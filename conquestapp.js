@@ -9,7 +9,8 @@
 var 
 gameport        = process.env.PORT || 4004,
 
-
+wrtc            = require('wrtc'),
+SimplePeer      = require('simple-peer'),
 UUID            = require('node-uuid'),
 verbose         = false,
 express         = require('express'),
@@ -30,6 +31,18 @@ server.listen( gameport );
 
 //Log something so we know that it succeeded.
 console.log('\t :: Express :: Listening on port ' + gameport );
+
+const p = new SimplePeer({
+    initiator: false,
+    trickle: false,
+    wrtc: wrtc
+})
+
+//Catch all exceptions
+process.on('uncaughtException', err => {
+    console.error('There was an uncaught error', err)
+    process.exit(1) //mandatory (as per the Node.js docs)
+})
 
 //By default, we forward the / path to index.html automatically.
 app.get( '/', function( req, res ){ 
@@ -88,7 +101,29 @@ app.get( '/*' , function( req, res, next ) {
             //Useful to know when someone connects
         console.log('\t socket.io:: player ' + client.userid + ' connected');
         
-            //When this client disconnects
+        //Process WebRTC Peer request received from client
+        client.on('WebRTCSignal', (arg) => {
+            console.log(arg); //Should be RTC Offer
+            p.signal(JSON.parse(arg));
+          });
+        
+        p.on('connect', () => {
+            console.log('CONNECTED.  SENDING Test Data');
+            p.send('Test Data: ' + Math.random())
+        });
+
+        p.on('signal', data => {
+            console.log('Server SIGNAL', JSON.stringify(data));
+            //Now negotiate initiator signal with Web RTC Peer at server by sending the ICE request as JSON
+            client.emit('WebRTCSignal', JSON.stringify(data));
+        });
+
+        p.on('data', data => {
+            console.log('ON DATA event received')
+            console.log('data: ' + data)
+          })
+
+        //When this client disconnects
         client.on('disconnect', function () {
 
                 //Useful to know when someone disconnects

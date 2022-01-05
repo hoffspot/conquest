@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+	<head>
+
+		<title> Testing getting a WebRTC Data Channel to Work</title>
+
+			<!-- Load style sheet -->
+		<link href="index.css" media="screen" rel="stylesheet" type="text/css">
+
+	<!-- Library code -->
+		
+		<!-- Load socket.io client side contents. -->
+		<script src="/socket.io/socket.io.js"></script>
+
+		<!-- import SimplePeer for WebRTC Data Channel Connections-->
+		<script src="lib/simplepeer.min.js"></script>
+
+		<!-- This will create a connection to socket.io, and print the user serverid that we sent from the server side. --> 
+		<script type="text/javascript">
+
+			//This is all that needs
+			var serversocket = io.connect('/');
+
+			//Now we can listen for that event
+			serversocket.on('onconnected', function( data ) {
+
+				//Note that the data is the object we sent from the server, as is. So we can assume its id exists. 
+				console.log( 'Connected successfully to the socket.io server. My server side ID is ' + data.id );
+
+			});
+
+			//initialize a WebRTC Peer
+			
+			const p = new SimplePeer({
+        		initiator: true,
+        		trickle: false
+      		});
+
+			p.on('error', err => console.log('error', err));
+
+      		p.on('signal', data => {
+        		console.log('Initiator SIGNAL', JSON.stringify(data));
+				//Now negotiate initiator signal with Web RTC Peer at server by sending the ICE request as JSON
+				serversocket.emit('WebRTCSignal', JSON.stringify(data));
+      		});
+
+			p.on('connect', () => {
+        		console.log('CONNECTED');
+      		});
+
+			p.on('data', data => {
+        		console.log('Ping event received')
+        		console.log('data: ' + data)
+      		})
+
+			  //Now we can listen for RTC Answer event
+			serversocket.on('WebRTCSignal', (arg) => {
+            	console.log(arg); //Should be RTC Answer
+            	p.signal(JSON.parse(arg));
+          	});
+
+		</script>
+
+	</head>
+
+	<body>
+		
+	</body>
+
+</html>

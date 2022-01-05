@@ -1,43 +1,35 @@
 <!DOCTYPE html>
 <html>
 	<head>
-		<title>Conquest Test Connection</title>
-		<style type="text/css">
-			html , body {
-				background: #212121; 
-				color: #fff; 
-				margin: 0; 
-				padding: 0;
-			}
-			#canvas {
-				position: absolute;
-				left: 0; right: 0; top: 0; bottom: 0; 
-				margin: auto;
-			}
-		</style>
-	 	
-		 	<!-- Notice the URL, this is handled by socket.io on the server automatically, via express -->
-		<script type="text/javascript" src="/socket.io/socket.io.js"></script>
+
+		<title> Real time multi-player games with HTML5</title>
+
+			<!-- Load style sheet -->
+		<link href="index.css" media="screen" rel="stylesheet" type="text/css">
+
+	<!-- Library code -->
 		
-			<!-- This will create a connection to socket.io, and print the user serverid that we sent from the server side. --> 
-		<script type="text/javascript">
+		 	<!-- Load socket.io client side contents. -->
+		<script src="/socket.io/socket.io.js"></script>
 
-				//This is all that needs
-			var socket = io.connect('/');
 
-				//Now we can listen for that event
-			socket.on('onconnected', function( data ) {
+	 		<!-- Load the GUI rendering library code. -->
+		<script type="text/javascript" src="lib/dat.gui.min.js"></script>
+			<!-- Load the keyboard specific code --> 
+		<script type="text/javascript" src="lib/keyboard.js"></script>
+	 	
+	<!-- Game code -->
 
-					//Note that the data is the object we sent from the server, as is. So we can assume its id exists. 
-		  		console.log( 'Connected successfully to the socket.io server. My server side ID is ' + data.id );
-
-		  	});
-
-		</script>
+	 		<!-- Load the common game code. -->
+		<script type="text/javascript" src="game.core.js"></script>
+			<!-- Finally, Load the game client code. -->
+		<script type="text/javascript" src="client.js"></script>		
 
 	</head>
 
 	<body>
-		<canvas id="canvas"> </canvas>	
+		<canvas id="viewport">
+		</canvas>
 	</body>
+
 </html>
