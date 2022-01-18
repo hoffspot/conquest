@@ -1,0 +1,50 @@
+body {
+    background: #090009;
+    /* Disable scroll bars */
+    overflow: hidden;
+
+    /* Disable long touch hold select on mobile browsers - added some lines, OG was just safari specific, may introduce bugs */
+    -webkit-touch-callout: none !important; /* Safari Touch */
+    -webkit-user-select: none;   /* Webkit */
+    -moz-user-select: none;      /* Firefox */
+    -ms-user-select: none;       /* Edge*/
+    user-select: none;       /* Future-proof*/
+}
+
+#wrapper {
+    position: absolute;
+    /* Wrapper covers entier window height and width */
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+
+    /* Prevent the blue highlighting from accidental selection of text */
+    user-select: none;
+}
+
+#gamecontainer {
+    /* Start with a default width that we can change later */
+    width: 640px;
+    height: 480px;
+
+    /* User a wider splash screen and center it within the container */
+    background: url("images/screens/splashscreen.png");
+    background-position: center;
+    background-repeat: no-repeat;
+
+    /* Center the game container relative to the outer wrapper */
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    transform-origin: center center;
+}
+
+.gamelayer {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    display: none;
+}
+
