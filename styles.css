@@ -48,3 +48,53 @@ body {
     display: none;
 }
 
+/* Game Starting Menu Screen */
+
+.game-title {
+    top: 5%;
+    right: 5%;
+    text-align: right;
+    width: 100%;
+
+    font-family: "Courier New", Courier, monospace;
+    font-size: 90px;
+    line-height: 80px;
+
+    color: white;
+    text-shadow: -2px 0 purple, 0 2px purple, 2px 0 purple, 0 -2px purple;
+}
+
+.game-option {
+    position: relative;
+    top: 65%;
+    left: 10%;
+    display: block;
+
+    font-family: "Courier New", Courier, monospace;
+    font-size: 48px;
+    color: white;
+    text-shadow: -2px 0 purple, 0 2px purple, 2px 0 purple, 0 -2px purple;
+
+    cursor: pointer;
+}
+
+.game-option:hover {
+    color: yellow;
+}
+
+/* Loading Screen */
+
+#loadingscreen {
+    background: rgba(100, 100, 100, 0.7);
+}
+
+#loadingmessage {
+    position: relative;
+    top: 400px;
+    text-align: center;
+
+    height: 48px;
+    color: white;
+    background: url("images/loader.gif") no-repeat center;
+    font: 12px Arial;
+}
