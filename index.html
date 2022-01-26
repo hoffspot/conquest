@@ -23,6 +23,14 @@
                     <span class="game-option" onclick = "multiplayer.start();">Multiplayer</span>
                 </div>
 
+                <div id="missionbriefingscreen" class="gamelayer">
+                    <img src="images/screens/interface-left.png" class="left-panel" draggable="false">
+                    <img src="images/screens/interface-right-briefing.png" class="right-panel" draggable="false">
+                    <input type="button" id="entermission" onclick = "singleplayer.play();">
+                    <input type="button" id="exitmission" onclick = "singleplayer.exit();">
+                    <div id="missonbriefing"></div></div>
+                </div>
+
                 <div id=loadingscreen" class="gamelayer">
                     <div id="loadingmessage"></div>
                 </div>
