@@ -58,7 +58,7 @@ var loader = {
         ev.target.removeEventListener(ev.type, loader.itemLoaded, false);
         loader.loadedCount++;
 
-        document.getElementById("loading message").innerHTML = "Loaded " + loader.loadedCount + " of " + loader.totalCount;
+        document.getElementById("loadingmessage").innerHTML = "Loaded " + loader.loadedCount + " of " + loader.totalCount;
 
         if (loader.loadedCount === loader.totalCount) {
             // Loader has loaded completely

@@ -54,6 +54,14 @@ var game = {
         // Apply this new width to the game container and game canvas
         gameContainer.style.width = width + "px";
     },
+
+    loadLevelData: function(level) {
+        game.currentLevel = level;
+        game.currentMap = maps[level.mapName];
+
+        // Load all the assets for the level startig with the map image
+        game.currentMapImage = loader.loadImage("images/maps/" + maps[level.mapName].mapImage);
+    },
 };
 
 /* Set up initial window event listeners */
