@@ -3,6 +3,7 @@ var game = {
     init: function() {
         // Initialize game objects
         loader.init();
+        mouse.init();
 
         // Initialize and store contexts for both the canvases
         game.initCanvases();
@@ -119,6 +120,9 @@ var game = {
     offsetY: 0,
 
     drawingLoop: function() {
+        // Pan the map if the mouse cursor is near the edge of the canvas
+        game.handlePanning();
+        
         // Draw the background whenever necessary
         game.drawBackground();
 
@@ -149,6 +153,60 @@ var game = {
 
             game.backgroundContext.drawImage(game.currentMapImage, game.offsetX, game.offsetY, game.canvasWidth, game.canvasHeight, 0, 0, game.canvasWidth, game.canvasHeight);
             game.refreshBackground = false;
+        }
+    },
+
+    // Distance from edge of canvas where panning starts
+    panningThreshold: 80,
+    // The maximum distance to pan in a single drawing loop
+    maximumPanDistance: 10,
+
+    handlePanning: function() {
+
+        // Do not pan if mouse leaves the canvas
+        if (!mouse.insideCanvas) {
+            return;
+        }
+
+        if (mouse.x <= game.panningThreshold) {
+            // Mouse is at left edge of the game area.  Pan to the left.
+            let panDistance = game.offsetX;
+
+            if (panDistance > 0) {
+                game.offsetX -= Math.min(panDistance, game.maximumPanDistance);
+                game.refreshBackground = true;
+            }
+        } else if (mouse.x >= game.canvasWidth - game.panningThreshold) {
+            // Mouse is at right edge of the game area.  Pan to the right.
+            let panDistance = game.currentMapImage.width - game.canvasWidth - game.offsetX;
+
+            if (panDistance > 0) {
+                game.offsetX += Math.min(panDistance, game.maximumPanDistance);
+                game.refreshBackground = true;
+            }
+        }
+
+        if (mouse.y <= game.panningThreshold) {
+            // Mouse is at the top edge of the game area.  Pan upwards.
+            let panDistance = game.offsetY;
+
+            if (panDistance > 0) {
+                game.offsetY -= Math.min(panDistance, game.maximumPanDistance);
+                game.refreshBackground = true;
+            }
+        } else if (mouse.y >= game.canvasHeight - game.panningThreshold) {
+            // Mouse is near bottom edge of the game area.  Pan downwards.
+            let panDistance = game.currentMapImage.height - game.canvasHeight - game.offsetY;
+
+            if (panDistance > 0) {
+                game.offsetY += Math.min(panDistance, this.maximumPanDistance);
+                game.refreshBackground = true;
+            }
+        }
+
+        if (game.refreshBackground) {
+            //Update the mouse game coordinates based on the new game offsetX and offsetY
+            mouse.calculateGameCoordinates();
         }
     },
 
