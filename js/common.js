@@ -78,3 +78,109 @@ var loader = {
         }
     }
 };
+
+// The default load() method used by all of our game entities
+function loadItem(name) {
+
+    //Question: where does the this reference get that list populated?  Looks like the function 
+    //gets referenced as internal to the object representing the entity.  Like a "base" object from buildings.js
+    var item = this.list[name];
+
+    // If the item sprite array has already been loaded, then no need to do it again
+    if (item.spriteArray) {
+        return;
+    }
+
+    item.spriteSheet = loader.loadImage("images/" + this.defaults.type + "/" + name + ".png");
+    item.spriteArray = [];
+    item.spriteCount = 0;
+
+    item.spriteImages.forEach(function(spriteImage) {
+        let constructImageCount = spriteImage.count;
+        let constructDirectionCount = spriteImage.directions;
+
+        if (constructDirectionCount) {
+            // If the spriteImage has directions defined, store sprites for each direction in spriteArray
+            for (let i = 0; i < constructDirectionCount; i++) {
+                let constructImageName = spriteImage.name + "-" + i;
+
+                item.spriteArray[constructImageName] = {
+                    name: constructImageName,
+                    count: constructImageCount,
+                    offset: item.spriteCount
+                };
+                item.spriteCount += constructImageCount;
+            }
+        } else {
+            // If the spriteImage has no directions, store just the name and image count in spriteArray
+            let constructImageName = spriteImage.name;
+
+            item.spriteArray[constructImageName] = {
+                name: constructImageName,
+                count: constructImageCount,
+                offset: item.spriteCount
+            };
+        }
+    });
+}
+
+// Polyfill for a few browsers that still do not support Object.assign
+if (typeof Object.assign !== "function") {
+    Object.assign = function(target, varArgs) { // .length of function is 2
+        "use strict";
+        if (target === null) { // TypeError if undefined of null
+            throw new TypeError("Cannot convert undefined or null to object");
+        }
+
+        var to = Object(target);
+
+        for (var index = 1; index < arguments.length; index++) {
+            var nextSource = arguments[index];
+
+            if (nextSource != null) { // Skip over undefined or null
+                for (var nextKey in nextSource) {
+                    // Avoid bugs when hasOwnProperty is shadowed
+                    if (Object.prototype.hasOwnProperty.call(nextSource, nextKey)) {
+                        to[nextKey] = nextSource[nextKey];
+                    }
+                }
+            }
+        }
+
+        return to;
+    };
+}
+
+// The default add() method used by all our game entities
+function addItem(details) {
+    var name = details.name;
+
+    //Initialize the item with any default parameters the item should have
+    var item = Object.assign({}, baseItem);
+
+    // Assign the item all the default properties for its category type
+    Object.assign(item, this.defaults);
+
+    // Assign item properties based on the item name
+    Object.assign(item, this.list[name]);
+
+    // By default, set the item's life to its maximum hit points
+    item.life = item.hitPoints;
+
+    // Override item defaults based on details
+    Object.assign(item, details);
+
+    return item;
+}
+
+//Default properties that every item should have
+var baseItem = {
+    animationIndex: 0,
+    direction: 0,
+
+    selected: false,
+    selectable: true,
+
+    orders:{ type: "stand"},
+    action: "stand",
+};
