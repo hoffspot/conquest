@@ -47,6 +47,45 @@ var buildings = {
 
     defaults: {
         type: "buildings",
+
+        processActions: function() {
+            switch (this.action) {
+                case "stand":
+                    this.imageList = this.spriteArray[this.lifeCode];
+                    this.imageOffset = this.imageList.offset + this.animationIndex;
+                    this.animationIndex++;
+
+                    if  (this.animationIndex >= this.imageList.count) {
+                        this.animationIndex = 0;
+                    }
+                    break;
+
+                case "construct":
+                    this.imageList = this.spriteArray["constructing"];
+                    this.imageOffset = this.imageList.offset + this.animationIndex;
+                    this.animationIndex++;
+
+                    // Once constructing is complete go back to standing
+                    if (this.animationIndex >= this.imageList.count) {
+                        this.animationIndex = 0;
+                        this.action = stand;
+                    }
+                    break;
+            }
+        },
+
+        // Default function for drawing a building
+        drawSprite: function() {
+            let x = this.drawingX;
+            let y = this.drawingY;
+
+            // All Sprite sheets will have blue in the first row and green in the second row
+            let colorIndex = (this.team === "blue") ? 0 : 1;
+            let colorOffset = colorIndex * this.pixelHeight;
+
+            // Draw the sprite at x, y
+            game.foregroundContext.drawImage(this.spriteSheet, this.imageOffset * this.pixelWidth, colorOffset, this.pixelWidth, this.pixelHeight, x, y, this.pixelWidth, this.pixelHeight);
+        },
     },
 
     load: loadItem,

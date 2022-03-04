@@ -183,4 +183,36 @@ var baseItem = {
 
     orders:{ type: "stand"},
     action: "stand",
+
+    // Default method for animating an item
+    animate: function() {
+
+        // Check the health of the item
+        if (this.life > this.hitPoints * 0.4) {
+            // Consider item healthy if it has more than 40% life
+            this.lifeCode = "healthy";
+        } else if (this.life > 0) {
+            // Consider item damaged if it has less than 40% life
+            this.lifeCode = "damaged";
+        } else {
+            // Remove item from the game if it had died (life is 0 or negative)
+            //  Good place to trigger blow up animation or keel over dead animation
+            this.lifeCode = "dead";
+            game.remove(this);
+
+            return;
+        }
+
+        //Process the currrent action
+        this.processActions();
+    },
+
+    // Default method for drawing an item
+    draw: function() {
+        // Compute pixel coordinates on canvas for drawing item
+        this.drawingX = (this.x * game.gridSize) - game.offsetX - this.pixelOffsetX;
+        this.drawingY = (this.y * game.gridSize) - game.offsetY - this.pixelOffsetY;
+
+        this.drawSprite();
+    },
 };

@@ -91,6 +91,88 @@ var game = {
 
         // Load all the assets for the level startig with the map image
         game.currentMapImage = loader.loadImage("images/maps/" + maps[level.mapName].mapImage);
+
+        // Initialize all the arrays for the game
+        game.resetArrays();
+
+        // Load all the assets for every entity defined in the level requirements array (listing 7-5)
+        for (let type in level.requirements) {
+            let requirementArray = level.requirements[type];
+            
+            requirementArray.forEach(function(name) {
+                if (window[type] && typeof window[type].load === "function") {
+                    window[type].load(name);
+                } else {
+                    console.log("Could not load type :", type);
+                }
+            });
+        }
+
+        //Add all the items defined in the level items array to the game (listing 7-5)
+        level.items.forEach(function(itemDetails) {
+            game.add(itemDetails);
+        });
+    },
+
+    resetArrays: function() {
+        // Listing 7-5
+
+        // Count items added in game.  Purpose is the assign them a unique id
+        game.counter = 0;
+
+        // Track all the items currently in the game
+        game.items = [];
+        game.building = [];
+        game.vehicles = [];
+        game.aircraft = [];
+        game.terrain = [];
+
+        // Track items that have been selected by the player
+        game.selectedItems = [];
+    },
+
+    add: function(itemDetails) {
+        // Set a unique id for the item. (Listing 7-5)
+
+        if (!itemDetails.uid) {
+            itemDetails.uid = ++game.counter;
+        }
+
+        var item = window[itemDetails.type].add(itemDetails);
+
+        // Add the item to the items array
+        game.items.push(item);
+
+        // Add the item to the type-specific array
+        game[item.type].push(item);
+
+        return item;
+    },
+
+    remove: function(item) {
+        // Unselect item if it is selected.  Opportunity to check for selected and skip this loop.  Also, access by key on uid
+        item.selected = false;
+        for (let i = game.selectedItems.length - 1; i >= 0; i--) {
+            if (game.selectedItems[i].uid === item.uid) {
+                game.selectedItems.splice(i, 1);
+                break;
+            }
+        }
+
+        // Remove item from the items array.  Opportunity to access by key if the root data structure is changed
+        for (let i = game.items.length - 1; i >= 0; i--) {
+            if (game.items[i].uid === item.uid) {
+                  game.items.splice(i, 1);
+                  break;
+            }
+        }
+        // Remove items from the type-specific array.  Opportunity to access by key of root data structure is changed
+        for (let i = game[item.type].length - 1; i >= 0; i--) {
+            if (game[item.type][i].uid === item.uid) {
+                game[item.type].splice(i, 1);
+                break;
+            }
+        }
     },
 
     start: function() {
