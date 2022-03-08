@@ -23,6 +23,21 @@ var levels = {
             /* Starting location for player */
             "startX": 4,
             "startY": 4,
+
+            /* Entities to be loaded */
+            "requirements": {
+                "buildings": ["base"],
+                "vehicles": [],
+                "aircraft": [],
+                "terrain": []
+            },
+
+            /* Entities to be added */
+            "items": [
+                {"type": "buildings", "name": "base", "x": 11, "y": 14, "team": "blue"},
+                {"type": "buildings", "name": "base", "x": 12, "y": 16, "team": "green"},
+                {"type": "buildings", "name": "base", "x": 15, "y": 15, "team": "green", "life": 50},
+            ]
         }
     ],
 

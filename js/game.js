@@ -122,7 +122,7 @@ var game = {
 
         // Track all the items currently in the game
         game.items = [];
-        game.building = [];
+        game.buildings = [];
         game.vehicles = [];
         game.aircraft = [];
         game.terrain = [];
@@ -191,6 +191,18 @@ var game = {
     animationTimeout: 100,  // 100 milliseconds or 10 times a second
     
     animationLoop: function() {
+        // Animate each of the elements within the game
+        game.items.forEach(function(item) {
+            item.animate();
+        });
+
+        //Sort game items into a sortedItems array based on their x,y coordinates
+        //Create a game.sortedItems array, which contains all the items sorted by y values and then x values after adjusting for pixelOffset . 
+        //This way, items that have a lower y value are earlier in the array.
+        game.sortedItems = Object.assign([], game.items);
+        game.sortedItems.sort(function(a, b) {
+            return a.y - b.y + ((a.y === b.y ) ? (b.x - a.x) : 0);
+        });
 
     },
 
@@ -207,6 +219,14 @@ var game = {
         
         // Draw the background whenever necessary
         game.drawBackground();
+
+        // Clear the foreground canvas
+        game.foregroundContext.clearRect(0, 0, game.canvasWidth, game.canvasHeight);
+
+        // Start drawing the foreground Elements
+        game.sortedItems.forEach(function(item) {
+            item.draw();
+        });
 
         // Call the drawing loop for the next frame using requestAnimationFrame
         if (game.running) {
