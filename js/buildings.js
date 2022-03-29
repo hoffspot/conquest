@@ -43,6 +43,35 @@ var buildings = {
                 {name: "constructing", count: 3}
             ],
         },
+        "starport": {
+            name: "starport",
+            pixelWidth: 40,
+            pixelHeight: 60,
+            baseWidth: 40,
+            baseHeight: 55,
+            pixelOffsetX: 1,
+            pixelOffsetY: 5,
+            buildableGrid: [
+                [1,1],
+                [1,1],
+                [1,1]
+            ],
+            passableGrid: [
+                [1,1],
+                [0,0],
+                [0,0]
+            ],
+            sight: 3,
+            cost: 2000,
+            canConstruct: true,
+            hitPoints: 300,
+            spriteImages: [
+                { name: "teleport", count: 9},
+                { name: "closing", count: 18},
+                { name: "healthy", count: 4},
+                { name: "damaged", count: 1}
+            ],
+        },
     },
 
     defaults: {
@@ -70,6 +99,13 @@ var buildings = {
                         this.animationIndex = 0;
                         this.action = stand;
                     }
+                    break;
+                case "teleport":
+                    this.imageList = this.spriteArray["teleport"];
+                    this.imageOffset = this.imageList.offset + this.animationIndex;
+                    this.animationIndex++;
+
+                    // Once teleporting is complete, move to stand mode
                     break;
             }
         },
