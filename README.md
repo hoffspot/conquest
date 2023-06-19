@@ -15,3 +15,4 @@ This is a personal devlog
 3/8/2022 PM - Working on Listing 7-10 up to processActions
 5/3/2023 PM - Working to get back in the saddle 
 5/5/2023 AM - Got Github linked back up.  Installed Copilot.  Getting back to correct spot in code
+6/19/2023 PM - Trying to enable new laptop
