@@ -1,238 +1,355 @@
-body {
-    background: #090009;
-    /* Disable scroll bars */
-    overflow: hidden;
-
-    /* Disable long touch hold select on mobile browsers - added some lines, OG was just safari specific, may introduce bugs */
-    -webkit-touch-callout: none !important; /* Safari Touch */
-    -webkit-user-select: none;   /* Webkit */
-    -moz-user-select: none;      /* Firefox */
-    -ms-user-select: none;       /* Edge*/
-    user-select: none;       /* Future-proof*/
-}
-
-#wrapper {
-    position: absolute;
-    /* Wrapper covers entier window height and width */
-    top: 0;
-    bottom: 0;
-    left: 0;
-    right: 0;
-
-    /* Prevent the blue highlighting from accidental selection of text */
-    user-select: none;
-}
-
 #gamecontainer {
-    /* Start with a default width that we can change later */
-    width: 640px;
-    height: 480px;
-
-    /* User a wider splash screen and center it within the container */
-    background: url("images/screens/splashscreen.png");
-    background-position: center;
-    background-repeat: no-repeat;
-
-    /* Center the game container relative to the outer wrapper */
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    transform-origin: center center;
+	width:640px;
+	height:480px;
+	background: url(images/splashscreen.png);
+	border: 1px solid black;
 }
 
 .gamelayer {
-    width: 100%;
-    height: 100%;
-    position: absolute;
-    display: none;
+	width:640px;
+	height:480px;
+	position:absolute;
+	display:none;
 }
 
 /* Game Starting Menu Screen */
-
-.game-title {
-    position: absolute;
-
-    top: 5%;
-    right: 5%;
-    text-align: right;
-    width: 100%;
-
-    font-family: "Courier New", Courier, monospace;
-    font-size: 90px;
-    line-height: 80px;
-
-    color: white;
-    text-shadow: -2px 0 purple, 0 2px purple, 2px 0 purple, 0 -2px purple;
+#gamestartscreen {
+    padding-top:320px;
+    text-align:left;
+    padding-left:50px;    
+    width:590px;
+    height:160px;
 }
 
-.game-option {
-    position: relative;
-    top: 65%;
-    left: 10%;
-    display: block;
-
-    font-family: "Courier New", Courier, monospace;
+#gamestartscreen span {
+    margin:20px;
+    font-family: ‘Courier New’, Courier, monospace;
     font-size: 48px;
-    color: white;
-    text-shadow: -2px 0 purple, 0 2px purple, 2px 0 purple, 0 -2px purple;
-
-    cursor: pointer;
+    cursor:pointer;
+    color:white    ;
+    text-shadow: -2px 0 purple, 0 2px purple, 2px 0 purple, 0 -2px purple;    
 }
 
-.game-option:hover {
-    color: yellow;
+#gamestartscreen span:hover {
+    color:yellow;
 }
 
 /* Loading Screen */
-
 #loadingscreen {
-    background: rgba(100, 100, 100, 0.7);
+    background:rgba(100,100,100,0.7);
+	z-index:10;
 }
 
 #loadingmessage {
-    position: relative;
-    top: 400px;
-    text-align: center;
-
-    height: 48px;
-    color: white;
-    background: url("images/loader.gif") no-repeat center;
-    font: 12px Arial;
+    margin-top:400px;
+    text-align:center;
+    height:48px;
+    color:white;
+    background:url(images/loader.gif) no-repeat center;
+    font:12px Arial;
 }
 
-/* Mission Briefinng Screen */
-
-#missionbriefingscreen {
-    background: url("images/screens/interface-middle.png");
+/* Mission Briefing Screen */
+#missionscreen {
+    background: url(images/missionscreen.png) no-repeat;
 }
 
-input[type="button"] {
-    border-width: 0;
-    outline: none;
-
-    background-color: transparent;
-    background-repeat: no-repeat;
-    background-image: url("images/buttons.png");
-
-    cursor: pointer;
+#missionscreen #entermission {
+    position:absolute;
+    top:79px;
+    left:6px;
+    width:246px;
+    height:68px;
+    border-width:0px;
+    background-image: url(images/buttons.png);
+    background-position: 0px 0px;
 }
 
-.left-panel {
-    left: 0;
-    top: 0;
-    position: absolute;
+#missionscreen #entermission:disabled, #missionscreen #entermission:active {
+    background-image: url(images/buttons.png);
+    background-position: -251px 0px;
 }
 
-.right-panel {
-    right: 0;
-    top: 0;
-    position: absolute;
+#missionscreen #exitmission {
+    position:absolute;
+    top:79px;
+    left:380px;
+    width:98px;
+    height:68px;
+    border-width:0px;    
+    background-image: url(images/buttons.png);
+    background-position: 0px -76px;
 }
 
-#entermission {
-    height: 52px;
-    width: 188px;
-
-    position: absolute;
-    top: 82px;
-    left: 3px;
-
-    background-position: -4px -4px;
+#missionscreen #exitmission:disabled,#missionscreen #exitmission:active{    
+    background-image: url(images/buttons.png);
+    background-position: -103px -76px;
 }
 
-#entermission:disabled, #entermission:active {
-    background-position: -196px -4px;
-}
-
-#exitmission {
-    height: 52px;
-    width: 72px;
-
-    position: absolute;
-    top: 82px;
-    right: 164px;
-
-    background-position: -4px -64px;
-}
-
-#exitmission:disabled, #exitmission:active {
-    background-position: -84px -64px;
-}
-
-#missionbriefing {
-    position: absolute;
-
-    top: 170px;
-    left: 40px;
-    right: 220px;
-    height: 270px;
-
-    text-align: justify;
-
-    color: rgb(130, 150, 162);
-    text-shadow: -1px 1px black;
-
-    font-size: 16px;
-    font-family: "Courier New", Courier, monospace;
+#missionscreen #missonbriefing {
+    position:absolute;
+    padding:10px;
+    top:160px;
+    left:20px;
+    width:410px;
+    height:300px;
+    color:rgb(130,150,162);
+    font-size: 13px;
+    font-family: ‘Courier New’, Courier, monospace;
 }
 
 /* Game Interface Screen */
 #gameinterfacescreen {
-    background: url("images/screens/interface-middle.png");
+    background: url(images/maininterface.png) no-repeat;
 }
 
-#gameinterfacescreen #gamemessages {
-    position: absolute;
-    padding: 5px;
-
-    top: 4px;
-    left: 5px;
-
-    right: 168px;
-    height: 60px;
-
-    color: rgb(130, 150, 162);
-
-    overflow: hidden;
-    
+#gameinterfacescreen #gamemessages{
+    position:absolute;
+    padding-left:10px;
+    top:5px;
+    left:5px;
+    width:450px;
+    height:60px;
+    color:rgb(130,150,162);
+    overflow:hidden;
     font-size: 13px;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Courier New', Courier, monospace;
+}
+#gameinterfacescreen #gamemessages span {
+    color:white;
 }
 
-#gamemessages span {
-    color: white;
+#gameinterfacescreen #callerpicture {
+    position:absolute;
+    left:498px;
+    top:154px;
+    width:126px;
+    height:88px;
+    overflow:none;
 }
 
-#callerpicture {
-    position: absolute;
-
-    right: 20px;
-    top: 155px;
-    width: 114px;
-    height: 72px;
-
-    overflow: hidden;
+#gameinterfacescreen #cash {
+    width:120px;
+    height:22px;
+    position:absolute;
+    left:498px;
+    top:256px;
+    color:rgb(130,150,162);
+    overflow:hidden;
+    font-size: 13px;
+    font-family: 'Courier New', Courier, monospace;
+    text-align:right;
 }
 
-#cash {
-    width: 120px;
-    height: 22px;
-    position: absolute;
-    right: 20px;
-    top: 241px;
-
-    color: rgb(130, 150, 162);
-    overflow: hidden;
-    font-size: 14px;
-    font-family: "Courier New", Courier, monospace;
-    text-align: right;
+#gameinterfacescreen canvas{
+    position:absolute;
+    top:79px;
+    left:0px;
 }
 
-#gameinterfacescreen canvas {
-    position: absolute;
-
-    top: 79px;
-    left: 0;
+#gameinterfacescreen #foregroundcanvas{
+    z-index:1;
 }
 
+#gameinterfacescreen #backgroundcanvas{
+    z-index:0;
+}
+
+/* Sidebar Buttons */
+#gameinterfacescreen #sidebarbuttons {
+    position:absolute;
+    left:500px;
+    top:305px;
+    width:152px;
+    height:148px;
+    overflow:none;
+}
+
+#gameinterfacescreen #sidebarbuttons input[type="button"] {
+    width:43px;
+    height:35px;
+    border-width:0px;
+    padding:0px;
+    background-image: url(images/buttons.png);
+}
+
+/* Grayed out state for buttons*/
+#starportbutton:active, #starportbutton:disabled {
+    background-position: -2px -305px;
+}
+#placeholder1:active, #placeholder1:disabled {
+    background-position: -52px -305px;
+}
+#turretbutton:active, #turretbutton:disabled {
+    background-position: -100px -305px;
+}
+#scouttankbutton:active, #scouttankbutton:disabled {
+    background-position: -2px -346px;
+}
+#heavytankbutton:active, #heavytankbutton:disabled {
+    background-position: -52px -346px;
+}
+#harvesterbutton:active, #harvesterbutton:disabled {
+    background-position: -102px -346px;
+}
+#chopperbutton:active, #chopperbutton:disabled {
+    background-position: -2px -387px;
+}
+#placeholder2:active, #placeholder2:disabled {
+    background-position: -52px -387px;
+}
+#wraithbutton:active, #wraithbutton:disabled {
+    background-position: -102px -387px;
+}
+
+/* Regular state for buttons*/ 
+#starportbutton {
+    background-position: -167px -305px;
+}
+#placeholder1 {
+    background-position: -216px -305px;
+}
+#turretbutton {
+    background-position: -264px -305px;
+}
+#scouttankbutton {
+    background-position: -167px -346px;
+}
+#heavytankbutton {
+    background-position: -216px -346px;
+}
+#harvesterbutton {
+    background-position: -264px -346px;
+}
+#chopperbutton {
+    background-position: -167px -387px;
+}
+#placeholder2 {
+    background-position: -216px -387px;
+}
+#wraithbutton {
+    background-position: -264px -387px;
+}
+
+/* Message Box Screen */
+#messageboxscreen {
+    background:rgba(0,0,0,0.7);
+    z-index:20;
+}
+#messagebox {
+    position:absolute;
+    top:170px;
+    left:140px;
+    width:296px;
+    height:178px;
+    color:white;
+    background:url(images/messagebox.png) no-repeat center;
+    color:rgb(130,150,162);
+    overflow:hidden;
+    font-size: 13px;
+    font-family: 'Courier New', Courier, monospace;
+}
+#messagebox span {
+    position:absolute;
+    top:30px;
+    left:50px;
+    width:200px;
+    height:100px;
+}
+
+#messagebox input[type="button"]{
+    background-image: url(images/buttons.png);    
+    position:absolute;
+    border-width:0px;
+    padding:0px;
+}
+#messageboxok{
+    background-position: -2px -150px;
+    top:126px;
+    left:11px;    
+    width:74px;
+    height:26px;
+}
+#messageboxok:active,#messageboxok:disabled{
+    background-position: -2px -186px;
+}
+
+#messageboxcancel{
+    background-position: -86px -150px;    
+    left:197px;
+    top:129px;    
+    width:73px;
+    height:24px;
+}
+#messageboxcancel:active,#messageboxcancel:disabled{
+    background-position: -86px -184px;
+}
+
+/* Multiplayer Lobby Screen */
+#multiplayerlobbyscreen {
+    background:url(images/multiplayerlobbyscreen.png) no-repeat center;
+}
+#multiplayerlobbyscreen input[type="button"]{
+    background-image: url(images/buttons.png);    
+    position:absolute;
+    border-width:0px;
+    padding:0px;
+}
+#multiplayerjoin{
+    background-position: -2px -212px;
+    top:400px;
+    left:21px;    
+    width:74px;
+    height:26px;
+}
+#multiplayerjoin:active,#multiplayerjoin:disabled{
+    background-position: -2px -247px;
+}
+#multiplayercancel{
+    background-position: -86px -150px;    
+    left:545px;
+    top:400px;    
+    width:73px;
+    height:24px;
+}
+#multiplayercancel:active,#multiplayercancel:disabled{
+    background-position: -86px -184px;
+}
+#multiplayergameslist {
+    padding:20px;
+    position:absolute;
+    width:392px;
+    height:270px;
+    top:98px;
+    left:124px;
+    background:rgba(0,0,0,0.7);
+    border:none;
+    color:gray;
+    font-size: 15px;
+    font-family: 'Courier New', Courier, monospace;
+}
+#multiplayergameslist:focus {
+    outline:none;    
+}
+#multiplayergameslist option.running{
+    color:gray;
+}
+#multiplayergameslist option.waiting{
+    color:green;
+}
+#multiplayergameslist option.empty{
+    color:lightblue;
+}
+
+#chatmessage{
+    position:absolute;
+    top:460px;
+    width:479px;
+    background:rgba(0,255,0,0.1);
+    color:green;
+    border:1px solid green;
+    display:none;
+}
+#chatmessage:focus {
+    outline:none;    
+}

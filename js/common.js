@@ -1,218 +1,231 @@
-// Asset loader.   I've historically seen some weird behavior here.  Likely needs a rework/reimplementation
+// Setup requestAnimationFrame and cancelAnimationFrame for use in the game code
+(function() {
+    var lastTime = 0;
+    var vendors = ['ms', ';', 'webkit', 'o'];
+    for(var x = 0; x < vendors.length && !window.requestAnimationFrame; ++x) {
+        window.requestAnimationFrame = window[vendors[x]+'RequestAnimationFrame'];
+        window.cancelAnimationFrame = 
+          window[vendors[x]+'CancelAnimationFrame'] || window[vendors[x]+'CancelRequestAnimationFrame'];
+    }
+ 
+    if (!window.requestAnimationFrame)
+        window.requestAnimationFrame = function(callback, element) {
+            var currTime = new Date().getTime();
+            var timeToCall = Math.max(0, 16 - (currTime - lastTime));
+            var id = window.setTimeout(function() { callback(currTime + timeToCall); }, 
+              timeToCall);
+            lastTime = currTime + timeToCall;
+            return id;
+        };
+ 
+    if (!window.cancelAnimationFrame)
+        window.cancelAnimationFrame = function(id) {
+            clearTimeout(id);
+        };
+}());
+
 var loader = {
-    loaded: true,
-    loadedCount: 0, // Assets that have been loaded so far
-    totalCount: 0, // Total number of assets that need loading
-
-    init: function() {
-        // Check for sounds support
-        var mp3Support, oggSupport;
-        var audio = document.createElement("audio");
-
-        if (audio.canPlayType) {
-            // Currently canPlayType() returns:  "", "maybe", or "probably"
-            mp3Support = "" !== audio.canPlayType("audio/mpeg");
-            oggSupport = "" !== audio.canPlayType("audio/ogg; codecs=\"vorbis\"");
-        } else {
-            // The audio tag is not supported
-            mp3support = false;
-            oggSupport = false;
-        }
+    loaded:true,
+    loadedCount:0, // Assets that have been loaded so far
+    totalCount:0, // Total number of assets that need to be loaded
+    
+    init:function(){
+        // check for sound support
+        var mp3Support,oggSupport;
+        var audio = document.createElement('audio');
+    	if (audio.canPlayType) {
+       		// Currently canPlayType() returns: "", "maybe" or "probably" 
+      		mp3Support = "" != audio.canPlayType('audio/mpeg');
+      		oggSupport = "" != audio.canPlayType('audio/ogg; codecs="vorbis"');
+    	} else {
+    		//The audio tag is not supported
+    		mp3Support = false;
+    		oggSupport = false;	
+    	}
 
         // Check for ogg, then mp3, and finally set soundFileExtn to undefined
-        loader.soundFileExtn = oggSupport ? ".ogg" : mp3Support ? ".mp3" : undefined;
+        loader.soundFileExtn = oggSupport?".ogg":mp3Support?".mp3":undefined;        
     },
-
-    loadImage: function(url) {
-        this.loaded = false;
+    loadImage:function(url){
         this.totalCount++;
-
-        game.showScreen("loadingscreen");
-
+        this.loaded = false;
+        $('#loadingscreen').show();
         var image = new Image();
-
-        image.addEventListener("load", loader.itemLoaded, false);
         image.src = url;
-
+        image.onload = loader.itemLoaded;
         return image;
     },
-
-    soundFileExtn: ".ogg",
-
-    loadSound: function(url) {
-        this.loaded = false;
-        this.totalCount++;
-
-        game.showScreen("loadingscreen");
-
-        var audio = new Audio();
-
-        audio.addEventListener("canplaythrough", loader.itemLoaded, false);
-        audio.src = url + loader.soundFileExtn;
-
-        return audio;
-    },
-
-    itemLoaded: function(ev) {
-        // Stop listening for event type (load or canplaythrough) for this item now that it has been loaded
-        ev.target.removeEventListener(ev.type, loader.itemLoaded, false);
+    soundFileExtn:".ogg",
+	loadSound:function(url){
+		this.totalCount++;
+		this.loaded = false;
+		$('#loadingscreen').show();
+		var audio = new Audio();
+		audio.src = url+loader.soundFileExtn;
+		audio.addEventListener("canplaythrough", loader.itemLoaded, false);
+		return audio;   
+	},
+    itemLoaded:function(){
         loader.loadedCount++;
-
-        document.getElementById("loadingmessage").innerHTML = "Loaded " + loader.loadedCount + " of " + loader.totalCount;
-
-        if (loader.loadedCount === loader.totalCount) {
-            // Loader has loaded completely
-            //Reset and clear the loader
+        $('#loadingmessage').html('Loaded '+loader.loadedCount+' of '+loader.totalCount);
+        if (loader.loadedCount === loader.totalCount){
             loader.loaded = true;
-            loader.loadedCount = 0;
-            loader.totalCount = 0;
-
-            // Hide the loading screen
-            game.hideScreen("loadingscreen");
-
-            // and call the loader.onload method if it exists
-            if (loader.onload) {
+            $('#loadingscreen').hide();
+            if(loader.onload){
                 loader.onload();
                 loader.onload = undefined;
             }
         }
     }
-};
+}
 
-// The default load() method used by all of our game entities
-function loadItem(name) {
-
-    //Question: where does the this reference get that list populated?  Looks like the function 
-    //gets referenced as internal to the object representing the entity.  Like a "base" object from buildings.js
+/* The default load() method used by all our game entities*/
+function loadItem(name){
     var item = this.list[name];
-
-    // If the item sprite array has already been loaded, then no need to do it again
-    if (item.spriteArray) {
+    // if the item sprite array has already been loaded then no need to do it again
+    if(item.spriteArray){
         return;
-    }
-
-    item.spriteSheet = loader.loadImage("images/" + this.defaults.type + "/" + name + ".png");
+    }        
+    item.spriteSheet = loader.loadImage('images/'+this.defaults.type+'/'+name+'.png');
     item.spriteArray = [];
     item.spriteCount = 0;
-
-    item.spriteImages.forEach(function(spriteImage) {
-        let constructImageCount = spriteImage.count;
-        let constructDirectionCount = spriteImage.directions;
-
-        if (constructDirectionCount) {
-            // If the spriteImage has directions defined, store sprites for each direction in spriteArray
-            for (let i = 0; i < constructDirectionCount; i++) {
-                let constructImageName = spriteImage.name + "-" + i;
-
+    
+    for (var i=0; i < item.spriteImages.length; i++){             
+        var constructImageCount = item.spriteImages[i].count; 
+        var constructDirectionCount = item.spriteImages[i].directions; 
+        if (constructDirectionCount){
+            for (var j=0; j < constructDirectionCount; j++) {
+                var constructImageName = item.spriteImages[i].name +"-"+j;
                 item.spriteArray[constructImageName] = {
-                    name: constructImageName,
-                    count: constructImageCount,
-                    offset: item.spriteCount
+                    name:constructImageName,
+                    count:constructImageCount,
+                    offset:item.spriteCount
                 };
                 item.spriteCount += constructImageCount;
-            }
-        } else {
-            // If the spriteImage has no directions, store just the name and image count in spriteArray
-            let constructImageName = spriteImage.name;
-
-            item.spriteArray[constructImageName] = {
-                name: constructImageName,
-                count: constructImageCount,
-                offset: item.spriteCount
             };
+        } else {
+            var constructImageName = item.spriteImages[i].name;
+            item.spriteArray[constructImageName] = {
+                name:constructImageName,
+                count:constructImageCount,
+                offset:item.spriteCount
+            };
+            item.spriteCount += constructImageCount;
         }
-    });
-}
-
-// Polyfill for a few browsers that still do not support Object.assign
-if (typeof Object.assign !== "function") {
-    Object.assign = function(target, varArgs) { // .length of function is 2
-        "use strict";
-        if (target === null) { // TypeError if undefined of null
-            throw new TypeError("Cannot convert undefined or null to object");
-        }
-
-        var to = Object(target);
-
-        for (var index = 1; index < arguments.length; index++) {
-            var nextSource = arguments[index];
-
-            if (nextSource != null) { // Skip over undefined or null
-                for (var nextKey in nextSource) {
-                    // Avoid bugs when hasOwnProperty is shadowed
-                    if (Object.prototype.hasOwnProperty.call(nextSource, nextKey)) {
-                        to[nextKey] = nextSource[nextKey];
-                    }
-                }
-            }
-        }
-
-        return to;
     };
+    // Load the weapon if item has one
+    if(item.weaponType){
+        bullets.load(item.weaponType);
+    }
+
 }
 
-// The default add() method used by all our game entities
-function addItem(details) {
+/* The default add() method used by all our game entities*/
+function addItem(details){
+    var item = {};
     var name = details.name;
-
-    //Initialize the item with any default parameters the item should have
-    var item = Object.assign({}, baseItem);
-
-    // Assign the item all the default properties for its category type
-    Object.assign(item, this.defaults);
-
-    // Assign item properties based on the item name
-    Object.assign(item, this.list[name]);
-
-    // By default, set the item's life to its maximum hit points
+    $.extend(item,this.defaults);
+    $.extend(item,this.list[name]);
     item.life = item.hitPoints;
-
-    // Override item defaults based on details
-    Object.assign(item, details);
-
+    $.extend(item,details);
     return item;
 }
 
-//Default properties that every item should have
-var baseItem = {
-    animationIndex: 0,
-    direction: 0,
+/* Common functions for turning and movement */
 
-    selected: false,
-    selectable: true,
+// Finds the angle between two objects in terms of a direction (where 0 <= angle < directions) 
+function findAngle(object,unit,directions){
+     var dy = (object.y) - (unit.y);
+     var dx = (object.x) - (unit.x);
+    //Convert Arctan to value between (0 - directions)
+    var angle = wrapDirection(directions/2-(Math.atan2(dx,dy)*directions/(2*Math.PI)),directions);   
+    return angle;    
+ }
 
-    orders:{ type: "stand"},
-    action: "stand",
+// returns the smallest difference (value ranging between -directions/2 to +directions/2) between two angles (where 0 <= angle < directions)
+function angleDiff(angle1,angle2,directions){
+    if (angle1>=directions/2){
+        angle1 = angle1-directions;
+    }
+    if (angle2>=directions/2){
+        angle2 = angle2-directions;
+    }
+    
+    diff = angle2-angle1; 
+    
+    if (diff<-directions/2){
+        diff += directions;
+    }
+    if (diff>directions/2){
+        diff -= directions;
+    }
+    
+    return diff;
+}
 
-    // Default method for animating an item
-    animate: function() {
+// Wrap value of direction so that it lies between 0 and directions-1
+function wrapDirection(direction,directions){
+    if (direction<0){
+        direction += directions;
+    }  
+    if (direction >= directions){
+        direction -= directions;
+    }
+    return direction;
+}
 
-        // Check the health of the item
-        if (this.life > this.hitPoints * 0.4) {
-            // Consider item healthy if it has more than 40% life
-            this.lifeCode = "healthy";
-        } else if (this.life > 0) {
-            // Consider item damaged if it has less than 40% life
-            this.lifeCode = "damaged";
-        } else {
-            // Remove item from the game if it had died (life is 0 or negative)
-            //  Good place to trigger blow up animation or keel over dead animation
-            this.lifeCode = "dead";
-            game.remove(this);
+function findFiringAngle(target,source,directions){
+    var dy = (target.y) - (source.y);
+    var dx = (target.x) - (source.x);
 
-            return;
+    if(target.type=="buildings"){
+        dy += target.baseWidth/2/game.gridSize;
+        dx += target.baseHeight/2/game.gridSize;
+    } else if(target.type == "aircraft"){
+        dy -= target.pixelShadowHeight/game.gridSize;
+    }
+
+     if(source.type=="buildings"){
+        dy -= source.baseWidth/2/game.gridSize;
+        dx -= source.baseHeight/2/game.gridSize;
+    } else if(source.type == "aircraft"){
+        dy += source.pixelShadowHeight/game.gridSize;
+    }
+
+    //Convert Arctan to value between (0 - 7)
+    var angle = wrapDirection(directions/2-(Math.atan2(dx,dy)*directions/(2*Math.PI)),directions);   
+    return angle;    
+}
+
+// Common Functions related to combat
+function isValidTarget(item){
+    return item.team != this.team && (this.canAttackLand && (item.type == "buildings" || item.type == "vehicles")|| (this.canAttackAir && (item.type == "aircraft")));
+}
+
+function findTargetsInSight(increment){
+    if(!increment){
+        increment=0;
+    }
+    var targets = [];
+    for (var i = game.items.length - 1; i >= 0; i--){
+        var item = game.items[i];                
+        if (this.isValidTarget(item)){
+            if(Math.pow(item.x-this.x,2) + Math.pow(item.y-this.y,2)<Math.pow(this.sight+increment,2)){
+                targets.push(item);
+            }
         }
+    };
+    
+    // Sort targets based on distance from attacker
+    var attacker = this;
+    targets.sort(function(a,b){
+        return (Math.pow(a.x-attacker.x,2) + Math.pow(a.y-attacker.y,2))-(Math.pow(b.x-attacker.x,2) + Math.pow(b.y-attacker.y,2));
+       });
+    
+    return targets;
+}
 
-        //Process the currrent action
-        this.processActions();
-    },
-
-    // Default method for drawing an item
-    draw: function() {
-        // Compute pixel coordinates on canvas for drawing item
-        this.drawingX = (this.x * game.gridSize) - game.offsetX - this.pixelOffsetX;
-        this.drawingY = (this.y * game.gridSize) - game.offsetY - this.pixelOffsetY;
-
-        this.drawSprite();
-    },
-};
+function isItemDead(uid){
+    var item = game.getItemByUid(uid);
+    return (!item || item.lifeCode == "dead");
+}
