@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f0f0f0;
+        }
+        .test-result {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+        }
+        .pass { background: #d4edda; color: #155724; }
+        .fail { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <h1>Simple Test Runner</h1>
+    <div id="results"></div>
+
+    <script>
+        // Simple test framework
+        class SimpleTestFramework {
+            constructor() {
+                this.tests = [];
+                this.results = [];
+            }
+            
+            addTest(name, testFunction) {
+                this.tests.push({ name, testFunction });
+            }
+            
+            runTests() {
+                const resultsDiv = document.getElementById('results');
+                let passed = 0;
+                let failed = 0;
+                
+                this.tests.forEach((test, index) => {
+                    try {
+                        const result = test.testFunction();
+                        const isPass = result === true;
+                        
+                        if (isPass) {
+                            passed++;
+                            resultsDiv.innerHTML += `<div class="test-result pass">✅ PASS: ${test.name}</div>`;
+                        } else {
+                            failed++;
+                            resultsDiv.innerHTML += `<div class="test-result fail">❌ FAIL: ${test.name} - ${result}</div>`;
+                        }
+                    } catch (error) {
+                        failed++;
+                        resultsDiv.innerHTML += `<div class="test-result fail">❌ ERROR: ${test.name} - ${error.message}</div>`;
+                    }
+                });
+                
+                resultsDiv.innerHTML += `<h2>Summary: ${passed} passed, ${failed} failed</h2>`;
+            }
+        }
+        
+        const testFramework = new SimpleTestFramework();
+        
+        // Test 1: Basic math
+        testFramework.addTest("Basic addition", function() {
+            if (2 + 2 !== 4) return "2 + 2 should equal 4";
+            return true;
+        });
+        
+        // Test 2: String operations
+        testFramework.addTest("String concatenation", function() {
+            if ("Hello" + " " + "World" !== "Hello World") {
+                return "String concatenation failed";
+            }
+            return true;
+        });
+        
+        // Test 3: Array operations
+        testFramework.addTest("Array length", function() {
+            const arr = [1, 2, 3];
+            if (arr.length !== 3) return "Array should have length 3";
+            return true;
+        });
+        
+        // Run tests when page loads
+        window.onload = function() {
+            testFramework.runTests();
+        };
+    </script>
+</body>
+</html> 

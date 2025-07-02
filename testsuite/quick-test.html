@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Quick Test</title>
+</head>
+<body>
+    <h1>Quick Test Results</h1>
+    <div id="results"></div>
+
+    <script src="../js/jquery.min.js"></script>
+    <script src="../js/common.js"></script>
+    <script src="../js/game.js"></script>
+    <script src="../js/mouse.js"></script>
+    <script src="../js/vehicles.js"></script>
+    <script src="../js/buildings.js"></script>
+    <script src="../js/aircraft.js"></script>
+    <script src="../js/bullets.js"></script>
+    <script src="../js/terrain.js"></script>
+    <script src="../js/maps.js"></script>
+    <script src="../js/levels.js"></script>
+    <script src="../js/fog.js"></script>
+    <script src="../js/astar.js"></script>
+    <script src="../js/sounds.js"></script>
+    <script src="../js/sidebar.js"></script>
+    <script src="../js/singleplayer.js"></script>
+    <script src="../js/multiplayer.js"></script>
+    <script src="../js/server.js"></script>
+    <script>
+        function test(name, testFn) {
+            try {
+                const result = testFn();
+                const div = document.createElement('div');
+                div.style.padding = '10px';
+                div.style.margin = '5px';
+                div.style.backgroundColor = result === true ? '#d4edda' : '#f8d7da';
+                div.style.border = '1px solid ' + (result === true ? '#c3e6cb' : '#f5c6cb');
+                div.innerHTML = `<strong>${name}:</strong> ${result === true ? 'PASS' : 'FAIL - ' + result}`;
+                document.getElementById('results').appendChild(div);
+                return result === true;
+            } catch (error) {
+                const div = document.createElement('div');
+                div.style.padding = '10px';
+                div.style.margin = '5px';
+                div.style.backgroundColor = '#f8d7da';
+                div.style.border = '1px solid #f5c6cb';
+                div.innerHTML = `<strong>${name}:</strong> ERROR - ${error.message}`;
+                document.getElementById('results').appendChild(div);
+                return false;
+            }
+        }
+
+        // Test 1: Game initialization
+        test('Game initialization', function() {
+            game.init();
+            return game.backgroundCanvas && game.foregroundCanvas;
+        });
+
+        // Test 2: Entity creation with direction property
+        test('Entity has direction property', function() {
+            const entity = addItem({
+                type: "vehicles",
+                name: "test"
+            });
+            return typeof entity.direction === 'number';
+        });
+
+        // Test 3: Entity creation with action property
+        test('Entity has action property', function() {
+            const entity = addItem({
+                type: "vehicles",
+                name: "test"
+            });
+            return typeof entity.action === 'string';
+        });
+
+        // Test 4: Damage calculation with variability
+        test('Damage calculation with variability', function() {
+            const damage = calculateDamage(100, 0);
+            return damage >= 90 && damage <= 110;
+        });
+
+        // Test 5: Target validation
+        test('Target validation', function() {
+            const attacker = {
+                team: "player",
+                canAttack: true,
+                canAttackLand: true
+            };
+            const target = {
+                team: "enemy",
+                type: "vehicles",
+                lifeCode: "healthy",
+                selectable: true
+            };
+            return isValidTarget(attacker, target);
+        });
+
+        // Test 6: Refresh background flag
+        test('Refresh background flag', function() {
+            game.init();
+            mouse.insideCanvas = true;
+            game.canvasWidth = 800;
+            game.canvasHeight = 600;
+            game.panningThreshold = 60;
+            game.panningSpeed = 10;
+            game.currentMapImage = { width: 1000, height: 800 };
+            
+            // Set initial camera position so it can pan
+            game.offsetX = 100;
+            game.offsetY = 100;
+            
+            game.refreshBackground = false;
+            mouse.x = 30;
+            mouse.y = 300;
+            game.handlePanning();
+            
+            return game.refreshBackground;
+        });
+
+        console.log('Quick test complete');
+    </script>
+</body>
+</html> 

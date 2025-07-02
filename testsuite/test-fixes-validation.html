@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Fixes Validation</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .pass { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .fail { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    </style>
+</head>
+<body>
+    <h1>Test Fixes Validation</h1>
+    <div id="results"></div>
+
+    <script src="../js/jquery.min.js"></script>
+    <script src="../js/common.js"></script>
+    <script src="../js/game.js"></script>
+    <script>
+        function runTest(name, testFunction) {
+            try {
+                const result = testFunction();
+                const div = document.createElement('div');
+                div.className = 'test-result ' + (result === true ? 'pass' : 'fail');
+                div.innerHTML = `<strong>${name}:</strong> ${result === true ? 'PASS' : 'FAIL - ' + result}`;
+                document.getElementById('results').appendChild(div);
+                return result === true;
+            } catch (error) {
+                const div = document.createElement('div');
+                div.className = 'test-result fail';
+                div.innerHTML = `<strong>${name}:</strong> ERROR - ${error.message}`;
+                document.getElementById('results').appendChild(div);
+                return false;
+            }
+        }
+
+        // Test 1: wrapDirection function
+        runTest('wrapDirection(20, 8) should return 4', function() {
+            const result = wrapDirection(20, 8);
+            return result === 4 ? true : `Expected 4, got ${result}`;
+        });
+
+        // Test 2: calculateDamage function
+        runTest('calculateDamage(0, 10) should return 0', function() {
+            const result = calculateDamage(0, 10);
+            return result === 0 ? true : `Expected 0, got ${result}`;
+        });
+
+        // Test 3: calculateDamage function with armor (with variability)
+        runTest('calculateDamage(100, 0) should return 90-110', function() {
+            const result = calculateDamage(100, 0);
+            return (result >= 90 && result <= 110) ? true : `Expected 90-110, got ${result}`;
+        });
+
+        // Test 4: calculateDamage function with armor (with variability)
+        runTest('calculateDamage(100, 20) should return 70-90', function() {
+            const result = calculateDamage(100, 20);
+            return (result >= 70 && result <= 90) ? true : `Expected 70-90, got ${result}`;
+        });
+
+        // Test 4: Game initialization
+        runTest('Game initialization should work', function() {
+            try {
+                game.init();
+                return game.backgroundCanvas && game.foregroundCanvas ? true : 'Canvas not initialized';
+            } catch (error) {
+                return 'Game initialization failed: ' + error.message;
+            }
+        });
+
+        // Test 5: addItem function
+        runTest('addItem should create entity with required properties', function() {
+            const entity = addItem({
+                type: "vehicles",
+                name: "scout-tank",
+                x: 10,
+                y: 10
+            });
+            
+            if (!entity.speed) return 'Entity should have speed property';
+            if (!entity.sight) return 'Entity should have sight property';
+            if (!entity.radius) return 'Entity should have radius property';
+            if (!entity.processOrders) return 'Entity should have processOrders function';
+            if (!entity.animate) return 'Entity should have animate function';
+            
+            return true;
+        });
+
+        // Test 6: isItemDead function
+        runTest('isItemDead should work with entity objects', function() {
+            const aliveEntity = { life: 50, hitPoints: 100 };
+            const deadEntity = { life: 0, hitPoints: 100 };
+            
+            if (isItemDead(aliveEntity)) return 'Alive entity should not be considered dead';
+            if (!isItemDead(deadEntity)) return 'Dead entity should be considered dead';
+            
+            return true;
+        });
+
+        // Test 7: UID generation should be unique
+        runTest('Entity UID generation should create unique IDs', function() {
+            const entity1 = addItem({ type: "vehicles", name: "test1" });
+            const entity2 = addItem({ type: "vehicles", name: "test2" });
+            
+            if (entity1.uid === entity2.uid) return 'UIDs should be unique';
+            if (!entity1.uid.startsWith('entity-')) return 'UID should start with entity- prefix';
+            if (!entity2.uid.startsWith('entity-')) return 'UID should start with entity- prefix';
+            
+            return true;
+        });
+
+        console.log('Test validation complete');
+    </script>
+</body>
+</html> 

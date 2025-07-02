@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minimal Test</title>
+</head>
+<body>
+    <h1>Minimal Test Runner</h1>
+    <div id="results"></div>
+
+    <!-- Load only essential scripts -->
+    <script src="../js/jquery.min.js"></script>
+    <script src="../js/common.js"></script>
+    <script src="../js/game.js"></script>
+
+    <script>
+        const results = document.getElementById('results');
+        
+        function log(message) {
+            console.log(message);
+            results.innerHTML += '<div>' + message + '</div>';
+        }
+        
+        function test(name, testFunction) {
+            try {
+                log('Testing: ' + name);
+                const result = testFunction();
+                if (result === true) {
+                    log('✅ PASS: ' + name);
+                    return true;
+                } else {
+                    log('❌ FAIL: ' + name + ' - ' + result);
+                    return false;
+                }
+            } catch (error) {
+                log('💥 ERROR: ' + name + ' - ' + error.message);
+                return false;
+            }
+        }
+        
+        // Test 1: Check if basic functions exist
+        test('Basic functions exist', function() {
+            if (typeof addItem !== 'function') return 'addItem not found';
+            if (typeof findAngle !== 'function') return 'findAngle not found';
+            if (typeof wrapDirection !== 'function') return 'wrapDirection not found';
+            if (typeof angleDiff !== 'function') return 'angleDiff not found';
+            if (typeof isValidTarget !== 'function') return 'isValidTarget not found';
+            if (typeof findFiringAngle !== 'function') return 'findFiringAngle not found';
+            if (typeof calculateDamage !== 'function') return 'calculateDamage not found';
+            return true;
+        });
+        
+        // Test 2: Check if game object exists
+        test('Game object exists', function() {
+            if (typeof game === 'undefined') return 'game object not found';
+            if (typeof game.init !== 'function') return 'game.init not found';
+            if (typeof game.handlePanning !== 'function') return 'game.handlePanning not found';
+            return true;
+        });
+        
+        // Test 3: Test basic math functions
+        test('Basic math functions work', function() {
+            const result = wrapDirection(10, 8);
+            if (result !== 2) return 'wrapDirection(10, 8) should return 2, got ' + result;
+            
+            const angle = findAngle({x: 10, y: 0}, {x: 0, y: 0}, 8);
+            if (isNaN(angle)) return 'findAngle returned NaN';
+            
+            const diff = angleDiff(0, 4, 8);
+            if (isNaN(diff)) return 'angleDiff returned NaN';
+            
+            return true;
+        });
+        
+        // Test 4: Test combat functions
+        test('Combat functions work', function() {
+            const damage = calculateDamage(100, 20);
+            if (damage < 70 || damage > 90) return 'calculateDamage returned unexpected value: ' + damage;
+            
+            const firingAngle = findFiringAngle({x: 10, y: 0}, {x: 0, y: 0}, 8);
+            if (isNaN(firingAngle)) return 'findFiringAngle returned NaN';
+            
+            return true;
+        });
+        
+        // Test 5: Test addItem function
+        test('addItem creates valid entity', function() {
+            const entity = addItem({
+                name: "test-unit",
+                type: "vehicles",
+                x: 10,
+                y: 20,
+                team: "player"
+            });
+            
+            if (!entity) return 'Entity not created';
+            if (entity.name !== "test-unit") return 'Entity name not set correctly';
+            if (entity.x !== 10) return 'Entity x position not set correctly';
+            if (entity.y !== 20) return 'Entity y position not set correctly';
+            if (entity.team !== "player") return 'Entity team not set correctly';
+            if (!entity.uid) return 'Entity UID not generated';
+            
+            return true;
+        });
+        
+        // Test 6: Test isValidTarget function
+        test('isValidTarget validates targets correctly', function() {
+            const attacker = {
+                team: "player",
+                canAttack: true,
+                canAttackLand: true,
+                canAttackAir: false
+            };
+            
+            const enemyGround = {
+                team: "enemy",
+                type: "vehicles",
+                lifeCode: "healthy",
+                selectable: true
+            };
+            
+            const friendly = {
+                team: "player",
+                type: "vehicles",
+                lifeCode: "healthy",
+                selectable: true
+            };
+            
+            if (!isValidTarget(attacker, enemyGround)) {
+                return 'Should be able to attack enemy ground unit';
+            }
+            
+            if (isValidTarget(attacker, friendly)) {
+                return 'Should not be able to attack friendly unit';
+            }
+            
+            return true;
+        });
+        
+        // Test 7: Test game initialization
+        test('Game initialization works', function() {
+            try {
+                // Mock canvas elements
+                if (!document.getElementById('gamebackgroundcanvas')) {
+                    const mockCanvas = {
+                        width: 800,
+                        height: 600,
+                        getContext: function() {
+                            return {
+                                drawImage: function() {},
+                                clearRect: function() {},
+                                fillRect: function() {},
+                                strokeRect: function() {},
+                                fillText: function() {},
+                                strokeText: function() {},
+                                save: function() {},
+                                restore: function() {},
+                                translate: function() {},
+                                scale: function() {},
+                                rotate: function() {}
+                            };
+                        }
+                    };
+                    
+                    document.getElementById = function(id) {
+                        if (id === 'gamebackgroundcanvas' || id === 'gameforegroundcanvas') {
+                            return mockCanvas;
+                        }
+                        return null;
+                    };
+                }
+                
+                // Mock jQuery
+                if (typeof $ === 'undefined') {
+                    window.$ = function(selector) {
+                        return {
+                            hide: function() { return this; },
+                            show: function() { return this; },
+                            html: function() { return this; },
+                            on: function() { return this; },
+                            off: function() { return this; }
+                        };
+                    };
+                }
+                
+                // Mock subsystems
+                if (typeof loader === 'undefined') {
+                    window.loader = { init: function() {} };
+                }
+                if (typeof mouse === 'undefined') {
+                    window.mouse = { init: function() {} };
+                }
+                if (typeof sidebar === 'undefined') {
+                    window.sidebar = { init: function() {} };
+                }
+                if (typeof sounds === 'undefined') {
+                    window.sounds = { init: function() {} };
+                }
+                
+                game.init();
+                
+                if (!game.backgroundCanvas) return 'Background canvas not initialized';
+                if (!game.foregroundCanvas) return 'Foreground canvas not initialized';
+                
+                return true;
+            } catch (error) {
+                return 'Game initialization failed: ' + error.message;
+            }
+        });
+        
+        log('All tests completed');
+    </script>
+</body>
+</html> 

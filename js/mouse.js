@@ -1,198 +1,412 @@
+/**
+ * LAST COLONY - MOUSE INPUT HANDLING SYSTEM
+ * =========================================
+ * 
+ * This file manages all mouse input for the game, including:
+ * - Mouse position tracking and coordinate conversion
+ * - Click detection and command processing
+ * - Drag selection for unit groups
+ * - Building placement preview
+ * - Context menu (right-click) handling
+ * 
+ * COORDINATE SYSTEMS:
+ * - Screen coordinates (x, y): Mouse position relative to canvas
+ * - Game coordinates (gameX, gameY): Position in the game world
+ * - Grid coordinates (gridX, gridY): Position in the tile grid system
+ * 
+ * INTERACTION PATTERNS:
+ * - Left Click: Select units, confirm building placement
+ * - Right Click: Issue commands (move, attack, guard, deploy)
+ * - Drag: Select multiple units in a rectangular area
+ * - Shift + Click: Add/remove units from selection
+ * 
+ * DESIGN PATTERNS:
+ * - Observer Pattern: Mouse events trigger game actions
+ * - State Machine: Different interaction modes (normal, building placement)
+ * - Command Pattern: Mouse actions create unit commands
+ */
+
+/**
+ * MOUSE INPUT MANAGER
+ * Central object that handles all mouse-related functionality.
+ * Maintains mouse state and coordinates across different coordinate systems.
+ */
 var mouse = {
-    // x,y coordinates of mouse relative to top left corner of canvas
-    x:0,
-    y:0,
-    // x,y coordinates of mouse relative to top left corner of game map
-    gameX:0,
-    gameY:0,
-    // game grid x,y coordinates of mouse 
-    gridX:0,
-    gridY:0,
-    // whether or not the left mouse button is currently pressed
-    buttonPressed:false,
-    // whether or not the player is dragging and selecting with the left mouse button pressed
-    dragSelect:false,
-    // whether or not the mouse is inside the canvas region
-    insideCanvas:false,
-
-	click:function(ev,rightClick){
-	    // Player clicked inside the canvas
-
+    // ========================================
+    // MOUSE STATE PROPERTIES
+    // ========================================
+    
+    /**
+     * SCREEN COORDINATES
+     * Mouse position relative to the top-left corner of the game canvas.
+     * These are the raw pixel coordinates from the browser.
+     */
+    x: 0,
+    y: 0,
+    
+    /**
+     * GAME WORLD COORDINATES
+     * Mouse position in the game world, accounting for camera offset.
+     * Used for determining what the player is clicking on in the game world.
+     */
+    gameX: 0,
+    gameY: 0,
+    
+    /**
+     * GRID COORDINATES
+     * Mouse position converted to the game's tile grid system.
+     * Each grid tile is 20x20 pixels, used for pathfinding and building placement.
+     */
+    gridX: 0,
+    gridY: 0,
+    
+    /**
+     * MOUSE BUTTON STATE
+     * Whether the left mouse button is currently being held down.
+     * Used for drag selection and continuous interaction.
+     */
+    buttonPressed: false,
+    
+    /**
+     * DRAG SELECTION STATE
+     * Whether the player is currently dragging to select multiple units.
+     * Activated when mouse moves more than 4 pixels while button is pressed.
+     */
+    dragSelect: false,
+    
+    /**
+     * CANVAS HOVER STATE
+     * Whether the mouse cursor is currently inside the game canvas.
+     * Used to disable camera panning when mouse leaves the game area.
+     */
+    insideCanvas: false,
+    
+    // ========================================
+    // CLICK HANDLING
+    // ========================================
+    
+    	/**
+	 * HANDLE MOUSE CLICK
+	 * Processes all mouse clicks and converts them into game actions.
+	 * Supports both left-click (selection) and right-click (commands).
+	 * 
+	 * @param {Event} ev - The mouse event object from the browser
+	 * @param {boolean} rightClick - Whether this is a right-click (context menu)
+	 * 
+	 * TEST: testsuite/tests/input-tests.js - "Click events are properly detected and validated"
+	 */
+	click: function(ev, rightClick){
+	    // Get the game object under the mouse cursor
 	    var clickedItem = this.itemUnderMouse();
 	    var shiftPressed = ev.shiftKey;
 
-	    if (!rightClick){ // Player left clicked
+	    if (!rightClick){ 
+	        // ========================================
+	        // LEFT CLICK HANDLING (SELECTION)
+	        // ========================================
+	        
 			if (game.deployBuilding){
-				// If the game is in deployBuilding mode, left clicking will deploy the building
+				// BUILDING PLACEMENT MODE
+				// If the game is in building placement mode, left click deploys the building
 				if(game.canDeployBuilding){
 					sidebar.finishDeployingBuilding();
 				} else {
-					game.showMessage("system","Warning! Cannot deploy building here.");
+					game.showMessage("system", "Warning! Cannot deploy building here.");
 				}
 				return;
 			}
 
+	        // NORMAL SELECTION MODE
 	        if (clickedItem){                
-	            // Pressing shift adds to existing selection. If shift is not pressed, clear existing selection
+	            // Handle unit selection with shift key support
+	            // Shift + click adds to existing selection, normal click clears selection
 	            if(!shiftPressed){
 	                game.clearSelection();
 	            }
-	            game.selectItem(clickedItem,shiftPressed);
+	            game.selectItem(clickedItem, shiftPressed);
 	        }
-	    } else { // Player right clicked
+	    } else { 
+	        // ========================================
+	        // RIGHT CLICK HANDLING (COMMANDS)
+	        // ========================================
+	        
 	        if (game.deployBuilding){
-				// If the game is in deployBuilding mode, right clicking will cancel deployBuilding mode	
+				// CANCEL BUILDING PLACEMENT
+				// Right click cancels building placement mode
 	            sidebar.cancelDeployingBuilding();
 	            return;
 	        }	        
-			// Handle actions like attacking and movement of selected units			
+			
+			// PROCESS UNIT COMMANDS
+			// Right click issues commands to selected units based on what was clicked
 			var uids = [];			
-			if (clickedItem){ // Player right clicked on something
+			
+			if (clickedItem){ 
+			    // CLICKED ON A GAME OBJECT
+			    
 				if (clickedItem.type != "terrain"){					
-					if (clickedItem.team != game.team){ // Player right clicked on an enemy item						
-						// identify selected items from players team that can attack
+					if (clickedItem.team != game.team){ 
+					    // ATTACK ENEMY
+					    // Player right-clicked on an enemy unit/building
+					    // Find all selected units that can attack and command them to attack
 						for (var i = game.selectedItems.length - 1; i >= 0; i--){
 							var item = game.selectedItems[i];							
 							if(item.team == game.team && item.canAttack){
 								uids.push(item.uid);
 							}
 						};
-						// then command them to attack the clicked item
-						if (uids.length>0){
-							game.sendCommand(uids,{type:"attack",toUid:clickedItem.uid});
+						
+						// Issue attack command to all capable units
+						if (uids.length > 0){
+							game.sendCommand(uids, {type: "attack", toUid: clickedItem.uid});
 							sounds.play("acknowledge-attacking");
 						}
-					} else  { // Player right clicked on a friendly item
-						//identify selected items from players team that can move						
+					} else { 
+					    // GUARD FRIENDLY
+					    // Player right-clicked on a friendly unit/building
+					    // Find all selected mobile units and command them to guard
 						for (var i = game.selectedItems.length - 1; i >= 0; i--){
 							var item = game.selectedItems[i];
 							if(item.team == game.team && (item.type == "vehicles" || item.type == "aircraft")){
 								uids.push(item.uid);
 							}
 						};
-						// then command them to guard the clicked item						
-						if (uids.length>0){
-							game.sendCommand(uids,{type:"guard",toUid:clickedItem.uid});
+						
+						// Issue guard command to all mobile units
+						if (uids.length > 0){
+							game.sendCommand(uids, {type: "guard", toUid: clickedItem.uid});
 							sounds.play("acknowledge-moving");
 						}
 					}
-				} else if (clickedItem.name == "oilfield"){ // Player right clicked on an oilfield
-					// identify the first selected harvester from players team (since only one can deploy at a time)
+				} else if (clickedItem.name == "oilfield"){ 
+				    // DEPLOY HARVESTER
+				    // Player right-clicked on an oil field
+				    // Find the first selected harvester and command it to deploy
 					for (var i = game.selectedItems.length - 1; i >= 0; i--){
 						var item = game.selectedItems[i];						
 						if(item.team == game.team && (item.type == "vehicles" && item.name == "harvester")){
 							uids.push(item.uid);
-							break;
+							break; // Only deploy one harvester at a time
 						}
 					};
-					// then command it to deploy on the oilfield
-					if (uids.length>0){					
-						game.sendCommand(uids,{type:"deploy",toUid:clickedItem.uid});
+					
+					// Issue deploy command to the harvester
+					if (uids.length > 0){					
+						game.sendCommand(uids, {type: "deploy", toUid: clickedItem.uid});
 						sounds.play("acknowledge-moving");
 					}
 				} 
-			} else { // Player right clicked on the ground
-				//identify selected items from players team that can move
+			} else { 
+			    // CLICKED ON EMPTY GROUND
+			    // Player right-clicked on empty space - command units to move there
+			    
+			    // Find all selected mobile units
 				for (var i = game.selectedItems.length - 1; i >= 0; i--){
 					var item = game.selectedItems[i];
 					if(item.team == game.team && (item.type == "vehicles" || item.type == "aircraft")){
 						uids.push(item.uid);
 					}
 				};
-				// then command them to move to the clicked location										
-				if (uids.length>0){
-					game.sendCommand(uids, {type:"move", to:{x:mouse.gameX/game.gridSize, y:mouse.gameY/game.gridSize}});
+				
+				// Issue move command to the clicked location
+				if (uids.length > 0){
+					game.sendCommand(uids, {
+					    type: "move", 
+					    to: {
+					        x: mouse.gameX / game.gridSize, 
+					        y: mouse.gameY / game.gridSize
+					    }
+					});
 					sounds.play("acknowledge-moving");
 				}
 			}
 	    }
 	},
-	itemUnderMouse:function(){
-		if(fog.isPointOverFog(mouse.gameX,mouse.gameY)){
+	
+	// ========================================
+	// OBJECT DETECTION
+	// ========================================
+	
+	/**
+	 * FIND OBJECT UNDER MOUSE
+	 * Determines which game object (if any) is under the mouse cursor.
+	 * Uses different collision detection methods for different object types.
+	 * 
+	 * Collision Detection Methods:
+	 * - Buildings/Terrain: Rectangle collision (accounting for size)
+	 * - Aircraft: Circle collision with height offset (for shadow)
+	 * - Units: Circle collision at ground level
+	 * 
+	 * @returns {Object|null} The game object under the mouse, or null if none
+	 */
+	itemUnderMouse: function(){
+		// Don't detect objects under fog of war
+		if(fog.isPointOverFog(mouse.gameX, mouse.gameY)){
 	        return;
 	    }	    
 	
+	    // Search through all game objects (back to front for proper layering)
 	    for (var i = game.items.length - 1; i >= 0; i--){
 	        var item = game.items[i];
-	        if (item.type=="buildings" || item.type=="terrain"){
-	            if(item.lifeCode != "dead" 
-	                && item.x<= (mouse.gameX)/game.gridSize 
-	                && item.x >= (mouse.gameX - item.baseWidth)/game.gridSize
-	                && item.y<= mouse.gameY/game.gridSize 
-	                && item.y >= (mouse.gameY - item.baseHeight)/game.gridSize
+	        
+	        // Skip dead objects
+	        if (item.lifeCode == "dead") continue;
+	        
+	        if (item.type == "buildings" || item.type == "terrain"){
+	            // RECTANGLE COLLISION FOR BUILDINGS AND TERRAIN
+	            // Buildings and terrain have rectangular footprints
+	            if(item.x <= (mouse.gameX) / game.gridSize 
+	                && item.x >= (mouse.gameX - item.baseWidth) / game.gridSize
+	                && item.y <= mouse.gameY / game.gridSize 
+	                && item.y >= (mouse.gameY - item.baseHeight) / game.gridSize
 	                ){
 	                    return item;
 	            }
-	        } else if (item.type=="aircraft"){
-	            if (item.lifeCode != "dead" && 
-	                Math.pow(item.x-mouse.gameX/game.gridSize,2) + Math.pow(item.y-(mouse.gameY+item.pixelShadowHeight)/game.gridSize,2) < Math.pow((item.radius)/game.gridSize,2)){
+	        } else if (item.type == "aircraft"){
+	            // CIRCLE COLLISION FOR AIRCRAFT WITH HEIGHT OFFSET
+	            // Aircraft appear to float above ground, so we check their shadow position
+	            var aircraftX = item.x - mouse.gameX / game.gridSize;
+	            var aircraftY = (item.y - (mouse.gameY + item.pixelShadowHeight) / game.gridSize);
+	            var distanceSquared = aircraftX * aircraftX + aircraftY * aircraftY;
+	            var radiusSquared = (item.radius / game.gridSize) * (item.radius / game.gridSize);
+	            
+	            if (distanceSquared < radiusSquared){
 	                return item;
 	            }
-	       }else {
-	            if (item.lifeCode != "dead" && Math.pow(item.x-mouse.gameX/game.gridSize,2) + Math.pow(item.y-mouse.gameY/game.gridSize,2) < Math.pow((item.radius)/game.gridSize,2)){
+	       } else {
+	            // CIRCLE COLLISION FOR GROUND UNITS
+	            // Standard circular collision detection for vehicles and other units
+	            var unitX = item.x - mouse.gameX / game.gridSize;
+	            var unitY = item.y - mouse.gameY / game.gridSize;
+	            var distanceSquared = unitX * unitX + unitY * unitY;
+	            var radiusSquared = (item.radius / game.gridSize) * (item.radius / game.gridSize);
+	            
+	            if (distanceSquared < radiusSquared){
 	                return item;
 	            }
 	        }
 	    }
 	},
-	draw:function(){
+	
+	// ========================================
+	// VISUAL FEEDBACK
+	// ========================================
+	
+	/**
+	 * DRAW MOUSE VISUALS
+	 * Renders visual feedback for mouse interactions.
+	 * Includes drag selection rectangle and building placement preview.
+	 */
+	draw: function(){
+	    // DRAW DRAG SELECTION RECTANGLE
 	    if(this.dragSelect){    
-	        var x = Math.min(this.gameX,this.dragX);
-	        var y = Math.min(this.gameY,this.dragY);
-	        var width = Math.abs(this.gameX-this.dragX)
-	        var height = Math.abs(this.gameY-this.dragY)
+	        var x = Math.min(this.gameX, this.dragX);
+	        var y = Math.min(this.gameY, this.dragY);
+	        var width = Math.abs(this.gameX - this.dragX);
+	        var height = Math.abs(this.gameY - this.dragY);
+	        
+	        // Draw white rectangle showing selection area
 	        game.foregroundContext.strokeStyle = 'white';
-	        game.foregroundContext.strokeRect(x-game.offsetX,y-game.offsetY, width, height);
+	        game.foregroundContext.strokeRect(
+	            x - game.offsetX, 
+	            y - game.offsetY, 
+	            width, 
+	            height
+	        );
 	    }    
+	    
+	    // DRAW BUILDING PLACEMENT PREVIEW
 	    if (game.deployBuilding && game.placementGrid){
 	        var buildingType = buildings.list[game.deployBuilding];
-	        var x = (this.gridX*game.gridSize)-game.offsetX;
-	        var y = (this.gridY*game.gridSize)-game.offsetY;
+	        var x = (this.gridX * game.gridSize) - game.offsetX;
+	        var y = (this.gridY * game.gridSize) - game.offsetY;
+	        
+	        // Draw colored grid showing where building will be placed
 	        for (var i = game.placementGrid.length - 1; i >= 0; i--){
 	            for (var j = game.placementGrid[i].length - 1; j >= 0; j--){                    
 	                if(game.placementGrid[i][j]){
+	                    // Blue = valid placement location
 	                    game.foregroundContext.fillStyle = "rgba(0,0,255,0.3)";                        
 	                } else {
+	                    // Red = invalid placement location
 	                    game.foregroundContext.fillStyle = "rgba(255,0,0,0.3)";
 	                }
-	                game.foregroundContext.fillRect(x+j*game.gridSize, y+i*game.gridSize, game.gridSize, game.gridSize);
+	                game.foregroundContext.fillRect(
+	                    x + j * game.gridSize, 
+	                    y + i * game.gridSize, 
+	                    game.gridSize, 
+	                    game.gridSize
+	                );
 	            };
 	        };        
 	    }
 	},
-	calculateGameCoordinates:function(){
-		mouse.gameX = mouse.x + game.offsetX ;
+	
+	// ========================================
+	// COORDINATE CONVERSION
+	// ========================================
+	
+	/**
+	 * CALCULATE GAME COORDINATES
+	 * Converts screen coordinates to game world coordinates.
+	 * Accounts for camera offset and converts to grid coordinates.
+	 */
+	calculateGameCoordinates: function(){
+		// Convert screen coordinates to game world coordinates
+		mouse.gameX = mouse.x + game.offsetX;
 		mouse.gameY = mouse.y + game.offsetY;
 
+		// Convert game coordinates to grid coordinates
 		mouse.gridX = Math.floor((mouse.gameX) / game.gridSize);
 		mouse.gridY = Math.floor((mouse.gameY) / game.gridSize);	
 	},
-    init:function(){
+	
+	// ========================================
+	// EVENT HANDLER SETUP
+	// ========================================
+	
+	/**
+	 * INITIALIZE MOUSE SYSTEM
+	 * Sets up all mouse event handlers and initializes the input system.
+	 * This is called once when the game starts.
+	 */
+    init: function(){
         var $mouseCanvas = $("#gameforegroundcanvas");
+        
+        // MOUSE MOVE HANDLER
+        // Tracks mouse position and handles drag selection
         $mouseCanvas.mousemove(function(ev) {
+            // Calculate mouse position relative to canvas
             var offset = $mouseCanvas.offset();
             mouse.x = ev.pageX - offset.left;
             mouse.y = ev.pageY - offset.top;  
             
+            // Convert to game coordinates
             mouse.calculateGameCoordinates();
 
+            // Handle drag selection
             if (mouse.buttonPressed){
-                if  ((Math.abs(mouse.dragX - mouse.gameX) > 4 || Math.abs(mouse.dragY - mouse.gameY) > 4)){
-                        mouse.dragSelect = true
+                // Start drag selection if mouse moves more than 4 pixels
+                if ((Math.abs(mouse.dragX - mouse.gameX) > 4 || Math.abs(mouse.dragY - mouse.gameY) > 4)){
+                        mouse.dragSelect = true;
                 }
             } else {
                 mouse.dragSelect = false;
             }                     
         });
         
+        // LEFT CLICK HANDLER
+        // Handles unit selection and building placement confirmation
         $mouseCanvas.click(function(ev) {
-            mouse.click(ev,false);
+            mouse.click(ev, false);
             mouse.dragSelect = false;                
-            return false;
+            return false; // Prevent default browser behavior
         });
         
+        // MOUSE DOWN HANDLER
+        // Initiates drag selection and tracks drag start position
         $mouseCanvas.mousedown(function(ev) {
-            if(ev.which == 1){
+            if(ev.which == 1){ // Left mouse button only
                 mouse.buttonPressed = true;
                 mouse.dragX = mouse.gameX;
                 mouse.dragY = mouse.gameY;
@@ -201,47 +415,65 @@ var mouse = {
             return false;
         });
         
-        $mouseCanvas.bind('contextmenu',function(ev){
-            mouse.click(ev,true);
-            return false;
+        // RIGHT CLICK HANDLER (CONTEXT MENU)
+        // Handles unit commands and building placement cancellation
+        $mouseCanvas.bind('contextmenu', function(ev){
+            mouse.click(ev, true);
+            return false; // Prevent default context menu
         });
         
+        // MOUSE UP HANDLER
+        // Completes drag selection and processes multi-unit selection
 		$mouseCanvas.mouseup(function(ev) {
 		    var shiftPressed = ev.shiftKey;
-		    if(ev.which==1){
-		    //Left key was released
+		    if(ev.which == 1){ // Left mouse button only
 		        if (mouse.dragSelect){
+		            // PROCESS DRAG SELECTION
+		            // Clear existing selection unless shift is held
 		            if (!shiftPressed){
-		                // Shift key was not pressed                        
 		                game.clearSelection();
 		            }
 
-		            var x1 = Math.min(mouse.gameX,mouse.dragX)/game.gridSize;
-		            var y1 = Math.min(mouse.gameY,mouse.dragY)/game.gridSize;
-		            var x2 = Math.max(mouse.gameX,mouse.dragX)/game.gridSize;
-		            var y2 = Math.max(mouse.gameY,mouse.dragY)/game.gridSize;
+		            // Calculate selection rectangle bounds
+		            var x1 = Math.min(mouse.gameX, mouse.dragX) / game.gridSize;
+		            var y1 = Math.min(mouse.gameY, mouse.dragY) / game.gridSize;
+		            var x2 = Math.max(mouse.gameX, mouse.dragX) / game.gridSize;
+		            var y2 = Math.max(mouse.gameY, mouse.dragY) / game.gridSize;
+		            
+		            // Select all units within the rectangle
 		            for (var i = game.items.length - 1; i >= 0; i--){
 		                var item = game.items[i];
-		                if (item.type != "buildings" && item.selectable && item.team==game.team && x1<= item.x && x2 >= item.x){
-		                    if ((item.type == "vehicles" && y1<= item.y && y2 >= item.y)
-		                    || (item.type == "aircraft" && (y1 <= item.y-item.pixelShadowHeight/game.gridSize) && (y2 >= item.y-item.pixelShadowHeight/game.gridSize))){
-		                        game.selectItem(item,shiftPressed);
+		                
+		                // Only select friendly, selectable, non-building units
+		                if (item.type != "buildings" && item.selectable && item.team == game.team && 
+		                    x1 <= item.x && x2 >= item.x){
+		                    
+		                    // Different selection logic for ground units vs aircraft
+		                    if ((item.type == "vehicles" && y1 <= item.y && y2 >= item.y)
+		                    || (item.type == "aircraft" && 
+		                        (y1 <= item.y - item.pixelShadowHeight / game.gridSize) && 
+		                        (y2 >= item.y - item.pixelShadowHeight / game.gridSize))){
+		                        game.selectItem(item, shiftPressed);
 		                    }
-
 		                } 
 		            };
 		        }
+		        
+		        // Reset mouse state
 		        mouse.buttonPressed = false;
 		        mouse.dragSelect = false;
 		    }
 		    return false;
 		});
 
-        
+        // MOUSE LEAVE HANDLER
+        // Disables camera panning when mouse leaves canvas
         $mouseCanvas.mouseleave(function(ev) {
             mouse.insideCanvas = false;
         });
         
+        // MOUSE ENTER HANDLER
+        // Re-enables interaction when mouse returns to canvas
         $mouseCanvas.mouseenter(function(ev) {
             mouse.buttonPressed = false;
             mouse.insideCanvas = true;

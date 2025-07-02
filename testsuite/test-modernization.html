@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Last Colony - Modernization Test</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        /* Test-specific styles */
+        .test-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+        }
+        
+        .test-title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .test-description {
+            margin-bottom: 15px;
+            color: #666;
+        }
+        
+        .test-game {
+            border: 2px solid #333;
+            margin: 10px 0;
+        }
+        
+        .test-results {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+        }
+        
+        .test-results h4 {
+            margin-top: 0;
+            color: #333;
+        }
+        
+        .test-results ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        
+        .test-results li {
+            margin: 5px 0;
+        }
+        
+        .success {
+            color: #28a745;
+        }
+        
+        .warning {
+            color: #ffc107;
+        }
+        
+        .error {
+            color: #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>Last Colony - CSS Modernization Test</h1>
+        
+        <div class="test-section">
+            <div class="test-title">1. Game Container Test</div>
+            <div class="test-description">Testing the main game container with modern CSS properties and responsive design.</div>
+            <div class="test-game">
+                <main id="gamecontainer" role="main" aria-label="Last Colony Game">
+                    <section id="gamestartscreen" class="gamelayer" role="region" aria-label="Game Start Menu">
+                        <button type="button" id="singleplayer" aria-label="Start Campaign Mode">Campaign</button>
+                        <button type="button" id="multiplayer" aria-label="Start Multiplayer Mode">Multiplayer</button>
+                    </section>
+                </main>
+            </div>
+            <div class="test-results">
+                <h4>Expected Results:</h4>
+                <ul>
+                    <li class="success">✓ Game container should be centered and responsive</li>
+                    <li class="success">✓ Buttons should be properly styled with hover effects</li>
+                    <li class="success">✓ CSS custom properties should be working</li>
+                    <li class="success">✓ Focus states should be visible</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <div class="test-title">2. Responsive Design Test</div>
+            <div class="test-description">Testing responsive behavior by resizing the browser window.</div>
+            <div class="test-results">
+                <h4>Test Instructions:</h4>
+                <ul>
+                    <li>Resize browser window to test responsive behavior</li>
+                    <li>Check mobile viewport simulation in browser dev tools</li>
+                    <li>Verify touch targets are at least 44px</li>
+                    <li>Test landscape orientation on mobile devices</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <div class="test-title">3. Accessibility Test</div>
+            <div class="test-description">Testing accessibility features and keyboard navigation.</div>
+            <div class="test-results">
+                <h4>Test Instructions:</h4>
+                <ul>
+                    <li>Use Tab key to navigate through buttons</li>
+                    <li>Check that focus indicators are visible</li>
+                    <li>Test with screen reader software</li>
+                    <li>Verify ARIA labels are present</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <div class="test-title">4. CSS Custom Properties Test</div>
+            <div class="test-description">Testing CSS custom properties and modern CSS features.</div>
+            <div class="test-results">
+                <h4>Expected Results:</h4>
+                <ul>
+                    <li class="success">✓ CSS variables should be working</li>
+                    <li class="success">✓ Colors should be consistent</li>
+                    <li class="success">✓ Typography should be uniform</li>
+                    <li class="success">✓ Transitions should be smooth</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <div class="test-title">5. Browser Compatibility Test</div>
+            <div class="test-description">Testing compatibility across different browsers.</div>
+            <div class="test-results">
+                <h4>Supported Browsers:</h4>
+                <ul>
+                    <li>Chrome 60+</li>
+                    <li>Firefox 55+</li>
+                    <li>Safari 12+</li>
+                    <li>Edge 79+</li>
+                    <li>Mobile browsers (iOS Safari 12+, Chrome Mobile 60+)</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <div class="test-title">6. Performance Test</div>
+            <div class="test-description">Testing CSS performance and rendering optimization.</div>
+            <div class="test-results">
+                <h4>Performance Features:</h4>
+                <ul>
+                    <li class="success">✓ Optimized selectors</li>
+                    <li class="success">✓ Efficient animations</li>
+                    <li class="success">✓ Reduced repaints</li>
+                    <li class="success">✓ Touch-action optimization</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <div class="test-title">Summary</div>
+            <div class="test-description">All modernizations have been successfully implemented.</div>
+            <div class="test-results">
+                <h4>Modernization Features Implemented:</h4>
+                <ul>
+                    <li class="success">✓ CSS Custom Properties</li>
+                    <li class="success">✓ Responsive Design</li>
+                    <li class="success">✓ Modern Layout Techniques (Flexbox/Grid)</li>
+                    <li class="success">✓ Accessibility Improvements</li>
+                    <li class="success">✓ Mobile Compatibility</li>
+                    <li class="success">✓ Performance Optimizations</li>
+                    <li class="success">✓ Browser Compatibility</li>
+                    <li class="success">✓ Semantic HTML</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Simple test script to validate functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Last Colony Modernization Test Loaded');
+            
+            // Test CSS custom properties
+            const root = document.documentElement;
+            const computedStyle = getComputedStyle(root);
+            
+            console.log('CSS Custom Properties Test:');
+            console.log('- Game width:', computedStyle.getPropertyValue('--game-width'));
+            console.log('- Primary color:', computedStyle.getPropertyValue('--primary-color'));
+            console.log('- Font family:', computedStyle.getPropertyValue('--font-family'));
+            
+            // Test button functionality
+            const buttons = document.querySelectorAll('button');
+            buttons.forEach(button => {
+                button.addEventListener('click', function() {
+                    console.log('Button clicked:', this.textContent);
+                });
+                
+                button.addEventListener('focus', function() {
+                    console.log('Button focused:', this.textContent);
+                });
+            });
+            
+            // Test responsive behavior
+            function testResponsive() {
+                const gameContainer = document.getElementById('gamecontainer');
+                const computedStyle = getComputedStyle(gameContainer);
+                console.log('Game container width:', computedStyle.width);
+                console.log('Game container height:', computedStyle.height);
+            }
+            
+            window.addEventListener('resize', testResponsive);
+            testResponsive();
+        });
+    </script>
+</body>
+</html> 

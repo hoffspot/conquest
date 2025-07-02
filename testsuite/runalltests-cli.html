@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Last Colony - Test Suite</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #00ff00;
+            margin: 20px;
+            line-height: 1.6;
+        }
+        .test-header, .test-summary, .test-results {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 2px solid #00ff00;
+        }
+        .test-item {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+            border-left: 4px solid;
+        }
+        .test-pass { background: #1a3a1a; border-left-color: #00ff00; }
+        .test-fail { background: #3a1a1a; border-left-color: #ff0000; }
+        .test-skip { background: #3a3a1a; border-left-color: #ffff00; }
+        .test-time { color: #888; font-size: 0.9em; }
+        .test-error { color: #ff6666; font-family: monospace; margin-top: 5px; padding: 5px; background: #2a1a1a; border-radius: 3px; }
+        .progress-bar { width: 100%; height: 20px; background: #1a1a1a; border: 1px solid #00ff00; border-radius: 10px; overflow: hidden; margin: 10px 0; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, #00ff00, #00cc00); transition: width 0.3s ease; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 15px 0; }
+        .stat-box { background: #1a1a1a; padding: 10px; border-radius: 5px; text-align: center; border: 1px solid #00ff00; }
+        .stat-number { font-size: 2em; font-weight: bold; }
+        .stat-label { font-size: 0.9em; color: #888; }
+    </style>
+</head>
+<body>
+    <div class="test-header">
+        <h1>🚀 Last Colony - Comprehensive Test Suite</h1>
+        <p>Running all tests to validate game functionality and performance</p>
+    </div>
+    <div class="test-summary">
+        <h2>📊 Test Summary</h2>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+        </div>
+        <div class="stats">
+            <div class="stat-box"><div class="stat-number" id="totalTests">0</div><div class="stat-label">Total Tests</div></div>
+            <div class="stat-box"><div class="stat-number" id="passedTests">0</div><div class="stat-label">Passed</div></div>
+            <div class="stat-box"><div class="stat-number" id="failedTests">0</div><div class="stat-label">Failed</div></div>
+            <div class="stat-box"><div class="stat-number" id="skippedTests">0</div><div class="stat-label">Skipped</div></div>
+            <div class="stat-box"><div class="stat-number" id="totalTime">0ms</div><div class="stat-label">Total Time</div></div>
+        </div>
+    </div>
+    <div class="test-results">
+        <h2>🔍 Detailed Test Results</h2>
+        <div id="testResults"></div>
+    </div>
+    <!-- Load game scripts for testing -->
+    <script src="../js/jquery.min.js"></script>
+    <script src="../js/common.js"></script>
+    <script src="../js/mouse.js"></script>
+    <script src="../js/game.js"></script>
+    <script src="../js/vehicles.js"></script>
+    <script src="../js/aircraft.js"></script>
+    <script src="../js/buildings.js"></script>
+    <script src="../js/bullets.js"></script>
+    <script src="../js/terrain.js"></script>
+    <script src="../js/astar.js"></script>
+    <script src="../js/maps.js"></script>
+    <script src="../js/levels.js"></script>
+    <script src="../js/sounds.js"></script>
+    <script src="../js/sidebar.js"></script>
+    <script src="../js/fog.js"></script>
+    <script src="../js/singleplayer.js"></script>
+    <script src="../js/multiplayer.js"></script>
+    <script>
+    // Mode detection: CLI (console) or browser (DOM)
+    function getMode() {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('mode') === 'cli') return 'cli';
+        if (typeof window.process !== 'undefined' && window.process.type === 'renderer') return 'cli';
+        return 'browser';
+    }
+    const mode = getMode();
+    // Test framework
+    class UnifiedTestFramework {
+        constructor() {
+            this.tests = [];
+            this.results = [];
+            this.startTime = null;
+            this.endTime = null;
+            this.stats = { total: 0, passed: 0, failed: 0, skipped: 0 };
+        }
+        addTest(name, testFunction, category) {
+            this.tests.push({ name, testFunction, category: category || 'general' });
+            this.stats.total++;
+        }
+        runTests() {
+            this.startTime = Date.now();
+            this.results = [];
+            this.stats.passed = 0;
+            this.stats.failed = 0;
+            this.stats.skipped = 0;
+            this.tests.forEach((test, index) => {
+                const testStartTime = Date.now();
+                let result;
+                try {
+                    result = test.testFunction();
+                    const testEndTime = Date.now();
+                    const testDuration = testEndTime - testStartTime;
+                    if (result === true) {
+                        this.stats.passed++;
+                        this.results.push({ name: test.name, status: 'pass', duration: testDuration, error: null });
+                        this.logResult('pass', test.name, testDuration);
+                    } else {
+                        this.stats.failed++;
+                        this.results.push({ name: test.name, status: 'fail', duration: testDuration, error: result });
+                        this.logResult('fail', test.name, testDuration, result);
+                    }
+                } catch (error) {
+                    const testEndTime = Date.now();
+                    const testDuration = testEndTime - testStartTime;
+                    this.stats.failed++;
+                    this.results.push({ name: test.name, status: 'error', duration: testDuration, error: error.message });
+                    this.logResult('error', test.name, testDuration, error.message);
+                }
+            });
+            this.endTime = Date.now();
+            this.printSummary();
+        }
+        logResult(status, name, duration, error) {
+            if (mode === 'cli') {
+                if (status === 'pass') {
+                    console.log(`✅ PASS: ${name} (${duration}ms)`);
+                } else if (status === 'fail') {
+                    console.log(`❌ FAIL: ${name} (${duration}ms)`);
+                    if (error) console.log(`   Error: ${error}`);
+                } else if (status === 'error') {
+                    console.log(`💥 ERROR: ${name} (${duration}ms)`);
+                    if (error) console.log(`   Error: ${error}`);
+                }
+            } else {
+                const testResultsDiv = document.getElementById('testResults');
+                const div = document.createElement('div');
+                div.className = 'test-item test-' + status;
+                div.innerHTML = `<b>${name}</b> <span class="test-time">(${duration}ms)</span>` + (error ? `<div class="test-error">${error}</div>` : '');
+                testResultsDiv.appendChild(div);
+            }
+        }
+        printSummary() {
+            const totalTime = this.endTime - this.startTime;
+            if (mode === 'cli') {
+                console.log(`\n📊 TEST SUMMARY`);
+                console.log(`Total Tests: ${this.stats.total}`);
+                console.log(`Passed: ${this.stats.passed}`);
+                console.log(`Failed: ${this.stats.failed}`);
+                console.log(`Skipped: ${this.stats.skipped}`);
+                console.log(`Total Time: ${totalTime}ms`);
+                if (this.stats.failed > 0) {
+                    console.log(`\n❌ FAILED TESTS:`);
+                    this.results.filter(r => r.status !== 'pass').forEach(result => {
+                        console.log(`- ${result.name}: ${result.error}`);
+                    });
+                }
+                if (this.stats.passed === this.stats.total) {
+                    console.log("\n🎉 ALL TESTS PASSED!");
+                } else {
+                    console.log(`\n⚠️  ${this.stats.failed} tests failed`);
+                }
+            } else {
+                document.getElementById('totalTests').textContent = this.stats.total;
+                document.getElementById('passedTests').textContent = this.stats.passed;
+                document.getElementById('failedTests').textContent = this.stats.failed;
+                document.getElementById('skippedTests').textContent = this.stats.skipped;
+                document.getElementById('totalTime').textContent = totalTime + 'ms';
+                document.getElementById('progressFill').style.width = (this.stats.total ? (100 * (this.stats.passed + this.stats.failed) / this.stats.total) : 0) + '%';
+            }
+        }
+    }
+    // Global test framework
+    const testFramework = new UnifiedTestFramework();
+    // Load test modules
+    function loadTestModules() {
+        const testModules = [
+            'tests/math-tests.js',
+            'tests/entity-tests.js',
+            'tests/game-engine-tests.js',
+            'tests/pathfinding-tests.js',
+            'tests/input-tests.js',
+            'tests/combat-tests.js',
+            'tests/ui-tests.js',
+            'tests/integration-tests.js'
+        ];
+        let loadedModules = 0;
+        testModules.forEach(modulePath => {
+            const script = document.createElement('script');
+            script.src = modulePath;
+            script.onload = function() {
+                loadedModules++;
+                if (loadedModules === testModules.length) {
+                    setTimeout(() => { testFramework.runTests(); }, 100);
+                }
+            };
+            script.onerror = function() {
+                console.warn(`⚠️  Failed to load test module: ${modulePath}`);
+                loadedModules++;
+                if (loadedModules === testModules.length) {
+                    setTimeout(() => { testFramework.runTests(); }, 100);
+                }
+            };
+            document.head.appendChild(script);
+        });
+    }
+    window.onload = function() { loadTestModules(); };
+    </script>
+</body>
+</html> 

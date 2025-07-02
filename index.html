@@ -1,8 +1,18 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 	<head>
-		<meta http-equiv="Content-type" content="text/html; charset=utf-8">
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
 		<title>Last Colony</title>
+		<meta name="description" content="A strategic conquest game - Last Colony">
+		<meta name="theme-color" content="#000000">
+		
+		<!-- Preload critical assets -->
+		<link rel="preload" href="images/splashscreen.png" as="image">
+		<link rel="preload" href="images/buttons.png" as="image">
+		
+		<!-- Scripts -->
 		<script src="js/common.js" type="text/javascript" charset="utf-8"></script>		
 		<script src="js/jquery.min.js" type="text/javascript" charset="utf-8"></script>
 		<script src="js/game.js" type="text/javascript" charset="utf-8"></script>
@@ -28,59 +38,66 @@
 		
 		<script src="js/multiplayer.js" type="text/javascript" charset="utf-8"></script>
 		
+		<!-- Styles -->
 		<link rel="stylesheet" href="styles.css" type="text/css" media="screen" charset="utf-8">
 	</head>
 	<body>
-	    <div id="gamecontainer">
-	        <div id="gamestartscreen" class="gamelayer">
-	            <span id="singleplayer" onclick = "singleplayer.start();">Campaign</span><br>
-	            <span id="multiplayer" onclick = "multiplayer.start();">Multiplayer</span><br>
-	        </div>
-	        <div id="missionscreen" class="gamelayer">
-	            <input type="button" id="entermission" onclick = "singleplayer.play();">
-	            <input type="button" id="exitmission" onclick = "singleplayer.exit();">
-	            <div id="missonbriefing">Welcome to your first mission.
-	            </div>
-	        </div>
-			<div id="gameinterfacescreen" class="gamelayer">
-			    <div id="gamemessages"></div>        
-			    <div id="callerpicture"></div>
-			    <div id="cash"></div>
-			    <div id="sidebarbuttons">                    
-			        <input type="button" id="starportbutton" title = "Starport">                    
-			        <input type="button" id="turretbutton" title = "Turret">
-			        <input type="button" id="placeholder1" disabled>
-
-			        <input type="button" id="scouttankbutton" title = "Scout Tank">
-			        <input type="button" id="heavytankbutton" title = "Heavy Tank">
-			        <input type="button" id="harvesterbutton" title = "Harvester">
-
-			        <input type="button" id="chopperbutton" title = "Copter">
-			        <input type="button" id="wraithbutton" title = "Wraith">
-			        <input type="button" id="placeholder2" disabled>      
-
-			    </div>
-			    <canvas id="gamebackgroundcanvas" height="400" width="480"></canvas>
-			    <canvas id="gameforegroundcanvas" height="400" width="480"></canvas>            
-			    <input type="text" id="chatmessage"></input>  
-			</div>
+	    <main id="gamecontainer" role="main" aria-label="Last Colony Game">
+	        <section id="gamestartscreen" class="gamelayer" role="region" aria-label="Game Start Menu">
+	            <button type="button" id="singleplayer" onclick="singleplayer.start();" aria-label="Start Campaign Mode">Campaign</button>
+	            <button type="button" id="multiplayer" onclick="multiplayer.start();" aria-label="Start Multiplayer Mode">Multiplayer</button>
+	        </section>
+	        
+	        <section id="missionscreen" class="gamelayer" role="region" aria-label="Mission Briefing">
+	            <button type="button" id="entermission" onclick="singleplayer.play();" aria-label="Enter Mission">Enter Mission</button>
+	            <button type="button" id="exitmission" onclick="singleplayer.exit();" aria-label="Exit Mission">Exit</button>
+	            <div id="missonbriefing" role="region" aria-label="Mission Briefing Text">Welcome to your first mission.</div>
+	        </section>
 			
-			<div id="messageboxscreen" class="gamelayer">
+			<section id="gameinterfacescreen" class="gamelayer" role="region" aria-label="Game Interface">
+			    <div id="gamemessages" role="log" aria-label="Game Messages"></div>        
+			    <div id="callerpicture" role="img" aria-label="Caller Picture"></div>
+			    <div id="cash" role="status" aria-label="Cash Amount"></div>
+			    
+			    <nav id="sidebarbuttons" role="toolbar" aria-label="Building and Unit Controls">                    
+			        <button type="button" id="starportbutton" title="Starport" aria-label="Build Starport"></button>                    
+			        <button type="button" id="turretbutton" title="Turret" aria-label="Build Turret"></button>
+			        <button type="button" id="placeholder1" disabled aria-label="Placeholder Button 1"></button>
+
+			        <button type="button" id="scouttankbutton" title="Scout Tank" aria-label="Build Scout Tank"></button>
+			        <button type="button" id="heavytankbutton" title="Heavy Tank" aria-label="Build Heavy Tank"></button>
+			        <button type="button" id="harvesterbutton" title="Harvester" aria-label="Build Harvester"></button>
+
+			        <button type="button" id="chopperbutton" title="Copter" aria-label="Build Copter"></button>
+			        <button type="button" id="wraithbutton" title="Wraith" aria-label="Build Wraith"></button>
+			        <button type="button" id="placeholder2" disabled aria-label="Placeholder Button 2"></button>      
+			    </nav>
+			    
+			    <canvas id="gamebackgroundcanvas" height="400" width="480" role="img" aria-label="Game Background"></canvas>
+			    <canvas id="gameforegroundcanvas" height="400" width="480" role="img" aria-label="Game Foreground"></canvas>            
+			    <input type="text" id="chatmessage" placeholder="Type chat message..." aria-label="Chat Message Input">  
+			</section>
+			
+			<section id="messageboxscreen" class="gamelayer" role="dialog" aria-label="Message Box" aria-modal="true">
 	            <div id="messagebox">
-	                <span id="messageboxtext"></span>
-	                <input type="button" id="messageboxok" onclick="game.messageBoxOK();">
-	                <input type="button" id="messageboxcancel" onclick="game.messageBoxCancel();">
+	                <span id="messageboxtext" role="alert"></span>
+	                <div role="group" aria-label="Message Box Actions">
+	                    <button type="button" id="messageboxok" onclick="game.messageBoxOK();" aria-label="OK">OK</button>
+	                    <button type="button" id="messageboxcancel" onclick="game.messageBoxCancel();" aria-label="Cancel">Cancel</button>
+	                </div>
 	            </div>
-	        </div>	        
-	        <div id="loadingscreen" class="gamelayer">
-	            <div id="loadingmessage"></div>
-	        </div>
-			<div id="multiplayerlobbyscreen" class="gamelayer">
-			    <select id="multiplayergameslist" size="10">
+	        </section>	        
+	        
+	        <section id="loadingscreen" class="gamelayer" role="status" aria-label="Loading Screen">
+	            <div id="loadingmessage" aria-live="polite">Loading...</div>
+	        </section>
+			
+			<section id="multiplayerlobbyscreen" class="gamelayer" role="region" aria-label="Multiplayer Lobby">
+			    <select id="multiplayergameslist" size="10" aria-label="Available Games List">
 			    </select>
-			    <input type="button" id="multiplayerjoin" onclick="multiplayer.join();">
-			    <input type="button" id="multiplayercancel" onclick="multiplayer.cancel();">
-			</div>	
-	    </div>
+			    <button type="button" id="multiplayerjoin" onclick="multiplayer.join();" aria-label="Join Game">Join</button>
+			    <button type="button" id="multiplayercancel" onclick="multiplayer.cancel();" aria-label="Cancel">Cancel</button>
+			</section>	
+	    </main>
 	</body>
 </html>

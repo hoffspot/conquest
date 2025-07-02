@@ -199,9 +199,20 @@ function initGame(room){
     // This logic can change later to let the players pick a level
     var currentLevel = 0;
     
+    // SPAWN LOCATION VARIABILITY CONSTANTS
+    // These constants define the spawn location selection for multiplayer games.
+    // Spawn locations are randomly selected to prevent predictable starting positions.
+    var SPAWN_VARIABILITY = {
+        AVAILABLE_SPAWNS: [0, 1, 2, 3],  // Available spawn point indices
+        SELECTION_METHOD: "random"        // Method for selecting spawns
+    };
+    
     // Randomly select two spawn locations between 0 and 3 for both players. 
-    var spawns = [0,1,2,3];
-    var spawnLocations = {"blue":spawns.splice(Math.floor(Math.random()*spawns.length),1), "green":spawns.splice(Math.floor(Math.random()*spawns.length),1)};
+    var spawns = SPAWN_VARIABILITY.AVAILABLE_SPAWNS.slice(); // Copy array to avoid mutation
+    var spawnLocations = {
+        "blue": spawns.splice(Math.floor(Math.random() * spawns.length), 1)[0], 
+        "green": spawns.splice(Math.floor(Math.random() * spawns.length), 1)[0]
+    };
     
     sendRoomWebSocketMessage(room,{type:"init_level", spawnLocations:spawnLocations, level:currentLevel});
 }
