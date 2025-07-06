@@ -152,25 +152,45 @@ var game = {
      * Sets up the game loop and initializes level-specific content.
      */
     start: function(){
-        // Switch to the main game interface
-        $('.gamelayer').hide();
-        $('#gameinterfacescreen').show();
-        
-        // Set game state flags
-		game.running = true;           // Enables the game loop
-		game.refreshBackground = true; // Forces background redraw on first frame
-		
-		// Start the rendering loop (this runs continuously)
-		game.drawingLoop();
+        try {
+            // Switch to the main game interface
+            console.log("Hiding all game layers...");
+            $('.gamelayer').hide();
+            console.log("Showing game interface...");
+            $('#gameinterfacescreen').show();
+            
+            // Check if interface is actually visible
+            const interface = document.getElementById('gameinterfacescreen');
+            if (interface) {
+                console.log("Game interface element found, display style:", interface.style.display);
+                console.log("Game interface computed display:", window.getComputedStyle(interface).display);
+            } else {
+                console.error("Game interface element not found!");
+            }
+            
+            // Set game state flags
+            game.running = true;           // Enables the game loop
+            game.refreshBackground = true; // Forces background redraw on first frame
+            
+            // Start the rendering loop (this runs continuously)
+            game.drawingLoop();
 
-		// Clear any previous game messages
-		$('#gamemessages').html("");
-        
-        // Initialize all level-specific triggers
-        // Triggers are events that happen at specific times or conditions
-        for (var i = game.currentLevel.triggers.length - 1; i >= 0; i--){
-            game.initTrigger(game.currentLevel.triggers[i]);
-        };        
+            // Clear any previous game messages
+            $('#gamemessages').html("");
+            
+            // Initialize all level-specific triggers
+            // Triggers are events that happen at specific times or conditions
+            console.log("Initializing", game.currentLevel.triggers.length, "triggers");
+            for (var i = game.currentLevel.triggers.length - 1; i >= 0; i--){
+                game.initTrigger(game.currentLevel.triggers[i]);
+            };
+            
+            console.log("Game interface started successfully");
+        } catch (error) {
+            console.error("Error in game.start():", error);
+            game.running = false;
+            throw error;
+        }
     },
 	
 	// ========================================
@@ -285,13 +305,30 @@ var game = {
 
 	    // Sort entities by Y coordinate for proper rendering order
 	    // Entities further "back" (higher Y) are drawn first, creating depth
-	    game.sortedItems = $.extend([], game.items);        
+	    game.sortedItems = $.extend([], game.items);
+	    
+	    // Debug: Check for invalid items
+	    for (var i = game.sortedItems.length - 1; i >= 0; i--) {
+	        var item = game.sortedItems[i];
+	        if (!item || typeof item !== 'object') {
+	            console.error("Invalid item in game.items:", item, "at index:", i);
+	            game.sortedItems.splice(i, 1);
+	            continue;
+	        }
+	        if (!item.y || typeof item.y !== 'number') {
+	            console.error("Item missing valid Y coordinate:", item);
+	        }
+	    }
+	    
 	    game.sortedItems.sort(function(a,b){
 	        return b.y - a.y + ((b.y == a.y) ? (a.x - b.x) : 0);
 	    });
 		
 		// Update fog of war system
 		fog.animate();
+		
+		// Update attack target indicators
+		game.updateAttackTargetIndicators();
 		
 	    // Record when this animation cycle completed
 	    // Used for interpolation in the drawing loop
@@ -305,58 +342,75 @@ var game = {
 	 * Separated from animation loop to maintain consistent game speed.
 	 */
 	drawingLoop: function(){    
-	    // Handle camera panning (edge scrolling)
-	    game.handlePanning();
-	
-		// Calculate interpolation factor for smooth movement
-		// Since drawing happens more frequently than animation, we interpolate
-		// between animation frames to create smooth visual movement
-		game.lastDrawTime = (new Date()).getTime();
-	    if (game.lastAnimationTime){
-	        game.drawingInterpolationFactor = (game.lastDrawTime - game.lastAnimationTime) / game.animationTimeout - 1;
-	        if (game.drawingInterpolationFactor > 0){ 
-            	game.drawingInterpolationFactor = 0; // Don't interpolate beyond next animation frame
-	        }
-	    } else {
-			game.drawingInterpolationFactor = -1;
-		}
-
-	    // OPTIMIZATION: Only redraw background when necessary
-	    // Background redrawing is expensive, so we only do it when camera moves
-	    if (game.refreshBackground){
-	        game.backgroundContext.drawImage(
-	            game.currentMapImage, 
-	            game.offsetX, game.offsetY, game.canvasWidth, game.canvasHeight, 
-	            0, 0, game.canvasWidth, game.canvasHeight
-	        );
-	        game.refreshBackground = false;
-	    }
-
-	    // Clear the foreground canvas for fresh drawing
-	    game.foregroundContext.clearRect(0, 0, game.canvasWidth, game.canvasHeight);
-	
-	    // Draw all game entities in sorted order (back to front)
-	    for (var i = game.sortedItems.length - 1; i >= 0; i--){
-	        if (game.sortedItems[i].type != "bullets"){
-	            game.sortedItems[i].draw();
-	        }
-	    };
-
-		// Draw bullets on top of everything else
-		// Bullets are drawn separately to ensure they're always visible
-	    for (var i = game.bullets.length - 1; i >= 0; i--){
-	        game.bullets[i].draw();
-	    };
-
-		// Draw fog of war overlay
-		fog.draw();
+	    try {
+	        // Handle camera panning (edge scrolling)
+	        game.handlePanning();
 		
-	    // Draw mouse cursor and selection indicators
-	    mouse.draw();
+		    // Calculate interpolation factor for smooth movement
+		    // Since drawing happens more frequently than animation, we interpolate
+		    // between animation frames to create smooth visual movement
+		    game.lastDrawTime = (new Date()).getTime();
+	        if (game.lastAnimationTime){
+	            game.drawingInterpolationFactor = (game.lastDrawTime - game.lastAnimationTime) / game.animationTimeout - 1;
+	            if (game.drawingInterpolationFactor > 0){ 
+	            	game.drawingInterpolationFactor = 0; // Don't interpolate beyond next animation frame
+	            }
+	        } else {
+			    game.drawingInterpolationFactor = -1;
+		    }
 
-	    // Schedule the next frame
-	    if (game.running){
-	        requestAnimationFrame(game.drawingLoop);    
+	        // OPTIMIZATION: Only redraw background when necessary
+	        // Background redrawing is expensive, so we only do it when camera moves
+	        if (game.refreshBackground){
+	            game.backgroundContext.drawImage(
+	                game.currentMapImage, 
+	                game.offsetX, game.offsetY, game.canvasWidth, game.canvasHeight, 
+	                0, 0, game.canvasWidth, game.canvasHeight
+	            );
+	            game.refreshBackground = false;
+	        }
+
+	        // Clear the foreground canvas for fresh drawing
+	        game.foregroundContext.clearRect(0, 0, game.canvasWidth, game.canvasHeight);
+		
+	        // Draw all game entities in sorted order (back to front)
+	        for (var i = game.sortedItems.length - 1; i >= 0; i--){
+	            var item = game.sortedItems[i];
+	            if (item.type != "bullets"){
+	                if (typeof item.draw !== 'function') {
+	                    console.error("Item missing draw method:", item);
+	                    console.error("Item type:", item.type);
+	                    console.error("Item name:", item.name);
+	                    console.error("Item UID:", item.uid);
+	                    continue; // Skip this item
+	                }
+	                item.draw();
+	            }
+	        };
+
+		    // Draw bullets on top of everything else
+		    // Bullets are drawn separately to ensure they're always visible
+	        for (var i = game.bullets.length - 1; i >= 0; i--){
+	            game.bullets[i].draw();
+	        };
+
+		    // Draw fog of war overlay
+		    fog.draw();
+			
+	        // Draw mouse cursor and selection indicators
+	        mouse.draw();
+			
+	        // Draw attack target indicators
+	        game.drawAttackTargetIndicators();
+
+	        // Schedule the next frame
+	        if (game.running){
+	            requestAnimationFrame(game.drawingLoop);    
+	        }
+	    } catch (error) {
+	        console.error("Error in drawingLoop:", error);
+	        // Stop the game loop if there's an error
+	        game.running = false;
 	    }                       
 	},
 	
@@ -387,30 +441,54 @@ var game = {
 	 * @returns {Object} The created entity object
 	 */
 	add: function(itemDetails) {
-	    // Assign unique identifier if not provided
-	    if (!itemDetails.uid){
-	        itemDetails.uid = game.counter++;
-	    }
+	    try {
+	        
+	        // Assign unique identifier if not provided
+	        // Note: Negative UIDs are used for special entities like:
+	        // - Mission objectives and triggers
+	        // - Pre-placed units with specific story roles
+	        // - Entities that need to be referenced by other game systems
+	        if (!itemDetails.uid){
+	            itemDetails.uid = game.counter++;
+	        }
 
-	    // Create the entity using the appropriate type manager
-	    var item = window[itemDetails.type].add(itemDetails);
+	        // Check if the type manager exists
+	        if (!window[itemDetails.type]) {
+	            console.error("Type manager not found:", itemDetails.type);
+	            return null;
+	        }
 
-	    // Add to main entity list
-	    game.items.push(item);
-	    // Add to type-specific list for efficient access
-	    game[item.type].push(item); 
+	                // Create the entity using the common addItem function
+        var item = addItem(itemDetails);
+	        
+	        if (!item) {
+	            console.error("Failed to create item:", itemDetails);
+	            return null;
+	        }
 
-	    // If adding buildings or terrain, invalidate pathfinding cache
-	    // This forces recalculation of walkable areas
-	    if(item.type == "buildings" || item.type == "terrain"){
-	        game.currentMapPassableGrid = undefined;
-	    }
+	        // Add to main entity list
+	        game.items.push(item);
+	        // Add to type-specific list for efficient access
+	        game[item.type].push(item); 
+	        // Add to sorted items for rendering (will be re-sorted in animation loop)
+	        game.sortedItems.push(item);
+
+	        // If adding buildings or terrain, invalidate pathfinding cache
+	        // This forces recalculation of walkable areas
+	        if(item.type == "buildings" || item.type == "terrain"){
+	            game.currentMapPassableGrid = undefined;
+	        }
 	
-	    // Play sound effect for bullet creation
-	    if (item.type == "bullets"){
-	        sounds.play(item.name);
-	    }	 
-	    return item;        
+	        // Play sound effect for bullet creation
+	        if (item.type == "bullets"){
+	            sounds.play(item.name);
+	        }
+	        
+	                return item;
+	    } catch (error) {
+	        console.error("Error in game.add():", error, "Item details:", itemDetails);
+	        return null;
+	    }        
 	},
 	
 	/**
@@ -445,6 +523,14 @@ var game = {
 	            break;
 	        }
 	    };   
+	    
+	    // Remove from sorted items list
+	    for (var i = game.sortedItems.length - 1; i >= 0; i--){
+	        if(game.sortedItems[i].uid == item.uid){
+	            game.sortedItems.splice(i, 1);
+	            break;
+	        }
+	    };
 	
 	    // Invalidate pathfinding cache if removing buildings or terrain
 	    if(item.type == "buildings" || item.type == "terrain"){
@@ -535,6 +621,117 @@ var game = {
 	},
 	
 	/**
+	 * ATTACK TARGET INDICATORS
+	 * Visual feedback system for attack commands
+	 */
+	attackTargetIndicators: [],
+	
+	/**
+	 * ADD ATTACK TARGET INDICATOR
+	 * Creates a visual indicator on the target of an attack command
+	 * 
+	 * @param {Object} target - The target entity to highlight
+	 */
+	addAttackTargetIndicator: function(target) {
+		if (!target || target.lifeCode === "dead") {
+			return;
+		}
+		
+		var indicator = {
+			target: target,
+			startTime: Date.now(),
+			duration: 1000, // 1 second
+			alpha: 1.0
+		};
+		
+		game.attackTargetIndicators.push(indicator);
+	},
+	
+	/**
+	 * UPDATE ATTACK TARGET INDICATORS
+	 * Updates and removes expired indicators
+	 */
+	updateAttackTargetIndicators: function() {
+		var currentTime = Date.now();
+		
+		for (var i = game.attackTargetIndicators.length - 1; i >= 0; i--) {
+			var indicator = game.attackTargetIndicators[i];
+			var elapsed = currentTime - indicator.startTime;
+			
+			if (elapsed >= indicator.duration) {
+				// Remove expired indicator
+				game.attackTargetIndicators.splice(i, 1);
+			} else {
+				// Update alpha for fade effect
+				indicator.alpha = 1.0 - (elapsed / indicator.duration);
+			}
+		}
+	},
+	
+	/**
+	 * DRAW ATTACK TARGET INDICATORS
+	 * Renders all active attack target indicators
+	 */
+	drawAttackTargetIndicators: function() {
+		for (var i = 0; i < game.attackTargetIndicators.length; i++) {
+			var indicator = game.attackTargetIndicators[i];
+			var target = indicator.target;
+			
+			if (!target || target.lifeCode === "dead") {
+				continue;
+			}
+			
+			if (target.type === "buildings") {
+				// Draw red rectangle for buildings
+				game.drawBuildingAttackIndicator(target, indicator.alpha);
+			} else {
+				// Draw red circle for units
+				game.drawUnitAttackIndicator(target, indicator.alpha);
+			}
+		}
+	},
+	
+	/**
+	 * DRAW BUILDING ATTACK INDICATOR
+	 * Draws a red rectangle around a building target
+	 * 
+	 * @param {Object} building - The building target
+	 * @param {number} alpha - Transparency value (0-1)
+	 */
+	drawBuildingAttackIndicator: function(building, alpha) {
+		// Use the same positioning logic as building selection rectangles
+		var x = building.drawingX + building.pixelOffsetX;
+		var y = building.drawingY + building.pixelOffsetY;
+		
+		game.foregroundContext.strokeStyle = `rgba(255, 0, 0, ${alpha})`;
+		game.foregroundContext.lineWidth = 1.5;
+		game.foregroundContext.fillStyle = `rgba(255, 0, 0, ${alpha * 0.2})`;
+		game.foregroundContext.fillRect(x - 2, y - 2, building.baseWidth + 4, building.baseHeight + 4);
+		game.foregroundContext.strokeRect(x - 2, y - 2, building.baseWidth + 4, building.baseHeight + 4);
+	},
+	
+	/**
+	 * DRAW UNIT ATTACK INDICATOR
+	 * Draws a red circle around a unit target
+	 * 
+	 * @param {Object} unit - The unit target
+	 * @param {number} alpha - Transparency value (0-1)
+	 */
+	drawUnitAttackIndicator: function(unit, alpha) {
+		// Use the same positioning logic as selection circles (including movement interpolation)
+		var x = unit.drawingX + unit.pixelOffsetX;
+		var y = unit.drawingY + unit.pixelOffsetY;
+		
+		game.foregroundContext.strokeStyle = `rgba(255, 0, 0, ${alpha})`;
+		game.foregroundContext.lineWidth = 1.5;
+		game.foregroundContext.fillStyle = `rgba(255, 0, 0, ${alpha * 0.2})`;
+		game.foregroundContext.beginPath();
+		game.foregroundContext.arc(x, y, unit.radius + 2, 0, Math.PI * 2, false);
+		game.foregroundContext.fill();
+		game.foregroundContext.stroke();
+	},
+	
+	/**
 	 * PROCESS COMMAND FOR UNITS
 	 * Receives commands from singleplayer/multiplayer and assigns them to units.
 	 * Handles target resolution and command validation.
@@ -543,28 +740,45 @@ var game = {
 	 * @param {Object} details - Command details including target information
 	 */
 	processCommand: function(uids, details){
+		console.log("=== PROCESS COMMAND DEBUG ===");
+		console.log("Processing command:", details.type);
+		console.log("Target UIDs:", uids);
+		console.log("Command details:", details);
+		
 		// Resolve target object if command includes a target UID
 		var toObject;	
 		if (details.toUid){
 			toObject = game.getItemByUid(details.toUid);
 			if(!toObject || toObject.lifeCode == "dead"){	
 				// Target no longer exists - invalid command			
+				console.error("Target object not found or dead:", details.toUid);
 				return;
 			}
+		}
+
+		// Add attack target indicator if this is an attack command
+		if (details.type === "attack" && toObject) {
+			game.addAttackTargetIndicator(toObject);
 		}
 
 		// Assign command to each specified unit
 		for (var i in uids){
 			var uid = uids[i];
 			var item = game.getItemByUid(uid);
+			console.log("Processing UID:", uid, "Item found:", !!item);
 			// Set the order for valid units
 			if(item){
+				console.log("Setting order on item:", item.name, "type:", item.orders.type);
 				item.orders = $.extend([], details);	
 				if(toObject) {
 					item.orders.to = toObject;					
 				}
+				console.log("Order set successfully");
+			} else {
+				console.error("Item not found for UID:", uid);
 			}
 		};
+		console.log("=== END PROCESS COMMAND DEBUG ===");
 	},
 	
 	// ========================================
@@ -702,6 +916,8 @@ var game = {
 	    var newMessage = existingMessage + '<span>' + from + ': </span>' + message + '<br>';
 	    $('#gamemessages').html(newMessage);
 	    $('#gamemessages').animate({scrollTop: $('#gamemessages').prop('scrollHeight')});
+	    
+	    console.log("Message displayed:", from + ": " + message);
 	},
 	
 	// ========================================
@@ -782,9 +998,11 @@ var game = {
 	 * @param {Object} trigger - Trigger configuration object
 	 */
 	initTrigger: function(trigger){
+	    console.log("Initializing trigger:", trigger.type, trigger);
 	    if(trigger.type == "timed"){
 	        // Timed trigger: fires after a specific delay
 	        trigger.timeout = setTimeout(function(){
+	            console.log("Executing timed trigger after", trigger.time, "ms");
 	            game.runTrigger(trigger);
 	        }, trigger.time)
 	    } else if(trigger.type == "conditional"){
@@ -802,12 +1020,14 @@ var game = {
 	 * @param {Object} trigger - The trigger to execute
 	 */
 	runTrigger: function(trigger){
+	    console.log("Running trigger:", trigger.type);
 	    if(trigger.type == "timed"){
 	        // Re-initialize timed trigger if it should repeat
 	        if (trigger.repeat){
 	            game.initTrigger(trigger);
 	        }
 	        // Execute the trigger's action
+	        console.log("Executing trigger action");
 	        trigger.action(trigger);
 	    } else if (trigger.type == "conditional"){
 	        // Check if condition is satisfied

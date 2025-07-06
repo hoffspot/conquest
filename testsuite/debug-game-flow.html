@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Game Flow</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .debug { background: #f0f0f0; padding: 10px; margin: 10px 0; border: 1px solid #ccc; }
+        .error { background: #ffebee; color: #c62828; padding: 10px; margin: 10px 0; border: 1px solid #ef5350; }
+        .success { background: #e8f5e8; color: #2e7d32; padding: 10px; margin: 10px 0; border: 1px solid #66bb6a; }
+        button { padding: 10px 20px; margin: 5px; font-size: 16px; }
+    </style>
+</head>
+<body>
+    <h1>Debug Game Flow</h1>
+    <div id="debug-output"></div>
+    
+    <button onclick="testCampaignStart()">Test Campaign Start</button>
+    <button onclick="testEnterMission()">Test Enter Mission</button>
+    <button onclick="testGameLoop()">Test Game Loop</button>
+    <button onclick="clearDebug()">Clear Debug</button>
+
+    <script src="../js/jquery.min.js"></script>
+    <script src="../js/common.js"></script>
+    <script src="../js/game.js"></script>
+    <script src="../js/mouse.js"></script>
+    <script src="../js/vehicles.js"></script>
+    <script src="../js/buildings.js"></script>
+    <script src="../js/aircraft.js"></script>
+    <script src="../js/bullets.js"></script>
+    <script src="../js/terrain.js"></script>
+    <script src="../js/maps.js"></script>
+    <script src="../js/levels.js"></script>
+    <script src="../js/fog.js"></script>
+    <script src="../js/astar.js"></script>
+    <script src="../js/sounds.js"></script>
+    <script src="../js/sidebar.js"></script>
+    <script src="../js/singleplayer.js"></script>
+    <script src="../js/multiplayer.js"></script>
+    <script src="../js/server.js"></script>
+
+    <script>
+        function log(message, type = 'debug') {
+            const output = document.getElementById('debug-output');
+            const div = document.createElement('div');
+            div.className = type;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}:</strong> ${message}`;
+            output.appendChild(div);
+            console.log(message);
+        }
+
+        function clearDebug() {
+            document.getElementById('debug-output').innerHTML = '';
+        }
+
+        function testCampaignStart() {
+            try {
+                log('Starting campaign test...', 'success');
+                
+                // Test game initialization
+                log('Initializing game...');
+                game.init();
+                log('Game initialized successfully', 'success');
+                
+                // Test campaign start
+                log('Starting campaign...');
+                singleplayer.start();
+                log('Campaign started successfully', 'success');
+                
+                // Check if mission screen is visible
+                const missionScreen = document.getElementById('missionscreen');
+                if (missionScreen && missionScreen.style.display !== 'none') {
+                    log('Mission screen is visible', 'success');
+                } else {
+                    log('Mission screen is NOT visible', 'error');
+                }
+                
+            } catch (error) {
+                log(`Error in campaign start: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+
+        function testEnterMission() {
+            try {
+                log('Testing enter mission...', 'success');
+                
+                // Check if fog.initLevel exists
+                if (typeof fog.initLevel === 'function') {
+                    log('fog.initLevel function exists', 'success');
+                } else {
+                    log('fog.initLevel function does NOT exist', 'error');
+                }
+                
+                // Check if game.animationLoop exists
+                if (typeof game.animationLoop === 'function') {
+                    log('game.animationLoop function exists', 'success');
+                } else {
+                    log('game.animationLoop function does NOT exist', 'error');
+                }
+                
+                // Check if game.start exists
+                if (typeof game.start === 'function') {
+                    log('game.start function exists', 'success');
+                } else {
+                    log('game.start function does NOT exist', 'error');
+                }
+                
+                // Test singleplayer.play
+                log('Calling singleplayer.play()...');
+                singleplayer.play();
+                log('singleplayer.play() completed', 'success');
+                
+                // Check if game is running
+                if (game.running) {
+                    log('Game is running', 'success');
+                } else {
+                    log('Game is NOT running', 'error');
+                }
+                
+            } catch (error) {
+                log(`Error in enter mission: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+
+        function testGameLoop() {
+            try {
+                log('Testing game loop...', 'success');
+                
+                // Check if drawingLoop is working
+                if (typeof game.drawingLoop === 'function') {
+                    log('game.drawingLoop function exists', 'success');
+                    
+                    // Test if requestAnimationFrame is available
+                    if (typeof requestAnimationFrame === 'function') {
+                        log('requestAnimationFrame is available', 'success');
+                    } else {
+                        log('requestAnimationFrame is NOT available', 'error');
+                    }
+                } else {
+                    log('game.drawingLoop function does NOT exist', 'error');
+                }
+                
+                // Check if animationInterval is set
+                if (game.animationInterval) {
+                    log('Animation interval is set', 'success');
+                } else {
+                    log('Animation interval is NOT set', 'error');
+                }
+                
+            } catch (error) {
+                log(`Error in game loop test: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+
+        // Initialize when page loads
+        window.onload = function() {
+            log('Debug page loaded', 'success');
+            log('Testing basic game initialization...');
+            
+            try {
+                game.init();
+                log('Basic game initialization successful', 'success');
+            } catch (error) {
+                log(`Basic game initialization failed: ${error.message}`, 'error');
+            }
+        };
+    </script>
+</body>
+</html> 

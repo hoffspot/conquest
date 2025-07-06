@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Message System</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .debug { background: #f0f0f0; padding: 10px; margin: 10px 0; border: 1px solid #ccc; }
+        .error { background: #ffebee; color: #c62828; padding: 10px; margin: 10px 0; border: 1px solid #ef5350; }
+        .success { background: #e8f5e8; color: #2e7d32; padding: 10px; margin: 10px 0; border: 1px solid #66bb6a; }
+        button { padding: 10px 20px; margin: 5px; font-size: 16px; }
+        #gameinterfacescreen { border: 2px solid #333; padding: 20px; margin: 20px 0; }
+        #gamemessages { height: 100px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; background: #fff; }
+        #callerpicture { width: 100px; height: 100px; border: 1px solid #ccc; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>Debug Message System</h1>
+    <div id="debug-output"></div>
+    
+    <button onclick="testMessageSystem()">Test Message System</button>
+    <button onclick="testTriggerSystem()">Test Trigger System</button>
+    <button onclick="testGameInterface()">Test Game Interface</button>
+    <button onclick="clearDebug()">Clear Debug</button>
+
+    <!-- Game Interface Elements for Testing -->
+    <div id="gameinterfacescreen" style="display: none;">
+        <div id="gamemessages"></div>
+        <div id="callerpicture"></div>
+        <div id="cash">1000</div>
+    </div>
+
+    <script src="../js/jquery.min.js"></script>
+    <script src="../js/common.js"></script>
+    <script src="../js/game.js"></script>
+    <script src="../js/mouse.js"></script>
+    <script src="../js/vehicles.js"></script>
+    <script src="../js/buildings.js"></script>
+    <script src="../js/aircraft.js"></script>
+    <script src="../js/bullets.js"></script>
+    <script src="../js/terrain.js"></script>
+    <script src="../js/maps.js"></script>
+    <script src="../js/levels.js"></script>
+    <script src="../js/fog.js"></script>
+    <script src="../js/astar.js"></script>
+    <script src="../js/sounds.js"></script>
+    <script src="../js/sidebar.js"></script>
+    <script src="../js/singleplayer.js"></script>
+    <script src="../js/multiplayer.js"></script>
+    <script src="../js/server.js"></script>
+
+    <script>
+        function log(message, type = 'debug') {
+            const output = document.getElementById('debug-output');
+            const div = document.createElement('div');
+            div.className = type;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}:</strong> ${message}`;
+            output.appendChild(div);
+            console.log(message);
+        }
+
+        function clearDebug() {
+            document.getElementById('debug-output').innerHTML = '';
+        }
+
+        function testMessageSystem() {
+            try {
+                log('Testing message system...', 'success');
+                
+                // Initialize game
+                game.init();
+                
+                // Show game interface
+                $('#gameinterfacescreen').show();
+                
+                // Test showMessage function
+                log('Testing showMessage function...');
+                game.showMessage("op", "Commander!! We haven't heard from the last convoy in over two hours. They should have arrived by now.");
+                
+                // Check if message was added to DOM
+                const messages = document.getElementById('gamemessages');
+                if (messages.innerHTML.includes('Operator')) {
+                    log('Message system working correctly', 'success');
+                } else {
+                    log('Message system NOT working', 'error');
+                }
+                
+            } catch (error) {
+                log(`Error in message system test: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+
+        function testTriggerSystem() {
+            try {
+                log('Testing trigger system...', 'success');
+                
+                // Initialize game
+                game.init();
+                
+                // Create a test trigger
+                const testTrigger = {
+                    type: "timed",
+                    time: 2000, // 2 seconds
+                    action: function() {
+                        log('Test trigger executed!', 'success');
+                        game.showMessage("op", "Test trigger message from operator.");
+                    }
+                };
+                
+                // Initialize the trigger
+                log('Initializing test trigger...');
+                game.initTrigger(testTrigger);
+                
+                log('Test trigger initialized. Should execute in 2 seconds...');
+                
+            } catch (error) {
+                log(`Error in trigger system test: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+
+        function testGameInterface() {
+            try {
+                log('Testing game interface...', 'success');
+                
+                // Initialize game
+                game.init();
+                
+                // Test if game interface can be shown
+                log('Showing game interface...');
+                $('.gamelayer').hide();
+                $('#gameinterfacescreen').show();
+                
+                // Check if interface is visible
+                const interface = document.getElementById('gameinterfacescreen');
+                if (interface.style.display !== 'none') {
+                    log('Game interface is visible', 'success');
+                } else {
+                    log('Game interface is NOT visible', 'error');
+                }
+                
+                // Test if message elements exist
+                const messages = document.getElementById('gamemessages');
+                const caller = document.getElementById('callerpicture');
+                
+                if (messages) {
+                    log('Message element exists', 'success');
+                } else {
+                    log('Message element does NOT exist', 'error');
+                }
+                
+                if (caller) {
+                    log('Caller picture element exists', 'success');
+                } else {
+                    log('Caller picture element does NOT exist', 'error');
+                }
+                
+            } catch (error) {
+                log(`Error in game interface test: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+
+        // Initialize when page loads
+        window.onload = function() {
+            log('Debug message system page loaded', 'success');
+        };
+    </script>
+</body>
+</html> 

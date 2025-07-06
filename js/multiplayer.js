@@ -127,6 +127,9 @@ var multiplayer = {
 	    multiplayer.currentLevel = messageObject.level;
 	    var level = maps.multiplayer[multiplayer.currentLevel];
 
+	    // Reset asset loader counters for new mission
+	    loader.reset();
+
 	    // Load all the assets for the level
 	    game.currentMapImage = loader.loadImage(level.mapImage);
 	    game.currentLevel = level;
@@ -141,7 +144,7 @@ var multiplayer = {
 	           for (var i=0; i < requirementArray.length; i++) {
 	               var name = requirementArray[i];
 	               if (window[type]){
-	                   window[type].load(name);
+	                   loadItem.call(window[type], name);
 	               } else {
 	                   console.log('Could not load type :',type);
 	               }
@@ -244,12 +247,33 @@ var multiplayer = {
 };
 
 $(window).keydown(function(e){
+    var keyPressed = e.which;
+    
+    // Handle Escape key - clear all selections and cancel building placement
+    if (e.which == 27){ // Escape key pressed
+        // Cancel building placement if active
+        if (game.deployBuilding){
+            sidebar.cancelDeployingBuilding();
+        }
+        
+        // Clear all unit selections
+        game.clearSelection();
+        
+        // Hide chat box if visible (multiplayer)
+        if (game.type == "multiplayer" && game.running){
+            $('#chatmessage').hide();
+            $('#chatmessage').val('');
+        }
+        
+        e.preventDefault();
+        return;
+    }
+    
     // Chatting only allowed in multiplayer when game is running
     if(game.type != "multiplayer" || !game.running){
         return;
     }
     
-    var keyPressed = e.which;
     if (e.which == 13){ // Enter key pressed    
         var isVisible = $('#chatmessage').is(':visible');    
         if (isVisible){
@@ -264,11 +288,6 @@ $(window).keydown(function(e){
             $('#chatmessage').show();
             $('#chatmessage').focus();    
         }
-        e.preventDefault();
-    } else if (e.which==27){ // Escape key pressed
-        // Pressing escape hides the chat box
-        $('#chatmessage').hide();
-        $('#chatmessage').val('');        
         e.preventDefault();
     }
 });

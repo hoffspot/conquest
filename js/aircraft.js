@@ -149,9 +149,16 @@ var aircraft = {
 		},
 		isValidTarget:isValidTarget,
 		findTargetsInSight:findTargetsInSight,
+		hasLineOfSightTo:hasLineOfSightTo,
 		processOrders:function(){
-		    this.lastMovementX = 0;
-		    this.lastMovementY = 0;
+		    // Reset movement variables if we're not actually moving
+		    if (this.orders.type !== "move" || 
+		        (this.orders.type === "attack" && this.orders.to && 
+		         (Math.pow(this.orders.to.x-this.x,2) + Math.pow(this.orders.to.y-this.y,2)) < Math.pow(bullets.list[this.weaponType].range,2))) {
+		        this.lastMovementX = 0;
+		        this.lastMovementY = 0;
+		    }
+		    
 		    if(this.reloadTimeLeft){
 		        this.reloadTimeLeft--;
 		    }
@@ -172,6 +179,28 @@ var aircraft = {
 		            var targets = this.findTargetsInSight(100);
 		            if(targets.length>0){
 		                this.orders = {type:"attack",to:targets[0],nextOrder:this.orders};
+		            } else {
+		                // If no targets found, move in a search pattern
+		                // Create a search destination if we don't have one
+		                if (!this.orders.searchDestination) {
+		                    // Pick a random destination within the map bounds
+		                    var mapWidth = game.currentLevel.mapGridWidth;
+		                    var mapHeight = game.currentLevel.mapGridHeight;
+		                    var searchX = Math.floor(Math.random() * mapWidth);
+		                    var searchY = Math.floor(Math.random() * mapHeight);
+		                    this.orders.searchDestination = {x: searchX, y: searchY};
+		                }
+		                
+		                // Move toward the search destination
+		                var distanceToSearchDest = Math.sqrt(Math.pow(this.orders.searchDestination.x - this.x, 2) + Math.pow(this.orders.searchDestination.y - this.y, 2));
+		                
+		                if (distanceToSearchDest < 2) {
+		                    // Reached search destination, pick a new one
+		                    delete this.orders.searchDestination;
+		                } else {
+		                    // Move toward search destination
+		                    this.moveTo(this.orders.searchDestination);
+		                }
 		            }
 		            break;                    
 		        case "move": 					
@@ -184,7 +213,7 @@ var aircraft = {
 		            }                                                
 		            break;
 		        case "attack":
-		            if(this.orders.to.lifeCode == "dead" || !this.isValidTarget(this.orders.to)){
+		            if(!this.orders.to || this.orders.to.lifeCode == "dead" || !this.isValidTarget(this, this.orders.to)){
 		                if (this.orders.nextOrder){
 		                    this.orders = this.orders.nextOrder;
 		                } else {
@@ -192,7 +221,9 @@ var aircraft = {
 		                }
 		                return;
 		            }
-		            if ((Math.pow(this.orders.to.x-this.x,2) + Math.pow(this.orders.to.y-this.y,2))<Math.pow(this.sight,2)) {                        
+		            // Get weapon range from bullet configuration
+            var weaponRange = bullets.list[this.weaponType].range;
+            if ((Math.pow(this.orders.to.x-this.x,2) + Math.pow(this.orders.to.y-this.y,2))<Math.pow(weaponRange,2)) {                        
 		                //Turn towards target and then start attacking when within range of the target 
 		                var newDirection = findFiringAngle(this.orders.to,this,this.directions);    
 		                var difference = angleDiff(this.direction,newDirection,this.directions);                                            

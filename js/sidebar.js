@@ -67,16 +67,32 @@ var sidebar = {
 			var placementGrid = buildings.list[game.deployBuilding].buildableGrid;
 			game.placementGrid = $.extend(true,[],placementGrid);
 			game.canDeployBuilding = true;
+			
+			console.log("=== CAN DEPLOY BUILDING DEBUG ===");
+			console.log("Deploy building:", game.deployBuilding);
+			console.log("Mouse grid position:", mouse.gridX, mouse.gridY);
+			console.log("Map dimensions:", game.currentLevel.mapGridWidth, "x", game.currentLevel.mapGridHeight);
+			console.log("Placement grid:", game.placementGrid);
+			
 			for (var i = game.placementGrid.length - 1; i >= 0; i--){
 				for (var j = game.placementGrid[i].length - 1; j >= 0; j--){					
 					if(game.placementGrid[i][j] && 
 						(mouse.gridY+i>= game.currentLevel.mapGridHeight || mouse.gridX+j>= game.currentLevel.mapGridWidth 
 							|| game.currentMapBuildableGrid[mouse.gridY+i][mouse.gridX+j]==1 || fog.grid[game.team][mouse.gridY+i][mouse.gridX+j]==1)){
+						
+						console.log("Building placement blocked at grid position:", mouse.gridX+j, mouse.gridY+i);
+						console.log("Reason: mapGridHeight exceeded:", mouse.gridY+i>= game.currentLevel.mapGridHeight);
+						console.log("Reason: mapGridWidth exceeded:", mouse.gridX+j>= game.currentLevel.mapGridWidth);
+						console.log("Reason: buildable grid blocked:", game.currentMapBuildableGrid[mouse.gridY+i][mouse.gridX+j]==1);
+						console.log("Reason: fog of war:", fog.grid[game.team][mouse.gridY+i][mouse.gridX+j]==1);
+						
 						game.canDeployBuilding = false;
 						game.placementGrid[i][j] = 0;
 					}
 				};
 			};
+			console.log("Final canDeployBuilding:", game.canDeployBuilding);
+			console.log("=== END CAN DEPLOY BUILDING DEBUG ===");
 		}		
 	},
 	init:function(){
@@ -100,9 +116,15 @@ var sidebar = {
 		//Initialize building construction buttons
 		$("#starportbutton").click(function(){
 			game.deployBuilding = "starport";
+			$("#starportbutton").addClass("selected");
+			$("#turretbutton").removeClass("selected");
+			game.showMessage("system", "Building placement mode: Left-click to place, Right-click or Escape to cancel");
 		});
 		$("#turretbutton").click(function(){
 			game.deployBuilding = "ground-turret";
+			$("#turretbutton").addClass("selected");
+			$("#starportbutton").removeClass("selected");
+			game.showMessage("system", "Building placement mode: Left-click to place, Right-click or Escape to cancel");
 		});
 	},
 	constructAtStarport:function(unitDetails){
@@ -122,24 +144,51 @@ var sidebar = {
 	},
 	cancelDeployingBuilding:function(){
 	    game.deployBuilding = undefined;
+	    this.clearBuildingButtonSelection();
+	},
+	
+	/**
+	 * CLEAR BUILDING BUTTON SELECTION
+	 * Removes visual selection highlight from building buttons
+	 */
+	clearBuildingButtonSelection:function(){
+	    // Remove any visual selection from building buttons
+	    $("#starportbutton, #turretbutton").removeClass("selected");
 	},
 	finishDeployingBuilding:function(){
 	    var buildingName= game.deployBuilding;        
 	    var base;
+	    
+	    console.log("=== BUILDING PLACEMENT DEBUG ===");
+	    console.log("Building to deploy:", buildingName);
+	    console.log("Mouse position (grid):", mouse.gridX, mouse.gridY);
+	    console.log("Can deploy building:", game.canDeployBuilding);
+	    console.log("Selected items:", game.selectedItems.length);
+	    
 	    for (var i = game.selectedItems.length - 1; i >= 0; i--){
 	        var item = game.selectedItems[i];
+	        console.log("Selected item", i, ":", item.name, "type:", item.type, "team:", item.team, "lifeCode:", item.lifeCode, "action:", item.action);
 	        if (item.type == "buildings" && item.name == "base" && item.team == game.team && item.lifeCode == "healthy" && item.action=="stand"){
 	            base = item;
+	            console.log("Found eligible base:", base.uid);
 	            break;
 	        }
 	    };        
 
 	    if (base){
 	        var buildingDetails = {type:"buildings",name:buildingName,x:mouse.gridX,y:mouse.gridY};
+	        console.log("Sending construct-building command:", buildingDetails);
+	        console.log("Base UID:", base.uid);
 	        game.sendCommand([base.uid],{type:"construct-building",details:buildingDetails});
+	        console.log("Command sent successfully");
+	    } else {
+	        console.error("No eligible base found for building construction");
+	        console.log("Requirements: type=buildings, name=base, team=" + game.team + ", lifeCode=healthy, action=stand");
 	    }
 
-	    // Clear deployBuilding flag
-	    game.deployBuilding = undefined;        
+	    // Clear deployBuilding flag and button selection
+	    game.deployBuilding = undefined;
+	    this.clearBuildingButtonSelection();
+	    console.log("=== END BUILDING PLACEMENT DEBUG ===");
 	}	
 }

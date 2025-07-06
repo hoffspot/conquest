@@ -108,11 +108,20 @@ var mouse = {
 			if (game.deployBuilding){
 				// BUILDING PLACEMENT MODE
 				// If the game is in building placement mode, left click deploys the building
+				console.log("=== BUILDING PLACEMENT CLICK DEBUG ===");
+				console.log("Building placement mode active:", game.deployBuilding);
+				console.log("Can deploy building:", game.canDeployBuilding);
+				console.log("Mouse grid position:", mouse.gridX, mouse.gridY);
+				console.log("Mouse game position:", mouse.gameX, mouse.gameY);
+				
 				if(game.canDeployBuilding){
+					console.log("Attempting to deploy building...");
 					sidebar.finishDeployingBuilding();
 				} else {
+					console.log("Cannot deploy building here - showing warning");
 					game.showMessage("system", "Warning! Cannot deploy building here.");
 				}
+				console.log("=== END BUILDING PLACEMENT CLICK DEBUG ===");
 				return;
 			}
 
@@ -429,17 +438,39 @@ var mouse = {
 		    if(ev.which == 1){ // Left mouse button only
 		        if (mouse.dragSelect){
 		            // PROCESS DRAG SELECTION
-		            // Clear existing selection unless shift is held
-		            if (!shiftPressed){
-		                game.clearSelection();
-		            }
-
 		            // Calculate selection rectangle bounds
 		            var x1 = Math.min(mouse.gameX, mouse.dragX) / game.gridSize;
 		            var y1 = Math.min(mouse.gameY, mouse.dragY) / game.gridSize;
 		            var x2 = Math.max(mouse.gameX, mouse.dragX) / game.gridSize;
 		            var y2 = Math.max(mouse.gameY, mouse.dragY) / game.gridSize;
 		            
+		            // If shift is not held, unselect units outside the selection box
+		            if (!shiftPressed){
+		                // First, unselect all currently selected units that are outside the selection box
+		                for (var i = game.selectedItems.length - 1; i >= 0; i--){
+		                    var selectedItem = game.selectedItems[i];
+		                    var isInSelectionBox = false;
+		                    
+		                    // Check if the selected item is within the selection rectangle
+		                    if (selectedItem.type != "buildings" && 
+		                        x1 <= selectedItem.x && x2 >= selectedItem.x){
+		                        
+		                        if ((selectedItem.type == "vehicles" && y1 <= selectedItem.y && y2 >= selectedItem.y)
+		                        || (selectedItem.type == "aircraft" && 
+		                            (y1 <= selectedItem.y - selectedItem.pixelShadowHeight / game.gridSize) && 
+		                            (y2 >= selectedItem.y - selectedItem.pixelShadowHeight / game.gridSize))){
+		                            isInSelectionBox = true;
+		                        }
+		                    }
+		                    
+		                    // If unit is outside selection box, unselect it
+		                    if (!isInSelectionBox){
+		                        selectedItem.selected = false;
+		                        game.selectedItems.splice(i, 1);
+		                    }
+		                }
+		            }
+
 		            // Select all units within the rectangle
 		            for (var i = game.items.length - 1; i >= 0; i--){
 		                var item = game.items[i];

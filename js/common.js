@@ -115,6 +115,18 @@ var loader = {
     },
     
     /**
+     * RESET LOADER COUNTERS
+     * Resets the loading counters when starting a new mission.
+     * This prevents incorrect loading counts between missions.
+     */
+    reset: function(){
+        this.loadedCount = 0;
+        this.totalCount = 0;
+        this.loaded = true;
+        this.onload = undefined;
+    },
+    
+    /**
      * LOAD IMAGE ASSET
      * Loads an image file and tracks loading progress.
      * 
@@ -254,80 +266,78 @@ function loadItem(name){
  * @returns {Object} The created entity object
  */
 function addItem(details){
-    var item = {};
-    var name = details.name;
-    
-    // Create a basic entity with default properties
-    item.type = details.type || "vehicles";
-    item.name = name;
-    item.x = details.x || 0;
-    item.y = details.y || 0;
-    item.team = details.team || "player";
-    item.life = 100;
-    item.hitPoints = 100;
-    item.selected = false;
-    item.selectable = true;
-    item.uid = UID_GENERATION.PREFIX + Math.random().toString(UID_GENERATION.BASE).substr(UID_GENERATION.START_INDEX, UID_GENERATION.LENGTH);
-    
-    // Add default properties for different entity types
-    if (item.type === "vehicles") {
-        item.speed = details.speed || 1;
-        item.sight = details.sight || 5;
-        item.radius = details.radius || 1;
-        item.canAttack = details.canAttack !== undefined ? details.canAttack : true;
-        item.canAttackLand = details.canAttackLand !== undefined ? details.canAttackLand : true;
-        item.canAttackAir = details.canAttackAir !== undefined ? details.canAttackAir : false;
-        item.weaponRange = details.weaponRange || 3;
-        item.weaponReloadTime = details.weaponReloadTime || 1000;
-    }
-    
-    // Add animation and movement properties
-    item.animationIndex = details.animationIndex || 0;
-    item.animationCount = details.animationCount || 1;
-    item.animationDelay = details.animationDelay || 100;
-    item.direction = details.direction || 0;  // Direction the entity is facing
-    item.action = details.action || "stand";  // Current action (stand, move, attack, etc.)
-    
-    // Add movement and combat functions
-    item.processOrders = function() {
-        // Default order processing - can be overridden
-        if (this.orders && this.orders.length > 0) {
-            // Process movement and combat orders
+    try {
+        
+        var name = details.name;
+        var type = details.type || "vehicles";
+        
+        // Get the entity definition from the appropriate type manager
+        var typeManager = window[type];
+        if (!typeManager || !typeManager.list || !typeManager.list[name]) {
+            console.error("Entity definition not found:", type, name);
+            console.error("Available types:", Object.keys(window).filter(k => typeof window[k] === 'object' && window[k].list));
+            return null;
         }
-    };
-    
-    item.animate = function() {
-        // Default animation - can be overridden
-        if (this.animationCount > 1) {
-            this.animationIndex = (this.animationIndex + 1) % this.animationCount;
+        
+        // Start with the defaults (includes all methods like draw, animate, etc.)
+        var item = $.extend(true, {}, typeManager.defaults);
+        
+        // Then extend with the specific entity definition
+        $.extend(true, item, typeManager.list[name]);
+        
+        // Set basic properties
+        item.type = type;
+        item.name = name;
+        item.x = details.x || 0;
+        item.y = details.y || 0;
+        item.team = details.team || "blue";
+        item.selected = false;
+        item.selectable = details.selectable !== undefined ? details.selectable : true;
+        
+        // Set UID (use provided UID or generate new one)
+        if (details.uid) {
+            item.uid = details.uid;
+        } else {
+            item.uid = game.counter++;
         }
-    };
-    
-    // Add line of sight function
-    item.hasLineOfSightTo = function(target) {
-        // Simple line of sight check - can be enhanced with terrain checking
-        var distance = Math.sqrt(Math.pow(target.x - this.x, 2) + Math.pow(target.y - this.y, 2));
-        return distance <= (this.sight || 5);
-    };
-    
-    // Apply custom details (overrides defaults)
-    for (var key in details) {
-        if (details.hasOwnProperty(key)) {
-            item[key] = details[key];
+        
+        // Set life and hit points
+        if (details.life !== undefined) {
+            item.life = details.life;
+        } else if (item.hitPoints) {
+            item.life = item.hitPoints;
+        } else {
+            item.life = 100;
         }
+        
+        // Initialize reload time for combat units
+        if (item.canAttack && item.weaponType) {
+            item.reloadTimeLeft = 0; // Allow immediate firing
+        }
+        
+        // Apply all other custom details (overrides defaults)
+        for (var key in details) {
+            if (details.hasOwnProperty(key) && key !== 'type' && key !== 'name') {
+                item[key] = details[key];
+            }
+        }
+        
+        // Ensure required methods exist
+        if (!item.draw) {
+            console.error("Entity missing draw method:", item);
+            return null;
+        }
+        
+        if (!item.animate) {
+            console.error("Entity missing animate method:", item);
+            return null;
+        }
+        return item;
+        
+    } catch (error) {
+        console.error("Error in addItem:", error, "Details:", details);
+        return null;
     }
-    
-    // Set initial life if not specified
-    if (!item.life) {
-        item.life = item.hitPoints || 100;
-    }
-    
-    // Add to game items array if game object exists
-    if (typeof game !== 'undefined' && game.items) {
-        game.items.push(item);
-    }
-    
-    return item;
 }
 
 // ========================================
@@ -513,11 +523,11 @@ function isValidTarget(attacker, target) {
 
 /**
  * FIND TARGETS IN SIGHT
- * Searches for valid targets within weapon range and line of sight.
+ * Searches for valid targets within sight range and line of sight.
  * Used by units to find enemies to attack.
  * 
  * Targeting Logic:
- * 1. Check if target is within weapon range
+ * 1. Check if target is within sight range
  * 2. Verify line of sight (no obstacles blocking)
  * 3. Ensure target is on different team
  * 4. Prioritize closest or most threatening targets
@@ -542,8 +552,8 @@ function findTargetsInSight(increment){
             // Calculate distance to target
             var distance = Math.sqrt(Math.pow(item.x - this.x, 2) + Math.pow(item.y - this.y, 2));
             
-            // Check if target is within weapon range
-            if (distance <= this.weaponRange){
+            // Check if target is within sight range
+            if (distance <= this.sight){
                 // Check line of sight (simplified - could be enhanced with raycasting)
                 if (this.hasLineOfSightTo(item)){
                     targets.push(item);

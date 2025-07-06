@@ -82,6 +82,8 @@ var vehicles = {
         selected:false,    
         selectable:true,
         directions:8,
+        lastMovementX:0,
+        lastMovementY:0,
         animate:function(){
             // Consider an item healthy if it has more than 40% life
             if (this.life>this.hitPoints*0.4){
@@ -128,9 +130,58 @@ var vehicles = {
         },
 		isValidTarget:isValidTarget,
 		findTargetsInSight:findTargetsInSight,
+		hasLineOfSightTo:hasLineOfSightTo,
+		drawLifeBar:function(){
+		    var x = this.drawingX;
+		    var y = this.drawingY - 2*game.lifeBarHeight;
+		    game.foregroundContext.fillStyle = (this.lifeCode == "healthy")?game.healthBarHealthyFillColor:game.healthBarDamagedFillColor;            
+		    game.foregroundContext.fillRect(x,y,this.pixelWidth*this.life/this.hitPoints,game.lifeBarHeight)
+		    game.foregroundContext.strokeStyle = game.healthBarBorderColor;
+		    game.foregroundContext.lineWidth = 1;
+		    game.foregroundContext.strokeRect(x,y,this.pixelWidth,game.lifeBarHeight)
+		},
+		drawSelection:function(){
+		    var x = this.drawingX + this.pixelOffsetX;
+		    var y = this.drawingY + this.pixelOffsetY;
+		    game.foregroundContext.strokeStyle = game.selectionBorderColor;
+		    game.foregroundContext.lineWidth = 1;
+		    game.foregroundContext.beginPath();
+		    game.foregroundContext.arc(x,y,this.radius,0,Math.PI*2,false);
+		    game.foregroundContext.fillStyle = game.selectionFillColor;
+		    game.foregroundContext.fill();
+		    game.foregroundContext.stroke();
+		},
+		draw:function(){
+		    var x = (this.x*game.gridSize)-game.offsetX- this.pixelOffsetX + this.lastMovementX*game.drawingInterpolationFactor*game.gridSize;
+		    var y = (this.y*game.gridSize)-game.offsetY- this.pixelOffsetY + this.lastMovementY*game.drawingInterpolationFactor*game.gridSize;
+		    this.drawingX = x;
+		    this.drawingY = y;
+		    if (this.selected){
+		        this.drawSelection();
+		        this.drawLifeBar();
+		    }
+		    var colorIndex = (this.team == "blue")?0:1;
+		    var colorOffset = colorIndex*this.pixelHeight;
+		    game.foregroundContext.drawImage(this.spriteSheet, this.imageOffset*this.pixelWidth,colorOffset, this.pixelWidth,this.pixelHeight,x,y,this.pixelWidth,this.pixelHeight);
+		
+		    // Draw glow while teleporting in
+		    if(this.brightness){
+		        game.foregroundContext.beginPath();
+		        game.foregroundContext.arc(x+ this.pixelOffsetX, y+this.pixelOffsetY, this.radius, 0 , Math.PI*2,false);
+		        game.foregroundContext.fillStyle = 'rgba(255,255,255,'+this.brightness+')';
+		        game.foregroundContext.fill();
+		    }
+		
+		},
 		processOrders:function(){
-		    this.lastMovementX = 0;
-		    this.lastMovementY = 0;    
+		    // Reset movement variables if we're not actually moving
+		    if (this.orders.type !== "move" || 
+		        (this.orders.type === "attack" && this.orders.to && 
+		         (Math.pow(this.orders.to.x-this.x,2) + Math.pow(this.orders.to.y-this.y,2)) < Math.pow(bullets.list[this.weaponType].range,2))) {
+		        this.lastMovementX = 0;
+		        this.lastMovementY = 0;
+		    }
+		    
 		    if(this.reloadTimeLeft){
 		        this.reloadTimeLeft--;
 		    }        
@@ -216,10 +267,36 @@ var vehicles = {
 		            var targets = this.findTargetsInSight(100);
 		            if(targets.length>0){
 		                this.orders = {type:"attack",to:targets[0],nextOrder:this.orders};
+		            } else {
+		                // If no targets found, move in a search pattern
+		                // Create a search destination if we don't have one
+		                if (!this.orders.searchDestination) {
+		                    // Pick a random destination within the map bounds
+		                    var mapWidth = game.currentLevel.mapGridWidth;
+		                    var mapHeight = game.currentLevel.mapGridHeight;
+		                    var searchX = Math.floor(Math.random() * mapWidth);
+		                    var searchY = Math.floor(Math.random() * mapHeight);
+		                    this.orders.searchDestination = {x: searchX, y: searchY};
+		                }
+		                
+		                // Move toward the search destination
+		                var distanceToSearchDest = Math.sqrt(Math.pow(this.orders.searchDestination.x - this.x, 2) + Math.pow(this.orders.searchDestination.y - this.y, 2));
+		                
+		                if (distanceToSearchDest < 2) {
+		                    // Reached search destination, pick a new one
+		                    delete this.orders.searchDestination;
+		                } else {
+		                    // Move toward search destination
+		                    var moving = this.moveTo(this.orders.searchDestination);
+		                    if (!moving) {
+		                        // Pathfinding failed, pick a new destination
+		                        delete this.orders.searchDestination;
+		                    }
+		                }
 		            }
 		            break;
 		        case "attack":
-		            if(this.orders.to.lifeCode == "dead" || !this.isValidTarget(this.orders.to)){
+		            if(!this.orders.to || this.orders.to.lifeCode == "dead" || !this.isValidTarget(this, this.orders.to)){
 		                if (this.orders.nextOrder){
 		                    this.orders = this.orders.nextOrder;
 		                } else {
@@ -227,7 +304,9 @@ var vehicles = {
 		                }
 		                return;
 		            }
-		            if ((Math.pow(this.orders.to.x-this.x,2) + Math.pow(this.orders.to.y-this.y,2))<Math.pow(this.sight,2)) {                        
+		            // Get weapon range from bullet configuration
+		            var weaponRange = bullets.list[this.weaponType].range;
+		            if ((Math.pow(this.orders.to.x-this.x,2) + Math.pow(this.orders.to.y-this.y,2))<Math.pow(weaponRange,2)) {                        
 		                //Turn towards target and then start attacking when within range of the target 
 		                var newDirection = findFiringAngle(this.orders.to,this,this.directions);    
 		                var difference = angleDiff(this.direction,newDirection,this.directions);                                            
@@ -432,48 +511,6 @@ var vehicles = {
 				}
 			}
 			return true;
-		},		
-		drawLifeBar:function(){
-		    var x = this.drawingX;
-		    var y = this.drawingY - 2*game.lifeBarHeight;
-		    game.foregroundContext.fillStyle = (this.lifeCode == "healthy")?game.healthBarHealthyFillColor:game.healthBarDamagedFillColor;            
-		    game.foregroundContext.fillRect(x,y,this.pixelWidth*this.life/this.hitPoints,game.lifeBarHeight)
-		    game.foregroundContext.strokeStyle = game.healthBarBorderColor;
-		    game.foregroundContext.lineWidth = 1;
-		    game.foregroundContext.strokeRect(x,y,this.pixelWidth,game.lifeBarHeight)
-		},
-		drawSelection:function(){
-		    var x = this.drawingX + this.pixelOffsetX;
-		    var y = this.drawingY + this.pixelOffsetY;
-		    game.foregroundContext.strokeStyle = game.selectionBorderColor;
-		    game.foregroundContext.lineWidth = 1;
-		    game.foregroundContext.beginPath();
-		    game.foregroundContext.arc(x,y,this.radius,0,Math.PI*2,false);
-		    game.foregroundContext.fillStyle = game.selectionFillColor;
-		    game.foregroundContext.fill();
-		    game.foregroundContext.stroke();
-		},
-		draw:function(){
-		    var x = (this.x*game.gridSize)-game.offsetX- this.pixelOffsetX + this.lastMovementX*game.drawingInterpolationFactor*game.gridSize;
-		    var y = (this.y*game.gridSize)-game.offsetY- this.pixelOffsetY + this.lastMovementY*game.drawingInterpolationFactor*game.gridSize;
-		    this.drawingX = x;
-		    this.drawingY = y;
-		    if (this.selected){
-		        this.drawSelection();
-		        this.drawLifeBar();
-		    }
-		    var colorIndex = (this.team == "blue")?0:1;
-		    var colorOffset = colorIndex*this.pixelHeight;
-		    game.foregroundContext.drawImage(this.spriteSheet, this.imageOffset*this.pixelWidth,colorOffset, this.pixelWidth,this.pixelHeight,x,y,this.pixelWidth,this.pixelHeight);
-		
-		    // Draw glow while teleporting in
-		    if(this.brightness){
-		        game.foregroundContext.beginPath();
-		        game.foregroundContext.arc(x+ this.pixelOffsetX, y+this.pixelOffsetY, this.radius, 0 , Math.PI*2,false);
-		        game.foregroundContext.fillStyle = 'rgba(255,255,255,'+this.brightness+')';
-		        game.foregroundContext.fill();
-		    }
-		
 		}
 
     },

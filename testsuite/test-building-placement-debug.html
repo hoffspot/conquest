@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Building Placement Debug Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #000; color: #fff; }
+        .test-container { text-align: center; padding: 20px; }
+        .debug { background: #f0f0f0; color: #000; padding: 10px; margin: 10px 0; border: 1px solid #ccc; text-align: left; }
+        .error { background: #ffebee; color: #c62828; padding: 10px; margin: 10px 0; border: 1px solid #ef5350; }
+        .success { background: #e8f5e8; color: #2e7d32; padding: 10px; margin: 10px 0; border: 1px solid #66bb6a; }
+        button { padding: 10px 20px; margin: 5px; font-size: 16px; }
+        #console-output { 
+            background: #000; 
+            color: #0f0; 
+            padding: 10px; 
+            margin: 10px 0; 
+            border: 1px solid #333; 
+            height: 400px; 
+            overflow-y: scroll; 
+            font-family: monospace; 
+            font-size: 12px;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>Building Placement Debug Test</h1>
+        <p>This test helps debug building placement issues. Open the browser console to see detailed logs.</p>
+        
+        <div class="debug">
+            <h3>Instructions:</h3>
+            <ol>
+                <li>Load the game and start mission 2</li>
+                <li>Select your base building</li>
+                <li>Click the turret button in the sidebar</li>
+                <li>Try to place the turret by clicking on the map</li>
+                <li>Check the browser console for detailed debug information</li>
+            </ol>
+        </div>
+        
+        <div id="console-output">
+            <div>Console output will appear here...</div>
+        </div>
+        
+        <button onclick="clearConsole()">Clear Console</button>
+        <button onclick="testBaseSelection()">Test Base Selection</button>
+        <button onclick="testTurretButton()">Test Turret Button</button>
+        <button onclick="testBuildingPlacement()">Test Building Placement</button>
+    </div>
+
+    <script>
+        // Override console.log to also display in our output div
+        var originalLog = console.log;
+        var originalError = console.error;
+        var consoleOutput = document.getElementById('console-output');
+        
+        console.log = function() {
+            originalLog.apply(console, arguments);
+            var args = Array.prototype.slice.call(arguments);
+            var message = args.join(' ');
+            consoleOutput.innerHTML += '<div style="color: #0f0;">' + message + '</div>';
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        };
+        
+        console.error = function() {
+            originalError.apply(console, arguments);
+            var args = Array.prototype.slice.call(arguments);
+            var message = args.join(' ');
+            consoleOutput.innerHTML += '<div style="color: #f00;">ERROR: ' + message + '</div>';
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        };
+        
+        function clearConsole() {
+            consoleOutput.innerHTML = '<div>Console cleared...</div>';
+        }
+        
+        function testBaseSelection() {
+            console.log("=== TESTING BASE SELECTION ===");
+            if (typeof game !== 'undefined') {
+                console.log("Game object exists");
+                console.log("Selected items:", game.selectedItems.length);
+                for (var i = 0; i < game.selectedItems.length; i++) {
+                    var item = game.selectedItems[i];
+                    console.log("Selected item", i, ":", item.name, "type:", item.type, "team:", item.team);
+                }
+            } else {
+                console.error("Game object not found - make sure the game is loaded");
+            }
+        }
+        
+        function testTurretButton() {
+            console.log("=== TESTING TURRET BUTTON ===");
+            if (typeof game !== 'undefined') {
+                console.log("Deploy building mode:", game.deployBuilding);
+                console.log("Can deploy building:", game.canDeployBuilding);
+                console.log("Player cash:", game.cash[game.team]);
+                console.log("Current level requirements:", game.currentLevel.requirements);
+            } else {
+                console.error("Game object not found - make sure the game is loaded");
+            }
+        }
+        
+        function testBuildingPlacement() {
+            console.log("=== TESTING BUILDING PLACEMENT ===");
+            if (typeof game !== 'undefined' && typeof mouse !== 'undefined') {
+                console.log("Mouse grid position:", mouse.gridX, mouse.gridY);
+                console.log("Mouse game position:", mouse.gameX, mouse.gameY);
+                console.log("Map dimensions:", game.currentLevel.mapGridWidth, "x", game.currentLevel.mapGridHeight);
+                console.log("Placement grid:", game.placementGrid);
+                console.log("Buildable grid exists:", !!game.currentMapBuildableGrid);
+            } else {
+                console.error("Game or mouse objects not found - make sure the game is loaded");
+            }
+        }
+        
+        // Auto-clear console on page load
+        window.onload = function() {
+            clearConsole();
+            console.log("Building Placement Debug Test loaded");
+            console.log("Please load the game and start mission 2 to test building placement");
+        };
+    </script>
+</body>
+</html> 

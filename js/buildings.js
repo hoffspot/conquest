@@ -29,15 +29,47 @@ var buildings = {
 			processOrders:function(){
 			    switch (this.orders.type){
 			        case "construct-building":            
+			            console.log("=== BASE CONSTRUCT-BUILDING DEBUG ===");
+			            console.log("Base processing construct-building order");
+			            console.log("Order details:", this.orders.details);
+			            console.log("Base team:", this.team);
+			            console.log("Base lifeCode:", this.lifeCode);
+			            console.log("Base action:", this.action);
+			            
+			            var itemDetails = this.orders.details;
+			            var buildingCost = buildings.list[itemDetails.name].cost;
+			            
+			            // Check if player has enough money
+			            if (game.cash[this.team] < buildingCost) {
+			                if (this.team == game.team) {
+			                    game.showMessage("system", "Warning! Insufficient Funds. Need " + buildingCost + " credits.");
+			                }
+			                this.orders = {type:"stand"};
+			                console.log("=== END BASE CONSTRUCT-BUILDING DEBUG (INSUFFICIENT FUNDS) ===");
+			                return;
+			            }
+			            
 			            this.action="construct";
 			            this.animationIndex = 0;
-			            var itemDetails = this.orders.details;
 			            // Teleport in building and subtract the cost from player cash
 			            itemDetails.team = this.team;
 			            itemDetails.action = "teleport";
+			            
+			            console.log("Creating building with details:", itemDetails);
 			            var item = game.add(itemDetails);
-			            game.cash[this.team] -= item.cost;                                                        
+			            
+			            if (item) {
+			                console.log("Building created successfully:", item.uid);
+			                console.log("Building cost:", buildingCost);
+			                console.log("Player cash before:", game.cash[this.team]);
+			                game.cash[this.team] -= buildingCost;
+			                console.log("Player cash after:", game.cash[this.team]);
+			            } else {
+			                console.error("Failed to create building!");
+			            }
+			            
 			            this.orders = {type:"stand"};
+			            console.log("=== END BASE CONSTRUCT-BUILDING DEBUG ===");
 			            break;                    
 			    }
 			}
@@ -171,6 +203,7 @@ var buildings = {
 		    ],
 			isValidTarget:isValidTarget,
 			findTargetsInSight:findTargetsInSight,
+			hasLineOfSightTo:hasLineOfSightTo,
 			processOrders:function(){
 			    if(this.reloadTimeLeft){
 			        this.reloadTimeLeft--;
@@ -189,7 +222,7 @@ var buildings = {
 			        case "attack":
 			            if(!this.orders.to || 
 			                this.orders.to.lifeCode == "dead" ||
-							!this.isValidTarget(this.orders.to) ||
+							!this.isValidTarget(this, this.orders.to) ||
 			                (Math.pow(this.orders.to.x-this.x,2) + Math.pow(this.orders.to.y-this.y,2))>Math.pow(this.sight,2)
 			                ){
 
@@ -233,6 +266,10 @@ var buildings = {
         action:"stand",
         selected:false,
         selectable:true,
+        processOrders:function(){
+            // Default processOrders implementation
+            // Individual buildings can override this with their own logic
+        },
 		animate:function(){
 			// Consider an item healthy if it has more than 40% life
 		    if (this.life>this.hitPoints*0.4){

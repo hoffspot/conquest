@@ -213,7 +213,28 @@ var maps = {
 				{"type":"timed","time":600000,
 				    "action":function(){
 						game.showMessage("pilot", "Close Air Support en route. Will try to do what I can.");						
-						game.add ({"type":"aircraft","name":"chopper","x":61,"y":22,"selectable":false,"team":"blue","orders":{"type":"hunt"}});
+						var chopper = game.add ({"type":"aircraft","name":"chopper","x":61,"y":22,"selectable":false,"team":"blue","uid":-20,"orders":{"type":"move","to":{"x":55,"y":22}}});
+						console.log("Chopper spawned:", chopper);
+				    }
+				},
+				// Switch air support to hunt mode once it reaches the map
+				{"type":"conditional",
+				    "condition":function(){
+				        var airSupport = game.getItemByUid(-20);
+				        if (airSupport) {
+				            var distance = Math.sqrt(Math.pow(airSupport.x - 55, 2) + Math.pow(airSupport.y - 22, 2));
+				            console.log("Air support position:", airSupport.x, airSupport.y, "Distance to target:", distance, "Orders:", airSupport.orders.type);
+				            return airSupport.orders.type === "move" && distance < 2;
+				        }
+				        return false;
+				    },
+				    "action":function(){
+				        var airSupport = game.getItemByUid(-20);
+				        if (airSupport) {
+				            console.log("Switching air support to hunt mode and making it selectable");
+				            airSupport.orders = {type:"hunt"};
+				            airSupport.selectable = true;
+				        }
 				    }
 				},
 				/* Lose if our base gets destroyed  */

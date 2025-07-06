@@ -22,6 +22,9 @@ var singleplayer = {
 	    // Load all the items for the level
 	    var level = maps.singleplayer[singleplayer.currentLevel];
 
+	    // Reset asset loader counters for new mission
+	    loader.reset();
+
 	    // Don't allow player to enter mission until all assets for the level are loaded
 	    $("#entermission").attr("disabled", true);
 
@@ -39,16 +42,23 @@ var singleplayer = {
 	           for (var i=0; i < requirementArray.length; i++) {
 	               var name = requirementArray[i];
 	               if (window[type]){
-	                   window[type].load(name);
+	                   loadItem.call(window[type], name);
 	               } else {
 	                   console.log('Could not load type :',type);
 	               }
 	           };
 	    };
 
+	    console.log("Loading level items:", level.items.length, "items");
+	    console.log("Available type managers:", {
+	        buildings: typeof buildings !== 'undefined',
+	        vehicles: typeof vehicles !== 'undefined', 
+	        aircraft: typeof aircraft !== 'undefined',
+	        terrain: typeof terrain !== 'undefined'
+	    });
 	    for (var i = level.items.length - 1; i >= 0; i--){
 	        var itemDetails = level.items[i];
-	        game.add(itemDetails);
+	                var item = game.add(itemDetails);
 	    };        
 
 	    // Create a grid that stores all obstructed tiles as 1 and unobstructed as 0
@@ -82,10 +92,27 @@ var singleplayer = {
 	    $("#missionscreen").show();       
 	},    
     play:function(){
-		fog.initLevel();
-        game.animationLoop();                        
-        game.animationInterval = setInterval(game.animationLoop,game.animationTimeout);
-        game.start();
+        try {
+            // Initialize fog of war system
+            fog.initLevel();
+            
+            // Run initial animation loop
+            game.animationLoop();
+            
+            // Set up the animation interval for regular updates
+            game.animationInterval = setInterval(game.animationLoop, game.animationTimeout);
+            
+            // Start the game (this includes the drawing loop)
+            game.start();
+        } catch (error) {
+            console.error("Error starting game:", error);
+            // Try to clean up if there was an error
+            if (game.animationInterval) {
+                clearInterval(game.animationInterval);
+                game.animationInterval = null;
+            }
+            game.running = false;
+        }
     },   
 	sendCommand:function(uids,details){
 	    game.processCommand(uids,details);
