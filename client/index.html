@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="theme-color" content="#090009">
+        <meta name="description" content="Last Colony: a real-time strategy game from Pro HTML5 Games">
+
+        <title>Last Colony</title>
+
+        <link rel="icon" href="data:,">
+        <link rel="stylesheet" href="styles.css">
+        <script type="module" src="js/main.js"></script>
+    </head>
+    <body>
+        <div id="wrapper">
+            <main id="gamecontainer">
+                <section id="gamestartscreen" class="gamelayer" hidden>
+                    <h1 class="game-title">LAST<br>COLONY</h1>
+                    <nav class="game-options" aria-label="Main menu">
+                        <button type="button" id="campaignbutton" class="game-option">Campaign</button>
+                        <button type="button" id="multiplayerbutton" class="game-option">Multiplayer</button>
+                    </nav>
+                </section>
+
+                <section id="missionbriefingscreen" class="gamelayer" hidden aria-label="Mission briefing">
+                    <img src="images/screens/interface-left.png" class="left-panel" draggable="false" alt="">
+                    <img src="images/screens/interface-right-briefing.png" class="right-panel" draggable="false" alt="">
+                    <button type="button" id="entermission" class="sprite-button" aria-label="Enter mission"></button>
+                    <button type="button" id="exitmission" class="sprite-button" aria-label="Exit"></button>
+                    <div id="missionbriefing"></div>
+                </section>
+
+                <section id="gameinterfacescreen" class="gamelayer" hidden aria-label="Game">
+                    <img src="images/screens/interface-left.png" class="left-panel" draggable="false" alt="">
+                    <img src="images/screens/interface-right-game.png" class="right-panel" draggable="false" alt="">
+                    <div id="gamemessages" role="log" aria-live="polite"></div>
+                    <div id="callerpicture"></div>
+                    <div id="cash" aria-label="Cash"></div>
+                    <div id="sidebarbuttons">
+                        <button type="button" id="starport" data-name="starport" class="sprite-button" title="Starport" aria-label="Build starport"></button>
+                        <button type="button" id="ground-turret" data-name="ground-turret" class="sprite-button" title="Turret" aria-label="Build turret"></button>
+                        <button type="button" id="harvester" data-name="harvester" class="sprite-button" title="Harvester" aria-label="Build harvester"></button>
+                        <button type="button" id="scout-tank" data-name="scout-tank" class="sprite-button" title="Scout Tank" aria-label="Build scout tank"></button>
+                        <button type="button" id="heavy-tank" data-name="heavy-tank" class="sprite-button" title="Heavy Tank" aria-label="Build heavy tank"></button>
+                        <button type="button" id="chopper" data-name="chopper" class="sprite-button" title="Copter" aria-label="Build copter"></button>
+                        <button type="button" id="wraith" data-name="wraith" class="sprite-button" title="Wraith" aria-label="Build wraith"></button>
+                    </div>
+                    <canvas id="gamebackgroundcanvas"></canvas>
+                    <canvas id="gameforegroundcanvas"></canvas>
+                    <input type="text" id="chatmessage" maxlength="200" autocomplete="off" aria-label="Chat message" hidden>
+                </section>
+
+                <section id="messageboxscreen" class="gamelayer" hidden>
+                    <div id="messagebox" role="alertdialog" aria-modal="true" aria-labelledby="messageboxtext">
+                        <div id="messageboxtext"></div>
+                        <button type="button" id="messageboxok" class="sprite-button" aria-label="OK"></button>
+                        <button type="button" id="messageboxcancel" class="sprite-button" aria-label="Cancel"></button>
+                    </div>
+                </section>
+
+                <section id="multiplayerlobbyscreen" class="gamelayer" hidden aria-label="Multiplayer lobby">
+                    <ul id="multiplayergameslist" role="listbox" aria-label="Game rooms"></ul>
+                    <button type="button" id="multiplayerjoin" class="sprite-button" aria-label="Join"></button>
+                    <button type="button" id="multiplayercancel" class="sprite-button" aria-label="Cancel"></button>
+                </section>
+
+                <section id="loadingscreen" class="gamelayer" hidden>
+                    <div id="loadingmessage" role="status"></div>
+                </section>
+            </main>
+        </div>
+        <noscript>Last Colony needs JavaScript to run.</noscript>
+    </body>
+</html>
