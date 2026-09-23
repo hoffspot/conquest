@@ -1,4 +1,6 @@
 // The multiplayer lobby: game rooms, players and the lockstep game clock.
+import { isUidList, sanitizeCommand } from "../client/js/core/commands.js";
+
 //
 // The lobby knows nothing about sockets. Each player is created with a send(object) function,
 // which keeps this logic easy to test and independent of the WebSocket library.
@@ -79,9 +81,16 @@ export class Lobby {
                 break;
 
             case "leave-room":
-                if (room && room.roomId === message.roomId && room.status === "waiting") {
+                if (!room || room.roomId !== message.roomId) {
+                    break;
+                }
+
+                if (room.status === "waiting") {
                     this.#leaveRoom(player);
                     this.#sendRoomListToEveryone();
+                } else {
+                    // Leaving once the game is starting or running ends it for the other player too
+                    this.#endGame(room, `The ${player.color} player left the game.`);
                 }
 
                 break;
@@ -104,13 +113,12 @@ export class Lobby {
 
             case "command":
                 if (room?.status === "running" && Number.isInteger(message.currentTick) && message.currentTick >= 0) {
-                    if (message.uids !== undefined) {
-                        if (!isValidCommand(message)) {
-                            break;
-                        }
+                    // Commands are rebuilt from known fields, so nothing unexpected is sent on to the other player
+                    const details = message.uids === undefined ? undefined : sanitizeCommand(message.details);
 
+                    if (details && isUidList(message.uids)) {
                         // Record who sent the command so clients only let players command their own units
-                        room.commands.push({ uids: message.uids, details: message.details, team: player.color });
+                        room.commands.push({ uids: [...message.uids], details, team: player.color });
                     }
 
                     // The player has now confirmed every tick up to currentTick + tickLag
@@ -339,14 +347,4 @@ export class Lobby {
             this.#measureLatencyStart(player);
         }
     }
-}
-
-// Basic sanity checks for a command's shape; the game validates the details further when it runs them
-function isValidCommand(message) {
-    return Array.isArray(message.uids)
-        && message.uids.length <= 500
-        && message.uids.every(Number.isInteger)
-        && message.details !== null
-        && typeof message.details === "object"
-        && typeof message.details.type === "string";
 }

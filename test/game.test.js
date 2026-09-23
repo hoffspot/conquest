@@ -154,6 +154,33 @@ describe("Game commands", () => {
         runTicks(game, 5);
     });
 
+    it("survives forged commands from a multiplayer opponent", () => {
+        const game = makeGame({
+            items: [
+                { type: "vehicles", name: "scout-tank", uid: 1, x: 21, y: 5, team: "blue" },
+                { type: "vehicles", name: "harvester", uid: 3, x: 22, y: 7, team: "blue" },
+                { type: "buildings", name: "starport", uid: 4, x: 25, y: 4, team: "blue" },
+                { type: "vehicles", name: "transport", uid: 2, x: 23, y: 5, team: "green", life: 1 },
+            ],
+            cash: { blue: 5000, green: 0 },
+        });
+
+        // A made-up oil field object instead of a real one
+        game.processCommand([3], { type: "deploy", to: { x: 25, y: 8, name: "oilfield", type: "terrain" } });
+        // A patrol with no destination hidden in previousOrder, restored once the target dies
+        game.processCommand([1], { type: "attack", toUid: 2, previousOrder: { type: "patrol" } });
+        game.update();
+        // A new unit that would start on a patrol with no destination
+        game.processCommand([4], { type: "construct-unit", details: { type: "vehicles", name: "scout-tank", orders: { type: "patrol" } } });
+
+        runTicks(game, 200);
+
+        assert.equal(game.getItemByUid(3).orders.type, "stand");
+        assert.equal(game.buildings.filter((item) => item.name === "harvester").length, 0);
+        assert.equal(game.getItemByUid(1).orders.type, "stand");
+        assert.ok(game.vehicles.some((item) => item.name === "scout-tank" && item.uid !== 1 && item.orders.type !== "patrol"));
+    });
+
     it("only lets a team command its own units when a team is given", () => {
         const game = makeTanks();
 

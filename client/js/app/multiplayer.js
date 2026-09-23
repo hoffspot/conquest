@@ -48,6 +48,11 @@ export class Multiplayer {
 
     // Connect to the server and open the multiplayer game lobby
     start() {
+        // Ignore repeated clicks while already connecting or connected
+        if (this.websocket) {
+            return;
+        }
+
         if (!("WebSocket" in window)) {
             showMessageBox("Your browser does not support WebSocket. Multiplayer will not work.");
 
@@ -107,11 +112,18 @@ export class Multiplayer {
                 break;
 
             case "initialize-level":
-                this.initLevel(message.spawnLocations, message.currentLevel);
+                // Ignore games in a room the player has just left
+                if (this.roomId !== undefined) {
+                    this.initLevel(message.spawnLocations, message.currentLevel);
+                }
+
                 break;
 
             case "play-game":
-                this.play();
+                if (this.roomId !== undefined) {
+                    this.play();
+                }
+
                 break;
 
             case "latency-ping":
@@ -124,7 +136,11 @@ export class Multiplayer {
                 break;
 
             case "end-game":
-                this.endGame(message.message);
+                // A player who left a starting game stays in the lobby
+                if (this.roomId !== undefined || this.app.activeMode === this) {
+                    this.endGame(message.message);
+                }
+
                 break;
 
             case "chat":
@@ -304,11 +320,19 @@ export class Multiplayer {
 
         this.commands.delete(this.currentTick);
 
-        for (const { uids, details, team } of commands) {
-            this.app.game.processCommand(uids, details, team);
-        }
+        try {
+            for (const { uids, details, team } of commands) {
+                this.app.game.processCommand(uids, details, team);
+            }
 
-        this.app.runTick();
+            this.app.runTick();
+        } catch (error) {
+            // Stop cleanly rather than freezing both players' games
+            console.error(error);
+            this.endGame(`The game stopped because of an error.\n${error.message}`);
+
+            return;
+        }
 
         // In case no command was sent for this tick, send an empty command so the server knows we are keeping up
         if (!this.sentCommandForTick) {

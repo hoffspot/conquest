@@ -31,8 +31,15 @@ export function createServer({ clientDirectory = CLIENT_DIRECTORY, log = console
         log(`Connection from ${address} accepted.`);
 
         const player = lobby.connect((message) => {
-            if (socket.readyState === WebSocket.OPEN) {
+            if (socket.readyState !== WebSocket.OPEN) {
+                return;
+            }
+
+            try {
                 socket.send(JSON.stringify(message));
+            } catch (error) {
+                // Never let one bad message take down the server (and every game on it)
+                log(`Could not send ${message.type} message to ${address}: ${error.message}`);
             }
         });
 

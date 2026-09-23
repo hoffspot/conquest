@@ -13,11 +13,12 @@ from, what changed and why, which bugs were fixed, and what is still the same.
   for that code (`testsuite/`), notes about it (`CodeUpdates/`) and the Chapter 12 WebSocket demo
   (`websocketdemo/`). These were replaced by the modernized game and are still available in the
   git history.
-- **Assets:** `client/images` and `client/audio` are the Chapter 13 assets, minus two files the
-  game never uses: the map's debug grid overlay (`plains-debug.png`) and the `click` sound. A few
-  images in the old repository were first edition versions with a different layout (`buttons.png`
-  and the character portraits) and were replaced; first edition images that the game no longer
-  uses were removed.
+- **Assets:** `client/images` and `client/audio` are the Chapter 13 assets, minus the files the
+  game never uses: the map's debug grid overlay (`plains-debug.png`), the `click` sound, and the
+  sprites for two terrain types (`bigrocks`, `smallrocks`) that no mission or map places. Every
+  remaining image and sound is used. A few images in the old repository were first edition
+  versions with a different layout (`buttons.png` and the character portraits) and were replaced;
+  first edition images that the game no longer uses were removed.
 
 ## Where things went
 
@@ -93,11 +94,13 @@ to the code.
 - The unmaintained `websocket` package was replaced with [`ws`](https://github.com/websockets/ws).
 - The lobby logic (`server/lobby.js`) is independent of the network code, so it can be tested
   directly.
-- Every client message is validated. Dead connections are detected with WebSocket pings.
+- Every client message is validated, and commands are rebuilt from known fields before they are
+  passed on to the other player (see `client/js/core/commands.js`, shared by the server and the
+  game). Dead connections are detected with WebSocket pings.
 
 ### Tooling
 
-- `npm test`: 84 unit, simulation and server tests using Node's built-in test runner. They
+- `npm test`: 95 unit, simulation and server tests using Node's built-in test runner. They
   include a scripted playthrough of mission 1, every mission running for 12 minutes of game time,
   and two simulated multiplayer clients checked for identical state after every tick.
 - `npm run test:e2e`: Playwright tests that play the game in Chromium, covering the campaign,
@@ -144,25 +147,33 @@ These bugs are in the book's Chapter 13 code.
 13. A malformed message (invalid JSON, an unknown room id, a non-string chat message) could crash
     the server, and a third player could join a full room.
 14. Commands weren't checked on either side. A player could command the opponent's units, crash
-    both games with an incomplete order, or "deploy" a harvester onto an enemy base to remove it.
-    Now the server attaches the sender's team to each command, and clients only obey commands
-    for that team's units and ignore invalid orders.
+    or freeze both games with an incomplete or made-up order, or "deploy" a harvester onto an
+    enemy base to remove it. Now the server and the game both rebuild every command from the
+    fields its type needs (targets must be real items named by id, positions must be numbers,
+    new units may only start with simple orders), the server attaches the sender's team to each
+    command, and clients only obey commands for that team's units.
 15. If a player joined a room before their latency had been measured, the room's tick lag was
     `NaN` and the game never started ticking.
 16. Spawn locations were sent as single-element arrays and only worked through type coercion.
 17. The server registered two `close` handlers for every connection.
+18. Leaving a game room while the game was starting left the room in a broken state: if the
+    player who left had already loaded the level, the server started the game with one player
+    missing and crashed. Now leaving a starting (or running) game ends it for the other player,
+    and the player who left stays in the lobby.
+19. Clicking **Multiplayer** again while connecting opened extra connections that were never
+    closed.
 
 **Input, display and sound**
 
-18. The touch handler read the deprecated global `window.event` instead of its own argument.
-19. Releasing the mouse outside the map during a drag selection left the drag stuck.
-20. Clicking **Enter Mission** or **Join** left the cursor inside the map's scrolling zone, so the
+20. The touch handler read the deprecated global `window.event` instead of its own argument.
+21. Releasing the mouse outside the map during a drag selection left the drag stuck.
+22. Clicking **Enter Mission** or **Join** left the cursor inside the map's scrolling zone, so the
     view immediately scrolled away from the starting position.
-21. The loading screen waited forever if an asset failed to load, or if a browser never fired
+23. The loading screen waited forever if an asset failed to load, or if a browser never fired
     `canplaythrough` for a sound (common on mobile).
-22. A sound could not play again until the previous play had finished, and rejected `play()`
+24. A sound could not play again until the previous play had finished, and rejected `play()`
     promises were never handled.
-23. The caller portrait could disappear early when two messages arrived within six seconds.
+25. The caller portrait could disappear early when two messages arrived within six seconds.
 
 ## Things that play differently
 

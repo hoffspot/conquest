@@ -95,6 +95,12 @@ export class Unit extends Entity {
                 break;
 
             case "patrol":
+                // A patrol needs both of its end points
+                if (!orders.to || !orders.from) {
+                    this.orders = { type: "stand" };
+                    break;
+                }
+
                 targets = this.findTargetsInSight(1);
 
                 if (targets.length > 0) {

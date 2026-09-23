@@ -75,7 +75,8 @@ Escape cancels.
   independent of the browser (so it can be tested in Node); a fixed-timestep game loop with
   triggers on game time; Web Audio; Pointer Events for mouse, touch and pen.
 - **One server:** `npm start` serves the game and runs the multiplayer lobby, using the `ws`
-  package instead of the unmaintained `websocket` package. Every message is validated.
+  package instead of the unmaintained `websocket` package. Every message is validated, and
+  commands are rebuilt from known fields before they reach the other player.
 - **Bug fixes:** the book's version skipped the first mission, never ran one of mission 3's
   failure conditions, duplicated unit ids when a mission was restarted, left a player stuck in a
   multiplayer room after each game, and let players command each other's units. See
@@ -108,6 +109,7 @@ client/                 The game (static files served to the browser)
   js/main.js            Entry point: creates the game and wires up the browser UI
   js/core/              The game simulation. No DOM code, so it also runs in Node
     game.js             Game state, items, commands, map grids and the game tick
+    commands.js         Validation of player commands (shared with the server)
     entities/           Buildings, vehicles, aircraft, bullets and terrain
     pathfinding.js      A* path finding
     fog.js              Fog of war

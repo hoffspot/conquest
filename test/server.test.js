@@ -145,6 +145,33 @@ describe("multiplayer over WebSocket", () => {
         green.socket.close();
     });
 
+    it("survives a deeply nested command that used to crash it", async () => {
+        const blue = await connectClient();
+        const green = await connectClient();
+
+        blue.send({ type: "join-room", roomId: 7 });
+        await blue.waitFor("joined-room");
+        green.send({ type: "join-room", roomId: 7 });
+        await blue.waitFor("initialize-level");
+        blue.send({ type: "initialized-level" });
+        green.send({ type: "initialized-level" });
+        await blue.waitFor("play-game");
+
+        const nested = "[".repeat(7000) + "]".repeat(7000);
+
+        blue.socket.send(`{"type":"command","currentTick":0,"uids":[],"details":{"type":"hunt","a":${nested}}}`);
+        green.send({ type: "command", currentTick: 0 });
+
+        // The server keeps running and relays the clean command
+        const tick = await green.waitFor("game-tick", (message) => message.commands.length > 0);
+
+        assert.deepEqual(tick.commands, [{ uids: [], details: { type: "hunt" }, team: "blue" }]);
+        assert.equal((await fetch(`${baseUrl}/`)).status, 200);
+
+        blue.socket.close();
+        green.socket.close();
+    });
+
     it("ends the game when a player's connection drops", async () => {
         const blue = await connectClient();
         const green = await connectClient();

@@ -144,6 +144,62 @@ describe("Lobby", () => {
         assert.ok(alice.all("game-tick").every((message) => message.commands.length === 0));
     });
 
+    it("relays only the fields a command needs, so nothing harmful reaches the other player", () => {
+        const alice = connect(lobby);
+        const bob = connect(lobby);
+
+        alice.send({ type: "join-room", roomId: 1 });
+        bob.send({ type: "join-room", roomId: 1 });
+        alice.send({ type: "initialized-level" });
+        bob.send({ type: "initialized-level" });
+
+        // Deep nesting like this used to make the server crash when it sent the next tick
+        // (JSON.stringify can't even produce it, so write the JSON out by hand)
+        const nested = "[".repeat(7000) + "]".repeat(7000);
+
+        lobby.handleMessage(alice.player, `{"type":"command","currentTick":0,"uids":[1],"details":{"type":"hunt","junk":${nested}}}`);
+        alice.send({ type: "command", currentTick: 0, uids: [2], details: { type: "attack", toUid: 7, previousOrder: { type: "patrol" } } });
+        bob.send({ type: "command", currentTick: 0 });
+
+        mock.timers.tick(100);
+
+        assert.deepEqual(bob.last("game-tick").commands, [
+            { uids: [1], details: { type: "hunt" }, team: "blue" },
+            { uids: [2], details: { type: "attack", toUid: 7 }, team: "blue" },
+        ]);
+    });
+
+    it("still counts a player's tick as confirmed when their command is invalid", () => {
+        const alice = connect(lobby);
+        const bob = connect(lobby);
+
+        alice.send({ type: "join-room", roomId: 1 });
+        bob.send({ type: "join-room", roomId: 1 });
+        alice.send({ type: "initialized-level" });
+        bob.send({ type: "initialized-level" });
+
+        alice.send({ type: "command", currentTick: 3, uids: [1], details: { type: "nonsense" } });
+
+        assert.equal(lobby.rooms[0].lastTickConfirmed.blue, 4);
+    });
+
+    it("ends a starting game for the other player when someone leaves it", () => {
+        const alice = connect(lobby);
+        const bob = connect(lobby);
+
+        alice.send({ type: "join-room", roomId: 1 });
+        bob.send({ type: "join-room", roomId: 1 });
+        bob.send({ type: "leave-room", roomId: 1 });
+
+        assert.deepEqual(alice.last("end-game"), { type: "end-game", message: "The green player left the game." });
+        assert.equal(lobby.rooms[0].status, "empty");
+        assert.equal(bob.player.room, undefined);
+
+        // Bob can join another game straight away
+        bob.send({ type: "join-room", roomId: 2 });
+        assert.equal(bob.last("joined-room").roomId, 2);
+    });
+
     it("rejects joining a full or invalid room, or two rooms at once", () => {
         const alice = connect(lobby);
         const bob = connect(lobby);

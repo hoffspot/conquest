@@ -19,42 +19,6 @@ export const terrainSpecs = defineSpecs({
             { name: "stand", count: 1 },
         ],
     },
-    "bigrocks": {
-        pixelWidth: 40,
-        pixelHeight: 70,
-        baseWidth: 40,
-        baseHeight: 40,
-        pixelOffsetX: 0,
-        pixelOffsetY: 30,
-        buildableGrid: [
-            [1, 1],
-            [0, 1],
-        ],
-        passableGrid: [
-            [1, 1],
-            [0, 1],
-        ],
-        spriteImages: [
-            { name: "stand", count: 1 },
-        ],
-    },
-    "smallrocks": {
-        pixelWidth: 20,
-        pixelHeight: 35,
-        baseWidth: 20,
-        baseHeight: 20,
-        pixelOffsetX: 0,
-        pixelOffsetY: 15,
-        buildableGrid: [
-            [1],
-        ],
-        passableGrid: [
-            [1],
-        ],
-        spriteImages: [
-            { name: "stand", count: 1 },
-        ],
-    },
 });
 
 export class Terrain extends Entity {

@@ -1,3 +1,4 @@
+import { sanitizeCommand } from "./commands.js";
 import { GRID_SIZE, TICK_MS } from "./config.js";
 import { maps } from "./data/maps.js";
 import { Emitter } from "./emitter.js";
@@ -5,11 +6,6 @@ import { createEntity, getSpec, getSpecs } from "./entities/index.js";
 import { Fog } from "./fog.js";
 import { TriggerRunner } from "./triggers.js";
 
-const isFiniteNumber = (value) => typeof value === "number" && Number.isFinite(value);
-const isPoint = (value) => value !== null && typeof value === "object" && isFiniteNumber(value.x) && isFiniteNumber(value.y);
-
-// Commands that need a destination ("to") before a unit can carry them out
-const ORDERS_NEEDING_DESTINATION = new Set(["move", "attack", "guard", "deploy", "patrol"]);
 
 /**
  * The game simulation: every entity on the map, the map grids, cash, fog of war and triggers.
@@ -209,33 +205,25 @@ export class Game extends Emitter {
      * Give orders to a set of units.
      * @param {number[]} uids
      * @param {object} details  the order, e.g. { type: "move", to: {x, y} } or { type: "attack", toUid }
+     *                          (see commands.js for every command and its fields)
      * @param {string} [team]   when set, only units belonging to this team will obey (used in multiplayer)
      */
     processCommand(uids, details, team) {
-        if (!Array.isArray(uids) || !details || typeof details.type !== "string") {
+        // Rebuild the command from the fields it needs, rejecting invalid commands
+        const orders = sanitizeCommand(details);
+
+        if (!Array.isArray(uids) || !orders) {
             return;
         }
 
-        // In case the target "to" object is in terms of uid, fetch the target object
-        let toObject;
+        // Commands name their target item by uid: fetch the target object
+        if (orders.toUid !== undefined) {
+            orders.to = this.getItemByUid(orders.toUid);
 
-        if (details.toUid !== undefined) {
-            toObject = this.getItemByUid(details.toUid);
-
-            if (!toObject || toObject.lifeCode === "dead") {
-                // To object no longer exists. Invalid command
+            if (!orders.to || orders.to.lifeCode === "dead") {
+                // Target no longer exists. Invalid command
                 return;
             }
-        }
-
-        const orders = { ...details };
-
-        if (toObject) {
-            orders.to = toObject;
-        }
-
-        if (!isValidOrder(orders)) {
-            return;
         }
 
         for (const uid of uids) {
@@ -381,23 +369,6 @@ export class Game extends Emitter {
 
         return { canDeployBuilding, placementGrid };
     }
-}
-
-function isValidOrder(orders) {
-    if (ORDERS_NEEDING_DESTINATION.has(orders.type) && !isPoint(orders.to)) {
-        return false;
-    }
-
-    if (orders.type === "patrol" && !isPoint(orders.from)) {
-        return false;
-    }
-
-    if ((orders.type === "construct-unit" || orders.type === "construct-building")
-        && (orders.details === null || typeof orders.details !== "object")) {
-        return false;
-    }
-
-    return true;
 }
 
 function removeFromArray(array, item) {
