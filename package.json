@@ -1,0 +1,27 @@
+{
+  "name": "conquest",
+  "version": "2.0.0",
+  "description": "Last Colony - the real-time strategy game from Pro HTML5 Games (2nd ed.), modernized with ES modules, Web Audio, Pointer Events and a ws-based multiplayer server.",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node --test test/*.test.js",
+    "test:e2e": "playwright test",
+    "lint": "eslint .",
+    "check": "npm run lint && npm test"
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.56.1",
+    "eslint": "^9.39.1",
+    "globals": "^16.5.0"
+  }
+}

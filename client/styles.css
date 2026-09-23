@@ -1,0 +1,587 @@
+:root {
+    --text-color: rgb(130, 150, 162);
+    --title-color: white;
+    --title-outline: purple;
+    --highlight-color: yellow;
+    --font-game: "Courier New", Courier, monospace;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+[hidden] {
+    display: none !important;
+}
+
+html,
+body {
+    margin: 0;
+    height: 100%;
+}
+
+body {
+    background: #090009;
+
+    /* Disable scroll bars */
+    overflow: hidden;
+
+    /* Disable long touch hold select on mobile browsers */
+    -webkit-touch-callout: none;
+}
+
+#wrapper {
+    position: absolute;
+
+    /* Wrapper covers entire window height and width */
+    inset: 0;
+
+    /* Prevent the ugly blue highlighting from accidental selection of text */
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+#gamecontainer {
+    /* Start with a default width that the game changes to fit the window */
+    width: 640px;
+    height: 480px;
+
+    /* Use a wider splash screen and center it within the container */
+    background: url("images/screens/splashscreen.png") no-repeat center;
+
+    /* Center the game container relative to outer wrapper */
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    transform-origin: center center;
+    overflow: hidden;
+}
+
+.gamelayer {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    inset: 0;
+}
+
+/* Keyboard focus indicator for all controls */
+button:focus-visible,
+[role="option"]:focus-visible {
+    outline: 2px solid var(--highlight-color);
+    outline-offset: 1px;
+}
+
+/* Buttons drawn from the buttons.png sprite sheet */
+.sprite-button {
+    border: 0;
+    padding: 0;
+    margin: 0;
+
+    background-color: transparent;
+    background-repeat: no-repeat;
+    background-image: url("images/buttons.png");
+
+    cursor: pointer;
+}
+
+.sprite-button:disabled {
+    cursor: default;
+}
+
+/* Game Starting Menu Screen */
+
+.game-title {
+    position: absolute;
+
+    top: 5%;
+    right: 5%;
+    width: 100%;
+    margin: 0;
+
+    text-align: right;
+    font-family: var(--font-game);
+    font-size: 90px;
+    font-weight: normal;
+    line-height: 80px;
+
+    color: var(--title-color);
+    text-shadow: -2px 0 var(--title-outline), 0 2px var(--title-outline), 2px 0 var(--title-outline), 0 -2px var(--title-outline);
+}
+
+.game-options {
+    position: absolute;
+    top: 65%;
+    left: 10%;
+}
+
+.game-option {
+    display: block;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    background: none;
+
+    font-family: var(--font-game);
+    font-size: 48px;
+    line-height: normal;
+    text-align: left;
+    color: var(--title-color);
+    text-shadow: -2px 0 var(--title-outline), 0 2px var(--title-outline), 2px 0 var(--title-outline), 0 -2px var(--title-outline);
+
+    cursor: pointer;
+}
+
+.game-option:hover,
+.game-option:focus-visible {
+    color: var(--highlight-color);
+    outline: none;
+}
+
+/* Loading Screen */
+
+#loadingscreen {
+    background: rgba(100, 100, 100, 0.7);
+    z-index: 20;
+}
+
+#loadingmessage {
+    position: relative;
+    top: 400px;
+    height: 48px;
+
+    text-align: center;
+    color: white;
+    background: url("images/loader.gif") no-repeat center;
+    font: 12px Arial, sans-serif;
+}
+
+/* Mission Briefing Screen */
+
+#missionbriefingscreen {
+    background: url("images/screens/interface-middle.png");
+}
+
+.left-panel {
+    left: 0;
+    top: 0;
+    position: absolute;
+}
+
+.right-panel {
+    right: 0;
+    top: 0;
+    position: absolute;
+}
+
+#entermission {
+    height: 52px;
+    width: 188px;
+
+    position: absolute;
+    top: 82px;
+    left: 3px;
+
+    background-position: -4px -4px;
+}
+
+#entermission:disabled,
+#entermission:active {
+    background-position: -196px -4px;
+}
+
+#exitmission {
+    height: 52px;
+    width: 72px;
+
+    position: absolute;
+    top: 82px;
+    right: 164px;
+
+    background-position: -4px -64px;
+}
+
+#exitmission:disabled,
+#exitmission:active {
+    background-position: -84px -64px;
+}
+
+#missionbriefing {
+    position: absolute;
+
+    top: 170px;
+    left: 40px;
+    right: 220px;
+    height: 270px;
+
+    text-align: justify;
+
+    color: var(--text-color);
+    text-shadow: -1px 1px black;
+
+    font-size: 16px;
+    font-family: var(--font-game);
+}
+
+/* Leave one blank line between paragraphs */
+#missionbriefing p {
+    margin: 0 0 1lh;
+}
+
+/* Game Interface Screen */
+
+#gameinterfacescreen {
+    background: url("images/screens/interface-middle.png");
+}
+
+#gamemessages {
+    position: absolute;
+    padding: 5px;
+
+    top: 4px;
+    left: 5px;
+
+    right: 168px;
+    height: 60px;
+
+    color: var(--text-color);
+
+    overflow: hidden;
+    font-size: 13px;
+    font-family: var(--font-game);
+    box-sizing: content-box;
+}
+
+#gamemessages span {
+    color: white;
+}
+
+#callerpicture {
+    position: absolute;
+
+    right: 20px;
+    top: 155px;
+    width: 114px;
+    height: 72px;
+
+    overflow: hidden;
+}
+
+#cash {
+    width: 120px;
+    height: 22px;
+    position: absolute;
+    right: 20px;
+    top: 241px;
+
+    color: var(--text-color);
+    overflow: hidden;
+    font-size: 14px;
+    font-family: var(--font-game);
+    text-align: right;
+}
+
+#gameinterfacescreen canvas {
+    position: absolute;
+    top: 79px;
+    left: 0;
+}
+
+#gameforegroundcanvas {
+    /* Let the game handle all touch gestures */
+    touch-action: none;
+}
+
+/* Sidebar Buttons */
+
+#sidebarbuttons {
+    position: absolute;
+
+    right: 12px;
+    top: 265px;
+
+    width: 130px;
+    height: 214px;
+
+    padding: 0;
+    margin: 0;
+
+    overflow: hidden;
+}
+
+#sidebarbuttons .sprite-button {
+    width: 64px;
+    height: 54px;
+    position: absolute;
+}
+
+/* Starport Button */
+
+#starport {
+    background-position: -4px -247px;
+}
+
+#starport:active,
+#starport:disabled {
+    background-position: -208px -247px;
+}
+
+/* Turret Button */
+
+#ground-turret {
+    right: 0;
+    background-position: -74px -247px;
+}
+
+#ground-turret:active,
+#ground-turret:disabled {
+    background-position: -278px -247px;
+}
+
+/* Scout Tank */
+
+#scout-tank {
+    top: 107px;
+    background-position: -4px -306px;
+}
+
+#scout-tank:active,
+#scout-tank:disabled {
+    background-position: -208px -306px;
+}
+
+/* Heavy Tank */
+
+#heavy-tank {
+    right: 0;
+    top: 107px;
+    background-position: -74px -306px;
+}
+
+#heavy-tank:active,
+#heavy-tank:disabled {
+    background-position: -278px -306px;
+}
+
+/* Harvester */
+
+#harvester {
+    top: 55px;
+    background-position: -140px -364px;
+}
+
+#harvester:active,
+#harvester:disabled {
+    background-position: -344px -364px;
+}
+
+/* Chopper */
+
+#chopper {
+    top: 159px;
+    background-position: -4px -364px;
+}
+
+#chopper:active,
+#chopper:disabled {
+    background-position: -208px -364px;
+}
+
+/* Wraith */
+
+#wraith {
+    right: 0;
+    top: 159px;
+    background-position: -74px -364px;
+}
+
+#wraith:active,
+#wraith:disabled {
+    background-position: -278px -364px;
+}
+
+/* Message Box Screen */
+
+#messageboxscreen {
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 10;
+}
+
+#messagebox {
+    /* Center the message box within screen */
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+
+    width: 296px;
+    height: 178px;
+
+    background: url("images/screens/messagebox.png") no-repeat center;
+    color: var(--text-color);
+    overflow: hidden;
+
+    font-size: 13px;
+    font-family: var(--font-game);
+}
+
+#messageboxtext {
+    position: absolute;
+
+    top: 30px;
+    left: 50px;
+    width: 200px;
+    height: 100px;
+}
+
+#messageboxtext p {
+    margin: 0 0 1lh;
+}
+
+#messageboxok {
+    position: absolute;
+
+    top: 128px;
+    left: 11px;
+    width: 74px;
+    height: 26px;
+
+    background-position: -4px -122px;
+}
+
+#messageboxok:active,
+#messageboxok:disabled {
+    background-position: -82px -122px;
+}
+
+#messageboxcancel {
+    position: absolute;
+
+    left: 197px;
+    top: 130px;
+    width: 73px;
+    height: 24px;
+
+    background-position: -4px -154px;
+}
+
+#messageboxcancel:active,
+#messageboxcancel:disabled {
+    background-position: -82px -154px;
+}
+
+/* Multiplayer Lobby Screen */
+
+#multiplayerlobbyscreen {
+    background: url("images/screens/multiplayerlobby.png") no-repeat center;
+}
+
+#multiplayergameslist {
+    /* Center on the screen */
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+
+    width: 394px;
+    height: 274px;
+    margin: 0;
+    padding: 22px;
+    list-style: none;
+    overflow: hidden;
+
+    /* Rows share the height of the list equally, like the table in the book */
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    /* Translucent gray background */
+    background: rgba(0, 0, 0, 0.5);
+
+    /* Format Text */
+    color: lightblue;
+    font-size: 14px;
+    font-family: var(--font-game);
+    text-align: left;
+}
+
+#multiplayergameslist li {
+    flex: 1 1 0;
+    display: flex;
+    align-items: center;
+    padding: 0 1px;
+    cursor: pointer;
+}
+
+/* Styles for the different game room statuses */
+
+#multiplayergameslist .selected {
+    background-color: #274466;
+}
+
+#multiplayergameslist .running,
+#multiplayergameslist .starting {
+    background-color: #444444;
+    color: #666666;
+    cursor: not-allowed;
+}
+
+#multiplayergameslist .waiting {
+    color: lightgreen;
+}
+
+#multiplayergameslist .empty {
+    color: lightblue;
+}
+
+#multiplayergameslist[aria-disabled="true"] li {
+    cursor: default;
+}
+
+/* Join and cancel buttons */
+
+#multiplayerlobbyscreen .sprite-button {
+    position: absolute;
+    top: 410px;
+    width: 74px;
+    height: 26px;
+}
+
+#multiplayerjoin {
+    left: calc(50% - 301px);
+    background-position: -4px -186px;
+}
+
+#multiplayerjoin:active,
+#multiplayerjoin:disabled {
+    background-position: -82px -186px;
+}
+
+#multiplayercancel {
+    left: calc(50% + 227px);
+    background-position: -4px -154px;
+}
+
+#multiplayercancel:active,
+#multiplayercancel:disabled {
+    background-position: -82px -154px;
+}
+
+/* Multiplayer chat input */
+
+#chatmessage {
+    position: absolute;
+    top: 460px;
+    left: 0;
+
+    background: rgba(0, 55, 0, 0.8);
+    color: green;
+    border: 1px solid green;
+    font-family: var(--font-game);
+}
+
+#chatmessage:focus {
+    outline: none;
+}
