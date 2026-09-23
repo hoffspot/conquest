@@ -34,7 +34,7 @@ export function createServer({ clientDirectory = CLIENT_DIRECTORY, log = console
             if (socket.readyState === WebSocket.OPEN) {
                 socket.send(JSON.stringify(message));
             }
-        }, { name: address });
+        });
 
         socket.isAlive = true;
         socket.on("pong", () => {

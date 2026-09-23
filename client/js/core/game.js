@@ -70,15 +70,14 @@ export class Game extends Emitter {
     /**
      * Load a level definition.
      * @param {object} level  entry from levels.singleplayer or levels.multiplayer
-     * @param {{team: string, mode: "singleplayer" | "multiplayer"}} options  team is the local player's team
+     * @param {{team: string}} options  team is the local player's team
      */
-    loadLevel(level, { team, mode }) {
+    loadLevel(level, { team }) {
         this.reset();
 
         this.currentLevel = level;
         this.currentMap = maps[level.mapName];
         this.team = team;
-        this.mode = mode;
 
         if (!this.currentMap) {
             throw new Error(`Unknown map: ${level.mapName}`);
@@ -410,7 +409,7 @@ function removeFromArray(array, item) {
 }
 
 // Make a copy of a 2 dimensional array
-export function copyGrid(grid) {
+function copyGrid(grid) {
     return grid.map((row) => row.slice());
 }
 

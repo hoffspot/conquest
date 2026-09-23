@@ -13,10 +13,11 @@ from, what changed and why, which bugs were fixed, and what is still the same.
   for that code (`testsuite/`), notes about it (`CodeUpdates/`) and the Chapter 12 WebSocket demo
   (`websocketdemo/`). These were replaced by the modernized game and are still available in the
   git history.
-- **Assets:** `client/images` and `client/audio` are exactly the Chapter 13 assets. A few images
-  in the old repository were first edition versions with a different layout (`buttons.png` and the
-  character portraits) and were replaced; first edition images that the game no longer uses were
-  removed.
+- **Assets:** `client/images` and `client/audio` are the Chapter 13 assets, minus two files the
+  game never uses: the map's debug grid overlay (`plains-debug.png`) and the `click` sound. A few
+  images in the old repository were first edition versions with a different layout (`buttons.png`
+  and the character portraits) and were replaced; first edition images that the game no longer
+  uses were removed.
 
 ## Where things went
 

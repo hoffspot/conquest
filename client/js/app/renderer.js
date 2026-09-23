@@ -1,7 +1,7 @@
 import { GRID_SIZE } from "../core/config.js";
 
 // The game area is always 400 pixels tall; its width changes with the window's aspect ratio
-export const CANVAS_HEIGHT = 400;
+const CANVAS_HEIGHT = 400;
 
 /**
  * Draws the game onto two stacked canvases: the background canvas holds the map and is only

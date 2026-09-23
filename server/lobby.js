@@ -35,10 +35,9 @@ export class Lobby {
     }
 
     /** Register a newly connected player. */
-    connect(send, { name = "player" } = {}) {
+    connect(send) {
         const player = {
             id: this.#nextPlayerId++,
-            name,
             send,
             room: undefined,
             color: undefined,

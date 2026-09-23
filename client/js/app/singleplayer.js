@@ -24,7 +24,7 @@ export class SinglePlayer {
         this.enterMissionButton.disabled = true;
 
         app.game.commandHandler = undefined;
-        app.game.loadLevel(level, { team: "blue", mode: "singleplayer" });
+        app.game.loadLevel(level, { team: "blue" });
 
         // Update the mission briefing text and show briefing screen
         switchToScreen("missionbriefingscreen");

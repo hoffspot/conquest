@@ -75,7 +75,7 @@ describe("Game levels", () => {
         const before = JSON.stringify(level.items);
         const game = new Game();
 
-        game.loadLevel(level, { team: "blue", mode: "singleplayer" });
+        game.loadLevel(level, { team: "blue" });
         runTicks(game, 200);
 
         assert.equal(JSON.stringify(level.items), before);
@@ -85,11 +85,11 @@ describe("Game levels", () => {
         const game = new Game();
         const uidsOf = () => game.items.map((item) => item.uid);
 
-        game.loadLevel(levels.singleplayer[1], { team: "blue", mode: "singleplayer" });
+        game.loadLevel(levels.singleplayer[1], { team: "blue" });
         const first = uidsOf();
 
         runTicks(game, 50);
-        game.loadLevel(levels.singleplayer[1], { team: "blue", mode: "singleplayer" });
+        game.loadLevel(levels.singleplayer[1], { team: "blue" });
 
         assert.deepEqual(uidsOf(), first);
         assert.equal(new Set(first).size, first.length);

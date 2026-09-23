@@ -16,7 +16,7 @@ const characters = {
 // How long a caller's picture stays up after their message
 const CALLER_PICTURE_TIMEOUT_MS = 6000;
 
-export function hideScreens() {
+function hideScreens() {
     for (const screen of document.querySelectorAll(".gamelayer")) {
         screen.hidden = true;
     }
@@ -28,10 +28,6 @@ export function showScreen(id) {
 
 export function hideScreen(id) {
     $(id).hidden = true;
-}
-
-export function isScreenVisible(id) {
-    return !$(id).hidden;
 }
 
 // Show only the given screen

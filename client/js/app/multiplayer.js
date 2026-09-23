@@ -250,7 +250,7 @@ export class Multiplayer {
 
         // Commands go to the server, which sends them back to both players as part of a game tick
         game.commandHandler = (uids, details) => this.sendCommand(uids, details);
-        game.loadLevel(level, { team: this.color, mode: "multiplayer" });
+        game.loadLevel(level, { team: this.color });
 
         this.commands = new Map([[0, []]]);
         this.lastReceivedTick = 0;

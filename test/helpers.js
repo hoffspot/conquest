@@ -18,10 +18,10 @@ export function makeLevel({ items = [], triggers = [], cash = { blue: 0, green: 
 }
 
 /** Create a game with a test level loaded. */
-export function makeGame(levelOptions, { team = "blue", mode = "singleplayer" } = {}) {
+export function makeGame(levelOptions, { team = "blue" } = {}) {
     const game = new Game();
 
-    game.loadLevel(makeLevel(levelOptions), { team, mode });
+    game.loadLevel(makeLevel(levelOptions), { team });
 
     return game;
 }

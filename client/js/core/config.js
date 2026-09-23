@@ -12,6 +12,3 @@ export const TRIGGER_CHECK_INTERVAL_MS = 1000;
 
 // The two teams in the game. Blue is always the first sprite row, green the second.
 export const TEAMS = Object.freeze(["blue", "green"]);
-
-// Entity categories. The strings double as the image folder names (images/<type>/<name>.png).
-export const ENTITY_TYPES = Object.freeze(["buildings", "vehicles", "aircraft", "terrain", "bullets"]);

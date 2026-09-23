@@ -18,7 +18,7 @@ function startCampaignLevel(index) {
         game.end();
     });
 
-    game.loadLevel(levels.singleplayer[index], { team: "blue", mode: "singleplayer" });
+    game.loadLevel(levels.singleplayer[index], { team: "blue" });
 
     return { game, events };
 }
@@ -83,7 +83,7 @@ describe("multiplayer lockstep", () => {
         const game = new Game();
         const level = levels.multiplayer[0];
 
-        game.loadLevel(level, { team, mode: "multiplayer" });
+        game.loadLevel(level, { team });
 
         for (const [spawnTeam, spawnIndex] of Object.entries(spawnLocations)) {
             const spawn = level.spawnLocations[spawnIndex];
