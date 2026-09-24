@@ -30,8 +30,9 @@ for (const name of ["three.core", "three.module"]) {
     await writeFile(path.join(target, `${name}.min.js`), code.replaceAll("./three.core.js", "./three.core.min.js"));
 }
 
-// Add-ons the game uses (loading glTF models), keeping their paths so their relative imports work
-for (const addon of ["loaders/GLTFLoader.js", "utils/BufferGeometryUtils.js", "utils/SkeletonUtils.js"]) {
+// Add-ons the game and the character lab use (loading glTF models, orbiting the camera, lighting
+// with a studio environment), keeping their paths so their relative imports work
+for (const addon of ["loaders/GLTFLoader.js", "utils/BufferGeometryUtils.js", "utils/SkeletonUtils.js", "controls/OrbitControls.js", "environments/RoomEnvironment.js"]) {
     const source = await readFile(path.join(three, "examples/jsm", addon), "utf8");
     const { code } = await transform(source, { minify: true, format: "esm", legalComments: "inline" });
     const file = path.join(target, "addons", addon);
