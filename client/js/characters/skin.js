@@ -50,7 +50,7 @@ export const SKIN_DEFAULTS = Object.freeze({
     lips: null, // lip colour (null: from the tone)
     brows: 0.6, // thickness 0 to 1
     browColour: null, // null: from the hair colour
-    hairColour: HAIR_COLOURS.brown,
+    hairColour: HAIR_COLOURS.brown, // (a character paints its hair's colour)
     scalp: 0, // hair painted on the scalp (a buzz cut, or under hair)
     stubble: 0, // beard shadow 0 to 1
     freckles: 0,
@@ -480,18 +480,21 @@ export function paintSkin(atlas, settings = {}) {
         }
 
         // Hair painted on: stubble, scalp, brows
-        const stubble = (f.beard[i] / 255) * look.stubble * (0.35 + 0.65 * grain);
+        // (Stubble and scalp get denser as they go up, so under a beard or hair they're solid)
+        const beard = (f.beard[i] / 255) * look.stubble;
+        const stubble = beard * (0.35 + 0.65 * grain) + Math.max(0, beard - 0.6) * 1.5;
 
-        mix(hair.map((c) => c * 0.9), Math.min(0.85, stubble));
+        // (Painted hair is a little darker than the colour, like hair cards on average)
+        mix(hair.map((c) => c * 0.78), Math.min(0.95, stubble));
 
-        const scalp = (f.scalp[i] / 255) * look.scalp * (0.55 + 0.45 * grain);
+        const scalp = (f.scalp[i] / 255) * look.scalp * (0.75 + 0.25 * grain);
 
-        mix(hair, Math.min(0.92, scalp));
+        mix(hair.map((c) => c * 0.8), Math.min(0.97, scalp));
 
         const browEdge = 0.62 * look.brows;
-        const browAlpha = (1 - smoothstep(browEdge - 0.08, browEdge + 0.03, f.brow[i] / 255)) * (0.25 + 0.75 * (f.browHair[i] / 255)) * Math.min(1, look.brows * 4);
+        const browAlpha = (1 - smoothstep(browEdge - 0.08, browEdge + 0.03, f.brow[i] / 255)) * (0.45 + 0.55 * (f.browHair[i] / 255)) * Math.min(1, look.brows * 4);
 
-        mix(brow, browAlpha * 0.9);
+        mix(brow, browAlpha * 0.95);
 
         data[i * 4] = colour[0] * 255;
         data[i * 4 + 1] = colour[1] * 255;

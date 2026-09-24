@@ -251,7 +251,7 @@ export class Character {
         const hair = { ...LOOK_DEFAULTS.hair, ...look.hair };
         const style = HAIRSTYLES[hair.style] ?? HAIRSTYLES.short;
         const beard = BEARDS[hair.beard] ?? BEARDS.none;
-        const skin = { ...SKIN_DEFAULTS, hairColour: hair.colour, ...look.skin };
+        const skin = { ...SKIN_DEFAULTS, ...look.skin, hairColour: hair.colour };
         const eyes = { ...EYE_DEFAULTS, ...look.eyes };
 
         this.look = { skin, eyes, hair };

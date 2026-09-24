@@ -34,7 +34,7 @@ export const HAIRSTYLES = Object.freeze({
 export const BEARDS = Object.freeze({
     none: { label: "None", strands: 0, stubble: 0 },
     stubble: { label: "Stubble", strands: 0, stubble: 0.35 },
-    short: { label: "Short beard", strands: 1400, length: 0.022, lift: 0.1, gravity: 0.3, width: 0.01, segments: 3, stubble: 0.9, volume: 0.003 },
+    short: { label: "Short beard", strands: 2600, length: 0.016, lift: 0.08, gravity: 0.3, width: 0.007, segments: 3, stubble: 1, volume: 0.003 },
     full: { label: "Full beard", strands: 1300, length: 0.075, lift: 0.12, gravity: 0.6, width: 0.014, segments: 6, stubble: 1, volume: 0.006 },
     goatee: { label: "Goatee", strands: 450, length: 0.045, lift: 0.1, gravity: 0.6, width: 0.012, segments: 4, stubble: 0.9, volume: 0.004, goatee: true },
 });
