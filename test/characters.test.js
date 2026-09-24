@@ -9,7 +9,7 @@ import { allDetailTargetNames, DETAILS, detailTargets } from "../client/js/chara
 import { EQUIPMENT, ITEMS, SLOTS } from "../client/js/characters/equipment.js";
 import { aboveHairline, beardAmount } from "../client/js/characters/face.js";
 import { amplitude, cadence, CURVES, curveAt, NATURAL_SPEED, phaseName, STANCE, strideLength, walkToRunSpeed } from "../client/js/characters/gait.js";
-import { buildGarment, GARMENTS, measureBody } from "../client/js/characters/garments.js";
+import { buildGarment, GARMENTS, measureBody, texelMap } from "../client/js/characters/garments.js";
 import { Walker } from "../client/js/characters/locomotion.js";
 import { allMacroTargetNames, components, MACRO_DEFAULTS, macroTargets } from "../client/js/characters/macro.js";
 import { decodeSection, encodeSection, Packer } from "../client/js/characters/pack.js";
@@ -388,6 +388,96 @@ describe("clothing and armour (garments.js)", () => {
         const end = Math.max(...lowest);
 
         assert.ok(end > 0.8 && end < 1.02, `the sleeve ends near the elbow (${end})`);
+    });
+
+    it("makes footwear the size of the foot, with one toe box", () => {
+        const ankle = f.rig.heads[f.rig.index.get("LeftFoot")].y;
+        const size = (points) => {
+            const xs = points.map(([x]) => x);
+            const zs = points.map(([, , z]) => z);
+
+            return { width: Math.max(...xs) - Math.min(...xs), length: Math.max(...zs) - Math.min(...zs) };
+        };
+        const bare = [];
+
+        for (let v = 0; v < human.vertexCount; v++) {
+            if (human.partOf[v] === 0 && measures.vertices[v].region === "foot" && f.positions[v * 3] > 0.02 && f.positions[v * 3 + 1] < ankle - 0.02) {
+                bare.push([f.positions[v * 3], f.positions[v * 3 + 1], f.positions[v * 3 + 2]]);
+            }
+        }
+
+        const foot = size(bare);
+
+        for (const id of ["boots", "sabatons"]) {
+            const { geometry } = buildGarment(f, id, measures);
+            const position = geometry.attributes.position;
+            const points = [];
+
+            for (let i = 0; i < position.count; i++) {
+                if (position.getX(i) > 0.02 && position.getY(i) < ankle - 0.02) {
+                    points.push([position.getX(i), position.getY(i), position.getZ(i)]);
+                }
+            }
+
+            const boot = size(points);
+
+            // Covering the foot, but no more than a few centimetres bigger (not clown shoes)
+            assert.ok(boot.length > foot.length && boot.length < foot.length + 0.03, `${id} is ${boot.length} long for a ${foot.length} foot`);
+            assert.ok(boot.width > foot.width && boot.width < foot.width + 0.025, `${id} is ${boot.width} wide for a ${foot.width} foot`);
+        }
+    });
+
+    it("joins smooth toe boxes onto footwear, closed, unfolded and on its texture", () => {
+        const { covered, size } = texelMap(human, 512);
+
+        for (const id of ["boots", "sabatons"]) {
+            const { geometry, sources } = buildGarment(f, id, measures);
+            const position = geometry.attributes.position;
+            const normal = geometry.attributes.normal;
+            const uv = geometry.attributes.uv;
+            const index = geometry.index.array;
+            const place = (i) => `${position.getX(i).toFixed(5)},${position.getY(i).toFixed(5)},${position.getZ(i).toFixed(5)}`;
+            const edges = new Map();
+            const capPoints = new Set();
+            let folded = 0;
+            let offTexture = 0;
+            let capTriangles = 0;
+
+            for (let t = 0; t < sources.length; t++) {
+                const corners = [index[t * 3], index[t * 3 + 1], index[t * 3 + 2]];
+                const [a, b, c] = corners.map((i) => new THREE.Vector3().fromBufferAttribute(position, i));
+                const face = new THREE.Vector3().crossVectors(b.clone().sub(a), c.clone().sub(a));
+                const smooth = corners.reduce((sum, i) => sum.add(new THREE.Vector3().fromBufferAttribute(normal, i)), new THREE.Vector3());
+                const nearToes = sources[t] === -1 || Math.max(a.y, b.y, c.y) < 0.08;
+
+                corners.forEach((i, k) => {
+                    const key = [place(i), place(corners[(k + 1) % 3])].sort().join("|");
+
+                    edges.set(key, (edges.get(key) ?? 0) + 1);
+                });
+
+                if (nearToes && face.lengthSq() > 1e-14 && face.dot(smooth) < 0) {
+                    folded++;
+                }
+
+                if (sources[t] === -1) {
+                    capTriangles++;
+                    corners.forEach((i) => capPoints.add(place(i)));
+
+                    const u = corners.reduce((sum, i) => sum + uv.getX(i), 0) / 3;
+                    const v = corners.reduce((sum, i) => sum + uv.getY(i), 0) / 3;
+
+                    offTexture += covered[Math.floor((1 - v) * size) * size + Math.floor(u * size)] ? 0 : 1;
+                }
+            }
+
+            const open = [...edges].filter(([key, uses]) => uses === 1 && key.split("|").every((point) => capPoints.has(point)));
+
+            assert.ok(capTriangles > 1000, `${id} has toe boxes`);
+            assert.equal(folded, 0, `${id} has no triangles folded over near the toes`);
+            assert.equal(open.length, 0, `${id}'s toe boxes are closed and joined on`);
+            assert.ok(offTexture / capTriangles < 0.01, `${id}'s toe boxes stay on the painted texture (${offTexture} of ${capTriangles} off it)`);
+        }
     });
 
     it("has a slot for every piece of equipment", () => {

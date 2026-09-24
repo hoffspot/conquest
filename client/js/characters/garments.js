@@ -40,6 +40,7 @@ export function measureBody(character) {
         armpit: head("LeftArm").y - 0.08 * (character.height / 1.7),
         neckZ: head("Neck").z,
         ankle: head("LeftFoot").y,
+        balls: [head("LeftToeBase"), head("RightToeBase")],
         height: character.height,
     };
     const face = faceFrame(human, positions);
@@ -48,6 +49,18 @@ export function measureBody(character) {
     for (const side of ["Left", "Right"]) {
         chains[`arm${side}`] = [head(`${side}Arm`), head(`${side}ForeArm`), head(`${side}Hand`)];
         chains[`leg${side}`] = [head(`${side}UpLeg`), head(`${side}Leg`), head(`${side}Foot`)];
+    }
+
+    // How far along the foot, from the ankle (0) to the ball of the foot (1), level with the ground
+    const feet = {};
+
+    for (const side of ["Left", "Right"]) {
+        const ankle = head(`${side}Foot`);
+        const axis = head(`${side}ToeBase`).clone().sub(ankle).setY(0);
+        const length = axis.length();
+
+        axis.normalize();
+        feet[side] = (point) => (point.x - ankle.x) * axis.x / length + (point.z - ankle.z) * axis.z / length;
     }
 
     const p = new THREE.Vector3();
@@ -74,6 +87,7 @@ export function measureBody(character) {
             side: side === "Left" ? 1 : -1,
             arm: along(chains[`arm${side}`]),
             leg: along(chains[`leg${side}`]),
+            foot: feet[side](p),
             x: p.x,
             y: p.y,
             z: p.z,
@@ -145,8 +159,8 @@ export const GARMENTS = Object.freeze({
     breastplate: { label: "Breastplate", slot: "armour", layer: 3, thickness: 0.02, loose: 0.01, smooth: 14, colour: "#b8bec2", roughness: 0.28, metalness: 1, pattern: "plate", inside: top((l) => l.waist - 0.04, 0.02, 0.05) },
     bracers: { label: "Bracers", slot: "forearms", layer: 3, thickness: 0.009, smooth: 6, colour: "#5c3a22", roughness: 0.6, pattern: "leather", inside: (v) => (v.region === "arm" ? Math.min(v.arm - 0.64, 0.93 - v.arm) : OUTSIDE) },
     belt: { label: "Belt", slot: "waist", layer: 4, thickness: 0.012, smooth: 6, colour: "#3a2616", roughness: 0.55, pattern: "leather", inside: (v, l) => (v.region === "torso" ? Math.min(v.y - (l.waist - 0.07), l.waist - 0.025 - v.y) : OUTSIDE) },
-    boots: { label: "Boots", slot: "feet", layer: 2, thickness: 0.007, smooth: 8, envelope: true, colour: "#3b2a1c", roughness: 0.6, pattern: "leather", inside: (v) => (v.region === "foot" ? 1 : v.region === "leg" ? v.leg - 0.66 : OUTSIDE) },
-    sabatons: { label: "Plate boots", slot: "feet", layer: 2, thickness: 0.012, smooth: 10, envelope: true, colour: "#a8aeb2", roughness: 0.3, metalness: 1, pattern: "plate", inside: (v) => (v.region === "foot" ? 1 : v.region === "leg" ? v.leg - 0.72 : OUTSIDE) },
+    boots: { label: "Boots", slot: "feet", layer: 2, thickness: 0.007, smooth: 8, toeBox: true, colour: "#3b2a1c", roughness: 0.6, pattern: "leather", inside: (v) => (v.region === "foot" ? 1 : v.region === "leg" ? v.leg - 0.66 : OUTSIDE) },
+    sabatons: { label: "Plate boots", slot: "feet", layer: 2, thickness: 0.012, smooth: 10, toeBox: true, colour: "#a8aeb2", roughness: 0.3, metalness: 1, pattern: "plate", inside: (v) => (v.region === "foot" ? 1 : v.region === "leg" ? v.leg - 0.72 : OUTSIDE) },
     gloves: { label: "Gloves", slot: "hands", layer: 2, thickness: 0.002, smooth: 1, colour: "#4a3322", roughness: 0.6, pattern: "leather", inside: (v) => (v.region === "hand" ? 1 : v.region === "arm" ? v.arm - 0.9 : OUTSIDE) },
     gauntlets: { label: "Gauntlets", slot: "hands", layer: 2, thickness: 0.007, smooth: 2, colour: "#a8aeb2", roughness: 0.3, metalness: 1, pattern: "plate", inside: (v) => (v.region === "hand" ? 1 : v.region === "arm" ? v.arm - 0.8 : OUTSIDE) },
     greaves: { label: "Greaves", slot: "shins", layer: 3, thickness: 0.014, smooth: 8, colour: "#a8aeb2", roughness: 0.3, metalness: 1, pattern: "plate", inside: (v) => (v.region === "leg" ? Math.min(v.leg - 0.56, 0.86 - v.leg) : OUTSIDE) },
@@ -165,13 +179,25 @@ export function buildGarment(character, id, measures) {
     const { vertices, landmarks } = measures;
     const inside = new Float32Array(human.vertexCount);
 
+    // Footwear with a toe box stops at the ball of the foot; the toe box is built separately
+    const cut = (v) => (garment.toeBox && vertices[v].region === "foot" ? Math.min(1, TOE_CUT - vertices[v].foot) : 1);
+
     for (let v = 0; v < human.vertexCount; v++) {
-        inside[v] = human.partOf[v] === 0 ? garment.inside(vertices[v], landmarks) : OUTSIDE;
+        inside[v] = human.partOf[v] === 0 ? Math.min(garment.inside(vertices[v], landmarks), cut(v)) : OUTSIDE;
     }
 
     const body = human.renderIndices("body");
     const source = human.renderSource;
     const covers = new Set();
+
+    // (the toes under a toe box aren't drawn)
+    if (garment.toeBox) {
+        for (let t = 0; t < body.length; t += 3) {
+            if ([body[t], body[t + 1], body[t + 2]].some((r) => vertices[source[r]].region === "foot" && vertices[source[r]].foot > TOE_CUT - 0.05)) {
+                covers.add(t / 3);
+            }
+        }
+    }
 
     // Cut the body's triangles along the region's edge. Vertices are either the body's (by render
     // vertex) or new ones on its edges (by the two render vertices and where along)
@@ -302,8 +328,7 @@ export function buildGarment(character, id, measures) {
         }
     }
 
-    // Grow outward, then smooth, keeping at least most of the thickness everywhere (or, for an
-    // envelope such as a boot, smooth freely and then cover whatever sticks out)
+    // Grow outward, then smooth, keeping at least most of the thickness everywhere
     const thickness = garment.thickness + (garment.loose ?? 0);
     const shell = new Float32Array(count * 3);
 
@@ -348,28 +373,35 @@ export function buildGarment(character, id, measures) {
         }
     };
 
-    smoothPasses(garment.smooth ?? 0, true);
+    // Points on the toe box cut (where the toe box joins on, with no hem)
+    const onCut = new Uint8Array(count);
 
-    // Footwear covers the toes as one smooth toe box
-    if (garment.envelope) {
-        const inFoot = list.map(({ a }) => vertices[source[a]].region === "foot");
-        const feet = [new Set(), new Set()];
+    if (garment.toeBox) {
+        list.forEach(({ a, b, t }, i) => {
+            const va = vertices[source[a]];
+            const vb = vertices[source[b]];
 
-        list.forEach((_, i) => {
-            if (inFoot[i]) {
-                const s = sharedOf[i];
-
-                feet[shell[s * 3] >= 0 ? 0 : 1].add(s);
+            if (va.region === "foot" && vb.region === "foot" && Math.abs(va.foot * (1 - t) + vb.foot * t - TOE_CUT) < 1e-4) {
+                onCut[sharedOf[i]] = 1;
             }
         });
-
-        for (const foot of feet) {
-            envelopFoot(shell, [...foot], landmarks);
-        }
-
-        // Relax the creases where the toes' gaps closed up
-        smoothPasses(3, false, new Set([...feet[0], ...feet[1]]));
     }
+
+    // The cut round each foot is the boot's edge, so the smoothing below keeps it where it is:
+    // it's put onto a smooth outline first, for the boot and its toe box to carry on from
+    const cuts = {};
+
+    if (garment.toeBox) {
+        for (const side of [1, -1]) {
+            const loop = cutLoop(sides, onCut, shell, side);
+
+            if (loop) {
+                cuts[side] = { loop, fractions: roundOffCut(loop, shell) };
+            }
+        }
+    }
+
+    smoothPasses(garment.smooth ?? 0, true);
 
     // The mesh: the shell, then a hem folding back to the skin along the garment's edge
     const out = {
@@ -406,7 +438,7 @@ export function buildGarment(character, id, measures) {
             const b = sharedOf[j];
             const key = a < b ? `${a}:${b}` : `${b}:${a}`;
 
-            if (sides.get(key) !== 1) {
+            if (sides.get(key) !== 1 || (onCut[a] && onCut[b])) {
                 continue;
             }
 
@@ -428,6 +460,16 @@ export function buildGarment(character, id, measures) {
         }
     }
 
+    if (garment.toeBox) {
+        const cap = { shell, sharedOf, onCut, neighbours, out, sources, human, positions, normals, vertices, thickness, triangles };
+
+        for (const side of [1, -1]) {
+            if (cuts[side]) {
+                addToeCap(cap, cuts[side], side);
+            }
+        }
+    }
+
     const geometry = new THREE.BufferGeometry();
 
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(out.positions, 3));
@@ -436,128 +478,503 @@ export function buildGarment(character, id, measures) {
     geometry.setAttribute("skinWeight", new THREE.BufferAttribute(new Uint8Array(out.skinWeights), 4, true));
     geometry.setIndex(out.positions.length / 3 > 65535 ? new THREE.Uint32BufferAttribute(out.indices, 1) : new THREE.Uint16BufferAttribute(out.indices, 1));
     geometry.computeVertexNormals();
-    // Hem vertices keep their own normals
+    // Hem and toe cap vertices keep their own normals
     smoothNormalsAcrossSeams(geometry, [...sharedOf, ...new Array(out.positions.length / 3 - list.length).fill(-1)]);
+
+    if (garment.toeBox) {
+        joinToeCaps(geometry, out.capJoins ?? []);
+    }
 
     return { geometry, covers, sources: Int32Array.from(sources), garment };
 }
 
+// Footwear with a toe box is cut this far along the foot (1 is the ball of the foot)
+const TOE_CUT = 0.85;
+
 /**
- * Make a foot's shell one smooth shape over the toes: measure its radius in every direction from
- * the middle of the foot, widen and blur that (so neighbouring toes merge), and push the shell out
- * to it below the ankle. Every toe is still covered.
+ * A toe box for one foot (side 1 left, -1 right): a smooth cap lofted forward from where the
+ * boot was cut near the ball of the foot (`loop`, in order round it), keeping the cut's outline
+ * but as wide and tall as all the toes together, and rounded off in front of them like a dome.
+ * The toes under it aren't drawn, so it needn't follow each one. It's skinned from the foot to
+ * the toes, so it bends with them.
  */
-function envelopFoot(shell, points, landmarks) {
-    if (!points.length) {
+function addToeCap(cap, { loop, fractions }, side) {
+    const { shell, sharedOf, onCut, neighbours, out, sources, human, positions, normals, vertices, thickness, triangles } = cap;
+    const RINGS = 20;
+
+    // Which of the boot's vertices each stretch of the cut uses at its ends. Where the cut
+    // crosses a texture seam, the boot has two vertices at one point, one either side; the cap
+    // has a column for each, so its texture carries on from both
+    const n = loop.length;
+    const edges = new Map();
+
+    for (let t = 0; t < triangles.length; t += 3) {
+        for (let k = 0; k < 3; k++) {
+            const i = triangles[t + k];
+            const j = triangles[t + ((k + 1) % 3)];
+
+            if (onCut[sharedOf[i]] && onCut[sharedOf[j]]) {
+                edges.set(`${sharedOf[i]}:${sharedOf[j]}`, [i, j]);
+                edges.set(`${sharedOf[j]}:${sharedOf[i]}`, [j, i]);
+            }
+        }
+    }
+
+    const leaving = [];
+    const arriving = [];
+
+    for (let i = 0; i < n; i++) {
+        const [from, to] = edges.get(`${loop[i]}:${loop[(i + 1) % n]}`);
+
+        leaving[i] = from;
+        arriving[(i + 1) % n] = to;
+    }
+
+    const columns = [];
+    const columnOf = new Map();
+
+    for (let i = 0; i < n; i++) {
+        for (const from of new Set([arriving[i], leaving[i]])) {
+            columnOf.set(from, columns.length);
+            columns.push({ i, from });
+        }
+    }
+
+    // The toes, grown by the boot's thickness (with the render vertex each is from, which knows
+    // where it is in the texture)
+    const toes = [];
+    const seen = new Set();
+
+    for (const r of human.renderIndices("body")) {
+        const v = human.renderSource[r];
+        const vertex = vertices[v];
+
+        if (!seen.has(r) && vertex.region === "foot" && vertex.side === side && vertex.foot > TOE_CUT - 0.02) {
+            seen.add(r);
+            toes.push(Object.assign([0, 1, 2].map((k) => positions[v * 3 + k] + normals[v * 3 + k] * thickness), { r }));
+        }
+    }
+
+    const at = (s) => [shell[s * 3], shell[s * 3 + 1], shell[s * 3 + 2]];
+    const loopPoints = loop.map(at);
+    const loopCentre = [0, 1, 2].map((k) => loopPoints.reduce((sum, p) => sum + p[k], 0) / loopPoints.length);
+    const z0 = loopCentre[2];
+    const tip = Math.max(...toes.map((p) => p[2])) + thickness * 0.3;
+
+    // Rings run evenly to the start of the nose, then round it off like a dome: their spacing
+    // follows a quarter circle, and they shrink with it to a point
+    const NOSE_START = 0.55;
+    const noseLength = Math.min(0.02, 0.25 * (tip - z0));
+    const place = (j) => {
+        const t = j / RINGS;
+
+        if (t <= NOSE_START) {
+            return { z: z0 + (t / NOSE_START) * (tip - noseLength - z0), nose: 1 };
+        }
+
+        const angle = ((t - NOSE_START) / (1 - NOSE_START)) * (Math.PI / 2);
+
+        return { z: tip - noseLength + noseLength * Math.sin(angle), nose: Math.cos(angle) };
+    };
+
+    // Each ring wraps the toes near it tightly (their convex hull, as they're grown by the
+    // boot's thickness already), smoothed, so the cap follows the toes as a whole, down to the
+    // shortest, not each toe. Columns go round each ring as far as they are round the cut, both
+    // measured from straight above their middles, so they stay in order however the rings differ
+    const places = Array.from({ length: RINGS }, (_, j) => place(j + 1));
+    const columnFractions = columns.map(({ i }) => fractions[i]);
+    const flat = loopPoints.map(([x, y]) => [x, y]);
+    const sections = [];
+
+    for (const { z, nose } of places) {
+        const near = nose < 1 ? [] : toes.filter((p) => Math.abs(p[2] - z) < (tip - z0) / RINGS);
+        const hull = near.length >= 3 ? convexHull(near.map(([x, y]) => [x, y])) : [];
+
+        if (nose < 1 || hull.length < 3) {
+            sections.push(sections[sections.length - 1] ?? columns.map(({ i }) => flat[i]));
+            continue;
+        }
+
+        const outline = outlineOf(hull, 6);
+
+        sections.push(columnFractions.map((f) => outline(f)));
+    }
+
+    // Smoothed along the foot from the cut, so it tapers evenly; the nose shrinks the last ring
+    // before it to its middle, like a dome
+    const body = places.filter(({ nose }) => nose === 1).length;
+    let smoothed = sections.slice(0, body);
+
+    for (let pass = 0; pass < 3; pass++) {
+        smoothed = smoothed.map((section, j) => section.map((point, c) => {
+            const around = [smoothed[j - 1]?.[c] ?? flat[columns[c].i], point, smoothed[j + 1]?.[c]].filter(Boolean);
+
+            return [0, 1].map((k) => around.reduce((sum, other) => sum + other[k], 0) / around.length);
+        }));
+    }
+
+    const last = smoothed[body - 1];
+    const xs = last.map(([x]) => x);
+    const ys = last.map(([, y]) => y);
+    const middle = [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2];
+    const rings = places.map(({ z, nose }, j) => ({
+        z,
+        blend: smoothstep(0, 0.35, (j + 1) / RINGS),
+        points: j < body ? smoothed[j] : last.map((point) => [0, 1].map((k) => middle[k] + (point[k] - middle[k]) * nose)),
+    }));
+
+    // Texture: from the boot's at the cut, each column slides along the cap to the middle of the
+    // toes' part of the texture (the garment's pattern is painted there too), so it fans in as
+    // the cap narrows to its nose. The toes' part is in one piece that far in from the cut, so
+    // it never reaches the empty texture between the toes
+    const uvOf = (i) => [out.uvs[i * 2], out.uvs[i * 2 + 1]];
+    const toesUV = [0, 1].map((k) => toes.reduce((sum, { r }) => sum + human.uvs[r * 2 + k], 0) / toes.length);
+
+    // Vertices: the boot's own along the cut, then each ring, column by column
+    const firstRing = out.positions.length / 3;
+    const toeBone = human.boneIndex.get(side > 0 ? "LeftToeBase" : "RightToeBase");
+    const addVertex = (position, uv, skinFrom, towardToes) => {
+        out.positions.push(...position);
+        out.uvs.push(...uv);
+
+        // From the foot's weights at the cut to the toe bone at the front
+        const weights = new Map();
+
+        for (let k = 0; k < 4; k++) {
+            const bone = out.skinIndices[skinFrom * 4 + k];
+            const weight = out.skinWeights[skinFrom * 4 + k] / 255;
+
+            if (weight) {
+                weights.set(bone, (weights.get(bone) ?? 0) + weight * (1 - towardToes));
+            }
+        }
+
+        weights.set(toeBone, (weights.get(toeBone) ?? 0) + towardToes);
+
+        const strongest = [...weights].sort((x, y) => y[1] - x[1]).slice(0, 4);
+        const bytes = strongest.map(([, w]) => Math.round(w * 255));
+
+        bytes[0] += 255 - bytes.reduce((sum, w) => sum + w, 0);
+
+        while (strongest.length < 4) {
+            strongest.push([0, 0]);
+            bytes.push(0);
+        }
+
+        out.skinIndices.push(...strongest.map(([bone]) => bone));
+        out.skinWeights.push(...bytes);
+    };
+
+    // The boot's slope at each point of the cut (sideways and up, for each step forward), from
+    // the boot just behind it, for the cap to set off along so there's no crease where they join
+    let slopes = loop.map((s, i) => {
+        const behind = [...neighbours[s]].filter((other) => !onCut[other]);
+
+        return behind.length ? [0, 1, 2].map((k) => loopPoints[i][k] - behind.reduce((sum, other) => sum + shell[other * 3 + k], 0) / behind.length) : [0, 0, 1];
+    });
+
+    for (let pass = 0; pass < 3; pass++) {
+        slopes = slopes.map((slope, i) => [0, 1, 2].map((k) => slope[k] * 0.5 + (slopes[(i + 1) % n][k] + slopes[(i + n - 1) % n][k]) * 0.25));
+    }
+
+    slopes = slopes.map(([x, y, z]) => {
+        const forward = Math.max(z, 0.3 * Math.hypot(x, y, z), 1e-6);
+
+        return [Math.max(-1.5, Math.min(1.5, x / forward)), Math.max(-1.5, Math.min(1.5, y / forward))];
+    });
+
+    // Each column starts from its own point on the cut (the foot turns out a little, so the cut
+    // isn't square to the rings) and heads the way the boot was going, easing into its ring
+    rings.forEach((ring, j) => {
+        const t = (j + 1) / RINGS;
+        const along = (ring.z - z0) / (tip - z0);
+
+        columns.forEach(({ i, from }, c) => {
+            const p = loopPoints[i];
+            const [x, y] = ring.points[c];
+            const [u, v] = uvOf(from);
+            const z = ring.z + (p[2] - z0) * (1 - ring.blend);
+            const carried = [p[0] + slopes[i][0] * (z - p[2]), p[1] + slopes[i][1] * (z - p[2])];
+            const position = [carried[0] + (x - carried[0]) * ring.blend, carried[1] + (y - carried[1]) * ring.blend, z];
+
+            addVertex(position, [u + (toesUV[0] - u) * along, v + (toesUV[1] - v) * along], from, smoothstep(0.1, 0.6, t));
+        });
+    });
+
+    // Triangles, facing out (checked on the first quad, flipped if needed). The last ring is
+    // the point of the nose
+    const count = columns.length;
+    const vertex = (j, c) => (j < 0 ? columns[c].from : firstRing + j * count + c);
+    const faces = [];
+
+    for (let j = -1; j < RINGS - 1; j++) {
+        for (let i = 0; i < n; i++) {
+            const a = columnOf.get(leaving[i]);
+            const b = columnOf.get(arriving[(i + 1) % n]);
+
+            faces.push(vertex(j, a), vertex(j, b), vertex(j + 1, b), vertex(j, a), vertex(j + 1, b), vertex(j + 1, a));
+        }
+    }
+
+    const position = (index) => out.positions.slice(index * 3, index * 3 + 3);
+    const [a, b, c] = [position(faces[0]), position(faces[1]), position(faces[2])];
+    const normal = [
+        (b[1] - a[1]) * (c[2] - a[2]) - (b[2] - a[2]) * (c[1] - a[1]),
+        (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]),
+        (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]),
+    ];
+    const outward = [a[0] - loopCentre[0], a[1] - loopCentre[1], 0];
+
+    if (normal[0] * outward[0] + normal[1] * outward[1] + normal[2] * outward[2] < 0) {
+        for (let k = 0; k < faces.length; k += 3) {
+            [faces[k + 1], faces[k + 2]] = [faces[k + 2], faces[k + 1]];
+        }
+    }
+
+    out.indices.push(...faces);
+
+    for (let k = 0; k < faces.length / 3; k++) {
+        sources.push(-1);
+    }
+
+    // Normals are shared later wherever the cap has more than one vertex at a point: the boot's
+    // along the cut, the two columns at a texture seam, and the point of the nose
+    out.capJoins ??= [];
+    out.capJoins.push(...columns.map(({ from }) => from));
+
+    for (let k = firstRing; k < out.positions.length / 3; k++) {
+        out.capJoins.push(k);
+    }
+}
+
+/** The toe box cut round one foot (side 1 left, -1 right): its shared points in order, or null. */
+function cutLoop(sides, onCut, shell, side) {
+    const next = new Map();
+
+    for (const [key, uses] of sides) {
+        const [a, b] = key.split(":").map(Number);
+
+        if (uses === 1 && onCut[a] && onCut[b] && Math.sign(shell[a * 3]) === side) {
+            next.set(a, [...(next.get(a) ?? []), b]);
+            next.set(b, [...(next.get(b) ?? []), a]);
+        }
+    }
+
+    if (next.size < 6) {
+        return null;
+    }
+
+    const loop = [next.keys().next().value];
+
+    while (loop.length < next.size) {
+        const [a, b] = next.get(loop[loop.length - 1]);
+        const following = a === loop[loop.length - 2] || loop.includes(a) ? b : a;
+
+        if (following === undefined || loop.includes(following)) {
+            break;
+        }
+
+        loop.push(following);
+    }
+
+    return loop;
+}
+
+/**
+ * Put a toe box cut onto a smooth outline round the foot. Grown out from the skin along its
+ * normals, the cut loops over itself where the skin curves in more tightly than the boot is
+ * thick (between the toes); instead it goes round all of it (its convex hull, smoothed), its
+ * points kept in order and spread evenly round it, and how far forward each is smoothed too.
+ * Returns how far round the outline each point is (see outlineOf).
+ */
+function roundOffCut(loop, shell) {
+    const n = loop.length;
+    const points = loop.map((s) => [shell[s * 3], shell[s * 3 + 1], shell[s * 3 + 2]]);
+    const ys = points.map((p) => p[1]);
+    const top = ys.indexOf(Math.max(...ys));
+
+    // How far round each point is, measured round the cut smoothed hard (which shrinks its loops
+    // over itself away), so the points spread evenly round the outline
+    let flat = points.map((p) => [p[0], p[1]]);
+
+    for (let pass = 0; pass < 40; pass++) {
+        flat = flat.map((p, i) => [0, 1].map((k) => p[k] * 0.5 + (flat[(i + 1) % n][k] + flat[(i + n - 1) % n][k]) * 0.25));
+    }
+
+    const around = new Float32Array(n);
+    let perimeter = 0;
+
+    for (let k = 1; k <= n; k++) {
+        const i = (top + k) % n;
+        const previous = flat[(top + k - 1) % n];
+
+        perimeter += Math.hypot(flat[i][0] - previous[0], flat[i][1] - previous[1]);
+        around[i] = k < n ? perimeter : 0;
+    }
+
+    const anticlockwise = points.reduce((sum, p, i) => sum + p[0] * points[(i + 1) % n][1] - points[(i + 1) % n][0] * p[1], 0) > 0;
+    const outline = outlineOf(convexHull(points.map(([x, y]) => [x, y])), 8);
+
+    // The outline is measured from straight above its middle; the cut from its top point, which
+    // is where the outline comes nearest it
+    const nearest = Array.from({ length: 256 }, (_, k) => k / 256).reduce((best, f) => {
+        const [x, y] = outline(f);
+        const d = Math.hypot(x - points[top][0], y - points[top][1]);
+
+        return d < best.d ? { f, d } : best;
+    }, { f: 0, d: Infinity }).f;
+    const fractions = loop.map((_, i) => (((nearest + (anticlockwise ? 1 : -1) * (around[i] / perimeter)) % 1) + 1) % 1);
+    let z = points.map((p) => p[2]);
+
+    for (let pass = 0; pass < 10; pass++) {
+        z = z.map((value, i) => value * 0.5 + (z[(i + 1) % n] + z[(i + n - 1) % n]) * 0.25);
+    }
+
+    loop.forEach((s, i) => {
+        const [x, y] = outline(fractions[i]);
+
+        shell[s * 3] = x;
+        shell[s * 3 + 1] = y;
+        shell[s * 3 + 2] = z[i];
+    });
+
+    return fractions;
+}
+
+/** The convex hull of 2D points, anticlockwise (Andrew's monotone chain). */
+function convexHull(points) {
+    const sorted = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const half = (list) => {
+        const chain = [];
+
+        for (const p of list) {
+            while (chain.length >= 2 && cross(chain[chain.length - 2], chain[chain.length - 1], p) <= 0) {
+                chain.pop();
+            }
+
+            chain.push(p);
+        }
+
+        chain.pop();
+
+        return chain;
+    };
+
+    return [...half(sorted), ...half([...sorted].reverse())];
+}
+
+/**
+ * A smooth closed outline round an anticlockwise convex polygon: a function from how far round
+ * it (0 to 1, anticlockwise from straight above its middle) to a point, keeping the first few
+ * harmonics of the polygon (so its size and shape, but no corners).
+ */
+function outlineOf(polygon, harmonics) {
+    const SAMPLES = 128;
+    const count = polygon.length;
+    const xs = polygon.map(([x]) => x);
+    const middle = (Math.min(...xs) + Math.max(...xs)) / 2;
+    const lengths = [0];
+
+    for (let k = 1; k <= count; k++) {
+        const a = polygon[k - 1];
+        const b = polygon[k % count];
+
+        lengths.push(lengths[k - 1] + Math.hypot(b[0] - a[0], b[1] - a[1]));
+    }
+
+    // Where a line straight up from the middle leaves it
+    let start = 0;
+    let highest = -Infinity;
+
+    for (let k = 0; k < count; k++) {
+        const a = polygon[k];
+        const b = polygon[(k + 1) % count];
+
+        if ((a[0] - middle) * (b[0] - middle) <= 0 && a[0] !== b[0]) {
+            const w = (middle - a[0]) / (b[0] - a[0]);
+            const y = a[1] + (b[1] - a[1]) * w;
+
+            if (y > highest) {
+                highest = y;
+                start = lengths[k] + (lengths[k + 1] - lengths[k]) * w;
+            }
+        }
+    }
+
+    const at = (f) => {
+        const target = (start + f * lengths[count]) % lengths[count];
+        let k = 0;
+
+        while (k < count - 1 && lengths[k + 1] < target) {
+            k++;
+        }
+
+        const a = polygon[k];
+        const b = polygon[(k + 1) % count];
+        const w = Math.min(1, Math.max(0, (target - lengths[k]) / (lengths[k + 1] - lengths[k] || 1)));
+
+        return [a[0] + (b[0] - a[0]) * w, a[1] + (b[1] - a[1]) * w];
+    };
+    const samples = Array.from({ length: SAMPLES }, (_, k) => at(k / SAMPLES));
+    const terms = [];
+
+    for (let h = 0; h <= harmonics; h++) {
+        terms.push([0, 1].map((axis) => {
+            let cosine = 0;
+            let sine = 0;
+
+            samples.forEach((p, k) => {
+                cosine += p[axis] * Math.cos((2 * Math.PI * h * k) / SAMPLES);
+                sine += p[axis] * Math.sin((2 * Math.PI * h * k) / SAMPLES);
+            });
+
+            return [(cosine / SAMPLES) * (h ? 2 : 1), (sine / SAMPLES) * 2];
+        }));
+    }
+
+    return (f) => [0, 1].map((axis) => terms.reduce((sum, term, h) => sum + term[axis][0] * Math.cos(2 * Math.PI * h * f) + term[axis][1] * Math.sin(2 * Math.PI * h * f), 0));
+}
+
+/** Share normals between toe cap and boot vertices at the same point. */
+function joinToeCaps(geometry, joins) {
+    if (!joins.length) {
         return;
     }
 
-    const AROUND = 36;
-    const UPDOWN = 18;
-    const min = [Infinity, Infinity, Infinity];
-    const max = [-Infinity, -Infinity, -Infinity];
+    // computeVertexNormals already averaged every triangle at each vertex, cap and boot alike;
+    // only vertices at one point (split by texture seams, or where the nose closes) need sharing
+    const normal = geometry.attributes.normal;
+    const position = geometry.attributes.position;
+    const byPlace = new Map();
 
-    for (const s of points) {
-        for (let k = 0; k < 3; k++) {
-            min[k] = Math.min(min[k], shell[s * 3 + k]);
-            max[k] = Math.max(max[k], shell[s * 3 + k]);
-        }
+    for (const i of joins) {
+        const key = `${position.getX(i).toFixed(5)},${position.getY(i).toFixed(5)},${position.getZ(i).toFixed(5)}`;
+
+        byPlace.set(key, [...(byPlace.get(key) ?? []), i]);
     }
 
-    const centre = [(min[0] + max[0]) / 2, min[1] + (max[1] - min[1]) * 0.4, (min[2] + max[2]) / 2];
-    const bin = (s) => {
-        const dx = shell[s * 3] - centre[0];
-        const dy = shell[s * 3 + 1] - centre[1];
-        const dz = shell[s * 3 + 2] - centre[2];
-        const length = Math.hypot(dx, dy, dz) || 1;
+    for (const group of byPlace.values()) {
+        const sum = [0, 0, 0];
 
-        return {
-            around: ((Math.atan2(dx, dz) / (2 * Math.PI) + 1) % 1) * AROUND,
-            updown: (Math.asin(Math.max(-1, Math.min(1, dy / length))) / Math.PI + 0.5) * (UPDOWN - 1),
-            length,
-            direction: [dx / length, dy / length, dz / length],
-        };
-    };
-    let radii = new Float32Array(AROUND * UPDOWN);
-
-    for (const s of points) {
-        const { around, updown, length } = bin(s);
-        const i = Math.round(updown) * AROUND + (Math.round(around) % AROUND);
-
-        radii[i] = Math.max(radii[i], length);
-    }
-
-    // Fill the gaps, then widen (the largest nearby) and blur (the average nearby)
-    const around = (a, e, pick) => {
-        const values = [];
-
-        for (let de = -1; de <= 1; de++) {
-            for (let da = -1; da <= 1; da++) {
-                const ee = e + de;
-
-                if (ee >= 0 && ee < UPDOWN) {
-                    const value = radii[ee * AROUND + ((a + da + AROUND) % AROUND)];
-
-                    if (value) {
-                        values.push(value);
-                    }
-                }
-            }
+        for (const i of group) {
+            sum[0] += normal.getX(i);
+            sum[1] += normal.getY(i);
+            sum[2] += normal.getZ(i);
         }
 
-        return values.length ? pick(values) : 0;
-    };
-    const pass = (pick, onlyEmpty = false) => {
-        const next = radii.slice();
+        const length = Math.hypot(...sum) || 1;
 
-        for (let e = 0; e < UPDOWN; e++) {
-            for (let a = 0; a < AROUND; a++) {
-                if (!onlyEmpty || !radii[e * AROUND + a]) {
-                    next[e * AROUND + a] = around(a, e, pick);
-                }
-            }
-        }
-
-        radii = next;
-    };
-    const mean = (values) => values.reduce((sum, value) => sum + value, 0) / values.length;
-
-    for (let k = 0; k < 4; k++) {
-        pass(mean, true);
-    }
-
-    pass((values) => Math.max(...values));
-    pass(mean);
-    pass(mean);
-
-    const radiusAt = (a, e) => {
-        const a0 = Math.floor(a);
-        const e0 = Math.min(UPDOWN - 2, Math.floor(e));
-        const fa = a - a0;
-        const fe = e - e0;
-        const r = (aa, ee) => radii[ee * AROUND + (aa % AROUND)];
-
-        return (r(a0, e0) * (1 - fa) + r(a0 + 1, e0) * fa) * (1 - fe) + (r(a0, e0 + 1) * (1 - fa) + r(a0 + 1, e0 + 1) * fa) * fe;
-    };
-
-    for (const s of points) {
-        const { around: a, updown: e, length, direction } = bin(s);
-        const wanted = radiusAt(a, e);
-
-        // Only below the ankle, easing in
-        const weight = smoothstep(landmarks.ankle + 0.02, landmarks.ankle - 0.03, shell[s * 3 + 1]);
-
-        if (wanted > length && weight > 0) {
-            const reach = length + (wanted - length) * weight;
-
-            for (let k = 0; k < 3; k++) {
-                shell[s * 3 + k] = centre[k] + direction[k] * reach;
-            }
+        for (const i of group) {
+            normal.setXYZ(i, sum[0] / length, sum[1] / length, sum[2] / length);
         }
     }
 }
 
-/** Average the normals of vertices at the same point (texture seams split them). */
+/**
+ * Average the normals of vertices at the same point (texture seams split them). Returns
+ * { sums (point -> normal), sharedOf }.
+ */
 function smoothNormalsAcrossSeams(geometry, sharedOf) {
     const normal = geometry.attributes.normal;
     const sums = new Map();
@@ -583,6 +1000,14 @@ function smoothNormalsAcrossSeams(geometry, sharedOf) {
             normal.setXYZ(i, x / length, y / length, z / length);
         }
     });
+
+    for (const [s, [x, y, z]] of sums) {
+        const length = Math.hypot(x, y, z) || 1;
+
+        sums.set(s, [x / length, y / length, z / length]);
+    }
+
+    return { sums, sharedOf };
 }
 
 /** Two body vertices' skin influences mixed (t of the way to b), as the four strongest. */
