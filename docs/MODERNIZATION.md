@@ -363,7 +363,9 @@ Multiplayer games get one too. The book's map is still one tick away on the miss
     generator uses integer arithmetic and plain `+ - * /`, which every browser computes
     identically, and never `Math.random` or `Math.sin`, whose results can differ between
     browsers. A test enforces this.
-  - The map's number is shown on the briefing. Trying a mission again keeps its map. `?seed=123`
+  - The briefing shows the map as the mission starts, under the fog of war apart from around the
+    player's base (so it helps decide whether to try a new map without scouting it), and the
+    map's number. Trying a mission again keeps its map. `?seed=123`
     in the address plays map 123, and `?map=classic` plays the book's map.
 - **Tests.**
   - Every level, generated from 25 seeds: neighbouring tiles always join up, and every tile of

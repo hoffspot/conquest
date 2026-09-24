@@ -190,14 +190,13 @@ export class Renderer {
         this.foregroundContext.drawImage(this.fogCanvas, -this.offsetX, -this.offsetY);
     }
 
-    // Cover the map with a darkened copy of itself, then cut soft-edged holes where the player can see
-    paintFog(grid) {
-        const context = this.fogContext;
-
+    // Cover the map with a darkened copy of itself, then cut soft-edged holes where the player can
+    // see (onto the fog canvas, or another canvas the size of the map)
+    paintFog(grid, context = this.fogContext) {
         context.globalCompositeOperation = "source-over";
         context.drawImage(this.mapImage, 0, 0);
         context.fillStyle = "rgba(0,0,0,0.8)";
-        context.fillRect(0, 0, this.fogCanvas.width, this.fogCanvas.height);
+        context.fillRect(0, 0, context.canvas.width, context.canvas.height);
 
         context.globalCompositeOperation = "destination-out";
 

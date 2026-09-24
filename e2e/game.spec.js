@@ -352,19 +352,24 @@ test.describe("generated maps", () => {
         await expect(page.getByRole("button", { name: "Enter mission" })).toBeEnabled();
         expect(await mapWidth(page)).toBe(64);
 
-        // The briefing shows a picture of the map
-        const previewColours = await page.locator("#mappreview").evaluate((canvas) => {
+        // The briefing shows a picture of the map, under the fog of war as the mission starts:
+        // only the part around the player's base is lit
+        const preview = await page.locator("#mappreview").evaluate((canvas) => {
             const data = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height).data;
             const colours = new Set();
+            let lit = 0;
 
-            for (let i = 0; i < data.length; i += 400) {
+            for (let i = 0; i < data.length; i += 4) {
                 colours.add(`${data[i]},${data[i + 1]},${data[i + 2]}`);
+                lit += Math.max(data[i], data[i + 1], data[i + 2]) > 90 ? 1 : 0;
             }
 
-            return colours.size;
+            return { colours: colours.size, lit: lit / (data.length / 4) };
         });
 
-        expect(previewColours).toBeGreaterThan(10);
+        expect(preview.colours).toBeGreaterThan(10);
+        expect(preview.lit).toBeGreaterThan(0.005);
+        expect(preview.lit).toBeLessThan(0.2);
 
         // A different map
         const first = await mapNumber(page);

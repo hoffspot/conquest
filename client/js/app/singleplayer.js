@@ -1,4 +1,5 @@
 import { levels } from "../core/data/levels.js";
+import { Fog } from "../core/fog.js";
 import { createMission, newSeed } from "../core/missions.js";
 import { seedFromAddress, setClassicMaps, usesClassicMaps } from "./mapchoice.js";
 import { showMessageBox, showMissionBriefing, switchToScreen } from "./ui.js";
@@ -83,7 +84,8 @@ export class SinglePlayer {
         this.enterMissionButton.focus();
     }
 
-    // A picture of the whole map, with the player's own units and buildings marked
+    // A picture of the map as the mission starts: under the fog of war except around the player's
+    // own units and buildings, which are marked
     #drawPreview() {
         const { renderer, game } = this.app;
         const map = renderer.mapImage;
@@ -93,13 +95,27 @@ export class SinglePlayer {
         const left = (canvas.width - map.width * scale) / 2;
         const top = (canvas.height - map.height * scale) / 2;
 
+        // What the player will be able to see, worked out on a copy so the game itself is untouched
+        const fog = new Fog(game);
+
+        fog.update();
+
+        this.previewFog ??= document.createElement("canvas");
+        this.previewFog.width = map.width;
+        this.previewFog.height = map.height;
+        renderer.paintFog(fog.grid, this.previewFog.getContext("2d"));
+
         context.fillStyle = "#000";
         context.fillRect(0, 0, canvas.width, canvas.height);
         context.drawImage(map, left, top, map.width * scale, map.height * scale);
+        context.drawImage(this.previewFog, left, top, map.width * scale, map.height * scale);
         context.fillStyle = "#5b8fff";
 
+        const { mapGridWidth, mapGridHeight } = game.currentMap;
+
+        // (Not units waiting off the map, such as the convoy the first mission sends you to find)
         for (const item of game.items) {
-            if (item.team === game.team && item.x >= 0 && item.y >= 0) {
+            if (item.team === game.team && item.x >= 0 && item.y >= 0 && item.x < mapGridWidth && item.y < mapGridHeight) {
                 const size = Math.max(3, (item.baseWidth ?? 20) * scale);
 
                 context.fillRect(left + item.x * 20 * scale, top + item.y * 20 * scale, size, size);
