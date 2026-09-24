@@ -3,7 +3,8 @@ import globals from "globals";
 
 export default [
     {
-        ignores: ["node_modules/", "test-results/", "playwright-report/"],
+        // client/vendor holds third-party code (Three.js)
+        ignores: ["node_modules/", "test-results/", "playwright-report/", "client/vendor/"],
     },
     js.configs.recommended,
     {
@@ -37,7 +38,7 @@ export default [
         },
     },
     {
-        files: ["server/**/*.js", "test/**/*.js", "e2e/**/*.js", "*.config.js"],
+        files: ["server/**/*.js", "scripts/**/*.js", "test/**/*.js", "e2e/**/*.js", "*.config.js"],
         languageOptions: {
             globals: globals.node,
         },

@@ -499,8 +499,16 @@ async function init() {
         setSpriteSheet(type, name, await loadImage(spriteSheetUrl(type, name)));
     });
 
+    // Three.js is only loaded now, so the menu appears without waiting for it. Without it (or
+    // without WebGL) every unit is drawn as a sprite.
+    const units3d = import("./app/units3d.js")
+        .then(({ Units3D }) => {
+            app.renderer.units3d = Units3D.create();
+        })
+        .catch((error) => console.warn("3D units are not available, using sprites instead:", error));
+
     try {
-        await loadWithProgress([...spriteSheets, ...app.sounds.load()]);
+        await loadWithProgress([...spriteSheets, ...app.sounds.load(), units3d]);
     } catch (error) {
         console.error(error);
         ui.showMessageBox(`Some game files could not be loaded.\n${error.message}`);

@@ -127,8 +127,10 @@ export class Entity {
 
     /**
      * @param {CanvasRenderingContext2D} context
-     * @param {{offsetX: number, offsetY: number, interpolation: number}} view
-     *        interpolation runs from -1 (previous tick position) to 0 (current tick position)
+     * @param {{offsetX: number, offsetY: number, interpolation: number, drawModel?: Function}} view
+     *        interpolation runs from -1 (previous tick position) to 0 (current tick position);
+     *        drawModel(context, item) draws the item in 3D instead of its sprite if it can
+     *        (returning true), see js/app/units3d.js
      */
     draw(context, view) {
         // Compute pixel coordinates on the canvas for drawing the item
@@ -146,7 +148,9 @@ export class Entity {
             this.drawLifeBar(context);
         }
 
-        this.drawSprite(context);
+        if (!view.drawModel?.(context, this)) {
+            this.drawSprite(context);
+        }
 
         // Draw a glow around unit while teleporting in
         if (this.brightness) {

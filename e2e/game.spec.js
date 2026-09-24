@@ -220,6 +220,87 @@ test.describe("desktop", () => {
     });
 });
 
+test.describe("3D units", () => {
+    const nextFrames = (page) => game(page, () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+
+    // A fingerprint of the pixels around the hero tank on the map
+    function pixelsAroundHero(page) {
+        return game(page, () => {
+            const { camera, game: { items } } = window.lastColony;
+            const tank = items.find((item) => item.uid === -1);
+            const canvas = document.getElementById("gameforegroundcanvas");
+            const ratio = canvas.width / canvas.getBoundingClientRect().width;
+            const center = camera.worldToScreen(tank.x * 20, tank.y * 20);
+            const size = Math.round(40 * camera.zoom * ratio);
+            const { data } = canvas.getContext("2d").getImageData(Math.round(center.x * ratio - size / 2), Math.round(center.y * ratio - size / 2), size, size);
+            let hash = 0;
+
+            for (const value of data) {
+                hash = (hash * 31 + value) % 1000000007;
+            }
+
+            return hash;
+        });
+    }
+
+    test("the first mission's hero tank is drawn in 3D", async ({ page }) => {
+        await openGame(page);
+        await page.getByRole("button", { name: "Campaign" }).click();
+        await page.getByRole("button", { name: "Enter mission" }).click();
+        await silenceMission(page);
+
+        const drawnIn3D = () => game(page, () => {
+            const { renderer, game: { items } } = window.lastColony;
+
+            return items.filter((item) => renderer.units3d?.has(item)).map((item) => item.uid);
+        });
+
+        // Only the hero tank; everything else is still a sprite
+        await expect.poll(drawnIn3D).toEqual([-1]);
+
+        // The 3D model replaces the sprite, and draws the same way every time
+        await game(page, () => {
+            window.lastColony.loop.paused = true;
+        });
+        await nextFrames(page);
+
+        const in3D = await pixelsAroundHero(page);
+
+        await game(page, () => {
+            const { renderer } = window.lastColony;
+
+            window.units3d = renderer.units3d;
+            renderer.units3d = undefined;
+        });
+        await nextFrames(page);
+        expect(await pixelsAroundHero(page)).not.toBe(in3D);
+
+        await game(page, () => {
+            window.lastColony.renderer.units3d = window.units3d;
+        });
+        await nextFrames(page);
+        expect(await pixelsAroundHero(page)).toBe(in3D);
+    });
+
+    test("without WebGL, units are drawn as sprites", async ({ page }) => {
+        await page.addInitScript(() => {
+            const getContext = HTMLCanvasElement.prototype.getContext;
+
+            HTMLCanvasElement.prototype.getContext = function (type, ...options) {
+                return type.startsWith("webgl") ? null : getContext.call(this, type, ...options);
+            };
+        });
+
+        await openGame(page);
+        await page.getByRole("button", { name: "Campaign" }).click();
+        await page.getByRole("button", { name: "Enter mission" }).click();
+        await silenceMission(page);
+
+        expect(await game(page, () => window.lastColony.renderer.units3d)).toBeUndefined();
+        await expect.poll(() => tick(page)).toBeGreaterThan(5);
+    });
+});
+
 test.describe("multiplayer", () => {
     test("two players can play a game", async ({ browser }) => {
         const players = [];
@@ -423,6 +504,13 @@ test.describe("phone (iPhone 16 Pro, landscape)", () => {
         expect(layout.menu.width).toBeGreaterThanOrEqual(44);
         expect(layout.build.width).toBeGreaterThanOrEqual(44);
         expect(layout.zoom).toBeGreaterThanOrEqual(1.3);
+
+        // The hero tank is drawn in 3D
+        await expect.poll(() => game(page, () => {
+            const { renderer, game: { items } } = window.lastColony;
+
+            return renderer.units3d?.has(items.find((item) => item.uid === -1));
+        })).toBe(true);
     });
 
     test("tap to select and move, drag to scroll, pinch to zoom", async ({ page }) => {

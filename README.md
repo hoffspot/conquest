@@ -142,6 +142,10 @@ units, deselect, and in multiplayer open the chat.
   home indicator), touch controls designed for fingers, pinch to zoom, a minimap, sharp graphics
   on high-resolution screens, landscape lock and an installable app (which also works offline
   when the game is served over HTTPS).
+- **3D units (in progress):** units are starting to be drawn as 3D models with
+  [Three.js](https://threejs.org) instead of sprites, seen from the same angle as the book's art.
+  For now the hero tank in the first mission is a test cube. See
+  [3D units](docs/MODERNIZATION.md#3d-units).
 - **Small additions:** a pause menu, mute, keyboard scrolling and zoom, keyboard support for menus
   and the multiplayer lobby, prices on the build buttons, markers that confirm each order, clearer
   error messages when something fails to load or connect.
@@ -155,6 +159,7 @@ npm run lint        # ESLint
 npm test            # unit, simulation and server tests (Node's built-in test runner)
 npm run test:e2e    # plays the game in Chromium using Playwright
 npm run check       # lint + unit tests
+npm run vendor:three  # after changing the three version in package.json: copies it to client/vendor
 ```
 
 The browser tests need Chromium: run `npx playwright install chromium` once, or set
@@ -171,6 +176,7 @@ client/                 The game (static files served to the browser)
   manifest.webmanifest  Lets the game be installed as an app (landscape, full screen)
   sw.js                 Service worker: keeps a copy of the game for offline play
   images/, audio/       Artwork and sounds from the book
+  vendor/three-r186/    Three.js (minified by scripts/vendor-three.js; loaded through an import map)
   js/main.js            Entry point: creates the game and wires up the browser UI
   js/core/              The game simulation. No DOM code, so it also runs in Node
     game.js             Game state, items, commands, map grids and the game tick
@@ -184,6 +190,7 @@ client/                 The game (static files served to the browser)
   js/app/               The browser side
     camera.js           Scrolling and zooming the view
     renderer.js         Drawing the map, units and fog on the canvases
+    units3d.js          Drawing units as 3D models with Three.js
     minimap.js          The overview map in the sidebar
     input.js            Mouse, touch and keyboard controls
     hud.js              The buttons over the map
@@ -202,6 +209,7 @@ server/
   static.js             Serves the client folder
 test/                   Unit, simulation and server tests
 e2e/                    Playwright browser tests
+scripts/vendor-three.js Copies Three.js from node_modules into client/vendor
 .github/workflows/      CI (ci.yml) and publishing to GitHub Pages (pages.yml)
 docs/MODERNIZATION.md   What changed compared to the book, and why
 ```

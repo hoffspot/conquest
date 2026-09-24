@@ -12,8 +12,12 @@ export default defineConfig({
         ...devices["Desktop Chrome"],
         baseURL: `http://localhost:${port}`,
         viewport: { width: 1000, height: 600 },
-        // Set CHROMIUM_PATH to use an already installed Chromium instead of Playwright's download
-        launchOptions: process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {},
+        launchOptions: {
+            // WebGL (for the 3D units) through software rendering on machines without a GPU, such as CI
+            args: ["--enable-unsafe-swiftshader"],
+            // Set CHROMIUM_PATH to use an already installed Chromium instead of Playwright's download
+            ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}),
+        },
     },
     webServer: {
         command: "node server/index.js",
