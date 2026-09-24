@@ -1,12 +1,17 @@
 // Service worker: keeps a copy of the game so it starts quickly and the campaign works offline.
 //
 // Code and pages are fetched from the network first (so updates show up straight away), falling
-// back to the saved copy when offline. Images and sounds rarely change, so they come from the saved
-// copy first. Change the version in CACHE_NAME when images or sounds change to replace the saved
-// copies.
+// back to the saved copy when offline. They are always checked with the server, never reused from
+// the browser's own caches: GitHub Pages lets browsers reuse files for ten minutes, so right after
+// an update a page could otherwise be put together from some old files and some new ones, which
+// don't work together. (Files that haven't changed come back as short "not modified" replies.)
+//
+// Images and sounds rarely change, so they come from the saved copy first. Change the version in
+// CACHE_NAME when images or sounds change to replace the saved copies.
 
 const CACHE_PREFIX = "last-colony-";
-const CACHE_NAME = `${CACHE_PREFIX}v1`;
+// v2: replaces copies saved before code was always checked with the server
+const CACHE_NAME = `${CACHE_PREFIX}v2`;
 
 self.addEventListener("install", () => {
     self.skipWaiting();
@@ -61,13 +66,21 @@ async function networkFirst(request) {
     const cache = await caches.open(CACHE_NAME);
 
     try {
-        const response = await fetch(request);
+        // Pages are fetched by address, as a page request can't be copied with different options
+        const response = await fetch(request.mode === "navigate" ? request.url : request, { cache: "no-cache" });
 
-        if (response.ok) {
-            cache.put(request, response.clone());
+        if (!response.ok || response.type !== "basic") {
+            return response;
         }
 
-        return response;
+        cache.put(request, response.clone());
+
+        // Tell the page not to reuse its copy without asking again, whatever the server allowed
+        const headers = new Headers(response.headers);
+
+        headers.set("Cache-Control", "no-cache");
+
+        return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
     } catch (error) {
         const cached = await cache.match(request);
 

@@ -25,6 +25,21 @@
                 }
             }
         </script>
+        <script>
+            // A new version of the game comes with a new service worker (sw.js), which takes over
+            // as soon as it is installed. A page loaded before that may be a mix of old and new
+            // files, so reload it, unless a game or the multiplayer lobby is under way. (This is
+            // here rather than in the game's code because the page is always the new version's.)
+            if (navigator.serviceWorker?.controller) {
+                navigator.serviceWorker.addEventListener("controllerchange", () => {
+                    const app = window.lastColony;
+
+                    if (!app?.activeMode && !app?.multiplayer.websocket) {
+                        window.location.reload();
+                    }
+                }, { once: true });
+            }
+        </script>
         <script type="module" src="js/main.js"></script>
     </head>
     <body>
