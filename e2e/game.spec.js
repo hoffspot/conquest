@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { devices, expect, test } from "@playwright/test";
 
 // The game exposes itself as window.lastColony for debugging, which these tests use to inspect state
 
@@ -16,15 +16,14 @@ async function openGame(page) {
     await expect(page.locator("#loadingscreen")).toBeHidden();
 }
 
-// Convert map tile coordinates to page coordinates, taking scrolling and scaling into account
+// Convert map tile coordinates to page coordinates, taking scrolling and zoom into account
 function tileToPage(page, x, y) {
     return page.evaluate(([x, y]) => {
-        const { renderer } = window.lastColony;
-        const canvas = document.getElementById("gameforegroundcanvas");
-        const rect = canvas.getBoundingClientRect();
-        const scale = rect.width / canvas.offsetWidth;
+        const { camera } = window.lastColony;
+        const rect = document.getElementById("gameforegroundcanvas").getBoundingClientRect();
+        const point = camera.worldToScreen(x * 20, y * 20);
 
-        return { x: rect.left + (x * 20 - renderer.offsetX) * scale, y: rect.top + (y * 20 - renderer.offsetY) * scale };
+        return { x: rect.left + point.x, y: rect.top + point.y };
     }, [x, y]);
 }
 
@@ -35,199 +34,387 @@ async function clickTile(page, x, y, options) {
     await page.mouse.click(point.x, point.y, options);
 }
 
-test("the campaign starts with a briefing and the first mission", async ({ page }) => {
-    await openGame(page);
+const game = (page, fn, arg) => page.evaluate(fn, arg);
 
-    await page.getByRole("button", { name: "Campaign" }).click();
-    await expect(page.locator("#missionbriefing")).toContainText("In the months since the great war");
+test.describe("desktop", () => {
+    test("the campaign starts with a briefing and the first mission", async ({ page }) => {
+        await openGame(page);
 
-    await page.getByRole("button", { name: "Enter mission" }).click();
-    await expect(page.locator("#gameinterfacescreen")).toBeVisible();
+        await page.getByRole("button", { name: "Campaign" }).click();
+        await expect(page.locator("#missionbriefing")).toContainText("In the months since the great war");
 
-    // The operator calls in after three seconds of game time
-    await expect(page.locator("#gamemessages")).toContainText("We haven't heard from the last convoy", { timeout: 10000 });
-    await expect(page.locator("#callerpicture img")).toHaveAttribute("alt", "Operator");
+        await page.getByRole("button", { name: "Enter mission" }).click();
+        await expect(page.locator("#gameinterfacescreen")).toBeVisible();
 
-    // The view starts over the player's base (at tile 55, 6)
-    const view = await page.evaluate(() => {
-        const { offsetX, offsetY, width, height } = window.lastColony.renderer;
+        // The operator calls in after three seconds of game time
+        await expect(page.locator("#gamemessages")).toContainText("We haven't heard from the last convoy", { timeout: 10000 });
+        await expect(page.locator("#callerpicture img")).toHaveAttribute("alt", "Operator");
 
-        return { offsetX, offsetY, width, height };
-    });
+        // The view starts over the player's base (at tile 55, 6)
+        const view = await game(page, () => {
+            const { offsetX, offsetY, width, height } = window.lastColony.camera;
 
-    expect(55 * 20).toBeGreaterThanOrEqual(view.offsetX);
-    expect(57 * 20).toBeLessThanOrEqual(view.offsetX + view.width);
-    expect(6 * 20).toBeLessThan(view.offsetY + view.height);
-});
-
-test("units can be selected and ordered around, and the game can be paused", async ({ page }) => {
-    await openGame(page);
-    await page.getByRole("button", { name: "Campaign" }).click();
-    await page.getByRole("button", { name: "Enter mission" }).click();
-
-    // Click the hero tank to select it, then right click the ground to move it
-    await clickTile(page, 57, 12.2);
-    await expect.poll(() => page.evaluate(() => window.lastColony.game.selectedItems.map((item) => item.uid))).toEqual([-1]);
-
-    await clickTile(page, 56, 17, { button: "right" });
-    expect(await page.evaluate(() => window.lastColony.game.getItemByUid(-1).orders.type)).toBe("move");
-
-    // P pauses the game
-    await page.keyboard.press("p");
-    const pausedAt = await page.evaluate(() => window.lastColony.game.tick);
-
-    await page.waitForTimeout(500);
-    expect(await page.evaluate(() => window.lastColony.game.tick)).toBe(pausedAt);
-
-    await page.keyboard.press("p");
-    await expect.poll(() => page.evaluate(() => window.lastColony.game.tick)).toBeGreaterThan(pausedAt);
-});
-
-test("touch screens: tap to select, double tap to give orders", async ({ browser }) => {
-    const context = await browser.newContext({ hasTouch: true, isMobile: true, viewport: { width: 915, height: 412 } });
-    const page = await context.newPage();
-
-    await openGame(page);
-    await page.locator("#campaignbutton").tap();
-    await page.locator("#entermission").tap();
-
-    const hero = await tileToPage(page, 57, 12.2);
-
-    await page.touchscreen.tap(hero.x, hero.y);
-    await expect.poll(() => page.evaluate(() => window.lastColony.game.selectedItems.map((item) => item.uid))).toEqual([-1]);
-
-    const ground = await tileToPage(page, 56, 17);
-
-    await page.touchscreen.tap(ground.x, ground.y);
-    await page.touchscreen.tap(ground.x, ground.y);
-    await expect.poll(() => page.evaluate(() => window.lastColony.game.getItemByUid(-1).orders.type)).toBe("move");
-
-    await context.close();
-});
-
-test("buildings and units can be constructed", async ({ page }) => {
-    await openGame(page);
-
-    // Jump straight to the second mission, which allows construction
-    await page.evaluate(() => {
-        const app = window.lastColony;
-
-        app.singleplayer.currentLevel = 1;
-        app.singleplayer.initLevel();
-    });
-    await page.getByRole("button", { name: "Enter mission" }).click();
-    await page.evaluate(() => {
-        window.lastColony.game.cash.blue = 5000;
-    });
-
-    // Select the base: only the building buttons become available
-    await clickTile(page, 56, 7);
-    await expect(page.locator("#ground-turret")).toBeEnabled();
-    await expect(page.locator("#scout-tank")).toBeDisabled();
-
-    // Place a turret next to the base
-    await page.locator("#ground-turret").click();
-    await clickTile(page, 54.5, 4.5);
-    await expect.poll(() => page.evaluate(() => window.lastColony.game.cash.blue)).toBe(3500);
-    expect(await page.evaluate(() => window.lastColony.game.buildings.some((item) => item.name === "ground-turret" && item.x === 54 && item.y === 4))).toBe(true);
-
-    // Building on top of the base is refused
-    await clickTile(page, 56, 7);
-    await page.locator("#ground-turret").click();
-    await clickTile(page, 56, 7);
-    await expect(page.locator("#gamemessages")).toContainText("Cannot deploy building here");
-
-    // Right click cancels placement
-    await clickTile(page, 56, 7, { button: "right" });
-    expect(await page.evaluate(() => window.lastColony.sidebar.deployBuilding)).toBeUndefined();
-});
-
-test("two players can play a multiplayer game", async ({ browser }) => {
-    const players = [];
-
-    for (let i = 0; i < 2; i++) {
-        const page = await (await browser.newContext({ viewport: { width: 1000, height: 600 } })).newPage();
-
-        page.on("pageerror", (error) => {
-            throw error;
+            return { offsetX, offsetY, width, height };
         });
 
+        expect(55 * 20).toBeGreaterThanOrEqual(view.offsetX);
+        expect(57 * 20).toBeLessThanOrEqual(view.offsetX + view.width);
+        expect(6 * 20).toBeLessThan(view.offsetY + view.height);
+    });
+
+    test("units can be selected and ordered around, the view zoomed, and the game paused", async ({ page }) => {
         await openGame(page);
-        await page.getByRole("button", { name: "Multiplayer" }).click();
-        await expect(page.locator("#multiplayerlobbyscreen")).toBeVisible();
-        players.push(page);
-    }
+        await page.getByRole("button", { name: "Campaign" }).click();
+        await page.getByRole("button", { name: "Enter mission" }).click();
 
-    const [blue, green] = players;
-    // Use a room that the other tests are not using
-    const room = (page) => page.locator("#multiplayergameslist li").nth(7);
+        // Click the hero tank to select it, then right click the ground to move it
+        await clickTile(page, 57, 12.2);
+        await expect.poll(() => game(page, () => window.lastColony.game.selectedItems.map((item) => item.uid))).toEqual([-1]);
 
-    await room(blue).click();
-    await blue.getByRole("button", { name: "Join" }).click();
-    await expect(room(green)).toContainText("Waiting for second player");
+        await clickTile(page, 56, 14, { button: "right" });
+        expect(await game(page, () => window.lastColony.game.getItemByUid(-1).orders.type)).toBe("move");
 
-    await room(green).click();
-    await green.getByRole("button", { name: "Join" }).click();
+        // The mouse wheel zooms around the pointer
+        const zoom = await game(page, () => window.lastColony.camera.zoom);
 
-    for (const page of players) {
-        await expect(page.locator("#gameinterfacescreen")).toBeVisible();
-        await expect.poll(() => page.evaluate(() => window.lastColony.game.tick)).toBeGreaterThan(5);
-    }
+        await page.mouse.wheel(0, -300);
+        await expect.poll(() => game(page, () => window.lastColony.camera.zoom)).toBeGreaterThan(zoom);
 
-    expect(await blue.evaluate(() => window.lastColony.game.team)).toBe("blue");
-    expect(await green.evaluate(() => window.lastColony.game.team)).toBe("green");
+        // P pauses the game and opens the menu
+        await page.keyboard.press("p");
+        await expect(page.locator("#pausescreen")).toBeVisible();
 
-    // Record the simulation state at every tick on both clients and check that they match
-    const recordStates = (page) => page.evaluate(() => {
-        const { game } = window.lastColony;
-        const update = game.update.bind(game);
+        const pausedAt = await game(page, () => window.lastColony.game.tick);
 
-        window.states = {};
-        game.update = () => {
-            update();
-            window.states[game.tick] = JSON.stringify(game.items.map((item) => [item.uid, item.x, item.y, item.life]));
-        };
+        await page.waitForTimeout(500);
+        expect(await game(page, () => window.lastColony.game.tick)).toBe(pausedAt);
+
+        await page.getByRole("button", { name: "Resume" }).click();
+        await expect.poll(() => game(page, () => window.lastColony.game.tick)).toBeGreaterThan(pausedAt);
     });
 
-    await Promise.all(players.map(recordStates));
+    test("buildings and units can be constructed", async ({ page }) => {
+        await openGame(page);
 
-    // Blue sends its tanks to the middle of the map
-    await blue.evaluate(() => {
-        const { game } = window.lastColony;
+        // Jump straight to the second mission, which allows construction
+        await game(page, () => {
+            const app = window.lastColony;
 
-        game.sendCommand(game.items.filter((item) => item.team === "blue" && item.canAttack).map((item) => item.uid), { type: "move", to: { x: 30, y: 20 } });
+            app.singleplayer.currentLevel = 1;
+            app.singleplayer.initLevel();
+        });
+        await page.getByRole("button", { name: "Enter mission" }).click();
+        await game(page, () => {
+            window.lastColony.game.cash.blue = 5000;
+        });
+
+        // Select the base: only the building buttons become available
+        await clickTile(page, 56, 7);
+        await expect(page.locator("#ground-turret")).toBeEnabled();
+        await expect(page.locator("#scout-tank")).toBeDisabled();
+        await expect(page.locator("#ground-turret")).toContainText("1,500");
+
+        // Place a turret next to the base
+        await page.locator("#ground-turret").click();
+        await clickTile(page, 54.5, 4.5);
+        await expect.poll(() => game(page, () => window.lastColony.game.cash.blue)).toBe(3500);
+        expect(await game(page, () => window.lastColony.game.buildings.some((item) => item.name === "ground-turret" && item.x === 54 && item.y === 4))).toBe(true);
+
+        // Building on top of the base is refused
+        await clickTile(page, 56, 7);
+        await page.locator("#ground-turret").click();
+        await clickTile(page, 56, 7);
+        await expect(page.locator("#gamemessages")).toContainText("Cannot deploy building here");
+
+        // Right click cancels placement
+        await clickTile(page, 56, 7, { button: "right" });
+        expect(await game(page, () => window.lastColony.sidebar.deployBuilding)).toBeUndefined();
     });
 
-    await blue.waitForTimeout(2000);
+    test("the minimap moves the view", async ({ page }) => {
+        await openGame(page);
+        await page.getByRole("button", { name: "Campaign" }).click();
+        await page.getByRole("button", { name: "Enter mission" }).click();
 
-    const [blueStates, greenStates] = await Promise.all(players.map((page) => page.evaluate(() => window.states)));
-    const commonTicks = Object.keys(blueStates).filter((tick) => tick in greenStates);
+        const minimap = await page.locator("#minimap").boundingBox();
 
-    expect(commonTicks.length).toBeGreaterThan(5);
-
-    for (const tick of commonTicks) {
-        expect(greenStates[tick], `tick ${tick}`).toBe(blueStates[tick]);
-    }
-
-    // Chat
-    await blue.keyboard.press("Enter");
-    await blue.keyboard.type("good luck");
-    await blue.keyboard.press("Enter");
-    await expect(green.locator("#gamemessages")).toContainText("blue: good luck");
-
-    // When one player leaves, the other is told and returns to the menu
-    await green.close();
-    await expect(blue.locator("#messageboxtext")).toContainText("The green player has been disconnected.");
-    await blue.getByRole("button", { name: "OK" }).click();
-    await expect(blue.locator("#gamestartscreen")).toBeVisible();
+        // The left edge of the minimap is the left edge of the map
+        await page.mouse.click(minimap.x + 3, minimap.y + minimap.height / 2);
+        await expect.poll(() => game(page, () => window.lastColony.camera.offsetX)).toBe(0);
+    });
 });
 
-test("the lobby reports when the server cannot be reached", async ({ page }) => {
-    await page.goto("/?server=ws://localhost:1");
-    await expect(page.locator("#loadingscreen")).toBeHidden();
+test.describe("multiplayer", () => {
+    test("two players can play a game", async ({ browser }) => {
+        const players = [];
 
-    await page.getByRole("button", { name: "Multiplayer" }).click();
-    await expect(page.locator("#messageboxtext")).toContainText("Error connecting to multiplayer server.");
-    await page.getByRole("button", { name: "OK" }).click();
-    await expect(page.locator("#gamestartscreen")).toBeVisible();
+        for (let i = 0; i < 2; i++) {
+            const page = await (await browser.newContext({ viewport: { width: 1000, height: 600 } })).newPage();
+
+            page.on("pageerror", (error) => {
+                throw error;
+            });
+
+            await openGame(page);
+            await page.getByRole("button", { name: "Multiplayer" }).click();
+            await expect(page.locator("#multiplayerlobbyscreen")).toBeVisible();
+            players.push(page);
+        }
+
+        const [blue, green] = players;
+        // Use a room that the other tests are not using
+        const room = (page) => page.locator("#multiplayergameslist li").nth(7);
+
+        await room(blue).click();
+        await blue.getByRole("button", { name: "Join" }).click();
+        await expect(room(green)).toContainText("Waiting for second player");
+
+        await room(green).click();
+        await green.getByRole("button", { name: "Join" }).click();
+
+        for (const page of players) {
+            await expect(page.locator("#gameinterfacescreen")).toBeVisible();
+            await expect.poll(() => game(page, () => window.lastColony.game.tick)).toBeGreaterThan(5);
+        }
+
+        expect(await game(blue, () => window.lastColony.game.team)).toBe("blue");
+        expect(await game(green, () => window.lastColony.game.team)).toBe("green");
+
+        // Record the simulation state at every tick on both clients and check that they match
+        const recordStates = (page) => game(page, () => {
+            const { game } = window.lastColony;
+            const update = game.update.bind(game);
+
+            window.states = {};
+            game.update = () => {
+                update();
+                window.states[game.tick] = JSON.stringify(game.items.map((item) => [item.uid, item.x, item.y, item.life]));
+            };
+        });
+
+        await Promise.all(players.map(recordStates));
+
+        // Blue sends its tanks to the middle of the map
+        await game(blue, () => {
+            const { game } = window.lastColony;
+
+            game.sendCommand(game.items.filter((item) => item.team === "blue" && item.canAttack).map((item) => item.uid), { type: "move", to: { x: 30, y: 20 } });
+        });
+
+        await blue.waitForTimeout(2000);
+
+        const [blueStates, greenStates] = await Promise.all(players.map((page) => game(page, () => window.states)));
+        const commonTicks = Object.keys(blueStates).filter((tick) => tick in greenStates);
+
+        expect(commonTicks.length).toBeGreaterThan(5);
+
+        for (const tick of commonTicks) {
+            expect(greenStates[tick], `tick ${tick}`).toBe(blueStates[tick]);
+        }
+
+        // Chat, from the keyboard and from the chat button
+        await blue.keyboard.press("Enter");
+        await blue.keyboard.type("good luck");
+        await blue.keyboard.press("Enter");
+        await expect(green.locator("#gamemessages")).toContainText("blue: good luck");
+
+        await green.getByRole("button", { name: "Chat" }).click();
+        await green.keyboard.type("thanks");
+        await green.keyboard.press("Enter");
+        await expect(blue.locator("#gamemessages")).toContainText("green: thanks");
+
+        // When one player leaves, the other is told and returns to the menu
+        await green.close();
+        await expect(blue.locator("#messageboxtext")).toContainText("The green player has been disconnected.");
+        await blue.getByRole("button", { name: "OK" }).click();
+        await expect(blue.locator("#gamestartscreen")).toBeVisible();
+    });
+
+    test("the lobby reports when the server cannot be reached", async ({ page }) => {
+        await page.goto("/?server=ws://localhost:1");
+        await expect(page.locator("#loadingscreen")).toBeHidden();
+
+        await page.getByRole("button", { name: "Multiplayer" }).click();
+        await expect(page.locator("#messageboxtext")).toContainText("Error connecting to multiplayer server.");
+        await page.getByRole("button", { name: "OK" }).click();
+        await expect(page.locator("#gamestartscreen")).toBeVisible();
+    });
+});
+
+test.describe("phone (iPhone 16 Pro, landscape)", () => {
+    // eslint-disable-next-line no-unused-vars
+    const { defaultBrowserType, ...iPhone } = devices["iPhone 16 Pro landscape"];
+
+    test.use(iPhone);
+
+    // Multi-finger gestures are sent through the Chrome DevTools Protocol
+    async function touchScreen(page) {
+        const cdp = await page.context().newCDPSession(page);
+        const send = (type, points) => cdp.send("Input.dispatchTouchEvent", {
+            type,
+            touchPoints: points.map(([x, y], id) => ({ x, y, id })),
+        });
+
+        return {
+            async drag(from, to, { holdMs = 0, steps = 8 } = {}) {
+                await send("touchStart", [[from.x, from.y]]);
+
+                if (holdMs) {
+                    await page.waitForTimeout(holdMs);
+                }
+
+                for (let i = 1; i <= steps; i++) {
+                    await send("touchMove", [[from.x + (to.x - from.x) * i / steps, from.y + (to.y - from.y) * i / steps]]);
+                }
+
+                await send("touchEnd", []);
+            },
+            async pinch(center, fromGap, toGap) {
+                const at = (gap) => [[center.x - gap / 2, center.y], [center.x + gap / 2, center.y]];
+
+                await send("touchStart", at(fromGap));
+
+                for (let i = 1; i <= 8; i++) {
+                    await send("touchMove", at(fromGap + (toGap - fromGap) * i / 8));
+                }
+
+                await send("touchEnd", []);
+            },
+        };
+    }
+
+    async function startMission(page, level = 0) {
+        await openGame(page);
+
+        if (level > 0) {
+            await game(page, (level) => {
+                window.lastColony.singleplayer.currentLevel = level;
+                window.lastColony.singleplayer.initLevel();
+            }, level);
+        } else {
+            await page.locator("#campaignbutton").tap();
+        }
+
+        await page.locator("#entermission").tap();
+        await expect(page.locator("#gameinterfacescreen")).toBeVisible();
+    }
+
+    test("the game fills the screen with touch-sized controls", async ({ page }) => {
+        await startMission(page);
+
+        const layout = await game(page, () => {
+            const rect = (id) => document.getElementById(id).getBoundingClientRect();
+
+            return {
+                viewport: { width: innerWidth, height: innerHeight },
+                map: rect("maparea"),
+                sidebar: rect("sidebar"),
+                menu: rect("menubutton"),
+                build: rect("starport"),
+                zoom: window.lastColony.camera.zoom,
+            };
+        });
+
+        // The map and the sidebar share the whole screen
+        expect(layout.map.left).toBe(0);
+        expect(Math.round(layout.map.right)).toBe(Math.round(layout.sidebar.left));
+        expect(Math.round(layout.sidebar.right)).toBe(layout.viewport.width);
+        expect(layout.map.height).toBe(layout.viewport.height);
+
+        // Buttons are big enough for fingers, and units are drawn larger than on desktop
+        expect(layout.menu.width).toBeGreaterThanOrEqual(44);
+        expect(layout.build.width).toBeGreaterThanOrEqual(44);
+        expect(layout.zoom).toBeGreaterThanOrEqual(1.3);
+    });
+
+    test("tap to select and move, drag to scroll, pinch to zoom", async ({ page }) => {
+        await startMission(page);
+        const touch = await touchScreen(page);
+
+        // Tap the hero tank, then tap the ground: one tap each
+        const hero = await tileToPage(page, 57, 12.2);
+
+        await page.touchscreen.tap(hero.x, hero.y);
+        await expect.poll(() => game(page, () => window.lastColony.game.selectedItems.map((item) => item.uid))).toEqual([-1]);
+
+        // Open ground just left of the hero, which is always in view
+        const ground = await tileToPage(page, 55, 12.7);
+
+        await page.touchscreen.tap(ground.x, ground.y);
+        expect(await game(page, () => window.lastColony.game.getItemByUid(-1).orders.type)).toBe("move");
+
+        // The deselect button clears the selection
+        await page.locator("#deselectbutton").tap();
+        expect(await game(page, () => window.lastColony.game.selectedItems.length)).toBe(0);
+
+        // One finger drags the map
+        const before = await game(page, () => window.lastColony.camera.offsetX);
+
+        await touch.drag({ x: 150, y: 200 }, { x: 400, y: 200 });
+        expect(await game(page, () => window.lastColony.camera.offsetX)).toBeLessThan(before - 100);
+
+        // Two fingers zoom
+        const zoom = await game(page, () => window.lastColony.camera.zoom);
+
+        await touch.pinch({ x: 300, y: 180 }, 100, 250);
+        expect(await game(page, () => window.lastColony.camera.zoom)).toBeGreaterThan(zoom * 1.5);
+    });
+
+    test("touch and hold, then drag, to select units", async ({ page }) => {
+        await startMission(page);
+        const touch = await touchScreen(page);
+
+        const hero = await game(page, () => {
+            const { x, y } = window.lastColony.game.getItemByUid(-1);
+
+            return { x, y };
+        });
+        const from = await tileToPage(page, hero.x - 2, hero.y - 2);
+        const to = await tileToPage(page, hero.x + 2, hero.y + 2);
+
+        await touch.drag(from, to, { holdMs: 500 });
+
+        expect(await game(page, () => window.lastColony.game.selectedItems.map((item) => item.uid))).toEqual([-1]);
+    });
+
+    test("buildings are placed by tapping the map and confirming", async ({ page }) => {
+        await startMission(page, 1);
+        await game(page, () => {
+            window.lastColony.game.cash.blue = 5000;
+        });
+
+        const base = await tileToPage(page, 56, 7);
+
+        await page.touchscreen.tap(base.x, base.y);
+        await page.locator("#ground-turret").tap();
+        await expect(page.locator("#placebutton")).toBeVisible();
+
+        const spot = await tileToPage(page, 54.5, 4.5);
+
+        await page.touchscreen.tap(spot.x, spot.y);
+        await expect(page.locator("#placebutton")).toBeEnabled();
+        await page.locator("#placebutton").tap();
+
+        await expect.poll(() => game(page, () => window.lastColony.game.cash.blue)).toBe(3500);
+        await expect(page.locator("#placebutton")).toBeHidden();
+    });
+
+    test("the game asks to be turned sideways and pauses in portrait", async ({ page }) => {
+        await startMission(page);
+
+        await page.setViewportSize({ width: 402, height: 681 });
+        await expect(page.locator("#rotatescreen")).toBeVisible();
+
+        const tick = await game(page, () => window.lastColony.game.tick);
+
+        await page.waitForTimeout(400);
+        expect(await game(page, () => window.lastColony.game.tick)).toBe(tick);
+
+        // Back in landscape the game waits, paused, for the player to resume
+        await page.setViewportSize({ width: 756, height: 352 });
+        await expect(page.locator("#rotatescreen")).toBeHidden();
+        await expect(page.locator("#pausescreen")).toBeVisible();
+        await page.locator("#resumebutton").tap();
+        await expect.poll(() => game(page, () => window.lastColony.game.tick)).toBeGreaterThan(tick);
+    });
 });

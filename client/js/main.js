@@ -1,7 +1,11 @@
 // Entry point: creates the game and wires the browser UI to it.
 import { loadImage, loadWithProgress } from "./app/assets.js";
+import { Camera } from "./app/camera.js";
+import * as device from "./app/device.js";
+import { Hud } from "./app/hud.js";
 import { Input } from "./app/input.js";
 import { GameLoop } from "./app/loop.js";
+import { Minimap } from "./app/minimap.js";
 import { Multiplayer } from "./app/multiplayer.js";
 import { Renderer } from "./app/renderer.js";
 import { Sidebar } from "./app/sidebar.js";
@@ -15,21 +19,34 @@ import { Game } from "./core/game.js";
 
 const $ = (id) => document.getElementById(id);
 
-// The game is designed for a 640x480 screen and scaled to fit the window.
-// Wider windows get a wider game area, up to 1024 pixels.
-const BASE_WIDTH = 640;
-const BASE_HEIGHT = 480;
-const MAX_WIDTH = 1024;
+// The menus are the book's 640x480 screens, scaled to fit. Wider screens get wider menus, up to 1024.
+const STAGE_WIDTH = 640;
+const STAGE_HEIGHT = 480;
+const STAGE_MAX_WIDTH = 1024;
+
+// The sidebar artwork is 160x480 and is scaled to the height of the screen
 const SIDEBAR_WIDTH = 160;
+const SIDEBAR_HEIGHT = 480;
+// ...but never takes more than this share of the screen width
+const SIDEBAR_MAX_SHARE = 0.3;
+// The minimap's size inside the sidebar artwork
+const MINIMAP_SIZE = 122;
+
+// On touch screens, zoom in at least this far so units are big enough to tap
+const TOUCH_ZOOM = 1.3;
 
 class App {
     activeMode = undefined;
+    hudScale = 1;
+    pauseMenuOpen = false;
 
     constructor() {
         this.game = new Game();
         this.sounds = new SoundManager();
+        this.camera = new Camera();
         this.renderer = new Renderer({
             game: this.game,
+            camera: this.camera,
             backgroundCanvas: $("gamebackgroundcanvas"),
             foregroundCanvas: $("gameforegroundcanvas"),
         });
@@ -37,10 +54,12 @@ class App {
         this.input = new Input({
             canvas: $("gameforegroundcanvas"),
             game: this.game,
+            camera: this.camera,
             renderer: this.renderer,
             sidebar: this.sidebar,
             sounds: this.sounds,
         });
+        this.minimap = new Minimap({ canvas: $("minimap"), game: this.game, camera: this.camera, renderer: this.renderer });
         this.loop = new GameLoop({
             tick: () => this.runTick(),
             render: (interpolation, elapsed) => this.render(interpolation, elapsed),
@@ -48,6 +67,7 @@ class App {
 
         this.singleplayer = new SinglePlayer(this);
         this.multiplayer = new Multiplayer(this);
+        this.hud = new Hud({ app: this });
 
         this.game.on("message", (from, message) => {
             this.sounds.play("message-received");
@@ -62,8 +82,29 @@ class App {
         const [mapImage] = await loadWithProgress([loadImage(`images/maps/${this.game.currentMap.mapImage}`)]);
 
         this.renderer.setMap(mapImage);
-        this.renderer.setView(startX * GRID_SIZE, startY * GRID_SIZE);
+        this.resize();
+        this.camera.setView(this.defaultZoom(), 0, 0);
+        this.#centerOnStart(startX, startY);
         this.sidebar.initRequirementsForLevel(level);
+    }
+
+    // The book's proportions on large screens; closer in on touch screens so units are easy to tap
+    defaultZoom() {
+        const touch = device.isTouchScreen() || this.input.isTouch;
+
+        return touch ? Math.max(this.hudScale, TOUCH_ZOOM) : this.hudScale;
+    }
+
+    // Start with the player's base in view (or the level's start position)
+    #centerOnStart(startX, startY) {
+        const { game, camera } = this;
+        const base = game.items.find((item) => item.team === game.team && item.name === "base");
+
+        if (base) {
+            camera.centerOn(base.x * GRID_SIZE + base.baseWidth / 2, base.y * GRID_SIZE + base.baseHeight / 2);
+        } else {
+            camera.setView(camera.zoom, startX * GRID_SIZE, startY * GRID_SIZE);
+        }
     }
 
     /**
@@ -76,8 +117,10 @@ class App {
 
         ui.switchToScreen("gameinterfacescreen");
         ui.clearGameMessages();
-        hideChat();
+        this.hideChat();
         this.input.reset();
+        this.resize();
+        this.hud.update();
 
         this.loop.start(loopMode);
     }
@@ -88,7 +131,8 @@ class App {
         this.sidebar.cancelDeployingBuilding();
         this.input.reset();
         this.activeMode = undefined;
-        hideChat();
+        this.hideChat();
+        this.#hidePauseMenu();
     }
 
     showMainMenu() {
@@ -98,7 +142,7 @@ class App {
     // Advance the game by one tick and update the sidebar
     runTick() {
         this.game.update();
-        this.sidebar.update(this.input.gridX, this.input.gridY);
+        this.sidebar.update(this.input.placementX, this.input.placementY);
         this.loop.tickCompleted();
     }
 
@@ -108,52 +152,150 @@ class App {
         }
 
         this.renderer.render(interpolation);
-
-        if (this.loop.paused) {
-            this.renderer.drawBanner("PAUSED");
-        }
-    }
-
-    // Scale the game to fit the window
-    resize() {
-        const scale = Math.min(window.innerWidth / BASE_WIDTH, window.innerHeight / BASE_HEIGHT);
-        const gameContainer = $("gamecontainer");
-
-        gameContainer.style.transform = `translate(-50%, -50%) scale(${scale})`;
-
-        // Use the extra room in wide windows for a wider game area, between 640 and 1024 pixels
-        const width = Math.round(Math.max(BASE_WIDTH, Math.min(MAX_WIDTH, window.innerWidth / scale)));
-
-        gameContainer.style.width = `${width}px`;
-
-        const canvasWidth = width - SIDEBAR_WIDTH;
-
-        if (this.renderer.width !== canvasWidth) {
-            this.renderer.resize(canvasWidth);
-        }
-
-        $("chatmessage").style.width = `${canvasWidth}px`;
+        this.minimap.render();
+        this.hud.update();
     }
 
     get isPlaying() {
         return this.loop.running;
     }
-}
 
-/* Chat (multiplayer only) */
+    /* Pause menu */
 
-function showChat() {
-    const chatMessage = $("chatmessage");
+    openPauseMenu() {
+        if (!this.isPlaying || this.pauseMenuOpen) {
+            return;
+        }
 
-    chatMessage.hidden = false;
-    chatMessage.focus();
-}
+        const multiplayer = this.activeMode === this.multiplayer;
 
-function hideChat() {
-    const chatMessage = $("chatmessage");
+        this.pauseMenuOpen = true;
+        // A multiplayer game can't be paused: the other player's game keeps going
+        this.loop.paused = !multiplayer;
+        this.input.reset();
 
-    chatMessage.value = "";
-    chatMessage.hidden = true;
+        $("pausetitle").textContent = multiplayer ? "Menu" : "Paused";
+        $("pausenote").hidden = !multiplayer;
+        $("quitbutton").textContent = multiplayer ? "Leave game" : "Quit mission";
+        $("fullscreenbutton").hidden = !device.canUseFullscreen();
+        this.#updatePauseMenuLabels();
+
+        $("pausescreen").hidden = false;
+        $("resumebutton").focus();
+    }
+
+    closePauseMenu() {
+        this.#hidePauseMenu();
+        this.loop.paused = false;
+    }
+
+    #hidePauseMenu() {
+        this.pauseMenuOpen = false;
+        $("pausescreen").hidden = true;
+    }
+
+    #updatePauseMenuLabels() {
+        $("soundbutton").textContent = this.sounds.muted ? "Sound: Off" : "Sound: On";
+        $("fullscreenbutton").textContent = device.isFullscreen() ? "Exit full screen" : "Full screen";
+    }
+
+    async quitFromPauseMenu() {
+        const multiplayer = this.activeMode === this.multiplayer;
+
+        this.#hidePauseMenu();
+
+        const confirmed = await ui.showMessageBox(multiplayer ? "Leave this game?\nThe other player will win." : "Quit this mission?", { cancel: true });
+
+        if (!confirmed) {
+            // Back to the pause menu (the game is still paused in single player)
+            this.pauseMenuOpen = false;
+            this.openPauseMenu();
+
+            return;
+        }
+
+        if (multiplayer) {
+            this.multiplayer.leaveGame();
+        } else {
+            this.stopLevel();
+            this.showMainMenu();
+        }
+    }
+
+    wirePauseMenu() {
+        $("resumebutton").addEventListener("click", () => this.closePauseMenu());
+        $("quitbutton").addEventListener("click", () => this.quitFromPauseMenu());
+        $("soundbutton").addEventListener("click", () => {
+            this.sounds.toggleMute();
+            this.#updatePauseMenuLabels();
+        });
+        $("fullscreenbutton").addEventListener("click", async () => {
+            await device.toggleFullscreen();
+            this.#updatePauseMenuLabels();
+        });
+    }
+
+    /* Chat (multiplayer only) */
+
+    showChat() {
+        if (this.activeMode !== this.multiplayer) {
+            return;
+        }
+
+        const chatMessage = $("chatmessage");
+
+        chatMessage.hidden = false;
+        chatMessage.focus();
+    }
+
+    hideChat() {
+        const chatMessage = $("chatmessage");
+
+        chatMessage.value = "";
+        chatMessage.hidden = true;
+        chatMessage.blur();
+    }
+
+    /* Layout */
+
+    // Fit everything to the screen, keeping clear of notches, rounded corners and the home indicator
+    resize() {
+        const style = document.documentElement.style;
+        const safe = $("safearea").getBoundingClientRect();
+        const width = Math.max(safe.width, 1);
+        const height = Math.max(safe.height, 1);
+
+        // Menus: the book's screens, scaled to fit and centred
+        const stageScale = Math.min(width / STAGE_WIDTH, height / STAGE_HEIGHT);
+        const stageWidth = Math.round(Math.max(STAGE_WIDTH, Math.min(STAGE_MAX_WIDTH, width / stageScale)));
+
+        style.setProperty("--stage-scale", stageScale);
+        style.setProperty("--stage-width", `${stageWidth}px`);
+        style.setProperty("--stage-left", `${safe.left + (width - stageWidth * stageScale) / 2}px`);
+        style.setProperty("--stage-top", `${safe.top + (height - STAGE_HEIGHT * stageScale) / 2}px`);
+
+        // The message box is small, so never shrink it below its full size unless it doesn't fit
+        style.setProperty("--dialog-scale", Math.min(width / 320, height / 200, Math.max(stageScale, 1)));
+
+        // Game screen: the sidebar art fills the height; the map gets everything else
+        this.hudScale = Math.min(height / SIDEBAR_HEIGHT, width * SIDEBAR_MAX_SHARE / SIDEBAR_WIDTH);
+
+        const sidebarWidth = SIDEBAR_WIDTH * this.hudScale;
+
+        style.setProperty("--hud-scale", this.hudScale);
+        style.setProperty("--sidebar-width", `${sidebarWidth}px`);
+
+        const mapWidth = Math.max(1, width - sidebarWidth);
+        const mapHeight = $("wrapper").clientHeight;
+        const pixelRatio = globalThis.devicePixelRatio || 1;
+        const layout = `${mapWidth},${mapHeight},${pixelRatio}`;
+
+        if (layout !== this.layout) {
+            this.layout = layout;
+            this.renderer.resize(mapWidth, mapHeight);
+            this.minimap.resize(MINIMAP_SIZE * this.hudScale);
+        }
+    }
 }
 
 /* Keyboard */
@@ -167,17 +309,29 @@ function handleKeyDown(app, ev) {
         return;
     }
 
+    const pauseKey = ev.key === "p" || ev.key === "P" || ev.key === "Pause";
+
+    if (app.pauseMenuOpen) {
+        if (pauseKey || ev.key === "Escape") {
+            ev.preventDefault();
+            app.closePauseMenu();
+        }
+
+        return;
+    }
+
     if (ev.key === "Enter" && app.activeMode === app.multiplayer) {
         ev.preventDefault();
-        showChat();
-    } else if ((ev.key === "p" || ev.key === "P" || ev.key === "Pause") && app.activeMode === app.singleplayer) {
-        app.loop.togglePause();
+        app.showChat();
+    } else if (pauseKey) {
+        app.openPauseMenu();
     } else if (ev.key === "m" || ev.key === "M") {
         const muted = app.sounds.toggleMute();
 
         app.game.showMessage("system", muted ? "Sound off." : "Sound on.");
-    } else {
-        app.input.handleKeyDown(ev);
+    } else if (!app.input.handleKeyDown(ev) && ev.key === "Escape") {
+        // Escape cancels placement or deselects first; with nothing else to cancel it opens the menu
+        app.openPauseMenu();
     }
 }
 
@@ -190,9 +344,9 @@ function handleChatKeyDown(app, ev) {
             app.multiplayer.sendChatMessage(message);
         }
 
-        hideChat();
+        app.hideChat();
     } else if (ev.key === "Escape") {
-        hideChat();
+        app.hideChat();
     }
 }
 
@@ -201,8 +355,15 @@ function handleChatKeyDown(app, ev) {
 function wireUpButtons(app) {
     const onClick = (id, handler) => $(id).addEventListener("click", handler);
 
-    onClick("campaignbutton", () => app.singleplayer.start());
-    onClick("multiplayerbutton", () => app.multiplayer.start());
+    // Starting a game on a phone goes full screen in landscape where the browser allows it
+    onClick("campaignbutton", () => {
+        device.enterLandscapeFullscreen();
+        app.singleplayer.start();
+    });
+    onClick("multiplayerbutton", () => {
+        device.enterLandscapeFullscreen();
+        app.multiplayer.start();
+    });
 
     onClick("entermission", () => app.singleplayer.play());
     onClick("exitmission", () => app.singleplayer.exit());
@@ -221,6 +382,38 @@ function wireUpButtons(app) {
             app.multiplayer.handleRoomClick(ev.target.closest("li"), { join: ev.key === "Enter" });
         }
     });
+
+    app.wirePauseMenu();
+}
+
+function watchScreen(app) {
+    // Resize once per frame at most, whatever triggered it (rotation, toolbars, window resizing)
+    let resizeRequest;
+    const scheduleResize = () => {
+        cancelAnimationFrame(resizeRequest);
+        resizeRequest = requestAnimationFrame(() => app.resize());
+    };
+
+    window.addEventListener("resize", scheduleResize);
+    window.addEventListener("orientationchange", scheduleResize);
+    window.visualViewport?.addEventListener("resize", scheduleResize);
+
+    // Pause when the device is turned to portrait or the game is put in the background
+    device.onOrientationChange((portrait) => {
+        if (portrait) {
+            app.openPauseMenu();
+        }
+    });
+
+    document.addEventListener("visibilitychange", () => {
+        if (document.hidden) {
+            app.openPauseMenu();
+        }
+    });
+
+    // Safari: let :active styles work on touch, and stop pinches from zooming the page
+    document.addEventListener("touchstart", () => {}, { passive: true });
+    document.addEventListener("gesturestart", (ev) => ev.preventDefault());
 }
 
 async function init() {
@@ -228,9 +421,8 @@ async function init() {
 
     ui.initMessageBox();
     wireUpButtons(app);
-
+    watchScreen(app);
     app.resize();
-    window.addEventListener("resize", () => app.resize());
 
     window.addEventListener("keydown", (ev) => handleKeyDown(app, ev));
     window.addEventListener("keyup", (ev) => app.input.handleKeyUp(ev));
@@ -241,6 +433,9 @@ async function init() {
     for (const type of ["pointerdown", "pointerup", "keydown"]) {
         window.addEventListener(type, () => app.sounds.unlock(), { capture: true });
     }
+
+    device.setUpInstall({ button: $("installbutton"), hint: $("installhint") });
+    device.registerServiceWorker();
 
     // Display the main game menu, and load the sprites and sounds for every unit
     app.showMainMenu();

@@ -2,27 +2,90 @@
 <html lang="en">
     <head>
         <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
         <meta name="mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+        <meta name="apple-mobile-web-app-title" content="Last Colony">
         <meta name="theme-color" content="#090009">
         <meta name="description" content="Last Colony: a real-time strategy game from Pro HTML5 Games">
 
         <title>Last Colony</title>
 
-        <link rel="icon" href="data:,">
+        <link rel="manifest" href="manifest.webmanifest">
+        <link rel="icon" href="images/icons/icon-192.png" type="image/png">
+        <link rel="apple-touch-icon" href="images/icons/apple-touch-icon.png">
         <link rel="stylesheet" href="styles.css">
         <script type="module" src="js/main.js"></script>
     </head>
     <body>
         <div id="wrapper">
-            <main id="gamecontainer">
+            <!-- Marks out the part of the screen clear of notches and rounded corners -->
+            <div id="safearea" aria-hidden="true"></div>
+
+            <!-- The game itself fills the whole screen -->
+            <section id="gameinterfacescreen" class="gamelayer" hidden aria-label="Game">
+                <div id="maparea">
+                    <canvas id="gamebackgroundcanvas"></canvas>
+                    <canvas id="gameforegroundcanvas"></canvas>
+
+                    <div id="gamemessages" role="log" aria-live="polite"></div>
+                    <input type="text" id="chatmessage" maxlength="200" autocomplete="off" enterkeyhint="send" aria-label="Chat message" placeholder="Message" hidden>
+
+                    <div class="hud hud-top">
+                        <button type="button" id="chatbutton" class="hud-button" aria-label="Chat" title="Chat (Enter)" hidden>
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H10l-5 4v-4H4z"/></svg>
+                        </button>
+                        <button type="button" id="menubutton" class="hud-button" aria-label="Menu" title="Menu (P)">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>
+                        </button>
+                    </div>
+
+                    <div class="hud hud-bottom">
+                        <button type="button" id="selectarmybutton" class="hud-button" aria-label="Select all combat units" title="Select all combat units">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5"/><circle cx="9" cy="12" r="2"/><circle cx="15" cy="12" r="2"/></svg>
+                        </button>
+                        <button type="button" id="deselectbutton" class="hud-button" aria-label="Deselect" title="Deselect (Escape)" hidden>
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5M9 9l6 6M15 9l-6 6"/></svg>
+                        </button>
+                        <button type="button" id="placebutton" class="hud-button hud-confirm" aria-label="Build here" title="Build here" hidden>
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L19 7"/></svg>
+                        </button>
+                        <button type="button" id="cancelplacebutton" class="hud-button hud-cancel" aria-label="Cancel building" title="Cancel (Escape)" hidden>
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <aside id="sidebar">
+                    <div id="sidebarpanel">
+                        <img src="images/screens/interface-right-game.png" class="right-panel" draggable="false" alt="">
+                        <canvas id="minimap" aria-label="Map overview: tap to move the view"></canvas>
+                        <div id="callerpicture"></div>
+                        <div id="cash" aria-label="Cash"></div>
+                        <div id="sidebarbuttons">
+                            <button type="button" id="starport" data-name="starport" class="sprite-button" title="Starport"></button>
+                            <button type="button" id="ground-turret" data-name="ground-turret" class="sprite-button" title="Turret"></button>
+                            <button type="button" id="harvester" data-name="harvester" class="sprite-button" title="Harvester"></button>
+                            <button type="button" id="scout-tank" data-name="scout-tank" class="sprite-button" title="Scout Tank"></button>
+                            <button type="button" id="heavy-tank" data-name="heavy-tank" class="sprite-button" title="Heavy Tank"></button>
+                            <button type="button" id="chopper" data-name="chopper" class="sprite-button" title="Copter"></button>
+                            <button type="button" id="wraith" data-name="wraith" class="sprite-button" title="Wraith"></button>
+                        </div>
+                    </div>
+                </aside>
+            </section>
+
+            <!-- Menus use the book's 640x480 artwork, scaled to fit the screen -->
+            <main id="gamecontainer" class="stage">
                 <section id="gamestartscreen" class="gamelayer" hidden>
                     <h1 class="game-title">LAST<br>COLONY</h1>
                     <nav class="game-options" aria-label="Main menu">
                         <button type="button" id="campaignbutton" class="game-option">Campaign</button>
                         <button type="button" id="multiplayerbutton" class="game-option">Multiplayer</button>
                     </nav>
+                    <p id="installhint" hidden>For the best experience, tap <strong>Share</strong> then <strong>Add to Home Screen</strong>.</p>
+                    <button type="button" id="installbutton" hidden>Install app</button>
                 </section>
 
                 <section id="missionbriefingscreen" class="gamelayer" hidden aria-label="Mission briefing">
@@ -33,44 +96,48 @@
                     <div id="missionbriefing"></div>
                 </section>
 
-                <section id="gameinterfacescreen" class="gamelayer" hidden aria-label="Game">
-                    <img src="images/screens/interface-left.png" class="left-panel" draggable="false" alt="">
-                    <img src="images/screens/interface-right-game.png" class="right-panel" draggable="false" alt="">
-                    <div id="gamemessages" role="log" aria-live="polite"></div>
-                    <div id="callerpicture"></div>
-                    <div id="cash" aria-label="Cash"></div>
-                    <div id="sidebarbuttons">
-                        <button type="button" id="starport" data-name="starport" class="sprite-button" title="Starport" aria-label="Build starport"></button>
-                        <button type="button" id="ground-turret" data-name="ground-turret" class="sprite-button" title="Turret" aria-label="Build turret"></button>
-                        <button type="button" id="harvester" data-name="harvester" class="sprite-button" title="Harvester" aria-label="Build harvester"></button>
-                        <button type="button" id="scout-tank" data-name="scout-tank" class="sprite-button" title="Scout Tank" aria-label="Build scout tank"></button>
-                        <button type="button" id="heavy-tank" data-name="heavy-tank" class="sprite-button" title="Heavy Tank" aria-label="Build heavy tank"></button>
-                        <button type="button" id="chopper" data-name="chopper" class="sprite-button" title="Copter" aria-label="Build copter"></button>
-                        <button type="button" id="wraith" data-name="wraith" class="sprite-button" title="Wraith" aria-label="Build wraith"></button>
-                    </div>
-                    <canvas id="gamebackgroundcanvas"></canvas>
-                    <canvas id="gameforegroundcanvas"></canvas>
-                    <input type="text" id="chatmessage" maxlength="200" autocomplete="off" aria-label="Chat message" hidden>
-                </section>
-
-                <section id="messageboxscreen" class="gamelayer" hidden>
-                    <div id="messagebox" role="alertdialog" aria-modal="true" aria-labelledby="messageboxtext">
-                        <div id="messageboxtext"></div>
-                        <button type="button" id="messageboxok" class="sprite-button" aria-label="OK"></button>
-                        <button type="button" id="messageboxcancel" class="sprite-button" aria-label="Cancel"></button>
-                    </div>
-                </section>
-
                 <section id="multiplayerlobbyscreen" class="gamelayer" hidden aria-label="Multiplayer lobby">
                     <ul id="multiplayergameslist" role="listbox" aria-label="Game rooms"></ul>
                     <button type="button" id="multiplayerjoin" class="sprite-button" aria-label="Join"></button>
                     <button type="button" id="multiplayercancel" class="sprite-button" aria-label="Cancel"></button>
                 </section>
-
-                <section id="loadingscreen" class="gamelayer" hidden>
-                    <div id="loadingmessage" role="status"></div>
-                </section>
             </main>
+
+            <section id="pausescreen" class="overlay" hidden>
+                <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="pausetitle">
+                    <h2 id="pausetitle">Paused</h2>
+                    <p id="pausenote" hidden>The game keeps running in multiplayer.</p>
+                    <button type="button" id="resumebutton" class="dialog-button">Resume</button>
+                    <button type="button" id="soundbutton" class="dialog-button">Sound: On</button>
+                    <button type="button" id="fullscreenbutton" class="dialog-button" hidden>Full screen</button>
+                    <button type="button" id="quitbutton" class="dialog-button">Quit mission</button>
+                </div>
+            </section>
+
+            <section id="messageboxscreen" class="overlay" hidden>
+                <div id="messagebox" role="alertdialog" aria-modal="true" aria-labelledby="messageboxtext">
+                    <div id="messageboxtext"></div>
+                    <button type="button" id="messageboxok" class="sprite-button" aria-label="OK"></button>
+                    <button type="button" id="messageboxcancel" class="sprite-button" aria-label="Cancel"></button>
+                </div>
+            </section>
+
+            <section id="loadingscreen" class="overlay" hidden>
+                <div class="stage">
+                    <div id="loadingmessage" role="status"></div>
+                </div>
+            </section>
+
+            <!-- Shown by CSS when a phone or tablet is held upright: the game is played in landscape -->
+            <section id="rotatescreen" class="overlay" aria-live="polite">
+                <div class="rotate-message">
+                    <svg class="rotate-icon" viewBox="0 0 64 64" aria-hidden="true">
+                        <rect x="20" y="6" width="24" height="44" rx="4"/>
+                        <path d="M28 44h8"/>
+                    </svg>
+                    <p>Turn your device sideways to play <strong>Last Colony</strong>.</p>
+                </div>
+            </section>
         </div>
         <noscript>Last Colony needs JavaScript to run.</noscript>
     </body>

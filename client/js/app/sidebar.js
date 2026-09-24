@@ -19,11 +19,31 @@ export class Sidebar {
         this.placementGrid = undefined;
         this.canDeployBuilding = false;
 
+        // Called when the player picks a building to place (set by the input code)
+        this.onStartPlacement = undefined;
+
         // Each button's data-name is the name of the item it constructs
         for (const button of container.querySelectorAll("button[data-name]")) {
-            this.buttons.set(button.dataset.name, button);
-            button.addEventListener("click", () => this.#onButtonClick(button.dataset.name));
+            const name = button.dataset.name;
+            const spec = this.#constructibleSpec(name);
+
+            this.buttons.set(name, button);
+            button.addEventListener("click", () => this.#onButtonClick(name));
+
+            // Show the price on the button, since touch screens can't show tooltips
+            if (spec) {
+                const cost = document.createElement("span");
+
+                cost.className = "cost";
+                cost.textContent = spec.cost.toLocaleString();
+                button.append(cost);
+                button.setAttribute("aria-label", `Build ${button.title} (${spec.cost} credits)`);
+            }
         }
+    }
+
+    #constructibleSpec(name) {
+        return CONSTRUCTABLE_TYPES.map((type) => this.game.getSpec(type, name)).find((spec) => spec?.canConstruct);
     }
 
     // Work out which items the player may construct in the current level
@@ -51,7 +71,7 @@ export class Sidebar {
         this.update();
     }
 
-    // Called after every game tick
+    // Called after every game tick, with the tile where the building being placed would go
     update(pointerGridX, pointerGridY) {
         this.updateCash(this.game.cash[this.game.team] ?? 0);
 
@@ -111,6 +131,7 @@ export class Sidebar {
 
         if (details.type === "buildings") {
             this.deployBuilding = details;
+            this.onStartPlacement?.();
         } else {
             this.constructInStarport(details);
         }
