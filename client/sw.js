@@ -2,9 +2,11 @@
 //
 // Code and pages are fetched from the network first (so updates show up straight away), falling
 // back to the saved copy when offline. Images and sounds rarely change, so they come from the saved
-// copy first. Change CACHE_NAME when images or sounds change to replace the saved copies.
+// copy first. Change the version in CACHE_NAME when images or sounds change to replace the saved
+// copies.
 
-const CACHE_NAME = "last-colony-v1";
+const CACHE_PREFIX = "last-colony-";
+const CACHE_NAME = `${CACHE_PREFIX}v1`;
 
 self.addEventListener("install", () => {
     self.skipWaiting();
@@ -12,8 +14,10 @@ self.addEventListener("install", () => {
 
 self.addEventListener("activate", (event) => {
     event.waitUntil((async () => {
+        // Only the game's own old copies: other sites on the same host (such as other GitHub Pages
+        // sites on username.github.io) share the same cache storage
         for (const name of await caches.keys()) {
-            if (name !== CACHE_NAME) {
+            if (name.startsWith(CACHE_PREFIX) && name !== CACHE_NAME) {
                 await caches.delete(name);
             }
         }

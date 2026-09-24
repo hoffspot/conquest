@@ -239,6 +239,19 @@ test.describe("multiplayer", () => {
         await page.getByRole("button", { name: "OK" }).click();
         await expect(page.locator("#gamestartscreen")).toBeVisible();
     });
+
+    test("copies of the game without a server (GitHub Pages) only offer the campaign", async ({ page }) => {
+        // What the Pages workflow publishes
+        await page.route("**/js/app/hosting.js", (route) => route.fulfill({
+            contentType: "text/javascript",
+            body: "export const MULTIPLAYER_SERVER = null;\n",
+        }));
+        await page.goto("/");
+        await expect(page.locator("#loadingscreen")).toBeHidden();
+
+        await expect(page.getByRole("button", { name: "Campaign" })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Multiplayer" })).toBeHidden();
+    });
 });
 
 test.describe("phone (iPhone 16 Pro, landscape)", () => {

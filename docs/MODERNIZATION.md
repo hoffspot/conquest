@@ -148,6 +148,9 @@ screen from small phones to large monitors.
   hold selection, placing buildings and the portrait "turn your device" screen.
 - `npm run lint`: ESLint.
 - GitHub Actions runs all of the above on every push.
+- Every change to `main` is published to GitHub Pages (<https://hoffspot.github.io/conquest/>)
+  after the lint and unit tests pass. That copy has no multiplayer server, so its menu only offers
+  the campaign (`client/js/app/hosting.js` says where the multiplayer server is).
 
 ## Bugs fixed
 
