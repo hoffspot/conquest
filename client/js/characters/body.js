@@ -9,7 +9,7 @@
 // Pure data, no DOM or Three.js: the character engine (character.js) turns the result into meshes.
 
 import { detailTargets } from "./details.js";
-import { macroTargets } from "./macro.js";
+import { bustTargets, macroTargets } from "./macro.js";
 import { decodeSection } from "./pack.js";
 
 /** Where the prepared body lives, next to the game's pages. */
@@ -130,7 +130,8 @@ export class HumanData {
             }
         });
 
-        for (const { name, weight } of detailTargets(details)) {
+        // Detail and bust shapes, stored sparsely
+        for (const { name, weight } of [...detailTargets(details), ...bustTargets(macro)]) {
             const { vertices, deltas, joints: moves } = this.details.get(name);
             const factor = weight * this.deltaUnit;
 

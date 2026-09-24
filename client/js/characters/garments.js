@@ -128,6 +128,11 @@ function top(bottom, sleeve, neck = 0.03) {
     };
 }
 
+/** A band round the torso, from `bottom` up to `top`. */
+function band(bottom, top) {
+    return (v, l) => (v.region === "torso" ? Math.min(v.y - bottom(l), top(l) - v.y) : OUTSIDE);
+}
+
 /** From `waist` down the legs to `length` (0 the hip, 1 the ankle). */
 function bottoms(waist, length) {
     return (v, l) => {
@@ -148,7 +153,10 @@ function bottoms(waist, length) {
  */
 export const GARMENTS = Object.freeze({
     briefs: { label: "Briefs", slot: "underwear", layer: 0, thickness: 0.0015, smooth: 2, colour: "#d8d2c4", roughness: 0.8, pattern: "cloth", inside: bottoms((l) => l.hips + 0.02, 0.1) },
-    chestWrap: { label: "Chest wrap", slot: "undershirt", layer: 0, thickness: 0.0015, smooth: 3, colour: "#d8d2c4", roughness: 0.8, pattern: "cloth", inside: top((l) => l.chest - 0.02, 0, 0.12) },
+    // Round the bust, whatever its size: from a little under the fullest bust (which reaches two
+    // thirds of the way down from the chest to the waist) to above the armpits, smoothed enough to
+    // bridge between the breasts
+    chestWrap: { label: "Chest wrap", slot: "undershirt", layer: 0, thickness: 0.0015, smooth: 6, colour: "#d8d2c4", roughness: 0.8, pattern: "cloth", inside: band((l) => l.chest - 0.75 * (l.chest - l.waist), (l) => l.armpit + 0.02) },
     shirt: { label: "Linen shirt", slot: "shirt", layer: 1, thickness: 0.004, loose: 0.006, smooth: 4, colour: "#cbbd9c", roughness: 0.85, pattern: "cloth", inside: top((l) => l.hips - 0.03, 0.97) },
     tunic: { label: "Tunic", slot: "shirt", layer: 1, thickness: 0.004, loose: 0.008, smooth: 4, colour: "#6f2f2a", roughness: 0.85, pattern: "trim", trim: "#c6a45a", inside: top((l) => l.hips - 0.06, 0.45) },
     trousers: { label: "Trousers", slot: "legs", layer: 1, thickness: 0.004, loose: 0.006, smooth: 4, colour: "#4a3f35", roughness: 0.9, pattern: "cloth", inside: bottoms((l) => l.waist - 0.02, 0.97) },

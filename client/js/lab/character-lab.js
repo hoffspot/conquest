@@ -308,7 +308,7 @@ function element(tag, attributes = {}, ...children) {
 }
 
 /** A labelled slider: `get()` reads its value, `set(value)` changes it. */
-function slider(label, { min, max, step = 0.01, get, set, format = (value) => value.toFixed(2) }) {
+function slider(label, { min, max, step = 0.01, get, set, format = (value) => value.toFixed(2), enabled = () => true, title }) {
     const id = `control${controlId++}`;
     const output = element("output", { for: id }, format(get()));
     const input = element("input", {
@@ -318,13 +318,20 @@ function slider(label, { min, max, step = 0.01, get, set, format = (value) => va
             output.textContent = format(Number(input.value));
         },
     });
+    const row = element("div", { class: "row", ...(title ? { title } : {}) }, element("label", { for: id }, label), input, output);
+    const enable = () => {
+        input.disabled = !enabled();
+        row.classList.toggle("disabled", input.disabled);
+    };
 
+    enable();
     refreshers.push(() => {
         input.value = get();
         output.textContent = format(get());
+        enable();
     });
 
-    return element("div", { class: "row" }, element("label", { for: id }, label), input, output);
+    return row;
 }
 
 function select(label, options, { get, set }) {
@@ -445,12 +452,17 @@ for (const button of document.querySelectorAll("#camerapicker button")) {
 }
 
 function bodyTab() {
-    const macro = (key, label, format) => slider(label, {
-        min: 0, max: 1, format,
+    const macro = (key, label, format, options = {}) => slider(label, {
+        min: 0, max: 1, format, ...options,
         get: () => state.shape.macro[key],
         set: (value) => {
             state.shape.macro[key] = value;
             change("shape");
+
+            // The bust slider is only for female bodies
+            if (key === "gender") {
+                refreshControls();
+            }
         },
     });
     const heritage = (key, label) => slider(label, {
@@ -478,6 +490,10 @@ function bodyTab() {
             macro("muscle", "Muscle"),
             macro("weight", "Weight"),
             macro("height", "Height"),
+            macro("bust", "Bust", undefined, {
+                title: "Cup size, for female bodies",
+                enabled: () => state.shape.macro.gender < 0.9,
+            }),
             element("p", { class: "note", id: "heightreadout" })),
         group("Heritage", heritage("african", "African"), heritage("asian", "Asian"), heritage("caucasian", "European")),
         group("Physique", ...detailSliders("body")),
@@ -497,7 +513,7 @@ function bodyTab() {
                 onclick: () => {
                     const random = Math.random;
 
-                    Object.assign(state.shape.macro, { gender: random(), muscle: random(), weight: 0.2 + random() * 0.6, height: 0.25 + random() * 0.5 });
+                    Object.assign(state.shape.macro, { gender: random(), muscle: random(), weight: 0.2 + random() * 0.6, height: 0.25 + random() * 0.5, bust: 0.15 + random() * 0.7 });
 
                     for (const { id } of DETAILS) {
                         state.shape.details[id] = (random() - 0.5) * 1.2;

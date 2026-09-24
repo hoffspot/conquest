@@ -201,6 +201,10 @@ input {
     min-height: 32px;
 }
 
+.row.disabled {
+    opacity: 0.45;
+}
+
 .row output {
     color: var(--muted);
     font-variant-numeric: tabular-nums;
