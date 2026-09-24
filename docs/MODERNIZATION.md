@@ -135,6 +135,20 @@ screen from small phones to large monitors.
   Screen on iPhone, install prompt on Android). The installed game opens full screen and in
   landscape without the browser's toolbars. A service worker keeps a copy of the game so that
   the campaign also works offline (when served over HTTPS).
+- **Updates arrive whole.** GitHub Pages lets browsers reuse files for ten minutes. So right
+  after an update, a phone could put the game together from some old files and some new ones,
+  which don't work together. The first release of generated maps failed this way ("Could not
+  load image images/maps/undefined").
+  - The service worker now always checks code and pages with the server; unchanged files come
+    back as short "not modified" replies. It also tells the page not to reuse its own copies
+    without asking.
+  - When an update's service worker takes over a page that was loaded before it, a small script
+    in `index.html` reloads the page, unless a game or the multiplayer lobby is under way. That
+    script comes with the page, which is always the newest.
+  - Tested with a server that caches like GitHub Pages: after an update, and after a second
+    update within ten minutes, every file came from the same version. Unit tests
+    (`test/sw.test.js`) run the service worker with stand-ins for the browser's caches and
+    network.
 - **Pause when away.** The campaign pauses when the phone is turned upright or the game goes to
   the background.
 - The lobby's rows are taller on touch screens and scroll, and small buttons have larger touch
@@ -363,7 +377,7 @@ Multiplayer games get one too. The book's map is still one tick away on the miss
 
 ### Tooling
 
-- `npm test`: 145 unit, simulation and server tests using Node's built-in test runner. They
+- `npm test`: 149 unit, simulation and server tests using Node's built-in test runner. They
   include a scripted playthrough of mission 1, every mission running for 12 minutes of game time,
   and two simulated multiplayer clients checked for identical state after every tick.
 - `npm run test:e2e`: Playwright tests that play the game in Chromium, covering the campaign,

@@ -98,7 +98,10 @@ export function setUpInstall({ button, hint }) {
     hint.hidden = !(isIOS() && isTouchScreen());
 }
 
-/** Cache the game for offline play (only possible on https or localhost). */
+/**
+ * Cache the game for offline play (only possible on https or localhost). When an update's service
+ * worker takes over, index.html reloads the page.
+ */
 export function registerServiceWorker() {
     if ("serviceWorker" in navigator && window.isSecureContext) {
         navigator.serviceWorker.register("sw.js").catch((error) => console.warn("Service worker not registered:", error));
