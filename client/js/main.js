@@ -71,7 +71,14 @@ class App {
 
         this.game.on("message", (from, message) => {
             this.sounds.play("message-received");
-            ui.showGameMessage(from, message);
+
+            // In the campaign the mission's characters speak in a dialog, and the game waits until
+            // the player has read it. Status messages and multiplayer chat appear over the map.
+            if (this.activeMode === this.singleplayer && ui.isTransmission(from)) {
+                ui.showTransmission(from, message);
+            } else {
+                ui.showGameMessage(from, message);
+            }
         });
         this.game.on("sound", (name) => this.sounds.play(name));
         this.game.on("levelend", (success) => this.activeMode?.handleLevelEnd(success));
@@ -117,6 +124,7 @@ class App {
 
         ui.switchToScreen("gameinterfacescreen");
         ui.clearGameMessages();
+        ui.clearTransmissions();
         this.hideChat();
         this.input.reset();
         this.resize();
@@ -133,6 +141,7 @@ class App {
         this.activeMode = undefined;
         this.hideChat();
         this.#hidePauseMenu();
+        ui.clearTransmissions();
     }
 
     showMainMenu() {
@@ -160,6 +169,25 @@ class App {
         return this.loop.running;
     }
 
+    /* Pausing */
+
+    // The campaign is paused while the pause menu or a message from a mission character is open.
+    // A multiplayer game can't be paused: the other player's game keeps going.
+    #updatePaused() {
+        const paused = this.pauseMenuOpen || ui.isTransmissionOpen();
+
+        this.loop.paused = paused && this.activeMode !== this.multiplayer;
+    }
+
+    // A message from a mission character opened or closed
+    #transmissionsChanged(open) {
+        if (open) {
+            this.input.reset();
+        }
+
+        this.#updatePaused();
+    }
+
     /* Pause menu */
 
     openPauseMenu() {
@@ -170,8 +198,7 @@ class App {
         const multiplayer = this.activeMode === this.multiplayer;
 
         this.pauseMenuOpen = true;
-        // A multiplayer game can't be paused: the other player's game keeps going
-        this.loop.paused = !multiplayer;
+        this.#updatePaused();
         this.input.reset();
 
         $("pausetitle").textContent = multiplayer ? "Menu" : "Paused";
@@ -186,7 +213,12 @@ class App {
 
     closePauseMenu() {
         this.#hidePauseMenu();
-        this.loop.paused = false;
+        this.#updatePaused();
+
+        // Back to the message the player was reading, if any
+        if (ui.isTransmissionOpen()) {
+            $("transmissioncontinue").focus();
+        }
     }
 
     #hidePauseMenu() {
@@ -220,6 +252,10 @@ class App {
             this.stopLevel();
             this.showMainMenu();
         }
+    }
+
+    wireTransmissions() {
+        ui.initTransmissions({ onChange: (open) => this.#transmissionsChanged(open) });
     }
 
     wirePauseMenu() {
@@ -320,6 +356,21 @@ function handleKeyDown(app, ev) {
         return;
     }
 
+    // A message from a mission character is open: Enter, Space or Escape continues. (The focused
+    // Continue button handles Enter and Space itself.)
+    if (ui.isTransmissionOpen()) {
+        const continueKey = ev.key === "Escape" || ((ev.key === "Enter" || ev.key === " ") && ev.target !== $("transmissioncontinue"));
+
+        if (continueKey) {
+            ev.preventDefault();
+            ui.nextTransmission();
+        } else if (pauseKey) {
+            app.openPauseMenu();
+        }
+
+        return;
+    }
+
     if (ev.key === "Enter" && app.activeMode === app.multiplayer) {
         ev.preventDefault();
         app.showChat();
@@ -384,6 +435,7 @@ function wireUpButtons(app) {
     });
 
     app.wirePauseMenu();
+    app.wireTransmissions();
 }
 
 function watchScreen(app) {
