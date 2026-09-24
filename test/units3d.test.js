@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { describe, test } from "node:test";
 import { Color, Vector3, REVISION } from "three";
 import { MODELS, modelFiles } from "../client/js/app/models.js";
-import { aimCamera, createCamera, facingRotation, groundToScene, heightOnScreen, interpolatedHeading, isDrawnIn3D, packCells, recolour } from "../client/js/app/units3d.js";
+import { aimCamera, createCamera, facingRotation, groundToScene, gunKick, heightOnScreen, interpolatedHeading, isDrawnIn3D, packCells, RECOIL_MS, recoilSwing, recolour } from "../client/js/app/units3d.js";
 
 // The JSON part of a .glb model file: its nodes, materials and extensions
 function readModel(file) {
@@ -97,7 +97,7 @@ describe("3D units", () => {
                     assert.ok(materials.has(name), `${key}: material ${name} is in ${file}`);
                 }
 
-                for (const name of [model.aim, ...(model.spin ?? []).map((s) => s.node)].filter(Boolean)) {
+                for (const name of [model.aim, model.recoil?.gun, ...(model.spin ?? []).map((s) => s.node)].filter(Boolean)) {
                     assert.ok(nodes.has(name), `${key}: part ${name} is in ${file}`);
                 }
             }
@@ -135,6 +135,27 @@ describe("3D units", () => {
         });
 
         assert.deepEqual(packCells([]), { positions: [], width: 0, height: 0 });
+    });
+
+    test("units rock back when they fire, rock forward past where they started, then settle", () => {
+        const swing = recoilSwing;
+
+        assert.equal(swing(0), 0, "starts from rest");
+        assert.ok(swing(60) > 0.99 && swing(60) <= 1.0001, "furthest back after about 60 ms");
+
+        const forward = Math.min(...Array.from({ length: 150 }, (_, i) => swing(150 + i)));
+
+        assert.ok(forward < -0.3 && forward > -0.4, `then rocks forward (${forward.toFixed(2)})`);
+        assert.ok(Math.abs(swing(RECOIL_MS - 1)) < 0.02, "and has settled by the end");
+        assert.equal(swing(RECOIL_MS), 0);
+        assert.equal(swing(-1), 0);
+        assert.equal(swing(Number.NaN), 0);
+
+        // The barrel slides back quickly and returns more slowly, without swinging past its rest position
+        assert.equal(gunKick(0), 0);
+        assert.equal(gunKick(25), 1);
+        assert.ok(gunKick(100) > 0 && gunKick(100) < gunKick(50));
+        assert.ok(Array.from({ length: RECOIL_MS }, (_, t) => gunKick(t)).every((kick) => kick >= 0 && kick <= 1));
     });
 
     test("team colours keep each material's lightness", () => {

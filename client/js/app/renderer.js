@@ -1,4 +1,5 @@
 import { GRID_SIZE } from "../core/config.js";
+import { Effects } from "./effects.js";
 
 // Canvases are rendered at the screen's pixel density for sharp output, up to this limit
 // (beyond 2x the difference is hard to see, but the cost in battery life is not)
@@ -15,8 +16,10 @@ const MARKER_DURATION_MS = 500;
 export class Renderer {
     #lastBackground = "";
     #markers = [];
-    // Lets items drawn in 3D replace their sprites (see Entity.draw)
-    #drawModel = (context, item) => this.units3d?.draw(context, item) ?? false;
+    // Lets items drawn in 3D, and shots drawn as effects, replace their sprites (see Entity.draw)
+    #drawModel = (context, item) => (item.type === "bullets"
+        ? this.effects.drawBullet(item, item.drawingX + item.pixelOffsetX + this.offsetX, item.drawingY + item.pixelOffsetY + this.offsetY)
+        : this.units3d?.draw(context, item) ?? false);
 
     constructor({ game, camera, backgroundCanvas, foregroundCanvas }) {
         this.game = game;
@@ -33,6 +36,18 @@ export class Renderer {
 
         // Draws some units in 3D instead of sprites, once loaded (js/app/units3d.js)
         this.units3d = undefined;
+
+        // Muzzle flashes, shells, explosions, fire and smoke (js/app/effects.js)
+        this.effects = new Effects({ game, reducedMotion: globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false });
+        game.on("fire", (item, bullet) => {
+            this.effects.fire(item, bullet);
+            this.units3d?.fired(item);
+        });
+        game.on("hit", (bullet, target) => this.effects.hit(bullet, target));
+        game.on("destroyed", (item) => this.effects.destroyed(item));
+
+        // Milliseconds of game time drawn so far (stops while the game is paused), for animations
+        this.time = 0;
 
         // The fog is painted onto an offscreen canvas the size of the whole map
         this.fogCanvas = document.createElement("canvas");
@@ -77,6 +92,7 @@ export class Renderer {
         this.paintedFogVersion = -1;
         this.camera.setMapSize(mapImage.width, mapImage.height);
         this.#lastBackground = "";
+        this.effects.clear();
     }
 
     /** Show a ring at a world position, e.g. to confirm where units were ordered to go. */
@@ -84,21 +100,26 @@ export class Renderer {
         this.#markers.push({ x, y, color, start: performance.now() });
     }
 
-    // Scale drawing so that one unit is one world pixel
+    // Scale drawing so that one unit is one world pixel (moved by the screen shake, if any)
     #applyTransform(context) {
         const scale = this.camera.zoom * this.pixelRatio;
+        const shake = this.effects.shakeOffset;
 
-        context.setTransform(scale, 0, 0, scale, 0, 0);
+        context.setTransform(scale, 0, 0, scale, shake.x * scale, shake.y * scale);
     }
 
     /**
      * Draw a frame.
      * @param {number} interpolation  -1..0, how far between the previous and the current tick to draw moving items
+     * @param {number} [elapsed]  milliseconds of game time since the last frame (0 while paused)
      */
-    render(interpolation) {
+    render(interpolation, elapsed = 0) {
         const context = this.foregroundContext;
         const view = { offsetX: this.offsetX, offsetY: this.offsetY, interpolation, zoom: this.camera.zoom, drawModel: this.#drawModel };
+        const visible = { x: this.offsetX, y: this.offsetY, width: this.width, height: this.height };
 
+        this.time += elapsed;
+        this.effects.update(elapsed, this.game.items, visible);
         this.drawBackground();
 
         // Render the 3D units first; each is copied onto the map when its turn to be drawn comes
@@ -106,24 +127,22 @@ export class Renderer {
             scale: this.camera.zoom * this.pixelRatio,
             interpolation,
             tick: this.game.tick,
-            view: { x: this.offsetX, y: this.offsetY, width: this.width, height: this.height },
+            time: this.time,
+            view: visible,
         });
 
         context.setTransform(1, 0, 0, 1, 0, 0);
         context.clearRect(0, 0, this.foregroundCanvas.width, this.foregroundCanvas.height);
         this.#applyTransform(context);
 
+        // Scorch marks on the ground, then the units, then fire and smoke over them
+        this.effects.drawGround(context, view);
+
         for (const item of this.game.sortedItems) {
             item.draw(context, view);
         }
 
-        // Draw exploding bullets on top of everything else
-        for (const bullet of this.game.bullets) {
-            if (bullet.action === "explode") {
-                bullet.draw(context, view);
-            }
-        }
-
+        this.effects.draw(context, view);
         this.drawFog();
         this.#drawMarkers(context, view);
 
@@ -140,7 +159,8 @@ export class Renderer {
         }
 
         const { offsetX, offsetY, zoom } = this.camera;
-        const state = `${offsetX},${offsetY},${zoom},${this.backgroundCanvas.width},${this.backgroundCanvas.height}`;
+        const shake = this.effects.shakeOffset;
+        const state = `${offsetX},${offsetY},${zoom},${this.backgroundCanvas.width},${this.backgroundCanvas.height},${shake.x},${shake.y}`;
 
         if (state === this.#lastBackground) {
             return;

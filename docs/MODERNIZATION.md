@@ -143,8 +143,8 @@ screen from small phones to large monitors.
 ### 3D units
 
 Every vehicle, aircraft and building is drawn as a 3D model with [Three.js](https://threejs.org)
-instead of a sprite. Only the oil fields, bullets and effects are still sprites. The map, fog of
-war, selection and the rest of the game stay 2D.
+instead of a sprite. Only the oil fields are still sprites, and shots and explosions are drawn as
+[effects](#effects). The map, fog of war, selection and the rest of the game stay 2D.
 
 - **Engine.** Three.js r186 with its WebGL 2 renderer. Before choosing it we compared Three.js,
   Babylon.js, PlayCanvas, OGL, twgl.js, regl and plain WebGL 2:
@@ -222,6 +222,8 @@ war, selection and the rest of the game stay 2D.
     following the progress of the sprite animation they replace.
   - Damaged units and buildings are drawn darker.
   - Aircraft are drawn above a shadow on the ground, at the same height as their sprites.
+  - Tanks rock back when they fire, and gun barrels recoil (see [Effects](#effects)).
+  - Rotors and recoil run on game time, so they stop while the game is paused.
 - **Lighting.** Materials are converted to simple (Lambert) lighting, lit by the sky and by
   sunlight from the north-west, as in the book's art. Some Kenney materials are metallic or unlit,
   which looked flat or black with this camera.
@@ -236,14 +238,69 @@ war, selection and the rest of the game stay 2D.
   - Three.js renders at one canvas pixel per screen pixel, with antialiasing, and asks for the
     low-power GPU on devices that have two.
 
+### Effects
+
+Shots, hits and destroyed units used to be small sprite animations of three to seven frames.
+They are now drawn by `js/app/effects.js` with particles on the 2D canvas, and tanks rock back
+when they fire.
+
+- **Research.** The effects follow common practice in game visual effects: Riot's League of
+  Legends VFX style guide, the Real-Time VFX community's explosion breakdowns, Jan Willem
+  Nijman's "The Art of Screenshake" talk, Squirrel Eiserloh's GDC 2016 talk on camera shake,
+  Allen Chou's articles on damped springs, and MDN's advice on canvas performance.
+- **Layers.** An explosion is built from layers that each last a different time:
+  - a white-hot flash that also lights up the ground (about 0.1 s);
+  - a fireball of ragged flames that billow out and cool from white through yellow and orange
+    to dark red (about 0.5 s);
+  - sparks and debris thrown out, falling back and bouncing; debris kicks up dust where it lands;
+  - a shock wave ring racing out across the ground (0.25 s);
+  - dark smoke that rises and spreads (1–3 s);
+  - a scorch mark that fades over about 20 seconds.
+- **Each weapon looks different.**
+  - Heavy tank and turret cannons: a star-shaped muzzle flash along the barrel, sparks, a puff
+    of smoke and a ring of dust kicked up around the tank; a glowing shell with a tapering
+    tracer; a medium explosion.
+  - Scout tanks: the same, smaller.
+  - Chopper missiles: a smoke trail and a bright exhaust; a bigger explosion.
+  - Wraith fireballs: a flickering fireball leaving flames behind it.
+  - Destroyed units: a big explosion with a rising column of smoke, then burning wreckage for a
+    few seconds. Buildings go up in several blasts across their base. A destroyed aircraft
+    explodes in the air and leaves a burnt patch where it falls.
+  - Damaged units smoke, and damaged buildings smoke and burn.
+- **Recoil.** When a tank fires, its hull is pushed back and tips nose-up, then rocks forward
+  past where it started and settles, like a damped spring. Its gun barrel slides back and
+  returns. The ground turret's barrel slides back too. Each model's recoil and the position of
+  its gun's muzzle are set in `js/app/models.js`.
+- **Screen shake.** Destroyed units and buildings shake the view by a few pixels for a moment,
+  less the further they are from the middle of the screen. There is no shake for players who
+  have asked their device for reduced motion.
+- **How it fits in.**
+  - The game reports what happened through events ("fire", "hit" and "destroyed"). The effects
+    only draw them and never change the game, so multiplayer games stay in step.
+  - The effects run on game time, so they freeze while the game is paused.
+  - Anything hidden by the fog of war shows no effects.
+  - Scorch marks are drawn under the units, and everything else over them, under the fog of
+    war. Shots in flight are drawn with the effects rather than as sprites.
+- **Performance.**
+  - Particles are drawn with a few small images painted once when the game starts: soft glows
+    and ragged flames in each colour of fire, smoke puffs, a muzzle flash and tracers. Building
+    gradients or using canvas shadows for every particle would be much slower.
+  - Fire, light and sparks are drawn with additive blending ("lighter"), so overlapping flames
+    brighten each other. Switching blend modes is slow on phones, so each frame draws
+    everything in two passes, one per blend mode.
+  - Particles live in a fixed pool of at most 400. When it is nearly full, trails and
+    lingering smoke are skipped first.
+  - In a 20-second test battle (85 shots, 11 units destroyed) on the iPhone profile, drawing the
+    effects took 0.3 ms per frame on average and 0.6 ms at the 95th percentile.
+
 ### Tooling
 
-- `npm test`: 111 unit, simulation and server tests using Node's built-in test runner. They
+- `npm test`: 123 unit, simulation and server tests using Node's built-in test runner. They
   include a scripted playthrough of mission 1, every mission running for 12 minutes of game time,
   and two simulated multiplayer clients checked for identical state after every tick.
 - `npm run test:e2e`: Playwright tests that play the game in Chromium, covering the campaign,
   selection and orders, zooming, the minimap, construction, 3D models for units and buildings
-  (and sprites when WebGL is missing) and a two player game with a mouse,
+  (and sprites when WebGL is missing), explosions and other effects and a two player game with a mouse,
   and on an emulated iPhone 16 Pro in landscape: the layout, taps, dragging, pinching, touch and
   hold selection, placing buildings and the portrait "turn your device" screen.
 - `npm run lint`: ESLint.

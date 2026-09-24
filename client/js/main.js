@@ -160,7 +160,7 @@ class App {
             this.input.handlePanning(elapsed);
         }
 
-        this.renderer.render(interpolation);
+        this.renderer.render(interpolation, this.loop.paused ? 0 : elapsed);
         this.minimap.render();
         this.hud.update();
     }
