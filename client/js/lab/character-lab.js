@@ -412,6 +412,11 @@ function selectTab(id) {
 
 selectTab(tabList.some(([id]) => id === params.get("tab")) ? params.get("tab") : "body");
 
+// Show the character's settings in every control (the equipment slots especially)
+for (const refresh of refreshers) {
+    refresh();
+}
+
 // Character and camera pickers
 const picker = document.querySelector("#characterpicker");
 

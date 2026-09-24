@@ -51,6 +51,7 @@ test("switches to the orc, changes gear and looks", async ({ page }) => {
     await page.waitForFunction(() => window.lab.character.equipment.get("face") === "tusks");
 
     await page.getByRole("tab", { name: "Gear" }).click();
+    await expect(page.locator("#slot-face")).toHaveValue("tusks");
     await page.getByRole("button", { name: "Knight" }).click();
     await page.waitForFunction(() => window.lab.character.equipment.get("armour") === "breastplate");
 
