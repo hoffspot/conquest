@@ -5,13 +5,12 @@ the game's own camera, then saves the results as sprite sheets the game can draw
 build time, not in the game:
 
 ```sh
-npm run build:art                        # every style, into client/images/art/
-npm run build:art -- --style=pixel       # one style
+npm run build:art                        # the sheet, into client/images/art/
 npm run build:art -- --previews=previews # also pictures of example castles and towns
 ```
 
 It uses Playwright's Chromium (or `CHROMIUM_PATH`), with software WebGL where there is no GPU.
-Both styles take about a minute.
+It takes about 40 seconds.
 
 ## How it works
 
@@ -44,14 +43,11 @@ Both styles take about a minute.
    shade. Each piece gives two images: the piece itself, shaded by its own shadows, and the
    shadow it casts on the ground. Keeping the ground shadow apart lets neighbouring pieces'
    shadows merge without doubling up.
-4. **Styles** (`main.js`):
-   - `smooth`: 40 pixels per grid square, shadows at half that.
-   - `pixel`: pixel art at LPC's 32 pixels per grid square. Every pixel is solid or clear, in
-     the [LPC](https://github.com/ElizaWy/LPC) palette, with a dark outline (`engine/pixel.js`).
-5. **Sheets** (`engine/atlas.js`): every sprite and shadow, trimmed to what can be seen and
-   packed into one WebP per style (`client/images/art/setpieces-<style>.webp`), with a manifest
-   (`.json`) saying where each piece's sprite and shadow are on the sheet and where their
-   top-left corners go on the map.
+4. **The sheet** (`main.js`, `engine/atlas.js`): every sprite at 40 pixels per grid square
+   (twice the map's resolution) and every shadow at half that, trimmed to what can be seen and
+   packed into one WebP (`client/images/art/setpieces.webp`). Its manifest (`setpieces.json`)
+   says where each piece's sprite and shadow are on the sheet and where their top-left corners
+   go on the map.
 
 **Layouts** (`client/js/core/setpieces/castle.js` and `town.js`) decide which pieces go where,
 and **`compose.js`** draws a layout with its pieces: the map's grass, the layout's ground (roads,
@@ -63,8 +59,6 @@ the pieces drawn back to front with any units among them.
 - **A new piece:** add it to `pieceCatalog()` in `pieces.js`, give it a builder in `kits/`, add
   the builder to `BUILDERS` in `main.js`, and run `npm run build:art`. A test checks that every
   catalogued piece has art.
-- **A new style:** add it to `STYLES` in `main.js` with its scale and finishing steps, and to
-  the list in `scripts/build-art.js`.
 - **A new kind of place** (a desert village, a dungeon): add its pieces as above and a layout
   module next to `castle.js` and `town.js`.
 
@@ -76,8 +70,6 @@ and whole-number arithmetic of `client/js/core/random.js`. A test enforces this.
 
 - KayKit Medieval Hexagon Pack by Kay Lousberg (<https://kaylousberg.com>), CC0
   (`models/kaykit/LICENSE.txt`).
-- The pixel-art palette is the Liberated Pixel Cup palette from LPC Revised
-  (<https://github.com/ElizaWy/LPC>), OGA-BY 3.0.
 - The castle pieces follow Castle Builder by Jon Rubashkin
   (<https://github.com/JonRubashkin/Castle-Builder>, MIT); the town layout follows Watabou's
   Medieval Fantasy City Generator (<https://github.com/watabou/TownGeneratorOS>). No code is

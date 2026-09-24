@@ -1,6 +1,6 @@
 // The art generator, running in a browser page (tools/artgen/index.html) that the build script
 // (scripts/build-art.js) opens in headless Chromium. It draws every piece in the catalogue
-// (client/js/core/setpieces/pieces.js) and packs the results into sheets for the game.
+// (client/js/core/setpieces/pieces.js) and packs the results into one sheet for the game.
 
 import * as THREE from "three";
 import { facingRotation, recolour } from "../../client/js/app/units3d.js";
@@ -12,24 +12,19 @@ import { layoutTown } from "../../client/js/core/setpieces/town.js";
 import { compose } from "./compose.js";
 import { packAtlas } from "./engine/atlas.js";
 import { loadModel } from "./engine/models.js";
-import { nearestColour, pixelate, pixelateShadow } from "./engine/pixel.js";
 import { PieceRenderer } from "./engine/render.js";
 import { gatehouse, keep, tower, wall } from "./kits/castle.js";
 import { house } from "./kits/house.js";
 import { landmark, prop, tree } from "./kits/town.js";
 
-// The styles the art comes in: image pixels per world pixel, and how each piece is finished
-//   scale        image pixels per world pixel
-//   shadowScale  ground shadows are stored at this fraction of the sprites' resolution
-//   finish       what is done to each sprite and shadow after rendering
-//   quality      how the sheet is saved (WebP; 1 is lossless)
-export const STYLES = {
-    // Smooth shading, twice the map's resolution (40 pixels per grid square). The soft shadows
-    // keep their look at half that.
-    smooth: { scale: 2, shadowScale: 0.5, quality: 0.9 },
-    // Pixel art in the LPC palette, at LPC's 32 pixels per grid square
-    pixel: { scale: 1.6, shadowScale: 1, finish: pixelate, finishShadow: pixelateShadow, quality: 1 },
-};
+// Image pixels per world pixel: twice the map's resolution (40 pixels per grid square)
+export const SCALE = 2;
+
+// The soft ground shadows keep their look at half the sprites' resolution
+const SHADOW_SCALE = 0.5;
+
+// WebP quality of the saved sheet and pictures
+const QUALITY = 0.9;
 
 // A copy of an image at a fraction of its size
 function shrink(image, fraction) {
@@ -80,21 +75,21 @@ function trim(image) {
     return { image: canvas, left, top };
 }
 
-// Finish a rendering in a style, trimmed to what can be seen. Returns the sprite and the shadow,
-// each with where its top-left corner goes (in world pixels from the piece's origin).
-function finished(result, style) {
-    const { scale, finish, finishShadow, shadowScale } = STYLES[style];
-    const sprite = trim(finish ? finish(result.sprite) : result.sprite);
-    const shadow = trim(shrink(finishShadow ? finishShadow(result.shadow) : result.shadow, shadowScale));
+// A rendering trimmed to what can be seen, with its shadow at SHADOW_SCALE. Returns the sprite
+// and the shadow, each with where its top-left corner goes (in world pixels from the piece's
+// origin).
+function finished(result) {
+    const sprite = trim(result.sprite);
+    const shadow = trim(shrink(result.shadow, SHADOW_SCALE));
 
     return {
         sprite: sprite.image,
-        x: result.x + sprite.left / scale,
-        y: result.y + sprite.top / scale,
+        x: result.x + sprite.left / SCALE,
+        y: result.y + sprite.top / SCALE,
         shadow: shadow.image,
-        shadowX: result.x + shadow.left / (scale * shadowScale),
-        shadowY: result.y + shadow.top / (scale * shadowScale),
-        shadowScale,
+        shadowX: result.x + shadow.left / (SCALE * SHADOW_SCALE),
+        shadowY: result.y + shadow.top / (SCALE * SHADOW_SCALE),
+        shadowScale: SHADOW_SCALE,
     };
 }
 
@@ -102,13 +97,16 @@ const BUILDERS = { wall, tower, gatehouse, keep, house, landmark, prop, tree };
 
 let renderer;
 
-/** Render one piece: { sprite, shadow, x, y } (see PieceRenderer.render). */
-export async function renderPiece(piece, style = "smooth") {
+/**
+ * Render one piece: { sprite, x, y, shadow, shadowX, shadowY, shadowScale }, the images trimmed
+ * to what can be seen (see PieceRenderer.render).
+ */
+export async function renderPiece(piece) {
     renderer ??= new PieceRenderer();
 
     const object = await BUILDERS[piece.kind](piece);
 
-    return finished(renderer.render(object, { scale: STYLES[style].scale }), style);
+    return finished(renderer.render(object, { scale: SCALE }));
 }
 
 const round = (value) => Math.round(value * 1000) / 1000;
@@ -120,13 +118,13 @@ const round = (value) => Math.round(value * 1000) / 1000;
  * its sprite and shadow are on the sheet ([x, y, width, height] in sheet pixels) and where their
  * top-left corners go on the map.
  */
-export async function buildSheet({ style = "smooth", keys } = {}) {
+export async function buildSheet({ keys } = {}) {
     const pieces = pieceCatalog().filter((piece) => !keys || keys.includes(piece.key));
     const images = [];
     const placed = [];
 
     for (const piece of pieces) {
-        const art = await renderPiece(piece, style);
+        const art = await renderPiece(piece);
 
         images.push({ id: `${piece.key}`, image: art.sprite }, { id: `${piece.key}:shadow`, image: art.shadow });
         placed.push({ piece, art });
@@ -134,9 +132,8 @@ export async function buildSheet({ style = "smooth", keys } = {}) {
 
     const { canvas, rects } = packAtlas(images);
     const manifest = {
-        style,
-        scale: STYLES[style].scale,
-        shadowScale: STYLES[style].shadowScale,
+        scale: SCALE,
+        shadowScale: SHADOW_SCALE,
         pieces: Object.fromEntries(placed.map(({ piece, art }) => [piece.key, {
             w: piece.w,
             h: piece.h,
@@ -149,24 +146,22 @@ export async function buildSheet({ style = "smooth", keys } = {}) {
         }])),
     };
 
-    return { image: canvas.toDataURL("image/webp", STYLES[style].quality), manifest };
+    return { image: canvas.toDataURL("image/webp", QUALITY), manifest };
 }
 
 const pieceArtCache = new Map();
 
-/** A piece's art in a style (drawn once, then remembered). */
-function pieceArt(key, style) {
-    const id = `${style}:${key}`;
-
-    if (!pieceArtCache.has(id)) {
-        pieceArtCache.set(id, renderPiece(pieceCatalog().find((piece) => piece.key === key), style));
+/** A piece's art (drawn once, then remembered). */
+function pieceArt(key) {
+    if (!pieceArtCache.has(key)) {
+        pieceArtCache.set(key, renderPiece(pieceCatalog().find((piece) => piece.key === key)));
     }
 
-    return pieceArtCache.get(id);
+    return pieceArtCache.get(key);
 }
 
 /** One of the game's units (from client/models, as units3d.js draws it), for comparing sizes. */
-async function unitArt(name, heading, style) {
+async function unitArt(name, heading) {
     const model = MODELS[name];
     const object = await loadModel(`/client/models/${model.file}`);
 
@@ -191,19 +186,19 @@ async function unitArt(name, heading, style) {
 
     renderer ??= new PieceRenderer();
 
-    return finished(renderer.render(holder, { scale: STYLES[style].scale }), style);
+    return finished(renderer.render(holder, { scale: SCALE }));
 }
 
 /**
  * A picture of a generated castle or town, with a few of the game's tanks on its roads for scale.
  * Returns { image (a WebP data URL), layout }.
  */
-export async function preview({ kind, width, height, seed, gate, approaches, style = "smooth", tanks = 3 }) {
+export async function preview({ kind, width, height, seed, gate, approaches, tanks = 3 }) {
     const layout = kind === "castle" ? layoutCastle({ width, height, gate, seed }) : layoutTown({ width, height, approaches, seed });
     const art = new Map();
 
     for (const { key } of layout.pieces) {
-        art.set(key, await pieceArt(key, style));
+        art.set(key, await pieceArt(key));
     }
 
     // Tanks parked on open road and cobbles
@@ -225,13 +220,12 @@ export async function preview({ kind, width, height, seed, gate, approaches, sty
     for (const [x, y] of random.shuffle(spots).slice(0, tanks)) {
         const heading = random.pick([0, 0.5, 1, 1.5]) * Math.PI;
 
-        units.push({ x: (x + 1) * 20, y: (y + 0.5) * 20, art: await unitArt("vehicles/heavy-tank", heading, style) });
+        units.push({ x: (x + 1) * 20, y: (y + 0.5) * 20, art: await unitArt("vehicles/heavy-tank", heading) });
     }
 
-    const finishGround = style === "pixel" ? pixelateGround : undefined;
-    const canvas = await compose(layout, (key) => art.get(key), { scale: STYLES[style].scale, units, finishGround });
+    const canvas = await compose(layout, (key) => art.get(key), { scale: SCALE, units });
 
-    return { image: canvas.toDataURL("image/webp", 0.9), layout };
+    return { image: canvas.toDataURL("image/webp", QUALITY), layout };
 }
 
 // A selection of pieces for looking over: towers, gatehouses, keeps, a house of each style,
@@ -249,7 +243,7 @@ const BOARD = [
 ];
 
 /** A picture of a selection of pieces on grass, each with its ground shadow, and labelled. */
-export async function board({ style = "smooth", keys = BOARD, columns = 7 } = {}) {
+export async function board({ keys = BOARD, columns = 7 } = {}) {
     const catalog = pieceCatalog();
     const cell = 6;
     const pieces = keys.map((key) => catalog.find((entry) => entry.key === key));
@@ -282,12 +276,11 @@ export async function board({ style = "smooth", keys = BOARD, columns = 7 } = {}
     const art = new Map();
 
     for (const key of keys) {
-        art.set(key, await pieceArt(key, style));
+        art.set(key, await pieceArt(key));
     }
 
-    const scale = STYLES[style].scale;
-    const finishGround = style === "pixel" ? pixelateGround : undefined;
-    const canvas = await compose(layout, (key) => art.get(key), { scale, finishGround });
+    const scale = SCALE;
+    const canvas = await compose(layout, (key) => art.get(key), { scale });
     const context = canvas.getContext("2d");
 
     context.font = `${Math.round(7 * scale)}px sans-serif`;
@@ -302,20 +295,8 @@ export async function board({ style = "smooth", keys = BOARD, columns = 7 } = {}
         context.fillText(key, px, py);
     }
 
-    return { image: canvas.toDataURL("image/webp", 0.9) };
+    return { image: canvas.toDataURL("image/webp", QUALITY) };
 }
 
-// Pixel-art ground: every pixel in the LPC palette
-function pixelateGround(canvas) {
-    const context = canvas.getContext("2d");
-    const image = context.getImageData(0, 0, canvas.width, canvas.height);
-
-    for (let i = 0; i < image.data.length; i += 4) {
-        image.data.set(nearestColour([image.data[i], image.data[i + 1], image.data[i + 2]]), i);
-    }
-
-    context.putImageData(image, 0, 0);
-}
-
-window.artgen = { pieceCatalog, renderPiece, buildSheet, preview, board, STYLES };
+window.artgen = { pieceCatalog, renderPiece, buildSheet, preview, board };
 window.artgenReady = true;

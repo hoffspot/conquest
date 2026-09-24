@@ -94,7 +94,7 @@ function edgeNoise(x, y) {
  * their top-left corners go, in world pixels from the north-west corner of the piece's first square.
  * `units` are extra things to draw among the pieces: [{ x, y (world pixels), art }].
  */
-export async function compose(layout, art, { scale, units = [], finishGround } = {}) {
+export async function compose(layout, art, { scale, units = [] } = {}) {
     const width = layout.width * CELL;
     const height = layout.height * CELL;
     const canvas = canvasOf((width + PAD.side * 2) * scale, (height + PAD.top + PAD.bottom) * scale);
@@ -155,10 +155,6 @@ export async function compose(layout, art, { scale, units = [], finishGround } =
         maskContext.fillStyle = pattern(maskContext, texture, world, scale);
         maskContext.fillRect(0, 0, mask.width, mask.height);
         context.drawImage(mask, ...origin);
-    }
-
-    if (finishGround) {
-        finishGround(canvas);
     }
 
     // Everything drawn, back to front: pieces by their southern edge, units by where they stand

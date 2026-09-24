@@ -180,24 +180,22 @@ describe("set piece art", () => {
         }
     });
 
-    for (const style of ["smooth", "pixel"]) {
-        it(`has ${style} art for every piece (npm run build:art)`, () => {
-            const file = new URL(`../client/images/art/setpieces-${style}.json`, import.meta.url);
+    it("has art for every piece (npm run build:art)", () => {
+        const file = new URL("../client/images/art/setpieces.json", import.meta.url);
 
-            assert.ok(existsSync(file), `client/images/art/setpieces-${style}.json exists`);
+        assert.ok(existsSync(file), "client/images/art/setpieces.json exists");
 
-            const manifest = JSON.parse(readFileSync(file, "utf8"));
+        const manifest = JSON.parse(readFileSync(file, "utf8"));
 
-            for (const piece of pieceCatalog()) {
-                const art = manifest.pieces[piece.key];
+        for (const piece of pieceCatalog()) {
+            const art = manifest.pieces[piece.key];
 
-                assert.ok(art, `${piece.key} has ${style} art`);
-                assert.deepEqual([art.w, art.h], [piece.w, piece.h], piece.key);
-                assert.equal(art.sprite.length, 4, piece.key);
-                assert.equal(art.shadow.length, 4, piece.key);
-                assert.equal(art.at.length, 2, piece.key);
-                assert.equal(art.shadowAt.length, 2, piece.key);
-            }
-        });
-    }
+            assert.ok(art, `${piece.key} has art`);
+            assert.deepEqual([art.w, art.h], [piece.w, piece.h], piece.key);
+            assert.equal(art.sprite.length, 4, piece.key);
+            assert.equal(art.shadow.length, 4, piece.key);
+            assert.equal(art.at.length, 2, piece.key);
+            assert.equal(art.shadowAt.length, 2, piece.key);
+        }
+    });
 });
