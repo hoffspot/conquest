@@ -449,7 +449,7 @@ export function buildGarment(character, id, measures) {
     const shellVertices = out.positions.length / 3;
 
     if (garment.toeBox) {
-        const cap = { shell, sharedOf, sides, onCut, out, sources, human, positions, normals, vertices, thickness, landmarks };
+        const cap = { shell, sharedOf, sides, onCut, out, sources, human, positions, normals, vertices, thickness, landmarks, list };
 
         for (const side of [1, -1]) {
             addToeCap(cap, side);
@@ -469,9 +469,55 @@ export function buildGarment(character, id, measures) {
 
     if (garment.toeBox) {
         joinToeCaps(geometry, shellVertices, out.capJoins ?? []);
+
+        // Where a toe cap's nose closes to a point, every vertex there shares one normal
+        const normal = geometry.attributes.normal;
+
+        for (const pole of out.capPoles ?? []) {
+            const sum = [0, 0, 0];
+
+            for (const i of pole) {
+                sum[0] += normal.getX(i);
+                sum[1] += normal.getY(i);
+                sum[2] += normal.getZ(i);
+            }
+
+            const length = Math.hypot(...sum) || 1;
+
+            for (const i of pole) {
+                normal.setXYZ(i, sum[0] / length, sum[1] / length, sum[2] / length);
+            }
+        }
     }
 
     return { geometry, covers, sources: Int32Array.from(sources), garment };
+}
+
+const islandsOf = new WeakMap();
+
+/** Which piece of the texture layout ("UV island") each render vertex is on. */
+function uvIslands(human) {
+    if (!islandsOf.has(human)) {
+        const parent = Int32Array.from({ length: human.renderSource.length }, (_, i) => i);
+        const find = (i) => {
+            while (parent[i] !== i) {
+                parent[i] = parent[parent[i]];
+                i = parent[i];
+            }
+
+            return i;
+        };
+        const body = human.renderIndices("body");
+
+        for (let t = 0; t < body.length; t += 3) {
+            parent[find(body[t + 1])] = find(body[t]);
+            parent[find(body[t + 2])] = find(body[t]);
+        }
+
+        islandsOf.set(human, parent.map((_, i) => find(i)));
+    }
+
+    return islandsOf.get(human);
 }
 
 // Footwear with a toe box is cut this far along the foot (1 is the ball of the foot)
@@ -486,9 +532,9 @@ const TOE_CUT = 0.92;
  * the toes, so it bends with them.
  */
 function addToeCap(cap, side) {
-    const { shell, sharedOf, sides, onCut, out, sources, human, positions, normals, vertices, thickness } = cap;
+    const { shell, sharedOf, sides, onCut, out, sources, human, positions, normals, vertices, thickness, list } = cap;
     const RINGS = 16;
-    const ANGLES = 32;
+    const ANGLES = 48;
 
     // The cut loop, in order round the foot
     const next = new Map();
@@ -522,32 +568,30 @@ function addToeCap(cap, side) {
         loop.push(following);
     }
 
-    // The toes, grown by the boot's thickness, and where they are in the texture
+    // The toes, grown by the boot's thickness (as render vertices, which know where they are in
+    // the texture, and which piece of the texture they're on)
+    const islands = uvIslands(human);
     const toes = [];
-    const toeUVs = new Map();
+    const seen = new Set();
 
-    for (let v = 0; v < human.vertexCount; v++) {
+    for (const r of human.renderIndices("body")) {
+        const v = human.renderSource[r];
         const vertex = vertices[v];
 
-        if (human.partOf[v] === 0 && vertex.region === "foot" && vertex.side === side && vertex.foot > TOE_CUT - 0.02) {
-            toes.push([0, 1, 2].map((k) => positions[v * 3 + k] + normals[v * 3 + k] * thickness));
-            toes[toes.length - 1].vertex = v;
+        if (!seen.has(r) && vertex.region === "foot" && vertex.side === side && vertex.foot > TOE_CUT - 0.02) {
+            seen.add(r);
+            toes.push(Object.assign([0, 1, 2].map((k) => positions[v * 3 + k] + normals[v * 3 + k] * thickness), { r, island: islands[r] }));
         }
     }
 
-    human.renderSource.forEach((v, r) => {
-        if (!toeUVs.has(v)) {
-            toeUVs.set(v, [human.uvs[r * 2], human.uvs[r * 2 + 1]]);
-        }
-    });
-
-    // The texture position of the toe nearest a point (so the boot's pattern carries on over it)
-    const uvNear = (point) => {
+    // The texture position of the nearest toe on the same piece of texture (so the boot's
+    // pattern carries on over the cap without jumping between pieces)
+    const uvNear = (point, island) => {
         let best = null;
         let distance = Infinity;
 
         for (const toe of toes) {
-            const d = (toe[0] - point[0]) ** 2 + (toe[1] - point[1]) ** 2 + (toe[2] - point[2]) ** 2;
+            const d = (toe[0] - point[0]) ** 2 + (toe[1] - point[1]) ** 2 + (toe[2] - point[2]) ** 2 + (toe.island === island ? 0 : 1);
 
             if (d < distance) {
                 distance = d;
@@ -555,7 +599,7 @@ function addToeCap(cap, side) {
             }
         }
 
-        return toeUVs.get(best.vertex);
+        return [human.uvs[best.r * 2], human.uvs[best.r * 2 + 1]];
     };
 
     const at = (s) => [shell[s * 3], shell[s * 3 + 1], shell[s * 3 + 2]];
@@ -567,13 +611,29 @@ function addToeCap(cap, side) {
     // Each ring's middle and outline, from the toes near it
     const rings = [];
 
+    // Rings run evenly to the start of the nose, then round it off like a dome: their spacing
+    // follows a quarter circle, and they shrink with it
+    const NOSE_START = 0.7;
+    const noseLength = Math.min(0.03, 0.35 * (tip - z0));
+    const place = (j) => {
+        const t = j / RINGS;
+
+        if (t <= NOSE_START) {
+            return { z: z0 + (t / NOSE_START) * (tip - noseLength - z0), nose: 1 };
+        }
+
+        const angle = ((t - NOSE_START) / (1 - NOSE_START)) * (Math.PI / 2);
+
+        return { z: tip - noseLength + noseLength * Math.sin(angle), nose: Math.cos(angle) };
+    };
+
     for (let j = 1; j <= RINGS; j++) {
-        const z = z0 + (j / (RINGS + 0.5)) * (tip - z0);
+        const { z, nose } = place(j);
         const near = toes.filter((p) => Math.abs(p[2] - z) < (tip - z0) / RINGS);
         const previous = rings[rings.length - 1];
 
         if (!near.length) {
-            rings.push({ ...previous, z });
+            rings.push({ ...previous, z, nose });
             continue;
         }
 
@@ -589,13 +649,13 @@ function addToeCap(cap, side) {
         }
 
         // Bridge gaps between toes, fill directions with no toe, then round it off
-        radius = radius.map((r, a) => Math.max(r, radius[(a + 1) % ANGLES], radius[(a + ANGLES - 1) % ANGLES], radius[(a + 2) % ANGLES], radius[(a + ANGLES - 2) % ANGLES]));
+        radius = radius.map((r, a) => Math.max(r, ...[1, 2, 3].flatMap((d) => [radius[(a + d) % ANGLES], radius[(a + ANGLES - d) % ANGLES]])));
 
-        for (let pass = 0; pass < 3; pass++) {
+        for (let pass = 0; pass < 6; pass++) {
             radius = radius.map((r, a) => (r > 0 ? (r * 2 + (radius[(a + 1) % ANGLES] || r) + (radius[(a + ANGLES - 1) % ANGLES] || r)) / 4 : (radius[(a + 1) % ANGLES] + radius[(a + ANGLES - 1) % ANGLES]) / 2));
         }
 
-        rings.push({ z, centre, radius });
+        rings.push({ z, nose, centre, radius });
     }
 
     // Rings smoothed along the foot, so it tapers evenly
@@ -604,6 +664,7 @@ function addToeCap(cap, side) {
 
         return {
             z: ring.z,
+            nose: ring.nose,
             centre: [0, 1].map((k) => around.reduce((sum, r) => sum + r.centre[k], 0) / around.length),
             radius: ring.radius.map((_, a) => around.reduce((sum, r) => sum + r.radius[a], 0) / around.length),
         };
@@ -621,7 +682,7 @@ function addToeCap(cap, side) {
     };
     const addVertex = (position, uvFrom, towardToes) => {
         out.positions.push(...position);
-        out.uvs.push(...uvNear(position));
+        out.uvs.push(...uvNear(position, islands[list[uvFrom].a]));
 
         // From the foot's weights at the cut to the toe bone at the front
         const weights = new Map();
@@ -659,7 +720,7 @@ function addToeCap(cap, side) {
             const angle = Math.atan2(p[1] - loopCentre[1], p[0] - loopCentre[0]);
             const fromLoop = Math.hypot(p[0] - loopCentre[0], p[1] - loopCentre[1]);
             const centre = [loopCentre[0] + (ring.centre[0] - loopCentre[0]) * blend, loopCentre[1] + (ring.centre[1] - loopCentre[1]) * blend];
-            const r = fromLoop + (radiusAt(ring, angle) - fromLoop) * blend;
+            const r = (fromLoop + (radiusAt(ring, angle) - fromLoop) * blend) * ring.nose;
 
             addVertex([centre[0] + Math.cos(angle) * r, centre[1] + Math.sin(angle) * r, ring.z], loopIndex[i], smoothstep(0.1, 0.6, t));
         });
@@ -706,9 +767,12 @@ function addToeCap(cap, side) {
         sources.push(-1);
     }
 
-    // The cut loop's vertices are shared with the boot; their normals are joined up later
+    // The cut loop's vertices are shared with the boot; their normals are joined up later, and so
+    // are the ones where the nose closes to a point
     out.capJoins ??= [];
     out.capJoins.push(...loopIndex);
+    out.capPoles ??= [];
+    out.capPoles.push([...Array.from({ length: n }, (_, i) => vertex(RINGS - 1, i)), tipIndex]);
 }
 
 /** Recompute the normals where toe caps join their boots, from both sides. */
