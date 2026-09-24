@@ -106,8 +106,11 @@ screen from small phones to large monitors.
 - **Layout.** The book scaled a fixed 640x480 screen to fit the window. The menus still do, since
   they are the book's artwork, but the game screen now fills the whole screen: the map takes
   all the space the sidebar doesn't, and the sidebar artwork is scaled to the height of the
-  screen. The 80 pixel message strip across the top is gone; messages appear over the map and
-  fade after a few seconds. Everything keeps clear of notches, the Dynamic Island, rounded
+  screen. The 80 pixel message strip across the top is gone. In the campaign, messages from the
+  mission's characters open in a dialog with the caller's portrait, and the game pauses until the
+  player presses Continue (long messages scroll; several at once are shown one by one). Status
+  messages and multiplayer chat appear over the map and fade after a few seconds; older ones
+  that no longer fit are removed whole rather than cut off. Everything keeps clear of notches, the Dynamic Island, rounded
   corners and the home indicator (`env(safe-area-inset-*)` with `viewport-fit=cover`).
 - **Zoom.** A camera (`js/app/camera.js`) lets the map be zoomed. Computers start at the book's
   proportions; touch screens start zoomed in so that units are big enough to tap. Pinch, the
@@ -225,6 +228,8 @@ These bugs are in the book's Chapter 13 code.
 - Losing a transport in "Under Siege" now fails the mission, as the level was written to (bug 2).
 - Path finding is proper A*, so units sometimes take slightly different (shorter) routes.
 - The game and its mission timers pause when the tab is hidden or the player presses P.
+- In the campaign, the game pauses while a message from the operator, driver or pilot is on
+  screen. The book kept playing while messages scrolled past in the strip at the top.
 - The game screen fills the screen instead of being a fixed 640x480 box, with messages over
   the map, a minimap and zoom. On touch screens a single tap gives orders (the book used a
   double tap) and dragging scrolls the map.

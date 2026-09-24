@@ -74,8 +74,9 @@ into `client/js/app/hosting.js`.
 
 **The campaign.** In *Rescue*, find a lost convoy and escort it back to base. In *Assault*, build
 up your defences and destroy the rebel base. In *Under Siege*, hold out until the evacuation
-fleet arrives and don't lose a single transport. Messages from your operator appear at the top of
-the map and tell you what to do next.
+fleet arrives and don't lose a single transport. Your operator and the other characters call in
+to tell you what to do next: the game waits while you read each message, then carries on when you
+press **Continue**.
 
 **Multiplayer.** Both players start with a base, a harvester and a few tanks. Deploy the harvester
 on an oil field to earn money, build up an army and destroy everything the other player has.
@@ -123,6 +124,7 @@ units, deselect, and in multiplayer open the chat.
 | M | Sound on or off |
 | Escape | Cancel placing a building, deselect, or open the menu |
 | Enter | Chat with the other player (multiplayer) |
+| Enter, Space or Escape | Continue after a message from a mission character |
 
 ## What's new compared to the book
 
@@ -189,7 +191,7 @@ client/                 The game (static files served to the browser)
     hosting.js          Where the multiplayer server is (changed for GitHub Pages)
     loop.js             The game loop
     sidebar.js          Cash display and construction buttons
-    ui.js               Screens, message box and in-game messages
+    ui.js               Screens, message box, character messages and status messages
     sounds.js           Sound effects (Web Audio)
     assets.js           Image loading with a progress display
     singleplayer.js     The campaign

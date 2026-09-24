@@ -36,6 +36,15 @@ async function clickTile(page, x, y, options) {
 
 const game = (page, fn, arg) => page.evaluate(fn, arg);
 
+// Keep the mission's story messages (which pause the game until read) from interrupting a test
+function silenceMission(page) {
+    return game(page, () => {
+        window.lastColony.game.triggers.pending = [];
+    });
+}
+
+const tick = (page) => game(page, () => window.lastColony.game.tick);
+
 test.describe("desktop", () => {
     test("the campaign starts with a briefing and the first mission", async ({ page }) => {
         await openGame(page);
@@ -46,9 +55,20 @@ test.describe("desktop", () => {
         await page.getByRole("button", { name: "Enter mission" }).click();
         await expect(page.locator("#gameinterfacescreen")).toBeVisible();
 
-        // The operator calls in after three seconds of game time
-        await expect(page.locator("#gamemessages")).toContainText("We haven't heard from the last convoy", { timeout: 10000 });
-        await expect(page.locator("#callerpicture img")).toHaveAttribute("alt", "Operator");
+        // The operator calls in after three seconds of game time, and the game waits until the
+        // message has been read
+        const operator = page.getByRole("dialog", { name: "Operator" });
+
+        await expect(operator).toContainText("We haven't heard from the last convoy", { timeout: 10000 });
+
+        const pausedAt = await tick(page);
+
+        await page.waitForTimeout(400);
+        expect(await tick(page)).toBe(pausedAt);
+
+        await operator.getByRole("button", { name: "Continue" }).click();
+        await expect(operator).toBeHidden();
+        await expect.poll(() => tick(page)).toBeGreaterThan(pausedAt);
 
         // The view starts over the player's base (at tile 55, 6)
         const view = await game(page, () => {
@@ -66,6 +86,7 @@ test.describe("desktop", () => {
         await openGame(page);
         await page.getByRole("button", { name: "Campaign" }).click();
         await page.getByRole("button", { name: "Enter mission" }).click();
+        await silenceMission(page);
 
         // Click the hero tank to select it, then right click the ground to move it
         await clickTile(page, 57, 12.2);
@@ -104,6 +125,7 @@ test.describe("desktop", () => {
             app.singleplayer.initLevel();
         });
         await page.getByRole("button", { name: "Enter mission" }).click();
+        await silenceMission(page);
         await game(page, () => {
             window.lastColony.game.cash.blue = 5000;
         });
@@ -131,10 +153,64 @@ test.describe("desktop", () => {
         expect(await game(page, () => window.lastColony.sidebar.deployBuilding)).toBeUndefined();
     });
 
+    test("messages from the mission's characters wait for the player, one at a time", async ({ page }) => {
+        await openGame(page);
+        await page.getByRole("button", { name: "Campaign" }).click();
+        await page.getByRole("button", { name: "Enter mission" }).click();
+        await silenceMission(page);
+
+        // Two messages at once are shown one after the other
+        await game(page, () => {
+            window.lastColony.game.showMessage("driver", "Can anyone hear us?");
+            window.lastColony.game.showMessage("pilot", "Hang tight. I'm on my way.");
+        });
+        await expect(page.getByRole("dialog", { name: "Driver" })).toContainText("Can anyone hear us?");
+
+        const pausedAt = await tick(page);
+
+        // The pause menu opens on top; resuming returns to the message, and the game still waits
+        await page.keyboard.press("p");
+        await expect(page.locator("#pausescreen")).toBeVisible();
+        await page.getByRole("button", { name: "Resume" }).click();
+        await expect(page.getByRole("dialog", { name: "Driver" })).toBeVisible();
+        await page.waitForTimeout(400);
+        expect(await tick(page)).toBe(pausedAt);
+
+        // Enter continues to the next message, and the last one resumes the game
+        await page.keyboard.press("Enter");
+        await expect(page.getByRole("dialog", { name: "Pilot" })).toContainText("Hang tight. I'm on my way.");
+        await page.getByRole("button", { name: "Continue" }).click();
+        await expect(page.locator("#transmissionscreen")).toBeHidden();
+        await expect.poll(() => tick(page)).toBeGreaterThan(pausedAt);
+
+        // Status messages appear over the map without pausing. Older ones that no longer fit are
+        // removed whole instead of being cut off.
+        await game(page, () => {
+            for (const message of ["Sound off.", "Sound on.", "Warning! Cannot deploy building here. ".repeat(3)]) {
+                window.lastColony.game.showMessage("system", message);
+            }
+        });
+        await expect(page.locator("#gamemessages")).toContainText("Warning! Cannot deploy building here.");
+        await expect(page.locator("#transmissionscreen")).toBeHidden();
+
+        const cutOff = await game(page, () => {
+            const panel = document.getElementById("gamemessages").getBoundingClientRect();
+
+            return [...document.getElementById("gamemessages").children].some((line) => {
+                const { top, bottom } = line.getBoundingClientRect();
+
+                return top < panel.top || bottom > panel.bottom;
+            });
+        });
+
+        expect(cutOff).toBe(false);
+    });
+
     test("the minimap moves the view", async ({ page }) => {
         await openGame(page);
         await page.getByRole("button", { name: "Campaign" }).click();
         await page.getByRole("button", { name: "Enter mission" }).click();
+        await silenceMission(page);
 
         const minimap = await page.locator("#minimap").boundingBox();
 
@@ -318,6 +394,7 @@ test.describe("phone (iPhone 16 Pro, landscape)", () => {
 
         await page.locator("#entermission").tap();
         await expect(page.locator("#gameinterfacescreen")).toBeVisible();
+        await silenceMission(page);
     }
 
     test("the game fills the screen with touch-sized controls", async ({ page }) => {
@@ -418,6 +495,51 @@ test.describe("phone (iPhone 16 Pro, landscape)", () => {
 
         await expect.poll(() => game(page, () => window.lastColony.game.cash.blue)).toBe(3500);
         await expect(page.locator("#placebutton")).toBeHidden();
+    });
+
+    test("messages from the mission's characters fit the screen and wait for a tap", async ({ page }) => {
+        await startMission(page);
+
+        // The campaign's longest message fits without scrolling
+        await game(page, () => window.lastColony.game.showMessage("driver", "Commander!! The colony has sent some extra supplies. We are coming in from the North East sector through rebel territory. We could use a little protection."));
+
+        const dialog = page.getByRole("dialog", { name: "Driver" });
+        const measure = () => game(page, () => {
+            const text = document.getElementById("transmissiontext");
+            const box = document.getElementById("transmission").getBoundingClientRect();
+            const button = document.getElementById("transmissioncontinue").getBoundingClientRect();
+
+            return {
+                scrolls: text.scrollHeight > text.clientHeight,
+                moreToRead: text.classList.contains("more"),
+                onScreen: box.top >= 0 && box.bottom <= innerHeight && button.bottom <= innerHeight,
+            };
+        });
+
+        await expect(dialog).toContainText("We could use a little protection.");
+        expect(await measure()).toEqual({ scrolls: false, moreToRead: false, onScreen: true });
+
+        const pausedAt = await tick(page);
+
+        await page.waitForTimeout(400);
+        expect(await tick(page)).toBe(pausedAt);
+        await dialog.getByRole("button", { name: "Continue" }).tap();
+        await expect(dialog).toBeHidden();
+        await expect.poll(() => tick(page)).toBeGreaterThan(pausedAt);
+
+        // A message too long for the screen scrolls, with Continue still in view
+        await game(page, () => window.lastColony.game.showMessage("op", "A very long report from the operator. ".repeat(40)));
+        await expect(page.getByRole("dialog", { name: "Operator" })).toBeVisible();
+        expect(await measure()).toEqual({ scrolls: true, moreToRead: true, onScreen: true });
+
+        await game(page, () => {
+            const text = document.getElementById("transmissiontext");
+
+            text.scrollTop = text.scrollHeight;
+        });
+        await expect.poll(async () => (await measure()).moreToRead).toBe(false);
+        await page.getByRole("button", { name: "Continue" }).tap();
+        await expect(page.locator("#transmissionscreen")).toBeHidden();
     });
 
     test("the game asks to be turned sideways and pauses in portrait", async ({ page }) => {

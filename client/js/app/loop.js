@@ -66,7 +66,8 @@ export class GameLoop {
         if (this.mode === "fixed" && !this.paused) {
             this.#accumulator += elapsed;
 
-            while (this.#accumulator >= TICK_MS && this.running) {
+            // A tick can pause the game (a message from a mission character) or end it
+            while (this.#accumulator >= TICK_MS && this.running && !this.paused) {
                 this.#accumulator -= TICK_MS;
                 this.tick();
             }

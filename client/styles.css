@@ -273,11 +273,20 @@ canvas:focus-visible {
 
     font-size: 16px;
     font-family: var(--font-game);
+
+    /* Long briefings scroll */
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
 }
 
 /* Leave one blank line between paragraphs */
 #missionbriefing p {
     margin: 0 0 1lh;
+}
+
+#missionbriefing p:last-child {
+    margin-bottom: 0;
 }
 
 /* Multiplayer Lobby Screen */
@@ -604,14 +613,10 @@ canvas:focus-visible {
     left: 8px;
     right: 112px;
     max-width: 640px;
+    /* Room for about three lines: older messages that don't fit are removed (ui.js) */
     max-height: calc(3 * 1.35em + 14px);
     padding: 6px 10px;
     overflow: hidden;
-
-    /* Newest messages at the bottom; older ones scroll off the top */
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
 
     background: rgba(5, 8, 14, 0.62);
     border: 1px solid rgba(130, 170, 210, 0.35);
@@ -751,6 +756,78 @@ canvas:focus-visible {
     font: 12px Arial, sans-serif;
 }
 
+/* Messages from the mission's characters (the campaign pauses while one is open) */
+
+#transmissionscreen {
+    z-index: 33;
+    display: grid;
+    place-items: center;
+    padding: calc(var(--safe-top) + 8px) calc(var(--safe-right) + 8px) calc(var(--safe-bottom) + 8px) calc(var(--safe-left) + 8px);
+    background: rgba(0, 0, 0, 0.45);
+}
+
+/* The whole message fits when it can; otherwise only the text scrolls, so the caller and the
+   Continue button stay in view */
+#transmission {
+    width: min(560px, 100%);
+    overflow: hidden;
+}
+
+.transmission-caller {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 14px;
+}
+
+#transmissionpicture {
+    flex: none;
+    width: auto;
+    height: min(72px, 17vh);
+    aspect-ratio: 120 / 72;
+    border: 1px solid var(--hud-border);
+    border-radius: 6px;
+}
+
+#transmissionfrom {
+    margin: 0;
+    text-align: left;
+    font-size: 20px;
+}
+
+#transmissiontext {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+
+    color: var(--hud-text);
+    font-size: 16px;
+    line-height: 1.4;
+}
+
+/* There is more to read below */
+#transmissiontext.more {
+    mask-image: linear-gradient(to bottom, black calc(100% - 2.5em), transparent);
+}
+
+#transmissiontext p {
+    margin: 0 0 0.6em;
+    text-align: left;
+    font-size: inherit;
+}
+
+#transmissiontext p:last-child {
+    margin-bottom: 0;
+}
+
+#transmissioncontinue {
+    flex: none;
+    align-self: flex-end;
+    min-width: 150px;
+}
+
 /* Pause menu */
 
 #pausescreen {
@@ -846,10 +923,19 @@ canvas:focus-visible {
     left: 50px;
     width: 200px;
     height: 100px;
+
+    /* Long messages scroll */
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
 }
 
 #messageboxtext p {
     margin: 0 0 1lh;
+}
+
+#messageboxtext p:last-child {
+    margin-bottom: 0;
 }
 
 #messageboxok {
