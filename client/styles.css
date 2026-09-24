@@ -280,6 +280,75 @@ canvas:focus-visible {
     touch-action: pan-y;
 }
 
+/* The mission's name and the choice of map, in the panel along the top */
+#missionheader {
+    position: absolute;
+    top: 14px;
+    left: 24px;
+    right: 322px;
+
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+    color: var(--text-color);
+    text-shadow: -1px 1px black;
+    font-family: var(--font-game);
+    font-size: 15px;
+}
+
+#missiontitle {
+    margin: 0;
+    font-size: 20px;
+    font-weight: normal;
+}
+
+#mapchoice {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+}
+
+#mapchoice label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+#mapchoice input {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: #5b8fd6;
+}
+
+#newmap {
+    padding: 3px 12px;
+    border: 1px solid var(--hud-border);
+    border-radius: 6px;
+    background: var(--hud-background);
+    color: var(--hud-text);
+    font: inherit;
+    cursor: pointer;
+}
+
+#newmap:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+/* A picture of the mission's map, where the minimap goes during the game */
+#mappreview {
+    position: absolute;
+    top: 17px;
+    right: 17px;
+    width: 122px;
+    height: 120px;
+    image-rendering: auto;
+}
+
 /* Leave one blank line between paragraphs */
 #missionbriefing p {
     margin: 0 0 1lh;

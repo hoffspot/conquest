@@ -74,8 +74,8 @@ describe("Lobby", () => {
         assert.deepEqual(bob.last("joined-room"), { type: "joined-room", roomId: 3, color: "green" });
         assert.equal(alice.last("room-list").roomList[2], "starting");
 
-        // With random() = 0 the players get spawn locations 0 and 1
-        assert.deepEqual(alice.last("initialize-level"), { type: "initialize-level", spawnLocations: { blue: 0, green: 1 }, currentLevel: 0 });
+        // With random() = 0 the players get spawn locations 0 and 1, and map 0
+        assert.deepEqual(alice.last("initialize-level"), { type: "initialize-level", spawnLocations: { blue: 0, green: 1 }, currentLevel: 0, seed: 0 });
         assert.deepEqual(bob.last("initialize-level"), alice.last("initialize-level"));
 
         alice.send({ type: "initialized-level" });

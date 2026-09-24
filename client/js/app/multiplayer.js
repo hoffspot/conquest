@@ -1,5 +1,6 @@
 import { TICK_MS } from "../core/config.js";
 import { levels } from "../core/data/levels.js";
+import { createMission } from "../core/missions.js";
 import { MULTIPLAYER_SERVER } from "./hosting.js";
 import { showMessageBox, switchToScreen } from "./ui.js";
 
@@ -131,7 +132,7 @@ export class Multiplayer {
             case "initialize-level":
                 // Ignore games in a room the player has just left
                 if (this.roomId !== undefined) {
-                    this.initLevel(message.spawnLocations, message.currentLevel);
+                    this.initLevel(message.spawnLocations, message.currentLevel, message.seed);
                 }
 
                 break;
@@ -269,12 +270,25 @@ export class Multiplayer {
 
     /* Playing */
 
-    async initLevel(spawnLocations, levelIndex) {
+    // Set up the level the server chose, on the map generated from its seed (or on the book's map,
+    // for a server that sends no seed)
+    async initLevel(spawnLocations, levelIndex, seed) {
         const { app } = this;
-        const level = levels.multiplayer[levelIndex];
+        const definition = levels.multiplayer[levelIndex];
 
-        if (!level) {
+        if (!definition) {
             this.endGame("The server asked for a level that this game does not have.");
+
+            return;
+        }
+
+        let level;
+
+        try {
+            level = createMission(definition, { seed, classic: !Number.isInteger(seed) });
+        } catch (error) {
+            console.error(error);
+            this.endGame(`Could not make the map.\n${error.message}`);
 
             return;
         }

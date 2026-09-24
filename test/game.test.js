@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { levels } from "../client/js/core/data/levels.js";
 import { Game } from "../client/js/core/game.js";
+import { createMission } from "../client/js/core/missions.js";
 import { makeGame, runTicks } from "./helpers.js";
 
 describe("Game items", () => {
@@ -71,7 +72,7 @@ describe("Game items", () => {
 
 describe("Game levels", () => {
     it("loading a level does not change the level definition", () => {
-        const level = levels.singleplayer[0];
+        const level = createMission(levels.singleplayer[0], { classic: true });
         const before = JSON.stringify(level.items);
         const game = new Game();
 
@@ -85,11 +86,13 @@ describe("Game levels", () => {
         const game = new Game();
         const uidsOf = () => game.items.map((item) => item.uid);
 
-        game.loadLevel(levels.singleplayer[1], { team: "blue" });
+        const level = createMission(levels.singleplayer[1], { seed: 5 });
+
+        game.loadLevel(level, { team: "blue" });
         const first = uidsOf();
 
         runTicks(game, 50);
-        game.loadLevel(levels.singleplayer[1], { team: "blue" });
+        game.loadLevel(level, { team: "blue" });
 
         assert.deepEqual(uidsOf(), first);
         assert.equal(new Set(first).size, first.length);

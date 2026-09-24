@@ -262,7 +262,10 @@ export class Lobby {
             spawnLocations[player.color] = spawns.splice(Math.floor(this.random() * spawns.length), 1)[0];
         }
 
-        this.#sendToRoom(room, { type: "initialize-level", spawnLocations, currentLevel });
+        // Both players generate the same map from the same seed
+        const seed = Math.floor(this.random() * 1e9);
+
+        this.#sendToRoom(room, { type: "initialize-level", spawnLocations, currentLevel, seed });
     }
 
     #startGame(room) {

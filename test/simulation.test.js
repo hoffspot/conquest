@@ -4,11 +4,13 @@ import { describe, it } from "node:test";
 import { TICK_MS } from "../client/js/core/config.js";
 import { levels } from "../client/js/core/data/levels.js";
 import { Game } from "../client/js/core/game.js";
+import { createMission } from "../client/js/core/missions.js";
 import { runTicks, snapshot } from "./helpers.js";
 
 const MINUTE = 60000 / TICK_MS;
 
-function startCampaignLevel(index) {
+// Start a campaign mission on the book's map, or on a generated map ({ seed })
+function startCampaignLevel(index, map = { classic: true }) {
     const game = new Game();
     const events = { messages: [], result: undefined };
 
@@ -18,7 +20,7 @@ function startCampaignLevel(index) {
         game.end();
     });
 
-    game.loadLevel(levels.singleplayer[index], { team: "blue" });
+    game.loadLevel(createMission(levels.singleplayer[index], map), { team: "blue" });
 
     return { game, events };
 }
@@ -58,6 +60,43 @@ describe("campaign", () => {
         assert.deepEqual(events.messages.map(({ from }) => from), ["op", "op", "op", "driver", "driver"]);
     });
 
+    for (const seed of [1, 2, 3]) {
+        it(`mission 1 can be won on generated map ${seed}, wherever the convoy is`, () => {
+            const { game, events } = startCampaignLevel(0, { seed });
+            const { convoy, base } = game.currentLevel.sites;
+            let phase = "hunt";
+
+            // As above, but driving to wherever this map put the convoy and the base
+            game.sendCommand([-1], { type: "hunt" });
+
+            runTicks(game, 12 * MINUTE, () => {
+                if (phase === "hunt" && game.isItemDead(-2) && game.isItemDead(-5)) {
+                    game.sendCommand([-1], { type: "move", to: { x: convoy.cx, y: convoy.cy } });
+                    phase = "rescue";
+                } else if (phase === "rescue" && game.getItemByUid(-3)?.orders.type === "guard") {
+                    game.sendCommand([-1], { type: "move", to: { x: base.cx, y: base.cy } });
+                    phase = "escort";
+                }
+
+                return events.result !== undefined;
+            });
+
+            assert.equal(events.result, true, `ended in phase ${phase}`);
+            assert.deepEqual(events.messages.map(({ from }) => from), ["op", "op", "op", "driver", "driver"]);
+        });
+    }
+
+    for (const [index, level] of levels.singleplayer.entries()) {
+        it(`mission ${index + 1} "${level.name}" runs on generated maps without errors`, () => {
+            for (const seed of [11, 12]) {
+                const { game, events } = startCampaignLevel(index, { seed });
+
+                runTicks(game, 6 * MINUTE, () => events.result !== undefined);
+                assert.ok(events.messages.length > 0, "the mission's story messages are shown");
+            }
+        });
+    }
+
     it("mission 1 is lost if the hero tank is destroyed", () => {
         const { game, events } = startCampaignLevel(0);
 
@@ -79,9 +118,9 @@ describe("campaign", () => {
 
 describe("multiplayer lockstep", () => {
     // Set up a multiplayer game the same way the client does when the server says "initialize-level"
-    function startMultiplayerGame(team, spawnLocations = { blue: 0, green: 3 }) {
+    function startMultiplayerGame(team, spawnLocations = { blue: 0, green: 3 }, map = { classic: true }) {
         const game = new Game();
-        const level = levels.multiplayer[0];
+        const level = createMission(levels.multiplayer[0], map);
 
         game.loadLevel(level, { team });
 
@@ -130,6 +169,29 @@ describe("multiplayer lockstep", () => {
         // Make sure the game actually did something interesting
         assert.ok(blueClient.buildings.some((item) => item.name === "harvester"), "a harvester was deployed");
         assert.ok(shotsFired > 0, "the hunting units found a fight");
+    });
+
+    it("two clients generate the same map from the server's seed, and stay identical on it", () => {
+        const map = { seed: 99 };
+        const blueClient = startMultiplayerGame("blue", { blue: 1, green: 2 }, map);
+        const greenClient = startMultiplayerGame("green", { blue: 1, green: 2 }, map);
+
+        assert.deepEqual(greenClient.currentMap, blueClient.currentMap);
+
+        const unitsOf = (game, team) => game.items.filter((item) => item.team === team && item.canAttack).map((item) => item.uid);
+
+        for (let tick = 0; tick < 2 * MINUTE; tick++) {
+            for (const game of [blueClient, greenClient]) {
+                if (tick === 5) {
+                    game.processCommand(unitsOf(blueClient, "blue"), { type: "hunt" }, "blue");
+                    game.processCommand(unitsOf(blueClient, "green"), { type: "hunt" }, "green");
+                }
+
+                game.update();
+            }
+
+            assert.equal(snapshot(blueClient), snapshot(greenClient), `clients diverged at tick ${tick}`);
+        }
     });
 
     it("the defeat trigger fires when a player has nothing left", () => {

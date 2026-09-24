@@ -78,8 +78,15 @@ fleet arrives and don't lose a single transport. Your operator and the other cha
 to tell you what to do next: the game waits while you read each message, then carries on when you
 press **Continue**.
 
-**Multiplayer.** Both players start with a base, a harvester and a few tanks. Deploy the harvester
-on an oil field to earn money, build up an army and destroy everything the other player has.
+**A new map every time.** Each mission is played on a newly generated map, so the lakes, rivers,
+lava and trees, and where the bases, convoys and patrols are, change every time, as in Diablo.
+The mission briefing shows the map, its number, and buttons to try a **New map** or play on
+**The book's map** instead. If you fail a mission, trying again keeps the same map. To play a map
+again later, add its number to the address: `?seed=123456`.
+
+**Multiplayer.** Both players start with a base, a harvester and a few tanks, on a map generated
+for the game. Deploy the harvester on an oil field to earn money, build up an army and destroy
+everything the other player has.
 
 To build, select your base (for buildings) or a starport (for vehicles and aircraft) and use the
 buttons in the sidebar, which show each item's price. A button is only enabled when you have the
@@ -151,6 +158,10 @@ units, deselect, and in multiplayer open the chat.
   explosions with a fireball, sparks, debris, a shock wave, smoke and scorch marks; burning wrecks
   and smoking damaged units; tanks rock back when they fire. See
   [Effects](docs/MODERNIZATION.md#effects).
+- **Generated maps:** every mission and multiplayer game gets a new map, built from the book's
+  own tiles, with the mission's bases, convoys and patrols placed to suit it and every route they
+  need checked to be passable. The book's map is still available. See
+  [Generated maps](docs/MODERNIZATION.md#generated-maps).
 - **Small additions:** a pause menu, mute, keyboard scrolling and zoom, keyboard support for menus
   and the multiplayer lobby, prices on the build buttons, markers that confirm each order, clearer
   error messages when something fails to load or connect.
@@ -165,6 +176,7 @@ npm test            # unit, simulation and server tests (Node's built-in test ru
 npm run test:e2e    # plays the game in Chromium using Playwright
 npm run check       # lint + unit tests
 npm run vendor:three  # after changing the three version in package.json: copies it to client/vendor
+npm run extract:tileset  # after changing the book's map image: rebuilds the tiles generated maps use
 ```
 
 The browser tests need Chromium: run `npx playwright install chromium` once, or set
@@ -189,10 +201,15 @@ client/                 The game (static files served to the browser)
     commands.js         Validation of player commands (shared with the server)
     entities/           Buildings, vehicles, aircraft, bullets and terrain
     pathfinding.js      A* path finding
+    mapgen.js           Generating maps: terrain, obstacles and mission sites, with checked routes
+    missions.js         Getting a level ready to play on the book's map or a generated one
+    sites.js            Helpers for placing a level's units at its sites
+    random.js           Seeded random numbers and noise (the same in every browser)
     fog.js              Fog of war
     triggers.js         Timed and conditional mission events
-    data/levels.js      The campaign missions and the multiplayer map
+    data/levels.js      The campaign missions and the multiplayer map, with the sites they use
     data/maps.js        Map terrain data
+    data/tileset.js     The book's map cut into tiles (made by scripts/extract-tileset.js)
   js/app/               The browser side
     camera.js           Scrolling and zooming the view
     renderer.js         Drawing the map, units and fog on the canvases
@@ -211,6 +228,7 @@ client/                 The game (static files served to the browser)
     sounds.js           Sound effects (Web Audio)
     assets.js           Image loading with a progress display
     singleplayer.js     The campaign
+    mapchoice.js        Whether to play on generated maps or the book's map
     multiplayer.js      The multiplayer lobby and lockstep game
 server/
   index.js              HTTP + WebSocket server (npm start)
@@ -219,6 +237,7 @@ server/
 test/                   Unit, simulation and server tests
 e2e/                    Playwright browser tests
 scripts/vendor-three.js Copies Three.js from node_modules into client/vendor
+scripts/extract-tileset.js  Cuts the book's map into the tiles generated maps are built from
 .github/workflows/      CI (ci.yml) and publishing to GitHub Pages (pages.yml)
 docs/MODERNIZATION.md   What changed compared to the book, and why
 ```
