@@ -19,6 +19,12 @@ to the new ones, so the book is still a good guide to the code.
 **Play it now at <https://hoffspot.github.io/conquest/>** (the campaign; multiplayer needs the
 game's server, see below).
 
+The game is starting to move from commanding many units to playing one character against
+enemies. The first piece is the **character lab** at
+<https://hoffspot.github.io/conquest/character-lab.html>: build a human or an orc, change their
+body, face, skin and hair, dress and arm them, and watch them walk. See
+[docs/CHARACTERS.md](docs/CHARACTERS.md).
+
 ## Quick start
 
 You need [Node.js](https://nodejs.org/) 22 or newer.
@@ -166,6 +172,14 @@ units, deselect, and in multiplayer open the chat.
 - **Castle and town art:** a generator that builds castles and towns as 3D models and renders
   them from the game's own camera, with layouts that tanks can drive through. It isn't on the maps yet. See
   [Castle and town art](docs/MODERNIZATION.md#castle-and-town-art).
+- **Characters:** a character engine for a single hero and their enemies, tried out in the
+  character lab (`character-lab.html`). It uses MakeHuman's body (CC0), with body, heritage, face
+  and physique sliders, and a 52-bone Mixamo-named skeleton whose joints are limited to real
+  ranges of motion. Skin, eyes,
+  hair and beards are painted and grown procedurally, and whole skin textures can be loaded.
+  Clothing and armour are fitted to the body; weapons, shields, helmets and packs sit on sockets.
+  Walking is made from gait-lab data, with planted feet, and motion capture clips are retargeted
+  to any body. See [docs/CHARACTERS.md](docs/CHARACTERS.md).
 - **Small additions:** a pause menu, mute, keyboard scrolling and zoom, keyboard support for menus
   and the multiplayer lobby, prices on the build buttons, markers that confirm each order, clearer
   error messages when something fails to load or connect.
@@ -182,6 +196,7 @@ npm run check       # lint + unit tests
 npm run vendor:three  # after changing the three version in package.json: copies it to client/vendor
 npm run extract:tileset  # after changing the book's map image: rebuilds the tiles generated maps use
 npm run build:art   # after changing tools/artgen: redraws the castle and town sprite sheets
+npm run build:characters -- --mpfb2=../mpfb2  # rebuilds client/characters from MakeHuman's MPFB2
 ```
 
 The browser tests need Chromium: run `npx playwright install chromium` once, or set
@@ -200,6 +215,9 @@ client/                 The game (static files served to the browser)
   images/, audio/       Artwork and sounds from the book
   images/art/           Castle and town sprite sheets (made by npm run build:art)
   models/               3D models of the units and buildings (credits in models/CREDITS.md)
+  characters/           The body characters are made from (made by npm run build:characters),
+                        MakeHuman's texture masks, and motion capture clips
+  character-lab.html    The character lab (with character-lab.css)
   vendor/three-r186/    Three.js (minified by scripts/vendor-three.js; loaded through an import map)
   js/main.js            Entry point: creates the game and wires up the browser UI
   js/core/              The game simulation. No DOM code, so it also runs in Node
@@ -217,6 +235,17 @@ client/                 The game (static files served to the browser)
     data/maps.js        Map terrain data
     data/tileset.js     The book's map cut into tiles (made by scripts/extract-tileset.js)
     setpieces/          Castle and town layouts, and the pieces they are built from
+  js/characters/        The character engine (see docs/CHARACTERS.md)
+    body.js             Loading and shaping the body; macro.js and details.js are the sliders
+    rig.js              The skeleton, anatomical joint angles and their limits, two-bone IK
+    character.js        A character: its meshes, look and equipment
+    skin.js, hair.js    Painting skin and eyes; growing hair and beards
+    garments.js         Clothing and armour fitted to the body
+    items.js            Weapons, shields, helmets and packs; equipment.js has slots and sockets
+    gait.js             Walking data; locomotion.js walks a character with it
+    bvh.js              Motion capture: reading BVH files and retargeting them
+    presets.js          The human, heroine and orc
+  js/lab/character-lab.js  The character lab
   js/app/               The browser side
     camera.js           Scrolling and zooming the view
     renderer.js         Drawing the map, units and fog on the canvases
@@ -246,9 +275,11 @@ e2e/                    Playwright browser tests
 scripts/vendor-three.js Copies Three.js from node_modules into client/vendor
 scripts/extract-tileset.js  Cuts the book's map into the tiles generated maps are built from
 scripts/build-art.js    Runs the art generator in headless Chromium and saves its sprite sheets
+scripts/build-characters.js  Prepares MakeHuman's body, shapes and skeleton for the character engine
 tools/artgen/           The art generator: builds castle and town pieces in 3D and renders them
 .github/workflows/      CI (ci.yml) and publishing to GitHub Pages (pages.yml)
 docs/MODERNIZATION.md   What changed compared to the book, and why
+docs/CHARACTERS.md      The character engine, and the research behind it
 ```
 
 ### How multiplayer works
@@ -293,6 +324,10 @@ Castle and town art (made by `tools/artgen`):
 - Castle pieces designed after Castle Builder by Jon Rubashkin
   (<https://github.com/JonRubashkin/Castle-Builder>); town layouts after Watabou's Medieval
   Fantasy City Generator (<https://github.com/watabou/TownGeneratorOS>)
+
+Characters: the body, its shapes, skeleton and skin weights, the texture masks and the walk and
+zombie walk motion capture clips are from MakeHuman (<https://github.com/makehumancommunity>),
+CC0. Gait data from the normal datasets bundled with pyCGM2 (<https://github.com/pyCGM2/pyCGM2>).
 
 3D engine: [Three.js](https://threejs.org) (MIT license, in `client/vendor/three-r186/LICENSE`).
 

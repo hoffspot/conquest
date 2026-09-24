@@ -423,9 +423,22 @@ and the layouts to put them in. It isn't used on the maps yet.
   - the same seed gives the same layout;
   - the layout code only uses safe arithmetic.
 
+### Characters
+
+The first step towards a game about one character fighting enemies (with multiplayer, vehicles
+and loot to follow): a character engine, and a lab page to try it,
+[`character-lab.html`](https://hoffspot.github.io/conquest/character-lab.html). The RTS is
+unchanged. [CHARACTERS.md](CHARACTERS.md) covers the engine and the research behind it:
+- **The body.** MakeHuman's body and skeleton, reshaped by its own sliders.
+- **Joints.** Limited to real ranges of motion.
+- **Look.** Painted skin and grown hair.
+- **Equipment.** Clothing and armour fitted to the body; items on sockets.
+- **Walking.** Made from gait-lab data, with feet that stay planted.
+- **Motion capture.** Retargeted to any body.
+
 ### Tooling
 
-- `npm test`: 165 unit, simulation and server tests using Node's built-in test runner. They
+- `npm test`: 195 unit, simulation, server and character tests using Node's built-in test runner. They
   include a scripted playthrough of mission 1, every mission running for 12 minutes of game time,
   and two simulated multiplayer clients checked for identical state after every tick.
 - `npm run test:e2e`: Playwright tests that play the game in Chromium, covering the campaign,
@@ -434,9 +447,12 @@ and the layouts to put them in. It isn't used on the maps yet.
   the book's map, the same map again after failing, map numbers) and a two player game on a
   generated map with a mouse,
   and on an emulated iPhone 16 Pro in landscape: the layout, taps, dragging, pinching, touch and
-  hold selection, placing buildings and the portrait "turn your device" screen.
+  hold selection, placing buildings and the portrait "turn your device" screen. They also check
+  that the character lab builds, dresses, re-dresses and walks characters, plays motion capture,
+  and fits a phone.
 - `npm run lint`: ESLint.
 - `npm run build:art`: makes the castle and town sprite sheets (see [Castle and town art](#castle-and-town-art)).
+- `npm run build:characters`: prepares MakeHuman's body for the character engine (see [Characters](#characters)).
 - GitHub Actions runs all of the above on every push.
 - Every change to `main` is published to GitHub Pages (<https://hoffspot.github.io/conquest/>)
   after the lint and unit tests pass. That copy has no multiplayer server, so its menu only offers

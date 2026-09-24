@@ -12,11 +12,14 @@ const MIME_TYPES = {
     ".png": "image/png",
     ".gif": "image/gif",
     ".jpg": "image/jpeg",
+    ".webp": "image/webp",
     ".svg": "image/svg+xml",
     ".ico": "image/x-icon",
     ".mp3": "audio/mpeg",
     ".ogg": "audio/ogg",
     ".glb": "model/gltf-binary",
+    ".bin": "application/octet-stream",
+    ".bvh": "text/plain; charset=utf-8",
     ".txt": "text/plain; charset=utf-8",
 };
 
