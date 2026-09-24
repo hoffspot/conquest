@@ -247,6 +247,14 @@ test.describe("phone (iPhone 16 Pro, landscape)", () => {
 
     test.use(iPhone);
 
+    // Like Safari on iPhone, which only lets videos go full screen. (Newer headless Chromium really
+    // goes full screen when a mission starts, and a full screen window can't be resized.)
+    test.beforeEach(async ({ page }) => {
+        await page.addInitScript(() => {
+            Object.defineProperty(Document.prototype, "fullscreenEnabled", { get: () => false });
+        });
+    });
+
     // Multi-finger gestures are sent through the Chrome DevTools Protocol
     async function touchScreen(page) {
         const cdp = await page.context().newCDPSession(page);
