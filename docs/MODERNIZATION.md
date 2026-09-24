@@ -140,13 +140,64 @@ screen from small phones to large monitors.
 - The lobby's rows are taller on touch screens and scroll, and small buttons have larger touch
   areas.
 
+### 3D units
+
+Units are moving from sprites to 3D models, drawn with [Three.js](https://threejs.org). The first
+step is a test: the first unit of the first mission (the hero's heavy tank) is drawn as a cube.
+Everything else in the game stays 2D for now.
+
+- **Engine.** Three.js r186 with its WebGL 2 renderer. Before choosing it we compared Three.js,
+  Babylon.js, PlayCanvas, OGL, twgl.js, regl and plain WebGL 2:
+  - Three.js is the smallest full-featured option that runs as plain ES modules without a
+    bundler: 196 KB gzipped, minified. It is MIT licensed and widely used, and has a glTF loader
+    for real models later.
+  - Babylon.js is about 1.8 MB gzipped and needs a bundler for ES modules.
+  - PlayCanvas is about 630 KB gzipped and wants to run the whole game.
+  - OGL, twgl.js and regl are small, but have no glTF loading or animation, or aren't actively
+    maintained.
+  - WebGPU is left for later. Three.js still calls its WebGPU renderer experimental, and iPhones
+    before iOS 26 don't have WebGPU. WebGL 2 works everywhere the game runs.
+- **Loading.** Three.js is vendored into `client/vendor/three-r186/` so the game keeps working
+  offline and on GitHub Pages, and loaded through an import map in `index.html`.
+  - Three.js stopped publishing minified builds in r186, so `npm run vendor:three` minifies it with
+    esbuild. That is a one-off step when upgrading, not a build step for the game.
+  - The game loads `js/app/units3d.js` (and with it Three.js) while the loading screen shows, so
+    the main menu appears without waiting for it.
+  - If a browser can't run it (no WebGL, or the phone takes the GPU away while the game is in the
+    background), units are drawn as sprites.
+- **How the 3D units fit into the 2D game.** Every frame, the 3D units are rendered in one pass
+  into a hidden WebGL canvas, each in its own square cell. When the 2D renderer reaches a unit in
+  its usual back-to-front order, it copies that unit's cell onto the map instead of drawing the
+  sprite (`Entity.draw` asks `view.drawModel` first).
+  - Draw order stays correct: a unit in front of a building covers it, and a unit behind it is
+    covered. Selection rings stay under units, and life bars and fog of war stay over them.
+  - Tapping, selecting, fog of war and the minimap work as before.
+  - Copying from a WebGL canvas into a 2D canvas stays on the GPU in Safari and Chrome, and a
+    rendered frame is copied only once, however many units use it.
+  - We also considered two other approaches. A separate 3D canvas layered over or under the map
+    can't mix with the 2D draw order. Moving the whole game into a 3D scene is a much bigger
+    rewrite.
+- **Camera.** An orthographic camera looks down at the map from 60° above the horizon, which is
+  the book's viewing angle. Ground positions are stretched away from the camera
+  (`z = y / sin 60°`), so a point on the ground lands exactly where it is on the painted map, while
+  height moves things up the screen. Unit tests check both.
+- **The test cube.** A 20-pixel cube in the team's colour, lit by the sky and by sunlight from the
+  north-west, as in the book's art. Its front face is lighter and glows a little, so its facing
+  shows. It turns smoothly between game ticks, the short way round.
+- **Next steps.**
+  - Replace the cube with a real low-poly tank, then the other units. Candidates are free (CC0)
+    glTF models such as Kenney's Space Kit and Quaternius's packs, compressed with meshopt.
+  - Colour each team by recolouring one named material.
+  - Animate turrets, helicopter rotors and wheels.
+
 ### Tooling
 
-- `npm test`: 102 unit, simulation and server tests using Node's built-in test runner. They
+- `npm test`: 107 unit, simulation and server tests using Node's built-in test runner. They
   include a scripted playthrough of mission 1, every mission running for 12 minutes of game time,
   and two simulated multiplayer clients checked for identical state after every tick.
 - `npm run test:e2e`: Playwright tests that play the game in Chromium, covering the campaign,
-  selection and orders, zooming, the minimap, construction and a two player game with a mouse,
+  selection and orders, zooming, the minimap, construction, the 3D hero tank (and sprites when
+  WebGL is missing) and a two player game with a mouse,
   and on an emulated iPhone 16 Pro in landscape: the layout, taps, dragging, pinching, touch and
   hold selection, placing buildings and the portrait "turn your device" screen.
 - `npm run lint`: ESLint.

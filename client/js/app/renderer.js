@@ -15,6 +15,8 @@ const MARKER_DURATION_MS = 500;
 export class Renderer {
     #lastBackground = "";
     #markers = [];
+    // Lets items drawn in 3D replace their sprites (see Entity.draw)
+    #drawModel = (context, item) => this.units3d?.draw(context, item) ?? false;
 
     constructor({ game, camera, backgroundCanvas, foregroundCanvas }) {
         this.game = game;
@@ -28,6 +30,9 @@ export class Renderer {
 
         // Overlays (selection box, building placement grid) drawn on top of everything else
         this.overlays = [];
+
+        // Draws some units in 3D instead of sprites, once loaded (js/app/units3d.js)
+        this.units3d = undefined;
 
         // The fog is painted onto an offscreen canvas the size of the whole map
         this.fogCanvas = document.createElement("canvas");
@@ -92,9 +97,17 @@ export class Renderer {
      */
     render(interpolation) {
         const context = this.foregroundContext;
-        const view = { offsetX: this.offsetX, offsetY: this.offsetY, interpolation, zoom: this.camera.zoom };
+        const view = { offsetX: this.offsetX, offsetY: this.offsetY, interpolation, zoom: this.camera.zoom, drawModel: this.#drawModel };
 
         this.drawBackground();
+
+        // Render the 3D units first; each is copied onto the map when its turn to be drawn comes
+        this.units3d?.render(this.game.sortedItems, {
+            scale: this.camera.zoom * this.pixelRatio,
+            interpolation,
+            tick: this.game.tick,
+            view: { x: this.offsetX, y: this.offsetY, width: this.width, height: this.height },
+        });
 
         context.setTransform(1, 0, 0, 1, 0, 0);
         context.clearRect(0, 0, this.foregroundCanvas.width, this.foregroundCanvas.height);
