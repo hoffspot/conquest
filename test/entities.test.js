@@ -100,6 +100,44 @@ describe("vehicles", () => {
         assert.equal(game.getItemByUid(2), undefined);
     });
 
+    it("report shots, hits and destroyed units, for the visual effects", () => {
+        const game = makeGame({
+            items: [
+                { type: "vehicles", name: "heavy-tank", uid: 1, x: 21, y: 6, team: "blue" },
+                { type: "vehicles", name: "scout-tank", uid: 2, x: 24, y: 6, team: "green", life: 20, orders: { type: "sentry" } },
+            ],
+        });
+        const events = [];
+
+        game.on("fire", (item, bullet) => events.push(["fire", item.uid, bullet.name, bullet.target.uid]));
+        game.on("hit", (bullet, target) => events.push(["hit", bullet.name, target?.uid]));
+        game.on("destroyed", (item) => events.push(["destroyed", item.uid, item.lifeCode, game.getItemByUid(item.uid)]));
+
+        runTicks(game, 300, () => game.isItemDead(2));
+
+        assert.deepEqual(events.find(([type, uid]) => type === "fire" && uid === 1), ["fire", 1, "cannon-ball", 2]);
+        assert.deepEqual(events.find(([type, uid]) => type === "fire" && uid === 2), ["fire", 2, "bullet", 1]);
+        assert.ok(events.some(([type, name, target]) => type === "hit" && name === "cannon-ball" && target === 2));
+        assert.deepEqual(events.at(-1), ["destroyed", 2, "dead", undefined], "reported once it is gone from the game");
+        assert.equal(events.filter(([type]) => type === "destroyed").length, 1);
+    });
+
+    it("report a bullet that runs out of range as hitting the ground", () => {
+        const game = makeGame({
+            items: [
+                { type: "vehicles", name: "scout-tank", uid: 1, x: 21, y: 6, team: "blue" },
+                { type: "vehicles", name: "transport", uid: 2, x: 30, y: 6, team: "green" },
+            ],
+        });
+        const hits = [];
+
+        game.on("hit", (bullet, target) => hits.push(target));
+        game.add({ type: "bullets", name: "bullet", x: 22, y: 6, direction: 2, target: game.getItemByUid(2) });
+        runTicks(game, 30, () => hits.length > 0);
+
+        assert.deepEqual(hits, [undefined]);
+    });
+
     it("harvesters deploy on oil fields and start earning money", () => {
         const game = makeGame({
             items: [

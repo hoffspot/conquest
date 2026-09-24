@@ -301,6 +301,44 @@ test.describe("3D units", () => {
     });
 });
 
+test.describe("effects", () => {
+    test("shots, hits and destroyed units are drawn as flashes, fire, smoke and explosions", async ({ page }) => {
+        await openGame(page);
+        await page.getByRole("button", { name: "Campaign" }).click();
+        await page.getByRole("button", { name: "Enter mission" }).click();
+        await silenceMission(page);
+
+        // An enemy scout tank, nearly destroyed, just in front of the hero's tank
+        await game(page, () => {
+            const { game, renderer } = window.lastColony;
+            const hero = game.getItemByUid(-1);
+            const seen = { events: [], particles: 0, scorches: 0 };
+            const render = renderer.render.bind(renderer);
+
+            for (const type of ["fire", "hit", "destroyed"]) {
+                game.on(type, () => seen.events.push(type));
+            }
+
+            renderer.render = (...args) => {
+                render(...args);
+                seen.particles = Math.max(seen.particles, renderer.effects.count);
+                seen.scorches = Math.max(seen.scorches, renderer.effects.scorchCount);
+            };
+
+            window.seen = seen;
+            game.add({ type: "vehicles", name: "scout-tank", x: hero.x + 2.5, y: hero.y, team: "green", life: 10, orders: { type: "sentry" } });
+        });
+
+        await expect.poll(() => game(page, () => window.seen.events), { timeout: 20000 }).toContain("destroyed");
+
+        const seen = await game(page, () => window.seen);
+
+        expect(seen.events).toEqual(expect.arrayContaining(["fire", "hit"]));
+        expect(seen.particles).toBeGreaterThan(20);
+        expect(seen.scorches).toBeGreaterThan(0);
+    });
+});
+
 test.describe("multiplayer", () => {
     test("two players can play a game", async ({ browser }) => {
         const players = [];

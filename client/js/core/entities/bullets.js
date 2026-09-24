@@ -117,11 +117,13 @@ export class Bullet extends Entity {
         }
 
         if (this.distanceTravelled > this.range) {
-            // Bullet fizzles out without hitting target
+            // Bullet falls to the ground without hitting target
             this.game.remove(this);
+            this.game.emit("hit", this, undefined);
         } else if (this.reachedTarget()) {
             // Bullet damages target and then explodes
             this.target.life -= this.damage;
+            this.game.emit("hit", this, this.target);
 
             this.orders = { type: "explode" };
             this.action = "explode";

@@ -17,9 +17,10 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { clone as cloneModel } from "three/addons/utils/SkeletonUtils.js";
 import { GRID_SIZE } from "../core/config.js";
 import { modelFiles, modelFor } from "./models.js";
+import { CAMERA_PITCH, heightOnScreen } from "./perspective.js";
 
-// The camera looks down at the map from this angle above the horizon, like the book's art
-export const CAMERA_PITCH = THREE.MathUtils.degToRad(60);
+// The camera looks down at the map from CAMERA_PITCH above the horizon, like the book's art
+export { CAMERA_PITCH, heightOnScreen };
 
 const SIN_PITCH = Math.sin(CAMERA_PITCH);
 const COS_PITCH = Math.cos(CAMERA_PITCH);
@@ -42,6 +43,32 @@ const DAMAGED_SHADE = 0.55;
 // Sprite animations that build a building up: the model rises out of the ground as they play
 const RISING_ANIMATIONS = new Set(["teleport", "deploy"]);
 
+// How long a unit rocks after firing, in milliseconds
+export const RECOIL_MS = 600;
+
+/**
+ * How far a unit has rocked back t milliseconds after firing, from 1 (furthest back) to about
+ * -0.35 (furthest forward): a damped spring that kicks back within a few frames, rocks forward
+ * past where it started, bounces back a little and settles.
+ */
+export function recoilSwing(t) {
+    if (!(t >= 0 && t < RECOIL_MS)) {
+        return 0;
+    }
+
+    // Normalised so that the first (backward) peak, at about 60 ms, is 1
+    return (Math.exp(-t / 140) * Math.sin((t * 2 * Math.PI) / 300)) / 0.6196;
+}
+
+/** How far a gun barrel has slid back t milliseconds after firing (0 to 1): fast back, slower forward. */
+export function gunKick(t) {
+    if (!(t >= 0 && t < RECOIL_MS)) {
+        return 0;
+    }
+
+    return Math.min(1, t / 25) * Math.exp(-Math.max(0, t - 25) / 90);
+}
+
 /** Does this item have a 3D model? (Items without one, such as the oil field, stay sprites.) */
 export function isDrawnIn3D(item) {
     return Boolean(modelFor(item));
@@ -53,11 +80,6 @@ export function isDrawnIn3D(item) {
  */
 export function groundToScene(x, y) {
     return { x, y: 0, z: y / SIN_PITCH };
-}
-
-/** How many world pixels up the screen a point at the given height appears. */
-export function heightOnScreen(height) {
-    return height * COS_PITCH;
 }
 
 /** The camera used for the 3D items: orthographic, looking down at the map from CAMERA_PITCH. */
@@ -180,6 +202,9 @@ export class Units3D {
     #lost = false;
     // What the latest rendering showed, to skip rendering the same thing again (saves battery)
     #lastFrame = "";
+    // When each item last fired (for recoil), on the clock passed to render()
+    #firedAt = new WeakMap();
+    #time = 0;
 
     /**
      * Create the 3D renderer and load the models, or return undefined if the browser can't draw
@@ -304,12 +329,19 @@ export class Units3D {
         root.add(object);
         root.rotation.y = facingRotation(model.facing);
         root.scale.setScalar(scale);
+        root.updateMatrixWorld(true);
+
+        // The gun barrel slides back along the model's length when it fires. Work out which way
+        // that is in the barrel's own coordinates: from world pixels in the model's frame (where
+        // it faces north) to the coordinates of the barrel's parent.
+        const gun = model.recoil?.gun && root.getObjectByName(model.recoil.gun);
+        const gunBasis = gun && new THREE.Matrix3().setFromMatrix4(gun.parent.matrixWorld.clone().invert());
 
         // How far the model reaches from its position on screen, for sizing its cell. (Aircraft
         // are rendered on the ground and drawn higher up, above a shadow, by draw().)
         const radius = (Math.hypot(size.x, size.z) / 2) * scale;
         const reach = Math.max(radius, radius * SIN_PITCH + heightOnScreen(size.y * scale)) + CELL_MARGIN;
-        const prototype = { root, damaged, reach, shadowRadius: model.altitude ? radius * 0.5 : 0 };
+        const prototype = { root, damaged, reach, gunBasis, length: (model.facing?.endsWith("x") ? size.x : size.z) * scale, shadowRadius: model.altitude ? radius * 0.5 : 0 };
 
         this.#prototypes.set(key, prototype);
 
@@ -331,6 +363,7 @@ export class Units3D {
             return part && { part, rest: part.quaternion.clone(), axis: new THREE.Vector3(axis === "x" ? 1 : 0, axis === "y" ? 1 : 0, axis === "z" ? 1 : 0), turnsPerSecond };
         }).filter(Boolean);
         const aimPart = model.aim ? body.getObjectByName(model.aim) : undefined;
+        const gunPart = prototype.gunBasis ? body.getObjectByName(model.recoil.gun) : undefined;
 
         this.scene.add(holder);
 
@@ -342,6 +375,7 @@ export class Units3D {
             holder,
             spinning,
             aim: aimPart && { part: aimPart, rest: aimPart.rotation.y },
+            gun: gunPart && { part: gunPart, rest: gunPart.position.clone() },
             damaged: false,
             previous: item.direction ?? 0,
             current: item.direction ?? 0,
@@ -353,10 +387,12 @@ export class Units3D {
      * Render this frame's 3D items. Call before drawing the items.
      * @param {Iterable} items  every item on the map
      * @param {{scale: number, interpolation: number, tick: number, time?: number, view: {x: number, y: number, width: number, height: number}}} frame
-     *        scale: canvas pixels per world pixel; time: milliseconds, for rotors; view: the visible part of the map in world pixels
+     *        scale: canvas pixels per world pixel; time: milliseconds on a clock that stops while the
+     *        game is paused, for rotors and recoil; view: the visible part of the map in world pixels
      */
     render(items, { scale, interpolation, tick, time = performance.now(), view }) {
         this.#cells.clear();
+        this.#time = time;
 
         const visible = [];
         const present = new Set();
@@ -444,8 +480,15 @@ export class Units3D {
         this.frameContext.drawImage(this.canvas, 0, 0, layout.width, layout.height, 0, 0, layout.width, layout.height);
     }
 
-    // Turn, aim, spin, rise and darken the item's model to match the item. Returns a summary of
-    // the pose, to tell whether anything changed since the last frame.
+    /** Rock an item back as it fires (see `recoil` in models.js). */
+    fired(item) {
+        if (modelFor(item)?.recoil) {
+            this.#firedAt.set(item, this.#time);
+        }
+    }
+
+    // Turn, aim, spin, rise, recoil and darken the item's model to match the item. Returns a
+    // summary of the pose, to tell whether anything changed since the last frame.
     #pose(item, drawn, interpolation, time) {
         const heading = item.directions
             ? interpolatedHeading(drawn.previous, drawn.current, item.directions, interpolation)
@@ -468,6 +511,8 @@ export class Units3D {
 
         drawn.pose.scale.y = rising ? Math.max(0.08, (item.imageOffset - animation.offset + 1) / animation.count) : 1;
 
+        const recoil = this.#recoil(item, drawn, heading, time);
+
         const damaged = item.lifeCode === "damaged";
 
         if (damaged !== drawn.damaged) {
@@ -486,7 +531,38 @@ export class Units3D {
         // Spinning parts change every frame
         const spin = drawn.spinning.length ? time : 0;
 
-        return `${drawn.body.uuid}:${heading.toFixed(3)}:${drawn.pose.scale.y.toFixed(3)}:${damaged}:${spin}`;
+        return `${drawn.body.uuid}:${heading.toFixed(3)}:${drawn.pose.scale.y.toFixed(3)}:${damaged}:${spin}:${recoil}`;
+    }
+
+    // Rock the hull back and slide the gun barrel back after the item fires. Returns how far into
+    // the recoil the item is (0 when still).
+    #recoil(item, drawn, heading, time) {
+        const settings = drawn.model.recoil;
+        const t = settings ? time - (this.#firedAt.get(item) ?? -Infinity) : Infinity;
+        const swing = recoilSwing(t);
+        const kick = gunKick(t);
+
+        if (settings && !(t < RECOIL_MS)) {
+            this.#firedAt.delete(item);
+        }
+
+        // The hull: pushed back along the ground and tipped nose-up, then rocking forward. Lifted
+        // by as much as its lower end dips, so that it doesn't sink into the ground.
+        const pitch = THREE.MathUtils.degToRad(settings?.pitch ?? 0) * swing;
+
+        drawn.body.position.set(0, (drawn.prototype.length / 2) * Math.abs(Math.sin(pitch)), (settings?.back ?? 0) * swing);
+        drawn.body.rotation.x = pitch;
+
+        // The barrel slides straight back. A turret's gun turns on its own, so "back" depends on
+        // where it aims; a tank's turns with the whole tank.
+        if (drawn.gun) {
+            const back = drawn.aim ? new THREE.Vector3(-Math.sin(heading), 0, Math.cos(heading)) : new THREE.Vector3(0, 0, 1);
+
+            back.applyMatrix3(drawn.prototype.gunBasis).multiplyScalar((settings.kick ?? 0) * kick);
+            drawn.gun.part.position.copy(drawn.gun.rest).add(back);
+        }
+
+        return swing || kick ? t.toFixed(0) : 0;
     }
 
     /**

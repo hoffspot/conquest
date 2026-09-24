@@ -84,6 +84,7 @@ export class Entity {
             // Remove item from the game if it has died (life is 0 or negative)
             this.lifeCode = "dead";
             this.game.remove(this);
+            this.game.emit("destroyed", this);
 
             return;
         }
@@ -129,8 +130,9 @@ export class Entity {
      * @param {CanvasRenderingContext2D} context
      * @param {{offsetX: number, offsetY: number, interpolation: number, drawModel?: Function}} view
      *        interpolation runs from -1 (previous tick position) to 0 (current tick position);
-     *        drawModel(context, item) draws the item in 3D instead of its sprite if it can
-     *        (returning true), see js/app/units3d.js
+     *        drawModel(context, item) draws the item another way instead of its sprite if it can
+     *        (returning true): as a 3D model (js/app/units3d.js), or a shot as an effect
+     *        (js/app/effects.js)
      */
     draw(context, view) {
         // Compute pixel coordinates on the canvas for drawing the item
@@ -333,6 +335,7 @@ export class Entity {
         const bullet = this.game.add({ name: this.weaponType, type: "bullets", x, y, direction: targetDirection, target });
 
         this.reloadTimeLeft = bullet.reloadTime;
+        this.game.emit("fire", this, bullet);
     }
 
     // Show a system warning, but only to the player who owns this entity

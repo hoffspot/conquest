@@ -12,9 +12,16 @@ import { TriggerRunner } from "./triggers.js";
  *
  * Game has no DOM, canvas or audio dependencies, so it runs unchanged in the browser and under
  * Node (for tests). Things the player should see or hear are reported as events:
- *   "message"  (from, text)   - a character or system message for the message panel
- *   "sound"    (name)         - a sound effect should be played
- *   "levelend" (success)      - a trigger ended the level
+ *   "message"   (from, text)     - a character or system message for the message panel
+ *   "sound"     (name)           - a sound effect should be played
+ *   "fire"      (item, bullet)   - an item fired its weapon (for muzzle flashes and recoil)
+ *   "hit"       (bullet, target) - a bullet hit its target, or hit the ground at the end of its
+ *                                  range (target undefined)
+ *   "destroyed" (item)           - a unit or building was destroyed
+ *   "levelend"  (success)        - a trigger ended the level
+ *
+ * These events only report what happened: listeners must not change the game, so that every
+ * player's copy of a multiplayer game stays the same.
  */
 export class Game extends Emitter {
     constructor() {

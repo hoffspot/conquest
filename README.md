@@ -147,6 +147,10 @@ units, deselect, and in multiplayer open the chat.
   colours, turn smoothly, and show damage. Rotors spin, turret guns aim, and buildings rise as they
   are built. The models are free low-poly models by Quaternius, Kenney and PolyDucky (see
   [Credits](#credits-and-license)). See [3D units](docs/MODERNIZATION.md#3d-units).
+- **Explosions and fire:** muzzle flashes, glowing tracer shells and missile smoke trails;
+  explosions with a fireball, sparks, debris, a shock wave, smoke and scorch marks; burning wrecks
+  and smoking damaged units; tanks rock back when they fire. See
+  [Effects](docs/MODERNIZATION.md#effects).
 - **Small additions:** a pause menu, mute, keyboard scrolling and zoom, keyboard support for menus
   and the multiplayer lobby, prices on the build buttons, markers that confirm each order, clearer
   error messages when something fails to load or connect.
@@ -194,6 +198,8 @@ client/                 The game (static files served to the browser)
     renderer.js         Drawing the map, units and fog on the canvases
     units3d.js          Drawing units and buildings as 3D models with Three.js
     models.js           Which model each unit and building uses, its size, team colours and parts
+    effects.js          Muzzle flashes, shells, explosions, fire, smoke and scorch marks
+    perspective.js      The angle the game is seen from (shared by the models and the effects)
     minimap.js          The overview map in the sidebar
     input.js            Mouse, touch and keyboard controls
     hud.js              The buttons over the map
