@@ -9,7 +9,10 @@ modernized from the book's final version (Chapter 13 of the
 
 This is the complete game: a three-mission single player campaign and two player multiplayer
 over WebSocket. It plays like the book's version, but the code has been brought up to date,
-bugs in the book's code have been fixed, and it comes with automated tests.
+bugs in the book's code have been fixed, and it comes with automated tests. It is designed to be
+played on a phone in landscape (it's tuned for an iPhone 16 Pro) as well as on tablets and computers:
+the map fills the screen, it has touch controls, pinch to zoom and a minimap, and it can be
+installed as an app.
 [docs/MODERNIZATION.md](docs/MODERNIZATION.md) describes every change and maps the book's files
 to the new ones, so the book is still a good guide to the code.
 
@@ -28,6 +31,18 @@ For a multiplayer game, open the page in two browser windows, or on two computer
 network using this computer's address instead of `localhost`. Both players pick the same game
 room in the lobby and press **Join**.
 
+### Playing on a phone
+
+1. Start the server on a computer (`npm start`). It prints the address to use on other devices,
+   for example `http://192.168.1.20:8080`.
+2. On the phone, connect to the same Wi-Fi network and open that address.
+3. Turn the phone sideways: the game is played in landscape (in portrait it asks you to turn the
+   phone and pauses).
+4. For full screen without the browser's toolbars, install the game: on iPhone tap **Share** then
+   **Add to Home Screen**; on Android use **Install app** on the start screen or the browser menu.
+   The installed game opens in landscape. On Android the game also goes full screen by itself when
+   a game starts.
+
 | Setting | How |
 | --- | --- |
 | Port | `PORT=3000 npm start` (default 8080) |
@@ -42,31 +57,54 @@ The game is plain ES modules with no build step, so any static web server can se
 
 **The campaign.** In *Rescue*, find a lost convoy and escort it back to base. In *Assault*, build
 up your defences and destroy the rebel base. In *Under Siege*, hold out until the evacuation
-fleet arrives and don't lose a single transport. Messages from your operator at the top of the
-screen tell you what to do next.
+fleet arrives and don't lose a single transport. Messages from your operator appear at the top of
+the map and tell you what to do next.
 
 **Multiplayer.** Both players start with a base, a harvester and a few tanks. Deploy the harvester
 on an oil field to earn money, build up an army and destroy everything the other player has.
 
 To build, select your base (for buildings) or a starport (for vehicles and aircraft) and use the
-buttons in the sidebar. A button is only enabled when you have the right building selected and
-enough money. Buildings are placed with a left click on the highlighted squares; right click or
-Escape cancels.
+buttons in the sidebar, which show each item's price. A button is only enabled when you have the
+right building selected and enough money. The minimap at the top of the sidebar shows the whole
+map; tap or click it to jump there.
 
-| Action | Mouse | Touch screen |
-| --- | --- | --- |
-| Select a unit or building | Left click | Tap |
-| Select several units | Drag a box, or shift + click | Drag a box |
-| Move, attack an enemy, or guard a friendly unit | Right click | Double tap |
-| Deploy a harvester | Right click an oil field | Double tap an oil field |
-| Scroll the map | Move to the edge of the map | Touch near the edge |
+**On a touch screen:**
+
+| Action | Gesture |
+| --- | --- |
+| Select a unit or building | Tap it |
+| Move the selected units | Tap the ground |
+| Attack | Tap an enemy while your units are selected |
+| Deploy a harvester | Select it, then tap an oil field |
+| Guard a friendly unit | Touch and hold it while your units are selected |
+| Select several units | Touch and hold, then drag a box |
+| Select all units of one kind on screen | Double tap one of them |
+| Scroll the map | Drag with one finger (flick to keep it moving) |
+| Zoom | Pinch |
+| Place a building | Tap where it should go, then tap it again or press ✓ (✕ cancels) |
+
+The buttons over the map open the menu (pause, sound, full screen, quit), select all your combat
+units, deselect, and in multiplayer open the chat.
+
+**With a mouse and keyboard:**
+
+| Action | Mouse |
+| --- | --- |
+| Select a unit or building | Left click (shift + click adds or removes) |
+| Select several units | Drag a box |
+| Select all units of one kind on screen | Double click one of them |
+| Move, attack an enemy, guard a friendly unit, deploy a harvester | Right click |
+| Place a building | Left click on the highlighted squares (right click cancels) |
+| Scroll the map | Move to the edge of the map, or drag with the middle button |
+| Zoom | Mouse wheel or trackpad pinch |
 
 | Key | Action |
 | --- | --- |
 | Arrow keys | Scroll the map |
-| P | Pause or resume (campaign) |
+| + and - | Zoom in and out |
+| P | Pause menu |
 | M | Sound on or off |
-| Escape | Cancel placing a building |
+| Escape | Cancel placing a building, deselect, or open the menu |
 | Enter | Chat with the other player (multiplayer) |
 
 ## What's new compared to the book
@@ -81,8 +119,13 @@ Escape cancels.
   failure conditions, duplicated unit ids when a mission was restarted, left a player stuck in a
   multiplayer room after each game, and let players command each other's units. See
   [the full list](docs/MODERNIZATION.md#bugs-fixed).
-- **Small additions:** pause, mute, keyboard scrolling, keyboard support for menus and the
-  multiplayer lobby, clearer error messages when something fails to load or connect.
+- **Made for phones:** a full-screen layout that fits any screen (keeping clear of notches and the
+  home indicator), touch controls designed for fingers, pinch to zoom, a minimap, sharp graphics
+  on high-resolution screens, landscape lock and an installable app (which also works offline
+  when the game is served over HTTPS).
+- **Small additions:** a pause menu, mute, keyboard scrolling and zoom, keyboard support for menus
+  and the multiplayer lobby, prices on the build buttons, markers that confirm each order, clearer
+  error messages when something fails to load or connect.
 - **Tests:** unit, simulation and server tests, browser tests with Playwright, ESLint and GitHub
   Actions CI.
 
@@ -96,15 +139,18 @@ npm run check       # lint + unit tests
 ```
 
 The browser tests need Chromium: run `npx playwright install chromium` once, or set
-`CHROMIUM_PATH` to an existing Chromium or Chrome executable.
+`CHROMIUM_PATH` to an existing Chromium or Chrome executable. They play the game with a mouse on
+a desktop screen, and with touch gestures on an emulated iPhone 16 Pro held sideways.
 
 While the game is running, the browser console gives access to the game through `lastColony`,
 for example `lastColony.game.cash.blue = 10000` or `lastColony.singleplayer.currentLevel`.
 
 ```
 client/                 The game (static files served to the browser)
-  index.html            Screens: menu, briefing, game, message box, lobby, loading
-  styles.css
+  index.html            Screens: menu, briefing, game, lobby, pause menu, message box, loading
+  styles.css            Layout for every screen size, from phones to desktops
+  manifest.webmanifest  Lets the game be installed as an app (landscape, full screen)
+  sw.js                 Service worker: keeps a copy of the game for offline play
   images/, audio/       Artwork and sounds from the book
   js/main.js            Entry point: creates the game and wires up the browser UI
   js/core/              The game simulation. No DOM code, so it also runs in Node
@@ -117,8 +163,12 @@ client/                 The game (static files served to the browser)
     data/levels.js      The campaign missions and the multiplayer map
     data/maps.js        Map terrain data
   js/app/               The browser side
+    camera.js           Scrolling and zooming the view
     renderer.js         Drawing the map, units and fog on the canvases
+    minimap.js          The overview map in the sidebar
     input.js            Mouse, touch and keyboard controls
+    hud.js              The buttons over the map
+    device.js           Landscape lock, full screen, installing the app
     loop.js             The game loop
     sidebar.js          Cash display and construction buttons
     ui.js               Screens, message box and in-game messages

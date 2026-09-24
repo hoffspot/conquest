@@ -3,6 +3,7 @@
 //   npm start                 -> http://localhost:8080
 //   PORT=3000 npm start       -> use a different port
 import http from "node:http";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocket, WebSocketServer } from "ws";
@@ -97,6 +98,15 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 
     server.httpServer.listen(port, host, () => {
         console.log(`Last Colony is running at http://${host ?? "localhost"}:${port}`);
+
+        // Addresses other devices on the same network (e.g. a phone) can use
+        if (!host) {
+            for (const address of Object.values(os.networkInterfaces()).flat()) {
+                if (address?.family === "IPv4" && !address.internal) {
+                    console.log(`On your phone or another computer: http://${address.address}:${port}`);
+                }
+            }
+        }
     });
 
     const shutdown = async () => {

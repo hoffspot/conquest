@@ -15,6 +15,10 @@ const characters = {
 
 // How long a caller's picture stays up after their message
 const CALLER_PICTURE_TIMEOUT_MS = 6000;
+// How long messages stay on screen over the map
+const MESSAGES_VISIBLE_MS = 9000;
+// Older messages are removed from the page (they are hidden behind newer ones anyway)
+const MAXIMUM_MESSAGES = 20;
 
 function hideScreens() {
     for (const screen of document.querySelectorAll(".gamelayer")) {
@@ -118,11 +122,14 @@ export function initMessageBox() {
 /* In-game message panel */
 
 let callerPictureTimeout;
+let messagesTimeout;
 
 export function clearGameMessages() {
     $("gamemessages").replaceChildren();
+    $("gamemessages").classList.remove("visible");
     $("callerpicture").replaceChildren();
     clearTimeout(callerPictureTimeout);
+    clearTimeout(messagesTimeout);
 }
 
 export function showGameMessage(from, message) {
@@ -145,14 +152,21 @@ export function showGameMessage(from, message) {
         callerPictureTimeout = setTimeout(() => callerPicture.replaceChildren(), CALLER_PICTURE_TIMEOUT_MS);
     }
 
-    // Append message to messages pane and scroll to the bottom
+    // Append the message; the panel shows the newest lines and fades out after a while
     const line = document.createElement("div");
     const sender = document.createElement("span");
 
     sender.textContent = `${from}: `;
     line.append(sender, message);
     gameMessages.append(line);
-    gameMessages.scrollTop = gameMessages.scrollHeight;
+
+    while (gameMessages.childElementCount > MAXIMUM_MESSAGES) {
+        gameMessages.firstElementChild.remove();
+    }
+
+    gameMessages.classList.add("visible");
+    clearTimeout(messagesTimeout);
+    messagesTimeout = setTimeout(() => gameMessages.classList.remove("visible"), MESSAGES_VISIBLE_MS);
 }
 
 /* Loading screen */

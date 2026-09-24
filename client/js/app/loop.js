@@ -53,12 +53,6 @@ export class GameLoop {
         }
     }
 
-    togglePause() {
-        this.paused = !this.paused;
-
-        return this.paused;
-    }
-
     // Record when the latest tick ran, for interpolating the drawing
     tickCompleted(time = performance.now()) {
         this.#lastTickTime = time;

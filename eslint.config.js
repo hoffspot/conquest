@@ -24,6 +24,12 @@ export default [
         },
     },
     {
+        files: ["client/sw.js"],
+        languageOptions: {
+            globals: globals.serviceworker,
+        },
+    },
+    {
         // The simulation core must not depend on the DOM, so that it also runs under Node
         files: ["client/js/core/**/*.js"],
         languageOptions: {

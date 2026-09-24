@@ -1,26 +1,30 @@
 import { GRID_SIZE } from "../core/config.js";
 
-// The game area is always 400 pixels tall; its width changes with the window's aspect ratio
-const CANVAS_HEIGHT = 400;
+// Canvases are rendered at the screen's pixel density for sharp output, up to this limit
+// (beyond 2x the difference is hard to see, but the cost in battery life is not)
+const MAX_PIXEL_RATIO = 2;
+
+// How long a command marker (the ring shown where a unit was ordered to go) stays visible
+const MARKER_DURATION_MS = 500;
 
 /**
  * Draws the game onto two stacked canvases: the background canvas holds the map and is only
- * redrawn when the view scrolls, while the foreground canvas is cleared and redrawn every frame.
+ * redrawn when the view changes, while the foreground canvas is cleared and redrawn every frame.
+ * Everything is drawn in world pixels, scaled by the camera's zoom and the screen's pixel ratio.
  */
 export class Renderer {
-    constructor({ game, backgroundCanvas, foregroundCanvas }) {
+    #lastBackground = "";
+    #markers = [];
+
+    constructor({ game, camera, backgroundCanvas, foregroundCanvas }) {
         this.game = game;
+        this.camera = camera;
 
         this.backgroundCanvas = backgroundCanvas;
         this.backgroundContext = backgroundCanvas.getContext("2d");
         this.foregroundCanvas = foregroundCanvas;
         this.foregroundContext = foregroundCanvas.getContext("2d");
-
-        // The visible part of the map, in map pixel coordinates
-        this.offsetX = 0;
-        this.offsetY = 0;
-        this.width = 480;
-        this.height = CANVAS_HEIGHT;
+        this.pixelRatio = 1;
 
         // Overlays (selection box, building placement grid) drawn on top of everything else
         this.overlays = [];
@@ -29,21 +33,36 @@ export class Renderer {
         this.fogCanvas = document.createElement("canvas");
         this.fogContext = this.fogCanvas.getContext("2d");
         this.paintedFogVersion = -1;
-
-        this.resize(this.width);
     }
 
-    resize(width) {
-        this.width = width;
+    // The visible part of the map in world pixels (used by the input code)
+    get offsetX() {
+        return this.camera.offsetX;
+    }
+
+    get offsetY() {
+        return this.camera.offsetY;
+    }
+
+    get width() {
+        return this.camera.width;
+    }
+
+    get height() {
+        return this.camera.height;
+    }
+
+    /** Size the canvases to fill width x height CSS pixels. */
+    resize(width, height) {
+        this.pixelRatio = Math.min(globalThis.devicePixelRatio || 1, MAX_PIXEL_RATIO);
 
         for (const canvas of [this.backgroundCanvas, this.foregroundCanvas]) {
-            canvas.width = width;
-            canvas.height = this.height;
+            canvas.width = Math.round(width * this.pixelRatio);
+            canvas.height = Math.round(height * this.pixelRatio);
         }
 
-        // Ensure the resizing doesn't cause the map to pan out of bounds
-        this.panBy(0, 0);
-        this.refreshBackground = true;
+        this.camera.setViewSize(width, height);
+        this.#lastBackground = "";
     }
 
     setMap(mapImage) {
@@ -51,34 +70,20 @@ export class Renderer {
         this.fogCanvas.width = mapImage.width;
         this.fogCanvas.height = mapImage.height;
         this.paintedFogVersion = -1;
-        this.refreshBackground = true;
+        this.camera.setMapSize(mapImage.width, mapImage.height);
+        this.#lastBackground = "";
     }
 
-    // Move the view to a map position (in pixels), keeping it within the map
-    setView(offsetX, offsetY) {
-        this.offsetX = offsetX;
-        this.offsetY = offsetY;
-        this.panBy(0, 0);
-        this.refreshBackground = true;
+    /** Show a ring at a world position, e.g. to confirm where units were ordered to go. */
+    addMarker(x, y, color) {
+        this.#markers.push({ x, y, color, start: performance.now() });
     }
 
-    /** Scroll the view, staying within the map. Returns true if the view moved. */
-    panBy(dx, dy) {
-        const mapWidth = this.mapImage?.width ?? this.width;
-        const mapHeight = this.mapImage?.height ?? this.height;
+    // Scale drawing so that one unit is one world pixel
+    #applyTransform(context) {
+        const scale = this.camera.zoom * this.pixelRatio;
 
-        const offsetX = Math.round(Math.min(Math.max(this.offsetX + dx, 0), Math.max(0, mapWidth - this.width)));
-        const offsetY = Math.round(Math.min(Math.max(this.offsetY + dy, 0), Math.max(0, mapHeight - this.height)));
-
-        if (offsetX === this.offsetX && offsetY === this.offsetY) {
-            return false;
-        }
-
-        this.offsetX = offsetX;
-        this.offsetY = offsetY;
-        this.refreshBackground = true;
-
-        return true;
+        context.setTransform(scale, 0, 0, scale, 0, 0);
     }
 
     /**
@@ -87,11 +92,13 @@ export class Renderer {
      */
     render(interpolation) {
         const context = this.foregroundContext;
-        const view = { offsetX: this.offsetX, offsetY: this.offsetY, interpolation };
+        const view = { offsetX: this.offsetX, offsetY: this.offsetY, interpolation, zoom: this.camera.zoom };
 
         this.drawBackground();
 
-        context.clearRect(0, 0, this.width, this.height);
+        context.setTransform(1, 0, 0, 1, 0, 0);
+        context.clearRect(0, 0, this.foregroundCanvas.width, this.foregroundCanvas.height);
+        this.#applyTransform(context);
 
         for (const item of this.game.sortedItems) {
             item.draw(context, view);
@@ -105,6 +112,7 @@ export class Renderer {
         }
 
         this.drawFog();
+        this.#drawMarkers(context, view);
 
         for (const overlay of this.overlays) {
             overlay(context, view);
@@ -112,34 +120,41 @@ export class Renderer {
     }
 
     // Since drawing the background map is a fairly large operation,
-    // we only redraw the background if it changes (due to panning or resizing)
+    // only redraw it when the view changes (due to panning, zooming or resizing)
     drawBackground() {
-        if (!this.refreshBackground || !this.mapImage) {
-            return;
-        }
-
-        this.backgroundContext.drawImage(this.mapImage,
-            this.offsetX, this.offsetY, this.width, this.height,
-            0, 0, this.width, this.height);
-
-        this.refreshBackground = false;
-    }
-
-    drawFog() {
-        const fog = this.game.fog;
-
         if (!this.mapImage) {
             return;
         }
 
-        if (this.paintedFogVersion !== fog.version) {
-            this.paintFog(fog.grid);
-            this.paintedFogVersion = fog.version;
+        const { offsetX, offsetY, zoom } = this.camera;
+        const state = `${offsetX},${offsetY},${zoom},${this.backgroundCanvas.width},${this.backgroundCanvas.height}`;
+
+        if (state === this.#lastBackground) {
+            return;
         }
 
-        this.foregroundContext.drawImage(this.fogCanvas,
-            this.offsetX, this.offsetY, this.width, this.height,
-            0, 0, this.width, this.height);
+        const context = this.backgroundContext;
+
+        context.setTransform(1, 0, 0, 1, 0, 0);
+        context.fillStyle = "#090009";
+        context.fillRect(0, 0, this.backgroundCanvas.width, this.backgroundCanvas.height);
+        this.#applyTransform(context);
+        context.drawImage(this.mapImage, -offsetX, -offsetY);
+
+        this.#lastBackground = state;
+    }
+
+    drawFog() {
+        if (!this.mapImage) {
+            return;
+        }
+
+        if (this.paintedFogVersion !== this.game.fog.version) {
+            this.paintFog(this.game.fog.grid);
+            this.paintedFogVersion = this.game.fog.version;
+        }
+
+        this.foregroundContext.drawImage(this.fogCanvas, -this.offsetX, -this.offsetY);
     }
 
     // Cover the map with a darkened copy of itself, then cut soft-edged holes where the player can see
@@ -174,18 +189,23 @@ export class Renderer {
         context.globalCompositeOperation = "source-over";
     }
 
-    // Draw a message such as "PAUSED" in the middle of the game area
-    drawBanner(text) {
-        const context = this.foregroundContext;
+    // Expanding, fading rings where commands were given
+    #drawMarkers(context, view) {
+        const now = performance.now();
 
-        context.save();
-        context.fillStyle = "rgba(0,0,0,0.5)";
-        context.fillRect(0, this.height / 2 - 30, this.width, 60);
-        context.font = "bold 32px \"Courier New\", Courier, monospace";
-        context.textAlign = "center";
-        context.textBaseline = "middle";
-        context.fillStyle = "white";
-        context.fillText(text, this.width / 2, this.height / 2);
-        context.restore();
+        this.#markers = this.#markers.filter((marker) => now - marker.start < MARKER_DURATION_MS);
+
+        for (const marker of this.#markers) {
+            const progress = (now - marker.start) / MARKER_DURATION_MS;
+
+            context.globalAlpha = 1 - progress;
+            context.strokeStyle = marker.color;
+            context.lineWidth = 2 / view.zoom;
+            context.beginPath();
+            context.arc(marker.x - view.offsetX, marker.y - view.offsetY, (6 + 14 * progress), 0, Math.PI * 2);
+            context.stroke();
+        }
+
+        context.globalAlpha = 1;
     }
 }

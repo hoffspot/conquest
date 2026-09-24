@@ -98,13 +98,54 @@ to the code.
   passed on to the other player (see `client/js/core/commands.js`, shared by the server and the
   game). Dead connections are detected with WebSocket pings.
 
+### Phones and tablets
+
+The game is designed for phones held sideways (tuned for an iPhone 16 Pro), and adapts to any
+screen from small phones to large monitors.
+
+- **Layout.** The book scaled a fixed 640x480 screen to fit the window. The menus still do, since
+  they are the book's artwork, but the game screen now fills the whole screen: the map takes
+  all the space the sidebar doesn't, and the sidebar artwork is scaled to the height of the
+  screen. The 80 pixel message strip across the top is gone; messages appear over the map and
+  fade after a few seconds. Everything keeps clear of notches, the Dynamic Island, rounded
+  corners and the home indicator (`env(safe-area-inset-*)` with `viewport-fit=cover`).
+- **Zoom.** A camera (`js/app/camera.js`) lets the map be zoomed. Computers start at the book's
+  proportions; touch screens start zoomed in so that units are big enough to tap. Pinch, the
+  mouse wheel or the + and - keys zoom.
+- **Minimap.** The book's sidebar art has an empty black square at the top. It now shows the
+  whole map with the fog of war, units as coloured dots and the part of the map on screen;
+  tap or click it to move there.
+- **Sharp graphics.** Canvases are drawn at the screen's pixel density (up to 2x).
+- **Touch controls.** The book used a tap to select, a double tap for every order and holding a
+  finger at the edge of the map to scroll. Now a tap selects or gives the obvious order, one
+  finger drags the map (with momentum), two fingers pinch to zoom, touch and hold draws a
+  selection box, and double tapping a unit selects all units of that type. Items near a finger
+  count as tapped. Buildings are placed by tapping where they should go and confirming.
+  Coloured rings confirm each order.
+- **On-screen buttons** replace the keyboard and right mouse button: a menu (pause, sound, full
+  screen, quit), select all combat units, deselect, confirm or cancel a building, and chat.
+- **Landscape only.** In portrait, phones and tablets show a "turn your device" screen and the
+  game pauses. On Android the game goes full screen and locks to landscape when a game starts.
+  iPhones don't let web pages lock the orientation, so there the "turn your device" screen
+  does the job.
+- **Installable app.** A web app manifest with icons makes the game installable (Add to Home
+  Screen on iPhone, install prompt on Android). The installed game opens full screen and in
+  landscape without the browser's toolbars. A service worker keeps a copy of the game so that
+  the campaign also works offline (when served over HTTPS).
+- **Pause when away.** The campaign pauses when the phone is turned upright or the game goes to
+  the background.
+- The lobby's rows are taller on touch screens and scroll, and small buttons have larger touch
+  areas.
+
 ### Tooling
 
-- `npm test`: 95 unit, simulation and server tests using Node's built-in test runner. They
+- `npm test`: 102 unit, simulation and server tests using Node's built-in test runner. They
   include a scripted playthrough of mission 1, every mission running for 12 minutes of game time,
   and two simulated multiplayer clients checked for identical state after every tick.
 - `npm run test:e2e`: Playwright tests that play the game in Chromium, covering the campaign,
-  selection and orders, touch input, construction and a two player game.
+  selection and orders, zooming, the minimap, construction and a two player game with a mouse,
+  and on an emulated iPhone 16 Pro in landscape: the layout, taps, dragging, pinching, touch and
+  hold selection, placing buildings and the portrait "turn your device" screen.
 - `npm run lint`: ESLint.
 - GitHub Actions runs all of the above on every push.
 
@@ -181,6 +222,9 @@ These bugs are in the book's Chapter 13 code.
 - Losing a transport in "Under Siege" now fails the mission, as the level was written to (bug 2).
 - Path finding is proper A*, so units sometimes take slightly different (shorter) routes.
 - The game and its mission timers pause when the tab is hidden or the player presses P.
+- The game screen fills the screen instead of being a fixed 640x480 box, with messages over
+  the map, a minimap and zoom. On touch screens a single tap gives orders (the book used a
+  double tap) and dragging scrolls the map.
 
 ## Known limitations
 

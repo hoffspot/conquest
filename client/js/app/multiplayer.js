@@ -370,6 +370,15 @@ export class Multiplayer {
         this.closeAndExit();
     }
 
+    // The player chose to leave a running game; the server tells the other player
+    leaveGame() {
+        this.#ending = true;
+        clearInterval(this.#tickInterval);
+        this.#tickInterval = undefined;
+        this.app.stopLevel();
+        this.closeAndExit();
+    }
+
     sendChatMessage(message) {
         this.send({ type: "chat", message });
     }
