@@ -18,6 +18,7 @@ const MIME_TYPES = {
     ".mp3": "audio/mpeg",
     ".ogg": "audio/ogg",
     ".glb": "model/gltf-binary",
+    ".gltf": "model/gltf+json",
     ".bin": "application/octet-stream",
     ".bvh": "text/plain; charset=utf-8",
     ".txt": "text/plain; charset=utf-8",

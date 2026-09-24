@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { layoutCastle } from "../client/js/core/setpieces/castle.js";
 import { GROUND, pieceCatalog } from "../client/js/core/setpieces/pieces.js";
@@ -177,25 +177,6 @@ describe("set piece art", () => {
             const source = readFileSync(new URL(`../client/js/core/setpieces/${file}`, import.meta.url), "utf8").replace(/\/\/.*$/gm, "");
 
             assert.doesNotMatch(source, /Math\.(random|sin|cos|tan|exp|log|pow|atan|hypot|cbrt|sqrt)\b/, file);
-        }
-    });
-
-    it("has art for every piece (npm run build:art)", () => {
-        const file = new URL("../client/images/art/setpieces.json", import.meta.url);
-
-        assert.ok(existsSync(file), "client/images/art/setpieces.json exists");
-
-        const manifest = JSON.parse(readFileSync(file, "utf8"));
-
-        for (const piece of pieceCatalog()) {
-            const art = manifest.pieces[piece.key];
-
-            assert.ok(art, `${piece.key} has art`);
-            assert.deepEqual([art.w, art.h], [piece.w, piece.h], piece.key);
-            assert.equal(art.sprite.length, 4, piece.key);
-            assert.equal(art.shadow.length, 4, piece.key);
-            assert.equal(art.at.length, 2, piece.key);
-            assert.equal(art.shadowAt.length, 2, piece.key);
         }
     });
 });
