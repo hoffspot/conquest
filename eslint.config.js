@@ -17,6 +17,13 @@ export default [
         },
     },
     {
+        // The art generator (tools/artgen) runs in a browser page, opened by scripts/build-art.js
+        files: ["tools/**/*.js"],
+        languageOptions: {
+            globals: globals.browser,
+        },
+    },
+    {
         // The game client runs in the browser
         files: ["client/**/*.js"],
         ignores: ["client/js/core/**"],
@@ -44,8 +51,8 @@ export default [
         },
     },
     {
-        // End-to-end tests also contain functions that run inside the browser page
-        files: ["e2e/**/*.js"],
+        // End-to-end tests and the art build also contain functions that run inside the browser page
+        files: ["e2e/**/*.js", "scripts/build-art.js"],
         languageOptions: {
             globals: globals.browser,
         },

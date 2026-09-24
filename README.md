@@ -163,6 +163,10 @@ units, deselect, and in multiplayer open the chat.
   own tiles, with the mission's bases, convoys and patrols placed to suit it and every route they
   need checked to be passable. The book's map is still available. See
   [Generated maps](docs/MODERNIZATION.md#generated-maps).
+- **Castle and town art:** a generator that builds castles and towns as 3D models and renders
+  them from the game's own camera, as smooth art or LPC-style pixel art, with layouts that
+  tanks can drive through. It isn't on the maps yet. See
+  [Castle and town art](docs/MODERNIZATION.md#castle-and-town-art).
 - **Small additions:** a pause menu, mute, keyboard scrolling and zoom, keyboard support for menus
   and the multiplayer lobby, prices on the build buttons, markers that confirm each order, clearer
   error messages when something fails to load or connect.
@@ -178,6 +182,7 @@ npm run test:e2e    # plays the game in Chromium using Playwright
 npm run check       # lint + unit tests
 npm run vendor:three  # after changing the three version in package.json: copies it to client/vendor
 npm run extract:tileset  # after changing the book's map image: rebuilds the tiles generated maps use
+npm run build:art   # after changing tools/artgen: redraws the castle and town sprite sheets
 ```
 
 The browser tests need Chromium: run `npx playwright install chromium` once, or set
@@ -194,6 +199,7 @@ client/                 The game (static files served to the browser)
   manifest.webmanifest  Lets the game be installed as an app (landscape, full screen)
   sw.js                 Service worker: keeps a copy of the game for offline play
   images/, audio/       Artwork and sounds from the book
+  images/art/           Castle and town sprite sheets (made by npm run build:art)
   models/               3D models of the units and buildings (credits in models/CREDITS.md)
   vendor/three-r186/    Three.js (minified by scripts/vendor-three.js; loaded through an import map)
   js/main.js            Entry point: creates the game and wires up the browser UI
@@ -211,6 +217,7 @@ client/                 The game (static files served to the browser)
     data/levels.js      The campaign missions and the multiplayer map, with the sites they use
     data/maps.js        Map terrain data
     data/tileset.js     The book's map cut into tiles (made by scripts/extract-tileset.js)
+    setpieces/          Castle and town layouts, and the pieces they are built from
   js/app/               The browser side
     camera.js           Scrolling and zooming the view
     renderer.js         Drawing the map, units and fog on the canvases
@@ -239,6 +246,8 @@ test/                   Unit, simulation and server tests
 e2e/                    Playwright browser tests
 scripts/vendor-three.js Copies Three.js from node_modules into client/vendor
 scripts/extract-tileset.js  Cuts the book's map into the tiles generated maps are built from
+scripts/build-art.js    Runs the art generator in headless Chromium and saves its sprite sheets
+tools/artgen/           The art generator: builds castle and town pieces in 3D and renders them
 .github/workflows/      CI (ci.yml) and publishing to GitHub Pages (pages.yml)
 docs/MODERNIZATION.md   What changed compared to the book, and why
 ```
@@ -277,6 +286,16 @@ Sounds: all sounds from Free Sound (<http://www.freesound.org/>).
   (<https://sketchfab.com/3d-models/ah-64-apache-attack-helicopter-low-poly-34986214decd4b3db90e91f12e624d78>)
   by PolyDucky (<https://sketchfab.com/salphytheunemployed>), licensed under CC-BY-4.0
   (<http://creativecommons.org/licenses/by/4.0/>). Changes: compressed for the game.
+
+Castle and town art (made by `tools/artgen`):
+
+- Landmarks, props and trees from the KayKit Medieval Hexagon Pack by Kay Lousberg
+  (<https://kaylousberg.com>), CC0
+- The pixel-art palette is the Liberated Pixel Cup palette from LPC Revised
+  (<https://github.com/ElizaWy/LPC>), OGA-BY 3.0
+- Castle pieces designed after Castle Builder by Jon Rubashkin
+  (<https://github.com/JonRubashkin/Castle-Builder>); town layouts after Watabou's Medieval
+  Fantasy City Generator (<https://github.com/watabou/TownGeneratorOS>)
 
 3D engine: [Three.js](https://threejs.org) (MIT license, in `client/vendor/three-r186/LICENSE`).
 
