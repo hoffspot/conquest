@@ -6,7 +6,7 @@ import { Hud } from "./app/hud.js";
 import { Input } from "./app/input.js";
 import { GameLoop } from "./app/loop.js";
 import { Minimap } from "./app/minimap.js";
-import { Multiplayer } from "./app/multiplayer.js";
+import { Multiplayer, hasMultiplayerServer } from "./app/multiplayer.js";
 import { Renderer } from "./app/renderer.js";
 import { Sidebar } from "./app/sidebar.js";
 import { SinglePlayer } from "./app/singleplayer.js";
@@ -433,6 +433,9 @@ async function init() {
     for (const type of ["pointerdown", "pointerup", "keydown"]) {
         window.addEventListener(type, () => app.sounds.unlock(), { capture: true });
     }
+
+    // Copies of the game on a static web host (GitHub Pages) have no multiplayer server
+    $("multiplayerbutton").hidden = !hasMultiplayerServer();
 
     device.setUpInstall({ button: $("installbutton"), hint: $("installhint") });
     device.registerServiceWorker();

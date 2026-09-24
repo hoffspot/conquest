@@ -16,6 +16,9 @@ installed as an app.
 [docs/MODERNIZATION.md](docs/MODERNIZATION.md) describes every change and maps the book's files
 to the new ones, so the book is still a good guide to the code.
 
+**Play it now at <https://hoffspot.github.io/conquest/>** (the campaign; multiplayer needs the
+game's server, see below).
+
 ## Quick start
 
 You need [Node.js](https://nodejs.org/) 22 or newer.
@@ -33,15 +36,16 @@ room in the lobby and press **Join**.
 
 ### Playing on a phone
 
-1. Start the server on a computer (`npm start`). It prints the address to use on other devices,
-   for example `http://192.168.1.20:8080`.
-2. On the phone, connect to the same Wi-Fi network and open that address.
-3. Turn the phone sideways: the game is played in landscape (in portrait it asks you to turn the
+1. Open <https://hoffspot.github.io/conquest/> on the phone. For multiplayer, start the server on
+   a computer instead (`npm start`), connect the phone to the same Wi-Fi network and open the
+   address the server prints, for example `http://192.168.1.20:8080`.
+2. Turn the phone sideways: the game is played in landscape (in portrait it asks you to turn the
    phone and pauses).
-4. For full screen without the browser's toolbars, install the game: on iPhone tap **Share** then
+3. For full screen without the browser's toolbars, install the game: on iPhone tap **Share** then
    **Add to Home Screen**; on Android use **Install app** on the start screen or the browser menu.
    The installed game opens in landscape. On Android the game also goes full screen by itself when
-   a game starts.
+   a game starts. Installed from the online copy (or any HTTPS address), the campaign also works
+   offline.
 
 | Setting | How |
 | --- | --- |
@@ -52,6 +56,19 @@ room in the lobby and press **Join**.
 
 The game is plain ES modules with no build step, so any static web server can serve the
 `client/` folder; only multiplayer needs the Node server.
+
+### Hosting on GitHub Pages
+
+[.github/workflows/pages.yml](.github/workflows/pages.yml) publishes the `client/` folder to
+GitHub Pages every time `main` changes, once the lint and unit tests pass. Setting it up takes one
+step: in the repository's **Settings > Pages**, set **Source** to **GitHub Actions**. The workflow
+can also be run by hand from the **Actions** tab.
+
+GitHub Pages only serves files, so the published copy has no multiplayer server and its menu only
+offers the campaign. To add multiplayer, run the server on a host that supports WebSockets and set
+the repository variable `MULTIPLAYER_SERVER` (**Settings > Secrets and variables > Actions >
+Variables**) to its address, for example `wss://last-colony.example.com`. The workflow writes it
+into `client/js/app/hosting.js`.
 
 ## How to play
 
@@ -169,6 +186,7 @@ client/                 The game (static files served to the browser)
     input.js            Mouse, touch and keyboard controls
     hud.js              The buttons over the map
     device.js           Landscape lock, full screen, installing the app
+    hosting.js          Where the multiplayer server is (changed for GitHub Pages)
     loop.js             The game loop
     sidebar.js          Cash display and construction buttons
     ui.js               Screens, message box and in-game messages
@@ -182,6 +200,7 @@ server/
   static.js             Serves the client folder
 test/                   Unit, simulation and server tests
 e2e/                    Playwright browser tests
+.github/workflows/      CI (ci.yml) and publishing to GitHub Pages (pages.yml)
 docs/MODERNIZATION.md   What changed compared to the book, and why
 ```
 

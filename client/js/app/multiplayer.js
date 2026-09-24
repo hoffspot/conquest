@@ -1,5 +1,6 @@
 import { TICK_MS } from "../core/config.js";
 import { levels } from "../core/data/levels.js";
+import { MULTIPLAYER_SERVER } from "./hosting.js";
 import { showMessageBox, switchToScreen } from "./ui.js";
 
 const statusMessages = {
@@ -9,8 +10,9 @@ const statusMessages = {
     empty: "Open",
 };
 
-// The multiplayer server normally serves the game too, so connect back to the same host.
-// Add ?server=ws://host:port to the page URL to use a different server.
+// The multiplayer server normally serves the game too, so connect back to the same host (see
+// hosting.js). Add ?server=ws://host:port to the page URL to use a different server.
+// Returns null when there is no server (a copy of the game on a static web host).
 function serverUrl() {
     const override = new URLSearchParams(window.location.search).get("server");
 
@@ -18,9 +20,18 @@ function serverUrl() {
         return override;
     }
 
+    if (MULTIPLAYER_SERVER !== "same-origin") {
+        return MULTIPLAYER_SERVER || null;
+    }
+
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
 
     return `${protocol}//${window.location.host || "localhost:8080"}`;
+}
+
+/** Is there a multiplayer server to play on? */
+export function hasMultiplayerServer() {
+    return serverUrl() !== null;
 }
 
 /**
@@ -55,6 +66,12 @@ export class Multiplayer {
 
         if (!("WebSocket" in window)) {
             showMessageBox("Your browser does not support WebSocket. Multiplayer will not work.");
+
+            return;
+        }
+
+        if (!hasMultiplayerServer()) {
+            showMessageBox("Multiplayer needs the game's server, which this copy of the game doesn't have.");
 
             return;
         }
