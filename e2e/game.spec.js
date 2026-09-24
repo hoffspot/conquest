@@ -243,7 +243,7 @@ test.describe("3D units", () => {
         });
     }
 
-    test("the first mission's hero tank is drawn in 3D", async ({ page }) => {
+    test("units and buildings are drawn as 3D models", async ({ page }) => {
         await openGame(page);
         await page.getByRole("button", { name: "Campaign" }).click();
         await page.getByRole("button", { name: "Enter mission" }).click();
@@ -252,11 +252,11 @@ test.describe("3D units", () => {
         const drawnIn3D = () => game(page, () => {
             const { renderer, game: { items } } = window.lastColony;
 
-            return items.filter((item) => renderer.units3d?.has(item)).map((item) => item.uid);
+            return items.filter((item) => renderer.units3d?.has(item)).map((item) => `${item.type}/${item.name}`).sort();
         });
 
-        // Only the hero tank; everything else is still a sprite
-        await expect.poll(drawnIn3D).toEqual([-1]);
+        // The hero's tank and the base start in view (enemy patrols may be in view too)
+        await expect.poll(drawnIn3D).toEqual(expect.arrayContaining(["buildings/base", "vehicles/heavy-tank"]));
 
         // The 3D model replaces the sprite, and draws the same way every time
         await game(page, () => {

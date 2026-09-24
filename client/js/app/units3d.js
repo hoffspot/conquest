@@ -1,18 +1,22 @@
-// Draws units as 3D models with Three.js instead of sprites.
+// Draws units and buildings as 3D models with Three.js instead of sprites.
 //
-// Only the units are 3D: the map, buildings, fog of war and everything else stay 2D. Every frame,
-// the 3D units are rendered in one pass into a hidden WebGL canvas, each in its own square cell.
-// The 2D renderer then copies a unit's cell onto the map at the moment it would have drawn that
-// unit's sprite (see Entity.draw). So 3D units keep the sprites' draw order (in front of or behind
-// buildings and other units), selection rings stay under them, life bars and fog of war stay over
-// them, and tapping, selecting and the minimap work as before.
+// Only the models are 3D: the map, fog of war and interface stay 2D. Every frame, the items with
+// a model (see models.js) are rendered in one pass into a hidden WebGL canvas, each in its own
+// square cell, and the result is copied once into a 2D canvas (so that browsers read back the
+// WebGL canvas once per frame, not once per item). The 2D renderer then copies an item's cell
+// onto the map at the moment it would have drawn that item's sprite (see Entity.draw). So 3D items keep the sprites' draw order,
+// selection rings stay under them, life bars and fog of war stay over them, and tapping,
+// selecting and the minimap work as before.
 //
 // The camera matches the book's artwork: an orthographic view looking down at the map from
 // CAMERA_PITCH above the horizon. Ground positions are stretched away from the camera so that
 // they line up exactly with the painted map, while height moves things up the screen.
 
 import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { clone as cloneModel } from "three/addons/utils/SkeletonUtils.js";
 import { GRID_SIZE } from "../core/config.js";
+import { modelFiles, modelFor } from "./models.js";
 
 // The camera looks down at the map from this angle above the horizon, like the book's art
 export const CAMERA_PITCH = THREE.MathUtils.degToRad(60);
@@ -20,26 +24,27 @@ export const CAMERA_PITCH = THREE.MathUtils.degToRad(60);
 const SIN_PITCH = Math.sin(CAMERA_PITCH);
 const COS_PITCH = Math.cos(CAMERA_PITCH);
 
-// How far the camera is from the ground (only needs to be above the tallest model)
-const CAMERA_DISTANCE = 1000;
+// How far the camera is from the ground (above the tallest model, and beyond the far edge of the
+// canvas the models are drawn on)
+const CAMERA_DISTANCE = 5000;
 
 // Empty space around a model in its cell, in world pixels (room for antialiasing)
 const CELL_MARGIN = 2;
 
-// Size of the test cube in world pixels (the tank's sprite is 30 pixels across)
-const CUBE_SIZE = 20;
+const TEAM_COLORS = { blue: 0x4b5fc8, green: 0x4c9c56 };
 
-const TEAM_COLORS = {
-    blue: { body: 0x4b5fc8, front: 0xa4b4ff, edges: 0x121838 },
-    green: { body: 0x4c9c56, front: 0xa6e8ad, edges: 0x10301a },
-};
+// How strongly `tint` models take on the team colour (enough to tell the teams apart at a glance)
+const TINT_STRENGTH = 0.6;
 
-/**
- * Which units are drawn in 3D. To start with, a test: the first unit of the first mission (the
- * hero's heavy tank, the only heavy tank with uid -1), drawn as a cube.
- */
+// Damaged buildings and units are drawn darker
+const DAMAGED_SHADE = 0.55;
+
+// Sprite animations that build a building up: the model rises out of the ground as they play
+const RISING_ANIMATIONS = new Set(["teleport", "deploy"]);
+
+/** Does this item have a 3D model? (Items without one, such as the oil field, stay sprites.) */
 export function isDrawnIn3D(item) {
-    return item.name === "heavy-tank" && item.uid === -1;
+    return Boolean(modelFor(item));
 }
 
 /**
@@ -55,7 +60,7 @@ export function heightOnScreen(height) {
     return height * COS_PITCH;
 }
 
-/** The camera used for the 3D units: orthographic, looking down at the map from CAMERA_PITCH. */
+/** The camera used for the 3D items: orthographic, looking down at the map from CAMERA_PITCH. */
 export function createCamera() {
     const camera = new THREE.OrthographicCamera(0, 1, 0, -1, 0, 2 * CAMERA_DISTANCE);
 
@@ -91,68 +96,110 @@ export function interpolatedHeading(previous, current, directions, interpolation
     return (direction / directions) * Math.PI * 2;
 }
 
-// Shared by every cube of a team
-const cubeParts = new Map();
-
-function cubePartsFor(team) {
-    if (!cubeParts.has(team)) {
-        const colors = TEAM_COLORS[team] ?? TEAM_COLORS.blue;
-        const geometry = new THREE.BoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE);
-        const side = new THREE.MeshLambertMaterial({ color: colors.body });
-        // The front glows a little so the cube's facing shows even when it is in shadow
-        const front = new THREE.MeshLambertMaterial({ color: colors.front, emissive: colors.front, emissiveIntensity: 0.45 });
-
-        cubeParts.set(team, {
-            geometry,
-            // Box faces: east, west, top, bottom, south, north. Models face north when their
-            // direction is 0, so the north face is the front.
-            materials: [side, side, side, side, side, front],
-            edges: new THREE.EdgesGeometry(geometry),
-            edgeMaterial: new THREE.LineBasicMaterial({ color: colors.edges }),
-        });
-    }
-
-    return cubeParts.get(team);
+/** The turn (about the vertical axis) that makes a model whose front points along `facing` face north. */
+export function facingRotation(facing) {
+    return { "-z": 0, "+x": Math.PI / 2, "+z": Math.PI, "-x": -Math.PI / 2 }[facing] ?? 0;
 }
 
-// The test model: a cube sitting on the ground, with its front face lighter so its facing shows
-function createCube(team) {
-    const parts = cubePartsFor(team);
-    const body = new THREE.Mesh(parts.geometry, parts.materials);
-    const edges = new THREE.LineSegments(parts.edges, parts.edgeMaterial);
-    const model = new THREE.Group();
+/**
+ * Lay out square cells of the given sizes in rows (largest first). Returns each cell's position,
+ * in the order given, and the total width and height.
+ */
+export function packCells(sizes) {
+    const order = sizes.map((size, index) => ({ size, index })).sort((a, b) => b.size - a.size);
+    const area = sizes.reduce((total, size) => total + size * size, 0);
+    const rowWidth = Math.max(order[0]?.size ?? 0, Math.ceil(Math.sqrt(area) * 1.2));
+    const positions = new Array(sizes.length);
+    let x = 0;
+    let y = 0;
+    let rowHeight = 0;
+    let width = 0;
 
-    body.position.y = CUBE_SIZE / 2;
-    edges.position.y = CUBE_SIZE / 2;
-    model.add(body, edges);
+    for (const { size, index } of order) {
+        if (x > 0 && x + size > rowWidth) {
+            x = 0;
+            y += rowHeight;
+            rowHeight = 0;
+        }
 
-    // How far the model reaches from its centre on screen, for sizing its cell
-    const radius = Math.hypot(CUBE_SIZE, CUBE_SIZE) / 2;
+        positions[index] = { x, y };
+        x += size;
+        rowHeight = Math.max(rowHeight, size);
+        width = Math.max(width, x);
+    }
 
-    model.userData.reach = Math.max(radius, radius * SIN_PITCH + heightOnScreen(CUBE_SIZE));
+    return { positions, width, height: y + rowHeight };
+}
 
-    return model;
+/**
+ * The team colour for a recoloured material: the team's hue and saturation, keeping the
+ * material's own lightness so that light and dark shades of it stay distinct.
+ */
+export function recolour(color, team) {
+    const original = new THREE.Color(color).getHSL({});
+    const target = new THREE.Color(TEAM_COLORS[team] ?? TEAM_COLORS.blue).getHSL({});
+
+    return new THREE.Color().setHSL(target.h, target.s, THREE.MathUtils.clamp(original.l, 0.2, 0.75)).getHex();
+}
+
+// The models are lit by the sky and by sunlight from the north-west, as in the book's art. They
+// use cheap Lambert shading (the models' metallic PBR materials would render black without an
+// environment map).
+function lambert(material, team, model) {
+    const result = new THREE.MeshLambertMaterial({
+        name: material.name,
+        color: material.color ? material.color.clone() : new THREE.Color(0xffffff),
+        map: material.map ?? null,
+        vertexColors: material.vertexColors ?? false,
+        transparent: material.transparent ?? false,
+        opacity: material.opacity ?? 1,
+        side: material.side ?? THREE.FrontSide,
+        alphaTest: material.alphaTest ?? 0,
+        flatShading: material.flatShading ?? false,
+    });
+
+    if (model.recolour?.includes(material.name)) {
+        result.color.setHex(recolour(result.color, team));
+    } else if (model.tint) {
+        result.color.lerp(new THREE.Color(TEAM_COLORS[team] ?? TEAM_COLORS.blue), TINT_STRENGTH);
+    }
+
+    return result;
 }
 
 export class Units3D {
-    // For every unit drawn in 3D: its model and the directions used to smooth its turning
-    #units = new Map();
-    // Where each unit is in this frame's canvas, in canvas pixels
+    // Loaded model files, by file name
+    #scenes = new Map();
+    // Each model prepared for each team (coloured, sized, facing north), copied for every item
+    #prototypes = new Map();
+    // For every item drawn in 3D: its copy of the model and the state used to animate it
+    #items = new Map();
+    // Where each item is in this frame's canvas, in canvas pixels
     #cells = new Map();
-    #cellPixels = 0;
-    #cellWorld = 0;
     #scale = 1;
     #lost = false;
+    // What the latest rendering showed, to skip rendering the same thing again (saves battery)
+    #lastFrame = "";
 
-    /** Create the 3D renderer, or return undefined if the browser can't (units are then drawn as sprites). */
-    static create() {
+    /**
+     * Create the 3D renderer and load the models, or return undefined if the browser can't draw
+     * them (every item is then drawn as a sprite). A model that fails to load leaves just its
+     * items as sprites.
+     */
+    static async create(baseUrl = "models/") {
+        let units3d;
+
         try {
-            return new Units3D();
+            units3d = new Units3D();
         } catch (error) {
-            console.warn("3D units are not available, using sprites instead:", error);
+            console.warn("3D models are not available, using sprites instead:", error);
 
             return undefined;
         }
+
+        await units3d.load(baseUrl);
+
+        return units3d;
     }
 
     constructor() {
@@ -164,13 +211,16 @@ export class Units3D {
 
         this.scene = new THREE.Scene();
 
-        // Soft light from the sky, and sunlight from the north-west, as in the book's art
-        const sun = new THREE.DirectionalLight(0xffffff, 2.4);
+        const sun = new THREE.DirectionalLight(0xffffff, 1.8);
 
         sun.position.set(-1, 2, -1.2);
-        this.scene.add(new THREE.HemisphereLight(0xe6ecff, 0x40402c, 1.5), sun);
+        this.scene.add(new THREE.HemisphereLight(0xe6ecff, 0x40402c, 1.125), sun);
 
         this.camera = createCamera();
+
+        // Each frame's rendering, copied once for the 2D renderer to draw from
+        this.frame = document.createElement("canvas");
+        this.frameContext = this.frame.getContext("2d");
 
         // Phones can take the GPU away (e.g. in the background); draw sprites until it comes back
         this.canvas.addEventListener("webglcontextlost", () => {
@@ -178,94 +228,270 @@ export class Units3D {
         });
         this.canvas.addEventListener("webglcontextrestored", () => {
             this.#lost = false;
+            this.#lastFrame = "";
         });
     }
 
+    async load(baseUrl) {
+        const loader = new GLTFLoader();
+
+        await Promise.all(modelFiles().map(async (file) => {
+            try {
+                const gltf = await loader.loadAsync(`${baseUrl}${file}`);
+
+                this.#scenes.set(file, gltf.scene);
+            } catch (error) {
+                console.warn(`Could not load the 3D model ${file}, using sprites instead:`, error);
+            }
+        }));
+    }
+
+    // A model prepared for a team, or undefined if its file didn't load
+    #prototype(model, team) {
+        const key = `${model.file ?? model.files[team]}|${team}`;
+
+        if (this.#prototypes.has(key)) {
+            return this.#prototypes.get(key);
+        }
+
+        const source = this.#scenes.get(model.files ? model.files[team] ?? model.files.blue : model.file);
+
+        if (!source) {
+            this.#prototypes.set(key, undefined);
+
+            return undefined;
+        }
+
+        const object = cloneModel(source);
+        const materials = new Map();
+        const damaged = new Map();
+
+        object.traverse((node) => {
+            if (!node.isMesh) {
+                return;
+            }
+
+            const convert = (material) => {
+                if (!materials.has(material)) {
+                    const healthy = lambert(material, team, model);
+                    const dark = healthy.clone();
+
+                    dark.color.multiplyScalar(DAMAGED_SHADE);
+                    materials.set(material, healthy);
+                    damaged.set(healthy, dark);
+                }
+
+                return materials.get(material);
+            };
+
+            node.material = Array.isArray(node.material) ? node.material.map(convert) : convert(node.material);
+            // Models are drawn into small cells positioned by hand; don't let Three.js cull them
+            node.frustumCulled = false;
+        });
+
+        // Sit on the ground, centred on the item's position, sized to its footprint, facing north
+        object.updateMatrixWorld(true);
+
+        const box = new THREE.Box3().setFromObject(object);
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
+        const scale = Array.isArray(model.footprint)
+            ? Math.min(model.footprint[0] / size.x, model.footprint[1] / size.z)
+            : model.footprint / Math.max(size.x, size.z);
+        const root = new THREE.Group();
+
+        object.position.set(-center.x, -box.min.y, -center.z);
+        root.add(object);
+        root.rotation.y = facingRotation(model.facing);
+        root.scale.setScalar(scale);
+
+        // How far the model reaches from its position on screen, for sizing its cell. (Aircraft
+        // are rendered on the ground and drawn higher up, above a shadow, by draw().)
+        const radius = (Math.hypot(size.x, size.z) / 2) * scale;
+        const reach = Math.max(radius, radius * SIN_PITCH + heightOnScreen(size.y * scale)) + CELL_MARGIN;
+        const prototype = { root, damaged, reach, shadowRadius: model.altitude ? radius * 0.5 : 0 };
+
+        this.#prototypes.set(key, prototype);
+
+        return prototype;
+    }
+
+    // A copy of the item's model, with the parts that move found
+    #create(item, model, prototype, tick) {
+        const body = cloneModel(prototype.root);
+        const pose = new THREE.Group();
+        const holder = new THREE.Group();
+
+        pose.add(body);
+        holder.add(pose);
+
+        const spinning = (model.spin ?? []).map(({ node, axis, turnsPerSecond }) => {
+            const part = body.getObjectByName(node);
+
+            return part && { part, rest: part.quaternion.clone(), axis: new THREE.Vector3(axis === "x" ? 1 : 0, axis === "y" ? 1 : 0, axis === "z" ? 1 : 0), turnsPerSecond };
+        }).filter(Boolean);
+        const aimPart = model.aim ? body.getObjectByName(model.aim) : undefined;
+
+        this.scene.add(holder);
+
+        return {
+            model,
+            prototype,
+            body,
+            pose,
+            holder,
+            spinning,
+            aim: aimPart && { part: aimPart, rest: aimPart.rotation.y },
+            damaged: false,
+            previous: item.direction ?? 0,
+            current: item.direction ?? 0,
+            tick,
+        };
+    }
+
     /**
-     * Render this frame's 3D units. Call before drawing the items.
+     * Render this frame's 3D items. Call before drawing the items.
      * @param {Iterable} items  every item on the map
-     * @param {{scale: number, interpolation: number, tick: number, view: {x: number, y: number, width: number, height: number}}} frame
-     *        scale: canvas pixels per world pixel; view: the visible part of the map in world pixels
+     * @param {{scale: number, interpolation: number, tick: number, time?: number, view: {x: number, y: number, width: number, height: number}}} frame
+     *        scale: canvas pixels per world pixel; time: milliseconds, for rotors; view: the visible part of the map in world pixels
      */
-    render(items, { scale, interpolation, tick, view }) {
+    render(items, { scale, interpolation, tick, time = performance.now(), view }) {
         this.#cells.clear();
 
-        const units = [];
+        const visible = [];
         const present = new Set();
 
         for (const item of items) {
-            if (!isDrawnIn3D(item)) {
+            const model = modelFor(item);
+            const prototype = model && this.#prototype(model, item.team);
+
+            if (!prototype) {
                 continue;
             }
 
             present.add(item);
 
-            let unit = this.#units.get(item);
+            let drawn = this.#items.get(item);
 
-            if (!unit) {
-                unit = { model: createCube(item.team), previous: item.direction, current: item.direction, tick };
-                this.#units.set(item, unit);
-                this.scene.add(unit.model);
+            if (!drawn) {
+                drawn = this.#create(item, model, prototype, tick);
+                this.#items.set(item, drawn);
             }
 
             // Remember the direction at the previous tick, to turn smoothly in between
-            if (unit.tick !== tick) {
-                unit.previous = unit.current;
-                unit.tick = tick;
+            if (drawn.tick !== tick) {
+                drawn.previous = drawn.current;
+                drawn.tick = tick;
             }
 
-            unit.current = item.direction;
-
-            unit.model.visible = false;
+            drawn.current = item.direction ?? 0;
+            drawn.holder.visible = false;
 
             if (this.#isInView(item, view)) {
-                units.push({ item, unit });
+                visible.push({ item, drawn });
             }
         }
 
-        // Forget units that are gone
-        for (const [item, unit] of this.#units) {
+        // Forget items that are gone
+        for (const [item, drawn] of this.#items) {
             if (!present.has(item)) {
-                this.scene.remove(unit.model);
-                this.#units.delete(item);
+                this.scene.remove(drawn.holder);
+                this.#items.delete(item);
             }
         }
 
-        if (units.length === 0 || this.#lost || this.renderer.getContext().isContextLost()) {
+        if (visible.length === 0 || this.#lost || this.renderer.getContext().isContextLost()) {
             return;
         }
 
-        // One square cell per unit, big enough for the largest model, in a grid
-        const reach = Math.max(...units.map(({ unit }) => unit.model.userData.reach)) + CELL_MARGIN;
-        const cellPixels = Math.ceil(2 * reach * scale);
-        const cellWorld = cellPixels / scale;
-        const columns = Math.ceil(Math.sqrt(units.length));
-        const rows = Math.ceil(units.length / columns);
+        // One square cell per item, big enough for its model
+        const sizes = visible.map(({ drawn }) => Math.ceil(2 * drawn.prototype.reach * scale));
+        const layout = packCells(sizes);
 
-        this.#resize(columns * cellPixels, rows * cellPixels, scale);
+        this.#resize(layout.width, layout.height, scale);
 
-        units.forEach(({ item, unit }, index) => {
-            const column = index % columns;
-            const row = Math.floor(index / columns);
-            const position = groundToScene((column + 0.5) * cellWorld, (row + 0.5) * cellWorld);
+        const poses = visible.map(({ item, drawn }, index) => {
+            const size = sizes[index];
+            const { x, y } = layout.positions[index];
+            const ground = groundToScene((x + size / 2) / scale, (y + size / 2) / scale);
 
-            unit.model.position.set(position.x, position.y, position.z);
-            unit.model.rotation.y = -interpolatedHeading(unit.previous, unit.current, item.directions, interpolation);
-            unit.model.visible = true;
+            drawn.holder.position.set(ground.x, ground.y, ground.z);
+            drawn.holder.visible = true;
+            this.#cells.set(item, { x, y, size });
 
-            this.#cells.set(item, { x: column * cellPixels, y: row * cellPixels });
+            return this.#pose(item, drawn, interpolation, time);
         });
 
-        this.#cellPixels = cellPixels;
-        this.#cellWorld = cellWorld;
         this.#scale = scale;
 
+        // Nothing moved since the last frame (for example while paused): keep that rendering
+        const frame = `${scale}|${layout.width}x${layout.height}|${poses.join("|")}`;
+
+        if (frame === this.#lastFrame) {
+            return;
+        }
+
+        this.#lastFrame = frame;
         this.renderer.render(this.scene, this.camera);
+
+        // Copy the rendering once; draw() copies each item's cell from here
+        if (this.frame.width !== this.canvas.width || this.frame.height !== this.canvas.height) {
+            this.frame.width = this.canvas.width;
+            this.frame.height = this.canvas.height;
+        }
+
+        this.frameContext.clearRect(0, 0, layout.width, layout.height);
+        this.frameContext.drawImage(this.canvas, 0, 0, layout.width, layout.height, 0, 0, layout.width, layout.height);
+    }
+
+    // Turn, aim, spin, rise and darken the item's model to match the item. Returns a summary of
+    // the pose, to tell whether anything changed since the last frame.
+    #pose(item, drawn, interpolation, time) {
+        const heading = item.directions
+            ? interpolatedHeading(drawn.previous, drawn.current, item.directions, interpolation)
+            : 0;
+
+        if (drawn.aim) {
+            // The building stays put and only the gun turns
+            drawn.aim.part.rotation.y = drawn.aim.rest - heading;
+        } else if (item.type !== "buildings") {
+            drawn.pose.rotation.y = -heading;
+        }
+
+        for (const { part, rest, axis, turnsPerSecond } of drawn.spinning) {
+            part.quaternion.copy(rest).multiply(new THREE.Quaternion().setFromAxisAngle(axis, (time / 1000) * turnsPerSecond * Math.PI * 2));
+        }
+
+        // Buildings rise out of the ground while they teleport in or deploy
+        const animation = item.imageList;
+        const rising = item.type === "buildings" && RISING_ANIMATIONS.has(animation?.name);
+
+        drawn.pose.scale.y = rising ? Math.max(0.08, (item.imageOffset - animation.offset + 1) / animation.count) : 1;
+
+        const damaged = item.lifeCode === "damaged";
+
+        if (damaged !== drawn.damaged) {
+            const swap = damaged
+                ? (material) => drawn.prototype.damaged.get(material) ?? material
+                : (material) => [...drawn.prototype.damaged].find(([, dark]) => dark === material)?.[0] ?? material;
+
+            drawn.body.traverse((node) => {
+                if (node.isMesh) {
+                    node.material = Array.isArray(node.material) ? node.material.map(swap) : swap(node.material);
+                }
+            });
+            drawn.damaged = damaged;
+        }
+
+        // Spinning parts change every frame
+        const spin = drawn.spinning.length ? time : 0;
+
+        return `${drawn.body.uuid}:${heading.toFixed(3)}:${drawn.pose.scale.y.toFixed(3)}:${damaged}:${spin}`;
     }
 
     /**
-     * Draw a unit rendered this frame onto the 2D canvas, centred on the unit's position.
-     * Returns false if the unit wasn't rendered in 3D (so its sprite should be drawn instead).
+     * Draw an item rendered this frame onto the 2D canvas, on the item's position.
+     * Returns false if the item wasn't rendered in 3D (so its sprite should be drawn instead).
      */
     draw(context, item) {
         const cell = this.#cells.get(item);
@@ -274,14 +500,25 @@ export class Units3D {
             return false;
         }
 
-        const half = this.#cellWorld / 2;
         const scale = this.#scale;
+        const world = cell.size / scale;
+        const ground = groundOnCanvas(item);
+        const drawn = this.#items.get(item);
+        const altitude = drawn.model.altitude ?? 0;
+
+        // Aircraft fly above a soft round shadow, as their sprites did
+        if (altitude) {
+            context.beginPath();
+            context.arc(ground.x, ground.y, drawn.prototype.shadowRadius, 0, Math.PI * 2);
+            context.fillStyle = "rgba(0, 0, 0, 0.25)";
+            context.fill();
+        }
 
         // Line the cell up with whole canvas pixels so the model stays sharp
-        const x = Math.round((item.drawingX + item.pixelOffsetX - half) * scale) / scale;
-        const y = Math.round((item.drawingY + item.pixelOffsetY - half) * scale) / scale;
+        const x = Math.round((ground.x - world / 2) * scale) / scale;
+        const y = Math.round((ground.y - altitude - world / 2) * scale) / scale;
 
-        context.drawImage(this.canvas, cell.x, cell.y, this.#cellPixels, this.#cellPixels, x, y, this.#cellWorld, this.#cellWorld);
+        context.drawImage(this.frame, cell.x, cell.y, cell.size, cell.size, x, y, world, world);
 
         return true;
     }
@@ -292,20 +529,40 @@ export class Units3D {
     }
 
     #isInView(item, { x, y, width, height }) {
-        const margin = GRID_SIZE * 3;
-        const itemX = item.x * GRID_SIZE;
-        const itemY = item.y * GRID_SIZE;
+        const margin = GRID_SIZE * 4;
+        const ground = groundOnMap(item);
 
-        return itemX > x - margin && itemX < x + width + margin && itemY > y - margin && itemY < y + height + margin;
+        return ground.x > x - margin && ground.x < x + width + margin && ground.y > y - margin && ground.y < y + height + margin;
     }
 
-    // Size the canvas and point the camera at it: canvas pixel (px, py) shows the ground at
-    // (px / scale, py / scale) world pixels
+    // Size the canvas (growing it in steps, so it isn't resized every frame) and point the camera
+    // at it: canvas pixel (px, py) shows the ground at (px / scale, py / scale) world pixels
     #resize(width, height, scale) {
-        if (this.canvas.width !== width || this.canvas.height !== height) {
-            this.renderer.setSize(width, height, false);
+        const step = 128;
+        const needWidth = Math.ceil(width / step) * step;
+        const needHeight = Math.ceil(height / step) * step;
+        const tooSmall = this.canvas.width < needWidth || this.canvas.height < needHeight;
+        const muchTooBig = this.canvas.width > needWidth * 2 || this.canvas.height > needHeight * 2;
+
+        if (tooSmall || muchTooBig) {
+            this.renderer.setSize(needWidth, needHeight, false);
         }
 
-        aimCamera(this.camera, width / scale, height / scale);
+        aimCamera(this.camera, this.canvas.width / scale, this.canvas.height / scale);
     }
+}
+
+// Where an item stands on the map, in world pixels: the centre of a building's base, or a unit's position
+function groundOnMap(item) {
+    return item.type === "buildings"
+        ? { x: item.x * GRID_SIZE + item.baseWidth / 2, y: item.y * GRID_SIZE + item.baseHeight / 2 }
+        : { x: item.x * GRID_SIZE, y: item.y * GRID_SIZE };
+}
+
+// The same point on the canvas being drawn (Entity.draw has just worked out drawingX/drawingY,
+// which include smooth movement between ticks)
+function groundOnCanvas(item) {
+    return item.type === "buildings"
+        ? { x: item.drawingX + item.pixelOffsetX + item.baseWidth / 2, y: item.drawingY + item.pixelOffsetY + item.baseHeight / 2 }
+        : { x: item.drawingX + item.pixelOffsetX, y: item.drawingY + item.pixelOffsetY };
 }

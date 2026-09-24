@@ -7,7 +7,7 @@
 //     npm install && npm run vendor:three
 //
 // then update the import map in client/index.html and CACHE_NAME in client/sw.js, and delete the
-// old vendor folder.
+// old vendor folder. Add-ons (the glTF loader) are copied to addons/ and imported as three/addons/.
 
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -28,6 +28,16 @@ for (const name of ["three.core", "three.module"]) {
     const { code } = await transform(source, { minify: true, format: "esm", legalComments: "inline" });
 
     await writeFile(path.join(target, `${name}.min.js`), code.replaceAll("./three.core.js", "./three.core.min.js"));
+}
+
+// Add-ons the game uses (loading glTF models), keeping their paths so their relative imports work
+for (const addon of ["loaders/GLTFLoader.js", "utils/BufferGeometryUtils.js", "utils/SkeletonUtils.js"]) {
+    const source = await readFile(path.join(three, "examples/jsm", addon), "utf8");
+    const { code } = await transform(source, { minify: true, format: "esm", legalComments: "inline" });
+    const file = path.join(target, "addons", addon);
+
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, code);
 }
 
 await copyFile(path.join(three, "LICENSE"), path.join(target, "LICENSE"));
