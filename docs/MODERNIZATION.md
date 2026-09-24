@@ -438,7 +438,7 @@ unchanged. [CHARACTERS.md](CHARACTERS.md) covers the engine and the research beh
 
 ### Tooling
 
-- `npm test`: 197 unit, simulation, server and character tests using Node's built-in test runner. They
+- `npm test`: 198 unit, simulation, server and character tests using Node's built-in test runner. They
   include a scripted playthrough of mission 1, every mission running for 12 minutes of game time,
   and two simulated multiplayer clients checked for identical state after every tick.
 - `npm run test:e2e`: Playwright tests that play the game in Chromium, covering the campaign,

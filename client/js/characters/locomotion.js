@@ -3,9 +3,10 @@
 //  - A "stride wheel" turns distance into gait phase: the phase advances by the distance walked
 //    over the stride length for that speed (from the walk ratio), so cadence and stride change
 //    with speed the way people's do, and joint swings scale with the stride.
-//  - The joint angles come from the gait curves (forward kinematics). The pelvis then sits at the
-//    height that puts the lower foot on the ground, which gives the body its natural rise and
-//    fall, and sways over the standing foot.
+//  - The joint angles come from the gait curves (forward kinematics). The pelvis rises and falls
+//    in a smooth wave, twice a stride, as people's does: lowest just after each heel strike and
+//    highest in mid-stance. How far, and how high it is, come from how far the legs reach through
+//    a stride, so no planted foot is left in the air. It also sways over the standing foot.
 //  - A foot on the ground stays where it landed ("foot locking"): whatever small slide the joint
 //    angles would make, two-bone inverse kinematics bends the leg to keep the foot planted, and
 //    the swinging foot catches up during its swing.
@@ -33,6 +34,13 @@ const smooth = (edge0, edge1, x) => {
     return t * t * (3 - 2 * t);
 };
 const wrap = (phase) => ((phase % 1) + 1) % 1;
+
+// The pelvis rises and falls twice a stride, lowest this far after each heel strike (in the
+// loading response). How far and how high are measured at these amounts of stride (0 standing
+// still), at this many points through a stride
+const LOWEST = 0.1;
+const LEVELS = [0, 0.25, 0.5, 0.75, 1, 1.3];
+const POINTS = 32;
 
 const _point = new THREE.Vector3();
 const _target = new THREE.Vector3();
@@ -67,6 +75,7 @@ export class Walker {
     /** Walk another way (a WALK_STYLES entry, or your own). */
     setStyle(style) {
         this.style = { ...WALK_STYLES.natural, ...style };
+        this.heights = [];
     }
 
     /** Measure the body (call after the character's shape changes). */
@@ -108,6 +117,7 @@ export class Walker {
         });
 
         this.feet.forEach((foot) => (foot.planted = false));
+        this.heights = [];
     }
 
     /**
@@ -157,11 +167,79 @@ export class Walker {
 
     #pose() {
         const rig = this.rig;
-        const style = this.style;
         const s = this.amount;
         const p = this.phase;
         const phases = [p, wrap(p + 0.5)];
-        const breathe = Math.sin(this.time * 2 * Math.PI * 0.25);
+        const height = this.#height(p, s);
+
+        this.#setJoints(phases, s, Math.sin(this.time * 2 * Math.PI * 0.25));
+
+        // Sway over the standing foot, and rise and fall
+        rig.offset.set(this.style.sway * Math.min(1, s * 1.5) * Math.sin(2 * Math.PI * p), height, 0);
+        rig.apply();
+        this.character.object.updateMatrixWorld(true);
+
+        // Keep planted feet on the ground where they landed, and swinging feet off it
+        SIDES.forEach((side, i) => this.#plant(side, i, phases[i], s));
+
+        // Toes bend to stay flat on the ground as the heel lifts
+        SIDES.forEach((side, i) => this.#flattenToes(side, i));
+    }
+
+    /**
+     * How high the pelvis sits at phase `p` (the left foot's) with `s` of a full stride: a smooth
+     * wave, lowest just after each heel strike and highest in mid-stance. How far it rises and
+     * falls is how far the legs' reach does through a stride (up to a limit), and it's never
+     * higher than lets the feet on the ground touch it; the legs bend to meet the ground where
+     * it's lower.
+     */
+    #height(p, s) {
+        const upper = Math.min(LEVELS.length - 1, Math.max(1, LEVELS.findIndex((level) => level >= s)));
+        const lower = upper - 1;
+        const t = Math.min(1, (s - LEVELS[lower]) / (LEVELS[upper] - LEVELS[lower]));
+        const [a, b] = [this.#reach(lower), this.#reach(upper)];
+        const middle = a.middle + (b.middle - a.middle) * t;
+        const rise = a.rise + (b.rise - a.rise) * t;
+
+        return middle - rise * Math.cos(4 * Math.PI * (p - LOWEST));
+    }
+
+    /**
+     * How high the pelvis can be through a stride at one of the LEVELS (from posing it at
+     * POINTS phases, the feet on the ground just touching it), as the middle and rise of the wave
+     * that stays under it. Measured once for each style and body.
+     */
+    #reach(level) {
+        if (!this.heights[level]) {
+            const s = LEVELS[level];
+            const highest = [];
+
+            for (let k = 0; k < POINTS; k++) {
+                const phases = [k / POINTS, wrap(k / POINTS + 0.5)];
+
+                this.#setJoints(phases, s, 0);
+                this.rig.apply();
+                this.character.object.updateMatrixWorld(true);
+                highest.push(Math.min(...[0, 1].filter((i) => s === 0 || phases[i] < STANCE).map((i) => -this.#lowest(i))));
+            }
+
+            // Its two steps alike, and no further than a real walk's rise and fall
+            const half = POINTS / 2;
+            const step = highest.slice(0, half).map((h, k) => Math.min(h, highest[k + half]));
+            const rise = Math.min(this.legLength * 0.028, (Math.max(...step) - Math.min(...step)) / 2);
+            const middle = Math.min(...highest.map((h, k) => h + rise * Math.cos(4 * Math.PI * (k / POINTS - LOWEST)))) - 0.002;
+
+            this.heights[level] = { middle, rise };
+        }
+
+        return this.heights[level];
+    }
+
+    /** Set the joints for the feet's phases (left, right), `s` of a full stride. */
+    #setJoints(phases, s, breathe) {
+        const rig = this.rig;
+        const style = this.style;
+        const p = phases[0];
 
         rig.reset();
 
@@ -243,24 +321,6 @@ export class Walker {
             rig.setAngles(`${side}HandThumb3`, { flex: grip ? 30 : 0 });
         });
 
-        // Sway over the standing foot
-        rig.offset.x = style.sway * Math.min(1, s * 1.5) * Math.sin(2 * Math.PI * p);
-        rig.apply();
-        this.character.object.updateMatrixWorld(true);
-
-        // Sit the pelvis at the height that puts the lower standing foot on the ground
-        const standing = [0, 1].filter((i) => s === 0 || phases[i] < STANCE);
-        const lowest = standing.map((i) => this.#lowest(i));
-
-        rig.offset.y = -Math.min(...lowest);
-        rig.apply();
-        this.character.object.updateMatrixWorld(true);
-
-        // Keep planted feet where they landed, and swinging feet off the ground
-        SIDES.forEach((side, i) => this.#plant(side, i, phases[i], s));
-
-        // Toes bend to stay flat on the ground as the heel lifts
-        SIDES.forEach((side, i) => this.#flattenToes(side, i));
     }
 
     /** How high a foot's lowest point (heel, ball or toe tip) is off the ground: 0 left, 1 right. */
@@ -339,12 +399,14 @@ export class Walker {
             foot.correction.y = 0;
 
             // On the ground: its lowest point just touching it
-            if (phase < STANCE - 0.05 || s === 0) {
-                lift = -this.#lowest(i);
-            }
+            lift = -this.#lowest(i);
         } else {
+            // Lifting off from the ground, easing into clearing it by a little
+            const off = smooth(STANCE, STANCE + 0.08, phase);
+            const lowest = this.#lowest(i);
+
             foot.correction.copy(foot.release).multiplyScalar(1 - smooth(STANCE, STANCE + 0.2, phase));
-            lift = Math.max(0, 0.008 - this.#lowest(i));
+            lift = -lowest + (Math.max(0, 0.008 * off - lowest) + lowest) * off;
         }
 
         if (foot.correction.lengthSq() < 1e-8 && Math.abs(lift) < 1e-4) {

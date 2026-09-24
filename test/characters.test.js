@@ -10,7 +10,7 @@ import { EQUIPMENT, ITEMS, SLOTS } from "../client/js/characters/equipment.js";
 import { aboveHairline, beardAmount } from "../client/js/characters/face.js";
 import { amplitude, cadence, CURVES, curveAt, NATURAL_SPEED, phaseName, STANCE, strideLength, walkToRunSpeed } from "../client/js/characters/gait.js";
 import { buildGarment, GARMENTS, measureBody, texelMap } from "../client/js/characters/garments.js";
-import { Walker } from "../client/js/characters/locomotion.js";
+import { Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
 import { allMacroTargetNames, components, MACRO_DEFAULTS, macroTargets } from "../client/js/characters/macro.js";
 import { decodeSection, encodeSection, Packer } from "../client/js/characters/pack.js";
 import { PRESETS } from "../client/js/characters/presets.js";
@@ -332,6 +332,31 @@ describe("walking (locomotion.js)", () => {
         assert.ok(Math.abs((f.object.position.z - start) / 3 - 1.3) < 0.05, "moves at its speed");
         assert.ok(slide < 0.01, `the planted foot slides ${slide} m`);
         assert.ok(lowest > -0.003, `feet stay out of the ground (${lowest})`);
+    });
+
+    it("rises and falls smoothly, without dropping as a foot lifts off", () => {
+        for (const style of [WALK_STYLES.natural, WALK_STYLES.orc]) {
+            const f = figure();
+            const walker = new Walker(f, style);
+            const hips = f.rig.bone("Hips");
+            const dt = 1 / 120;
+            const heights = [];
+
+            for (let t = 0; t < 5; t += dt) {
+                walker.update(dt, { speed: 1.3 });
+
+                if (t > 2) {
+                    heights.push(hips.getWorldPosition(new THREE.Vector3()).y);
+                }
+            }
+
+            const steepest = Math.max(...heights.slice(1).map((h, k) => Math.abs(h - heights[k])));
+            const range = Math.max(...heights) - Math.min(...heights);
+
+            // People's hips rise and fall about 4 cm, at up to about a quarter of a metre a second
+            assert.ok(steepest < 0.003, `the hips move ${(steepest * 1000).toFixed(1)} mm in a 120th of a second`);
+            assert.ok(range > 0.015 && range < 0.065, `the hips rise and fall ${(range * 100).toFixed(1)} cm`);
+        }
     });
 });
 

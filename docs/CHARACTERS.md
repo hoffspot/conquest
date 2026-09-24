@@ -198,8 +198,16 @@ standing, arms at the sides, palms facing the thighs.
 - **Joint angles.** The pelvis (obliquity, rotation), hips (flexion, adduction), knees, ankles,
   shoulders and elbows follow the measured curves. The trunk counter-rotates against the pelvis
   and the head stays level.
-- **Height and sway.** The pelvis sits at whatever height puts the lower standing foot on the
-  ground, which makes the body's rise and fall. It sways over the standing foot.
+- **Height and sway.** The pelvis rises and falls in a smooth wave, twice a stride, as people's
+  does: lowest just after each heel strike, highest in mid-stance, about 4 cm at a natural pace.
+  How far it rises and falls, and how high it is, come from how far the legs reach through a
+  stride. That is measured once for each style and body at a few stride lengths, from standing to
+  a fast walk, and kept low enough that no planted foot floats. The legs bend to meet the ground
+  where it's lower. It sways over the standing foot.
+  - Sitting the pelvis on whichever standing foot was lowest made it drop 2 cm (9 cm for the
+    orc) in a single frame at each toe-off, when the trailing toe, which had been propping it
+    up, left the ground. A test checks the hips never move more than 3 mm in a 120th of a
+    second.
 - **Foot locking.** A planted foot stays where it landed, pivoting on its heel early in stance and
   its ball late in stance. Two-bone IK bends the leg to keep it there. The swinging foot eases
   back, and toes bend to stay flat as the heel lifts. The tests check that a planted foot moves
