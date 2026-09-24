@@ -15,7 +15,8 @@
     "lint": "eslint .",
     "check": "npm run lint && npm test",
     "vendor:three": "node scripts/vendor-three.js",
-    "extract:tileset": "node scripts/extract-tileset.js"
+    "extract:tileset": "node scripts/extract-tileset.js",
+    "build:art": "node scripts/build-art.js"
   },
   "dependencies": {
     "ws": "^8.18.3"

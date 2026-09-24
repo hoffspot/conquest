@@ -377,9 +377,55 @@ Multiplayer games get one too. The book's map is still one tick away on the miss
   - A fingerprint of one map guards against accidental changes, which would stop players with
     different versions of the game from playing together.
 
+### Castle and town art
+
+A first step towards giving the maps a medieval, role-playing-game look (keeping the units, the
+interface and the missions as they are): a generator that makes the art for castles and towns,
+and the layouts to put them in. It isn't used on the maps yet.
+
+- **Modelled, then rendered.** Rather than drawing tiles by hand, each piece is built as a 3D
+  model in code and rendered from the game's own camera (looking down from 60°, the ground lined
+  up with the map grid, the 3D units' sunlight). So the art matches the units' angle and
+  lighting exactly, and one builder gives any number of variants. This is how Diablo, StarCraft
+  and Age of Empires II made their art.
+- **The engine** (`tools/artgen`, see its [README](../tools/artgen/README.md)) runs at build time
+  in headless Chromium (`npm run build:art`). It saves one sprite sheet per style to
+  `client/images/art/`, about 0.4 to 0.9 MB each.
+  - **Castle pieces:** walls, round and square towers with battlements or roofs, gatehouses
+    facing each way, and keeps with corner turrets. Their design follows Castle Builder.
+  - **Houses** of 8 sizes in 4 styles (thatched cottages, timber-framed, brick and stone), each
+    with variants that differ in height, roof, colours, windows and chimney.
+  - **Landmarks, props and trees** (tavern, church, blacksmith, market, windmill, well, tents,
+    barrels and so on) from KayKit's free Medieval Hexagon models.
+  - Two styles: smooth shading, and pixel art in the Liberated Pixel Cup palette.
+  - Each piece's ground shadow is kept apart from the piece, so that neighbouring shadows merge
+    instead of doubling, and units can drive through a shadow rather than under it.
+- **Layouts** (`client/js/core/setpieces`) decide what goes where, on a rectangle of grid
+  squares, and say which squares units can't cross.
+  - **Castles:** an outer wall (a rectangle, or an L shape) with towers at the corners and every
+    few squares. A gatehouse faces the way in. The keep is as big as fits, towards the back.
+    Halls and stables stand against the walls, with a well and props in the courtyard, a paved
+    way from the gate to the keep, and a road out. The castle can face any way.
+  - **Towns:** as in Watabou's Medieval Fantasy City Generator, but at the scale of the game's
+    units. A market square has streets from it to each way in, and lanes branching off.
+    Houses stand on plots along every street, facing it. The tavern, church and blacksmith stand
+    on the square, with a well and market stalls. Gardens and trees fill the backs of the plots,
+    and there may be a windmill on the edge of town. Streets are two squares wide so tanks can
+    drive through.
+  - Like the map generator, layouts use only seeded random numbers and whole-number arithmetic,
+    so they can be made in multiplayer games.
+- **Tests** (17): castles facing every way and towns with every combination of ways in, each from
+  30 seeds and in different sizes. They check:
+  - every piece has art, is its catalogued size, stays on the grid and never overlaps another;
+  - the road into a castle reaches the keep and every open square of the courtyard;
+  - every way into a town joins every other, every house faces a street, and every street is
+    two squares wide;
+  - the same seed gives the same layout;
+  - the layout code only uses safe arithmetic.
+
 ### Tooling
 
-- `npm test`: 149 unit, simulation and server tests using Node's built-in test runner. They
+- `npm test`: 166 unit, simulation and server tests using Node's built-in test runner. They
   include a scripted playthrough of mission 1, every mission running for 12 minutes of game time,
   and two simulated multiplayer clients checked for identical state after every tick.
 - `npm run test:e2e`: Playwright tests that play the game in Chromium, covering the campaign,
@@ -390,6 +436,7 @@ Multiplayer games get one too. The book's map is still one tick away on the miss
   and on an emulated iPhone 16 Pro in landscape: the layout, taps, dragging, pinching, touch and
   hold selection, placing buildings and the portrait "turn your device" screen.
 - `npm run lint`: ESLint.
+- `npm run build:art`: makes the castle and town sprite sheets (see [Castle and town art](#castle-and-town-art)).
 - GitHub Actions runs all of the above on every push.
 - Every change to `main` is published to GitHub Pages (<https://hoffspot.github.io/conquest/>)
   after the lint and unit tests pass. That copy has no multiplayer server, so its menu only offers
