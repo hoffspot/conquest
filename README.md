@@ -80,7 +80,8 @@ press **Continue**.
 
 **A new map every time.** Each mission is played on a newly generated map, so the lakes, rivers,
 lava and trees, and where the bases, convoys and patrols are, change every time, as in Diablo.
-The mission briefing shows the map, its number, and buttons to try a **New map** or play on
+The mission briefing shows the map as the mission starts (under the fog of war, apart from around
+your base), its number, and buttons to try a **New map** or play on
 **The book's map** instead. If you fail a mission, trying again keeps the same map. To play a map
 again later, add its number to the address: `?seed=123456`.
 
