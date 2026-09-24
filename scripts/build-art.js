@@ -1,14 +1,10 @@
 // Generates the art for castles and towns (npm run build:art): opens the art generator
 // (tools/artgen) in headless Chromium, which draws every piece with Three.js, and saves the
-// sheets it makes to client/images/art/:
-//
-//   setpieces-smooth.webp / .json   smooth shading, 40 pixels per grid square
-//   setpieces-pixel.webp / .json    pixel art in the LPC palette, 32 pixels per grid square
+// sheet it makes to client/images/art/setpieces.webp, with its manifest setpieces.json.
 //
 // Uses Playwright's Chromium (or CHROMIUM_PATH), drawing with software WebGL where there is no GPU.
 //
-//     npm run build:art                   every style
-//     npm run build:art -- --style=pixel  one style
+//     npm run build:art                    the sheet
 //     npm run build:art -- --previews=dir  also save pictures of example castles and towns in dir
 
 import { createReadStream } from "node:fs";
@@ -94,37 +90,33 @@ const PREVIEWS = [
 ];
 
 async function main() {
-    const only = process.argv.find((arg) => arg.startsWith("--style="))?.split("=")[1];
     const previews = process.argv.find((arg) => arg.startsWith("--previews="))?.split("=")[1];
-    const styles = only ? [only] : ["smooth", "pixel"];
     const target = path.join(root, "client/images/art");
     const generator = await openGenerator();
 
     await mkdir(target, { recursive: true });
 
     try {
-        for (const style of styles) {
-            const started = Date.now();
-            const { image, manifest } = await generator.page.evaluate((style) => window.artgen.buildSheet({ style }), style);
+        const started = Date.now();
+        const { image, manifest } = await generator.page.evaluate(() => window.artgen.buildSheet());
 
-            await writeFile(path.join(target, `setpieces-${style}.webp`), dataUrlToBuffer(image));
-            await writeFile(path.join(target, `setpieces-${style}.json`), `${JSON.stringify(manifest)}\n`);
-            console.log(`${style}: ${Object.keys(manifest.pieces).length} pieces in ${((Date.now() - started) / 1000).toFixed(1)} s`);
+        await writeFile(path.join(target, "setpieces.webp"), dataUrlToBuffer(image));
+        await writeFile(path.join(target, "setpieces.json"), `${JSON.stringify(manifest)}\n`);
+        console.log(`${Object.keys(manifest.pieces).length} pieces in ${((Date.now() - started) / 1000).toFixed(1)} s`);
 
-            if (previews) {
-                await mkdir(previews, { recursive: true });
+        if (previews) {
+            await mkdir(previews, { recursive: true });
 
-                for (const example of PREVIEWS) {
-                    const { image: picture } = await generator.page.evaluate((options) => window.artgen.preview(options), { ...example, style });
+            for (const example of PREVIEWS) {
+                const { image: picture } = await generator.page.evaluate((options) => window.artgen.preview(options), example);
 
-                    await writeFile(path.join(previews, `${example.name}-${style}.webp`), dataUrlToBuffer(picture));
-                }
-
-                const { image: pieces } = await generator.page.evaluate((style) => window.artgen.board({ style }), style);
-
-                await writeFile(path.join(previews, `pieces-${style}.webp`), dataUrlToBuffer(pieces));
-                console.log(`${style}: ${PREVIEWS.length} previews and the pieces in ${previews}`);
+                await writeFile(path.join(previews, `${example.name}.webp`), dataUrlToBuffer(picture));
             }
+
+            const { image: pieces } = await generator.page.evaluate(() => window.artgen.board());
+
+            await writeFile(path.join(previews, "pieces.webp"), dataUrlToBuffer(pieces));
+            console.log(`${PREVIEWS.length} previews and the pieces in ${previews}`);
         }
     } finally {
         await generator.close();

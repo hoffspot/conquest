@@ -164,8 +164,7 @@ units, deselect, and in multiplayer open the chat.
   need checked to be passable. The book's map is still available. See
   [Generated maps](docs/MODERNIZATION.md#generated-maps).
 - **Castle and town art:** a generator that builds castles and towns as 3D models and renders
-  them from the game's own camera, as smooth art or LPC-style pixel art, with layouts that
-  tanks can drive through. It isn't on the maps yet. See
+  them from the game's own camera, with layouts that tanks can drive through. It isn't on the maps yet. See
   [Castle and town art](docs/MODERNIZATION.md#castle-and-town-art).
 - **Small additions:** a pause menu, mute, keyboard scrolling and zoom, keyboard support for menus
   and the multiplayer lobby, prices on the build buttons, markers that confirm each order, clearer
@@ -291,8 +290,6 @@ Castle and town art (made by `tools/artgen`):
 
 - Landmarks, props and trees from the KayKit Medieval Hexagon Pack by Kay Lousberg
   (<https://kaylousberg.com>), CC0
-- The pixel-art palette is the Liberated Pixel Cup palette from LPC Revised
-  (<https://github.com/ElizaWy/LPC>), OGA-BY 3.0
 - Castle pieces designed after Castle Builder by Jon Rubashkin
   (<https://github.com/JonRubashkin/Castle-Builder>); town layouts after Watabou's Medieval
   Fantasy City Generator (<https://github.com/watabou/TownGeneratorOS>)

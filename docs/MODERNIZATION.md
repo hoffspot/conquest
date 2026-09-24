@@ -389,15 +389,15 @@ and the layouts to put them in. It isn't used on the maps yet.
   lighting exactly, and one builder gives any number of variants. This is how Diablo, StarCraft
   and Age of Empires II made their art.
 - **The engine** (`tools/artgen`, see its [README](../tools/artgen/README.md)) runs at build time
-  in headless Chromium (`npm run build:art`). It saves one sprite sheet per style to
-  `client/images/art/`, about 0.4 to 0.9 MB each.
+  in headless Chromium (`npm run build:art`). It saves one sprite sheet,
+  `client/images/art/setpieces.webp` (0.85 MB), at 40 pixels per grid square (twice the map's
+  resolution, so it stays sharp on phones).
   - **Castle pieces:** walls, round and square towers with battlements or roofs, gatehouses
     facing each way, and keeps with corner turrets. Their design follows Castle Builder.
   - **Houses** of 8 sizes in 4 styles (thatched cottages, timber-framed, brick and stone), each
     with variants that differ in height, roof, colours, windows and chimney.
   - **Landmarks, props and trees** (tavern, church, blacksmith, market, windmill, well, tents,
     barrels and so on) from KayKit's free Medieval Hexagon models.
-  - Two styles: smooth shading, and pixel art in the Liberated Pixel Cup palette.
   - Each piece's ground shadow is kept apart from the piece, so that neighbouring shadows merge
     instead of doubling, and units can drive through a shadow rather than under it.
 - **Layouts** (`client/js/core/setpieces`) decide what goes where, on a rectangle of grid
@@ -414,7 +414,7 @@ and the layouts to put them in. It isn't used on the maps yet.
     drive through.
   - Like the map generator, layouts use only seeded random numbers and whole-number arithmetic,
     so they can be made in multiplayer games.
-- **Tests** (17): castles facing every way and towns with every combination of ways in, each from
+- **Tests** (16): castles facing every way and towns with every combination of ways in, each from
   30 seeds and in different sizes. They check:
   - every piece has art, is its catalogued size, stays on the grid and never overlaps another;
   - the road into a castle reaches the keep and every open square of the courtyard;
@@ -425,7 +425,7 @@ and the layouts to put them in. It isn't used on the maps yet.
 
 ### Tooling
 
-- `npm test`: 166 unit, simulation and server tests using Node's built-in test runner. They
+- `npm test`: 165 unit, simulation and server tests using Node's built-in test runner. They
   include a scripted playthrough of mission 1, every mission running for 12 minutes of game time,
   and two simulated multiplayer clients checked for identical state after every tick.
 - `npm run test:e2e`: Playwright tests that play the game in Chromium, covering the campaign,
