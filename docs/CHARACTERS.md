@@ -134,11 +134,21 @@ slots, sockets and hidden skin.
 3. **Shell.** The region is pushed out along the normals by the garment's thickness and
    looseness, and smoothed. A breastplate is smoothed more than a shirt.
    - **Toe boxes.** The body's toes are separate tubes that no smoothing can join. So footwear
-     stops at the ball of the foot, and a toe cap is lofted forward from there, ring by ring.
-     Each ring follows the outline of all the toes at that point, with the gaps between them
-     bridged.
-   - **Size.** Boots come out about a centimetre bigger than the foot all round, and are skinned
-     from the foot to the toe bone so they still bend as the heel lifts.
+     is cut just behind the ball of the foot, and a toe cap is lofted forward from the cut, ring
+     by ring, to a dome over the longest toe:
+     - **The cut** is put onto a smooth outline first: its convex hull, smoothed, with its points
+       spread evenly. Grown out from the skin, the edge loops over itself wherever the skin
+       curves in more tightly than the boot is thick, as it does between the toes.
+     - **Each ring** shrink-wraps the toes at that point along the foot (their convex hull,
+       smoothed), so the cap follows the toes as a whole, down to the shortest, not each toe.
+       Columns are placed by how far round they are from the top, so they never cross.
+     - **The join.** Each column sets off along the boot's own slope, then eases into its ring,
+       so there is no crease.
+     - **Texture.** Each column slides from the boot's texture at the cut to the middle of the
+       toes' part of the texture, fanning in as the cap narrows.
+   - **Size.** Boots come out about a centimetre bigger than the foot all round, and plate about
+     two. They are skinned from the foot to the toe bone so they still bend as the heel lifts.
+     Tests check the size, and that the toe caps are closed, unfolded and on their texture.
 4. **Hem.** A hem folds back to the skin, so edges have visible thickness.
 5. **Skinning and texture.** Every garment vertex comes from the body, so it inherits the body's
    skin weights (it bends exactly like the skin) and texture coordinates. It is painted in the
