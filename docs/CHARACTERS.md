@@ -132,7 +132,13 @@ slots, sockets and hidden skin.
 2. **Cut.** The body's triangles are cut exactly along the region's edge, so hems are straight,
    not jagged along the mesh.
 3. **Shell.** The region is pushed out along the normals by the garment's thickness and
-   looseness, and smoothed. A breastplate is smoothed more than a shirt, and boots lose their toes.
+   looseness, and smoothed. A breastplate is smoothed more than a shirt.
+   - **Toe boxes.** The body's toes are separate tubes that no smoothing can join. So footwear
+     stops at the ball of the foot, and a toe cap is lofted forward from there, ring by ring.
+     Each ring follows the outline of all the toes at that point, with the gaps between them
+     bridged.
+   - **Size.** Boots come out about a centimetre bigger than the foot all round, and are skinned
+     from the foot to the toe bone so they still bend as the heel lifts.
 4. **Hem.** A hem folds back to the skin, so edges have visible thickness.
 5. **Skinning and texture.** Every garment vertex comes from the body, so it inherits the body's
    skin weights (it bends exactly like the skin) and texture coordinates. It is painted in the

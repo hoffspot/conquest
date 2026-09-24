@@ -390,6 +390,43 @@ describe("clothing and armour (garments.js)", () => {
         assert.ok(end > 0.8 && end < 1.02, `the sleeve ends near the elbow (${end})`);
     });
 
+    it("makes footwear the size of the foot, with one toe box", () => {
+        const ankle = f.rig.heads[f.rig.index.get("LeftFoot")].y;
+        const size = (points) => {
+            const xs = points.map(([x]) => x);
+            const zs = points.map(([, , z]) => z);
+
+            return { width: Math.max(...xs) - Math.min(...xs), length: Math.max(...zs) - Math.min(...zs) };
+        };
+        const bare = [];
+
+        for (let v = 0; v < human.vertexCount; v++) {
+            if (human.partOf[v] === 0 && measures.vertices[v].region === "foot" && f.positions[v * 3] > 0.02 && f.positions[v * 3 + 1] < ankle - 0.02) {
+                bare.push([f.positions[v * 3], f.positions[v * 3 + 1], f.positions[v * 3 + 2]]);
+            }
+        }
+
+        const foot = size(bare);
+
+        for (const id of ["boots", "sabatons"]) {
+            const { geometry } = buildGarment(f, id, measures);
+            const position = geometry.attributes.position;
+            const points = [];
+
+            for (let i = 0; i < position.count; i++) {
+                if (position.getX(i) > 0.02 && position.getY(i) < ankle - 0.02) {
+                    points.push([position.getX(i), position.getY(i), position.getZ(i)]);
+                }
+            }
+
+            const boot = size(points);
+
+            // Covering the foot, but no more than a few centimetres bigger (not clown shoes)
+            assert.ok(boot.length > foot.length && boot.length < foot.length + 0.03, `${id} is ${boot.length} long for a ${foot.length} foot`);
+            assert.ok(boot.width > foot.width && boot.width < foot.width + 0.025, `${id} is ${boot.width} wide for a ${foot.width} foot`);
+        }
+    });
+
     it("has a slot for every piece of equipment", () => {
         const slots = new Set(SLOTS.map(({ id }) => id));
 
