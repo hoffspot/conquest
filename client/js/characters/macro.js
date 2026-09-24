@@ -12,12 +12,16 @@
 // Pure data, no DOM: used by the character engine and by the build script that prepares the
 // targets.
 
-/** The sliders and their default values (0 to 1; heritage values are shares that add up to 1). */
+/**
+ * The sliders and their default values (0 to 1; heritage values are shares that add up to 1).
+ * `bust` is MakeHuman's cup size, for female bodies.
+ */
 export const MACRO_DEFAULTS = Object.freeze({
     gender: 0.5,
     muscle: 0.5,
     weight: 0.5,
     height: 0.5,
+    bust: 0.5,
     african: 1 / 3,
     asian: 1 / 3,
     caucasian: 1 / 3,
@@ -39,7 +43,14 @@ const SEGMENTS = {
         { lowest: -0.01, highest: 0.49, low: "minheight", high: "" },
         { lowest: 0.51, highest: 1.01, low: "", high: "maxheight" },
     ],
+    bust: [
+        { lowest: -0.01, highest: 0.49998, low: "mincup", high: "averagecup" },
+        { lowest: 0.49999, highest: 1.01, low: "averagecup", high: "maxcup" },
+    ],
 };
+
+const MUSCLES = ["minmuscle", "averagemuscle", "maxmuscle"];
+const BUILDS = ["minweight", "averageweight", "maxweight"];
 
 export const HERITAGES = Object.freeze(["african", "asian", "caucasian"]);
 
@@ -117,8 +128,8 @@ export function allMacroTargetNames() {
     }
 
     for (const sex of ["female", "male"]) {
-        for (const muscles of ["minmuscle", "averagemuscle", "maxmuscle"]) {
-            for (const build of ["minweight", "averageweight", "maxweight"]) {
+        for (const muscles of MUSCLES) {
+            for (const build of BUILDS) {
                 const shape = `${sex}-young-${muscles}-${build}`;
 
                 names.push(`macrodetails/universal-${shape}`);
@@ -128,4 +139,37 @@ export function allMacroTargetNames() {
     }
 
     return names;
+}
+
+/**
+ * The bust shapes to blend for these slider settings: [{ name, weight }]. They're MakeHuman's
+ * cup size shapes (at average firmness), one pair for each muscle and weight, blended like the
+ * other macro shapes (after MPFB2's TargetService, "gender-age-muscle-weight-cupsize-firmness").
+ * They're made for female bodies, so they're also blended in by how female the body is; MakeHuman
+ * leaves that out, so a man with a larger cup would grow a bust.
+ */
+export function bustTargets(settings = {}) {
+    const values = { ...MACRO_DEFAULTS, ...settings };
+    const female = components("gender", values.gender).find(([sex]) => sex === "female")?.[1] ?? 0;
+    const targets = [];
+
+    for (const [muscles, muscleWeight] of components("muscle", values.muscle)) {
+        for (const [build, buildWeight] of components("weight", values.weight)) {
+            for (const [cup, cupWeight] of components("bust", values.bust)) {
+                const amount = female * muscleWeight * buildWeight * cupWeight;
+
+                // The average cup is the body as it is
+                if (cup !== "averagecup" && amount > CUTOFF) {
+                    targets.push({ name: `breast/female-young-${muscles}-${build}-${cup}-averagefirmness`, weight: round(amount) });
+                }
+            }
+        }
+    }
+
+    return targets;
+}
+
+/** Every bust shape any setting can use (for preparing them at build time). */
+export function allBustTargetNames() {
+    return MUSCLES.flatMap((muscles) => BUILDS.flatMap((build) => ["mincup", "maxcup"].map((cup) => `breast/female-young-${muscles}-${build}-${cup}-averagefirmness`)));
 }

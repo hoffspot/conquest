@@ -11,7 +11,7 @@ import { aboveHairline, beardAmount } from "../client/js/characters/face.js";
 import { amplitude, cadence, CURVES, curveAt, NATURAL_SPEED, phaseName, STANCE, strideLength, walkToRunSpeed } from "../client/js/characters/gait.js";
 import { buildGarment, GARMENTS, measureBody, texelMap } from "../client/js/characters/garments.js";
 import { Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
-import { allMacroTargetNames, components, MACRO_DEFAULTS, macroTargets } from "../client/js/characters/macro.js";
+import { allBustTargetNames, allMacroTargetNames, bustTargets, components, MACRO_DEFAULTS, macroTargets } from "../client/js/characters/macro.js";
 import { decodeSection, encodeSection, Packer } from "../client/js/characters/pack.js";
 import { PRESETS } from "../client/js/characters/presets.js";
 import { JOINTS, jointOf, jointRotation, limitRotation, Rig } from "../client/js/characters/rig.js";
@@ -73,6 +73,59 @@ describe("body shape sliders (macro.js)", () => {
         const heritage = targets.filter(({ name }) => /(african|asian|caucasian)-male/.test(name)).reduce((sum, { weight }) => sum + weight, 0);
 
         assert.ok(Math.abs(heritage - 1) < 0.02, `heritage adds to ${heritage}`);
+    });
+
+    it("changes the bust of female bodies only, from shapes in the data file", () => {
+        const names = new Set(allBustTargetNames());
+        const total = (settings) => bustTargets(settings).reduce((sum, { weight }) => sum + weight, 0);
+
+        assert.equal(names.size, 18);
+
+        for (const name of names) {
+            assert.ok(human.details.has(name), name);
+        }
+
+        for (const settings of [{ gender: 0, bust: 0 }, { gender: 0, bust: 1, muscle: 0.2, weight: 0.8 }, { gender: 0.3, bust: 0.9, muscle: 1, weight: 0 }]) {
+            for (const { name, weight } of bustTargets(settings)) {
+                assert.ok(names.has(name), name);
+                assert.ok(weight > 0 && weight <= 1, `${name} ${weight}`);
+            }
+        }
+
+        // The average cup is the body as it is; a woman's full bust is all hers, half a woman's half
+        assert.deepEqual(bustTargets({ gender: 0 }), []);
+        assert.ok(Math.abs(total({ gender: 0, bust: 1 }) - 1) < 0.03, `${total({ gender: 0, bust: 1 })}`);
+        assert.ok(Math.abs(total({ gender: 0.5, bust: 1 }) - 0.5) < 0.03, `${total({ gender: 0.5, bust: 1 })}`);
+        assert.deepEqual(bustTargets({ gender: 1, bust: 1 }), []);
+    });
+
+    it("gives a woman a fuller bust as the slider goes up, and leaves a man's chest alone", () => {
+        const chestFront = (macro) => {
+            const { positions } = human.shape({ macro });
+            let height = 0;
+            let front = -Infinity;
+
+            for (let v = 0; v < human.vertexCount; v++) {
+                if (human.partOf[v] === 0) {
+                    height = Math.max(height, positions[v * 3 + 1]);
+                }
+            }
+
+            for (let v = 0; v < human.vertexCount; v++) {
+                const up = positions[v * 3 + 1] / height;
+
+                if (human.partOf[v] === 0 && up > 0.66 && up < 0.78 && Math.abs(positions[v * 3]) < 0.15) {
+                    front = Math.max(front, positions[v * 3 + 2]);
+                }
+            }
+
+            return front;
+        };
+        const woman = [0, 0.5, 1].map((bust) => chestFront({ gender: 0, bust }));
+        const man = [0, 0.5, 1].map((bust) => chestFront({ gender: 1, bust }));
+
+        assert.ok(woman[0] < woman[1] && woman[1] + 0.02 < woman[2], `a woman's chest comes forward to ${woman.map((z) => z.toFixed(3))} m`);
+        assert.ok(man[0] === man[1] && man[1] === man[2], `a man's chest stays at ${man[0]}`);
     });
 });
 
@@ -604,6 +657,6 @@ describe("presets (presets.js)", () => {
         }
 
         assert.ok(figure(PRESETS.orc.shape).height > figure(PRESETS.hero.shape).height, "orcs are big");
-        assert.deepEqual(Object.keys(MACRO_DEFAULTS).sort(), ["african", "asian", "caucasian", "gender", "height", "muscle", "weight"]);
+        assert.deepEqual(Object.keys(MACRO_DEFAULTS).sort(), ["african", "asian", "bust", "caucasian", "gender", "height", "muscle", "weight"]);
     });
 });

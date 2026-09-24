@@ -14,7 +14,7 @@
 //     sliders (client/js/characters/macro.js): 60 dense shapes stored as their principal
 //     components (the fewest that reproduce every one of them)
 //   - the detail shapes behind the face and physique sliders (client/js/characters/details.js),
-//     stored sparsely
+//     and the bust shapes (macro.js), stored sparsely
 //   - where every joint moves with each shape, so the skeleton always fits the body
 //
 // Also copies MakeHuman's texture masks for the lips, ears, nails and so on, which the engine uses
@@ -25,7 +25,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { gunzipSync, gzipSync } from "node:zlib";
 import { allDetailTargetNames } from "../client/js/characters/details.js";
-import { allMacroTargetNames } from "../client/js/characters/macro.js";
+import { allBustTargetNames, allMacroTargetNames } from "../client/js/characters/macro.js";
 import { Packer } from "../client/js/characters/pack.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -407,8 +407,8 @@ function main() {
         }
     });
 
-    // The detail shapes, sparse
-    const details = allDetailTargetNames().map((name) => {
+    // The detail and bust shapes, sparse
+    const details = [...allDetailTargetNames(), ...allBustTargetNames()].map((name) => {
         const deltas = readTarget(name);
         const kept = [...deltas].filter(([v]) => sourceOf.has(v));
         const at = new Uint16Array(kept.map(([v]) => sourceOf.get(v)));
@@ -462,7 +462,7 @@ function main() {
     }
 
     console.log(`${count} vertices (${renderSource.length} to draw), ${indices.length / 3} triangles, ${bones.length} bones`);
-    console.log(`${n} macro shapes in ${components.length} components (worst error ${(worst * 1000).toFixed(2)} mm); ${details.length} detail shapes`);
+    console.log(`${n} macro shapes in ${components.length} components (worst error ${(worst * 1000).toFixed(2)} mm); ${details.length} detail and bust shapes`);
     console.log(`human.bin: ${(packed.length / 1024).toFixed(0)} KB (${(packer.length / 1024).toFixed(0)} KB unpacked)`);
 }
 

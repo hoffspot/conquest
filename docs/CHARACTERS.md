@@ -10,8 +10,8 @@ that follows real joints and real walking. Try it in the **character lab**:
 The lab lets you:
 
 - **Build a body.** Pick the human, the heroine or the orc, then change gender, muscle, weight,
-  height and heritage, plus 26 face and physique sliders (jaw, brow, nose, ears, shoulders,
-  limbs...).
+  height, bust (for female bodies) and heritage, plus 26 face and physique sliders (jaw, brow,
+  nose, ears, shoulders, limbs...).
 - **Change how they look.**
   - Skin tone, blotchiness, redness, freckles, warts, veins and war paint.
   - Eye colour and pupils.
@@ -66,6 +66,11 @@ The body is MakeHuman's base mesh (`hm08`), taken from its Blender add-on
   height and heritage sliders. They are stored as their principal components: 29 of them
   reproduce all 60 exactly.
 - **Face and physique.** 76 sparse shapes sit behind the face and physique sliders.
+- **Bust.** 18 more sparse shapes sit behind the bust slider: MakeHuman's cup size shapes (at
+  average firmness), a small and a large cup for each muscle and weight. They blend like the
+  macro shapes, times how female the body is. MakeHuman leaves out that last part, so a man
+  with a larger cup would grow a bust; here the slider does nothing to a male body, and the lab
+  greys it out. The middle of the slider is the body as MakeHuman makes it.
 - **Joints.** In MakeHuman, each joint is the average of some vertices, so the build also stores
   how far every joint moves with every shape. The skeleton fits every body.
 - **In the browser.** Shaping a body blends those shapes into new vertex positions and joint
@@ -128,7 +133,9 @@ slots, sockets and hidden skin.
 1. **Region.** A garment is a region of the body, written with measurements that fit any body:
    how far down the arm (0 shoulder, 0.5 elbow, 1 wrist), how far down the leg, and heights of
    the waist, hips, chest and neck. A tunic is "the torso down to 6 cm below the hips, the arms to
-   the elbow".
+   the elbow". A chest wrap is a band round the torso, from three quarters of the way down from
+   the chest to the waist (under the fullest bust) to just above the armpits, so it covers any
+   bust.
 2. **Cut.** The body's triangles are cut exactly along the region's edge, so hems are straight,
    not jagged along the mesh.
 3. **Shell.** The region is pushed out along the normals by the garment's thickness and

@@ -63,6 +63,38 @@ test("switches to the orc, changes gear and looks", async ({ page }) => {
     await page.waitForFunction(() => window.lab.character.hairMesh?.geometry.attributes.position.count > 1000);
 });
 
+test("sizes a woman's bust, and not a man's", async ({ page }) => {
+    await openLab(page);
+
+    // The human is a man: the slider is off
+    const bust = page.getByRole("tabpanel", { name: "Body" }).getByLabel("Bust");
+
+    await expect(bust).toBeDisabled();
+
+    await page.getByRole("radio", { name: "Heroine" }).click();
+    await expect(bust).toBeEnabled();
+
+    const chestFront = () => page.evaluate(() => {
+        const { character } = window.lab;
+        const positions = character.positions;
+        let front = -Infinity;
+
+        for (let v = 0; v < character.human.vertexCount; v++) {
+            const up = positions[v * 3 + 1] / character.height;
+
+            if (character.human.partOf[v] === 0 && up > 0.66 && up < 0.78 && Math.abs(positions[v * 3]) < 0.15) {
+                front = Math.max(front, positions[v * 3 + 2]);
+            }
+        }
+
+        return front;
+    });
+    const before = await chestFront();
+
+    await bust.fill("1");
+    await expect.poll(chestFront).toBeGreaterThan(before + 0.02);
+});
+
 test("plays a motion capture clip", async ({ page }) => {
     await openLab(page, "/character-lab.html?clip=zombie-walk&tab=motion");
     await page.waitForFunction(() => window.lab.player?.clip.frames.length > 10);

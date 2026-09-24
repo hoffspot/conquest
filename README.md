@@ -173,8 +173,8 @@ units, deselect, and in multiplayer open the chat.
   them from the game's own camera, with layouts that tanks can drive through. It isn't on the maps yet. See
   [Castle and town art](docs/MODERNIZATION.md#castle-and-town-art).
 - **Characters:** a character engine for a single hero and their enemies, tried out in the
-  character lab (`character-lab.html`). It uses MakeHuman's body (CC0), with body, heritage, face
-  and physique sliders, and a 52-bone Mixamo-named skeleton whose joints are limited to real
+  character lab (`character-lab.html`). It uses MakeHuman's body (CC0), with body, bust, heritage,
+  face and physique sliders, and a 52-bone Mixamo-named skeleton whose joints are limited to real
   ranges of motion. Skin, eyes,
   hair and beards are painted and grown procedurally, and whole skin textures can be loaded.
   Clothing and armour are fitted to the body; weapons, shields, helmets and packs sit on sockets.
