@@ -142,10 +142,11 @@ units, deselect, and in multiplayer open the chat.
   home indicator), touch controls designed for fingers, pinch to zoom, a minimap, sharp graphics
   on high-resolution screens, landscape lock and an installable app (which also works offline
   when the game is served over HTTPS).
-- **3D units (in progress):** units are starting to be drawn as 3D models with
-  [Three.js](https://threejs.org) instead of sprites, seen from the same angle as the book's art.
-  For now the hero tank in the first mission is a test cube. See
-  [3D units](docs/MODERNIZATION.md#3d-units).
+- **3D units:** every vehicle, aircraft and building is a 3D model drawn with
+  [Three.js](https://threejs.org), seen from the same angle as the book's art. Models are in team
+  colours, turn smoothly, and show damage. Rotors spin, turret guns aim, and buildings rise as they
+  are built. The models are free low-poly models by Quaternius, Kenney and PolyDucky (see
+  [Credits](#credits-and-license)). See [3D units](docs/MODERNIZATION.md#3d-units).
 - **Small additions:** a pause menu, mute, keyboard scrolling and zoom, keyboard support for menus
   and the multiplayer lobby, prices on the build buttons, markers that confirm each order, clearer
   error messages when something fails to load or connect.
@@ -176,6 +177,7 @@ client/                 The game (static files served to the browser)
   manifest.webmanifest  Lets the game be installed as an app (landscape, full screen)
   sw.js                 Service worker: keeps a copy of the game for offline play
   images/, audio/       Artwork and sounds from the book
+  models/               3D models of the units and buildings (credits in models/CREDITS.md)
   vendor/three-r186/    Three.js (minified by scripts/vendor-three.js; loaded through an import map)
   js/main.js            Entry point: creates the game and wires up the browser UI
   js/core/              The game simulation. No DOM code, so it also runs in Node
@@ -190,7 +192,8 @@ client/                 The game (static files served to the browser)
   js/app/               The browser side
     camera.js           Scrolling and zooming the view
     renderer.js         Drawing the map, units and fog on the canvases
-    units3d.js          Drawing units as 3D models with Three.js
+    units3d.js          Drawing units and buildings as 3D models with Three.js
+    models.js           Which model each unit and building uses, its size, team colours and parts
     minimap.js          The overview map in the sidebar
     input.js            Mouse, touch and keyboard controls
     hud.js              The buttons over the map
@@ -238,6 +241,18 @@ Artwork:
   - Priest Portrait by Zeldyn (<http://opengameart.org/content/priest-portrait-female>)
 
 Sounds: all sounds from Free Sound (<http://www.freesound.org/>).
+
+3D models (details in [client/models/CREDITS.md](client/models/CREDITS.md)):
+
+- Tanks, rovers, the wraith and the ground turret by Quaternius (<https://quaternius.com>), CC0
+- The base, starport and harvester rig are assembled from Kenney's Space Kit
+  (<https://kenney.nl/assets/space-kit>), CC0
+- The chopper is based on "AH-64 Apache Attack Helicopter Low Poly"
+  (<https://sketchfab.com/3d-models/ah-64-apache-attack-helicopter-low-poly-34986214decd4b3db90e91f12e624d78>)
+  by PolyDucky (<https://sketchfab.com/salphytheunemployed>), licensed under CC-BY-4.0
+  (<http://creativecommons.org/licenses/by/4.0/>). Changes: compressed for the game.
+
+3D engine: [Three.js](https://threejs.org) (MIT license, in `client/vendor/three-r186/LICENSE`).
 
 The book used Andrea Giammarchi's A* implementation; this version has its own.
 

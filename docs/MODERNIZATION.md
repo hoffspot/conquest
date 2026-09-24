@@ -142,15 +142,14 @@ screen from small phones to large monitors.
 
 ### 3D units
 
-Units are moving from sprites to 3D models, drawn with [Three.js](https://threejs.org). The first
-step is a test: the first unit of the first mission (the hero's heavy tank) is drawn as a cube.
-Everything else in the game stays 2D for now.
+Every vehicle, aircraft and building is drawn as a 3D model with [Three.js](https://threejs.org)
+instead of a sprite. Only the oil fields, bullets and effects are still sprites. The map, fog of
+war, selection and the rest of the game stay 2D.
 
 - **Engine.** Three.js r186 with its WebGL 2 renderer. Before choosing it we compared Three.js,
   Babylon.js, PlayCanvas, OGL, twgl.js, regl and plain WebGL 2:
   - Three.js is the smallest full-featured option that runs as plain ES modules without a
-    bundler: 196 KB gzipped, minified. It is MIT licensed and widely used, and has a glTF loader
-    for real models later.
+    bundler: 196 KB gzipped, minified. It is MIT licensed, widely used, and has a glTF loader.
   - Babylon.js is about 1.8 MB gzipped and needs a bundler for ES modules.
   - PlayCanvas is about 630 KB gzipped and wants to run the whole game.
   - OGL, twgl.js and regl are small, but have no glTF loading or animation, or aren't actively
@@ -160,20 +159,43 @@ Everything else in the game stays 2D for now.
 - **Loading.** Three.js is vendored into `client/vendor/three-r186/` so the game keeps working
   offline and on GitHub Pages, and loaded through an import map in `index.html`.
   - Three.js stopped publishing minified builds in r186, so `npm run vendor:three` minifies it with
-    esbuild. That is a one-off step when upgrading, not a build step for the game.
-  - The game loads `js/app/units3d.js` (and with it Three.js) while the loading screen shows, so
-    the main menu appears without waiting for it.
+    esbuild, along with the three add-ons the game uses (the glTF loader, and the utilities it
+    needs to copy animated models). That is a one-off step when upgrading, not a build step for
+    the game.
+  - The game loads `js/app/units3d.js`, Three.js and the models behind the loading screen, with
+    the sprites and sounds, rather than as part of the page.
   - If a browser can't run it (no WebGL, or the phone takes the GPU away while the game is in the
-    background), units are drawn as sprites.
-- **How the 3D units fit into the 2D game.** Every frame, the 3D units are rendered in one pass
-  into a hidden WebGL canvas, each in its own square cell. When the 2D renderer reaches a unit in
-  its usual back-to-front order, it copies that unit's cell onto the map instead of drawing the
-  sprite (`Entity.draw` asks `view.drawModel` first).
+    background), units and buildings are drawn as sprites. A model that fails to load falls back
+    to its sprite on its own.
+- **The models.** Free low-poly models, chosen from about a hundred candidates rendered in the
+  game's view (details and licenses in `client/models/CREDITS.md`):
+
+  | Unit or building | Model | Author and license |
+  | --- | --- | --- |
+  | Heavy tank | "Tank" (Animated Tanks Pack) | Quaternius, CC0 |
+  | Scout tank | "Tank2" (Animated Tanks Pack) | Quaternius, CC0 |
+  | Harvester | "Rover_Round" (Ultimate Space Kit) | Quaternius, CC0 |
+  | Transport | "Rover_2" (Ultimate Space Kit) | Quaternius, CC0 |
+  | Chopper | "AH-64 Apache Attack Helicopter Low Poly" | PolyDucky, CC BY 4.0 |
+  | Wraith | "Striker" (Ultimate Spaceships Pack) | Quaternius, CC0 |
+  | Base | Generator, dish and tanks on a pad, assembled from the Space Kit | Kenney, CC0 |
+  | Starport | Landing pad and control blocks, assembled from the Space Kit | Kenney, CC0 |
+  | Harvester rig | Support tower, drill pipe and generator, assembled from the Space Kit | Kenney, CC0 |
+  | Ground turret | "Turret_Gun" (Cyberpunk Game Kit) | Quaternius, CC0 |
+
+  - The models were compressed with glTF Transform: vertex positions quantized
+    (`KHR_mesh_quantization`, which Three.js reads without a decoder), detailed ones simplified,
+    and textures kept at 256 pixels or less. All eleven files add up to about 760 KB.
+  - `js/app/models.js` lists each model's file, its size on the map, which way its front points,
+    how it takes the team colour, and its moving parts. Adding or swapping a model only needs a
+    line there.
+- **How the models fit into the 2D game.** Every frame, the models on screen are rendered in one
+  pass into a hidden WebGL canvas, each in its own square cell. When the 2D renderer reaches a
+  unit or building in its usual back-to-front order, it copies that cell onto the map instead of
+  drawing the sprite (`Entity.draw` asks `view.drawModel` first).
   - Draw order stays correct: a unit in front of a building covers it, and a unit behind it is
     covered. Selection rings stay under units, and life bars and fog of war stay over them.
   - Tapping, selecting, fog of war and the minimap work as before.
-  - Copying from a WebGL canvas into a 2D canvas stays on the GPU in Safari and Chrome, and a
-    rendered frame is copied only once, however many units use it.
   - We also considered two other approaches. A separate 3D canvas layered over or under the map
     can't mix with the 2D draw order. Moving the whole game into a 3D scene is a much bigger
     rewrite.
@@ -181,23 +203,47 @@ Everything else in the game stays 2D for now.
   the book's viewing angle. Ground positions are stretched away from the camera
   (`z = y / sin 60°`), so a point on the ground lands exactly where it is on the painted map, while
   height moves things up the screen. Unit tests check both.
-- **The test cube.** A 20-pixel cube in the team's colour, lit by the sky and by sunlight from the
-  north-west, as in the book's art. Its front face is lighter and glows a little, so its facing
-  shows. It turns smoothly between game ticks, the short way round.
-- **Next steps.**
-  - Replace the cube with a real low-poly tank, then the other units. Candidates are free (CC0)
-    glTF models such as Kenney's Space Kit and Quaternius's packs, compressed with meshopt.
-  - Colour each team by recolouring one named material.
-  - Animate turrets, helicopter rotors and wheels.
+- **Sizes.** Each model is scaled to fit the space the game gives it: a unit's longest side is
+  about the size of its sprite, and a building fits inside its base area on the map (the ground
+  turret's is 20 × 18 pixels, which keeps it in scale with the tanks).
+- **Team colours.** The book's sprites were drawn once per team. The models are coloured in the
+  game instead:
+  - Models with plain coloured materials (the tanks, the Kenney buildings and the turret) give
+    their trim materials the team's hue, keeping each material's own lightness so shading
+    survives.
+  - Models painted with one small shared texture (the rovers and the chopper) are tinted towards
+    the team colour.
+  - The wraith comes with blue and green skins, so each team has its own file.
+- **Animation.**
+  - Units turn smoothly between game ticks, the short way round.
+  - The chopper's main and tail rotors spin.
+  - The ground turret's gun turns to aim while its base stays still.
+  - Buildings rise out of the ground while the starport teleports them in or a harvester deploys,
+    following the progress of the sprite animation they replace.
+  - Damaged units and buildings are drawn darker.
+  - Aircraft are drawn above a shadow on the ground, at the same height as their sprites.
+- **Lighting.** Materials are converted to simple (Lambert) lighting, lit by the sky and by
+  sunlight from the north-west, as in the book's art. Some Kenney materials are metallic or unlit,
+  which looked flat or black with this camera.
+- **Performance.**
+  - A rendered frame is copied from the WebGL canvas once, into a 2D canvas, and each unit is
+    copied from there. Copying from the WebGL canvas once per unit made the browser read it back
+    from the GPU again and again.
+  - Only units and buildings near the view are rendered, and each cell is only as big as its
+    model on screen (aircraft are rendered on the ground, and lifted when they are copied).
+  - When nothing on screen has moved, turned or changed since the last frame, the 3D render is
+    skipped and the last one reused.
+  - Three.js renders at one canvas pixel per screen pixel, with antialiasing, and asks for the
+    low-power GPU on devices that have two.
 
 ### Tooling
 
-- `npm test`: 107 unit, simulation and server tests using Node's built-in test runner. They
+- `npm test`: 111 unit, simulation and server tests using Node's built-in test runner. They
   include a scripted playthrough of mission 1, every mission running for 12 minutes of game time,
   and two simulated multiplayer clients checked for identical state after every tick.
 - `npm run test:e2e`: Playwright tests that play the game in Chromium, covering the campaign,
-  selection and orders, zooming, the minimap, construction, the 3D hero tank (and sprites when
-  WebGL is missing) and a two player game with a mouse,
+  selection and orders, zooming, the minimap, construction, 3D models for units and buildings
+  (and sprites when WebGL is missing) and a two player game with a mouse,
   and on an emulated iPhone 16 Pro in landscape: the layout, taps, dragging, pinching, touch and
   hold selection, placing buildings and the portrait "turn your device" screen.
 - `npm run lint`: ESLint.
