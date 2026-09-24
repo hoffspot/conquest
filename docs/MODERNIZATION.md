@@ -293,14 +293,84 @@ when they fire.
   - In a 20-second test battle (85 shots, 11 units destroyed) on the iPhone profile, drawing the
     effects took 0.3 ms per frame on average and 0.6 ms at the 95th percentile.
 
+### Generated maps
+
+The book has one hand-painted map, used by every mission and by multiplayer. Now, as in Diablo,
+each mission is played on a newly generated map, with the same objectives placed to suit it.
+Multiplayer games get one too. The book's map is still one tick away on the mission briefing.
+
+- **The book's own tiles.** The map image is made of 20 pixel tiles from the "Hard Vacuum"
+  artwork. `scripts/extract-tileset.js` cuts it into its 73 distinct tiles.
+  - Terrain edges are "corner" tiles: each shows the terrain at its four corners (grass, water,
+    lava or a dirt pit), with a rocky rim between them. The script works out every corner's
+    terrain from its colour, which gives each tile a signature such as `GGWW` (grass along the
+    top, water along the bottom).
+  - Obstacles standing on grass (clumps of trees, rocks, a walled ruin) are kept whole as
+    "stamps".
+  - The result is `client/js/core/data/tileset.js`. A test checks that it still matches the
+    image. The script reads the PNG with a small decoder of its own (`scripts/png.js`), so it
+    needs no image libraries.
+- **Making a map** (`client/js/core/mapgen.js`, 64 by 44 tiles, a few milliseconds):
+  1. **Sites.** The places the mission needs are placed first, by the level's rules: in a
+     corner, opposite another site, on the map edge beside a site, part of the way between two
+     sites. Examples are the player's base, the enemy base, where a convoy waits and patrol
+     routes.
+  2. **Terrain.** Lakes and ponds (blobs with ragged, noisy edges), winding rivers, lava fields
+     (often running off the edge of the map) and dirt pits are painted onto the grid of tile
+     corners, keeping clear of the sites. Different kinds of terrain never touch, as the book
+     has no tiles for that.
+  3. **Tiles.** Each tile is picked by its four corners. Where the book has no tile for a
+     combination (water in two opposite corners only, for example), the terrain is trimmed back
+     until it does. Trimming only ever removes terrain, so it can never close a route.
+  4. **Routes.** Every pair of sites the level says must be connected is checked for a route at
+     least two tiles wide, so that vehicles don't get stuck in gaps. Where there is none, a
+     passage three tiles wide is cut along the cheapest line through the terrain.
+  5. **Obstacles.** Trees, rocks and ruins are dropped onto open grass, never onto a site, and
+     taken away again if one would cut a route.
+  6. **Checks.** The finished map is checked again with the game's own A* path finding. Then
+     `missions.js` checks once more with the level's buildings in place. If anything is wrong,
+     the map is made again from a seed derived from the first. In tests, this almost never
+     happens.
+- **Missions that follow the map.** Levels no longer contain coordinates. Instead,
+  `data/levels.js` names each mission's sites and says where they are on each kind of map: exact
+  rectangles on the book's map, and placement rules for generated maps.
+  - The units, buildings and triggers are written against the sites, so the same mission script
+    works on both. "The convoy was last seen in the North West sector" names wherever the convoy
+    actually is. The convoy waits just off the map beside its site. Reinforcements arrive from
+    the map edge nearest the base.
+  - Bases designed for one corner are mirrored to suit the corner they are in, so their
+    defences face the rest of the map.
+  - On the book's map, every unit is exactly where the book put it. A comparison playing each
+    original mission side by side with the new version found them identical, every tick for 12
+    minutes.
+- **The same map for everyone.** A map is made from a seed, and the same seed always gives the
+  same map.
+  - In multiplayer, the server picks the seed and both players generate the map from it. So the
+    generator uses integer arithmetic and plain `+ - * /`, which every browser computes
+    identically, and never `Math.random` or `Math.sin`, whose results can differ between
+    browsers. A test enforces this.
+  - The map's number is shown on the briefing. Trying a mission again keeps its map. `?seed=123`
+    in the address plays map 123, and `?map=classic` plays the book's map.
+- **Tests.**
+  - Every level, generated from 25 seeds: neighbouring tiles always join up, and every tile of
+    water, lava or obstacle blocks units. Every site is open ground, and every required route is
+    open with the buildings in place. Nothing starts on water or lava.
+  - Mission 1 is won on three generated maps by driving to wherever the convoy is and escorting
+    it home. Every mission runs on generated maps without errors.
+  - Two multiplayer clients that generate the map from the same seed stay identical, tick by tick.
+  - A fingerprint of one map guards against accidental changes, which would stop players with
+    different versions of the game from playing together.
+
 ### Tooling
 
-- `npm test`: 123 unit, simulation and server tests using Node's built-in test runner. They
+- `npm test`: 145 unit, simulation and server tests using Node's built-in test runner. They
   include a scripted playthrough of mission 1, every mission running for 12 minutes of game time,
   and two simulated multiplayer clients checked for identical state after every tick.
 - `npm run test:e2e`: Playwright tests that play the game in Chromium, covering the campaign,
   selection and orders, zooming, the minimap, construction, 3D models for units and buildings
-  (and sprites when WebGL is missing), explosions and other effects and a two player game with a mouse,
+  (and sprites when WebGL is missing), explosions and other effects, generated maps (a new map,
+  the book's map, the same map again after failing, map numbers) and a two player game on a
+  generated map with a mouse,
   and on an emulated iPhone 16 Pro in landscape: the layout, taps, dragging, pinching, touch and
   hold selection, placing buildings and the portrait "turn your device" screen.
 - `npm run lint`: ESLint.

@@ -1,5 +1,5 @@
 // Entry point: creates the game and wires the browser UI to it.
-import { loadImage, loadWithProgress } from "./app/assets.js";
+import { drawMap, loadImage, loadWithProgress } from "./app/assets.js";
 import { Camera } from "./app/camera.js";
 import * as device from "./app/device.js";
 import { Hud } from "./app/hud.js";
@@ -86,7 +86,7 @@ class App {
 
     // Load the level's map and position the view (items and cash are set up by game.loadLevel)
     async prepareLevel(level, startX, startY) {
-        const [mapImage] = await loadWithProgress([loadImage(`images/maps/${this.game.currentMap.mapImage}`)]);
+        const [mapImage] = await loadWithProgress([drawMap(this.game.currentMap)]);
 
         this.renderer.setMap(mapImage);
         this.resize();
@@ -418,6 +418,8 @@ function wireUpButtons(app) {
 
     onClick("entermission", () => app.singleplayer.play());
     onClick("exitmission", () => app.singleplayer.exit());
+    onClick("newmap", () => app.singleplayer.newMap());
+    $("classicmap").addEventListener("change", (ev) => app.singleplayer.setClassicMap(ev.target.checked));
 
     onClick("multiplayerjoin", () => app.multiplayer.join());
     onClick("multiplayercancel", () => app.multiplayer.cancel());

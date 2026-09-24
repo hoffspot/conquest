@@ -14,7 +14,8 @@
     "test:e2e": "playwright test",
     "lint": "eslint .",
     "check": "npm run lint && npm test",
-    "vendor:three": "node scripts/vendor-three.js"
+    "vendor:three": "node scripts/vendor-three.js",
+    "extract:tileset": "node scripts/extract-tileset.js"
   },
   "dependencies": {
     "ws": "^8.18.3"

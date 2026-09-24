@@ -103,6 +103,15 @@
                     <button type="button" id="entermission" class="sprite-button" aria-label="Enter mission"></button>
                     <button type="button" id="exitmission" class="sprite-button" aria-label="Exit"></button>
                     <div id="missionbriefing"></div>
+                    <div id="missionheader">
+                        <h2 id="missiontitle"></h2>
+                        <div id="mapchoice">
+                            <span id="mapname"></span>
+                            <button type="button" id="newmap">New map</button>
+                            <label><input type="checkbox" id="classicmap"> The book's map</label>
+                        </div>
+                    </div>
+                    <canvas id="mappreview" width="244" height="240" aria-label="Map of the mission"></canvas>
                 </section>
 
                 <section id="multiplayerlobbyscreen" class="gamelayer" hidden aria-label="Multiplayer lobby">

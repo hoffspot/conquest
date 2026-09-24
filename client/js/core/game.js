@@ -71,15 +71,16 @@ export class Game extends Emitter {
     }
 
     /**
-     * Load a level definition.
-     * @param {object} level  entry from levels.singleplayer or levels.multiplayer
+     * Load a level.
+     * @param {object} level  a level ready to play (see createMission in missions.js): its map (or
+     *        the name of one of the maps in maps.js), items, triggers and cash
      * @param {{team: string}} options  team is the local player's team
      */
     loadLevel(level, { team }) {
         this.reset();
 
         this.currentLevel = level;
-        this.currentMap = maps[level.mapName];
+        this.currentMap = level.map ?? maps[level.mapName];
         this.team = team;
 
         if (!this.currentMap) {

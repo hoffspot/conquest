@@ -9,8 +9,9 @@ test.beforeEach(async ({ page }) => {
     });
 });
 
-async function openGame(page) {
-    await page.goto("/");
+// Most tests play on the book's map, where they know where everything is
+async function openGame(page, { address = "/?map=classic" } = {}) {
+    await page.goto(address);
     await expect(page.locator("#gamestartscreen")).toBeVisible();
     // Wait for the sprites and sounds to finish loading
     await expect(page.locator("#loadingscreen")).toBeHidden();
@@ -339,6 +340,70 @@ test.describe("effects", () => {
     });
 });
 
+test.describe("generated maps", () => {
+    const mapNumber = (page) => page.locator("#mapname").textContent();
+    const mapWidth = (page) => game(page, () => window.lastColony.game.currentMap.mapGridWidth);
+
+    test("every mission gets a new map; the map can be changed, or swapped for the book's", async ({ page }) => {
+        await openGame(page, { address: "/" });
+        await page.getByRole("button", { name: "Campaign" }).click();
+
+        await expect(page.locator("#mapname")).toHaveText(/^Map \d+$/);
+        await expect(page.getByRole("button", { name: "Enter mission" })).toBeEnabled();
+        expect(await mapWidth(page)).toBe(64);
+
+        // The briefing shows a picture of the map
+        const previewColours = await page.locator("#mappreview").evaluate((canvas) => {
+            const data = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height).data;
+            const colours = new Set();
+
+            for (let i = 0; i < data.length; i += 400) {
+                colours.add(`${data[i]},${data[i + 1]},${data[i + 2]}`);
+            }
+
+            return colours.size;
+        });
+
+        expect(previewColours).toBeGreaterThan(10);
+
+        // A different map
+        const first = await mapNumber(page);
+
+        await page.getByRole("button", { name: "New map" }).click();
+        await expect(page.locator("#mapname")).not.toHaveText(first);
+        await expect(page.getByRole("button", { name: "Enter mission" })).toBeEnabled();
+
+        const second = await mapNumber(page);
+
+        // The book's map, and back to the same generated map
+        await page.getByLabel("The book's map").check();
+        await expect(page.locator("#mapname")).toHaveText("The book's map");
+        await expect(page.getByRole("button", { name: "New map" })).toBeDisabled();
+        expect(await mapWidth(page)).toBe(60);
+
+        await page.getByLabel("The book's map").uncheck();
+        await expect(page.locator("#mapname")).toHaveText(second);
+        await expect(page.getByRole("button", { name: "Enter mission" })).toBeEnabled();
+
+        // Play it, fail, and try again on the same map
+        await page.getByRole("button", { name: "Enter mission" }).click();
+        await expect(page.locator("#gameinterfacescreen")).toBeVisible();
+        await silenceMission(page);
+        await game(page, () => window.lastColony.game.endLevel(false));
+        await expect(page.locator("#messagebox")).toContainText("Mission Failed");
+        await page.locator("#messageboxok").click();
+        await expect(page.locator("#mapname")).toHaveText(second);
+    });
+
+    test("a map number in the address plays that map", async ({ page }) => {
+        await openGame(page, { address: "/?seed=12345" });
+        await page.getByRole("button", { name: "Campaign" }).click();
+
+        await expect(page.locator("#mapname")).toHaveText("Map 12345");
+        expect(await game(page, () => window.lastColony.game.currentLevel.seed)).toBe(12345);
+    });
+});
+
 test.describe("multiplayer", () => {
     test("two players can play a game", async ({ browser }) => {
         const players = [];
@@ -374,6 +439,16 @@ test.describe("multiplayer", () => {
 
         expect(await game(blue, () => window.lastColony.game.team)).toBe("blue");
         expect(await game(green, () => window.lastColony.game.team)).toBe("green");
+
+        // Both players generated the same map from the server's seed
+        const mapOf = (page) => game(page, () => {
+            const { currentMap } = window.lastColony.game;
+
+            return { seed: currentMap.seed, width: currentMap.mapGridWidth, tiles: JSON.stringify(currentMap.tiles) };
+        });
+
+        expect((await mapOf(blue)).width).toBe(64);
+        expect(await mapOf(green)).toEqual(await mapOf(blue));
 
         // Record the simulation state at every tick on both clients and check that they match
         const recordStates = (page) => game(page, () => {
