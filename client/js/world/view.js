@@ -89,6 +89,12 @@ export class View {
         this.focus = new THREE.Vector3();
         this.distance = DISTANCE.start;
 
+        /**
+         * Which way the camera looks from, in radians: 0 from the south, looking north, growing
+         * towards the east (so π/2 is from the east, looking west).
+         */
+        this.yaw = 0;
+
         /** How far the camera looks down from the horizon, in degrees. */
         this.pitch = PITCH;
 
@@ -145,9 +151,10 @@ export class View {
         this.camera.updateProjectionMatrix();
     }
 
-    /** Point the camera at a spot (metres), easing towards it by `ease` (1 jumps straight there). */
-    follow(point, ease = 1) {
-        this.focus.lerp(point, ease);
+    /** Point the camera at a spot (metres), looking from `yaw` (radians, as `this.yaw`). */
+    look(point, yaw = this.yaw) {
+        this.focus.copy(point);
+        this.yaw = yaw;
         this.#place();
     }
 
@@ -176,10 +183,11 @@ export class View {
     }
 
     #place() {
-        const { focus, camera, distance } = this;
+        const { focus, camera, distance, yaw } = this;
         const pitch = (this.pitch * Math.PI) / 180;
+        const across = Math.cos(pitch) * distance;
 
-        camera.position.set(focus.x, focus.y + Math.sin(pitch) * distance, focus.z + Math.cos(pitch) * distance);
+        camera.position.set(focus.x + Math.sin(yaw) * across, focus.y + Math.sin(pitch) * distance, focus.z + Math.cos(yaw) * across);
         camera.lookAt(focus.x, focus.y + 0.8, focus.z);
 
         // The sun's shadows follow the player, snapped to whole shadow texels so they don't shimmer
@@ -202,6 +210,16 @@ export class View {
         const hit = ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3());
 
         return hit;
+    }
+
+    /**
+     * Where a point in the world (metres) is on the screen, from the middle: -1 to 1 across (left
+     * to right) and up (bottom to top), or null behind the camera.
+     */
+    fromMiddle(point) {
+        const projected = _point.copy(point).project(this.camera);
+
+        return projected.z > 1 ? null : { x: projected.x, y: projected.y };
     }
 
     /** Where a point in the world (metres) is on the screen, in client pixels (null behind the camera). */

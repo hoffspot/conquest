@@ -54,6 +54,10 @@ what's left; with none left you're out of breath, and walk the rest of the way. 
 you attack whatever is within your weapon's reach on your own: melee weapons reach the eight
 squares round yours; ranged ones anything in range that you can see.
 
+**The camera** keeps still while you move about the middle of the screen. Walk out of the middle,
+the way the map would have to scroll, and it follows you, turning round smoothly to look from
+behind you the way you're going (at the same height and zoom), until you stop.
+
 An orc patrols the fields from the north-west corner, halfway down the west side and back. When
 it sees you (within 12 metres, with nothing in the way) it chases you and attacks whenever you're
 within reach, giving up if it loses sight of you for three seconds. Each blow knocks off hit
@@ -191,6 +195,7 @@ client/                 The game (static files served to the browser)
     session.js          The 3D view and the character kit, and starting games
     creator.js          Making a character; heroes.js has random ones and names
     game.js             Playing: the world, the battle, the characters, taps and the camera
+    camera.js           How the camera follows the player: still in the middle, then from behind
     hud.js              Health, stamina, names, damage numbers and messages over the game
     wheel.js            The action wheel: hold, flick, cooldowns; icons.js draws its icons
     minimap.js          The minimap: the world from above, with everyone on it
