@@ -395,10 +395,12 @@ export class Rig {
 
     /**
      * Bend a limb (three bones: say LeftUpLeg, LeftLeg, LeftFoot) so its end reaches `target` (a
-     * point in the rig's space), keeping the middle joint on the side it was bending to. The end
-     * bone keeps its orientation in the world. Call after apply() and updateMatrixWorld().
+     * point in the rig's space), keeping the middle joint on the side it was bending to, or, given
+     * `pole` (a direction in the upper bone's anatomical frame: forward, (0, 0, 1), for a knee),
+     * bending it that way, however near straight the limb was. The end bone keeps its orientation
+     * in the world. Call after apply() and updateMatrixWorld().
      */
-    reach(upperName, lowerName, endName, target) {
+    reach(upperName, lowerName, endName, target, { pole = null } = {}) {
         const upper = this.bone(upperName);
         const lower = this.bone(lowerName);
         const end = this.bone(endName);
@@ -421,10 +423,27 @@ export class Rig {
 
         toTarget.normalize();
 
-        // The bend direction: where the middle joint is now, away from the line to the target
-        const bendDirection = _b.clone().sub(_a);
+        // The bend direction: the way the joint bends (the pole, turned with the upper bone), or
+        // where the middle joint is now, away from the line to the target. (Where the middle
+        // joint is can be almost on that line, when the limb's nearly straight or the target has
+        // moved across it, and then which side it's on flickers from frame to frame)
+        const bendDirection = new THREE.Vector3();
 
-        bendDirection.addScaledVector(toTarget, -bendDirection.dot(toTarget));
+        if (pole) {
+            const turned = upper.getWorldQuaternion(new THREE.Quaternion()).multiply(this.frames[this.index.get(upperName)]);
+
+            if (space) {
+                turned.premultiply(space.getWorldQuaternion(new THREE.Quaternion()).invert());
+            }
+
+            bendDirection.copy(pole).applyQuaternion(turned);
+            bendDirection.addScaledVector(toTarget, -bendDirection.dot(toTarget));
+        }
+
+        if (bendDirection.lengthSq() < 1e-6) {
+            bendDirection.copy(_b).sub(_a);
+            bendDirection.addScaledVector(toTarget, -bendDirection.dot(toTarget));
+        }
 
         if (bendDirection.lengthSq() < 1e-10) {
             bendDirection.set(0, 0, 1).applyQuaternion(upper.getWorldQuaternion(new THREE.Quaternion()));

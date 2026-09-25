@@ -540,6 +540,62 @@ describe("walking (locomotion.js)", () => {
         }
     });
 
+    it("keeps its knees bending forward, never flicking sideways or backwards, run and walked round corners, starting and stopping", () => {
+        for (const [speed, fps] of [[7.9, 60], [7.9, 30], [1.7, 60]]) {
+            const f = figure();
+            const walker = new Walker(f);
+            const object = f.object;
+            const dt = 1 / fps;
+            const bone = (name) => object.worldToLocal(f.rig.bone(name).getWorldPosition(new THREE.Vector3()));
+            let facing = 0;
+            let pace = 0;
+            let backwards = Infinity;
+            let sideways = 0;
+            let flick = 0;
+            const last = [null, null];
+
+            // As the game moves a character: speeding up, a sharp corner every second (the way it
+            // goes changes at once, and it turns to face it at 9 radians a second), then stopping
+            for (let t = 0; t < 5; t += dt) {
+                const heading = t > 4 ? 0 : [0, Math.PI / 2, 0, -Math.PI / 2][Math.floor(t)];
+                const target = t > 4 ? 0 : speed;
+                const turn = Math.atan2(Math.sin(heading - facing), Math.cos(heading - facing));
+
+                pace = target > pace ? Math.min(target, pace + 6 * dt) : Math.max(target, pace - 7 * dt);
+                facing += Math.max(-9 * dt, Math.min(9 * dt, turn));
+                object.position.x += Math.sin(heading) * pace * dt;
+                object.position.z += Math.cos(heading) * pace * dt;
+                object.rotation.y = facing;
+                object.updateMatrixWorld(true);
+                walker.update(dt, { moved: pace * dt });
+
+                ["Left", "Right"].forEach((side, i) => {
+                    // The knee, off the line from the hip to the ankle: forwards (z) and sideways (x)
+                    const hip = bone(`${side}UpLeg`);
+                    const ankle = bone(`${side}Foot`);
+                    const along = ankle.clone().sub(hip).normalize();
+                    const off = bone(`${side}Leg`).sub(hip);
+
+                    off.addScaledVector(along, -off.dot(along));
+                    backwards = Math.min(backwards, off.z);
+                    sideways = Math.max(sideways, Math.abs(off.x));
+
+                    if (last[i] !== null) {
+                        flick = Math.max(flick, Math.abs(off.x - last[i]) / (dt * 60));
+                    }
+
+                    last[i] = off.x;
+                });
+            }
+
+            const at = `at ${speed} m/s, ${fps} frames a second`;
+
+            assert.ok(backwards > -0.005, `a knee bends ${(-backwards * 100).toFixed(1)} cm backwards ${at}`);
+            assert.ok(sideways < 0.11, `a knee is ${(sideways * 100).toFixed(1)} cm off to the side ${at}`);
+            assert.ok(flick < 0.03, `a knee flicks ${(flick * 100).toFixed(1)} cm sideways in a 60th of a second ${at}`);
+        }
+    });
+
     it("breaks into a run and back into a walk smoothly as it's moved faster and slower", () => {
         const f = figure();
         const walker = new Walker(f);

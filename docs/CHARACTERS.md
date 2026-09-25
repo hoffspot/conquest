@@ -227,9 +227,18 @@ standing, arms at the sides, palms facing the thighs.
     up, left the ground. A test checks the hips never move more than 3 mm in a 120th of a
     second.
 - **Foot locking.** A planted foot stays where it landed, pivoting on its heel early in stance and
-  its ball late in stance. Two-bone IK bends the leg to keep it there. The swinging foot eases
-  back, and toes bend to stay flat as the heel lifts. The tests check that a planted foot moves
-  less than a centimetre.
+  its ball late in stance. Two-bone IK bends the leg to keep it there, the knee always bending
+  forward (the thigh's anatomical forward, turned with it, is the IK's pole). A leg is never
+  asked to reach more than 98.5% of its length: a planted foot that would need it slides along
+  with the body instead. The swinging foot eases back (and, however long it's in the air, soon
+  stops making up for how far it slid), and toes bend to stay flat as the heel lifts. The tests
+  check that a planted foot moves less than a centimetre, and that, run and walked round sharp
+  corners, starting and stopping, at 60 and 30 frames a second, knees never bend backwards,
+  stay within 11 cm of the hip-to-ankle line sideways and never flick sideways.
+  - The IK used to bend the knee towards wherever it already was. When a planted foot was held
+    far from where the gait put it (running, turning, starting off), the line from the hip to
+    the foot passed right by the knee, so which side the knee was on flickered: for a frame it
+    swung 20 cm or more to the side, or bent backwards, bowing the leg.
 - **Styles.** A walk style sets lean, crouch, arm spread, stance width, toe-out, swagger, sway,
   head carriage and finger curl. The orc's is hunched, wide and heavy.
 - **Footsteps.** `onStep(foot, speed)` hears each foot land while moving (the game plays a
@@ -413,7 +422,8 @@ straight. These aren't modelled yet.
   (flexion 150 but extension 0). This is like FABRIK's quadrant cones
   ([Aristidou & Lasenby 2011](https://www.andreasaristidou.com/publications/papers/FABRIK.pdf)).
   The twist has its own range.
-- **IK.** Analytic two-bone IK (law of cosines, with the bend kept in its plane) for legs and arms.
+- **IK.** Analytic two-bone IK (law of cosines, with the bend kept in its plane, or towards a pole
+  given in the upper bone's anatomical frame: forward, for knees) for legs and arms.
   Three.js's CCDIKSolver clamps Euler angles per joint, which suits chains like tails.
 
 ### Walking
