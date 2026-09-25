@@ -35,9 +35,9 @@ describe("the score (score.js)", () => {
             if (instrument.kinds) {
                 assert.ok(instrument.kinds.includes(note.pitch));
             } else {
-                // Two semitones from a recording at most, but for the psaltery's lowest notes
-                // (the library's lowest is A sharp 4: F4 plays it five semitones down)
-                const most = note.instrument === "psaltery" ? 5 : 2;
+                // Two semitones from a recording at most, but for the ocarina's lowest notes
+                // (the library's lowest is A4: F4 plays it four semitones down)
+                const most = note.instrument === "ocarina" ? 4 : 2;
 
                 assert.ok(Math.abs(baseFor(note.instrument, note.pitch) - note.pitch) <= most, `${note.instrument} ${note.pitch}`);
             }
@@ -45,7 +45,7 @@ describe("the score (score.js)", () => {
     });
 
     it("has a tune in every section, and a band playing the choruses", () => {
-        const melodic = ["recorder", "psaltery", "harp"];
+        const melodic = ["recorder", "ocarina", "harp"];
 
         for (const section of SCORE.sections) {
             const start = section.start;
@@ -135,7 +135,7 @@ describe("the instruments (instruments.js, samples.js)", () => {
 });
 
 describe("making the recordings (scripts/build-music.js)", () => {
-    it("reads the library's SFZ files: each recording, its note, where it starts and its tuning", () => {
+    it("reads the library's SFZ files: each recording, its note, where it starts, its tuning, and whether it's a note's release", () => {
         const regions = regionsOf(`// Made by a tool
 <group>
 ampeg_release=0.3
@@ -146,14 +146,17 @@ pitch_keycenter=65
 offset=1002
 tune=-2
 
+<group>
+trigger=release
+
 <region>
 sample=Recorder/Sus/Alto_G#3.wav
 pitch_keycenter=68
 `);
 
         assert.deepEqual(regions, [
-            { sample: "Recorder/Sus/Alto_F3.wav", key: 65, offset: 1002, tune: -2 },
-            { sample: "Recorder/Sus/Alto_G#3.wav", key: 68, offset: 0, tune: 0 },
+            { sample: "Recorder/Sus/Alto_F3.wav", key: 65, offset: 1002, tune: -2, trigger: "attack" },
+            { sample: "Recorder/Sus/Alto_G#3.wav", key: 68, offset: 0, tune: 0, trigger: "release" },
         ]);
     });
 

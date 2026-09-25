@@ -1,6 +1,6 @@
 // The music: an original ballad for a bard, in the spirit of the songs in 1985's The Bard's Tale
 // (short, modal, folk-like tunes, played there on home computers' sound chips) but played by a
-// band of real, old instruments (instruments.js): a recorder, a bowed psaltery, a folk harp, a
+// band of real, old instruments (instruments.js): a recorder, an ocarina, a folk harp, a
 // strumstick (a small plucked folk instrument, for a lute), a Renaissance organ, hand chimes, a
 // frame drum and a tambourine, with harpsichord arpeggios in the bridge.
 //
@@ -257,7 +257,7 @@ export function compose() {
         drums(names.length, "verse", 0.5);
     });
     section("chorus", CHORUS_CHORDS, (names) => {
-        melody("psaltery", CHORUS, 0.7);
+        melody("ocarina", CHORUS, 0.7);
         melody("recorder", harmony(CHORUS, names, 8), 0.42);
         harp(names, 0.45);
         pad(names, 0.4);
@@ -265,14 +265,14 @@ export function compose() {
         drums(names.length, "chorus", 0.6);
     });
     section("verse", VERSE_CHORDS, (names) => {
-        melody("psaltery", VERSE, 0.65);
+        melody("ocarina", VERSE, 0.65);
         counter(names, 0.32);
         strum(names, 0.55);
         bass(names, 0.4);
         drums(names.length, "verse", 0.55);
     });
     section("chorus", CHORUS_CHORDS, (names) => {
-        melody("psaltery", CHORUS, 0.75);
+        melody("ocarina", CHORUS, 0.75);
         melody("recorder", harmony(CHORUS, names), 0.45);
         harp(names, 0.5);
         pad(names, 0.45);
@@ -294,7 +294,7 @@ export function compose() {
         chimes(VERSE, 0.3, 8);
     });
     section("last chorus", CHORUS_CHORDS, (names) => {
-        melody("psaltery", CHORUS, 0.8);
+        melody("ocarina", CHORUS, 0.8);
         melody("recorder", harmony(CHORUS, names), 0.5);
         harp(names, 0.5);
         strum(names, 0.45);

@@ -82,7 +82,7 @@ sight, already at full health) says why.
   every kind of blow sounds different where it lands; feet step on cobbles, dirt and grass.
 - **Environment**: the wind blows, birds sing, and the trees near you rustle.
 - **Music**: a four-minute score in the style of *The Bard's Tale* (1985), played on recordings
-  of real, old instruments: an alto recorder, a bowed psaltery, a folk harp, a strumstick (a
+  of real, old instruments: an alto recorder, an ocarina, a folk harp, a strumstick (a
   small plucked folk instrument, for a lute), a Renaissance chamber organ, hand chimes, a frame
   drum and a tambourine, with harpsichord arpeggios in the bridge. It's in D Dorian, in 3/4, with
   an intro, verses, choruses, a bridge, a quiet verse, a last chorus and an outro that leads back

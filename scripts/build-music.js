@@ -46,13 +46,11 @@ const ONSET = 0.03;
  * Each instrument: its SFZ in the library, how long its samples are (seconds: long enough for
  * the score's longest note and its release), and which recordings to use where the library
  * has more than one for a note (`pick`: a pattern in the file's name, such as a velocity
- * layer). Unpitched ones (drums) name a recording for each kind of hit instead. The bowed
- * psaltery's long bow strokes swell slowly, so its notes start into the stroke (`skip`
- * seconds), faded in over `fadeIn` like a bow's attack.
+ * layer). Unpitched ones (drums) name a recording for each kind of hit instead.
  */
 const SOURCES = {
     recorder: { sfz: "Aerophones/Edge-blown Aerophones/Baroque Alto Recorder - Sustain", seconds: 2.4 },
-    psaltery: { sfz: "Chordophones/Zithers/Psaltery, Bowed and Plucked - LongBow", seconds: 2.4, skip: 0.4, fadeIn: 0.04 },
+    ocarina: { sfz: "Aerophones/Edge-blown Aerophones/Ocarina, Typical - SusVib", seconds: 2.4 },
     harp: { sfz: "Chordophones/Composite Chordophones/Folk Harp", seconds: 2.4, pick: /_v2_/ },
     strumstick: { sfz: "Chordophones/Composite Chordophones/Strumstick", seconds: 2, pick: /_vl2_/ },
     harpsichord: { sfz: "Chordophones/Zithers/Harpsichord, Flemish - 8'", seconds: 1.2, pick: /_Low_Far_/ },
@@ -85,7 +83,8 @@ export async function fetchFromLibrary(path, library = LIBRARY) {
     }
 }
 
-// An SFZ's regions: { sample, key, offset, tune }, with its groups' settings
+// An SFZ's regions: { sample, key, offset, tune, trigger }, with its groups' settings (a
+// "release" trigger's recording is what's heard after a note ends, not the note)
 export function regionsOf(text) {
     const regions = [];
     let group = {};
@@ -98,7 +97,7 @@ export function regionsOf(text) {
         } else {
             const all = { ...group, ...settings };
 
-            regions.push({ sample: all.sample, key: Number(all.pitch_keycenter), offset: Number(all.offset ?? 0), tune: Number(all.tune ?? 0) });
+            regions.push({ sample: all.sample, key: Number(all.pitch_keycenter), offset: Number(all.offset ?? 0), tune: Number(all.tune ?? 0), trigger: all.trigger ?? "attack" });
         }
     }
 
@@ -211,10 +210,10 @@ function onsetOf(samples, rate, from = 0) {
     return Math.max(from, n - Math.round(0.003 * rate));
 }
 
-// Fade in (over `fadeIn` seconds) and out over the last fifth of a second, then make it as loud
-// as the others
-function finish(samples, { fadeIn = 0.002 } = {}) {
-    const rise = Math.max(1, Math.round(fadeIn * RATE));
+// Fade in over a moment and out over the last fifth of a second, then make it as loud as the
+// others
+function finish(samples) {
+    const rise = Math.round(0.002 * RATE);
     const fadeOut = Math.round(0.2 * RATE);
     const window = Math.round(0.05 * RATE);
     const body = Math.min(samples.length, Math.round(BODY * RATE));
@@ -290,7 +289,7 @@ async function main() {
     for (const [name, source] of Object.entries(SOURCES)) {
         const folder = source.sfz.slice(0, source.sfz.lastIndexOf("/") + 1);
         const sfz = (await fetchFromLibrary(`${source.sfz}.sfz`, SFZ_LIBRARY)).toString("utf8");
-        const regions = regionsOf(sfz).filter(({ sample }) => !source.pick || source.pick.test(sample));
+        const regions = regionsOf(sfz).filter(({ sample, trigger }) => trigger !== "release" && (!source.pick || source.pick.test(sample)));
         let chosen;
 
         if (source.kinds) {
@@ -298,7 +297,7 @@ async function main() {
         } else {
             // One recording per note (the first round of any the library repeats), low to high
             const notes = SCORE.notes.filter(({ instrument }) => instrument === name).map(({ pitch }) => pitch);
-            const byKey = [...new Map(regions.map((region) => [region.key, region])).values()].sort((a, b) => a.key - b.key);
+            const byKey = [...new Map(regions.toReversed().map((region) => [region.key, region])).values()].sort((a, b) => a.key - b.key);
 
             chosen = cover(byKey, Math.min(...notes), Math.max(...notes));
         }
@@ -307,8 +306,8 @@ async function main() {
 
         for (const region of chosen) {
             const wav = decodeWav(await fetchFromLibrary(folder + region.sample.replaceAll("\\", "/")));
-            const start = onsetOf(wav.samples, wav.rate, region.offset) + Math.round((source.skip ?? 0) * wav.rate);
-            const samples = finish(resample(wav.samples, wav.rate, { start, cents: region.tune, seconds: source.seconds }), { fadeIn: source.fadeIn });
+            const start = onsetOf(wav.samples, wav.rate, region.offset);
+            const samples = finish(resample(wav.samples, wav.rate, { start, cents: region.tune, seconds: source.seconds }));
             const mp3 = encodeMp3(samples);
             const label = region.kind ?? region.key;
             const file = `${name}-${label}.${createHash("sha256").update(mp3).digest("hex").slice(0, 8)}.mp3`;
@@ -328,7 +327,8 @@ async function main() {
         }
     }
 
-    const lines = Object.entries(list).map(([name, samples]) => `    ${name}: [\n${samples.map((sample) => `        ${JSON.stringify(sample).replace(/"(\w+)":/g, "$1: ")},\n`).join("")}    ],`);
+    const entry = (sample) => `{ ${Object.entries(sample).map(([key, value]) => `${key}: ${JSON.stringify(value)}`).join(", ")} }`;
+    const lines = Object.entries(list).map(([name, samples]) => `    ${name}: [\n${samples.map((sample) => `        ${entry(sample)},\n`).join("")}    ],`);
 
     await writeFile(LIST, `// Made by scripts/build-music.js (npm run build:music): don't edit it by hand.
 //

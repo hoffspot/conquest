@@ -1,12 +1,12 @@
 // The music's instruments: recordings of real ones, from the Versilian Community Sample Library
 // (CC0) by Versilian Studios. scripts/build-music.js makes them into short MP3s (client/music),
-// listed in samples.js: an alto recorder, a bowed psaltery (a medieval zither played with a
-// bow), a folk harp, a strumstick (a small plucked folk instrument, standing in for a lute), a
-// harpsichord, a Renaissance chamber organ, hand chimes, a frame drum and a tambourine.
+// listed in samples.js: an alto recorder, an ocarina (a small, round clay flute), a folk harp,
+// a strumstick (a small plucked folk instrument, standing in for a lute), a harpsichord, a
+// Renaissance chamber organ, hand chimes, a frame drum and a tambourine.
 //
 // Each pitched instrument was recorded at a few notes, a few semitones apart: a note plays the
-// nearest, a little faster or slower. Blown and bowed instruments (and the organ) sound for as
-// long as a note lasts, then fade over `release` seconds; plucked and struck ones ring on.
+// nearest, a little faster or slower. Blown instruments (and the organ) sound for as long as a
+// note lasts, then fade over `release` seconds; plucked and struck ones ring on.
 
 import { SAMPLES } from "./samples.js";
 
@@ -17,7 +17,7 @@ import { SAMPLES } from "./samples.js";
  */
 export const INSTRUMENTS = Object.freeze({
     recorder: { name: "Alto recorder", held: true, release: 0.15, mix: 0.5, pan: -0.15 },
-    psaltery: { name: "Bowed psaltery", held: true, release: 0.3, mix: 0.46, pan: 0.2 },
+    ocarina: { name: "Ocarina", held: true, release: 0.25, mix: 0.44, pan: 0.2 },
     harp: { name: "Folk harp", mix: 0.36, pan: -0.3 },
     strumstick: { name: "Strumstick", mix: 0.42, pan: 0.3 },
     harpsichord: { name: "Harpsichord", mix: 0.2, pan: 0.1 },

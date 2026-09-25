@@ -267,7 +267,7 @@ speaker. This one is original, and played on recordings of real, old instruments
 | Instrument | Plays | Recording |
 | --- | --- | --- |
 | Alto recorder | the tune, harmony, long notes | Baroque Alto Recorder, sustained |
-| Bowed psaltery (a medieval zither played with a bow) | the tune | long bow strokes |
+| Ocarina (a small, round clay flute) | the tune, softly | sustained, with a gentle vibrato |
 | Folk harp | arpeggios, the quiet verse's tune | Folk Harp, medium |
 | Strumstick (a small plucked folk instrument, for a lute) | strummed chords | fingered, medium |
 | Harpsichord | the bridge's arpeggios | Flemish harpsichord, 8' |
@@ -276,15 +276,15 @@ speaker. This one is original, and played on recordings of real, old instruments
 | Frame drum, tambourine | the beat | a large and a small hand drum's hits; a tambourine's |
 
 Each pitched instrument was recorded every few semitones; a note plays the nearest recording,
-a little faster or slower (never more than 2 semitones, but for the psaltery's three lowest
-notes, below the library's lowest). Recorder, psaltery and organ notes sound for as long as the
+a little faster or slower (never more than 2 semitones, but for the ocarina's three lowest
+notes, below the library's lowest). Recorder, ocarina and organ notes sound for as long as the
 note lasts, then fade; plucked and struck ones ring on.
 
 `npm run build:music` (`scripts/build-music.js`) makes them: for each instrument, it reads the
 library's SFZ file (which recording is which note), picks recordings every 4 semitones or so
 across the notes the score plays, and downloads them (kept in `.cache/vcsl`). Each is mixed to
-mono, started where its note starts (the psaltery's long bow strokes swell slowly, so 0.4
-seconds into the stroke, faded in like a bow's attack), fine-tuned (by the SFZ's tuning),
+mono, started where its note starts (never a "release" recording, the sound after a note
+ends, which some instruments also have), fine-tuned (by the SFZ's tuning),
 resampled to 32 kHz, cut to as long as the score needs (0.6 to 2.6 seconds), faded out, made
 about as loud as the others (by its loudest 50 ms in its first 0.6 seconds) and saved as an
 80 kb/s MP3 named for what's in it: 46 recordings, under a megabyte in all, listed in
@@ -298,12 +298,12 @@ minute, 128 bars, four minutes long:
 | --- | --- | --- | --- |
 | Intro | 8 | recorder fragment | harp, a low D on the organ |
 | Verse | 16 | recorder | strumstick, organ bass, drum |
-| Chorus | 16 | psaltery, recorder harmony in the second half | harp, organ, drum and tambourine |
-| Verse | 16 | psaltery | long recorder notes under it, strumstick, organ bass, drum |
-| Chorus | 16 | psaltery, recorder harmony | harp, organ, chimes, drum and tambourine |
+| Chorus | 16 | ocarina, recorder harmony in the second half | harp, organ, drum and tambourine |
+| Verse | 16 | ocarina | long recorder notes under it, strumstick, organ bass, drum |
+| Chorus | 16 | ocarina, recorder harmony | harp, organ, chimes, drum and tambourine |
 | Bridge | 16 | recorder | harpsichord arpeggios, organ, drum and tambourine (to B flat and back) |
 | Quiet verse | 16 | harp | organ, a few chimes |
-| Last chorus | 16 | psaltery, recorder harmony | harp, strumstick, organ, chimes, drum and tambourine, with fills |
+| Last chorus | 16 | ocarina, recorder harmony | harp, strumstick, organ, chimes, drum and tambourine, with fills |
 | Outro | 8 | recorder | harp fading, organ: ending on A, to lead back to D |
 
 The accompaniment is written from each section's chords; the timing and loudness of every note
