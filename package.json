@@ -1,7 +1,7 @@
 {
   "name": "conquest",
   "version": "2.0.0",
-  "description": "Last Colony - the real-time strategy game from Pro HTML5 Games (2nd ed.), modernized with ES modules, Web Audio, Pointer Events and a ws-based multiplayer server.",
+  "description": "Pellagos: a fantasy action role-playing game in the browser, with a hero and orcs built from MakeHuman's body, in a generated town drawn in real-time 3D.",
   "private": true,
   "type": "module",
   "engines": {
@@ -15,12 +15,8 @@
     "lint": "eslint .",
     "check": "npm run lint && npm test",
     "vendor:three": "node scripts/vendor-three.js",
-    "extract:tileset": "node scripts/extract-tileset.js",
-    "build:art": "node scripts/build-art.js",
+    "build:manifest": "node scripts/build-manifest.js",
     "build:characters": "node scripts/build-characters.js"
-  },
-  "dependencies": {
-    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

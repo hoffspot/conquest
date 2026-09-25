@@ -1,10 +1,6 @@
 name: Deploy to GitHub Pages
 
 # Publishes the game (the client folder) to https://<owner>.github.io/<repo>/ whenever main changes.
-# GitHub Pages only serves files, so this copy of the game has the campaign but no multiplayer
-# server. To add multiplayer, run the server somewhere (npm start) and set the MULTIPLAYER_SERVER
-# repository variable (Settings > Secrets and variables > Actions > Variables) to its address,
-# for example wss://last-colony.example.com
 
 on:
   push:
@@ -34,12 +30,9 @@ jobs:
       - run: npm test
 
       - name: Put the site together
-        env:
-          MULTIPLAYER_SERVER: ${{ vars.MULTIPLAYER_SERVER }}
         run: |
+          npm run build:manifest
           cp -R client _site
-          node -e 'console.log(`export const MULTIPLAYER_SERVER = ${JSON.stringify(process.env.MULTIPLAYER_SERVER || null)};`)' > _site/js/app/hosting.js
-          cat _site/js/app/hosting.js
 
       - uses: actions/configure-pages@v6
 

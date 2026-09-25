@@ -41,6 +41,10 @@ const HOLDS = {
     bow: { Arm: { flex: 5, abduct: 8 }, ForeArm: { flex: 20, pronate: 0 }, Hand: { flex: 0 }, swing: 0.5 },
     pistol: { Arm: { flex: 0, abduct: 8 }, ForeArm: { flex: 25, pronate: 10 }, Hand: { flex: 0, deviate: -10 }, swing: 0.6 },
     sword: { Arm: { flex: 0, abduct: 9 }, ForeArm: { flex: 20, pronate: 10 }, Hand: { flex: 0, deviate: -20 }, swing: 0.7 },
+    wand: { Arm: { flex: 4, abduct: 8 }, ForeArm: { flex: 30, pronate: 15 }, Hand: { flex: 0, deviate: -10 }, swing: 0.6 },
+    hammer: { Arm: { flex: 10, abduct: 12, rotate: 10 }, ForeArm: { flex: 72, pronate: 0 }, Hand: { flex: -5, deviate: 8 }, swing: 0.2 },
+    book: { Arm: { flex: 22, abduct: 10, rotate: 10 }, ForeArm: { flex: 88, pronate: -80 }, Hand: { flex: -8, deviate: 0 }, swing: 0.12 },
+    fist: { Arm: { flex: 4, abduct: 10 }, ForeArm: { flex: 38, pronate: 20 }, Hand: { flex: 0 }, swing: 0.7 },
 };
 
 /**
@@ -50,6 +54,12 @@ const HOLDS = {
 export const ITEMS = Object.freeze({
     sword: { label: "Arming sword", slot: "mainHand", model: "sword", socket: "rightHand", grips: true, hold: HOLDS.sword },
     staff: { label: "Mage's staff", slot: "mainHand", model: "staff", socket: "rightHand", grips: true, hold: HOLDS.staff },
+    wand: { label: "Wand", slot: "mainHand", model: "wand", socket: "rightHand", grips: true, hold: HOLDS.wand },
+    warHammer: { label: "War hammer", slot: "mainHand", model: "warHammer", socket: "rightHand", grips: true, hold: HOLDS.hammer },
+    cleaver: { label: "Orc cleaver", slot: "mainHand", model: "cleaver", socket: "rightHand", grips: true, hold: HOLDS.sword },
+    spikedGauntlets: { label: "Spiked gauntlets", slot: "mainHand", model: "knuckleSpikes", socket: "rightHand", grips: true, hold: HOLDS.fist, garment: "gauntlets" },
+    spikedGauntletLeft: { label: "Spiked gauntlet (left)", slot: "offHand", model: "knuckleSpikes", socket: "leftHand", grips: true, hold: HOLDS.fist },
+    grimoire: { label: "Grimoire", slot: "offHand", model: "grimoire", socket: "leftHand", hold: HOLDS.book },
     pistol: { label: "Flintlock pistol", slot: "mainHand", model: "pistol", socket: "rightHand", grips: true, hold: HOLDS.pistol },
     bow: { label: "Longbow", slot: "offHand", model: "bow", socket: "leftHand", turn: [-1.1, 0, 0], grips: true, hold: HOLDS.bow },
     roundShield: { label: "Round shield", slot: "offHand", model: "roundShield", socket: "leftForearm", hold: HOLDS.shield, grips: true },

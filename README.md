@@ -2,28 +2,72 @@
 
 [![CI](https://github.com/hoffspot/conquest/actions/workflows/ci.yml/badge.svg)](https://github.com/hoffspot/conquest/actions/workflows/ci.yml)
 
-**Last Colony**, the real-time strategy game from
-[*Pro HTML5 Games*](https://www.apress.com/9781484229095) (2nd edition) by Aditya Ravi Shankar,
-modernized from the book's final version (Chapter 13 of the
-[official source code](https://github.com/Apress/pro-html5-games-17)).
+**Pellagos**: make a character, choose a weapon, and defend a market town from the orc that
+prowls its fields. It's drawn in real-time 3D with [Three.js](https://threejs.org), plays in the
+browser on phones, tablets and computers, and can be installed as an app.
 
-This is the complete game: a three-mission single player campaign and two player multiplayer
-over WebSocket. It plays like the book's version, but the code has been brought up to date,
-bugs in the book's code have been fixed, and it comes with automated tests. It is designed to be
-played on a phone in landscape (it's tuned for an iPhone 16 Pro) as well as on tablets and computers:
-the map fills the screen, it has touch controls, pinch to zoom and a minimap, and it can be
-installed as an app.
-[docs/MODERNIZATION.md](docs/MODERNIZATION.md) describes every change and maps the book's files
-to the new ones, so the book is still a good guide to the code.
+**Play it at <https://hoffspot.github.io/conquest/>.** The character lab, for building and
+dressing characters and watching them walk and fight, is at
+<https://hoffspot.github.io/conquest/character-lab.html>.
 
-**Play it now at <https://hoffspot.github.io/conquest/>** (the campaign; multiplayer needs the
-game's server, see below).
+[docs/GAME.md](docs/GAME.md) describes how the game works: the world, the fighting, the drawing,
+the screens and debug mode. [docs/CHARACTERS.md](docs/CHARACTERS.md) describes the character
+engine.
 
-The game is starting to move from commanding many units to playing one character against
-enemies. The first piece is the **character lab** at
-<https://hoffspot.github.io/conquest/character-lab.html>: build a human or an orc, change their
-body, face, skin and hair, dress and arm them, and watch them walk. See
-[docs/CHARACTERS.md](docs/CHARACTERS.md).
+## How to play
+
+**Loading.** The first screen lists everything the game downloads (about 3 MB: the 3D engine,
+the game's code, the body characters are made from, its skin details, and the props and trees),
+with a bar for each and one for the whole. Then the title screen offers to **Continue** with your
+character, or make a **New character**.
+
+**Making a character** takes three steps:
+
+1. **Look.** Shape the body (build, height, bust, heritage and physique), the face, and the
+   colours and hair (skin, eyes, hairstyle, beard). **Random** makes someone new. Drag across the
+   picture to walk round them; each tab frames what it changes.
+2. **Weapon.** Everyone starts in a tunic, leather bracers, leather pants and leather boots, and
+   chooses one weapon (a bow comes with a quiver of arrows on the back):
+
+   | Weapon | School | Reach | Damage | Attacks a second | Hits |
+   | --- | --- | --- | --- | --- | --- |
+   | Sword | Melee | Next square | 4–8 | 0.9 | Slash: twists away |
+   | Staff | Melee | Next square | 3–7 | 1.0 | Strike: rocks back |
+   | Wand | Magic | 7 m | 2–6 | 1.0 | Arcane bolt: a shudder |
+   | Grimoire | Magic | 7 m | 4–9 | 0.6 | Fireball: shields their face from the fire |
+   | War hammer | Melee | Next square | 6–12 | 0.6 | Crush: knocked back, knees buckling |
+   | Bow | Ranged | 9 m | 3–7 | 0.7 | Arrow: a jolt, and it sticks |
+   | Spiked gauntlets | Melee | Next square | 2–5 | 1.7 | Punch: the head snaps round |
+
+   The damage is rolled for every blow: any whole number between the two, each as likely.
+3. **Name.** Type one, or ask for a suggestion, and **Begin**.
+
+Your character is saved in the browser, with the town they live in.
+
+**In the town.** You wake in the market square. **Tap or click the ground** to walk there, or
+**an enemy** to go and fight them. Standing still, you attack whatever is within your weapon's
+reach on your own: melee weapons reach the eight squares round yours; ranged ones anything in
+range that you can see.
+
+An orc patrols the fields from the north-west corner, halfway down the west side and back. When
+it sees you (within 12 metres, with nothing in the way) it chases you and attacks whenever you're
+within reach, giving up if it loses sight of you for three seconds. Each blow knocks off hit
+points; at none, a character falls. You get up again in the market square five seconds later,
+with full health; the orc comes back to its corner half a minute after it falls.
+
+| Action | Touch | Mouse and keyboard |
+| --- | --- | --- |
+| Walk | Tap the ground | Click the ground |
+| Fight | Tap an enemy | Click an enemy |
+| Zoom | Pinch, or the + and − buttons | Scroll, or the + and − buttons |
+| Pause | The menu button | The menu button or Escape |
+
+**Debug mode.** The switch on the title screen shows an overlay, on every screen, of how the game
+is running: frame rate and a graph of frame times, how long updating and drawing take, what's
+drawn (draw calls, triangles, textures, shaders), memory, the GPU and screen, the battle, and how
+long each part took to download and build. Its controls change the drawing quality, render
+scale and shadows, and show the squares characters walk on and their paths. See
+[docs/GAME.md](docs/GAME.md#debug-mode).
 
 ## Quick start
 
@@ -34,207 +78,90 @@ npm install
 npm start
 ```
 
-Open <http://localhost:8080> and choose **Campaign** or **Multiplayer**.
+Open <http://localhost:8080>. To go straight into a game with a random character, open
+<http://localhost:8080/?play> (add `&weapon=bow`, `&seed=12` for another town, or
+`&quality=low`).
 
-For a multiplayer game, open the page in two browser windows, or on two computers on the same
-network using this computer's address instead of `localhost`. Both players pick the same game
-room in the lobby and press **Join**.
-
-### Playing on a phone
-
-1. Open <https://hoffspot.github.io/conquest/> on the phone. For multiplayer, start the server on
-   a computer instead (`npm start`), connect the phone to the same Wi-Fi network and open the
-   address the server prints, for example `http://192.168.1.20:8080`.
-2. Turn the phone sideways: the game is played in landscape (in portrait it asks you to turn the
-   phone and pauses).
-3. For full screen without the browser's toolbars, install the game: on iPhone tap **Share** then
-   **Add to Home Screen**; on Android use **Install app** on the start screen or the browser menu.
-   The installed game opens in landscape. On Android the game also goes full screen by itself when
-   a game starts. Installed from the online copy (or any HTTPS address), the campaign also works
-   offline.
+The game is plain ES modules with no build step, so any static web server can serve the
+`client/` folder.
 
 | Setting | How |
 | --- | --- |
 | Port | `PORT=3000 npm start` (default 8080) |
 | Network interface | `HOST=127.0.0.1 npm start` (default: all interfaces) |
-| Restart the server when server code changes | `npm run dev` |
-| Use a multiplayer server on another host | add `?server=ws://host:8080` to the page URL |
+| Restart the server when its code changes | `npm run dev` |
 
-The game is plain ES modules with no build step, so any static web server can serve the
-`client/` folder; only multiplayer needs the Node server.
+To play on a phone on the same Wi-Fi network, open the address the server prints, for example
+`http://192.168.1.20:8080`, or use the online copy. For full screen without the browser's
+toolbars, install it: on iPhone tap **Share** then **Add to Home Screen**; on Android use
+**Install app** in the browser's menu. Installed from the online copy (or any HTTPS address), it
+also plays offline.
 
 ### Hosting on GitHub Pages
 
 [.github/workflows/pages.yml](.github/workflows/pages.yml) publishes the `client/` folder to
-GitHub Pages every time `main` changes, once the lint and unit tests pass. Setting it up takes one
-step: in the repository's **Settings > Pages**, set **Source** to **GitHub Actions**. The workflow
-can also be run by hand from the **Actions** tab.
-
-GitHub Pages only serves files, so the published copy has no multiplayer server and its menu only
-offers the campaign. To add multiplayer, run the server on a host that supports WebSockets and set
-the repository variable `MULTIPLAYER_SERVER` (**Settings > Secrets and variables > Actions >
-Variables**) to its address, for example `wss://last-colony.example.com`. The workflow writes it
-into `client/js/app/hosting.js`.
-
-## How to play
-
-**The campaign.** In *Rescue*, find a lost convoy and escort it back to base. In *Assault*, build
-up your defences and destroy the rebel base. In *Under Siege*, hold out until the evacuation
-fleet arrives and don't lose a single transport. Your operator and the other characters call in
-to tell you what to do next: the game waits while you read each message, then carries on when you
-press **Continue**.
-
-**A new map every time.** Each mission is played on a newly generated map, so the lakes, rivers,
-lava and trees, and where the bases, convoys and patrols are, change every time, as in Diablo.
-The mission briefing shows the map as the mission starts (under the fog of war, apart from around
-your base), its number, and buttons to try a **New map** or play on
-**The book's map** instead. If you fail a mission, trying again keeps the same map. To play a map
-again later, add its number to the address: `?seed=123456`.
-
-**Multiplayer.** Both players start with a base, a harvester and a few tanks, on a map generated
-for the game. Deploy the harvester on an oil field to earn money, build up an army and destroy
-everything the other player has.
-
-To build, select your base (for buildings) or a starport (for vehicles and aircraft) and use the
-buttons in the sidebar, which show each item's price. A button is only enabled when you have the
-right building selected and enough money. The minimap at the top of the sidebar shows the whole
-map; tap or click it to jump there.
-
-**On a touch screen:**
-
-| Action | Gesture |
-| --- | --- |
-| Select a unit or building | Tap it |
-| Move the selected units | Tap the ground |
-| Attack | Tap an enemy while your units are selected |
-| Deploy a harvester | Select it, then tap an oil field |
-| Guard a friendly unit | Touch and hold it while your units are selected |
-| Select several units | Touch and hold, then drag a box |
-| Select all units of one kind on screen | Double tap one of them |
-| Scroll the map | Drag with one finger (flick to keep it moving) |
-| Zoom | Pinch |
-| Place a building | Tap where it should go, then tap it again or press ✓ (✕ cancels) |
-
-The buttons over the map open the menu (pause, sound, full screen, quit), select all your combat
-units, deselect, and in multiplayer open the chat.
-
-**With a mouse and keyboard:**
-
-| Action | Mouse |
-| --- | --- |
-| Select a unit or building | Left click (shift + click adds or removes) |
-| Select several units | Drag a box |
-| Select all units of one kind on screen | Double click one of them |
-| Move, attack an enemy, guard a friendly unit, deploy a harvester | Right click |
-| Place a building | Left click on the highlighted squares (right click cancels) |
-| Scroll the map | Move to the edge of the map, or drag with the middle button |
-| Zoom | Mouse wheel or trackpad pinch |
-
-| Key | Action |
-| --- | --- |
-| Arrow keys | Scroll the map |
-| + and - | Zoom in and out |
-| P | Pause menu |
-| M | Sound on or off |
-| Escape | Cancel placing a building, deselect, or open the menu |
-| Enter | Chat with the other player (multiplayer) |
-| Enter, Space or Escape | Continue after a message from a mission character |
-
-## What's new compared to the book
-
-- **Modern code:** ES modules and classes instead of global objects; a game simulation that is
-  independent of the browser (so it can be tested in Node); a fixed-timestep game loop with
-  triggers on game time; Web Audio; Pointer Events for mouse, touch and pen.
-- **One server:** `npm start` serves the game and runs the multiplayer lobby, using the `ws`
-  package instead of the unmaintained `websocket` package. Every message is validated, and
-  commands are rebuilt from known fields before they reach the other player.
-- **Bug fixes:** the book's version skipped the first mission, never ran one of mission 3's
-  failure conditions, duplicated unit ids when a mission was restarted, left a player stuck in a
-  multiplayer room after each game, and let players command each other's units. See
-  [the full list](docs/MODERNIZATION.md#bugs-fixed).
-- **Made for phones:** a full-screen layout that fits any screen (keeping clear of notches and the
-  home indicator), touch controls designed for fingers, pinch to zoom, a minimap, sharp graphics
-  on high-resolution screens, landscape lock and an installable app (which also works offline
-  when the game is served over HTTPS).
-- **3D units:** every vehicle, aircraft and building is a 3D model drawn with
-  [Three.js](https://threejs.org), seen from the same angle as the book's art. Models are in team
-  colours, turn smoothly, and show damage. Rotors spin, turret guns aim, and buildings rise as they
-  are built. The models are free low-poly models by Quaternius, Kenney and PolyDucky (see
-  [Credits](#credits-and-license)). See [3D units](docs/MODERNIZATION.md#3d-units).
-- **Explosions and fire:** muzzle flashes, glowing tracer shells and missile smoke trails;
-  explosions with a fireball, sparks, debris, a shock wave, smoke and scorch marks; burning wrecks
-  and smoking damaged units; tanks rock back when they fire. See
-  [Effects](docs/MODERNIZATION.md#effects).
-- **Generated maps:** every mission and multiplayer game gets a new map, built from the book's
-  own tiles, with the mission's bases, convoys and patrols placed to suit it and every route they
-  need checked to be passable. The book's map is still available. See
-  [Generated maps](docs/MODERNIZATION.md#generated-maps).
-- **Castle and town art:** a generator that builds castles and towns as 3D models and renders
-  them from the game's own camera, with layouts that tanks can drive through. It isn't on the maps yet. See
-  [Castle and town art](docs/MODERNIZATION.md#castle-and-town-art).
-- **Characters:** a character engine for a single hero and their enemies, tried out in the
-  character lab (`character-lab.html`). It uses MakeHuman's body (CC0), with body, bust, heritage,
-  face and physique sliders, and a 52-bone Mixamo-named skeleton whose joints are limited to real
-  ranges of motion. Skin, eyes,
-  hair and beards are painted and grown procedurally, and whole skin textures can be loaded.
-  Clothing and armour are fitted to the body; weapons, shields, helmets and packs sit on sockets.
-  Walking is made from gait-lab data, with planted feet, and motion capture clips are retargeted
-  to any body. See [docs/CHARACTERS.md](docs/CHARACTERS.md).
-- **Small additions:** a pause menu, mute, keyboard scrolling and zoom, keyboard support for menus
-  and the multiplayer lobby, prices on the build buttons, markers that confirm each order, clearer
-  error messages when something fails to load or connect.
-- **Tests:** unit, simulation and server tests, browser tests with Playwright, ESLint and GitHub
-  Actions CI.
+GitHub Pages every time `main` changes, once the lint and unit tests pass. To set it up, in the
+repository's **Settings > Pages**, set **Source** to **GitHub Actions**. The workflow can also be
+run by hand from the **Actions** tab.
 
 ## Development
 
 ```sh
 npm run lint        # ESLint
-npm test            # unit, simulation and server tests (Node's built-in test runner)
+npm test            # unit tests (Node's built-in test runner)
 npm run test:e2e    # plays the game in Chromium using Playwright
 npm run check       # lint + unit tests
-npm run vendor:three  # after changing the three version in package.json: copies it to client/vendor
-npm run extract:tileset  # after changing the book's map image: rebuilds the tiles generated maps use
-npm run build:art   # after changing tools/artgen: redraws the castle and town sprite sheets
+npm run build:manifest  # after changing what the game downloads: lists it for the loading screen
+npm run vendor:three    # after changing the three version in package.json: copies it to client/vendor
 npm run build:characters -- --mpfb2=../mpfb2  # rebuilds client/characters from MakeHuman's MPFB2
 ```
 
-The browser tests need Chromium: run `npx playwright install chromium` once, or set
-`CHROMIUM_PATH` to an existing Chromium or Chrome executable. They play the game with a mouse on
-a desktop screen, and with touch gestures on an emulated iPhone 16 Pro held sideways.
+`npm test` checks that `client/js/app/manifest.js` (the loading screen's list of files and their
+sizes) is up to date, so run `npm run build:manifest` after changing the game's code or data. The
+browser tests need Chromium: run `npx playwright install chromium` once, or set `CHROMIUM_PATH`
+to an existing Chromium or Chrome executable.
 
-While the game is running, the browser console gives access to the game through `lastColony`,
-for example `lastColony.game.cash.blue = 10000` or `lastColony.singleplayer.currentLevel`.
+While the game is running, the browser console reaches it through `pellagos`: for example
+`pellagos.game.battle.actor("orc")`, or `pellagos.game.advance(10)` to play on ten seconds
+without drawing (handy on slow machines).
 
 ```
 client/                 The game (static files served to the browser)
-  index.html            Screens: menu, briefing, game, lobby, pause menu, message box, loading
+  index.html            The screens: loading, title, making a character, the game, the menu, debug
   styles.css            Layout for every screen size, from phones to desktops
-  manifest.webmanifest  Lets the game be installed as an app (landscape, full screen)
+  manifest.webmanifest  Lets the game be installed as an app
   sw.js                 Service worker: keeps a copy of the game for offline play
-  images/, audio/       Artwork and sounds from the book
-  images/art/           Castle and town sprite sheets (made by npm run build:art)
-  models/               3D models of the units and buildings (credits in models/CREDITS.md)
   characters/           The body characters are made from (made by npm run build:characters),
                         MakeHuman's texture masks, and motion capture clips
+  models/kaykit/        Props and trees (KayKit Medieval Hexagon, CC0)
+  images/icons/         The app's icons
   character-lab.html    The character lab (with character-lab.css)
   vendor/three-r186/    Three.js (minified by scripts/vendor-three.js; loaded through an import map)
-  js/main.js            Entry point: creates the game and wires up the browser UI
-  js/core/              The game simulation. No DOM code, so it also runs in Node
-    game.js             Game state, items, commands, map grids and the game tick
-    commands.js         Validation of player commands (shared with the server)
-    entities/           Buildings, vehicles, aircraft, bullets and terrain
-    pathfinding.js      A* path finding
-    mapgen.js           Generating maps: terrain, obstacles and mission sites, with checked routes
-    missions.js         Getting a level ready to play on the book's map or a generated one
-    sites.js            Helpers for placing a level's units at its sites
-    random.js           Seeded random numbers and noise (the same in every browser)
-    fog.js              Fog of war
-    triggers.js         Timed and conditional mission events
-    data/levels.js      The campaign missions and the multiplayer map, with the sites they use
-    data/maps.js        Map terrain data
-    data/tileset.js     The book's map cut into tiles (made by scripts/extract-tileset.js)
-    setpieces/          Castle and town layouts, and the pieces they are built from
+  js/main.js            The screens, from loading to playing (no Three.js: it loads first)
+  js/app/               The game on the page
+    loader.js           Downloads everything, counting every byte; manifest.js lists it
+    session.js          The 3D view and the character kit, and starting games
+    creator.js          Making a character; heroes.js has random ones and names
+    game.js             Playing: the world, the battle, the characters, taps and the camera
+    hud.js              Health, names, damage numbers and messages over the game
+    debug.js            Debug mode's overlay
+    save.js             The saved character and settings (local storage)
+    device.js           Full screen and the service worker
+  js/core/              The rules. No DOM or Three.js, so they also run in Node
+    world.js            The world: a town on 1-metre squares, fields, trees, where everyone starts
+    battle.js           Moving, fighting, damage, dying and coming back; the orc's patrol
+    weapons.js          The weapons and their attacks
+    pathfinding.js      A* paths on the squares
+    random.js           Seeded random numbers
+    setpieces/          Town (and castle) layouts, and the pieces they're made from
+  js/world/             Drawing the world
+    view.js             The renderer, lights, sky, the camera, quality levels, the cutaway
+    ground.js           The ground: textures blended square by square
+    town3d.js           The town's buildings, props and trees, merged into few meshes
+    art/                The art kits the town is built with: houses, landmarks, props, trees
+    avatar.js           A character in the world, following its place in the battle
+    effects.js          Arrows, bolts, fireballs, sparks, dust, fire and arcane light
+    squares.js          Debug mode's squares and paths
   js/characters/        The character engine (see docs/CHARACTERS.md)
     body.js             Loading and shaping the body; macro.js and details.js are the sliders
     rig.js              The skeleton, anatomical joint angles and their limits, two-bone IK
@@ -243,95 +170,37 @@ client/                 The game (static files served to the browser)
     garments.js         Clothing and armour fitted to the body
     items.js            Weapons, shields, helmets and packs; equipment.js has slots and sockets
     gait.js             Walking data; locomotion.js walks a character with it
+    actions.js          Attacking, flinching when hit, falling
     bvh.js              Motion capture: reading BVH files and retargeting them
     presets.js          The human, heroine and orc
   js/lab/character-lab.js  The character lab
-  js/app/               The browser side
-    camera.js           Scrolling and zooming the view
-    renderer.js         Drawing the map, units and fog on the canvases
-    units3d.js          Drawing units and buildings as 3D models with Three.js
-    models.js           Which model each unit and building uses, its size, team colours and parts
-    effects.js          Muzzle flashes, shells, explosions, fire, smoke and scorch marks
-    perspective.js      The angle the game is seen from (shared by the models and the effects)
-    minimap.js          The overview map in the sidebar
-    input.js            Mouse, touch and keyboard controls
-    hud.js              The buttons over the map
-    device.js           Landscape lock, full screen, installing the app
-    hosting.js          Where the multiplayer server is (changed for GitHub Pages)
-    loop.js             The game loop
-    sidebar.js          Cash display and construction buttons
-    ui.js               Screens, message box, character messages and status messages
-    sounds.js           Sound effects (Web Audio)
-    assets.js           Image loading with a progress display
-    singleplayer.js     The campaign
-    mapchoice.js        Whether to play on generated maps or the book's map
-    multiplayer.js      The multiplayer lobby and lockstep game
-server/
-  index.js              HTTP + WebSocket server (npm start)
-  lobby.js              Game rooms, players and the lockstep game clock
-  static.js             Serves the client folder
-test/                   Unit, simulation and server tests
+server/                 A static file server for playing locally (npm start)
+test/                   Unit tests
 e2e/                    Playwright browser tests
-scripts/vendor-three.js Copies Three.js from node_modules into client/vendor
-scripts/extract-tileset.js  Cuts the book's map into the tiles generated maps are built from
-scripts/build-art.js    Runs the art generator in headless Chromium and saves its sprite sheets
-scripts/build-characters.js  Prepares MakeHuman's body, shapes and skeleton for the character engine
-tools/artgen/           The art generator: builds castle and town pieces in 3D and renders them
+scripts/                vendor-three.js, build-characters.js, build-manifest.js
 .github/workflows/      CI (ci.yml) and publishing to GitHub Pages (pages.yml)
-docs/MODERNIZATION.md   What changed compared to the book, and why
+docs/GAME.md            How the game works
 docs/CHARACTERS.md      The character engine, and the research behind it
+docs/MODERNIZATION.md   The history: the book's Last Colony, modernized, before Pellagos replaced it
 ```
-
-### How multiplayer works
-
-The game uses deterministic lockstep, as in the book. Players never send unit positions, only
-the commands they give. The server collects each player's commands and sends them to both
-players as part of numbered game ticks, ten per second. Each game only moves on to a tick once
-it has that tick's commands. Both players run the same simulation with the same commands, so
-their games stay identical.
 
 ## Credits and license
 
-Game code and design: *Pro HTML5 Games* by Aditya Ravi Shankar (Apress, 2017). The game code and
-assets in this repository are derived from the book's source code, which is distributed under
-the book's own freeware license (reproduced in [LICENSE-BOOK-CODE.txt](LICENSE-BOOK-CODE.txt));
-it allows personal use and modification, but not commercial use.
+- Props and trees: the KayKit Medieval Hexagon Pack by Kay Lousberg
+  (<https://kaylousberg.com>), CC0 (`client/models/kaykit/LICENSE.txt`).
+- Characters: the body, its shapes, skeleton and skin weights, the texture masks and the walk and
+  zombie walk motion capture clips are from MakeHuman (<https://github.com/makehumancommunity>),
+  CC0. Gait data from the normal datasets bundled with pyCGM2 (<https://github.com/pyCGM2/pyCGM2>).
+- Town layouts after Watabou's Medieval Fantasy City Generator
+  (<https://github.com/watabou/TownGeneratorOS>); castle pieces after Castle Builder by Jon
+  Rubashkin (<https://github.com/JonRubashkin/Castle-Builder>).
+- 3D engine: [Three.js](https://threejs.org) (MIT license, in `client/vendor/three-r186/LICENSE`).
 
-Artwork:
-
-- "Hard Vacuum" artwork and game sprites by Daniel Cook (<http://www.lostgarden.com/>)
-- Artwork from Open Game Art (<https://opengameart.org>):
-  - Thief Portrait by Zeldyn (<http://opengameart.org/content/thief-portrait-female>)
-  - Jacob Portrait by Gaspard (<http://opengameart.org/content/four-post-apocalyptic-portraits>)
-  - Priest Portrait by Zeldyn (<http://opengameart.org/content/priest-portrait-female>)
-
-Sounds: all sounds from Free Sound (<http://www.freesound.org/>).
-
-3D models (details in [client/models/CREDITS.md](client/models/CREDITS.md)):
-
-- Tanks, rovers, the wraith and the ground turret by Quaternius (<https://quaternius.com>), CC0
-- The base, starport and harvester rig are assembled from Kenney's Space Kit
-  (<https://kenney.nl/assets/space-kit>), CC0
-- The chopper is based on "AH-64 Apache Attack Helicopter Low Poly"
-  (<https://sketchfab.com/3d-models/ah-64-apache-attack-helicopter-low-poly-34986214decd4b3db90e91f12e624d78>)
-  by PolyDucky (<https://sketchfab.com/salphytheunemployed>), licensed under CC-BY-4.0
-  (<http://creativecommons.org/licenses/by/4.0/>). Changes: compressed for the game.
-
-Castle and town art (made by `tools/artgen`):
-
-- Landmarks, props and trees from the KayKit Medieval Hexagon Pack by Kay Lousberg
-  (<https://kaylousberg.com>), CC0
-- Castle pieces designed after Castle Builder by Jon Rubashkin
-  (<https://github.com/JonRubashkin/Castle-Builder>); town layouts after Watabou's Medieval
-  Fantasy City Generator (<https://github.com/watabou/TownGeneratorOS>)
-
-Characters: the body, its shapes, skeleton and skin weights, the texture masks and the walk and
-zombie walk motion capture clips are from MakeHuman (<https://github.com/makehumancommunity>),
-CC0. Gait data from the normal datasets bundled with pyCGM2 (<https://github.com/pyCGM2/pyCGM2>).
-
-3D engine: [Three.js](https://threejs.org) (MIT license, in `client/vendor/three-r186/LICENSE`).
-
-The book used Andrea Giammarchi's A* implementation; this version has its own.
+This repository began as a modernization of Last Colony, the real-time strategy game from
+[*Pro HTML5 Games*](https://www.apress.com/9781484229095) by Aditya Ravi Shankar. Pellagos has
+replaced it (the book's game is in the git history, and
+[docs/MODERNIZATION.md](docs/MODERNIZATION.md) describes it); the book's license for its code and
+assets is in [LICENSE-BOOK-CODE.txt](LICENSE-BOOK-CODE.txt).
 
 ## Devlog
 
@@ -351,3 +220,4 @@ This application will be neither good nor bug free so YMMV.
 - 6/19/2023 PM - Trying to enable new laptop
 - 7/2/2025 AM - Since I'm never going to put in the direct work, using this project to learn about setting up Agentic AI. We'll see what that can do.
 - 9/23/2026 - Replaced the partial first-edition code with a modernized version of the complete game from the 2nd edition's Chapter 13 (see docs/MODERNIZATION.md).
+- 9/25/2026 - Replaced the strategy game with Pellagos: one character, made by the player, against an orc, in a town in real-time 3D (see docs/GAME.md).

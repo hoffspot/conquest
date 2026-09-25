@@ -21,8 +21,8 @@ const YARD_PROPS = ["barrels", "crates", "sacks", "cart"];
 /**
  * A town filling width x height squares, with streets leaving it on the given sides ("n", "e",
  * "s", "w"). Returns { kind, width, height, approaches, seed, pieces, obstructed, ground,
- * entrances } (see layoutCastle); entrances lists, for each way in, the street's squares at the
- * edge.
+ * entrances, square } (see layoutCastle); entrances lists, for each way in, the street's squares
+ * at the edge, and square is the market square ({ x, y, w, h }).
  */
 export function layoutTown({ width, height, approaches = ["w", "e"], seed = 1 }) {
     if (width < TOWN_MIN[0] || height < TOWN_MIN[1]) {
@@ -351,5 +351,6 @@ function designTown(width, height, approaches, random) {
         obstructed: plan.obstructed,
         ground: plan.ground,
         entrances: approaches.map((side) => entrances[side]),
+        square: { x: px, y: py, w: pw, h: ph },
     };
 }

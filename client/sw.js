@@ -1,17 +1,20 @@
-// Service worker: keeps a copy of the game so it starts quickly and the campaign works offline.
+// Service worker: keeps a copy of the game so it starts quickly and plays offline.
 //
-// Code and pages are fetched from the network first (so updates show up straight away), falling
-// back to the saved copy when offline. They are always checked with the server, never reused from
-// the browser's own caches: GitHub Pages lets browsers reuse files for ten minutes, so right after
-// an update a page could otherwise be put together from some old files and some new ones, which
-// don't work together. (Files that haven't changed come back as short "not modified" replies.)
+// Code, pages and the characters' data are fetched from the network first (so updates show up
+// straight away), falling back to the saved copy when offline. They are always checked with the
+// server, never reused from the browser's own caches: GitHub Pages lets browsers reuse files for
+// ten minutes, so right after an update a page could otherwise be put together from some old
+// files and some new ones, which don't work together. (Files that haven't changed come back as
+// short "not modified" replies.)
 //
-// Images and sounds rarely change, so they come from the saved copy first. Change the version in
-// CACHE_NAME when images or sounds change to replace the saved copies.
+// Images and 3D models rarely change, so they come from the saved copy first. Change the version
+// in CACHE_NAME when they change to replace the saved copies.
 
-const CACHE_PREFIX = "last-colony-";
-// v2: replaces copies saved before code was always checked with the server
-const CACHE_NAME = `${CACHE_PREFIX}v2`;
+const CACHE_PREFIX = "pellagos-";
+const CACHE_NAME = `${CACHE_PREFIX}v1`;
+
+// Copies kept by the game this one replaced (Last Colony), on the same site
+const OLD_PREFIXES = ["last-colony-"];
 
 self.addEventListener("install", () => {
     self.skipWaiting();
@@ -22,7 +25,7 @@ self.addEventListener("activate", (event) => {
         // Only the game's own old copies: other sites on the same host (such as other GitHub Pages
         // sites on username.github.io) share the same cache storage
         for (const name of await caches.keys()) {
-            if (name.startsWith(CACHE_PREFIX) && name !== CACHE_NAME) {
+            if ((name.startsWith(CACHE_PREFIX) && name !== CACHE_NAME) || OLD_PREFIXES.some((prefix) => name.startsWith(prefix))) {
                 await caches.delete(name);
             }
         }
@@ -35,12 +38,12 @@ self.addEventListener("fetch", (event) => {
     const request = event.request;
     const url = new URL(request.url);
 
-    // Only handle the game's own files (not the multiplayer WebSocket or other sites)
+    // Only handle the game's own files (not other sites)
     if (request.method !== "GET" || url.origin !== self.location.origin) {
         return;
     }
 
-    const isAsset = /\.(png|gif|jpg|mp3|ogg)$/.test(url.pathname);
+    const isAsset = /\.(png|gif|jpg|webp|gltf|glb)$/.test(url.pathname) || /\/models\/.+\.bin$/.test(url.pathname);
 
     event.respondWith(isAsset ? cacheFirst(request) : networkFirst(request));
 });

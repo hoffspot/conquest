@@ -9,10 +9,11 @@ const ORIGIN = "https://example.github.io";
 
 // Load sw.js with a fake network that answers every request with `body`, the way GitHub Pages
 // does (letting browsers reuse the file for ten minutes), and with the network failing if asked
-function loadServiceWorker({ offline = false } = {}) {
+function loadServiceWorker({ offline = false, stored = [] } = {}) {
     const handlers = {};
     const saved = new Map();
     const requests = [];
+    const deleted = [];
 
     const context = vm.createContext({
         URL, Headers, Request, Response, console,
@@ -25,7 +26,12 @@ function loadServiceWorker({ offline = false } = {}) {
             clients: { claim: async () => {} },
         },
         caches: {
-            keys: async () => [],
+            keys: async () => [...stored],
+            delete: async (name) => {
+                deleted.push(name);
+
+                return true;
+            },
             open: async () => ({
                 match: async (request) => saved.get(request.url)?.clone(),
                 put: async (request, response) => {
@@ -64,7 +70,14 @@ function loadServiceWorker({ offline = false } = {}) {
         return responded;
     };
 
-    return { request, requests, saved };
+    const activate = async () => {
+        let done;
+
+        handlers.activate({ waitUntil: (promise) => (done = promise) });
+        await done;
+    };
+
+    return { request, requests, saved, deleted, activate };
 }
 
 describe("service worker", () => {
@@ -98,6 +111,34 @@ describe("service worker", () => {
         const offline = loadServiceWorker({ offline: true });
 
         await assert.rejects(offline.request("/js/main.js"), /Failed to fetch/, "nothing saved yet");
+    });
+
+    it("keeps 3D models and images, taking them from its copy first", async () => {
+        const worker = loadServiceWorker();
+
+        await worker.request("/models/kaykit/barrel.gltf");
+        await worker.request("/models/kaykit/barrel.gltf");
+        await worker.request("/models/kaykit/barrel.bin");
+        await worker.request("/images/icons/icon-192.png");
+
+        // The model was fetched once, the second time coming from the copy
+        assert.deepEqual(worker.requests.map(({ url }) => url), [`${ORIGIN}/models/kaykit/barrel.gltf`, `${ORIGIN}/models/kaykit/barrel.bin`, `${ORIGIN}/images/icons/icon-192.png`]);
+    });
+
+    it("checks the characters' data with the server, as it's rebuilt with the code", async () => {
+        const worker = loadServiceWorker();
+
+        await worker.request("/characters/human.bin");
+
+        assert.deepEqual(worker.requests, [{ url: `${ORIGIN}/characters/human.bin`, cache: "no-cache" }]);
+    });
+
+    it("clears out old copies: its own older versions and the game it replaced", async () => {
+        const worker = loadServiceWorker({ stored: ["pellagos-v0", "pellagos-v1", "last-colony-v2", "another-site-v1"] });
+
+        await worker.activate();
+
+        assert.deepEqual(worker.deleted, ["pellagos-v0", "last-colony-v2"]);
     });
 
     it("leaves other sites alone", async () => {
