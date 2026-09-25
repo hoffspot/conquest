@@ -356,6 +356,12 @@ for (const type of ["pointerdown", "pointerup", "touchend", "click", "keydown"])
     document.addEventListener(type, () => state.session?.sound.unlock(), { capture: true });
 }
 
+// Coming back to the page (from another app, or the browser's back and forward cache), the
+// sound is started again if the browser stopped it
+for (const type of ["pageshow", "focus"]) {
+    window.addEventListener(type, () => state.session?.sound.wake());
+}
+
 // Pause when the page is hidden (switching apps on a phone), and silence it
 document.addEventListener("visibilitychange", () => {
     state.session?.sound.setHidden(document.hidden);

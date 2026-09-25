@@ -256,6 +256,40 @@ test("once a tap lets it make sound, the music plays on recordings of real instr
     }, null, { timeout: 30000 });
     expect(recordings.length).toBeGreaterThan(40);
     expect(recordings.every((status) => status === 200)).toBe(true);
+
+    // Stopped by the browser (as a call or an alarm would), it starts again by itself, and the
+    // music carries on; closed, it's made anew and the music carries on from where it was
+    const going = () => page.evaluate(() => {
+        const { sound } = window.pellagos.session;
+
+        return { state: sound.context.state, index: sound.music.index };
+    });
+    const musicMoves = async () => {
+        const { index } = await page.evaluate(() => ({ index: window.pellagos.session.sound.music.index }));
+
+        await page.waitForFunction((index) => window.pellagos.session.sound.music.index > index, index, { timeout: 15000 });
+    };
+
+    await page.evaluate(() => window.pellagos.session.sound.context.suspend());
+    await page.waitForFunction(() => window.pellagos.session.sound.context.state === "running", null, { timeout: 10000 });
+    await musicMoves();
+
+    const before = await page.evaluate(() => {
+        const { sound } = window.pellagos.session;
+
+        window.oldContext = sound.context;
+        sound.context.close();
+
+        return sound.music.index;
+    });
+
+    await page.waitForFunction(() => {
+        const { sound } = window.pellagos.session;
+
+        return sound.context !== window.oldContext && sound.context.state === "running";
+    }, null, { timeout: 10000 });
+    await musicMoves();
+    expect((await going()).index).toBeGreaterThanOrEqual(before);
 });
 
 test("double-clicking the ground runs there, using stamina, shown by an orange bar until it's back", async ({ page }) => {
