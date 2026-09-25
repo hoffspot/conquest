@@ -44,9 +44,17 @@ const TREES_HEARD = 22;
 // How quickly it fades in and out (seconds)
 const FADE = 0.08;
 
-// The music: scheduled this far ahead (seconds), checked this often (ms); how much of it goes
-// through the reverb, and how long the reverb rings (seconds)
+// How loud it all is at the speakers: the mix is raised this much (about 8 dB), gently
+// compressed, then limited just under full scale, so a phone's speaker plays it loud enough
+// without a busy fight clipping
+const OUTPUT = 2.5;
+const LIMIT = -1.5;
+
+// The music: scheduled this far ahead (seconds), checked this often (ms); how loud it is
+// against the rest (about 3 dB up, at the same slider setting), how much of it goes through the
+// reverb, and how long the reverb rings (seconds)
 const LOOKAHEAD = 1.2;
+const MUSIC_LEVEL = 1.4;
 const SCHEDULE_MS = 200;
 const REVERB_SEND = 0.28;
 const REVERB_TIME = 2.6;
@@ -161,18 +169,24 @@ export class Sound {
 
             const context = new Context({ latencyHint: "interactive" });
             const compressor = context.createDynamicsCompressor();
+            const limiter = context.createDynamicsCompressor();
 
             this.context = context;
             this.master = context.createGain();
-            this.master.gain.value = this.enabled ? 1 : 0;
+            this.master.gain.value = this.enabled ? OUTPUT : 0;
 
-            // A little compression keeps a busy fight from clipping
-            compressor.threshold.value = -14;
+            // A little compression evens it out; the limiter keeps a busy fight from clipping
+            compressor.threshold.value = -18;
             compressor.knee.value = 12;
-            compressor.ratio.value = 4;
+            compressor.ratio.value = 3;
             compressor.attack.value = 0.003;
-            compressor.release.value = 0.2;
-            this.master.connect(compressor).connect(context.destination);
+            compressor.release.value = 0.25;
+            limiter.threshold.value = LIMIT;
+            limiter.knee.value = 0;
+            limiter.ratio.value = 20;
+            limiter.attack.value = 0.001;
+            limiter.release.value = 0.1;
+            this.master.connect(compressor).connect(limiter).connect(context.destination);
 
             for (const bus of BUSES) {
                 this.buses[bus] = context.createGain();
@@ -197,7 +211,14 @@ export class Sound {
             this.music.timer.unref?.();
         }
 
+        // (Suspended, or interrupted on iPhones by a call or another app.) Safari on iPhones and
+        // iPads also wants something played in the tap itself: a moment of silence
         if (this.enabled && !this.hidden && this.context.state !== "running") {
+            const silence = this.context.createBufferSource();
+
+            silence.buffer = this.context.createBuffer(1, 1, this.context.sampleRate);
+            silence.connect(this.context.destination);
+            silence.start();
             this.context.resume().catch(() => {});
         }
     }
@@ -214,7 +235,7 @@ export class Sound {
             this.context.resume().catch(() => {});
         }
 
-        this.#fade(on ? 1 : 0);
+        this.#fade(on ? OUTPUT : 0);
 
         // Off, the browser needn't keep working on it
         if (!on) {
@@ -462,7 +483,7 @@ export class Sound {
         for (const [name, instrument] of Object.entries(INSTRUMENTS)) {
             const level = context.createGain();
 
-            level.gain.value = instrument.mix;
+            level.gain.value = instrument.mix * MUSIC_LEVEL;
 
             if (context.createStereoPanner) {
                 const panner = context.createStereoPanner();
