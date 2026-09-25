@@ -21,6 +21,7 @@ import { Squares } from "../world/squares.js";
 import { buildGround } from "../world/ground.js";
 import { buildTown } from "../world/town3d.js";
 import { Minimap, treesOf } from "./minimap.js";
+import { CameraFollow } from "./camera.js";
 import { ACTIONS, ActionWheel, directionOf } from "./wheel.js";
 
 /** What every new character wears; their weapon (and a bow's quiver) are added to it. */
@@ -58,7 +59,6 @@ const FLICK = 30;
 // up to so many metres
 const LEAN = { share: 0.4, most: 4.5 };
 
-const ease = (rate, dt) => 1 - Math.exp(-rate * dt);
 const _focus = new THREE.Vector3();
 const _lean = new THREE.Vector3();
 
@@ -164,7 +164,11 @@ export class Game {
             this.previous.set(actor.id, { x: actor.x, y: actor.y });
         }
 
-        this.#follow(1);
+        // The camera starts on the player, looking north
+        const start = this.avatars.get("player").object.position;
+
+        this.cameraFollow = new CameraFollow({ x: start.x, z: start.z });
+        this.#follow(0);
         step("Drawing the map");
 
         this.minimap = await time("minimap", () => new Minimap(this.hud.map, world, { onTap: (tap) => this.mapTap(tap) }));
@@ -424,7 +428,7 @@ export class Game {
         if (this.squares?.object.visible) {
             this.squares.update(battle);
         }
-        this.#follow(ease(6, dt));
+        this.#follow(dt);
 
         // Bars over the other characters' heads
         for (const actor of battle.actors) {
@@ -481,16 +485,19 @@ export class Game {
         object.visible = sinking < 1;
     }
 
-    // The camera follows the player, leaning towards whoever they're fighting so both are in view
-    #follow(amount) {
+    // The camera (camera.js): still while the player moves about the middle of the screen, then
+    // following them from behind the way they're going, leaning towards whoever they're fighting
+    // so both are in view
+    #follow(dt) {
         const player = this.avatars.get("player");
 
-        if (!player) {
+        if (!player || !this.cameraFollow) {
             return;
         }
 
         const position = player.object.position;
         const foe = this.#foe();
+        const chest = player.point(0.55);
 
         _focus.copy(position);
 
@@ -500,8 +507,14 @@ export class Game {
             _focus.add(lean.clampLength(0, LEAN.most));
         }
 
-        this.view.follow(_focus, amount);
-        this.view.setFocus(player.point(0.55));
+        const { focus, yaw } = this.cameraFollow.update(dt, {
+            player: { x: position.x, z: position.z, vx: player.follow.vx, vz: player.follow.vz },
+            screen: this.view.fromMiddle(chest),
+            aim: { x: _focus.x, z: _focus.z },
+        });
+
+        this.view.look(_focus.set(focus.x, 0, focus.z), yaw);
+        this.view.setFocus(chest);
     }
 
     // The minimap: everyone on it, where the player is going and what the camera sees

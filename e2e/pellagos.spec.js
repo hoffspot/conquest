@@ -241,6 +241,53 @@ test("tapping the ground walks the player there", async ({ page }) => {
     expect(walked.end[1]).toBeLessThan(walked.start[1] - 2);
 });
 
+test("the camera keeps still while the player moves about the middle, then follows them from behind", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const camera = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const { view } = session;
+        const avatar = game.avatars.get("player");
+        const spot = (dx, dz) => view.toScreen(avatar.object.position.clone().add({ x: dx, y: 0, z: dz }));
+        const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
+
+        game.stop();
+
+        // A step within the middle of the screen: the camera keeps still
+        const still = { x: view.focus.x, z: view.focus.z, yaw: view.yaw };
+        const near = spot(1, 0);
+
+        game.tap(near.x, near.y);
+        game.advance(2);
+
+        const afterStep = { x: view.focus.x, z: view.focus.z, yaw: view.yaw };
+
+        // A long walk east: out of the middle, and the camera turns round behind the player
+        const far = spot(12, 0);
+
+        game.tap(far.x, far.y);
+        game.advance(2.5);
+
+        const from = avatar.object.position.clone();
+
+        game.advance(1.5);
+
+        const heading = avatar.object.position.clone().sub(from);
+        const behind = Math.atan2(-heading.x, -heading.z);
+        const onScreen = view.fromMiddle(avatar.point(0.55));
+
+        return { still, afterStep, yaw: view.yaw, off: Math.abs(wrap(view.yaw - behind)), walked: heading.length(), onScreen };
+    });
+
+    expect(camera.afterStep).toEqual(camera.still);
+    expect(camera.still.yaw).toBe(0);
+    expect(camera.walked).toBeGreaterThan(1.5);
+    expect(Math.abs(camera.yaw)).toBeGreaterThan(0.8);
+    expect(camera.off).toBeLessThan(0.5);
+    expect(Math.abs(camera.onScreen.x)).toBeLessThan(0.34);
+    expect(Math.abs(camera.onScreen.y)).toBeLessThan(0.34);
+});
+
 test("once a tap lets it make sound, the music plays on recordings of real instruments", async ({ page }) => {
     const recordings = [];
 

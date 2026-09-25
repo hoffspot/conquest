@@ -114,9 +114,20 @@ with a fair few hit points to spare.
 
 A WebGL renderer with ACES tone mapping, a sky and fog, a studio environment map for the
 characters' materials, a hemisphere light and a sun whose shadow map follows the player (snapped
-to whole shadow texels, so shadows don't shimmer). The camera looks north over the player from
-55 degrees above the horizon, zooming between 5 and 32 metres away; it leans towards whoever the
-player is fighting so both stay in view.
+to whole shadow texels, so shadows don't shimmer). The camera looks down from 55 degrees above
+the horizon, zooming between 5 and 32 metres away, from any side (`yaw`: from the south, looking
+north, to start with).
+
+**Following the player** (app/camera.js). While the player moves about the middle of the screen
+(the middle third each way: the zone), the camera keeps still. Once they walk out of it, the way
+the map would have to scroll, it follows them, catching up and turning round to look from behind
+them, the way they're going, at the same height and zoom. It turns on a spring, gathering speed
+and slowing smoothly, never faster than 3 radians a second (a half turn in about a second), and
+the way they're going is averaged over a third of a second, so a path's corners don't swing it
+about. Once they stop and it's caught up, it keeps still again, with a new middle. Put somewhere
+else (coming back to life), it catches them up without turning. While following, it leans
+towards whoever the player is fighting, so both stay in view. The minimap stays north up; what
+the camera sees turns on it.
 
 **Quality levels** trade looks for speed, chosen for the device (debug mode can change them):
 
@@ -126,7 +137,7 @@ player is fighting so both stay in view.
 | Medium (phones) | up to 1.5× | 2048 | yes | 30% | 512 |
 | High (computers) | up to 2× | 2048 | yes | 45% | 1024 |
 
-**The cutaway.** The camera looks north, so a house can stand between it and the player. The
+**The cutaway.** A house can stand between the camera and the player, from whichever side it looks. The
 view marches along the line from the player to the camera over the town's height map, and when
 something is in the way the town's materials cut a round, dithered hole through whatever is
 nearer the camera than the player (a few lines added to their shaders; the shadows they cast
@@ -431,6 +442,10 @@ particles reuse one buffer, and projectiles and effects add no lights.
   speeding up and slowing down, charging), stamina (used, got back, running out, never below
   none or above its most), spells (heal rolls, stun freezing the orc and calling off its blow,
   the shared cooldown, every reason a cast fails), and a simulated minute on a generated world.
+- `test/camera.test.js`: the camera keeping still in the middle of the screen, following out of
+  it and turning behind the player (walked away from, it doesn't turn; walked towards, it turns
+  all the way round), smoothly, steady through a path's corners, keeping still again once caught
+  up, and catching up without turning when the player comes back to life elsewhere.
 - `test/actions.test.js`: attacks (their timing, where the hands reach on different bodies,
   two-handed grips, alternating punches), reactions and falls, on the real body.
 - `test/app.test.js`, `test/town3d.test.js`, `test/manifest.test.js`, `test/sw.test.js`: saving,
@@ -453,7 +468,8 @@ particles reuse one buffer, and projectiles and effects add no lights.
   through to playing them, carrying on with a saved character, a fight to the death, walking by
   tapping, running by double-clicking and double-tapping with the stamina bar showing and going,
   the music's recordings downloaded and playing after a tap (and carrying on when the browser
-  suspends or closes its sound), the target ring, walking by the
+  suspends or closes its sound), the camera keeping still for a step and following a long walk
+  from behind, the target ring, walking by the
   minimap, Game options and the volume sliders (remembered), the
   action wheel (stunning the orc, a flick refused while cooling down, then a heal), and a phone
   screen. Drawing without a GPU is slow, so fights are played on with
