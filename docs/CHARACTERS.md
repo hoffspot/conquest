@@ -20,8 +20,9 @@ The lab lets you:
   - Whole texture skins: save the painted skin, paint over it, and load it back.
 - **Dress and arm them.** 18 garments and 19 items go in 16 slots, with ready-made outfits
   (adventurer, knight, mage, ranger, gunner, orc raider).
-- **Watch them walk.** Walking is made from gait-lab data. You can change the speed and the walk
-  style, walk in a circle, see the joint angles through the stride, and show the skeleton.
+- **Watch them walk and run.** Walking is made from gait-lab data, running from sprinting
+  studies. You can change the speed (up to a sprint of 8.5 m/s) and the walk style, walk in a
+  circle, see the joint angles through the stride, and show the skeleton.
 - **Play motion capture.** Two of MakeHuman's clips, a walk and a zombie walk, are retargeted to
   whatever body you've made.
 - **Fight.** Arm them with any of the game's weapons, stand on guard, attack (once or over and
@@ -47,8 +48,8 @@ to them.
 | `garments.js` | Clothing and armour fitted to the body |
 | `items.js` | Rigid equipment: weapons, shields, helmets, packs, tusks |
 | `equipment.js` | Slots, sockets and the equipment catalogue |
-| `gait.js` | Walking data: joint angle curves, cadence and stride by speed |
-| `locomotion.js` | The walker: poses the skeleton from the gait data as the character moves |
+| `gait.js` | Walking and running data: joint angle curves, cadence and stride by speed |
+| `locomotion.js` | The walker: poses the skeleton from the gait data as the character walks and runs |
 | `bvh.js` | Motion capture: reading BVH files and retargeting them to our skeleton |
 | `presets.js` | The human, heroine and orc |
 | `kit.js` | Loads everything characters share, once |
@@ -231,6 +232,27 @@ standing, arms at the sides, palms facing the thighs.
   less than a centimetre.
 - **Styles.** A walk style sets lean, crouch, arm spread, stance width, toe-out, swagger, sway,
   head carriage and finger curl. The orc's is hunched, wide and heavy.
+
+**Running** (`locomotion.js`, from `gait.js`'s sprinting curves): faster than people can walk
+(the walk-to-run speed, about 2.1 m/s for a 0.9 m leg), the walk blends into a sprint over the
+next 1.4 m/s, eased so it never changes gait in a jolt.
+
+- **Joint angles.** The thigh, knee, ankle, shoulder and elbow follow key angles through a
+  sprinting stride, joined by a smooth looping curve (Catmull-Rom). The foot lands under the
+  knee, the leg folds under the load and pushes off behind, then the heel kicks up towards the
+  buttock and the knee drives high before reaching forward to land. The arms pump against the
+  legs with the elbows bent about a right angle (less, carrying something).
+- **Flight.** Each foot is on the ground for a quarter of the stride, landing on its ball, so
+  both feet are off the ground about half the time. The planted foot is locked as in walking.
+- **Cadence and stride.** About 2.7 steps a second at a jog of 3 m/s, rising to about 4 at a
+  sprint of 8 m/s, with strides of about 4 metres; both scaled by leg length.
+- **Height.** The body is lowest in the middle of each foot's time on the ground and highest in
+  the air, rising and falling about 6 cm. It leans 9° further forward, sways less and turns its
+  pelvis further.
+- The tests sprint at 8 m/s and check that the planted foot doesn't slide, the feet stay out of
+  the ground, both are in the air about half the time, the steps come as often as they should
+  and the hips are lowest mid-step; and that speeding up from a walk to a sprint and slowing
+  back has no jolts.
 
 ### Fighting (actions.js)
 
@@ -442,11 +464,21 @@ coefficients are in `gait.js`.
   [three-vrm](https://github.com/pixiv/three-vrm/blob/dev/packages/three-vrm-core/examples/humanoidAnimation/loadMixamoAnimation.js).
   Three.js's `SkeletonUtils.retargetClip` has known problems with Mixamo's feet and hands.
 
-**Running**, for later:
+**Running** (Novacheck, *The biomechanics of running*, Gait & Posture 1998, and sprinting
+studies):
 
-- Stance is about 40% of the stride when jogging, falling with speed, with two flight phases.
-- The knee bends about 40–45° in stance and 90–125° in swing.
-- Hip flexion is about 50–55°.
+- Stance is about 40% of the stride when jogging, falling with speed to about a quarter
+  sprinting, with two flight phases.
+- The knee bends about 40–45° in stance and 90–125° in swing, the most sprinting (the heel comes
+  up towards the buttock).
+- Hip flexion is about 50–55° jogging and more sprinting, the knee driving high; the hip extends
+  10–20° at toe-off.
+- Sprinters land on the forefoot, close under the body.
+- Cadence rises from about 2.7 steps a second jogging to 4–5 sprinting: people run faster by
+  taking longer steps at first, then quicker ones.
+- The body is lowest in mid-stance and highest in flight, the opposite of walking.
+- People walk at about 1.4 m/s and sprint at about 6.5 (untrained adults, over a short
+  distance): about 4.6 times as fast. The game's running speed keeps that ratio.
 
 ### Equipment in games and engines
 
@@ -482,8 +514,8 @@ sources.
 
 ## What's next
 
-- **More actions.** Running (the gait research above covers it), blocking, dodging and picking
-  up loot, and a staff that strikes up close and casts from afar.
+- **More actions.** Blocking, dodging and picking up loot, and a staff that strikes up close and
+  casts from afar.
 - **More two-handed items.** Guns and two-handed swords, with the second hand as the staff's and
   hammer's; a bowstring that bends as it's drawn.
 - **Loose clothing.** Robes, skirts and cloaks need their own hanging meshes.

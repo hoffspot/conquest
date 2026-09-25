@@ -1,4 +1,4 @@
-// Walking: poses a character's rig from the gait curves (gait.js) as it moves.
+// Walking and running: poses a character's rig from the gait curves (gait.js) as it moves.
 //
 //  - A "stride wheel" turns distance into gait phase: the phase advances by the distance walked
 //    over the stride length for that speed (from the walk ratio), so cadence and stride change
@@ -12,11 +12,17 @@
 //    the swinging foot catches up during its swing.
 //  - The trunk counter-rotates against the pelvis, and the head stays level and looking ahead.
 //
+// Faster than people can walk (walkToRunSpeed), the walk turns into a run: the joints blend to
+// the sprinting curves, each foot is on the ground for a quarter of the stride instead of most of
+// it (both feet off the ground between steps), landing on the ball of the foot; the body leans
+// forward, is lowest in the middle of each step and highest in the air, and the arms pump with the
+// elbows bent.
+//
 // A style changes the walk: lean, crouch, arm spread, stance width, swagger and so on. Standing
 // still is the same walk with no stride, plus breathing.
 
 import * as THREE from "three";
-import { amplitude, CURVES, curveAt, PELVIC_TILT, STANCE, strideLength } from "./gait.js";
+import { amplitude, CURVES, curveAt, PELVIC_TILT, RUN_CURVES, RUN_STANCE, runStrideLength, STANCE, strideLength, walkToRunSpeed } from "./gait.js";
 
 /** How a character walks (all angles in degrees). */
 export const WALK_STYLES = Object.freeze({
@@ -45,6 +51,16 @@ const POINTS = 32;
 // How fast feet shuffle back under a character turning on the spot (metres a second)
 const SHUFFLE = 0.8;
 
+// Running: from the fastest walk to this much faster, the walk blends into a run. Running, the
+// body leans this much further forward (degrees), the feet land this far apart (metres), and the
+// body rises and falls this share of the leg's length (each way) through each step, lowest this
+// far through a stride (mid-stance)
+const RUN_BLEND = 1.4;
+const RUN_LEAN = 9;
+const RUN_STANCE_WIDTH = 0.05;
+const RUN_RISE = 0.035;
+const RUN_LOWEST = RUN_STANCE * 0.45;
+
 const _point = new THREE.Vector3();
 const _target = new THREE.Vector3();
 
@@ -66,6 +82,9 @@ export class Walker {
         this.distance = 0;
         this.amount = 0;
 
+        /** How much it's running rather than walking (0 to 1). */
+        this.run = 0;
+
         /**
          * Per foot: whether it's planted, the pivot it's planted on (world), how far the joint
          * angles would have slid it, and how far they had when it lifted off.
@@ -79,6 +98,7 @@ export class Walker {
     setStyle(style) {
         this.style = { ...WALK_STYLES.natural, ...style };
         this.heights = [];
+        this.runHeight = null;
     }
 
     /** Measure the body (call after the character's shape changes). */
@@ -121,6 +141,7 @@ export class Walker {
 
         this.feet.forEach((foot) => (foot.planted = false));
         this.heights = [];
+        this.runHeight = null;
     }
 
     /**
@@ -148,8 +169,19 @@ export class Walker {
             this.speed += (this.targetSpeed - this.speed) * Math.min(1, dt * 12);
         }
 
+        // Running, faster than anyone can walk (eased in and out)
+        const fastest = walkToRunSpeed(this.legLength);
+        const running = smooth(fastest, fastest + RUN_BLEND, this.speed);
+
+        this.run += (running - this.run) * Math.min(1, dt * 6);
+
+        if (this.run < 0.001) {
+            this.run = 0;
+        }
+
         // Stride wheel
-        const stride = strideLength(Math.max(this.speed, 0.05), this.legLength);
+        const pace = Math.max(this.speed, 0.05);
+        const stride = strideLength(pace, this.legLength) * (1 - this.run) + runStrideLength(pace, this.legLength) * this.run;
         const step = moved ?? this.speed * dt;
 
         this.distance += step;
@@ -188,14 +220,15 @@ export class Walker {
     #pose(dt = 0) {
         const rig = this.rig;
         const s = this.amount;
+        const r = this.run;
         const p = this.phase;
         const phases = [p, wrap(p + 0.5)];
-        const height = this.#height(p, s);
+        const height = this.#height(p, s) * (1 - r) + (r > 0 ? this.#runningHeight(p) * r : 0);
 
-        this.#setJoints(phases, s, Math.sin(this.time * 2 * Math.PI * 0.25));
+        this.#setJoints(phases, s, Math.sin(this.time * 2 * Math.PI * 0.25), r);
 
-        // Sway over the standing foot, and rise and fall
-        rig.offset.set(this.style.sway * Math.min(1, s * 1.5) * Math.sin(2 * Math.PI * p), height, 0);
+        // Sway over the standing foot (less, running), and rise and fall
+        rig.offset.set(this.style.sway * Math.min(1, s * 1.5) * (1 - 0.6 * r) * Math.sin(2 * Math.PI * p), height, 0);
 
         // Anything layered over the walk (an attack, a flinch, a fall) changes the joints now. It
         // says false when the feet shouldn't be kept on the ground (falling down)
@@ -211,7 +244,7 @@ export class Walker {
         }
 
         // Keep planted feet on the ground where they landed, and swinging feet off it
-        SIDES.forEach((side, i) => this.#plant(side, i, phases[i], s, dt));
+        SIDES.forEach((side, i) => this.#plant(side, i, phases[i], s, dt, r));
 
         // Toes bend to stay flat on the ground as the heel lifts
         SIDES.forEach((side, i) => this.#flattenToes(side, i));
@@ -269,22 +302,46 @@ export class Walker {
         return this.heights[level];
     }
 
-    /** Set the joints for the feet's phases (left, right), `s` of a full stride. */
-    #setJoints(phases, s, breathe) {
+    /**
+     * How high the pelvis sits running, at phase `p`: a smooth wave twice a stride, lowest in the
+     * middle of each foot's time on the ground (as low as lets that foot touch the ground in the
+     * sprinting pose) and highest in the air between steps. Measured once for each style and body.
+     */
+    #runningHeight(p) {
+        if (this.runHeight === null) {
+            this.#setJoints([RUN_LOWEST, wrap(RUN_LOWEST + 0.5)], 1, 0, 1);
+            this.rig.apply();
+            this.character.object.updateMatrixWorld(true);
+            this.runHeight = -this.#lowest(0) - 0.004;
+        }
+
+        const rise = this.legLength * RUN_RISE;
+
+        return this.runHeight + rise - rise * Math.cos(4 * Math.PI * (p - RUN_LOWEST));
+    }
+
+    /**
+     * Set the joints for the feet's phases (left, right), `s` of a full stride, `r` of the way
+     * from walking to running.
+     */
+    #setJoints(phases, s, breathe, r = 0) {
         const rig = this.rig;
         const style = this.style;
         const p = phases[0];
+        const walk = 1 - r;
+        const mix = (a, b) => a * walk + b * r;
 
         rig.reset();
 
-        // Pelvis: tilt, obliquity (drops on the swinging side) and rotation (forward with the leg)
-        const obliquity = s * style.swagger * curveAt(CURVES.pelvicObliquity, p);
-        const rotation = s * style.swagger * curveAt(CURVES.pelvicRotation, p);
+        // Pelvis: tilt, obliquity (drops on the swinging side) and rotation (forward with the leg),
+        // turning further running
+        const obliquity = mix(s, 1.2) * style.swagger * curveAt(CURVES.pelvicObliquity, p);
+        const rotation = mix(s, 1.5) * style.swagger * curveAt(CURVES.pelvicRotation, p);
 
         rig.setAngles("Hips", { tilt: 0, obliquity, turn: rotation });
 
-        // Trunk: leans, counter-rotates against the pelvis and stays upright
-        const lean = style.lean + s * 2 + breathe * 0.6 * (1 - s);
+        // Trunk: leans (further running), counter-rotates against the pelvis and stays upright
+        const lean = style.lean + mix(s * 2 + breathe * 0.6 * (1 - s), RUN_LEAN);
         const turn = 1.3 * rotation;
         const bend = 0.9 * obliquity;
         const shares = { Spine: 0.25, Spine1: 0.35, Spine2: 0.4 };
@@ -301,42 +358,46 @@ export class Walker {
         rig.setAngles("Neck", { flex: style.headForward, turn: headTurn * 0.4, bend: headBend * 0.5 });
         rig.setAngles("Head", { flex: headFlex - style.headForward * 1.6, turn: headTurn * 0.6, bend: headBend * 0.5 });
 
-        // Legs, from the gait curves (stance width sets how far the thighs come in)
-        const inward = Math.atan2((this.hipWidth - style.stanceWidth) / 2, this.legLength) * (180 / Math.PI);
+        // Legs, from the gait curves (stance width sets how far the thighs come in; running, the
+        // feet land nearly in a line)
+        const inward = Math.atan2((this.hipWidth - mix(style.stanceWidth, RUN_STANCE_WIDTH)) / 2, this.legLength) * (180 / Math.PI);
 
         SIDES.forEach((side, i) => {
             const phase = phases[i];
-            const crouch = style.crouch;
+            const crouch = style.crouch * walk;
 
             rig.setAngles(`${side}UpLeg`, {
-                flex: s * (curveAt(CURVES.hipFlexion, phase) - PELVIC_TILT) + crouch + lean * 0.3,
-                abduct: -s * curveAt(CURVES.hipAdduction, phase) - inward,
-                rotate: -style.toeOut * 0.5,
+                flex: mix(s * (curveAt(CURVES.hipFlexion, phase) - PELVIC_TILT), curveAt(RUN_CURVES.thigh, phase)) + crouch + lean * 0.3,
+                abduct: -mix(s, 1.2) * curveAt(CURVES.hipAdduction, phase) - inward,
+                rotate: -style.toeOut * 0.5 * walk,
             });
-            rig.setAngles(`${side}Leg`, { flex: s * curveAt(CURVES.kneeFlexion, phase) + crouch * 1.6 });
-            rig.setAngles(`${side}Foot`, { flex: s * curveAt(CURVES.ankleDorsiflexion, phase) + crouch * 0.6, rotate: style.toeOut * 0.5, invert: inward * 0.6 });
+            rig.setAngles(`${side}Leg`, { flex: mix(s * curveAt(CURVES.kneeFlexion, phase), curveAt(RUN_CURVES.kneeFlexion, phase)) + crouch * 1.6 });
+            rig.setAngles(`${side}Foot`, { flex: mix(s * curveAt(CURVES.ankleDorsiflexion, phase), curveAt(RUN_CURVES.ankleDorsiflexion, phase)) + crouch * 0.6, rotate: style.toeOut * 0.5 * walk, invert: inward * 0.6 });
 
-            // Arms swing against the legs, or carry what's in the hand
+            // Arms swing against the legs (pumping, running), or carry what's in the hand
             const hold = this.character.holds[side];
             const swing = s * curveAt(CURVES.shoulderFlexion, phase);
             const elbowSwing = s * (curveAt(CURVES.elbowFlexion, phase) - 10);
+            const pump = curveAt(RUN_CURVES.shoulderFlexion, phase);
+            const bend = curveAt(RUN_CURVES.elbowFlexion, phase);
 
-            rig.setAngles(`${side}Shoulder`, { elevate: 0, protract: swing * 0.15 });
+            rig.setAngles(`${side}Shoulder`, { elevate: 0, protract: mix(swing, pump) * 0.15 });
 
             if (hold?.Arm) {
+                // Carrying something, the arm pumps less, the elbow bending towards a sprinter's
                 const amount = hold.swing ?? 0.3;
 
-                rig.setAngles(`${side}Arm`, { ...hold.Arm, flex: hold.Arm.flex + amount * (swing + style.armForward * s) + breathe * 0.5, abduct: (hold.Arm.abduct ?? 0) + style.armSpread * 0.5 });
-                rig.setAngles(`${side}ForeArm`, { ...hold.ForeArm, flex: hold.ForeArm.flex + amount * elbowSwing * 0.5 });
+                rig.setAngles(`${side}Arm`, { ...hold.Arm, flex: hold.Arm.flex + mix(amount * (swing + style.armForward * s) + breathe * 0.5, (0.35 + amount * 0.6) * pump), abduct: (hold.Arm.abduct ?? 0) + style.armSpread * 0.5 });
+                rig.setAngles(`${side}ForeArm`, { ...hold.ForeArm, flex: mix(hold.ForeArm.flex + amount * elbowSwing * 0.5, hold.ForeArm.flex + (bend - hold.ForeArm.flex) * 0.6) });
                 rig.setAngles(`${side}Hand`, hold.Hand ?? {});
             } else {
                 rig.setAngles(`${side}Arm`, {
-                    flex: swing + s * style.armForward + breathe * 0.5,
-                    abduct: style.armSpread + s * 2,
-                    rotate: 5,
+                    flex: mix(swing + s * style.armForward + breathe * 0.5, pump),
+                    abduct: mix(style.armSpread + s * 2, 10),
+                    rotate: mix(5, 15),
                 });
-                rig.setAngles(`${side}ForeArm`, { flex: 10 + style.elbow + elbowSwing, pronate: 25 });
-                rig.setAngles(`${side}Hand`, { flex: 8, deviate: -5 });
+                rig.setAngles(`${side}ForeArm`, { flex: mix(10 + style.elbow + elbowSwing, bend), pronate: mix(25, 45) });
+                rig.setAngles(`${side}Hand`, { flex: mix(8, 0), deviate: -5 });
             }
 
             // Fingers: relaxed, or closed round a grip
@@ -399,14 +460,16 @@ export class Walker {
         return Math.min(...["heel", "ball", "tip"].map((which) => this.#contact(i, which).y)) - ground;
     }
 
-    #plant(side, i, phase, s, dt = 0) {
+    #plant(side, i, phase, s, dt = 0, r = 0) {
         const foot = this.feet[i];
         const object = this.character.object;
         const ground = object.getWorldPosition(_point).y;
-        const onGround = s === 0 || phase < STANCE;
+        const stance = STANCE + (RUN_STANCE - STANCE) * r;
+        const onGround = s === 0 || phase < stance;
 
-        // The foot pivots on its heel early in stance, on its ball late in stance
-        const pivot = s === 0 || phase < 0.3 ? "heel" : "ball";
+        // Walking, the foot pivots on its heel early in stance, on its ball late in stance;
+        // running, it lands on the ball
+        const pivot = r < 0.5 && (s === 0 || phase < stance * 0.48) ? "heel" : "ball";
         const now = this.#contact(i, pivot);
 
         now.y = ground;
@@ -445,10 +508,10 @@ export class Walker {
             lift = -this.#lowest(i);
         } else {
             // Lifting off from the ground, easing into clearing it by a little
-            const off = smooth(STANCE, STANCE + 0.08, phase);
+            const off = smooth(stance, stance + 0.08, phase);
             const lowest = this.#lowest(i);
 
-            foot.correction.copy(foot.release).multiplyScalar(1 - smooth(STANCE, STANCE + 0.2, phase));
+            foot.correction.copy(foot.release).multiplyScalar(1 - smooth(stance, stance + 0.2, phase));
             lift = -lowest + (Math.max(0, 0.008 * off - lowest) + lowest) * off;
         }
 

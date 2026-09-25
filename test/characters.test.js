@@ -8,7 +8,7 @@ import { parseBVH, retarget } from "../client/js/characters/bvh.js";
 import { allDetailTargetNames, DETAILS, detailTargets } from "../client/js/characters/details.js";
 import { EQUIPMENT, ITEMS, SLOTS } from "../client/js/characters/equipment.js";
 import { aboveHairline, beardAmount } from "../client/js/characters/face.js";
-import { amplitude, cadence, CURVES, curveAt, NATURAL_SPEED, phaseName, STANCE, strideLength, walkToRunSpeed } from "../client/js/characters/gait.js";
+import { amplitude, cadence, CURVES, curveAt, NATURAL_SPEED, phaseName, RUN_CURVES, RUN_STANCE, runCadence, runStrideLength, STANCE, strideLength, walkToRunSpeed } from "../client/js/characters/gait.js";
 import { buildGarment, GARMENTS, measureBody, texelMap } from "../client/js/characters/garments.js";
 import { Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
 import { allBustTargetNames, allMacroTargetNames, bustTargets, components, MACRO_DEFAULTS, macroTargets } from "../client/js/characters/macro.js";
@@ -347,6 +347,38 @@ describe("gait (gait.js)", () => {
         assert.equal(amplitude(NATURAL_SPEED), 1);
         assert.ok(Math.abs(walkToRunSpeed(0.9) - 2.1) < 0.01);
     });
+
+    it("sprints with the knee driven high, the heel kicked up and a push off the toes", () => {
+        const range = (curve) => Array.from({ length: 200 }, (_, k) => curveAt(curve, k / 200));
+
+        // The thigh reaches well forward in swing and well back at push-off
+        assert.ok(Math.max(...range(RUN_CURVES.thigh)) > 55 && Math.min(...range(RUN_CURVES.thigh)) < -20);
+        // The heel comes up towards the buttock
+        assert.ok(Math.max(...range(RUN_CURVES.kneeFlexion)) > 110);
+        assert.ok(curveAt(RUN_CURVES.ankleDorsiflexion, RUN_STANCE) < -20, "pushing off the toes");
+        // The elbows stay bent, near a right angle
+        assert.ok(range(RUN_CURVES.elbowFlexion).every((angle) => angle > 60 && angle < 115));
+
+        // Keyed curves go through their keys and loop smoothly round the end of the stride
+        for (const curve of Object.values(RUN_CURVES)) {
+            for (const [phase, value] of curve.keys) {
+                assert.ok(Math.abs(curveAt(curve, phase) - value) < 1e-9, curve.label);
+            }
+
+            assert.ok(Math.abs(curveAt(curve, 1 - 1e-6) - curveAt(curve, 0)) < 1e-3, curve.label);
+            assert.ok(Math.abs(curveAt(curve, 0.3) - curveAt(curve, -0.7)) < 1e-9, curve.label);
+        }
+    });
+
+    it("runs faster with longer and quicker steps, as people do", () => {
+        // About 2.7 steps a second jogging, 4 sprinting, with longer legs taking longer steps
+        assert.ok(Math.abs(runCadence(3) - 2.7) < 0.01);
+        assert.ok(Math.abs(runCadence(8) - 3.95) < 0.01);
+        assert.ok(runCadence(20) <= 4.6);
+        assert.ok(runStrideLength(8) > 3.8 && runStrideLength(8) < 4.3, `${runStrideLength(8)} m strides at 8 m/s`);
+        assert.ok(runStrideLength(8, 1.1) > runStrideLength(8, 0.9));
+        assert.ok(runStrideLength(3) > strideLength(1.4));
+    });
 });
 
 describe("walking (locomotion.js)", () => {
@@ -410,6 +442,111 @@ describe("walking (locomotion.js)", () => {
             assert.ok(steepest < 0.003, `the hips move ${(steepest * 1000).toFixed(1)} mm in a 120th of a second`);
             assert.ok(range > 0.015 && range < 0.065, `the hips rise and fall ${(range * 100).toFixed(1)} cm`);
         }
+    });
+
+    it("sprints: in the air between steps, landing on the ball of the foot without sliding, lowest mid-step", () => {
+        for (const [shape, style] of [[{}, WALK_STYLES.natural], [PRESETS.orc.shape, WALK_STYLES.orc]]) {
+            const f = figure(shape);
+            const walker = new Walker(f, style);
+            const hips = f.rig.bone("Hips");
+            const dt = 1 / 120;
+
+            for (let t = 0; t < 4; t += dt) {
+                walker.update(dt, { speed: 8 });
+            }
+
+            const start = f.object.position.z;
+            const heights = [];
+            const middles = { stance: [], flight: [] };
+            let slide = 0;
+            let lowest = Infinity;
+            let flying = 0;
+            let steps = 0;
+            let planted = null;
+            let last = walker.phase;
+
+            for (let t = 0; t < 2; t += dt) {
+                walker.update(dt, { speed: 8 });
+
+                const phase = walker.phase;
+                const height = hips.getWorldPosition(new THREE.Vector3()).y;
+
+                steps += Math.floor(phase * 2) !== Math.floor(last * 2) ? 1 : 0;
+                last = phase;
+
+                // While the left foot is on the ground, its ball stays where it landed
+                if (phase > 0.03 && phase < RUN_STANCE - 0.03) {
+                    const point = walker.footPoint(0, "ball");
+
+                    planted ??= point.clone();
+                    slide = Math.max(slide, Math.hypot(point.x - planted.x, point.z - planted.z));
+                } else {
+                    planted = null;
+                }
+
+                lowest = Math.min(lowest, walker.footHeight(0), walker.footHeight(1));
+                flying += walker.footHeight(0) > 0.01 && walker.footHeight(1) > 0.01 ? 1 : 0;
+                heights.push(height);
+
+                // The middle of a foot's time on the ground, and of the flight after it
+                const half = phase % 0.5;
+
+                if (half > 0.08 && half < 0.14) {
+                    middles.stance.push(height);
+                } else if (half > 0.33 && half < 0.39) {
+                    middles.flight.push(height);
+                }
+            }
+
+            const mean = (list) => list.reduce((sum, value) => sum + value, 0) / list.length;
+            const change = heights.slice(1).map((height, k) => height - heights[k]);
+            const jerk = Math.max(...change.slice(1).map((d, k) => Math.abs(d - change[k])));
+            const range = Math.max(...heights) - Math.min(...heights);
+
+            assert.ok(walker.run > 0.99, "running, not walking");
+            assert.ok(Math.abs((f.object.position.z - start) / 2 - 8) < 0.1, "moves at its speed");
+            assert.ok(Math.abs(steps / 2 - runCadence(8, walker.legLength)) < 0.15, `${steps / 2} steps a second`);
+            assert.ok(slide < 0.01, `the planted foot slides ${slide} m`);
+            assert.ok(lowest > -0.003, `feet stay out of the ground (${lowest})`);
+            assert.ok(flying / heights.length > 0.4 && flying / heights.length < 0.65, `both feet off the ground ${flying / heights.length} of the time`);
+            assert.ok(range > 0.04 && range < 0.1, `the hips rise and fall ${(range * 100).toFixed(1)} cm`);
+            assert.ok(mean(middles.stance) < mean(middles.flight) - 0.02, "lowest on the ground, highest in the air");
+            assert.ok(jerk < 0.0025, `the hips change speed ${(jerk * 1000).toFixed(2)} mm a frame`);
+        }
+    });
+
+    it("breaks into a run and back into a walk smoothly as it's moved faster and slower", () => {
+        const f = figure();
+        const walker = new Walker(f);
+        const hips = f.rig.bone("Hips");
+        const dt = 1 / 60;
+        const heights = [];
+        let speed = 1.7;
+        let lowest = Infinity;
+        let fastest = 0;
+
+        // As the game moves a character: walking, speeding up to a sprint, then slowing to a walk
+        for (let t = 0; t < 7; t += dt) {
+            const target = t < 1.5 ? 1.7 : t < 4.5 ? 8 : 1.7;
+
+            speed = target > speed ? Math.min(target, speed + 6 * dt) : Math.max(target, speed - 7 * dt);
+            f.object.translateZ(speed * dt);
+            walker.update(dt, { moved: speed * dt });
+            fastest = Math.max(fastest, walker.run);
+            lowest = Math.min(lowest, walker.footHeight(0), walker.footHeight(1));
+
+            if (t > 0.5) {
+                heights.push(hips.getWorldPosition(new THREE.Vector3()).y);
+            }
+        }
+
+        const change = heights.slice(1).map((height, k) => height - heights[k]);
+        const jerk = Math.max(...change.slice(1).map((d, k) => Math.abs(d - change[k])));
+
+        assert.ok(fastest > 0.99 && walker.run === 0, "ran, then walked again");
+        assert.ok(lowest > -0.003, `feet stay out of the ground (${lowest})`);
+        // No jolts changing gait: the hips change speed no more than they do running
+        assert.ok(jerk < 0.008, `the hips change speed ${(jerk * 1000).toFixed(2)} mm a frame`);
     });
 });
 

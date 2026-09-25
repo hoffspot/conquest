@@ -3,8 +3,10 @@
 // over it (actions.js: attacking, flinching, falling).
 //
 // The battle moves actors from square to square in fixed steps; the game gives the avatar where
-// its actor is between two steps, and the avatar walks there, turning smoothly to face the way
-// its actor faces.
+// its actor is between two steps, and the avatar walks there. It follows on a spring, which
+// rounds off the corners of the square-by-square path, so that a character runs in smooth lines
+// rather than zig-zagging from square to square, and it faces the way it's going (or, standing,
+// the way its actor faces), turning smoothly.
 
 import * as THREE from "three";
 import { Actions } from "../characters/actions.js";
@@ -12,6 +14,14 @@ import { Walker, WALK_STYLES } from "../characters/locomotion.js";
 
 // How fast characters turn (radians a second)
 const TURN_SPEED = 9;
+
+// How closely a character follows its place in the battle: the stiffness of a critically damped
+// spring (per second). It trails by 2 / FOLLOW seconds' travel: under a third of a metre walking,
+// about a metre and a quarter sprinting
+const FOLLOW = 12;
+
+// Faster than this (metres a second), a character faces the way it's going
+const HEADING_SPEED = 0.5;
 
 const wrapAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
 
@@ -32,6 +42,9 @@ export class Avatar {
         this.walker.afterPose = () => this.actions.place();
         this.facing = 0;
         this.last = new THREE.Vector3();
+
+        /** Where it's drawn, following its actor, and how fast that's moving (metres, m/s). */
+        this.follow = { x: 0, z: 0, vx: 0, vz: 0 };
     }
 
     /** Put it straight somewhere (metres), facing a way (radians from south, towards east). */
@@ -40,17 +53,36 @@ export class Avatar {
         this.object.rotation.y = facing;
         this.facing = facing;
         this.last.copy(this.object.position);
+        Object.assign(this.follow, { x, z, vx: 0, vz: 0 });
         this.walker.release();
     }
 
-    /** Walk to where its actor is now (metres), turning towards the way it faces. */
-    update(dt, x, z, facing) {
+    /**
+     * Walk towards where its actor is now (metres), facing the way it's going, or, standing still
+     * or when `steer` is false (attacking), the way its actor faces (`facing`).
+     */
+    update(dt, x, z, facing, steer = true) {
         const object = this.object;
-        const moved = Math.hypot(x - this.last.x, z - this.last.z);
-        const most = TURN_SPEED * dt;
-        const turn = wrapAngle(facing - this.facing);
+        const follow = this.follow;
 
-        object.position.set(x, 0, z);
+        // The spring, stepped exactly (so it's the same at any frame rate)
+        const decay = Math.exp(-FOLLOW * dt);
+        const ex = follow.x - x;
+        const ez = follow.z - z;
+        const jx = follow.vx + FOLLOW * ex;
+        const jz = follow.vz + FOLLOW * ez;
+
+        follow.x = x + (ex + jx * dt) * decay;
+        follow.z = z + (ez + jz * dt) * decay;
+        follow.vx = (follow.vx - FOLLOW * jx * dt) * decay;
+        follow.vz = (follow.vz - FOLLOW * jz * dt) * decay;
+
+        const moved = Math.hypot(follow.x - this.last.x, follow.z - this.last.z);
+        const heading = steer && Math.hypot(follow.vx, follow.vz) > HEADING_SPEED ? Math.atan2(follow.vx, follow.vz) : facing;
+        const most = TURN_SPEED * dt;
+        const turn = wrapAngle(heading - this.facing);
+
+        object.position.set(follow.x, 0, follow.z);
         this.last.copy(object.position);
         this.facing = wrapAngle(this.facing + Math.max(-most, Math.min(most, turn)));
         object.rotation.y = this.facing;

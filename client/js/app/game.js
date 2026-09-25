@@ -38,6 +38,10 @@ const SINK = 1.5;
 // A tap that moves less than this (pixels) is a tap, not a drag
 const TAP_SLOP = 12;
 
+// A second tap this soon after one (ms), and this close to it (pixels), makes a double tap: run
+const DOUBLE_TAP_MS = 350;
+const DOUBLE_TAP_SLOP = 60;
+
 // How far from an enemy (screen pixels, at its chest) a tap picks it
 const PICK_RADIUS = 46;
 
@@ -84,6 +88,7 @@ export class Game {
         this.flash = new Map();
         this.pointers = new Map();
         this.pinch = null;
+        this.lastTap = null;
         this.listeners = [];
         this.onDeath = () => {};
     }
@@ -158,10 +163,10 @@ export class Game {
         const player = this.battle.actor("player");
 
         this.hud.clear();
-        this.hud.setPlayer({ name: player.name, hp: player.hp, maxHp: player.maxHp });
+        this.hud.setPlayer(player);
 
         for (const actor of this.battle.actors.filter((other) => other.id !== "player")) {
-            this.hud.track(actor.id, { name: actor.name, hp: actor.hp, maxHp: actor.maxHp, hostile: actor.team !== player.team });
+            this.hud.track(actor.id, { ...actor, hostile: actor.team !== player.team });
         }
     }
 
@@ -325,8 +330,9 @@ export class Game {
             const z = previous.y + (actor.y - previous.y) * alpha;
 
             avatar.actions.setGuard(!actor.dead && this.#fighting(actor));
-            avatar.update(dt, x, z, actor.facing);
+            avatar.update(dt, x, z, actor.facing, !actor.attack);
             this.#updateBody(actor, avatar, dt);
+            hud.setStamina(actor.id, actor.stamina, actor.maxStamina);
         }
 
         // Projectiles, between their last two steps, rising and falling on the way
@@ -487,6 +493,12 @@ export class Game {
                     effects.land(event.projectile);
                     this.flights.delete(event.projectile);
                     break;
+                case "exhausted":
+                    if (event.id === "player") {
+                        hud.message("Out of breath", 1.5);
+                    }
+
+                    break;
                 case "death": {
                     const killer = event.by ? this.avatars.get(event.by) : null;
 
@@ -618,7 +630,7 @@ export class Game {
             }
 
             if (event.type === "pointerup" && !pointer.moved) {
-                this.tap(event.clientX, event.clientY);
+                this.tap(event.clientX, event.clientY, { run: event.shiftKey, time: event.timeStamp });
             }
         };
 
@@ -630,13 +642,22 @@ export class Game {
         }, { passive: false });
     }
 
-    /** A tap or click at a point on the screen (client pixels): fight who's there, or walk there. */
-    tap(clientX, clientY) {
+    /**
+     * A tap or click at a point on the screen (client pixels), at `time` (ms, as performance.now()):
+     * fight who's there, or walk there. Tapped twice in quick succession (or with `run`:
+     * shift-clicked), run there.
+     */
+    tap(clientX, clientY, { run = false, time = performance.now() } = {}) {
         const player = this.battle.actor("player");
+        const last = this.lastTap;
+
+        this.lastTap = { time, x: clientX, y: clientY };
 
         if (!player || player.dead) {
             return;
         }
+
+        run ||= last !== null && time - last.time <= DOUBLE_TAP_MS && Math.hypot(clientX - last.x, clientY - last.y) <= DOUBLE_TAP_SLOP;
 
         // An enemy near the tap?
         let best = null;
@@ -659,7 +680,7 @@ export class Game {
         }
 
         if (best) {
-            this.battle.command("player", { type: "engage", target: best.id });
+            this.battle.command("player", { type: "engage", target: best.id, run });
             this.effects.markTarget(best.x, best.y);
 
             return;
@@ -674,7 +695,7 @@ export class Game {
         const x = Math.min(this.world.width - 1, Math.max(0, Math.floor(ground.x)));
         const y = Math.min(this.world.height - 1, Math.max(0, Math.floor(ground.z)));
 
-        this.battle.command("player", { type: "move", to: [x, y] });
+        this.battle.command("player", { type: "move", to: [x, y], run });
 
         const goal = this.battle.actor("player").order?.to ?? [x, y];
 

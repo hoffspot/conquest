@@ -1,12 +1,15 @@
-// How people walk, from gait-lab measurements: the angles of the pelvis, hips, knees, ankles,
-// shoulders and elbows through one stride of normal walking, as Fourier series fitted to
+// How people walk and run, from gait-lab measurements: the angles of the pelvis, hips, knees,
+// ankles, shoulders and elbows through one stride of normal walking, as Fourier series fitted to
 // published normal-adult averages (Winter's biomechanics data and the Plug-in Gait conventions:
 // flexion, adduction and internal rotation positive; pelvic obliquity positive when that side is
-// up, pelvic rotation positive when that side is forward). See docs/CHARACTERS.md.
+// up, pelvic rotation positive when that side is forward), and through one stride of sprinting,
+// as key angles from running studies (Novacheck's review of running biomechanics). See
+// docs/CHARACTERS.md.
 //
-// A stride runs from one heel strike to the next heel strike of the same foot: phase 0 to 1,
-// with that foot on the ground ("stance") for the first 62% and swinging for the rest. Curves are
-// for the left side; the right side is half a stride later.
+// A stride runs from one foot strike to the next strike of the same foot: phase 0 to 1. Walking,
+// that foot is on the ground ("stance") for the first 62% and swinging for the rest; sprinting,
+// for only the first quarter, with both feet off the ground between steps. Curves are for the
+// left side; the right side is half a stride later.
 //
 // Pure maths, no Three.js: the walker (locomotion.js) turns these into poses.
 
@@ -42,6 +45,10 @@ export const CURVES = Object.freeze({
 
 /** A curve's angle (degrees) at a phase (any number: whole strides wrap around). */
 export function curveAt(curve, phase) {
+    if (curve.keys) {
+        return keyedAt(curve.keys, phase);
+    }
+
     let angle = curve.mean;
 
     curve.harmonics.forEach(([a, b], i) => {
@@ -52,6 +59,53 @@ export function curveAt(curve, phase) {
 
     return angle;
 }
+
+// A value on the smooth, looping curve through [phase, value] keys (Catmull-Rom, the last key
+// leading back round to the first)
+function keyedAt(keys, phase) {
+    const p = ((phase % 1) + 1) % 1;
+    const count = keys.length;
+    let k = count - 1;
+
+    while (k > 0 && keys[k][0] > p) {
+        k--;
+    }
+
+    const key = (i) => {
+        const [time, value] = keys[((i % count) + count) % count];
+
+        return [time + Math.floor(i / count), value];
+    };
+    const [t0, v0] = key(k);
+    const [t1, v1] = key(k + 1);
+    const [tb, vb] = key(k - 1);
+    const [ta, va] = key(k + 2);
+    const m0 = ((v1 - vb) / (t1 - tb)) * (t1 - t0);
+    const m1 = ((va - v0) / (ta - t0)) * (t1 - t0);
+    const u = ((p < t0 ? p + 1 : p) - t0) / (t1 - t0);
+    const u2 = u * u;
+    const u3 = u2 * u;
+
+    return (2 * u3 - 3 * u2 + 1) * v0 + (u3 - 2 * u2 + u) * m0 + (-2 * u3 + 3 * u2) * v1 + (u3 - u2) * m1;
+}
+
+/** Fraction of a sprinting stride each foot spends on the ground. */
+export const RUN_STANCE = 0.24;
+
+/**
+ * Sprinting, through a stride: the thigh's angle from upright (forward positive), knee flexion,
+ * ankle dorsiflexion, and the arms' swing (shoulder flexion) and elbow flexion, in degrees. The
+ * foot lands under the knee (0), the leg folds under the load, extends to push off behind (0.24),
+ * then the heel kicks up towards the buttock and the knee drives high (about 0.75) before
+ * reaching forward to land again. The arms pump against the legs, elbows bent about a right angle.
+ */
+export const RUN_CURVES = Object.freeze({
+    thigh: { label: "Thigh angle", keys: [[0, 34], [0.08, 16], [0.16, -8], [0.24, -26], [0.34, -20], [0.46, 8], [0.6, 42], [0.75, 60], [0.88, 48]] },
+    kneeFlexion: { label: "Knee flexion", keys: [[0, 24], [0.09, 44], [0.24, 20], [0.34, 62], [0.46, 108], [0.58, 122], [0.72, 100], [0.84, 52], [0.93, 22]] },
+    ankleDorsiflexion: { label: "Ankle dorsiflexion", keys: [[0, -6], [0.11, 16], [0.24, -26], [0.36, -18], [0.56, 4], [0.78, 10], [0.92, 2]] },
+    shoulderFlexion: { label: "Shoulder flexion", keys: [[0, 2], [0.25, 50], [0.5, 4], [0.75, -40]] },
+    elbowFlexion: { label: "Elbow flexion", keys: [[0, 88], [0.25, 108], [0.5, 90], [0.75, 70]] },
+});
 
 /** Walking speed people choose on their own, in metres a second (for a leg of `legLength`). */
 export const NATURAL_SPEED = 1.35;
@@ -84,6 +138,20 @@ export function amplitude(speed, legLength = REFERENCE_LEG) {
 /** The fastest walk before people break into a run (Froude number 0.5), in metres a second. */
 export function walkToRunSpeed(legLength = REFERENCE_LEG) {
     return Math.sqrt(0.5 * 9.81 * legLength);
+}
+
+/**
+ * Steps a second running at a speed: about 2.7 at a jog of 3 metres a second, rising to about 4
+ * at a sprint of 8 (people run faster mostly by taking longer steps at first, then by taking them
+ * more often), for a leg of this length.
+ */
+export function runCadence(speed, legLength = REFERENCE_LEG) {
+    return Math.min(4.6, 2.7 + 0.25 * Math.max(0, speed - 3)) * Math.sqrt(REFERENCE_LEG / legLength);
+}
+
+/** Stride length (two steps) running at a speed, in metres, for a leg of this length. */
+export function runStrideLength(speed, legLength = REFERENCE_LEG) {
+    return (2 * speed) / runCadence(speed, legLength);
 }
 
 /** Which of PHASES a foot is in. */

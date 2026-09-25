@@ -32,6 +32,33 @@ async function playing(page, address) {
     await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 90000 });
 }
 
+// Where a spot so many metres north of the player is on the screen
+async function spotNorth(page, metres) {
+    return page.evaluate((metres) => {
+        const { game, session } = window.pellagos;
+        const avatar = game.avatars.get("player");
+
+        return session.view.toScreen(avatar.object.position.clone().setZ(avatar.object.position.z - metres));
+    }, metres);
+}
+
+// Click (or tap) twice, 160 ms apart. Drawing without a GPU takes so long that input sent one
+// event after another arrives seconds apart, so these say when they happened, as a device's do
+async function doubleTap(page, { x, y }, { touch = false } = {}) {
+    const cdp = await page.context().newCDPSession(page);
+    const start = Date.now() / 1000;
+
+    for (const [down, at, count] of [[true, 0, 1], [false, 0.06, 1], [true, 0.16, 2], [false, 0.22, 2]]) {
+        if (touch) {
+            await cdp.send("Input.dispatchTouchEvent", { type: down ? "touchStart" : "touchEnd", touchPoints: down ? [{ x, y }] : [], timestamp: start + at });
+        } else {
+            await cdp.send("Input.dispatchMouseEvent", { type: down ? "mousePressed" : "mouseReleased", x, y, button: "left", buttons: down ? 1 : 0, clickCount: count, timestamp: start + at });
+        }
+    }
+
+    await cdp.detach();
+}
+
 test("loads everything, listing what it downloads, then shows the title", async ({ page }) => {
     await page.goto("/");
 
@@ -214,6 +241,56 @@ test("tapping the ground walks the player there", async ({ page }) => {
     expect(walked.end[1]).toBeLessThan(walked.start[1] - 2);
 });
 
+test("double-clicking the ground runs there, using stamina, shown by an orange bar until it's back", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const bar = page.locator("#playerplate .bar.stamina");
+    const order = () => page.evaluate(() => window.pellagos.game.battle.actor("player").order);
+    const spot = await spotNorth(page, 4);
+
+    await expect(bar).toBeHidden();
+
+    // A click walks, and a shift-click (not so soon as to be a double click) runs
+    await page.mouse.click(spot.x, spot.y);
+    expect((await order()).run).toBe(false);
+    await page.waitForTimeout(500);
+    await page.keyboard.down("Shift");
+    await page.mouse.click(spot.x, spot.y);
+    await page.keyboard.up("Shift");
+    expect((await order()).run).toBe(true);
+    await page.evaluate(() => window.pellagos.game.battle.command("player", { type: "stop" }));
+
+    // A spot a few metres north of the player, double-clicked
+    await doubleTap(page, spot);
+
+    const ran = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+        const order = { ...player.order };
+        let fastest = 0;
+
+        game.stop();
+
+        for (let k = 0; k < 20; k++) {
+            game.advance(0.05);
+            fastest = Math.max(fastest, player.pace);
+        }
+
+        return { order, fastest, walk: player.speed, stamina: player.stamina, maxStamina: player.maxStamina };
+    });
+
+    expect(ran.order.run).toBe(true);
+    expect(ran.fastest).toBeGreaterThan(ran.walk * 2);
+    expect(ran.stamina).toBeLessThan(ran.maxStamina);
+    await expect(bar).toBeVisible();
+    await expect(bar).toHaveText(`${Math.floor(ran.stamina)} / ${ran.maxStamina}`);
+    expect(await bar.locator(".fill").evaluate((fill) => getComputedStyle(fill).backgroundImage)).toContain("rgb(236, 138, 28)");
+
+    // Rested, it's full again, and the bar goes
+    await page.evaluate(() => window.pellagos.game.advance(20));
+    await expect(bar).toBeHidden();
+});
+
 test.describe("on a phone", () => {
     test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
@@ -243,5 +320,20 @@ test.describe("on a phone", () => {
             expect(box.width).toBeGreaterThanOrEqual(44);
             expect(box.x + box.width).toBeLessThanOrEqual(390);
         }
+
+        // The hint fits across the screen, clear of the zoom buttons
+        const hint = await page.locator("#hint").boundingBox();
+        const zoom = await page.locator("#zoomout").boundingBox();
+
+        expect(hint.x).toBeGreaterThanOrEqual(0);
+        expect(hint.x + hint.width).toBeLessThanOrEqual(zoom.x);
+    });
+
+    test("runs where the ground is double-tapped", async ({ page }) => {
+        await playing(page, "/?play&seed=1");
+
+        await doubleTap(page, await spotNorth(page, 4), { touch: true });
+
+        expect(await page.evaluate(() => window.pellagos.game.battle.actor("player").order?.run)).toBe(true);
     });
 });

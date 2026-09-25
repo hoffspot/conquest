@@ -35,13 +35,22 @@ to the same town:
 ## The battle (core/battle.js)
 
 The battle runs in fixed steps of 50 ms, the same on every device, whatever the frame rate.
-Each step returns events (`attack`, `projectile`, `hit`, `miss`, `death`, `respawn`...) for the
-drawing to show; nothing in it draws anything.
+Each step returns events (`attack`, `projectile`, `hit`, `miss`, `death`, `respawn`,
+`exhausted`...) for the drawing to show; nothing in it draws anything.
 
 - **Moving.** Each character stands on one square and walks from square middle to square middle
   along A* paths (8 directions, no cutting corners past blocked squares). It never steps into a
   square another character is on or stepping into; if someone is in the way for 0.4 s it finds a
   way round. The player walks at 1.7 m/s; the orc patrols at 1.1 and chases at 1.8.
+- **Running and stamina.** Told to run (a move or fight order with `run`), a character sprints
+  at `SPRINT` times its walking speed, 6.5 / 1.4 (about 4.6): as much faster as people sprint
+  (about 6.5 m/s) than walk (about 1.4 m/s). For the player that's 7.9 m/s. It speeds up at
+  6 m/s each second (a second from a walk to a sprint) and slows at 7, slowing in time to arrive
+  (or to reach an enemy it's charging) at a walk. Running uses 3 points of stamina a second;
+  walking, standing and fighting get 1 a second back. A character has as much stamina as hit
+  points, and it never goes above that or below none. With none left, a runner walks the rest of
+  the way (the `exhausted` event). Coming back to life, a character is rested. The orc doesn't
+  run.
 - **Reach.** A melee attack reaches the eight squares touching the attacker's: N, NE, E, SE, S,
   SW, W and NW (Chebyshev distance 1). A ranged attack reaches any square whose middle is within
   its range and that the attacker can see: a line between the two squares' middles that crosses
@@ -141,8 +150,12 @@ few dozen draw calls (about 40,000 triangles), however many houses it has. While
 
 An avatar is a character (characters/character.js) kept in step with its actor in the battle.
 The game shows everyone between where they were at the last two battle steps, so they move
-smoothly at any frame rate; the avatar walks there (the walk's stride follows how far it really
-moved), turning smoothly towards the way its actor faces. Characters in the game grow only part
+smoothly at any frame rate, and the avatar follows that on a spring (critically damped, of
+stiffness 12 a second). The spring rounds off the corners of the battle's square-by-square
+paths, so a sprint runs in smooth lines instead of zig-zagging from square to square; it trails
+by under a third of a metre walking and about a metre and a quarter sprinting, and catches up
+as the character slows to arrive. The walk's stride follows how far the avatar really moved, and
+it turns smoothly to face the way it's going (standing or attacking, the way its actor faces). Characters in the game grow only part
 of their hair (the quality level's share, in fewer, wider strands: at the game's distance it
 looks the same), which roughly halves their triangles.
 
@@ -182,7 +195,11 @@ call; nothing adds a light (adding lights makes Three.js rebuild every lit mater
    swung every few seconds.
 4. **Playing** (app/game.js): building the world, with a progress bar for each part (the ground,
    each piece of the town, the characters, compiling every shader before the first frame), then
-   the game.
+   the game. A tap walks; a second tap within 350 ms and 60 pixels of the first (going by when
+   the taps happened, so a slow frame between them doesn't matter) turns it into a run, as does
+   a Shift-click. The heads-up display (app/hud.js) shows the player's name and health, with an
+   orange stamina bar under the health bar while stamina isn't full, "Out of breath" when a run
+   ends for want of it, bars over the other characters, and the damage each blow does.
 
 The character is saved in the browser's local storage as `pellagos.save`: `{ version, hero,
 seed, created }`, where `hero` is `{ name, shape: { macro, details }, look: { skin, eyes, hair },
@@ -201,7 +218,7 @@ switched off. It folds away to just the frame rate. It shows:
   memory; the quality level, pixel ratio and drawing buffer size;
 - the GPU (where the browser says), the JavaScript heap (Chrome), the screen, cores and memory;
 - the battle: its time, how many steps each frame ran, projectiles in flight, and each character's
-  place, hit points and what it's doing;
+  place, hit points, stamina and what it's doing (with its speed, running);
 - how much was downloaded and how long each group took, and how long each part of the world took
   to build.
 
@@ -221,8 +238,9 @@ particles reuse one buffer, and projectiles and effects add no lights.
 
 - `test/world.test.js`, `test/combat.test.js`: the world's layout and pathing on many seeds, and
   the battle: reach in every direction, line of sight, attack timing, projectiles, damage rolls,
-  staggering, death and respawn, the orc's patrol, chase and giving up, and a simulated minute on
-  a generated world.
+  staggering, death and respawn, the orc's patrol, chase and giving up, running (its speed,
+  speeding up and slowing down, charging), stamina (used, got back, running out, never below
+  none or above its most), and a simulated minute on a generated world.
 - `test/actions.test.js`: attacks (their timing, where the hands reach on different bodies,
   two-handed grips, alternating punches), reactions and falls, on the real body.
 - `test/app.test.js`, `test/town3d.test.js`, `test/manifest.test.js`, `test/sw.test.js`: saving,
@@ -230,5 +248,6 @@ particles reuse one buffer, and projectiles and effects add no lights.
   list and the service worker.
 - `e2e/pellagos.spec.js`: the whole game in Chromium: loading, debug mode, making a character
   through to playing them, carrying on with a saved character, a fight to the death, walking by
-  tapping, and a phone screen. Drawing without a GPU is slow, so fights are played on with
+  tapping, running by double-clicking and double-tapping with the stamina bar showing and going,
+  and a phone screen. Drawing without a GPU is slow, so fights are played on with
   `game.advance(seconds)`, which runs the game without drawing each frame.
