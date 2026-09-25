@@ -16,9 +16,11 @@
     "check": "npm run lint && npm test",
     "vendor:three": "node scripts/vendor-three.js",
     "build:manifest": "node scripts/build-manifest.js",
-    "build:characters": "node scripts/build-characters.js"
+    "build:characters": "node scripts/build-characters.js",
+    "build:music": "node scripts/build-music.js"
   },
   "devDependencies": {
+    "@breezystack/lamejs": "^1.2.7",
     "@eslint/js": "^9.39.1",
     "@playwright/test": "^1.56.1",
     "esbuild": "0.28.2",

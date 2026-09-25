@@ -81,19 +81,20 @@ sight, already at full health) says why.
 - **Effects**: swords, staffs, hammers and fists swish; bows twang and spells crackle and chime;
   every kind of blow sounds different where it lands; feet step on cobbles, dirt and grass.
 - **Environment**: the wind blows, birds sing, and the trees near you rustle.
-- **Music**: a four-minute score in the style of *The Bard's Tale* (1985), played by a small
-  modern band: lute, harp, recorder, fiddle, cello, a soft pad, bells, a frame drum and
-  tambourine, with a chip-tune bridge in the old games' honour. It's in D Dorian, in 3/4, with
+- **Music**: a four-minute score in the style of *The Bard's Tale* (1985), played on recordings
+  of real, old instruments: an alto recorder, an ocarina, a folk harp, a strumstick (a
+  small plucked folk instrument, for a lute), a Renaissance chamber organ, hand chimes, a frame
+  drum and a tambourine, with harpsichord arpeggios in the bridge. It's in D Dorian, in 3/4, with
   an intro, verses, choruses, a bridge, a quiet verse, a last chorus and an outro that leads back
-  into the intro, so it loops without a seam. It's quiet to start with, under the effects and the
-  town.
+  into the intro, so it loops without a seam. It's quiet to start with, under the effects.
 
-It's all made in code as the game starts (in a worker, so nothing waits for it), with nothing to
-download. Effects and the town are heard from where you stand: quieter further away, and to the
-left or right.
+The effects and the town's sounds are made in code as the game starts (in a worker, so nothing
+waits for them); the music's recordings (about a megabyte) are downloaded meanwhile. Effects and
+the town are heard from where you stand: quieter further away, and to the left or right.
 
 **Game options**, in the menu: turn the minimap on or off, turn all the sound on or off, and set
-how loud the effects (80% to start with), the environment (50%) and the music (35%) are. They're
+how loud the effects (50% to start with), the environment (40%) and the music (35%) are. The
+defaults suit a phone at about 40% volume, with plenty of room to turn each up. They're
 remembered.
 
 | Action | Touch | Mouse and keyboard |
@@ -158,6 +159,7 @@ npm run check       # lint + unit tests
 npm run build:manifest  # after changing what the game downloads: lists it for the loading screen
 npm run vendor:three    # after changing the three version in package.json: copies it to client/vendor
 npm run build:characters -- --mpfb2=../mpfb2  # rebuilds client/characters from MakeHuman's MPFB2
+npm run build:music     # remakes client/music, the music's instrument recordings, from the VCSL
 ```
 
 `npm test` checks that `client/js/app/manifest.js` (the loading screen's list of files and their
@@ -178,6 +180,8 @@ client/                 The game (static files served to the browser)
   characters/           The body characters are made from (made by npm run build:characters),
                         MakeHuman's texture masks, and motion capture clips
   models/kaykit/        Props and trees (KayKit Medieval Hexagon, CC0)
+  music/                The music's instruments: short recordings of real ones, as MP3s (made by
+                        npm run build:music from the Versilian Community Sample Library, CC0)
   images/icons/         The app's icons
   character-lab.html    The character lab (with character-lab.css)
   vendor/three-r186/    Three.js (minified by scripts/vendor-three.js; loaded through an import map)
@@ -202,8 +206,9 @@ client/                 The game (static files served to the browser)
     random.js           Seeded random numbers
     setpieces/          Town (and castle) layouts, and the pieces they're made from
   js/audio/             The sound: dsp.js has the building blocks; synth.js makes the effects
-                        and the town's sounds, instruments.js the band, score.js writes the
-                        music; worker.js makes it all away from the page; sound.js plays it
+                        and the town's sounds (worker.js away from the page); score.js writes
+                        the music; instruments.js and samples.js are the band's recordings;
+                        sound.js plays it all
   js/world/             Drawing the world
     view.js             The renderer, lights, sky, the camera, quality levels, the cutaway
     ground.js           The ground: textures blended square by square
@@ -228,7 +233,7 @@ client/                 The game (static files served to the browser)
 server/                 A static file server for playing locally (npm start)
 test/                   Unit tests
 e2e/                    Playwright browser tests
-scripts/                vendor-three.js, build-characters.js, build-manifest.js
+scripts/                vendor-three.js, build-characters.js, build-manifest.js, build-music.js
 .github/workflows/      CI (ci.yml) and publishing to GitHub Pages (pages.yml)
 docs/GAME.md            How the game works
 docs/CHARACTERS.md      The character engine, and the research behind it
@@ -245,6 +250,9 @@ docs/MODERNIZATION.md   The history: the book's Last Colony, modernized, before 
 - Town layouts after Watabou's Medieval Fantasy City Generator
   (<https://github.com/watabou/TownGeneratorOS>); castle pieces after Castle Builder by Jon
   Rubashkin (<https://github.com/JonRubashkin/Castle-Builder>).
+- Music's instruments: recordings from the Versilian Community Sample Library by Versilian
+  Studios (<https://github.com/sgossner/VCSL>), CC0, trimmed and made into MP3s by
+  `scripts/build-music.js` (with its SFZ files from <https://github.com/smpldsnds/sgossner-vcsl>).
 - 3D engine: [Three.js](https://threejs.org) (MIT license, in `client/vendor/three-r186/LICENSE`).
 
 This repository began as a modernization of Last Colony, the real-time strategy game from

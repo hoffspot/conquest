@@ -241,6 +241,23 @@ test("tapping the ground walks the player there", async ({ page }) => {
     expect(walked.end[1]).toBeLessThan(walked.start[1] - 2);
 });
 
+test("once a tap lets it make sound, the music plays on recordings of real instruments", async ({ page }) => {
+    const recordings = [];
+
+    page.on("response", (response) => /\/music\/.+\.mp3$/.test(response.url()) && recordings.push(response.status()));
+    await playing(page, "/?play&seed=1");
+    await page.mouse.click(20, 400);
+
+    // Every recording downloaded and decoded, and the score under way
+    await page.waitForFunction(() => {
+        const { sound } = window.pellagos.session;
+
+        return sound.recordings.size === 0 && sound.instruments.size > 40 && sound.music.start !== null;
+    }, null, { timeout: 30000 });
+    expect(recordings.length).toBeGreaterThan(40);
+    expect(recordings.every((status) => status === 200)).toBe(true);
+});
+
 test("double-clicking the ground runs there, using stamina, shown by an orange bar until it's back", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
@@ -368,8 +385,8 @@ test("the minimap walks the player where it's tapped, and Game options turn it a
     await expect(soundSwitch).toBeChecked();
 
     // Each kind of sound has its slider: effects, environment and music (soft to start with)
-    await expect(page.locator("#effectsvolume")).toHaveValue("80");
-    await expect(page.locator("#environmentvolume")).toHaveValue("50");
+    await expect(page.locator("#effectsvolume")).toHaveValue("50");
+    await expect(page.locator("#environmentvolume")).toHaveValue("40");
     await expect(page.locator("#musicvolume")).toHaveValue("35");
     await page.locator("#musicvolume").fill("60");
     await page.locator("#musicvolume").dispatchEvent("change");
