@@ -13,6 +13,12 @@
 //    squares, with nothing in the way) it chases them and attacks whenever they're within reach,
 //    giving up and going back to its patrol if it loses sight of them for GIVE_UP_MS.
 //
+// Told to run (an order with run: true), a character sprints: SPRINT times as fast as it walks,
+// speeding up and slowing down as runners do (ACCELERATION, BRAKING), and slowing to a walk in
+// time to arrive. Running uses stamina, STAMINA_DRAIN points a second; anything else gets it
+// back, STAMINA_RECOVERY a second. A character has as much stamina as it has hit points, and it
+// never goes below none or above that. With none left, a runner walks the rest of the way.
+//
 // An attack (weapons.js) lands its blow hitAt into it: melee attacks hit if the target is still
 // within reach, ranged attacks let go of a projectile that flies to the target. Each hit rolls its
 // damage and takes it off the target's hit points; at none, the target dies, and comes back to
@@ -23,7 +29,7 @@
 
 import { findPath } from "./pathfinding.js";
 import { createRandom } from "./random.js";
-import { chooseAttack, distanceBetween, rollDamage, WEAPONS } from "./weapons.js";
+import { chooseAttack, distanceBetween, longestReach, rollDamage, WEAPONS } from "./weapons.js";
 import { nearestFree } from "./world.js";
 
 /** The length of one step, in ms. */
@@ -37,6 +43,21 @@ export const KINDS = Object.freeze({
     player: { hp: 50, speed: 1.7, respawn: 5000 },
     orc: { hp: 50, speed: 1.1, chase: 1.8, respawn: 30000 },
 });
+
+/**
+ * How many times as fast as it walks a character sprints: as people do, walking at about 1.4
+ * metres a second (5 km/h) and sprinting at about 6.5 (23 km/h).
+ */
+export const SPRINT = 6.5 / 1.4;
+
+/** Stamina used running, and got back doing anything else, in points a second. */
+export const STAMINA_DRAIN = 3;
+export const STAMINA_RECOVERY = 1;
+
+// How quickly a runner speeds up and slows down (metres a second, each second): about a second
+// from a walk to a sprint, and a few strides to slow from one
+const ACCELERATION = 6;
+const BRAKING = 7;
 
 // An enemy that hasn't seen its target for this long goes back to its patrol (ms)
 const GIVE_UP_MS = 3000;
@@ -86,6 +107,8 @@ export class Battle {
             patrol,
             hp: type.hp,
             maxHp: type.hp,
+            stamina: type.hp,
+            maxStamina: type.hp,
             speed: type.speed,
             chaseSpeed: type.chase ?? type.speed,
             respawnMs: type.respawn,
@@ -97,7 +120,11 @@ export class Battle {
             square: [...square],
             to: null,
             path: [],
+            // How fast it's going (m/s), how fast it goes walking just now (an enemy chasing
+            // walks faster), and whether it's running
             pace: type.speed,
+            walkPace: type.speed,
+            running: false,
             // Which way it faces: radians from south (+y), turning towards east (+x)
             facing: 0,
             order: null,
@@ -126,7 +153,8 @@ export class Battle {
 
     /**
      * Tell a character what to do: { type: "move", to: [x, y] } (walk there, or as near as
-     * can be), { type: "engage", target: id } (go and fight it), or { type: "stop" }.
+     * can be), { type: "engage", target: id } (go and fight it), or { type: "stop" }. Moving
+     * and engaging, run: true runs there (while its stamina lasts).
      */
     command(id, order) {
         const actor = this.actor(id);
@@ -144,12 +172,12 @@ export class Battle {
             case "move": {
                 const goal = nearestFree(this.world.blocked, order.to);
 
-                actor.order = { type: "move", to: goal };
+                actor.order = { type: "move", to: goal, run: Boolean(order.run) };
                 this.#pathTo(actor, goal);
                 break;
             }
             case "engage":
-                actor.order = { type: "engage", target: order.target };
+                actor.order = { type: "engage", target: order.target, run: Boolean(order.run) };
                 actor.pathGoal = null;
                 break;
             default:
@@ -243,7 +271,7 @@ export class Battle {
     #obey(actor) {
         const order = actor.order;
 
-        actor.pace = actor.speed;
+        actor.walkPace = actor.speed;
 
         if (order?.type === "move") {
             if (actor.path.length || actor.to) {
@@ -290,14 +318,14 @@ export class Battle {
         const target = actor.target === null ? null : this.actor(actor.target);
 
         if (target && !target.dead) {
-            actor.pace = actor.chaseSpeed;
+            actor.walkPace = actor.chaseSpeed;
             this.#pursue(actor, target);
 
             return;
         }
 
         actor.target = null;
-        actor.pace = actor.speed;
+        actor.walkPace = actor.speed;
 
         const goal = actor.patrol[actor.patrolIndex];
 
@@ -401,16 +429,68 @@ export class Battle {
     }
 
     #move(actor) {
-        if (actor.dead || this.time < actor.staggeredUntil || (actor.attack && !actor.to)) {
+        if (actor.dead) {
             return;
         }
 
-        let budget = (actor.pace * STEP_MS) / 1000;
+        const seconds = STEP_MS / 1000;
+
+        // A runner with no stamina left walks
+        if (actor.order?.run && actor.stamina <= 0) {
+            actor.order.run = false;
+            this.#emit("exhausted", { id: actor.id });
+        }
+
+        // How fast to go: walking pace, or up to a sprint (speeding up, and slowing down in time
+        // to arrive walking)
+        const run = Boolean(actor.order?.run);
+        const walk = actor.walkPace;
+        const want = run ? Math.min(actor.speed * SPRINT, Math.sqrt(walk * walk + 2 * BRAKING * this.#distanceLeft(actor))) : walk;
+
+        actor.pace = want > actor.pace ? Math.min(want, actor.pace + ACCELERATION * seconds) : Math.max(want, actor.pace - BRAKING * seconds);
+
+        const held = this.time < actor.staggeredUntil || (actor.attack && !actor.to);
+        const travelled = held ? 0 : this.#travel(actor, actor.pace * seconds);
+
+        // Standing still, it starts again from a walk
+        if (travelled === 0) {
+            actor.pace = walk;
+        }
+
+        // Running uses stamina, anything else gets it back (in hundredths, so it adds up exactly)
+        actor.running = run && travelled > 0;
+
+        const stamina = actor.stamina + (actor.running ? -STAMINA_DRAIN : STAMINA_RECOVERY) * seconds;
+
+        actor.stamina = Math.min(actor.maxStamina, Math.max(0, Math.round(stamina * 100) / 100));
+    }
+
+    // How far a character has to go along its path (to where the one it's after is within
+    // reach), in metres
+    #distanceLeft(actor) {
+        let left = 0;
+        let [x, y] = [actor.x, actor.y];
+
+        for (const [sx, sy] of actor.to ? [actor.to, ...actor.path] : actor.path) {
+            left += Math.hypot(sx + 0.5 - x, sy + 0.5 - y);
+            [x, y] = [sx + 0.5, sy + 0.5];
+        }
+
+        if (actor.order?.type === "engage" || actor.target !== null) {
+            left -= longestReach(actor.weapon);
+        }
+
+        return Math.max(0, left);
+    }
+
+    // Walk `budget` metres along the path, square by square. Returns how far it went
+    #travel(actor, budget) {
+        const start = budget;
 
         while (budget > 0) {
             if (!actor.to) {
                 if (!actor.path.length || !this.#stepInto(actor)) {
-                    return;
+                    return start - budget;
                 }
             }
 
@@ -430,7 +510,7 @@ export class Battle {
                 if (this.#arrivedInReach(actor)) {
                     actor.path = [];
 
-                    return;
+                    return start - budget;
                 }
             } else {
                 actor.x += (dx / distance) * budget;
@@ -443,6 +523,8 @@ export class Battle {
                 }
             }
         }
+
+        return start;
     }
 
     #arrivedInReach(actor) {
@@ -649,6 +731,10 @@ export class Battle {
         Object.assign(actor, {
             dead: false,
             hp: actor.maxHp,
+            stamina: actor.maxStamina,
+            pace: actor.speed,
+            walkPace: actor.speed,
+            running: false,
             square,
             x: square[0] + 0.5,
             y: square[1] + 0.5,

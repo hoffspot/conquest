@@ -13,6 +13,7 @@
     --health: #86c35c;
     --health-low: #e2743c;
     --hostile: #d4533b;
+    --stamina: #ec8a1c;
     --background: #15120e;
 
     --font-display: "Palatino Linotype", Palatino, "Book Antiqua", "URW Palladio L", Georgia, serif;
@@ -808,6 +809,33 @@ input[type="range"] {
     line-height: 10px;
 }
 
+/* Stamina: a slimmer orange bar under the health bar, shown while it isn't full */
+.bar[hidden] {
+    display: none;
+}
+
+.plate .bar.stamina {
+    height: 11px;
+}
+
+.plate .bar.stamina .fill {
+    background: linear-gradient(180deg, #ffc978, var(--stamina));
+    transition-duration: 0.1s;
+}
+
+.plate .bar.stamina .value {
+    font-size: 9px;
+    line-height: 11px;
+}
+
+.floater .bar.stamina {
+    height: 6px;
+}
+
+.floater .bar.stamina .value {
+    display: none;
+}
+
 .damage {
     position: absolute;
     transform: translate(-50%, -100%);
@@ -879,7 +907,10 @@ input[type="range"] {
     background: rgba(0, 0, 0, 0.45);
     color: var(--ink);
     font-size: 14px;
-    white-space: nowrap;
+    text-align: center;
+    width: max-content;
+    /* Clear of the zoom buttons in the corner, on both sides as it's in the middle */
+    max-width: calc(100% - 2 * (var(--safe-right) + 12px + 46px + 10px));
     animation: fade 1s ease-in 6s forwards;
 }
 

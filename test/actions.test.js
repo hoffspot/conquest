@@ -9,7 +9,9 @@ import { HumanData } from "../client/js/characters/body.js";
 import { Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
 import { PRESETS } from "../client/js/characters/presets.js";
 import { Rig } from "../client/js/characters/rig.js";
+import { Battle, STEP_MS } from "../client/js/core/battle.js";
 import { STARTING_WEAPONS, WEAPONS } from "../client/js/core/weapons.js";
+import { Avatar } from "../client/js/world/avatar.js";
 
 const manifest = JSON.parse(readFileSync(new URL("../client/characters/human.json", import.meta.url), "utf8"));
 const unpacked = gunzipSync(readFileSync(new URL("../client/characters/human.bin", import.meta.url)));
@@ -221,5 +223,57 @@ describe("reactions and falls (actions.js)", () => {
         walker.release();
         walker.update(0.05);
         assert.ok(world("Head", character).y > character.height * 0.85);
+    });
+});
+
+describe("characters in the world (avatar.js)", () => {
+    // Follow a battle's player as the game does, at 60 frames a second, between its steps
+    function follow(order, seconds) {
+        const battle = new Battle({ blocked: Array.from({ length: 30 }, () => new Uint8Array(60)) }, { seed: 1 });
+        const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [2, 24] });
+        const avatar = new Avatar(figure());
+        const dt = 1 / 60;
+        const frames = [];
+        let previous = { x: player.x, y: player.y };
+        let waiting = 0;
+
+        avatar.place(player.x, player.y, player.facing);
+        battle.command("player", order);
+
+        for (let t = 0; t < seconds; t += dt) {
+            for (waiting += dt * 1000; waiting >= STEP_MS; waiting -= STEP_MS) {
+                previous = { x: player.x, y: player.y };
+                battle.advance(STEP_MS);
+            }
+
+            const alpha = waiting / STEP_MS;
+            const x = previous.x + (player.x - previous.x) * alpha;
+            const z = previous.y + (player.y - previous.y) * alpha;
+
+            avatar.update(dt, x, z, player.facing);
+            frames.push({ facing: avatar.facing, x: avatar.object.position.x, z: avatar.object.position.z, lag: Math.hypot(avatar.object.position.x - x, avatar.object.position.z - z), pace: player.pace });
+        }
+
+        return { frames, player };
+    }
+
+    it("runs in smooth lines, not zig-zagging from square to square, and stops where its actor does", () => {
+        // A path that goes straight, then zig-zags diagonally and straight to the north-east
+        const { frames, player } = follow({ type: "move", to: [50, 3], run: true }, 9);
+        const fast = frames.filter(({ pace }) => pace > 7);
+        const turns = fast.slice(1).map(({ facing }, k) => Math.abs(Math.atan2(Math.sin(facing - fast[k].facing), Math.cos(facing - fast[k].facing))) * (180 / Math.PI));
+        const last = frames.at(-1);
+
+        assert.ok(fast.length > 200, "sprinted");
+        // Square by square, it would turn 45° at every corner
+        assert.ok(Math.max(...turns) < 5, `turns at most ${Math.max(...turns).toFixed(1)}° a frame`);
+        assert.ok(Math.max(...fast.map(({ lag }) => lag)) < 1.5, "keeps close to its actor");
+        assert.ok(Math.hypot(last.x - player.x, last.z - player.y) < 0.01, "and ends where it is");
+    });
+
+    it("keeps within a third of a metre of its actor walking", () => {
+        const { frames } = follow({ type: "move", to: [50, 3] }, 12);
+
+        assert.ok(Math.max(...frames.map(({ lag }) => lag)) < 0.33);
     });
 });

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { Battle, KINDS, SIGHT, STEP_MS } from "../client/js/core/battle.js";
+import { Battle, KINDS, SIGHT, SPRINT, STAMINA_DRAIN, STAMINA_RECOVERY, STEP_MS } from "../client/js/core/battle.js";
 import { createRandom } from "../client/js/core/random.js";
 import { chooseAttack, inReach, MELEE_REACH, rollDamage, STARTING_WEAPONS, WEAPONS } from "../client/js/core/weapons.js";
 import { generateWorld } from "../client/js/core/world.js";
@@ -282,6 +282,165 @@ describe("the battle (battle.js)", () => {
 
         assert.deepEqual(fight(9), fight(9));
         assert.notDeepEqual(fight(9), fight(10));
+    });
+
+    it("runs as much faster than walking as people sprint, speeding up and slowing to a walk to arrive", () => {
+        // People walk at about 1.4 m/s and sprint at 6 to 7
+        assert.ok(SPRINT > 4.2 && SPRINT < 5, `${SPRINT} times as fast`);
+
+        const battle = new Battle(open(60, 5), { seed: 1 });
+        const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [1, 2] });
+        const walk = KINDS.player.speed;
+        const paces = [];
+
+        battle.command("player", { type: "move", to: [50, 2], run: true });
+
+        for (let t = 0; t < 12000 && (player.to || player.path.length); t += STEP_MS) {
+            battle.advance(STEP_MS);
+            paces.push({ time: battle.time, pace: player.pace, moving: Boolean(player.to || player.path.length) });
+        }
+
+        const fastest = Math.max(...paces.map(({ pace }) => pace));
+        const top = paces.find(({ pace }) => pace >= walk * SPRINT - 1e-9);
+        const arriving = paces.filter(({ moving }) => moving).at(-1);
+
+        assert.deepEqual(player.square, [50, 2]);
+        assert.ok(Math.abs(fastest - walk * SPRINT) < 1e-9, `sprints at ${fastest.toFixed(2)} m/s`);
+        assert.ok(top.time >= 900 && top.time <= 1300, `at full speed after ${top.time} ms`);
+        assert.ok(arriving.pace < walk + 1.5, `arrives at ${arriving.pace.toFixed(2)} m/s`);
+        assert.ok(paces.every(({ pace }, k) => k === 0 || Math.abs(pace - paces[k - 1].pace) < 0.36), "no sudden changes of speed");
+        assert.ok(battle.time < ((49 / walk) * 1000) / 3.5, `ran 49 m in ${battle.time} ms`);
+
+        // There, it stands
+        battle.advance(STEP_MS);
+        assert.equal(player.order, null);
+        assert.equal(player.running, false);
+        assert.equal(player.pace, walk);
+    });
+
+    it("uses 3 stamina a second running and gets 1 a second back otherwise, between none and its most", () => {
+        const battle = new Battle(open(60, 5), { seed: 1 });
+        const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [1, 2] });
+
+        // As much stamina as hit points to start with
+        assert.equal(player.stamina, KINDS.player.hp);
+        assert.equal(player.maxStamina, KINDS.player.hp);
+        assert.equal(STAMINA_DRAIN, 3);
+        assert.equal(STAMINA_RECOVERY, 1);
+
+        battle.command("player", { type: "move", to: [58, 2], run: true });
+        run(battle, 2000);
+        assert.ok(player.running);
+        assert.equal(player.stamina, KINDS.player.hp - 2 * STAMINA_DRAIN);
+
+        // Walking gets it back
+        battle.command("player", { type: "move", to: [1, 2] });
+        run(battle, 3000);
+        assert.ok(!player.running && (player.to || player.path.length), "walking");
+        assert.equal(player.stamina, KINDS.player.hp - 2 * STAMINA_DRAIN + 3 * STAMINA_RECOVERY);
+
+        // ...and so does standing, up to its most and no more
+        run(battle, 20000);
+        assert.equal(player.stamina, player.maxStamina);
+    });
+
+    it("stops running when its stamina runs out, and walks the rest of the way", () => {
+        const battle = new Battle(open(60, 5), { seed: 1 });
+        const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [1, 2] });
+        const walk = KINDS.player.speed;
+        const events = [];
+        let lowest = Infinity;
+
+        player.stamina = 3;
+        battle.command("player", { type: "move", to: [40, 2], run: true });
+
+        for (let t = 0; t < 30000; t += STEP_MS) {
+            events.push(...battle.advance(STEP_MS));
+            lowest = Math.min(lowest, player.stamina);
+
+            if (events.some(({ type }) => type === "exhausted") && player.pace === walk && !events.slow) {
+                events.slow = battle.time;
+            }
+        }
+
+        const exhausted = events.filter(({ type }) => type === "exhausted");
+
+        assert.equal(exhausted.length, 1);
+        assert.equal(exhausted[0].id, "player");
+        // A second's running (3 points), then down to a walk within about a second
+        assert.ok(exhausted[0].time >= 1000 && exhausted[0].time <= 1100, `out of breath after ${exhausted[0].time} ms`);
+        assert.ok(events.slow - exhausted[0].time <= 1000, `walking ${events.slow - exhausted[0].time} ms later`);
+        assert.equal(lowest, 0);
+        assert.deepEqual(player.square, [40, 2]);
+        assert.ok(player.stamina > 0 && player.stamina <= player.maxStamina);
+    });
+
+    it("walks when told to run with no stamina left", () => {
+        const battle = new Battle(open(20, 5), { seed: 1 });
+        const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [1, 2] });
+
+        player.stamina = 0;
+        battle.command("player", { type: "move", to: [15, 2], run: true });
+
+        const events = run(battle, 1000);
+
+        assert.equal(events.filter(({ type }) => type === "exhausted").length, 1);
+        assert.equal(player.pace, KINDS.player.speed);
+        assert.ok(!player.running);
+        assert.equal(player.stamina, STAMINA_RECOVERY);
+    });
+
+    it("charges an enemy it's told to engage running, slowing down to fight it", () => {
+        const battle = new Battle(open(30, 5), { seed: 2 });
+        const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [1, 2] });
+        const walk = KINDS.player.speed;
+        const paces = [];
+
+        battle.add({ id: "dummy", kind: "orc", weapon: "cleaver", team: "orcs", square: [26, 2] });
+        battle.command("player", { type: "engage", target: "dummy", run: true });
+
+        let attacked = null;
+
+        for (let t = 0; t < 8000 && !attacked; t += STEP_MS) {
+            const moving = Boolean(player.to || player.path.length);
+
+            attacked = battle.advance(STEP_MS).find((event) => event.type === "attack" && event.id === "player");
+
+            if (moving) {
+                paces.push(player.pace);
+            }
+        }
+
+        assert.ok(attacked, "attacks");
+        assert.deepEqual(player.square, [25, 2]);
+        assert.ok(Math.max(...paces) > walk * 3, "ran");
+        assert.ok(paces.at(-1) < walk + 1.5, `slowed to ${paces.at(-1).toFixed(2)} m/s`);
+        assert.ok(player.stamina < player.maxStamina);
+    });
+
+    it("comes back to life rested, and an orc chasing never runs", () => {
+        const battle = new Battle(open(40, 40), { seed: 1 });
+        const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [2, 2 + SIGHT - 2] });
+        const orc = battle.add({ id: "orc", kind: "orc", weapon: "cleaver", team: "orcs", square: [2, 2], ai: "patrol", patrol: [[2, 2], [30, 2]] });
+        let fastest = 0;
+
+        player.stamina = 4;
+
+        for (let t = 0; t < 10000; t += STEP_MS) {
+            battle.advance(STEP_MS);
+            fastest = Math.max(fastest, orc.pace);
+        }
+
+        assert.ok(fastest <= KINDS.orc.chase + 1e-9);
+        assert.equal(orc.stamina, orc.maxStamina);
+
+        player.hp = 1;
+        run(battle, 5000);
+
+        const back = run(battle, KINDS.player.respawn + 1000).find((event) => event.type === "respawn" && event.id === "player");
+
+        assert.ok(back, "the player comes back");
+        assert.ok(player.stamina >= player.maxStamina - 1, `with ${player.stamina} stamina`);
     });
 
     it("plays out in the generated world: the orc patrols its corner while the player waits in the square", () => {

@@ -9,7 +9,7 @@ import { ClipPlayer, parseBVH, retarget } from "../characters/bvh.js";
 import { Character } from "../characters/character.js";
 import { DETAILS } from "../characters/details.js";
 import { EQUIPMENT, SLOTS } from "../characters/equipment.js";
-import { cadence, CURVES, curveAt, PELVIC_TILT, phaseName, strideLength, walkToRunSpeed } from "../characters/gait.js";
+import { cadence, CURVES, curveAt, PELVIC_TILT, phaseName, runCadence, runStrideLength, strideLength, walkToRunSpeed } from "../characters/gait.js";
 import { BEARDS, HAIRSTYLES } from "../characters/hair.js";
 import { loadCharacterKit } from "../characters/kit.js";
 import { Walker, WALK_STYLES } from "../characters/locomotion.js";
@@ -738,7 +738,7 @@ function motionTab() {
         group("Walking",
             check("Walk", { get: () => state.motion.moving, set: (value) => (state.motion.moving = value) }),
             slider("Speed", {
-                min: 0.2, max: 2.1, step: 0.05, format: (value) => `${value.toFixed(2)} m/s`,
+                min: 0.2, max: 8.5, step: 0.05, format: (value) => `${value.toFixed(2)} m/s`,
                 get: () => state.motion.speed,
                 set: (value) => {
                     state.motion.speed = value;
@@ -814,7 +814,9 @@ function refreshReadouts() {
     if (gait) {
         const speed = state.motion.speed;
 
-        gait.textContent = `${Math.round(cadence(speed, leg))} steps a minute, ${strideLength(speed, leg).toFixed(2)} m strides (from the walk ratio). People break into a run at about ${walkToRunSpeed(leg).toFixed(1)} m/s.`;
+        gait.textContent = speed > walkToRunSpeed(leg)
+            ? `Running: ${Math.round(runCadence(speed, leg) * 60)} steps a minute, ${runStrideLength(speed, leg).toFixed(2)} m strides. Faster than about ${walkToRunSpeed(leg).toFixed(1)} m/s, people run rather than walk.`
+            : `${Math.round(cadence(speed, leg))} steps a minute, ${strideLength(speed, leg).toFixed(2)} m strides (from the walk ratio). People break into a run at about ${walkToRunSpeed(leg).toFixed(1)} m/s.`;
     }
 }
 

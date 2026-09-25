@@ -45,9 +45,13 @@ character, or make a **New character**.
 Your character is saved in the browser, with the town they live in.
 
 **In the town.** You wake in the market square. **Tap or click the ground** to walk there, or
-**an enemy** to go and fight them. Standing still, you attack whatever is within your weapon's
-reach on your own: melee weapons reach the eight squares round yours; ranged ones anything in
-range that you can see.
+**an enemy** to go and fight them. **Double-tap** (or double-click) to run there instead, as much
+faster than walking as people sprint: 7.9 metres a second to your walking 1.7. Running tires you:
+it uses 3 points of **stamina** a second, and anything else gets 1 a second back. You have as
+much stamina as hit points (50). While it isn't full, an orange bar under your health shows
+what's left; with none left you're out of breath, and walk the rest of the way. Standing still,
+you attack whatever is within your weapon's reach on your own: melee weapons reach the eight
+squares round yours; ranged ones anything in range that you can see.
 
 An orc patrols the fields from the north-west corner, halfway down the west side and back. When
 it sees you (within 12 metres, with nothing in the way) it chases you and attacks whenever you're
@@ -58,7 +62,8 @@ with full health; the orc comes back to its corner half a minute after it falls.
 | Action | Touch | Mouse and keyboard |
 | --- | --- | --- |
 | Walk | Tap the ground | Click the ground |
-| Fight | Tap an enemy | Click an enemy |
+| Run | Double-tap the ground | Double-click (or Shift-click) the ground |
+| Fight | Tap an enemy (double-tap to run at them) | Click an enemy (double-click to run at them) |
 | Zoom | Pinch, or the + and − buttons | Scroll, or the + and − buttons |
 | Pause | The menu button | The menu button or Escape |
 
@@ -169,7 +174,7 @@ client/                 The game (static files served to the browser)
     skin.js, hair.js    Painting skin and eyes; growing hair and beards
     garments.js         Clothing and armour fitted to the body
     items.js            Weapons, shields, helmets and packs; equipment.js has slots and sockets
-    gait.js             Walking data; locomotion.js walks a character with it
+    gait.js             Walking and running data; locomotion.js walks and runs a character with it
     actions.js          Attacking, flinching when hit, falling
     bvh.js              Motion capture: reading BVH files and retargeting them
     presets.js          The human, heroine and orc

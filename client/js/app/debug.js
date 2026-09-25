@@ -147,8 +147,9 @@ export class Debug {
             const { battle } = game;
             const describe = (actor) => {
                 const doing = actor.dead ? "dead" : actor.attack ? `attacking ${actor.attack.target}` : actor.order ? actor.order.type : actor.target ? `chasing ${actor.target}` : actor.path.length ? "walking" : "standing";
+                const moving = actor.running ? `, running ${actor.pace.toFixed(1)} m/s` : "";
 
-                return `${actor.id} (${actor.x.toFixed(1)}, ${actor.y.toFixed(1)}) ${actor.hp}/${actor.maxHp} ${doing}`;
+                return `${actor.id} (${actor.x.toFixed(1)}, ${actor.y.toFixed(1)}) hp ${actor.hp}/${actor.maxHp} stamina ${Math.floor(actor.stamina)}/${actor.maxStamina} ${doing}${moving}`;
             };
 
             lines.push(`Battle ${(battle.time / 1000).toFixed(1)} s  steps/frame ${game.stats.steps}  projectiles ${battle.projectiles.length}`, ...battle.actors.map(describe));
