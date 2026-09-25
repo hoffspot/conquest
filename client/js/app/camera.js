@@ -1,6 +1,6 @@
-// How the camera follows the player. While they move about in the middle of the screen (the
-// zone), it keeps still. Once they walk out of the zone, the way the map would have to scroll,
-// it follows them, turning round to look from behind them the way they're going, at the same
+// How the camera follows the player. While they move about near where it looks (the zone: a
+// couple of steps either way), it keeps still. Once they walk out of the zone, the way the map
+// would have to scroll, it follows them, turning round to look from behind them the way they're going, at the same
 // height and zoom, until they stop, catching up and keeping still again.
 //
 // Pure maths on plain numbers (no Three.js), so it's tested in Node: the game (game.js) says
@@ -8,10 +8,11 @@
 // view's camera where this says.
 
 /**
- * The zone the player moves about in without the camera following: half its width and half its
- * height, as shares of the screen's (so the middle third each way).
+ * The zone the player moves about in without the camera following: `radius` metres on the ground
+ * round where the camera looks (a couple of steps, the same at any zoom), and never nearer the
+ * screen's edge than `screen` (a share of the way from its middle, for when zoomed right in).
  */
-export const ZONE = Object.freeze({ x: 1 / 3, y: 1 / 3 });
+export const ZONE = Object.freeze({ radius: 1.4, screen: 0.6 });
 
 // Going faster than this (m/s) is going somewhere
 const MOVING = 0.4;
@@ -72,7 +73,9 @@ export class CameraFollow {
             heading.z += (player.vz / speed - heading.z) * share;
         }
 
-        if (!this.following && (!screen || Math.abs(screen.x) > ZONE.x || Math.abs(screen.y) > ZONE.y)) {
+        const away = Math.hypot(player.x - this.focus.x, player.z - this.focus.z);
+
+        if (!this.following && (away > ZONE.radius || !screen || Math.abs(screen.x) > ZONE.screen || Math.abs(screen.y) > ZONE.screen)) {
             this.following = true;
         }
 

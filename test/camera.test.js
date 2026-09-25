@@ -31,14 +31,30 @@ function walk(camera, { from, vx, vz, seconds, across = 6 }) {
 }
 
 describe("the camera following the player (camera.js)", () => {
-    it("keeps still while the player moves about the middle of the screen", () => {
+    it("keeps still while the player moves about near where it looks, a couple of steps either way", () => {
         const camera = new CameraFollow({ x: 10, z: 10 });
 
-        camera.update(FRAME, { player: { x: 10.5, z: 10, vx: 1.7, vz: 0 }, screen: { x: ZONE.x * 0.9, y: -ZONE.y * 0.9 } });
+        assert.equal(ZONE.radius, 1.4);
+
+        for (const [x, z] of [[10.5, 10], [10, 11.2], [9.1, 9.1]]) {
+            camera.update(FRAME, { player: { x, z, vx: 1.7, vz: 0 }, screen: { x: 0.2, y: -0.2 } });
+        }
 
         assert.equal(camera.following, false);
         assert.deepEqual(camera.focus, { x: 10, z: 10 });
         assert.equal(camera.yaw, 0);
+    });
+
+    it("follows after a couple of steps out, however zoomed; zoomed right in, before they reach the screen's edge", () => {
+        const out = new CameraFollow({ x: 10, z: 10 });
+
+        out.update(FRAME, { player: { x: 11.5, z: 10, vx: 1.7, vz: 0 }, screen: { x: 0.1, y: 0 } });
+        assert.equal(out.following, true, "1.5 m out");
+
+        const edge = new CameraFollow({ x: 10, z: 10 });
+
+        edge.update(FRAME, { player: { x: 10.8, z: 10, vx: 1.7, vz: 0 }, screen: { x: 0.7, y: 0 } });
+        assert.equal(edge.following, true, "near the edge");
     });
 
     it("once they walk out of it, follows them, turning round behind them the way they're going", () => {

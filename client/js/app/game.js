@@ -55,6 +55,11 @@ const PICK_RADIUS = 46;
 const HOLD_MS = 400;
 const FLICK = 30;
 
+// A swipe up from the player (straight ahead): this far up (pixels), mostly up, and quickly
+// (within this long, ms)
+const SWIPE = 40;
+const SWIPE_MS = 600;
+
 // How far the camera leans from the player towards who they're fighting: a share of the way,
 // up to so many metres
 const LEAN = { share: 0.4, most: 4.5 };
@@ -731,7 +736,7 @@ export class Game {
         const canvas = this.view.canvas;
 
         this.#on(canvas, "pointerdown", (event) => {
-            const pointer = { x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, moved: false, hold: null, wheel: null };
+            const pointer = { x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, start: event.timeStamp, moved: false, hold: null, wheel: null, swipe: false };
 
             canvas.setPointerCapture?.(event.pointerId);
             this.pointers.set(event.pointerId, pointer);
@@ -741,6 +746,9 @@ export class Game {
 
             if (who) {
                 pointer.hold = setTimeout(() => this.#openWheel(pointer, who), HOLD_MS);
+
+                // (From the player, it may be a swipe up: straight ahead)
+                pointer.swipe = who.wheel === "self";
             }
 
             if (this.pointers.size === 2) {
@@ -775,6 +783,14 @@ export class Game {
 
             if (pointer.moved) {
                 clearTimeout(pointer.hold);
+            }
+
+            // Swiped up from the player: straight ahead, as far as the way is clear
+            const rise = pointer.startY - pointer.y;
+
+            if (pointer.swipe && this.pointers.size === 1 && rise > SWIPE && rise > 1.5 * Math.abs(pointer.x - pointer.startX) && event.timeStamp - pointer.start < SWIPE_MS) {
+                pointer.swipe = false;
+                this.forward();
             }
 
             if (this.pinch && this.pointers.size === 2) {
@@ -839,6 +855,29 @@ export class Game {
         const ground = enemy ? null : this.view.groundAt(clientX, clientY);
 
         this.#order({ enemy, ground: ground && [ground.x, ground.z] }, { clientX, clientY, run, time, from: "view" });
+    }
+
+    /**
+     * Go straight ahead the way the player faces, square after square, as far as the way is
+     * clear: running while their stamina lasts, then walking (a swipe up from them).
+     */
+    forward() {
+        const avatar = this.avatars.get("player");
+        const player = this.battle.actor("player");
+
+        if (!avatar || !player || player.dead) {
+            return;
+        }
+
+        this.battle.command("player", { type: "ahead", facing: avatar.facing, run: true });
+
+        const goal = player.order?.to;
+
+        if (goal) {
+            this.effects.markTarget(goal[0] + 0.5, goal[1] + 0.5);
+        } else {
+            this.sound?.play("denied");
+        }
     }
 
     /**

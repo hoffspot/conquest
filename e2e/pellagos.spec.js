@@ -241,6 +241,51 @@ test("tapping the ground walks the player there", async ({ page }) => {
     expect(walked.end[1]).toBeLessThan(walked.start[1] - 2);
 });
 
+test("swiping up from the player sends them straight ahead, running, as far as the way is clear", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // (The game playing on, taking taps and swipes)
+    const start = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const avatar = game.avatars.get("player");
+
+        return { at: session.view.toScreen(avatar.point(0.5)), facing: avatar.facing, x: avatar.object.position.x, z: avatar.object.position.z };
+    });
+
+    // A quick flick up from the player (said when it happened, as a device would)
+    const cdp = await page.context().newCDPSession(page);
+    const now = Date.now() / 1000;
+    const { x, y } = start.at;
+
+    for (const [type, dy, at] of [["mousePressed", 0, 0], ["mouseMoved", -25, 0.05], ["mouseMoved", -70, 0.1], ["mouseReleased", -70, 0.15]]) {
+        await cdp.send("Input.dispatchMouseEvent", { type, x, y: y + dy, button: "left", buttons: type === "mouseReleased" ? 0 : 1, clickCount: 1, timestamp: now + at });
+    }
+
+    const moved = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+        const order = player.order;
+
+        game.stop();
+        game.advance(1.5);
+
+        const avatar = game.avatars.get("player");
+
+        return { order, running: player.running, pace: player.pace, x: avatar.object.position.x, z: avatar.object.position.z };
+    });
+
+    expect(moved.order?.type).toBe("move");
+    expect(moved.order.run).toBe(true);
+    expect(moved.running).toBe(true);
+
+    // The way they faced
+    const along = (moved.x - start.x) * Math.sin(start.facing) + (moved.z - start.z) * Math.cos(start.facing);
+    const across = Math.abs((moved.x - start.x) * Math.cos(start.facing) - (moved.z - start.z) * Math.sin(start.facing));
+
+    expect(along).toBeGreaterThan(3);
+    expect(across).toBeLessThan(1);
+});
+
 test("the camera keeps still while the player moves about the middle, then follows them from behind", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

@@ -215,3 +215,37 @@ export function findPath(grid, start, end) {
 
     return [];
 }
+
+/**
+ * The squares straight ahead of a point ([x, y] metres, on 1-metre squares) the way `facing`
+ * points (radians from south, towards east: along (sin, cos) in x and y), one after another, as
+ * far as the way is clear: up to the first blocked square or the grid's edge, and never cutting
+ * the corner of a blocked square. Doesn't include the square the point is on.
+ */
+export function lineAhead(grid, [x, y], facing, most = 400) {
+    const height = grid.length;
+    const width = grid[0].length;
+    const dx = Math.sin(facing);
+    const dy = Math.cos(facing);
+    const squares = [];
+    let [sx, sy] = [Math.floor(x), Math.floor(y)];
+
+    // (Stepping a fifth of a metre at a time, noting each square entered)
+    for (let travelled = 0.2; squares.length < most; travelled += 0.2) {
+        const nx = Math.floor(x + dx * travelled);
+        const ny = Math.floor(y + dy * travelled);
+
+        if (nx === sx && ny === sy) {
+            continue;
+        }
+
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height || grid[ny][nx] || (nx !== sx && ny !== sy && (grid[sy][nx] || grid[ny][sx]))) {
+            break;
+        }
+
+        squares.push([nx, ny]);
+        [sx, sy] = [nx, ny];
+    }
+
+    return squares;
+}
