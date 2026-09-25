@@ -53,6 +53,11 @@ draws anything.
   points, and it never goes above that or below none. With none left, a runner walks the rest of
   the way (the `exhausted` event). Coming back to life, a character is rested. The orc doesn't
   run.
+- **Straight ahead.** An `ahead` order (`{ type: "ahead", facing, run }`) sends a character in a
+  straight line the way it faces, as far as it can go: its path is the squares along that line
+  (pathfinding.js `lineAhead`, stepping along it a fifth of a metre at a time), up to the first
+  blocked square or the world's edge, never cutting a blocked corner. Running, it sprints while
+  its stamina lasts, then walks.
 - **Reach.** A melee attack reaches the eight squares touching the attacker's: N, NE, E, SE, S,
   SW, W and NW (Chebyshev distance 1). A ranged attack reaches any square whose middle is within
   its range and that the attacker can see: a line between the two squares' middles that crosses
@@ -118,8 +123,9 @@ to whole shadow texels, so shadows don't shimmer). The camera looks down from 55
 the horizon, zooming between 5 and 32 metres away, from any side (`yaw`: from the south, looking
 north, to start with).
 
-**Following the player** (app/camera.js). While the player moves about the middle of the screen
-(the middle third each way: the zone), the camera keeps still. Once they walk out of it, the way
+**Following the player** (app/camera.js). While the player moves about near where it looks (the
+zone: 1.4 metres round it, a couple of steps, however it's zoomed, and never nearer the screen's
+edge than 60% of the way from its middle), the camera keeps still. Once they walk out of it, the way
 the map would have to scroll, it follows them, catching up and turning round to look from behind
 them, the way they're going, at the same height and zoom. It turns on a spring, gathering speed
 and slowing smoothly, never faster than 3 radians a second (a half turn in about a second), and
@@ -199,8 +205,57 @@ Arrows, bolts and fireballs fly from the attacker's hand to the target's chest (
 little), bolts and fireballs leaving trails. Where each blow lands there's a burst for its
 reaction: sparks for cuts and arrows, dust and a flash for blunt blows, fire for fireballs, a
 swirl of violet light for arcane bolts. Arrows stick in whoever they hit for a couple of
-seconds. Every spark, puff and flame is a particle in one fixed-size buffer drawn in one draw
-call; nothing adds a light (adding lights makes Three.js rebuild every lit material's shaders).
+seconds, or, where they made a wound, until it heals (no more than eight in anyone: the oldest
+go). Every spark, puff, drop of blood and flame is a particle in one of two fixed-size buffers (one
+glowing, one not) drawn in a draw call each; nothing adds a light (adding lights makes Three.js
+rebuild every lit material's shaders).
+
+**Blood** sprays from each blow's wound, thrown the way the blow went (more from worse wounds, none
+from burns), and drips from the badly hurt: below half their hit points now and then, below a
+quarter often, twice as often on the move. Drops that reach the ground leave a spot; a blow that
+makes a wound (or kills) splashes the ground beyond; and the fallen bleed into a pool under their
+chest, spreading over five seconds, drained away when they get up. Spots, splashes and pools are
+one instanced mesh (256 at most, the oldest going first), each a picture from a 2 by 2 atlas
+drawn as the game starts (three splashes, a pool), wet and a little glossy, fading after about 45
+seconds. Burns smoke and throw embers while they smoulder.
+
+### Battle damage (world/wounds.js)
+
+Every blow that lands leaves a **mark** of its kind where it lands; falling below 75%, 50% and 25%
+of their hit points (the thresholds: stages 1 to 3), the blow that did it leaves a **wound** for
+each one it crossed, bigger and worse. The kind is the attack's reaction:
+
+| Reaction (weapon) | Mark | Wound |
+| --- | --- | --- |
+| slash (sword) | a nick | a long cut, dark inside, raw at the edges, blood running down |
+| hack (orc cleaver) | a cut | a deep, wide gash, bleeding more |
+| pierce (bow) | a hole | a hole with the arrow left in it, blood welling and running |
+| crush (war hammer) | a bruise | a swollen bruise, split open and bleeding |
+| strike (staff) | a welt | a long welt, raw and bleeding along the middle |
+| punch (spiked gauntlets) | a bruise pricked by spikes | a bruise torn by a row of spike holes, bleeding |
+| fire (grimoire) | a scorch | charred black, raw round it, glowing embers a few seconds; burnt through clothes |
+| arcane (wand) | a few veins | crooked veins spreading from it, glowing violet a few seconds, then dark |
+
+A blow lands facing the way it came from (the most facing of a few dozen random points on the
+body), at its kind's height (fists higher), never on the hands or head. Healed back above a
+threshold, that stage's wounds and marks go (and the arrows in them); at full health, all of
+them; coming back to life, all of them.
+
+A character's damage is one 512-texel texture over the body's UV map, which its clothes share:
+red for blood, green for bruising, blue for charring, alpha for cuts. Each wound is painted in 3D:
+every texel knows where on the body it is (garments.js `texelMap`), so a wound is shaped round its
+point across the body's surface (sideways, up it, and turned), wherever the UV map's seams fall,
+and blood runs straight down. The body's material and a copy of each garment's (the originals
+are shared with everyone who wears them) mix it in with a few lines added to their shaders:
+- **Skin**: bruising darkens it purple; a cut is raw red at its edges and dark inside; blood is
+  dark red, thicker where there's more, and wet (less rough); char is black.
+- **Cloth**: scuffed paler where struck, soaked with blood and scorched; cut, torn or burnt through
+  where the cut's deep, its edges frayed pale (singed brown round a burn), showing the skin and its
+  wound beneath.
+- **Metal**: scratched bright, dented dark, bloodied and blackened.
+
+Burns' embers and arcane veins glow (added light, in the same shaders) for 4 and 5 seconds,
+flickering as they die down.
 
 The enemy the player is told to fight (tapped) has a red ring round it on the ground, with four
 arrowheads pointing in: one mesh, its colours and see-through-ness in its vertices, drawn
@@ -390,7 +445,9 @@ closes it.
    each piece of the town, the characters, compiling every shader before the first frame), then
    the game. A tap walks; a press and hold on the player or an enemy opens the action wheel; a second tap within 350 ms and 60 pixels of the first (going by when
    the taps happened, so a slow frame between them doesn't matter) turns it into a run, as does
-   a Shift-click. The heads-up display (app/hud.js) shows the player's name and health, with an
+   a Shift-click. A swipe up that starts on the player (40 pixels up within 600 ms, mostly up)
+   sends them straight ahead the way they face, running (an `ahead` order), with the ring where
+   they'll stop; blocked straight away, it's refused with a sound. The heads-up display (app/hud.js) shows the player's name and health, with an
    orange stamina bar under the health bar while stamina isn't full, "Out of breath" when a run
    ends for want of it, the minimap, bars over the other characters (the target's lit red), and
    the damage each blow does.
@@ -432,7 +489,9 @@ call) and two characters (a body, garments and hair each, about 35,000 to 45,000
 the game's hair detail), and again from the sun for shadows. On phones the quality level draws
 fewer pixels and thinner hair and uses smaller textures, and debug mode shows what each costs.
 Everything that can be is built once: the town is merged, shaders are compiled while loading,
-particles reuse one buffer, and projectiles and effects add no lights.
+particles reuse two buffers, blood on the ground is one instanced mesh, and projectiles and
+effects add no lights. Battle damage costs a texture lookup or two a pixel on each character,
+and a small texture (a megabyte) each, uploaded again only when a blow lands or a wound heals.
 
 ## Testing
 
@@ -441,9 +500,18 @@ particles reuse one buffer, and projectiles and effects add no lights.
   staggering, death and respawn, the orc's patrol, chase and giving up, running (its speed,
   speeding up and slowing down, charging), stamina (used, got back, running out, never below
   none or above its most), spells (heal rolls, stun freezing the orc and calling off its blow,
-  the shared cooldown, every reason a cast fails), and a simulated minute on a generated world.
-- `test/camera.test.js`: the camera keeping still in the middle of the screen, following out of
-  it and turning behind the player (walked away from, it doesn't turn; walked towards, it turns
+  the shared cooldown, every reason a cast fails), going straight ahead (to the first wall,
+  sprinting, then walking with no stamina), and a simulated minute on a generated world.
+  `test/pathfinding.test.js`: A* paths, and the line of squares straight ahead (stopping at a
+  wall or the world's edge, never cutting a blocked corner).
+- `test/wounds.test.js`: battle damage on the real body: the thresholds, a kind for every
+  reaction, a mark every blow and a wound for each threshold crossed, each kind painted its own
+  way (cuts bleed, blunt blows bruise, fire chars and never bleeds, arcane light leaves veins),
+  landing facing the blow at its kind's height (not on the hands or head), healing a stage at a
+  time (their arrows with them), gone on coming back to life, glows fading, eight arrows at most,
+  and the body's and garments' materials mixing it in.
+- `test/camera.test.js`: the camera keeping still while the player moves a couple of steps about
+  where it looks, following once they go further and turning behind the player (walked away from, it doesn't turn; walked towards, it turns
   all the way round), smoothly, steady through a path's corners, keeping still again once caught
   up, and catching up without turning when the player comes back to life elsewhere.
 - `test/actions.test.js`: attacks (their timing, where the hands reach on different bodies,
@@ -467,6 +535,9 @@ particles reuse one buffer, and projectiles and effects add no lights.
 - `e2e/pellagos.spec.js`: the whole game in Chromium: loading, debug mode, making a character
   through to playing them, carrying on with a saved character, a fight to the death, walking by
   tapping, running by double-clicking and double-tapping with the stamina bar showing and going,
+  swiping up from the player to go straight ahead (running),
+  a bow fight leaving arrows in bleeding wounds, blood on the ground and a pool under the fallen,
+  healed and come back to life without them,
   the music's recordings downloaded and playing after a tap (and carrying on when the browser
   suspends or closes its sound), the camera keeping still for a step and following a long walk
   from behind, the target ring, walking by the

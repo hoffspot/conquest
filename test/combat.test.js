@@ -345,6 +345,36 @@ describe("the battle (battle.js)", () => {
         assert.equal(player.stamina, player.maxStamina);
     });
 
+    it("goes straight ahead the way it faces as far as the way is clear, running while its stamina lasts", () => {
+        const battle = new Battle(worldOf([
+            "..........................#.",
+            "............................",
+            "............................",
+        ]), { seed: 1 });
+        const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [1, 0] });
+
+        // Facing east: along the row to the square before the wall
+        battle.command("player", { type: "ahead", facing: Math.PI / 2, run: true });
+        assert.deepEqual(player.order, { type: "move", to: [25, 0], run: true });
+        assert.deepEqual(player.path[0], [2, 0]);
+
+        run(battle, 1500);
+        assert.ok(player.running && player.pace > KINDS.player.speed * 2, "sprinting");
+        run(battle, 8000);
+        assert.deepEqual(player.square, [25, 0]);
+        assert.ok(player.x > 25 && player.x < 26 && player.y === 0.5, "never left the row");
+
+        // Up against the wall, there's nowhere ahead to go
+        battle.command("player", { type: "ahead", facing: Math.PI / 2, run: true });
+        assert.equal(player.order, null);
+
+        // Out of breath, it walks
+        player.stamina = 0;
+        battle.command("player", { type: "ahead", facing: -Math.PI / 2, run: true });
+        run(battle, 1000);
+        assert.ok(player.pace <= KINDS.player.speed + 1e-9, `walking at ${player.pace.toFixed(2)} m/s`);
+    });
+
     it("stops running when its stamina runs out, and walks the rest of the way", () => {
         const battle = new Battle(open(60, 5), { seed: 1 });
         const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [1, 2] });

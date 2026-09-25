@@ -52,11 +52,24 @@ it uses 3 points of **stamina** a second, and anything else gets 1 a second back
 much stamina as hit points (50). While it isn't full, an orange bar under your health shows
 what's left; with none left you're out of breath, and walk the rest of the way. Standing still,
 you attack whatever is within your weapon's reach on your own: melee weapons reach the eight
-squares round yours; ranged ones anything in range that you can see.
+squares round yours; ranged ones anything in range that you can see. **Swipe up from yourself**
+(a quick flick upwards, starting on your character) to go straight ahead the way you're facing,
+as far as you can until something's in the way: sprinting while you have stamina, then walking.
 
-**The camera** keeps still while you move about the middle of the screen. Walk out of the middle,
-the way the map would have to scroll, and it follows you, turning round smoothly to look from
-behind you the way you're going (at the same height and zoom), until you stop.
+**The camera** keeps still while you move a couple of steps either way. Go further, the way the
+map would have to scroll, and it follows you, turning round smoothly to look from behind you the
+way you're going (at the same height and zoom), until you stop.
+
+**Blows leave their mark.** Every blow that lands leaves a mark of its weapon's kind where it
+hits, on the body and through the clothes: a sword's cut, a cleaver's gash, an arrow left
+sticking out of a bleeding hole, a staff's welt, a hammer's swollen bruise split open, a spiked
+fist's row of holes, fire's charred, smouldering burn (smoke and embers rising from it a while),
+arcane light's glowing violet veins. Falling below three quarters, a half and a quarter of their
+hit points, the blow that did it leaves a much worse wound. Blood sprays with each blow, gushes
+from the worst, splashes the ground and, once they're badly hurt, drips from them, leaving a
+trail; the fallen lie in a spreading pool. Clothes are cut, torn and burnt through where they're
+hit, showing the wound beneath. Healing back above a threshold heals that stage's wounds and
+marks (all of them, at full health); coming back to life, all of them.
 
 An orc patrols the fields from the north-west corner, halfway down the west side and back. When
 it sees you (within 12 metres, with nothing in the way) it chases you and attacks whenever you're
@@ -220,8 +233,11 @@ client/                 The game (static files served to the browser)
     town3d.js           The town's buildings, props and trees, merged into few meshes
     art/                The art kits the town is built with: houses, landmarks, props, trees
     avatar.js           A character in the world, following its place in the battle
-    effects.js          Arrows, bolts, fireballs, sparks, dust, fire, arcane light, the target
-                        ring, spells' light and the stars round a stunned head
+    effects.js          Arrows, bolts, fireballs, sparks, dust, fire, arcane light, blood and
+                        its splashes and pools, smoke and embers, the target ring, spells' light
+                        and the stars round a stunned head
+    wounds.js           Battle damage: each blow's mark and each threshold's wound, painted on
+                        the body and its clothes
     squares.js          Debug mode's squares and paths
   js/characters/        The character engine (see docs/CHARACTERS.md)
     body.js             Loading and shaping the body; macro.js and details.js are the sliders

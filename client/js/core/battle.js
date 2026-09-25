@@ -31,7 +31,7 @@
 // Nothing here draws anything: every step returns events ("attack", "hit", "death"...) for the
 // interface to show. Pure JavaScript with seeded random numbers, no DOM.
 
-import { findPath } from "./pathfinding.js";
+import { findPath, lineAhead } from "./pathfinding.js";
 import { createRandom } from "./random.js";
 import { rollHeal, SPELL_COOLDOWN, SPELLS } from "./spells.js";
 import { chooseAttack, distanceBetween, longestReach, rollDamage, WEAPONS } from "./weapons.js";
@@ -163,8 +163,9 @@ export class Battle {
 
     /**
      * Tell a character what to do: { type: "move", to: [x, y] } (walk there, or as near as
-     * can be), { type: "engage", target: id } (go and fight it), or { type: "stop" }. Moving
-     * and engaging, run: true runs there (while its stamina lasts).
+     * can be), { type: "ahead", facing } (straight ahead the way `facing` points, radians, as
+     * far as the way is clear), { type: "engage", target: id } (go and fight it), or
+     * { type: "stop" }. Moving and engaging, run: true runs there (while its stamina lasts).
      */
     command(id, order) {
         const actor = this.actor(id);
@@ -184,6 +185,24 @@ export class Battle {
 
                 actor.order = { type: "move", to: goal, run: Boolean(order.run) };
                 this.#pathTo(actor, goal);
+                break;
+            }
+            case "ahead": {
+                // From wherever it is (or is stepping to), square after square in a line
+                const from = actor.to ? [actor.to[0] + 0.5, actor.to[1] + 0.5] : [actor.x, actor.y];
+                const line = lineAhead(this.world.blocked, from, order.facing);
+
+                if (!line.length) {
+                    actor.order = null;
+                    actor.path = [];
+                    break;
+                }
+
+                actor.order = { type: "move", to: line.at(-1), run: Boolean(order.run) };
+                actor.path = line;
+                actor.pathGoal = [...line.at(-1)];
+                actor.lastPathAt = this.time;
+                actor.blockedSince = null;
                 break;
             }
             case "engage":
