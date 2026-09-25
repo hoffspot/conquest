@@ -30,9 +30,9 @@ export function detectQuality() {
     return touch ? "medium" : "high";
 }
 
-// The camera looks down this far from the horizon (degrees), from this far away (metres),
-// zooming between
-export const PITCH = 55;
+// The camera looks down this far from the horizon (degrees: low enough to see well ahead of the
+// player), from this far away (metres), zooming between
+export const PITCH = 45;
 export const DISTANCE = Object.freeze({ least: 5, start: 10.5, most: 32 });
 
 // The sun: where it shines from (towards the north-east, so shadows fall away from the camera),
@@ -190,10 +190,12 @@ export class View {
         camera.position.set(focus.x + Math.sin(yaw) * across, focus.y + Math.sin(pitch) * distance, focus.z + Math.cos(yaw) * across);
         camera.lookAt(focus.x, focus.y + 0.8, focus.z);
 
-        // The sun's shadows follow the player, snapped to whole shadow texels so they don't shimmer
+        // The sun's shadows follow the player, a little ahead of them where more of the ground is
+        // in view (the further out, the more), snapped to whole shadow texels so they don't shimmer
         const texel = (SHADOW_REACH * 2) / this.quality.shadows;
-        const x = Math.round(focus.x / texel) * texel;
-        const z = Math.round(focus.z / texel) * texel;
+        const ahead = Math.min(SHADOW_REACH / 2, distance * 0.35);
+        const x = Math.round((focus.x - Math.sin(yaw) * ahead) / texel) * texel;
+        const z = Math.round((focus.z - Math.cos(yaw) * ahead) / texel) * texel;
 
         this.sun.target.position.set(x, 0, z);
         this.sun.position.set(x, 0, z).addScaledVector(SUN_DIRECTION, 60);
