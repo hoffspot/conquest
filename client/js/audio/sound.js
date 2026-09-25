@@ -9,9 +9,17 @@
 //    reverb.
 //
 // synth.js's sounds are made in a worker (worker.js), so nothing waits for them; the music's
-// recordings (client/music, about a megabyte) are downloaded meanwhile. Browsers only let a page make sound once someone has tapped, clicked or pressed
-// a key on it, so it starts on the first one (unlock()). The music plays from then on, on every
-// screen, the pause menu included; everything is silent while the page is hidden.
+// recordings (client/music, about a megabyte) are downloaded meanwhile. Browsers only let a page
+// make sound once someone has tapped, clicked or pressed a key on it, so it starts on the first
+// one (unlock()). The music plays from then on, on every screen, the pause menu included;
+// everything is silent while the page is hidden.
+//
+// The browser's sound can stop on its own: suspended or interrupted (a call, an alarm, another
+// app's sound, the screen locking), stuck (Safari on iPhones can say it's playing with its clock
+// standing still), or closed. However it stops, it's started again: straight away where the
+// browser allows it, on the next tap where it doesn't (restarting an interrupted or stuck one
+// takes suspending it first), and if that doesn't help, it's made anew, the music carrying on
+// where it was.
 
 import { baseFor, INSTRUMENTS, sampleFiles } from "./instruments.js";
 import { SCORE } from "./score.js";
@@ -37,6 +45,10 @@ const MOST_PAN = 0.85;
 
 // At most this many sound effects at once
 const VOICES = 24;
+
+// If the browser's clock stands still this long (seconds) while it says it's playing, it's
+// started again; if it's stuck again that soon after, it's made anew
+const STALL = 1.5;
 
 // The music's recordings: how many there are, and how many are downloaded at once
 const RECORDINGS = sampleFiles().length;
@@ -103,7 +115,15 @@ export class Sound {
 
         /** Where the player is (metres): sounds are heard from there. */
         this.listener = { x: 0, z: 0 };
-        this.voices = 0;
+
+        /** When each sound effect playing ends (the browser's time), to keep to VOICES. */
+        this.sounding = [];
+
+        /** The time now (ms), and the browser's clock when it last moved: { time, at } (for noticing it stuck). */
+        this.now = () => performance.now();
+        this.clock = null;
+        this.stalled = false;
+        this.restarted = -Infinity;
         this.ambient = false;
         this.wind = null;
         this.trees = [];
@@ -166,69 +186,191 @@ export class Sound {
 
     /**
      * Start the browser's sound, if it hasn't been (call on a tap, click or key press, when
-     * browsers allow it), and the music with it. Safe to call again and again.
+     * browsers allow it), and the music with it; or start it again, if it's stopped. Safe to
+     * call again and again.
      */
     unlock() {
-        if (!this.context) {
-            const Context = globalThis.AudioContext ?? globalThis.webkitAudioContext;
+        if (this.context || this.#start()) {
+            this.#revive({ tap: true });
+        }
+    }
 
-            if (!Context) {
-                return;
-            }
+    /** Start the sound again if it's stopped, without a tap (the page shown again, say). */
+    wake() {
+        if (this.context) {
+            this.#revive();
+        }
+    }
 
-            const context = new Context({ latencyHint: "interactive" });
-            const compressor = context.createDynamicsCompressor();
-            const limiter = context.createDynamicsCompressor();
+    /**
+     * Check the browser's sound is going, and play the music's next notes. Call every
+     * SCHEDULE_MS (the sound's own timer does, once started).
+     */
+    tick() {
+        this.#watch();
+        this.scheduleMusic();
+    }
 
-            this.context = context;
-            this.master = context.createGain();
-            this.master.gain.value = this.enabled ? OUTPUT : 0;
+    // Make the browser's sound: its context, the mix (buses, compressor, limiter), the music's
+    // channels and every sample the browser doesn't yet have. Returns whether it could.
+    #start() {
+        const Context = globalThis.AudioContext ?? globalThis.webkitAudioContext;
 
-            // A little compression evens it out; the limiter keeps a busy fight from clipping
-            compressor.threshold.value = -18;
-            compressor.knee.value = 12;
-            compressor.ratio.value = 3;
-            compressor.attack.value = 0.003;
-            compressor.release.value = 0.25;
-            limiter.threshold.value = LIMIT;
-            limiter.knee.value = 0;
-            limiter.ratio.value = 20;
-            limiter.attack.value = 0.001;
-            limiter.release.value = 0.1;
-            this.master.connect(compressor).connect(limiter).connect(context.destination);
+        if (!Context) {
+            return false;
+        }
 
-            for (const bus of BUSES) {
-                this.buses[bus] = context.createGain();
-                this.buses[bus].gain.value = gainOf(this.volumes[bus]);
-                this.buses[bus].connect(this.master);
-            }
+        const context = new Context({ latencyHint: "interactive" });
+        const compressor = context.createDynamicsCompressor();
+        const limiter = context.createDynamicsCompressor();
 
-            this.#buildMusic();
+        this.context = context;
+        this.master = context.createGain();
+        this.master.gain.value = this.enabled ? OUTPUT : 0;
 
-            for (const [name, variants] of this.samples) {
-                variants.forEach((samples, variant) => this.#buffer(name, variant, samples));
-            }
+        // A little compression evens it out; the limiter keeps a busy fight from clipping
+        compressor.threshold.value = -18;
+        compressor.knee.value = 12;
+        compressor.ratio.value = 3;
+        compressor.attack.value = 0.003;
+        compressor.release.value = 0.25;
+        limiter.threshold.value = LIMIT;
+        limiter.knee.value = 0;
+        limiter.ratio.value = 20;
+        limiter.attack.value = 0.001;
+        limiter.release.value = 0.1;
+        this.master.connect(compressor).connect(limiter).connect(context.destination);
 
-            for (const [id, recording] of this.recordings) {
-                this.#decode(id, recording);
-            }
+        for (const bus of BUSES) {
+            this.buses[bus] = context.createGain();
+            this.buses[bus].gain.value = gainOf(this.volumes[bus]);
+            this.buses[bus].connect(this.master);
+        }
 
-            this.samples.clear();
-            this.#startWind();
-            this.music.timer = setInterval(() => this.scheduleMusic(), SCHEDULE_MS);
+        this.#buildMusic();
+
+        for (const [name, variants] of this.samples) {
+            variants.forEach((samples, variant) => this.#buffer(name, variant, samples));
+        }
+
+        for (const [id, recording] of this.recordings) {
+            this.#decode(id, recording);
+        }
+
+        this.samples.clear();
+        this.sounding = [];
+        this.clock = null;
+        this.#startWind();
+
+        // Stopped by the browser rather than by us: started again
+        context.addEventListener?.("statechange", () => context === this.context && context.state !== "running" && this.#revive());
+
+        if (!this.music.timer) {
+            this.music.timer = setInterval(() => this.tick(), SCHEDULE_MS);
             this.music.timer.unref?.();
         }
 
-        // (Suspended, or interrupted on iPhones by a call or another app.) Safari on iPhones and
-        // iPads also wants something played in the tap itself: a moment of silence
-        if (this.enabled && !this.hidden && this.context.state !== "running") {
-            const silence = this.context.createBufferSource();
+        return true;
+    }
 
-            silence.buffer = this.context.createBuffer(1, 1, this.context.sampleRate);
-            silence.connect(this.context.destination);
-            silence.start();
-            this.context.resume().catch(() => {});
+    // Start the browser's sound again if it's stopped (and it's meant to be playing): resumed if
+    // suspended or interrupted; in a tap (or stuck), suspended first, as Safari on iPhones won't
+    // resume an interrupted or stuck one otherwise (without a tap, an interrupted one is only
+    // asked to resume, which it does when the interruption's over: suspended without a tap,
+    // Safari might not let it); made anew if closed. Safari also wants something played in a
+    // tap, so a moment of silence is.
+    #revive({ tap = false } = {}) {
+        const context = this.context;
+
+        if (!context || !this.enabled || this.hidden || (context.state === "running" && !this.stalled)) {
+            return;
         }
+
+        if (context.state === "closed") {
+            this.#rebuild();
+
+            return;
+        }
+
+        try {
+            const silence = context.createBufferSource();
+
+            silence.buffer = context.createBuffer(1, 1, context.sampleRate);
+            silence.connect(context.destination);
+            silence.start();
+        } catch {
+            // (Only silence: nothing lost)
+        }
+
+        if (context.state !== "suspended" && (tap || this.stalled)) {
+            context.suspend().catch(() => {});
+        }
+
+        context.resume().catch(() => {});
+        this.stalled = false;
+        this.clock = null;
+    }
+
+    // Notice the browser's clock standing still while it says it's playing: start it again, or,
+    // if it was started again for that lately and is stuck again, make it anew
+    #watch() {
+        const context = this.context;
+        const now = this.now();
+
+        if (!context || context.state !== "running" || !this.enabled || this.hidden) {
+            this.clock = null;
+
+            return;
+        }
+
+        if (!this.clock || context.currentTime > this.clock.time) {
+            this.clock = { time: context.currentTime, at: now };
+            this.stalled = false;
+
+            return;
+        }
+
+        if (now - this.clock.at < STALL * 1000) {
+            return;
+        }
+
+        this.stalled = true;
+
+        if (now - this.restarted < STALL * 4000) {
+            this.#rebuild();
+        } else {
+            this.restarted = now;
+            this.#revive();
+        }
+    }
+
+    // Make the browser's sound anew (it's closed, or stuck however it's started again), keeping
+    // every sample it had, and carrying the music on from where it was
+    #rebuild() {
+        const old = this.context;
+        const music = this.music;
+        const next = SCORE.notes[music?.index ?? 0];
+
+        this.context = null;
+        this.wind = null;
+
+        try {
+            old?.close?.()?.catch?.(() => {});
+        } catch {
+            // (Already closed)
+        }
+
+        if (!this.#start()) {
+            return;
+        }
+
+        if (music?.start !== null && next) {
+            this.music.start = this.context.currentTime + 0.3 - this.music.loop * SCORE.length - next.time;
+        }
+
+        this.stalled = false;
+        this.restarted = -Infinity;
+        this.#revive();
     }
 
     /** Turn it all on or off. */
@@ -239,8 +381,9 @@ export class Sound {
             return;
         }
 
-        if (on && !this.hidden) {
-            this.context.resume().catch(() => {});
+        // (Turned on with a tap on the switch)
+        if (on) {
+            this.#revive({ tap: true });
         }
 
         this.#fade(on ? OUTPUT : 0);
@@ -276,8 +419,8 @@ export class Sound {
 
         if (hidden) {
             this.context.suspend().catch(() => {});
-        } else if (this.enabled) {
-            this.context.resume().catch(() => {});
+        } else {
+            this.#revive();
         }
     }
 
@@ -343,7 +486,11 @@ export class Sound {
         const context = this.context;
         const buffers = this.buffers.get(name);
 
-        if (!this.playing || !buffers?.length || this.voices >= VOICES) {
+        // (Counting the sounds still playing by when they end, not by the browser saying they
+        // have: a stuck browser never does)
+        this.sounding = this.sounding.filter((end) => end > context?.currentTime);
+
+        if (!this.playing || !buffers?.length || this.sounding.length >= VOICES) {
             return null;
         }
 
@@ -380,13 +527,14 @@ export class Sound {
             level.connect(bus);
         }
 
-        this.voices++;
+        const start = context.currentTime + Math.max(0, delay);
+
+        this.sounding.push(start + source.buffer.duration / source.playbackRate.value);
         source.addEventListener("ended", () => {
-            this.voices--;
             source.disconnect();
             level.disconnect();
         });
-        source.start(context.currentTime + Math.max(0, delay));
+        source.start(start);
 
         return source;
     }
@@ -525,7 +673,8 @@ export class Sound {
             channels[name] = level;
         }
 
-        this.music = { channels, start: null, index: 0, loop: 0, timer: null };
+        // (Where the music has got to is kept when the browser's sound is made anew)
+        this.music = { start: null, index: 0, loop: 0, timer: null, ...this.music, channels };
     }
 
     /**
@@ -556,7 +705,11 @@ export class Sound {
 
             // (Notes that were due while the page was busy are let go, not played late)
             if (at >= now - 0.05 && this.volumes.music > 0) {
-                this.#note(note, at);
+                try {
+                    this.#note(note, at);
+                } catch {
+                    // (One note going wrong mustn't stop the rest)
+                }
             }
 
             music.index++;

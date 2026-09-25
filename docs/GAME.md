@@ -324,6 +324,23 @@ Web Audio (which this is) while the ring switch is on silent. While the game
 is paused, the music and the wind play on (the birds and leaves wait). Everything is silent
 while the page is hidden, and off (suspended) when turned off in Game options.
 
+The browser's sound can also stop on its own, and `sound.js` starts it again however it stops:
+
+- **Suspended or interrupted** by the browser (a call, an alarm, a notification, another app's
+  sound, the screen locking): asked to resume straight away, and when the page is shown or
+  focused again (an interrupted one resumes when the interruption's over), and on the next tap,
+  click or key suspended and then resumed, as Safari on iPhones won't resume an interrupted one
+  otherwise (turning the sound off and on did the same).
+- **Stuck**: Safari on iPhones can say it's playing with its clock standing still. A check every
+  0.2 s notices the clock not moving for 1.5 s and starts it again the same way; if it's stuck
+  again within 6 s, the browser's sound is made anew.
+- **Closed**: made anew.
+
+Made anew, it keeps every sample (the browser's copies work in the new one) and the music carries
+on from the note it had got to. A note that can't be played is skipped rather than stopping the
+rest, and the 24 effects allowed at once are counted by when each ends, so effects the browser
+never says have ended can't use them up.
+
 ### The action wheel (app/wheel.js)
 
 Press and hold (0.4 s, without moving) on the player or an enemy, and a see-through wheel
@@ -424,8 +441,9 @@ particles reuse one buffer, and projectiles and effects add no lights.
   their blows, a sound for every attack, each on its bus, the bow's plucked string in tune), the
   wind's seamless loop, and playing them: from where they happen, on their buses at their
   sliders' volumes, timed, silent hidden or turned off, the music's recordings downloaded and
-  decoded (or, offline, not, without fuss), and the music scheduled ahead and round again
-  without a gap.
+  decoded (or, offline, not, without fuss), the music scheduled ahead and round again without a
+  gap, and the sound started again however it stops (interrupted, hidden, stuck, closed, a note
+  going wrong, effects never ending).
 - `test/music.test.js`: the score (its sections and length, every note in time and near a
   recording of its instrument, a tune in every section, in key, ending on A to lead back to D),
   the recordings (one for every instrument and kind of drum hit, each note played from the
@@ -434,7 +452,8 @@ particles reuse one buffer, and projectiles and effects add no lights.
 - `e2e/pellagos.spec.js`: the whole game in Chromium: loading, debug mode, making a character
   through to playing them, carrying on with a saved character, a fight to the death, walking by
   tapping, running by double-clicking and double-tapping with the stamina bar showing and going,
-  the music's recordings downloaded and playing after a tap, the target ring, walking by the
+  the music's recordings downloaded and playing after a tap (and carrying on when the browser
+  suspends or closes its sound), the target ring, walking by the
   minimap, Game options and the volume sliders (remembered), the
   action wheel (stunning the orc, a flick refused while cooling down, then a heal), and a phone
   screen. Drawing without a GPU is slow, so fights are played on with

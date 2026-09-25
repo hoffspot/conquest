@@ -144,24 +144,32 @@ function fakeAudio() {
     class FakeContext {
         constructor() {
             this.state = "suspended";
+            this.calls = [];
             this.currentTime = 10;
             this.sampleRate = 48000;
             this.destination = node({ name: "destination" });
         }
 
+        // (Each call is kept in `calls`, to see how it was started again)
         resume() {
+            this.calls.push("resume");
             this.state = "running";
 
             return Promise.resolve();
         }
 
         suspend() {
+            this.calls.push("suspend");
             this.state = "suspended";
 
             return Promise.resolve();
         }
 
-        close() {}
+        close() {
+            this.state = "closed";
+
+            return Promise.resolve();
+        }
 
         createGain() {
             return node({ gain: param(1) });
@@ -182,7 +190,7 @@ function fakeAudio() {
         createBuffer(channels, length, rate) {
             const data = Array.from({ length: channels }, () => new Float32Array(length));
 
-            return { length, sampleRate: rate, numberOfChannels: channels, getChannelData: (channel) => data[channel] };
+            return { length, sampleRate: rate, duration: length / rate, numberOfChannels: channels, getChannelData: (channel) => data[channel] };
         }
 
         // (Decodes a recording to a stand-in buffer, as the browser would, a moment later)
@@ -389,6 +397,158 @@ describe("playing sounds (sound.js)", () => {
         context.currentTime += 1;
         sound.scheduleMusic();
         assert.equal(music().length, 0);
+        sound.close();
+    });
+});
+
+describe("keeping the sound going (sound.js)", () => {
+    // The music's notes played so far
+    const musicOf = (sound, played) => played.filter(({ source }) => Object.values(sound.music.channels).includes(source.outputs[0]?.outputs[0]));
+
+    it("starts again on the next tap when the browser interrupted it (a call, an alarm, the screen locking), suspending it first as Safari needs", async () => {
+        const { sound } = await started();
+        const context = sound.context;
+
+        assert.equal(sound.playing, true);
+
+        // A tap while it's playing leaves it be
+        context.calls.length = 0;
+        sound.unlock();
+        assert.deepEqual(context.calls, []);
+
+        context.state = "interrupted";
+        assert.equal(sound.playing, false);
+        sound.unlock();
+        assert.deepEqual(context.calls, ["suspend", "resume"]);
+        assert.equal(sound.playing, true);
+
+        // Without a tap (coming back to the page), only asked to resume: the browser does when
+        // the interruption's over
+        context.state = "interrupted";
+        context.calls.length = 0;
+        sound.wake();
+        assert.deepEqual(context.calls, ["resume"]);
+        assert.equal(sound.playing, true);
+        sound.close();
+    });
+
+    it("starts again when the page is shown again, and turned back on, but not while it's hidden or off", async () => {
+        const { sound } = await started();
+        const context = sound.context;
+
+        sound.setHidden(true);
+        assert.equal(context.state, "suspended");
+        sound.wake();
+        assert.equal(context.state, "suspended", "not while hidden");
+        sound.setHidden(false);
+        assert.equal(sound.playing, true);
+
+        sound.setEnabled(false);
+        context.state = "interrupted";
+        sound.unlock();
+        assert.equal(context.state, "interrupted", "not while turned off");
+        sound.setEnabled(true);
+        assert.equal(sound.playing, true);
+        sound.close();
+    });
+
+    it("notices the browser's clock standing still while it says it's playing, starts it again, and if it's still stuck makes it anew, the music carrying on", async () => {
+        const { sound, played } = await started();
+        let now = 0;
+
+        sound.now = () => now;
+
+        // The music under way, a few seconds in
+        for (let t = 0; t < 5; t += 0.2) {
+            sound.context.currentTime = 10 + t;
+            now += 200;
+            sound.tick();
+        }
+
+        const first = sound.context;
+        const index = sound.music.index;
+
+        assert.ok(index > 0);
+
+        // The clock stands still: after a moment and a half, started again
+        first.calls.length = 0;
+
+        for (let k = 0; k < 9; k++) {
+            now += 200;
+            sound.tick();
+        }
+
+        assert.deepEqual(first.calls, ["suspend", "resume"]);
+        assert.equal(sound.context, first);
+
+        // Still stuck: made anew, with every sample, and the music carries on where it was
+        const before = played.length;
+
+        for (let k = 0; k < 9; k++) {
+            now += 200;
+            sound.tick();
+        }
+
+        assert.notEqual(sound.context, first);
+        assert.equal(first.state, "closed");
+        assert.equal(sound.playing, true);
+        assert.equal(sound.instruments.size, sampleFiles().length);
+        assert.ok(sound.buffers.has("slash"));
+
+        const notes = musicOf(sound, played.slice(before));
+
+        assert.ok(notes.length > 0, "the music plays on");
+        assert.ok(sound.music.index >= index, "from where it was, not from the start");
+        assert.ok(notes.every(({ when }) => when >= sound.context.currentTime && when <= sound.context.currentTime + 1.6));
+        sound.close();
+    });
+
+    it("makes the sound anew if the browser closed it", async () => {
+        const { sound } = await started();
+        const first = sound.context;
+
+        first.state = "closed";
+        sound.unlock();
+        assert.notEqual(sound.context, first);
+        assert.equal(sound.playing, true);
+        assert.ok(sound.play("slash"));
+        sound.close();
+    });
+
+    it("keeps the music playing when one note goes wrong", async () => {
+        const { sound, played } = await started();
+        const make = sound.context.createBufferSource.bind(sound.context);
+        let failed = false;
+
+        // The first note can't be made
+        sound.context.createBufferSource = () => {
+            if (!failed) {
+                failed = true;
+                throw new Error("InvalidStateError");
+            }
+
+            return make();
+        };
+
+        played.length = 0;
+        sound.scheduleMusic();
+        assert.ok(failed);
+        assert.ok(musicOf(sound, played).length > 0, "the rest are played");
+        sound.close();
+    });
+
+    it("never runs out of sound effects, even when the browser doesn't say they've ended", async () => {
+        const { sound } = await started();
+
+        for (let k = 0; k < 24; k++) {
+            assert.ok(sound.play("slash"), `sound ${k}`);
+        }
+
+        assert.equal(sound.play("slash"), null, "at most 24 at once");
+
+        // (The stand-in never says a sound has ended)
+        sound.context.currentTime += 5;
+        assert.ok(sound.play("slash"), "once they're over, more play");
         sound.close();
     });
 });
