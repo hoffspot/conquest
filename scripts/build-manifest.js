@@ -3,9 +3,9 @@
 //
 //     npm run build:manifest
 //
-// The game's code is followed from its entry modules through their imports (and the import
-// map's "three" and "three/addons/" in index.html), leaving out what main.js imports itself (it
-// is already loaded when the loader starts). The character data and masks, and the 3D models
+// The game's code is followed from its entry modules through their imports and the workers they
+// start (and the import map's "three" and "three/addons/" in index.html), leaving out what
+// main.js imports itself (it is already loaded when the loader starts). The character data and masks, and the 3D models
 // with the buffers and textures their glTF files name, are listed too. test/manifest.test.js
 // checks the list is up to date.
 
@@ -23,6 +23,9 @@ const ENTRIES = ["js/app/session.js", "js/app/creator.js"];
 // A module's static imports and re-exports, and its import()s (minified code may have no spaces)
 const STATIC = /(?:^|[;\s}])(?:import|export)\s*(?:[\w*{}\s,$]*?\s*from\s*)?["']([^"']+)["']/g;
 const DYNAMIC = /import\s*\(\s*["']([^"']+)["']\s*\)/g;
+
+// The scripts it starts workers with: new Worker(new URL("...", import.meta.url))
+const WORKER = /new\s+Worker\s*\(\s*new\s+URL\s*\(\s*["']([^"']+)["']/g;
 
 async function importMap() {
     const html = await readFile(path.join(client, "index.html"), "utf8");
@@ -66,7 +69,7 @@ async function closure(entries, map, { dynamic = true } = {}) {
         }
 
         const source = await readFile(path.join(client, file), "utf8");
-        const specifiers = [...source.matchAll(STATIC), ...(dynamic ? source.matchAll(DYNAMIC) : [])].map(([, specifier]) => specifier);
+        const specifiers = [...source.matchAll(STATIC), ...(dynamic ? [...source.matchAll(DYNAMIC), ...source.matchAll(WORKER)] : [])].map(([, specifier]) => specifier);
 
         for (const specifier of specifiers) {
             const next = resolve(specifier, file, map);

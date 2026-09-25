@@ -263,6 +263,9 @@ export const REACTIONS = Object.freeze({
 
 const FALL = { buckle: 0.28, topple: 0.55, settle: 0.35 };
 
+/** How long into a fall the body hits the ground (s): for the sound of it. */
+export const FALL_LANDS = FALL.buckle * 0.6 + FALL.topple;
+
 // --- The engine ---
 
 const HANDS = ["right", "left"];

@@ -85,6 +85,9 @@ export class Walker {
         /** How much it's running rather than walking (0 to 1). */
         this.run = 0;
 
+        /** Hears each footstep as a foot lands, moving: (foot (0 left, 1 right), speed). */
+        this.onStep = null;
+
         /**
          * Per foot: whether it's planted, the pivot it's planted on (world), how far the joint
          * angles would have slid it, and how far they had when it lifted off.
@@ -478,6 +481,10 @@ export class Walker {
             foot.planted = true;
             foot.pivot = pivot;
             foot.lock.copy(now);
+
+            if (s > 0 && this.speed > 0.3) {
+                this.onStep?.(i, this.speed);
+            }
         } else if (onGround && foot.pivot !== pivot) {
             // Rolling onto the ball: keep the correction so far, pivoting about the new point
             foot.pivot = pivot;

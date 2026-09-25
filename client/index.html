@@ -125,6 +125,7 @@
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
                 </button>
             </div>
+            <canvas id="minimap" role="img" aria-label="Map of the town and fields" hidden></canvas>
             <div id="banner" role="status" hidden></div>
             <p class="hint" id="hint">Tap the ground to walk, double&#8209;tap to run, or tap an enemy to fight it.</p>
             <div class="hud-bottom">
@@ -139,10 +140,31 @@
 
         <!-- Paused -->
         <dialog id="menu" aria-labelledby="menutitle">
-            <h2 id="menutitle">Paused</h2>
-            <div class="menu">
-                <button type="button" class="button primary" id="resumebutton">Resume</button>
-                <button type="button" class="button" id="quitbutton">Back to the title</button>
+            <div class="menupage" id="menumain">
+                <h2 id="menutitle">Paused</h2>
+                <div class="menu">
+                    <button type="button" class="button primary" id="resumebutton">Resume</button>
+                    <button type="button" class="button" id="optionsbutton">Game options</button>
+                    <button type="button" class="button" id="quitbutton">Back to the title</button>
+                </div>
+            </div>
+            <div class="menupage" id="menuoptions" hidden>
+                <h2 id="optionstitle">Game options</h2>
+                <div class="options">
+                    <label class="switch option">
+                        <span class="text">Minimap<small>The map in the top right</small></span>
+                        <input type="checkbox" id="minimapswitch" role="switch">
+                        <span class="track" aria-hidden="true"></span>
+                    </label>
+                    <label class="switch option">
+                        <span class="text">Sound<small>Fighting, footsteps and the town</small></span>
+                        <input type="checkbox" id="soundswitch" role="switch">
+                        <span class="track" aria-hidden="true"></span>
+                    </label>
+                </div>
+                <div class="menu">
+                    <button type="button" class="button" id="optionsback">Back</button>
+                </div>
             </div>
         </dialog>
 

@@ -1,5 +1,6 @@
 // What the game keeps between visits, in the browser's local storage: the player's character
-// (and the seed of the world it lives in), and settings (debug mode, drawing quality).
+// (and the seed of the world it lives in), and settings (the game options, debug mode, drawing
+// quality).
 //
 // Storage can be missing or refuse to work (private browsing, blocked site data), so every read
 // and write is guarded: without it the game still plays, it just doesn't remember.
@@ -11,7 +12,7 @@ const SETTINGS_KEY = "pellagos.settings";
 export const SAVE_VERSION = 1;
 
 /** Settings, and what they are until changed. */
-export const SETTINGS_DEFAULTS = Object.freeze({ debug: false, debugFolded: false, quality: "auto", renderScale: 1, shadows: true, squares: false });
+export const SETTINGS_DEFAULTS = Object.freeze({ debug: false, debugFolded: false, quality: "auto", renderScale: 1, shadows: true, squares: false, minimap: true, sound: true });
 
 function read(key) {
     try {
