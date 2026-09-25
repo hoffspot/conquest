@@ -88,13 +88,16 @@ export class Hud {
         }
     }
 
-    /** A number rising from a point on the screen: the damage a blow did (or "Miss"). */
-    damage(point, text, { toPlayer = false } = {}) {
+    /**
+     * A number rising from a point on the screen: the damage a blow did (or "Miss"), or `kind`
+     * "heal" (green: hit points back) or "stun" (the word, in gold).
+     */
+    damage(point, text, { toPlayer = false, kind = "" } = {}) {
         if (!point) {
             return;
         }
 
-        const number = element("div", `damage${toPlayer ? " to-player" : ""}`, String(text));
+        const number = element("div", `damage${toPlayer ? " to-player" : ""}${kind ? ` ${kind}` : ""}`, String(text));
 
         number.style.left = `${point.x.toFixed(1)}px`;
         number.style.top = `${point.y.toFixed(1)}px`;

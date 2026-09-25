@@ -895,6 +895,82 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     color: #ff8f73;
 }
 
+.damage.heal {
+    color: #7dff9e;
+}
+
+.damage.stun {
+    color: #ffe14a;
+    font-size: 20px;
+}
+
+/* The action wheel: four see-through slices round whoever was held on */
+.wheel {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 3;
+    transform: translate(-50%, -50%) scale(0.7);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.12s ease-out, opacity 0.12s ease-out;
+    filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.5));
+}
+
+.wheel.shown {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+}
+
+.wheel svg {
+    display: block;
+    overflow: visible;
+}
+
+.wheel .face {
+    fill: rgba(24, 19, 14, 0.6);
+    stroke: rgba(236, 200, 130, 0.6);
+    stroke-width: 1.5;
+    transition: fill 0.1s;
+}
+
+.wheel .empty .face {
+    fill: rgba(24, 19, 14, 0.28);
+    stroke: rgba(236, 200, 130, 0.25);
+    stroke-dasharray: 4 4;
+}
+
+.wheel .label {
+    fill: #f6ead2;
+    font: 700 11px var(--font-ui);
+    text-anchor: middle;
+    paint-order: stroke;
+    stroke: rgba(0, 0, 0, 0.75);
+    stroke-width: 3px;
+}
+
+.wheel .cooldown {
+    fill: rgba(38, 38, 38, 0.78);
+}
+
+.wheel .cooling .icon {
+    opacity: 0.55;
+}
+
+.wheel .chosen .face {
+    fill: rgba(236, 200, 130, 0.5);
+}
+
+.wheel .refused .face {
+    fill: rgba(200, 50, 40, 0.55);
+}
+
+.wheel .hub {
+    fill: rgba(24, 19, 14, 0.4);
+    stroke: rgba(236, 200, 130, 0.45);
+    stroke-width: 1.5;
+}
+
 @keyframes rise {
     0% {
         opacity: 0;
@@ -1022,6 +1098,51 @@ dialog#menu .options {
 
 .switch.option .track {
     flex: none;
+}
+
+/* How loud each kind of sound is: a slider on each row */
+.volumes {
+    display: grid;
+    padding: 4px 0 6px;
+    border-bottom: 1px solid var(--field-border);
+}
+
+.volume {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    column-gap: 10px;
+    padding: 8px 2px 4px 12px;
+    font-size: 14px;
+    color: var(--ink);
+}
+
+.volume .text {
+    display: grid;
+    gap: 1px;
+}
+
+.volume small {
+    font-size: 11px;
+    color: var(--muted);
+}
+
+.volume input {
+    grid-column: 1 / -1;
+    width: 100%;
+    margin: 4px 0 0;
+}
+
+.volume output {
+    grid-row: 1;
+    grid-column: 2;
+    font-size: 13px;
+    color: var(--gold-bright);
+    font-variant-numeric: tabular-nums;
+}
+
+.volumes.off {
+    opacity: 0.45;
 }
 
 /* --- Debug mode --- */

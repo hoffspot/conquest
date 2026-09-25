@@ -127,7 +127,7 @@
             </div>
             <canvas id="minimap" role="img" aria-label="Map of the town and fields" hidden></canvas>
             <div id="banner" role="status" hidden></div>
-            <p class="hint" id="hint">Tap the ground to walk, double&#8209;tap to run, or tap an enemy to fight it.</p>
+            <p class="hint" id="hint">Tap the ground to walk, double&#8209;tap to run, or tap an enemy to fight it. Hold on yourself or an enemy for spells.</p>
             <div class="hud-bottom">
                 <button type="button" id="zoomin" class="hud-button" aria-label="Zoom in" title="Zoom in">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
@@ -157,10 +157,27 @@
                         <span class="track" aria-hidden="true"></span>
                     </label>
                     <label class="switch option">
-                        <span class="text">Sound<small>Fighting, footsteps and the town</small></span>
+                        <span class="text">Sound<small>Everything below, on or off</small></span>
                         <input type="checkbox" id="soundswitch" role="switch">
                         <span class="track" aria-hidden="true"></span>
                     </label>
+                    <div class="volumes" id="volumes">
+                        <label class="volume">
+                            <span class="text">Sound effects<small>Fighting, spells, footsteps</small></span>
+                            <input type="range" id="effectsvolume" min="0" max="100" step="5" data-bus="effects">
+                            <output for="effectsvolume"></output>
+                        </label>
+                        <label class="volume">
+                            <span class="text">Environment<small>Wind, birds, trees</small></span>
+                            <input type="range" id="environmentvolume" min="0" max="100" step="5" data-bus="environment">
+                            <output for="environmentvolume"></output>
+                        </label>
+                        <label class="volume">
+                            <span class="text">Music<small>The bard's ballad</small></span>
+                            <input type="range" id="musicvolume" min="0" max="100" step="5" data-bus="music">
+                            <output for="musicvolume"></output>
+                        </label>
+                    </div>
                 </div>
                 <div class="menu">
                     <button type="button" class="button" id="optionsback">Back</button>

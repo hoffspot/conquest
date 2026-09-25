@@ -1,12 +1,27 @@
-// The game's sound: plays the sounds synth.js makes (in a worker, worker.js) with the Web Audio
-// API, each from where it happens: quieter the further it is from the player, and to the left or
-// right. The wind blows quietly all the time, and birds sing now and then. It can be turned off
-// (the menu's Game options), and is silent while the game is paused.
+// The game's sound, played with the Web Audio API in three buses, each with its own volume (the
+// sliders in Game options), all turned on or off together (the Sound switch):
 //
-// Browsers only let a page make sound once someone has tapped, clicked or pressed a key on it,
-// so the sound starts on the first one (unlock()).
+//  - Sound effects: blows, spells, footsteps and cues (synth.js), each from where it happens:
+//    quieter the further it is from the player, and to the left or right.
+//  - The environment: the wind blowing, birds singing and leaves rustling in nearby trees.
+//  - Music: the score (score.js), played on its instruments (instruments.js) as it goes, note by
+//    note, a little ahead of time, so it loops without a seam; with a hall's reverb.
+//
+// synth.js's sounds and instruments.js's samples are made in a worker (worker.js), so nothing
+// waits for them. Browsers only let a page make sound once someone has tapped, clicked or pressed
+// a key on it, so it starts on the first one (unlock()). The music plays from then on, on every
+// screen, the pause menu included; everything is silent while the page is hidden.
 
+import { baseFor, instrumentSamples, INSTRUMENTS, MUSIC_RATE, renderInstrument } from "./instruments.js";
+import { SCORE } from "./score.js";
 import { PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "./synth.js";
+
+/** The buses, and how loud each is to start with (0 to 1, as the sliders show them). */
+export const BUSES = Object.freeze(["effects", "environment", "music"]);
+export const VOLUME_DEFAULTS = Object.freeze({ effects: 0.8, environment: 0.5, music: 0.35 });
+
+/** How loud a slider's setting (0 to 1) sounds: a curve, as ears hear loudness. */
+export const gainOf = (volume) => Math.max(0, Math.min(1, volume)) ** 1.5;
 
 // Heard at full volume this close (metres), and not at all this far away
 const NEAR = 4;
@@ -16,15 +31,25 @@ const FAR = 34;
 const SIDE = 14;
 const MOST_PAN = 0.85;
 
-// At most this many sounds at once
+// At most this many sound effects at once
 const VOICES = 24;
 
-// How loud the wind is, and how long between birds singing (seconds, from and to)
-const WIND = 0.09;
+// How loud the wind is; how long between birds singing, and leaves rustling (seconds, from and
+// to), and how near a tree has to be to be heard (metres)
+const WIND = 0.2;
 const BIRDS = [4, 14];
+const LEAVES = [2.5, 7];
+const TREES_HEARD = 22;
 
 // How quickly it fades in and out (seconds)
 const FADE = 0.08;
+
+// The music: scheduled this far ahead (seconds), checked this often (ms); how much of it goes
+// through the reverb, and how long the reverb rings (seconds)
+const LOOKAHEAD = 1.2;
+const SCHEDULE_MS = 200;
+const REVERB_SEND = 0.28;
+const REVERB_TIME = 2.6;
 
 // The swing for each attack animation (actions.js), and the sound of each projectile's launch
 const SWINGS = { sword: "swingSword", staff: "swingStaff", hammer: "swingHammer", punch: "swingPunch", cleaver: "swingCleaver" };
@@ -35,32 +60,46 @@ const LAUNCHES = { arrow: "arrow", bolt: "bolt", fireball: "fireball" };
 const STEPS = ["stepGrass", "stepDirt", "stepStone", "stepDirt", "stepStone"];
 
 export class Sound {
-    /** @param {object} [options] @param {boolean} [options.enabled] - Whether it's on. */
-    constructor({ enabled = true } = {}) {
+    /**
+     * @param {object} [options]
+     * @param {boolean} [options.enabled] - Whether it's on.
+     * @param {object} [options.volumes] - { effects, environment, music }, 0 to 1.
+     */
+    constructor({ enabled = true, volumes = VOLUME_DEFAULTS } = {}) {
         this.enabled = enabled;
+        this.volumes = { ...VOLUME_DEFAULTS, ...volumes };
         this.paused = true;
+        this.hidden = false;
         this.context = null;
         this.master = null;
+        this.buses = {};
 
-        /** The sounds' samples as they're made (name → [variant]), and the browser's copies. */
+        /** Samples as they're made (sounds: name → [variant]; instruments: "name key" → samples). */
         this.samples = new Map();
+        this.instrumentSamples = new Map();
+
+        /** The browser's copies: sounds' (name → [variant]) and instruments' ("name key"). */
         this.buffers = new Map();
+        this.instruments = new Map();
 
         /** Where the player is (metres): sounds are heard from there. */
         this.listener = { x: 0, z: 0 };
         this.voices = 0;
         this.ambient = false;
         this.wind = null;
+        this.trees = [];
         this.nextBird = BIRDS[0];
+        this.nextLeaves = LEAVES[0];
+        this.music = null;
         this.ready = null;
     }
 
-    /** Is sound playing (on, started, and not paused)? */
+    /** Can sound be heard (started, on, and the page showing)? */
     get playing() {
-        return Boolean(this.context && this.enabled && !this.paused && this.context.state === "running");
+        return Boolean(this.context && this.enabled && !this.hidden && this.context.state === "running");
     }
 
-    /** Start making the sounds (once), in a worker. Resolves when they're all made. */
+    /** Start making the sounds and the music's instruments (once), in a worker. Resolves when all are made. */
     prepare() {
         this.ready ??= new Promise((resolve) => {
             let worker = null;
@@ -69,12 +108,18 @@ export class Sound {
 
                 for (const [name, sound] of Object.entries(SOUNDS)) {
                     for (let variant = 0; variant < sound.variants; variant++) {
-                        this.#receive(name, variant, render(name, variant));
+                        this.#receive({ name, variant, samples: render(name, variant) });
                         await new Promise((next) => setTimeout(next, 0));
                     }
                 }
 
-                this.#receive("wind", 0, wind());
+                this.#receive({ name: "wind", variant: 0, samples: wind() });
+
+                for (const [name, key] of instrumentSamples()) {
+                    this.#receive({ instrument: name, key, samples: renderInstrument(name, key) });
+                    await new Promise((next) => setTimeout(next, 0));
+                }
+
                 resolve();
             };
 
@@ -85,7 +130,7 @@ export class Sound {
                         worker.terminate();
                         resolve();
                     } else {
-                        this.#receive(data.name, data.variant, data.samples);
+                        this.#receive(data);
                     }
                 });
                 worker.addEventListener("error", (event) => {
@@ -104,7 +149,7 @@ export class Sound {
 
     /**
      * Start the browser's sound, if it hasn't been (call on a tap, click or key press, when
-     * browsers allow it). Safe to call again and again.
+     * browsers allow it), and the music with it. Safe to call again and again.
      */
     unlock() {
         if (!this.context) {
@@ -119,7 +164,7 @@ export class Sound {
 
             this.context = context;
             this.master = context.createGain();
-            this.master.gain.value = this.enabled && !this.paused ? 1 : 0;
+            this.master.gain.value = this.enabled ? 1 : 0;
 
             // A little compression keeps a busy fight from clipping
             compressor.threshold.value = -14;
@@ -129,19 +174,35 @@ export class Sound {
             compressor.release.value = 0.2;
             this.master.connect(compressor).connect(context.destination);
 
+            for (const bus of BUSES) {
+                this.buses[bus] = context.createGain();
+                this.buses[bus].gain.value = gainOf(this.volumes[bus]);
+                this.buses[bus].connect(this.master);
+            }
+
+            this.#buildMusic();
+
             for (const [name, variants] of this.samples) {
                 variants.forEach((samples, variant) => this.#buffer(name, variant, samples));
             }
 
+            for (const [id, samples] of this.instrumentSamples) {
+                this.#instrument(id, samples);
+            }
+
+            this.samples.clear();
+            this.instrumentSamples.clear();
             this.#startWind();
+            this.music.timer = setInterval(() => this.scheduleMusic(), SCHEDULE_MS);
+            this.music.timer.unref?.();
         }
 
-        if (this.enabled && this.context.state !== "running") {
+        if (this.enabled && !this.hidden && this.context.state !== "running") {
             this.context.resume().catch(() => {});
         }
     }
 
-    /** Turn it on or off. */
+    /** Turn it all on or off. */
     setEnabled(on) {
         this.enabled = on;
 
@@ -149,11 +210,11 @@ export class Sound {
             return;
         }
 
-        if (on) {
+        if (on && !this.hidden) {
             this.context.resume().catch(() => {});
         }
 
-        this.#fade(on && !this.paused ? 1 : 0);
+        this.#fade(on ? 1 : 0);
 
         // Off, the browser needn't keep working on it
         if (!on) {
@@ -161,10 +222,39 @@ export class Sound {
         }
     }
 
-    /** Silence it while the game is paused, and bring it back after. */
+    /** Set how loud a bus is ("effects", "environment" or "music"; 0 to 1). */
+    setVolume(bus, volume) {
+        this.volumes[bus] = Math.max(0, Math.min(1, volume));
+
+        const gain = this.buses[bus]?.gain;
+
+        if (gain) {
+            const now = this.context.currentTime;
+
+            gain.cancelScheduledValues(now);
+            gain.setValueAtTime(gain.value, now);
+            gain.linearRampToValueAtTime(gainOf(this.volumes[bus]), now + FADE);
+        }
+    }
+
+    /** Silence everything while the page is hidden (another tab or app), and bring it back after. */
+    setHidden(hidden) {
+        this.hidden = hidden;
+
+        if (!this.context) {
+            return;
+        }
+
+        if (hidden) {
+            this.context.suspend().catch(() => {});
+        } else if (this.enabled) {
+            this.context.resume().catch(() => {});
+        }
+    }
+
+    /** While the game is paused, no birds sing or leaves rustle (the music and wind go on). */
     setPaused(paused) {
         this.paused = paused;
-        this.#fade(this.enabled && !paused ? 1 : 0);
     }
 
     /** Where the player is (metres), for hearing everything from. */
@@ -173,7 +263,12 @@ export class Sound {
         this.listener.z = z;
     }
 
-    /** Let the wind blow and birds sing (or not). */
+    /** Where the trees are ([{ x, z }] metres), for hearing their leaves. */
+    setTrees(trees) {
+        this.trees = trees;
+    }
+
+    /** Let the wind blow, birds sing and leaves rustle (in the game), or not. */
     setAmbient(on) {
         this.ambient = on;
 
@@ -185,17 +280,28 @@ export class Sound {
         }
     }
 
-    /** Birds, now and then. Call every frame. */
+    /** Birds and leaves, now and then. Call every frame. */
     update(dt) {
-        if (!this.ambient || !this.playing) {
+        if (!this.ambient || this.paused || !this.playing) {
             return;
         }
 
         this.nextBird -= dt;
+        this.nextLeaves -= dt;
 
         if (this.nextBird <= 0) {
             this.nextBird = BIRDS[0] + Math.random() * (BIRDS[1] - BIRDS[0]);
             this.play("bird", { at: { x: this.listener.x + (Math.random() - 0.5) * 40, z: this.listener.z + (Math.random() - 0.5) * 40 }, volume: 0.6 + Math.random() * 0.4, rate: 0.9 + Math.random() * 0.2 });
+        }
+
+        if (this.nextLeaves <= 0) {
+            this.nextLeaves = LEAVES[0] + Math.random() * (LEAVES[1] - LEAVES[0]);
+
+            const near = this.trees.filter(({ x, z }) => Math.hypot(x - this.listener.x, z - this.listener.z) < TREES_HEARD);
+
+            if (near.length) {
+                this.play("leaves", { at: near[Math.floor(Math.random() * near.length)], volume: 0.7 + Math.random() * 0.3, rate: 0.9 + Math.random() * 0.2 });
+            }
         }
     }
 
@@ -229,6 +335,7 @@ export class Sound {
 
         const source = context.createBufferSource();
         const level = context.createGain();
+        const bus = this.buses[SOUNDS[name]?.bus ?? "effects"];
 
         source.buffer = buffers[Math.floor(Math.random() * buffers.length)];
         source.playbackRate.value = rate * (0.96 + Math.random() * 0.08);
@@ -239,9 +346,9 @@ export class Sound {
             const panner = context.createStereoPanner();
 
             panner.pan.value = pan;
-            level.connect(panner).connect(this.master);
+            level.connect(panner).connect(bus);
         } else {
-            level.connect(this.master);
+            level.connect(bus);
         }
 
         this.voices++;
@@ -279,13 +386,28 @@ export class Sound {
         return this.play(STEPS[ground] ?? "stepDirt", { at, volume: running ? 1.3 : 0.6 + 0.15 * speed, rate: running ? 1.08 : 1 });
     }
 
-    // Keep a sound's samples, and give the browser a copy if it's started
-    #receive(name, variant, samples) {
-        const variants = this.samples.get(name) ?? [];
+    // Keep a sound's or instrument's samples, and give the browser a copy if it's started
+    #receive({ name, variant, instrument, key, samples }) {
+        if (instrument) {
+            const id = `${instrument} ${key}`;
 
-        variants[variant] = samples;
-        this.samples.set(name, variants);
-        this.#buffer(name, variant, samples);
+            if (this.context) {
+                this.#instrument(id, samples);
+            } else {
+                this.instrumentSamples.set(id, samples);
+            }
+
+            return;
+        }
+
+        if (this.context) {
+            this.#buffer(name, variant, samples);
+        } else {
+            const variants = this.samples.get(name) ?? [];
+
+            variants[variant] = samples;
+            this.samples.set(name, variants);
+        }
 
         if (name === "wind") {
             this.#startWind();
@@ -293,16 +415,19 @@ export class Sound {
     }
 
     #buffer(name, variant, samples) {
-        if (!this.context || !samples) {
-            return;
-        }
-
         const buffer = this.context.createBuffer(1, samples.length, SAMPLE_RATE);
         const variants = this.buffers.get(name) ?? [];
 
         buffer.getChannelData(0).set(samples);
         variants[variant] = buffer;
         this.buffers.set(name, variants);
+    }
+
+    #instrument(id, samples) {
+        const buffer = this.context.createBuffer(1, samples.length, MUSIC_RATE);
+
+        buffer.getChannelData(0).set(samples);
+        this.instruments.set(id, buffer);
     }
 
     #startWind() {
@@ -318,9 +443,126 @@ export class Sound {
         source.buffer = buffer;
         source.loop = true;
         level.gain.value = WIND;
-        source.connect(level).connect(this.master);
+        source.connect(level).connect(this.buses.environment);
         source.start();
         this.wind = { source, level };
+    }
+
+    // The music's channels: one per instrument (its level and place), dry and through a reverb
+    #buildMusic() {
+        const context = this.context;
+        const reverb = context.createConvolver();
+        const send = context.createGain();
+        const channels = {};
+
+        reverb.buffer = hall(context, REVERB_TIME);
+        send.gain.value = REVERB_SEND;
+        send.connect(reverb).connect(this.buses.music);
+
+        for (const [name, instrument] of Object.entries(INSTRUMENTS)) {
+            const level = context.createGain();
+
+            level.gain.value = instrument.mix;
+
+            if (context.createStereoPanner) {
+                const panner = context.createStereoPanner();
+
+                panner.pan.value = instrument.pan;
+                level.connect(panner);
+                panner.connect(this.buses.music);
+                panner.connect(send);
+            } else {
+                level.connect(this.buses.music);
+                level.connect(send);
+            }
+
+            channels[name] = level;
+        }
+
+        this.music = { channels, start: null, index: 0, loop: 0, timer: null };
+    }
+
+    /**
+     * Play the score's notes that start in the next LOOKAHEAD seconds, round again from its
+     * start at its end (every SCHEDULE_MS, once started).
+     */
+    scheduleMusic() {
+        const music = this.music;
+        const context = this.context;
+
+        if (!this.playing || !this.instruments.size) {
+            return;
+        }
+
+        const now = context.currentTime;
+        const notes = SCORE.notes;
+
+        music.start ??= now + 0.3;
+
+        for (;;) {
+            const note = notes[music.index];
+            const at = music.start + music.loop * SCORE.length + note.time;
+
+            if (at > now + LOOKAHEAD) {
+                break;
+            }
+
+            // (Notes that were due while the page was busy are let go, not played late)
+            if (at >= now - 0.05 && this.volumes.music > 0) {
+                this.#note(note, at);
+            }
+
+            music.index++;
+
+            if (music.index >= notes.length) {
+                music.index = 0;
+                music.loop++;
+            }
+        }
+    }
+
+    #note(note, at) {
+        const instrument = INSTRUMENTS[note.instrument];
+        const key = instrument.kinds ? note.pitch : baseFor(instrument, note.pitch);
+        const buffer = this.instruments.get(`${note.instrument} ${key}`);
+
+        if (!buffer) {
+            return;
+        }
+
+        const context = this.context;
+        const source = context.createBufferSource();
+        const level = context.createGain();
+        const end = at + note.duration;
+
+        source.buffer = buffer;
+        source.playbackRate.value = instrument.kinds ? 1 : 2 ** ((note.pitch - key) / 12);
+        level.gain.setValueAtTime(note.velocity, at);
+        source.start(at);
+
+        if (instrument.held) {
+            level.gain.setValueAtTime(note.velocity, end);
+            level.gain.linearRampToValueAtTime(0, end + instrument.release);
+            source.stop(end + instrument.release + 0.02);
+        } else {
+            // Plucked and struck notes ring on a while
+            level.gain.setValueAtTime(note.velocity, end + 1.2);
+            level.gain.linearRampToValueAtTime(0, end + 1.5);
+            source.stop(end + 1.52);
+        }
+
+        source.connect(level).connect(this.music.channels[note.instrument]);
+        source.addEventListener("ended", () => {
+            source.disconnect();
+            level.disconnect();
+        });
+    }
+
+    /** Stop everything for good (the music's timer and the browser's sound). */
+    close() {
+        clearInterval(this.music?.timer);
+        this.context?.close?.();
+        this.context = null;
     }
 
     #fade(to) {
@@ -335,4 +577,26 @@ export class Sound {
         gain.setValueAtTime(gain.value, now);
         gain.linearRampToValueAtTime(to, now + FADE);
     }
+}
+
+// A hall's reverb: stereo noise, fading away over `seconds`, a little darker as it fades
+function hall(context, seconds) {
+    const length = Math.round(seconds * context.sampleRate);
+    const buffer = context.createBuffer(2, length, context.sampleRate);
+
+    for (let channel = 0; channel < 2; channel++) {
+        const data = buffer.getChannelData(channel);
+        let smooth = 0;
+
+        for (let n = 0; n < length; n++) {
+            const t = n / length;
+            const white = Math.random() * 2 - 1;
+
+            // Lower frequencies last longer: a gentler low-pass as it goes
+            smooth += (white - smooth) * (0.9 - 0.75 * t);
+            data[n] = smooth * (1 - t) ** 3 * (n < 0.01 * context.sampleRate ? n / (0.01 * context.sampleRate) : 1);
+        }
+    }
+
+    return buffer;
 }

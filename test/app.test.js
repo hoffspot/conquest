@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { cleanName, defaultHero, HUMAN_TONES, randomHero, suggestName } from "../client/js/app/heroes.js";
 import { formatBytes, Loader } from "../client/js/app/loader.js";
+import { ICONS } from "../client/js/app/icons.js";
 import { buildingsOf, mapColours, treesOf } from "../client/js/app/minimap.js";
+import { ACTIONS, DIRECTIONS, directionOf, sectorPath, WHEELS } from "../client/js/app/wheel.js";
+import { SPELLS } from "../client/js/core/spells.js";
 import { isHero, loadSave, loadSettings, newSeed, SAVE_VERSION, saveSettings, SETTINGS_DEFAULTS, writeSave, clearSave } from "../client/js/app/save.js";
 import { BEARDS, HAIRSTYLES } from "../client/js/characters/hair.js";
 import { MACRO_DEFAULTS } from "../client/js/characters/macro.js";
@@ -196,6 +199,45 @@ describe("the minimap (minimap.js)", () => {
 
             assert.ok(greenest([r, g, b]) && r + g + b < 200, `a tree at ${x}, ${y}`);
         }
+    });
+});
+
+describe("the action wheel (wheel.js, icons.js)", () => {
+    it("tells which slice a finger is in: none near the middle, then up, right, down or left", () => {
+        assert.deepEqual(DIRECTIONS, ["up", "right", "down", "left"]);
+        assert.equal(directionOf(0, 0), null);
+        assert.equal(directionOf(10, -12, 30), null, "still in the middle");
+        assert.equal(directionOf(0, -40), "up");
+        assert.equal(directionOf(40, 5), "right");
+        assert.equal(directionOf(-3, 50), "down");
+        assert.equal(directionOf(-60, -10), "left");
+
+        // Slices are a quarter each, cut on the diagonals
+        assert.equal(directionOf(30, -32), "up");
+        assert.equal(directionOf(32, -30), "right");
+    });
+
+    it("draws each slice as a ring's sector", () => {
+        const path = sectorPath(30, 96, -Math.PI * 0.75, -Math.PI * 0.25);
+
+        assert.match(path, /^M-?[\d.]+,-?[\d.]+A96,96 0 0 1 -?[\d.]+,-?[\d.]+L-?[\d.]+,-?[\d.]+A30,30 0 0 0 -?[\d.]+,-?[\d.]+Z$/);
+        assert.ok(path.startsWith("M-67.88,-67.88"), path);
+    });
+
+    it("puts Heal up on the player's own wheel and Stun up on an enemy's, each a spell with an icon", () => {
+        assert.deepEqual(WHEELS, { self: { up: "heal" }, enemy: { up: "stun" } });
+
+        for (const [id, action] of Object.entries(ACTIONS)) {
+            assert.ok(SPELLS[action.spell], id);
+            assert.equal(typeof action.label, "string");
+            assert.match(ICONS[id], /<(path|circle|ellipse)/, `${id} has an icon`);
+        }
+
+        // Green for healing; gold stars for a stun
+        assert.match(ICONS.heal, /url\(#icon-heal-cross\)/);
+        assert.match(ICONS.stun, /url\(#icon-stun-star\)/);
+        assert.equal(SPELLS.heal.target, "self");
+        assert.equal(SPELLS.stun.target, "enemy");
     });
 });
 

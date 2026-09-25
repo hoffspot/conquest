@@ -35,8 +35,10 @@ to the same town:
 ## The battle (core/battle.js)
 
 The battle runs in fixed steps of 50 ms, the same on every device, whatever the frame rate.
-Each step returns events (`attack`, `projectile`, `hit`, `miss`, `death`, `respawn`,
-`exhausted`...) for the drawing to show; nothing in it draws anything.
+Each step makes events (`attack`, `projectile`, `hit`, `miss`, `death`, `respawn`,
+`exhausted`, `cast`, `healed`, `stunned`...) for the drawing to show; `advance` hands over all
+of them since it was last called (so a spell cast between frames is shown too). Nothing in it
+draws anything.
 
 - **Moving.** Each character stands on one square and walks from square middle to square middle
   along A* paths (8 directions, no cutting corners past blocked squares). It never steps into a
@@ -69,6 +71,15 @@ Each step returns events (`attack`, `projectile`, `hit`, `miss`, `death`, `respa
 - **Damage** is rolled for each hit: a whole number from the attack's least to its most, each
   equally likely (the battle's seeded random numbers). It comes off the target's hit points and
   staggers them for a moment (they can't move or start an attack): a punch 0.08 s, a hammer 0.45.
+- **Spells** (spells.js), cast with `cast(id, spell, target)`, take a moment to cast, then
+  land. **Heal** is cast on yourself (0.6 s) and gives back a whole number of hit points from 10
+  to 20, rolled, never above the most. **Stun** is cast on an enemy within 9 metres that the
+  caster can see (0.4 s): for 3 seconds it can't move, attack, cast or think, and whatever it
+  was starting is called off; the orc then turns on whoever stunned it. All of a character's
+  spells share one cooldown: none can be cast for 3 seconds from when one was. A spell that
+  can't be cast says why (`cooldown`, `busy` while staggered, stunned or casting, `full` at full
+  health, `range`, `sight`, `dead`, `target`) and nothing happens. Casting stands still, and
+  calls off an attack that hasn't landed; walking off doesn't stop a spell once it's begun.
 - **Dying and coming back.** At no hit points a character falls; the player gets up in the
   market square 5 seconds later, with full health, and the orc back in its corner 30 seconds
   later.
@@ -87,6 +98,11 @@ would be one line in weapons.js):
 | Bow | arrow | 9 m | 3–7 | 660 | 1000 | 1400 | 150 | pierce |
 | Spiked gauntlets | punch | melee | 2–5 | 170 | 420 | 600 | 80 | punch |
 | Orc cleaver | hack | melee | 3–8 | 520 | 900 | 1400 | 200 | hack |
+
+| Spell | On | Reach | Casts in | Does | Cooldown (shared) |
+| --- | --- | --- | --- | --- | --- |
+| Heal | yourself | | 600 ms | 10–20 hit points back | 3000 ms |
+| Stun | an enemy | 9 m, in sight | 400 ms | can't act for 3000 ms | 3000 ms |
 
 Both sides have 50 hit points. In play-testing (test/combat.test.js simulates fights on
 generated worlds), a sword fight with the orc lasts about 10 seconds and the player usually wins
@@ -182,6 +198,11 @@ without the scene's tone mapping so it stays red. It closes in on the enemy when
 it until it falls or the player is told to do something else. Its bar over its head is lit red
 too.
 
+Spells gather light in the caster's left hand as they're cast (green for Heal, violet for Stun).
+A heal lands in a burst of green sparkles rising round the character and a green ring spreading
+over the ground; a stun in a flash of violet and gold, and three gold stars circle the stunned character's
+head (always facing the camera) until it wears off.
+
 ### The minimap (app/minimap.js)
 
 The whole world from above, north up, in the top right of the screen under the menu button (a
@@ -197,26 +218,92 @@ pixels of the tap; a double tap runs.
 
 ### Sound (audio/)
 
-There are no sound files: `synth.js` makes every sound from noise and tones, shaped by filters
-(biquads, sweeping for swings), envelopes and a plucked string (Karplus-Strong for the bow),
-each in a few variants so repeats don't sound the same. Every sound is made about as loud as
-the others (by its loudest 30 ms), then played at its own volume.
+There are no sound files: everything is made in code as the game starts. `dsp.js` has the
+building blocks: noise, filters (biquads, sweeping for swings), envelopes, tones, wavetable
+oscillators, and a plucked string (Karplus-Strong, tuned between samples with an all-pass filter
+so it's in tune at any pitch). `sound.js` plays it all with the Web Audio API, in three **buses**,
+each with its own volume (the sliders in Game options, heard on a curve, `volume ** 1.5`, as ears
+hear loudness), all through a compressor and turned on or off together by the Sound switch:
+
+| Bus | What | To start with |
+| --- | --- | --- |
+| Effects | Blows, spells, footsteps, cues | 80% |
+| Environment | The wind, birds, rustling trees | 50% |
+| Music | The score | 35% |
+
+**Effects** (`synth.js`), each in a few variants so repeats don't sound the same, and each made
+about as loud as the others (by its loudest 30 ms), then played at its own volume:
 
 - **Swings** for each melee attack, timed so they're loudest as the blow lands; **launches** for
   arrows, bolts and fireballs; a **hit** for each reaction (a blade's ring for slashes, a knock
   for the staff, a heavy thump for the hammer, a thunk for arrows, a zap for arcane bolts, a
   roar for fire, a meaty thud for punches); a body **falling** as it hits the ground.
+- **Spells**: a rising chime casting Heal and a warm chord as it lands; the bolt's crackle
+  casting Stun and a zap and warble as it lands.
 - **Footsteps**, as each foot lands (the walker says when), on stone, dirt or grass, louder
   running.
-- **Cues**: a target chosen, an enemy slain, falling, waking again, out of breath.
-- **The town**: a quiet wind (a ten-second loop without a seam) and birds now and then.
+- **Cues**: a target chosen, an enemy slain, falling, waking again, out of breath, the action
+  wheel opening, and a flick refused.
 
-`worker.js` makes them in a worker, the most needed first, so the page never waits (without
-module workers they're made on the page, a few at a time). `sound.js` plays them with the Web
-Audio API, each from where it happens: full volume within 4 metres of the player, fading to
-nothing at 34, and panned left or right; at most 24 at once, through a compressor. Browsers let
-a page make sound only after a tap, click or key, so it starts on the first one. It's silent
-while the game is paused, and off (suspended) when turned off in Game options.
+They're heard from where they happen: full volume within 4 metres of the player, fading to
+nothing at 34, and panned left or right; at most 24 at once.
+
+**The environment**: a quiet wind (a ten-second loop without a seam), birds now and then (every
+4 to 14 seconds), and leaves rustling in a tree within 22 metres (every 2.5 to 7 seconds), from
+where the tree is.
+
+**Music.** A score (`score.js`) in the style of the 1985 *Bard's Tale*: the old games' bard songs
+were short, looping, old-world tunes, played on the Commodore 64's sound chip and the Apple II's
+speaker. This one is original, and played by a small band instead
+(`instruments.js`): lute and harp (plucked strings, the lute's two courses a hair apart),
+recorder (breathy, with a chiff and vibrato), fiddle (a bowed wavetable through a violin's
+formants), cello, a soft pad of detuned saws, bells (from inharmonic partials), a frame drum and tambourine, and a
+pulse-wave chip voice in the bridge, for the old games. Each instrument is made at pitches a
+fifth apart across its range and played at other pitches by speeding it up or slowing it down
+(never more than a few semitones).
+
+It's in D Dorian (D minor with a raised sixth, the old dances' mode), in 3/4 at 96 beats a
+minute, 128 bars, four minutes long:
+
+| Section | Bars | Tune | With |
+| --- | --- | --- | --- |
+| Intro | 8 | recorder fragment | harp, a low D on the cello |
+| Verse | 16 | recorder | lute, cello, drum |
+| Chorus | 16 | fiddle, recorder harmony in the second half | harp, pad, cello, drum and tambourine |
+| Verse | 16 | fiddle | long recorder notes under it, lute, cello, drum |
+| Chorus | 16 | fiddle, recorder harmony | harp, pad, cello, bells, drum and tambourine |
+| Bridge | 16 | recorder | chip arpeggios, pad, cello, drum and tambourine (to B flat and back) |
+| Quiet verse | 16 | harp | pad, cello, a few bells |
+| Last chorus | 16 | fiddle, recorder harmony | harp, lute, pad, cello, bells, drum and tambourine, with fills |
+| Outro | 8 | recorder | harp fading, cello, pad: ending on A, to lead back to D |
+
+The accompaniment is written from each section's chords; the timing and loudness of every note
+vary a little (seeded, so it's the same each time). `sound.js` plays it note by note, 1.2
+seconds ahead (checked every 0.2 s), each instrument panned in its place in the band and through
+a hall's reverb, and carries straight on round from the end to the beginning, so it loops
+without a seam. It plays on every screen.
+
+`worker.js` makes the sounds and instruments in a worker, the most needed first, so the page
+never waits (without module workers they're made on the page, a few at a time). Browsers let a
+page make sound only after a tap, click or key, so it starts on the first one. While the game
+is paused, the music and the wind play on (the birds and leaves wait). Everything is silent
+while the page is hidden, and off (suspended) when turned off in Game options.
+
+### The action wheel (app/wheel.js)
+
+Press and hold (0.4 s, without moving) on the player or an enemy, and a see-through wheel
+(SVG, 200 pixels across, kept on the screen) opens round them, cut into four slices: up, right,
+down and left. Keep holding and flick: as soon as the finger is 30 pixels from where it opened,
+the slice it's in is tried, lit gold if it's used; letting go before then does nothing. Each
+wheel's slices (`WHEELS`) hold actions (`ACTIONS`), each with an icon (app/icons.js: SVG, in
+colours that say what it does, a glowing green cross for Heal, gold stars round a violet dazed
+head for Stun). The player's own wheel has Heal at the top; an enemy's, Stun; the other slices
+are empty for now.
+
+While spells are cooling down, their slices are greyed over as much of the slice as the cooldown
+has left, the grey drawing back as it passes. A flick at a greyed slice, or an empty
+one, flashes it red and is refused. The game plays on while it's open; a second finger (a pinch)
+closes it.
 
 ## The screens (main.js)
 
@@ -238,19 +325,21 @@ while the game is paused, and off (suspended) when turned off in Game options.
    swung every few seconds.
 4. **Playing** (app/game.js): building the world, with a progress bar for each part (the ground,
    each piece of the town, the characters, compiling every shader before the first frame), then
-   the game. A tap walks; a second tap within 350 ms and 60 pixels of the first (going by when
+   the game. A tap walks; a press and hold on the player or an enemy opens the action wheel; a second tap within 350 ms and 60 pixels of the first (going by when
    the taps happened, so a slow frame between them doesn't matter) turns it into a run, as does
    a Shift-click. The heads-up display (app/hud.js) shows the player's name and health, with an
    orange stamina bar under the health bar while stamina isn't full, "Out of breath" when a run
    ends for want of it, the minimap, bars over the other characters (the target's lit red), and
    the damage each blow does.
 5. **The menu** (the menu button, or Escape) pauses the game: Resume, Game options, or back to
-   the title. **Game options** has a switch each for the minimap and the sound; Back (or Escape)
-   returns to the menu.
+   the title. **Game options** has a switch for the minimap, a switch that turns all the sound
+   on or off, and a slider (0 to 100%) for each bus: sound effects, environment and music (a
+   sound plays as the first two are moved, to hear how loud). Back (or Escape) returns to the
+   menu.
 
 The character is saved in the browser's local storage as `pellagos.save`: `{ version, hero,
 seed, created }`, where `hero` is `{ name, shape: { macro, details }, look: { skin, eyes, hair },
-weapon }`. Settings (the minimap and sound switches, debug mode and its controls) are in
+weapon }`. Settings (the minimap and sound switches, the three volumes, debug mode and its controls) are in
 `pellagos.settings`. A save of another
 version, or one naming a weapon the game doesn't know, is ignored rather than misread; if the
 browser won't store anything (private browsing), the game still plays, it just forgets.
@@ -288,17 +377,25 @@ particles reuse one buffer, and projectiles and effects add no lights.
   the battle: reach in every direction, line of sight, attack timing, projectiles, damage rolls,
   staggering, death and respawn, the orc's patrol, chase and giving up, running (its speed,
   speeding up and slowing down, charging), stamina (used, got back, running out, never below
-  none or above its most), and a simulated minute on a generated world.
+  none or above its most), spells (heal rolls, stun freezing the orc and calling off its blow,
+  the shared cooldown, every reason a cast fails), and a simulated minute on a generated world.
 - `test/actions.test.js`: attacks (their timing, where the hands reach on different bodies,
   two-handed grips, alternating punches), reactions and falls, on the real body.
 - `test/app.test.js`, `test/town3d.test.js`, `test/manifest.test.js`, `test/sw.test.js`: saving,
-  heroes, the minimap's colours, the loader's byte counting, the ground's blending, the town's
+  heroes, the minimap's colours, the action wheel (which slice a flick is in, its shapes, its
+  actions and icons), the loader's byte counting, the ground's blending, the town's
   builders, the loading list and the service worker.
 - `test/audio.test.js`: every sound (clean, as loud as the others, no clicks, swings timed to
-  their blows, a sound for every attack), the wind's seamless loop, and playing them: from
-  where they happen, timed, silent paused or turned off.
+  their blows, a sound for every attack, each on its bus), the wind's seamless loop, and playing
+  them: from where they happen, on their buses at their sliders' volumes, timed, silent hidden or
+  turned off, and the music scheduled ahead and round again without a gap.
+- `test/music.test.js`: the score (its sections and length, every note in time and in its
+  instrument's range, a tune in every section, in key, ending on A to lead back to D) and the
+  instruments (every sample clean and heard, the plucked strings in tune).
 - `e2e/pellagos.spec.js`: the whole game in Chromium: loading, debug mode, making a character
   through to playing them, carrying on with a saved character, a fight to the death, walking by
   tapping, running by double-clicking and double-tapping with the stamina bar showing and going,
-  the target ring, walking by the minimap, Game options (remembered), and a phone screen. Drawing without a GPU is slow, so fights are played on with
+  the target ring, walking by the minimap, Game options and the volume sliders (remembered), the
+  action wheel (stunning the orc, a flick refused while cooling down, then a heal), and a phone
+  screen. Drawing without a GPU is slow, so fights are played on with
   `game.advance(seconds)`, which runs the game without drawing each frame.

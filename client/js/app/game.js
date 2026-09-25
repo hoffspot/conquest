@@ -13,13 +13,15 @@ import { FALL_LANDS, REACTIONS } from "../characters/actions.js";
 import { Character } from "../characters/character.js";
 import { PRESETS } from "../characters/presets.js";
 import { Battle, STEP_MS } from "../core/battle.js";
+import { CAST_FAILURES, SPELLS } from "../core/spells.js";
 import { longestReach, WEAPONS } from "../core/weapons.js";
 import { Avatar } from "../world/avatar.js";
 import { Effects } from "../world/effects.js";
 import { Squares } from "../world/squares.js";
 import { buildGround } from "../world/ground.js";
 import { buildTown } from "../world/town3d.js";
-import { Minimap } from "./minimap.js";
+import { Minimap, treesOf } from "./minimap.js";
+import { ACTIONS, ActionWheel, directionOf } from "./wheel.js";
 
 /** What every new character wears; their weapon (and a bow's quiver) are added to it. */
 export const STARTING_OUTFIT = Object.freeze(["tunic", "bracers", "breeches", "boots"]);
@@ -46,6 +48,11 @@ const DOUBLE_TAP_SLOP = { view: 60, map: 16 };
 
 // How far from an enemy (screen pixels, at its chest) a tap picks it
 const PICK_RADIUS = 46;
+
+// Holding this long (ms) on the player or an enemy opens the action wheel; a finger this far
+// (pixels) from where it opened is in one of its slices
+const HOLD_MS = 400;
+const FLICK = 30;
 
 // How far the camera leans from the player towards who they're fighting: a share of the way,
 // up to so many metres
@@ -115,8 +122,8 @@ export class Game {
         let done = 0;
         const step = (label) => onProgress({ label, done: ++done, total: steps });
 
-        // The sounds are made while everything else is built (and after: they don't hold it up)
-        this.sound?.prepare();
+        // The trees, for hearing their leaves
+        this.sound?.setTrees(treesOf(world).map(({ x, y }) => ({ x, z: y })));
         onProgress({ label: "Laying the ground", done, total: steps });
         this.ground = await time("ground", () => buildGround(world));
         view.scene.add(this.ground);
@@ -162,6 +169,8 @@ export class Game {
 
         this.minimap = await time("minimap", () => new Minimap(this.hud.map, world, { onTap: (tap) => this.mapTap(tap) }));
         this.minimap.show(this.minimapShown ?? true);
+        this.wheel = new ActionWheel(this.hud.root);
+        this.effects.camera = view.camera;
 
         // Compile every shader now rather than when each thing first comes into view
         await time("shaders", () => view.renderer.compileAsync(view.scene, view.camera));
@@ -221,8 +230,14 @@ export class Game {
         }
 
         this.listeners = [];
+
+        for (const pointer of this.pointers.values()) {
+            clearTimeout(pointer.hold);
+        }
+
         this.pointers.clear();
         this.pinch = null;
+        this.wheel?.hide();
     }
 
     /** Take everything out of the scene (before building another game). */
@@ -248,6 +263,7 @@ export class Game {
         }
 
         this.minimap?.dispose();
+        this.wheel?.element.remove();
         this.view.setOccluders(null);
         this.view.setFocus(null);
     }
@@ -375,6 +391,18 @@ export class Game {
                 const height = flight.height + (target.character.height * 0.72 - flight.height) * along;
 
                 this.effects.fly(projectile.id, new THREE.Vector3(x, height + Math.sin(Math.PI * along) * flight.arc, z));
+            }
+        }
+
+        // The wheel's spells, greyed for as long as they're cooling down
+        if (this.wheel?.open) {
+            this.wheel.setCooldown(battle.cooldown("player"));
+        }
+
+        // Light gathers in the hand of anyone casting a spell
+        for (const actor of battle.actors) {
+            if (actor.casting && Math.random() < dt * 30) {
+                this.effects.burst(actor.casting.spell === "heal" ? "healCharge" : "stunCharge", this.avatars.get(actor.id).hand("Left"));
             }
         }
 
@@ -574,6 +602,29 @@ export class Game {
                     effects.land(event.projectile);
                     this.flights.delete(event.projectile);
                     break;
+                case "cast": {
+                    const spell = SPELLS[event.spell];
+
+                    avatar.actions.startAttack(event.spell === "heal" ? "castHeal" : "castStun", { hitAt: spell.castTime / 1000, duration: (spell.castTime / 1000) * 1.7 });
+                    this.sound?.play(event.spell === "heal" ? "castHeal" : "bolt", { at: avatar.object.position });
+                    break;
+                }
+                case "healed": {
+                    const actor = battle.actor(event.id);
+
+                    effects.burst("heal", avatar.point(0.5));
+                    effects.pulse(avatar.object.position.x, avatar.object.position.z);
+                    hud.damage(this.#screenAbove(event.id), `+${event.amount}`, { kind: "heal" });
+                    hud.setHealth(event.id, actor.hp, actor.maxHp);
+                    this.sound?.play("healed", { at: avatar.object.position });
+                    break;
+                }
+                case "stunned":
+                    effects.burst("stun", avatar.point(0.9));
+                    effects.daze(avatar.object, avatar.character.height * 1.08, (event.until - battle.time) / 1000);
+                    hud.damage(this.#screenAbove(event.id), "Stunned", { kind: "stun" });
+                    this.sound?.play("stun", { at: avatar.object.position });
+                    break;
                 case "exhausted":
                     if (event.id === "player") {
                         hud.message("Out of breath", 1.5);
@@ -586,6 +637,7 @@ export class Game {
 
                     avatar.actions.die({ from: killer ? avatar.angleTo(killer.object.position.x, killer.object.position.z) : 0 });
                     avatar.deadFor = 0;
+                    effects.clearDaze(avatar.object);
                     this.sound?.play("fall", { at: avatar.object.position, delay: FALL_LANDS });
 
                     if (event.id === "player") {
@@ -666,12 +718,26 @@ export class Game {
         const canvas = this.view.canvas;
 
         this.#on(canvas, "pointerdown", (event) => {
+            const pointer = { x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, moved: false, hold: null, wheel: null };
+
             canvas.setPointerCapture?.(event.pointerId);
-            this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, moved: false });
+            this.pointers.set(event.pointerId, pointer);
+
+            // Held on the player or an enemy: the action wheel
+            const who = this.pointers.size === 1 ? this.#whoIsAt(event.clientX, event.clientY) : null;
+
+            if (who) {
+                pointer.hold = setTimeout(() => this.#openWheel(pointer, who), HOLD_MS);
+            }
 
             if (this.pointers.size === 2) {
                 const [a, b] = [...this.pointers.values()];
 
+                for (const each of this.pointers.values()) {
+                    clearTimeout(each.hold);
+                }
+
+                this.#closeWheel();
                 this.pinch = { distance: Math.hypot(a.x - b.x, a.y - b.y) };
             }
         });
@@ -685,7 +751,18 @@ export class Game {
 
             pointer.x = event.clientX;
             pointer.y = event.clientY;
+
+            if (pointer.wheel) {
+                this.#steerWheel(pointer);
+
+                return;
+            }
+
             pointer.moved ||= Math.hypot(pointer.x - pointer.startX, pointer.y - pointer.startY) > TAP_SLOP;
+
+            if (pointer.moved) {
+                clearTimeout(pointer.hold);
+            }
 
             if (this.pinch && this.pointers.size === 2) {
                 const [a, b] = [...this.pointers.values()];
@@ -707,6 +784,16 @@ export class Game {
             }
 
             this.pointers.delete(event.pointerId);
+            clearTimeout(pointer.hold);
+
+            // Let go with the wheel open: whatever was chosen, it closes (in the middle, nothing)
+            if (pointer.wheel) {
+                if (!pointer.wheel.done) {
+                    this.#closeWheel();
+                }
+
+                return;
+            }
 
             if (this.pinch) {
                 if (this.pointers.size === 0) {
@@ -735,31 +822,124 @@ export class Game {
      * shift-clicked), run there.
      */
     tap(clientX, clientY, { run = false, time = performance.now() } = {}) {
-        const player = this.battle.actor("player");
+        const enemy = this.#whoIsAt(clientX, clientY, { player: false })?.actor ?? null;
+        const ground = enemy ? null : this.view.groundAt(clientX, clientY);
 
-        // An enemy near the tap?
+        this.#order({ enemy, ground: ground && [ground.x, ground.z] }, { clientX, clientY, run, time, from: "view" });
+    }
+
+    /**
+     * Try an action (an ACTIONS key) on a target: "self" (the player) or an enemy's id. Returns
+     * the battle's answer: { ok } or { ok: false, reason }, saying why not to the player.
+     */
+    act(action, target) {
+        const spell = ACTIONS[action]?.spell;
+        const result = spell ? this.battle.cast("player", spell, target === "self" ? null : target) : { ok: false, reason: "busy" };
+
+        if (!result.ok) {
+            this.hud.message(CAST_FAILURES[result.reason], 1.4);
+            this.sound?.play("denied");
+        }
+
+        return result;
+    }
+
+    // Who is under a point on the screen, within PICK_RADIUS of their feet, middle or head: the
+    // nearest living enemy, or the player (if `player`); { actor, wheel: "enemy" or "self" }
+    #whoIsAt(clientX, clientY, { player: withPlayer = true } = {}) {
+        const player = this.battle.actor("player");
         let best = null;
         let bestDistance = PICK_RADIUS;
 
+        if (!player) {
+            return null;
+        }
+
         for (const actor of this.battle.actors) {
-            if (player && actor.team !== player.team && !actor.dead) {
-                const avatar = this.avatars.get(actor.id);
+            const mine = actor === player;
 
-                for (const share of [0.2, 0.5, 0.8]) {
-                    const point = this.view.toScreen(avatar.point(share));
-                    const distance = point ? Math.hypot(point.x - clientX, point.y - clientY) : Infinity;
+            if (actor.dead || (mine && !withPlayer) || (!mine && actor.team === player.team)) {
+                continue;
+            }
 
-                    if (distance < bestDistance) {
-                        best = actor;
-                        bestDistance = distance;
-                    }
+            const avatar = this.avatars.get(actor.id);
+
+            for (const share of [0.2, 0.5, 0.8]) {
+                const point = this.view.toScreen(avatar.point(share));
+                const distance = point ? Math.hypot(point.x - clientX, point.y - clientY) : Infinity;
+
+                // (Enemies first, where they and the player overlap)
+                if (distance < bestDistance - (mine ? 6 : 0)) {
+                    best = { actor, wheel: mine ? "self" : "enemy" };
+                    bestDistance = distance;
                 }
             }
         }
 
-        const ground = best ? null : this.view.groundAt(clientX, clientY);
+        return best;
+    }
 
-        this.#order({ enemy: best, ground: ground && [ground.x, ground.z] }, { clientX, clientY, run, time, from: "view" });
+    // The finger's been held on someone: open the wheel round them
+    #openWheel(pointer, { actor, wheel }) {
+        const player = this.battle.actor("player");
+
+        if (!this.running || player.dead || actor.dead || this.pointers.size !== 1) {
+            return;
+        }
+
+        const centre = this.view.toScreen(this.avatars.get(actor.id).point(0.55));
+
+        if (!centre) {
+            return;
+        }
+
+        pointer.wheel = { originX: pointer.x, originY: pointer.y, target: wheel === "self" ? "self" : actor.id, refused: null, done: false };
+        this.wheel.show(centre.x, centre.y, wheel, pointer.wheel.target);
+        this.wheel.setCooldown(this.battle.cooldown("player"));
+        this.sound?.play("wheel");
+        globalThis.navigator?.vibrate?.(12);
+    }
+
+    // The finger moves with the wheel open: into a slice, try its action (once)
+    #steerWheel(pointer) {
+        const open = pointer.wheel;
+
+        if (open.done) {
+            return;
+        }
+
+        const direction = directionOf(pointer.x - open.originX, pointer.y - open.originY, FLICK);
+        const action = direction ? this.wheel.actionAt(direction) : null;
+
+        if (!direction) {
+            open.refused = null;
+            this.wheel.mark(null);
+
+            return;
+        }
+
+        const cooling = SPELLS[ACTIONS[action]?.spell] && this.battle.cooldown("player") > 0;
+
+        if (!action || cooling) {
+            if (open.refused !== direction) {
+                open.refused = direction;
+                this.wheel.mark(direction, "refused");
+                this.sound?.play("denied");
+            }
+
+            return;
+        }
+
+        open.done = true;
+        this.wheel.mark(direction, "chosen");
+        this.wheel.hide({ after: 180 });
+        this.act(action, open.target);
+    }
+
+    #closeWheel() {
+        if (this.wheel?.open) {
+            this.wheel.hide();
+        }
     }
 
     /**
