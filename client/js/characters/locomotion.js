@@ -51,6 +51,15 @@ const POINTS = 32;
 // How fast feet shuffle back under a character turning on the spot (metres a second)
 const SHUFFLE = 0.8;
 
+// A leg is never stretched further than this share of its length (a planted foot slides a little
+// instead), and how quickly a lifted foot stops making up for how far it had slid (per second),
+// however long it's in the air
+const REACH = 0.985;
+const LET_GO = 5;
+
+// Knees bend forward (in the thigh's anatomical frame)
+const KNEE = new THREE.Vector3(0, 0, 1);
+
 // Running: from the fastest walk to this much faster, the walk blends into a run. Running, the
 // body leans this much further forward (degrees), the feet land this far apart (metres), and the
 // body rises and falls this share of the leg's length (each way) through each step, lowest this
@@ -63,6 +72,8 @@ const RUN_LOWEST = RUN_STANCE * 0.45;
 
 const _point = new THREE.Vector3();
 const _target = new THREE.Vector3();
+const _hip = new THREE.Vector3();
+const _reach = new THREE.Vector3();
 
 export class Walker {
     /**
@@ -112,6 +123,9 @@ export class Walker {
 
         this.legLength = head("LeftUpLeg").y;
         this.hipWidth = head("LeftUpLeg").x - head("RightUpLeg").x;
+
+        // How far each leg reaches, hip to ankle
+        this.reaches = SIDES.map((side) => head(`${side}Leg`).distanceTo(head(`${side}UpLeg`)) + head(`${side}Foot`).distanceTo(head(`${side}Leg`)));
 
         // Where each foot touches the ground (heel, ball, toe tip), relative to its bones
         const positions = this.character.positions;
@@ -514,10 +528,12 @@ export class Walker {
             // On the ground: its lowest point just touching it
             lift = -this.#lowest(i);
         } else {
-            // Lifting off from the ground, easing into clearing it by a little
+            // Lifting off from the ground, easing into clearing it by a little (and, however long
+            // it's in the air, soon no longer making up for how far it had slid)
             const off = smooth(stance, stance + 0.08, phase);
             const lowest = this.#lowest(i);
 
+            foot.release.multiplyScalar(Math.exp(-LET_GO * dt));
             foot.correction.copy(foot.release).multiplyScalar(1 - smooth(stance, stance + 0.2, phase));
             lift = -lowest + (Math.max(0, 0.008 * off - lowest) + lowest) * off;
         }
@@ -526,11 +542,33 @@ export class Walker {
             return;
         }
 
-        // Where the ankle has to be, in the character's space
-        _target.setFromMatrixPosition(this.rig.bone(`${side}Foot`).matrixWorld).add(foot.correction);
+        // Where the ankle has to be: no further from the hip than the leg reaches (a planted foot
+        // that would need it slides along with the body instead)
+        _target.setFromMatrixPosition(this.rig.bone(`${side}Foot`).matrixWorld);
         _target.y += lift;
+        _hip.setFromMatrixPosition(this.rig.bone(`${side}UpLeg`).matrixWorld);
+
+        const reach = this.reaches[i] * REACH * object.getWorldScale(_reach).y;
+        const d = _reach.copy(_target).sub(_hip);
+        const c = foot.correction;
+
+        if (d.clone().add(c).lengthSq() > reach * reach) {
+            const a = c.lengthSq();
+            const b = 2 * d.dot(c);
+            const e = d.lengthSq() - reach * reach;
+            const share = e >= 0 ? 0 : (-b + Math.sqrt(Math.max(0, b * b - 4 * a * e))) / (2 * a);
+
+            c.multiplyScalar(Math.min(1, Math.max(0, share)));
+
+            if (foot.planted) {
+                foot.lock.copy(now).add(c);
+            }
+        }
+
+        // In the character's space, the knee bending forward
+        _target.add(c);
         object.worldToLocal(_target);
-        this.rig.reach(`${side}UpLeg`, `${side}Leg`, `${side}Foot`, _target);
+        this.rig.reach(`${side}UpLeg`, `${side}Leg`, `${side}Foot`, _target, { pole: KNEE });
     }
 
     #flattenToes(side, i) {
