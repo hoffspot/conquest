@@ -289,6 +289,14 @@ over whatever the character was doing and back out at the end. Each key says:
 | Spiked gauntlets | From a boxer's guard, a straight punch at head height, left and right in turn |
 | Orc cleaver | Raised high behind the head; hacked down |
 
+**Spells** are cast the same way, with the free left hand (the right keeps hold of the weapon),
+key 1 being when the spell takes effect:
+
+| Spell | The cast |
+| --- | --- |
+| Heal (`castHeal`) | The hand gathers the light before the chest, head bowed; then lifts it up and open, looking up |
+| Stun (`castStun`) | The hand drawn back by the left shoulder, turning away; then thrust open-palmed at the enemy, leaning in |
+
 On guard (while fighting), each weapon is held ready: the sword upright in front, the staff and
 hammer across the body in both hands, the fists up, the book open.
 

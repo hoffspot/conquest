@@ -165,6 +165,28 @@ export const ATTACKS = Object.freeze({
             [2, { ...GUARDS.cleaver, ...spine({}), offset: [0, 0, 0] }],
         ],
     },
+
+    // Spells, cast with the free (left) hand, key 1 when the spell takes effect. Healing: the
+    // hand gathers the light before the chest, then lifts it up and open
+    castHeal: {
+        keys: [
+            [0, { ...spine({}), Head: { flex: 0 } }],
+            [0.55, { left: { at: [0.08, -0.35, 0.5], point: [-0.3, 0.3, 0.9], edge: [0, -1, 0.2] }, ...spine({ flex: 6 }), Head: { flex: 8 } }],
+            [1, { left: { at: [0.1, 0.35, 0.45], point: [-0.2, 0.9, 0.35], edge: [0, 0.2, 1] }, ...spine({ flex: -6 }), Head: { flex: -14 } }],
+            [1.5, { left: { at: [0.12, 0.32, 0.42], point: [-0.2, 0.9, 0.35], edge: [0, 0.2, 1] }, ...spine({ flex: -5 }), Head: { flex: -10 } }],
+            [2, { ...spine({}), Head: { flex: 0 } }],
+        ],
+    },
+    // Stunning: drawn back by the left shoulder, then thrust open-palmed at the enemy
+    castStun: {
+        keys: [
+            [0, { ...spine({}), offset: [0, 0, 0] }],
+            [0.55, { left: { at: [0.28, 0.08, 0.28], point: [-1, 0, 0], edge: [0, 1, 0.15] }, ...spine({ turn: 18, flex: -4 }), offset: [0, 0.01, -0.03] }],
+            [1, { left: { at: [-0.1, 0.02, 1.02], point: [-1, 0, 0], edge: [0, 1, 0.15] }, ...spine({ turn: -12, flex: 6 }), offset: [0, -0.02, 0.06] }],
+            [1.5, { left: { at: [-0.1, -0.02, 0.98], point: [-1, 0, 0], edge: [0, 1, 0.2] }, ...spine({ turn: -10, flex: 6 }), offset: [0, -0.02, 0.05] }],
+            [2, { ...spine({}), offset: [0, 0, 0] }],
+        ],
+    },
 });
 
 // --- Reactions to being hit ---

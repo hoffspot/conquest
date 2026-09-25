@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Battle, KINDS, SIGHT, SPRINT, STAMINA_DRAIN, STAMINA_RECOVERY, STEP_MS } from "../client/js/core/battle.js";
 import { createRandom } from "../client/js/core/random.js";
+import { CAST_FAILURES, SPELL_COOLDOWN, SPELLS } from "../client/js/core/spells.js";
 import { chooseAttack, inReach, MELEE_REACH, rollDamage, STARTING_WEAPONS, WEAPONS } from "../client/js/core/weapons.js";
 import { generateWorld } from "../client/js/core/world.js";
 import { parseGrid } from "./helpers.js";
@@ -441,6 +442,137 @@ describe("the battle (battle.js)", () => {
 
         assert.ok(back, "the player comes back");
         assert.ok(player.stamina >= player.maxStamina - 1, `with ${player.stamina} stamina`);
+    });
+
+    it("heals by a rolled 10 to 20 hit points after a moment's casting, never past full health", () => {
+        const amounts = new Set();
+
+        for (let seed = 1; seed <= 40; seed++) {
+            const battle = new Battle(open(10, 10), { seed });
+            const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [4, 4] });
+
+            player.hp = seed % 2 ? 20 : 45;
+
+            assert.deepEqual(battle.cast("player", "heal"), { ok: true });
+
+            const cast = run(battle, SPELLS.heal.castTime - STEP_MS);
+
+            assert.equal(player.hp, seed % 2 ? 20 : 45, "not yet");
+            assert.ok(cast.some((event) => event.type === "cast" && event.spell === "heal" && event.target === "player"), "the cast is an event");
+
+            const healed = run(battle, STEP_MS * 2).find((event) => event.type === "healed");
+
+            assert.ok(healed, "healed");
+            assert.equal(player.hp, Math.min(player.maxHp, (seed % 2 ? 20 : 45) + healed.amount));
+
+            if (seed % 2) {
+                assert.ok(Number.isInteger(healed.amount) && healed.amount >= 10 && healed.amount <= 20);
+                amounts.add(healed.amount);
+            } else {
+                assert.equal(player.hp, player.maxHp, "no more than full");
+            }
+        }
+
+        assert.ok(amounts.size >= 6, `rolled ${[...amounts].sort()}`);
+    });
+
+    it("stuns an enemy it can see within reach: it can't move or attack for three seconds", () => {
+        const battle = new Battle(open(20, 5), { seed: 3 });
+
+        battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [2, 2] });
+
+        const orc = battle.add({ id: "orc", kind: "orc", weapon: "cleaver", team: "orcs", square: [9, 2], ai: "patrol", patrol: [[9, 2], [9, 2]] });
+
+        assert.deepEqual(battle.cast("player", "stun", "orc"), { ok: true });
+
+        const events = run(battle, SPELLS.stun.castTime + STEP_MS);
+        const stunned = events.find((event) => event.type === "stunned");
+
+        assert.equal(stunned?.id, "orc");
+        assert.equal(stunned.by, "player");
+
+        // Stunned, it doesn't come after the player, even though it's seen them
+        const square = [...orc.square];
+        const during = run(battle, SPELLS.stun.stun - 2 * STEP_MS);
+
+        assert.deepEqual(orc.square, square, "stays put");
+        assert.ok(!during.some((event) => event.type === "attack" && event.id === "orc"));
+
+        // Then it does
+        run(battle, 3000);
+        assert.notDeepEqual(orc.square, square, "comes after the player once it's over");
+        assert.equal(orc.target, "player");
+    });
+
+    it("stops a stunned enemy's attack before its blow lands", () => {
+        const battle = new Battle(open(10, 10), { seed: 2 });
+        const player = battle.add({ id: "player", kind: "player", weapon: "wand", team: "hero", square: [4, 4] });
+        const orc = battle.add({ id: "orc", kind: "orc", weapon: "cleaver", team: "orcs", square: [5, 4], ai: "patrol", patrol: [[5, 4], [5, 4]] });
+
+        // The orc starts a blow; the stun lands before it does
+        let events = [];
+
+        while (!orc.attack) {
+            events = battle.advance(STEP_MS);
+        }
+
+        player.spellReadyAt = 0;
+        battle.cast("player", "stun", "orc");
+        events = run(battle, 3000);
+
+        const orcHits = events.filter((event) => event.type === "hit" && event.by === "orc" && event.time < events.find((e) => e.type === "stunned").until);
+
+        assert.equal(orcHits.length, 0, "no blows while stunned");
+    });
+
+    it("shares one three-second cooldown between every spell", () => {
+        const battle = new Battle(open(20, 5), { seed: 1 });
+        const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [2, 2] });
+
+        battle.add({ id: "orc", kind: "orc", weapon: "cleaver", team: "orcs", square: [8, 2] });
+        player.hp = 10;
+
+        assert.equal(SPELL_COOLDOWN, 3000);
+        assert.equal(battle.cooldown("player"), 0);
+        assert.ok(battle.cast("player", "heal").ok);
+        assert.equal(battle.cooldown("player"), 1);
+        assert.deepEqual(battle.cast("player", "stun", "orc"), { ok: false, reason: "cooldown" }, "stun waits for heal's cooldown");
+
+        run(battle, 1500);
+        assert.ok(Math.abs(battle.cooldown("player") - 0.5) < 0.02, `half way: ${battle.cooldown("player")}`);
+        assert.equal(battle.cast("player", "heal").reason, "cooldown");
+
+        run(battle, 1500);
+        assert.equal(battle.cooldown("player"), 0);
+        assert.ok(battle.cast("player", "stun", "orc").ok, "ready again");
+    });
+
+    it("says why a spell can't be cast: out of reach, out of sight, full health, not an enemy", () => {
+        const battle = new Battle(worldOf([
+            "....................",
+            "..........#.........",
+            "..........#.........",
+            "..........#.........",
+            "....................",
+        ]), { seed: 1 });
+
+        battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [8, 2] });
+        battle.add({ id: "far", kind: "orc", weapon: "cleaver", team: "orcs", square: [19, 4] });
+        battle.add({ id: "hidden", kind: "orc", weapon: "cleaver", team: "orcs", square: [12, 2] });
+        battle.add({ id: "friend", kind: "player", weapon: "sword", team: "hero", square: [6, 2] });
+
+        assert.equal(battle.cast("player", "stun", "far").reason, "range");
+        assert.equal(battle.cast("player", "stun", "hidden").reason, "sight");
+        assert.equal(battle.cast("player", "stun", "friend").reason, "target");
+        assert.equal(battle.cast("player", "stun", "nobody").reason, "dead");
+        assert.equal(battle.cast("player", "heal").reason, "full");
+
+        for (const reason of ["range", "sight", "target", "dead", "full", "cooldown", "busy"]) {
+            assert.equal(typeof CAST_FAILURES[reason], "string", reason);
+        }
+
+        // Failing costs nothing: it's still ready
+        assert.equal(battle.cooldown("player"), 0);
     });
 
     it("plays out in the generated world: the orc patrols its corner while the player waits in the square", () => {

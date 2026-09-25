@@ -65,13 +65,36 @@ from above: roads, roofs, trees, what the camera can see, you (an arrow pointing
 face), where you're going, and the orc (red; ringed when it's your target). Tap it to walk
 there, or tap the orc on it to go and fight it; double-tap to run.
 
-**Sound.** Swords, staffs, hammers and fists swish; bows twang and spells crackle; every kind of
-blow sounds different where it lands; feet step on cobbles, dirt and grass; the wind blows and
-birds sing. It's all made in code as the game starts (in a worker, so nothing waits for it),
-with nothing to download, and it's heard from where you stand: quieter further away, and to the
+**Spells.** Press and hold on yourself or on an enemy, and a see-through wheel opens round
+them, cut in four like a pizza: up, right, down and left. Keep holding and flick towards a slice
+to cast what's in it; let go in the middle to change your mind. For now there are two spells,
+both at the top. On yourself, **Heal** (a green cross) gives back 10 to 20 hit points, rolled,
+after a 0.6-second cast. On an enemy, **Stun** (violet, with stars) reaches 9 metres, if you can
+see it: 0.4 seconds later it's dazed for three seconds, unable to move, attack or cast (stars
+circle its head). All spells share one cooldown of three seconds from when one's cast: while it
+runs, their slices are greyed over, and the grey sweeps back as it passes. A flick at a greyed
+slice, or at an empty one, is refused, and a spell that can't be cast (out of reach, out of
+sight, already at full health) says why.
+
+**Sound**, in three kinds, each with its own volume:
+
+- **Effects**: swords, staffs, hammers and fists swish; bows twang and spells crackle and chime;
+  every kind of blow sounds different where it lands; feet step on cobbles, dirt and grass.
+- **Environment**: the wind blows, birds sing, and the trees near you rustle.
+- **Music**: a four-minute score in the style of *The Bard's Tale* (1985), played by a small
+  modern band: lute, harp, recorder, fiddle, cello, a soft pad, bells, a frame drum and
+  tambourine, with a chip-tune bridge in the old games' honour. It's in D Dorian, in 3/4, with
+  an intro, verses, choruses, a bridge, a quiet verse, a last chorus and an outro that leads back
+  into the intro, so it loops without a seam. It's quiet to start with, under the effects and the
+  town.
+
+It's all made in code as the game starts (in a worker, so nothing waits for it), with nothing to
+download. Effects and the town are heard from where you stand: quieter further away, and to the
 left or right.
 
-**Game options**, in the menu: turn the minimap and the sound on or off. They're remembered.
+**Game options**, in the menu: turn the minimap on or off, turn all the sound on or off, and set
+how loud the effects (80% to start with), the environment (50%) and the music (35%) are. They're
+remembered.
 
 | Action | Touch | Mouse and keyboard |
 | --- | --- | --- |
@@ -80,6 +103,7 @@ left or right.
 | Fight | Tap an enemy (double-tap to run at them) | Click an enemy (double-click to run at them) |
 | Zoom | Pinch, or the + and − buttons | Scroll, or the + and − buttons |
 | Walk or fight on the map | Tap the minimap (double-tap to run) | Click the minimap (double-click to run) |
+| Cast a spell | Hold on yourself or an enemy, then flick to a slice | Hold the button down on them, then flick the mouse |
 | Pause, Game options | The menu button | The menu button or Escape |
 
 **Debug mode.** The switch on the title screen shows an overlay, on every screen, of how the game
@@ -164,6 +188,7 @@ client/                 The game (static files served to the browser)
     creator.js          Making a character; heroes.js has random ones and names
     game.js             Playing: the world, the battle, the characters, taps and the camera
     hud.js              Health, stamina, names, damage numbers and messages over the game
+    wheel.js            The action wheel: hold, flick, cooldowns; icons.js draws its icons
     minimap.js          The minimap: the world from above, with everyone on it
     debug.js            Debug mode's overlay
     save.js             The saved character and settings (local storage)
@@ -172,18 +197,21 @@ client/                 The game (static files served to the browser)
     world.js            The world: a town on 1-metre squares, fields, trees, where everyone starts
     battle.js           Moving, fighting, damage, dying and coming back; the orc's patrol
     weapons.js          The weapons and their attacks
+    spells.js           The spells: heal and stun, and their shared cooldown
     pathfinding.js      A* paths on the squares
     random.js           Seeded random numbers
     setpieces/          Town (and castle) layouts, and the pieces they're made from
-  js/audio/             The sound: synth.js makes it (worker.js runs it away from the page),
-                        sound.js plays it
+  js/audio/             The sound: dsp.js has the building blocks; synth.js makes the effects
+                        and the town's sounds, instruments.js the band, score.js writes the
+                        music; worker.js makes it all away from the page; sound.js plays it
   js/world/             Drawing the world
     view.js             The renderer, lights, sky, the camera, quality levels, the cutaway
     ground.js           The ground: textures blended square by square
     town3d.js           The town's buildings, props and trees, merged into few meshes
     art/                The art kits the town is built with: houses, landmarks, props, trees
     avatar.js           A character in the world, following its place in the battle
-    effects.js          Arrows, bolts, fireballs, sparks, dust, fire, arcane light, the target ring
+    effects.js          Arrows, bolts, fireballs, sparks, dust, fire, arcane light, the target
+                        ring, spells' light and the stars round a stunned head
     squares.js          Debug mode's squares and paths
   js/characters/        The character engine (see docs/CHARACTERS.md)
     body.js             Loading and shaping the body; macro.js and details.js are the sliders
@@ -193,7 +221,7 @@ client/                 The game (static files served to the browser)
     garments.js         Clothing and armour fitted to the body
     items.js            Weapons, shields, helmets and packs; equipment.js has slots and sockets
     gait.js             Walking and running data; locomotion.js walks and runs a character with it
-    actions.js          Attacking, flinching when hit, falling
+    actions.js          Attacking, casting, flinching when hit, falling
     bvh.js              Motion capture: reading BVH files and retargeting them
     presets.js          The human, heroine and orc
   js/lab/character-lab.js  The character lab

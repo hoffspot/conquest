@@ -12,10 +12,11 @@ export { readModelsFrom } from "../world/art/engine/models.js";
 export { detectQuality } from "../world/view.js";
 
 /**
- * Set up the view, the sound (on or off: `sound`) and load the character kit. `fetch` fetches
- * files (the loader's copies); `onProgress(label)` hears each step.
+ * Set up the view, the sound (on or off: `sound`, with `volumes` { effects, environment, music })
+ * and load the character kit. `fetch` fetches files (the loader's copies); `onProgress(label)`
+ * hears each step.
  */
-export async function createSession({ canvas, quality, sound = true, fetch = globalThis.fetch.bind(globalThis), onProgress = () => {} }) {
+export async function createSession({ canvas, quality, sound = true, volumes, fetch = globalThis.fetch.bind(globalThis), onProgress = () => {} }) {
     onProgress("Starting the 3D view");
 
     const view = new View(canvas, { quality });
@@ -24,7 +25,12 @@ export async function createSession({ canvas, quality, sound = true, fetch = glo
 
     const kit = await loadCharacterKit({ textureSize: view.quality.skin, fetch });
 
-    return { view, kit, sound: new Sound({ enabled: sound }) };
+    const audio = new Sound({ enabled: sound, volumes });
+
+    // The music and sounds are made while the game loads (and after: nothing waits for them)
+    audio.prepare();
+
+    return { view, kit, sound: audio };
 }
 
 /** A new game in the world of `seed`, for a hero: { name, shape, look, weapon }. */

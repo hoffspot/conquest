@@ -2,7 +2,8 @@
 // (sound.js)
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { Sound } from "../client/js/audio/sound.js";
+import { BUSES, gainOf, Sound, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
+import { SCORE } from "../client/js/audio/score.js";
 import { loudness, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "../client/js/audio/synth.js";
 import { WEAPONS } from "../client/js/core/weapons.js";
 
@@ -67,6 +68,12 @@ describe("making sounds (synth.js)", () => {
         }
     });
 
+    it("puts every sound on the effects bus but for the town's: birds and leaves", () => {
+        for (const [name, sound] of Object.entries(SOUNDS)) {
+            assert.equal(sound.bus ?? "effects", ["bird", "leaves"].includes(name) ? "environment" : "effects", name);
+        }
+    });
+
     it("blows a wind that loops without a seam", () => {
         const samples = wind();
         const step = (k) => Math.abs(samples[(k + 1) % samples.length] - samples[k]);
@@ -79,17 +86,33 @@ describe("making sounds (synth.js)", () => {
     });
 });
 
-// A stand-in for the browser's Web Audio: records what's played, how loud and where
+// A stand-in for the browser's Web Audio: records what's played, how loud, where and on which bus
 function fakeAudio() {
     const played = [];
     const param = (value) => ({ value, cancelScheduledValues() {}, setValueAtTime(v) { this.value = v; }, linearRampToValueAtTime(v) { this.value = v; } });
-    const node = (extra = {}) => ({ connect: (next) => next, disconnect() {}, ...extra });
+
+    // A node remembers what it's connected to, so a sound can be followed to its bus
+    const node = (extra = {}) => {
+        const self = {
+            outputs: [],
+            connect(next) {
+                self.outputs.push(next);
+
+                return next;
+            },
+            disconnect() {},
+            ...extra,
+        };
+
+        return self;
+    };
 
     class FakeContext {
         constructor() {
             this.state = "suspended";
             this.currentTime = 10;
-            this.destination = node();
+            this.sampleRate = 48000;
+            this.destination = node({ name: "destination" });
         }
 
         resume() {
@@ -104,6 +127,8 @@ function fakeAudio() {
             return Promise.resolve();
         }
 
+        close() {}
+
         createGain() {
             return node({ gain: param(1) });
         }
@@ -112,39 +137,27 @@ function fakeAudio() {
             return node({ pan: param(0) });
         }
 
+        createConvolver() {
+            return node({ buffer: null });
+        }
+
         createDynamicsCompressor() {
             return node({ threshold: param(0), knee: param(0), ratio: param(0), attack: param(0), release: param(0) });
         }
 
         createBuffer(channels, length, rate) {
-            const data = new Float32Array(length);
+            const data = Array.from({ length: channels }, () => new Float32Array(length));
 
-            return { length, sampleRate: rate, getChannelData: () => data };
+            return { length, sampleRate: rate, numberOfChannels: channels, getChannelData: (channel) => data[channel] };
         }
 
         createBufferSource() {
-            const level = { gain: 1 };
             const source = node({
                 playbackRate: param(1),
                 addEventListener() {},
-                start: (when = 0) => played.push({ buffer: source.buffer, when, level, pan: source.pan }),
+                start: (when = 0) => played.push({ source, when }),
                 stop() {},
             });
-
-            // (Follow the source through its gain and panner, to see how loud and where)
-            source.connect = (gain) => {
-                gain.connect = (next) => {
-                    if (next.pan) {
-                        source.pan = next.pan;
-                    }
-
-                    return next;
-                };
-
-                Object.defineProperty(level, "gain", { get: () => gain.gain.value });
-
-                return gain;
-            };
 
             return source;
         }
@@ -155,68 +168,146 @@ function fakeAudio() {
     return played;
 }
 
-describe("playing sounds (sound.js)", () => {
-    it("makes every sound (here without a worker), and plays nothing before it's unlocked", async () => {
-        const sound = new Sound();
+// Where a sound goes: its level (gain), pan, and the bus it ends up on
+function route(sound, source) {
+    const level = source.outputs[0];
+    const next = level.outputs[0];
+    const pan = next.pan ? next.pan.value : 0;
+    const bus = Object.entries(sound.buses).find(([, gain]) => gain === next || gain === next.outputs[0])?.[0];
 
-        await sound.prepare();
+    return { gain: level.gain.value, pan, bus };
+}
+
+// The sounds, made once (without a worker, as in Node) and handed to each Sound tested
+const made = new Sound();
+const making = made.prepare();
+
+async function started(options) {
+    await making;
+
+    const played = fakeAudio();
+    const sound = new Sound(options);
+
+    sound.samples = new Map(made.samples);
+    sound.instrumentSamples = new Map(made.instrumentSamples);
+    sound.ready = making;
+    sound.unlock();
+    await Promise.resolve();
+
+    return { sound, played };
+}
+
+describe("playing sounds (sound.js)", () => {
+    it("makes every sound and every instrument's samples (here without a worker), and plays nothing before it's unlocked", async () => {
+        await making;
 
         for (const [name, { variants }] of Object.entries(SOUNDS)) {
-            assert.equal(sound.samples.get(name)?.filter(Boolean).length, variants, name);
+            assert.equal(made.samples.get(name)?.filter(Boolean).length, variants, name);
         }
 
-        assert.ok(sound.samples.has("wind"));
-        assert.equal(sound.play("slash"), null, "no sound until the browser allows it");
+        assert.ok(made.samples.has("wind"));
+        assert.ok(made.instrumentSamples.size >= 40, `${made.instrumentSamples.size} instrument samples`);
+        assert.equal(made.play("slash"), null, "no sound until the browser allows it");
     });
 
     it("plays from where things happen: quieter further away, and to the side they're on", async () => {
-        const played = fakeAudio();
-        const sound = new Sound();
+        const { sound, played } = await started();
 
-        await sound.prepare();
-        sound.unlock();
-        await Promise.resolve();
-        sound.setPaused(false);
         sound.setListener(50, 50);
 
         const level = (x, z) => {
             played.length = 0;
-            sound.play("crush", { at: { x, z } });
 
-            return played[0] ?? null;
+            const source = sound.play("crush", { at: { x, z } });
+
+            return source ? route(sound, source) : null;
         };
         const near = level(51, 50);
         const middle = level(65, 50);
 
-        assert.ok(near && middle && near.level.gain > middle.level.gain * 2, "quieter further away");
+        assert.ok(near && middle && near.gain > middle.gain * 2, "quieter further away");
         assert.equal(level(95, 50), null, "not heard at all far away");
-        assert.ok(level(40, 50).pan.value < 0 && level(60, 50).pan.value > 0, "left and right");
-
-        delete globalThis.AudioContext;
+        assert.ok(level(40, 50).pan < 0 && level(60, 50).pan > 0, "left and right");
+        sound.close();
     });
 
-    it("times a swing to be loudest as the blow lands, and falls silent paused or turned off", async () => {
-        const played = fakeAudio();
-        const sound = new Sound();
+    it("sends each kind of sound to its own bus, as loud as its slider says", async () => {
+        const { sound } = await started({ volumes: { effects: 0.8, environment: 0.5, music: 0.2 } });
 
-        await sound.prepare();
-        sound.unlock();
-        await Promise.resolve();
-        sound.setPaused(false);
+        assert.deepEqual(BUSES, ["effects", "environment", "music"]);
+        assert.deepEqual(VOLUME_DEFAULTS, { effects: 0.8, environment: 0.5, music: 0.35 });
+        assert.equal(route(sound, sound.play("slash")).bus, "effects");
+        assert.equal(route(sound, sound.play("bird")).bus, "environment");
+        assert.ok(Math.abs(sound.buses.music.gain.value - gainOf(0.2)) < 1e-9);
+
+        // The music is soft next to the effects and the town, to start with
+        assert.ok(gainOf(VOLUME_DEFAULTS.music) < gainOf(VOLUME_DEFAULTS.environment) && gainOf(VOLUME_DEFAULTS.environment) < gainOf(VOLUME_DEFAULTS.effects));
+
+        sound.setVolume("effects", 0.25);
+        assert.ok(Math.abs(sound.buses.effects.gain.value - gainOf(0.25)) < 1e-9);
+        assert.equal(gainOf(0), 0);
+        assert.equal(gainOf(1), 1);
+        sound.close();
+    });
+
+    it("times a swing to be loudest as the blow lands, and falls silent turned off or hidden", async () => {
+        const { sound, played } = await started();
 
         sound.attack("hammer", { x: 0, z: 0 }, 0.64);
-        assert.ok(Math.abs(played[0].when - (10 + 0.64 - PEAKS.swingHammer)) < 1e-9);
+        assert.ok(Math.abs(played.at(-1).when - (10 + 0.64 - PEAKS.swingHammer)) < 1e-9);
         assert.equal(sound.attack("bow", { x: 0, z: 0 }, 0.66), null, "bows twang when they let go, not when drawn");
 
-        sound.setPaused(true);
+        sound.setHidden(true);
         assert.equal(sound.play("lock"), null);
-        sound.setPaused(false);
+        sound.setHidden(false);
+        await Promise.resolve();
         sound.setEnabled(false);
         assert.equal(sound.play("lock"), null);
         sound.setEnabled(true);
         await Promise.resolve();
         assert.ok(sound.play("lock"));
+        sound.close();
+    });
 
-        delete globalThis.AudioContext;
+    it("plays the score a little ahead of time, on the music bus, round again without a gap", async () => {
+        const { sound, played } = await started();
+        const context = sound.context;
+        const music = () => played.filter(({ source }) => source.outputs[0].outputs[0] && Object.values(sound.music.channels).includes(source.outputs[0].outputs[0]));
+
+        played.length = 0;
+        sound.scheduleMusic();
+
+        const first = music();
+        const start = sound.music.start;
+
+        assert.ok(first.length > 0, "the first notes are scheduled");
+        assert.ok(first.every(({ when }) => when >= context.currentTime && when <= context.currentTime + 1.6), "a little ahead");
+
+        // Nearly four minutes on, into the next time round: the notes carry straight on
+        for (let t = 0; t <= SCORE.length + 5; t += 0.2) {
+            context.currentTime = 10 + t;
+            sound.scheduleMusic();
+        }
+
+        const times = music().map(({ when }) => when);
+
+        assert.equal(sound.music.loop, 1);
+        assert.ok(times.some((when) => Math.abs(when - (start + SCORE.length + SCORE.notes[0].time)) < 0.05), "the first note again, one score's length later");
+        assert.ok(times.every((when, k) => k === 0 || when >= times[k - 1] - 0.05), "in order");
+
+        const gaps = times.slice(1).map((when, k) => when - times[k]);
+        const bar = (SCORE.beatsPerBar * 60) / SCORE.tempo;
+
+        // At most a bar held without a new note, and round the end straight back to the start
+        assert.ok(Math.max(...gaps) < bar + 0.05, `never more than ${Math.max(...gaps).toFixed(2)} s without a note`);
+        assert.ok(SCORE.length - SCORE.notes.at(-1).time + SCORE.notes[0].time < 0.5, "no pause at the seam");
+
+        // Silent while turned off; turned down to nothing, nothing is played
+        sound.setVolume("music", 0);
+        played.length = 0;
+        context.currentTime += 1;
+        sound.scheduleMusic();
+        assert.equal(music().length, 0);
+        sound.close();
     });
 });

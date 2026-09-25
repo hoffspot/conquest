@@ -8,205 +8,22 @@
 //  - Hits: a thump (a sine dropping in pitch) and a burst of filtered noise, with a ring of
 //    inharmonic partials for blades, a knock for wood, a zap for magic, a roar for fire.
 //  - The bow: a plucked string (Karplus-Strong); spells: rising chimes and a whoosh.
-//  - Footsteps on stone, dirt and grass; a body falling; a bird's chirp; the wind (a loop).
-//  - Cues: a target chosen, an enemy slain, falling, waking again, out of breath.
+//  - Spells: a rising shimmer casting a heal, a warm swell as it lands; a dizzy warble for a stun.
+//  - Footsteps on stone, dirt and grass; a body falling.
+//  - Cues: a target chosen, an enemy slain, falling, waking again, out of breath; the action
+//    wheel opening, and a slice that can't be used.
+//  - Around the town (the environment): a bird's chirp, leaves rustling, the wind (a loop).
 //
-// Pure maths on arrays of samples, no Web Audio: sound.js plays them. So they're tested in Node.
+// Each sound belongs to a bus, which has its own volume: "effects" (the default) or
+// "environment" (the music is music.js's). Built from dsp.js; no Web Audio (sound.js plays
+// them), so they're tested in Node.
 
 import { createRandom } from "../core/random.js";
+import { add, count, filter, finish, hit, noise, pluck, shape, swell, tone } from "./dsp.js";
 
-/** Samples a second the sounds are made at (the browser plays them at its own rate). */
-export const SAMPLE_RATE = 48000;
+export { loudness, SAMPLE_RATE } from "./dsp.js";
 
 const TAU = 2 * Math.PI;
-const count = (seconds) => Math.max(1, Math.round(seconds * SAMPLE_RATE));
-
-/** White noise, `seconds` long. */
-function noise(random, seconds) {
-    const out = new Float32Array(count(seconds));
-
-    for (let n = 0; n < out.length; n++) {
-        out[n] = random.next() * 2 - 1;
-    }
-
-    return out;
-}
-
-/**
- * A biquad filter (Robert Bristow-Johnson's cookbook): "lowpass", "highpass" or "bandpass",
- * at `frequency` Hz (a number, or a function of the time in seconds), with resonance `q`.
- */
-function filter(input, type, frequency, q = Math.SQRT1_2) {
-    const out = new Float32Array(input.length);
-    const at = typeof frequency === "function" ? frequency : () => frequency;
-    let [x1, x2, y1, y2] = [0, 0, 0, 0];
-    let [b0, b1, b2, a1, a2] = [0, 0, 0, 0, 0];
-
-    for (let n = 0; n < input.length; n++) {
-        // New coefficients every 32 samples, for filters that sweep
-        if (n % 32 === 0) {
-            const f = Math.min(SAMPLE_RATE * 0.45, Math.max(10, at(n / SAMPLE_RATE)));
-            const w = (TAU * f) / SAMPLE_RATE;
-            const cos = Math.cos(w);
-            const alpha = Math.sin(w) / (2 * q);
-            const a0 = 1 + alpha;
-
-            if (type === "lowpass") {
-                [b0, b1, b2] = [(1 - cos) / 2, 1 - cos, (1 - cos) / 2];
-            } else if (type === "highpass") {
-                [b0, b1, b2] = [(1 + cos) / 2, -(1 + cos), (1 + cos) / 2];
-            } else {
-                [b0, b1, b2] = [alpha, 0, -alpha];
-            }
-
-            [b0, b1, b2, a1, a2] = [b0 / a0, b1 / a0, b2 / a0, (-2 * cos) / a0, (1 - alpha) / a0];
-        }
-
-        const x = input[n];
-        const y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
-
-        x2 = x1;
-        x1 = x;
-        y2 = y1;
-        y1 = y;
-        out[n] = y;
-    }
-
-    return out;
-}
-
-/** Multiply by an envelope: a function of the time in seconds. */
-function shape(samples, envelope) {
-    for (let n = 0; n < samples.length; n++) {
-        samples[n] *= envelope(n / SAMPLE_RATE);
-    }
-
-    return samples;
-}
-
-/** A quick rise over `attack` seconds, then a fall by e every `decay` seconds. */
-const hit = (attack, decay) => (t) => (t < attack ? t / attack : Math.exp(-(t - attack) / decay));
-
-/** A swell to a peak `peak` of the way through `length` seconds, and away again. */
-const swell = (length, peak) => (t) => {
-    const u = t / length;
-
-    return u < peak ? Math.sin((Math.PI / 2) * (u / peak)) ** 2 : Math.cos((Math.PI / 2) * Math.min(1, (u - peak) / (1 - peak))) ** 2;
-};
-
-/**
- * A tone `seconds` long at `frequency` Hz (or a function of time), with `harmonics` [[multiple,
- * level]...] over it, and optional frequency modulation ([ratio, depth]).
- */
-function tone(seconds, frequency, { harmonics = [[1, 1]], fm = null, phase = 0 } = {}) {
-    const out = new Float32Array(count(seconds));
-    const at = typeof frequency === "function" ? frequency : () => frequency;
-    const multiples = harmonics.map(([multiple]) => multiple);
-    const levels = harmonics.map(([, level]) => level);
-    const [ratio, depth] = fm ?? [0, 0];
-    let angle = phase;
-    let modulator = 0;
-
-    for (let n = 0; n < out.length; n++) {
-        const f = at(n / SAMPLE_RATE);
-        const bend = depth ? depth * Math.sin(modulator) : 0;
-        let value = 0;
-
-        for (let k = 0; k < multiples.length; k++) {
-            value += levels[k] * Math.sin(multiples[k] * angle + bend);
-        }
-
-        out[n] = value;
-        angle += (TAU * f) / SAMPLE_RATE;
-        modulator += (TAU * f * ratio) / SAMPLE_RATE;
-    }
-
-    return out;
-}
-
-/** A plucked string (Karplus-Strong) at `frequency` Hz, `seconds` long, losing `damping` a cycle. */
-function pluck(random, frequency, seconds, damping = 0.996) {
-    const out = new Float32Array(count(seconds));
-    const period = Math.max(2, Math.round(SAMPLE_RATE / frequency));
-    const line = filter(noise(random, period / SAMPLE_RATE + 0.001), "lowpass", 3000).subarray(0, period);
-
-    for (let n = 0; n < out.length; n++) {
-        const k = n % period;
-        const next = line[(k + 1) % period];
-        const value = line[k];
-
-        out[n] = value;
-        line[k] = damping * 0.5 * (value + next);
-    }
-
-    return out;
-}
-
-/** Add `layer` into `mix` (which grows to fit) at `offset` seconds, times `gain`. */
-function add(mix, layer, gain = 1, offset = 0) {
-    const start = Math.round(offset * SAMPLE_RATE);
-    const length = Math.max(mix.length, start + layer.length);
-    let out = mix;
-
-    if (length > mix.length) {
-        out = new Float32Array(length);
-        out.set(mix);
-    }
-
-    for (let n = 0; n < layer.length; n++) {
-        out[start + n] += layer[n] * gain;
-    }
-
-    return out;
-}
-
-// How loud every sound is made (the loudest 30 ms of it, root mean square), before its own volume
-// (SOUNDS) scales it: so a roar of noise and a pure tone sound about as loud as each other
-const LOUDNESS = 0.3;
-const PEAK = 0.95;
-
-/** How loud a sound is: the root mean square of its loudest 30 ms. */
-export function loudness(samples) {
-    const window = count(0.03);
-    let sum = 0;
-    let loudest = 0;
-
-    for (let n = 0; n < samples.length; n++) {
-        sum += samples[n] * samples[n];
-
-        if (n >= window) {
-            sum -= samples[n - window] * samples[n - window];
-        }
-
-        loudest = Math.max(loudest, sum);
-    }
-
-    return Math.sqrt(Math.max(0, loudest) / Math.min(window, samples.length));
-}
-
-/**
- * Tidy a sound: no DC, a short fade at each end (no clicks), and as loud as the others (LOUDNESS),
- * as far as its loudest sample allows (PEAK).
- */
-function finish(samples) {
-    const out = filter(samples, "highpass", 25);
-    const fade = count(0.004);
-    let peak = 0;
-
-    for (let n = 0; n < out.length; n++) {
-        out[n] *= Math.min(1, n / fade, (out.length - 1 - n) / fade);
-        peak = Math.max(peak, Math.abs(out[n]));
-    }
-
-    const level = loudness(out);
-    const scale = level > 0 ? Math.min(PEAK / peak, LOUDNESS / level) : 0;
-
-    for (let n = 0; n < out.length; n++) {
-        out[n] *= scale;
-    }
-
-    return out;
-}
 
 // --- The sounds ---
 
@@ -373,6 +190,48 @@ export const SOUNDS = {
         make: (random) => add(add(thump(80, 42, 0.4, 0.1), burst(random, 0.3, "lowpass", 500, 0.8, 0.003, 0.07), 0.9), add(thump(95, 60, 0.25, 0.05), burst(random, 0.2, "lowpass", 800, 0.8, 0.002, 0.04), 0.7), 0.5, 0.18),
     },
 
+    // Spells: a rising shimmer as a heal is cast, a warm swell as it lands; a dizzy warble for a stun
+    castHeal: {
+        variants: 2,
+        volume: 0.45,
+        make: (random) => {
+            let out = shape(filter(noise(random, 0.7), "highpass", 5000), swell(0.7, 0.7));
+
+            [880, 1109, 1319, 1760].forEach((frequency, k) => {
+                out = add(out, shape(tone(0.6, frequency, { harmonics: [[1, 1], [2.76, 0.15]] }), hit(0.01, 0.25)), 0.5, k * 0.1);
+            });
+
+            return out;
+        },
+    },
+    healed: {
+        variants: 1,
+        volume: 0.5,
+        make: () => {
+            let out = new Float32Array(count(1.3));
+
+            for (const frequency of [587, 740, 880, 1175]) {
+                out = add(out, shape(tone(1.3, frequency, { harmonics: [[1, 1], [2, 0.2]] }), swell(1.3, 0.25)), 0.5);
+            }
+
+            return out;
+        },
+    },
+    stun: {
+        variants: 2,
+        volume: 0.6,
+        make: (random) => {
+            const zap = shape(tone(0.25, (t) => 300 + 1200 * Math.exp(-t / 0.05), { fm: [2.01, 1.5] }), hit(0.002, 0.07));
+            const warble = shape(tone(0.9, (t) => 520 + 90 * Math.sin(TAU * 7 * t) - 120 * t, { harmonics: [[1, 1], [3, 0.2]] }), swell(0.9, 0.2));
+
+            return add(add(zap, warble, 0.6, 0.08), burst(random, 0.2, "highpass", 4500, 0.7, 0.001, 0.05), 0.4);
+        },
+    },
+
+    // The action wheel: opening, and a slice that can't be used
+    wheel: { variants: 1, volume: 0.3, make: (random) => add(whoosh(random, { length: 0.16, from: 1500, top: 4200, to: 2500, peak: 0.6 }), notes([[1320, 0.06]], { decay: 0.04, length: 0.16 }), 0.4) },
+    denied: { variants: 1, volume: 0.35, make: () => notes([[233, 0], [196, 0.09]], { decay: 0.06, harmonics: [[1, 1], [3, 0.3], [5, 0.12]], length: 0.3 }) },
+
     // Cues
     lock: { variants: 1, volume: 0.35, make: () => notes([[740, 0], [1110, 0.07]], { decay: 0.06, length: 0.3 }) },
     slain: { variants: 1, volume: 0.4, make: () => notes([[523, 0], [659, 0.09], [784, 0.18], [1047, 0.27]], { decay: 0.35, length: 1.2 }) },
@@ -388,10 +247,11 @@ export const SOUNDS = {
         },
     },
 
-    // Out in the fields
+    // Around the town (the environment's bus): birds, and leaves rustling in a tree
     bird: {
         variants: 4,
-        volume: 0.18,
+        volume: 0.4,
+        bus: "environment",
         make: (random) => {
             const pitch = 3400 + random.next() * 1800;
             const chirps = 2 + Math.floor(random.next() * 3);
@@ -405,6 +265,25 @@ export const SOUNDS = {
             }
 
             return out;
+        },
+    },
+    leaves: {
+        variants: 3,
+        volume: 0.4,
+        bus: "environment",
+        make: (random) => {
+            const length = 1.6 + random.next() * 0.8;
+            const hiss = filter(filter(noise(random, length), "highpass", 1600), "lowpass", 7000);
+            const flutter = filter(noise(random, length), "lowpass", 14);
+            let most = 0;
+
+            for (const value of flutter) {
+                most = Math.max(most, Math.abs(value));
+            }
+
+            const whole = swell(length, 0.4);
+
+            return shape(hiss.map((value, n) => value * (0.25 + (0.75 * Math.abs(flutter[n])) / most)), whole);
         },
     },
 };

@@ -12,7 +12,20 @@ const SETTINGS_KEY = "pellagos.settings";
 export const SAVE_VERSION = 1;
 
 /** Settings, and what they are until changed. */
-export const SETTINGS_DEFAULTS = Object.freeze({ debug: false, debugFolded: false, quality: "auto", renderScale: 1, shadows: true, squares: false, minimap: true, sound: true });
+export const SETTINGS_DEFAULTS = Object.freeze({
+    debug: false,
+    debugFolded: false,
+    quality: "auto",
+    renderScale: 1,
+    shadows: true,
+    squares: false,
+    minimap: true,
+    sound: true,
+    // How loud each kind of sound is, 0 to 1 (audio/sound.js VOLUME_DEFAULTS)
+    effectsVolume: 0.8,
+    environmentVolume: 0.5,
+    musicVolume: 0.35,
+});
 
 function read(key) {
     try {

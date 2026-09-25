@@ -1,6 +1,9 @@
 // What fighting looks like besides the fighters: arrows, bolts and fireballs in flight, sparks,
 // dust, fire and arcane light where blows land, arrows left stuck in whoever they hit, a ring on
 // the ground where the player is walking to, and a red ring round the enemy they're set to fight.
+// Spells: green light gathering in a healer's hand and rising round them, with a green ring
+// spreading on the ground; violet sparks in a hand casting a stun, a burst where it lands, and
+// stars circling the stunned one's head until it wears off.
 //
 // Every spark, puff and flame is a particle in one shared, fixed-size buffer, drawn in a single
 // draw call (glowing ones added to what's behind them, like light), so a busy fight costs no more
@@ -21,7 +24,14 @@ const BURSTS = {
     fire: { count: 34, colours: [0xffe08a, 0xff3a0a], size: [0.18, 0.36], speed: [0.8, 2.4], life: [0.35, 0.75], gravity: -3, spread: 1.8, glow: true, grow: 0.4 },
     trailBolt: { count: 2, colours: [0xe6dcff, 0x7a5cff], size: [0.08, 0.14], speed: [0, 0.3], life: [0.15, 0.3], gravity: 0, spread: 2, glow: true },
     trailFire: { count: 3, colours: [0xffd070, 0xff2a00], size: [0.16, 0.3], speed: [0.2, 0.8], life: [0.2, 0.4], gravity: -2, spread: 2, glow: true, grow: 0.6 },
+    heal: { count: 30, colours: [0xdcffe0, 0x28d05a], size: [0.08, 0.18], speed: [0.4, 1.3], life: [0.7, 1.2], gravity: -1.8, spread: 2.2, glow: true, swirl: 3 },
+    healCharge: { count: 3, colours: [0xeaffec, 0x5ef08a], size: [0.05, 0.1], speed: [0.1, 0.5], life: [0.25, 0.45], gravity: -0.8, spread: 2, glow: true },
+    stun: { count: 30, colours: [0xfff4a0, 0x9a5cff], size: [0.06, 0.15], speed: [1.5, 3.2], life: [0.25, 0.55], gravity: 0, spread: 2, glow: true, swirl: 8 },
+    stunCharge: { count: 3, colours: [0xe8d8ff, 0x8a4dff], size: [0.05, 0.1], speed: [0.2, 0.7], life: [0.2, 0.35], gravity: 0, spread: 2, glow: true, swirl: 5 },
 };
+
+// A dazed character's stars: how many, how far round its head (m), how fast they circle (rad/s)
+const DAZE = { stars: 3, radius: 0.24, speed: 4.5 };
 
 const VERTEX = /* glsl */ `
 attribute float size;
@@ -232,6 +242,15 @@ export class Effects {
         this.target = null;
         scene.add(this.targetRing);
 
+        // Rings spreading on the ground (a heal), and stars circling dazed heads
+        this.pulses = [];
+        this.dazed = [];
+        this.star = new THREE.ShapeGeometry(starShape(0.075, 0.032));
+        this.starMaterial = new THREE.MeshBasicMaterial({ color: 0xffe14a, side: THREE.DoubleSide, toneMapped: false });
+
+        /** The camera, for turning the stars to face it (the game sets it). */
+        this.camera = null;
+
         this.arrow = arrowModel();
     }
 
@@ -282,6 +301,55 @@ export class Effects {
         if (object !== (this.target?.object ?? null)) {
             this.target = object ? { object, radius, age: 0 } : null;
         }
+    }
+
+    /** A ring spreading on the ground from a point (metres), in a colour, fading as it goes. */
+    pulse(x, z, colour = 0x3ddc6a) {
+        const ring = new THREE.Mesh(
+            new THREE.RingGeometry(0.86, 1, 48).rotateX(-Math.PI / 2),
+            new THREE.MeshBasicMaterial({ color: colour, transparent: true, depthWrite: false, toneMapped: false }),
+        );
+
+        ring.position.set(x, 0.04, z);
+        ring.renderOrder = 1;
+        this.group.add(ring);
+        this.pulses.push({ ring, age: 0 });
+    }
+
+    /**
+     * Stars circling a character's head (at `height` metres) for `seconds`: dazed. Again while
+     * dazed, it lasts the longer of the two.
+     */
+    daze(object, height, seconds) {
+        const already = this.dazed.find((daze) => daze.object === object);
+
+        if (already) {
+            already.left = Math.max(already.left, seconds);
+
+            return;
+        }
+
+        const stars = new THREE.Group();
+
+        for (let k = 0; k < DAZE.stars; k++) {
+            stars.add(new THREE.Mesh(this.star, this.starMaterial));
+        }
+
+        this.group.add(stars);
+        this.dazed.push({ object, height, left: seconds, age: 0, stars });
+    }
+
+    /** No more stars round a character's head (it's fallen). */
+    clearDaze(object) {
+        this.dazed = this.dazed.filter((daze) => {
+            if (daze.object === object) {
+                daze.stars.removeFromParent();
+
+                return false;
+            }
+
+            return true;
+        });
     }
 
     /** A projectile the battle launched: `kind` "arrow", "bolt" or "fireball", from a point. */
@@ -385,6 +453,56 @@ export class Effects {
         this.marker.scale.setScalar(1.4 - 0.6 * t);
         this.marker.visible = t < 1;
 
+        // Rings spread and fade
+        this.pulses = this.pulses.filter((pulse) => {
+            pulse.age += dt;
+
+            const t = pulse.age / 0.8;
+
+            pulse.ring.scale.setScalar(0.3 + 1.1 * Math.sqrt(Math.min(1, t)));
+            pulse.ring.material.opacity = 0.85 * (1 - Math.min(1, t));
+
+            if (t >= 1) {
+                pulse.ring.removeFromParent();
+                pulse.ring.geometry.dispose();
+                pulse.ring.material.dispose();
+
+                return false;
+            }
+
+            return true;
+        });
+
+        // Stars circle dazed heads, facing the camera, shrinking away at the end
+        this.dazed = this.dazed.filter((daze) => {
+            daze.age += dt;
+            daze.left -= dt;
+
+            if (daze.left <= 0) {
+                daze.stars.removeFromParent();
+
+                return false;
+            }
+
+            const { position } = daze.object;
+            const size = Math.min(1, daze.left / 0.3, daze.age / 0.15);
+
+            daze.stars.children.forEach((star, k) => {
+                const angle = daze.age * DAZE.speed + (k * 2 * Math.PI) / DAZE.stars;
+
+                star.position.set(position.x + Math.cos(angle) * DAZE.radius, daze.height + 0.03 * Math.sin(angle * 2), position.z + Math.sin(angle) * DAZE.radius);
+                star.scale.setScalar(size);
+
+                if (this.camera) {
+                    star.quaternion.copy(this.camera.quaternion);
+                }
+
+                star.rotateZ(daze.age * 3 + k);
+            });
+
+            return true;
+        });
+
         // The target's ring closes in when it's chosen, then turns slowly and pulses
         const target = this.target;
         const ring = this.targetRing;
@@ -405,6 +523,22 @@ export class Effects {
             ring.material.opacity = lock;
         }
     }
+}
+
+// A five-pointed star, `outer` and `inner` metres from its middle
+function starShape(outer, inner) {
+    const shape = new THREE.Shape();
+
+    for (let k = 0; k < 10; k++) {
+        const radius = k % 2 ? inner : outer;
+        const angle = Math.PI / 2 + (k * Math.PI) / 5;
+
+        shape[k ? "lineTo" : "moveTo"](Math.cos(angle) * radius, Math.sin(angle) * radius);
+    }
+
+    shape.closePath();
+
+    return shape;
 }
 
 // How long a new target's ring takes to close in on it (s)

@@ -19,6 +19,10 @@
 // back, STAMINA_RECOVERY a second. A character has as much stamina as it has hit points, and it
 // never goes below none or above that. With none left, a runner walks the rest of the way.
 //
+// A character can cast spells (spells.js) too: healing itself, or stunning an enemy it can see
+// within reach, which then can't move, attack or do anything else for a while. Casting takes a
+// moment, standing still; every spell then shares one cooldown.
+//
 // An attack (weapons.js) lands its blow hitAt into it: melee attacks hit if the target is still
 // within reach, ranged attacks let go of a projectile that flies to the target. Each hit rolls its
 // damage and takes it off the target's hit points; at none, the target dies, and comes back to
@@ -29,6 +33,7 @@
 
 import { findPath } from "./pathfinding.js";
 import { createRandom } from "./random.js";
+import { rollHeal, SPELL_COOLDOWN, SPELLS } from "./spells.js";
 import { chooseAttack, distanceBetween, longestReach, rollDamage, WEAPONS } from "./weapons.js";
 import { nearestFree } from "./world.js";
 
@@ -131,6 +136,11 @@ export class Battle {
             attack: null,
             readyAt: 0,
             staggeredUntil: 0,
+            // Stunned until (ms), the spell it's casting ({ spell, target, start, landsAt }), and
+            // when it can cast another
+            stunnedUntil: 0,
+            casting: null,
+            spellReadyAt: 0,
             dead: false,
             respawnAt: 0,
             target: null,
@@ -186,17 +196,87 @@ export class Battle {
         }
     }
 
-    /** Advance by `ms` (whole steps; the rest carries over). Returns the events that happened. */
+    /**
+     * Have a character cast a spell (a SPELLS key), on an enemy (`target`, an id) if it's that
+     * kind of spell. Returns { ok: true }, or { ok: false, reason } if it can't be cast now:
+     * "cooldown", "busy" (staggered, stunned or already casting), "full" (healing at full
+     * health), "dead", "target" (not an enemy), "range" or "sight" (CAST_FAILURES says them).
+     */
+    cast(id, spellId, targetId = null) {
+        const actor = this.actor(id);
+        const spell = SPELLS[spellId];
+
+        if (!actor || !spell || actor.dead) {
+            return { ok: false, reason: "busy" };
+        }
+
+        if (this.time < actor.spellReadyAt) {
+            return { ok: false, reason: "cooldown" };
+        }
+
+        if (this.time < actor.staggeredUntil || this.time < actor.stunnedUntil || actor.casting) {
+            return { ok: false, reason: "busy" };
+        }
+
+        let target = actor;
+
+        if (spell.target === "enemy") {
+            target = this.actor(targetId);
+
+            if (!target || target.dead) {
+                return { ok: false, reason: "dead" };
+            }
+
+            if (target.team === actor.team) {
+                return { ok: false, reason: "target" };
+            }
+
+            if (distanceBetween(actor.square, target.square) > spell.reach) {
+                return { ok: false, reason: "range" };
+            }
+
+            if (!this.canSee(actor, target)) {
+                return { ok: false, reason: "sight" };
+            }
+
+            actor.facing = Math.atan2(target.x - actor.x, target.y - actor.y);
+        } else if (spell.heal && actor.hp >= actor.maxHp) {
+            return { ok: false, reason: "full" };
+        }
+
+        // Casting calls off an attack
+        actor.attack = null;
+        actor.casting = { spell: spellId, target: target.id, start: this.time, landsAt: this.time + spell.castTime };
+        actor.spellReadyAt = this.time + SPELL_COOLDOWN;
+        this.#emit("cast", { id: actor.id, spell: spellId, target: target.id, castTime: spell.castTime });
+
+        return { ok: true };
+    }
+
+    /** How long until a character can cast a spell again, as a share of the cooldown (0: ready). */
+    cooldown(id) {
+        const actor = this.actor(id);
+
+        return actor ? Math.max(0, Math.min(1, (actor.spellReadyAt - this.time) / SPELL_COOLDOWN)) : 0;
+    }
+
+    /**
+     * Advance by `ms` (whole steps; the rest carries over). Returns the events that happened
+     * (and any from casting since last time).
+     */
     advance(ms) {
         this.lag += ms;
-        this.events = [];
 
         while (this.lag >= STEP_MS) {
             this.lag -= STEP_MS;
             this.#step();
         }
 
-        return this.events;
+        const events = this.events;
+
+        this.events = [];
+
+        return events;
     }
 
     /** Can `a` see `b`: within SIGHT squares, with no blocked square between their middles? */
@@ -256,7 +336,7 @@ export class Battle {
             return;
         }
 
-        if (this.time < actor.staggeredUntil || actor.attack) {
+        if (this.time < actor.staggeredUntil || this.time < actor.stunnedUntil || actor.attack || actor.casting) {
             return;
         }
 
@@ -449,7 +529,7 @@ export class Battle {
 
         actor.pace = want > actor.pace ? Math.min(want, actor.pace + ACCELERATION * seconds) : Math.max(want, actor.pace - BRAKING * seconds);
 
-        const held = this.time < actor.staggeredUntil || (actor.attack && !actor.to);
+        const held = this.time < actor.staggeredUntil || this.time < actor.stunnedUntil || ((actor.attack || actor.casting) && !actor.to);
         const travelled = held ? 0 : this.#travel(actor, actor.pace * seconds);
 
         // Standing still, it starts again from a walk
@@ -576,6 +656,10 @@ export class Battle {
     }
 
     #fight(actor) {
+        if (actor.casting && !actor.dead && this.time >= actor.casting.landsAt) {
+            this.#land(actor);
+        }
+
         const current = actor.attack;
 
         if (!current || actor.dead) {
@@ -604,6 +688,42 @@ export class Battle {
 
         if (elapsed >= attack.duration) {
             actor.attack = null;
+        }
+    }
+
+    // A spell lands: healing, or stunning its target (who then turns on the caster)
+    #land(actor) {
+        const { spell: id, target: targetId } = actor.casting;
+        const spell = SPELLS[id];
+        const target = this.actor(targetId);
+
+        actor.casting = null;
+
+        if (!target || target.dead) {
+            return;
+        }
+
+        if (spell.heal) {
+            const before = target.hp;
+
+            target.hp = Math.min(target.maxHp, target.hp + rollHeal(spell, this.random));
+            this.#emit("healed", { id: target.id, by: actor.id, spell: id, amount: target.hp - before, hp: target.hp, maxHp: target.maxHp });
+        }
+
+        if (spell.stun) {
+            target.stunnedUntil = Math.max(target.stunnedUntil, this.time + spell.stun);
+            target.casting = null;
+
+            if (target.attack && !target.attack.struck) {
+                target.attack = null;
+            }
+
+            if (target.ai === "patrol") {
+                target.target = actor.id;
+                target.lastSeen = this.time + spell.stun;
+            }
+
+            this.#emit("stunned", { id: target.id, by: actor.id, spell: id, until: target.stunnedUntil });
         }
     }
 
@@ -688,6 +808,7 @@ export class Battle {
         actor.dead = true;
         actor.respawnAt = this.time + actor.respawnMs;
         actor.attack = null;
+        actor.casting = null;
         actor.order = null;
         actor.path = [];
         actor.target = null;
@@ -744,6 +865,9 @@ export class Battle {
             attack: null,
             readyAt: this.time,
             staggeredUntil: 0,
+            stunnedUntil: 0,
+            casting: null,
+            spellReadyAt: this.time,
             target: null,
             patrolIndex: 1,
             waitUntil: 0,

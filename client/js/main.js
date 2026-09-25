@@ -141,6 +141,7 @@ async function load() {
         canvas,
         quality: settings.quality === "auto" ? undefined : settings.quality,
         sound: settings.sound,
+        volumes: { effects: settings.effectsVolume, environment: settings.environmentVolume, music: settings.musicVolume },
         fetch: loader.loadFile,
         onProgress: (label) => step(label, label.startsWith("Unpacking") ? 0.3 : 0.15),
     });
@@ -288,6 +289,46 @@ $("#optionsback").addEventListener("click", () => menuPage("main"));
 $("#minimapswitch").addEventListener("change", (event) => applySetting("minimap", event.target.checked));
 $("#soundswitch").addEventListener("change", (event) => applySetting("sound", event.target.checked));
 
+// How loud each kind of sound is: as the slider moves, and remembered when let go. Moving the
+// effects or environment slider plays a little of it (the music is playing anyway)
+const PREVIEWS = { effects: "slash", environment: "bird" };
+let previewed = 0;
+
+for (const slider of document.querySelectorAll(".volume input")) {
+    const bus = slider.dataset.bus;
+    const key = `${bus}Volume`;
+    const output = slider.parentElement.querySelector("output");
+    const show = () => (output.textContent = `${slider.value}%`);
+
+    slider.value = Math.round(settings[key] * 100);
+    show();
+    slider.addEventListener("input", () => {
+        const sound = state.session?.sound;
+
+        show();
+        sound?.setVolume(bus, slider.value / 100);
+
+        if (PREVIEWS[bus] && performance.now() - previewed > 300) {
+            previewed = performance.now();
+            sound?.play(PREVIEWS[bus]);
+        }
+    });
+    slider.addEventListener("change", () => {
+        settings[key] = slider.value / 100;
+        saveSettings({ [key]: settings[key] });
+    });
+}
+
+function showVolumes(on) {
+    $("#volumes").classList.toggle("off", !on);
+
+    for (const slider of document.querySelectorAll(".volume input")) {
+        slider.disabled = !on;
+    }
+}
+
+showVolumes(settings.sound);
+
 // Escape goes back from Game options, and closes the menu from the main page
 $("#menu").addEventListener("cancel", (event) => {
     event.preventDefault();
@@ -314,8 +355,10 @@ for (const type of ["pointerdown", "pointerup", "keydown"]) {
     document.addEventListener(type, () => state.session?.sound.unlock(), { capture: true });
 }
 
-// Pause when the page is hidden (switching apps on a phone)
+// Pause when the page is hidden (switching apps on a phone), and silence it
 document.addEventListener("visibilitychange", () => {
+    state.session?.sound.setHidden(document.hidden);
+
     if (document.hidden) {
         pause();
     }
@@ -338,6 +381,7 @@ function applySetting(key, value) {
         showMinimap(value);
     } else if (key === "sound") {
         state.session?.sound.setEnabled(value);
+        showVolumes(value);
     } else {
         applyViewSettings();
     }

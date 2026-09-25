@@ -366,10 +366,21 @@ test("the minimap walks the player where it's tapped, and Game options turn it a
 
     await expect(minimapSwitch).toBeChecked();
     await expect(soundSwitch).toBeChecked();
+
+    // Each kind of sound has its slider: effects, environment and music (soft to start with)
+    await expect(page.locator("#effectsvolume")).toHaveValue("80");
+    await expect(page.locator("#environmentvolume")).toHaveValue("50");
+    await expect(page.locator("#musicvolume")).toHaveValue("35");
+    await page.locator("#musicvolume").fill("60");
+    await page.locator("#musicvolume").dispatchEvent("change");
+    await expect(page.locator("output[for=musicvolume]")).toHaveText("60%");
+    expect(await page.evaluate(() => window.pellagos.session.sound.volumes.music)).toBe(0.6);
+
     await page.locator("label:has(#minimapswitch)").click();
     await page.locator("label:has(#soundswitch)").click();
     await expect(minimapSwitch).not.toBeChecked();
     await expect(soundSwitch).not.toBeChecked();
+    await expect(page.locator("#musicvolume")).toBeDisabled();
     await page.getByRole("button", { name: "Back" }).click();
     await page.getByRole("button", { name: "Resume" }).click();
     await expect(minimap).toBeHidden();
@@ -378,7 +389,99 @@ test("the minimap walks the player where it's tapped, and Game options turn it a
     // Remembered next time
     await playing(page, "/?play&seed=1");
     await expect(minimap).toBeHidden();
-    expect(await page.evaluate(() => window.pellagos.session.sound.enabled)).toBe(false);
+    expect(await page.evaluate(() => ({ enabled: window.pellagos.session.sound.enabled, music: window.pellagos.session.sound.volumes.music }))).toEqual({ enabled: false, music: 0.6 });
+    await expect(page.locator("#musicvolume")).toHaveValue("60");
+});
+
+test("holding on an enemy or the player opens the action wheel: flick up to stun it, or to heal", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const wheel = page.locator(".wheel");
+    const up = wheel.locator('.slice[data-direction="up"]');
+
+    // The orc standing a few squares from the player, who's hurt
+    const orcAt = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const { battle } = game;
+        const player = battle.actor("player");
+        const orc = battle.actor("orc");
+        const square = [player.square[0] + 3, player.square[1] - 2];
+
+        Object.assign(orc, { square, x: square[0] + 0.5, y: square[1] + 0.5, to: null, path: [], ai: null });
+        game.avatars.get("orc").place(orc.x, orc.y, Math.PI);
+        game.previous.set("orc", { x: orc.x, y: orc.y });
+        player.hp = 20;
+        game.advance(0.1);
+
+        return session.view.toScreen(game.avatars.get("orc").point(0.5));
+    });
+    const hold = async ({ x, y }) => {
+        await page.mouse.move(x, y);
+        await page.mouse.down();
+        await expect(wheel).toBeVisible();
+    };
+    const flickUp = async ({ x, y }) => {
+        await page.mouse.move(x, y - 25, { steps: 2 });
+        await page.mouse.move(x, y - 60, { steps: 2 });
+    };
+    // Play on without drawing, then carry on
+    const playOn = (seconds) => page.evaluate((seconds) => {
+        const { game } = window.pellagos;
+
+        game.stop();
+        game.advance(seconds);
+        game.start();
+    }, seconds);
+
+    // Held on the orc: its wheel, with Stun at the top
+    await hold(orcAt);
+    await expect(up.locator(".label")).toHaveText("Stun");
+    await expect(wheel.locator(".slice.empty")).toHaveCount(3);
+    await flickUp(orcAt);
+    await page.mouse.up();
+    await playOn(0.6);
+
+    const stunned = await page.evaluate(() => {
+        const { battle } = window.pellagos.game;
+
+        return { stunned: battle.actor("orc").stunnedUntil > battle.time, cooldown: battle.cooldown("player") };
+    });
+
+    expect(stunned.stunned).toBe(true);
+    expect(stunned.cooldown).toBeGreaterThan(0.5);
+
+    // Held on the player while spells cool down: Heal greyed over, and a flick at it refused. (The
+    // game plays on in real time meanwhile, so the cooldown's started again, not to run out first.)
+    const meAt = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const { battle } = game;
+
+        battle.actor("player").spellReadyAt = battle.time + 3000;
+
+        return session.view.toScreen(game.avatars.get("player").point(0.5));
+    });
+
+    await hold(meAt);
+    await expect(up.locator(".label")).toHaveText("Heal");
+    await expect(up).toHaveClass(/cooling/);
+    expect(await up.locator(".cooldown").getAttribute("d")).not.toBe("");
+    await flickUp(meAt);
+    await expect(up).toHaveClass(/refused/);
+    await page.mouse.up();
+    expect(await page.evaluate(() => window.pellagos.game.battle.actor("player").casting)).toBeNull();
+
+    // Once it's over, the flick heals, by 10 to 20
+    await playOn(3);
+    await hold(meAt);
+    await expect(up).not.toHaveClass(/cooling/);
+    await flickUp(meAt);
+    await page.mouse.up();
+    await playOn(1);
+
+    const hp = await page.evaluate(() => window.pellagos.game.battle.actor("player").hp);
+
+    expect(hp).toBeGreaterThanOrEqual(30);
+    expect(hp).toBeLessThanOrEqual(40);
 });
 
 test.describe("on a phone", () => {
