@@ -72,7 +72,7 @@ export const MANIFEST = Object.freeze([
             ["js/world/art/kits/landmarks.js", 16864],
             ["js/world/art/kits/town.js", 2627],
             ["js/world/avatar.js", 4952],
-            ["js/world/effects.js", 36955],
+            ["js/world/effects.js", 36997],
             ["js/world/ground.js", 7444],
             ["js/world/squares.js", 3982],
             ["js/world/town3d.js", 10047],
