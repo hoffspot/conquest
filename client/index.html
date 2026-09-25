@@ -6,17 +6,17 @@
         <meta name="mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-        <meta name="apple-mobile-web-app-title" content="Last Colony">
-        <meta name="theme-color" content="#090009">
-        <meta name="description" content="Last Colony: a real-time strategy game from Pro HTML5 Games">
+        <meta name="apple-mobile-web-app-title" content="Pellagos">
+        <meta name="theme-color" content="#15120e">
+        <meta name="description" content="Pellagos: make a character, choose a weapon and defend a town from the orc in its fields.">
 
-        <title>Last Colony</title>
+        <title>Pellagos</title>
 
         <link rel="manifest" href="manifest.webmanifest">
         <link rel="icon" href="images/icons/icon-192.png" type="image/png">
         <link rel="apple-touch-icon" href="images/icons/apple-touch-icon.png">
         <link rel="stylesheet" href="styles.css">
-        <!-- Three.js draws units in 3D (vendored: see scripts/vendor-three.js). The import map must come before any module script. -->
+        <!-- Three.js draws the world (vendored: see scripts/vendor-three.js). The import map must come before any module script. -->
         <script type="importmap">
             {
                 "imports": {
@@ -28,13 +28,11 @@
         <script>
             // A new version of the game comes with a new service worker (sw.js), which takes over
             // as soon as it is installed. A page loaded before that may be a mix of old and new
-            // files, so reload it, unless a game or the multiplayer lobby is under way. (This is
-            // here rather than in the game's code because the page is always the new version's.)
+            // files, so reload it, unless a game is under way. (This is here rather than in the
+            // game's code because the page is always the new version's.)
             if (navigator.serviceWorker?.controller) {
                 navigator.serviceWorker.addEventListener("controllerchange", () => {
-                    const app = window.lastColony;
-
-                    if (!app?.activeMode && !app?.multiplayer.websocket) {
+                    if (!window.pellagos?.playing) {
                         window.location.reload();
                     }
                 }, { once: true });
@@ -43,147 +41,124 @@
         <script type="module" src="js/main.js"></script>
     </head>
     <body>
-        <div id="wrapper">
-            <!-- Marks out the part of the screen clear of notches and rounded corners -->
-            <div id="safearea" aria-hidden="true"></div>
+        <!-- The world, and the character being made, are drawn here, behind every screen -->
+        <canvas id="view" aria-hidden="true"></canvas>
 
-            <!-- The game itself fills the whole screen -->
-            <section id="gameinterfacescreen" class="gamelayer" hidden aria-label="Game">
-                <div id="maparea">
-                    <canvas id="gamebackgroundcanvas"></canvas>
-                    <canvas id="gameforegroundcanvas"></canvas>
+        <!-- Loading: what's being downloaded and built, and how far it's got -->
+        <section id="loading" class="screen" aria-labelledby="loadingtitle">
+            <div class="card loader">
+                <h1 class="wordmark" id="loadingtitle">Pellagos</h1>
+                <p class="status" id="loadstatus" role="status">Starting…</p>
+                <div class="progress" id="loadbar" role="progressbar" aria-labelledby="loadstatus" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill"></div></div>
+                <p class="amount" id="loadamount"></p>
+                <ul class="files" id="loadlist"></ul>
+            </div>
+        </section>
 
-                    <div id="gamemessages" role="log" aria-live="polite"></div>
-                    <input type="text" id="chatmessage" maxlength="200" autocomplete="off" enterkeyhint="send" aria-label="Chat message" placeholder="Message" hidden>
+        <!-- The title screen -->
+        <section id="title" class="screen" hidden aria-labelledby="titlename">
+            <div class="card title">
+                <h1 class="wordmark" id="titlename">Pellagos</h1>
+                <p class="tagline">A market town on the edge of the wilds. Something prowls its fields.</p>
+                <div class="menu">
+                    <button type="button" id="continuebutton" class="button primary" hidden>Continue</button>
+                    <button type="button" id="newbutton" class="button">New character</button>
+                </div>
+                <p class="note" id="savenote" hidden></p>
+                <label class="switch" title="Show how fast the game runs and what it draws">
+                    <input type="checkbox" id="debugswitch" role="switch">
+                    <span class="track" aria-hidden="true"></span>
+                    <span>Debug mode</span>
+                </label>
+            </div>
+        </section>
 
-                    <div class="hud hud-top">
-                        <button type="button" id="chatbutton" class="hud-button" aria-label="Chat" title="Chat (Enter)" hidden>
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H10l-5 4v-4H4z"/></svg>
-                        </button>
-                        <button type="button" id="menubutton" class="hud-button" aria-label="Menu" title="Menu (P)">
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>
-                        </button>
+        <!-- Making a character: body and face, colours and hair, then a weapon and a name -->
+        <section id="create" class="screen" hidden aria-labelledby="createtitle">
+            <div class="card creator">
+                <header class="creator-head">
+                    <h2 id="createtitle">Make your character</h2>
+                    <ol class="steps" aria-label="Steps">
+                        <li data-step="look" aria-current="step">Look</li>
+                        <li data-step="weapon">Weapon</li>
+                        <li data-step="name">Name</li>
+                    </ol>
+                </header>
+
+                <div class="step" id="step-look">
+                    <nav class="tabs" role="tablist" id="createtabs"></nav>
+                    <div class="tabpanels" id="createpanels"></div>
+                </div>
+
+                <div class="step" id="step-weapon" hidden>
+                    <p class="note">Everyone starts in a tunic, leather bracers, leather pants and leather boots. Choose what you'll fight with:</p>
+                    <div class="weapons" role="radiogroup" aria-label="Weapon" id="weaponlist"></div>
+                </div>
+
+                <form class="step" id="step-name" hidden>
+                    <label for="nameinput">What are you called?</label>
+                    <div class="name-row">
+                        <input type="text" id="nameinput" maxlength="20" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="go" required>
+                        <button type="button" class="button" id="suggestname">Suggest</button>
                     </div>
+                    <p class="note" id="namesummary"></p>
+                </form>
 
-                    <div class="hud hud-bottom">
-                        <button type="button" id="selectarmybutton" class="hud-button" aria-label="Select all combat units" title="Select all combat units">
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5"/><circle cx="9" cy="12" r="2"/><circle cx="15" cy="12" r="2"/></svg>
-                        </button>
-                        <button type="button" id="deselectbutton" class="hud-button" aria-label="Deselect" title="Deselect (Escape)" hidden>
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5M9 9l6 6M15 9l-6 6"/></svg>
-                        </button>
-                        <button type="button" id="placebutton" class="hud-button hud-confirm" aria-label="Build here" title="Build here" hidden>
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L19 7"/></svg>
-                        </button>
-                        <button type="button" id="cancelplacebutton" class="hud-button hud-cancel" aria-label="Cancel building" title="Cancel (Escape)" hidden>
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
-                        </button>
-                    </div>
+                <footer class="creator-foot">
+                    <button type="button" class="button" id="createback">Back</button>
+                    <button type="button" class="button" id="randombutton">Random</button>
+                    <button type="button" class="button primary" id="createnext">Next</button>
+                </footer>
+            </div>
+        </section>
+
+        <!-- The game's heads-up display -->
+        <section id="hud" class="screen" hidden aria-label="Game">
+            <div id="floaters" aria-hidden="true"></div>
+            <div class="hud-top">
+                <div class="plate" id="playerplate">
+                    <span class="name"></span>
+                    <div class="bar"><div class="fill"></div><span class="value"></span></div>
                 </div>
+                <button type="button" id="menubutton" class="hud-button" aria-label="Menu" title="Menu (Esc)">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+                </button>
+            </div>
+            <div id="banner" role="status" hidden></div>
+            <p class="hint" id="hint">Tap the ground to walk, or an enemy to fight it.</p>
+            <div class="hud-bottom">
+                <button type="button" id="zoomin" class="hud-button" aria-label="Zoom in" title="Zoom in">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                </button>
+                <button type="button" id="zoomout" class="hud-button" aria-label="Zoom out" title="Zoom out">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg>
+                </button>
+            </div>
+        </section>
 
-                <aside id="sidebar">
-                    <div id="sidebarpanel">
-                        <img src="images/screens/interface-right-game.png" class="right-panel" draggable="false" alt="">
-                        <canvas id="minimap" aria-label="Map overview: tap to move the view"></canvas>
-                        <div id="callerpicture"></div>
-                        <div id="cash" aria-label="Cash"></div>
-                        <div id="sidebarbuttons">
-                            <button type="button" id="starport" data-name="starport" class="sprite-button" title="Starport"></button>
-                            <button type="button" id="ground-turret" data-name="ground-turret" class="sprite-button" title="Turret"></button>
-                            <button type="button" id="harvester" data-name="harvester" class="sprite-button" title="Harvester"></button>
-                            <button type="button" id="scout-tank" data-name="scout-tank" class="sprite-button" title="Scout Tank"></button>
-                            <button type="button" id="heavy-tank" data-name="heavy-tank" class="sprite-button" title="Heavy Tank"></button>
-                            <button type="button" id="chopper" data-name="chopper" class="sprite-button" title="Copter"></button>
-                            <button type="button" id="wraith" data-name="wraith" class="sprite-button" title="Wraith"></button>
-                        </div>
-                    </div>
-                </aside>
-            </section>
+        <!-- Paused -->
+        <dialog id="menu" aria-labelledby="menutitle">
+            <h2 id="menutitle">Paused</h2>
+            <div class="menu">
+                <button type="button" class="button primary" id="resumebutton">Resume</button>
+                <button type="button" class="button" id="quitbutton">Back to the title</button>
+            </div>
+        </dialog>
 
-            <!-- Menus use the book's 640x480 artwork, scaled to fit the screen -->
-            <main id="gamecontainer" class="stage">
-                <section id="gamestartscreen" class="gamelayer" hidden>
-                    <h1 class="game-title">LAST<br>COLONY</h1>
-                    <nav class="game-options" aria-label="Main menu">
-                        <button type="button" id="campaignbutton" class="game-option">Campaign</button>
-                        <button type="button" id="multiplayerbutton" class="game-option">Multiplayer</button>
-                    </nav>
-                    <p id="installhint" hidden>For the best experience, tap <strong>Share</strong> then <strong>Add to Home Screen</strong>.</p>
-                    <button type="button" id="installbutton" hidden>Install app</button>
-                </section>
+        <!-- Debug mode: how fast the game runs and what it draws -->
+        <aside id="debug" hidden aria-label="Debug statistics">
+            <header>
+                <span id="debugsummary">Debug</span>
+                <button type="button" id="debugcollapse" aria-expanded="true" aria-controls="debugbody" title="Fold away">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>
+                </button>
+            </header>
+            <div id="debugbody">
+                <pre id="debugstats"></pre>
+                <div id="debugcontrols"></div>
+            </div>
+        </aside>
 
-                <section id="missionbriefingscreen" class="gamelayer" hidden aria-label="Mission briefing">
-                    <img src="images/screens/interface-left.png" class="left-panel" draggable="false" alt="">
-                    <img src="images/screens/interface-right-briefing.png" class="right-panel" draggable="false" alt="">
-                    <button type="button" id="entermission" class="sprite-button" aria-label="Enter mission"></button>
-                    <button type="button" id="exitmission" class="sprite-button" aria-label="Exit"></button>
-                    <div id="missionbriefing"></div>
-                    <div id="missionheader">
-                        <h2 id="missiontitle"></h2>
-                        <div id="mapchoice">
-                            <span id="mapname"></span>
-                            <button type="button" id="newmap">New map</button>
-                            <label><input type="checkbox" id="classicmap"> The book's map</label>
-                        </div>
-                    </div>
-                    <canvas id="mappreview" width="244" height="240" aria-label="Map of the mission"></canvas>
-                </section>
-
-                <section id="multiplayerlobbyscreen" class="gamelayer" hidden aria-label="Multiplayer lobby">
-                    <ul id="multiplayergameslist" role="listbox" aria-label="Game rooms"></ul>
-                    <button type="button" id="multiplayerjoin" class="sprite-button" aria-label="Join"></button>
-                    <button type="button" id="multiplayercancel" class="sprite-button" aria-label="Cancel"></button>
-                </section>
-            </main>
-
-            <!-- Messages from the mission's characters: the campaign pauses until the player continues -->
-            <section id="transmissionscreen" class="overlay" hidden>
-                <div id="transmission" class="dialog" role="dialog" aria-modal="true" aria-labelledby="transmissionfrom" aria-describedby="transmissiontext">
-                    <div class="transmission-caller">
-                        <img id="transmissionpicture" src="images/characters/girl1.png" width="120" height="72" alt="">
-                        <h2 id="transmissionfrom">Operator</h2>
-                    </div>
-                    <div id="transmissiontext"></div>
-                    <button type="button" id="transmissioncontinue" class="dialog-button">Continue</button>
-                </div>
-            </section>
-
-            <section id="pausescreen" class="overlay" hidden>
-                <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="pausetitle">
-                    <h2 id="pausetitle">Paused</h2>
-                    <p id="pausenote" hidden>The game keeps running in multiplayer.</p>
-                    <button type="button" id="resumebutton" class="dialog-button">Resume</button>
-                    <button type="button" id="soundbutton" class="dialog-button">Sound: On</button>
-                    <button type="button" id="fullscreenbutton" class="dialog-button" hidden>Full screen</button>
-                    <button type="button" id="quitbutton" class="dialog-button">Quit mission</button>
-                </div>
-            </section>
-
-            <section id="messageboxscreen" class="overlay" hidden>
-                <div id="messagebox" role="alertdialog" aria-modal="true" aria-labelledby="messageboxtext">
-                    <div id="messageboxtext"></div>
-                    <button type="button" id="messageboxok" class="sprite-button" aria-label="OK"></button>
-                    <button type="button" id="messageboxcancel" class="sprite-button" aria-label="Cancel"></button>
-                </div>
-            </section>
-
-            <section id="loadingscreen" class="overlay" hidden>
-                <div class="stage">
-                    <div id="loadingmessage" role="status"></div>
-                </div>
-            </section>
-
-            <!-- Shown by CSS when a phone or tablet is held upright: the game is played in landscape -->
-            <section id="rotatescreen" class="overlay" aria-live="polite">
-                <div class="rotate-message">
-                    <svg class="rotate-icon" viewBox="0 0 64 64" aria-hidden="true">
-                        <rect x="20" y="6" width="24" height="44" rx="4"/>
-                        <path d="M28 44h8"/>
-                    </svg>
-                    <p>Turn your device sideways to play <strong>Last Colony</strong>.</p>
-                </div>
-            </section>
-        </div>
-        <noscript>Last Colony needs JavaScript to run.</noscript>
+        <noscript>Pellagos needs JavaScript.</noscript>
     </body>
 </html>

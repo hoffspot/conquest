@@ -33,11 +33,14 @@ export class Character {
      * @param {object} [options.look] - Skin, eyes and hair: { skin: {...}, eyes: {...}, hair: {...} }
      *   (see LOOK_DEFAULTS, skin.js and hair.js).
      * @param {string[]} [options.equipment] - What it wears and carries (EQUIPMENT ids).
+     * @param {number} [options.hairDetail] - How much of its hair to grow, 0 to 1 (less for
+     *   characters seen from afar: hair.js).
      */
-    constructor(kit, { shape = {}, look = {}, equipment = [], materials = {} } = {}) {
+    constructor(kit, { shape = {}, look = {}, equipment = [], materials = {}, hairDetail = 1 } = {}) {
         const human = kit.human;
 
         this.kit = kit;
+        this.hairDetail = hairDetail;
         this.human = human;
         this.object = new THREE.Group();
         this.object.name = "character";
@@ -283,7 +286,7 @@ export class Character {
 
     #buildHair() {
         const { style, beard } = this.look.hair;
-        const geometry = buildHair(this, style, beard, { below: this.hairHidden ? 0.0 : Infinity });
+        const geometry = buildHair(this, style, beard, { below: this.hairHidden ? 0.0 : Infinity, detail: this.hairDetail });
 
         if (this.hairMesh) {
             this.hairMesh.geometry.dispose();

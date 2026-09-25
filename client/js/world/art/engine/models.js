@@ -1,11 +1,20 @@
 // Ready-made 3D models (glTF), lit like the rest of the art: KayKit's trees, props and landmark
-// buildings (tools/artgen/models/kaykit, CC0), and the game's own units for size comparisons.
+// buildings (client/models/kaykit, CC0).
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
-const loader = new GLTFLoader();
+const manager = new THREE.LoadingManager();
+const loader = new GLTFLoader(manager);
 const loaded = new Map();
+
+/**
+ * Where to read models' files from: `resolve(url)` gives the URL to load instead (the game's
+ * loader hands out its downloaded copies).
+ */
+export function readModelsFrom(resolve) {
+    manager.setURLModifier(resolve);
+}
 
 /** A copy of the model in a glTF file, with materials the art's lights work with. */
 export async function loadModel(url) {
@@ -21,8 +30,7 @@ export async function loadModel(url) {
         }
 
         const convert = (source) => {
-            // The glTF materials are PBR, which look black without an environment; Lambert shading
-            // matches the rest of the art (and units3d.js)
+            // Lambert shading, like the rest of the town (cheaper than the glTF's PBR materials)
             const result = new THREE.MeshLambertMaterial({
                 name: source.name,
                 color: source.color?.clone() ?? new THREE.Color(0xffffff),
@@ -46,15 +54,22 @@ export async function loadModel(url) {
 
 /**
  * Place a model on a piece's footprint (w x h grid squares): standing on the ground, centred on
- * the footprint (or on `at`, in world pixels), `unit` world pixels per model unit, turned `turn`
- * radians about the vertical.
+ * the footprint (or on `at`, in world pixels), turned `turn` radians about the vertical, and
+ * either `unit` world pixels per model unit or `size` world pixels at its longest (across or up).
  */
-export function placeModel(object, { w, h }, { unit, turn = 0, at } = {}) {
+export function placeModel(object, { w, h }, { unit, size, turn = 0, at } = {}) {
     const holder = new THREE.Group();
     const turned = new THREE.Group();
 
     turned.add(object);
     turned.rotation.y = turn;
+
+    if (size) {
+        const extent = new THREE.Box3().setFromObject(object).getSize(new THREE.Vector3());
+
+        unit = size / Math.max(extent.x, extent.y, extent.z);
+    }
+
     turned.scale.setScalar(unit);
     turned.updateMatrixWorld(true);
 

@@ -278,6 +278,19 @@ const PAINTERS = {
         };
     },
 
+    // Grass: soft patches of lighter and darker green, speckled with blades
+    grass({ base, light, dark }, seed) {
+        const patches = periodicNoise(seed, 4);
+        const tufts = periodicNoise(seed + 1, 24);
+        const blades = periodicNoise(seed + 2, 128);
+
+        return (x, y) => {
+            const tone = patches((x / SIZE) * 4, (y / SIZE) * 4) * 0.5 + tufts((x / SIZE) * 24, (y / SIZE) * 24) * 0.3 + blades((x / SIZE) * 128, (y / SIZE) * 128) * 0.2;
+
+            return tone < 0.5 ? mix(dark, base, tone * 2) : mix(base, light, (tone - 0.5) * 2);
+        };
+    },
+
     // Ploughed soil: furrows running east to west
     soil({ base, light, dark }, seed) {
         const grain = periodicNoise(seed, 64);
@@ -292,30 +305,32 @@ const PAINTERS = {
     },
 };
 
-// Colours for each material, and how many world pixels one copy of its texture covers
+// Colours for each material, and how many world pixels one copy of its texture covers (five to a
+// metre: stone courses are 35 centimetres, bricks 10, slates 15, thatch 33)
 const MATERIALS = {
-    stone: { painter: "ashlar", world: 40, base: 0x8f8c86, light: 0xb4b0a6, dark: 0x6c6964, mortar: 0x57544f },
-    "stone-warm": { painter: "ashlar", world: 40, base: 0xa89878, light: 0xc8b996, dark: 0x847359, mortar: 0x645846 },
-    "stone-dark": { painter: "ashlar", world: 40, base: 0x6f6e70, light: 0x8e8c8c, dark: 0x535257, mortar: 0x403f43 },
-    brick: { painter: "brick", world: 24, base: 0x9a4e38, light: 0xb4654a, dark: 0x733627, mortar: 0xb3a792 },
-    "brick-brown": { painter: "brick", world: 24, base: 0x80533a, light: 0x9c6a4c, dark: 0x5f3b29, mortar: 0xa89d8a },
-    plaster: { painter: "plaster", world: 48, base: 0xe4dac0, light: 0xf1eadb, dark: 0xcdbf9f },
-    "plaster-white": { painter: "plaster", world: 48, base: 0xe8e6de, light: 0xf6f4ef, dark: 0xcfcbc0 },
-    "plaster-ochre": { painter: "plaster", world: 48, base: 0xd9b77a, light: 0xe8cc96, dark: 0xbf9b5e },
-    "plaster-rose": { painter: "plaster", world: 48, base: 0xd7ad98, light: 0xe6c4b3, dark: 0xbd9079 },
-    thatch: { painter: "thatch", world: 24, base: 0xc2a15a, light: 0xdcc17a, dark: 0x8c6f37 },
-    "thatch-grey": { painter: "thatch", world: 24, base: 0x9d8c66, light: 0xb8a883, dark: 0x6e6147 },
-    slate: { painter: "slate", world: 24, base: 0x5a6078, light: 0x7a8199, dark: 0x40445a, mortar: 0x2c2e42 },
-    "slate-grey": { painter: "slate", world: 24, base: 0x6c7077, light: 0x898d94, dark: 0x4d5057, mortar: 0x34363b },
-    shingles: { painter: "slate", world: 24, base: 0x7a5a40, light: 0x94704f, dark: 0x5a412d, mortar: 0x3d2b1e },
-    clay: { painter: "clay", world: 24, base: 0xb0553c, light: 0xcf7552, dark: 0x803726, mortar: 0x5e2a1d },
-    "clay-orange": { painter: "clay", world: 24, base: 0xc0703f, light: 0xda8f58, dark: 0x8f4d2a, mortar: 0x6a3a20 },
-    planks: { painter: "planks", world: 20, base: 0x7b5a3c, light: 0x9a7552, dark: 0x4a3322 },
-    "planks-dark": { painter: "planks", world: 20, base: 0x5a3e28, light: 0x70503a, dark: 0x33231a },
+    stone: { painter: "ashlar", world: 14, base: 0x8f8c86, light: 0xb4b0a6, dark: 0x6c6964, mortar: 0x57544f },
+    "stone-warm": { painter: "ashlar", world: 14, base: 0xa89878, light: 0xc8b996, dark: 0x847359, mortar: 0x645846 },
+    "stone-dark": { painter: "ashlar", world: 14, base: 0x6f6e70, light: 0x8e8c8c, dark: 0x535257, mortar: 0x403f43 },
+    brick: { painter: "brick", world: 5, base: 0x9a4e38, light: 0xb4654a, dark: 0x733627, mortar: 0xb3a792 },
+    "brick-brown": { painter: "brick", world: 5, base: 0x80533a, light: 0x9c6a4c, dark: 0x5f3b29, mortar: 0xa89d8a },
+    plaster: { painter: "plaster", world: 30, base: 0xe4dac0, light: 0xf1eadb, dark: 0xcdbf9f },
+    "plaster-white": { painter: "plaster", world: 30, base: 0xe8e6de, light: 0xf6f4ef, dark: 0xcfcbc0 },
+    "plaster-ochre": { painter: "plaster", world: 30, base: 0xd9b77a, light: 0xe8cc96, dark: 0xbf9b5e },
+    "plaster-rose": { painter: "plaster", world: 30, base: 0xd7ad98, light: 0xe6c4b3, dark: 0xbd9079 },
+    thatch: { painter: "thatch", world: 10, base: 0xc2a15a, light: 0xdcc17a, dark: 0x8c6f37 },
+    "thatch-grey": { painter: "thatch", world: 10, base: 0x9d8c66, light: 0xb8a883, dark: 0x6e6147 },
+    slate: { painter: "slate", world: 9, base: 0x5a6078, light: 0x7a8199, dark: 0x40445a, mortar: 0x2c2e42 },
+    "slate-grey": { painter: "slate", world: 9, base: 0x6c7077, light: 0x898d94, dark: 0x4d5057, mortar: 0x34363b },
+    shingles: { painter: "slate", world: 9, base: 0x7a5a40, light: 0x94704f, dark: 0x5a412d, mortar: 0x3d2b1e },
+    clay: { painter: "clay", world: 10, base: 0xb0553c, light: 0xcf7552, dark: 0x803726, mortar: 0x5e2a1d },
+    "clay-orange": { painter: "clay", world: 10, base: 0xc0703f, light: 0xda8f58, dark: 0x8f4d2a, mortar: 0x6a3a20 },
+    planks: { painter: "planks", world: 14, base: 0x7b5a3c, light: 0x9a7552, dark: 0x4a3322 },
+    "planks-dark": { painter: "planks", world: 14, base: 0x5a3e28, light: 0x70503a, dark: 0x33231a },
     cobbles: { painter: "cobbles", world: 40, base: 0x928c80, light: 0xb3ab9c, dark: 0x6f6a60, mortar: 0x4f4b44 },
     road: { painter: "earth", world: 64, base: 0x9d7f5a, light: 0xb49770, dark: 0x7f6446 },
     courtyard: { painter: "earth", world: 64, base: 0xa99b80, light: 0xc3b69b, dark: 0x8b7e66 },
     soil: { painter: "soil", world: 32, base: 0x6e4d33, light: 0x8a6446, dark: 0x4a3222 },
+    grass: { painter: "grass", world: 48, base: 0x62803c, light: 0x86a352, dark: 0x3f5a28 },
 };
 
 // Plain colours (no texture): trims, doors, glass, metal
@@ -330,6 +345,20 @@ const COLOURS = {
     ridge: 0x3f3a36,
     banner: 0x9b2d2d,
     gold: 0xc9a13b,
+    water: 0x3e5763,
+    sail: 0xd8ccb0,
+    awning: 0xa8342a,
+    apples: 0xb8322a,
+    cabbages: 0x6c9a3a,
+    squash: 0xd9822b,
+    bread: 0xc89a5a,
+    rope: 0x9c8a62,
+    "canvas-sack": 0xb9a67e,
+};
+
+// Colours that glow (the forge's coals)
+const GLOWING = {
+    embers: { color: 0xff8a3a, emissive: 0xff4a0a, emissiveIntensity: 1.6 },
 };
 
 const cache = new Map();
@@ -363,6 +392,8 @@ export function material(name) {
         result = new THREE.MeshLambertMaterial({ map: texture });
     } else if (COLOURS[name] !== undefined) {
         result = new THREE.MeshLambertMaterial({ color: COLOURS[name] });
+    } else if (GLOWING[name]) {
+        result = new THREE.MeshLambertMaterial(GLOWING[name]);
     } else {
         throw new Error(`No material called ${name}`);
     }

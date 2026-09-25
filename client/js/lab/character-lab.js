@@ -4,6 +4,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { Actions, REACTIONS } from "../characters/actions.js";
 import { ClipPlayer, parseBVH, retarget } from "../characters/bvh.js";
 import { Character } from "../characters/character.js";
 import { DETAILS } from "../characters/details.js";
@@ -15,6 +16,7 @@ import { Walker, WALK_STYLES } from "../characters/locomotion.js";
 import { MACRO_DEFAULTS } from "../characters/macro.js";
 import { PRESETS } from "../characters/presets.js";
 import { EYE_DEFAULTS, HAIR_COLOURS, SKIN_DEFAULTS, SKIN_TONES } from "../characters/skin.js";
+import { WEAPONS } from "../core/weapons.js";
 
 const canvas = document.querySelector("#view");
 const status = document.querySelector("#status");
@@ -132,6 +134,13 @@ presetState(state.preset);
 
 const character = new Character(kit, { shape: state.shape, look: state.look, equipment: state.equipment });
 const walker = new Walker(character, WALK_STYLES[state.walk]);
+
+// Fighting: attacks, reactions and falls, layered over the walk (actions.js)
+const actions = new Actions(character);
+const fight = { weapon: params.get("weapon") ?? "", reaction: params.get("reaction") ?? "slash", repeat: false, guard: false, slow: 1, at: params.has("at") ? Number(params.get("at")) : null, action: params.get("action") ?? "" };
+
+walker.overlay = (dt) => actions.apply(dt * fight.slow);
+walker.afterPose = () => actions.place();
 const skeletonHelper = new THREE.SkeletonHelper(character.rig.root);
 
 skeletonHelper.visible = false;
@@ -261,6 +270,10 @@ renderer.setAnimationLoop((time) => {
     const dt = Math.min(0.05, Math.max(0, timer.getDelta()));
 
     applyChanges();
+
+    if (fight.repeat && !actions.attack && !actions.fall) {
+        attack();
+    }
 
     if (!state.motion.paused) {
         step(dt);
@@ -666,6 +679,58 @@ function gearTab() {
     ];
 }
 
+// Arm the character with a weapon (weapons.js), replacing whatever it held
+function arm(weapon) {
+    fight.weapon = weapon;
+
+    const held = new Set(["mainHand", "offHand", "back"]);
+
+    state.equipment = state.equipment.filter((id) => !held.has(EQUIPMENT[id].slot));
+
+    if (weapon) {
+        state.equipment.push(...WEAPONS[weapon].equipment);
+        actions.setWeapon(WEAPONS[weapon].attacks[0].animation);
+    }
+
+    change("equipment");
+}
+
+/** Attack with the weapon held (as the game does), once or over and over. */
+function attack() {
+    const weapon = WEAPONS[fight.weapon];
+
+    if (weapon) {
+        const { animation, hitAt, duration } = weapon.attacks[0];
+
+        actions.startAttack(animation, { hitAt: hitAt / 1000, duration: duration / 1000 });
+    }
+}
+
+/** Show one moment of an action, frozen: an attack at key time `at` (0 to 2, 1 the blow), a reaction at `at` (0 to 1), a fall `at` seconds in. */
+function freeze(action, at) {
+    fight.action = action;
+    fight.at = at;
+    actions.revive();
+
+    const weapon = WEAPONS[fight.weapon];
+
+    if (action === "attack" && weapon) {
+        const { animation, hitAt, duration } = weapon.attacks[0];
+        const elapsed = at <= 1 ? at * (hitAt / 1000) : hitAt / 1000 + (at - 1) * ((duration - hitAt) / 1000);
+
+        actions.startAttack(animation, { hitAt: hitAt / 1000, duration: duration / 1000 });
+        actions.attack.start = actions.time - elapsed;
+    } else if (REACTIONS[action]) {
+        actions.react(action, { from: 0 });
+        actions.reactions[0].start = actions.time - at * REACTIONS[action].length;
+    } else if (action === "fall") {
+        actions.die({ from: 0 });
+        actions.fall.start = actions.time - at;
+    }
+
+    fight.slow = 0;
+}
+
 function motionTab() {
     const chart = element("canvas", { id: "gaitchart", width: 600, height: 300, "aria-label": "Joint angles through one stride, with where the left leg is now" });
 
@@ -706,6 +771,24 @@ function motionTab() {
                 },
             })),
         group("Stride", chart, element("p", { class: "note", id: "phasereadout" })),
+        group("Fighting",
+            element("p", { class: "note" }, "The game's attacks, flinches and falls, layered over the walk. An attack's blow lands a set time in (the weapon's), and each kind of blow has its own flinch."),
+            select("Weapon", [["", "None"], ...Object.entries(WEAPONS).map(([id, { label }]) => [id, label])], { get: () => fight.weapon, set: (value) => arm(value) }),
+            check("On guard", {
+                get: () => fight.guard,
+                set: (value) => {
+                    fight.guard = value;
+                    actions.setGuard(value);
+                },
+            }),
+            check("Attack over and over", { get: () => fight.repeat, set: (value) => (fight.repeat = value) }),
+            select("Blow", Object.keys(REACTIONS).map((name) => [name, name[0].toUpperCase() + name.slice(1)]), { get: () => fight.reaction, set: (value) => (fight.reaction = value) }),
+            slider("Slow motion", { min: 0.1, max: 1, step: 0.05, format: (value) => `${Math.round(value * 100)}%`, get: () => fight.slow, set: (value) => (fight.slow = value) }),
+            element("div", { class: "buttons" },
+                element("button", { type: "button", class: "button", onclick: attack }, "Attack"),
+                element("button", { type: "button", class: "button", onclick: () => actions.react(fight.reaction, { from: 0 }) }, "Be hit"),
+                element("button", { type: "button", class: "button", onclick: () => actions.die({ from: 0 }) }, "Fall"),
+                element("button", { type: "button", class: "button", onclick: () => actions.revive() }, "Get up"))),
         group("View",
             check("Skeleton", {
                 get: () => state.motion.skeleton,
@@ -813,7 +896,17 @@ function drawGait() {
     }
 }
 
-window.lab = { THREE, scene, camera, controls, renderer, character, kit, walker, state, step, change, choosePreset, setCamera, chooseClip, get player() { return player; }, PRESETS, WALK_STYLES, ready: true };
+window.lab = { THREE, scene, camera, controls, renderer, character, kit, walker, actions, fight, arm, attack, freeze, state, step, change, choosePreset, setCamera, chooseClip, get player() { return player; }, PRESETS, WALK_STYLES, ready: true };
+
+// ?weapon=sword&action=attack&at=1 shows one moment of an action, frozen (for pictures)
+if (fight.weapon) {
+    arm(fight.weapon);
+}
+
+if (fight.action && fight.at !== null) {
+    applyChanges();
+    freeze(fight.action, fight.at);
+}
 
 if (state.motion.clip) {
     change("clip");

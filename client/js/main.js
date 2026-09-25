@@ -1,523 +1,359 @@
-// Entry point: creates the game and wires the browser UI to it.
-import { drawMap, loadImage, loadWithProgress } from "./app/assets.js";
-import { Camera } from "./app/camera.js";
-import * as device from "./app/device.js";
-import { Hud } from "./app/hud.js";
-import { Input } from "./app/input.js";
-import { GameLoop } from "./app/loop.js";
-import { Minimap } from "./app/minimap.js";
-import { Multiplayer, hasMultiplayerServer } from "./app/multiplayer.js";
-import { Renderer } from "./app/renderer.js";
-import { Sidebar } from "./app/sidebar.js";
-import { SinglePlayer } from "./app/singleplayer.js";
-import { SoundManager } from "./app/sounds.js";
-import * as ui from "./app/ui.js";
-import { GRID_SIZE } from "./core/config.js";
-import { allEntityNames } from "./core/entities/index.js";
-import { setSpriteSheet, spriteSheetUrl } from "./core/entities/sprites.js";
-import { Game } from "./core/game.js";
+// Pellagos: the page's screens, from loading to playing.
+//
+//  1. Loading: downloads everything (manifest.js), showing each group of files and how far it has
+//     got, then starts the 3D view and unpacks the body the characters are made from.
+//  2. The title: carry on with the saved character, or make a new one; debug mode on or off.
+//  3. Making a character (creator.js): body, face, colours and hair; a weapon; a name.
+//  4. Building the world (the town, the characters, their shaders) and playing (game.js), until
+//     the menu goes back to the title.
+//
+// Nothing here imports Three.js: it and the rest of the game are downloaded by the loader first,
+// and only then imported.
+//
+// ?play goes straight into a game with a random character (with ?weapon=, ?seed= and ?quality=).
 
-const $ = (id) => document.getElementById(id);
+import { registerServiceWorker } from "./app/device.js";
+import { Debug } from "./app/debug.js";
+import { formatBytes, Loader } from "./app/loader.js";
+import { MANIFEST } from "./app/manifest.js";
+import { loadSave, loadSettings, newSeed, saveSettings, writeSave } from "./app/save.js";
+import { WEAPONS } from "./core/weapons.js";
 
-// The menus are the book's 640x480 screens, scaled to fit. Wider screens get wider menus, up to 1024.
-const STAGE_WIDTH = 640;
-const STAGE_HEIGHT = 480;
-const STAGE_MAX_WIDTH = 1024;
+const params = new URLSearchParams(location.search);
+const canvas = document.querySelector("#view");
+const $ = (selector) => document.querySelector(selector);
 
-// The sidebar artwork is 160x480 and is scaled to the height of the screen
-const SIDEBAR_WIDTH = 160;
-const SIDEBAR_HEIGHT = 480;
-// ...but never takes more than this share of the screen width
-const SIDEBAR_MAX_SHARE = 0.3;
-// The minimap's size inside the sidebar artwork
-const MINIMAP_SIZE = 122;
+const settings = loadSettings();
+const debug = new Debug($("#debug"), { settings, onChange: applySetting });
 
-// On touch screens, zoom in at least this far so units are big enough to tap
-const TOUCH_ZOOM = 1.3;
+// What's been loaded and made: the loader, the game's modules, the view and character kit, the
+// heads-up display, and the game being played
+const state = { loader: null, modules: null, session: null, hud: null, game: null, save: null, creator: null };
 
-class App {
-    activeMode = undefined;
-    hudScale = 1;
-    pauseMenuOpen = false;
+window.pellagos = {
+    get game() {
+        return state.game;
+    },
+    get creator() {
+        return state.creator;
+    },
+    get session() {
+        return state.session;
+    },
+    get loader() {
+        return state.loader;
+    },
+    debug,
+    playing: false,
+};
 
-    constructor() {
-        this.game = new Game();
-        this.sounds = new SoundManager();
-        this.camera = new Camera();
-        this.renderer = new Renderer({
-            game: this.game,
-            camera: this.camera,
-            backgroundCanvas: $("gamebackgroundcanvas"),
-            foregroundCanvas: $("gameforegroundcanvas"),
-        });
-        this.sidebar = new Sidebar({ game: this.game, container: $("sidebarbuttons"), cashDisplay: $("cash") });
-        this.input = new Input({
-            canvas: $("gameforegroundcanvas"),
-            game: this.game,
-            camera: this.camera,
-            renderer: this.renderer,
-            sidebar: this.sidebar,
-            sounds: this.sounds,
-        });
-        this.minimap = new Minimap({ canvas: $("minimap"), game: this.game, camera: this.camera, renderer: this.renderer });
-        this.loop = new GameLoop({
-            tick: () => this.runTick(),
-            render: (interpolation, elapsed) => this.render(interpolation, elapsed),
-        });
-
-        this.singleplayer = new SinglePlayer(this);
-        this.multiplayer = new Multiplayer(this);
-        this.hud = new Hud({ app: this });
-
-        this.game.on("message", (from, message) => {
-            this.sounds.play("message-received");
-
-            // In the campaign the mission's characters speak in a dialog, and the game waits until
-            // the player has read it. Status messages and multiplayer chat appear over the map.
-            if (this.activeMode === this.singleplayer && ui.isTransmission(from)) {
-                ui.showTransmission(from, message);
-            } else {
-                ui.showGameMessage(from, message);
-            }
-        });
-        this.game.on("sound", (name) => this.sounds.play(name));
-        this.game.on("levelend", (success) => this.activeMode?.handleLevelEnd(success));
+function show(id) {
+    for (const screen of document.querySelectorAll(".screen")) {
+        screen.hidden = screen.id !== id;
     }
 
-    // Load the level's map and position the view (items and cash are set up by game.loadLevel)
-    async prepareLevel(level, startX, startY) {
-        const [mapImage] = await loadWithProgress([drawMap(this.game.currentMap)]);
-
-        this.renderer.setMap(mapImage);
-        this.resize();
-        this.camera.setView(this.defaultZoom(), 0, 0);
-        this.#centerOnStart(startX, startY);
-        this.sidebar.initRequirementsForLevel(level);
-    }
-
-    // The book's proportions on large screens; closer in on touch screens so units are easy to tap
-    defaultZoom() {
-        const touch = device.isTouchScreen() || this.input.isTouch;
-
-        return touch ? Math.max(this.hudScale, TOUCH_ZOOM) : this.hudScale;
-    }
-
-    // Start with the player's base in view (or the level's start position)
-    #centerOnStart(startX, startY) {
-        const { game, camera } = this;
-        const base = game.items.find((item) => item.team === game.team && item.name === "base");
-
-        if (base) {
-            camera.centerOn(base.x * GRID_SIZE + base.baseWidth / 2, base.y * GRID_SIZE + base.baseHeight / 2);
-        } else {
-            camera.setView(camera.zoom, startX * GRID_SIZE, startY * GRID_SIZE);
-        }
-    }
-
-    /**
-     * Show the game screen and start the loop.
-     * @param mode  the SinglePlayer or Multiplayer controller running the level
-     * @param {"fixed" | "external"} loopMode  whether the loop advances the game itself or the server does
-     */
-    startLevel(mode, loopMode) {
-        this.activeMode = mode;
-
-        ui.switchToScreen("gameinterfacescreen");
-        ui.clearGameMessages();
-        ui.clearTransmissions();
-        this.hideChat();
-        this.input.reset();
-        this.resize();
-        this.hud.update();
-
-        this.loop.start(loopMode);
-    }
-
-    stopLevel() {
-        this.loop.stop();
-        this.game.end();
-        this.sidebar.cancelDeployingBuilding();
-        this.input.reset();
-        this.activeMode = undefined;
-        this.hideChat();
-        this.#hidePauseMenu();
-        ui.clearTransmissions();
-    }
-
-    showMainMenu() {
-        ui.switchToScreen("gamestartscreen");
-    }
-
-    // Advance the game by one tick and update the sidebar
-    runTick() {
-        this.game.update();
-        this.sidebar.update(this.input.placementX, this.input.placementY);
-        this.loop.tickCompleted();
-    }
-
-    render(interpolation, elapsed) {
-        if (!this.loop.paused) {
-            this.input.handlePanning(elapsed);
-        }
-
-        this.renderer.render(interpolation, this.loop.paused ? 0 : elapsed);
-        this.minimap.render();
-        this.hud.update();
-    }
-
-    get isPlaying() {
-        return this.loop.running;
-    }
-
-    /* Pausing */
-
-    // The campaign is paused while the pause menu or a message from a mission character is open.
-    // A multiplayer game can't be paused: the other player's game keeps going.
-    #updatePaused() {
-        const paused = this.pauseMenuOpen || ui.isTransmissionOpen();
-
-        this.loop.paused = paused && this.activeMode !== this.multiplayer;
-    }
-
-    // A message from a mission character opened or closed
-    #transmissionsChanged(open) {
-        if (open) {
-            this.input.reset();
-        }
-
-        this.#updatePaused();
-    }
-
-    /* Pause menu */
-
-    openPauseMenu() {
-        if (!this.isPlaying || this.pauseMenuOpen) {
-            return;
-        }
-
-        const multiplayer = this.activeMode === this.multiplayer;
-
-        this.pauseMenuOpen = true;
-        this.#updatePaused();
-        this.input.reset();
-
-        $("pausetitle").textContent = multiplayer ? "Menu" : "Paused";
-        $("pausenote").hidden = !multiplayer;
-        $("quitbutton").textContent = multiplayer ? "Leave game" : "Quit mission";
-        $("fullscreenbutton").hidden = !device.canUseFullscreen();
-        this.#updatePauseMenuLabels();
-
-        $("pausescreen").hidden = false;
-        $("resumebutton").focus();
-    }
-
-    closePauseMenu() {
-        this.#hidePauseMenu();
-        this.#updatePaused();
-
-        // Back to the message the player was reading, if any
-        if (ui.isTransmissionOpen()) {
-            $("transmissioncontinue").focus();
-        }
-    }
-
-    #hidePauseMenu() {
-        this.pauseMenuOpen = false;
-        $("pausescreen").hidden = true;
-    }
-
-    #updatePauseMenuLabels() {
-        $("soundbutton").textContent = this.sounds.muted ? "Sound: Off" : "Sound: On";
-        $("fullscreenbutton").textContent = device.isFullscreen() ? "Exit full screen" : "Full screen";
-    }
-
-    async quitFromPauseMenu() {
-        const multiplayer = this.activeMode === this.multiplayer;
-
-        this.#hidePauseMenu();
-
-        const confirmed = await ui.showMessageBox(multiplayer ? "Leave this game?\nThe other player will win." : "Quit this mission?", { cancel: true });
-
-        if (!confirmed) {
-            // Back to the pause menu (the game is still paused in single player)
-            this.pauseMenuOpen = false;
-            this.openPauseMenu();
-
-            return;
-        }
-
-        if (multiplayer) {
-            this.multiplayer.leaveGame();
-        } else {
-            this.stopLevel();
-            this.showMainMenu();
-        }
-    }
-
-    wireTransmissions() {
-        ui.initTransmissions({ onChange: (open) => this.#transmissionsChanged(open) });
-    }
-
-    wirePauseMenu() {
-        $("resumebutton").addEventListener("click", () => this.closePauseMenu());
-        $("quitbutton").addEventListener("click", () => this.quitFromPauseMenu());
-        $("soundbutton").addEventListener("click", () => {
-            this.sounds.toggleMute();
-            this.#updatePauseMenuLabels();
-        });
-        $("fullscreenbutton").addEventListener("click", async () => {
-            await device.toggleFullscreen();
-            this.#updatePauseMenuLabels();
-        });
-    }
-
-    /* Chat (multiplayer only) */
-
-    showChat() {
-        if (this.activeMode !== this.multiplayer) {
-            return;
-        }
-
-        const chatMessage = $("chatmessage");
-
-        chatMessage.hidden = false;
-        chatMessage.focus();
-    }
-
-    hideChat() {
-        const chatMessage = $("chatmessage");
-
-        chatMessage.value = "";
-        chatMessage.hidden = true;
-        chatMessage.blur();
-    }
-
-    /* Layout */
-
-    // Fit everything to the screen, keeping clear of notches, rounded corners and the home indicator
-    resize() {
-        const style = document.documentElement.style;
-        const safe = $("safearea").getBoundingClientRect();
-        const width = Math.max(safe.width, 1);
-        const height = Math.max(safe.height, 1);
-
-        // Menus: the book's screens, scaled to fit and centred
-        const stageScale = Math.min(width / STAGE_WIDTH, height / STAGE_HEIGHT);
-        const stageWidth = Math.round(Math.max(STAGE_WIDTH, Math.min(STAGE_MAX_WIDTH, width / stageScale)));
-
-        style.setProperty("--stage-scale", stageScale);
-        style.setProperty("--stage-width", `${stageWidth}px`);
-        style.setProperty("--stage-left", `${safe.left + (width - stageWidth * stageScale) / 2}px`);
-        style.setProperty("--stage-top", `${safe.top + (height - STAGE_HEIGHT * stageScale) / 2}px`);
-
-        // The message box is small, so never shrink it below its full size unless it doesn't fit
-        style.setProperty("--dialog-scale", Math.min(width / 320, height / 200, Math.max(stageScale, 1)));
-
-        // Game screen: the sidebar art fills the height; the map gets everything else
-        this.hudScale = Math.min(height / SIDEBAR_HEIGHT, width * SIDEBAR_MAX_SHARE / SIDEBAR_WIDTH);
-
-        const sidebarWidth = SIDEBAR_WIDTH * this.hudScale;
-
-        style.setProperty("--hud-scale", this.hudScale);
-        style.setProperty("--sidebar-width", `${sidebarWidth}px`);
-
-        const mapWidth = Math.max(1, width - sidebarWidth);
-        const mapHeight = $("wrapper").clientHeight;
-        const pixelRatio = globalThis.devicePixelRatio || 1;
-        const layout = `${mapWidth},${mapHeight},${pixelRatio}`;
-
-        if (layout !== this.layout) {
-            this.layout = layout;
-            this.renderer.resize(mapWidth, mapHeight);
-            this.minimap.resize(MINIMAP_SIZE * this.hudScale);
-        }
-    }
+    document.body.dataset.screen = id;
 }
 
-/* Keyboard */
+// --- Loading ---
 
-function handleKeyDown(app, ev) {
-    if (ui.isMessageBoxOpen()) {
-        return;
+function setProgress(share, status, amount = "") {
+    const bar = $("#loadbar");
+
+    bar.querySelector(".fill").style.transform = `scaleX(${Math.max(0, Math.min(1, share)).toFixed(4)})`;
+    bar.setAttribute("aria-valuenow", String(Math.round(share * 100)));
+
+    if (status !== undefined) {
+        $("#loadstatus").textContent = status;
     }
 
-    if (!app.isPlaying || ev.target === $("chatmessage")) {
-        return;
-    }
-
-    const pauseKey = ev.key === "p" || ev.key === "P" || ev.key === "Pause";
-
-    if (app.pauseMenuOpen) {
-        if (pauseKey || ev.key === "Escape") {
-            ev.preventDefault();
-            app.closePauseMenu();
-        }
-
-        return;
-    }
-
-    // A message from a mission character is open: Enter, Space or Escape continues. (The focused
-    // Continue button handles Enter and Space itself.)
-    if (ui.isTransmissionOpen()) {
-        const continueKey = ev.key === "Escape" || ((ev.key === "Enter" || ev.key === " ") && ev.target !== $("transmissioncontinue"));
-
-        if (continueKey) {
-            ev.preventDefault();
-            ui.nextTransmission();
-        } else if (pauseKey) {
-            app.openPauseMenu();
-        }
-
-        return;
-    }
-
-    if (ev.key === "Enter" && app.activeMode === app.multiplayer) {
-        ev.preventDefault();
-        app.showChat();
-    } else if (pauseKey) {
-        app.openPauseMenu();
-    } else if (ev.key === "m" || ev.key === "M") {
-        const muted = app.sounds.toggleMute();
-
-        app.game.showMessage("system", muted ? "Sound off." : "Sound on.");
-    } else if (!app.input.handleKeyDown(ev) && ev.key === "Escape") {
-        // Escape cancels placement or deselects first; with nothing else to cancel it opens the menu
-        app.openPauseMenu();
-    }
+    $("#loadamount").textContent = amount;
 }
 
-function handleChatKeyDown(app, ev) {
-    if (ev.key === "Enter") {
-        // Send any text in the message input
-        const message = ev.target.value.trim();
+// A row for each group of files: what it is, how much of it has come, and its own bar
+function listGroups(loader) {
+    const rows = loader.groups.map((group) => {
+        const size = Object.assign(document.createElement("span"), { className: "size" });
+        const label = Object.assign(document.createElement("span"), { className: "label", textContent: group.label });
+        const detail = Object.assign(document.createElement("span"), { className: "detail", textContent: `${group.detail} · ${group.files.length} file${group.files.length === 1 ? "" : "s"}` });
+        const bar = Object.assign(document.createElement("div"), { className: "progress" });
+        const fill = Object.assign(document.createElement("div"), { className: "fill" });
+        const row = document.createElement("li");
 
-        if (message) {
-            app.multiplayer.sendChatMessage(message);
-        }
+        bar.append(fill);
+        row.append(label, size, detail, bar);
 
-        app.hideChat();
-    } else if (ev.key === "Escape") {
-        app.hideChat();
-    }
-}
-
-/* Start up */
-
-function wireUpButtons(app) {
-    const onClick = (id, handler) => $(id).addEventListener("click", handler);
-
-    // Starting a game on a phone goes full screen in landscape where the browser allows it
-    onClick("campaignbutton", () => {
-        device.enterLandscapeFullscreen();
-        app.singleplayer.start();
-    });
-    onClick("multiplayerbutton", () => {
-        device.enterLandscapeFullscreen();
-        app.multiplayer.start();
+        return { group, row, size, fill };
     });
 
-    onClick("entermission", () => app.singleplayer.play());
-    onClick("exitmission", () => app.singleplayer.exit());
-    onClick("newmap", () => app.singleplayer.newMap());
-    $("classicmap").addEventListener("change", (ev) => app.singleplayer.setClassicMap(ev.target.checked));
+    $("#loadlist").replaceChildren(...rows.map(({ row }) => row));
 
-    onClick("multiplayerjoin", () => app.multiplayer.join());
-    onClick("multiplayercancel", () => app.multiplayer.cancel());
+    return () => {
+        for (const { group, row, size, fill } of rows) {
+            size.textContent = group.loaded >= group.total ? formatBytes(group.total) : `${formatBytes(group.loaded)} of ${formatBytes(group.total)}`;
+            fill.style.transform = `scaleX(${(group.total ? group.loaded / group.total : 1).toFixed(4)})`;
+            row.classList.toggle("done", group.done === group.files.length);
+        }
+    };
+}
 
-    const gamesList = $("multiplayergameslist");
+// Downloads count for most of the bar; starting the view and unpacking the body the rest
+const DOWNLOAD_SHARE = 0.85;
 
-    gamesList.addEventListener("click", (ev) => app.multiplayer.handleRoomClick(ev.target.closest("li")));
-    gamesList.addEventListener("dblclick", (ev) => app.multiplayer.handleRoomClick(ev.target.closest("li"), { join: true }));
-    // Space selects the focused room, Enter joins it
-    gamesList.addEventListener("keydown", (ev) => {
-        if (ev.key === " " || ev.key === "Enter") {
-            ev.preventDefault();
-            app.multiplayer.handleRoomClick(ev.target.closest("li"), { join: ev.key === "Enter" });
+async function load() {
+    show("loading");
+
+    const loader = new Loader(MANIFEST);
+    const refresh = listGroups(loader);
+    let drawn = 0;
+
+    state.loader = loader;
+    debug.watch({ loader });
+
+    await loader.load(() => {
+        const now = performance.now();
+
+        // At most one redraw a frame's worth of time
+        if (now - drawn > 50 || loader.loaded >= loader.total) {
+            drawn = now;
+            refresh();
+            setProgress((loader.loaded / loader.total) * DOWNLOAD_SHARE, `Downloading ${loader.current.split("/").pop() || "…"}`, `${formatBytes(loader.loaded)} of ${formatBytes(loader.total)}`);
         }
     });
 
-    app.wirePauseMenu();
-    app.wireTransmissions();
-}
+    refresh();
 
-function watchScreen(app) {
-    // Resize once per frame at most, whatever triggered it (rotation, toolbars, window resizing)
-    let resizeRequest;
-    const scheduleResize = () => {
-        cancelAnimationFrame(resizeRequest);
-        resizeRequest = requestAnimationFrame(() => app.resize());
+    const steps = [];
+    const step = (label, share) => {
+        steps.push({ label, at: performance.now() });
+        setProgress(DOWNLOAD_SHARE + share * (1 - DOWNLOAD_SHARE), label, `${formatBytes(loader.total)} downloaded in ${(loader.time / 1000).toFixed(1)} s`);
     };
 
-    window.addEventListener("resize", scheduleResize);
-    window.addEventListener("orientationchange", scheduleResize);
-    window.visualViewport?.addEventListener("resize", scheduleResize);
+    step("Starting the 3D engine", 0);
 
-    // Pause when the device is turned to portrait or the game is put in the background
-    device.onOrientationChange((portrait) => {
-        if (portrait) {
-            app.openPauseMenu();
-        }
+    const started = performance.now();
+    const [session, creator, hud] = await Promise.all([import("./app/session.js"), import("./app/creator.js"), import("./app/hud.js")]);
+    const imported = performance.now();
+
+    state.modules = { ...session, ...creator, ...hud };
+    session.readModelsFrom(loader.urlOf);
+    state.session = await session.createSession({
+        canvas,
+        quality: settings.quality === "auto" ? undefined : settings.quality,
+        fetch: loader.loadFile,
+        onProgress: (label) => step(label, label.startsWith("Unpacking") ? 0.3 : 0.15),
     });
-
-    document.addEventListener("visibilitychange", () => {
-        if (document.hidden) {
-            app.openPauseMenu();
-        }
-    });
-
-    // Safari: let :active styles work on touch, and stop pinches from zooming the page
-    document.addEventListener("touchstart", () => {}, { passive: true });
-    document.addEventListener("gesturestart", (ev) => ev.preventDefault());
+    state.hud = new hud.Hud($("#hud"));
+    applyViewSettings();
+    debug.watch({ view: state.session.view, builds: { modules: imported - started, body: performance.now() - imported } });
+    setProgress(1, "Ready");
 }
 
-async function init() {
-    const app = new App();
+// --- The title ---
 
-    ui.initMessageBox();
-    wireUpButtons(app);
-    watchScreen(app);
-    app.resize();
+function title() {
+    const save = loadSave(WEAPONS);
+    const continueButton = $("#continuebutton");
+    const newButton = $("#newbutton");
+    const note = $("#savenote");
 
-    window.addEventListener("keydown", (ev) => handleKeyDown(app, ev));
-    window.addEventListener("keyup", (ev) => app.input.handleKeyUp(ev));
-    window.addEventListener("blur", () => app.input.releaseKeys());
-    $("chatmessage").addEventListener("keydown", (ev) => handleChatKeyDown(app, ev));
+    state.save = save;
+    show("title");
+    continueButton.hidden = !save;
+    note.hidden = !save;
+    newButton.textContent = "New character";
+    delete newButton.dataset.confirm;
 
-    // Browsers only allow audio after the player interacts with the page
-    for (const type of ["pointerdown", "pointerup", "keydown"]) {
-        window.addEventListener(type, () => app.sounds.unlock(), { capture: true });
+    if (save) {
+        continueButton.textContent = `Continue as ${save.hero.name}`;
+        note.textContent = `${WEAPONS[save.hero.weapon].label}. Started ${new Date(save.created).toLocaleDateString()}.`;
+        continueButton.focus();
+    } else {
+        newButton.focus();
+    }
+}
+
+$("#continuebutton").addEventListener("click", () => state.save && play(state.save));
+
+$("#newbutton").addEventListener("click", (event) => {
+    const button = event.currentTarget;
+
+    // Making a new character replaces the saved one: ask first
+    if (state.save && !button.dataset.confirm) {
+        button.dataset.confirm = "yes";
+        button.textContent = `Replace ${state.save.hero.name}? Tap again`;
+
+        return;
     }
 
-    // Copies of the game on a static web host (GitHub Pages) have no multiplayer server
-    $("multiplayerbutton").hidden = !hasMultiplayerServer();
+    create();
+});
 
-    device.setUpInstall({ button: $("installbutton"), hint: $("installhint") });
-    device.registerServiceWorker();
+$("#debugswitch").checked = settings.debug;
+$("#debugswitch").addEventListener("change", (event) => applySetting("debug", event.target.checked));
 
-    // Display the main game menu, and load the sprites and sounds for every unit
-    app.showMainMenu();
+// --- Making a character ---
 
-    const spriteSheets = allEntityNames().map(async ({ type, name }) => {
-        setSpriteSheet(type, name, await loadImage(spriteSheetUrl(type, name)));
-    });
+async function create() {
+    const { Creator } = state.modules;
+    const { view, kit } = state.session;
 
-    // Three.js and the 3D models are loaded here, behind the loading screen, rather than imported
-    // with the page. Without them (or without WebGL) every unit and building is drawn as a sprite.
-    const units3d = import("./app/units3d.js")
-        .then(async ({ Units3D }) => {
-            app.renderer.units3d = await Units3D.create();
-        })
-        .catch((error) => console.warn("3D models are not available, using sprites instead:", error));
+    show("create");
+    state.creator = new Creator({ view, kit });
+
+    const hero = await state.creator.run();
+
+    state.creator = null;
+
+    if (!hero) {
+        title();
+
+        return;
+    }
+
+    const save = { hero, seed: newSeed(), created: new Date().toISOString() };
+
+    if (!writeSave(save)) {
+        console.warn("This browser won't keep the character: it will be forgotten when the page closes.");
+    }
+
+    play(save);
+}
+
+// --- Playing ---
+
+async function play(save) {
+    const { createGame } = state.modules;
+    const { view, kit } = state.session;
+
+    state.game?.dispose();
+    show("loading");
+    $("#loadlist").replaceChildren();
+    setProgress(0, "Building the world");
+
+    const game = createGame({ view, kit, hud: state.hud, hero: save.hero, seed: save.seed });
+
+    state.game = game;
+    await game.build(({ label, done, total }) => setProgress(done / total, label, `${done} of ${total}`));
+    game.showSquares(settings.squares);
+    debug.watch({ game });
+    show("hud");
+    game.start();
+    window.pellagos.playing = true;
+}
+
+function pause() {
+    if (!state.game?.running) {
+        return;
+    }
+
+    state.game.stop();
+    $("#menu").showModal();
+}
+
+function resume() {
+    $("#menu").close();
+    state.game?.start();
+}
+
+function quit() {
+    $("#menu").close();
+    state.game?.dispose();
+    state.game = null;
+    window.pellagos.playing = false;
+    debug.watch({ game: null });
+    title();
+}
+
+$("#menubutton").addEventListener("click", pause);
+$("#resumebutton").addEventListener("click", resume);
+$("#quitbutton").addEventListener("click", quit);
+$("#menu").addEventListener("cancel", (event) => {
+    event.preventDefault();
+    resume();
+});
+$("#zoomin").addEventListener("click", () => state.session?.view.zoom(0.8));
+$("#zoomout").addEventListener("click", () => state.session?.view.zoom(1.25));
+
+document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && document.body.dataset.screen === "hud" && !$("#menu").open) {
+        pause();
+    }
+});
+
+window.addEventListener("resize", () => state.session?.view.resize());
+
+// Pause when the page is hidden (switching apps on a phone)
+document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+        pause();
+    }
+});
+
+// --- Settings ---
+
+function applySetting(key, value) {
+    settings[key] = value;
+    saveSettings({ [key]: value });
+
+    if (key === "debug") {
+        debug.show(value);
+        $("#debugswitch").checked = value;
+    } else if (key === "debugFolded") {
+        // Nothing more to do: the overlay folds itself
+    } else if (key === "squares") {
+        state.game?.showSquares(value);
+    } else {
+        applyViewSettings();
+    }
+}
+
+function applyViewSettings() {
+    const view = state.session?.view;
+
+    if (!view) {
+        return;
+    }
+
+    const quality = settings.quality === "auto" ? state.modules.detectQuality() : settings.quality;
+
+    view.renderScale = settings.renderScale;
+    view.setQuality(quality);
+    view.setShadows(settings.shadows);
+}
+
+// --- Off we go ---
+
+async function start() {
+    debug.show(settings.debug);
+    registerServiceWorker();
 
     try {
-        await loadWithProgress([...spriteSheets, ...app.sounds.load(), units3d]);
+        await load();
     } catch (error) {
         console.error(error);
-        ui.showMessageBox(`Some game files could not be loaded.\n${error.message}`);
+        setProgress(0, "Pellagos couldn't load. Check your connection and try again.", String(error.message ?? error));
+
+        const retry = Object.assign(document.createElement("button"), { type: "button", className: "button primary", textContent: "Try again" });
+
+        retry.addEventListener("click", () => location.reload());
+        $("#loadlist").replaceChildren(retry);
+
+        return;
     }
 
-    // Expose the app for debugging from the browser console
-    globalThis.lastColony = app;
+    if (params.has("play")) {
+        const { randomHero, suggestName } = await import("./app/heroes.js");
+        const hero = randomHero();
+
+        hero.name = suggestName(hero);
+        hero.weapon = WEAPONS[params.get("weapon")] ? params.get("weapon") : "sword";
+        play({ hero, seed: Number(params.get("seed")) || 1 });
+
+        return;
+    }
+
+    title();
 }
 
-init();
+start();

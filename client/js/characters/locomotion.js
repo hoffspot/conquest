@@ -42,6 +42,9 @@ const LOWEST = 0.1;
 const LEVELS = [0, 0.25, 0.5, 0.75, 1, 1.3];
 const POINTS = 32;
 
+// How fast feet shuffle back under a character turning on the spot (metres a second)
+const SHUFFLE = 0.8;
+
 const _point = new THREE.Vector3();
 const _target = new THREE.Vector3();
 
@@ -122,23 +125,32 @@ export class Walker {
 
     /**
      * Advance by `dt` seconds. `speed` is the speed to walk at (metres a second, eased into), in
-     * the direction the character faces. Moves the character.
+     * the direction the character faces; the walker moves the character. Or, when something else
+     * moves it (the game, following the battle), `moved` is how far it went since the last update
+     * (metres), and the legs keep up with that.
      */
-    update(dt, { speed = this.targetSpeed } = {}) {
+    update(dt, { speed = this.targetSpeed, moved = null } = {}) {
         const object = this.character.object;
 
         dt = Math.max(0, dt);
 
-        this.targetSpeed = speed;
         this.time += dt;
 
-        const change = this.targetSpeed - this.speed;
+        if (moved === null) {
+            this.targetSpeed = speed;
 
-        this.speed += Math.sign(change) * Math.min(Math.abs(change), ACCELERATION * dt);
+            const change = this.targetSpeed - this.speed;
+
+            this.speed += Math.sign(change) * Math.min(Math.abs(change), ACCELERATION * dt);
+        } else if (dt > 0) {
+            // Walking as fast as it's moved (smoothed a little, as it's moved in steps)
+            this.targetSpeed = moved / dt;
+            this.speed += (this.targetSpeed - this.speed) * Math.min(1, dt * 12);
+        }
 
         // Stride wheel
         const stride = strideLength(Math.max(this.speed, 0.05), this.legLength);
-        const step = this.speed * dt;
+        const step = moved ?? this.speed * dt;
 
         this.distance += step;
         this.phase = wrap(this.phase + step / stride);
@@ -152,10 +164,18 @@ export class Walker {
             this.amount = 0;
         }
 
-        object.translateZ(step);
+        if (moved === null) {
+            object.translateZ(step);
+        }
+
         object.updateMatrixWorld(true);
 
-        this.#pose();
+        this.#pose(dt);
+    }
+
+    /** Lift both feet (say after the character is put somewhere else), to plant them afresh. */
+    release() {
+        this.feet.forEach((foot) => (foot.planted = false));
     }
 
     /** Move the walker's world bookkeeping (when the lab moves the character and ground back). */
@@ -165,7 +185,7 @@ export class Walker {
         }
     }
 
-    #pose() {
+    #pose(dt = 0) {
         const rig = this.rig;
         const s = this.amount;
         const p = this.phase;
@@ -176,14 +196,28 @@ export class Walker {
 
         // Sway over the standing foot, and rise and fall
         rig.offset.set(this.style.sway * Math.min(1, s * 1.5) * Math.sin(2 * Math.PI * p), height, 0);
+
+        // Anything layered over the walk (an attack, a flinch, a fall) changes the joints now. It
+        // says false when the feet shouldn't be kept on the ground (falling down)
+        const planted = this.overlay?.(dt) ?? true;
+
         rig.apply();
         this.character.object.updateMatrixWorld(true);
 
+        if (!planted) {
+            this.release();
+
+            return;
+        }
+
         // Keep planted feet on the ground where they landed, and swinging feet off it
-        SIDES.forEach((side, i) => this.#plant(side, i, phases[i], s));
+        SIDES.forEach((side, i) => this.#plant(side, i, phases[i], s, dt));
 
         // Toes bend to stay flat on the ground as the heel lifts
         SIDES.forEach((side, i) => this.#flattenToes(side, i));
+
+        // Anything layered over the walk that places the hands (reaching to swing a weapon)
+        this.afterPose?.(dt);
     }
 
     /**
@@ -365,7 +399,7 @@ export class Walker {
         return Math.min(...["heel", "ball", "tip"].map((which) => this.#contact(i, which).y)) - ground;
     }
 
-    #plant(side, i, phase, s) {
+    #plant(side, i, phase, s, dt = 0) {
         const foot = this.feet[i];
         const object = this.character.object;
         const ground = object.getWorldPosition(_point).y;
@@ -388,6 +422,15 @@ export class Walker {
         } else if (!onGround && foot.planted) {
             foot.planted = false;
             foot.release.copy(foot.correction);
+        }
+
+        // Standing still and turned (to face someone), the feet shuffle round under the body
+        if (foot.planted && s === 0 && dt > 0) {
+            const off = foot.lock.distanceTo(now);
+
+            if (off > 0.02) {
+                foot.lock.lerp(now, Math.min(1, (dt * SHUFFLE) / off));
+            }
         }
 
         // Planted: move the foot back by however far its pivot has slid. Swinging: ease that off,

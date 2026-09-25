@@ -1,7 +1,14 @@
 # Modernizing Last Colony
 
-This document describes how the game in this repository relates to the book's code: where it came
-from, what changed and why, which bugs were fixed, and what is still the same.
+> **History.** This repository's strategy game, Last Colony, has since been replaced by Pellagos
+> (see [GAME.md](GAME.md)): the vehicles, aircraft, buildings, campaign and multiplayer lobby are
+> gone, and what's described below is in the git history. Some of it lives on in Pellagos: the
+> fixed-step, deterministic simulation kept apart from the browser, A* path finding, seeded
+> random numbers, the generated town layouts, the character engine, the service worker, the
+> static server and the tests.
+
+This document describes how the game in this repository related to the book's code: where it came
+from, what changed and why, which bugs were fixed, and what stayed the same.
 
 ## Starting point
 

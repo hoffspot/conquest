@@ -15,11 +15,11 @@ import { decodeSection } from "./pack.js";
 /** Where the prepared body lives, next to the game's pages. */
 export const HUMAN_URL = new URL("../../characters/", import.meta.url);
 
-/** Download and unpack the body (human.json and human.bin from `base`). */
-export async function loadHumanData(base = HUMAN_URL) {
+/** Download and unpack the body (human.json and human.bin from `base`, with `fetch`). */
+export async function loadHumanData(base = HUMAN_URL, fetch = globalThis.fetch.bind(globalThis)) {
     const [manifest, packed] = await Promise.all([
-        fetch(new URL("human.json", base)).then((response) => checked(response).json()),
-        fetch(new URL("human.bin", base)).then((response) => checked(response).arrayBuffer()),
+        fetch(new URL("human.json", base).href).then((response) => checked(response).json()),
+        fetch(new URL("human.bin", base).href).then((response) => checked(response).arrayBuffer()),
     ]);
 
     return new HumanData(manifest, await gunzip(packed));

@@ -15,6 +15,7 @@
     "lint": "eslint .",
     "check": "npm run lint && npm test",
     "vendor:three": "node scripts/vendor-three.js",
+    "build:manifest": "node scripts/build-manifest.js",
     "build:characters": "node scripts/build-characters.js"
   },
   "devDependencies": {

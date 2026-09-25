@@ -271,16 +271,38 @@ function sampleSurface(positions, triangles, count, next) {
 }
 
 /**
+ * A style with fewer, wider strands of fewer segments, `detail` (0 to 1) of the full count: seen
+ * from further away, it looks the same for a fraction of the triangles.
+ */
+function thinned(style, detail) {
+    if (detail >= 1 || !style.strands) {
+        return style;
+    }
+
+    const fewer = (count) => Math.max(24, Math.round(count * detail));
+    const wider = (width) => width / Math.sqrt(Math.max(detail, 0.15));
+
+    return {
+        ...style,
+        strands: fewer(style.strands),
+        width: wider(style.width),
+        segments: Math.max(3, Math.round(style.segments * (0.35 + 0.65 * detail))),
+        tail: style.tail && { ...style.tail, strands: fewer(style.tail.strands), width: wider(style.tail.width) },
+    };
+}
+
+/**
  * Build a character's hair and beard as one geometry, to skin to its rig (or null for none).
  * `character` is a Character; `style` and `beard` are keys of HAIRSTYLES and BEARDS. Under a
  * hat or helmet, `below` keeps only the hair growing below that height (face coordinates).
+ * `detail` (0 to 1) thins the hair out for characters seen from afar.
  */
-export function buildHair(character, style = "short", beard = "none", { seed = 1, below = Infinity } = {}) {
+export function buildHair(character, style = "short", beard = "none", { seed = 1, below = Infinity, detail = 1 } = {}) {
     const human = character.human;
     const positions = character.positions;
     const rig = character.rig;
-    const hair = HAIRSTYLES[style] ?? HAIRSTYLES.short;
-    const whiskers = BEARDS[beard] ?? BEARDS.none;
+    const hair = thinned(HAIRSTYLES[style] ?? HAIRSTYLES.short, detail);
+    const whiskers = thinned(BEARDS[beard] ?? BEARDS.none, detail);
 
     if (!hair.strands && !whiskers.strands) {
         return null;
@@ -370,11 +392,11 @@ export function buildHair(character, style = "short", beard = "none", { seed = 1
         }
 
         if (hair.tail) {
-            addTail(builder, hair.tail, tie, keepOut, next);
+            addTail(builder, hair.tail, tie, keepOut, next, detail);
         }
 
         if (hair.knot) {
-            addKnot(builder, knot, next, face.scale);
+            addKnot(builder, knot, next, face.scale, detail);
         }
     }
 
@@ -455,11 +477,13 @@ function grow(root, direction, length, style, keepOut, stop, next) {
 }
 
 /** A ponytail: strands from a tie at the back of the head, hanging down the back. */
-function addTail(builder, tail, tie, keepOut, next) {
+function addTail(builder, tail, tie, keepOut, next, detail = 1) {
+    const segments = Math.max(4, Math.round(10 * (0.35 + 0.65 * Math.min(1, detail))));
+
     for (let s = 0; s < tail.strands; s++) {
         const start = tie.clone().add(new THREE.Vector3((next() - 0.5) * 0.016, (next() - 0.5) * 0.016, -0.004));
         const direction = new THREE.Vector3((next() - 0.5) * 0.2, -0.3, -0.9).normalize();
-        const points = grow(start, direction, tail.length * (0.8 + 0.4 * next()), { segments: 10, gravity: 0.8 }, (p) => keepOut(p, 0.012), null, next);
+        const points = grow(start, direction, tail.length * (0.8 + 0.4 * next()), { segments, gravity: 0.8 }, (p) => keepOut(p, 0.012), null, next);
         const middle = points[0].clone();
 
         // Gathered at the tie, spreading a little lower down
@@ -474,10 +498,12 @@ function addTail(builder, tail, tie, keepOut, next) {
 }
 
 /** A topknot: a bun of short curled strands on top of the head. */
-function addKnot(builder, centre, next, scale) {
+function addKnot(builder, centre, next, scale, detail = 1) {
     const radius = 0.026 * scale;
+    const strands = Math.max(30, Math.round(140 * Math.min(1, detail)));
+    const width = (0.018 * scale) / Math.sqrt(Math.max(Math.min(1, detail), 0.15));
 
-    for (let s = 0; s < 140; s++) {
+    for (let s = 0; s < strands; s++) {
         const angle = next() * Math.PI * 2;
         const height = (next() - 0.35) * radius * 1.2;
         const points = [];
@@ -489,7 +515,7 @@ function addKnot(builder, centre, next, scale) {
             points.push(new THREE.Vector3(centre.x + Math.cos(a) * r, centre.y + radius * 0.7 + height, centre.z + Math.sin(a) * r));
         }
 
-        builder.strand(points, 0.018 * scale, (p) => p.clone().sub(centre).normalize(), next());
+        builder.strand(points, width, (p) => p.clone().sub(centre).normalize(), next());
     }
 }
 

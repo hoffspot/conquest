@@ -66,6 +66,20 @@ export function generateWorld({ seed = 1, town: [townWidth, townHeight] = TOWN_P
         }
     }
 
+    // Props and trees are smaller than houses: they fill only the middle half of their plots
+    // (a well or tent 4 metres across, barrels or a tree trunk 2), and characters can walk round
+    // them
+    for (const piece of town.pieces.filter(({ key }) => /^(prop|tree)-/.test(key))) {
+        const [x0, y0] = [origin + piece.x * PLOT, origin + piece.y * PLOT];
+        const [w, h] = [piece.w * PLOT, piece.h * PLOT];
+
+        for (let y = y0; y < y0 + h; y++) {
+            for (let x = x0; x < x0 + w; x++) {
+                blocked[y][x] = x >= x0 + w / 4 && x < x0 + (3 * w) / 4 && y >= y0 + h / 4 && y < y0 + (3 * h) / 4 ? 1 : 0;
+            }
+        }
+    }
+
     // Its streets carry on as roads to the edge of the map
     const road = rows(width, height);
 

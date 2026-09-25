@@ -74,6 +74,27 @@ describe("the world (world.js)", () => {
         }
     });
 
+    it("blocks only the middle of props' and trees' plots, where they stand, so people can walk round them", () => {
+        let checked = 0;
+
+        for (const seed of [1, 2, 3]) {
+            const world = generateWorld({ seed });
+
+            for (const piece of world.town.pieces.filter(({ key }) => /^(prop|tree)-/.test(key))) {
+                const [x0, y0] = [world.origin + piece.x * PLOT, world.origin + piece.y * PLOT];
+                const [w, h] = [piece.w * PLOT, piece.h * PLOT];
+
+                // The middle is blocked; the squares along the plot's edge are free
+                assert.equal(world.blocked[y0 + h / 2][x0 + w / 2], 1, piece.key);
+                assert.equal(world.blocked[y0][x0], 0, piece.key);
+                assert.equal(world.blocked[y0 + h - 1][x0 + w - 1], 0, piece.key);
+                checked++;
+            }
+        }
+
+        assert.ok(checked > 10);
+    });
+
     it("comes out the same for the same seed, and different for another", () => {
         const again = generateWorld({ seed: 7 });
         const other = generateWorld({ seed: 8 });

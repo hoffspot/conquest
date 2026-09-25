@@ -1,9 +1,10 @@
 # Characters
 
-The game is moving from commanding many units to playing one character against enemies, with
-loot. This is the first step: a character engine for the player (a human) and the first enemy (an
-orc). It covers bodies you can reshape and reskin, equipment that goes on and off, and movement
-that follows real joints and real walking. Try it in the **character lab**:
+The character engine behind Pellagos's player (a human) and its first enemy (an orc). It covers
+bodies you can reshape and reskin, equipment that goes on and off, movement that follows real
+joints and real walking, and fighting: attacks with every weapon, flinches for every kind of blow,
+and falling down. The game's character maker uses it ([GAME.md](GAME.md#the-screens-mainjs)), and
+the **character lab** shows everything it can do:
 <https://hoffspot.github.io/conquest/character-lab.html> (or `npm start` and open
 <http://localhost:8080/character-lab.html>).
 
@@ -17,15 +18,16 @@ The lab lets you:
   - Eye colour and pupils.
   - Nine hairstyles, four beards, and hair and brow colour.
   - Whole texture skins: save the painted skin, paint over it, and load it back.
-- **Dress and arm them.** 18 garments and 13 items go in 16 slots, with ready-made outfits
+- **Dress and arm them.** 18 garments and 19 items go in 16 slots, with ready-made outfits
   (adventurer, knight, mage, ranger, gunner, orc raider).
 - **Watch them walk.** Walking is made from gait-lab data. You can change the speed and the walk
   style, walk in a circle, see the joint angles through the stride, and show the skeleton.
 - **Play motion capture.** Two of MakeHuman's clips, a walk and a zombie walk, are retargeted to
   whatever body you've made.
+- **Fight.** Arm them with any of the game's weapons, stand on guard, attack (once or over and
+  over, in slow motion if you like), be hit by each kind of blow, fall and get up (Motion tab,
+  Fighting). `?weapon=sword&action=attack&at=1&speed=0` shows one moment of an action, frozen.
 - **See it from the game's camera** ("Game view").
-
-The RTS is unchanged for now. Nothing here is wired into the game yet.
 
 ## How it's put together
 
@@ -172,9 +174,17 @@ shape:
 - the upper back, for packs, quivers and slung guns
 - inside the lower lip, for tusks
 
-An item can bring a garment: a backpack brings its straps. It can hide things: a helmet hides the
-hair above its rim. It can also set how its arm is carried when walking: a shield across the body,
-a staff upright, a sword lowered, with less arm swing and a gripping fist.
+An item can bring a garment: a backpack brings its straps, spiked gauntlets their plate
+gauntlets. It can hide things: a helmet hides the hair above its rim. It can also set how its arm
+is carried when walking: a shield across the body, a staff or war hammer upright, a sword or
+wand lowered, a grimoire open on the palm, fists clenched, with less arm swing and a gripping
+fist.
+
+The game's weapons are items too: a sword, a mage's staff, a crystal-tipped wand, an open
+grimoire (in the left hand, the right hand free to cast), a two-handed war hammer, a longbow with
+a quiver of arrows on the back, spiked knuckle plates over plate gauntlets (one for each hand),
+and the orc's notched cleaver. Every character starts in the same outfit: a tunic, leather
+bracers, leather pants and leather boots.
 
 **Slots:** head, face, under top, shirt, chest, armour, forearms, hands, waist, underwear, legs,
 shins, feet, back, main hand and off hand. One piece per slot.
@@ -222,6 +232,64 @@ standing, arms at the sides, palms facing the thighs.
 - **Styles.** A walk style sets lean, crouch, arm spread, stance width, toe-out, swagger, sway,
   head carriage and finger curl. The orc's is hunched, wide and heavy.
 
+### Fighting (actions.js)
+
+Actions are layered over walking and standing: the walker sets the walk's joints, the actions
+change them before the bones are posed (so IK still plants the feet under a lunge), and once the
+feet are planted they reach the hands.
+
+**Attacks** are a few key poses per weapon, timed round the blow: key time 1 is when it lands
+(or the arrow or spell is let go), 2 is when the attack ends, so the same keys fit an attack of
+any speed. Between keys every value follows a smooth Catmull-Rom curve, and the attack eases in
+over whatever the character was doing and back out at the end. Each key says:
+
+- **Where the hands are**: the grip, measured from the shoulder in arm lengths, in the
+  character's frame (x to its left, y up, z forward, towards whoever it's fighting). The shoulder
+  moves as the body twists and leans, so turning into a swing carries the arm round with it.
+- **Which way the weapon points**, and which way its edge faces (a blade's edge, the knuckles, a
+  book's spine). The arm reaches there with two-bone IK and the hand turns so the weapon points
+  that way, whatever the body's size, so a sword swings through where an enemy stands.
+- **The second hand of a two-handed weapon** holds it further down the shaft (the staff, the war
+  hammer), and turns the same way.
+- **The spine, pelvis and hips** as joint angles, and the pelvis's offset (a lunge, a crouch into
+  a hammer blow), which the legs bend to follow.
+
+| Weapon | The attack |
+| --- | --- |
+| Sword | Up over the right shoulder, turning away; down and across through the enemy, stepping in; follows through to the left hip |
+| Staff | Two-handed, drawn back over the shoulder; brought down level at the enemy's chest |
+| Wand | Tip up and back; flicked out at arm's length, pointing at the enemy |
+| Grimoire | The book held open in the left hand; the right hand drawn back by the shoulder, then thrown open-palmed at the enemy |
+| War hammer | Two-handed, high over the head, arching back; brought down with the whole body, knees bending |
+| Bow | Turned side on, the bow at arm's length towards the target; drawn to the chin, loosed, the hand flying back past the ear |
+| Spiked gauntlets | From a boxer's guard, a straight punch at head height, left and right in turn |
+| Orc cleaver | Raised high behind the head; hacked down |
+
+On guard (while fighting), each weapon is held ready: the sword upright in front, the staff and
+hammer across the body in both hands, the fists up, the book open.
+
+**Reactions** to being hit are functions of time and of where the blow came from (which side,
+front or back), added to whatever pose the character is in, so a flinch during an attack still
+shows the attack. Each kind of blow (weapons.js: an attack's `reaction`) has its own, and its own
+effect where it lands, so how a character reacts depends on what hit it:
+
+| Blow | Reaction | Effect |
+| --- | --- | --- |
+| slash (sword) | twists away from the blade, head snapping away | sparks |
+| strike (staff) | rocks back, head thrown back | dust |
+| arcane (wand) | a shudder through the whole body | violet light |
+| fire (grimoire) | flinches back, arms up to shield the face | fire |
+| crush (war hammer) | doubled over, knees buckling, knocked back | a flash and dust |
+| pierce (bow) | a sharp jolt at the chest (and the arrow sticks) | sparks |
+| punch (gauntlets) | the head snaps round | a flash and dust |
+| hack (orc cleaver) | a heavy cut that twists and staggers | sparks |
+
+To give a new attack its own reaction, add an entry to `REACTIONS` and name it in the attack.
+
+**Falling.** The knees and back give way, then the whole body topples (backwards, or forwards
+when hit from behind), falling faster and faster about the pelvis, lands with a little bounce,
+arms flung out, and lies flat. The feet aren't kept planted while falling.
+
 **Motion capture** (`bvh.js`) is retargeted bone by bone in the world:
 
 1. Pose the BVH skeleton and take each joint's world rotation, in our axes.
@@ -260,11 +328,14 @@ similar.
 
 The lab applies changes at most once a frame.
 
+**Hair detail.** Characters seen from afar can grow only part of their hair (`hairDetail`, 0 to
+1): fewer strands, each wider so the hair is as thick, with fewer segments. In the game (quality
+levels: a fifth to 45% of the strands) this roughly halves a character's triangles: the long
+style's 48,000 hair triangles become about 14,000 at high quality.
+
 For many enemies on screen, the next steps are:
 
 - merging a character's parts into one mesh
-- painting skins at 512
-- simpler hair
 - a lower-detail body: MakeHuman's proxy meshes use the same rig
 
 ## Research
@@ -411,10 +482,10 @@ sources.
 
 ## What's next
 
-- **Actions.** Running (the gait research above covers it), turning on the spot, attacks, blocks,
-  shooting, casting, hits, deaths and picking up loot. Each is built from joint-angle curves or
-  motion capture on the same skeleton.
-- **Two-handed items.** Guns, bows being drawn and two-handed swords, with IK for the second hand.
+- **More actions.** Running (the gait research above covers it), blocking, dodging and picking
+  up loot, and a staff that strikes up close and casts from afar.
+- **More two-handed items.** Guns and two-handed swords, with the second hand as the staff's and
+  hammer's; a bowstring that bends as it's drawn.
 - **Loose clothing.** Robes, skirts and cloaks need their own hanging meshes.
 - **Crowds.** Merged meshes and lower-detail bodies for groups of enemies.
 - **Multiplayer.** The host's game is authoritative and other players sync to it, except for loot,

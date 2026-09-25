@@ -30,7 +30,9 @@ jobs:
       - run: npm test
 
       - name: Put the site together
-        run: cp -R client _site
+        run: |
+          npm run build:manifest
+          cp -R client _site
 
       - uses: actions/configure-pages@v6
 
