@@ -21,11 +21,15 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     squares: false,
     minimap: true,
     sound: true,
-    // How loud each kind of sound is, 0 to 1 (audio/sound.js VOLUME_DEFAULTS)
-    effectsVolume: 0.8,
-    environmentVolume: 0.5,
+    // How loud each kind of sound is, 0 to 1 (audio/sound.js VOLUME_DEFAULTS), and the scale
+    // they're on: volumes saved on another (louder) scale are forgotten, for the defaults
+    effectsVolume: 0.5,
+    environmentVolume: 0.4,
     musicVolume: 0.35,
+    volumeScale: 2,
 });
+
+const VOLUMES = ["effectsVolume", "environmentVolume", "musicVolume"];
 
 function read(key) {
     try {
@@ -75,7 +79,15 @@ export function clearSave() {
 
 /** The settings (defaults for anything not set). */
 export function loadSettings() {
-    return { ...SETTINGS_DEFAULTS, ...read(SETTINGS_KEY) };
+    const saved = { ...read(SETTINGS_KEY) };
+
+    if (saved.volumeScale !== SETTINGS_DEFAULTS.volumeScale) {
+        for (const key of [...VOLUMES, "volumeScale"]) {
+            delete saved[key];
+        }
+    }
+
+    return { ...SETTINGS_DEFAULTS, ...saved };
 }
 
 /** Change some settings, keeping the rest. Returns them all. */

@@ -4,24 +4,28 @@
 //  - Sound effects: blows, spells, footsteps and cues (synth.js), each from where it happens:
 //    quieter the further it is from the player, and to the left or right.
 //  - The environment: the wind blowing, birds singing and leaves rustling in nearby trees.
-//  - Music: the score (score.js), played on its instruments (instruments.js) as it goes, note by
-//    note, a little ahead of time, so it loops without a seam; with a hall's reverb.
+//  - Music: the score (score.js), played on recordings of real instruments (instruments.js) as
+//    it goes, note by note, a little ahead of time, so it loops without a seam; with a hall's
+//    reverb.
 //
-// synth.js's sounds and instruments.js's samples are made in a worker (worker.js), so nothing
-// waits for them. Browsers only let a page make sound once someone has tapped, clicked or pressed
+// synth.js's sounds are made in a worker (worker.js), so nothing waits for them; the music's
+// recordings (client/music, about a megabyte) are downloaded meanwhile. Browsers only let a page make sound once someone has tapped, clicked or pressed
 // a key on it, so it starts on the first one (unlock()). The music plays from then on, on every
 // screen, the pause menu included; everything is silent while the page is hidden.
 
-import { baseFor, instrumentSamples, INSTRUMENTS, MUSIC_RATE, renderInstrument } from "./instruments.js";
+import { baseFor, INSTRUMENTS, sampleFiles } from "./instruments.js";
 import { SCORE } from "./score.js";
 import { PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "./synth.js";
 
 /** The buses, and how loud each is to start with (0 to 1, as the sliders show them). */
 export const BUSES = Object.freeze(["effects", "environment", "music"]);
-export const VOLUME_DEFAULTS = Object.freeze({ effects: 0.8, environment: 0.5, music: 0.35 });
+export const VOLUME_DEFAULTS = Object.freeze({ effects: 0.5, environment: 0.4, music: 0.35 });
 
-/** How loud a slider's setting (0 to 1) sounds: a curve, as ears hear loudness. */
-export const gainOf = (volume) => Math.max(0, Math.min(1, volume)) ** 1.5;
+/**
+ * How loud a slider's setting (0 to 1) sounds: a curve, as ears hear loudness (halfway is a
+ * quarter as loud as the top, 12 dB down).
+ */
+export const gainOf = (volume) => Math.max(0, Math.min(1, volume)) ** 2;
 
 // Heard at full volume this close (metres), and not at all this far away
 const NEAR = 4;
@@ -34,6 +38,10 @@ const MOST_PAN = 0.85;
 // At most this many sound effects at once
 const VOICES = 24;
 
+// The music's recordings: how many there are, and how many are downloaded at once
+const RECORDINGS = sampleFiles().length;
+const DOWNLOADS = 6;
+
 // How loud the wind is; how long between birds singing, and leaves rustling (seconds, from and
 // to), and how near a tree has to be to be heard (metres)
 const WIND = 0.2;
@@ -44,17 +52,17 @@ const TREES_HEARD = 22;
 // How quickly it fades in and out (seconds)
 const FADE = 0.08;
 
-// How loud it all is at the speakers: the mix is raised this much (about 8 dB), gently
-// compressed, then limited just under full scale, so a phone's speaker plays it loud enough
-// without a busy fight clipping
-const OUTPUT = 2.5;
+// How loud it all is at the speakers: the mix is turned down this much (about 10 dB, so the
+// sliders' defaults are comfortable on a phone at middling volume, with room to turn them up),
+// gently compressed, then limited just under full scale, so a busy fight turned up can't clip
+const OUTPUT = 0.32;
 const LIMIT = -1.5;
 
 // The music: scheduled this far ahead (seconds), checked this often (ms); how loud it is
-// against the rest (about 3 dB up, at the same slider setting), how much of it goes through the
+// against the rest (about 5 dB up, at the same slider setting), how much of it goes through the
 // reverb, and how long the reverb rings (seconds)
 const LOOKAHEAD = 1.2;
-const MUSIC_LEVEL = 1.4;
+const MUSIC_LEVEL = 1.8;
 const SCHEDULE_MS = 200;
 const REVERB_SEND = 0.28;
 const REVERB_TIME = 2.6;
@@ -72,8 +80,9 @@ export class Sound {
      * @param {object} [options]
      * @param {boolean} [options.enabled] - Whether it's on.
      * @param {object} [options.volumes] - { effects, environment, music }, 0 to 1.
+     * @param {Function} [options.fetch] - How to download the music's recordings.
      */
-    constructor({ enabled = true, volumes = VOLUME_DEFAULTS } = {}) {
+    constructor({ enabled = true, volumes = VOLUME_DEFAULTS, fetch = globalThis.fetch?.bind(globalThis) } = {}) {
         this.enabled = enabled;
         this.volumes = { ...VOLUME_DEFAULTS, ...volumes };
         this.paused = true;
@@ -82,11 +91,13 @@ export class Sound {
         this.master = null;
         this.buses = {};
 
-        /** Samples as they're made (sounds: name → [variant]; instruments: "name key" → samples). */
+        /** Sounds' samples as they're made (name → [variant]), and the music's recordings as they're downloaded ("instrument key" → MP3). */
         this.samples = new Map();
-        this.instrumentSamples = new Map();
+        this.recordings = new Map();
+        this.unplayable = 0;
+        this.fetch = fetch;
 
-        /** The browser's copies: sounds' (name → [variant]) and instruments' ("name key"). */
+        /** The browser's copies: sounds' (name → [variant]) and instruments' ("instrument key"). */
         this.buffers = new Map();
         this.instruments = new Map();
 
@@ -107,8 +118,12 @@ export class Sound {
         return Boolean(this.context && this.enabled && !this.hidden && this.context.state === "running");
     }
 
-    /** Start making the sounds and the music's instruments (once), in a worker. Resolves when all are made. */
+    /**
+     * Start making the sounds (once), in a worker, and downloading the music's recordings.
+     * Resolves when the sounds are made (`downloading` when the recordings are downloaded).
+     */
     prepare() {
+        this.downloading ??= this.#download();
         this.ready ??= new Promise((resolve) => {
             let worker = null;
             const here = async () => {
@@ -122,12 +137,6 @@ export class Sound {
                 }
 
                 this.#receive({ name: "wind", variant: 0, samples: wind() });
-
-                for (const [name, key] of instrumentSamples()) {
-                    this.#receive({ instrument: name, key, samples: renderInstrument(name, key) });
-                    await new Promise((next) => setTimeout(next, 0));
-                }
-
                 resolve();
             };
 
@@ -200,12 +209,11 @@ export class Sound {
                 variants.forEach((samples, variant) => this.#buffer(name, variant, samples));
             }
 
-            for (const [id, samples] of this.instrumentSamples) {
-                this.#instrument(id, samples);
+            for (const [id, recording] of this.recordings) {
+                this.#decode(id, recording);
             }
 
             this.samples.clear();
-            this.instrumentSamples.clear();
             this.#startWind();
             this.music.timer = setInterval(() => this.scheduleMusic(), SCHEDULE_MS);
             this.music.timer.unref?.();
@@ -407,20 +415,8 @@ export class Sound {
         return this.play(STEPS[ground] ?? "stepDirt", { at, volume: running ? 1.3 : 0.6 + 0.15 * speed, rate: running ? 1.08 : 1 });
     }
 
-    // Keep a sound's or instrument's samples, and give the browser a copy if it's started
-    #receive({ name, variant, instrument, key, samples }) {
-        if (instrument) {
-            const id = `${instrument} ${key}`;
-
-            if (this.context) {
-                this.#instrument(id, samples);
-            } else {
-                this.instrumentSamples.set(id, samples);
-            }
-
-            return;
-        }
-
+    // Keep a sound's samples, and give the browser a copy if it's started
+    #receive({ name, variant, samples }) {
         if (this.context) {
             this.#buffer(name, variant, samples);
         } else {
@@ -444,11 +440,40 @@ export class Sound {
         this.buffers.set(name, variants);
     }
 
-    #instrument(id, samples) {
-        const buffer = this.context.createBuffer(1, samples.length, MUSIC_RATE);
+    // Download the music's recordings, a few at a time, and have the browser decode them once it's started
+    async #download() {
+        const files = sampleFiles();
+        let next = 0;
 
-        buffer.getChannelData(0).set(samples);
-        this.instruments.set(id, buffer);
+        const worker = async () => {
+            while (next < files.length) {
+                const [id, url] = files[next++];
+
+                try {
+                    const response = await this.fetch(url);
+
+                    if (!response.ok) {
+                        throw new Error(`${url}: ${response.status}`);
+                    }
+
+                    this.recordings.set(id, await response.arrayBuffer());
+
+                    if (this.context) {
+                        this.#decode(id, this.recordings.get(id));
+                    }
+                } catch {
+                    // (Offline, say: the music just doesn't play, or plays without it)
+                    this.unplayable++;
+                }
+            }
+        };
+
+        await Promise.all(Array.from({ length: DOWNLOADS }, worker));
+    }
+
+    #decode(id, recording) {
+        this.recordings.delete(id);
+        this.context.decodeAudioData(recording).then((buffer) => this.instruments.set(id, buffer), () => this.unplayable++);
     }
 
     #startWind() {
@@ -511,7 +536,8 @@ export class Sound {
         const music = this.music;
         const context = this.context;
 
-        if (!this.playing || !this.instruments.size) {
+        // (Starting once every recording is ready, or known not to be, so none is missing from the start)
+        if (!this.playing || (music.start === null && (!this.instruments.size || this.instruments.size + this.unplayable < RECORDINGS))) {
             return;
         }
 
@@ -544,7 +570,7 @@ export class Sound {
 
     #note(note, at) {
         const instrument = INSTRUMENTS[note.instrument];
-        const key = instrument.kinds ? note.pitch : baseFor(instrument, note.pitch);
+        const key = baseFor(note.instrument, note.pitch);
         const buffer = this.instruments.get(`${note.instrument} ${key}`);
 
         if (!buffer) {

@@ -218,21 +218,25 @@ pixels of the tap; a double tap runs.
 
 ### Sound (audio/)
 
-There are no sound files: everything is made in code as the game starts. `dsp.js` has the
-building blocks: noise, filters (biquads, sweeping for swings), envelopes, tones, wavetable
-oscillators, and a plucked string (Karplus-Strong, tuned between samples with an all-pass filter
-so it's in tune at any pitch). `sound.js` plays it all with the Web Audio API, in three **buses**,
-each with its own volume (the sliders in Game options, heard on a curve, `volume ** 1.5`, as ears
-hear loudness), turned on or off together by the Sound switch. The mix is raised about 8 dB,
-gently compressed and then limited just under full scale, so a phone's speaker plays it loud
-enough (the music averaging about −23 dBFS at its default, the blows and spells peaking a few
-dB under full scale) without a busy fight clipping:
+The effects and the town's sounds are made in code as the game starts; the music is played on
+recordings of real instruments. `dsp.js` has the building blocks for the made ones: noise,
+filters (biquads, sweeping for swings), envelopes, tones, and a plucked string (Karplus-Strong,
+tuned between samples with an all-pass filter so it's in tune at any pitch). `sound.js` plays
+it all with the Web Audio API, in three **buses**, each with its own volume (the sliders in Game
+options, heard on a curve, `volume ** 2`, as ears hear loudness: halfway is 12 dB down),
+turned on or off together by the Sound switch. The mix is turned down about 10 dB, gently
+compressed, and limited just under full scale, so a busy fight turned up can't clip:
 
 | Bus | What | To start with |
 | --- | --- | --- |
-| Effects | Blows, spells, footsteps, cues | 80% |
-| Environment | The wind, birds, rustling trees | 50% |
+| Effects | Blows, spells, footsteps, cues | 50% |
+| Environment | The wind, birds, rustling trees | 40% |
 | Music | The score | 35% |
+
+The defaults are set for a phone at about 40% volume (a player's own setting): blows and spells
+reach about −31 to −37 dBFS at their loudest, footsteps about −43, and the music averages about
+−42, a little under the blows. Each slider has 9 to 18 dB of room to turn up. Settings saved on
+the earlier, louder scale (`volumeScale` other than 2) have their volumes forgotten, for these.
 
 **Effects** (`synth.js`), each in a few variants so repeats don't sound the same, and each made
 about as loud as the others (by its loudest 30 ms), then played at its own volume:
@@ -257,28 +261,50 @@ where the tree is.
 
 **Music.** A score (`score.js`) in the style of the 1985 *Bard's Tale*: the old games' bard songs
 were short, looping, old-world tunes, played on the Commodore 64's sound chip and the Apple II's
-speaker. This one is original, and played by a small band instead
-(`instruments.js`): lute and harp (plucked strings, the lute's two courses a hair apart),
-recorder (breathy, with a chiff and vibrato), fiddle (a bowed wavetable through a violin's
-formants), cello, a soft pad of detuned saws, bells (from inharmonic partials), a frame drum and tambourine, and a
-pulse-wave chip voice in the bridge, for the old games. Each instrument is made at pitches a
-fifth apart across its range and played at other pitches by speeding it up or slowing it down
-(never more than a few semitones).
+speaker. This one is original, and played on recordings of real, old instruments
+(`instruments.js`), from the Versilian Community Sample Library (VCSL, CC0: public domain):
+
+| Instrument | Plays | Recording |
+| --- | --- | --- |
+| Alto recorder | the tune, harmony, long notes | Baroque Alto Recorder, sustained |
+| Bowed psaltery (a medieval zither played with a bow) | the tune | long bow strokes |
+| Folk harp | arpeggios, the quiet verse's tune | Folk Harp, medium |
+| Strumstick (a small plucked folk instrument, for a lute) | strummed chords | fingered, medium |
+| Harpsichord | the bridge's arpeggios | Flemish harpsichord, 8' |
+| Renaissance chamber organ | the bass, and chords above it | 8' stop |
+| Hand chimes | a few notes over the choruses | Hand Chimes |
+| Frame drum, tambourine | the beat | a large and a small hand drum's hits; a tambourine's |
+
+Each pitched instrument was recorded every few semitones; a note plays the nearest recording,
+a little faster or slower (never more than 2 semitones, but for the psaltery's three lowest
+notes, below the library's lowest). Recorder, psaltery and organ notes sound for as long as the
+note lasts, then fade; plucked and struck ones ring on.
+
+`npm run build:music` (`scripts/build-music.js`) makes them: for each instrument, it reads the
+library's SFZ file (which recording is which note), picks recordings every 4 semitones or so
+across the notes the score plays, and downloads them (kept in `.cache/vcsl`). Each is mixed to
+mono, started where its note starts (the psaltery's long bow strokes swell slowly, so 0.4
+seconds into the stroke, faded in like a bow's attack), fine-tuned (by the SFZ's tuning),
+resampled to 32 kHz, cut to as long as the score needs (0.6 to 2.6 seconds), faded out, made
+about as loud as the others (by its loudest 50 ms in its first 0.6 seconds) and saved as an
+80 kb/s MP3 named for what's in it: 46 recordings, under a megabyte in all, listed in
+`samples.js`. (MP3 adds about 35 ms of silence at the start of each, the same for every one, so
+the music is in time with itself.)
 
 It's in D Dorian (D minor with a raised sixth, the old dances' mode), in 3/4 at 96 beats a
 minute, 128 bars, four minutes long:
 
 | Section | Bars | Tune | With |
 | --- | --- | --- | --- |
-| Intro | 8 | recorder fragment | harp, a low D on the cello |
-| Verse | 16 | recorder | lute, cello, drum |
-| Chorus | 16 | fiddle, recorder harmony in the second half | harp, pad, cello, drum and tambourine |
-| Verse | 16 | fiddle | long recorder notes under it, lute, cello, drum |
-| Chorus | 16 | fiddle, recorder harmony | harp, pad, cello, bells, drum and tambourine |
-| Bridge | 16 | recorder | chip arpeggios, pad, cello, drum and tambourine (to B flat and back) |
-| Quiet verse | 16 | harp | pad, cello, a few bells |
-| Last chorus | 16 | fiddle, recorder harmony | harp, lute, pad, cello, bells, drum and tambourine, with fills |
-| Outro | 8 | recorder | harp fading, cello, pad: ending on A, to lead back to D |
+| Intro | 8 | recorder fragment | harp, a low D on the organ |
+| Verse | 16 | recorder | strumstick, organ bass, drum |
+| Chorus | 16 | psaltery, recorder harmony in the second half | harp, organ, drum and tambourine |
+| Verse | 16 | psaltery | long recorder notes under it, strumstick, organ bass, drum |
+| Chorus | 16 | psaltery, recorder harmony | harp, organ, chimes, drum and tambourine |
+| Bridge | 16 | recorder | harpsichord arpeggios, organ, drum and tambourine (to B flat and back) |
+| Quiet verse | 16 | harp | organ, a few chimes |
+| Last chorus | 16 | psaltery, recorder harmony | harp, strumstick, organ, chimes, drum and tambourine, with fills |
+| Outro | 8 | recorder | harp fading, organ: ending on A, to lead back to D |
 
 The accompaniment is written from each section's chords; the timing and loudness of every note
 vary a little (seeded, so it's the same each time). `sound.js` plays it note by note, 1.2
@@ -286,8 +312,11 @@ seconds ahead (checked every 0.2 s), each instrument panned in its place in the 
 a hall's reverb, and carries straight on round from the end to the beginning, so it loops
 without a seam. It plays on every screen.
 
-`worker.js` makes the sounds and instruments in a worker, the most needed first, so the page
-never waits (without module workers they're made on the page, a few at a time). Browsers let a
+`worker.js` makes the sounds in a worker, the most needed first, so the page never waits
+(without module workers they're made on the page, a few at a time). Meanwhile the music's
+recordings are downloaded, six at a time, in the background (not on the loading screen: the
+game doesn't wait for them), kept by the service worker, and decoded once sound starts; the
+music begins when they all are. Offline without them, it just doesn't play. Browsers let a
 page make sound only after a tap, click or key, so it starts on the first one (the start or end
 of a touch, a click or a key: Safari on iPhones counts only the end of a touch, and wants
 something played in it, so a moment of silence is). On an iPhone or iPad, Safari mutes a page's
@@ -388,20 +417,25 @@ particles reuse one buffer, and projectiles and effects add no lights.
 - `test/actions.test.js`: attacks (their timing, where the hands reach on different bodies,
   two-handed grips, alternating punches), reactions and falls, on the real body.
 - `test/app.test.js`, `test/town3d.test.js`, `test/manifest.test.js`, `test/sw.test.js`: saving,
-  heroes, the minimap's colours, the action wheel (which slice a flick is in, its shapes, its
+  heroes (and forgetting volumes saved on the old scale), the minimap's colours, the action wheel (which slice a flick is in, its shapes, its
   actions and icons), the loader's byte counting, the ground's blending, the town's
   builders, the loading list and the service worker.
 - `test/audio.test.js`: every sound (clean, as loud as the others, no clicks, swings timed to
-  their blows, a sound for every attack, each on its bus), the wind's seamless loop, and playing
-  them: from where they happen, on their buses at their sliders' volumes, timed, silent hidden or
-  turned off, and the music scheduled ahead and round again without a gap.
-- `test/music.test.js`: the score (its sections and length, every note in time and in its
-  instrument's range, a tune in every section, in key, ending on A to lead back to D) and the
-  instruments (every sample clean and heard, the plucked strings in tune).
+  their blows, a sound for every attack, each on its bus, the bow's plucked string in tune), the
+  wind's seamless loop, and playing them: from where they happen, on their buses at their
+  sliders' volumes, timed, silent hidden or turned off, the music's recordings downloaded and
+  decoded (or, offline, not, without fuss), and the music scheduled ahead and round again
+  without a gap.
+- `test/music.test.js`: the score (its sections and length, every note in time and near a
+  recording of its instrument, a tune in every section, in key, ending on A to lead back to D),
+  the recordings (one for every instrument and kind of drum hit, each note played from the
+  nearest, every file a small MP3 in `client/music` and nothing else there) and the build
+  script's reading of the library's SFZ and WAV files.
 - `e2e/pellagos.spec.js`: the whole game in Chromium: loading, debug mode, making a character
   through to playing them, carrying on with a saved character, a fight to the death, walking by
   tapping, running by double-clicking and double-tapping with the stamina bar showing and going,
-  the target ring, walking by the minimap, Game options and the volume sliders (remembered), the
+  the music's recordings downloaded and playing after a tap, the target ring, walking by the
+  minimap, Game options and the volume sliders (remembered), the
   action wheel (stunning the orc, a flick refused while cooling down, then a heal), and a phone
   screen. Drawing without a GPU is slow, so fights are played on with
   `game.advance(seconds)`, which runs the game without drawing each frame.

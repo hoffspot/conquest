@@ -1,7 +1,8 @@
 // The music: an original ballad for a bard, in the spirit of the songs in 1985's The Bard's Tale
 // (short, modal, folk-like tunes, played there on home computers' sound chips) but played by a
-// band: lute, harp, recorder, fiddle, cello, strings, bells, frame drum and tambourine, with a
-// home computer's pulse wave arpeggios in the bridge as a nod to the old games.
+// band of real, old instruments (instruments.js): a recorder, a bowed psaltery, a folk harp, a
+// strumstick (a small plucked folk instrument, for a lute), a Renaissance organ, hand chimes, a
+// frame drum and a tambourine, with harpsichord arpeggios in the bridge.
 //
 // D Dorian (D minor with a bright B natural), 3/4 at 96 beats a minute, four minutes:
 //
@@ -9,8 +10,8 @@
 //   major) · quiet verse (16) · last chorus (16) · outro (8, ending on A, which leads back into
 //   the intro's D minor, so it loops without a seam)
 //
-// The tunes are written out below; the accompaniment (arpeggios, strumming, bass, strings,
-// drums) is made from each section's chords. Pure data, no Web Audio: sound.js plays it.
+// The tunes are written out below; the accompaniment (arpeggios, strumming, the organ's bass
+// and chords, drums) is made from each section's chords. Pure data, no Web Audio: sound.js plays it.
 
 import { createRandom } from "../core/random.js";
 
@@ -160,30 +161,33 @@ export function compose() {
 
         pattern.forEach((pitch, k) => play("harp", bar, k * 0.5, pitch, 0.5, level * (k === 0 ? 1 : 0.8)));
     });
-    const lute = (names, velocity) => names.forEach((name, bar) => {
-        const low = voicing(name, 38);
-        const chord = voicing(name, 50);
+    // The strumstick: the chord's root on the beat, then the chord strummed twice
+    const strum = (names, velocity) => names.forEach((name, bar) => {
+        const low = voicing(name, 50);
+        const chord = voicing(name, 55);
 
-        play("lute", bar, 0, low.root, 1, velocity);
+        play("strumstick", bar, 0, low.root, 1, velocity);
 
         for (const beat of [1, 2]) {
-            [chord.third, chord.fifth, chord.root + 12].forEach((pitch, k) => play("lute", bar, beat + k * 0.035, pitch, 1, velocity * 0.7));
+            [chord.third, chord.fifth, chord.root + 12].forEach((pitch, k) => play("strumstick", bar, beat + k * 0.035, pitch, 1, velocity * 0.7));
         }
     });
-    const cello = (names, velocity) => names.forEach((name, bar) => play("cello", bar, 0, voicing(name, 36).root, 2.95, velocity));
+    // The organ: a bass note held through each bar, and (softer) the chord above it
+    const bass = (names, velocity) => names.forEach((name, bar) => play("organ", bar, 0, voicing(name, 36).root, 2.95, velocity));
     const pad = (names, velocity) => names.forEach((name, bar) => {
         const { root, third, fifth } = voicing(name, 55);
 
         for (const pitch of [root, third, fifth]) {
-            play("pad", bar, 0, pitch, 2.95, velocity);
+            play("organ", bar, 0, pitch, 2.95, velocity * 0.6);
         }
     });
-    const chip = (names, velocity) => names.forEach((name, bar) => {
+    // Harpsichord arpeggios, in sixteenths
+    const arpeggios = (names, velocity) => names.forEach((name, bar) => {
         const { root, third, fifth } = voicing(name, 62);
         const cycle = [root, third, fifth, root + 12];
 
         for (let k = 0; k < 12; k++) {
-            play("chip", bar, k * 0.25, cycle[k % 4], 0.25, velocity * (k % 4 === 0 ? 1 : 0.75), { exact: true });
+            play("harpsichord", bar, k * 0.25, cycle[k % 4], 0.25, velocity * (k % 4 === 0 ? 1 : 0.75), { exact: true });
         }
     });
     const counter = (names, velocity) => names.forEach((name, bar) => {
@@ -191,14 +195,15 @@ export function compose() {
 
         play("recorder", bar, 0, third, 2.9, velocity);
     });
-    const bells = (notesOfTune, velocity, every = 2) => {
+    // Hand chimes: the tune's first note in every other bar (or every `every`), an octave up
+    const chimes = (notesOfTune, velocity, every = 2) => {
         let beat = 0;
 
         for (const [pitch, beats] of notesOfTune) {
             const bar = Math.floor(beat / BEATS_PER_BAR);
 
             if (pitch !== null && beat % BEATS_PER_BAR === 0 && bar % every === 0) {
-                play("bells", bar, 0, pitch + 12 > 98 ? pitch : pitch + 12, 2, velocity);
+                play("chimes", bar, 0, pitch + 12 > 96 ? pitch : pitch + 12, 2, velocity);
             }
 
             beat += beats;
@@ -242,66 +247,66 @@ export function compose() {
 
     section("intro", INTRO_CHORDS, (names) => {
         harp(names, 0.55);
-        names.forEach((_, bar) => play("cello", bar, 0, midi("D2"), 2.95, 0.3));
+        names.forEach((_, bar) => play("organ", bar, 0, midi("D2"), 2.95, 0.3));
         melody("recorder", INTRO, 0.5);
     });
     section("verse", VERSE_CHORDS, (names) => {
         melody("recorder", VERSE, 0.7);
-        lute(names, 0.55);
-        cello(names, 0.4);
+        strum(names, 0.55);
+        bass(names, 0.4);
         drums(names.length, "verse", 0.5);
     });
     section("chorus", CHORUS_CHORDS, (names) => {
-        melody("fiddle", CHORUS, 0.7);
+        melody("psaltery", CHORUS, 0.7);
         melody("recorder", harmony(CHORUS, names, 8), 0.42);
         harp(names, 0.45);
         pad(names, 0.4);
-        cello(names, 0.45);
+        bass(names, 0.45);
         drums(names.length, "chorus", 0.6);
     });
     section("verse", VERSE_CHORDS, (names) => {
-        melody("fiddle", VERSE, 0.65);
+        melody("psaltery", VERSE, 0.65);
         counter(names, 0.32);
-        lute(names, 0.55);
-        cello(names, 0.4);
+        strum(names, 0.55);
+        bass(names, 0.4);
         drums(names.length, "verse", 0.55);
     });
     section("chorus", CHORUS_CHORDS, (names) => {
-        melody("fiddle", CHORUS, 0.75);
+        melody("psaltery", CHORUS, 0.75);
         melody("recorder", harmony(CHORUS, names), 0.45);
         harp(names, 0.5);
         pad(names, 0.45);
-        cello(names, 0.5);
-        bells(CHORUS, 0.4);
+        bass(names, 0.5);
+        chimes(CHORUS, 0.4);
         drums(names.length, "chorus", 0.65);
     });
     section("bridge", BRIDGE_CHORDS, (names) => {
-        chip(names, 0.45);
+        arpeggios(names, 0.45);
         melody("recorder", BRIDGE, 0.6);
         pad(names, 0.45);
-        cello(names, 0.4);
+        bass(names, 0.4);
         drums(names.length, "bridge", 0.5);
     });
     section("quiet verse", VERSE_CHORDS, (names) => {
         melody("harp", VERSE, 0.62);
         pad(names, 0.3);
-        cello(names, 0.3);
-        bells(VERSE, 0.3, 8);
+        bass(names, 0.3);
+        chimes(VERSE, 0.3, 8);
     });
     section("last chorus", CHORUS_CHORDS, (names) => {
-        melody("fiddle", CHORUS, 0.8);
+        melody("psaltery", CHORUS, 0.8);
         melody("recorder", harmony(CHORUS, names), 0.5);
         harp(names, 0.5);
-        lute(names, 0.45);
+        strum(names, 0.45);
         pad(names, 0.5);
-        cello(names, 0.55);
-        bells(CHORUS, 0.45);
+        bass(names, 0.55);
+        chimes(CHORUS, 0.45);
         drums(names.length, "chorus", 0.7, { fills: true });
     });
     section("outro", OUTRO_CHORDS, (names) => {
         melody("recorder", OUTRO, 0.5);
         harp(names, (bar) => 0.55 - bar * 0.025);
-        cello(names, 0.3);
+        bass(names, 0.3);
         pad(names, 0.25);
     });
 

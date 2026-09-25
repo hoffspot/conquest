@@ -1,10 +1,14 @@
 // The game's sounds (client/js/audio): made in code (synth.js) and played from where they happen
 // (sound.js)
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
+import { pluck } from "../client/js/audio/dsp.js";
+import { sampleFiles } from "../client/js/audio/instruments.js";
 import { BUSES, gainOf, Sound, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
 import { SCORE } from "../client/js/audio/score.js";
 import { loudness, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "../client/js/audio/synth.js";
+import { createRandom } from "../client/js/core/random.js";
 import { WEAPONS } from "../client/js/core/weapons.js";
 
 const peakOf = (samples) => samples.reduce((most, value) => Math.max(most, Math.abs(value)), 0);
@@ -84,6 +88,36 @@ describe("making sounds (synth.js)", () => {
         // Round the end to the start is no bigger a step than the wind takes anyway
         assert.ok(step(samples.length - 1) <= steps[Math.floor(steps.length * 0.99)], "seamless");
     });
+
+    it("tunes its plucked string between samples, so the bow twangs in tune", () => {
+        // The pitch, by where the signal best matches itself a period later
+        const pitchOf = (samples, rate) => {
+            const window = 6000;
+            const match = (lag) => samples.subarray(1000, 1000 + window).reduce((sum, value, n) => sum + value * samples[1000 + n + lag], 0);
+            let best = 0;
+            let lag = 0;
+
+            for (let l = Math.floor(rate / 1500); l < rate / 60; l++) {
+                const m = match(l);
+
+                if (m > best) {
+                    best = m;
+                    lag = l;
+                }
+            }
+
+            const [a, b, c] = [match(lag - 1), match(lag), match(lag + 1)];
+
+            return rate / (lag + (a - c) / (2 * (a - 2 * b + c)));
+        };
+
+        for (const frequency of [110, 293.66, 659.26, 987.77]) {
+            const measured = pitchOf(pluck(createRandom(3), frequency, 0.6, 0.998), SAMPLE_RATE);
+            const cents = 1200 * Math.log2(measured / frequency);
+
+            assert.ok(Math.abs(cents) < 3, `${frequency} Hz is ${cents.toFixed(1)} cents out`);
+        }
+    });
 });
 
 // A stand-in for the browser's Web Audio: records what's played, how loud, where and on which bus
@@ -151,6 +185,11 @@ function fakeAudio() {
             return { length, sampleRate: rate, numberOfChannels: channels, getChannelData: (channel) => data[channel] };
         }
 
+        // (Decodes a recording to a stand-in buffer, as the browser would, a moment later)
+        decodeAudioData(recording) {
+            return Promise.resolve(this.createBuffer(1, Math.max(1, recording.byteLength), 32000));
+        }
+
         createBufferSource() {
             const source = node({
                 playbackRate: param(1),
@@ -178,36 +217,77 @@ function route(sound, source) {
     return { gain: level.gain.value, pan, bus };
 }
 
-// The sounds, made once (without a worker, as in Node) and handed to each Sound tested
-const made = new Sound();
+// Recordings "downloaded" from client/music, as the browser would
+const fromDisk = async (url) => {
+    const data = await readFile(url);
+
+    return { ok: true, arrayBuffer: async () => data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) };
+};
+
+// The sounds, made once (without a worker, as in Node), and the music's recordings, downloaded
+// once, handed to each Sound tested
+const made = new Sound({ fetch: fromDisk });
 const making = made.prepare();
 
 async function started(options) {
     await making;
+    await made.downloading;
 
     const played = fakeAudio();
-    const sound = new Sound(options);
+    const sound = new Sound({ fetch: fromDisk, ...options });
 
     sound.samples = new Map(made.samples);
-    sound.instrumentSamples = new Map(made.instrumentSamples);
+    sound.recordings = new Map(made.recordings);
     sound.ready = making;
+    sound.downloading = made.downloading;
     sound.unlock();
-    await Promise.resolve();
+
+    // (The browser decodes the recordings a moment later)
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     return { sound, played };
 }
 
 describe("playing sounds (sound.js)", () => {
-    it("makes every sound and every instrument's samples (here without a worker), and plays nothing before it's unlocked", async () => {
+    it("makes every sound (here without a worker), downloads the music's recordings, and plays nothing before it's unlocked", async () => {
         await making;
+        await made.downloading;
 
         for (const [name, { variants }] of Object.entries(SOUNDS)) {
             assert.equal(made.samples.get(name)?.filter(Boolean).length, variants, name);
         }
 
         assert.ok(made.samples.has("wind"));
-        assert.ok(made.instrumentSamples.size >= 40, `${made.instrumentSamples.size} instrument samples`);
+        assert.deepEqual([...made.recordings.keys()].sort(), sampleFiles().map(([id]) => id).sort());
         assert.equal(made.play("slash"), null, "no sound until the browser allows it");
+
+        // Unlocked, the browser decodes them all
+        const { sound } = await started();
+
+        assert.equal(sound.instruments.size, sampleFiles().length);
+        assert.equal(sound.recordings.size, 0, "and they're let go once decoded");
+        sound.close();
+    });
+
+    it("plays no music without its recordings (offline, say), and doesn't mind", async () => {
+        const offline = new Sound({ fetch: async () => ({ ok: false, status: 404 }) });
+
+        await offline.prepare();
+        await offline.downloading;
+        assert.equal(offline.recordings.size, 0);
+        assert.equal(offline.unplayable, sampleFiles().length);
+    });
+
+    it("starts the music without a recording it couldn't get, rather than never", async () => {
+        const [missing] = sampleFiles()[0];
+        const { sound } = await started();
+
+        // (As if that one had failed to download)
+        sound.instruments.delete(missing);
+        sound.unplayable = 1;
+        sound.scheduleMusic();
+        assert.notEqual(sound.music.start, null);
+        sound.close();
     });
 
     it("plays from where things happen: quieter further away, and to the side they're on", async () => {
@@ -235,7 +315,7 @@ describe("playing sounds (sound.js)", () => {
         const { sound } = await started({ volumes: { effects: 0.8, environment: 0.5, music: 0.2 } });
 
         assert.deepEqual(BUSES, ["effects", "environment", "music"]);
-        assert.deepEqual(VOLUME_DEFAULTS, { effects: 0.8, environment: 0.5, music: 0.35 });
+        assert.deepEqual(VOLUME_DEFAULTS, { effects: 0.5, environment: 0.4, music: 0.35 });
         assert.equal(route(sound, sound.play("slash")).bus, "effects");
         assert.equal(route(sound, sound.play("bird")).bus, "environment");
         assert.ok(Math.abs(sound.buses.music.gain.value - gainOf(0.2)) < 1e-9);
@@ -247,6 +327,7 @@ describe("playing sounds (sound.js)", () => {
         assert.ok(Math.abs(sound.buses.effects.gain.value - gainOf(0.25)) < 1e-9);
         assert.equal(gainOf(0), 0);
         assert.equal(gainOf(1), 1);
+        assert.equal(gainOf(0.5), 0.25, "halfway is 12 dB down");
         sound.close();
     });
 

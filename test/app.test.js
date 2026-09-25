@@ -81,6 +81,25 @@ describe("saving (save.js)", () => {
         saveSettings({ debug: true });
         saveSettings({ quality: "low" });
         assert.deepEqual(loadSettings(), { ...SETTINGS_DEFAULTS, debug: true, quality: "low" });
+
+        // Volumes are kept on today's scale...
+        saveSettings({ musicVolume: 0.2 });
+        assert.equal(loadSettings().musicVolume, 0.2);
+    });
+
+    it("forgets volumes saved on the old, louder scale, for the new defaults, keeping the rest", () => {
+        const items = useStorage();
+
+        items.set("pellagos.settings", JSON.stringify({ minimap: false, effectsVolume: 0.1, environmentVolume: 0.1, musicVolume: 0.1 }));
+
+        const settings = loadSettings();
+
+        assert.equal(settings.minimap, false);
+        assert.deepEqual([settings.effectsVolume, settings.environmentVolume, settings.musicVolume], [SETTINGS_DEFAULTS.effectsVolume, SETTINGS_DEFAULTS.environmentVolume, SETTINGS_DEFAULTS.musicVolume]);
+
+        // Set again, they're remembered
+        saveSettings({ effectsVolume: 0.3 });
+        assert.equal(loadSettings().effectsVolume, 0.3);
     });
 
     it("still plays when the browser won't store anything", () => {

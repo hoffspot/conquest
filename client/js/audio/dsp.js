@@ -1,31 +1,13 @@
-// The building blocks the game's sounds and music are made from: noise, tones, wavetables,
-// filters, envelopes, a plucked string, mixing and levels. Pure maths on arrays of samples, no
-// Web Audio (sound.js plays the results), so they run in a worker and in Node.
-//
-// Everything is made at the current sample rate, SAMPLE_RATE unless atRate() says otherwise
-// (the music's instruments are made at a lower rate, to take less memory).
+// The building blocks the game's sounds are made from (synth.js): noise, tones, filters,
+// envelopes, a plucked string, mixing and levels. Pure maths on arrays of samples, at
+// SAMPLE_RATE, with no Web Audio (sound.js plays the results), so they run in a worker and in
+// Node.
 
 /** Samples a second sounds are made at (the browser plays them at its own rate). */
 export const SAMPLE_RATE = 48000;
 
 const TAU = 2 * Math.PI;
-let rate = SAMPLE_RATE;
-
-/** Make something at another sample rate: `make()` runs with it, and its result is returned. */
-export function atRate(sampleRate, make) {
-    const before = rate;
-
-    rate = sampleRate;
-
-    try {
-        return make();
-    } finally {
-        rate = before;
-    }
-}
-
-/** The sample rate things are being made at. */
-export const currentRate = () => rate;
+const rate = SAMPLE_RATE;
 
 /** How many samples `seconds` is (at least one). */
 export const count = (seconds) => Math.max(1, Math.round(seconds * rate));
@@ -128,48 +110,6 @@ export function tone(seconds, frequency, { harmonics = [[1, 1]], fm = null, phas
         out[n] = value;
         angle += (TAU * f) / rate;
         modulator += (TAU * f * ratio) / rate;
-    }
-
-    return out;
-}
-
-/**
- * One cycle of a waveform, `size` samples long: the sum of harmonics, `level(k)` of the k-th,
- * up to `highest`.
- */
-export function wavetable(level, highest, size = 2048) {
-    const table = new Float32Array(size + 1);
-
-    for (let k = 1; k <= highest; k++) {
-        const amount = level(k);
-
-        if (amount) {
-            for (let n = 0; n <= size; n++) {
-                table[n] += amount * Math.sin((TAU * k * n) / size);
-            }
-        }
-    }
-
-    return table;
-}
-
-/** Play a wavetable round and round at `frequency` Hz (or a function of time), `seconds` long. */
-export function oscillate(table, seconds, frequency, phase = 0) {
-    const out = new Float32Array(count(seconds));
-    const at = typeof frequency === "function" ? frequency : () => frequency;
-    const size = table.length - 1;
-    let position = phase * size;
-
-    for (let n = 0; n < out.length; n++) {
-        const index = Math.floor(position);
-        const share = position - index;
-
-        out[n] = table[index] + (table[index + 1] - table[index]) * share;
-        position += (at(n / rate) * size) / rate;
-
-        if (position >= size) {
-            position -= size * Math.floor(position / size);
-        }
     }
 
     return out;

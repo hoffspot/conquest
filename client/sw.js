@@ -7,8 +7,9 @@
 // files and some new ones, which don't work together. (Files that haven't changed come back as
 // short "not modified" replies.)
 //
-// Images and 3D models rarely change, so they come from the saved copy first. Change the version
-// in CACHE_NAME when they change to replace the saved copies.
+// Images, 3D models and the music's recordings rarely change, so they come from the saved copy
+// first. Change the version in CACHE_NAME when they change to replace the saved copies (the
+// recordings' names change with what's in them, so they needn't).
 
 const CACHE_PREFIX = "pellagos-";
 const CACHE_NAME = `${CACHE_PREFIX}v1`;
@@ -43,7 +44,7 @@ self.addEventListener("fetch", (event) => {
         return;
     }
 
-    const isAsset = /\.(png|gif|jpg|webp|gltf|glb)$/.test(url.pathname) || /\/models\/.+\.bin$/.test(url.pathname);
+    const isAsset = /\.(png|gif|jpg|webp|gltf|glb|mp3)$/.test(url.pathname) || /\/models\/.+\.bin$/.test(url.pathname);
 
     event.respondWith(isAsset ? cacheFirst(request) : networkFirst(request));
 });
