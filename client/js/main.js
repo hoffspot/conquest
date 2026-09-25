@@ -140,6 +140,7 @@ async function load() {
     state.session = await session.createSession({
         canvas,
         quality: settings.quality === "auto" ? undefined : settings.quality,
+        sound: settings.sound,
         fetch: loader.loadFile,
         onProgress: (label) => step(label, label.startsWith("Unpacking") ? 0.3 : 0.15),
     });
@@ -190,6 +191,8 @@ $("#newbutton").addEventListener("click", (event) => {
 });
 
 $("#debugswitch").checked = settings.debug;
+$("#minimapswitch").checked = settings.minimap;
+$("#soundswitch").checked = settings.sound;
 $("#debugswitch").addEventListener("change", (event) => applySetting("debug", event.target.checked));
 
 // --- Making a character ---
@@ -224,18 +227,19 @@ async function create() {
 
 async function play(save) {
     const { createGame } = state.modules;
-    const { view, kit } = state.session;
+    const { view, kit, sound } = state.session;
 
     state.game?.dispose();
     show("loading");
     $("#loadlist").replaceChildren();
     setProgress(0, "Building the world");
 
-    const game = createGame({ view, kit, hud: state.hud, hero: save.hero, seed: save.seed });
+    const game = createGame({ view, kit, sound, hud: state.hud, hero: save.hero, seed: save.seed });
 
     state.game = game;
     await game.build(({ label, done, total }) => setProgress(done / total, label, `${done} of ${total}`));
     game.showSquares(settings.squares);
+    showMinimap(settings.minimap);
     debug.watch({ game });
     show("hud");
     game.start();
@@ -248,12 +252,23 @@ function pause() {
     }
 
     state.game.stop();
+    menuPage("main");
     $("#menu").showModal();
 }
 
 function resume() {
     $("#menu").close();
     state.game?.start();
+}
+
+// The menu's pages: the main one, and Game options
+function menuPage(page) {
+    const options = page === "options";
+
+    $("#menumain").hidden = options;
+    $("#menuoptions").hidden = !options;
+    $("#menu").setAttribute("aria-labelledby", options ? "optionstitle" : "menutitle");
+    (options ? $("#minimapswitch") : $("#resumebutton")).focus();
 }
 
 function quit() {
@@ -268,9 +283,20 @@ function quit() {
 $("#menubutton").addEventListener("click", pause);
 $("#resumebutton").addEventListener("click", resume);
 $("#quitbutton").addEventListener("click", quit);
+$("#optionsbutton").addEventListener("click", () => menuPage("options"));
+$("#optionsback").addEventListener("click", () => menuPage("main"));
+$("#minimapswitch").addEventListener("change", (event) => applySetting("minimap", event.target.checked));
+$("#soundswitch").addEventListener("change", (event) => applySetting("sound", event.target.checked));
+
+// Escape goes back from Game options, and closes the menu from the main page
 $("#menu").addEventListener("cancel", (event) => {
     event.preventDefault();
-    resume();
+
+    if ($("#menumain").hidden) {
+        menuPage("main");
+    } else {
+        resume();
+    }
 });
 $("#zoomin").addEventListener("click", () => state.session?.view.zoom(0.8));
 $("#zoomout").addEventListener("click", () => state.session?.view.zoom(1.25));
@@ -282,6 +308,11 @@ document.addEventListener("keydown", (event) => {
 });
 
 window.addEventListener("resize", () => state.session?.view.resize());
+
+// Browsers let a page make sound only once it's been tapped, clicked or typed on
+for (const type of ["pointerdown", "pointerup", "keydown"]) {
+    document.addEventListener(type, () => state.session?.sound.unlock(), { capture: true });
+}
 
 // Pause when the page is hidden (switching apps on a phone)
 document.addEventListener("visibilitychange", () => {
@@ -303,9 +334,18 @@ function applySetting(key, value) {
         // Nothing more to do: the overlay folds itself
     } else if (key === "squares") {
         state.game?.showSquares(value);
+    } else if (key === "minimap") {
+        showMinimap(value);
+    } else if (key === "sound") {
+        state.session?.sound.setEnabled(value);
     } else {
         applyViewSettings();
     }
+}
+
+function showMinimap(on) {
+    document.body.dataset.minimap = on ? "on" : "off";
+    state.game?.showMinimap(on);
 }
 
 function applyViewSettings() {

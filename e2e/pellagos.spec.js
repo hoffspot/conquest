@@ -291,6 +291,96 @@ test("double-clicking the ground runs there, using stamina, shown by an orange b
     await expect(bar).toBeHidden();
 });
 
+test("tapping an enemy rings it as the player's target, until they're told to walk away", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const target = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const { battle } = game;
+        const player = battle.actor("player");
+        const orc = battle.actor("orc");
+        const ring = game.effects.targetRing;
+        const square = [player.square[0] + 3, player.square[1] - 3];
+
+        game.stop();
+
+        // The orc, standing a few squares from the player
+        Object.assign(orc, { square, x: square[0] + 0.5, y: square[1] + 0.5, to: null, path: [], ai: null });
+        game.avatars.get("orc").place(orc.x, orc.y, Math.PI);
+        game.previous.set("orc", { x: orc.x, y: orc.y });
+        game.advance(0.1);
+
+        const before = ring.visible;
+        const at = session.view.toScreen(game.avatars.get("orc").point(0.5));
+
+        game.tap(at.x, at.y);
+        game.advance(0.5);
+
+        const orcAt = game.avatars.get("orc").object.position;
+        const ringed = { visible: ring.visible, off: Math.hypot(ring.position.x - orcAt.x, ring.position.z - orcAt.z), plate: document.querySelector(".floater.targeted")?.dataset.id ?? null };
+        const away = session.view.toScreen(game.avatars.get("player").object.position.clone().setZ(orcAt.z + 6));
+
+        game.tap(away.x, away.y, { time: performance.now() + 1000 });
+        game.advance(0.2);
+
+        return { before, ringed, after: { visible: ring.visible, plate: document.querySelector(".floater.targeted")?.dataset.id ?? null } };
+    });
+
+    expect(target.before).toBe(false);
+    expect(target.ringed).toEqual({ visible: true, off: expect.any(Number), plate: "orc" });
+    expect(target.ringed.off).toBeLessThan(0.01);
+    expect(target.after).toEqual({ visible: false, plate: null });
+});
+
+test("the minimap walks the player where it's tapped, and Game options turn it and the sound off, remembered", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const minimap = page.locator("#minimap");
+
+    await expect(minimap).toBeVisible();
+
+    // Ten metres south of the player, on the map
+    const box = await minimap.boundingBox();
+    const spot = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        return { x: player.x, z: player.y + 10, width: game.world.width, height: game.world.height };
+    });
+
+    await page.mouse.click(box.x + (spot.x / spot.width) * box.width, box.y + (spot.z / spot.height) * box.height);
+
+    const walked = await page.evaluate(() => ({ order: window.pellagos.game.battle.actor("player").order, sound: window.pellagos.session.sound.playing }));
+
+    expect(walked.order.type).toBe("move");
+    expect(Math.abs(walked.order.to[0] + 0.5 - spot.x)).toBeLessThan(3);
+    expect(Math.abs(walked.order.to[1] + 0.5 - spot.z)).toBeLessThan(3);
+    expect(walked.sound).toBe(true);
+
+    // Menu, Game options: both on; turn them off
+    await page.locator("#menubutton").click();
+    await page.getByRole("button", { name: "Game options" }).click();
+
+    const minimapSwitch = page.getByRole("switch", { name: /Minimap/ });
+    const soundSwitch = page.getByRole("switch", { name: /Sound/ });
+
+    await expect(minimapSwitch).toBeChecked();
+    await expect(soundSwitch).toBeChecked();
+    await page.locator("label:has(#minimapswitch)").click();
+    await page.locator("label:has(#soundswitch)").click();
+    await expect(minimapSwitch).not.toBeChecked();
+    await expect(soundSwitch).not.toBeChecked();
+    await page.getByRole("button", { name: "Back" }).click();
+    await page.getByRole("button", { name: "Resume" }).click();
+    await expect(minimap).toBeHidden();
+    expect(await page.evaluate(() => window.pellagos.session.sound.playing)).toBe(false);
+
+    // Remembered next time
+    await playing(page, "/?play&seed=1");
+    await expect(minimap).toBeHidden();
+    expect(await page.evaluate(() => window.pellagos.session.sound.enabled)).toBe(false);
+});
+
 test.describe("on a phone", () => {
     test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 

@@ -3,11 +3,14 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { cleanName, defaultHero, HUMAN_TONES, randomHero, suggestName } from "../client/js/app/heroes.js";
 import { formatBytes, Loader } from "../client/js/app/loader.js";
+import { buildingsOf, mapColours, treesOf } from "../client/js/app/minimap.js";
 import { isHero, loadSave, loadSettings, newSeed, SAVE_VERSION, saveSettings, SETTINGS_DEFAULTS, writeSave, clearSave } from "../client/js/app/save.js";
 import { BEARDS, HAIRSTYLES } from "../client/js/characters/hair.js";
 import { MACRO_DEFAULTS } from "../client/js/characters/macro.js";
 import { createRandom } from "../client/js/core/random.js";
+import { GROUND } from "../client/js/core/setpieces/pieces.js";
 import { WEAPONS } from "../client/js/core/weapons.js";
+import { generateWorld } from "../client/js/core/world.js";
 
 // A stand-in for the browser's local storage (or one that refuses, as in private browsing)
 function useStorage({ refuse = false } = {}) {
@@ -69,6 +72,8 @@ describe("saving (save.js)", () => {
     it("remembers settings over their defaults", () => {
         useStorage();
         assert.deepEqual(loadSettings(), SETTINGS_DEFAULTS);
+        assert.equal(SETTINGS_DEFAULTS.minimap, true, "the minimap starts on");
+        assert.equal(SETTINGS_DEFAULTS.sound, true, "and so does the sound");
 
         saveSettings({ debug: true });
         saveSettings({ quality: "low" });
@@ -138,6 +143,59 @@ describe("heroes (heroes.js)", () => {
         assert.equal(cleanName("O'Brien-Smith"), "O'Brien-Smith");
         assert.equal(cleanName("x".repeat(40)).length, 20);
         assert.equal(cleanName("   "), "");
+    });
+});
+
+describe("the minimap (minimap.js)", () => {
+    const world = generateWorld({ seed: 4 });
+    const colours = mapColours(world);
+    const colourAt = (x, y) => [...colours.subarray((y * world.width + x) * 4, (y * world.width + x) * 4 + 3)];
+    const greenest = ([r, g, b]) => g > r && g > b;
+
+    it("colours every square: the ground, roofs over buildings, trees in the fields", () => {
+        assert.equal(colours.length, world.width * world.height * 4);
+        assert.ok(colours.every((value, k) => k % 4 !== 3 || value === 255), "solid");
+
+        // Grass is green, roads the colour of earth, the market square grey
+        const find = (kind) => {
+            for (let y = 0; y < world.height; y++) {
+                for (let x = 0; x < world.width; x++) {
+                    if (world.ground[y][x] === kind && !world.blocked[y][x]) {
+                        return [x, y];
+                    }
+                }
+            }
+
+            return null;
+        };
+        const [road, cobbles, grass] = [find(GROUND.road), find(GROUND.cobbles), find(GROUND.grass)];
+
+        assert.ok(greenest(colourAt(...grass)));
+        assert.ok(colourAt(...road)[0] > colourAt(...road)[2] + 40, "roads are brown");
+        assert.ok(Math.abs(colourAt(...cobbles)[0] - colourAt(...cobbles)[2]) < 30, "cobbles are grey");
+
+        // Every building's squares have a roof: not the ground's colour, and not green
+        const buildings = buildingsOf(world);
+
+        assert.ok(buildings.length >= 10);
+
+        for (const { x, y, w, h } of buildings) {
+            const middle = colourAt(x + Math.floor(w / 2), y + Math.floor(h / 2));
+
+            assert.ok(!greenest(middle));
+            assert.ok(world.blocked[y + Math.floor(h / 2)][x + Math.floor(w / 2)], "buildings block their squares");
+        }
+
+        // Trees, where their trunks stand, are dark green
+        const trees = treesOf(world);
+
+        assert.equal(trees.length, world.trees.length + world.town.pieces.filter(({ key }) => key.startsWith("tree-")).length);
+
+        for (const { x, y } of world.trees.slice(0, 20)) {
+            const [r, g, b] = colourAt(x, y);
+
+            assert.ok(greenest([r, g, b]) && r + g + b < 200, `a tree at ${x}, ${y}`);
+        }
     });
 });
 

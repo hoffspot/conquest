@@ -12,8 +12,12 @@ export class Hud {
         this.plate = root.querySelector("#playerplate");
         this.floaters = root.querySelector("#floaters");
         this.banner = root.querySelector("#banner");
+
+        /** The minimap's canvas (app/minimap.js draws it). */
+        this.map = root.querySelector("#minimap");
         this.tracked = new Map();
         this.bannerTimer = null;
+        this.targeted = null;
     }
 
     /** Show the player's name, health and stamina. */
@@ -56,6 +60,17 @@ export class Hud {
         if (plate) {
             this.#setStamina(plate, stamina, maxStamina);
         }
+    }
+
+    /** Mark the character the player is set to fight (its bar lit up), or no one (null). */
+    setTarget(id) {
+        if (id === this.targeted) {
+            return;
+        }
+
+        this.tracked.get(this.targeted)?.classList.remove("targeted");
+        this.targeted = id;
+        this.tracked.get(id)?.classList.add("targeted");
     }
 
     /** Move a character's bar to a point on the screen (client pixels), or hide it (null). */
@@ -103,6 +118,7 @@ export class Hud {
     clear() {
         this.floaters.replaceChildren();
         this.tracked.clear();
+        this.targeted = null;
         this.message("");
     }
 

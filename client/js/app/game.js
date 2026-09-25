@@ -9,7 +9,7 @@
 // Tap or click the ground to walk there, or an enemy to go and fight it; pinch or scroll to zoom.
 
 import * as THREE from "three";
-import { REACTIONS } from "../characters/actions.js";
+import { FALL_LANDS, REACTIONS } from "../characters/actions.js";
 import { Character } from "../characters/character.js";
 import { PRESETS } from "../characters/presets.js";
 import { Battle, STEP_MS } from "../core/battle.js";
@@ -19,6 +19,7 @@ import { Effects } from "../world/effects.js";
 import { Squares } from "../world/squares.js";
 import { buildGround } from "../world/ground.js";
 import { buildTown } from "../world/town3d.js";
+import { Minimap } from "./minimap.js";
 
 /** What every new character wears; their weapon (and a bow's quiver) are added to it. */
 export const STARTING_OUTFIT = Object.freeze(["tunic", "bracers", "breeches", "boots"]);
@@ -38,9 +39,10 @@ const SINK = 1.5;
 // A tap that moves less than this (pixels) is a tap, not a drag
 const TAP_SLOP = 12;
 
-// A second tap this soon after one (ms), and this close to it (pixels), makes a double tap: run
+// A second tap this soon after one (ms), and this close to it (pixels; on the minimap, less),
+// makes a double tap: run
 const DOUBLE_TAP_MS = 350;
-const DOUBLE_TAP_SLOP = 60;
+const DOUBLE_TAP_SLOP = { view: 60, map: 16 };
 
 // How far from an enemy (screen pixels, at its chest) a tap picks it
 const PICK_RADIUS = 46;
@@ -62,9 +64,10 @@ export class Game {
      * @param {object} options.hero - The player's character: { name, shape, look, weapon }.
      * @param {import("./hud.js").Hud} options.hud
      */
-    constructor({ view, kit, world, hero, hud }) {
+    constructor({ view, kit, world, hero, hud, sound = null }) {
         this.view = view;
         this.kit = kit;
+        this.sound = sound;
         this.world = world;
         this.hero = hero;
         this.hud = hud;
@@ -108,10 +111,12 @@ export class Game {
 
             return result;
         };
-        const steps = world.town.pieces.length + world.trees.length + 5;
+        const steps = world.town.pieces.length + world.trees.length + 6;
         let done = 0;
         const step = (label) => onProgress({ label, done: ++done, total: steps });
 
+        // The sounds are made while everything else is built (and after: they don't hold it up)
+        this.sound?.prepare();
         onProgress({ label: "Laying the ground", done, total: steps });
         this.ground = await time("ground", () => buildGround(world));
         view.scene.add(this.ground);
@@ -153,6 +158,10 @@ export class Game {
         }
 
         this.#follow(1);
+        step("Drawing the map");
+
+        this.minimap = await time("minimap", () => new Minimap(this.hud.map, world, { onTap: (tap) => this.mapTap(tap) }));
+        this.minimap.show(this.minimapShown ?? true);
 
         // Compile every shader now rather than when each thing first comes into view
         await time("shaders", () => view.renderer.compileAsync(view.scene, view.camera));
@@ -173,6 +182,13 @@ export class Game {
     #addAvatar(id, character, options) {
         const avatar = new Avatar(character, options);
 
+        // Footsteps, on whatever ground the foot lands on
+        avatar.walker.onStep = (foot, speed) => {
+            const { x, z } = avatar.object.position;
+            const ground = this.world.ground[Math.floor(z)]?.[Math.floor(x)];
+
+            this.sound?.step(ground, avatar.object.position, speed);
+        };
         character.object.name = id;
         this.view.scene.add(character.object);
         this.avatars.set(id, avatar);
@@ -190,12 +206,15 @@ export class Game {
         this.lastFrame = performance.now();
         this.#listen();
         this.view.renderer.setAnimationLoop((now) => this.#frame(now));
+        this.sound?.setAmbient(true);
+        this.sound?.setPaused(false);
     }
 
     /** Stop (pause): nothing moves until start() again. */
     stop() {
         this.running = false;
         this.view.renderer.setAnimationLoop(null);
+        this.sound?.setPaused(true);
 
         for (const [target, type, listener, options] of this.listeners) {
             target.removeEventListener(type, listener, options);
@@ -209,6 +228,7 @@ export class Game {
     /** Take everything out of the scene (before building another game). */
     dispose() {
         this.stop();
+        this.sound?.setAmbient(false);
         this.hud.clear();
 
         for (const avatar of this.avatars.values()) {
@@ -223,12 +243,19 @@ export class Game {
         this.ground?.material.dispose();
         this.effects?.group.traverse((node) => node.geometry?.dispose());
 
-        for (const object of [this.ground, this.town?.object, this.effects?.group, this.effects?.marker, this.squares?.object]) {
+        for (const object of [this.ground, this.town?.object, this.effects?.group, this.effects?.marker, this.effects?.targetRing, this.squares?.object]) {
             object?.removeFromParent();
         }
 
+        this.minimap?.dispose();
         this.view.setOccluders(null);
         this.view.setFocus(null);
+    }
+
+    /** Show the minimap or not. */
+    showMinimap(on) {
+        this.minimapShown = on;
+        this.minimap?.show(on);
     }
 
     /** Show the squares characters walk on, which are blocked, and everyone's path (debug mode). */
@@ -351,7 +378,20 @@ export class Game {
             }
         }
 
+        // Everything is heard from where the player is
+        const me = this.avatars.get("player");
+
+        this.sound?.setListener(me.object.position.x, me.object.position.z);
+        this.sound?.update(dt);
+
+        // The enemy the player is set to fight, ringed, with its bar lit
+        const target = this.#target();
+        const ringed = target ? this.avatars.get(target.id) : null;
+
+        this.effects.setTarget(ringed?.object ?? null, ringed ? Math.max(0.5, ringed.character.height * 0.33) : 0.6);
+        hud.setTarget(target?.id ?? null);
         this.effects.update(dt, view.pixelsPerMetre());
+        this.#drawMinimap(target);
 
         if (this.squares?.object.visible) {
             this.squares.update(battle);
@@ -436,6 +476,45 @@ export class Game {
         this.view.setFocus(player.point(0.55));
     }
 
+    // The minimap: everyone on it, where the player is going and what the camera sees
+    #drawMinimap(target) {
+        const minimap = this.minimap;
+
+        if (!minimap?.due()) {
+            return;
+        }
+
+        const { battle, view } = this;
+        const actor = battle.actor("player");
+        const me = this.avatars.get("player");
+        const rect = view.canvas.getBoundingClientRect();
+        const corners = [[rect.left, rect.top], [rect.right, rect.top], [rect.right, rect.bottom], [rect.left, rect.bottom]].map(([x, y]) => {
+            const ground = view.groundAt(x, y);
+
+            return ground ? [ground.x, ground.z] : null;
+        });
+
+        minimap.draw({
+            player: actor.dead ? null : { x: me.object.position.x, z: me.object.position.z, facing: me.facing },
+            others: battle.actors.filter((other) => other !== actor && !other.dead).map((other) => {
+                const position = this.avatars.get(other.id).object.position;
+
+                return { x: position.x, z: position.z, hostile: other.team !== actor.team, targeted: other === target };
+            }),
+            destination: actor.order?.type === "move" ? [actor.order.to[0] + 0.5, actor.order.to[1] + 0.5] : null,
+            view: corners,
+        });
+    }
+
+    // Who the player was told to fight (and is still alive), or null
+    #target() {
+        const player = this.battle.actor("player");
+        const order = player && !player.dead ? player.order : null;
+        const target = order?.type === "engage" ? this.battle.actor(order.target) : null;
+
+        return target && !target.dead ? target : null;
+    }
+
     // Who the player is fighting: who they were told to fight, or the nearest enemy after them
     #foe() {
         const battle = this.battle;
@@ -468,6 +547,7 @@ export class Game {
                 case "attack":
                     avatar.actions.startAttack(event.animation, { hitAt: event.hitAt / 1000, duration: event.duration / 1000 });
                     this.lastAttack.set(event.id, battle.time);
+                    this.sound?.attack(event.animation, avatar.object.position, event.hitAt / 1000);
                     break;
                 case "projectile": {
                     const target = this.avatars.get(event.target);
@@ -475,6 +555,7 @@ export class Game {
                     const from = avatar.hand(hand);
 
                     effects.launch(event.projectile, event.kind, from);
+                    this.sound?.launch(event.kind, from);
                     this.flights.set(event.projectile, {
                         previous: new THREE.Vector2(event.x, event.y),
                         distance: Math.hypot(target.object.position.x - event.x, target.object.position.z - event.y),
@@ -496,6 +577,7 @@ export class Game {
                 case "exhausted":
                     if (event.id === "player") {
                         hud.message("Out of breath", 1.5);
+                        this.sound?.play("breath");
                     }
 
                     break;
@@ -504,11 +586,14 @@ export class Game {
 
                     avatar.actions.die({ from: killer ? avatar.angleTo(killer.object.position.x, killer.object.position.z) : 0 });
                     avatar.deadFor = 0;
+                    this.sound?.play("fall", { at: avatar.object.position, delay: FALL_LANDS });
 
                     if (event.id === "player") {
                         hud.message("You have fallen. You'll wake in the market square…", (event.respawnAt - battle.time) / 1000);
+                        this.sound?.play("fallen");
                     } else {
                         hud.message(`The ${battle.actor(event.id).name.toLowerCase()} is slain!`, 3);
+                        this.sound?.play("slain", { delay: FALL_LANDS });
                     }
 
                     this.onDeath(event);
@@ -526,6 +611,7 @@ export class Game {
 
                     if (event.id === "player") {
                         hud.message("");
+                        this.sound?.play("wake");
                     }
 
                     break;
@@ -545,6 +631,7 @@ export class Game {
         const actor = battle.actor(event.id);
 
         victim.actions.react(event.reaction, { from });
+        this.sound?.hit(event.reaction, victim.object.position);
 
         // Where the blow lands, and which way it was going
         const at = victim.point(event.reaction === "punch" ? 0.88 : 0.7);
@@ -649,22 +736,13 @@ export class Game {
      */
     tap(clientX, clientY, { run = false, time = performance.now() } = {}) {
         const player = this.battle.actor("player");
-        const last = this.lastTap;
-
-        this.lastTap = { time, x: clientX, y: clientY };
-
-        if (!player || player.dead) {
-            return;
-        }
-
-        run ||= last !== null && time - last.time <= DOUBLE_TAP_MS && Math.hypot(clientX - last.x, clientY - last.y) <= DOUBLE_TAP_SLOP;
 
         // An enemy near the tap?
         let best = null;
         let bestDistance = PICK_RADIUS;
 
         for (const actor of this.battle.actors) {
-            if (actor.team !== player.team && !actor.dead) {
+            if (player && actor.team !== player.team && !actor.dead) {
                 const avatar = this.avatars.get(actor.id);
 
                 for (const share of [0.2, 0.5, 0.8]) {
@@ -679,21 +757,57 @@ export class Game {
             }
         }
 
-        if (best) {
-            this.battle.command("player", { type: "engage", target: best.id, run });
-            this.effects.markTarget(best.x, best.y);
+        const ground = best ? null : this.view.groundAt(clientX, clientY);
 
+        this.#order({ enemy: best, ground: ground && [ground.x, ground.z] }, { clientX, clientY, run, time, from: "view" });
+    }
+
+    /**
+     * A tap on the minimap, at a point in the world (x, z metres) and on the screen (clientX,
+     * clientY): fight an enemy within `reach` metres of it, or walk there. Twice in quick
+     * succession, run.
+     */
+    mapTap({ x, z, reach = 3, clientX = 0, clientY = 0, run = false, time = performance.now() }) {
+        const player = this.battle.actor("player");
+        const enemies = this.battle.actors.filter((actor) => player && actor.team !== player.team && !actor.dead);
+        const distance = (actor) => Math.hypot(actor.x - x, actor.y - z);
+        const enemy = enemies.filter((actor) => distance(actor) <= reach).sort((a, b) => distance(a) - distance(b))[0] ?? null;
+
+        this.#order({ enemy, ground: enemy ? null : [x, z] }, { clientX, clientY, run, time, from: "map" });
+    }
+
+    // Send the player to fight an enemy, or to a point on the ground ([x, z] metres), running if
+    // told to or tapped twice in quick succession (in the same place: the view or the minimap)
+    #order({ enemy, ground }, { clientX, clientY, run, time, from }) {
+        const player = this.battle.actor("player");
+        const last = this.lastTap;
+
+        this.lastTap = { time, x: clientX, y: clientY, from };
+
+        if (!player || player.dead) {
             return;
         }
 
-        const ground = this.view.groundAt(clientX, clientY);
+        run ||= last !== null && last.from === from && time - last.time <= DOUBLE_TAP_MS && Math.hypot(clientX - last.x, clientY - last.y) <= DOUBLE_TAP_SLOP[from];
+
+        if (enemy) {
+            const chosen = player.order?.type === "engage" && player.order.target === enemy.id;
+
+            this.battle.command("player", { type: "engage", target: enemy.id, run });
+
+            if (!chosen) {
+                this.sound?.play("lock");
+            }
+
+            return;
+        }
 
         if (!ground) {
             return;
         }
 
-        const x = Math.min(this.world.width - 1, Math.max(0, Math.floor(ground.x)));
-        const y = Math.min(this.world.height - 1, Math.max(0, Math.floor(ground.z)));
+        const x = Math.min(this.world.width - 1, Math.max(0, Math.floor(ground[0])));
+        const y = Math.min(this.world.height - 1, Math.max(0, Math.floor(ground[1])));
 
         this.battle.command("player", { type: "move", to: [x, y], run });
 

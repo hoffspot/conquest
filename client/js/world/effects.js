@@ -1,6 +1,6 @@
 // What fighting looks like besides the fighters: arrows, bolts and fireballs in flight, sparks,
-// dust, fire and arcane light where blows land, arrows left stuck in whoever they hit, and a ring
-// on the ground where the player is walking to.
+// dust, fire and arcane light where blows land, arrows left stuck in whoever they hit, a ring on
+// the ground where the player is walking to, and a red ring round the enemy they're set to fight.
 //
 // Every spark, puff and flame is a particle in one shared, fixed-size buffer, drawn in a single
 // draw call (glowing ones added to what's behind them, like light), so a busy fight costs no more
@@ -223,6 +223,15 @@ export class Effects {
         this.markerAge = Infinity;
         scene.add(this.marker);
 
+        // The ring round the enemy the player is set to fight: { object, radius, age }, or null
+        this.targetRing = new THREE.Mesh(targetGeometry(), new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
+        this.targetRing.name = "target";
+        this.targetRing.position.y = 0.035;
+        this.targetRing.renderOrder = 1;
+        this.targetRing.visible = false;
+        this.target = null;
+        scene.add(this.targetRing);
+
         this.arrow = arrowModel();
     }
 
@@ -263,6 +272,16 @@ export class Effects {
         this.marker.position.x = x;
         this.marker.position.z = z;
         this.markerAge = 0;
+    }
+
+    /**
+     * Ring the enemy the player is set to fight: its object (the ring follows it), `radius`
+     * metres round it; or null for no one. A new target's ring closes in on it.
+     */
+    setTarget(object, radius = 0.6) {
+        if (object !== (this.target?.object ?? null)) {
+            this.target = object ? { object, radius, age: 0 } : null;
+        }
     }
 
     /** A projectile the battle launched: `kind` "arrow", "bolt" or "fireball", from a point. */
@@ -365,5 +384,89 @@ export class Effects {
         this.marker.material.opacity = 0.85 * (1 - t);
         this.marker.scale.setScalar(1.4 - 0.6 * t);
         this.marker.visible = t < 1;
+
+        // The target's ring closes in when it's chosen, then turns slowly and pulses
+        const target = this.target;
+        const ring = this.targetRing;
+
+        ring.visible = Boolean(target?.object.visible) && target.object.position.y > -0.2;
+
+        if (ring.visible) {
+            target.age += dt;
+
+            const lock = Math.min(1, target.age / LOCK_ON);
+            const closing = 1 + 0.9 * (1 - lock) ** 2;
+            const pulse = 1 + 0.04 * Math.sin(target.age * 2 * Math.PI * 1.2);
+
+            ring.position.x = target.object.position.x;
+            ring.position.z = target.object.position.z;
+            ring.scale.setScalar(target.radius * closing * pulse);
+            ring.rotation.y = -target.age * 0.7;
+            ring.material.opacity = lock;
+        }
     }
+}
+
+// How long a new target's ring takes to close in on it (s)
+const LOCK_ON = 0.25;
+
+/**
+ * The target ring, a unit's radius across, flat on the ground: a bright red band with a soft glow
+ * inside it and a dark edge outside (to show on light ground too), and four arrowheads pointing in
+ * at it. One mesh, with its colours (and see-through-ness) in the vertices.
+ */
+function targetGeometry() {
+    const positions = [];
+    const colours = [];
+    // (Linear colours, shown as they are: not toned down with the lit scene)
+    const red = [1, 0.08, 0.03];
+    const dark = [0.02, 0, 0];
+    const vertex = (x, z, [r, g, b], a) => {
+        positions.push(x, 0, z);
+        colours.push(r, g, b, a);
+    };
+
+    // A band from radius r0 to r1, faded from alpha a0 (inside) to a1 (outside)
+    const band = (r0, r1, colour0, a0, colour1, a1) => {
+        const segments = 48;
+
+        for (let k = 0; k < segments; k++) {
+            const [t0, t1] = [(k / segments) * 2 * Math.PI, ((k + 1) / segments) * 2 * Math.PI];
+            const inner0 = [Math.cos(t0) * r0, Math.sin(t0) * r0];
+            const inner1 = [Math.cos(t1) * r0, Math.sin(t1) * r0];
+            const outer0 = [Math.cos(t0) * r1, Math.sin(t0) * r1];
+            const outer1 = [Math.cos(t1) * r1, Math.sin(t1) * r1];
+
+            vertex(...inner0, colour0, a0);
+            vertex(...outer1, colour1, a1);
+            vertex(...outer0, colour1, a1);
+            vertex(...inner0, colour0, a0);
+            vertex(...inner1, colour0, a0);
+            vertex(...outer1, colour1, a1);
+        }
+    };
+
+    band(0.6, 0.88, red, 0, red, 0.35);
+    band(0.88, 1, red, 1, red, 1);
+    band(1, 1.14, dark, 0.5, dark, 0);
+
+    // Arrowheads outside the ring, pointing in
+    for (let k = 0; k < 4; k++) {
+        const angle = (k + 0.5) * (Math.PI / 2);
+        const [cx, cz] = [Math.cos(angle), Math.sin(angle)];
+        const [sx, sz] = [-cz, cx];
+        const tip = [cx * 1.1, cz * 1.1];
+        const back = 1.42;
+
+        vertex(...tip, red, 1);
+        vertex(cx * back + sx * 0.17, cz * back + sz * 0.17, red, 1);
+        vertex(cx * back - sx * 0.17, cz * back - sz * 0.17, red, 1);
+    }
+
+    const geometry = new THREE.BufferGeometry();
+
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute("color", new THREE.Float32BufferAttribute(colours, 4));
+
+    return geometry;
 }

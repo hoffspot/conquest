@@ -175,6 +175,49 @@ swirl of violet light for arcane bolts. Arrows stick in whoever they hit for a c
 seconds. Every spark, puff and flame is a particle in one fixed-size buffer drawn in one draw
 call; nothing adds a light (adding lights makes Three.js rebuild every lit material's shaders).
 
+The enemy the player is told to fight (tapped) has a red ring round it on the ground, with four
+arrowheads pointing in: one mesh, its colours and see-through-ness in its vertices, drawn
+without the scene's tone mapping so it stays red. It closes in on the enemy when it's chosen
+(from nearly twice the size, in a quarter of a second), then turns slowly and pulses, following
+it until it falls or the player is told to do something else. Its bar over its head is lit red
+too.
+
+### The minimap (app/minimap.js)
+
+The whole world from above, north up, in the top right of the screen under the menu button (a
+canvas, a third of the screen's width on phones, up to 188 pixels). Each square is coloured for
+its ground (grass, road, cobbles, soil, courtyard) or what stands on it (roofs over buildings,
+blue-grey for the tavern, church and other landmarks, props, trees), with a little variation
+from square to square; the buildings get a dark edge and a light ridge and the trees round
+crowns. That's painted once, four pixels to the metre. Each frame (at most 30 times a second)
+draws it scaled to fit, then what the camera sees (the ground under the screen's corners), where
+the player is going, the enemies (red dots, the target ringed) and the player (an arrowhead
+pointing the way they face). A tap on it walks the player there, or fights an enemy within 12
+pixels of the tap; a double tap runs.
+
+### Sound (audio/)
+
+There are no sound files: `synth.js` makes every sound from noise and tones, shaped by filters
+(biquads, sweeping for swings), envelopes and a plucked string (Karplus-Strong for the bow),
+each in a few variants so repeats don't sound the same. Every sound is made about as loud as
+the others (by its loudest 30 ms), then played at its own volume.
+
+- **Swings** for each melee attack, timed so they're loudest as the blow lands; **launches** for
+  arrows, bolts and fireballs; a **hit** for each reaction (a blade's ring for slashes, a knock
+  for the staff, a heavy thump for the hammer, a thunk for arrows, a zap for arcane bolts, a
+  roar for fire, a meaty thud for punches); a body **falling** as it hits the ground.
+- **Footsteps**, as each foot lands (the walker says when), on stone, dirt or grass, louder
+  running.
+- **Cues**: a target chosen, an enemy slain, falling, waking again, out of breath.
+- **The town**: a quiet wind (a ten-second loop without a seam) and birds now and then.
+
+`worker.js` makes them in a worker, the most needed first, so the page never waits (without
+module workers they're made on the page, a few at a time). `sound.js` plays them with the Web
+Audio API, each from where it happens: full volume within 4 metres of the player, fading to
+nothing at 34, and panned left or right; at most 24 at once, through a compressor. Browsers let
+a page make sound only after a tap, click or key, so it starts on the first one. It's silent
+while the game is paused, and off (suspended) when turned off in Game options.
+
 ## The screens (main.js)
 
 1. **Loading.** The loader (app/loader.js) downloads everything listed in `app/manifest.js`
@@ -199,18 +242,23 @@ call; nothing adds a light (adding lights makes Three.js rebuild every lit mater
    the taps happened, so a slow frame between them doesn't matter) turns it into a run, as does
    a Shift-click. The heads-up display (app/hud.js) shows the player's name and health, with an
    orange stamina bar under the health bar while stamina isn't full, "Out of breath" when a run
-   ends for want of it, bars over the other characters, and the damage each blow does.
+   ends for want of it, the minimap, bars over the other characters (the target's lit red), and
+   the damage each blow does.
+5. **The menu** (the menu button, or Escape) pauses the game: Resume, Game options, or back to
+   the title. **Game options** has a switch each for the minimap and the sound; Back (or Escape)
+   returns to the menu.
 
 The character is saved in the browser's local storage as `pellagos.save`: `{ version, hero,
 seed, created }`, where `hero` is `{ name, shape: { macro, details }, look: { skin, eyes, hair },
-weapon }`. Settings (debug mode and its controls) are in `pellagos.settings`. A save of another
+weapon }`. Settings (the minimap and sound switches, debug mode and its controls) are in
+`pellagos.settings`. A save of another
 version, or one naming a weapon the game doesn't know, is ignored rather than misread; if the
 browser won't store anything (private browsing), the game still plays, it just forgets.
 
 ## Debug mode
 
 The switch on the title screen turns on an overlay (app/debug.js) on every screen, until it's
-switched off. It folds away to just the frame rate. It shows:
+switched off (in the game, under the minimap). It folds away to just the frame rate. It shows:
 
 - the frame rate, a graph of the last 120 frames' times (green under a sixtieth of a second, amber
   under a thirtieth, red over), and how long each frame's update and drawing take on the CPU;
@@ -244,10 +292,13 @@ particles reuse one buffer, and projectiles and effects add no lights.
 - `test/actions.test.js`: attacks (their timing, where the hands reach on different bodies,
   two-handed grips, alternating punches), reactions and falls, on the real body.
 - `test/app.test.js`, `test/town3d.test.js`, `test/manifest.test.js`, `test/sw.test.js`: saving,
-  heroes, the loader's byte counting, the ground's blending, the town's builders, the loading
-  list and the service worker.
+  heroes, the minimap's colours, the loader's byte counting, the ground's blending, the town's
+  builders, the loading list and the service worker.
+- `test/audio.test.js`: every sound (clean, as loud as the others, no clicks, swings timed to
+  their blows, a sound for every attack), the wind's seamless loop, and playing them: from
+  where they happen, timed, silent paused or turned off.
 - `e2e/pellagos.spec.js`: the whole game in Chromium: loading, debug mode, making a character
   through to playing them, carrying on with a saved character, a fight to the death, walking by
   tapping, running by double-clicking and double-tapping with the stamina bar showing and going,
-  and a phone screen. Drawing without a GPU is slow, so fights are played on with
+  the target ring, walking by the minimap, Game options (remembered), and a phone screen. Drawing without a GPU is slow, so fights are played on with
   `game.advance(seconds)`, which runs the game without drawing each frame.

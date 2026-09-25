@@ -45,7 +45,8 @@ character, or make a **New character**.
 Your character is saved in the browser, with the town they live in.
 
 **In the town.** You wake in the market square. **Tap or click the ground** to walk there, or
-**an enemy** to go and fight them. **Double-tap** (or double-click) to run there instead, as much
+**an enemy** to go and fight them: a red ring round it marks it as your target, and its name
+lights up, until it falls or you're told to go elsewhere. **Double-tap** (or double-click) to run there instead, as much
 faster than walking as people sprint: 7.9 metres a second to your walking 1.7. Running tires you:
 it uses 3 points of **stamina** a second, and anything else gets 1 a second back. You have as
 much stamina as hit points (50). While it isn't full, an orange bar under your health shows
@@ -59,13 +60,27 @@ within reach, giving up if it loses sight of you for three seconds. Each blow kn
 points; at none, a character falls. You get up again in the market square five seconds later,
 with full health; the orc comes back to its corner half a minute after it falls.
 
+**The minimap**, in the top right under the menu button, shows the whole town and its fields
+from above: roads, roofs, trees, what the camera can see, you (an arrow pointing the way you
+face), where you're going, and the orc (red; ringed when it's your target). Tap it to walk
+there, or tap the orc on it to go and fight it; double-tap to run.
+
+**Sound.** Swords, staffs, hammers and fists swish; bows twang and spells crackle; every kind of
+blow sounds different where it lands; feet step on cobbles, dirt and grass; the wind blows and
+birds sing. It's all made in code as the game starts (in a worker, so nothing waits for it),
+with nothing to download, and it's heard from where you stand: quieter further away, and to the
+left or right.
+
+**Game options**, in the menu: turn the minimap and the sound on or off. They're remembered.
+
 | Action | Touch | Mouse and keyboard |
 | --- | --- | --- |
 | Walk | Tap the ground | Click the ground |
 | Run | Double-tap the ground | Double-click (or Shift-click) the ground |
 | Fight | Tap an enemy (double-tap to run at them) | Click an enemy (double-click to run at them) |
 | Zoom | Pinch, or the + and − buttons | Scroll, or the + and − buttons |
-| Pause | The menu button | The menu button or Escape |
+| Walk or fight on the map | Tap the minimap (double-tap to run) | Click the minimap (double-click to run) |
+| Pause, Game options | The menu button | The menu button or Escape |
 
 **Debug mode.** The switch on the title screen shows an overlay, on every screen, of how the game
 is running: frame rate and a graph of frame times, how long updating and drawing take, what's
@@ -148,7 +163,8 @@ client/                 The game (static files served to the browser)
     session.js          The 3D view and the character kit, and starting games
     creator.js          Making a character; heroes.js has random ones and names
     game.js             Playing: the world, the battle, the characters, taps and the camera
-    hud.js              Health, names, damage numbers and messages over the game
+    hud.js              Health, stamina, names, damage numbers and messages over the game
+    minimap.js          The minimap: the world from above, with everyone on it
     debug.js            Debug mode's overlay
     save.js             The saved character and settings (local storage)
     device.js           Full screen and the service worker
@@ -159,13 +175,15 @@ client/                 The game (static files served to the browser)
     pathfinding.js      A* paths on the squares
     random.js           Seeded random numbers
     setpieces/          Town (and castle) layouts, and the pieces they're made from
+  js/audio/             The sound: synth.js makes it (worker.js runs it away from the page),
+                        sound.js plays it
   js/world/             Drawing the world
     view.js             The renderer, lights, sky, the camera, quality levels, the cutaway
     ground.js           The ground: textures blended square by square
     town3d.js           The town's buildings, props and trees, merged into few meshes
     art/                The art kits the town is built with: houses, landmarks, props, trees
     avatar.js           A character in the world, following its place in the battle
-    effects.js          Arrows, bolts, fireballs, sparks, dust, fire and arcane light
+    effects.js          Arrows, bolts, fireballs, sparks, dust, fire, arcane light, the target ring
     squares.js          Debug mode's squares and paths
   js/characters/        The character engine (see docs/CHARACTERS.md)
     body.js             Loading and shaping the body; macro.js and details.js are the sliders

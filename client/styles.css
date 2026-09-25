@@ -14,6 +14,9 @@
     --health-low: #e2743c;
     --hostile: #d4533b;
     --stamina: #ec8a1c;
+
+    /* How wide the minimap is */
+    --minimap-size: clamp(116px, 30vw, 188px);
     --background: #15120e;
 
     --font-display: "Palatino Linotype", Palatino, "Book Antiqua", "URW Palladio L", Georgia, serif;
@@ -804,6 +807,47 @@ input[type="range"] {
     height: 10px;
 }
 
+/* The minimap, under the menu button */
+#minimap {
+    position: absolute;
+    top: calc(var(--safe-top) + 12px + 46px + 10px);
+    right: calc(var(--safe-right) + 12px);
+    width: var(--minimap-size);
+    border-radius: 12px;
+    border: 1px solid var(--panel-border);
+    background: var(--panel);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+    pointer-events: auto;
+    touch-action: none;
+    cursor: pointer;
+}
+
+#minimap[hidden] {
+    display: none;
+}
+
+/* Debug mode's overlay moves down out of the minimap's way */
+body[data-screen="hud"][data-minimap="on"] #debug {
+    top: calc(var(--safe-top) + 12px + 46px + 10px + var(--minimap-size) + 10px);
+}
+
+/* The enemy the player is set to fight */
+.floater.targeted {
+    border-color: #ff6a4d;
+    box-shadow: 0 0 0 1px rgba(255, 106, 77, 0.55), 0 0 14px rgba(255, 80, 50, 0.45);
+}
+
+.floater.targeted .name::before {
+    content: "";
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 5px;
+    border: 2px solid #ff6a4d;
+    border-radius: 50%;
+    vertical-align: 1px;
+}
+
 .floater .bar .value {
     font-size: 9px;
     line-height: 10px;
@@ -943,6 +987,41 @@ dialog#menu h2 {
 
 dialog#menu .menu {
     margin-bottom: 0;
+}
+
+/* Game options: a switch on each row */
+dialog#menu .options {
+    margin: 18px 0 4px;
+    display: grid;
+}
+
+.switch.option {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 0;
+    padding: 12px 2px;
+    border-bottom: 1px solid var(--field-border);
+    font-size: 16px;
+    color: var(--ink);
+}
+
+.switch.option:first-child {
+    border-top: 1px solid var(--field-border);
+}
+
+.switch.option .text {
+    display: grid;
+    gap: 2px;
+}
+
+.switch.option small {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.switch.option .track {
+    flex: none;
 }
 
 /* --- Debug mode --- */

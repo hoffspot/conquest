@@ -444,6 +444,31 @@ describe("walking (locomotion.js)", () => {
         }
     });
 
+    it("hears a footstep as each foot lands, one foot then the other, as often as it steps", () => {
+        const walker = new Walker(figure());
+        const steps = [];
+        let time = 0;
+
+        walker.onStep = (foot, speed) => steps.push({ foot, speed, time });
+
+        for (; time < 1; time += 1 / 60) {
+            walker.update(1 / 60, { speed: 0 });
+        }
+
+        assert.equal(steps.length, 0, "standing still, no steps");
+
+        for (; time < 5; time += 1 / 60) {
+            walker.update(1 / 60, { speed: 1.4 });
+        }
+
+        const walking = steps.filter((step) => step.time > 3);
+
+        // About 1.9 steps a second at 1.4 m/s (114 a minute), left and right in turn
+        assert.ok(Math.abs(walking.length / 2 - cadence(1.4, walker.legLength) / 60) < 0.4, `${walking.length / 2} steps a second`);
+        assert.ok(walking.every((step, k) => k === 0 || step.foot !== walking[k - 1].foot));
+        assert.ok(walking.every(({ speed }) => Math.abs(speed - 1.4) < 0.05));
+    });
+
     it("sprints: in the air between steps, landing on the ball of the foot without sliding, lowest mid-step", () => {
         for (const [shape, style] of [[{}, WALK_STYLES.natural], [PRESETS.orc.shape, WALK_STYLES.orc]]) {
             const f = figure(shape);

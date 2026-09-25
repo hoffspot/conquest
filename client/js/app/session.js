@@ -2,6 +2,7 @@
 // and a way to start a game in a world. (This module brings in Three.js, so main.js imports it
 // only once the loader has downloaded everything.)
 
+import { Sound } from "../audio/sound.js";
 import { loadCharacterKit } from "../characters/kit.js";
 import { generateWorld } from "../core/world.js";
 import { View } from "../world/view.js";
@@ -11,10 +12,10 @@ export { readModelsFrom } from "../world/art/engine/models.js";
 export { detectQuality } from "../world/view.js";
 
 /**
- * Set up the view and load the character kit. `fetch` fetches files (the loader's copies);
- * `onProgress(label)` hears each step.
+ * Set up the view, the sound (on or off: `sound`) and load the character kit. `fetch` fetches
+ * files (the loader's copies); `onProgress(label)` hears each step.
  */
-export async function createSession({ canvas, quality, fetch = globalThis.fetch.bind(globalThis), onProgress = () => {} }) {
+export async function createSession({ canvas, quality, sound = true, fetch = globalThis.fetch.bind(globalThis), onProgress = () => {} }) {
     onProgress("Starting the 3D view");
 
     const view = new View(canvas, { quality });
@@ -23,12 +24,12 @@ export async function createSession({ canvas, quality, fetch = globalThis.fetch.
 
     const kit = await loadCharacterKit({ textureSize: view.quality.skin, fetch });
 
-    return { view, kit };
+    return { view, kit, sound: new Sound({ enabled: sound }) };
 }
 
 /** A new game in the world of `seed`, for a hero: { name, shape, look, weapon }. */
-export function createGame({ view, kit, hud, hero, seed }) {
+export function createGame({ view, kit, sound, hud, hero, seed }) {
     const world = generateWorld({ seed });
 
-    return new Game({ view, kit, world, hero, hud });
+    return new Game({ view, kit, sound, world, hero, hud });
 }
