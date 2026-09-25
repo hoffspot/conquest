@@ -218,6 +218,118 @@ test("the player and the orc fight when in reach, until one falls", async ({ pag
     expect(fight.dead.length).toBe(1);
 });
 
+test("blows leave wounds of their weapon's kind, worse below each threshold, with blood on the ground; healed and come back to life, gone", async ({ page }) => {
+    await playing(page, "/?play&seed=1&weapon=bow");
+
+    const fight = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const { battle } = game;
+
+        game.stop();
+
+        // The player six squares south of the orc, shooting as it comes
+        const orc = battle.actor("orc");
+        const player = battle.actor("player");
+
+        Object.assign(player, { x: orc.x, y: orc.y + 6, square: [orc.square[0], orc.square[1] + 6] });
+        game.previous.set("player", { x: player.x, y: player.y });
+        game.avatars.get("player").place(player.x, player.y, Math.PI);
+
+        for (let second = 0; second < 40 && orc.hp >= orc.maxHp / 2 && !player.dead; second++) {
+            game.advance(0.5);
+        }
+
+        const wounds = game.wounds.get("orc");
+        const blood = (id) => game.wounds.get(id).data.filter((value, i) => i % 4 === 0 && value > 0).length;
+
+        return {
+            hp: orc.hp,
+            kinds: [...new Set(wounds.list.map((wound) => wound.kind))],
+            stage: wounds.stage,
+            marks: wounds.list.filter((wound) => wound.mark).length,
+            // Arrows left in the wounds, held by the bones they went into
+            arrows: wounds.list.filter((wound) => wound.arrow?.parent?.isBone).length,
+            blood: blood("orc"),
+            splats: game.effects.splats.list.filter(Boolean).length,
+            skin: game.avatars.get("orc").character.materials.body.customProgramCacheKey(),
+        };
+    });
+
+    expect(fight.hp).toBeLessThan(25);
+    expect(fight.kinds).toEqual(["pierce"]);
+    expect(fight.stage).toBeGreaterThanOrEqual(2);
+    expect(fight.marks).toBeGreaterThan(0);
+    expect(fight.arrows).toBeGreaterThan(1);
+    expect(fight.blood).toBeGreaterThan(200);
+    expect(fight.splats).toBeGreaterThan(0);
+    expect(fight.skin).toBe("wounded-skin");
+
+    // Fought to the end: whoever falls lies in a pool of blood. Healed, the other's worse
+    // wounds are gone; come back to life, all of them, arrows and pool too
+    const end = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const { battle } = game;
+        const orc = battle.actor("orc");
+        const player = battle.actor("player");
+
+        for (let second = 0; second < 40 && !orc.dead && !player.dead; second++) {
+            game.advance(0.5);
+        }
+
+        const fallen = orc.dead ? orc : player;
+        const standing = orc.dead ? player : orc;
+
+        // Down, bleeding (and nobody else hurting the one left standing)
+        game.advance(2.5);
+
+        const pool = game.pools.get(fallen.id)?.spot;
+        const arrows = game.wounds.get(fallen.id).list.map((wound) => wound.arrow).filter(Boolean);
+        const hurt = game.wounds.get(standing.id).list.length;
+
+        // Hurt below a quarter, then healed back above half
+        standing.hp = Math.round(standing.maxHp * 0.2);
+        game.wounds.get(standing.id).hit({ reaction: "hack", from: 0, hp: standing.hp, maxHp: standing.maxHp, before: standing.maxHp });
+        standing.spellReadyAt = battle.time;
+
+        const worst = game.wounds.get(standing.id).stage;
+
+        // (A little better by the time it lands, so it takes them back above half)
+        battle.cast(standing.id, "heal");
+        standing.hp = Math.round(standing.maxHp * 0.4);
+        game.advance(1);
+
+        const healed = { hp: standing.hp, stage: game.wounds.get(standing.id).stage, worst };
+
+        for (let second = 0; second < 40 && fallen.dead; second++) {
+            game.advance(1);
+        }
+
+        return {
+            fallen: fallen.id,
+            pool: Boolean(pool),
+            poolSize: pool?.size ?? 0,
+            arrows: arrows.length,
+            hurt,
+            healed,
+            alive: !fallen.dead,
+            woundsAfter: game.wounds.get(fallen.id).list.length,
+            arrowsAfter: arrows.filter((arrow) => arrow.parent).length,
+            pools: game.pools.size,
+        };
+    });
+
+    expect(end.pool).toBe(true);
+    expect(end.poolSize).toBeGreaterThan(1);
+    expect(end.hurt).toBeGreaterThan(0);
+    expect(end.healed.worst).toBe(3);
+    expect(end.healed.hp).toBeGreaterThanOrEqual(25);
+    expect(end.healed.stage).toBeLessThanOrEqual(1);
+    expect(end.alive).toBe(true);
+    expect(end.woundsAfter).toBe(0);
+    expect(end.arrowsAfter).toBe(0);
+    expect(end.pools).toBe(0);
+});
+
 test("tapping the ground walks the player there", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

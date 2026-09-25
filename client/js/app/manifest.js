@@ -24,7 +24,7 @@ export const MANIFEST = Object.freeze([
         files: [
             ["js/app/camera.js", 4498],
             ["js/app/creator.js", 23947],
-            ["js/app/game.js", 39892],
+            ["js/app/game.js", 43557],
             ["js/app/heroes.js", 5479],
             ["js/app/hud.js", 5943],
             ["js/app/icons.js", 3606],
@@ -72,11 +72,12 @@ export const MANIFEST = Object.freeze([
             ["js/world/art/kits/landmarks.js", 16864],
             ["js/world/art/kits/town.js", 2627],
             ["js/world/avatar.js", 4952],
-            ["js/world/effects.js", 23212],
+            ["js/world/effects.js", 36955],
             ["js/world/ground.js", 7444],
             ["js/world/squares.js", 3982],
             ["js/world/town3d.js", 10047],
             ["js/world/view.js", 11606],
+            ["js/world/wounds.js", 30610],
         ],
     },
     {

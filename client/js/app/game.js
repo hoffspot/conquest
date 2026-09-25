@@ -18,6 +18,7 @@ import { longestReach, WEAPONS } from "../core/weapons.js";
 import { Avatar } from "../world/avatar.js";
 import { Effects } from "../world/effects.js";
 import { Squares } from "../world/squares.js";
+import { KINDS, Wounds } from "../world/wounds.js";
 import { buildGround } from "../world/ground.js";
 import { buildTown } from "../world/town3d.js";
 import { Minimap, treesOf } from "./minimap.js";
@@ -101,6 +102,10 @@ export class Game {
         this.lastAttack = new Map();
         this.flights = new Map();
         this.flash = new Map();
+
+        /** Each character's wounds (wounds.js), and the pools of blood under the fallen: { left, spot }. */
+        this.wounds = new Map();
+        this.pools = new Map();
         this.pointers = new Map();
         this.pinch = null;
         this.lastTap = null;
@@ -210,6 +215,7 @@ export class Game {
         character.object.name = id;
         this.view.scene.add(character.object);
         this.avatars.set(id, avatar);
+        this.wounds.set(id, new Wounds(character, { seed: this.avatars.size * 17 + 3 }));
 
         return avatar;
     }
@@ -258,6 +264,10 @@ export class Game {
         for (const avatar of this.avatars.values()) {
             avatar.object.removeFromParent();
             avatar.character.dispose();
+        }
+
+        for (const wounds of this.wounds.values()) {
+            wounds.dispose();
         }
 
         // The town's merged meshes and the ground are this game's own (their materials, but for
@@ -427,6 +437,7 @@ export class Game {
 
         this.effects.setTarget(ringed?.object ?? null, ringed ? Math.max(0.5, ringed.character.height * 0.33) : 0.6);
         hud.setTarget(target?.id ?? null);
+        this.#bleed(dt);
         this.effects.update(dt, view.pixelsPerMetre());
         this.#drawMinimap(target);
 
@@ -630,6 +641,7 @@ export class Game {
                 case "healed": {
                     const actor = battle.actor(event.id);
 
+                    this.wounds.get(event.id)?.heal(actor.hp, actor.maxHp);
                     effects.burst("heal", avatar.point(0.5));
                     effects.pulse(avatar.object.position.x, avatar.object.position.z);
                     hud.damage(this.#screenAbove(event.id), `+${event.amount}`, { kind: "heal" });
@@ -658,6 +670,9 @@ export class Game {
                     effects.clearDaze(avatar.object);
                     this.sound?.play("fall", { at: avatar.object.position, delay: FALL_LANDS });
 
+                    // Blood pools under their chest once they're down
+                    this.pools.set(event.id, { left: FALL_LANDS + 0.2, spot: null });
+
                     if (event.id === "player") {
                         hud.message("You have fallen. You'll wake in the market square…", (event.respawnAt - battle.time) / 1000);
                         this.sound?.play("fallen");
@@ -677,6 +692,9 @@ export class Game {
                     avatar.deadFor = 0;
                     this.previous.set(actor.id, { x: actor.x, y: actor.y });
                     effects.clearStuck(avatar.character.rig.bone("Spine2"));
+                    this.wounds.get(event.id)?.clear();
+                    effects.drain(this.pools.get(event.id)?.spot);
+                    this.pools.delete(event.id);
                     hud.setHealth(actor.id, actor.hp, actor.maxHp);
 
                     if (event.id === "player") {
@@ -703,20 +721,92 @@ export class Game {
         victim.actions.react(event.reaction, { from });
         this.sound?.hit(event.reaction, victim.object.position);
 
-        // Where the blow lands, and which way it was going
-        const at = victim.point(event.reaction === "punch" ? 0.88 : 0.7);
+        // The wound it leaves (or mark), where the blow lands, and which way it was going
+        const wounds = this.wounds.get(event.id);
+        const landed = wounds?.hit({ reaction: event.reaction, from: attacker ? from : null, hp: event.hp, maxHp: event.maxHp, before: event.hp + event.damage });
+        const at = landed ? wounds.pointOf(landed) : victim.point(event.reaction === "punch" ? 0.88 : 0.7);
         const direction = attacker ? at.clone().sub(attacker.point(0.7)).setY(0).normalize() : null;
+        const kind = KINDS[event.reaction] ?? KINDS.strike;
 
         effects.impact(reaction?.effect ?? "sparks", at, direction);
 
+        // Blood sprays from it, gushing from a wound (and a killing blow), with a splash on the
+        // ground beyond; burns smoke
+        if (kind.blood > 0) {
+            effects.bleed(at, direction, { amount: kind.blood * (landed?.mark ? 0.7 : 1.4), gush: !landed?.mark || event.hp <= 0 });
+        }
+
+        if (kind.glow === "fire") {
+            effects.burst("ash", at, direction);
+        }
+
         if (event.projectile) {
-            effects.land(event.projectile, victim.character.rig.bone("Spine2"));
+            const arrow = effects.land(event.projectile, landed ? wounds.boneOf(landed) : victim.character.rig.bone("Spine2"), { at: landed ? at : null, keep: Boolean(landed) });
+
+            if (arrow && landed) {
+                wounds.keep(landed, arrow);
+            }
+
             this.flights.delete(event.projectile);
         }
 
         hud.damage(this.#screenAbove(event.id), event.damage, { toPlayer: event.id === "player" });
         hud.setHealth(event.id, actor.hp, actor.maxHp);
         this.flash.set(event.id, 0.25);
+    }
+
+    // Wounds glow and fade; burns smoke and throw embers; the badly hurt drip blood (the worse
+    // and the faster they're going, the more), leaving a trail; and blood pools under the fallen
+    #bleed(dt) {
+        const { effects } = this;
+        const point = new THREE.Vector3();
+
+        for (const [id, wounds] of this.wounds) {
+            const actor = this.battle.actor(id);
+            const avatar = this.avatars.get(id);
+
+            wounds.update(dt);
+
+            if (!actor || !avatar.object.visible) {
+                continue;
+            }
+
+            for (const wound of wounds.smouldering) {
+                if (Math.random() < dt * 5) {
+                    effects.burst("smoke", wounds.pointOf(wound, point));
+                }
+
+                if (Math.random() < dt * 7) {
+                    effects.burst("embers", wounds.pointOf(wound, point));
+                }
+            }
+
+            const stage = actor.dead ? 0 : wounds.stage;
+            const bleeding = stage >= 2 ? wounds.bleeding : [];
+
+            if (bleeding.length) {
+                const moving = Math.hypot(avatar.follow?.vx ?? 0, avatar.follow?.vz ?? 0) > 0.4;
+                const rate = (stage >= 3 ? 3.5 : 1.3) * (moving ? 2 : 1);
+
+                if (Math.random() < dt * rate) {
+                    effects.drip(wounds.pointOf(bleeding[Math.floor(Math.random() * bleeding.length)], point));
+                }
+            }
+        }
+
+        for (const [id, pool] of this.pools) {
+            pool.left -= dt;
+
+            if (!pool.spot && pool.left <= 0) {
+                const { character } = this.avatars.get(id);
+
+                character.object.updateMatrixWorld();
+
+                const chest = character.rig.bone("Spine1").getWorldPosition(point);
+
+                pool.spot = effects.pool(chest.x, chest.z, 1.5 + Math.random() * 0.4);
+            }
+        }
     }
 
     #screenAbove(id) {

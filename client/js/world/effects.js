@@ -1,6 +1,8 @@
 // What fighting looks like besides the fighters: arrows, bolts and fireballs in flight, sparks,
-// dust, fire and arcane light where blows land, arrows left stuck in whoever they hit, a ring on
-// the ground where the player is walking to, and a red ring round the enemy they're set to fight.
+// dust, fire and arcane light where blows land, blood spraying from wounds and dripping from the
+// badly hurt, splashed on the ground and pooling under the fallen, smoke and embers rising from
+// burns, arrows left stuck in whoever they hit, a ring on the ground where the player is walking
+// to, and a red ring round the enemy they're set to fight.
 // Spells: green light gathering in a healer's hand and rising round them, with a green ring
 // spreading on the ground; violet sparks in a hand casting a stun, a burst where it lands, and
 // stars circling the stunned one's head until it wears off.
@@ -12,10 +14,12 @@
 import * as THREE from "three";
 
 // How many particles there can be at once
-const PARTICLES = 600;
+const PARTICLES = 800;
 
 // Each burst: how many particles, their colours (from, to), size (metres), speed (m/s), how long
-// they last (s), how much gravity pulls them (m/s²; negative rises), and how they spread
+// they last (s), how much gravity pulls them (m/s²; negative rises), and how they spread. Ones
+// that don't glow cover what's behind them, `opacity` much (fading at the end if `late`); `drag`
+// slows them (a share a second); blood that reaches the ground leaves a spot there (`splash`).
 const BURSTS = {
     sparks: { count: 22, colours: [0xfff1c4, 0xff8a1a], size: [0.05, 0.1], speed: [2.5, 5], life: [0.18, 0.4], gravity: 9, spread: 0.9, glow: true },
     dust: { count: 16, colours: [0xb8a78a, 0x8a7a62], size: [0.25, 0.5], speed: [0.5, 1.4], life: [0.5, 0.9], gravity: -0.4, spread: 1.6, glow: false, grow: 2.2 },
@@ -28,7 +32,24 @@ const BURSTS = {
     healCharge: { count: 3, colours: [0xeaffec, 0x5ef08a], size: [0.05, 0.1], speed: [0.1, 0.5], life: [0.25, 0.45], gravity: -0.8, spread: 2, glow: true },
     stun: { count: 30, colours: [0xfff4a0, 0x9a5cff], size: [0.06, 0.15], speed: [1.5, 3.2], life: [0.25, 0.55], gravity: 0, spread: 2, glow: true, swirl: 8 },
     stunCharge: { count: 3, colours: [0xe8d8ff, 0x8a4dff], size: [0.05, 0.1], speed: [0.2, 0.7], life: [0.2, 0.35], gravity: 0, spread: 2, glow: true, swirl: 5 },
+    blood: { count: 18, colours: [0xc0180c, 0x5a0503], size: [0.02, 0.05], speed: [1.4, 3.6], life: [0.4, 0.75], gravity: 9.8, spread: 0.9, glow: false, opacity: 0.95, late: true, drag: 0.8, splash: 0.2 },
+    gush: { count: 42, colours: [0xd01a0e, 0x5a0503], size: [0.025, 0.07], speed: [1.8, 4.6], life: [0.5, 0.95], gravity: 9.8, spread: 1.2, glow: false, opacity: 0.95, late: true, drag: 0.8, splash: 0.15 },
+    drip: { count: 1, colours: [0xa0120a, 0x5a0503], size: [0.014, 0.024], speed: [0, 0.15], life: [0.5, 0.7], gravity: 9.8, spread: 0.3, glow: false, opacity: 0.95, late: true, drag: 0.2, splash: 1 },
+    smoke: { count: 2, colours: [0x2e2824, 0x6a625a], size: [0.1, 0.2], speed: [0.2, 0.5], life: [1, 1.7], gravity: -0.6, spread: 0.8, glow: false, opacity: 0.4, grow: 2.6 },
+    embers: { count: 1, colours: [0xffc060, 0xff3a00], size: [0.02, 0.04], speed: [0.3, 0.9], life: [0.4, 0.9], gravity: -1.2, spread: 1.6, glow: true },
+    ash: { count: 10, colours: [0x3a322c, 0x6a625a], size: [0.14, 0.3], speed: [0.4, 1.1], life: [0.8, 1.4], gravity: -1, spread: 1.6, glow: false, opacity: 0.45, grow: 1.8 },
 };
+
+// Blood on the ground: how many spots and pools there can be at once, how long they stay (s)
+// before fading, and how long they take to fade
+const SPLATS = 256;
+const SPLAT_STAYS = 45;
+const SPLAT_FADES = 8;
+
+// A pool under the fallen: how long it takes to spread (s), and how quickly it goes once they're
+// up again
+const POOL_SPREADS = 5;
+const POOL_DRAINS = 2;
 
 // A dazed character's stars: how many, how far round its head (m), how fast they circle (rad/s)
 const DAZE = { stars: 3, radius: 0.24, speed: 4.5 };
@@ -97,7 +118,7 @@ class Particles {
     }
 
     emit(settings, at, direction) {
-        const { count, colours, size, speed, life, gravity, spread, grow = 0, swirl = 0 } = settings;
+        const { count, colours, size, speed, life, gravity, spread, grow = 0, swirl = 0, opacity = this.glow ? 1 : 0.55, late = false, drag = 2.5, splash = 0 } = settings;
         const from = new THREE.Color(colours[0]);
         const to = new THREE.Color(colours[1]);
 
@@ -122,12 +143,16 @@ class Particles {
                 gravity,
                 grow,
                 swirl,
+                opacity,
+                late,
+                drag,
+                splash: Math.random() < splash,
                 centre: at.clone(),
             });
         }
     }
 
-    update(dt, pixels) {
+    update(dt, pixels, onGround = null) {
         this.material.uniforms.scale.value = pixels;
         this.live = this.live.filter((particle) => {
             const { i, velocity } = particle;
@@ -158,9 +183,16 @@ class Particles {
             this.positions[i * 3] += velocity.x * dt;
             this.positions[i * 3 + 1] = Math.max(0.02, this.positions[i * 3 + 1] + velocity.y * dt);
             this.positions[i * 3 + 2] += velocity.z * dt;
-            velocity.multiplyScalar(1 - Math.min(1, dt * 2.5));
+            velocity.multiplyScalar(1 - Math.min(1, dt * particle.drag));
+
+            // Blood reaching the ground leaves a spot, and is gone
+            if (particle.splash && this.positions[i * 3 + 1] <= 0.02) {
+                onGround?.(this.positions[i * 3], this.positions[i * 3 + 2], particle.size);
+                particle.age = particle.life;
+            }
+
             this.sizes[i] = particle.size * (1 + particle.grow * t);
-            this.alphas[i] = (1 - t) * (1 - t) * (this.glow ? 1 : 0.55);
+            this.alphas[i] = particle.opacity * (particle.late ? 1 - t ** 4 : (1 - t) * (1 - t));
             this.tints[i * 3] = particle.from.r + (particle.to.r - particle.from.r) * t;
             this.tints[i * 3 + 1] = particle.from.g + (particle.to.g - particle.from.g) * t;
             this.tints[i * 3 + 2] = particle.from.b + (particle.to.b - particle.from.b) * t;
@@ -172,6 +204,242 @@ class Particles {
             this.geometry.attributes[name].needsUpdate = true;
         }
     }
+}
+
+// --- Blood on the ground ---
+
+// Spots of blood, splashes and pools, flat on the ground: one instanced mesh (a single draw
+// call), wet and glossy, each instance a picture from an atlas of four (three splashes and a
+// pool), fading once it's been there a while
+class Splats {
+    constructor() {
+        const geometry = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+
+        // Which picture and how much it shows, for each
+        this.shown = new Float32Array(SPLATS * 2);
+        geometry.setAttribute("splat", new THREE.InstancedBufferAttribute(this.shown, 2).setUsage(THREE.DynamicDrawUsage));
+
+        const material = new THREE.MeshStandardMaterial({
+            color: 0x420604,
+            map: splatAtlas(),
+            roughness: 0.45,
+            metalness: 0,
+            transparent: true,
+            depthWrite: false,
+            polygonOffset: true,
+            polygonOffsetFactor: -2,
+            polygonOffsetUnits: -2,
+        });
+
+        material.onBeforeCompile = (shader) => {
+            shader.vertexShader = shader.vertexShader
+                .replace("void main() {", "attribute vec2 splat;\nvarying float vShown;\nvoid main() {")
+                .replace("#include <uv_vertex>", "#include <uv_vertex>\nvMapUv = vMapUv * 0.5 + vec2( mod( splat.x, 2.0 ), 1.0 - floor( splat.x / 2.0 ) ) * 0.5;\nvShown = splat.y;");
+            shader.fragmentShader = shader.fragmentShader
+                .replace("void main() {", "varying float vShown;\nvoid main() {")
+                .replace("#include <map_fragment>", "#include <map_fragment>\ndiffuseColor.a *= vShown;");
+        };
+        material.customProgramCacheKey = () => "splats";
+
+        this.mesh = new THREE.InstancedMesh(geometry, material, SPLATS);
+        this.mesh.name = "blood";
+        this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        this.mesh.receiveShadow = true;
+        this.mesh.frustumCulled = false;
+        this.mesh.renderOrder = 1;
+
+        // Each instance: { k (its index), x, z, size, pool, angle, variant, age, spreads, stays,
+        // fades }, or null (unused)
+        this.list = Array.from({ length: SPLATS }, () => null);
+        this.matrix = new THREE.Matrix4();
+        this.hide = new THREE.Matrix4().makeScale(0, 0, 0);
+
+        for (let k = 0; k < SPLATS; k++) {
+            this.mesh.setMatrixAt(k, this.hide);
+        }
+    }
+
+    /**
+     * Put a spot of blood on the ground at (x, z), `size` metres across: a splash (or `pool`),
+     * taking `spreads` seconds to spread out. Returns it (to `drain` later).
+     */
+    add(x, z, size, { pool = false, spreads = 0.12 } = {}) {
+        let k = this.list.indexOf(null);
+
+        // Full: the oldest spot goes (not a pool, while there are others)
+        if (k < 0) {
+            let oldest = -Infinity;
+
+            this.list.forEach((spot, i) => {
+                const age = spot.age - (spot.pool ? 1e6 : 0);
+
+                if (age > oldest) {
+                    oldest = age;
+                    k = i;
+                }
+            });
+        }
+
+        const spot = { k, x, z, size, pool, angle: Math.random() * Math.PI * 2, variant: pool ? 3 : Math.floor(Math.random() * 3), age: 0, spreads, stays: SPLAT_STAYS * (0.8 + Math.random() * 0.4), fades: SPLAT_FADES };
+
+        this.list[k] = spot;
+        this.shown[k * 2] = spot.variant;
+        this.#draw(spot);
+
+        return spot;
+    }
+
+    /** A pool drains away (whoever lay in it is up again). */
+    drain(spot) {
+        if (this.list[spot.k] === spot) {
+            spot.stays = Math.min(spot.stays, spot.age);
+            spot.fades = POOL_DRAINS;
+        }
+    }
+
+    /** Clear the ground. */
+    clear() {
+        this.list.forEach((spot, k) => {
+            if (spot) {
+                this.list[k] = null;
+                this.mesh.setMatrixAt(k, this.hide);
+            }
+        });
+        this.mesh.instanceMatrix.needsUpdate = true;
+    }
+
+    update(dt) {
+        let changed = false;
+
+        for (const spot of this.list) {
+            if (!spot) {
+                continue;
+            }
+
+            spot.age += dt;
+
+            // Still spreading, or fading
+            if (spot.age < spot.spreads + dt || spot.age > spot.stays) {
+                changed = true;
+
+                if (spot.age > spot.stays + spot.fades) {
+                    this.list[spot.k] = null;
+                    this.mesh.setMatrixAt(spot.k, this.hide);
+                } else {
+                    this.#draw(spot);
+                }
+            }
+        }
+
+        if (changed) {
+            this.mesh.instanceMatrix.needsUpdate = true;
+            this.mesh.geometry.attributes.splat.needsUpdate = true;
+        }
+    }
+
+    #draw(spot) {
+        const t = Math.min(1, spot.age / spot.spreads);
+        const spread = spot.pool ? 1 - (1 - t) ** 2 : 0.4 + 0.6 * Math.sqrt(t);
+        const size = spot.size * Math.max(0.05, spread);
+
+        this.matrix.makeRotationY(spot.angle).scale(new THREE.Vector3(size, 1, size)).setPosition(spot.x, spot.pool ? 0.012 : 0.014, spot.z);
+        this.mesh.setMatrixAt(spot.k, this.matrix);
+        this.shown[spot.k * 2 + 1] = spot.age > spot.stays ? Math.max(0, 1 - (spot.age - spot.stays) / spot.fades) : 1;
+        this.mesh.instanceMatrix.needsUpdate = true;
+        this.mesh.geometry.attributes.splat.needsUpdate = true;
+    }
+}
+
+// The pictures of blood on the ground, in a 2 by 2 atlas: three splashes (a blot with drops
+// thrown round it) and a pool (a rounded, lobed puddle). White, the material colours them; the
+// middle's a little darker, where it's thicker.
+function splatAtlas() {
+    const size = 512;
+    const half = size / 2;
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+    let seed = 7;
+    const random = () => {
+        seed = (seed * 16807) % 2147483647;
+
+        return seed / 2147483647;
+    };
+
+    canvas.width = canvas.height = size;
+
+    // A blob: a circle with a wobbly edge
+    const blob = (cx, cy, radius, lobes, wobble) => {
+        const phase = random() * Math.PI * 2;
+        const phase2 = random() * Math.PI * 2;
+
+        context.beginPath();
+
+        for (let k = 0; k <= 48; k++) {
+            const angle = (k / 48) * Math.PI * 2;
+            const r = radius * (1 + wobble * Math.sin(angle * lobes + phase) + wobble * 0.5 * Math.sin(angle * (lobes + 3) + phase2));
+
+            context[k ? "lineTo" : "moveTo"](cx + Math.cos(angle) * r, cy + Math.sin(angle) * r);
+        }
+
+        context.closePath();
+        context.fill();
+    };
+
+    for (let variant = 0; variant < 4; variant++) {
+        const ox = (variant % 2) * half;
+        const oy = Math.floor(variant / 2) * half;
+        const cx = ox + half / 2;
+        const cy = oy + half / 2;
+        const gradient = context.createRadialGradient(cx, cy, 0, cx, cy, half * 0.45);
+
+        gradient.addColorStop(0, "rgba(150, 150, 150, 1)");
+        gradient.addColorStop(0.55, "rgba(215, 215, 215, 1)");
+        gradient.addColorStop(1, "rgba(255, 255, 255, 1)");
+        context.fillStyle = gradient;
+
+        if (variant === 3) {
+            // A pool: lobes run together
+            blob(cx, cy, half * 0.3, 5, 0.12);
+
+            for (let k = 0; k < 5; k++) {
+                const angle = random() * Math.PI * 2;
+                const reach = half * (0.12 + random() * 0.12);
+
+                blob(cx + Math.cos(angle) * reach, cy + Math.sin(angle) * reach, half * (0.1 + random() * 0.1), 4, 0.15);
+            }
+
+            continue;
+        }
+
+        // A splash: the blot, streaks thrown out one way, and drops round it
+        blob(cx, cy, half * (0.12 + random() * 0.06), 7, 0.2);
+
+        const throwAngle = random() * Math.PI * 2;
+
+        for (let k = 0; k < 14; k++) {
+            const angle = throwAngle + (random() - 0.5) * (k < 6 ? 1.2 : Math.PI * 2);
+            const reach = half * (0.16 + random() * 0.26);
+            const radius = half * (0.008 + random() * (k < 6 ? 0.03 : 0.018));
+
+            blob(cx + Math.cos(angle) * reach, cy + Math.sin(angle) * reach, radius, 3, 0.2);
+
+            // A streak back towards the middle, from the bigger drops
+            if (k < 6) {
+                context.beginPath();
+                context.moveTo(cx + Math.cos(angle) * reach * 0.5, cy + Math.sin(angle) * reach * 0.5);
+                context.lineTo(cx + Math.cos(angle) * reach, cy + Math.sin(angle) * reach);
+                context.lineWidth = radius * 1.1;
+                context.strokeStyle = gradient;
+                context.stroke();
+            }
+        }
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+
+    texture.colorSpace = THREE.SRGBColorSpace;
+
+    return texture;
 }
 
 // --- Projectiles ---
@@ -214,7 +482,8 @@ export class Effects {
         this.dust = new Particles(false);
         this.group = new THREE.Group();
         this.group.name = "effects";
-        this.group.add(this.glow.points, this.dust.points);
+        this.splats = new Splats();
+        this.group.add(this.glow.points, this.dust.points, this.splats.mesh);
         scene.add(this.group);
 
         /** Projectiles in flight, by the battle's projectile id. */
@@ -252,6 +521,50 @@ export class Effects {
         this.camera = null;
 
         this.arrow = arrowModel();
+
+        // The bloodied end of an arrow that's gone in, just outside the wound
+        this.bloodied = new THREE.Mesh(new THREE.CylinderGeometry(0.0062, 0.0062, 0.1, 5).rotateX(Math.PI / 2).translate(0, 0, 0.25), new THREE.MeshStandardMaterial({ color: 0x4a0604, roughness: 0.25 }));
+    }
+
+    /**
+     * Blood from a wound at a point: a spray thrown `direction` (the way the blow went), `amount`
+     * times as much (a gush for a bad wound), splashed on the ground beyond.
+     */
+    bleed(at, direction, { amount = 1, gush = false } = {}) {
+        const settings = BURSTS[gush ? "gush" : "blood"];
+        const sideways = direction ? direction.clone().setY(0.35) : null;
+
+        this.dust.emit({ ...settings, count: Math.round(settings.count * amount) }, at, sideways);
+
+        // A splash on the ground where most of it lands, beyond the victim
+        if (gush && direction) {
+            const beyond = 0.4 + Math.random() * 0.5;
+            const aside = (Math.random() - 0.5) * 0.6;
+
+            this.splats.add(at.x + direction.x * beyond - direction.z * aside, at.z + direction.z * beyond + direction.x * aside, 0.3 + Math.random() * 0.25, { spreads: 0.25 });
+        }
+    }
+
+    /** A drop of blood falling from a wound, to leave a spot on the ground. */
+    drip(at) {
+        this.burst("drip", at);
+    }
+
+    /** A spot of blood on the ground (metres), `size` across. */
+    spot(x, z, size) {
+        return this.splats.add(x, z, size);
+    }
+
+    /** A pool of blood spreading on the ground under someone fallen (metres). Returns it, to `drain`. */
+    pool(x, z, size) {
+        return this.splats.add(x, z, size, { pool: true, spreads: POOL_SPREADS });
+    }
+
+    /** A pool drains away (they're up again). */
+    drain(pool) {
+        if (pool) {
+            this.splats.drain(pool);
+        }
     }
 
     /** A burst of particles (a BURSTS key) at a point, thrown towards `direction` (optional). */
@@ -391,27 +704,53 @@ export class Effects {
         }
     }
 
-    /** A projectile has arrived (or missed): remove it; arrows stick in `bone` if given. */
-    land(id, bone = null) {
+    /**
+     * A projectile has arrived (or missed): remove it. Arrows stick in `bone` if given: in the
+     * wound `at` (a point in the world, where it went in), bloodied, kept there if `keep` (until
+     * whoever keeps it takes it out: returned), or gone after a while.
+     */
+    land(id, bone = null, { at = null, keep = false } = {}) {
         const flight = this.flying.get(id);
 
         if (!flight) {
-            return;
+            return null;
         }
 
         this.flying.delete(id);
         flight.object.removeFromParent();
 
-        if (flight.kind === "arrow" && bone) {
-            // Left sticking out of whoever it hit, pointing the way it flew
-            const stuck = this.arrow.clone();
-            const direction = flight.object.position.clone().sub(flight.last).normalize();
+        if (flight.kind !== "arrow" || !bone) {
+            return null;
+        }
 
-            bone.add(stuck);
-            stuck.position.copy(bone.worldToLocal(flight.object.position.clone().addScaledVector(direction, 0.06)));
-            stuck.quaternion.copy(bone.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(flight.object.quaternion));
+        // Left sticking out of whoever it hit, pointing the way it flew (into the wound), its
+        // head in them
+        const stuck = this.arrow.clone();
+        const into = flight.object.position.clone().sub(flight.last);
+
+        if (into.lengthSq() > 1e-8) {
+            into.normalize();
+        } else {
+            into.set(0, 0, 1).applyQuaternion(flight.object.quaternion);
+        }
+
+        const centre = at ? at.clone().addScaledVector(into, -0.3) : flight.object.position.clone().addScaledVector(into, 0.06);
+        const world = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), into);
+
+        if (at) {
+            stuck.add(this.bloodied.clone());
+        }
+
+        bone.updateMatrixWorld();
+        bone.add(stuck);
+        stuck.position.copy(bone.worldToLocal(centre));
+        stuck.quaternion.copy(bone.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(world));
+
+        if (!keep) {
             this.stuck.push({ object: stuck, left: 2.5 });
         }
+
+        return stuck;
     }
 
     /** Take away every stuck arrow (say when a character comes back to life). */
@@ -430,7 +769,8 @@ export class Effects {
     /** Advance by `dt` seconds. `pixels` is how many screen pixels a metre is at 1 metre away. */
     update(dt, pixels) {
         this.glow.update(dt, pixels);
-        this.dust.update(dt, pixels);
+        this.dust.update(dt, pixels, (x, z, size) => this.splats.add(x, z, size * (2.5 + Math.random() * 2)));
+        this.splats.update(dt);
 
         this.stuck = this.stuck.filter((arrow) => {
             arrow.left -= dt;
