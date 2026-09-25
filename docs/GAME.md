@@ -223,7 +223,10 @@ building blocks: noise, filters (biquads, sweeping for swings), envelopes, tones
 oscillators, and a plucked string (Karplus-Strong, tuned between samples with an all-pass filter
 so it's in tune at any pitch). `sound.js` plays it all with the Web Audio API, in three **buses**,
 each with its own volume (the sliders in Game options, heard on a curve, `volume ** 1.5`, as ears
-hear loudness), all through a compressor and turned on or off together by the Sound switch:
+hear loudness), turned on or off together by the Sound switch. The mix is raised about 8 dB,
+gently compressed and then limited just under full scale, so a phone's speaker plays it loud
+enough (the music averaging about −23 dBFS at its default, the blows and spells peaking a few
+dB under full scale) without a busy fight clipping:
 
 | Bus | What | To start with |
 | --- | --- | --- |
@@ -285,7 +288,10 @@ without a seam. It plays on every screen.
 
 `worker.js` makes the sounds and instruments in a worker, the most needed first, so the page
 never waits (without module workers they're made on the page, a few at a time). Browsers let a
-page make sound only after a tap, click or key, so it starts on the first one. While the game
+page make sound only after a tap, click or key, so it starts on the first one (the start or end
+of a touch, a click or a key: Safari on iPhones counts only the end of a touch, and wants
+something played in it, so a moment of silence is). On an iPhone or iPad, Safari mutes a page's
+Web Audio (which this is) while the ring switch is on silent. While the game
 is paused, the music and the wind play on (the birds and leaves wait). Everything is silent
 while the page is hidden, and off (suspended) when turned off in Game options.
 

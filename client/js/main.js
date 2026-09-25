@@ -350,8 +350,9 @@ document.addEventListener("keydown", (event) => {
 
 window.addEventListener("resize", () => state.session?.view.resize());
 
-// Browsers let a page make sound only once it's been tapped, clicked or typed on
-for (const type of ["pointerdown", "pointerup", "keydown"]) {
+// Browsers let a page make sound only once it's been tapped, clicked or typed on (and which of
+// these counts differs: Safari on iPhones takes the end of a touch, not its start)
+for (const type of ["pointerdown", "pointerup", "touchend", "click", "keydown"]) {
     document.addEventListener(type, () => state.session?.sound.unlock(), { capture: true });
 }
 
