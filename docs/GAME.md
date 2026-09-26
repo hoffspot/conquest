@@ -306,7 +306,8 @@ looks the same), which roughly halves their triangles.
 
 Attacks, flinches and falls (characters/actions.js, described in
 [CHARACTERS.md](CHARACTERS.md#fighting-actionsjs)) are started by the battle's events: an
-`attack` event starts the weapon's attack, timed so its blow lands when the battle's does; a
+`attack` event starts the weapon's attack (in any of its five ways but the one it last used),
+timed so its blow lands when the battle's does; a
 `hit` makes the target flinch in the way the attack's `reaction` says, from the side the blow came
 from, flushes their skin red for a moment and shows the damage; a `death` makes them fall away
 from the killing blow, lie still for 4 seconds and sink out of sight until they come back.
@@ -318,7 +319,18 @@ little), bolts and fireballs leaving trails. Where each blow lands there's a bur
 reaction: sparks for cuts and arrows, dust and a flash for blunt blows, fire for fireballs, a
 swirl of violet light for arcane bolts. Arrows stick in whoever they hit for a couple of
 seconds, or, where they made a wound, until it heals (no more than eight in anyone: the oldest
-go). Every spark, puff, drop of blood and flame is a particle in one of two fixed-size buffers (one
+go).
+
+**Five looks.** Fireballs, arcane bolts, heals and stuns each come in five looks (`LOOKS`), all
+plainly what they are but none quite like another, and chosen like the attacks' ways
+(`core/variety.js`): any at first, then any but the caster's last. A fireball may be a blaze, a
+roaring red one (bigger, a deeper whoosh), a small bright comet with a long tail, one spiralling
+round its path, or a smouldering one trailing smoke; a bolt an orb, a spark jittering about its
+path, a pulsing one, two balls circling each other, or a streak drawn out along its path. Each
+bursts where it lands in its own colours and size, and its whoosh is pitched to it. A spell is
+cast and lands in the same look: the light gathering in the hand is in its colours.
+
+Every spark, puff, drop of blood and flame is a particle in one of two fixed-size buffers (one
 glowing, one not) drawn in a draw call each; nothing adds a light (adding lights makes Three.js
 rebuild every lit material's shaders).
 
@@ -376,10 +388,14 @@ without the scene's tone mapping so it stays red. It closes in on the enemy when
 it until it falls or the player is told to do something else. Its bar over its head is lit red
 too.
 
-Spells gather light in the caster's left hand as they're cast (green for Heal, violet for Stun).
-A heal lands in a burst of green sparkles rising round the character and a green ring spreading
-over the ground; a stun in a flash of violet and gold, and three gold stars circle the stunned character's
-head (always facing the camera) until it wears off.
+Spells gather light in the caster's left hand as they're cast (green for Heal, violet or gold
+for Stun), in the look they'll land in. A heal lands in green light round the character and a
+ring (or two, one after the other) spreading over the ground: sparkles swirling up round them, a
+fountain thrown up from their feet, a tight spiral column, petals of light falling from over their
+head, or a white flash. A stun lands in a flash, and stars circle the stunned character's head
+(always facing the camera) until it wears off: three gold stars, four quick ones in a whirl, a
+crown of five small gold and white ones, two big comets on a tilted circle, or three lilac ones
+on a wobbling halo.
 
 ### The minimap (app/minimap.js)
 
@@ -680,8 +696,14 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   where it looks, following once they go further and turning behind the player (walked away from, it doesn't turn; walked towards, it turns
   all the way round), smoothly, steady through a path's corners, keeping still again once caught
   up, and catching up without turning when the player comes back to life elsewhere.
-- `test/actions.test.js`: attacks (their timing, where the hands reach on different bodies,
-  two-handed grips, alternating punches), reactions and falls, on the real body.
+- `test/actions.test.js`: attacks (five ways of each, every one landing in front at a fighting
+  height, never the same way twice in a row, all five used; their timing, where the hands reach
+  on different bodies, two-handed grips, alternating punches), reactions and falls, on the real
+  body.
+- `test/effects.test.js`: five looks each for fireballs, bolts, heals and stuns, each like what it
+  is (fireballs orange and red, bolts violet and blue, heals green, stars bright); flying in them
+  (straight, spiralling, jittering, as twins, drawn out), bursting in their colours, rings and
+  stars.
 - `test/app.test.js`, `test/town3d.test.js`, `test/manifest.test.js`, `test/sw.test.js`: saving,
   heroes (and forgetting volumes saved on the old scale), the minimap's colours (in the town and
   inside), the action wheel (which slice a flick is in, its shapes, its

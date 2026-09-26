@@ -52,7 +52,9 @@ it uses 3 points of **stamina** a second, and anything else gets 1 a second back
 much stamina as hit points (50). Your name and health are in the bottom left corner; while your
 stamina isn't full, an orange bar under your health shows what's left; with none left you're out of breath, and walk the rest of the way. Standing still,
 you attack whatever is within your weapon's reach on your own: melee weapons reach the eight
-squares round yours; ranged ones anything in range that you can see. **Swipe up from yourself**
+squares round yours; ranged ones anything in range that you can see. Every weapon attacks in five
+ways (a sword slashes, cuts backhand, chops overhead, thrusts and cuts upwards), never the same
+way twice in a row, and fireballs, bolts and spells each have five looks too. **Swipe up from yourself**
 (a quick flick upwards, starting on your character) to go straight ahead the way you're facing,
 as far as you can until something's in the way: sprinting while you have stamina, then walking.
 
@@ -258,6 +260,7 @@ client/                 The game (static files served to the browser)
     weapons.js          The weapons and their attacks
     spells.js           The spells: heal and stun, and their shared cooldown
     pathfinding.js      A* paths on the squares
+    variety.js          Choosing one of a few ways of doing something, never the last one again
     random.js           Seeded random numbers
     setpieces/          Town (and castle) layouts, and the pieces they're made from
   js/audio/             The sound: dsp.js has the building blocks; synth.js makes the effects
@@ -275,7 +278,7 @@ client/                 The game (static files served to the browser)
     avatar.js           A character in the world, following its place in the battle
     effects.js          Arrows, bolts, fireballs, sparks, dust, fire, arcane light, blood and
                         its splashes and pools, smoke and embers, the target ring, spells' light
-                        and the stars round a stunned head
+                        and the stars round a stunned head, in five looks each
     wounds.js           Battle damage: each blow's mark and each threshold's wound, painted on
                         the body and its clothes
     squares.js          Debug mode's squares and paths
@@ -287,7 +290,7 @@ client/                 The game (static files served to the browser)
     garments.js         Clothing and armour fitted to the body
     items.js            Weapons, shields, helmets and packs; equipment.js has slots and sockets
     gait.js             Walking and running data; locomotion.js walks and runs a character with it
-    actions.js          Attacking, casting, flinching when hit, falling
+    actions.js          Attacking and casting (five ways of each), flinching when hit, falling
     bvh.js              Motion capture: reading BVH files and retargeting them
     presets.js          The human, heroine and orc
   js/lab/character-lab.js  The character lab

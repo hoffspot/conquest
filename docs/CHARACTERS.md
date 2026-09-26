@@ -27,7 +27,8 @@ The lab lets you:
   whatever body you've made.
 - **Fight.** Arm them with any of the game's weapons, stand on guard, attack (once or over and
   over, in slow motion if you like), be hit by each kind of blow, fall and get up (Motion tab,
-  Fighting). `?weapon=sword&action=attack&at=1&speed=0` shows one moment of an action, frozen.
+  Fighting), any of each weapon's five ways or any but the last, as in the game.
+  `?weapon=sword&action=attack&at=1&speed=0&way=2` shows one moment of an action, frozen.
 - **See it from the game's camera** ("Game view").
 
 ## How it's put together
@@ -308,24 +309,33 @@ over whatever the character was doing and back out at the end. Each key says:
 - **The spine, pelvis and hips** as joint angles, and the pelvis's offset (a lunge, a crouch into
   a hammer blow), which the legs bend to follow.
 
-| Weapon | The attack |
-| --- | --- |
-| Sword | Up over the right shoulder, turning away; down and across through the enemy, stepping in; follows through to the left hip |
-| Staff | Two-handed, drawn back over the shoulder; brought down level at the enemy's chest |
-| Wand | Tip up and back; flicked out at arm's length, pointing at the enemy |
-| Grimoire | The book held open in the left hand; the right hand drawn back by the shoulder, then thrown open-palmed at the enemy |
-| War hammer | Two-handed, high over the head, arching back; brought down with the whole body, knees bending |
-| Bow | Turned side on, the bow at arm's length towards the target; drawn to the chin, loosed, the hand flying back past the ear |
-| Spiked gauntlets | From a boxer's guard, a straight punch at head height, left and right in turn |
-| Orc cleaver | Raised high behind the head; hacked down |
+**Five ways of every attack.** Each weapon attacks in five ways, so no two blows in a row look
+alike. The first is any of the five; after that, it's any of the other four (`variety.js`: each
+character keeps track of its own last way for each attack). All of them land where the enemy
+stands, in front at chest to head height, so any way can be swapped for another without the
+battle knowing.
+
+| Weapon | The first way | And four more |
+| --- | --- | --- |
+| Sword | A diagonal slash: up over the right shoulder, turning away; down and across through the enemy, stepping in; follows through to the left hip | a backhand slash, an overhead cut, a thrust, a rising cut |
+| Staff | An overhead strike: two-handed, drawn back over the shoulder; brought down level at the enemy's chest | a sweep, a thrust, a rising strike, a spinning strike |
+| Wand | A flick: tip up and back; flicked out at arm's length, pointing at the enemy | a jab, a circle, a flourish, a low sweep |
+| Grimoire | A throw from the palm: the book held open in the left hand; the right hand drawn back by the shoulder, then thrown open-palmed at the enemy | an overhand hurl, a side-arm throw, a palm push, an underhand lob |
+| War hammer | An overhead smash: two-handed, high over the head, arching back; brought down with the whole body, knees bending | a side swing, a diagonal chop, an upswing, a leaping slam |
+| Bow | A side-on draw: turned side on, the bow at arm's length towards the target; drawn to the chin, loosed, the hand flying back past the ear | a high draw, a snap shot, a crouching shot, a canted draw |
+| Spiked gauntlets | A straight punch at head height from a boxer's guard (left and right in turn, whichever way) | a hook, an uppercut, a body blow, an overhand |
+| Orc cleaver | An overhead hack: raised high behind the head; hacked down | a backhand, a flat chop, a gut rip, a stab and rip |
 
 **Spells** are cast the same way, with the free left hand (the right keeps hold of the weapon),
 key 1 being when the spell takes effect:
 
-| Spell | The cast |
-| --- | --- |
-| Heal (`castHeal`) | The hand gathers the light before the chest, head bowed; then lifts it up and open, looking up |
-| Stun (`castStun`) | The hand drawn back by the left shoulder, turning away; then thrust open-palmed at the enemy, leaning in |
+| Spell | The first way | And four more |
+| --- | --- | --- |
+| Heal (`castHeal`) | Lifted up: the hand gathers the light before the chest, head bowed; then lifts it up and open, looking up | from the heart, a circle, a rising sweep, from the earth |
+| Stun (`castStun`) | A palm thrust: the hand drawn back by the left shoulder, turning away; then thrust open-palmed at the enemy, leaning in | pointed from above, a cross-body flick, a double push, a rising sweep |
+
+The light of a spell, and the bolts and fireballs a wand or grimoire throws, have five looks
+each too, chosen the same way (see [GAME.md](GAME.md), Effects).
 
 On guard (while fighting), each weapon is held ready: the sword upright in front, the staff and
 hammer across the body in both hands, the fists up, the book open.
@@ -347,6 +357,8 @@ effect where it lands, so how a character reacts depends on what hit it:
 | hack (orc cleaver) | a heavy cut that twists and staggers | sparks |
 
 To give a new attack its own reaction, add an entry to `REACTIONS` and name it in the attack.
+A new attack needs its five ways (`ATTACKS[name].variants`: a name and key poses each); the tests
+check each lands in front at a fighting height.
 
 **Falling.** The knees and back give way, then the whole body topples (backwards, or forwards
 when hit from behind), falling faster and faster about the pelvis, lands with a little bounce,
