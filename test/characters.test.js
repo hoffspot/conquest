@@ -635,11 +635,10 @@ describe("walking (locomotion.js)", () => {
 });
 
 describe("hair (hair.js)", () => {
-    it("covers the back of the head: styles parted in the middle part only over the top", () => {
-        const body = figure(FOLK.courtesan.shape);
-        const face = faceFrame(human, body.positions);
+    // A body to grow hair on, with the head's triangles as Character.sourceTriangles gives them
+    function head(shape) {
+        const body = figure(shape);
 
-        // (The head's triangles, as Character.sourceTriangles gives them)
         body.sourceTriangles = (part, bones) => {
             const indices = human.renderIndices(part);
             const triangles = [];
@@ -655,31 +654,71 @@ describe("hair (hair.js)", () => {
             return triangles;
         };
 
+        return { body, face: faceFrame(human, body.positions) };
+    }
+
+    // Every point of a style's hair, in face coordinates (metres from between the eyes: x to the
+    // left, y up, z forward)
+    function grown({ body, face }, style, detail = 0.2) {
+        const position = buildHair(body, style, "none", { detail })?.attributes.position;
+
+        return Array.from({ length: position?.count ?? 0 }, (_, i) => face.toFace(position.getX(i), position.getY(i), position.getZ(i)));
+    }
+
+    const woman = head(FOLK.courtesan2.shape);
+    const man = head(PRESETS.hero.shape);
+    const styles = Object.keys(HAIRSTYLES).filter((style) => HAIRSTYLES[style].strands);
+
+    it("covers the back of the head: styles parted in the middle part only over the top", () => {
         // Of the hair behind the head, from the nape to the crown, as much down its middle (a
         // strip 3 cm wide) as anywhere else: not combed away from it, leaving the scalp bare
-        for (const [style, { tail, knot, strip }] of Object.entries(HAIRSTYLES)) {
-            if (tail || knot || strip) {
-                continue;
-            }
+        for (const style of styles.filter((one) => !HAIRSTYLES[one].tail && !HAIRSTYLES[one].knot && !HAIRSTYLES[one].strip)) {
+            const behind = grown(woman, style).filter(([, y, z]) => z < -0.14 && y > -0.02 && y < 0.07);
+            const middle = behind.filter(([x]) => Math.abs(x) < 0.015);
 
-            const geometry = buildHair(body, style, "none", { detail: 0.2 });
-            const position = geometry?.attributes.position;
-            let behind = 0;
-            let middle = 0;
+            assert.ok(behind.length > 100 && middle.length / behind.length > 0.13, `${style}: ${middle.length} of ${behind.length} points behind the head down its middle`);
+        }
+    });
 
-            for (let i = 0; i < (position?.count ?? 0); i++) {
-                const [x, y, z] = face.toFace(position.getX(i), position.getY(i), position.getZ(i));
+    it("lies close to the head and hangs straight: nothing sticks out, nothing falls over the face, nothing grows inside the mouth", () => {
+        for (const who of [woman, man]) {
+            for (const style of styles) {
+                for (const detail of [0.2, 0.45]) {
+                    const points = grown(who, style, detail);
+                    const widest = Math.max(...points.filter(([, y]) => y > -0.1).map(([x]) => Math.abs(x)));
 
-                if (z < -0.14 && y > -0.02 && y < 0.07) {
-                    behind++;
-                    middle += Math.abs(x) < 0.015 ? 1 : 0;
+                    // (The head's about 9 cm either side of the middle, with the ears)
+                    assert.ok(widest < 0.125, `${style} (${detail}) reaches ${widest.toFixed(3)} out from the middle of the face`);
+                    assert.ok(!points.some(([x, y, z]) => Math.abs(x) < 0.045 && y < 0.02 && y > -0.1 && z > -0.02), `${style} (${detail}) falls over the face`);
+                    assert.ok(!points.some(([x, y, z]) => Math.abs(x) < 0.02 && y < -0.13 && y > -0.25 && z > -0.07), `${style} (${detail}) hangs down the throat`);
                 }
             }
-
-            if (HAIRSTYLES[style].strands) {
-                assert.ok(behind > 100 && middle / behind > 0.13, `${style}: ${middle} of ${behind} points behind the head down its middle`);
-            }
         }
+    });
+
+    it("cuts long hair and a bob to a clean hem", () => {
+        for (const style of ["bob", "long"]) {
+            const [back, front] = HAIRSTYLES[style].hem;
+            const lowest = Math.min(...grown(woman, style).map(([, y]) => y));
+
+            assert.ok(lowest > back - 0.03 && lowest < front, `${style} ends ${lowest.toFixed(3)} (its hem ${back} to ${front})`);
+        }
+    });
+
+    it("starts parted hair right at the parting, either side of it", () => {
+        for (const style of ["bob", "long"]) {
+            const parting = grown(woman, style).filter(([x, y, z]) => Math.abs(x) < 0.006 && y > 0.07 && z > -0.1);
+
+            assert.ok(parting.filter(([x]) => x > 0).length > 8 && parting.filter(([x]) => x < 0).length > 8, `${style}: ${parting.length} points at the parting`);
+        }
+    });
+
+    it("grows a ponytail full and round, not flat", () => {
+        const tail = grown(woman, "ponytail").filter(([, y, z]) => z < -0.2 && y < -0.08);
+        const span = (k) => Math.max(...tail.map((p) => p[k])) - Math.min(...tail.map((p) => p[k]));
+
+        assert.ok(tail.length > 200);
+        assert.ok(span(0) > 0.04 && span(2) > 0.04, `the tail is ${span(0).toFixed(3)} wide and ${span(2).toFixed(3)} deep`);
     });
 });
 

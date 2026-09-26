@@ -120,16 +120,39 @@ skin. That covers the lab's "Load skin…" and the skins made in MakeHuman or pa
 on MakeHuman's eye helper mesh with a glossy clear coat.
 
 **Hair.** Hair is thousands of thin strips (hair cards) with a strand texture, grown from roots
-spread over the scalp above the style's hairline:
+spread over the outside of the head above the style's hairline (never inside the mouth), and
+groomed so it looks kept:
 
-1. Each strand leaves the scalp in the style's direction: from the crown, combed back, parted,
-   up, or to a tie or knot. A parting runs only over the top of the head: behind the crown the
-   hair falls straight down, so the back of the head is covered (a test checks it's as thick
-   down the middle as anywhere).
-2. It bends under gravity.
-3. It is kept just outside the head, which is measured as its radius in every direction. The neck
-   and shoulders are ellipsoids that long hair falls over.
-4. Each strand gets its own layer, and is darker at its roots.
+1. **Direction.** Each strand leaves the scalp in the style's direction: from the crown, combed
+   back, away from a parting, standing up (a crest), or to a tie or knot. Neighbouring strands turn
+   the same way (a little, as a comb leaves them), rather than each its own.
+2. **Lying on the head.** It's grown in fine steps (half a centimetre), so it follows the curve of
+   the head. Hair is soft, so over the upper half of the head, where the scalp faces up, gravity
+   presses it flat: it lies on the head in its own layer just off the scalp, sliding down its sides.
+   It goes round the face, along the hairline, never down over it.
+3. **Hanging.** Below the head's widest point it hangs straight down (strands grown lower on the
+   head start downhill), draping over the neck, shoulders, chest and back (the skin, taken as a
+   smooth surface through its points): forward over a shoulder if it grew in front of the ear,
+   back if behind, never swept out sideways. Hair drawn to a tie or knot lies on the head all the way
+   there, pulled taut.
+4. **Cut.** A bob and long hair end at a hem (clean, a little longer behind), not at random lengths;
+   other hair grows shorter low on the head (round the ears, at the nape).
+5. **A parting** runs only over the top of the head, with roots all along it a hair's breadth
+   either side, so it's a thin line; behind the crown the hair falls straight down.
+6. **Smoothing.** Each strand is smoothed where it hangs (no kinks where it meets the body), then
+   resampled to a few segments, more where it bends. Its card faces out from the scalp, or the
+   body it lies on, or (hanging free) out from the neck, so it never twists edge on.
+7. **A ponytail** is a round bundle from its tie: gathered there, full a third of the way down,
+   tapering to its ends, clear of the back by its own thickness, strands all round it.
+8. **Texture and scalp.** Strands are solid from the root (a card's root edge is at the scalp) and
+   fade over their last few millimetres. The scalp under hair is painted solidly in its colour, a
+   shade darker, so nothing shows between the cards.
+
+Tests check that no hair sticks out from the head, falls over the face or down the throat; that
+cut hair ends at its hem, parted hair starts at its parting, the back of the head is covered as
+thickly down the middle as anywhere, and a ponytail is round, not flat. Growing a character's hair
+takes about a tenth of a second for the tavern's folk (at their level of detail), a quarter of a
+second at the most detailed.
 
 Hair near the head is skinned to the head; long hair hands over to the neck and upper back.
 Beards grow from the jaw the same way, lying along the face. Under a helmet or hat, only hair from
