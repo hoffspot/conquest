@@ -63,8 +63,9 @@ test("loads everything, listing what it downloads, then shows the title", async 
     await page.goto("/");
 
     // Each group of files on the loading screen, with the manifest's sizes
-    await expect(page.locator("#loadlist li")).toHaveCount(5);
+    await expect(page.locator("#loadlist li")).toHaveCount(6);
     await expect(page.locator("#loadlist")).toContainText("3D engine");
+    await expect(page.locator("#loadlist")).toContainText("Lettering");
     await expect(page.locator("#title")).toBeVisible({ timeout: 60000 });
     await expect(page.locator("#titlename")).toHaveText("Pellagos");
     await expect(page.locator("#continuebutton")).toBeHidden();
@@ -73,7 +74,7 @@ test("loads everything, listing what it downloads, then shows the title", async 
 
     expect(loaded.loaded).toBe(loaded.total);
     expect(loaded.total).toBeGreaterThan(2_000_000);
-    expect(loaded.groups).toEqual([true, true, true, true, true]);
+    expect(loaded.groups).toEqual([true, true, true, true, true, true]);
 });
 
 test("debug mode shows how the game runs, and is remembered", async ({ page }) => {
