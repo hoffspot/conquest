@@ -167,12 +167,12 @@ function wand() {
 }
 
 function warHammer() {
-    // A long ash haft (gripped a third of the way up), a square steel head with a spike behind
-    // it, and a point on top; the striking face looks forward (+z)
+    // A long ash haft (gripped a quarter of the way up, the other hand at its end), a square
+    // steel head with a spike behind it, and a point on top; the striking face looks forward (+z)
     return assemble([
-        [at(new THREE.CylinderGeometry(0.017, 0.019, 1.12, 10), 0, 0.2, 0), "wood"],
+        [at(new THREE.CylinderGeometry(0.017, 0.019, 1.02, 10), 0, 0.25, 0), "wood"],
         [at(new THREE.CylinderGeometry(0.021, 0.021, 0.16, 10), 0, 0, 0), "leather"],
-        [at(new THREE.CylinderGeometry(0.02, 0.02, 0.05, 10), 0, -0.37, 0), "iron"],
+        [at(new THREE.CylinderGeometry(0.02, 0.02, 0.05, 10), 0, -0.27, 0), "iron"],
         [at(new THREE.BoxGeometry(0.075, 0.075, 0.13), 0, 0.72, 0.035), "darkSteel"],
         [at(new THREE.BoxGeometry(0.09, 0.09, 0.03), 0, 0.72, 0.11), "steel"],
         [at(new THREE.ConeGeometry(0.03, 0.13, 4), 0, 0.72, -0.09, -Math.PI / 2, 0, 0), "darkSteel"],

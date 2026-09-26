@@ -38,35 +38,44 @@ export const SLOTS = Object.freeze([
     { id: "offHand", label: "Off hand" },
 ]);
 
-// Arm poses for carrying things (anatomical angles, degrees), used instead of the arm's swing
+// Arm poses for carrying things (anatomical angles, degrees), used instead of the arm's swing;
+// and how far the fingers curl round what's held (`curl`: the index, middle, ring and little
+// fingers, degrees at each joint; a fist closes tighter, a wand is pinched) and how the thumb
+// closes (`thumb`: its three joints, rig.js JOINTS.thumb; else over the fingers)
 const HOLDS = {
     shield: { Arm: { flex: 20, abduct: 14, rotate: 50 }, ForeArm: { flex: 85, pronate: 10 }, Hand: { flex: 10 }, swing: 0.15 },
     staff: { Arm: { flex: 12, abduct: 10, rotate: 10 }, ForeArm: { flex: 78, pronate: 0 }, Hand: { flex: -5, deviate: 10 }, swing: 0.25 },
     bow: { Arm: { flex: 5, abduct: 8 }, ForeArm: { flex: 20, pronate: 0 }, Hand: { flex: 0 }, swing: 0.5 },
     pistol: { Arm: { flex: 0, abduct: 8 }, ForeArm: { flex: 25, pronate: 10 }, Hand: { flex: 0, deviate: -10 }, swing: 0.6 },
     sword: { Arm: { flex: 0, abduct: 9 }, ForeArm: { flex: 20, pronate: 10 }, Hand: { flex: 0, deviate: -20 }, swing: 0.7 },
-    wand: { Arm: { flex: 4, abduct: 8 }, ForeArm: { flex: 30, pronate: 15 }, Hand: { flex: 0, deviate: -10 }, swing: 0.6 },
+    wand: { Arm: { flex: 4, abduct: 8 }, ForeArm: { flex: 30, pronate: 15 }, Hand: { flex: 0, deviate: -10 }, swing: 0.6, curl: [24, 52, 68, 76], thumb: [{ flex: 35, oppose: 15 }, { flex: 20 }, { flex: 15 }] },
     hammer: { Arm: { flex: 10, abduct: 12, rotate: 10 }, ForeArm: { flex: 72, pronate: 0 }, Hand: { flex: -5, deviate: 8 }, swing: 0.2 },
     book: { Arm: { flex: 22, abduct: 10, rotate: 10 }, ForeArm: { flex: 88, pronate: -80 }, Hand: { flex: -8, deviate: 0 }, swing: 0.12 },
-    fist: { Arm: { flex: 4, abduct: 10 }, ForeArm: { flex: 38, pronate: 20 }, Hand: { flex: 0 }, swing: 0.7 },
+    fist: { Arm: { flex: 4, abduct: 10 }, ForeArm: { flex: 38, pronate: 20 }, Hand: { flex: 0 }, swing: 0.7, curl: [92, 94, 96, 98], thumb: [{ flex: 60, oppose: -5 }, { flex: 45 }, { flex: 35 }] },
     tankard: { Arm: { flex: 12, abduct: 8, rotate: 5 }, ForeArm: { flex: 88, pronate: -5 }, Hand: { flex: 0, deviate: 12 }, swing: 0.15 },
 };
 
 /**
- * Items: slot, model (items.js), socket, an extra turn in the socket (Euler angles, radians),
- * the hold pose for its arm, whether the hand grips it, what it hides and brings.
+ * Items: slot, model (items.js), socket, an extra turn in the socket (Euler angles, radians: a
+ * hilt or haft lies across the fist diagonally, along the palm's crease from the index finger's
+ * knuckle to the heel of the hand, so a blade leans towards the fingers; a wand is pinched,
+ * pointing along them),
+ * the hold pose for its arm, whether the hand grips it, what it hides and brings; and for a
+ * two-handed haft, where along it the other hand holds it (`haft`: metres along its y from the
+ * grip, from and to: a quarterstaff's hands about shoulder width apart, a war hammer's rear hand
+ * at the end of the handle).
  */
 export const ITEMS = Object.freeze({
-    sword: { label: "Arming sword", slot: "mainHand", model: "sword", socket: "rightHand", grips: true, hold: HOLDS.sword },
-    staff: { label: "Mage's staff", slot: "mainHand", model: "staff", socket: "rightHand", grips: true, hold: HOLDS.staff },
-    wand: { label: "Wand", slot: "mainHand", model: "wand", socket: "rightHand", grips: true, hold: HOLDS.wand },
-    warHammer: { label: "War hammer", slot: "mainHand", model: "warHammer", socket: "rightHand", grips: true, hold: HOLDS.hammer },
-    cleaver: { label: "Orc cleaver", slot: "mainHand", model: "cleaver", socket: "rightHand", grips: true, hold: HOLDS.sword },
+    sword: { label: "Arming sword", slot: "mainHand", model: "sword", socket: "rightHand", turn: [0.9, 0, 0], grips: true, hold: HOLDS.sword },
+    staff: { label: "Mage's staff", slot: "mainHand", model: "staff", socket: "rightHand", turn: [0.25, 0, 0], grips: true, hold: HOLDS.staff, haft: [-0.7, -0.3] },
+    wand: { label: "Wand", slot: "mainHand", model: "wand", socket: "rightHand", turn: [1.45, 0, 0], grips: true, hold: HOLDS.wand },
+    warHammer: { label: "War hammer", slot: "mainHand", model: "warHammer", socket: "rightHand", turn: [0.25, 0, 0], grips: true, hold: HOLDS.hammer, haft: [-0.22, -0.16] },
+    cleaver: { label: "Orc cleaver", slot: "mainHand", model: "cleaver", socket: "rightHand", turn: [0.7, 0, 0], grips: true, hold: HOLDS.sword },
     spikedGauntlets: { label: "Spiked gauntlets", slot: "mainHand", model: "knuckleSpikes", socket: "rightHand", grips: true, hold: HOLDS.fist, garment: "gauntlets" },
     spikedGauntletLeft: { label: "Spiked gauntlet (left)", slot: "offHand", model: "knuckleSpikes", socket: "leftHand", grips: true, hold: HOLDS.fist },
     grimoire: { label: "Grimoire", slot: "offHand", model: "grimoire", socket: "leftHand", hold: HOLDS.book },
     pistol: { label: "Flintlock pistol", slot: "mainHand", model: "pistol", socket: "rightHand", grips: true, hold: HOLDS.pistol },
-    bow: { label: "Longbow", slot: "offHand", model: "bow", socket: "leftHand", turn: [-1.1, 0, 0], grips: true, hold: HOLDS.bow },
+    bow: { label: "Longbow", slot: "offHand", model: "bow", socket: "leftHand", turn: [0.4, 0, 0], grips: true, hold: HOLDS.bow },
     roundShield: { label: "Round shield", slot: "offHand", model: "roundShield", socket: "leftForearm", hold: HOLDS.shield, grips: true },
     kiteShield: { label: "Kite shield", slot: "offHand", model: "kiteShield", socket: "leftForearm", hold: HOLDS.shield, grips: true },
     nasalHelm: { label: "Nasal helm", slot: "head", model: "nasalHelm", socket: "head", hides: ["hair"] },

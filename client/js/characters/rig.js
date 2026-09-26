@@ -95,9 +95,14 @@ export const JOINTS = {
         { name: "deviate", axis: NX, range: [-30, 20] },
     ],
     finger,
+    // The thumb lies turned from the fingers, down and out from the side of the palm and partly
+    // in front of it, so it bends about its own axes (in the hand's frame, measured from the
+    // body's rest pose): flexing curls it towards its pad, across the palm to the little finger
+    // (all three joints: CMC, MCP 50, IP 80), and opposing (the CMC only; palmar abduction 70)
+    // brings it out in front of the palm. A fist or a grip closes it over the curled fingers
     thumb: [
-        { name: "flex", axis: NZ, range: [-10, 60] },
-        { name: "oppose", axis: NX, range: [-20, 60] },
+        { name: "flex", axis: [0.7, -0.7, -0.14], range: [-20, 80] },
+        { name: "oppose", axis: [-0.447, -0.277, -0.851], range: [-20, 50] },
     ],
 };
 
@@ -154,6 +159,42 @@ export function jointRotation(kind, side, angles, target = new THREE.Quaternion(
 const _twist = new THREE.Quaternion();
 const _swing = new THREE.Quaternion();
 const _vector = new THREE.Vector3();
+const _from = new THREE.Vector3();
+const _to = new THREE.Vector3();
+
+/**
+ * Split a joint rotation (in the anatomical frame) into a twist about the bone's axis (`axis`,
+ * or none) and a swing after it: returns the twist (radians) and puts the swing, as a rotation
+ * vector (its axis times its angle, radians), in `swing`.
+ */
+function splitRotation(rotation, axis, swing) {
+    let twist = 0;
+
+    _swing.copy(rotation);
+
+    if (axis) {
+        const along = rotation.x * axis.x + rotation.y * axis.y + rotation.z * axis.z;
+
+        _twist.set(axis.x * along, axis.y * along, axis.z * along, rotation.w);
+
+        if (_twist.lengthSq() < 1e-12) {
+            _twist.identity();
+        } else {
+            _twist.normalize();
+        }
+
+        twist = 2 * Math.atan2(_twist.x * axis.x + _twist.y * axis.y + _twist.z * axis.z, _twist.w);
+        twist = ((twist + 3 * Math.PI) % (2 * Math.PI)) - Math.PI;
+        _swing.multiply(_twist.invert());
+    }
+
+    const angle = 2 * Math.acos(Math.min(1, Math.abs(_swing.w)));
+    const scale = angle > 1e-9 ? ((_swing.w < 0 ? -1 : 1) * angle) / Math.sin(angle / 2) : 0;
+
+    swing.set(_swing.x * scale, _swing.y * scale, _swing.z * scale);
+
+    return twist;
+}
 
 /**
  * Keep a joint rotation (in the anatomical frame) within the joint's range: the twist about the
@@ -168,34 +209,11 @@ export function limitRotation(kind, side, rotation) {
         return rotation;
     }
 
-    // Twist: the rotation about the bone's own axis
-    let twistAngle = 0;
+    // The twist about the bone's own axis, and the swing (as a rotation vector, degrees), in
+    // terms of the other movements
+    const twistAngle = splitRotation(rotation, twistMovement ? axisFor(twistMovement.axis, side) : null, _vector) / DEG;
 
-    if (twistMovement) {
-        const axis = axisFor(twistMovement.axis, side).clone();
-        const along = rotation.x * axis.x + rotation.y * axis.y + rotation.z * axis.z;
-
-        _twist.set(axis.x * along, axis.y * along, axis.z * along, rotation.w);
-
-        if (_twist.lengthSq() < 1e-12) {
-            _twist.identity();
-        } else {
-            _twist.normalize();
-        }
-
-        twistAngle = 2 * Math.atan2(_twist.x * axis.x + _twist.y * axis.y + _twist.z * axis.z, _twist.w) / DEG;
-        twistAngle = ((twistAngle + 540) % 360) - 180;
-        _swing.copy(rotation).multiply(_twist.invert());
-    } else {
-        _swing.copy(rotation);
-    }
-
-    // Swing as a rotation vector (axis times angle), in terms of the two swing movements
-    const angle = 2 * Math.acos(Math.min(1, Math.abs(_swing.w)));
-    const sign = _swing.w < 0 ? -1 : 1;
-    const scale = angle > 1e-9 ? (sign * angle) / Math.sin(angle / 2) / DEG : 0;
-
-    _vector.set(_swing.x * scale, _swing.y * scale, _swing.z * scale);
+    _vector.divideScalar(DEG);
 
     const angles = {};
     let outside = 0;
@@ -244,6 +262,29 @@ export function limitRotation(kind, side, rotation) {
     return rotation;
 }
 
+/**
+ * Blend a joint rotation (in the anatomical frame) `t` of the way from `from` to `to` as the
+ * joint itself moves: the twist about the bone and the swing (as a rotation vector) each along a
+ * straight line, so between two rotations in the joint's range it stays in range (where a slerp
+ * can swing an elbow sideways on the way). Into `target` (which may be `from`).
+ */
+export function blendRotation(kind, side, from, to, t, target = new THREE.Quaternion()) {
+    const twistMovement = JOINTS[kind].find((movement) => movement.twist);
+    const axis = twistMovement ? axisFor(twistMovement.axis, side) : null;
+    const twistFrom = splitRotation(from, axis, _from);
+    const twist = twistFrom + (splitRotation(to, axis, _to) - twistFrom) * t;
+    const swing = _from.lerp(_to, t);
+    const angle = swing.length();
+
+    if (angle > 1e-9) {
+        target.setFromAxisAngle(swing.divideScalar(angle), angle);
+    } else {
+        target.identity();
+    }
+
+    return axis ? target.multiply(_q.setFromAxisAngle(axis, twist)) : target;
+}
+
 /** The rotation whose y axis points along `down` reversed... a frame from where two axes go. */
 function frame(yAxis, xAxis) {
     const y = yAxis.clone().normalize();
@@ -269,6 +310,68 @@ const _b = new THREE.Vector3();
 const _c = new THREE.Vector3();
 const _target = new THREE.Vector3();
 const _delta = new THREE.Quaternion();
+const _was = new THREE.Quaternion();
+const _now = new THREE.Quaternion();
+const _identity = new THREE.Quaternion();
+
+// --- Reaching with an arm, anatomically (Rig.reachArm) ---
+
+// The elbow's swivel (round the line from the shoulder to the wrist) is searched in this many
+// steps round, after trying near where it was
+const SWIVEL_STEPS = 24;
+
+// What a way of reaching costs, in degrees squared: how far each joint would go past its range
+// (the shoulder, the forearm's twist, the wrist), plus how far the wrist is cocked (COMFORT),
+// plus how far the elbow points from its natural way (NATURAL times 1 - the cosine between them),
+// plus (STEADY a degree squared) how far the swivel moved from last time
+const NATURAL = 700;
+const STEADY = 0.06;
+
+// A way the elbow is asked to point (an archer's drawing elbow up behind) counts for more
+const HINTED = 3000;
+
+// A shoulder past its range is worse than a hand turned a little otherwise than wanted
+const SHOULDER = 10;
+
+// Bending the wrist from where it rests costs a little too (degrees squared, times this): of the
+// ways to reach, the one keeping the wrist nearer straight, as people do, swivelling the elbow
+// rather than cocking the wrist
+const COMFORT = 0.1;
+
+// Straining less than this (degrees squared), near where it was is good enough
+const GOOD_STRAIN = 4;
+
+// The elbow bends at most this far (degrees), and the forearm turns this far each way
+const ELBOW_MOST = 148;
+const PRONATION = 80;
+
+const _S = new THREE.Vector3();
+const _W = new THREE.Vector3();
+const _E = new THREE.Vector3();
+const _dir = new THREE.Vector3();
+const _u = new THREE.Vector3();
+const _v = new THREE.Vector3();
+const _bend = new THREE.Vector3();
+const _prefer = new THREE.Vector3();
+const _xA = new THREE.Vector3();
+const _yA = new THREE.Vector3();
+const _zA = new THREE.Vector3();
+const _yF = new THREE.Vector3();
+const _zF = new THREE.Vector3();
+const _m = new THREE.Matrix4();
+const _Farm = new THREE.Quaternion();
+const _Ffore = new THREE.Quaternion();
+const _Fhand = new THREE.Quaternion();
+const _qa = new THREE.Quaternion();
+const _qb = new THREE.Quaternion();
+const _qc = new THREE.Quaternion();
+const _parentFrame = new THREE.Quaternion();
+const _body = new THREE.Quaternion();
+const _left = new THREE.Vector3();
+const _back = new THREE.Vector3();
+const _down = new THREE.Vector3(0, -1, 0);
+
+const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
 
 /** A skeleton for the body, posed with joint rotations. */
 export class Rig {
@@ -357,6 +460,23 @@ export class Rig {
         const { kind, side } = this.joints[i];
 
         jointRotation(kind, side, angles, this.rotations[i]);
+    }
+
+    /**
+     * Turn a posed bone back `1 - t` of the way to `from` (its local rotation before), as its
+     * joint moves (blendRotation: never out of the joint's range on the way).
+     */
+    blendBone(name, from, t) {
+        const i = this.index.get(name);
+        const bone = this.bones[i];
+        const parent = this.frames[this.definition[i].parent] ?? _identity;
+        const { kind, side } = this.joints[i];
+
+        // (A bone's local rotation is its parent's rest frame, the joint rotation, then out of its own)
+        _was.copy(parent).invert().multiply(from).multiply(this.frames[i]);
+        _now.copy(parent).invert().multiply(bone.quaternion).multiply(this.frames[i]);
+        blendRotation(kind, side, _was, _now, t, _now);
+        bone.quaternion.copy(parent).multiply(_now).multiply(_was.copy(this.frames[i]).invert());
     }
 
     /** Put every joint back in the anatomical position (or the rest pose, with `rest`). */
@@ -468,6 +588,236 @@ export class Rig {
         end.parent.getWorldQuaternion(_parentWorld);
         end.quaternion.copy(_parentWorld.invert().multiply(endWorld));
         end.updateMatrixWorld(true);
+    }
+
+    /**
+     * Reach an arm's hand to a grip as a real arm would (or as near as it can), every joint in
+     * its range: the shoulder, the elbow (bending only one way, at most ELBOW_MOST), the forearm
+     * turning the palm (pronation and supination, PRONATION each way) and the wrist (bending and
+     * tilting, never twisting). The hand turns the way it's wanted as far as the arm can turn it:
+     * the turn about the forearm goes to the forearm, the rest to the wrist, within their ranges;
+     * what's past them is left undone (the hand points a little otherwise) rather than breaking
+     * the wrist. Of all the ways the elbow could swivel round the line from the shoulder to the
+     * wrist, the one that strains the joints least, keeps the elbow down and out, and moves least
+     * from last time.
+     *
+     * `side` "Left" or "Right". The goal (world space): `grip` (where the hand's grip point goes),
+     * `offset` (the grip point from the wrist, in the hand's anatomical frame), and which way the
+     * hand turns: `hand` (its anatomical frame, a quaternion), or `aim` ({ axis: a direction in
+     * the hand's anatomical frame, such as what it holds points along, or the palm; toward: the
+     * world direction it should point }, the hand turning the least it can from easy, so the
+     * roll about the axis comes naturally), or neither (relaxed). Easy is the forearm turned
+     * `pronate` degrees and the wrist at `wrist` (anatomical angles); `hold` (0 to 1) how far the
+     * hand turns from easy to the way wanted (easing in and out of it). `bend`: which way the
+     * elbow should point, if not the natural way (down, out and a little back; world), `bent` (0
+     * to 1) how much. `swivel`: last time's, to stay near. Sets the arm's bones; returns
+     * { swivel, strain (degrees, how far past their ranges the joints were wanted), grip
+     * (reached), frame (the hand's anatomical frame) }.
+     */
+    reachArm(side, { grip, offset, hand = null, aim = null, hold = 1, pronate = 25, wrist = null, bend = null, bent = 1, swivel = null }) {
+        const s = side === "Left" ? 1 : -1;
+        const iArm = this.index.get(`${side}Arm`);
+        const iFore = this.index.get(`${side}ForeArm`);
+        const iHand = this.index.get(`${side}Hand`);
+        const upper = this.bones[iArm];
+        const lower = this.bones[iFore];
+        const end = this.bones[iHand];
+        const parent = upper.parent;
+        const iParent = this.index.get(parent.name);
+
+        // The arm's parent's anatomical frame, the shoulder, and the bones' lengths (in the world)
+        parent.getWorldQuaternion(_qa);
+        _parentFrame.copy(_qa).multiply(this.frames[iParent]);
+        upper.getWorldPosition(_S);
+
+        const L1 = _S.distanceTo(lower.getWorldPosition(_E));
+        const L2 = _E.distanceTo(end.getWorldPosition(_W));
+        const scale = L1 / Math.max(1e-6, this.heads[iFore].distanceTo(this.heads[iArm]));
+        const most = L1 + L2 - 1e-4;
+        const least = Math.sqrt(L1 * L1 + L2 * L2 - 2 * L1 * L2 * Math.cos((180 - ELBOW_MOST) * DEG));
+
+        // The body's own left and back (the elbows' natural way: down, out, a little back)
+        (this.root.parent ?? this.root).getWorldQuaternion(_body);
+        _left.set(1, 0, 0).applyQuaternion(_body);
+        _back.set(0, 0, -1).applyQuaternion(_body);
+
+        const relaxedFore = jointRotation("ForeArm", s, { pronate }, new THREE.Quaternion());
+        const relaxedHand = jointRotation("Hand", s, wrist ?? { flex: -8, deviate: -4 }, new THREE.Quaternion());
+        const handLimited = new THREE.Quaternion();
+        const offsetWorld = new THREE.Vector3();
+        const wanted = new THREE.Quaternion();
+        const partly = new THREE.Quaternion();
+        const axis = new THREE.Vector3();
+        const best = { phi: 0, cost: Infinity, strain: 0 };
+        let target = null;
+
+        // The frames and strain for one swivel; kept in _Farm, _Ffore, _Fhand (and _W: the wrist)
+        const evaluate = (phi) => {
+            _dir.copy(target).sub(_S);
+
+            const dist = Math.min(most, Math.max(least, _dir.length()));
+
+            _dir.normalize();
+
+            // Round the line from the shoulder to the wrist: 0 is straight down from it
+            _u.copy(_down).addScaledVector(_dir, -_down.dot(_dir));
+
+            if (_u.lengthSq() < 1e-6) {
+                _u.copy(_back).addScaledVector(_dir, -_back.dot(_dir));
+            }
+
+            _u.normalize();
+            _v.crossVectors(_dir, _u);
+            _bend.copy(_u).multiplyScalar(Math.cos(phi)).addScaledVector(_v, Math.sin(phi));
+
+            const cosA = Math.min(1, Math.max(-1, (L1 * L1 + dist * dist - L2 * L2) / (2 * L1 * dist)));
+            const sinA = Math.sqrt(1 - cosA * cosA);
+
+            _E.copy(_S).addScaledVector(_dir, L1 * cosA).addScaledVector(_bend, L1 * sinA);
+            _W.copy(_S).addScaledVector(_dir, dist);
+
+            // The upper arm: along it up to the shoulder, the elbow's hinge across the arm's plane
+            _yA.copy(_S).sub(_E).divideScalar(L1);
+            _xA.crossVectors(_dir, _bend).normalize();
+            _zA.crossVectors(_xA, _yA);
+            _Farm.setFromRotationMatrix(_m.makeBasis(_xA, _yA, _zA));
+
+            // The forearm, before it turns: the same hinge
+            _yF.copy(_E).sub(_W).divideScalar(L2);
+            _zF.crossVectors(_xA, _yF);
+            _Ffore.setFromRotationMatrix(_m.makeBasis(_xA, _yF, _zF));
+
+            // The shoulder, as far as it's past its range
+            _qa.copy(_parentFrame).invert().multiply(_Farm);
+            _qb.copy(_qa);
+
+            const shoulder = _qa.angleTo(limitRotation("Arm", s, _qb)) / DEG;
+            let strain = SHOULDER * shoulder * shoulder;
+            let comfort = 0;
+
+            let goal = hand;
+
+            if (aim) {
+                // Aiming: from easy (the forearm turned, the wrist as it rests), the least turn
+                // that points the axis the way wanted
+                wanted.copy(_Ffore).multiply(relaxedFore).multiply(relaxedHand);
+                axis.copy(aim.axis).applyQuaternion(wanted);
+                goal = wanted.premultiply(_qa.setFromUnitVectors(axis.normalize(), aim.toward));
+            }
+
+            if (goal && hold < 0.999) {
+                // Only partly held: that far from relaxed towards it
+                const easy = _qc.copy(_Ffore).multiply(relaxedFore).multiply(relaxedHand);
+
+                goal = partly.copy(easy).slerp(goal, Math.max(0, hold));
+            }
+
+            if (goal) {
+                // The hand's turn about the forearm goes to the forearm, as far as it turns
+                _qa.copy(_Ffore).invert().multiply(goal);
+
+                const theta = wrap(2 * Math.atan2(_qa.y, _qa.w));
+                const want = (s > 0 ? -theta : theta) / DEG;
+                const tau = Math.min(PRONATION, Math.max(-PRONATION, want));
+                const twist = want - tau;
+
+                _Ffore.multiply(jointRotation("ForeArm", s, { pronate: tau }, _qc, false));
+
+                // The rest to the wrist, within its range
+                _qa.copy(_Ffore).invert().multiply(goal);
+                handLimited.copy(_qa);
+                limitRotation("Hand", s, handLimited);
+
+                const beyond = _qa.angleTo(handLimited) / DEG;
+                const cocked = handLimited.angleTo(relaxedHand) / DEG;
+
+                strain += twist * twist + beyond * beyond;
+                comfort = COMFORT * cocked * cocked;
+                _Fhand.copy(_Ffore).multiply(handLimited);
+            } else {
+                _Ffore.multiply(relaxedFore);
+                _Fhand.copy(_Ffore).multiply(relaxedHand);
+            }
+
+            // The elbow's natural way (down, out and a little back), or the way wanted, across the
+            // line to the wrist
+            _prefer.copy(_down).addScaledVector(_left, 0.6 * s).addScaledVector(_back, 0.2);
+
+            if (bend) {
+                _prefer.normalize().multiplyScalar(1 - bent).addScaledVector(bend, bent);
+            }
+
+            _prefer.addScaledVector(_dir, -_prefer.dot(_dir));
+
+            const natural = _prefer.lengthSq() > 1e-6 ? 1 - _bend.dot(_prefer.normalize()) : 0;
+            const moved = swivel === null ? 0 : wrap(phi - swivel) / DEG;
+
+            return { cost: strain + comfort + (bend ? NATURAL + (HINTED - NATURAL) * bent : NATURAL) * natural + STEADY * moved * moved, strain };
+        };
+
+        const tryPhi = (phi) => {
+            const { cost, strain } = evaluate(phi);
+
+            if (cost < best.cost) {
+                Object.assign(best, { phi: wrap(phi), cost, strain });
+            }
+        };
+
+        // Where the wrist goes: back from the grip by the grip's offset in the hand (wanted, or
+        // as last reached)
+        const solve = (frame) => {
+            target = offsetWorld.copy(offset).multiplyScalar(scale).applyQuaternion(frame).negate().add(grip);
+            best.cost = Infinity;
+
+            if (swivel !== null) {
+                for (const nudge of [0, -0.2, 0.2, -0.45, 0.45]) {
+                    tryPhi(swivel + nudge);
+                }
+            }
+
+            if (best.strain > GOOD_STRAIN || swivel === null) {
+                for (let k = 0; k < SWIVEL_STEPS; k++) {
+                    tryPhi(-Math.PI + (2 * Math.PI * k) / SWIVEL_STEPS);
+                }
+            }
+
+            for (let step = Math.PI / SWIVEL_STEPS; step > 0.004; step /= 2) {
+                const around = best.phi;
+
+                tryPhi(around - step);
+                tryPhi(around + step);
+            }
+
+            evaluate(best.phi);
+        };
+
+        // (A relaxed or aimed hand's offset is along the forearm: a first guess, then from where it went)
+        if (hand) {
+            solve(hand);
+        } else {
+            _qa.setFromUnitVectors(_down.clone().negate(), _dir.copy(grip).sub(_S).normalize().negate());
+            solve(_qa.clone());
+        }
+
+        // Again, from the hand's frame as it could be (the grip moves with it)
+        solve(_Fhand.clone());
+
+        // Pose the bones: each one's world rotation is its anatomical frame out of its rest frame
+        _qa.copy(_Farm).multiply(_qb.copy(this.frames[iArm]).invert());
+        parent.getWorldQuaternion(_qc);
+        upper.quaternion.copy(_qc.invert().multiply(_qa));
+        _qb.copy(_Ffore).multiply(_qc.copy(this.frames[iFore]).invert());
+        lower.quaternion.copy(_qc.copy(_qa).invert().multiply(_qb));
+        _qa.copy(_Fhand).multiply(_qc.copy(this.frames[iHand]).invert());
+        end.quaternion.copy(_qc.copy(_qb).invert().multiply(_qa));
+        upper.updateMatrixWorld(true);
+
+        return {
+            swivel: best.phi,
+            strain: Math.sqrt(best.strain),
+            grip: offsetWorld.copy(offset).multiplyScalar(scale).applyQuaternion(_Fhand).add(_W).clone(),
+            frame: _Fhand.clone(),
+        };
     }
 
     /** Turn a bone so a direction (in the rig's space) becomes another. */

@@ -31,6 +31,9 @@ export const WALK_STYLES = Object.freeze({
 });
 
 const SIDES = ["Left", "Right"];
+
+// The thumb round a grip: closed over the curled fingers (rig.js JOINTS.thumb)
+const GRIP_THUMB = [{ flex: 55, oppose: -10 }, { flex: 35 }, { flex: 25 }];
 const ACCELERATION = 2.5; // metres a second, each second
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -423,17 +426,18 @@ export class Walker {
             // Fingers: relaxed, or closed round a grip
             const grip = hold?.grips;
 
-            for (const finger of ["Index", "Middle", "Ring", "Pinky"]) {
-                const curl = grip ? 78 : style.fingers * (finger === "Index" ? 0.7 : finger === "Pinky" ? 1.25 : 1);
+            ["Index", "Middle", "Ring", "Pinky"].forEach((finger, k) => {
+                const curl = grip ? hold.curl?.[k] ?? 78 : style.fingers * (finger === "Index" ? 0.7 : finger === "Pinky" ? 1.25 : 1);
 
                 for (const joint of [1, 2, 3]) {
                     rig.setAngles(`${side}Hand${finger}${joint}`, { flex: curl * (joint === 1 ? (grip ? 0.95 : 0.8) : grip ? 1.05 : 1) });
                 }
-            }
+            });
 
-            rig.setAngles(`${side}HandThumb1`, { flex: grip ? 25 : 10, oppose: grip ? 40 : 15 });
-            rig.setAngles(`${side}HandThumb2`, { flex: grip ? 45 : style.fingers * 0.5 });
-            rig.setAngles(`${side}HandThumb3`, { flex: grip ? 30 : 0 });
+            // The thumb closed over the fingers round a grip (or as the hold says: a wand's pinched), or resting by the index
+            const thumb = grip ? hold.thumb ?? GRIP_THUMB : [{ flex: 10, oppose: 10 }, { flex: style.fingers * 0.5 }, { flex: 6 }];
+
+            thumb.forEach((angles, k) => rig.setAngles(`${side}HandThumb${k + 1}`, angles));
         });
 
     }

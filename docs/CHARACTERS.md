@@ -301,11 +301,21 @@ over whatever the character was doing and back out at the end. Each key says:
 - **Where the hands are**: the grip, measured from the shoulder in arm lengths, in the
   character's frame (x to its left, y up, z forward, towards whoever it's fighting). The shoulder
   moves as the body twists and leans, so turning into a swing carries the arm round with it.
-- **Which way the weapon points**, and which way its edge faces (a blade's edge, the knuckles, a
-  book's spine). The arm reaches there with two-bone IK and the hand turns so the weapon points
-  that way, whatever the body's size, so a sword swings through where an enemy stands.
-- **The second hand of a two-handed weapon** holds it further down the shaft (the staff, the war
-  hammer), and turns the same way.
+- **How each hand is turned.** Holding something: which way it points, and which way its edge
+  faces (a blade's cutting edge, the knuckles, a book's spine). Empty: which way the palm faces
+  and the fingers point. A key can also ask for the elbow to point a way (an archer's drawing
+  elbow, up behind) and say how the forearm and wrist rest when nothing turns them. A key that
+  leaves a hand's turn or its elbow out lets them ease back to how they'd come naturally; any
+  other value a key leaves out runs on the line between the keys either side that give it.
+- **Which hands it moves.** A hand is reached only from the first key that places it to the last,
+  easing in and out; before and after, the arm is the walk's (or the seat's). Left out of a key in
+  between, the hand keeps on its way (arms stay folded while the head nods).
+- **The fingers' shape**: open, relaxed, cupped, gripping, a fist, pointing, or hooked round a
+  bowstring (and beckoning, the index curled further).
+- **The second hand of a two-handed weapon** grips the shaft too (the staff, the war hammer). A
+  key gives it its own place, and the shaft lies along the line through both. The hand holds it
+  where the item says (`haft`): a quarterstaff's hands about shoulder width apart (30 to 70 cm),
+  a war hammer's rear hand at the end of the handle. It never grips past the end.
 - **The spine, pelvis and hips** as joint angles, and the pelvis's offset (a lunge, a crouch into
   a hammer blow), which the legs bend to follow.
 
@@ -339,6 +349,56 @@ each too, chosen the same way (see [GAME.md](GAME.md), Effects).
 
 On guard (while fighting), each weapon is held ready: the sword upright in front, the staff and
 hammer across the body in both hands, the fists up, the book open.
+
+**Arms and hands, as real ones move** (`Rig.reachArm`). The arms reach where the keys say
+anatomically, whatever the body's size:
+
+- **Every joint in its range.** The shoulder; the elbow, a hinge bending one way, up to 150°; the
+  forearm turning the palm, 80° each way; and the wrist bending and tilting, never twisting. A
+  hand's turn about the forearm goes to the forearm and the rest to the wrist, as far as each
+  goes. A hand wanted turned further points a little otherwise rather than breaking the wrist.
+- **The elbow's swivel.** An arm can reach the same place with its elbow swivelled anywhere round
+  the line from the shoulder to the wrist. It takes the way that strains the joints least and
+  keeps the wrist nearest straight, as people swivel the elbow rather than cock the wrist. It
+  keeps the elbow down and out (or where the key asks), and moves least from the last frame.
+- **Easing in and out.** Actions blend in and out joint by joint: each joint's twist and swing
+  move in straight lines, so a blend between two poses in range stays in range. A plain slerp of
+  the rotations swung elbows up to 34° sideways on the way. An action eases out after its last
+  key (from key time 1.55 at the soonest), so a late key, like the toast's drink, is played in
+  full.
+- **Grips.** Each item sits in the fist as a real grip holds it. A hilt or haft lies across the
+  palm from the index knuckle to the heel of the hand, so a sword's blade leans 38° from the line
+  of the fingers towards the thumb, and tilting the wrist towards the little finger brings it
+  nearer in line with the forearm. A staff's or hammer's haft lies nearly square across the palm,
+  and a wand is pinched along the fingers. The thumb bends about its own axes (it lies turned
+  from the fingers): round a grip or in a fist it closes over the curled fingers. The second
+  hand on a staff or hammer closes round the shaft too. A hand holding something keeps its grip
+  whatever shape a pose gives the hand.
+- **Technique.** The keys follow how people really fight:
+  - A sword's forehand cuts go palm up, the true edge leading, and backhands palm down. Blows land
+    with the arm extended and the elbow a little bent.
+  - A two-handed shaft crosses the forearms at the blow, as a bat does.
+  - The bow is shot side on. The bow arm is straight, its wrist relaxed. A three-finger hook
+    draws the string to an anchor at the jaw, the drawing elbow up at shoulder height behind.
+  - Punches come from a guard by the chin: a straight punch turning palm down, a hook with the
+    elbow level, an uppercut with the palm to the body.
+  - Spells are pushed out with the palm, or lifted in a cupped hand.
+- **Out of the body.** What's held stays out of the body. A staff's or hammer's butt and a bow's
+  limbs pass beside the legs and hips, not through them. A tankard's rim meets the lower lip when
+  drinking, rather than the tankard sitting at the chest. The two-handed keys were fitted over
+  their whole motion, on the hero's build and the default one, to keep them clear while staying
+  as near the original choreography as they could. The war hammer's haft ends 26 cm below the
+  right hand, with the rear hand at its end, as a two-handed hammer is held.
+
+The tests go through every attack, cast, rest and guard, holding what each is done with, a tenth
+of the way at a time and at each key, and check that:
+
+- every elbow, forearm and wrist stays in its range;
+- each shoulder is in range at the key poses (within 5°), and only a little past it (under 20°),
+  briefly, mid-swing;
+- each hand is turned as its keys ask, straining under 35°;
+- the thumb closes over the fingers round a grip, and both fists close round a two-handed shaft;
+- nothing held sinks into the body.
 
 **Reactions** to being hit are functions of time and of where the blow came from (which side,
 front or back), added to whatever pose the character is in, so a flinch during an attack still
@@ -483,7 +543,8 @@ limits in `rig.js`:
 | Elbow | flexion 150; hyperextension 0 in men, 10–15 in women |
 | Forearm | pronation 80, supination 80 |
 | Wrist | flexion 80, extension 70, radial deviation 20, ulnar 30 |
-| Fingers | MCP 90, PIP 100, DIP 90; thumb CMC abduction 70 |
+| Fingers | MCP 90, PIP 100, DIP 90 |
+| Thumb | CMC palmar abduction 70; MCP flexion 50; IP flexion 80 |
 | Hip | flexion 120 (135 in Soucie 2011's men; only about 80 with the knee straight), extension 30, abduction 45, adduction 30, rotation 45 each way |
 | Knee | flexion 135–142, hyperextension 0–10; with the knee bent 90°, rotation 28 external and 13 internal (Mossberg & Smith 1983) |
 | Ankle | dorsiflexion 20, plantarflexion 50; subtalar inversion 20, eversion 10 |
@@ -507,8 +568,14 @@ straight. These aren't modelled yet.
   ([Aristidou & Lasenby 2011](https://www.andreasaristidou.com/publications/papers/FABRIK.pdf)).
   The twist has its own range.
 - **IK.** Analytic two-bone IK (law of cosines, with the bend kept in its plane, or towards a pole
-  given in the upper bone's anatomical frame: forward, for knees) for legs and arms.
+  given in the upper bone's anatomical frame: forward, for knees) for legs. Arms search the
+  elbow's swivel round the shoulder-to-wrist line for the least strained, most natural way
+  (`Rig.reachArm`, above), as arm IK solvers for animation do: the swivel angle is the arm's one
+  free degree of freedom once the hand is placed.
   Three.js's CCDIKSolver clamps Euler angles per joint, which suits chains like tails.
+- **Blending.** Blending two joint rotations by their swing and twist separately, each in a
+  straight line (swing-twist interpolation, as in Allen Chou's article above), keeps a blend
+  inside the joint's limits. A slerp of the whole rotation can leave them.
 
 ### Walking
 
