@@ -124,6 +124,30 @@ export const SOUNDS = {
     swingCleaver: { variants: 3, volume: 0.6, make: swing({ name: "swingCleaver", length: 0.34, from: 450, top: 1900, to: 700, body: 0.35 }) },
     swingKick: { variants: 3, volume: 0.5, make: swing({ name: "swingKick", length: 0.24, from: 520, top: 1700, to: 800, body: 0.3, peak: 0.6 }) },
 
+    // Drawing weapons and putting them away: a blade's ring as it leaves its scabbard, the
+    // click of its hilt going home; something slung off the back, or back on it; fists
+    // clenched, the knuckles cracking
+    unsheathe: {
+        variants: 2,
+        volume: 0.5,
+        make: (random) => add(burst(random, 0.32, "bandpass", (t) => 2600 + 9000 * t, 4, 0.02, 0.2), ring([[3150, 0.25, 0.35], [4730, 0.16, 0.28], [6920, 0.08, 0.2]], 0.6), 0.5, 0.18),
+    },
+    sheathe: {
+        variants: 2,
+        volume: 0.55,
+        make: (random) => add(burst(random, 0.22, "bandpass", (t) => 6000 - 12000 * t, 4, 0.01, 0.16), add(thump(260, 150, 0.08, 0.018), burst(random, 0.02, "highpass", 2500, 0.8, 0.0005, 0.006), 0.6), 1, 0.2),
+    },
+    unsling: {
+        variants: 2,
+        volume: 0.45,
+        make: (random) => add(whoosh(random, { length: 0.3, from: 320, top: 1300, to: 520, peak: 0.45, body: 0.6 }), burst(random, 0.07, "lowpass", 900, 0.8, 0.002, 0.025), 0.6, 0.02),
+    },
+    knuckles: {
+        variants: 2,
+        volume: 0.45,
+        make: (random) => add(add(burst(random, 0.03, "highpass", 3000, 1, 0.0005, 0.008), burst(random, 0.03, "highpass", 2400, 1, 0.0005, 0.008), 0.9, 0.06), add(thump(160, 100, 0.12, 0.04), burst(random, 0.12, "bandpass", 700, 1.5, 0.005, 0.05), 0.8), 0.9, 0.1),
+    },
+
     // Hits
     slash: {
         variants: 3,

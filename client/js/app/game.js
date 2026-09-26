@@ -14,7 +14,7 @@
 // through a door or up the stairs, the screen dips to black and comes up on the other side.
 
 import * as THREE from "three";
-import { FALL_LANDS, REACTIONS } from "../characters/actions.js";
+import { DRAWS, FALL_LANDS, REACTIONS } from "../characters/actions.js";
 import { Character } from "../characters/character.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
 import { Battle, hostile, STEP_MS, TALK_REACH } from "../core/battle.js";
@@ -39,10 +39,23 @@ import { ACTIONS, ActionWheel, directionOf } from "./wheel.js";
 /** What every new character wears; their weapon (and a bow's quiver) are added to it. */
 export const STARTING_OUTFIT = Object.freeze(["tunic", "bracers", "breeches", "boots"]);
 
-/** Everything a character with a starting weapon wears and carries (EQUIPMENT ids). */
-export function heroEquipment(weapon) {
-    return [...STARTING_OUTFIT, ...WEAPONS[weapon].equipment];
+/**
+ * Everything a character with a starting weapon wears and carries (EQUIPMENT ids): in spiked
+ * boots (`boots`, or the boots on their own), instead of leather ones.
+ */
+export function heroEquipment(weapon, boots = false) {
+    const kicks = boots || weapon === "boots";
+
+    return [...STARTING_OUTFIT.filter((id) => !(kicks && id === "boots")), ...WEAPONS[weapon].equipment, ...(kicks && weapon !== "boots" ? WEAPONS.boots.equipment : [])];
 }
+
+/** How a character holds its weapon to fight (actions.js GUARDS, DRAWS), for its WEAPONS key. */
+export const guardOf = (weapon) => WEAPONS[weapon].attacks[0].animation;
+
+// The sound of drawing each kind of weapon and putting it away (at the moment the hand takes it
+// or lets it go): a blade from its scabbard, something slung off the back or from a belt, fists
+// clenched
+const DRAW_SOUNDS = { sword: ["unsheathe", "sheathe"], punch: ["knuckles", null], kick: ["knuckles", null] };
 
 // The orc, and what it fights with
 const ORC_WEAPON = "cleaver";
@@ -239,17 +252,20 @@ export class Game {
 
         // The player
         const hairDetail = view.quality.hair;
-        const hero = await time("hero", () => new Character(kit, { shape: this.hero.shape, look: this.hero.look, equipment: heroEquipment(this.hero.weapon), hairDetail }));
+        const hero = await time("hero", () => new Character(kit, { shape: this.hero.shape, look: this.hero.look, equipment: heroEquipment(this.hero.weapon, this.hero.boots), hairDetail }));
 
-        this.#addAvatar("player", hero, { walk: "natural", guard: WEAPONS[this.hero.weapon].attacks[0].animation });
-        this.battle.add({ id: "player", kind: "player", name: this.hero.name, weapon: this.hero.weapon, team: "town", square: world.spawns.player });
+        // (Weapons put away to start with: drawn for a fight)
+        hero.sheathe(true);
+        this.#addAvatar("player", hero, { walk: "natural", guard: guardOf(this.hero.weapon) });
+        this.battle.add({ id: "player", kind: "player", name: this.hero.name, weapon: this.hero.weapon, boots: Boolean(this.hero.boots), team: "town", square: world.spawns.player });
         step("Waking the orc");
 
         // The orc
         const preset = PRESETS.orc;
         const orc = await time("orc", () => new Character(kit, { shape: preset.shape, look: preset.look, equipment: [...preset.equipment, ...WEAPONS[ORC_WEAPON].equipment], hairDetail }));
 
-        this.#addAvatar("orc", orc, { walk: preset.walk, guard: WEAPONS[ORC_WEAPON].attacks[0].animation });
+        orc.sheathe(true);
+        this.#addAvatar("orc", orc, { walk: preset.walk, guard: guardOf(ORC_WEAPON) });
         this.battle.add({ id: "orc", kind: "orc", name: "Orc", weapon: ORC_WEAPON, team: "orcs", square: world.spawns.orc, ai: "patrol", patrol: world.patrol });
 
         // The tavern's folk, going about their business (no one fights them)
@@ -534,7 +550,7 @@ export class Game {
             const x = previous.x + (actor.x - previous.x) * alpha;
             const z = previous.y + (actor.y - previous.y) * alpha;
 
-            avatar.actions.setGuard(!actor.dead && this.#fighting(actor));
+            avatar.actions.setGuard(!actor.dead && actor.armed && this.#fighting(actor));
             avatar.update(dt, ox + x, oz + z, actor.facing, !actor.attack);
             this.#updateBody(actor, avatar, dt);
             hud.setStamina(actor.id, actor.stamina, actor.maxStamina);
@@ -1065,10 +1081,22 @@ export class Game {
             const avatar = this.avatars.get(event.id);
 
             switch (event.type) {
-                case "attack":
-                    avatar.actions.startAttack(event.animation, { hitAt: event.hitAt / 1000, duration: event.duration / 1000 });
+                case "attack": {
+                    const actor = battle.actor(event.id);
+
+                    // (Its weapon in hand, whatever it looked like; kicking with one, the hands
+                    // stay on guard)
+                    if (avatar.character.sheathed && !avatar.actions.drawing) {
+                        avatar.character.sheathe(false);
+                    }
+
+                    avatar.actions.startAttack(event.animation, { hitAt: event.hitAt / 1000, duration: event.duration / 1000, arms: event.animation !== "kick" || ["boots", "gauntlets"].includes(actor.weapon) });
                     this.lastAttack.set(event.id, battle.time);
                     this.sound?.attack(event.animation, avatar.object.position, event.hitAt / 1000);
+                    break;
+                }
+                case "draw":
+                    this.#draw(event, avatar);
                     break;
                 case "projectile": {
                     const target = this.avatars.get(event.target);
@@ -1191,6 +1219,7 @@ export class Game {
                     const actor = battle.actor(event.id);
 
                     avatar.actions.revive();
+                    avatar.character.sheathe(true);
                     this.#place(actor);
                     avatar.deadFor = 0;
 
@@ -1214,6 +1243,28 @@ export class Game {
                 default:
                     break;
             }
+        }
+    }
+
+    // Drawing a weapon, or putting it away (battle.js): its flourish and sound on the player's map,
+    // else just done
+    #draw({ id, on }, avatar) {
+        const actor = this.battle.actor(id);
+        const guard = guardOf(actor.weapon);
+
+        if (actor.map !== this.mapId || actor.dead) {
+            avatar.actions.stopResting();
+            avatar.character.sheathe(!on);
+
+            return;
+        }
+
+        avatar.actions.draw(guard, on);
+
+        const sound = (DRAW_SOUNDS[guard] ?? ["unsling", "unsling"])[on ? 0 : 1];
+
+        if (sound) {
+            this.sound?.play(sound, { at: avatar.object.position, delay: DRAWS[guard]?.[on ? "draw" : "sheathe"].hitAt ?? 0 });
         }
     }
 

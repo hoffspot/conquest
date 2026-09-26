@@ -4,7 +4,8 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { gunzipSync } from "node:zlib";
 import * as THREE from "three";
-import { Actions, ATTACKS, GUARDS, REACTIONS, RESTS } from "../client/js/characters/actions.js";
+import { Actions, ATTACKS, DRAWS, GUARDS, REACTIONS, RESTS } from "../client/js/characters/actions.js";
+import { Character, placed } from "../client/js/characters/character.js";
 import { HumanData } from "../client/js/characters/body.js";
 import { Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
 import { PRESETS } from "../client/js/characters/presets.js";
@@ -43,9 +44,15 @@ function figure(shape = {}) {
 
 // A figure that walks (standing still) with actions layered over it, holding things (items'
 // ids) as a Character holds them: each item's model on its hand's socket, turned in it, and the
-// hand's hold (equipment.js)
+// hand's hold (equipment.js); and putting its weapons away as a Character does
 function fighter(shape, held = []) {
     const character = figure(shape);
+
+    character.equipment = new Map();
+
+    for (const method of ["sheathe", "sheathPose", "settle"]) {
+        character[method] = Character.prototype[method].bind(character);
+    }
 
     for (const id of held) {
         const item = ITEMS[id];
@@ -63,6 +70,13 @@ function fighter(shape, held = []) {
         character.rig.bone(socket.bone).add(model);
         character.items.push(model);
         character.holds[/left|Left/.test(item.socket) ? "Left" : "Right"] = { ...item.hold, grips: item.grips };
+        character.equipment.set(item.slot, id);
+        model.userData.home = { bone: socket.bone, position: model.position.clone(), quaternion: model.quaternion.clone() };
+        model.userData.hand = /^(left|right)Hand$/.test(item.socket) ? (item.socket.startsWith("left") ? "Left" : "Right") : null;
+
+        if (item.sheath && !item.sheath.worn) {
+            model.userData.sheath = placed(socketOn(character, item.sheath.socket), item.sheath);
+        }
     }
 
     const walker = new Walker(character, WALK_STYLES.natural);
@@ -564,6 +578,20 @@ describe("arms and hands (actions.js, Rig.reachArm)", () => {
             all.push({ label: `${name} guard`, held: HELD[name], guard: name, keys: [], hitAt: 0.5, duration: 1, begin: () => {} });
         }
 
+        // (Drawing each weapon and putting it away: held as it's drawn, the hands reaching for it
+        // where it's put away as they would for its place, `at`)
+        for (const [name, { draw, sheathe }] of Object.entries(DRAWS)) {
+            for (const [on, how] of [[true, draw], [false, sheathe]]) {
+                all.push({
+                    label: `${on ? "drawing" : "putting away"} the ${name}`, held: HELD[name], guard: on ? null : name, keys: how.keys, hitAt: how.hitAt, duration: how.duration,
+                    begin: (actions) => {
+                        actions.character.sheathe(on);
+                        actions.draw(name, on);
+                    },
+                });
+            }
+        }
+
         return all;
     }
 
@@ -621,12 +649,17 @@ describe("arms and hands (actions.js, Rig.reachArm)", () => {
 
                     assert.ok(beyond(character.rig, `${side}ForeArm`) < 1, `${at}: the elbow and forearm in range`);
                     assert.ok(beyond(character.rig, `${side}Hand`) < 1, `${at}: the wrist in range`);
-                    assert.ok(shoulder < (own ? 5 : 20), `${at}: the shoulder ${shoulder.toFixed(0)} degrees past its range`);
+                    // (Reaching for a weapon where it's put away, it then settles into the hand
+                    // the rest of the way: the shoulder may go a little further, the hand needn't
+                    // be turned exactly as asked)
+                    const reaching = action.keys.find(([time]) => time === key)?.[1][side.toLowerCase()]?.sheath;
+
+                    assert.ok(shoulder < (own && !reaching ? 5 : 20), `${at}: the shoulder ${shoulder.toFixed(0)} degrees past its range`);
                     shoulders = Math.max(shoulders, shoulder);
 
-                    if (own) {
-                        // (Strain: how far past their ranges the joints would have to go to reach
-                        // and turn the hand exactly as asked)
+                    // (Strain: how far past their ranges the joints would have to go to reach
+                    // and turn the hand exactly as asked)
+                    if (own && !reaching) {
                         assert.ok(strain < 35, `${at}: strained ${strain.toFixed(0)} degrees`);
                     }
                 }

@@ -26,9 +26,11 @@ export const LOOK_DEFAULTS = Object.freeze({
 // The parts of the base mesh, in the order they're drawn (with a material each)
 const DRAWN = ["body", "eyes", "lashes"];
 
-// An item's place on a socket, from where its grip goes (`at`) and which ways its point and edge
-// face (equipment.js SHEATHS): { bone, position, quaternion } in the bone's frame
-function placed(socket, { at = [0, 0, 0], point = [0, 1, 0], edge = [0, 0, 1] }) {
+/**
+ * An item's place on a socket, from where its grip goes (`at`) and which ways its point and edge
+ * face (equipment.js SHEATHS): { bone, position, quaternion } in the bone's frame.
+ */
+export function placed(socket, { at = [0, 0, 0], point = [0, 1, 0], edge = [0, 0, 1] }) {
     const y = new THREE.Vector3(...point).normalize();
     const z = new THREE.Vector3(...edge).addScaledVector(y, -new THREE.Vector3(...edge).dot(y)).normalize();
     const x = new THREE.Vector3().crossVectors(y, z);

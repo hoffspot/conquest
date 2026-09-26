@@ -709,6 +709,15 @@ function attack() {
     }
 }
 
+/** Draw the weapon held, with its flourish (actions.js DRAWS), or put it away (`on`: false). */
+function draw(on) {
+    const weapon = WEAPONS[fight.weapon];
+
+    if (weapon) {
+        actions.draw(weapon.attacks[0].animation, on);
+    }
+}
+
 /** Rest as the chosen role does (sitting for a patron's), in the way chosen. */
 function rest() {
     actions.setSeated(Boolean(ROLES[fight.role].seated));
@@ -802,7 +811,7 @@ function motionTab() {
             })),
         group("Stride", chart, element("p", { class: "note", id: "phasereadout" })),
         group("Fighting",
-            element("p", { class: "note" }, "The game's attacks, flinches and falls, layered over the walk. Each weapon attacks five ways, never the same twice running; an attack's blow lands a set time in (the weapon's), and each kind of blow has its own flinch."),
+            element("p", { class: "note" }, "The game's attacks, flinches and falls, layered over the walk. Each weapon attacks five ways, never the same twice running; an attack's blow lands a set time in (the weapon's), and each kind of blow has its own flinch. Weapons are drawn with a flourish, and put away on the body: a sword in its scabbard, a staff, hammer or bow on the back."),
             select("Weapon", [["", "None"], ...Object.entries(WEAPONS).map(([id, { label }]) => [id, label])], { get: () => fight.weapon, set: (value) => arm(value) }),
             check("On guard", {
                 get: () => fight.guard,
@@ -820,6 +829,8 @@ function motionTab() {
             select("Blow", Object.keys(REACTIONS).map((name) => [name, name[0].toUpperCase() + name.slice(1)]), { get: () => fight.reaction, set: (value) => (fight.reaction = value) }),
             slider("Slow motion", { min: 0.1, max: 1, step: 0.05, format: (value) => `${Math.round(value * 100)}%`, get: () => fight.slow, set: (value) => (fight.slow = value) }),
             element("div", { class: "buttons" },
+                element("button", { type: "button", class: "button", onclick: () => draw(true) }, "Draw"),
+                element("button", { type: "button", class: "button", onclick: () => draw(false) }, "Put away"),
                 element("button", { type: "button", class: "button", onclick: attack }, "Attack"),
                 element("button", { type: "button", class: "button", onclick: () => actions.react(fight.reaction, { from: 0 }) }, "Be hit"),
                 element("button", { type: "button", class: "button", onclick: () => actions.die({ from: 0 }) }, "Fall"),

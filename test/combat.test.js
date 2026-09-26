@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { Battle, KINDS, SIGHT, SPRINT, STAMINA_DRAIN, STAMINA_RECOVERY, STEP_MS } from "../client/js/core/battle.js";
+import { Battle, DRAW_MS, KINDS, SHEATHE_AFTER_MS, SHEATHE_MS, SIGHT, SPRINT, STAMINA_DRAIN, STAMINA_RECOVERY, STEP_MS } from "../client/js/core/battle.js";
 import { createRandom } from "../client/js/core/random.js";
 import { CAST_FAILURES, SPELL_COOLDOWN, SPELLS } from "../client/js/core/spells.js";
 import { armsOf, averageDamage, chooseAttack, inReach, longestReach, MELEE_REACH, rollDamage, STARTING_WEAPONS, WEAPONS } from "../client/js/core/weapons.js";
@@ -215,6 +215,70 @@ describe("the battle (battle.js)", () => {
 
         assert.ok(battle.actor("player").boots);
         assert.ok(hits.length > 0 && hits.every((hit) => hit.attack === "kick" && hit.reaction === "kick" && hit.damage >= 3 && hit.damage <= 7));
+    });
+
+    it("starts with weapons put away, draws them when an enemy comes into sight, and can't strike until they're out", () => {
+        const battle = new Battle(open(20, 10), { seed: 4 });
+
+        battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [2, 5] });
+        battle.add({ id: "orc", kind: "orc", weapon: "cleaver", team: "orcs", square: [9, 5], ai: "patrol", patrol: [[9, 5], [9, 5]] });
+
+        assert.ok(!battle.actor("player").armed && !battle.actor("orc").armed);
+
+        const events = run(battle, 8000);
+        const draws = events.filter((event) => event.type === "draw");
+
+        for (const id of ["player", "orc"]) {
+            const drew = draws.find((event) => event.id === id);
+            const first = events.find((event) => event.type === "attack" && event.id === id);
+
+            assert.ok(drew?.on, `${id} draws`);
+            assert.ok(drew.time <= STEP_MS * 2, `${id} draws as soon as it sees the other`);
+            assert.ok(first && first.time >= drew.time + DRAW_MS, `${id} strikes once it's drawn`);
+            assert.ok(battle.actor(id).armed, `${id} is armed`);
+        }
+    });
+
+    it("doesn't draw for an enemy it can't see, unless it's told to fight it (and then the enemy it's after draws too)", () => {
+        const battle = new Battle(worldOf([
+            ".........#..........",
+            ".........#..........",
+            ".........#..........",
+            ".........#..........",
+            ".........#..........",
+        ]), { seed: 4 });
+
+        battle.add({ id: "player", kind: "player", weapon: "hammer", team: "hero", square: [3, 2] });
+        battle.add({ id: "orc", kind: "orc", weapon: "cleaver", team: "orcs", square: [15, 2], ai: "patrol", patrol: [[15, 2], [15, 2]] });
+
+        assert.ok(!run(battle, 2000).some((event) => event.type === "draw"), "a wall between them");
+
+        battle.command("player", { type: "engage", target: "orc" });
+
+        const draws = run(battle, 500).filter((event) => event.type === "draw");
+
+        assert.deepEqual(draws.map(({ id, on }) => [id, on]), [["player", true], ["orc", true]]);
+    });
+
+    it("puts its weapon away a while after the fight, once no enemy's in sight or after it", () => {
+        const battle = new Battle(open(20, 10), { seed: 4 });
+
+        battle.add({ id: "player", kind: "player", weapon: "bow", team: "hero", square: [2, 5] });
+        battle.add({ id: "orc", kind: "orc", weapon: "cleaver", team: "orcs", square: [14, 5], ai: "patrol", patrol: [[14, 5], [14, 5]] });
+        run(battle, 1000);
+        assert.ok(battle.actor("player").armed);
+
+        // (The orc gone, for good)
+        const gone = battle.time;
+
+        Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        const events = run(battle, SHEATHE_AFTER_MS + SHEATHE_MS + 1000);
+        const away = events.find((event) => event.type === "draw" && event.id === "player");
+
+        assert.equal(away?.on, false);
+        assert.ok(away.time >= gone + SHEATHE_AFTER_MS - STEP_MS && away.time <= gone + SHEATHE_AFTER_MS + 2 * STEP_MS, String(away.time - gone));
+        assert.ok(!battle.actor("player").armed && !battle.actor("player").drawing);
     });
 
     it("kills at no hit points, and brings the dead back where they started", () => {
