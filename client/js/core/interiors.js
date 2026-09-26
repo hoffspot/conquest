@@ -182,15 +182,16 @@ export function tavernFloors() {
 }
 
 /**
- * The tavern's folk: [{ id, name, preset (characters/presets.js FOLK), map, square, facing,
- * routine }], each to add to the battle as one of the neutral folk (battle.js #routine). The
- * barkeep goes between the bar and the barrels behind it, drawing ale; two serving wenches go
- * between the bar and the tables, putting tankards down; patrons sit on the benches, raising
- * their tankards now and then; upstairs, the madam keeps her counter.
+ * The tavern's folk: [{ id, title (what they are), role (roles.js ROLES: how they pass the time),
+ * sex ("f" or "m"), preset (characters/presets.js FOLK), map, square, facing, routine }], each to add to the battle
+ * as one of the neutral folk (battle.js #routine). The barkeep goes between the bar and the
+ * barrels behind it, drawing ale; two serving wenches go between the bar and the tables, putting
+ * tankards down; patrons sit on the benches (raising their tankards, drinking, laughing: their
+ * rests); upstairs, the madam keeps her counter. (Their names are the world's: world.js.)
  */
 export function tavernFolk() {
     const { s, e, n, w } = FACING;
-    const seated = (id, name, preset, square, facing, every) => ({ id, name, preset, map: "taproom", square, facing, routine: { seated: true, act: "toast", every } });
+    const seated = (id, title, sex, preset, square, facing) => ({ id, title, role: "patron", sex, preset, map: "taproom", square, facing, routine: { seated: true } });
     const serving = [
         { square: [9, 3], facing: e, group: "bar" },
         { square: [9, 5], facing: e, group: "bar" },
@@ -205,7 +206,9 @@ export function tavernFolk() {
     return [
         {
             id: "barkeep",
-            name: "Barkeep",
+            title: "Barkeep",
+            role: "barkeep",
+            sex: "m",
             preset: "barkeep",
             map: "taproom",
             square: [11, 4],
@@ -222,15 +225,17 @@ export function tavernFolk() {
                 ],
             },
         },
-        { id: "wench", name: "Serving wench", preset: "wench", map: "taproom", square: [9, 4], facing: e, routine: { order: "alternate", wait: [1500, 3500], stops: serving } },
-        { id: "wench2", name: "Serving wench", preset: "wench2", map: "taproom", square: [5, 5], facing: s, routine: { order: "alternate", wait: [1500, 3500], stops: [...serving.slice(2), ...serving.slice(0, 2)] } },
-        seated("drinker", "Drinker", "drinker", [3, 2], s, [5000, 13000]),
-        seated("alewife", "Alewife", "alewife", [4, 4], n, [6000, 15000]),
-        seated("farmer", "Farmer", "farmer", [6, 6], s, [5500, 14000]),
-        seated("greybeard", "Greybeard", "greybeard", [7, 8], n, [7000, 16000]),
+        { id: "wench", title: "Serving wench", role: "barmaid", sex: "f", preset: "wench", map: "taproom", square: [9, 4], facing: e, routine: { order: "alternate", wait: [1500, 3500], stops: serving } },
+        { id: "wench2", title: "Serving wench", role: "barmaid", sex: "f", preset: "wench2", map: "taproom", square: [5, 5], facing: s, routine: { order: "alternate", wait: [1500, 3500], stops: [...serving.slice(2), ...serving.slice(0, 2)] } },
+        seated("drinker", "Drinker", "m", "drinker", [3, 2], s),
+        seated("alewife", "Alewife", "f", "alewife", [4, 4], n),
+        seated("farmer", "Farmer", "m", "farmer", [6, 6], s),
+        seated("greybeard", "Greybeard", "m", "greybeard", [7, 8], n),
         {
             id: "madam",
-            name: "The madam",
+            title: "Madam",
+            role: "madam",
+            sex: "f",
             preset: "madam",
             map: "upstairs",
             square: [3, 3],

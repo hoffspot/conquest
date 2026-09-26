@@ -35,13 +35,19 @@
 // damage and takes it off the target's hit points; at none, the target dies, and comes back to
 // life at its starting point a while later (KINDS: respawn).
 //
+// The folk (roles.js) rest now and then while the player can see them: every several seconds
+// (REST_EVERY) one of their role's five rests, never the same twice running, staying put until
+// it's done (a "rest" event: { id, role, rest }).
+//
 // Nothing here draws anything: every step returns events ("attack", "hit", "death"...) for the
 // interface to show. Pure JavaScript with seeded random numbers, no DOM.
 
 import { routeBetween } from "./interiors.js";
 import { findPath, lineAhead } from "./pathfinding.js";
 import { createRandom } from "./random.js";
+import { REST_EVERY, ROLES } from "./roles.js";
 import { rollHeal, SPELL_COOLDOWN, SPELLS } from "./spells.js";
+import { Variety } from "./variety.js";
 import { chooseAttack, distanceBetween, longestReach, rollDamage, WEAPONS } from "./weapons.js";
 import { nearestFree } from "./world.js";
 
@@ -94,6 +100,11 @@ const LINK_REACH = 1;
 // One of the folk that can't get to where it's going for this long (ms) goes somewhere else
 const ROUTINE_GIVE_UP_MS = 8000;
 
+// The folk don't rest until this long (ms) after doing something at a stop (pouring, serving),
+// nor straight away when the player first sees them (a while between these, ms)
+const REST_AFTER_ACT_MS = 3500;
+const REST_WHEN_SEEN_MS = [800, 3000];
+
 const same = (a, b) => a !== null && b !== null && a[0] === b[0] && a[1] === b[1];
 
 export class Battle {
@@ -125,9 +136,9 @@ export class Battle {
      * ([x, y]), map (a map's id: "town" to start with), ai ("patrol" for enemies, "routine" for
      * the folk), patrol ([[x, y], [x, y]], on its map), neutral (one of the folk: no one fights
      * them, and they fight no one), routine (the folk's: see #routine), facing }. It comes back
-     * to life where it's added.
+     * to life where it's added. The folk have a `role` (roles.js ROLES: how they rest).
      */
-    add({ id, kind, name = kind, weapon = null, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, facing = 0 }) {
+    add({ id, kind, name = kind, weapon = null, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, facing = 0 }) {
         const type = KINDS[kind];
         const actor = {
             id,
@@ -166,10 +177,15 @@ export class Battle {
             facing,
             neutral,
             routine,
+            role,
             // The folk's routine: the stop it's making for, whether it's there, and since when
             stop: 0,
             arrived: false,
             stopSince: 0,
+            // Resting (the folk): when it may next, until when it's at it, and which it did last
+            restAt: 0,
+            restingUntil: 0,
+            restVariety: new Variety(() => this.chance.next()),
             order: null,
             attack: null,
             readyAt: 0,
@@ -451,7 +467,7 @@ export class Battle {
         actor.walkPace = actor.speed;
 
         if (routine.seated) {
-            if (this.time >= actor.waitUntil) {
+            if (routine.act && this.time >= actor.waitUntil) {
                 // (Not straight away: a while after sitting down)
                 if (actor.waitUntil > 0) {
                     this.#emit("act", { id: actor.id, act: routine.act });
@@ -459,6 +475,8 @@ export class Battle {
 
                 actor.waitUntil = this.time + between(routine.every);
             }
+
+            this.#rest(actor);
 
             return;
         }
@@ -480,8 +498,14 @@ export class Battle {
 
             if (stop.act) {
                 this.#emit("act", { id: actor.id, act: stop.act });
+                actor.restAt = Math.max(actor.restAt, this.time + REST_AFTER_ACT_MS);
             }
 
+            return;
+        }
+
+        // Waiting here, resting now and then while seen (and not going on until it's done)
+        if (there && (this.#rest(actor) || this.time < actor.restingUntil)) {
             return;
         }
 
@@ -498,6 +522,33 @@ export class Battle {
         if (!there && (!same(actor.pathGoal, stop.square) || this.time - actor.lastPathAt >= REPATH_MS)) {
             this.#pathTo(actor, stop.square);
         }
+    }
+
+    /**
+     * One of the folk rests (one of its role's rests, never the same twice running) if it's time
+     * to and the player can see it: returns whether it started one. Unseen, it waits a moment
+     * after it's first seen again.
+     */
+    #rest(actor) {
+        const rests = ROLES[actor.role]?.rests;
+
+        if (!rests || this.time < actor.restAt) {
+            return false;
+        }
+
+        if (!this.actors.some((other) => other.kind === "player" && !other.dead && this.canSee(other, actor))) {
+            actor.restAt = this.time + REST_WHEN_SEEN_MS[0] + this.chance.next() * (REST_WHEN_SEEN_MS[1] - REST_WHEN_SEEN_MS[0]);
+
+            return false;
+        }
+
+        const rest = actor.restVariety.next("rest", rests.length);
+
+        actor.restingUntil = this.time + rests[rest].duration * 1000;
+        actor.restAt = actor.restingUntil + REST_EVERY[0] + this.chance.next() * (REST_EVERY[1] - REST_EVERY[0]);
+        this.#emit("rest", { id: actor.id, role: actor.role, rest });
+
+        return true;
     }
 
     // The stop after this one: the next in turn, or one of another group at random

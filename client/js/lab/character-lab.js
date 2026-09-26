@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { Actions, ATTACKS, REACTIONS } from "../characters/actions.js";
+import { ROLES } from "../core/roles.js";
 import { ClipPlayer, parseBVH, retarget } from "../characters/bvh.js";
 import { Character } from "../characters/character.js";
 import { DETAILS } from "../characters/details.js";
@@ -137,8 +138,9 @@ const walker = new Walker(character, WALK_STYLES[state.walk]);
 
 // Fighting: attacks, reactions and falls, layered over the walk (actions.js)
 const actions = new Actions(character);
-// (Which of an attack's five ways: `way`, or null for any but the last, as in the game)
-const fight = { weapon: params.get("weapon") ?? "", way: params.has("way") ? Number(params.get("way")) : null, reaction: params.get("reaction") ?? "slash", repeat: false, guard: false, slow: 1, at: params.has("at") ? Number(params.get("at")) : null, action: params.get("action") ?? "" };
+// (Which of an attack's five ways: `way`, or null for any but the last, as in the game; and how
+// to rest: a role's, roles.js)
+const fight = { weapon: params.get("weapon") ?? "", way: params.has("way") ? Number(params.get("way")) : null, reaction: params.get("reaction") ?? "slash", repeat: false, guard: false, slow: 1, at: params.has("at") ? Number(params.get("at")) : null, action: params.get("action") ?? "", role: ROLES[params.get("rest")] ? params.get("rest") : "adventurer" };
 
 walker.overlay = (dt) => actions.apply(dt * fight.slow);
 walker.afterPose = () => actions.place();
@@ -707,6 +709,18 @@ function attack() {
     }
 }
 
+/** Rest as the chosen role does (sitting for a patron's), in the way chosen. */
+function rest() {
+    actions.setSeated(Boolean(ROLES[fight.role].seated));
+
+    const way = actions.rest(fight.role, { variant: fight.way === null ? null : Math.min(4, fight.way) });
+    const readout = document.getElementById("restreadout");
+
+    if (readout && way !== null) {
+        readout.textContent = `${way + 1}: ${ROLES[fight.role].rests[way].name}`;
+    }
+}
+
 // Which way that attack was
 function showWay(animation, way) {
     const readout = document.getElementById("wayreadout");
@@ -729,6 +743,12 @@ function freeze(action, at) {
         const elapsed = at <= 1 ? at * (hitAt / 1000) : hitAt / 1000 + (at - 1) * ((duration - hitAt) / 1000);
 
         showWay(animation, actions.startAttack(animation, { hitAt: hitAt / 1000, duration: duration / 1000, variant: fight.way ?? 0 }));
+        actions.attack.start = actions.time - elapsed;
+    } else if (action === "rest") {
+        const { hitAt, duration } = ROLES[fight.role].rests[Math.min(4, fight.way ?? 0)];
+        const elapsed = at <= 1 ? at * hitAt : hitAt + (at - 1) * (duration - hitAt);
+
+        rest();
         actions.attack.start = actions.time - elapsed;
     } else if (REACTIONS[action]) {
         actions.react(action, { from: 0 });
@@ -804,6 +824,19 @@ function motionTab() {
                 element("button", { type: "button", class: "button", onclick: () => actions.react(fight.reaction, { from: 0 }) }, "Be hit"),
                 element("button", { type: "button", class: "button", onclick: () => actions.die({ from: 0 }) }, "Fall"),
                 element("button", { type: "button", class: "button", onclick: () => actions.revive() }, "Get up"))),
+        group("Resting",
+            element("p", { class: "note" }, "How each class of character passes the time: five ways each, played every several seconds while the player can see them (the player's own after standing still a while). The way is the one chosen above."),
+            select("Class", Object.entries(ROLES).map(([id, { title }]) => [id, title]), {
+                get: () => fight.role,
+                set: (value) => {
+                    fight.role = value;
+                    actions.setSeated(false);
+                },
+            }),
+            element("p", { class: "note", id: "restreadout" }),
+            element("div", { class: "buttons" },
+                element("button", { type: "button", class: "button", onclick: rest }, "Rest"),
+                element("button", { type: "button", class: "button", onclick: () => actions.setSeated(false) }, "Stand up"))),
         group("View",
             check("Skeleton", {
                 get: () => state.motion.skeleton,
@@ -913,9 +946,10 @@ function drawGait() {
     }
 }
 
-window.lab = { THREE, scene, camera, controls, renderer, character, kit, walker, actions, fight, arm, attack, freeze, state, step, change, choosePreset, setCamera, chooseClip, get player() { return player; }, PRESETS, WALK_STYLES, ready: true };
+window.lab = { THREE, scene, camera, controls, renderer, character, kit, walker, actions, fight, arm, attack, rest, freeze, state, step, change, choosePreset, setCamera, chooseClip, get player() { return player; }, PRESETS, WALK_STYLES, ready: true };
 
-// ?weapon=sword&action=attack&at=1 shows one moment of an action, frozen (for pictures)
+// ?weapon=sword&action=attack&at=1 shows one moment of an action, frozen (for pictures);
+// ?action=rest&rest=barkeep&way=2&at=1 one of a class's rests
 if (fight.weapon) {
     arm(fight.weapon);
 }

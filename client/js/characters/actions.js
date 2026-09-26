@@ -4,7 +4,9 @@
 //    and from the side it came from;
 //  - falling down dead, and lying there;
 //  - the tavern's folk: sitting on a bench, raising a tankard and drinking from it, putting one
-//    down on a table, and drawing ale from a barrel.
+//    down on a table, and drawing ale from a barrel;
+//  - resting: how each role (roles.js: the barkeep, a serving wench, a patron, the madam, the
+//    player's adventurer) passes the time, five ways each (RESTS).
 //
 // An attack is a few key poses timed round the moment that matters: key time 1 is when the blow
 // lands (or the arrow or spell is let go: the weapon's hitAt), and 2 is when the attack ends (its
@@ -31,6 +33,7 @@
 // the hands.
 
 import * as THREE from "three";
+import { ROLES } from "../core/roles.js";
 import { Variety } from "../core/variety.js";
 import { socketOn } from "./equipment.js";
 import { jointRotation } from "./rig.js";
@@ -451,6 +454,186 @@ export const ATTACKS = Object.freeze({
     },
 });
 
+// --- Resting ---
+
+// A hand on something in front (a table's top, the bar, the counter: `y` arm lengths below the
+// shoulder, `z` in front), palm down
+const flat = (x, y, z, side = 1) => ({ at: [x, y, z], point: [side, 0, 0.15], edge: [0, -0.15, 1] });
+
+// Where the toast starts from: the tankard held before the chest
+const TOASTING = { right: tankard, ...spine({}), Head: { flex: 0 } };
+
+// Arms folded over the chest: each hand tucked under the other arm, the right forearm over the left
+const FOLDED = { right: { at: [0.74, -0.36, 0.24], point: [0, 1, 0], edge: [1, 0, 0] }, left: { at: [-0.74, -0.44, 0.22], point: [0, 1, 0], edge: [-1, 0, 0] } };
+
+/**
+ * How each role passes the time (roles.js ROLES: the rests' names and timings, in the same order):
+ * five ways each, key 1 at the moment that matters, starting and ending in the pose it rests in.
+ * Seated patrons rest sitting (the legs are the bench's), the others standing.
+ */
+export const RESTS = Object.freeze({
+    barkeep: [
+        variant("wiping the bar", { ...spine({}) },
+            // The right hand going round and round on the bar, leaning on the left
+            [0.35, { right: flat(0.2, -0.66, 0.72), left: flat(-0.12, -0.68, 0.62, -1), ...spine({ flex: 14 }) }],
+            [0.6, { right: flat(0.36, -0.66, 0.62) }],
+            [0.8, { right: flat(0.22, -0.66, 0.52) }],
+            [1, { right: flat(0.06, -0.66, 0.62) }],
+            [1.2, { right: flat(0.2, -0.66, 0.74) }],
+            [1.4, { right: flat(0.36, -0.66, 0.62) }],
+            [1.6, { right: flat(0.2, -0.66, 0.54), left: flat(-0.12, -0.68, 0.62, -1), ...spine({ flex: 14 }) }]),
+        variant("stroking his beard", { ...spine({}), Head: { flex: 0 } },
+            // The hand to the chin, stroking the beard down, twice, thinking
+            [0.5, { right: { at: [0.34, 0.14, 0.3] }, Head: { flex: -6, bend: -4 } }],
+            [0.75, { right: { at: [0.34, -0.02, 0.33] } }],
+            [1, { right: { at: [0.34, 0.14, 0.3] } }],
+            [1.3, { right: { at: [0.34, -0.03, 0.33] } }],
+            [1.6, { right: { at: [0.34, 0.1, 0.31] }, Head: { flex: -4, bend: -2 } }]),
+        variant("leaning on the bar", { ...spine({}), Head: { flex: 0 }, offset: [0, 0, 0] },
+            // Both hands on the bar, wide apart, leaning on them and looking out over the room
+            [0.5, { right: flat(-0.04, -0.62, 0.76), left: flat(0.04, -0.62, 0.76, -1), ...spine({ flex: 30 }), Head: { flex: -20 }, offset: [0, -0.03, 0.07] }],
+            [1.6, { right: flat(-0.04, -0.62, 0.76), left: flat(0.04, -0.62, 0.76, -1), ...spine({ flex: 32, turn: 6 }), Head: { flex: -20, turn: 12 }, offset: [0, -0.03, 0.07] }]),
+        variant("arms folded", { ...spine({}), Head: { flex: 0 } },
+            // Arms folded over the chest, nodding at something said
+            [0.5, { ...FOLDED, ...spine({ flex: -4 }), Head: { flex: -4 } }],
+            [0.9, { Head: { flex: 8 } }],
+            [1.15, { Head: { flex: -2 } }],
+            [1.4, { Head: { flex: 8 } }],
+            [1.65, { ...FOLDED, ...spine({ flex: -4 }), Head: { flex: -2 } }]),
+        variant("rubbing his neck", { ...spine({}), Head: { flex: 0, bend: 0 } },
+            // The hand behind the neck, the head bowed, rolled one way and the other
+            [0.5, { right: { at: [0.26, 0.12, -0.06] }, ...spine({ flex: 6 }), Head: { flex: 16, bend: 0 } }],
+            [1, { right: { at: [0.3, 0.14, -0.06] }, Head: { flex: 10, bend: 12 } }],
+            [1.4, { right: { at: [0.24, 0.1, -0.05] }, Head: { flex: 12, bend: -10 } }],
+            [1.65, { right: { at: [0.26, 0.12, -0.06] }, ...spine({ flex: 4 }), Head: { flex: 4, bend: 0 } }]),
+    ],
+    barmaid: [
+        variant("wiping her brow", { ...spine({}), Head: { flex: 0 } },
+            // The back of the wrist across the forehead, then a sigh
+            [0.5, { left: { at: [-0.52, 0.42, 0.26] }, Head: { flex: -6 } }],
+            [1, { left: { at: [-0.12, 0.44, 0.24] }, Head: { flex: -8 } }],
+            [1.4, { left: { at: [0.02, -0.2, 0.2] }, ...spine({ flex: 6 }), Head: { flex: 10 } }]),
+        variant("hand on her hip", { ...spine({}), Head: { bend: 0 }, Hips: { obliquity: 0, turn: 0 }, offset: [0, 0, 0] },
+            // A hand on the hip, the hip cocked, the head tilted
+            [0.5, { left: { at: [0.08, -0.68, 0.02] }, Hips: { obliquity: 5, turn: -6 }, ...spine({ bend: -6 }), Head: { bend: 10 }, offset: [0.03, -0.01, 0] }],
+            [1.6, { left: { at: [0.08, -0.68, 0.02] }, Hips: { obliquity: 6, turn: -8 }, ...spine({ bend: -7 }), Head: { bend: 12 }, offset: [0.035, -0.01, 0] }]),
+        variant("tucking back her hair", { ...spine({}), Head: { bend: 0, flex: 0 } },
+            // The hand up to the side of the head, tucking the hair back behind the ear
+            [0.55, { left: { at: [-0.16, 0.36, 0.14] }, Head: { bend: 10, flex: 4 } }],
+            [1, { left: { at: [-0.12, 0.34, -0.02] }, Head: { bend: 12, flex: 2 } }],
+            [1.4, { left: { at: [0.02, -0.25, 0.1] }, Head: { bend: 4, flex: 0 } }]),
+        variant("a curtsy", { ...spine({}), Head: { flex: 0 }, offset: [0, 0, 0] },
+            // Bobbing down, the head bowed, the skirt held out to the side
+            [1, { left: { at: [0.34, -0.9, 0.2] }, ...spine({ flex: 17 }), Head: { flex: 20 }, offset: [0, -0.045, -0.03] }],
+            [1.3, { left: { at: [0.3, -0.88, 0.18] }, ...spine({ flex: 14 }), Head: { flex: 16 }, offset: [0, -0.035, -0.02] }]),
+        variant("stretching her back", { ...spine({}), Head: { flex: 0 }, offset: [0, 0, 0] },
+            // A hand to the small of the back, arching back
+            [0.5, { left: { at: [-0.22, -0.62, -0.28] }, ...spine({ flex: -6 }), Head: { flex: -6 } }],
+            [1, { left: { at: [-0.25, -0.6, -0.3] }, ...spine({ flex: -13 }), Head: { flex: -14 }, offset: [0, 0, 0.03] }],
+            [1.5, { left: { at: [-0.22, -0.62, -0.28] }, ...spine({ flex: -8 }), Head: { flex: -6 }, offset: [0, 0, 0.01] }]),
+    ],
+    patron: [
+        variant("a toast", TOASTING, ...ATTACKS.toast.variants[0].keys.slice(1, -1)),
+        variant("a long drink", TOASTING,
+            // The tankard to the lips and tipped right back, then the mouth wiped on a sleeve
+            [0.55, { right: { at: [0.3, 0.1, 0.3], point: [0.2, 0.75, -0.6] }, Head: { flex: -8 } }],
+            [1, { right: { at: [0.32, 0.15, 0.24], point: [0.3, 0.3, -0.9] }, ...spine({ flex: -6 }), Head: { flex: -24 } }],
+            [1.4, { right: { at: [0.32, 0.17, 0.22], point: [0.3, 0.15, -0.95] }, ...spine({ flex: -8 }), Head: { flex: -28 } }],
+            [1.65, { right: tankard, left: { at: [-0.5, 0.22, 0.3] }, ...spine({ flex: 2 }), Head: { flex: 4 } }],
+            [1.85, { right: tankard, left: { at: [-0.18, 0.2, 0.3] }, ...spine({ flex: 2 }), Head: { flex: 2 } }]),
+        variant("a belly laugh", { ...spine({}), Head: { flex: 0 } },
+            // Thrown back laughing, slapping the table, twice
+            [0.4, { left: flat(-0.12, -0.36, 0.6, -1), ...spine({ flex: -12 }), Head: { flex: -16 } }],
+            [0.7, { left: flat(-0.12, -0.3, 0.6, -1), ...spine({ flex: -8 }), Head: { flex: -12 } }],
+            [1, { left: flat(-0.12, -0.56, 0.66, -1), ...spine({ flex: 8 }), Head: { flex: 6 } }],
+            [1.25, { left: flat(-0.12, -0.3, 0.6, -1), ...spine({ flex: -10 }), Head: { flex: -14 } }],
+            [1.5, { left: flat(-0.12, -0.56, 0.66, -1), ...spine({ flex: 6 }), Head: { flex: 4 } }],
+            [1.75, { ...spine({ flex: -4 }), Head: { flex: -6 } }]),
+        variant("thumping the table", TOASTING,
+            // The tankard banged down on the table, twice, cheering
+            [0.45, { right: { at: [0.16, -0.22, 0.58], point: [0, 1, 0.1] }, ...spine({ flex: -4 }), Head: { flex: -8 } }],
+            [1, { right: { at: [0.16, -0.58, 0.66], point: [0, 1, 0.1] }, ...spine({ flex: 8 }), Head: { flex: 6 } }],
+            [1.25, { right: { at: [0.16, -0.25, 0.6], point: [0, 1, 0.1] }, ...spine({ flex: -2 }), Head: { flex: -6 } }],
+            [1.5, { right: { at: [0.16, -0.58, 0.66], point: [0, 1, 0.1] }, ...spine({ flex: 8 }), Head: { flex: 6 } }],
+            [1.8, { right: tankard, ...spine({}), Head: { flex: 0 } }]),
+        variant("looking about", { ...spine({}), Neck: { turn: 0 }, Head: { turn: 0, flex: 0 } },
+            // Over one shoulder, then the other
+            [0.6, { ...spine({ turn: 16 }), Neck: { turn: 18 }, Head: { turn: 26, flex: -4 } }],
+            [1, { ...spine({ turn: 18 }), Neck: { turn: 20 }, Head: { turn: 28, flex: -4 } }],
+            [1.3, { ...spine({ turn: -14 }), Neck: { turn: -18 }, Head: { turn: -26, flex: -2 } }],
+            [1.6, { ...spine({ turn: -16 }), Neck: { turn: -20 }, Head: { turn: -28, flex: -2 } }]),
+    ],
+    madam: [
+        variant("fanning herself", { ...spine({}), Head: { flex: 0, bend: 0 } },
+            // Fanning her face with her hand, quickly
+            [0.4, { right: { at: [0.2, 0.28, 0.36] }, Head: { flex: -6, bend: -4 } }],
+            [0.55, { right: { at: [0.34, 0.32, 0.4] } }],
+            [0.7, { right: { at: [0.2, 0.28, 0.36] } }],
+            [0.85, { right: { at: [0.34, 0.32, 0.4] } }],
+            [1, { right: { at: [0.2, 0.28, 0.36] } }],
+            [1.2, { right: { at: [0.34, 0.32, 0.4] } }],
+            [1.4, { right: { at: [0.2, 0.28, 0.36] } }],
+            [1.6, { right: { at: [0.3, 0.3, 0.38] }, Head: { flex: -4, bend: -2 } }]),
+        variant("hands on her hips", { ...spine({}), Head: { turn: 0 } },
+            // Hands on hips, looking over her house one way and the other
+            [0.5, { right: { at: [-0.08, -0.68, 0.02] }, left: { at: [0.08, -0.68, 0.02] }, ...spine({ flex: -3 }), Head: { turn: 0 } }],
+            [0.9, { ...spine({ flex: -3, turn: 10 }), Head: { turn: 24 } }],
+            [1.3, { ...spine({ flex: -3, turn: -10 }), Head: { turn: -24 } }],
+            [1.65, { right: { at: [-0.08, -0.68, 0.02] }, left: { at: [0.08, -0.68, 0.02] }, ...spine({ flex: -3 }), Head: { turn: 0 } }]),
+        variant("touching her necklace", { ...spine({}), Head: { flex: 0, bend: 0 } },
+            // Fingers to the throat, toying with a necklace, looking down
+            [0.6, { left: { at: [-0.28, -0.04, 0.24] }, Head: { flex: 10, bend: 6 } }],
+            [1, { left: { at: [-0.24, -0.02, 0.25] }, Head: { flex: 12, bend: 8 } }],
+            [1.4, { left: { at: [-0.3, -0.05, 0.24] }, Head: { flex: 8, bend: 4 } }]),
+        variant("drumming her fingers", { ...spine({}), RightHand: { flex: 0 } },
+            // A hand on the counter in front, drumming it
+            [0.5, { right: { at: [0.16, -0.64, 0.7] }, ...spine({ flex: 8 }), RightHand: { flex: -25 } }],
+            [0.7, { RightHand: { flex: 10 } }],
+            [0.85, { RightHand: { flex: -25 } }],
+            [1, { RightHand: { flex: 10 } }],
+            [1.15, { RightHand: { flex: -25 } }],
+            [1.3, { RightHand: { flex: 10 } }],
+            [1.45, { RightHand: { flex: -25 } }],
+            [1.6, { right: { at: [0.16, -0.64, 0.7] }, ...spine({ flex: 8 }), RightHand: { flex: 0 } }]),
+        variant("smoothing her gown", { ...spine({}), Head: { flex: 0 } },
+            // Both hands smoothing down the front of her gown
+            [0.5, { right: { at: [0.2, -0.6, 0.24] }, left: { at: [-0.2, -0.6, 0.24] }, ...spine({ flex: 10 }), Head: { flex: 14 } }],
+            [1, { right: { at: [0.18, -0.95, 0.28] }, left: { at: [-0.18, -0.95, 0.28] }, ...spine({ flex: 16 }), Head: { flex: 16 } }],
+            [1.4, { right: { at: [0.16, -0.8, 0.22] }, left: { at: [-0.16, -0.8, 0.22] }, ...spine({ flex: 4 }), Head: { flex: 4 } }]),
+    ],
+    adventurer: [
+        variant("stretching", { ...spine({}), Head: { flex: 0 } },
+            // Both arms up high, the back arched, then down
+            [0.55, { right: { at: [0.12, 0.7, 0.2] }, left: { at: [-0.12, 0.7, 0.2] }, ...spine({ flex: -6 }), Head: { flex: -8 } }],
+            [1, { right: { at: [0.1, 0.96, 0.08] }, left: { at: [-0.1, 0.96, 0.08] }, ...spine({ flex: -12 }), Head: { flex: -16 } }],
+            [1.35, { right: { at: [0.1, 0.94, 0.06] }, left: { at: [-0.1, 0.94, 0.06] }, ...spine({ flex: -13 }), Head: { flex: -16 } }],
+            [1.7, { right: { at: [-0.1, 0.2, 0.2] }, left: { at: [0.1, 0.2, 0.2] }, ...spine({ flex: 0 }), Head: { flex: 0 } }]),
+        variant("looking about", { ...spine({}), Head: { turn: 0, flex: 0 } },
+            // A hand shading the eyes, looking into the distance one way, then the other
+            [0.5, { left: { at: [-0.32, 0.4, 0.34] }, Head: { flex: -4 } }],
+            [0.8, { ...spine({ turn: 14 }), Head: { turn: 26, flex: -4 } }],
+            [1.2, { ...spine({ turn: -14 }), Head: { turn: -26, flex: -4 } }],
+            [1.55, { left: { at: [-0.32, 0.4, 0.34] }, ...spine({ turn: 0 }), Head: { turn: 0, flex: -2 } }]),
+        variant("rolling the shoulders", { ...spine({}), LeftShoulder: { elevate: 0, protract: 0 }, RightShoulder: { elevate: 0, protract: 0 }, Neck: { bend: 0 } },
+            // The shoulders rolled up and back, and the neck stretched one way and the other
+            [0.4, { LeftShoulder: { elevate: 22, protract: 14 }, RightShoulder: { elevate: 22, protract: 14 } }],
+            [0.7, { LeftShoulder: { elevate: 26, protract: -18 }, RightShoulder: { elevate: 26, protract: -18 } }],
+            [1, { LeftShoulder: { elevate: 0, protract: -10 }, RightShoulder: { elevate: 0, protract: -10 }, Neck: { bend: 20 } }],
+            [1.35, { LeftShoulder: { elevate: 0, protract: 0 }, RightShoulder: { elevate: 0, protract: 0 }, Neck: { bend: -20 } }],
+            [1.65, { Neck: { bend: 0 } }]),
+        variant("a yawn", { ...spine({}), Head: { flex: 0 }, LeftShoulder: { elevate: 0 }, RightShoulder: { elevate: 0 } },
+            // A hand to the mouth, the head back, the shoulders up
+            [0.5, { left: { at: [-0.34, 0.22, 0.32] }, Head: { flex: -12 }, LeftShoulder: { elevate: 12 }, RightShoulder: { elevate: 12 } }],
+            [1, { left: { at: [-0.34, 0.24, 0.32] }, ...spine({ flex: -8 }), Head: { flex: -20 }, LeftShoulder: { elevate: 18 }, RightShoulder: { elevate: 18 } }],
+            [1.5, { left: { at: [-0.1, -0.3, 0.2] }, ...spine({ flex: 2 }), Head: { flex: 4 }, LeftShoulder: { elevate: 0 }, RightShoulder: { elevate: 0 } }]),
+        variant("shifting the weight", { ...spine({}), Hips: { obliquity: 0 }, offset: [0, 0, 0] },
+            // From one foot to the other, a thumb in the belt
+            [0.5, { left: { at: [-0.26, -0.62, 0.22] }, Hips: { obliquity: -6 }, ...spine({ bend: 5 }), offset: [-0.04, -0.01, 0] }],
+            [1, { left: { at: [-0.26, -0.62, 0.22] }, Hips: { obliquity: 6 }, ...spine({ bend: -5 }), offset: [0.04, -0.01, 0] }],
+            [1.5, { left: { at: [-0.26, -0.62, 0.22] }, Hips: { obliquity: -3 }, ...spine({ bend: 3 }), offset: [-0.02, 0, 0] }]),
+    ],
+});
+
 // --- Reactions to being hit ---
 
 /**
@@ -660,7 +843,10 @@ function sample(times, values, n, time) {
     return (2 * u3 - 3 * u2 + 1) * p0 + (u3 - 2 * u2 + u) * m0 + (-2 * u3 + 3 * u2) * p1 + (u3 - u2) * m1;
 }
 
-const COMPILED = new Map(Object.entries(ATTACKS).map(([name, attack]) => [name, attack.variants.map(({ keys }) => compile(keys))]));
+const COMPILED = new Map([
+    ...Object.entries(ATTACKS).map(([name, attack]) => [name, attack.variants.map(({ keys }) => compile(keys))]),
+    ...Object.entries(RESTS).map(([role, rests]) => [`rest:${role}`, rests.map(({ keys }) => compile(keys))]),
+]);
 const GUARD_TRACKS = new Map(Object.entries(GUARDS).map(([name, guard]) => [name, compile([[0, guard]])]));
 
 const MIRROR = { Left: "Right", Right: "Left", left: "right", right: "left" };
@@ -749,6 +935,40 @@ export class Actions {
     }
 
     /**
+     * Rest: one of a role's resting animations (roles.js ROLES, the poses RESTS), `variant` or at
+     * random, never the one it did last, timed as the role says. Returns which, or null (a role
+     * with no rests). An attack started while resting takes over from it.
+     */
+    rest(role, { variant = null } = {}) {
+        const rests = ROLES[role]?.rests;
+
+        if (!rests || !RESTS[role]) {
+            return null;
+        }
+
+        const name = `rest:${role}`;
+        const way = variant ?? this.variety.next(name, rests.length);
+        const { hitAt, duration } = rests[way];
+
+        this.variety.last.set(name, way);
+        this.attack = { name, variant: way, tracks: COMPILED.get(name)[way], start: this.time, hitAt, duration, mirror: false, rest: true, stopping: null };
+
+        return way;
+    }
+
+    /** Is it resting (one of its role's rests under way, and not already easing out of it)? */
+    get resting() {
+        return Boolean(this.attack?.rest && !this.attack.stopping);
+    }
+
+    /** Stop resting, easing out of it over `seconds` (something's come up). */
+    stopResting(seconds = 0.35) {
+        if (this.attack?.rest && !this.attack.stopping) {
+            this.attack.stopping = { start: this.time, length: seconds };
+        }
+    }
+
+    /**
      * React to a blow (a REACTIONS key). `from` is where it came from, as an angle in the
      * character's own frame (0 straight ahead, positive to its left).
      */
@@ -796,15 +1016,16 @@ export class Actions {
         }
 
         if (this.attack) {
-            const { tracks, start, hitAt, duration, mirror } = this.attack;
+            const { tracks, start, hitAt, duration, mirror, stopping = null } = this.attack;
             const elapsed = this.time - start;
+            const easing = stopping ? 1 - smooth(0, stopping.length, this.time - stopping.start) : 1;
 
-            if (elapsed >= duration) {
+            if (elapsed >= duration || easing <= 0) {
                 this.attack = null;
             } else {
                 // Key time: 0 to 1 until the blow lands, 1 to 2 after
                 const key = elapsed < hitAt ? elapsed / hitAt : 1 + (elapsed - hitAt) / Math.max(1e-3, duration - hitAt);
-                const weight = smooth(0, 0.3, key) * (1 - smooth(1.55, 2, key));
+                const weight = smooth(0, 0.3, key) * (1 - smooth(1.55, 2, key)) * easing;
 
                 this.#blend(tracks, key, weight, mirror);
             }

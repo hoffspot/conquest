@@ -25,6 +25,7 @@
 // Everything comes from one seed, so a saved character always comes back to the same town.
 
 import { FACING, MAP_ORIGINS, tavernFloors, tavernFolk } from "./interiors.js";
+import { namePeople } from "./names.js";
 import { createRandom } from "./random.js";
 import { GROUND, landmarkKey, TREE_VARIANTS } from "./setpieces/pieces.js";
 import { layoutTown } from "./setpieces/town.js";
@@ -65,7 +66,7 @@ export const SEE_OVER = /^prop-/;
  * squares), tavern (tavernOf, or null), maps ({ town, taproom, upstairs }: each { id, width,
  * height, blocked, opaque, ground, origin }, the floors as interiors.js reads them), links
  * ([{ id, kind, ends: [{ map, squares, arrive, facing }, ...] }]: the tavern's door and stairs),
- * folk (the tavern's: interiors.js tavernFolk, none without a tavern) }.
+ * folk (the tavern's: interiors.js tavernFolk, each named: names.js; none without a tavern) }.
  */
 export function generateWorld({ seed = 1, town: [townWidth, townHeight] = TOWN_PLOTS, border = BORDER_PLOTS } = {}) {
     const random = createRandom(seed);
@@ -217,7 +218,7 @@ export function generateWorld({ seed = 1, town: [townWidth, townHeight] = TOWN_P
         tavern,
         maps,
         links,
-        folk: tavern ? tavernFolk() : [],
+        folk: tavern ? namePeople(tavernFolk(), seed) : [],
     };
 }
 

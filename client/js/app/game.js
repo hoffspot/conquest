@@ -18,6 +18,7 @@ import { FALL_LANDS, REACTIONS } from "../characters/actions.js";
 import { Character } from "../characters/character.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
 import { Battle, hostile, STEP_MS } from "../core/battle.js";
+import { PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js";
 import { CAST_FAILURES, SPELLS } from "../core/spells.js";
 import { Variety } from "../core/variety.js";
 import { longestReach, WEAPONS } from "../core/weapons.js";
@@ -151,6 +152,13 @@ export class Game {
 
         /** Each floor inside (interiors3d.js's), by map id. */
         this.interiors = new Map();
+
+        /**
+         * When the player last did anything (the game's clock, s), and when they next rest (null
+         * until they've stood a while with nothing going on: roles.js PLAYER_RESTS_AFTER).
+         */
+        this.lastInput = 0;
+        this.restAt = null;
     }
 
     /** Where a map is drawn in the world ([x, z] metres). */
@@ -238,7 +246,7 @@ export class Game {
             });
 
             avatar.actions.setSeated(Boolean(one.routine.seated));
-            this.battle.add({ id: one.id, kind: "folk", name: one.name, team: "folk", square: one.square, map: one.map, ai: "routine", neutral: true, routine: one.routine, facing: one.facing });
+            this.battle.add({ id: one.id, kind: "folk", name: one.name, team: "folk", square: one.square, map: one.map, ai: "routine", neutral: true, routine: one.routine, role: one.role, facing: one.facing });
         }
 
         step("Getting ready to draw");
@@ -550,6 +558,7 @@ export class Game {
         this.effects.setTarget(ringed?.object ?? null, ringed ? Math.max(0.5, ringed.character.height * 0.33) : 0.6);
         hud.setTarget(target?.id ?? null);
         this.#bleed(dt);
+        this.#restPlayer();
         this.effects.update(dt, view.pixelsPerMetre());
         this.#drawMinimap(target);
 
@@ -714,6 +723,64 @@ export class Game {
         const after = battle.actors.filter((actor) => hostile(actor, player) && !actor.dead && actor.map === player.map && (actor.target === player.id || actor.attack?.target === player.id || player.attack?.target === actor.id));
 
         return after.sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))[0] ?? null;
+    }
+
+    // --- Resting ---
+
+    // The player did something (tapped, clicked, typed, scrolled): no resting for a while
+    #wake() {
+        this.lastInput = this.clock;
+        this.restAt = null;
+        this.avatars.get("player")?.actions.stopResting();
+    }
+
+    // The player, standing a while with nothing going on (no input, no one to fight or after
+    // them, no one to talk to): now and then one of the adventurer's rests (roles.js)
+    #restPlayer() {
+        const player = this.battle.actor("player");
+        const actions = this.avatars.get("player")?.actions;
+
+        if (!player || !actions) {
+            return;
+        }
+
+        const still = !player.dead && !player.order && !player.attack && !player.casting && !player.to && !player.path.length && this.battle.time >= player.stunnedUntil;
+        const quiet = still && this.clock - this.lastInput >= PLAYER_RESTS_AFTER / 1000 && !this.talking && !this.#threatened(player);
+
+        if (!quiet) {
+            actions.stopResting();
+            this.restAt = null;
+
+            return;
+        }
+
+        this.restAt ??= this.clock;
+
+        if (this.clock >= this.restAt && !actions.attack) {
+            const rest = ROLES.adventurer.rests[actions.rest("adventurer")];
+
+            this.restAt = this.clock + rest.duration + (REST_EVERY[0] + Math.random() * (REST_EVERY[1] - REST_EVERY[0])) / 1000;
+        }
+    }
+
+    // Is anyone after the player, or can they see an enemy? (No time to rest.)
+    #threatened(player) {
+        return this.battle.actors.some((other) => hostile(other, player) && !other.dead && other.map === player.map && (other.target === player.id || this.battle.canSee(player, other)));
+    }
+
+    // One of the folk rests (battle.js #rest): seen and heard only on the player's map
+    #rest({ id, role, rest }, avatar) {
+        const how = ROLES[role]?.rests[rest];
+
+        if (!how || this.battle.actor(id).map !== this.mapId) {
+            return;
+        }
+
+        avatar.actions.rest(role, { variant: rest });
+
+        if (how.sound) {
+            this.sound?.play(how.sound, { at: avatar.object.position, delay: how.hitAt, volume: how.volume ?? 1 });
+        }
     }
 
     // One of the looks of a spell's light or a bolt (effects.js LOOKS), for a character: any at
@@ -941,6 +1008,9 @@ export class Game {
                 }
                 case "act":
                     this.#act(event, avatar);
+                    break;
+                case "rest":
+                    this.#rest(event, avatar);
                     break;
                 case "cross": {
                     const actor = battle.actor(event.id);
@@ -1209,6 +1279,11 @@ export class Game {
 
         this.#on(canvas, "pointerup", up);
         this.#on(canvas, "pointercancel", up);
+
+        // Anything the player does keeps them from resting
+        for (const type of ["pointerdown", "keydown", "wheel"]) {
+            this.#on(document, type, () => this.#wake(), { capture: true, passive: true });
+        }
         this.#on(canvas, "wheel", (event) => {
             event.preventDefault();
             this.view.zoom(Math.exp(event.deltaY * 0.0015));
@@ -1221,6 +1296,8 @@ export class Game {
      * Tapped twice in quick succession (or with `run`: shift-clicked), run there.
      */
     tap(clientX, clientY, { run = false, time = performance.now() } = {}) {
+        this.#wake();
+
         const enemy = this.#whoIsAt(clientX, clientY, { player: false })?.actor ?? null;
         const door = enemy ? null : this.doors?.at(this.view.rayAt(clientX, clientY), this.mapId) ?? null;
         const ground = enemy || door ? null : this.view.groundAt(clientX, clientY);
@@ -1234,6 +1311,8 @@ export class Game {
      * clear: running while their stamina lasts, then walking (a swipe up from them).
      */
     forward() {
+        this.#wake();
+
         const avatar = this.avatars.get("player");
         const player = this.battle.actor("player");
 
@@ -1258,6 +1337,8 @@ export class Game {
      * the battle's answer: { ok } or { ok: false, reason }, saying why not to the player.
      */
     act(action, target) {
+        this.#wake();
+
         const spell = ACTIONS[action]?.spell;
         const result = spell ? this.battle.cast("player", spell, target === "self" ? null : target) : { ok: false, reason: "busy" };
 
@@ -1373,6 +1454,8 @@ export class Game {
      * quick succession, run.
      */
     mapTap({ x, z, reach = 3, clientX = 0, clientY = 0, run = false, time = performance.now() }) {
+        this.#wake();
+
         const player = this.battle.actor("player");
         const enemies = this.battle.actors.filter((actor) => player && hostile(actor, player) && !actor.dead && actor.map === player.map);
         const distance = (actor) => Math.hypot(actor.x - x, actor.y - z);

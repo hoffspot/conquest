@@ -4,12 +4,13 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { gunzipSync } from "node:zlib";
 import * as THREE from "three";
-import { Actions, ATTACKS, GUARDS, REACTIONS } from "../client/js/characters/actions.js";
+import { Actions, ATTACKS, GUARDS, REACTIONS, RESTS } from "../client/js/characters/actions.js";
 import { HumanData } from "../client/js/characters/body.js";
 import { Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
 import { PRESETS } from "../client/js/characters/presets.js";
 import { Rig } from "../client/js/characters/rig.js";
 import { Battle, STEP_MS } from "../client/js/core/battle.js";
+import { PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../client/js/core/roles.js";
 import { pickAnother, Variety } from "../client/js/core/variety.js";
 import { STARTING_WEAPONS, WEAPONS } from "../client/js/core/weapons.js";
 import { Avatar } from "../client/js/world/avatar.js";
@@ -381,5 +382,126 @@ describe("characters in the world (avatar.js)", () => {
         const { frames } = follow({ type: "move", to: [50, 3] }, 12);
 
         assert.ok(Math.max(...frames.map(({ lag }) => lag)) < 0.33);
+    });
+});
+
+describe("resting (actions.js RESTS, roles.js)", () => {
+    // Where the hands are at a rest's key moment (world metres), with the head, the hips and the
+    // shoulders, standing (or seated) still
+    function atThePeak(role, variant, { shape } = {}) {
+        const { character, walker, actions } = fighter(shape);
+        const seated = Boolean(ROLES[role].seated);
+
+        actions.setSeated(seated);
+        walker.update(0);
+
+        const shoulders = { right: world("RightArm", character), left: world("LeftArm", character) };
+        const waist = world("Spine", character);
+
+        actions.rest(role, { variant });
+        walker.update(ROLES[role].rests[variant].hitAt);
+
+        return { character, actions, shoulders, waist, right: world("RightHand", character), left: world("LeftHand", character), head: world("Head", character), pelvis: world("Hips", character) };
+    }
+
+    const wayOf = (role, name) => ROLES[role].rests.findIndex((rest) => rest.name === name);
+
+    it("has five named rests for every role, each timed, posed from key time 0 to 2", () => {
+        assert.deepEqual(Object.keys(RESTS).sort(), Object.keys(ROLES).sort());
+
+        for (const [role, { title, rests }] of Object.entries(ROLES)) {
+            assert.ok(title, role);
+            assert.equal(rests.length, 5, role);
+            assert.deepEqual(RESTS[role].map(({ name }) => name), rests.map(({ name }) => name), role);
+            assert.equal(new Set(rests.map(({ name }) => name)).size, 5, `${role}: five different rests`);
+
+            for (const { name, hitAt, duration } of rests) {
+                assert.ok(hitAt > 0.3 && hitAt < duration && duration <= 4, `${role}: ${name}`);
+            }
+
+            for (const { name, keys } of RESTS[role]) {
+                const times = keys.map(([time]) => time);
+
+                assert.equal(times[0], 0, name);
+                assert.equal(times.at(-1), 2, name);
+                assert.ok(times.every((time, k) => k === 0 || time > times[k - 1]), `${name}: key times in order`);
+            }
+        }
+
+        assert.ok(REST_EVERY[0] >= 3000 && REST_EVERY[1] <= 10000, "every several seconds");
+        assert.equal(PLAYER_RESTS_AFTER, 15000);
+    });
+
+    it("rests any way at first, then never the same way twice running, and eases out when told to stop", () => {
+        const { actions } = fighter();
+        const ways = [];
+
+        for (let k = 0; k < 120; k++) {
+            ways.push(actions.rest("barmaid"));
+        }
+
+        assert.ok(ways.every((way, k) => k === 0 || way !== ways[k - 1]));
+        assert.equal(new Set(ways).size, 5);
+        assert.equal(actions.rest("barmaid", { variant: 3 }), 3);
+        assert.equal(actions.rest("nobody"), null);
+
+        // Told to stop, it eases out, then it's done
+        const { character, walker, actions: resting } = fighter();
+
+        resting.rest("adventurer", { variant: 0 });
+        walker.update(0.6);
+        assert.equal(resting.resting, true);
+        resting.stopResting(0.3);
+        assert.equal(resting.resting, false);
+        walker.update(0.15);
+        assert.ok(resting.attack, "still easing out");
+        walker.update(0.2);
+        assert.equal(resting.attack, null);
+        assert.ok(character.rig.bone("Hips"));
+    });
+
+    it("puts the hands where each rest says: a beard stroked, a brow wiped, hands on the bar and on the hips, a toast raised, arms stretched high", () => {
+        const beard = atThePeak("barkeep", wayOf("barkeep", "stroking his beard"));
+
+        assert.ok(beard.right.distanceTo(beard.head) < 0.25, "a hand at the chin");
+
+        const brow = atThePeak("barmaid", wayOf("barmaid", "wiping her brow"));
+
+        assert.ok(brow.left.y > brow.shoulders.left.y + 0.1 && brow.left.distanceTo(brow.head) < 0.3, "a wrist at the brow");
+
+        const hip = atThePeak("barmaid", wayOf("barmaid", "hand on her hip"));
+
+        assert.ok(Math.abs(hip.left.y - hip.waist.y) < 0.2, "a hand at the hip");
+        assert.ok(hip.left.x > hip.waist.x + 0.1, "at the side");
+
+        const bar = atThePeak("barkeep", wayOf("barkeep", "leaning on the bar"));
+
+        for (const side of ["right", "left"]) {
+            assert.ok(bar[side].z > bar.shoulders[side].z + 0.25, `${side} hand on the bar in front`);
+            assert.ok(bar[side].y < bar.shoulders[side].y - 0.2, `${side} hand down on it`);
+        }
+
+        const hips = atThePeak("madam", wayOf("madam", "hands on her hips"));
+
+        assert.ok(hips.right.x < hips.waist.x - 0.1 && hips.left.x > hips.waist.x + 0.1, "one on each side");
+        assert.ok(Math.abs(hips.right.y - hips.waist.y) < 0.2 && Math.abs(hips.left.y - hips.waist.y) < 0.2, "both at the hips");
+
+        const toast = atThePeak("patron", wayOf("patron", "a toast"));
+
+        assert.ok(toast.right.y > toast.shoulders.right.y + 0.15, "the tankard raised high");
+
+        const stretch = atThePeak("adventurer", wayOf("adventurer", "stretching"));
+
+        assert.ok(stretch.right.y > stretch.head.y && stretch.left.y > stretch.head.y, "both arms up over the head");
+    });
+
+    it("stays seated through a patron's rests, the pelvis down on the bench", () => {
+        const standing = atThePeak("barmaid", 0);
+
+        for (let way = 0; way < 5; way++) {
+            const { pelvis } = atThePeak("patron", way);
+
+            assert.ok(pelvis.y < standing.pelvis.y - 0.25, `${ROLES.patron.rests[way].name}: sitting`);
+        }
     });
 });
