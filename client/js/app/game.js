@@ -19,9 +19,10 @@ import { Character } from "../characters/character.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
 import { Battle, hostile, STEP_MS } from "../core/battle.js";
 import { CAST_FAILURES, SPELLS } from "../core/spells.js";
+import { Variety } from "../core/variety.js";
 import { longestReach, WEAPONS } from "../core/weapons.js";
 import { Avatar } from "../world/avatar.js";
-import { Effects } from "../world/effects.js";
+import { Effects, LOOKS } from "../world/effects.js";
 import { Squares } from "../world/squares.js";
 import { KINDS, Wounds } from "../world/wounds.js";
 import { buildGround } from "../world/ground.js";
@@ -125,6 +126,15 @@ export class Game {
         this.lastAttack = new Map();
         this.flights = new Map();
         this.flash = new Map();
+
+        /**
+         * How each character's spells and bolts look (effects.js LOOKS: never the same twice in a
+         * row), and the look of each spell being cast and on its way (by whom it's cast, and on
+         * whom it lands).
+         */
+        this.variety = new Map();
+        this.casting = new Map();
+        this.landing = new Map();
 
         /** Each character's wounds (wounds.js), and the pools of blood under the fallen: { left, spot }. */
         this.wounds = new Map();
@@ -523,7 +533,7 @@ export class Game {
         // Light gathers in the hand of anyone casting a spell
         for (const actor of battle.actors) {
             if (actor.casting && Math.random() < dt * 30) {
-                this.effects.burst(actor.casting.spell === "heal" ? "healCharge" : "stunCharge", this.avatars.get(actor.id).hand("Left"));
+                this.effects.charge(actor.casting.spell, this.avatars.get(actor.id).hand("Left"), this.casting.get(actor.id) ?? 0);
             }
         }
 
@@ -706,6 +716,25 @@ export class Game {
         return after.sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))[0] ?? null;
     }
 
+    // One of the looks of a spell's light or a bolt (effects.js LOOKS), for a character: any at
+    // first, never the same as its last after
+    #look(id, kind) {
+        if (!this.variety.has(id)) {
+            this.variety.set(id, new Variety());
+        }
+
+        return this.variety.get(id).next(kind, LOOKS[kind].length);
+    }
+
+    // The look a spell lands on a character in: the one it was cast in (then done with), or any
+    #landing(id, spell) {
+        const look = this.landing.get(id) ?? this.#look(id, spell);
+
+        this.landing.delete(id);
+
+        return look;
+    }
+
     // --- Inside and out ---
 
     // One of the folk does something (battle.js #routine): raises a tankard, puts one down on a
@@ -832,8 +861,10 @@ export class Game {
 
                     const [ox, oz] = this.originOf(battle.actor(event.id).map);
 
-                    effects.launch(event.projectile, event.kind, from);
-                    this.sound?.launch(event.kind, from);
+                    const look = LOOKS[event.kind] ? this.#look(event.id, event.kind) : 0;
+
+                    effects.launch(event.projectile, event.kind, from, look);
+                    this.sound?.launch(event.kind, from, { rate: LOOKS[event.kind]?.[look].pitch ?? 1 });
                     this.flights.set(event.projectile, {
                         previous: new THREE.Vector2(event.x, event.y),
                         distance: Math.hypot(target.object.position.x - ox - event.x, target.object.position.z - oz - event.y),
@@ -854,6 +885,11 @@ export class Game {
                     break;
                 case "cast": {
                     const spell = SPELLS[event.spell];
+                    const look = this.#look(event.id, event.spell);
+
+                    // (Gathering in the hand, and landing on whom it's cast on, in the same look)
+                    this.casting.set(event.id, look);
+                    this.landing.set(event.target, look);
 
                     avatar.actions.startAttack(event.spell === "heal" ? "castHeal" : "castStun", { hitAt: spell.castTime / 1000, duration: (spell.castTime / 1000) * 1.7 });
                     this.sound?.play(event.spell === "heal" ? "castHeal" : "bolt", { at: avatar.object.position });
@@ -863,16 +899,14 @@ export class Game {
                     const actor = battle.actor(event.id);
 
                     this.wounds.get(event.id)?.heal(actor.hp, actor.maxHp);
-                    effects.burst("heal", avatar.point(0.5));
-                    effects.pulse(avatar.object.position.x, avatar.object.position.z);
+                    effects.heal(avatar.object.position, avatar.character.height, this.#landing(event.id, "heal"));
                     hud.damage(this.#screenAbove(event.id), `+${event.amount}`, { kind: "heal" });
                     hud.setHealth(event.id, actor.hp, actor.maxHp);
                     this.sound?.play("healed", { at: avatar.object.position });
                     break;
                 }
                 case "stunned":
-                    effects.burst("stun", avatar.point(0.9));
-                    effects.daze(avatar.object, avatar.character.height * 1.08, (event.until - battle.time) / 1000);
+                    effects.stun(avatar.point(0.9), avatar.object, avatar.character.height * 1.08, (event.until - battle.time) / 1000, this.#landing(event.id, "stun"));
                     hud.damage(this.#screenAbove(event.id), "Stunned", { kind: "stun" });
                     this.sound?.play("stun", { at: avatar.object.position });
                     break;
@@ -974,7 +1008,7 @@ export class Game {
         const direction = attacker ? at.clone().sub(attacker.point(0.7)).setY(0).normalize() : null;
         const kind = KINDS[event.reaction] ?? KINDS.strike;
 
-        effects.impact(reaction?.effect ?? "sparks", at, direction);
+        effects.impact(reaction?.effect ?? "sparks", at, direction, event.projectile ? effects.lookOf(event.projectile) : null);
 
         // Blood sprays from it, gushing from a wound (and a killing blow), with a splash on the
         // ground beyond; burns smoke
