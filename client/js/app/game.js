@@ -276,6 +276,7 @@ export class Game {
         this.#listen();
         this.view.renderer.setAnimationLoop((now) => this.#frame(now));
         this.sound?.setAmbient(this.mapId === "town");
+        this.sound?.setPlace(this.mapId);
         this.sound?.setPaused(false);
     }
 
@@ -304,6 +305,8 @@ export class Game {
     dispose() {
         this.stop();
         this.sound?.setAmbient(false);
+        this.sound?.setPlace("town");
+        this.sound?.setHearth(null);
         this.hud.clear();
 
         for (const avatar of this.avatars.values()) {
@@ -708,6 +711,11 @@ export class Game {
         this.view.setOccluders(interior ? null : this.town);
         this.minimap?.setMap(this.world.maps[mapId]);
 
+        // The tavern's music inside, heard through the floor upstairs; the town's out; and the
+        // hearth's fire crackling in the taproom
+        this.sound?.setPlace(mapId);
+        this.sound?.setHearth(interior?.hearth ?? null);
+
         if (this.running) {
             this.sound?.setAmbient(!interior);
         }
@@ -839,11 +847,18 @@ export class Game {
                 }
                 case "cross": {
                     const actor = battle.actor(event.id);
+                    const was = avatar.object.position.clone();
 
                     this.#place(actor);
 
                     if (event.id === "player") {
                         this.#arrive(actor);
+                        this.sound?.setListener(avatar.object.position.x, avatar.object.position.z);
+                    }
+
+                    // A door opening and banging shut, heard on the player's side of it
+                    if (event.kind === "door" && (event.to === this.mapId || event.from === this.mapId)) {
+                        this.sound?.play("door", { at: event.to === this.mapId ? avatar.object.position : was });
                     }
 
                     break;

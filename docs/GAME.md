@@ -388,8 +388,8 @@ compressed, and limited just under full scale, so a busy fight turned up can't c
 | Bus | What | To start with |
 | --- | --- | --- |
 | Effects | Blows, spells, footsteps, cues | 50% |
-| Environment | The wind, birds, rustling trees | 40% |
-| Music | The score | 35% |
+| Environment | The wind, birds, rustling trees; the tavern's hearth | 40% |
+| Music | The town's score, or the tavern's jig | 35% |
 
 The defaults are set for a phone at about 40% volume (a player's own setting): blows and spells
 reach about −31 to −37 dBFS at their loudest, footsteps about −43, and the music averages about
@@ -405,17 +405,20 @@ about as loud as the others (by its loudest 30 ms), then played at its own volum
   roar for fire, a meaty thud for punches); a body **falling** as it hits the ground.
 - **Spells**: a rising chime casting Heal and a warm chord as it lands; the bolt's crackle
   casting Stun and a zap and warble as it lands.
-- **Footsteps**, as each foot lands (the walker says when), on stone, dirt or grass, louder
-  running.
+- **Footsteps**, as each foot lands (the walker says when), on stone, dirt, grass or wooden
+  boards (upstairs in the tavern), louder running.
+- **A door**: its latch lifting, its hinges creaking and it banging shut, when anyone goes through
+  the tavern's door on the player's side of it (so the orc following them in is heard).
 - **Cues**: a target chosen, an enemy slain, falling, waking again, out of breath, the action
   wheel opening, and a flick refused.
 
 They're heard from where they happen: full volume within 4 metres of the player, fading to
 nothing at 34, and panned left or right; at most 24 at once.
 
-**The environment**: a quiet wind (a ten-second loop without a seam), birds now and then (every
-4 to 14 seconds), and leaves rustling in a tree within 22 metres (every 2.5 to 7 seconds), from
-where the tree is.
+**The environment**: out in the town, a quiet wind (a ten-second loop without a seam), birds now
+and then (every 4 to 14 seconds), and leaves rustling in a tree within 22 metres (every 2.5 to 7
+seconds), from where the tree is. In the taproom, instead, the hearth's fire crackles (a soft rush
+of flame with a few pops and snaps, every 0.2 to 0.9 seconds, from the hearth).
 
 **Music.** A score (`score.js`) in the style of the 1985 *Bard's Tale*: the old games' bard songs
 were short, looping, old-world tunes, played on the Commodore 64's sound chip and the Apple II's
@@ -438,14 +441,45 @@ a little faster or slower (never more than 2 semitones, but for the ocarina's th
 notes, below the library's lowest). Recorder, ocarina and organ notes sound for as long as the
 note lasts, then fade; plucked and struck ones ring on.
 
-`npm run build:music` (`scripts/build-music.js`) makes them: for each instrument, it reads the
-library's SFZ file (which recording is which note), picks recordings every 4 semitones or so
-across the notes the score plays, and downloads them (kept in `.cache/vcsl`). Each is mixed to
+**The tavern's music** (`tavern.js`) is a jig, lively, led by a lute: there's no recording of a
+real lute under a free licence to be had, so it's played on the nearest, a classical guitar's
+nylon strings (FreePats' Spanish classical guitar, CC0), with lute-like double stops (a second
+voice a third below the tune's longer notes), and its quick notes stopped a third of a second
+after they end, as a finger on the string would. In 6/8 at 108 dotted crotchets a minute, in D
+Mixolydian (D major with a C natural, as old dance tunes often are), with a third strain in B
+minor; like a dance tune, each strain is eight bars, played twice; about a minute and a half:
+
+| Section | Bars | Tune | With |
+| --- | --- | --- | --- |
+| Intro | 4 | | the lute strumming, the drum and tambourine lightly |
+| A, A again | 8, 8 | the lute; the recorder a third below the second time | the lute's bass and chords (a bass note on each beat, the chord between), the drums |
+| B, B again | 8, 8 | the lute; then the recorder, the lute an octave below | long recorder notes, the drums, with a fill |
+| C, C again | 8, 8 | the lute, in B minor; then the recorder, the lute a third below | the drums |
+| A on the lute | 8 | the lute alone, over a bass note a bar | |
+| Break | 4 | | the lute strumming, the drums, with fills |
+| Last A, last B | 8, 8 | the lute with the recorder | the drums, with fills |
+| Outro | 4 | the lute | ending on A, to lead back to D |
+
+The drums play a jig's beat (the frame drum low on each beat and high on its last quaver, the
+tambourine on the off-beats), and each beat's first quaver is leant on. It's about as loud as the
+town's score.
+
+**Where it's heard** (`setPlace`, told by the game whenever the player's map changes): each score
+has its own track (its instruments' channels, into its own level and low-pass filter). Going into
+the tavern, the town's music fades out over 1.5 seconds as the tavern's fades in, from its start;
+coming back out, the town's comes back where it left off. Upstairs, the tavern's music is heard
+through the floor: at 40% of its level (about 8 dB down) and muffled (low-passed at 650 Hz),
+changing over 0.8 s on the stairs.
+
+`npm run build:music` (`scripts/build-music.js`) makes the recordings: for each instrument, it
+reads the library's SFZ file (which recording is which note), picks recordings every 4 semitones
+or so across the notes the music plays, and downloads them (kept in `.cache`; the guitar's are
+FLAC, decoded with `@wasm-audio-decoders/flac`). Each is mixed to
 mono, started where its note starts (never a "release" recording, the sound after a note
 ends, which some instruments also have), fine-tuned (by the SFZ's tuning),
 resampled to 32 kHz, cut to as long as the score needs (0.6 to 2.6 seconds), faded out, made
 about as loud as the others (by its loudest 50 ms in its first 0.6 seconds) and saved as an
-80 kb/s MP3 named for what's in it: 46 recordings, under a megabyte in all, listed in
+80 kb/s MP3 named for what's in it: 56 recordings, about 1.1 megabytes in all, listed in
 `samples.js`. (MP3 adds about 35 ms of silence at the start of each, the same for every one, so
 the music is in time with itself.)
 
@@ -627,10 +661,13 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   wind's seamless loop, and playing them: from where they happen, on their buses at their
   sliders' volumes, timed, silent hidden or turned off, the music's recordings downloaded and
   decoded (or, offline, not, without fuss), the music scheduled ahead and round again without a
-  gap, and the sound started again however it stops (interrupted, hidden, stuck, closed, a note
+  gap, fading into the tavern's going in (from its start), quieter and muffled upstairs, and back
+  to the town's where it left off, and the sound started again however it stops (interrupted, hidden, stuck, closed, a note
   going wrong, effects never ending).
 - `test/music.test.js`: the score (its sections and length, every note in time and near a
   recording of its instrument, a tune in every section, in key, ending on A to lead back to D),
+  the tavern's jig (its strains of eight bars, the lute in every one, the drums on every beat,
+  in D Mixolydian with C sharp only where it should be, looping without a seam),
   the recordings (one for every instrument and kind of drum hit, each note played from the
   nearest, every file a small MP3 in `client/music` and nothing else there) and the build
   script's reading of the library's SFZ and WAV files.

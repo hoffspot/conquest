@@ -1,8 +1,10 @@
 // Made by scripts/build-music.js (npm run build:music): don't edit it by hand.
 //
 // The music's samples, in client/music: recordings of real instruments from the Versilian
-// Community Sample Library by Versilian Studios (CC0), https://github.com/sgossner/VCSL. Each
-// pitched instrument has recordings at a few notes (`key`, MIDI); drums one for each kind of hit.
+// Community Sample Library by Versilian Studios (CC0), https://github.com/sgossner/VCSL, and
+// FreePats' Spanish classical guitar (CC0), https://github.com/freepats/spanish-classical-guitar.
+// Each pitched instrument has recordings at a few notes (`key`, MIDI); drums one for each kind
+// of hit.
 
 /** Each instrument's samples: [{ key, file }], or [{ kind, file }] for drums. */
 export const SAMPLES = Object.freeze({
@@ -69,5 +71,17 @@ export const SAMPLES = Object.freeze({
     ],
     tambourine: [
         { kind: "hit", file: "tambourine-hit.70eb7951.mp3" },
+    ],
+    guitar: [
+        { key: 41, file: "guitar-41.6ea722db.mp3" },
+        { key: 45, file: "guitar-45.e7af1e3c.mp3" },
+        { key: 50, file: "guitar-50.fef51653.mp3" },
+        { key: 55, file: "guitar-55.7aec7959.mp3" },
+        { key: 60, file: "guitar-60.4332ef41.mp3" },
+        { key: 65, file: "guitar-65.61012c69.mp3" },
+        { key: 70, file: "guitar-70.c3905ef2.mp3" },
+        { key: 75, file: "guitar-75.7b380077.mp3" },
+        { key: 80, file: "guitar-80.745e0905.mp3" },
+        { key: 84, file: "guitar-84.fc2d92a3.mp3" },
     ],
 });

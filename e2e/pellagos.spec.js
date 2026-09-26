@@ -606,7 +606,7 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
 
         const player = game.battle.actor("player");
 
-        return { ...tapped, map: player.map, shown: game.mapId, square: player.square, facing: player.facing, minimap: game.minimap.map.id };
+        return { ...tapped, map: player.map, shown: game.mapId, square: player.square, facing: player.facing, minimap: game.minimap.map.id, heard: session.sound.place };
     }, { map, kind, seconds });
 
     // Outside the door, the orc out of the way
@@ -625,7 +625,7 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
 
     const inside = await through("town", "door", 5);
 
-    expect(inside).toEqual({ order: "enter", glowing: true, map: "taproom", shown: "taproom", square: outside.inside, facing: Math.PI, minimap: "taproom" });
+    expect(inside).toEqual({ order: "enter", glowing: true, map: "taproom", shown: "taproom", square: outside.inside, facing: Math.PI, minimap: "taproom", heard: "taproom" });
     expect(await page.evaluate(() => {
         const { game } = window.pellagos;
 
@@ -642,7 +642,7 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
 
     const up = await through("taproom", "stairs", 6);
 
-    expect(up).toMatchObject({ order: "enter", glowing: true, map: "upstairs", shown: "upstairs", square: outside.top, minimap: "upstairs" });
+    expect(up).toMatchObject({ order: "enter", glowing: true, map: "upstairs", shown: "upstairs", square: outside.top, minimap: "upstairs", heard: "upstairs" });
 
     // (Standing at their top, straight down)
     const down = await through("upstairs", "stairs", 3);
@@ -652,7 +652,7 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
     // And out, onto the square outside the door
     const out = await through("taproom", "door", 14);
 
-    expect(out).toMatchObject({ order: "enter", map: "town", shown: "town", square: outside.outside, minimap: "town" });
+    expect(out).toMatchObject({ order: "enter", map: "town", shown: "town", square: outside.outside, minimap: "town", heard: "town" });
 });
 
 test("the minimap walks the player where it's tapped, and Game options turn it and the sound off, remembered", async ({ page }) => {

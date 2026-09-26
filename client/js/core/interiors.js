@@ -170,7 +170,7 @@ export function readPlan(id, name, rows, { ground = GROUND.courtyard } = {}) {
  */
 export function tavernFloors() {
     const taproom = readPlan("taproom", "Wenches and Ale", TAPROOM, { ground: GROUND.cobbles });
-    const upstairs = readPlan("upstairs", "Upstairs at Wenches and Ale", UPSTAIRS, { ground: GROUND.soil });
+    const upstairs = readPlan("upstairs", "Upstairs at Wenches and Ale", UPSTAIRS, { ground: GROUND.planks });
 
     // Inside the front door, looking into the room; at the foot of the stairs and at their top,
     // looking into the room

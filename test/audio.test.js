@@ -72,9 +72,9 @@ describe("making sounds (synth.js)", () => {
         }
     });
 
-    it("puts every sound on the effects bus but for the town's: birds and leaves", () => {
+    it("puts every sound on the effects bus but for the town's and the tavern's: birds, leaves and the hearth crackling", () => {
         for (const [name, sound] of Object.entries(SOUNDS)) {
-            assert.equal(sound.bus ?? "effects", ["bird", "leaves"].includes(name) ? "environment" : "effects", name);
+            assert.equal(sound.bus ?? "effects", ["bird", "leaves", "crackle"].includes(name) ? "environment" : "effects", name);
         }
     });
 
@@ -181,6 +181,10 @@ function fakeAudio() {
 
         createConvolver() {
             return node({ buffer: null });
+        }
+
+        createBiquadFilter() {
+            return node({ type: "lowpass", frequency: param(350), Q: param(1) });
         }
 
         createDynamicsCompressor() {
@@ -397,6 +401,80 @@ describe("playing sounds (sound.js)", () => {
         context.currentTime += 1;
         sound.scheduleMusic();
         assert.equal(music().length, 0);
+        sound.close();
+    });
+
+    it("fades the town's music into the tavern's going in, from its start; quieter and muffled upstairs; and back to the town's where it left off", async () => {
+        const { sound, played } = await started();
+        const context = sound.context;
+        const { town, tavern } = sound.tracks;
+        const on = (track) => played.filter(({ source }) => Object.values(track.channels).includes(source.outputs[0]?.outputs[0]));
+
+        // A minute into the town's music
+        for (let t = 0; t <= 60; t += 0.2) {
+            context.currentTime = 10 + t;
+            sound.scheduleMusic();
+        }
+
+        const index = town.index;
+
+        assert.equal(sound.music, town);
+        assert.equal(tavern.output.gain.value, 0, "the tavern's silent out here");
+
+        // In: the town's fades out, the tavern's in, from the start, led by the lute
+        sound.setPlace("taproom");
+        assert.equal(sound.music, tavern);
+        assert.equal(town.output.gain.value, 0);
+        assert.equal(tavern.output.gain.value, 1);
+        assert.equal(tavern.filter.frequency.value, 20000, "clear");
+        played.length = 0;
+        sound.scheduleMusic();
+        assert.ok(Math.abs(tavern.start - (context.currentTime + 0.3)) < 1e-9);
+        assert.ok(on(tavern).length > 0 && on(town).length === 0);
+
+        for (let t = 0; t <= 4; t += 0.2) {
+            context.currentTime += 0.2;
+            sound.scheduleMusic();
+        }
+
+        assert.ok(on(tavern).some(({ source }) => source.outputs[0].outputs[0] === tavern.channels.guitar));
+
+        // Upstairs: the same, quieter and muffled; down again, as it was
+        sound.setPlace("upstairs");
+        assert.equal(sound.music, tavern);
+        assert.equal(tavern.output.gain.value, 0.4);
+        assert.equal(tavern.filter.frequency.value, 650);
+        sound.setPlace("taproom");
+        assert.deepEqual([tavern.output.gain.value, tavern.filter.frequency.value], [1, 20000]);
+
+        // Out: the town's again, where it left off, straight away
+        sound.setPlace("town");
+        assert.equal(sound.music, town);
+        assert.equal(town.index, index);
+        assert.equal(tavern.output.gain.value, 0);
+        played.length = 0;
+        sound.scheduleMusic();
+
+        const next = on(town)[0];
+
+        assert.ok(next && Math.abs(next.when - (context.currentTime + 0.3)) < 0.05, "its next note in a moment");
+        sound.close();
+    });
+
+    it("starts the music where the player is, if they're in the tavern when the sound starts", async () => {
+        await making;
+
+        fakeAudio();
+
+        const sound = new Sound({ fetch: fromDisk });
+
+        sound.recordings = new Map(made.recordings);
+        sound.samples = new Map(made.samples);
+        sound.setPlace("upstairs");
+        sound.unlock();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        assert.equal(sound.music, sound.tracks.tavern);
+        assert.deepEqual([sound.tracks.tavern.output.gain.value, sound.tracks.town.output.gain.value, sound.tracks.tavern.filter.frequency.value], [0.4, 0, 650]);
         sound.close();
     });
 });

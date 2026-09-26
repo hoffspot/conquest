@@ -18,6 +18,7 @@ const GROUND_COLOURS = {
     [GROUND.cobbles]: [152, 146, 136],
     [GROUND.soil]: [130, 102, 68],
     [GROUND.courtyard]: [164, 154, 136],
+    [GROUND.planks]: [132, 94, 58],
 };
 const ROOFS = [[146, 76, 50], [126, 90, 60], [112, 98, 88]];
 const LANDMARK_ROOF = [96, 104, 118];
@@ -38,7 +39,7 @@ const INSIDE = {
     washstand: [182, 180, 170],
     chest: [96, 66, 38],
     chaise: [118, 40, 74],
-    "side-table": [112, 76, 42],
+    "side-table": [78, 44, 30],
 };
 
 // Pixels to the metre of the painted map

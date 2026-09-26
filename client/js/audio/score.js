@@ -31,19 +31,21 @@ export function midi(name) {
     return 12 * (Number(octave) + 1) + LETTERS[letter] + (accidental === "#" ? 1 : accidental === "b" ? -1 : 0);
 }
 
-// A tune written as notes and how many beats each lasts ("r" rests), bars between |s
-const tune = (text) => text.split(/\s+/).filter((token) => token && token !== "|").map((token) => {
+/** A tune written as notes and how many beats each lasts ("r" rests), bars between |s: [[pitch, beats]]. */
+export const tune = (text) => text.split(/\s+/).filter((token) => token && token !== "|").map((token) => {
     const [name, beats] = token.split(":");
 
     return [name === "r" ? null : midi(name), Number(beats)];
 });
 
-// Chords: the pitch classes of the root, third and fifth
-const CHORDS = { Dm: [2, 5, 9], C: [0, 4, 7], G: [7, 11, 2], A: [9, 1, 4], Am: [9, 0, 4], F: [5, 9, 0], Bb: [10, 2, 5] };
-const chords = (text) => text.split(/\s+/).filter(Boolean);
+/** Chords: the pitch classes of the root, third and fifth. */
+export const CHORDS = Object.freeze({ Dm: [2, 5, 9], C: [0, 4, 7], G: [7, 11, 2], A: [9, 1, 4], Am: [9, 0, 4], F: [5, 9, 0], Bb: [10, 2, 5], D: [2, 6, 9], Em: [4, 7, 11], Bm: [11, 2, 6] });
 
-// A chord's notes from its root in [low, low + 11]: root, third and fifth above it
-function voicing(name, low) {
+/** A bar's chords, written as their names. */
+export const chords = (text) => text.split(/\s+/).filter(Boolean);
+
+/** A chord's notes from its root in [low, low + 11]: root, third and fifth above it. */
+export function voicing(name, low) {
     const [root, third, fifth] = CHORDS[name];
     const r = low + ((root - low) % 12 + 12) % 12;
     const above = (pc) => r + ((pc - root) % 12 + 12) % 12;
