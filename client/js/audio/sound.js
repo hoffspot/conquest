@@ -105,7 +105,7 @@ const THROUGH_FLOOR = 0.8;
 const CLEAR = 20000;
 
 // The swing for each attack animation (actions.js), and the sound of each projectile's launch
-const SWINGS = { sword: "swingSword", staff: "swingStaff", hammer: "swingHammer", punch: "swingPunch", cleaver: "swingCleaver" };
+const SWINGS = { sword: "swingSword", staff: "swingStaff", hammer: "swingHammer", punch: "swingPunch", kick: "swingKick", cleaver: "swingCleaver" };
 const LAUNCHES = { arrow: "arrow", bolt: "bolt", fireball: "fireball" };
 
 // The footsteps on each kind of ground (setpieces/pieces.js GROUND: grass, road, cobbles, soil,

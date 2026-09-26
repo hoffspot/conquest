@@ -53,7 +53,7 @@ import { createRandom } from "./random.js";
 import { BECKON, REST_EVERY, ROLES } from "./roles.js";
 import { rollHeal, SPELL_COOLDOWN, SPELLS } from "./spells.js";
 import { Variety } from "./variety.js";
-import { chooseAttack, distanceBetween, longestReach, rollDamage, WEAPONS } from "./weapons.js";
+import { armsOf, chooseAttack, distanceBetween, longestReach, rollDamage, WEAPONS } from "./weapons.js";
 import { nearestFree } from "./world.js";
 
 /**
@@ -148,19 +148,23 @@ export class Battle {
     }
 
     /**
-     * Add a character: { id, kind (a KINDS key), name, weapon (a WEAPONS key), team, square
+     * Add a character: { id, kind (a KINDS key), name, weapon (a WEAPONS key), boots (wearing
+     * spiked boots, kicking too: weapons.js armsOf), team, square
      * ([x, y]), map (a map's id: "town" to start with), ai ("patrol" for enemies, "routine" for
      * the folk), patrol ([[x, y], [x, y]], on its map), neutral (one of the folk: no one fights
      * them, and they fight no one), routine (the folk's: see #routine), facing }. It comes back
      * to life where it's added. The folk have a `role` (roles.js ROLES: how they rest).
      */
-    add({ id, kind, name = kind, weapon = null, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, facing = 0 }) {
+    add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, facing = 0 }) {
         const type = KINDS[kind];
         const actor = {
             id,
             kind,
             name,
             weapon,
+            boots: boots || weapon === "boots",
+            // Its attacks (its weapon's, and kicks)
+            arms: armsOf(weapon, boots),
             team,
             ai,
             patrol,
@@ -910,7 +914,7 @@ export class Battle {
             return false;
         }
 
-        const attack = chooseAttack(actor.weapon, actor.square, target.square);
+        const attack = chooseAttack(actor.arms, actor.square, target.square);
 
         return attack !== null && (attack.kind === "melee" || this.canSee(actor, target));
     }
@@ -1091,7 +1095,7 @@ export class Battle {
         }
 
         if (actor.order?.type === "engage" || (actor.target !== null && actor.order?.type !== "enter")) {
-            left -= longestReach(actor.weapon);
+            left -= longestReach(actor.arms);
         }
 
         return Math.max(0, left);
@@ -1182,7 +1186,8 @@ export class Battle {
             return;
         }
 
-        const attack = chooseAttack(actor.weapon, actor.square, target.square);
+        // (Kicking or using the weapon, at random, wearing spiked boots)
+        const attack = chooseAttack(actor.arms, actor.square, target.square, this.random);
 
         actor.attack = { attack, target: target.id, start: this.time, struck: false };
         actor.readyAt = this.time + attack.interval;

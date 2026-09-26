@@ -210,23 +210,28 @@ export class Character {
 
         for (const id of itemIds) {
             const item = EQUIPMENT[id];
-            const socket = socketOn(this, item.socket);
-            const model = buildItem(item.model, socket.fit);
 
-            model.name = id;
-            model.position.copy(socket.position);
-            model.quaternion.copy(socket.quaternion);
+            // (Some are in several parts, each on its own socket: spiked boots' iron)
+            for (const part of item.parts ?? [item]) {
+                const socket = socketOn(this, part.socket);
+                const model = buildItem(part.model, socket.fit);
 
-            if (item.turn) {
-                model.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(...item.turn)));
+                model.name = id;
+                model.position.copy(socket.position);
+                model.quaternion.copy(socket.quaternion);
+
+                if (part.turn) {
+                    model.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(...part.turn)));
+                }
+
+                if (part.offset) {
+                    model.position.add(new THREE.Vector3(...part.offset));
+                }
+
+                this.rig.bone(socket.bone).add(model);
+                this.items.push(model);
             }
 
-            if (item.offset) {
-                model.position.add(new THREE.Vector3(...item.offset));
-            }
-
-            this.rig.bone(socket.bone).add(model);
-            this.items.push(model);
             hairHidden ||= item.hides?.includes("hair");
 
             if (item.hold) {

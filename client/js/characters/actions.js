@@ -119,6 +119,9 @@ export const GUARDS = Object.freeze({
     // (The bow low before the body, its back to the enemy, the drawing hand near the string)
     bow: { left: { at: [-0.15, -0.7, 0.55], point: [-0.2, 0.85, 0.5], edge: [0, -0.5, 0.85] }, right: { at: [0.3, -0.6, 0.5], pronate: 40, shape: "relaxed" } },
     punch: { right: fist(1), left: fist(-1), ...spine({ flex: 6 }) },
+    // (Kicking: a looser guard, the fists lower, the body upright; the fists kept before the
+    // chest as it turns)
+    kick: { right: { ...fist(1), at: [0.26, 0.05, 0.4], shape: "fist", chest: 1 }, left: { ...fist(-1), at: [-0.22, -0.02, 0.55], shape: "fist", chest: 1 }, ...spine({ flex: 2 }) },
     cleaver: { right: { at: [0.1, -0.5, 0.65], point: [0.2, 0.7, 0.65], edge: [-0.2, -0.65, 0.73] }, left: FREE },
 });
 
@@ -134,6 +137,13 @@ const HAMMER = rest(GUARDS.hammer);
 const BOW = rest(GUARDS.bow, { Head: { turn: 0, flex: 0 } });
 const PUNCH = rest(GUARDS.punch);
 const CLEAVER = rest(GUARDS.cleaver);
+
+// Kicking (with the right leg; every other kick is mirrored, with the left): the kicking leg's
+// joints, from standing (the standing leg is left to keep its foot planted), and how far each
+// foot is let go of the ground (`free`: the kicking foot, from as it lifts to as it's down again)
+const LEG_DOWN = { RightUpLeg: { flex: 0, abduct: 0, rotate: 0 }, RightLeg: { flex: 0 }, RightFoot: { flex: 0 }, free: { right: 0 } };
+const KICK = rest(GUARDS.kick, { Hips: { turn: 0, tilt: 0, obliquity: 0 }, ...LEG_DOWN });
+const lifted = (pose) => ({ free: { right: 1 }, ...pose });
 const CAST = { ...spine({}), Head: { flex: 0 }, offset: [0, 0, 0] };
 
 // One way of doing an action: its name and key poses, from and back to `start`
@@ -383,6 +393,62 @@ export const ATTACKS = Object.freeze({
                 [0.5, { right: { at: [-0.15, 0.3, 0.3], palm: [0.5, -0.8, 0], towards: [0.2, 0.5, 0.85] }, left: fist(-1), ...spine({ flex: -4, turn: -20 }), Hips: { turn: 8 }, offset: [0, 0, -0.03] }],
                 [1, { right: { at: [0.3, 0.08, 1.08], palm: [-0.3, -0.95, 0], towards: [0, -0.25, 1], elbow: [-0.8, 0.4, 0] }, left: fist(-1), ...spine({ flex: 10, turn: 22 }), Hips: { turn: -12 }, offset: [0, -0.04, 0.07] }],
                 [1.4, { right: { at: [0.35, -0.15, 0.78], palm: [0, -1, 0], towards: [0, -0.3, 1] }, left: fist(-1), ...spine({ flex: 12, turn: 14 }), Hips: { turn: -8 }, offset: [0, -0.04, 0.04] }]),
+        ],
+    },
+    kick: {
+        // (The foot lifts off as the knee comes up, and is down again before the end; the body
+        // leans away from the kick to balance it, the fists kept up)
+        alternate: true,
+        variants: [
+            variant("front kick", KICK,
+                // The knee drawn up high, then the leg snapped straight out into the belly, the
+                // toes pointed, leaning back a little, then drawn back in and put down
+                [0.25, { free: { right: 1 } }],
+                [0.6, lifted({ RightUpLeg: { flex: 94, abduct: 4 }, RightLeg: { flex: 118 }, RightFoot: { flex: -25 }, ...spine({ flex: -2 }), Hips: { tilt: -4 }, offset: [0, -0.03, -0.01] })],
+                [1, lifted({ RightUpLeg: { flex: 80, abduct: 2 }, RightLeg: { flex: 4 }, RightFoot: { flex: -40 }, ...spine({ flex: -2 }), Neck: { flex: 6 }, Head: { flex: 8 }, Hips: { tilt: -8 }, offset: [0, -0.08, 0.04] })],
+                [1.35, lifted({ RightUpLeg: { flex: 90, abduct: 4 }, RightLeg: { flex: 110 }, RightFoot: { flex: -25 }, ...spine({ flex: -2 }), Hips: { tilt: -4 }, offset: [0, -0.03, 0.01] })],
+                [1.7, { ...LEG_DOWN, free: { right: 0.4 }, RightUpLeg: { flex: 20 }, RightLeg: { flex: 30 }, Hips: { tilt: 0 }, offset: [0, -0.01, 0] }],
+                [1.85, { free: { right: 0 } }]),
+            variant("roundhouse", KICK,
+                // Pivoting on the standing foot, the hips turning over and leaning back, the knee
+                // brought round and the shin whipped into the enemy's ribs, the chest and head
+                // kept turned to them, the kicking side's fist swung down and back
+                [0.25, { free: { right: 1 } }],
+                [0.6, lifted({ RightUpLeg: { flex: 75, abduct: 35, rotate: -25 }, RightLeg: { flex: 125 }, RightFoot: { flex: -30 }, ...spine({ turn: -15 }), Hips: { turn: -40, tilt: -6 }, offset: [0, -0.03, -0.02] })],
+                [1, lifted({ RightUpLeg: { flex: 62, abduct: 45, rotate: -35 }, RightLeg: { flex: 10 }, RightFoot: { flex: -45 }, ...spine({ turn: -25, flex: 4 }), Neck: { turn: -10, flex: 6 }, Head: { turn: -10, flex: 8 }, Hips: { turn: -55, tilt: -18 }, offset: [0, -0.08, 0.01], right: { at: [0.05, -0.62, -0.1], palm: [0.3, 0, -1], towards: [0, -1, 0], shape: "fist" } })],
+                [1.35, lifted({ RightUpLeg: { flex: 72, abduct: 35, rotate: -25 }, RightLeg: { flex: 120 }, RightFoot: { flex: -30 }, ...spine({ turn: -15 }), Hips: { turn: -45, tilt: -8 }, offset: [0, -0.03, 0] })],
+                [1.7, { ...LEG_DOWN, free: { right: 0.4 }, RightUpLeg: { flex: 25, abduct: 10 }, RightLeg: { flex: 40 }, ...spine({ turn: -4 }), Hips: { turn: -12, tilt: 0 }, offset: [0, -0.01, 0] }],
+                [1.85, { free: { right: 0 } }]),
+            variant("side kick", KICK,
+                // Turned side on, the knee drawn up across the body, then the heel driven
+                // straight out into the enemy, the body leaning right away from it
+                [0.25, { free: { right: 1 } }],
+                [0.6, lifted({ RightUpLeg: { flex: 80, abduct: 20, rotate: -20 }, RightLeg: { flex: 125 }, RightFoot: { flex: 10 }, ...spine({ turn: -25 }), Hips: { turn: -65, tilt: -8 }, offset: [0, -0.03, -0.03] })],
+                [1, lifted({ RightUpLeg: { flex: 20, abduct: 45, rotate: -20 }, RightLeg: { flex: 0 }, RightFoot: { flex: 15 }, ...spine({ turn: -35 }), Neck: { turn: -15, flex: 12 }, Head: { turn: -15, flex: 12 }, Hips: { turn: -82, tilt: -28 }, offset: [0, -0.08, -0.03] })],
+                [1.35, lifted({ RightUpLeg: { flex: 75, abduct: 25, rotate: -20 }, RightLeg: { flex: 120 }, RightFoot: { flex: 10 }, ...spine({ turn: -28 }), Hips: { turn: -68, tilt: -10 }, offset: [0, -0.03, -0.01] })],
+                [1.7, { ...LEG_DOWN, free: { right: 0.4 }, RightUpLeg: { flex: 25, abduct: 8 }, RightLeg: { flex: 40 }, ...spine({ turn: -6 }), Hips: { turn: -15, tilt: 0 }, offset: [0, -0.01, 0] }],
+                [1.85, { free: { right: 0 } }]),
+            variant("stamp", KICK,
+                // The knee raised high, the foot flexed, then stamped down and forward through
+                // the enemy's knee, leaning into it
+                [0.25, { free: { right: 1 } }],
+                [0.6, lifted({ RightUpLeg: { flex: 105, abduct: 8, rotate: 10 }, RightLeg: { flex: 105 }, RightFoot: { flex: 15 }, ...spine({ flex: -2 }), Hips: { tilt: -4 }, offset: [0, -0.01, -0.03] })],
+                [1, lifted({ RightUpLeg: { flex: 42, abduct: 6, rotate: 15 }, RightLeg: { flex: 4 }, RightFoot: { flex: 15 }, ...spine({ flex: 10 }), Hips: { tilt: 4 }, offset: [0, -0.07, 0.07] })],
+                [1.35, lifted({ RightUpLeg: { flex: 50, abduct: 6, rotate: 10 }, RightLeg: { flex: 40 }, RightFoot: { flex: 5 }, ...spine({ flex: 8 }), Hips: { tilt: 2 }, offset: [0, -0.06, 0.05] })],
+                [1.7, { ...LEG_DOWN, free: { right: 0.4 }, RightUpLeg: { flex: 20 }, RightLeg: { flex: 25 }, ...spine({ flex: 3 }), offset: [0, -0.02, 0.02] }],
+                [1.85, { free: { right: 0 } }]),
+            variant("spinning back kick", KICK,
+                // Spun round on the standing foot until the back is to the enemy, the knee
+                // tucked, looking over the shoulder; then the heel driven straight back into
+                // them, leaning forward away from it; then turned back round to face them. (The
+                // pelvis turns about the standing foot; its lean, `tilt`, is about the body's
+                // side to side axis before it turned: a lean back, turned round, is forward)
+                [0.3, { free: { right: 0.6 }, ...spine({ turn: 10 }), Hips: { turn: 70 }, offset: [0.06, -0.02, 0] }],
+                [0.65, lifted({ RightUpLeg: { flex: 70, abduct: 0 }, RightLeg: { flex: 120 }, RightFoot: { flex: 10 }, ...spine({ flex: 6, turn: 30 }), Neck: { turn: 20 }, Head: { turn: 20 }, Hips: { turn: 165, tilt: -8 }, offset: [0.12, -0.05, 0] })],
+                [1, lifted({ RightUpLeg: { flex: -30, abduct: -12 }, RightLeg: { flex: 2 }, RightFoot: { flex: 15 }, ...spine({ flex: 12, turn: 45 }), Neck: { turn: 30 }, Head: { turn: 30, flex: 8 }, Hips: { turn: 172, tilt: -28 }, offset: [0.08, -0.12, -0.03] })],
+                [1.35, lifted({ RightUpLeg: { flex: 60, abduct: 0 }, RightLeg: { flex: 110 }, RightFoot: { flex: 5 }, ...spine({ flex: 6, turn: 30 }), Neck: { turn: 20 }, Head: { turn: 20 }, Hips: { turn: 160, tilt: -8 }, offset: [0.12, -0.05, 0] })],
+                [1.65, { ...LEG_DOWN, free: { right: 0.5 }, RightUpLeg: { flex: 25 }, RightLeg: { flex: 40 }, ...spine({ turn: 8 }), Neck: { turn: 0 }, Head: { turn: 0 }, Hips: { turn: 55, tilt: 0 }, offset: [0.05, -0.02, 0] }],
+                [1.85, { free: { right: 0 } }]),
         ],
     },
     cleaver: {
@@ -834,6 +900,16 @@ export const REACTIONS = Object.freeze({
             return { ...spine({ turn: -side * 10 * e, flex: -front * 5 * e }), Neck: { turn: -side * 14 * e, bend: side * 8 * e }, Head: { turn: -side * 18 * e, flex: -front * 10 * e }, offset: [0, 0, -front * 0.03 * e] };
         },
     },
+    // A kick: winded, doubling over it and driven back a step, the arms drawn in
+    kick: {
+        length: 0.55,
+        effect: "impact",
+        pose: (t, { side, front }) => {
+            const e = pulse(t, 0.18);
+
+            return { ...spine({ flex: front * 20 * e, turn: -side * 8 * e }), Head: { flex: front * 10 * e }, RightArm: { flex: 20 * e }, LeftArm: { flex: 20 * e }, RightForeArm: { flex: 35 * e }, LeftForeArm: { flex: 35 * e }, offset: [0, -0.06 * e, -front * 0.11 * e] };
+        },
+    },
     // An orc's cleaver: a heavy cut that staggers
     hack: {
         length: 0.6,
@@ -941,6 +1017,7 @@ function compile(rawKeys) {
                 "held",
                 "bent",
                 ...("pronate" in value ? ["pronate"] : []),
+                ...("chest" in value ? ["chest"] : []),
                 ...(value.wrist ? ["wristFlex", "wristDeviate"] : []),
             ];
         }
@@ -973,6 +1050,7 @@ function compile(rawKeys) {
             switch (name) {
                 case "on":
                 case "pronate":
+                case "chest":
                     return value[name];
                 case "reach":
                     return 1;
@@ -1086,6 +1164,10 @@ const _item = new THREE.Quaternion();
 const _hand = new THREE.Quaternion();
 const _basis = new THREE.Matrix4();
 const _wrist = new THREE.Vector3();
+const _forward = new THREE.Vector3();
+const _up = new THREE.Vector3(0, 1, 0);
+const _chest = new THREE.Quaternion();
+const _yaw = new THREE.Quaternion();
 
 /**
  * An empty hand's anatomical frame (world) with its palm facing `palm` and its fingers pointing
@@ -1143,6 +1225,9 @@ export class Actions {
 
         /** How far past their ranges each arm's joints were last asked to go (degrees, for checking poses). */
         this.strain = { right: 0, left: 0 };
+
+        /** How far each foot is let go of the ground this frame, 0 to 1 (kicking: Walker.freed). */
+        this.free = { Left: 0, Right: 0 };
     }
 
     /** Sit down (on a bench) or stand. */
@@ -1163,9 +1248,10 @@ export class Actions {
     /**
      * Start an attack (an ATTACKS key), the blow landing `hitAt` seconds in and ending at
      * `duration` seconds: one of its ways (`variant`, or at random, never the way it was done
-     * last time). Returns which way.
+     * last time). Returns which way. Without its `arms` the hands stay as they were (kicking
+     * with a weapon in hand, on guard).
      */
-    startAttack(name, { hitAt, duration, variant = null }) {
+    startAttack(name, { hitAt, duration, variant = null, arms = true }) {
         const attack = ATTACKS[name];
 
         if (!attack) {
@@ -1176,7 +1262,7 @@ export class Actions {
 
         this.variety.last.set(name, way);
         this.attacks++;
-        this.attack = { name, variant: way, tracks: COMPILED.get(name)[way], start: this.time, hitAt, duration, mirror: Boolean(attack.alternate && this.attacks % 2 === 0) };
+        this.attack = { name, variant: way, tracks: COMPILED.get(name)[way], start: this.time, hitAt, duration, mirror: Boolean(attack.alternate && this.attacks % 2 === 0), arms };
 
         return way;
     }
@@ -1258,6 +1344,8 @@ export class Actions {
         this.time += dt;
         this.guard += Math.sign(this.guardTarget - this.guard) * Math.min(Math.abs(this.guardTarget - this.guard), dt * 4);
         this.reaching = [];
+        this.free.Left = 0;
+        this.free.Right = 0;
 
         if (this.seated) {
             this.#sit();
@@ -1268,7 +1356,7 @@ export class Actions {
         }
 
         if (this.attack) {
-            const { tracks, start, hitAt, duration, mirror, stopping = null } = this.attack;
+            const { tracks, start, hitAt, duration, mirror, stopping = null, arms = true } = this.attack;
             const elapsed = this.time - start;
             const easing = stopping ? 1 - smooth(0, stopping.length, this.time - stopping.start) : 1;
 
@@ -1279,7 +1367,7 @@ export class Actions {
                 const key = this.attack.held ? 1 : elapsed < hitAt ? elapsed / hitAt : 1 + (elapsed - hitAt) / Math.max(1e-3, duration - hitAt);
                 const weight = this.attack.held ? 1 : smooth(0, 0.3, key) * (1 - smooth(tracks.settle, 2, key)) * easing;
 
-                this.#blend(tracks, key, weight, mirror);
+                this.#blend(tracks, key, weight, mirror, arms);
             }
         }
 
@@ -1337,7 +1425,7 @@ export class Actions {
 
             for (const side of order) {
                 const other = side === "right" ? "left" : "right";
-                const second = hands[other] && "on" in hands[other] && hands[other].at ? this.#place(other, hands[other].at) : null;
+                const second = hands[other] && "on" in hands[other] && hands[other].at ? this.#place(other, hands[other].at, this.#frame(hands[other], new THREE.Quaternion())) : null;
 
                 grips[side] = this.#reach(side, hands[side], weight * (hands[side].reach ?? 1), grips[other], second);
                 reached.add(side);
@@ -1354,11 +1442,16 @@ export class Actions {
 
     // Blend the joints towards an action's pose at a key time, by `weight`; hands' places are
     // kept for place()
-    #blend({ times, tracks }, key, weight, mirror) {
+    #blend({ times, tracks }, key, weight, mirror, arms = true) {
         const rig = this.rig;
         const hands = {};
 
         for (const { joint, names, values } of tracks) {
+            // (The hands and fingers left as they are)
+            if (!arms && (HANDS.includes(joint) || DIGIT.test(joint))) {
+                continue;
+            }
+
             const value = (n) => {
                 const sampled = sample(times, values, n, key);
 
@@ -1374,6 +1467,16 @@ export class Actions {
                 continue;
             }
 
+            // (How far each foot is off the ground, following the pose: a kick)
+            if (joint === "free") {
+                names.forEach((side, n) => {
+                    const Side = (mirror ? MIRROR[side] : side) === "left" ? "Left" : "Right";
+
+                    this.free[Side] = Math.max(this.free[Side], Math.min(1, Math.max(0, value(n))) * weight);
+                });
+                continue;
+            }
+
             const name = mirror ? mirrored(joint) : joint;
 
             if (HANDS.includes(joint)) {
@@ -1382,7 +1485,7 @@ export class Actions {
                 names.forEach((channel, n) => {
                     if (channel === "reach") {
                         hand.reach = Math.min(1, Math.max(0, value(n)));
-                    } else if (channel === "on" || channel === "pronate" || channel === "held" || channel === "bent") {
+                    } else if (channel === "on" || channel === "pronate" || channel === "held" || channel === "bent" || channel === "chest") {
                         hand[channel] = value(n);
                     } else if (channel === "wristFlex" || channel === "wristDeviate") {
                         hand.wrist ??= { flex: 0, deviate: 0 };
@@ -1465,13 +1568,27 @@ export class Actions {
     }
 
     // Where a hand's place (`at`: arm lengths from its shoulder, in the character's frame) is in the world
-    #place(side, at) {
+    #place(side, at, frame = this.character.object.getWorldQuaternion(new THREE.Quaternion())) {
         const body = this.#measure();
         const shoulder = this.rig.bone("Spine2").localToWorld(_shoulder.copy(body.shoulders[side]));
 
-        this.character.object.getWorldQuaternion(_frame);
+        return new THREE.Vector3().fromArray(at).multiplyScalar(body.arm).applyQuaternion(frame).add(shoulder);
+    }
 
-        return new THREE.Vector3().fromArray(at).multiplyScalar(body.arm).applyQuaternion(_frame).add(shoulder);
+    // The frame a hand's place and turn are given in (world): the character's, or turned as far
+    // as its chest has turned from it (`chest`: 0 to 1; fists kept up before the chest, spinning)
+    #frame(hand, target) {
+        this.character.object.getWorldQuaternion(target);
+
+        const share = hand?.chest ?? 0;
+
+        if (share > 0.001) {
+            const forward = _forward.set(0, 0, 1).applyQuaternion(this.rig.bone("Spine2").getWorldQuaternion(_chest)).applyQuaternion(_chest.copy(target).invert());
+
+            target.multiply(_yaw.setFromAxisAngle(_up, Math.atan2(forward.x, forward.z) * share));
+        }
+
+        return target;
     }
 
     // Reach one hand to its place as a real arm would (Rig.reachArm: every joint within its
@@ -1493,7 +1610,7 @@ export class Actions {
         let point = null;
         let edge = null;
 
-        this.character.object.getWorldQuaternion(_frame);
+        this.#frame(hand, _frame);
 
         if ("on" in hand) {
             if (!other) {
@@ -1503,13 +1620,13 @@ export class Actions {
             // Further down the other hand's weapon, along it (turned as comes naturally): where
             // it passes nearest this hand's place, or `on` metres down; below the other fist, and
             // where the haft's held (ITEMS: `haft`)
-            const wanted = hand.at ? this.#place(side, hand.at).sub(other.position).dot(other.point) : -hand.on;
+            const wanted = hand.at ? this.#place(side, hand.at, _frame).sub(other.position).dot(other.point) : -hand.on;
             const along = Math.min(other.haft?.[1] ?? -FIST, Math.max(other.haft?.[0] ?? -Infinity, wanted));
 
             position = other.position.clone().addScaledVector(other.point, along);
             point = other.point.clone();
         } else {
-            position = this.#place(side, hand.at);
+            position = this.#place(side, hand.at, _frame);
 
             if (second) {
                 // Held in both hands: along the line from the other hand's place through this one's

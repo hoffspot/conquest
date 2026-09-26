@@ -103,6 +103,12 @@ export class Walker {
         this.onStep = null;
 
         /**
+         * How far each foot is let go of the ground, 0 to 1 (a kick lifts one: its leg follows
+         * the joint angles, not the ground): ("Left" or "Right") => share, or null for neither.
+         */
+        this.freed = null;
+
+        /**
          * Per foot: whether it's planted, the pivot it's planted on (world), how far the joint
          * angles would have slid it, and how far they had when it lifted off.
          */
@@ -486,6 +492,7 @@ export class Walker {
 
     #plant(side, i, phase, s, dt = 0, r = 0) {
         const foot = this.feet[i];
+        const free = Math.min(1, Math.max(0, this.freed?.(side) ?? 0));
         const object = this.character.object;
         const ground = object.getWorldPosition(_point).y;
         const stance = STANCE + (RUN_STANCE - STANCE) * r;
@@ -516,7 +523,10 @@ export class Walker {
         }
 
         // Standing still and turned (to face someone), the feet shuffle round under the body
-        if (foot.planted && s === 0 && dt > 0) {
+        // (not while the other's off the ground, kicking: this one stands firm)
+        const other = SIDES[1 - i];
+
+        if (foot.planted && s === 0 && dt > 0 && !(this.freed?.(other) > 0)) {
             const off = foot.lock.distanceTo(now);
 
             if (off > 0.02) {
@@ -543,6 +553,18 @@ export class Walker {
             foot.release.multiplyScalar(Math.exp(-LET_GO * dt));
             foot.correction.copy(foot.release).multiplyScalar(1 - smooth(stance, stance + 0.2, phase));
             lift = -lowest + (Math.max(0, 0.008 * off - lowest) + lowest) * off;
+        }
+
+        // Let go of the ground (kicking): the leg as the joint angles have it, as far as it's
+        // free; mostly free, the foot plants afresh wherever it comes down
+        if (free > 0) {
+            foot.correction.multiplyScalar(1 - free);
+            lift *= 1 - free;
+
+            if (free > 0.5) {
+                foot.planted = false;
+                foot.release.set(0, 0, 0);
+            }
         }
 
         if (foot.correction.lengthSq() < 1e-8 && Math.abs(lift) < 1e-4) {

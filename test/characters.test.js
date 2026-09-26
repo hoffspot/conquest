@@ -963,7 +963,7 @@ describe("clothing and armour (garments.js)", () => {
             }
         }
 
-        assert.ok(Object.values(ITEMS).every(({ socket }) => socket));
+        assert.ok(Object.values(ITEMS).every(({ socket, parts }) => socket || parts.every((part) => part.socket && part.model)));
     });
 });
 

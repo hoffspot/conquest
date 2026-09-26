@@ -212,6 +212,70 @@ function knuckleSpikes(scale) {
     return assemble(parts, "spikes");
 }
 
+// A curved plate: part of a ring round the y axis (`radius` to its outside, `thickness` thick),
+// `height` tall, round from `from` to `to` (radians about y, from +z towards +x); its middle at the origin
+function arcPlate(radius, thickness, height, from, to) {
+    const shape = new THREE.Shape();
+    const steps = 10;
+    const point = (r, angle) => [r * Math.sin(angle), -r * Math.cos(angle)];
+
+    shape.moveTo(...point(radius, from));
+
+    for (let k = 1; k <= steps; k++) {
+        shape.lineTo(...point(radius, from + ((to - from) * k) / steps));
+    }
+
+    for (let k = steps; k >= 0; k--) {
+        shape.lineTo(...point(radius - thickness, from + ((to - from) * k) / steps));
+    }
+
+    const geometry = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false });
+
+    // (Drawn across x and z, standing up along y)
+    geometry.rotateX(-Math.PI / 2);
+    geometry.translate(0, -height / 2, 0);
+
+    return geometry;
+}
+
+// Spiked boots' iron (equipment.js: on the toes, heels and shins, facing forward, +z; one
+// material, so each piece is one draw)
+function toeSpike(scale) {
+    // A domed cap over the toes (the origin a little back from their tips, on top), a spike
+    // straight out of its front and two studs on top
+    const cap = new THREE.SphereGeometry(0.044 * scale, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.5, 0.95);
+
+    return assemble([
+        [at(cap, 0, -0.012 * scale, -0.008 * scale), "darkSteel"],
+        [at(new THREE.ConeGeometry(0.008 * scale, 0.042 * scale, 6), 0, 0, 0.052 * scale, Math.PI / 2, 0, 0), "darkSteel"],
+        [at(new THREE.ConeGeometry(0.005 * scale, 0.014 * scale, 5), 0.018 * scale, 0.012 * scale, -0.004 * scale, 0.5, 0, -0.4), "darkSteel"],
+        [at(new THREE.ConeGeometry(0.005 * scale, 0.014 * scale, 5), -0.018 * scale, 0.012 * scale, -0.004 * scale, 0.5, 0, 0.4), "darkSteel"],
+    ], "toeSpike");
+}
+
+function heelSpur(scale) {
+    // A band round the back of the heel (the origin on it) and a spur pointing back from it
+    const radius = 0.037 * scale;
+    const band = arcPlate(radius, 0.004 * scale, 0.03 * scale, Math.PI * 0.62, Math.PI * 1.38);
+
+    return assemble([
+        [at(band, 0, 0, radius), "darkSteel"],
+        [at(new THREE.ConeGeometry(0.009 * scale, 0.038 * scale, 6), 0, 0, -0.021 * scale, -Math.PI / 2, 0, 0), "darkSteel"],
+    ], "heelSpur");
+}
+
+function shinPlate(scale) {
+    // A curved plate down the front of the shin (the origin on it), three spikes along it
+    const radius = 0.046 * scale;
+    const parts = [[at(arcPlate(radius, 0.004 * scale, 0.17 * scale, -Math.PI * 0.36, Math.PI * 0.36), 0, 0, -radius), "darkSteel"]];
+
+    for (const y of [-0.055, 0, 0.055]) {
+        parts.push([at(new THREE.ConeGeometry(0.0075 * scale, 0.032 * scale, 6), 0, y * scale, 0.014 * scale, Math.PI / 2, 0, 0), "darkSteel"]);
+    }
+
+    return assemble(parts, "shinPlate");
+}
+
 function cleaver() {
     // A broad, heavy, notched blade on a short wooden grip, its edge forward (+z)
     const outline = new THREE.Shape();
@@ -448,6 +512,12 @@ export function buildItem(model, fit = {}) {
             return grimoire();
         case "knuckleSpikes":
             return knuckleSpikes(fit.scale ?? 1);
+        case "toeSpike":
+            return toeSpike(fit.scale ?? 1);
+        case "heelSpur":
+            return heelSpur(fit.scale ?? 1);
+        case "shinPlate":
+            return shinPlate(fit.scale ?? 1);
         case "cleaver":
             return cleaver();
         case "bow":

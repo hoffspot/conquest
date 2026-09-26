@@ -74,6 +74,17 @@ export const ITEMS = Object.freeze({
     cleaver: { label: "Orc cleaver", slot: "mainHand", model: "cleaver", socket: "rightHand", turn: [0.7, 0, 0], grips: true, hold: HOLDS.sword },
     spikedGauntlets: { label: "Spiked gauntlets", slot: "mainHand", model: "knuckleSpikes", socket: "rightHand", grips: true, hold: HOLDS.fist, garment: "gauntlets" },
     spikedGauntletLeft: { label: "Spiked gauntlet (left)", slot: "offHand", model: "knuckleSpikes", socket: "leftHand", grips: true, hold: HOLDS.fist },
+    // (Iron on both feet: over the toes, round the heels and down the shins, each on its bone)
+    spikedBoots: {
+        label: "Spiked boots",
+        slot: "feet",
+        garment: "spikedBootLeather",
+        parts: ["right", "left"].flatMap((side) => [
+            { model: "toeSpike", socket: `${side}Toe` },
+            { model: "heelSpur", socket: `${side}Heel` },
+            { model: "shinPlate", socket: `${side}Shin` },
+        ]),
+    },
     grimoire: { label: "Grimoire", slot: "offHand", model: "grimoire", socket: "leftHand", hold: HOLDS.book },
     pistol: { label: "Flintlock pistol", slot: "mainHand", model: "pistol", socket: "rightHand", grips: true, hold: HOLDS.pistol },
     bow: { label: "Longbow", slot: "offHand", model: "bow", socket: "leftHand", turn: [0.4, 0, 0], grips: true, hold: HOLDS.bow },
@@ -130,6 +141,39 @@ export function socketOn(character, socket) {
 
             return { bone, position, quaternion, fit };
         }
+        case "rightToe":
+        case "leftToe":
+        case "rightHeel":
+        case "leftHeel":
+        case "rightShin":
+        case "leftShin": {
+            // On the outside of the foot's skin (and the boot's leather over it): over the tips
+            // of the toes; round the back of the heel, a little above the sole; down the front
+            // of the shin, a little above the ankle
+            const Side = socket.startsWith("left") ? "Left" : "Right";
+            const part = socket.slice(Side.length);
+            const bone = `${Side}${{ Toe: "ToeBase", Heel: "Foot", Shin: "Leg" }[part]}`;
+            const extent = boneExtent(character, part === "Toe" ? [`${Side}Foot`, `${Side}ToeBase`] : [bone], part === "Toe" ? (y, z) => z : part === "Heel" ? (y, z) => (y < 0.07 * face.scale ? -z : -Infinity) : null);
+            let position;
+
+            if (part === "Toe") {
+                const toe = head(`${Side}ToeBase`);
+
+                position = new THREE.Vector3(extent.x, toe.y + 0.004, extent.z - 0.012 * face.scale).sub(toe);
+            } else if (part === "Heel") {
+                position = new THREE.Vector3(extent.x, 0.045 * face.scale, extent.z - 0.01).sub(head(bone));
+            } else {
+                // A third of the way up from the ankle to the knee, on the front of the shin
+                const knee = head(bone);
+                const ankle = head(`${Side}Foot`);
+                const y = ankle.y + (knee.y - ankle.y) * 0.4;
+                const front = boneExtent(character, [bone], (vy, z) => (Math.abs(vy - y) < 0.03 ? z : -Infinity));
+
+                position = new THREE.Vector3(front.x, y, front.z + 0.012).sub(knee);
+            }
+
+            return { bone, position, quaternion: new THREE.Quaternion(), fit };
+        }
         case "head": {
             const middle = new THREE.Vector3(...face.fromFace(0, 0.035, -0.068));
 
@@ -174,6 +218,41 @@ export function socketOn(character, socket) {
         default:
             throw new Error(`No socket "${socket}"`);
     }
+}
+
+/**
+ * The furthest point of some bones' skin (what each moves most) by `score(y, z)` (the highest
+ * wins; none: the middle of it), in the body's rest pose, at the middle of it across: { x, y, z }.
+ */
+function boneExtent(character, boneNames, score = null) {
+    const { human, positions, rig } = character;
+    const bones = new Set(boneNames.map((name) => rig.index.get(name)));
+    let best = null;
+    let bestScore = -Infinity;
+    const sum = [0, 0, 0];
+    let count = 0;
+
+    for (let v = 0; v < human.vertexCount; v++) {
+        if (human.partOf[v] === 0 && bones.has(human.skinIndices[v * 4])) {
+            const [x, y, z] = [positions[v * 3], positions[v * 3 + 1], positions[v * 3 + 2]];
+
+            sum[0] += x;
+            sum[1] += y;
+            sum[2] += z;
+            count++;
+
+            const value = score ? score(y, z) : -Infinity;
+
+            if (value > bestScore) {
+                bestScore = value;
+                best = { x, y, z };
+            }
+        }
+    }
+
+    const middle = { x: sum[0] / count, y: sum[1] / count, z: sum[2] / count };
+
+    return best ? { ...best, x: middle.x } : middle;
 }
 
 /** The head's radius round its upper half (for fitting helmets). */

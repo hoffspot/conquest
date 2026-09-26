@@ -122,6 +122,7 @@ export const SOUNDS = {
     swingHammer: { variants: 3, volume: 0.6, make: swing({ name: "swingHammer", length: 0.5, from: 220, top: 850, to: 300, q: 1, body: 0.7 }) },
     swingPunch: { variants: 3, volume: 0.4, make: swing({ name: "swingPunch", length: 0.15, from: 900, top: 2300, to: 1200, peak: 0.6 }) },
     swingCleaver: { variants: 3, volume: 0.6, make: swing({ name: "swingCleaver", length: 0.34, from: 450, top: 1900, to: 700, body: 0.35 }) },
+    swingKick: { variants: 3, volume: 0.5, make: swing({ name: "swingKick", length: 0.24, from: 520, top: 1700, to: 800, body: 0.3, peak: 0.6 }) },
 
     // Hits
     slash: {
@@ -153,6 +154,12 @@ export const SOUNDS = {
         variants: 3,
         volume: 0.7,
         make: (random) => add(add(burst(random, 0.12, "lowpass", 1200, 0.8, 0.001, 0.03), thump(130, 80, 0.1, 0.03), 1), burst(random, 0.02, "highpass", 3500, 0.7, 0.0005, 0.004), 0.5),
+    },
+    // A spiked boot: a heavy thud into the body, a crack of leather and the spikes biting
+    kick: {
+        variants: 3,
+        volume: 0.8,
+        make: (random) => add(add(thump(95, 50, 0.2, 0.05), burst(random, 0.14, "lowpass", 900, 0.8, 0.001, 0.04), 0.9), burst(random, 0.03, "highpass", 2800, 0.7, 0.0005, 0.007), 0.6),
     },
     arcane: {
         variants: 3,
