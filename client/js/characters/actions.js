@@ -178,14 +178,14 @@ export const ATTACKS = Object.freeze({
         variants: [
             variant("overhead strike", STAFF,
                 // Raised over the right shoulder, the head back, then brought down on the enemy
-                [0.6, { right: { at: [0.03, 0.41, 0.18] }, left: { on: 0, at: [-0.43, 0.14, 0.34] }, ...spine({ flex: -6, turn: -18 }), offset: [0, 0.01, -0.04] }],
-                [1, { right: { at: [0.58, -0.56, 0.56] }, left: { on: 0, at: [-0.11, -0.69, 0.49] }, ...spine({ flex: 16, turn: 12 }), offset: [0, -0.05, 0.08] }],
-                [1.3, { right: { at: [0.26, -0.92, 0.68] }, left: { on: 0, at: [-0.4, -1.11, 0.13] }, ...spine({ flex: 18, turn: 14 }), offset: [0, -0.06, 0.07] }]),
+                [0.6, { right: { at: [0.03, 0.41, 0.21] }, left: { on: 0, at: [-0.45, 0.17, 0.32] }, ...spine({ flex: -6, turn: -18 }), offset: [0, 0.01, -0.04] }],
+                [1, { right: { at: [0.56, -0.56, 0.61] }, left: { on: 0, at: [-0.08, -0.74, 0.44] }, ...spine({ flex: 16, turn: 12 }), offset: [0, -0.05, 0.08] }],
+                [1.3, { right: { at: [0.26, -0.87, 0.58] }, left: { on: 0, at: [-0.4, -1.11, 0.13] }, ...spine({ flex: 18, turn: 14 }), offset: [0, -0.06, 0.07] }]),
             variant("sweep", STAFF,
                 // Swung back round to the right, then swept flat across to the left
-                [0.6, { right: { at: [-0.5, -0.26, 0.3] }, left: { on: 0, at: [-0.12, -0.46, 0.39] }, ...spine({ turn: -32 }), Hips: { turn: 12 }, offset: [0, -0.02, -0.03] }],
-                [1, { right: { at: [0.19, -0.69, 0.45] }, left: { on: 0, at: [-0.59, -0.83, 0.49] }, ...spine({ flex: 6, turn: 22 }), Hips: { turn: -12 }, offset: [0, -0.05, 0.08] }],
-                [1.35, { right: { at: [0.82, -0.53, 0.06] }, left: { on: 0, at: [0.22, -0.64, 0.48] }, ...spine({ flex: 8, turn: 30 }), Hips: { turn: -15 }, offset: [0, -0.05, 0.06] }]),
+                [0.6, { right: { at: [-0.5, -0.26, 0.3] }, left: { on: 0, at: [-0.14, -0.46, 0.37] }, ...spine({ turn: -32 }), Hips: { turn: 12 }, offset: [0, -0.02, -0.03] }],
+                [1, { right: { at: [0.22, -0.66, 0.4] }, left: { on: 0, at: [-0.56, -0.83, 0.44] }, ...spine({ flex: 6, turn: 22 }), Hips: { turn: -12 }, offset: [0, -0.05, 0.08] }],
+                [1.35, { right: { at: [0.8, -0.5, 0.06] }, left: { on: 0, at: [0.17, -0.69, 0.43] }, ...spine({ flex: 8, turn: 30 }), Hips: { turn: -15 }, offset: [0, -0.05, 0.06] }]),
             variant("thrust", STAFF,
                 // Drawn back low, then driven head first at the enemy
                 [0.6, { right: { at: [0.2, -0.62, 0.2] }, left: { on: 0, at: [-0.43, -0.7, -0.23] }, ...spine({ turn: -14 }), offset: [0, -0.02, -0.07] }],
@@ -274,29 +274,35 @@ export const ATTACKS = Object.freeze({
         variants: [
             variant("overhead smash", HAMMER,
                 // High over the head, the head hanging back, arching back, then down with the whole body onto the enemy
-                [0.6, { right: { at: [0.18, 0.82, 0.22] }, left: { on: 0, at: [-0.27, 0.58, 0.53] }, ...spine({ flex: -12 }), offset: [0, 0.02, -0.05] }],
-                [1, { right: { at: [0.45, -0.75, 0.82] }, left: { on: 0, at: [-0.26, -0.92, 0.38] }, ...spine({ flex: 18 }), offset: [0, -0.1, 0.1] }],
-                [1.35, { right: { at: [0.62, -0.85, 0.11] }, left: { on: 0, at: [-0.1, -0.82, -0.1] }, ...spine({ flex: 28 }), offset: [0, -0.14, 0.1] }]),
+                [0.6, { right: { at: [0.06, 0.85, 0.2] }, left: { on: 0, at: [-0.62, 0.58, 0.58] }, ...spine({ flex: -12 }), offset: [0, 0.02, -0.05] }],
+                [1, { right: { at: [0.48, -0.65, 0.75] }, left: { on: 0, at: [-0.21, -0.82, 0.31] }, ...spine({ flex: 18 }), offset: [0, -0.1, 0.1] }],
+                [1.35, { right: { at: [0.62, -0.67, 0.34] }, left: { on: 0, at: [0, -0.62, -0.02] }, ...spine({ flex: 28 }), offset: [0, -0.14, 0.1] }],
+                // (Lifted out in front on the way back, clear of the legs)
+                [1.7, { right: { at: [0.3, -0.5, 0.75] }, left: { on: 0, at: [-0.25, -0.85, 0.45] }, ...spine({ flex: 12 }), offset: [0, -0.06, 0.05] }]),
             variant("side swing", HAMMER,
                 // Swung back round to the right, then flat into the enemy's side, the face first
-                [0.6, { right: { at: [-0.41, -0.07, 0.09] }, left: { on: 0, at: [-0.04, -0.66, -0.07] }, ...spine({ turn: -35 }), Hips: { turn: 15 }, offset: [0, -0.02, -0.04] }],
-                [1, { right: { at: [0.19, -0.68, 0.47] }, left: { on: 0, at: [-0.51, -0.89, 0.5] }, ...spine({ flex: 8, turn: 25 }), Hips: { turn: -18 }, offset: [0, -0.06, 0.08] }],
-                [1.35, { right: { at: [0.61, -0.59, 0.04] }, left: { on: 0, at: [-0.13, -0.8, 0.38] }, ...spine({ flex: 12, turn: 35 }), Hips: { turn: -20 }, offset: [0, -0.07, 0.06] }]),
+                [0.6, { right: { at: [-0.41, -0.24, 0.12] }, left: { on: 0, at: [-0.29, -0.68, 0.31] }, ...spine({ turn: -35 }), Hips: { turn: 15 }, offset: [0, -0.02, -0.04] }],
+                [1, { right: { at: [0.22, -0.6, 0.42] }, left: { on: 0, at: [-0.46, -0.79, 0.55] }, ...spine({ flex: 8, turn: 25 }), Hips: { turn: -18 }, offset: [0, -0.06, 0.08] }],
+                [1.35, { right: { at: [0.56, -0.56, 0.09] }, left: { on: 0, at: [-0.1, -0.8, 0.63] }, ...spine({ flex: 12, turn: 35 }), Hips: { turn: -20 }, offset: [0, -0.07, 0.06] }]),
             variant("diagonal chop", HAMMER,
                 // Up over the right shoulder, then down and across
-                [0.6, { right: { at: [-0.3, 0.5, 0.26] }, left: { on: 0, at: [-0.61, 0.1, 0.39] }, ...spine({ turn: -22, flex: -8 }), Hips: { turn: 10 }, offset: [0, 0.01, -0.04] }],
-                [1, { right: { at: [0.6, -0.83, 0.62] }, left: { on: 0, at: [-0.22, -1.05, 0.42] }, ...spine({ flex: 20, turn: 15 }), Hips: { turn: -10 }, offset: [0, -0.1, 0.1] }],
-                [1.35, { right: { at: [0.71, -0.94, 0.07] }, left: { on: 0, at: [-0.08, -0.93, 0] }, ...spine({ flex: 26, turn: 18 }), Hips: { turn: -12 }, offset: [0, -0.12, 0.09] }]),
+                [0.6, { right: { at: [-0.17, 0.36, 0.36] }, left: { on: 0, at: [-0.6, 0, 0.42] }, ...spine({ turn: -22, flex: -8 }), Hips: { turn: 10 }, offset: [0, 0.01, -0.04] }],
+                [1, { right: { at: [0.45, -0.83, 0.57] }, left: { on: 0, at: [-0.32, -1, 0.43] }, ...spine({ flex: 20, turn: 15 }), Hips: { turn: -10 }, offset: [0, -0.1, 0.1] }],
+                [1.35, { right: { at: [0.55, -0.75, 0.45] }, left: { on: 0, at: [-0.25, -0.9, 0.45] }, ...spine({ flex: 26, turn: 18 }), Hips: { turn: -12 }, offset: [0, -0.12, 0.09] }],
+                // (Lifted out in front on the way back, clear of the legs)
+                [1.7, { right: { at: [0.23, -0.47, 0.6] }, left: { on: 0, at: [-0.3, -0.95, 0.25] }, ...spine({ flex: 12, turn: 8 }), Hips: { turn: -5 }, offset: [0, -0.05, 0.04] }]),
             variant("upswing", HAMMER,
                 // Low behind, then swung up under the enemy's chin
-                [0.6, { right: { at: [0, -0.98, 0.61] }, left: { on: 0, at: [-0.53, -0.6, 0.72] }, ...spine({ flex: 18, turn: -15 }), offset: [0, -0.1, -0.03] }],
-                [1, { right: { at: [0.32, -0.51, 0.53] }, left: { on: 0, at: [-0.36, -0.76, 0.32] }, ...spine({ flex: -2, turn: 10 }), offset: [0, 0, 0.08] }],
-                [1.35, { right: { at: [0.27, -0.15, 0.51] }, left: { on: 0, at: [-0.45, -0.4, 0.6] }, ...spine({ flex: -6, turn: 12 }), offset: [0, 0.01, 0.06] }]),
+                [0.6, { right: { at: [-0.12, -0.95, 0.56] }, left: { on: 0, at: [-0.5, -0.6, 0.72] }, ...spine({ flex: 18, turn: -15 }), offset: [0, -0.1, -0.03] }],
+                [1, { right: { at: [0.32, -0.56, 0.63] }, left: { on: 0, at: [-0.36, -0.83, 0.47] }, ...spine({ flex: -2, turn: 10 }), offset: [0, 0, 0.08] }],
+                [1.35, { right: { at: [0.25, -0.15, 0.46] }, left: { on: 0, at: [-0.45, -0.47, 0.6] }, ...spine({ flex: -6, turn: 12 }), offset: [0, 0.01, 0.06] }]),
             variant("leaping slam", HAMMER,
                 // Rising up on the toes with it high overhead, then slammed down, crouching into it
-                [0.55, { right: { at: [0.15, 0.89, 0.16] }, left: { on: 0, at: [-0.3, 0.65, 0.53] }, ...spine({ flex: -16 }), offset: [0, 0.05, -0.06] }],
-                [1, { right: { at: [0.35, -0.8, 0.82] }, left: { on: 0, at: [-0.36, -0.96, 0.39] }, ...spine({ flex: 26 }), offset: [0, -0.16, 0.14] }],
-                [1.4, { right: { at: [0.51, -0.87, 0.09] }, left: { on: 0, at: [-0.18, -0.78, -0.23] }, ...spine({ flex: 32 }), offset: [0, -0.18, 0.12] }]),
+                [0.55, { right: { at: [0.08, 0.84, 0.14] }, left: { on: 0, at: [-0.62, 0.6, 0.53] }, ...spine({ flex: -16 }), offset: [0, 0.05, -0.06] }],
+                [1, { right: { at: [0.25, -0.67, 0.78] }, left: { on: 0, at: [-0.43, -0.85, 0.3] }, ...spine({ flex: 26 }), offset: [0, -0.16, 0.14] }],
+                [1.4, { right: { at: [0.67, -0.76, 0.02] }, left: { on: 0, at: [-0.03, -0.73, -0.23] }, ...spine({ flex: 32 }), offset: [0, -0.18, 0.12] }],
+                // (Lifted out in front on the way back, clear of the legs)
+                [1.7, { right: { at: [0.2, -0.37, 0.7] }, left: { on: 0, at: [-0.32, -0.87, 0.35] }, ...spine({ flex: 14 }), offset: [0, -0.08, 0.06] }]),
         ],
     },
     bow: {

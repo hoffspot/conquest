@@ -41,7 +41,7 @@ export const MANIFEST = Object.freeze([
             ["js/audio/synth.js", 18214],
             ["js/audio/tavern.js", 11520],
             ["js/audio/worker.js", 958],
-            ["js/characters/actions.js", 107145],
+            ["js/characters/actions.js", 107859],
             ["js/characters/body.js", 8056],
             ["js/characters/character.js", 19055],
             ["js/characters/details.js", 5742],
