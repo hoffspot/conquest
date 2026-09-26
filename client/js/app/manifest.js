@@ -76,7 +76,7 @@ export const MANIFEST = Object.freeze([
             ["js/world/ground.js", 7444],
             ["js/world/squares.js", 3982],
             ["js/world/town3d.js", 10047],
-            ["js/world/view.js", 11606],
+            ["js/world/view.js", 11868],
             ["js/world/wounds.js", 30610],
         ],
     },

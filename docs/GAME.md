@@ -118,10 +118,12 @@ with a fair few hit points to spare.
 ### The view (world/view.js)
 
 A WebGL renderer with ACES tone mapping, a sky and fog, a studio environment map for the
-characters' materials, a hemisphere light and a sun whose shadow map follows the player (snapped
-to whole shadow texels, so shadows don't shimmer). The camera looks down from 55 degrees above
-the horizon, zooming between 5 and 32 metres away, from any side (`yaw`: from the south, looking
-north, to start with).
+characters' materials, a hemisphere light and a sun whose shadow map follows the player (a
+little ahead of them, where more of the ground is in view, the further out the more: up to 12
+of its 24 metres; snapped to whole shadow texels, so shadows don't shimmer). The camera looks
+down from 45 degrees above the horizon (low enough to see well ahead of the player), zooming
+between 5 and 32 metres away, from any side (`yaw`: from the south, looking north, to start
+with).
 
 **Following the player** (app/camera.js). While the player moves about near where it looks (the
 zone: 1.4 metres round it, a couple of steps, however it's zoomed, and never nearer the screen's
