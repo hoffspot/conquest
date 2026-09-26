@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { findPath } from "../client/js/core/pathfinding.js";
 import { GROUND } from "../client/js/core/setpieces/pieces.js";
-import { BORDER_PLOTS, generateWorld, PLOT, TOWN_PLOTS } from "../client/js/core/world.js";
+import { BORDER_PLOTS, generateWorld, PLOT, SEE_OVER, TOWN_PLOTS } from "../client/js/core/world.js";
 
 describe("the world (world.js)", () => {
     const world = generateWorld({ seed: 7 });
@@ -93,6 +93,40 @@ describe("the world (world.js)", () => {
         }
 
         assert.ok(checked > 10);
+    });
+
+    it("hides what's behind houses, landmarks and trees, but not behind a well, barrels or a cart", () => {
+        const kinds = { see: 0, hide: 0 };
+
+        for (const seed of [1, 2, 3]) {
+            const world = generateWorld({ seed });
+
+            // Only what's in the way can hide anything
+            for (let y = 0; y < world.height; y++) {
+                for (let x = 0; x < world.width; x++) {
+                    assert.ok(!world.opaque[y][x] || world.blocked[y][x], `${x}, ${y}`);
+                }
+            }
+
+            for (const piece of world.town.pieces) {
+                const [x, y] = [world.origin + piece.x * PLOT + (piece.w * PLOT) / 2, world.origin + piece.y * PLOT + (piece.h * PLOT) / 2];
+                const low = SEE_OVER.test(piece.key);
+
+                if (world.blocked[y][x]) {
+                    assert.equal(world.opaque[y][x], low ? 0 : 1, piece.key);
+                    kinds[low ? "see" : "hide"]++;
+                }
+            }
+
+            // Trees in the fields too, and the map says so
+            for (const tree of world.trees) {
+                assert.equal(world.opaque[tree.y][tree.x], 1);
+            }
+
+            assert.equal(world.maps.town.opaque, world.opaque);
+        }
+
+        assert.ok(kinds.see > 5 && kinds.hide > 50, JSON.stringify(kinds));
     });
 
     it("comes out the same for the same seed, and different for another", () => {

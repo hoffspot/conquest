@@ -354,7 +354,8 @@ export class Battle {
 
     /**
      * Can `a` see `b`: on the same map, within SIGHT squares, with nothing that blocks sight
-     * between their middles (anything blocked outdoors; walls, not tables, indoors)?
+     * between their middles (the map's opaque squares: houses and trees, not barrels or a well,
+     * outdoors; walls, not tables, indoors)?
      */
     canSee(a, b) {
         if (a.map !== b.map) {

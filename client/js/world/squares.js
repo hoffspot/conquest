@@ -1,6 +1,7 @@
 // Debug mode's view of the squares characters walk on, on one map (the town, or a floor of the
-// tavern): a grid over the ground, the blocked squares tinted red, and the path ahead of each
-// character there as a line (the player's gold, the others' red).
+// tavern): a grid over the ground, the blocked squares tinted (red where they hide what's behind
+// them too, amber where they can be seen over), and the path ahead of each character there as a
+// line (the player's gold, the others' red).
 
 import * as THREE from "three";
 
@@ -31,13 +32,13 @@ const PATH_POINTS = 512;
 export class Squares {
     /** @param {object} map - One of generateWorld's maps (core/world.js): the town, or a floor inside. */
     constructor(map) {
-        const { width, height, blocked, origin = [0, 0], id = "town" } = map;
+        const { width, height, blocked, opaque = blocked, origin = [0, 0], id = "town" } = map;
         const data = new Uint8Array(width * height * 4);
 
         for (let y = 0; y < height; y++) {
             for (let x = 0; x < width; x++) {
                 if (blocked[y][x]) {
-                    data.set([235, 70, 50, 110], (y * width + x) * 4);
+                    data.set(opaque[y][x] ? [235, 70, 50, 110] : [240, 170, 40, 100], (y * width + x) * 4);
                 }
             }
         }
