@@ -10,6 +10,7 @@ import { Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
 import { PRESETS } from "../client/js/characters/presets.js";
 import { Rig } from "../client/js/characters/rig.js";
 import { Battle, STEP_MS } from "../client/js/core/battle.js";
+import { pickAnother, Variety } from "../client/js/core/variety.js";
 import { STARTING_WEAPONS, WEAPONS } from "../client/js/core/weapons.js";
 import { Avatar } from "../client/js/world/avatar.js";
 
@@ -51,18 +52,101 @@ function fighter(shape) {
 
 const world = (bone, character) => character.rig.bone(bone).getWorldPosition(new THREE.Vector3());
 
-describe("attacks (actions.js)", () => {
-    it("has one for every weapon, timed with 1 as the blow and 2 as the end", () => {
-        for (const [id, weapon] of Object.entries(WEAPONS)) {
-            for (const { animation } of weapon.attacks) {
-                const times = ATTACKS[animation]?.keys.map(([time]) => time);
+// Where the hands are when an attack's blow lands, done a given way (world metres), and the
+// shoulders and an arm's length, standing still
+function atTheBlow(name, variant, { shape, hitAt = 0.4, duration = 0.8 } = {}) {
+    const { character, walker, actions } = fighter(shape);
 
-                assert.ok(times, `${id} has an animation`);
+    walker.update(0);
+
+    const shoulders = { right: world("RightArm", character), left: world("LeftArm", character) };
+    const arm = shoulders.right.distanceTo(world("RightForeArm", character)) + world("RightForeArm", character).distanceTo(world("RightHand", character));
+
+    actions.startAttack(name, { hitAt, duration, variant });
+    walker.update(hitAt);
+
+    return { character, shoulders, arm, right: world("RightHand", character), left: world("LeftHand", character), head: world("Head", character) };
+}
+
+describe("attacks (actions.js)", () => {
+    it("has five ways of doing every weapon's attack and every spell, each timed with 1 as the blow and 2 as the end", () => {
+        const names = [...new Set(Object.values(WEAPONS).flatMap(({ attacks }) => attacks.map(({ animation }) => animation))), "castHeal", "castStun"];
+
+        for (const name of names) {
+            const { variants } = ATTACKS[name] ?? {};
+
+            assert.equal(variants?.length, 5, `${name} has five ways`);
+            assert.equal(new Set(variants.map((variant) => variant.name)).size, 5, `${name}'s ways have their own names`);
+
+            for (const { name: way, keys } of variants) {
+                const times = keys.map(([time]) => time);
+
                 assert.equal(times[0], 0);
-                assert.ok(times.includes(1), `${animation} has a key at the blow`);
+                assert.ok(times.includes(1), `${name} (${way}) has a key at the blow`);
                 assert.equal(times.at(-1), 2);
-                assert.ok(times.every((time, k) => k === 0 || time > times[k - 1]), `${animation}'s keys in order`);
+                assert.ok(times.every((time, k) => k === 0 || time > times[k - 1]), `${name} (${way})'s keys in order`);
+                assert.deepEqual(keys[0][1], keys.at(-1)[1], `${name} (${way}) ends as it starts`);
             }
+
+            // Each way really is different where the blow lands
+            const blows = variants.map(({ keys }) => JSON.stringify(keys.find(([time]) => time === 1)[1]));
+
+            assert.equal(new Set(blows).size, 5, `${name}'s blows all differ`);
+        }
+    });
+
+    it("never does an attack the same way twice in a row, and does it every way", () => {
+        const { walker, actions } = fighter();
+        const ways = [];
+
+        for (let k = 0; k < 200; k++) {
+            ways.push(actions.startAttack("sword", { hitAt: 0.38, duration: 0.76 }));
+            walker.update(0.8);
+        }
+
+        assert.ok(ways.every((way, k) => k === 0 || way !== ways[k - 1]), "never twice in a row");
+        assert.deepEqual([...new Set(ways)].sort(), [0, 1, 2, 3, 4]);
+
+        // The first, any of the five
+        const firsts = new Set(Array.from({ length: 200 }, () => new Actions(figure()).startAttack("staff", { hitAt: 0.3, duration: 0.7 })));
+
+        assert.equal(firsts.size, 5);
+
+        // Each kind of action its own, and a way asked for is the way done
+        assert.equal(actions.startAttack("hammer", { hitAt: 0.6, duration: 1.1, variant: 3 }), 3);
+        assert.notEqual(actions.startAttack("hammer", { hitAt: 0.6, duration: 1.1 }), 3);
+    });
+
+    it("lands every way of every melee blow in front, at the enemy, between the hips and the top of the head", () => {
+        for (const name of ["sword", "staff", "hammer", "cleaver", "punch"]) {
+            for (let variant = 0; variant < 5; variant++) {
+                const { character, shoulders, arm, right } = atTheBlow(name, variant, { shape: name === "cleaver" ? PRESETS.orc.shape : undefined });
+                const way = `${name} (${ATTACKS[name].variants[variant].name})`;
+
+                assert.ok(right.z > shoulders.right.z + arm * 0.45, `${way}: forward ${(right.z - shoulders.right.z).toFixed(2)} m`);
+                assert.ok(right.y > character.height * 0.4 && right.y < character.height * 1.05, `${way}: at ${right.y.toFixed(2)} m`);
+            }
+        }
+    });
+
+    it("lets go of every bolt, fireball and stun from a hand held out towards the enemy, draws every bow to the face, and raises every heal", () => {
+        for (const [name, hand] of [["wand", "right"], ["grimoire", "right"], ["castStun", "left"]]) {
+            for (let variant = 0; variant < 5; variant++) {
+                const blow = atTheBlow(name, variant);
+
+                assert.ok(blow[hand].z > blow.shoulders[hand].z + blow.arm * 0.6, `${name} ${variant}: held out ${(blow[hand].z - blow.shoulders[hand].z).toFixed(2)} m`);
+            }
+        }
+
+        for (let variant = 0; variant < 5; variant++) {
+            const bow = atTheBlow("bow", variant, { hitAt: 0.66, duration: 1 });
+
+            assert.ok(bow.left.z > bow.shoulders.left.z + bow.arm * 0.5, `bow ${variant}: the bow held out`);
+            assert.ok(bow.right.distanceTo(bow.head) < 0.35, `bow ${variant}: drawn to the face (${bow.right.distanceTo(bow.head).toFixed(2)} m)`);
+
+            const heal = atTheBlow("castHeal", variant, { hitAt: 0.6, duration: 1 });
+
+            assert.ok(heal.left.y > heal.shoulders.left.y, `heal ${variant}: raised`);
         }
     });
 
@@ -88,7 +172,7 @@ describe("attacks (actions.js)", () => {
 
             const shoulder = world("RightArm", character);
 
-            actions.startAttack("sword", { hitAt: hitAt / 1000, duration: duration / 1000 });
+            actions.startAttack("sword", { hitAt: hitAt / 1000, duration: duration / 1000, variant: 0 });
             walker.update(hitAt / 1000);
 
             const hand = world("RightHand", character);
@@ -104,7 +188,7 @@ describe("attacks (actions.js)", () => {
         const { character, walker, actions } = fighter();
         const { hitAt, duration } = WEAPONS.hammer.attacks[0];
 
-        actions.startAttack("hammer", { hitAt: hitAt / 1000, duration: duration / 1000 });
+        actions.startAttack("hammer", { hitAt: hitAt / 1000, duration: duration / 1000, variant: 0 });
         walker.update(hitAt / 1000 * 0.6);
 
         const raised = world("RightHand", character);
@@ -117,16 +201,16 @@ describe("attacks (actions.js)", () => {
         assert.ok(struck.y < raised.y - 0.3 && struck.z > raised.z + 0.3, "brought down and forward");
     });
 
-    it("holds a two-handed weapon with both hands, one below the other", () => {
-        const { character, walker, actions } = fighter();
-        const { hitAt, duration } = WEAPONS.staff.attacks[0];
+    it("holds a two-handed weapon with both hands, one below the other, whichever way it's swung", () => {
+        for (const name of ["staff", "hammer"]) {
+            for (let variant = 0; variant < 5; variant++) {
+                const { hitAt, duration } = WEAPONS[name === "staff" ? "staff" : "hammer"].attacks[0];
+                const { left, right } = atTheBlow(name, variant, { hitAt: hitAt / 1000, duration: duration / 1000 });
+                const gap = left.distanceTo(right);
 
-        actions.startAttack("staff", { hitAt: hitAt / 1000, duration: duration / 1000 });
-        walker.update(hitAt / 1000);
-
-        const gap = world("LeftHand", character).distanceTo(world("RightHand", character));
-
-        assert.ok(gap > 0.2 && gap < 0.65, `hands ${gap.toFixed(2)} m apart`);
+                assert.ok(gap > 0.2 && gap < 0.65, `${name} ${variant}: hands ${gap.toFixed(2)} m apart`);
+            }
+        }
     });
 
     it("punches with the left and right in turn", () => {
@@ -135,7 +219,7 @@ describe("attacks (actions.js)", () => {
         const reach = [];
 
         for (let k = 0; k < 2; k++) {
-            actions.startAttack("punch", { hitAt: hitAt / 1000, duration: duration / 1000 });
+            actions.startAttack("punch", { hitAt: hitAt / 1000, duration: duration / 1000, variant: k });
             walker.update(hitAt / 1000);
             reach.push(world("RightHand", character).z - world("LeftHand", character).z);
             walker.update(duration / 1000);
@@ -168,6 +252,28 @@ describe("attacks (actions.js)", () => {
                 assert.ok(q.angleTo(before[i]) < 0.02, name);
             }
         });
+    });
+});
+
+describe("variety (variety.js)", () => {
+    it("picks any at first, then never the last one again, all of the others equally often", () => {
+        const counts = [0, 0, 0, 0, 0];
+
+        for (let k = 0; k < 5000; k++) {
+            counts[pickAnother(5, 2)]++;
+        }
+
+        assert.equal(counts[2], 0);
+        assert.ok(counts.filter((_, k) => k !== 2).every((count) => Math.abs(count - 1250) < 150), counts.join());
+        assert.equal(pickAnother(5, null, () => 0.999), 4);
+        assert.equal(pickAnother(5, 4, () => 0.999), 3);
+        assert.equal(pickAnother(5, 0, () => 0), 1);
+        assert.equal(pickAnother(1, 0), 0);
+
+        const variety = new Variety();
+        const picks = Array.from({ length: 50 }, () => variety.next("fireball", 5));
+
+        assert.ok(picks.every((pick, k) => k === 0 || pick !== picks[k - 1]));
     });
 });
 

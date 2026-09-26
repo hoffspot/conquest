@@ -4,7 +4,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { Actions, REACTIONS } from "../characters/actions.js";
+import { Actions, ATTACKS, REACTIONS } from "../characters/actions.js";
 import { ClipPlayer, parseBVH, retarget } from "../characters/bvh.js";
 import { Character } from "../characters/character.js";
 import { DETAILS } from "../characters/details.js";
@@ -137,7 +137,8 @@ const walker = new Walker(character, WALK_STYLES[state.walk]);
 
 // Fighting: attacks, reactions and falls, layered over the walk (actions.js)
 const actions = new Actions(character);
-const fight = { weapon: params.get("weapon") ?? "", reaction: params.get("reaction") ?? "slash", repeat: false, guard: false, slow: 1, at: params.has("at") ? Number(params.get("at")) : null, action: params.get("action") ?? "" };
+// (Which of an attack's five ways: `way`, or null for any but the last, as in the game)
+const fight = { weapon: params.get("weapon") ?? "", way: params.has("way") ? Number(params.get("way")) : null, reaction: params.get("reaction") ?? "slash", repeat: false, guard: false, slow: 1, at: params.has("at") ? Number(params.get("at")) : null, action: params.get("action") ?? "" };
 
 walker.overlay = (dt) => actions.apply(dt * fight.slow);
 walker.afterPose = () => actions.place();
@@ -695,14 +696,23 @@ function arm(weapon) {
     change("equipment");
 }
 
-/** Attack with the weapon held (as the game does), once or over and over. */
+/** Attack with the weapon held (as the game does), once or over and over, in the way chosen. */
 function attack() {
     const weapon = WEAPONS[fight.weapon];
 
     if (weapon) {
         const { animation, hitAt, duration } = weapon.attacks[0];
 
-        actions.startAttack(animation, { hitAt: hitAt / 1000, duration: duration / 1000 });
+        showWay(animation, actions.startAttack(animation, { hitAt: hitAt / 1000, duration: duration / 1000, variant: fight.way }));
+    }
+}
+
+// Which way that attack was
+function showWay(animation, way) {
+    const readout = document.getElementById("wayreadout");
+
+    if (readout && way !== null) {
+        readout.textContent = `${way + 1}: ${ATTACKS[animation].variants[way].name}`;
     }
 }
 
@@ -718,7 +728,7 @@ function freeze(action, at) {
         const { animation, hitAt, duration } = weapon.attacks[0];
         const elapsed = at <= 1 ? at * (hitAt / 1000) : hitAt / 1000 + (at - 1) * ((duration - hitAt) / 1000);
 
-        actions.startAttack(animation, { hitAt: hitAt / 1000, duration: duration / 1000 });
+        showWay(animation, actions.startAttack(animation, { hitAt: hitAt / 1000, duration: duration / 1000, variant: fight.way ?? 0 }));
         actions.attack.start = actions.time - elapsed;
     } else if (REACTIONS[action]) {
         actions.react(action, { from: 0 });
@@ -772,7 +782,7 @@ function motionTab() {
             })),
         group("Stride", chart, element("p", { class: "note", id: "phasereadout" })),
         group("Fighting",
-            element("p", { class: "note" }, "The game's attacks, flinches and falls, layered over the walk. An attack's blow lands a set time in (the weapon's), and each kind of blow has its own flinch."),
+            element("p", { class: "note" }, "The game's attacks, flinches and falls, layered over the walk. Each weapon attacks five ways, never the same twice running; an attack's blow lands a set time in (the weapon's), and each kind of blow has its own flinch."),
             select("Weapon", [["", "None"], ...Object.entries(WEAPONS).map(([id, { label }]) => [id, label])], { get: () => fight.weapon, set: (value) => arm(value) }),
             check("On guard", {
                 get: () => fight.guard,
@@ -781,6 +791,11 @@ function motionTab() {
                     actions.setGuard(value);
                 },
             }),
+            select("Way", [["", "Any, never twice running"], ...[0, 1, 2, 3, 4].map((way) => [String(way), `${way + 1}`])], {
+                get: () => (fight.way === null ? "" : String(fight.way)),
+                set: (value) => (fight.way = value === "" ? null : Number(value)),
+            }),
+            element("p", { class: "note", id: "wayreadout" }),
             check("Attack over and over", { get: () => fight.repeat, set: (value) => (fight.repeat = value) }),
             select("Blow", Object.keys(REACTIONS).map((name) => [name, name[0].toUpperCase() + name.slice(1)]), { get: () => fight.reaction, set: (value) => (fight.reaction = value) }),
             slider("Slow motion", { min: 0.1, max: 1, step: 0.05, format: (value) => `${Math.round(value * 100)}%`, get: () => fight.slow, set: (value) => (fight.slow = value) }),

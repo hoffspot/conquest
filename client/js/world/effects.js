@@ -7,6 +7,11 @@
 // spreading on the ground; violet sparks in a hand casting a stun, a burst where it lands, and
 // stars circling the stunned one's head until it wears off.
 //
+// Fireballs, arcane bolts, heals and stuns each have five looks (LOOKS), all plainly the same
+// thing but none quite like another: a fireball may be a roaring red blaze, a bright comet, a
+// spiralling ball, a smouldering one trailing smoke. The game picks one for each (never the same
+// twice in a row).
+//
 // Every spark, puff and flame is a particle in one shared, fixed-size buffer, drawn in a single
 // draw call (glowing ones added to what's behind them, like light), so a busy fight costs no more
 // to draw than a quiet one.
@@ -26,8 +31,6 @@ const BURSTS = {
     impact: { count: 14, colours: [0xffffff, 0xffd27a], size: [0.08, 0.18], speed: [1.5, 3.5], life: [0.12, 0.3], gravity: 4, spread: 1.4, glow: true },
     arcane: { count: 30, colours: [0xd9c4ff, 0x6a4dff], size: [0.06, 0.16], speed: [1, 3], life: [0.3, 0.6], gravity: -1.5, spread: 2, glow: true, swirl: 6 },
     fire: { count: 34, colours: [0xffe08a, 0xff3a0a], size: [0.18, 0.36], speed: [0.8, 2.4], life: [0.35, 0.75], gravity: -3, spread: 1.8, glow: true, grow: 0.4 },
-    trailBolt: { count: 2, colours: [0xe6dcff, 0x7a5cff], size: [0.08, 0.14], speed: [0, 0.3], life: [0.15, 0.3], gravity: 0, spread: 2, glow: true },
-    trailFire: { count: 3, colours: [0xffd070, 0xff2a00], size: [0.16, 0.3], speed: [0.2, 0.8], life: [0.2, 0.4], gravity: -2, spread: 2, glow: true, grow: 0.6 },
     heal: { count: 30, colours: [0xdcffe0, 0x28d05a], size: [0.08, 0.18], speed: [0.4, 1.3], life: [0.7, 1.2], gravity: -1.8, spread: 2.2, glow: true, swirl: 3 },
     healCharge: { count: 3, colours: [0xeaffec, 0x5ef08a], size: [0.05, 0.1], speed: [0.1, 0.5], life: [0.25, 0.45], gravity: -0.8, spread: 2, glow: true },
     stun: { count: 30, colours: [0xfff4a0, 0x9a5cff], size: [0.06, 0.15], speed: [1.5, 3.2], life: [0.25, 0.55], gravity: 0, spread: 2, glow: true, swirl: 8 },
@@ -51,8 +54,51 @@ const SPLAT_FADES = 8;
 const POOL_SPREADS = 5;
 const POOL_DRAINS = 2;
 
-// A dazed character's stars: how many, how far round its head (m), how fast they circle (rad/s)
-const DAZE = { stars: 3, radius: 0.24, speed: 4.5 };
+/**
+ * Each kind of spell light's five looks (the game chooses: variety.js). Fireballs and bolts: the
+ * core's colour and size (m), the particles trailing it (as BURSTS), how it wobbles (`flicker`, a
+ * share of its size), spirals round its path (`spiral`: radius m, speed rad/s), jitters
+ * (`jitter`, m) or is two balls circling each other (`twin`), is drawn out along its path
+ * (`stretch`) or trails smoke (`smoke`), the burst where it hits (`burst`: colours and a size),
+ * and its whoosh's pitch. Heals: the light rising (`burst`), from where (`from`: a share of the
+ * height), the rings spreading on the ground (colour, and a second one after a moment), and the
+ * light gathering in the hand as it's cast (`charge`). Stuns: the flash (`burst`), and the stars
+ * circling the head: how many, their colours, how far round (m), how fast (rad/s), how big, and
+ * how tilted and wobbling their circle is.
+ */
+export const LOOKS = Object.freeze({
+    fireball: [
+        { name: "blaze", core: 0xff7a1a, size: 0.13, flicker: 0.1, pitch: 1, trail: { count: 3, colours: [0xffd070, 0xff2a00], size: [0.16, 0.3], speed: [0.2, 0.8], life: [0.2, 0.4], gravity: -2, spread: 2, glow: true, grow: 0.6 }, burst: { colours: [0xffe08a, 0xff3a0a], size: 1 } },
+        { name: "roaring", core: 0xff4a0a, size: 0.17, flicker: 0.16, pitch: 0.85, trail: { count: 5, colours: [0xffb040, 0xd01000], size: [0.2, 0.4], speed: [0.2, 0.9], life: [0.25, 0.45], gravity: -2.4, spread: 2.2, glow: true, grow: 0.7 }, burst: { colours: [0xffc060, 0xd01800], size: 1.35 } },
+        { name: "comet", core: 0xffd070, size: 0.1, flicker: 0.05, pitch: 1.18, trail: { count: 4, colours: [0xfff4c0, 0xff6a10], size: [0.08, 0.16], speed: [0, 0.2], life: [0.35, 0.6], gravity: -0.4, spread: 0.6, glow: true, grow: 0.2 }, burst: { colours: [0xfff2b0, 0xff7a10], size: 0.85 } },
+        { name: "spiral", core: 0xff8a2a, size: 0.12, flicker: 0.1, pitch: 1.06, spiral: { radius: 0.09, speed: 17 }, trail: { count: 3, colours: [0xffe090, 0xff4a00], size: [0.12, 0.24], speed: [0.1, 0.5], life: [0.25, 0.45], gravity: -1.5, spread: 1.4, glow: true, grow: 0.4 }, burst: { colours: [0xffe08a, 0xff4a0a], size: 1 } },
+        { name: "smouldering", core: 0xe0460c, size: 0.14, flicker: 0.2, pitch: 0.93, smoke: true, trail: { count: 2, colours: [0xff9a40, 0xa01800], size: [0.16, 0.28], speed: [0.2, 0.7], life: [0.25, 0.45], gravity: -1.8, spread: 2, glow: true, grow: 0.5 }, burst: { colours: [0xffa040, 0x901000], size: 1.1 } },
+    ],
+    bolt: [
+        { name: "orb", core: 0xb9a4ff, size: 0.06, flicker: 0.1, pitch: 1, trail: { count: 2, colours: [0xe6dcff, 0x7a5cff], size: [0.08, 0.14], speed: [0, 0.3], life: [0.15, 0.3], gravity: 0, spread: 2, glow: true }, burst: { colours: [0xd9c4ff, 0x6a4dff], size: 1 } },
+        { name: "spark", core: 0xa8d8ff, size: 0.05, flicker: 0.25, pitch: 1.2, jitter: 0.07, trail: { count: 3, colours: [0xf0faff, 0x5a8cff], size: [0.05, 0.1], speed: [0.2, 0.8], life: [0.1, 0.22], gravity: 0, spread: 2.5, glow: true }, burst: { colours: [0xf0faff, 0x4a7cff], size: 0.9 } },
+        { name: "pulsing", core: 0xe07bff, size: 0.07, flicker: 0.35, pitch: 0.92, trail: { count: 2, colours: [0xffd8ff, 0xb04dff], size: [0.1, 0.18], speed: [0, 0.3], life: [0.2, 0.35], gravity: 0, spread: 2, glow: true, swirl: 8 }, burst: { colours: [0xffd0ff, 0xa040ff], size: 1.15 } },
+        { name: "twin", core: 0xc8b4ff, size: 0.04, flicker: 0.1, pitch: 1.1, twin: { radius: 0.06, speed: 22 }, trail: { count: 2, colours: [0xeee6ff, 0x8a6cff], size: [0.05, 0.1], speed: [0, 0.2], life: [0.15, 0.3], gravity: 0, spread: 1.5, glow: true }, burst: { colours: [0xe6dcff, 0x7a5cff], size: 1 } },
+        { name: "streak", core: 0xd4c8ff, size: 0.05, flicker: 0.05, pitch: 1.25, stretch: 3.2, trail: { count: 1, colours: [0xffffff, 0x9a7cff], size: [0.06, 0.1], speed: [0, 0.1], life: [0.08, 0.16], gravity: 0, spread: 0.5, glow: true }, burst: { colours: [0xffffff, 0x8a6cff], size: 0.9 } },
+    ],
+    heal: [
+        { name: "rising swirl", from: 0.5, burst: {}, rings: [0x3ddc6a], charge: [0xeaffec, 0x5ef08a] },
+        { name: "fountain", from: 0.3, burst: { colours: [0xf4ffd0, 0x9adc3a], gravity: 3.5, speed: [2, 3.2], spread: 0.7, swirl: 0, life: [0.6, 1] }, up: true, rings: [0xb8e04a], charge: [0xf8ffd8, 0xb0e84a] },
+        { name: "spiral column", from: 0.15, burst: { count: 40, colours: [0xd8fff4, 0x2ac8a0], swirl: 9, spread: 0.5, speed: [0.3, 0.8], gravity: -3.2, life: [0.8, 1.3] }, rings: [0x2ad0a8, 0x2ad0a8], charge: [0xe0fff8, 0x40e0b8] },
+        { name: "falling petals", from: 1.15, burst: { count: 30, colours: [0xf4ffe8, 0x7ae070], size: [0.08, 0.18], speed: [0.6, 1.3], gravity: 0.9, spread: 3, swirl: 2, drag: 1.2, life: [1, 1.6] }, rings: [0x9ae8a0], charge: [0xf8fff0, 0x8ae890] },
+        { name: "radiant flash", from: 0.55, burst: { count: 28, colours: [0xffffff, 0x60f080], speed: [1.5, 2.8], life: [0.5, 0.9], swirl: 0, gravity: -0.8 }, flash: true, rings: [0x7dff9a, 0xd8ffb0], charge: [0xffffff, 0x6af08a] },
+    ],
+    stun: [
+        { name: "gold stars", burst: {}, stars: 3, colours: [0xffe14a], radius: 0.24, speed: 4.5, size: 1, tilt: 0, charge: [0xe8d8ff, 0x8a4dff] },
+        { name: "whirl", burst: { colours: [0xd8e8ff, 0x5a6cff], swirl: 12 }, stars: 4, colours: [0xfff08a], radius: 0.21, speed: 6.5, size: 0.8, tilt: 0, charge: [0xd8e0ff, 0x6a6cff] },
+        { name: "sparkle crown", burst: { colours: [0xffffff, 0xffd84a] }, stars: 5, colours: [0xffe14a, 0xffffff], radius: 0.2, speed: 3.5, size: 0.65, tilt: 0, charge: [0xfff8d8, 0xffc84a] },
+        { name: "twin comets", burst: { colours: [0xfff4a0, 0xff9a2a], count: 24 }, stars: 2, colours: [0xffc84a], radius: 0.3, speed: 3, size: 1.35, tilt: 0.15, charge: [0xfff0c0, 0xff9a4a] },
+        { name: "wobbling halo", burst: { colours: [0xffd8ff, 0xc04dff] }, stars: 3, colours: [0xe8b8ff], radius: 0.25, speed: 4, size: 1, tilt: 0.35, charge: [0xf0d8ff, 0xc04dff] },
+    ],
+});
+
+// Smoke puffing from a smouldering fireball as it flies
+const SMOKE_TRAIL = { count: 1, colours: [0x3a2e26, 0x6a625a], size: [0.12, 0.2], speed: [0.1, 0.3], life: [0.5, 0.9], gravity: -0.5, spread: 1, glow: false, opacity: 0.35, grow: 2 };
 
 const VERTEX = /* glsl */ `
 attribute float size;
@@ -511,11 +557,12 @@ export class Effects {
         this.target = null;
         scene.add(this.targetRing);
 
-        // Rings spreading on the ground (a heal), and stars circling dazed heads
+        // Rings spreading on the ground (a heal), and stars circling dazed heads; and things to do
+        // in a moment ({ left (s), run })
         this.pulses = [];
         this.dazed = [];
+        this.later = [];
         this.star = new THREE.ShapeGeometry(starShape(0.075, 0.032));
-        this.starMaterial = new THREE.MeshBasicMaterial({ color: 0xffe14a, side: THREE.DoubleSide, toneMapped: false });
 
         /** The camera, for turning the stars to face it (the game sets it). */
         this.camera = null;
@@ -576,15 +623,24 @@ export class Effects {
         }
     }
 
-    /** What a reaction's effect looks like where a blow lands (actions.js REACTIONS: effect). */
-    impact(effect, at, direction) {
+    /**
+     * What a reaction's effect looks like where a blow lands (actions.js REACTIONS: effect); a
+     * fireball's or bolt's burst in its look (`look`, from lookOf).
+     */
+    impact(effect, at, direction, look = null) {
+        const scaled = (name, style) => {
+            const settings = BURSTS[name];
+
+            return style ? { ...settings, colours: style.burst.colours, size: settings.size.map((size) => size * style.burst.size), count: Math.round(settings.count * style.burst.size) } : settings;
+        };
+
         switch (effect) {
             case "fire":
-                this.burst("fire", at, direction);
+                this.glow.emit(scaled("fire", look === null ? null : LOOKS.fireball[look]), at, direction);
                 this.burst("sparks", at, direction);
                 break;
             case "arcane":
-                this.burst("arcane", at, direction);
+                this.glow.emit(scaled("arcane", look === null ? null : LOOKS.bolt[look]), at, direction);
                 break;
             case "impact":
                 this.burst("impact", at, direction);
@@ -633,7 +689,8 @@ export class Effects {
      * Stars circling a character's head (at `height` metres) for `seconds`: dazed. Again while
      * dazed, it lasts the longer of the two.
      */
-    daze(object, height, seconds) {
+    daze(object, height, seconds, look = 0) {
+        const style = LOOKS.stun[look] ?? LOOKS.stun[0];
         const already = this.dazed.find((daze) => daze.object === object);
 
         if (already) {
@@ -644,12 +701,66 @@ export class Effects {
 
         const stars = new THREE.Group();
 
-        for (let k = 0; k < DAZE.stars; k++) {
-            stars.add(new THREE.Mesh(this.star, this.starMaterial));
+        for (let k = 0; k < style.stars; k++) {
+            stars.add(new THREE.Mesh(this.star, this.#starMaterial(style.colours[k % style.colours.length])));
         }
 
         this.group.add(stars);
-        this.dazed.push({ object, height, left: seconds, age: 0, stars });
+        this.dazed.push({ object, height, left: seconds, age: 0, stars, style });
+    }
+
+    // The stars' material in a colour (made once)
+    #starMaterial(colour) {
+        this.starMaterials ??= new Map();
+
+        if (!this.starMaterials.has(colour)) {
+            this.starMaterials.set(colour, new THREE.MeshBasicMaterial({ color: colour, side: THREE.DoubleSide, toneMapped: false }));
+        }
+
+        return this.starMaterials.get(colour);
+    }
+
+    /**
+     * A stun lands on a character: a flash at `at` (its head), and stars circling its head (at
+     * `height` metres) for `seconds`, in one of LOOKS.stun.
+     */
+    stun(at, object, height, seconds, look = 0) {
+        const style = LOOKS.stun[look] ?? LOOKS.stun[0];
+
+        this.glow.emit({ ...BURSTS.stun, ...style.burst }, at, null);
+        this.daze(object, height, seconds, look);
+    }
+
+    /**
+     * A heal lands on a character standing at `ground` ({ x, z }) and `height` tall: light rising
+     * (or falling, or fountaining) round them, and a ring (or two) spreading on the ground, in one
+     * of LOOKS.heal.
+     */
+    heal(ground, height, look = 0) {
+        const style = LOOKS.heal[look] ?? LOOKS.heal[0];
+        const at = new THREE.Vector3(ground.x, height * style.from, ground.z);
+
+        this.glow.emit({ ...BURSTS.heal, ...style.burst }, at, style.up ? new THREE.Vector3(0, 2.5, 0) : null);
+
+        if (style.flash) {
+            this.glow.emit({ ...BURSTS.impact, colours: [0xffffff, 0x9affb0], count: 18, size: [0.14, 0.3] }, at, null);
+        }
+
+        style.rings.forEach((colour, k) => {
+            if (k === 0) {
+                this.pulse(ground.x, ground.z, colour);
+            } else {
+                this.later.push({ left: 0.22 * k, run: () => this.pulse(ground.x, ground.z, colour) });
+            }
+        });
+    }
+
+    /** Light gathering in a hand casting a spell ("heal" or "stun"), in the look it'll land in. */
+    charge(spell, at, look = 0) {
+        const looks = spell === "heal" ? LOOKS.heal : LOOKS.stun;
+        const style = looks[look] ?? looks[0];
+
+        this.glow.emit({ ...BURSTS[spell === "heal" ? "healCharge" : "stunCharge"], colours: style.charge }, at, null);
     }
 
     /** No more stars round a character's head (it's fallen). */
@@ -665,24 +776,42 @@ export class Effects {
         });
     }
 
-    /** A projectile the battle launched: `kind` "arrow", "bolt" or "fireball", from a point. */
-    launch(id, kind, from) {
+    /**
+     * A projectile the battle launched: `kind` "arrow", "bolt" or "fireball", from a point; a
+     * bolt or fireball in one of its LOOKS.
+     */
+    launch(id, kind, from, look = 0) {
+        const style = LOOKS[kind]?.[look] ?? LOOKS[kind]?.[0] ?? null;
         let object;
 
         if (kind === "arrow") {
             object = this.arrow.clone();
-        } else if (kind === "fireball") {
-            object = glowBall(0xff7a1a, 0.13);
         } else {
-            object = glowBall(0xb9a4ff, 0.06);
+            object = glowBall(style.core, style.size);
+
+            // Two balls circling each other
+            if (style.twin) {
+                object.add(glowBall(style.core, style.size));
+            }
         }
 
         object.position.copy(from);
         this.group.add(object);
-        this.flying.set(id, { kind, object, last: from.clone() });
+        this.flying.set(id, { kind, object, last: from.clone(), look, style, age: 0, phase: Math.random() * Math.PI * 2, path: from.clone() });
     }
 
-    /** Move a projectile to a point (metres), arrows pointing the way they're flying. */
+    /** Which of its looks a projectile in flight has (null for none: an arrow, or gone). */
+    lookOf(id) {
+        const flight = this.flying.get(id);
+
+        return flight && flight.kind !== "arrow" ? flight.look : null;
+    }
+
+    /**
+     * Move a projectile along its path to a point (metres): arrows pointing the way they're
+     * flying; bolts and fireballs flickering, spiralling, jittering or circling as their look
+     * has it, trailing flames, sparks or smoke.
+     */
     fly(id, position) {
         const flight = this.flying.get(id);
 
@@ -690,17 +819,70 @@ export class Effects {
             return;
         }
 
-        const { object, kind, last } = flight;
+        const { object, kind, last, style, path } = flight;
+        const heading = position.clone().sub(path);
 
         last.copy(object.position);
-        object.position.copy(position);
+        path.copy(position);
 
         if (kind === "arrow") {
+            object.position.copy(position);
+
             if (position.distanceToSquared(last) > 1e-8) {
                 object.lookAt(position.clone().add(position.clone().sub(last)));
             }
-        } else {
-            this.burst(kind === "fireball" ? "trailFire" : "trailBolt", position);
+
+            return;
+        }
+
+        const now = performance.now() / 1000;
+        const t = now + flight.phase;
+
+        flight.age += 1;
+        object.position.copy(position);
+
+        // Off its path: round in a spiral, or jittering like a spark
+        if (heading.lengthSq() > 1e-8) {
+            heading.normalize();
+            flight.heading = heading;
+        }
+
+        const forward = flight.heading ?? new THREE.Vector3(0, 0, 1);
+        const side = new THREE.Vector3(0, 1, 0).cross(forward).normalize();
+        const up = forward.clone().cross(side);
+
+        if (style.spiral) {
+            const angle = t * style.spiral.speed;
+
+            object.position.addScaledVector(side, Math.cos(angle) * style.spiral.radius).addScaledVector(up, Math.sin(angle) * style.spiral.radius);
+        }
+
+        if (style.jitter) {
+            object.position.addScaledVector(side, (Math.random() - 0.5) * 2 * style.jitter).addScaledVector(up, (Math.random() - 0.5) * 2 * style.jitter);
+        }
+
+        if (style.twin) {
+            const angle = t * style.twin.speed;
+            const offset = side.clone().multiplyScalar(Math.cos(angle) * style.twin.radius).addScaledVector(up, Math.sin(angle) * style.twin.radius);
+
+            object.position.add(offset);
+            object.children.at(-1).position.copy(offset).multiplyScalar(-2);
+        }
+
+        // Flickering, and drawn out along its path
+        const flicker = 1 + style.flicker * (Math.sin(t * 23) * 0.6 + Math.sin(t * 37 + 1.3) * 0.4);
+
+        object.scale.set(flicker, flicker, flicker);
+
+        if (style.stretch) {
+            object.lookAt(object.position.clone().add(forward));
+            object.scale.z *= style.stretch;
+        }
+
+        this.glow.emit(style.trail, object.position, null);
+
+        if (style.smoke && Math.random() < 0.5) {
+            this.dust.emit(SMOKE_TRAIL, object.position, null);
         }
     }
 
@@ -768,6 +950,15 @@ export class Effects {
 
     /** Advance by `dt` seconds. `pixels` is how many screen pixels a metre is at 1 metre away. */
     update(dt, pixels) {
+        this.later = this.later.filter((job) => {
+            job.left -= dt;
+
+            if (job.left <= 0) {
+                job.run();
+            }
+
+            return job.left > 0;
+        });
         this.glow.update(dt, pixels);
         this.dust.update(dt, pixels, (x, z, size) => this.splats.add(x, z, size * (2.5 + Math.random() * 2)));
         this.splats.update(dt);
@@ -827,11 +1018,16 @@ export class Effects {
             const { position } = daze.object;
             const size = Math.min(1, daze.left / 0.3, daze.age / 0.15);
 
-            daze.stars.children.forEach((star, k) => {
-                const angle = daze.age * DAZE.speed + (k * 2 * Math.PI) / DAZE.stars;
+            const { stars, speed, radius, tilt } = daze.style;
 
-                star.position.set(position.x + Math.cos(angle) * DAZE.radius, daze.height + 0.03 * Math.sin(angle * 2), position.z + Math.sin(angle) * DAZE.radius);
-                star.scale.setScalar(size);
+            daze.stars.children.forEach((star, k) => {
+                const angle = daze.age * speed + (k * 2 * Math.PI) / stars;
+
+                // (A tilted circle, its tilt turning slowly: a wobbling halo)
+                const lift = Math.sin(angle - daze.age * 1.3) * tilt * radius;
+
+                star.position.set(position.x + Math.cos(angle) * radius, daze.height + 0.03 * Math.sin(angle * 2) + lift, position.z + Math.sin(angle) * radius);
+                star.scale.setScalar(size * daze.style.size);
 
                 if (this.camera) {
                     star.quaternion.copy(this.camera.quaternion);

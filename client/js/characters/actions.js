@@ -31,6 +31,7 @@
 // the hands.
 
 import * as THREE from "three";
+import { Variety } from "../core/variety.js";
 import { socketOn } from "./equipment.js";
 import { jointRotation } from "./rig.js";
 
@@ -87,154 +88,365 @@ export const GUARDS = Object.freeze({
 
 // --- Attacks ---
 
+// Where each attack starts and ends: the weapon's guard, the body square to the front
+const rest = (guard, extra = {}) => ({ ...spine({}), Hips: { turn: 0 }, offset: [0, 0, 0], ...guard, ...extra });
+const SWORD = rest(GUARDS.sword);
+const STAFF = rest(GUARDS.staff);
+const WAND = rest(GUARDS.wand);
+const GRIMOIRE = rest(GUARDS.grimoire);
+const HAMMER = rest(GUARDS.hammer);
+const BOW = rest(GUARDS.bow, { Head: { turn: 0, flex: 0 } });
+const PUNCH = rest(GUARDS.punch);
+const CLEAVER = rest(GUARDS.cleaver);
+const CAST = { ...spine({}), Head: { flex: 0 }, offset: [0, 0, 0] };
+
+// One way of doing an action: its name and key poses, from and back to `start`
+const variant = (name, start, ...keys) => ({ name, keys: [[0, start], ...keys, [2, start]] });
+
 /**
- * Each weapon's attack (weapons.js: an attack's `animation`): key poses at key times (1 when
- * the blow lands, 2 at the end). `alternate` mirrors every other attack (left and right punches).
+ * Each weapon's attack (weapons.js: an attack's `animation`) and each spell's cast, in five ways
+ * (`variants`: { name, keys }), so no two in a row look the same (the character picks one at
+ * random, never the one it did last: variety.js). Each is key poses at key times, 1 when the blow
+ * lands (or the arrow, bolt or spell is let go) and 2 at the end, starting and ending in the
+ * weapon's guard. `alternate` mirrors every other attack (left and right punches).
  */
 export const ATTACKS = Object.freeze({
     sword: {
-        keys: [
-            [0, { ...GUARDS.sword, ...spine({}), Hips: { turn: 0 }, offset: [0, 0, 0] }],
-            // Up over the right shoulder, turning away
-            [0.62, { right: { at: [-0.2, 0.45, -0.1], point: [0.25, 0.55, -0.8], edge: [0.3, -0.3, 0.9] }, LeftArm: { flex: 25, abduct: 35 }, LeftForeArm: { flex: 45 }, ...spine({ turn: -26, bend: 6 }), Hips: { turn: 10 }, offset: [0, 0, -0.03] }],
-            // Down and across through the enemy, stepping into it
-            [1, { right: { at: [0.35, -0.3, 0.85], point: [0.25, -0.15, 1], edge: [0.8, -0.5, 0] }, LeftArm: { flex: 5, abduct: 35 }, LeftForeArm: { flex: 40 }, ...spine({ flex: 10, turn: 20, bend: -4 }), Hips: { turn: -12 }, offset: [0, -0.05, 0.08] }],
-            [1.35, { right: { at: [0.7, -0.6, 0.5], point: [0.8, -0.5, 0.2], edge: [0.2, -0.6, -0.8] }, LeftArm: { flex: 0, abduct: 30 }, LeftForeArm: { flex: 35 }, ...spine({ flex: 12, turn: 26 }), Hips: { turn: -15 }, offset: [0, -0.06, 0.07] }],
-            [2, { ...GUARDS.sword, ...spine({}), Hips: { turn: 0 }, offset: [0, 0, 0] }],
+        variants: [
+            variant("diagonal slash", SWORD,
+                // Up over the right shoulder, turning away...
+                [0.62, { right: { at: [-0.2, 0.45, -0.1], point: [0.25, 0.55, -0.8], edge: [0.3, -0.3, 0.9] }, LeftArm: { flex: 25, abduct: 35 }, LeftForeArm: { flex: 45 }, ...spine({ turn: -26, bend: 6 }), Hips: { turn: 10 }, offset: [0, 0, -0.03] }],
+                // ...down and across through the enemy, stepping into it
+                [1, { right: { at: [0.35, -0.3, 0.85], point: [0.25, -0.15, 1], edge: [0.8, -0.5, 0] }, LeftArm: { flex: 5, abduct: 35 }, LeftForeArm: { flex: 40 }, ...spine({ flex: 10, turn: 20, bend: -4 }), Hips: { turn: -12 }, offset: [0, -0.05, 0.08] }],
+                [1.35, { right: { at: [0.7, -0.6, 0.5], point: [0.8, -0.5, 0.2], edge: [0.2, -0.6, -0.8] }, LeftArm: { flex: 0, abduct: 30 }, LeftForeArm: { flex: 35 }, ...spine({ flex: 12, turn: 26 }), Hips: { turn: -15 }, offset: [0, -0.06, 0.07] }]),
+            variant("backhand slash", SWORD,
+                // Drawn across to the left shoulder, then swept back out to the right
+                [0.6, { right: { at: [0.55, 0.25, 0.15], point: [0.5, 0.5, -0.7], edge: [-0.6, -0.2, -0.5] }, LeftArm: { flex: 20, abduct: 30 }, LeftForeArm: { flex: 60 }, ...spine({ turn: 26, bend: -4 }), Hips: { turn: -8 }, offset: [0, 0, -0.03] }],
+                [1, { right: { at: [-0.3, -0.25, 0.85], point: [-0.35, -0.1, 1], edge: [-0.85, -0.4, 0] }, LeftArm: { flex: 5, abduct: 40 }, LeftForeArm: { flex: 40 }, ...spine({ flex: 8, turn: -22, bend: 4 }), Hips: { turn: 12 }, offset: [0, -0.04, 0.08] }],
+                [1.35, { right: { at: [-0.7, -0.45, 0.45], point: [-0.9, -0.3, 0.1], edge: [-0.2, -0.6, -0.8] }, LeftArm: { flex: 0, abduct: 38 }, LeftForeArm: { flex: 35 }, ...spine({ flex: 10, turn: -28 }), Hips: { turn: 14 }, offset: [0, -0.05, 0.06] }]),
+            variant("overhead cut", SWORD,
+                // Raised high over the head, the blade back, then brought straight down
+                [0.6, { right: { at: [0.1, 0.55, 0], point: [0.05, 0.3, -0.95], edge: [0, 0.95, 0.3] }, LeftArm: { flex: 60, abduct: 20 }, LeftForeArm: { flex: 90 }, ...spine({ flex: -10 }), offset: [0, 0.02, -0.04] }],
+                [1, { right: { at: [0.15, -0.35, 0.85], point: [0.05, -0.2, 1], edge: [0, -1, 0.2] }, LeftArm: { flex: 20, abduct: 30 }, LeftForeArm: { flex: 45 }, ...spine({ flex: 18 }), offset: [0, -0.07, 0.1] }],
+                [1.35, { right: { at: [0.15, -0.6, 0.7], point: [0.05, -0.55, 0.8], edge: [0, -0.8, -0.55] }, LeftArm: { flex: 15, abduct: 30 }, LeftForeArm: { flex: 40 }, ...spine({ flex: 22 }), offset: [0, -0.08, 0.09] }]),
+            variant("thrust", SWORD,
+                // Drawn back to the hip, point forward, then lunged straight at the enemy
+                [0.6, { right: { at: [-0.05, -0.5, 0.05], point: [0.1, 0.1, 1], edge: [-1, 0, 0.1] }, LeftArm: { flex: 30, abduct: 30 }, LeftForeArm: { flex: 70 }, ...spine({ turn: -20 }), Hips: { turn: 12 }, offset: [0, -0.02, -0.06] }],
+                [1, { right: { at: [0.2, -0.15, 1.05], point: [0.05, 0.02, 1], edge: [-1, 0, 0] }, LeftArm: { flex: 0, abduct: 45 }, LeftForeArm: { flex: 25 }, ...spine({ flex: 8, turn: 22 }), Hips: { turn: -14 }, offset: [0, -0.07, 0.16] }],
+                [1.35, { right: { at: [0.2, -0.18, 1], point: [0.05, 0, 1], edge: [-1, 0, 0] }, LeftArm: { flex: 0, abduct: 42 }, LeftForeArm: { flex: 28 }, ...spine({ flex: 8, turn: 20 }), Hips: { turn: -12 }, offset: [0, -0.07, 0.14] }]),
+            variant("rising cut", SWORD,
+                // Low behind on the right, then swept up and across
+                [0.6, { right: { at: [-0.45, -0.7, 0.15], point: [-0.3, -0.55, -0.6], edge: [0.2, 0.9, 0] }, LeftArm: { flex: 15, abduct: 35 }, LeftForeArm: { flex: 50 }, ...spine({ flex: 12, turn: -24 }), Hips: { turn: 10 }, offset: [0, -0.06, -0.02] }],
+                [1, { right: { at: [0.2, -0.1, 0.85], point: [0.3, 0.55, 0.75], edge: [0.35, 0.8, -0.4] }, LeftArm: { flex: 5, abduct: 40 }, LeftForeArm: { flex: 35 }, ...spine({ flex: 2, turn: 18, bend: -6 }), Hips: { turn: -10 }, offset: [0, -0.02, 0.07] }],
+                [1.35, { right: { at: [0.45, 0.35, 0.5], point: [0.4, 0.85, 0.1], edge: [0.3, 0.2, -0.9] }, LeftArm: { flex: 5, abduct: 38 }, LeftForeArm: { flex: 35 }, ...spine({ flex: -4, turn: 24, bend: -8 }), Hips: { turn: -12 }, offset: [0, 0, 0.05] }]),
         ],
     },
     staff: {
-        keys: [
-            [0, { ...GUARDS.staff, ...spine({}), offset: [0, 0, 0] }],
-            // Drawn back over the shoulder
-            [0.6, { right: { at: [-0.1, 0.35, 0.05], point: [0.15, 0.55, -0.82], edge: [-1, 0, 0] }, left: { on: 0.42 }, ...spine({ flex: -6, turn: -18 }), offset: [0, 0.01, -0.04] }],
-            // Brought down on the enemy
-            [1, { right: { at: [0.3, -0.3, 0.85], point: [0.05, -0.05, 1], edge: [-1, 0, 0] }, left: { on: 0.42 }, ...spine({ flex: 16, turn: 12 }), offset: [0, -0.05, 0.08] }],
-            [1.3, { right: { at: [0.3, -0.5, 0.75], point: [0.05, -0.4, 0.9], edge: [-1, 0, 0] }, left: { on: 0.42 }, ...spine({ flex: 18, turn: 14 }), offset: [0, -0.06, 0.07] }],
-            [2, { ...GUARDS.staff, ...spine({}), offset: [0, 0, 0] }],
+        variants: [
+            variant("overhead strike", STAFF,
+                // Drawn back over the shoulder, then brought down on the enemy
+                [0.6, { right: { at: [-0.1, 0.35, 0.05], point: [0.15, 0.55, -0.82], edge: [-1, 0, 0] }, left: { on: 0.42 }, ...spine({ flex: -6, turn: -18 }), offset: [0, 0.01, -0.04] }],
+                [1, { right: { at: [0.3, -0.3, 0.85], point: [0.05, -0.05, 1], edge: [-1, 0, 0] }, left: { on: 0.42 }, ...spine({ flex: 16, turn: 12 }), offset: [0, -0.05, 0.08] }],
+                [1.3, { right: { at: [0.3, -0.5, 0.75], point: [0.05, -0.4, 0.9], edge: [-1, 0, 0] }, left: { on: 0.42 }, ...spine({ flex: 18, turn: 14 }), offset: [0, -0.06, 0.07] }]),
+            variant("sweep", STAFF,
+                // Swung back round to the right, then swept flat across
+                [0.6, { right: { at: [-0.5, -0.25, 0.2], point: [-0.75, 0.2, -0.55], edge: [0, 1, 0] }, left: { on: 0.42 }, ...spine({ turn: -32 }), Hips: { turn: 12 }, offset: [0, -0.02, -0.03] }],
+                [1, { right: { at: [0.15, -0.3, 0.7], point: [0.55, 0.1, 0.85], edge: [0, 1, 0] }, left: { on: 0.42 }, ...spine({ flex: 6, turn: 22 }), Hips: { turn: -12 }, offset: [0, -0.05, 0.08] }],
+                [1.35, { right: { at: [0.5, -0.35, 0.45], point: [0.9, 0.05, 0.1], edge: [0, 1, 0] }, left: { on: 0.42 }, ...spine({ flex: 8, turn: 30 }), Hips: { turn: -15 }, offset: [0, -0.05, 0.06] }]),
+            variant("thrust", STAFF,
+                // Drawn back low, then driven head first at the enemy
+                [0.6, { right: { at: [0.05, -0.55, 0.05], point: [0.05, 0.15, 1], edge: [-1, 0, 0] }, left: { on: 0.42 }, ...spine({ turn: -14 }), offset: [0, -0.02, -0.07] }],
+                [1, { right: { at: [0.15, -0.35, 0.8], point: [0.05, 0.05, 1], edge: [-1, 0, 0] }, left: { on: 0.42 }, ...spine({ flex: 10, turn: 12 }), offset: [0, -0.07, 0.16] }],
+                [1.3, { right: { at: [0.15, -0.37, 0.78], point: [0.05, 0.03, 1], edge: [-1, 0, 0] }, left: { on: 0.42 }, ...spine({ flex: 10, turn: 10 }), offset: [0, -0.07, 0.14] }]),
+            variant("rising strike", STAFF,
+                // The head low behind, then swung up under the enemy's guard
+                [0.6, { right: { at: [-0.35, -0.7, 0.15], point: [-0.3, -0.6, -0.7], edge: [-1, 0, 0] }, left: { on: 0.42 }, ...spine({ flex: 14, turn: -18 }), offset: [0, -0.06, -0.02] }],
+                [1, { right: { at: [0.2, -0.2, 0.7], point: [0.05, 0.65, 0.75], edge: [-1, 0, 0] }, left: { on: 0.42 }, ...spine({ flex: 4, turn: 10 }), offset: [0, -0.03, 0.08] }],
+                [1.35, { right: { at: [0.25, 0.05, 0.6], point: [0.05, 0.9, 0.4], edge: [-1, 0, 0] }, left: { on: 0.42 }, ...spine({ flex: -4, turn: 12 }), offset: [0, -0.01, 0.06] }]),
+            variant("spinning strike", STAFF,
+                // Wound far round to the right, then the whole body turns into the blow
+                [0.5, { right: { at: [-0.4, -0.1, -0.1], point: [-0.6, 0.35, -0.7], edge: [0, 1, 0] }, left: { on: 0.42 }, ...spine({ turn: -45, flex: -4 }), Hips: { turn: 25 }, offset: [0, 0, -0.04] }],
+                [1, { right: { at: [0.1, -0.15, 0.8], point: [0.45, 0.3, 0.85], edge: [0, 1, 0] }, left: { on: 0.42 }, ...spine({ flex: 8, turn: 30 }), Hips: { turn: -25 }, offset: [0, -0.05, 0.1] }],
+                [1.35, { right: { at: [0.55, -0.3, 0.35], point: [0.95, 0.15, -0.1], edge: [0, 1, 0] }, left: { on: 0.42 }, ...spine({ flex: 8, turn: 40 }), Hips: { turn: -30 }, offset: [0, -0.05, 0.07] }]),
         ],
     },
     wand: {
-        keys: [
-            [0, { ...GUARDS.wand, ...spine({}) }],
-            // Tip up and back...
-            [0.65, { right: { at: [-0.1, 0.3, 0.3], point: [0, 0.75, -0.65], edge: [-1, 0, 0] }, ...spine({ turn: -10, flex: -4 }) }],
-            // ...then flicked at the enemy
-            [1, { right: { at: [0.12, -0.05, 1.02], point: [0.05, 0.02, 1], edge: [-1, 0, 0] }, ...spine({ turn: 8, flex: 4 }) }],
-            [1.45, { right: { at: [0.12, -0.1, 0.98], point: [0.05, -0.08, 1], edge: [-1, 0, 0] }, ...spine({ turn: 8, flex: 4 }) }],
-            [2, { ...GUARDS.wand, ...spine({}) }],
+        variants: [
+            variant("flick", WAND,
+                // Tip up and back, then flicked at the enemy
+                [0.65, { right: { at: [-0.1, 0.3, 0.3], point: [0, 0.75, -0.65], edge: [-1, 0, 0] }, ...spine({ turn: -10, flex: -4 }) }],
+                [1, { right: { at: [0.12, -0.05, 1.02], point: [0.05, 0.02, 1], edge: [-1, 0, 0] }, ...spine({ turn: 8, flex: 4 }) }],
+                [1.45, { right: { at: [0.12, -0.1, 0.98], point: [0.05, -0.08, 1], edge: [-1, 0, 0] }, ...spine({ turn: 8, flex: 4 }) }]),
+            variant("jab", WAND,
+                // Drawn in to the chest, then jabbed straight out
+                [0.6, { right: { at: [0.05, -0.3, 0.35], point: [0, 0.35, 0.9], edge: [-1, 0, 0] }, ...spine({ turn: -8 }), offset: [0, 0, -0.03] }],
+                [1, { right: { at: [0.12, -0.02, 1.05], point: [0.02, 0.02, 1], edge: [-1, 0, 0] }, ...spine({ turn: 10, flex: 4 }), offset: [0, -0.02, 0.06] }],
+                [1.4, { right: { at: [0.12, -0.04, 1.02], point: [0.02, 0, 1], edge: [-1, 0, 0] }, ...spine({ turn: 10, flex: 4 }), offset: [0, -0.02, 0.05] }]),
+            variant("circle", WAND,
+                // A circle traced in the air, then pointed
+                [0.3, { right: { at: [-0.1, -0.2, 0.65], point: [0, 0.7, 0.7], edge: [-1, 0, 0] }, ...spine({ turn: -4 }) }],
+                [0.5, { right: { at: [0.1, 0.12, 0.62], point: [0.2, 0.9, 0.3], edge: [-1, 0, 0] }, ...spine({ turn: 2, flex: -3 }) }],
+                [0.75, { right: { at: [0.28, -0.15, 0.58], point: [0.3, 0.6, 0.7], edge: [-1, 0, 0] }, ...spine({ turn: 6 }) }],
+                [1, { right: { at: [0.1, -0.05, 1.02], point: [0.03, 0.02, 1], edge: [-1, 0, 0] }, ...spine({ turn: 8, flex: 4 }) }],
+                [1.4, { right: { at: [0.1, -0.08, 0.98], point: [0.03, -0.05, 1], edge: [-1, 0, 0] }, ...spine({ turn: 8, flex: 4 }) }]),
+            variant("flourish", WAND,
+                // Raised high overhead, then snapped down to point
+                [0.65, { right: { at: [0.05, 0.55, 0.25], point: [0, 0.9, -0.4], edge: [-1, 0, 0] }, ...spine({ flex: -8 }), offset: [0, 0.02, -0.02] }],
+                [1, { right: { at: [0.12, -0.12, 1], point: [0.03, -0.12, 1], edge: [-1, 0, 0] }, ...spine({ flex: 8, turn: 6 }), offset: [0, -0.03, 0.05] }],
+                [1.4, { right: { at: [0.12, -0.2, 0.95], point: [0.03, -0.2, 0.98], edge: [-1, 0, 0] }, ...spine({ flex: 8, turn: 6 }), offset: [0, -0.03, 0.04] }]),
+            variant("low sweep", WAND,
+                // Swept up from low at the side
+                [0.65, { right: { at: [-0.3, -0.7, 0.4], point: [-0.2, -0.5, 0.85], edge: [-1, 0, 0] }, ...spine({ flex: 10, turn: -12 }), offset: [0, -0.04, 0] }],
+                [1, { right: { at: [0.15, 0.02, 1], point: [0.05, 0.1, 1], edge: [-1, 0, 0] }, ...spine({ turn: 10 }), offset: [0, -0.01, 0.05] }],
+                [1.4, { right: { at: [0.15, 0, 0.96], point: [0.05, 0.08, 1], edge: [-1, 0, 0] }, ...spine({ turn: 10 }), offset: [0, -0.01, 0.04] }]),
         ],
     },
     grimoire: {
-        keys: [
-            [0, { left: book, ...spine({}), offset: [0, 0, 0] }],
-            // Gathering the fire in the hand, drawn back by the shoulder
-            [0.55, { left: book, right: { at: [-0.25, 0.05, 0.3], point: [1, 0, 0], edge: [0, 1, 0.15] }, ...spine({ turn: -18, flex: -5 }), offset: [0, 0.01, -0.03] }],
-            [0.85, { left: book, right: { at: [-0.22, 0.08, 0.25], point: [1, 0, 0], edge: [0, 1, 0.15] }, ...spine({ turn: -20, flex: -6 }), offset: [0, 0.01, -0.035] }],
-            // Thrown from the open palm
-            [1, { left: book, right: { at: [0.12, -0.02, 1.02], point: [1, 0, 0], edge: [0, 1, 0.15] }, ...spine({ turn: 12, flex: 8 }), offset: [0, -0.03, 0.07] }],
-            [1.5, { left: book, right: { at: [0.12, -0.06, 0.98], point: [1, 0, 0], edge: [0, 1, 0.2] }, ...spine({ turn: 10, flex: 8 }), offset: [0, -0.03, 0.06] }],
-            [2, { left: book, ...spine({}), offset: [0, 0, 0] }],
+        variants: [
+            variant("throw from the palm", GRIMOIRE,
+                // Gathering the fire in the hand, drawn back by the shoulder, then thrown
+                [0.55, { left: book, right: { at: [-0.25, 0.05, 0.3], point: [1, 0, 0], edge: [0, 1, 0.15] }, ...spine({ turn: -18, flex: -5 }), offset: [0, 0.01, -0.03] }],
+                [0.85, { left: book, right: { at: [-0.22, 0.08, 0.25], point: [1, 0, 0], edge: [0, 1, 0.15] }, ...spine({ turn: -20, flex: -6 }), offset: [0, 0.01, -0.035] }],
+                [1, { left: book, right: { at: [0.12, -0.02, 1.02], point: [1, 0, 0], edge: [0, 1, 0.15] }, ...spine({ turn: 12, flex: 8 }), offset: [0, -0.03, 0.07] }],
+                [1.5, { left: book, right: { at: [0.12, -0.06, 0.98], point: [1, 0, 0], edge: [0, 1, 0.2] }, ...spine({ turn: 10, flex: 8 }), offset: [0, -0.03, 0.06] }]),
+            variant("overhand hurl", GRIMOIRE,
+                // Up by the ear, then hurled forward and down
+                [0.55, { left: book, right: { at: [-0.15, 0.35, 0], point: [1, 0, 0], edge: [0, 0.6, -0.8] }, ...spine({ turn: -20, flex: -8 }), offset: [0, 0.02, -0.04] }],
+                [1, { left: book, right: { at: [0.12, 0, 1], point: [1, 0, 0], edge: [0, 1, 0.2] }, ...spine({ turn: 14, flex: 10 }), offset: [0, -0.04, 0.08] }],
+                [1.5, { left: book, right: { at: [0.18, -0.3, 0.85], point: [1, 0, 0], edge: [0, 0.8, 0.5] }, ...spine({ turn: 14, flex: 12 }), offset: [0, -0.04, 0.06] }]),
+            variant("side-arm", GRIMOIRE,
+                // Down by the right hip, then swung round and let go
+                [0.55, { left: book, right: { at: [-0.5, -0.4, 0.1], point: [1, 0, 0.3], edge: [0, 1, 0] }, ...spine({ turn: -28 }), Hips: { turn: 10 }, offset: [0, -0.01, -0.03] }],
+                [1, { left: book, right: { at: [0.15, -0.1, 1], point: [1, 0, 0], edge: [0, 1, 0.15] }, ...spine({ turn: 18, flex: 6 }), Hips: { turn: -10 }, offset: [0, -0.03, 0.07] }],
+                [1.5, { left: book, right: { at: [0.4, -0.2, 0.8], point: [1, 0, 0], edge: [0, 1, 0.3] }, ...spine({ turn: 22, flex: 6 }), Hips: { turn: -12 }, offset: [0, -0.03, 0.05] }]),
+            variant("palm push", GRIMOIRE,
+                // Drawn in to the chest, the fire growing, then pushed out at arm's length
+                [0.55, { left: book, right: { at: [0.05, -0.1, 0.2], point: [1, 0, 0], edge: [0, 1, 0.15] }, ...spine({ flex: -3 }), offset: [0, 0, -0.03] }],
+                [0.8, { left: book, right: { at: [0.08, -0.12, 0.15], point: [1, 0, 0], edge: [0, 1, 0.15] }, ...spine({ flex: -4 }), offset: [0, 0, -0.04] }],
+                [1, { left: book, right: { at: [0.1, -0.02, 1.05], point: [1, 0, 0], edge: [0, 1, 0.15] }, ...spine({ flex: 6 }), offset: [0, -0.03, 0.08] }],
+                [1.5, { left: book, right: { at: [0.1, -0.05, 1], point: [1, 0, 0], edge: [0, 1, 0.2] }, ...spine({ flex: 6 }), offset: [0, -0.03, 0.07] }]),
+            variant("underhand lob", GRIMOIRE,
+                // Cupped low, then lobbed up and out
+                [0.55, { left: book, right: { at: [-0.2, -0.65, 0.15], point: [1, 0, 0], edge: [0, 0.3, 1] }, ...spine({ flex: 10, turn: -12 }), offset: [0, -0.04, -0.02] }],
+                [1, { left: book, right: { at: [0.1, 0.1, 0.95], point: [1, 0, 0], edge: [0, 0.6, 0.8] }, ...spine({ flex: -4, turn: 10 }), offset: [0, 0, 0.06] }],
+                [1.5, { left: book, right: { at: [0.12, 0.15, 0.9], point: [1, 0, 0], edge: [0, 0.7, 0.7] }, ...spine({ flex: -4, turn: 10 }), offset: [0, 0, 0.05] }]),
         ],
     },
     hammer: {
-        keys: [
-            [0, { ...GUARDS.hammer, ...spine({}), offset: [0, 0, 0] }],
-            // High over the head, arching back
-            [0.6, { right: { at: [0.1, 0.55, -0.05], point: [0.05, 0.25, -0.97], edge: [0, -1, -0.2] }, left: { on: 0.38 }, ...spine({ flex: -12 }), offset: [0, 0.02, -0.05] }],
-            // Down with the whole body onto the enemy
-            [1, { right: { at: [0.25, -0.2, 0.85], point: [0.05, 0.05, 1], edge: [0, -1, 0] }, left: { on: 0.38 }, ...spine({ flex: 18 }), offset: [0, -0.1, 0.1] }],
-            [1.35, { right: { at: [0.25, -0.6, 0.7], point: [0.05, -0.55, 0.85], edge: [0, -0.85, -0.55] }, left: { on: 0.38 }, ...spine({ flex: 28 }), offset: [0, -0.14, 0.1] }],
-            [2, { ...GUARDS.hammer, ...spine({}), offset: [0, 0, 0] }],
+        variants: [
+            variant("overhead smash", HAMMER,
+                // High over the head, arching back, then down with the whole body onto the enemy
+                [0.6, { right: { at: [0.1, 0.55, -0.05], point: [0.05, 0.25, -0.97], edge: [0, -1, -0.2] }, left: { on: 0.38 }, ...spine({ flex: -12 }), offset: [0, 0.02, -0.05] }],
+                [1, { right: { at: [0.25, -0.2, 0.85], point: [0.05, 0.05, 1], edge: [0, -1, 0] }, left: { on: 0.38 }, ...spine({ flex: 18 }), offset: [0, -0.1, 0.1] }],
+                [1.35, { right: { at: [0.25, -0.6, 0.7], point: [0.05, -0.55, 0.85], edge: [0, -0.85, -0.55] }, left: { on: 0.38 }, ...spine({ flex: 28 }), offset: [0, -0.14, 0.1] }]),
+            variant("side swing", HAMMER,
+                // Swung back round to the right, then flat into the enemy's side
+                [0.6, { right: { at: [-0.55, -0.15, -0.05], point: [-0.7, 0.25, -0.65], edge: [0.6, 0, -0.75] }, left: { on: 0.38 }, ...spine({ turn: -35 }), Hips: { turn: 15 }, offset: [0, -0.02, -0.04] }],
+                [1, { right: { at: [0.15, -0.3, 0.8], point: [0.45, 0.05, 0.9], edge: [0.9, 0, -0.4] }, left: { on: 0.38 }, ...spine({ flex: 8, turn: 25 }), Hips: { turn: -18 }, offset: [0, -0.06, 0.08] }],
+                [1.35, { right: { at: [0.5, -0.45, 0.4], point: [0.9, -0.1, 0.1], edge: [0.1, 0, -1] }, left: { on: 0.38 }, ...spine({ flex: 12, turn: 35 }), Hips: { turn: -20 }, offset: [0, -0.07, 0.06] }]),
+            variant("diagonal chop", HAMMER,
+                // Up over the right shoulder, then down and across
+                [0.6, { right: { at: [-0.35, 0.45, -0.05], point: [-0.35, 0.5, -0.8], edge: [0.3, -0.9, 0.2] }, left: { on: 0.38 }, ...spine({ turn: -22, flex: -8 }), Hips: { turn: 10 }, offset: [0, 0.01, -0.04] }],
+                [1, { right: { at: [0.25, -0.35, 0.8], point: [0.25, -0.25, 0.93], edge: [0.3, -0.95, 0] }, left: { on: 0.38 }, ...spine({ flex: 20, turn: 15 }), Hips: { turn: -10 }, offset: [0, -0.1, 0.1] }],
+                [1.35, { right: { at: [0.35, -0.65, 0.6], point: [0.35, -0.7, 0.6], edge: [0.2, -0.6, -0.75] }, left: { on: 0.38 }, ...spine({ flex: 26, turn: 18 }), Hips: { turn: -12 }, offset: [0, -0.12, 0.09] }]),
+            variant("upswing", HAMMER,
+                // Low behind, then swung up under the enemy's chin
+                [0.6, { right: { at: [-0.35, -0.8, 0], point: [-0.3, -0.75, -0.6], edge: [0, 0.6, 0.8] }, left: { on: 0.38 }, ...spine({ flex: 18, turn: -15 }), offset: [0, -0.1, -0.03] }],
+                [1, { right: { at: [0.15, -0.1, 0.8], point: [0.05, 0.6, 0.8], edge: [0, 0.8, -0.6] }, left: { on: 0.38 }, ...spine({ flex: -2, turn: 10 }), offset: [0, 0, 0.08] }],
+                [1.35, { right: { at: [0.2, 0.2, 0.6], point: [0, 0.95, 0.3], edge: [0, 0.3, -0.95] }, left: { on: 0.38 }, ...spine({ flex: -6, turn: 12 }), offset: [0, 0.01, 0.06] }]),
+            variant("leaping slam", HAMMER,
+                // Rising up on the toes with it high overhead, then slammed down, crouching into it
+                [0.55, { right: { at: [0.1, 0.65, -0.1], point: [0.05, 0.1, -0.99], edge: [0, -1, -0.1] }, left: { on: 0.38 }, ...spine({ flex: -16 }), offset: [0, 0.05, -0.06] }],
+                [1, { right: { at: [0.25, -0.35, 0.85], point: [0.05, -0.1, 1], edge: [0, -1, 0] }, left: { on: 0.38 }, ...spine({ flex: 26 }), offset: [0, -0.16, 0.14] }],
+                [1.4, { right: { at: [0.25, -0.7, 0.65], point: [0.05, -0.7, 0.7], edge: [0, -0.7, -0.7] }, left: { on: 0.38 }, ...spine({ flex: 32 }), offset: [0, -0.18, 0.12] }]),
         ],
     },
     bow: {
-        keys: [
-            [0, { ...GUARDS.bow, ...spine({}), Head: { turn: 0 }, offset: [0, 0, 0] }],
-            // Up and nocked, side on to the target, the bow at arm's length towards it
-            [0.3, { left: { at: [0.05, 0.05, 1], point: [0, 1, 0.1], edge: [0, 0, 1] }, right: { at: [0.45, 0.08, 0.95] }, RightArm: { flex: 90, abduct: 30 }, RightForeArm: { flex: 90 }, ...spine({ turn: -40 }), Head: { turn: 32 }, offset: [0, 0, 0] }],
-            // Drawn to the chin as the arrow is loosed
-            [1, { left: { at: [0.05, 0.05, 1.02], point: [0, 1, 0.1], edge: [0, 0, 1] }, right: { at: [0.3, 0.28, 0.2] }, RightArm: { flex: 90, abduct: 70 }, RightForeArm: { flex: 140 }, ...spine({ turn: -42, flex: -3 }), Head: { turn: 34 }, offset: [0, -0.02, 0] }],
-            // The drawing hand flies back past the ear
-            [1.15, { left: { at: [0.05, 0.04, 1.02], point: [0, 1, 0.1], edge: [0, 0, 1] }, right: { at: [0.05, 0.3, -0.12] }, RightArm: { flex: 85, abduct: 85 }, RightForeArm: { flex: 120 }, ...spine({ turn: -42, flex: -3 }), Head: { turn: 34 }, offset: [0, -0.02, 0] }],
-            [1.5, { left: { at: [0.05, -0.05, 0.95], point: [0, 1, 0.12], edge: [0, 0, 1] }, right: { at: [0.05, 0.1, -0.05] }, RightArm: { flex: 70, abduct: 80 }, RightForeArm: { flex: 110 }, ...spine({ turn: -36 }), Head: { turn: 28 }, offset: [0, -0.01, 0] }],
-            [2, { ...GUARDS.bow, ...spine({}), Head: { turn: 0 }, offset: [0, 0, 0] }],
+        variants: [
+            variant("side-on draw", BOW,
+                // Up and nocked, side on to the target, the bow at arm's length towards it...
+                [0.3, { left: { at: [0.05, 0.05, 1], point: [0, 1, 0.1], edge: [0, 0, 1] }, right: { at: [0.45, 0.08, 0.95] }, RightArm: { flex: 90, abduct: 30 }, RightForeArm: { flex: 90 }, ...spine({ turn: -40 }), Head: { turn: 32, flex: 0 }, offset: [0, 0, 0] }],
+                // ...drawn to the chin as the arrow is loosed...
+                [1, { left: { at: [0.05, 0.05, 1.02], point: [0, 1, 0.1], edge: [0, 0, 1] }, right: { at: [0.3, 0.28, 0.2] }, RightArm: { flex: 90, abduct: 70 }, RightForeArm: { flex: 140 }, ...spine({ turn: -42, flex: -3 }), Head: { turn: 34, flex: 0 }, offset: [0, -0.02, 0] }],
+                // ...and the drawing hand flies back past the ear
+                [1.15, { left: { at: [0.05, 0.04, 1.02], point: [0, 1, 0.1], edge: [0, 0, 1] }, right: { at: [0.05, 0.3, -0.12] }, RightArm: { flex: 85, abduct: 85 }, RightForeArm: { flex: 120 }, ...spine({ turn: -42, flex: -3 }), Head: { turn: 34, flex: 0 }, offset: [0, -0.02, 0] }],
+                [1.5, { left: { at: [0.05, -0.05, 0.95], point: [0, 1, 0.12], edge: [0, 0, 1] }, right: { at: [0.05, 0.1, -0.05] }, RightArm: { flex: 70, abduct: 80 }, RightForeArm: { flex: 110 }, ...spine({ turn: -36 }), Head: { turn: 28, flex: 0 }, offset: [0, -0.01, 0] }]),
+            variant("high draw", BOW,
+                // Raised high and drawn back to the ear, leaning back into it
+                [0.3, { left: { at: [0.05, 0.22, 0.95], point: [0, 1, 0.05], edge: [0, 0, 1] }, right: { at: [0.45, 0.25, 0.9] }, RightArm: { flex: 110, abduct: 35 }, RightForeArm: { flex: 95 }, ...spine({ turn: -38, flex: -8 }), Head: { turn: 30, flex: -6 }, offset: [0, 0, -0.02] }],
+                [1, { left: { at: [0.05, 0.24, 0.98], point: [0, 1, 0.05], edge: [0, 0, 1] }, right: { at: [0.3, 0.45, 0.2] }, RightArm: { flex: 110, abduct: 75 }, RightForeArm: { flex: 140 }, ...spine({ turn: -40, flex: -8 }), Head: { turn: 32, flex: -6 }, offset: [0, -0.01, -0.02] }],
+                [1.15, { left: { at: [0.05, 0.23, 0.98], point: [0, 1, 0.05], edge: [0, 0, 1] }, right: { at: [0.05, 0.45, -0.1] }, RightArm: { flex: 105, abduct: 90 }, RightForeArm: { flex: 120 }, ...spine({ turn: -40, flex: -8 }), Head: { turn: 32, flex: -6 }, offset: [0, -0.01, -0.02] }],
+                [1.5, { left: { at: [0.05, 0.05, 0.95], point: [0, 1, 0.1], edge: [0, 0, 1] }, right: { at: [0.05, 0.2, -0.05] }, RightArm: { flex: 80, abduct: 80 }, RightForeArm: { flex: 110 }, ...spine({ turn: -34, flex: -4 }), Head: { turn: 26, flex: -3 }, offset: [0, 0, -0.01] }]),
+            variant("snap shot", BOW,
+                // A quick half draw, hardly turning
+                [0.3, { left: { at: [0.08, -0.05, 0.95], point: [0, 1, 0.12], edge: [0, 0, 1] }, right: { at: [0.35, 0, 0.85] }, RightArm: { flex: 80, abduct: 30 }, RightForeArm: { flex: 90 }, ...spine({ turn: -25 }), Head: { turn: 20, flex: 0 }, offset: [0, 0, 0] }],
+                [1, { left: { at: [0.08, -0.04, 0.98], point: [0, 1, 0.12], edge: [0, 0, 1] }, right: { at: [0.28, 0.15, 0.35] }, RightArm: { flex: 90, abduct: 55 }, RightForeArm: { flex: 120 }, ...spine({ turn: -28 }), Head: { turn: 22, flex: 0 }, offset: [0, -0.01, 0] }],
+                [1.15, { left: { at: [0.08, -0.05, 0.98], point: [0, 1, 0.12], edge: [0, 0, 1] }, right: { at: [0.2, 0.2, 0.1] }, RightArm: { flex: 85, abduct: 70 }, RightForeArm: { flex: 115 }, ...spine({ turn: -28 }), Head: { turn: 22, flex: 0 }, offset: [0, -0.01, 0] }],
+                [1.5, { left: { at: [0.08, -0.15, 0.92], point: [0, 1, 0.15], edge: [0, 0, 1] }, right: { at: [0.1, 0.05, 0] }, RightArm: { flex: 60, abduct: 60 }, RightForeArm: { flex: 100 }, ...spine({ turn: -22 }), Head: { turn: 18, flex: 0 }, offset: [0, 0, 0] }]),
+            variant("crouching shot", BOW,
+                // Dropping low on bent knees to draw and loose
+                [0.3, { left: { at: [0.05, 0.05, 1], point: [0, 1, 0.1], edge: [0, 0, 1] }, right: { at: [0.45, 0.08, 0.95] }, RightArm: { flex: 90, abduct: 30 }, RightForeArm: { flex: 90 }, ...spine({ turn: -38, flex: 6 }), Head: { turn: 30, flex: -6 }, offset: [0, -0.2, -0.03] }],
+                [1, { left: { at: [0.05, 0.08, 1.02], point: [0, 1, 0.1], edge: [0, 0, 1] }, right: { at: [0.3, 0.3, 0.2] }, RightArm: { flex: 90, abduct: 70 }, RightForeArm: { flex: 140 }, ...spine({ turn: -40, flex: 6 }), Head: { turn: 32, flex: -8 }, offset: [0, -0.24, -0.03] }],
+                [1.15, { left: { at: [0.05, 0.07, 1.02], point: [0, 1, 0.1], edge: [0, 0, 1] }, right: { at: [0.05, 0.3, -0.12] }, RightArm: { flex: 85, abduct: 85 }, RightForeArm: { flex: 120 }, ...spine({ turn: -40, flex: 6 }), Head: { turn: 32, flex: -8 }, offset: [0, -0.24, -0.03] }],
+                [1.5, { left: { at: [0.05, -0.05, 0.95], point: [0, 1, 0.12], edge: [0, 0, 1] }, right: { at: [0.05, 0.1, -0.05] }, RightArm: { flex: 70, abduct: 80 }, RightForeArm: { flex: 110 }, ...spine({ turn: -34, flex: 3 }), Head: { turn: 26, flex: -4 }, offset: [0, -0.12, -0.02] }]),
+            variant("canted draw", BOW,
+                // The bow tipped over on its side, drawn to the cheek
+                [0.3, { left: { at: [0.02, 0, 1], point: [0.6, 0.8, 0.1], edge: [0, 0, 1] }, right: { at: [0.4, 0.05, 0.92] }, RightArm: { flex: 85, abduct: 30 }, RightForeArm: { flex: 90 }, ...spine({ turn: -34, bend: -6 }), Head: { turn: 28, flex: 0 }, offset: [0, 0, 0] }],
+                [1, { left: { at: [0.02, 0.02, 1.02], point: [0.6, 0.8, 0.1], edge: [0, 0, 1] }, right: { at: [0.32, 0.22, 0.22] }, RightArm: { flex: 85, abduct: 65 }, RightForeArm: { flex: 138 }, ...spine({ turn: -36, bend: -6 }), Head: { turn: 30, flex: 0 }, offset: [0, -0.02, 0] }],
+                [1.15, { left: { at: [0.02, 0.01, 1.02], point: [0.6, 0.8, 0.1], edge: [0, 0, 1] }, right: { at: [0.08, 0.25, -0.1] }, RightArm: { flex: 80, abduct: 80 }, RightForeArm: { flex: 120 }, ...spine({ turn: -36, bend: -6 }), Head: { turn: 30, flex: 0 }, offset: [0, -0.02, 0] }],
+                [1.5, { left: { at: [0.05, -0.05, 0.95], point: [0.3, 0.95, 0.1], edge: [0, 0, 1] }, right: { at: [0.05, 0.1, -0.05] }, RightArm: { flex: 70, abduct: 80 }, RightForeArm: { flex: 110 }, ...spine({ turn: -30, bend: -3 }), Head: { turn: 26, flex: 0 }, offset: [0, -0.01, 0] }]),
         ],
     },
     punch: {
         alternate: true,
-        keys: [
-            [0, { ...GUARDS.punch, Hips: { turn: 0 }, offset: [0, 0, 0] }],
-            // A little pulled back...
-            [0.5, { right: { at: [0.25, -0.05, 0.3], point: [0.7, 0.3, 0], edge: [0, 0.3, 1] }, left: fist(-1), ...spine({ flex: 6, turn: -10 }), Hips: { turn: 6 }, offset: [0, -0.01, -0.02] }],
-            // ...then straight out, turning into it
-            [1, { right: { at: [0.26, 0.04, 1.03], point: [0.9, 0, 0.1], edge: [0, 0, 1] }, left: fist(-1), ...spine({ flex: 8, turn: 20 }), Hips: { turn: -12 }, offset: [0, -0.03, 0.06] }],
-            [1.4, { right: { at: [0.28, 0, 0.75], point: [0.85, 0.15, 0.1], edge: [0, 0.15, 1] }, left: fist(-1), ...spine({ flex: 7, turn: 10 }), Hips: { turn: -6 }, offset: [0, -0.02, 0.03] }],
-            [2, { ...GUARDS.punch, Hips: { turn: 0 }, offset: [0, 0, 0] }],
+        variants: [
+            variant("straight", PUNCH,
+                // A little pulled back, then straight out, turning into it
+                [0.5, { right: { at: [0.25, -0.05, 0.3], point: [0.7, 0.3, 0], edge: [0, 0.3, 1] }, left: fist(-1), ...spine({ flex: 6, turn: -10 }), Hips: { turn: 6 }, offset: [0, -0.01, -0.02] }],
+                [1, { right: { at: [0.26, 0.04, 1.03], point: [0.9, 0, 0.1], edge: [0, 0, 1] }, left: fist(-1), ...spine({ flex: 8, turn: 20 }), Hips: { turn: -12 }, offset: [0, -0.03, 0.06] }],
+                [1.4, { right: { at: [0.28, 0, 0.75], point: [0.85, 0.15, 0.1], edge: [0, 0.15, 1] }, left: fist(-1), ...spine({ flex: 7, turn: 10 }), Hips: { turn: -6 }, offset: [0, -0.02, 0.03] }]),
+            variant("hook", PUNCH,
+                // Out wide, then round into the side of the head
+                [0.5, { right: { at: [-0.3, -0.05, 0.3], point: [0.6, 0.3, 0.3], edge: [0, 0.3, 1] }, left: fist(-1), ...spine({ flex: 6, turn: -18 }), Hips: { turn: 8 }, offset: [0, -0.01, -0.02] }],
+                [1, { right: { at: [0.12, 0.02, 0.85], point: [0.95, 0.1, -0.2], edge: [0.2, 0, 1] }, left: fist(-1), ...spine({ flex: 6, turn: 28 }), Hips: { turn: -14 }, offset: [0, -0.03, 0.05] }],
+                [1.4, { right: { at: [0.4, 0, 0.6], point: [0.9, 0.2, -0.3], edge: [0.3, 0.1, 1] }, left: fist(-1), ...spine({ flex: 6, turn: 30 }), Hips: { turn: -15 }, offset: [0, -0.03, 0.04] }]),
+            variant("uppercut", PUNCH,
+                // Dipping low, then driven up under the chin
+                [0.5, { right: { at: [0, -0.55, 0.3], point: [0.6, -0.1, 0.4], edge: [0, 0.3, 1] }, left: fist(-1), ...spine({ flex: 12, turn: -10 }), Hips: { turn: 6 }, offset: [0, -0.06, 0] }],
+                [1, { right: { at: [0.18, 0.12, 0.72], point: [0.5, 0.8, 0.1], edge: [0, 0.2, 1] }, left: fist(-1), ...spine({ flex: -4, turn: 16 }), Hips: { turn: -10 }, offset: [0, 0.01, 0.05] }],
+                [1.4, { right: { at: [0.2, 0.18, 0.6], point: [0.5, 0.85, 0], edge: [0, 0.1, 1] }, left: fist(-1), ...spine({ flex: -4, turn: 14 }), Hips: { turn: -8 }, offset: [0, 0.01, 0.04] }]),
+            variant("body blow", PUNCH,
+                // Low and hard into the belly, bending into it
+                [0.5, { right: { at: [0.2, -0.3, 0.25], point: [0.7, 0.3, 0], edge: [0, 0.3, 1] }, left: fist(-1), ...spine({ flex: 14, turn: -10 }), Hips: { turn: 6 }, offset: [0, -0.06, -0.02] }],
+                [1, { right: { at: [0.25, -0.38, 0.95], point: [0.9, 0.2, 0], edge: [0, 0.1, 1] }, left: fist(-1), ...spine({ flex: 16, turn: 18 }), Hips: { turn: -10 }, offset: [0, -0.08, 0.07] }],
+                [1.4, { right: { at: [0.25, -0.35, 0.7], point: [0.85, 0.25, 0], edge: [0, 0.15, 1] }, left: fist(-1), ...spine({ flex: 14, turn: 10 }), Hips: { turn: -6 }, offset: [0, -0.06, 0.04] }]),
+            variant("overhand", PUNCH,
+                // Looping up and over, then down onto the head
+                [0.5, { right: { at: [-0.25, 0.3, 0.15], point: [0.5, 0.6, -0.2], edge: [0, 0.3, 1] }, left: fist(-1), ...spine({ flex: -4, turn: -20 }), Hips: { turn: 8 }, offset: [0, 0, -0.03] }],
+                [1, { right: { at: [0.22, 0.02, 1], point: [0.8, -0.2, 0.2], edge: [0, -0.2, 1] }, left: fist(-1), ...spine({ flex: 10, turn: 22 }), Hips: { turn: -12 }, offset: [0, -0.04, 0.07] }],
+                [1.4, { right: { at: [0.3, -0.2, 0.75], point: [0.8, -0.1, 0.2], edge: [0, 0, 1] }, left: fist(-1), ...spine({ flex: 12, turn: 14 }), Hips: { turn: -8 }, offset: [0, -0.04, 0.04] }]),
         ],
     },
     cleaver: {
-        keys: [
-            [0, { ...GUARDS.cleaver, ...spine({}), offset: [0, 0, 0] }],
-            // Raised high behind the head
-            [0.6, { right: { at: [-0.1, 0.5, -0.05], point: [0.15, 0.35, -0.92], edge: [0, 0.9, 0.3] }, LeftArm: { flex: 40, abduct: 35 }, LeftForeArm: { flex: 70 }, ...spine({ flex: -8, turn: -18 }), offset: [0, 0.01, -0.03] }],
-            // Hacked down
-            [1, { right: { at: [0.2, -0.3, 0.85], point: [0.05, -0.3, 0.95], edge: [0, -0.95, 0.3] }, LeftArm: { flex: 10, abduct: 40 }, LeftForeArm: { flex: 40 }, ...spine({ flex: 22, turn: 14 }), offset: [0, -0.1, 0.1] }],
-            [1.35, { right: { at: [0.3, -0.65, 0.6], point: [0.15, -0.85, 0.4], edge: [0, -0.4, -0.9] }, LeftArm: { flex: 5, abduct: 38 }, LeftForeArm: { flex: 40 }, ...spine({ flex: 25, turn: 16 }), offset: [0, -0.11, 0.09] }],
-            [2, { ...GUARDS.cleaver, ...spine({}), offset: [0, 0, 0] }],
+        variants: [
+            variant("overhead hack", CLEAVER,
+                // Raised high behind the head, then hacked down
+                [0.6, { right: { at: [-0.1, 0.5, -0.05], point: [0.15, 0.35, -0.92], edge: [0, 0.9, 0.3] }, LeftArm: { flex: 40, abduct: 35 }, LeftForeArm: { flex: 70 }, ...spine({ flex: -8, turn: -18 }), offset: [0, 0.01, -0.03] }],
+                [1, { right: { at: [0.2, -0.3, 0.85], point: [0.05, -0.3, 0.95], edge: [0, -0.95, 0.3] }, LeftArm: { flex: 10, abduct: 40 }, LeftForeArm: { flex: 40 }, ...spine({ flex: 22, turn: 14 }), offset: [0, -0.1, 0.1] }],
+                [1.35, { right: { at: [0.3, -0.65, 0.6], point: [0.15, -0.85, 0.4], edge: [0, -0.4, -0.9] }, LeftArm: { flex: 5, abduct: 38 }, LeftForeArm: { flex: 40 }, ...spine({ flex: 25, turn: 16 }), offset: [0, -0.11, 0.09] }]),
+            variant("backhand", CLEAVER,
+                // Across to the left shoulder, then backhanded out to the right
+                [0.6, { right: { at: [0.5, 0.25, 0.15], point: [0.4, 0.55, -0.7], edge: [-0.6, 0.3, -0.4] }, LeftArm: { flex: 30, abduct: 30 }, LeftForeArm: { flex: 60 }, ...spine({ turn: 25 }), Hips: { turn: -8 }, offset: [0, 0, -0.03] }],
+                [1, { right: { at: [-0.25, -0.3, 0.85], point: [-0.3, -0.2, 0.95], edge: [-0.9, -0.3, 0] }, LeftArm: { flex: 10, abduct: 42 }, LeftForeArm: { flex: 40 }, ...spine({ flex: 14, turn: -22 }), Hips: { turn: 12 }, offset: [0, -0.07, 0.09] }],
+                [1.35, { right: { at: [-0.65, -0.55, 0.45], point: [-0.85, -0.45, 0.2], edge: [-0.3, -0.5, -0.8] }, LeftArm: { flex: 5, abduct: 40 }, LeftForeArm: { flex: 40 }, ...spine({ flex: 16, turn: -28 }), Hips: { turn: 14 }, offset: [0, -0.08, 0.07] }]),
+            variant("flat chop", CLEAVER,
+                // Swung back out to the right, then chopped flat across
+                [0.6, { right: { at: [-0.55, 0.05, -0.05], point: [-0.65, 0.1, -0.7], edge: [0.75, 0, -0.65] }, LeftArm: { flex: 30, abduct: 35 }, LeftForeArm: { flex: 65 }, ...spine({ turn: -32 }), Hips: { turn: 14 }, offset: [0, -0.01, -0.03] }],
+                [1, { right: { at: [0.3, -0.2, 0.85], point: [0.35, -0.05, 0.93], edge: [0.93, 0, -0.35] }, LeftArm: { flex: 10, abduct: 40 }, LeftForeArm: { flex: 40 }, ...spine({ flex: 10, turn: 24 }), Hips: { turn: -14 }, offset: [0, -0.07, 0.1] }],
+                [1.35, { right: { at: [0.65, -0.35, 0.45], point: [0.9, -0.1, 0.1], edge: [0.1, 0, -1] }, LeftArm: { flex: 5, abduct: 38 }, LeftForeArm: { flex: 40 }, ...spine({ flex: 12, turn: 32 }), Hips: { turn: -16 }, offset: [0, -0.08, 0.08] }]),
+            variant("gut rip", CLEAVER,
+                // Low at the hip, then ripped upward through the belly
+                [0.6, { right: { at: [-0.3, -0.75, 0.1], point: [-0.1, -0.3, 0.95], edge: [0, 0.95, 0.3] }, LeftArm: { flex: 25, abduct: 35 }, LeftForeArm: { flex: 60 }, ...spine({ flex: 16, turn: -14 }), offset: [0, -0.08, -0.02] }],
+                [1, { right: { at: [0.15, -0.3, 0.85], point: [0.1, 0.3, 0.95], edge: [0, 0.95, -0.3] }, LeftArm: { flex: 10, abduct: 40 }, LeftForeArm: { flex: 40 }, ...spine({ flex: 10, turn: 12 }), offset: [0, -0.05, 0.1] }],
+                [1.35, { right: { at: [0.2, 0.05, 0.7], point: [0.1, 0.7, 0.7], edge: [0, 0.7, -0.7] }, LeftArm: { flex: 5, abduct: 38 }, LeftForeArm: { flex: 40 }, ...spine({ flex: 4, turn: 14 }), offset: [0, -0.02, 0.08] }]),
+            variant("stab and rip", CLEAVER,
+                // Drawn back, point first, stabbed in, then ripped down
+                [0.6, { right: { at: [0, -0.5, 0.05], point: [0.05, 0.05, 1], edge: [0, -1, 0] }, LeftArm: { flex: 30, abduct: 35 }, LeftForeArm: { flex: 65 }, ...spine({ turn: -16 }), Hips: { turn: 8 }, offset: [0, -0.03, -0.06] }],
+                [1, { right: { at: [0.18, -0.25, 1.02], point: [0.05, 0, 1], edge: [0, -1, 0] }, LeftArm: { flex: 10, abduct: 42 }, LeftForeArm: { flex: 40 }, ...spine({ flex: 10, turn: 18 }), Hips: { turn: -10 }, offset: [0, -0.08, 0.16] }],
+                [1.35, { right: { at: [0.12, -0.65, 0.75], point: [0.05, -0.5, 0.85], edge: [0, -0.85, -0.5] }, LeftArm: { flex: 5, abduct: 40 }, LeftForeArm: { flex: 40 }, ...spine({ flex: 20, turn: 14 }), Hips: { turn: -8 }, offset: [0, -0.1, 0.12] }]),
         ],
     },
 
-    // Spells, cast with the free (left) hand, key 1 when the spell takes effect. Healing: the
-    // hand gathers the light before the chest, then lifts it up and open
+    // Spells, cast with the free (left) hand, key 1 when the spell takes effect
     castHeal: {
-        keys: [
-            [0, { ...spine({}), Head: { flex: 0 } }],
-            [0.55, { left: { at: [0.08, -0.35, 0.5], point: [-0.3, 0.3, 0.9], edge: [0, -1, 0.2] }, ...spine({ flex: 6 }), Head: { flex: 8 } }],
-            [1, { left: { at: [0.1, 0.35, 0.45], point: [-0.2, 0.9, 0.35], edge: [0, 0.2, 1] }, ...spine({ flex: -6 }), Head: { flex: -14 } }],
-            [1.5, { left: { at: [0.12, 0.32, 0.42], point: [-0.2, 0.9, 0.35], edge: [0, 0.2, 1] }, ...spine({ flex: -5 }), Head: { flex: -10 } }],
-            [2, { ...spine({}), Head: { flex: 0 } }],
+        variants: [
+            variant("lifted up", CAST,
+                // The hand gathers the light before the chest, then lifts it up and open
+                [0.55, { left: { at: [0.08, -0.35, 0.5], point: [-0.3, 0.3, 0.9], edge: [0, -1, 0.2] }, ...spine({ flex: 6 }), Head: { flex: 8 } }],
+                [1, { left: { at: [0.1, 0.35, 0.45], point: [-0.2, 0.9, 0.35], edge: [0, 0.2, 1] }, ...spine({ flex: -6 }), Head: { flex: -14 } }],
+                [1.5, { left: { at: [0.12, 0.32, 0.42], point: [-0.2, 0.9, 0.35], edge: [0, 0.2, 1] }, ...spine({ flex: -5 }), Head: { flex: -10 } }]),
+            variant("from the heart", CAST,
+                // The palm to the heart, the head bowed, then raised to the sky
+                [0.5, { left: { at: [-0.25, -0.25, 0.25], point: [-0.8, 0.5, 0.2], edge: [0, 0, 1] }, ...spine({ flex: 4 }), Head: { flex: 14 } }],
+                [1, { left: { at: [0.18, 0.5, 0.35], point: [-0.1, 0.95, 0.3], edge: [0, 0.25, 1] }, ...spine({ flex: -8 }), Head: { flex: -18 } }],
+                [1.5, { left: { at: [0.18, 0.45, 0.33], point: [-0.1, 0.95, 0.3], edge: [0, 0.25, 1] }, ...spine({ flex: -6 }), Head: { flex: -14 } }]),
+            variant("circle", CAST,
+                // A circle drawn with the open palm, then opened upward
+                [0.35, { left: { at: [0.05, -0.35, 0.55], point: [-0.3, 0.3, 0.9], edge: [0, -1, 0.2] }, ...spine({ flex: 4 }), Head: { flex: 6 } }],
+                [0.6, { left: { at: [0.35, -0.1, 0.55], point: [-0.1, 0.5, 0.85], edge: [0, -0.6, 0.6] }, ...spine({ flex: 2 }), Head: { flex: 2 } }],
+                [0.8, { left: { at: [0.1, 0.15, 0.6], point: [-0.2, 0.7, 0.6], edge: [0, -0.2, 1] }, ...spine({ flex: 0 }), Head: { flex: -4 } }],
+                [1, { left: { at: [0.05, 0.3, 0.55], point: [-0.2, 0.9, 0.35], edge: [0, 0.2, 1] }, ...spine({ flex: -4 }), Head: { flex: -10 } }],
+                [1.5, { left: { at: [0.06, 0.28, 0.52], point: [-0.2, 0.9, 0.35], edge: [0, 0.2, 1] }, ...spine({ flex: -4 }), Head: { flex: -8 } }]),
+            variant("rising sweep", CAST,
+                // Swept up from low at the side, high over the head
+                [0.5, { left: { at: [0.55, -0.55, 0.25], point: [0.3, -0.3, 0.9], edge: [0, -1, 0.2] }, ...spine({ flex: 4, bend: 6 }), Head: { flex: 10 } }],
+                [1, { left: { at: [0.3, 0.6, 0.35], point: [0.1, 0.95, 0.2], edge: [0, 0.2, 1] }, ...spine({ flex: -6, bend: -2 }), Head: { flex: -16 } }],
+                [1.5, { left: { at: [0.28, 0.55, 0.33], point: [0.1, 0.95, 0.2], edge: [0, 0.2, 1] }, ...spine({ flex: -5 }), Head: { flex: -12 } }]),
+            variant("from the earth", CAST,
+                // Bowing, the palm over the ground, then drawing the light up from it
+                [0.5, { left: { at: [0.05, -0.7, 0.55], point: [-0.3, -0.2, 0.9], edge: [0, -1, 0.1] }, ...spine({ flex: 16 }), Head: { flex: 18 } }],
+                [1, { left: { at: [0.08, 0.25, 0.5], point: [-0.2, 0.9, 0.35], edge: [0, 0.3, 1] }, ...spine({ flex: -4 }), Head: { flex: -10 } }],
+                [1.5, { left: { at: [0.08, 0.22, 0.48], point: [-0.2, 0.9, 0.35], edge: [0, 0.3, 1] }, ...spine({ flex: -3 }), Head: { flex: -8 } }]),
         ],
     },
-    // Raising a tankard (held in the right hand, upright) high in a toast, then drinking from it,
-    // key 1 at the top of the toast
-    toast: {
-        keys: [
-            [0, { right: tankard, ...spine({}), Head: { flex: 0 } }],
-            [1, { right: { at: [0.08, 0.38, 0.55], point: [0, 1, 0.2] }, ...spine({ flex: -6 }), Head: { flex: -12 } }],
-            [1.25, { right: { at: [0.1, 0.45, 0.52], point: [0.05, 1, 0.15] }, ...spine({ flex: -7 }), Head: { flex: -12 } }],
-            [1.6, { right: { at: [0.3, 0.12, 0.24], point: [0.35, 0.55, -0.75] }, ...spine({ flex: -8 }), Head: { flex: -22 } }],
-            [1.85, { right: { at: [0.3, 0.13, 0.25], point: [0.35, 0.5, -0.8] }, ...spine({ flex: -8 }), Head: { flex: -24 } }],
-            [2, { right: tankard, ...spine({}), Head: { flex: 0 } }],
-        ],
-    },
-    // Putting a tankard down on a table in front, leaning over it (key 1 as it touches down)
-    serve: {
-        keys: [
-            [0, { right: tankard, ...spine({}), offset: [0, 0, 0] }],
-            [1, { right: { at: [0.12, -0.62, 0.78], point: [0, 1, 0.1] }, ...spine({ flex: 22 }), offset: [0, -0.02, 0.03] }],
-            [1.3, { right: { at: [0.12, -0.6, 0.76], point: [0, 1, 0.1] }, ...spine({ flex: 20 }), offset: [0, -0.02, 0.03] }],
-            [2, { right: tankard, ...spine({}), offset: [0, 0, 0] }],
-        ],
-    },
-    // Drawing ale: both hands to a barrel's tap in front, the left holding the tankard under it
-    pour: {
-        keys: [
-            [0, { ...spine({}) }],
-            [0.7, { right: { at: [0.15, -0.35, 0.72], point: [0.9, 0.2, 0.2], edge: [0, -1, 0] }, left: { at: [-0.05, -0.62, 0.7], point: [-0.9, 0, 0.3], edge: [0, 1, 0] }, ...spine({ flex: 14 }) }],
-            [1.4, { right: { at: [0.18, -0.4, 0.72], point: [0.9, 0.2, 0.2], edge: [0, -1, 0] }, left: { at: [-0.05, -0.6, 0.7], point: [-0.9, 0, 0.3], edge: [0, 1, 0] }, ...spine({ flex: 14 }) }],
-            [2, { ...spine({}) }],
+    castStun: {
+        variants: [
+            variant("palm thrust", CAST,
+                // Drawn back by the left shoulder, then thrust open-palmed at the enemy
+                [0.55, { left: { at: [0.28, 0.08, 0.28], point: [-1, 0, 0], edge: [0, 1, 0.15] }, ...spine({ turn: 18, flex: -4 }), offset: [0, 0.01, -0.03] }],
+                [1, { left: { at: [-0.1, 0.02, 1.02], point: [-1, 0, 0], edge: [0, 1, 0.15] }, ...spine({ turn: -12, flex: 6 }), offset: [0, -0.02, 0.06] }],
+                [1.5, { left: { at: [-0.1, -0.02, 0.98], point: [-1, 0, 0], edge: [0, 1, 0.2] }, ...spine({ turn: -10, flex: 6 }), offset: [0, -0.02, 0.05] }]),
+            variant("pointed from above", CAST,
+                // Raised high, then pointed down at the enemy
+                [0.55, { left: { at: [0.15, 0.5, 0.25], point: [-0.6, 0.6, 0.3], edge: [0, 0.3, 1] }, ...spine({ flex: -6 }), offset: [0, 0.01, -0.02] }],
+                [1, { left: { at: [-0.05, 0, 1.02], point: [-1, 0, 0], edge: [0, 1, 0.15] }, ...spine({ flex: 6, turn: -8 }), offset: [0, -0.02, 0.05] }],
+                [1.5, { left: { at: [-0.05, -0.04, 0.98], point: [-1, 0, 0], edge: [0, 1, 0.2] }, ...spine({ flex: 6, turn: -8 }), offset: [0, -0.02, 0.04] }]),
+            variant("cross-body flick", CAST,
+                // Across the chest to the right, then flicked out at the enemy
+                [0.55, { left: { at: [-0.35, -0.2, 0.3], point: [-1, 0, 0.1], edge: [0, 1, 0] }, ...spine({ turn: -18 }), offset: [0, 0, -0.02] }],
+                [1, { left: { at: [0.05, 0.02, 1], point: [-1, 0, 0], edge: [0, 1, 0.15] }, ...spine({ turn: 10 }), offset: [0, -0.01, 0.04] }],
+                [1.5, { left: { at: [0.05, -0.02, 0.96], point: [-1, 0, 0], edge: [0, 1, 0.2] }, ...spine({ turn: 8 }), offset: [0, -0.01, 0.03] }]),
+            variant("double push", CAST,
+                // Two pushes, the second sending it
+                [0.4, { left: { at: [0.1, -0.15, 0.25], point: [-1, 0, 0], edge: [0, 1, 0.15] }, ...spine({ flex: -2 }), offset: [0, 0, -0.02] }],
+                [0.65, { left: { at: [0.05, -0.1, 0.6], point: [-1, 0, 0], edge: [0, 1, 0.15] }, ...spine({ flex: 3 }), offset: [0, -0.01, 0.02] }],
+                [0.85, { left: { at: [0.1, -0.12, 0.35], point: [-1, 0, 0], edge: [0, 1, 0.15] }, ...spine({ flex: -1 }), offset: [0, 0, -0.01] }],
+                [1, { left: { at: [-0.08, 0, 1.05], point: [-1, 0, 0], edge: [0, 1, 0.15] }, ...spine({ flex: 8 }), offset: [0, -0.03, 0.08] }],
+                [1.5, { left: { at: [-0.08, -0.03, 1], point: [-1, 0, 0], edge: [0, 1, 0.2] }, ...spine({ flex: 7 }), offset: [0, -0.03, 0.06] }]),
+            variant("rising sweep", CAST,
+                // Swept up from low at the side to point at the enemy
+                [0.55, { left: { at: [0.35, -0.6, 0.4], point: [-0.8, -0.3, 0.3], edge: [0, 1, 0] }, ...spine({ flex: 10, turn: 10 }), offset: [0, -0.03, 0] }],
+                [1, { left: { at: [-0.05, 0.08, 1], point: [-1, 0.1, 0], edge: [0, 1, 0.15] }, ...spine({ flex: 2, turn: -10 }), offset: [0, -0.01, 0.05] }],
+                [1.5, { left: { at: [-0.05, 0.04, 0.96], point: [-1, 0.05, 0], edge: [0, 1, 0.2] }, ...spine({ flex: 2, turn: -8 }), offset: [0, -0.01, 0.04] }]),
         ],
     },
 
-    // Stunning: drawn back by the left shoulder, then thrust open-palmed at the enemy
-    castStun: {
-        keys: [
-            [0, { ...spine({}), offset: [0, 0, 0] }],
-            [0.55, { left: { at: [0.28, 0.08, 0.28], point: [-1, 0, 0], edge: [0, 1, 0.15] }, ...spine({ turn: 18, flex: -4 }), offset: [0, 0.01, -0.03] }],
-            [1, { left: { at: [-0.1, 0.02, 1.02], point: [-1, 0, 0], edge: [0, 1, 0.15] }, ...spine({ turn: -12, flex: 6 }), offset: [0, -0.02, 0.06] }],
-            [1.5, { left: { at: [-0.1, -0.02, 0.98], point: [-1, 0, 0], edge: [0, 1, 0.2] }, ...spine({ turn: -10, flex: 6 }), offset: [0, -0.02, 0.05] }],
-            [2, { ...spine({}), offset: [0, 0, 0] }],
+    // The tavern's folk (one way each)
+    toast: {
+        variants: [
+            // Raising a tankard (held in the right hand, upright) high in a toast, then drinking
+            // from it, key 1 at the top of the toast
+            variant("toast", { right: tankard, ...spine({}), Head: { flex: 0 } },
+                [1, { right: { at: [0.08, 0.38, 0.55], point: [0, 1, 0.2] }, ...spine({ flex: -6 }), Head: { flex: -12 } }],
+                [1.25, { right: { at: [0.1, 0.45, 0.52], point: [0.05, 1, 0.15] }, ...spine({ flex: -7 }), Head: { flex: -12 } }],
+                [1.6, { right: { at: [0.3, 0.12, 0.24], point: [0.35, 0.55, -0.75] }, ...spine({ flex: -8 }), Head: { flex: -22 } }],
+                [1.85, { right: { at: [0.3, 0.13, 0.25], point: [0.35, 0.5, -0.8] }, ...spine({ flex: -8 }), Head: { flex: -24 } }]),
+        ],
+    },
+    serve: {
+        variants: [
+            // Putting a tankard down on a table in front, leaning over it (key 1 as it touches down)
+            variant("serve", { right: tankard, ...spine({}), offset: [0, 0, 0] },
+                [1, { right: { at: [0.12, -0.62, 0.78], point: [0, 1, 0.1] }, ...spine({ flex: 22 }), offset: [0, -0.02, 0.03] }],
+                [1.3, { right: { at: [0.12, -0.6, 0.76], point: [0, 1, 0.1] }, ...spine({ flex: 20 }), offset: [0, -0.02, 0.03] }]),
+        ],
+    },
+    pour: {
+        variants: [
+            // Drawing ale: both hands to a barrel's tap in front, the left holding the tankard under it
+            variant("pour", { ...spine({}) },
+                [0.7, { right: { at: [0.15, -0.35, 0.72], point: [0.9, 0.2, 0.2], edge: [0, -1, 0] }, left: { at: [-0.05, -0.62, 0.7], point: [-0.9, 0, 0.3], edge: [0, 1, 0] }, ...spine({ flex: 14 }) }],
+                [1.4, { right: { at: [0.18, -0.4, 0.72], point: [0.9, 0.2, 0.2], edge: [0, -1, 0] }, left: { at: [-0.05, -0.6, 0.7], point: [-0.9, 0, 0.3], edge: [0, 1, 0] }, ...spine({ flex: 14 }) }]),
         ],
     },
 });
@@ -448,7 +660,7 @@ function sample(times, values, n, time) {
     return (2 * u3 - 3 * u2 + 1) * p0 + (u3 - 2 * u2 + u) * m0 + (-2 * u3 + 3 * u2) * p1 + (u3 - u2) * m1;
 }
 
-const COMPILED = new Map(Object.entries(ATTACKS).map(([name, attack]) => [name, compile(attack.keys)]));
+const COMPILED = new Map(Object.entries(ATTACKS).map(([name, attack]) => [name, attack.variants.map(({ keys }) => compile(keys))]));
 const GUARD_TRACKS = new Map(Object.entries(GUARDS).map(([name, guard]) => [name, compile([[0, guard]])]));
 
 const MIRROR = { Left: "Right", Right: "Left", left: "right", right: "left" };
@@ -495,6 +707,9 @@ export class Actions {
 
         /** Sitting (on a bench), or standing. */
         this.seated = false;
+
+        /** Which way each action was done last, to do it another way next time. */
+        this.variety = new Variety();
     }
 
     /** Sit down (on a bench) or stand. */
@@ -514,17 +729,23 @@ export class Actions {
 
     /**
      * Start an attack (an ATTACKS key), the blow landing `hitAt` seconds in and ending at
-     * `duration` seconds.
+     * `duration` seconds: one of its ways (`variant`, or at random, never the way it was done
+     * last time). Returns which way.
      */
-    startAttack(name, { hitAt, duration }) {
+    startAttack(name, { hitAt, duration, variant = null }) {
         const attack = ATTACKS[name];
 
         if (!attack) {
-            return;
+            return null;
         }
 
+        const way = variant ?? this.variety.next(name, attack.variants.length);
+
+        this.variety.last.set(name, way);
         this.attacks++;
-        this.attack = { name, tracks: COMPILED.get(name), start: this.time, hitAt, duration, mirror: Boolean(attack.alternate && this.attacks % 2 === 0) };
+        this.attack = { name, variant: way, tracks: COMPILED.get(name)[way], start: this.time, hitAt, duration, mirror: Boolean(attack.alternate && this.attacks % 2 === 0) };
+
+        return way;
     }
 
     /**

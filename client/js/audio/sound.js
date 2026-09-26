@@ -653,9 +653,9 @@ export class Sound {
         return name ? this.play(name, { at, delay: hitAt - PEAKS[name] }) : null;
     }
 
-    /** A projectile let go ("arrow", "bolt" or "fireball"). */
-    launch(kind, at) {
-        return LAUNCHES[kind] ? this.play(LAUNCHES[kind], { at }) : null;
+    /** A projectile let go ("arrow", "bolt" or "fireball"), higher or lower (`rate`) for its look. */
+    launch(kind, at, { rate = 1 } = {}) {
+        return LAUNCHES[kind] ? this.play(LAUNCHES[kind], { at, rate }) : null;
     }
 
     /** A blow landing: the sound of its reaction (weapons.js: slash, strike, crush...). */
