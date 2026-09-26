@@ -123,7 +123,9 @@ on MakeHuman's eye helper mesh with a glossy clear coat.
 spread over the scalp above the style's hairline:
 
 1. Each strand leaves the scalp in the style's direction: from the crown, combed back, parted,
-   up, or to a tie or knot.
+   up, or to a tie or knot. A parting runs only over the top of the head: behind the crown the
+   hair falls straight down, so the back of the head is covered (a test checks it's as thick
+   down the middle as anywhere).
 2. It bends under gravity.
 3. It is kept just outside the head, which is measured as its radius in every direction. The neck
    and shoulders are ellipsoids that long hair falls over.

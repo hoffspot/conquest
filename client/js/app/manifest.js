@@ -50,7 +50,7 @@ export const MANIFEST = Object.freeze([
             ["js/characters/face.js", 3403],
             ["js/characters/gait.js", 7667],
             ["js/characters/garments.js", 68772],
-            ["js/characters/hair.js", 25618],
+            ["js/characters/hair.js", 25779],
             ["js/characters/items.js", 19334],
             ["js/characters/kit.js", 829],
             ["js/characters/locomotion.js", 26219],

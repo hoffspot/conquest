@@ -8,7 +8,8 @@ import { HumanData } from "../client/js/characters/body.js";
 import { parseBVH, retarget } from "../client/js/characters/bvh.js";
 import { allDetailTargetNames, DETAILS, detailTargets } from "../client/js/characters/details.js";
 import { EQUIPMENT, ITEMS, SLOTS } from "../client/js/characters/equipment.js";
-import { aboveHairline, beardAmount } from "../client/js/characters/face.js";
+import { aboveHairline, beardAmount, faceFrame } from "../client/js/characters/face.js";
+import { buildHair, HAIRSTYLES } from "../client/js/characters/hair.js";
 import { amplitude, cadence, CURVES, curveAt, NATURAL_SPEED, phaseName, RUN_CURVES, RUN_STANCE, runCadence, runStrideLength, STANCE, strideLength, walkToRunSpeed } from "../client/js/characters/gait.js";
 import { buildGarment, DESIGNS, designSolid, GARMENTS, measureBody, paintGarment, texelMap } from "../client/js/characters/garments.js";
 import { Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
@@ -630,6 +631,55 @@ describe("walking (locomotion.js)", () => {
         assert.ok(lowest > -0.003, `feet stay out of the ground (${lowest})`);
         // No jolts changing gait: the hips change speed no more than they do running
         assert.ok(jerk < 0.008, `the hips change speed ${(jerk * 1000).toFixed(2)} mm a frame`);
+    });
+});
+
+describe("hair (hair.js)", () => {
+    it("covers the back of the head: styles parted in the middle part only over the top", () => {
+        const body = figure(FOLK.courtesan.shape);
+        const face = faceFrame(human, body.positions);
+
+        // (The head's triangles, as Character.sourceTriangles gives them)
+        body.sourceTriangles = (part, bones) => {
+            const indices = human.renderIndices(part);
+            const triangles = [];
+
+            for (let t = 0; t < indices.length; t += 3) {
+                const a = human.renderSource[indices[t]];
+
+                if (bones.has(human.skinIndices[a * 4])) {
+                    triangles.push(a, human.renderSource[indices[t + 1]], human.renderSource[indices[t + 2]]);
+                }
+            }
+
+            return triangles;
+        };
+
+        // Of the hair behind the head, from the nape to the crown, as much down its middle (a
+        // strip 3 cm wide) as anywhere else: not combed away from it, leaving the scalp bare
+        for (const [style, { tail, knot, strip }] of Object.entries(HAIRSTYLES)) {
+            if (tail || knot || strip) {
+                continue;
+            }
+
+            const geometry = buildHair(body, style, "none", { detail: 0.2 });
+            const position = geometry?.attributes.position;
+            let behind = 0;
+            let middle = 0;
+
+            for (let i = 0; i < (position?.count ?? 0); i++) {
+                const [x, y, z] = face.toFace(position.getX(i), position.getY(i), position.getZ(i));
+
+                if (z < -0.14 && y > -0.02 && y < 0.07) {
+                    behind++;
+                    middle += Math.abs(x) < 0.015 ? 1 : 0;
+                }
+            }
+
+            if (HAIRSTYLES[style].strands) {
+                assert.ok(behind > 100 && middle / behind > 0.13, `${style}: ${middle} of ${behind} points behind the head down its middle`);
+            }
+        }
     });
 });
 
