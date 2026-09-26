@@ -198,6 +198,28 @@ function grimoire() {
     ], "grimoire");
 }
 
+// A closed grimoire, as it hangs at the hip: in the open one's frame (its spine along +z, its
+// pages across y), both halves folded onto one side, a clasp holding them shut
+function grimoireClosed() {
+    return assemble([
+        [at(new THREE.BoxGeometry(0.036, 0.13, 0.21), -0.004, 0.068, 0.05), "darkLeather"],
+        [at(new THREE.BoxGeometry(0.03, 0.122, 0.2), -0.004, 0.07, 0.05), "parchment"],
+        [at(new THREE.CylinderGeometry(0.018, 0.018, 0.21, 8, 1, false, Math.PI, Math.PI), -0.004, 0.003, 0.05, Math.PI / 2, 0, 0), "darkLeather"],
+        [at(new THREE.BoxGeometry(0.04, 0.024, 0.02), -0.004, 0.13, 0.05), "brass"],
+    ], "grimoireClosed");
+}
+
+// A sword's scabbard, in the sheathed sword's frame (the blade along +y from the hilt): leather
+// over the blade, brass at its mouth and its tip, and a loop up to the belt
+function scabbard() {
+    return assemble([
+        [at(new THREE.CylinderGeometry(0.02, 0.014, 0.72, 8).scale(1, 1, 1.6), 0, 0.44, 0), "darkLeather"],
+        [at(new THREE.CylinderGeometry(0.023, 0.023, 0.04, 8).scale(1, 1, 1.6), 0, 0.09, 0), "brass"],
+        [at(new THREE.ConeGeometry(0.016, 0.05, 8).scale(1, 1, 1.6), 0, 0.815, 0, Math.PI, 0, 0), "brass"],
+        [at(new THREE.BoxGeometry(0.008, 0.07, 0.02), -0.022, 0.1, 0.03, 0, 0, 0.3), "darkLeather"],
+    ], "scabbard");
+}
+
 function knuckleSpikes(scale) {
     // A steel plate over the knuckles (which are forward of the fist's grip, +z, across it along
     // y) with four spikes on it
@@ -510,6 +532,10 @@ export function buildItem(model, fit = {}) {
             return warHammer();
         case "grimoire":
             return grimoire();
+        case "grimoireClosed":
+            return grimoireClosed();
+        case "scabbard":
+            return scabbard();
         case "knuckleSpikes":
             return knuckleSpikes(fit.scale ?? 1);
         case "toeSpike":

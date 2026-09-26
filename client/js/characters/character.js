@@ -26,6 +26,21 @@ export const LOOK_DEFAULTS = Object.freeze({
 // The parts of the base mesh, in the order they're drawn (with a material each)
 const DRAWN = ["body", "eyes", "lashes"];
 
+// An item's place on a socket, from where its grip goes (`at`) and which ways its point and edge
+// face (equipment.js SHEATHS): { bone, position, quaternion } in the bone's frame
+function placed(socket, { at = [0, 0, 0], point = [0, 1, 0], edge = [0, 0, 1] }) {
+    const y = new THREE.Vector3(...point).normalize();
+    const z = new THREE.Vector3(...edge).addScaledVector(y, -new THREE.Vector3(...edge).dot(y)).normalize();
+    const x = new THREE.Vector3().crossVectors(y, z);
+    const turn = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
+
+    return {
+        bone: socket.bone,
+        position: new THREE.Vector3(...at).applyQuaternion(socket.quaternion).add(socket.position),
+        quaternion: socket.quaternion.clone().multiply(turn),
+    };
+}
+
 export class Character {
     /**
      * @param {object} kit - What characters are made from (loadCharacterKit): { human, atlas }.
@@ -65,6 +80,9 @@ export class Character {
 
         /** Per side ("Left", "Right"): the arm pose for what that hand carries, if anything. */
         this.holds = {};
+
+        /** Whether its weapons are put away (sheathe). */
+        this.sheathed = false;
         this.hairHidden = false;
 
         this.geometry = this.#createGeometry();
@@ -136,8 +154,11 @@ export class Character {
             } else {
                 itemIds.push(id);
 
-                if (entry.garment) {
-                    garmentIds.push(entry.garment);
+                // (And what it needs worn: gauntlets under spikes, a belt or strap to hang from)
+                for (const garment of [entry.garment, entry.sheath?.garment]) {
+                    if (garment && !garmentIds.includes(garment)) {
+                        garmentIds.push(garment);
+                    }
                 }
             }
         }
@@ -205,7 +226,8 @@ export class Character {
             this.garments.push(mesh);
         }
 
-        // Items on their sockets
+        // Items on their sockets (where they're held or worn: `home`), and weapons' places put
+        // away (`sheath`) with what they hang in there
         let hairHidden = false;
 
         for (const id of itemIds) {
@@ -214,25 +236,112 @@ export class Character {
             // (Some are in several parts, each on its own socket: spiked boots' iron)
             for (const part of item.parts ?? [item]) {
                 const socket = socketOn(this, part.socket);
-                const model = buildItem(part.model, socket.fit);
-
-                model.name = id;
-                model.position.copy(socket.position);
-                model.quaternion.copy(socket.quaternion);
+                const home = { bone: socket.bone, position: socket.position.clone(), quaternion: socket.quaternion.clone() };
 
                 if (part.turn) {
-                    model.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(...part.turn)));
+                    home.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(...part.turn)));
                 }
 
                 if (part.offset) {
-                    model.position.add(new THREE.Vector3(...part.offset));
+                    home.position.add(new THREE.Vector3(...part.offset));
                 }
 
-                this.rig.bone(socket.bone).add(model);
+                const model = new THREE.Group();
+                const look = buildItem(part.model, socket.fit);
+
+                model.name = id;
+                model.add(look);
+                model.userData.home = home;
+                model.userData.hand = /^(left|right)Hand$/.test(part.socket) ? (part.socket.startsWith("left") ? "Left" : "Right") : null;
+
+                const sheath = part === item && item.sheath && !item.sheath.worn ? item.sheath : null;
+
+                if (sheath) {
+                    const at = socketOn(this, sheath.socket);
+                    const place = placed(at, sheath);
+
+                    model.userData.sheath = place;
+
+                    // (Looking different put away: a closed book)
+                    if (sheath.model) {
+                        const away = buildItem(sheath.model, socket.fit);
+
+                        away.visible = false;
+                        model.add(away);
+                        model.userData.looks = { held: look, away };
+                    }
+
+                    // (What it hangs in, there all the time: a scabbard)
+                    if (sheath.holder) {
+                        const holder = buildItem(sheath.holder, socket.fit);
+
+                        holder.name = `${id}:${sheath.holder}`;
+                        holder.userData.holder = true;
+                        holder.position.copy(place.position);
+                        holder.quaternion.copy(place.quaternion);
+                        holder.userData.home = place;
+                        this.rig.bone(place.bone).add(holder);
+                        this.items.push(holder);
+                    }
+                }
+
                 this.items.push(model);
             }
 
             hairHidden ||= item.hides?.includes("hair");
+        }
+
+        // Each weapon in hand or put away, as it was
+        this.sheathe(this.sheathed);
+
+        // Under a hat or helmet, only the hair below its rim shows
+        if (this.hairHidden !== hairHidden) {
+            this.hairHidden = hairHidden;
+            this.#buildHair();
+        }
+    }
+
+    /**
+     * Put its weapons away (`on`: each in its sheath, equipment.js SHEATHS: a sword in its
+     * scabbard, a staff on the back; worn gauntlets stay on, the hands opening) or in hand. The
+     * hands' holds follow.
+     */
+    sheathe(on = true, { settle = 0 } = {}) {
+        this.sheathed = on;
+        this.holds = {};
+
+        for (const model of this.items) {
+            const { home, sheath, looks } = model.userData;
+
+            if (home && !model.userData.holder) {
+                const place = on && sheath ? sheath : home;
+                const bone = this.rig.bone(place.bone);
+
+                // (Taken by the hand or let go of into its sheath, it settles there from where it
+                // was, over `settle` seconds, as fingers close round it)
+                if (settle > 0 && sheath && model.parent && model.parent !== bone) {
+                    bone.attach(model);
+                    model.userData.settling = { from: model.position.clone(), turn: model.quaternion.clone(), place, left: settle, length: settle };
+                } else {
+                    bone.add(model);
+                    model.position.copy(place.position);
+                    model.quaternion.copy(place.quaternion);
+                    model.userData.settling = null;
+                }
+
+                if (looks) {
+                    looks.held.visible = !(on && sheath);
+                    looks.away.visible = on && Boolean(sheath);
+                }
+            }
+        }
+
+        for (const id of this.equipment.values()) {
+            const item = EQUIPMENT[id];
+
+            if (item.kind !== "item" || (on && item.sheath)) {
+                continue;
+            }
 
             if (item.hold) {
                 this.holds[/left|Left/.test(item.socket) ? "Left" : "Right"] = { ...item.hold, grips: item.grips };
@@ -240,12 +349,49 @@ export class Character {
                 this.holds[/left|Left/.test(item.socket) ? "Left" : "Right"] = { grips: true };
             }
         }
+    }
 
-        // Under a hat or helmet, only the hair below its rim shows
-        if (this.hairHidden !== hairHidden) {
-            this.hairHidden = hairHidden;
-            this.#buildHair();
+    /** Move weapons settling into a hand or sheath on by `dt` seconds (Character.sheathe). */
+    settle(dt) {
+        for (const model of this.items) {
+            const settling = model.userData.settling;
+
+            if (settling) {
+                settling.left = Math.max(0, settling.left - dt);
+
+                const t = 1 - settling.left / settling.length;
+                const eased = t * t * (3 - 2 * t);
+
+                model.position.lerpVectors(settling.from, settling.place.position, eased);
+                model.quaternion.slerpQuaternions(settling.turn, settling.place.quaternion, eased);
+
+                if (settling.left === 0) {
+                    model.userData.settling = null;
+                }
+            }
         }
+    }
+
+    /**
+     * Where the weapon a hand ("Left" or "Right") draws is when put away, in the world: { position
+     * (its grip), point (along its grip, to the blade or head), edge }, or null (nothing to draw).
+     */
+    sheathPose(side) {
+        const model = this.items.find((item) => item.userData.hand === side && item.userData.sheath);
+
+        if (!model) {
+            return null;
+        }
+
+        const { bone, position, quaternion } = model.userData.sheath;
+        const parent = this.rig.bone(bone);
+        const turn = parent.getWorldQuaternion(new THREE.Quaternion()).multiply(quaternion);
+
+        return {
+            position: parent.localToWorld(position.clone()),
+            point: new THREE.Vector3(0, 1, 0).applyQuaternion(turn),
+            edge: new THREE.Vector3(0, 0, 1).applyQuaternion(turn),
+        };
     }
 
     /** A drape's material, made once per kit. */
