@@ -7,7 +7,7 @@ import { ICONS } from "../client/js/app/icons.js";
 import { buildingsOf, interiorColours, mapColours, treesOf } from "../client/js/app/minimap.js";
 import { ACTIONS, DIRECTIONS, directionOf, sectorPath, WHEELS } from "../client/js/app/wheel.js";
 import { SPELLS } from "../client/js/core/spells.js";
-import { isHero, loadSave, loadSettings, newSeed, SAVE_VERSION, saveSettings, SETTINGS_DEFAULTS, writeSave, clearSave } from "../client/js/app/save.js";
+import { isHero, loadSave, loadSettings, loadTalks, newSeed, SAVE_VERSION, saveSettings, saveTalks, SETTINGS_DEFAULTS, writeSave, clearSave } from "../client/js/app/save.js";
 import { BEARDS, HAIRSTYLES } from "../client/js/characters/hair.js";
 import { MACRO_DEFAULTS } from "../client/js/characters/macro.js";
 import { createRandom } from "../client/js/core/random.js";
@@ -100,6 +100,22 @@ describe("saving (save.js)", () => {
         // Set again, they're remembered
         saveSettings({ effectsVolume: 0.3 });
         assert.equal(loadSettings().effectsVolume, 0.3);
+    });
+
+    it("remembers what the folk remember of a saved character, and what it's learnt; not for another", () => {
+        useStorage();
+
+        const save = { seed: 12, created: "2026-09-26T10:00:00.000Z" };
+        const talks = { memory: { barkeep: { talks: 2, flags: ["askedPlace"] } }, knowledge: new Set(["orc"]) };
+
+        assert.deepEqual(loadTalks(save), { memory: {}, knowledge: [] });
+        assert.equal(saveTalks(save, talks), true);
+        assert.deepEqual(loadTalks(save), { memory: { barkeep: { talks: 2, flags: ["askedPlace"] } }, knowledge: ["orc"] });
+
+        // Another character (or world) starts afresh; a game not saved (?play) keeps nothing
+        assert.deepEqual(loadTalks({ ...save, created: "2026-09-27T10:00:00.000Z" }), { memory: {}, knowledge: [] });
+        assert.deepEqual(loadTalks({ ...save, seed: 13 }), { memory: {}, knowledge: [] });
+        assert.equal(saveTalks({ seed: 1 }, talks), false);
     });
 
     it("still plays when the browser won't store anything", () => {

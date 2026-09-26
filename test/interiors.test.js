@@ -442,6 +442,61 @@ describe("the tavern's folk (interiors.js, battle.js)", () => {
         assert.ok(seen.every(({ role }) => role === "madam"));
     });
 
+    it("walks the player up to talk: across the bar to the barkeep, next to a patron; who stop and face them while they talk, then carry on", () => {
+        const { battle } = busy();
+        const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "town", square: [7, 9], map: "taproom" });
+        const barkeep = battle.actor("barkeep");
+
+        battle.command("player", { type: "approach", target: "barkeep" });
+
+        const arrived = run(battle, 12000).find(({ type }) => type === "arrived");
+
+        assert.deepEqual(arrived && { id: arrived.id, target: arrived.target }, { id: "player", target: "barkeep" });
+        assert.ok(player.square[0] < 10, `in front of the bar, not behind it: ${player.square}`);
+        assert.ok(battle.canTalk(player, barkeep));
+        assert.equal(player.order, null);
+
+        // Talking: the barkeep stays where he is, facing the player, doing nothing else
+        battle.talk("barkeep", "player");
+        battle.talk("player", "barkeep");
+
+        const where = barkeep.square.join();
+        const talking = run(battle, 8000);
+
+        assert.equal(barkeep.square.join(), where);
+        assert.ok(Math.abs(Math.atan2(Math.sin(barkeep.facing - Math.atan2(player.x - barkeep.x, player.y - barkeep.y)), Math.cos(barkeep.facing - Math.atan2(player.x - barkeep.x, player.y - barkeep.y)))) < 0.01, "facing the player");
+        assert.ok(!talking.some(({ type, id }) => (type === "rest" || type === "act") && id === "barkeep"));
+
+        // Done: back behind the bar about his business
+        battle.talk("barkeep", null);
+        battle.talk("player", null);
+
+        const squares = new Set();
+
+        for (let t = 0; t < 20000; t += STEP_MS) {
+            battle.advance(STEP_MS);
+            squares.add(barkeep.square.join());
+        }
+
+        assert.ok(squares.size > 1, "he goes back to work");
+
+        // A patron: next to them, and they keep facing their table
+        const drinker = battle.actor("drinker");
+        const facing = drinker.facing;
+
+        battle.command("player", { type: "approach", target: "drinker" });
+        assert.ok(run(battle, 15000).some(({ type, target }) => type === "arrived" && target === "drinker"));
+        battle.talk("drinker", "player");
+        run(battle, 2000);
+        assert.equal(drinker.facing, facing);
+        assert.ok(battle.canTalk(player, drinker));
+
+        // No one to walk up to on another map
+        battle.command("player", { type: "approach", target: "madam" });
+        run(battle, 200);
+        assert.equal(player.order, null);
+    });
+
     it("has no one fight the folk: the orc ignores them, the player can't be set on them or cast at them, and they fight no one", () => {
         const { battle } = busy();
 

@@ -34,8 +34,8 @@ export async function createSession({ canvas, quality, sound = true, volumes, fe
 }
 
 /** A new game in the world of `seed`, for a hero: { name, shape, look, weapon }. */
-export function createGame({ view, kit, sound, hud, hero, seed }) {
+export function createGame({ view, kit, sound, hud, hero, seed, talks, onTalk }) {
     const world = generateWorld({ seed });
 
-    return new Game({ view, kit, sound, world, hero, hud });
+    return new Game({ view, kit, sound, world, hero, hud, talks, onTalk });
 }

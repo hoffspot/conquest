@@ -632,8 +632,8 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
         return { town: game.town.object.visible, taproom: game.interiors.get("taproom").object.visible, upstairs: game.interiors.get("upstairs").object.visible };
     })).toEqual({ town: false, taproom: true, upstairs: false });
 
-    // The folk: seven in the taproom, seen, without name plates; the patrons raise their
-    // tankards; tapping one doesn't set the player on them
+    // The folk: seven in the taproom, seen, without name plates; the patrons rest (raising their
+    // tankards, drinking, laughing); tapping one doesn't set the player on them
     const folk = await page.evaluate(() => {
         const { game, session } = window.pellagos;
         const here = game.battle.actors.filter((actor) => actor.neutral && actor.map === "taproom");
@@ -668,7 +668,7 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
     });
 
     expect(folk).toMatchObject({ ids: ["barkeep", "wench", "wench2", "drinker", "alewife", "farmer", "greybeard"], shown: true, plates: 1, madam: false });
-    expect(folk.acted).toContain("toast");
+    expect(folk.acted).toContain("rest:patron");
     expect(folk.order).not.toBe("engage");
 
     // Near the stairs, then up them, and down again
@@ -693,6 +693,59 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
     const out = await through("taproom", "door", 14);
 
     expect(out).toMatchObject({ order: "enter", map: "town", shown: "town", square: outside.outside, minimap: "town", heard: "town" });
+});
+
+test("tapping someone walks the player up to talk: their name and what they are, what they say, replies that lead on, Escape to stop", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // Into the taproom, the orc out of the way, then tap the barkeep
+    const tapped = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        game.battle.command("player", { type: "enter", link: "tavern-door" });
+        game.advance(30);
+        game.battle.command("player", { type: "move", to: [7, 6] });
+        game.advance(5);
+
+        const spot = session.view.toScreen(game.avatars.get("barkeep").point(0.6));
+
+        game.tap(spot.x, spot.y, { time: performance.now() + 9000 });
+
+        const order = game.battle.actor("player").order?.type ?? null;
+
+        game.advance(8);
+
+        return { map: game.battle.actor("player").map, order, name: game.world.folk.find(({ id }) => id === "barkeep").name, talking: game.battle.actor("barkeep").talkingTo };
+    });
+
+    expect(tapped).toMatchObject({ map: "taproom", order: "approach", talking: "player" });
+
+    const talk = page.locator(".talk");
+
+    await expect(talk).toBeVisible();
+    await expect(talk.locator(".talk-name")).toHaveText(tapped.name);
+    await expect(talk.locator(".talk-title")).toHaveText("Barkeep");
+    await expect(talk.locator(".talk-line")).toContainText(tapped.name.split(" ")[0]);
+    await expect(talk.locator(".talk-choice").last()).toHaveText(/Farewell/);
+
+    // Asking for news: he answers, with things to ask next
+    await talk.getByRole("button", { name: /news/ }).click();
+    await expect(talk.getByRole("button", { name: /Thanks for that/ })).toBeVisible();
+
+    const news = await talk.locator(".talk-line").textContent();
+
+    expect(news.length).toBeGreaterThan(20);
+
+    // Its number on the keyboard says it; Escape stops talking (without pausing the game)
+    await page.evaluate(() => window.pellagos.game.start());
+    await page.keyboard.press(String(await talk.locator(".talk-choice").count()));
+    await expect(talk.locator(".talk-line")).not.toHaveText(news);
+    await page.keyboard.press("Escape");
+    await expect(talk).toBeHidden();
+    await expect(page.locator("#menu")).not.toHaveAttribute("open", "");
+    expect(await page.evaluate(() => ({ talking: window.pellagos.game.battle.actor("barkeep").talkingTo, remembered: window.pellagos.game.memory.barkeep.talks }))).toEqual({ talking: null, remembered: 1 });
 });
 
 test("the minimap walks the player where it's tapped, and Game options turn it and the sound off, remembered", async ({ page }) => {

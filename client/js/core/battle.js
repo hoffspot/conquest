@@ -35,6 +35,10 @@
 // damage and takes it off the target's hit points; at none, the target dies, and comes back to
 // life at its starting point a while later (KINDS: respawn).
 //
+// Told to "approach" someone, the player walks up to them (next to them, or across a bar, a table
+// or a counter: TALK_REACH) and stops there, facing them ("arrived"): to talk. Someone talking (talk()) stops what they're doing and faces
+// whoever they're talking to until it's over.
+//
 // The folk (roles.js) rest now and then while the player can see them: every several seconds
 // (REST_EVERY) one of their role's five rests, never the same twice running, staying put until
 // it's done (a "rest" event: { id, role, rest }).
@@ -50,6 +54,12 @@ import { rollHeal, SPELL_COOLDOWN, SPELLS } from "./spells.js";
 import { Variety } from "./variety.js";
 import { chooseAttack, distanceBetween, longestReach, rollDamage, WEAPONS } from "./weapons.js";
 import { nearestFree } from "./world.js";
+
+/**
+ * How near (squares) two people have to be to talk, seeing each other: next to each other, or
+ * with something between them (a bar, a table: in the way, not hiding them), across it.
+ */
+export const TALK_REACH = Object.freeze({ near: 1.5, across: 3.2 });
 
 /** The length of one step, in ms. */
 export const STEP_MS = 50;
@@ -106,6 +116,11 @@ const REST_AFTER_ACT_MS = 3500;
 const REST_WHEN_SEEN_MS = [800, 3000];
 
 const same = (a, b) => a !== null && b !== null && a[0] === b[0] && a[1] === b[1];
+
+// The eight squares round one, and how many squares at most are looked through for a place to
+// talk to someone from
+const AROUND = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+const TALK_SEARCH = 800;
 
 export class Battle {
     /**
@@ -186,6 +201,8 @@ export class Battle {
             restAt: 0,
             restingUntil: 0,
             restVariety: new Variety(() => this.chance.next()),
+            // Who it's talking to (an id), if anyone
+            talkingTo: null,
             order: null,
             attack: null,
             readyAt: 0,
@@ -219,9 +236,10 @@ export class Battle {
      * Tell a character what to do: { type: "move", to: [x, y] } (walk there, on its map, or as
      * near as can be), { type: "ahead", facing } (straight ahead the way `facing` points,
      * radians, as far as the way is clear), { type: "engage", target: id } (go and fight it),
-     * { type: "enter", link: id } (walk to the link's end on its map and go through), or
-     * { type: "stop" }. Moving, engaging and entering, run: true runs there (while its stamina
-     * lasts).
+     * { type: "enter", link: id } (walk to the link's end on its map and go through),
+     * { type: "approach", target: id } (walk up to someone, to talk: "arrived" when there), or
+     * { type: "stop" }. Moving, engaging, entering and approaching, run: true runs there (while
+     * its stamina lasts).
      */
     command(id, order) {
         const actor = this.actor(id);
@@ -265,6 +283,10 @@ export class Battle {
                 actor.order = { type: "engage", target: order.target, run: Boolean(order.run) };
                 actor.pathGoal = null;
                 break;
+            case "approach":
+                actor.order = { type: "approach", target: order.target, run: Boolean(order.run) };
+                actor.pathGoal = null;
+                break;
             case "enter": {
                 const link = this.links.find(({ id: linkId }) => linkId === order.link);
 
@@ -282,6 +304,22 @@ export class Battle {
             default:
                 actor.order = null;
                 actor.path = [];
+        }
+    }
+
+    /**
+     * Two characters talk (`id` to `withId`; null: they stop): it stops what it's doing and
+     * faces them until they stop.
+     */
+    talk(id, withId) {
+        const actor = this.actor(id);
+
+        if (actor) {
+            actor.talkingTo = withId;
+
+            if (withId !== null) {
+                actor.restingUntil = 0;
+            }
         }
     }
 
@@ -374,32 +412,85 @@ export class Battle {
      * outdoors; walls, not tables, indoors)?
      */
     canSee(a, b) {
-        if (a.map !== b.map) {
-            return false;
-        }
+        return a.map === b.map && this.#sees(a.map, a.square, b.square);
+    }
 
-        const [ax, ay] = a.square;
-        const [bx, by] = b.square;
-        const distance = distanceBetween(a.square, b.square);
+    // Can someone on a map at one square see another square: within SIGHT, nothing opaque between
+    // (along the line between their middles)?
+    #sees(mapId, from, to) {
+        const distance = distanceBetween(from, to);
 
         if (distance > SIGHT) {
             return false;
         }
 
-        const map = this.maps[a.map];
-        const opaque = map.opaque ?? map.blocked;
+        const map = this.maps[mapId];
+
+        return !this.#between(map.opaque ?? map.blocked, from, to, distance);
+    }
+
+    // Is anything marked in `grid` on the way between two squares (not counting them)?
+    #between(grid, [ax, ay], [bx, by], distance = distanceBetween([ax, ay], [bx, by])) {
         const steps = Math.ceil(distance * 4);
 
         for (let k = 1; k < steps; k++) {
             const x = Math.floor(ax + 0.5 + ((bx - ax) * k) / steps);
             const y = Math.floor(ay + 0.5 + ((by - ay) * k) / steps);
 
-            if (opaque[y][x] && !(x === ax && y === ay) && !(x === bx && y === by)) {
-                return false;
+            if (grid[y][x] && !(x === ax && y === ay) && !(x === bx && y === by)) {
+                return true;
             }
         }
 
-        return true;
+        return false;
+    }
+
+    /**
+     * Can `a` and `b` talk: seeing each other, next to each other or across something in the way
+     * (TALK_REACH)?
+     */
+    canTalk(a, b) {
+        return a.map === b.map && this.#talksFrom(a.map, a.square, b.square);
+    }
+
+    // Could someone at one square on a map talk to someone at another?
+    #talksFrom(mapId, from, to) {
+        const distance = distanceBetween(from, to);
+
+        if (distance > TALK_REACH.across || !this.#sees(mapId, from, to)) {
+            return false;
+        }
+
+        // Next to them, or across something (a blocked square on the way between)
+        return distance <= TALK_REACH.near || this.#between(this.maps[mapId].blocked, from, to, distance);
+    }
+
+    // The nearest square (walking) that `actor` could talk to `target` from, free and not taken,
+    // or null (none it can get to)
+    #talkSpot(actor, target) {
+        const blocked = this.#blocked(actor);
+        const start = actor.to ?? actor.square;
+        const seen = new Set([start.join()]);
+        const queue = [start];
+
+        for (let k = 0; k < queue.length && k < TALK_SEARCH; k++) {
+            const square = queue[k];
+
+            if (this.#talksFrom(actor.map, square, target.square) && (same(square, start) || !this.#taken(square, actor))) {
+                return square;
+            }
+
+            for (const [dx, dy] of AROUND) {
+                const next = [square[0] + dx, square[1] + dy];
+
+                if (blocked[next[1]]?.[next[0]] === 0 && !seen.has(next.join())) {
+                    seen.add(next.join());
+                    queue.push(next);
+                }
+            }
+        }
+
+        return null;
     }
 
     // The squares a character can't walk on, on its map
@@ -442,6 +533,31 @@ export class Battle {
 
         if (this.time < actor.staggeredUntil || this.time < actor.stunnedUntil || actor.attack || actor.casting) {
             return;
+        }
+
+        // Talking: facing whoever it's talking to (sitting, just the way it sits), nothing else
+        // (once it's stopped where it was going)
+        const partner = actor.talkingTo === null ? null : this.actor(actor.talkingTo);
+
+        if (partner && !partner.dead && partner.map === actor.map && actor.ai !== "patrol") {
+            const face = () => (actor.facing = Math.atan2(partner.x - actor.x, partner.y - actor.y));
+
+            // The folk stop going about their business; the player just turns to them, standing
+            if (actor.ai === "routine") {
+                if (!actor.to) {
+                    actor.path = [];
+
+                    if (!actor.routine.seated) {
+                        face();
+                    }
+                }
+
+                return;
+            }
+
+            if (!actor.to && !actor.path.length && !actor.order) {
+                face();
+            }
         }
 
         if (actor.ai === "patrol") {
@@ -586,6 +702,40 @@ export class Battle {
             }
 
             actor.order = null;
+        }
+
+        if (order?.type === "approach") {
+            const target = this.actor(order.target);
+
+            if (!target || target.dead || target.map !== actor.map) {
+                actor.order = null;
+            } else if (this.canTalk(actor, target) && !actor.to) {
+                // There: stop, facing them
+                actor.order = null;
+                actor.path = [];
+                actor.facing = Math.atan2(target.x - actor.x, target.y - actor.y);
+                this.#emit("arrived", { id: actor.id, target: target.id });
+
+                return;
+            } else {
+                // To the nearest place to talk to them from (again when they've moved, or now and
+                // then if stuck)
+                const idle = !actor.path.length && !actor.to;
+
+                if (!same(order.from ?? null, target.square) || (idle && this.time - actor.lastPathAt >= REPATH_MS)) {
+                    const spot = this.#talkSpot(actor, target);
+
+                    order.from = [...target.square];
+
+                    if (!spot) {
+                        actor.order = null;
+                    } else if (!same(spot, actor.to ?? actor.square)) {
+                        this.#pathTo(actor, spot);
+                    }
+                }
+
+                return;
+            }
         }
 
         if (order?.type === "engage") {
