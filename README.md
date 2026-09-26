@@ -100,14 +100,19 @@ you go after it.
 **The tavern's folk.** The taproom is busy: a burly, bearded barkeep in an apron goes between the
 bar and the barrels behind it, drawing ale; two serving wenches, in laced bodices and long
 skirts, carry tankards between the bar and the tables and set them down; and four patrons sit on
-the benches. Upstairs the madam, in a velvet gown, keeps her counter. Each has a name of their
+the benches. Upstairs the madam, in a velvet gown, keeps her counter, and in each of the four
+bedrooms a courtesan in lace lingerie (black, crimson under a corset, emerald, ivory; lined where
+it counts, so nothing explicit shows) waits by her door. When you come into her sight in the
+hallway she turns to you and beckons you in with a curl of her finger. Each has a name of their
 own. No one fights them, and they fight no one; they're blue dots on the minimap. While you can
 see them they pass the time, every several seconds one of five things their sort does: the
 patrons raise a toast (the tankards clink), take a long drink, roar with laughter slapping the
 table, thump their tankards down or look about; the barkeep wipes the bar, strokes his beard,
 leans on it, folds his arms or rubs his neck; the wenches wipe their brows, put a hand on a hip,
 tuck back their hair, curtsy or stretch their backs; the madam fans herself, puts her hands on
-her hips, toys with her necklace, drums her fingers or smooths her gown. Stand still with
+her hips, toys with her necklace, drums her fingers or smooths her gown; the courtesans twirl
+their hair, stretch slowly, cock a hip, blow you a kiss or smooth their hands down their sides.
+Stand still with
 nothing going on for 15 seconds and you do too: stretching, looking about, rolling your
 shoulders, yawning, shifting your weight.
 
@@ -115,7 +120,8 @@ shoulders, yawning, shifting your weight.
 table) and talk: their name and what they are, what they say, and what you can say back (tap a
 reply, or press its number). They stop and turn to you. Each sort has their own things to talk
 about: the barkeep sells ale and gossips about the orc, the wenches bring food and know everyone,
-the patrons have news and opinions, the madam offers a room; and some have their own stories.
+the patrons have news and opinions, the madam offers a room, the courtesans flirt, dance, sell
+their callers' secrets and ask a favour; and some have their own stories.
 They remember you, and what you've asked; and what you learn from one, another may know you
 know. Choices that would cost something or change the world (buying, renting, taking on a job)
 are there, but for now only the talk goes on. Walk off, or press Escape, to stop.

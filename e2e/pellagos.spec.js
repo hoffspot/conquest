@@ -588,7 +588,7 @@ test("tapping an enemy rings it as the player's target, until they're told to wa
     expect(target.after).toEqual({ visible: false, plate: null });
 });
 
-test("tapping the tavern's door lights its edge green, and the player walks in: inside the door, facing the room; up the stairs, down, and out", async ({ page }) => {
+test("tapping the tavern's door lights its edge green, and the player walks in: inside the door, facing the room; up the stairs (where a courtesan beckons), down, and out", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     // Tap the door or stairs (a link's end on the map shown), and play on until through
@@ -684,13 +684,53 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
     expect(up).toMatchObject({ order: "enter", glowing: true, map: "upstairs", shown: "upstairs", square: outside.top, minimap: "upstairs", heard: "upstairs" });
     expect(await page.evaluate(() => window.pellagos.game.avatars.get("madam").object.visible)).toBe(true);
 
+    // Along the hallway to the first bedroom's door: the courtesan in it (and the one across the
+    // way) turns and beckons the player in, and the screen says so; she's in see-through lace.
+    // Then back to the top of the stairs
+    const beckoned = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const courtesan = game.avatars.get("courtesan");
+        let seen = null;
+
+        game.battle.command("player", { type: "move", to: [8, 5] });
+
+        for (let k = 0; k < 60 && !seen; k++) {
+            game.advance(0.25);
+
+            if (courtesan.actions.attack?.name === "beckon") {
+                game.advance(0.1);
+                seen = document.body.textContent.match(/\w+ beckons you over/)?.[0] ?? "";
+            }
+        }
+
+        const lace = courtesan.character.garments.filter((mesh) => mesh.material.transparent).map(({ name }) => name).sort();
+
+        game.battle.command("player", { type: "move", to: game.world.maps.upstairs.marks[">"][0] });
+        game.advance(10);
+
+        return { seen, names: ["courtesan", "courtesan3"].map((id) => game.world.folk.find((one) => one.id === id).name.split(" ")[0]), lace, shown: courtesan.object.visible, back: game.battle.actor("player").square };
+    });
+
+    expect(beckoned.shown).toBe(true);
+    expect(beckoned.names.map((name) => `${name} beckons you over`)).toContain(beckoned.seen);
+    expect(beckoned.lace).toEqual(["choker", "laceBraBlack", "laceBriefsBlack", "stockingsBlack", "suspendersBlack"]);
+    expect(beckoned.back).toEqual(outside.top);
+
     // (Standing at their top, straight down)
     const down = await through("upstairs", "stairs", 3);
 
     expect(down).toMatchObject({ map: "taproom", shown: "taproom", square: [0, 0] });
 
-    // And out, onto the square outside the door
-    const out = await through("taproom", "door", 14);
+    // And out (from just inside it, so no one's in the way to tap instead), onto the square
+    // outside the door
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.battle.command("player", { type: "move", to: [7, 8] });
+        game.advance(10);
+    });
+
+    const out = await through("taproom", "door", 6);
 
     expect(out).toMatchObject({ order: "enter", map: "town", shown: "town", square: outside.outside, minimap: "town", heard: "town" });
 });
