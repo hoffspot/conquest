@@ -10,7 +10,7 @@ import { allDetailTargetNames, DETAILS, detailTargets } from "../client/js/chara
 import { EQUIPMENT, ITEMS, SLOTS } from "../client/js/characters/equipment.js";
 import { aboveHairline, beardAmount } from "../client/js/characters/face.js";
 import { amplitude, cadence, CURVES, curveAt, NATURAL_SPEED, phaseName, RUN_CURVES, RUN_STANCE, runCadence, runStrideLength, STANCE, strideLength, walkToRunSpeed } from "../client/js/characters/gait.js";
-import { buildGarment, GARMENTS, measureBody, texelMap } from "../client/js/characters/garments.js";
+import { buildGarment, DESIGNS, designSolid, GARMENTS, measureBody, paintGarment, texelMap } from "../client/js/characters/garments.js";
 import { Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
 import { allBustTargetNames, allMacroTargetNames, bustTargets, components, MACRO_DEFAULTS, macroTargets } from "../client/js/characters/macro.js";
 import { buildDrape, DRAPES } from "../client/js/characters/drapes.js";
@@ -656,13 +656,96 @@ describe("clothing and armour (garments.js)", () => {
             const position = geometry.attributes.position;
             const weights = geometry.attributes.skinWeight.array;
 
-            assert.ok(covers.size > 10, `${id} covers some of the body`);
+            // (Lingerie hides only what's under its opaque parts: none of the skin, under sheer stockings)
+            assert.ok(covers.size > 10 || GARMENTS[id].design, `${id} covers some of the body`);
             assert.equal(sources.length, geometry.index.count / 3, `${id}: a source for every triangle`);
             assert.ok(position.array.every(Number.isFinite), `${id} has no broken vertices`);
 
             for (let i = 0; i < weights.length; i += 4) {
                 assert.equal(weights[i] + weights[i + 1] + weights[i + 2] + weights[i + 3], 255, `${id} vertex ${i / 4}'s weights`);
             }
+        }
+    });
+
+    it("paints lingerie from its design: clear where there's none, lace to see through, opaque where it's lined or a band, white to be tinted", () => {
+        const map = texelMap(human, 512);
+
+        for (const design of Object.keys(DESIGNS)) {
+            const { data } = paintGarment(map, { design });
+            let clear = 0;
+            let sheer = 0;
+            let opaque = 0;
+
+            for (let i = 0; i < map.size * map.size; i++) {
+                const alpha = data[i * 4 + 3];
+
+                if (!map.covered[i]) {
+                    continue;
+                }
+
+                clear += alpha === 0 ? 1 : 0;
+                sheer += alpha > 20 && alpha < 235 ? 1 : 0;
+                opaque += alpha === 255 ? 1 : 0;
+                assert.ok(data[i * 4] === data[i * 4 + 1] && data[i * 4 + 1] === data[i * 4 + 2], `${design} is painted in greys`);
+            }
+
+            assert.ok(clear > opaque && opaque > 100, `${design}: ${clear} texels clear, ${opaque} opaque`);
+            assert.ok(sheer > 100, `${design}: ${sheer} texels see-through`);
+        }
+    });
+
+    it("lines lingerie over the nipples and the groin, hiding the skin there, on any body in any pose", () => {
+        // Where the skin's nipples and groin are (as its masks paint them: characters/masks), on
+        // the base body the designs are drawn on
+        const base = human.basePositions;
+        const near = (v, [x, y, z], r) => Math.hypot(Math.abs(base[v * 3]) - x, base[v * 3 + 1] - y, base[v * 3 + 2] - z) < r;
+        const nipples = [];
+        const groin = [];
+
+        for (let v = 0; v < human.vertexCount; v++) {
+            if (human.partOf[v] === 0 && near(v, [0.08, 0.381, 0.157], 0.016)) {
+                nipples.push(v);
+            }
+
+            if (human.partOf[v] === 0 && Math.abs(base[v * 3]) < 0.022 && base[v * 3 + 1] > -0.045 && base[v * 3 + 1] < -0.002 && base[v * 3 + 2] > 0.035) {
+                groin.push(v);
+            }
+        }
+
+        assert.ok(nipples.length > 10 && groin.length > 10);
+
+        const brief = designSolid(human, "briefs");
+        const bra = designSolid(human, "bra");
+
+        assert.ok(nipples.every((v) => bra[v]), "the bra's cups are lined over the nipples");
+        assert.ok(groin.every((v) => brief[v]), "the briefs are lined over the groin");
+
+        // Built on a courtesan (the fullest bust), every triangle of skin there is hidden: it's
+        // not drawn, so it can't show through whatever the pose (the lining bends with it)
+        const body = figure(FOLK.courtesan4.shape);
+        const shaped = measureBody(body);
+        const triangles = human.renderIndices("body");
+
+        for (const [id, spots] of [["laceBraIvory", nipples], ["laceBriefsIvory", groin]]) {
+            const { covers } = buildGarment(body, id, shaped);
+            const spot = new Set(spots);
+            let touching = 0;
+
+            for (let t = 0; t < triangles.length; t += 3) {
+                if ([0, 1, 2].some((k) => spot.has(human.renderSource[triangles[t + k]]))) {
+                    touching++;
+                    assert.ok(covers.has(t / 3), `${id} hides body triangle ${t / 3}`);
+                }
+            }
+
+            assert.ok(touching > 10);
+        }
+
+        // And every courtesan wears both
+        for (const id of ["courtesan", "courtesan2", "courtesan3", "courtesan4"]) {
+            const designs = FOLK[id].equipment.map((piece) => GARMENTS[piece]?.design);
+
+            assert.ok(designs.includes("bra") && designs.includes("briefs"), `${id} is covered`);
         }
     });
 

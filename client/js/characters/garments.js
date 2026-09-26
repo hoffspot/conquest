@@ -15,7 +15,7 @@
 
 import * as THREE from "three";
 import { faceFrame } from "./face.js";
-import { fbm, smoothstep } from "./noise.js";
+import { fbm, hash3, smoothstep } from "./noise.js";
 
 const ARM = /^(Left|Right)(Arm|ForeArm)$/;
 const HAND = /^(Left|Right)Hand/;
@@ -149,7 +149,8 @@ function bottoms(waist, length) {
 
 /**
  * Every garment: its slot, layer (under garments first), region, thickness and looseness (metres),
- * smoothing, and look (colour, roughness, metalness, a pattern painted in, a tiling detail).
+ * smoothing, and look (colour, roughness, metalness, a pattern painted in, a tiling detail); or,
+ * for lingerie, the design it's cut from (DESIGNS), clear wherever that has no fabric.
  */
 export const GARMENTS = Object.freeze({
     briefs: { label: "Briefs", slot: "underwear", layer: 0, thickness: 0.0015, smooth: 2, colour: "#d8d2c4", roughness: 0.8, pattern: "cloth", inside: bottoms((l) => l.hips + 0.02, 0.1) },
@@ -182,10 +183,46 @@ export const GARMENTS = Object.freeze({
     velvetBodice: { label: "Velvet bodice", slot: "chest", layer: 2, thickness: 0.006, loose: 0.002, smooth: 6, colour: "#1e1418", roughness: 0.5, pattern: "laced", trim: "#c9a24a", inside: band((l) => l.waist - 0.07, (l) => l.chest + 0.03) },
     greenTunic: { label: "Green tunic", slot: "shirt", layer: 1, thickness: 0.004, loose: 0.008, smooth: 4, colour: "#3d5733", roughness: 0.85, pattern: "trim", trim: "#b89a55", inside: top((l) => l.hips - 0.06, 0.45) },
     blueTunic: { label: "Blue tunic", slot: "shirt", layer: 1, thickness: 0.004, loose: 0.008, smooth: 4, colour: "#33456a", roughness: 0.85, pattern: "trim", trim: "#c8b27a", inside: top((l) => l.hips - 0.06, 0.45) },
+
+    // Lingerie, for the ladies upstairs: modern lace with a nod to the period (a corset laced up
+    // the front, ribbon bows, stockings with a seam up the back, a velvet choker). Each is cut
+    // from its design (DESIGNS, below) rather than its region, which only needs to take it all in:
+    // see-through lace, opaque only where it's lined (over the nipples and the groin) or a band
+    // (straps, waistbands, ribbons, the corset)
+    ...lingerie("Black", "#1c1519"),
+    ...lingerie("Crimson", "#8a1426"),
+    ...lingerie("Emerald", "#1f5e44"),
+    ...lingerie("Ivory", "#eee4d2"),
+    corset: { label: "Corset", slot: "chest", layer: 2, thickness: 0.006, smooth: 4, colour: "#7e1223", roughness: 0.45, design: "corset", inside: band((l) => l.hips - 0.04, (l) => l.chest + 0.02) },
+    choker: { label: "Velvet choker", slot: "neck", layer: 1, thickness: 0.003, smooth: 2, colour: "#16101a", roughness: 0.7, design: "choker", inside: (v, l) => (v.region === "torso" || v.region === "head" ? 0.06 - Math.abs(v.y - l.neck) : OUTSIDE) },
 });
 
 /**
- * Build a garment on a character: { geometry, covers (the body triangles it covers, a Set of
+ * One colour of lingerie: a lace bra, briefs, a suspender belt and stockings, named for it
+ * ("laceBraBlack"...); black also has fishnet stockings.
+ */
+function lingerie(name, colour) {
+    const pieces = {
+        [`laceBra${name}`]: { label: `${name} lace bra`, slot: "undershirt", layer: 0, thickness: 0.002, smooth: 2, design: "bra", inside: top((l) => l.waist + 0.02, 0.08, -0.03) },
+        [`laceBriefs${name}`]: { label: `${name} lace briefs`, slot: "underwear", layer: 0, thickness: 0.002, smooth: 2, design: "briefs", inside: bottoms((l) => l.hips + 0.03, 0.22) },
+        [`suspenders${name}`]: { label: `${name} suspender belt`, slot: "waist", layer: 1, thickness: 0.0025, smooth: 2, design: "suspenders", inside: bottoms((l) => l.waist, 0.5) },
+        [`stockings${name}`]: { label: `${name} stockings`, slot: "legs", layer: 0, thickness: 0.0012, smooth: 1, design: "stockings", inside: (v) => (v.region === "foot" ? 1 : v.region === "leg" ? v.leg - 0.12 : OUTSIDE) },
+    };
+
+    if (name === "Black") {
+        pieces.fishnets = { label: "Fishnet stockings", slot: "legs", layer: 0, thickness: 0.0012, smooth: 1, design: "fishnets", inside: (v) => (v.region === "foot" ? 1 : v.region === "leg" ? v.leg - 0.12 : OUTSIDE) };
+    }
+
+    for (const piece of Object.values(pieces)) {
+        piece.colour = colour;
+        piece.roughness = 0.55;
+    }
+
+    return pieces;
+}
+
+/**
+ * Build a garment on a character: { geometry, covers (the body triangles it hides, a Set of
  * body triangle numbers), sources (the body triangle each of its triangles comes from), garment }.
  * `measures` is measureBody(character).
  */
@@ -205,6 +242,9 @@ export function buildGarment(character, id, measures) {
     const body = human.renderIndices("body");
     const source = human.renderSource;
     const covers = new Set();
+
+    // A garment cut from a design covers only where its fabric is opaque
+    const solid = garment.design ? designSolid(human, garment.design) : null;
 
     // (the toes under a toe box aren't drawn)
     if (garment.toeBox) {
@@ -242,7 +282,10 @@ export function buildGarment(character, id, measures) {
         }
 
         if (kept === 3) {
-            covers.add(t / 3);
+            if (!solid || corners.every((r) => solid[source[r]])) {
+                covers.add(t / 3);
+            }
+
             triangles.push(point(corners[0]), point(corners[1]), point(corners[2]));
             sources.push(t / 3);
             continue;
@@ -1060,7 +1103,8 @@ function mixSkin(human, a, b, t) {
 
 /**
  * Where every texel of a (smaller) body texture is on the base body, for painting garments:
- * { size, covered, positions (3 floats a texel), bones }.
+ * { size, covered, positions (3 floats a texel), bones (each texel's main bone), names (the
+ * bones' names) }.
  */
 export function texelMap(human, size = 512) {
     const count = size * size;
@@ -1106,11 +1150,18 @@ export function texelMap(human, size = 512) {
         }
     }
 
-    return { size, covered, positions: where, bones };
+    return { size, covered, positions: where, bones, names: human.bones.map((bone) => bone.name) };
 }
 
-/** Paint a garment's texture: { data (RGBA), bump (one byte a texel), size }. */
+/**
+ * Paint a garment's texture: { data (RGBA), bump (one byte a texel), size }. A garment cut from a
+ * design is painted white (its material's colour tints it), clear where there's no fabric.
+ */
 export function paintGarment(map, garment) {
+    if (garment.design) {
+        return paintDesign(map, garment.design);
+    }
+
     const { size, covered, positions } = map;
     const count = size * size;
     const data = new Uint8ClampedArray(count * 4);
@@ -1249,4 +1300,351 @@ function dilate(size, covered, data, bump) {
 
         filled = next;
     }
+}
+
+// --- Lingerie: designs painted on the base body ---
+//
+// A design says what fabric is at each point of the base body, where garments' textures are
+// painted (so it fits every body, stretching with it): none (the garment is clear there, however
+// far its region reaches), lace, lined lace, a band (straps, ribbons, waistbands, the corset's
+// satin), sheer stocking or fishnet; and how far inside the fabric's edge the point is (metres),
+// for lace's scalloped edges. Designs are symmetric, measured out from the body's middle.
+
+const NONE = 0;
+const LACE = 1;
+const LINED = 2;
+const BAND = 3;
+const BOW = 4;
+const SHEER = 5;
+const REINFORCED = 6;
+const SEAM = 7;
+const NET = 8;
+const SATIN = 9;
+
+/** The opaque fabrics: the skin (and anything worn) under them is hidden. */
+const SOLID = new Set([LINED, BAND, BOW, SATIN]);
+
+// Landmarks of the base body (metres; y up, z forward): its nipples, round which cups are lined;
+// its groin, which briefs line; the middle of its torso, front to back; and each leg's axis, from
+// the hip joint to the knee and on to the ankle
+const NIPPLE = [0.08, 0.381, 0.157];
+const TORSO_Z = 0.05;
+const LEG_AXIS = [[0.11, 0.049, 0.012], [0.158, -0.369, 0.032], [0.22, -0.745, -0.001]];
+
+// A bra's cups: triangles round each nipple (across from it, out to the side, and up from it),
+// their apex towards the strap
+const CUP = [[-0.058, -0.042], [0.046, -0.041], [0.012, 0.072]];
+
+/**
+ * A point of the base body (`leg`: whether it's on a leg or foot), for designs: { ax (how far out
+ * from the middle), y, z, leg, around (radians round the torso from the front, out to the side), legAround
+ * and legRadius (round the leg's axis: 0 in front, positive outward, ±π behind), s and t (across
+ * and up the surface, metres, for lace) }.
+ */
+function designPoint(x, y, z, leg) {
+    const ax = Math.abs(x);
+    const [a, b] = y > LEG_AXIS[1][1] ? [LEG_AXIS[0], LEG_AXIS[1]] : [LEG_AXIS[1], LEG_AXIS[2]];
+    const f = (y - a[1]) / (b[1] - a[1]);
+    const lx = ax - (a[0] + (b[0] - a[0]) * f);
+    const lz = z - (a[2] + (b[2] - a[2]) * f);
+    const around = Math.atan2(ax, z - TORSO_Z);
+    const legAround = Math.atan2(lx, lz);
+
+    return { ax, y, z, leg, around, legAround, legRadius: Math.hypot(lx, lz), s: leg ? legAround * 0.065 : around * 0.13, t: y };
+}
+
+/** How far inside a triangle (corners anticlockwise) a point is: metres, negative outside. */
+function inTriangle(x, y, corners) {
+    let inside = Infinity;
+
+    for (let k = 0; k < 3; k++) {
+        const [x0, y0] = corners[k];
+        const [x1, y1] = corners[(k + 1) % 3];
+
+        inside = Math.min(inside, ((x1 - x0) * (y - y0) - (y1 - y0) * (x - x0)) / Math.hypot(x1 - x0, y1 - y0));
+    }
+
+    return inside;
+}
+
+/** How far inside a strip `half` wide either side of a line down the body (x at each y) a point is. */
+const strip = (ax, y, [x0, y0], [x1, y1], half) => Math.min(half - Math.abs(ax - (x0 + ((x1 - x0) * (y - y0)) / (y1 - y0))), y - Math.min(y0, y1), Math.max(y0, y1) - y);
+
+/** A ribbon bow at [x, y] (x from the middle), `size` wide each way: how far inside it. */
+function bow(ax, y, [x, y0], size) {
+    const knot = size * 0.28 - Math.hypot(ax - x, y - y0);
+    const loop = (side) => inTriangle(side * (ax - x), y - y0, [[0, 0], [size, -size * 0.55], [size, size * 0.55]]);
+    const tail = (side) => strip(side * (ax - x), y, [size * 0.15, y0], [size * 0.55, y0 - size * 1.2], size * 0.16);
+
+    return Math.max(knot, loop(1), loop(-1), tail(1), tail(-1));
+}
+
+/** The first fabric a point is inside, of [fabric, inside] pairs in order: [fabric, inside] or [NONE]. */
+function first(...parts) {
+    return parts.find(([, inside]) => inside > 0) ?? [NONE, 0];
+}
+
+/**
+ * Every design: the heights of the base body it's between (nothing's painted outside them), and
+ * its fabric at a point of the base body (designPoint): [fabric, how far inside its edge].
+ */
+export const DESIGNS = Object.freeze({
+    // Triangle cups of lace, lined round the nipples, on satin straps over the shoulders to a
+    // thin band under the bust; a bow between the cups
+    bra: { heights: [0.3, 0.64], fabric: ({ ax, y, z }) => {
+        const dx = ax - NIPPLE[0];
+        const dy = y - NIPPLE[1];
+        const cup = Math.min(inTriangle(dx, dy, CUP), z - 0.06);
+        const lined = Math.min(cup, 0.038 - Math.hypot(dx - 0.002, dy + 0.004));
+        const apex = [NIPPLE[0] + CUP[2][0], NIPPLE[1] + CUP[2][1]];
+        const strap = z > 0.03 ? strip(ax, y, apex, [0.105, 0.62], 0.005) : strip(ax, y, [0.095, 0.33], [0.105, 0.62], 0.005);
+
+        return first(
+            [BOW, bow(ax, y, [0, 0.345], 0.013)],
+            [LINED, lined],
+            [LACE, cup],
+            [BAND, Math.max(strap, Math.min(0.005 - Math.abs(y - 0.334), z > 0.06 ? 0.036 - ax : 1))],
+        );
+    } },
+
+    // Low on the hips, cut high at the sides and cheeky behind; lined over the groin and between
+    // the legs, on a satin waistband
+    briefs: { heights: [-0.12, 0.08], fabric: ({ ax, y, z }) => {
+        const waist = 0.064 - 0.01 * smoothstep(0.08, 0.17, ax);
+        const front = z > 0.02;
+        const leg = front ? -0.05 + 0.108 * smoothstep(0.03, 0.16, ax) : -0.065 + 0.115 * smoothstep(0.01, 0.075, ax);
+        const inside = Math.min(waist - y, Math.max(y - leg, 0.03 - ax));
+        const lined = Math.min(inside, (ax < 0.047 && y < 0.024 && z > 0.005) || (ax < 0.032 && y < -0.03) ? 1 : -1);
+
+        return first(
+            [BOW, bow(ax, y, [0, waist - 0.016], 0.011)],
+            [BAND, Math.min(0.006 - Math.abs(y - waist), inside + 0.006)],
+            [LINED, lined],
+            [LACE, inside],
+        );
+    } },
+
+    // A lace belt round the hips, scalloped along its lower edge, and satin suspenders down the
+    // front and side of each thigh to clips at the stockings' tops
+    suspenders: { heights: [-0.22, 0.17], fabric: ({ ax, y, legAround, legRadius }) => {
+        const belt = Math.min(0.165 - y, y - 0.085);
+        const suspender = (angle) => Math.min((0.0045 - Math.abs(legAround - angle) * legRadius), y + 0.21, 0.09 - y);
+        const clip = (angle) => Math.min(0.008 - Math.abs(legAround - angle) * legRadius, 0.012 - Math.abs(y + 0.2));
+
+        return first(
+            [BOW, bow(ax, y, [0.052, 0.078], 0.01)],
+            [BAND, Math.max(clip(0.2), clip(1.3), Math.min(belt, 0.006 - Math.abs(y - 0.159)))],
+            [LACE, belt],
+            [BAND, Math.max(suspender(0.2), suspender(1.3))],
+        );
+    } },
+
+    // Sheer to mid-thigh, with a deep lace top, a seam up the back and darker heels and toes
+    stockings: { heights: [-0.9, -0.18], fabric: (p) => stocking(p, SHEER) },
+    fishnets: { heights: [-0.9, -0.18], fabric: (p) => stocking(p, NET) },
+
+    // Satin, under the bust: up to a point between the breasts and under the arms, down to a
+    // point below the waist in front; boned, piped, laced up the front over the skin, and
+    // edged with lace along its top
+    corset: { heights: [0.03, 0.42], fabric: ({ ax, y, z, around }) => {
+        const side = Math.sin(around) ** 2;
+        const behind = (1 - Math.cos(around)) / 2;
+        const front = z > TORSO_Z;
+        const top = 0.333 + 0.05 * side + 0.02 * behind + (front ? 0.024 * (1 - smoothstep(0, 0.045, ax)) : 0);
+        const bottom = 0.078 - (front ? 0.032 * (1 - smoothstep(0, 0.07, ax)) : 0);
+        const inside = Math.min(top - y, y - bottom);
+
+        // The lacing: a cord criss-crossing the gap up the front
+        if (front && ax < 0.011 && inside > 0) {
+            const frac = (value) => value - Math.floor(value);
+            const cross = Math.min(Math.abs(frac((y + ax) * 55) - 0.5), Math.abs(frac((y - ax) * 55) - 0.5));
+
+            return cross < 0.1 ? [BAND, 1] : [NONE, 0];
+        }
+
+        return first([SATIN, Math.min(top - 0.009 - y, y - bottom)], [LACE, inside + 0.004]);
+    } },
+
+    // A velvet band round the neck, edged with lace
+    choker: { heights: [0.59, 0.625], fabric: ({ ax, y, z }) => {
+        const round = 0.075 - Math.hypot(ax, z - 0.015);
+
+        return first([BAND, Math.min(round, 0.0065 - Math.abs(y - 0.607))], [LACE, Math.min(round, 0.0115 - Math.abs(y - 0.607))]);
+    } },
+});
+
+/** A stocking (`fabric`: SHEER or NET) up to mid-thigh, its lace top, seam, heel and toe. */
+function stocking({ y, z, leg, legAround, legRadius }, fabric) {
+    const top = -0.185 - y;
+
+    if (!leg || top <= 0) {
+        return [NONE, 0];
+    }
+
+    if (top < 0.062) {
+        return [LACE, top];
+    }
+
+    if (top < 0.07) {
+        return [BAND, 1];
+    }
+
+    if (fabric === NET) {
+        return [NET, top];
+    }
+
+    const seam = (Math.PI - Math.abs(legAround)) * legRadius;
+
+    return y < -0.72 && (z < -0.01 || z > 0.09) ? [REINFORCED, top] : seam < 0.0016 ? [SEAM, top] : [SHEER, top];
+}
+
+/** Floral lace at a point (across and up the surface, metres): [alpha, shade, relief]. */
+function laceAt(s, t) {
+    // Flowers on a honeycomb, each turned its own way, on tulle crossed by curling stems; edges
+    // soft over about a texel, so the texture filters smoothly
+    const CELL = 0.04;
+    const ROW = CELL * 0.866;
+    const row = Math.round(t / ROW);
+    let best = null;
+
+    for (let r = row - 1; r <= row + 1; r++) {
+        const offset = (r & 1) * CELL * 0.5;
+        const column = Math.round((s - offset) / CELL);
+
+        for (let c = column - 1; c <= column + 1; c++) {
+            const dx = s - (c * CELL + offset);
+            const dy = t - r * ROW;
+            const distance = dx * dx + dy * dy;
+
+            if (!best || distance < best.distance) {
+                best = { dx, dy, distance, turn: hash3(r, c, 7) * Math.PI * 2 };
+            }
+        }
+    }
+
+    const r = Math.sqrt(best.distance);
+    const angle = Math.atan2(best.dy, best.dx) + best.turn;
+    const petal = CELL * 0.36 * (0.5 + 0.5 * Math.abs(Math.cos(2.5 * angle)));
+    const heart = smoothstep(0.005, 0.0035, r);
+    const eyelet = smoothstep(0.0055, 0.0075, r);
+    const fill = 0.84 * smoothstep(petal + 0.0005, petal - 0.0025, r) * eyelet;
+    const cord = Math.exp(-(((r - petal) / 0.0014) ** 2));
+    const stem = smoothstep(0.045, 0.02, Math.abs(fbm(s * 30, t * 30, 0.5, 2) - 0.5)) * 0.92;
+    const alpha = Math.max(0.24, fill, cord, heart, stem);
+    const raised = Math.max(cord, heart, stem);
+
+    return [alpha, 0.88 + 0.22 * raised, 0.4 + 0.5 * raised];
+}
+
+/** How a fabric looks at a point: [alpha, shade, relief] (CLEAR where there's none). */
+function fabricLook(fabric, inside, p) {
+    // Soft along every edge
+    const edge = smoothstep(0, 0.0025, inside);
+
+    switch (fabric) {
+        case LACE: {
+            // A scalloped edge, bound with a cord
+            const scallop = inside - 0.005 * (1 - Math.abs(Math.sin((p.s + p.t) * 200)));
+            const [alpha, shade, relief] = laceAt(p.s, p.t);
+            const cord = smoothstep(0, 0.0015, scallop) * smoothstep(0.0045, 0.0025, scallop);
+
+            return scallop <= 0 ? CLEAR : [Math.max(alpha, cord) * smoothstep(0, 0.0012, scallop), shade + 0.2 * cord, Math.max(relief, cord)];
+        }
+        case LINED: {
+            const [alpha] = laceAt(p.s, p.t);
+
+            return [1, 0.8 + 0.2 * alpha, 0.35 + 0.5 * alpha];
+        }
+        case BAND:
+            return [edge, 1, 0.6];
+        case BOW:
+            return [edge, 1.15, 0.85];
+        case SHEER:
+            return [0.42, 0.85, 0.5];
+        case REINFORCED:
+            return [0.68, 0.8, 0.5];
+        case SEAM:
+            return [0.92, 0.7, 0.6];
+        case NET: {
+            // Diamonds a couple of centimetres across
+            const frac = (value) => value - Math.floor(value);
+            const u = frac((p.s + p.t) / 0.026);
+            const v = frac((p.s - p.t) / 0.026);
+            const thread = Math.min(Math.min(u, 1 - u), Math.min(v, 1 - v));
+
+            return [smoothstep(0.1, 0.05, thread), 1, 0.8];
+        }
+        case SATIN: {
+            // Piped along its edges, boned every few centimetres round, with lace laid over it
+            const [alpha] = laceAt(p.s, p.t);
+            const frac = (value) => value - Math.floor(value);
+            const channel = smoothstep(0.42, 0.47, Math.abs(frac(p.s / 0.042) - 0.5));
+            const piping = smoothstep(0.005, 0.003, inside);
+
+            return [1, (0.78 + 0.26 * alpha) * (1 - 0.3 * channel) + 0.3 * piping, 0.45 + 0.35 * alpha - 0.2 * channel + 0.4 * piping];
+        }
+        default:
+            return CLEAR;
+    }
+}
+
+const CLEAR = [0, 1, 0.5];
+
+/** Paint a design: white (the material's colour tints it), clear where there's no fabric. */
+function paintDesign(map, name) {
+    const { size, covered, positions, bones, names } = map;
+    const count = size * size;
+    const data = new Uint8ClampedArray(count * 4);
+    const bump = new Uint8ClampedArray(count);
+    const { heights: [low, high], fabric } = DESIGNS[name];
+    const legs = names.map((bone) => LEG_BONE.test(bone));
+
+    // (clear texels are white too, so they don't darken the fabric's edges as it's minified)
+    data.fill(255);
+
+    for (let i = 0; i < count; i++) {
+        const y = positions[i * 3 + 1];
+
+        data[i * 4 + 3] = 0;
+
+        if (!covered[i] || y < low || y > high) {
+            continue;
+        }
+
+        const p = designPoint(positions[i * 3], y, positions[i * 3 + 2], legs[bones[i]]);
+        const [kind, inside] = fabric(p);
+        const [alpha, shade, relief] = fabricLook(kind, inside, p);
+
+        data[i * 4] = data[i * 4 + 1] = data[i * 4 + 2] = Math.min(255, shade * 225);
+        data[i * 4 + 3] = alpha * 255;
+        bump[i] = relief * 255;
+    }
+
+    dilate(size, covered, data, bump);
+
+    return { size, data, bump };
+}
+
+const LEG_BONE = /Leg$|Foot|Toe/;
+
+/**
+ * Which of a body's vertices a design's fabric is opaque over (1), by where each is on the base
+ * body: the skin there is hidden under it.
+ */
+export function designSolid(human, name) {
+    const solid = new Uint8Array(human.vertexCount);
+    const positions = human.basePositions;
+    const { heights: [low, high], fabric } = DESIGNS[name];
+
+    for (let v = 0; v < human.vertexCount; v++) {
+        const y = positions[v * 3 + 1];
+
+        if (y >= low && y <= high) {
+            const p = designPoint(positions[v * 3], y, positions[v * 3 + 2], LEG_BONE.test(human.bones[human.skinIndices[v * 4]].name));
+
+            solid[v] = SOLID.has(fabric(p)[0]) ? 1 : 0;
+        }
+    }
+
+    return solid;
 }

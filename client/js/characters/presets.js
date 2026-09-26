@@ -78,9 +78,11 @@ export const PRESETS = Object.freeze({
 });
 
 /**
- * The tavern's folk (Wenches and Ale): its barkeep, two serving wenches, the madam upstairs, and
- * the patrons at its tables, each dressed for it; the wenches and patrons with tankards of ale.
- * (Nothing that never shows is worn under their clothes: each garment takes a while to fit.)
+ * The tavern's folk (Wenches and Ale): its barkeep, two serving wenches, the madam and four
+ * courtesans upstairs, and the patrons at its tables, each dressed for it; the wenches and patrons
+ * with tankards of ale. (Nothing that never shows is worn under their clothes: each garment takes
+ * a while to fit.) The courtesans are shaped as an hourglass (a narrow waist, full hips, buttocks
+ * and busts) and wear lingerie (garments.js).
  */
 export const FOLK = Object.freeze({
     barkeep: {
@@ -109,6 +111,34 @@ export const FOLK = Object.freeze({
         shape: { macro: { gender: 0, muscle: 0.35, weight: 0.62, height: 0.56, bust: 0.8, african: 0.1, asian: 0.2, caucasian: 0.7 }, details: { cheekbones: 0.5, lips: 0.5, jawWidth: 0.1 } },
         look: { skin: { tone: SKIN_TONES.light, blush: 0.8, brows: 0.7 }, eyes: { iris: "#2c3a52" }, hair: { style: "topknot", beard: "none", colour: HAIR_COLOURS.black } },
         equipment: ["chemise", "velvetBodice", "gown", "boots"],
+        walk: "natural",
+    },
+    courtesan: {
+        label: "Courtesan",
+        shape: { macro: { gender: 0, muscle: 0.42, weight: 0.45, height: 0.52, bust: 0.75, african: 0.1, asian: 0.1, caucasian: 0.8 }, details: { waist: -0.8, hips: 0.35, buttocks: 0.8, thighs: 0.05, lips: 0.4, cheekbones: 0.4 } },
+        look: { skin: { tone: SKIN_TONES.fair, blush: 0.65, brows: 0.5 }, eyes: { iris: "#3b5a7a" }, hair: { style: "long", beard: "none", colour: HAIR_COLOURS.black } },
+        equipment: ["laceBraBlack", "laceBriefsBlack", "suspendersBlack", "stockingsBlack", "choker"],
+        walk: "natural",
+    },
+    courtesan2: {
+        label: "Courtesan",
+        shape: { macro: { gender: 0, muscle: 0.45, weight: 0.5, height: 0.5, bust: 0.95, african: 0.1, asian: 0.2, caucasian: 0.7 }, details: { waist: -0.7, hips: 0.45, buttocks: 0.9, thighs: 0.15, lips: 0.5, eyeSize: 0.2 } },
+        look: { skin: { tone: SKIN_TONES.light, blush: 0.6, brows: 0.6, freckles: 0.2 }, eyes: { iris: "#4f6b3a" }, hair: { style: "long", beard: "none", colour: HAIR_COLOURS.red } },
+        equipment: ["laceBraCrimson", "laceBriefsCrimson", "corset", "fishnets"],
+        walk: "natural",
+    },
+    courtesan3: {
+        label: "Courtesan",
+        shape: { macro: { gender: 0, muscle: 0.4, weight: 0.42, height: 0.58, bust: 0.65, african: 0.7, asian: 0.1, caucasian: 0.2 }, details: { waist: -0.9, hips: 0.3, buttocks: 0.7, thighs: 0, lips: 0.5, cheekbones: 0.5 } },
+        look: { skin: { tone: SKIN_TONES.brown, blush: 0.4, brows: 0.6 }, eyes: { iris: "#3b2a1c" }, hair: { style: "bob", beard: "none", colour: HAIR_COLOURS.black } },
+        equipment: ["laceBraEmerald", "laceBriefsEmerald", "suspendersEmerald", "stockingsEmerald"],
+        walk: "natural",
+    },
+    courtesan4: {
+        label: "Courtesan",
+        shape: { macro: { gender: 0, muscle: 0.45, weight: 0.55, height: 0.46, bust: 1, african: 0.2, asian: 0.3, caucasian: 0.5 }, details: { waist: -0.6, hips: 0.5, buttocks: 1, thighs: 0.2, lips: 0.3, noseWidth: -0.2 } },
+        look: { skin: { tone: SKIN_TONES.olive, blush: 0.5, brows: 0.6 }, eyes: { iris: "#533626" }, hair: { style: "ponytail", beard: "none", colour: HAIR_COLOURS.blond } },
+        equipment: ["laceBraIvory", "laceBriefsIvory", "suspendersIvory", "stockingsIvory", "choker"],
         walk: "natural",
     },
     drinker: {

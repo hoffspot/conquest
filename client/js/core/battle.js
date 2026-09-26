@@ -41,7 +41,8 @@
 //
 // The folk (roles.js) rest now and then while the player can see them: every several seconds
 // (REST_EVERY) one of their role's five rests, never the same twice running, staying put until
-// it's done (a "rest" event: { id, role, rest }).
+// it's done (a "rest" event: { id, role, rest }). A courtesan, when the player comes into her
+// sight, turns to them and beckons them into her room first (an "act" event, act "beckon").
 //
 // Nothing here draws anything: every step returns events ("attack", "hit", "death"...) for the
 // interface to show. Pure JavaScript with seeded random numbers, no DOM.
@@ -49,7 +50,7 @@
 import { routeBetween } from "./interiors.js";
 import { findPath, lineAhead } from "./pathfinding.js";
 import { createRandom } from "./random.js";
-import { REST_EVERY, ROLES } from "./roles.js";
+import { BECKON, REST_EVERY, ROLES } from "./roles.js";
 import { rollHeal, SPELL_COOLDOWN, SPELLS } from "./spells.js";
 import { Variety } from "./variety.js";
 import { chooseAttack, distanceBetween, longestReach, rollDamage, WEAPONS } from "./weapons.js";
@@ -201,6 +202,11 @@ export class Battle {
             restAt: 0,
             restingUntil: 0,
             restVariety: new Variety(() => this.chance.next()),
+            // Beckoning (a role that beckons): whether it's beckoned the player since they came
+            // into sight, when it last saw them, and until when it's beckoning
+            beckoned: false,
+            sawPlayerAt: -Infinity,
+            beckoningUntil: 0,
             // Who it's talking to (an id), if anyone
             talkingTo: null,
             order: null,
@@ -600,7 +606,7 @@ export class Battle {
         const stop = routine.stops[actor.stop];
         const idle = !actor.path.length && !actor.to;
 
-        if (!idle) {
+        if (this.#beckon(actor, idle) || !idle) {
             return;
         }
 
@@ -638,6 +644,39 @@ export class Battle {
         if (!there && (!same(actor.pathGoal, stop.square) || this.time - actor.lastPathAt >= REPATH_MS)) {
             this.#pathTo(actor, stop.square);
         }
+    }
+
+    /**
+     * One of the folk whose role beckons (a courtesan) turns to the player and beckons them over
+     * (an "act" event: { id, act: "beckon", target }) when they come into its sight, once it's
+     * standing still (`idle`), and hasn't since they were last out of it for a while
+     * (BECKON.again): returns whether it's beckoning.
+     */
+    #beckon(actor, idle) {
+        if (!ROLES[actor.role]?.beckons) {
+            return false;
+        }
+
+        const player = this.actors.find((other) => other.kind === "player" && !other.dead && this.canSee(actor, other));
+
+        if (player) {
+            // Back in sight after a while out of it
+            if (this.time - actor.sawPlayerAt > BECKON.again) {
+                actor.beckoned = false;
+            }
+
+            actor.sawPlayerAt = this.time;
+
+            if (idle && !actor.beckoned && this.time >= actor.restingUntil) {
+                actor.beckoned = true;
+                actor.facing = Math.atan2(player.x - actor.x, player.y - actor.y);
+                actor.restingUntil = actor.beckoningUntil = this.time + BECKON.duration * 1000;
+                actor.restAt = actor.restingUntil + REST_EVERY[0] + this.chance.next() * (REST_EVERY[1] - REST_EVERY[0]);
+                this.#emit("act", { id: actor.id, act: "beckon", target: player.id });
+            }
+        }
+
+        return this.time < actor.beckoningUntil;
     }
 
     /**

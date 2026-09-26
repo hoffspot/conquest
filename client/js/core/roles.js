@@ -1,10 +1,11 @@
 // What sort of person each character is: their class (a role), such as the barkeep, a serving
-// wench, a patron at the tables, the madam upstairs, or the player's adventurer.
+// wench, a patron at the tables, the madam or a courtesan upstairs, or the player's adventurer.
 //
-// A role says what the character is called (its `title`, under its name in a talk: dialogue.js)
-// and how it passes the time: five resting animations (`rests`), one of which it plays every
-// several seconds while the player can see it (battle.js #rest; the player, after standing a
-// while with nothing going on: game.js). It picks any of the five at first, then any but the
+// A role says what the character is called (its `title`, under its name in a talk: dialogue.js),
+// whether it beckons the player over when they come into sight (`beckons`: the courtesans
+// upstairs, BECKON), and how it passes the time: five resting animations (`rests`), one of which
+// it plays every several seconds while the player can see it (battle.js #rest; the player, after
+// standing a while with nothing going on: game.js). It picks any of the five at first, then any but the
 // last (variety.js). Everyone of a role shares its rests. Each rest is named, and timed like an
 // attack (actions.js): `hitAt` seconds to the moment that matters (the top of a toast, a slap on
 // the table), `duration` seconds in all; the poses are actions.js's RESTS. A rest can make a
@@ -55,6 +56,18 @@ export const ROLES = Object.freeze({
             { name: "smoothing her gown", hitAt: 1, duration: 2.4 },
         ],
     },
+    courtesan: {
+        title: "Courtesan",
+        // Seeing the player come into sight, she turns to them and beckons them into her room
+        beckons: true,
+        rests: [
+            { name: "twirling her hair", hitAt: 1, duration: 3 },
+            { name: "a slow stretch", hitAt: 1.2, duration: 3.6 },
+            { name: "a hand on her hip", hitAt: 1, duration: 3.4 },
+            { name: "blowing a kiss", hitAt: 1, duration: 2.8 },
+            { name: "smoothing down her sides", hitAt: 1, duration: 3 },
+        ],
+    },
     adventurer: {
         title: "Adventurer",
         rests: [
@@ -66,6 +79,12 @@ export const ROLES = Object.freeze({
         ],
     },
 });
+
+/**
+ * Beckoning (a role that `beckons`): its timing (s, as a rest's), and how long (ms) the player has
+ * to have been out of sight before it beckons them again.
+ */
+export const BECKON = Object.freeze({ hitAt: 0.9, duration: 3.4, again: 6000 });
 
 /** How often someone rests while seen: every this many ms, give or take (at random between). */
 export const REST_EVERY = Object.freeze([4000, 9000]);
