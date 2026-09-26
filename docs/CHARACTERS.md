@@ -375,6 +375,46 @@ arms flung out, and lies flat. The feet aren't kept planted while falling.
 - **Serving**: leaning over a table to set a tankard down on it.
 - **Pouring**: both hands to a barrel's tap in front, the left holding the tankard under it.
 
+### Resting
+
+How each class of character passes the time (`RESTS`, by class: the game's roles, core/roles.js,
+which name and time them): five ways each, key poses timed like an attack's (key 1 at the moment
+that matters: the top of a toast, a slap on the table), played every several seconds while the
+player can see them, and by the player after standing still a while. `rest(role)` plays one of
+a class's rests, any at first and then any but the last; `stopResting()` eases out of it (in
+0.35 s). A patron rests sitting down.
+
+| Class | Rest | The pose |
+| --- | --- | --- |
+| Barkeep | wiping the bar | the right hand going round and round on the bar, leaning on the left |
+| | stroking his beard | the hand to the chin, stroking down twice, thinking |
+| | leaning on the bar | both hands on the bar, leaning on them, looking out over the room |
+| | arms folded | each hand tucked under the other arm, nodding |
+| | rubbing his neck | a hand behind the neck, the head bowed and rolled one way, then the other |
+| Serving wench | wiping her brow | the back of the wrist across the forehead, then a sigh |
+| | hand on her hip | the hip cocked, the head tilted |
+| | tucking back her hair | a hand up to the side of the head, behind the ear |
+| | a curtsy | a little bob, the head bowed, the skirt held out |
+| | stretching her back | a hand to the small of the back, arching |
+| Patron | a toast | the toast, sitting |
+| | a long drink | the tankard tipped right back, then the mouth wiped on a sleeve |
+| | a belly laugh | thrown back laughing, slapping the table twice |
+| | thumping the table | the tankard banged down twice, cheering |
+| | looking about | over one shoulder, then the other |
+| Madam | fanning herself | a hand fanning the face, quickly |
+| | hands on her hips | looking over her house one way and the other |
+| | touching her necklace | fingers at the throat, looking down |
+| | drumming her fingers | a hand on the counter, drumming it |
+| | smoothing her gown | both hands down the front of her gown |
+| Adventurer | stretching | both arms up high, the back arched |
+| | looking about | a hand shading the eyes, one way then the other |
+| | rolling the shoulders | the shoulders rolled up and back, the neck stretched each way |
+| | a yawn | a hand to the mouth, the head back, the shoulders up |
+| | shifting the weight | from one foot to the other, a thumb in the belt |
+
+The lab's Motion tab has them (Resting: a class, the way from Fighting's Way, Rest), and
+`?action=rest&rest=barkeep&way=2&at=1` shows one frozen.
+
 **Motion capture** (`bvh.js`) is retargeted bone by bone in the world:
 
 1. Pose the BVH skeleton and take each joint's world rotation, in our axes.

@@ -74,7 +74,8 @@ hit, showing the wound beneath. Healing back above a threshold heals that stage'
 marks (all of them, at full health); coming back to life, all of them.
 
 An orc patrols the fields from the north-west corner, halfway down the west side and back. When
-it sees you (within 12 metres, with nothing in the way) it chases you and attacks whenever you're
+it sees you (within 12 metres, with nothing in the way: walls, houses and trees hide you, a well,
+barrels or a cart don't) it chases you and attacks whenever you're
 within reach, giving up if it loses sight of you for three seconds. Each blow knocks off hit
 points; at none, a character falls. You get up again in the market square five seconds later,
 with full health; the orc comes back to its corner half a minute after it falls.
@@ -99,9 +100,25 @@ you go after it.
 **The tavern's folk.** The taproom is busy: a burly, bearded barkeep in an apron goes between the
 bar and the barrels behind it, drawing ale; two serving wenches, in laced bodices and long
 skirts, carry tankards between the bar and the tables and set them down; and four patrons sit on
-the benches, now and then raising their tankards in a toast and drinking (you hear the tankards
-clink). Upstairs the madam, in a velvet gown, keeps her counter. No one fights them, and they
-fight no one; they're blue dots on the minimap.
+the benches. Upstairs the madam, in a velvet gown, keeps her counter. Each has a name of their
+own. No one fights them, and they fight no one; they're blue dots on the minimap. While you can
+see them they pass the time, every several seconds one of five things their sort does: the
+patrons raise a toast (the tankards clink), take a long drink, roar with laughter slapping the
+table, thump their tankards down or look about; the barkeep wipes the bar, strokes his beard,
+leans on it, folds his arms or rubs his neck; the wenches wipe their brows, put a hand on a hip,
+tuck back their hair, curtsy or stretch their backs; the madam fans herself, puts her hands on
+her hips, toys with her necklace, drums her fingers or smooths her gown. Stand still with
+nothing going on for 15 seconds and you do too: stretching, looking about, rolling your
+shoulders, yawning, shifting your weight.
+
+**Talking.** Tap one of the folk and you walk up to them (or to the bar, or the other side of a
+table) and talk: their name and what they are, what they say, and what you can say back (tap a
+reply, or press its number). They stop and turn to you. Each sort has their own things to talk
+about: the barkeep sells ale and gossips about the orc, the wenches bring food and know everyone,
+the patrons have news and opinions, the madam offers a room; and some have their own stories.
+They remember you, and what you've asked; and what you learn from one, another may know you
+know. Choices that would cost something or change the world (buying, renting, taking on a job)
+are there, but for now only the talk goes on. Walk off, or press Escape, to stop.
 
 **The minimap**, in the top right under the menu button, shows the whole of where you are from
 above: out in the town, its roads, roofs and trees; inside, the floor, walls, furniture and
@@ -154,6 +171,7 @@ remembered.
 | Run | Double-tap the ground | Double-click (or Shift-click) the ground |
 | Fight | Tap an enemy (double-tap to run at them) | Click an enemy (double-click to run at them) |
 | Go through a door, up or down stairs | Tap the door or stairs | Click the door or stairs |
+| Talk to someone | Tap them, then tap a reply | Click them, then click a reply or press its number; Escape to stop |
 | Zoom | Pinch, or the + and − buttons | Scroll, or the + and − buttons |
 | Walk or fight on the map | Tap the minimap (double-tap to run) | Click the minimap (double-click to run) |
 | Cast a spell | Hold on yourself or an enemy, then flick to a slice | Hold the button down on them, then flick the mouse |
@@ -250,7 +268,8 @@ client/                 The game (static files served to the browser)
     wheel.js            The action wheel: hold, flick, cooldowns; icons.js draws its icons
     minimap.js          The minimap: the map the player is on from above, with everyone on it
     debug.js            Debug mode's overlay
-    save.js             The saved character and settings (local storage)
+    talk.js             The talk: who's talking, what they say, and the replies to choose from
+    save.js             The saved character, what's been said, and settings (local storage)
     device.js           Full screen and the service worker
   js/core/              The rules. No DOM or Three.js, so they also run in Node
     world.js            The world: a town on 1-metre squares, fields, trees, where everyone starts,
@@ -259,6 +278,9 @@ client/                 The game (static files served to the browser)
     battle.js           Moving, fighting, damage, dying and coming back; the orc's patrol
     weapons.js          The weapons and their attacks
     spells.js           The spells: heal and stun, and their shared cooldown
+    roles.js            Classes of people (barkeep, patron...): their titles and five rests each
+    dialogue.js         Conversations: trees of what's said and the replies, conditions, effects
+    names.js            People's names, drawn from the world's seed
     pathfinding.js      A* paths on the squares
     variety.js          Choosing one of a few ways of doing something, never the last one again
     random.js           Seeded random numbers
