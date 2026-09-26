@@ -84,6 +84,7 @@ function fighter(shape, held = []) {
 
     walker.overlay = (dt) => actions.apply(dt);
     walker.afterPose = () => actions.place();
+    walker.freed = (side) => actions.free[side];
 
     return { character, walker, actions };
 }
@@ -268,6 +269,73 @@ describe("attacks (actions.js)", () => {
         assert.ok(reach[1] < -0.15, "then the left");
     });
 
+    it("kicks five ways, with the right leg and the left in turn: the foot off the ground and out at the enemy, the standing foot staying put", () => {
+        const { hitAt, duration } = WEAPONS.boots.attacks[0];
+
+        for (let variant = 0; variant < 5; variant++) {
+            for (const mirror of [false, true]) {
+                const { character, walker, actions } = fighter();
+
+                walker.update(0);
+
+                for (let k = 0; k < 10; k++) {
+                    walker.update(0.05);
+                }
+
+                actions.attacks = mirror ? 1 : 0;
+                actions.startAttack("kick", { hitAt: hitAt / 1000, duration: duration / 1000, variant });
+
+                const kicking = actions.attack.mirror ? "Left" : "Right";
+                const standing = kicking === "Left" ? "Right" : "Left";
+                // (The standing foot pivots on its heel or the ball of the foot as the body turns:
+                // that stays put, or slides a little where the leg would have to stretch)
+                const pivots = () => ["heel", "ball"].map((which) => walker.footPoint(standing === "Left" ? 0 : 1, which).clone());
+                const before = pivots();
+                const label = `${ATTACKS.kick.variants[variant].name} (${kicking.toLowerCase()} leg)`;
+
+                assert.equal(actions.attack.mirror, mirror, label);
+
+                for (let t = 0; t < hitAt / 1000 - 1e-6; t += 1 / 60) {
+                    walker.update(Math.min(1 / 60, hitAt / 1000 - t));
+                }
+
+                const toe = world(`${kicking}ToeBase`, character);
+                const slid = Math.min(...pivots().map((point, k) => Math.hypot(point.x - before[k].x, point.z - before[k].z)));
+
+                assert.equal(actions.free[kicking], 1, `${label}: its foot let go of the ground`);
+                assert.equal(actions.free[standing], 0, `${label}: the other not`);
+                assert.ok(toe.z > 0.6 && toe.y > 0.2, `${label}: kicking out in front (${toe.toArray().map((v) => v.toFixed(2))})`);
+                assert.ok(slid < 0.07, `${label}: the standing foot stays put (${slid.toFixed(3)})`);
+
+                for (let t = 0; t < (duration - hitAt) / 1000 + 0.2; t += 1 / 30) {
+                    walker.update(1 / 30);
+                }
+
+                assert.ok(world(`${kicking}Foot`, character).y < 0.12, `${label}: back down`);
+            }
+        }
+    });
+
+    it("kicks with a weapon in hand without moving the hands off guard", () => {
+        const { character, walker, actions } = fighter(undefined, ["sword"]);
+        const { hitAt, duration } = WEAPONS.boots.attacks[0];
+
+        actions.setWeapon("sword");
+        actions.setGuard(true);
+
+        for (let k = 0; k < 10; k++) {
+            walker.update(0.1);
+        }
+
+        const guard = world("RightHand", character).sub(world("RightArm", character));
+
+        actions.startAttack("kick", { hitAt: hitAt / 1000, duration: duration / 1000, variant: 0, arms: false });
+        walker.update(hitAt / 1000);
+
+        assert.ok(world("RightHand", character).sub(world("RightArm", character)).distanceTo(guard) < 0.08, "the sword hand where it was, from the shoulder");
+        assert.equal(actions.free.Right, 1);
+    });
+
     it("ends each attack back in the walk's pose", () => {
         const { character, walker, actions } = fighter();
         const pose = () => character.rig.bones.map((bone) => bone.quaternion.clone());
@@ -291,6 +359,85 @@ describe("attacks (actions.js)", () => {
                 assert.ok(q.angleTo(before[i]) < 0.02, name);
             }
         });
+    });
+});
+
+describe("drawing weapons and putting them away (actions.js DRAWS, Character.sheathe)", () => {
+    it("has a draw ending on guard and a put-away ending with the hands free for every weapon, the hand taking hold at key time 1", () => {
+        for (const id of [...STARTING_WEAPONS, "cleaver"]) {
+            const guard = WEAPONS[id].attacks[0].animation;
+            const { draw, sheathe } = DRAWS[guard] ?? {};
+
+            assert.ok(draw && sheathe, id);
+
+            for (const how of [draw, sheathe]) {
+                assert.ok(how.hitAt > 0 && how.hitAt < how.duration && how.duration < 2.5, `${id}: timing`);
+                assert.deepEqual(how.keys.map(([time]) => time).filter((time) => time <= 0 || time >= 2), [0, 2], `${id}: keys from 0 to 2`);
+            }
+
+            assert.equal(draw.keys.at(-1)[1].right, GUARDS[guard].right, `${id}: drawn to its guard`);
+            assert.ok(!sheathe.keys.at(-1)[1].right && !sheathe.keys.at(-1)[1].left, `${id}: put away, the hands free`);
+        }
+    });
+
+    it("takes a sword from its scabbard into the hand as the hand gets there, and puts it back", () => {
+        const { character, walker, actions } = fighter(undefined, ["sword"]);
+        const sword = character.items[0];
+        const { draw, sheathe } = DRAWS.sword;
+
+        character.sheathe(true);
+        walker.update(0);
+        assert.equal(sword.parent.name, "Hips");
+        assert.equal(character.holds.Right, undefined, "the hand empty");
+
+        const took = actions.draw("sword", true);
+
+        assert.equal(took, draw.duration);
+        walker.update(draw.hitAt - 0.05);
+        assert.equal(sword.parent.name, "Hips", "not yet");
+
+        // (Where it's put away, the hand's there too)
+        const hand = world("RightHand", character);
+        const away = character.sheathPose("Right").position;
+
+        walker.update(0.1);
+        assert.equal(sword.parent.name, "RightHand");
+        assert.ok(hand.distanceTo(away) < 0.2, "the hand at the hilt");
+        assert.ok(character.holds.Right?.grips, "gripped");
+
+        for (let t = 0; t < took; t += 0.1) {
+            walker.update(0.1);
+        }
+
+        assert.equal(actions.attack, null);
+        assert.ok(!character.sheathed);
+
+        // Put away
+        actions.draw("sword", false);
+        walker.update(sheathe.hitAt + 0.05);
+        assert.equal(sword.parent.name, "Hips");
+        assert.ok(character.sheathed && !character.holds.Right);
+    });
+
+    it("finishes drawing or putting away at once if something else is done meanwhile", () => {
+        const { character, walker, actions } = fighter(undefined, ["warHammer"]);
+        const hammer = character.items[0];
+
+        character.sheathe(true);
+        walker.update(0);
+        assert.equal(hammer.parent.name, "Spine2", "on the back");
+
+        actions.draw("hammer", true);
+        walker.update(0.1);
+        actions.startAttack("hammer", { hitAt: 0.64, duration: 1.1 });
+        assert.equal(hammer.parent.name, "RightHand");
+        assert.ok(!character.sheathed);
+
+        actions.draw("hammer", false);
+        walker.update(0.1);
+        actions.die();
+        assert.equal(hammer.parent.name, "Spine2");
+        assert.ok(character.sheathed);
     });
 });
 

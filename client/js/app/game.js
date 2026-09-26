@@ -1084,13 +1084,15 @@ export class Game {
                 case "attack": {
                     const actor = battle.actor(event.id);
 
-                    // (Its weapon in hand, whatever it looked like; kicking with one, the hands
-                    // stay on guard)
-                    if (avatar.character.sheathed && !avatar.actions.drawing) {
+                    // (Kicking with a weapon in hand, the hands stay on guard; and its weapon in
+                    // hand, whatever it looked like: once starting the attack has finished any
+                    // drawing or putting away)
+                    avatar.actions.startAttack(event.animation, { hitAt: event.hitAt / 1000, duration: event.duration / 1000, arms: event.animation !== "kick" || ["boots", "gauntlets"].includes(actor.weapon) });
+
+                    if (avatar.character.sheathed) {
                         avatar.character.sheathe(false);
                     }
 
-                    avatar.actions.startAttack(event.animation, { hitAt: event.hitAt / 1000, duration: event.duration / 1000, arms: event.animation !== "kick" || ["boots", "gauntlets"].includes(actor.weapon) });
                     this.lastAttack.set(event.id, battle.time);
                     this.sound?.attack(event.animation, avatar.object.position, event.hitAt / 1000);
                     break;
