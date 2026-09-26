@@ -2,6 +2,8 @@
 // characters going in and out of it in the battle
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import * as THREE from "three";
+import { Doors } from "../client/js/app/doors.js";
 import { Battle, STEP_MS } from "../client/js/core/battle.js";
 import { linkAt, MAP_ORIGINS, readPlan, routeBetween, tavernFloors } from "../client/js/core/interiors.js";
 import { findPath } from "../client/js/core/pathfinding.js";
@@ -231,6 +233,25 @@ describe("going in and out (battle.js)", () => {
         assert.equal(orc.map, "town");
     });
 
+    it("has the player, set to fight someone who goes through a door, go after them the same way", () => {
+        const { battle, player, world } = tavern();
+        const [front] = world.tavern.front;
+
+        battle.add({ id: "thief", kind: "orc", weapon: "cleaver", team: "orcs", square: front });
+        battle.command("player", { type: "engage", target: "thief" });
+        battle.command("thief", { type: "enter", link: "tavern-door" });
+
+        const events = run(battle, 4000);
+
+        assert.deepEqual(events.filter((event) => event.type === "cross").map((event) => [event.id, event.to]), [["thief", "taproom"], ["player", "taproom"]]);
+        assert.equal(player.order?.target, "thief", "still after it");
+
+        // Somewhere it didn't go from here (it was carried off): they give up
+        Object.assign(battle.actor("thief"), { map: "upstairs", crossed: null });
+        run(battle, 2000);
+        assert.equal(player.order, null);
+    });
+
     it("brings the dead back to life on the map they started on", () => {
         const { battle, player } = tavern();
 
@@ -270,5 +291,66 @@ describe("going in and out (battle.js)", () => {
         assert.equal(player.map, "taproom");
         assert.ok(events.some((event) => event.type === "fizzle"));
         assert.ok(!events.some((event) => event.type === "hit" && event.id === "player"));
+    });
+});
+
+describe("the doors and stairs to tap (doors.js)", () => {
+    const world = generateWorld({ seed: 1 });
+    const doors = new Doors(world, new THREE.Group());
+
+    // A ray from high up in front of a point, at it
+    const rayAt = (x, y, z, from) => {
+        const origin = new THREE.Vector3(x + from[0], 8, z + from[1]);
+
+        return new THREE.Ray(origin, new THREE.Vector3(x, y, z).sub(origin).normalize());
+    };
+
+    it("has a target at each end of each door and stairs, on its map", () => {
+        assert.deepEqual(doors.targets.map(({ link, map }) => `${link.id}:${map}`).sort(), ["tavern-door:taproom", "tavern-door:town", "tavern-stairs:taproom", "tavern-stairs:upstairs"]);
+        assert.ok(doors.targets.every(({ glow }) => !glow.visible));
+    });
+
+    it("is hit by a tap on the tavern's door from outside, on the town's map only", () => {
+        const { door } = world.tavern;
+        const ray = rayAt(door.x, 1.2, door.z, [Math.sin(door.facing) * 8, Math.cos(door.facing) * 8]);
+
+        assert.equal(doors.at(ray, "town")?.link.id, "tavern-door");
+        assert.equal(doors.at(ray, "taproom"), null);
+
+        // A tap on the wall well along from it isn't
+        const along = [Math.cos(door.facing) * 4, -Math.sin(door.facing) * 4];
+
+        assert.equal(doors.at(rayAt(door.x + along[0], 1.2, door.z + along[1], [Math.sin(door.facing) * 8, Math.cos(door.facing) * 8]), "town"), null);
+    });
+
+    it("is hit by a tap on the inside of the door and on the stairs, drawn where their maps are", () => {
+        const { taproom, upstairs } = world.maps;
+        const [tx, tz] = taproom.origin;
+        const [ux, uz] = upstairs.origin;
+        const [dx] = taproom.marks.D[0];
+
+        assert.equal(doors.at(rayAt(tx + dx + 1, 0.8, tz + taproom.height - 0.3, [0, -6]), "taproom")?.link.id, "tavern-door");
+        assert.equal(doors.at(rayAt(tx + 3, 1.5, tz + 1, [0, 6]), "taproom")?.link.id, "tavern-stairs");
+        assert.equal(doors.at(rayAt(ux + 3, 0, uz + 0.5, [0, 6]), "upstairs")?.link.id, "tavern-stairs");
+    });
+
+    it("glows when tapped, and while the player makes for it, then fades", () => {
+        const target = doors.targets.find(({ map }) => map === "town");
+
+        doors.light(target, 10);
+        doors.update(0.5, 10, { map: "town" });
+        assert.ok(target.glow.visible && target.level === 1);
+
+        // Not on another map
+        doors.update(0.5, 10.5, { map: "taproom" });
+        assert.equal(target.level, 0);
+
+        // Kept lit while heading there, fading once through
+        doors.update(0.5, 20, { map: "town", heading: "tavern-door" });
+        assert.equal(target.level, 1);
+        doors.update(0.1, 20.1, { map: "town" });
+        assert.ok(target.level > 0 && target.level < 1);
+        doors.update(1, 21, { map: "town" });
+        assert.ok(!target.glow.visible);
     });
 });

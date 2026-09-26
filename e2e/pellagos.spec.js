@@ -587,6 +587,73 @@ test("tapping an enemy rings it as the player's target, until they're told to wa
     expect(target.after).toEqual({ visible: false, plate: null });
 });
 
+test("tapping the tavern's door lights its edge green, and the player walks in: inside the door, facing the room; up the stairs, down, and out", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // Tap the door or stairs (a link's end on the map shown), and play on until through
+    const through = (map, kind, seconds) => page.evaluate(({ map, kind, seconds }) => {
+        const { game, session } = window.pellagos;
+        const target = game.doors.targets.find((each) => each.map === map && each.link.kind === kind);
+        const spot = session.view.toScreen(target.box.getCenter(target.box.min.clone()));
+
+        game.tap(spot.x, spot.y);
+        game.advance(0.3);
+
+        const tapped = { order: game.battle.actor("player").order?.type ?? null, glowing: target.glow.visible };
+
+        game.advance(seconds);
+
+        const player = game.battle.actor("player");
+
+        return { ...tapped, map: player.map, shown: game.mapId, square: player.square, facing: player.facing, minimap: game.minimap.map.id };
+    }, { map, kind, seconds });
+
+    // Outside the door, the orc out of the way
+    const outside = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        game.battle.command("player", { type: "move", to: game.world.tavern.outside });
+        game.advance(25);
+
+        return { square: game.battle.actor("player").square, outside: game.world.tavern.outside, inside: game.world.maps.taproom.marks.D[0], top: game.world.maps.upstairs.marks[">"][0] };
+    });
+
+    expect(outside.square).toEqual(outside.outside);
+
+    const inside = await through("town", "door", 5);
+
+    expect(inside).toEqual({ order: "enter", glowing: true, map: "taproom", shown: "taproom", square: outside.inside, facing: Math.PI, minimap: "taproom" });
+    expect(await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        return { town: game.town.object.visible, taproom: game.interiors.get("taproom").object.visible, upstairs: game.interiors.get("upstairs").object.visible };
+    })).toEqual({ town: false, taproom: true, upstairs: false });
+
+    // Near the stairs, then up them, and down again
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.battle.command("player", { type: "move", to: [3, 3] });
+        game.advance(8);
+    });
+
+    const up = await through("taproom", "stairs", 6);
+
+    expect(up).toMatchObject({ order: "enter", glowing: true, map: "upstairs", shown: "upstairs", square: outside.top, minimap: "upstairs" });
+
+    // (Standing at their top, straight down)
+    const down = await through("upstairs", "stairs", 3);
+
+    expect(down).toMatchObject({ map: "taproom", shown: "taproom", square: [0, 0] });
+
+    // And out, onto the square outside the door
+    const out = await through("taproom", "door", 14);
+
+    expect(out).toMatchObject({ order: "enter", map: "town", shown: "town", square: outside.outside, minimap: "town" });
+});
+
 test("the minimap walks the player where it's tapped, and Game options turn it and the sound off, remembered", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

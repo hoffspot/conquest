@@ -26,8 +26,8 @@ export const STOREY = 3;
 export const INTERIOR_CUT = Object.freeze({
     player: { value: new THREE.Vector3() },
     toCamera: { value: new THREE.Vector2(0, 1) },
-    height: { value: 1.05 },
-    margin: { value: 0.7 },
+    height: { value: 1.25 },
+    margin: { value: 0.1 },
 });
 
 const M = 5;
@@ -96,9 +96,7 @@ function cutAway(target) {
             .replace("#include <common>", "#include <common>\nvarying vec3 vCutWorld;\nuniform vec3 cutPlayer;\nuniform vec2 cutToCamera;\nuniform float cutHeight;\nuniform float cutMargin;")
             .replace("#include <clipping_planes_fragment>", `#include <clipping_planes_fragment>
 {
-    float nearer = dot(vCutWorld.xz - cutPlayer.xz, cutToCamera);
-    float dither = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
-    if (vCutWorld.y - cutPlayer.y > cutHeight && nearer > cutMargin + dither * 0.35) discard;
+    if (vCutWorld.y - cutPlayer.y > cutHeight && dot(vCutWorld.xz - cutPlayer.xz, cutToCamera) > cutMargin) discard;
 }`);
     };
     target.customProgramCacheKey = () => `interior-cut-${target.type}`;

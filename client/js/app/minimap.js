@@ -1,12 +1,14 @@
-// The minimap: the whole world from above, north up, in the top right of the game. It shows the
-// ground (grass, roads, cobbles, soil), the buildings' roofs, props and trees, what the camera
-// can see, where the player is going, the enemies (the one the player is set to fight ringed),
-// and the player, pointing the way they face. Tapping it walks there, or fights the enemy
-// tapped; a double tap runs.
+// The minimap: the whole of the map the player is on from above, north up, in the top right of
+// the game. Out in the town it shows the ground (grass, roads, cobbles, soil), the buildings'
+// roofs, props and trees; inside the tavern, the floor, the walls, the furniture and the stairs.
+// Over that, what the camera can see, where the player is going, the enemies (the one the player
+// is set to fight ringed), and the player, pointing the way they face. Tapping it walks there,
+// or fights the enemy tapped; a double tap runs.
 //
-// The ground, buildings and trees don't change, so they're painted once into an image four
-// pixels to the metre; each frame draws that, scaled to fit, and the markers over it.
+// The maps don't change, so each is painted once into an image four pixels to the metre; each
+// frame draws that, scaled to fit, and the markers over it.
 
+import { PLAN_KEY } from "../core/interiors.js";
 import { GROUND } from "../core/setpieces/pieces.js";
 
 // Colours (RGB) of the ground and of what stands on it
@@ -21,6 +23,23 @@ const ROOFS = [[146, 76, 50], [126, 90, 60], [112, 98, 88]];
 const LANDMARK_ROOF = [96, 104, 118];
 const PROP = [86, 72, 58];
 const TREE = [48, 78, 36];
+
+// Colours (RGB) of what stands inside (core/interiors.js's PLAN_KEY kinds), on the floor's
+const INSIDE = {
+    wall: [46, 36, 30],
+    hearth: [96, 84, 76],
+    stairs: [150, 116, 74],
+    table: [112, 76, 42],
+    bench: [88, 60, 34],
+    bar: [98, 60, 32],
+    barrels: [124, 88, 48],
+    counter: [104, 36, 50],
+    bed: [150, 38, 56],
+    washstand: [182, 180, 170],
+    chest: [96, 66, 38],
+    chaise: [118, 40, 74],
+    "side-table": [112, 76, 42],
+};
 
 // Pixels to the metre of the painted map
 const SCALE = 4;
@@ -40,6 +59,27 @@ const jitter = (x, y) => {
 
     return (((n ^ (n >>> 13)) & 0xff) / 127.5) - 1;
 };
+
+/**
+ * Each square's colour on a map inside (core/interiors.js), as RGBA bytes row by row: the floor,
+ * or whatever stands on it.
+ */
+export function interiorColours(map) {
+    const { width, height, plan, ground } = map;
+    const data = new Uint8ClampedArray(width * height * 4);
+
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const kind = PLAN_KEY[plan[y][x]].kind;
+            const colour = INSIDE[kind] ?? GROUND_COLOURS[ground[y][x]] ?? GROUND_COLOURS[GROUND.courtyard];
+            const shade = 1 + 0.05 * jitter(x, y);
+
+            data.set([colour[0] * shade, colour[1] * shade, colour[2] * shade, 255], (y * width + x) * 4);
+        }
+    }
+
+    return data;
+}
 
 /** The buildings' footprints (in squares): { x, y, w, h, landmark } for every house and landmark. */
 export function buildingsOf(world) {
@@ -117,10 +157,10 @@ export class Minimap {
         this.canvas = canvas;
         this.world = world;
         this.context = canvas.getContext("2d");
-        this.base = paint(world);
+        this.bases = new Map();
         this.drawn = -Infinity;
         this.pointer = null;
-        canvas.style.aspectRatio = `${world.width} / ${world.height}`;
+        this.setMap(world.maps?.town ?? { id: "town", width: world.width, height: world.height });
 
         const down = (event) => {
             this.pointer = { id: event.pointerId, x: event.clientX, y: event.clientY };
@@ -135,7 +175,7 @@ export class Minimap {
             }
 
             const rect = canvas.getBoundingClientRect();
-            const metres = world.width / rect.width;
+            const metres = this.map.width / rect.width;
 
             onTap({ x: (event.clientX - rect.left) * metres, z: (event.clientY - rect.top) * metres, reach: PICK * metres, clientX: event.clientX, clientY: event.clientY, time: event.timeStamp });
         };
@@ -145,6 +185,18 @@ export class Minimap {
         for (const [type, listener] of this.listeners) {
             canvas.addEventListener(type, listener);
         }
+    }
+
+    /** Show a map (one of the world's maps: the town, or a floor inside), painting it the first time. */
+    setMap(map) {
+        if (!this.bases.has(map.id)) {
+            this.bases.set(map.id, map.id === "town" ? paint(this.world) : paintInterior(map));
+        }
+
+        this.map = map;
+        this.base = this.bases.get(map.id);
+        this.canvas.style.aspectRatio = `${map.width} / ${map.height}`;
+        this.drawn = -Infinity;
     }
 
     /** Show it or not. */
@@ -164,7 +216,7 @@ export class Minimap {
      * ([[x, z] ×4], null where it sees no ground) or null.
      */
     draw({ player, others = [], destination = null, view = null }, now = performance.now()) {
-        const { canvas, context, world } = this;
+        const { canvas, context, map } = this;
 
         this.drawn = now;
 
@@ -182,7 +234,7 @@ export class Minimap {
             canvas.height = Math.round(height * ratio);
         }
 
-        const scale = width / world.width;
+        const scale = width / map.width;
         const at = (x, z) => [x * scale, z * scale];
 
         context.setTransform(ratio, 0, 0, ratio, 0, 0);
@@ -269,6 +321,68 @@ export class Minimap {
 // A canvas to draw on that isn't on the page
 function offscreen(width, height) {
     return globalThis.OffscreenCanvas ? new OffscreenCanvas(width, height) : Object.assign(document.createElement("canvas"), { width, height });
+}
+
+// A map inside's image: a colour for every square, walls, stairs' treads, round barrels, the
+// hearth's fire and the doorway
+function paintInterior(map) {
+    const { width, height, pieces, marks } = map;
+    const squares = offscreen(width, height);
+
+    squares.getContext("2d").putImageData(new ImageData(interiorColours(map), width, height), 0, 0);
+
+    const image = offscreen(width * SCALE, height * SCALE);
+    const context = image.getContext("2d");
+
+    context.imageSmoothingEnabled = false;
+    context.drawImage(squares, 0, 0, width * SCALE, height * SCALE);
+    context.scale(SCALE, SCALE);
+
+    for (const { kind, x, y, w, h } of pieces) {
+        if (kind === "stairs") {
+            // Treads across the way they go
+            context.strokeStyle = "rgba(40, 26, 14, 0.7)";
+            context.lineWidth = 0.08;
+
+            for (let tread = x + 0.33; tread < x + w; tread += 0.33) {
+                context.beginPath();
+                context.moveTo(tread, y + 0.08);
+                context.lineTo(tread, y + h - 0.08);
+                context.stroke();
+            }
+        } else if (kind === "barrels") {
+            for (let j = y; j < y + h; j++) {
+                context.beginPath();
+                context.arc(x + w / 2, j + 0.5, 0.4, 0, 2 * Math.PI);
+                context.fillStyle = "rgb(146, 104, 58)";
+                context.fill();
+                context.strokeStyle = "rgba(40, 26, 14, 0.8)";
+                context.lineWidth = 0.1;
+                context.stroke();
+            }
+        } else if (kind === "hearth") {
+            context.beginPath();
+            context.arc(x + w * 0.62, y + h / 2, 0.55, 0, 2 * Math.PI);
+            context.fillStyle = "rgba(255, 128, 40, 0.9)";
+            context.fill();
+        } else if (kind !== "wall") {
+            context.strokeStyle = "rgba(24, 14, 8, 0.55)";
+            context.lineWidth = 0.1;
+            context.strokeRect(x + 0.08, y + 0.08, w - 0.16, h - 0.16);
+        }
+    }
+
+    // The walls round it, and the doorway through them
+    context.strokeStyle = `rgb(${INSIDE.wall.join(",")})`;
+    context.lineWidth = 0.5;
+    context.strokeRect(0.25, 0.25, width - 0.5, height - 0.5);
+
+    for (const [x, y] of marks.D ?? []) {
+        context.fillStyle = "rgb(186, 150, 96)";
+        context.fillRect(x, y + 0.5, 1, 0.5);
+    }
+
+    return image;
 }
 
 // The map's image: a colour for every square, the buildings' edges and ridges, and round trees

@@ -35,11 +35,6 @@ export function detectQuality() {
 export const PITCH = 45;
 export const DISTANCE = Object.freeze({ least: 5, start: 10.5, most: 32 });
 
-// The sun: where it shines from (towards the north-east, so shadows fall away from the camera),
-// and how far round the player its shadows are drawn (metres)
-const SUN_DIRECTION = new THREE.Vector3(...OUTDOORS.sunFrom).normalize();
-const SHADOW_REACH = 24;
-
 const SKY = 0xa9c8de;
 
 // Indoors: no sky, a dim warm room lit from above, and lamps (the hearth's fire, candles) that
@@ -48,6 +43,11 @@ const SKY = 0xa9c8de;
 const OUTDOORS = Object.freeze({ background: SKY, fog: [55, 130], sky: [0xcfe0ff, 0x5a4a32, 1.1], sun: [0xfff0d8, 2.3], sunFrom: [-0.55, 1, 0.65], environment: 0.55 });
 const INDOORS = Object.freeze({ background: 0x140e0a, fog: [16, 38], sky: [0xffdcb4, 0x3a2716, 0.75], sun: [0xffe2b8, 0.9], sunFrom: [0.25, 1, 0.35], environment: 0.3 });
 const LAMPS = 2;
+
+// The sun: where it shines from (towards the north-east, so shadows fall away from the camera),
+// and how far round the player its shadows are drawn (metres)
+const SUN_DIRECTION = new THREE.Vector3(...OUTDOORS.sunFrom).normalize();
+const SHADOW_REACH = 24;
 
 // The hole cut through buildings in front of the player: how big (times the player's height on
 // the screen) and how quickly it opens and closes (per second)

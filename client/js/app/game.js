@@ -6,7 +6,12 @@
 // so they move smoothly whatever the frame rate. Each step's events (attacks, hits, deaths) start
 // the animations, projectiles, sparks and damage numbers that show them.
 //
-// Tap or click the ground to walk there, or an enemy to go and fight it; pinch or scroll to zoom.
+// Tap or click the ground to walk there, or an enemy to go and fight it, or a door or stairs to
+// go through them; pinch or scroll to zoom.
+//
+// The town and each floor of the tavern are maps of their own (core/interiors.js), drawn far
+// apart in the world (each at its origin), and only the one the player is on is shown: going
+// through a door or up the stairs, the screen dips to black and comes up on the other side.
 
 import * as THREE from "three";
 import { FALL_LANDS, REACTIONS } from "../characters/actions.js";
@@ -21,8 +26,10 @@ import { Squares } from "../world/squares.js";
 import { KINDS, Wounds } from "../world/wounds.js";
 import { buildGround } from "../world/ground.js";
 import { buildTown } from "../world/town3d.js";
+import { buildInterior, INTERIOR_CUT } from "../world/interiors3d.js";
 import { Minimap, treesOf } from "./minimap.js";
 import { CameraFollow } from "./camera.js";
+import { Doors } from "./doors.js";
 import { ACTIONS, ActionWheel, directionOf } from "./wheel.js";
 
 /** What every new character wears; their weapon (and a bow's quiver) are added to it. */
@@ -65,8 +72,15 @@ const SWIPE_MS = 600;
 // up to so many metres
 const LEAN = { share: 0.4, most: 4.5 };
 
+// Going through a door or up the stairs, the screen comes up from black this fast (s)
+const FADE_IN = 0.45;
+
+// Embers rise from the hearth this often (a second)
+const EMBERS = 5;
+
 const _focus = new THREE.Vector3();
 const _lean = new THREE.Vector3();
+const _hearth = new THREE.Vector3();
 
 export class Game {
     /**
@@ -111,6 +125,18 @@ export class Game {
         this.lastTap = null;
         this.listeners = [];
         this.onDeath = () => {};
+
+        /** The map the player is on, the one shown (world.maps), and the game's clock (s). */
+        this.mapId = "town";
+        this.clock = 0;
+
+        /** Each floor inside (interiors3d.js's), by map id. */
+        this.interiors = new Map();
+    }
+
+    /** Where a map is drawn in the world ([x, z] metres). */
+    originOf(mapId) {
+        return this.world.maps?.[mapId]?.origin ?? [0, 0];
     }
 
     /**
@@ -128,7 +154,8 @@ export class Game {
 
             return result;
         };
-        const steps = world.town.pieces.length + world.trees.length + 6;
+        const floors = Object.values(world.maps ?? {}).filter(({ id }) => id !== "town");
+        const steps = world.town.pieces.length + world.trees.length + 6 + floors.length;
         let done = 0;
         const step = (label) => onProgress({ label, done: ++done, total: steps });
 
@@ -147,6 +174,19 @@ export class Game {
         }));
         view.scene.add(this.town.object);
         view.setOccluders(this.town);
+
+        // Inside the tavern, each floor put away until the player goes in; and its doors and stairs
+        for (const map of floors) {
+            step(`Furnishing ${map.name}`);
+
+            const interior = await time(map.id, () => buildInterior(map));
+
+            interior.object.visible = false;
+            view.scene.add(interior.object);
+            this.interiors.set(map.id, interior);
+        }
+
+        this.doors = new Doors(world, view.scene);
         step(`Dressing ${this.hero.name}`);
 
         // The player
@@ -168,10 +208,7 @@ export class Game {
         this.effects = new Effects(view.scene);
 
         for (const actor of this.battle.actors) {
-            const avatar = this.avatars.get(actor.id);
-
-            avatar.place(actor.x, actor.y, actor.facing);
-            this.previous.set(actor.id, { x: actor.x, y: actor.y });
+            this.#place(actor);
         }
 
         // The camera starts on the player, looking north
@@ -185,6 +222,11 @@ export class Game {
         this.minimap.show(this.minimapShown ?? true);
         this.wheel = new ActionWheel(this.hud.root);
         this.effects.camera = view.camera;
+
+        // The black the screen dips to going through a door
+        this.curtain = document.createElement("div");
+        this.curtain.className = "curtain";
+        this.hud.root.prepend(this.curtain);
 
         // Compile every shader now rather than when each thing first comes into view
         await time("shaders", () => view.renderer.compileAsync(view.scene, view.camera));
@@ -207,8 +249,11 @@ export class Game {
 
         // Footsteps, on whatever ground the foot lands on
         avatar.walker.onStep = (foot, speed) => {
+            const mapId = this.battle.actor(id)?.map ?? "town";
+            const map = this.world.maps?.[mapId] ?? this.world;
+            const [ox, oz] = this.originOf(mapId);
             const { x, z } = avatar.object.position;
-            const ground = this.world.ground[Math.floor(z)]?.[Math.floor(x)];
+            const ground = map.ground[Math.floor(z - oz)]?.[Math.floor(x - ox)];
 
             this.sound?.step(ground, avatar.object.position, speed);
         };
@@ -230,7 +275,7 @@ export class Game {
         this.lastFrame = performance.now();
         this.#listen();
         this.view.renderer.setAnimationLoop((now) => this.#frame(now));
-        this.sound?.setAmbient(true);
+        this.sound?.setAmbient(this.mapId === "town");
         this.sound?.setPaused(false);
     }
 
@@ -277,14 +322,25 @@ export class Game {
         this.ground?.material.dispose();
         this.effects?.group.traverse((node) => node.geometry?.dispose());
 
+        // The interiors' merged meshes (their materials are shared by every game)
+        for (const interior of this.interiors.values()) {
+            interior.object.traverse((node) => node.geometry?.dispose());
+            interior.object.removeFromParent();
+        }
+
+        this.interiors.clear();
+        this.doors?.dispose();
+
         for (const object of [this.ground, this.town?.object, this.effects?.group, this.effects?.marker, this.effects?.targetRing, this.squares?.object]) {
             object?.removeFromParent();
         }
 
         this.minimap?.dispose();
         this.wheel?.element.remove();
+        this.curtain?.remove();
         this.view.setOccluders(null);
         this.view.setFocus(null);
+        this.view.setIndoors(null);
     }
 
     /** Show the minimap or not. */
@@ -295,8 +351,9 @@ export class Game {
 
     /** Show the squares characters walk on, which are blocked, and everyone's path (debug mode). */
     showSquares(on) {
-        if (on && !this.squares) {
-            this.squares = new Squares(this.world);
+        if (on && this.squares?.mapId !== this.mapId) {
+            this.squares?.object.removeFromParent();
+            this.squares = new Squares(this.world.maps?.[this.mapId] ?? this.world);
             this.view.scene.add(this.squares.object);
         }
 
@@ -385,15 +442,21 @@ export class Game {
     #update(dt, alpha) {
         const { battle, view, hud } = this;
 
+        this.clock += dt;
+
         for (const actor of battle.actors) {
             const avatar = this.avatars.get(actor.id);
             const previous = this.previous.get(actor.id);
+            const [ox, oz] = this.originOf(actor.map);
             const x = previous.x + (actor.x - previous.x) * alpha;
             const z = previous.y + (actor.y - previous.y) * alpha;
 
             avatar.actions.setGuard(!actor.dead && this.#fighting(actor));
-            avatar.update(dt, x, z, actor.facing, !actor.attack);
+            avatar.update(dt, ox + x, oz + z, actor.facing, !actor.attack);
             this.#updateBody(actor, avatar, dt);
+
+            // (Only those on the player's map are seen)
+            avatar.object.visible &&= actor.map === this.mapId;
             hud.setStamina(actor.id, actor.stamina, actor.maxStamina);
         }
 
@@ -402,8 +465,9 @@ export class Game {
             const flight = this.flights.get(projectile.id);
 
             if (flight) {
-                const x = flight.previous.x + (projectile.x - flight.previous.x) * alpha;
-                const z = flight.previous.y + (projectile.y - flight.previous.y) * alpha;
+                const [ox, oz] = this.originOf(projectile.map);
+                const x = ox + flight.previous.x + (projectile.x - flight.previous.x) * alpha;
+                const z = oz + flight.previous.y + (projectile.y - flight.previous.y) * alpha;
                 const target = this.avatars.get(projectile.target);
                 const left = Math.hypot(target.object.position.x - x, target.object.position.z - z);
                 const along = flight.distance > 0 ? Math.min(1, Math.max(0, 1 - left / flight.distance)) : 1;
@@ -445,14 +509,15 @@ export class Game {
             this.squares.update(battle);
         }
         this.#follow(dt);
+        this.#inside(dt);
 
-        // Bars over the other characters' heads
+        // Bars over the heads of the others on the player's map
         for (const actor of battle.actors) {
             if (actor.id !== "player") {
                 const avatar = this.avatars.get(actor.id);
                 const head = avatar.point(1.08);
 
-                hud.place(actor.id, actor.dead ? null : view.toScreen(head));
+                hud.place(actor.id, actor.dead || actor.map !== this.mapId ? null : view.toScreen(head));
             }
         }
 
@@ -479,7 +544,7 @@ export class Game {
 
         const reach = longestReach(actor.weapon) + 2;
 
-        return this.battle.actors.some((other) => other.team !== actor.team && !other.dead && Math.hypot(other.x - actor.x, other.y - actor.y) <= reach && this.battle.canSee(actor, other));
+        return this.battle.actors.some((other) => other.team !== actor.team && !other.dead && other.map === actor.map && Math.hypot(other.x - actor.x, other.y - actor.y) <= reach && this.battle.canSee(actor, other));
     }
 
     // The dead lie still a while, then sink out of sight until they come back to life
@@ -518,7 +583,8 @@ export class Game {
         _focus.copy(position);
 
         if (foe) {
-            const lean = _lean.set(foe.x - position.x, 0, foe.y - position.z).multiplyScalar(LEAN.share);
+            const [ox, oz] = this.originOf(foe.map);
+            const lean = _lean.set(ox + foe.x - position.x, 0, oz + foe.y - position.z).multiplyScalar(LEAN.share);
 
             _focus.add(lean.clampLength(0, LEAN.most));
         }
@@ -544,19 +610,24 @@ export class Game {
         const { battle, view } = this;
         const actor = battle.actor("player");
         const me = this.avatars.get("player");
+        const [ox, oz] = this.originOf(this.mapId);
         const rect = view.canvas.getBoundingClientRect();
         const corners = [[rect.left, rect.top], [rect.right, rect.top], [rect.right, rect.bottom], [rect.left, rect.bottom]].map(([x, y]) => {
             const ground = view.groundAt(x, y);
 
-            return ground ? [ground.x, ground.z] : null;
+            return ground ? [ground.x - ox, ground.z - oz] : null;
         });
 
+        if (minimap.map.id !== this.mapId) {
+            minimap.setMap(this.world.maps[this.mapId]);
+        }
+
         minimap.draw({
-            player: actor.dead ? null : { x: me.object.position.x, z: me.object.position.z, facing: me.facing },
-            others: battle.actors.filter((other) => other !== actor && !other.dead).map((other) => {
+            player: actor.dead ? null : { x: me.object.position.x - ox, z: me.object.position.z - oz, facing: me.facing },
+            others: battle.actors.filter((other) => other !== actor && !other.dead && other.map === this.mapId).map((other) => {
                 const position = this.avatars.get(other.id).object.position;
 
-                return { x: position.x, z: position.z, hostile: other.team !== actor.team, targeted: other === target };
+                return { x: position.x - ox, z: position.z - oz, hostile: other.team !== actor.team, targeted: other === target };
             }),
             destination: actor.order?.type === "move" ? [actor.order.to[0] + 0.5, actor.order.to[1] + 0.5] : null,
             view: corners,
@@ -569,7 +640,7 @@ export class Game {
         const order = player && !player.dead ? player.order : null;
         const target = order?.type === "engage" ? this.battle.actor(order.target) : null;
 
-        return target && !target.dead ? target : null;
+        return target && !target.dead && target.map === player.map ? target : null;
     }
 
     // Who the player is fighting: who they were told to fight, or the nearest enemy after them
@@ -583,13 +654,93 @@ export class Game {
 
         const ordered = player.order?.type === "engage" ? battle.actor(player.order.target) : null;
 
-        if (ordered && !ordered.dead) {
+        if (ordered && !ordered.dead && ordered.map === player.map) {
             return ordered;
         }
 
-        const after = battle.actors.filter((actor) => actor.team !== player.team && !actor.dead && (actor.target === player.id || actor.attack?.target === player.id || player.attack?.target === actor.id));
+        const after = battle.actors.filter((actor) => actor.team !== player.team && !actor.dead && actor.map === player.map && (actor.target === player.id || actor.attack?.target === player.id || player.attack?.target === actor.id));
 
         return after.sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))[0] ?? null;
+    }
+
+    // --- Inside and out ---
+
+    // Put a character where it is in the battle, on its map, at once (not walking there)
+    #place(actor) {
+        const [ox, oz] = this.originOf(actor.map);
+
+        this.avatars.get(actor.id).place(ox + actor.x, oz + actor.y, actor.facing);
+        this.previous.set(actor.id, { x: actor.x, y: actor.y });
+    }
+
+    // The player has come through a door or up or down the stairs (or woken elsewhere): the
+    // screen comes up from black on the map they're on, the camera behind them the way they face
+    #arrive(actor) {
+        const position = this.avatars.get("player").object.position;
+
+        this.#showMap(actor.map);
+        this.cameraFollow = new CameraFollow({ x: position.x, z: position.z, yaw: Math.atan2(-Math.sin(actor.facing), -Math.cos(actor.facing)) });
+        this.#follow(0);
+        this.effects.markerAge = Infinity;
+
+        if (this.curtain) {
+            this.curtain.style.transition = "none";
+            this.curtain.style.opacity = "1";
+            this.curtain.getBoundingClientRect();
+            this.curtain.style.transition = `opacity ${FADE_IN}s ease-out`;
+            this.curtain.style.opacity = "0";
+        }
+    }
+
+    // Show one map (the town, or a floor inside), lit for being out or in, and nothing of the others
+    #showMap(mapId) {
+        const interior = this.interiors.get(mapId) ?? null;
+
+        this.mapId = mapId;
+        this.town.object.visible = !interior;
+        this.ground.visible = !interior;
+
+        for (const [id, each] of this.interiors) {
+            each.object.visible = id === mapId;
+        }
+
+        this.view.setIndoors(interior);
+        this.view.setOccluders(interior ? null : this.town);
+        this.minimap?.setMap(this.world.maps[mapId]);
+
+        if (this.running) {
+            this.sound?.setAmbient(!interior);
+        }
+
+        if (this.squares?.object.visible) {
+            this.showSquares(true);
+        }
+    }
+
+    // Indoors: the walls and ceilings between the camera and the player cut away, the fires and
+    // the spit turning, the lamps flickering, embers rising from the hearth; and, in or out, the
+    // glow round the doors and stairs the player's making for
+    #inside(dt) {
+        const interior = this.interiors.get(this.mapId);
+        const player = this.battle.actor("player");
+
+        if (interior) {
+            const me = this.avatars.get("player").object.position;
+            const camera = this.view.camera.position;
+
+            INTERIOR_CUT.player.value.copy(me);
+            INTERIOR_CUT.toCamera.value.set(camera.x - me.x, camera.z - me.z).normalize();
+            interior.update(dt, this.clock);
+            this.view.flicker(this.clock);
+
+            if (interior.hearth && Math.random() < dt * EMBERS) {
+                const { x, y, z } = interior.hearth;
+
+                this.effects.burst("embers", _hearth.set(x + (Math.random() - 0.5) * 0.6, y, z + (Math.random() - 0.5) * 1.2));
+            }
+        }
+
+        this.doors?.update(dt, this.clock, { map: this.mapId, heading: player?.order?.type === "enter" ? player.order.link : null });
     }
 
     // --- What happened in the battle ---
@@ -611,11 +762,13 @@ export class Game {
                     const hand = WEAPONS[battle.actor(event.id).weapon].equipment.includes("bow") ? "Left" : "Right";
                     const from = avatar.hand(hand);
 
+                    const [ox, oz] = this.originOf(battle.actor(event.id).map);
+
                     effects.launch(event.projectile, event.kind, from);
                     this.sound?.launch(event.kind, from);
                     this.flights.set(event.projectile, {
                         previous: new THREE.Vector2(event.x, event.y),
-                        distance: Math.hypot(target.object.position.x - event.x, target.object.position.z - event.y),
+                        distance: Math.hypot(target.object.position.x - ox - event.x, target.object.position.z - oz - event.y),
                         height: from.y,
                         arc: event.kind === "arrow" ? 0.25 : 0.05,
                     });
@@ -684,13 +837,28 @@ export class Game {
                     this.onDeath(event);
                     break;
                 }
+                case "cross": {
+                    const actor = battle.actor(event.id);
+
+                    this.#place(actor);
+
+                    if (event.id === "player") {
+                        this.#arrive(actor);
+                    }
+
+                    break;
+                }
                 case "respawn": {
                     const actor = battle.actor(event.id);
 
                     avatar.actions.revive();
-                    avatar.place(actor.x, actor.y, actor.facing);
+                    this.#place(actor);
                     avatar.deadFor = 0;
-                    this.previous.set(actor.id, { x: actor.x, y: actor.y });
+
+                    if (event.id === "player" && actor.map !== this.mapId) {
+                        this.#arrive(actor);
+                    }
+
                     effects.clearStuck(avatar.character.rig.bone("Spine2"));
                     this.wounds.get(event.id)?.clear();
                     effects.drain(this.pools.get(event.id)?.spot);
@@ -937,14 +1105,16 @@ export class Game {
 
     /**
      * A tap or click at a point on the screen (client pixels), at `time` (ms, as performance.now()):
-     * fight who's there, or walk there. Tapped twice in quick succession (or with `run`:
-     * shift-clicked), run there.
+     * fight who's there, go through the door or up or down the stairs there, or walk there.
+     * Tapped twice in quick succession (or with `run`: shift-clicked), run there.
      */
     tap(clientX, clientY, { run = false, time = performance.now() } = {}) {
         const enemy = this.#whoIsAt(clientX, clientY, { player: false })?.actor ?? null;
-        const ground = enemy ? null : this.view.groundAt(clientX, clientY);
+        const door = enemy ? null : this.doors?.at(this.view.rayAt(clientX, clientY), this.mapId) ?? null;
+        const ground = enemy || door ? null : this.view.groundAt(clientX, clientY);
+        const [ox, oz] = this.originOf(this.mapId);
 
-        this.#order({ enemy, ground: ground && [ground.x, ground.z] }, { clientX, clientY, run, time, from: "view" });
+        this.#order({ enemy, door, ground: ground && [ground.x - ox, ground.z - oz] }, { clientX, clientY, run, time, from: "view" });
     }
 
     /**
@@ -962,9 +1132,10 @@ export class Game {
         this.battle.command("player", { type: "ahead", facing: avatar.facing, run: true });
 
         const goal = player.order?.to;
+        const [ox, oz] = this.originOf(player.map);
 
         if (goal) {
-            this.effects.markTarget(goal[0] + 0.5, goal[1] + 0.5);
+            this.effects.markTarget(ox + goal[0] + 0.5, oz + goal[1] + 0.5);
         } else {
             this.sound?.play("denied");
         }
@@ -1000,7 +1171,7 @@ export class Game {
         for (const actor of this.battle.actors) {
             const mine = actor === player;
 
-            if (actor.dead || (mine && !withPlayer) || (!mine && actor.team === player.team)) {
+            if (actor.dead || (mine && !withPlayer) || (!mine && actor.team === player.team) || actor.map !== player.map) {
                 continue;
             }
 
@@ -1085,22 +1256,23 @@ export class Game {
     }
 
     /**
-     * A tap on the minimap, at a point in the world (x, z metres) and on the screen (clientX,
-     * clientY): fight an enemy within `reach` metres of it, or walk there. Twice in quick
-     * succession, run.
+     * A tap on the minimap, at a point on the player's map (x, z metres) and on the screen
+     * (clientX, clientY): fight an enemy within `reach` metres of it, or walk there. Twice in
+     * quick succession, run.
      */
     mapTap({ x, z, reach = 3, clientX = 0, clientY = 0, run = false, time = performance.now() }) {
         const player = this.battle.actor("player");
-        const enemies = this.battle.actors.filter((actor) => player && actor.team !== player.team && !actor.dead);
+        const enemies = this.battle.actors.filter((actor) => player && actor.team !== player.team && !actor.dead && actor.map === player.map);
         const distance = (actor) => Math.hypot(actor.x - x, actor.y - z);
         const enemy = enemies.filter((actor) => distance(actor) <= reach).sort((a, b) => distance(a) - distance(b))[0] ?? null;
 
         this.#order({ enemy, ground: enemy ? null : [x, z] }, { clientX, clientY, run, time, from: "map" });
     }
 
-    // Send the player to fight an enemy, or to a point on the ground ([x, z] metres), running if
-    // told to or tapped twice in quick succession (in the same place: the view or the minimap)
-    #order({ enemy, ground }, { clientX, clientY, run, time, from }) {
+    // Send the player to fight an enemy, through a door (or up or down the stairs), or to a point
+    // on the ground ([x, z] metres, on their map), running if told to or tapped twice in quick
+    // succession (in the same place: the view or the minimap)
+    #order({ enemy, door = null, ground }, { clientX, clientY, run, time, from }) {
         const player = this.battle.actor("player");
         const last = this.lastTap;
 
@@ -1124,17 +1296,27 @@ export class Game {
             return;
         }
 
+        // The door's edge glows green as they make for it
+        if (door) {
+            this.battle.command("player", { type: "enter", link: door.link.id, run });
+            this.doors.light(door, this.clock);
+
+            return;
+        }
+
         if (!ground) {
             return;
         }
 
-        const x = Math.min(this.world.width - 1, Math.max(0, Math.floor(ground[0])));
-        const y = Math.min(this.world.height - 1, Math.max(0, Math.floor(ground[1])));
+        const map = this.world.maps?.[player.map] ?? this.world;
+        const [ox, oz] = this.originOf(player.map);
+        const x = Math.min(map.width - 1, Math.max(0, Math.floor(ground[0])));
+        const y = Math.min(map.height - 1, Math.max(0, Math.floor(ground[1])));
 
         this.battle.command("player", { type: "move", to: [x, y], run });
 
         const goal = this.battle.actor("player").order?.to ?? [x, y];
 
-        this.effects.markTarget(goal[0] + 0.5, goal[1] + 0.5);
+        this.effects.markTarget(ox + goal[0] + 0.5, oz + goal[1] + 0.5);
     }
 }

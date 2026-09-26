@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import { cleanName, defaultHero, HUMAN_TONES, randomHero, suggestName } from "../client/js/app/heroes.js";
 import { formatBytes, Loader } from "../client/js/app/loader.js";
 import { ICONS } from "../client/js/app/icons.js";
-import { buildingsOf, mapColours, treesOf } from "../client/js/app/minimap.js";
+import { buildingsOf, interiorColours, mapColours, treesOf } from "../client/js/app/minimap.js";
 import { ACTIONS, DIRECTIONS, directionOf, sectorPath, WHEELS } from "../client/js/app/wheel.js";
 import { SPELLS } from "../client/js/core/spells.js";
 import { isHero, loadSave, loadSettings, newSeed, SAVE_VERSION, saveSettings, SETTINGS_DEFAULTS, writeSave, clearSave } from "../client/js/app/save.js";
@@ -217,6 +217,21 @@ describe("the minimap (minimap.js)", () => {
             const [r, g, b] = colourAt(x, y);
 
             assert.ok(greenest([r, g, b]) && r + g + b < 200, `a tree at ${x}, ${y}`);
+        }
+    });
+
+    it("colours the floors inside the tavern: the floor, and walls, stairs and furniture on it", () => {
+        for (const map of [world.maps.taproom, world.maps.upstairs]) {
+            const inside = interiorColours(map);
+            const at = ([x, y]) => [...inside.subarray((y * map.width + x) * 4, (y * map.width + x) * 4 + 3)];
+            const floor = at(map.marks["."][0]);
+            const differs = (a, b) => a.some((value, k) => Math.abs(value - b[k]) > 20);
+
+            assert.equal(inside.length, map.width * map.height * 4);
+
+            for (const piece of map.pieces.filter(({ x, y }) => map.blocked[y][x])) {
+                assert.ok(differs(at([piece.x, piece.y]), floor), `${map.id}'s ${piece.kind} stands out from the floor`);
+            }
         }
     });
 });

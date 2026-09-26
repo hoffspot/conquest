@@ -1,6 +1,6 @@
-// Debug mode's view of the squares characters walk on: a grid over the ground, the blocked
-// squares tinted red, and each character's path ahead of it as a line (the player's gold, the
-// others' red).
+// Debug mode's view of the squares characters walk on, on one map (the town, or a floor of the
+// tavern): a grid over the ground, the blocked squares tinted red, and the path ahead of each
+// character there as a line (the player's gold, the others' red).
 
 import * as THREE from "three";
 
@@ -29,9 +29,9 @@ void main() {
 const PATH_POINTS = 512;
 
 export class Squares {
-    /** @param {object} world - From generateWorld (core/world.js). */
-    constructor(world) {
-        const { width, height, blocked } = world;
+    /** @param {object} map - One of generateWorld's maps (core/world.js): the town, or a floor inside. */
+    constructor(map) {
+        const { width, height, blocked, origin = [0, 0], id = "town" } = map;
         const data = new Uint8Array(width * height * 4);
 
         for (let y = 0; y < height; y++) {
@@ -71,9 +71,13 @@ export class Squares {
         this.object = new THREE.Group();
         this.object.name = "squares";
         this.object.add(grid, this.paths);
+        this.object.position.set(origin[0], 0, origin[1]);
+
+        /** Which map it's of. */
+        this.mapId = id;
     }
 
-    /** Draw each character's path, from where it is through the squares ahead of it. */
+    /** Draw the path of each character on its map, from where it is through the squares ahead of it. */
     update(battle) {
         const geometry = this.paths.geometry;
         const positions = geometry.attributes.position.array;
@@ -83,7 +87,7 @@ export class Squares {
         let count = 0;
 
         for (const actor of battle.actors) {
-            if (actor.dead) {
+            if (actor.dead || (actor.map ?? "town") !== this.mapId) {
                 continue;
             }
 

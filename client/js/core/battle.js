@@ -445,6 +445,16 @@ export class Battle {
 
             if (!target || target.dead || target.team === actor.team) {
                 actor.order = null;
+            } else if (target.map !== actor.map) {
+                // Gone through a door or up the stairs from here: after them, the same way
+                const trail = target.crossed;
+                const link = trail?.from === actor.map ? this.links.find(({ id }) => id === trail.link) : null;
+
+                if (link && this.#goThrough(actor, link)) {
+                    return;
+                }
+
+                actor.order = null;
             } else {
                 this.#pursue(actor, target);
 

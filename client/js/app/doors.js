@@ -59,7 +59,7 @@ function shapeOf(world, link, end) {
         const across = [Math.cos(door.facing), -Math.sin(door.facing)];
         const half = door.width / 2 + 0.08;
         const [bottom, top] = [door.floor - 0.06, door.floor + door.height + 0.1];
-        const at = (a, y, o = 0.12) => [door.x + across[0] * a + out[0] * o, y, door.z + across[1] * a + out[1] * o];
+        const at = (a, y, o = 0.3) => [door.x + across[0] * a + out[0] * o, y, door.z + across[1] * a + out[1] * o];
         const corners = [at(-half, bottom), at(half, bottom), at(half, top), at(-half, top)];
         const xs = corners.map(([x]) => x);
         const zs = corners.map(([, , z]) => z);
