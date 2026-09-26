@@ -55,7 +55,11 @@ export const SIGHT = 12;
 export const KINDS = Object.freeze({
     player: { hp: 50, speed: 1.7, respawn: 5000 },
     orc: { hp: 50, speed: 1.1, chase: 1.8, respawn: 30000 },
+    folk: { hp: 50, speed: 1.2, respawn: 5000 },
 });
+
+/** Are two characters enemies: on different teams, and neither one of the folk no one fights? */
+export const hostile = (a, b) => a.team !== b.team && !a.neutral && !b.neutral;
 
 /**
  * How many times as fast as it walks a character sprints: as people do, walking at about 1.4
@@ -87,6 +91,9 @@ const BLOCKED_WAIT_MS = 400;
 // Whoever is in the way at a link's end, a character this near it goes through anyway (squares)
 const LINK_REACH = 1;
 
+// One of the folk that can't get to where it's going for this long (ms) goes somewhere else
+const ROUTINE_GIVE_UP_MS = 8000;
+
 const same = (a, b) => a !== null && b !== null && a[0] === b[0] && a[1] === b[1];
 
 export class Battle {
@@ -102,6 +109,9 @@ export class Battle {
         this.maps = world.maps ?? { town: world };
         this.links = world.links ?? [];
         this.random = createRandom(seed);
+
+        // The folk's comings and goings (apart, so they don't change how the fighting goes)
+        this.chance = createRandom(seed + 7919);
         this.time = 0;
         this.actors = [];
         this.projectiles = [];
@@ -112,10 +122,12 @@ export class Battle {
 
     /**
      * Add a character: { id, kind (a KINDS key), name, weapon (a WEAPONS key), team, square
-     * ([x, y]), map (a map's id: "town" to start with), ai ("patrol" for enemies), patrol ([[x,
-     * y], [x, y]], on its map) }. It comes back to life where it's added.
+     * ([x, y]), map (a map's id: "town" to start with), ai ("patrol" for enemies, "routine" for
+     * the folk), patrol ([[x, y], [x, y]], on its map), neutral (one of the folk: no one fights
+     * them, and they fight no one), routine (the folk's: see #routine), facing }. It comes back
+     * to life where it's added.
      */
-    add({ id, kind, name = kind, weapon, team, square, map = "town", ai = null, patrol = null }) {
+    add({ id, kind, name = kind, weapon = null, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, facing = 0 }) {
         const type = KINDS[kind];
         const actor = {
             id,
@@ -151,7 +163,13 @@ export class Battle {
             walkPace: type.speed,
             running: false,
             // Which way it faces: radians from south (+y), turning towards east (+x)
-            facing: 0,
+            facing,
+            neutral,
+            routine,
+            // The folk's routine: the stop it's making for, whether it's there, and since when
+            stop: 0,
+            arrived: false,
+            stopSince: 0,
             order: null,
             attack: null,
             readyAt: 0,
@@ -282,7 +300,7 @@ export class Battle {
                 return { ok: false, reason: "dead" };
             }
 
-            if (target.team === actor.team) {
+            if (!hostile(actor, target)) {
                 return { ok: false, reason: "target" };
             }
 
@@ -411,9 +429,87 @@ export class Battle {
 
         if (actor.ai === "patrol") {
             this.#patrol(actor);
+        } else if (actor.ai === "routine") {
+            this.#routine(actor);
         } else {
             this.#obey(actor);
         }
+    }
+
+    /**
+     * The folk going about their business (actor.routine): seated ({ seated: true, act, every:
+     * [ms, ms] }), doing its act (a toast) every so often; or going from stop to stop ({ stops:
+     * [{ square, facing, act, group }], wait: [ms, ms], order: "cycle" or "alternate" }), each in
+     * turn or (alternating) one of another group at random, waiting at each, facing its way, and
+     * doing its act there (an "act" event: { id, act }).
+     */
+    #routine(actor) {
+        const routine = actor.routine;
+        const between = ([least, most]) => least + this.chance.next() * (most - least);
+
+        actor.walkPace = actor.speed;
+
+        if (routine.seated) {
+            if (this.time >= actor.waitUntil) {
+                // (Not straight away: a while after sitting down)
+                if (actor.waitUntil > 0) {
+                    this.#emit("act", { id: actor.id, act: routine.act });
+                }
+
+                actor.waitUntil = this.time + between(routine.every);
+            }
+
+            return;
+        }
+
+        const stop = routine.stops[actor.stop];
+        const idle = !actor.path.length && !actor.to;
+
+        if (!idle) {
+            return;
+        }
+
+        // There: on its square, or next to it with someone standing on it
+        const there = same(actor.square, stop.square) || (distanceBetween(actor.square, stop.square) <= 1 && this.#taken(stop.square, actor));
+
+        if (there && !actor.arrived) {
+            actor.arrived = true;
+            actor.facing = stop.facing;
+            actor.waitUntil = this.time + between(stop.wait ?? routine.wait);
+
+            if (stop.act) {
+                this.#emit("act", { id: actor.id, act: stop.act });
+            }
+
+            return;
+        }
+
+        // Done here (or can't get there for a long while): on to the next
+        if ((there && this.time >= actor.waitUntil) || (!actor.arrived && this.time - actor.stopSince > ROUTINE_GIVE_UP_MS)) {
+            actor.stop = this.#nextStop(actor);
+            actor.arrived = false;
+            actor.stopSince = this.time;
+            this.#pathTo(actor, routine.stops[actor.stop].square);
+
+            return;
+        }
+
+        if (!there && (!same(actor.pathGoal, stop.square) || this.time - actor.lastPathAt >= REPATH_MS)) {
+            this.#pathTo(actor, stop.square);
+        }
+    }
+
+    // The stop after this one: the next in turn, or one of another group at random
+    #nextStop(actor) {
+        const { stops, order = "cycle" } = actor.routine;
+
+        if (order === "alternate") {
+            const others = stops.map((stop, k) => k).filter((k) => stops[k].group !== stops[actor.stop].group);
+
+            return others[Math.floor(this.chance.next() * others.length)] ?? actor.stop;
+        }
+
+        return (actor.stop + 1) % stops.length;
     }
 
     // The player: follow orders, and attack whatever is within reach when standing still
@@ -443,7 +539,7 @@ export class Battle {
         if (order?.type === "engage") {
             const target = this.actor(order.target);
 
-            if (!target || target.dead || target.team === actor.team) {
+            if (!target || target.dead || !hostile(actor, target)) {
                 actor.order = null;
             } else if (target.map !== actor.map) {
                 // Gone through a door or up the stairs from here: after them, the same way
@@ -583,7 +679,7 @@ export class Battle {
         let bestDistance = Infinity;
 
         for (const other of this.actors) {
-            if (other.team !== actor.team && !other.dead && other.map === actor.map && test(other)) {
+            if (hostile(other, actor) && !other.dead && other.map === actor.map && test(other)) {
                 const distance = distanceBetween(actor.square, other.square);
 
                 if (distance < bestDistance) {

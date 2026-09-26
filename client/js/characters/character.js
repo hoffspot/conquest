@@ -10,6 +10,7 @@
 import * as THREE from "three";
 import { Rig } from "./rig.js";
 import { EQUIPMENT, socketOn } from "./equipment.js";
+import { buildDrape, drapeMaterial, DRAPES } from "./drapes.js";
 import { buildGarment, GARMENTS, measureBody, paintGarment, texelMap } from "./garments.js";
 import { BEARDS, buildHair, hairTexture, HAIRSTYLES } from "./hair.js";
 import { buildItem } from "./items.js";
@@ -122,6 +123,7 @@ export class Character {
         this.holds = {};
 
         const garmentIds = [];
+        const drapeIds = [];
         const itemIds = [];
 
         for (const id of this.equipment.values()) {
@@ -129,6 +131,8 @@ export class Character {
 
             if (entry.kind === "garment") {
                 garmentIds.push(id);
+            } else if (entry.kind === "drape") {
+                drapeIds.push(id);
             } else {
                 itemIds.push(id);
 
@@ -185,6 +189,21 @@ export class Character {
 
         this.setHidden(hidden);
 
+        // Skirts, gowns and aprons, hanging over what's under them
+        for (const id of drapeIds) {
+            const { geometry } = buildDrape(this, id, measures);
+            const mesh = new THREE.SkinnedMesh(geometry, this.#drapeMaterial(id));
+
+            mesh.name = id;
+            mesh.userData.drape = true;
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            mesh.bind(this.rig.skeleton, new THREE.Matrix4());
+            mesh.boundingSphere = this.mesh.boundingSphere;
+            this.object.add(mesh);
+            this.garments.push(mesh);
+        }
+
         // Items on their sockets
         let hairHidden = false;
 
@@ -221,6 +240,19 @@ export class Character {
             this.hairHidden = hairHidden;
             this.#buildHair();
         }
+    }
+
+    /** A drape's material, made once per kit. */
+    #drapeMaterial(id) {
+        const kit = this.kit;
+
+        kit.drapeMaterials ??= new Map();
+
+        if (!kit.drapeMaterials.has(id)) {
+            kit.drapeMaterials.set(id, drapeMaterial(DRAPES[id]));
+        }
+
+        return kit.drapeMaterials.get(id);
     }
 
     /** A garment's material, its texture painted once per kit. */

@@ -29,6 +29,8 @@ export function itemMaterial(name) {
             bone: { color: 0xe8dcc0, roughness: 0.55 },
             parchment: { color: 0xe6d8b0, roughness: 0.9 },
             crystal: { color: 0x7fd8ff, emissive: 0x2a8cff, emissiveIntensity: 1.2, roughness: 0.1, metalness: 0, transparent: true, opacity: 0.9 },
+            pewter: { color: 0x9a9ea0, metalness: 0.85, roughness: 0.42 },
+            foam: { color: 0xf3ead2, roughness: 0.95 },
         }[name];
 
         materials.set(name, new THREE.MeshStandardMaterial(settings));
@@ -393,6 +395,21 @@ function quiver() {
     return assemble(parts, "quiver");
 }
 
+// A tankard, held by its handle: the handle along the grip, the pewter body on the palm's side of
+// it, a head of foam on top
+function tankard() {
+    const body = 0.065;
+    const parts = [
+        [at(new THREE.CylinderGeometry(0.041, 0.045, 0.13, 14), body, 0.01, 0), "pewter"],
+        [at(new THREE.CylinderGeometry(0.046, 0.046, 0.01, 14), body, -0.052, 0), "pewter"],
+        [at(new THREE.CylinderGeometry(0.038, 0.038, 0.012, 14), body, 0.078, 0), "foam"],
+        [at(new THREE.SphereGeometry(0.026, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), body - 0.01, 0.082, 0.008), "foam"],
+        [at(new THREE.TorusGeometry(0.034, 0.007, 6, 12, Math.PI), 0.024, 0.01, 0, 0, 0, Math.PI / 2), "pewter"],
+    ];
+
+    return assemble(parts, "tankard");
+}
+
 function tusks(scale) {
     const parts = [];
 
@@ -455,6 +472,8 @@ export function buildItem(model, fit = {}) {
             return quiver();
         case "tusks":
             return tusks(fit.scale ?? 1);
+        case "tankard":
+            return tankard();
         default:
             throw new Error(`No item model "${model}"`);
     }

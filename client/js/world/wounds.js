@@ -478,7 +478,8 @@ export class Wounds {
             character.mesh.material = character.mesh.material.map((material, k) => (k === 0 ? character.materials.body : material));
         }
 
-        for (const garment of character.garments) {
+        // (Not drapes, a skirt or an apron: they aren't laid out on the body's texture)
+        for (const garment of character.garments.filter((mesh) => !mesh.userData.drape)) {
             garment.material = patch(garment.material, true);
         }
     }

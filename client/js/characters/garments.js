@@ -174,6 +174,14 @@ export const GARMENTS = Object.freeze({
     greaves: { label: "Greaves", slot: "shins", layer: 3, thickness: 0.014, smooth: 8, colour: "#a8aeb2", roughness: 0.3, metalness: 1, pattern: "plate", inside: (v) => (v.region === "leg" ? Math.min(v.leg - 0.56, 0.86 - v.leg) : OUTSIDE) },
     straps: { label: "Pack straps", slot: "straps", layer: 5, thickness: 0.012, smooth: 3, colour: "#2e1d12", roughness: 0.6, pattern: "leather", hidden: true, inside: (v, l) => (v.region === "torso" ? Math.min(0.016 * (l.height / 1.7) - Math.abs(Math.abs(v.x) - 0.085 * (l.height / 1.7)), v.y - l.armpit + 0.04) : OUTSIDE) },
     loincloth: { label: "Loincloth", slot: "underwear", layer: 0, thickness: 0.003, smooth: 3, colour: "#5b4632", roughness: 0.9, pattern: "leather", inside: bottoms((l) => l.hips + 0.03, 0.2) },
+
+    // The tavern's folk: a chemise with a low neck and short sleeves, and a bodice laced up the
+    // front over it, from under the waist to over the bust; and tunics in other colours
+    chemise: { label: "Chemise", slot: "shirt", layer: 1, thickness: 0.003, loose: 0.006, smooth: 4, colour: "#e6ddc8", roughness: 0.85, pattern: "cloth", inside: top((l) => l.hips - 0.03, 0.55, 0.075) },
+    bodice: { label: "Laced bodice", slot: "chest", layer: 2, thickness: 0.006, loose: 0.002, smooth: 6, colour: "#8c2020", roughness: 0.7, pattern: "laced", trim: "#e2d3a8", inside: band((l) => l.waist - 0.07, (l) => l.chest + 0.02) },
+    velvetBodice: { label: "Velvet bodice", slot: "chest", layer: 2, thickness: 0.006, loose: 0.002, smooth: 6, colour: "#1e1418", roughness: 0.5, pattern: "laced", trim: "#c9a24a", inside: band((l) => l.waist - 0.07, (l) => l.chest + 0.03) },
+    greenTunic: { label: "Green tunic", slot: "shirt", layer: 1, thickness: 0.004, loose: 0.008, smooth: 4, colour: "#3d5733", roughness: 0.85, pattern: "trim", trim: "#b89a55", inside: top((l) => l.hips - 0.06, 0.45) },
+    blueTunic: { label: "Blue tunic", slot: "shirt", layer: 1, thickness: 0.004, loose: 0.008, smooth: 4, colour: "#33456a", roughness: 0.85, pattern: "trim", trim: "#c8b27a", inside: top((l) => l.hips - 0.06, 0.45) },
 });
 
 /**
@@ -1156,6 +1164,28 @@ export function paintGarment(map, garment) {
 
                 shade = 0.92 + 0.08 * smoothstep(0, 0.1, band) + 0.04 * (fbm(x * 30, y * 30, z * 30, 2) - 0.5);
                 height = 0.5 + 0.3 * smoothstep(0, 0.08, band);
+                break;
+            }
+            case "laced": {
+                const weave = fbm(x * 160, y * 160, z * 160, 2);
+
+                shade = 0.9 + 0.12 * (weave - 0.5) + 0.06 * (fbm(x * 10, y * 10, z * 10, 2) - 0.5);
+                height = 0.5 + 0.2 * (weave - 0.5);
+
+                // Down the front: the gap between its edges, criss-crossed by a cord
+                if (z > 0 && Math.abs(x) < 0.022) {
+                    const frac = (value) => value - Math.floor(value);
+                    const cross = Math.min(Math.abs(frac((y + Math.abs(x)) * 55) - 0.5), Math.abs(frac((y - Math.abs(x)) * 55) - 0.5));
+
+                    if (cross < 0.12) {
+                        c = trim;
+                        height += 0.25;
+                    } else if (Math.abs(x) < 0.008) {
+                        shade *= 0.45;
+                        height -= 0.2;
+                    }
+                }
+
                 break;
             }
             case "trim": {

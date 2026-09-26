@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { gunzipSync } from "node:zlib";
 import * as THREE from "three";
+import { Actions, ATTACKS } from "../client/js/characters/actions.js";
 import { HumanData } from "../client/js/characters/body.js";
 import { parseBVH, retarget } from "../client/js/characters/bvh.js";
 import { allDetailTargetNames, DETAILS, detailTargets } from "../client/js/characters/details.js";
@@ -12,8 +13,9 @@ import { amplitude, cadence, CURVES, curveAt, NATURAL_SPEED, phaseName, RUN_CURV
 import { buildGarment, GARMENTS, measureBody, texelMap } from "../client/js/characters/garments.js";
 import { Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
 import { allBustTargetNames, allMacroTargetNames, bustTargets, components, MACRO_DEFAULTS, macroTargets } from "../client/js/characters/macro.js";
+import { buildDrape, DRAPES } from "../client/js/characters/drapes.js";
 import { decodeSection, encodeSection, Packer } from "../client/js/characters/pack.js";
-import { PRESETS } from "../client/js/characters/presets.js";
+import { FOLK, PRESETS } from "../client/js/characters/presets.js";
 import { JOINTS, jointOf, jointRotation, limitRotation, Rig } from "../client/js/characters/rig.js";
 import { paintEye, paintSkin, SkinAtlas } from "../client/js/characters/skin.js";
 
@@ -39,7 +41,7 @@ function figure(shape = {}) {
     rig.fit(joints);
     object.updateMatrixWorld(true);
 
-    return { human, rig, object, positions, normals: human.normals(positions), joints, height, holds: {} };
+    return { human, rig, object, positions, normals: human.normals(positions), joints, height, holds: {}, items: [] };
 }
 
 const DEG = Math.PI / 180;
@@ -783,13 +785,126 @@ describe("clothing and armour (garments.js)", () => {
             assert.ok(slots.has(entry.slot), `${id}'s slot ${entry.slot}`);
         }
 
-        for (const preset of Object.values(PRESETS)) {
+        for (const preset of [...Object.values(PRESETS), ...Object.values(FOLK)]) {
             for (const id of preset.equipment) {
                 assert.ok(EQUIPMENT[id], id);
             }
         }
 
         assert.ok(Object.values(ITEMS).every(({ socket }) => socket));
+    });
+});
+
+describe("skirts, gowns and aprons (drapes.js)", () => {
+    const f = figure(FOLK.wench.shape);
+    const measures = measureBody(f);
+    const { landmarks: l } = measures;
+
+    // Each vertex: where it is, and its skin weights' sum
+    const vertices = (geometry) => {
+        const position = geometry.attributes.position;
+        const weights = geometry.attributes.skinWeight.array;
+
+        return Array.from({ length: position.count }, (_, i) => ({ x: position.getX(i), y: position.getY(i), z: position.getZ(i), weight: weights[i * 4] + weights[i * 4 + 1] + weights[i * 4 + 2] + weights[i * 4 + 3] }));
+    };
+
+    it("hangs every drape from the waist, fitted round the body, flaring to its hem", () => {
+        for (const id of Object.keys(DRAPES)) {
+            const { geometry } = buildDrape(f, id, measures);
+            const points = vertices(geometry);
+            const top = Math.max(...points.map(({ y }) => y));
+            const hem = Math.min(...points.map(({ y }) => y));
+
+            assert.ok(points.every(({ x, y, z }) => [x, y, z].every(Number.isFinite)), `${id}: no broken vertices`);
+            assert.ok(points.every(({ weight }) => Math.abs(weight - 1) < 1e-5), `${id}: skin weights sum to one`);
+            assert.ok(Math.abs(top - (l.waist - 0.01 * (f.height / 1.7))) < 0.01, `${id} starts at the waist`);
+            assert.ok(hem < l.hips - 0.3, `${id} hangs well below the hips`);
+
+            // Wider at the hem than round the waist (at the sides)
+            const width = (y) => Math.max(...points.filter((p) => Math.abs(p.y - y) < 1e-4).map(({ x }) => Math.abs(x)));
+
+            assert.ok(width(hem) > width(top), `${id} flares`);
+        }
+
+        // The long ones reach the ankles; the apron only the thighs, and only at the front
+        assert.ok(Math.min(...vertices(buildDrape(f, "kirtle", measures).geometry).map(({ y }) => y)) < l.ankle + 0.05);
+
+        const apron = vertices(buildDrape(f, "apron", measures).geometry);
+        const middle = apron.reduce((sum, { z }) => sum + z, 0) / apron.length;
+
+        assert.ok(Math.min(...apron.map(({ y }) => y)) > l.ankle + 0.25);
+        assert.ok(apron.every(({ z }) => z > middle - 0.12), "the apron's at the front");
+    });
+
+    it("swings with the thighs and shins below the hips, each side with its own", () => {
+        const { geometry } = buildDrape(f, "skirt", measures);
+        const index = geometry.attributes.skinIndex.array;
+        const weight = geometry.attributes.skinWeight.array;
+        const position = geometry.attributes.position;
+        const bone = (name) => f.rig.index.get(name);
+        const on = (i, name) => [0, 1, 2, 3].reduce((sum, k) => sum + (index[i * 4 + k] === bone(name) ? weight[i * 4 + k] : 0), 0);
+        const hem = Math.min(...Array.from({ length: position.count }, (_, i) => position.getY(i)));
+
+        for (let i = 0; i < position.count; i++) {
+            if (Math.abs(position.getY(i) - hem) < 1e-4 && Math.abs(position.getX(i)) > 0.1) {
+                const side = position.getX(i) > 0 ? "Left" : "Right";
+
+                assert.ok(on(i, `${side}Leg`) > 0.5, "the hem's sides follow their shins");
+                assert.ok(on(i, "Hips") < 0.2);
+            }
+        }
+    });
+});
+
+describe("the tavern's folk (presets.js, actions.js)", () => {
+    // Pose a body by its walk and actions for a moment, and say where a bone is (world metres)
+    const posed = (f, set, seconds = 0.1) => {
+        const actions = new Actions(f);
+        const walker = new Walker(f);
+
+        walker.overlay = (dt) => actions.apply(dt);
+        walker.afterPose = () => actions.place();
+        set(actions);
+
+        for (let t = 0; t < seconds; t += 1 / 30) {
+            walker.update(1 / 30, { moved: 0 });
+        }
+
+        return (name) => f.rig.bone(name).getWorldPosition(new THREE.Vector3());
+    };
+
+    it("builds every one of the folk's bodies", () => {
+        for (const [name, preset] of Object.entries(FOLK)) {
+            const f = figure(preset.shape);
+
+            assert.ok(f.height > 1.4 && f.height < 2.1, `${name} is ${f.height} m`);
+        }
+    });
+
+    it("sits on a bench: the pelvis on the seat, thighs level, shins upright, feet on the floor", () => {
+        const f = figure(FOLK.drinker.shape);
+        const at = posed(f, (actions) => actions.setSeated(true));
+        const [hips, knee, ankle] = [at("LeftUpLeg"), at("LeftLeg"), at("LeftFoot")];
+
+        assert.ok(hips.y > 0.5 && hips.y < 0.62, `hips ${hips.y.toFixed(2)} m up`);
+        assert.ok(Math.abs(knee.y - hips.y) < 0.08, "thighs level");
+        assert.ok(knee.z - hips.z > 0.3, "knees forward");
+        assert.ok(Math.abs(ankle.z - knee.z) < 0.12 && ankle.y < 0.15, "shins upright, feet down");
+    });
+
+    it("raises a tankard high in a toast, then drinks from it", () => {
+        assert.ok(ATTACKS.toast && ATTACKS.serve && ATTACKS.pour);
+
+        const f = figure(FOLK.drinker.shape);
+        const rest = posed(f, (actions) => actions.setSeated(true))("RightHand").y;
+        const f2 = figure(FOLK.drinker.shape);
+        const at = posed(f2, (actions) => {
+            actions.setSeated(true);
+            actions.startAttack("toast", { hitAt: 1, duration: 3.2 });
+        }, 1);
+
+        assert.ok(at("RightHand").y > rest + 0.25, `raised from ${rest.toFixed(2)} to ${at("RightHand").y.toFixed(2)} m`);
+        assert.ok(at("RightHand").y > at("Neck").y, "above the shoulders");
     });
 });
 

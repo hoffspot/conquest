@@ -257,6 +257,9 @@ export class Walker {
         if (!planted) {
             this.release();
 
+            // (Sitting, the hands still reach: raising a tankard)
+            this.afterPose?.(dt);
+
             return;
         }
 

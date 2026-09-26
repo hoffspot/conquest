@@ -58,6 +58,12 @@ HH.bb.bb..C..K         ......WW.WWW.W
 ......DD......         .LL...WBBwWBBw
 ```
 
+The tavern's folk (`tavernFolk`, in `world.folk`): in the taproom, the barkeep behind the bar,
+going between it (facing the room) and the barrels (drawing ale); two serving wenches, going
+between the front of the bar and the tables, setting tankards down on them; and four patrons on
+the benches facing the tables, raising their tankards every 5 to 16 seconds. Upstairs, the madam
+keeps to her counter.
+
 Walls, hearths and stairs block walking and sight; furniture only walking. Each run of the same
 thing is one piece (a table, a bed, a stretch of wall), for the art and the minimap. The maps
 are joined by links, `world.links`: the tavern's door (from the town's `front` squares to the
@@ -123,6 +129,14 @@ draws anything.
 - **Dying and coming back.** At no hit points a character falls; the player gets up in the
   market square 5 seconds later, with full health, and the orc back in its corner 30 seconds
   later (whichever map they fell on).
+- **The folk** (`neutral`: the tavern's; `hostile(a, b)` says who fights whom) are on a team of
+  their own, and no one fights them: nobody sets on them, casts at them or attacks them, and they
+  fight no one. They go about their business (`ai: "routine"`): seated, raising a tankard every
+  so often (an `act` event), or going from stop to stop, each in turn or, alternating, one of
+  another group at random (the bar, then a table), waiting at each (seconds, from and to),
+  facing its way, and doing its act there (serving, pouring). Someone standing on a stop, they
+  stop next to it; unable to get to one for 8 seconds, they go on to the next. Their comings and
+  goings use their own random numbers, so they don't change how the fighting goes.
 - **Doors and stairs.** Every character is on a map (`actor.map`), and only sees, reaches,
   paths round and fights those on the same one. An `enter` order (`{ type: "enter", link }`)
   walks a character to one of the link's squares on its map; standing on one (or next to one
@@ -221,6 +235,14 @@ tavern's front door, the inside of the door, the side of the stairs, the stairwe
 a glow round its edge: a green ribbon with a softer band either side, drawn additively. A tap on
 one (after enemies, before the ground) tells the player to go through; it glows for at least
 1.2 s, and while the player's on their way, pulsing, then fades.
+
+**The folk in the game.** Each is built at the start, like the player and the orc (their looks
+and clothes are `presets.js`'s `FOLK`; with less hair than the player, as there are more of them,
+and nothing worn that never shows), lit but casting no shadows. They have no name plates, can't
+be tapped to fight, and show on the minimap as blue dots. Only those on the player's map are
+drawn and animated; coming onto a map, everyone on it is put where they are. Their acts play
+their animations, and a sound: tankards clinking (at the top of a toast, and softly as one's set
+down) and ale pouring from a tap.
 
 ### Inside the tavern (world/interiors3d.js)
 
@@ -614,7 +636,10 @@ casts shadows, and show the squares characters walk on (blocked ones red) with e
 
 A frame draws the town (a few dozen draw calls, about 40,000 triangles), the ground (one draw
 call) and two characters (a body, garments and hair each, about 35,000 to 45,000 triangles at
-the game's hair detail), and again from the sun for shadows. On phones the quality level draws
+the game's hair detail), and again from the sun for shadows. In the taproom there are nine
+characters (the folk casting no shadows): about 220 draw calls and 630,000 triangles; only the
+characters on the player's map are drawn or animated. Building the eight folk adds about three
+seconds to loading on a desktop computer. On phones the quality level draws
 fewer pixels and thinner hair and uses smaller textures, and debug mode shows what each costs.
 Everything that can be is built once: the town is merged, shaders are compiled while loading,
 particles reuse two buffers, blood on the ground is one instanced mesh, and projectiles and
@@ -632,13 +657,19 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   sprinting, then walking with no stamina), and a simulated minute on a generated world.
   `test/pathfinding.test.js`: A* paths, and the line of squares straight ahead (stopping at a
   wall or the world's edge, never cutting a blocked corner).
-- `test/interiors.test.js`: reading plans, the tavern's floors (every table, bench, bed and the
+- `test/interiors.test.js`: the tavern's folk (on benches facing tables, stops on the floor and
+  reachable, toasting now and then without moving, the wenches serving round the tables and back
+  to the bar, the barkeep pouring behind it, the madam at her counter, and no one fighting any of
+  them); reading plans, the tavern's floors (every table, bench, bed and the
   bar reachable), the tavern's door clear and reachable on 40 seeds, routes between maps, going
   in, up, down and out, orders only on the map a character is on, fighting only there, the orc
   following through the door and up the stairs and finding its way back, the player going after
   a target that goes through, respawning on the map started on, arrows fizzling; and the doors
   and stairs to tap: a target at each end, hit by a tap on it on its map only, glowing when
   tapped and while the player makes for it.
+- `test/characters.test.js` (with CHARACTERS.md's): the tavern's folk's bodies and clothes,
+  skirts, gowns and aprons (hanging from the waist, flaring to the hem, skinned to the thighs and
+  shins), sitting on a bench (thighs level, shins upright), and raising a tankard in a toast.
 - `test/wounds.test.js`: battle damage on the real body: the thresholds, a kind for every
   reaction, a mark every blow and a wound for each threshold crossed, each kind painted its own
   way (cuts bleed, blunt blows bruise, fire chars and never bleeds, arcane light leaves veins),
@@ -680,7 +711,8 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   the music's recordings downloaded and playing after a tap (and carrying on when the browser
   suspends or closes its sound), the camera keeping still for a step and following a long walk
   from behind, the target ring, tapping the tavern's door (lit green) to walk in and come out
-  inside it facing the room, up the stairs, down and out again, walking by the
+  inside it facing the room, the folk there (seen, without name plates, toasting, not to be
+  fought), up the stairs (the madam), down and out again, walking by the
   minimap, Game options and the volume sliders (remembered), the
   action wheel (stunning the orc, a flick refused while cooling down, then a heal), and a phone
   screen. Drawing without a GPU is slow, so fights are played on with

@@ -2,7 +2,9 @@
 //  - attacking with each weapon, and standing on guard while fighting;
 //  - flinching when hit, differently for each kind of blow (weapons.js: an attack's `reaction`),
 //    and from the side it came from;
-//  - falling down dead, and lying there.
+//  - falling down dead, and lying there;
+//  - the tavern's folk: sitting on a bench, raising a tankard and drinking from it, putting one
+//    down on a table, and drawing ale from a barrel.
 //
 // An attack is a few key poses timed round the moment that matters: key time 1 is when the blow
 // lands (or the arrow or spell is let go: the weapon's hitAt), and 2 is when the attack ends (its
@@ -52,6 +54,23 @@ const spine = ({ flex = 0, turn = 0, bend = 0 }) => ({
 // --- Guards: how each weapon is held while fighting ---
 
 const book = { at: [-0.3, -0.55, 0.6], point: [1, 0, 0], edge: [0, 0.35, 1] };
+const tankard = { at: [0.12, -0.46, 0.5], point: [0, 1, 0.08] };
+
+// Sitting on a bench: the thighs level and the shins upright, leaning a little over the table,
+// the free arm resting on it; the pelvis lowered to the seat (SEAT: metres above the floor, and
+// how far the hip joints sit above it) and back from the middle of the square
+const SEAT = { height: 0.45, flesh: 0.1, back: 0.14 };
+const SITTING = {
+    LeftUpLeg: { flex: 88, abduct: 7 },
+    RightUpLeg: { flex: 88, abduct: 7 },
+    LeftLeg: { flex: 86 },
+    RightLeg: { flex: 86 },
+    LeftFoot: { flex: 2 },
+    RightFoot: { flex: 2 },
+    ...spine({ flex: 8 }),
+    LeftArm: { flex: 38, abduct: 12 },
+    LeftForeArm: { flex: 78, pronate: 40 },
+};
 const fist = (side) => ({ at: [side * 0.3, 0.02, 0.42], point: [side * 0.7, 0.3, 0], edge: [0, 0.3, 1] });
 
 /** How each weapon is held while fighting, eased into when a fight starts. */
@@ -177,6 +196,37 @@ export const ATTACKS = Object.freeze({
             [2, { ...spine({}), Head: { flex: 0 } }],
         ],
     },
+    // Raising a tankard (held in the right hand, upright) high in a toast, then drinking from it,
+    // key 1 at the top of the toast
+    toast: {
+        keys: [
+            [0, { right: tankard, ...spine({}), Head: { flex: 0 } }],
+            [1, { right: { at: [0.08, 0.38, 0.55], point: [0, 1, 0.2] }, ...spine({ flex: -6 }), Head: { flex: -12 } }],
+            [1.25, { right: { at: [0.1, 0.45, 0.52], point: [0.05, 1, 0.15] }, ...spine({ flex: -7 }), Head: { flex: -12 } }],
+            [1.6, { right: { at: [0.3, 0.12, 0.24], point: [0.35, 0.55, -0.75] }, ...spine({ flex: -8 }), Head: { flex: -22 } }],
+            [1.85, { right: { at: [0.3, 0.13, 0.25], point: [0.35, 0.5, -0.8] }, ...spine({ flex: -8 }), Head: { flex: -24 } }],
+            [2, { right: tankard, ...spine({}), Head: { flex: 0 } }],
+        ],
+    },
+    // Putting a tankard down on a table in front, leaning over it (key 1 as it touches down)
+    serve: {
+        keys: [
+            [0, { right: tankard, ...spine({}), offset: [0, 0, 0] }],
+            [1, { right: { at: [0.12, -0.62, 0.78], point: [0, 1, 0.1] }, ...spine({ flex: 22 }), offset: [0, -0.02, 0.03] }],
+            [1.3, { right: { at: [0.12, -0.6, 0.76], point: [0, 1, 0.1] }, ...spine({ flex: 20 }), offset: [0, -0.02, 0.03] }],
+            [2, { right: tankard, ...spine({}), offset: [0, 0, 0] }],
+        ],
+    },
+    // Drawing ale: both hands to a barrel's tap in front, the left holding the tankard under it
+    pour: {
+        keys: [
+            [0, { ...spine({}) }],
+            [0.7, { right: { at: [0.15, -0.35, 0.72], point: [0.9, 0.2, 0.2], edge: [0, -1, 0] }, left: { at: [-0.05, -0.62, 0.7], point: [-0.9, 0, 0.3], edge: [0, 1, 0] }, ...spine({ flex: 14 }) }],
+            [1.4, { right: { at: [0.18, -0.4, 0.72], point: [0.9, 0.2, 0.2], edge: [0, -1, 0] }, left: { at: [-0.05, -0.6, 0.7], point: [-0.9, 0, 0.3], edge: [0, 1, 0] }, ...spine({ flex: 14 }) }],
+            [2, { ...spine({}) }],
+        ],
+    },
+
     // Stunning: drawn back by the left shoulder, then thrust open-palmed at the enemy
     castStun: {
         keys: [
@@ -442,6 +492,14 @@ export class Actions {
         // The hands' places to reach this frame, after the feet are planted
         this.reaching = [];
         this.body = null;
+
+        /** Sitting (on a bench), or standing. */
+        this.seated = false;
+    }
+
+    /** Sit down (on a bench) or stand. */
+    setSeated(on) {
+        this.seated = on;
     }
 
     /** Which weapon's guard to stand in while fighting (a GUARDS key; null for none). */
@@ -508,6 +566,10 @@ export class Actions {
         this.guard += Math.sign(this.guardTarget - this.guard) * Math.min(Math.abs(this.guardTarget - this.guard), dt * 4);
         this.reaching = [];
 
+        if (this.seated) {
+            this.#sit();
+        }
+
         if (this.guard > 0.001 && this.guardName) {
             this.#blend(GUARD_TRACKS.get(this.guardName), 0, smooth(0, 1, this.guard), false);
         }
@@ -546,7 +608,27 @@ export class Actions {
             return false;
         }
 
-        return true;
+        // (Sitting, the feet stay where the legs put them)
+        return !this.seated;
+    }
+
+    // Sit: the legs bent over the seat, the pelvis lowered onto it
+    #sit() {
+        const rig = this.rig;
+        const scale = this.character.height / 1.7;
+        const hips = rig.heads[rig.index.get("Hips")].y;
+
+        for (const [joint, angles] of Object.entries(SITTING)) {
+            const index = rig.index.get(joint);
+
+            if (index !== undefined) {
+                const { kind, side } = rig.joints[index];
+
+                rig.rotations[index].copy(jointRotation(kind, side, angles, _rotation));
+            }
+        }
+
+        rig.offset.set(0, SEAT.height + SEAT.flesh * scale - hips, -SEAT.back * scale);
     }
 
     /** Reach the hands to where the actions want them (once the body is posed and the feet planted). */
