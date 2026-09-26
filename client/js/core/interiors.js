@@ -181,6 +181,73 @@ export function tavernFloors() {
     return { taproom, upstairs, door, stairs: { id: "tavern-stairs", kind: "stairs", ends: [foot, top] } };
 }
 
+/**
+ * The tavern's folk: [{ id, name, preset (characters/presets.js FOLK), map, square, facing,
+ * routine }], each to add to the battle as one of the neutral folk (battle.js #routine). The
+ * barkeep goes between the bar and the barrels behind it, drawing ale; two serving wenches go
+ * between the bar and the tables, putting tankards down; patrons sit on the benches, raising
+ * their tankards now and then; upstairs, the madam keeps her counter.
+ */
+export function tavernFolk() {
+    const { s, e, n, w } = FACING;
+    const seated = (id, name, preset, square, facing, every) => ({ id, name, preset, map: "taproom", square, facing, routine: { seated: true, act: "toast", every } });
+    const serving = [
+        { square: [9, 3], facing: e, group: "bar" },
+        { square: [9, 5], facing: e, group: "bar" },
+        { square: [5, 3], facing: w, act: "serve", group: "tables" },
+        { square: [8, 3], facing: w, act: "serve", group: "tables" },
+        { square: [2, 3], facing: e, act: "serve", group: "tables" },
+        { square: [5, 7], facing: e, act: "serve", group: "tables" },
+        { square: [2, 7], facing: e, act: "serve", group: "tables" },
+        { square: [8, 7], facing: w, act: "serve", group: "tables" },
+    ];
+
+    return [
+        {
+            id: "barkeep",
+            name: "Barkeep",
+            preset: "barkeep",
+            map: "taproom",
+            square: [11, 4],
+            facing: w,
+            routine: {
+                order: "alternate",
+                wait: [2500, 6000],
+                stops: [
+                    { square: [11, 3], facing: w, group: "bar" },
+                    { square: [11, 5], facing: w, group: "bar" },
+                    { square: [12, 2], facing: e, act: "pour", group: "barrels" },
+                    { square: [12, 4], facing: e, act: "pour", group: "barrels" },
+                    { square: [12, 6], facing: e, act: "pour", group: "barrels" },
+                ],
+            },
+        },
+        { id: "wench", name: "Serving wench", preset: "wench", map: "taproom", square: [9, 4], facing: e, routine: { order: "alternate", wait: [1500, 3500], stops: serving } },
+        { id: "wench2", name: "Serving wench", preset: "wench2", map: "taproom", square: [5, 5], facing: s, routine: { order: "alternate", wait: [1500, 3500], stops: [...serving.slice(2), ...serving.slice(0, 2)] } },
+        seated("drinker", "Drinker", "drinker", [3, 2], s, [5000, 13000]),
+        seated("alewife", "Alewife", "alewife", [4, 4], n, [6000, 15000]),
+        seated("farmer", "Farmer", "farmer", [6, 6], s, [5500, 14000]),
+        seated("greybeard", "Greybeard", "greybeard", [7, 8], n, [7000, 16000]),
+        {
+            id: "madam",
+            name: "The madam",
+            preset: "madam",
+            map: "upstairs",
+            square: [3, 3],
+            facing: s,
+            routine: {
+                wait: [4000, 9000],
+                stops: [
+                    { square: [3, 3], facing: s },
+                    { square: [2, 3], facing: s },
+                    { square: [4, 3], facing: s },
+                    { square: [3, 3], facing: e },
+                ],
+            },
+        },
+    ];
+}
+
 /** Which link (and which of its ends) a character on `map` standing on `square` is at, or null. */
 export function linkAt(links, map, [x, y]) {
     for (const link of links) {

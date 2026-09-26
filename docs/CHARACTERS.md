@@ -166,6 +166,27 @@ slots, sockets and hidden skin.
 6. **Hiding.** Skin under a garment isn't drawn, and neither is a garment under another one.
    Layers go underwear, clothing, mid layer, armour, belts and straps.
 
+**Drapes** (`drapes.js`) are clothes that hang from the body rather than wrapping it: skirts,
+gowns and aprons. A garment can't hang between the legs, so a drape is built instead, as rings of
+cloth round the body:
+
+- **Fitted, then falling.** Its top ring goes round the waist, measured round the body at that
+  height in 48 directions (the furthest skin in each, smoothed); two more rings take it out over
+  the hips, where the body (and the tops of the thighs) is widest. Below that, twelve rings fall
+  to its hem (from the hips at 0 to the ankles at 1), rounding off from the body's shape to a
+  circle and flaring out by its `flare` (a share of the hips' width), with pleats round it,
+  deeper towards the hem and shaded darker in their folds.
+- **An apron** only goes part of the way round (`arc`), at the front, a little out from what's
+  under it.
+- **Skinned** like the body: the waist to the lower back and pelvis; below the hips, more and
+  more to the thighs (up to 90% at the knees), each side to its own, the front and back shared;
+  below the knees, more and more to the shins. So the hem swings as the legs walk, and sitting,
+  it lies over the lap and falls down the shins.
+
+The tavern's folk wear them: wool, green and red skirts, a velvet gown, and the barkeep's apron,
+over a chemise (low-necked, short-sleeved) and a laced bodice (a band from under the waist to over
+the bust, painted with a cord criss-crossing down the front).
+
 **Items** (`items.js`) are rigid models on **sockets**, points on bones placed from the body's
 shape:
 
@@ -188,7 +209,7 @@ and the orc's notched cleaver. Every character starts in the same outfit: a tuni
 bracers, leather pants and leather boots.
 
 **Slots:** head, face, under top, shirt, chest, armour, forearms, hands, waist, underwear, legs,
-shins, feet, back, main hand and off hand. One piece per slot.
+apron, shins, feet, back, main hand and off hand. One piece per slot.
 
 To **add a garment**, add an entry to `GARMENTS` with its slot, layer, thickness, smoothing, look
 and `inside(vertex, landmarks)` function. To **add an item**, add a model builder to `items.js`
@@ -330,6 +351,17 @@ To give a new attack its own reaction, add an entry to `REACTIONS` and name it i
 **Falling.** The knees and back give way, then the whole body topples (backwards, or forwards
 when hit from behind), falling faster and faster about the pelvis, lands with a little bounce,
 arms flung out, and lies flat. The feet aren't kept planted while falling.
+
+**The tavern's folk** have a few more:
+
+- **Sitting** (`setSeated`): the thighs level (hips flexed 88°), the knees bent square, the feet
+  flat, leaning a little over the table, the free arm resting on it; the pelvis lowered onto a
+  45 cm bench (the hip joints 10 cm above it) and back from the middle of the square, so the
+  knees go under the table. The feet aren't kept planted, but the hands still reach.
+- **A toast**: a tankard (held upright by its handle, the forearm level) raised high in front,
+  shaken, then brought to the mouth and tipped, the head back, and down again.
+- **Serving**: leaning over a table to set a tankard down on it.
+- **Pouring**: both hands to a barrel's tap in front, the left holding the tankard under it.
 
 **Motion capture** (`bvh.js`) is retargeted bone by bone in the world:
 

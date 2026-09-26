@@ -16,8 +16,8 @@
 import * as THREE from "three";
 import { FALL_LANDS, REACTIONS } from "../characters/actions.js";
 import { Character } from "../characters/character.js";
-import { PRESETS } from "../characters/presets.js";
-import { Battle, STEP_MS } from "../core/battle.js";
+import { FOLK, PRESETS } from "../characters/presets.js";
+import { Battle, hostile, STEP_MS } from "../core/battle.js";
 import { CAST_FAILURES, SPELLS } from "../core/spells.js";
 import { longestReach, WEAPONS } from "../core/weapons.js";
 import { Avatar } from "../world/avatar.js";
@@ -71,6 +71,15 @@ const SWIPE_MS = 600;
 // How far the camera leans from the player towards who they're fighting: a share of the way,
 // up to so many metres
 const LEAN = { share: 0.4, most: 4.5 };
+
+// The tavern's folk: how much hair they grow (at most: less than the player, as there are more
+// of them), and what each of their acts is: its animation's timing (s) and the sound it makes
+const FOLK_HAIR = 0.2;
+const ACTS = {
+    toast: { hitAt: 1, duration: 3.2, sound: "clink", volume: 1 },
+    serve: { hitAt: 0.8, duration: 1.8, sound: "clink", volume: 0.45 },
+    pour: { hitAt: 1, duration: 2.8, sound: "pour", volume: 1, early: 0.3 },
+};
 
 // Going through a door or up the stairs, the screen comes up from black this fast (s)
 const FADE_IN = 0.45;
@@ -155,7 +164,8 @@ export class Game {
             return result;
         };
         const floors = Object.values(world.maps ?? {}).filter(({ id }) => id !== "town");
-        const steps = world.town.pieces.length + world.trees.length + 6 + floors.length;
+        const folk = world.folk ?? [];
+        const steps = world.town.pieces.length + world.trees.length + 6 + floors.length + folk.length;
         let done = 0;
         const step = (label) => onProgress({ label, done: ++done, total: steps });
 
@@ -203,6 +213,24 @@ export class Game {
 
         this.#addAvatar("orc", orc, { walk: preset.walk, guard: WEAPONS[ORC_WEAPON].attacks[0].animation });
         this.battle.add({ id: "orc", kind: "orc", name: "Orc", weapon: ORC_WEAPON, team: "orcs", square: world.spawns.orc, ai: "patrol", patrol: world.patrol });
+
+        // The tavern's folk, going about their business (no one fights them)
+        for (const [k, one] of folk.entries()) {
+            step(`Filling the tavern (${k + 1} of ${folk.length})`);
+
+            const look = FOLK[one.preset];
+            const character = await time(one.id, () => new Character(kit, { shape: look.shape, look: look.look, equipment: look.equipment, hairDetail: Math.min(hairDetail, FOLK_HAIR) }));
+            const avatar = this.#addAvatar(one.id, character, { walk: look.walk, wounds: false });
+
+            // (Lit, but casting no shadows: there are a lot of them, and it's dim in there)
+            character.object.traverse((node) => {
+                node.castShadow = false;
+            });
+
+            avatar.actions.setSeated(Boolean(one.routine.seated));
+            this.battle.add({ id: one.id, kind: "folk", name: one.name, team: "folk", square: one.square, map: one.map, ai: "routine", neutral: true, routine: one.routine, facing: one.facing });
+        }
+
         step("Getting ready to draw");
 
         this.effects = new Effects(view.scene);
@@ -239,12 +267,12 @@ export class Game {
         this.hud.clear();
         this.hud.setPlayer(player);
 
-        for (const actor of this.battle.actors.filter((other) => other.id !== "player")) {
-            this.hud.track(actor.id, { ...actor, hostile: actor.team !== player.team });
+        for (const actor of this.battle.actors.filter((other) => other.id !== "player" && !other.neutral)) {
+            this.hud.track(actor.id, { ...actor, hostile: hostile(actor, player) });
         }
     }
 
-    #addAvatar(id, character, options) {
+    #addAvatar(id, character, { wounds = true, ...options }) {
         const avatar = new Avatar(character, options);
 
         // Footsteps, on whatever ground the foot lands on
@@ -260,7 +288,10 @@ export class Game {
         character.object.name = id;
         this.view.scene.add(character.object);
         this.avatars.set(id, avatar);
-        this.wounds.set(id, new Wounds(character, { seed: this.avatars.size * 17 + 3 }));
+
+        if (wounds) {
+            this.wounds.set(id, new Wounds(character, { seed: this.avatars.size * 17 + 3 }));
+        }
 
         return avatar;
     }
@@ -451,15 +482,19 @@ export class Game {
             const avatar = this.avatars.get(actor.id);
             const previous = this.previous.get(actor.id);
             const [ox, oz] = this.originOf(actor.map);
+
+            // (Only those on the player's map are seen, and moved)
+            if (actor.map !== this.mapId) {
+                avatar.object.visible = false;
+                continue;
+            }
+
             const x = previous.x + (actor.x - previous.x) * alpha;
             const z = previous.y + (actor.y - previous.y) * alpha;
 
             avatar.actions.setGuard(!actor.dead && this.#fighting(actor));
             avatar.update(dt, ox + x, oz + z, actor.facing, !actor.attack);
             this.#updateBody(actor, avatar, dt);
-
-            // (Only those on the player's map are seen)
-            avatar.object.visible &&= actor.map === this.mapId;
             hud.setStamina(actor.id, actor.stamina, actor.maxStamina);
         }
 
@@ -541,13 +576,18 @@ export class Game {
 
     // Is a character fighting (so standing on guard)? Attacking lately, or an enemy close by
     #fighting(actor) {
+        // (The folk never fight)
+        if (actor.neutral) {
+            return false;
+        }
+
         if (actor.attack || this.battle.time - (this.lastAttack.get(actor.id) ?? -Infinity) < 2500) {
             return true;
         }
 
         const reach = longestReach(actor.weapon) + 2;
 
-        return this.battle.actors.some((other) => other.team !== actor.team && !other.dead && other.map === actor.map && Math.hypot(other.x - actor.x, other.y - actor.y) <= reach && this.battle.canSee(actor, other));
+        return this.battle.actors.some((other) => hostile(other, actor) && !other.dead && other.map === actor.map && Math.hypot(other.x - actor.x, other.y - actor.y) <= reach && this.battle.canSee(actor, other));
     }
 
     // The dead lie still a while, then sink out of sight until they come back to life
@@ -630,7 +670,7 @@ export class Game {
             others: battle.actors.filter((other) => other !== actor && !other.dead && other.map === this.mapId).map((other) => {
                 const position = this.avatars.get(other.id).object.position;
 
-                return { x: position.x - ox, z: position.z - oz, hostile: other.team !== actor.team, targeted: other === target };
+                return { x: position.x - ox, z: position.z - oz, hostile: hostile(other, actor), targeted: other === target };
             }),
             destination: actor.order?.type === "move" ? [actor.order.to[0] + 0.5, actor.order.to[1] + 0.5] : null,
             view: corners,
@@ -661,12 +701,25 @@ export class Game {
             return ordered;
         }
 
-        const after = battle.actors.filter((actor) => actor.team !== player.team && !actor.dead && actor.map === player.map && (actor.target === player.id || actor.attack?.target === player.id || player.attack?.target === actor.id));
+        const after = battle.actors.filter((actor) => hostile(actor, player) && !actor.dead && actor.map === player.map && (actor.target === player.id || actor.attack?.target === player.id || player.attack?.target === actor.id));
 
         return after.sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))[0] ?? null;
     }
 
     // --- Inside and out ---
+
+    // One of the folk does something (battle.js #routine): raises a tankard, puts one down on a
+    // table, draws ale from a barrel; seen and heard only on the player's map
+    #act({ id, act }, avatar) {
+        const how = ACTS[act];
+
+        if (!how || this.battle.actor(id).map !== this.mapId) {
+            return;
+        }
+
+        avatar.actions.startAttack(act, { hitAt: how.hitAt, duration: how.duration });
+        this.sound?.play(how.sound, { at: avatar.object.position, delay: how.hitAt - (how.early ?? 0), volume: how.volume });
+    }
 
     // Put a character where it is in the battle, on its map, at once (not walking there)
     #place(actor) {
@@ -702,6 +755,13 @@ export class Game {
         this.mapId = mapId;
         this.town.object.visible = !interior;
         this.ground.visible = !interior;
+
+        // Everyone else here where they are now (they weren't moved while out of sight)
+        for (const actor of this.battle.actors) {
+            if (actor.map === mapId && actor.id !== "player") {
+                this.#place(actor);
+            }
+        }
 
         for (const [id, each] of this.interiors) {
             each.object.visible = id === mapId;
@@ -845,6 +905,9 @@ export class Game {
                     this.onDeath(event);
                     break;
                 }
+                case "act":
+                    this.#act(event, avatar);
+                    break;
                 case "cross": {
                     const actor = battle.actor(event.id);
                     const was = avatar.object.position.clone();
@@ -1186,7 +1249,7 @@ export class Game {
         for (const actor of this.battle.actors) {
             const mine = actor === player;
 
-            if (actor.dead || (mine && !withPlayer) || (!mine && actor.team === player.team) || actor.map !== player.map) {
+            if (actor.dead || (mine && !withPlayer) || (!mine && !hostile(actor, player)) || actor.map !== player.map) {
                 continue;
             }
 
@@ -1277,7 +1340,7 @@ export class Game {
      */
     mapTap({ x, z, reach = 3, clientX = 0, clientY = 0, run = false, time = performance.now() }) {
         const player = this.battle.actor("player");
-        const enemies = this.battle.actors.filter((actor) => player && actor.team !== player.team && !actor.dead && actor.map === player.map);
+        const enemies = this.battle.actors.filter((actor) => player && hostile(actor, player) && !actor.dead && actor.map === player.map);
         const distance = (actor) => Math.hypot(actor.x - x, actor.y - z);
         const enemy = enemies.filter((actor) => distance(actor) <= reach).sort((a, b) => distance(a) - distance(b))[0] ?? null;
 

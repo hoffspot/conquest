@@ -5,6 +5,8 @@
 //
 //  - Garments (garments.js) are fitted to the body and skinned to its skeleton: clothing and
 //    armour that bends with the body.
+//  - Drapes (drapes.js) hang from the body: skirts, gowns and aprons, skinned to its skeleton
+//    so they swing with the legs.
 //  - Items (items.js) are rigid models on a socket: a point on a bone, placed from the body's
 //    shape (the palm of the hand, the middle of the head, the upper back), so a sword sits in any
 //    hand. An item can also bring a garment (a backpack's straps), hide parts of the body (a
@@ -12,6 +14,7 @@
 
 import * as THREE from "three";
 import { faceFrame } from "./face.js";
+import { DRAPES } from "./drapes.js";
 import { GARMENTS } from "./garments.js";
 
 /** The slots, in the order to show them. */
@@ -27,6 +30,7 @@ export const SLOTS = Object.freeze([
     { id: "waist", label: "Waist" },
     { id: "underwear", label: "Underwear" },
     { id: "legs", label: "Legs" },
+    { id: "apron", label: "Apron" },
     { id: "shins", label: "Shins" },
     { id: "feet", label: "Feet" },
     { id: "back", label: "Back" },
@@ -45,6 +49,7 @@ const HOLDS = {
     hammer: { Arm: { flex: 10, abduct: 12, rotate: 10 }, ForeArm: { flex: 72, pronate: 0 }, Hand: { flex: -5, deviate: 8 }, swing: 0.2 },
     book: { Arm: { flex: 22, abduct: 10, rotate: 10 }, ForeArm: { flex: 88, pronate: -80 }, Hand: { flex: -8, deviate: 0 }, swing: 0.12 },
     fist: { Arm: { flex: 4, abduct: 10 }, ForeArm: { flex: 38, pronate: 20 }, Hand: { flex: 0 }, swing: 0.7 },
+    tankard: { Arm: { flex: 12, abduct: 8, rotate: 5 }, ForeArm: { flex: 88, pronate: -5 }, Hand: { flex: 0, deviate: 12 }, swing: 0.15 },
 };
 
 /**
@@ -71,11 +76,13 @@ export const ITEMS = Object.freeze({
     quiver: { label: "Quiver", slot: "back", model: "quiver", socket: "back", turn: [0.25, 0, 0.5], offset: [0, 0.02, -0.04] },
     musket: { label: "Musket (slung)", slot: "back", model: "musket", socket: "back", turn: [0, 0, 2.5], offset: [0, 0, -0.03] },
     tusks: { label: "Tusks", slot: "face", model: "tusks", socket: "mouth" },
+    tankard: { label: "Tankard of ale", slot: "mainHand", model: "tankard", socket: "rightHand", grips: true, hold: HOLDS.tankard },
 });
 
-/** Every piece of equipment by id: { kind: "garment" | "item", slot, label, ... }. */
+/** Every piece of equipment by id: { kind: "garment" | "drape" | "item", slot, label, ... }. */
 export const EQUIPMENT = Object.freeze(Object.fromEntries([
     ...Object.entries(GARMENTS).filter(([, garment]) => !garment.hidden).map(([id, garment]) => [id, { kind: "garment", ...garment }]),
+    ...Object.entries(DRAPES).map(([id, drape]) => [id, { kind: "drape", ...drape }]),
     ...Object.entries(ITEMS).map(([id, item]) => [id, { kind: "item", ...item }]),
 ]));
 

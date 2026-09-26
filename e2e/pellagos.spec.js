@@ -632,6 +632,45 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
         return { town: game.town.object.visible, taproom: game.interiors.get("taproom").object.visible, upstairs: game.interiors.get("upstairs").object.visible };
     })).toEqual({ town: false, taproom: true, upstairs: false });
 
+    // The folk: seven in the taproom, seen, without name plates; the patrons raise their
+    // tankards; tapping one doesn't set the player on them
+    const folk = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const here = game.battle.actors.filter((actor) => actor.neutral && actor.map === "taproom");
+        const acted = new Set();
+
+        for (let k = 0; k < 40; k++) {
+            game.advance(0.25);
+
+            for (const actor of here) {
+                const name = game.avatars.get(actor.id).actions.attack?.name;
+
+                if (name) {
+                    acted.add(name);
+                }
+            }
+        }
+
+        const drinker = game.avatars.get("drinker");
+        const spot = session.view.toScreen(drinker.point(0.5));
+
+        game.tap(spot.x, spot.y, { time: performance.now() + 5000 });
+        game.advance(0.2);
+
+        return {
+            ids: here.map(({ id }) => id),
+            shown: here.every(({ id }) => game.avatars.get(id).object.visible),
+            plates: document.querySelectorAll(".floater").length,
+            acted: [...acted].sort(),
+            order: game.battle.actor("player").order?.type ?? null,
+            madam: game.avatars.get("madam").object.visible,
+        };
+    });
+
+    expect(folk).toMatchObject({ ids: ["barkeep", "wench", "wench2", "drinker", "alewife", "farmer", "greybeard"], shown: true, plates: 1, madam: false });
+    expect(folk.acted).toContain("toast");
+    expect(folk.order).not.toBe("engage");
+
     // Near the stairs, then up them, and down again
     await page.evaluate(() => {
         const { game } = window.pellagos;
@@ -643,6 +682,7 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
     const up = await through("taproom", "stairs", 6);
 
     expect(up).toMatchObject({ order: "enter", glowing: true, map: "upstairs", shown: "upstairs", square: outside.top, minimap: "upstairs", heard: "upstairs" });
+    expect(await page.evaluate(() => window.pellagos.game.avatars.get("madam").object.visible)).toBe(true);
 
     // (Standing at their top, straight down)
     const down = await through("upstairs", "stairs", 3);

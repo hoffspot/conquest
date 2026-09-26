@@ -94,6 +94,13 @@ yourself. If the orc is chasing you when you go in, it follows you through the d
 stairs, and the fight carries on; and if you're set to fight something that goes through a door,
 you go after it.
 
+**The tavern's folk.** The taproom is busy: a burly, bearded barkeep in an apron goes between the
+bar and the barrels behind it, drawing ale; two serving wenches, in laced bodices and long
+skirts, carry tankards between the bar and the tables and set them down; and four patrons sit on
+the benches, now and then raising their tankards in a toast and drinking (you hear the tankards
+clink). Upstairs the madam, in a velvet gown, keeps her counter. No one fights them, and they
+fight no one; they're blue dots on the minimap.
+
 **The minimap**, in the top right under the menu button, shows the whole of where you are from
 above: out in the town, its roads, roofs and trees; inside, the floor, walls, furniture and
 stairs. On it are what the camera can see, you (an arrow pointing the way you face), where

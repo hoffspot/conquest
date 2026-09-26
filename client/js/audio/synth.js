@@ -10,7 +10,7 @@
 //  - The bow: a plucked string (Karplus-Strong); spells: rising chimes and a whoosh.
 //  - Spells: a rising shimmer casting a heal, a warm swell as it lands; a dizzy warble for a stun.
 //  - Footsteps on stone, dirt, grass and wooden boards; a body falling; a door opening and
-//    banging shut behind someone.
+//    banging shut behind someone; in the tavern, tankards clinking and ale being drawn.
 //  - Cues: a target chosen, an enemy slain, falling, waking again, out of breath; the action
 //    wheel opening, and a slice that can't be used.
 //  - Around the town (the environment): a bird's chirp, leaves rustling, the wind (a loop); and
@@ -290,6 +290,35 @@ export const SOUNDS = {
             return out;
         },
     },
+    // Pewter tankards knocked together in a toast (or one set down): a dull ring and a knock
+    clink: {
+        variants: 3,
+        volume: 0.35,
+        make: (random) => {
+            const pitch = 0.92 + random.next() * 0.16;
+
+            return add(ring([[1480 * pitch, 0.5, 0.05], [2310 * pitch, 0.35, 0.035], [3690 * pitch, 0.18, 0.02]], 0.3), burst(random, 0.04, "bandpass", 900, 1, 0.0005, 0.01), 0.6);
+        },
+    },
+
+    // Ale drawn from a barrel's tap into a tankard: a gurgling splash, rising as it fills
+    pour: {
+        variants: 2,
+        volume: 0.3,
+        make: (random) => {
+            const length = 1.3;
+            const flow = filter(noise(random, length), "bandpass", (t) => 700 + 500 * (t / length), 1.4);
+            const gurgle = filter(noise(random, length), "lowpass", 9);
+            let most = 0;
+
+            for (const value of gurgle) {
+                most = Math.max(most, Math.abs(value));
+            }
+
+            return shape(flow.map((value, n) => value * (0.55 + (0.45 * Math.abs(gurgle[n])) / most)), swell(length, 0.15));
+        },
+    },
+
     // The hearth's fire: a few pops and snaps over the soft rush of the flames
     crackle: {
         variants: 4,
