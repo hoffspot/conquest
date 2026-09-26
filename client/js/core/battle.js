@@ -23,6 +23,13 @@
 // within reach, which then can't move, attack or do anything else for a while. Casting takes a
 // moment, standing still; every spell then shares one cooldown.
 //
+// The world can have several maps (the town, and the floors of buildings: world.js, interiors.js)
+// joined by links (doors, stairs). Each character is on one map, and only sees, meets and fights
+// those on the same one. Told to "enter" a link, a character walks to its end and comes out at
+// its other end, on the other map. An enemy chasing someone who goes through a link just after
+// it saw them follows them through; one that gives up the chase on another map finds its way
+// back to its patrol.
+//
 // An attack (weapons.js) lands its blow hitAt into it: melee attacks hit if the target is still
 // within reach, ranged attacks let go of a projectile that flies to the target. Each hit rolls its
 // damage and takes it off the target's hit points; at none, the target dies, and comes back to
@@ -31,6 +38,7 @@
 // Nothing here draws anything: every step returns events ("attack", "hit", "death"...) for the
 // interface to show. Pure JavaScript with seeded random numbers, no DOM.
 
+import { routeBetween } from "./interiors.js";
 import { findPath, lineAhead } from "./pathfinding.js";
 import { createRandom } from "./random.js";
 import { rollHeal, SPELL_COOLDOWN, SPELLS } from "./spells.js";
@@ -76,6 +84,9 @@ const REPATH_MS = 500;
 // How long a character waits for someone in its way before finding a way round them (ms)
 const BLOCKED_WAIT_MS = 400;
 
+// Whoever is in the way at a link's end, a character this near it goes through anyway (squares)
+const LINK_REACH = 1;
+
 const same = (a, b) => a !== null && b !== null && a[0] === b[0] && a[1] === b[1];
 
 export class Battle {
@@ -86,6 +97,10 @@ export class Battle {
      */
     constructor(world, { seed = 1 } = {}) {
         this.world = world;
+
+        // The maps (the world itself if it has only the one) and the links between them
+        this.maps = world.maps ?? { town: world };
+        this.links = world.links ?? [];
         this.random = createRandom(seed);
         this.time = 0;
         this.actors = [];
@@ -97,10 +112,10 @@ export class Battle {
 
     /**
      * Add a character: { id, kind (a KINDS key), name, weapon (a WEAPONS key), team, square
-     * ([x, y]), ai ("patrol" for enemies), patrol ([[x, y], [x, y]]) }. It comes back to life
-     * where it's added.
+     * ([x, y]), map (a map's id: "town" to start with), ai ("patrol" for enemies), patrol ([[x,
+     * y], [x, y]], on its map) }. It comes back to life where it's added.
      */
-    add({ id, kind, name = kind, weapon, team, square, ai = null, patrol = null }) {
+    add({ id, kind, name = kind, weapon, team, square, map = "town", ai = null, patrol = null }) {
         const type = KINDS[kind];
         const actor = {
             id,
@@ -110,6 +125,11 @@ export class Battle {
             team,
             ai,
             patrol,
+            // The map it's on, where it comes back to life, and the last link it went through
+            // ({ link, from, to, time })
+            map,
+            spawnMap: map,
+            crossed: null,
             hp: type.hp,
             maxHp: type.hp,
             stamina: type.hp,
@@ -162,10 +182,12 @@ export class Battle {
     }
 
     /**
-     * Tell a character what to do: { type: "move", to: [x, y] } (walk there, or as near as
-     * can be), { type: "ahead", facing } (straight ahead the way `facing` points, radians, as
-     * far as the way is clear), { type: "engage", target: id } (go and fight it), or
-     * { type: "stop" }. Moving and engaging, run: true runs there (while its stamina lasts).
+     * Tell a character what to do: { type: "move", to: [x, y] } (walk there, on its map, or as
+     * near as can be), { type: "ahead", facing } (straight ahead the way `facing` points,
+     * radians, as far as the way is clear), { type: "engage", target: id } (go and fight it),
+     * { type: "enter", link: id } (walk to the link's end on its map and go through), or
+     * { type: "stop" }. Moving, engaging and entering, run: true runs there (while its stamina
+     * lasts).
      */
     command(id, order) {
         const actor = this.actor(id);
@@ -181,7 +203,7 @@ export class Battle {
 
         switch (order.type) {
             case "move": {
-                const goal = nearestFree(this.world.blocked, order.to);
+                const goal = nearestFree(this.#blocked(actor), order.to);
 
                 actor.order = { type: "move", to: goal, run: Boolean(order.run) };
                 this.#pathTo(actor, goal);
@@ -190,7 +212,7 @@ export class Battle {
             case "ahead": {
                 // From wherever it is (or is stepping to), square after square in a line
                 const from = actor.to ? [actor.to[0] + 0.5, actor.to[1] + 0.5] : [actor.x, actor.y];
-                const line = lineAhead(this.world.blocked, from, order.facing);
+                const line = lineAhead(this.#blocked(actor), from, order.facing);
 
                 if (!line.length) {
                     actor.order = null;
@@ -209,6 +231,20 @@ export class Battle {
                 actor.order = { type: "engage", target: order.target, run: Boolean(order.run) };
                 actor.pathGoal = null;
                 break;
+            case "enter": {
+                const link = this.links.find(({ id: linkId }) => linkId === order.link);
+
+                if (!link?.ends.some((end) => end.map === actor.map)) {
+                    actor.order = null;
+                    actor.path = [];
+                    break;
+                }
+
+                actor.order = { type: "enter", link: link.id, run: Boolean(order.run) };
+                actor.pathGoal = null;
+                this.#goThrough(actor, link);
+                break;
+            }
             default:
                 actor.order = null;
                 actor.path = [];
@@ -298,8 +334,15 @@ export class Battle {
         return events;
     }
 
-    /** Can `a` see `b`: within SIGHT squares, with no blocked square between their middles? */
+    /**
+     * Can `a` see `b`: on the same map, within SIGHT squares, with nothing that blocks sight
+     * between their middles (anything blocked outdoors; walls, not tables, indoors)?
+     */
     canSee(a, b) {
+        if (a.map !== b.map) {
+            return false;
+        }
+
         const [ax, ay] = a.square;
         const [bx, by] = b.square;
         const distance = distanceBetween(a.square, b.square);
@@ -308,18 +351,25 @@ export class Battle {
             return false;
         }
 
+        const map = this.maps[a.map];
+        const opaque = map.opaque ?? map.blocked;
         const steps = Math.ceil(distance * 4);
 
         for (let k = 1; k < steps; k++) {
             const x = Math.floor(ax + 0.5 + ((bx - ax) * k) / steps);
             const y = Math.floor(ay + 0.5 + ((by - ay) * k) / steps);
 
-            if (this.world.blocked[y][x] && !(x === ax && y === ay) && !(x === bx && y === by)) {
+            if (opaque[y][x] && !(x === ax && y === ay) && !(x === bx && y === by)) {
                 return false;
             }
         }
 
         return true;
+    }
+
+    // The squares a character can't walk on, on its map
+    #blocked(actor) {
+        return this.maps[actor.map].blocked;
     }
 
     #emit(type, details) {
@@ -372,6 +422,16 @@ export class Battle {
 
         actor.walkPace = actor.speed;
 
+        if (order?.type === "enter") {
+            const link = this.links.find(({ id }) => id === order.link);
+
+            if (link && this.#goThrough(actor, link)) {
+                return;
+            }
+
+            actor.order = null;
+        }
+
         if (order?.type === "move") {
             if (actor.path.length || actor.to) {
                 return;
@@ -401,9 +461,25 @@ export class Battle {
         }
     }
 
-    // An enemy: patrol, chase what it sees, attack what it catches
+    // An enemy: patrol, chase what it sees (through doors and up stairs, if they went through
+    // just after it saw them), attack what it catches
     #patrol(actor) {
         const seen = this.#nearestEnemy(actor, (enemy) => this.canSee(actor, enemy));
+        const chased = actor.target === null ? null : this.actor(actor.target);
+        const trail = chased?.crossed;
+        const following = chased && !chased.dead && chased.map !== actor.map && trail && trail.from === actor.map && trail.time - actor.lastSeen <= GIVE_UP_MS;
+
+        if (following) {
+            const link = this.links.find(({ id }) => id === trail.link);
+
+            // After them, keeping the chase alive until it's through
+            actor.lastSeen = this.time;
+            actor.walkPace = actor.chaseSpeed;
+
+            if (this.#goThrough(actor, link)) {
+                return;
+            }
+        }
 
         if (seen) {
             actor.target = seen.id;
@@ -416,15 +492,31 @@ export class Battle {
 
         const target = actor.target === null ? null : this.actor(actor.target);
 
-        if (target && !target.dead) {
+        if (target && !target.dead && target.map === actor.map) {
             actor.walkPace = actor.chaseSpeed;
             this.#pursue(actor, target);
 
             return;
         }
 
+        if (target && !target.dead) {
+            // Gone where it can't follow: wait a while in case they come back
+            return;
+        }
+
         actor.target = null;
         actor.walkPace = actor.speed;
+
+        // Somewhere else than its patrol (it followed someone in): back the way it came
+        if (actor.map !== actor.spawnMap) {
+            const route = routeBetween(this.links, actor.map, actor.spawnMap);
+
+            if (route?.length) {
+                this.#goThrough(actor, route[0]);
+            }
+
+            return;
+        }
 
         const goal = actor.patrol[actor.patrolIndex];
 
@@ -465,8 +557,12 @@ export class Battle {
         }
     }
 
-    /** Can `actor` attack `target` from where they stand (within reach, and seen for ranged)? */
+    /** Can `actor` attack `target` from where they stand (on the same map, within reach, and seen for ranged)? */
     #reachable(actor, target) {
+        if (actor.map !== target.map) {
+            return false;
+        }
+
         const attack = chooseAttack(actor.weapon, actor.square, target.square);
 
         return attack !== null && (attack.kind === "melee" || this.canSee(actor, target));
@@ -477,7 +573,7 @@ export class Battle {
         let bestDistance = Infinity;
 
         for (const other of this.actors) {
-            if (other.team !== actor.team && !other.dead && test(other)) {
+            if (other.team !== actor.team && !other.dead && other.map === actor.map && test(other)) {
                 const distance = distanceBetween(actor.square, other.square);
 
                 if (distance < bestDistance) {
@@ -492,18 +588,18 @@ export class Battle {
 
     // --- Walking ---
 
-    /** Is a square taken by a character other than `except` (standing on it or stepping into it)? */
+    /** Is a square on `except`'s map taken by another character (standing on it or stepping into it)? */
     #taken([x, y], except) {
-        return this.actors.some((other) => other !== except && !other.dead && ((other.square[0] === x && other.square[1] === y) || (other.to && other.to[0] === x && other.to[1] === y)));
+        return this.actors.some((other) => other !== except && !other.dead && other.map === except.map && ((other.square[0] === x && other.square[1] === y) || (other.to && other.to[0] === x && other.to[1] === y)));
     }
 
     // Find a path to `goal`, round other characters (except `through`, whose square it may end on)
     #pathTo(actor, goal, through = null) {
-        const blocked = this.world.blocked;
+        const blocked = this.#blocked(actor);
         const marked = [];
 
         for (const other of this.actors) {
-            if (other !== actor && other !== through && !other.dead) {
+            if (other !== actor && other !== through && !other.dead && other.map === actor.map) {
                 for (const [x, y] of [other.square, other.to].filter(Boolean)) {
                     if (!blocked[y][x]) {
                         blocked[y][x] = 1;
@@ -525,6 +621,78 @@ export class Battle {
         actor.pathGoal = [...goal];
         actor.lastPathAt = this.time;
         actor.blockedSince = null;
+    }
+
+    /**
+     * Head for a link's end on the character's map and, standing on it (or next to it, when
+     * someone's in the way), go through. Returns false if the link has no end on its map.
+     */
+    #goThrough(actor, link) {
+        const here = link?.ends.find((end) => end.map === actor.map);
+
+        if (!here) {
+            return false;
+        }
+
+        const [x, y] = actor.square;
+        const on = here.squares.some(([sx, sy]) => sx === x && sy === y);
+        const near = here.squares.some((square) => distanceBetween(square, actor.square) <= LINK_REACH && this.#taken(square, actor));
+
+        if (!actor.to && (on || (near && !actor.path.length))) {
+            this.#cross(actor, link, here);
+
+            return true;
+        }
+
+        // On the way: a path to it if it's heading anywhere else, or has none (at most every
+        // REPATH_MS, in case there's no way there)
+        const goal = here.squares.find((square) => !this.#taken(square, actor)) ?? here.squares[0];
+        const heading = actor.pathGoal !== null && here.squares.some((square) => same(square, actor.pathGoal));
+        const idle = !actor.path.length && !actor.to;
+
+        if (!heading || (idle && this.time - actor.lastPathAt >= REPATH_MS)) {
+            this.#pathTo(actor, goal);
+        }
+
+        return true;
+    }
+
+    // Come out at a link's other end: on its map, on the square it arrives at (or the nearest
+    // free one), facing into the room
+    #cross(actor, link, here) {
+        const there = link.ends.find((end) => end !== here);
+        const blocked = this.maps[there.map].blocked.map((row) => Uint8Array.from(row));
+
+        for (const other of this.actors) {
+            if (other !== actor && !other.dead && other.map === there.map) {
+                for (const [sx, sy] of [other.square, other.to].filter(Boolean)) {
+                    blocked[sy][sx] = 1;
+                }
+            }
+        }
+
+        const square = nearestFree(blocked, there.arrive);
+        const from = actor.map;
+
+        Object.assign(actor, {
+            map: there.map,
+            square,
+            x: square[0] + 0.5,
+            y: square[1] + 0.5,
+            to: null,
+            path: [],
+            pathGoal: null,
+            facing: there.facing,
+            pace: actor.walkPace,
+            attack: null,
+            crossed: { link: link.id, from, to: there.map, time: this.time },
+        });
+
+        if (actor.order?.type === "enter") {
+            actor.order = null;
+        }
+
+        this.#emit("cross", { id: actor.id, link: link.id, kind: link.kind, from, to: there.map, square, facing: there.facing });
     }
 
     #move(actor) {
@@ -575,7 +743,7 @@ export class Battle {
             [x, y] = [sx + 0.5, sy + 0.5];
         }
 
-        if (actor.order?.type === "engage" || actor.target !== null) {
+        if (actor.order?.type === "engage" || (actor.target !== null && actor.order?.type !== "enter")) {
             left -= longestReach(actor.weapon);
         }
 
@@ -760,6 +928,7 @@ export class Battle {
             from: actor.id,
             target: target.id,
             attack,
+            map: actor.map,
             x: actor.x,
             y: actor.y,
         };
@@ -774,7 +943,8 @@ export class Battle {
             const target = this.actor(projectile.target);
             const attacker = this.actor(projectile.from);
 
-            if (!target || target.dead) {
+            // (Gone, or through a door: it misses)
+            if (!target || target.dead || target.map !== projectile.map) {
                 this.projectiles.splice(this.projectiles.indexOf(projectile), 1);
                 this.#emit("fizzle", { projectile: projectile.id });
                 continue;
@@ -858,17 +1028,20 @@ export class Battle {
     }
 
     #respawn(actor) {
-        const blocked = this.world.blocked.map((row) => Uint8Array.from(row));
+        const blocked = this.maps[actor.spawnMap].blocked.map((row) => Uint8Array.from(row));
 
         for (const other of this.actors) {
-            if (other !== actor && !other.dead) {
+            if (other !== actor && !other.dead && other.map === actor.spawnMap) {
                 blocked[other.square[1]][other.square[0]] = 1;
             }
         }
 
         const square = nearestFree(blocked, actor.spawn);
+        const from = actor.map;
 
         Object.assign(actor, {
+            map: actor.spawnMap,
+            crossed: null,
             dead: false,
             hp: actor.maxHp,
             stamina: actor.maxStamina,
@@ -892,7 +1065,7 @@ export class Battle {
             waitUntil: 0,
             pathGoal: null,
         });
-        this.#emit("respawn", { id: actor.id, square });
+        this.#emit("respawn", { id: actor.id, square, map: actor.map, from });
     }
 }
 
