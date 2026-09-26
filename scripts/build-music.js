@@ -1,26 +1,33 @@
 // Makes the music's instrument samples (client/music, listed in client/js/audio/samples.js) from
-// recordings of real instruments in the Versilian Community Sample Library (VCSL, CC0: public
-// domain) by Versilian Studios: https://github.com/sgossner/VCSL
+// recordings of real instruments, all CC0 (public domain): the Versilian Community Sample
+// Library (VCSL) by Versilian Studios, https://github.com/sgossner/VCSL, and, for the tavern's
+// lute, FreePats' Spanish classical guitar, https://github.com/freepats/spanish-classical-guitar
 //
 //   npm run build:music
 //
-// For each instrument the score plays (score.js), it reads the library's SFZ file (which says
-// which recording is which note), picks a recording every few semitones across the notes the
-// score uses (instruments.js plays the nearest, a little faster or slower), and downloads it
-// (kept in .cache/vcsl). Each is made mono, tuned (by the SFZ's fine tuning), resampled to 32 kHz,
-// cut to as long as the score needs, faded out, made about as loud as the others, and saved as
-// an MP3 named for what's in it (so browsers and the service worker can keep them for good).
+// For each instrument the music plays (score.js, and the tavern's, tavern.js), it reads the
+// library's SFZ file (which says which recording is which note), picks a recording every few
+// semitones across the notes the music uses (instruments.js plays the nearest, a little faster or
+// slower), and downloads it (kept in .cache). Each is made mono, tuned (by the SFZ's fine
+// tuning), resampled to 32 kHz, cut to as long as the music needs, faded out, made about as loud
+// as the others, and saved as an MP3 named for what's in it (so browsers and the service worker
+// can keep them for good).
 
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { Mp3Encoder } from "@breezystack/lamejs";
+import { FLACDecoder } from "@wasm-audio-decoders/flac";
 import { SCORE } from "../client/js/audio/score.js";
+import { TAVERN } from "../client/js/audio/tavern.js";
 
-// The recordings, and the SFZ files (made for the library, kept with a copy of it)
+// The recordings, and the SFZ files (VCSL's made for it, kept with a copy of it; FreePats' with
+// its recordings), and where they're kept once downloaded
 const LIBRARY = "https://raw.githubusercontent.com/sgossner/VCSL/master/";
 const SFZ_LIBRARY = "https://raw.githubusercontent.com/smpldsnds/sgossner-vcsl/main/";
 const CACHE = new URL("../.cache/vcsl/", import.meta.url);
+const FREEPATS = "https://raw.githubusercontent.com/freepats/spanish-classical-guitar/main/";
+const FREEPATS_CACHE = new URL("../.cache/freepats/", import.meta.url);
 const OUT = new URL("../client/music/", import.meta.url);
 const LIST = new URL("../client/js/audio/samples.js", import.meta.url);
 
@@ -43,10 +50,10 @@ const PEAK = 0.95;
 const ONSET = 0.03;
 
 /**
- * Each instrument: its SFZ in the library, how long its samples are (seconds: long enough for
- * the score's longest note and its release), and which recordings to use where the library
- * has more than one for a note (`pick`: a pattern in the file's name, such as a velocity
- * layer). Unpitched ones (drums) name a recording for each kind of hit instead.
+ * Each instrument: its SFZ in the library (VCSL's, or `freepats`), how long its samples are
+ * (seconds: long enough for the music's longest note and its release), and which recordings to
+ * use where the library has more than one for a note (`pick`: a pattern in the file's name, such
+ * as a velocity layer). Unpitched ones (drums) name a recording for each kind of hit instead.
  */
 const SOURCES = {
     recorder: { sfz: "Aerophones/Edge-blown Aerophones/Baroque Alto Recorder - Sustain", seconds: 2.4 },
@@ -58,12 +65,16 @@ const SOURCES = {
     chimes: { sfz: "Idiophones/Struck Idiophones/Hand Chimes", seconds: 2.6 },
     drum: { sfz: "Membranophones/Struck Membranophones/Frame Drum", seconds: 0.8, kinds: { low: /HDrumL_Hit_v3_rr1/, high: /HDrumS_Hit_v2_rr1/ } },
     tambourine: { sfz: "Idiophones/Struck Idiophones/Tambourine 1", seconds: 0.6, kinds: { hit: /Tamb1_Hit_v1_rr1/ } },
+    guitar: { sfz: "SpanishClassicalGuitar-20190618", freepats: true, seconds: 1.8 },
 };
 
+// Every note the music plays
+const NOTES = [...SCORE.notes, ...TAVERN.notes];
+
 // A file from the library, downloaded once
-export async function fetchFromLibrary(path, library = LIBRARY) {
+export async function fetchFromLibrary(path, library = LIBRARY, cache = CACHE) {
     const encoded = path.split("/").map(encodeURIComponent).join("/");
-    const cached = new URL(encoded, CACHE);
+    const cached = new URL(encoded, cache);
 
     try {
         return await readFile(cached);
@@ -97,7 +108,7 @@ export function regionsOf(text) {
         } else {
             const all = { ...group, ...settings };
 
-            regions.push({ sample: all.sample, key: Number(all.pitch_keycenter), offset: Number(all.offset ?? 0), tune: Number(all.tune ?? 0), trigger: all.trigger ?? "attack" });
+            regions.push({ sample: all.sample, key: Number(all.pitch_keycenter ?? all.key), offset: Number(all.offset ?? 0), tune: Number(all.tune ?? 0), trigger: all.trigger ?? "attack" });
         }
     }
 
@@ -160,6 +171,26 @@ export function decodeWav(data) {
     }
 
     return { samples, rate: format.rate };
+}
+
+// Decode a FLAC file to one channel of samples in -1 to 1, and its rate
+async function decodeFlac(data) {
+    const decoder = new FLACDecoder();
+
+    await decoder.ready;
+
+    try {
+        const { channelData, sampleRate } = await decoder.decodeFile(new Uint8Array(data));
+        const samples = new Float32Array(channelData[0].length);
+
+        for (const channel of channelData) {
+            channel.forEach((value, n) => (samples[n] += value / channelData.length));
+        }
+
+        return { samples, rate: sampleRate };
+    } finally {
+        decoder.free();
+    }
 }
 
 // Resample to RATE, `cents` higher, from `start`, for `seconds` (windowed sinc, low-passed below
@@ -288,7 +319,8 @@ async function main() {
 
     for (const [name, source] of Object.entries(SOURCES)) {
         const folder = source.sfz.slice(0, source.sfz.lastIndexOf("/") + 1);
-        const sfz = (await fetchFromLibrary(`${source.sfz}.sfz`, SFZ_LIBRARY)).toString("utf8");
+        const [library, sfzLibrary, cache] = source.freepats ? [FREEPATS, FREEPATS, FREEPATS_CACHE] : [LIBRARY, SFZ_LIBRARY, CACHE];
+        const sfz = (await fetchFromLibrary(`${source.sfz}.sfz`, sfzLibrary, cache)).toString("utf8");
         const regions = regionsOf(sfz).filter(({ sample, trigger }) => trigger !== "release" && (!source.pick || source.pick.test(sample)));
         let chosen;
 
@@ -296,7 +328,7 @@ async function main() {
             chosen = Object.entries(source.kinds).map(([kind, pattern]) => ({ kind, ...regions.find(({ sample }) => pattern.test(sample)) }));
         } else {
             // One recording per note (the first round of any the library repeats), low to high
-            const notes = SCORE.notes.filter(({ instrument }) => instrument === name).map(({ pitch }) => pitch);
+            const notes = NOTES.filter(({ instrument }) => instrument === name).map(({ pitch }) => pitch);
             const byKey = [...new Map(regions.toReversed().map((region) => [region.key, region])).values()].sort((a, b) => a.key - b.key);
 
             chosen = cover(byKey, Math.min(...notes), Math.max(...notes));
@@ -305,7 +337,9 @@ async function main() {
         list[name] = [];
 
         for (const region of chosen) {
-            const wav = decodeWav(await fetchFromLibrary(folder + region.sample.replaceAll("\\", "/")));
+            const path = folder + region.sample.replaceAll("\\", "/");
+            const data = await fetchFromLibrary(path, library, cache);
+            const wav = path.endsWith(".flac") ? await decodeFlac(data) : decodeWav(data);
             const start = onsetOf(wav.samples, wav.rate, region.offset);
             const samples = finish(resample(wav.samples, wav.rate, { start, cents: region.tune, seconds: source.seconds }));
             const mp3 = encodeMp3(samples);
@@ -333,8 +367,10 @@ async function main() {
     await writeFile(LIST, `// Made by scripts/build-music.js (npm run build:music): don't edit it by hand.
 //
 // The music's samples, in client/music: recordings of real instruments from the Versilian
-// Community Sample Library by Versilian Studios (CC0), https://github.com/sgossner/VCSL. Each
-// pitched instrument has recordings at a few notes (\`key\`, MIDI); drums one for each kind of hit.
+// Community Sample Library by Versilian Studios (CC0), https://github.com/sgossner/VCSL, and
+// FreePats' Spanish classical guitar (CC0), https://github.com/freepats/spanish-classical-guitar.
+// Each pitched instrument has recordings at a few notes (\`key\`, MIDI); drums one for each kind
+// of hit.
 
 /** Each instrument's samples: [{ key, file }], or [{ kind, file }] for drums. */
 export const SAMPLES = Object.freeze({

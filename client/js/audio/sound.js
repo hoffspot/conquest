@@ -4,9 +4,12 @@
 //  - Sound effects: blows, spells, footsteps and cues (synth.js), each from where it happens:
 //    quieter the further it is from the player, and to the left or right.
 //  - The environment: the wind blowing, birds singing and leaves rustling in nearby trees.
-//  - Music: the score (score.js), played on recordings of real instruments (instruments.js) as
-//    it goes, note by note, a little ahead of time, so it loops without a seam; with a hall's
-//    reverb.
+//  - Music: the town's score (score.js), or, in the tavern, its jig (tavern.js), played on
+//    recordings of real instruments (instruments.js) as it goes, note by note, a little ahead of
+//    time, so it loops without a seam; with a hall's reverb. Going into the tavern, the town's
+//    music fades into the tavern's, which starts from its beginning; coming out, the town's
+//    comes back where it left off. Upstairs, the tavern's music is quieter and muffled, heard
+//    through the floor.
 //
 // synth.js's sounds are made in a worker (worker.js), so nothing waits for them; the music's
 // recordings (client/music, about a megabyte) are downloaded meanwhile. Browsers only let a page
@@ -24,6 +27,21 @@
 import { baseFor, INSTRUMENTS, sampleFiles } from "./instruments.js";
 import { SCORE } from "./score.js";
 import { PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "./synth.js";
+import { TAVERN } from "./tavern.js";
+
+/** The music: the town's, and the tavern's. */
+export const SCORES = Object.freeze({ town: SCORE, tavern: TAVERN });
+
+/**
+ * Where the player can be (the game's maps), and the music heard there: which score, how loud
+ * (a share of the music bus), and how muffled (heard through a floor: a low-pass filter's
+ * frequency, Hz, or null).
+ */
+export const PLACES = Object.freeze({
+    town: { score: "town", level: 1, muffle: null },
+    taproom: { score: "tavern", level: 1, muffle: null },
+    upstairs: { score: "tavern", level: 0.4, muffle: 650 },
+});
 
 /** The buses, and how loud each is to start with (0 to 1, as the sliders show them). */
 export const BUSES = Object.freeze(["effects", "environment", "music"]);
@@ -79,13 +97,23 @@ const SCHEDULE_MS = 200;
 const REVERB_SEND = 0.28;
 const REVERB_TIME = 2.6;
 
+// Going from one score to the other, the one fades out and the other in over this long
+// (seconds); going upstairs or down, the music gets quieter and muffled, or louder and clear,
+// over this long; and the low-pass filter's frequency when it isn't muffled (Hz)
+const CROSSFADE = 1.5;
+const THROUGH_FLOOR = 0.8;
+const CLEAR = 20000;
+
 // The swing for each attack animation (actions.js), and the sound of each projectile's launch
 const SWINGS = { sword: "swingSword", staff: "swingStaff", hammer: "swingHammer", punch: "swingPunch", cleaver: "swingCleaver" };
 const LAUNCHES = { arrow: "arrow", bolt: "bolt", fireball: "fireball" };
 
 // The footsteps on each kind of ground (setpieces/pieces.js GROUND: grass, road, cobbles, soil,
-// courtyard)
-const STEPS = ["stepGrass", "stepDirt", "stepStone", "stepDirt", "stepStone"];
+// courtyard, planks)
+const STEPS = ["stepGrass", "stepDirt", "stepStone", "stepDirt", "stepStone", "stepWood"];
+
+// How long between the hearth's crackles (seconds, from and to)
+const CRACKLES = [0.2, 0.9];
 
 export class Sound {
     /**
@@ -129,8 +157,15 @@ export class Sound {
         this.trees = [];
         this.nextBird = BIRDS[0];
         this.nextLeaves = LEAVES[0];
+        this.hearth = null;
+        this.nextCrackle = 0;
         this.music = null;
         this.ready = null;
+
+        /** Where the player is (a PLACES key), and each score's playing: { score, start, index, loop, channels, output, filter }. */
+        this.place = "town";
+        this.tracks = {};
+        this.timer = null;
     }
 
     /** Can sound be heard (started, on, and the page showing)? */
@@ -265,9 +300,9 @@ export class Sound {
         // Stopped by the browser rather than by us: started again
         context.addEventListener?.("statechange", () => context === this.context && context.state !== "running" && this.#revive());
 
-        if (!this.music.timer) {
-            this.music.timer = setInterval(() => this.tick(), SCHEDULE_MS);
-            this.music.timer.unref?.();
+        if (!this.timer) {
+            this.timer = setInterval(() => this.tick(), SCHEDULE_MS);
+            this.timer.unref?.();
         }
 
         return true;
@@ -349,7 +384,7 @@ export class Sound {
     #rebuild() {
         const old = this.context;
         const music = this.music;
-        const next = SCORE.notes[music?.index ?? 0];
+        const next = music?.score.notes[music.index];
 
         this.context = null;
         this.wind = null;
@@ -364,8 +399,8 @@ export class Sound {
             return;
         }
 
-        if (music?.start !== null && next) {
-            this.music.start = this.context.currentTime + 0.3 - this.music.loop * SCORE.length - next.time;
+        if (music && music.start !== null && next) {
+            this.music.start = this.context.currentTime + 0.3 - this.music.loop * music.score.length - next.time;
         }
 
         this.stalled = false;
@@ -424,6 +459,60 @@ export class Sound {
         }
     }
 
+    /**
+     * Say where the player is (a PLACES key: the town, or a floor of the tavern), for the music
+     * heard there: from the town into the tavern, the town's music fades into the tavern's, from
+     * its start; back out, the town's comes back where it left off; upstairs, the tavern's is
+     * quieter and muffled.
+     */
+    setPlace(place) {
+        const was = PLACES[this.place];
+        const now = PLACES[place];
+
+        if (!now || place === this.place) {
+            return;
+        }
+
+        this.place = place;
+
+        // (Not started yet: the music starts where the player is)
+        if (!this.context) {
+            this.music = this.tracks[now.score] ?? this.music;
+
+            return;
+        }
+
+        const time = this.context.currentTime;
+        const ramp = (param, to, seconds) => {
+            param.cancelScheduledValues(time);
+            param.setValueAtTime(param.value, time);
+            param.linearRampToValueAtTime(to, time + seconds);
+        };
+        const track = this.tracks[now.score];
+
+        if (was.score !== now.score) {
+            ramp(this.tracks[was.score].output.gain, 0, CROSSFADE);
+
+            if (now.score !== "town" || track.start === null) {
+                // From the start (once every recording is ready)
+                Object.assign(track, { start: null, index: 0, loop: 0 });
+            } else {
+                // Where it was, its next note in a moment
+                const next = track.score.notes[track.index];
+
+                track.start = time + 0.3 - track.loop * track.score.length - next.time;
+            }
+
+            this.music = track;
+        }
+
+        ramp(track.output.gain, now.level, was.score !== now.score ? CROSSFADE : THROUGH_FLOOR);
+
+        if (track.filter) {
+            ramp(track.filter.frequency, now.muffle ?? CLEAR, THROUGH_FLOOR);
+        }
+    }
+
     /** While the game is paused, no birds sing or leaves rustle (the music and wind go on). */
     setPaused(paused) {
         this.paused = paused;
@@ -440,6 +529,11 @@ export class Sound {
         this.trees = trees;
     }
 
+    /** Where a fire is burning near the player ({ x, z } metres: the tavern's hearth), to hear it crackle; or null. */
+    setHearth(at) {
+        this.hearth = at;
+    }
+
     /** Let the wind blow, birds sing and leaves rustle (in the game), or not. */
     setAmbient(on) {
         this.ambient = on;
@@ -452,9 +546,22 @@ export class Sound {
         }
     }
 
-    /** Birds and leaves, now and then. Call every frame. */
+    /** Birds and leaves, and the hearth's crackling, now and then. Call every frame. */
     update(dt) {
-        if (!this.ambient || this.paused || !this.playing) {
+        if (this.paused || !this.playing) {
+            return;
+        }
+
+        if (this.hearth) {
+            this.nextCrackle -= dt;
+
+            if (this.nextCrackle <= 0) {
+                this.nextCrackle = CRACKLES[0] + Math.random() * (CRACKLES[1] - CRACKLES[0]);
+                this.play("crackle", { at: this.hearth, volume: 0.6 + Math.random() * 0.4, rate: 0.85 + Math.random() * 0.3 });
+            }
+        }
+
+        if (!this.ambient) {
             return;
         }
 
@@ -642,48 +749,68 @@ export class Sound {
         this.wind = { source, level };
     }
 
-    // The music's channels: one per instrument (its level and place), dry and through a reverb
+    // The music's tracks, one for each score: a channel for each instrument it plays (its level
+    // and place), into the score's own level (for fading it in and out) and filter (muffling it
+    // upstairs), then dry and through a reverb
     #buildMusic() {
         const context = this.context;
         const reverb = context.createConvolver();
         const send = context.createGain();
-        const channels = {};
+        const here = PLACES[this.place];
 
         reverb.buffer = hall(context, REVERB_TIME);
         send.gain.value = REVERB_SEND;
         send.connect(reverb).connect(this.buses.music);
 
-        for (const [name, instrument] of Object.entries(INSTRUMENTS)) {
-            const level = context.createGain();
+        for (const [name, score] of Object.entries(SCORES)) {
+            const output = context.createGain();
+            const filter = context.createBiquadFilter?.() ?? null;
+            const channels = {};
 
-            level.gain.value = instrument.mix * MUSIC_LEVEL;
+            output.gain.value = here.score === name ? here.level : 0;
 
-            if (context.createStereoPanner) {
-                const panner = context.createStereoPanner();
-
-                panner.pan.value = instrument.pan;
-                level.connect(panner);
-                panner.connect(this.buses.music);
-                panner.connect(send);
-            } else {
-                level.connect(this.buses.music);
-                level.connect(send);
+            if (filter) {
+                filter.type = "lowpass";
+                filter.frequency.value = here.score === name && here.muffle ? here.muffle : CLEAR;
+                filter.Q.value = 0.5;
+                output.connect(filter);
             }
 
-            channels[name] = level;
+            (filter ?? output).connect(this.buses.music);
+            (filter ?? output).connect(send);
+
+            for (const instrument of new Set(score.notes.map((note) => note.instrument))) {
+                const level = context.createGain();
+
+                level.gain.value = INSTRUMENTS[instrument].mix * MUSIC_LEVEL;
+
+                if (context.createStereoPanner) {
+                    const panner = context.createStereoPanner();
+
+                    panner.pan.value = INSTRUMENTS[instrument].pan;
+                    level.connect(panner).connect(output);
+                } else {
+                    level.connect(output);
+                }
+
+                channels[instrument] = level;
+            }
+
+            // (Where each score has got to is kept when the browser's sound is made anew)
+            this.tracks[name] = { start: null, index: 0, loop: 0, ...this.tracks[name], score, channels, output, filter };
         }
 
-        // (Where the music has got to is kept when the browser's sound is made anew)
-        this.music = { start: null, index: 0, loop: 0, timer: null, ...this.music, channels };
+        this.music = this.tracks[here.score];
     }
 
     /**
-     * Play the score's notes that start in the next LOOKAHEAD seconds, round again from its
-     * start at its end (every SCHEDULE_MS, once started).
+     * Play the notes of the score heard where the player is that start in the next LOOKAHEAD
+     * seconds, round again from its start at its end (every SCHEDULE_MS, once started).
      */
     scheduleMusic() {
         const music = this.music;
         const context = this.context;
+        const score = music?.score;
 
         // (Starting once every recording is ready, or known not to be, so none is missing from the start)
         if (!this.playing || (music.start === null && (!this.instruments.size || this.instruments.size + this.unplayable < RECORDINGS))) {
@@ -691,13 +818,13 @@ export class Sound {
         }
 
         const now = context.currentTime;
-        const notes = SCORE.notes;
+        const notes = score.notes;
 
         music.start ??= now + 0.3;
 
         for (;;) {
             const note = notes[music.index];
-            const at = music.start + music.loop * SCORE.length + note.time;
+            const at = music.start + music.loop * score.length + note.time;
 
             if (at > now + LOOKAHEAD) {
                 break;
@@ -706,7 +833,7 @@ export class Sound {
             // (Notes that were due while the page was busy are let go, not played late)
             if (at >= now - 0.05 && this.volumes.music > 0) {
                 try {
-                    this.#note(note, at);
+                    this.#note(note, at, music);
                 } catch {
                     // (One note going wrong mustn't stop the rest)
                 }
@@ -721,7 +848,7 @@ export class Sound {
         }
     }
 
-    #note(note, at) {
+    #note(note, at, track) {
         const instrument = INSTRUMENTS[note.instrument];
         const key = baseFor(note.instrument, note.pitch);
         const buffer = this.instruments.get(`${note.instrument} ${key}`);
@@ -746,12 +873,14 @@ export class Sound {
             source.stop(end + instrument.release + 0.02);
         } else {
             // Plucked and struck notes ring on a while
-            level.gain.setValueAtTime(note.velocity, end + 1.2);
-            level.gain.linearRampToValueAtTime(0, end + 1.5);
-            source.stop(end + 1.52);
+            const ring = instrument.ring ?? 1.2;
+
+            level.gain.setValueAtTime(note.velocity, end + ring);
+            level.gain.linearRampToValueAtTime(0, end + ring + 0.3);
+            source.stop(end + ring + 0.32);
         }
 
-        source.connect(level).connect(this.music.channels[note.instrument]);
+        source.connect(level).connect(track.channels[note.instrument]);
         source.addEventListener("ended", () => {
             source.disconnect();
             level.disconnect();
@@ -760,7 +889,7 @@ export class Sound {
 
     /** Stop everything for good (the music's timer and the browser's sound). */
     close() {
-        clearInterval(this.music?.timer);
+        clearInterval(this.timer);
         this.context?.close?.();
         this.context = null;
     }

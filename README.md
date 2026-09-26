@@ -114,17 +114,24 @@ sight, already at full health) says why.
 **Sound**, in three kinds, each with its own volume:
 
 - **Effects**: swords, staffs, hammers and fists swish; bows twang and spells crackle and chime;
-  every kind of blow sounds different where it lands; feet step on cobbles, dirt and grass.
-- **Environment**: the wind blows, birds sing, and the trees near you rustle.
+  every kind of blow sounds different where it lands; feet step on cobbles, dirt, grass and
+  wooden boards; the tavern's door creaks open and bangs shut.
+- **Environment**: the wind blows, birds sing, and the trees near you rustle; in the tavern, the
+  hearth's fire crackles.
 - **Music**: a four-minute score in the style of *The Bard's Tale* (1985), played on recordings
   of real, old instruments: an alto recorder, an ocarina, a folk harp, a strumstick (a
   small plucked folk instrument, for a lute), a Renaissance chamber organ, hand chimes, a frame
   drum and a tambourine, with harpsichord arpeggios in the bridge. It's in D Dorian, in 3/4, with
   an intro, verses, choruses, a bridge, a quiet verse, a last chorus and an outro that leads back
   into the intro, so it loops without a seam. It's quiet to start with, under the effects.
+  In the tavern it fades into a lively jig, led by a lute (played on a classical guitar's nylon
+  strings, the nearest to a lute's gut), with a recorder, a frame drum and a tambourine: in 6/8,
+  in D Mixolydian with a strain in B minor, about a minute and a half, looping. Upstairs you hear
+  it through the floor, quieter and muffled; back outside, the town's music carries on where it
+  left off.
 
 The effects and the town's sounds are made in code as the game starts (in a worker, so nothing
-waits for them); the music's recordings (about a megabyte) are downloaded meanwhile. Effects and
+waits for them); the music's recordings (about 1.1 megabytes) are downloaded meanwhile. Effects and
 the town are heard from where you stand: quieter further away, and to the left or right.
 
 **Game options**, in the menu: turn the minimap on or off, turn all the sound on or off, and set
@@ -248,8 +255,8 @@ client/                 The game (static files served to the browser)
     setpieces/          Town (and castle) layouts, and the pieces they're made from
   js/audio/             The sound: dsp.js has the building blocks; synth.js makes the effects
                         and the town's sounds (worker.js away from the page); score.js writes
-                        the music; instruments.js and samples.js are the band's recordings;
-                        sound.js plays it all
+                        the town's music and tavern.js the tavern's; instruments.js and
+                        samples.js are the band's recordings; sound.js plays it all
   js/world/             Drawing the world
     view.js             The renderer, lights, sky, the camera, quality levels, the cutaway
     ground.js           The ground: textures blended square by square
@@ -300,6 +307,8 @@ docs/MODERNIZATION.md   The history: the book's Last Colony, modernized, before 
 - Music's instruments: recordings from the Versilian Community Sample Library by Versilian
   Studios (<https://github.com/sgossner/VCSL>), CC0, trimmed and made into MP3s by
   `scripts/build-music.js` (with its SFZ files from <https://github.com/smpldsnds/sgossner-vcsl>).
+  The tavern's lute is FreePats' Spanish classical guitar
+  (<https://github.com/freepats/spanish-classical-guitar>), CC0.
 - The tavern's lettering: UnifrakturMaguntia by j. 'mach' wust (after Peter Wiegel), SIL Open
   Font License 1.1
   (`client/fonts/UnifrakturMaguntia-OFL.txt`).

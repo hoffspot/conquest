@@ -9,10 +9,12 @@
 //    inharmonic partials for blades, a knock for wood, a zap for magic, a roar for fire.
 //  - The bow: a plucked string (Karplus-Strong); spells: rising chimes and a whoosh.
 //  - Spells: a rising shimmer casting a heal, a warm swell as it lands; a dizzy warble for a stun.
-//  - Footsteps on stone, dirt and grass; a body falling.
+//  - Footsteps on stone, dirt, grass and wooden boards; a body falling; a door opening and
+//    banging shut behind someone.
 //  - Cues: a target chosen, an enemy slain, falling, waking again, out of breath; the action
 //    wheel opening, and a slice that can't be used.
-//  - Around the town (the environment): a bird's chirp, leaves rustling, the wind (a loop).
+//  - Around the town (the environment): a bird's chirp, leaves rustling, the wind (a loop); and
+//    in the tavern, the hearth's fire crackling.
 //
 // Each sound belongs to a bus, which has its own volume: "effects" (the default) or
 // "environment" (the music is music.js's). Built from dsp.js; no Web Audio (sound.js plays
@@ -76,6 +78,13 @@ function step(random, kind) {
         const heel = add(burst(random, 0.05, "bandpass", 3200, 1.1, 0.0008, 0.012), thump(160, 90, 0.08, 0.018), 0.5);
 
         return add(heel, burst(random, 0.04, "bandpass", 2600, 1.2, 0.0008, 0.01), 0.35, 0.03);
+    }
+
+    if (kind === "wood") {
+        // A hollow knock on a board, and the board's low ring under it
+        const knock = add(burst(random, 0.06, "bandpass", 1100, 1.3, 0.0008, 0.016), thump(150, 100, 0.1, 0.024), 0.7);
+
+        return add(knock, shape(tone(0.14, 190 + random.next() * 30, { harmonics: [[1, 1], [2.3, 0.35]] }), hit(0.001, 0.035)), 0.45);
     }
 
     if (kind === "dirt") {
@@ -182,6 +191,20 @@ export const SOUNDS = {
     stepStone: { variants: 4, volume: 0.3, make: (random) => step(random, "stone") },
     stepDirt: { variants: 4, volume: 0.32, make: (random) => step(random, "dirt") },
     stepGrass: { variants: 4, volume: 0.28, make: (random) => step(random, "grass") },
+    stepWood: { variants: 4, volume: 0.32, make: (random) => step(random, "wood") },
+
+    // A door: the latch lifting, its hinges creaking as it swings, and it banging shut
+    door: {
+        variants: 2,
+        volume: 0.55,
+        make: (random) => {
+            const latch = add(burst(random, 0.03, "highpass", 3500, 0.8, 0.0005, 0.006), burst(random, 0.03, "bandpass", 1800, 2, 0.0005, 0.01), 0.8, 0.05);
+            const creak = shape(filter(tone(0.45, (t) => 300 + 170 * t + 35 * Math.sin(TAU * 9 * t), { fm: [1.51, 0.8], harmonics: [[1, 1], [2, 0.5], [3, 0.3]] }), "bandpass", 900, 1.2), swell(0.45, 0.35));
+            const shut = add(thump(95, 50, 0.35, 0.08), burst(random, 0.12, "lowpass", 700, 0.8, 0.001, 0.03), 0.7);
+
+            return add(add(latch, creak, 0.3, 0.08), shut, 0.9, 0.62);
+        },
+    },
 
     // A body hitting the ground, and its gear after it
     fall: {
@@ -265,6 +288,25 @@ export const SOUNDS = {
             }
 
             return out;
+        },
+    },
+    // The hearth's fire: a few pops and snaps over the soft rush of the flames
+    crackle: {
+        variants: 4,
+        volume: 0.3,
+        bus: "environment",
+        make: (random) => {
+            const length = 0.5 + random.next() * 0.3;
+            let out = shape(filter(noise(random, length), "lowpass", 900), swell(length, 0.4));
+
+            for (let k = 0, pops = 2 + Math.floor(random.next() * 4); k < pops; k++) {
+                out = add(out, burst(random, 0.03, "highpass", 1800 + random.next() * 2500, 0.8, 0.0004, 0.004 + random.next() * 0.006), 0.3 + random.next() * 0.35, random.next() * (length - 0.05));
+            }
+
+            // (Its peaks rounded off a little, so it's as loud as the others without clipping)
+            const most = out.reduce((top, value) => Math.max(top, Math.abs(value)), 0);
+
+            return out.map((value) => Math.tanh((2.5 * value) / most));
         },
     },
     leaves: {

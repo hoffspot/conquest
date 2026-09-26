@@ -67,7 +67,7 @@ export const PROPS = Object.freeze({
 export const TREE_VARIANTS = 6;
 
 /** What the ground is, square by square. */
-export const GROUND = Object.freeze({ grass: 0, road: 1, cobbles: 2, soil: 3, courtyard: 4 });
+export const GROUND = Object.freeze({ grass: 0, road: 1, cobbles: 2, soil: 3, courtyard: 4, planks: 5 });
 
 export const wallKey = (axis, length) => `wall-${axis}-${length}`;
 export const towerKey = (shape, top) => `tower-${shape}-${top}`;

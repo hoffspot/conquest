@@ -6,6 +6,7 @@ import { describe, it } from "node:test";
 import { baseFor, INSTRUMENTS, keysOf, sampleFiles } from "../client/js/audio/instruments.js";
 import { SAMPLES } from "../client/js/audio/samples.js";
 import { BEATS_PER_BAR, midi, SCORE, TEMPO } from "../client/js/audio/score.js";
+import { TAVERN, TAVERN_BEATS_PER_BAR, TAVERN_TEMPO } from "../client/js/audio/tavern.js";
 import { decodeWav, regionsOf } from "../scripts/build-music.js";
 
 const BAR = (BEATS_PER_BAR * 60) / TEMPO;
@@ -87,9 +88,68 @@ describe("the score (score.js)", () => {
     });
 });
 
+describe("the tavern's music (tavern.js)", () => {
+    const bar = (TAVERN_BEATS_PER_BAR * 60) / TAVERN_TEMPO;
+    const inSection = (section) => TAVERN.notes.filter(({ time }) => time >= section.start && time < section.start + section.bars * bar);
+
+    it("is a jig in 6/8, about a minute and a half: strains of eight bars, each played twice", () => {
+        assert.equal(TAVERN_TEMPO, 108);
+        assert.equal(TAVERN_BEATS_PER_BAR, 2);
+        assert.deepEqual(TAVERN.sections.map(({ name }) => name), ["intro", "A", "A again", "B", "B again", "C", "C again", "A on the lute", "break", "last A", "last B", "outro"]);
+        assert.ok(TAVERN.sections.filter(({ name }) => /^(last )?[ABC]( again)?$/.test(name)).every(({ bars }) => bars === 8));
+        assert.equal(TAVERN.sections.reduce((bars, section) => bars + section.bars, 0) * bar, TAVERN.length);
+        assert.ok(TAVERN.length > 85 && TAVERN.length < 100, `${TAVERN.length} s`);
+        assert.ok(TAVERN.sections.every((section, k) => k === 0 || section.bar === TAVERN.sections[k - 1].bar + TAVERN.sections[k - 1].bars));
+    });
+
+    it("is led by the lute in every strain, with a recorder, a frame drum and a tambourine, every note in time and near a recording", () => {
+        assert.deepEqual([...new Set(TAVERN.notes.map(({ instrument }) => instrument))].sort(), ["drum", "guitar", "recorder", "tambourine"]);
+
+        for (const section of TAVERN.sections) {
+            assert.ok(inSection(section).some(({ instrument }) => instrument === "guitar"), section.name);
+        }
+
+        for (const [k, note] of TAVERN.notes.entries()) {
+            assert.ok(note.time >= 0 && note.time < TAVERN.length);
+            assert.ok(k === 0 || note.time >= TAVERN.notes[k - 1].time, "in time order");
+            assert.ok(note.duration > 0 && note.velocity > 0 && note.velocity <= 1);
+
+            if (!INSTRUMENTS[note.instrument].kinds) {
+                assert.ok(Math.abs(baseFor(note.instrument, note.pitch) - note.pitch) <= 2, `${note.instrument} ${note.pitch}`);
+            }
+        }
+
+        // Lively: the drums on every beat of the full strains, and a quaver's lilt in the tune
+        const full = TAVERN.sections.find(({ name }) => name === "last B");
+        const hits = inSection(full).filter(({ instrument }) => instrument === "drum");
+
+        assert.ok(hits.length >= full.bars * 4);
+    });
+
+    it("keeps to D Mixolydian, with a C sharp only over A major and in the B minor strain", () => {
+        const pitched = TAVERN.notes.filter(({ instrument }) => !INSTRUMENTS[instrument].kinds);
+        const allowed = new Set([2, 4, 6, 7, 9, 11, 0, 1]);
+
+        assert.ok(pitched.every(({ pitch }) => allowed.has(pitch % 12)));
+
+        const sharp = new Set(TAVERN.sections.filter((section) => inSection(section).some(({ instrument, pitch }) => !INSTRUMENTS[instrument].kinds && pitch % 12 === 1)).map(({ name }) => name));
+
+        assert.deepEqual([...sharp].sort(), ["C", "C again", "break", "intro", "outro"]);
+    });
+
+    it("ends on A, leading back into D at the start: it loops without a seam", () => {
+        const lowest = (notes) => notes.filter(({ instrument }) => !INSTRUMENTS[instrument].kinds).reduce((low, note) => (note.pitch < low.pitch ? note : low));
+
+        // (Bars' first notes are played a moment early or late, as players do)
+        assert.equal(lowest(TAVERN.notes.filter(({ time }) => time >= TAVERN.length - bar - 0.01)).pitch % 12, 9);
+        assert.equal(lowest(TAVERN.notes.filter(({ time }) => time < bar - 0.01)).pitch % 12, 2);
+        assert.ok(TAVERN.length - TAVERN.notes.at(-1).time + TAVERN.notes[0].time < 0.5);
+    });
+});
+
 describe("the instruments (instruments.js, samples.js)", () => {
-    it("has recordings of every instrument the score plays, and of every kind of drum hit", () => {
-        const played = new Set(SCORE.notes.map(({ instrument }) => instrument));
+    it("has recordings of every instrument the music plays, and of every kind of drum hit", () => {
+        const played = new Set([...SCORE.notes, ...TAVERN.notes].map(({ instrument }) => instrument));
 
         assert.deepEqual([...played].sort(), Object.keys(INSTRUMENTS).sort());
         assert.deepEqual(Object.keys(SAMPLES).sort(), Object.keys(INSTRUMENTS).sort());
