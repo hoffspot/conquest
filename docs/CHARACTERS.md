@@ -96,9 +96,9 @@ Each detail slider blends MakeHuman's own shapes. For example, "Pointed ears" is
 Because it shares the skeleton, every animation, piece of equipment and hairstyle works on it too.
 
 **The courtesans** (presets.js `FOLK`) are an hourglass: a narrow waist (the waist slider at -0.6
-to -0.9), full hips (0.3 to 0.5: above about 0.6, the hips bulge out at the sides like
-saddlebags), round buttocks (0.7 to 1) and busts from full to fuller (0.65 to 1), on slim, fairly
-toned bodies, each a different height, heritage, face and hair.
+to -0.9), curving hips (0.15 to 0.28: much above 0.5, the hips bulge out at the sides like
+saddlebags), round buttocks (0.4 to 0.55) and busts from full to fuller (0.65 to 1), on slim,
+fairly toned bodies, each a different height, heritage, face and hair.
 
 ### Skin, eyes and hair
 

@@ -57,7 +57,7 @@ export const MANIFEST = Object.freeze([
             ["js/characters/macro.js", 6921],
             ["js/characters/noise.js", 2651],
             ["js/characters/pack.js", 3799],
-            ["js/characters/presets.js", 9952],
+            ["js/characters/presets.js", 9955],
             ["js/characters/rig.js", 35687],
             ["js/characters/skin.js", 23724],
             ["js/core/battle.js", 51716],
