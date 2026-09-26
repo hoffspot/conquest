@@ -690,6 +690,15 @@ input[type="range"] {
 
 #hud .hud-top {
     top: calc(var(--safe-top) + 12px);
+    justify-content: flex-end;
+}
+
+/* The player's name, health and stamina, in the bottom left corner (the stamina bar, when it
+   shows, growing it upwards) */
+#playerplate {
+    position: absolute;
+    left: calc(var(--safe-left) + 12px);
+    bottom: calc(var(--safe-bottom) + 12px);
 }
 
 #hud .hud-bottom {
@@ -1019,7 +1028,8 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 #hud .hint {
     position: absolute;
     left: 50%;
-    bottom: calc(var(--safe-bottom) + 18px);
+    /* Above the player's plate in the corner, clear of it however narrow the screen */
+    bottom: calc(var(--safe-bottom) + 12px + 80px);
     transform: translateX(-50%);
     margin: 0;
     padding: 8px 14px;

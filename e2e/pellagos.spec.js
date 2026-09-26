@@ -775,6 +775,16 @@ test.describe("on a phone", () => {
 
         expect(hint.x).toBeGreaterThanOrEqual(0);
         expect(hint.x + hint.width).toBeLessThanOrEqual(zoom.x);
+
+        // The player's name and health in the bottom left corner, beside the zoom buttons and
+        // under the hint, with room above it for the stamina bar
+        const plate = await page.locator("#playerplate").boundingBox();
+
+        expect(plate.x).toBeLessThan(30);
+        expect(plate.y + plate.height).toBeGreaterThan(844 - 30);
+        expect(plate.y + plate.height).toBeLessThanOrEqual(844);
+        expect(plate.x + plate.width).toBeLessThanOrEqual(zoom.x);
+        expect(hint.y + hint.height).toBeLessThanOrEqual(plate.y - 20);
     });
 
     test("runs where the ground is double-tapped", async ({ page }) => {

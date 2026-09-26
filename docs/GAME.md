@@ -449,8 +449,10 @@ closes it.
    the taps happened, so a slow frame between them doesn't matter) turns it into a run, as does
    a Shift-click. A swipe up that starts on the player (40 pixels up within 600 ms, mostly up)
    sends them straight ahead the way they face, running (an `ahead` order), with the ring where
-   they'll stop; blocked straight away, it's refused with a sound. The heads-up display (app/hud.js) shows the player's name and health, with an
-   orange stamina bar under the health bar while stamina isn't full, "Out of breath" when a run
+   they'll stop; blocked straight away, it's refused with a sound. The heads-up display
+   (app/hud.js) shows the player's name and health in the bottom left corner (the zoom buttons
+   in the bottom right), with an orange stamina bar under the health bar while stamina isn't
+   full, "Out of breath" when a run
    ends for want of it, the minimap, bars over the other characters (the target's lit red), and
    the damage each blow does.
 5. **The menu** (the menu button, or Escape) pauses the game: Resume, Game options, or back to

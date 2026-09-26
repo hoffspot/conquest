@@ -49,8 +49,8 @@ Your character is saved in the browser, with the town they live in.
 lights up, until it falls or you're told to go elsewhere. **Double-tap** (or double-click) to run there instead, as much
 faster than walking as people sprint: 7.9 metres a second to your walking 1.7. Running tires you:
 it uses 3 points of **stamina** a second, and anything else gets 1 a second back. You have as
-much stamina as hit points (50). While it isn't full, an orange bar under your health shows
-what's left; with none left you're out of breath, and walk the rest of the way. Standing still,
+much stamina as hit points (50). Your name and health are in the bottom left corner; while your
+stamina isn't full, an orange bar under your health shows what's left; with none left you're out of breath, and walk the rest of the way. Standing still,
 you attack whatever is within your weapon's reach on your own: melee weapons reach the eight
 squares round yours; ranged ones anything in range that you can see. **Swipe up from yourself**
 (a quick flick upwards, starting on your character) to go straight ahead the way you're facing,
