@@ -693,6 +693,15 @@ input[type="range"] {
     justify-content: flex-end;
 }
 
+/* The black the view dips to going through a door or up the stairs (under the rest of the HUD) */
+#hud .curtain {
+    position: absolute;
+    inset: 0;
+    background: #000;
+    opacity: 0;
+    pointer-events: none;
+}
+
 /* The player's name, health and stamina, in the bottom left corner (the stamina bar, when it
    shows, growing it upwards) */
 #playerplate {

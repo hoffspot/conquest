@@ -31,6 +31,41 @@ to the same town:
   walk round them.
 - **Where everyone starts**: the player in the middle of the market square, the orc 3 squares in
   from the north-west corner, and the orc's patrol from there halfway down the map's west side.
+- **The tavern** (`tavernOf`), 3 by 3 plots (12 metres), turned to face the market square if it
+  stands on it, otherwise a street (whichever of its sides has an open plot in the middle): its
+  door and the two squares in front of it (`front`), cleared, and the square outside them where
+  whoever comes out stands (`outside`).
+
+### Maps and links (core/interiors.js)
+
+The town is one map; each floor of a building is another, on the same 1-metre squares:
+`world.maps` is `{ town, taproom, upstairs }`, each `{ id, width, height, blocked, opaque (what
+blocks sight), ground, origin }`. A floor is drawn as a plan, a row of characters for each row
+of squares, north at the top:
+
+```
+TAPROOM                UPSTAIRS
+<SSSS........K         .SSSS>WBBwWBBw       .  floor           W  wall      T  table
+.............K         ......WBB.WBB.       D  door            H  hearth    b  bench
+...bb.bb..C..K         ......W...W...       <  foot of stairs  C  bar       K  barrels
+HH.TT.TT..C..K         ......W..cW..c       >  top of stairs   M  counter   B  bed
+HH.bb.bb..C..K         ..MMM.WW.WWW.W       S  stairs          w  washstand c  chest
+HH........C..K         ..............                          L  chaise    o  side table
+HH.bb.bb..C..K         ......WW.WWW.W
+...TT.TT.....K         ......W..cW..c
+...bb.bb......         ....o.W...W...
+..............         ......WBB.WBB.
+......DD......         .LL...WBBwWBBw
+```
+
+Walls, hearths and stairs block walking and sight; furniture only walking. Each run of the same
+thing is one piece (a table, a bed, a stretch of wall), for the art and the minimap. The maps
+are joined by links, `world.links`: the tavern's door (from the town's `front` squares to the
+taproom's `D` squares) and its stairs (from `<` to `>`). Each end of a link is `{ map, squares,
+arrive, facing }`: the squares that go through it, and where (and which way facing) whoever
+comes through it from the other end stands: just inside the door facing north into the room, at
+the foot or the top of the stairs facing south, outside the tavern facing away from it.
+`routeBetween` finds the links from one map to another.
 
 ## The battle (core/battle.js)
 
@@ -87,7 +122,16 @@ draws anything.
   calls off an attack that hasn't landed; walking off doesn't stop a spell once it's begun.
 - **Dying and coming back.** At no hit points a character falls; the player gets up in the
   market square 5 seconds later, with full health, and the orc back in its corner 30 seconds
-  later.
+  later (whichever map they fell on).
+- **Doors and stairs.** Every character is on a map (`actor.map`), and only sees, reaches,
+  paths round and fights those on the same one. An `enter` order (`{ type: "enter", link }`)
+  walks a character to one of the link's squares on its map; standing on one (or next to one
+  someone else is standing on), it goes through, coming out at the other end's `arrive` square
+  (or the nearest free one), facing its way (the `cross` event). A projectile whose target goes
+  through fizzles. The orc, chasing someone who goes through a door or up the stairs within 3
+  seconds of it last seeing them, follows them the same way; left on another map, it finds its
+  way back through the links to its patrol. The player, set to fight someone who goes through,
+  goes after them the same way.
 
 Each weapon has one or more attacks, used in order of preference by whichever can reach, so a
 weapon can have melee and ranged attacks (a staff that strikes up close and casts from afar
@@ -159,6 +203,47 @@ cobbles, soil and courtyard earth is at each point, with soft, ragged edges; the
 tiling textures by it over grass, each at its real size (cobbles about 16 cm across), and shades
 everything by a much larger copy of the grass so the repeats don't show from afar.
 
+### Inside and out (app/game.js)
+
+Each map is drawn at its own place in the 3D world (`MAP_ORIGINS`: the taproom 2 kilometres east
+of the town, upstairs 100 metres south of that), so nothing of one (shadows, blood, sounds) is
+ever seen or heard on another; a character's place on its map is offset by its map's origin.
+Only the map the player is on is shown: the town and its ground, or one floor inside. Going
+through, the screen dips to black and fades back in over 0.45 s, the camera behind the player
+the way they face. Indoors, the view (`setIndoors`) has a dark background and closer fog, a dim
+warm light from above and the room's two lamps (for the taproom the hearth's fire and a candle
+wheel; upstairs two red-shaded lamps), flickering. The two point lights are always in the
+scene, out (at no intensity) outdoors, so that going in and out never makes Three.js recompile
+every lit material's shaders.
+
+**Doors and stairs** (app/doors.js). Each end of each link has a box a tap's ray can hit (the
+tavern's front door, the inside of the door, the side of the stairs, the stairwell upstairs) and
+a glow round its edge: a green ribbon with a softer band either side, drawn additively. A tap on
+one (after enemies, before the ground) tells the player to go through; it glows for at least
+1.2 s, and while the player's on their way, pulsing, then fades.
+
+### Inside the tavern (world/interiors3d.js)
+
+The rooms are built from their plans with the art kits' materials, five art pixels to the metre:
+walls of plaster on a stone footing between timber posts under a beam, with windows of daylight
+and curtained doorways; flagstones in the taproom and planks upstairs. In the taproom, the
+tables with candles, tankards and plates, and benches; the bar, with tankards along its top, and
+behind it two tiers of casks on a stillage, each with a brass tap, and shelves of tankards; the
+hearth, a stone chimney breast with a mantel, logs and embers, three flames and a boar on a spit
+turning slowly over them; a candle wheel; and the stairs, twelve steps and a handrail rising
+3 metres along the north wall. Upstairs, rugs, the counter with a velvet runner, a ledger, a
+bell, a candle and a vase of flowers, a chaise longue and side table, the stairwell with its
+rail, and four bedrooms with canopied beds (their drapes red or purple), washstands and chests,
+lit by red-shaded sconces. Everything that doesn't move is merged by material (about 100 draw
+calls in all with the characters); the spit and the flames apart.
+
+The flames are crossed quads with a shader of rising noise, drawn additively and flickering,
+and embers rise from the hearth. The whole room is shown, like a doll's house with its near side
+cut away: every interior material discards what's more than 1.25 metres above the floor and on
+the camera's side of the player (`INTERIOR_CUT`: the player's position and the direction to the
+camera, set each frame), so walls, the chimney breast and bed canopies between the camera and
+the player are lowered, and everything beyond them stands full height.
+
 ### The town (world/town3d.js, world/art)
 
 The art kits build every piece of the town's plan in the art's world pixels, five to a metre:
@@ -167,7 +252,10 @@ The art kits build every piece of the town's plan in the art's world pixels, fiv
   brick, stone), one or two storeys of about 3.5 metres, with 2-metre doors and 1-metre windows
   on their south sides, where the camera sees them.
 - **Special buildings** (kits/landmarks.js): a two-storey tavern with a jettied, timber-framed
-  upper floor and a sign over the door; a stone church with buttresses, tall windows and a tower
+  upper floor, its name, *Wenches and Ale*, in gold blackletter (UnifrakturMaguntia, kits/signs.js,
+  loaded as a web font) on an oxblood board along its front, and a hanging sign painted on a
+  canvas (a barmaid in a red bodice raising two foaming tankards, in a gilt border, with the
+  name on a scroll) swinging from an iron bracket by the door, turned to face the square; a stone church with buttresses, tall windows and a tower
   and spire; a blacksmith's workshop with an open shed over the forge, anvil and quenching
   trough; a market hall on stone columns with stalls of produce beneath; a windmill with a
   thatched cap and four sails. (KayKit's buildings were tried first, but they're toy-like: their
@@ -273,7 +361,7 @@ head (always facing the camera) until it wears off.
 
 ### The minimap (app/minimap.js)
 
-The whole world from above, north up, in the top right of the screen under the menu button (a
+The whole of the map the player is on from above, north up, in the top right of the screen under the menu button (a
 canvas, a third of the screen's width on phones, up to 188 pixels). Each square is coloured for
 its ground (grass, road, cobbles, soil, courtyard) or what stands on it (roofs over buildings,
 blue-grey for the tavern, church and other landmarks, props, trees), with a little variation
@@ -282,7 +370,9 @@ crowns. That's painted once, four pixels to the metre. Each frame (at most 30 ti
 draws it scaled to fit, then what the camera sees (the ground under the screen's corners), where
 the player is going, the enemies (red dots, the target ringed) and the player (an arrowhead
 pointing the way they face). A tap on it walks the player there, or fights an enemy within 12
-pixels of the tap; a double tap runs.
+pixels of the tap; a double tap runs. Inside, each floor is painted from its plan: the floor,
+walls, furniture in its colours, the stairs' treads, round barrels, the hearth's fire and the
+doorway; only those on the same floor as the player are shown.
 
 ### Sound (audio/)
 
@@ -508,6 +598,13 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   sprinting, then walking with no stamina), and a simulated minute on a generated world.
   `test/pathfinding.test.js`: A* paths, and the line of squares straight ahead (stopping at a
   wall or the world's edge, never cutting a blocked corner).
+- `test/interiors.test.js`: reading plans, the tavern's floors (every table, bench, bed and the
+  bar reachable), the tavern's door clear and reachable on 40 seeds, routes between maps, going
+  in, up, down and out, orders only on the map a character is on, fighting only there, the orc
+  following through the door and up the stairs and finding its way back, the player going after
+  a target that goes through, respawning on the map started on, arrows fizzling; and the doors
+  and stairs to tap: a target at each end, hit by a tap on it on its map only, glowing when
+  tapped and while the player makes for it.
 - `test/wounds.test.js`: battle damage on the real body: the thresholds, a kind for every
   reaction, a mark every blow and a wound for each threshold crossed, each kind painted its own
   way (cuts bleed, blunt blows bruise, fire chars and never bleeds, arcane light leaves veins),
@@ -521,7 +618,8 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
 - `test/actions.test.js`: attacks (their timing, where the hands reach on different bodies,
   two-handed grips, alternating punches), reactions and falls, on the real body.
 - `test/app.test.js`, `test/town3d.test.js`, `test/manifest.test.js`, `test/sw.test.js`: saving,
-  heroes (and forgetting volumes saved on the old scale), the minimap's colours, the action wheel (which slice a flick is in, its shapes, its
+  heroes (and forgetting volumes saved on the old scale), the minimap's colours (in the town and
+  inside), the action wheel (which slice a flick is in, its shapes, its
   actions and icons), the loader's byte counting, the ground's blending, the town's
   builders, the loading list and the service worker.
 - `test/audio.test.js`: every sound (clean, as loud as the others, no clicks, swings timed to
@@ -544,7 +642,8 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   healed and come back to life without them,
   the music's recordings downloaded and playing after a tap (and carrying on when the browser
   suspends or closes its sound), the camera keeping still for a step and following a long walk
-  from behind, the target ring, walking by the
+  from behind, the target ring, tapping the tavern's door (lit green) to walk in and come out
+  inside it facing the room, up the stairs, down and out again, walking by the
   minimap, Game options and the volume sliders (remembered), the
   action wheel (stunning the orc, a flick refused while cooling down, then a heal), and a phone
   screen. Drawing without a GPU is slow, so fights are played on with

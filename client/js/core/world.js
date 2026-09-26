@@ -11,10 +11,16 @@
 // the edge of the map. The player starts in the market square. An orc starts in the north-west
 // corner and patrols south along the west side, halfway down the map and back.
 //
+// The tavern can be gone into: it turns to face the market square (or failing that a street),
+// the squares just in front of its door are clear, and its door leads to the taproom, a map of
+// its own (interiors.js), with stairs from there to the floor above. The world's `maps` are the
+// town and those floors; its `links` join them.
+//
 // Everything comes from one seed, so a saved character always comes back to the same town.
 
+import { FACING, MAP_ORIGINS, tavernFloors } from "./interiors.js";
 import { createRandom } from "./random.js";
-import { GROUND, TREE_VARIANTS } from "./setpieces/pieces.js";
+import { GROUND, landmarkKey, TREE_VARIANTS } from "./setpieces/pieces.js";
 import { layoutTown } from "./setpieces/town.js";
 
 /** Metres per square of the town's plan. */
@@ -42,7 +48,9 @@ const rows = (width, height, value = 0) => Array.from({ length: height }, () => 
  * the town's north-west corner is, in metres), town (its layout, in plots), blocked[y][x] (1 where
  * characters can't go), ground[y][x] (GROUND kinds), trees ([{ x, y, variant }], trunks at square
  * corners, in metres), spawns: { player, orc } ([x, y] squares), patrol ([[x, y], [x, y]]
- * squares) }.
+ * squares), tavern (tavernOf, or null), maps ({ town, taproom, upstairs }: each { id, width,
+ * height, blocked, opaque, ground, origin }, the floors as interiors.js reads them), links
+ * ([{ id, kind, ends: [{ map, squares, arrive, facing }, ...] }]: the tavern's door and stairs) }.
  */
 export function generateWorld({ seed = 1, town: [townWidth, townHeight] = TOWN_PLOTS, border = BORDER_PLOTS } = {}) {
     const random = createRandom(seed);
@@ -149,6 +157,22 @@ export function generateWorld({ seed = 1, town: [townWidth, townHeight] = TOWN_P
         }
     }
 
+    // The tavern's door, and the floors it leads to
+    const tavern = tavernOf(town, origin);
+    const floors = tavernFloors();
+    const maps = { town: { id: "town", name: "Town", width, height, blocked, opaque: blocked, ground, origin: MAP_ORIGINS.town } };
+    const links = [];
+
+    if (tavern) {
+        for (const [x, y] of tavern.clear) {
+            blocked[y][x] = 0;
+        }
+
+        maps.taproom = floors.taproom;
+        maps.upstairs = floors.upstairs;
+        links.push({ id: "tavern-door", kind: "door", ends: [{ map: "town", squares: tavern.front, arrive: tavern.outside, facing: tavern.facing }, floors.door] }, floors.stairs);
+    }
+
     return {
         seed,
         width,
@@ -161,6 +185,67 @@ export function generateWorld({ seed = 1, town: [townWidth, townHeight] = TOWN_P
         trees,
         spawns: { player, orc: nearestFree(blocked, orcStart) },
         patrol: patrol.map((point) => nearestFree(blocked, point)),
+        tavern,
+        maps,
+        links,
+    };
+}
+
+// The tavern (3 by 3 plots, 12 metres square) is built facing south, its door in the middle of
+// its front, 10.2 metres back from its north side, 1.8 metres wide; the two squares in front of
+// the door (its middle two, 10 and 11 metres back) are cleared to walk up to it
+const TAVERN_SIZE = 12;
+const DOOR_BACK = 10.2;
+const DOOR = Object.freeze({ width: 1.8, height: 2.3, floor: 0.3 });
+
+/**
+ * Where the tavern stands and which way it faces (the side whose middle opens onto the market
+ * square, or a street; south first): { x, y (its north-west square), size (squares), facing
+ * (radians, as characters face: 0 south), side ("s", "e", "n", "w"), door: { x, z (metres, the
+ * middle of its threshold), facing, width, height, floor }, front (the two squares at the door,
+ * inside the tavern's plots), outside (the square to come out onto), clear (the squares to
+ * clear) }, or null if the town has no tavern.
+ */
+export function tavernOf(town, origin) {
+    const piece = town.pieces.find(({ key }) => key === landmarkKey("tavern"));
+
+    if (!piece) {
+        return null;
+    }
+
+    const open = (i, j) => i >= 0 && j >= 0 && i < town.width && j < town.height && !town.obstructed[j][i];
+    const square = town.square;
+    const onSquare = (i, j) => i >= square.x && i < square.x + square.w && j >= square.y && j < square.y + square.h;
+    const middles = { s: [piece.x + 1, piece.y + piece.h], e: [piece.x + piece.w, piece.y + 1], w: [piece.x - 1, piece.y + 1], n: [piece.x + 1, piece.y - 1] };
+    const sides = Object.keys(middles).filter((side) => open(...middles[side]));
+    const side = sides.find((side) => onSquare(...middles[side])) ?? sides[0] ?? "s";
+    const facing = FACING[side];
+    const x0 = origin + piece.x * PLOT;
+    const y0 = origin + piece.y * PLOT;
+    const half = TAVERN_SIZE / 2;
+
+    // A point in the tavern's own frame (facing south, metres from its north-west corner) turned
+    // to face the way it does, in the world
+    const turn = (u, v) => {
+        const [du, dv] = [u - half, v - half];
+
+        return [x0 + half + du * Math.cos(facing) + dv * Math.sin(facing), y0 + half - du * Math.sin(facing) + dv * Math.cos(facing)];
+    };
+    const squareAt = (u, v) => turn(u, v).map(Math.floor);
+    const [dx, dz] = turn(half, DOOR_BACK);
+    const front = [squareAt(half - 0.5, 10.5), squareAt(half + 0.5, 10.5)];
+    const outside = squareAt(half - 0.5, 11.5);
+
+    return {
+        x: x0,
+        y: y0,
+        size: TAVERN_SIZE,
+        facing,
+        side,
+        door: { x: dx, z: dz, facing, ...DOOR },
+        front,
+        outside,
+        clear: [...front, outside, squareAt(half + 0.5, 11.5)],
     };
 }
 

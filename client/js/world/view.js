@@ -35,12 +35,19 @@ export function detectQuality() {
 export const PITCH = 45;
 export const DISTANCE = Object.freeze({ least: 5, start: 10.5, most: 32 });
 
+const SKY = 0xa9c8de;
+
+// Indoors: no sky, a dim warm room lit from above, and lamps (the hearth's fire, candles) that
+// flicker; outdoors the lamps are out. (The lamps are always there, so that going in and out
+// never makes Three.js rebuild every lit material's shaders.)
+const OUTDOORS = Object.freeze({ background: SKY, fog: [55, 130], sky: [0xcfe0ff, 0x5a4a32, 1.1], sun: [0xfff0d8, 2.3], sunFrom: [-0.55, 1, 0.65], environment: 0.55 });
+const INDOORS = Object.freeze({ background: 0x140e0a, fog: [16, 38], sky: [0xffdcb4, 0x3a2716, 0.75], sun: [0xffe2b8, 0.9], sunFrom: [0.25, 1, 0.35], environment: 0.3 });
+const LAMPS = 2;
+
 // The sun: where it shines from (towards the north-east, so shadows fall away from the camera),
 // and how far round the player its shadows are drawn (metres)
-const SUN_DIRECTION = new THREE.Vector3(-0.55, 1, 0.65).normalize();
+const SUN_DIRECTION = new THREE.Vector3(...OUTDOORS.sunFrom).normalize();
 const SHADOW_REACH = 24;
-
-const SKY = 0xa9c8de;
 
 // The hole cut through buildings in front of the player: how big (times the player's height on
 // the screen) and how quickly it opens and closes (per second)
@@ -84,6 +91,17 @@ export class View {
         this.sun.shadow.normalBias = 0.03;
         Object.assign(this.sun.shadow.camera, { left: -SHADOW_REACH, right: SHADOW_REACH, top: SHADOW_REACH, bottom: -SHADOW_REACH, near: 1, far: 120 });
         this.scene.add(this.sun, this.sun.target);
+
+        // The lamps indoors, out until the player goes in: { light, intensity, flicker, seed }
+        this.lamps = Array.from({ length: LAMPS }, (_, k) => {
+            const light = new THREE.PointLight(0xffffff, 0, 12, 2);
+
+            this.scene.add(light);
+
+            return { light, intensity: 0, flicker: 0, seed: k * 17.3 };
+        });
+        this.sunDirection = SUN_DIRECTION.clone();
+        this.indoors = false;
 
         this.camera = new THREE.PerspectiveCamera(36, 1, 0.3, 220);
         this.focus = new THREE.Vector3();
@@ -198,20 +216,70 @@ export class View {
         const z = Math.round((focus.z - Math.cos(yaw) * ahead) / texel) * texel;
 
         this.sun.target.position.set(x, 0, z);
-        this.sun.position.set(x, 0, z).addScaledVector(SUN_DIRECTION, 60);
+        this.sun.position.set(x, 0, z).addScaledVector(this.sunDirection, 60);
     }
 
-    /** The point on the ground under a point on the screen (client pixels), or null. */
-    groundAt(clientX, clientY) {
+    /**
+     * Light the scene for being indoors (`interior`: interiors3d.js's, with its lamps: { x, y, z,
+     * colour, intensity, distance, flicker }) or out (null).
+     */
+    setIndoors(interior) {
+        const look = interior ? INDOORS : OUTDOORS;
+
+        this.indoors = Boolean(interior);
+        this.scene.background.set(look.background);
+        this.scene.fog.color.set(look.background);
+        [this.scene.fog.near, this.scene.fog.far] = look.fog;
+        this.hemisphere.color.set(look.sky[0]);
+        this.hemisphere.groundColor.set(look.sky[1]);
+        this.hemisphere.intensity = look.sky[2];
+        this.sun.color.set(look.sun[0]);
+        this.sun.intensity = look.sun[1];
+        this.sunDirection.set(...look.sunFrom).normalize();
+        this.scene.environmentIntensity = look.environment;
+
+        this.lamps.forEach((lamp, k) => {
+            const spec = interior?.lights[k];
+
+            lamp.intensity = spec?.intensity ?? 0;
+            lamp.flicker = spec?.flicker ?? 0;
+            lamp.light.intensity = lamp.intensity;
+
+            if (spec) {
+                lamp.light.color.set(spec.colour);
+                lamp.light.distance = spec.distance;
+                lamp.light.position.set(spec.x, spec.y, spec.z);
+            }
+        });
+
+        this.#place();
+    }
+
+    /** Make the lamps flicker, as flames do (`time` in seconds). */
+    flicker(time) {
+        for (const lamp of this.lamps) {
+            if (lamp.intensity > 0) {
+                const wave = Math.sin(time * 9.1 + lamp.seed) * 0.5 + Math.sin(time * 23.7 + lamp.seed * 2) * 0.3 + Math.sin(time * 4.3) * 0.2;
+
+                lamp.light.intensity = lamp.intensity * (1 + lamp.flicker * wave);
+            }
+        }
+    }
+
+    /** The ray from the camera through a point on the screen (client pixels). */
+    rayAt(clientX, clientY) {
         const rect = this.canvas.getBoundingClientRect();
         const pointer = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
         const ray = new THREE.Raycaster();
 
         ray.setFromCamera(pointer, this.camera);
 
-        const hit = ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3());
+        return ray.ray;
+    }
 
-        return hit;
+    /** The point on the ground under a point on the screen (client pixels), or null. */
+    groundAt(clientX, clientY) {
+        return this.rayAt(clientX, clientY).intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3());
     }
 
     /**

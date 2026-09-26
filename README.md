@@ -77,10 +77,28 @@ within reach, giving up if it loses sight of you for three seconds. Each blow kn
 points; at none, a character falls. You get up again in the market square five seconds later,
 with full health; the orc comes back to its corner half a minute after it falls.
 
-**The minimap**, in the top right under the menu button, shows the whole town and its fields
-from above: roads, roofs, trees, what the camera can see, you (an arrow pointing the way you
-face), where you're going, and the orc (red; ringed when it's your target). Tap it to walk
-there, or tap the orc on it to go and fight it; double-tap to run.
+**The tavern.** Facing the market square (or, where it can't, a street) stands *Wenches and Ale*,
+its name in gold blackletter on a red board along its front and, hanging from an iron bracket by
+the door, a painted sign of a barmaid raising two foaming tankards. **Tap its door**: a green
+glow traces round it, and you walk up to it and go in, coming out just inside the door, facing
+into the taproom. Inside are long tables with benches, candles and tankards; the bar, with
+barrels on a rack behind it, each with a brass tap; a great stone hearth, its fire flickering
+and throwing embers, with a wild boar turning on a spit over the flames; and stairs up the north
+wall. **Tap the stairs** to go up to the floor above, a brothel: the madam's velvet-topped
+counter, a chaise longue by a side table with wine and candles, and a hallway to four bedrooms,
+each with a canopied bed, a washstand and a chest. Tap the stairwell there to come down, and the
+inside of the door to go out again. Each floor is a map of its own: going through, the screen
+dips to black and comes up on the other side. Indoors, the walls and everything else higher than
+your waist between you and the camera are cut away, like a doll's house's, so you can always see
+yourself. If the orc is chasing you when you go in, it follows you through the door and up the
+stairs, and the fight carries on; and if you're set to fight something that goes through a door,
+you go after it.
+
+**The minimap**, in the top right under the menu button, shows the whole of where you are from
+above: out in the town, its roads, roofs and trees; inside, the floor, walls, furniture and
+stairs. On it are what the camera can see, you (an arrow pointing the way you face), where
+you're going, and the orc when it's where you are (red; ringed when it's your target). Tap it to
+walk there, or tap the orc on it to go and fight it; double-tap to run.
 
 **Spells.** Press and hold on yourself or on an enemy, and a see-through wheel opens round
 them, cut in four like a pizza: up, right, down and left. Keep holding and flick towards a slice
@@ -119,6 +137,7 @@ remembered.
 | Walk | Tap the ground | Click the ground |
 | Run | Double-tap the ground | Double-click (or Shift-click) the ground |
 | Fight | Tap an enemy (double-tap to run at them) | Click an enemy (double-click to run at them) |
+| Go through a door, up or down stairs | Tap the door or stairs | Click the door or stairs |
 | Zoom | Pinch, or the + and − buttons | Scroll, or the + and − buttons |
 | Walk or fight on the map | Tap the minimap (double-tap to run) | Click the minimap (double-click to run) |
 | Cast a spell | Hold on yourself or an enemy, then flick to a slice | Hold the button down on them, then flick the mouse |
@@ -197,6 +216,7 @@ client/                 The game (static files served to the browser)
   characters/           The body characters are made from (made by npm run build:characters),
                         MakeHuman's texture masks, and motion capture clips
   models/kaykit/        Props and trees (KayKit Medieval Hexagon, CC0)
+  fonts/                UnifrakturMaguntia, the blackletter of the tavern's signs (SIL OFL)
   music/                The music's instruments: short recordings of real ones, as MP3s (made by
                         npm run build:music from the Versilian Community Sample Library, CC0)
   images/icons/         The app's icons
@@ -209,14 +229,17 @@ client/                 The game (static files served to the browser)
     creator.js          Making a character; heroes.js has random ones and names
     game.js             Playing: the world, the battle, the characters, taps and the camera
     camera.js           How the camera follows the player: still in the middle, then from behind
+    doors.js            The doors and stairs to tap, and the green glow round them
     hud.js              Health, stamina, names, damage numbers and messages over the game
     wheel.js            The action wheel: hold, flick, cooldowns; icons.js draws its icons
-    minimap.js          The minimap: the world from above, with everyone on it
+    minimap.js          The minimap: the map the player is on from above, with everyone on it
     debug.js            Debug mode's overlay
     save.js             The saved character and settings (local storage)
     device.js           Full screen and the service worker
   js/core/              The rules. No DOM or Three.js, so they also run in Node
-    world.js            The world: a town on 1-metre squares, fields, trees, where everyone starts
+    world.js            The world: a town on 1-metre squares, fields, trees, where everyone starts,
+                        the tavern, and its maps and the links between them
+    interiors.js        Inside buildings: the tavern's floors, drawn as plans of their squares
     battle.js           Moving, fighting, damage, dying and coming back; the orc's patrol
     weapons.js          The weapons and their attacks
     spells.js           The spells: heal and stun, and their shared cooldown
@@ -231,7 +254,10 @@ client/                 The game (static files served to the browser)
     view.js             The renderer, lights, sky, the camera, quality levels, the cutaway
     ground.js           The ground: textures blended square by square
     town3d.js           The town's buildings, props and trees, merged into few meshes
-    art/                The art kits the town is built with: houses, landmarks, props, trees
+    interiors3d.js      Inside the tavern: its rooms and furniture, the fire, the boar on its
+                        spit, and cutting away what's between the camera and the player
+    art/                The art kits the town is built with: houses, landmarks, props, trees,
+                        and the tavern's signs
     avatar.js           A character in the world, following its place in the battle
     effects.js          Arrows, bolts, fireballs, sparks, dust, fire, arcane light, blood and
                         its splashes and pools, smoke and embers, the target ring, spells' light
@@ -274,6 +300,9 @@ docs/MODERNIZATION.md   The history: the book's Last Colony, modernized, before 
 - Music's instruments: recordings from the Versilian Community Sample Library by Versilian
   Studios (<https://github.com/sgossner/VCSL>), CC0, trimmed and made into MP3s by
   `scripts/build-music.js` (with its SFZ files from <https://github.com/smpldsnds/sgossner-vcsl>).
+- The tavern's lettering: UnifrakturMaguntia by j. 'mach' wust (after Peter Wiegel), SIL Open
+  Font License 1.1
+  (`client/fonts/UnifrakturMaguntia-OFL.txt`).
 - 3D engine: [Three.js](https://threejs.org) (MIT license, in `client/vendor/three-r186/LICENSE`).
 
 This repository began as a modernization of Last Colony, the real-time strategy game from

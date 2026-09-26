@@ -63,9 +63,22 @@ export async function buildTown(world, { onProgress = () => {} } = {}) {
 
     for (const piece of world.town.pieces) {
         const spec = catalog.get(piece.key);
-        const object = await BUILDERS[spec.kind](spec);
+        const built = await BUILDERS[spec.kind](spec);
+        let object = built;
 
-        object.position.set(origin + piece.x * 20, 0, origin + piece.y * 20);
+        // The tavern turns to face the square (or a street: world.js), about its middle
+        if (spec.kind === "landmark" && spec.name === "tavern" && world.tavern) {
+            const [halfW, halfH] = [piece.w * 10, piece.h * 10];
+
+            object = new THREE.Group();
+            built.position.set(-halfW, 0, -halfH);
+            object.add(built);
+            object.rotation.y = world.tavern.facing;
+            object.position.set(origin + piece.x * 20 + halfW, 0, origin + piece.y * 20 + halfH);
+        } else {
+            object.position.set(origin + piece.x * 20, 0, origin + piece.y * 20);
+        }
+
         art.add(object);
         onProgress(++done, total);
         await breathe();

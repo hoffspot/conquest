@@ -5,6 +5,7 @@
 
 import { material } from "../engine/materials.js";
 import { Solid } from "../engine/solid.js";
+import { hangingSignTexture, loadSignFont, nameBoardTexture, signMaterial } from "./signs.js";
 
 const M = 5;
 const m = (metres) => metres * M;
@@ -48,8 +49,13 @@ function board(solid, [cx, cy], z, angle, start, end, width, name, offset = 0) {
     solid.face([...corners].reverse(), material(name));
 }
 
-/** The tavern: stone below, a jettied, timber-framed floor above, a sign over the door. */
-export function tavern({ w, h }) {
+/**
+ * The tavern, "Wenches and Ale": stone below, a jettied, timber-framed floor above, its name on a
+ * board along the front and a painted sign hanging by the door.
+ */
+export async function tavern({ w, h }) {
+    await loadSignFont();
+
     const solid = new Solid();
     const [width, depth] = [w * 20, h * 20];
     const [x0, x1, z0, z1] = [m(1), width - m(1), m(2), depth - m(1.8)];
@@ -91,17 +97,36 @@ export function tavern({ w, h }) {
         window(solid, x, 1.2, z1, 1, 1.1, "timber");
     }
 
-    for (let i = 0; i < 4; i++) {
+    // Upstairs, a window at each end (the name board between them)
+    for (const i of [0, 3]) {
         window(solid, x0 + m(1.3) + ((x1 - x0 - m(2.6)) * i) / 3, 4, z1 + jetty + 0.7, 0.9, 1.1, "timber");
     }
 
-    // The sign, hanging from an iron bracket by the door
-    const signX = middle + m(1.9);
+    // The name, on a board along the front of the upper floor, between its windows
+    const front = z1 + jetty + 0.7;
+    const [boardLeft, boardRight, boardLow, boardHigh] = [middle - m(2.8), middle + m(2.8), m(3.6), m(4.5)];
+    const nameBoard = signMaterial(nameBoardTexture(), "name-board");
 
-    solid.box(signX - 0.3, m(3.45), z1, signX + 0.3, m(3.6), z1 + m(1.2), material("iron"));
-    solid.box(signX - 0.15, m(2.7), z1 + m(1.05), signX + 0.15, m(3.45), z1 + m(1.1), material("iron"));
-    solid.box(signX - m(0.05), m(2.1), z1 + m(0.6), signX + m(0.05), m(2.9), z1 + m(1.2), material("banner"));
-    solid.box(signX - m(0.07), m(2.25), z1 + m(0.72), signX + m(0.07), m(2.75), z1 + m(1.08), material("gold"));
+    solid.box(boardLeft - 0.6, boardLow - 0.6, front, boardRight + 0.6, boardHigh + 0.6, front + 0.5, beam);
+    solid.face([[boardLeft, boardLow, front + 0.55], [boardRight, boardLow, front + 0.55], [boardRight, boardHigh, front + 0.55], [boardLeft, boardHigh, front + 0.55]], nameBoard, [[0, 0], [1, 0], [1, 1], [0, 1]]);
+
+    // The sign, hanging from an iron bracket by the door, out over the street: painted on both
+    // sides, for those coming either way
+    const signX = middle + m(1.9);
+    const [signNear, signFar, signLow, signHigh] = [z1 + m(0.42), z1 + m(1.18), m(1.95), m(2.85)];
+    const picture = signMaterial(hangingSignTexture(), "hanging-sign");
+    const iron = material("iron");
+
+    solid.box(signX - 0.3, m(3.45), z1, signX + 0.3, m(3.6), z1 + m(1.3), iron);
+    solid.box(signX - 0.15, m(2.9), z1 + m(1.2), signX + 0.15, m(3.45), z1 + m(1.25), iron);
+
+    for (const z of [signNear + m(0.08), signFar - m(0.08)]) {
+        solid.box(signX - 0.1, signHigh, z - 0.1, signX + 0.1, m(3.45), z + 0.1, iron);
+    }
+
+    solid.box(signX - 0.35, signLow - 0.4, signNear - 0.4, signX + 0.35, signHigh + 0.4, signFar + 0.4, beam);
+    solid.face([[signX + 0.4, signLow, signFar], [signX + 0.4, signLow, signNear], [signX + 0.4, signHigh, signNear], [signX + 0.4, signHigh, signFar]], picture, [[0, 0], [1, 0], [1, 1], [0, 1]]);
+    solid.face([[signX - 0.4, signLow, signNear], [signX - 0.4, signLow, signFar], [signX - 0.4, signHigh, signFar], [signX - 0.4, signHigh, signNear]], picture, [[0, 0], [1, 0], [1, 1], [0, 1]]);
 
     // Barrels and a bench out front
     barrel(solid, x0 + m(0.6), z1 + m(0.9));
