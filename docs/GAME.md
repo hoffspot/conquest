@@ -28,7 +28,10 @@ to the same town:
 - **Squares**: the map is 112 by 104 squares of 1 metre, each blocked or not, with the kind of
   ground on it. Houses and special buildings block their whole plots; props and trees only the
   middle half of theirs (a well or tent 4 metres across, barrels or a trunk 2), so people can
-  walk round them.
+  walk round them. Apart from that, each square says whether it can be seen through (`opaque`):
+  houses, the special buildings and trees (in town and in the fields) are taller than anyone's
+  eyes and hide what's behind them; props (`SEE_OVER`: a well, barrels, crates, a cart) are in the
+  way but can be seen over. Everything that depends on seeing uses it (the battle's `canSee`).
 - **Where everyone starts**: the player in the middle of the market square, the orc 3 squares in
   from the north-west corner, and the orc's patrol from there halfway down the map's west side.
 - **The tavern** (`tavernOf`), 3 by 3 plots (12 metres), turned to face the market square if it
@@ -61,8 +64,10 @@ HH.bb.bb..C..K         ......WW.WWW.W
 The tavern's folk (`tavernFolk`, in `world.folk`): in the taproom, the barkeep behind the bar,
 going between it (facing the room) and the barrels (drawing ale); two serving wenches, going
 between the front of the bar and the tables, setting tankards down on them; and four patrons on
-the benches facing the tables, raising their tankards every 5 to 16 seconds. Upstairs, the madam
-keeps to her counter.
+the benches facing the tables. Upstairs, the madam keeps to her counter. Each has a title (what
+they are: "Barkeep"), a class (`role`: roles.js, how they pass the time and talk) and a sex, and
+a name drawn from the world's seed (`names.js`: a given name for their sex and a byname, such as
+"Maud Thatcher", none used twice), so a saved world keeps its people's names.
 
 Walls, hearths and stairs block walking and sight; furniture only walking. Each run of the same
 thing is one piece (a table, a bed, a stretch of wall), for the art and the minimap. The maps
@@ -102,7 +107,7 @@ draws anything.
 - **Reach.** A melee attack reaches the eight squares touching the attacker's: N, NE, E, SE, S,
   SW, W and NW (Chebyshev distance 1). A ranged attack reaches any square whose middle is within
   its range and that the attacker can see: a line between the two squares' middles that crosses
-  no blocked square.
+  no opaque square (a wall or a house hides a target; a table or barrels don't).
 - **Fighting on its own.** Standing still, the player attacks the nearest enemy within reach. Told
   to walk somewhere, they go there (walking away calls off an attack that hasn't landed yet).
   Told to fight someone, they walk until that enemy is within reach, then attack.
@@ -131,12 +136,24 @@ draws anything.
   later (whichever map they fell on).
 - **The folk** (`neutral`: the tavern's; `hostile(a, b)` says who fights whom) are on a team of
   their own, and no one fights them: nobody sets on them, casts at them or attacks them, and they
-  fight no one. They go about their business (`ai: "routine"`): seated, raising a tankard every
-  so often (an `act` event), or going from stop to stop, each in turn or, alternating, one of
-  another group at random (the bar, then a table), waiting at each (seconds, from and to),
-  facing its way, and doing its act there (serving, pouring). Someone standing on a stop, they
-  stop next to it; unable to get to one for 8 seconds, they go on to the next. Their comings and
-  goings use their own random numbers, so they don't change how the fighting goes.
+  fight no one. They go about their business (`ai: "routine"`): seated, or going from stop to
+  stop, each in turn or, alternating, one of another group at random (the bar, then a table),
+  waiting at each (seconds, from and to), facing its way, and doing its act there (serving,
+  pouring: an `act` event). Someone standing on a stop, they stop next to it; unable to get to
+  one for 8 seconds, they go on to the next. Their comings and goings use their own random
+  numbers, so they don't change how the fighting goes.
+- **Resting.** While the player can see them (`canSee`), the folk rest now and then: every 4 to
+  9 seconds, seated or waiting at a stop, one of their class's five rests (roles.js), never the
+  same twice running (a `rest` event: `{ id, role, rest }`), staying where they are until it's
+  done. Not straight after an act, nor the moment the player first sees them (0.8 to 3 seconds
+  later); unseen, never.
+- **Talking.** Told to `approach` someone (`{ type: "approach", target }`), a character walks to
+  the nearest square it could talk to them from (`canTalk`: seeing them, next to them, or up to
+  3.2 squares away across something in the way: the bar, a table, a counter), there (searching
+  outwards from where it stands) or after them as they move, and stops facing them (an `arrived`
+  event). `talk(id, withId)` has someone talk to another (null: stop): the folk stop what they're
+  doing and turn to face them (seated, they stay facing their table); the player turns to them
+  while standing.
 - **Doors and stairs.** Every character is on a map (`actor.map`), and only sees, reaches,
   paths round and fights those on the same one. An `enter` order (`{ type: "enter", link }`)
   walks a character to one of the link's squares on its map; standing on one (or next to one
@@ -239,10 +256,59 @@ one (after enemies, before the ground) tells the player to go through; it glows 
 **The folk in the game.** Each is built at the start, like the player and the orc (their looks
 and clothes are `presets.js`'s `FOLK`; with less hair than the player, as there are more of them,
 and nothing worn that never shows), lit but casting no shadows. They have no name plates, can't
-be tapped to fight, and show on the minimap as blue dots. Only those on the player's map are
-drawn and animated; coming onto a map, everyone on it is put where they are. Their acts play
-their animations, and a sound: tankards clinking (at the top of a toast, and softly as one's set
-down) and ale pouring from a tap.
+be tapped to fight (a tap walks up to them to talk), and show on the minimap as blue dots. Only
+those on the player's map are drawn and animated; coming onto a map, everyone on it is put where
+they are. Their acts and rests play their animations, and a sound: tankards clinking (at the top
+of a toast, and softly as one's set down), ale pouring from a tap, a tankard thumped on a table.
+
+**Classes and resting** (core/roles.js). Everyone has a class (a role): the barkeep, a serving
+wench, a patron, the madam, and the player's adventurer. A class has a title and five resting
+animations, shared by everyone of it (their poses: actions.js `RESTS`, see
+[CHARACTERS.md](CHARACTERS.md#resting)):
+
+| Class | Its rests |
+| --- | --- |
+| Barkeep | wiping the bar, stroking his beard, leaning on the bar, arms folded, rubbing his neck |
+| Serving wench | wiping her brow, a hand on her hip, tucking back her hair, a curtsy, stretching her back |
+| Patron (seated) | a toast, a long drink, a belly laugh, thumping the table, looking about |
+| Madam | fanning herself, hands on her hips, touching her necklace, drumming her fingers, smoothing her gown |
+| Adventurer (the player) | stretching, looking about, rolling the shoulders, a yawn, shifting the weight |
+
+The folk rest when the battle says (every 4 to 9 seconds while the player can see them). The
+player rests after standing for 15 seconds (`PLAYER_RESTS_AFTER`) with no input (a tap, a click,
+a key, the mouse wheel), no enemy in sight or after them, and no one to talk to: at once, then
+every 4 to 9 seconds after each, any of the five but the last. Anything the player does eases
+them out of it.
+
+### Talking (core/dialogue.js, app/talk.js)
+
+Tapping one of the folk (after enemies) walks the player up to them (the battle's `approach`),
+and once there, a talk opens: a panel across the bottom of the screen with their name (as the
+world named them) and title, what they're saying, and the player's replies, one button each
+(or its number on a keyboard). Escape, the cross, walking off (any other order), getting more
+than 4 squares apart, or an enemy in sight or after the player ends it. They stop what they
+were doing and face the player until it's over.
+
+A conversation is a tree (`TREES`, one for each class; `OWN_TREES` for folk with their own, by
+id, such as the greybeard's siege story). Each node has what they say and the replies to it:
+
+- **Lines**: one, or a few to pick from (never the same twice running), or groups for different
+  moments (`{ if, lines }`: a stranger is greeted differently from someone they've met, and the
+  madam knows if the barkeep sent the player). Words are filled in: `{player}`, `{name}`,
+  `{fullName}`, `{title}`, `{place}`, and any of the folk's given names by id (`{madam}`...).
+- **Replies** (`choices`: or another node's, `choices: "more"`, so a talk comes back round to
+  what can be asked), each leading to another node (`next`) or ending the talk (`next: null`);
+  with none to offer, just "Farewell."
+- **Conditions** (`if`) show a reply, or choose lines: `met`, what they remember of the player
+  (`flag`, `notFlag`), what the player knows from anyone (`knows`, `notKnows`), and `all`,
+  `any`, `not`. Anything else (gold, a quest's state) is asked of the game (`check`), and holds
+  until the game knows better.
+- **Effects** (`do`) of a reply: `remember` and `forget` (theirs, about the player) and `learn`
+  (the player's, known to every conversation after) are kept now, and saved with the character
+  (save.js `saveTalks`: for a saved character only, set aside for another). Everything else is
+  something done in the world, handed to the game (`onEffect`): buying (`{ buy: "ale", price:
+  2 }`), paying, renting a room, a quest moving on (`{ quest: "orc", step: "accepted" }`). The
+  world doesn't change yet: the game keeps the last 50 (`game.done`) for when it does.
 
 ### Inside the tavern (world/interiors3d.js)
 
@@ -664,8 +730,10 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
 
 ## Testing
 
-- `test/world.test.js`, `test/combat.test.js`: the world's layout and pathing on many seeds, and
-  the battle: reach in every direction, line of sight, attack timing, projectiles, damage rolls,
+- `test/world.test.js`, `test/combat.test.js`: the world's layout and pathing on many seeds,
+  what hides what's behind it (houses, landmarks, trees) and what can be seen over (props), and
+  the battle: reach in every direction, line of sight (seeing and shooting over barrels, not
+  through walls), attack timing, projectiles, damage rolls,
   staggering, death and respawn, the orc's patrol, chase and giving up, running (its speed,
   speeding up and slowing down, charging), stamina (used, got back, running out, never below
   none or above its most), spells (heal rolls, stun freezing the orc and calling off its blow,
@@ -674,9 +742,11 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   `test/pathfinding.test.js`: A* paths, and the line of squares straight ahead (stopping at a
   wall or the world's edge, never cutting a blocked corner).
 - `test/interiors.test.js`: the tavern's folk (on benches facing tables, stops on the floor and
-  reachable, toasting now and then without moving, the wenches serving round the tables and back
-  to the bar, the barkeep pouring behind it, the madam at her counter, and no one fighting any of
-  them); reading plans, the tavern's floors (every table, bench, bed and the
+  reachable, each with a class and a name, resting while the player can see them and never
+  unseen, never the same rest twice running and staying put for it, the wenches serving round
+  the tables and back to the bar, the barkeep pouring behind it, the madam at her counter, walked
+  up to and talked to across the bar or next to a patron, stopping to talk and carrying on after,
+  and no one fighting any of them); reading plans, the tavern's floors (every table, bench, bed and the
   bar reachable), the tavern's door clear and reachable on 40 seeds, routes between maps, going
   in, up, down and out, orders only on the map a character is on, fighting only there, the orc
   following through the door and up the stairs and finding its way back, the player going after
@@ -698,13 +768,20 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   up, and catching up without turning when the player comes back to life elsewhere.
 - `test/actions.test.js`: attacks (five ways of each, every one landing in front at a fighting
   height, never the same way twice in a row, all five used; their timing, where the hands reach
-  on different bodies, two-handed grips, alternating punches), reactions and falls, on the real
-  body.
+  on different bodies, two-handed grips, alternating punches), rests (five named for every
+  class, never the same twice running, easing out when stopped, the hands where each says,
+  patrons staying seated), reactions and falls, on the real body.
+- `test/dialogue.test.js`: names (for each one's sex, none twice, the same for the same world),
+  and conversations: one for everyone, every tree hanging together (every reply leads somewhere,
+  every node can be got to, every talk can end), every name filled in, strangers and friends
+  greeted differently, what's asked remembered, what's learnt carried to others, world effects
+  handed to the game, conditions it doesn't know asked of it, lines said differently each time.
 - `test/effects.test.js`: five looks each for fireballs, bolts, heals and stuns, each like what it
   is (fireballs orange and red, bolts violet and blue, heals green, stars bright); flying in them
   (straight, spiralling, jittering, as twins, drawn out), bursting in their colours, rings and
   stars.
-- `test/app.test.js`, `test/town3d.test.js`, `test/manifest.test.js`, `test/sw.test.js`: saving,
+- `test/app.test.js`, `test/town3d.test.js`, `test/manifest.test.js`, `test/sw.test.js`: saving
+  (and what's been said in talks, for the saved character only),
   heroes (and forgetting volumes saved on the old scale), the minimap's colours (in the town and
   inside), the action wheel (which slice a flick is in, its shapes, its
   actions and icons), the loader's byte counting, the ground's blending, the town's
@@ -733,8 +810,10 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   the music's recordings downloaded and playing after a tap (and carrying on when the browser
   suspends or closes its sound), the camera keeping still for a step and following a long walk
   from behind, the target ring, tapping the tavern's door (lit green) to walk in and come out
-  inside it facing the room, the folk there (seen, without name plates, toasting, not to be
-  fought), up the stairs (the madam), down and out again, walking by the
+  inside it facing the room, the folk there (seen, without name plates, resting, not to be
+  fought), tapping the barkeep to walk up and talk (his name and title, what he says, replies
+  by tap and by number key, Escape to stop), up the stairs (the madam), down and out again,
+  walking by the
   minimap, Game options and the volume sliders (remembered), the
   action wheel (stunning the orc, a flick refused while cooling down, then a heal), and a phone
   screen. Drawing without a GPU is slow, so fights are played on with

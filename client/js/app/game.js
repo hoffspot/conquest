@@ -17,10 +17,12 @@ import * as THREE from "three";
 import { FALL_LANDS, REACTIONS } from "../characters/actions.js";
 import { Character } from "../characters/character.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
-import { Battle, hostile, STEP_MS } from "../core/battle.js";
+import { Battle, hostile, STEP_MS, TALK_REACH } from "../core/battle.js";
+import { Conversation, treeFor } from "../core/dialogue.js";
+import { PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js";
 import { CAST_FAILURES, SPELLS } from "../core/spells.js";
 import { Variety } from "../core/variety.js";
-import { longestReach, WEAPONS } from "../core/weapons.js";
+import { distanceBetween, longestReach, WEAPONS } from "../core/weapons.js";
 import { Avatar } from "../world/avatar.js";
 import { Effects, LOOKS } from "../world/effects.js";
 import { Squares } from "../world/squares.js";
@@ -31,6 +33,7 @@ import { buildInterior, INTERIOR_CUT } from "../world/interiors3d.js";
 import { Minimap, treesOf } from "./minimap.js";
 import { CameraFollow } from "./camera.js";
 import { Doors } from "./doors.js";
+import { TalkPanel } from "./talk.js";
 import { ACTIONS, ActionWheel, directionOf } from "./wheel.js";
 
 /** What every new character wears; their weapon (and a bow's quiver) are added to it. */
@@ -100,8 +103,11 @@ export class Game {
      * @param {object} options.world - From generateWorld (core/world.js).
      * @param {object} options.hero - The player's character: { name, shape, look, weapon }.
      * @param {import("./hud.js").Hud} options.hud
+     * @param {object} [options.talks] - What the folk remember of the player, and what the player
+     *     has learnt talking (save.js loadTalks): { memory, knowledge }.
+     * @param {Function} [options.onTalk] - Hears them whenever they change (to keep them).
      */
-    constructor({ view, kit, world, hero, hud, sound = null }) {
+    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {} }) {
         this.view = view;
         this.kit = kit;
         this.sound = sound;
@@ -151,6 +157,27 @@ export class Game {
 
         /** Each floor inside (interiors3d.js's), by map id. */
         this.interiors = new Map();
+
+        /**
+         * When the player last did anything (the game's clock, s), and when they next rest (null
+         * until they've stood a while with nothing going on: roles.js PLAYER_RESTS_AFTER).
+         */
+        this.lastInput = 0;
+        this.restAt = null;
+
+        /**
+         * Talking (core/dialogue.js): what each of the folk remembers of the player (by id), what
+         * the player has learnt, the talk under way ({ id, conversation }) or who the player's
+         * going to talk to (an id), and what's been done in the world by talking (things bought,
+         * rooms rented: not yet anything more than kept here).
+         */
+        this.memory = talks.memory;
+        this.knowledge = new Set(talks.knowledge);
+        this.onTalk = onTalk;
+        this.talking = null;
+        this.approaching = null;
+        this.talkVariety = new Variety();
+        this.done = [];
     }
 
     /** Where a map is drawn in the world ([x, z] metres). */
@@ -238,7 +265,7 @@ export class Game {
             });
 
             avatar.actions.setSeated(Boolean(one.routine.seated));
-            this.battle.add({ id: one.id, kind: "folk", name: one.name, team: "folk", square: one.square, map: one.map, ai: "routine", neutral: true, routine: one.routine, facing: one.facing });
+            this.battle.add({ id: one.id, kind: "folk", name: one.name, team: "folk", square: one.square, map: one.map, ai: "routine", neutral: true, routine: one.routine, role: one.role, facing: one.facing });
         }
 
         step("Getting ready to draw");
@@ -259,6 +286,9 @@ export class Game {
         this.minimap = await time("minimap", () => new Minimap(this.hud.map, world, { onTap: (tap) => this.mapTap(tap) }));
         this.minimap.show(this.minimapShown ?? true);
         this.wheel = new ActionWheel(this.hud.root);
+        this.talk = new TalkPanel(this.hud.root);
+        this.talk.onChoose = (index) => this.#say(index);
+        this.talk.onClose = () => this.#endTalk();
         this.effects.camera = view.camera;
 
         // The black the screen dips to going through a door
@@ -381,6 +411,7 @@ export class Game {
 
         this.minimap?.dispose();
         this.wheel?.element.remove();
+        this.talk?.panel.remove();
         this.curtain?.remove();
         this.view.setOccluders(null);
         this.view.setFocus(null);
@@ -550,6 +581,8 @@ export class Game {
         this.effects.setTarget(ringed?.object ?? null, ringed ? Math.max(0.5, ringed.character.height * 0.33) : 0.6);
         hud.setTarget(target?.id ?? null);
         this.#bleed(dt);
+        this.#keepTalking();
+        this.#restPlayer();
         this.effects.update(dt, view.pixelsPerMetre());
         this.#drawMinimap(target);
 
@@ -714,6 +747,179 @@ export class Game {
         const after = battle.actors.filter((actor) => hostile(actor, player) && !actor.dead && actor.map === player.map && (actor.target === player.id || actor.attack?.target === player.id || player.attack?.target === actor.id));
 
         return after.sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))[0] ?? null;
+    }
+
+    // --- Talking ---
+
+    // Go and talk to one of the folk: at once if they're next to the player, or once the player's
+    // walked up to them
+    #talkTo(npc, { run = false } = {}) {
+        const player = this.battle.actor("player");
+
+        if (!player || player.dead || this.talking?.id === npc.id) {
+            return;
+        }
+
+        this.#endTalk();
+
+        if (this.battle.canTalk(player, npc) && !player.to) {
+            this.approaching = null;
+            this.battle.command("player", { type: "stop" });
+            this.#openTalk(npc);
+
+            return;
+        }
+
+        this.approaching = npc.id;
+        this.battle.command("player", { type: "approach", target: npc.id, run });
+    }
+
+    // Start talking to one of the folk: they stop and face the player, and the talk shows
+    #openTalk(npc) {
+        const tree = npc && !npc.dead ? treeFor(npc) : null;
+
+        if (!tree) {
+            return;
+        }
+
+        const title = this.world.folk?.find(({ id }) => id === npc.id)?.title ?? ROLES[npc.role]?.title ?? "";
+        const names = Object.fromEntries((this.world.folk ?? []).map(({ id, name }) => [id, name.split(" ")[0]]));
+
+        this.memory[npc.id] ??= { talks: 0, flags: [] };
+
+        const conversation = new Conversation(tree, {
+            speaker: { id: npc.id, name: npc.name, title },
+            player: { name: this.hero.name },
+            names,
+            memory: this.memory[npc.id],
+            knowledge: this.knowledge,
+            variety: this.talkVariety,
+            onEffect: (effect, speaker) => this.#effect(effect, speaker),
+        });
+
+        this.talking = { id: npc.id, conversation };
+        this.battle.talk(npc.id, "player");
+        this.battle.talk("player", npc.id);
+        this.avatars.get(npc.id)?.actions.stopResting();
+        this.avatars.get("player")?.actions.stopResting();
+        this.talk.show({ name: npc.name, title }, conversation);
+        this.#keepTalks();
+    }
+
+    // Say one of the replies: the talk goes on, or ends
+    #say(index) {
+        const conversation = this.talking?.conversation;
+
+        if (!conversation?.choose(index)) {
+            return;
+        }
+
+        this.#keepTalks();
+
+        if (conversation.ended) {
+            this.#endTalk();
+        } else {
+            this.talk.update(conversation);
+        }
+    }
+
+    // Stop talking: they go back to what they were doing
+    #endTalk() {
+        if (!this.talking) {
+            return;
+        }
+
+        this.battle.talk(this.talking.id, null);
+        this.battle.talk("player", null);
+        this.talking = null;
+        this.talk?.hide();
+    }
+
+    // A talk ends if it can't go on: either of them gone (dead, or elsewhere), the player walked
+    // away, or someone's after the player
+    #keepTalking() {
+        const talking = this.talking;
+
+        if (!talking) {
+            return;
+        }
+
+        const player = this.battle.actor("player");
+        const npc = this.battle.actor(talking.id);
+
+        if (!player || !npc || player.dead || npc.dead || npc.map !== player.map || distanceBetween(player.square, npc.square) > TALK_REACH.across + 1 || this.#threatened(player)) {
+            this.#endTalk();
+        }
+    }
+
+    // Something done in the world by talking (buying, paying, renting, a quest moving on...):
+    // for now, only kept (the last few), for the world to act on later
+    #effect(effect, speaker) {
+        this.done.push({ ...effect, by: speaker.id, at: this.clock });
+        this.done.splice(0, Math.max(0, this.done.length - 50));
+    }
+
+    // Keep what's been said (the game's save: save.js)
+    #keepTalks() {
+        this.onTalk({ memory: this.memory, knowledge: [...this.knowledge] });
+    }
+
+    // --- Resting ---
+
+    // The player did something (tapped, clicked, typed, scrolled): no resting for a while
+    #wake() {
+        this.lastInput = this.clock;
+        this.restAt = null;
+        this.avatars.get("player")?.actions.stopResting();
+    }
+
+    // The player, standing a while with nothing going on (no input, no one to fight or after
+    // them, no one to talk to): now and then one of the adventurer's rests (roles.js)
+    #restPlayer() {
+        const player = this.battle.actor("player");
+        const actions = this.avatars.get("player")?.actions;
+
+        if (!player || !actions) {
+            return;
+        }
+
+        const still = !player.dead && !player.order && !player.attack && !player.casting && !player.to && !player.path.length && this.battle.time >= player.stunnedUntil;
+        const quiet = still && this.clock - this.lastInput >= PLAYER_RESTS_AFTER / 1000 && !this.talking && !this.#threatened(player);
+
+        if (!quiet) {
+            actions.stopResting();
+            this.restAt = null;
+
+            return;
+        }
+
+        this.restAt ??= this.clock;
+
+        if (this.clock >= this.restAt && !actions.attack) {
+            const rest = ROLES.adventurer.rests[actions.rest("adventurer")];
+
+            this.restAt = this.clock + rest.duration + (REST_EVERY[0] + Math.random() * (REST_EVERY[1] - REST_EVERY[0])) / 1000;
+        }
+    }
+
+    // Is anyone after the player, or can they see an enemy? (No time to rest.)
+    #threatened(player) {
+        return this.battle.actors.some((other) => hostile(other, player) && !other.dead && other.map === player.map && (other.target === player.id || this.battle.canSee(player, other)));
+    }
+
+    // One of the folk rests (battle.js #rest): seen and heard only on the player's map
+    #rest({ id, role, rest }, avatar) {
+        const how = ROLES[role]?.rests[rest];
+
+        if (!how || this.battle.actor(id).map !== this.mapId) {
+            return;
+        }
+
+        avatar.actions.rest(role, { variant: rest });
+
+        if (how.sound) {
+            this.sound?.play(how.sound, { at: avatar.object.position, delay: how.hitAt, volume: how.volume ?? 1 });
+        }
     }
 
     // One of the looks of a spell's light or a bolt (effects.js LOOKS), for a character: any at
@@ -941,6 +1147,17 @@ export class Game {
                 }
                 case "act":
                     this.#act(event, avatar);
+                    break;
+                case "rest":
+                    this.#rest(event, avatar);
+                    break;
+                case "arrived":
+                    // Walked up to someone to talk to them
+                    if (event.id === "player" && event.target === this.approaching) {
+                        this.approaching = null;
+                        this.#openTalk(battle.actor(event.target));
+                    }
+
                     break;
                 case "cross": {
                     const actor = battle.actor(event.id);
@@ -1209,6 +1426,26 @@ export class Game {
 
         this.#on(canvas, "pointerup", up);
         this.#on(canvas, "pointercancel", up);
+
+        // Anything the player does keeps them from resting
+        for (const type of ["pointerdown", "keydown", "wheel"]) {
+            this.#on(document, type, () => this.#wake(), { capture: true, passive: true });
+        }
+
+        // Talking, the number keys say what's next to them, and Escape stops (not the menu)
+        this.#on(document, "keydown", (event) => {
+            if (!this.talk?.open || !this.running) {
+                return;
+            }
+
+            if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                this.#endTalk();
+            } else if (/^[1-9]$/.test(event.key)) {
+                this.#say(Number(event.key) - 1);
+            }
+        }, { capture: true });
         this.#on(canvas, "wheel", (event) => {
             event.preventDefault();
             this.view.zoom(Math.exp(event.deltaY * 0.0015));
@@ -1221,7 +1458,19 @@ export class Game {
      * Tapped twice in quick succession (or with `run`: shift-clicked), run there.
      */
     tap(clientX, clientY, { run = false, time = performance.now() } = {}) {
-        const enemy = this.#whoIsAt(clientX, clientY, { player: false })?.actor ?? null;
+        this.#wake();
+
+        const who = this.#whoIsAt(clientX, clientY, { player: false, folk: true })?.actor ?? null;
+
+        // Someone to talk to: go up to them
+        if (who?.neutral) {
+            this.lastTap = { time, x: clientX, y: clientY, from: "view" };
+            this.#talkTo(who, { run });
+
+            return;
+        }
+
+        const enemy = who;
         const door = enemy ? null : this.doors?.at(this.view.rayAt(clientX, clientY), this.mapId) ?? null;
         const ground = enemy || door ? null : this.view.groundAt(clientX, clientY);
         const [ox, oz] = this.originOf(this.mapId);
@@ -1234,6 +1483,8 @@ export class Game {
      * clear: running while their stamina lasts, then walking (a swipe up from them).
      */
     forward() {
+        this.#wake();
+
         const avatar = this.avatars.get("player");
         const player = this.battle.actor("player");
 
@@ -1258,6 +1509,8 @@ export class Game {
      * the battle's answer: { ok } or { ok: false, reason }, saying why not to the player.
      */
     act(action, target) {
+        this.#wake();
+
         const spell = ACTIONS[action]?.spell;
         const result = spell ? this.battle.cast("player", spell, target === "self" ? null : target) : { ok: false, reason: "busy" };
 
@@ -1270,8 +1523,9 @@ export class Game {
     }
 
     // Who is under a point on the screen, within PICK_RADIUS of their feet, middle or head: the
-    // nearest living enemy, or the player (if `player`); { actor, wheel: "enemy" or "self" }
-    #whoIsAt(clientX, clientY, { player: withPlayer = true } = {}) {
+    // nearest living enemy, one of the folk (if `folk`), or the player (if `player`); { actor,
+    // wheel: "enemy", "talk" or "self" }
+    #whoIsAt(clientX, clientY, { player: withPlayer = true, folk = false } = {}) {
         const player = this.battle.actor("player");
         let best = null;
         let bestDistance = PICK_RADIUS;
@@ -1283,7 +1537,7 @@ export class Game {
         for (const actor of this.battle.actors) {
             const mine = actor === player;
 
-            if (actor.dead || (mine && !withPlayer) || (!mine && !hostile(actor, player)) || actor.map !== player.map) {
+            if (actor.dead || (mine && !withPlayer) || (!mine && !hostile(actor, player) && !(folk && actor.neutral)) || actor.map !== player.map) {
                 continue;
             }
 
@@ -1295,7 +1549,7 @@ export class Game {
 
                 // (Enemies first, where they and the player overlap)
                 if (distance < bestDistance - (mine ? 6 : 0)) {
-                    best = { actor, wheel: mine ? "self" : "enemy" };
+                    best = { actor, wheel: mine ? "self" : actor.neutral ? "talk" : "enemy" };
                     bestDistance = distance;
                 }
             }
@@ -1373,6 +1627,8 @@ export class Game {
      * quick succession, run.
      */
     mapTap({ x, z, reach = 3, clientX = 0, clientY = 0, run = false, time = performance.now() }) {
+        this.#wake();
+
         const player = this.battle.actor("player");
         const enemies = this.battle.actors.filter((actor) => player && hostile(actor, player) && !actor.dead && actor.map === player.map);
         const distance = (actor) => Math.hypot(actor.x - x, actor.y - z);
@@ -1389,6 +1645,10 @@ export class Game {
         const last = this.lastTap;
 
         this.lastTap = { time, x: clientX, y: clientY, from };
+
+        // Going somewhere else, or after someone: no more talking
+        this.#endTalk();
+        this.approaching = null;
 
         if (!player || player.dead) {
             return;

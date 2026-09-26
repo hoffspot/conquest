@@ -16,7 +16,7 @@ import { registerServiceWorker } from "./app/device.js";
 import { Debug } from "./app/debug.js";
 import { formatBytes, Loader } from "./app/loader.js";
 import { MANIFEST } from "./app/manifest.js";
-import { loadSave, loadSettings, newSeed, saveSettings, writeSave } from "./app/save.js";
+import { loadSave, loadSettings, loadTalks, newSeed, saveSettings, saveTalks, writeSave } from "./app/save.js";
 import { WEAPONS } from "./core/weapons.js";
 
 const params = new URLSearchParams(location.search);
@@ -235,7 +235,7 @@ async function play(save) {
     $("#loadlist").replaceChildren();
     setProgress(0, "Building the world");
 
-    const game = createGame({ view, kit, sound, hud: state.hud, hero: save.hero, seed: save.seed });
+    const game = createGame({ view, kit, sound, hud: state.hud, hero: save.hero, seed: save.seed, talks: loadTalks(save), onTalk: (talks) => saveTalks(save, talks) });
 
     state.game = game;
     await game.build(({ label, done, total }) => setProgress(done / total, label, `${done} of ${total}`));

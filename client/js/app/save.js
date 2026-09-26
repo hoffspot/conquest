@@ -1,5 +1,6 @@
 // What the game keeps between visits, in the browser's local storage: the player's character
-// (and the seed of the world it lives in), and settings (the game options, debug mode, drawing
+// (and the seed of the world it lives in), what the folk in it remember of them and what they've
+// learnt talking (core/dialogue.js), and settings (the game options, debug mode, drawing
 // quality).
 //
 // Storage can be missing or refuse to work (private browsing, blocked site data), so every read
@@ -7,6 +8,7 @@
 
 const SAVE_KEY = "pellagos.save";
 const SETTINGS_KEY = "pellagos.settings";
+const TALKS_KEY = "pellagos.talks";
 
 /** The save format's version: a save from another version is set aside, not misread. */
 export const SAVE_VERSION = 1;
@@ -66,6 +68,22 @@ export function loadSave(weapons) {
 /** Save a hero and the seed of its world. Returns false if the browser wouldn't store it. */
 export function writeSave({ hero, seed }) {
     return write(SAVE_KEY, { version: SAVE_VERSION, hero, seed, created: new Date().toISOString() });
+}
+
+/**
+ * What the folk of a saved game ({ seed, created }) remember of its character, and what it's
+ * learnt: { memory: { id: { talks, flags } }, knowledge: [...] }; nothing yet for another game.
+ */
+export function loadTalks(save) {
+    const talks = read(TALKS_KEY);
+    const ours = talks && save?.created && talks.created === save.created && talks.seed === save.seed;
+
+    return ours ? { memory: talks.memory ?? {}, knowledge: talks.knowledge ?? [] } : { memory: {}, knowledge: [] };
+}
+
+/** Keep what's been said in a saved game (not in one that isn't saved: ?play). */
+export function saveTalks(save, { memory, knowledge }) {
+    return save?.created ? write(TALKS_KEY, { created: save.created, seed: save.seed, memory, knowledge: [...knowledge] }) : false;
 }
 
 /** Forget the saved game. */

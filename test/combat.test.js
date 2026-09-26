@@ -577,6 +577,42 @@ describe("the battle (battle.js)", () => {
         assert.ok(battle.cast("player", "stun", "orc").ok, "ready again");
     });
 
+    it("sees and shoots over what's low (barrels: blocked, not opaque) but not through a wall", () => {
+        // "o" is in the way but can be seen over; "#" is a wall
+        const rows = [
+            "..........",
+            "....o.....",
+            "....o.....",
+            "....o.....",
+            "..........",
+            "....#.....",
+            "....#.....",
+            "....#.....",
+        ];
+        const world = { blocked: rows.map((row) => Uint8Array.from([...row], (cell) => (cell === "." ? 0 : 1))), opaque: rows.map((row) => Uint8Array.from([...row], (cell) => (cell === "#" ? 1 : 0))) };
+        const battle = new Battle(world, { seed: 3 });
+        const player = battle.add({ id: "player", kind: "player", weapon: "bow", team: "hero", square: [1, 2] });
+        const orc = battle.add({ id: "orc", kind: "orc", weapon: "cleaver", team: "orcs", square: [8, 2], ai: "patrol", patrol: [[8, 2], [8, 2]] });
+        const hidden = battle.add({ id: "hidden", kind: "orc", weapon: "cleaver", team: "orcs", square: [8, 6], ai: "patrol", patrol: [[8, 6], [8, 6]] });
+
+        assert.equal(battle.canSee(player, orc), true);
+        assert.equal(battle.canSee(orc, player), true);
+        player.square = [1, 6];
+        player.x = 1.5;
+        player.y = 6.5;
+        assert.equal(battle.canSee(player, hidden), false);
+        assert.equal(battle.cast("player", "stun", "hidden").reason, "sight");
+
+        // Back behind the barrels: the bow shoots over them
+        player.square = [1, 2];
+        player.x = 1.5;
+        player.y = 2.5;
+
+        const events = run(battle, 1500);
+
+        assert.ok(events.some((event) => event.type === "projectile" && event.id === "player" && event.target === "orc"));
+    });
+
     it("says why a spell can't be cast: out of reach, out of sight, full health, not an enemy", () => {
         const battle = new Battle(worldOf([
             "....................",

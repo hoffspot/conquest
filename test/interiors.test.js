@@ -7,6 +7,7 @@ import { Doors } from "../client/js/app/doors.js";
 import { Battle, STEP_MS } from "../client/js/core/battle.js";
 import { FACING, linkAt, MAP_ORIGINS, readPlan, routeBetween, tavernFloors, tavernFolk } from "../client/js/core/interiors.js";
 import { findPath } from "../client/js/core/pathfinding.js";
+import { REST_EVERY, ROLES } from "../client/js/core/roles.js";
 import { generateWorld } from "../client/js/core/world.js";
 
 function run(battle, ms) {
@@ -302,7 +303,7 @@ describe("the tavern's folk (interiors.js, battle.js)", () => {
         const battle = new Battle(world, { seed });
 
         for (const one of world.folk) {
-            battle.add({ id: one.id, kind: "folk", name: one.name, team: "folk", square: one.square, map: one.map, ai: "routine", neutral: true, routine: one.routine, facing: one.facing });
+            battle.add({ id: one.id, kind: "folk", name: one.name, team: "folk", square: one.square, map: one.map, ai: "routine", neutral: true, routine: one.routine, role: one.role, facing: one.facing });
         }
 
         return { world, battle };
@@ -313,8 +314,10 @@ describe("the tavern's folk (interiors.js, battle.js)", () => {
         const folk = tavernFolk();
         const { taproom, upstairs } = world.maps;
 
-        assert.deepEqual(world.folk, folk);
+        assert.deepEqual(world.folk.map((one) => ({ ...one, name: undefined })), folk.map((one) => ({ ...one, name: undefined })));
         assert.deepEqual(folk.map(({ id }) => id), ["barkeep", "wench", "wench2", "drinker", "alewife", "farmer", "greybeard", "madam"]);
+        assert.deepEqual(folk.map(({ role }) => role), ["barkeep", "barmaid", "barmaid", "patron", "patron", "patron", "patron", "madam"]);
+        assert.ok(folk.every(({ title, sex, role }) => title && ["f", "m"].includes(sex) && ROLES[role]));
 
         for (const one of folk) {
             const map = world.maps[one.map];
@@ -341,17 +344,23 @@ describe("the tavern's folk (interiors.js, battle.js)", () => {
         assert.ok(taproom.plan[4].slice(10, 13).startsWith("C"), "the bar between the barkeep and the room");
     });
 
-    it("has the patrons raise their tankards now and then, the wenches serve the tables in turn with the bar, and the barkeep draw ale", () => {
+    it("has the patrons rest (a toast, a drink, a laugh...) while the player can see them, the wenches serve the tables in turn with the bar, and the barkeep draw ale", () => {
         const { battle } = busy();
         const acts = [];
+        const rests = [];
         const places = new Map();
+
+        // The player by the door, looking in
+        battle.add({ id: "player", kind: "player", weapon: "sword", team: "town", square: [7, 10], map: "taproom" });
 
         for (let t = 0; t < 90000; t += STEP_MS) {
             for (const event of battle.advance(STEP_MS)) {
-                if (event.type === "act") {
-                    const actor = battle.actor(event.id);
+                const actor = battle.actor(event.id);
 
+                if (event.type === "act") {
                     acts.push({ ...event, time: battle.time, square: [...actor.square] });
+                } else if (event.type === "rest") {
+                    rests.push({ ...event, time: battle.time, square: [...actor.square] });
                 }
             }
 
@@ -362,20 +371,38 @@ describe("the tavern's folk (interiors.js, battle.js)", () => {
 
         const of = (id, act) => acts.filter((event) => event.id === id && event.act === act);
 
-        // Patrons: toasts every 5 to 16 seconds, never moving from their benches
+        // Patrons: one of their five rests every several seconds, never the same twice running,
+        // never moving from their benches
         for (const id of ["drinker", "alewife", "farmer", "greybeard"]) {
-            const toasts = of(id, "toast");
+            const theirs = rests.filter((event) => event.id === id);
 
-            assert.ok(toasts.length >= 4 && toasts.length <= 18, `${id} toasted ${toasts.length} times`);
-            assert.ok(toasts[0].time > 4000, "not the moment they sit down");
+            assert.ok(theirs.length >= 6 && theirs.length <= 14, `${id} rested ${theirs.length} times`);
+            assert.ok(theirs.every(({ role }) => role === "patron"));
+            assert.ok(theirs.every((event, k) => k === 0 || event.rest !== theirs[k - 1].rest), `${id} never rests the same way twice running`);
+            assert.ok(new Set(theirs.map(({ rest }) => rest)).size >= 4, `${id} rests in several ways`);
+            assert.ok(theirs.every((event, k) => k === 0 || event.time - theirs[k - 1].time >= ROLES.patron.rests[theirs[k - 1].rest].duration * 1000 + REST_EVERY[0]), "one at a time, a while apart");
             assert.equal(new Set(places.get(id)).size, 1, `${id} stays sitting`);
+        }
+
+        // The wenches and the barkeep rest too, standing still until they're done
+        for (const id of ["wench", "wench2", "barkeep"]) {
+            const theirs = rests.filter((event) => event.id === id);
+            const steps = places.get(id);
+
+            assert.ok(theirs.length >= 1, `${id} rested`);
+
+            for (const { time, rest, role, square } of theirs) {
+                const until = Math.min(steps.length, (time + ROLES[role].rests[rest].duration * 1000) / STEP_MS - 1);
+
+                assert.ok(steps.slice(time / STEP_MS, until).every((place) => place === square.join()), `${id} stays put resting`);
+            }
         }
 
         // Wenches: serving at the tables, back to the bar between
         for (const id of ["wench", "wench2"]) {
             const serves = of(id, "serve");
 
-            assert.ok(serves.length >= 5, `${id} served ${serves.length} times`);
+            assert.ok(serves.length >= 4, `${id} served ${serves.length} times`);
             assert.ok(new Set(serves.map(({ square }) => square.join())).size >= 3, `${id} goes round the tables`);
             assert.ok(new Set(places.get(id)).has("9,3") || new Set(places.get(id)).has("9,5"), `${id} goes back to the bar`);
         }
@@ -387,8 +414,87 @@ describe("the tavern's folk (interiors.js, battle.js)", () => {
         assert.ok(pours.every(({ square }) => square[0] === 12));
         assert.ok(places.get("barkeep").every((square) => Number(square.split(",")[0]) >= 11), "he stays behind the bar");
 
-        // The madam keeps to her counter upstairs
+        // The madam keeps to her counter upstairs, where no one can see her: she doesn't rest
         assert.ok(places.get("madam").every((square) => square.split(",")[1] === "3"));
+        assert.ok(!rests.some(({ id }) => id === "madam"));
+    });
+
+    it("rests only while the player can see them: not with the player outside, nor behind a wall", () => {
+        const outside = busy();
+
+        outside.battle.add({ id: "player", kind: "player", weapon: "sword", team: "town", square: outside.world.spawns.player });
+        assert.equal(run(outside.battle, 30000).filter(({ type }) => type === "rest").length, 0);
+
+        // Upstairs, at the far end of the hallway, the walls between: then at her counter
+        const upstairs = busy();
+        const player = upstairs.battle.add({ id: "player", kind: "player", weapon: "sword", team: "town", square: [13, 5], map: "upstairs" });
+        const madam = upstairs.battle.actor("madam");
+
+        assert.equal(upstairs.battle.canSee(player, madam), false);
+        assert.equal(run(upstairs.battle, 20000).filter(({ type, id }) => type === "rest" && id === "madam").length, 0);
+
+        Object.assign(player, { square: [3, 6], x: 3.5, y: 6.5 });
+        assert.equal(upstairs.battle.canSee(player, madam), true);
+
+        const seen = run(upstairs.battle, 30000).filter(({ type, id }) => type === "rest" && id === "madam");
+
+        assert.ok(seen.length >= 2, `the madam rested ${seen.length} times`);
+        assert.ok(seen.every(({ role }) => role === "madam"));
+    });
+
+    it("walks the player up to talk: across the bar to the barkeep, next to a patron; who stop and face them while they talk, then carry on", () => {
+        const { battle } = busy();
+        const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "town", square: [7, 9], map: "taproom" });
+        const barkeep = battle.actor("barkeep");
+
+        battle.command("player", { type: "approach", target: "barkeep" });
+
+        const arrived = run(battle, 12000).find(({ type }) => type === "arrived");
+
+        assert.deepEqual(arrived && { id: arrived.id, target: arrived.target }, { id: "player", target: "barkeep" });
+        assert.ok(player.square[0] < 10, `in front of the bar, not behind it: ${player.square}`);
+        assert.ok(battle.canTalk(player, barkeep));
+        assert.equal(player.order, null);
+
+        // Talking: the barkeep stays where he is, facing the player, doing nothing else
+        battle.talk("barkeep", "player");
+        battle.talk("player", "barkeep");
+
+        const where = barkeep.square.join();
+        const talking = run(battle, 8000);
+
+        assert.equal(barkeep.square.join(), where);
+        assert.ok(Math.abs(Math.atan2(Math.sin(barkeep.facing - Math.atan2(player.x - barkeep.x, player.y - barkeep.y)), Math.cos(barkeep.facing - Math.atan2(player.x - barkeep.x, player.y - barkeep.y)))) < 0.01, "facing the player");
+        assert.ok(!talking.some(({ type, id }) => (type === "rest" || type === "act") && id === "barkeep"));
+
+        // Done: back behind the bar about his business
+        battle.talk("barkeep", null);
+        battle.talk("player", null);
+
+        const squares = new Set();
+
+        for (let t = 0; t < 20000; t += STEP_MS) {
+            battle.advance(STEP_MS);
+            squares.add(barkeep.square.join());
+        }
+
+        assert.ok(squares.size > 1, "he goes back to work");
+
+        // A patron: next to them, and they keep facing their table
+        const drinker = battle.actor("drinker");
+        const facing = drinker.facing;
+
+        battle.command("player", { type: "approach", target: "drinker" });
+        assert.ok(run(battle, 15000).some(({ type, target }) => type === "arrived" && target === "drinker"));
+        battle.talk("drinker", "player");
+        run(battle, 2000);
+        assert.equal(drinker.facing, facing);
+        assert.ok(battle.canTalk(player, drinker));
+
+        // No one to walk up to on another map
+        battle.command("player", { type: "approach", target: "madam" });
+        run(battle, 200);
+        assert.equal(player.order, null);
     });
 
     it("has no one fight the folk: the orc ignores them, the player can't be set on them or cast at them, and they fight no one", () => {

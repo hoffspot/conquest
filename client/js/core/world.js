@@ -11,6 +11,12 @@
 // the edge of the map. The player starts in the market square. An orc starts in the north-west
 // corner and patrols south along the west side, halfway down the map and back.
 //
+// Every square says whether it can be walked on (`blocked`) and, apart from that, whether it can be
+// seen through (`opaque`): houses, the town's landmarks and trees are taller than anyone's eyes and
+// hide what's behind them; a well, barrels, crates or a cart are in the way but can be seen over.
+// Whatever depends on seeing (the orc spotting the player, shooting and casting at someone, the
+// folk noticing them) looks through the squares that aren't opaque.
+//
 // The tavern can be gone into: it turns to face the market square (or failing that a street),
 // the squares just in front of its door are clear, and its door leads to the taproom, a map of
 // its own (interiors.js), with stairs from there to the floor above. The world's `maps` are the
@@ -19,6 +25,7 @@
 // Everything comes from one seed, so a saved character always comes back to the same town.
 
 import { FACING, MAP_ORIGINS, tavernFloors, tavernFolk } from "./interiors.js";
+import { namePeople } from "./names.js";
 import { createRandom } from "./random.js";
 import { GROUND, landmarkKey, TREE_VARIANTS } from "./setpieces/pieces.js";
 import { layoutTown } from "./setpieces/town.js";
@@ -44,14 +51,22 @@ const CORNER = 3;
 const rows = (width, height, value = 0) => Array.from({ length: height }, () => new Uint8Array(width).fill(value));
 
 /**
+ * The town's pieces that are in the way but low enough to see over (by their keys: props, such
+ * as a well, barrels or a cart). Everything else standing in the way (houses, landmarks, trees,
+ * walls and towers) hides what's behind it.
+ */
+export const SEE_OVER = /^prop-/;
+
+/**
  * Generate the world for a seed: { seed, width, height (squares, 1 m each), plot, origin (where
  * the town's north-west corner is, in metres), town (its layout, in plots), blocked[y][x] (1 where
- * characters can't go), ground[y][x] (GROUND kinds), trees ([{ x, y, variant }], trunks at square
+ * characters can't go), opaque[y][x] (1 where nothing behind can be seen: see SEE_OVER),
+ * ground[y][x] (GROUND kinds), trees ([{ x, y, variant }], trunks at square
  * corners, in metres), spawns: { player, orc } ([x, y] squares), patrol ([[x, y], [x, y]]
  * squares), tavern (tavernOf, or null), maps ({ town, taproom, upstairs }: each { id, width,
  * height, blocked, opaque, ground, origin }, the floors as interiors.js reads them), links
  * ([{ id, kind, ends: [{ map, squares, arrive, facing }, ...] }]: the tavern's door and stairs),
- * folk (the tavern's: interiors.js tavernFolk, none without a tavern) }.
+ * folk (the tavern's: interiors.js tavernFolk, each named: names.js; none without a tavern) }.
  */
 export function generateWorld({ seed = 1, town: [townWidth, townHeight] = TOWN_PLOTS, border = BORDER_PLOTS } = {}) {
     const random = createRandom(seed);
@@ -60,6 +75,7 @@ export function generateWorld({ seed = 1, town: [townWidth, townHeight] = TOWN_P
     const height = (townHeight + 2 * border) * PLOT;
     const origin = border * PLOT;
     const blocked = rows(width, height);
+    const opaque = rows(width, height);
     const ground = rows(width, height, GROUND.grass);
     const inTown = (x, y) => x >= origin && y >= origin && x < origin + townWidth * PLOT && y < origin + townHeight * PLOT;
 
@@ -85,6 +101,16 @@ export function generateWorld({ seed = 1, town: [townWidth, townHeight] = TOWN_P
         for (let y = y0; y < y0 + h; y++) {
             for (let x = x0; x < x0 + w; x++) {
                 blocked[y][x] = x >= x0 + w / 4 && x < x0 + (3 * w) / 4 && y >= y0 + h / 4 && y < y0 + (3 * h) / 4 ? 1 : 0;
+            }
+        }
+    }
+
+    // What can't be seen through: whatever's in the way on a piece's squares, unless it's low
+    // (SEE_OVER). (Gardens no one can get to have nothing on them: they're open.)
+    for (const piece of town.pieces.filter(({ key }) => !SEE_OVER.test(key))) {
+        for (let y = origin + piece.y * PLOT; y < origin + (piece.y + piece.h) * PLOT; y++) {
+            for (let x = origin + piece.x * PLOT; x < origin + (piece.x + piece.w) * PLOT; x++) {
+                opaque[y][x] = blocked[y][x];
             }
         }
     }
@@ -148,9 +174,10 @@ export function generateWorld({ seed = 1, town: [townWidth, townHeight] = TOWN_P
         const y = random.int(1, height - 2);
 
         if (clear(x, y) && clear(x - 1, y - 1)) {
-            // The trunk stands where four squares meet, and fills them
+            // The trunk stands where four squares meet, and fills them (and hides what's behind)
             for (const [bx, by] of [[x - 1, y - 1], [x, y - 1], [x - 1, y], [x, y]]) {
                 blocked[by][bx] = 1;
+                opaque[by][bx] = 1;
             }
 
             trees.push({ x, y, variant: random.int(0, TREE_VARIANTS - 1) });
@@ -161,12 +188,13 @@ export function generateWorld({ seed = 1, town: [townWidth, townHeight] = TOWN_P
     // The tavern's door, and the floors it leads to
     const tavern = tavernOf(town, origin);
     const floors = tavernFloors();
-    const maps = { town: { id: "town", name: "Town", width, height, blocked, opaque: blocked, ground, origin: MAP_ORIGINS.town } };
+    const maps = { town: { id: "town", name: "Town", width, height, blocked, opaque, ground, origin: MAP_ORIGINS.town } };
     const links = [];
 
     if (tavern) {
         for (const [x, y] of tavern.clear) {
             blocked[y][x] = 0;
+            opaque[y][x] = 0;
         }
 
         maps.taproom = floors.taproom;
@@ -182,6 +210,7 @@ export function generateWorld({ seed = 1, town: [townWidth, townHeight] = TOWN_P
         origin,
         town,
         blocked,
+        opaque,
         ground,
         trees,
         spawns: { player, orc: nearestFree(blocked, orcStart) },
@@ -189,7 +218,7 @@ export function generateWorld({ seed = 1, town: [townWidth, townHeight] = TOWN_P
         tavern,
         maps,
         links,
-        folk: tavern ? tavernFolk() : [],
+        folk: tavern ? namePeople(tavernFolk(), seed) : [],
     };
 }
 
