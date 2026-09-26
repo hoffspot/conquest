@@ -27,7 +27,8 @@ character, or make a **New character**.
    colours and hair (skin, eyes, hairstyle, beard). **Random** makes someone new. Drag across the
    picture to walk round them; each tab frames what it changes.
 2. **Weapon.** Everyone starts in a tunic, leather bracers, leather pants and leather boots, and
-   chooses one weapon (a bow comes with a quiver of arrows on the back):
+   chooses one weapon (a bow comes with a quiver of arrows on the back). **Spiked boots** can be
+   chosen on their own, or worn with any other weapon (a switch under the list):
 
    | Weapon | School | Reach | Damage | Attacks a second | Hits |
    | --- | --- | --- | --- | --- | --- |
@@ -38,8 +39,15 @@ character, or make a **New character**.
    | War hammer | Melee | Next square | 6–12 | 0.6 | Crush: knocked back, knees buckling |
    | Bow | Ranged | 9 m | 3–7 | 0.7 | Arrow: a jolt, and it sticks |
    | Spiked gauntlets | Melee | Next square | 2–5 | 1.7 | Punch: the head snaps round |
+   | Spiked boots | Melee | Next square | 3–7 | 1.0 | Kick: winded, doubled over |
 
    The damage is rolled for every blow: any whole number between the two, each as likely.
+   Wearing spiked boots with another weapon, you kick too. With a melee weapon (gauntlets
+   included), each blow up close is a kick or the weapon at random, both doing the damage halfway
+   between the two (a sword and boots: 3.5–7.5, so 4 to 7). With a bow, wand or grimoire you kick
+   whoever's next to you, for the boots' own damage, and shoot or cast at anyone further off. The
+   kicks are a front kick, a roundhouse, a side kick, a stamp and a spinning back kick, with each
+   leg in turn.
 3. **Name.** Type one, or ask for a suggestion, and **Begin**.
 
 Your character is saved in the browser, with the town they live in.
@@ -57,6 +65,24 @@ ways (a sword slashes, cuts backhand, chops overhead, thrusts and cuts upwards),
 way twice in a row, and fireballs, bolts and spells each have five looks too. **Swipe up from yourself**
 (a quick flick upwards, starting on your character) to go straight ahead the way you're facing,
 as far as you can until something's in the way: sprinting while you have stamina, then walking.
+
+**Weapons are put away** out of a fight, each in its place on the body:
+- the sword in a scabbard at the left hip;
+- the wand in the belt;
+- the grimoire closed at the hip;
+- the staff, war hammer, bow and the orc's cleaver slung on the back, from a strap across the chest.
+
+You draw yours with a flourish when an enemy comes into sight, when anything's after you, or when
+you tap an enemy to fight it:
+- the sword's salute and twirl;
+- the wand's spinning tip;
+- the grimoire opened and its pages swept;
+- the staff and hammer heaved over the shoulder;
+- the bow swung round and its string plucked;
+- a burst of shadow boxing for gauntlets, or of shadow kicks for boots.
+
+It takes a moment before you can strike. Ten seconds after the fight, once no enemy is in sight
+or after you, you put it away again. The orc does the same, on its patrol.
 
 **The camera** keeps still while you move a couple of steps either way. Go further, the way the
 map would have to scroll, and it follows you, turning round smoothly to look from behind you the
@@ -200,7 +226,7 @@ npm start
 ```
 
 Open <http://localhost:8080>. To go straight into a game with a random character, open
-<http://localhost:8080/?play> (add `&weapon=bow`, `&seed=12` for another town, or
+<http://localhost:8080/?play> (add `&weapon=bow`, `&boots` for spiked boots too, `&seed=12` for another town, or
 `&quality=low`).
 
 The game is plain ES modules with no build step, so any static web server can serve the

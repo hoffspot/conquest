@@ -264,6 +264,9 @@ shape:
 - the middle of the head, for helmets, sized to fit it
 - the upper back, for packs, quivers and slung guns
 - inside the lower lip, for tusks
+- the outside of each hip, on the belt, for what hangs from it
+- over the tips of the toes, round the back of each heel, and down the front of each shin (on
+  the skin, placed from the foot's and shin's own vertices), for spiked boots' iron
 
 An item can bring a garment: a backpack brings its straps, spiked gauntlets their plate
 gauntlets. It can hide things: a helmet hides the hair above its rim. It can also set how its arm
@@ -276,6 +279,34 @@ grimoire (in the left hand, the right hand free to cast), a two-handed war hamme
 a quiver of arrows on the back, spiked knuckle plates over plate gauntlets (one for each hand),
 and the orc's notched cleaver. Every character starts in the same outfit: a tunic, leather
 bracers, leather pants and leather boots.
+
+**Spiked boots** are an item in several parts (`parts`), each on its own socket: a domed iron cap
+over the toes with a spike out of its front (on the toe bone, so it bends with the toes), a band
+round the heel with a spur, and a curved plate down each shin with three spikes. They bring their
+own dark, calf-high leather (`spikedBootLeather`), in the feet slot.
+
+**Putting weapons away** (`SHEATHS`). Each weapon has a place on the body it's put away in:
+- a socket, and where the grip goes from it;
+- which ways its point and edge face;
+- what it hangs in (a scabbard, always there);
+- what it needs worn to hang from (a belt, or a baldric: a strap from the right shoulder across
+  the chest and back to the left hip);
+- how it looks put away, if that's different (the grimoire's closed book).
+
+| Weapon | Put away |
+| --- | --- |
+| Sword | In a leather scabbard with brass fittings at the left hip, the hilt forward and up, the blade down and back |
+| Wand | Tucked in the belt at the right hip, the tip down |
+| Grimoire | Closed, hanging flat at the left hip, its spine down |
+| Staff, war hammer, orc cleaver | On the back, the grip behind the right shoulder where the hand reaches over for it, the head (the staff's crystal) down across the back to the left hip |
+| Bow | On the back across the quiver, the grip behind the left shoulder for the left hand (a bow looks the same either way up) |
+| Spiked gauntlets | Worn: the hands just open |
+
+`Character.sheathe(on)` moves every weapon between its hand and its place put away, and the hands'
+holds with them (an empty hand swings and relaxes as it walks). Taking one into the hand, or
+letting it go into its sheath (`settle`), the weapon keeps where it was in the world and settles
+into its new place over a fraction of a second, the way fingers close round a grip, so the hand
+needn't meet it exactly. `sheathPose(side)` says where the weapon a hand draws is put away.
 
 **Slots:** head, face, neck, under top, shirt, chest, armour, forearms, hands, waist, underwear,
 legs, apron, shins, feet, back, main hand and off hand. One piece per slot.
@@ -385,7 +416,21 @@ over whatever the character was doing and back out at the end. Each key says:
   where the item says (`haft`): a quarterstaff's hands about shoulder width apart (30 to 70 cm),
   a war hammer's rear hand at the end of the handle. It never grips past the end.
 - **The spine, pelvis and hips** as joint angles, and the pelvis's offset (a lunge, a crouch into
-  a hammer blow), which the legs bend to follow.
+  a hammer blow), which the legs bend to follow. The pelvis's lean (`tilt`) and roll
+  (`obliquity`) are about the body's axes before it turns (`turn`): turned round, a lean back is
+  forward.
+- **The legs, and which foot is off the ground** (`free`: 0 to 1 for each). The walker keeps
+  planted feet where they landed, bending the legs to them; a free foot is left to the leg's joint
+  angles (a kick), plants afresh wherever it comes down, and the standing foot stands firm (it
+  doesn't shuffle round under the body meanwhile).
+- **The chest's frame** (a hand's `chest`: 0 to 1): a hand's place and turn can be given as the
+  chest faces rather than the body, so fists stay up before a chest that spins round.
+- **Where a weapon is put away** (a hand's `sheath`: 0 to 1): the hand goes to the grip of its
+  weapon there, pointing it the way it lies. It's turned about that as strains least (the arm is
+  reached once just aiming it, to see), easing from there to how the keys either side turn it.
+- **A second hand on and off the weapon.** A second hand that grips the other's weapon in some
+  keys and not in others (`onto`) lets go of it nearer those that don't, so it can swing free
+  while a staff is whirled and take hold of it again on guard.
 
 **Five ways of every attack.** Each weapon attacks in five ways, so no two blows in a row look
 alike. The first is any of the five; after that, it's any of the other four (`variety.js`: each
@@ -458,13 +503,15 @@ anatomically, whatever the body's size:
   as near the original choreography as they could. The war hammer's haft ends 26 cm below the
   right hand, with the rear hand at its end, as a two-handed hammer is held.
 
-The tests go through every attack, cast, rest and guard, holding what each is done with, a tenth
-of the way at a time and at each key, and check that:
+The tests go through every attack, cast, rest, guard, draw and put-away, holding what each is
+done with, a tenth of the way at a time and at each key, and check that:
 
 - every elbow, forearm and wrist stays in its range;
 - each shoulder is in range at the key poses (within 5°), and only a little past it (under 20°),
   briefly, mid-swing;
-- each hand is turned as its keys ask, straining under 35°;
+- each hand is turned as its keys ask, straining under 35° (reaching for a weapon where it's
+  put away, which then settles into the hand, the hand needn't be turned exactly, and the
+  shoulder may go as far as mid-swing);
 - the thumb closes over the fingers round a grip, and both fists close round a two-handed shaft;
 - nothing held sinks into the body.
 
@@ -483,10 +530,40 @@ effect where it lands, so how a character reacts depends on what hit it:
 | pierce (bow) | a sharp jolt at the chest (and the arrow sticks) | sparks |
 | punch (gauntlets) | the head snaps round | a flash and dust |
 | hack (orc cleaver) | a heavy cut that twists and staggers | sparks |
+| kick (spiked boots) | winded: doubles over, driven back a step, the arms drawn in | a flash and dust |
 
 To give a new attack its own reaction, add an entry to `REACTIONS` and name it in the attack.
 A new attack needs its five ways (`ATTACKS[name].variants`: a name and key poses each); the tests
 check each lands in front at a fighting height.
+
+**Kicks** (spiked boots): five ways, with the right leg and then the left (`alternate`, every
+other one mirrored), each landing its blow at the enemy:
+- a front kick, snapped out to the belly;
+- a roundhouse, the hips turning over and leaning back, the shin whipped into the ribs;
+- a side kick, the heel driven out, the body leaning right away;
+- a stamp down through the knee;
+- a spinning back kick, turned round on the standing foot, the heel driven straight back.
+
+The fists stay up before the turning chest, the swinging arm flung back in the roundhouse. Kicking
+with a weapon in hand (`startAttack(..., { arms: false })`), the hands stay on the weapon's guard.
+
+**Drawing weapons and putting them away** (`DRAWS`, `draw(guard, on)`). Each weapon has a draw,
+ending on its guard, and a put-away, ending with the hands free. Key time 1 is when the hand
+takes hold of it where it's put away, or lets go of it there, and the weapon moves then
+(`Character.sheathe`, settling). An action started meanwhile finishes the move at once. Each has
+a flourish:
+
+| Weapon | Drawn | Put away |
+| --- | --- | --- |
+| Sword | Across to the hilt at the left hip, swept up and out across the body, raised in a salute before the face, twirled round at the wrist, on guard | A salute, a twirl forward, the point round to the scabbard's mouth and slid home |
+| Wand | Snatched from the belt, flicked up, its tip twirled round in a circle and held up a moment | A last twirl, tucked back in the belt |
+| Grimoire | Unhooked from the hip, opened before the chest, the other hand passed over its pages | Closed with the other hand and hung back at the hip |
+| Staff | Up over the right shoulder, pulled up overhead, its crystal swinging up from behind, over and forward, raised high, then taken on guard in both hands | Raised in one hand, swung up and back over the shoulder |
+| War hammer | Heaved up overhead from the back, swung over and down, its head slapped into the open left palm | Hoisted overhead and put over the right shoulder |
+| Orc cleaver | Ripped from the back over the shoulder, raised high, wheeled round out to the right, and brandished with a snarl | Raised and put back over the shoulder |
+| Bow | Up over the left shoulder, pulled over and swung down in front, spinning, held upright and its string plucked | Raised and slung back over the left shoulder |
+| Spiked gauntlets | The fists up, and a burst of shadow boxing: a jab, a cross, a hook and an uppercut | The fists lowered and opened, the hands shaken out |
+| Spiked boots | Up on guard, and shadow kicks: a snap kick high in the air, the knee driven up | Standing down: the fists dropped, the shoulders and neck rolled loose |
 
 **Falling.** The knees and back give way, then the whole body topples (backwards, or forwards
 when hit from behind), falling faster and faster about the pelvis, lands with a little bounce,

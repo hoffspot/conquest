@@ -191,12 +191,16 @@ test("carries on with the saved character, in the same world", async ({ page }) 
     await expect(page.locator("#title")).toBeVisible();
 });
 
-test("the player and the orc fight when in reach, until one falls", async ({ page }) => {
+test("the player and the orc draw their weapons and fight when in reach, until one falls", async ({ page }) => {
     await playing(page, "/?play&seed=1&weapon=sword");
 
     const fight = await page.evaluate(() => {
         const { game } = window.pellagos;
         const events = [];
+        const sword = game.avatars.get("player").character.items.find((item) => item.name === "sword");
+
+        // (Put away to start with: the sword in its scabbard at the hip)
+        const before = { sheathed: game.avatars.get("player").character.sheathed, on: sword.parent.name };
 
         game.stop();
 
@@ -222,7 +226,12 @@ test("the player and the orc fight when in reach, until one falls", async ({ pag
             game.advance(1);
         }
 
+        const drew = (id) => events.find((event) => event.type === "draw" && event.id === id);
+        const struck = (id) => events.find((event) => event.type === "attack" && event.id === id);
+
         return {
+            before,
+            drewFirst: ["player", "orc"].every((id) => drew(id)?.on && drew(id).time < struck(id).time),
             attacks: [...new Set(events.filter((event) => event.type === "attack").map((event) => `${event.id}:${event.attack}`))],
             hits: events.filter((event) => event.type === "hit").length,
             dead: events.filter((event) => event.type === "death").map((event) => event.id),
@@ -231,6 +240,8 @@ test("the player and the orc fight when in reach, until one falls", async ({ pag
         };
     });
 
+    expect(fight.before).toEqual({ sheathed: true, on: "Hips" });
+    expect(fight.drewFirst).toBe(true);
     expect(fight.attacks).toEqual(expect.arrayContaining(["player:slash", "orc:hack"]));
     expect(fight.hits).toBeGreaterThan(4);
     expect(fight.dead.length).toBe(1);
