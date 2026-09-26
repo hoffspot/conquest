@@ -8,7 +8,9 @@ import { Actions, ATTACKS, GUARDS, REACTIONS, RESTS } from "../client/js/charact
 import { HumanData } from "../client/js/characters/body.js";
 import { Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
 import { PRESETS } from "../client/js/characters/presets.js";
-import { Rig } from "../client/js/characters/rig.js";
+import { ITEMS, socketOn } from "../client/js/characters/equipment.js";
+import { buildItem } from "../client/js/characters/items.js";
+import { limitRotation, Rig } from "../client/js/characters/rig.js";
 import { Battle, STEP_MS } from "../client/js/core/battle.js";
 import { PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../client/js/core/roles.js";
 import { pickAnother, Variety } from "../client/js/core/variety.js";
@@ -39,9 +41,30 @@ function figure(shape = {}) {
     return { human, rig, object, positions, normals: human.normals(positions), joints, height, holds: {}, items: [] };
 }
 
-// A figure that walks (standing still) with actions layered over it
-function fighter(shape) {
+// A figure that walks (standing still) with actions layered over it, holding things (items'
+// ids) as a Character holds them: each item's model on its hand's socket, turned in it, and the
+// hand's hold (equipment.js)
+function fighter(shape, held = []) {
     const character = figure(shape);
+
+    for (const id of held) {
+        const item = ITEMS[id];
+        const socket = socketOn(character, item.socket);
+        const model = buildItem(item.model, socket.fit);
+
+        model.name = id;
+        model.position.copy(socket.position);
+        model.quaternion.copy(socket.quaternion);
+
+        if (item.turn) {
+            model.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(...item.turn)));
+        }
+
+        character.rig.bone(socket.bone).add(model);
+        character.items.push(model);
+        character.holds[/left|Left/.test(item.socket) ? "Left" : "Right"] = { ...item.hold, grips: item.grips };
+    }
+
     const walker = new Walker(character, WALK_STYLES.natural);
     const actions = new Actions(character);
 
@@ -55,8 +78,8 @@ const world = (bone, character) => character.rig.bone(bone).getWorldPosition(new
 
 // Where the hands are when an attack's blow lands, done a given way (world metres), and the
 // shoulders and an arm's length, standing still
-function atTheBlow(name, variant, { shape, hitAt = 0.4, duration = 0.8 } = {}) {
-    const { character, walker, actions } = fighter(shape);
+function atTheBlow(name, variant, { shape, hitAt = 0.4, duration = 0.8, held = [] } = {}) {
+    const { character, walker, actions } = fighter(shape, held);
 
     walker.update(0);
 
@@ -206,10 +229,11 @@ describe("attacks (actions.js)", () => {
         for (const name of ["staff", "hammer"]) {
             for (let variant = 0; variant < 5; variant++) {
                 const { hitAt, duration } = WEAPONS[name === "staff" ? "staff" : "hammer"].attacks[0];
-                const { left, right } = atTheBlow(name, variant, { hitAt: hitAt / 1000, duration: duration / 1000 });
+                const { left, right } = atTheBlow(name, variant, { hitAt: hitAt / 1000, duration: duration / 1000, held: [name === "staff" ? "staff" : "warHammer"] });
                 const gap = left.distanceTo(right);
 
-                assert.ok(gap > 0.2 && gap < 0.65, `${name} ${variant}: hands ${gap.toFixed(2)} m apart`);
+                // (A quarterstaff's hands about shoulder width apart; a war hammer's rear hand at the end of the handle)
+                assert.ok(gap > (name === "staff" ? 0.25 : 0.15) && gap < 0.65, `${name} ${variant}: hands ${gap.toFixed(2)} m apart`);
             }
         }
     });
@@ -502,6 +526,295 @@ describe("resting (actions.js RESTS, roles.js)", () => {
             const { pelvis } = atThePeak("patron", way);
 
             assert.ok(pelvis.y < standing.pelvis.y - 0.25, `${ROLES.patron.rests[way].name}: sitting`);
+        }
+    });
+});
+
+describe("arms and hands (actions.js, Rig.reachArm)", () => {
+    const DEG = Math.PI / 180;
+
+    // What each action is done holding (casting, a sword in the other hand, on guard), and what
+    // each role carries resting (the player, a sword)
+    const HELD = { sword: ["sword"], staff: ["staff"], wand: ["wand"], grimoire: ["grimoire"], hammer: ["warHammer"], bow: ["bow"], punch: ["spikedGauntlets", "spikedGauntletLeft"], cleaver: ["cleaver"], castHeal: ["sword"], castStun: ["sword"], toast: ["tankard"], serve: ["tankard"], pour: [] };
+    const GUARDED = { castHeal: "sword", castStun: "sword" };
+    const CARRIED = { barmaid: ["tankard"], patron: ["tankard"], adventurer: ["sword"] };
+
+    const armed = (held = [], shape = {}) => fighter(shape, held);
+
+    // Every way of every attack, cast and tavern action (from its weapon's guard), every rest and
+    // every guard: what's held, how to start it, its keys, and when key times 1 and 2 come
+    function everything() {
+        const all = [];
+
+        for (const [name, { variants }] of Object.entries(ATTACKS)) {
+            variants.forEach(({ name: way, keys }, variant) => {
+                all.push({ label: `${name} (${way})`, held: HELD[name], guard: GUARDS[name] ? name : GUARDED[name], keys, hitAt: 0.5, duration: 1, begin: (actions) => actions.startAttack(name, { hitAt: 0.5, duration: 1, variant }) });
+            });
+        }
+
+        for (const [role, rests] of Object.entries(RESTS)) {
+            rests.forEach(({ name: way, keys }, variant) => {
+                const { hitAt, duration } = ROLES[role].rests[variant];
+
+                all.push({ label: `${role} (${way})`, held: CARRIED[role] ?? [], seated: ROLES[role].seated, keys, hitAt, duration, begin: (actions) => actions.rest(role, { variant }) });
+            });
+        }
+
+        for (const name of Object.keys(GUARDS)) {
+            all.push({ label: `${name} guard`, held: HELD[name], guard: name, keys: [], hitAt: 0.5, duration: 1, begin: () => {} });
+        }
+
+        return all;
+    }
+
+    // Do an action, looking at it every `step` of key time and at each of its own keys:
+    // look(key time, whether it's one of the action's keys, the fighter)
+    function through({ held, guard, seated, keys, hitAt, duration, begin }, look, { step = 0.1, shape } = {}) {
+        const fighting = armed(held, shape);
+        const { walker, actions } = fighting;
+
+        actions.setSeated(Boolean(seated));
+        walker.update(0);
+
+        if (guard) {
+            actions.setWeapon(guard);
+            actions.setGuard(true);
+
+            for (let k = 0; k < 10; k++) {
+                walker.update(0.1);
+            }
+        }
+
+        begin(actions);
+
+        const own = new Set(keys.map(([time]) => time).filter((time) => time > 0 && time < 2));
+        const every = Array.from({ length: Math.round(2 / step) - 1 }, (_, k) => Math.round((k + 1) * step * 1000) / 1000);
+        let last = 0;
+
+        for (const key of [...new Set([...every, ...own])].sort((a, b) => a - b)) {
+            const time = key <= 1 ? key * hitAt : hitAt + (key - 1) * (duration - hitAt);
+
+            walker.update(time - last);
+            last = time;
+            look(key, own.has(key), fighting);
+        }
+    }
+
+    // How far a joint is turned past its range (degrees)
+    function beyond(rig, name) {
+        const i = rig.index.get(name);
+        const turned = rig.frames[human.bones[i].parent].clone().invert().multiply(rig.bones[i].quaternion).multiply(rig.frames[i]);
+        const { kind, side } = rig.joints[i];
+
+        return turned.angleTo(limitRotation(kind, side, turned.clone())) / DEG;
+    }
+
+    it("keeps every elbow, forearm and wrist in its range through every attack, rest and guard, the shoulders too at the key poses, and turns the hands as the keys ask", () => {
+        let shoulders = 0;
+
+        for (const action of everything()) {
+            through(action, (key, own, { character, actions }) => {
+                for (const side of ["Right", "Left"]) {
+                    const at = `${action.label} at ${key}, the ${side.toLowerCase()} arm`;
+                    const shoulder = beyond(character.rig, `${side}Arm`);
+                    const strain = actions.strain[side.toLowerCase()];
+
+                    assert.ok(beyond(character.rig, `${side}ForeArm`) < 1, `${at}: the elbow and forearm in range`);
+                    assert.ok(beyond(character.rig, `${side}Hand`) < 1, `${at}: the wrist in range`);
+                    assert.ok(shoulder < (own ? 5 : 20), `${at}: the shoulder ${shoulder.toFixed(0)} degrees past its range`);
+                    shoulders = Math.max(shoulders, shoulder);
+
+                    if (own) {
+                        // (Strain: how far past their ranges the joints would have to go to reach
+                        // and turn the hand exactly as asked)
+                        assert.ok(strain < 35, `${at}: strained ${strain.toFixed(0)} degrees`);
+                    }
+                }
+            });
+        }
+
+        assert.ok(shoulders > 0, "(the shoulders are measured)");
+    });
+
+    // Where a hand's thumb tip is, and its index finger's knuckle, in the hand's own frame
+    // (metres: x towards the palm's side, y along the fingers, z towards the thumb's side)
+    function thumbOf(rig, Side) {
+        const hand = rig.bone(`${Side}Hand`);
+        const frame = hand.getWorldQuaternion(new THREE.Quaternion()).multiply(rig.frames[rig.index.get(`${Side}Hand`)]).invert();
+        const wrist = hand.getWorldPosition(new THREE.Vector3());
+        const local = (point) => {
+            const v = point.sub(wrist).applyQuaternion(frame);
+
+            return new THREE.Vector3(Side === "Left" ? -v.x : v.x, -v.y, v.z);
+        };
+        const i = rig.index.get(`${Side}HandThumb3`);
+        const tip = rig.bone(`${Side}HandThumb3`).localToWorld(rig.tails[i].clone().sub(rig.heads[i]));
+
+        return { tip: local(tip), knuckle: local(rig.bone(`${Side}HandIndex1`).getWorldPosition(new THREE.Vector3())) };
+    }
+
+    it("closes the fingers and thumb round what's gripped, both fists round a two-handed shaft, and opens them for an open palm", () => {
+        for (const [name, held, sides] of [["sword", ["sword"], ["Right"]], ["staff", ["staff"], ["Right", "Left"]], ["hammer", ["warHammer"], ["Right", "Left"]]]) {
+            const { character, walker, actions } = armed(held);
+
+            walker.update(0);
+            actions.setWeapon(name);
+            actions.setGuard(true);
+
+            for (let k = 0; k < 10; k++) {
+                walker.update(0.1);
+            }
+
+            const item = character.items[0];
+            const along = new THREE.Vector3(0, 1, 0).applyQuaternion(item.getWorldQuaternion(new THREE.Quaternion()));
+            const from = item.getWorldPosition(new THREE.Vector3());
+            const off = (bone) => {
+                const v = character.rig.bone(bone).getWorldPosition(new THREE.Vector3()).sub(from);
+
+                return v.addScaledVector(along, -v.dot(along)).length();
+            };
+
+            for (const Side of sides) {
+                const { tip, knuckle } = thumbOf(character.rig, Side);
+
+                for (const finger of ["Index", "Middle", "Ring", "Pinky"]) {
+                    assert.ok(off(`${Side}Hand${finger}2`) < 0.035, `${name}: the ${Side.toLowerCase()} ${finger.toLowerCase()} finger round the grip`);
+                }
+
+                assert.ok(tip.x > 0.015, `${name}: the ${Side.toLowerCase()} thumb in front of the palm`);
+                assert.ok(tip.z < knuckle.z - 0.03, `${name}: the ${Side.toLowerCase()} thumb across the fingers`);
+            }
+        }
+
+        // The stun's palm thrust: the hand open at the enemy, the thumb out to the side
+        const { character, walker, actions } = armed(["sword"]);
+
+        walker.update(0);
+        actions.startAttack("castStun", { hitAt: 0.4, duration: 0.7, variant: 0 });
+        walker.update(0.4);
+
+        const { tip, knuckle } = thumbOf(character.rig, "Left");
+
+        assert.ok(tip.z > knuckle.z + 0.03, "the thumb out from the fingers");
+    });
+
+    // Each body vertex's heaviest bone, and whether that's a hand's
+    const heaviest = Array.from({ length: human.vertexCount }, (_, v) => {
+        const weights = [0, 1, 2, 3].map((k) => human.skinWeights[v * 4 + k]);
+
+        return human.skinIndices[v * 4 + weights.indexOf(Math.max(...weights))];
+    });
+    const onHand = heaviest.map((bone) => /Hand/.test(human.bones[bone].name));
+
+    // Each model's points (once each, in its own frame)
+    const pointsOf = new WeakMap();
+    const points = (geometry) => {
+        if (!pointsOf.has(geometry)) {
+            const seen = new Map();
+            const position = geometry.attributes.position;
+
+            for (let i = 0; i < position.count; i++) {
+                const point = new THREE.Vector3().fromBufferAttribute(position, i);
+
+                seen.set(point.toArray().map((c) => Math.round(c * 500)).join(" "), point);
+            }
+
+            pointsOf.set(geometry, [...seen.values()]);
+        }
+
+        return pointsOf.get(geometry);
+    };
+
+    // How deep the deepest point of what's held is under the skin (metres; below 0, clear of it):
+    // each point of its models against the nearest point of the posed body's skin, unless that's
+    // a hand's (the hands hold it)
+    function sunk(character) {
+        const { rig, positions, normals } = character;
+        const CELL = 0.05;
+        const cellOf = (p) => (Math.floor(p.x / CELL) + 512) * 1048576 + (Math.floor(p.y / CELL) + 512) * 1024 + (Math.floor(p.z / CELL) + 512);
+        const near = [-1, 0, 1].flatMap((dx) => [-1, 0, 1].flatMap((dy) => [-1, 0, 1].map((dz) => dx * 1048576 + dy * 1024 + dz)));
+        const held = [];
+        const around = new Set();
+        const cells = new Map();
+        const point = new THREE.Vector3();
+
+        character.object.updateMatrixWorld(true);
+
+        // Where what's held is, and the cells round it
+        for (const model of character.items) {
+            model.traverse((mesh) => {
+                for (const local of mesh.isMesh ? points(mesh.geometry) : []) {
+                    const q = local.clone().applyMatrix4(mesh.matrixWorld);
+
+                    held.push(q);
+                    near.forEach((step) => around.add(cellOf(q) + step));
+                }
+            });
+        }
+
+        // The skin there (roughly where each vertex is first, by its heaviest bone)
+        const matrices = rig.bones.map((bone, i) => bone.matrixWorld.clone().multiply(rig.skeleton.boneInverses[i]));
+
+        for (let v = 0; v < human.vertexCount; v++) {
+            if (human.partOf[v] !== 0 || !around.has(cellOf(point.fromArray(positions, v * 3).applyMatrix4(matrices[heaviest[v]])))) {
+                continue;
+            }
+
+            const at = new THREE.Vector3();
+            const normal = new THREE.Vector3();
+
+            for (let k = 0; k < 4; k++) {
+                const weight = human.skinWeights[v * 4 + k] / 255;
+                const matrix = matrices[human.skinIndices[v * 4 + k]];
+
+                if (weight) {
+                    at.addScaledVector(point.fromArray(positions, v * 3).applyMatrix4(matrix), weight);
+                    normal.addScaledVector(point.fromArray(normals, v * 3).transformDirection(matrix), weight);
+                }
+            }
+
+            const cell = cellOf(at);
+
+            cells.set(cell, [...(cells.get(cell) ?? []), { at, normal: normal.normalize(), hand: onHand[v] }]);
+        }
+
+        let deepest = -Infinity;
+
+        for (const q of held) {
+            let nearest = null;
+            let best = Infinity;
+
+            for (const step of near) {
+                for (const skin of cells.get(cellOf(q) + step) ?? []) {
+                    const distance = skin.at.distanceToSquared(q);
+
+                    if (distance < best) {
+                        best = distance;
+                        nearest = skin;
+                    }
+                }
+            }
+
+            if (nearest && !nearest.hand) {
+                deepest = Math.max(deepest, nearest.at.clone().sub(q).dot(nearest.normal));
+            }
+        }
+
+        return deepest;
+    }
+
+    it("keeps what's held out of its own body: a staff's or hammer's butt and a bow's limbs pass beside the legs, not through them", () => {
+        // (On the hero's build and the default one; the cleaver, the orcs' weapon, on an orc's)
+        const builds = { sword: [PRESETS.hero, null], staff: [PRESETS.hero, null], wand: [PRESETS.hero, null], hammer: [PRESETS.hero, null], bow: [PRESETS.hero, null], cleaver: [PRESETS.orc] };
+
+        for (const action of everything().filter(({ label }) => builds[label.split(" ")[0]])) {
+            for (const build of builds[action.label.split(" ")[0]]) {
+                through(action, (key, own, { character }) => {
+                    const depth = sunk(character);
+
+                    assert.ok(depth < 0.02, `${action.label} at ${key}${build ? "" : " (the default build)"}: ${(depth * 100).toFixed(0)} cm into the body`);
+                }, { shape: build?.shape });
+            }
         }
     });
 });
