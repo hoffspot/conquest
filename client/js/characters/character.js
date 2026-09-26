@@ -179,7 +179,8 @@ export class Character {
             const mesh = new THREE.SkinnedMesh(geometry, this.#garmentMaterial(id));
 
             mesh.name = id;
-            mesh.castShadow = true;
+            // (lace would cast a shadow as if it were solid)
+            mesh.castShadow = !garment.design;
             mesh.receiveShadow = true;
             mesh.bind(this.rig.skeleton, new THREE.Matrix4());
             mesh.boundingSphere = this.mesh.boundingSphere;
@@ -262,6 +263,10 @@ export class Character {
 
         kit.garmentMaterials ??= new Map();
 
+        if (garment.design && !kit.garmentMaterials.has(id)) {
+            kit.garmentMaterials.set(id, this.#designMaterial(garment));
+        }
+
         if (!kit.garmentMaterials.has(id)) {
             kit.texelMap ??= texelMap(this.human, 512);
 
@@ -279,6 +284,43 @@ export class Character {
         }
 
         return kit.garmentMaterials.get(id);
+    }
+
+    /**
+     * Lingerie's material: its design's texture (painted once per kit, white, shared by every
+     * colour) tinted, and see-through where the texture is. The texture keeps its colour where
+     * it's clear, so the edges of what's there don't darken as it's minified.
+     */
+    #designMaterial(garment) {
+        const kit = this.kit;
+
+        kit.designTextures ??= new Map();
+
+        if (!kit.designTextures.has(garment.design)) {
+            kit.texelMap ??= texelMap(this.human, 512);
+
+            const { data, size } = paintGarment(kit.texelMap, garment);
+            const texture = new THREE.DataTexture(new Uint8Array(data.buffer), size, size);
+
+            // (painted rows from the top, as a canvas would be)
+            texture.flipY = true;
+            texture.colorSpace = THREE.SRGBColorSpace;
+            texture.magFilter = THREE.LinearFilter;
+            texture.minFilter = THREE.LinearMipmapLinearFilter;
+            texture.generateMipmaps = true;
+            texture.anisotropy = 4;
+            texture.needsUpdate = true;
+            kit.designTextures.set(garment.design, texture);
+        }
+
+        return new THREE.MeshStandardMaterial({
+            color: garment.colour,
+            map: kit.designTextures.get(garment.design),
+            roughness: garment.roughness ?? 0.6,
+            transparent: true,
+            alphaTest: 0.03,
+            side: THREE.DoubleSide,
+        });
     }
 
     /** Change how the character looks: { skin, eyes, hair } (see LOOK_DEFAULTS). */

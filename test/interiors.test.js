@@ -7,7 +7,7 @@ import { Doors } from "../client/js/app/doors.js";
 import { Battle, STEP_MS } from "../client/js/core/battle.js";
 import { FACING, linkAt, MAP_ORIGINS, readPlan, routeBetween, tavernFloors, tavernFolk } from "../client/js/core/interiors.js";
 import { findPath } from "../client/js/core/pathfinding.js";
-import { REST_EVERY, ROLES } from "../client/js/core/roles.js";
+import { BECKON, REST_EVERY, ROLES } from "../client/js/core/roles.js";
 import { generateWorld } from "../client/js/core/world.js";
 
 function run(battle, ms) {
@@ -309,14 +309,14 @@ describe("the tavern's folk (interiors.js, battle.js)", () => {
         return { world, battle };
     }
 
-    it("puts a barkeep behind the bar, two wenches, patrons on benches facing the tables, and the madam upstairs", () => {
+    it("puts a barkeep behind the bar, two wenches, patrons on benches facing the tables, and the madam and four courtesans upstairs", () => {
         const world = generateWorld({ seed: 1 });
         const folk = tavernFolk();
         const { taproom, upstairs } = world.maps;
 
         assert.deepEqual(world.folk.map((one) => ({ ...one, name: undefined })), folk.map((one) => ({ ...one, name: undefined })));
-        assert.deepEqual(folk.map(({ id }) => id), ["barkeep", "wench", "wench2", "drinker", "alewife", "farmer", "greybeard", "madam"]);
-        assert.deepEqual(folk.map(({ role }) => role), ["barkeep", "barmaid", "barmaid", "patron", "patron", "patron", "patron", "madam"]);
+        assert.deepEqual(folk.map(({ id }) => id), ["barkeep", "wench", "wench2", "drinker", "alewife", "farmer", "greybeard", "madam", "courtesan", "courtesan2", "courtesan3", "courtesan4"]);
+        assert.deepEqual(folk.map(({ role }) => role), ["barkeep", "barmaid", "barmaid", "patron", "patron", "patron", "patron", "madam", "courtesan", "courtesan", "courtesan", "courtesan"]);
         assert.ok(folk.every(({ title, sex, role }) => title && ["f", "m"].includes(sex) && ROLES[role]));
 
         for (const one of folk) {
@@ -342,6 +342,73 @@ describe("the tavern's folk (interiors.js, battle.js)", () => {
         assert.equal(upstairs.plan[4][3], "M", "her counter in front of her");
         assert.ok(folk.filter(({ id }) => id.startsWith("wench")).every(({ routine }) => routine.stops.some(({ group }) => group === "bar") && routine.stops.some(({ act }) => act === "serve")));
         assert.ok(taproom.plan[4].slice(10, 13).startsWith("C"), "the bar between the barkeep and the room");
+    });
+
+    it("puts a courtesan in each bedroom upstairs, just inside its door", () => {
+        const folk = tavernFolk().filter(({ role }) => role === "courtesan");
+        const { upstairs } = tavernFloors();
+        const rooms = new Set();
+
+        assert.equal(folk.length, 4);
+
+        for (const one of folk) {
+            const [x, y] = one.square;
+            const ahead = [x + Math.round(Math.sin(one.facing)), y + Math.round(Math.cos(one.facing))];
+
+            // Facing out through the doorway (walls either side of it) into the hallway
+            assert.equal(one.map, "upstairs");
+            assert.equal(upstairs.plan[ahead[1]][ahead[0]], ".", `${one.id} faces her doorway`);
+            assert.equal(upstairs.plan[ahead[1]][ahead[0] - 1], "W");
+            assert.equal(upstairs.plan[ahead[1]][ahead[0] + 1], "W");
+            assert.equal(upstairs.plan[ahead[1] + Math.round(Math.cos(one.facing))][ahead[0]], ".", "the hallway beyond");
+
+            // Every stop in her own room (behind the same doorway), by the door or the bed
+            for (const { square } of one.routine.stops) {
+                assert.equal(upstairs.blocked[square[1]][square[0]], 0);
+                assert.ok(Math.sign(square[1] - ahead[1]) === Math.sign(y - ahead[1]) && Math.abs(square[0] - x) <= 1, `${one.id}'s stop ${square} is in her room`);
+            }
+
+            rooms.add(ahead.join());
+        }
+
+        assert.equal(rooms.size, 4, "one to a room");
+    });
+
+    it("has a courtesan beckon the player in when they come into her sight at her door (not through a wall), once until they've been out of sight a while", () => {
+        const { battle } = busy();
+        const beckons = () => run(battle, 1000).filter((event) => event.type === "act" && event.act === "beckon");
+        const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "town", square: [2, 5], map: "upstairs" });
+        const courtesan = battle.actor("courtesan");
+        const put = (square) => {
+            player.square = [...square];
+            player.x = square[0] + 0.5;
+            player.y = square[1] + 0.5;
+        };
+
+        // Down the hallway, the walls between: no one sees them
+        assert.deepEqual(beckons(), []);
+
+        // At her door (and the door across the hallway): she turns to them and beckons, and so
+        // does the courtesan across the way; no one else sees them
+        put([8, 5]);
+
+        const seen = beckons();
+
+        assert.deepEqual(seen.map(({ id, target }) => [id, target]), [["courtesan", "player"], ["courtesan3", "player"]]);
+        assert.ok(Math.abs(courtesan.facing - Math.atan2(player.x - courtesan.x, player.y - courtesan.y)) < 1e-9, "facing them");
+
+        // Not again while they're still in sight, nor straight after they step out of it
+        assert.deepEqual(run(battle, 8000).filter((event) => event.act === "beckon" && event.id === "courtesan"), []);
+        put([2, 5]);
+        run(battle, 1000);
+        put([8, 5]);
+        assert.deepEqual(beckons().filter(({ id }) => id === "courtesan"), [], "not after a moment out of sight");
+
+        // After a while out of sight, again
+        put([2, 5]);
+        run(battle, BECKON.again + 1000);
+        put([8, 5]);
+        assert.deepEqual(beckons().map(({ id }) => id), ["courtesan", "courtesan3"]);
     });
 
     it("has the patrons rest (a toast, a drink, a laugh...) while the player can see them, the wenches serve the tables in turn with the bar, and the barkeep draw ale", () => {

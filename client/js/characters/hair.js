@@ -353,7 +353,7 @@ export function buildHair(character, style = "short", beard = "none", { seed = 1
         for (const { point, normal } of roots) {
             const outward = point.clone().sub(head.centre).normalize();
             const along = (direction) => direction.addScaledVector(outward, -direction.dot(outward)).normalize();
-            const [x, y] = face.toFace(point.x, point.y, point.z);
+            const [x, y, z] = face.toFace(point.x, point.y, point.z);
             let direction;
 
             switch (hair.flow) {
@@ -365,8 +365,9 @@ export function buildHair(character, style = "short", beard = "none", { seed = 1
                     direction = along(new THREE.Vector3(Math.sign(x) * 0.15, -0.1 + 0.4 * smoothstep(0.05, 0.08, y), -1));
                     break;
                 case "part":
-                    // Away from a parting down the middle, then down
-                    direction = along(new THREE.Vector3(Math.sign(x) || 1, -0.5, -0.35 + 0.2 * smoothstep(0.03, 0.07, y)));
+                    // Away from a parting down the middle of the top of the head, then down; behind
+                    // the crown, where there's no parting, straight down the back of the head
+                    direction = along(new THREE.Vector3((Math.sign(x) || 1) * smoothstep(-0.13, -0.08, z), -0.5, -0.35 + 0.2 * smoothstep(0.03, 0.07, y)));
                     break;
                 case "tail":
                     direction = along(tie.clone().sub(point));

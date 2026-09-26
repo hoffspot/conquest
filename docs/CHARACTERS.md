@@ -69,7 +69,8 @@ The body is MakeHuman's base mesh (`hm08`), taken from its Blender add-on
 - **Body shape.** The build also keeps 60 shapes ("targets") behind the gender, muscle, weight,
   height and heritage sliders. They are stored as their principal components: 29 of them
   reproduce all 60 exactly.
-- **Face and physique.** 76 sparse shapes sit behind the face and physique sliders.
+- **Face and physique.** 84 sparse shapes sit behind the face and physique sliders, among them
+  the waist, hips, buttocks and thighs (MakeHuman's measure and hip shapes).
 - **Bust.** 18 more sparse shapes sit behind the bust slider: MakeHuman's cup size shapes (at
   average firmness), a small and a large cup for each muscle and weight. They blend like the
   macro shapes, times how female the body is. MakeHuman leaves out that last part, so a man
@@ -94,6 +95,11 @@ Each detail slider blends MakeHuman's own shapes. For example, "Pointed ears" is
 
 Because it shares the skeleton, every animation, piece of equipment and hairstyle works on it too.
 
+**The courtesans** (presets.js `FOLK`) are an hourglass: a narrow waist (the waist slider at -0.6
+to -0.9), curving hips (0.15 to 0.28: much above 0.5, the hips bulge out at the sides like
+saddlebags), round buttocks (0.4 to 0.55) and busts from full to fuller (0.65 to 1), on slim,
+fairly toned bodies, each a different height, heritage, face and hair.
+
 ### Skin, eyes and hair
 
 **Skin.** The skin is painted into MakeHuman's texture layout, so any image in that layout is a
@@ -117,7 +123,9 @@ on MakeHuman's eye helper mesh with a glossy clear coat.
 spread over the scalp above the style's hairline:
 
 1. Each strand leaves the scalp in the style's direction: from the crown, combed back, parted,
-   up, or to a tie or knot.
+   up, or to a tie or knot. A parting runs only over the top of the head: behind the crown the
+   hair falls straight down, so the back of the head is covered (a test checks it's as thick
+   down the middle as anywhere).
 2. It bends under gravity.
 3. It is kept just outside the head, which is measured as its radius in every direction. The neck
    and shoulders are ellipsoids that long hair falls over.
@@ -188,6 +196,43 @@ The tavern's folk wear them: wool, green and red skirts, a velvet gown, and the 
 over a chemise (low-necked, short-sleeved) and a laced bodice (a band from under the waist to over
 the bust, painted with a cord criss-crossing down the front).
 
+**Lingerie** (`garments.js` `DESIGNS`) is modern lace with a nod to the period, worn by the
+courtesans upstairs. It isn't cut by its region, which only has to take it all in (the torso from
+the waist to the shoulders for a bra), but by a **design**: what fabric is at each point of the
+*base* body, where garment textures are painted. So it fits every body, stretching with it (a
+fuller bust stretches its cups with it), and moves with the skin in any pose.
+
+- **Fabrics.** None (the garment is clear there), floral lace (flowers on a honeycomb, each
+  turned its own way, on tulle crossed by curling stems, with scalloped edges bound by a cord),
+  lined lace (opaque, the lace showing on the lining), a band (satin straps, waistbands, ribbons
+  and bows), sheer stocking (darker at the heel and toe, with a seam up the back), fishnet and a
+  corset's satin (boned, piped along its edges, with lace laid over it). Edges are soft over a
+  texel or two, so the texture filters smoothly.
+- **The designs.** A bra (triangle cups of lace round the nipples, lined in the middle, on
+  satin straps and a thin band, open under the bust between the cups, with a bow between them);
+  briefs (low on the hips, cut high at the sides and to a tanga behind, lined over the groin and
+  between the legs, on a satin waistband with a bow); a suspender belt (a lace belt round the
+  hips, satin suspenders down the front and side of each thigh to clips at the stockings' tops);
+  stockings to mid-thigh with deep lace tops (sheer or fishnet); an underbust corset, laced up
+  the front over the skin, edged with lace along its top; and a velvet choker edged with lace.
+- **Colours.** Each design is painted once, in white, and the material's colour tints it, so
+  black, crimson, emerald and ivory sets share their textures (`lingerie(name, colour)` makes a
+  set's garments: `laceBraBlack`, `laceBriefsCrimson`, `suspendersEmerald`, `stockingsIvory`...,
+  and `fishnets`). The texture is straight (not premultiplied) alpha, white where it's clear too,
+  so the fabric's edges don't darken as it's minified.
+- **What shows.** The material is see-through (blended, and discarding what's clear, so nothing
+  invisible hides what's behind it), and casts no shadow. The skin under lingerie is still drawn,
+  except under what's opaque: every body triangle whose corners are all lined or a band is hidden
+  (`designSolid`), and so is anything worn under it there. The nipples and the groin are always
+  under lining (the bra's lined cups reach at least 2 cm past where the skin's masks paint the
+  nipples; the briefs' lining covers the whole groin and between the legs), and the skin there is
+  never drawn, so nothing shows through in any pose or on any body. Tests check both. This is
+  lingerie, not nudity: nothing explicit is shown, and none is meant to be.
+
+The courtesans wear four sets: black lace with suspenders, sheer black stockings and a choker;
+crimson under a crimson corset with fishnets; emerald with suspenders and emerald stockings; and
+ivory with suspenders, ivory stockings and a choker.
+
 **Items** (`items.js`) are rigid models on **sockets**, points on bones placed from the body's
 shape:
 
@@ -209,8 +254,8 @@ a quiver of arrows on the back, spiked knuckle plates over plate gauntlets (one 
 and the orc's notched cleaver. Every character starts in the same outfit: a tunic, leather
 bracers, leather pants and leather boots.
 
-**Slots:** head, face, under top, shirt, chest, armour, forearms, hands, waist, underwear, legs,
-apron, shins, feet, back, main hand and off hand. One piece per slot.
+**Slots:** head, face, neck, under top, shirt, chest, armour, forearms, hands, waist, underwear,
+legs, apron, shins, feet, back, main hand and off hand. One piece per slot.
 
 To **add a garment**, add an entry to `GARMENTS` with its slot, layer, thickness, smoothing, look
 and `inside(vertex, landmarks)` function. To **add an item**, add a model builder to `items.js`
@@ -434,6 +479,9 @@ arms flung out, and lies flat. The feet aren't kept planted while falling.
   shaken, then brought to the mouth and tipped, the head back, and down again.
 - **Serving**: leaning over a table to set a tankard down on it.
 - **Pouring**: both hands to a barrel's tap in front, the left holding the tankard under it.
+- **Beckoning** (a courtesan, when the player comes into her sight): the hip cocked, a hand on
+  it, the other held out palm up, its index finger curling "come here" three times (the
+  `beckon` finger shape: the index straight, the others loosely curled; a key's `index` curls it).
 
 ### Resting
 
@@ -466,6 +514,11 @@ a class's rests, any at first and then any but the last; `stopResting()` eases o
 | | touching her necklace | fingers at the throat, looking down |
 | | drumming her fingers | a hand on the counter, drumming it |
 | | smoothing her gown | both hands down the front of her gown |
+| Courtesan | twirling her hair | a lock wound round a finger by the neck, the head tilted to it |
+| | a slow stretch | both hands behind the head, elbows out, arching the back and swaying the hips |
+| | a hand on her hip | the hip cocked, the other hand trailing slowly down the thigh |
+| | blowing a kiss | fingertips to the lips, then the hand swept out, opening, palm up |
+| | smoothing down her sides | both hands from the ribs in to the waist and out over the hips |
 | Adventurer | stretching | both arms up high, the back arched |
 | | looking about | a hand shading the eyes, one way then the other |
 | | rolling the shoulders | the shoulders rolled up and back, the neck stretched each way |

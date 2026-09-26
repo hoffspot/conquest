@@ -243,6 +243,144 @@ export const TREES = Object.freeze({
             },
         },
     },
+    // A courtesan: warm, teasing, and never quite saying it. What she offers (her company, a
+    // dance, what she hears from her callers, a favour to be done) is handed to the game to do
+    courtesan: {
+        start: "greet",
+        nodes: {
+            greet: {
+                say: [
+                    {
+                        if: { met: false },
+                        lines: [
+                            "Well, look what's wandered up the stairs. I'm {name}. Come in, sweetling, I don't bite. Not unless I'm asked nicely.",
+                            "There you are. I saw you in the hall and hoped you'd find my door. {name}, at your service. Any service at all.",
+                            "Don't hover in the doorway, it lets the warm out. I'm {name}. Sit, if you like. The bed's softer than the chair.",
+                        ],
+                    },
+                    { if: { flag: "danced" }, lines: ["{player}! Come to tread on my toes again?", "Back for another dance, {player}? My feet have only just forgiven you."] },
+                    { lines: ["{player}, I was hoping you'd come back.", "Back again, {player}? I'll start to think you like me.", "Ah, my favourite face. Come in, {player}, come in."] },
+                ],
+                choices: "more",
+            },
+            more: {
+                say: ["So, what'll it be?", "What else can I do for you, sweetling?", "Well? Don't be shy.", "I'm all yours. For now."],
+                choices: [
+                    { if: { notFlag: "toldOfHerself" }, say: "Tell me about yourself.", next: "herself", do: [{ remember: "toldOfHerself" }] },
+                    { say: "What is it you offer?", next: "offer" },
+                    { say: "Heard anything interesting lately?", next: "secretsPrice" },
+                    { if: { all: [{ notFlag: "favourAsked" }, { flag: "toldOfHerself" }] }, say: "You look troubled.", next: "troubled" },
+                    { if: { flag: "favourAsked", notFlag: "locketReturned" }, say: "About your locket...", next: "locket" },
+                    { say: "Another time.", next: "leaving" },
+                ],
+            },
+            herself: {
+                say: [
+                    "A fisherman's daughter from the coast, with a laugh too loud for chapel and legs too long for mending nets. {madam} found me singing for coppers on the quay. Now I sing for silver, and only when I feel like it.",
+                    "I was a lady's maid at the keep, once. The lady's husband liked me better than she did, so here I am. The pay's better, and nobody makes me curtsy.",
+                    "A miller's girl, run off with a travelling player. He left; I stayed. {madam} says I've a gift for making men forget their troubles. And their purses.",
+                ],
+                choices: [
+                    { say: "You've done well for yourself.", next: "flattered" },
+                    { say: "Do you miss home?", next: "home" },
+                    { say: "I see.", next: "more" },
+                ],
+            },
+            home: {
+                say: "Every morning. Then I remember why I left, roll over, and go back to sleep.",
+                choices: "more",
+            },
+            flattered: {
+                say: ["Flattery will get you everywhere, {player}. Well. Almost everywhere.", "Keep talking like that and I'll forget to charge you.", "Oh, you're a sweet one. I like sweet ones. They blush."],
+                choices: "more",
+            },
+            offer: {
+                say: "Company, sweetling. A fire, a glass of something red, a pair of warm hands for your aching shoulders, and a listening ear. Whatever happens after that, {madam} doesn't ask and I don't tell.",
+                choices: [
+                    { say: "Your company for the evening. (20 coppers)", next: "company", do: [{ hire: "company", price: 20 }] },
+                    { say: "Just a dance, then.", next: "dance", do: [{ remember: "danced" }] },
+                    { say: "Just talk.", next: "more" },
+                ],
+            },
+            company: {
+                say: ["Then close the door behind you, sweetling, and let me take care of the rest.", "Good choice. Mind the bedpost. And your manners."],
+                choices: [{ say: "(Close the door.)", next: null }],
+            },
+            dance: {
+                say: ["No music? Then I'll hum. There. One, two, three... you're lighter on your feet than you look.", "Hands where I can see them. Lower. Not that low. There, now we're dancing."],
+                choices: [
+                    { say: "You're a fine dancer yourself.", next: "flattered" },
+                    { say: "That'll do for me.", next: "more" },
+                ],
+            },
+            secretsPrice: {
+                say: "Men tell me all sorts, lying back with their eyes closed. But secrets aren't free, sweetling.",
+                choices: [
+                    { say: "For your trouble. (5 coppers)", next: "secrets", do: [{ pay: 5 }, { learn: "courtesanRumours" }] },
+                    { say: "Keep them, then.", next: "more" },
+                ],
+            },
+            secrets: {
+                say: [
+                    "A captain of the watch told me, between sighs, that the east gate's left unbarred on market nights. For a price.",
+                    "One of the miller's men swears there's a purse of gold under the millstone. Men swear a great many things up here.",
+                    "{greybeard} isn't half the fool he plays. He was a sergeant once, and he still has friends up at the keep.",
+                    "A merchant cried in his sleep about the ruins east of town. Something down there frightened him more than his wife does.",
+                ],
+                choices: [
+                    { if: { notKnows: "orc" }, say: "Anything about an orc?", next: "orc", do: [{ learn: "orc" }] },
+                    { say: "Tell me another. (5 coppers)", next: "secrets", do: [{ pay: 5 }] },
+                    { say: "Thank you.", next: "more" },
+                ],
+            },
+            orc: {
+                say: "The farmers won't stop talking about it. Out in the fields north-west, big as a barn door and twice as ugly. Stay out of its sight, sweetling. I'd hate to see that face spoiled.",
+                choices: "more",
+            },
+            troubled: {
+                say: "Am I? It's nothing. Only... a merchant took my mother's locket as surety against a debt I paid him twice over, and he won't give it back. Silver, with a shell on the lid. It's all I have of her.",
+                choices: [
+                    { say: "I'll get it back for you.", next: "promise", do: [{ remember: "favourAsked" }, { quest: "locket", step: "accepted" }] },
+                    { say: "Who is this merchant?", next: "merchant" },
+                    { say: "That's not my business.", next: "unkind" },
+                ],
+            },
+            merchant: {
+                say: "Fat as a Michaelmas goose, rings on every finger, lodges by the market square. He'll say he's never heard of me. He's heard of me.",
+                choices: [
+                    { say: "I'll get it back for you.", next: "promise", do: [{ remember: "favourAsked" }, { quest: "locket", step: "accepted" }] },
+                    { say: "I'll think about it.", next: "more" },
+                ],
+            },
+            promise: {
+                say: "You would? Oh, you sweet thing. Bring it back to me and I'll show you just how grateful a girl can be. With a song. To start with.",
+                choices: "more",
+            },
+            unkind: {
+                say: "No. No, I suppose it isn't. Forget I said anything.",
+                choices: "more",
+            },
+            locket: {
+                say: [
+                    // (The game lets the player know it once they have it: for now, never)
+                    { if: { knows: "locketFound" }, lines: ["You found it! Come here, you. No, closer."] },
+                    { lines: ["Any luck with that merchant? Silver, with a shell on the lid. Don't let him fob you off with tin.", "He's still got it, hasn't he? Men like him never let go of anything shiny."] },
+                ],
+                choices: [
+                    { if: { knows: "locketFound" }, say: "Here it is.", next: "returned", do: [{ remember: "locketReturned" }, { quest: "locket", step: "returned" }] },
+                    { say: "I'm working on it.", next: "more" },
+                ],
+            },
+            returned: {
+                say: "My mother's locket. I never thought I'd hold it again. Whatever you want tonight, sweetling, it's on the house.",
+                choices: "more",
+            },
+            leaving: {
+                say: ["Don't keep me waiting too long.", "You know where to find me.", "Leaving so soon? Pity."],
+                choices: [{ say: "Farewell.", next: null }],
+            },
+        },
+    },
 });
 
 /** Conversations of their own, by id, for folk who don't talk just as their role does. */

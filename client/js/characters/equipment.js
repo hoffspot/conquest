@@ -21,6 +21,7 @@ import { GARMENTS } from "./garments.js";
 export const SLOTS = Object.freeze([
     { id: "head", label: "Head" },
     { id: "face", label: "Face" },
+    { id: "neck", label: "Neck" },
     { id: "undershirt", label: "Under top" },
     { id: "shirt", label: "Shirt" },
     { id: "chest", label: "Chest" },

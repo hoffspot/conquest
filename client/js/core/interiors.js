@@ -183,11 +183,13 @@ export function tavernFloors() {
 
 /**
  * The tavern's folk: [{ id, title (what they are), role (roles.js ROLES: how they pass the time),
- * sex ("f" or "m"), preset (characters/presets.js FOLK), map, square, facing, routine }], each to add to the battle
- * as one of the neutral folk (battle.js #routine). The barkeep goes between the bar and the
- * barrels behind it, drawing ale; two serving wenches go between the bar and the tables, putting
- * tankards down; patrons sit on the benches (raising their tankards, drinking, laughing: their
- * rests); upstairs, the madam keeps her counter. (Their names are the world's: world.js.)
+ * sex ("f" or "m"), preset (characters/presets.js FOLK), map, square, facing, routine }], each to
+ * add to the battle as one of the neutral folk (battle.js #routine). The barkeep goes between the
+ * bar and the barrels behind it, drawing ale; two serving wenches go between the bar and the
+ * tables, putting tankards down; patrons sit on the benches (raising their tankards, drinking,
+ * laughing: their rests); upstairs, the madam keeps her counter, and a courtesan waits in each
+ * bedroom, beckoning the player in when they come into sight at its door. (Their names are the
+ * world's: world.js.)
  */
 export function tavernFolk() {
     const { s, e, n, w } = FACING;
@@ -250,6 +252,24 @@ export function tavernFolk() {
                 ],
             },
         },
+        // A courtesan in each bedroom: by its door, looking out into the hallway, or by the bed
+        // (listed after everyone else, so everyone else keeps the name they had before)
+        ...[
+            ["courtesan", [8, 3], [9, 2], s],
+            ["courtesan2", [12, 3], [13, 2], s],
+            ["courtesan3", [8, 7], [9, 8], n],
+            ["courtesan4", [12, 7], [13, 8], n],
+        ].map(([id, door, bed, facing]) => ({
+            id,
+            title: "Courtesan",
+            role: "courtesan",
+            sex: "f",
+            preset: id,
+            map: "upstairs",
+            square: door,
+            facing,
+            routine: { wait: [9000, 18000], stops: [{ square: door, facing }, { square: bed, facing }] },
+        })),
     ];
 }
 

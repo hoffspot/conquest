@@ -64,7 +64,9 @@ HH.bb.bb..C..K         ......WW.WWW.W
 The tavern's folk (`tavernFolk`, in `world.folk`): in the taproom, the barkeep behind the bar,
 going between it (facing the room) and the barrels (drawing ale); two serving wenches, going
 between the front of the bar and the tables, setting tankards down on them; and four patrons on
-the benches facing the tables. Upstairs, the madam keeps to her counter. Each has a title (what
+the benches facing the tables. Upstairs, the madam keeps to her counter, and a courtesan waits
+in each of the four bedrooms, just inside its door looking out into the hallway, or by the bed
+(listed after everyone else, so everyone else keeps the name they had). Each has a title (what
 they are: "Barkeep"), a class (`role`: roles.js, how they pass the time and talk) and a sex, and
 a name drawn from the world's seed (`names.js`: a given name for their sex and a byname, such as
 "Maud Thatcher", none used twice), so a saved world keeps its people's names.
@@ -262,7 +264,7 @@ they are. Their acts and rests play their animations, and a sound: tankards clin
 of a toast, and softly as one's set down), ale pouring from a tap, a tankard thumped on a table.
 
 **Classes and resting** (core/roles.js). Everyone has a class (a role): the barkeep, a serving
-wench, a patron, the madam, and the player's adventurer. A class has a title and five resting
+wench, a patron, the madam, a courtesan, and the player's adventurer. A class has a title and five resting
 animations, shared by everyone of it (their poses: actions.js `RESTS`, see
 [CHARACTERS.md](CHARACTERS.md#resting)):
 
@@ -272,9 +274,18 @@ animations, shared by everyone of it (their poses: actions.js `RESTS`, see
 | Serving wench | wiping her brow, a hand on her hip, tucking back her hair, a curtsy, stretching her back |
 | Patron (seated) | a toast, a long drink, a belly laugh, thumping the table, looking about |
 | Madam | fanning herself, hands on her hips, touching her necklace, drumming her fingers, smoothing her gown |
+| Courtesan | twirling her hair, a slow stretch, a hand on her hip, blowing a kiss, smoothing down her sides |
 | Adventurer (the player) | stretching, looking about, rolling the shoulders, a yawn, shifting the weight |
 
-The folk rest when the battle says (every 4 to 9 seconds while the player can see them). The
+The folk rest when the battle says (every 4 to 9 seconds while the player can see them).
+
+**Beckoning.** A class can beckon (`beckons`: the courtesans). When the player comes into her
+sight (on her map, within sight, with no wall between: so only through her doorway, from the
+hallway in front of it), a courtesan turns to them and beckons them into her room (an "act"
+event, `beckon`: `BECKON`'s timing), and the screen says so ("Gisela beckons you over"). She
+does it once while they stay in sight, and again only after they've been out of it for 6 seconds
+(`BECKON.again`), so walking up and down the hallway doesn't set her off at every step. Standing
+her ground until she's done, she rests as the other folk do after. The
 player rests after standing for 15 seconds (`PLAYER_RESTS_AFTER`) with no input (a tap, a click,
 a key, the mouse wheel), no enemy in sight or after them, and no one to talk to: at once, then
 every 4 to 9 seconds after each, any of the five but the last. Anything the player does eases
@@ -309,6 +320,21 @@ id, such as the greybeard's siege story). Each node has what they say and the re
   something done in the world, handed to the game (`onEffect`): buying (`{ buy: "ale", price:
   2 }`), paying, renting a room, a quest moving on (`{ quest: "orc", step: "accepted" }`). The
   world doesn't change yet: the game keeps the last 50 (`game.done`) for when it does.
+
+**The courtesans' talk** (`TREES.courtesan`) is warm and teasing, all innuendo and nothing
+explicit, and built to lead to things done in the world once the game does them. Each greets a
+stranger, someone she's met, or someone she's danced with differently, and she offers:
+
+- **Herself**: where she came from (one of a few stories), once, and whether she misses home.
+- **What she offers**: her company for the evening (`{ hire: "company", price: 20 }`, and the
+  talk ends as the door closes), a dance (remembered, so she teases about it after), or just talk.
+- **What she's heard**: secrets from her callers, for a price (`{ pay: 5 }`, and the player
+  learns `courtesanRumours`): the east gate, the miller's gold, the greybeard's friends at the
+  keep, the ruins east of town, and the orc (which the player learns of, if they hadn't).
+- **A favour** (once she's told of herself): a merchant keeps her mother's locket. Promising to
+  get it back starts a quest (`{ quest: "locket", step: "accepted" }`); once the player knows
+  they have it (`locketFound`, for the game to teach them when it gives them the locket), they
+  can give it back (`{ quest: "locket", step: "returned" }`).
 
 ### Inside the tavern (world/interiors3d.js)
 

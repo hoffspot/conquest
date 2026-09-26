@@ -19,7 +19,7 @@ import { Character } from "../characters/character.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
 import { Battle, hostile, STEP_MS, TALK_REACH } from "../core/battle.js";
 import { Conversation, treeFor } from "../core/dialogue.js";
-import { PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js";
+import { BECKON, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js";
 import { CAST_FAILURES, SPELLS } from "../core/spells.js";
 import { Variety } from "../core/variety.js";
 import { distanceBetween, longestReach, WEAPONS } from "../core/weapons.js";
@@ -83,6 +83,7 @@ const ACTS = {
     toast: { hitAt: 1, duration: 3.2, sound: "clink", volume: 1 },
     serve: { hitAt: 0.8, duration: 1.8, sound: "clink", volume: 0.45 },
     pour: { hitAt: 1, duration: 2.8, sound: "pour", volume: 1, early: 0.3 },
+    beckon: { hitAt: BECKON.hitAt, duration: BECKON.duration },
 };
 
 // Going through a door or up the stairs, the screen comes up from black this fast (s)
@@ -944,16 +945,25 @@ export class Game {
     // --- Inside and out ---
 
     // One of the folk does something (battle.js #routine): raises a tankard, puts one down on a
-    // table, draws ale from a barrel; seen and heard only on the player's map
-    #act({ id, act }, avatar) {
+    // table, draws ale from a barrel, beckons the player over (turning to them first); seen and
+    // heard only on the player's map
+    #act({ id, act, target }, avatar) {
         const how = ACTS[act];
+        const actor = this.battle.actor(id);
 
-        if (!how || this.battle.actor(id).map !== this.mapId) {
+        if (!how || actor.map !== this.mapId) {
             return;
         }
 
         avatar.actions.startAttack(act, { hitAt: how.hitAt, duration: how.duration });
-        this.sound?.play(how.sound, { at: avatar.object.position, delay: how.hitAt - (how.early ?? 0), volume: how.volume });
+
+        if (how.sound) {
+            this.sound?.play(how.sound, { at: avatar.object.position, delay: how.hitAt - (how.early ?? 0), volume: how.volume });
+        }
+
+        if (act === "beckon" && target === "player" && !this.talking) {
+            this.hud.message(`${actor.name.split(" ")[0]} beckons you over`, 2.5);
+        }
     }
 
     // Put a character where it is in the battle, on its map, at once (not walking there)

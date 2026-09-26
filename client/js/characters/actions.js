@@ -4,9 +4,9 @@
 //    and from the side it came from;
 //  - falling down dead, and lying there;
 //  - the tavern's folk: sitting on a bench, raising a tankard and drinking from it, putting one
-//    down on a table, and drawing ale from a barrel;
-//  - resting: how each role (roles.js: the barkeep, a serving wench, a patron, the madam, the
-//    player's adventurer) passes the time, five ways each (RESTS).
+//    down on a table, drawing ale from a barrel, and a courtesan beckoning the player over;
+//  - resting: how each role (roles.js: the barkeep, a serving wench, a patron, the madam, a
+//    courtesan, the player's adventurer) passes the time, five ways each (RESTS).
 //
 // An attack is a few key poses timed round the moment that matters: key time 1 is when the blow
 // lands (or the arrow or spell is let go: the weapon's hitAt), and 2 is when the attack ends (its
@@ -69,6 +69,13 @@ const spine = ({ flex = 0, turn = 0, bend = 0 }) => ({
 // --- Guards: how each weapon is held while fighting ---
 
 const book = { at: [-0.3, -0.55, 0.6], point: [1, 0, 0], edge: [0, 0.35, 1] };
+
+// A hand on the hip (side 1: the right), the fingers forward over the hip bone, the thumb behind,
+// the elbow out to the side
+const akimbo = (side) => ({ at: [side * -0.08, -0.68, 0.02], palm: [side * 0.98, -0.12, -0.18], towards: [side * 0.09, -0.52, 0.85], elbow: [-side, -0.2, -0.3], shape: "relaxed" });
+
+// The right hand held out in front, palm up, the index finger curled `index` degrees (beckoning)
+const BECKONING = (index) => ({ at: [0.04, -0.12, 0.72], palm: [0, 1, 0.1], towards: [0.05, 0.1, 1], shape: "beckon", index });
 const tankard = { at: [0.12, -0.46, 0.5], point: [0, 1, 0.08] };
 
 // Sitting on a bench: the thighs level and the shins upright, leaning a little over the table,
@@ -498,6 +505,20 @@ export const ATTACKS = Object.freeze({
                 [1.3, { right: { at: [0.12, -0.6, 0.76], point: [0, 1, 0.1] }, ...spine({ flex: 20 }), offset: [0, -0.02, 0.03] }]),
         ],
     },
+    // Beckoning the player over (a courtesan, when she first sees them): facing them, a hand
+    // held out palm up, the index finger curling "come here" three times, the other on the hip
+    beckon: {
+        variants: [
+            variant("beckon", { ...spine({}), Head: { bend: 0, flex: 0 }, Hips: { obliquity: 0, turn: 0 }, offset: [0, 0, 0] },
+                [0.5, { right: BECKONING(10), left: akimbo(-1), Hips: { obliquity: 6, turn: -6 }, ...spine({ flex: -3, bend: -5 }), Head: { bend: 10, flex: 4 }, offset: [0.03, -0.01, 0] }],
+                [0.75, { right: BECKONING(85) }],
+                [1, { right: BECKONING(10) }],
+                [1.2, { right: BECKONING(85) }],
+                [1.4, { right: BECKONING(10) }],
+                [1.6, { right: BECKONING(85) }],
+                [1.8, { right: BECKONING(20), left: akimbo(-1), Hips: { obliquity: 6, turn: -6 }, ...spine({ flex: -3, bend: -5 }), Head: { bend: 8, flex: 2 }, offset: [0.03, -0.01, 0] }]),
+        ],
+    },
     pour: {
         variants: [
             // Drawing ale: both hands to a barrel's tap in front, the left holding the tankard under it
@@ -515,12 +536,16 @@ export const ATTACKS = Object.freeze({
 // shoulder, `z` in front), palm down, the fingers forward and a little in (open, or round a rag)
 const flat = (x, y, z, side = 1, shape = "open") => ({ at: [x, y, z], palm: [0, -1, 0], towards: [side * 0.25, 0, 1], shape });
 
-// A hand on the hip (side 1: the right), the fingers forward over the hip bone, the thumb behind,
-// the elbow out to the side
-const akimbo = (side) => ({ at: [side * -0.08, -0.68, 0.02], palm: [side * 0.98, -0.12, -0.18], towards: [side * 0.09, -0.52, 0.85], elbow: [-side, -0.2, -0.3], shape: "relaxed" });
-
 // Where the toast starts from: the tankard held before the chest
 const TOASTING = { right: tankard, ...spine({}), Head: { flex: 0 } };
+
+// A hand on the front of the thigh, palm to it and the fingers down (the right: trailing down it)
+const THIGH_HIGH = { at: [0.06, -0.72, 0.16], palm: [0.25, 0, -0.97], towards: [0, -1, 0.1], shape: "open" };
+const THIGH_LOW = { at: [0.05, -0.92, 0.18], palm: [0.25, 0, -0.97], towards: [0, -1, 0.1], shape: "open" };
+
+// A hand flat against the side of the body (side 1: the right), `x` in from the shoulder and `y`
+// below it, the fingers forward and down
+const flank = (hand, x, y) => ({ at: [hand * x, y, 0.08], palm: [hand * 0.95, 0, -0.3], towards: [0, -0.4, 0.9], shape: "open" });
 
 // Arms folded over the chest: each hand tucked under the other arm, the right forearm over the left
 const FOLDED = { right: { at: [0.74, -0.36, 0.24], point: [0, 1, 0], edge: [1, 0, 0] }, left: { at: [-0.74, -0.44, 0.22], point: [0, 1, 0], edge: [-1, 0, 0] } };
@@ -662,6 +687,40 @@ export const RESTS = Object.freeze({
             [1, { right: { at: [0.18, -0.95, 0.28], palm: [0.3, 0, -0.95], towards: [0, -1, 0.1], shape: "open" }, left: { at: [-0.18, -0.95, 0.28], palm: [-0.3, 0, -0.95], towards: [0, -1, 0.1], shape: "open" }, ...spine({ flex: 16 }), Head: { flex: 16 } }],
             [1.4, { right: { at: [0.16, -0.8, 0.22], palm: [0.23, -0.15, -0.96], towards: [-0.01, -0.99, 0.15], shape: "relaxed" }, left: { at: [-0.16, -0.8, 0.22], palm: [-0.23, -0.15, -0.96], towards: [0.01, -0.99, 0.15], shape: "relaxed" }, ...spine({ flex: 4 }), Head: { flex: 4 } }]),
     ],
+    courtesan: [
+        variant("twirling her hair", { ...spine({}), Head: { bend: 0, flex: 0 }, Hips: { obliquity: 0 }, offset: [0, 0, 0] },
+            // A lock of hair wound round a finger by the side of the neck, the head tilted to it
+            [0.5, { left: { at: [-0.12, 0.3, 0.16], palm: [-0.9, 0, 0.4], towards: [0, 1, 0.1], shape: "beckon", index: 30 }, Hips: { obliquity: 4 }, Head: { bend: 12, flex: 4 }, offset: [-0.02, 0, 0] }],
+            [0.75, { left: { at: [-0.09, 0.25, 0.2], palm: [-0.9, 0, 0.4], towards: [0, 1, 0.1], shape: "beckon", index: 70 } }],
+            [1, { left: { at: [-0.13, 0.21, 0.16], palm: [-0.9, 0, 0.4], towards: [0, 1, 0.1], shape: "beckon", index: 25 }, Head: { bend: 14, flex: 6 } }],
+            [1.25, { left: { at: [-0.09, 0.26, 0.12], palm: [-0.9, 0, 0.4], towards: [0, 1, 0.1], shape: "beckon", index: 70 } }],
+            [1.55, { left: { at: [-0.12, 0.3, 0.16], palm: [-0.9, 0, 0.4], towards: [0, 1, 0.1], shape: "beckon", index: 30 }, Hips: { obliquity: 4 }, Head: { bend: 10, flex: 4 }, offset: [-0.02, 0, 0] }]),
+        variant("a slow stretch", { ...spine({}), Head: { flex: 0 }, Hips: { obliquity: 0 }, offset: [0, 0, 0] },
+            // Both hands behind the head, the elbows out, arching the back and swaying the hips
+            [0.6, { right: { at: [0.3, 0.38, -0.02], palm: [0, 0, 1], towards: [1, 0.2, 0], elbow: [-1, 0.6, 0.2], shape: "relaxed" }, left: { at: [-0.3, 0.38, -0.02], palm: [0, 0, 1], towards: [-1, 0.2, 0], elbow: [1, 0.6, 0.2], shape: "relaxed" }, ...spine({ flex: -6 }), Head: { flex: -4 } }],
+            [1, { ...spine({ flex: -12, bend: 4 }), Head: { flex: -10 }, Hips: { obliquity: 6 }, offset: [0.03, -0.01, 0] }],
+            [1.4, { ...spine({ flex: -11, bend: -4 }), Head: { flex: -8 }, Hips: { obliquity: -6 }, offset: [-0.03, -0.01, 0] }],
+            [1.7, { right: { at: [0.3, 0.38, -0.02], palm: [0, 0, 1], towards: [1, 0.2, 0], elbow: [-1, 0.6, 0.2], shape: "relaxed" }, left: { at: [-0.3, 0.38, -0.02], palm: [0, 0, 1], towards: [-1, 0.2, 0], elbow: [1, 0.6, 0.2], shape: "relaxed" }, ...spine({ flex: -4 }), Head: { flex: -2 }, Hips: { obliquity: 0 }, offset: [0, 0, 0] }]),
+        variant("a hand on her hip", { ...spine({}), Head: { bend: 0 }, Hips: { obliquity: 0, turn: 0 }, offset: [0, 0, 0] },
+            // A hand on the hip, the hip cocked, the other hand trailing slowly down the thigh
+            [0.5, { left: akimbo(-1), right: THIGH_HIGH, Hips: { obliquity: 6, turn: -8 }, ...spine({ bend: -6 }), Head: { bend: 10 }, offset: [0.035, -0.01, 0] }],
+            [1, { right: THIGH_LOW, Hips: { obliquity: 7, turn: -9 }, Head: { bend: 12 } }],
+            [1.4, { right: THIGH_HIGH }],
+            [1.7, { left: akimbo(-1), right: THIGH_HIGH, Hips: { obliquity: 6, turn: -8 }, ...spine({ bend: -6 }), Head: { bend: 10 }, offset: [0.035, -0.01, 0] }]),
+        variant("blowing a kiss", { ...spine({}), Head: { flex: 0, bend: 0 } },
+            // Fingertips to the lips, then the hand swept out towards whoever's watching, opening
+            [0.6, { right: { at: [0.26, 0.28, 0.3], palm: [0, 0, -1], towards: [0, 1, 0.1], shape: "relaxed" }, Head: { flex: 4, bend: 6 } }],
+            [0.8, { right: { at: [0.26, 0.29, 0.31], palm: [0, 0, -1], towards: [0, 1, 0.1], shape: "relaxed" }, Head: { flex: 6, bend: 6 } }],
+            [1, { right: { at: [0.12, 0.2, 0.8], palm: [0.55, 0.8, -0.2], towards: [0, 0.25, 1], shape: "open" }, ...spine({ flex: 4 }), Head: { flex: -2, bend: 4 } }],
+            [1.3, { right: { at: [0.1, 0.18, 0.84], palm: [0.55, 0.8, -0.2], towards: [0, 0.25, 1], shape: "open" }, ...spine({ flex: 4 }), Head: { flex: -2, bend: 6 } }],
+            [1.6, { right: { at: [0.08, -0.4, 0.3], palm: [0.4, 0, -0.9], towards: [0, -0.8, 0.5], shape: "relaxed" }, ...spine({}), Head: { flex: 0, bend: 2 } }]),
+        variant("smoothing down her sides", { ...spine({}), Head: { flex: 0 }, Hips: { obliquity: 0 } },
+            // Both hands run slowly down her sides, from the ribs in to the waist and out over the hips
+            [0.5, { right: flank(1, 0.09, -0.36), left: flank(-1, 0.09, -0.36), ...spine({ flex: -5 }), Head: { flex: -4 } }],
+            [1, { right: flank(1, 0.13, -0.54), left: flank(-1, 0.13, -0.54), ...spine({ flex: -3 }), Hips: { obliquity: 4 } }],
+            [1.4, { right: flank(1, 0.02, -0.72), left: flank(-1, 0.02, -0.72), ...spine({ flex: 0 }), Head: { flex: 2 }, Hips: { obliquity: -3 } }],
+            [1.65, { right: flank(1, 0.02, -0.76), left: flank(-1, 0.02, -0.76), Hips: { obliquity: 0 } }]),
+    ],
     adventurer: [
         variant("stretching", { ...spine({}), Head: { flex: 0 } },
             // Both arms up high, the back arched, then down
@@ -801,8 +860,9 @@ const VECTORS = ["at", "point", "edge", "palm", "towards", "elbow"];
 
 // How the fingers are held, for a hand's `shape` in a key pose: each finger's flexion at its
 // three joints (degrees; the ring and little fingers curl a little more, as they do), and the
-// thumb's. A pointing hand's index is straight; `index` (degrees) curls it (beckoning). A hook
-// draws a bowstring on the fingers' ends
+// thumb's. A pointing hand's index is straight, the others curled into the palm; a beckoning
+// hand's index is straight, the others curled loosely; `index` (degrees) curls it ("come here").
+// A hook draws a bowstring on the fingers' ends
 const CURLS = {
     open: { fingers: [3, 2, 1], thumb: [{ flex: -5, oppose: 15 }, { flex: 0 }, { flex: 0 }] },
     relaxed: { fingers: [16, 24, 12], thumb: [{ flex: 10, oppose: 10 }, { flex: 10 }, { flex: 8 }] },
@@ -810,6 +870,7 @@ const CURLS = {
     grip: { fingers: [76, 84, 58], thumb: [{ flex: 55, oppose: -10 }, { flex: 35 }, { flex: 25 }] },
     fist: { fingers: [88, 98, 62], thumb: [{ flex: 60, oppose: -5 }, { flex: 45 }, { flex: 35 }] },
     point: { fingers: [88, 98, 62], index: [4, 4, 2], thumb: [{ flex: 58, oppose: -5 }, { flex: 45 }, { flex: 30 }] },
+    beckon: { fingers: [42, 58, 34], index: [6, 6, 3], thumb: [{ flex: 15, oppose: 15 }, { flex: 15 }, { flex: 10 }] },
     hook: { fingers: [15, 80, 50], thumb: [{ flex: 15, oppose: 10 }, { flex: 15 }, { flex: 10 }] },
 };
 const FINGERS = ["Index", "Middle", "Ring", "Pinky"];
