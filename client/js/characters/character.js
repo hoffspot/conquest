@@ -336,7 +336,8 @@ export class Character {
         // Paint hair on the scalp and jaw under the strands (or as a buzz cut or stubble)
         const painted = {
             ...skin,
-            scalp: Math.max(skin.scalp, style.scalp ?? 1),
+            // (under hair strands, solid: none of the skin shows between them)
+            scalp: Math.max(skin.scalp, style.scalp ?? (style.strands ? 1.4 : 1)),
             stubble: Math.max(skin.stubble, beard.stubble),
         };
 

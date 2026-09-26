@@ -1,49 +1,63 @@
 // Hair and beards, grown from the head: many thin strips ("hair cards", as most games use) with
 // a strand texture, each following a strand from a root on the skin.
 //
-// Roots are spread over the head's skin above the style's hairline (and, for beards, over the
-// jaw). Each strand leaves the skin in the style's direction (combed back, parted, standing
-// up...), bends under gravity and slides over the head: the head's shape is measured as its
-// radius in every direction from its middle, and strands are kept just outside it, in layers,
-// so the same style fits any head. The neck and body are ellipsoids for long hair to fall over.
+// Roots are spread over the outside of the head above the style's hairline (and, for beards,
+// over the jaw); parted hair also has roots all along its parting. Each strand leaves the skin in
+// the style's direction (combed back, away from a parting, to a tie or knot, standing up), neighbouring
+// strands turned the same way as a comb leaves them, and is grown in fine steps: over the upper
+// half of the head it lies on it (hair is soft: gravity presses it to the scalp), in its own
+// layer just off it, going round the face rather than over it; below the head's widest point, it
+// hangs straight down, draping over the neck, shoulders, chest and back (the skin, as a smooth
+// surface) forward or back as it grew. Cut hair ends at its hem, and the rest at its length.
+// Then each strand is smoothed where it hangs and resampled to a few segments, more where it
+// bends. The head's shape is measured as its radius in every direction from its middle, so the
+// same style fits any head. A ponytail is a full, round bundle from its tie.
+//
 // Hair is skinned to the head, handing over to the neck and upper back lower down, so long hair
 // follows the body. Under the cards, the scalp is painted in the hair's colour (skin.js).
 
 import * as THREE from "three";
-import { aboveHairline, beardAmount, faceFrame, HEAD_CENTRE_Z, nearEar } from "./face.js";
-import { random, smoothstep } from "./noise.js";
+import { aboveHairline, beardAmount, EAR, faceFrame, HEAD_CENTRE_Z, nearEar } from "./face.js";
+import { random, smoothstep, valueNoise } from "./noise.js";
 
 /**
- * Hairstyles: how many strands, how long (metres), how they leave the scalp (`flow`, and `lift`
- * away from it), how much they fall (`gravity`), how thick the hair is (`volume`, metres).
- * `scalp` is how much hair to paint on the scalp; `raise` moves the hairline up.
+ * Hairstyles: how many strands, how long (metres, at most), how they leave the scalp (`flow`, and
+ * `lift` away from it), how much they fall (`gravity`: how far a strand bends down, per metre),
+ * how thick the hair is (`volume`, metres), and how many segments each strand has. Cut hair ends
+ * at a hem (`hem`: the height its ends are cut to, face coordinates, at the back and the front,
+ * give or take `ragged`) rather than a length. Hair lies on the head (combed over it, down to its
+ * widest point) unless it stands up (`stands`). `scalp` is how much hair to paint on the scalp;
+ * `raise` moves the hairline up.
  */
 export const HAIRSTYLES = Object.freeze({
     bald: { label: "Bald", strands: 0, scalp: 0 },
     buzz: { label: "Buzz cut", strands: 0, scalp: 1 },
-    short: { label: "Short", strands: 1800, length: 0.05, lift: 0.1, gravity: 0.15, flow: "crown", width: 0.016, segments: 4, volume: 0.01 },
-    swept: { label: "Swept back", strands: 1500, length: 0.13, lift: 0.04, gravity: 0.6, flow: "back", width: 0.018, segments: 7, volume: 0.01 },
-    bob: { label: "Bob", strands: 1600, length: 0.19, lift: 0.05, gravity: 0.55, flow: "part", width: 0.018, segments: 9, volume: 0.012 },
-    long: { label: "Long", strands: 1700, length: 0.42, lift: 0.05, gravity: 0.7, flow: "part", width: 0.02, segments: 14, volume: 0.012 },
-    ponytail: { label: "Ponytail", strands: 1300, length: 0.12, lift: 0.02, gravity: 0.05, flow: "tail", width: 0.016, segments: 6, volume: 0.006, tail: { strands: 220, length: 0.34, width: 0.02 } },
-    mohawk: { label: "Mohawk", strands: 520, length: 0.11, lift: 1.2, gravity: 0, flow: "up", width: 0.02, segments: 5, volume: 0.004, strip: 0.02, scalp: 0.3 },
-    topknot: { label: "Topknot", strands: 900, length: 0.09, lift: 0.02, gravity: 0, flow: "knot", width: 0.016, segments: 6, volume: 0.005, raise: 0.03, scalp: 0.4, knot: true },
+    short: { label: "Short", strands: 1800, length: 0.05, lift: 0.1, gravity: 6, flow: "crown", width: 0.016, segments: 4, volume: 0.008, fringe: 0.02 },
+    swept: { label: "Swept back", strands: 1500, length: 0.13, lift: 0.04, gravity: 30, flow: "back", width: 0.018, segments: 7, volume: 0.008 },
+    bob: { label: "Bob", strands: 1600, length: 0.4, lift: 0.03, gravity: 40, flow: "part", width: 0.018, segments: 9, volume: 0.01, hem: [-0.105, -0.115], ragged: 0.004 },
+    long: { label: "Long", strands: 1700, length: 0.8, lift: 0.03, gravity: 40, flow: "part", width: 0.02, segments: 14, volume: 0.01, hem: [-0.4, -0.34], ragged: 0.012 },
+    ponytail: { label: "Ponytail", strands: 1300, length: 0.3, lift: 0.02, gravity: 1, flow: "tail", width: 0.016, segments: 6, volume: 0.004, tail: { strands: 220, length: 0.34, width: 0.02, radius: 0.03 } },
+    mohawk: { label: "Mohawk", strands: 520, length: 0.11, lift: 1.2, gravity: 0, flow: "up", width: 0.02, segments: 5, volume: 0.004, strip: 0.02, scalp: 0.3, stands: true },
+    topknot: { label: "Topknot", strands: 900, length: 0.3, lift: 0.02, gravity: 0, flow: "knot", width: 0.016, segments: 6, volume: 0.004, raise: 0.03, scalp: 0.4, knot: true },
 });
 
 /** Beards: `stubble` is painted on the skin under them (or is all there is). */
 export const BEARDS = Object.freeze({
     none: { label: "None", strands: 0, stubble: 0 },
     stubble: { label: "Stubble", strands: 0, stubble: 0.35 },
-    short: { label: "Short beard", strands: 2600, length: 0.016, lift: 0.08, gravity: 0.3, width: 0.007, segments: 3, stubble: 1, volume: 0.003 },
-    full: { label: "Full beard", strands: 1300, length: 0.075, lift: 0.12, gravity: 0.6, width: 0.014, segments: 6, stubble: 1, volume: 0.006 },
-    goatee: { label: "Goatee", strands: 450, length: 0.045, lift: 0.1, gravity: 0.6, width: 0.012, segments: 4, stubble: 0.9, volume: 0.004, goatee: true },
+    short: { label: "Short beard", strands: 2600, length: 0.016, lift: 0.08, gravity: 27, width: 0.007, segments: 3, stubble: 1, volume: 0.003 },
+    full: { label: "Full beard", strands: 1300, length: 0.075, lift: 0.12, gravity: 23, width: 0.014, segments: 6, stubble: 1, volume: 0.006 },
+    goatee: { label: "Goatee", strands: 450, length: 0.045, lift: 0.1, gravity: 25, width: 0.012, segments: 4, stubble: 0.9, volume: 0.004, goatee: true },
 });
 
 let strandTexture = null;
 
 /**
- * A texture of hair strands in clumps, white so a material's colour tints it, shared by all
- * hair. The left and right halves are two variants; the tips are at the bottom.
+ * A texture of hair strands, white so a material's colour tints it, shared by all hair: combed
+ * strands, lying nearly side by side in loose locks, solid right from the root (where a card
+ * starts at the scalp: a parting stays a thin line) and fading out over their last few
+ * millimetres (so a tip is soft, not pointed). The left and right halves are two variants; the
+ * tips are at the bottom.
  */
 export function hairTexture() {
     if (strandTexture) {
@@ -63,33 +77,32 @@ export function hairTexture() {
     context.lineCap = "round";
 
     for (const half of [0, 1]) {
-        const left = half * (width / 2) + 3;
-        const span = width / 2 - 6;
+        const left = half * (width / 2) + 4;
+        const span = width / 2 - 8;
 
-        // Clumps of strands, each narrowing to a point near the tip
-        for (let clump = 0; clump < 5; clump++) {
-            const centre = left + ((clump + 0.5) / 5) * span + (next() - 0.5) * 3;
-            const spread = span / 10;
-            const end = height * (0.72 + 0.26 * next());
+        // Locks of strands across the card, each gathering only a little towards its end
+        for (let lock = 0; lock < 7; lock++) {
+            const centre = left + ((lock + 0.5) / 7) * span + (next() - 0.5) * 2;
+            const spread = span / 7;
+            const end = height * (0.95 + 0.04 * next());
 
-            for (let s = 0; s < 14; s++) {
-                const start = centre + (next() - 0.5) * 2 * spread;
-                const tip = centre + (next() - 0.5) * spread * 0.4;
-                const shade = Math.round(170 + next() * 85);
+            for (let s = 0; s < 16; s++) {
+                const start = centre + (next() - 0.5) * spread * 1.1;
+                const tip = centre + (start - centre) * 0.75 + (next() - 0.5) * 1.5;
+                const shade = Math.round(175 + next() * 80);
+                const top = next() * 2;
+                const bottom = end * (0.97 + 0.03 * next());
+                const gradient = context.createLinearGradient(0, top, 0, bottom);
 
-                // Each strand starts at its own height, fading in, so a card's root edge is ragged
-                const top = next() * height * 0.14;
-                const gradient = context.createLinearGradient(0, top, 0, end);
-
-                gradient.addColorStop(0, `rgba(${shade},${shade},${shade},0)`);
-                gradient.addColorStop(0.12, `rgba(${shade},${shade},${shade},0.95)`);
-                gradient.addColorStop(0.8, `rgba(${shade},${shade},${shade},0.85)`);
+                gradient.addColorStop(0, `rgba(${shade},${shade},${shade},0.9)`);
+                gradient.addColorStop(0.01, `rgba(${shade},${shade},${shade},0.95)`);
+                gradient.addColorStop(0.88, `rgba(${shade},${shade},${shade},0.9)`);
                 gradient.addColorStop(1, `rgba(${shade},${shade},${shade},0)`);
                 context.strokeStyle = gradient;
-                context.lineWidth = 0.8 + next() * 1.1;
+                context.lineWidth = 0.9 + next() * 0.9;
                 context.beginPath();
                 context.moveTo(start, top);
-                context.bezierCurveTo(start, top + (end - top) * 0.4, tip + (next() - 0.5) * 2, top + (end - top) * 0.7, tip, end * (0.85 + 0.15 * next()));
+                context.bezierCurveTo(start, top + (bottom - top) * 0.4, tip + (next() - 0.5), top + (bottom - top) * 0.7, tip, bottom);
                 context.stroke();
             }
         }
@@ -115,6 +128,9 @@ class HeadShape {
 
         this.centre = centre;
         this.radii = new Float32Array(AROUND * UPDOWN);
+
+        /** Its lowest point's height (nothing below it can be in the head). */
+        this.bottom = Math.min(...points.map((p) => p.y)) - 0.02;
 
         const d = new THREE.Vector3();
 
@@ -215,6 +231,158 @@ function pushOutOfEllipsoid(point, { centre, radii }, margin) {
     }
 }
 
+// The body hair hangs over: the neck, shoulders (and the tops of the arms), chest and back
+const BODY_BONES = new Set(["Neck", "Spine2", "Spine1", "LeftShoulder", "RightShoulder", "LeftArm", "RightArm"]);
+
+/**
+ * The body under long hair, as its skin's points and normals (`include(v, bone)`: which), in a
+ * grid, for hanging hair to lie over: pushed out along the nearest point's normal.
+ */
+class BodyShape {
+    static CELL = 0.025;
+
+    constructor(human, positions, normals, include) {
+        const C = BodyShape.CELL;
+        const chosen = [];
+        const min = [Infinity, Infinity, Infinity];
+        const max = [-Infinity, -Infinity, -Infinity];
+
+        for (let v = 0; v < human.vertexCount; v++) {
+            if (human.partOf[v] === 0 && include(v, human.skinIndices[v * 4])) {
+                chosen.push(v);
+
+                for (let k = 0; k < 3; k++) {
+                    min[k] = Math.min(min[k], positions[v * 3 + k]);
+                    max[k] = Math.max(max[k], positions[v * 3 + k]);
+                }
+            }
+        }
+
+        this.normal = new THREE.Vector3();
+
+        /** Its highest point's height (nothing above it can touch it), with room to spare. */
+        this.top = max[1] + C * 2;
+
+        // A grid over it (a cell's points and normals packed together, cell by cell)
+        this.origin = min.map((m) => m - C * 2);
+        this.size = min.map((m, k) => Math.ceil((max[k] - m) / C) + 5);
+
+        const cellOf = (v) => this.#cell(positions[v * 3], positions[v * 3 + 1], positions[v * 3 + 2]);
+        const counts = new Uint32Array(this.size[0] * this.size[1] * this.size[2] + 1);
+
+        for (const v of chosen) {
+            counts[cellOf(v) + 1]++;
+        }
+
+        for (let c = 1; c < counts.length; c++) {
+            counts[c] += counts[c - 1];
+        }
+
+        this.starts = counts.slice();
+        this.points = new Float32Array(chosen.length * 6);
+
+        const fill = counts.slice();
+
+        for (const v of chosen) {
+            const at = fill[cellOf(v)]++ * 6;
+
+            for (let k = 0; k < 3; k++) {
+                this.points[at + k] = positions[v * 3 + k];
+                this.points[at + 3 + k] = normals[v * 3 + k];
+            }
+        }
+    }
+
+    // A point's cell's number (-1 outside the grid)
+    #cell(x, y, z) {
+        const C = BodyShape.CELL;
+        const [sx, sy, sz] = this.size;
+        const i = Math.floor((x - this.origin[0]) / C);
+        const j = Math.floor((y - this.origin[1]) / C);
+        const k = Math.floor((z - this.origin[2]) / C);
+
+        return i < 0 || j < 0 || k < 0 || i >= sx || j >= sy || k >= sz ? -1 : (i * sy + j) * sz + k;
+    }
+
+    /**
+     * Push a point out to `margin` above the body's skin: a smooth surface through the skin's
+     * points within a few centimetres (their average, weighted to the nearest, and its normal).
+     * Returns that normal if it was pushed (touching the body), else null.
+     */
+    pushOut(point, margin) {
+        const C = BodyShape.CELL;
+        const reach2 = (C * 1.4) ** 2;
+        const [sx, sy, sz] = this.size;
+        const { points, starts } = this;
+        const i0 = Math.floor((point.x - this.origin[0]) / C);
+        const j0 = Math.floor((point.y - this.origin[1]) / C);
+        const k0 = Math.floor((point.z - this.origin[2]) / C);
+        let weights = 0;
+        let cx = 0;
+        let cy = 0;
+        let cz = 0;
+        let nx = 0;
+        let ny = 0;
+        let nz = 0;
+
+        if (i0 < 1 || j0 < 1 || k0 < 1 || i0 >= sx - 1 || j0 >= sy - 1 || k0 >= sz - 1) {
+            return null;
+        }
+
+        for (let i = i0 - 1; i <= i0 + 1; i++) {
+            for (let j = j0 - 1; j <= j0 + 1; j++) {
+                const row = (i * sy + j) * sz;
+
+                for (let a = starts[row + k0 - 1] * 6, end = starts[row + k0 + 2] * 6; a < end; a += 6) {
+                    const d2 = (points[a] - point.x) ** 2 + (points[a + 1] - point.y) ** 2 + (points[a + 2] - point.z) ** 2;
+
+                    if (d2 < reach2) {
+                        const w = (1 - d2 / reach2) ** 2;
+
+                        weights += w;
+                        cx += points[a] * w;
+                        cy += points[a + 1] * w;
+                        cz += points[a + 2] * w;
+                        nx += points[a + 3] * w;
+                        ny += points[a + 4] * w;
+                        nz += points[a + 5] * w;
+                    }
+                }
+            }
+        }
+
+        if (weights < 1e-6) {
+            return null;
+        }
+
+        const n = this.normal.set(nx, ny, nz).normalize();
+        const above = (point.x - cx / weights) * n.x + (point.y - cy / weights) * n.y + (point.z - cz / weights) * n.z;
+
+        if (above >= margin) {
+            return null;
+        }
+
+        point.addScaledVector(n, margin - above);
+
+        return n;
+    }
+}
+
+/**
+ * Keep hair clear of the face (a point, moved if it's in front of it): out to the side of it,
+ * past the cheeks, from the brows to below the chin.
+ */
+function clearOfFace(face, point) {
+    const [x, y, z] = face.toFace(point.x, point.y, point.z);
+    const half = 0.068 - 0.02 * smoothstep(-0.05, -0.13, y);
+
+    if (z > -0.035 && y < 0.035 && y > -0.17 && Math.abs(x) < half) {
+        const [nx] = face.fromFace((Math.sign(x) || 1) * half, y, z);
+
+        point.x = nx;
+    }
+}
+
 /** Random points on triangles (area-weighted), with the triangles' normals. */
 function sampleSurface(positions, triangles, count, next) {
     const areas = [];
@@ -279,6 +447,9 @@ function thinned(style, detail) {
         return style;
     }
 
+    // (Short hair keeps more of its strands: they're only a few triangles each)
+    detail = Math.min(1, Math.max(detail, style.length < 0.1 ? 0.4 : 0));
+
     const fewer = (count) => Math.max(24, Math.round(count * detail));
     const wider = (width) => width / Math.sqrt(Math.max(detail, 0.15));
 
@@ -286,7 +457,7 @@ function thinned(style, detail) {
         ...style,
         strands: fewer(style.strands),
         width: wider(style.width),
-        segments: Math.max(3, Math.round(style.segments * (0.35 + 0.65 * detail))),
+        segments: Math.max(Math.min(style.segments, 5), Math.round(style.segments * (0.5 + 0.5 * detail))),
         tail: style.tail && { ...style.tail, strands: fewer(style.tail.strands), width: wider(style.tail.width) },
     };
 }
@@ -323,13 +494,35 @@ export function buildHair(character, style = "short", beard = "none", { seed = 1
 
     const head = new HeadShape(at(0, 0.01, HEAD_CENTRE_Z), headPoints);
     const neck = fitEllipsoid(human, positions, new Set([rig.index.get("Neck")]), 0.92);
-    const body = fitEllipsoid(human, positions, new Set([rig.index.get("Spine2"), rig.index.get("LeftShoulder"), rig.index.get("RightShoulder")]), 0.95);
+    const shoulders = rig.heads[rig.index.get("LeftArm")].y;
+    const body = new BodyShape(human, positions, character.normals ?? human.normals(positions), (v, bone) => BODY_BONES.has(human.bones[bone].name) && (!/Arm$/.test(human.bones[bone].name) || positions[v * 3 + 1] > shoulders - 0.06));
+
+    // Hair is kept off the head, the body under it (the neck, shoulders, chest and back: it lies
+    // over them) and the face (framing it, never across it)
     const keepOut = (point, margin) => {
-        head.pushOut(point, margin);
-        pushOutOfEllipsoid(point, neck, margin);
-        pushOutOfEllipsoid(point, body, margin + 0.01);
+        if (point.y > head.bottom) {
+            head.pushOut(point, margin);
+        }
+
+        const touching = point.y < body.top ? body.pushOut(point, margin + 0.002) : null;
+
+        clearOfFace(face, point);
+
+        return touching;
     };
     const builder = new CardBuilder(rig, next);
+
+    // Hanging hair faces out from the head, turning to face out from the body (round the neck)
+    // as it falls past the jaw, and out of the body a little where it lies on it
+    const neckAxis = at(0, 0, HEAD_CENTRE_Z);
+    const jaw = at(0, -0.12, 0).y;
+    const hangingFacing = (point, touching) => {
+        const fromHead = point.clone().sub(head.centre).normalize();
+        const fromNeck = new THREE.Vector3(point.x - neckAxis.x, 0, point.z - neckAxis.z).normalize();
+        const facing = fromHead.lerp(fromNeck, smoothstep(jaw + 0.04, jaw - 0.08, point.y));
+
+        return (touching ? facing.addScaledVector(touching, 0.5) : facing).normalize();
+    };
 
     // Where the hair's crown whorl, topknot and ponytail tie are
     const crown = at(0, 0.1, -0.11);
@@ -340,20 +533,47 @@ export function buildHair(character, style = "short", beard = "none", { seed = 1
     const gathered = below < Infinity && (hair.tail || hair.knot);
 
     if (hair.strands && !gathered) {
-        const roots = sampleSurface(positions, headTriangles, hair.strands * 4, next).filter(({ point }) => {
+        const candidates = sampleSurface(positions, headTriangles, hair.strands * 8, next).filter(({ point, normal }) => {
             const [x, y, z] = face.toFace(point.x, point.y, point.z);
+            const outward = point.clone().sub(head.centre);
+
+            // Only on the outside of the head (not inside the mouth), facing out
+            if (outward.length() < head.radius(outward) * 0.9 || normal.dot(outward.normalize()) < 0.2) {
+                return false;
+            }
 
             if (hair.strip && Math.abs(x) > hair.strip * (1 + 0.5 * smoothstep(0.08, -0.05, z))) {
                 return false;
             }
 
-            return y < below && aboveHairline(x, y, z, hair.raise ?? 0) > 0.002 && nearEar(x, y, z) < 0.3;
-        }).slice(0, hair.strands);
+            return y < below && aboveHairline(x, y, z, hair.raise ?? 0) > 0.002 && nearEar(x, y, z) < 0.5;
+        });
+        const roots = candidates.slice(0, hair.strands);
+
+        // Parted hair starts right at the parting, and falls away from it either side: roots all
+        // along it, a hair's breadth either side, so it's a thin line, not a bald strip
+        if (hair.flow === "part") {
+            const count = Math.max(24, Math.round(hair.strands * 0.1));
+
+            for (let n = 0; n < count; n++) {
+                const z = PARTING_ENDS + (0.08 - PARTING_ENDS) * ((n + next()) / count);
+                const out = at((n % 2 ? 1 : -1) * PARTING, 0.12, z).sub(head.centre).normalize();
+                const point = head.centre.clone().addScaledVector(out, head.radius(out));
+                const [x, y, fz] = face.toFace(point.x, point.y, point.z);
+
+                if (aboveHairline(x, y, fz) > 0.002) {
+                    roots.push({ point, normal: out });
+                }
+            }
+        }
 
         for (const { point, normal } of roots) {
             const outward = point.clone().sub(head.centre).normalize();
             const along = (direction) => direction.addScaledVector(outward, -direction.dot(outward)).normalize();
             const [x, y, z] = face.toFace(point.x, point.y, point.z);
+
+            // Which side it's on (at the parting, either)
+            const side = Math.abs(x) > 0.0005 ? Math.sign(x) : next() < 0.5 ? -1 : 1;
             let direction;
 
             switch (hair.flow) {
@@ -365,9 +585,10 @@ export function buildHair(character, style = "short", beard = "none", { seed = 1
                     direction = along(new THREE.Vector3(Math.sign(x) * 0.15, -0.1 + 0.4 * smoothstep(0.05, 0.08, y), -1));
                     break;
                 case "part":
-                    // Away from a parting down the middle of the top of the head, then down; behind
-                    // the crown, where there's no parting, straight down the back of the head
-                    direction = along(new THREE.Vector3((Math.sign(x) || 1) * smoothstep(-0.13, -0.08, z), -0.5, -0.35 + 0.2 * smoothstep(0.03, 0.07, y)));
+                    // Straight off a parting down the middle of the top of the head, to either
+                    // side, then down; behind the crown, where there's no parting, straight down
+                    // the back of the head
+                    direction = along(new THREE.Vector3(side * smoothstep(PARTING_ENDS - 0.03, PARTING_ENDS + 0.02, z), -0.5, -0.35 + 0.2 * smoothstep(0.03, 0.07, y)));
                     break;
                 case "tail":
                     direction = along(tie.clone().sub(point));
@@ -376,18 +597,46 @@ export function buildHair(character, style = "short", beard = "none", { seed = 1
                     direction = along(knot.clone().sub(point));
                     break;
                 default:
-                    direction = outward.clone().add(new THREE.Vector3(0, 0, -0.35)).normalize();
+                    // Standing up off the scalp, leaning up and back (a crest)
+                    direction = outward.clone().add(new THREE.Vector3(0, 0.6, -0.3)).normalize();
             }
 
-            const jitter = 0.25;
+            // Below the head's widest point, where it hangs from the start, downhill
+            if (!hair.stands && !hair.tail && !hair.knot) {
+                direction.lerp(along(new THREE.Vector3(0, -1, 0)), smoothstep(-0.02, -0.3, outward.y)).normalize();
+            }
 
-            direction.addScaledVector(outward, hair.lift).add(new THREE.Vector3((next() - 0.5) * jitter, (next() - 0.5) * jitter, (next() - 0.5) * jitter)).normalize();
+            // Combed: neighbouring strands turn the same way (a little, as a comb leaves them),
+            // each only a touch its own
+            const swirl = (valueNoise(point.x * 40 + 11, point.y * 40, point.z * 40) - 0.5) * 0.6 + (next() - 0.5) * 0.08;
 
+            direction.applyAxisAngle(outward, swirl).addScaledVector(outward, hair.lift).normalize();
+
+            // Each strand lies in its own layer, the outer ones further off the scalp
             const layer = next();
-            const length = hair.length * (0.75 + 0.45 * next());
+            const lie = (k) => 0.002 + hair.volume * layer * Math.min(1, k * 4);
             const stop = hair.flow === "knot" ? knot : hair.flow === "tail" ? tie : null;
             const start = point.clone().addScaledVector(normal.dot(outward) > 0 ? normal : outward, 0.001);
-            const points = grow(start, direction, length, hair, (p, k) => keepOut(p, 0.002 + hair.volume * layer * Math.min(1, k * 2)), stop, next);
+            const hem = hair.hem ? at(0, hemAt(hair.hem, z) + (next() - 0.5) * 2 * hair.ragged, 0).y : null;
+            const points = grow(start, direction, {
+                // (Uncut hair growing low on the head, round the ears and at the nape, is shorter)
+                length: hair.length * (hem === null && !stop ? (0.9 + 0.2 * next()) * (0.4 + 0.6 * smoothstep(-0.3, 0, outward.y)) : 1),
+                segments: hair.segments,
+                bend: hair.gravity,
+                head: hair.stands ? null : head,
+                lie,
+                keepOut: (p, k) => keepOut(p, lie(k)),
+                drape: new THREE.Vector3(0, -1, z > EAR[2] + 0.02 ? 0.7 : -0.7),
+                around: hangingFacing,
+                onFace: (p) => {
+                    const [fx, fy, fz] = face.toFace(p.x, p.y, p.z);
+
+                    return aboveHairline(fx, fy, fz) < -(hair.fringe ?? 0) && Math.abs(Math.atan2(fx, fz - HEAD_CENTRE_Z)) < 1.2;
+                },
+                aside: () => at(side, 0, -0.4).sub(at(0, 0, 0)),
+                stop,
+                hem,
+            });
 
             builder.strand(points, hair.width, (p) => p.clone().sub(head.centre).normalize(), layer);
         }
@@ -423,17 +672,22 @@ export function buildHair(character, style = "short", beard = "none", { seed = 1
 
             const layer = next();
             const surface = normal.clone();
-            const points = grow(point.clone().addScaledVector(normal, 0.001), direction, whiskers.length * (0.7 + 0.6 * next()), whiskers, (p, k) => {
-                // Keep off the face: no nearer the face than the root, along its normal
-                const above = p.clone().sub(point).dot(surface);
-                const wanted = 0.001 + whiskers.volume * layer * Math.min(1, k * 2);
+            const points = grow(point.clone().addScaledVector(normal, 0.001), direction, {
+                length: whiskers.length * (0.8 + 0.4 * next()),
+                segments: whiskers.segments,
+                bend: whiskers.gravity,
+                keepOut: (p, k) => {
+                    // Keep off the face: no nearer the face than the root, along its normal
+                    const above = p.clone().sub(point).dot(surface);
+                    const wanted = 0.001 + whiskers.volume * layer * Math.min(1, k * 2);
 
-                if (above < wanted) {
-                    p.addScaledVector(surface, wanted - above);
-                }
+                    if (above < wanted) {
+                        p.addScaledVector(surface, wanted - above);
+                    }
 
-                pushOutOfEllipsoid(p, neck, 0.004);
-            }, null, next);
+                    pushOutOfEllipsoid(p, neck, 0.004);
+                },
+            });
 
             builder.strand(points, whiskers.width, () => surface, layer);
         }
@@ -443,58 +697,250 @@ export function buildHair(character, style = "short", beard = "none", { seed = 1
 }
 
 /**
- * Grow a strand: `segments` steps from `root`, bending under gravity; `keepOut(point, step)`
- * keeps each point off the body. Strands with a `stop` (a tie or knot) are drawn to it.
+ * Grow a strand from `root`, setting off in `direction`: in fine steps (a few millimetres), so it
+ * follows the curve of the head, then resampled to `segments` (keeping more points where it
+ * bends). While it's over the upper half of the head (where the scalp faces up), it lies on it,
+ * `lie(k)` above the scalp (k: 0 at the root, 1 at the tip), combed along it, and turned
+ * `aside()` (to the side and back) rather than down over the face (`onFace(point)`); below the
+ * head's widest point, it hangs, bending down under gravity (`bend`, per metre) and kept off the
+ * head and body (`keepOut`, which returns the body's normal where it touches it), draping over
+ * the body the way `drape` says. It ends after `length`, or at the height `hem` (cut hair), or at
+ * `stop` (a tie or knot), drawn towards it. Without a `head` (hair standing up), it never lies.
  */
-function grow(root, direction, length, style, keepOut, stop, next) {
-    const points = [root.clone()];
-    const segments = style.segments;
-    const step = length / segments;
+function grow(root, direction, { length, segments, bend = 0, head = null, lie = () => 0.002, keepOut = () => null, drape = null, around = null, onFace = () => false, aside = null, stop = null, hem = null }) {
     const heading = direction.clone();
     const point = root.clone();
+    const out = new THREE.Vector3();
+    let lying = Boolean(head);
 
-    for (let s = 1; s <= segments; s++) {
-        heading.y -= style.gravity * (0.4 + 0.15 * next());
-        heading.normalize();
+    // Which way the card faces at each point: off the scalp where it lies on the head, off the
+    // body where it touches it, and as it last did where it hangs free
+    let facing = head ? root.clone().sub(head.centre).normalize() : null;
+    const points = [Object.assign(root.clone(), { facing })];
+    let grown = 0;
+
+    while (grown < length) {
+        // Down to the head's widest point, it lies on the head; below it, it hangs. Hair drawn
+        // to a tie or knot lies on the head all the way, pulled taut, until it's nearly there
+        if (lying) {
+            out.copy(point).sub(head.centre).normalize();
+            lying = stop ? point.distanceTo(stop) > 0.035 : out.y > -0.05;
+        }
+
+        // (Finer steps over the head, where it curves)
+        const step = Math.min(lying ? FINE_STEP : FINE_STEP * 1.6, length - grown + 1e-6);
+        const k = Math.min(1, (grown += step) / length);
+
+        heading.y -= bend * step;
 
         if (stop) {
-            if (point.distanceTo(stop) < step) {
-                points.push(stop.clone());
+            const distance = point.distanceTo(stop);
+
+            if (distance < step * 1.5) {
+                points.push(Object.assign(stop.clone(), { facing }));
                 break;
             }
 
-            heading.lerp(stop.clone().sub(point).normalize(), 0.45).normalize();
+            // Drawn to it, and straight to it once near
+            heading.lerp(stop.clone().sub(point).normalize(), distance < 0.04 ? 1 : 0.25);
         }
+
+        if (lying) {
+            heading.addScaledVector(out, -heading.dot(out));
+        }
+
+        heading.normalize();
 
         const previous = point.clone();
 
         point.addScaledVector(heading, step);
-        keepOut(point, s / segments);
-        heading.copy(point).sub(previous).normalize();
-        points.push(point.clone());
+
+        if (lying) {
+            out.copy(point).sub(head.centre);
+            point.copy(head.centre).addScaledVector(out.normalize(), head.radius(out) + lie(k));
+
+            // Not down over the face: along the hairline instead, to the side and back (or, if
+            // that's still over it, straight back)
+            if (aside && onFace(point)) {
+                out.copy(previous).sub(head.centre).normalize();
+
+                for (const away of [aside(), aside().setX(0)]) {
+                    heading.copy(away).addScaledVector(out, -away.dot(out)).normalize();
+                    point.copy(previous).addScaledVector(heading, step);
+
+                    const lift = point.clone().sub(head.centre);
+
+                    point.copy(head.centre).addScaledVector(lift.normalize(), head.radius(lift) + lie(k));
+
+                    if (!onFace(point)) {
+                        break;
+                    }
+                }
+            }
+
+            facing = point.clone().sub(head.centre).normalize();
+        }
+
+        // Touching the body, it drapes over it (down it, and straight forward or back over a
+        // shoulder), not carried on out the way it was pushed
+        const touching = keepOut(point, k);
+
+        if (!lying && around) {
+            facing = around(point, touching);
+        }
+
+        if (touching && drape) {
+            heading.copy(drape).addScaledVector(touching, -drape.dot(touching));
+            heading.x *= 0.25;
+            heading.normalize();
+        } else {
+            heading.copy(point).sub(previous).normalize();
+        }
+
+        points.push(Object.assign(point.clone(), { hanging: !lying, facing }));
+
+        if (hem !== null && point.y < hem) {
+            break;
+        }
     }
 
-    return points;
+    // Smoothed where it hangs (no kinks where it meets the body), still kept off it
+    for (let pass = 0; pass < 3; pass++) {
+        for (let k = 1; k < points.length - 1; k++) {
+            if (points[k].hanging) {
+                const { hanging } = points[k];
+                let { facing: faces } = points[k];
+
+                points[k].lerp(points[k - 1].clone().add(points[k + 1]).multiplyScalar(0.5), 0.5);
+                const touching = keepOut(points[k], k / (points.length - 1));
+
+                faces = around ? around(points[k], touching) : faces;
+                Object.assign(points[k], { hanging, facing: faces });
+            }
+        }
+    }
+
+    return resample(points, segments);
 }
 
-/** A ponytail: strands from a tie at the back of the head, hanging down the back. */
+// Strands are grown in steps this long (metres), then resampled
+const FINE_STEP = 0.005;
+
+// A parting: how near the middle (face coordinates) its roots are, and where it ends behind (at
+// the crown)
+const PARTING = 0.0015;
+const PARTING_ENDS = -0.105;
+
+/** Where cut hair ends (face coordinates' height), from its hem at the back and the front, by how far forward its root is. */
+const hemAt = ([back, front], z) => back + (front - back) * smoothstep(-0.14, -0.02, z);
+
+/**
+ * A polyline resampled to `count` segments, spaced evenly by length and by how much it turns, so
+ * bends keep more of the points.
+ */
+function resample(points, count) {
+    if (points.length <= count + 1) {
+        return points;
+    }
+
+    const measure = [0];
+    const length = points.reduce((sum, p, k) => sum + (k ? p.distanceTo(points[k - 1]) : 0), 0) || 1;
+    const a = new THREE.Vector3();
+    const b = new THREE.Vector3();
+
+    for (let k = 1; k < points.length; k++) {
+        const turn = k > 1 ? a.subVectors(points[k], points[k - 1]).angleTo(b.subVectors(points[k - 1], points[k - 2])) : 0;
+
+        measure.push(measure[k - 1] + points[k].distanceTo(points[k - 1]) / length + turn / Math.PI);
+    }
+
+    const total = measure.at(-1);
+    const out = [points[0].clone()];
+    let k = 1;
+
+
+    for (let n = 1; n < count; n++) {
+        const target = (n / count) * total;
+
+        while (measure[k] < target) {
+            k++;
+        }
+
+        const t = (target - measure[k - 1]) / (measure[k] - measure[k - 1] || 1);
+        const [a, b] = [points[k - 1].facing, points[k].facing];
+
+        out.push(Object.assign(points[k - 1].clone().lerp(points[k], t), { facing: a && b ? a.clone().lerp(b, t).normalize() : a ?? b }));
+    }
+
+    out.push(Object.assign(points.at(-1).clone(), { facing: points.at(-1).facing }));
+    out[0].facing = points[0].facing;
+
+    return out;
+}
+
+/**
+ * A ponytail: a round bundle of strands from a tie at the back of the head, hanging down the
+ * back. It's gathered tight at the tie, full a third of the way down (`radius`), tapering to its
+ * ends; its middle falls back and down under gravity, clear of the head and back by its own
+ * thickness, and the strands lie round it, each facing out from it, turning a little down it.
+ */
 function addTail(builder, tail, tie, keepOut, next, detail = 1) {
-    const segments = Math.max(4, Math.round(10 * (0.35 + 0.65 * Math.min(1, detail))));
+    const segments = Math.max(6, Math.round(12 * (0.4 + 0.6 * Math.min(1, detail))));
+    const radius = (t) => tail.radius * (0.3 + 0.7 * smoothstep(0, 0.3, t) - 0.45 * smoothstep(0.35, 1, t));
 
-    for (let s = 0; s < tail.strands; s++) {
-        const start = tie.clone().add(new THREE.Vector3((next() - 0.5) * 0.016, (next() - 0.5) * 0.016, -0.004));
-        const direction = new THREE.Vector3((next() - 0.5) * 0.2, -0.3, -0.9).normalize();
-        const points = grow(start, direction, tail.length * (0.8 + 0.4 * next()), { segments, gravity: 0.8 }, (p) => keepOut(p, 0.012), null, next);
-        const middle = points[0].clone();
+    // Its middle, from the tie
+    const axis = grow(tie.clone(), new THREE.Vector3(0, -0.6, -0.8).normalize(), {
+        length: tail.length,
+        segments: 24,
+        bend: 16,
+        keepOut: (p, k) => keepOut(p, radius(k) + 0.004),
+    });
+    const lengths = [0];
 
-        // Gathered at the tie, spreading a little lower down
-        points.forEach((point, k) => {
-            const spread = 0.25 + 0.75 * (k / points.length);
+    for (let k = 1; k < axis.length; k++) {
+        lengths.push(lengths[k - 1] + axis[k].distanceTo(axis[k - 1]));
+    }
 
-            point.x = middle.x + (point.x - middle.x) * spread;
-        });
+    // Where along it a point is (t, 0 at the tie to 1 at the end): its middle there, which way it
+    // runs, and two directions across it
+    const along = (t) => {
+        const target = t * lengths.at(-1);
+        let k = 1;
 
-        builder.strand(points, tail.width, (p) => new THREE.Vector3(p.x - middle.x, 0, p.z - middle.z - 0.03).normalize(), next());
+        while (k < axis.length - 1 && lengths[k] < target) {
+            k++;
+        }
+
+        const u = (target - lengths[k - 1]) / (lengths[k] - lengths[k - 1] || 1);
+        const middle = axis[k - 1].clone().lerp(axis[k], u);
+        const tangent = axis[k].clone().sub(axis[k - 1]).normalize();
+        const across = new THREE.Vector3(1, 0, 0).addScaledVector(tangent, -tangent.x).normalize();
+
+        return { middle, across, up: new THREE.Vector3().crossVectors(tangent, across) };
+    };
+
+    const strands = Math.max(80, Math.round(tail.strands * Math.min(1, detail)));
+    const width = tail.width / Math.sqrt(Math.max(Math.min(1, detail), 0.3));
+
+    for (let s = 0; s < strands; s++) {
+        // Round it (mostly near its outside, where it's seen), each ending a little short of the
+        // longest
+        const angle = next() * Math.PI * 2;
+        const out = 0.45 + 0.55 * Math.sqrt(next());
+        const end = 0.82 + 0.18 * next();
+        const twist = (next() - 0.5) * 0.5;
+        const points = [];
+
+        for (let k = 0; k <= segments; k++) {
+            const t = (k / segments) * end;
+            const { middle, across, up } = along(t);
+            const turn = angle + twist * t;
+            const facing = across.clone().multiplyScalar(Math.cos(turn)).addScaledVector(up, Math.sin(turn));
+
+            points.push(Object.assign(middle.addScaledVector(facing, radius(t) * out), { facing }));
+        }
+
+        builder.strand(points, width, (p) => p.facing, 0.35 + 0.65 * out);
     }
 }
 
@@ -554,11 +1000,27 @@ class CardBuilder {
             return;
         }
 
-        points.forEach((point, k) => {
-            const t = k / (count - 1);
-            const normal = normalAt(point);
+        // How far along the strand each point is (0 at the root, 1 at the tip), by length
+        const along0 = [0];
 
+        for (let k = 1; k < count; k++) {
+            along0.push(along0[k - 1] + points[k].distanceTo(points[k - 1]));
+        }
+
+        points.forEach((point, k) => {
+            const t = along0[k] / (along0.at(-1) || 1);
+            const normal = (point.facing ?? normalAt(point)).clone();
+
+            // The card faces out at right angles to the strand (or, for a strand standing
+            // straight out, to the side, so it's seen edge on from the front, like a crest)
             along.copy(points[Math.min(count - 1, k + 1)]).sub(points[Math.max(0, k - 1)]).normalize();
+            normal.addScaledVector(along, -normal.dot(along));
+
+            if (normal.lengthSq() < 0.09) {
+                normal.set(1, 0, 0).addScaledVector(along, -along.x);
+            }
+
+            normal.normalize();
             side.crossVectors(along, normal).normalize();
 
             const half = (width / 2) * (1 - 0.45 * t);

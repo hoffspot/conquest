@@ -489,7 +489,7 @@ export function paintSkin(atlas, settings = {}) {
 
         const scalp = (f.scalp[i] / 255) * look.scalp * (0.75 + 0.25 * grain);
 
-        mix(hair.map((c) => c * 0.8), Math.min(0.97, scalp));
+        mix(hair.map((c) => c * 0.75), Math.min(1, scalp));
 
         const browEdge = 0.62 * look.brows;
         const browAlpha = (1 - smoothstep(browEdge - 0.08, browEdge + 0.03, f.brow[i] / 255)) * (0.45 + 0.55 * (f.browHair[i] / 255)) * Math.min(1, look.brows * 4);
