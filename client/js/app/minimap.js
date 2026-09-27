@@ -248,6 +248,11 @@ export class Minimap {
         }
     }
 
+    /** Let go of a floor's painting (its building's been let go: painted again if it's shown again). */
+    forget(mapId) {
+        this.bases.delete(mapId);
+    }
+
     /**
      * Show a map (one of the world's maps: the world outside, the town on its own, or a floor
      * inside), painting it the first time (or, the world outside, as the player goes).

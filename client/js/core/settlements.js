@@ -8,6 +8,7 @@
 
 import { CELL, CHUNK, CHUNKS } from "./worldplan/plan.js";
 import { GROUND } from "./setpieces/pieces.js";
+import { openEntrances } from "./insides.js";
 import { layoutTown, SETTLEMENT_KINDS } from "./setpieces/town.js";
 
 /** How far past its own square the world round a settlement has to be for it to be laid out (metres). */
@@ -94,6 +95,9 @@ export class Settlements {
         if (!settlement) {
             const town = layoutTown({ seed: place.seed, kind: place.kind, exits: waysOut(this.plan, place) });
             const { at, size } = squareOf(place);
+
+            // (The way up to the doors of its buildings that can be gone into, cleared)
+            openEntrances(town.pieces, town.blocked, town.opaque);
 
             settlement = { place, town, at, size };
             this.laid.set(place.id, settlement);

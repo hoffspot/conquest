@@ -1,0 +1,449 @@
+// Going inside: every building that can be gone into (setpieces/pieces.js ENTERED: taverns, and
+// in time the temples, smithies and guilds) in every settlement, its front door one of the world's
+// links, its floors made the first time they're wanted (the player's walking up to the door, or
+// through it) and kept, each at a place of its own far off in the 3D world, with its folk.
+//
+// A building's door is where the art puts it (ENTRANCES: kits/landmarks.js builds it there): so
+// far in from the front of its lot, so far along it, so wide; the squares in front of it are
+// cleared to walk up to it (openEntrances). Its floors are plans (interiors.js readPlan), laid out
+// for its kind: a tavern's taproom (its tables set out one of several ways, its hearth, bar and
+// barrels, and stairs if it has a floor above) and upstairs, as its name has it (tavern lore:
+// rooms to let with an innkeeper at the counter; rooms with a courtesan or two; or a madam's
+// house). Its folk are worked out from its plan: a barkeep behind the bar and at the barrels,
+// serving wenches between the bar and the tables, patrons on the benches, whoever keeps
+// upstairs, and the courtesans in their rooms.
+//
+// The town's own tavern, Wenches and Ale, is made with the town (world.js) and keeps its ids
+// (taproom, upstairs, tavern-door, tavern-stairs) and its folk; it's registered here as made.
+// Pure data, no DOM.
+
+import { FACING, readPlan, tavernFolk, UPSTAIRS_PLAN } from "./interiors.js";
+import { namePeople } from "./names.js";
+import { createRandom } from "./random.js";
+import { ENTERED, GROUND, PLOT } from "./setpieces/pieces.js";
+
+/**
+ * Where each kind of building's front door is, as the art builds it: how far in from the front of
+ * its lot the door stands (metres), how far along the front from its middle (+ east as it would
+ * face south), how wide and tall it is, and how high its sill (the plinth, or steps).
+ */
+export const ENTRANCES = Object.freeze({
+    tavern: { depth: 1.8, offset: 0, width: 1.8, height: 2.3, floor: 0.3 },
+    guild: { depth: 1.8, offset: 0, width: 2.2, height: 2.6, floor: 0.3 },
+    church: { depth: 1.2, offset: 0, width: 1.6, height: 2.6, floor: 0.6 },
+    blacksmith: { depth: 2.2, offset: -1.2, width: 1.3, height: 2.1, floor: 0.3 },
+});
+
+/** The kinds that can be gone into so far (the rest of ENTERED in time). */
+export const ENTERABLE = Object.freeze(["tavern"]);
+
+// The way to a door, cleared: at least this far either side of its middle, and from this far in
+// behind it to this far out past the lot's front (metres)
+const WAY_IN = Object.freeze({ across: 1.2, behind: 0.4, out: 1 });
+
+/**
+ * Where a building's front door is, and the way to it: { door: { x, z (metres, the middle of its
+ * threshold), facing (as characters face: 0 south), width, height, floor }, front (the two squares
+ * at the door), outside (the square to come out onto), clear (every square to clear to walk up to
+ * it), facing, corner ([x, y]: its lot's north-west corner as it would stand facing south), size
+ * ([width, depth] metres) }. Its piece is placed from `origin` (metres: [x, y], or a number for
+ * both).
+ */
+export function entranceOf(piece, origin = 0) {
+    const spec = ENTRANCES[piece.name];
+    const [ox, oy] = Array.isArray(origin) ? origin : [origin, origin];
+    const [width, depth] = [piece.w * PLOT, piece.h * PLOT];
+    const { facing } = piece;
+    const [cx, cy] = [ox + piece.x, oy + piece.y];
+    const [cos, sin] = [Math.cos(facing), Math.sin(facing)];
+
+    // A point in the lot's own frame (facing south, metres from its north-west corner) turned to
+    // face the way it does, about its middle, in the world
+    const turn = (u, v) => {
+        const [du, dv] = [u - width / 2, v - depth / 2];
+
+        return [cx + du * cos + dv * sin, cy - du * sin + dv * cos];
+    };
+    const squareAt = (u, v) => turn(u, v).map(Math.floor);
+    const [u, v] = [width / 2 + spec.offset, depth - spec.depth];
+    const [dx, dz] = turn(u, v);
+    const front = [squareAt(u - 0.5, v + 0.3), squareAt(u + 0.5, v + 0.3)];
+    const outside = squareAt(u, depth + 0.6);
+    const across = Math.max(WAY_IN.across, spec.width / 2 + 0.3);
+    const clear = [];
+    const reach = Math.hypot(width, depth) / 2 + 2;
+
+    for (let y = Math.floor(cy - reach); y <= Math.ceil(cy + reach); y++) {
+        for (let x = Math.floor(cx - reach); x <= Math.ceil(cx + reach); x++) {
+            const [px, py] = [x + 0.5 - cx, y + 0.5 - cy];
+            const pu = width / 2 + px * cos - py * sin;
+            const pv = depth / 2 + px * sin + py * cos;
+
+            if (Math.abs(pu - u) <= across && pv >= v - WAY_IN.behind && pv <= depth + WAY_IN.out) {
+                clear.push([x, y]);
+            }
+        }
+    }
+
+    return {
+        door: { x: dx, z: dz, facing, width: spec.width, height: spec.height, floor: spec.floor },
+        front,
+        outside,
+        clear: [...front, outside, ...clear],
+        facing,
+        corner: [cx - width / 2, cy - depth / 2],
+        size: [width, depth],
+    };
+}
+
+/**
+ * Clear the way up to the door of every building of a layout's that can be gone into (its
+ * squares not blocked, nor hiding what's behind them), in `blocked` and `opaque` ([y][x]: the
+ * layout's own, or copies), its pieces placed from `origin`.
+ */
+export function openEntrances(pieces, blocked, opaque, origin = 0) {
+    for (const piece of pieces) {
+        if (piece.kind !== "landmark" || !ENTERED.includes(piece.name) || !ENTRANCES[piece.name]) {
+            continue;
+        }
+
+        const [ox, oy] = Array.isArray(origin) ? origin : [origin, origin];
+
+        for (const [x, y] of entranceOf(piece, origin).clear) {
+            const [i, j] = [x - ox, y - oy];
+
+            if (blocked[j]?.[i] !== undefined) {
+                blocked[j][i] = 0;
+                opaque[j][i] = 0;
+            }
+        }
+    }
+}
+
+// --- Taverns ---
+
+// A taproom, 18 by 15 metres as Wenches and Ale's: the hearth on the west wall, the bar along the
+// east with the barrels behind it, the door in the middle of the south wall, and stairs along the
+// north wall if there's a floor above; its tables set out one of these ways ([x, y, length]: each
+// a table a metre deep with a bench along each side)
+const TABLES = Object.freeze({
+    four: [[4, 5, 2], [9, 5, 2], [4, 10, 2], [9, 10, 2]],
+    long: [[4, 5, 7], [4, 10, 3]],
+    six: [[4, 4, 2], [8, 4, 2], [4, 8, 2], [9, 8, 2], [4, 12, 2], [11, 12, 2]],
+    hall: [[4, 5, 3], [9, 5, 3], [4, 9, 3], [9, 9, 3]],
+    few: [[5, 5, 3], [4, 10, 2], [9, 10, 2]],
+});
+
+/** The ways a taproom's tables can be set out. */
+export const LAYOUTS = Object.freeze(Object.keys(TABLES));
+
+/** What a taproom's walls can be: plastered and limewashed, or planked, or bare stone. */
+export const FINISHES = Object.freeze(["plaster", "plaster-white", "plaster-ochre", "planks", "stone-warm"]);
+
+/** A taproom's plan (interiors.js's characters): its tables set out `layout`'s way, stairs up if `stairs`. */
+export function taproomPlan(layout, stairs) {
+    const rows = Array.from({ length: 15 }, () => [..."..................".slice(0, 18)]);
+    const put = (x, y, char) => {
+        rows[y][x] = char;
+    };
+
+    if (stairs) {
+        for (const y of [0, 1]) {
+            put(0, y, "<");
+
+            for (let x = 1; x <= 5; x++) {
+                put(x, y, "S");
+            }
+        }
+    }
+
+    for (let y = 6; y <= 9; y++) {
+        put(0, y, "H");
+        put(1, y, "H");
+    }
+
+    for (let y = 3; y <= 10; y++) {
+        put(14, y, "C");
+    }
+
+    for (let y = 1; y <= 12; y++) {
+        put(17, y, "K");
+    }
+
+    for (const [x0, y, length] of TABLES[layout]) {
+        for (let x = x0; x < x0 + length; x++) {
+            put(x, y - 1, "b");
+            put(x, y, "T");
+            put(x, y + 1, "b");
+        }
+    }
+
+    put(8, 14, "D");
+    put(9, 14, "D");
+
+    return rows.map((row) => row.join(""));
+}
+
+// What's upstairs, by the tavern's upstairs (taverns.js UPSTAIRS): who keeps it, and how many of
+// its rooms have a courtesan
+const KEEPERS = Object.freeze({ bordello: { keeper: "madam", courtesans: 4 }, mixed: { keeper: "innkeeper", courtesans: [1, 2] }, inn: { keeper: "innkeeper", courtesans: 0 } });
+
+/**
+ * A tavern's floors: [{ suffix, style (the art's: taproom, upstairs), look (upstairs: a madam's
+ * house, "bordello", or an "inn"), finish (the taproom's walls), name, rows, ground, sound,
+ * layout }], the taproom first. From its own seed: the taproom's layout and walls, and upstairs
+ * as its name has it.
+ */
+export function tavernRooms(building) {
+    const random = createRandom(building.seed);
+    const upstairs = building.tavern?.storeys > 1 && building.tavern?.upstairs;
+    const layout = random.pick(LAYOUTS);
+    const finish = random.pick(FINISHES);
+    const floors = [{ suffix: "taproom", style: "taproom", name: building.name, rows: taproomPlan(layout, Boolean(upstairs)), ground: GROUND.cobbles, sound: "taproom", layout, finish }];
+
+    if (upstairs) {
+        floors.push({ suffix: "upstairs", style: "upstairs", look: upstairs === "bordello" ? "bordello" : "inn", name: `Upstairs at ${building.name}`, rows: UPSTAIRS_PLAN, ground: GROUND.planks, sound: "upstairs" });
+    }
+
+    return floors;
+}
+
+/**
+ * A tavern's folk, worked out from its floors (readPlan's maps: the taproom, and upstairs if it
+ * has one): [{ local (their part: barkeep, wench, drinker...), title, role, sex, map, square,
+ * facing, routine }], as interiors.js tavernFolk's (without their looks: the game makes those from
+ * their `seed`).
+ */
+export function tavernFolkOf(building, taproom, upstairs = null) {
+    const random = createRandom(building.seed * 7 + 13);
+    const { s, e, n, w } = FACING;
+    const folk = [];
+    const bar = taproom.pieces.find(({ kind }) => kind === "bar");
+    const barrels = taproom.pieces.find(({ kind }) => kind === "barrels");
+    const free = (x, y) => x >= 0 && y >= 0 && x < taproom.width && y < taproom.height && !taproom.blocked[y][x];
+    const sex = () => (random.chance(0.5) ? "f" : "m");
+
+    // The barkeep, behind the bar and at the barrels
+    const rows = Array.from({ length: bar.h }, (_, k) => bar.y + k);
+    const behind = rows.filter((_, k) => k % 3 === 1).map((y) => ({ square: [bar.x + 1, y], facing: w, group: "bar" }));
+    const casks = [barrels.y + 2, barrels.y + Math.floor(barrels.h / 2), barrels.y + barrels.h - 3].map((y) => ({ square: [barrels.x - 1, y], facing: e, act: "pour", group: "barrels" }));
+
+    folk.push({ local: "barkeep", title: "Barkeep", role: "barkeep", sex: "m", map: taproom.id, square: behind[0].square, facing: w, routine: { order: "alternate", wait: [2500, 6000], stops: [...behind, ...casks] } });
+
+    // Serving wenches, between the bar and the tables' ends
+    const atBar = [rows[2], rows.at(-3)].map((y) => ({ square: [bar.x - 1, y], facing: e, group: "bar" }));
+    const atTables = taproom.pieces.filter(({ kind }) => kind === "table").flatMap((table) => [
+        free(table.x - 1, table.y) ? { square: [table.x - 1, table.y], facing: e, act: "serve", group: "tables" } : null,
+        free(table.x + table.w, table.y) ? { square: [table.x + table.w, table.y], facing: w, act: "serve", group: "tables" } : null,
+    ]).filter(Boolean);
+    const stops = [...atBar, ...atTables];
+    const wenches = random.int(1, 2);
+
+    for (let k = 0; k < wenches; k++) {
+        const order = k === 0 ? stops : [...atTables, ...atBar];
+
+        folk.push({ local: k === 0 ? "wench" : "wench2", title: "Serving wench", role: "barmaid", sex: "f", map: taproom.id, square: order[k === 0 ? 0 : 1].square, facing: s, routine: { order: "alternate", wait: [1500, 3500], stops: order } });
+    }
+
+    // Patrons on the benches, facing their tables (the first few with the parts the barkeep's
+    // gossip names)
+    const seats = random.shuffle([...(taproom.marks.b ?? [])]).slice(0, random.int(4, 6));
+    const parts = [["drinker", "Drinker"], ["alewife", "Alewife"], ["farmer", "Farmer"], ["greybeard", "Greybeard"], ["tinker", "Tinker"], ["drover", "Drover"]];
+
+    seats.forEach(([x, y], k) => {
+        const facing = taproom.plan[y + 1]?.[x] === "T" ? s : n;
+        const [local, title] = parts[k];
+        const who = local === "alewife" ? "f" : local === "greybeard" || local === "farmer" ? "m" : sex();
+
+        folk.push({ local, title, role: "patron", sex: who, map: taproom.id, square: [x, y], facing, routine: { seated: true } });
+    });
+
+    // Upstairs: whoever keeps it at the counter, and courtesans in their rooms (the same rooms as
+    // Wenches and Ale's: interiors.js tavernFolk)
+    if (upstairs) {
+        const keep = KEEPERS[building.tavern.upstairs] ?? KEEPERS.inn;
+        const theirs = tavernFolk().filter(({ map }) => map === "upstairs");
+        const madam = theirs.find(({ id }) => id === "madam");
+        const rooms = theirs.filter(({ role }) => role === "courtesan");
+        const count = Array.isArray(keep.courtesans) ? random.int(...keep.courtesans) : keep.courtesans;
+
+        folk.push({ ...madam, id: undefined, preset: undefined, local: keep.keeper, title: keep.keeper === "madam" ? "Madam" : "Innkeeper", role: keep.keeper, sex: keep.keeper === "madam" ? "f" : sex(), map: upstairs.id });
+
+        for (const [k, room] of random.shuffle([...rooms]).slice(0, count).entries()) {
+            folk.push({ ...room, id: undefined, preset: undefined, local: k === 0 ? "courtesan" : `courtesan${k + 1}`, map: upstairs.id });
+        }
+    }
+
+    return folk;
+}
+
+// --- The buildings ---
+
+// Where the buildings' floors are drawn in the 3D world: past the world's edge (and Wenches and
+// Ale's), a hundred metres apart, each building's floors in a column
+const ORIGINS = Object.freeze({ x: 10200, step: 100, across: 60 });
+
+/**
+ * Every building that can be gone into, by key (`${place}:${piece id}`): its front door among the
+ * world's links from the moment it's known (`add`), its floors and folk made the first time
+ * they're wanted (`make`, `ensure`). Changes the world's `maps` and `links` in place, so the battle
+ * and whatever else holds them sees what's added.
+ */
+export class Interiors {
+    /** @param {object} world - The world (overworld.js buildWorld's): its maps and links. */
+    constructor(world) {
+        this.world = world;
+
+        /** Each building: { key, kind, name, piece, place, seed, entrance, made, maps (ids), folk }. */
+        this.buildings = new Map();
+
+        // Which building each map is in, and how many have been given a place to be drawn
+        this.byMap = new Map();
+        this.placed = 0;
+
+        /** Bumped whenever a building is added or made (for the doors to catch up). */
+        this.version = 0;
+    }
+
+    /**
+     * Add a building that's been made already, with its maps and folk (Wenches and Ale, made with
+     * the town).
+     */
+    adopt({ key, kind, name, maps, folk, piece = null, tavern = null }) {
+        const building = { key, kind, name, piece, tavern, place: null, seed: 0, entrance: null, made: true, maps, folk };
+
+        this.buildings.set(key, building);
+
+        for (const id of maps) {
+            this.byMap.set(id, building);
+        }
+
+        this.version++;
+
+        return building;
+    }
+
+    /**
+     * Add a settlement's building (a layout piece of a kind that can be gone into), placed from
+     * `origin` (metres: its layout's corner in the world), in the place `place` (an id): its
+     * front door joins the world's links. Returns it (null if it can't be gone into).
+     */
+    add(piece, { origin = 0, place = "home", name = null } = {}) {
+        if (!ENTERABLE.includes(piece.name)) {
+            return null;
+        }
+
+        const key = `${place}:${piece.id}`;
+
+        if (this.buildings.has(key)) {
+            return this.buildings.get(key);
+        }
+
+        const entrance = entranceOf(piece, origin);
+        const building = {
+            key,
+            kind: piece.name,
+            name: name ?? piece.tavern?.name ?? piece.name,
+            piece,
+            tavern: piece.tavern ?? null,
+            place,
+            seed: piece.seed ?? 1,
+            entrance,
+            made: false,
+            maps: [],
+            folk: [],
+        };
+        const back = entrance.facing > 0 ? entrance.facing - Math.PI : entrance.facing + Math.PI;
+
+        // (Its inside end is where it'll be once its floors are made)
+        building.door = {
+            id: `${key}/door`,
+            kind: "door",
+            building: key,
+            ends: [
+                { map: "town", squares: entrance.front, arrive: entrance.outside, facing: back, door: entrance.door },
+                { map: `${key}/taproom`, squares: [], arrive: null, facing: FACING.s, pending: true },
+            ],
+        };
+        this.buildings.set(key, building);
+        this.byMap.set(`${key}/taproom`, building);
+        this.world.links.push(building.door);
+        this.version++;
+
+        return building;
+    }
+
+    /** The building a map's in (or null for the world outside). */
+    of(mapId) {
+        return this.byMap.get(mapId) ?? null;
+    }
+
+    /** Make a map's building's floors and folk, if they're not made yet; whether the map's there now. */
+    ensure(mapId) {
+        if (this.world.maps[mapId]) {
+            return true;
+        }
+
+        const building = this.of(mapId);
+
+        if (!building || building.made) {
+            return Boolean(this.world.maps[mapId]);
+        }
+
+        this.make(building.key);
+
+        return Boolean(this.world.maps[mapId]);
+    }
+
+    /** Make a building's floors and folk (once): its maps among the world's, its door's inside end, its stairs. */
+    make(key) {
+        const building = this.buildings.get(key);
+
+        if (!building || building.made) {
+            return building;
+        }
+
+        const floors = tavernRooms(building);
+        const column = this.placed++;
+        const origin = [ORIGINS.x + (column % ORIGINS.across) * ORIGINS.step, Math.floor(column / ORIGINS.across) * ORIGINS.step * 2];
+        const maps = floors.map((floor, k) => {
+            const map = readPlan(`${key}/${floor.suffix}`, floor.name, floor.rows, { ground: floor.ground });
+
+            Object.assign(map, { origin: [origin[0], origin[1] + k * ORIGINS.step], style: floor.style, look: floor.look ?? null, finish: floor.finish ?? null, sound: floor.sound, building: key, layout: floor.layout ?? null });
+
+            return map;
+        });
+
+        for (const map of maps) {
+            this.world.maps[map.id] = map;
+            this.byMap.set(map.id, building);
+            building.maps.push(map.id);
+        }
+
+        // Its door's inside end: a couple of steps in, turned back to face it (as Wenches and Ale's)
+        const [taproom, upstairs] = maps;
+        const [doorX, doorY] = taproom.marks.D[0];
+
+        Object.assign(building.door.ends[1], { squares: taproom.marks.D, arrive: [doorX, doorY - 2], facing: FACING.s, pending: false });
+
+        if (upstairs) {
+            building.stairs = {
+                id: `${key}/stairs`,
+                kind: "stairs",
+                building: key,
+                ends: [
+                    { map: taproom.id, squares: taproom.marks["<"], arrive: [1, 3], facing: FACING.n },
+                    { map: upstairs.id, squares: upstairs.marks[">"], arrive: [6, 3], facing: FACING.n },
+                ],
+            };
+            this.world.links.push(building.stairs);
+        }
+
+        // Its folk, named from its seed, each with an id of their own in the world
+        building.folk = namePeople(tavernFolkOf(building, taproom, upstairs), building.seed).map((one) => ({ ...one, id: `${key}/${one.local}`, seed: building.seed * 31 + one.local.length * 7 + one.square[0] * 131 + one.square[1] }));
+        building.made = true;
+        this.version++;
+
+        return building;
+    }
+}

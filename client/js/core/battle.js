@@ -262,6 +262,42 @@ export class Battle {
     }
 
     /**
+     * Take a character out (one of the folk, gone with their building when the player's far
+     * away): no one's after them, talking to them or shooting at them any more. Whether they were
+     * there.
+     */
+    remove(id) {
+        const actor = this.actor(id);
+
+        if (!actor) {
+            return false;
+        }
+
+        this.actors.splice(this.actors.indexOf(actor), 1);
+        this.projectiles = this.projectiles.filter(({ from, target }) => from !== id && target !== id);
+
+        for (const other of this.actors) {
+            if (other.target === id) {
+                other.target = null;
+            }
+
+            if (other.attack?.target === id) {
+                other.attack = null;
+            }
+
+            if (other.order?.target === id) {
+                other.order = null;
+            }
+
+            if (other.talkingTo === id) {
+                other.talkingTo = null;
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * Tell a character what to do: { type: "move", to: [x, y] } (walk there, on its map, or as
      * near as can be), { type: "ahead", facing } (straight ahead the way `facing` points,
      * radians, as far as the way is clear), { type: "engage", target: id } (go and fight it),
@@ -1076,6 +1112,12 @@ export class Battle {
     // free one), facing into the room
     #cross(actor, link, here) {
         const there = link.ends.find((end) => end !== here);
+
+        // (A building's floors are made the first time anyone goes in: world.interiors)
+        if (there.pending && !this.world.interiors?.ensure(there.map)) {
+            return;
+        }
+
         const square = nearestFree(this.#squares(there.map), there.arrive, { taken: this.#others(there.map, actor) });
         const from = actor.map;
 

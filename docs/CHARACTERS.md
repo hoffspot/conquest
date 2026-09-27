@@ -590,7 +590,8 @@ which name and time them): five ways each, key poses timed like an attack's (key
 that matters: the top of a toast, a slap on the table), played every several seconds while the
 player can see them, and by the player after standing still a while. `rest(role)` plays one of
 a class's rests, any at first and then any but the last; `stopResting()` eases out of it (in
-0.35 s). A patron rests sitting down.
+0.35 s). A patron rests sitting down. An innkeeper (keeping the rooms upstairs at an inn) rests
+as the barkeep does, at the counter.
 
 | Class | Rest | The pose |
 | --- | --- | --- |

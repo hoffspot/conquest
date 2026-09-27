@@ -1,5 +1,6 @@
 // What sort of person each character is: their class (a role), such as the barkeep, a serving
-// wench, a patron at the tables, the madam or a courtesan upstairs, or the player's adventurer.
+// wench, a patron at the tables, the innkeeper, the madam or a courtesan upstairs, or the
+// player's adventurer.
 //
 // A role says what the character is called (its `title`, under its name in a talk: dialogue.js),
 // whether it beckons the player over when they come into sight (`beckons`: the courtesans
@@ -33,6 +34,16 @@ export const ROLES = Object.freeze({
             { name: "tucking back her hair", hitAt: 1, duration: 2.2 },
             { name: "a curtsy", hitAt: 0.8, duration: 1.9 },
             { name: "stretching her back", hitAt: 1, duration: 2.6 },
+        ],
+    },
+    innkeeper: {
+        title: "Innkeeper",
+        rests: [
+            { name: "wiping the counter", hitAt: 1.4, duration: 3.6 },
+            { name: "a hand to the chin", hitAt: 1, duration: 2.8 },
+            { name: "leaning on the counter", hitAt: 1.2, duration: 3.4 },
+            { name: "arms folded", hitAt: 1.2, duration: 3.6 },
+            { name: "rubbing the neck", hitAt: 1, duration: 2.8 },
         ],
     },
     patron: {

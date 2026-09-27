@@ -19,8 +19,10 @@
 // game decides what each does; for now none changes the world, and the talk just goes on.
 //
 // Words are filled in: {player} (the player's name), {name} (the speaker's given name),
-// {fullName}, {title}, {place}, and any of the folk by id ({madam}, {barkeep}, {greybeard}...: their
-// given names).
+// {fullName}, {title}, {place} (where they are: the tavern's name), and any of the folk by their
+// part ({madam}, {barkeep}, {greybeard}..., and {keeper}, whoever keeps the rooms upstairs, the
+// madam if no one else: their given names). What's upstairs, if anything (`upstairs`: true,
+// false, or which: "bordello", "mixed", "inn"), is asked of the game.
 //
 // Everyone of a role (roles.js) talks as the role's tree (TREES) says, unless they have their own
 // (OWN_TREES, by id). Pure data and a little bookkeeping, no DOM.
@@ -32,6 +34,14 @@ export const PLACE = "Wenches and Ale";
 
 // Ending a talk
 const FAREWELL = { say: "Farewell.", next: null };
+
+/**
+ * Whether what's upstairs in a tavern (`upstairs`: "bordello", "mixed", "inn", or null for no
+ * floor above) is as a condition wants (`want`: true for anything, false for nothing, or which).
+ */
+export function upstairsIs(want, upstairs) {
+    return typeof want === "boolean" ? Boolean(upstairs) === want : upstairs === want;
+}
 
 /** Each role's conversation, by role (roles.js). */
 export const TREES = Object.freeze({
@@ -57,7 +67,7 @@ export const TREES = Object.freeze({
                     { say: "An ale, if you please. (2 coppers)", next: "ale", do: [{ buy: "ale", price: 2 }] },
                     { say: "Heard any news?", next: "news" },
                     { if: { notFlag: "askedPlace" }, say: "Tell me about this place.", next: "place", do: [{ remember: "askedPlace" }] },
-                    { say: "I'm after a bed for the night.", next: "room", do: [{ learn: "sentByBarkeep" }] },
+                    { if: { upstairs: true }, say: "I'm after a bed for the night.", next: "room", do: [{ learn: "sentByBarkeep" }] },
                     FAREWELL,
                 ],
             },
@@ -90,11 +100,18 @@ export const TREES = Object.freeze({
                 ],
             },
             place: {
-                say: "This is {place}: ale down here, and other comforts up the stairs. For those you'll want {madam}. Tell her I sent you.",
+                say: [
+                    { if: { upstairs: "bordello" }, lines: ["This is {place}: ale down here, and other comforts up the stairs. For those you'll want {madam}. Tell her I sent you."] },
+                    { if: { upstairs: true }, lines: ["This is {place}: ale down here, and clean beds up the stairs. {keeper} keeps the rooms. Tell them I sent you."] },
+                    { lines: ["This is {place}: ale, a fire, a bench to sit on, and no questions asked. What more does anyone need?"] },
+                ],
                 choices: "more",
             },
             room: {
-                say: "Beds are {madam}'s business, upstairs. Tell her {name} sent you and she'll not charge you double.",
+                say: [
+                    { if: { upstairs: "bordello" }, lines: ["Beds are {madam}'s business, upstairs. Tell her {name} sent you and she'll not charge you double."] },
+                    { lines: ["Rooms are upstairs, and {keeper}'s the one to ask. Tell them {name} sent you."] },
+                ],
                 choices: "more",
             },
         },
@@ -189,10 +206,23 @@ export const TREES = Object.freeze({
             drink: { say: ["Now there's a friend! Your health!", "Bless you. Bless your boots, even."], choices: "more" },
             news: {
                 say: [
-                    "{barkeep} waters the ale on market days. Don't tell him I said so.",
-                    "They say {madam} upstairs was a lady once. A real one, with a castle and everything.",
-                    "My cousin saw lights in the old mill at night. Ghosts, or smugglers. Either way, I'm not going.",
-                    "There's a blacksmith by the square who'll put an edge on anything, if you can stand his singing.",
+                    {
+                        if: { upstairs: "bordello" },
+                        lines: [
+                            "{barkeep} waters the ale on market days. Don't tell him I said so.",
+                            "They say {madam} upstairs was a lady once. A real one, with a castle and everything.",
+                            "My cousin saw lights in the old mill at night. Ghosts, or smugglers. Either way, I'm not going.",
+                            "There's a blacksmith by the square who'll put an edge on anything, if you can stand his singing.",
+                        ],
+                    },
+                    {
+                        lines: [
+                            "{barkeep} waters the ale on market days. Don't tell him I said so.",
+                            "My cousin saw lights in the old mill at night. Ghosts, or smugglers. Either way, I'm not going.",
+                            "There's a blacksmith by the square who'll put an edge on anything, if you can stand his singing.",
+                            "The guild's put up a notice for wolves again. There's always wolves.",
+                        ],
+                    },
                 ],
                 choices: [
                     { say: "Go on.", next: "news" },
@@ -240,6 +270,50 @@ export const TREES = Object.freeze({
             looking: {
                 say: "Looking's free, darling. Everything else has a price.",
                 choices: [{ say: "Fair enough.", next: "more" }, FAREWELL],
+            },
+        },
+    },
+    // Whoever keeps the rooms upstairs at an inn: brisk and kindly
+    innkeeper: {
+        start: "greet",
+        nodes: {
+            greet: {
+                say: [
+                    {
+                        if: { met: false, knows: "sentByBarkeep" },
+                        lines: ["{barkeep} sent you up? Then you're welcome. I'm {name}; I keep the rooms at {place}. Clean sheets, a lock on every door, and no questions."],
+                    },
+                    {
+                        if: { met: false },
+                        lines: ["Evening. I'm {name}; I keep the rooms at {place}. Clean sheets, a lock on every door, and no questions.", "A room? You've come to the right door. {name}, at your service."],
+                    },
+                    { lines: ["Back again, {player}? Your old room's free.", "{player}. A bed, or just a chat?"] },
+                ],
+                choices: "more",
+            },
+            more: {
+                say: ["Anything else?", "What can I do for you?", "Yes?"],
+                choices: [
+                    { say: "A room for the night. (8 coppers)", next: "room", do: [{ rent: "room", price: 8 }] },
+                    { if: { upstairs: "mixed" }, say: "And the ladies down the hall?", next: "ladies" },
+                    { say: "Who stays here?", next: "guests" },
+                    FAREWELL,
+                ],
+            },
+            room: {
+                say: ["The room at the end on the left. Breakfast's at dawn and not a moment after.", "Here's your key. Mind the third stair; it talks."],
+                choices: "more",
+            },
+            ladies: {
+                say: "They pay for their rooms like anyone, and what they do in them is their business. Be polite, or be gone.",
+                choices: "more",
+            },
+            guests: {
+                say: [
+                    "Drovers, mostly, and a merchant now and then. And adventurers, lately, since the guild's been busy.",
+                    "Whoever pays. A knight stayed here once. He snored like a bear and tipped like a king.",
+                ],
+                choices: [{ say: "Sounds lively.", next: "more" }, FAREWELL],
             },
         },
     },
@@ -450,6 +524,7 @@ export class Conversation {
      * @param {object} options
      * @param {object} options.speaker - Who's talking: { id, name, title } (name as "Given Byname").
      * @param {object} [options.player] - { name }.
+     * @param {string} [options.place] - Where they're talking (the tavern's name), for {place}.
      * @param {object} [options.names] - The folk's given names, by id, for {madam} and the like.
      * @param {object} [options.memory] - What they remember of the player: { talks, flags }
      *     (changed as the talk goes: kept by the game).
@@ -459,8 +534,9 @@ export class Conversation {
      *     `do` that isn't remembering or learning) and the speaker.
      * @param {Function} [options.check] - Asked whether a condition this doesn't know holds.
      */
-    constructor(tree, { speaker, player = { name: "stranger" }, names = {}, memory = { talks: 0, flags: [] }, knowledge = new Set(), variety = new Variety(), onEffect = () => {}, check = () => true }) {
+    constructor(tree, { speaker, player = { name: "stranger" }, place = PLACE, names = {}, memory = { talks: 0, flags: [] }, knowledge = new Set(), variety = new Variety(), onEffect = () => {}, check = () => true }) {
         this.tree = tree;
+        this.place = place;
         this.speaker = speaker;
         this.player = player;
         this.names = names;
@@ -541,7 +617,7 @@ export class Conversation {
     /** Fill in a line's words ({player}, {name}, {madam}...). */
     fill(text) {
         const given = this.speaker.name.split(" ")[0];
-        const words = { player: this.player.name, name: given, fullName: this.speaker.name, title: this.speaker.title, place: PLACE };
+        const words = { player: this.player.name, name: given, fullName: this.speaker.name, title: this.speaker.title, place: this.place, keeper: this.names.keeper ?? this.names.madam };
 
         return text.replace(/\{(\w+)\}/g, (whole, word) => words[word] ?? this.names[word] ?? whole);
     }

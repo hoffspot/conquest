@@ -351,6 +351,8 @@ client/                 The game (static files served to the browser)
                         tavern, and its maps and the links between them
     grid.js             Reading any map's squares (blocked, opaque, ground), in rows or chunks
     interiors.js        Inside buildings: the tavern's floors, drawn as plans of their squares
+    insides.js          Every building that can be gone into: its door, and its floors and folk
+                        made the first time they're wanted
     battle.js           Moving, fighting, damage, dying and coming back; the orc's patrol
     weapons.js          The weapons and their attacks
     spells.js           The spells: heal and stun, and their shared cooldown
@@ -378,7 +380,7 @@ client/                 The game (static files served to the browser)
                         bridges, trees, the land's features, the undergrowth near the player,
                         and the settlements' buildings
     town3d.js           The town's buildings, props and trees, merged into few meshes
-    interiors3d.js      Inside the tavern: its rooms and furniture, the fire, the boar on its
+    interiors3d.js      Inside the taverns: their rooms and furniture, the fire, the boar on its
                         spit, and taking down the walls between the camera and the player
     art/                The art the town is built with: engine/ (solid.js's shapes, the
                         textures' painters.js, materials.js, and atlas.js, the one material
@@ -403,7 +405,8 @@ client/                 The game (static files served to the browser)
     gait.js             Walking and running data; locomotion.js walks and runs a character with it
     actions.js          Attacking and casting (five ways of each), flinching when hit, falling
     bvh.js              Motion capture: reading BVH files and retargeting them
-    presets.js          The human, heroine and orc
+    presets.js          The human, heroine and orc, and Wenches and Ale's folk
+    folk.js             Everyone else's looks, made up from their part, sex and seed
   js/lab/character-lab.js  The character lab
   js/lab/world-map.js   The world map
   js/lab/town-map.js    The town map

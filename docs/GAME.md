@@ -184,6 +184,38 @@ square outside the tavern), so that it's in view to tap, and a tap on the ground
 player is a step, not straight back through.
 `routeBetween` finds the links from one map to another.
 
+### Every building's inside (core/insides.js)
+
+Wenches and Ale's floors are made with the town, as above. Every other building that can be gone
+into (`ENTERABLE`: taverns so far; temples, smithies and guilds to come), in the start town and in
+every settlement as it's laid out, is known to the world's `interiors` (`Interiors`, by key:
+`${place}:${piece id}`, such as `home:tavern-2`), and its front door is one of the world's links
+from the start (`${key}/door`), its inside end still to make (`pending`). Its floors and folk are
+made the first time they're wanted (`ensure`, `make`): when the game gets them ready as the
+player comes near, or when anyone (the player, or the orc after them) goes through its door. They
+join `world.maps` and `world.links` in place (so the battle and the doors see them at once), each
+building at a place of its own past the world's edge (from 10.2 km east, 100 metres apart), and
+are kept.
+
+- **The door** (`ENTRANCES`, `entranceOf`) is where the art builds it: so far in from the front
+  of the lot, so far along it and so wide, for each kind (a tavern's in the middle, 1.8 metres
+  in; a church's up its steps; a smithy's off to one side, behind its open front). The squares up
+  to it are cleared (`openEntrances`), as the start town's tavern's always were.
+- **A tavern's taproom** (`taproomPlan`) is Wenches and Ale's room, 18 by 15 metres, with its
+  hearth, bar and barrels, and its tables set out one of five ways (`LAYOUTS`: four, six, two long
+  ones, a hall of four long ones, or a few), stairs up along the north wall if there's a floor
+  above, and walls of one of five finishes (`FINISHES`: plaster, whitewash, ochre, planks or
+  stone). From the tavern's own seed, the same every time.
+- **Upstairs**, if it's two storeys, as its name has it (`core/lore/taverns.js`): a madam's house
+  (a madam at the counter and four courtesans in the rooms), an inn with a courtesan or two
+  (an innkeeper, and one or two), or rooms to let (an innkeeper alone), in rose and velvet or in
+  whitewash and wool.
+- **Its folk** (`tavernFolkOf`) are worked out from its plan: the barkeep behind the bar and at
+  the barrels, one or two serving wenches between the bar and the tables' ends, four to six
+  patrons on the benches (the drinker, the alewife, the farmer, the greybeard, a tinker, a
+  drover), and upstairs whoever keeps it, and the courtesans. They're named from the building's
+  seed, each with an id of their own (`${key}/barkeep`) and a seed for their looks.
+
 ## The battle (core/battle.js)
 
 The battle runs in fixed steps of 50 ms, the same on every device, whatever the frame rate.
@@ -476,28 +508,44 @@ wheel; upstairs two red-shaded lamps), flickering. The two point lights are alwa
 scene, out (at no intensity) outdoors, so that going in and out never makes Three.js recompile
 every lit material's shaders.
 
-**Doors and stairs** (app/doors.js). Each end of each link has a box a tap's ray can hit (the
-tavern's front door, the inside of the door, the side of the stairs, the stairwell upstairs) and
-a glow round its edge: a green ribbon with a softer band either side, drawn additively. A tap on
+**Getting buildings ready.** Every half a second, outside, the game looks over the buildings
+that can be gone into: one whose door is within 22 metres of the player (or whose door they're
+making for) is got ready: its plans made, then each floor built and each of its folk, one to a
+piece of work, for at most 6 ms a frame, so it's ready well before the player's at the door. If
+they're through it first, whatever's still to build is built at once. Once the player is 90
+metres away (and outside), it's let go: its folk out of the battle, their characters and its
+floors thrown away (built again if they come back); the plans are kept. Wenches and Ale is
+built at the start and kept.
+
+**Doors and stairs** (app/doors.js). Each end of each link has a box a tap's ray can hit (a
+building's front door, the inside of the door, the side of the stairs, the stairwell upstairs)
+and a glow round its edge (new doors, as settlements are laid out and buildings made, are picked
+up by `sync`): a green ribbon with a softer band either side, drawn additively. A tap on
 one (after enemies, before the ground) tells the player to go through; it glows for at least
 1.2 s, and while the player's on their way, pulsing, then fades.
 
-**The folk in the game.** Each is built at the start, like the player and the orc (their looks
-and clothes are `presets.js`'s `FOLK`; with less hair than the player, as there are more of them,
-and nothing worn that never shows), lit but casting no shadows. They have no name plates, can't
+**The folk in the game.** Wenches and Ale's are built at the start, like the player and the orc
+(their looks and clothes are `presets.js`'s `FOLK`), and every other building's as it's got
+ready, each looking as their part, sex and seed have them (`characters/folk.js`, `folkLook`:
+their height, build and face, their forebears' skin, eyes and hair, how they wear their hair and
+beard, and what their part wears: the barkeep's apron, a wench's bodice and skirt, a patron's
+tunic or kirtle, the madam's gown, a courtesan's lingerie in one of four colours); all with less
+hair than the player, as there are more of them, and nothing worn that never shows, lit but
+casting no shadows. They have no name plates, can't
 be tapped to fight (a tap walks up to them to talk), and show on the minimap as blue dots. Only
 those on the player's map are drawn and animated; coming onto a map, everyone on it is put where
 they are. Their acts and rests play their animations, and a sound: tankards clinking (at the top
 of a toast, and softly as one's set down), ale pouring from a tap, a tankard thumped on a table.
 
 **Classes and resting** (core/roles.js). Everyone has a class (a role): the barkeep, a serving
-wench, a patron, the madam, a courtesan, and the player's adventurer. A class has a title and five resting
+wench, a patron, an innkeeper, the madam, a courtesan, and the player's adventurer. A class has a title and five resting
 animations, shared by everyone of it (their poses: actions.js `RESTS`, see
 [CHARACTERS.md](CHARACTERS.md#resting)):
 
 | Class | Its rests |
 | --- | --- |
 | Barkeep | wiping the bar, stroking his beard, leaning on the bar, arms folded, rubbing his neck |
+| Innkeeper | wiping the counter, a hand to the chin, leaning on the counter, arms folded, rubbing the neck |
 | Serving wench | wiping her brow, a hand on her hip, tucking back her hair, a curtsy, stretching her back |
 | Patron (seated) | a toast, a long drink, a belly laugh, thumping the table, looking about |
 | Madam | fanning herself, hands on her hips, touching her necklace, drumming her fingers, smoothing her gown |
@@ -533,7 +581,10 @@ id, such as the greybeard's siege story). Each node has what they say and the re
 - **Lines**: one, or a few to pick from (never the same twice running), or groups for different
   moments (`{ if, lines }`: a stranger is greeted differently from someone they've met, and the
   madam knows if the barkeep sent the player). Words are filled in: `{player}`, `{name}`,
-  `{fullName}`, `{title}`, `{place}`, and any of the folk's given names by id (`{madam}`...).
+  `{fullName}`, `{title}`, `{place}` (the tavern they're in), and the given names of the folk
+  there by their part (`{madam}`, `{barkeep}`..., and `{keeper}`: whoever keeps the rooms
+  upstairs). What's upstairs (`if: { upstairs }`: anything, nothing, or which) chooses what the
+  barkeep says of it, and whether there's a bed to ask for; an innkeeper has a talk of their own.
 - **Replies** (`choices`: or another node's, `choices: "more"`, so a talk comes back round to
   what can be asked), each leading to another node (`next`) or ending the talk (`next: null`);
   with none to offer, just "Farewell."
@@ -563,7 +614,7 @@ stranger, someone she's met, or someone she's danced with differently, and she o
   they have it (`locketFound`, for the game to teach them when it gives them the locket), they
   can give it back (`{ quest: "locket", step: "returned" }`).
 
-### Inside the tavern (world/interiors3d.js)
+### Inside the taverns (world/interiors3d.js)
 
 The rooms are built from their plans with the art kits' materials, five art pixels to the metre:
 walls of plaster on a stone footing between timber posts under a beam, with windows of daylight
@@ -575,7 +626,9 @@ turning slowly over them; a candle wheel; and the stairs, two metres wide, twelv
 handrail rising 3 metres along the north wall. Upstairs, rugs, the counter with a velvet runner, a ledger, a
 bell, a candle and a vase of flowers, a chaise longue and side table, the stairwell with its
 rail, and four bedrooms with canopied beds (their drapes red or purple), washstands and chests,
-lit by red-shaded sconces. Everything that doesn't move is merged by material (about 100 draw
+lit by red-shaded sconces; at an inn, whitewashed walls, beds hung in green, blue and ochre wool
+and linen, and plain glass in the sconces. Each floor is built by its style (`map.style`), each
+taproom with its own walls (`map.finish`). Everything that doesn't move is merged by material (about 100 draw
 calls in all with the characters); the spit and the flames apart.
 
 The flames are crossed quads with a shader of rising noise, drawn additively and flickering,
@@ -1155,6 +1208,15 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   streets' ends).
   `test/pathfinding.test.js`: A* paths, and the line of squares straight ahead (stopping at a
   wall or the world's edge, never cutting a blocked corner).
+- `test/insides.test.js`: every building's door where the art builds it, whichever way it faces,
+  and the way up to it cleared; taprooms set out every way, everything reachable from the door;
+  upstairs as the tavern's name has it, or none; the folk worked out from the plan (on the floor,
+  seated on benches, their rounds reachable, who keeps upstairs and how many courtesans); the
+  settlements' taverns' doors among the world's links as they're laid out, their floors and folk
+  made once when wanted, each building somewhere of its own; going in through a door not made yet
+  in the battle; each floor built by its style and the doors picked up; folk made up as they're
+  wanted, as their part and sex have them, each their own; what's upstairs in talk; and the
+  battle letting go of a character.
 - `test/interiors.test.js`: the tavern's folk (on benches facing tables, stops on the floor and
   reachable, each with a class and a name, resting while the player can see them and never
   unseen, never the same rest twice running and staying put for it, the wenches serving round
