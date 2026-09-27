@@ -215,7 +215,8 @@ cloth round the body:
   below the knees, more and more to the shins. So the hem swings as the legs walk, and sitting,
   it lies over the lap and falls down the shins.
 
-The tavern's folk wear them: wool, green and red skirts, a velvet gown, and the barkeep's apron,
+The tavern's folk wear them: wool, green and red skirts, a velvet gown, and the barkeep's apron
+(the smith and apprentice a leather one, longer and stiffer),
 over a chemise (low-necked, short-sleeved) and a laced bodice (a band from under the waist to over
 the bust, painted with a cord criss-crossing down the front).
 
@@ -579,6 +580,16 @@ arms flung out, and lies flat. The feet aren't kept planted while falling.
   shaken, then brought to the mouth and tipped, the head back, and down again.
 - **Serving**: leaning over a table to set a tankard down on it.
 - **Pouring**: both hands to a barrel's tap in front, the left holding the tankard under it.
+- **The smithy's work** (the smith holds a smith's hammer in the right hand and tongs in the left,
+  their reins across the palm so the jaws point along the forearm, `turn`; a bar of glowing
+  iron in their jaws):
+  - **forge**: three blows on the work on the anvil, the hammer raised by the shoulder (its head
+    back, its face up) and brought down flat on it, the tongs holding the work, bending into each;
+  - **heat**: the work thrust into the forge's coals with the tongs, and turned there;
+  - **quench**: the work plunged into the trough, and held there;
+  - **pump** (the apprentice): both hands on the bellows' lever, pushing it down and letting it
+    up, three times;
+  - **crank**: turning the grindstone's crank round and round, the other hand on its frame.
 - **Beckoning** (a courtesan, when the player comes into her sight): the hip cocked, a hand on
   it, the other held out palm up, its index finger curling "come here" three times (the
   `beckon` finger shape: the index straight, the others loosely curled; a key's `index` curls it).
@@ -620,6 +631,13 @@ as the barkeep does, at the counter.
 | | a hand on her hip | the hip cocked, the other hand trailing slowly down the thigh |
 | | blowing a kiss | fingertips to the lips, then the hand swept out, opening, palm up |
 | | smoothing down her sides | both hands from the ribs in to the waist and out over the hips |
+| Smith | wiping the brow | the back of the wrist across the forehead (the serving wench's) |
+| | looking over the work | the tongs held up before the face, the work turned this way and that |
+| | rolling the shoulders | (the adventurer's) |
+| | stretching the back | (the serving wench's) |
+| | shifting the weight | (the adventurer's) |
+| Apprentice | wiping the brow | (the serving wench's) |
+| | looking about, rolling the shoulders, a yawn, stretching | (the adventurer's) |
 | Adventurer | stretching | both arms up high, the back arched |
 | | looking about | a hand shading the eyes, one way then the other |
 | | rolling the shoulders | the shoulders rolled up and back, the neck stretched each way |

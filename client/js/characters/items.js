@@ -31,6 +31,7 @@ export function itemMaterial(name) {
             crystal: { color: 0x7fd8ff, emissive: 0x2a8cff, emissiveIntensity: 1.2, roughness: 0.1, metalness: 0, transparent: true, opacity: 0.9 },
             pewter: { color: 0x9a9ea0, metalness: 0.85, roughness: 0.42 },
             foam: { color: 0xf3ead2, roughness: 0.95 },
+            hotIron: { color: 0xff7a2a, emissive: 0xff4a0a, emissiveIntensity: 1.4, roughness: 0.6 },
         }[name];
 
         materials.set(name, new THREE.MeshStandardMaterial(settings));
@@ -481,6 +482,33 @@ function quiver() {
     return assemble(parts, "quiver");
 }
 
+// A smith's hammer, held by its short ash handle: a square iron head across the top of it, its
+// flat face forward (+z) and its peen, wedge-shaped, behind
+function smithHammer() {
+    return assemble([
+        [at(new THREE.CylinderGeometry(0.013, 0.015, 0.34, 8), 0, 0.08, 0), "wood"],
+        [at(new THREE.BoxGeometry(0.042, 0.042, 0.075), 0, 0.26, 0.03), "iron"],
+        [at(new THREE.CylinderGeometry(0.026, 0.026, 0.02, 10), 0, 0.26, 0.075, Math.PI / 2, 0, 0), "darkSteel"],
+        [at(new THREE.BoxGeometry(0.036, 0.02, 0.05), 0, 0.26, -0.03), "iron"],
+    ], "smithHammer");
+}
+
+// A smith's tongs, held by their handles: two long iron reins meeting at a rivet, their jaws
+// forward (+y) holding a bar of iron glowing from the forge
+function tongs() {
+    const parts = [];
+
+    for (const side of [-1, 1]) {
+        parts.push([at(new THREE.BoxGeometry(0.008, 0.36, 0.008), side * 0.009, 0.1, 0, 0, 0, side * 0.025), "darkSteel"]);
+        parts.push([at(new THREE.BoxGeometry(0.012, 0.09, 0.01), side * 0.008, 0.32, 0, 0, 0, -side * 0.12), "darkSteel"]);
+    }
+
+    parts.push([at(new THREE.CylinderGeometry(0.009, 0.009, 0.03, 8), 0, 0.27, 0, 0, 0, Math.PI / 2), "iron"]);
+    parts.push([at(new THREE.BoxGeometry(0.018, 0.2, 0.012), 0, 0.43, 0), "hotIron"]);
+
+    return assemble(parts, "tongs");
+}
+
 // A tankard, held by its handle: the handle along the grip, the pewter body on the palm's side of
 // it, a head of foam on top
 function tankard() {
@@ -570,6 +598,10 @@ export function buildItem(model, fit = {}) {
             return tusks(fit.scale ?? 1);
         case "tankard":
             return tankard();
+        case "smithHammer":
+            return smithHammer();
+        case "tongs":
+            return tongs();
         default:
             throw new Error(`No item model "${model}"`);
     }

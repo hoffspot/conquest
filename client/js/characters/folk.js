@@ -1,9 +1,10 @@
 // Folk made up as they're wanted: a look for anyone in a building (the barkeep, a serving wench, a
-// drover on a bench, whoever keeps the rooms, a courtesan...) from their part, their sex and a
-// seed of their own, so no two taverns' folk look alike. Their body (height, build, bust, belly,
-// face), where their forebears came from and the skin, eyes and hair that go with it, how they
-// wear their hair and beard, and what they wear for their part, each picked from the seed.
-// Wenches and Ale's folk keep their own looks (presets.js FOLK). Pure data, no DOM.
+// drover on a bench, whoever keeps the rooms, a courtesan, the smith and the apprentice...) from
+// their part, their sex and a seed of their own, so no two buildings' folk look alike. Their body
+// (height, build, bust, belly, face), where their forebears came from and the skin, eyes and hair
+// that go with it, how they wear their hair and beard, and what they wear and carry for their
+// part, each picked from the seed. Wenches and Ale's folk keep their own looks (presets.js FOLK).
+// Pure data, no DOM.
 
 import { createRandom } from "../core/random.js";
 import { HAIR_COLOURS, SKIN_TONES } from "./skin.js";
@@ -35,6 +36,14 @@ const PARTS = {
         m: { wear: [["shirt"], ["jerkin"], ["trousers", "breeches"], ["boots"], ["belt"]], hair: ["short", "swept", "bald"], beard: ["short", "stubble", "goatee", "none"], build: { weight: [0.45, 0.8], muscle: [0.4, 0.6], belly: [0, 0.6] } },
         f: { wear: [["chemise"], ["bodice", "velvetBodice"], ["kirtle", "skirt"], ["boots"]], hair: ["topknot", "bob", "ponytail"], build: { weight: [0.45, 0.75], muscle: [0.4, 0.5], bust: [0.5, 0.85] } },
     },
+    smith: {
+        m: { wear: [["shirt"], ["breeches", "trousers"], ["boots"], ["belt"], ["leatherApron"], ["smithHammer"], ["tongs"]], hair: ["bald", "buzz", "short"], beard: ["full", "short", "stubble"], build: { weight: [0.6, 0.9], muscle: [0.72, 0.95], belly: [0.1, 0.6] } },
+        f: { wear: [["shirt"], ["breeches"], ["boots"], ["leatherApron"], ["smithHammer"], ["tongs"]], hair: ["ponytail", "topknot", "bob"], build: { weight: [0.5, 0.7], muscle: [0.6, 0.8], bust: [0.4, 0.7] } },
+    },
+    apprentice: {
+        m: { wear: [["tunic", "shirt", "blueTunic"], ["trousers"], ["boots"], ["leatherApron"]], hair: ["short", "buzz", "swept"], beard: ["none", "none", "stubble"], build: { weight: [0.35, 0.6], muscle: [0.45, 0.65], belly: [0, 0.1] } },
+        f: { wear: [["shirt", "chemise"], ["breeches", "trousers"], ["boots"], ["leatherApron"]], hair: ["ponytail", "bob"], build: { weight: [0.38, 0.55], muscle: [0.45, 0.6], bust: [0.35, 0.6] } },
+    },
     madam: { f: { wear: [["chemise"], ["velvetBodice"], ["gown"], ["boots"]], hair: ["topknot", "long"], build: { weight: [0.5, 0.7], muscle: [0.32, 0.42], bust: [0.7, 1] } } },
     courtesan: { f: { wear: "lingerie", hair: ["long", "long", "bob", "ponytail", "topknot"], build: { weight: [0.4, 0.55], muscle: [0.38, 0.46], bust: [0.6, 1] } } },
 };
@@ -47,8 +56,8 @@ const GREY = ["grey", "white"];
 
 /**
  * A look for one of the folk: { shape, look, equipment, walk } (as presets.js FOLK's), from
- * `one`: { role (roles.js: barkeep, barmaid, patron, innkeeper, madam, courtesan), local (their
- * part: wench, greybeard...), sex ("f" or "m"), seed }.
+ * `one`: { role (roles.js: barkeep, barmaid, patron, innkeeper, madam, courtesan, smith,
+ * apprentice), local (their part: wench, greybeard...), sex ("f" or "m"), seed }.
  */
 export function folkLook({ role, local = role, sex = "m", seed = 1 }) {
     const random = createRandom(seed * 2654435761 + 97);

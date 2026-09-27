@@ -111,6 +111,14 @@ const ACTS = {
     serve: { hitAt: 0.8, duration: 1.8, sound: "clink", volume: 0.45 },
     pour: { hitAt: 1, duration: 2.8, sound: "pour", volume: 1, early: 0.3 },
     beckon: { hitAt: BECKON.hitAt, duration: BECKON.duration },
+    // The smithy's: three blows on the anvil (each ringing and throwing sparks, `beats`: s after
+    // key 1), the work thrust into the coals, quenched in the trough (hissing, steam rising), the
+    // bellows pumped (the forge's fire flaring), and the grindstone cranked (turning as it is)
+    forge: { hitAt: 0.9, duration: 2.6, sound: "anvil", volume: 1, beats: [0, 0.37, 0.71], burst: "sparks", ahead: 0.62, height: 0.9 },
+    heat: { hitAt: 0.9, duration: 2.4, sound: "bellows", volume: 0.5, burst: "embers", ahead: 0.9, height: 1, flare: 0.5 },
+    quench: { hitAt: 0.8, duration: 2.2, sound: "hiss", volume: 1, burst: "steam", ahead: 0.7, height: 0.7 },
+    pump: { hitAt: 0.7, duration: 2.1, sound: "bellows", volume: 1, beats: [0, 0.38, 0.76], flare: 0.8 },
+    crank: { hitAt: 0.9, duration: 2.6, sound: "grind", volume: 1, drive: "grindstone" },
 };
 
 // Going through a door or up the stairs, the screen comes up from black this fast (s)
@@ -166,6 +174,9 @@ export class Game {
         this.lastAttack = new Map();
         this.flights = new Map();
         this.flash = new Map();
+
+        /** What's to happen a little later (the game's clock, s): [{ at, then }]. */
+        this.later = [];
 
         /**
          * How each character's spells and bolts look (effects.js LOOKS: never the same twice in a
@@ -583,6 +594,17 @@ export class Game {
     // Run the battle's steps for `dt` seconds, and move everyone to match. Returns the steps run
     #tick(dt) {
         this.accumulator += dt * 1000;
+
+        // (What was put off till now: a spark off the anvil at each blow)
+        if (this.later.length && this.later[0].at <= this.clock) {
+            const due = this.later.filter(({ at }) => at <= this.clock);
+
+            this.later = this.later.filter(({ at }) => at > this.clock);
+
+            for (const { then } of due) {
+                then();
+            }
+        }
 
         let steps = 0;
 
@@ -1086,13 +1108,40 @@ export class Game {
 
         avatar.actions.startAttack(act, { hitAt: how.hitAt, duration: how.duration });
 
-        if (how.sound) {
-            this.sound?.play(how.sound, { at: avatar.object.position, delay: how.hitAt - (how.early ?? 0), volume: how.volume });
+        // Its sound at each beat (at key 1, or at each of its `beats`), and what flies up where
+        // the work is (so far ahead of them, so high): sparks off the anvil, steam off the trough
+        for (const beat of how.beats ?? [0]) {
+            const delay = how.hitAt + beat;
+
+            if (how.sound) {
+                this.sound?.play(how.sound, { at: avatar.object.position, delay: delay - (how.early ?? 0), volume: how.volume });
+            }
+
+            if (how.burst) {
+                const { x, z } = avatar.object.position;
+                const [ahead, height] = [how.ahead, how.height];
+
+                this.#after(delay, () => this.effects.burst(how.burst, new THREE.Vector3(x + Math.sin(actor.facing) * ahead, height, z + Math.cos(actor.facing) * ahead)));
+            }
+
+            if (how.flare) {
+                this.#after(delay, () => this.view.flare(0, how.flare, this.clock));
+            }
+        }
+
+        if (how.drive) {
+            this.interiors.get(this.mapId)?.drive(how.drive, this.clock + how.hitAt * 0.5, how.duration - how.hitAt * 0.5);
         }
 
         if (act === "beckon" && target === "player" && !this.talking) {
             this.hud.message(`${actor.name.split(" ")[0]} beckons you over`, 2.5);
         }
+    }
+
+    // Do something `seconds` from now (the game's clock)
+    #after(seconds, then) {
+        this.later.push({ at: this.clock + seconds, then });
+        this.later.sort((a, b) => a.at - b.at);
     }
 
     // Put a character where it is in the battle, on its map, at once (not walking there)

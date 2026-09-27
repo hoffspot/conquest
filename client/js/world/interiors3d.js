@@ -5,7 +5,10 @@
 // above; and that floor, with its rugs, the counter, a chaise longue, and the hallway to four
 // bedrooms behind curtained doorways, each with a canopied bed, a washstand and a chest (a madam's
 // house in rose and red velvet, an inn in whitewash and wool). Each taproom has its own walls (the
-// map's `finish`).
+// map's `finish`). A smithy: bare stone walls and beaten earth, the forge under its hood with its
+// coals glowing and a fire, the bellows, the anvil on its stump, the quenching trough, a
+// grindstone that turns while it's cranked, racks of tools and of finished work, a workbench with
+// its vice, and a heap of charcoal.
 //
 // Built with the art kits' Solid (five art pixels to a metre) and their materials, each map in
 // its own group at its place in the world (its `origin`). There are no ceilings, and what stands
@@ -94,7 +97,11 @@ const COLOURS = {
     "wool-green": 0x46603c,
     "wool-blue": 0x3a4b6e,
     "wool-ochre": 0x9a7434,
+    leather: 0x4f3220,
 };
+
+// The art's materials darkened (a textured material under a colour): beaten earth black with soot
+const TINTED = { "earth-sooty": ["road", 0x6a5e54] };
 
 // Each interior's own copies of the materials (the town's are shared, and cut differently), and
 // the same again for walls (`wall`: cut lower)
@@ -119,6 +126,10 @@ function material(name, { wall = false } = {}) {
         } else if (name === "roast") {
             result = new THREE.MeshStandardMaterial({ color: 0x9c5424, roughness: 0.45, metalness: 0 });
             result.name = name;
+        } else if (TINTED[name]) {
+            result = artMaterial(TINTED[name][0]).clone();
+            result.color.setHex(TINTED[name][1]);
+            result.name = `${name}-inside`;
         } else {
             result = artMaterial(name).clone();
             result.name = `${name}-inside`;
@@ -929,13 +940,176 @@ function upstairs(map) {
     };
 }
 
-const BUILDERS = { taproom, upstairs };
+// --- The smithy ---
+
+function smithy(map) {
+    const solid = new Solid();
+    const moving = [];
+    const [w, h] = [m(map.width), m(map.height)];
+    const at = (kind) => map.pieces.find((piece) => piece.kind === kind);
+
+    // Beaten earth underfoot, dark with soot; bare stone walls, the door in the middle of the south
+    solid.box(-m(0.3), -0.5, -m(0.3), w + m(0.3), 0, h + m(0.3), material("earth-sooty"));
+
+    const doors = map.marks.D;
+    const doorMiddle = (doors[0][0] + doors.at(-1)[0] + 1) / 2;
+
+    outerWalls(solid, map, "stone", [{ side: "s", from: doorMiddle - 0.7, to: doorMiddle + 0.7, lintel: 2.2 }]);
+    solid.box(m(doorMiddle - 0.7), 0, h - 0.2, m(doorMiddle + 0.7), m(2.2), h + 0.4, material("planks-dark", WALL));
+
+    for (const z of [4, 9]) {
+        windowIn(solid, "z", w, m(z), 1);
+    }
+
+    windowIn(solid, "x", h, m(3.5), 1);
+    windowIn(solid, "x", h, m(12.5), 1);
+
+    // The forge: a waist-high hearth of stone against the north wall, a bed of glowing coals on
+    // it, a hood over it narrowing to the chimney, and a fire
+    const forge = at("forge");
+    const [fx0, fx1, fz0, fz1] = [m(forge.x), m(forge.x + forge.w), m(forge.y), m(forge.y + forge.h)];
+    const fx = (fx0 + fx1) / 2;
+
+    solid.box(fx0, 0, fz0, fx1, m(0.85), fz1 - m(0.2), material("stone-dark"));
+    solid.box(fx0 + m(0.4), m(0.85), fz0 + m(0.4), fx1 - m(0.4), m(0.9), fz1 - m(0.6), artMaterial("embers"));
+    solid.box(fx0 - m(0.1), m(0.85), fz0 + m(0.2), fx0 + m(0.3), m(1.15), fz1 - m(0.2), material("stone-dark"));
+    solid.box(fx1 - m(0.3), m(0.85), fz0 + m(0.2), fx1 + m(0.1), m(1.15), fz1 - m(0.2), material("stone-dark"));
+    solid.face([[fx0 - m(0.2), m(1.8), fz1], [fx1 + m(0.2), m(1.8), fz1], [fx1 - m(0.9), m(STOREY), fz0 + m(0.4)], [fx0 + m(0.9), m(STOREY), fz0 + m(0.4)]], material("stone-dark", WALL));
+    solid.box(fx0 - m(0.2), m(1.65), fz1 - m(0.15), fx1 + m(0.2), m(1.8), fz1 + m(0.05), material("timber", WALL));
+
+    for (const side of [fx0 - m(0.1), fx1 - m(0.1)]) {
+        solid.box(side, m(1.15), fz0, side + m(0.2), m(1.8), fz0 + m(0.4), material("stone-dark", WALL));
+    }
+
+    // Tongs and pokers hanging from the hood's beam
+    for (let k = 0; k < 4; k++) {
+        const x = fx0 + m(0.5 + k * 0.4);
+
+        solid.box(x - 0.15, m(1.05), fz1 - 0.1, x + 0.15, m(1.65), fz1 + 0.2, material("iron"));
+    }
+
+    const fires = [flame(m(1.4), m(0.5), 2.3), flame(m(1), m(0.4), 5.9)];
+
+    fires[0].position.set(fx, m(0.9), (fz0 + fz1) / 2 - m(0.2));
+    fires[1].position.set(fx + m(0.5), m(0.9), (fz0 + fz1) / 2);
+
+    // The bellows beside it: two boards and the leather between, on a frame, the lever over them
+    const bellows = at("bellows");
+    const [bx, bz] = [m(bellows.x + 0.5), m(bellows.y + 0.5)];
+
+    solid.box(bx - m(0.35), 0, bz - m(0.4), bx + m(0.35), m(0.35), bz + m(0.4), material("timber"));
+    solid.box(bx - m(0.3), m(0.35), bz - m(0.35), bx + m(0.3), m(0.42), bz + m(0.35), material("planks-dark"));
+    solid.box(bx - m(0.28), m(0.42), bz - m(0.33), bx + m(0.28), m(0.62), bz + m(0.3), material("leather"));
+    solid.box(bx - m(0.3), m(0.62), bz - m(0.35), bx + m(0.3), m(0.68), bz + m(0.35), material("planks-dark"));
+    solid.box(bx - 0.25, m(0.1), bz - m(0.4), bx + 0.25, m(1.3), bz - m(0.3), material("timber"));
+    solid.box(bx - 0.2, m(1.2), bz - m(0.35), bx + 0.2, m(1.28), bz + m(0.55), material("timber"));
+    solid.box(bx + m(0.3), m(0.45), bz - m(0.08), fx0, m(0.55), bz + m(0.08), material("iron"));
+
+    // The anvil on its stump
+    const anvil = at("anvil");
+    const [ax, az] = [m(anvil.x + 0.5), m(anvil.y + 0.5)];
+
+    solid.cylinder(ax, az, 0, m(0.5), m(0.3), m(0.32), material("planks-dark"), { segments: 10 });
+    solid.box(ax - m(0.12), m(0.5), az - m(0.1), ax + m(0.12), m(0.62), az + m(0.1), material("iron"));
+    solid.box(ax - m(0.35), m(0.62), az - m(0.12), ax + m(0.3), m(0.8), az + m(0.12), material("iron"));
+    solid.box(ax + m(0.3), m(0.68), az - m(0.07), ax + m(0.5), m(0.78), az + m(0.07), material("iron"));
+    solid.box(ax - m(0.1), m(0.8), az - m(0.03), ax + m(0.15), m(0.83), az + m(0.03), material("embers"));
+
+    // The quenching trough: a long box of planks, full of dark water
+    const trough = at("trough");
+    const [tx0, tx1, tz0, tz1] = [m(trough.x + 0.15), m(trough.x + trough.w - 0.15), m(trough.y + 0.1), m(trough.y + trough.h - 0.1)];
+
+    const plank = 0.45;
+
+    solid.box(tx0, 0, tz0, tx1, m(0.12), tz1, material("planks"));
+    solid.box(tx0, 0, tz0, tx0 + plank, m(0.65), tz1, material("planks"));
+    solid.box(tx1 - plank, 0, tz0, tx1, m(0.65), tz1, material("planks"));
+    solid.box(tx0 + plank, 0, tz0, tx1 - plank, m(0.65), tz0 + plank, material("planks"));
+    solid.box(tx0 + plank, 0, tz1 - plank, tx1 - plank, m(0.65), tz1, material("planks"));
+    solid.box(tx0 + plank, m(0.12), tz0 + plank, tx1 - plank, m(0.55), tz1 - plank, material("water"));
+
+    for (const z of [tz0 + m(0.3), tz1 - m(0.3)]) {
+        solid.box(tx0 - 0.1, m(0.2), z - 0.25, tx1 + 0.1, m(0.28), z + 0.25, material("iron"));
+    }
+
+    // The grindstone: a stone wheel in a wooden frame, a crank and a treadle
+    const stone = at("grindstone");
+    const [gx, gz] = [m(stone.x + 0.5), m(stone.y + 0.5)];
+
+    for (const side of [-1, 1]) {
+        solid.box(gx + side * m(0.2) - 0.3, 0, gz - m(0.35), gx + side * m(0.2) + 0.3, m(0.75), gz - m(0.25), material("timber"));
+        solid.box(gx + side * m(0.2) - 0.3, 0, gz + m(0.25), gx + side * m(0.2) + 0.3, m(0.75), gz + m(0.35), material("timber"));
+    }
+
+    const wheel = new THREE.Group();
+
+    wheel.position.set(gx, m(0.72), gz);
+    wheel.add(new THREE.Mesh(new THREE.CylinderGeometry(m(0.32), m(0.32), m(0.12), 18).rotateZ(Math.PI / 2), material("stone")));
+    wheel.add(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, m(0.55), 6).rotateZ(Math.PI / 2), material("iron")));
+    moving.push({ object: wheel, turn: 5, axis: "x", name: "grindstone" });
+
+    // The coals, heaped in the corner, and sacks of them
+    const coal = at("coal");
+
+    solid.pyramid(m(coal.x), m(coal.y), m(coal.x + coal.w), m(coal.y + coal.h), 0, m(0.7), material("shadow"));
+    solid.box(m(coal.x + coal.w - 0.8), 0, m(coal.y + coal.h + 0.1), m(coal.x + coal.w - 0.1), m(0.6), m(coal.y + coal.h + 0.6), material("canvas-sack"));
+
+    // Racks: tools hung on a board along the north wall; finished work (swords, axes, shields)
+    // along the east
+    for (const rack of map.pieces.filter((piece) => piece.kind === "rack")) {
+        const [rx0, rx1, rz0, rz1] = [m(rack.x), m(rack.x + rack.w), m(rack.y), m(rack.y + rack.h)];
+
+        if (rack.w > rack.h) {
+            solid.box(rx0 + 0.3, m(1.2), rz0, rx1 - 0.3, m(2), rz0 + 0.4, material("planks", WALL));
+            solid.box(rx0 + 0.3, 0, rz0 + 0.5, rx1 - 0.3, m(0.8), rz1 - m(0.35), material("planks-dark"));
+
+            for (let x = rx0 + m(0.4); x < rx1 - m(0.2); x += m(0.45)) {
+                const long = (Math.round(x) % 3) * 0.6;
+
+                solid.box(x - 0.12, m(1.25) - long, rz0 + 0.4, x + 0.12, m(1.85), rz0 + 0.65, material("iron", WALL));
+                solid.box(x - 0.35, m(1.25) - long - 0.35, rz0 + 0.35, x + 0.35, m(1.25) - long, rz0 + 0.7, material("iron", WALL));
+            }
+        } else {
+            solid.box(rx1 - m(0.35), m(0.2), rz0 + 0.3, rx1 - m(0.25), m(0.3), rz1 - 0.3, material("timber"));
+            solid.box(rx1 - m(0.35), m(1.1), rz0 + 0.3, rx1 - m(0.25), m(1.2), rz1 - 0.3, material("timber"));
+
+            for (let z = rz0 + m(0.3); z < rz1 - m(0.2); z += m(0.3)) {
+                solid.box(rx1 - m(0.3) - 0.1, m(0.2), z - 0.2, rx1 - m(0.3) + 0.1, m(1.25), z + 0.2, material("iron"));
+                solid.box(rx1 - m(0.3) - 0.25, m(0.85), z - 0.7, rx1 - m(0.3) + 0.25, m(0.9), z + 0.7, material("brass"));
+            }
+
+            solid.cylinder(rx1 - 0.3, (rz0 + rz1) / 2, m(1.4), m(1.45), m(0.35), m(0.35), material("paint-red", WALL), { segments: 14 });
+        }
+    }
+
+    // The workbench along the west wall: a vice, a hammer and files on it
+    const bench = at("workbench");
+    const [wx0, wx1, wz0, wz1] = [m(bench.x + 0.05), m(bench.x + bench.w - 0.1), m(bench.y + 0.1), m(bench.y + bench.h - 0.1)];
+
+    table(solid, wx0, wz0, wx1, wz1);
+    solid.box(wx1 - m(0.25), m(0.78), wz0 + m(0.6), wx1 - m(0.05), m(0.98), wz0 + m(0.8), material("iron"));
+    solid.box(wx0 + m(0.2), m(0.78), wz0 + m(1.4), wx0 + m(0.4), m(0.82), wz0 + m(1.8), material("iron"));
+    candle(solid, (wx0 + wx1) / 2, wz1 - m(0.4), m(0.78));
+
+    return {
+        solid,
+        moving,
+        flames: fires,
+        lights: [
+            { kind: "fire", x: forge.x + forge.w / 2, y: 1.2, z: forge.y + forge.h, colour: 0xff7a2a, intensity: 10, distance: 14, flicker: 0.3 },
+            { kind: "lamp", x: map.width / 2, y: 2.5, z: map.height * 0.6, colour: 0xffc27a, intensity: 4, distance: 16, flicker: 0.05 },
+        ],
+        hearth: { x: forge.x + forge.w / 2, y: 0.95, z: forge.y + forge.h / 2 },
+    };
+}
+
+const BUILDERS = { taproom, upstairs, smithy };
 
 /**
  * Build a map's inside: { map, object (a Group at the map's place in the world, in metres),
  * lights (point lights to place: { kind, x, y, z (world metres), colour, intensity, distance,
  * flicker }), hearth (world point of its fire, or null), update(dt, time) (turns the spit,
- * moves the flames), dispose() }.
+ * moves the flames), drive(name, time, seconds) (turns a named part a while), dispose() }.
  */
 export function buildInterior(map) {
     const built = BUILDERS[map.style ?? map.id](map);
@@ -992,12 +1166,21 @@ export function buildInterior(map) {
         lights: built.lights.map((light) => ({ ...light, x: ox + light.x, z: oz + light.z })),
         hearth: built.hearth ? { x: ox + built.hearth.x, y: built.hearth.y, z: oz + built.hearth.z } : null,
         update(dt, time) {
-            for (const { object: part, turn } of built.moving) {
-                part.rotation.z += turn * dt;
+            for (const part of built.moving) {
+                // (A named part turns only while it's driven: the grindstone while cranked)
+                if (!part.name || time < (part.until ?? 0)) {
+                    part.object.rotation[part.axis ?? "z"] += part.turn * dt;
+                }
             }
 
             for (const fire of built.flames) {
                 fire.userData.flame.uniforms.time.value = time;
+            }
+        },
+        /** Turn one of its named moving parts (the grindstone) for a while, from `time` (s). */
+        drive(name, time, seconds) {
+            for (const part of built.moving.filter((each) => each.name === name)) {
+                part.until = time + seconds;
             }
         },
         // (Its own geometry and flames: the materials are shared by every inside)

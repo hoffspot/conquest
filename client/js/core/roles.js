@@ -1,6 +1,6 @@
 // What sort of person each character is: their class (a role), such as the barkeep, a serving
-// wench, a patron at the tables, the innkeeper, the madam or a courtesan upstairs, or the
-// player's adventurer.
+// wench, a patron at the tables, the innkeeper, the madam or a courtesan upstairs, the smith and
+// the apprentice, or the player's adventurer.
 //
 // A role says what the character is called (its `title`, under its name in a talk: dialogue.js),
 // whether it beckons the player over when they come into sight (`beckons`: the courtesans
@@ -77,6 +77,27 @@ export const ROLES = Object.freeze({
             { name: "a hand on her hip", hitAt: 1, duration: 3.4 },
             { name: "blowing a kiss", hitAt: 1, duration: 2.8 },
             { name: "smoothing down her sides", hitAt: 1, duration: 3 },
+        ],
+    },
+    // The smithy's: the smith, a hammer in one hand and tongs in the other, and the apprentice
+    smith: {
+        title: "Blacksmith",
+        rests: [
+            { name: "wiping the brow", hitAt: 1, duration: 2.4 },
+            { name: "looking over the work", hitAt: 1, duration: 3 },
+            { name: "rolling the shoulders", hitAt: 1, duration: 2.8 },
+            { name: "stretching the back", hitAt: 1, duration: 2.6 },
+            { name: "shifting the weight", hitAt: 1, duration: 3.2 },
+        ],
+    },
+    apprentice: {
+        title: "Apprentice",
+        rests: [
+            { name: "wiping the brow", hitAt: 1, duration: 2.4 },
+            { name: "looking about", hitAt: 1, duration: 3.4 },
+            { name: "rolling the shoulders", hitAt: 1, duration: 2.8 },
+            { name: "a yawn", hitAt: 1, duration: 2.8 },
+            { name: "stretching", hitAt: 1.2, duration: 3.2 },
         ],
     },
     adventurer: {

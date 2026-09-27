@@ -35,6 +35,17 @@ export const PLAN_KEY = Object.freeze({
     c: { kind: "chest", blocks: true },
     L: { kind: "chaise", blocks: true, joins: true },
     o: { kind: "side-table", blocks: true },
+    // A smithy's: the forge (a hearth of stone waist high, a hood over it), its bellows, the
+    // anvil, the quenching trough, the grindstone, racks of tools and finished work, the
+    // workbench, and a heap of charcoal
+    F: { kind: "forge", blocks: true, opaque: true, joins: true },
+    P: { kind: "bellows", blocks: true },
+    A: { kind: "anvil", blocks: true },
+    Q: { kind: "trough", blocks: true, joins: true },
+    G: { kind: "grindstone", blocks: true },
+    R: { kind: "rack", blocks: true, joins: true },
+    X: { kind: "workbench", blocks: true, joins: true },
+    O: { kind: "coal", blocks: true, joins: true },
 });
 
 // The taproom, 18 by 15 metres (roomier than the tavern looks from outside, to walk about in
