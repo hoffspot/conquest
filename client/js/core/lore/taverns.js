@@ -54,6 +54,9 @@ const NUMBERS = [["Two", 2], ["Three", 3], ["Four", 4], ["Five", 5], ["Seven", 7
 // Houses of pleasure's names, and the pictures on their signs
 const HOUSES = [["The Velvet Garter", "rose"], ["The Rosy Cheek", "rose"], ["The Tipsy Maiden", "tankard"], ["The Silken Sheets", "moon"], ["The Wench and Barrel", "barrel"], ["The Scarlet Lantern", "lantern"], ["The Painted Swan", "swan"], ["The Merry Widow", "harp"], ["The Honeyed Rose", "rose"], ["The Midnight Moon", "moon"]];
 
+/** The start town's tavern: a whole house of courtesans upstairs (the first there ever was). */
+export const WENCHES = Object.freeze({ name: "Wenches and Ale", emblem: "tankard", count: 1, upstairs: "bordello", storeys: 2 });
+
 /**
  * What's upstairs in a tavern: rooms to let (an inn), rooms to let with some let by the hour
  * (a courtesan or two), or a whole house of courtesans.

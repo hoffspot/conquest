@@ -286,7 +286,7 @@ function draw() {
     if (layers.places) {
         for (const place of plan.places) {
             const [sx, sy] = toScreen(...place.at);
-            const r = Math.max({ capital: 6, city: 4.5, town: 3.2, village: 2 }[place.kind], place.radius / view.scale);
+            const r = Math.max({ capital: 6, city: 4.5, town: 3.2, village: 2, hamlet: 1.5, farmstead: 1.1 }[place.kind], place.radius / view.scale);
 
             context.fillStyle = PEOPLE_COLOURS[place.race];
             context.strokeStyle = "#101418";
@@ -322,7 +322,7 @@ function draw() {
         context.strokeStyle = "rgb(10 12 14 / 85%)";
 
         for (const place of plan.places) {
-            const shown = { capital: 0, city: 60, town: 110, village: 260 }[place.kind];
+            const shown = { capital: 0, city: 60, town: 110, village: 260, hamlet: 420, farmstead: 600 }[place.kind];
 
             if (perKm < shown) {
                 continue;

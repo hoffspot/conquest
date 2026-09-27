@@ -3,23 +3,33 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-// (Textured materials paint a canvas: enough of one for them to in Node)
-globalThis.document ??= {
-    createElement: () => ({
-        width: 0,
-        height: 0,
-        getContext: () => ({ createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData() {} }),
-    }),
-};
+// (Textured materials and signs paint a canvas: enough of one for them to in Node, every other
+// drawing call doing nothing)
+const noop = () => {};
+const context = () =>
+    new Proxy(
+        {
+            createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }),
+            createLinearGradient: () => ({ addColorStop: noop }),
+            createRadialGradient: () => ({ addColorStop: noop }),
+            measureText: (text) => ({ width: String(text).length * 10 }),
+        },
+        { get: (target, key) => (key in target ? target[key] : noop) },
+    );
+
+globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContext: context }) };
 
 const THREE = await import("three");
 const { layoutTown } = await import("../client/js/core/setpieces/town.js");
+const { GODS } = await import("../client/js/core/lore/gods.js");
 const { TRADES } = await import("../client/js/core/setpieces/pieces.js");
 const { LAYERS, layerOf, paintLayers, toAtlas } = await import("../client/js/world/art/engine/atlas.js");
 const { material, MATERIALS } = await import("../client/js/world/art/engine/materials.js");
 const { paintLayer } = await import("../client/js/world/art/engine/painters.js");
 const { Solid } = await import("../client/js/world/art/engine/solid.js");
 const { buildHouse, house, planHouse, STYLES } = await import("../client/js/world/art/kits/house.js");
+const { EMBLEM_NAMES, paintEmblem } = await import("../client/js/world/art/kits/emblems.js");
+const { landmark, LANDMARK_BUILDERS } = await import("../client/js/world/art/kits/landmarks.js");
 const { prop, PROP_NAMES } = await import("../client/js/world/art/kits/props.js");
 const { merge } = await import("../client/js/world/town3d.js");
 
@@ -129,7 +139,7 @@ describe("houses (kits/house.js)", () => {
             const triangles = trianglesOf(object);
 
             most = Math.max(most, triangles);
-            assert.ok(triangles > 150 && triangles < 3500, `${piece.key}: ${triangles} triangles`);
+            assert.ok(triangles > 150 && triangles < 4500, `${piece.key}: ${triangles} triangles`);
             assert.ok(box.min.x > -M && box.min.z > -M && box.max.x < piece.w * 20 + M && box.max.z < piece.h * 20 + M, `${piece.key} spills out of its lot`);
             assert.ok(box.min.y >= 0 && box.max.y < M * 16, `${piece.key} is ${box.max.y / M} m tall`);
 
@@ -155,6 +165,67 @@ describe("houses (kits/house.js)", () => {
             const plan = planHouse(piece);
 
             assert.equal(plan.style === "barn", piece.use === "barn" || piece.use === "stable", piece.key);
+        }
+    });
+});
+
+describe("landmarks (kits/landmarks.js)", () => {
+    // Every landmark of some towns and cities, as their layouts have them
+    const landmarks = ["town", "city"].flatMap((kind) => [1, 2, 3].flatMap((seed) => layoutTown({ seed, kind }).pieces.filter((piece) => piece.kind === "landmark")));
+    const materialsOf = (object) => {
+        const names = [];
+
+        object.traverse((node) => {
+            if (node.isMesh) {
+                names.push(...[node.material].flat().map(({ name }) => name));
+            }
+        });
+
+        return names;
+    };
+
+    it("builds every one a town has, within its lot and a few thousand triangles", async () => {
+        const kinds = new Set(landmarks.map(({ name }) => name));
+
+        for (const name of ["tavern", "church", "blacksmith", "guild"]) {
+            assert.ok(kinds.has(name), name);
+            assert.ok(LANDMARK_BUILDERS[name], name);
+        }
+
+        for (const piece of landmarks.filter(({ name }, k) => name !== "market" || k % 3 === 0)) {
+            const object = await landmark(piece);
+            const box = new THREE.Box3().setFromObject(object);
+            const triangles = trianglesOf(object);
+
+            assert.ok(triangles > 100 && triangles < 9000, `${piece.name}: ${triangles} triangles`);
+            assert.ok(box.min.x > -M * 1.5 && box.min.z > -M * 1.5 && box.max.x < piece.w * 20 + M * 1.5 && box.max.z < piece.h * 20 + M * 1.5, `${piece.name} spills out of its lot`);
+        }
+    });
+
+    it("hangs each tavern's own name and sign, the guild's, and each church's patron's", async () => {
+        for (const piece of landmarks.filter(({ name }) => name === "tavern" || name === "guild" || name === "church")) {
+            const names = materialsOf(await landmark(piece));
+
+            if (piece.name === "tavern") {
+                assert.ok(names.includes(`board ${piece.tavern.name}`) && names.includes(`sign ${piece.tavern.name}`), piece.tavern.name);
+            } else if (piece.name === "guild") {
+                assert.ok(names.includes("board guild") && names.includes("sign guild"));
+            } else {
+                assert.ok(GODS[piece.patron], piece.patron);
+                assert.ok(names.some((name) => name.includes(GODS[piece.patron].name)), `${piece.patron}: ${names.filter((name) => name.startsWith("sign"))}`);
+            }
+        }
+    });
+});
+
+describe("emblems (kits/emblems.js)", () => {
+    it("paints every emblem, one of it or several (The Three Bells)", () => {
+        const canvas = globalThis.document.createElement("canvas").getContext("2d");
+
+        for (const name of EMBLEM_NAMES) {
+            for (const count of [1, 2, 3, 4, 7, 9]) {
+                assert.doesNotThrow(() => paintEmblem(canvas, name, { x: 50, y: 50, size: 80, count }), `${count} ${name}`);
+            }
         }
     });
 });

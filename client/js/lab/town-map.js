@@ -7,6 +7,7 @@
 
 import { footprint, layoutTown, SETTLEMENT_KINDS } from "../core/setpieces/town.js";
 import { GROUND, PLOT } from "../core/setpieces/pieces.js";
+import { GODS } from "../core/lore/gods.js";
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -137,7 +138,7 @@ function draw() {
             context.font = "bold 13px system-ui, sans-serif";
             context.textAlign = "center";
             context.textBaseline = "middle";
-            context.fillText(piece.name, 0, 0);
+            context.fillText(titleOf(piece), 0, 0);
             context.restore();
         }
     }
@@ -195,6 +196,14 @@ function panel() {
         item(GROUND_COLOURS[GROUND.soil], "vegetable bed"),
     );
 }
+// What a landmark's called: a tavern by its name, a church by its patron
+function titleOf(piece) {
+    if (piece.tavern) {
+        return piece.tavern.name;
+    }
+
+    return piece.patron ? `church of ${GODS[piece.patron].name}` : piece.name;
+}
 
 function count() {
     const { town } = state;
@@ -203,7 +212,7 @@ function count() {
     $("#counts").replaceChildren(
         ...[
             `${of("house").length} houses`,
-            `landmarks: ${of("landmark").map(({ name }) => name).join(", ") || "none"}`,
+            `landmarks: ${of("landmark").map(titleOf).join(", ") || "none"}`,
             `${town.streets.filter(({ main }) => main).length} main streets, ${town.streets.filter(({ main }) => !main).length} lanes and alleys`,
             `${of("prop").length} props, ${of("tree").length} trees`,
             `${town.width} × ${town.height} metres, laid out in ${state.took.toFixed(0)} ms`,

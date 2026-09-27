@@ -29,6 +29,10 @@ back to the same world:
 - **The world outside** (`Overworld`, the `town` map): all of it, on 1-metre squares, made a
   chunk 64 metres square at a time from the plan as it's needed, the town's squares in the chunks
   it's in, and its streets carrying on as the plan's roads (see WORLD.md, *The world in chunks*).
+- **Every other settlement** (`core/settlements.js`: the plan's capitals, cities, towns,
+  villages, hamlets and farmsteads), laid out by `layoutTown` from its own seed the first time
+  the world within a chunk of it is made, and set into the chunks it's in as the town is, the
+  plan's roads carried on to its streets' ends.
 
 `generateWorld({ seed, kind, exits })` makes the town:
 
@@ -54,10 +58,21 @@ back to the same world:
 
 ### Towns (core/setpieces/town.js)
 
-`layoutTown({ seed, kind, exits })` lays out a village, town or city the way old towns grew
-(after Watabou's Medieval Fantasy City Generator, written afresh at the game's scale), in
-metres, x east and y south. See any at `town-map.html?seed=5&kind=town` (a village, a town or a
-city: `SETTLEMENT_KINDS`):
+`layoutTown({ seed, kind, exits })` lays out a settlement the way old towns grew (after
+Watabou's Medieval Fantasy City Generator, written afresh at the game's scale), in metres, x
+east and y south. See any at `town-map.html?seed=5&kind=town` (`SETTLEMENT_KINDS`):
+
+| Kind | Radius (m) | Rings of lanes | Landmarks round the market (or green) |
+| --- | --- | --- | --- |
+| Farmstead | 13 | | None: a farmhouse, its barns, stable and sheds round a yard |
+| Hamlet | 17 | | A tavern, on a green |
+| Village | 30 | | A tavern, a church, a smithy and an adventurers' guild; sometimes a windmill |
+| Town | 48 | 1 | The same, and half the time a second tavern |
+| City | 84 | 3 | The same, a market hall and a second tavern; often a third tavern and a second smithy |
+| Capital | 112 | 4 | The same, a market hall, three taverns (often four) and two smithies |
+
+A farmstead's or hamlet's streets are earth, not cobbled; a farmstead's yard is beaten earth and
+a hamlet's middle is a green. Its houses have one storey, or two now and then.
 
 - **A market place** near the middle: a polygon of five to seven corners, 10 to 13 metres out
   (in a town), cobbled.
@@ -75,15 +90,46 @@ city: `SETTLEMENT_KINDS`):
   wall). Fewer lots are built on towards the edge, and none past it (the edge wanders).
 - **Back buildings** (outhouses, workshops, barns: 4.5 to 7.5 metres) filling the blocks behind
   the houses, each lined up with the street nearest it and facing it, a narrow way between them.
-- **Landmarks**: the tavern, church and smithy (and in a city, the market hall) facing the
-  market, slid along its edge if need be but never round its corner (or, failing that, facing a
-  main street near it); a well and stalls on it, clear of where the main streets leave; a
-  windmill out at the edge, by a main street.
+- **Landmarks**: the tavern, church, smithy and guild (and in a city, the market hall) facing
+  the market, slid along its edge if need be but never round its corner (or, failing that,
+  facing a main street near it); a well and stalls on it, clear of where the main streets leave;
+  a windmill out at the edge, by a main street. A layout that can't place the four that can be
+  entered (`ENTERED`: tavern, church, smithy, guild) is laid out again. Each has an `id` of its
+  own in the layout (`tavern-1`) and a seed. A tavern has its name, sign and storeys, and what's
+  upstairs (`core/lore/taverns.js`: below); a church its patron, one of the Six
+  (`core/lore/gods.js`: below).
 - **Trees** dotted about the open ground left.
 
 Every piece is a rectangle turned to face some way (`facing`, as characters face): its middle,
 its size in plots as the art kits build it, and `footprint(piece)` its corners. A town is 20 to
-50 houses, a city 50 to 80, a village 5 to 15. All the arithmetic is exact (`exact.js`: sines,
+50 houses, a city 50 to 80, a capital 90 or more, a village 5 to 15, a hamlet or farmstead 3 to
+8 buildings.
+
+**Taverns' names** (`core/lore/taverns.js`, `nameTavern`) are made the ways old inns were named,
+the name and the picture on the sign going together: The (adjective) (thing) (The Golden Crown,
+The Drunken Boar), The (thing) and (thing) (The Rose and Crown, The Fox and Hounds), The
+(creature)'s Head, The (number) (things) (The Three Bells, The Seven Stars: the sign shows that
+many). What's upstairs goes with the name: rooms to let (an inn), rooms with a courtesan or two,
+or a whole house of courtesans, most often named as one (The Velvet Garter, The Silken Sheets).
+A one-storey tavern has nothing upstairs. No two taverns in a settlement share a name. The start
+town's first tavern is *Wenches and Ale*, as it always was.
+
+**The Six** (`core/lore/gods.js`). In the beginning there was only the Silence, and in it one
+ember, the Hearth. Lonely, it broke into six sparks, and each woke as a god:
+
+| God | Title | Of | Sign |
+| --- | --- | --- | --- |
+| Aurelia | the Dawnmother | Life, health and vigour | A golden sun rising over a green bough |
+| Brannoc | the Red Horn | Battle and the hunt | A stag's antlers over a crossed spear and bow |
+| Ithriel | the Veiled Star | Magic and the arcane | An eye within a seven-pointed star |
+| Morvaine | the Keeper of the Last Gate | Death and what lies after | A lantern hanging from a key |
+| Seliane | the Rose of Evening | Love and romance | A red rose twined through two rings |
+| Dunmar | Anvilhand | Skills, crafts and trades | A hammer crossed with a chisel over an anvil |
+
+A seventh spark would not wake: the Hollow One, which only wanted, and fed on the others' light.
+The Six drove it into the dark under the world, but its hunger seeps out still, and the orcs are
+what it made of the first hunters it caught. Each god has a story, a festival and sayings; every
+temple is to all six, under one of them as its patron. All the arithmetic is exact (`exact.js`: sines,
 cosines, arctangents and square roots with + - * / alone), so the same seed gives the same town
 in every browser. Laying out a town takes about 20 to 80 ms.
 
@@ -358,8 +404,13 @@ much of it, and never a loading screen. Each chunk has:
   patches round the feet merged a chunk at a time. Merged a chunk at a time as the town's are, a
   wood of 25 chunks would take 100 megabytes or more.
 
-The chunks also say how tall their trees are on each square, for the cutaway. The minimap is
-painted from the same chunks.
+- **The settlements' buildings, props and trees**: each piece whose middle is in the chunk,
+  built by the art kits as the town's are and merged with the one material (the atlas, above);
+  the trees are the chunk's. Buildings are built a few at a time, within 6 ms a frame, so walking
+  up to a city never stalls a frame; while loading, the game waits for those round the start.
+
+The chunks also say how tall their trees and buildings are on each square, for the cutaway. The
+minimap is painted from the same chunks.
 
 ### Inside and out (app/game.js)
 
@@ -529,15 +580,31 @@ facing south; each is turned about its middle to face the way the layout says:
   the eaves and jetties and in the reveals, streaks, moss on the roof where it faces north (as
   the house stands), and each house's limewash a little its own colour. A house is about 300 to
   2,000 triangles (a two-storey timber house with a jettied front about 1,700).
-- **Special buildings** (kits/landmarks.js): a two-storey tavern with a jettied, timber-framed
-  upper floor, its name, *Wenches and Ale*, in gold blackletter (UnifrakturMaguntia, kits/signs.js,
-  loaded as a web font) on an oxblood board along its front, and a hanging sign painted on a
-  canvas (a barmaid in a red bodice raising two foaming tankards, in a gilt border, with the
-  name on a scroll) swinging from an iron bracket by the door, turned to face the square; a stone church with buttresses, tall windows and a tower
-  and spire; a blacksmith's workshop with an open shed over the forge, anvil and quenching
-  trough; a market hall on stone columns with stalls of produce beneath; a windmill with a
-  thatched cap and four sails. (KayKit's buildings were tried first, but they're toy-like: their
-  doors are twice a person's height.)
+- **Special buildings** (kits/landmarks.js), each from its piece of the layout:
+  - **Taverns**, built as the houses are (timber-framed, stone or brick, as the tavern's seed
+    says), one storey or two, with a wide door in the middle of the front. The tavern's name is
+    painted in gold blackletter (UnifrakturMaguntia, kits/signs.js, loaded as a web font) on a
+    board along the upper floor (over the door, on one storey), on a ground of oxblood, green,
+    blue or black. Its sign hangs from an iron bracket by the door: the tavern's emblem
+    (kits/emblems.js: 25 of them, a stag, a boar, bells, a crown, a rose, a ship, keys... one of
+    them or as many as the name says) painted in gold on a coloured field in a gilt frame, the
+    name on a scroll under it. A lantern hangs on the other side of the door, with barrels and a
+    bench outside. *Wenches and Ale* is stone below and a jettied, timber-framed floor above,
+    its sign a barmaid in a red bodice raising two foaming tankards.
+  - **The adventurers' guild**: a two-storey hall of stone, timber or brick, 16 by 12 metres,
+    its name on a blue board, its crest (a shield over crossed swords) hanging by the door,
+    blue banners with gold either side, and a board of notices outside.
+  - **The church**: a stone nave, buttressed, with tall windows, and a tower with a spire at the
+    front, the Six's gilded sun of six rays on its top, and its patron's sign by the door (the
+    patron's emblem: Aurelia's sun, Brannoc's stag, Ithriel's star, Morvaine's lantern,
+    Seliane's rose, Dunmar's anvil).
+  - **The smithy**: a stone workshop with an open shed over the forge, anvil and quenching
+    trough, and its sign (an anvil and hammer) by the door.
+  - A market hall on stone columns with stalls of produce beneath, and a windmill with a
+    thatched cap and four sails.
+
+  (KayKit's buildings were tried first, but they're toy-like: their doors are twice a person's
+  height.)
 - **Props** (kits/props.js) are built for the game in the same hand: a well (a ring of stone,
   two posts, a windlass and bucket, a roof of shingles), barrels of staves bellying out under
   iron hoops, crates battened at their edges, sacks tied at the neck, a handcart, a stack of
@@ -739,7 +806,8 @@ the 128 metres round the player; inside, the whole floor. Each square is coloure
 (roofs over buildings, blue-grey for the tavern, church and other landmarks, props, trees), with
 a little variation from square to square; the buildings get a dark edge and a light ridge and
 the trees round crowns. That's painted four pixels to the metre: the town once, and the world a
-patch 192 metres square at a time round the player, the town's picture laid in it, painted again
+patch 192 metres square at a time round the player, the town's picture laid in it and the other
+settlements' buildings and props painted over their ground the same way, painted again
 when they've gone far enough that what's shown would reach the patch's edge. Each frame (at most 30 times a second)
 draws it scaled to fit, then what the camera sees (the ground under the screen's corners), where
 the player is going, the enemies (red dots, the target ringed) and the player (an arrowhead
@@ -1009,8 +1077,10 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
 
 ## Testing
 
-- `test/setpieces.test.js`: town layouts (villages, towns and cities, 38 of them): the same for a
-  seed, more built the bigger the place, the tavern (and church and smithy) round the market,
+- `test/setpieces.test.js`: settlement layouts (farmsteads, hamlets, villages, towns, cities and
+  capitals, 50 of them): the same for a seed, more built the bigger the place, a tavern in every
+  hamlet and bigger, and a tavern, church, smithy and guild in every village and bigger, round the
+  market, each with an id of its own, taverns named once each, a farmstead's one farmhouse,
   every street joined to the market and every way out, every house turned to face its street
   (at over 40 angles) with its front walked up to from the market, no building on another or on
   a street, each blocking the squares under it and hiding what's behind it (props not), main
@@ -1028,7 +1098,10 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   they're come to, the town set in just as it was made with everything in it moved, its streets
   carried on as roads, water blocked but seen over, bridges walked over, trees as thick as their
   land has them and of its kinds, clear of roads and water; a way out of the town along the roads
-  across many chunks, found quickly; the player walking out into the world; chunks made quickly).
+  across many chunks, found quickly; the player walking out into the world; chunks made quickly;
+  the other settlements laid out as the world near them is made, the same every time, set in as
+  they were laid out, each piece with one chunk, and the plan's roads carried on to their
+  streets' ends).
   `test/pathfinding.test.js`: A* paths, and the line of squares straight ahead (stopping at a
   wall or the world's edge, never cutting a blocked corner).
 - `test/interiors.test.js`: the tavern's folk (on benches facing tables, stops on the floor and

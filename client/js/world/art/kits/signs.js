@@ -5,12 +5,14 @@
 // beneath.
 
 import * as THREE from "three";
+import { WENCHES } from "../../../core/lore/taverns.js";
+import { paintEmblem } from "./emblems.js";
 
 /** The font the tavern's name is lettered in, and where it's served from. */
 export const SIGN_FONT = Object.freeze({ family: "UnifrakturMaguntia", url: "fonts/UnifrakturMaguntia.woff2" });
 
-/** What the tavern is called. */
-export const TAVERN_NAME = "Wenches and Ale";
+/** What the start town's tavern is called. */
+export const TAVERN_NAME = WENCHES.name;
 
 let fontLoading = null;
 
@@ -87,15 +89,31 @@ function gold(context, top, bottom) {
     return gradient;
 }
 
+const textures = new Map();
+
+// A picture painted once for all that show it (by what it shows)
+function once(key, paint) {
+    if (!textures.has(key)) {
+        textures.set(key, paint());
+    }
+
+    return textures.get(key);
+}
+
 /**
- * The name board's picture (a texture, 56 wide to 9 high): the tavern's name in gilded
- * blackletter on oxblood, between gilt rules, with a leaf at each end.
+ * The name board's picture (a texture, 56 wide to 9 high): a name (the tavern's, unless it's
+ * another's) in gilded blackletter on a board of a colour (oxblood, unless another), between
+ * gilt rules, with a leaf at each end.
  */
-export function nameBoardTexture() {
+export function nameBoardTexture({ name = TAVERN_NAME, ground = "#5c1a16", dark = "#2e0a08" } = {}) {
+    return once(`board|${name}|${ground}`, () => paintNameBoard(name, ground, dark));
+}
+
+function paintNameBoard(name, ground, dark) {
     const [width, height] = [2048, 330];
     const { canvas, context } = canvasOf(width, height);
 
-    grain(context, width, height, "#5c1a16", "#2e0a08", 3);
+    grain(context, width, height, ground, dark, 3);
 
     // A gilt rule round the edge, and a dark one inside it
     context.strokeStyle = gold(context, 0, height);
@@ -134,22 +152,85 @@ export function nameBoardTexture() {
     context.textBaseline = "middle";
     context.font = lettering(230);
 
-    const measured = context.measureText(TAVERN_NAME).width;
+    const measured = context.measureText(name).width;
     const squeeze = Math.min(1, (width - 360) / measured);
 
     context.save();
     context.translate(width / 2, height / 2 + 10);
     context.scale(squeeze, 1);
     context.fillStyle = "rgba(12, 2, 1, 0.75)";
-    context.fillText(TAVERN_NAME, 5, 6);
+    context.fillText(name, 5, 6);
     context.fillStyle = gold(context, -80, 80);
-    context.fillText(TAVERN_NAME, 0, 0);
+    context.fillText(name, 0, 0);
     context.lineWidth = 2;
     context.strokeStyle = "rgba(80, 40, 5, 0.6)";
-    context.strokeText(TAVERN_NAME, 0, 0);
+    context.strokeText(name, 0, 0);
     context.restore();
 
     return textureOf(canvas);
+}
+
+// The fields signs are painted on, and the emblems' colours on each
+const FIELDS = [["#2d4a2a", "#142612", "#e2b54c"], ["#5c1a16", "#2e0a08", "#e2b54c"], ["#1f3552", "#0e1a2a", "#e8e0c8"], ["#2a2a2e", "#121214", "#d8a84a"], ["#6a4a1a", "#35240a", "#f2ead8"], ["#3a1f4a", "#1c0e24", "#e2b54c"]];
+
+/**
+ * A hanging sign's picture (a texture, 5 wide to 6 high), in the manner of old inn signs: its
+ * emblem (emblems.js: `count` of them) painted on a field within a gilt border, the name on a
+ * scroll beneath. `tint` picks the field (a number: the same for the same sign).
+ */
+export function emblemSignTexture({ name, emblem, count = 1, tint = 0 }) {
+    return once(`sign|${name}|${emblem}|${count}|${tint}`, () => {
+        const [width, height] = [512, 614];
+        const { canvas, context } = canvasOf(width, height);
+        const [field, dark, colour] = FIELDS[Math.abs(tint) % FIELDS.length];
+        const cx = width / 2;
+
+        grain(context, width, height, field, dark, 5 + (tint % 7));
+        context.strokeStyle = gold(context, 0, height);
+        context.lineWidth = 18;
+        context.strokeRect(12, 12, width - 24, height - 24);
+        context.strokeStyle = "#1a0c05";
+        context.lineWidth = 4;
+        context.strokeRect(28, 28, width - 56, height - 56);
+
+        // A glow behind the emblem, and the emblem
+        const glow = context.createRadialGradient(cx, 250, 20, cx, 250, 220);
+
+        glow.addColorStop(0, "rgba(255, 230, 170, 0.28)");
+        glow.addColorStop(1, "rgba(255, 230, 170, 0)");
+        context.fillStyle = glow;
+        context.fillRect(32, 32, width - 64, height - 64);
+        paintEmblem(context, emblem, { x: cx, y: 250, size: 330, colour, count });
+
+        // The scroll with the name
+        const scrollTop = height - 132;
+
+        context.fillStyle = "#efe0bb";
+        context.strokeStyle = "#3a1c10";
+        context.lineWidth = 4;
+        context.beginPath();
+        context.moveTo(48, scrollTop + 18);
+        context.quadraticCurveTo(cx, scrollTop - 10, width - 48, scrollTop + 18);
+        context.lineTo(width - 48, scrollTop + 84);
+        context.quadraticCurveTo(cx, scrollTop + 56, 48, scrollTop + 84);
+        context.closePath();
+        context.fill();
+        context.stroke();
+        context.fillStyle = "#5c1a16";
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+        context.font = lettering(48);
+
+        const measured = context.measureText(name).width;
+
+        context.save();
+        context.translate(cx, scrollTop + 44);
+        context.scale(Math.min(1, (width - 130) / measured), 1);
+        context.fillText(name, 0, 0);
+        context.restore();
+
+        return textureOf(canvas);
+    });
 }
 
 // A tankard of ale with a foaming head, its handle on `side` (1 right, -1 left), tilted `tilt`
@@ -204,6 +285,10 @@ function tankard(context, x, y, size, side, tilt) {
  * the name on a scroll beneath.
  */
 export function hangingSignTexture() {
+    return once("sign|wenches", paintWenches);
+}
+
+function paintWenches() {
     const [width, height] = [640, 768];
     const { canvas, context } = canvasOf(width, height);
     const cx = width / 2;
@@ -411,6 +496,8 @@ export function signMaterial(texture, name) {
 
     result.name = name;
     result.shadowSide = THREE.DoubleSide;
+    // (Each sign's own: let go with what it's on. Its picture is kept for the next)
+    result.userData.own = true;
 
     return result;
 }

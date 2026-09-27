@@ -109,9 +109,24 @@ describe("castle layouts", () => {
 
 describe("town layouts (town.js)", () => {
     const KINDS = Object.keys(SETTLEMENT_KINDS);
-    const TOWNS = KINDS.flatMap((kind) => Array.from({ length: kind === "city" ? 6 : 16 }, (_, k) => ({ kind, seed: k * 7919 + 11 })));
+    const TOWNS = KINDS.flatMap((kind) => Array.from({ length: kind === "capital" ? 3 : kind === "city" ? 6 : 16 }, (_, k) => ({ kind, seed: k * 7919 + 11 })));
     const layouts = new Map(TOWNS.map(({ kind, seed }) => [`${kind} ${seed}`, layoutTown({ kind, seed })]));
-    const street = (town, x, y) => town.ground[y]?.[x] === GROUND.road || town.ground[y]?.[x] === GROUND.cobbles;
+
+    // A street: road or cobbles, or the middle (a market, a hamlet's green, a farmstead's yard)
+    const inPolygon = (corners, px, py) => {
+        let inside = false;
+
+        for (let k = 0, last = corners.length - 1; k < corners.length; last = k++) {
+            const [[ax, ay], [bx, by]] = [corners[k], corners[last]];
+
+            if (ay > py !== by > py && px < ((bx - ax) * (py - ay)) / (by - ay) + ax) {
+                inside = !inside;
+            }
+        }
+
+        return inside;
+    };
+    const street = (town, x, y) => town.ground[y]?.[x] === GROUND.road || town.ground[y]?.[x] === GROUND.cobbles || inPolygon(town.market.corners, x + 0.5, y + 0.5);
 
     // The squares that can be walked to from a square, round corners only where both sides are open
     function walk(town, [x0, y0]) {
@@ -163,7 +178,7 @@ describe("town layouts (town.js)", () => {
     });
 
     it("builds more the bigger the place, with its landmarks round the market", () => {
-        const least = { village: 5, town: 20, city: 45 };
+        const least = { farmstead: 3, hamlet: 3, village: 5, town: 20, city: 45, capital: 90 };
         const landmarks = new Map();
 
         for (const { kind, seed } of TOWNS) {
@@ -172,7 +187,29 @@ describe("town layouts (town.js)", () => {
             const names = town.pieces.filter((piece) => piece.kind === "landmark").map(({ name }) => name);
 
             assert.ok(houses >= least[kind], `${kind} ${seed}: ${houses} houses`);
-            assert.ok(names.includes("tavern"), `${kind} ${seed}: a tavern`);
+
+            // A tavern in every place but a farmstead; and a church, a smithy and a guild in
+            // every village and bigger
+            assert.equal(names.includes("tavern"), kind !== "farmstead", `${kind} ${seed}: a tavern`);
+
+            for (const name of ["church", "blacksmith", "guild"]) {
+                assert.equal(names.includes(name), kind !== "farmstead" && kind !== "hamlet", `${kind} ${seed}: a ${name}`);
+            }
+
+            // (A farmstead is its farmhouse and its barns)
+            if (kind === "farmstead") {
+                assert.equal(town.pieces.filter((piece) => piece.kind === "house" && !piece.back).length, 1);
+            }
+
+            // Each tavern named, and every landmark that can be gone into with an id of its own
+            const ids = town.pieces.filter(({ id }) => id).map(({ id }) => id);
+
+            assert.equal(new Set(ids).size, ids.length);
+
+            for (const piece of town.pieces.filter(({ name }) => name === "tavern")) {
+                assert.match(piece.tavern.name, /^The [A-Z]/);
+                assert.ok(piece.tavern.storeys >= 1 && piece.tavern.storeys <= 2);
+            }
             assert.equal(town.width, 2 * Math.round(SETTLEMENT_KINDS[kind].radius + SETTLEMENT_KINDS[kind].fields));
 
             for (const name of names) {

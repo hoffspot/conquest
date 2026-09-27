@@ -103,7 +103,7 @@ describe("the world plan (worldplan/plan.js)", () => {
         }
     });
 
-    it("gives each people a capital, cities, towns and villages in their lands, apart, each with a guild but the villages, all named", () => {
+    it("gives each people a capital, cities, towns, villages, hamlets and farmsteads in their lands, apart, each with a guild but the hamlets and farmsteads, all named", () => {
         for (const [seed, plan] of plans) {
             const names = new Set(plan.places.map(({ name }) => name));
 
@@ -117,17 +117,19 @@ describe("the world plan (worldplan/plan.js)", () => {
                 assert.ok(count("city") >= 2 && count("city") <= 3, `seed ${seed}: ${race.id} ${count("city")} cities`);
                 assert.ok(count("town") >= 4 && count("town") <= 6, `seed ${seed}: ${race.id} ${count("town")} towns`);
                 assert.ok(count("village") >= 4, `seed ${seed}: ${race.id} ${count("village")} villages`);
+                assert.ok(count("hamlet") >= 3, `seed ${seed}: ${race.id} ${count("hamlet")} hamlets`);
+                assert.ok(count("farmstead") >= 1, `seed ${seed}: ${race.id} ${count("farmstead")} farmsteads`);
 
                 for (const place of mine) {
                     const k = at(...place.cell);
 
                     assert.equal(plan.territory[k], r + 1, `${place.name} in its people's lands`);
                     assert.equal(plan.water[k], WATER.none, `${place.name} on dry land`);
-                    assert.equal(place.guild, place.kind !== "village");
+                    assert.equal(place.guild, place.kind !== "hamlet" && place.kind !== "farmstead");
                     assert.match(place.name, /^[A-Z][a-z]+$/);
                     assert.deepEqual(place.at, [(place.cell[0] + 0.5) * CELL, (place.cell[1] + 0.5) * CELL]);
 
-                    for (const other of mine.filter((p) => p !== place)) {
+                    for (const other of plan.places.filter((p) => p !== place && (p.race === place.race || p.kind === "hamlet" || p.kind === "farmstead" || place.kind === "hamlet" || place.kind === "farmstead"))) {
                         assert.ok(distance(place.cell, other.cell) >= (SETTLEMENTS[place.kind].apart + SETTLEMENTS[other.kind].apart) / 2 - 1e-9, `${place.name} and ${other.name} apart`);
                     }
                 }
@@ -153,7 +155,8 @@ describe("the world plan (worldplan/plan.js)", () => {
                 assert.deepEqual(road.bridges, road.cells.filter(([x, y]) => plan.water[at(x, y)] === WATER.river));
             }
 
-            // Each capital reaches every settlement of its people, and every other capital
+            // Each capital reaches every settlement of its people (but its farmsteads, out in the
+            // fields off the roads), and every other capital
             const reach = (from) => {
                 const seen = new Set([from]);
                 const queue = [from];
@@ -173,7 +176,7 @@ describe("the world plan (worldplan/plan.js)", () => {
             for (const race of plan.races) {
                 const reached = reach(race.capital);
 
-                for (const place of plan.places.filter((p) => p.race === race.id || p.kind === "capital")) {
+                for (const place of plan.places.filter((p) => (p.race === race.id && p.kind !== "farmstead") || p.kind === "capital")) {
                     assert.ok(reached.has(place.id), `seed ${seed}: ${race.capital} to ${place.id}`);
                 }
             }
@@ -276,11 +279,11 @@ describe("the world plan (worldplan/plan.js)", () => {
         assert.throws(() => startFor(plan, "dwarf"));
     });
 
-    it("has a guild branch in every capital, city and town, each with open ground round it for the guild's work", () => {
+    it("has a guild branch in every capital, city, town and village, each with open ground round it for the guild's work", () => {
         const plan = plans.get(3);
         const branches = guilds(plan);
 
-        assert.equal(branches.length, plan.places.filter(({ kind }) => kind !== "village").length);
+        assert.equal(branches.length, plan.places.filter(({ kind }) => kind !== "hamlet" && kind !== "farmstead").length);
 
         const branch = startFor(plan, "elf");
         const spots = openGround(plan, branch, 7, 6);

@@ -597,9 +597,8 @@ export const EMBLEM_NAMES = Object.freeze(Object.keys(PAINTERS));
  */
 export function paintEmblem(context, name, { x, y, size, colour = "#c9a13b", count = 1 }) {
     const painter = PAINTERS[name] ?? PAINTERS.star;
-    const places = count <= 1 ? [[0, 0, 1]] : Array.from({ length: Math.min(count, 7) }, (_, k, all) => {
-        const shown = all.length;
-
+    const shown = Math.min(count, 7);
+    const places = count <= 1 ? [[0, 0, 1]] : Array.from({ length: shown }, (_, k) => {
         if (shown === 2) {
             return [(k - 0.5) * 0.9, 0, 0.5];
         }

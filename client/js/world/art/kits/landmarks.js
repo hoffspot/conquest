@@ -1,11 +1,15 @@
 // A town's special buildings, built to the same measure as its houses and people (five world
-// pixels to a metre): a two-storey tavern, a stone church with a spired tower, a blacksmith's
-// smithy with an open forge, a market hall on columns with stalls beneath, and a windmill.
-// Like the houses, each faces south, the side the camera sees.
+// pixels to a metre): taverns (each its own, from its name down: house.js builds them as it does
+// the houses, with their names and signs), the adventurers' guild's hall, a stone church with a
+// spired tower, a blacksmith's smithy with an open forge, a market hall on columns with stalls
+// beneath, and a windmill. Each is built facing south; the town turns it to face its street.
 
+import { GODS } from "../../../core/lore/gods.js";
+import { createRandom } from "../../../core/random.js";
 import { material } from "../engine/materials.js";
 import { Solid } from "../engine/solid.js";
-import { hangingSignTexture, loadSignFont, nameBoardTexture, signMaterial } from "./signs.js";
+import { buildHouse, planHouse, STYLES as HOUSE_STYLES } from "./house.js";
+import { emblemSignTexture, hangingSignTexture, loadSignFont, nameBoardTexture, signMaterial, TAVERN_NAME } from "./signs.js";
 
 const M = 5;
 const m = (metres) => metres * M;
@@ -49,99 +53,218 @@ function board(solid, [cx, cy], z, angle, start, end, width, name, offset = 0) {
     solid.face([...corners].reverse(), material(name));
 }
 
+// Where the leaf of a public building's front door stands: this far in from the front of its lot
+// (metres), in the middle of it (core/world.js tavernOf goes through it there)
+const ENTRY = 1.8;
+
+// The seed a landmark's look comes from: its own, or where it stands
+const seedOf = (piece) => piece.seed ?? Math.round((piece.x ?? 0) * 31 + (piece.y ?? 0) * 17 + 7);
+
+// A sign painted on both sides, hanging from an iron bracket out from a wall's face (a face as
+// Solid.wall's), `u` along it, its top `top` up it: the bracket and its stay, two rings, the board
+function hangingSign(solid, face, u, top, texture, name, { width = 0.8, height = 0.96, reach = 1.35 } = {}) {
+    const { out } = face;
+    const along = (d, v) => [face.origin[0] + face.across[0] * u + out[0] * d, face.origin[1] + v, face.origin[2] + face.across[2] * u + out[2] * d];
+    const iron = material("iron");
+    const picture = signMaterial(texture, name);
+
+    solid.beam(along(0, top + m(0.1)), along(m(reach), top + m(0.1)), m(0.06), m(0.08), iron);
+    solid.beam(along(0, top - m(0.55)), along(m(reach * 0.7), top + m(0.08)), m(0.04), m(0.04), iron);
+
+    const [near, far] = [m(reach) * 0.22, m(reach) * 0.22 + m(width)];
+
+    for (const d of [near + m(0.08), far - m(0.08)]) {
+        solid.beam(along(d, top + m(0.08)), along(d, top - m(0.06)), m(0.03), m(0.03), iron);
+    }
+
+    const [bottom, upper] = [top - m(0.06) - m(height), top - m(0.06)];
+    const corners = [along(near, bottom), along(far, bottom), along(far, upper), along(near, upper)];
+
+    // (Painted on both faces, each the right way round)
+    solid.face(corners, picture, [[0, 0], [1, 0], [1, 1], [0, 1]]);
+    solid.face([...corners].reverse(), picture, [[0, 1], [1, 1], [1, 0], [0, 0]]);
+}
+
+// A name board on a wall's face: `u0` to `u1` along it, `v0` to `v1` up it, in a timber frame
+function nameBoard(solid, face, [u0, u1, v0, v1], texture, name, frame) {
+    const { out } = face;
+    const at = (u, v, d = 0) => [face.origin[0] + face.across[0] * u + out[0] * d, face.origin[1] + v, face.origin[2] + face.across[2] * u + out[2] * d];
+
+    solid.member(at(u0 - 0.6, (v0 + v1) / 2), at(u1 + 0.6, (v0 + v1) / 2), out, v1 - v0 + 1.2, 0.45, material(frame));
+    solid.facing([at(u0, v0, 0.5), at(u1, v0, 0.5), at(u1, v1, 0.5), at(u0, v1, 0.5)], out, signMaterial(texture, name), [[0, 0], [1, 0], [1, 1], [0, 1]]);
+}
+
+// The front of a house's storey (as house.js lays it out), as a face
+const frontOf = (level) => ({ origin: [level.box[0], level.y, level.box[3]], across: [1, 0, 0], out: [0, 0, 1], length: level.box[1] - level.box[0] });
+
 /**
- * The tavern, "Wenches and Ale": stone below, a jettied, timber-framed floor above, its name on a
- * board along the front and a painted sign hanging by the door.
+ * A tavern (its layout piece says which: its name, the picture on its sign, how many storeys),
+ * built as a house of its town is (house.js), stone, brick or timber-framed, with a wide door in
+ * the middle of its front, its name on a board along the front (over the door, on one storey)
+ * and its sign hanging from a bracket by the door; a lantern, and barrels and a bench outside.
+ * The town's first, "Wenches and Ale", is stone below and a jettied timber-framed floor above,
+ * its sign a barmaid raising two tankards.
  */
-export async function tavern({ w, h }) {
+export async function tavern(piece) {
     await loadSignFont();
 
-    const solid = new Solid();
+    const { w, h } = piece;
+    const own = piece.tavern ?? { name: TAVERN_NAME, emblem: "tankard", count: 1, storeys: 2 };
+    const wenches = own.name === TAVERN_NAME;
+    const random = createRandom(seedOf(piece));
+    const style = wenches ? "timber" : random.pick(["timber", "timber", "stone", "brick"]);
+    const reveal = HOUSE_STYLES[style].reveal + 0.04;
     const [width, depth] = [w * 20, h * 20];
-    const [x0, x1, z0, z1] = [m(1), width - m(1), m(2), depth - m(1.8)];
-    const jetty = m(0.45);
-    const plaster = material("plaster");
-    const beam = material("timber");
+    const board = Math.min(m(5.6), width - m(3.2));
+    const plan = planHouse({
+        w,
+        h,
+        style,
+        storeys: own.storeys,
+        seed: seedOf(piece),
+        x: piece.x,
+        y: piece.y,
+        facing: piece.facing,
+        front: depth - m(ENTRY) + m(reveal),
+        entrance: { width: m(1.8), height: m(2.3) },
+        board,
+        ground: wenches ? "stone-warm" : null,
+        jettied: wenches ? true : null,
+        lofty: m(own.storeys < 2 ? 4 : 3.2),
+    });
+    const solid = buildHouse(plan);
+    const oak = plan.frame ?? "timber";
+    const ground = plan.levels[0];
+    const face = frontOf(ground);
+    const middle = face.length / 2;
+    const boardHeight = (board * 9) / 56;
 
-    // Ground floor of stone, upper floor jutting out over the street
-    solid.box(x0 - 0.8, 0, z0 - 0.8, x1 + 0.8, m(0.3), z1 + 0.8, material("stone-dark"));
-    solid.box(x0, m(0.3), z0, x1, m(3.2), z1, material("stone-warm"));
-    solid.box(x0 - jetty, m(3.2), z0, x1 + jetty, m(6.1), z1 + jetty, plaster);
-    solid.box(x0 - jetty - 0.5, m(3.05), z1, x1 + jetty + 0.5, m(3.35), z1 + jetty + 0.6, beam);
+    // The name: along the upper floor's front, or over the door
+    if (plan.levels.length > 1) {
+        const level = plan.levels[1];
+        const v0 = Math.min(level.height - boardHeight - m(0.35), m(1.05));
 
-    // Timber framing on the upper floor
-    for (let i = 0; i <= 6; i++) {
-        const x = x0 - jetty + ((x1 - x0 + 2 * jetty) * i) / 6;
+        nameBoard(solid, frontOf(level), [middle - board / 2, middle + board / 2, v0, v0 + boardHeight], nameBoardTexture({ name: own.name }), `board ${own.name}`, oak);
+    } else {
+        const small = Math.min(board, m(4.4));
+        const v0 = m(2.55);
 
-        solid.box(x - 0.8, m(3.3), z1 + jetty, x + 0.8, m(6.1), z1 + jetty + 0.7, beam);
+        nameBoard(solid, face, [middle - small / 2, middle + small / 2, v0, v0 + Math.min((small * 9) / 56, ground.height - v0 - m(0.2))], nameBoardTexture({ name: own.name }), `board ${own.name}`, oak);
     }
 
-    solid.box(x0 - jetty, m(5.9), z1 + jetty, x1 + jetty, m(6.1), z1 + jetty + 0.7, beam);
+    // The sign, hanging by the door out over the street, and a lantern on the other side (on one
+    // storey, past the ends of the name board)
+    const aside = plan.levels.length > 1 ? m(1.9) : Math.min(board, m(4.4)) / 2 + m(0.55);
+    const texture = wenches ? hangingSignTexture() : emblemSignTexture({ name: own.name, emblem: own.emblem, count: own.count, tint: seedOf(piece) % 6 });
 
-    // A steep clay roof, and two chimneys
-    const span = z1 + jetty - z0;
+    hangingSign(solid, face, middle + aside, Math.min(m(3.2), ground.height - m(0.1)), texture, `sign ${own.name}`, { width: 1, height: 1.2 });
 
-    solid.roof(x0 - jetty - m(0.5), z0 - m(0.5), x1 + jetty + m(0.5), z1 + jetty + m(0.5), m(6.1), span * 0.62, { ridge: "x", material: material("clay"), gable: plaster });
+    const lantern = [face.origin[0] + middle - aside + m(0.45), m(2.2), face.origin[2] + m(0.22)];
 
-    for (const x of [x0 + m(1.4), x1 - m(1.4)]) {
-        solid.box(x - m(0.45), m(6), (z0 + z1) / 2 - m(1.8), x + m(0.45), m(6.1) + span * 0.62 + m(1.2), (z0 + z1) / 2 - m(0.9), material("brick"));
-    }
+    solid.beam([lantern[0], lantern[1] + m(0.35), face.origin[2]], [lantern[0], lantern[1] + m(0.35), lantern[2]], m(0.04), m(0.04), material("iron"));
+    solid.box(lantern[0] - m(0.12), lantern[1] - m(0.18), lantern[2] - m(0.12), lantern[0] + m(0.12), lantern[1] + m(0.18), lantern[2] + m(0.12), material("glass-lit"));
+    solid.box(lantern[0] - m(0.15), lantern[1] + m(0.18), lantern[2] - m(0.15), lantern[0] + m(0.15), lantern[1] + m(0.26), lantern[2] + m(0.15), material("iron"));
 
-    // A wide double door, windows either side and above
-    const middle = (x0 + x1) / 2;
+    // Barrels at one side of the door, a bench at the other
+    const street = face.origin[2] + m(0.45);
 
-    door(solid, middle, z1, { width: 1.8, height: 2.3, floor: 0.3 });
-    solid.box(middle - 0.3, m(0.3), z1 + 1, middle + 0.3, m(2.6), z1 + 1.3, beam);
+    barrel(solid, face.origin[0] + middle + m(1.2), street);
+    barrel(solid, face.origin[0] + middle + m(1.2) + m(0.62), street + m(0.05));
+    solid.box(face.origin[0] + middle - m(2.9), m(0.42), face.origin[2] + m(0.15), face.origin[0] + middle - m(1.5), m(0.48), face.origin[2] + m(0.5), material("planks"));
 
-    for (const x of [x0 + m(1.4), x0 + m(3), x1 - m(3), x1 - m(1.4)]) {
-        window(solid, x, 1.2, z1, 1, 1.1, "timber");
-    }
-
-    // Upstairs, a window at each end (the name board between them)
-    for (const i of [0, 3]) {
-        window(solid, x0 + m(1.3) + ((x1 - x0 - m(2.6)) * i) / 3, 4, z1 + jetty + 0.7, 0.9, 1.1, "timber");
-    }
-
-    // The name, on a board along the front of the upper floor, between its windows
-    const front = z1 + jetty + 0.7;
-    const [boardLeft, boardRight, boardLow, boardHigh] = [middle - m(2.8), middle + m(2.8), m(3.6), m(4.5)];
-    const nameBoard = signMaterial(nameBoardTexture(), "name-board");
-
-    solid.box(boardLeft - 0.6, boardLow - 0.6, front, boardRight + 0.6, boardHigh + 0.6, front + 0.5, beam);
-    solid.face([[boardLeft, boardLow, front + 0.55], [boardRight, boardLow, front + 0.55], [boardRight, boardHigh, front + 0.55], [boardLeft, boardHigh, front + 0.55]], nameBoard, [[0, 0], [1, 0], [1, 1], [0, 1]]);
-
-    // The sign, hanging from an iron bracket by the door, out over the street: painted on both
-    // sides, for those coming either way
-    const signX = middle + m(1.9);
-    const [signNear, signFar, signLow, signHigh] = [z1 + m(0.42), z1 + m(1.18), m(1.95), m(2.85)];
-    const picture = signMaterial(hangingSignTexture(), "hanging-sign");
-    const iron = material("iron");
-
-    solid.box(signX - 0.3, m(3.45), z1, signX + 0.3, m(3.6), z1 + m(1.3), iron);
-    solid.box(signX - 0.15, m(2.9), z1 + m(1.2), signX + 0.15, m(3.45), z1 + m(1.25), iron);
-
-    for (const z of [signNear + m(0.08), signFar - m(0.08)]) {
-        solid.box(signX - 0.1, signHigh, z - 0.1, signX + 0.1, m(3.45), z + 0.1, iron);
-    }
-
-    solid.box(signX - 0.35, signLow - 0.4, signNear - 0.4, signX + 0.35, signHigh + 0.4, signFar + 0.4, beam);
-    solid.face([[signX + 0.4, signLow, signFar], [signX + 0.4, signLow, signNear], [signX + 0.4, signHigh, signNear], [signX + 0.4, signHigh, signFar]], picture, [[0, 0], [1, 0], [1, 1], [0, 1]]);
-    solid.face([[signX - 0.4, signLow, signNear], [signX - 0.4, signLow, signFar], [signX - 0.4, signHigh, signFar], [signX - 0.4, signHigh, signNear]], picture, [[0, 0], [1, 0], [1, 1], [0, 1]]);
-
-    // Barrels and a bench out front
-    barrel(solid, x0 + m(0.6), z1 + m(0.9));
-    barrel(solid, x0 + m(1.3), z1 + m(1.1));
-    solid.box(x1 - m(3.2), m(0.42), z1 + m(0.3), x1 - m(1.4), m(0.48), z1 + m(0.75), material("planks"));
-
-    for (const x of [x1 - m(3), x1 - m(1.6)]) {
-        solid.box(x - 0.4, 0, z1 + m(0.35), x + 0.4, m(0.42), z1 + m(0.7), beam);
+    for (const x of [middle - m(2.75), middle - m(1.65)]) {
+        solid.box(face.origin[0] + x - m(0.05), 0, face.origin[2] + m(0.2), face.origin[0] + x + m(0.05), m(0.42), face.origin[2] + m(0.45), material("timber"));
     }
 
     return solid.toObject();
 }
 
-/** The church: a stone nave, buttressed, with tall windows, and a tower with a spire at the front. */
-export function church({ w, h }) {
+/**
+ * The adventurers' guild: a big hall of stone, brick or timber, two storeys, its wide door in the
+ * middle of its front under its name on a board, its crest (a shield over crossed swords) hanging
+ * by the door, banners either side, and a board of notices outside.
+ */
+export async function guild(piece) {
+    await loadSignFont();
+
+    const { w, h } = piece;
+    const random = createRandom(seedOf(piece));
+    const style = random.pick(["stone", "timber", "brick"]);
+    const reveal = HOUSE_STYLES[style].reveal + 0.04;
+    const [width, depth] = [w * 20, h * 20];
+    const board = Math.min(m(7), width - m(4));
+    const plan = planHouse({
+        w,
+        h,
+        style,
+        storeys: 2,
+        seed: seedOf(piece),
+        x: piece.x,
+        y: piece.y,
+        facing: piece.facing,
+        front: depth - m(ENTRY) + m(reveal),
+        entrance: { width: m(2.2), height: m(2.6) },
+        board,
+        jettied: false,
+    });
+    const solid = buildHouse(plan);
+    const ground = plan.levels[0];
+    const face = frontOf(ground);
+    const middle = face.length / 2;
+    const level = plan.levels[1];
+    const boardHeight = (board * 9) / 56;
+    const v0 = Math.min(level.height - boardHeight - m(0.3), m(0.9));
+
+    nameBoard(solid, frontOf(level), [middle - board / 2, middle + board / 2, v0, v0 + boardHeight], nameBoardTexture({ name: "Adventurers' Guild", ground: "#1f3552", dark: "#0e1a2a" }), "board guild", plan.frame ?? "timber");
+    hangingSign(solid, face, middle + m(2.2), m(3.1), emblemSignTexture({ name: "Adventurers' Guild", emblem: "shield", tint: 2 }), "sign guild");
+
+    // Banners in the guild's blue and gold, hanging from poles either side of the door
+    for (const side of [-1, 1]) {
+        const u = middle + side * m(1.9);
+        const at = (d, v) => [face.origin[0] + u + d, v, face.origin[2] + m(0.25)];
+
+        solid.beam([face.origin[0] + u - m(0.45), m(3.6), face.origin[2]], [face.origin[0] + u - m(0.45), m(3.6), face.origin[2] + m(0.3)], m(0.05), m(0.05), material("iron"));
+        solid.beam(at(-m(0.45), m(3.6)), at(m(0.45), m(3.6)), m(0.06), m(0.06), material("timber"));
+
+        const cloth = [at(-m(0.4), m(3.55)), at(m(0.4), m(3.55)), at(m(0.4), m(1.9)), at(0, m(1.65)), at(-m(0.4), m(1.9))];
+
+        solid.facing(cloth, [0, 0, 1], material("paint-blue"));
+        solid.facing(cloth, [0, 0, -1], material("paint-blue"));
+        solid.facing([at(-m(0.1), m(3.1)), at(m(0.1), m(3.1)), at(m(0.1), m(2.3)), at(-m(0.1), m(2.3))].map(([x, y, z]) => [x, y, z + 0.1]), [0, 0, 1], material("gold"));
+    }
+
+    // A board of notices on two posts beside the door, papers pinned to it
+    const nx = face.origin[0] + middle - m(4.1);
+    const nz = face.origin[2] + m(0.9);
+
+    for (const dx of [-m(0.7), m(0.7)]) {
+        solid.beam([nx + dx, 0, nz], [nx + dx, m(2), nz], m(0.1), m(0.1), material("timber"), { up: [0, 0, 1] });
+    }
+
+    solid.box(nx - m(0.8), m(1), nz - m(0.03), nx + m(0.8), m(1.9), nz + m(0.03), material("planks"));
+    solid.box(nx - m(0.9), m(1.9), nz - m(0.12), nx + m(0.9), m(1.98), nz + m(0.12), material("shingles"));
+
+    for (let k = 0; k < 6; k++) {
+        const [px, py] = [nx - m(0.6) + (k % 3) * m(0.55) + random.range(-1, 1), m(1.12) + Math.floor(k / 3) * m(0.38) + random.range(-0.5, 0.5)];
+
+        solid.face([[px, py, nz + m(0.04)], [px + m(0.3), py, nz + m(0.04)], [px + m(0.3), py + m(0.3), nz + m(0.04)], [px, py + m(0.3), nz + m(0.04)]], material("paint-cream"));
+    }
+
+    return solid.toObject();
+}
+
+// Each of the Six's emblem (emblems.js), for their churches' signs
+const GOD_EMBLEMS = Object.freeze({ aurelia: "sun", brannoc: "stag", ithriel: "star", morvaine: "lantern", seliane: "rose", dunmar: "anvil" });
+
+/**
+ * The church: a stone nave, buttressed, with tall windows, and a tower with a spire at the front,
+ * the Six's sun of six rays on its top; its patron's (core/lore/gods.js) sign by the door.
+ */
+export async function church(piece) {
+    await loadSignFont();
+
+    const { w, h } = piece;
+    const patron = GODS[piece.patron] ?? GODS.aurelia;
     const solid = new Solid();
     const [width, depth] = [w * 20, h * 20];
     const stone = material("stone");
@@ -189,11 +312,23 @@ export function church({ w, h }) {
 
     solid.pyramid(tx0 - m(0.2), tz0 - m(0.2), tx1 + m(0.2), tz1 + m(0.2), top, m(7.5), material("slate-grey"));
 
-    // A gold cross on the spire
+    // The Six's gilded sun on the spire: six rays round a disc, on a rod
     const apex = top + m(7.5);
+    const [sx, sy, sz] = [width / 2, apex + m(0.95), (tz0 + tz1) / 2];
+    const gilt = material("gold");
 
-    solid.box(width / 2 - 0.3, apex - 1, (tz0 + tz1) / 2 - 0.3, width / 2 + 0.3, apex + m(1.1), (tz0 + tz1) / 2 + 0.3, material("gold"));
-    solid.box(width / 2 - m(0.35), apex + m(0.55), (tz0 + tz1) / 2 - 0.3, width / 2 + m(0.35), apex + m(0.7), (tz0 + tz1) / 2 + 0.3, material("gold"));
+    solid.beam([sx, apex - 1, sz], [sx, sy, sz], m(0.08), m(0.08), gilt);
+
+    for (let k = 0; k < 6; k++) {
+        const angle = (k / 6) * Math.PI * 2 + Math.PI / 2;
+
+        solid.beam([sx, sy, sz], [sx + Math.cos(angle) * m(0.6), sy + Math.sin(angle) * m(0.6), sz], m(0.07), m(0.05), gilt);
+    }
+
+    const disc = Array.from({ length: 12 }, (_, k) => [sx + Math.cos((k / 12) * Math.PI * 2) * m(0.26), sy + Math.sin((k / 12) * Math.PI * 2) * m(0.26), sz + m(0.04)]);
+
+    solid.face(disc, gilt);
+    solid.face([...disc].reverse().map(([x, y, z]) => [x, y, z - m(0.08)]), gilt);
 
     // The door under a pointed arch, a round window over it, and steps up to it
     const middle = width / 2;
@@ -214,11 +349,22 @@ export function church({ w, h }) {
     solid.box(middle - m(1.3), 0, tz1, middle + m(1.3), m(0.3), tz1 + m(1.1), material("stone-warm"));
     solid.box(middle - m(1.3), m(0.3), tz1, middle + m(1.3), m(0.6), tz1 + m(0.6), material("stone-warm"));
 
+    // The patron's sign by the door
+    const front = { origin: [0, 0, tz1 + 0.4], across: [1, 0, 0], out: [0, 0, 1], length: width };
+
+    hangingSign(solid, front, middle + m(1.9), m(3.3), emblemSignTexture({ name: `${patron.name} ${patron.title}`, emblem: GOD_EMBLEMS[piece.patron] ?? "sun", tint: 2 + Object.keys(GODS).indexOf(piece.patron) }), `sign ${patron.name}`);
+
     return solid.toObject();
 }
 
-/** The smithy: a stone workshop, and beside it an open shed over the forge, anvil and trough. */
-export function blacksmith({ w, h }) {
+/**
+ * The smithy: a stone workshop, its sign (an anvil and hammer) hanging by the door, and beside
+ * it an open shed over the forge, anvil and trough.
+ */
+export async function blacksmith(piece) {
+    await loadSignFont();
+
+    const { w, h } = piece;
     const solid = new Solid();
     const [, depth] = [w * 20, h * 20];
     const [x0, x1, z0, z1] = [m(1), m(6.8), m(2), depth - m(2.2)];
@@ -231,6 +377,7 @@ export function blacksmith({ w, h }) {
     solid.roof(x0 - m(0.4), z0 - m(0.4), x1 + m(0.4), z1 + m(0.4), m(3.4), (z1 - z0) * 0.5, { ridge: "x", material: material("slate-grey"), gable: stone });
     door(solid, x0 + m(3.8), z1, { width: 1.3, height: 2.1, floor: 0.3 });
     window(solid, x0 + m(1.6), 1.2, z1, 1, 1, "timber");
+    hangingSign(solid, { origin: [x0, 0, z1], across: [1, 0, 0], out: [0, 0, 1], length: x1 - x0 }, m(5), m(3), emblemSignTexture({ name: "Blacksmith", emblem: "anvil", tint: seedOf(piece) % 6 }), "sign blacksmith");
 
     // The open shed: a lean-to roof on posts, against the workshop's east wall
     const [sx1, sz0, sz1] = [m(11.3), z0 + m(0.4), z1 + m(0.6)];
@@ -372,9 +519,9 @@ export function windmill({ w, h }) {
 }
 
 /** Every special building, by name (setpieces/pieces.js LANDMARKS). */
-export const LANDMARK_BUILDERS = Object.freeze({ tavern, church, blacksmith, market, windmill });
+export const LANDMARK_BUILDERS = Object.freeze({ tavern, church, blacksmith, guild, market, windmill });
 
-/** A town's special building, filling its footprint. */
-export function landmark({ name, w, h }) {
-    return LANDMARK_BUILDERS[name]({ w, h });
+/** A town's special building (its layout piece), filling its footprint. */
+export function landmark(piece) {
+    return LANDMARK_BUILDERS[piece.name](piece);
 }
