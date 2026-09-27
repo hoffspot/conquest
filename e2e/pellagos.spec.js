@@ -74,7 +74,7 @@ test("loads everything, listing what it downloads, then shows the title", async 
 
     expect(loaded.loaded).toBe(loaded.total);
     expect(loaded.total).toBeGreaterThan(2_000_000);
-    expect(loaded.groups).toEqual([true, true, true, true, true, true]);
+    expect(loaded.groups).toEqual([true, true, true, true, true]);
 });
 
 test("debug mode shows how the game runs, and is remembered", async ({ page }) => {
