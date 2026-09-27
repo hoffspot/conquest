@@ -2,21 +2,26 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { findPath } from "../client/js/core/pathfinding.js";
 import { GROUND } from "../client/js/core/setpieces/pieces.js";
-import { BORDER_PLOTS, generateWorld, PLOT, SEE_OVER, TOWN_PLOTS } from "../client/js/core/world.js";
+import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
+import { generateWorld, PLOT, SEE_OVER } from "../client/js/core/world.js";
 
 describe("the world (world.js)", () => {
     const world = generateWorld({ seed: 7 });
 
     it("is a town in fields, on 1-metre squares", () => {
-        assert.equal(world.width, (TOWN_PLOTS[0] + 2 * BORDER_PLOTS) * PLOT);
-        assert.equal(world.height, (TOWN_PLOTS[1] + 2 * BORDER_PLOTS) * PLOT);
+        const { radius, fields } = SETTLEMENT_KINDS.town;
+
+        assert.equal(world.width, 2 * Math.round(radius + fields));
+        assert.equal(world.height, world.width);
         assert.equal(world.blocked.length, world.height);
         assert.equal(world.blocked[0].length, world.width);
+        assert.equal(world.origin, 0);
 
-        // Houses are 8 to 16 metres across: the right size for people 1.7 metres tall
-        for (const piece of world.town.pieces.filter(({ key }) => key.startsWith("house"))) {
-            assert.ok(piece.w * PLOT >= 8 && piece.w * PLOT <= 16, piece.key);
-            assert.ok(piece.h * PLOT >= 8 && piece.h * PLOT <= 16, piece.key);
+        // Houses are 4.5 to 12 metres across (the smallest behind the others): the right size for
+        // people 1.7 metres tall
+        for (const piece of world.town.pieces.filter(({ kind }) => kind === "house")) {
+            assert.ok(piece.w * PLOT >= 4.5 && piece.w * PLOT <= 12, piece.key);
+            assert.ok(piece.h * PLOT >= 4.5 && piece.h * PLOT <= 12, piece.key);
         }
 
         // Streets are wide enough for people to pass
@@ -25,13 +30,12 @@ describe("the world (world.js)", () => {
         assert.ok(roads > 500, `${roads} square metres of road`);
     });
 
-    it("starts the player in the market square and the orc in the north-west corner", () => {
-        const { square } = world.town;
+    it("starts the player in the market place and the orc in the north-west corner", () => {
         const [x, y] = world.spawns.player;
-        const toPlots = (value) => (value - world.origin) / PLOT;
+        const [cx, cy] = world.town.centre;
 
-        assert.ok(toPlots(x) >= square.x - 1 && toPlots(x) <= square.x + square.w + 1, `player at x ${x}`);
-        assert.ok(toPlots(y) >= square.y - 1 && toPlots(y) <= square.y + square.h + 1, `player at y ${y}`);
+        assert.ok(Math.hypot(x + 0.5 - cx, y + 0.5 - cy) < SETTLEMENT_KINDS.town.market[0], `player at ${x}, ${y}`);
+        assert.equal(world.ground[y][x], GROUND.cobbles);
         assert.equal(world.blocked[y][x], 0);
 
         const [ox, oy] = world.spawns.orc;
@@ -74,20 +78,27 @@ describe("the world (world.js)", () => {
         }
     });
 
-    it("blocks only the middle of props' and trees' plots, where they stand, so people can walk round them", () => {
+    it("blocks only the middle of props' plots, and the four squares round a tree's trunk, so people can walk round them", () => {
         let checked = 0;
 
         for (const seed of [1, 2, 3]) {
             const world = generateWorld({ seed });
 
-            for (const piece of world.town.pieces.filter(({ key }) => /^(prop|tree)-/.test(key))) {
-                const [x0, y0] = [world.origin + piece.x * PLOT, world.origin + piece.y * PLOT];
-                const [w, h] = [piece.w * PLOT, piece.h * PLOT];
+            for (const piece of world.town.pieces.filter(({ kind }) => kind === "prop")) {
+                // The middle is blocked; a little way beyond the middle half of its plots is free
+                // (or something else's)
+                const reach = (piece.w * PLOT) / 4 + 1.5;
 
-                // The middle is blocked; the squares along the plot's edge are free
-                assert.equal(world.blocked[y0 + h / 2][x0 + w / 2], 1, piece.key);
-                assert.equal(world.blocked[y0][x0], 0, piece.key);
-                assert.equal(world.blocked[y0 + h - 1][x0 + w - 1], 0, piece.key);
+                assert.equal(world.blocked[Math.floor(piece.y)][Math.floor(piece.x)], 1, piece.key);
+                assert.ok([[reach, 0], [-reach, 0], [0, reach], [0, -reach]].some(([dx, dy]) => !world.blocked[Math.floor(piece.y + dy)][Math.floor(piece.x + dx)]), piece.key);
+                checked++;
+            }
+
+            for (const piece of world.town.pieces.filter(({ kind }) => kind === "tree")) {
+                for (const [x, y] of [[piece.x - 1, piece.y - 1], [piece.x, piece.y - 1], [piece.x - 1, piece.y], [piece.x, piece.y]]) {
+                    assert.equal(world.blocked[y][x], 1, piece.key);
+                }
+
                 checked++;
             }
         }
@@ -109,7 +120,8 @@ describe("the world (world.js)", () => {
             }
 
             for (const piece of world.town.pieces) {
-                const [x, y] = [world.origin + piece.x * PLOT + (piece.w * PLOT) / 2, world.origin + piece.y * PLOT + (piece.h * PLOT) / 2];
+                // (A tree's trunk is where four squares meet: the one to its north-west)
+                const [x, y] = piece.kind === "tree" ? [piece.x - 1, piece.y - 1] : [Math.floor(piece.x), Math.floor(piece.y)];
                 const low = SEE_OVER.test(piece.key);
 
                 if (world.blocked[y][x]) {

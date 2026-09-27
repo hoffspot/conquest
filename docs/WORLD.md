@@ -265,11 +265,12 @@ Water can't be walked into, but can be seen over. A chunk takes about 3 to 5 ms 
 
 ## Next
 
-This is step 2 of the world's first phase. Step 1 was the plan; step 2 the chunks. The next
-steps:
+This is step 3 of the world's first phase. Step 1 was the plan, step 2 the chunks; step 3 the
+town builder (`core/setpieces/town.js`: see GAME.md, *Towns*), which lays out the start town, and
+can lay out a village, a town or a city (`town-map.html`). The next steps:
 
-- **Places in chunks:** the settlements (the town builder, at each kind's size) and roads built
-  in them.
+- **Places in chunks:** every settlement laid out by the town builder at its kind's size and set
+  into the chunks it's in, as the start town is, and the roads built to them.
 - **Camps and patrols in play:** enemies of each camp's tier, patrols that roam their range, and
   camps that can be destroyed.
 - **The lands drawn:** ground, trees and plants for each biome (two forests for the elves and dark
@@ -317,3 +318,6 @@ quickly.
 - choosing another people moves the start;
 - another seed lays out another world;
 - zooming works.
+
+`e2e/town-map.spec.js` opens the town map in a browser: it draws a town for a seed (with its
+tavern and houses), a city bigger with more houses, and another seed another town.

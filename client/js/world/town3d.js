@@ -1,11 +1,12 @@
-// The town in 3D: every piece of the town's plan (houses, the tavern, church and blacksmith, props,
-// trees) built by the art kits (art/kits), with the trees in the fields round it, merged into as
-// few meshes as possible (the trees a tile of the map at a time, so those out of view aren't
-// drawn: trees.js). The world round it is drawn a chunk at a time (chunks3d.js).
+// The town in 3D: every piece of the town's layout (houses, the tavern, church and blacksmith,
+// props, trees: core/setpieces/town.js) built by the art kits (art/kits), each turned about its
+// middle to face its street, with the trees in the fields round it, merged into as few meshes as
+// possible (the trees a tile of the map at a time, so those out of view aren't drawn: trees.js).
+// The world round it is drawn a chunk at a time (chunks3d.js).
 //
-// The kits build in the art's world pixels (a plan square is 20, x east, y up and z south), and
-// the world is in metres, so the town is scaled by PIXEL: a plan square is PLOT (4) metres, a door
-// 2 metres tall. Everything that doesn't move is merged by material, so the whole town draws in a
+// The kits build facing south, in the art's world pixels (a plot is 20, x east, y up and z south),
+// and the world is in metres, so the town is scaled by PIXEL: a plot is PLOT (4) metres, a door 2
+// metres tall. Everything that doesn't move is merged by material, so the whole town draws in a
 // few dozen draw calls, however many houses it has.
 //
 // The camera looks north over the town, so a house can stand between it and the player. The
@@ -16,6 +17,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { createRandom } from "../core/random.js";
 import { pieceCatalog } from "../core/setpieces/pieces.js";
+import { footprint } from "../core/setpieces/town.js";
 import { PLOT } from "../core/world.js";
 import { gatehouse, keep, tower, wall } from "./art/kits/castle.js";
 import { house } from "./art/kits/house.js";
@@ -36,6 +38,9 @@ const catalog = new Map(pieceCatalog().map((piece) => [piece.key, piece]));
  * pixels, from the bottom left) and depth (0 near to 1 far), and its radius in pixels (0: none).
  */
 export const CUTAWAY = Object.freeze({ centre: { value: new THREE.Vector3() }, radius: { value: 0 } });
+
+// How far a building's roof reaches past its footprint (metres: the eaves)
+const EAVES = 0.4;
 
 // What the camera pulls in closer than, rather than looking through (view.js): what's built,
 // not the props (carts, wells, stalls) or the trees
@@ -87,31 +92,27 @@ export async function buildTown(world, { onProgress = () => {} } = {}) {
     const plant = (x, z, variant, size) => planted.push({ x, z, variant, size: size * random.range(0.9, 1.1), turn: random.next() * Math.PI * 2 });
 
     for (const piece of world.town.pieces) {
-        const spec = catalog.get(piece.key);
+        // (A layout's piece says what it is; the art catalogue's pieces are its sizes)
+        const spec = piece.kind ? piece : catalog.get(piece.key);
 
+        // A tree stands on its trunk's point, where four squares meet
         if (spec.kind === "tree") {
-            plant(ox + (piece.x + 0.5) * PLOT, oz + (piece.y + 0.5) * PLOT, spec.variant, 0.9);
+            plant(ox + piece.x, oz + piece.y, spec.variant, 0.9);
             onProgress(++done, total);
             continue;
         }
 
+        // Everything else is built facing south, and turned to face its street (or the market)
+        // about its middle
         const built = await BUILDERS[spec.kind](spec);
-        let object = built;
+        const object = new THREE.Group();
 
-        // The tavern turns to face the square (or a street: world.js), about its middle
-        if (spec.kind === "landmark" && spec.name === "tavern" && world.tavern) {
-            const [halfW, halfH] = [piece.w * 10, piece.h * 10];
-
-            object = new THREE.Group();
-            built.position.set(-halfW, 0, -halfH);
-            object.add(built);
-            object.rotation.y = world.tavern.facing;
-            object.position.set(ox / PIXEL + piece.x * 20 + halfW, 0, oz / PIXEL + piece.y * 20 + halfH);
-        } else {
-            object.position.set(ox / PIXEL + piece.x * 20, 0, oz / PIXEL + piece.y * 20);
-        }
-
+        built.position.set(-piece.w * 10, 0, -piece.h * 10);
+        object.add(built);
+        object.rotation.y = piece.facing;
+        object.position.set((ox + piece.x) / PIXEL, 0, (oz + piece.y) / PIXEL);
         object.userData.built = BUILT.has(spec.kind);
+        object.userData.piece = piece;
         art.add(object);
         onProgress(++done, total);
         await breathe();
@@ -142,8 +143,23 @@ export async function buildTown(world, { onProgress = () => {} } = {}) {
         }
     };
 
+    // (A building's height over the squares under it and its eaves, as it's turned: not its
+    // turned box's, which would be wider)
     for (const object of art.children) {
-        stand(new THREE.Box3().setFromObject(object), object.userData.built);
+        const top = new THREE.Box3().setFromObject(object).max.y;
+        const corners = footprint(object.userData.piece, EAVES).map(([x, y]) => [ox + x, oz + y]);
+        const xs = corners.map(([x]) => x);
+        const zs = corners.map(([, z]) => z);
+
+        for (const map of object.userData.built ? [heights, buildings] : [heights]) {
+            for (let z = Math.max(map.z0, Math.floor(Math.min(...zs))); z < Math.min(map.z0 + map.height, Math.ceil(Math.max(...zs))); z++) {
+                for (let x = Math.max(map.x0, Math.floor(Math.min(...xs))); x < Math.min(map.x0 + map.width, Math.ceil(Math.max(...xs))); x++) {
+                    if (within(corners, x + 0.5, z + 0.5)) {
+                        map.rows[z - map.z0][x - map.x0] = Math.max(map.rows[z - map.z0][x - map.x0], top);
+                    }
+                }
+            }
+        }
     }
 
     trees.boxes.forEach((box) => stand(box, false));
@@ -159,6 +175,21 @@ export async function buildTown(world, { onProgress = () => {} } = {}) {
     object.add(trees.object);
 
     return { object, heights, buildings };
+}
+
+// Is a point inside a polygon ([[x, z]...])?
+function within(corners, px, pz) {
+    let inside = false;
+
+    for (let k = 0, last = corners.length - 1; k < corners.length; last = k++) {
+        const [[ax, az], [bx, bz]] = [corners[k], corners[last]];
+
+        if (az > pz !== bz > pz && px < ((bx - ax) * (pz - az)) / (bz - az) + ax) {
+            inside = !inside;
+        }
+    }
+
+    return inside;
 }
 
 // Cut a hole round the player through the parts of a material nearer the camera than they are,

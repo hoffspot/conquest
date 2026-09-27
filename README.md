@@ -12,7 +12,10 @@ dressing characters and watching them walk and fight, is at
 <https://hoffspot.github.io/conquest/character-lab.html>. The world map, showing the whole world
 (8 kilometres square: six peoples, their cities, towns and villages, the
 roads between them, and the ruins, caves and enemy camps in the wild), is at
-<https://hoffspot.github.io/conquest/world-map.html>.
+<https://hoffspot.github.io/conquest/world-map.html>. The town map, laying out a village, town or
+city from a seed as the game's towns are laid out (streets wandering out from a market place,
+lanes curving round between them, and houses turned every way to face them), is at
+<https://hoffspot.github.io/conquest/town-map.html>.
 
 [docs/GAME.md](docs/GAME.md) describes how the game works: the world, the fighting, the drawing,
 the screens and debug mode. [docs/CHARACTERS.md](docs/CHARACTERS.md) describes the character
@@ -313,6 +316,7 @@ client/                 The game (static files served to the browser)
   images/icons/         The app's icons
   character-lab.html    The character lab (with character-lab.css)
   world-map.html        The world map (with world-map.css)
+  town-map.html         The town map (with world-map.css)
   vendor/three-r186/    Three.js (minified by scripts/vendor-three.js; loaded through an import map)
   js/main.js            The screens, from loading to playing (no Three.js: it loads first)
   js/app/               The game on the page
@@ -346,7 +350,8 @@ client/                 The game (static files served to the browser)
     pathfinding.js      A* paths on the squares (in a window round the way, on a big map)
     variety.js          Choosing one of a few ways of doing something, never the last one again
     random.js           Seeded random numbers
-    setpieces/          Town (and castle) layouts, and the pieces they're made from
+    setpieces/          Town (and castle) layouts, and the pieces they're made from: town.js lays
+                        out villages, towns and cities, exact.js does their sums the same everywhere
     worldplan/          The world plan (see docs/WORLD.md): plan.js lays it out from a seed;
                         terrain.js the land, climate, rivers and territories; settle.js the
                         settlements, roads, sites and camps; races.js the peoples, lands and foes
@@ -385,6 +390,7 @@ client/                 The game (static files served to the browser)
     presets.js          The human, heroine and orc
   js/lab/character-lab.js  The character lab
   js/lab/world-map.js   The world map
+  js/lab/town-map.js    The town map
 server/                 A static file server for playing locally (npm start)
 test/                   Unit tests
 e2e/                    Playwright browser tests

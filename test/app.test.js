@@ -238,11 +238,13 @@ describe("the minimap (minimap.js)", () => {
 
         assert.ok(buildings.length >= 10);
 
-        for (const { x, y, w, h } of buildings) {
-            const middle = colourAt(x + Math.floor(w / 2), y + Math.floor(h / 2));
+        for (const { corners, ridge } of buildings) {
+            // (Its middle: halfway along its ridge)
+            const [x, y] = [Math.floor((ridge[0][0] + ridge[1][0]) / 2), Math.floor((ridge[0][1] + ridge[1][1]) / 2)];
 
-            assert.ok(!greenest(middle));
-            assert.ok(world.blocked[y + Math.floor(h / 2)][x + Math.floor(w / 2)], "buildings block their squares");
+            assert.equal(corners.length, 4);
+            assert.ok(!greenest(colourAt(x, y)));
+            assert.ok(world.blocked[y][x], "buildings block their squares");
         }
 
         // Trees, where their trunks stand, are dark green
@@ -261,8 +263,12 @@ describe("the minimap (minimap.js)", () => {
         const placed = buildWorld({ seed: 4 });
         const [dx, dy] = placed.stamp.at;
         const shift = (things) => things.map((thing) => ({ ...thing, x: thing.x + dx, y: thing.y + dy }));
+        const moved = ([x, y]) => [x + dx, y + dy];
 
-        assert.deepEqual(buildingsOf(placed), shift(buildingsOf(placed.home)));
+        assert.deepEqual(
+            buildingsOf(placed).map(({ corners }) => corners),
+            buildingsOf(placed.home).map(({ corners }) => corners.map(moved)),
+        );
         assert.deepEqual(treesOf(placed), shift(treesOf(placed.home)));
     });
 

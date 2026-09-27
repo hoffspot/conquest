@@ -9,7 +9,7 @@ import { FACING, linkAt, MAP_ORIGINS, readPlan, routeBetween, tavernFloors, tave
 import { findPath } from "../client/js/core/pathfinding.js";
 import { cutFor, cutsAway, doorways } from "../client/js/world/interiors3d.js";
 import { BECKON, REST_EVERY, ROLES } from "../client/js/core/roles.js";
-import { generateWorld } from "../client/js/core/world.js";
+import { generateWorld, nearestFree } from "../client/js/core/world.js";
 
 function run(battle, ms) {
     const events = [];
@@ -94,13 +94,18 @@ describe("inside buildings (interiors.js)", () => {
 });
 
 describe("the tavern's door (world.js)", () => {
-    it("faces the market square or a street in every town, with its door walked up to from the square", () => {
+    it("faces the market place (whichever way that is) in every town, with its door walked up to from it", () => {
         for (let seed = 1; seed <= 40; seed++) {
             const world = generateWorld({ seed });
             const { tavern } = world;
 
             assert.ok(tavern, `seed ${seed}`);
-            assert.ok(["s", "e", "n", "w"].includes(tavern.side));
+
+            // Its front towards the market's middle
+            const [cx, cy] = world.town.centre;
+            const middle = [tavern.x + tavern.size / 2, tavern.y + tavern.size / 2];
+
+            assert.ok(Math.sin(tavern.facing) * (cx - middle[0]) + Math.cos(tavern.facing) * (cy - middle[1]) > 0, `seed ${seed}: facing the market`);
 
             for (const [x, y] of [...tavern.front, tavern.outside]) {
                 assert.equal(world.blocked[y][x], 0, `seed ${seed}: ${x}, ${y} is clear`);
@@ -205,8 +210,8 @@ describe("going in and out (battle.js)", () => {
 
     it("has an orc chasing the player follow them in through the door, and up the stairs, then find its way back to its patrol", () => {
         const { world, battle, player } = tavern();
-        const out = { s: [0, 1], n: [0, -1], e: [1, 0], w: [-1, 0] }[world.tavern.side];
-        const [ox, oy] = [world.tavern.outside[0] + out[0] * 4, world.tavern.outside[1] + out[1] * 4];
+        const out = [Math.sin(world.tavern.facing), Math.cos(world.tavern.facing)];
+        const [ox, oy] = nearestFree(world.blocked, [Math.round(world.tavern.outside[0] + out[0] * 4), Math.round(world.tavern.outside[1] + out[1] * 4)]);
 
         // The orc, a few steps behind the player, sees them go in
         battle.add({ id: "orc", kind: "orc", weapon: "cleaver", team: "orcs", square: [ox, oy], ai: "patrol", patrol: world.patrol });
@@ -283,11 +288,11 @@ describe("going in and out (battle.js)", () => {
 
     it("has an arrow that's still flying when its target goes through a door miss", () => {
         const { battle, player, world } = tavern();
-        const out = { s: [0, 1], n: [0, -1], e: [1, 0], w: [-1, 0] }[world.tavern.side];
+        const out = [Math.sin(world.tavern.facing), Math.cos(world.tavern.facing)];
         const [front] = world.tavern.front;
 
         Object.assign(player, { square: [...front], x: front[0] + 0.5, y: front[1] + 0.5 });
-        battle.add({ id: "archer", kind: "orc", weapon: "bow", team: "orcs", square: [front[0] + out[0] * 7, front[1] + out[1] * 7] });
+        battle.add({ id: "archer", kind: "orc", weapon: "bow", team: "orcs", square: nearestFree(world.blocked, [Math.round(front[0] + out[0] * 7), Math.round(front[1] + out[1] * 7)]) });
         battle.command("archer", { type: "engage", target: "player" });
 
         for (let k = 0; k < 100 && !battle.projectiles.length; k++) {
