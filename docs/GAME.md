@@ -392,16 +392,19 @@ lit by red-shaded sconces. Everything that doesn't move is merged by material (a
 calls in all with the characters); the spit and the flames apart.
 
 The flames are crossed quads with a shader of rising noise, drawn additively and flickering,
-and embers rise from the hearth. The whole room is shown, like a doll's house with its near
-walls taken down: on the camera's side of the player (`INTERIOR_CUT`: the player's position and
-the direction to the camera, set each frame), the walls (and what's on them: posts, beams,
-lintels, doorway curtains, windows, sconces, the chimney breast and the door) are cut away down
-to their stone footing (0.36 metres), and anything else above head height (1.7 metres: bed
-canopies, the shelves over the barrels), so nothing stands between the camera and the player,
-whichever way it looks, and everything beyond them stands full height. Every interior material
-is drawn on both sides, and where a cut shows the inside of something (a wall's end, a post),
-it's dark wood (`cap`), as if solid. Wherever a wall has a gap of one or two squares, it's a
-doorway, with a lintel and its curtains tied back at either side (`doorways`).
+and embers rise from the hearth. The room is open above, and what stands in front of the player
+is taken down, so they're always in view whichever way the camera looks: a strip 5 metres wide
+from them to the camera (`INTERIOR_CUT`: the player's position, the direction to the camera and
+the floor's bounds, set each frame by `cutFor`). In it, the walls (and what's on them: posts,
+beams, lintels, doorway curtains, windows, sconces, the chimney breast and the door) come down to
+their stone footing (built apart, and never cut), a whole square's length at a time, as each
+square's middle is in the strip or not (the walls round the edge counting as the square inside
+them), so a wall is never sliced along its length; and anything else, above head height (1.7
+metres: bed canopies, the shelves over the barrels). Every other wall stands full height, so the
+rooms keep their shape. Every interior material is drawn on both sides, and where a cut shows
+the inside of something (a wall's end, a post), it's dark wood (`cap`), as if solid. `cutsAway`
+does the same sums as the shaders, for tests. Wherever a wall has a gap of one or two squares,
+it's a doorway, with a lintel and its curtains tied back at either side (`doorways`).
 
 ### The town (world/town3d.js, world/art)
 
@@ -830,7 +833,11 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   following through the door and up the stairs and finding its way back, the player going after
   a target that goes through, respawning on the map started on, arrows fizzling; and the doors
   and stairs to tap: a target at each end, hit by a tap on it on its map only, glowing when
-  tapped and while the player makes for it.
+  tapped and while the player makes for it; arriving a couple of steps clear of a door or the
+  stairs, facing it; and seeing the player indoors: the walls in the strip in front of them down
+  (a whole square at a time, the outer walls as the square inside them), those to the side,
+  behind or level with them standing, anything else cut only above head height, and the
+  doorways found in the walls.
 - `test/characters.test.js` (with CHARACTERS.md's): the tavern's folk's bodies and clothes,
   skirts, gowns and aprons (hanging from the waist, flaring to the hem, skinned to the thighs and
   shins), sitting on a bench (thighs level, shins upright), and raising a tankard in a toast.

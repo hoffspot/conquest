@@ -5,11 +5,12 @@
 // bedrooms behind curtained doorways, each with a canopied bed, a washstand and a chest.
 //
 // Built with the art kits' Solid (five art pixels to a metre) and their materials, each map in
-// its own group at its place in the world (MAP_ORIGINS). There are no ceilings, and on the
-// camera's side of the player (INTERIOR_CUT, set each frame by the game) the walls are cut away
-// down to their stone footing, and anything else above head height, like a doll's house with its
-// near walls taken down, so the player is always in view whichever way the camera looks; where a
-// cut shows the inside of a wall or a post, it's dark wood, as if solid.
+// its own group at its place in the world (MAP_ORIGINS). There are no ceilings, and what stands
+// in front of the player (INTERIOR_CUT, set each frame by the game: a strip from them towards the
+// camera) is cut away: walls down to their stone footing, a whole square's length at a time, and
+// anything else above head height, so the player is always in view whichever way the camera
+// looks, and every other wall stands full height; where a cut shows the inside of something, it's
+// dark wood, as if solid.
 
 import * as THREE from "three";
 import { material as artMaterial } from "./art/engine/materials.js";
@@ -21,23 +22,53 @@ export const STOREY = 3;
 
 /**
  * Where the player is and which way the camera looks from them (along the ground), shared by
- * every interior material: what's more than `margin` metres nearer the camera than the player is
- * cut away above `wall` metres (walls: just above their footing) or `height` (everything else);
- * where the inside of something cut shows, it's `cap`.
+ * every interior material: what's in front of them (more than `margin` metres nearer the camera
+ * than they are, and less than `width` metres to either side of the line from them to it) is cut
+ * away: walls (above their footing, which is built apart and never cut) altogether, a square at a
+ * time (whether each square's middle is in front of them: the walls round the edge, the square
+ * inside them, within `bounds`, the floor shown: x0, z0, x1, z1 in world metres), and everything
+ * else above `height` metres; where the inside of something cut shows, it's `cap`.
  */
 export const INTERIOR_CUT = Object.freeze({
     player: { value: new THREE.Vector3() },
     toCamera: { value: new THREE.Vector2(0, 1) },
     height: { value: 1.7 },
-    wall: { value: 0.36 },
     margin: { value: 0.1 },
+    width: { value: 2.5 },
+    bounds: { value: new THREE.Vector4(0, 0, 1, 1) },
     cap: { value: new THREE.Color(0x2b1d13) },
 });
+
+/** Cut away what's in front of the player on a map (interiors.js's): where they are, and where the camera is (world metres). */
+export function cutFor(map, player, camera) {
+    const [ox, oz] = map.origin;
+
+    INTERIOR_CUT.player.value.copy(player);
+    INTERIOR_CUT.toCamera.value.set(camera.x - player.x, camera.z - player.z).normalize();
+    INTERIOR_CUT.bounds.value.set(ox, oz, ox + map.width, oz + map.height);
+}
+
+/**
+ * Whether a point (world metres) is cut away, as the interior materials' shaders decide it:
+ * `wall` for a wall's (a square at a time, from the floor up), else anything else's (above head
+ * height). Pure maths on INTERIOR_CUT, for tests.
+ */
+export function cutsAway([x, y, z], { wall = false } = {}) {
+    const { player, toCamera, height, margin, width, bounds } = INTERIOR_CUT;
+    const inside = (value, least, most) => Math.min(most - 0.001, Math.max(least + 0.001, value));
+    const [px, pz] = wall ? [Math.floor(inside(x, bounds.value.x, bounds.value.z)) + 0.5, Math.floor(inside(z, bounds.value.y, bounds.value.w)) + 0.5] : [x, z];
+    const [dx, dz] = [px - player.value.x, pz - player.value.z];
+    const [tx, tz] = [toCamera.value.x, toCamera.value.y];
+    const along = dx * tx + dz * tz;
+    const across = Math.abs(-dx * tz + dz * tx);
+
+    return y - player.value.y > (wall ? 0 : height.value) && along > margin.value && across < width.value;
+}
 
 const M = 5;
 const m = (metres) => metres * M;
 
-// What's part of a wall (cut away lower than anything else: INTERIOR_CUT)
+// What's part of a wall (cut away from the floor up, a square at a time: INTERIOR_CUT)
 const WALL = Object.freeze({ wall: true });
 
 // Colours the art kits don't have
@@ -93,27 +124,41 @@ function material(name, { wall = false } = {}) {
         }
 
         result.shadowSide = THREE.DoubleSide;
-        cutAway(result, wall ? INTERIOR_CUT.wall : INTERIOR_CUT.height);
+        cutAway(result, wall);
         materials.set(key, result);
     }
 
     return materials.get(key);
 }
 
-// Cut away what stands above `height` on the camera's side of the player (INTERIOR_CUT); drawn
-// both sides, the inside of whatever's cut showing as solid (the cap colour)
-function cutAway(target, height) {
+// Cut away what stands in front of the player (INTERIOR_CUT, as cutsAway): a wall's squares whole
+// (`wall`), anything else above head height; drawn both sides, the inside of whatever's cut
+// showing as solid (the cap colour)
+function cutAway(target, wall) {
     target.side = THREE.DoubleSide;
     target.onBeforeCompile = (shader) => {
-        Object.assign(shader.uniforms, { cutPlayer: INTERIOR_CUT.player, cutToCamera: INTERIOR_CUT.toCamera, cutHeight: height, cutMargin: INTERIOR_CUT.margin, cutCap: INTERIOR_CUT.cap });
+        Object.assign(shader.uniforms, {
+            cutPlayer: INTERIOR_CUT.player,
+            cutToCamera: INTERIOR_CUT.toCamera,
+            cutHeight: wall ? { value: 0 } : INTERIOR_CUT.height,
+            cutSquares: { value: wall ? 1 : 0 },
+            cutMargin: INTERIOR_CUT.margin,
+            cutWidth: INTERIOR_CUT.width,
+            cutBounds: INTERIOR_CUT.bounds,
+            cutCap: INTERIOR_CUT.cap,
+        });
         shader.vertexShader = shader.vertexShader
             .replace("#include <common>", "#include <common>\nvarying vec3 vCutWorld;")
             .replace("#include <project_vertex>", "#include <project_vertex>\nvCutWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;");
         shader.fragmentShader = shader.fragmentShader
-            .replace("#include <common>", "#include <common>\nvarying vec3 vCutWorld;\nuniform vec3 cutPlayer;\nuniform vec2 cutToCamera;\nuniform float cutHeight;\nuniform float cutMargin;\nuniform vec3 cutCap;")
+            .replace("#include <common>", "#include <common>\nvarying vec3 vCutWorld;\nuniform vec3 cutPlayer;\nuniform vec2 cutToCamera;\nuniform float cutHeight;\nuniform float cutSquares;\nuniform float cutMargin;\nuniform float cutWidth;\nuniform vec4 cutBounds;\nuniform vec3 cutCap;")
             .replace("#include <clipping_planes_fragment>", `#include <clipping_planes_fragment>
 {
-    if (vCutWorld.y - cutPlayer.y > cutHeight && dot(vCutWorld.xz - cutPlayer.xz, cutToCamera) > cutMargin) discard;
+    vec2 cutAt = (cutSquares > 0.5 ? floor(clamp(vCutWorld.xz, cutBounds.xy + 0.001, cutBounds.zw - 0.001)) + 0.5 : vCutWorld.xz) - cutPlayer.xz;
+    float cutAlong = dot(cutAt, cutToCamera);
+    float cutAcross = abs(dot(cutAt, vec2(-cutToCamera.y, cutToCamera.x)));
+
+    if (vCutWorld.y - cutPlayer.y > cutHeight && cutAlong > cutMargin && cutAcross < cutWidth) discard;
 }`)
             .replace("#include <dithering_fragment>", "#include <dithering_fragment>\nif (!gl_FrontFacing) gl_FragColor = vec4(cutCap, 1.0);");
     };
@@ -321,7 +366,7 @@ function wall(solid, x0, z0, x1, z1, thick, finish) {
     const [ax0, az0, ax1, az1] = along === "x" ? [x0, z0 - thick / 2, x1, z0 + thick / 2] : [x0 - thick / 2, z0, x0 + thick / 2, z1];
     const top = m(STOREY);
 
-    solid.box(ax0, 0, az0, ax1, m(0.35), az1, material("stone-warm", WALL));
+    solid.box(ax0, 0, az0, ax1, m(0.35), az1, material("stone-warm"));
     solid.box(ax0 + 0.05, m(0.35), az0 + 0.05, ax1 - 0.05, top, az1 - 0.05, material(finish, WALL));
     solid.box(ax0, top - m(0.18), az0 - 0.2, ax1, top, az1 + 0.2, material("timber", WALL));
 
