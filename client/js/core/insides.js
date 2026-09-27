@@ -1,7 +1,8 @@
-// Going inside: every building that can be gone into (setpieces/pieces.js ENTERED: taverns, and
-// in time the temples, smithies and guilds) in every settlement, its front door one of the world's
-// links, its floors made the first time they're wanted (the player's walking up to the door, or
-// through it) and kept, each at a place of its own far off in the 3D world, with its folk.
+// Going inside: every building that can be gone into (setpieces/pieces.js ENTERED: taverns,
+// smithies, temples and adventurers' guilds) in every settlement, its front door one of the
+// world's links, its floors made the first time they're wanted (the player's walking up to the
+// door, or through it) and kept, each at a place of its own far off in the 3D world, with its
+// folk.
 //
 // A building's door is where the art puts it (ENTRANCES: kits/landmarks.js builds it there): so
 // far in from the front of its lot, so far along it, so wide; the squares in front of it are
@@ -9,15 +10,18 @@
 // for its kind: a tavern's taproom (its tables set out one of several ways, its hearth, bar and
 // barrels, and stairs if it has a floor above) and upstairs, as its name has it (tavern lore:
 // rooms to let with an innkeeper at the counter; rooms with a courtesan or two; or a madam's
-// house). Its folk are worked out from its plan: a barkeep behind the bar and at the barrels,
-// serving wenches between the bar and the tables, patrons on the benches, whoever keeps
-// upstairs, and the courtesans in their rooms.
+// house); a smithy's workshop; a temple's nave; a guild's hall. Its folk are worked out from its
+// plan: a barkeep behind the bar and at the barrels, serving wenches between the bar and the
+// tables, patrons on the benches, whoever keeps upstairs, and the courtesans in their rooms; the
+// smith and the apprentice at their work; the priest, an acolyte and worshippers in the pews;
+// the guild's receptionist behind her counter and adventurers at the quest board and the tables.
 //
 // The town's own tavern, Wenches and Ale, is made with the town (world.js) and keeps its ids
 // (taproom, upstairs, tavern-door, tavern-stairs) and its folk; it's registered here as made.
 // Pure data, no DOM.
 
 import { FACING, readPlan, tavernFolk, UPSTAIRS_PLAN } from "./interiors.js";
+import { GOD_IDS, GODS } from "./lore/gods.js";
 import { namePeople } from "./names.js";
 import { createRandom } from "./random.js";
 import { ENTERED, GROUND, PLOT } from "./setpieces/pieces.js";
@@ -34,8 +38,8 @@ export const ENTRANCES = Object.freeze({
     blacksmith: { depth: 2.2, offset: -1.2, width: 1.3, height: 2.1, floor: 0.3 },
 });
 
-/** The kinds that can be gone into so far (the rest of ENTERED in time). */
-export const ENTERABLE = Object.freeze(["tavern", "blacksmith"]);
+/** The kinds that can be gone into. */
+export const ENTERABLE = Object.freeze(["tavern", "blacksmith", "church", "guild"]);
 
 // The way to a door, cleared: at least this far either side of its middle, and from this far in
 // behind it to this far out past the lot's front (metres)
@@ -325,16 +329,174 @@ export function smithyFolkOf(building, forge) {
     ];
 }
 
+// --- Temples ---
+
+// A temple of the Six, 16 by 18 metres: its patron's altar on a dais at the north end, their
+// statue behind it; the other five's shrines along the walls (three west, two east) and a stand of
+// votive candles; pews either side of the aisle, facing the altar; a basin of water either side of
+// the door, in the middle of the south wall
+const TEMPLE = [
+    "................",
+    "......ZZZZ......",
+    "......aaaa......",
+    "................",
+    "s..............s",
+    "................",
+    "..pppp....pppp..",
+    "................",
+    "s.pppp....pppp.s",
+    "................",
+    "..pppp....pppp..",
+    "................",
+    "s.pppp....pppp.v",
+    "................",
+    "..pppp....pppp..",
+    "................",
+    "f..............f",
+    ".......DD.......",
+];
+
+/** A temple's floors: its nave, under its patron. */
+export function templeRooms(building) {
+    return [{ suffix: "nave", style: "temple", name: building.name, rows: TEMPLE, ground: GROUND.cobbles, sound: "temple", patron: building.patron }];
+}
+
+/**
+ * Which of the Six each of a temple's shrines is to, in the order they stand (north to south,
+ * west then east): the five that aren't its patron, in the order they woke.
+ */
+export function shrinesOf(patron) {
+    return GOD_IDS.filter((id) => id !== patron);
+}
+
+/**
+ * A temple's folk, worked out from its plan: the priest, going between the altar (blessing the
+ * pews) and the shrines (lighting their candles); an acolyte at the votive candles and the
+ * basins; and two to four worshippers in the pews, facing the altar.
+ */
+export function templeFolkOf(building, nave) {
+    const random = createRandom(building.seed * 7 + 41);
+    const { n, s, e, w } = FACING;
+    const altar = nave.pieces.find(({ kind }) => kind === "altar");
+    const shrines = nave.pieces.filter(({ kind }) => kind === "shrine");
+    const votive = nave.pieces.find(({ kind }) => kind === "votive");
+    const basins = nave.pieces.filter(({ kind }) => kind === "basin");
+    const before = (piece) => (piece.x === 0 ? { square: [1, piece.y], facing: w } : { square: [nave.width - 2, piece.y], facing: e });
+    const bless = { square: [altar.x + Math.floor(altar.w / 2), altar.y + altar.h], facing: s, act: "bless", group: "altar", wait: [4000, 7000] };
+    const folk = [
+        {
+            local: "priest",
+            title: "Priest",
+            role: "priest",
+            sex: random.chance(0.5) ? "f" : "m",
+            map: nave.id,
+            square: bless.square,
+            facing: s,
+            routine: { order: "alternate", wait: [3000, 5000], stops: [bless, ...shrines.map((shrine) => ({ ...before(shrine), act: "light", group: "shrines" }))] },
+        },
+        {
+            local: "acolyte",
+            title: "Acolyte",
+            role: "acolyte",
+            sex: random.chance(0.5) ? "f" : "m",
+            map: nave.id,
+            square: before(votive).square,
+            facing: e,
+            routine: { order: "cycle", wait: [4000, 8000], stops: [{ ...before(votive), act: "light" }, ...basins.map((basin) => ({ ...before(basin), act: "light" }))] },
+        },
+    ];
+
+    // Worshippers in the pews, each on a seat of their own, facing the altar
+    const seats = random.shuffle([...(nave.marks.p ?? [])]).slice(0, random.int(2, 4));
+
+    seats.forEach(([x, y], k) => {
+        folk.push({ local: `worshipper${k + 1}`, title: "Worshipper", role: "worshipper", sex: random.chance(0.5) ? "f" : "m", map: nave.id, square: [x, y], facing: n, routine: { seated: true } });
+    });
+
+    return folk;
+}
+
+// --- Adventurers' guilds ---
+
+// A guild's hall, 20 by 16 metres: the counter across the north, the receptionist behind it and
+// shelves of ledgers and scrolls on the wall behind her; the quest board along the west wall;
+// tables with benches for the adventurers; a hearth on the east wall; barrels either side of the
+// door, in the middle of the south wall
+const GUILD = [
+    "eeeeeeee............",
+    "....................",
+    "..MMMMMMMM..........",
+    "....................",
+    "q...................",
+    "q.....bbb.....bbb...",
+    "q.....TTT.....TTT..H",
+    "q.....bbb.....bbb..H",
+    "q..................H",
+    "......bbb.....bbb...",
+    "......TTT.....TTT...",
+    "......bbb.....bbb...",
+    "....................",
+    "....................",
+    "KK................KK",
+    ".........DD.........",
+];
+
+/** A guild's floors: its hall. */
+export function guildRooms(building) {
+    return [{ suffix: "hall", style: "guild", name: building.name, rows: GUILD, ground: GROUND.planks, sound: "guild" }];
+}
+
+// What an adventurer can be (their look: characters/folk.js)
+const CALLINGS = Object.freeze(["warrior", "ranger", "mage", "rogue", "cleric"]);
+
+/**
+ * A guild's folk, worked out from its plan: the receptionist behind the counter (stamping
+ * notices, and at the shelves); adventurers reading the quest board, and one at the counter;
+ * and more at the tables, drinking.
+ */
+export function guildFolkOf(building, hall) {
+    const random = createRandom(building.seed * 7 + 53);
+    const { n, s, w } = FACING;
+    const counter = hall.pieces.find(({ kind }) => kind === "counter");
+    const shelves = hall.pieces.find(({ kind }) => kind === "shelves");
+    const board = hall.pieces.find(({ kind }) => kind === "board");
+    const behind = [counter.x + 2, counter.x + counter.w - 3].map((x) => ({ square: [x, counter.y - 1], facing: s, act: "stamp", group: "counter" }));
+    const filing = { square: [shelves.x + 2, shelves.y + 1], facing: n, act: "file", group: "shelves" };
+    const reading = [1, 3].map((dy) => ({ square: [board.x + 1, board.y + dy], facing: w, act: "read", group: "board", wait: [5000, 9000] }));
+    const asking = { square: [counter.x + 3, counter.y + 1], facing: n, group: "counter", wait: [6000, 10000] };
+    const callings = random.shuffle([...CALLINGS]);
+    const sex = () => (random.chance(0.5) ? "f" : "m");
+    const folk = [
+        { local: "receptionist", title: "Guild receptionist", role: "receptionist", sex: "f", map: hall.id, square: behind[0].square, facing: s, routine: { order: "alternate", wait: [3000, 6000], stops: [...behind, filing] } },
+        { local: "adventurer", title: "Adventurer", role: "adventurer", look: callings[0], sex: sex(), map: hall.id, square: reading[0].square, facing: w, routine: { order: "alternate", wait: [4000, 8000], stops: [reading[0], asking] } },
+        { local: "adventurer2", title: "Adventurer", role: "adventurer", look: callings[1], sex: sex(), map: hall.id, square: reading[1].square, facing: w, routine: { order: "cycle", wait: [6000, 12000], stops: [reading[1]] } },
+    ];
+
+    // More at the tables, drinking to their last job (patrons, as in a tavern, talking as
+    // adventurers do)
+    const seats = random.shuffle([...(hall.marks.b ?? [])]).slice(0, random.int(2, 4));
+
+    seats.forEach(([x, y], k) => {
+        const facing = hall.plan[y + 1]?.[x] === "T" ? s : n;
+
+        folk.push({ local: `adventurer${k + 3}`, title: "Adventurer", role: "patron", talk: "adventurer", look: callings[(k + 2) % callings.length], sex: sex(), map: hall.id, square: [x, y], facing, routine: { seated: true, act: "toast", every: [9000, 18000] } });
+    });
+
+    return folk;
+}
+
 // Each kind's floors (the first is the one its front door opens into) and its folk
 const KINDS = Object.freeze({
     tavern: { first: "taproom", rooms: tavernRooms, folk: (building, [taproom, upstairs]) => tavernFolkOf(building, taproom, upstairs) },
     blacksmith: { first: "forge", rooms: smithyRooms, folk: (building, [forge]) => smithyFolkOf(building, forge) },
+    church: { first: "nave", rooms: templeRooms, folk: (building, [nave]) => templeFolkOf(building, nave) },
+    guild: { first: "hall", rooms: guildRooms, folk: (building, [hall]) => guildFolkOf(building, hall) },
 });
 
 // --- The buildings ---
 
 // What a building's called that has no name of its own
-const NAMES = Object.freeze({ blacksmith: "the smithy" });
+const NAMES = Object.freeze({ blacksmith: "the smithy", guild: "the Adventurers' Guild" });
 
 // Where the buildings' floors are drawn in the 3D world: past the world's edge (and Wenches and
 // Ale's), a hundred metres apart, each building's floors in a column
@@ -364,10 +526,10 @@ export class Interiors {
 
     /**
      * Add a building that's been made already, with its maps and folk (Wenches and Ale, made with
-     * the town).
+     * the town), and where its middle is (`at`: [x, y] metres, in the world).
      */
-    adopt({ key, kind, name, maps, folk, piece = null, tavern = null }) {
-        const building = { key, kind, name, piece, tavern, place: null, seed: 0, entrance: null, made: true, maps, folk };
+    adopt({ key, kind, name, maps, folk, piece = null, tavern = null, at = null }) {
+        const building = { key, kind, name, piece, tavern, place: null, seed: 0, at, entrance: null, made: true, maps, folk };
 
         this.buildings.set(key, building);
 
@@ -398,14 +560,18 @@ export class Interiors {
 
         const entrance = entranceOf(piece, origin);
         const inside = `${key}/${KINDS[piece.name].first}`;
+        const [ox, oy] = Array.isArray(origin) ? origin : [origin, origin];
         const building = {
             key,
             kind: piece.name,
-            name: name ?? piece.tavern?.name ?? NAMES[piece.name] ?? piece.name,
+            name: name ?? piece.tavern?.name ?? (piece.patron ? `the Temple of ${GODS[piece.patron].name}` : null) ?? NAMES[piece.name] ?? piece.name,
             piece,
             tavern: piece.tavern ?? null,
+            patron: piece.patron ?? null,
             place,
             seed: piece.seed ?? 1,
+            // (Its middle, in the world: metres)
+            at: [ox + piece.x, oy + piece.y],
             entrance,
             made: false,
             maps: [],
@@ -468,7 +634,7 @@ export class Interiors {
         const maps = floors.map((floor, k) => {
             const map = readPlan(`${key}/${floor.suffix}`, floor.name, floor.rows, { ground: floor.ground });
 
-            Object.assign(map, { origin: [origin[0], origin[1] + k * ORIGINS.step], style: floor.style, look: floor.look ?? null, finish: floor.finish ?? null, sound: floor.sound, building: key, layout: floor.layout ?? null });
+            Object.assign(map, { origin: [origin[0], origin[1] + k * ORIGINS.step], style: floor.style, look: floor.look ?? null, finish: floor.finish ?? null, patron: floor.patron ?? null, sound: floor.sound, building: key, layout: floor.layout ?? null });
 
             return map;
         });

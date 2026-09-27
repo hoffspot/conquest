@@ -27,9 +27,23 @@ async function title(page) {
     await expect(page.locator("#title")).toBeVisible({ timeout: 60000 });
 }
 
+// Open the game and wait for it to be playing (checking on a timer: a page with nothing changing
+// on it may draw no frames). If it isn't in time, what the loading screen says, and the page's
+// errors, are in the failure
 async function playing(page, address) {
+    const errors = [];
+
+    page.on("pageerror", (error) => errors.push(error.message));
+    page.on("console", (message) => message.type() === "error" && errors.push(message.text()));
     await page.goto(address);
-    await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 90000 });
+
+    try {
+        await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 90000, polling: 250 });
+    } catch (error) {
+        const where = await page.evaluate(() => ({ screen: document.body.dataset.screen, status: document.querySelector("#loadstatus")?.textContent, amount: document.querySelector("#loadamount")?.textContent })).catch((reason) => ({ unreadable: String(reason) }));
+
+        throw new Error(`Not playing: ${JSON.stringify(where)}; errors: ${JSON.stringify(errors.slice(0, 5))}`, { cause: error });
+    }
 }
 
 // Where a spot so many metres north of the player is on the screen
@@ -266,7 +280,7 @@ test("blows leave wounds of their weapon's kind, worse below each threshold, wit
         game.avatars.get("player").place(player.x, player.y, Math.PI);
 
         for (let second = 0; second < 40 && orc.hp >= orc.maxHp / 2 && !player.dead; second++) {
-            game.advance(0.5);
+            game.advance(0.5, { render: false });
         }
 
         const wounds = game.wounds.get("orc");
@@ -303,7 +317,7 @@ test("blows leave wounds of their weapon's kind, worse below each threshold, wit
         const player = battle.actor("player");
 
         for (let second = 0; second < 40 && !orc.dead && !player.dead; second++) {
-            game.advance(0.5);
+            game.advance(0.5, { render: false });
         }
 
         const fallen = orc.dead ? orc : player;
@@ -773,7 +787,7 @@ test("double-clicking the ground runs there, using stamina, shown by an orange b
         game.stop();
 
         for (let k = 0; k < 20; k++) {
-            game.advance(0.05);
+            game.advance(0.05, { render: false });
             fastest = Math.max(fastest, player.pace);
         }
 
@@ -908,7 +922,7 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
         const acted = new Set();
 
         for (let k = 0; k < 40; k++) {
-            game.advance(0.25);
+            game.advance(0.25, { render: false });
 
             for (const actor of here) {
                 const name = game.avatars.get(actor.id).actions.attack?.name;
@@ -1139,7 +1153,7 @@ test("the smithy: the smith heats, hammers and quenches the work, the apprentice
 
         // A while at work (what each of them does, as the battle says)
         for (let k = 0; k < 90; k++) {
-            game.advance(0.5);
+            game.advance(0.5, { render: false });
 
             for (const id of [`${building.key}/smith`, `${building.key}/apprentice`]) {
                 const name = game.avatars.get(id).actions.attack?.name;
@@ -1161,6 +1175,148 @@ test("the smithy: the smith heats, hammers and quenches the work, the apprentice
     expect(smithy.acts).toEqual(expect.arrayContaining(["smith:heat", "smith:forge", "smith:quench", "apprentice:pump", "apprentice:crank"]));
     expect(smithy.heard).toEqual(expect.arrayContaining(["anvil", "hiss", "bellows", "grind"]));
     expect(smithy.place).toBe("smithy");
+});
+
+test("the temple: the priest in white blesses the pews and lights the shrines' candles, worshippers pray, and the priest tells of the temple's patron", async ({ page }) => {
+    // (Seed 2's town's temple, to Aurelia, a few steps from the start)
+    await playing(page, "/?play&seed=2");
+
+    const temple = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const building = [...game.world.interiors.buildings.values()].find((each) => each.kind === "church");
+        const player = game.battle.actor("player");
+        const acts = [];
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        // Straight through its door
+        const [x, y] = building.door.ends[0].squares[0];
+
+        Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [] });
+        game.battle.command("player", { type: "enter", link: building.door.id });
+        game.advance(0.3);
+
+        const folk = game.battle.actors.filter((actor) => actor.map === player.map && actor.id !== "player");
+        const priest = folk.find(({ role }) => role === "priest");
+
+        // A while inside: what the priest and the worshippers do
+        for (let k = 0; k < 80; k++) {
+            game.advance(0.5, { render: false });
+
+            for (const one of folk) {
+                const name = game.avatars.get(one.id).actions.attack?.name;
+
+                if (name && !acts.includes(`${one.role}:${name}`)) {
+                    acts.push(`${one.role}:${name}`);
+                }
+            }
+        }
+
+        // Up to the priest, to ask whose temple it is
+        game.approaching = priest.id;
+        game.battle.command("player", { type: "approach", target: priest.id });
+
+        for (let k = 0; k < 200 && !game.talking; k++) {
+            game.advance(0.1, { render: false });
+        }
+
+        const conversation = game.talking?.conversation;
+        const asked = conversation?.choices.findIndex(({ text }) => text.includes("Whose temple"));
+
+        conversation?.choose(asked);
+
+        return {
+            map: player.map,
+            name: building.name,
+            wearing: [...game.avatars.get(priest.id).character.equipment.values()],
+            roles: folk.map(({ role }) => role),
+            acts,
+            patron: conversation?.line ?? null,
+            place: session.sound.place,
+        };
+    });
+
+    expect(temple.map).toMatch(/church-\d+\/nave$/);
+    expect(temple.name).toBe("the Temple of Aurelia");
+    expect(temple.wearing).toEqual(expect.arrayContaining(["alb", "chasuble", "albSkirt"]));
+    expect(temple.roles.slice(0, 2)).toEqual(["priest", "acolyte"]);
+    expect(temple.roles.filter((role) => role === "worshipper").length).toBeGreaterThanOrEqual(2);
+    expect(temple.acts).toEqual(expect.arrayContaining(["priest:bless", "priest:light", "acolyte:light"]));
+    expect(temple.acts.some((act) => act.startsWith("worshipper:rest:"))).toBe(true);
+    expect(temple.patron).toMatch(/This is Aurelia's house, the Dawnmother/);
+    expect(temple.place).toBe("temple");
+});
+
+test("the adventurers' guild: the receptionist stamps notices behind her counter, adventurers read the quest board and drink at the tables, and she signs the player up", async ({ page }) => {
+    // (Seed 2's town's guild)
+    await playing(page, "/?play&seed=2");
+
+    const guild = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const building = [...game.world.interiors.buildings.values()].find((each) => each.kind === "guild");
+        const player = game.battle.actor("player");
+        const acts = [];
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        // Straight through its door
+        const [x, y] = building.door.ends[0].squares[0];
+
+        Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [] });
+        game.battle.command("player", { type: "enter", link: building.door.id });
+        game.advance(0.3);
+
+        const folk = game.battle.actors.filter((actor) => actor.map === player.map && actor.id !== "player");
+        const receptionist = folk.find(({ role }) => role === "receptionist");
+
+        // A while inside: what the receptionist and the adventurers do
+        for (let k = 0; k < 60; k++) {
+            game.advance(0.5, { render: false });
+
+            for (const one of folk) {
+                const name = game.avatars.get(one.id).actions.attack?.name;
+
+                if (name && !acts.includes(`${one.role}:${name}`)) {
+                    acts.push(`${one.role}:${name}`);
+                }
+            }
+        }
+
+        // Up to the counter, to register
+        game.approaching = receptionist.id;
+        game.battle.command("player", { type: "approach", target: receptionist.id });
+
+        for (let k = 0; k < 200 && !game.talking; k++) {
+            game.advance(0.1, { render: false });
+        }
+
+        const conversation = game.talking?.conversation;
+
+        conversation?.choose(conversation.choices.findIndex(({ text }) => text.includes("register")));
+
+        return {
+            map: player.map,
+            name: building.name,
+            wearing: [...game.avatars.get(receptionist.id).character.equipment.values()],
+            sheathed: folk.filter(({ role }) => role === "adventurer").map(({ id }) => game.avatars.get(id).character.sheathed),
+            roles: folk.map(({ role }) => role),
+            acts,
+            registered: conversation?.line ?? null,
+            place: session.sound.place,
+        };
+    });
+
+    expect(guild.map).toMatch(/guild-\d+\/hall$/);
+    expect(guild.name).toBe("the Adventurers' Guild");
+    expect(guild.wearing).toEqual(expect.arrayContaining(["guildBlouse", "guildVest", "guildSkirt"]));
+    expect(guild.roles.slice(0, 3)).toEqual(["receptionist", "adventurer", "adventurer"]);
+    expect(guild.roles.filter((role) => role === "patron").length).toBeGreaterThanOrEqual(2);
+    expect(guild.sheathed).toEqual([true, true]);
+    expect(guild.acts).toEqual(expect.arrayContaining(["receptionist:stamp", "adventurer:read"]));
+    expect(guild.registered).toMatch(/^Wonderful! Name: .+\. Rank: Copper\./);
+    expect(guild.place).toBe("guild");
 });
 
 test("tapping someone walks the player up to talk: their name and what they are, what they say, replies that lead on, Escape to stop", async ({ page }) => {
@@ -1214,6 +1370,99 @@ test("tapping someone walks the player up to talk: their name and what they are,
     await expect(talk).toBeHidden();
     await expect(page.locator("#menu")).not.toHaveAttribute("open", "");
     expect(await page.evaluate(() => ({ talking: window.pellagos.game.battle.actor("barkeep").talkingTo, remembered: window.pellagos.game.memory.barkeep.talks }))).toEqual({ talking: null, remembered: 1 });
+});
+
+test("a building gone into is marked on the minimap; holding the minimap opens the world map, fog over all but where the player's been", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // Nothing marked yet; into Wenches and Ale and out again, then a walk out of town
+    const found = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+        const before = { icons: game.icons().length, chunks: game.explored.chunksVisited };
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        for (const map of ["taproom", "town"]) {
+            game.battle.command("player", { type: "enter", link: "tavern-door" });
+
+            for (let k = 0; k < 200 && player.map !== map; k++) {
+                game.advance(0.25, { render: false });
+            }
+        }
+
+        game.minimap.drawn = -Infinity;
+        game.advance(0.1);
+
+        const marked = { icons: game.icons().map(({ kind }) => kind), minimap: [...game.minimap.icons], entered: [...game.explored.entered] };
+
+        // (Somewhere 150 metres off that can be walked to)
+        const squares = game.world.maps.town.squares;
+        const [px, py] = player.square;
+
+        for (let k = 0; k < 16 && !player.path.length; k++) {
+            const to = [Math.round(px + Math.cos((k * Math.PI) / 8) * 150), Math.round(py + Math.sin((k * Math.PI) / 8) * 150)];
+
+            if (!squares.blocked(...to)) {
+                game.battle.command("player", { type: "move", to, run: true });
+                game.advance(0.1, { render: false });
+            }
+        }
+
+        for (let k = 0; k < 120; k++) {
+            game.advance(0.5, { render: false });
+        }
+
+        return { before, marked, chunks: game.explored.chunksVisited, map: player.map };
+    });
+
+    expect(found.before).toEqual({ icons: 0, chunks: 1 });
+    expect(found.marked).toEqual({ icons: ["tavern"], minimap: ["tavern"], entered: ["home:tavern"] });
+    expect(found.chunks).toBeGreaterThanOrEqual(3);
+
+    // Held (not tapped): the world map, the game paused under it
+    await page.evaluate(() => window.pellagos.game.start());
+
+    const box = await page.locator("#minimap").boundingBox();
+
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(800);
+    await page.mouse.up();
+    await page.waitForFunction(() => window.pellagos.worldMap?.drawn, null, { polling: 100 });
+
+    const map = await page.evaluate(() => {
+        const { game, worldMap } = window.pellagos;
+
+        return { open: document.querySelector("#worldmap").open, running: game.running, order: game.battle.actor("player").order?.type ?? null, drawn: worldMap.drawn, chunks: game.explored.chunksVisited, town: game.world.plan.places.find(({ at }) => Math.hypot(at[0] - game.world.stamp.middle[0], at[1] - game.world.stamp.middle[1]) < 200)?.name };
+    });
+
+    expect(map.open).toBe(true);
+    expect(map.running).toBe(false);
+    expect(map.order).toBeNull();
+    expect(map.drawn.fogged).toBe(128 * 128 - map.chunks);
+    expect(map.drawn.chunks.length).toBe(map.chunks);
+    expect(map.drawn.icons).toEqual(["tavern"]);
+    expect(map.drawn.names).toContain(map.town);
+    await expect(page.getByRole("heading", { name: "The world" })).toBeVisible();
+    await expect(page.locator("#worldmapkey li")).toHaveCount(5);
+
+    // Zoomed right out, the whole world under its fog; Escape closes it and the game goes on
+    await page.locator("#worldmapout").click();
+    await page.locator("#worldmapout").click();
+
+    expect(await page.evaluate(() => window.pellagos.worldMap.view.scale)).toBeGreaterThan(3);
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#worldmap")).not.toBeVisible();
+    expect(await page.evaluate(() => window.pellagos.game.running)).toBe(true);
+
+    // M opens it too, and closes it again
+    await page.keyboard.press("m");
+    await expect(page.locator("#worldmap")).toBeVisible();
+    await page.keyboard.press("m");
+    await expect(page.locator("#worldmap")).not.toBeVisible();
+    expect(await page.evaluate(() => window.pellagos.game.running)).toBe(true);
 });
 
 test("the minimap walks the player where it's tapped, and Game options turn it and the sound off, remembered", async ({ page }) => {

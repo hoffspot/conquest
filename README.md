@@ -169,6 +169,20 @@ Stand still with
 nothing going on for 15 seconds and you do too: stretching, looking about, rolling your
 shoulders, yawning, shifting your weight.
 
+**Going into the other buildings.** Every tavern, smithy, temple and adventurers' guild, in
+your town and in every village, town and city out in the world, can be gone into the same way;
+each is got ready as you come near. Every other tavern has its own name, sign, taproom and
+upstairs (rooms to let, a courtesan or two, or a madam's house). In a **smithy**, named for its
+smith, the smith heats the work in the forge, hammers it on the anvil (ringing, throwing sparks)
+and quenches it hissing in the trough, while the apprentice pumps the bellows (the fire flares)
+and turns the grindstone. A **temple** is to all of the Six under its patron: a whitewashed nave
+with the patron's altar and statue, a shrine to each of the others, pews and candles; a priest
+in white vestments blesses the pews and lights the shrines' candles, and worshippers pray. In an
+**adventurers' guild**, a cheerful receptionist in the guild's uniform, her hair in twin tails,
+stamps notices behind her counter, and adventurers of every calling read the quest board and
+drink at the tables; she'll sign you up (Rank: Copper), though the board's jobs can't be taken
+yet.
+
 **Talking.** Tap one of the folk and you walk up to them (or to the bar, or the other side of a
 table) and talk: their name and what they are, what they say, and what you can say back (tap a
 reply, or press its number). They stop and turn to you. Each sort has their own things to talk
@@ -182,14 +196,23 @@ are there, but for now only the talk goes on. Walk off, or press Escape, to stop
 **Out of the town.** Its streets carry on as roads into the world round it, over rivers on
 bridges, through fields, meadows and woods; walk anywhere you can, as far as you like. The world
 is drawn round you as you go, with no loading screens: only its far edge in the fog is ever
-being built. For now it's the land alone: the other settlements, the ruins and the enemy camps
-the world map shows are still to come.
+being built. The hamlets, villages, towns and cities of the world plan are there, each with its
+own buildings; the ruins and the enemy camps are still to come.
 
 **The minimap**, in the top right under the menu button, shows where you are from above: out in
 the world, the 128 metres or so round you, its roads, rivers, roofs and trees; inside, the
 whole floor, its walls, furniture and stairs. On it are what the camera can see, you (an arrow pointing the way you face), where
-you're going, and the orc when it's where you are (red; ringed when it's your target). Tap it to
-walk there, or tap the orc on it to go and fight it; double-tap to run.
+you're going, and the orc when it's where you are (red; ringed when it's your target). Every
+tavern, smithy, temple and guild you've been inside has an icon over it: a foaming tankard, an
+anvil, a temple's columns, crossed swords and a shield. Tap it to walk there, or tap the orc on it
+to go and fight it; double-tap to run.
+
+**The world map.** Hold your finger (or the mouse) on the minimap, or press M, and the whole
+world opens full screen, the game paused under it. A fog lies over every 64-metre patch of the
+world you haven't set foot in, lifting as you walk into each; what you've seen is shown as the
+minimap shows it, with the names of the places you've been and the icons of the buildings you've
+gone into. Drag to look about, pinch or scroll to zoom, and close it with the cross, Escape or M.
+What you've found is saved with your character.
 
 **Spells.** Press and hold on yourself or on an enemy, and a see-through wheel opens round
 them, cut in four like a pizza: up, right, down and left. Keep holding and flick towards a slice
@@ -300,11 +323,15 @@ npm run build:music     # remakes client/music, the music's instrument recording
 `npm test` checks that `client/js/app/manifest.js` (the loading screen's list of files and their
 sizes) is up to date, so run `npm run build:manifest` after changing the game's code or data. The
 browser tests need Chromium: run `npx playwright install chromium` once, or set `CHROMIUM_PATH`
-to an existing Chromium or Chrome executable.
+to an existing Chromium or Chrome executable. Every browser test has a page of its own, so they
+run side by side (on half the machine's cores; `--workers=N` for more or fewer), and CI splits
+them between three jobs run at once (`--shard=1/3`...). CI runs for each pull request, and for
+main as each is merged; lint and the unit tests are a job of their own.
 
 While the game is running, the browser console reaches it through `pellagos`: for example
 `pellagos.game.battle.actor("orc")`, or `pellagos.game.advance(10)` to play on ten seconds
-without drawing (handy on slow machines).
+without drawing (handy on slow machines), then draw once (`{ render: false }`: not even that, as
+the browser tests do stepping through what happens).
 
 ```
 client/                 The game (static files served to the browser)
@@ -336,10 +363,12 @@ client/                 The game (static files served to the browser)
     hud.js              Health, stamina, names, damage numbers and messages over the game
     wheel.js            The action wheel: hold, flick, cooldowns; icons.js draws its icons
     minimap.js          The minimap: the map the player is on from above (out in the world, the
-                        patch round them), with everyone on it
+                        patch round them), with everyone on it; mapicons.js the buildings' icons
+    worldmap.js         The world map: the whole world, under a fog where the player hasn't been
     debug.js            Debug mode's overlay
     talk.js             The talk: who's talking, what they say, and the replies to choose from
-    save.js             The saved character, what's been said, and settings (local storage)
+    save.js             The saved character, what's been said and found, and settings (local
+                        storage)
     device.js           Full screen and the service worker
   js/core/              The rules. No DOM or Three.js, so they also run in Node
     overworld.js        The world: 8 km of it on 1-metre squares, made a chunk at a time from its
@@ -353,6 +382,7 @@ client/                 The game (static files served to the browser)
     interiors.js        Inside buildings: the tavern's floors, drawn as plans of their squares
     insides.js          Every building that can be gone into: its door, and its floors and folk
                         made the first time they're wanted
+    explored.js         What the player has found: the buildings gone into, the chunks walked
     battle.js           Moving, fighting, damage, dying and coming back; the orc's patrol
     weapons.js          The weapons and their attacks
     spells.js           The spells: heal and stun, and their shared cooldown
@@ -380,8 +410,9 @@ client/                 The game (static files served to the browser)
                         bridges, trees, the land's features, the undergrowth near the player,
                         and the settlements' buildings
     town3d.js           The town's buildings, props and trees, merged into few meshes
-    interiors3d.js      Inside the taverns: their rooms and furniture, the fire, the boar on its
-                        spit, and taking down the walls between the camera and the player
+    interiors3d.js      Inside the buildings: the taverns', smithies', temples' and guilds'
+                        rooms and furniture, the fires, the boar on its spit, and taking
+                        down the walls between the camera and the player
     art/                The art the town is built with: engine/ (solid.js's shapes, the
                         textures' painters.js, materials.js, and atlas.js, the one material
                         everything built is drawn with) and kits/ (house.js, with framing.js and

@@ -44,6 +44,43 @@ const PARTS = {
         m: { wear: [["tunic", "shirt", "blueTunic"], ["trousers"], ["boots"], ["leatherApron"]], hair: ["short", "buzz", "swept"], beard: ["none", "none", "stubble"], build: { weight: [0.35, 0.6], muscle: [0.45, 0.65], belly: [0, 0.1] } },
         f: { wear: [["shirt", "chemise"], ["breeches", "trousers"], ["boots"], ["leatherApron"]], hair: ["ponytail", "bob"], build: { weight: [0.38, 0.55], muscle: [0.45, 0.6], bust: [0.35, 0.6] } },
     },
+    priest: {
+        m: { wear: [["alb"], ["chasuble"], ["albSkirt"], ["boots"]], hair: ["short", "bald", "swept", "buzz"], beard: ["full", "short", "none", "goatee"], build: { weight: [0.45, 0.75], muscle: [0.35, 0.55], belly: [0, 0.5] } },
+        f: { wear: [["alb"], ["chasuble"], ["albSkirt"], ["boots"]], hair: ["topknot", "long", "bob"], build: { weight: [0.4, 0.65], muscle: [0.35, 0.5], bust: [0.4, 0.7] } },
+    },
+    acolyte: {
+        m: { wear: [["alb"], ["albSkirt"], ["belt"], ["boots"]], hair: ["short", "buzz"], beard: ["none"], build: { weight: [0.35, 0.55], muscle: [0.4, 0.55], belly: [0, 0.1] } },
+        f: { wear: [["alb"], ["albSkirt"], ["belt"], ["boots"]], hair: ["ponytail", "bob", "topknot"], build: { weight: [0.35, 0.55], muscle: [0.38, 0.5], bust: [0.35, 0.6] } },
+    },
+    worshipper: {
+        m: { wear: [["tunic", "greenTunic", "blueTunic", "shirt"], [null, "jerkin"], ["trousers", "breeches"], ["boots"], ["belt"]], hair: ["short", "swept", "buzz", "bald"], beard: ["short", "full", "stubble", "none"], build: { weight: [0.4, 0.85], muscle: [0.4, 0.7], belly: [0, 0.7] } },
+        f: { wear: [["chemise"], [null, "bodice"], ["kirtle", "skirt", "greenSkirt"], ["boots"]], hair: ["long", "bob", "ponytail", "topknot"], build: { weight: [0.4, 0.75], muscle: [0.4, 0.55], bust: [0.45, 0.85] } },
+    },
+    // An adventurers' guild's receptionist: a young woman drawn as a hero of an adventure story
+    // would have her: big bright eyes in a small, soft face, her hair in twin tails or a bob with
+    // bangs, in the guild's uniform
+    receptionist: { f: { wear: [["guildBlouse"], ["guildVest"], ["guildSkirt"], ["boots"]], hair: ["twintails", "twintails", "bob"], build: { weight: [0.36, 0.46], muscle: [0.36, 0.44], bust: [0.55, 0.75] }, youthful: true } },
+    // Adventurers, by their calling (sheathing what they carry)
+    warrior: {
+        m: { wear: [["gambeson", "mail"], ["tunic", "blueTunic"], ["breeches", "trousers"], ["boots"], ["belt"], ["bracers", null], ["sword"], ["roundShield", "kiteShield", null]], hair: ["short", "buzz", "swept", "mohawk"], beard: ["short", "full", "stubble", "none"], build: { weight: [0.5, 0.8], muscle: [0.65, 0.95], belly: [0, 0.3] }, armed: true },
+        f: { wear: [["gambeson", "mail"], ["tunic", "blueTunic"], ["breeches"], ["boots"], ["belt"], ["bracers", null], ["sword"], ["roundShield", null]], hair: ["ponytail", "bob", "topknot"], build: { weight: [0.45, 0.65], muscle: [0.55, 0.75], bust: [0.45, 0.75] }, armed: true },
+    },
+    ranger: {
+        m: { wear: [["greenTunic"], ["jerkin"], ["breeches"], ["boots"], ["belt"], ["bracers"], ["bow"], ["quiver"]], hair: ["short", "swept", "long"], beard: ["short", "stubble", "none"], build: { weight: [0.4, 0.6], muscle: [0.5, 0.75], belly: [0, 0.1] }, armed: true },
+        f: { wear: [["greenTunic"], ["jerkin"], ["breeches"], ["boots"], ["belt"], ["bracers"], ["bow"], ["quiver"]], hair: ["ponytail", "long", "bob"], build: { weight: [0.4, 0.55], muscle: [0.45, 0.65], bust: [0.4, 0.7] }, armed: true },
+    },
+    mage: {
+        m: { wear: [["blueTunic", "shirt"], ["mageRobe"], ["boots"], ["belt"], ["wizardHat", null], ["staff"]], hair: ["long", "swept", "bald"], beard: ["full", "goatee", "short"], build: { weight: [0.35, 0.6], muscle: [0.3, 0.45], belly: [0, 0.3] }, armed: true },
+        f: { wear: [["chemise", "blueTunic"], ["mageRobe"], ["boots"], ["belt"], ["wizardHat", null], ["staff"]], hair: ["long", "topknot", "bob"], build: { weight: [0.35, 0.55], muscle: [0.3, 0.42], bust: [0.5, 0.85] }, armed: true },
+    },
+    rogue: {
+        m: { wear: [["shirt"], ["jerkin"], ["breeches"], ["boots"], ["belt"], ["gloves"], ["sword"]], hair: ["short", "swept", "buzz"], beard: ["stubble", "goatee", "none"], build: { weight: [0.35, 0.55], muscle: [0.5, 0.7], belly: [0, 0.1] }, armed: true },
+        f: { wear: [["shirt", "chemise"], ["jerkin"], ["breeches"], ["boots"], ["belt"], ["gloves"], ["sword"]], hair: ["bob", "ponytail", "long"], build: { weight: [0.35, 0.5], muscle: [0.45, 0.6], bust: [0.45, 0.75] }, armed: true },
+    },
+    cleric: {
+        m: { wear: [["alb"], ["mail"], ["albSkirt"], ["boots"], ["belt"], ["warHammer"]], hair: ["short", "bald", "buzz"], beard: ["full", "short", "none"], build: { weight: [0.5, 0.75], muscle: [0.5, 0.75], belly: [0, 0.4] }, armed: true },
+        f: { wear: [["alb"], ["mail"], ["albSkirt"], ["boots"], ["belt"], ["warHammer"]], hair: ["topknot", "bob", "ponytail"], build: { weight: [0.45, 0.65], muscle: [0.45, 0.65], bust: [0.45, 0.75] }, armed: true },
+    },
     madam: { f: { wear: [["chemise"], ["velvetBodice"], ["gown"], ["boots"]], hair: ["topknot", "long"], build: { weight: [0.5, 0.7], muscle: [0.32, 0.42], bust: [0.7, 1] } } },
     courtesan: { f: { wear: "lingerie", hair: ["long", "long", "bob", "ponytail", "topknot"], build: { weight: [0.4, 0.55], muscle: [0.38, 0.46], bust: [0.6, 1] } } },
 };
@@ -51,24 +88,32 @@ const PARTS = {
 // A courtesan's lingerie: one colour, and what goes with it
 const LINGERIE = ["Black", "Crimson", "Emerald", "Ivory"];
 
+// What's carried in the right hand (put away for a tankard, at a table)
+const WEAPONS_IN_HAND = new Set(["sword", "staff", "warHammer"]);
+
+// A youthful look's bright eyes and hair
+const BRIGHT = Object.freeze({ irises: ["#3fa6e8", "#56c48a", "#9a6ae0", "#e0a03a"], hair: ["platinum", "blond", "rose", "auburn", "black", "red"] });
+
 // Grey with age (the greybeard), or now and then
 const GREY = ["grey", "white"];
 
 /**
- * A look for one of the folk: { shape, look, equipment, walk } (as presets.js FOLK's), from
- * `one`: { role (roles.js: barkeep, barmaid, patron, innkeeper, madam, courtesan, smith,
- * apprentice), local (their part: wench, greybeard...), sex ("f" or "m"), seed }.
+ * A look for one of the folk: { shape, look, equipment, walk, sheathed } (as presets.js FOLK's),
+ * from `one`: { role (roles.js: barkeep, barmaid, patron, innkeeper, madam, courtesan, smith,
+ * apprentice, priest, acolyte, worshipper, receptionist), local (their part: wench, greybeard...),
+ * look (their look, if not their role's: an adventurer's calling, warrior, ranger, mage, rogue or
+ * cleric), sex ("f" or "m"), seed }.
  */
-export function folkLook({ role, local = role, sex = "m", seed = 1 }) {
+export function folkLook({ role, local = role, look: calling = null, sex = "m", seed = 1 }) {
     const random = createRandom(seed * 2654435761 + 97);
-    const part = role === "barmaid" ? "wench" : role;
+    const part = calling ?? (role === "barmaid" ? "wench" : role);
     const spec = PARTS[part]?.[sex] ?? PARTS.patron[sex] ?? PARTS.patron.m;
     const lineage = random.pick(LINEAGES);
     const [african, asian, caucasian] = lineage.mix.map((share) => Math.max(0, share + random.range(-0.08, 0.08)));
     const total = african + asian + caucasian;
     const between = ([least, most]) => random.range(least, most);
     const { build } = spec;
-    const old = local === "greybeard" || random.chance(0.08);
+    const old = local === "greybeard" || (!spec.youthful && random.chance(0.08));
 
     // The body: a man or a woman, as tall and heavy and strong as their part has them
     const macro = {
@@ -89,15 +134,22 @@ export function folkLook({ role, local = role, sex = "m", seed = 1 }) {
         details.shoulders = random.range(0, 0.4);
     }
 
+    // (Youthful, as a hero of an adventure story would draw a young woman: big eyes, a small nose
+    // and mouth, a soft jaw, on a grown woman's body)
+    if (spec.youthful) {
+        macro.height = random.range(0.4, 0.5);
+        Object.assign(details, { eyeSize: random.range(0.9, 1), noseLength: random.range(-0.7, -0.5), noseWidth: random.range(-0.6, -0.4), noseTip: random.range(0.3, 0.5), mouthWidth: random.range(-0.5, -0.3), lips: random.range(0.1, 0.3), jawWidth: random.range(-0.7, -0.5), chin: random.range(-0.5, -0.3), cheekbones: random.range(0, 0.2), headSquare: random.range(-0.5, -0.3), headSize: random.range(0.05, 0.12), browAngle: 0.3 });
+    }
+
     if (part === "courtesan") {
         Object.assign(details, { waist: random.range(-0.9, -0.6), hips: random.range(0.14, 0.28), buttocks: random.range(0.4, 0.55), thighs: random.range(0, 0.1) });
     }
 
     // Skin, eyes and hair as their forebears had them
-    const colour = old ? random.pick(GREY) : random.pick(lineage.hair);
+    const colour = old ? random.pick(GREY) : random.pick(spec.youthful ? BRIGHT.hair : lineage.hair);
     const look = {
         skin: { tone: SKIN_TONES[random.pick(lineage.tones)], blush: random.range(0.3, 0.75), brows: random.range(0.5, 0.9), freckles: lineage.tones.includes("fair") && random.chance(0.3) ? random.range(0.2, 0.5) : 0 },
-        eyes: { iris: random.pick(lineage.irises) },
+        eyes: { iris: random.pick(spec.youthful ? BRIGHT.irises : lineage.irises) },
         hair: { style: random.pick(spec.hair), beard: sex === "m" ? random.pick(spec.beard ?? ["none"]) : "none", colour: HAIR_COLOURS[colour] },
     };
 
@@ -121,5 +173,11 @@ export function folkLook({ role, local = role, sex = "m", seed = 1 }) {
         equipment = spec.wear.map((choices) => random.pick(choices)).filter(Boolean);
     }
 
-    return { label: local, shape: { macro, details }, look, equipment, walk: "natural" };
+    // (Drinking at a table: a tankard in the hand their weapon would be in)
+    if (role === "patron" && calling) {
+        equipment = [...equipment.filter((id) => !WEAPONS_IN_HAND.has(id)), "tankard"];
+    }
+
+    // (What they carry put away, as they're not fighting: `sheathed`)
+    return { label: local, shape: { macro, details }, look, equipment, walk: "natural", sheathed: Boolean(spec.armed) };
 }

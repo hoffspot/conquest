@@ -1,10 +1,15 @@
 name: CI
 
+# Pull requests, and main when they're merged (a branch's pushes are tested once, in its pull
+# request, not twice)
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
+  # Lint and the unit tests
   test:
     runs-on: ubuntu-latest
     steps:
@@ -19,6 +24,24 @@ jobs:
       - run: npm run lint
       - run: npm test
 
+  # The end-to-end tests, split three ways, run side by side
+  e2e:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    name: e2e (${{ matrix.shard }} of 3)
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
       - name: Install Chromium for the end-to-end tests
         run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+      - run: npx playwright test --shard=${{ matrix.shard }}/3

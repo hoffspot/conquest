@@ -187,7 +187,7 @@ player is a step, not straight back through.
 ### Every building's inside (core/insides.js)
 
 Wenches and Ale's floors are made with the town, as above. Every other building that can be gone
-into (`ENTERABLE`: taverns and smithies so far; temples and guilds to come), in the start town and in
+into (`ENTERABLE`: taverns, smithies, temples and adventurers' guilds), in the start town and in
 every settlement as it's laid out, is known to the world's `interiors` (`Interiors`, by key:
 `${place}:${piece id}`, such as `home:tavern-2`), and its front door is one of the world's links
 from the start (`${key}/door`), its inside end still to make (`pending`). Its floors and folk are
@@ -236,6 +236,67 @@ are kept.
   Its folk (`smithyFolkOf`): the smith, going from the forge (heating the work: `heat`) to the
   anvil (hammering it: `forge`), to the trough (quenching it: `quench`) and back to the anvil;
   and the apprentice, at the bellows (`pump`) and the grindstone (`crank`).
+- **A temple** (`templeRooms`) is a nave 16 by 18 metres, to all of the Six under its patron
+  ("the Temple of Aurelia"): the patron's altar on a dais at the north end, their statue behind
+  it; a shrine to each of the other five along the walls (`shrinesOf`: in the order they woke),
+  and a stand of votive candles; pews either side of the aisle, facing the altar; and a basin of
+  water either side of the door:
+
+  ```
+  ................   Z  the patron's statue   a  altar    s  shrine
+  ......ZZZZ......   v  votive candles        p  pew      f  basin
+  ......aaaa......
+  ................
+  s..............s
+  ................
+  ..pppp....pppp..
+  ................
+  s.pppp....pppp.s
+  ................
+  ..pppp....pppp..
+  ................
+  s.pppp....pppp.v
+  ................
+  ..pppp....pppp..
+  ................
+  f..............f
+  .......DD.......
+  ```
+
+  Its folk (`templeFolkOf`): the priest (a man or a woman), going between the altar, where they
+  bless the pews (`bless`), and the shrines, lighting their candles (`light`); an acolyte, at
+  the votive candles and the basins; and two to four worshippers seated in the pews.
+- **An adventurers' guild** (`guildRooms`) is a hall 20 by 16 metres ("the Adventurers'
+  Guild"), as the guilds of adventure stories have them: the counter across the north end, with
+  shelves of ledgers and scrolls on the wall behind it; the quest board along the west wall;
+  four tables with benches; the hearth on the east wall; and barrels either side of the door:
+
+  ```
+  eeeeeeee............   e  shelves     M  counter   q  quest board
+  ....................   T  table       b  bench     H  hearth
+  ..MMMMMMMM..........   K  barrels
+  ....................
+  q...................
+  q.....bbb.....bbb...
+  q.....TTT.....TTT..H
+  q.....bbb.....bbb..H
+  q..................H
+  ......bbb.....bbb...
+  ......TTT.....TTT...
+  ......bbb.....bbb...
+  ....................
+  ....................
+  KK................KK
+  .........DD.........
+  ```
+
+  Its folk (`guildFolkOf`): the receptionist behind the counter, stamping notices at either end
+  of it (`stamp`) and filing them on the shelves behind her (`file`); two adventurers at the
+  quest board, reading the notices (`read`), one going up to the counter now and then; and two
+  to four more at the tables, drinking to their last job. Each adventurer has a calling
+  (warrior, ranger, mage, rogue or cleric: every one before any comes twice), dressed and armed
+  as it has them, their weapons sheathed; those at the tables hold tankards instead of their
+  swords, staves and hammers. The quest board's notices can't be taken yet.
 
 ## The battle (core/battle.js)
 
@@ -245,10 +306,17 @@ Each step makes events (`attack`, `draw`, `projectile`, `hit`, `miss`, `death`, 
 of them since it was last called (so a spell cast between frames is shown too). Nothing in it
 draws anything.
 
-- **Moving.** Each character stands on one square and walks from square middle to square middle
-  along A* paths (8 directions, no cutting corners past blocked squares). It never steps into a
-  square another character is on or stepping into; if someone is in the way for 0.4 s it finds a
-  way round. Every map's squares are read the same way (`core/grid.js`: `blocked`, `opaque` and
+- **Moving.** Each character stands on one square and finds its way along A* paths (8
+  directions, no cutting corners past blocked squares). It doesn't walk them square by square
+  (which zig-zags: on open ground the shortest ways in 8 directions go straight, then diagonally,
+  or back and forth between the two): it heads in a straight line for the furthest square of its
+  path it can see (up to 64 on), with 0.3 metres of room either side of it for its body (so it
+  doesn't graze a corner), across no one; the squares on that line become its path. As it steps
+  onto that square it looks ahead again, so it turns only where it has to, at corners, and it
+  faces the way it's going. It's on each square as it walks into it, stepping into the next only
+  if no one's on it or stepping into it, and ends in the middle of the last; if someone is in the
+  way for 0.4 s it finds a way round. Sent to fight someone, once the square it's stepping onto
+  has them within reach, it slows to that square's middle and stops there. Every map's squares are read the same way (`core/grid.js`: `blocked`, `opaque` and
   `ground` for any square, blocked off the map), whether kept in rows or in chunks. On a big map
   (the world outside), A* looks only in a window round the start and the goal, 64 squares wider
   each way, and gives up after 120,000 squares; the others in the way are a set of squares to
@@ -550,7 +618,11 @@ one (after enemies, before the ground) tells the player to go through; it glows 
 ready, each looking as their part, sex and seed have them (`characters/folk.js`, `folkLook`:
 their height, build and face, their forebears' skin, eyes and hair, how they wear their hair and
 beard, and what their part wears: the barkeep's apron, a wench's bodice and skirt, a patron's
-tunic or kirtle, the madam's gown, a courtesan's lingerie in one of four colours); all with less
+tunic or kirtle, the madam's gown, a courtesan's lingerie in one of four colours, the priest's
+white vestments, the guild receptionist's uniform, an adventurer's calling's arms and armour,
+sheathed); the receptionist has the youthful look of a heroine of an adventure story, a young
+woman with big bright eyes, a small nose and mouth and a soft jaw, and bright hair in twin tails
+or a bob; all with less
 hair than the player, as there are more of them, and nothing worn that never shows, lit but
 casting no shadows. They have no name plates, can't
 be tapped to fight (a tap walks up to them to talk), and show on the minimap as blue dots. Only
@@ -559,11 +631,15 @@ they are. Their acts and rests play their animations, and a sound: tankards clin
 of a toast, and softly as one's set down), ale pouring from a tap, a tankard thumped on a table.
 In a smithy, each of the smith's three blows rings on the anvil and throws sparks off it; the
 work hisses in the trough, steam rising; the bellows breathe and the forge's fire flares with
-them (`view.flare`); and the grindstone rasps and turns while it's cranked (`interior.drive`).
+them (`view.flare`); and the grindstone rasps and turns while it's cranked (`interior.drive`). In
+a temple, the priest's blessing chimes softly and a golden glimmer rises over the pews, and a
+lit candle sends up a spark. In a guild, each of the receptionist's stamps thumps on the counter,
+and paper rustles as she files a notice and as the adventurers read the board.
 
 **Classes and resting** (core/roles.js). Everyone has a class (a role): the barkeep, a serving
-wench, a patron, an innkeeper, the madam, a courtesan, the blacksmith and the apprentice, and the
-player's adventurer. A class has a title and five resting
+wench, a patron, an innkeeper, the madam, a courtesan, the blacksmith and the apprentice, the
+priest, an acolyte and the worshippers, the guild's receptionist, and adventurers (the player,
+and those at the guild). A class has a title and five resting
 animations, shared by everyone of it (their poses: actions.js `RESTS`, see
 [CHARACTERS.md](CHARACTERS.md#resting)):
 
@@ -576,8 +652,12 @@ animations, shared by everyone of it (their poses: actions.js `RESTS`, see
 | Madam | fanning herself, hands on her hips, touching her necklace, drumming her fingers, smoothing her gown |
 | Courtesan | twirling her hair, a slow stretch, a hand on her hip, blowing a kiss, smoothing down her sides |
 | Blacksmith | wiping the brow, looking over the work, rolling the shoulders, stretching the back, shifting the weight |
+| Priest | hands folded in prayer, arms raised in praise, a bow of the head, the sign of the Hearth, hands clasped behind |
+| Acolyte | hands folded in prayer, a bow of the head, looking about, the sign of the Hearth, a yawn |
+| Worshipper (seated) | praying, head bowed, looking up, the sign of the Hearth, hands in the lap |
 | Apprentice | wiping the brow, looking about, rolling the shoulders, a yawn, stretching |
-| Adventurer (the player) | stretching, looking about, rolling the shoulders, a yawn, shifting the weight |
+| Guild receptionist | a cheerful wave, chin in her hands, a little bow, tidying the papers, tucking back her hair |
+| Adventurer (the player, and at the guild) | stretching, looking about, rolling the shoulders, a yawn, shifting the weight |
 
 The folk rest when the battle says (every 4 to 9 seconds while the player can see them).
 
@@ -603,12 +683,13 @@ than 4 squares apart, or an enemy in sight or after the player ends it. They sto
 were doing and face the player until it's over.
 
 A conversation is a tree (`TREES`, one for each class; `OWN_TREES` for folk with their own, by
-id, such as the greybeard's siege story). Each node has what they say and the replies to it:
+id, such as the greybeard's siege story; and for folk who talk as another class does, `talk`:
+the adventurers drinking at a guild's tables are patrons who talk as adventurers). Each node has what they say and the replies to it:
 
 - **Lines**: one, or a few to pick from (never the same twice running), or groups for different
   moments (`{ if, lines }`: a stranger is greeted differently from someone they've met, and the
   madam knows if the barkeep sent the player). Words are filled in: `{player}`, `{name}`,
-  `{fullName}`, `{title}`, `{place}` (the tavern they're in), and the given names of the folk
+  `{fullName}`, `{title}`, `{place}` (the building they're in), `{town}`, and the given names of the folk
   there by their part (`{madam}`, `{barkeep}`..., and `{keeper}`: whoever keeps the rooms
   upstairs). What's upstairs (`if: { upstairs }`: anything, nothing, or which) chooses what the
   barkeep says of it, and whether there's a bed to ask for; an innkeeper has a talk of their own.
@@ -625,6 +706,13 @@ id, such as the greybeard's siege story). Each node has what they say and the re
   something done in the world, handed to the game (`onEffect`): buying (`{ buy: "ale", price:
   2 }`), paying, renting a room, a quest moving on (`{ quest: "orc", step: "accepted" }`). The
   world doesn't change yet: the game keeps the last 50 (`game.done`) for when it does.
+
+**The guild's talk.** The receptionist is cheerful and a little flustered: she welcomes a
+stranger to the town's branch of the guild, and signs the player up as an adventurer
+(remembered, and the player learns `guildMember`: "Rank: Copper. Everyone starts at Copper,
+don't pout!"), and tells of the quest board, the ranks (Copper, Iron, Bronze, Silver, Gold and
+Mithril) and the other branches. The adventurers are wry and give advice ("Be nice to
+{receptionist}. She decides who gets the good notices.").
 
 **The courtesans' talk** (`TREES.courtesan`) is warm and teasing, all innuendo and nothing
 explicit, and built to lead to things done in the world once the game does them. Each greets a
@@ -665,6 +753,24 @@ forge; the anvil on its stump, a glowing bar on it; the quenching trough, open, 
 grindstone in its frame; racks of tools along the north wall, and of swords and a shield along
 the east; the workbench with its vice and files; and the charcoal heaped in a corner, sacks by
 it. In the smithy the town's music is heard as if through its walls, under the forge's crackle.
+
+A temple has whitewashed walls between pillars, tall windows down both sides, and pale
+flagstones with a red runner up the aisle to the dais: two broad steps to the altar, stone under
+a white cloth bordered in gold, with candlesticks and a book; behind it the patron's statue, a
+robed figure in white with arms held out in blessing and a halo in the god's colour, on a
+plinth, their colours hanging either side. Each shrine is a niche of its god's colour with a
+small white statue of them and three candles before it. There are pews with high backs, a stand
+of votive candles in three iron tiers, stone basins of water on pedestals, and a great ring of
+candles hanging over the nave. In a temple the town's music is hushed, far off.
+
+An adventurers' guild has floorboards and ochre plaster walls with windows on two sides, and the
+guild's banners, blue with a gold shield, either side of the counter and by the door. Behind the
+counter, shelves of ledgers, scrolls in their pigeonholes and a strongbox. The counter is dark
+wood with the guild's crest on its front and a blue runner along its top, and on it a bell, a
+ledger, a stamp and its pad, a stack of notices and a quill in its pot. The quest board is a
+framed board thick with notices, each pinned or sealed in red wax, some curling. The tables have
+tankards, a map, dice and candles; the hearth has a fire and a great horned skull over it; a ring
+of candles hangs over the tables. In the guild the tavern's jig plays as lively as in a taproom.
 
 The flames are crossed quads with a shader of rising noise, drawn additively and flickering,
 and embers rise from the hearth. The room is open above, and what stands in front of the player
@@ -949,11 +1055,54 @@ patch 192 metres square at a time round the player, the town's picture laid in i
 settlements' buildings and props painted over their ground the same way, painted again
 when they've gone far enough that what's shown would reach the patch's edge. Each frame (at most 30 times a second)
 draws it scaled to fit, then what the camera sees (the ground under the screen's corners), where
-the player is going, the enemies (red dots, the target ringed) and the player (an arrowhead
-pointing the way they face). A tap on it walks the player there, or fights an enemy within 12
-pixels of the tap; a double tap runs. Inside, each floor is painted from its plan: the floor,
-walls, furniture in its colours, the stairs' treads, round barrels, the hearth's fire and the
-doorway; only those on the same floor as the player are shown.
+the player is going, the enemies (red dots, the target ringed), an icon over each building the
+player has gone into, and the player (an arrowhead pointing the way they face). A tap on it walks
+the player there, or fights an enemy within 12 pixels of the tap; a double tap runs; holding it
+(0.55 s, without moving) opens the world map. Inside, each floor is painted from its plan: the
+floor, walls, furniture in its colours, the stairs' treads, round barrels, the hearth's fire and
+the doorway; only those on the same floor as the player are shown.
+
+**The icons** (`app/mapicons.js`) are only over the buildings that can be gone into, and only once
+the player has been inside (a house that can't be entered never has one): a round dark badge
+rimmed in the colour of what it is, with its sign: a foaming tankard for a tavern (amber), an
+anvil throwing a spark for a smithy (steel), a temple's columns under its pediment for a temple
+(white and gold), and crossed swords behind a blue shield for an adventurers' guild (gold). They're
+drawn on a canvas from paths on a 24-unit grid, the same on the minimap (22 pixels), the world
+map (24) and its key.
+
+**What the player's found** (`core/explored.js` `Explored`): the buildings they've gone into (by
+key: marked the first time they cross into one of its floors) and the chunks of the world they've
+set foot in (64 metres square; the chunk they're standing in is marked as they go, out in the
+world). The chunks are a bit each, 128 by 128 of them in 2 KB; kept with a saved game in
+`pellagos.explored` (`{ created, seed, entered, visited }`, the chunks as base64), for that
+character only, as the talks are.
+
+### The world map (app/worldmap.js)
+
+Held on the minimap (or M on a keyboard), the whole screen becomes a map of the world, the game
+paused under it, until it's closed (the cross, Escape, or M again). It opens on the player, about
+900 metres across the screen's shorter side; drag to look about, pinch or scroll to zoom (from a
+quarter of a metre to a pixel out to the whole world), or use its buttons: where you are, zoom in,
+zoom out. A key in the corner shows the four icons and the fog.
+
+- **The land** is one picture of the world's plan, four pixels to a cell (32 metres), each cell in
+  its land's grass colour as the minimap has it, shaded by the hills as if lit from the
+  north-west, with the seas, lakes and rivers; the roads between the settlements over it.
+- **Nearer in** (4 metres to a pixel or closer), each chunk the player has been in is shown as
+  the minimap paints it, every square of it: the ground, water and bridges, the town and the
+  settlements' buildings, props, trees and the land's features, at two pixels to the metre.
+  They're painted as they come into view, six a frame (the rest next frame), and the last 240
+  kept.
+- **The fog** lies over every chunk the player hasn't set foot in: opaque, cloudy (a tiling
+  tile of soft noise in the fog's colours, moving with the map as it's dragged), with the chunks'
+  square edges. Nothing of the land shows through it; it lifts off a chunk the moment the player
+  walks into it.
+- **Over it**: the names of the settlements the player has been in (20 metres to a pixel or
+  closer), the icons over the buildings they've gone into (6 metres to a pixel or closer), and
+  the player, pointing the way they face (inside, at the building they're in).
+
+A redraw waits for the next frame, or 50 ms if the browser has no frame coming (as when nothing
+else on the page is changing, with the game paused).
 
 ### Sound (audio/)
 
@@ -1172,7 +1321,7 @@ closes it.
 The character is saved in the browser's local storage as `pellagos.save`: `{ version, hero,
 seed, created }`, where `hero` is `{ name, shape: { macro, details }, look: { skin, eyes, hair },
 weapon }`. Settings (the minimap and sound switches, the three volumes, debug mode and its controls) are in
-`pellagos.settings`. A save of another
+`pellagos.settings`; what the character's found of the world, in `pellagos.explored`. A save of another
 version, or one naming a weapon the game doesn't know, is ignored rather than misread; if the
 browser won't store anything (private browsing), the game still plays, it just forgets.
 
@@ -1226,8 +1375,10 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   streets leaving the ways asked; the exact sums matching Math's; and castle layouts.
 - `test/world.test.js`, `test/combat.test.js`: the world's layout and pathing on many seeds,
   what hides what's behind it (houses, landmarks, trees) and what can be seen over (props), and
-  the battle: reach in every direction, line of sight (seeing and shooting over barrels, not
-  through walls), attack timing, projectiles, damage rolls,
+  the battle: walking open ground in a straight line (facing one way the whole way, never more
+  than a centimetre off the line), keeping clear of walls and turning only at corners; reach in
+  every direction, line of sight (seeing and shooting over barrels, not through walls), attack
+  timing, projectiles, damage rolls,
   staggering, death and respawn, the orc's patrol, chase and giving up, running (its speed,
   speeding up and slowing down, charging), stamina (used, got back, running out, never below
   none or above its most), spells (heal rolls, stun freezing the orc and calling off its blow,
@@ -1248,8 +1399,15 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   upstairs as the tavern's name has it, or none; the folk worked out from the plan (on the floor,
   seated on benches, their rounds reachable, who keeps upstairs and how many courtesans); a
   smithy's forge, bellows, anvil, trough and grindstone all got to from its door, the smith and
-  apprentice at them, and the smithy named for its smith; the settlements' taverns' and
-  smithies' doors among the world's links as they're laid out, their floors and folk
+  apprentice at them, and the smithy named for its smith; a temple's altar, statue, five shrines
+  to the other gods, pews, votive candles and basins, the priest's and acolyte's rounds got to
+  from the door, worshippers seated facing the altar, and the priest in white vestments; a
+  guild's counter, shelves, quest board, tables and hearth, the receptionist stamping behind the
+  counter and filing at the shelves, adventurers of every calling at the board and the tables,
+  the receptionist in the guild's uniform with twin tails or a bob, adventurers sheathed and
+  those drinking holding tankards; every kind of building drawn by its style; the
+  settlements' taverns', smithies', temples' and guilds' doors among the world's links as they're laid
+  out, their floors and folk
   made once when wanted, each building somewhere of its own; going in through a door not made yet
   in the battle; each floor built by its style and the doors picked up; folk made up as they're
   wanted, as their part and sex have them, each their own; what's upstairs in talk; and the
@@ -1301,8 +1459,12 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   is (fireballs orange and red, bolts violet and blue, heals green, stars bright); flying in them
   (straight, spiralling, jittering, as twins, drawn out), bursting in their colours, rings and
   stars.
+- `test/explored.test.js`: the buildings gone into, once each; a chunk's fog lifted when it's set
+  foot in, and only that chunk, to the world's corners and nothing off it; kept and read back
+  just as it was.
 - `test/app.test.js`, `test/town3d.test.js`, `test/manifest.test.js`, `test/sw.test.js`: saving
-  (and what's been said in talks, for the saved character only),
+  (and what's been said in talks, and what's been found of the world, for the saved character
+  only),
   heroes (and forgetting volumes saved on the old scale), the minimap's colours (in the town and
   inside), the action wheel (which slice a flick is in, its shapes, its
   actions and icons), the loader's byte counting, the ground's blending, the town's
@@ -1360,9 +1522,15 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   by tap and by number key, Escape to stop), up the stairs (the madam), down and out again,
   another tavern got ready as the player comes near (its own taproom, sound, minimap and folk
   inside), let go far off and built at once if walked straight into, a smithy's smith heating,
-  hammering and quenching and its apprentice at the bellows and grindstone (each heard),
+  hammering and quenching and its apprentice at the bellows and grindstone (each heard), a
+  temple's priest in white blessing and lighting the shrines' candles, worshippers praying, and
+  the priest telling of the temple's patron, a guild's receptionist stamping notices and
+  adventurers reading the board and drinking, their weapons sheathed, and the receptionist
+  signing the player up,
   walking by the
-  minimap, walking 300 metres out of the town into the world (the chunks round the player drawn,
+  minimap, a building gone into marked on the minimap, the world map held open from it (the game
+  paused under it, the fog over every chunk but those walked into, the tavern's icon and the
+  town's name on it, zooming out, closed by Escape and by M), walking 300 metres out of the town into the world (the chunks round the player drawn,
   those left behind thrown away, the minimap following), Game options and the volume sliders
   (remembered), the
   action wheel (stunning the orc, a flick refused while cooling down, then a heal), and a phone

@@ -38,6 +38,9 @@ export const HAIRSTYLES = Object.freeze({
     long: { label: "Long", strands: 1700, length: 0.8, lift: 0.03, gravity: 40, flow: "part", width: 0.02, segments: 14, volume: 0.01, hem: [-0.4, -0.34], ragged: 0.012 },
     ponytail: { label: "Ponytail", strands: 1300, length: 0.3, lift: 0.02, gravity: 1, flow: "tail", width: 0.016, segments: 6, volume: 0.004, tail: { strands: 220, length: 0.34, width: 0.02, radius: 0.03 } },
     mohawk: { label: "Mohawk", strands: 520, length: 0.11, lift: 1.2, gravity: 0, flow: "up", width: 0.02, segments: 5, volume: 0.004, strip: 0.02, scalp: 0.3, stands: true },
+    // (Twin tails: the hair drawn back either side to a tie high on each side of the back of the
+    // head, a tail from each, and a short fringe of bangs over the forehead)
+    twintails: { label: "Twin tails", strands: 1400, length: 0.3, lift: 0.02, gravity: 1, flow: "twin", width: 0.016, segments: 6, volume: 0.004, fringe: 0.035, bangs: 0.085, tails: { strands: 170, length: 0.4, width: 0.02, radius: 0.026 } },
     topknot: { label: "Topknot", strands: 900, length: 0.3, lift: 0.02, gravity: 0, flow: "knot", width: 0.016, segments: 6, volume: 0.004, raise: 0.03, scalp: 0.4, knot: true },
 });
 
@@ -459,6 +462,7 @@ function thinned(style, detail) {
         width: wider(style.width),
         segments: Math.max(Math.min(style.segments, 5), Math.round(style.segments * (0.5 + 0.5 * detail))),
         tail: style.tail && { ...style.tail, strands: fewer(style.tail.strands), width: wider(style.tail.width) },
+        tails: style.tails && { ...style.tails, strands: fewer(style.tails.strands), width: wider(style.tails.width) },
     };
 }
 
@@ -528,9 +532,10 @@ export function buildHair(character, style = "short", beard = "none", { seed = 1
     const crown = at(0, 0.1, -0.11);
     const knot = at(0, 0.145, -0.085);
     const tie = at(0, 0.035, -0.17);
+    const ties = { [-1]: at(-0.085, 0.07, -0.11), 1: at(0.085, 0.07, -0.11) };
 
-    // A ponytail or topknot can't come out of a helmet
-    const gathered = below < Infinity && (hair.tail || hair.knot);
+    // A ponytail, twin tails or a topknot can't come out of a helmet
+    const gathered = below < Infinity && (hair.tail || hair.tails || hair.knot);
 
     if (hair.strands && !gathered) {
         const candidates = sampleSurface(positions, headTriangles, hair.strands * 8, next).filter(({ point, normal }) => {
@@ -572,8 +577,10 @@ export function buildHair(character, style = "short", beard = "none", { seed = 1
             const along = (direction) => direction.addScaledVector(outward, -direction.dot(outward)).normalize();
             const [x, y, z] = face.toFace(point.x, point.y, point.z);
 
-            // Which side it's on (at the parting, either)
+            // Which side it's on (at the parting, either); and whether it's one of the bangs (twin
+            // tails' fringe: the front of the hairline, over the forehead)
             const side = Math.abs(x) > 0.0005 ? Math.sign(x) : next() < 0.5 ? -1 : 1;
+            const bang = Boolean(hair.bangs) && aboveHairline(x, y, z) < 0.03 && Math.abs(Math.atan2(x, z - HEAD_CENTRE_Z)) < 0.65;
             let direction;
 
             switch (hair.flow) {
@@ -593,6 +600,11 @@ export function buildHair(character, style = "short", beard = "none", { seed = 1
                 case "tail":
                     direction = along(tie.clone().sub(point));
                     break;
+                case "twin":
+                    // Drawn back to the tie on its side; or, at the front of the hairline, a bang
+                    // falling over the forehead
+                    direction = bang ? along(new THREE.Vector3(side * 0.12, -1, 0.3)) : along(ties[side].clone().sub(point));
+                    break;
                 case "knot":
                     direction = along(knot.clone().sub(point));
                     break;
@@ -602,7 +614,7 @@ export function buildHair(character, style = "short", beard = "none", { seed = 1
             }
 
             // Below the head's widest point, where it hangs from the start, downhill
-            if (!hair.stands && !hair.tail && !hair.knot) {
+            if (!hair.stands && !hair.tail && !hair.knot && !(hair.tails && !bang)) {
                 direction.lerp(along(new THREE.Vector3(0, -1, 0)), smoothstep(-0.02, -0.3, outward.y)).normalize();
             }
 
@@ -615,12 +627,12 @@ export function buildHair(character, style = "short", beard = "none", { seed = 1
             // Each strand lies in its own layer, the outer ones further off the scalp
             const layer = next();
             const lie = (k) => 0.002 + hair.volume * layer * Math.min(1, k * 4);
-            const stop = hair.flow === "knot" ? knot : hair.flow === "tail" ? tie : null;
+            const stop = hair.flow === "knot" ? knot : hair.flow === "tail" ? tie : hair.flow === "twin" && !bang ? ties[side] : null;
             const start = point.clone().addScaledVector(normal.dot(outward) > 0 ? normal : outward, 0.001);
             const hem = hair.hem ? at(0, hemAt(hair.hem, z) + (next() - 0.5) * 2 * hair.ragged, 0).y : null;
             const points = grow(start, direction, {
                 // (Uncut hair growing low on the head, round the ears and at the nape, is shorter)
-                length: hair.length * (hem === null && !stop ? (0.9 + 0.2 * next()) * (0.4 + 0.6 * smoothstep(-0.3, 0, outward.y)) : 1),
+                length: bang ? hair.bangs * (0.85 + 0.3 * next()) : hair.length * (hem === null && !stop ? (0.9 + 0.2 * next()) * (0.4 + 0.6 * smoothstep(-0.3, 0, outward.y)) : 1),
                 segments: hair.segments,
                 bend: hair.gravity,
                 head: hair.stands ? null : head,
@@ -631,7 +643,8 @@ export function buildHair(character, style = "short", beard = "none", { seed = 1
                 onFace: (p) => {
                     const [fx, fy, fz] = face.toFace(p.x, p.y, p.z);
 
-                    return aboveHairline(fx, fy, fz) < -(hair.fringe ?? 0) && Math.abs(Math.atan2(fx, fz - HEAD_CENTRE_Z)) < 1.2;
+                    // (A bang falls over the forehead, to the brows)
+                    return aboveHairline(fx, fy, fz) < -((bang ? hair.bangs : hair.fringe) ?? 0) && Math.abs(Math.atan2(fx, fz - HEAD_CENTRE_Z)) < 1.2;
                 },
                 aside: () => at(side, 0, -0.4).sub(at(0, 0, 0)),
                 stop,
@@ -643,6 +656,10 @@ export function buildHair(character, style = "short", beard = "none", { seed = 1
 
         if (hair.tail) {
             addTail(builder, hair.tail, tie, keepOut, next, detail);
+        }
+
+        for (const side of hair.tails ? [-1, 1] : []) {
+            addTail(builder, hair.tails, ties[side], keepOut, next, detail, new THREE.Vector3(side * 0.55, -0.6, -0.55).normalize());
         }
 
         if (hair.knot) {
@@ -884,12 +901,12 @@ function resample(points, count) {
  * ends; its middle falls back and down under gravity, clear of the head and back by its own
  * thickness, and the strands lie round it, each facing out from it, turning a little down it.
  */
-function addTail(builder, tail, tie, keepOut, next, detail = 1) {
+function addTail(builder, tail, tie, keepOut, next, detail = 1, start = new THREE.Vector3(0, -0.6, -0.8).normalize()) {
     const segments = Math.max(6, Math.round(12 * (0.4 + 0.6 * Math.min(1, detail))));
     const radius = (t) => tail.radius * (0.3 + 0.7 * smoothstep(0, 0.3, t) - 0.45 * smoothstep(0.35, 1, t));
 
     // Its middle, from the tie
-    const axis = grow(tie.clone(), new THREE.Vector3(0, -0.6, -0.8).normalize(), {
+    const axis = grow(tie.clone(), start, {
         length: tail.length,
         segments: 24,
         bend: 16,

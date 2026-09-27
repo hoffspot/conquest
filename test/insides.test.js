@@ -14,8 +14,9 @@ const { Doors } = await import("../client/js/app/doors.js");
 const { folkLook } = await import("../client/js/characters/folk.js");
 const { EQUIPMENT } = await import("../client/js/characters/equipment.js");
 const { Battle, STEP_MS } = await import("../client/js/core/battle.js");
-const { upstairsIs } = await import("../client/js/core/dialogue.js");
-const { ENTERABLE, ENTRANCES, entranceOf, FINISHES, LAYOUTS, openEntrances, smithyFolkOf, smithyRooms, taproomPlan, tavernFolkOf, tavernRooms } = await import("../client/js/core/insides.js");
+const { treeFor, upstairsIs } = await import("../client/js/core/dialogue.js");
+const { ENTERABLE, ENTRANCES, entranceOf, FINISHES, guildFolkOf, guildRooms, LAYOUTS, openEntrances, shrinesOf, smithyFolkOf, smithyRooms, taproomPlan, tavernFolkOf, tavernRooms, templeFolkOf, templeRooms } = await import("../client/js/core/insides.js");
+const { GOD_IDS, GODS } = await import("../client/js/core/lore/gods.js");
 const { squaresOf } = await import("../client/js/core/grid.js");
 const { readPlan } = await import("../client/js/core/interiors.js");
 const { CHUNK, buildWorld } = await import("../client/js/core/overworld.js");
@@ -198,6 +199,150 @@ describe("a smithy's workshop and folk (insides.js)", () => {
     });
 });
 
+describe("a temple's nave and folk (insides.js)", () => {
+    it("has its patron's altar and statue, a shrine to each of the other five, pews, votive candles and basins, all got to from the door", () => {
+        for (const patron of GOD_IDS) {
+            const building = { key: `test:temple:${patron}`, name: `the Temple of ${GODS[patron].name}`, seed: patron.length * 7, patron };
+            const [floor] = templeRooms(building);
+            const nave = readPlan("nave", floor.name, floor.rows);
+            const door = nave.marks.D[0];
+            const count = (kind) => nave.pieces.filter((piece) => piece.kind === kind).length;
+
+            assert.equal(floor.style, "temple");
+            assert.equal(floor.patron, patron);
+            assert.equal(count("altar"), 1);
+            assert.equal(count("statue"), 1);
+            assert.equal(count("shrine"), 5);
+            assert.ok(count("pew") >= 20 && count("votive") === 1 && count("basin") === 2);
+            assert.deepEqual(shrinesOf(patron), GOD_IDS.filter((id) => id !== patron));
+
+            const folk = templeFolkOf(building, nave);
+            const [priest, acolyte, ...worshippers] = folk;
+
+            assert.equal(priest.role, "priest");
+            assert.equal(acolyte.role, "acolyte");
+            assert.ok(worshippers.length >= 2 && worshippers.length <= 4);
+
+            // The priest blesses from before the altar and lights each shrine's candles; the
+            // acolyte tends the votive candles and the basins; everywhere they go got to from the door
+            assert.deepEqual([...new Set(priest.routine.stops.map(({ act }) => act))], ["bless", "light"]);
+            assert.equal(priest.routine.stops.filter(({ act }) => act === "light").length, 5);
+
+            for (const one of [priest, acolyte]) {
+                for (const { square } of one.routine.stops) {
+                    assert.ok(!nave.blocked[square[1]][square[0]] && reachable(nave, door, square), `${one.local} at ${square}`);
+                }
+            }
+
+            // Worshippers seated in the pews, facing the altar
+            for (const one of worshippers) {
+                assert.equal(one.role, "worshipper");
+                assert.equal(nave.plan[one.square[1]][one.square[0]], "p");
+                assert.ok(one.routine.seated);
+                assert.equal(one.facing, Math.PI);
+            }
+        }
+    });
+
+    it("dresses its priest in white vestments", () => {
+        for (const [role, sex] of [["priest", "m"], ["priest", "f"], ["acolyte", "f"]]) {
+            const { equipment } = folkLook({ role, sex, seed: 5 });
+
+            assert.ok(equipment.includes("alb") && equipment.includes("albSkirt"), `${role} (${sex})`);
+            assert.equal(role === "priest", equipment.includes("chasuble"));
+        }
+
+        assert.ok(EQUIPMENT.alb.colour === "#f1ede4" && EQUIPMENT.chasuble.trim);
+    });
+});
+
+describe("a guild's hall and folk (insides.js)", () => {
+    it("has its counter, shelves, quest board, tables and hearth, all got to from the door, the receptionist behind the counter and adventurers at the board and tables", () => {
+        for (const seed of [1, 2, 3, 4, 5, 6]) {
+            const building = { key: `test:guild:${seed}`, name: "the Adventurers' Guild", seed };
+            const [floor] = guildRooms(building);
+            const hall = readPlan("hall", floor.name, floor.rows);
+            const door = hall.marks.D[0];
+            const count = (kind) => hall.pieces.filter((piece) => piece.kind === kind).length;
+
+            assert.equal(floor.style, "guild");
+            assert.equal(floor.sound, "guild");
+            assert.ok(count("counter") === 1 && count("shelves") === 1 && count("board") === 1 && count("hearth") === 1);
+            assert.ok(count("table") === 4 && count("barrels") === 2);
+
+            const folk = guildFolkOf(building, hall);
+            const [receptionist, ...adventurers] = folk;
+            const counter = hall.pieces.find(({ kind }) => kind === "counter");
+            const board = hall.pieces.find(({ kind }) => kind === "board");
+
+            // The receptionist, a young woman, stamps notices behind the counter and files at the
+            // shelves behind her
+            assert.equal(receptionist.role, "receptionist");
+            assert.equal(receptionist.sex, "f");
+            assert.deepEqual([...new Set(receptionist.routine.stops.map(({ act }) => act))], ["stamp", "file"]);
+
+            for (const { square, act } of receptionist.routine.stops) {
+                assert.ok(!hall.blocked[square[1]][square[0]] && reachable(hall, door, square), `receptionist at ${square}`);
+
+                if (act === "stamp") {
+                    assert.equal(square[1], counter.y - 1);
+                    assert.ok(square[0] >= counter.x && square[0] < counter.x + counter.w);
+                }
+            }
+
+            // Two adventurers read the board (one going to the counter now and then), and two to
+            // four more drink at the tables, of every calling before any's twice
+            const [reader, reader2, ...drinkers] = adventurers;
+
+            for (const one of [reader, reader2]) {
+                assert.equal(one.role, "adventurer");
+                assert.ok(one.routine.stops.some(({ act, square }) => act === "read" && square[0] === board.x + 1));
+
+                for (const { square } of one.routine.stops) {
+                    assert.ok(!hall.blocked[square[1]][square[0]] && reachable(hall, door, square), `${one.local} at ${square}`);
+                }
+            }
+
+            assert.ok(drinkers.length >= 2 && drinkers.length <= 4);
+
+            for (const one of drinkers) {
+                assert.equal(one.role, "patron");
+                assert.equal(one.talk, "adventurer");
+                assert.equal(hall.plan[one.square[1]][one.square[0]], "b");
+                assert.ok(one.routine.seated);
+            }
+
+            assert.equal(new Set(adventurers.slice(0, 5).map(({ look }) => look)).size, Math.min(5, adventurers.length));
+            assert.ok(adventurers.every(({ look }) => ["warrior", "ranger", "mage", "rogue", "cleric"].includes(look)));
+            assert.equal(new Set(folk.map(({ local }) => local)).size, folk.length);
+        }
+    });
+
+    it("dresses its receptionist in the guild's uniform, her hair in twin tails or a bob; its adventurers armed but sheathed, tankards in hand at the tables", () => {
+        for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+            const { equipment, look, sheathed } = folkLook({ role: "receptionist", sex: "f", seed });
+
+            assert.deepEqual(equipment.slice(0, 3), ["guildBlouse", "guildVest", "guildSkirt"]);
+            assert.ok(["twintails", "bob"].includes(look.hair.style));
+            assert.ok(!sheathed);
+        }
+
+        for (const calling of ["warrior", "ranger", "mage", "rogue", "cleric"]) {
+            for (const sex of ["f", "m"]) {
+                const reading = folkLook({ role: "adventurer", look: calling, sex, seed: 3 });
+                const drinking = folkLook({ role: "patron", look: calling, sex, seed: 3 });
+
+                assert.ok(reading.sheathed, `${calling} (${sex})`);
+                assert.ok(["sword", "bow", "staff", "warHammer"].some((id) => reading.equipment.includes(id)), `${calling} (${sex}): ${reading.equipment}`);
+                assert.ok(drinking.equipment.includes("tankard"), `${calling} (${sex}): ${drinking.equipment}`);
+                assert.ok(!["sword", "staff", "warHammer"].some((id) => drinking.equipment.includes(id)));
+            }
+        }
+
+        assert.ok(treeFor({ id: "x", role: "receptionist" }) && treeFor({ id: "x", role: "patron", talk: "adventurer" }) !== treeFor({ id: "x", role: "patron" }));
+    });
+});
+
 describe("the buildings (insides.js Interiors)", () => {
     let world;
     let interiors;
@@ -226,26 +371,31 @@ describe("the buildings (insides.js Interiors)", () => {
 
     it("knows Wenches and Ale as made already, with its own ids, first among the doors", () => {
         const home = interiors.buildings.get("home:tavern");
+        const [door] = world.links[0].ends[0].squares;
 
         assert.ok(home.made);
         assert.deepEqual(home.maps, ["taproom", "upstairs"]);
         assert.equal(interiors.of("taproom"), home);
         assert.equal(interiors.of("town"), null);
         assert.equal(world.links[0].id, "tavern-door");
+        assert.ok(Math.hypot(home.at[0] - door[0], home.at[1] - door[1]) < 12, `Wenches and Ale at ${home.at}`);
         assert.equal(home.folk, world.folk);
     });
 
-    it("puts every settlement's taverns' and smithies' doors among the world's links as it's laid out, their insides still to make", () => {
+    it("puts every settlement's taverns', smithies', temples' and guilds' doors among the world's links as it's laid out, their insides still to make", () => {
         const entered = settlement.town.pieces.filter((piece) => piece.kind === "landmark" && ENTERABLE.includes(piece.name));
 
-        assert.deepEqual(new Set(entered.map(({ name }) => name)), new Set(["tavern", "blacksmith"]));
+        assert.deepEqual(new Set(entered.map(({ name }) => name)), new Set(["tavern", "blacksmith", "church", "guild"]));
 
         for (const piece of entered) {
             const building = interiors.buildings.get(`${settlement.place.id}:${piece.id}`);
             const [outside, inside] = building.door.ends;
 
             assert.ok(world.links.includes(building.door));
-            assert.equal(building.name, piece.tavern?.name ?? "the smithy");
+
+            // (Where it stands, for its icon on the maps: its middle, a few steps from its door)
+            assert.ok(Math.hypot(building.at[0] - outside.squares[0][0], building.at[1] - outside.squares[0][1]) < 12, `${building.key}: at ${building.at}`);
+            assert.equal(building.name, piece.tavern?.name ?? (piece.patron ? `the Temple of ${GODS[piece.patron].name}` : { blacksmith: "the smithy", guild: "the Adventurers' Guild" }[piece.name]));
             assert.equal(outside.map, "town");
             assert.ok(outside.door && outside.squares.length === 2);
             assert.ok(inside.pending);
@@ -350,11 +500,18 @@ describe("the buildings (insides.js Interiors)", () => {
         assert.ok(doors.targets.length > count);
         assert.ok(doors.targets.some(({ end }) => end === fresh.door.ends[1]));
 
-        for (const id of building.maps) {
-            const interior = buildInterior(world.maps[id]);
+        // (Every kind drawn: a taproom, a smithy's workshop, a temple's nave, a guild's hall)
+        for (const kind of ENTERABLE) {
+            const one = [...interiors.buildings.values()].find((each) => each.kind === kind && each.key !== "home:tavern");
 
-            assert.ok(interior.object.children.length > 0);
-            interior.dispose();
+            interiors.make(one.key);
+
+            for (const id of one.maps) {
+                const interior = buildInterior(world.maps[id]);
+
+                assert.ok(interior.object.children.length > 0, `${kind}: ${id}`);
+                interior.dispose();
+            }
         }
     });
 });

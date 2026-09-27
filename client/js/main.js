@@ -16,7 +16,7 @@ import { registerServiceWorker } from "./app/device.js";
 import { Debug } from "./app/debug.js";
 import { formatBytes, Loader } from "./app/loader.js";
 import { MANIFEST } from "./app/manifest.js";
-import { loadSave, loadSettings, loadTalks, newSeed, saveSettings, saveTalks, writeSave } from "./app/save.js";
+import { loadExplored, loadSave, loadSettings, loadTalks, newSeed, saveExplored, saveSettings, saveTalks, writeSave } from "./app/save.js";
 import { WEAPONS } from "./core/weapons.js";
 
 const params = new URLSearchParams(location.search);
@@ -28,7 +28,7 @@ const debug = new Debug($("#debug"), { settings, onChange: applySetting });
 
 // What's been loaded and made: the loader, the game's modules, the view and character kit, the
 // heads-up display, and the game being played
-const state = { loader: null, modules: null, session: null, hud: null, game: null, save: null, creator: null };
+const state = { loader: null, modules: null, session: null, hud: null, game: null, save: null, creator: null, worldMap: null };
 
 window.pellagos = {
     get game() {
@@ -42,6 +42,9 @@ window.pellagos = {
     },
     get loader() {
         return state.loader;
+    },
+    get worldMap() {
+        return state.worldMap;
     },
     debug,
     playing: false,
@@ -235,7 +238,22 @@ async function play(save) {
     $("#loadlist").replaceChildren();
     setProgress(0, "Building the world");
 
-    const game = createGame({ view, kit, sound, hud: state.hud, hero: save.hero, seed: save.seed, talks: loadTalks(save), onTalk: (talks) => saveTalks(save, talks) });
+    const game = createGame({
+        view,
+        kit,
+        sound,
+        hud: state.hud,
+        hero: save.hero,
+        seed: save.seed,
+        talks: loadTalks(save),
+        onTalk: (talks) => saveTalks(save, talks),
+        explored: loadExplored(save),
+        onExplore: (explored) => saveExplored(save, explored),
+        onWorldMap: openWorldMap,
+    });
+
+    state.worldMap?.dispose();
+    state.worldMap = null;
 
     state.game = game;
     await game.build(({ label, done, total }) => setProgress(done / total, label, `${done} of ${total}`));
@@ -272,7 +290,71 @@ function menuPage(page) {
     (options ? $("#minimapswitch") : $("#resumebutton")).focus();
 }
 
+// --- The world map (the minimap held, or M) ---
+
+async function openWorldMap() {
+    const game = state.game;
+
+    if (!game?.running || $("#menu").open || $("#worldmap").open) {
+        return;
+    }
+
+    game.stop();
+    $("#worldmap").showModal();
+
+    // (Made the first time, for the world being played)
+    if (!state.worldMap || state.worldMap.world !== game.world) {
+        const { WorldMap } = await import("./app/worldmap.js");
+
+        state.worldMap?.dispose();
+        state.worldMap = new WorldMap($("#worldmapcanvas"), game.world, game.explored);
+        keyOf();
+    }
+
+    state.worldMap.open(game.worldMapView());
+}
+
+function closeWorldMap() {
+    if ($("#worldmap").open) {
+        $("#worldmap").close();
+        state.game?.start();
+    }
+}
+
+// The map's key: each icon, and the fog
+async function keyOf() {
+    const { drawBuildingIcon } = await import("./app/mapicons.js");
+    const list = $("#worldmapkey");
+
+    list.replaceChildren();
+
+    for (const [kind, label] of [["tavern", "Tavern"], ["blacksmith", "Smithy"], ["church", "Temple"], ["guild", "Adventurers' guild"]]) {
+        const item = document.createElement("li");
+        const icon = Object.assign(document.createElement("canvas"), { width: 44, height: 44 });
+
+        drawBuildingIcon(icon.getContext("2d"), kind, 22, 22, 40);
+        item.append(icon, label);
+        list.append(item);
+    }
+
+    const fog = document.createElement("li");
+
+    fog.append(Object.assign(document.createElement("span"), { className: "fog" }), "Not yet explored");
+    list.append(fog);
+}
+
+$("#worldmapclose").addEventListener("click", closeWorldMap);
+$("#worldmapin").addEventListener("click", () => state.worldMap?.zoom(0.6));
+$("#worldmapout").addEventListener("click", () => state.worldMap?.zoom(1 / 0.6));
+$("#worldmaphere").addEventListener("click", () => state.worldMap?.centre());
+$("#worldmap").addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeWorldMap();
+});
+window.addEventListener("resize", () => $("#worldmap").open && state.worldMap?.redraw());
+
 function quit() {
+    closeWorldMap();
     $("#menu").close();
     state.game?.dispose();
     state.game = null;
@@ -343,8 +425,18 @@ $("#zoomin").addEventListener("click", () => state.session?.view.zoom(0.8));
 $("#zoomout").addEventListener("click", () => state.session?.view.zoom(1.25));
 
 document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && document.body.dataset.screen === "hud" && !$("#menu").open) {
+    if (document.body.dataset.screen !== "hud" || $("#menu").open) {
+        return;
+    }
+
+    if (event.key === "Escape" && !$("#worldmap").open) {
         pause();
+    } else if ((event.key === "m" || event.key === "M") && !event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey && !(event.target instanceof HTMLInputElement)) {
+        if ($("#worldmap").open) {
+            closeWorldMap();
+        } else {
+            openWorldMap();
+        }
     }
 });
 

@@ -1220,6 +1220,125 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     }
 }
 
+/* --- The world map: the whole screen, the key and buttons over it --- */
+
+dialog#worldmap {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: #1e1b16;
+    color: var(--ink);
+    overflow: hidden;
+}
+
+dialog#worldmap::backdrop {
+    background: rgba(0, 0, 0, 0.6);
+}
+
+#worldmapcanvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+    cursor: grab;
+}
+
+#worldmapcanvas:active {
+    cursor: grabbing;
+}
+
+.worldmap-head {
+    position: absolute;
+    top: calc(var(--safe-top) + 12px);
+    left: calc(var(--safe-left) + 12px);
+    right: calc(var(--safe-right) + 12px);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    pointer-events: none;
+}
+
+.worldmap-head > * {
+    pointer-events: auto;
+}
+
+.worldmap-head h2 {
+    margin: 0;
+    padding: 8px 16px;
+    border-radius: 12px;
+    border: 1px solid var(--panel-border);
+    background: var(--panel);
+    font-family: var(--font-display);
+    font-size: 19px;
+    color: var(--gold-bright);
+}
+
+.worldmap-tools {
+    position: absolute;
+    right: calc(var(--safe-right) + 12px);
+    bottom: calc(var(--safe-bottom) + 12px);
+    display: grid;
+    gap: 8px;
+}
+
+.worldmap-key {
+    position: absolute;
+    left: calc(var(--safe-left) + 12px);
+    bottom: calc(var(--safe-bottom) + 12px);
+    margin: 0;
+    padding: 8px 12px;
+    list-style: none;
+    display: grid;
+    gap: 4px;
+    border-radius: 12px;
+    border: 1px solid var(--panel-border);
+    background: var(--panel);
+    font-size: 13px;
+    color: var(--ink);
+}
+
+.worldmap-key li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.worldmap-key canvas,
+.worldmap-key .fog {
+    width: 22px;
+    height: 22px;
+    flex: none;
+}
+
+.worldmap-key .fog {
+    border-radius: 4px;
+    border: 1px solid var(--panel-border);
+    background: rgb(30, 27, 22);
+}
+
+/* On a short screen (a phone on its side), the key keeps to one line */
+@media (max-height: 460px) {
+    .worldmap-key {
+        grid-auto-flow: column;
+        gap: 12px;
+        right: calc(var(--safe-right) + 12px + 46px + 12px);
+    }
+}
+
+#minimap {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
 /* --- Paused --- */
 
 dialog#menu {

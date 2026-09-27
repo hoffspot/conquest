@@ -342,6 +342,76 @@ describe("the battle (battle.js)", () => {
         assert.ok(!throughTheWall, "went round the wall");
     });
 
+    it("walks open ground in a straight line to where it's going, not zig-zagging from square to square", () => {
+        for (const [from, to] of [[[2, 14], [50, 3]], [[2, 2], [47, 17]], [[40, 2], [3, 18]], [[5, 10], [55, 10]]]) {
+            const battle = new Battle(open(60, 20), { seed: 1 });
+            const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: from });
+            const [x0, y0, x1, y1] = [from[0] + 0.5, from[1] + 0.5, to[0] + 0.5, to[1] + 0.5];
+            const length = Math.hypot(x1 - x0, y1 - y0);
+            let stray = 0;
+            const facings = new Set();
+
+            battle.command("player", { type: "move", to });
+
+            for (let t = 0; t < 60000 && (player.to || player.path.length || player.order); t += STEP_MS) {
+                battle.advance(STEP_MS);
+                stray = Math.max(stray, Math.abs(((player.x - x0) * (y1 - y0) - (player.y - y0) * (x1 - x0)) / length));
+                facings.add(player.facing.toFixed(3));
+            }
+
+            assert.deepEqual(player.square, to);
+            assert.ok(player.x === x1 && player.y === y1, "in the middle of the square it was going to");
+            assert.ok(stray < 0.01, `${from} to ${to}: strays ${stray.toFixed(2)} m from the straight line`);
+            assert.equal(facings.size, 1, `${from} to ${to}: faces ${facings.size} ways`);
+        }
+    });
+
+    it("keeps its body clear of walls as it heads straight for the furthest square it can see, and turns only at corners", () => {
+        const rows = [
+            "..............................",
+            "..............................",
+            "..........#####...............",
+            "..........#####...............",
+            "..........#####.......####....",
+            "..........#####.......####....",
+            "......................####....",
+            "......................####....",
+            "..............................",
+            "..............................",
+        ];
+        const battle = new Battle(worldOf(rows), { seed: 1 });
+        const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [1, 3] });
+        const blocked = parseGrid(rows);
+        let closest = Infinity;
+        let turns = 0;
+        let facing = null;
+
+        battle.command("player", { type: "move", to: [28, 6] });
+
+        for (let t = 0; t < 60000 && (player.to || player.path.length || player.order); t += STEP_MS) {
+            battle.advance(STEP_MS);
+
+            // (How near its middle comes to any wall)
+            for (let y = 0; y < rows.length; y++) {
+                for (let x = 0; x < rows[0].length; x++) {
+                    if (blocked[y][x]) {
+                        closest = Math.min(closest, Math.hypot(player.x - Math.min(Math.max(player.x, x), x + 1), player.y - Math.min(Math.max(player.y, y), y + 1)));
+                    }
+                }
+            }
+
+            if (facing !== null && Math.abs(player.facing - facing) > 0.01) {
+                turns++;
+            }
+
+            facing = player.facing;
+        }
+
+        assert.deepEqual(player.square, [28, 6]);
+        assert.ok(closest >= 0.29, `came within ${closest.toFixed(2)} m of a wall`);
+        assert.ok(turns <= 3, `turned ${turns} times`);
+    });
+
     it("sends the player to fight an enemy it's told to engage, stopping as soon as it's within reach", () => {
         const battle = new Battle(open(20, 5), { seed: 2 });
         const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [1, 2] });

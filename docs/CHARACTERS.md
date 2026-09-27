@@ -16,7 +16,7 @@ The lab lets you:
 - **Change how they look.**
   - Skin tone, blotchiness, redness, freckles, warts, veins and war paint.
   - Eye colour and pupils.
-  - Nine hairstyles, four beards, and hair and brow colour.
+  - Ten hairstyles, four beards, and hair and brow colour.
   - Whole texture skins: save the painted skin, paint over it, and load it back.
 - **Dress and arm them.** 18 garments and 19 items go in 16 slots, with ready-made outfits
   (adventurer, knight, mage, ranger, gunner, orc raider).
@@ -144,6 +144,9 @@ groomed so it looks kept:
    body it lies on, or (hanging free) out from the neck, so it never twists edge on.
 7. **A ponytail** is a round bundle from its tie: gathered there, full a third of the way down,
    tapering to its ends, clear of the back by its own thickness, strands all round it.
+   **Twin tails** are two such bundles, a little slimmer and longer, from ties high on either
+   side of the back of the head, the hair either side of a centre line drawn to its own tie, with
+   a short fringe of bangs over the forehead.
 8. **Texture and scalp.** Strands are solid from the root (a card's root edge is at the scalp) and
    fade over their last few millimetres. The scalp under hair is painted solidly in its colour, a
    shade darker, so nothing shows between the cards.
@@ -216,7 +219,10 @@ cloth round the body:
   it lies over the lap and falls down the shins.
 
 The tavern's folk wear them: wool, green and red skirts, a velvet gown, and the barkeep's apron
-(the smith and apprentice a leather one, longer and stiffer),
+(the smith and apprentice a leather one, longer and stiffer; a temple's priest and acolyte an
+alb's white skirt to the floor, under an alb with long sleeves and, the priest, a chasuble
+bordered in gold; an adventurers' guild's receptionist its uniform, a white blouse under a navy
+vest laced in gold and a navy skirt to the knee; a mage a robe to the ankles),
 over a chemise (low-necked, short-sleeved) and a laced bodice (a band from under the waist to over
 the bust, painted with a cord criss-crossing down the front).
 
@@ -590,6 +596,13 @@ arms flung out, and lies flat. The feet aren't kept planted while falling.
   - **pump** (the apprentice): both hands on the bellows' lever, pushing it down and letting it
     up, three times;
   - **crank**: turning the grindstone's crank round and round, the other hand on its frame.
+- **A temple's**: **bless**, the right hand raised palm out and drawn down and across in the sign
+  of the Hearth, the other on the chest; **light**, reaching forward to a candle's wick, bowing a
+  little.
+- **A guild's**: **stamp** (the receptionist), leaning over the counter, a hand holding the
+  notice flat and the other bringing the stamp down on it, twice; **file**, reaching up to the
+  shelves behind her; **read** (an adventurer at the quest board), a finger run down a notice,
+  the other hand on the hip, the head following it.
 - **Beckoning** (a courtesan, when the player comes into her sight): the hip cocked, a hand on
   it, the other held out palm up, its index finger curling "come here" three times (the
   `beckon` finger shape: the index straight, the others loosely curled; a key's `index` curls it).
@@ -638,6 +651,22 @@ as the barkeep does, at the counter.
 | | shifting the weight | (the adventurer's) |
 | Apprentice | wiping the brow | (the serving wench's) |
 | | looking about, rolling the shoulders, a yawn, stretching | (the adventurer's) |
+| Priest | hands folded in prayer | the hands together before the chest, fingers up, the head bowed |
+| | arms raised in praise | both arms up high and wide, palms up, the face lifted |
+| | a bow of the head | hands folded at the waist, a slow bow |
+| | the sign of the Hearth | fingertips to the brow, then the heart, then out palm up |
+| | hands clasped behind | at the small of the back, looking over the pews one way and the other |
+| Acolyte | (the priest's prayer, bow and sign; the adventurer's looking about and yawn) | |
+| Worshipper (seated) | praying | hands together, the head bowed over them |
+| | head bowed | bowed low, the hands folded in the lap |
+| | looking up | hands together, looking up to the altar's god |
+| | the sign of the Hearth | as the priest's |
+| | hands in the lap | palms up, eyes closed |
+| Guild receptionist | a cheerful wave | a hand up by the face, waved side to side, the other on her hip, the head tilted |
+| | chin in her hands | leaning on the counter, both hands under the chin |
+| | a little bow | hands together at the waist, a quick bow |
+| | tidying the papers | (the barkeep's wiping the bar) |
+| | tucking back her hair | (the serving wench's) |
 | Adventurer | stretching | both arms up high, the back arched |
 | | looking about | a hand shading the eyes, one way then the other |
 | | rolling the shoulders | the shoulders rolled up and back, the neck stretched each way |

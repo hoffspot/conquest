@@ -7,9 +7,12 @@ const port = Number(process.env.E2E_PORT) || 8095;
 export default defineConfig({
     testDir: "e2e",
     // Without a GPU, drawing is done in software, which is slow: give each test time, and on CI
-    // run one at a time so they don't slow each other down
+    // run one at a time so they don't slow each other down (CI splits them between jobs run side
+    // by side instead: --shard). Every test has a page of its own, so any of them can run
+    // alongside any other, even those in the same file
     timeout: 120000,
     workers: process.env.CI ? 1 : undefined,
+    fullyParallel: true,
     reporter: process.env.CI ? "github" : "list",
     use: {
         ...devices["Desktop Chrome"],

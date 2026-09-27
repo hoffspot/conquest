@@ -3,8 +3,9 @@
 // soil, water), the buildings' roofs, props and trees, the 128 metres or so round the player;
 // inside the tavern, the whole floor: the walls, the furniture and the stairs. Over that, what
 // the camera can see, where the player is going, the enemies (the one the player is set to fight
-// ringed), and the player, pointing the way they face. Tapping it walks there, or fights the
-// enemy tapped; a double tap runs.
+// ringed), an icon over each building the player has gone into (app/mapicons.js), and the player,
+// pointing the way they face. Tapping it walks there, or fights the enemy tapped; a double tap
+// runs; holding it opens the world map (app/worldmap.js).
 //
 // What's shown is painted into an image four pixels to the metre: each floor inside once, the
 // world round the player a patch at a time (painted again when they've gone far enough that the
@@ -15,6 +16,7 @@ import { CHUNK, WET } from "../core/overworld.js";
 import { GROUND, HOUSE_STYLES, PLOT } from "../core/setpieces/pieces.js";
 import { footprint } from "../core/setpieces/town.js";
 import { LAND_COLOURS } from "../world/ground.js";
+import { drawBuildingIcon } from "./mapicons.js";
 
 // Colours (RGB) of the ground and of what stands on it
 const GROUND_COLOURS = {
@@ -54,6 +56,14 @@ const INSIDE = {
     rack: [84, 60, 38],
     workbench: [112, 76, 42],
     coal: [34, 30, 28],
+    statue: [226, 222, 212],
+    altar: [236, 230, 214],
+    shrine: [196, 164, 92],
+    votive: [70, 66, 62],
+    pew: [98, 66, 40],
+    basin: [120, 150, 164],
+    board: [206, 190, 146],
+    shelves: [84, 60, 38],
 };
 
 // Pixels to the metre of the painted map
@@ -66,7 +76,7 @@ const SPAN = 128;
 const PAINTED = 192;
 
 // Water, and bridges over it (RGB)
-const WATER_COLOURS = { [WET.still]: [58, 104, 130], [WET.river]: [70, 120, 146] };
+export const WATER_COLOURS = { [WET.still]: [58, 104, 130], [WET.river]: [70, 120, 146] };
 const BRIDGE = [150, 112, 70];
 
 // At most this many redraws a second
@@ -77,6 +87,12 @@ const TAP_SLOP = 10;
 
 // How far from an enemy's dot (pixels) a tap picks it
 const PICK = 12;
+
+// Held this long (ms) without moving, it's held, not tapped
+const HOLD_MS = 550;
+
+// How big the icons over the buildings gone into are (pixels)
+const ICON_SIZE = 22;
 
 // A little variation from square to square, the same every time (-1 to 1)
 const jitter = (x, y) => {
@@ -215,8 +231,9 @@ export class Minimap {
      * @param {object} [options]
      * @param {(tap: object) => void} [options.onTap] - Hears taps on it: { x, z (metres), reach
      *     (metres: how close to an enemy picks it), clientX, clientY, time }.
+     * @param {() => void} [options.onHold] - Hears it held (a finger, or the mouse, kept down on it).
      */
-    constructor(canvas, world, { onTap = () => {} } = {}) {
+    constructor(canvas, world, { onTap = () => {}, onHold = () => {} } = {}) {
         this.canvas = canvas;
         this.world = world;
         this.context = canvas.getContext("2d");
@@ -224,21 +241,48 @@ export class Minimap {
         this.drawn = -Infinity;
         this.pointer = null;
 
+        /** The kinds of the icons last drawn (the buildings gone into, in view). */
+        this.icons = [];
+
         // Out in the world: the patch painted round the player ({ x, z (its corner, metres),
         // image }), and where they were last drawn
         this.patch = null;
         this.middle = null;
         this.setMap(world.maps?.town ?? { id: "town", width: world.width, height: world.height });
 
+        // A tap walks there; held a while without moving, the world map opens
         const down = (event) => {
-            this.pointer = { id: event.pointerId, x: event.clientX, y: event.clientY };
+            clearTimeout(this.pointer?.timer);
+
+            const pointer = { id: event.pointerId, x: event.clientX, y: event.clientY, time: event.timeStamp, held: false };
+
+            pointer.timer = setTimeout(() => {
+                pointer.held = true;
+                onHold();
+            }, HOLD_MS);
+            this.pointer = pointer;
+        };
+        const move = (event) => {
+            const pointer = this.pointer;
+
+            if (pointer?.id === event.pointerId && Math.hypot(event.clientX - pointer.x, event.clientY - pointer.y) > TAP_SLOP) {
+                clearTimeout(pointer.timer);
+            }
         };
         const up = (event) => {
             const pointer = this.pointer;
 
+            clearTimeout(pointer?.timer);
             this.pointer = null;
 
-            if (!pointer || pointer.id !== event.pointerId || Math.hypot(event.clientX - pointer.x, event.clientY - pointer.y) > TAP_SLOP) {
+            if (!pointer || pointer.held || pointer.id !== event.pointerId || Math.hypot(event.clientX - pointer.x, event.clientY - pointer.y) > TAP_SLOP) {
+                return;
+            }
+
+            // (Held long enough, though the page was too busy to notice till now)
+            if (event.timeStamp - pointer.time >= HOLD_MS) {
+                onHold();
+
                 return;
             }
 
@@ -249,7 +293,13 @@ export class Minimap {
             onTap({ x: x0 + (event.clientX - rect.left) * metres, z: z0 + (event.clientY - rect.top) * metres, reach: PICK * metres, clientX: event.clientX, clientY: event.clientY, time: event.timeStamp });
         };
 
-        this.listeners = [["pointerdown", down], ["pointerup", up]];
+        const cancel = () => {
+            clearTimeout(this.pointer?.timer);
+            this.pointer = null;
+        };
+
+        // (No menu popping up for a finger held on it)
+        this.listeners = [["pointerdown", down], ["pointermove", move], ["pointerup", up], ["pointercancel", cancel], ["contextmenu", (event) => event.preventDefault()]];
 
         for (const [type, listener] of this.listeners) {
             canvas.addEventListener(type, listener);
@@ -313,9 +363,10 @@ export class Minimap {
     /**
      * Draw it: `player` { x, z, facing } (metres, radians), `others` [{ x, z, hostile,
      * targeted }], `destination` [x, z] or null, `view` the corners of what the camera sees
-     * ([[x, z] ×4], null where it sees no ground) or null.
+     * ([[x, z] ×4], null where it sees no ground) or null, and `icons` over the buildings gone
+     * into ([{ kind, x, z }]).
      */
-    draw({ player, others = [], destination = null, view = null }, now = performance.now()) {
+    draw({ player, others = [], destination = null, view = null, icons = [] }, now = performance.now()) {
         const { canvas, context, map } = this;
 
         this.drawn = now;
@@ -405,6 +456,18 @@ export class Minimap {
             context.stroke();
         }
 
+        // The buildings the player has gone into: what each is (those shown, kept for tests)
+        this.icons = [];
+
+        for (const icon of icons) {
+            const [x, y] = at(icon.x, icon.z);
+
+            if (x > -ICON_SIZE && y > -ICON_SIZE && x < width + ICON_SIZE && y < height + ICON_SIZE) {
+                drawBuildingIcon(context, icon.kind, x, y, ICON_SIZE);
+                this.icons.push(icon.kind);
+            }
+        }
+
         // The player: an arrowhead pointing the way they face (0 is south, towards east positive)
         if (player) {
             const [x, y] = at(player.x, player.z);
@@ -449,6 +512,8 @@ export class Minimap {
 
     /** Stop listening for taps. */
     dispose() {
+        clearTimeout(this.pointer?.timer);
+
         for (const [type, listener] of this.listeners) {
             this.canvas.removeEventListener(type, listener);
         }
@@ -566,7 +631,8 @@ function paint(world) {
 // as the ground's drawn in it (world/ground.js LAND_COLOURS)
 const landColour = new Map();
 
-function grassOf(biome) {
+/** A land's grass colour on the map (RGB), by its BIOMES id. */
+export function grassOf(biome) {
     if (!landColour.has(biome)) {
         const [colour, amount] = LAND_COLOURS[biome] ?? ["#000000", 0];
         const tint = [1, 3, 5].map((at) => parseInt(colour.slice(at, at + 2), 16));
@@ -580,10 +646,10 @@ function grassOf(biome) {
 /**
  * A patch of the world outside (buildWorld's), `size` metres square from (x0, z0): each square's
  * colour (its land's grass, roads, soil, water and bridges), the town's own picture where it
- * is (painted once: `town`, if it has been), and the trees, round. Returns the image, with the
- * town's picture as its `town`.
+ * is (painted once: `town`, if it has been), and the trees, round. Returns the image (SCALE
+ * pixels to the metre), with the town's picture as its `town`.
  */
-function paintPatch(world, x0, z0, size, town = null) {
+export function paintPatch(world, x0, z0, size, town = null) {
     const overworld = world.maps.town;
     const data = new Uint8ClampedArray(size * size * 4);
 

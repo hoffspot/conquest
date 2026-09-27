@@ -1,6 +1,7 @@
 // What sort of person each character is: their class (a role), such as the barkeep, a serving
 // wench, a patron at the tables, the innkeeper, the madam or a courtesan upstairs, the smith and
-// the apprentice, or the player's adventurer.
+// the apprentice, the priest, an acolyte and the worshippers, a guild's receptionist, or an
+// adventurer (the player, or one of the guild's).
 //
 // A role says what the character is called (its `title`, under its name in a talk: dialogue.js),
 // whether it beckons the player over when they come into sight (`beckons`: the courtesans
@@ -98,6 +99,49 @@ export const ROLES = Object.freeze({
             { name: "rolling the shoulders", hitAt: 1, duration: 2.8 },
             { name: "a yawn", hitAt: 1, duration: 2.8 },
             { name: "stretching", hitAt: 1.2, duration: 3.2 },
+        ],
+    },
+    // A temple's: the priest (in white), an acolyte, and worshippers praying in the pews
+    priest: {
+        title: "Priest",
+        rests: [
+            { name: "hands folded in prayer", hitAt: 1, duration: 3.2 },
+            { name: "arms raised in praise", hitAt: 1, duration: 3 },
+            { name: "a bow of the head", hitAt: 0.9, duration: 2.4 },
+            { name: "the sign of the Hearth", hitAt: 1, duration: 2.6 },
+            { name: "hands clasped behind", hitAt: 1, duration: 3 },
+        ],
+    },
+    acolyte: {
+        title: "Acolyte",
+        rests: [
+            { name: "hands folded in prayer", hitAt: 1, duration: 3.2 },
+            { name: "a bow of the head", hitAt: 0.9, duration: 2.4 },
+            { name: "looking about", hitAt: 1, duration: 3.4 },
+            { name: "the sign of the Hearth", hitAt: 1, duration: 2.6 },
+            { name: "a yawn", hitAt: 1, duration: 2.8 },
+        ],
+    },
+    worshipper: {
+        title: "Worshipper",
+        seated: true,
+        rests: [
+            { name: "praying", hitAt: 1, duration: 3.4 },
+            { name: "head bowed", hitAt: 1, duration: 3 },
+            { name: "looking up", hitAt: 1, duration: 2.6 },
+            { name: "the sign of the Hearth", hitAt: 1, duration: 2.6 },
+            { name: "hands in the lap", hitAt: 1, duration: 3 },
+        ],
+    },
+    // An adventurers' guild's receptionist, behind her counter
+    receptionist: {
+        title: "Guild receptionist",
+        rests: [
+            { name: "a cheerful wave", hitAt: 0.9, duration: 2.4 },
+            { name: "chin in her hands", hitAt: 1.2, duration: 3.6 },
+            { name: "a little bow", hitAt: 0.8, duration: 1.9 },
+            { name: "tidying the papers", hitAt: 1.4, duration: 3.6 },
+            { name: "tucking back her hair", hitAt: 1, duration: 2.2 },
         ],
     },
     adventurer: {
