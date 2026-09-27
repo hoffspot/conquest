@@ -19,7 +19,7 @@ describe("the trees (trees.js)", () => {
         assert.notDeepEqual(growTree("oak", 3).wood.position, growTree("oak", 4).wood.position);
     });
 
-    it("grows each kind to its height, standing on its trunk's foot, its crown round it", () => {
+    it("grows each kind to its height, rooted where its trunk's foot is, its crown round it", () => {
         for (const kind of KINDS) {
             for (const seed of [1, 2, 3]) {
                 const tree = growTree(kind, seed);
@@ -30,7 +30,9 @@ describe("the trees (trees.js)", () => {
                 const spread = Math.max(...leaves.map(([x, , z]) => Math.hypot(x, z)));
 
                 assert.ok(tree.height >= least && tree.height <= most, `${kind} ${seed}: ${tree.height}`);
-                assert.ok(Math.abs(Math.min(...wood.map(([, y]) => y))) < 0.05, `${kind} stands on the ground`);
+                const below = Math.min(...wood.map(([, y]) => y));
+
+                assert.ok(below < -0.1 && below > -0.35, `${kind} ${seed}: rooted a little way into the ground (${below.toFixed(2)})`);
                 assert.ok(top > tree.height * 0.8 && top < tree.height * 1.3, `${kind} ${seed}: its top ${top.toFixed(1)} of ${tree.height.toFixed(1)}`);
                 assert.ok(spread > 1.2 && spread < tree.height, `${kind} ${seed}: spread ${spread.toFixed(1)}`);
             }
@@ -48,7 +50,7 @@ describe("the trees (trees.js)", () => {
         assert.ok(growTree("apple", 1).height < 6);
     });
 
-    it("keeps each tree light enough for a phone: under 3,000 triangles, about 1,600 on average", () => {
+    it("keeps each tree light enough for a phone: under 3,000 triangles, about 1,900 on average", () => {
         let total = 0;
 
         for (const [kind, seed] of VARIANTS) {
@@ -81,6 +83,73 @@ describe("the trees (trees.js)", () => {
         assert.equal(bark.name, "bark");
     });
 
+    it("roots each tree: its foot swells out over its roots, which go into the ground; darker and mossy low down, on a patch of earth", () => {
+        for (const kind of KINDS) {
+            const tree = growTree(kind, 2);
+            const wood = points(tree.wood);
+            const trunk = SPECIES[kind].trunk.radius * (tree.height / 10);
+            const at = (least, most) => wood.filter(([, y]) => y >= least && y <= most).map(([x, , z]) => Math.hypot(x, z));
+            const ground = at(-0.01, 0.01);
+
+            // Wider at the ground than the trunk (and widest over the roots), which run on out
+            assert.ok(Math.min(...ground) > trunk * 0.98, `${kind}: its foot round its trunk`);
+            assert.ok(Math.max(...ground) > trunk * 1.3, `${kind}: its foot swells out`);
+            assert.ok(Math.max(...at(-0.05, 0.05)) > trunk * 1.3 + 0.2, `${kind}: its roots run out over the ground`);
+
+            // Each root ends in the ground, not on it
+            assert.ok(Math.max(...wood.filter(([, y]) => y < -0.05).map(([x, , z]) => Math.hypot(x, z))) > trunk * 1.3 + 0.2, `${kind}: its roots go into the ground`);
+
+            // The bark darker at the ground than up the trunk
+            const shade = (least, most) => {
+                const shares = tree.wood.color.filter((_, k) => k % 3 === 0 && tree.wood.position[k + 1] >= least && tree.wood.position[k + 1] <= most);
+
+                return shares.reduce((sum, share) => sum + share, 0) / shares.length;
+            };
+
+            assert.ok(shade(-0.3, 0.05) < 0.75 && shade(1.5, 3) > 0.97, `${kind}: ${shade(-0.3, 0.05).toFixed(2)} at the ground, ${shade(1.5, 3).toFixed(2)} up the trunk`);
+            assert.ok(tree.patch.radius > 0.4 && tree.patch.radius <= 2.4, `${kind}: a patch ${tree.patch.radius.toFixed(2)} m round`);
+        }
+    });
+
+    it("casts each crown's shadow from a shell round its leaves (the leaves cast none), drawn only into the shadows", () => {
+        for (const kind of KINDS) {
+            const tree = growTree(kind, 1);
+            const leaves = points(tree.leaves);
+            const shell = points(tree.shell);
+            const box = (list) => [0, 1, 2].map((axis) => [Math.min(...list.map((p) => p[axis])), Math.max(...list.map((p) => p[axis]))]);
+            const [crown, round] = [box(leaves), box(shell)];
+
+            assert.equal(tree.shell.index.length / 3, 180);
+
+            // Inside the crown, reaching most of the way across it, and never into the ground
+            for (const axis of [0, 1, 2]) {
+                const [least, most] = crown[axis];
+                const [from, to] = round[axis];
+
+                // (Low boughs' leaves come nearer the ground than the shell, which stops above it)
+                assert.ok(from >= Math.min(least, 0.15) - 0.05 && to <= most + 0.05, `${kind}: its shell inside its crown (axis ${axis})`);
+                assert.ok(to - from > (most - least) * 0.5, `${kind}: its shell across most of its crown (axis ${axis}: ${(to - from).toFixed(1)} of ${(most - least).toFixed(1)})`);
+            }
+
+            assert.ok(round[1][0] >= 0.15 - 1e-6, `${kind}: its shell above the ground`);
+        }
+
+        const { object } = plantTrees([{ x: 5, z: 5, variant: 0 }]);
+        const byName = (name) => object.children.filter((mesh) => mesh.name.startsWith(name));
+        const [cast] = byName("crown shadows");
+
+        assert.ok(byName("leaves").every((mesh) => !mesh.castShadow && mesh.receiveShadow), "the leaves cast no shadows, but are shaded");
+        assert.ok(byName("bark").every((mesh) => mesh.castShadow));
+        assert.equal(cast.castShadow, true);
+        assert.equal(cast.customDepthMaterial, treeMaterials().dapple, "dappled");
+
+        // Three.js draws the shadows first: the shells in them, then none of them in the view
+        cast.onBeforeShadow();
+        assert.equal(cast.geometry.drawRange.count, Infinity);
+        cast.onBeforeRender();
+        assert.equal(cast.geometry.drawRange.count, 0);
+    });
+
     it("plants trees a tile at a time, each where it stands, as big as it's asked", () => {
         const { object, boxes } = plantTrees([
             { x: 5, z: 5, variant: 0 },
@@ -88,9 +157,16 @@ describe("the trees (trees.js)", () => {
             { x: 105, z: 60, variant: 5 },
         ]);
 
-        // Two tiles, the bark and the leaves in each
-        assert.equal(object.children.length, 4);
-        assert.deepEqual(object.children.map(({ material }) => material.name).sort(), ["bark", "bark", "leaves", "leaves"]);
+        // Two tiles, the bark and the leaves in each; and all the crowns' shadows, and the patches
+        // round their feet, together
+        assert.equal(object.children.length, 6);
+        assert.deepEqual(object.children.map(({ material }) => material.name).sort(), ["bark", "bark", "crown shadows", "leaves", "leaves", "litter"]);
+
+        const litter = object.children.find(({ name }) => name === "litter");
+
+        assert.equal(litter.geometry.index.count / 3, 6, "a patch round each foot");
+        assert.equal(litter.userData.onGround, true, "on the ground: not cut away in front of the player");
+        assert.equal(litter.castShadow, false);
 
         boxes.forEach((box, k) => {
             const [x, z] = [[5, 5], [8, 6], [105, 60]][k];

@@ -105,7 +105,9 @@ marks (all of them, at full health); coming back to life, all of them.
 **Trees** stand about the town and its fields, and a forest round them: oaks with crooked,
 spreading limbs, smooth grey beeches, white birches with drooping twigs, Scots pines on bare
 orange trunks, spruces in tiers, tall poplars, and little apple trees, every one grown a little
-differently, their leaves stirring in the breeze.
+differently, their leaves stirring in the breeze. Each is rooted: its foot swells out over roots
+that run into the earth, the bark dark and mossy low down, on a patch of bare earth, moss and
+fallen leaves or needles, and its crown casts a dappled shadow.
 
 An orc patrols the fields from the north-west corner, halfway down the west side and back. When
 it sees you (within 12 metres, with nothing in the way: walls, houses and trees hide you, a well,

@@ -145,7 +145,7 @@ export async function buildTown(world, { onProgress = () => {} } = {}) {
 
     object.name = "town";
 
-    for (const mesh of [...object.children, ...trees.object.children]) {
+    for (const mesh of [...object.children, ...trees.object.children.filter(({ userData }) => !userData.onGround)]) {
         cutAway(mesh.material);
     }
 

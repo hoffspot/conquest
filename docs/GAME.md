@@ -438,7 +438,7 @@ The art kits build every piece of the town's plan in the art's world pixels, fiv
   | Lombardy poplar | Short boughs straight up, a column | 9.5 to 12 m |
   | Apple | Low and twisted, a round crown, apples among the leaves | 4 to 5 m |
 
-  A tree grows as a trunk that tapers from a flared foot and leans a little; boughs round it
+  A tree grows as a trunk that leans a little and tapers from its foot; boughs round it
   (by the golden angle, or in whorls), as long as the kind's crown shape says for how far up
   they are, bending up to the light or down under their weight (resting on the ground rather
   than going into it) and crooked; and branches on those. The wood is tubes, their bark running
@@ -446,14 +446,40 @@ The art kits build every piece of the town's plan in the art's world pixels, fiv
   spray or tuft of needles) round the branches' ends, turned every which way (a spruce's lying
   level along its boughs), lit as if the crown were one rounded mass (their normals point out
   from its middle, and they're lit the same from either side), darker deep inside it, and each a
-  little warmer or cooler. About 1,600 triangles a tree on average. The bark's and the leaves'
-  pictures are drawn on canvases when the game starts (each kind's side by side on one picture),
-  so every tree shares two materials. The leaves stir in a breeze (`TREE_WIND`: each part of a
-  crown in its own time, more the higher up), and anything of a tree within 3 to 7 metres of the
-  camera fades out in a dithered pattern, so the camera never looks through a wall of leaves.
-  Planted (`plantTrees`), the trees are merged a tile of the map 24 metres square at a time, so
-  the camera and the sun's shadows draw only the tiles in view (about 250,000 to 300,000
-  triangles a frame, shadows included, on the market square or at the forest's edge).
+  little warmer or cooler.
+
+  **Rooted.** The trunk's foot (`rootedFoot`) swells out towards the ground, all round and more
+  in a buttress over each root (2 or 3 for a birch, 5 or 6 for a beech, as the kind's `foot`
+  says), and carries on 20 cm into the ground, so there's no edge where it stands. Each root
+  runs on down from its buttress as one spur, broad and low along the ground (its top showing
+  as a ridge in the earth), then steeply into it while still thick: going in gently, a round
+  root shows as a long thin point, like a claw. The bark is darker and mossy low down, to the
+  full colour 1.1 metres up (a birch's nearly black at the foot). Round each foot lies a patch
+  of bare earth, moss and what's fallen (oak, beech, birch, poplar or apple leaves in their
+  autumn colours, a few windfall apples, or pine and spruce needles and cones), fading into
+  the grass: each kind's drawn on a canvas, laid a centimetre over the ground and drawn over it.
+  These add about 240 triangles, so a tree is about 1,900 triangles on average.
+
+  **Shadows.** The leaves don't cast shadows themselves: thousands of overlapping cards, each
+  tested against its picture, cost more to draw into the sun's shadow map than everything else
+  in the view (on the software renderer in the browser tests, a frame at the forest's edge took
+  1.1 seconds instead of 0.35). Each crown's shadow is cast by its shell instead: 180 triangles
+  round the middles of its leaf cards (as far as they reach in each direction, smoothed, so a
+  spruce's comes to a point and a poplar's is tall and narrow), drawn only into the shadows
+  (`onBeforeShadow` and `onBeforeRender` switch it on and off). Three.js draws a shell's far
+  side into them, so a crown's own leaves, inside it, aren't in its shadow, while the ground,
+  the buildings and folk under it are. Its own depth material (`dapple`) makes holes in it with
+  a noise in the world, a few where the sun looks through the middle of a crown and more towards
+  its edge, so the shadow is dappled with a broken, leafy edge. The bark casts its own shadow.
+
+  The pictures (bark, leaves and litter) are drawn on canvases when the game starts (each kind's
+  side by side on one picture), so every tree shares three materials. The leaves stir in a
+  breeze (`TREE_WIND`: each part of a crown in its own time, more the higher up), and anything
+  of a tree within 3 to 7 metres of the camera fades out in a dithered pattern, so the camera
+  never looks through a wall of leaves. Planted (`plantTrees`), the trees are merged a tile of
+  the map 24 metres square at a time, so the camera and the sun's shadows draw only the tiles in
+  view (about 250,000 to 300,000 triangles a frame, shadows included, on the market square or at
+  the forest's edge); the crowns' shells and the patches round the feet are one mesh each.
 - **A forest** round the outside of the map, leaving the roads' ways out clear.
 
 Textures are sized in metres too: bricks courses of 10 cm, slates of 15, stone courses of 35.

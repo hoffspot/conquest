@@ -1,5 +1,7 @@
 // Trees grown from rules for each kind, so that each one is a little different and nothing needs
-// downloading. A trunk that tapers from a flared foot and leans a little; boughs set round it the
+// downloading. A trunk that leans a little and tapers from its foot, which swells out into the
+// ground in buttresses, roots running out from them into the soil, darker and mossy low down,
+// on a patch of bare earth, moss and fallen leaves or needles; boughs set round it the
 // way that kind grows them (an oak's spreading and crooked, a beech's in a dome, a birch's
 // arching over, a pine's in a flat crown on a bare trunk, a spruce's in whorls, tier on tier, a
 // poplar's straight up, an apple tree's low and twisted), bending up to the light or down under
@@ -13,9 +15,14 @@
 // by side on one picture, and its leaves on another, so all the trees share two materials; and
 // planted (plantTrees) they're merged a tile of the map at a time, so the camera (and the sun's
 // shadows) draw only the tiles in view.
+//
+// The leaves don't cast shadows themselves: thousands of overlapping cards, each tested against
+// its picture, would cost more to draw into the sun's shadows than everything else in the view.
+// Each crown's shadow is cast by its shell instead, a rounded mass of 180 triangles round where
+// its leaves grow, drawn only into the shadows.
 
 import * as THREE from "three";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { createRandom } from "../../../core/random.js";
 
 /**
@@ -30,6 +37,9 @@ import { createRandom } from "../../../core/random.js";
  * - branches: on each bough, likewise.
  * - leaves: the cards' size (metres), how many on each branch (and bough, if it has none), from
  *   how far along; flat (lying level along the bough, as a spruce's sprays).
+ * - foot: how far it swells out in buttresses (a share of the trunk's radius), how many roots
+ *   run out from them over the ground and how far (metres), and how dark and mossy the bark is
+ *   at the ground (red, green, blue: shares of its colour).
  */
 export const SPECIES = Object.freeze({
     oak: {
@@ -38,6 +48,7 @@ export const SPECIES = Object.freeze({
         boughs: { count: [6, 8], from: 0.3, to: 0.95, angle: [48, 75], length: [0.38, 0.5], shape: "spread", bend: 0.05, crook: 0.45, thickness: 0.58 },
         branches: { count: [4, 6], from: 0.25, angle: [35, 65], length: [0.35, 0.55], bend: 0.12, crook: 0.4 },
         leaves: { size: [1.5, 2], perBranch: 9, from: 0.1 },
+        foot: { flare: 0.8, roots: [4, 6], reach: [0.6, 0.9], tint: [0.62, 0.66, 0.5] },
         bark: "oak",
     },
     beech: {
@@ -46,6 +57,7 @@ export const SPECIES = Object.freeze({
         boughs: { count: [11, 14], from: 0.3, to: 0.97, angle: [38, 60], length: [0.3, 0.4], shape: "dome", bend: 0.1, crook: 0.2, thickness: 0.45 },
         branches: { count: [3, 5], from: 0.25, angle: [30, 60], length: [0.45, 0.65], bend: 0.12, crook: 0.25 },
         leaves: { size: [1.5, 1.95], perBranch: 8, from: 0.1 },
+        foot: { flare: 0.95, roots: [5, 6], reach: [0.6, 0.9], tint: [0.66, 0.7, 0.56] },
         bark: "beech",
     },
     birch: {
@@ -54,6 +66,7 @@ export const SPECIES = Object.freeze({
         boughs: { count: [9, 13], from: 0.35, to: 0.96, angle: [32, 50], length: [0.22, 0.32], shape: "oval", bend: -0.18, crook: 0.2, thickness: 0.4 },
         branches: { count: [3, 4], from: 0.3, angle: [25, 45], length: [0.45, 0.65], bend: -0.35, crook: 0.2 },
         leaves: { size: [1.1, 1.45], perBranch: 7, from: 0.15 },
+        foot: { flare: 0.4, roots: [2, 3], reach: [0.35, 0.55], tint: [0.34, 0.33, 0.31] },
         bark: "birch",
     },
     pine: {
@@ -62,6 +75,7 @@ export const SPECIES = Object.freeze({
         boughs: { count: [11, 14], from: 0.55, to: 0.97, angle: [55, 82], length: [0.2, 0.3], shape: "top", bend: 0.22, crook: 0.4, thickness: 0.42 },
         branches: { count: [3, 4], from: 0.35, angle: [30, 60], length: [0.4, 0.6], bend: 0.25, crook: 0.3 },
         leaves: { size: [1.35, 1.7], perBranch: 4, from: 0.45, tufts: true },
+        foot: { flare: 0.5, roots: [3, 4], reach: [0.45, 0.7], tint: [0.66, 0.62, 0.52] },
         bark: "pine",
     },
     spruce: {
@@ -70,6 +84,7 @@ export const SPECIES = Object.freeze({
         boughs: { count: [56, 70], whorl: 7, from: 0.08, to: 0.97, angle: [80, 100], length: [0.36, 0.42], shape: "cone", bend: -0.2, crook: 0.12, thickness: 0.3, sides: 3, segments: 3 },
         branches: null,
         leaves: { size: [1.2, 1.55], perBranch: 7, from: 0.05, flat: true },
+        foot: { flare: 0.6, roots: [4, 5], reach: [0.5, 0.8], tint: [0.62, 0.64, 0.5] },
         bark: "spruce",
     },
     poplar: {
@@ -78,6 +93,7 @@ export const SPECIES = Object.freeze({
         boughs: { count: [16, 20], from: 0.12, to: 0.97, angle: [16, 28], length: [0.16, 0.22], shape: "column", bend: 0.2, crook: 0.15, thickness: 0.3, sides: 4 },
         branches: { count: [2, 3], from: 0.35, angle: [18, 30], length: [0.4, 0.6], bend: 0.2, crook: 0.2 },
         leaves: { size: [1.25, 1.6], perBranch: 7, from: 0.1 },
+        foot: { flare: 0.55, roots: [3, 4], reach: [0.45, 0.7], tint: [0.64, 0.66, 0.54] },
         bark: "poplar",
     },
     apple: {
@@ -86,6 +102,7 @@ export const SPECIES = Object.freeze({
         boughs: { count: [5, 7], from: 0.55, to: 1, angle: [45, 65], length: [0.45, 0.6], shape: "spread", bend: 0.1, crook: 0.55, thickness: 0.65 },
         branches: { count: [3, 5], from: 0.2, angle: [35, 60], length: [0.45, 0.65], bend: 0.06, crook: 0.45 },
         leaves: { size: [1.1, 1.4], perBranch: 8, from: 0.1 },
+        foot: { flare: 0.5, roots: [3, 4], reach: [0.35, 0.55], tint: [0.6, 0.62, 0.5] },
         bark: "apple",
     },
 });
@@ -116,6 +133,20 @@ const BARK_REPEAT = 1.6;
 // How low a bough or a spray of leaves comes to the ground (metres)
 const GROUND_CLEAR = 0.2;
 
+// A trunk's foot: how far round it's made (sides), the heights of its rings (metres; below the
+// ground too, so there's no edge where it stands), and how high it swells out (at most, metres;
+// less up a short trunk); and how high up the bark is darker and mossy (metres)
+const FOOT_SIDES = 12;
+const FOOT_RINGS = [-0.2, 0, 0.1, 0.3];
+const FOOT_TOP = 0.75;
+const MOSS_HEIGHT = 1.1;
+
+// A crown's shell (what casts its shadow): how far round each of its corners it reaches out to
+// the leaves (cos of the angle), and how low it comes (metres; not into the ground, where the
+// ground inside it would be lit)
+const SHELL_CONE = Math.cos((32 * Math.PI) / 180);
+const SHELL_FOOT = 0.15;
+
 const UP = new THREE.Vector3(0, 1, 0);
 const GOLDEN = Math.PI * (3 - Math.sqrt(5));
 const _a = new THREE.Vector3();
@@ -139,9 +170,9 @@ const SHAPES = {
 };
 
 // A limb (trunk, bough or branch) grown as a path: its points, radii, and how long it is
-function limb(random, { from, direction, length, radius, taper, segments, bend, crook, flare = false }) {
+function limb(random, { from, direction, length, radius, taper, segments, bend, crook }) {
     const points = [from.clone()];
-    const radii = [radius * (flare ? 1.5 : 1)];
+    const radii = [radius];
     const heading = direction.clone().normalize();
     const step = length / segments;
 
@@ -166,7 +197,7 @@ function limb(random, { from, direction, length, radius, taper, segments, bend, 
 
         const t = k / segments;
 
-        radii.push(radius * (1 - (1 - taper) * t) * (flare && k === 1 ? 1.12 : 1));
+        radii.push(radius * (1 - (1 - taper) * t));
     }
 
     return { points, radii, length };
@@ -199,8 +230,10 @@ function aside(axis, angle, around) {
 }
 
 /**
- * Grow a tree of a kind (SPECIES) from a seed: { height, wood: { position, normal, uv, index },
- * leaves: { position, normal, uv, color, index }, crown: { centre, radius } } (arrays; metres).
+ * Grow a tree of a kind (SPECIES) from a seed: { height, wood: { position, normal, uv, color,
+ * index }, leaves: { position, normal, uv, color, index }, crown: { centre, radius }, shell:
+ * { position, index } (the crown's, which casts its shadow), patch: { radius } (of the earth
+ * and fallen leaves round its foot) } (arrays; metres).
  */
 export function growTree(kind, seed) {
     const species = SPECIES[kind];
@@ -213,7 +246,7 @@ export function growTree(kind, seed) {
     // The trunk: up, leaning a little
     const { trunk } = species;
     const lean = new THREE.Vector3((random.next() - 0.5) * 2 * trunk.lean, 1, (random.next() - 0.5) * 2 * trunk.lean);
-    const stem = limb(random, { from: new THREE.Vector3(), direction: lean, length: height * trunk.reach, radius: trunk.radius * (height / 10), taper: trunk.taper, segments: SEGMENTS[0], bend: 0, crook: trunk.crook, flare: true });
+    const stem = limb(random, { from: new THREE.Vector3(), direction: lean, length: height * trunk.reach, radius: trunk.radius * (height / 10), taper: trunk.taper, segments: SEGMENTS[0], bend: 0, crook: trunk.crook });
 
     limbs.push({ ...stem, level: 0 });
 
@@ -279,14 +312,27 @@ export function growTree(kind, seed) {
     }
 
     const cell = KINDS.indexOf(kind);
-    const wood = tubes(limbs, cell);
     const leaves = cards(random, species, tips, height, cell);
 
-    return { height, wood, leaves: leaves.geometry, crown: leaves.crown };
+    // The foot and roots (from their own seed, so they change nothing above them)
+    const foot = rootedFoot(createRandom(seed * 7919 + kind.length * 104729 + 1), species, stem, cell);
+    const wood = tubes([...limbs, ...foot.roots], cell);
+
+    join(wood, foot.geometry);
+    wood.color = [];
+
+    for (let k = 1; k < wood.position.length; k += 3) {
+        const y = wood.position[k];
+        const clean = Math.min(1, Math.max(0, y / MOSS_HEIGHT)) ** 0.7;
+
+        wood.color.push(...species.foot.tint.map((share) => share + (1 - share) * clean));
+    }
+
+    return { height, wood, leaves: leaves.geometry, crown: leaves.crown, shell: leaves.shell, patch: { radius: foot.patch } };
 }
 
-// The wood: each limb a tube, its bark's pattern (the kind's, `cell` across the bark's picture)
-// running up it
+// The wood: each limb a tube (squashed lower than it's wide, by `squash`), its bark's pattern (the
+// kind's, `cell` across the bark's picture) running up it
 function tubes(limbs, cell) {
     const position = [];
     const normal = [];
@@ -294,7 +340,7 @@ function tubes(limbs, cell) {
     const index = [];
     const frame = { n: new THREE.Vector3(), b: new THREE.Vector3(), t: new THREE.Vector3() };
 
-    for (const { points, radii, level, sides: finer } of limbs) {
+    for (const { points, radii, level, sides: finer, squash = 1 } of limbs) {
         const sides = finer ?? ROUND[level];
         const first = position.length / 3;
         let travelled = 0;
@@ -319,8 +365,11 @@ function tubes(limbs, cell) {
                 const ny = frame.n.y * c + frame.b.y * d;
                 const nz = frame.n.z * c + frame.b.z * d;
 
-                position.push(points[k].x + nx * radii[k], points[k].y + ny * radii[k], points[k].z + nz * radii[k]);
-                normal.push(nx, ny, nz);
+                // (Lower than it's wide, if squashed: a root along the ground)
+                const up = Math.hypot(nx, ny / squash, nz);
+
+                position.push(points[k].x + nx * radii[k], points[k].y + ny * radii[k] * squash, points[k].z + nz * radii[k]);
+                normal.push(nx / up, ny / squash / up, nz / up);
                 uv.push((cell + 0.04 + 0.92 * (s / sides)) / KINDS.length, travelled / BARK_REPEAT);
             }
         }
@@ -336,6 +385,115 @@ function tubes(limbs, cell) {
     }
 
     return { position, normal, uv, index };
+}
+
+// Add one geometry's arrays ({ position, normal, uv, index }) to another's
+function join(into, from) {
+    const first = into.position.length / 3;
+
+    into.position.push(...from.position);
+    into.normal.push(...from.normal);
+    into.uv.push(...from.uv);
+    into.index.push(...from.index.map((k) => k + first));
+}
+
+// A trunk's foot, swelling out into buttresses where it meets the ground, one over each root, and
+// on down into it; and the roots, running out from the buttresses over the ground and into it:
+// { geometry: { position, normal, uv, index }, roots (limbs, for tubes), patch (how far round
+// it the earth is bare, metres) }
+function rootedFoot(random, species, stem, cell) {
+    const { foot } = species;
+    const count = random.int(...foot.roots);
+    const start = random.next() * Math.PI * 2;
+    const lobes = Array.from({ length: count }, (_, k) => ({
+        angle: start + ((k + (random.next() - 0.5) * 0.6) / count) * Math.PI * 2,
+        strength: 0.6 + 0.4 * random.next(),
+        reach: random.range(...foot.reach),
+    }));
+    const top = Math.min(FOOT_TOP, stem.length * 0.4);
+    const heights = [...FOOT_RINGS, top];
+
+    // Round the trunk as tubes() goes round it, so the bark's pattern carries on up
+    const axis = stem.points[1].clone().sub(stem.points[0]).normalize();
+    const n = new THREE.Vector3().crossVectors(axis, Math.abs(axis.y) > 0.9 ? _a.set(1, 0, 0) : _a.set(0, 1, 0)).normalize();
+    const b = new THREE.Vector3().crossVectors(axis, n).normalize();
+
+    // Swelling out towards the ground (all round, and more over each root), to nothing at the top
+    const low = (h) => {
+        const s = Math.min(1, Math.max(0, h / top));
+
+        return 1 - s * s * (3 - 2 * s);
+    };
+    const lobe = (angle) => lobes.reduce((sum, { angle: at, strength }) => sum + strength * Math.max(0, Math.cos(angle - at)) ** 4, 0);
+    const radius = (angle, h) => radiusAt(stem, Math.max(0, h) / stem.length) * (1.015 + 0.45 * foot.flare * low(h) ** 2 + foot.flare * low(h) ** 2 * lobe(angle));
+    const centre = (h) => (h < 0 ? stem.points[0].clone().addScaledVector(axis, h) : along(stem, h / stem.length).point);
+    const position = [];
+    const normal = [];
+    const uv = [];
+    const index = [];
+    const out = new THREE.Vector3();
+    const around = new THREE.Vector3();
+    const facing = new THREE.Vector3();
+
+    heights.forEach((h, k) => {
+        const [below, above] = [heights[Math.max(0, k - 1)], heights[Math.min(heights.length - 1, k + 1)]];
+        const middle = centre(h);
+
+        for (let s = 0; s <= FOOT_SIDES; s++) {
+            const angle = (s / FOOT_SIDES) * Math.PI * 2;
+            const r = radius(angle, h);
+
+            out.copy(n).multiplyScalar(Math.cos(angle)).addScaledVector(b, Math.sin(angle));
+            around.copy(n).multiplyScalar(-Math.sin(angle)).addScaledVector(b, Math.cos(angle));
+            position.push(middle.x + out.x * r, middle.y + out.y * r, middle.z + out.z * r);
+
+            // Leaning back as it spreads (up the slope of the foot, and to the sides of a ridge)
+            const slope = (radius(angle, above) - radius(angle, below)) / (above - below);
+            const side = (radius(angle + 0.05, h) - radius(angle - 0.05, h)) / (0.1 * r);
+
+            facing.copy(out).addScaledVector(axis, -slope).addScaledVector(around, -side).normalize();
+            normal.push(facing.x, facing.y, facing.z);
+            uv.push((cell + 0.04 + 0.92 * (s / FOOT_SIDES)) / KINDS.length, h / BARK_REPEAT);
+        }
+    });
+
+    for (let k = 0; k < heights.length - 1; k++) {
+        for (let s = 0; s < FOOT_SIDES; s++) {
+            const a = k * (FOOT_SIDES + 1) + s;
+            const c = a + FOOT_SIDES + 1;
+
+            index.push(a, c, a + 1, a + 1, c, c + 1);
+        }
+    }
+
+    // The roots: each on down from its buttress, as one spur, broad and low along the ground (the
+    // top of it showing, as a ridge in the earth), then steeply down into it while still thick
+    // (going in gently, a root would show as a long thin point, like a claw)
+    const base = stem.radii[0] * (1.015 + 0.45 * foot.flare);
+    const roots = lobes.map(({ angle, strength, reach }) => {
+        const way = n.clone().multiplyScalar(Math.cos(angle)).addScaledVector(b, Math.sin(angle)).setY(0).normalize();
+        const side = new THREE.Vector3(-way.z, 0, way.x);
+        const at = (distance, y, aside) => stem.points[0].clone().addScaledVector(way, distance).addScaledVector(side, aside).setY(y);
+        const thick = stem.radii[0] * 0.6 * strength * (0.75 + 0.5 * foot.flare);
+        const wander = () => (random.next() - 0.5) * 0.25 * reach;
+        const radii = [thick * 1.15, thick * 0.9, thick * 0.7, thick * 0.6];
+
+        return {
+            points: [
+                at(base * 0.45, Math.min(top * 0.5, stem.radii[0] * 1.3), 0),
+                at(base + 0.25 * reach, 0.4 * thick, wander()),
+                at(base + 0.55 * reach, 0.05 * thick, wander()),
+                at(base + 0.68 * reach, -1.5 * thick, wander()),
+            ],
+            radii,
+            level: 2,
+            sides: 6,
+            squash: 0.7,
+        };
+    });
+    const patch = Math.min(2.4, base * 2 + 0.75 * Math.max(...lobes.map(({ reach }) => reach)));
+
+    return { geometry: { position, normal, uv, index }, roots, patch };
 }
 
 // The leaves: cards round the ends of the branches, each a cluster of leaves (its picture: the
@@ -438,7 +596,65 @@ function cards(random, species, tips, height, cell) {
         index.push(first, first + 1, first + 2, first, first + 2, first + 3);
     }
 
-    return { geometry: { position, normal, uv, color, index }, crown: { centre: centre.toArray(), radius: radius.toArray() } };
+    return {
+        geometry: { position, normal, uv, color, index },
+        crown: { centre: centre.toArray(), radius: radius.toArray() },
+        shell: crownShell(placed.map((card) => card.centre), centre, radius),
+    };
+}
+
+let ball = null;
+
+// The shell round a crown, for its shadow: an icosphere's corners pushed out from the crown's
+// middle as far as the cards' middles reach that way (a spruce's comes to a point, a poplar's is
+// tall and narrow, a pine's sits on its bare trunk), smoothed with their neighbours:
+// { position, index } (metres)
+function crownShell(middles, centre, radius) {
+    if (!ball) {
+        const sphere = new THREE.IcosahedronGeometry(1, 2);
+
+        sphere.deleteAttribute("normal");
+        sphere.deleteAttribute("uv");
+
+        const merged = mergeVertices(sphere);
+        const corners = merged.getAttribute("position");
+        const index = [...merged.getIndex().array];
+        const neighbours = Array.from({ length: corners.count }, () => new Set());
+
+        for (let k = 0; k < index.length; k += 3) {
+            for (let j = 0; j < 3; j++) {
+                neighbours[index[k + j]].add(index[k + ((j + 1) % 3)]).add(index[k + ((j + 2) % 3)]);
+            }
+        }
+
+        ball = { directions: Array.from({ length: corners.count }, (_, k) => new THREE.Vector3().fromBufferAttribute(corners, k)), index, neighbours: neighbours.map((set) => [...set]) };
+    }
+
+    // The cards' middles as if the crown were round (a share of its radius each way)
+    const out = middles.map((middle) => middle.clone().sub(centre).divide(radius));
+    const reach = ball.directions.map((direction) => {
+        let most = 0.3;
+
+        for (const to of out) {
+            const along = to.dot(direction);
+
+            if (along > SHELL_CONE * to.length()) {
+                most = Math.max(most, along);
+            }
+        }
+
+        return most;
+    });
+    const smooth = reach.map((most, k) => 0.5 * most + (0.5 * ball.neighbours[k].reduce((sum, j) => sum + reach[j], 0)) / ball.neighbours[k].length);
+    const position = [];
+
+    ball.directions.forEach((direction, k) => {
+        const corner = direction.clone().multiplyScalar(smooth[k]).multiply(radius).add(centre);
+
+        position.push(corner.x, Math.max(SHELL_FOOT, corner.y), corner.z);
+    });
+
+    return { position, index: [...ball.index] };
 }
 
 // --- Pictures: bark and leaves, drawn on canvases (in the browser) ---
@@ -795,6 +1011,106 @@ function atlas(width, height, draw) {
     return canvas;
 }
 
+// What lies round each kind's foot: fallen leaves (their colours, and how long, pixels of 128),
+// or needles and cones; an apple tree's windfalls
+const LITTER = {
+    oak: { leaves: ["#5e4a30", "#6e5636", "#4e3e28", "#7a603c"], size: 8 },
+    beech: { leaves: ["#74482c", "#865634", "#5e3c26", "#946440"], size: 7 },
+    birch: { leaves: ["#8a7436", "#7a6c38", "#96803e", "#5e5430"], size: 5 },
+    pine: { needles: ["#7a5634", "#86603a", "#5e452c"], cones: "#4e3420" },
+    spruce: { needles: ["#5e4630", "#6a5036", "#4e3c28"], cones: "#44301e" },
+    poplar: { leaves: ["#847438", "#6e6434", "#5a5630", "#907e44"], size: 6 },
+    apple: { leaves: ["#646036", "#72683a", "#52502e"], size: 6, fruit: ["#8a3226", "#a08036"] },
+};
+
+// The patch round a tree's foot, seen from above, fading out at its edge: bare earth, moss, and
+// what's fallen from the tree
+function litterPicture(context, kind) {
+    const random = createRandom(kind.charCodeAt(1) * 31 + kind.length);
+    const litter = LITTER[kind];
+    const size = 128;
+    const middle = size / 2;
+    // A spot round the middle, thinning out further out (0: the middle, 1: the edge)
+    const spot = (most = 1) => {
+        const r = most * Math.sqrt(random.next()) * (size * 0.46);
+        const a = random.next() * Math.PI * 2;
+
+        return [middle + Math.cos(a) * r, middle + Math.sin(a) * r, r / (size * 0.46)];
+    };
+
+    // Earth, darkest by the trunk, in blotches so its edge is ragged
+    for (let k = 0; k < 200; k++) {
+        const [x, y, out] = spot();
+
+        context.fillStyle = `rgba(${58 + random.int(0, 16)}, ${46 + random.int(0, 12)}, ${30 + random.int(0, 8)}, ${0.13 * (1 - out) ** 1.5})`;
+        context.beginPath();
+        context.arc(x, y, 6 + random.next() * 12, 0, Math.PI * 2);
+        context.fill();
+    }
+
+    // Moss, further out
+    for (let k = 0; k < 40; k++) {
+        const [x, y, out] = spot(0.9);
+
+        context.fillStyle = `rgba(${66 + random.int(0, 20)}, ${88 + random.int(0, 24)}, 38, ${0.3 * (1 - out)})`;
+        context.beginPath();
+        context.arc(x, y, 3 + random.next() * 6, 0, Math.PI * 2);
+        context.fill();
+    }
+
+    // What's fallen
+    context.lineCap = "round";
+
+    if (litter.needles) {
+        for (let k = 0; k < 420; k++) {
+            const [x, y, out] = spot(0.95);
+            const a = random.next() * Math.PI * 2;
+            const length = 4 + random.next() * 4;
+
+            context.strokeStyle = litter.needles[random.int(0, litter.needles.length - 1)];
+            context.globalAlpha = 0.7 * (1 - out * out);
+            context.lineWidth = 1;
+            context.beginPath();
+            context.moveTo(x, y);
+            context.lineTo(x + Math.cos(a) * length, y + Math.sin(a) * length);
+            context.stroke();
+        }
+
+        for (let k = 0; k < 5; k++) {
+            const [x, y] = spot(0.7);
+
+            context.globalAlpha = 1;
+            context.fillStyle = litter.cones;
+            context.beginPath();
+            context.ellipse(x, y, 4.5, 2.6, random.next() * Math.PI, 0, Math.PI * 2);
+            context.fill();
+        }
+    } else {
+        for (let k = 0; k < 90; k++) {
+            const [x, y, out] = spot();
+            const long = litter.size * (0.7 + random.next() * 0.6);
+
+            context.fillStyle = litter.leaves[random.int(0, litter.leaves.length - 1)];
+            context.globalAlpha = 0.7 * (1 - out * out);
+            context.beginPath();
+            context.ellipse(x, y, long / 2, long / 4, random.next() * Math.PI, 0, Math.PI * 2);
+            context.fill();
+        }
+
+        for (const colour of litter.fruit ?? []) {
+            const [x, y] = spot(0.8);
+
+            context.globalAlpha = 1;
+            context.fillStyle = colour;
+            context.beginPath();
+            context.arc(x, y, 3.2, 0, Math.PI * 2);
+            context.fill();
+        }
+    }
+
+    context.globalAlpha = 1;
+}
+
 // --- Materials: the bark and the leaves, shared by every tree (so they merge) ---
 
 /**
@@ -827,7 +1143,11 @@ function nearFade(material) {
 
 let materials = null;
 
-/** The trees' materials: { bark, leaves }, every kind's pictures side by side on each. */
+/**
+ * The trees' materials: { bark, leaves, litter (round their feet) }, every kind's pictures side
+ * by side on each; and the crowns' shells', which cast their shadows but are never seen:
+ * { shadows, dapple } (dapple: the shadows' own, `customDepthMaterial`).
+ */
 export function treeMaterials() {
     if (!materials) {
         const drawn = typeof document !== "undefined";
@@ -840,7 +1160,7 @@ export function treeMaterials() {
 
             return result;
         };
-        const bark = new THREE.MeshLambertMaterial({ name: "bark", color: drawn ? 0xffffff : 0x5d4a3d, map: drawn ? texture(atlas(128, 256, (context, kind) => barkPicture(context, SPECIES[kind].bark)), true) : null });
+        const bark = new THREE.MeshLambertMaterial({ name: "bark", color: drawn ? 0xffffff : 0x5d4a3d, map: drawn ? texture(atlas(128, 256, (context, kind) => barkPicture(context, SPECIES[kind].bark)), true) : null, vertexColors: true });
         const leaves = new THREE.MeshLambertMaterial({
             name: "leaves",
             color: drawn ? 0xffffff : 0x4a7a29,
@@ -851,7 +1171,6 @@ export function treeMaterials() {
         });
 
         bark.shadowSide = THREE.DoubleSide;
-        leaves.shadowSide = THREE.DoubleSide;
 
         // Seen from behind, a card's leaves are lit as from in front (as the crown is), not dark;
         // and they stir in the breeze, each part of a crown in its own time, more the higher up
@@ -877,7 +1196,68 @@ export function treeMaterials() {
             nearFade(material);
         }
 
-        materials = { bark, leaves };
+        // A shell is drawn only into the sun's shadows (shadowOnly), and there by its far side, so a
+        // crown's leaves, inside it, aren't in its shadow
+        const shadows = new THREE.MeshBasicMaterial({ name: "crown shadows", colorWrite: false, depthWrite: false });
+
+        // Into the shadows, a shell is drawn with holes in it, as sunlight comes through a crown
+        // (bigger and more of them towards its edge as the sun sees it, where the leaves are
+        // thinner), so its shadow is dappled, with a broken edge
+        const dapple = new THREE.MeshDepthMaterial();
+
+        dapple.onBeforeCompile = (shader) => {
+            shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nvarying vec3 vDappleAt;\nvarying float vDappleFacing;").replace(
+                "#include <begin_vertex>",
+                `#include <begin_vertex>
+vDappleAt = (modelMatrix * vec4(transformed, 1.0)).xyz;
+vDappleFacing = abs(normalize(mat3(modelViewMatrix) * normal).z);`,
+            );
+            shader.fragmentShader = shader.fragmentShader
+                .replace(
+                    "#include <common>",
+                    `#include <common>
+varying vec3 vDappleAt;
+varying float vDappleFacing;
+
+float dappleHash(vec3 p) {
+    return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+}
+
+float dappleNoise(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+
+    f = f * f * (3.0 - 2.0 * f);
+
+    return mix(
+        mix(mix(dappleHash(i), dappleHash(i + vec3(1.0, 0.0, 0.0)), f.x), mix(dappleHash(i + vec3(0.0, 1.0, 0.0)), dappleHash(i + vec3(1.0, 1.0, 0.0)), f.x), f.y),
+        mix(mix(dappleHash(i + vec3(0.0, 0.0, 1.0)), dappleHash(i + vec3(1.0, 0.0, 1.0)), f.x), mix(dappleHash(i + vec3(0.0, 1.0, 1.0)), dappleHash(i + vec3(1.0, 1.0, 1.0)), f.x), f.y),
+        f.z
+    );
+}`,
+                )
+                .replace(
+                    "#include <clipping_planes_fragment>",
+                    `#include <clipping_planes_fragment>
+if (0.5 * dappleNoise(vDappleAt * 1.9) + 0.3 * dappleNoise(vDappleAt * 4.7) + 0.2 * dappleNoise(vDappleAt * 11.0) > mix(0.38, 0.74, vDappleFacing)) discard;`,
+                );
+        };
+        dapple.customProgramCacheKey = () => "crown dapple";
+
+        // The earth and fallen leaves round each foot, laid over the ground (drawn over it, and
+        // fading into it)
+        const litter = new THREE.MeshLambertMaterial({
+            name: "litter",
+            color: drawn ? 0xffffff : 0x4a3a28,
+            map: drawn ? texture(atlas(128, 128, litterPicture), false) : null,
+            transparent: true,
+            depthWrite: false,
+            polygonOffset: true,
+            polygonOffsetFactor: -1,
+            polygonOffsetUnits: -4,
+        });
+
+        materials = { bark, leaves, litter, shadows, dapple };
     }
 
     return materials;
@@ -901,7 +1281,8 @@ function geometryOf({ position, normal, uv, color, index }) {
 
 const grown = new Map();
 
-// A variant's wood and leaves, grown once: { kind, wood, leaves } (BufferGeometry, metres)
+// A variant's wood, leaves and crown's shell, grown once: { kind, wood, leaves, shell }
+// (BufferGeometry, metres), and how far round its foot the earth is bare (patch, metres)
 function grownGeometry(variant) {
     const index = ((variant % VARIANTS.length) + VARIANTS.length) % VARIANTS.length;
 
@@ -909,27 +1290,86 @@ function grownGeometry(variant) {
         const [kind, seed] = VARIANTS[index];
         const tree = growTree(kind, seed);
 
-        grown.set(index, { kind, wood: geometryOf(tree.wood), leaves: geometryOf(tree.leaves) });
+        const shell = new THREE.BufferGeometry();
+
+        shell.setAttribute("position", new THREE.Float32BufferAttribute(tree.shell.position, 3));
+        shell.setIndex(tree.shell.index);
+        shell.computeVertexNormals();
+        grown.set(index, { kind, wood: geometryOf(tree.wood), leaves: geometryOf(tree.leaves), shell, patch: tree.patch.radius });
     }
 
     return grown.get(index);
 }
 
+// The patches of earth and fallen leaves round trees' feet ([{ x, z, turn, radius, kind }],
+// metres), a little over the ground, each a square of its kind's picture
+function patches(placed) {
+    const position = [];
+    const normal = [];
+    const uv = [];
+    const index = [];
+
+    for (const { x, z, turn, radius, kind } of placed) {
+        const first = position.length / 3;
+        const cell = KINDS.indexOf(kind);
+
+        for (const [u, v] of [[0, 0], [1, 0], [1, 1], [0, 1]]) {
+            const [a, b] = [(u - 0.5) * 2 * radius, (v - 0.5) * 2 * radius];
+
+            position.push(x + a * Math.cos(turn) + b * Math.sin(turn), 0.01, z - a * Math.sin(turn) + b * Math.cos(turn));
+            normal.push(0, 1, 0);
+            uv.push((cell + u) / KINDS.length, v);
+        }
+
+        index.push(first, first + 2, first + 1, first, first + 3, first + 2);
+    }
+
+    const geometry = new THREE.BufferGeometry();
+
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(position, 3));
+    geometry.setAttribute("normal", new THREE.Float32BufferAttribute(normal, 3));
+    geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+    geometry.setIndex(index);
+
+    return geometry;
+}
+
+// Laid on the ground (so not cut away in front of the player: town3d.js), and never casting a
+// shadow
+function onGround(mesh) {
+    mesh.receiveShadow = true;
+    mesh.userData.onGround = true;
+    mesh.renderOrder = -1;
+}
+
+// A crown's shell (or all of them) is drawn only into the sun's shadows: Three.js draws those
+// first, then the view, where it's drawn as none of its triangles
+function shadowOnly(mesh) {
+    mesh.castShadow = true;
+    mesh.receiveShadow = false;
+    mesh.customDepthMaterial = treeMaterials().dapple;
+    mesh.onBeforeShadow = () => mesh.geometry.setDrawRange(0, Infinity);
+    mesh.onBeforeRender = () => mesh.geometry.setDrawRange(0, 0);
+}
+
 /**
- * A tree (a VARIANTS index): a Group in metres, its trunk's foot at (0, 0, 0), the wood and the
- * leaves meshes sharing the trees' materials; grown once for each variant, copied after.
+ * A tree (a VARIANTS index): a Group in metres, its trunk's foot at (0, 0, 0), the wood, the
+ * leaves, the crown's shell (casting the crown's shadow) and the patch round its foot sharing
+ * the trees' materials; grown once for each variant, copied after.
  */
 export function treeObject(variant) {
-    const { kind, wood, leaves } = grownGeometry(variant);
-    const { bark, leaves: foliage } = treeMaterials();
+    const { kind, wood, leaves, shell, patch } = grownGeometry(variant);
+    const { bark, leaves: foliage, litter, shadows } = treeMaterials();
     const group = new THREE.Group();
+    const parts = [new THREE.Mesh(wood, bark), new THREE.Mesh(leaves, foliage), new THREE.Mesh(shell, shadows), new THREE.Mesh(patches([{ x: 0, z: 0, turn: 0, radius: patch, kind }]), litter)];
 
     group.name = `tree-${kind}`;
-    group.add(new THREE.Mesh(wood, bark), new THREE.Mesh(leaves, foliage));
-    group.traverse((node) => {
-        node.castShadow = true;
-        node.receiveShadow = true;
-    });
+    group.add(...parts);
+    parts[0].castShadow = true;
+    parts[0].receiveShadow = true;
+    parts[1].receiveShadow = true;
+    shadowOnly(parts[2]);
+    onGround(parts[3]);
 
     return group;
 }
@@ -937,7 +1377,9 @@ export function treeObject(variant) {
 /**
  * Plant trees: [{ x, z (their trunks' feet, metres), variant, size (1: as grown), turn (radians
  * about the trunk) }], merged a `tile` metres square of the map at a time (the tiles out of view
- * aren't drawn): { object (a Group of the tiles' meshes), boxes (each tree's Box3, in order) }.
+ * aren't drawn), and the crowns' shells (casting their shadows) and the patches round their feet
+ * all together: { object (a Group of the meshes), boxes (each tree's Box3 above the ground, in
+ * order) }.
  */
 export function plantTrees(placements, { tile = 24 } = {}) {
     const tiles = new Map();
@@ -946,9 +1388,11 @@ export function plantTrees(placements, { tile = 24 } = {}) {
     const turned = new THREE.Quaternion();
     const scale = new THREE.Vector3();
     const at = new THREE.Vector3();
+    const shells = [];
+    const grounds = [];
 
     for (const { x, z, variant, size = 1, turn = 0 } of placements) {
-        const { wood, leaves } = grownGeometry(variant);
+        const { kind, wood, leaves, shell, patch } = grownGeometry(variant);
         const key = `${Math.floor(x / tile)},${Math.floor(z / tile)}`;
 
         matrix.compose(at.set(x, 0, z), turned.setFromAxisAngle(UP, turn), scale.setScalar(size));
@@ -961,6 +1405,7 @@ export function plantTrees(placements, { tile = 24 } = {}) {
             box.union(part.boundingBox);
         }
 
+        box.min.y = Math.max(0, box.min.y);
         boxes.push(box);
 
         if (!tiles.has(key)) {
@@ -969,9 +1414,11 @@ export function plantTrees(placements, { tile = 24 } = {}) {
 
         tiles.get(key).wood.push(parts[0]);
         tiles.get(key).leaves.push(parts[1]);
+        shells.push(shell.clone().applyMatrix4(matrix));
+        grounds.push({ x, z, turn, radius: patch * size, kind });
     }
 
-    const { bark, leaves } = treeMaterials();
+    const { bark, leaves, litter, shadows } = treeMaterials();
     const object = new THREE.Group();
 
     object.name = "trees";
@@ -981,11 +1428,28 @@ export function plantTrees(placements, { tile = 24 } = {}) {
             const mesh = new THREE.Mesh(mergeGeometries(geometries), material);
 
             mesh.name = `${material.name} ${key}`;
-            mesh.castShadow = true;
+            mesh.castShadow = material !== leaves;
             mesh.receiveShadow = true;
             mesh.matrixAutoUpdate = false;
             object.add(mesh);
         }
+    }
+
+    // (Few enough triangles that drawing the shells out of the sun's view costs nothing)
+    if (shells.length) {
+        const cast = new THREE.Mesh(mergeGeometries(shells), shadows);
+
+        cast.name = shadows.name;
+        cast.matrixAutoUpdate = false;
+        shadowOnly(cast);
+        object.add(cast);
+
+        const floor = new THREE.Mesh(patches(grounds), litter);
+
+        floor.name = litter.name;
+        floor.matrixAutoUpdate = false;
+        onGround(floor);
+        object.add(floor);
     }
 
     return { object, boxes };
