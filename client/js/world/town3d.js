@@ -1,7 +1,7 @@
 // The town in 3D: every piece of the town's plan (houses, the tavern, church and blacksmith, props,
 // trees) built by the art kits (art/kits), with the trees in the fields round it, merged into as
 // few meshes as possible (the trees a tile of the map at a time, so those out of view aren't
-// drawn: trees.js).
+// drawn: trees.js). The world round it is drawn a chunk at a time (chunks3d.js).
 //
 // The kits build in the art's world pixels (a plan square is 20, x east, y up and z south), and
 // the world is in metres, so the town is scaled by PIXEL: a plan square is PLOT (4) metres, a door
@@ -15,7 +15,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { createRandom } from "../core/random.js";
-import { GROUND, pieceCatalog, TREE_VARIANTS } from "../core/setpieces/pieces.js";
+import { pieceCatalog } from "../core/setpieces/pieces.js";
 import { PLOT } from "../core/world.js";
 import { gatehouse, keep, tower, wall } from "./art/kits/castle.js";
 import { house } from "./art/kits/house.js";
@@ -25,9 +25,6 @@ import { plantTrees } from "./art/kits/trees.js";
 
 /** Metres per art world pixel. */
 export const PIXEL = PLOT / 20;
-
-// The forest round the map: how far outside its edge trees grow (metres)
-const BORDER = { near: 1.5, far: 16 };
 
 // What builds each kind of piece (castle pieces too, for towns with walls one day)
 export const BUILDERS = { house, landmark, prop, tree, wall, tower, gatehouse, keep };
@@ -45,16 +42,31 @@ export const CUTAWAY = Object.freeze({ centre: { value: new THREE.Vector3() }, r
 const BUILT = new Set(["house", "landmark", "wall", "tower", "gatehouse", "keep"]);
 
 /**
- * Build the town and the trees round it: { object: a Group (in metres) of merged meshes, heights:
- * the height of whatever stands on each square, heights[y][x], in metres, and buildings: the
- * same for what's built alone (BUILT) }. `onProgress(done, total)` hears as each piece is built.
+ * How high whatever stands on each square of an area is (metres): { x0, z0 (its north-west
+ * square), width, height, rows (Float32Array rows, rows[z - z0][x - x0]), at(x, z) (any point,
+ * 0 outside it) }.
+ */
+export function heightMap([x0, z0, width, height]) {
+    const rows = Array.from({ length: height }, () => new Float32Array(width));
+
+    return { x0, z0, width, height, rows, at: (x, z) => rows[Math.floor(z) - z0]?.[Math.floor(x) - x0] ?? 0 };
+}
+
+/**
+ * Build the town and the trees in its fields: { object: a Group (in metres) of merged meshes,
+ * heights: the height of whatever stands on each of its squares (heightMap's), and buildings:
+ * the same for what's built alone (BUILT) }. The town's corner is at `world.origin` ([x, z] or
+ * a number for both), and its squares are `world.stamp`'s (where it's set in the world: [x, z]
+ * `at`, its width and height) or the world's own. `onProgress(done, total)` hears as each piece
+ * is built.
  */
 export async function buildTown(world, { onProgress = () => {} } = {}) {
     const art = new THREE.Group();
-    const origin = world.origin / PIXEL;
+    const [ox, oz] = Array.isArray(world.origin) ? world.origin : [world.origin, world.origin];
     const total = world.town.pieces.length + world.trees.length;
-    const heights = Array.from({ length: world.height }, () => new Float32Array(world.width));
-    const buildings = Array.from({ length: world.height }, () => new Float32Array(world.width));
+    const area = world.stamp ? [...world.stamp.at, world.stamp.width, world.stamp.height] : [0, 0, world.width, world.height];
+    const heights = heightMap(area);
+    const buildings = heightMap(area);
     let done = 0;
 
     art.scale.setScalar(PIXEL);
@@ -78,7 +90,7 @@ export async function buildTown(world, { onProgress = () => {} } = {}) {
         const spec = catalog.get(piece.key);
 
         if (spec.kind === "tree") {
-            plant(world.origin + (piece.x + 0.5) * PLOT, world.origin + (piece.y + 0.5) * PLOT, spec.variant, 0.9);
+            plant(ox + (piece.x + 0.5) * PLOT, oz + (piece.y + 0.5) * PLOT, spec.variant, 0.9);
             onProgress(++done, total);
             continue;
         }
@@ -94,9 +106,9 @@ export async function buildTown(world, { onProgress = () => {} } = {}) {
             built.position.set(-halfW, 0, -halfH);
             object.add(built);
             object.rotation.y = world.tavern.facing;
-            object.position.set(origin + piece.x * 20 + halfW, 0, origin + piece.y * 20 + halfH);
+            object.position.set(ox / PIXEL + piece.x * 20 + halfW, 0, oz / PIXEL + piece.y * 20 + halfH);
         } else {
-            object.position.set(origin + piece.x * 20, 0, origin + piece.y * 20);
+            object.position.set(ox / PIXEL + piece.x * 20, 0, oz / PIXEL + piece.y * 20);
         }
 
         object.userData.built = BUILT.has(spec.kind);
@@ -111,11 +123,6 @@ export async function buildTown(world, { onProgress = () => {} } = {}) {
         onProgress(++done, total);
     }
 
-    // A forest round the map's edge, where no one can go, leaving the roads' ways out clear
-    for (const { x, y, variant, size } of borderTrees(world)) {
-        plant(x, y, variant, size);
-    }
-
     await breathe();
 
     const trees = plantTrees(planted);
@@ -124,12 +131,12 @@ export async function buildTown(world, { onProgress = () => {} } = {}) {
 
     // How high everything stands on each square
     const stand = (box, built) => {
-        for (let y = Math.max(0, Math.floor(box.min.z)); y < Math.min(world.height, Math.ceil(box.max.z)); y++) {
-            for (let x = Math.max(0, Math.floor(box.min.x)); x < Math.min(world.width, Math.ceil(box.max.x)); x++) {
-                heights[y][x] = Math.max(heights[y][x], box.max.y);
+        for (const map of built ? [heights, buildings] : [heights]) {
+            for (let z = Math.max(map.z0, Math.floor(box.min.z)); z < Math.min(map.z0 + map.height, Math.ceil(box.max.z)); z++) {
+                const row = map.rows[z - map.z0];
 
-                if (built) {
-                    buildings[y][x] = Math.max(buildings[y][x], box.max.y);
+                for (let x = Math.max(map.x0, Math.floor(box.min.x)); x < Math.min(map.x0 + map.width, Math.ceil(box.max.x)); x++) {
+                    row[x - map.x0] = Math.max(row[x - map.x0], box.max.y);
                 }
             }
         }
@@ -152,34 +159,6 @@ export async function buildTown(world, { onProgress = () => {} } = {}) {
     object.add(trees.object);
 
     return { object, heights, buildings };
-}
-
-// Trees in a band round the outside of the map (metres), clear of the roads leaving it
-function borderTrees(world) {
-    const random = createRandom(world.seed * 7 + 3);
-    const trees = [];
-    const { width, height, ground } = world;
-    const roadAt = (x, y) => ground[Math.min(height - 1, Math.max(0, Math.floor(y)))][Math.min(width - 1, Math.max(0, Math.floor(x)))] === GROUND.road;
-
-    for (let k = 0; k < (width + height) * 0.55; k++) {
-        const along = random.next() * 2 * (width + height);
-        const out = BORDER.near + random.next() ** 1.5 * (BORDER.far - BORDER.near);
-        let [x, y] = along < width ? [along, -out] : along < width + height ? [width + out, along - width] : along < 2 * width + height ? [along - width - height, height + out] : [-out, along - 2 * width - height];
-
-        x += (random.next() - 0.5) * 2;
-        y += (random.next() - 0.5) * 2;
-
-        // Where the nearest edge square is a road, leave the way clear
-        const edgeX = Math.min(width - 1, Math.max(0, x));
-        const edgeY = Math.min(height - 1, Math.max(0, y));
-        const nearRoad = [-3, 0, 3].some((d) => roadAt(edgeX + (x < 0 || x > width ? 0 : d), edgeY + (y < 0 || y > height ? 0 : d)));
-
-        if (!nearRoad) {
-            trees.push({ x, y, variant: random.int(0, TREE_VARIANTS - 1), size: 0.85 + random.next() * 0.5 });
-        }
-    }
-
-    return trees;
 }
 
 // Cut a hole round the player through the parts of a material nearer the camera than they are,

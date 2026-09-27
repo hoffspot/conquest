@@ -64,10 +64,18 @@ export const PROPS = Object.freeze({
 });
 
 /**
- * How many different trees there are (each fills one square): each a kind of tree grown one way
- * (world/art/kits/trees.js VARIANTS).
+ * The trees there are ([kind, seed]): each kind grown several ways (world/art/kits/trees.js grows
+ * them), the broadleaved ones more often than the rest, as in the fields round an old town.
  */
-export const TREE_VARIANTS = 24;
+export const TREE_KINDS = Object.freeze([
+    ["oak", 1], ["beech", 1], ["birch", 1], ["spruce", 1], ["pine", 1], ["oak", 2],
+    ["poplar", 1], ["birch", 2], ["spruce", 2], ["beech", 2], ["apple", 1], ["oak", 3],
+    ["pine", 2], ["spruce", 3], ["birch", 3], ["beech", 3], ["oak", 4], ["spruce", 4],
+    ["poplar", 2], ["apple", 2], ["birch", 4], ["pine", 3], ["beech", 4], ["oak", 5],
+]);
+
+/** How many different trees there are (each fills one square): TREE_KINDS's. */
+export const TREE_VARIANTS = TREE_KINDS.length;
 
 /** What the ground is, square by square. */
 export const GROUND = Object.freeze({ grass: 0, road: 1, cobbles: 2, soil: 3, courtyard: 4, planks: 5 });

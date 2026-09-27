@@ -1,15 +1,19 @@
-// The minimap: the whole of the map the player is on from above, north up, in the top right of
-// the game. Out in the town it shows the ground (grass, roads, cobbles, soil), the buildings'
-// roofs, props and trees; inside the tavern, the floor, the walls, the furniture and the stairs.
-// Over that, what the camera can see, where the player is going, the enemies (the one the player
-// is set to fight ringed), and the player, pointing the way they face. Tapping it walks there,
-// or fights the enemy tapped; a double tap runs.
+// The minimap: the map the player is on from above, north up, in the top right of the game. In
+// the town and the world round it, the ground (grass in each land's colours, roads, cobbles,
+// soil, water), the buildings' roofs, props and trees, the 128 metres or so round the player;
+// inside the tavern, the whole floor: the walls, the furniture and the stairs. Over that, what
+// the camera can see, where the player is going, the enemies (the one the player is set to fight
+// ringed), and the player, pointing the way they face. Tapping it walks there, or fights the
+// enemy tapped; a double tap runs.
 //
-// The maps don't change, so each is painted once into an image four pixels to the metre; each
-// frame draws that, scaled to fit, and the markers over it.
+// What's shown is painted into an image four pixels to the metre: each floor inside once, the
+// world round the player a patch at a time (painted again when they've gone far enough that the
+// patch's edge would show). Each frame draws that, scaled to fit, and the markers over it.
 
 import { PLAN_KEY } from "../core/interiors.js";
+import { CHUNK, WET } from "../core/overworld.js";
 import { GROUND } from "../core/setpieces/pieces.js";
+import { LAND_COLOURS } from "../world/ground.js";
 
 // Colours (RGB) of the ground and of what stands on it
 const GROUND_COLOURS = {
@@ -44,6 +48,16 @@ const INSIDE = {
 
 // Pixels to the metre of the painted map
 const SCALE = 4;
+
+// Out in the world: how much of it the minimap shows round the player (metres across), and how
+// much is painted at a time (the player can go a quarter of the difference before it's painted
+// again: metres)
+const SPAN = 128;
+const PAINTED = 192;
+
+// Water, and bridges over it (RGB)
+const WATER_COLOURS = { [WET.still]: [58, 104, 130], [WET.river]: [70, 120, 146] };
+const BRIDGE = [150, 112, 70];
 
 // At most this many redraws a second
 const FRAME_RATE = 30;
@@ -82,17 +96,22 @@ export function interiorColours(map) {
     return data;
 }
 
+// Where the town's corner is ([x, y] metres: a world's origin is a number for both, or a pair)
+const cornerOf = ({ origin }) => (Array.isArray(origin) ? origin : [origin, origin]);
+
 /** The buildings' footprints (in squares): { x, y, w, h, landmark } for every house and landmark. */
 export function buildingsOf(world) {
-    const { town, origin, plot } = world;
+    const { town, plot } = world;
+    const [ox, oy] = cornerOf(world);
 
-    return town.pieces.filter(({ key }) => /^(house|landmark)-/.test(key)).map(({ key, x, y, w, h }) => ({ x: origin + x * plot, y: origin + y * plot, w: w * plot, h: h * plot, landmark: key.startsWith("landmark-") }));
+    return town.pieces.filter(({ key }) => /^(house|landmark)-/.test(key)).map(({ key, x, y, w, h }) => ({ x: ox + x * plot, y: oy + y * plot, w: w * plot, h: h * plot, landmark: key.startsWith("landmark-") }));
 }
 
-/** The trees: { x, y, r } (their middles and how far their crowns spread, in metres). */
+/** The town's trees: { x, y, r } (their middles and how far their crowns spread, in metres). */
 export function treesOf(world) {
-    const { town, origin, plot } = world;
-    const inTown = town.pieces.filter(({ key }) => key.startsWith("tree-")).map(({ x, y, w, h }) => ({ x: origin + (x + w / 2) * plot, y: origin + (y + h / 2) * plot, r: 0.55 * Math.min(w, h) * plot }));
+    const { town, plot } = world;
+    const [ox, oy] = cornerOf(world);
+    const inTown = town.pieces.filter(({ key }) => key.startsWith("tree-")).map(({ x, y, w, h }) => ({ x: ox + (x + w / 2) * plot, y: oy + (y + h / 2) * plot, r: 0.55 * Math.min(w, h) * plot }));
 
     return [...world.trees.map(({ x, y }) => ({ x, y, r: 1.8 })), ...inTown];
 }
@@ -149,7 +168,7 @@ export function mapColours(world) {
 export class Minimap {
     /**
      * @param {HTMLCanvasElement} canvas - Where to draw it (sized by the page's styles).
-     * @param {object} world - From generateWorld (core/world.js).
+     * @param {object} world - From buildWorld (core/overworld.js), or generateWorld (core/world.js).
      * @param {object} [options]
      * @param {(tap: object) => void} [options.onTap] - Hears taps on it: { x, z (metres), reach
      *     (metres: how close to an enemy picks it), clientX, clientY, time }.
@@ -161,6 +180,11 @@ export class Minimap {
         this.bases = new Map();
         this.drawn = -Infinity;
         this.pointer = null;
+
+        // Out in the world: the patch painted round the player ({ x, z (its corner, metres),
+        // image }), and where they were last drawn
+        this.patch = null;
+        this.middle = null;
         this.setMap(world.maps?.town ?? { id: "town", width: world.width, height: world.height });
 
         const down = (event) => {
@@ -176,9 +200,10 @@ export class Minimap {
             }
 
             const rect = canvas.getBoundingClientRect();
-            const metres = this.map.width / rect.width;
+            const [x0, z0, across] = this.shown();
+            const metres = across / rect.width;
 
-            onTap({ x: (event.clientX - rect.left) * metres, z: (event.clientY - rect.top) * metres, reach: PICK * metres, clientX: event.clientX, clientY: event.clientY, time: event.timeStamp });
+            onTap({ x: x0 + (event.clientX - rect.left) * metres, z: z0 + (event.clientY - rect.top) * metres, reach: PICK * metres, clientX: event.clientX, clientY: event.clientY, time: event.timeStamp });
         };
 
         this.listeners = [["pointerdown", down], ["pointerup", up]];
@@ -188,16 +213,42 @@ export class Minimap {
         }
     }
 
-    /** Show a map (one of the world's maps: the town, or a floor inside), painting it the first time. */
+    /**
+     * Show a map (one of the world's maps: the world outside, the town on its own, or a floor
+     * inside), painting it the first time (or, the world outside, as the player goes).
+     */
     setMap(map) {
+        this.map = map;
+        this.drawn = -Infinity;
+
+        // The world outside: the patch round the player, painted as they go
+        if (map.chunk) {
+            this.base = this.patch?.image ?? null;
+            this.canvas.style.aspectRatio = "1 / 1";
+
+            return;
+        }
+
         if (!this.bases.has(map.id)) {
             this.bases.set(map.id, map.id === "town" ? paint(this.world) : paintInterior(map));
         }
 
-        this.map = map;
         this.base = this.bases.get(map.id);
         this.canvas.style.aspectRatio = `${map.width} / ${map.height}`;
-        this.drawn = -Infinity;
+    }
+
+    /**
+     * What it shows of its map: [x, z (its north-west corner), metres across]: the whole map, or
+     * out in the world, the SPAN metres round where the player was last drawn.
+     */
+    shown() {
+        if (!this.map.chunk) {
+            return [0, 0, this.map.width];
+        }
+
+        const [x, z] = this.middle ?? [this.map.width / 2, this.map.height / 2];
+
+        return [x - SPAN / 2, z - SPAN / 2, SPAN];
     }
 
     /** Show it or not. */
@@ -235,13 +286,32 @@ export class Minimap {
             canvas.height = Math.round(height * ratio);
         }
 
-        const scale = width / map.width;
-        const at = (x, z) => [x * scale, z * scale];
+        // Out in the world: round the player (painted afresh if they've gone far enough)
+        if (map.chunk) {
+            if (player) {
+                this.middle = [player.x, player.z];
+            }
+
+            this.#repaint();
+        }
+
+        const [x0, z0, across] = this.shown();
+        const scale = width / across;
+        const at = (x, z) => [(x - x0) * scale, (z - z0) * scale];
 
         context.setTransform(ratio, 0, 0, ratio, 0, 0);
         context.imageSmoothingEnabled = true;
         context.imageSmoothingQuality = "high";
-        context.drawImage(this.base, 0, 0, width, height);
+
+        if (map.chunk) {
+            const { x: px, z: pz } = this.patch;
+
+            context.fillStyle = "#1c2a33";
+            context.fillRect(0, 0, width, height);
+            context.drawImage(this.base, (x0 - px) * SCALE, (z0 - pz) * SCALE, across * SCALE, across * SCALE, 0, 0, width, height);
+        } else {
+            context.drawImage(this.base, 0, 0, width, height);
+        }
 
         // What the camera sees
         if (view?.every(Boolean)) {
@@ -307,6 +377,26 @@ export class Minimap {
             context.stroke();
             context.restore();
         }
+    }
+
+    // Out in the world: paint the patch round the player afresh if what's shown would go past
+    // its edge
+    #repaint() {
+        const [x0, z0, across] = this.shown();
+        const patch = this.patch;
+
+        if (patch && x0 >= patch.x && z0 >= patch.z && x0 + across <= patch.x + PAINTED && z0 + across <= patch.z + PAINTED) {
+            return;
+        }
+
+        // (Snapped to whole chunks' quarters, so it's the same wherever it's come to from)
+        const snap = CHUNK / 4;
+        const x = Math.round((x0 + across / 2 - PAINTED / 2) / snap) * snap;
+        const z = Math.round((z0 + across / 2 - PAINTED / 2) / snap) * snap;
+
+        this.patch = { x, z, image: paintPatch(this.world, x, z, PAINTED, this.patch?.town) };
+        this.patch.town = this.patch.image.town;
+        this.base = this.patch.image;
     }
 
     /** Stop listening for taps. */
@@ -422,15 +512,124 @@ function paint(world) {
 
     // Trees: round crowns, lit from the top left
     for (const { x, y, r } of treesOf(world)) {
-        context.beginPath();
-        context.arc(x, y, r, 0, 2 * Math.PI);
-        context.fillStyle = `rgb(${TREE.join(",")})`;
-        context.fill();
-        context.beginPath();
-        context.arc(x - r * 0.3, y - r * 0.3, r * 0.45, 0, 2 * Math.PI);
-        context.fillStyle = "rgba(140, 180, 90, 0.35)";
-        context.fill();
+        crown(context, x, y, r);
     }
 
     return image;
+}
+
+// Each land's grass colour on the minimap (RGB): the town's grass, in the land's colour as much
+// as the ground's drawn in it (world/ground.js LAND_COLOURS)
+const landColour = new Map();
+
+function grassOf(biome) {
+    if (!landColour.has(biome)) {
+        const [colour, amount] = LAND_COLOURS[biome] ?? ["#000000", 0];
+        const tint = [1, 3, 5].map((at) => parseInt(colour.slice(at, at + 2), 16));
+
+        landColour.set(biome, GROUND_COLOURS[GROUND.grass].map((c, k) => c + (tint[k] - c) * amount));
+    }
+
+    return landColour.get(biome);
+}
+
+/**
+ * A patch of the world outside (buildWorld's), `size` metres square from (x0, z0): each square's
+ * colour (its land's grass, roads, soil, water and bridges), the town's own picture where it
+ * is (painted once: `town`, if it has been), and the trees, round. Returns the image, with the
+ * town's picture as its `town`.
+ */
+function paintPatch(world, x0, z0, size, town = null) {
+    const overworld = world.maps.town;
+    const data = new Uint8ClampedArray(size * size * 4);
+
+    for (let cy = Math.floor(z0 / CHUNK); cy * CHUNK < z0 + size; cy++) {
+        for (let cx = Math.floor(x0 / CHUNK); cx * CHUNK < x0 + size; cx++) {
+            if (cx < 0 || cy < 0 || cx * CHUNK >= overworld.width || cy * CHUNK >= overworld.height) {
+                continue;
+            }
+
+            const chunk = overworld.chunk(cx, cy);
+
+            for (let j = 0; j < CHUNK; j++) {
+                const y = chunk.y0 + j - z0;
+
+                if (y < 0 || y >= size) {
+                    continue;
+                }
+
+                for (let i = 0; i < CHUNK; i++) {
+                    const x = chunk.x0 + i - x0;
+
+                    if (x < 0 || x >= size) {
+                        continue;
+                    }
+
+                    const k = j * CHUNK + i;
+                    const ground = chunk.ground[k];
+                    let colour;
+
+                    if (chunk.bridge[k]) {
+                        colour = BRIDGE;
+                    } else if (chunk.water[k]) {
+                        colour = WATER_COLOURS[chunk.water[k]];
+                    } else if (ground === GROUND.grass) {
+                        colour = grassOf(overworld.biomeAt(chunk.x0 + i, chunk.y0 + j));
+                    } else {
+                        colour = GROUND_COLOURS[ground] ?? GROUND_COLOURS[GROUND.grass];
+                    }
+
+                    const shade = 1 + 0.05 * jitter(chunk.x0 + i, chunk.y0 + j);
+
+                    data.set([colour[0] * shade, colour[1] * shade, colour[2] * shade, 255], (y * size + x) * 4);
+                }
+            }
+        }
+    }
+
+    const squares = offscreen(size, size);
+
+    squares.getContext("2d").putImageData(new ImageData(data, size, size), 0, 0);
+
+    const image = offscreen(size * SCALE, size * SCALE);
+    const context = image.getContext("2d");
+
+    context.imageSmoothingEnabled = false;
+    context.drawImage(squares, 0, 0, size * SCALE, size * SCALE);
+
+    // The town, as it's painted on its own
+    const { stamp, home } = world;
+
+    image.town = town ?? paint(home);
+    context.drawImage(image.town, (stamp.at[0] - x0) * SCALE, (stamp.at[1] - z0) * SCALE);
+
+    // The trees round it
+    context.scale(SCALE, SCALE);
+    context.translate(-x0, -z0);
+
+    for (let cy = Math.floor(z0 / CHUNK); cy * CHUNK < z0 + size; cy++) {
+        for (let cx = Math.floor(x0 / CHUNK); cx * CHUNK < x0 + size; cx++) {
+            if (cx < 0 || cy < 0 || cx * CHUNK >= overworld.width || cy * CHUNK >= overworld.height) {
+                continue;
+            }
+
+            for (const { x, y, size: grown } of overworld.chunk(cx, cy).trees) {
+                crown(context, x, y, 1.8 * grown);
+            }
+        }
+    }
+
+    return image;
+}
+
+// A tree's crown, round, lit from the top left
+function crown(context, x, y, r) {
+    context.beginPath();
+    context.arc(x, y, r, 0, 2 * Math.PI);
+    context.fillStyle = `rgb(${TREE.join(",")})`;
+    context.fill();
+    context.beginPath();
+    context.arc(x - r * 0.3, y - r * 0.3, r * 0.45, 0, 2 * Math.PI);
+    context.fillStyle = "rgba(140, 180, 90, 0.35)";
+    context.fill();
 }

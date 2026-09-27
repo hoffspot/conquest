@@ -1,0 +1,696 @@
+// The world outside: all 8 kilometres of it (worldplan/plan.js lays it out), on 1-metre squares
+// like the town's, made a chunk (CHUNK metres square) at a time as it's needed, and the same
+// every time it's made again. The town (world.js) is set into it where a player of their people
+// starts (a town near their capital), its streets carrying on along the plan's roads.
+//
+// Each square of a chunk comes from the plan's cell under it (CELL metres square):
+//
+// - Lakes and the sea, their shores blended from cell to cell and a little ragged.
+// - Rivers: a line from each river cell to the one it runs into, wandering, wider the more water
+//   runs in them; where a road crosses one, a bridge: a straight deck along the road from bank to
+//   bank, a little onto each.
+// - Roads: along the plan's roads (smoothed from cell to cell), a trade road widest, a track
+//   narrowest.
+// - The ground: grass (drawn in each land's colours: world/chunks3d.js), soil in the fields of
+//   farmland, road, and planks on bridges.
+// - Trees, as many as the land has (woods thick with them, meadows few, beaches none), of the
+//   kinds that grow there; clear of roads and water, and of the settlements, sites and camps
+//   still to be built.
+//
+// Water can't be walked into; trees block their squares and can't be seen through. Nothing here
+// uses Three.js, so it runs in Node too.
+
+import { MAP_ORIGINS } from "./interiors.js";
+import { createRandom, noise } from "./random.js";
+import { GROUND, TREE_KINDS } from "./setpieces/pieces.js";
+import { generateWorld } from "./world.js";
+import { BIOME, BIOMES, CELL, CELLS, CHUNK, CHUNKS, planWorld, startFor, WATER, WORLD_SIZE } from "./worldplan/plan.js";
+
+export { CHUNK, CHUNKS, WORLD_SIZE };
+
+/** A chunk's squares, and each square's index in them: (y - y0) * CHUNK + (x - x0). */
+export const SQUARES = CHUNK * CHUNK;
+
+/** What's in a chunk's `water`: none, still water (a lake or the sea), a river. */
+export const WET = Object.freeze({ none: 0, still: 1, river: 2 });
+
+/**
+ * The trees of each kind of land: how many to 100 square metres, and of which kinds (as likely as
+ * each other: listed twice, twice as likely).
+ */
+export const FLORA = Object.freeze({
+    sea: { density: 0, kinds: [] },
+    lake: { density: 0, kinds: [] },
+    beach: { density: 0, kinds: [] },
+    farmland: { density: 0.12, kinds: ["oak", "apple", "poplar", "beech"] },
+    meadow: { density: 0.25, kinds: ["oak", "beech", "birch", "apple"] },
+    woods: { density: 0.9, kinds: ["oak", "beech", "birch", "oak"] },
+    heath: { density: 0.35, kinds: ["birch", "pine", "birch"] },
+    marsh: { density: 0.6, kinds: ["birch", "poplar", "birch"] },
+    elfwood: { density: 1, kinds: ["beech", "birch", "beech", "oak"] },
+    darkwood: { density: 1.1, kinds: ["spruce", "pine", "spruce"] },
+    savannah: { density: 0.18, kinds: ["apple", "oak"] },
+    jungle: { density: 1.2, kinds: ["beech", "oak", "poplar"] },
+    badlands: { density: 0.04, kinds: ["pine"] },
+    volcanic: { density: 0.02, kinds: ["pine"] },
+    tundra: { density: 0.4, kinds: ["spruce", "birch", "pine"] },
+    snow: { density: 0.08, kinds: ["spruce"] },
+    mountain: { density: 0.3, kinds: ["pine", "spruce"] },
+});
+
+// Roads' half-widths (metres), by kind
+const ROAD_HALF = Object.freeze({ trade: 2.2, road: 1.8, track: 1.1 });
+
+// Rivers: their half-widths (metres: the least and most, wider the more rain runs in them), and
+// how far they wander from a straight line between cells (metres)
+const RIVER_HALF = [1.5, 5];
+const WANDER = 7;
+
+/**
+ * Bridges: how far past the road's edge the deck reaches each side (metres), and how far onto
+ * each bank; a road's crossings closer together than `join` metres are one bridge. Looked for
+ * every `step` metres along the road.
+ */
+export const BRIDGE = Object.freeze({ wider: 0.4, banks: 1.5, join: 3, step: 0.5 });
+
+// Trees: tried every TREE_GRID metres (and a random way in); how far (squares) they keep from
+// roads and water; how far (metres) from the town, and from the edges of the settlements, sites
+// and camps still to be built
+const TREE_GRID = 4;
+const TREE_CLEAR = 2;
+const CLEAR_OF_TOWN = 3;
+const CLEAR_OF_PLACES = 12;
+
+// How many chunks to keep once made (the rest are made again when they're needed)
+const KEEP = 256;
+
+const VARIANTS_OF = Object.fromEntries([...new Set(TREE_KINDS.map(([kind]) => kind))].map((kind) => [kind, TREE_KINDS.flatMap(([k], variant) => (k === kind ? [variant] : []))]));
+
+const cellAt = (v) => Math.min(CELLS - 1, Math.max(0, Math.floor(v / CELL)));
+const inside = (x, y) => x >= 0 && y >= 0 && x < WORLD_SIZE && y < WORLD_SIZE;
+
+// How far a point is from a line segment
+function fromSegment(px, py, [ax, ay, bx, by]) {
+    const [dx, dy] = [bx - ax, by - ay];
+    const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1)));
+
+    return Math.hypot(px - (ax + dx * t), py - (ay + dy * t));
+}
+
+// A line through cells' middles, rounded at its corners (twice cut in, keeping its ends)
+function smooth(points) {
+    let line = points;
+
+    for (let pass = 0; pass < 2 && line.length > 2; pass++) {
+        const next = [line[0]];
+
+        for (let k = 0; k < line.length - 1; k++) {
+            const [[ax, ay], [bx, by]] = [line[k], line[k + 1]];
+
+            next.push([ax * 0.75 + bx * 0.25, ay * 0.75 + by * 0.25], [ax * 0.25 + bx * 0.75, ay * 0.25 + by * 0.75]);
+        }
+
+        next.push(line.at(-1));
+        line = next;
+    }
+
+    return line;
+}
+
+/**
+ * The world outside, on 1-metre squares, made a chunk at a time: a map (as the battle reads maps:
+ * grid.js) whose squares are its `squares`.
+ */
+export class Overworld {
+    /**
+     * @param {object} options
+     * @param {object} options.plan - The world plan (worldplan/plan.js planWorld).
+     * @param {object} options.stamp - The town set into it: { at: [x, y] (its north-west square),
+     *   width, height, blocked, opaque, ground (its rows) }.
+     * @param {object} options.start - The plan's settlement the town stands for.
+     */
+    constructor({ plan, stamp, start }) {
+        this.id = "town";
+        this.name = "The world";
+        this.width = WORLD_SIZE;
+        this.height = WORLD_SIZE;
+        this.origin = MAP_ORIGINS.town;
+        this.plan = plan;
+        this.stamp = stamp;
+        this.start = start;
+        this.chunks = new Map();
+        this.rivers = new Map();
+        this.last = null;
+
+        // The places trees keep clear of: the settlements (but the town, which is set in), the
+        // sites and the camps
+        this.clearings = [
+            ...plan.places.filter((place) => place !== start).map(({ at, radius }) => ({ at, radius: radius + CLEAR_OF_PLACES })),
+            ...plan.sites.map(({ at }) => ({ at, radius: CLEAR_OF_PLACES })),
+            ...plan.camps.map(({ at }) => ({ at, radius: CLEAR_OF_PLACES })),
+        ];
+        this.roads = this.#layRoads();
+        this.bridges = new Map();
+
+        const read = (layer, off) => (x, y) => {
+            if (!inside(x, y)) {
+                return off;
+            }
+
+            const chunk = this.chunkAt(x, y);
+
+            return chunk[layer][(y - chunk.y0) * CHUNK + (x - chunk.x0)];
+        };
+        const blocked = read("blocked", 1);
+        const opaque = read("opaque", 1);
+
+        /** Its squares, as grid.js reads them. */
+        this.squares = {
+            width: WORLD_SIZE,
+            height: WORLD_SIZE,
+            blocked: (x, y) => blocked(x, y) === 1,
+            opaque: (x, y) => opaque(x, y) === 1,
+            ground: read("ground", GROUND.grass),
+        };
+    }
+
+    /** The chunk a square is in (made if need be). */
+    chunkAt(x, y) {
+        return this.chunk(Math.floor(x / CHUNK), Math.floor(y / CHUNK));
+    }
+
+    /**
+     * A chunk (cx, cy: chunks from the world's north-west corner): { cx, cy, x0, y0 (its
+     * north-west square), blocked, opaque, ground, water (WET), bridge (Uint8Array, a square
+     * each: under a bridge's deck), trees ([{ x, y (a trunk's point, where four squares meet),
+     * variant, size, turn }]), bridges (those whose middles are in it: [{ a, b ([x, y] metres:
+     * its deck's ends, along the road), half (its deck's half-width) }]), town (whether the
+     * town's in it) }.
+     */
+    chunk(cx, cy) {
+        const last = this.last;
+
+        if (last && last.cx === cx && last.cy === cy) {
+            return last;
+        }
+
+        const key = cy * CHUNKS + cx;
+        let chunk = this.chunks.get(key);
+
+        if (chunk) {
+            // (Most recently used last, for letting go of the oldest)
+            this.chunks.delete(key);
+        } else {
+            chunk = this.#make(cx, cy);
+
+            if (this.chunks.size >= KEEP) {
+                this.chunks.delete(this.chunks.keys().next().value);
+            }
+        }
+
+        this.chunks.set(key, chunk);
+        this.last = chunk;
+
+        return chunk;
+    }
+
+    /** The land (BIOMES id) at a point (metres). */
+    biomeAt(x, y) {
+        return BIOMES[this.plan.biome[cellAt(y) * CELLS + cellAt(x)]].id;
+    }
+
+    /** Whether a square is in the town. */
+    inTown(x, y) {
+        const { at, width, height } = this.stamp;
+
+        return x >= at[0] && y >= at[1] && x < at[0] + width && y < at[1] + height;
+    }
+
+    // --- Making a chunk ---
+
+    #make(cx, cy) {
+        const [x0, y0] = [cx * CHUNK, cy * CHUNK];
+        const blocked = new Uint8Array(SQUARES);
+        const opaque = new Uint8Array(SQUARES);
+        const ground = new Uint8Array(SQUARES);
+        const water = new Uint8Array(SQUARES);
+        const bridge = new Uint8Array(SQUARES);
+        const { stamp } = this;
+        let town = false;
+
+        for (let j = 0; j < CHUNK; j++) {
+            for (let i = 0; i < CHUNK; i++) {
+                const [x, y] = [x0 + i, y0 + j];
+                const k = j * CHUNK + i;
+
+                if (this.inTown(x, y)) {
+                    const [tx, ty] = [x - stamp.at[0], y - stamp.at[1]];
+
+                    blocked[k] = stamp.blocked[ty][tx];
+                    opaque[k] = stamp.opaque[ty][tx];
+                    ground[k] = stamp.ground[ty][tx];
+                    town = true;
+                    continue;
+                }
+
+                const land = this.landAt(x, y);
+
+                ground[k] = land.ground;
+                water[k] = land.water;
+                bridge[k] = land.bridge ? 1 : 0;
+                blocked[k] = land.water && !land.bridge ? 1 : 0;
+            }
+        }
+
+        const bridges = this.#bridgesNear(cx, cy).filter(({ a, b }) => Math.floor((a[0] + b[0]) / 2 / CHUNK) === cx && Math.floor((a[1] + b[1]) / 2 / CHUNK) === cy);
+        const chunk = { cx, cy, x0, y0, blocked, opaque, ground, water, bridge, trees: [], bridges, town };
+
+        this.#plant(chunk);
+
+        return chunk;
+    }
+
+    /**
+     * What a square outside the town is, from the plan alone: { ground (GROUND), water (WET),
+     * bridge (under a bridge's deck), road (its kind, or null) }.
+     */
+    landAt(x, y) {
+        const { plan } = this;
+        const [px, py] = [x + 0.5, y + 0.5];
+        const cell = cellAt(py) * CELLS + cellAt(px);
+        const road = this.#roadAt(px, py);
+        const river = this.#riverAt(px, py);
+        const still = !river && this.#stillAt(px, py);
+        const water = river ? WET.river : still ? WET.still : WET.none;
+
+        // Under a bridge (over the river, or its ends on the banks)
+        if (this.#bridgeAt(px, py)) {
+            return { ground: GROUND.planks, water, bridge: true, road: road ?? "bridge" };
+        }
+
+        // (Roads go round lakes, and cross rivers only on bridges)
+        if (water) {
+            return { ground: GROUND.soil, water, bridge: false, road: null };
+        }
+
+        if (road) {
+            return { ground: GROUND.road, water, bridge: false, road };
+        }
+
+        // Fields in farmland: soil, with strips of grass between
+        const fields = plan.biome[cell] === BIOME.farmland && noise(x, y, plan.seed + 31, 14, 2) > 0.46;
+
+        return { ground: fields ? GROUND.soil : GROUND.grass, water, bridge: false, road: null };
+    }
+
+    // Is a point in a lake or the sea: still water, blended across cells' middles, a little ragged?
+    #stillAt(px, py) {
+        const { plan } = this;
+        const [fx, fy] = [px / CELL - 0.5, py / CELL - 0.5];
+        const [i, j] = [Math.floor(fx), Math.floor(fy)];
+        const [tx, ty] = [fx - i, fy - j];
+        const wet = (ci, cj) => {
+            if (ci < 0 || cj < 0 || ci >= CELLS || cj >= CELLS) {
+                return 1;
+            }
+
+            const w = plan.water[cj * CELLS + ci];
+
+            return w === WATER.sea || w === WATER.lake ? 1 : 0;
+        };
+        const top = wet(i, j) + (wet(i + 1, j) - wet(i, j)) * tx;
+        const bottom = wet(i, j + 1) + (wet(i + 1, j + 1) - wet(i, j + 1)) * tx;
+        const blend = top + (bottom - top) * ty;
+
+        return blend > 0 && blend + (noise(px, py, plan.seed + 41, 9, 2) - 0.5) * 0.3 > 0.5;
+    }
+
+    // Is a point in a river (the lines from river cells to where they run, wandering)?
+    #riverAt(px, py) {
+        const segments = this.#riversNear(Math.floor(px / CHUNK), Math.floor(py / CHUNK));
+
+        if (!segments.length) {
+            return false;
+        }
+
+        const seed = this.plan.seed;
+        const [wx, wy] = [px + (noise(px, py, seed + 51, 40, 2) - 0.5) * 2 * WANDER, py + (noise(px, py, seed + 61, 40, 2) - 0.5) * 2 * WANDER];
+
+        return segments.some((segment) => fromSegment(wx, wy, segment) <= segment[4]);
+    }
+
+    // The river lines near a chunk: [ax, ay, bx, by, half-width] (metres)
+    #riversNear(cx, cy) {
+        const key = cy * CHUNKS + cx;
+
+        if (!this.rivers.has(key)) {
+            const { plan } = this;
+            const segments = [];
+            const reach = Math.ceil((WANDER + RIVER_HALF[1]) / CELL) + 1;
+            const [c0, c1] = [Math.floor((cx * CHUNK) / CELL) - reach, Math.floor(((cx + 1) * CHUNK) / CELL) + reach];
+            const [r0, r1] = [Math.floor((cy * CHUNK) / CELL) - reach, Math.floor(((cy + 1) * CHUNK) / CELL) + reach];
+
+            for (let j = Math.max(0, r0); j <= Math.min(CELLS - 1, r1); j++) {
+                for (let i = Math.max(0, c0); i <= Math.min(CELLS - 1, c1); i++) {
+                    const k = j * CELLS + i;
+
+                    if (plan.water[k] !== WATER.river) {
+                        continue;
+                    }
+
+                    const into = this.#downstream(i, j);
+
+                    if (into) {
+                        const half = Math.min(RIVER_HALF[1], Math.max(RIVER_HALF[0], 0.9 + Math.sqrt(plan.flow[k]) * 0.09));
+
+                        segments.push([(i + 0.5) * CELL, (j + 0.5) * CELL, (into[0] + 0.5) * CELL, (into[1] + 0.5) * CELL, half]);
+                    }
+                }
+            }
+
+            this.rivers.set(key, segments);
+        }
+
+        return this.rivers.get(key);
+    }
+
+    // The cell a river cell runs into: a lake or the sea beside it, or the river cell beside it
+    // that more water runs through
+    #downstream(i, j) {
+        const { plan } = this;
+        const here = plan.flow[j * CELLS + i];
+        let best = null;
+        let most = here;
+
+        for (const [di, dj] of [[0, -1], [1, 0], [0, 1], [-1, 0], [1, -1], [1, 1], [-1, 1], [-1, -1]]) {
+            const [ni, nj] = [i + di, j + dj];
+
+            if (ni < 0 || nj < 0 || ni >= CELLS || nj >= CELLS) {
+                continue;
+            }
+
+            const w = plan.water[nj * CELLS + ni];
+
+            if (w === WATER.sea || w === WATER.lake) {
+                return [ni, nj];
+            }
+
+            if (w === WATER.river && plan.flow[nj * CELLS + ni] > most) {
+                most = plan.flow[nj * CELLS + ni];
+                best = [ni, nj];
+            }
+        }
+
+        return best;
+    }
+
+    // Is a point under a bridge's deck?
+    #bridgeAt(px, py) {
+        return this.#bridgesNear(Math.floor(px / CHUNK), Math.floor(py / CHUNK)).some(({ a, b, half }) => {
+            const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
+            const length = Math.hypot(dx, dy);
+            const along = ((px - a[0]) * dx + (py - a[1]) * dy) / length;
+
+            return along >= 0 && along <= length && Math.abs((px - a[0]) * dy - (py - a[1]) * dx) / length <= half;
+        });
+    }
+
+    // The bridges that reach into a chunk (the roads' through it)
+    #bridgesNear(cx, cy) {
+        const key = cy * CHUNKS + cx;
+
+        if (!this.bridges.has(key)) {
+            const [x0, y0] = [cx * CHUNK, cy * CHUNK];
+            const lines = new Set((this.roads.get(key) ?? []).map((segment) => segment[5]));
+            const near = [...lines].flatMap((line) => this.#bridgesOf(line)).filter(({ a, b, half }) => Math.max(a[0], b[0]) + half >= x0 && Math.min(a[0], b[0]) - half < x0 + CHUNK && Math.max(a[1], b[1]) + half >= y0 && Math.min(a[1], b[1]) - half < y0 + CHUNK);
+            const middle = ({ a, b }) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+            const kept = [];
+
+            // (Where roads share their way over a river, one bridge: the widest)
+            for (const bridge of near.sort((p, q) => q.half - p.half)) {
+                const [mx, my] = middle(bridge);
+
+                if (!kept.some((other) => Math.hypot(middle(other)[0] - mx, middle(other)[1] - my) < 2 * other.half)) {
+                    kept.push(bridge);
+                }
+            }
+
+            this.bridges.set(key, kept);
+        }
+
+        return this.bridges.get(key);
+    }
+
+    // A road's bridges: where it crosses rivers (looked for every BRIDGE.step metres along it),
+    // each a straight deck from a little way onto one bank to a little way onto the other
+    #bridgesOf(line) {
+        if (!line.bridges) {
+            const along = [];
+
+            for (let k = 0; k < line.points.length - 1; k++) {
+                const [[ax, ay], [bx, by]] = [line.points[k], line.points[k + 1]];
+                const steps = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / BRIDGE.step));
+
+                for (let j = k ? 1 : 0; j <= steps; j++) {
+                    const [x, y] = [ax + ((bx - ax) * j) / steps, ay + ((by - ay) * j) / steps];
+
+                    along.push({ at: [x, y], wet: this.#riverAt(x, y) });
+                }
+            }
+
+            // Each run over a river (those nearly touching joined), and a little onto its banks
+            const runs = [];
+
+            along.forEach(({ wet }, k) => {
+                if (!wet) {
+                    return;
+                }
+
+                const last = runs.at(-1);
+
+                if (last && (k - last[1]) * BRIDGE.step <= BRIDGE.join) {
+                    last[1] = k;
+                } else {
+                    runs.push([k, k]);
+                }
+            });
+
+            const banks = Math.round(BRIDGE.banks / BRIDGE.step);
+
+            line.bridges = runs.map(([from, to]) => ({
+                a: along[Math.max(0, from - banks)].at,
+                b: along[Math.min(along.length - 1, to + banks)].at,
+                half: ROAD_HALF[line.kind] + BRIDGE.wider,
+            }));
+        }
+
+        return line.bridges;
+    }
+
+    // The kind of road at a point, or null
+    #roadAt(px, py) {
+        const near = this.roads.get(Math.floor(py / CHUNK) * CHUNKS + Math.floor(px / CHUNK));
+
+        return near?.find((segment) => fromSegment(px, py, segment) <= ROAD_HALF[segment[4]])?.[4] ?? null;
+    }
+
+    // The roads, as lines ([ax, ay, bx, by, kind, the road they're part of]) listed by the chunks
+    // they pass through; those from the town start at its streets' ends rather than its middle
+    #layRoads() {
+        const { plan, start } = this;
+        const byChunk = new Map();
+        const exits = this.#exits();
+        const [sx, sy, sw, sh] = [this.stamp.at[0] - 10, this.stamp.at[1] - 10, this.stamp.width + 20, this.stamp.height + 20];
+        const near = ([x, y]) => x >= sx && y >= sy && x < sx + sw && y < sy + sh;
+
+        for (const road of plan.roads) {
+            let points = smooth(road.cells.map(([x, y]) => [(x + 0.5) * CELL, (y + 0.5) * CELL]));
+
+            if (road.from === start.id || road.to === start.id) {
+                // From the town's end: from where its nearest street leaves it, once clear of it
+                if (road.to === start.id) {
+                    points = [...points].reverse();
+                }
+
+                const out = points.findIndex((point) => !near(point));
+
+                if (out < 0 || !exits.length) {
+                    continue;
+                }
+
+                const exit = exits.reduce((best, e) => (Math.hypot(e[0] - points[out][0], e[1] - points[out][1]) < Math.hypot(best[0] - points[out][0], best[1] - points[out][1]) ? e : best));
+
+                points = [exit, ...points.slice(out)];
+            }
+
+            // (Its bridges are found when a chunk it goes through is first made)
+            const line = { points, kind: road.kind, bridges: null };
+
+            for (let k = 0; k < points.length - 1; k++) {
+                const segment = [...points[k], ...points[k + 1], road.kind, line];
+                const pad = ROAD_HALF[road.kind] + 1;
+                const [cx0, cx1] = [Math.floor((Math.min(segment[0], segment[2]) - pad) / CHUNK), Math.floor((Math.max(segment[0], segment[2]) + pad) / CHUNK)];
+                const [cy0, cy1] = [Math.floor((Math.min(segment[1], segment[3]) - pad) / CHUNK), Math.floor((Math.max(segment[1], segment[3]) + pad) / CHUNK)];
+
+                for (let cy = cy0; cy <= cy1; cy++) {
+                    for (let cx = cx0; cx <= cx1; cx++) {
+                        const key = cy * CHUNKS + cx;
+
+                        if (!byChunk.has(key)) {
+                            byChunk.set(key, []);
+                        }
+
+                        byChunk.get(key).push(segment);
+                    }
+                }
+            }
+        }
+
+        return byChunk;
+    }
+
+    // Where the town's streets leave it (metres: the middle of each at its edge)
+    #exits() {
+        const { at, width, height, ground } = this.stamp;
+        const exits = [];
+        const runs = (length, isRoad, place) => {
+            let from = -1;
+
+            for (let k = 0; k <= length; k++) {
+                if (k < length && isRoad(k)) {
+                    from = from < 0 ? k : from;
+                } else if (from >= 0) {
+                    exits.push(place((from + k) / 2));
+                    from = -1;
+                }
+            }
+        };
+
+        runs(height, (k) => ground[k][0] === GROUND.road, (m) => [at[0], at[1] + m]);
+        runs(height, (k) => ground[k][width - 1] === GROUND.road, (m) => [at[0] + width, at[1] + m]);
+        runs(width, (k) => ground[0][k] === GROUND.road, (m) => [at[0] + m, at[1]]);
+        runs(width, (k) => ground[height - 1][k] === GROUND.road, (m) => [at[0] + m, at[1] + height]);
+
+        return exits;
+    }
+
+    // Trees in a chunk: tried every TREE_GRID metres, as many as its land has, clear of roads,
+    // water, the town and the places still to be built; each trunk where four squares meet, the
+    // four in the chunk, and filling them
+    #plant(chunk) {
+        const { plan, stamp } = this;
+        const { x0, y0, blocked, opaque } = chunk;
+        const random = createRandom((Math.imul(chunk.cx + 1, 73856093) ^ Math.imul(chunk.cy + 1, 19349663) ^ Math.imul(plan.seed, 83492791)) >>> 0);
+        const clearings = this.clearings.filter(({ at, radius }) => at[0] > x0 - radius && at[0] < x0 + CHUNK + radius && at[1] > y0 - radius && at[1] < y0 + CHUNK + radius);
+        const [tx0, ty0] = [stamp.at[0] - CLEAR_OF_TOWN, stamp.at[1] - CLEAR_OF_TOWN];
+        const [tx1, ty1] = [stamp.at[0] + stamp.width + CLEAR_OF_TOWN, stamp.at[1] + stamp.height + CLEAR_OF_TOWN];
+        const clear = (x, y) => {
+            for (let dy = -TREE_CLEAR - 1; dy <= TREE_CLEAR; dy++) {
+                for (let dx = -TREE_CLEAR - 1; dx <= TREE_CLEAR; dx++) {
+                    const [sx, sy] = [x + dx, y + dy];
+                    const within = sx >= x0 && sy >= y0 && sx < x0 + CHUNK && sy < y0 + CHUNK;
+                    const k = (sy - y0) * CHUNK + (sx - x0);
+
+                    if (!inside(sx, sy) || (within ? blocked[k] || chunk.water[k] || chunk.ground[k] === GROUND.road || chunk.bridge[k] : this.#busy(sx, sy))) {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        };
+        const steps = CHUNK / TREE_GRID;
+
+        for (let gy = 0; gy < steps; gy++) {
+            for (let gx = 0; gx < steps; gx++) {
+                // (The same random numbers for every try, planted or not, so a chunk's trees stay
+                // the same whatever's round them)
+                const x = Math.min(x0 + CHUNK - 1, Math.max(x0 + 1, Math.round(x0 + (gx + random.next()) * TREE_GRID)));
+                const y = Math.min(y0 + CHUNK - 1, Math.max(y0 + 1, Math.round(y0 + (gy + random.next()) * TREE_GRID)));
+                const [chance, pick, size, turn] = [random.next(), random.next(), random.range(0.85, 1.3), random.next() * Math.PI * 2];
+                const flora = FLORA[this.biomeAt(x, y)];
+
+                if (chance >= (flora.density * TREE_GRID * TREE_GRID) / 100) {
+                    continue;
+                }
+
+                if ((x >= tx0 && y >= ty0 && x < tx1 && y < ty1) || clearings.some(({ at, radius }) => Math.hypot(at[0] - x, at[1] - y) < radius) || !clear(x, y)) {
+                    continue;
+                }
+
+                const kind = flora.kinds[Math.floor(pick * flora.kinds.length)];
+                const variants = VARIANTS_OF[kind];
+                const variant = variants[Math.floor(((pick * flora.kinds.length) % 1) * variants.length)];
+
+                for (const [bx, by] of [[x - 1, y - 1], [x, y - 1], [x - 1, y], [x, y]]) {
+                    blocked[(by - y0) * CHUNK + (bx - x0)] = 1;
+                    opaque[(by - y0) * CHUNK + (bx - x0)] = 1;
+                }
+
+                chunk.trees.push({ x, y, variant, size, turn });
+            }
+        }
+    }
+
+    // Whether a square outside a chunk being made is road or water (or the town)
+    #busy(x, y) {
+        if (this.inTown(x, y)) {
+            return true;
+        }
+
+        const land = this.landAt(x, y);
+
+        return land.water !== WET.none || land.road !== null;
+    }
+}
+
+/**
+ * The world for a seed: the plan, the town set into it where a player of `race` starts, and the
+ * world outside round it, in the shape generateWorld's (world.js) is, but in the world's metres
+ * and squares (the town's north-west corner at `origin` [x, y]): { seed, plan, start (the plan's
+ * settlement the town stands for), width, height (the world's, metres), plot, origin, town, trees
+ * (the town's own), spawns, patrol, tavern, maps ({ town: the Overworld, taproom, upstairs }),
+ * links, folk, stamp (the town's own squares and where they are), home (the town as generateWorld
+ * made it, in its own metres) }.
+ */
+export function buildWorld({ seed = 1, race = "human", plan = planWorld(seed) } = {}) {
+    const start = startFor(plan, race);
+    const town = generateWorld({ seed });
+    const at = [Math.round(start.at[0] - town.width / 2), Math.round(start.at[1] - town.height / 2)];
+    const stamp = { at, width: town.width, height: town.height, blocked: town.blocked, opaque: town.opaque, ground: town.ground };
+    const overworld = new Overworld({ plan, stamp, start });
+    const move = ([x, y]) => [x + at[0], y + at[1]];
+    const tavern = town.tavern && {
+        ...town.tavern,
+        x: town.tavern.x + at[0],
+        y: town.tavern.y + at[1],
+        door: { ...town.tavern.door, x: town.tavern.door.x + at[0], z: town.tavern.door.z + at[1] },
+        front: town.tavern.front.map(move),
+        outside: move(town.tavern.outside),
+        clear: town.tavern.clear.map(move),
+    };
+    const links = town.links.map((link) => ({
+        ...link,
+        ends: link.ends.map((end) => (end.map === "town" ? { ...end, squares: end.squares.map(move), arrive: move(end.arrive) } : end)),
+    }));
+
+    return {
+        seed,
+        plan,
+        start,
+        width: WORLD_SIZE,
+        height: WORLD_SIZE,
+        plot: town.plot,
+        origin: [town.origin + at[0], town.origin + at[1]],
+        town: town.town,
+        trees: town.trees.map(({ x, y, variant }) => ({ x: x + at[0], y: y + at[1], variant })),
+        spawns: { player: move(town.spawns.player), orc: move(town.spawns.orc) },
+        patrol: town.patrol.map(move),
+        tavern,
+        maps: { ...town.maps, town: overworld },
+        links,
+        folk: town.folk,
+        stamp,
+        home: town,
+    };
+}

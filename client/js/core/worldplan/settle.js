@@ -21,6 +21,9 @@ export const SETTLEMENTS = Object.freeze({
     village: { count: [6, 9], apart: 9, radius: 30, guild: false },
 });
 
+// How far (cells) capitals, cities and towns keep from water
+const DRY = 2;
+
 /** The plan's `road` layer: none, a track (to a village), a road. */
 export const ROAD = Object.freeze({ none: 0, track: 1, road: 2 });
 
@@ -117,6 +120,20 @@ function buildable(land, x, y) {
     return Math.max(0, 1 - steep * 25) + (wet ? 0.4 : 0);
 }
 
+// Whether a cell has no water (river, lake or sea) within `clear` cells: a town's, a city's and a
+// capital's streets are laid out square to the land round them, clear of rivers
+function dry(land, x, y, clear) {
+    for (let dy = -clear; dy <= clear; dy++) {
+        for (let dx = -clear; dx <= clear; dx++) {
+            if (land.water[cellIndex(x + dx, y + dy)]) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
 // Each people's settlements: the capital near their heartland, then cities, towns and villages
 // through their lands, each far enough from the others
 function settle(land, random, used) {
@@ -131,7 +148,7 @@ function settle(land, random, used) {
                 const score = buildable(land, x, y);
 
                 if (score > 0.3) {
-                    cells.push({ x, y, score });
+                    cells.push({ x, y, score, dry: dry(land, x, y, DRY) });
                 }
             }
         }
@@ -155,8 +172,9 @@ function settle(land, random, used) {
             places.push(place);
         };
 
-        // The capital: the best land near the heartland's middle
-        const near = cells.filter(({ x, y }) => Math.hypot(x - hx, y - hy) < 12);
+        // The capital: the best land near the heartland's middle (clear of water, if there's any)
+        const close = cells.filter(({ x, y }) => Math.hypot(x - hx, y - hy) < 12);
+        const near = close.some((cell) => cell.dry) ? close.filter((cell) => cell.dry) : close;
 
         add("capital", near.reduce((best, cell) => (cell.score > best.score ? cell : best), near[0] ?? { x: hx, y: hy, score: 0 }));
 
@@ -164,7 +182,7 @@ function settle(land, random, used) {
         // often first)
         for (const kind of ["city", "town", "village"]) {
             const want = random.int(...SETTLEMENTS[kind].count);
-            const order = cells.map((cell) => ({ cell, key: random.next() ** (1 / (0.2 + cell.score)) })).sort((a, b) => b.key - a.key);
+            const order = cells.filter((cell) => kind === "village" || cell.dry).map((cell) => ({ cell, key: random.next() ** (1 / (0.2 + cell.score)) })).sort((a, b) => b.key - a.key);
 
             for (const { cell } of order) {
                 if (mine.filter((p) => p.kind === kind).length >= want) {

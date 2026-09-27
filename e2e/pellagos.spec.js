@@ -146,6 +146,7 @@ test("makes a character: a random look, a weapon and a name, then plays them in 
         const { game } = window.pellagos;
         const player = game.battle.actor("player");
         const { square } = game.world.town;
+        const [ox, oy] = game.world.origin;
 
         const character = game.avatars.get("player").character;
 
@@ -156,7 +157,7 @@ test("makes a character: a random look, a weapon and a name, then plays them in 
             // (The bow slung on the back to start with)
             sheathed: character.sheathed,
             bowOn: character.items.find((item) => item.name === "bow").parent.name,
-            inSquare: player.x >= game.world.origin + square.x * 4 && player.x <= game.world.origin + (square.x + square.w) * 4 && player.y >= game.world.origin + square.y * 4 && player.y <= game.world.origin + (square.y + square.h) * 4,
+            inSquare: player.x >= ox + square.x * 4 && player.x <= ox + (square.x + square.w) * 4 && player.y >= oy + square.y * 4 && player.y <= oy + (square.y + square.h) * 4,
             saved: JSON.parse(localStorage.getItem("pellagos.save")),
         };
     });
@@ -546,8 +547,9 @@ test("in the town, the camera comes in closer than a building in the way, or ris
     const views = await page.evaluate(() => {
         const { game, session } = window.pellagos;
         const { view } = session;
-        const map = game.world.maps.town;
+        const squares = game.world.maps.town.squares;
         const buildings = game.town.buildings;
+        const { at, width, height } = game.world.stamp;
 
         game.stop();
         Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
@@ -557,15 +559,28 @@ test("in the town, the camera comes in closer than a building in the way, or ris
         let walled = null;
         let open = null;
 
-        for (let y = 4; y < map.height - 12 && !(walled && open); y++) {
-            for (let x = 12; x < map.width - 12 && !(walled && open); x++) {
-                const clear = [0, 1].every((dy) => !map.blocked[y + dy][x]);
+        // (In the town)
+        const none = (x, y) => {
+            for (let dy = -3; dy < 12; dy++) {
+                for (let dx = -12; dx < 12; dx++) {
+                    if (buildings.at(x + dx, y + dy) > 0) {
+                        return false;
+                    }
+                }
+            }
 
-                if (!walled && clear && buildings[y + 2][x] > 5 && buildings[y + 3][x] > 5) {
+            return true;
+        };
+
+        for (let y = at[1] + 4; y < at[1] + height - 12 && !(walled && open); y++) {
+            for (let x = at[0] + 12; x < at[0] + width - 12 && !(walled && open); x++) {
+                const clear = [0, 1].every((dy) => !squares.blocked(x, y + dy));
+
+                if (!walled && clear && buildings.at(x, y + 2) > 5 && buildings.at(x, y + 3) > 5) {
                     walled = [x, y];
                 }
 
-                if (!open && clear && buildings.slice(y - 3, y + 12).every((row) => row.slice(x - 12, x + 12).every((height) => height === 0))) {
+                if (!open && clear && none(x, y)) {
                     open = [x, y];
                 }
             }
@@ -581,7 +596,7 @@ test("in the town, the camera comes in closer than a building in the way, or ris
             game.advance(1.5);
 
             const camera = view.camera.position;
-            const height = buildings[Math.floor(camera.z)]?.[Math.floor(camera.x)] ?? 0;
+            const height = buildings.at(camera.x, camera.z);
 
             return { pulled: view.pulled, lifted: view.lifted, clearOfIt: camera.y > height, hidden: view.hidden(game.avatars.get("player").point(0.55)) };
         };
@@ -595,6 +610,69 @@ test("in the town, the camera comes in closer than a building in the way, or ris
     expect(views.open).not.toBe(null);
     expect(views.open.pulled).toBeLessThan(0.05);
     expect(views.open.lifted).toBeLessThan(0.5);
+});
+
+test("walks out of the town into the world, drawn round the player as they go, with no loading", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const trip = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+        const world = game.world.maps.town;
+        const key = (cx, cy) => cy * 128 + cx;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        // Somewhere open about 250 metres west of the town
+        let goal = null;
+
+        for (let d = 0; d < 60 && !goal; d++) {
+            for (const y of [Math.floor(player.y) + d, Math.floor(player.y) - d]) {
+                if (!goal && !world.squares.blocked(game.world.stamp.at[0] - 250, y)) {
+                    goal = [game.world.stamp.at[0] - 250, y];
+                }
+            }
+        }
+
+        const before = [...game.chunks.drawn.keys()];
+
+        game.battle.command("player", { type: "move", to: goal });
+
+        // (Walking, it's three minutes or so: played on without drawing but every eight seconds)
+        for (let k = 0; k < 40 && player.order; k++) {
+            game.advance(8);
+        }
+
+        game.minimap.drawn = -Infinity;
+        game.advance(1);
+
+        const [cx, cy] = [Math.floor(player.x / 64), Math.floor(player.y / 64)];
+        const [x0, z0, across] = game.minimap.shown();
+        const round = [];
+
+        for (let dy = -2; dy <= 2; dy++) {
+            for (let dx = -2; dx <= 2; dx++) {
+                round.push(game.chunks.drawn.has(key(cx + dx, cy + dy)));
+            }
+        }
+
+        return {
+            arrived: Math.hypot(player.x - goal[0] - 0.5, player.y - goal[1] - 0.5) < 1.5,
+            outside: !world.inTown(Math.floor(player.x), Math.floor(player.y)),
+            round,
+            near: [...game.chunks.drawn.values()].every((drawn) => Math.max(Math.abs(drawn.cx - cx), Math.abs(drawn.cy - cy)) <= 3),
+            dropped: before.filter((drawn) => !game.chunks.drawn.has(drawn)).length,
+            mapped: player.x > x0 && player.x < x0 + across && player.y > z0 && player.y < z0 + across,
+        };
+    });
+
+    expect(trip.arrived).toBe(true);
+    expect(trip.outside).toBe(true);
+    expect(trip.round).toEqual(Array(25).fill(true));
+    expect(trip.near).toBe(true);
+    expect(trip.dropped).toBeGreaterThan(0);
+    expect(trip.mapped).toBe(true);
 });
 
 test("once a tap lets it make sound, the music plays on recordings of real instruments", async ({ page }) => {
@@ -972,16 +1050,17 @@ test("the minimap walks the player where it's tapped, and Game options turn it a
 
     await expect(minimap).toBeVisible();
 
-    // Ten metres south of the player, on the map
+    // Ten metres south of the player, on the map (which shows the world round them)
     const box = await minimap.boundingBox();
     const spot = await page.evaluate(() => {
         const { game } = window.pellagos;
         const player = game.battle.actor("player");
+        const [x0, z0, across] = game.minimap.shown();
 
-        return { x: player.x, z: player.y + 10, width: game.world.width, height: game.world.height };
+        return { x: player.x, z: player.y + 10, x0, z0, across };
     });
 
-    await page.mouse.click(box.x + (spot.x / spot.width) * box.width, box.y + (spot.z / spot.height) * box.height);
+    await page.mouse.click(box.x + ((spot.x - spot.x0) / spot.across) * box.width, box.y + ((spot.z - spot.z0) / spot.across) * box.height);
 
     const walked = await page.evaluate(() => ({ order: window.pellagos.game.battle.actor("player").order, sound: window.pellagos.session.sound.playing }));
 

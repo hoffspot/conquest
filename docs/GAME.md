@@ -1,7 +1,7 @@
 # How Pellagos works
 
-Pellagos is one character, made by the player, in a market town on a map of 1-metre squares,
-against an orc that patrols the fields. Everything is drawn in real-time 3D with Three.js, sized
+Pellagos is one character, made by the player, in a market town set in a world 8 kilometres
+square, all of it on 1-metre squares, against an orc that patrols the fields. Everything is drawn in real-time 3D with Three.js, sized
 so that people and buildings look right beside each other, and made to run on phones.
 
 The code is in three layers, each only using the ones below it:
@@ -14,10 +14,23 @@ The code is in three layers, each only using the ones below it:
 - **The page** (`client/js/app`, `client/js/main.js`): the loading screen, the title, making a
   character, the game's controls and heads-up display, saving, debug mode.
 
-## The world (core/world.js)
+## The world (core/overworld.js, core/world.js)
 
-`generateWorld({ seed })` makes the world from one seed, so a saved character always comes back
-to the same town:
+`buildWorld({ seed, race })` makes the world from one seed, so a saved character always comes
+back to the same world:
+
+- **Its plan** (`worldplan/`, [WORLD.md](WORLD.md)): the land, the peoples, their settlements,
+  roads, rivers, sites and camps.
+- **The town**, `generateWorld`'s (below), set into the world where a player of their people
+  starts (their town nearest their capital: humans, for now), with everything in it (the spawns,
+  the orc's patrol, the tavern, the links' ends) moved to its place. The world's `origin` is the
+  town's corner, `[x, y]`; `stamp` is where the town is and its own squares; `home` is the town as
+  it was made, on its own.
+- **The world outside** (`Overworld`, the `town` map): all of it, on 1-metre squares, made a
+  chunk 64 metres square at a time from the plan as it's needed, the town's squares in the chunks
+  it's in, and its streets carrying on as the plan's roads (see WORLD.md, *The world in chunks*).
+
+`generateWorld({ seed })` makes the town:
 
 - **A town** laid out by `setpieces/town.js` on a coarser plan of 4-metre squares ("plots"): 18
   by 16 plots of streets, houses of 8 to 16 metres, a market square of 20 to 28 metres with a
@@ -41,7 +54,8 @@ to the same town:
 
 ### Maps and links (core/interiors.js)
 
-The town is one map; each floor of a building is another, on the same 1-metre squares, and
+The world outside (the town in it) is one map; each floor of a building is another, on the same
+1-metre squares, and
 bigger inside than the building looks from outside (18 by 15 metres in a tavern 12 metres
 square), to walk about in easily: two metres and more between the tables, round the hearth,
 behind the bar and on the stairs, a hallway three metres wide upstairs, and doorways two wide:
@@ -100,7 +114,11 @@ draws anything.
 - **Moving.** Each character stands on one square and walks from square middle to square middle
   along A* paths (8 directions, no cutting corners past blocked squares). It never steps into a
   square another character is on or stepping into; if someone is in the way for 0.4 s it finds a
-  way round. The player walks at 1.7 m/s; the orc patrols at 1.1 and chases at 1.8.
+  way round. Every map's squares are read the same way (`core/grid.js`: `blocked`, `opaque` and
+  `ground` for any square, blocked off the map), whether kept in rows or in chunks. On a big map
+  (the world outside), A* looks only in a window round the start and the goal, 64 squares wider
+  each way, and gives up after 120,000 squares; the others in the way are a set of squares to
+  keep off, not written into a copy of the map. The player walks at 1.7 m/s; the orc patrols at 1.1 and chases at 1.8.
 - **Running and stamina.** Told to run (a move or fight order with `run`), a character sprints
   at `SPRINT` times its walking speed, 6.5 / 1.4 (about 4.6): as much faster as people sprint
   (about 6.5 m/s) than walk (about 1.4 m/s). For the player that's 7.9 m/s. It speeds up at
@@ -270,18 +288,51 @@ shaders; the shadows they cast stay whole).
 
 ### The ground (world/ground.js)
 
-One flat mesh under the whole map, carrying on 110 metres past its edges into the fog. A small
-"splat" texture, four texels to a metre made from the world's ground plan, says how much road,
-cobbles, soil and courtyard earth is at each point, with soft, ragged edges; the shader blends
-tiling textures by it over grass, each at its real size (cobbles about 16 cm across), and shades
-everything by a much larger copy of the grass so the repeats don't show from afar.
+A flat mesh under each chunk of the world (a town on its own has one under it all, carrying on
+110 metres past its edges into the fog). A small "splat" texture, four texels to a metre made
+from the chunk's squares (and one more round it, so the edges blend across chunks as if there
+were none), says how much road, cobbles, soil and courtyard earth is at each point, with soft,
+ragged edges, the same wherever the world's cut; the shader blends tiling textures by it over
+grass, each at its real size (cobbles about 16 cm across), and shades everything by a much larger
+copy of the grass so the repeats don't show from afar. The grass takes its land's colour
+(`LAND_COLOURS`: a little yellower in farmland, darker in the woods, dark in the darkwood, pale
+gold on the savannah, rust in the badlands, ash grey on volcanic land, grey on mountains, white
+with snow, sand on beaches), from one texture of the whole world a texel to the plan's cell,
+blended between cells, with the edges wandering 26 metres or so so the cells don't show. Every
+chunk's ground shares one shader; chunks of grass alone share a material too.
+
+### The world outside (world/chunks3d.js)
+
+The world is drawn a chunk at a time round the player: the 25 chunks within two of theirs (160
+metres or more each way, into the fog). Loading, those round where they start are built (about
+a second); after, as they go, the nearest chunk not yet drawn is built each frame, one at most,
+and those more than three chunks away are thrown away, so however far they go there's only so
+much of it, and never a loading screen. Each chunk has:
+
+- **Its ground** (above).
+- **Water**: a sheet over the lakes, the sea and rivers, drawn where a mask (a texel a square)
+  says, soft and paler at its edges, rippling in the breeze and catching the sky, over a bed of
+  soil. Water can't be walked into, but can be seen over.
+- **Bridges**, where roads cross rivers: each a straight deck of boards laid across it, from a
+  little way onto one bank to a little way onto the other, along the road, with a dark beam along
+  each edge and a rail on posts along each side. Anyone on one stands on its boards, 16 cm up
+  (stepping up onto it and down off it smoothly).
+- **Trees** (`Woodland`, kits/trees.js): every variant kept once and drawn wherever it's planted
+  (Three.js's BatchedMesh), all the world's wood in one draw call and its leaves in another, only
+  the trees in view (and, into the sun's shadows, only those in its); the crowns' shells and the
+  patches round the feet merged a chunk at a time. Merged a chunk at a time as the town's are, a
+  wood of 25 chunks would take 100 megabytes or more.
+
+The chunks also say how tall their trees are on each square, for the cutaway. The minimap is
+painted from the same chunks.
 
 ### Inside and out (app/game.js)
 
-Each map is drawn at its own place in the 3D world (`MAP_ORIGINS`: the taproom 2 kilometres east
-of the town, upstairs 100 metres south of that), so nothing of one (shadows, blood, sounds) is
-ever seen or heard on another; a character's place on its map is offset by its map's origin.
-Only the map the player is on is shown: the town and its ground, or one floor inside. Going
+Each map is drawn at its own place in the 3D world (`MAP_ORIGINS`: the world outside at the
+origin, the taproom 10 kilometres east, past the world's edge, upstairs 100 metres south of
+that), so nothing of one (shadows, blood, sounds) is ever seen or heard on another; a
+character's place on its map is offset by its map's origin. Only the map the player is on is
+shown: the world outside and the town, or one floor inside. Going
 through, the screen dips to black and fades back in over 0.45 s, the camera behind the player
 the way they face. Indoors, the view (`setIndoors`) has a dark background and closer fog, a dim
 warm light from above and the room's two lamps (for the taproom the hearth's fire and a candle
@@ -480,12 +531,14 @@ The art kits build every piece of the town's plan in the art's world pixels, fiv
   the map 24 metres square at a time, so the camera and the sun's shadows draw only the tiles in
   view (about 250,000 to 300,000 triangles a frame, shadows included, on the market square or at
   the forest's edge); the crowns' shells and the patches round the feet are one mesh each.
-- **A forest** round the outside of the map, leaving the roads' ways out clear.
+
+The world round the town, its trees too, is drawn a chunk at a time (world/chunks3d.js, above).
 
 Textures are sized in metres too: bricks courses of 10 cm, slates of 15, stone courses of 35.
 Everything that doesn't move is merged into one mesh per material, so the whole town draws in a
 few dozen draw calls (about 40,000 triangles), however many houses it has. While it's built,
-`buildTown` also records how tall whatever stands on each square is, for the cutaway.
+`buildTown` also records how tall whatever stands on each of the town's squares is (a
+`heightMap`, read anywhere with `at(x, z)`), for the cutaway.
 
 ### Characters in the world (world/avatar.js)
 
@@ -599,12 +652,15 @@ on a wobbling halo.
 
 ### The minimap (app/minimap.js)
 
-The whole of the map the player is on from above, north up, in the top right of the screen under the menu button (a
-canvas, a third of the screen's width on phones, up to 188 pixels). Each square is coloured for
-its ground (grass, road, cobbles, soil, courtyard) or what stands on it (roofs over buildings,
-blue-grey for the tavern, church and other landmarks, props, trees), with a little variation
-from square to square; the buildings get a dark edge and a light ridge and the trees round
-crowns. That's painted once, four pixels to the metre. Each frame (at most 30 times a second)
+The map the player is on from above, north up, in the top right of the screen under the menu
+button (a canvas, a third of the screen's width on phones, up to 188 pixels): out in the world,
+the 128 metres round the player; inside, the whole floor. Each square is coloured for its ground
+(grass in its land's colour, road, cobbles, soil, courtyard, water, bridges) or what stands on it
+(roofs over buildings, blue-grey for the tavern, church and other landmarks, props, trees), with
+a little variation from square to square; the buildings get a dark edge and a light ridge and
+the trees round crowns. That's painted four pixels to the metre: the town once, and the world a
+patch 192 metres square at a time round the player, the town's picture laid in it, painted again
+when they've gone far enough that what's shown would reach the patch's edge. Each frame (at most 30 times a second)
 draws it scaled to fit, then what the camera sees (the ground under the screen's corners), where
 the player is going, the enemies (red dots, the target ringed) and the player (an arrowhead
 pointing the way they face). A tap on it walks the player there, or fights an enemy within 12
@@ -849,7 +905,8 @@ switched off (in the game, under the minimap). It folds away to just the frame r
   to build.
 
 Its controls change the quality level, the render scale (drawing fewer pixels), whether the sun
-casts shadows, and show the squares characters walk on (blocked ones red) with everyone's path.
+casts shadows, and show the squares characters walk on (blocked ones red) with everyone's path
+(out in the world, the 160 squares round the player, shown afresh as they go).
 
 ## Performance
 
@@ -860,6 +917,11 @@ characters (the folk casting no shadows): about 220 draw calls and 630,000 trian
 characters on the player's map are drawn or animated. Building the eight folk adds about three
 seconds to loading on a desktop computer. On phones the quality level draws
 fewer pixels and thinner hair and uses smaller textures, and debug mode shows what each costs.
+With the world round the town, in the browser tests' views a frame makes 80 to 150 draw calls
+and draws 180,000 to 260,000 triangles, in the town or out of it, shadows included (the world's
+trees are culled one by one, so only those in view are drawn). A chunk takes
+about 35 ms to build in the browser tests, one a frame at most. The camera sees no further than
+150 metres (the fog's all there is by 130).
 Everything that can be is built once: the town is merged, shaders are compiled while loading,
 particles reuse two buffers, blood on the ground is one instanced mesh, and projectiles and
 effects add no lights. Battle damage costs a texture lookup or two a pixel on each character,
@@ -876,6 +938,11 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   none or above its most), spells (heal rolls, stun freezing the orc and calling off its blow,
   the shared cooldown, every reason a cast fails), going straight ahead (to the first wall,
   sprinting, then walking with no stamina), and a simulated minute on a generated world.
+  `test/overworld.test.js`: the world outside (blocked off its edges, the same chunks however
+  they're come to, the town set in just as it was made with everything in it moved, its streets
+  carried on as roads, water blocked but seen over, bridges walked over, trees as thick as their
+  land has them and of its kinds, clear of roads and water; a way out of the town along the roads
+  across many chunks, found quickly; the player walking out into the world; chunks made quickly).
   `test/pathfinding.test.js`: A* paths, and the line of squares straight ahead (stopping at a
   wall or the world's edge, never cutting a blocked corner).
 - `test/interiors.test.js`: the tavern's folk (on benches facing tables, stops on the floor and
@@ -962,7 +1029,9 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   fought), tapping the barkeep to walk up and talk (his name and title, what he says, replies
   by tap and by number key, Escape to stop), up the stairs (the madam), down and out again,
   walking by the
-  minimap, Game options and the volume sliders (remembered), the
+  minimap, walking 300 metres out of the town into the world (the chunks round the player drawn,
+  those left behind thrown away, the minimap following), Game options and the volume sliders
+  (remembered), the
   action wheel (stunning the orc, a flick refused while cooling down, then a heal), and a phone
   screen. Drawing without a GPU is slow, so fights are played on with
   `game.advance(seconds)`, which runs the game without drawing each frame.

@@ -5,9 +5,12 @@
 // uses a binary heap for the open list, keeps proper g-scores (so paths are optimal), and
 // breaks ties deterministically so that every multiplayer client computes identical paths.
 //
-// grid[y][x] is truthy for obstructed tiles and falsy for passable ones.
-// Units may move diagonally, but only when both adjacent orthogonal tiles are free,
-// so they never cut the corner of an obstacle.
+// The grid is read through grid.js (squaresOf): rows, grid[y][x] truthy for obstructed tiles and
+// falsy for passable ones, or a map with its own squares (the world, in chunks: overworld.js),
+// searched only round the start and end. Units may move diagonally, but only when both adjacent
+// orthogonal tiles are free, so they never cut the corner of an obstacle.
+
+import { squareKey, squaresOf } from "./grid.js";
 
 class MinHeap {
     #items = [];
@@ -86,51 +89,81 @@ class MinHeap {
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
+// A map bigger than this many squares (the world, in chunks) is searched only round the start and
+// the end: this far beyond them (squares), and no more than MOST squares in all before giving up
+const WHOLE = 1 << 16;
+const MARGIN = 64;
+const MOST = 120000;
+
+// Kept from one search to the next (big enough for the biggest window yet)
+let buffers = { size: 0, gScore: null, parent: null, closed: null };
+
+function buffersFor(size) {
+    if (buffers.size < size) {
+        buffers = { size, gScore: new Float64Array(size), parent: new Int32Array(size), closed: new Uint8Array(size) };
+    }
+
+    buffers.gScore.fill(Infinity, 0, size);
+    buffers.parent.fill(-1, 0, size);
+    buffers.closed.fill(0, 0, size);
+
+    return buffers;
+}
+
 /**
  * Find a path between two grid tiles.
  *
- * @param {ArrayLike<ArrayLike<number>>} grid  2D grid, grid[y][x] truthy when obstructed
+ * @param {object} grid  The map (grid.js squaresOf: rows, grid[y][x] truthy when obstructed, or
+ *   a map with its own squares)
  * @param {[number, number]} start  [x, y] of the starting tile
  * @param {[number, number]} end    [x, y] of the destination tile (clamped to the grid)
+ * @param {object} [options]
+ * @param {Set<number>} [options.taken]  Squares to go round as well (grid.js squareKey)
  * @returns {Array<[number, number]>} tiles from start to end inclusive, or [] if unreachable
  */
-export function findPath(grid, start, end) {
-    const rows = grid.length;
-    const cols = rows > 0 ? grid[0].length : 0;
+export function findPath(grid, start, end, { taken = null } = {}) {
+    const squares = squaresOf(grid);
+    const { width, height } = squares;
 
-    if (rows === 0 || cols === 0) {
+    if (width === 0 || height === 0) {
         return [];
     }
 
     const [startX, startY] = start;
 
-    if (startX < 0 || startY < 0 || startX >= cols || startY >= rows) {
+    if (startX < 0 || startY < 0 || startX >= width || startY >= height) {
         return [];
     }
 
     // A destination outside the map is treated as the nearest tile on the map edge
-    const endX = clamp(end[0], 0, cols - 1);
-    const endY = clamp(end[1], 0, rows - 1);
+    const endX = clamp(end[0], 0, width - 1);
+    const endY = clamp(end[1], 0, height - 1);
 
-    const startIndex = startY * cols + startX;
-    const endIndex = endY * cols + endX;
-
-    if (startIndex === endIndex) {
+    if (startX === endX && startY === endY) {
         return [[startX, startY]];
     }
 
-    const heuristic = (x, y) => Math.sqrt((x - endX) * (x - endX) + (y - endY) * (y - endY));
+    // The part of the map searched: all of it, or round the start and the end
+    const whole = width * height <= WHOLE;
+    const x0 = whole ? 0 : Math.max(0, Math.min(startX, endX) - MARGIN);
+    const y0 = whole ? 0 : Math.max(0, Math.min(startY, endY) - MARGIN);
+    const x1 = whole ? width : Math.min(width, Math.max(startX, endX) + MARGIN + 1);
+    const y1 = whole ? height : Math.min(height, Math.max(startY, endY) + MARGIN + 1);
+    const cols = x1 - x0;
+    const size = cols * (y1 - y0);
+    const free = (x, y) => x >= x0 && y >= y0 && x < x1 && y < y1 && !squares.blocked(x, y) && !taken?.has(squareKey(x, y));
 
-    const size = rows * cols;
-    const gScore = new Float64Array(size).fill(Infinity);
-    const parent = new Int32Array(size).fill(-1);
-    const closed = new Uint8Array(size);
+    const startIndex = (startY - y0) * cols + (startX - x0);
+    const endIndex = (endY - y0) * cols + (endX - x0);
+    const heuristic = (x, y) => Math.sqrt((x - endX) * (x - endX) + (y - endY) * (y - endY));
+    const { gScore, parent, closed } = buffersFor(size);
     const open = new MinHeap();
 
     let sequence = 0;
+    let explored = 0;
 
     const consider = (fromIndex, x, y, cost) => {
-        const index = y * cols + x;
+        const index = (y - y0) * cols + (x - x0);
 
         if (closed[index]) {
             return;
@@ -151,7 +184,7 @@ export function findPath(grid, start, end) {
     gScore[startIndex] = 0;
     open.push({ index: startIndex, f: heuristic(startX, startY), h: heuristic(startX, startY), seq: sequence++ });
 
-    while (open.size > 0) {
+    while (open.size > 0 && explored < MOST) {
         const { index } = open.pop();
 
         if (closed[index]) {
@@ -163,21 +196,22 @@ export function findPath(grid, start, end) {
             const path = [];
 
             for (let current = index; current !== -1; current = parent[current]) {
-                path.push([current % cols, Math.floor(current / cols)]);
+                path.push([(current % cols) + x0, Math.floor(current / cols) + y0]);
             }
 
             return path.reverse();
         }
 
         closed[index] = 1;
+        explored++;
 
-        const x = index % cols;
-        const y = (index - x) / cols;
+        const x = (index % cols) + x0;
+        const y = Math.floor(index / cols) + y0;
 
-        const north = y > 0 && !grid[y - 1][x];
-        const south = y < rows - 1 && !grid[y + 1][x];
-        const east = x < cols - 1 && !grid[y][x + 1];
-        const west = x > 0 && !grid[y][x - 1];
+        const north = free(x, y - 1);
+        const south = free(x, y + 1);
+        const east = free(x + 1, y);
+        const west = free(x - 1, y);
 
         if (north) {
             consider(index, x, y - 1, 1);
@@ -196,19 +230,19 @@ export function findPath(grid, start, end) {
         }
 
         // Diagonal moves are only allowed when they do not cut an obstacle's corner
-        if (north && east && !grid[y - 1][x + 1]) {
+        if (north && east && free(x + 1, y - 1)) {
             consider(index, x + 1, y - 1, Math.SQRT2);
         }
 
-        if (north && west && !grid[y - 1][x - 1]) {
+        if (north && west && free(x - 1, y - 1)) {
             consider(index, x - 1, y - 1, Math.SQRT2);
         }
 
-        if (south && east && !grid[y + 1][x + 1]) {
+        if (south && east && free(x + 1, y + 1)) {
             consider(index, x + 1, y + 1, Math.SQRT2);
         }
 
-        if (south && west && !grid[y + 1][x - 1]) {
+        if (south && west && free(x - 1, y + 1)) {
             consider(index, x - 1, y + 1, Math.SQRT2);
         }
     }
@@ -223,15 +257,14 @@ export function findPath(grid, start, end) {
  * the corner of a blocked square. Doesn't include the square the point is on.
  */
 export function lineAhead(grid, [x, y], facing, most = 400) {
-    const height = grid.length;
-    const width = grid[0].length;
+    const squares = squaresOf(grid);
     const dx = Math.sin(facing);
     const dy = Math.cos(facing);
-    const squares = [];
+    const line = [];
     let [sx, sy] = [Math.floor(x), Math.floor(y)];
 
     // (Stepping a fifth of a metre at a time, noting each square entered)
-    for (let travelled = 0.2; squares.length < most; travelled += 0.2) {
+    for (let travelled = 0.2; line.length < most; travelled += 0.2) {
         const nx = Math.floor(x + dx * travelled);
         const ny = Math.floor(y + dy * travelled);
 
@@ -239,13 +272,13 @@ export function lineAhead(grid, [x, y], facing, most = 400) {
             continue;
         }
 
-        if (nx < 0 || ny < 0 || nx >= width || ny >= height || grid[ny][nx] || (nx !== sx && ny !== sy && (grid[sy][nx] || grid[ny][sx]))) {
+        if (squares.blocked(nx, ny) || (nx !== sx && ny !== sy && (squares.blocked(nx, sy) || squares.blocked(sx, ny)))) {
             break;
         }
 
-        squares.push([nx, ny]);
+        line.push([nx, ny]);
         [sx, sy] = [nx, ny];
     }
 
-    return squares;
+    return line;
 }

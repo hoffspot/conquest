@@ -22,6 +22,7 @@ export const CHUNKS = WORLD_SIZE / CHUNK;
  * Lay out a world from a seed: {
  *   seed, size (metres a side), cell (metres), cells (a side),
  *   height, temperature, moisture (Float32Array, 0 to 1, a cell each), water (Uint8Array: WATER),
+ *   flow (Float32Array: how much rain drains through each cell: the wider a river),
  *   biome (Uint8Array: BIOMES index), territory (Uint8Array: 0 none, else RACES index + 1),
  *   road (Uint8Array: ROAD),
  *   races ([{ id, heartland: [x, y] cells, capital (a place id) }]),
@@ -45,6 +46,7 @@ export function planWorld(seed) {
         temperature: land.temperature,
         moisture: land.moisture,
         water: land.water,
+        flow: land.flow,
         biome: land.biome,
         territory: land.territory,
         road: settled.road,

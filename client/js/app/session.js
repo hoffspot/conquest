@@ -4,7 +4,7 @@
 
 import { Sound } from "../audio/sound.js";
 import { loadCharacterKit } from "../characters/kit.js";
-import { generateWorld } from "../core/world.js";
+import { buildWorld } from "../core/overworld.js";
 import { View } from "../world/view.js";
 import { Game } from "./game.js";
 
@@ -33,9 +33,12 @@ export async function createSession({ canvas, quality, sound = true, volumes, fe
     return { view, kit, sound: audio };
 }
 
-/** A new game in the world of `seed`, for a hero: { name, shape, look, weapon }. */
+/**
+ * A new game in the world of `seed` (the whole world, laid out from its plan, with the town set
+ * in where a human starts), for a hero: { name, shape, look, weapon }.
+ */
 export function createGame({ view, kit, sound, hud, hero, seed, talks, onTalk }) {
-    const world = generateWorld({ seed });
+    const world = buildWorld({ seed });
 
     return new Game({ view, kit, sound, world, hero, hud, talks, onTalk });
 }

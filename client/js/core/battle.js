@@ -53,6 +53,7 @@
 // Nothing here draws anything: every step returns events ("attack", "hit", "death"...) for the
 // interface to show. Pure JavaScript with seeded random numbers, no DOM.
 
+import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { routeBetween } from "./interiors.js";
 import { findPath, lineAhead } from "./pathfinding.js";
 import { createRandom } from "./random.js";
@@ -60,7 +61,6 @@ import { BECKON, REST_EVERY, ROLES } from "./roles.js";
 import { rollHeal, SPELL_COOLDOWN, SPELLS } from "./spells.js";
 import { Variety } from "./variety.js";
 import { armsOf, chooseAttack, distanceBetween, longestReach, rollDamage, WEAPONS } from "./weapons.js";
-import { nearestFree } from "./world.js";
 
 /**
  * How near (squares) two people have to be to talk, seeing each other: next to each other, or
@@ -284,7 +284,7 @@ export class Battle {
 
         switch (order.type) {
             case "move": {
-                const goal = nearestFree(this.#blocked(actor), order.to);
+                const goal = nearestFree(this.#squares(actor.map), order.to);
 
                 actor.order = { type: "move", to: goal, run: Boolean(order.run) };
                 this.#pathTo(actor, goal);
@@ -293,7 +293,7 @@ export class Battle {
             case "ahead": {
                 // From wherever it is (or is stepping to), square after square in a line
                 const from = actor.to ? [actor.to[0] + 0.5, actor.to[1] + 0.5] : [actor.x, actor.y];
-                const line = lineAhead(this.#blocked(actor), from, order.facing);
+                const line = lineAhead(this.#squares(actor.map), from, order.facing);
 
                 if (!line.length) {
                     actor.order = null;
@@ -453,20 +453,18 @@ export class Battle {
             return false;
         }
 
-        const map = this.maps[mapId];
-
-        return !this.#between(map.opaque ?? map.blocked, from, to, distance);
+        return !this.#between(this.#squares(mapId).opaque, from, to, distance);
     }
 
-    // Is anything marked in `grid` on the way between two squares (not counting them)?
-    #between(grid, [ax, ay], [bx, by], distance = distanceBetween([ax, ay], [bx, by])) {
+    // Is any square `marked` (x, y) on the way between two squares (not counting them)?
+    #between(marked, [ax, ay], [bx, by], distance = distanceBetween([ax, ay], [bx, by])) {
         const steps = Math.ceil(distance * 4);
 
         for (let k = 1; k < steps; k++) {
             const x = Math.floor(ax + 0.5 + ((bx - ax) * k) / steps);
             const y = Math.floor(ay + 0.5 + ((by - ay) * k) / steps);
 
-            if (grid[y][x] && !(x === ax && y === ay) && !(x === bx && y === by)) {
+            if (marked(x, y) && !(x === ax && y === ay) && !(x === bx && y === by)) {
                 return true;
             }
         }
@@ -491,13 +489,13 @@ export class Battle {
         }
 
         // Next to them, or across something (a blocked square on the way between)
-        return distance <= TALK_REACH.near || this.#between(this.maps[mapId].blocked, from, to, distance);
+        return distance <= TALK_REACH.near || this.#between(this.#squares(mapId).blocked, from, to, distance);
     }
 
     // The nearest square (walking) that `actor` could talk to `target` from, free and not taken,
     // or null (none it can get to)
     #talkSpot(actor, target) {
-        const blocked = this.#blocked(actor);
+        const squares = this.#squares(actor.map);
         const start = actor.to ?? actor.square;
         const seen = new Set([start.join()]);
         const queue = [start];
@@ -512,7 +510,7 @@ export class Battle {
             for (const [dx, dy] of AROUND) {
                 const next = [square[0] + dx, square[1] + dy];
 
-                if (blocked[next[1]]?.[next[0]] === 0 && !seen.has(next.join())) {
+                if (!squares.blocked(next[0], next[1]) && !seen.has(next.join())) {
                     seen.add(next.join());
                     queue.push(next);
                 }
@@ -522,9 +520,27 @@ export class Battle {
         return null;
     }
 
-    // The squares a character can't walk on, on its map
-    #blocked(actor) {
-        return this.maps[actor.map].blocked;
+    // A map's squares (grid.js): which can be walked on and seen through
+    #squares(mapId) {
+        return squaresOf(this.maps[mapId]);
+    }
+
+    // The squares other characters on a map stand on (and, `stepping`, are stepping into), but
+    // `actor` and `through`: a Set of grid.js squareKey
+    #others(mapId, actor, { through = null, stepping = true } = {}) {
+        const taken = new Set();
+
+        for (const other of this.actors) {
+            if (other !== actor && other !== through && !other.dead && other.map === mapId) {
+                for (const square of stepping ? [other.square, other.to] : [other.square]) {
+                    if (square) {
+                        taken.add(squareKey(...square));
+                    }
+                }
+            }
+        }
+
+        return taken;
     }
 
     #emit(type, details) {
@@ -1012,26 +1028,8 @@ export class Battle {
 
     // Find a path to `goal`, round other characters (except `through`, whose square it may end on)
     #pathTo(actor, goal, through = null) {
-        const blocked = this.#blocked(actor);
-        const marked = [];
-
-        for (const other of this.actors) {
-            if (other !== actor && other !== through && !other.dead && other.map === actor.map) {
-                for (const [x, y] of [other.square, other.to].filter(Boolean)) {
-                    if (!blocked[y][x]) {
-                        blocked[y][x] = 1;
-                        marked.push([x, y]);
-                    }
-                }
-            }
-        }
-
         const start = actor.to ?? actor.square;
-        const path = findPath(blocked, start, goal);
-
-        for (const [x, y] of marked) {
-            blocked[y][x] = 0;
-        }
+        const path = findPath(this.#squares(actor.map), start, goal, { taken: this.#others(actor.map, actor, { through }) });
 
         // The path starts where the character is (or is stepping to)
         actor.path = path.slice(1);
@@ -1078,17 +1076,7 @@ export class Battle {
     // free one), facing into the room
     #cross(actor, link, here) {
         const there = link.ends.find((end) => end !== here);
-        const blocked = this.maps[there.map].blocked.map((row) => Uint8Array.from(row));
-
-        for (const other of this.actors) {
-            if (other !== actor && !other.dead && other.map === there.map) {
-                for (const [sx, sy] of [other.square, other.to].filter(Boolean)) {
-                    blocked[sy][sx] = 1;
-                }
-            }
-        }
-
-        const square = nearestFree(blocked, there.arrive);
+        const square = nearestFree(this.#squares(there.map), there.arrive, { taken: this.#others(there.map, actor) });
         const from = actor.map;
 
         Object.assign(actor, {
@@ -1456,15 +1444,7 @@ export class Battle {
     }
 
     #respawn(actor) {
-        const blocked = this.maps[actor.spawnMap].blocked.map((row) => Uint8Array.from(row));
-
-        for (const other of this.actors) {
-            if (other !== actor && !other.dead && other.map === actor.spawnMap) {
-                blocked[other.square[1]][other.square[0]] = 1;
-            }
-        }
-
-        const square = nearestFree(blocked, actor.spawn);
+        const square = nearestFree(this.#squares(actor.spawnMap), actor.spawn, { taken: this.#others(actor.spawnMap, actor, { stepping: false }) });
         const from = actor.map;
 
         Object.assign(actor, {
