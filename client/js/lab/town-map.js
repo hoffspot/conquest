@@ -212,7 +212,7 @@ function count() {
     $("#counts").replaceChildren(
         ...[
             `${of("house").length} houses`,
-            `landmarks: ${of("landmark").map(titleOf).join(", ") || "none"}`,
+            `landmarks: ${of("landmark").map((piece) => (titleOf(piece) === piece.name ? piece.name : `${piece.name} (${titleOf(piece)})`)).join(", ") || "none"}`,
             `${town.streets.filter(({ main }) => main).length} main streets, ${town.streets.filter(({ main }) => !main).length} lanes and alleys`,
             `${of("prop").length} props, ${of("tree").length} trees`,
             `${town.width} × ${town.height} metres, laid out in ${state.took.toFixed(0)} ms`,
