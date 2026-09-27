@@ -306,10 +306,17 @@ Each step makes events (`attack`, `draw`, `projectile`, `hit`, `miss`, `death`, 
 of them since it was last called (so a spell cast between frames is shown too). Nothing in it
 draws anything.
 
-- **Moving.** Each character stands on one square and walks from square middle to square middle
-  along A* paths (8 directions, no cutting corners past blocked squares). It never steps into a
-  square another character is on or stepping into; if someone is in the way for 0.4 s it finds a
-  way round. Every map's squares are read the same way (`core/grid.js`: `blocked`, `opaque` and
+- **Moving.** Each character stands on one square and finds its way along A* paths (8
+  directions, no cutting corners past blocked squares). It doesn't walk them square by square
+  (which zig-zags: on open ground the shortest ways in 8 directions go straight, then diagonally,
+  or back and forth between the two): it heads in a straight line for the furthest square of its
+  path it can see (up to 64 on), with 0.3 metres of room either side of it for its body (so it
+  doesn't graze a corner), across no one; the squares on that line become its path. As it steps
+  onto that square it looks ahead again, so it turns only where it has to, at corners, and it
+  faces the way it's going. It's on each square as it walks into it, stepping into the next only
+  if no one's on it or stepping into it, and ends in the middle of the last; if someone is in the
+  way for 0.4 s it finds a way round. Sent to fight someone, once the square it's stepping onto
+  has them within reach, it slows to that square's middle and stops there. Every map's squares are read the same way (`core/grid.js`: `blocked`, `opaque` and
   `ground` for any square, blocked off the map), whether kept in rows or in chunks. On a big map
   (the world outside), A* looks only in a window round the start and the goal, 64 squares wider
   each way, and gives up after 120,000 squares; the others in the way are a set of squares to
@@ -1368,8 +1375,10 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   streets leaving the ways asked; the exact sums matching Math's; and castle layouts.
 - `test/world.test.js`, `test/combat.test.js`: the world's layout and pathing on many seeds,
   what hides what's behind it (houses, landmarks, trees) and what can be seen over (props), and
-  the battle: reach in every direction, line of sight (seeing and shooting over barrels, not
-  through walls), attack timing, projectiles, damage rolls,
+  the battle: walking open ground in a straight line (facing one way the whole way, never more
+  than a centimetre off the line), keeping clear of walls and turning only at corners; reach in
+  every direction, line of sight (seeing and shooting over barrels, not through walls), attack
+  timing, projectiles, damage rolls,
   staggering, death and respawn, the orc's patrol, chase and giving up, running (its speed,
   speeding up and slowing down, charging), stamina (used, got back, running out, never below
   none or above its most), spells (heal rolls, stun freezing the orc and calling off its blow,

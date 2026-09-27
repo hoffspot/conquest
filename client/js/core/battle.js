@@ -132,6 +132,14 @@ const REST_WHEN_SEEN_MS = [800, 3000];
 
 const same = (a, b) => a !== null && b !== null && a[0] === b[0] && a[1] === b[1];
 
+// Walking a path, a character heads straight for the furthest square of it that it can see (at
+// most this many squares on), with this much room either side of it (metres: its body, so it
+// doesn't graze a corner), rather than from square to square; and moves at most this far at a
+// time (metres), so it notes every square it walks into
+const STEER_AHEAD = 64;
+const BODY = 0.3;
+const STRIDE = 0.2;
+
 // The eight squares round one, and how many squares at most are looked through for a place to
 // talk to someone from
 const AROUND = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
@@ -1201,28 +1209,72 @@ export class Battle {
         return Math.max(0, left);
     }
 
-    // Walk `budget` metres along the path, square by square. Returns how far it went
+    /**
+     * Walk `budget` metres along the path. Returns how far it went. It heads straight for the
+     * furthest square of the path it can see (#straighten), the squares on the way its path, so
+     * it crosses open ground in a straight line rather than zig-zagging from square to square;
+     * it's on each square as it walks into it, stepping into the next only if no one's there, and
+     * ends in the middle of the last.
+     */
     #travel(actor, budget) {
         const start = budget;
 
-        while (budget > 0) {
+        while (budget > 1e-9) {
             if (!actor.to) {
-                if (!actor.path.length || !this.#stepInto(actor)) {
+                if (!actor.path.length) {
+                    return start - budget;
+                }
+
+                if (actor.steering?.path !== actor.path) {
+                    this.#straighten(actor);
+                }
+
+                if (!this.#stepInto(actor)) {
                     return start - budget;
                 }
             }
 
-            const [tx, ty] = [actor.to[0] + 0.5, actor.to[1] + 0.5];
+            // Towards where it's heading (or, its path changed under it, the square it's stepping into)
+            const steering = actor.steering?.path === actor.path ? actor.steering : null;
+            const [tx, ty] = steering ? steering.point : [actor.to[0] + 0.5, actor.to[1] + 0.5];
             const dx = tx - actor.x;
             const dy = ty - actor.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
+            const last = !actor.path.length;
 
-            if (distance <= budget) {
-                actor.x = tx;
-                actor.y = ty;
+            if (distance > 1e-9) {
+                const step = Math.min(budget, distance, STRIDE);
+
+                actor.x += (dx / distance) * step;
+                actor.y += (dy / distance) * step;
+                actor.facing = Math.atan2(dx, dy);
+                budget -= step;
+
+                if (step === distance) {
+                    [actor.x, actor.y] = [tx, ty];
+                }
+            }
+
+            // On the square it was stepping into: the last one only in its middle; a square it
+            // walked past without setting foot on (a corner cut, as it heads straight) passed too
+            const [sx, sy] = [Math.floor(actor.x), Math.floor(actor.y)];
+            const onto = sx === actor.to[0] && sy === actor.to[1];
+            const past = !last && sx === actor.path[0][0] && sy === actor.path[0][1];
+            const there = Math.abs(actor.x - (actor.to[0] + 0.5)) < 1e-6 && Math.abs(actor.y - (actor.to[1] + 0.5)) < 1e-6;
+
+            if ((last ? there : onto || past) || (distance <= 1e-9 && same([sx, sy], actor.to))) {
                 actor.square = [...actor.to];
+
+                // Within reach of the target from here: on to the middle of this square, slowing
+                // as it comes, and stop there
+                if (!last && !there && this.#arrivedInReach(actor)) {
+                    actor.path = [];
+                    actor.steering = { path: actor.path, point: [actor.to[0] + 0.5, actor.to[1] + 0.5] };
+
+                    continue;
+                }
+
                 actor.to = null;
-                budget -= distance;
 
                 // Stop as soon as the target is within reach
                 if (this.#arrivedInReach(actor)) {
@@ -1230,19 +1282,93 @@ export class Battle {
 
                     return start - budget;
                 }
-            } else {
-                actor.x += (dx / distance) * budget;
-                actor.y += (dy / distance) * budget;
-                budget = 0;
 
-                // Halfway across, it's on the new square
-                if (Math.abs(actor.x - tx) < 0.5 && Math.abs(actor.y - ty) < 0.5) {
-                    actor.square = [...actor.to];
+                // On the square it was heading for: it looks ahead again from here
+                if (same(actor.square, actor.steering?.square ?? null)) {
+                    actor.steering = null;
                 }
+            } else if (distance <= 1e-9) {
+                // (Nowhere further to go this way: on to the square itself)
+                actor.steering = null;
             }
         }
 
         return start;
+    }
+
+    /**
+     * Head straight for the furthest square of the path (at most STEER_AHEAD on) that can be
+     * walked to in a straight line from where the character is, with room for its body either
+     * side, over no one: the squares on that line become the start of its path.
+     */
+    #straighten(actor) {
+        const route = actor.path;
+        const squares = this.#squares(actor.map);
+        let best = null;
+
+        for (let k = 0; k < Math.min(route.length, STEER_AHEAD); k++) {
+            const line = this.#lineTo(actor, squares, route[k]);
+
+            if (!line) {
+                break;
+            }
+
+            best = { k, line };
+        }
+
+        const [goal, k] = best ? [route[best.k], best.k] : [route[0], 0];
+
+        if (best) {
+            actor.path = [...best.line, ...route.slice(k + 1)];
+        }
+
+        actor.steering = { path: actor.path, square: [...goal], point: [goal[0] + 0.5, goal[1] + 0.5] };
+    }
+
+    // The squares a character walks into going in a straight line from where it is to the middle
+    // of `square` (ending on it), or null if the way isn't clear: a blocked square within BODY of
+    // the line, a corner cut, or someone standing on it
+    #lineTo(actor, squares, [gx, gy]) {
+        const [x0, y0] = [actor.x, actor.y];
+        const [x1, y1] = [gx + 0.5, gy + 0.5];
+        const length = Math.hypot(x1 - x0, y1 - y0);
+        const line = [];
+
+        if (length < 1e-9) {
+            return null;
+        }
+
+        const [nx, ny] = [-(y1 - y0) / length, (x1 - x0) / length];
+        let [sx, sy] = [Math.floor(x0), Math.floor(y0)];
+
+        for (let travelled = 0.1; ; travelled = Math.min(length, travelled + 0.1)) {
+            const t = travelled / length;
+            const [px, py] = [x0 + (x1 - x0) * t, y0 + (y1 - y0) * t];
+
+            // Room for its body either side
+            for (const side of [-BODY, BODY]) {
+                if (squares.blocked(Math.floor(px + nx * side), Math.floor(py + ny * side))) {
+                    return null;
+                }
+            }
+
+            const [qx, qy] = [Math.floor(px), Math.floor(py)];
+
+            if (qx !== sx || qy !== sy) {
+                if (squares.blocked(qx, qy) || (qx !== sx && qy !== sy && (squares.blocked(qx, sy) || squares.blocked(sx, qy))) || this.#taken([qx, qy], actor)) {
+                    return null;
+                }
+
+                line.push([qx, qy]);
+                [sx, sy] = [qx, qy];
+            }
+
+            if (travelled >= length) {
+                break;
+            }
+        }
+
+        return line.length && same(line.at(-1), [gx, gy]) ? line : null;
     }
 
     #arrivedInReach(actor) {
