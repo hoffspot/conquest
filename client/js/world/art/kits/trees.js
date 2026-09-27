@@ -14,7 +14,9 @@
 // every time; each variant once, then copied wherever it stands. Every kind's bark is drawn side
 // by side on one picture, and its leaves on another, so all the trees share two materials; and
 // planted (plantTrees) they're merged a tile of the map at a time, so the camera (and the sun's
-// shadows) draw only the tiles in view.
+// shadows) draw only the tiles in view. In the world outside, where there are far more of them
+// and they come and go as the player does (world/chunks3d.js), each variant is kept once and
+// drawn wherever it stands (Woodland), only those in view.
 //
 // The leaves don't cast shadows themselves: thousands of overlapping cards, each tested against
 // its picture, would cost more to draw into the sun's shadows than everything else in the view.
@@ -24,6 +26,7 @@
 import * as THREE from "three";
 import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { createRandom } from "../../../core/random.js";
+import { TREE_KINDS } from "../../../core/setpieces/pieces.js";
 
 /**
  * How each kind grows. Heights in metres; angles in degrees from the parent's direction;
@@ -112,15 +115,10 @@ export const KINDS = Object.freeze(Object.keys(SPECIES));
 
 /**
  * The trees there are ([kind, seed]): each kind grown several ways, the broadleaved ones more
- * often than the rest, as in the fields round an old town. Their number is the pieces'
- * TREE_VARIANTS (core/setpieces/pieces.js).
+ * often than the rest (core/setpieces/pieces.js TREE_KINDS, so the world's rules can choose them
+ * by kind).
  */
-export const VARIANTS = Object.freeze([
-    ["oak", 1], ["beech", 1], ["birch", 1], ["spruce", 1], ["pine", 1], ["oak", 2],
-    ["poplar", 1], ["birch", 2], ["spruce", 2], ["beech", 2], ["apple", 1], ["oak", 3],
-    ["pine", 2], ["spruce", 3], ["birch", 3], ["beech", 3], ["oak", 4], ["spruce", 4],
-    ["poplar", 2], ["apple", 2], ["birch", 4], ["pine", 3], ["beech", 4], ["oak", 5],
-]);
+export const VARIANTS = TREE_KINDS;
 
 // How finely wood is made: sides round, and segments along, a trunk, a bough and a branch
 // (a kind's boughs can be finer: `sides`, `segments`)
@@ -1180,7 +1178,11 @@ export function treeMaterials() {
                 .replace("#include <common>", "#include <common>\nuniform float windTime;\nuniform float windSway;")
                 .replace("#include <begin_vertex>", `#include <begin_vertex>
 {
-    vec3 windAt = (modelMatrix * vec4(position, 1.0)).xyz;
+    vec4 windLocal = vec4(position, 1.0);
+#ifdef USE_BATCHING
+    windLocal = batchingMatrix * windLocal;
+#endif
+    vec3 windAt = (modelMatrix * windLocal).xyz;
     float windPhase = windAt.x * 0.37 + windAt.z * 0.29 + windAt.y * 0.8;
     float windHow = windSway * clamp((windAt.y - 1.5) / 6.0, 0.0, 1.0);
 
@@ -1453,4 +1455,169 @@ export function plantTrees(placements, { tile = 24 } = {}) {
     }
 
     return { object, boxes };
+}
+
+// How much room the woodland's batches start with: trees, and the vertices and indices of the
+// variants grown (each grows as more is needed)
+const WOODLAND = Object.freeze({ trees: 2048, vertices: 48000, indices: 96000 });
+
+const _matrix = new THREE.Matrix4();
+const _turned = new THREE.Quaternion();
+const _scale = new THREE.Vector3();
+const _at = new THREE.Vector3();
+
+/**
+ * Trees planted and felled a lot at a time, as the world outside is drawn round the player
+ * (world/chunks3d.js): each variant kept once and drawn wherever it's planted (Three.js's
+ * BatchedMesh), the wood in one draw call and the leaves in another, only the trees in view
+ * (and, into the sun's shadows, only those in its); the crowns' shells and the patches round
+ * their feet merged a lot at a time, as plantTrees merges them.
+ */
+export class Woodland {
+    constructor() {
+        const { bark, leaves } = treeMaterials();
+
+        this.wood = new THREE.BatchedMesh(WOODLAND.trees, WOODLAND.vertices, WOODLAND.indices, bark);
+        this.leaves = new THREE.BatchedMesh(WOODLAND.trees, WOODLAND.vertices, WOODLAND.indices, leaves);
+        this.wood.name = "woodland bark";
+        this.leaves.name = "woodland leaves";
+
+        for (const batch of [this.wood, this.leaves]) {
+            batch.userData.room = { vertices: WOODLAND.vertices, indices: WOODLAND.indices };
+
+            // (Each tree is culled on its own; the whole woodland never is)
+            batch.frustumCulled = false;
+            batch.receiveShadow = true;
+            batch.matrixAutoUpdate = false;
+        }
+
+        this.wood.castShadow = true;
+
+        // Each variant's geometry in the batches ([wood, leaves] ids), and its box
+        this.variants = new Map();
+        this.planted = 0;
+        this.object = new THREE.Group();
+        this.object.name = "woodland";
+        this.object.add(this.wood, this.leaves);
+    }
+
+    /**
+     * Plant a lot of trees: [{ x, z (their trunks' feet, metres), variant, size, turn }]. Returns
+     * the lot: { object (a Group of their shells and the patches round their feet, to add to the
+     * scene), boxes (each tree's Box3 above the ground, in order), ids }.
+     */
+    plant(placements) {
+        const shells = [];
+        const grounds = [];
+        const boxes = [];
+        const ids = [];
+
+        this.#room(placements.length);
+
+        for (const { x, z, variant, size = 1, turn = 0 } of placements) {
+            const { wood, leaves, box } = this.#variant(variant);
+            const { kind, shell, patch } = grownGeometry(variant);
+
+            _matrix.compose(_at.set(x, 0, z), _turned.setFromAxisAngle(UP, turn), _scale.setScalar(size));
+
+            const pair = [this.wood.addInstance(wood), this.leaves.addInstance(leaves)];
+
+            this.wood.setMatrixAt(pair[0], _matrix);
+            this.leaves.setMatrixAt(pair[1], _matrix);
+            ids.push(pair);
+
+            const placed = box.clone().applyMatrix4(_matrix);
+
+            placed.min.y = Math.max(0, placed.min.y);
+            boxes.push(placed);
+            shells.push(shell.clone().applyMatrix4(_matrix));
+            grounds.push({ x, z, turn, radius: patch * size, kind });
+        }
+
+        this.planted += placements.length;
+
+        const object = new THREE.Group();
+        const { litter, shadows } = treeMaterials();
+
+        object.name = "woodland lot";
+
+        if (shells.length) {
+            const cast = new THREE.Mesh(mergeGeometries(shells), shadows);
+
+            cast.name = shadows.name;
+            cast.matrixAutoUpdate = false;
+            shadowOnly(cast);
+
+            const floor = new THREE.Mesh(patches(grounds), litter);
+
+            floor.name = litter.name;
+            floor.matrixAutoUpdate = false;
+            onGround(floor);
+            object.add(cast, floor);
+        }
+
+        return { object, boxes, ids };
+    }
+
+    /** Fell a lot of trees (plant's): gone from the batches, and its shells and patches thrown away. */
+    fell(lot) {
+        for (const [wood, leaves] of lot.ids) {
+            this.wood.deleteInstance(wood);
+            this.leaves.deleteInstance(leaves);
+        }
+
+        this.planted -= lot.ids.length;
+        lot.ids = [];
+        lot.object.removeFromParent();
+        lot.object.traverse((node) => node.geometry?.dispose());
+    }
+
+    /** Let go of everything on the GPU (the batches: the materials are shared). */
+    dispose() {
+        this.wood.dispose();
+        this.leaves.dispose();
+    }
+
+    // A variant's wood and leaves in the batches (added the first time it's planted, the batches
+    // made bigger if they're full), and its box
+    #variant(variant) {
+        const index = ((variant % VARIANTS.length) + VARIANTS.length) % VARIANTS.length;
+
+        if (!this.variants.has(index)) {
+            const { wood, leaves } = grownGeometry(index);
+            const box = new THREE.Box3();
+
+            for (const [batch, geometry] of [[this.wood, wood], [this.leaves, leaves]]) {
+                const vertices = geometry.attributes.position.count;
+                const indices = geometry.index.count;
+
+                if (batch.unusedVertexCount < vertices || batch.unusedIndexCount < indices) {
+                    const room = batch.userData.room;
+
+                    room.vertices = Math.max(2 * room.vertices, room.vertices + vertices);
+                    room.indices = Math.max(2 * room.indices, room.indices + indices);
+                    batch.setGeometrySize(room.vertices, room.indices);
+                }
+
+                geometry.computeBoundingBox();
+                box.union(geometry.boundingBox);
+            }
+
+            this.variants.set(index, { wood: this.wood.addGeometry(wood), leaves: this.leaves.addGeometry(leaves), box });
+        }
+
+        return this.variants.get(index);
+    }
+
+    // Room in the batches for so many more trees
+    #room(more) {
+        const needed = this.planted + more;
+
+        if (needed > this.wood.maxInstanceCount) {
+            const most = Math.max(needed, 2 * this.wood.maxInstanceCount);
+
+            this.wood.setInstanceCount(most);
+            this.leaves.setInstanceCount(most);
+        }
+    }
 }

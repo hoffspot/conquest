@@ -16,6 +16,7 @@ import { WEAPONS } from "../client/js/core/weapons.js";
 import { guardOf, heroEquipment } from "../client/js/app/game.js";
 import { weaponNumbers } from "../client/js/app/creator.js";
 import { generateWorld } from "../client/js/core/world.js";
+import { buildWorld } from "../client/js/core/overworld.js";
 
 // A stand-in for the browser's local storage (or one that refuses, as in private browsing)
 function useStorage({ refuse = false } = {}) {
@@ -254,6 +255,15 @@ describe("the minimap (minimap.js)", () => {
 
             assert.ok(greenest([r, g, b]) && r + g + b < 200, `a tree at ${x}, ${y}`);
         }
+    });
+
+    it("finds the buildings and trees of a town set in the world where it's set", () => {
+        const placed = buildWorld({ seed: 4 });
+        const [dx, dy] = placed.stamp.at;
+        const shift = (things) => things.map((thing) => ({ ...thing, x: thing.x + dx, y: thing.y + dy }));
+
+        assert.deepEqual(buildingsOf(placed), shift(buildingsOf(placed.home)));
+        assert.deepEqual(treesOf(placed), shift(treesOf(placed.home)));
     });
 
     it("colours the floors inside the tavern: the floor, and walls, stairs and furniture on it", () => {

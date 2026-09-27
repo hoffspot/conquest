@@ -86,7 +86,7 @@ const UPSTAIRS = [
  * Where each floor is drawn in the 3D world (metres): far from the town and each other, so that
  * nothing of one (shadows, blood, sounds) is ever seen or heard on another.
  */
-export const MAP_ORIGINS = Object.freeze({ town: [0, 0], taproom: [2000, 0], upstairs: [2000, 100] });
+export const MAP_ORIGINS = Object.freeze({ town: [0, 0], taproom: [10000, 0], upstairs: [10000, 100] });
 
 /** Which way a character faces (radians from south, towards east), by compass point. */
 export const FACING = Object.freeze({ s: 0, e: Math.PI / 2, n: Math.PI, w: -Math.PI / 2 });

@@ -4,8 +4,9 @@ import { describe, it } from "node:test";
 import { GROUND, LANDMARKS, pieceCatalog } from "../client/js/core/setpieces/pieces.js";
 import { generateWorld } from "../client/js/core/world.js";
 import { LANDMARK_BUILDERS } from "../client/js/world/art/kits/landmarks.js";
-import { splatData } from "../client/js/world/ground.js";
-import { BUILDERS, PIXEL } from "../client/js/world/town3d.js";
+import { LAND_COLOURS, splatData, splatOf } from "../client/js/world/ground.js";
+import { BIOMES } from "../client/js/core/worldplan/plan.js";
+import { BUILDERS, heightMap, PIXEL } from "../client/js/world/town3d.js";
 
 describe("the town in 3D (town3d.js)", () => {
     it("has something to build every kind of piece a town can have, and every special building", () => {
@@ -65,5 +66,51 @@ describe("the ground (ground.js)", () => {
         }
 
         assert.ok(found.has(GROUND.road) && found.has(GROUND.cobbles), "roads and a cobbled square");
+    });
+
+    it("is the same where two parts of a map overlap, so the chunks of the world meet without a seam", () => {
+        const kindAt = (x, y) => world.ground[y]?.[x];
+        const [left, right] = [splatOf(kindAt, [10, 20, 40, 30], 4), splatOf(kindAt, [46, 20, 40, 30], 4)];
+        let compared = 0;
+
+        assert.ok(left.any && right.any);
+
+        // (Metres 46 to 50 are in both)
+        for (let j = 0; j < 30 * 4; j++) {
+            for (let i = 0; i < 4 * 4; i++) {
+                for (let layer = 0; layer < 4; layer++) {
+                    assert.equal(left.data[(j * 160 + (36 * 4 + i)) * 4 + layer], right.data[(j * 160 + i) * 4 + layer]);
+                    compared++;
+                }
+            }
+        }
+
+        assert.equal(compared, 120 * 16 * 4);
+        assert.equal(splatOf(() => GROUND.grass, [0, 0, 8, 8]).any, false, "grass alone");
+    });
+
+    it("gives every land a colour over the grass, or none", () => {
+        for (const { id } of BIOMES) {
+            const [colour, amount] = LAND_COLOURS[id];
+
+            assert.match(colour, /^#[0-9a-f]{6}$/, id);
+            assert.ok(amount >= 0 && amount <= 1, id);
+        }
+
+        assert.equal(LAND_COLOURS.meadow[1], 0, "the grass as it is in meadows");
+        assert.ok(LAND_COLOURS.snow[1] > 0.9 && LAND_COLOURS.woods[1] < 0.5);
+    });
+});
+
+describe("the town's height maps (town3d.js heightMap)", () => {
+    it("covers the town where it's set in the world, and reads nothing outside it", () => {
+        const map = heightMap([100, 200, 30, 20]);
+
+        map.rows[5][7] = 6.5;
+        assert.equal(map.at(107.2, 205.9), 6.5);
+        assert.equal(map.at(99, 205), 0);
+        assert.equal(map.at(107, 221), 0);
+        assert.equal(map.rows.length, 20);
+        assert.equal(map.rows[0].length, 30);
     });
 });

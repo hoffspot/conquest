@@ -3,8 +3,8 @@
 The game is growing from one market town into a whole world, 8 kilometres square. It won't be
 built all at once: it's laid out first, from a seed, as a **plan** (`client/js/core/worldplan`).
 The plan says what every part of the world is: its land, who lives there, and what lies between.
-Later, the world will be built in chunks from the plan as the player comes near. Built again, the
-same seed gives the same chunk.
+The world is built from it in chunks as the player comes near (*The world in chunks*, below).
+Built again, the same seed gives the same chunk.
 
 The plan is pure data: typed arrays and plain objects, with no DOM or Three.js. So it runs in
 Node for the tests, and later in a worker. Laying one out takes about half a second to a second.
@@ -18,7 +18,7 @@ See it at <https://hoffspot.github.io/conquest/world-map.html> (or `npm start` a
 | --- | --- |
 | The world | 8,192 metres square (`WORLD_SIZE`), with the sea round it |
 | The plan's cells | 32 metres (`CELL`), 256 a side: every layer is one value a cell |
-| The chunks it will be built in | 64 metres (`CHUNK`), 128 a side |
+| The chunks it's built in | 64 metres (`CHUNK`), 128 a side, each 64 by 64 squares of 1 metre |
 
 **Layers** (one value per cell):
 
@@ -229,12 +229,45 @@ at the far side of the world.
   - choose which people to start as.
 - **Its address** remembers the seed and the people.
 
+## The world in chunks (`core/overworld.js`)
+
+`buildWorld({ seed, race })` lays out the plan, makes the town (`core/world.js`) and sets it in
+where a player of that people starts (`startFor`), and makes the world outside, `Overworld`: a
+map like any other (`core/grid.js`: blocked, opaque and ground for any square), all 8 km of it on
+1-metre squares, made a chunk at a time as it's needed and kept (the last 256 used: about 5 megabytes), the same
+every time it's made again. The game draws it round the player as they go (`world/chunks3d.js`:
+see GAME.md). Each square of a chunk comes from the plan's cell under it:
+
+- **The town**, where it's set in: its own squares, just as it was made.
+- **Lakes and the sea**, their shores blended from cell to cell across the cells' middles, a
+  little ragged.
+- **Rivers**: a line from each river cell to the cell it runs into (a lake or the sea beside it,
+  or the river cell beside it that more water runs through), wandering up to 7 metres from
+  straight, 3 to 10 metres wide, wider the more water runs in it.
+- **Roads**, along the plan's roads, smoothed from cell to cell (rounded twice at each corner):
+  trade roads 4.4 metres wide, roads 3.6, tracks 2.2. The roads from the town start from where
+  its streets leave it. Roads go round lakes, and cross rivers only on bridges: where a road runs
+  over a river (looked for every half metre along it), a straight deck from 1.5 metres onto one
+  bank to 1.5 metres onto the other, 0.4 metres wider each side than the road. Every square under
+  it can be walked over. Where roads share their way over a river, the widest of their bridges.
+- **The ground**: grass (drawn in each land's colours), soil in fields in farmland, road, planks
+  on bridges.
+- **Trees**, tried every 4 metres (a random way in): as many as the land has (`FLORA`, trees to
+  100 square metres: a wood 0.9, the darkwood 1.1, jungle 1.2, a meadow 0.25, farmland 0.12, the
+  badlands 0.04; beaches and water none), of its kinds (oak, beech, birch and apple in meadows;
+  spruce and pine in the darkwood). Each keeps 2 squares from roads and water, 3 metres from the
+  town, and 12 metres from the settlements, sites and camps still to be built; its trunk blocks
+  the four squares round its point, and can't be seen through. A chunk's trees come from its
+  own seed, the same random numbers used for every try, planted or not, so they're the same
+  whatever's made round them.
+
+Water can't be walked into, but can be seen over. A chunk takes about 3 to 5 ms to make in Node.
+
 ## Next
 
-This is step 1 of the world's first phase. The next steps:
+This is step 2 of the world's first phase. Step 1 was the plan; step 2 the chunks. The next
+steps:
 
-- **Chunks from the plan:** building 64-metre chunks from the plan's cells as the player comes
-  near, and letting them go as they leave, without loading screens.
 - **Places in chunks:** the settlements (the town builder, at each kind's size) and roads built
   in them.
 - **Camps and patrols in play:** enemies of each camp's tier, patrols that roam their range, and
@@ -247,6 +280,13 @@ Height on the ground (each cell's `height` shaping the land) is paused. Free ter
 navigation mesh isn't planned.
 
 ## Tests
+
+`test/overworld.test.js` checks the world in chunks: blocked off its edges; the same chunks
+however they're come to; the town set in just as it was made, with everything in it moved; its
+streets carried on as roads, water blocked but seen over, bridges walked over; trees as thick as
+their land has them, of its kinds, clear of roads and water; a way out of the town along the
+roads across many chunks, found quickly; the player walking out into the world; and chunks made
+quickly.
 
 `test/world-plan.test.js` checks, for three seeds:
 

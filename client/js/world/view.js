@@ -117,7 +117,7 @@ export class View {
         this.sunDirection = SUN_DIRECTION.clone();
         this.indoors = false;
 
-        this.camera = new THREE.PerspectiveCamera(36, 1, 0.3, 220);
+        this.camera = new THREE.PerspectiveCamera(36, 1, 0.3, 150);
         this.focus = new THREE.Vector3();
         this.distance = DISTANCE.start;
 
@@ -212,8 +212,9 @@ export class View {
     }
 
     /**
-     * The town's height maps ({ heights, buildings }: buildTown's), for seeing when anything
-     * hides the player, and coming in closer than buildings; null for none (indoors).
+     * The height maps ({ heights, buildings }, each with `at(x, z)`: how high what stands on a
+     * square is, metres: town3d.js heightMap's), for seeing when anything hides the player, and
+     * coming in closer than buildings; null for none (indoors).
      */
     setOccluders(town) {
         this.occluders = town?.heights ?? null;
@@ -239,7 +240,7 @@ export class View {
         const [x0, y0, z0] = [this.focus.x, this.focus.y + LOOK_UP, this.focus.z];
 
         for (let along = 0.4; along < distance + PULL.margin; along += 0.2) {
-            const height = heights[Math.floor(z0 + dz * along)]?.[Math.floor(x0 + dx * along)] ?? 0;
+            const height = heights.at(x0 + dx * along, z0 + dz * along);
 
             if (height > y0 + up * along - 0.3) {
                 return Math.max(0, along - PULL.margin);
@@ -430,7 +431,7 @@ export class View {
                 break;
             }
 
-            const height = heights[Math.floor(_point.z)]?.[Math.floor(_point.x)] ?? 0;
+            const height = heights.at(_point.x, _point.z);
 
             if (height > _point.y) {
                 return true;

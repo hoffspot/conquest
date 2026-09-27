@@ -24,6 +24,7 @@
 //
 // Everything comes from one seed, so a saved character always comes back to the same town.
 
+import { nearestFree } from "./grid.js";
 import { FACING, MAP_ORIGINS, tavernFloors, tavernFolk } from "./interiors.js";
 import { namePeople } from "./names.js";
 import { createRandom } from "./random.js";
@@ -284,26 +285,5 @@ export function tavernOf(town, origin) {
     };
 }
 
-/** The free square nearest a square (searching outward ring by ring). */
-export function nearestFree(blocked, [x, y]) {
-    const height = blocked.length;
-    const width = blocked[0].length;
-
-    for (let ring = 0; ring < Math.max(width, height); ring++) {
-        for (let dy = -ring; dy <= ring; dy++) {
-            for (let dx = -ring; dx <= ring; dx++) {
-                if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring) {
-                    continue;
-                }
-
-                const [cx, cy] = [x + dx, y + dy];
-
-                if (cx >= 0 && cy >= 0 && cx < width && cy < height && !blocked[cy][cx]) {
-                    return [cx, cy];
-                }
-            }
-        }
-    }
-
-    throw new Error("No free square in the world");
-}
+// (Where to find the free square nearest a square, as before)
+export { nearestFree };

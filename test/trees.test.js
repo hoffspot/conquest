@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { TREE_VARIANTS } from "../client/js/core/setpieces/pieces.js";
-import { growTree, KINDS, plantTrees, SPECIES, treeMaterials, VARIANTS } from "../client/js/world/art/kits/trees.js";
+import { growTree, KINDS, plantTrees, SPECIES, treeMaterials, VARIANTS, Woodland } from "../client/js/world/art/kits/trees.js";
 
 // The corners of a grown part: [x, y, z] for each vertex
 const points = ({ position }) => Array.from({ length: position.length / 3 }, (_, k) => position.slice(k * 3, k * 3 + 3));
@@ -178,5 +178,42 @@ describe("the trees (trees.js)", () => {
         const [kind, seed] = VARIANTS[3];
 
         assert.ok(boxes[1].max.y > growTree(kind, seed).height * 1.2, "the bigger one taller");
+    });
+
+    it("keeps each variant once in the world's woodland, drawing it wherever it's planted, and fells a lot at a time", () => {
+        const woodland = new Woodland();
+        const lot = (x0, count) => Array.from({ length: count }, (_, k) => ({ x: x0 + (k % 10) * 6, z: Math.floor(k / 10) * 6, variant: k % VARIANTS.length, size: 1 + (k % 3) * 0.1, turn: k }));
+        const first = woodland.plant(lot(0, 60));
+        const second = woodland.plant(lot(64, 60));
+
+        // Every variant's wood and leaves once, and a tree drawn for each planted
+        assert.equal(woodland.variants.size, VARIANTS.length);
+        assert.equal(woodland.planted, 120);
+        assert.equal(woodland.wood.instanceCount, 120);
+        assert.equal(woodland.wood.perObjectFrustumCulled, true, "only those in view drawn");
+        assert.ok(woodland.wood.castShadow && !woodland.leaves.castShadow);
+
+        // Each where it stands, on the ground, with its shells and patches alone in its lot
+        first.boxes.forEach((box, k) => {
+            const { x, z } = lot(0, 60)[k];
+
+            assert.ok(box.min.x < x && box.max.x > x && box.min.z < z && box.max.z > z && box.min.y === 0, `tree ${k}`);
+        });
+        assert.deepEqual(first.object.children.map(({ name }) => name), ["crown shadows", "litter"]);
+
+        // Felled, its trees are gone and its room used again; more than there's room for, and
+        // the batches grow
+        woodland.fell(first);
+        assert.equal(woodland.planted, 60);
+        assert.equal(first.object.parent, null);
+
+        const more = woodland.plant(lot(128, 3000));
+
+        assert.equal(woodland.planted, 3060);
+        assert.ok(woodland.wood.maxInstanceCount >= 3060);
+        woodland.fell(second);
+        woodland.fell(more);
+        assert.equal(woodland.planted, 0);
+        woodland.dispose();
     });
 });

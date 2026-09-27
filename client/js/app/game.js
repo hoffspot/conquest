@@ -9,9 +9,11 @@
 // Tap or click the ground to walk there, or an enemy to go and fight it, or a door or stairs to
 // go through them; drag to turn the camera round the player (or tilt it); pinch or scroll to zoom.
 //
-// The town and each floor of the tavern are maps of their own (core/interiors.js), drawn far
-// apart in the world (each at its origin), and only the one the player is on is shown: going
-// through a door or up the stairs, the screen dips to black and comes up on the other side.
+// The world outside (the town set in it: core/overworld.js) and each floor of the tavern are maps
+// of their own (core/interiors.js), drawn far apart (each at its origin), and only the one the
+// player is on is shown: going through a door or up the stairs, the screen dips to black and
+// comes up on the other side. The world outside is drawn a chunk at a time round the player
+// (world/chunks3d.js), as they go.
 
 import * as THREE from "three";
 import { DRAWS, FALL_LANDS, REACTIONS } from "../characters/actions.js";
@@ -20,6 +22,8 @@ import { FOLK, PRESETS } from "../characters/presets.js";
 import { Battle, hostile, STEP_MS, TALK_REACH } from "../core/battle.js";
 import { Conversation, treeFor } from "../core/dialogue.js";
 import { BECKON, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js";
+import { squaresOf } from "../core/grid.js";
+import { GROUND } from "../core/setpieces/pieces.js";
 import { CAST_FAILURES, SPELLS } from "../core/spells.js";
 import { Variety } from "../core/variety.js";
 import { distanceBetween, longestReach, WEAPONS } from "../core/weapons.js";
@@ -27,6 +31,7 @@ import { Avatar } from "../world/avatar.js";
 import { Effects, LOOKS } from "../world/effects.js";
 import { Squares } from "../world/squares.js";
 import { KINDS, Wounds } from "../world/wounds.js";
+import { Chunks, DECK, REACH } from "../world/chunks3d.js";
 import { buildGround } from "../world/ground.js";
 import { buildTown } from "../world/town3d.js";
 import { buildInterior, cutFor } from "../world/interiors3d.js";
@@ -121,7 +126,8 @@ export class Game {
      * @param {object} options
      * @param {import("../world/view.js").View} options.view
      * @param {object} options.kit - The character kit (characters/kit.js).
-     * @param {object} options.world - From generateWorld (core/world.js).
+     * @param {object} options.world - From buildWorld (core/overworld.js: the world, with the
+     *     town set in it), or generateWorld (core/world.js: the town on its own).
      * @param {object} options.hero - The player's character: { name, shape, look, weapon }.
      * @param {import("./hud.js").Hud} options.hud
      * @param {object} [options.talks] - What the folk remember of the player, and what the player
@@ -207,8 +213,9 @@ export class Game {
     }
 
     /**
-     * Build everything there is to see: the ground, the town, the player and the orc, and the
-     * shaders to draw them. `onProgress({ label, done, total })` hears how far it's got.
+     * Build everything there is to see: the world round the player (or the ground), the town,
+     * the player and the orc, and the shaders to draw them. `onProgress({ label, done, total })`
+     * hears how far it's got.
      */
     async build(onProgress = () => {}) {
         const { view, world, kit } = this;
@@ -223,25 +230,54 @@ export class Game {
         };
         const floors = Object.values(world.maps ?? {}).filter(({ id }) => id !== "town");
         const folk = world.folk ?? [];
-        const steps = world.town.pieces.length + world.trees.length + 6 + floors.length + folk.length;
+        const outside = Boolean(world.maps?.town?.chunk);
+        const chunks = outside ? (2 * REACH.drawn + 1) ** 2 : 0;
+        const steps = world.town.pieces.length + world.trees.length + chunks + 6 + floors.length + folk.length;
         let done = 0;
         const step = (label) => onProgress({ label, done: ++done, total: steps });
 
-        // The trees, for hearing their leaves
-        this.sound?.setTrees(treesOf(world).map(({ x, y }) => ({ x, z: y })));
-        onProgress({ label: "Laying the ground", done, total: steps });
-        this.ground = await time("ground", () => buildGround(world));
-        view.scene.add(this.ground);
+        // The town's trees, for hearing their leaves (and the world's, as it's drawn)
+        this.townTrees = treesOf(world).map(({ x, y }) => ({ x, z: y }));
+        this.sound?.setTrees(this.townTrees);
+        onProgress({ label: "Laying the land", done, total: steps });
+
+        if (outside) {
+            // The world round where the player starts, a chunk at a time (then more as they go)
+            const [x, y] = world.spawns.player;
+
+            this.chunks = new Chunks(world);
+            view.scene.add(this.chunks.object);
+            await time("chunks", async () => {
+                while (this.chunks.update(x + 0.5, y + 0.5)) {
+                    onProgress({ label: `Laying the land (${this.chunks.drawn.size} of ${chunks})`, done: ++done, total: steps });
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+            });
+            this.#hearTrees();
+        } else {
+            this.ground = await time("ground", () => buildGround(world));
+            view.scene.add(this.ground);
+        }
+
         step("Building the town");
+
+        const built = done;
 
         this.town = await time("town", () => buildTown(world, {
             onProgress: (count) => {
-                done = 1 + count;
+                done = built + count;
                 onProgress({ label: count < world.town.pieces.length ? `Building the town (${count} of ${world.town.pieces.length})` : `Planting trees (${count - world.town.pieces.length} of ${world.trees.length})`, done, total: steps });
             },
         }));
         view.scene.add(this.town.object);
-        view.setOccluders(this.town);
+
+        // What can stand between the camera and the player: the town's buildings and trees, and
+        // the world's trees round it
+        this.occluders = {
+            heights: { at: (x, z) => Math.max(this.town.heights.at(x, z), this.chunks?.heightAt(x, z) ?? 0) },
+            buildings: this.town.buildings,
+        };
+        view.setOccluders(this.occluders);
 
         // Inside the tavern, each floor put away until the player goes in; and its doors and stairs
         for (const map of floors) {
@@ -345,7 +381,7 @@ export class Game {
             const map = this.world.maps?.[mapId] ?? this.world;
             const [ox, oz] = this.originOf(mapId);
             const { x, z } = avatar.object.position;
-            const ground = map.ground[Math.floor(z - oz)]?.[Math.floor(x - ox)];
+            const ground = squaresOf(map).ground(Math.floor(x - ox), Math.floor(z - oz));
 
             this.sound?.step(ground, avatar.object.position, speed);
         };
@@ -419,6 +455,7 @@ export class Game {
         this.town?.object.traverse((node) => node.geometry?.dispose());
         this.ground?.geometry.dispose();
         this.ground?.material.dispose();
+        this.chunks?.dispose();
         this.effects?.group.traverse((node) => node.geometry?.dispose());
 
         // The interiors' merged meshes (their materials are shared by every game)
@@ -430,7 +467,7 @@ export class Game {
         this.interiors.clear();
         this.doors?.dispose();
 
-        for (const object of [this.ground, this.town?.object, this.effects?.group, this.effects?.marker, this.effects?.targetRing, this.squares?.object]) {
+        for (const object of [this.ground, this.town?.object, this.chunks?.object, this.effects?.group, this.effects?.marker, this.effects?.targetRing, this.squares?.object]) {
             object?.removeFromParent();
         }
 
@@ -449,11 +486,22 @@ export class Game {
         this.minimap?.show(on);
     }
 
-    /** Show the squares characters walk on, which are blocked, and everyone's path (debug mode). */
+    /**
+     * Show the squares characters walk on, which are blocked, and everyone's path (debug mode):
+     * out in the world, those round the player.
+     */
     showSquares(on) {
-        if (on && this.squares?.mapId !== this.mapId) {
+        const player = this.battle.actor("player");
+        const around = player ? [player.x, player.y] : null;
+
+        if (on && (this.squares?.mapId !== this.mapId || (around && this.squares.strayed(around)))) {
             this.squares?.object.removeFromParent();
-            this.squares = new Squares(this.world.maps?.[this.mapId] ?? this.world);
+            this.squares?.object.traverse((node) => {
+                node.geometry?.dispose();
+                node.material?.uniforms?.blocked?.value.dispose();
+                node.material?.dispose();
+            });
+            this.squares = new Squares(this.world.maps?.[this.mapId] ?? this.world, { around });
             this.view.scene.add(this.squares.object);
         }
 
@@ -561,7 +609,7 @@ export class Game {
 
             avatar.actions.setGuard(!actor.dead && actor.armed && this.#fighting(actor));
             avatar.update(dt, ox + x, oz + z, actor.facing, !actor.attack);
-            this.#updateBody(actor, avatar, dt);
+            this.#updateBody(actor, avatar, dt, this.#standsAt(actor.map, x, z));
             hud.setStamina(actor.id, actor.stamina, actor.maxStamina);
         }
 
@@ -613,7 +661,17 @@ export class Game {
         this.#drawMinimap(target);
 
         if (this.squares?.object.visible) {
+            this.showSquares(true);
             this.squares.update(battle);
+        }
+
+        // The world round the player, drawn as they go (a chunk a frame at most)
+        if (this.chunks && this.mapId === "town") {
+            const { x, z } = this.avatars.get("player").object.position;
+
+            if (this.chunks.update(x, z)) {
+                this.#hearTrees();
+            }
         }
         this.#follow(dt);
         this.#inside(dt);
@@ -659,13 +717,22 @@ export class Game {
         return this.battle.actors.some((other) => hostile(other, actor) && !other.dead && other.map === actor.map && Math.hypot(other.x - actor.x, other.y - actor.y) <= reach && this.battle.canSee(actor, other));
     }
 
-    // The dead lie still a while, then sink out of sight until they come back to life
-    #updateBody(actor, avatar, dt) {
+    // How high the ground is where someone stands on a map (metres): a bridge's deck, or the ground
+    #standsAt(mapId, x, y) {
+        const map = this.world.maps?.[mapId];
+
+        return map?.chunk && squaresOf(map).ground(Math.floor(x), Math.floor(y)) === GROUND.planks ? DECK.top : 0;
+    }
+
+    // Standing on the ground (stepping up onto a bridge's deck, and down off it); or, dead, lying
+    // still a while, then sinking out of sight until they come back to life
+    #updateBody(actor, avatar, dt, ground = 0) {
         const object = avatar.object;
 
         if (!actor.dead) {
             object.visible = true;
-            object.position.y = 0;
+            avatar.standing = (avatar.standing ?? ground) + (ground - (avatar.standing ?? ground)) * Math.min(1, dt * 12);
+            object.position.y = avatar.standing;
 
             return;
         }
@@ -1023,7 +1090,12 @@ export class Game {
 
         this.mapId = mapId;
         this.town.object.visible = !interior;
-        this.ground.visible = !interior;
+
+        for (const outside of [this.ground, this.chunks?.object]) {
+            if (outside) {
+                outside.visible = !interior;
+            }
+        }
 
         // Everyone else here where they are now (they weren't moved while out of sight)
         for (const actor of this.battle.actors) {
@@ -1037,7 +1109,7 @@ export class Game {
         }
 
         this.view.setIndoors(interior);
-        this.view.setOccluders(interior ? null : this.town);
+        this.view.setOccluders(interior ? null : this.occluders);
         this.minimap?.setMap(this.world.maps[mapId]);
 
         // The tavern's music inside, heard through the floor upstairs; the town's out; and the
@@ -1052,6 +1124,11 @@ export class Game {
         if (this.squares?.object.visible) {
             this.showSquares(true);
         }
+    }
+
+    // The trees whose leaves can be heard: the town's, and those of the world drawn round it
+    #hearTrees() {
+        this.sound?.setTrees([...this.townTrees, ...(this.chunks?.trees() ?? [])]);
     }
 
     // Indoors: the walls and anything tall in front of the player cut away, the fires and

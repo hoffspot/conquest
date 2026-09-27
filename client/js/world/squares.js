@@ -1,9 +1,14 @@
-// Debug mode's view of the squares characters walk on, on one map (the town, or a floor of the
-// tavern): a grid over the ground, the blocked squares tinted (red where they hide what's behind
-// them too, amber where they can be seen over), and the path ahead of each character there as a
-// line (the player's gold, the others' red).
+// Debug mode's view of the squares characters walk on, on one map (the world outside, or a floor
+// of the tavern): a grid over the ground, the blocked squares tinted (red where they hide what's
+// behind them too, amber where they can be seen over), and the path ahead of each character there
+// as a line (the player's gold, the others' red). Out in the world, only the squares round the
+// player (WINDOW), shown afresh when they've gone far enough.
 
 import * as THREE from "three";
+import { squaresOf } from "../core/grid.js";
+
+/** How many squares across are shown of a map bigger than that (round a point). */
+export const WINDOW = 160;
 
 const VERTEX = /* glsl */ `
 varying vec2 vSquare;
@@ -30,15 +35,31 @@ void main() {
 const PATH_POINTS = 512;
 
 export class Squares {
-    /** @param {object} map - One of generateWorld's maps (core/world.js): the town, or a floor inside. */
-    constructor(map) {
-        const { width, height, blocked, opaque = blocked, origin = [0, 0], id = "town" } = map;
+    /**
+     * @param {object} map - One of the world's maps (the world outside, or a floor inside).
+     * @param {object} [options]
+     * @param {number[]} [options.around] - Where to show the squares round ([x, y]), on a map
+     *     more than WINDOW squares across.
+     */
+    constructor(map, { around = null } = {}) {
+        const { origin = [0, 0], id = "town" } = map;
+        const squares = squaresOf(map);
+        const whole = squares.width <= WINDOW && squares.height <= WINDOW;
+        const [cx, cy] = around ?? [squares.width / 2, squares.height / 2];
+        const x0 = whole ? 0 : Math.max(0, Math.min(squares.width - WINDOW, Math.round(cx - WINDOW / 2)));
+        const y0 = whole ? 0 : Math.max(0, Math.min(squares.height - WINDOW, Math.round(cy - WINDOW / 2)));
+        const width = whole ? squares.width : WINDOW;
+        const height = whole ? squares.height : WINDOW;
         const data = new Uint8Array(width * height * 4);
+
+        /** The squares shown: [x0, y0, width, height] (all of them, or a window). */
+        this.window = [x0, y0, width, height];
+        this.whole = whole;
 
         for (let y = 0; y < height; y++) {
             for (let x = 0; x < width; x++) {
-                if (blocked[y][x]) {
-                    data.set(opaque[y][x] ? [235, 70, 50, 110] : [240, 170, 40, 100], (y * width + x) * 4);
+                if (squares.blocked(x0 + x, y0 + y)) {
+                    data.set(squares.opaque(x0 + x, y0 + y) ? [235, 70, 50, 110] : [240, 170, 40, 100], (y * width + x) * 4);
                 }
             }
         }
@@ -57,6 +78,7 @@ export class Squares {
         }));
 
         grid.renderOrder = 2;
+        grid.position.set(x0, 0, y0);
 
         const positions = new Float32Array(PATH_POINTS * 2 * 3);
         const colours = new Float32Array(PATH_POINTS * 2 * 3);
@@ -76,6 +98,16 @@ export class Squares {
 
         /** Which map it's of. */
         this.mapId = id;
+    }
+
+    /**
+     * Whether a point on its map ([x, y]) is far enough from the middle of the window shown to
+     * show another round it (never, if all the map's shown).
+     */
+    strayed([x, y]) {
+        const [x0, y0, width, height] = this.window;
+
+        return !this.whole && Math.abs(x - (x0 + width / 2)) > width / 4 || Math.abs(y - (y0 + height / 2)) > height / 4;
     }
 
     /** Draw the path of each character on its map, from where it is through the squares ahead of it. */

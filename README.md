@@ -3,19 +3,21 @@
 [![CI](https://github.com/hoffspot/conquest/actions/workflows/ci.yml/badge.svg)](https://github.com/hoffspot/conquest/actions/workflows/ci.yml)
 
 **Pellagos**: make a character, choose a weapon, and defend a market town from the orc that
-prowls its fields. It's drawn in real-time 3D with [Three.js](https://threejs.org), plays in the
+prowls its fields, then walk out of it into the world round it: 8 kilometres of fields, woods,
+rivers and roads, drawn round you as you go, with no loading screens. It's drawn in real-time 3D with [Three.js](https://threejs.org), plays in the
 browser on phones, tablets and computers, and can be installed as an app.
 
 **Play it at <https://hoffspot.github.io/conquest/>.** The character lab, for building and
 dressing characters and watching them walk and fight, is at
 <https://hoffspot.github.io/conquest/character-lab.html>. The world map, showing the whole world
-the game is growing into (8 kilometres square: six peoples, their cities, towns and villages, the
+(8 kilometres square: six peoples, their cities, towns and villages, the
 roads between them, and the ruins, caves and enemy camps in the wild), is at
 <https://hoffspot.github.io/conquest/world-map.html>.
 
 [docs/GAME.md](docs/GAME.md) describes how the game works: the world, the fighting, the drawing,
 the screens and debug mode. [docs/CHARACTERS.md](docs/CHARACTERS.md) describes the character
-engine, and [docs/WORLD.md](docs/WORLD.md) the world plan.
+engine, and [docs/WORLD.md](docs/WORLD.md) the world: its plan, and how it's built from it in
+chunks.
 
 ## How to play
 
@@ -169,9 +171,15 @@ They remember you, and what you've asked; and what you learn from one, another m
 know. Choices that would cost something or change the world (buying, renting, taking on a job)
 are there, but for now only the talk goes on. Walk off, or press Escape, to stop.
 
-**The minimap**, in the top right under the menu button, shows the whole of where you are from
-above: out in the town, its roads, roofs and trees; inside, the floor, walls, furniture and
-stairs. On it are what the camera can see, you (an arrow pointing the way you face), where
+**Out of the town.** Its streets carry on as roads into the world round it, over rivers on
+bridges, through fields, meadows and woods; walk anywhere you can, as far as you like. The world
+is drawn round you as you go, with no loading screens: only its far edge in the fog is ever
+being built. For now it's the land alone: the other settlements, the ruins and the enemy camps
+the world map shows are still to come.
+
+**The minimap**, in the top right under the menu button, shows where you are from above: out in
+the world, the 128 metres or so round you, its roads, rivers, roofs and trees; inside, the
+whole floor, its walls, furniture and stairs. On it are what the camera can see, you (an arrow pointing the way you face), where
 you're going, and the orc when it's where you are (red; ringed when it's your target). Tap it to
 walk there, or tap the orc on it to go and fight it; double-tap to run.
 
@@ -316,14 +324,18 @@ client/                 The game (static files served to the browser)
     doors.js            The doors and stairs to tap, and the green glow round them
     hud.js              Health, stamina, names, damage numbers and messages over the game
     wheel.js            The action wheel: hold, flick, cooldowns; icons.js draws its icons
-    minimap.js          The minimap: the map the player is on from above, with everyone on it
+    minimap.js          The minimap: the map the player is on from above (out in the world, the
+                        patch round them), with everyone on it
     debug.js            Debug mode's overlay
     talk.js             The talk: who's talking, what they say, and the replies to choose from
     save.js             The saved character, what's been said, and settings (local storage)
     device.js           Full screen and the service worker
   js/core/              The rules. No DOM or Three.js, so they also run in Node
-    world.js            The world: a town on 1-metre squares, fields, trees, where everyone starts,
-                        the tavern, and its maps and the links between them
+    overworld.js        The world: 8 km of it on 1-metre squares, made a chunk at a time from its
+                        plan, with the town set in where the player starts
+    world.js            The town: on 1-metre squares, fields, trees, where everyone starts, the
+                        tavern, and its maps and the links between them
+    grid.js             Reading any map's squares (blocked, opaque, ground), in rows or chunks
     interiors.js        Inside buildings: the tavern's floors, drawn as plans of their squares
     battle.js           Moving, fighting, damage, dying and coming back; the orc's patrol
     weapons.js          The weapons and their attacks
@@ -331,7 +343,7 @@ client/                 The game (static files served to the browser)
     roles.js            Classes of people (barkeep, patron...): their titles and five rests each
     dialogue.js         Conversations: trees of what's said and the replies, conditions, effects
     names.js            People's names, drawn from the world's seed
-    pathfinding.js      A* paths on the squares
+    pathfinding.js      A* paths on the squares (in a window round the way, on a big map)
     variety.js          Choosing one of a few ways of doing something, never the last one again
     random.js           Seeded random numbers
     setpieces/          Town (and castle) layouts, and the pieces they're made from
@@ -345,7 +357,9 @@ client/                 The game (static files served to the browser)
   js/world/             Drawing the world
     view.js             The renderer, lights, sky, the camera (clear of buildings), quality
                         levels, the cutaway
-    ground.js           The ground: textures blended square by square
+    ground.js           The ground: textures blended square by square, in each land's colours
+    chunks3d.js         The world round the player, a chunk at a time as they go: ground, water,
+                        bridges and trees
     town3d.js           The town's buildings, props and trees, merged into few meshes
     interiors3d.js      Inside the tavern: its rooms and furniture, the fire, the boar on its
                         spit, and taking down the walls between the camera and the player
@@ -378,7 +392,7 @@ scripts/                vendor-three.js, build-characters.js, build-manifest.js,
 .github/workflows/      CI (ci.yml) and publishing to GitHub Pages (pages.yml)
 docs/GAME.md            How the game works
 docs/CHARACTERS.md      The character engine, and the research behind it
-docs/WORLD.md           The world plan: the whole world laid out from a seed
+docs/WORLD.md           The world: laid out from a seed as a plan, and built from it in chunks
 docs/MODERNIZATION.md   The history: the book's Last Colony, modernized, before Pellagos replaced it
 ```
 
