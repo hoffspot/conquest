@@ -38,16 +38,21 @@ const catalog = new Map(pieceCatalog().map((piece) => [piece.key, piece]));
  */
 export const CUTAWAY = Object.freeze({ centre: { value: new THREE.Vector3() }, radius: { value: 0 } });
 
+// What the camera pulls in closer than, rather than looking through (view.js): what's built,
+// not the props (carts, wells, stalls) or the trees
+const BUILT = new Set(["house", "landmark", "wall", "tower", "gatehouse", "keep"]);
+
 /**
  * Build the town and the trees round it: { object: a Group (in metres) of merged meshes, heights:
- * the height of whatever stands on each square, heights[y][x], in metres }. `onProgress(done,
- * total)` hears as each piece is built.
+ * the height of whatever stands on each square, heights[y][x], in metres, and buildings: the
+ * same for what's built alone (BUILT) }. `onProgress(done, total)` hears as each piece is built.
  */
 export async function buildTown(world, { onProgress = () => {} } = {}) {
     const art = new THREE.Group();
     const origin = world.origin / PIXEL;
     const total = world.town.pieces.length + world.trees.length;
     const heights = Array.from({ length: world.height }, () => new Float32Array(world.width));
+    const buildings = Array.from({ length: world.height }, () => new Float32Array(world.width));
     let done = 0;
 
     art.scale.setScalar(PIXEL);
@@ -79,6 +84,7 @@ export async function buildTown(world, { onProgress = () => {} } = {}) {
             object.position.set(origin + piece.x * 20, 0, origin + piece.y * 20);
         }
 
+        object.userData.built = BUILT.has(spec.kind);
         art.add(object);
         onProgress(++done, total);
         await breathe();
@@ -115,6 +121,10 @@ export async function buildTown(world, { onProgress = () => {} } = {}) {
         for (let y = Math.max(0, Math.floor(box.min.z)); y < Math.min(world.height, Math.ceil(box.max.z)); y++) {
             for (let x = Math.max(0, Math.floor(box.min.x)); x < Math.min(world.width, Math.ceil(box.max.x)); x++) {
                 heights[y][x] = Math.max(heights[y][x], box.max.y);
+
+                if (object.userData.built) {
+                    buildings[y][x] = Math.max(buildings[y][x], box.max.y);
+                }
             }
         }
     }
@@ -127,7 +137,7 @@ export async function buildTown(world, { onProgress = () => {} } = {}) {
         cutAway(mesh.material);
     }
 
-    return { object, heights };
+    return { object, heights, buildings };
 }
 
 // Trees in a band round the outside of the map (metres), clear of the roads leaving it
