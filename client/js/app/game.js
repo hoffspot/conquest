@@ -30,6 +30,7 @@ import { KINDS, Wounds } from "../world/wounds.js";
 import { buildGround } from "../world/ground.js";
 import { buildTown } from "../world/town3d.js";
 import { buildInterior, cutFor } from "../world/interiors3d.js";
+import { TREE_WIND } from "../world/art/kits/trees.js";
 import { Minimap, treesOf } from "./minimap.js";
 import { CameraFollow } from "./camera.js";
 import { Doors } from "./doors.js";
@@ -542,6 +543,7 @@ export class Game {
         const { battle, view, hud } = this;
 
         this.clock += dt;
+        TREE_WIND.time.value = this.clock;
 
         for (const actor of battle.actors) {
             const avatar = this.avatars.get(actor.id);

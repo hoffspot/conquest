@@ -1,6 +1,7 @@
 // The town in 3D: every piece of the town's plan (houses, the tavern, church and blacksmith, props,
 // trees) built by the art kits (art/kits), with the trees in the fields round it, merged into as
-// few meshes as possible.
+// few meshes as possible (the trees a tile of the map at a time, so those out of view aren't
+// drawn: trees.js).
 //
 // The kits build in the art's world pixels (a plan square is 20, x east, y up and z south), and
 // the world is in metres, so the town is scaled by PIXEL: a plan square is PLOT (4) metres, a door
@@ -20,6 +21,7 @@ import { gatehouse, keep, tower, wall } from "./art/kits/castle.js";
 import { house } from "./art/kits/house.js";
 import { landmark } from "./art/kits/landmarks.js";
 import { prop, tree } from "./art/kits/town.js";
+import { plantTrees } from "./art/kits/trees.js";
 
 /** Metres per art world pixel. */
 export const PIXEL = PLOT / 20;
@@ -66,8 +68,21 @@ export async function buildTown(world, { onProgress = () => {} } = {}) {
         }
     };
 
+    // The trees, planted together at the end (trees.js: merged a tile at a time), each turned
+    // and sized a little differently: in the town, in the fields, and in the forest round them
+    const planted = [];
+    const random = createRandom(world.seed * 13 + 5);
+    const plant = (x, z, variant, size) => planted.push({ x, z, variant, size: size * random.range(0.9, 1.1), turn: random.next() * Math.PI * 2 });
+
     for (const piece of world.town.pieces) {
         const spec = catalog.get(piece.key);
+
+        if (spec.kind === "tree") {
+            plant(world.origin + (piece.x + 0.5) * PLOT, world.origin + (piece.y + 0.5) * PLOT, spec.variant, 0.9);
+            onProgress(++done, total);
+            continue;
+        }
+
         const built = await BUILDERS[spec.kind](spec);
         let object = built;
 
@@ -90,52 +105,51 @@ export async function buildTown(world, { onProgress = () => {} } = {}) {
         await breathe();
     }
 
-    // Field trees stand on their trunk's point, where four squares meet (the kit centres a tree
-    // in a 20-pixel square)
+    // Field trees stand on their trunk's point, where four squares meet
     for (const { x, y, variant } of world.trees) {
-        const object = await tree({ variant });
-
-        object.position.set(x / PIXEL - 10, 0, y / PIXEL - 10);
-        art.add(object);
+        plant(x, y, variant, 1);
         onProgress(++done, total);
-        await breathe();
     }
 
     // A forest round the map's edge, where no one can go, leaving the roads' ways out clear
     for (const { x, y, variant, size } of borderTrees(world)) {
-        const object = await tree({ variant });
-
-        object.scale.setScalar(size);
-        object.position.set(x / PIXEL - 10 * size, 0, y / PIXEL - 10 * size);
-        art.add(object);
+        plant(x, y, variant, size);
     }
+
+    await breathe();
+
+    const trees = plantTrees(planted);
 
     art.updateMatrixWorld(true);
 
     // How high everything stands on each square
-    const box = new THREE.Box3();
-
-    for (const object of art.children) {
-        box.setFromObject(object);
-
+    const stand = (box, built) => {
         for (let y = Math.max(0, Math.floor(box.min.z)); y < Math.min(world.height, Math.ceil(box.max.z)); y++) {
             for (let x = Math.max(0, Math.floor(box.min.x)); x < Math.min(world.width, Math.ceil(box.max.x)); x++) {
                 heights[y][x] = Math.max(heights[y][x], box.max.y);
 
-                if (object.userData.built) {
+                if (built) {
                     buildings[y][x] = Math.max(buildings[y][x], box.max.y);
                 }
             }
         }
+    };
+
+    for (const object of art.children) {
+        stand(new THREE.Box3().setFromObject(object), object.userData.built);
     }
+
+    trees.boxes.forEach((box) => stand(box, false));
 
     const object = merge(art);
 
     object.name = "town";
 
-    for (const mesh of object.children) {
+    for (const mesh of [...object.children, ...trees.object.children]) {
         cutAway(mesh.material);
     }
+
+    object.add(trees.object);
 
     return { object, heights, buildings };
 }
@@ -175,8 +189,13 @@ function cutAway(material) {
         return;
     }
 
+    // (After whatever the material does to its shader already: a tree's leaves' lighting)
+    const before = material.onBeforeCompile.bind(material);
+    const key = material.customProgramCacheKey();
+
     material.userData.cutAway = true;
-    material.onBeforeCompile = (shader) => {
+    material.onBeforeCompile = (shader, renderer) => {
+        before(shader, renderer);
         shader.uniforms.cutCentre = CUTAWAY.centre;
         shader.uniforms.cutRadius = CUTAWAY.radius;
         shader.fragmentShader = shader.fragmentShader
@@ -189,7 +208,7 @@ if (cutRadius > 0.0 && gl_FragCoord.z < cutCentre.z) {
     if (r < 1.0 && dither > smoothstep(0.55, 1.0, r)) discard;
 }`);
     };
-    material.customProgramCacheKey = () => "cutAway";
+    material.customProgramCacheKey = () => `cutAway|${key}`;
     material.needsUpdate = true;
 }
 

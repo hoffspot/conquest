@@ -17,7 +17,7 @@ engine.
 ## How to play
 
 **Loading.** The first screen lists everything the game downloads (about 3 MB: the 3D engine,
-the game's code, the body characters are made from, its skin details, and the props and trees),
+the game's code, the body characters are made from, its skin details, and the props),
 with a bar for each and one for the whole. Then the title screen offers to **Continue** with your
 character, or make a **New character**.
 
@@ -101,6 +101,11 @@ from the worst, splashes the ground and, once they're badly hurt, drips from the
 trail; the fallen lie in a spreading pool. Clothes are cut, torn and burnt through where they're
 hit, showing the wound beneath. Healing back above a threshold heals that stage's wounds and
 marks (all of them, at full health); coming back to life, all of them.
+
+**Trees** stand about the town and its fields, and a forest round them: oaks with crooked,
+spreading limbs, smooth grey beeches, white birches with drooping twigs, Scots pines on bare
+orange trunks, spruces in tiers, tall poplars, and little apple trees, every one grown a little
+differently, their leaves stirring in the breeze.
 
 An orc patrols the fields from the north-west corner, halfway down the west side and back. When
 it sees you (within 12 metres, with nothing in the way: walls, houses and trees hide you, a well,
@@ -288,7 +293,7 @@ client/                 The game (static files served to the browser)
   sw.js                 Service worker: keeps a copy of the game for offline play
   characters/           The body characters are made from (made by npm run build:characters),
                         MakeHuman's texture masks, and motion capture clips
-  models/kaykit/        Props and trees (KayKit Medieval Hexagon, CC0)
+  models/kaykit/        Props (KayKit Medieval Hexagon, CC0)
   fonts/                UnifrakturMaguntia, the blackletter of the tavern's signs (SIL OFL)
   music/                The music's instruments: short recordings of real ones, as MP3s (made by
                         npm run build:music from the Versilian Community Sample Library, CC0)
@@ -368,7 +373,7 @@ docs/MODERNIZATION.md   The history: the book's Last Colony, modernized, before 
 
 ## Credits and license
 
-- Props and trees: the KayKit Medieval Hexagon Pack by Kay Lousberg
+- Props: the KayKit Medieval Hexagon Pack by Kay Lousberg
   (<https://kaylousberg.com>), CC0 (`client/models/kaykit/LICENSE.txt`).
 - Characters: the body, its shapes, skeleton and skin weights, the texture masks and the walk and
   zombie walk motion capture clips are from MakeHuman (<https://github.com/makehumancommunity>),

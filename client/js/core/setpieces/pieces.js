@@ -63,8 +63,11 @@ export const PROPS = Object.freeze({
     tent: [2, 2],
 });
 
-/** How many different trees there are (each fills one square). */
-export const TREE_VARIANTS = 6;
+/**
+ * How many different trees there are (each fills one square): each a kind of tree grown one way
+ * (world/art/kits/trees.js VARIANTS).
+ */
+export const TREE_VARIANTS = 24;
 
 /** What the ground is, square by square. */
 export const GROUND = Object.freeze({ grass: 0, road: 1, cobbles: 2, soil: 3, courtyard: 4, planks: 5 });

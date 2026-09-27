@@ -422,8 +422,38 @@ The art kits build every piece of the town's plan in the art's world pixels, fiv
   trough; a market hall on stone columns with stalls of produce beneath; a windmill with a
   thatched cap and four sails. (KayKit's buildings were tried first, but they're toy-like: their
   doors are twice a person's height.)
-- **Props and trees** (kits/town.js) are KayKit's models, sized to what they are: barrels 95 cm
-  tall, crates 85, a wheelbarrow 1.6 metres long, a well 3.4 metres tall, trees 7 to 10.
+- **Props** (kits/town.js) are KayKit's models, sized to what they are: barrels 95 cm tall,
+  crates 85, a wheelbarrow 1.6 metres long, a well 3.4 metres tall.
+- **Trees** (kits/trees.js) are grown for the game, nothing to download: seven kinds, each grown
+  several ways (24 variants in all, each from its own seed, so the same every time), each tree
+  where it stands turned its own way and a little bigger or smaller.
+
+  | Kind | How it grows | Height |
+  | --- | --- | --- |
+  | Oak | A short trunk splitting into crooked, spreading limbs; a broad crown of lobed leaves; dark furrowed bark | 7 to 9 m |
+  | Beech | A tall smooth grey trunk; boughs in a dome; bright oval leaves | 8 to 10 m |
+  | Birch | A slender white trunk with black marks; arching boughs, drooping twigs, small pale leaves | 7.5 to 9.5 m |
+  | Scots pine | A bare trunk, orange and scaly higher up; a flat crown of upturned boughs, needles in tufts | 8.5 to 10.5 m |
+  | Spruce | Whorls of boughs in tiers to a point, drooping, needles in flat sprays | 7.5 to 9.5 m |
+  | Lombardy poplar | Short boughs straight up, a column | 9.5 to 12 m |
+  | Apple | Low and twisted, a round crown, apples among the leaves | 4 to 5 m |
+
+  A tree grows as a trunk that tapers from a flared foot and leans a little; boughs round it
+  (by the golden angle, or in whorls), as long as the kind's crown shape says for how far up
+  they are, bending up to the light or down under their weight (resting on the ground rather
+  than going into it) and crooked; and branches on those. The wood is tubes, their bark running
+  up them; the leaves are cards (squares with a picture of a cluster of leaves on a twig, or a
+  spray or tuft of needles) round the branches' ends, turned every which way (a spruce's lying
+  level along its boughs), lit as if the crown were one rounded mass (their normals point out
+  from its middle, and they're lit the same from either side), darker deep inside it, and each a
+  little warmer or cooler. About 1,600 triangles a tree on average. The bark's and the leaves'
+  pictures are drawn on canvases when the game starts (each kind's side by side on one picture),
+  so every tree shares two materials. The leaves stir in a breeze (`TREE_WIND`: each part of a
+  crown in its own time, more the higher up), and anything of a tree within 3 to 7 metres of the
+  camera fades out in a dithered pattern, so the camera never looks through a wall of leaves.
+  Planted (`plantTrees`), the trees are merged a tile of the map 24 metres square at a time, so
+  the camera and the sun's shadows draw only the tiles in view (about 250,000 to 300,000
+  triangles a frame, shadows included, on the market square or at the forest's edge).
 - **A forest** round the outside of the map, leaving the roads' ways out clear.
 
 Textures are sized in metres too: bricks courses of 10 cm, slates of 15, stone courses of 35.
@@ -738,7 +768,7 @@ closes it.
    six files at a time, reading each as it arrives. The bar shows the bytes downloaded out of the
    total (the files' sizes on disk, which is what arrives, whatever compression the server uses),
    and each group of files has its own row and bar: the 3D engine, the game's code, the body and
-   its shapes, its skin details, and the props and trees. The data is kept in memory and handed
+   its shapes, its skin details, and the props. The data is kept in memory and handed
    to the character kit and the model loader from there; the code is imported from the browser's
    cache. Then the last part of the bar is starting the 3D view and unpacking the body. Nothing
    before the loader imports Three.js, so the engine's download is counted too.

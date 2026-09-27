@@ -28,7 +28,7 @@ describe("the loader's manifest (client/js/app/manifest.js)", () => {
 
         const paths = MANIFEST.flatMap(({ files }) => files.map(([path]) => path));
 
-        for (const needed of ["vendor/three-r186/three.module.min.js", "vendor/three-r186/three.core.min.js", "js/app/game.js", "js/app/creator.js", "characters/human.bin", "characters/masks/lips.jpg", "models/kaykit/tree_single_A.bin", "fonts/UnifrakturMaguntia.woff2"]) {
+        for (const needed of ["vendor/three-r186/three.module.min.js", "vendor/three-r186/three.core.min.js", "js/app/game.js", "js/app/creator.js", "characters/human.bin", "characters/masks/lips.jpg", "models/kaykit/barrel.bin", "fonts/UnifrakturMaguntia.woff2"]) {
             assert.ok(paths.includes(needed), needed);
         }
 
