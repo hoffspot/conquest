@@ -498,8 +498,10 @@ The art kits build every piece of the town's layout in the art's world pixels, f
 facing south; each is turned about its middle to face the way the layout says:
 
 - **Houses** (kits/house.js) in four styles (whitewashed cottages with thatch, timber-framed,
-  brick, stone), one or two storeys of about 3.5 metres, with 2-metre doors and 1-metre windows
-  on their south sides, where the camera sees them.
+  brick, stone), storeys of about 3.5 metres, with 2-metre doors and 1-metre windows on their
+  fronts. Half the houses standing on 64 square metres or more have a second storey: few in a
+  village, more in a town and most in a city, where the houses are bigger. Back buildings are
+  one storey.
 - **Special buildings** (kits/landmarks.js): a two-storey tavern with a jettied, timber-framed
   upper floor, its name, *Wenches and Ale*, in gold blackletter (UnifrakturMaguntia, kits/signs.js,
   loaded as a web font) on an oxblood board along its front, and a hanging sign painted on a
@@ -572,8 +574,8 @@ The world round the town, its trees too, is drawn a chunk at a time (world/chunk
 
 Textures are sized in metres too: bricks courses of 10 cm, slates of 15, stone courses of 35.
 Everything that doesn't move is merged into one mesh per material, so the whole town draws in a
-few dozen draw calls (about 40,000 triangles), however many houses it has. While it's built,
-`buildTown` also records how tall whatever stands on each of the town's squares is (a
+few dozen draw calls (about 8,000 to 10,000 triangles), however many houses it has. While it's
+built, `buildTown` also records how tall whatever stands on each of the town's squares is (a
 `heightMap`, read anywhere with `at(x, z)`; a building over the squares under it and its eaves,
 as it's turned, not its turned box), for the cutaway.
 
@@ -947,7 +949,7 @@ casts shadows, and show the squares characters walk on (blocked ones red) with e
 
 ## Performance
 
-A frame draws the town (a few dozen draw calls, about 40,000 triangles), the ground (one draw
+A frame draws the town (a few dozen draw calls, about 8,000 to 10,000 triangles), the ground (one draw
 call) and two characters (a body, garments and hair each, about 35,000 to 45,000 triangles at
 the game's hair detail), and again from the sun for shadows. In the taproom there are nine
 characters (the folk casting no shadows): about 220 draw calls and 630,000 triangles; only the
