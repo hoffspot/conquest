@@ -29,7 +29,7 @@ import { Squares } from "../world/squares.js";
 import { KINDS, Wounds } from "../world/wounds.js";
 import { buildGround } from "../world/ground.js";
 import { buildTown } from "../world/town3d.js";
-import { buildInterior, INTERIOR_CUT } from "../world/interiors3d.js";
+import { buildInterior, cutFor } from "../world/interiors3d.js";
 import { Minimap, treesOf } from "./minimap.js";
 import { CameraFollow } from "./camera.js";
 import { Doors } from "./doors.js";
@@ -1052,7 +1052,7 @@ export class Game {
         }
     }
 
-    // Indoors: the walls and ceilings between the camera and the player cut away, the fires and
+    // Indoors: the walls and anything tall in front of the player cut away, the fires and
     // the spit turning, the lamps flickering, embers rising from the hearth; and, in or out, the
     // glow round the doors and stairs the player's making for
     #inside(dt) {
@@ -1060,11 +1060,7 @@ export class Game {
         const player = this.battle.actor("player");
 
         if (interior) {
-            const me = this.avatars.get("player").object.position;
-            const camera = this.view.camera.position;
-
-            INTERIOR_CUT.player.value.copy(me);
-            INTERIOR_CUT.toCamera.value.set(camera.x - me.x, camera.z - me.z).normalize();
+            cutFor(interior.map, this.avatars.get("player").object.position, this.view.camera.position);
             interior.update(dt, this.clock);
             this.view.flicker(this.clock);
 

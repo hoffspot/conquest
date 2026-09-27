@@ -123,9 +123,10 @@ wall. **Tap the stairs** to go up to the floor above, a brothel: the madam's vel
 counter, a chaise longue by a side table with wine and candles, and a wide hallway to four
 bedrooms through curtained doorways, each with a canopied bed, a washstand and a chest. Tap the stairwell there to come down, and the
 inside of the door to go out again. Each floor is a map of its own: going through, the screen
-dips to black and comes up on the other side. Indoors, the walls between you and the camera are
-taken down to their stone footing (and anything else higher than your head), like a doll's
-house's, so you can always see yourself, whichever way the camera looks. If the orc is chasing you when you go in, it follows you through the door and up the
+dips to black and comes up on the other side. Indoors, the walls just in front of you, between
+you and the camera, are taken down to their stone footing (and anything else higher than your
+head there), so you can always see yourself whichever way the camera looks, while the rest of
+the walls stand. If the orc is chasing you when you go in, it follows you through the door and up the
 stairs, and the fight carries on; and if you're set to fight something that goes through a door,
 you go after it.
 

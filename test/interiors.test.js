@@ -7,6 +7,7 @@ import { Doors } from "../client/js/app/doors.js";
 import { Battle, STEP_MS } from "../client/js/core/battle.js";
 import { FACING, linkAt, MAP_ORIGINS, readPlan, routeBetween, tavernFloors, tavernFolk } from "../client/js/core/interiors.js";
 import { findPath } from "../client/js/core/pathfinding.js";
+import { cutFor, cutsAway, doorways } from "../client/js/world/interiors3d.js";
 import { BECKON, REST_EVERY, ROLES } from "../client/js/core/roles.js";
 import { generateWorld } from "../client/js/core/world.js";
 
@@ -664,5 +665,61 @@ describe("the doors and stairs to tap (doors.js)", () => {
         assert.ok(target.level > 0 && target.level < 1);
         doors.update(1, 21, { map: "town" });
         assert.ok(!target.glow.visible);
+    });
+});
+
+describe("seeing the player indoors (interiors3d.js)", () => {
+    const { upstairs } = tavernFloors();
+    const [ox, oz] = upstairs.origin;
+    const at = (x, y, z) => [ox + x, y, oz + z];
+
+    // The player in the hallway, halfway along it, the camera to the south of them
+    const standing = () => cutFor(upstairs, new THREE.Vector3(ox + 10.5, 0, oz + 7.5), new THREE.Vector3(ox + 10.5, 7, oz + 15));
+
+    it("takes down the walls in front of the player, a strip about five metres wide from them to the camera, and leaves every other wall standing", () => {
+        standing();
+
+        // The hallway's south wall, just in front of them: down, from the floor up
+        assert.equal(cutsAway(at(10.5, 0.5, 9.5), { wall: true }), true);
+        assert.equal(cutsAway(at(10.5, 2.8, 9.5), { wall: true }), true);
+
+        // Off to the side, behind them, or level with them: standing
+        assert.equal(cutsAway(at(16.5, 1.5, 9.5), { wall: true }), false, "6 metres to the side");
+        assert.equal(cutsAway(at(10.5, 1.5, 5.5), { wall: true }), false, "behind them");
+        assert.equal(cutsAway(at(8.5, 1.5, 7.5), { wall: true }), false, "level with them");
+    });
+
+    it("takes a wall down a whole square at a time, never slicing along one", () => {
+        standing();
+
+        // Square 12 of the wall (its middle 2 metres to the side) is in the strip, all of it;
+        // square 13 (3 metres) isn't, none of it
+        for (const x of [12.05, 12.5, 12.95]) {
+            assert.equal(cutsAway(at(x, 1.5, 9.5), { wall: true }), true, `${x}`);
+        }
+
+        for (const x of [13.05, 13.5, 13.95]) {
+            assert.equal(cutsAway(at(x, 1.5, 9.5), { wall: true }), false, `${x}`);
+        }
+
+        // Round the edge: the outer wall's inside face, middle and outside face count as one
+        // square (the one inside it)
+        const outer = [upstairs.height, upstairs.height + 0.15, upstairs.height + 0.3].map((z) => cutsAway(at(10.5, 1.5, z), { wall: true }));
+
+        assert.deepEqual(outer, [true, true, true]);
+    });
+
+    it("cuts anything else in front of them only above head height", () => {
+        standing();
+
+        assert.equal(cutsAway(at(10.5, 2.2, 9.5)), true, "a bed's canopy");
+        assert.equal(cutsAway(at(10.5, 1, 9.5)), false, "a table or a chest");
+        assert.equal(cutsAway(at(16.5, 2.2, 9.5)), false, "off to the side");
+    });
+
+    it("finds the doorways: gaps of one or two squares through a wall", () => {
+        const found = doorways(upstairs).map(({ along, x0, y0, length }) => `${along} ${x0},${y0} ${length}`).sort();
+
+        assert.deepEqual(found, ["x 10,5 2", "x 10,9 2", "x 15,5 2", "x 15,9 2"]);
     });
 });
