@@ -25,6 +25,8 @@
 import { MAP_ORIGINS } from "./interiors.js";
 import { createRandom, noise } from "./random.js";
 import { Settlements, squareOf, waysOut } from "./settlements.js";
+import { Interiors } from "./insides.js";
+import { WENCHES } from "./lore/taverns.js";
 import { featuresOf } from "./wilds.js";
 import { GROUND, TREE_KINDS } from "./setpieces/pieces.js";
 import { generateWorld } from "./world.js";
@@ -156,7 +158,13 @@ export class Overworld {
         // The other settlements, laid out as the world near them is made (their roads then joined
         // to their streets' ends: roads to them wait for that, `waiting`, by place)
         this.waiting = new Map();
-        this.settlements = new Settlements(plan, { skip: start, onLaid: (settlement) => this.#join(settlement) });
+        this.settlements = new Settlements(plan, {
+            skip: start,
+            onLaid: (settlement) => {
+                this.#join(settlement);
+                this.#enter(settlement);
+            },
+        });
         this.roads = this.#layRoads();
         this.bridges = new Map();
 
@@ -225,6 +233,27 @@ export class Overworld {
     /** The land (BIOMES id) at a point (metres). */
     biomeAt(x, y) {
         return BIOMES[this.plan.biome[cellAt(y) * CELLS + cellAt(x)]].id;
+    }
+
+    /**
+     * Keep the buildings that can be gone into (insides.js Interiors) told of each settlement's as
+     * it's laid out (and of those laid out already).
+     */
+    attach(interiors) {
+        this.interiors = interiors;
+
+        for (const settlement of this.settlements.laid.values()) {
+            this.#enter(settlement);
+        }
+    }
+
+    // A settlement's buildings that can be gone into, added to the interiors
+    #enter(settlement) {
+        for (const piece of settlement.town.pieces) {
+            if (piece.kind === "landmark") {
+                this.interiors?.add(piece, { origin: settlement.at, place: settlement.place.id });
+            }
+        }
     }
 
     /**
@@ -857,10 +886,9 @@ export function buildWorld({ seed = 1, race = "human", plan = planWorld(seed) } 
     };
     const links = town.links.map((link) => ({
         ...link,
-        ends: link.ends.map((end) => (end.map === "town" ? { ...end, squares: end.squares.map(move), arrive: move(end.arrive) } : end)),
+        ends: link.ends.map((end) => (end.map === "town" ? { ...end, squares: end.squares.map(move), arrive: move(end.arrive), door: link.id === "tavern-door" ? tavern.door : end.door } : end)),
     }));
-
-    return {
+    const world = {
         seed,
         plan,
         start,
@@ -879,4 +907,23 @@ export function buildWorld({ seed = 1, race = "human", plan = planWorld(seed) } 
         stamp,
         home: town,
     };
+
+    // Every building that can be gone into: the town's own tavern, made with it; the town's other
+    // buildings; and each settlement's as it's laid out (insides.js)
+    const interiors = new Interiors(world);
+
+    if (tavern) {
+        interiors.adopt({ key: "home:tavern", kind: "tavern", name: WENCHES.name, tavern: WENCHES, maps: ["taproom", "upstairs"], folk: town.folk });
+    }
+
+    for (const piece of town.town.pieces) {
+        if (piece.kind === "landmark" && piece.tavern !== WENCHES) {
+            interiors.add(piece, { origin: world.origin, place: "home" });
+        }
+    }
+
+    world.interiors = interiors;
+    overworld.attach(interiors);
+
+    return world;
 }

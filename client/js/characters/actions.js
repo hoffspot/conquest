@@ -621,42 +621,46 @@ const FOLDED = { right: { at: [0.74, -0.36, 0.24], point: [0, 1, 0], edge: [1, 0
  * five ways each, key 1 at the moment that matters, starting and ending in the pose it rests in.
  * Seated patrons rest sitting (the legs are the bench's), the others standing.
  */
+// The barkeep's rests (the innkeeper's too, at the counter upstairs)
+const BARKEEP_RESTS = [
+    variant("wiping the bar", { ...spine({}) },
+        // The right hand going round and round on the bar, leaning on the left
+        [0.35, { right: flat(0.2, -0.66, 0.72, 1, "relaxed"), left: flat(-0.12, -0.68, 0.62, -1), ...spine({ flex: 14 }) }],
+        [0.6, { right: flat(0.36, -0.66, 0.62, 1, "relaxed") }],
+        [0.8, { right: flat(0.22, -0.66, 0.52, 1, "relaxed") }],
+        [1, { right: flat(0.06, -0.66, 0.62, 1, "relaxed") }],
+        [1.2, { right: flat(0.2, -0.66, 0.74, 1, "relaxed") }],
+        [1.4, { right: flat(0.36, -0.66, 0.62, 1, "relaxed") }],
+        [1.6, { right: flat(0.2, -0.66, 0.54, 1, "relaxed"), left: flat(-0.12, -0.68, 0.62, -1), ...spine({ flex: 14 }) }]),
+    variant("stroking his beard", { ...spine({}), Head: { flex: 0 } },
+        // The hand to the chin, stroking the beard down, twice, thinking
+        [0.5, { right: { at: [0.34, 0.14, 0.3], palm: [0, 0.2, -1], towards: [0.6, 0.8, 0], shape: "cup" }, Head: { flex: -6, bend: -4 } }],
+        [0.75, { right: { at: [0.34, -0.02, 0.33], palm: [0, 0.2, -1], towards: [0.6, 0.8, 0], shape: "cup" } }],
+        [1, { right: { at: [0.34, 0.14, 0.3], palm: [0, 0.2, -1], towards: [0.6, 0.8, 0], shape: "cup" } }],
+        [1.3, { right: { at: [0.34, -0.03, 0.33], palm: [0, 0.2, -1], towards: [0.6, 0.8, 0], shape: "cup" } }],
+        [1.6, { right: { at: [0.34, 0.1, 0.31], palm: [0, 0.2, -1], towards: [0.6, 0.8, 0], shape: "cup" }, Head: { flex: -4, bend: -2 } }]),
+    variant("leaning on the bar", { ...spine({}), Head: { flex: 0 }, offset: [0, 0, 0] },
+        // Both hands on the bar, wide apart, leaning on them and looking out over the room
+        [0.5, { right: flat(-0.04, -0.62, 0.76), left: flat(0.04, -0.62, 0.76, -1), ...spine({ flex: 30 }), Head: { flex: -20 }, offset: [0, -0.03, 0.07] }],
+        [1.6, { right: flat(-0.04, -0.62, 0.76), left: flat(0.04, -0.62, 0.76, -1), ...spine({ flex: 32, turn: 6 }), Head: { flex: -20, turn: 12 }, offset: [0, -0.03, 0.07] }]),
+    variant("arms folded", { ...spine({}), Head: { flex: 0 } },
+        // Arms folded over the chest, nodding at something said
+        [0.5, { ...FOLDED, ...spine({ flex: -4 }), Head: { flex: -4 } }],
+        [0.9, { Head: { flex: 8 } }],
+        [1.15, { Head: { flex: -2 } }],
+        [1.4, { Head: { flex: 8 } }],
+        [1.65, { ...FOLDED, ...spine({ flex: -4 }), Head: { flex: -2 } }]),
+    variant("rubbing his neck", { ...spine({}), Head: { flex: 0, bend: 0 } },
+        // The hand behind the neck, the head bowed, rolled one way and the other
+        [0.5, { right: { at: [0.26, 0.16, -0.02], palm: [0, 0, 1], towards: [1, 0.3, 0], elbow: [-0.5, 0.4, 0.8], shape: "relaxed" }, ...spine({ flex: 6 }), Head: { flex: 16, bend: 0 } }],
+        [1, { right: { at: [0.3, 0.18, -0.02], palm: [0, 0, 1], towards: [1, 0.3, 0], elbow: [-0.5, 0.4, 0.8], shape: "relaxed" }, Head: { flex: 10, bend: 12 } }],
+        [1.4, { right: { at: [0.24, 0.14, -0.01], palm: [0, 0, 1], towards: [1, 0.3, 0], elbow: [-0.5, 0.4, 0.8], shape: "relaxed" }, Head: { flex: 12, bend: -10 } }],
+        [1.65, { right: { at: [0.26, 0.16, -0.02], palm: [0, 0, 1], towards: [1, 0.3, 0], elbow: [-0.5, 0.4, 0.8], shape: "relaxed" }, ...spine({ flex: 4 }), Head: { flex: 4, bend: 0 } }]),
+];
+
 export const RESTS = Object.freeze({
-    barkeep: [
-        variant("wiping the bar", { ...spine({}) },
-            // The right hand going round and round on the bar, leaning on the left
-            [0.35, { right: flat(0.2, -0.66, 0.72, 1, "relaxed"), left: flat(-0.12, -0.68, 0.62, -1), ...spine({ flex: 14 }) }],
-            [0.6, { right: flat(0.36, -0.66, 0.62, 1, "relaxed") }],
-            [0.8, { right: flat(0.22, -0.66, 0.52, 1, "relaxed") }],
-            [1, { right: flat(0.06, -0.66, 0.62, 1, "relaxed") }],
-            [1.2, { right: flat(0.2, -0.66, 0.74, 1, "relaxed") }],
-            [1.4, { right: flat(0.36, -0.66, 0.62, 1, "relaxed") }],
-            [1.6, { right: flat(0.2, -0.66, 0.54, 1, "relaxed"), left: flat(-0.12, -0.68, 0.62, -1), ...spine({ flex: 14 }) }]),
-        variant("stroking his beard", { ...spine({}), Head: { flex: 0 } },
-            // The hand to the chin, stroking the beard down, twice, thinking
-            [0.5, { right: { at: [0.34, 0.14, 0.3], palm: [0, 0.2, -1], towards: [0.6, 0.8, 0], shape: "cup" }, Head: { flex: -6, bend: -4 } }],
-            [0.75, { right: { at: [0.34, -0.02, 0.33], palm: [0, 0.2, -1], towards: [0.6, 0.8, 0], shape: "cup" } }],
-            [1, { right: { at: [0.34, 0.14, 0.3], palm: [0, 0.2, -1], towards: [0.6, 0.8, 0], shape: "cup" } }],
-            [1.3, { right: { at: [0.34, -0.03, 0.33], palm: [0, 0.2, -1], towards: [0.6, 0.8, 0], shape: "cup" } }],
-            [1.6, { right: { at: [0.34, 0.1, 0.31], palm: [0, 0.2, -1], towards: [0.6, 0.8, 0], shape: "cup" }, Head: { flex: -4, bend: -2 } }]),
-        variant("leaning on the bar", { ...spine({}), Head: { flex: 0 }, offset: [0, 0, 0] },
-            // Both hands on the bar, wide apart, leaning on them and looking out over the room
-            [0.5, { right: flat(-0.04, -0.62, 0.76), left: flat(0.04, -0.62, 0.76, -1), ...spine({ flex: 30 }), Head: { flex: -20 }, offset: [0, -0.03, 0.07] }],
-            [1.6, { right: flat(-0.04, -0.62, 0.76), left: flat(0.04, -0.62, 0.76, -1), ...spine({ flex: 32, turn: 6 }), Head: { flex: -20, turn: 12 }, offset: [0, -0.03, 0.07] }]),
-        variant("arms folded", { ...spine({}), Head: { flex: 0 } },
-            // Arms folded over the chest, nodding at something said
-            [0.5, { ...FOLDED, ...spine({ flex: -4 }), Head: { flex: -4 } }],
-            [0.9, { Head: { flex: 8 } }],
-            [1.15, { Head: { flex: -2 } }],
-            [1.4, { Head: { flex: 8 } }],
-            [1.65, { ...FOLDED, ...spine({ flex: -4 }), Head: { flex: -2 } }]),
-        variant("rubbing his neck", { ...spine({}), Head: { flex: 0, bend: 0 } },
-            // The hand behind the neck, the head bowed, rolled one way and the other
-            [0.5, { right: { at: [0.26, 0.16, -0.02], palm: [0, 0, 1], towards: [1, 0.3, 0], elbow: [-0.5, 0.4, 0.8], shape: "relaxed" }, ...spine({ flex: 6 }), Head: { flex: 16, bend: 0 } }],
-            [1, { right: { at: [0.3, 0.18, -0.02], palm: [0, 0, 1], towards: [1, 0.3, 0], elbow: [-0.5, 0.4, 0.8], shape: "relaxed" }, Head: { flex: 10, bend: 12 } }],
-            [1.4, { right: { at: [0.24, 0.14, -0.01], palm: [0, 0, 1], towards: [1, 0.3, 0], elbow: [-0.5, 0.4, 0.8], shape: "relaxed" }, Head: { flex: 12, bend: -10 } }],
-            [1.65, { right: { at: [0.26, 0.16, -0.02], palm: [0, 0, 1], towards: [1, 0.3, 0], elbow: [-0.5, 0.4, 0.8], shape: "relaxed" }, ...spine({ flex: 4 }), Head: { flex: 4, bend: 0 } }]),
-    ],
+    barkeep: BARKEEP_RESTS,
+    innkeeper: BARKEEP_RESTS.map((rest, k) => ({ ...rest, name: ["wiping the counter", "a hand to the chin", "leaning on the counter", "arms folded", "rubbing the neck"][k] })),
     barmaid: [
         variant("wiping her brow", { ...spine({}), Head: { flex: 0 } },
             // The back of the wrist across the forehead, then a sigh

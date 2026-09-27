@@ -82,6 +82,9 @@ const UPSTAIRS = [
     ".LL.....W.BBwW.BBw",
 ];
 
+/** Upstairs at a tavern: its lounge and counter, and four bedrooms off a hallway (insides.js uses it too). */
+export const UPSTAIRS_PLAN = UPSTAIRS;
+
 /**
  * Where each floor is drawn in the 3D world (metres): far from the town and each other, so that
  * nothing of one (shadows, blood, sounds) is ever seen or heard on another.

@@ -18,9 +18,10 @@
 import * as THREE from "three";
 import { DRAWS, FALL_LANDS, REACTIONS } from "../characters/actions.js";
 import { Character } from "../characters/character.js";
+import { folkLook } from "../characters/folk.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
 import { Battle, hostile, STEP_MS, TALK_REACH } from "../core/battle.js";
-import { Conversation, treeFor } from "../core/dialogue.js";
+import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
 import { BECKON, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js";
 import { squaresOf } from "../core/grid.js";
 import { GROUND } from "../core/setpieces/pieces.js";
@@ -118,6 +119,11 @@ const FADE_IN = 0.45;
 // Embers rise from the hearth this often (a second)
 const EMBERS = 5;
 
+// The buildings round the player, looked over this often (s): those whose doors are this near
+// (m) got ready to go into (their floors and folk built, a piece at a time, for at most `budget`
+// ms a frame), and those this far let go (their plans are kept: built again if they come back)
+const VISITS = Object.freeze({ every: 0.5, near: 22, far: 90, budget: 6 });
+
 const _focus = new THREE.Vector3();
 const _lean = new THREE.Vector3();
 const _hearth = new THREE.Vector3();
@@ -185,6 +191,14 @@ export class Game {
 
         /** Each floor inside (interiors3d.js's), by map id. */
         this.interiors = new Map();
+
+        /**
+         * The buildings got ready to go into (their floors and folk built: world.interiors makes
+         * their plans), by key: { key, queue (what's still to build, a piece at a time), maps,
+         * folk (the ids of what's been built) }; and when they're next looked over (s).
+         */
+        this.visits = new Map();
+        this.visitClock = 0;
 
         /**
          * When the player last did anything (the game's clock, s), and when they next rest (null
@@ -319,18 +333,7 @@ export class Game {
         // The tavern's folk, going about their business (no one fights them)
         for (const [k, one] of folk.entries()) {
             step(`Filling the tavern (${k + 1} of ${folk.length})`);
-
-            const look = FOLK[one.preset];
-            const character = await time(one.id, () => new Character(kit, { shape: look.shape, look: look.look, equipment: look.equipment, hairDetail: Math.min(hairDetail, FOLK_HAIR) }));
-            const avatar = this.#addAvatar(one.id, character, { walk: look.walk, wounds: false });
-
-            // (Lit, but casting no shadows: there are a lot of them, and it's dim in there)
-            character.object.traverse((node) => {
-                node.castShadow = false;
-            });
-
-            avatar.actions.setSeated(Boolean(one.routine.seated));
-            this.battle.add({ id: one.id, kind: "folk", name: one.name, team: "folk", square: one.square, map: one.map, ai: "routine", neutral: true, routine: one.routine, role: one.role, facing: one.facing });
+            await time(one.id, () => this.#addFolk(one));
         }
 
         step("Getting ready to draw");
@@ -377,6 +380,23 @@ export class Game {
         }
     }
 
+    // One of the folk, looking as they do (Wenches and Ale's as they always have; anyone else as
+    // their part and seed have them), going about their business in the battle
+    #addFolk(one) {
+        const look = one.preset ? FOLK[one.preset] : folkLook(one);
+        const character = new Character(this.kit, { shape: look.shape, look: look.look, equipment: look.equipment, hairDetail: Math.min(this.view.quality.hair, FOLK_HAIR) });
+        const avatar = this.#addAvatar(one.id, character, { walk: look.walk, wounds: false });
+
+        // (Lit, but casting no shadows: there are a lot of them, and it's dim in there)
+        character.object.traverse((node) => {
+            node.castShadow = false;
+        });
+
+        avatar.actions.setSeated(Boolean(one.routine.seated));
+
+        return this.battle.add({ id: one.id, kind: "folk", name: one.name, team: "folk", square: one.square, map: one.map, ai: "routine", neutral: true, routine: one.routine, role: one.role, facing: one.facing });
+    }
+
     #addAvatar(id, character, { wounds = true, ...options }) {
         const avatar = new Avatar(character, options);
 
@@ -412,7 +432,7 @@ export class Game {
         this.#listen();
         this.view.renderer.setAnimationLoop((now) => this.#frame(now));
         this.sound?.setAmbient(this.mapId === "town");
-        this.sound?.setPlace(this.mapId);
+        this.sound?.setPlace(this.#soundOf(this.mapId));
         this.sound?.setPaused(false);
     }
 
@@ -681,6 +701,8 @@ export class Game {
                 this.#hearTrees();
             }
         }
+
+        this.#visit(dt);
         this.#follow(dt);
         this.#inside(dt);
 
@@ -882,15 +904,23 @@ export class Game {
             return;
         }
 
-        const title = this.world.folk?.find(({ id }) => id === npc.id)?.title ?? ROLES[npc.role]?.title ?? "";
-        const names = Object.fromEntries((this.world.folk ?? []).map(({ id, name }) => [id, name.split(" ")[0]]));
+        // Where they are, and the folk there they might talk of (by their part: the barkeep, the
+        // madam...), and what's upstairs
+        const building = this.world.interiors?.of(npc.map);
+        const folk = building?.folk ?? this.world.folk ?? [];
+        const title = folk.find(({ id }) => id === npc.id)?.title ?? ROLES[npc.role]?.title ?? "";
+        const names = Object.fromEntries(folk.map(({ id, local = id, name }) => [local, name.split(" ")[0]]));
+        const upstairs = building?.tavern?.storeys > 1 ? building.tavern.upstairs : null;
 
+        names.keeper ??= names.innkeeper;
         this.memory[npc.id] ??= { talks: 0, flags: [] };
 
         const conversation = new Conversation(tree, {
             speaker: { id: npc.id, name: npc.name, title },
             player: { name: this.hero.name },
+            place: building?.name,
             names,
+            check: (condition) => !("upstairs" in condition) || upstairsIs(condition.upstairs, upstairs),
             memory: this.memory[npc.id],
             knowledge: this.knowledge,
             variety: this.talkVariety,
@@ -1092,6 +1122,141 @@ export class Game {
         }
     }
 
+    // --- Going inside ---
+
+    // Every so often, the buildings near the player got ready to go into, and those far behind
+    // them let go; and, every frame, a little more of those being got ready built
+    #visit(dt) {
+        const interiors = this.world.interiors;
+
+        if (!interiors) {
+            return;
+        }
+
+        const until = performance.now() + VISITS.budget;
+
+        for (const visit of this.visits.values()) {
+            while (visit.queue.length && performance.now() < until) {
+                visit.queue.shift()();
+            }
+        }
+
+        this.visitClock -= dt;
+
+        const player = this.battle.actor("player");
+
+        // (Inside, nothing's let go or got ready: the town's as it was left)
+        if (this.visitClock > 0 || !player || player.map !== "town") {
+            return;
+        }
+
+        this.visitClock = VISITS.every;
+
+        // (The doors of the settlements come to since)
+        this.doors?.sync();
+
+        const heading = player.order?.type === "enter" ? this.battle.links.find(({ id }) => id === player.order.link)?.building : null;
+
+        for (const building of interiors.buildings.values()) {
+            if (!building.entrance) {
+                continue;
+            }
+
+            const { x, z } = building.entrance.door;
+            const distance = Math.hypot(x - player.x, z - player.y);
+
+            if (!this.visits.has(building.key) && (distance < VISITS.near || heading === building.key)) {
+                this.#prepare(building);
+            } else if (this.visits.has(building.key) && distance > VISITS.far) {
+                this.#release(building.key);
+            }
+        }
+    }
+
+    // Start getting a building ready: its plans made, then each floor and each of its folk built,
+    // one to a piece of work, and the doors told of its insides
+    #prepare(building) {
+        const visit = { key: building.key, queue: [], maps: [], folk: [] };
+
+        visit.queue.push(() => {
+            this.world.interiors.make(building.key);
+            visit.queue.push(...building.maps.map((id) => () => this.#furnish(visit, id)));
+            visit.queue.push(...building.folk.map((one) => () => this.#people(visit, one)));
+            visit.queue.push(() => this.doors?.sync());
+        });
+        this.visits.set(building.key, visit);
+
+        return visit;
+    }
+
+    // A building ready to go into now: whatever of it's still to build, built at once
+    #ready(key) {
+        const building = key ? this.world.interiors?.buildings.get(key) : null;
+
+        // (Wenches and Ale's built with the town)
+        if (!building?.entrance) {
+            return;
+        }
+
+        const visit = this.visits.get(key) ?? this.#prepare(building);
+
+        while (visit.queue.length) {
+            visit.queue.shift()();
+        }
+    }
+
+    // One of a building's floors, built and put away until the player goes in
+    #furnish(visit, mapId) {
+        const interior = buildInterior(this.world.maps[mapId]);
+
+        interior.object.visible = this.mapId === mapId;
+        this.view.scene.add(interior.object);
+        this.interiors.set(mapId, interior);
+        visit.maps.push(mapId);
+    }
+
+    // One of a building's folk, where they are in it
+    #people(visit, one) {
+        if (this.battle.actor(one.id)) {
+            return;
+        }
+
+        this.#place(this.#addFolk(one));
+        visit.folk.push(one.id);
+    }
+
+    // Let a building go: its folk out of the battle and gone, its floors thrown away (its plans
+    // are kept, and the battle can still go in: its floors are built again if the player comes
+    // back)
+    #release(key) {
+        const visit = this.visits.get(key);
+
+        this.visits.delete(key);
+
+        for (const id of visit.folk) {
+            const avatar = this.avatars.get(id);
+
+            this.battle.remove(id);
+            avatar?.character.object.removeFromParent();
+            avatar?.character.dispose();
+
+            for (const each of [this.avatars, this.previous, this.flash, this.lastAttack, this.variety, this.casting, this.landing, this.flights]) {
+                each.delete(id);
+            }
+        }
+
+        for (const id of visit.maps) {
+            this.interiors.get(id)?.dispose();
+            this.interiors.delete(id);
+            this.minimap?.forget(id);
+        }
+    }
+
+    // What's heard on a map: its own sound (a taproom's, upstairs'), or the map's
+    #soundOf(mapId) {
+        return this.world.maps?.[mapId]?.sound ?? mapId;
+    }
+
     // Show one map (the town, or a floor inside), lit for being out or in, and nothing of the others
     #showMap(mapId) {
         const interior = this.interiors.get(mapId) ?? null;
@@ -1122,7 +1287,7 @@ export class Game {
 
         // The tavern's music inside, heard through the floor upstairs; the town's out; and the
         // hearth's fire crackling in the taproom
-        this.sound?.setPlace(mapId);
+        this.sound?.setPlace(this.#soundOf(mapId));
         this.sound?.setHearth(interior?.hearth ?? null);
 
         if (this.running) {
@@ -1295,6 +1460,8 @@ export class Game {
                     this.#place(actor);
 
                     if (event.id === "player") {
+                        // (Walked straight in: whatever of it isn't built yet, built now)
+                        this.#ready(this.world.interiors?.of(event.to)?.key);
                         this.#arrive(actor);
                         this.sound?.setListener(avatar.object.position.x, avatar.object.position.z);
                     }

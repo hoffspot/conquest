@@ -1,7 +1,9 @@
 // The doors and stairs the player can tap to go through (the world's links: core/world.js,
-// core/interiors.js): where each end of each is in the world, a box a tap's ray can hit, and a
-// green glow traced round its edge, lit when it's tapped and kept lit while the player walks
-// there, pulsing, then fading once they're through.
+// core/interiors.js, core/insides.js): where each end of each is in the world, a box a tap's ray
+// can hit, and a green glow traced round its edge, lit when it's tapped and kept lit while the
+// player walks there, pulsing, then fading once they're through. New doors (the buildings of the
+// settlements the player comes to) and the insides of buildings as they're made are picked up by
+// sync().
 
 import * as THREE from "three";
 import { STOREY } from "../world/interiors3d.js";
@@ -53,8 +55,8 @@ function shapeOf(world, link, end) {
     const map = world.maps[end.map];
 
     if (link.kind === "door" && end.map === "town") {
-        // The tavern's front door, turned the way the tavern faces
-        const { door } = world.tavern;
+        // A building's front door, turned the way it faces
+        const door = end.door ?? world.tavern.door;
         const out = [Math.sin(door.facing), Math.cos(door.facing)];
         const across = [Math.cos(door.facing), -Math.sin(door.facing)];
         const half = door.width / 2 + 0.08;
@@ -86,7 +88,7 @@ function shapeOf(world, link, end) {
     const [x0, x1] = [stair.x - 0.05, stair.x + stair.w + 0.05];
     const z = stair.y + stair.h;
 
-    if (end.map === "upstairs") {
+    if (end === link.ends[1]) {
         return {
             box: [x0, -0.6, stair.y - 0.1, x1, 1.2, z + 0.4],
             loop: [[x0, 0.04, stair.y + 0.04], [x1, 0.04, stair.y + 0.04], [x1, 0.04, z + 0.05], [x0, 0.04, z + 0.05]],
@@ -111,28 +113,57 @@ export class Doors {
         this.object.name = "doors";
         parent.add(this.object);
 
+        this.world = world;
+
         /** Each end of each link: { link, end, map, box (world), glow, level, litUntil }. */
         this.targets = [];
 
+        // (The ends there are targets for, and how far through the world's links that's got)
+        this.ends = new Set();
+        this.seen = 0;
+        this.sync();
+    }
+
+    /**
+     * Catch up with the world's links: a target for every end of every link there's a map for
+     * (not a building's inside that's still to be made). Cheap when nothing's changed.
+     */
+    sync() {
+        const { world } = this;
+        const version = (world.interiors?.version ?? 0) + world.links.length * 1e6;
+
+        if (version === this.seen) {
+            return;
+        }
+
+        this.seen = version;
+
         for (const link of world.links) {
             for (const end of link.ends) {
-                const shape = shapeOf(world, link, end);
-                const [ox, oz] = world.maps[end.map].origin;
-                const [x0, y0, z0, x1, y1, z1] = shape.box;
-                const loop = shape.loop.map(([x, y, z]) => new THREE.Vector3(x + ox, y, z + oz));
-                const normal = new THREE.Vector3(...shape.normal);
-                const glow = new THREE.Group();
-
-                glow.add(new THREE.Mesh(ribbon(loop, normal, GLOW.halo), glowMaterial(0.22)));
-                glow.add(new THREE.Mesh(ribbon(loop, normal, GLOW.core), glowMaterial(0.95)));
-                glow.visible = false;
-                glow.renderOrder = 4;
-                glow.name = `${link.id}-${end.map}`;
-                this.object.add(glow);
-
-                this.targets.push({ link, end, map: end.map, box: new THREE.Box3(new THREE.Vector3(x0 + ox, y0, z0 + oz), new THREE.Vector3(x1 + ox, y1, z1 + oz)), glow, level: 0, litUntil: -Infinity });
+                if (!this.ends.has(end) && !end.pending && world.maps[end.map]) {
+                    this.ends.add(end);
+                    this.#add(link, end);
+                }
             }
         }
+    }
+
+    #add(link, end) {
+        const shape = shapeOf(this.world, link, end);
+        const [ox, oz] = this.world.maps[end.map].origin;
+        const [x0, y0, z0, x1, y1, z1] = shape.box;
+        const loop = shape.loop.map(([x, y, z]) => new THREE.Vector3(x + ox, y, z + oz));
+        const normal = new THREE.Vector3(...shape.normal);
+        const glow = new THREE.Group();
+
+        glow.add(new THREE.Mesh(ribbon(loop, normal, GLOW.halo), glowMaterial(0.22)));
+        glow.add(new THREE.Mesh(ribbon(loop, normal, GLOW.core), glowMaterial(0.95)));
+        glow.visible = false;
+        glow.renderOrder = 4;
+        glow.name = `${link.id}-${end.map}`;
+        this.object.add(glow);
+
+        this.targets.push({ link, end, map: end.map, box: new THREE.Box3(new THREE.Vector3(x0 + ox, y0, z0 + oz), new THREE.Vector3(x1 + ox, y1, z1 + oz)), glow, level: 0, litUntil: -Infinity });
     }
 
     /** The nearest door or stairs on `map` a ray (from the camera, world metres) hits, or null. */

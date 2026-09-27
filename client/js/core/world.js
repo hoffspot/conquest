@@ -27,6 +27,7 @@
 // Everything comes from one seed, so a saved character always comes back to the same town.
 
 import { nearestFree } from "./grid.js";
+import { entranceOf, openEntrances } from "./insides.js";
 import { MAP_ORIGINS, tavernFloors, tavernFolk } from "./interiors.js";
 import { WENCHES } from "./lore/taverns.js";
 import { namePeople } from "./names.js";
@@ -127,7 +128,10 @@ export function generateWorld({ seed = 1, kind = "town", exits = null } = {}) {
         }
     }
 
-    // The tavern's door, and the floors it leads to
+    // The way up to the doors of the buildings that can be gone into; the tavern's door, and the
+    // floors it leads to
+    openEntrances(town.pieces, blocked, opaque);
+
     const tavern = tavernOf(town);
     const floors = tavernFloors();
     const maps = { town: { id: "town", name: "Town", width, height, blocked, opaque, ground, origin: MAP_ORIGINS.town } };
@@ -168,25 +172,14 @@ export function generateWorld({ seed = 1, kind = "town", exits = null } = {}) {
     };
 }
 
-// The tavern (3 by 3 plots, 12 metres square) is built facing south, its door in the middle of
-// its front, 10.2 metres back from its north side, 1.8 metres wide; the squares in front of the
-// door are cleared to walk up to it
-const TAVERN_SIZE = 12;
-const DOOR_BACK = 10.2;
-const DOOR = Object.freeze({ width: 1.8, height: 2.3, floor: 0.3 });
-
-// The way to the tavern's door, cleared: this far either side of the door's middle, and from this
-// far back in the tavern to this far (metres from its north side, as it would face south)
-const WAY_IN = Object.freeze({ across: 1.2, from: 9.8, to: 13 });
-
 /**
  * Where the tavern stands and which way it faces (the way the town laid it out: towards the market
  * place, or a street): { x, y (its north-west corner as it would be facing south, metres), size
  * (metres), facing (radians, as characters face: 0 south), door: { x, z (metres, the middle of its
  * threshold), facing, width, height, floor }, front (the two squares at the door, inside the
  * tavern), outside (the square to come out onto), clear (the squares to clear) }, or null if the
- * town has no tavern. The town's pieces are placed from `origin` (metres: [x, y], or a number for
- * both).
+ * town has no tavern: its door where the art puts it, 1.8 metres in from its front (insides.js
+ * entranceOf). The town's pieces are placed from `origin` (metres: [x, y], or a number for both).
  */
 export function tavernOf(town, origin = 0) {
     const piece = town.pieces.find(({ key }) => key === landmarkKey("tavern"));
@@ -195,51 +188,9 @@ export function tavernOf(town, origin = 0) {
         return null;
     }
 
-    const [ox, oy] = Array.isArray(origin) ? origin : [origin, origin];
-    const facing = piece.facing;
-    const half = TAVERN_SIZE / 2;
-    const [x0, y0] = [ox + piece.x - half, oy + piece.y - half];
+    const { corner, size, door, front, outside, clear } = entranceOf(piece, origin);
 
-    // A point in the tavern's own frame (facing south, metres from its north-west corner) turned
-    // to face the way it does, about its middle, in the world
-    const turn = (u, v) => {
-        const [du, dv] = [u - half, v - half];
-
-        return [x0 + half + du * Math.cos(facing) + dv * Math.sin(facing), y0 + half - du * Math.sin(facing) + dv * Math.cos(facing)];
-    };
-    const squareAt = (u, v) => turn(u, v).map(Math.floor);
-    const [dx, dz] = turn(half, DOOR_BACK);
-    const front = [squareAt(half - 0.5, 10.5), squareAt(half + 0.5, 10.5)];
-    const outside = squareAt(half, 12.6);
-
-    // The way to the door: every square whose middle is in front of it, from its threshold out
-    // past the tavern's front, as wide as the door and a little more (so that, turned any way,
-    // it's squares side by side, not only corner to corner)
-    const clear = [];
-    const [cx, cy] = [x0 + half, y0 + half];
-
-    for (let y = Math.floor(cy - half - 2); y <= Math.ceil(cy + half + 2); y++) {
-        for (let x = Math.floor(cx - half - 2); x <= Math.ceil(cx + half + 2); x++) {
-            const [px, py] = [x + 0.5 - cx, y + 0.5 - cy];
-            const u = half + px * Math.cos(facing) - py * Math.sin(facing);
-            const v = half + px * Math.sin(facing) + py * Math.cos(facing);
-
-            if (Math.abs(u - half) <= WAY_IN.across && v >= WAY_IN.from && v <= WAY_IN.to) {
-                clear.push([x, y]);
-            }
-        }
-    }
-
-    return {
-        x: x0,
-        y: y0,
-        size: TAVERN_SIZE,
-        facing,
-        door: { x: dx, z: dz, facing, ...DOOR },
-        front,
-        outside,
-        clear: [...front, outside, ...clear],
-    };
+    return { x: corner[0], y: corner[1], size: size[0], facing: piece.facing, door, front, outside, clear };
 }
 
 // (Where to find the free square nearest a square, as before)

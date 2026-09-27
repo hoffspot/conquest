@@ -1,11 +1,14 @@
-// The insides of buildings in 3D (core/interiors.js has their plans): for now the tavern's
-// taproom, with its flagstones, tables and benches, the bar and the tapped barrels behind it, the
-// great hearth with a boar turning on a spit over an animated fire, and the stairs up; and the
-// floor above, with its rugs, the madam's counter, a chaise longue, and the hallway to four
-// bedrooms behind curtained doorways, each with a canopied bed, a washstand and a chest.
+// The insides of buildings in 3D (core/interiors.js has their plans, core/insides.js which a
+// building has), built by each floor's style: for now a tavern's taproom, with its flagstones,
+// tables and benches however they're set out, the bar and the tapped barrels behind it, the great
+// hearth with a boar turning on a spit over an animated fire, and the stairs up if there's a floor
+// above; and that floor, with its rugs, the counter, a chaise longue, and the hallway to four
+// bedrooms behind curtained doorways, each with a canopied bed, a washstand and a chest (a madam's
+// house in rose and red velvet, an inn in whitewash and wool). Each taproom has its own walls (the
+// map's `finish`).
 //
 // Built with the art kits' Solid (five art pixels to a metre) and their materials, each map in
-// its own group at its place in the world (MAP_ORIGINS). There are no ceilings, and what stands
+// its own group at its place in the world (its `origin`). There are no ceilings, and what stands
 // in front of the player (INTERIOR_CUT, set each frame by the game: a strip from them towards the
 // camera) is cut away: walls down to their stone footing, a whole square's length at a time, and
 // anything else above head height, so the player is always in view whichever way the camera
@@ -88,6 +91,9 @@ const COLOURS = {
     flowers: 0xc24a6e,
     leaves: 0x3f6b35,
     apple: 0xb3261d,
+    "wool-green": 0x46603c,
+    "wool-blue": 0x3a4b6e,
+    "wool-ochre": 0x9a7434,
 };
 
 // Each interior's own copies of the materials (the town's are shared, and cut differently), and
@@ -107,8 +113,8 @@ function material(name, { wall = false } = {}) {
             // Daylight in the panes
             result = new THREE.MeshBasicMaterial({ color: 0xd9e8f5 });
             result.name = name;
-        } else if (name === "candle-flame" || name === "sconce") {
-            result = new THREE.MeshBasicMaterial({ color: name === "sconce" ? 0xff5a4a : 0xffd27a, toneMapped: false });
+        } else if (name === "candle-flame" || name.startsWith("sconce")) {
+            result = new THREE.MeshBasicMaterial({ color: { sconce: 0xff5a4a, "sconce-warm": 0xffb45a }[name] ?? 0xffd27a, toneMapped: false });
             result.name = name;
         } else if (name === "roast") {
             result = new THREE.MeshStandardMaterial({ color: 0x9c5424, roughness: 0.45, metalness: 0 });
@@ -445,7 +451,7 @@ function outerWalls(solid, map, finish, openings = []) {
 
 // Walls through a floor: each wall square joined to its wall neighbours through its middle, and
 // where a wall stops at a doorway, carried on to the doorway's edge
-function innerWalls(solid, map, finish) {
+function innerWalls(solid, map, finish, curtain = "velvet") {
     const isWall = (x, y) => map.plan[y]?.[x] === "W";
     const thick = m(0.18);
 
@@ -486,7 +492,7 @@ function innerWalls(solid, map, finish) {
             solid.box(a - 0.4, lintel - 0.8, cz - thick / 2 - 0.3, b + 0.4, lintel, cz + thick / 2 + 0.3, material("timber", WALL));
 
             for (const [c0, c1] of [[a + 0.1, a + 1.2], [b - 1.2, b - 0.1]]) {
-                solid.box(c0, m(0.1), cz - 0.3, c1, lintel - 0.8, cz + 0.3, material("velvet", WALL));
+                solid.box(c0, m(0.1), cz - 0.3, c1, lintel - 0.8, cz + 0.3, material(curtain, WALL));
             }
         } else {
             const [a, b, cx] = [m(y0), m(y0 + length), m(x0 + 0.5)];
@@ -495,7 +501,7 @@ function innerWalls(solid, map, finish) {
             solid.box(cx - thick / 2 - 0.3, lintel - 0.8, a - 0.4, cx + thick / 2 + 0.3, lintel, b + 0.4, material("timber", WALL));
 
             for (const [c0, c1] of [[a + 0.1, a + 1.2], [b - 1.2, b - 0.1]]) {
-                solid.box(cx - 0.3, m(0.1), c0, cx + 0.3, lintel - 0.8, c1, material("velvet", WALL));
+                solid.box(cx - 0.3, m(0.1), c0, cx + 0.3, lintel - 0.8, c1, material(curtain, WALL));
             }
         }
     }
@@ -576,7 +582,7 @@ function taproom(map) {
     const doors = map.marks.D;
     const doorMiddle = (doors[0][0] + doors.at(-1)[0] + 1) / 2;
 
-    outerWalls(solid, map, "plaster", [{ side: "s", from: doorMiddle - 0.9, to: doorMiddle + 0.9, lintel: 2.35 }]);
+    outerWalls(solid, map, map.finish ?? "plaster", [{ side: "s", from: doorMiddle - 0.9, to: doorMiddle + 0.9, lintel: 2.35 }]);
 
     // The door, shut, in its frame
     const [doorLeft, doorRight, wallZ] = [m(doorMiddle - 0.9), m(doorMiddle + 0.9), h];
@@ -599,11 +605,15 @@ function taproom(map) {
         windowIn(solid, "z", 0, m(z), -1);
     }
 
-    // The stairs up, along the north wall, rising east from their foot
+    // The stairs up, along the north wall, rising east from their foot (if there's a floor above;
+    // else another window)
     const stair = map.pieces.find((piece) => piece.kind === "stairs");
-    const [stairZ0, stairZ1] = [m(stair.y), m(stair.y + stair.h)];
 
-    stairs(solid, m(stair.x), m(stair.x + stair.w), stairZ0, stairZ1, 0, m(STOREY), stairZ1);
+    if (stair) {
+        stairs(solid, m(stair.x), m(stair.x + stair.w), m(stair.y), m(stair.y + stair.h), 0, m(STOREY), m(stair.y + stair.h));
+    } else {
+        windowIn(solid, "x", 0, m(3.5), -1);
+    }
 
     // The hearth: a stone chimney breast on the west wall, a wide opening, a mantel beam, the
     // hearthstone before it; logs and fire; a boar turning on a spit over the flames
@@ -817,8 +827,12 @@ function upstairs(map) {
     solid.box(hole0 - 0.3, m(0.95), well0, hole0 + 0.3, m(1.05), well1, material("timber"));
     solid.box(hole0 - 0.35, 0, -0.35, hole0 + 0.35, m(1.05), 0.35, material("timber"));
 
-    outerWalls(solid, map, "plaster-rose");
-    innerWalls(solid, map, "plaster-rose");
+    // A madam's house in rose and red velvet; an inn's plainer, in whitewash and wool
+    const inn = map.look === "inn";
+    const [finish, cloth] = inn ? ["plaster-white", "wool-green"] : ["plaster-rose", "velvet"];
+
+    outerWalls(solid, map, finish);
+    innerWalls(solid, map, finish, cloth);
 
     for (const z of [4, 11]) {
         windowIn(solid, "z", 0, m(z), -1);
@@ -833,13 +847,13 @@ function upstairs(map) {
     rug(solid, m(0.6), m(6.2), m(7.4), m(12.8));
     rug(solid, m(8.3), m(6.4), m(17.6), m(8.6));
 
-    // The madam's counter: dark wood, a red runner, a ledger, a bell, a candle, flowers
+    // The counter: dark wood, a runner, a ledger, a bell, a candle, flowers
     const counter = map.pieces.find((piece) => piece.kind === "counter");
     const [cx0, cx1, cz0, cz1] = [m(counter.x), m(counter.x + counter.w), m(counter.y + 0.15), m(counter.y + 0.85)];
 
     solid.box(cx0, 0, cz0, cx1, m(1.05), cz1, material("planks-dark"));
     solid.box(cx0 - 0.4, m(1.05), cz0 - 0.4, cx1 + 0.4, m(1.12), cz1 + 0.4, material("timber-light"));
-    solid.box(cx0 + m(0.3), m(1.12), cz0 + 0.5, cx1 - m(0.3), m(1.14), cz1 - 0.5, material("velvet"));
+    solid.box(cx0 + m(0.3), m(1.12), cz0 + 0.5, cx1 - m(0.3), m(1.14), cz1 - 0.5, material(inn ? "rug-border" : "velvet"));
     solid.box(cx0 + m(0.6), m(1.14), cz0 + m(0.15), cx0 + m(1.05), m(1.2), cz0 + m(0.5), material("ledger"));
     solid.cylinder(cx0 + m(1.7), cz0 + m(0.35), m(1.14), m(1.22), m(0.06), 0.1, material("brass"), { segments: 10 });
     candle(solid, cx1 - m(0.35), cz0 + m(0.35), m(1.14));
@@ -854,9 +868,9 @@ function upstairs(map) {
     const [lx0, lx1, lz] = [m(chaise.x), m(chaise.x + chaise.w), m(chaise.y)];
 
     solid.box(lx0 + 0.5, 0, lz + m(0.2), lx1 - 0.5, m(0.4), lz + m(0.85), material("timber"));
-    solid.box(lx0 + 0.8, m(0.4), lz + m(0.25), lx1 - 0.8, m(0.52), lz + m(0.8), material("velvet"));
-    solid.box(lx0 + 0.5, m(0.4), lz + m(0.7), lx1 - 0.5, m(0.95), lz + m(0.88), material("velvet"));
-    solid.box(lx0 + 0.5, m(0.4), lz + m(0.2), lx0 + m(0.3), m(0.8), lz + m(0.85), material("velvet"));
+    solid.box(lx0 + 0.8, m(0.4), lz + m(0.25), lx1 - 0.8, m(0.52), lz + m(0.8), material(cloth));
+    solid.box(lx0 + 0.5, m(0.4), lz + m(0.7), lx1 - 0.5, m(0.95), lz + m(0.88), material(cloth));
+    solid.box(lx0 + 0.5, m(0.4), lz + m(0.2), lx0 + m(0.3), m(0.8), lz + m(0.85), material(cloth));
 
     const side = map.pieces.find((piece) => piece.kind === "side-table");
     const [sx, sz] = [m(side.x + 0.5), m(side.y + 0.5)];
@@ -867,9 +881,9 @@ function upstairs(map) {
     candle(solid, sx + m(0.12), sz - m(0.05), m(0.68));
     solid.cylinder(sx + m(0.05), sz + m(0.15), m(0.68), m(0.95), m(0.05), m(0.03), material("wine"), { segments: 8 });
 
-    // The bedrooms: canopied beds, a washstand and a chest in each, candles in red glass on the
+    // The bedrooms: canopied beds, a washstand and a chest in each, candles in sconces on the
     // walls
-    const drapes = ["velvet", "velvet-purple", "velvet-purple", "velvet"];
+    const drapes = inn ? ["wool-green", "wool-blue", "wool-ochre", "linen"] : ["velvet", "velvet-purple", "velvet-purple", "velvet"];
 
     map.pieces.filter((piece) => piece.kind === "bed").forEach((piece, k) => {
         const [x0, z0, x1, z1] = [m(piece.x), m(piece.y), m(piece.x + piece.w), m(piece.y + piece.h)];
@@ -898,9 +912,9 @@ function upstairs(map) {
         chest(solid, m(piece.x + 0.5), m(piece.y + 0.5));
     }
 
-    // Sconces with red glass in the hallway and by the counter
+    // Sconces in the hallway and by the counter: red glass in a madam's house, clear at an inn
     for (const [x, z] of [[9, 5.62], [13.5, 5.62], [9, 9.38], [13.5, 9.38], [0.05, 8]]) {
-        solid.box(m(x) - 0.5, m(1.8), m(z) - 0.5, m(x) + 0.5, m(2.1), m(z) + 0.5, material("sconce", WALL));
+        solid.box(m(x) - 0.5, m(1.8), m(z) - 0.5, m(x) + 0.5, m(2.1), m(z) + 0.5, material(inn ? "sconce-warm" : "sconce", WALL));
     }
 
     return {
@@ -908,8 +922,8 @@ function upstairs(map) {
         moving: [],
         flames: [],
         lights: [
-            { kind: "lamp", x: 4, y: 2.4, z: 7.5, colour: 0xff8a6a, intensity: 7, distance: 15, flicker: 0.06 },
-            { kind: "fire", x: 13, y: 2.2, z: 7.5, colour: 0xff5a5a, intensity: 5, distance: 14, flicker: 0.1 },
+            { kind: "lamp", x: 4, y: 2.4, z: 7.5, colour: inn ? 0xffc27a : 0xff8a6a, intensity: 7, distance: 15, flicker: 0.06 },
+            { kind: "fire", x: 13, y: 2.2, z: 7.5, colour: inn ? 0xffa860 : 0xff5a5a, intensity: 5, distance: 14, flicker: 0.1 },
         ],
         hearth: null,
     };
@@ -921,10 +935,10 @@ const BUILDERS = { taproom, upstairs };
  * Build a map's inside: { map, object (a Group at the map's place in the world, in metres),
  * lights (point lights to place: { kind, x, y, z (world metres), colour, intensity, distance,
  * flicker }), hearth (world point of its fire, or null), update(dt, time) (turns the spit,
- * moves the flames) }.
+ * moves the flames), dispose() }.
  */
 export function buildInterior(map) {
-    const built = BUILDERS[map.id](map);
+    const built = BUILDERS[map.style ?? map.id](map);
     const art = new THREE.Group();
     const [ox, oz] = map.origin;
 
@@ -985,6 +999,17 @@ export function buildInterior(map) {
             for (const fire of built.flames) {
                 fire.userData.flame.uniforms.time.value = time;
             }
+        },
+        // (Its own geometry and flames: the materials are shared by every inside)
+        dispose() {
+            object.traverse((node) => {
+                node.geometry?.dispose();
+
+                if (node.material?.type === "ShaderMaterial") {
+                    node.material.dispose();
+                }
+            });
+            object.removeFromParent();
         },
     };
 }

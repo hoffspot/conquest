@@ -1006,6 +1006,110 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
     expect(await tapsRound()).toEqual(["move", "move", "move", "move"]);
 });
 
+test("every tavern can be gone into: got ready as the player comes near, its own room and folk inside; let go once they're far off, and built at once if they walk straight in", async ({ page }) => {
+    // (Seed 2's town has a second tavern, the Stag's Head, an inn)
+    await playing(page, "/?play&seed=2");
+
+    // Put the player (or anyone) on a square, at once
+    const helpers = () => {
+        window.put = (id, [x, y]) => {
+            const { game } = window.pellagos;
+            const actor = game.battle.actor(id);
+
+            Object.assign(actor, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [], order: null });
+            game.avatars.get(id).place(x + 0.5, y + 0.5, actor.facing);
+            game.previous.set(id, { x: actor.x, y: actor.y });
+        };
+    };
+
+    await page.evaluate(helpers);
+
+    // Near its door, it's got ready a piece at a time: its floors, then its folk
+    const near = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        const building = [...game.world.interiors.buildings.values()].find((each) => each.entrance);
+        const before = game.visits.has(building.key);
+
+        // (Looked over at the next frame)
+        window.put("player", building.door.ends[0].arrive);
+        game.visitClock = 0;
+        game.advance(0.1);
+
+        const visit = game.visits.get(building.key);
+        const started = { maps: visit.maps.length, folk: visit.folk.length, left: visit.queue.length };
+
+        game.advance(2);
+
+        return { key: building.key, name: building.name, before, started, ready: { maps: visit.maps.length, folk: visit.folk.length, left: visit.queue.length }, hidden: visit.maps.every((id) => !game.interiors.get(id).object.visible) };
+    });
+
+    expect(near.name).toBe("The Stag's Head");
+    expect(near.before).toBe(false);
+    expect(near.started.folk).toBeLessThan(near.ready.folk);
+    expect(near.ready).toEqual({ maps: 2, folk: expect.any(Number), left: 0 });
+    expect(near.ready.folk).toBeGreaterThanOrEqual(6);
+    expect(near.hidden).toBe(true);
+
+    // Through its door: its own taproom, heard and mapped as one, with its own folk
+    const inside = await page.evaluate((key) => {
+        const { game, session } = window.pellagos;
+        const target = game.doors.targets.find((each) => each.map === "town" && each.link.id === `${key}/door`);
+        const spot = session.view.toScreen(target.box.getCenter(target.box.min.clone()));
+
+        game.tap(spot.x, spot.y);
+        game.advance(4);
+
+        const player = game.battle.actor("player");
+        const folk = game.battle.actors.filter((actor) => actor.map === player.map && actor.id !== "player");
+
+        return { map: player.map, shown: game.mapId, minimap: game.minimap.map.id, heard: session.sound.place, visible: game.interiors.get(player.map).object.visible, town: game.town.object.visible, folk: folk.map(({ id }) => id), names: folk.map(({ name }) => name), wenches: game.world.folk.map(({ name }) => name) };
+    }, near.key);
+
+    expect(inside).toMatchObject({ map: `${near.key}/taproom`, shown: `${near.key}/taproom`, minimap: `${near.key}/taproom`, heard: "taproom", visible: true, town: false });
+    expect(inside.folk).toContain(`${near.key}/barkeep`);
+    expect(inside.names.filter((name) => inside.wenches.includes(name))).toEqual([]);
+
+    // Out, and far off: let go (its plans kept)
+    const far = await page.evaluate((key) => {
+        const { game } = window.pellagos;
+        const building = game.world.interiors.buildings.get(key);
+
+        game.battle.command("player", { type: "enter", link: `${key}/door` });
+        game.advance(4);
+
+        const out = game.battle.actor("player").map;
+
+        window.put("player", game.world.spawns.player.map((value) => value - 100));
+        game.visitClock = 0;
+        game.advance(0.2);
+
+        return { out, visited: game.visits.has(key), folk: game.battle.actors.filter(({ id }) => id.startsWith(`${key}/`)).length, floors: building.maps.filter((id) => game.interiors.has(id)).length, plans: building.maps.filter((id) => game.world.maps[id]).length };
+    }, near.key);
+
+    expect(far).toEqual({ out: "town", visited: false, folk: 0, floors: 0, plans: 2 });
+
+    // Straight back in through the door, before it's got ready: built there and then
+    const again = await page.evaluate((key) => {
+        const { game } = window.pellagos;
+        const [outside] = game.world.interiors.buildings.get(key).door.ends;
+
+        window.put("player", outside.squares[0]);
+        game.battle.command("player", { type: "enter", link: `${key}/door` });
+        game.advance(0.2);
+
+        const player = game.battle.actor("player");
+
+        return { map: player.map, shown: game.mapId, visible: game.interiors.get(player.map)?.object.visible ?? false, folk: game.battle.actors.filter((actor) => actor.map === player.map && actor.id !== "player").length };
+    }, near.key);
+
+    expect(again).toEqual({ map: `${near.key}/taproom`, shown: `${near.key}/taproom`, visible: true, folk: expect.any(Number) });
+    expect(again.folk).toBeGreaterThanOrEqual(5);
+});
+
 test("tapping someone walks the player up to talk: their name and what they are, what they say, replies that lead on, Escape to stop", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
