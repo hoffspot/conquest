@@ -77,6 +77,12 @@ export const TREE_KINDS = Object.freeze([
 /** How many different trees there are (each fills one square): TREE_KINDS's. */
 export const TREE_VARIANTS = TREE_KINDS.length;
 
+/**
+ * How many metres a grid square of the art is: the kits build a piece `w` by `h` squares, and a
+ * town's layout is in metres (town.js).
+ */
+export const PLOT = 4;
+
 /** What the ground is, square by square. */
 export const GROUND = Object.freeze({ grass: 0, road: 1, cobbles: 2, soil: 3, courtyard: 4, planks: 5 });
 

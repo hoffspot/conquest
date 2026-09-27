@@ -644,6 +644,19 @@ export class Overworld {
     }
 }
 
+// The ways the plan's roads leave a settlement (angles: 0 east, π/2 south): towards where each
+// of its roads is ROAD_SIGHT metres out
+const ROAD_SIGHT = 100;
+
+function waysOut(plan, place) {
+    return plan.roads.filter(({ from, to }) => from === place.id || to === place.id).flatMap((road) => {
+        const cells = road.to === place.id ? [...road.cells].reverse() : road.cells;
+        const far = cells.map(([x, y]) => [(x + 0.5) * CELL, (y + 0.5) * CELL]).find(([x, y]) => Math.hypot(x - place.at[0], y - place.at[1]) >= ROAD_SIGHT);
+
+        return far ? [Math.atan2(far[1] - place.at[1], far[0] - place.at[0])] : [];
+    });
+}
+
 /**
  * The world for a seed: the plan, the town set into it where a player of `race` starts, and the
  * world outside round it, in the shape generateWorld's (world.js) is, but in the world's metres
@@ -655,7 +668,7 @@ export class Overworld {
  */
 export function buildWorld({ seed = 1, race = "human", plan = planWorld(seed) } = {}) {
     const start = startFor(plan, race);
-    const town = generateWorld({ seed });
+    const town = generateWorld({ seed, exits: waysOut(plan, start) });
     const at = [Math.round(start.at[0] - town.width / 2), Math.round(start.at[1] - town.height / 2)];
     const stamp = { at, width: town.width, height: town.height, blocked: town.blocked, opaque: town.opaque, ground: town.ground };
     const overworld = new Overworld({ plan, stamp, start });

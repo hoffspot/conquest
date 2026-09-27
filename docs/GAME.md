@@ -25,32 +25,67 @@ back to the same world:
   starts (their town nearest their capital: humans, for now), with everything in it (the spawns,
   the orc's patrol, the tavern, the links' ends) moved to its place. The world's `origin` is the
   town's corner, `[x, y]`; `stamp` is where the town is and its own squares; `home` is the town as
-  it was made, on its own.
+  it was made, on its own. The town's main streets head out the ways the plan's roads leave it.
 - **The world outside** (`Overworld`, the `town` map): all of it, on 1-metre squares, made a
   chunk 64 metres square at a time from the plan as it's needed, the town's squares in the chunks
   it's in, and its streets carrying on as the plan's roads (see WORLD.md, *The world in chunks*).
 
-`generateWorld({ seed })` makes the town:
+`generateWorld({ seed, kind, exits })` makes the town:
 
-- **A town** laid out by `setpieces/town.js` on a coarser plan of 4-metre squares ("plots"): 18
-  by 16 plots of streets, houses of 8 to 16 metres, a market square of 20 to 28 metres with a
-  well and stalls, and special buildings (a tavern, church, blacksmith, market hall and windmill).
-- **Fields** round it, 5 plots (20 metres) deep on every side, with the town's streets carrying
-  on as roads to the edge, and trees dotted about (about one for every 70 square metres, kept
-  clear of the roads, the orc's patrol and where people start).
-- **Squares**: the map is 112 by 104 squares of 1 metre, each blocked or not, with the kind of
-  ground on it. Houses and special buildings block their whole plots; props and trees only the
-  middle half of theirs (a well or tent 4 metres across, barrels or a trunk 2), so people can
-  walk round them. Apart from that, each square says whether it can be seen through (`opaque`):
-  houses, the special buildings and trees (in town and in the fields) are taller than anyone's
-  eyes and hide what's behind them; props (`SEE_OVER`: a well, barrels, crates, a cart) are in the
-  way but can be seen over. Everything that depends on seeing uses it (the battle's `canSee`).
-- **Where everyone starts**: the player in the middle of the market square, the orc 3 squares in
+- **A town** laid out by `setpieces/town.js` (below), in metres, its main streets leaving the
+  ways `exits` asks.
+- **Fields** round it, with the town's streets carrying on as roads to the edge, and trees dotted
+  about (about one for every 70 square metres, kept clear of the roads, the town, the orc's
+  patrol and where people start).
+- **Squares**: the map is 132 by 132 squares of 1 metre, each blocked or not, with the kind of
+  ground on it. A building blocks the squares under it (whose middles are more than 0.3 metres
+  inside it, turned as it stands); a prop only the middle half of its footprint (a well or stall
+  4 metres across, barrels 2); a tree the four squares round its trunk; so people can walk round
+  them. Apart from that, each square says whether it can be seen through (`opaque`): houses, the
+  special buildings and trees (in town and in the fields) are taller than anyone's eyes and hide
+  what's behind them; props (`SEE_OVER`: a well, barrels, crates, a cart) are in the way but can be
+  seen over. Everything that depends on seeing uses it (the battle's `canSee`).
+- **Where everyone starts**: the player in the middle of the market place, the orc 3 squares in
   from the north-west corner, and the orc's patrol from there halfway down the map's west side.
-- **The tavern** (`tavernOf`), 3 by 3 plots (12 metres), turned to face the market square if it
-  stands on it, otherwise a street (whichever of its sides has an open plot in the middle): its
-  door and the two squares in front of it (`front`), cleared, and the square outside them where
-  whoever comes out stands (`outside`).
+- **The tavern** (`tavernOf`), 12 metres square, facing the market place whichever way that is:
+  its door, the two squares at it (`front`), the square to come out onto (`outside`), and the way
+  up to it cleared (every square in front of the door 2.4 metres wide, out past its front, so
+  that it's squares side by side at any angle, not only corner to corner).
+
+### Towns (core/setpieces/town.js)
+
+`layoutTown({ seed, kind, exits })` lays out a village, town or city the way old towns grew
+(after Watabou's Medieval Fantasy City Generator, written afresh at the game's scale), in
+metres, x east and y south. See any at `town-map.html?seed=5&kind=town` (a village, a town or a
+city: `SETTLEMENT_KINDS`):
+
+- **A market place** near the middle: a polygon of five to seven corners, 10 to 13 metres out
+  (in a town), cobbled.
+- **Main streets** (4.4 metres wide) from it to where the roads leave (`exits`: the ways the
+  world's roads go; ways closer than 50 degrees made one; three or four round if none are
+  given), bending as they go (their heading wandering smoothly up to 26 degrees either way of the
+  way out), cobbled in the middle of town and earth further out.
+- **Lanes** (3 metres) curving round between neighbouring main streets, a ring of them (a city
+  three), wandering in and out, and alleys off them.
+- **Houses** along both sides of every street and round the market, one lot after another, 6 to
+  10 metres across and 8 to 12 deep, each turned to face its street where it stands (so they
+  stand at every angle as the streets bend), 0.4 metres back from it (up to 2 metres more where
+  the street bends towards its corners), wall to wall with their neighbours or nearly, a yard
+  behind most (with a vegetable bed, a tree, or barrels, crates, sacks or a cart by the back
+  wall). Fewer lots are built on towards the edge, and none past it (the edge wanders).
+- **Back buildings** (outhouses, workshops, barns: 4.5 to 7.5 metres) filling the blocks behind
+  the houses, each lined up with the street nearest it and facing it, a narrow way between them.
+- **Landmarks**: the tavern, church and smithy (and in a city, the market hall) facing the
+  market, slid along its edge if need be but never round its corner (or, failing that, facing a
+  main street near it); a well and stalls on it, clear of where the main streets leave; a
+  windmill out at the edge, by a main street.
+- **Trees** dotted about the open ground left.
+
+Every piece is a rectangle turned to face some way (`facing`, as characters face): its middle,
+its size in plots as the art kits build it, and `footprint(piece)` its corners. A town is 20 to
+50 houses, a city 50 to 80, a village 5 to 15. All the arithmetic is exact (`exact.js`: sines,
+cosines, arctangents and square roots with + - * / alone), so the same seed gives the same town
+in every browser. Laying out a town takes about 20 to 80 ms.
 
 ### Maps and links (core/interiors.js)
 
@@ -459,11 +494,14 @@ it's a doorway, with a lintel and its curtains tied back at either side (`doorwa
 
 ### The town (world/town3d.js, world/art)
 
-The art kits build every piece of the town's plan in the art's world pixels, five to a metre:
+The art kits build every piece of the town's layout in the art's world pixels, five to a metre,
+facing south; each is turned about its middle to face the way the layout says:
 
 - **Houses** (kits/house.js) in four styles (whitewashed cottages with thatch, timber-framed,
-  brick, stone), one or two storeys of about 3.5 metres, with 2-metre doors and 1-metre windows
-  on their south sides, where the camera sees them.
+  brick, stone), storeys of about 3.5 metres, with 2-metre doors and 1-metre windows on their
+  fronts. Half the houses standing on 64 square metres or more have a second storey: few in a
+  village, more in a town and most in a city, where the houses are bigger. Back buildings are
+  one storey.
 - **Special buildings** (kits/landmarks.js): a two-storey tavern with a jettied, timber-framed
   upper floor, its name, *Wenches and Ale*, in gold blackletter (UnifrakturMaguntia, kits/signs.js,
   loaded as a web font) on an oxblood board along its front, and a hanging sign painted on a
@@ -536,9 +574,10 @@ The world round the town, its trees too, is drawn a chunk at a time (world/chunk
 
 Textures are sized in metres too: bricks courses of 10 cm, slates of 15, stone courses of 35.
 Everything that doesn't move is merged into one mesh per material, so the whole town draws in a
-few dozen draw calls (about 40,000 triangles), however many houses it has. While it's built,
-`buildTown` also records how tall whatever stands on each of the town's squares is (a
-`heightMap`, read anywhere with `at(x, z)`), for the cutaway.
+few dozen draw calls (about 8,000 to 10,000 triangles), however many houses it has. While it's
+built, `buildTown` also records how tall whatever stands on each of the town's squares is (a
+`heightMap`, read anywhere with `at(x, z)`; a building over the squares under it and its eaves,
+as it's turned, not its turned box), for the cutaway.
 
 ### Characters in the world (world/avatar.js)
 
@@ -910,7 +949,7 @@ casts shadows, and show the squares characters walk on (blocked ones red) with e
 
 ## Performance
 
-A frame draws the town (a few dozen draw calls, about 40,000 triangles), the ground (one draw
+A frame draws the town (a few dozen draw calls, about 8,000 to 10,000 triangles), the ground (one draw
 call) and two characters (a body, garments and hair each, about 35,000 to 45,000 triangles at
 the game's hair detail), and again from the sun for shadows. In the taproom there are nine
 characters (the folk casting no shadows): about 220 draw calls and 630,000 triangles; only the
@@ -929,6 +968,12 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
 
 ## Testing
 
+- `test/setpieces.test.js`: town layouts (villages, towns and cities, 38 of them): the same for a
+  seed, more built the bigger the place, the tavern (and church and smithy) round the market,
+  every street joined to the market and every way out, every house turned to face its street
+  (at over 40 angles) with its front walked up to from the market, no building on another or on
+  a street, each blocking the squares under it and hiding what's behind it (props not), main
+  streets leaving the ways asked; the exact sums matching Math's; and castle layouts.
 - `test/world.test.js`, `test/combat.test.js`: the world's layout and pathing on many seeds,
   what hides what's behind it (houses, landmarks, trees) and what can be seen over (props), and
   the battle: reach in every direction, line of sight (seeing and shooting over barrels, not

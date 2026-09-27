@@ -145,7 +145,7 @@ test("makes a character: a random look, a weapon and a name, then plays them in 
     const game = await page.evaluate(() => {
         const { game } = window.pellagos;
         const player = game.battle.actor("player");
-        const { square } = game.world.town;
+        const [cx, cy] = game.world.town.centre;
         const [ox, oy] = game.world.origin;
 
         const character = game.avatars.get("player").character;
@@ -157,7 +157,7 @@ test("makes a character: a random look, a weapon and a name, then plays them in 
             // (The bow slung on the back to start with)
             sheathed: character.sheathed,
             bowOn: character.items.find((item) => item.name === "bow").parent.name,
-            inSquare: player.x >= ox + square.x * 4 && player.x <= ox + (square.x + square.w) * 4 && player.y >= oy + square.y * 4 && player.y <= oy + (square.y + square.h) * 4,
+            inSquare: Math.hypot(player.x - (ox + cx), player.y - (oy + cy)) < 10,
             saved: JSON.parse(localStorage.getItem("pellagos.save")),
         };
     });

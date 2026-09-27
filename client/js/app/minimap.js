@@ -12,7 +12,8 @@
 
 import { PLAN_KEY } from "../core/interiors.js";
 import { CHUNK, WET } from "../core/overworld.js";
-import { GROUND } from "../core/setpieces/pieces.js";
+import { GROUND, HOUSE_STYLES, PLOT } from "../core/setpieces/pieces.js";
+import { footprint } from "../core/setpieces/town.js";
 import { LAND_COLOURS } from "../world/ground.js";
 
 // Colours (RGB) of the ground and of what stands on it
@@ -24,7 +25,8 @@ const GROUND_COLOURS = {
     [GROUND.courtyard]: [164, 154, 136],
     [GROUND.planks]: [132, 94, 58],
 };
-const ROOFS = [[146, 76, 50], [126, 90, 60], [112, 98, 88]];
+// Roofs, by the house's style (thatch, clay tiles, brick-red tiles, slate)
+const ROOFS = [[176, 150, 92], [146, 76, 50], [126, 90, 60], [110, 106, 108]];
 const LANDMARK_ROOF = [96, 104, 118];
 const PROP = [86, 72, 58];
 const TREE = [48, 78, 36];
@@ -96,22 +98,44 @@ export function interiorColours(map) {
     return data;
 }
 
-// Where the town's corner is ([x, y] metres: a world's origin is a number for both, or a pair)
+// Where the town's layout starts ([x, y] metres: a world's origin is a number for both, or a pair)
 const cornerOf = ({ origin }) => (Array.isArray(origin) ? origin : [origin, origin]);
 
-/** The buildings' footprints (in squares): { x, y, w, h, landmark } for every house and landmark. */
-export function buildingsOf(world) {
-    const { town, plot } = world;
-    const [ox, oy] = cornerOf(world);
+// Is a point inside a polygon ([[x, y]...])?
+function within(corners, px, py) {
+    let inside = false;
 
-    return town.pieces.filter(({ key }) => /^(house|landmark)-/.test(key)).map(({ key, x, y, w, h }) => ({ x: ox + x * plot, y: oy + y * plot, w: w * plot, h: h * plot, landmark: key.startsWith("landmark-") }));
+    for (let k = 0, last = corners.length - 1; k < corners.length; last = k++) {
+        const [[ax, ay], [bx, by]] = [corners[k], corners[last]];
+
+        if (ay > py !== by > py && px < ((bx - ax) * (py - ay)) / (by - ay) + ax) {
+            inside = !inside;
+        }
+    }
+
+    return inside;
 }
 
-/** The town's trees: { x, y, r } (their middles and how far their crowns spread, in metres). */
-export function treesOf(world) {
-    const { town, plot } = world;
+/**
+ * The buildings, as they stand: { corners ([x, y] ×4, metres, each turned the way it faces),
+ * ridge ([from, to]: along the longer way), landmark, style } for every house and landmark.
+ */
+export function buildingsOf(world) {
     const [ox, oy] = cornerOf(world);
-    const inTown = town.pieces.filter(({ key }) => key.startsWith("tree-")).map(({ x, y, w, h }) => ({ x: ox + (x + w / 2) * plot, y: oy + (y + h / 2) * plot, r: 0.55 * Math.min(w, h) * plot }));
+
+    return world.town.pieces.filter(({ kind }) => kind === "house" || kind === "landmark").map((piece) => {
+        const corners = footprint(piece, -0.3).map(([x, y]) => [ox + x, oy + y]);
+        const [a, b, c, d] = corners;
+        const middle = (p, q) => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
+
+        return { corners, ridge: piece.w >= piece.h ? [middle(a, d), middle(b, c)] : [middle(a, b), middle(d, c)], landmark: piece.kind === "landmark", style: piece.style };
+    });
+}
+
+/** The town's trees: { x, y, r } (their trunks and how far their crowns spread, in metres). */
+export function treesOf(world) {
+    const [ox, oy] = cornerOf(world);
+    const inTown = world.town.pieces.filter(({ kind }) => kind === "tree").map(({ x, y }) => ({ x: ox + x, y: oy + y, r: 2 }));
 
     return [...world.trees.map(({ x, y }) => ({ x, y, r: 1.8 })), ...inTown];
 }
@@ -121,25 +145,36 @@ export function treesOf(world) {
  * or a prop or tree where one stands.
  */
 export function mapColours(world) {
-    const { width, height, ground, blocked, town, origin, plot } = world;
+    const { width, height, ground, blocked, town } = world;
+    const [ox, oy] = cornerOf(world);
     const data = new Uint8ClampedArray(width * height * 4);
     const roofs = new Int16Array(width * height).fill(-1);
     const props = new Uint8Array(width * height);
 
-    buildingsOf(world).forEach(({ x, y, w, h, landmark }, k) => {
-        for (let j = y; j < y + h; j++) {
-            for (let i = x; i < x + w; i++) {
-                roofs[j * width + i] = landmark ? ROOFS.length : k % ROOFS.length;
+    // Every square under each thing (its middle inside it)
+    const under = (corners, visit) => {
+        const xs = corners.map(([x]) => x);
+        const ys = corners.map(([, y]) => y);
+
+        for (let j = Math.max(0, Math.floor(Math.min(...ys))); j < Math.min(height, Math.ceil(Math.max(...ys))); j++) {
+            for (let i = Math.max(0, Math.floor(Math.min(...xs))); i < Math.min(width, Math.ceil(Math.max(...xs))); i++) {
+                if (within(corners, i + 0.5, j + 0.5)) {
+                    visit(j * width + i);
+                }
             }
         }
+    };
+
+    buildingsOf(world).forEach(({ corners, landmark, style }) => {
+        under(corners, (at) => {
+            roofs[at] = landmark ? ROOFS.length : Math.max(0, HOUSE_STYLES.indexOf(style));
+        });
     });
 
-    for (const { x, y, w, h } of town.pieces.filter(({ key }) => key.startsWith("prop-"))) {
-        for (let j = origin + y * plot; j < origin + (y + h) * plot; j++) {
-            for (let i = origin + x * plot; i < origin + (x + w) * plot; i++) {
-                props[j * width + i] = 1;
-            }
-        }
+    for (const piece of town.pieces.filter(({ kind }) => kind === "prop")) {
+        under(footprint(piece, -(piece.w * PLOT) / 4).map(([x, y]) => [ox + x, oy + y]), (at) => {
+            props[at] = 1;
+        });
     }
 
     for (let y = 0; y < height; y++) {
@@ -490,21 +525,17 @@ function paint(world) {
     context.drawImage(squares, 0, 0, width * SCALE, height * SCALE);
     context.scale(SCALE, SCALE);
 
-    // Buildings: a dark edge, and a light ridge along the roof
-    for (const { x, y, w, h } of buildingsOf(world)) {
+    // Buildings: a dark edge, and a light ridge along the roof, each turned as it stands
+    for (const { corners, ridge } of buildingsOf(world)) {
+        context.beginPath();
+        corners.forEach(([x, y], k) => context[k ? "lineTo" : "moveTo"](x, y));
+        context.closePath();
         context.strokeStyle = "rgba(34, 22, 16, 0.85)";
         context.lineWidth = 0.6;
-        context.strokeRect(x + 0.3, y + 0.3, w - 0.6, h - 0.6);
+        context.stroke();
         context.beginPath();
-
-        if (w >= h) {
-            context.moveTo(x + 1, y + h / 2);
-            context.lineTo(x + w - 1, y + h / 2);
-        } else {
-            context.moveTo(x + w / 2, y + 1);
-            context.lineTo(x + w / 2, y + h - 1);
-        }
-
+        context.moveTo(...ridge[0]);
+        context.lineTo(...ridge[1]);
         context.strokeStyle = "rgba(255, 230, 200, 0.35)";
         context.lineWidth = 0.5;
         context.stroke();

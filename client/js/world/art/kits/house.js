@@ -22,6 +22,11 @@ const STYLES = {
 
 const TWO_STOREYS = 1.65;
 
+// Half the houses standing on this many plots or more (64 square metres) have a second storey:
+// few in a village, more in a town and most in a city, where houses are bigger. Back buildings
+// (outhouses, workshops, barns) never do
+const UPSTAIRS = 4;
+
 // The stone plinth the walls stand on, and the door (world pixels)
 const PLINTH = 2;
 const DOOR = { width: 6, height: 10 };
@@ -51,8 +56,11 @@ function framing(solid, x0, x1, z, top) {
     solid.box(x0, top * 0.48, z, x1, top * 0.48 + 1.4, z + 0.7, beam);
 }
 
-/** A house filling a w x h footprint (grid squares), in a style, looking like its variant. */
-export function house({ w, h, style, variant }) {
+/**
+ * A house filling a w x h footprint (plots, maybe fractions of them), in a style, looking like
+ * its variant; a back building (`back`) behind the houses on a street is one storey.
+ */
+export function house({ w, h, style, variant, back = false }) {
     const random = createRandom(seedOf(`${w}x${h}-${style}-${variant}`));
     const look = STYLES[style];
     const solid = new Solid();
@@ -63,7 +71,7 @@ export function house({ w, h, style, variant }) {
     const z0 = inset + (h > 2 ? random.int(0, 2) : 0);
     const x1 = w * CELL - inset;
     const z1 = h * CELL - inset - (h > 2 ? random.int(0, 2) : 0);
-    const storeys = w * h >= 9 && random.chance(0.5) ? 2 : 1;
+    const storeys = !back && w * h >= UPSTAIRS && random.chance(0.5) ? 2 : 1;
     const top = random.range(...look.storey) * (storeys === 2 ? TWO_STOREYS : 1);
     const ridge = w > h ? "x" : h > w ? "z" : variant % 2 ? "z" : "x";
     const span = ridge === "x" ? z1 - z0 : x1 - x0;
