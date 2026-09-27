@@ -114,7 +114,7 @@ export async function manifestSource() {
         { id: "code", label: "Game code", detail: "Pellagos", files: await sized(code) },
         { id: "body", label: "Body and shapes", detail: "MakeHuman base mesh, skeleton and sliders", files: await sized(["characters/human.json", "characters/human.bin"]) },
         { id: "skin", label: "Skin details", detail: "MakeHuman masks", files: await sized(masks) },
-        { id: "models", label: "Props and trees", detail: "KayKit Medieval Hexagon models", files: await sized(new Set(models)) },
+        { id: "models", label: "Props", detail: "KayKit Medieval Hexagon models", files: await sized(new Set(models)) },
         { id: "fonts", label: "Lettering", detail: "UnifrakturMaguntia, for the tavern's signs", files: await sized((await readdir(path.join(client, "fonts"))).filter((name) => name.endsWith(".woff2")).map((name) => `fonts/${name}`)) },
     ];
     const lines = groups.map(({ id, label, detail, files }) => [
