@@ -7,7 +7,8 @@ import { ICONS } from "../client/js/app/icons.js";
 import { buildingsOf, interiorColours, mapColours, treesOf } from "../client/js/app/minimap.js";
 import { ACTIONS, DIRECTIONS, directionOf, sectorPath, WHEELS } from "../client/js/app/wheel.js";
 import { SPELLS } from "../client/js/core/spells.js";
-import { isHero, loadSave, loadSettings, loadTalks, newSeed, SAVE_VERSION, saveSettings, saveTalks, SETTINGS_DEFAULTS, writeSave, clearSave } from "../client/js/app/save.js";
+import { isHero, loadExplored, loadSave, loadSettings, loadTalks, newSeed, SAVE_VERSION, saveExplored, saveSettings, saveTalks, SETTINGS_DEFAULTS, writeSave, clearSave } from "../client/js/app/save.js";
+import { Explored } from "../client/js/core/explored.js";
 import { BEARDS, HAIRSTYLES } from "../client/js/characters/hair.js";
 import { MACRO_DEFAULTS } from "../client/js/characters/macro.js";
 import { createRandom } from "../client/js/core/random.js";
@@ -119,6 +120,29 @@ describe("saving (save.js)", () => {
         assert.deepEqual(loadTalks({ ...save, created: "2026-09-27T10:00:00.000Z" }), { memory: {}, knowledge: [] });
         assert.deepEqual(loadTalks({ ...save, seed: 13 }), { memory: {}, knowledge: [] });
         assert.equal(saveTalks({ seed: 1 }, talks), false);
+    });
+
+    it("remembers what a saved character has found of its world: the buildings gone into, the chunks set foot in; not for another", () => {
+        useStorage();
+
+        const save = { seed: 12, created: "2026-09-26T10:00:00.000Z" };
+        const explored = new Explored();
+
+        explored.enter("home:tavern");
+        explored.visit(5000, 6000);
+
+        assert.deepEqual(new Explored(loadExplored(save)).entered, new Set());
+        assert.equal(saveExplored(save, explored), true);
+
+        const back = new Explored(loadExplored(save));
+
+        assert.ok(back.hasEntered("home:tavern") && back.isVisited(Math.floor(5000 / 64), Math.floor(6000 / 64)));
+        assert.equal(back.chunksVisited, 1);
+
+        // Another character (or world) starts afresh; a game not saved (?play) keeps nothing
+        assert.equal(new Explored(loadExplored({ ...save, created: "2026-09-27T10:00:00.000Z" })).chunksVisited, 0);
+        assert.equal(new Explored(loadExplored({ ...save, seed: 13 })).entered.size, 0);
+        assert.equal(saveExplored({ seed: 1 }, explored), false);
     });
 
     it("still plays when the browser won't store anything", () => {

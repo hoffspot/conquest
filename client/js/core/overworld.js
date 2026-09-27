@@ -913,7 +913,10 @@ export function buildWorld({ seed = 1, race = "human", plan = planWorld(seed) } 
     const interiors = new Interiors(world);
 
     if (tavern) {
-        interiors.adopt({ key: "home:tavern", kind: "tavern", name: WENCHES.name, tavern: WENCHES, maps: ["taproom", "upstairs"], folk: town.folk });
+        const piece = town.town.pieces.find((one) => one.tavern === WENCHES);
+        const [ox, oy] = Array.isArray(world.origin) ? world.origin : [world.origin, world.origin];
+
+        interiors.adopt({ key: "home:tavern", kind: "tavern", name: WENCHES.name, tavern: WENCHES, maps: ["taproom", "upstairs"], folk: town.folk, piece, at: piece ? [ox + piece.x, oy + piece.y] : null });
     }
 
     for (const piece of town.town.pieces) {

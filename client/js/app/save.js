@@ -1,7 +1,8 @@
 // What the game keeps between visits, in the browser's local storage: the player's character
 // (and the seed of the world it lives in), what the folk in it remember of them and what they've
-// learnt talking (core/dialogue.js), and settings (the game options, debug mode, drawing
-// quality).
+// learnt talking (core/dialogue.js), what they've found of the world (core/explored.js: the
+// buildings gone into, the chunks set foot in), and settings (the game options, debug mode,
+// drawing quality).
 //
 // Storage can be missing or refuse to work (private browsing, blocked site data), so every read
 // and write is guarded: without it the game still plays, it just doesn't remember.
@@ -9,6 +10,7 @@
 const SAVE_KEY = "pellagos.save";
 const SETTINGS_KEY = "pellagos.settings";
 const TALKS_KEY = "pellagos.talks";
+const EXPLORED_KEY = "pellagos.explored";
 
 /** The save format's version: a save from another version is set aside, not misread. */
 export const SAVE_VERSION = 1;
@@ -84,6 +86,22 @@ export function loadTalks(save) {
 /** Keep what's been said in a saved game (not in one that isn't saved: ?play). */
 export function saveTalks(save, { memory, knowledge }) {
     return save?.created ? write(TALKS_KEY, { created: save.created, seed: save.seed, memory, knowledge: [...knowledge] }) : false;
+}
+
+/**
+ * What the character of a saved game ({ seed, created }) has found of its world (core/explored.js
+ * Explored's toJSON: { entered, visited }); nothing yet for another game.
+ */
+export function loadExplored(save) {
+    const explored = read(EXPLORED_KEY);
+    const ours = explored && save?.created && explored.created === save.created && explored.seed === save.seed;
+
+    return ours ? { entered: explored.entered ?? [], visited: explored.visited ?? "" } : { entered: [], visited: "" };
+}
+
+/** Keep what's been found in a saved game (not in one that isn't saved: ?play). */
+export function saveExplored(save, explored) {
+    return save?.created ? write(EXPLORED_KEY, { created: save.created, seed: save.seed, ...explored.toJSON() }) : false;
 }
 
 /** Forget the saved game. */

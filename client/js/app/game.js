@@ -22,6 +22,7 @@ import { folkLook } from "../characters/folk.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
 import { Battle, hostile, STEP_MS, TALK_REACH } from "../core/battle.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
+import { Explored } from "../core/explored.js";
 import { GODS } from "../core/lore/gods.js";
 import { BECKON, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js";
 import { squaresOf } from "../core/grid.js";
@@ -157,8 +158,12 @@ export class Game {
      * @param {object} [options.talks] - What the folk remember of the player, and what the player
      *     has learnt talking (save.js loadTalks): { memory, knowledge }.
      * @param {Function} [options.onTalk] - Hears them whenever they change (to keep them).
+     * @param {object} [options.explored] - What the player has found of the world (save.js
+     *     loadExplored: core/explored.js Explored's toJSON).
+     * @param {Function} [options.onExplore] - Hears it whenever they find more (to keep it).
+     * @param {Function} [options.onWorldMap] - Asked to open the world map (the minimap held).
      */
-    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {} }) {
+    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {} }) {
         this.view = view;
         this.kit = kit;
         this.sound = sound;
@@ -236,6 +241,16 @@ export class Game {
         this.memory = talks.memory;
         this.knowledge = new Set(talks.knowledge);
         this.onTalk = onTalk;
+
+        /**
+         * What the player's found of the world (core/explored.js): the buildings they've gone
+         * into and the chunks they've set foot in; the icons over those buildings, for the maps
+         * (made again as more are found); and who hears of it.
+         */
+        this.explored = explored instanceof Explored ? explored : new Explored(explored);
+        this.onExplore = onExplore;
+        this.onWorldMap = onWorldMap;
+        this.landmarks = { version: -1, icons: [] };
         this.talking = null;
         this.approaching = null;
         this.talkVariety = new Variety();
@@ -371,7 +386,7 @@ export class Game {
         this.#follow(0);
         step("Drawing the map");
 
-        this.minimap = await time("minimap", () => new Minimap(this.hud.map, world, { onTap: (tap) => this.mapTap(tap) }));
+        this.minimap = await time("minimap", () => new Minimap(this.hud.map, world, { onTap: (tap) => this.mapTap(tap), onHold: () => this.onWorldMap() }));
         this.minimap.show(this.minimapShown ?? true);
         this.wheel = new ActionWheel(this.hud.root);
         this.talk = new TalkPanel(this.hud.root);
@@ -875,7 +890,43 @@ export class Game {
             }),
             destination: actor.order?.type === "move" ? [actor.order.to[0] + 0.5, actor.order.to[1] + 0.5] : null,
             view: corners,
+            icons: this.mapId === "town" ? this.icons() : [],
         });
+    }
+
+    /**
+     * The icons over the buildings the player has gone into ([{ kind, x, z }]: metres, on the
+     * world outside), for the maps.
+     */
+    icons() {
+        const { explored, landmarks } = this;
+
+        if (landmarks.version !== explored.version) {
+            const buildings = this.world.interiors?.buildings;
+
+            landmarks.icons = [...explored.entered].map((key) => buildings?.get(key)).filter((building) => building?.at).map(({ kind, at }) => ({ kind, x: at[0], z: at[1] }));
+            landmarks.version = explored.version;
+        }
+
+        return landmarks.icons;
+    }
+
+    /**
+     * What the world map shows (app/worldmap.js): where the player is ({ x, z, facing }, metres
+     * and radians, on the world outside: inside, at the building's door) and the icons.
+     */
+    worldMapView() {
+        const actor = this.battle.actor("player");
+        const building = this.world.interiors?.of(actor.map);
+        const outside = actor.map === "town" ? [actor.x, actor.y] : (building?.at ?? building?.door?.ends[0].arrive ?? [actor.x, actor.y]);
+        const facing = this.avatars.get("player")?.facing ?? actor.facing;
+
+        return { player: { x: outside[0], z: outside[1], facing }, icons: this.icons() };
+    }
+
+    // The player's found more of the world: keep it
+    #explored() {
+        this.onExplore(this.explored);
     }
 
     // Who the player was told to fight (and is still alive), or null
@@ -1218,6 +1269,11 @@ export class Game {
 
         const player = this.battle.actor("player");
 
+        // Out in the world, the chunk the player's in is visited: the fog lifts off it
+        if (player?.map === "town" && this.explored.visit(player.x, player.y)) {
+            this.#explored();
+        }
+
         // (Inside, nothing's let go or got ready: the town's as it was left)
         if (this.visitClock > 0 || !player || player.map !== "town") {
             return;
@@ -1533,8 +1589,15 @@ export class Game {
                     this.#place(actor);
 
                     if (event.id === "player") {
+                        const building = this.world.interiors?.of(event.to);
+
                         // (Walked straight in: whatever of it isn't built yet, built now)
-                        this.#ready(this.world.interiors?.of(event.to)?.key);
+                        this.#ready(building?.key);
+
+                        // The first time in, it's marked on the maps
+                        if (building && this.explored.enter(building.key)) {
+                            this.#explored();
+                        }
                         this.#arrive(actor);
                         this.sound?.setListener(avatar.object.position.x, avatar.object.position.z);
                     }

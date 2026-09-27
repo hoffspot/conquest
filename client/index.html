@@ -128,7 +128,7 @@
                 <div class="bar"><div class="fill"></div><span class="value"></span></div>
                 <div class="bar stamina" hidden><div class="fill"></div><span class="value"></span></div>
             </div>
-            <p class="hint" id="hint">Tap the ground to walk, double&#8209;tap to run, tap an enemy to fight it, or someone to talk to them. Hold on yourself or an enemy for spells.</p>
+            <p class="hint" id="hint">Tap the ground to walk, double&#8209;tap to run, tap an enemy to fight it, or someone to talk to them. Hold on yourself or an enemy for spells, or on the minimap for the world map.</p>
             <div class="hud-bottom">
                 <button type="button" id="zoomin" class="hud-button" aria-label="Zoom in" title="Zoom in">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
@@ -138,6 +138,29 @@
                 </button>
             </div>
         </section>
+
+        <!-- The world map: the minimap held, or M -->
+        <dialog id="worldmap" aria-labelledby="worldmaptitle">
+            <canvas id="worldmapcanvas" role="img" aria-label="Map of the world, where you've been"></canvas>
+            <header class="worldmap-head">
+                <h2 id="worldmaptitle">The world</h2>
+                <button type="button" id="worldmapclose" class="hud-button" aria-label="Close the map" title="Close the map (Esc)">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+                </button>
+            </header>
+            <ul class="worldmap-key" id="worldmapkey" aria-label="Key"></ul>
+            <div class="worldmap-tools">
+                <button type="button" id="worldmaphere" class="hud-button" aria-label="Where you are" title="Where you are">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
+                </button>
+                <button type="button" id="worldmapin" class="hud-button" aria-label="Zoom in" title="Zoom in">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                </button>
+                <button type="button" id="worldmapout" class="hud-button" aria-label="Zoom out" title="Zoom out">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg>
+                </button>
+            </div>
+        </dialog>
 
         <!-- Paused -->
         <dialog id="menu" aria-labelledby="menutitle">

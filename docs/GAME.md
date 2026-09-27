@@ -1048,11 +1048,54 @@ patch 192 metres square at a time round the player, the town's picture laid in i
 settlements' buildings and props painted over their ground the same way, painted again
 when they've gone far enough that what's shown would reach the patch's edge. Each frame (at most 30 times a second)
 draws it scaled to fit, then what the camera sees (the ground under the screen's corners), where
-the player is going, the enemies (red dots, the target ringed) and the player (an arrowhead
-pointing the way they face). A tap on it walks the player there, or fights an enemy within 12
-pixels of the tap; a double tap runs. Inside, each floor is painted from its plan: the floor,
-walls, furniture in its colours, the stairs' treads, round barrels, the hearth's fire and the
-doorway; only those on the same floor as the player are shown.
+the player is going, the enemies (red dots, the target ringed), an icon over each building the
+player has gone into, and the player (an arrowhead pointing the way they face). A tap on it walks
+the player there, or fights an enemy within 12 pixels of the tap; a double tap runs; holding it
+(0.55 s, without moving) opens the world map. Inside, each floor is painted from its plan: the
+floor, walls, furniture in its colours, the stairs' treads, round barrels, the hearth's fire and
+the doorway; only those on the same floor as the player are shown.
+
+**The icons** (`app/mapicons.js`) are only over the buildings that can be gone into, and only once
+the player has been inside (a house that can't be entered never has one): a round dark badge
+rimmed in the colour of what it is, with its sign: a foaming tankard for a tavern (amber), an
+anvil throwing a spark for a smithy (steel), a temple's columns under its pediment for a temple
+(white and gold), and crossed swords behind a blue shield for an adventurers' guild (gold). They're
+drawn on a canvas from paths on a 24-unit grid, the same on the minimap (22 pixels), the world
+map (24) and its key.
+
+**What the player's found** (`core/explored.js` `Explored`): the buildings they've gone into (by
+key: marked the first time they cross into one of its floors) and the chunks of the world they've
+set foot in (64 metres square; the chunk they're standing in is marked as they go, out in the
+world). The chunks are a bit each, 128 by 128 of them in 2 KB; kept with a saved game in
+`pellagos.explored` (`{ created, seed, entered, visited }`, the chunks as base64), for that
+character only, as the talks are.
+
+### The world map (app/worldmap.js)
+
+Held on the minimap (or M on a keyboard), the whole screen becomes a map of the world, the game
+paused under it, until it's closed (the cross, Escape, or M again). It opens on the player, about
+900 metres across the screen's shorter side; drag to look about, pinch or scroll to zoom (from a
+quarter of a metre to a pixel out to the whole world), or use its buttons: where you are, zoom in,
+zoom out. A key in the corner shows the four icons and the fog.
+
+- **The land** is one picture of the world's plan, four pixels to a cell (32 metres), each cell in
+  its land's grass colour as the minimap has it, shaded by the hills as if lit from the
+  north-west, with the seas, lakes and rivers; the roads between the settlements over it.
+- **Nearer in** (4 metres to a pixel or closer), each chunk the player has been in is shown as
+  the minimap paints it, every square of it: the ground, water and bridges, the town and the
+  settlements' buildings, props, trees and the land's features, at two pixels to the metre.
+  They're painted as they come into view, six a frame (the rest next frame), and the last 240
+  kept.
+- **The fog** lies over every chunk the player hasn't set foot in: opaque, cloudy (a tiling
+  tile of soft noise in the fog's colours, moving with the map as it's dragged), with the chunks'
+  square edges. Nothing of the land shows through it; it lifts off a chunk the moment the player
+  walks into it.
+- **Over it**: the names of the settlements the player has been in (20 metres to a pixel or
+  closer), the icons over the buildings they've gone into (6 metres to a pixel or closer), and
+  the player, pointing the way they face (inside, at the building they're in).
+
+A redraw waits for the next frame, or 50 ms if the browser has no frame coming (as when nothing
+else on the page is changing, with the game paused).
 
 ### Sound (audio/)
 
@@ -1271,7 +1314,7 @@ closes it.
 The character is saved in the browser's local storage as `pellagos.save`: `{ version, hero,
 seed, created }`, where `hero` is `{ name, shape: { macro, details }, look: { skin, eyes, hair },
 weapon }`. Settings (the minimap and sound switches, the three volumes, debug mode and its controls) are in
-`pellagos.settings`. A save of another
+`pellagos.settings`; what the character's found of the world, in `pellagos.explored`. A save of another
 version, or one naming a weapon the game doesn't know, is ignored rather than misread; if the
 browser won't store anything (private browsing), the game still plays, it just forgets.
 
@@ -1407,8 +1450,12 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   is (fireballs orange and red, bolts violet and blue, heals green, stars bright); flying in them
   (straight, spiralling, jittering, as twins, drawn out), bursting in their colours, rings and
   stars.
+- `test/explored.test.js`: the buildings gone into, once each; a chunk's fog lifted when it's set
+  foot in, and only that chunk, to the world's corners and nothing off it; kept and read back
+  just as it was.
 - `test/app.test.js`, `test/town3d.test.js`, `test/manifest.test.js`, `test/sw.test.js`: saving
-  (and what's been said in talks, for the saved character only),
+  (and what's been said in talks, and what's been found of the world, for the saved character
+  only),
   heroes (and forgetting volumes saved on the old scale), the minimap's colours (in the town and
   inside), the action wheel (which slice a flick is in, its shapes, its
   actions and icons), the loader's byte counting, the ground's blending, the town's
@@ -1472,7 +1519,9 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   adventurers reading the board and drinking, their weapons sheathed, and the receptionist
   signing the player up,
   walking by the
-  minimap, walking 300 metres out of the town into the world (the chunks round the player drawn,
+  minimap, a building gone into marked on the minimap, the world map held open from it (the game
+  paused under it, the fog over every chunk but those walked into, the tavern's icon and the
+  town's name on it, zooming out, closed by Escape and by M), walking 300 metres out of the town into the world (the chunks round the player drawn,
   those left behind thrown away, the minimap following), Game options and the volume sliders
   (remembered), the
   action wheel (stunning the orc, a flick refused while cooling down, then a heal), and a phone

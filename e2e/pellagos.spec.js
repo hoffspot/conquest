@@ -1358,6 +1358,99 @@ test("tapping someone walks the player up to talk: their name and what they are,
     expect(await page.evaluate(() => ({ talking: window.pellagos.game.battle.actor("barkeep").talkingTo, remembered: window.pellagos.game.memory.barkeep.talks }))).toEqual({ talking: null, remembered: 1 });
 });
 
+test("a building gone into is marked on the minimap; holding the minimap opens the world map, fog over all but where the player's been", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // Nothing marked yet; into Wenches and Ale and out again, then a walk out of town
+    const found = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+        const before = { icons: game.icons().length, chunks: game.explored.chunksVisited };
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        for (const map of ["taproom", "town"]) {
+            game.battle.command("player", { type: "enter", link: "tavern-door" });
+
+            for (let k = 0; k < 200 && player.map !== map; k++) {
+                game.advance(0.25);
+            }
+        }
+
+        game.minimap.drawn = -Infinity;
+        game.advance(0.1);
+
+        const marked = { icons: game.icons().map(({ kind }) => kind), minimap: [...game.minimap.icons], entered: [...game.explored.entered] };
+
+        // (Somewhere 150 metres off that can be walked to)
+        const squares = game.world.maps.town.squares;
+        const [px, py] = player.square;
+
+        for (let k = 0; k < 16 && !player.path.length; k++) {
+            const to = [Math.round(px + Math.cos((k * Math.PI) / 8) * 150), Math.round(py + Math.sin((k * Math.PI) / 8) * 150)];
+
+            if (!squares.blocked(...to)) {
+                game.battle.command("player", { type: "move", to, run: true });
+                game.advance(0.1);
+            }
+        }
+
+        for (let k = 0; k < 120; k++) {
+            game.advance(0.5);
+        }
+
+        return { before, marked, chunks: game.explored.chunksVisited, map: player.map };
+    });
+
+    expect(found.before).toEqual({ icons: 0, chunks: 1 });
+    expect(found.marked).toEqual({ icons: ["tavern"], minimap: ["tavern"], entered: ["home:tavern"] });
+    expect(found.chunks).toBeGreaterThanOrEqual(3);
+
+    // Held (not tapped): the world map, the game paused under it
+    await page.evaluate(() => window.pellagos.game.start());
+
+    const box = await page.locator("#minimap").boundingBox();
+
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(800);
+    await page.mouse.up();
+    await page.waitForFunction(() => window.pellagos.worldMap?.drawn, null, { polling: 100 });
+
+    const map = await page.evaluate(() => {
+        const { game, worldMap } = window.pellagos;
+
+        return { open: document.querySelector("#worldmap").open, running: game.running, order: game.battle.actor("player").order?.type ?? null, drawn: worldMap.drawn, chunks: game.explored.chunksVisited, town: game.world.plan.places.find(({ at }) => Math.hypot(at[0] - game.world.stamp.middle[0], at[1] - game.world.stamp.middle[1]) < 200)?.name };
+    });
+
+    expect(map.open).toBe(true);
+    expect(map.running).toBe(false);
+    expect(map.order).toBeNull();
+    expect(map.drawn.fogged).toBe(128 * 128 - map.chunks);
+    expect(map.drawn.chunks.length).toBe(map.chunks);
+    expect(map.drawn.icons).toEqual(["tavern"]);
+    expect(map.drawn.names).toContain(map.town);
+    await expect(page.getByRole("heading", { name: "The world" })).toBeVisible();
+    await expect(page.locator("#worldmapkey li")).toHaveCount(5);
+
+    // Zoomed right out, the whole world under its fog; Escape closes it and the game goes on
+    await page.locator("#worldmapout").click();
+    await page.locator("#worldmapout").click();
+
+    expect(await page.evaluate(() => window.pellagos.worldMap.view.scale)).toBeGreaterThan(3);
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#worldmap")).not.toBeVisible();
+    expect(await page.evaluate(() => window.pellagos.game.running)).toBe(true);
+
+    // M opens it too, and closes it again
+    await page.keyboard.press("m");
+    await expect(page.locator("#worldmap")).toBeVisible();
+    await page.keyboard.press("m");
+    await expect(page.locator("#worldmap")).not.toBeVisible();
+    expect(await page.evaluate(() => window.pellagos.game.running)).toBe(true);
+});
+
 test("the minimap walks the player where it's tapped, and Game options turn it and the sound off, remembered", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

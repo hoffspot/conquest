@@ -371,12 +371,14 @@ describe("the buildings (insides.js Interiors)", () => {
 
     it("knows Wenches and Ale as made already, with its own ids, first among the doors", () => {
         const home = interiors.buildings.get("home:tavern");
+        const [door] = world.links[0].ends[0].squares;
 
         assert.ok(home.made);
         assert.deepEqual(home.maps, ["taproom", "upstairs"]);
         assert.equal(interiors.of("taproom"), home);
         assert.equal(interiors.of("town"), null);
         assert.equal(world.links[0].id, "tavern-door");
+        assert.ok(Math.hypot(home.at[0] - door[0], home.at[1] - door[1]) < 12, `Wenches and Ale at ${home.at}`);
         assert.equal(home.folk, world.folk);
     });
 
@@ -390,6 +392,9 @@ describe("the buildings (insides.js Interiors)", () => {
             const [outside, inside] = building.door.ends;
 
             assert.ok(world.links.includes(building.door));
+
+            // (Where it stands, for its icon on the maps: its middle, a few steps from its door)
+            assert.ok(Math.hypot(building.at[0] - outside.squares[0][0], building.at[1] - outside.squares[0][1]) < 12, `${building.key}: at ${building.at}`);
             assert.equal(building.name, piece.tavern?.name ?? (piece.patron ? `the Temple of ${GODS[piece.patron].name}` : { blacksmith: "the smithy", guild: "the Adventurers' Guild" }[piece.name]));
             assert.equal(outside.map, "town");
             assert.ok(outside.door && outside.squares.length === 2);

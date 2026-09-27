@@ -526,10 +526,10 @@ export class Interiors {
 
     /**
      * Add a building that's been made already, with its maps and folk (Wenches and Ale, made with
-     * the town).
+     * the town), and where its middle is (`at`: [x, y] metres, in the world).
      */
-    adopt({ key, kind, name, maps, folk, piece = null, tavern = null }) {
-        const building = { key, kind, name, piece, tavern, place: null, seed: 0, entrance: null, made: true, maps, folk };
+    adopt({ key, kind, name, maps, folk, piece = null, tavern = null, at = null }) {
+        const building = { key, kind, name, piece, tavern, place: null, seed: 0, at, entrance: null, made: true, maps, folk };
 
         this.buildings.set(key, building);
 
@@ -560,6 +560,7 @@ export class Interiors {
 
         const entrance = entranceOf(piece, origin);
         const inside = `${key}/${KINDS[piece.name].first}`;
+        const [ox, oy] = Array.isArray(origin) ? origin : [origin, origin];
         const building = {
             key,
             kind: piece.name,
@@ -569,6 +570,8 @@ export class Interiors {
             patron: piece.patron ?? null,
             place,
             seed: piece.seed ?? 1,
+            // (Its middle, in the world: metres)
+            at: [ox + piece.x, oy + piece.y],
             entrance,
             made: false,
             maps: [],

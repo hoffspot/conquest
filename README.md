@@ -196,14 +196,23 @@ are there, but for now only the talk goes on. Walk off, or press Escape, to stop
 **Out of the town.** Its streets carry on as roads into the world round it, over rivers on
 bridges, through fields, meadows and woods; walk anywhere you can, as far as you like. The world
 is drawn round you as you go, with no loading screens: only its far edge in the fog is ever
-being built. For now it's the land alone: the other settlements, the ruins and the enemy camps
-the world map shows are still to come.
+being built. The hamlets, villages, towns and cities of the world plan are there, each with its
+own buildings; the ruins and the enemy camps are still to come.
 
 **The minimap**, in the top right under the menu button, shows where you are from above: out in
 the world, the 128 metres or so round you, its roads, rivers, roofs and trees; inside, the
 whole floor, its walls, furniture and stairs. On it are what the camera can see, you (an arrow pointing the way you face), where
-you're going, and the orc when it's where you are (red; ringed when it's your target). Tap it to
-walk there, or tap the orc on it to go and fight it; double-tap to run.
+you're going, and the orc when it's where you are (red; ringed when it's your target). Every
+tavern, smithy, temple and guild you've been inside has an icon over it: a foaming tankard, an
+anvil, a temple's columns, crossed swords and a shield. Tap it to walk there, or tap the orc on it
+to go and fight it; double-tap to run.
+
+**The world map.** Hold your finger (or the mouse) on the minimap, or press M, and the whole
+world opens full screen, the game paused under it. A fog lies over every 64-metre patch of the
+world you haven't set foot in, lifting as you walk into each; what you've seen is shown as the
+minimap shows it, with the names of the places you've been and the icons of the buildings you've
+gone into. Drag to look about, pinch or scroll to zoom, and close it with the cross, Escape or M.
+What you've found is saved with your character.
 
 **Spells.** Press and hold on yourself or on an enemy, and a see-through wheel opens round
 them, cut in four like a pizza: up, right, down and left. Keep holding and flick towards a slice
@@ -350,10 +359,12 @@ client/                 The game (static files served to the browser)
     hud.js              Health, stamina, names, damage numbers and messages over the game
     wheel.js            The action wheel: hold, flick, cooldowns; icons.js draws its icons
     minimap.js          The minimap: the map the player is on from above (out in the world, the
-                        patch round them), with everyone on it
+                        patch round them), with everyone on it; mapicons.js the buildings' icons
+    worldmap.js         The world map: the whole world, under a fog where the player hasn't been
     debug.js            Debug mode's overlay
     talk.js             The talk: who's talking, what they say, and the replies to choose from
-    save.js             The saved character, what's been said, and settings (local storage)
+    save.js             The saved character, what's been said and found, and settings (local
+                        storage)
     device.js           Full screen and the service worker
   js/core/              The rules. No DOM or Three.js, so they also run in Node
     overworld.js        The world: 8 km of it on 1-metre squares, made a chunk at a time from its
@@ -367,6 +378,7 @@ client/                 The game (static files served to the browser)
     interiors.js        Inside buildings: the tavern's floors, drawn as plans of their squares
     insides.js          Every building that can be gone into: its door, and its floors and folk
                         made the first time they're wanted
+    explored.js         What the player has found: the buildings gone into, the chunks walked
     battle.js           Moving, fighting, damage, dying and coming back; the orc's patrol
     weapons.js          The weapons and their attacks
     spells.js           The spells: heal and stun, and their shared cooldown
