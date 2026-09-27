@@ -533,7 +533,12 @@ describe("the tavern's folk (interiors.js, battle.js)", () => {
 
         battle.command("player", { type: "approach", target: "barkeep" });
 
-        const arrived = run(battle, 12000).find(({ type }) => type === "arrived");
+        // (Up to them: as the game does, looked at the moment they're there)
+        let arrived = null;
+
+        for (let t = 0; t < 12000 && !arrived; t += STEP_MS) {
+            arrived = battle.advance(STEP_MS).find(({ type }) => type === "arrived");
+        }
 
         assert.deepEqual(arrived && { id: arrived.id, target: arrived.target }, { id: "player", target: "barkeep" });
         assert.ok(player.square[0] < 14, `in front of the bar, not behind it: ${player.square}`);

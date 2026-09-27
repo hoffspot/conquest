@@ -1031,7 +1031,7 @@ test("every tavern can be gone into: got ready as the player comes near, its own
         game.stop();
         Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
 
-        const building = [...game.world.interiors.buildings.values()].find((each) => each.entrance);
+        const building = [...game.world.interiors.buildings.values()].find((each) => each.entrance && each.kind === "tavern");
         const before = game.visits.has(building.key);
 
         // (Looked over at the next frame)
