@@ -40,6 +40,7 @@ export const HAIR_COLOURS = Object.freeze({
     platinum: "#d9ccb0",
     grey: "#8d8a86",
     white: "#e6e2dc",
+    rose: "#d88aa6",
 });
 
 /** Everything paintSkin() can be told, with the defaults. */

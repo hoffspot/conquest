@@ -26,6 +26,8 @@ export const DRAPES = Object.freeze({
     apron: { label: "Apron", slot: "apron", length: 0.62, flare: 0.08, pleats: 5, arc: 0.4, over: 0.035, colour: "#d9d0bc", roughness: 0.95 },
     leatherApron: { label: "Leather apron", slot: "apron", length: 0.78, flare: 0.06, pleats: 3, arc: 0.45, over: 0.04, colour: "#4f3220", roughness: 0.7 },
     albSkirt: { label: "Alb (its skirt)", slot: "legs", length: 1.06, flare: 0.5, pleats: 18, colour: "#f1ede4", roughness: 0.9 },
+    guildSkirt: { label: "Guild skirt", slot: "legs", length: 0.55, flare: 0.55, pleats: 16, colour: "#23365e", roughness: 0.8 },
+    mageRobe: { label: "Mage's robe", slot: "legs", length: 1.05, flare: 0.55, pleats: 16, colour: "#2e3f78", roughness: 0.85 },
 });
 
 // Round the body in this many steps; down it in this many rings below the hips

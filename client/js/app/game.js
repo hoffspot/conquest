@@ -123,6 +123,11 @@ const ACTS = {
     // A temple's: the priest's blessing (a soft chime, a glimmer over the pews), and a candle lit
     bless: { hitAt: 1, duration: 2.8, sound: "healed", volume: 0.35, burst: "blessing", ahead: 0.5, height: 1.7 },
     light: { hitAt: 1, duration: 2.4, burst: "embers", ahead: 0.6, height: 1 },
+    // A guild's: a notice stamped, twice (a thump on the counter each time), one filed on the
+    // shelves, and the quest board read (paper rustling)
+    stamp: { hitAt: 0.8, duration: 2.2, sound: "stepWood", volume: 2, beats: [0, 0.7] },
+    file: { hitAt: 0.9, duration: 2, sound: "rustle", volume: 1 },
+    read: { hitAt: 0.9, duration: 2, sound: "rustle", volume: 0.6 },
 };
 
 // Going through a door or up the stairs, the screen comes up from black this fast (s)
@@ -401,6 +406,11 @@ export class Game {
         const look = one.preset ? FOLK[one.preset] : folkLook(one);
         const character = new Character(this.kit, { shape: look.shape, look: look.look, equipment: look.equipment, hairDetail: Math.min(this.view.quality.hair, FOLK_HAIR) });
         const avatar = this.#addAvatar(one.id, character, { walk: look.walk, wounds: false });
+
+        // (Weapons put away: adventurers about the guild)
+        if (look.sheathed) {
+            character.sheathe(true);
+        }
 
         // (Lit, but casting no shadows: there are a lot of them, and it's dim in there)
         character.object.traverse((node) => {
@@ -924,23 +934,27 @@ export class Game {
 
     // Start talking to one of the folk: they stop and face the player, and the talk shows
     #openTalk(npc) {
-        const tree = npc && !npc.dead ? treeFor(npc) : null;
+        // Where they are, and the folk there they might talk of (by their part: the barkeep, the
+        // madam...), and what's upstairs
+        const building = npc ? this.world.interiors?.of(npc.map) : null;
+        const folk = building?.folk ?? this.world.folk ?? [];
+
+        // (Their talk: their role's, or another's: an adventurer drinking at a guild's table)
+        const tree = npc && !npc.dead ? treeFor({ ...npc, talk: folk.find(({ id }) => id === npc.id)?.talk }) : null;
 
         if (!tree) {
             return;
         }
 
-        // Where they are, and the folk there they might talk of (by their part: the barkeep, the
-        // madam...), and what's upstairs
-        const building = this.world.interiors?.of(npc.map);
-        const folk = building?.folk ?? this.world.folk ?? [];
         const title = folk.find(({ id }) => id === npc.id)?.title ?? ROLES[npc.role]?.title ?? "";
         const names = Object.fromEntries(folk.map(({ id, local = id, name }) => [local, name.split(" ")[0]]));
         const upstairs = building?.tavern?.storeys > 1 ? building.tavern.upstairs : null;
 
         names.keeper ??= names.innkeeper;
 
-        // (In a temple, its patron: "Aurelia", "the Dawnmother")
+        // (The settlement's name, and in a temple, its patron: "Aurelia", "the Dawnmother")
+        names.town = building?.place === "home" ? this.world.start?.name : this.world.plan?.places.find(({ id }) => id === building?.place)?.name;
+
         if (building?.patron) {
             names.patron = GODS[building.patron].name;
             names.patronTitle = GODS[building.patron].title;

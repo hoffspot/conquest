@@ -674,7 +674,9 @@ describe("hair (hair.js)", () => {
     it("covers the back of the head: styles parted in the middle part only over the top", () => {
         // Of the hair behind the head, from the nape to the crown, as much down its middle (a
         // strip 3 cm wide) as anywhere else: not combed away from it, leaving the scalp bare
-        for (const style of styles.filter((one) => !HAIRSTYLES[one].tail && !HAIRSTYLES[one].knot && !HAIRSTYLES[one].strip)) {
+        // (but for hair drawn to a tie, a knot or a strip; twin tails part down the back, to
+        // either tie)
+        for (const style of styles.filter((one) => !HAIRSTYLES[one].tail && !HAIRSTYLES[one].tails && !HAIRSTYLES[one].knot && !HAIRSTYLES[one].strip)) {
             const behind = grown(woman, style).filter(([, y, z]) => z < -0.14 && y > -0.02 && y < 0.07);
             const middle = behind.filter(([x]) => Math.abs(x) < 0.015);
 
@@ -689,8 +691,12 @@ describe("hair (hair.js)", () => {
                     const points = grown(who, style, detail);
                     const widest = Math.max(...points.filter(([, y]) => y > -0.1).map(([x]) => Math.abs(x)));
 
-                    // (The head's about 9 cm either side of the middle, with the ears)
-                    assert.ok(widest < 0.125, `${style} (${detail}) reaches ${widest.toFixed(3)} out from the middle of the face`);
+                    // (The head's about 9 cm either side of the middle, with the ears; twin
+                    // tails stand a little out from their ties high on either side of it, as
+                    // they're drawn)
+                    const most = HAIRSTYLES[style].tails ? 0.185 : 0.125;
+
+                    assert.ok(widest < most, `${style} (${detail}) reaches ${widest.toFixed(3)} out from the middle of the face`);
                     assert.ok(!points.some(([x, y, z]) => Math.abs(x) < 0.045 && y < 0.02 && y > -0.1 && z > -0.02), `${style} (${detail}) falls over the face`);
                     assert.ok(!points.some(([x, y, z]) => Math.abs(x) < 0.02 && y < -0.13 && y > -0.25 && z > -0.07), `${style} (${detail}) hangs down the throat`);
                 }
@@ -721,6 +727,17 @@ describe("hair (hair.js)", () => {
 
         assert.ok(tail.length > 200);
         assert.ok(span(0) > 0.04 && span(2) > 0.04, `the tail is ${span(0).toFixed(3)} wide and ${span(2).toFixed(3)} deep`);
+    });
+
+    it("grows twin tails, one either side as full as the other, and bangs over the brow", () => {
+        const points = grown(woman, "twintails");
+        const low = points.filter(([, y, z]) => z < -0.08 && y < -0.08);
+        const [left, right] = [low.filter(([x]) => x > 0.03).length, low.filter(([x]) => x < -0.03).length];
+        const bangs = points.filter(([x, y, z]) => Math.abs(x) < 0.04 && y > 0.02 && y < 0.07 && z > 0);
+
+        assert.ok(left > 150 && right > 150 && Math.min(left, right) / Math.max(left, right) > 0.8, `${left} points in the left tail, ${right} in the right`);
+        assert.ok(low.filter(([x]) => Math.abs(x) < 0.015).length < 0.1 * low.length, "the tails hang either side, not down the middle");
+        assert.ok(bangs.length > 20, `${bangs.length} points in the bangs`);
     });
 });
 

@@ -192,6 +192,10 @@ export const GARMENTS = Object.freeze({
     // over it a chasuble, sleeveless and bordered in gold
     alb: { label: "Alb", slot: "shirt", layer: 1, thickness: 0.004, loose: 0.01, smooth: 4, colour: "#f1ede4", roughness: 0.9, pattern: "cloth", inside: top((l) => l.hips - 0.08, 0.97) },
     chasuble: { label: "Chasuble", slot: "chest", layer: 2, thickness: 0.005, loose: 0.012, smooth: 6, colour: "#f6f2ea", roughness: 0.8, pattern: "trim", trim: "#c9a24a", inside: top((l) => l.hips - 0.14, 0.06, 0.05) },
+    // An adventurers' guild's uniform: a white blouse with long sleeves, and a navy vest laced up
+    // the front, bordered in gold (its skirt a drape: drapes.js)
+    guildBlouse: { label: "Guild blouse", slot: "shirt", layer: 1, thickness: 0.003, loose: 0.007, smooth: 4, colour: "#f4f1ea", roughness: 0.85, pattern: "cloth", inside: top((l) => l.hips - 0.03, 0.97, 0.04) },
+    guildVest: { label: "Guild vest", slot: "chest", layer: 2, thickness: 0.006, loose: 0.002, smooth: 6, colour: "#23365e", roughness: 0.7, pattern: "laced", trim: "#d6b35a", inside: band((l) => l.waist - 0.07, (l) => l.chest + 0.03) },
 
     // Lingerie, for the ladies upstairs: modern lace with a nod to the period (a corset laced up
     // the front, ribbon bows, stockings with a seam up the back, a velvet choker). Each is cut

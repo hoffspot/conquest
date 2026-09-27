@@ -60,6 +60,8 @@ const INSIDE = {
     votive: [70, 66, 62],
     pew: [98, 66, 40],
     basin: [120, 150, 164],
+    board: [206, 190, 146],
+    shelves: [84, 60, 38],
 };
 
 // Pixels to the metre of the painted map

@@ -455,6 +455,66 @@ export const TREES = Object.freeze({
             },
         },
     },
+    // An adventurers' guild's receptionist: bright, eager, a little flustered, very proud of her guild
+    receptionist: {
+        start: "greet",
+        nodes: {
+            greet: {
+                say: [
+                    { if: { met: false }, lines: ["Welcome to the Adventurers' Guild! I'm {name}, and I look after the counter. Oh! Are you new? You look new. Not in a bad way!", "Hello, hello! Welcome to the {town} branch of the Adventurers' Guild! I'm {name}. How can I help you today?"] },
+                    { if: { flag: "registered" }, lines: ["{player}! You're back! And all your fingers still on, too. What can I do for you?", "Welcome back, {player}! The board's got new notices, if you're looking."] },
+                    { lines: ["Oh, it's you again! Have you thought about registering?", "Hello again! The counter's all yours."] },
+                ],
+                choices: "more",
+            },
+            more: {
+                say: ["Anything else?", "What else can I help with?", "Yes? I'm listening!"],
+                choices: [
+                    { if: { notFlag: "registered" }, say: "I'd like to register as an adventurer.", next: "register" },
+                    { say: "What's the quest board?", next: "board" },
+                    { say: "How do the ranks work?", next: "ranks" },
+                    { say: "Are there other branches?", next: "branches" },
+                    FAREWELL,
+                ],
+            },
+            register: {
+                say: "Wonderful! Name: {player}. Rank: Copper. Everyone starts at Copper, don't pout! Here's your card. Don't lose it; the replacement fee is terrible, and I have to fill in the form.",
+                choices: [{ say: "Thank you!", next: "more", do: [{ remember: "registered" }, { learn: "guildMember" }] }],
+            },
+            board: {
+                say: "That's where the jobs go up! Villages, merchants, the odd wizard with a lost cat. Take a notice down, bring it to me, and it's yours. Well, soon: the new notices are still being written up.",
+                choices: "more",
+            },
+            ranks: {
+                say: "Copper, Iron, Bronze, Silver, Gold, and then Mithril, which only three people have: one of them's a legend and the other two won't stop talking about it. Finish jobs to rank up!",
+                choices: "more",
+            },
+            branches: {
+                say: "There's a branch in every village and town, and in the cities too. The same card works at all of them. And they all have a counter, and someone like me behind it. Though not quite like me.",
+                choices: "more",
+            },
+        },
+    },
+    // An adventurer at the guild: seasoned, a little wry, glad to give advice
+    adventurer: {
+        start: "greet",
+        nodes: {
+            greet: {
+                say: [
+                    { if: { met: false }, lines: ["New blood, eh? Name's {name}. Word of advice: read the notice twice before you take it.", "Hm? {name}. Don't mind me, I'm waiting for a better job to go up.", "You look like you can handle yourself. {name}, Iron rank. Almost Bronze."] },
+                    { lines: ["{player}. Still breathing? Good.", "Oh, you again. Seen anything worth the walk?"] },
+                ],
+                choices: [
+                    { say: "Any advice?", next: "advice" },
+                    { say: "Good hunting.", next: null },
+                ],
+            },
+            advice: {
+                say: ["Wolves come in threes. If you see one, look for the other two.", "Never take a job from a man who won't say what's in the box.", "The camps get meaner the further you go from home. Start close.", "Be nice to {receptionist}. She decides who gets the good notices."],
+                choices: [{ say: "I'll remember that.", next: null }],
+            },
+        },
+    },
     // A courtesan: warm, teasing, and never quite saying it. What she offers (her company, a
     // dance, what she hears from her callers, a favour to be done) is handed to the game to do
     courtesan: {
@@ -648,8 +708,8 @@ export const OWN_TREES = Object.freeze({
 });
 
 /** The conversation someone has: their own, or their role's (null for none). */
-export function treeFor({ id, role }) {
-    return OWN_TREES[id] ?? TREES[role] ?? null;
+export function treeFor({ id, role, talk = null }) {
+    return OWN_TREES[id] ?? TREES[talk] ?? TREES[role] ?? null;
 }
 
 /**

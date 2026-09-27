@@ -169,6 +169,20 @@ Stand still with
 nothing going on for 15 seconds and you do too: stretching, looking about, rolling your
 shoulders, yawning, shifting your weight.
 
+**Going into the other buildings.** Every tavern, smithy, temple and adventurers' guild, in
+your town and in every village, town and city out in the world, can be gone into the same way;
+each is got ready as you come near. Every other tavern has its own name, sign, taproom and
+upstairs (rooms to let, a courtesan or two, or a madam's house). In a **smithy**, named for its
+smith, the smith heats the work in the forge, hammers it on the anvil (ringing, throwing sparks)
+and quenches it hissing in the trough, while the apprentice pumps the bellows (the fire flares)
+and turns the grindstone. A **temple** is to all of the Six under its patron: a whitewashed nave
+with the patron's altar and statue, a shrine to each of the others, pews and candles; a priest
+in white vestments blesses the pews and lights the shrines' candles, and worshippers pray. In an
+**adventurers' guild**, a cheerful receptionist in the guild's uniform, her hair in twin tails,
+stamps notices behind her counter, and adventurers of every calling read the quest board and
+drink at the tables; she'll sign you up (Rank: Copper), though the board's jobs can't be taken
+yet.
+
 **Talking.** Tap one of the folk and you walk up to them (or to the bar, or the other side of a
 table) and talk: their name and what they are, what they say, and what you can say back (tap a
 reply, or press its number). They stop and turn to you. Each sort has their own things to talk
@@ -380,8 +394,9 @@ client/                 The game (static files served to the browser)
                         bridges, trees, the land's features, the undergrowth near the player,
                         and the settlements' buildings
     town3d.js           The town's buildings, props and trees, merged into few meshes
-    interiors3d.js      Inside the taverns: their rooms and furniture, the fire, the boar on its
-                        spit, and taking down the walls between the camera and the player
+    interiors3d.js      Inside the buildings: the taverns', smithies', temples' and guilds'
+                        rooms and furniture, the fires, the boar on its spit, and taking
+                        down the walls between the camera and the player
     art/                The art the town is built with: engine/ (solid.js's shapes, the
                         textures' painters.js, materials.js, and atlas.js, the one material
                         everything built is drawn with) and kits/ (house.js, with framing.js and

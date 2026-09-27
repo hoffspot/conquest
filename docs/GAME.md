@@ -187,7 +187,7 @@ player is a step, not straight back through.
 ### Every building's inside (core/insides.js)
 
 Wenches and Ale's floors are made with the town, as above. Every other building that can be gone
-into (`ENTERABLE`: taverns, smithies and temples so far; guilds to come), in the start town and in
+into (`ENTERABLE`: taverns, smithies, temples and adventurers' guilds), in the start town and in
 every settlement as it's laid out, is known to the world's `interiors` (`Interiors`, by key:
 `${place}:${piece id}`, such as `home:tavern-2`), and its front door is one of the world's links
 from the start (`${key}/door`), its inside end still to make (`pending`). Its floors and folk are
@@ -266,6 +266,37 @@ are kept.
   Its folk (`templeFolkOf`): the priest (a man or a woman), going between the altar, where they
   bless the pews (`bless`), and the shrines, lighting their candles (`light`); an acolyte, at
   the votive candles and the basins; and two to four worshippers seated in the pews.
+- **An adventurers' guild** (`guildRooms`) is a hall 20 by 16 metres ("the Adventurers'
+  Guild"), as the guilds of adventure stories have them: the counter across the north end, with
+  shelves of ledgers and scrolls on the wall behind it; the quest board along the west wall;
+  four tables with benches; the hearth on the east wall; and barrels either side of the door:
+
+  ```
+  eeeeeeee............   e  shelves     M  counter   q  quest board
+  ....................   T  table       b  bench     H  hearth
+  ..MMMMMMMM..........   K  barrels
+  ....................
+  q...................
+  q.....bbb.....bbb...
+  q.....TTT.....TTT..H
+  q.....bbb.....bbb..H
+  q..................H
+  ......bbb.....bbb...
+  ......TTT.....TTT...
+  ......bbb.....bbb...
+  ....................
+  ....................
+  KK................KK
+  .........DD.........
+  ```
+
+  Its folk (`guildFolkOf`): the receptionist behind the counter, stamping notices at either end
+  of it (`stamp`) and filing them on the shelves behind her (`file`); two adventurers at the
+  quest board, reading the notices (`read`), one going up to the counter now and then; and two
+  to four more at the tables, drinking to their last job. Each adventurer has a calling
+  (warrior, ranger, mage, rogue or cleric: every one before any comes twice), dressed and armed
+  as it has them, their weapons sheathed; those at the tables hold tankards instead of their
+  swords, staves and hammers. The quest board's notices can't be taken yet.
 
 ## The battle (core/battle.js)
 
@@ -580,7 +611,11 @@ one (after enemies, before the ground) tells the player to go through; it glows 
 ready, each looking as their part, sex and seed have them (`characters/folk.js`, `folkLook`:
 their height, build and face, their forebears' skin, eyes and hair, how they wear their hair and
 beard, and what their part wears: the barkeep's apron, a wench's bodice and skirt, a patron's
-tunic or kirtle, the madam's gown, a courtesan's lingerie in one of four colours); all with less
+tunic or kirtle, the madam's gown, a courtesan's lingerie in one of four colours, the priest's
+white vestments, the guild receptionist's uniform, an adventurer's calling's arms and armour,
+sheathed); the receptionist has the youthful look of a heroine of an adventure story, a young
+woman with big bright eyes, a small nose and mouth and a soft jaw, and bright hair in twin tails
+or a bob; all with less
 hair than the player, as there are more of them, and nothing worn that never shows, lit but
 casting no shadows. They have no name plates, can't
 be tapped to fight (a tap walks up to them to talk), and show on the minimap as blue dots. Only
@@ -591,11 +626,13 @@ In a smithy, each of the smith's three blows rings on the anvil and throws spark
 work hisses in the trough, steam rising; the bellows breathe and the forge's fire flares with
 them (`view.flare`); and the grindstone rasps and turns while it's cranked (`interior.drive`). In
 a temple, the priest's blessing chimes softly and a golden glimmer rises over the pews, and a
-lit candle sends up a spark.
+lit candle sends up a spark. In a guild, each of the receptionist's stamps thumps on the counter,
+and paper rustles as she files a notice and as the adventurers read the board.
 
 **Classes and resting** (core/roles.js). Everyone has a class (a role): the barkeep, a serving
 wench, a patron, an innkeeper, the madam, a courtesan, the blacksmith and the apprentice, the
-priest, an acolyte and the worshippers, and the player's adventurer. A class has a title and five resting
+priest, an acolyte and the worshippers, the guild's receptionist, and adventurers (the player,
+and those at the guild). A class has a title and five resting
 animations, shared by everyone of it (their poses: actions.js `RESTS`, see
 [CHARACTERS.md](CHARACTERS.md#resting)):
 
@@ -612,7 +649,8 @@ animations, shared by everyone of it (their poses: actions.js `RESTS`, see
 | Acolyte | hands folded in prayer, a bow of the head, looking about, the sign of the Hearth, a yawn |
 | Worshipper (seated) | praying, head bowed, looking up, the sign of the Hearth, hands in the lap |
 | Apprentice | wiping the brow, looking about, rolling the shoulders, a yawn, stretching |
-| Adventurer (the player) | stretching, looking about, rolling the shoulders, a yawn, shifting the weight |
+| Guild receptionist | a cheerful wave, chin in her hands, a little bow, tidying the papers, tucking back her hair |
+| Adventurer (the player, and at the guild) | stretching, looking about, rolling the shoulders, a yawn, shifting the weight |
 
 The folk rest when the battle says (every 4 to 9 seconds while the player can see them).
 
@@ -638,12 +676,13 @@ than 4 squares apart, or an enemy in sight or after the player ends it. They sto
 were doing and face the player until it's over.
 
 A conversation is a tree (`TREES`, one for each class; `OWN_TREES` for folk with their own, by
-id, such as the greybeard's siege story). Each node has what they say and the replies to it:
+id, such as the greybeard's siege story; and for folk who talk as another class does, `talk`:
+the adventurers drinking at a guild's tables are patrons who talk as adventurers). Each node has what they say and the replies to it:
 
 - **Lines**: one, or a few to pick from (never the same twice running), or groups for different
   moments (`{ if, lines }`: a stranger is greeted differently from someone they've met, and the
   madam knows if the barkeep sent the player). Words are filled in: `{player}`, `{name}`,
-  `{fullName}`, `{title}`, `{place}` (the tavern they're in), and the given names of the folk
+  `{fullName}`, `{title}`, `{place}` (the building they're in), `{town}`, and the given names of the folk
   there by their part (`{madam}`, `{barkeep}`..., and `{keeper}`: whoever keeps the rooms
   upstairs). What's upstairs (`if: { upstairs }`: anything, nothing, or which) chooses what the
   barkeep says of it, and whether there's a bed to ask for; an innkeeper has a talk of their own.
@@ -660,6 +699,13 @@ id, such as the greybeard's siege story). Each node has what they say and the re
   something done in the world, handed to the game (`onEffect`): buying (`{ buy: "ale", price:
   2 }`), paying, renting a room, a quest moving on (`{ quest: "orc", step: "accepted" }`). The
   world doesn't change yet: the game keeps the last 50 (`game.done`) for when it does.
+
+**The guild's talk.** The receptionist is cheerful and a little flustered: she welcomes a
+stranger to the town's branch of the guild, and signs the player up as an adventurer
+(remembered, and the player learns `guildMember`: "Rank: Copper. Everyone starts at Copper,
+don't pout!"), and tells of the quest board, the ranks (Copper, Iron, Bronze, Silver, Gold and
+Mithril) and the other branches. The adventurers are wry and give advice ("Be nice to
+{receptionist}. She decides who gets the good notices.").
 
 **The courtesans' talk** (`TREES.courtesan`) is warm and teasing, all innuendo and nothing
 explicit, and built to lead to things done in the world once the game does them. Each greets a
@@ -709,6 +755,15 @@ plinth, their colours hanging either side. Each shrine is a niche of its god's c
 small white statue of them and three candles before it. There are pews with high backs, a stand
 of votive candles in three iron tiers, stone basins of water on pedestals, and a great ring of
 candles hanging over the nave. In a temple the town's music is hushed, far off.
+
+An adventurers' guild has floorboards and ochre plaster walls with windows on two sides, and the
+guild's banners, blue with a gold shield, either side of the counter and by the door. Behind the
+counter, shelves of ledgers, scrolls in their pigeonholes and a strongbox. The counter is dark
+wood with the guild's crest on its front and a blue runner along its top, and on it a bell, a
+ledger, a stamp and its pad, a stack of notices and a quill in its pot. The quest board is a
+framed board thick with notices, each pinned or sealed in red wax, some curling. The tables have
+tankards, a map, dice and candles; the hearth has a fire and a great horned skull over it; a ring
+of candles hangs over the tables. In the guild the tavern's jig plays as lively as in a taproom.
 
 The flames are crossed quads with a shader of rising noise, drawn additively and flickering,
 and embers rise from the hearth. The room is open above, and what stands in front of the player
@@ -1294,8 +1349,12 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   smithy's forge, bellows, anvil, trough and grindstone all got to from its door, the smith and
   apprentice at them, and the smithy named for its smith; a temple's altar, statue, five shrines
   to the other gods, pews, votive candles and basins, the priest's and acolyte's rounds got to
-  from the door, worshippers seated facing the altar, and the priest in white vestments; the
-  settlements' taverns', smithies' and temples' doors among the world's links as they're laid
+  from the door, worshippers seated facing the altar, and the priest in white vestments; a
+  guild's counter, shelves, quest board, tables and hearth, the receptionist stamping behind the
+  counter and filing at the shelves, adventurers of every calling at the board and the tables,
+  the receptionist in the guild's uniform with twin tails or a bob, adventurers sheathed and
+  those drinking holding tankards; every kind of building drawn by its style; the
+  settlements' taverns', smithies', temples' and guilds' doors among the world's links as they're laid
   out, their floors and folk
   made once when wanted, each building somewhere of its own; going in through a door not made yet
   in the battle; each floor built by its style and the doors picked up; folk made up as they're
@@ -1409,7 +1468,9 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   inside), let go far off and built at once if walked straight into, a smithy's smith heating,
   hammering and quenching and its apprentice at the bellows and grindstone (each heard), a
   temple's priest in white blessing and lighting the shrines' candles, worshippers praying, and
-  the priest telling of the temple's patron,
+  the priest telling of the temple's patron, a guild's receptionist stamping notices and
+  adventurers reading the board and drinking, their weapons sheathed, and the receptionist
+  signing the player up,
   walking by the
   minimap, walking 300 metres out of the town into the world (the chunks round the player drawn,
   those left behind thrown away, the minimap following), Game options and the volume sliders

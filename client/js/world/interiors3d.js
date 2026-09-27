@@ -100,6 +100,11 @@ const COLOURS = {
     "wool-blue": 0x3a4b6e,
     "wool-ochre": 0x9a7434,
     leather: 0x4f3220,
+    parchment: 0xe6d6ac,
+    "wax-red": 0x9a1c1c,
+    "guild-blue": 0x23365e,
+    "guild-gold": 0xd6b35a,
+    bone: 0xe4d8bc,
 };
 
 // The art's materials darkened (a textured material under a colour): beaten earth black with soot
@@ -1274,7 +1279,185 @@ function temple(map) {
     };
 }
 
-const BUILDERS = { taproom, upstairs, smithy, temple };
+// --- The adventurers' guild ---
+
+function guild(map) {
+    const solid = new Solid();
+    const moving = [];
+    const [w, h] = [m(map.width), m(map.height)];
+    const at = (kind) => map.pieces.filter((piece) => piece.kind === kind);
+
+    // Floorboards, timber-framed plaster walls, the door in the middle of the south wall
+    solid.box(-m(0.3), -0.5, -m(0.3), w + m(0.3), 0, h + m(0.3), material("planks"));
+
+    const doors = map.marks.D;
+    const doorMiddle = (doors[0][0] + doors.at(-1)[0] + 1) / 2;
+
+    outerWalls(solid, map, "plaster-ochre", [{ side: "s", from: doorMiddle - 1.1, to: doorMiddle + 1.1, lintel: 2.6 }]);
+    solid.box(m(doorMiddle - 1.1), 0, h - 0.2, m(doorMiddle + 1.1), m(2.6), h + 0.4, material("planks-dark", WALL));
+
+    for (const x of [4.5, 14.5]) {
+        windowIn(solid, "x", h, m(x), 1);
+    }
+
+    for (const z of [3, 12]) {
+        windowIn(solid, "z", w, m(z), 1);
+    }
+
+    // The guild's banners, blue with a gold shield, either side of the counter and by the door
+    const banner = (x, z, face) => {
+        const across = face === "z" ? [m(0.45), 0.2] : [0.2, m(0.45)];
+
+        solid.box(x - across[0], m(1.1), z - across[1], x + across[0], m(2.8), z + across[1], material("guild-blue", WALL));
+        solid.box(x - across[0] * 0.5, m(1.7), z - across[1] * 0.5 - (face === "z" ? 0.1 : 0), x + across[0] * 0.5, m(2.3), z + across[1] * 0.5 + (face === "z" ? 0.1 : 0), material("guild-gold", WALL));
+        solid.box(x - across[0] - 0.2, m(2.8), z - across[1] - 0.2, x + across[0] + 0.2, m(2.9), z + across[1] + 0.2, material("brass", WALL));
+    };
+
+    banner(m(9.5), 0.3, "z");
+    banner(m(13), 0.3, "z");
+    banner(0.3, m(11), "x");
+
+    // Shelves along the north wall behind the counter: ledgers, scrolls in their pigeonholes, a
+    // strongbox
+    for (const shelf of at("shelves")) {
+        const [x0, x1] = [m(shelf.x), m(shelf.x + shelf.w)];
+        const z = m(shelf.y);
+
+        solid.box(x0, 0, z, x1, m(2.2), z + m(0.1), material("planks-dark", WALL));
+
+        for (const y of [0.35, 0.8, 1.25, 1.7]) {
+            solid.box(x0, m(y), z, x1, m(y + 0.05), z + m(0.45), material("planks", WALL));
+
+            for (let x = x0 + m(0.2); x < x1 - m(0.2); x += m(0.3)) {
+                const pick = Math.round(x * 7 + y * 13) % 4;
+
+                if (pick === 0) {
+                    solid.cylinder(x, z + m(0.25), m(y + 0.05), m(y + 0.3), m(0.07), m(0.07), material("parchment", WALL), { segments: 8 });
+                } else if (pick < 3) {
+                    solid.box(x - m(0.08), m(y + 0.05), z + m(0.1), x + m(0.08), m(y + 0.38), z + m(0.4), material(pick === 1 ? "ledger" : "guild-blue", WALL));
+                }
+            }
+        }
+    }
+
+    // The counter: dark wood with the guild's crest on its front, a blue runner along its top, a
+    // bell, a ledger, a stamp and its pad, a stack of notices, a quill in its pot
+    for (const counter of at("counter")) {
+        const [x0, x1, z0, z1] = [m(counter.x), m(counter.x + counter.w), m(counter.y + 0.1), m(counter.y + 0.9)];
+
+        solid.box(x0, 0, z0, x1, m(1.05), z1, material("planks-dark"));
+        solid.box(x0 - 0.4, m(1.05), z0 - 0.4, x1 + 0.4, m(1.12), z1 + 0.4, material("timber-light"));
+        solid.box(x0 + m(0.3), m(1.12), z0 + 0.5, x1 - m(0.3), m(1.14), z1 - 0.5, material("guild-blue"));
+        solid.box((x0 + x1) / 2 - m(0.4), m(0.35), z1, (x0 + x1) / 2 + m(0.4), m(0.9), z1 + 0.15, material("guild-blue"));
+        solid.box((x0 + x1) / 2 - m(0.2), m(0.45), z1 + 0.1, (x0 + x1) / 2 + m(0.2), m(0.8), z1 + 0.2, material("guild-gold"));
+        solid.cylinder(x0 + m(0.6), (z0 + z1) / 2, m(1.14), m(1.22), m(0.06), 0.1, material("brass"), { segments: 10 });
+        solid.box(x0 + m(1.4), m(1.14), z0 + m(0.15), x0 + m(1.9), m(1.2), z0 + m(0.5), material("ledger"));
+        solid.box(x0 + m(2.5), m(1.14), z0 + m(0.2), x0 + m(2.8), m(1.16), z0 + m(0.5), material("rug-border"));
+        solid.cylinder(x0 + m(2.65), z0 + m(0.35), m(1.16), m(1.28), m(0.03), m(0.04), material("timber"), { segments: 6 });
+
+        for (let k = 0; k < 6; k++) {
+            solid.box(x1 - m(1.6) + k * 0.1, m(1.14) + k * 0.12, z0 + m(0.15) + (k % 2) * 0.2, x1 - m(1.1) + k * 0.1, m(1.14) + (k + 1) * 0.12, z0 + m(0.55) + (k % 2) * 0.2, material("parchment"));
+        }
+
+        solid.cylinder(x1 - m(0.5), z0 + m(0.35), m(1.14), m(1.26), m(0.04), m(0.04), material("pewter"), { segments: 8 });
+        solid.box(x1 - m(0.5) - 0.05, m(1.2), z0 + m(0.35) - 0.05, x1 - m(0.5) + 0.05, m(1.45), z0 + m(0.35) + 0.05, material("linen"));
+    }
+
+    // The quest board along the west wall: a framed board thick with notices, each pinned or
+    // sealed in red wax, some curling
+    for (const board of at("board")) {
+        const [z0, z1] = [m(board.y), m(board.y + board.h)];
+
+        solid.box(0, m(0.8), z0 + m(0.1), m(0.12), m(2.4), z1 - m(0.1), material("planks-dark", WALL));
+        solid.box(0, m(0.75), z0, m(0.18), m(0.85), z1, material("timber", WALL));
+        solid.box(0, m(2.35), z0, m(0.18), m(2.45), z1, material("timber", WALL));
+
+        for (let k = 0; k < 18; k++) {
+            const z = z0 + m(0.35) + ((k * 7) % 18) * ((z1 - z0 - m(0.7)) / 18);
+            const y = m(1.0 + ((k * 5) % 6) * 0.22);
+            const [tall, wide] = [m(0.24 + (k % 3) * 0.05), m(0.18 + (k % 2) * 0.06)];
+
+            solid.box(m(0.12), y, z - wide / 2, m(0.15), y + tall, z + wide / 2, material("parchment", WALL));
+
+            if (k % 3 === 0) {
+                solid.box(m(0.15), y + tall - m(0.07), z - 0.2, m(0.17), y + tall - m(0.03), z + 0.2, material("wax-red", WALL));
+            }
+        }
+    }
+
+    // Tables, and benches along them, with tankards, a map, dice and candles
+    for (const piece of at("table")) {
+        const [x0, z0, x1, z1] = [m(piece.x), m(piece.y), m(piece.x + piece.w), m(piece.y + piece.h)];
+
+        table(solid, x0, z0 + m(0.1), x1, z1 - m(0.1));
+        candle(solid, (x0 + x1) / 2, (z0 + z1) / 2, m(0.78));
+        tankard(solid, x0 + m(0.4), z0 + m(0.35), m(0.78), piece.x % 2 === 0);
+        tankard(solid, x1 - m(0.5), z1 - m(0.3), m(0.78));
+        solid.box(x0 + m(0.9), m(0.78), z0 + m(0.25), x0 + m(1.5), m(0.79), z1 - m(0.25), material("parchment"));
+
+        for (const dx of [0, 0.12]) {
+            solid.box(x1 - m(0.9 + dx), m(0.78), z0 + m(0.3), x1 - m(0.86 + dx), m(0.82), z0 + m(0.34), material("bone"));
+        }
+    }
+
+    for (const run of benchRuns(map)) {
+        bench(solid, m(run.x), m(run.y), m(run.x + run.w), m(run.y + 1));
+    }
+
+    // The hearth on the east wall, a fire in it, and over it a great horned skull
+    const [hearth] = at("hearth");
+    const [hz0, hz1] = [m(hearth.y), m(hearth.y + hearth.h)];
+    const hz = (hz0 + hz1) / 2;
+
+    solid.box(w - m(0.9), 0, hz0, w + m(0.1), m(STOREY), hz0 + m(0.8), material("stone", WALL));
+    solid.box(w - m(0.9), 0, hz1 - m(0.8), w + m(0.1), m(STOREY), hz1, material("stone", WALL));
+    solid.box(w - m(0.9), m(1.5), hz0, w + m(0.1), m(STOREY), hz1, material("stone", WALL));
+    solid.box(w - m(0.15), 0, hz0, w + m(0.1), m(1.5), hz1, material("soot", WALL));
+    solid.box(w - m(1.05), m(1.45), hz0 - m(0.1), w, m(1.65), hz1 + m(0.1), material("timber", WALL));
+    solid.box(w - m(1.8), 0, hz0 - m(0.2), w, m(0.06), hz1 + m(0.2), material("stone-dark"));
+    solid.box(w - m(0.8), m(0.05), hz - m(0.4), w - m(0.2), m(0.2), hz + m(0.4), artMaterial("embers"));
+
+    const fire = flame(m(0.9), m(0.7), 4.2);
+
+    fire.position.set(w - m(0.5), m(0.12), hz);
+
+    const skull = new THREE.Group();
+    const bone = material("bone", WALL);
+
+    skull.add(new THREE.Mesh(new THREE.SphereGeometry(m(0.28), 10, 8).scale(1, 0.8, 1.3).translate(w - m(0.3), m(2.25), hz), bone));
+    skull.add(new THREE.Mesh(new THREE.ConeGeometry(m(0.12), m(0.45), 8).rotateZ(Math.PI / 2).translate(w - m(0.6), m(2.2), hz), bone));
+
+    for (const side of [-1, 1]) {
+        skull.add(new THREE.Mesh(new THREE.ConeGeometry(m(0.07), m(0.7), 8).rotateX(side * 1.1).translate(w - m(0.3), m(2.55), hz + side * m(0.45)), bone));
+    }
+
+    solid.add(objectSolid(skull));
+
+    // Barrels either side of the door
+    for (const barrel of at("barrels")) {
+        const [x, z] = [m(barrel.x + barrel.w / 2), m(barrel.y + 0.5)];
+
+        solid.cylinder(x, z, 0, m(0.9), m(0.38), m(0.38), material("planks"), { segments: 12 });
+        solid.cylinder(x, z, m(0.15), m(0.2), m(0.4), m(0.4), material("iron"), { segments: 12 });
+        solid.cylinder(x, z, m(0.7), m(0.75), m(0.4), m(0.4), material("iron"), { segments: 12 });
+    }
+
+    // A ring of candles hanging over the tables
+    solid.add(objectSolid(candleWheel(m(10.5), m(8), m(2.6), m(0.8), 8)));
+
+    return {
+        solid,
+        moving,
+        flames: [fire],
+        lights: [
+            { kind: "fire", x: map.width - 0.6, y: 1, z: hearth.y + hearth.h / 2, colour: 0xff8a3a, intensity: 7, distance: 14, flicker: 0.22 },
+            { kind: "lamp", x: map.width / 2, y: 2.5, z: map.height * 0.45, colour: 0xffd6a0, intensity: 7, distance: 20, flicker: 0.05 },
+        ],
+        hearth: { x: map.width - 0.5, y: 0.6, z: hearth.y + hearth.h / 2 },
+    };
+}
+
+const BUILDERS = { taproom, upstairs, smithy, temple, guild };
 
 /**
  * Build a map's inside: { map, object (a Group at the map's place in the world, in metres),

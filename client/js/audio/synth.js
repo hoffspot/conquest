@@ -11,7 +11,8 @@
 //  - Spells: a rising shimmer casting a heal, a warm swell as it lands; a dizzy warble for a stun.
 //  - Footsteps on stone, dirt, grass and wooden boards; a body falling; a door opening and
 //    banging shut behind someone; in the tavern, tankards clinking and ale being drawn; in the
-//    smithy, the anvil ringing, the bellows, steam hissing off the trough, the grindstone.
+//    smithy, the anvil ringing, the bellows, steam hissing off the trough, the grindstone; in the
+//    guild, paper rustling.
 //  - Cues: a target chosen, an enemy slain, falling, waking again, out of breath; the action
 //    wheel opening, and a slice that can't be used.
 //  - Around the town (the environment): a bird's chirp, leaves rustling, the wind (a loop); and
@@ -382,6 +383,17 @@ export const SOUNDS = {
             const rate = rasp.length / length;
 
             return shape(rasp.map((value, n) => value * (0.6 + 0.4 * Math.sin((n / rate) * TAU * 3))), swell(length, 0.5));
+        },
+    },
+    // Paper: a notice taken down or filed, a page turned (a few dry crinkles)
+    rustle: {
+        variants: 3,
+        volume: 0.35,
+        make: (random) => {
+            const length = 0.5;
+            const grains = Array.from({ length: 5 }, () => random.next() * length * 0.85);
+
+            return shape(filter(noise(random, length), "bandpass", (t) => 3600 + 1800 * (t / length), 1.1), (t) => grains.reduce((most, at) => Math.max(most, Math.exp(-Math.abs(t - at) * 55)), 0.12) * swell(length, 0.25)(t));
         },
     },
 

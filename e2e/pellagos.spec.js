@@ -1234,6 +1234,77 @@ test("the temple: the priest in white blesses the pews and lights the shrines' c
     expect(temple.place).toBe("temple");
 });
 
+test("the adventurers' guild: the receptionist stamps notices behind her counter, adventurers read the quest board and drink at the tables, and she signs the player up", async ({ page }) => {
+    // (Seed 2's town's guild)
+    await playing(page, "/?play&seed=2");
+
+    const guild = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const building = [...game.world.interiors.buildings.values()].find((each) => each.kind === "guild");
+        const player = game.battle.actor("player");
+        const acts = [];
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        // Straight through its door
+        const [x, y] = building.door.ends[0].squares[0];
+
+        Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [] });
+        game.battle.command("player", { type: "enter", link: building.door.id });
+        game.advance(0.3);
+
+        const folk = game.battle.actors.filter((actor) => actor.map === player.map && actor.id !== "player");
+        const receptionist = folk.find(({ role }) => role === "receptionist");
+
+        // A while inside: what the receptionist and the adventurers do
+        for (let k = 0; k < 60; k++) {
+            game.advance(0.5);
+
+            for (const one of folk) {
+                const name = game.avatars.get(one.id).actions.attack?.name;
+
+                if (name && !acts.includes(`${one.role}:${name}`)) {
+                    acts.push(`${one.role}:${name}`);
+                }
+            }
+        }
+
+        // Up to the counter, to register
+        game.approaching = receptionist.id;
+        game.battle.command("player", { type: "approach", target: receptionist.id });
+
+        for (let k = 0; k < 200 && !game.talking; k++) {
+            game.advance(0.1);
+        }
+
+        const conversation = game.talking?.conversation;
+
+        conversation?.choose(conversation.choices.findIndex(({ text }) => text.includes("register")));
+
+        return {
+            map: player.map,
+            name: building.name,
+            wearing: [...game.avatars.get(receptionist.id).character.equipment.values()],
+            sheathed: folk.filter(({ role }) => role === "adventurer").map(({ id }) => game.avatars.get(id).character.sheathed),
+            roles: folk.map(({ role }) => role),
+            acts,
+            registered: conversation?.line ?? null,
+            place: session.sound.place,
+        };
+    });
+
+    expect(guild.map).toMatch(/guild-\d+\/hall$/);
+    expect(guild.name).toBe("the Adventurers' Guild");
+    expect(guild.wearing).toEqual(expect.arrayContaining(["guildBlouse", "guildVest", "guildSkirt"]));
+    expect(guild.roles.slice(0, 3)).toEqual(["receptionist", "adventurer", "adventurer"]);
+    expect(guild.roles.filter((role) => role === "patron").length).toBeGreaterThanOrEqual(2);
+    expect(guild.sheathed).toEqual([true, true]);
+    expect(guild.acts).toEqual(expect.arrayContaining(["receptionist:stamp", "adventurer:read"]));
+    expect(guild.registered).toMatch(/^Wonderful! Name: .+\. Rank: Copper\./);
+    expect(guild.place).toBe("guild");
+});
+
 test("tapping someone walks the player up to talk: their name and what they are, what they say, replies that lead on, Escape to stop", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

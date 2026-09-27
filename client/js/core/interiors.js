@@ -54,6 +54,10 @@ export const PLAN_KEY = Object.freeze({
     v: { kind: "votive", blocks: true },
     p: { kind: "pew", blocks: true },
     f: { kind: "basin", blocks: true },
+    // An adventurers' guild's: the quest board on the wall, and shelves of ledgers and scrolls
+    // behind the counter
+    q: { kind: "board", blocks: true, joins: true },
+    e: { kind: "shelves", blocks: true, joins: true },
 });
 
 // The taproom, 18 by 15 metres (roomier than the tavern looks from outside, to walk about in

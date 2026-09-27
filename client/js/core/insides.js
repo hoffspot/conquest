@@ -1,5 +1,5 @@
 // Going inside: every building that can be gone into (setpieces/pieces.js ENTERED: taverns,
-// smithies and temples, and in time the guilds) in every settlement, its front door one of the
+// smithies, temples and adventurers' guilds) in every settlement, its front door one of the
 // world's links, its floors made the first time they're wanted (the player's walking up to the
 // door, or through it) and kept, each at a place of its own far off in the 3D world, with its
 // folk.
@@ -10,10 +10,11 @@
 // for its kind: a tavern's taproom (its tables set out one of several ways, its hearth, bar and
 // barrels, and stairs if it has a floor above) and upstairs, as its name has it (tavern lore:
 // rooms to let with an innkeeper at the counter; rooms with a courtesan or two; or a madam's
-// house); a smithy's workshop; a temple's nave. Its folk are worked out from its plan: a
-// barkeep behind the bar and at the barrels, serving wenches between the bar and the tables,
-// patrons on the benches, whoever keeps upstairs, and the courtesans in their rooms; the smith
-// and the apprentice at their work; the priest, an acolyte and worshippers in the pews.
+// house); a smithy's workshop; a temple's nave; a guild's hall. Its folk are worked out from its
+// plan: a barkeep behind the bar and at the barrels, serving wenches between the bar and the
+// tables, patrons on the benches, whoever keeps upstairs, and the courtesans in their rooms; the
+// smith and the apprentice at their work; the priest, an acolyte and worshippers in the pews;
+// the guild's receptionist behind her counter and adventurers at the quest board and the tables.
 //
 // The town's own tavern, Wenches and Ale, is made with the town (world.js) and keeps its ids
 // (taproom, upstairs, tavern-door, tavern-stairs) and its folk; it's registered here as made.
@@ -37,8 +38,8 @@ export const ENTRANCES = Object.freeze({
     blacksmith: { depth: 2.2, offset: -1.2, width: 1.3, height: 2.1, floor: 0.3 },
 });
 
-/** The kinds that can be gone into so far (the rest of ENTERED in time). */
-export const ENTERABLE = Object.freeze(["tavern", "blacksmith", "church"]);
+/** The kinds that can be gone into. */
+export const ENTERABLE = Object.freeze(["tavern", "blacksmith", "church", "guild"]);
 
 // The way to a door, cleared: at least this far either side of its middle, and from this far in
 // behind it to this far out past the lot's front (metres)
@@ -415,17 +416,87 @@ export function templeFolkOf(building, nave) {
     return folk;
 }
 
+// --- Adventurers' guilds ---
+
+// A guild's hall, 20 by 16 metres: the counter across the north, the receptionist behind it and
+// shelves of ledgers and scrolls on the wall behind her; the quest board along the west wall;
+// tables with benches for the adventurers; a hearth on the east wall; barrels either side of the
+// door, in the middle of the south wall
+const GUILD = [
+    "eeeeeeee............",
+    "....................",
+    "..MMMMMMMM..........",
+    "....................",
+    "q...................",
+    "q.....bbb.....bbb...",
+    "q.....TTT.....TTT..H",
+    "q.....bbb.....bbb..H",
+    "q..................H",
+    "......bbb.....bbb...",
+    "......TTT.....TTT...",
+    "......bbb.....bbb...",
+    "....................",
+    "....................",
+    "KK................KK",
+    ".........DD.........",
+];
+
+/** A guild's floors: its hall. */
+export function guildRooms(building) {
+    return [{ suffix: "hall", style: "guild", name: building.name, rows: GUILD, ground: GROUND.planks, sound: "guild" }];
+}
+
+// What an adventurer can be (their look: characters/folk.js)
+const CALLINGS = Object.freeze(["warrior", "ranger", "mage", "rogue", "cleric"]);
+
+/**
+ * A guild's folk, worked out from its plan: the receptionist behind the counter (stamping
+ * notices, and at the shelves); adventurers reading the quest board, and one at the counter;
+ * and more at the tables, drinking.
+ */
+export function guildFolkOf(building, hall) {
+    const random = createRandom(building.seed * 7 + 53);
+    const { n, s, w } = FACING;
+    const counter = hall.pieces.find(({ kind }) => kind === "counter");
+    const shelves = hall.pieces.find(({ kind }) => kind === "shelves");
+    const board = hall.pieces.find(({ kind }) => kind === "board");
+    const behind = [counter.x + 2, counter.x + counter.w - 3].map((x) => ({ square: [x, counter.y - 1], facing: s, act: "stamp", group: "counter" }));
+    const filing = { square: [shelves.x + 2, shelves.y + 1], facing: n, act: "file", group: "shelves" };
+    const reading = [1, 3].map((dy) => ({ square: [board.x + 1, board.y + dy], facing: w, act: "read", group: "board", wait: [5000, 9000] }));
+    const asking = { square: [counter.x + 3, counter.y + 1], facing: n, group: "counter", wait: [6000, 10000] };
+    const callings = random.shuffle([...CALLINGS]);
+    const sex = () => (random.chance(0.5) ? "f" : "m");
+    const folk = [
+        { local: "receptionist", title: "Guild receptionist", role: "receptionist", sex: "f", map: hall.id, square: behind[0].square, facing: s, routine: { order: "alternate", wait: [3000, 6000], stops: [...behind, filing] } },
+        { local: "adventurer", title: "Adventurer", role: "adventurer", look: callings[0], sex: sex(), map: hall.id, square: reading[0].square, facing: w, routine: { order: "alternate", wait: [4000, 8000], stops: [reading[0], asking] } },
+        { local: "adventurer2", title: "Adventurer", role: "adventurer", look: callings[1], sex: sex(), map: hall.id, square: reading[1].square, facing: w, routine: { order: "cycle", wait: [6000, 12000], stops: [reading[1]] } },
+    ];
+
+    // More at the tables, drinking to their last job (patrons, as in a tavern, talking as
+    // adventurers do)
+    const seats = random.shuffle([...(hall.marks.b ?? [])]).slice(0, random.int(2, 4));
+
+    seats.forEach(([x, y], k) => {
+        const facing = hall.plan[y + 1]?.[x] === "T" ? s : n;
+
+        folk.push({ local: `adventurer${k + 3}`, title: "Adventurer", role: "patron", talk: "adventurer", look: callings[(k + 2) % callings.length], sex: sex(), map: hall.id, square: [x, y], facing, routine: { seated: true, act: "toast", every: [9000, 18000] } });
+    });
+
+    return folk;
+}
+
 // Each kind's floors (the first is the one its front door opens into) and its folk
 const KINDS = Object.freeze({
     tavern: { first: "taproom", rooms: tavernRooms, folk: (building, [taproom, upstairs]) => tavernFolkOf(building, taproom, upstairs) },
     blacksmith: { first: "forge", rooms: smithyRooms, folk: (building, [forge]) => smithyFolkOf(building, forge) },
     church: { first: "nave", rooms: templeRooms, folk: (building, [nave]) => templeFolkOf(building, nave) },
+    guild: { first: "hall", rooms: guildRooms, folk: (building, [hall]) => guildFolkOf(building, hall) },
 });
 
 // --- The buildings ---
 
 // What a building's called that has no name of its own
-const NAMES = Object.freeze({ blacksmith: "the smithy" });
+const NAMES = Object.freeze({ blacksmith: "the smithy", guild: "the Adventurers' Guild" });
 
 // Where the buildings' floors are drawn in the 3D world: past the world's edge (and Wenches and
 // Ale's), a hundred metres apart, each building's floors in a column

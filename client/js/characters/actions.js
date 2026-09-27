@@ -645,6 +645,34 @@ export const ATTACKS = Object.freeze({
                 ...[0.4, 0.55, 0.7, 0.85, 1, 1.15, 1.3, 1.45, 1.6, 1.75].map((time, k) => [time, { right: crank(k / 4), left: { at: [-0.15, -0.62, 0.5], palm: [0, -1, 0], towards: [0, 0, 1], shape: "open" }, ...spine({ flex: 16 }) }])),
         ],
     },
+    // A guild's: the receptionist stamping a notice on the counter (the stamp raised and brought
+    // down, twice), and filing it on the shelves behind (reaching up); an adventurer reading the
+    // quest board (a finger along a notice, the other hand on the hip)
+    stamp: {
+        variants: [
+            variant("stamp", { ...spine({}), Head: { flex: 0 } },
+                [0.5, { right: { at: [0.1, -0.35, 0.55], palm: [0.3, -0.9, 0.2], towards: [0, 0, 1], shape: "grip" }, left: { at: [-0.12, -0.66, 0.62], palm: [0, -1, 0], towards: [0.25, 0, 1], shape: "open" }, ...spine({ flex: 12 }), Head: { flex: 16 } }],
+                [1, { right: { at: [0.1, -0.64, 0.6], palm: [0.3, -0.9, 0.2], towards: [0, 0, 1], shape: "grip" }, ...spine({ flex: 16 }) }],
+                [1.25, { right: { at: [0.1, -0.35, 0.55], palm: [0.3, -0.9, 0.2], towards: [0, 0, 1], shape: "grip" }, ...spine({ flex: 12 }) }],
+                [1.5, { right: { at: [0.1, -0.64, 0.6], palm: [0.3, -0.9, 0.2], towards: [0, 0, 1], shape: "grip" }, ...spine({ flex: 16 }), Head: { flex: 18 } }]),
+        ],
+    },
+    file: {
+        variants: [
+            variant("file", { ...spine({}), Head: { flex: 0 } },
+                [0.6, { right: { at: [0.05, 0.45, 0.5], palm: [0, -0.2, 1], towards: [0, 1, 0.1], shape: "relaxed" }, ...spine({ flex: -6 }), Head: { flex: -16 } }],
+                [1, { right: { at: [0.05, 0.55, 0.55], palm: [0, -0.2, 1], towards: [0, 1, 0.1], shape: "open" }, ...spine({ flex: -8 }), Head: { flex: -20 } }],
+                [1.5, { right: { at: [0.1, 0.1, 0.4], palm: [0, -0.2, 1], towards: [0, 1, 0.1], shape: "relaxed" }, ...spine({}), Head: { flex: -4 } }]),
+        ],
+    },
+    read: {
+        variants: [
+            variant("read", { ...spine({}), Head: { flex: 0, turn: 0 } },
+                [0.6, { right: { at: [0.05, 0.05, 0.62], palm: [0.2, 0, 1], towards: [0, 1, 0.2], shape: "beckon", index: 0 }, left: akimbo(-1), ...spine({ flex: 4 }), Head: { flex: 4, turn: -6 } }],
+                [1, { right: { at: [0.18, -0.1, 0.62], palm: [0.2, 0, 1], towards: [0, 1, 0.2], shape: "beckon", index: 0 }, Head: { flex: 8, turn: 6 } }],
+                [1.5, { right: { at: [0.05, -0.2, 0.62], palm: [0.2, 0, 1], towards: [0, 1, 0.2], shape: "beckon", index: 0 }, Head: { flex: 10, turn: -4 } }]),
+        ],
+    },
     // A temple's: the priest blessing the pews (the right hand raised, palm out, and drawn down
     // and across in the sign of the Hearth, the other on the chest), and lighting a candle at a
     // shrine (reaching forward to its wick, bowing a little)
@@ -971,6 +999,28 @@ export const RESTS = Object.freeze({
     ],
     apprentice: [renamed(BARMAID_RESTS[0], "wiping the brow"), ADVENTURER_RESTS[1], ADVENTURER_RESTS[2], ADVENTURER_RESTS[3], ADVENTURER_RESTS[0]],
     priest: PRIEST_RESTS,
+    receptionist: [
+        variant("a cheerful wave", { ...spine({}), Head: { bend: 0 }, Hips: { obliquity: 0 } },
+            // A bright wave, the hand high by the face, the head tilted
+            [0.4, { right: { at: [0.02, 0.45, 0.35], palm: [0, 0, 1], towards: [0, 1, 0], shape: "open" }, left: akimbo(-1), Head: { bend: 10 }, Hips: { obliquity: 4 } }],
+            [0.7, { right: { at: [-0.12, 0.48, 0.35], palm: [0, 0, 1], towards: [-0.3, 1, 0], shape: "open" } }],
+            [0.9, { right: { at: [0.12, 0.48, 0.35], palm: [0, 0, 1], towards: [0.3, 1, 0], shape: "open" } }],
+            [1.1, { right: { at: [-0.12, 0.48, 0.35], palm: [0, 0, 1], towards: [-0.3, 1, 0], shape: "open" } }],
+            [1.35, { right: { at: [0.1, 0.46, 0.35], palm: [0, 0, 1], towards: [0.2, 1, 0], shape: "open" }, Head: { bend: 12 } }],
+            [1.7, { ...spine({}), Head: { bend: 0 }, Hips: { obliquity: 0 } }]),
+        variant("chin in her hands", { ...spine({}), Head: { flex: 0, bend: 0 }, offset: [0, 0, 0] },
+            // Leaning on the counter, her chin in her hands, swaying a little
+            [0.5, { ...PRAYING(0.02), ...spine({ flex: 24 }), Head: { flex: -18, bend: 6 }, offset: [0, -0.04, 0.06] }],
+            [1.1, { ...spine({ flex: 26, bend: -4 }), Head: { flex: -16, bend: -8 } }],
+            [1.6, { ...PRAYING(0.02), ...spine({ flex: 24, bend: 4 }), Head: { flex: -18, bend: 8 }, offset: [0, -0.04, 0.06] }]),
+        variant("a little bow", { ...spine({}), Head: { flex: 0 } },
+            // Hands together in front, a quick bow
+            [0.4, { right: { at: [0.3, -0.72, 0.3], palm: [0.6, 0.2, 0.7], towards: [0.5, -0.3, 0.8], shape: "relaxed" }, left: { at: [-0.28, -0.74, 0.3], palm: [-0.6, 0.2, 0.7], towards: [-0.5, -0.3, 0.8], shape: "relaxed" } }],
+            [1, { ...spine({ flex: 28 }), Head: { flex: 14 } }],
+            [1.5, { ...spine({ flex: 2 }), Head: { flex: 0 } }]),
+        renamed(BARKEEP_RESTS[0], "tidying the papers"),
+        renamed(BARMAID_RESTS[2], "tucking back her hair"),
+    ],
     acolyte: [PRIEST_RESTS[0], PRIEST_RESTS[2], ADVENTURER_RESTS[1], PRIEST_RESTS[3], ADVENTURER_RESTS[3]],
     worshipper: [
         variant("praying", { ...spine({}), Head: { flex: 0 } },
