@@ -39,6 +39,12 @@
 // or a counter: TALK_REACH) and stops there, facing them ("arrived"): to talk. Someone talking (talk()) stops what they're doing and faces
 // whoever they're talking to until it's over.
 //
+// Weapons are put away (sheathed, slung on the back...) out of a fight, and drawn for one: when an
+// enemy comes into sight, or anyone's after them, or the player is told to fight someone. Drawing
+// takes a moment (DRAW_MS) before the weapon can be used; once no enemy has been in sight or
+// after them for SHEATHE_AFTER_MS, they put it away again, which takes a while too (SHEATHE_MS).
+// (A "draw" event: { id, on }.)
+//
 // The folk (roles.js) rest now and then while the player can see them: every several seconds
 // (REST_EVERY) one of their role's five rests, never the same twice running, staying put until
 // it's done (a "rest" event: { id, role, rest }). A courtesan, when the player comes into her
@@ -53,7 +59,7 @@ import { createRandom } from "./random.js";
 import { BECKON, REST_EVERY, ROLES } from "./roles.js";
 import { rollHeal, SPELL_COOLDOWN, SPELLS } from "./spells.js";
 import { Variety } from "./variety.js";
-import { chooseAttack, distanceBetween, longestReach, rollDamage, WEAPONS } from "./weapons.js";
+import { armsOf, chooseAttack, distanceBetween, longestReach, rollDamage, WEAPONS } from "./weapons.js";
 import { nearestFree } from "./world.js";
 
 /**
@@ -64,6 +70,14 @@ export const TALK_REACH = Object.freeze({ near: 1.5, across: 3.2 });
 
 /** The length of one step, in ms. */
 export const STEP_MS = 50;
+
+/**
+ * Drawing a weapon: how long until it can be used (ms). Putting it away: how long it takes, and
+ * how long after a fight it's done (ms: no enemy in sight or after them for this long).
+ */
+export const DRAW_MS = 700;
+export const SHEATHE_MS = 1000;
+export const SHEATHE_AFTER_MS = 10000;
 
 /** How far characters can see, in squares. */
 export const SIGHT = 12;
@@ -148,19 +162,28 @@ export class Battle {
     }
 
     /**
-     * Add a character: { id, kind (a KINDS key), name, weapon (a WEAPONS key), team, square
+     * Add a character: { id, kind (a KINDS key), name, weapon (a WEAPONS key), boots (wearing
+     * spiked boots, kicking too: weapons.js armsOf), team, square
      * ([x, y]), map (a map's id: "town" to start with), ai ("patrol" for enemies, "routine" for
      * the folk), patrol ([[x, y], [x, y]], on its map), neutral (one of the folk: no one fights
-     * them, and they fight no one), routine (the folk's: see #routine), facing }. It comes back
-     * to life where it's added. The folk have a `role` (roles.js ROLES: how they rest).
+     * them, and they fight no one), routine (the folk's: see #routine), facing, armed (its
+     * weapon drawn to start with; else it's put away) }. It comes back to life where it's added.
+     * The folk have a `role` (roles.js ROLES: how they rest).
      */
-    add({ id, kind, name = kind, weapon = null, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, facing = 0 }) {
+    add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, facing = 0, armed = false }) {
         const type = KINDS[kind];
         const actor = {
             id,
             kind,
             name,
             weapon,
+            boots: boots || weapon === "boots",
+            // Its attacks (its weapon's, and kicks); whether its weapon is drawn, and drawing
+            // it or putting it away ({ on, until }); when it was last in a fight
+            arms: armsOf(weapon, boots),
+            armed,
+            drawing: null,
+            foughtAt: -Infinity,
             team,
             ai,
             patrol,
@@ -512,6 +535,7 @@ export class Battle {
         this.time += STEP_MS;
 
         for (const actor of this.actors) {
+            this.#arm(actor);
             this.#think(actor);
         }
 
@@ -524,6 +548,52 @@ export class Battle {
         }
 
         this.#fly();
+    }
+
+    // --- Drawing weapons and putting them away ---
+
+    /**
+     * Draw its weapon for a fight (an enemy in sight or after it, or told to fight one), or put it
+     * away a while after one (SHEATHE_AFTER_MS), not in the middle of an attack.
+     */
+    #arm(actor) {
+        if (!actor.arms.length || actor.dead) {
+            return;
+        }
+
+        if (actor.drawing && this.time >= actor.drawing.until) {
+            actor.armed = actor.drawing.on;
+            actor.drawing = null;
+        }
+
+        if (this.#inFight(actor)) {
+            actor.foughtAt = this.time;
+
+            if (!actor.armed && !actor.drawing?.on) {
+                this.#draw(actor, true);
+            }
+        } else if (actor.armed && !actor.drawing && !actor.attack && this.time - actor.foughtAt >= SHEATHE_AFTER_MS) {
+            this.#draw(actor, false);
+        }
+    }
+
+    // Start drawing its weapon (`on`), or putting it away (it can't be used meanwhile)
+    #draw(actor, on) {
+        actor.armed = false;
+        actor.drawing = { on, until: this.time + (on ? DRAW_MS : SHEATHE_MS) };
+        this.#emit("draw", { id: actor.id, on });
+    }
+
+    /**
+     * Is a character in a fight: attacking or told to fight, or an enemy on its map that it can
+     * see, or that's after it (chasing it, attacking it, or told to fight it)?
+     */
+    #inFight(actor) {
+        if (actor.attack || actor.order?.type === "engage") {
+            return true;
+        }
+
+        return this.actors.some((other) => hostile(other, actor) && !other.dead && other.map === actor.map && (other.target === actor.id || other.attack?.target === actor.id || (other.order?.type === "engage" && other.order.target === actor.id) || this.canSee(actor, other)));
     }
 
     // --- Deciding what to do ---
@@ -910,7 +980,7 @@ export class Battle {
             return false;
         }
 
-        const attack = chooseAttack(actor.weapon, actor.square, target.square);
+        const attack = chooseAttack(actor.arms, actor.square, target.square);
 
         return attack !== null && (attack.kind === "melee" || this.canSee(actor, target));
     }
@@ -1091,7 +1161,7 @@ export class Battle {
         }
 
         if (actor.order?.type === "engage" || (actor.target !== null && actor.order?.type !== "enter")) {
-            left -= longestReach(actor.weapon);
+            left -= longestReach(actor.arms);
         }
 
         return Math.max(0, left);
@@ -1178,11 +1248,21 @@ export class Battle {
     #attack(actor, target) {
         actor.facing = Math.atan2(target.x - actor.x, target.y - actor.y);
 
+        // (Its weapon drawn first)
+        if (!actor.armed) {
+            if (!actor.drawing?.on) {
+                this.#draw(actor, true);
+            }
+
+            return;
+        }
+
         if (this.time < actor.readyAt) {
             return;
         }
 
-        const attack = chooseAttack(actor.weapon, actor.square, target.square);
+        // (Kicking or using the weapon, at random, wearing spiked boots)
+        const attack = chooseAttack(actor.arms, actor.square, target.square, this.random);
 
         actor.attack = { attack, target: target.id, start: this.time, struck: false };
         actor.readyAt = this.time + attack.interval;
@@ -1343,6 +1423,7 @@ export class Battle {
     #die(actor, killer) {
         actor.dead = true;
         actor.respawnAt = this.time + actor.respawnMs;
+        actor.drawing = null;
         actor.attack = null;
         actor.casting = null;
         actor.order = null;
@@ -1411,6 +1492,9 @@ export class Battle {
             patrolIndex: 1,
             waitUntil: 0,
             pathGoal: null,
+            armed: false,
+            drawing: null,
+            foughtAt: -Infinity,
         });
         this.#emit("respawn", { id: actor.id, square, map: actor.map, from });
     }

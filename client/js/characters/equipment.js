@@ -57,6 +57,33 @@ const HOLDS = {
 };
 
 /**
+ * Where weapons are put away (`sheath`): on a socket (a hip, the back), where the grip goes from
+ * it (`at`, metres: x to the character's left, y up, z forward) and which ways the item's point
+ * (`point`: along its grip, towards the blade or head) and edge (`edge`) face; what it hangs in
+ * (`holder`: a scabbard, always there) and what it needs worn to hang from (`garment`: a belt, a
+ * strap across the chest); and how it looks put away, if not as in hand (`model`: a closed book).
+ * Worn weapons (`worn`: spiked gauntlets) stay on, the hands just open.
+ */
+const SHEATHS = {
+    // (At the left hip, the hilt forward and up, the blade down and back behind the thigh)
+    sword: { socket: "leftHip", at: [0.035, 0.06, 0.04], point: [0.12, -0.85, -0.5], edge: [0, -0.5, 0.85], holder: "scabbard", garment: "belt" },
+    // (Tucked in the belt at the right hip, the tip down)
+    wand: { socket: "rightHip", at: [-0.03, 0.05, 0.03], point: [-0.06, -1, 0.22], edge: [0, 0.22, 1], garment: "belt" },
+    // (Closed, hanging flat at the left hip, its spine down)
+    grimoire: { socket: "leftHip", at: [0.045, -0.07, -0.07], point: [0, 0, 1], edge: [0, -1, 0], model: "grimoireClosed", garment: "belt" },
+    // (On the back, slung from the right shoulder: the grip behind it, where the hand reaches
+    // over for it, the staff's crystal, the hammer's and the cleaver's heads down across the back
+    // to the left hip)
+    staff: { socket: "back", at: [-0.12, 0.15, -0.04], point: [0.3, -0.95, 0], edge: [0, 0, 1], garment: "baldric" },
+    hammer: { socket: "back", at: [-0.12, 0.15, -0.05], point: [0.3, -0.95, 0], edge: [0, 0, -1], garment: "baldric" },
+    cleaver: { socket: "back", at: [-0.12, 0.15, -0.035], point: [0.45, -0.89, 0], edge: [-0.89, -0.45, 0], garment: "baldric" },
+    // (On the back across the quiver, the grip behind the left shoulder for the left hand, a
+    // limb up past it, the other down to the right hip)
+    bow: { socket: "back", at: [0.12, 0.15, -0.1], point: [-0.3, -0.95, 0], edge: [0, 0, 1], garment: "baldric" },
+    worn: { worn: true },
+};
+
+/**
  * Items: slot, model (items.js), socket, an extra turn in the socket (Euler angles, radians: a
  * hilt or haft lies across the fist diagonally, along the palm's crease from the index finger's
  * knuckle to the heel of the hand, so a blade leans towards the fingers; a wand is pinched,
@@ -67,16 +94,27 @@ const HOLDS = {
  * at the end of the handle).
  */
 export const ITEMS = Object.freeze({
-    sword: { label: "Arming sword", slot: "mainHand", model: "sword", socket: "rightHand", turn: [0.9, 0, 0], grips: true, hold: HOLDS.sword },
-    staff: { label: "Mage's staff", slot: "mainHand", model: "staff", socket: "rightHand", turn: [0.25, 0, 0], grips: true, hold: HOLDS.staff, haft: [-0.7, -0.3] },
-    wand: { label: "Wand", slot: "mainHand", model: "wand", socket: "rightHand", turn: [1.45, 0, 0], grips: true, hold: HOLDS.wand },
-    warHammer: { label: "War hammer", slot: "mainHand", model: "warHammer", socket: "rightHand", turn: [0.25, 0, 0], grips: true, hold: HOLDS.hammer, haft: [-0.22, -0.16] },
-    cleaver: { label: "Orc cleaver", slot: "mainHand", model: "cleaver", socket: "rightHand", turn: [0.7, 0, 0], grips: true, hold: HOLDS.sword },
-    spikedGauntlets: { label: "Spiked gauntlets", slot: "mainHand", model: "knuckleSpikes", socket: "rightHand", grips: true, hold: HOLDS.fist, garment: "gauntlets" },
-    spikedGauntletLeft: { label: "Spiked gauntlet (left)", slot: "offHand", model: "knuckleSpikes", socket: "leftHand", grips: true, hold: HOLDS.fist },
-    grimoire: { label: "Grimoire", slot: "offHand", model: "grimoire", socket: "leftHand", hold: HOLDS.book },
+    sword: { label: "Arming sword", slot: "mainHand", model: "sword", socket: "rightHand", turn: [0.9, 0, 0], grips: true, hold: HOLDS.sword, sheath: SHEATHS.sword },
+    staff: { label: "Mage's staff", slot: "mainHand", model: "staff", socket: "rightHand", turn: [0.25, 0, 0], grips: true, hold: HOLDS.staff, haft: [-0.7, -0.3], sheath: SHEATHS.staff },
+    wand: { label: "Wand", slot: "mainHand", model: "wand", socket: "rightHand", turn: [1.45, 0, 0], grips: true, hold: HOLDS.wand, sheath: SHEATHS.wand },
+    warHammer: { label: "War hammer", slot: "mainHand", model: "warHammer", socket: "rightHand", turn: [0.25, 0, 0], grips: true, hold: HOLDS.hammer, haft: [-0.22, -0.16], sheath: SHEATHS.hammer },
+    cleaver: { label: "Orc cleaver", slot: "mainHand", model: "cleaver", socket: "rightHand", turn: [0.7, 0, 0], grips: true, hold: HOLDS.sword, sheath: SHEATHS.cleaver },
+    spikedGauntlets: { label: "Spiked gauntlets", slot: "mainHand", model: "knuckleSpikes", socket: "rightHand", grips: true, hold: HOLDS.fist, garment: "gauntlets", sheath: SHEATHS.worn },
+    spikedGauntletLeft: { label: "Spiked gauntlet (left)", slot: "offHand", model: "knuckleSpikes", socket: "leftHand", grips: true, hold: HOLDS.fist, sheath: SHEATHS.worn },
+    // (Iron on both feet: over the toes, round the heels and down the shins, each on its bone)
+    spikedBoots: {
+        label: "Spiked boots",
+        slot: "feet",
+        garment: "spikedBootLeather",
+        parts: ["right", "left"].flatMap((side) => [
+            { model: "toeSpike", socket: `${side}Toe` },
+            { model: "heelSpur", socket: `${side}Heel` },
+            { model: "shinPlate", socket: `${side}Shin` },
+        ]),
+    },
+    grimoire: { label: "Grimoire", slot: "offHand", model: "grimoire", socket: "leftHand", hold: HOLDS.book, sheath: SHEATHS.grimoire },
     pistol: { label: "Flintlock pistol", slot: "mainHand", model: "pistol", socket: "rightHand", grips: true, hold: HOLDS.pistol },
-    bow: { label: "Longbow", slot: "offHand", model: "bow", socket: "leftHand", turn: [0.4, 0, 0], grips: true, hold: HOLDS.bow },
+    bow: { label: "Longbow", slot: "offHand", model: "bow", socket: "leftHand", turn: [0.4, 0, 0], grips: true, hold: HOLDS.bow, sheath: SHEATHS.bow },
     roundShield: { label: "Round shield", slot: "offHand", model: "roundShield", socket: "leftForearm", hold: HOLDS.shield, grips: true },
     kiteShield: { label: "Kite shield", slot: "offHand", model: "kiteShield", socket: "leftForearm", hold: HOLDS.shield, grips: true },
     nasalHelm: { label: "Nasal helm", slot: "head", model: "nasalHelm", socket: "head", hides: ["hair"] },
@@ -130,6 +168,65 @@ export function socketOn(character, socket) {
 
             return { bone, position, quaternion, fit };
         }
+        case "leftHip":
+        case "rightHip": {
+            // On the outside of the hip, on the belt (garments.js: a hand's breadth below the
+            // waist), for things hung from it
+            const left = socket === "leftHip";
+            const belt = head("Spine").y - 0.048 * (character.height / 1.7);
+            const trunk = new Set(["Hips", "Spine", "LeftUpLeg", "RightUpLeg"].map((name) => rig.index.get(name)));
+            let best = null;
+
+            for (let v = 0; v < human.vertexCount; v++) {
+                const y = positions[v * 3 + 1];
+
+                // (The trunk's skin, not the hands hanging beside it)
+                if (human.partOf[v] === 0 && trunk.has(human.skinIndices[v * 4]) && Math.abs(y - belt) < 0.02) {
+                    const x = positions[v * 3] * (left ? 1 : -1);
+
+                    if (!best || x > best.x) {
+                        best = { x, z: positions[v * 3 + 2] };
+                    }
+                }
+            }
+
+            const position = new THREE.Vector3((left ? 1 : -1) * (best.x + 0.014), belt, best.z).sub(head("Hips"));
+
+            return { bone: "Hips", position, quaternion: new THREE.Quaternion(), fit };
+        }
+        case "rightToe":
+        case "leftToe":
+        case "rightHeel":
+        case "leftHeel":
+        case "rightShin":
+        case "leftShin": {
+            // On the outside of the foot's skin (and the boot's leather over it): over the tips
+            // of the toes; round the back of the heel, a little above the sole; down the front
+            // of the shin, a little above the ankle
+            const Side = socket.startsWith("left") ? "Left" : "Right";
+            const part = socket.slice(Side.length);
+            const bone = `${Side}${{ Toe: "ToeBase", Heel: "Foot", Shin: "Leg" }[part]}`;
+            const extent = boneExtent(character, part === "Toe" ? [`${Side}Foot`, `${Side}ToeBase`] : [bone], part === "Toe" ? (y, z) => z : part === "Heel" ? (y, z) => (y < 0.07 * face.scale ? -z : -Infinity) : null);
+            let position;
+
+            if (part === "Toe") {
+                const toe = head(`${Side}ToeBase`);
+
+                position = new THREE.Vector3(extent.x, toe.y + 0.004, extent.z - 0.012 * face.scale).sub(toe);
+            } else if (part === "Heel") {
+                position = new THREE.Vector3(extent.x, 0.045 * face.scale, extent.z - 0.01).sub(head(bone));
+            } else {
+                // A third of the way up from the ankle to the knee, on the front of the shin
+                const knee = head(bone);
+                const ankle = head(`${Side}Foot`);
+                const y = ankle.y + (knee.y - ankle.y) * 0.4;
+                const front = boneExtent(character, [bone], (vy, z) => (Math.abs(vy - y) < 0.03 ? z : -Infinity));
+
+                position = new THREE.Vector3(front.x, y, front.z + 0.012).sub(knee);
+            }
+
+            return { bone, position, quaternion: new THREE.Quaternion(), fit };
+        }
         case "head": {
             const middle = new THREE.Vector3(...face.fromFace(0, 0.035, -0.068));
 
@@ -174,6 +271,41 @@ export function socketOn(character, socket) {
         default:
             throw new Error(`No socket "${socket}"`);
     }
+}
+
+/**
+ * The furthest point of some bones' skin (what each moves most) by `score(y, z)` (the highest
+ * wins; none: the middle of it), in the body's rest pose, at the middle of it across: { x, y, z }.
+ */
+function boneExtent(character, boneNames, score = null) {
+    const { human, positions, rig } = character;
+    const bones = new Set(boneNames.map((name) => rig.index.get(name)));
+    let best = null;
+    let bestScore = -Infinity;
+    const sum = [0, 0, 0];
+    let count = 0;
+
+    for (let v = 0; v < human.vertexCount; v++) {
+        if (human.partOf[v] === 0 && bones.has(human.skinIndices[v * 4])) {
+            const [x, y, z] = [positions[v * 3], positions[v * 3 + 1], positions[v * 3 + 2]];
+
+            sum[0] += x;
+            sum[1] += y;
+            sum[2] += z;
+            count++;
+
+            const value = score ? score(y, z) : -Infinity;
+
+            if (value > bestScore) {
+                bestScore = value;
+                best = { x, y, z };
+            }
+        }
+    }
+
+    const middle = { x: sum[0] / count, y: sum[1] / count, z: sum[2] / count };
+
+    return best ? { ...best, x: middle.x } : middle;
 }
 
 /** The head's radius round its upper half (for fitting helmets). */

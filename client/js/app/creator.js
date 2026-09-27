@@ -13,9 +13,9 @@ import { EQUIPMENT } from "../characters/equipment.js";
 import { DETAILS } from "../characters/details.js";
 import { BEARDS, HAIRSTYLES } from "../characters/hair.js";
 import { HAIR_COLOURS } from "../characters/skin.js";
-import { STARTING_WEAPONS, WEAPONS } from "../core/weapons.js";
+import { armsOf, STARTING_WEAPONS, WEAPONS } from "../core/weapons.js";
 import { Avatar } from "../world/avatar.js";
-import { heroEquipment } from "./game.js";
+import { guardOf, heroEquipment } from "./game.js";
 import { cleanName, defaultHero, HUMAN_TONES, IRIS_COLOURS, randomHero, suggestName } from "./heroes.js";
 
 const STEPS = ["look", "weapon", "name"];
@@ -59,12 +59,20 @@ const element = (tag, attributes = {}, ...children) => {
 
 const title = (text) => text[0].toUpperCase() + text.slice(1).replace(/([A-Z])/g, " $1").toLowerCase();
 
-/** Words for a weapon's numbers: damage, reach and speed. */
-export function weaponNumbers(weapon) {
-    return WEAPONS[weapon].attacks.map(({ kind, damage: [least, most], reach, interval }) => {
-        const range = kind === "melee" ? "up close" : `${reach} m`;
+/**
+ * Words for a weapon's numbers: damage, reach and speed; or, with spiked boots too (`boots`), a
+ * kick's or the weapon's, and how they mix.
+ */
+export function weaponNumbers(weapon, boots = false) {
+    const range = (least, most) => (least === most ? `${least}` : `${least}–${most}`);
 
-        return `${least}–${most} damage · ${range} · ${(1000 / interval).toFixed(1)} a second`;
+    return armsOf(weapon, boots).map((attack) => {
+        const { kind, reach } = attack;
+        const { damage: [least, most], interval } = attack.either?.[0] ?? attack;
+        const where = kind === "melee" ? "up close" : `${reach} m`;
+        const how = attack.either ? " (kicks or the weapon)" : boots && attack.id === "kick" && weapon !== "boots" ? " (kicks)" : "";
+
+        return `${range(least, most)} damage ${where}${how}${attack.either ? "" : ` · ${(1000 / interval).toFixed(1)} a second`}`;
     }).join("; ");
 }
 
@@ -97,6 +105,7 @@ export class Creator {
     run(hero = defaultHero()) {
         this.hero = structuredClone(hero);
         this.hero.weapon = STARTING_WEAPONS.includes(this.hero.weapon) ? this.hero.weapon : STARTING_WEAPONS[0];
+        this.hero.boots = Boolean(this.hero.boots) && this.hero.weapon !== "boots";
 
         this.#buildCharacter();
         this.#buildPanel();
@@ -171,9 +180,9 @@ export class Creator {
         this.avatar?.object.removeFromParent();
         this.avatar?.character.dispose();
 
-        const character = new Character(this.kit, { shape: hero.shape, look: hero.look, equipment: heroEquipment(hero.weapon) });
+        const character = new Character(this.kit, { shape: hero.shape, look: hero.look, equipment: heroEquipment(hero.weapon, hero.boots) });
 
-        this.avatar = new Avatar(character, { guard: WEAPONS[hero.weapon].attacks[0].animation });
+        this.avatar = new Avatar(character, { guard: guardOf(hero.weapon) });
         this.avatar.place(0, 0, 0);
         this.scene.add(character.object);
     }
@@ -203,10 +212,10 @@ export class Creator {
         }
 
         if (pending.has("weapon")) {
-            character.setEquipment(heroEquipment(hero.weapon));
-            avatar.actions.setWeapon(WEAPONS[hero.weapon].attacks[0].animation);
+            character.setEquipment(heroEquipment(hero.weapon, hero.boots));
+            avatar.actions.setWeapon(guardOf(hero.weapon));
             avatar.actions.setGuard(this.step !== "look");
-            this.#swing();
+            this.#showDraw();
         }
 
         pending.clear();
@@ -218,11 +227,27 @@ export class Creator {
         }
     }
 
-    // Show the chosen weapon in use
-    #swing() {
-        const { animation, hitAt, duration } = WEAPONS[this.hero.weapon].attacks[0];
+    // Show the chosen weapon drawn, with its flourish, then in use
+    #showDraw() {
+        const { avatar, hero } = this;
 
-        this.avatar.actions.startAttack(animation, { hitAt: hitAt / 1000, duration: duration / 1000 });
+        avatar.character.sheathe(true);
+
+        const took = avatar.actions.draw(guardOf(hero.weapon), true);
+
+        this.kicked = true;
+        this.demoAt = performance.now() + (took + 0.6) * 1000;
+    }
+
+    // Show the chosen weapon in use (in spiked boots too, a kick every other time)
+    #swing() {
+        const { weapon, boots } = this.hero;
+        const kick = boots && !this.kicked;
+        const { animation, hitAt, duration } = (kick ? WEAPONS.boots : WEAPONS[weapon]).attacks[0];
+
+        this.kicked = kick;
+        this.avatar.character.sheathe(false);
+        this.avatar.actions.startAttack(animation, { hitAt: hitAt / 1000, duration: duration / 1000, arms: !kick || weapon === "gauntlets" });
         this.demoAt = performance.now() + DEMO_EVERY * 1000;
     }
 
@@ -387,7 +412,7 @@ export class Creator {
         this.avatar?.actions.setGuard(step !== "look");
 
         if (step === "weapon") {
-            this.#swing();
+            this.#showDraw();
         }
 
         if (step === "name") {
@@ -446,10 +471,10 @@ export class Creator {
     #refreshName() {
         const name = cleanName(this.hero.name);
         const weapon = WEAPONS[this.hero.weapon].label.toLowerCase();
+        const kit = heroEquipment(this.hero.weapon, this.hero.boots).map((id) => EQUIPMENT[id].label.toLowerCase());
+        const armed = this.hero.weapon === "boots" ? "spiked boots" : this.hero.boots ? `a ${weapon} and spiked boots` : `a ${weapon}`;
 
-        const kit = heroEquipment(this.hero.weapon).map((id) => EQUIPMENT[id].label.toLowerCase());
-
-        this.root.querySelector("#namesummary").textContent = name ? `${name}, with a ${weapon}. You'll wake in the market square of Pellagos in a ${kit.slice(0, -1).join(", ")} and ${kit.at(-1)}.` : "Every hero needs a name.";
+        this.root.querySelector("#namesummary").textContent = name ? `${name}, with ${armed}. You'll wake in the market square of Pellagos in a ${kit.slice(0, -1).join(", ")} and ${kit.at(-1)}.` : "Every hero needs a name.";
         this.root.querySelector("#createnext").disabled = this.step === "name" && !name;
     }
 
@@ -619,6 +644,7 @@ export class Creator {
                 type: "button", class: "weapon", role: "radio", "data-weapon": id,
                 onclick: () => {
                     this.hero.weapon = id;
+                    this.hero.boots &&= id !== "boots";
                     this.#change("weapon");
                     show();
                 },
@@ -628,6 +654,20 @@ export class Creator {
             element("span", { class: "about" }, weapon.about),
             element("span", { class: "numbers" }, weaponNumbers(id)));
         });
+        // Spiked boots with any other weapon: kicking too
+        const numbers = element("span", { class: "numbers" });
+        const boots = element("button", {
+            type: "button", class: "weapon option", role: "switch", id: "bootstoggle",
+            onclick: () => {
+                this.hero.boots = !this.hero.boots;
+                this.#change("weapon");
+                show();
+            },
+        },
+        element("span", { class: "label" }, "And spiked boots"),
+        element("span", { class: "kind" }, "Kicks"),
+        element("span", { class: "about" }, "Kick as well as fight with your weapon: up close, each blow is a kick or the weapon at random, both doing the damage halfway between the two. With a bow, wand or grimoire, you kick whoever's next to you."),
+        numbers);
         const show = () => {
             for (const card of cards) {
                 const chosen = card.dataset.weapon === this.hero.weapon;
@@ -635,8 +675,13 @@ export class Creator {
                 card.setAttribute("aria-checked", String(chosen));
                 card.tabIndex = chosen ? 0 : -1;
             }
+
+            boots.hidden = this.hero.weapon === "boots";
+            boots.setAttribute("aria-checked", String(Boolean(this.hero.boots)));
+            numbers.textContent = weaponNumbers(this.hero.weapon, true);
         };
 
+        this.root.querySelector("#bootsoption").replaceChildren(boots);
         list.replaceChildren(...cards);
         list.onkeydown = (event) => {
             const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[event.key];

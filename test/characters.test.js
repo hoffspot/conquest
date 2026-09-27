@@ -7,7 +7,9 @@ import { Actions, ATTACKS } from "../client/js/characters/actions.js";
 import { HumanData } from "../client/js/characters/body.js";
 import { parseBVH, retarget } from "../client/js/characters/bvh.js";
 import { allDetailTargetNames, DETAILS, detailTargets } from "../client/js/characters/details.js";
-import { EQUIPMENT, ITEMS, SLOTS } from "../client/js/characters/equipment.js";
+import { EQUIPMENT, ITEMS, SLOTS, socketOn } from "../client/js/characters/equipment.js";
+import { placed } from "../client/js/characters/character.js";
+import { STARTING_WEAPONS, WEAPONS } from "../client/js/core/weapons.js";
 import { aboveHairline, beardAmount, faceFrame } from "../client/js/characters/face.js";
 import { buildHair, HAIRSTYLES } from "../client/js/characters/hair.js";
 import { amplitude, cadence, CURVES, curveAt, NATURAL_SPEED, phaseName, RUN_CURVES, RUN_STANCE, runCadence, runStrideLength, STANCE, strideLength, walkToRunSpeed } from "../client/js/characters/gait.js";
@@ -963,7 +965,60 @@ describe("clothing and armour (garments.js)", () => {
             }
         }
 
-        assert.ok(Object.values(ITEMS).every(({ socket }) => socket));
+        assert.ok(Object.values(ITEMS).every(({ socket, parts }) => socket || parts.every((part) => part.socket && part.model)));
+    });
+});
+
+describe("weapons put away, and spiked boots (equipment.js)", () => {
+    const f = figure(PRESETS.hero.shape);
+    const head = (name) => f.rig.heads[f.rig.index.get(name)];
+    const where = (socket, spec = {}) => {
+        const place = placed(socketOn(f, socket), spec);
+
+        return place.position.clone().add(head(place.bone));
+    };
+
+    it("puts every weapon away somewhere on the body, or has it worn", () => {
+        for (const id of [...STARTING_WEAPONS, "cleaver"]) {
+            for (const item of WEAPONS[id].equipment.map((each) => ITEMS[each]).filter((each) => each?.hold)) {
+                assert.ok(item.sheath, `${id}: ${item.label}`);
+
+                if (!item.sheath.worn) {
+                    // (Close against the body: within a hand's breadth of its middle, front to back)
+                    const grip = where(item.sheath.socket, item.sheath);
+
+                    assert.ok(Math.abs(grip.x) < 0.25 && grip.z > -0.25 && grip.z < 0.2, `${id}: at ${grip.toArray().map((v) => v.toFixed(2))}`);
+                }
+            }
+        }
+    });
+
+    it("hangs things at the hips from the belt, on the outside of each hip", () => {
+        const belt = head("Spine").y - 0.048 * (f.height / 1.7);
+
+        for (const [socket, side] of [["leftHip", 1], ["rightHip", -1]]) {
+            const hip = where(socket);
+
+            assert.ok(Math.abs(hip.y - belt) < 0.01, socket);
+            assert.ok(hip.x * side > 0.1 && hip.x * side < 0.25, `${socket}: ${hip.x.toFixed(2)}`);
+        }
+    });
+
+    it("puts spiked boots' iron over the toes, round the heels and down the shins", () => {
+        for (const side of ["Left", "Right"]) {
+            const Side = side.toLowerCase();
+            const [ankle, ball, knee] = [head(`${side}Foot`), head(`${side}ToeBase`), head(`${side}Leg`)];
+            const toe = where(`${Side}Toe`);
+            const heel = where(`${Side}Heel`);
+            const shin = where(`${Side}Shin`);
+
+            assert.ok(toe.z > ball.z && toe.y < 0.06, `${side} toe`);
+            assert.ok(heel.z < ankle.z - 0.04 && heel.y < ankle.y, `${side} heel`);
+            assert.ok(shin.y > ankle.y && shin.y < knee.y && shin.z > ankle.z, `${side} shin`);
+        }
+
+        assert.equal(ITEMS.spikedBoots.parts.length, 6);
+        assert.equal(GARMENTS[ITEMS.spikedBoots.garment].slot, "feet");
     });
 });
 

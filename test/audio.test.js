@@ -36,7 +36,7 @@ describe("making sounds (synth.js)", () => {
     });
 
     it("has a swing for every melee attack, a hit for every reaction and a launch for every projectile", () => {
-        const swings = { sword: "swingSword", staff: "swingStaff", hammer: "swingHammer", punch: "swingPunch", cleaver: "swingCleaver" };
+        const swings = { sword: "swingSword", staff: "swingStaff", hammer: "swingHammer", punch: "swingPunch", kick: "swingKick", cleaver: "swingCleaver" };
 
         for (const [id, { attacks }] of Object.entries(WEAPONS)) {
             for (const attack of attacks) {

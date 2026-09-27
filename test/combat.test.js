@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { Battle, KINDS, SIGHT, SPRINT, STAMINA_DRAIN, STAMINA_RECOVERY, STEP_MS } from "../client/js/core/battle.js";
+import { Battle, DRAW_MS, KINDS, SHEATHE_AFTER_MS, SHEATHE_MS, SIGHT, SPRINT, STAMINA_DRAIN, STAMINA_RECOVERY, STEP_MS } from "../client/js/core/battle.js";
 import { createRandom } from "../client/js/core/random.js";
 import { CAST_FAILURES, SPELL_COOLDOWN, SPELLS } from "../client/js/core/spells.js";
-import { chooseAttack, inReach, MELEE_REACH, rollDamage, STARTING_WEAPONS, WEAPONS } from "../client/js/core/weapons.js";
+import { armsOf, averageDamage, chooseAttack, inReach, longestReach, MELEE_REACH, rollDamage, STARTING_WEAPONS, WEAPONS } from "../client/js/core/weapons.js";
 import { generateWorld } from "../client/js/core/world.js";
 import { parseGrid } from "./helpers.js";
 
@@ -26,8 +26,8 @@ function run(battle, ms) {
 }
 
 describe("weapons (weapons.js)", () => {
-    it("offers the seven starting weapons, each with whole-number damage ranges", () => {
-        assert.deepEqual(STARTING_WEAPONS, ["sword", "staff", "wand", "grimoire", "hammer", "bow", "gauntlets"]);
+    it("offers the eight starting weapons, each with whole-number damage ranges", () => {
+        assert.deepEqual(STARTING_WEAPONS, ["sword", "staff", "wand", "grimoire", "hammer", "bow", "gauntlets", "boots"]);
 
         for (const [id, weapon] of Object.entries(WEAPONS)) {
             assert.ok(weapon.attacks.length > 0, id);
@@ -89,6 +89,64 @@ describe("weapons (weapons.js)", () => {
         }
     });
 
+    it("with spiked boots, kicks or uses a melee weapon at random, both doing the damage halfway between theirs", () => {
+        const kick = WEAPONS.boots.attacks[0];
+
+        assert.deepEqual(armsOf("boots"), [kick]);
+        assert.deepEqual(armsOf("sword"), WEAPONS.sword.attacks);
+
+        for (const weapon of ["sword", "staff", "hammer", "gauntlets", "cleaver"]) {
+            const [mixed] = armsOf(weapon, true);
+            const own = WEAPONS[weapon].attacks[0];
+            const damage = [(own.damage[0] + kick.damage[0]) / 2, (own.damage[1] + kick.damage[1]) / 2];
+
+            assert.deepEqual(averageDamage(own, kick), damage, weapon);
+            assert.deepEqual(mixed.either.map(({ id }) => id), [own.id, "kick"], weapon);
+            assert.ok(mixed.either.every((attack) => attack.damage[0] === damage[0] && attack.damage[1] === damage[1]), weapon);
+            assert.equal(longestReach(armsOf(weapon, true)), MELEE_REACH);
+        }
+
+        // Each blow one or the other, at random, both often
+        const random = createRandom(5);
+        const picks = Array.from({ length: 200 }, () => chooseAttack(armsOf("sword", true), [0, 0], [1, 0], random).id);
+
+        assert.ok(picks.filter((id) => id === "kick").length > 70 && picks.filter((id) => id === "slash").length > 70);
+        assert.equal(chooseAttack(armsOf("sword", true), [0, 0], [2, 0], random), null);
+    });
+
+    it("with spiked boots and a bow, wand or grimoire, kicks up close with the boots' own damage, and shoots or casts further off", () => {
+        const random = createRandom(6);
+
+        for (const weapon of ["bow", "wand", "grimoire"]) {
+            const arms = armsOf(weapon, true);
+            const ranged = WEAPONS[weapon].attacks[0];
+
+            for (const next of [[1, 0], [1, 1], [0, -1]]) {
+                assert.deepEqual(chooseAttack(arms, [0, 0], next, random), WEAPONS.boots.attacks[0], `${weapon} next to it`);
+            }
+
+            assert.equal(chooseAttack(arms, [0, 0], [3, 0], random), ranged, `${weapon} further off`);
+            assert.equal(longestReach(arms), ranged.reach);
+        }
+    });
+
+    it("rolls an averaged range with halves as the whole numbers inside it, evenly", () => {
+        const random = createRandom(8);
+        const counts = new Map();
+
+        for (let k = 0; k < 4000; k++) {
+            const damage = rollDamage({ damage: [3.5, 7.5] }, random);
+
+            counts.set(damage, (counts.get(damage) ?? 0) + 1);
+        }
+
+        assert.deepEqual([...counts.keys()].sort(), [4, 5, 6, 7]);
+
+        for (const count of counts.values()) {
+            assert.ok(Math.abs(count - 1000) < 120, String(count));
+        }
+    });
+
     it("picks an attack that reaches: ranged weapons out to their range", () => {
         assert.equal(chooseAttack("bow", [0, 0], [9, 0])?.id, "arrow");
         assert.equal(chooseAttack("bow", [0, 0], [9, 3]), null);
@@ -123,6 +181,104 @@ describe("the battle (battle.js)", () => {
         assert.equal(player.hp, KINDS.player.hp - taken("player"));
         assert.equal(orc.hp, KINDS.orc.hp - taken("orc"));
         assert.ok(taken("orc") > 0 && taken("player") > 0);
+    });
+
+    it("has a player in spiked boots with a sword both kick and slash, each for the averaged damage", () => {
+        const battle = new Battle(open(10, 10), { seed: 11 });
+
+        battle.add({ id: "player", kind: "player", weapon: "sword", boots: true, team: "hero", square: [4, 4] });
+        battle.add({ id: "orc", kind: "orc", weapon: "cleaver", team: "orcs", square: [5, 5], ai: "patrol", patrol: [[5, 5], [5, 5]] });
+        battle.actor("orc").hp = battle.actor("orc").maxHp = 1000;
+        battle.actor("player").hp = battle.actor("player").maxHp = 1000;
+
+        const events = run(battle, 20000);
+        const attacks = events.filter((event) => event.type === "attack" && event.id === "player");
+        const hits = events.filter((event) => event.type === "hit" && event.by === "player");
+
+        assert.ok(attacks.some((event) => event.attack === "kick" && event.animation === "kick"), "kicks");
+        assert.ok(attacks.some((event) => event.attack === "slash" && event.animation === "sword"), "slashes");
+        assert.ok(hits.length > 10);
+
+        for (const hit of hits) {
+            assert.ok(hit.damage >= 4 && hit.damage <= 7, `${hit.attack} ${hit.damage}`);
+        }
+    });
+
+    it("has a player with only spiked boots kick", () => {
+        const battle = new Battle(open(10, 10), { seed: 12 });
+
+        battle.add({ id: "player", kind: "player", weapon: "boots", team: "hero", square: [4, 4] });
+        battle.add({ id: "orc", kind: "orc", weapon: "cleaver", team: "orcs", square: [5, 5], ai: "patrol", patrol: [[5, 5], [5, 5]] });
+
+        const events = run(battle, 5000);
+        const hits = events.filter((event) => event.type === "hit" && event.by === "player");
+
+        assert.ok(battle.actor("player").boots);
+        assert.ok(hits.length > 0 && hits.every((hit) => hit.attack === "kick" && hit.reaction === "kick" && hit.damage >= 3 && hit.damage <= 7));
+    });
+
+    it("starts with weapons put away, draws them when an enemy comes into sight, and can't strike until they're out", () => {
+        const battle = new Battle(open(20, 10), { seed: 4 });
+
+        battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [2, 5] });
+        battle.add({ id: "orc", kind: "orc", weapon: "cleaver", team: "orcs", square: [9, 5], ai: "patrol", patrol: [[9, 5], [9, 5]] });
+
+        assert.ok(!battle.actor("player").armed && !battle.actor("orc").armed);
+
+        const events = run(battle, 8000);
+        const draws = events.filter((event) => event.type === "draw");
+
+        for (const id of ["player", "orc"]) {
+            const drew = draws.find((event) => event.id === id);
+            const first = events.find((event) => event.type === "attack" && event.id === id);
+
+            assert.ok(drew?.on, `${id} draws`);
+            assert.ok(drew.time <= STEP_MS * 2, `${id} draws as soon as it sees the other`);
+            assert.ok(first && first.time >= drew.time + DRAW_MS, `${id} strikes once it's drawn`);
+            assert.ok(battle.actor(id).armed, `${id} is armed`);
+        }
+    });
+
+    it("doesn't draw for an enemy it can't see, unless it's told to fight it (and then the enemy it's after draws too)", () => {
+        const battle = new Battle(worldOf([
+            ".........#..........",
+            ".........#..........",
+            ".........#..........",
+            ".........#..........",
+            ".........#..........",
+        ]), { seed: 4 });
+
+        battle.add({ id: "player", kind: "player", weapon: "hammer", team: "hero", square: [3, 2] });
+        battle.add({ id: "orc", kind: "orc", weapon: "cleaver", team: "orcs", square: [15, 2], ai: "patrol", patrol: [[15, 2], [15, 2]] });
+
+        assert.ok(!run(battle, 2000).some((event) => event.type === "draw"), "a wall between them");
+
+        battle.command("player", { type: "engage", target: "orc" });
+
+        const draws = run(battle, 500).filter((event) => event.type === "draw");
+
+        assert.deepEqual(draws.map(({ id, on }) => [id, on]), [["player", true], ["orc", true]]);
+    });
+
+    it("puts its weapon away a while after the fight, once no enemy's in sight or after it", () => {
+        const battle = new Battle(open(20, 10), { seed: 4 });
+
+        battle.add({ id: "player", kind: "player", weapon: "bow", team: "hero", square: [2, 5] });
+        battle.add({ id: "orc", kind: "orc", weapon: "cleaver", team: "orcs", square: [14, 5], ai: "patrol", patrol: [[14, 5], [14, 5]] });
+        run(battle, 1000);
+        assert.ok(battle.actor("player").armed);
+
+        // (The orc gone, for good)
+        const gone = battle.time;
+
+        Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        const events = run(battle, SHEATHE_AFTER_MS + SHEATHE_MS + 1000);
+        const away = events.find((event) => event.type === "draw" && event.id === "player");
+
+        assert.equal(away?.on, false);
+        assert.ok(away.time >= gone + SHEATHE_AFTER_MS - STEP_MS && away.time <= gone + SHEATHE_AFTER_MS + 2 * STEP_MS, String(away.time - gone));
+        assert.ok(!battle.actor("player").armed && !battle.actor("player").drawing);
     });
 
     it("kills at no hit points, and brings the dead back where they started", () => {

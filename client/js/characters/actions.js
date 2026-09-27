@@ -119,6 +119,9 @@ export const GUARDS = Object.freeze({
     // (The bow low before the body, its back to the enemy, the drawing hand near the string)
     bow: { left: { at: [-0.15, -0.7, 0.55], point: [-0.2, 0.85, 0.5], edge: [0, -0.5, 0.85] }, right: { at: [0.3, -0.6, 0.5], pronate: 40, shape: "relaxed" } },
     punch: { right: fist(1), left: fist(-1), ...spine({ flex: 6 }) },
+    // (Kicking: a looser guard, the fists lower, the body upright; the fists kept before the
+    // chest as it turns)
+    kick: { right: { ...fist(1), at: [0.26, 0.05, 0.4], shape: "fist", chest: 1 }, left: { ...fist(-1), at: [-0.22, -0.02, 0.55], shape: "fist", chest: 1 }, ...spine({ flex: 2 }) },
     cleaver: { right: { at: [0.1, -0.5, 0.65], point: [0.2, 0.7, 0.65], edge: [-0.2, -0.65, 0.73] }, left: FREE },
 });
 
@@ -134,6 +137,13 @@ const HAMMER = rest(GUARDS.hammer);
 const BOW = rest(GUARDS.bow, { Head: { turn: 0, flex: 0 } });
 const PUNCH = rest(GUARDS.punch);
 const CLEAVER = rest(GUARDS.cleaver);
+
+// Kicking (with the right leg; every other kick is mirrored, with the left): the kicking leg's
+// joints, from standing (the standing leg is left to keep its foot planted), and how far each
+// foot is let go of the ground (`free`: the kicking foot, from as it lifts to as it's down again)
+const LEG_DOWN = { RightUpLeg: { flex: 0, abduct: 0, rotate: 0 }, RightLeg: { flex: 0 }, RightFoot: { flex: 0 }, free: { right: 0 } };
+const KICK = rest(GUARDS.kick, { Hips: { turn: 0, tilt: 0, obliquity: 0 }, ...LEG_DOWN });
+const lifted = (pose) => ({ free: { right: 1 }, ...pose });
 const CAST = { ...spine({}), Head: { flex: 0 }, offset: [0, 0, 0] };
 
 // One way of doing an action: its name and key poses, from and back to `start`
@@ -383,6 +393,62 @@ export const ATTACKS = Object.freeze({
                 [0.5, { right: { at: [-0.15, 0.3, 0.3], palm: [0.5, -0.8, 0], towards: [0.2, 0.5, 0.85] }, left: fist(-1), ...spine({ flex: -4, turn: -20 }), Hips: { turn: 8 }, offset: [0, 0, -0.03] }],
                 [1, { right: { at: [0.3, 0.08, 1.08], palm: [-0.3, -0.95, 0], towards: [0, -0.25, 1], elbow: [-0.8, 0.4, 0] }, left: fist(-1), ...spine({ flex: 10, turn: 22 }), Hips: { turn: -12 }, offset: [0, -0.04, 0.07] }],
                 [1.4, { right: { at: [0.35, -0.15, 0.78], palm: [0, -1, 0], towards: [0, -0.3, 1] }, left: fist(-1), ...spine({ flex: 12, turn: 14 }), Hips: { turn: -8 }, offset: [0, -0.04, 0.04] }]),
+        ],
+    },
+    kick: {
+        // (The foot lifts off as the knee comes up, and is down again before the end; the body
+        // leans away from the kick to balance it, the fists kept up)
+        alternate: true,
+        variants: [
+            variant("front kick", KICK,
+                // The knee drawn up high, then the leg snapped straight out into the belly, the
+                // toes pointed, leaning back a little, then drawn back in and put down
+                [0.25, { free: { right: 1 } }],
+                [0.6, lifted({ RightUpLeg: { flex: 94, abduct: 4 }, RightLeg: { flex: 118 }, RightFoot: { flex: -25 }, ...spine({ flex: -2 }), Hips: { tilt: -4 }, offset: [0, -0.03, -0.01] })],
+                [1, lifted({ RightUpLeg: { flex: 80, abduct: 2 }, RightLeg: { flex: 4 }, RightFoot: { flex: -40 }, ...spine({ flex: -2 }), Neck: { flex: 6 }, Head: { flex: 8 }, Hips: { tilt: -8 }, offset: [0, -0.08, 0.04] })],
+                [1.35, lifted({ RightUpLeg: { flex: 90, abduct: 4 }, RightLeg: { flex: 110 }, RightFoot: { flex: -25 }, ...spine({ flex: -2 }), Hips: { tilt: -4 }, offset: [0, -0.03, 0.01] })],
+                [1.7, { ...LEG_DOWN, free: { right: 0.4 }, RightUpLeg: { flex: 20 }, RightLeg: { flex: 30 }, Hips: { tilt: 0 }, offset: [0, -0.01, 0] }],
+                [1.85, { free: { right: 0 } }]),
+            variant("roundhouse", KICK,
+                // Pivoting on the standing foot, the hips turning over and leaning back, the knee
+                // brought round and the shin whipped into the enemy's ribs, the chest and head
+                // kept turned to them, the kicking side's fist swung down and back
+                [0.25, { free: { right: 1 } }],
+                [0.6, lifted({ RightUpLeg: { flex: 75, abduct: 35, rotate: -25 }, RightLeg: { flex: 125 }, RightFoot: { flex: -30 }, ...spine({ turn: -15 }), Hips: { turn: -40, tilt: -6 }, offset: [0, -0.03, -0.02] })],
+                [1, lifted({ RightUpLeg: { flex: 62, abduct: 45, rotate: -35 }, RightLeg: { flex: 10 }, RightFoot: { flex: -45 }, ...spine({ turn: -25, flex: 4 }), Neck: { turn: -10, flex: 6 }, Head: { turn: -10, flex: 8 }, Hips: { turn: -55, tilt: -18 }, offset: [0, -0.08, 0.01], right: { at: [0.05, -0.62, -0.1], palm: [0.3, 0, -1], towards: [0, -1, 0], shape: "fist" } })],
+                [1.35, lifted({ RightUpLeg: { flex: 72, abduct: 35, rotate: -25 }, RightLeg: { flex: 120 }, RightFoot: { flex: -30 }, ...spine({ turn: -15 }), Hips: { turn: -45, tilt: -8 }, offset: [0, -0.03, 0] })],
+                [1.7, { ...LEG_DOWN, free: { right: 0.4 }, RightUpLeg: { flex: 25, abduct: 10 }, RightLeg: { flex: 40 }, ...spine({ turn: -4 }), Hips: { turn: -12, tilt: 0 }, offset: [0, -0.01, 0] }],
+                [1.85, { free: { right: 0 } }]),
+            variant("side kick", KICK,
+                // Turned side on, the knee drawn up across the body, then the heel driven
+                // straight out into the enemy, the body leaning right away from it
+                [0.25, { free: { right: 1 } }],
+                [0.6, lifted({ RightUpLeg: { flex: 80, abduct: 20, rotate: -20 }, RightLeg: { flex: 125 }, RightFoot: { flex: 10 }, ...spine({ turn: -25 }), Hips: { turn: -65, tilt: -8 }, offset: [0, -0.03, -0.03] })],
+                [1, lifted({ RightUpLeg: { flex: 20, abduct: 45, rotate: -20 }, RightLeg: { flex: 0 }, RightFoot: { flex: 15 }, ...spine({ turn: -35 }), Neck: { turn: -15, flex: 12 }, Head: { turn: -15, flex: 12 }, Hips: { turn: -82, tilt: -28 }, offset: [0, -0.08, -0.03] })],
+                [1.35, lifted({ RightUpLeg: { flex: 75, abduct: 25, rotate: -20 }, RightLeg: { flex: 120 }, RightFoot: { flex: 10 }, ...spine({ turn: -28 }), Hips: { turn: -68, tilt: -10 }, offset: [0, -0.03, -0.01] })],
+                [1.7, { ...LEG_DOWN, free: { right: 0.4 }, RightUpLeg: { flex: 25, abduct: 8 }, RightLeg: { flex: 40 }, ...spine({ turn: -6 }), Hips: { turn: -15, tilt: 0 }, offset: [0, -0.01, 0] }],
+                [1.85, { free: { right: 0 } }]),
+            variant("stamp", KICK,
+                // The knee raised high, the foot flexed, then stamped down and forward through
+                // the enemy's knee, leaning into it
+                [0.25, { free: { right: 1 } }],
+                [0.6, lifted({ RightUpLeg: { flex: 105, abduct: 8, rotate: 10 }, RightLeg: { flex: 105 }, RightFoot: { flex: 15 }, ...spine({ flex: -2 }), Hips: { tilt: -4 }, offset: [0, -0.01, -0.03] })],
+                [1, lifted({ RightUpLeg: { flex: 42, abduct: 6, rotate: 15 }, RightLeg: { flex: 4 }, RightFoot: { flex: 15 }, ...spine({ flex: 10 }), Hips: { tilt: 4 }, offset: [0, -0.07, 0.07] })],
+                [1.35, lifted({ RightUpLeg: { flex: 50, abduct: 6, rotate: 10 }, RightLeg: { flex: 40 }, RightFoot: { flex: 5 }, ...spine({ flex: 8 }), Hips: { tilt: 2 }, offset: [0, -0.06, 0.05] })],
+                [1.7, { ...LEG_DOWN, free: { right: 0.4 }, RightUpLeg: { flex: 20 }, RightLeg: { flex: 25 }, ...spine({ flex: 3 }), offset: [0, -0.02, 0.02] }],
+                [1.85, { free: { right: 0 } }]),
+            variant("spinning back kick", KICK,
+                // Spun round on the standing foot until the back is to the enemy, the knee
+                // tucked, looking over the shoulder; then the heel driven straight back into
+                // them, leaning forward away from it; then turned back round to face them. (The
+                // pelvis turns about the standing foot; its lean, `tilt`, is about the body's
+                // side to side axis before it turned: a lean back, turned round, is forward)
+                [0.3, { free: { right: 0.6 }, ...spine({ turn: 10 }), Hips: { turn: 70 }, offset: [0.06, -0.02, 0] }],
+                [0.65, lifted({ RightUpLeg: { flex: 70, abduct: 0 }, RightLeg: { flex: 120 }, RightFoot: { flex: 10 }, ...spine({ flex: 6, turn: 30 }), Neck: { turn: 20 }, Head: { turn: 20 }, Hips: { turn: 165, tilt: -8 }, offset: [0.12, -0.05, 0] })],
+                [1, lifted({ RightUpLeg: { flex: -30, abduct: -12 }, RightLeg: { flex: 2 }, RightFoot: { flex: 15 }, ...spine({ flex: 12, turn: 45 }), Neck: { turn: 30 }, Head: { turn: 30, flex: 8 }, Hips: { turn: 172, tilt: -28 }, offset: [0.08, -0.12, -0.03] })],
+                [1.35, lifted({ RightUpLeg: { flex: 60, abduct: 0 }, RightLeg: { flex: 110 }, RightFoot: { flex: 5 }, ...spine({ flex: 6, turn: 30 }), Neck: { turn: 20 }, Head: { turn: 20 }, Hips: { turn: 160, tilt: -8 }, offset: [0.12, -0.05, 0] })],
+                [1.65, { ...LEG_DOWN, free: { right: 0.5 }, RightUpLeg: { flex: 25 }, RightLeg: { flex: 40 }, ...spine({ turn: 8 }), Neck: { turn: 0 }, Head: { turn: 0 }, Hips: { turn: 55, tilt: 0 }, offset: [0.05, -0.02, 0] }],
+                [1.85, { free: { right: 0 } }]),
         ],
     },
     cleaver: {
@@ -762,6 +828,336 @@ export const RESTS = Object.freeze({
  * `side` is 1 from the character's left, -1 from its right; `front` is 1 from in front, -1 from
  * behind. `offset` moves the pelvis (metres), a knock back or a stagger.
  */
+// --- Drawing weapons and putting them away ---
+
+// How long a weapon takes to settle into the hand that's taken it, or into its sheath, unless
+// its draw says (s)
+const SETTLE = 0.2;
+
+// The weapon's guard, eased into at the end of drawing it (and out of, putting it away)
+const guard = (name) => rest(GUARDS[name]);
+const EASY = { ...spine({}), Hips: { turn: 0 }, offset: [0, 0, 0] };
+
+/**
+ * How each weapon (by its guard: GUARDS) is drawn from where it's put away (equipment.js SHEATHS)
+ * and put back, each with a flourish: `draw` and `sheathe`, each { hitAt, duration (s), keys }.
+ * Key time 1 is when the hand takes hold of it where it's put away (`sheath`: 1, a hand's place
+ * and turn there), or lets go of it there; it moves between the two then. A draw ends in the
+ * weapon's guard, and putting it away ends with the hands free. Worn weapons are drawn by making
+ * fists and shadow boxing (gauntlets) or kicking (boots), and put away by shaking the hands out.
+ */
+export const DRAWS = Object.freeze({
+    sword: {
+        draw: {
+            hitAt: 0.32,
+            duration: 1.55,
+            settle: 0.24,
+            keys: [
+                [0, EASY],
+                // Across to the hilt at the left hip, turning towards it...
+                [0.55, { right: { at: [0.3, -0.6, 0.35], sheath: 0.6 }, ...spine({ turn: 10 }) }],
+                [1, { right: { at: [0.4, -0.7, 0.2], sheath: 1 }, left: FREE, ...spine({ turn: 24, flex: 6 }), Hips: { turn: 8 } }],
+                // ...drawn up and out across the body in one sweep...
+                [1.14, { right: { at: [-0.05, 0.25, 0.6], point: [0.5, 0.45, 0.74], edge: [-0.3, 0.9, -0.3] }, left: REACH_OUT, ...spine({ turn: -12 }), Hips: { turn: -4 } }],
+                // ...raised in a salute before the face, then twirled round at the wrist, the
+                // point sweeping down and back past the right side and up again...
+                [1.3, { right: { at: [0.15, 0.05, 0.4], point: [0, 1, 0.12], edge: [0.1, -0.12, 0.99], elbow: [-0.33, -0.91, -0.26] }, left: FREE, ...spine({}), Hips: { turn: 0 } }],
+                [1.45, { right: { at: [0.05, -0.2, 0.62], point: [0.64, -0.35, 0.69], edge: [-0.67, 0.06, 0.74], elbow: [-0.63, -0.76, -0.18] } }],
+                [1.6, { right: { at: [-0.12, -0.38, 0.5], point: [-0.17, -0.96, 0.23] } }],
+                [1.75, { right: { at: [0.05, -0.15, 0.62], point: [0.1, 0.6, 0.79], edge: [-0.35, -0.7, 0.63], elbow: [-0.1, -0.89, -0.44] } }],
+                // ...and on guard
+                [2, guard("sword")],
+            ],
+        },
+        sheathe: {
+            hitAt: 0.95,
+            duration: 1.4,
+            settle: 0.24,
+            keys: [
+                [0, guard("sword")],
+                // A salute, a twirl forward...
+                [0.3, { right: { at: [0.15, 0.05, 0.4], point: [0, 1, 0.12], edge: [0.1, -0.12, 0.99], elbow: [-0.33, -0.91, -0.26] }, left: FREE }],
+                [0.55, { right: { at: [0.05, -0.15, 0.62], point: [0.2, -0.3, 0.93], edge: [-0.3, -0.9, -0.1] } }],
+                // ...then the point round to the scabbard's mouth, and slid home
+                [0.8, { right: { at: [0.35, -0.45, 0.35], point: [0.15, -0.8, -0.55], edge: [0, -0.55, 0.8], sheath: 0.6 }, ...spine({ turn: 10 }) }],
+                [1, { right: { at: [0.4, -0.7, 0.2], sheath: 1 }, ...spine({ turn: 16, flex: 4 }), Hips: { turn: 5 } }],
+                // (The hand let go, falling to the side)
+                [1.35, { right: { at: [0.1, -0.8, 0.12], pronate: 40, shape: "relaxed" }, left: FREE, ...spine({}), Hips: { turn: 0 } }],
+                [2, EASY],
+            ],
+        },
+    },
+    wand: {
+        draw: {
+            hitAt: 0.25,
+            duration: 1.3,
+            settle: 0.15,
+            keys: [
+                [0, EASY],
+                // Snatched from the belt, flicked up, its tip twirled round in a circle...
+                [0.6, { right: { at: [-0.05, -0.72, 0.15], sheath: 0.7 } }],
+                [1, { right: { at: [-0.05, -0.8, 0.1], sheath: 1 }, left: FREE }],
+                [1.15, { right: { at: [0, -0.1, 0.55], point: [0.1, 0.9, 0.4] } }],
+                [1.35, { right: { at: [0.1, 0.18, 0.6], point: [0.6, 0.6, 0.5] } }],
+                [1.5, { right: { at: [0.15, 0.25, 0.62], point: [0, 0.3, 0.95] } }],
+                [1.65, { right: { at: [0.05, 0.2, 0.6], point: [-0.6, 0.6, 0.5] } }],
+                // ...and held up a moment, the tip sparking, then on guard
+                [1.8, { right: { at: [0.1, 0.05, 0.65], point: [0.1, 0.8, 0.6] } }],
+                [2, guard("wand")],
+            ],
+        },
+        sheathe: {
+            hitAt: 0.85,
+            duration: 1.2,
+            keys: [
+                [0, guard("wand")],
+                // A last twirl, then tucked back in the belt
+                [0.35, { right: { at: [0.1, 0.1, 0.6], point: [0.2, 0.7, 0.7] } }],
+                [0.6, { right: { at: [0, -0.4, 0.4], point: [0, -0.8, 0.6] } }],
+                [1, { right: { at: [-0.05, -0.8, 0.1], sheath: 1 } }],
+                [1.4, { right: { at: [-0.1, -0.85, 0.08], pronate: 40, shape: "relaxed" }, left: FREE }],
+                [2, EASY],
+            ],
+        },
+    },
+    grimoire: {
+        draw: {
+            hitAt: 0.3,
+            duration: 1.45,
+            keys: [
+                [0, EASY],
+                // Unhooked from the left hip, brought up before the chest and opened...
+                [0.6, { left: { at: [0.05, -0.72, 0.12], sheath: 0.7 } }],
+                [1, { left: { at: [0.05, -0.8, 0.05], sheath: 1 } }],
+                [1.25, { left: { at: [-0.2, -0.3, 0.55], point: [1, 0, 0], edge: [0, 0.6, 0.8] } }],
+                // ...and the other hand passed over its pages, palm down, as if reading a spell
+                [1.5, { left: { at: [-0.2, -0.3, 0.55], point: [1, 0, 0], edge: [0, 0.6, 0.8] }, right: { at: [0.18, -0.25, 0.58], palm: [0, -1, 0], towards: [-0.3, 0, 1], shape: "open" } }],
+                [1.75, { right: { at: [-0.05, -0.25, 0.58], palm: [0, -1, 0.2], towards: [-0.6, 0, 0.8], shape: "open" } }],
+                [2, guard("grimoire")],
+            ],
+        },
+        sheathe: {
+            hitAt: 0.9,
+            duration: 1.3,
+            keys: [
+                [0, guard("grimoire")],
+                // Closed with the other hand, and hung back at the hip
+                [0.4, { left: { at: [-0.2, -0.3, 0.55], point: [1, 0, 0], edge: [0, 0.6, 0.8] }, right: { at: [-0.05, -0.2, 0.55], palm: [-0.3, -1, 0], towards: [-0.5, 0, 1], shape: "open" } }],
+                [0.7, { left: { at: [0.05, -0.6, 0.2], sheath: 0.5 }, right: { at: [0.2, -0.6, 0.4], pronate: 40, shape: "relaxed" } }],
+                [1, { left: { at: [0.05, -0.8, 0.05], sheath: 1 } }],
+                [1.4, { left: { at: [0.12, -0.85, 0.08], pronate: 40, shape: "relaxed" } }],
+                [2, EASY],
+            ],
+        },
+    },
+    staff: {
+        draw: {
+            hitAt: 0.38,
+            duration: 1.7,
+            settle: 0.3,
+            keys: [
+                [0, EASY],
+                // Up over the right shoulder to the staff, pulled up overhead, its crystal
+                // swinging up from behind, over and forward, raised up high...
+                [0.3, { right: { at: [-0.25, -0.2, 0.3], pronate: 40, shape: "relaxed", elbow: [-0.9, -0.1, -0.3] } }],
+                [0.6, { right: { at: [-0.05, 0.25, 0.05], sheath: 0.6, elbow: [-0.5, 0.85, 0] } }],
+                [1, { right: { at: [0, 0.2, -0.1], sheath: 1, elbow: [-0.5, 0.85, 0] }, left: FREE }],
+                [1.2, { right: { at: [0.1, 0.6, 0.15], point: [0.1, 0.3, -0.95] }, ...spine({ flex: -6 }) }],
+                [1.4, { right: { at: [0.1, 0.45, 0.5], point: [0.72, -0.08, 0.69] }, ...spine({ flex: 2 }) }],
+                [1.55, { right: { at: [0.15, 0.15, 0.6], point: [0.2, 0.95, 0.2] }, ...spine({}) }],
+                // ...and brought down on guard, the other hand taking it
+                [2, guard("staff")],
+            ],
+        },
+        sheathe: {
+            hitAt: 1,
+            duration: 1.5,
+            settle: 0.3,
+            keys: [
+                [0, guard("staff")],
+                // Raised up high in one hand, then swung up and back over the right shoulder
+                [0.3, { right: { at: [0.15, 0.15, 0.6], point: [0.2, 0.95, 0.2] }, left: FREE }],
+                [0.55, { right: { at: [0.1, 0.6, 0.15], point: [0.1, 0.3, -0.95] }, ...spine({ flex: -6 }) }],
+                [0.8, { right: { at: [0, 0.3, -0.05], sheath: 0.6, elbow: [-0.5, 0.85, 0] }, ...spine({}) }],
+                [1, { right: { at: [0, 0.2, -0.1], sheath: 1, elbow: [-0.5, 0.85, 0] } }],
+                [1.12, { right: { at: [-0.15, 0.15, 0.15], pronate: 40, shape: "relaxed", elbow: [-0.7, 0.2, -0.6] } }],
+                [1.35, { right: { at: [-0.1, -0.85, 0.08], pronate: 40, shape: "relaxed" } }],
+                [2, EASY],
+            ],
+        },
+    },
+    hammer: {
+        draw: {
+            hitAt: 0.38,
+            duration: 1.75,
+            settle: 0.3,
+            keys: [
+                [0, EASY],
+                // Up over the right shoulder to the haft, heaved up overhead...
+                [0.3, { right: { at: [-0.25, -0.2, 0.3], pronate: 40, shape: "relaxed", elbow: [-0.9, -0.1, -0.3] } }],
+                [0.6, { right: { at: [-0.05, 0.25, 0.05], sheath: 0.6, elbow: [-0.5, 0.85, 0] } }],
+                [1, { right: { at: [0, 0.2, -0.1], sheath: 1, elbow: [-0.5, 0.85, 0] }, left: FREE }],
+                [1.2, { right: { at: [0.1, 0.6, 0.15], point: [0.1, 0.3, -0.95] }, ...spine({ flex: -6 }) }],
+                // ...swung over and down, its head slapped into the open left palm...
+                [1.45, { right: { at: [0.1, 0.4, 0.55], point: [0.87, 0.13, 0.48] }, left: { at: [-0.1, -0.45, 0.62], palm: [0.3, 1, 0], towards: [0.3, 0, 1], shape: "open" }, ...spine({ flex: 4 }) }],
+                [1.65, { right: { at: [0.2, -0.55, 0.55], point: [-0.4, 0.14, 0.91] }, left: { at: [-0.1, -0.5, 0.62], palm: [0.3, 1, 0], towards: [0.3, 0, 1], shape: "open" }, ...spine({ flex: 8 }), offset: [0, -0.03, 0] }],
+                // ...and on guard
+                [2, guard("hammer")],
+            ],
+        },
+        sheathe: {
+            hitAt: 1,
+            duration: 1.5,
+            settle: 0.3,
+            keys: [
+                [0, guard("hammer")],
+                // Hoisted up overhead and put over the right shoulder, onto the back
+                [0.4, { right: { at: [0.1, 0.6, 0.15], point: [0.1, 0.3, -0.95] }, left: FREE, ...spine({ flex: -6 }) }],
+                [0.75, { right: { at: [0, 0.3, -0.05], sheath: 0.6, elbow: [-0.5, 0.85, 0] }, ...spine({}) }],
+                [1, { right: { at: [0, 0.2, -0.1], sheath: 1, elbow: [-0.5, 0.85, 0] } }],
+                [1.12, { right: { at: [-0.15, 0.15, 0.15], pronate: 40, shape: "relaxed", elbow: [-0.7, 0.2, -0.6] } }],
+                [1.35, { right: { at: [-0.1, -0.85, 0.08], pronate: 40, shape: "relaxed" } }],
+                [2, EASY],
+            ],
+        },
+    },
+    cleaver: {
+        draw: {
+            hitAt: 0.36,
+            duration: 1.6,
+            settle: 0.28,
+            keys: [
+                [0, EASY],
+                // Ripped from the back over the right shoulder, raised high...
+                [0.3, { right: { at: [-0.25, -0.2, 0.3], pronate: 40, shape: "relaxed", elbow: [-0.9, -0.1, -0.3] } }],
+                [0.6, { right: { at: [-0.05, 0.25, 0.05], sheath: 0.6, elbow: [-0.5, 0.85, 0] } }],
+                [1, { right: { at: [0, 0.2, -0.1], sheath: 1, elbow: [-0.5, 0.85, 0] }, left: FREE }],
+                [1.2, { right: { at: [0.05, 0.55, 0.2], point: [0.2, 0.9, -0.3] }, ...spine({ flex: -8 }) }],
+                // ...wheeled round out to the right and back up, and brandished with a snarl
+                [1.4, { right: { at: [-0.35, 0.1, 0.5], point: [-0.6, 0.5, 0.6] }, ...spine({ turn: -12 }) }],
+                [1.6, { right: { at: [-0.2, -0.5, 0.5], point: [-0.2, -0.5, 0.85] } }],
+                [1.8, { right: { at: [0.1, 0.12, 0.6], point: [0.2, 0.8, 0.5] }, left: REACH_OUT, ...spine({ flex: 6 }), Neck: { flex: -8 }, Head: { flex: -8 } }],
+                [2, guard("cleaver")],
+            ],
+        },
+        sheathe: {
+            hitAt: 0.95,
+            duration: 1.4,
+            settle: 0.28,
+            keys: [
+                [0, guard("cleaver")],
+                // Raised and put back over the shoulder
+                [0.4, { right: { at: [0.05, 0.55, 0.2], point: [0.2, 0.9, -0.3] }, left: FREE }],
+                [0.75, { right: { at: [0, 0.3, -0.05], sheath: 0.6, elbow: [-0.5, 0.85, 0] } }],
+                [1, { right: { at: [0, 0.2, -0.1], sheath: 1, elbow: [-0.5, 0.85, 0] } }],
+                [1.12, { right: { at: [-0.15, 0.15, 0.15], pronate: 40, shape: "relaxed", elbow: [-0.7, 0.2, -0.6] } }],
+                [1.35, { right: { at: [-0.1, -0.85, 0.08], pronate: 40, shape: "relaxed" } }],
+                [2, EASY],
+            ],
+        },
+    },
+    bow: {
+        draw: {
+            hitAt: 0.38,
+            duration: 1.65,
+            settle: 0.3,
+            keys: [
+                [0, EASY],
+                // Up over the left shoulder to the bow, pulled up over it and swung down in
+                // front, spinning...
+                [0.3, { left: { at: [0.15, -0.1, 0.35], pronate: 40, shape: "relaxed", elbow: [0.9, 0, -0.3] } }],
+                [0.6, { left: { at: [0.05, 0.25, 0.05], sheath: 0.6, elbow: [0.5, 0.85, 0] } }],
+                [1, { left: { at: [0, 0.2, -0.1], sheath: 1, elbow: [0.5, 0.85, 0] } }],
+                [1.22, { left: { at: [-0.1, 0.55, 0.3], point: [-0.72, 0.27, 0.64], edge: [0.02, 0.99, -0.11], elbow: [0.88, -0.2, 0.43] } }],
+                [1.42, { left: { at: [-0.2, -0.2, 0.7], point: [0.02, 0.73, 0.68], edge: [-0.13, -0.65, 0.75], elbow: [0.95, -0.23, 0.23] } }],
+                // ...held upright, its string plucked to try it, then on guard
+                [1.62, { left: { at: [-0.15, -0.4, 0.62], point: [0, 1, 0.1], edge: [-0.21, -0.1, 0.97], elbow: [0.56, -0.61, -0.57] }, right: { at: [-0.05, -0.38, 0.45], palm: [-0.9, 0, 0.3], shape: "hook" } }],
+                [1.78, { right: { at: [0.02, -0.4, 0.38], palm: [-0.9, 0, 0.3], shape: "hook" } }],
+                [2, guard("bow")],
+            ],
+        },
+        sheathe: {
+            hitAt: 0.95,
+            duration: 1.4,
+            settle: 0.3,
+            keys: [
+                [0, guard("bow")],
+                // Raised and slung back over the left shoulder
+                [0.4, { left: { at: [-0.1, 0.55, 0.3], point: [-0.72, 0.27, 0.64], edge: [0.02, 0.99, -0.11], elbow: [0.88, -0.2, 0.43] }, right: { at: [0.2, -0.7, 0.2], pronate: 40, shape: "relaxed" } }],
+                [0.75, { left: { at: [0, 0.3, -0.05], sheath: 0.6, elbow: [0.5, 0.85, 0] } }],
+                [1, { left: { at: [0, 0.2, -0.1], sheath: 1, elbow: [0.5, 0.85, 0] } }],
+                [1.12, { left: { at: [0.15, 0.15, 0.15], pronate: 40, shape: "relaxed", elbow: [0.7, 0.2, -0.6] } }],
+                [1.35, { left: { at: [0.1, -0.85, 0.08], pronate: 40, shape: "relaxed" } }],
+                [2, EASY],
+            ],
+        },
+    },
+    punch: {
+        // (Spiked gauntlets are worn: drawn, the fists close; put away, the hands open)
+        draw: {
+            hitAt: 0.2,
+            duration: 1.5,
+            keys: [
+                [0, EASY],
+                // The fists up, then a burst of shadow boxing: a jab, a cross, a hook and an
+                // uppercut, bouncing on the toes, and on guard
+                [1, { right: fist(1), left: fist(-1), ...spine({ flex: 6 }), offset: [0, -0.02, 0] }],
+                [1.15, { left: { at: [-0.25, 0.12, 1.1], palm: [0, -1, 0], towards: [0, 0, 1] }, ...spine({ flex: 6, turn: -14 }), Hips: { turn: 8 }, offset: [0, 0, 0.03] }],
+                [1.3, { left: fist(-1), right: { at: [0.28, 0.1, 1.15], palm: [0, -1, 0], towards: [0, 0, 1] }, ...spine({ flex: 8, turn: 20 }), Hips: { turn: -12 }, offset: [0, -0.02, 0.05] }],
+                [1.45, { right: fist(1), left: { at: [-0.45, 0.12, 0.72], palm: [0, -1, 0], towards: [-1, 0, 0.25], elbow: [1, 0.05, -0.1] }, ...spine({ flex: 6, turn: -18 }), Hips: { turn: 10 }, offset: [0, 0, 0.02] }],
+                [1.6, { left: fist(-1), right: { at: [0.3, 0.12, 0.72], palm: [0.2, 0, -1], towards: [0, 1, 0.15], elbow: [0, -1, 0.2] }, ...spine({ flex: -2, turn: 16 }), Hips: { turn: -10 }, offset: [0, 0.01, 0.03] }],
+                [1.8, { right: fist(1), left: fist(-1), ...spine({ flex: 6 }), Hips: { turn: 0 }, offset: [0, -0.03, 0] }],
+                [2, guard("punch")],
+            ],
+        },
+        sheathe: {
+            hitAt: 0.5,
+            duration: 1.25,
+            keys: [
+                [0, guard("punch")],
+                // The fists lowered and opened, and the hands shaken out
+                [1, { right: { at: [-0.1, -0.7, 0.3], palm: [0.3, -1, 0], towards: [0, -0.3, 1], shape: "relaxed" }, left: { at: [0.1, -0.7, 0.3], palm: [-0.3, -1, 0], towards: [0, -0.3, 1], shape: "relaxed" }, ...spine({}) }],
+                [1.2, { right: { at: [-0.12, -0.72, 0.3], palm: [0.6, -0.8, 0], towards: [0, -0.8, 0.6], shape: "open" }, left: { at: [0.12, -0.72, 0.3], palm: [-0.6, -0.8, 0], towards: [0, -0.8, 0.6], shape: "open" } }],
+                [1.4, { right: { at: [-0.1, -0.7, 0.3], palm: [0.3, -1, 0], towards: [0, -0.3, 1], shape: "open" }, left: { at: [0.1, -0.7, 0.3], palm: [-0.3, -1, 0], towards: [0, -0.3, 1], shape: "open" } }],
+                [1.6, { right: { at: [-0.12, -0.75, 0.25], palm: [0.6, -0.8, 0], towards: [0, -0.8, 0.6], shape: "relaxed" }, left: { at: [0.12, -0.75, 0.25], palm: [-0.6, -0.8, 0], towards: [0, -0.8, 0.6], shape: "relaxed" } }],
+                [2, EASY],
+            ],
+        },
+    },
+    kick: {
+        // (Spiked boots are worn: drawn is a fighter's stance; put away, standing easy)
+        draw: {
+            hitAt: 0.2,
+            duration: 1.6,
+            keys: [
+                [0, { ...EASY, ...LEG_DOWN }],
+                // Up on guard, then shadow kicks: a snap kick high into the air, the knee
+                // driven up, and back down on guard
+                [1, { ...rest(GUARDS.kick), ...LEG_DOWN }],
+                [1.1, { free: { right: 1 } }],
+                [1.25, lifted({ RightUpLeg: { flex: 95, abduct: 4 }, RightLeg: { flex: 8 }, RightFoot: { flex: -40 }, Hips: { tilt: -10 }, offset: [0, -0.07, 0.03] })],
+                [1.4, lifted({ RightUpLeg: { flex: 90, abduct: 4 }, RightLeg: { flex: 115 }, RightFoot: { flex: -20 }, Hips: { tilt: -4 }, offset: [0, -0.03, 0] })],
+                [1.55, lifted({ RightUpLeg: { flex: 112, abduct: 8 }, RightLeg: { flex: 125 }, RightFoot: { flex: -20 }, ...spine({ flex: 8 }), Hips: { tilt: 0 }, offset: [0, -0.02, 0.03] })],
+                [1.75, { ...LEG_DOWN, free: { right: 0.3 }, RightUpLeg: { flex: 15 }, RightLeg: { flex: 20 }, ...spine({ flex: 2 }), offset: [0, -0.02, 0] }],
+                [1.85, { free: { right: 0 } }],
+                [2, { ...rest(GUARDS.kick), ...LEG_DOWN }],
+            ],
+        },
+        sheathe: {
+            hitAt: 0.4,
+            duration: 1.2,
+            keys: [
+                [0, rest(GUARDS.kick)],
+                // Standing down: the fists dropped, the shoulders and neck rolled loose
+                [1, { right: { at: [-0.05, -0.75, 0.2], palm: [0.3, -1, 0], towards: [0, -0.3, 1], shape: "relaxed" }, left: { at: [0.05, -0.75, 0.2], palm: [-0.3, -1, 0], towards: [0, -0.3, 1], shape: "relaxed" }, ...spine({}) }],
+                [1.3, { RightShoulder: { elevate: 12 }, LeftShoulder: { elevate: 12 }, Neck: { bend: 12 }, Head: { bend: 10 } }],
+                [1.6, { RightShoulder: { elevate: 0 }, LeftShoulder: { elevate: 0 }, Neck: { bend: -12 }, Head: { bend: -10 } }],
+                [2, { ...EASY, RightShoulder: { elevate: 0 }, LeftShoulder: { elevate: 0 }, Neck: { bend: 0 }, Head: { bend: 0 } }],
+            ],
+        },
+    },
+});
+
 export const REACTIONS = Object.freeze({
     // A cut: twists away from the blade, head snapping away
     slash: {
@@ -832,6 +1228,16 @@ export const REACTIONS = Object.freeze({
             const e = pulse(t, 0.15);
 
             return { ...spine({ turn: -side * 10 * e, flex: -front * 5 * e }), Neck: { turn: -side * 14 * e, bend: side * 8 * e }, Head: { turn: -side * 18 * e, flex: -front * 10 * e }, offset: [0, 0, -front * 0.03 * e] };
+        },
+    },
+    // A kick: winded, doubling over it and driven back a step, the arms drawn in
+    kick: {
+        length: 0.55,
+        effect: "impact",
+        pose: (t, { side, front }) => {
+            const e = pulse(t, 0.18);
+
+            return { ...spine({ flex: front * 20 * e, turn: -side * 8 * e }), Head: { flex: front * 10 * e }, RightArm: { flex: 20 * e }, LeftArm: { flex: 20 * e }, RightForeArm: { flex: 35 * e }, LeftForeArm: { flex: 35 * e }, offset: [0, -0.06 * e, -front * 0.11 * e] };
         },
     },
     // An orc's cleaver: a heavy cut that staggers
@@ -931,7 +1337,7 @@ function compile(rawKeys) {
             // Its vectors, and how easily the forearm and wrist are held (Rig.reachArm's `pronate`
             // and `wrist`); a second hand on a weapon, how far down it (or its place, `at`)
             return [
-                ...("on" in value ? ["on"] : []),
+                ...("on" in value ? ["on", "onto"] : []),
                 ...VECTORS.filter((name) => value[name]).flatMap((name) => [`${name}X`, `${name}Y`, `${name}Z`]),
                 // (Whether the hand's reached at all: not before the first key that places it, nor
                 // after the last; how much it's turned the way its vectors say, and its elbow
@@ -941,6 +1347,8 @@ function compile(rawKeys) {
                 "held",
                 "bent",
                 ...("pronate" in value ? ["pronate"] : []),
+                ...("chest" in value ? ["chest"] : []),
+                ...("sheath" in value ? ["sheath"] : []),
                 ...(value.wrist ? ["wristFlex", "wristDeviate"] : []),
             ];
         }
@@ -973,11 +1381,15 @@ function compile(rawKeys) {
             switch (name) {
                 case "on":
                 case "pronate":
+                case "chest":
+                case "sheath":
                     return value[name];
                 case "reach":
                     return 1;
                 case "held":
-                    return value.point || value.palm || "on" in value ? 1 : 0;
+                    return value.point || value.palm || "on" in value || value.sheath ? 1 : 0;
+                case "onto":
+                    return "on" in value ? 1 : 0;
                 case "bent":
                     return value.elbow ? 1 : 0;
                 case "wristFlex":
@@ -1017,7 +1429,8 @@ function compile(rawKeys) {
                 const after = given.find((g) => g > k);
 
                 if (before === undefined || after === undefined) {
-                    row[n] = names[n] === "reach" ? 0 : (values[before ?? after]?.[n] ?? 0);
+                    // (A hand's reached, and reaching for a sheath, only between keys that say)
+                    row[n] = names[n] === "reach" || names[n] === "sheath" ? 0 : (values[before ?? after]?.[n] ?? 0);
                 } else {
                     const u = (times[k] - times[before]) / (times[after] - times[before]);
 
@@ -1066,6 +1479,7 @@ function sample(times, values, n, time) {
 const COMPILED = new Map([
     ...Object.entries(ATTACKS).map(([name, attack]) => [name, attack.variants.map(({ keys }) => compile(keys))]),
     ...Object.entries(RESTS).map(([role, rests]) => [`rest:${role}`, rests.map(({ keys }) => compile(keys))]),
+    ...Object.entries(DRAWS).flatMap(([name, { draw, sheathe }]) => [[`draw:${name}`, [compile(draw.keys)]], [`sheathe:${name}`, [compile(sheathe.keys)]]]),
 ]);
 const GUARD_TRACKS = new Map(Object.entries(GUARDS).map(([name, guard]) => [name, compile([[0, guard]])]));
 
@@ -1086,6 +1500,12 @@ const _item = new THREE.Quaternion();
 const _hand = new THREE.Quaternion();
 const _basis = new THREE.Matrix4();
 const _wrist = new THREE.Vector3();
+const _forward = new THREE.Vector3();
+const _up = new THREE.Vector3(0, 1, 0);
+const _chest = new THREE.Quaternion();
+const _now = new THREE.Quaternion();
+const _edge = new THREE.Vector3();
+const _yaw = new THREE.Quaternion();
 
 /**
  * An empty hand's anatomical frame (world) with its palm facing `palm` and its fingers pointing
@@ -1141,8 +1561,14 @@ export class Actions {
         /** Where each elbow swivelled to last frame (Rig.reachArm), to stay near; null: not reaching. */
         this.swivel = { right: null, left: null };
 
+        /** How each hand was turned last frame (world), reaching; null: not reaching. */
+        this.turned = { right: null, left: null };
+
         /** How far past their ranges each arm's joints were last asked to go (degrees, for checking poses). */
         this.strain = { right: 0, left: 0 };
+
+        /** How far each foot is let go of the ground this frame, 0 to 1 (kicking: Walker.freed). */
+        this.free = { Left: 0, Right: 0 };
     }
 
     /** Sit down (on a bench) or stand. */
@@ -1163,9 +1589,10 @@ export class Actions {
     /**
      * Start an attack (an ATTACKS key), the blow landing `hitAt` seconds in and ending at
      * `duration` seconds: one of its ways (`variant`, or at random, never the way it was done
-     * last time). Returns which way.
+     * last time). Returns which way. Without its `arms` the hands stay as they were (kicking
+     * with a weapon in hand, on guard).
      */
-    startAttack(name, { hitAt, duration, variant = null }) {
+    startAttack(name, { hitAt, duration, variant = null, arms = true }) {
         const attack = ATTACKS[name];
 
         if (!attack) {
@@ -1174,9 +1601,10 @@ export class Actions {
 
         const way = variant ?? this.variety.next(name, attack.variants.length);
 
+        this.#swapped();
         this.variety.last.set(name, way);
         this.attacks++;
-        this.attack = { name, variant: way, tracks: COMPILED.get(name)[way], start: this.time, hitAt, duration, mirror: Boolean(attack.alternate && this.attacks % 2 === 0) };
+        this.attack = { name, variant: way, tracks: COMPILED.get(name)[way], start: this.time, hitAt, duration, mirror: Boolean(attack.alternate && this.attacks % 2 === 0), arms };
 
         return way;
     }
@@ -1197,14 +1625,52 @@ export class Actions {
         const way = variant ?? this.variety.next(name, rests.length);
         const { hitAt, duration } = rests[way];
 
+        this.#swapped();
         this.variety.last.set(name, way);
         this.attack = { name, variant: way, tracks: COMPILED.get(name)[way], start: this.time, hitAt, duration, mirror: false, rest: true, stopping: null };
 
         return way;
     }
 
+    /**
+     * Draw a weapon (`on`), or put it away: the DRAWS action for its guard (`name`), the weapon
+     * moving between its sheath and the hand when the hand takes hold of it (Character.sheathe).
+     * With no action for it, it moves at once. Returns how long it takes (s), or 0.
+     */
+    draw(name, on = true) {
+        const how = DRAWS[name]?.[on ? "draw" : "sheathe"];
+
+        this.#swapped();
+
+        if (!how) {
+            this.character.sheathe?.(!on);
+
+            return 0;
+        }
+
+        const action = `${on ? "draw" : "sheathe"}:${name}`;
+
+        this.attack = { name: action, variant: 0, tracks: COMPILED.get(action)[0], start: this.time, hitAt: how.hitAt, duration: how.duration, mirror: false, swap: on ? "draw" : "sheathe", settle: how.settle };
+
+        return how.duration;
+    }
+
+    /** Is a weapon being drawn or put away? */
+    get drawing() {
+        return Boolean(this.attack?.swap);
+    }
+
+    // A draw or sheathing cut short: the weapon ends up where it was going
+    #swapped() {
+        if (this.attack?.swap && !this.attack.swapped) {
+            this.attack.swapped = true;
+            this.character.sheathe?.(this.attack.swap === "sheathe", { settle: this.attack.settle ?? SETTLE });
+        }
+    }
+
     /** Hold one key pose (as an attack's), until something else is done: for trying poses out. */
     holdPose(pose) {
+        this.#swapped();
         this.attack = { name: "pose", variant: 0, tracks: compile([[0, pose], [2, pose]]), start: this.time, hitAt: 1, duration: Infinity, mirror: false, held: true };
     }
 
@@ -1232,6 +1698,7 @@ export class Actions {
 
     /** Fall down dead, away from `from` (an angle as for react). */
     die({ from = 0 } = {}) {
+        this.#swapped();
         this.attack = null;
         this.fall = { start: this.time, backwards: Math.cos(from) >= 0 };
         this.guardTarget = 0;
@@ -1256,8 +1723,11 @@ export class Actions {
      */
     apply(dt) {
         this.time += dt;
+        this.character.settle?.(dt);
         this.guard += Math.sign(this.guardTarget - this.guard) * Math.min(Math.abs(this.guardTarget - this.guard), dt * 4);
         this.reaching = [];
+        this.free.Left = 0;
+        this.free.Right = 0;
 
         if (this.seated) {
             this.#sit();
@@ -1267,8 +1737,13 @@ export class Actions {
             this.#blend(GUARD_TRACKS.get(this.guardName), 0, smooth(0, 1, this.guard), false);
         }
 
+        // (Drawing a weapon or putting it away, it moves when the hand takes hold of it)
+        if (this.attack?.swap && this.time - this.attack.start >= this.attack.hitAt) {
+            this.#swapped();
+        }
+
         if (this.attack) {
-            const { tracks, start, hitAt, duration, mirror, stopping = null } = this.attack;
+            const { tracks, start, hitAt, duration, mirror, stopping = null, arms = true } = this.attack;
             const elapsed = this.time - start;
             const easing = stopping ? 1 - smooth(0, stopping.length, this.time - stopping.start) : 1;
 
@@ -1279,7 +1754,7 @@ export class Actions {
                 const key = this.attack.held ? 1 : elapsed < hitAt ? elapsed / hitAt : 1 + (elapsed - hitAt) / Math.max(1e-3, duration - hitAt);
                 const weight = this.attack.held ? 1 : smooth(0, 0.3, key) * (1 - smooth(tracks.settle, 2, key)) * easing;
 
-                this.#blend(tracks, key, weight, mirror);
+                this.#blend(tracks, key, weight, mirror, arms);
             }
         }
 
@@ -1337,7 +1812,7 @@ export class Actions {
 
             for (const side of order) {
                 const other = side === "right" ? "left" : "right";
-                const second = hands[other] && "on" in hands[other] && hands[other].at ? this.#place(other, hands[other].at) : null;
+                const second = hands[other] && "on" in hands[other] && hands[other].at ? this.#place(other, hands[other].at, this.#frame(hands[other], new THREE.Quaternion())) : null;
 
                 grips[side] = this.#reach(side, hands[side], weight * (hands[side].reach ?? 1), grips[other], second);
                 reached.add(side);
@@ -1348,17 +1823,23 @@ export class Actions {
         for (const side of HANDS) {
             if (!reached.has(side)) {
                 this.swivel[side] = null;
+                this.turned[side] = null;
             }
         }
     }
 
     // Blend the joints towards an action's pose at a key time, by `weight`; hands' places are
     // kept for place()
-    #blend({ times, tracks }, key, weight, mirror) {
+    #blend({ times, tracks }, key, weight, mirror, arms = true) {
         const rig = this.rig;
         const hands = {};
 
         for (const { joint, names, values } of tracks) {
+            // (The hands and fingers left as they are)
+            if (!arms && (HANDS.includes(joint) || DIGIT.test(joint))) {
+                continue;
+            }
+
             const value = (n) => {
                 const sampled = sample(times, values, n, key);
 
@@ -1374,6 +1855,16 @@ export class Actions {
                 continue;
             }
 
+            // (How far each foot is off the ground, following the pose: a kick)
+            if (joint === "free") {
+                names.forEach((side, n) => {
+                    const Side = (mirror ? MIRROR[side] : side) === "left" ? "Left" : "Right";
+
+                    this.free[Side] = Math.max(this.free[Side], Math.min(1, Math.max(0, value(n))) * weight);
+                });
+                continue;
+            }
+
             const name = mirror ? mirrored(joint) : joint;
 
             if (HANDS.includes(joint)) {
@@ -1382,7 +1873,7 @@ export class Actions {
                 names.forEach((channel, n) => {
                     if (channel === "reach") {
                         hand.reach = Math.min(1, Math.max(0, value(n)));
-                    } else if (channel === "on" || channel === "pronate" || channel === "held" || channel === "bent") {
+                    } else if (channel === "on" || channel === "pronate" || channel === "held" || channel === "bent" || channel === "chest" || channel === "sheath" || channel === "onto") {
                         hand[channel] = value(n);
                     } else if (channel === "wristFlex" || channel === "wristDeviate") {
                         hand.wrist ??= { flex: 0, deviate: 0 };
@@ -1394,6 +1885,12 @@ export class Actions {
                         hand[vector]["XYZ".indexOf(channel.at(-1))] = value(n);
                     }
                 });
+                // (A hand on the other's weapon in some keys, not in others: on it only nearer
+                // those that say, `onto`)
+                if (hand.onto !== undefined && hand.onto < 0.5) {
+                    delete hand.on;
+                }
+
                 hands[name] = hand;
                 continue;
             }
@@ -1465,13 +1962,27 @@ export class Actions {
     }
 
     // Where a hand's place (`at`: arm lengths from its shoulder, in the character's frame) is in the world
-    #place(side, at) {
+    #place(side, at, frame = this.character.object.getWorldQuaternion(new THREE.Quaternion())) {
         const body = this.#measure();
         const shoulder = this.rig.bone("Spine2").localToWorld(_shoulder.copy(body.shoulders[side]));
 
-        this.character.object.getWorldQuaternion(_frame);
+        return new THREE.Vector3().fromArray(at).multiplyScalar(body.arm).applyQuaternion(frame).add(shoulder);
+    }
 
-        return new THREE.Vector3().fromArray(at).multiplyScalar(body.arm).applyQuaternion(_frame).add(shoulder);
+    // The frame a hand's place and turn are given in (world): the character's, or turned as far
+    // as its chest has turned from it (`chest`: 0 to 1; fists kept up before the chest, spinning)
+    #frame(hand, target) {
+        this.character.object.getWorldQuaternion(target);
+
+        const share = hand?.chest ?? 0;
+
+        if (share > 0.001) {
+            const forward = _forward.set(0, 0, 1).applyQuaternion(this.rig.bone("Spine2").getWorldQuaternion(_chest)).applyQuaternion(_chest.copy(target).invert());
+
+            target.multiply(_yaw.setFromAxisAngle(_up, Math.atan2(forward.x, forward.z) * share));
+        }
+
+        return target;
     }
 
     // Reach one hand to its place as a real arm would (Rig.reachArm: every joint within its
@@ -1485,15 +1996,17 @@ export class Actions {
         const body = this.#measure();
         const handBone = rig.bone(`${Side}Hand`);
         const handFrame = rig.frames[rig.index.get(`${Side}Hand`)];
-        const item = this.character.items.find((model) => model.parent === handBone);
+        // (What it holds, or will once it's drawn: as it's held, `home`)
+        const item = this.character.items.find((model) => model.parent === handBone || (model.userData.hand === Side && model.userData.sheath));
         const socket = body.sockets[side];
-        const itemPosition = item ? item.position : socket.position;
-        const itemQuaternion = item ? item.quaternion : socket.quaternion;
+        const holding = item?.userData.home ?? item;
+        const itemPosition = holding ? holding.position : socket.position;
+        const itemQuaternion = holding ? holding.quaternion : socket.quaternion;
         let position;
         let point = null;
         let edge = null;
 
-        this.character.object.getWorldQuaternion(_frame);
+        this.#frame(hand, _frame);
 
         if ("on" in hand) {
             if (!other) {
@@ -1503,13 +2016,13 @@ export class Actions {
             // Further down the other hand's weapon, along it (turned as comes naturally): where
             // it passes nearest this hand's place, or `on` metres down; below the other fist, and
             // where the haft's held (ITEMS: `haft`)
-            const wanted = hand.at ? this.#place(side, hand.at).sub(other.position).dot(other.point) : -hand.on;
+            const wanted = hand.at ? this.#place(side, hand.at, _frame).sub(other.position).dot(other.point) : -hand.on;
             const along = Math.min(other.haft?.[1] ?? -FIST, Math.max(other.haft?.[0] ?? -Infinity, wanted));
 
             position = other.position.clone().addScaledVector(other.point, along);
             point = other.point.clone();
         } else {
-            position = this.#place(side, hand.at);
+            position = this.#place(side, hand.at, _frame);
 
             if (second) {
                 // Held in both hands: along the line from the other hand's place through this one's
@@ -1518,6 +2031,32 @@ export class Actions {
             } else if (hand.point) {
                 point = new THREE.Vector3().fromArray(hand.point).normalize().applyQuaternion(_frame);
                 edge = hand.edge ? new THREE.Vector3().fromArray(hand.edge).applyQuaternion(_frame) : null;
+            }
+
+            // To where what it draws is put away (drawing or sheathing it), holding it pointing
+            // the way it lies there, turned about that as strains least (it settles the rest of
+            // the way into the hand or sheath, Character.sheathe), and easing from there to how
+            // the keys either side turn it
+            const away = hand.sheath > 0.001 ? this.character.sheathPose?.(Side) : null;
+
+            if (away) {
+                const share = Math.min(1, hand.sheath);
+
+                position.lerp(away.position, share);
+                point = point ? point.lerp(away.point, share).normalize() : away.point.clone();
+
+                // (Turned about it as strains least there: the arm reached once just aiming it)
+                const arm = [`${Side}Arm`, `${Side}ForeArm`, `${Side}Hand`].map((name) => rig.bone(name).quaternion.clone());
+                const along = new THREE.Vector3(0, 1, 0).applyQuaternion(_item.copy(handFrame).invert().multiply(itemQuaternion));
+                const bend = hand.elbow ? new THREE.Vector3().fromArray(hand.elbow).normalize().applyQuaternion(_frame) : null;
+
+                rig.reachArm(Side, { grip: position, offset: itemPosition.clone().applyQuaternion(_item.copy(handFrame).invert()), aim: { axis: along, toward: point }, hold: 1, pronate: hand.pronate ?? 25, bend, bent: 1, swivel: this.swivel[side] });
+
+                const natural = _edge.set(0, 0, 1).applyQuaternion(handBone.getWorldQuaternion(_now).multiply(itemQuaternion));
+
+                [`${Side}Arm`, `${Side}ForeArm`, `${Side}Hand`].forEach((name, i) => rig.bone(name).quaternion.copy(arm[i]));
+                rig.bone(`${Side}Arm`).updateMatrixWorld(true);
+                edge = (edge ?? natural.clone()).lerp(natural, share);
             }
         }
 
@@ -1557,6 +2096,9 @@ export class Actions {
 
         this.swivel[side] = solved.swivel;
         this.strain[side] = solved.strain;
+
+        // (How the hand was turned in the end, for easing from next frame)
+        this.turned[side] = handBone.getWorldQuaternion(this.turned[side] ?? new THREE.Quaternion());
 
         // Blend with where the arm was (joint by joint, as they move)
         if (weight < 1) {

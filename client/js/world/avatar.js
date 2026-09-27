@@ -39,6 +39,7 @@ export class Avatar {
         this.actions = new Actions(character);
         this.actions.setWeapon(guard);
         this.walker.overlay = (dt) => this.actions.apply(dt);
+        this.walker.freed = (side) => this.actions.free[side];
         this.walker.afterPose = () => this.actions.place();
         this.facing = 0;
         this.last = new THREE.Vector3();

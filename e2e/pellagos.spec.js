@@ -119,17 +119,23 @@ test("makes a character: a random look, a weapon and a name, then plays them in 
     await page.getByRole("button", { name: "Random" }).click();
     expect(await page.evaluate(() => JSON.stringify(window.pellagos.creator.hero.shape))).not.toBe(before);
 
-    // A weapon: every starting weapon is offered; the bow comes with a quiver
+    // A weapon: every starting weapon is offered; the bow comes with a quiver; and spiked boots
+    // can be worn with it (to kick whoever's next to you)
     await page.getByRole("button", { name: "Next: weapon" }).click();
-    await expect(page.locator(".weapon")).toHaveCount(7);
+    await expect(page.locator('.weapon[role="radio"]')).toHaveCount(8);
     await page.locator('[data-weapon="bow"]').click();
     await page.waitForFunction(() => window.pellagos.creator.avatar.character.items.some((item) => item.name === "bow"));
     expect(await page.evaluate(() => window.pellagos.creator.avatar.character.items.map((item) => item.name))).toEqual(expect.arrayContaining(["bow", "quiver"]));
+    await expect(page.locator("#bootstoggle")).toHaveAttribute("aria-checked", "false");
+    await expect(page.locator("#bootstoggle .numbers")).toContainText("up close (kicks)");
+    await page.locator("#bootstoggle").click();
+    await expect(page.locator("#bootstoggle")).toHaveAttribute("aria-checked", "true");
+    await page.waitForFunction(() => window.pellagos.creator.avatar.character.items.some((item) => item.name === "spikedBoots"));
 
     // A name
     await page.getByRole("button", { name: "Next: name" }).click();
     await page.locator("#nameinput").fill("  Tamsin  Rowe ");
-    await expect(page.locator("#namesummary")).toContainText("Tamsin Rowe, with a bow");
+    await expect(page.locator("#namesummary")).toContainText("Tamsin Rowe, with a bow and spiked boots");
     await page.getByRole("button", { name: "Begin" }).click();
 
     await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
@@ -141,19 +147,30 @@ test("makes a character: a random look, a weapon and a name, then plays them in 
         const player = game.battle.actor("player");
         const { square } = game.world.town;
 
+        const character = game.avatars.get("player").character;
+
         return {
             weapon: player.weapon,
-            equipment: [...game.avatars.get("player").character.equipment.values()],
+            boots: player.boots,
+            equipment: [...character.equipment.values()],
+            // (The bow slung on the back to start with)
+            sheathed: character.sheathed,
+            bowOn: character.items.find((item) => item.name === "bow").parent.name,
             inSquare: player.x >= game.world.origin + square.x * 4 && player.x <= game.world.origin + (square.x + square.w) * 4 && player.y >= game.world.origin + square.y * 4 && player.y <= game.world.origin + (square.y + square.h) * 4,
             saved: JSON.parse(localStorage.getItem("pellagos.save")),
         };
     });
 
     expect(game.weapon).toBe("bow");
-    expect(game.equipment).toEqual(expect.arrayContaining(["tunic", "bracers", "breeches", "boots", "bow", "quiver"]));
+    expect(game.boots).toBe(true);
+    expect(game.equipment).toEqual(expect.arrayContaining(["tunic", "bracers", "breeches", "spikedBoots", "bow", "quiver"]));
+    expect(game.equipment).not.toContain("boots");
+    expect(game.sheathed).toBe(true);
+    expect(game.bowOn).toBe("Spine2");
     expect(game.inSquare).toBe(true);
     expect(game.saved.hero.name).toBe("Tamsin Rowe");
     expect(game.saved.hero.weapon).toBe("bow");
+    expect(game.saved.hero.boots).toBe(true);
 });
 
 test("carries on with the saved character, in the same world", async ({ page }) => {
@@ -174,12 +191,16 @@ test("carries on with the saved character, in the same world", async ({ page }) 
     await expect(page.locator("#title")).toBeVisible();
 });
 
-test("the player and the orc fight when in reach, until one falls", async ({ page }) => {
+test("the player and the orc draw their weapons and fight when in reach, until one falls", async ({ page }) => {
     await playing(page, "/?play&seed=1&weapon=sword");
 
     const fight = await page.evaluate(() => {
         const { game } = window.pellagos;
         const events = [];
+        const sword = game.avatars.get("player").character.items.find((item) => item.name === "sword");
+
+        // (Put away to start with: the sword in its scabbard at the hip)
+        const before = { sheathed: game.avatars.get("player").character.sheathed, on: sword.parent.name };
 
         game.stop();
 
@@ -205,7 +226,12 @@ test("the player and the orc fight when in reach, until one falls", async ({ pag
             game.advance(1);
         }
 
+        const drew = (id) => events.find((event) => event.type === "draw" && event.id === id);
+        const struck = (id) => events.find((event) => event.type === "attack" && event.id === id);
+
         return {
+            before,
+            drewFirst: ["player", "orc"].every((id) => drew(id)?.on && drew(id).time < struck(id).time),
             attacks: [...new Set(events.filter((event) => event.type === "attack").map((event) => `${event.id}:${event.attack}`))],
             hits: events.filter((event) => event.type === "hit").length,
             dead: events.filter((event) => event.type === "death").map((event) => event.id),
@@ -214,6 +240,8 @@ test("the player and the orc fight when in reach, until one falls", async ({ pag
         };
     });
 
+    expect(fight.before).toEqual({ sheathed: true, on: "Hips" });
+    expect(fight.drewFirst).toBe(true);
     expect(fight.attacks).toEqual(expect.arrayContaining(["player:slash", "orc:hack"]));
     expect(fight.hits).toBeGreaterThan(4);
     expect(fight.dead.length).toBe(1);

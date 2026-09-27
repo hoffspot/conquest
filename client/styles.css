@@ -582,6 +582,15 @@ input[type="range"] {
     font-variant-numeric: tabular-nums;
 }
 
+/* (Spiked boots with another weapon: a switch under the list) */
+#bootsoption {
+    margin-top: 10px;
+}
+
+.weapon.option {
+    border-style: dashed;
+}
+
 .weapon[aria-checked="true"] {
     border-color: var(--gold);
     background: rgba(220, 180, 106, 0.14);

@@ -6,8 +6,17 @@
 // attacker can see. A weapon can have both (a staff that strikes up close and casts from afar),
 // listed in the order they're preferred.
 //
+// Spiked boots (the "boots" weapon) are worn, with a weapon or on their own, and add kicks to
+// how a character fights (armsOf):
+//  - With a melee weapon (or spiked gauntlets), a character kicks or uses the weapon, one or the
+//    other at random for each blow up close. Both do the same damage: the range halfway between
+//    the boots' and the weapon's.
+//  - With a bow, wand or grimoire, it kicks whoever is next to it, doing the boots' own damage,
+//    and shoots or casts at anyone further off as before.
+//
 // Each attack says:
 //  - damage: [least, most] hit points, a whole number rolled evenly between them for every hit
+//    (between the two halves of an averaged range, it's rounded: halfway on average)
 //  - hitAt: how long into the attack the blow lands (or the arrow or spell is let go), in ms
 //  - duration: how long the attack takes; interval: the shortest time from one to the next
 //  - reaction: how whoever it hits reacts (a slash turns them, a hammer staggers them back, an
@@ -78,6 +87,13 @@ export const WEAPONS = Object.freeze({
         equipment: ["spikedGauntlets", "spikedGauntletLeft"],
         attacks: [melee({ id: "punch", damage: [2, 5], hitAt: 170, duration: 420, interval: 600, stagger: 80, reaction: "punch", animation: "punch" })],
     },
+    boots: {
+        label: "Spiked boots",
+        school: "Melee",
+        about: "Iron-shod boots, spiked at the toes and heels. Front, round and side kicks, a stamp and a spinning back kick. Wear them with any weapon, or on their own.",
+        equipment: ["spikedBoots"],
+        attacks: [melee({ id: "kick", damage: [3, 7], hitAt: 360, duration: 760, interval: 1050, stagger: 220, reaction: "kick", animation: "kick" })],
+    },
     cleaver: {
         label: "Orc cleaver",
         school: "Melee",
@@ -88,7 +104,40 @@ export const WEAPONS = Object.freeze({
 });
 
 /** The weapons a new character can start with, in the order to offer them. */
-export const STARTING_WEAPONS = Object.freeze(["sword", "staff", "wand", "grimoire", "hammer", "bow", "gauntlets"]);
+export const STARTING_WEAPONS = Object.freeze(["sword", "staff", "wand", "grimoire", "hammer", "bow", "gauntlets", "boots"]);
+
+/** The damage range halfway between two attacks' (each end may come to a half). */
+export const averageDamage = (a, b) => [(a.damage[0] + b.damage[0]) / 2, (a.damage[1] + b.damage[1]) / 2];
+
+/**
+ * What a character fights with: its weapon's attacks (a WEAPONS key, or none) and, wearing
+ * spiked boots (`boots`, or the "boots" weapon itself), kicks. A list of attacks in the order
+ * they're preferred; an entry with `either` is one of those attacks, chosen at random each time
+ * (kicks and a melee weapon's blows, each with the damage halfway between theirs).
+ */
+export function armsOf(weapon, boots = false) {
+    const kick = WEAPONS.boots.attacks[0];
+    const attacks = weapon ? WEAPONS[weapon].attacks : [];
+
+    if (!boots || weapon === "boots") {
+        return attacks;
+    }
+
+    if (!attacks.some((attack) => attack.kind === "melee")) {
+        // Kicking whoever's next to it (first: a ranged attack reaches them too)
+        return [kick, ...attacks];
+    }
+
+    return attacks.map((attack) => {
+        if (attack.kind !== "melee") {
+            return attack;
+        }
+
+        const damage = averageDamage(attack, kick);
+
+        return { kind: "melee", reach: Math.max(attack.reach, kick.reach), either: [{ ...attack, damage }, { ...kick, damage }] };
+    });
+}
 
 /** How far apart two squares are for an attack: rings of squares round `from` ([x, y]). */
 export const ringsApart = ([ax, ay], [bx, by]) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
@@ -110,19 +159,39 @@ export function inReach(attack, from, to) {
     return attack.kind === "melee" ? rings <= attack.reach : distanceBetween(from, to) <= attack.reach;
 }
 
-/** The first of a weapon's attacks that reaches from one square to another, or null. */
-export function chooseAttack(weapon, from, to) {
-    return WEAPONS[weapon].attacks.find((attack) => inReach(attack, from, to)) ?? null;
+// A weapon's attacks (a WEAPONS key) or a character's (armsOf)
+const listOf = (arms) => (typeof arms === "string" ? WEAPONS[arms].attacks : (arms ?? []));
+
+/**
+ * The first attack that reaches from one square to another, of a weapon (a WEAPONS key) or a
+ * character's (armsOf), or null. Where that's one of two (`either`), one at random (`random`:
+ * createRandom's; without it, the first).
+ */
+export function chooseAttack(arms, from, to, random = null) {
+    const attack = listOf(arms).find((each) => inReach(each, from, to)) ?? null;
+
+    if (attack?.either) {
+        return random ? random.pick(attack.either) : attack.either[0];
+    }
+
+    return attack;
 }
 
-/** The furthest any of a weapon's attacks reaches, in squares. */
-export function longestReach(weapon) {
-    return Math.max(...WEAPONS[weapon].attacks.map((attack) => attack.reach));
+/** The furthest any attack of a weapon (a WEAPONS key) or a character's (armsOf) reaches, in squares (0: none). */
+export function longestReach(arms) {
+    return Math.max(0, ...listOf(arms).map((attack) => attack.reach));
 }
 
-/** Roll an attack's damage: a whole number from its least to its most, each equally likely. */
+/**
+ * Roll an attack's damage: a whole number from its least to its most, each equally likely. (An
+ * averaged range with halves: a number between them, rounded.)
+ */
 export function rollDamage(attack, random) {
     const [least, most] = attack.damage;
 
-    return random.int(least, most);
+    if (Number.isInteger(least) && Number.isInteger(most)) {
+        return random.int(least, most);
+    }
+
+    return Math.round(random.range(least, most));
 }

@@ -13,6 +13,8 @@ import { MACRO_DEFAULTS } from "../client/js/characters/macro.js";
 import { createRandom } from "../client/js/core/random.js";
 import { GROUND } from "../client/js/core/setpieces/pieces.js";
 import { WEAPONS } from "../client/js/core/weapons.js";
+import { guardOf, heroEquipment } from "../client/js/app/game.js";
+import { weaponNumbers } from "../client/js/app/creator.js";
 import { generateWorld } from "../client/js/core/world.js";
 
 // A stand-in for the browser's local storage (or one that refuses, as in private browsing)
@@ -181,6 +183,24 @@ describe("heroes (heroes.js)", () => {
         assert.equal(cleanName("O'Brien-Smith"), "O'Brien-Smith");
         assert.equal(cleanName("x".repeat(40)).length, 20);
         assert.equal(cleanName("   "), "");
+    });
+});
+
+describe("a hero's kit (game.js, creator.js)", () => {
+    it("wears leather boots, or spiked boots with any weapon or on their own", () => {
+        assert.deepEqual(heroEquipment("sword"), ["tunic", "bracers", "breeches", "boots", "sword"]);
+        assert.deepEqual(heroEquipment("bow", true), ["tunic", "bracers", "breeches", "bow", "quiver", "spikedBoots"]);
+        assert.deepEqual(heroEquipment("boots"), ["tunic", "bracers", "breeches", "spikedBoots"]);
+        assert.deepEqual(heroEquipment("boots", true), heroEquipment("boots"));
+        assert.equal(guardOf("boots"), "kick");
+        assert.equal(guardOf("gauntlets"), "punch");
+    });
+
+    it("says what a weapon does, and with spiked boots too, how kicks mix in", () => {
+        assert.equal(weaponNumbers("sword"), "4–8 damage up close · 0.9 a second");
+        assert.equal(weaponNumbers("sword", true), "3.5–7.5 damage up close (kicks or the weapon)");
+        assert.equal(weaponNumbers("bow", true), "3–7 damage up close (kicks) · 1.0 a second; 3–7 damage 9 m · 0.7 a second");
+        assert.equal(weaponNumbers("boots"), "3–7 damage up close · 1.0 a second");
     });
 });
 

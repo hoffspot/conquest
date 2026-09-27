@@ -168,7 +168,7 @@ function title() {
 
     if (save) {
         continueButton.textContent = `Continue as ${save.hero.name}`;
-        note.textContent = `${WEAPONS[save.hero.weapon].label}. Started ${new Date(save.created).toLocaleDateString()}.`;
+        note.textContent = `${WEAPONS[save.hero.weapon].label}${save.hero.boots ? " and spiked boots" : ""}. Started ${new Date(save.created).toLocaleDateString()}.`;
         continueButton.focus();
     } else {
         newButton.focus();
@@ -439,6 +439,7 @@ async function start() {
 
         hero.name = suggestName(hero);
         hero.weapon = WEAPONS[params.get("weapon")] ? params.get("weapon") : "sword";
+        hero.boots = params.has("boots") && hero.weapon !== "boots";
         play({ hero, seed: Number(params.get("seed")) || 1 });
 
         return;

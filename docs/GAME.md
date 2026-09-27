@@ -83,7 +83,7 @@ the foot or the top of the stairs facing south, outside the tavern facing away f
 ## The battle (core/battle.js)
 
 The battle runs in fixed steps of 50 ms, the same on every device, whatever the frame rate.
-Each step makes events (`attack`, `projectile`, `hit`, `miss`, `death`, `respawn`,
+Each step makes events (`attack`, `draw`, `projectile`, `hit`, `miss`, `death`, `respawn`,
 `exhausted`, `cast`, `healed`, `stunned`...) for the drawing to show; `advance` hands over all
 of them since it was last called (so a spell cast between frames is shown too). Nothing in it
 draws anything.
@@ -110,6 +110,18 @@ draws anything.
   SW, W and NW (Chebyshev distance 1). A ranged attack reaches any square whose middle is within
   its range and that the attacker can see: a line between the two squares' middles that crosses
   no opaque square (a wall or a house hides a target; a table or barrels don't).
+- **Spiked boots** (`boots`, or the boots on their own: weapons.js `armsOf`) add kicks. With a
+  melee weapon, each blow is a kick or the weapon, one or the other at random (the battle's seeded
+  random numbers), both doing the damage halfway between the two: a range with halves, rolled as
+  the whole numbers inside it, evenly (3.5–7.5 rolls 4 to 7). With a bow, wand or grimoire, a kick
+  comes first for whoever is next to it, doing the boots' own damage; the ranged attack is for
+  anyone further off.
+- **Drawing weapons and putting them away.** Everyone starts with their weapon put away
+  (`armed`: false). A character draws it (a `draw` event, `on`) in a fight: attacking or told to
+  fight, an enemy in sight, or an enemy after it (chasing it, attacking it, or told to fight it).
+  It can strike 700 ms later (`DRAW_MS`), and an attack waits for it. With no enemy in sight or
+  after it for 10 seconds (`SHEATHE_AFTER_MS`), and not attacking, it puts the weapon away
+  (`on`: false, taking `SHEATHE_MS`). Coming back to life, it's put away.
 - **Fighting on its own.** Standing still, the player attacks the nearest enemy within reach. Told
   to walk somewhere, they go there (walking away calls off an attack that hasn't landed yet).
   Told to fight someone, they walk until that enemy is within reach, then attack.
@@ -179,6 +191,7 @@ would be one line in weapons.js):
 | War hammer | smash | melee | 6–12 | 640 | 1100 | 1700 | 450 | crush |
 | Bow | arrow | 9 m | 3–7 | 660 | 1000 | 1400 | 150 | pierce |
 | Spiked gauntlets | punch | melee | 2–5 | 170 | 420 | 600 | 80 | punch |
+| Spiked boots | kick | melee | 3–7 | 360 | 760 | 1050 | 220 | kick |
 | Orc cleaver | hack | melee | 3–8 | 520 | 900 | 1400 | 200 | hack |
 
 | Spell | On | Reach | Casts in | Does | Cooldown (shared) |
@@ -399,7 +412,11 @@ looks the same), which roughly halves their triangles.
 Attacks, flinches and falls (characters/actions.js, described in
 [CHARACTERS.md](CHARACTERS.md#fighting-actionsjs)) are started by the battle's events: an
 `attack` event starts the weapon's attack (in any of its five ways but the one it last used),
-timed so its blow lands when the battle's does; a
+timed so its blow lands when the battle's does (a kick with a weapon in hand leaves the hands on
+guard); a `draw` event draws the weapon from where it's put away with its flourish, or puts it back,
+with its sound as the hand takes it or lets it go (a blade's ring leaving its scabbard and the click
+of its hilt going home, something slung off the back or taken from the belt, knuckles cracking);
+a character only stands on guard with its weapon out; a
 `hit` makes the target flinch in the way the attack's `reaction` says, from the side the blow came
 from, flushes their skin red for a moment and shows the damage; a `death` makes them fall away
 from the killing blow, lie still for 4 seconds and sink out of sight until they come back.
@@ -695,8 +712,10 @@ closes it.
 3. **Making a character** (app/creator.js): the character stands on a plinth, lit from the front
    and edged in blue light from behind, while the panel beside it (below it on an upright phone)
    changes them. The camera frames what each tab changes: the whole body, the face close up, the
-   head and shoulders for colours and hair. The weapon step shows each weapon held on guard and
-   swung every few seconds.
+   head and shoulders for colours and hair. The weapon step lists the eight weapons (spiked boots
+   among them) and a switch to wear spiked boots with any other, showing how their damage mixes.
+   It shows the weapon chosen drawn with its flourish, then held on guard and swung every few
+   seconds (in spiked boots too, a kick every other time). The hero's `boots` is saved with them.
 4. **Playing** (app/game.js): building the world, with a progress bar for each part (the ground,
    each piece of the town, the characters, compiling every shader before the first frame), then
    the game. A tap walks; a press and hold on the player or an enemy opens the action wheel; a second tap within 350 ms and 60 pixels of the first (going by when
