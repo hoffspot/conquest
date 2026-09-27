@@ -87,7 +87,7 @@ export const MANIFEST = Object.freeze([
             ["js/world/interiors3d.js", 40652],
             ["js/world/squares.js", 4407],
             ["js/world/town3d.js", 11206],
-            ["js/world/view.js", 18803],
+            ["js/world/view.js", 18813],
             ["js/world/wounds.js", 30915],
         ],
     },
