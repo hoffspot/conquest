@@ -1,0 +1,230 @@
+/* The world map (world-map.html): the map, with a settings panel beside it (below it on narrow
+   screens). */
+
+:root {
+    --background: #101418;
+    --panel: #171d23;
+    --panel-raised: #1f272f;
+    --line: #2d3843;
+    --text: #dce5ee;
+    --muted: #8a99a8;
+    --accent: #e0a24a;
+    --accent-text: #1b1206;
+    --focus: #7cc4ff;
+    --panel-width: 320px;
+
+    color-scheme: dark;
+    font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-text-size-adjust: 100%;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+[hidden] {
+    display: none !important;
+}
+
+html,
+body {
+    margin: 0;
+    height: 100%;
+    background: var(--background);
+    color: var(--text);
+    overflow: hidden;
+}
+
+button,
+select,
+input {
+    font: inherit;
+    color: inherit;
+}
+
+:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+}
+
+#atlas {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--panel-width);
+}
+
+#viewport {
+    position: relative;
+    min-height: 0;
+    overflow: hidden;
+    background: #0c1116;
+    touch-action: none;
+}
+
+#map {
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+}
+
+#map.dragging {
+    cursor: grabbing;
+}
+
+#status {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: rgb(12 17 22 / 80%);
+    font-size: 16px;
+}
+
+#hover {
+    position: absolute;
+    left: 12px;
+    bottom: 12px;
+    max-width: min(360px, calc(100% - 24px));
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgb(23 29 35 / 92%);
+    pointer-events: none;
+    white-space: pre-line;
+}
+
+.zoom {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    display: grid;
+    gap: 6px;
+}
+
+.zoom button,
+#panel button {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel-raised);
+    cursor: pointer;
+}
+
+#panel button[type="submit"] {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--accent-text);
+}
+
+#panel {
+    overflow-y: auto;
+    padding: 16px;
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+    border-left: 1px solid var(--line);
+    background: var(--panel);
+}
+
+h1 {
+    margin: 0 0 12px;
+    font-size: 20px;
+}
+
+h2 {
+    margin: 18px 0 8px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.row label {
+    min-width: 64px;
+}
+
+#seed {
+    width: 110px;
+    min-height: 36px;
+    padding: 0 8px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--background);
+}
+
+select {
+    min-height: 36px;
+    padding: 0 8px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--background);
+}
+
+.muted {
+    margin: 0 0 12px;
+    color: var(--muted);
+}
+
+fieldset {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 12px;
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+}
+
+fieldset label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 28px;
+}
+
+.key {
+    display: grid;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.key li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.swatch {
+    flex: none;
+    width: 14px;
+    height: 14px;
+    border: 1px solid rgb(0 0 0 / 40%);
+    border-radius: 3px;
+}
+
+@media (width <= 720px) {
+    #atlas {
+        grid-template-columns: 1fr;
+        grid-template-rows: minmax(0, 1fr) 42%;
+    }
+
+    #panel {
+        border-left: 0;
+        border-top: 1px solid var(--line);
+    }
+}

@@ -8,11 +8,14 @@ browser on phones, tablets and computers, and can be installed as an app.
 
 **Play it at <https://hoffspot.github.io/conquest/>.** The character lab, for building and
 dressing characters and watching them walk and fight, is at
-<https://hoffspot.github.io/conquest/character-lab.html>.
+<https://hoffspot.github.io/conquest/character-lab.html>. The world map, showing the whole world
+the game is growing into (8 kilometres square: six peoples, their cities, towns and villages, the
+roads between them, and the ruins, caves and enemy camps in the wild), is at
+<https://hoffspot.github.io/conquest/world-map.html>.
 
 [docs/GAME.md](docs/GAME.md) describes how the game works: the world, the fighting, the drawing,
 the screens and debug mode. [docs/CHARACTERS.md](docs/CHARACTERS.md) describes the character
-engine.
+engine, and [docs/WORLD.md](docs/WORLD.md) the world plan.
 
 ## How to play
 
@@ -301,6 +304,7 @@ client/                 The game (static files served to the browser)
                         npm run build:music from the Versilian Community Sample Library, CC0)
   images/icons/         The app's icons
   character-lab.html    The character lab (with character-lab.css)
+  world-map.html        The world map (with world-map.css)
   vendor/three-r186/    Three.js (minified by scripts/vendor-three.js; loaded through an import map)
   js/main.js            The screens, from loading to playing (no Three.js: it loads first)
   js/app/               The game on the page
@@ -331,6 +335,9 @@ client/                 The game (static files served to the browser)
     variety.js          Choosing one of a few ways of doing something, never the last one again
     random.js           Seeded random numbers
     setpieces/          Town (and castle) layouts, and the pieces they're made from
+    worldplan/          The world plan (see docs/WORLD.md): plan.js lays it out from a seed;
+                        terrain.js the land, climate, rivers and territories; settle.js the
+                        settlements, roads, sites and camps; races.js the peoples, lands and foes
   js/audio/             The sound: dsp.js has the building blocks; synth.js makes the effects
                         and the town's sounds (worker.js away from the page); score.js writes
                         the town's music and tavern.js the tavern's; instruments.js and
@@ -363,6 +370,7 @@ client/                 The game (static files served to the browser)
     bvh.js              Motion capture: reading BVH files and retargeting them
     presets.js          The human, heroine and orc
   js/lab/character-lab.js  The character lab
+  js/lab/world-map.js   The world map
 server/                 A static file server for playing locally (npm start)
 test/                   Unit tests
 e2e/                    Playwright browser tests
@@ -370,6 +378,7 @@ scripts/                vendor-three.js, build-characters.js, build-manifest.js,
 .github/workflows/      CI (ci.yml) and publishing to GitHub Pages (pages.yml)
 docs/GAME.md            How the game works
 docs/CHARACTERS.md      The character engine, and the research behind it
+docs/WORLD.md           The world plan: the whole world laid out from a seed
 docs/MODERNIZATION.md   The history: the book's Last Colony, modernized, before Pellagos replaced it
 ```
 
