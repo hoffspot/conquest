@@ -5,8 +5,10 @@
 // world, drawn in its chunks as the game draws it. Draw calls and triangles are counted as the
 // game's debug mode counts them.
 //
-// ?seed=N&show=street|landmarks|town|village|hamlet|farmstead|city|capital choose;
-// window.buildingLab is there for tests.
+// ?seed=N&show=street|landmarks|town|village|hamlet|farmstead|city|capital choose, or
+// show=wilds-meadow (or any land: wilds-woods, wilds-badlands...) for the land itself, well away
+// from any settlement or road (&undergrowth=0.5 to thin it, 0 for none); window.buildingLab is
+// there for tests.
 
 import * as THREE from "three";
 import { createRandom } from "../core/random.js";
@@ -14,6 +16,7 @@ import { nameTavern } from "../core/lore/taverns.js";
 import { GOD_IDS } from "../core/lore/gods.js";
 import { LANDMARKS } from "../core/setpieces/pieces.js";
 import { buildWorld } from "../core/overworld.js";
+import { BIOMES, CELL, CELLS } from "../core/worldplan/plan.js";
 import { generateWorld } from "../core/world.js";
 import { Chunks } from "../world/chunks3d.js";
 import { prepareAtlas } from "../world/art/engine/atlas.js";
@@ -27,7 +30,7 @@ const $ = (selector) => document.querySelector(selector);
 const params = new URLSearchParams(location.search);
 const state = {
     seed: Number(params.get("seed")) || 7,
-    show: ["town", "landmarks", "capital", "city", "village", "hamlet", "farmstead"].includes(params.get("show")) ? params.get("show") : "street",
+    show: ["town", "landmarks", "capital", "city", "village", "hamlet", "farmstead", ...BIOMES.map(({ id }) => `wilds-${id}`)].includes(params.get("show")) ? params.get("show") : "street",
     built: null,
     stats: null,
     ready: false,
@@ -84,6 +87,42 @@ function landmarksOf(seed) {
     return { width: Math.ceil(x + 4), height: 40, pieces };
 }
 
+// A spot in the middle of a stretch of a land (metres), as far from the plan's places and roads as
+// can be found: the land itself, as the game draws it
+function wildsOf(plan, land) {
+    const biome = BIOMES.findIndex(({ id }) => id === land);
+    const roads = new Set(plan.roads.flatMap(({ cells }) => cells.map(([x, y]) => y * CELLS + x)));
+    let best = null;
+
+    for (let k = 0; k < CELLS * CELLS; k++) {
+        if (plan.biome[k] !== biome) {
+            continue;
+        }
+
+        const [x, y] = [k % CELLS, Math.floor(k / CELLS)];
+        let score = 0;
+
+        // (All round it the same land, no road, and far from places)
+        for (let dy = -3; dy <= 3; dy++) {
+            for (let dx = -3; dx <= 3; dx++) {
+                const at = (y + dy) * CELLS + (x + dx);
+
+                score += plan.biome[at] === biome && !roads.has(at) ? 1 : -2;
+            }
+        }
+
+        const near = Math.min(...plan.places.map((place) => Math.hypot(place.at[0] - (x + 0.5) * CELL, place.at[1] - (y + 0.5) * CELL)));
+
+        score += Math.min(near, 400) / 100;
+
+        if (!best || score > best.score) {
+            best = { score, at: [(x + 0.5) * CELL, (y + 0.5) * CELL] };
+        }
+    }
+
+    return best.at;
+}
+
 async function build() {
     state.ready = false;
     $("#status").hidden = false;
@@ -94,6 +133,30 @@ async function build() {
     }
 
     await prepareAtlas();
+
+    // A stretch of a land, as the game draws it
+    if (state.show.startsWith("wilds-")) {
+        const world = buildWorld({ seed: state.seed });
+        const [x, z] = wildsOf(world.plan, state.show.slice(6));
+        const chunks = new Chunks(world, { undergrowth: Number(params.get("undergrowth") ?? 1) });
+
+        chunks.fill(x, z, 1);
+
+        while (chunks.busy) {
+            chunks.update(x, z);
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+
+        view.scene.add(chunks.object);
+        state.built = chunks.object;
+        state.chunks = chunks;
+        orbit.focus.set(x, 1, z);
+        orbit.distance = 11;
+        orbit.pitch = 42;
+        finish(chunks.drawn.size);
+
+        return;
+    }
 
     // A settlement out in the world, as the game draws it: the nearest of its kind to where a
     // player starts, in the chunks round it

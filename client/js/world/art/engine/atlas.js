@@ -154,35 +154,98 @@ export function atlasMaterial() {
         return shared;
     }
 
-    const texture = new THREE.DataArrayTexture(prepared?.data ?? paintLayers(), LAYER_SIZE, LAYER_SIZE, LAYERS.length);
-
-    texture.format = THREE.RGBAFormat;
-    texture.type = THREE.UnsignedByteType;
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.magFilter = THREE.LinearFilter;
-    texture.minFilter = THREE.LinearMipmapLinearFilter;
-    texture.generateMipmaps = true;
-    texture.anisotropy = 4;
-    texture.needsUpdate = true;
-
     const material = new THREE.MeshLambertMaterial({ vertexColors: true });
-    const uniforms = { atlasMap: { value: texture }, atlasRelief: { value: RELIEF } };
+    const uniforms = { atlasMap: { value: atlasTexture() }, atlasRelief: { value: RELIEF } };
 
     material.name = "atlas";
     material.shadowSide = THREE.DoubleSide;
-    material.userData.atlas = texture;
+    material.userData.atlas = uniforms.atlasMap.value;
+    material.userData.uniforms = uniforms;
+    material.onBeforeCompile = (shader) => fromAtlas(shader, uniforms);
+    material.customProgramCacheKey = () => "atlas";
+    shared = material;
+
+    return material;
+}
+
+/**
+ * The undergrowth's: where the player is (x, z metres, for `focus`), how far from them it starts to
+ * sink into the ground and where it's all gone (metres: `fade`), and how far the tips of grass
+ * and flowers stir in the breeze (metres: `sway`).
+ */
+export const WILDS = Object.freeze({ focus: { value: new THREE.Vector2() }, fade: { value: new THREE.Vector2(40, 56) }, sway: { value: 0.07 } });
+
+let wilds = null;
+
+/**
+ * The atlas's material for the undergrowth (grass, flowers, pebbles, sticks: kits/wilds.js): both
+ * sides of each blade and petal drawn, lit as the ground is whichever side is seen; the higher up a
+ * blade each vertex is (a `sway` attribute, 0 at its foot to 1 at its tip), the more it stirs in
+ * the breeze (`time`: seconds, a uniform the game keeps going); and further from the player than
+ * WILDS.fade, sunk into the ground, so none of it pops in or out of sight.
+ */
+export function wildsMaterial(time) {
+    if (wilds) {
+        return wilds;
+    }
+
+    const material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+    const uniforms = { atlasMap: { value: atlasTexture() }, atlasRelief: { value: 0 }, wildsTime: time, wildsFocus: WILDS.focus, wildsFade: WILDS.fade, wildsSway: WILDS.sway };
+
+    material.name = "wilds";
     material.userData.uniforms = uniforms;
     material.onBeforeCompile = (shader) => {
-        Object.assign(shader.uniforms, uniforms);
+        fromAtlas(shader, uniforms);
         shader.vertexShader = shader.vertexShader
-            .replace("#include <common>", "#include <common>\nattribute float layer;\nflat varying float vLayer;\nvarying vec2 vAtlasUv;")
-            .replace("#include <uv_vertex>", "#include <uv_vertex>\nvLayer = layer;\nvAtlasUv = uv;");
-        shader.fragmentShader = shader.fragmentShader
-            .replace("#include <common>", `#include <common>\nuniform highp sampler2DArray atlasMap;\nuniform float atlasRelief;\nflat varying float vLayer;\nvarying vec2 vAtlasUv;\n${RELIEF_GLSL}`)
-            .replace("#include <map_fragment>", "vec4 atlasTexel = texture(atlasMap, vec3(vAtlasUv, vLayer));\ndiffuseColor.rgb *= atlasTexel.rgb;")
-            .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
+            .replace("#include <common>", "#include <common>\nattribute float sway;\nuniform float wildsTime;\nuniform vec2 wildsFocus;\nuniform vec2 wildsFade;\nuniform float wildsSway;")
+            .replace("#include <begin_vertex>", `#include <begin_vertex>
+vec3 wildAt = (modelMatrix * vec4(transformed, 1.0)).xyz;
+float wildPhase = wildAt.x * 0.61 + wildAt.z * 0.47;
+float wildHow = wildsSway * sway;
+transformed.x += wildHow * (sin(wildsTime * 2.3 + wildPhase) + 0.35 * sin(wildsTime * 5.1 + wildPhase * 1.7));
+transformed.z += wildHow * 0.6 * cos(wildsTime * 1.9 + wildPhase * 1.3);
+transformed.y = mix(transformed.y, -0.06, smoothstep(wildsFade.x, wildsFade.y, distance(wildAt.xz, wildsFocus)));`);
+        // (Both sides lit alike: a blade's back as its front)
+        shader.fragmentShader = shader.fragmentShader.replace("#include <normal_fragment_begin>", "#include <normal_fragment_begin>\nnormal *= faceDirection;");
+    };
+    material.customProgramCacheKey = () => "wilds";
+    wilds = material;
+
+    return material;
+}
+
+// The atlas's texture array, made once: its layers as painted (prepareAtlas's, or here and now)
+let texture = null;
+
+function atlasTexture() {
+    if (!texture) {
+        texture = new THREE.DataArrayTexture(prepared?.data ?? paintLayers(), LAYER_SIZE, LAYER_SIZE, LAYERS.length);
+        texture.format = THREE.RGBAFormat;
+        texture.type = THREE.UnsignedByteType;
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        texture.magFilter = THREE.LinearFilter;
+        texture.minFilter = THREE.LinearMipmapLinearFilter;
+        texture.generateMipmaps = true;
+        texture.anisotropy = 4;
+        texture.needsUpdate = true;
+    }
+
+    return texture;
+}
+
+// A material's shader drawn from the atlas: each vertex's layer, its texture coordinates, and the
+// layer's heights lit as relief
+function fromAtlas(shader, uniforms) {
+    Object.assign(shader.uniforms, uniforms);
+    shader.vertexShader = shader.vertexShader
+        .replace("#include <common>", "#include <common>\nattribute float layer;\nflat varying float vLayer;\nvarying vec2 vAtlasUv;")
+        .replace("#include <uv_vertex>", "#include <uv_vertex>\nvLayer = layer;\nvAtlasUv = uv;");
+    shader.fragmentShader = shader.fragmentShader
+        .replace("#include <common>", `#include <common>\nuniform highp sampler2DArray atlasMap;\nuniform float atlasRelief;\nflat varying float vLayer;\nvarying vec2 vAtlasUv;\n${RELIEF_GLSL}`)
+        .replace("#include <map_fragment>", "vec4 atlasTexel = texture(atlasMap, vec3(vAtlasUv, vLayer));\ndiffuseColor.rgb *= atlasTexel.rgb;")
+        .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
 if (atlasRelief > 0.0) {
     vec2 dx = dFdx(vAtlasUv);
     vec2 dy = dFdy(vAtlasUv);
@@ -191,11 +254,6 @@ if (atlasRelief > 0.0) {
 
     normal = reliefNormal(-vViewPosition, normal, slope, faceDirection);
 }`);
-    };
-    material.customProgramCacheKey = () => "atlas";
-    shared = material;
-
-    return material;
 }
 
 const _colour = new THREE.Color();

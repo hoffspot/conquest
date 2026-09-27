@@ -6,24 +6,38 @@
 // Each chunk has its ground (ground.js: the grass in its land's colours, with roads, fields and
 // the town's streets blended in), its water (lakes, the sea and rivers, over their beds), bridges
 // where roads cross rivers (straight decks of boards from bank to bank, railed), its trees (trees.js Woodland: every
-// variant kept once, drawn wherever it stands), and the buildings and props of any settlement in
-// it (core/settlements.js), built by the art kits a few at a time each frame (so walking into a
-// town never stalls) and merged into the art's one material when they're all built. The start
-// town itself is drawn on its own (town3d.js), over the chunks it's in.
+// variant kept once, drawn wherever it stands), the land's own features (core/wilds.js: boulders,
+// fallen trees, stumps, bushes...: kits/wilds.js, one mesh a chunk), and the buildings and props
+// of any settlement in it (core/settlements.js), built by the art kits a few at a time each frame
+// (so walking into a town never stalls) and merged into the art's one material when they're all
+// built. The start town itself is drawn on its own (town3d.js), over the chunks it's in.
+//
+// The chunks near the player (those within WILDS.fade's reach, give or take) have their
+// undergrowth too: grass, flowers, ferns, pebbles, sticks... (kits/wilds.js), built a few at a time
+// in the same budget, and let go again once the player's gone far enough that it's all sunk into
+// the ground.
 
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { CHUNK, CHUNKS, WET } from "../core/overworld.js";
 import { material } from "./art/engine/materials.js";
+import { WILDS } from "./art/engine/atlas.js";
 import { TREE_WIND, Woodland } from "./art/kits/trees.js";
+import { featureMesh, Growth, TILE, undergrowthMesh, undergrowthOf } from "./art/kits/wilds.js";
 import { chunkGround, disposeChunkGround, disposeGrass, landColours } from "./ground.js";
 import { BUILDERS, cutAway, merge, PIXEL, placed, standOn } from "./town3d.js";
 
 /** How many chunks round the player's are drawn (each way), and how far off they're let go. */
 export const REACH = Object.freeze({ drawn: 2, kept: 3 });
 
-/** How long a frame may spend building settlements' buildings (milliseconds). */
+/** How long a frame may spend building settlements' buildings and undergrowth (milliseconds). */
 export const BUILD_BUDGET = 6;
+
+/**
+ * Undergrowth is grown for chunks whose nearest edge is within `grow` metres of the player, and let
+ * go once it's more than `drop` (past where it's all sunk into the ground: WILDS.fade).
+ */
+export const UNDERGROWTH = Object.freeze({ grow: 64, drop: 84 });
 
 // Water: how high over the ground it lies (metres), its colour and how much it shows (the rest
 // the bed under it), and its mask's texels per metre
@@ -43,8 +57,11 @@ export class Chunks {
      * @param {object} world - From buildWorld (core/overworld.js): its `maps.town` the world
      *     outside, and its plan.
      */
-    constructor(world) {
+    constructor(world, { undergrowth = 1 } = {}) {
         this.world = world;
+
+        /** How thick the undergrowth grows (1 as the lands have it; less on slower devices, 0 none). */
+        this.undergrowth = undergrowth;
         this.overworld = world.maps.town;
         this.land = landColours(world.plan);
         this.woodland = new Woodland();
@@ -56,10 +73,12 @@ export class Chunks {
         this.object.add(this.woodland.object, this.primer);
 
         // The chunks drawn, by key: { cx, cy, object, trees (their lot), heights, job (its
-        // buildings, while they're being built: { pieces, index, group, waiting }) }; and those
-        // whose buildings are being built, in turn
+        // buildings, while they're being built: { pieces, index, group, waiting }), growth (its
+        // undergrowth while it's being grown: Growth), undergrowth (its mesh) }; those whose
+        // buildings are being built, in turn; and those whose undergrowth is being grown
         this.drawn = new Map();
         this.building = [];
+        this.growing = [];
         this.centre = null;
         this.wanted = [];
 
@@ -76,6 +95,8 @@ export class Chunks {
                 this.#draw(cx, cy);
             }
         }
+
+        this.#tend(x, z);
     }
 
     /**
@@ -92,12 +113,111 @@ export class Chunks {
             changed = true;
         }
 
-        return this.#build() || changed;
+        this.#tend(x, z);
+
+        const start = performance.now();
+        const built = this.#build();
+        const grown = this.#grow(start + BUILD_BUDGET);
+
+        return built || grown || changed;
     }
 
-    /** Whether any settlement's buildings are still being built. */
+    /** Grow the undergrowth this thick from now on (as the constructor's `undergrowth`): grown again if it's changed. */
+    setUndergrowth(amount) {
+        if (amount === this.undergrowth) {
+            return;
+        }
+
+        this.undergrowth = amount;
+
+        for (const drawn of this.drawn.values()) {
+            this.#uproot(drawn);
+        }
+    }
+
+    /** Whether any settlement's buildings, or any undergrowth near, are still being built. */
     get busy() {
-        return this.building.length > 0;
+        return this.building.length > 0 || this.growing.length > 0;
+    }
+
+    // Keep the undergrowth where the player is: grown for the chunks near them (queued), let go
+    // for those they've left behind
+    #tend(x, z) {
+        WILDS.focus.value.set(x, z);
+
+        if (!this.undergrowth) {
+            return;
+        }
+
+        for (const drawn of this.drawn.values()) {
+            const [x0, z0] = [drawn.cx * CHUNK, drawn.cy * CHUNK];
+            const off = Math.hypot(Math.max(x0 - x, 0, x - (x0 + CHUNK)), Math.max(z0 - z, 0, z - (z0 + CHUNK)));
+
+            if (off <= UNDERGROWTH.grow && !drawn.growth && !drawn.undergrowth) {
+                drawn.growth = { items: null, growth: null };
+                this.growing.push(drawn);
+            } else if (off > UNDERGROWTH.drop && (drawn.growth || drawn.undergrowth)) {
+                this.#uproot(drawn);
+            }
+
+            // (Each tile drawn only while any of it is near enough not to have sunk from sight)
+            for (const mesh of drawn.undergrowth ?? []) {
+                const [tx, tz] = mesh.userData.tile;
+
+                mesh.visible = Math.hypot(Math.max(tx - x, 0, x - (tx + TILE)), Math.max(tz - z, 0, z - (tz + TILE))) < WILDS.fade.value.y;
+            }
+        }
+
+        // (The nearest first)
+        this.growing.sort((a, b) => Math.hypot(a.cx * CHUNK + CHUNK / 2 - x, a.cy * CHUNK + CHUNK / 2 - z) - Math.hypot(b.cx * CHUNK + CHUNK / 2 - x, b.cy * CHUNK + CHUNK / 2 - z));
+    }
+
+    // Grow what undergrowth can be grown before `until` (performance.now()'s); whether a chunk's
+    // was finished
+    #grow(until) {
+        let finished = false;
+
+        while (this.growing.length && performance.now() < until) {
+            const drawn = this.growing[0];
+            const job = drawn.growth;
+
+            if (!job.growth) {
+                const chunk = this.overworld.chunk(drawn.cx, drawn.cy);
+
+                job.growth = new Growth(undergrowthOf(this.overworld, chunk, { density: this.undergrowth }), [chunk.x0, chunk.y0]);
+                continue;
+            }
+
+            if (!job.growth.grow(until)) {
+                break;
+            }
+
+            this.growing.shift();
+            drawn.growth = null;
+            drawn.undergrowth = job.growth.meshes();
+
+            for (const mesh of drawn.undergrowth) {
+                drawn.object.add(mesh);
+            }
+
+            finished = true;
+            this.version++;
+        }
+
+        return finished;
+    }
+
+    // Let a chunk's undergrowth go (or stop growing it)
+    #uproot(drawn) {
+        this.growing = this.growing.filter((other) => other !== drawn);
+        drawn.growth = null;
+
+        for (const mesh of drawn.undergrowth ?? []) {
+            mesh.removeFromParent();
+            mesh.geometry.dispose();
+        }
+
+        drawn.undergrowth = null;
     }
 
     // Build what can be built of the settlements' buildings in this frame's budget; whether a
@@ -276,6 +396,23 @@ export class Chunks {
         const lot = this.woodland.plant(chunk.trees.map(({ x, y, variant, size, turn }) => ({ x, z: y, variant, size, turn })));
         const heights = new Float32Array(CHUNK * CHUNK);
 
+        // The land's own features, and how high they stand
+        if (chunk.features.length) {
+            const wild = featureMesh(chunk.features, (x, y) => this.overworld.biomeAt(x, y), [chunk.x0, chunk.y0]);
+
+            object.add(wild.mesh);
+
+            for (const { min, max, top } of wild.boxes) {
+                for (let y = Math.max(chunk.y0, Math.floor(min[1])); y < Math.min(chunk.y0 + CHUNK, Math.ceil(max[1])); y++) {
+                    for (let x = Math.max(chunk.x0, Math.floor(min[0])); x < Math.min(chunk.x0 + CHUNK, Math.ceil(max[0])); x++) {
+                        const at = (y - chunk.y0) * CHUNK + (x - chunk.x0);
+
+                        heights[at] = Math.max(heights[at], top);
+                    }
+                }
+            }
+        }
+
         for (const box of lot.boxes) {
             for (let y = Math.max(chunk.y0, Math.floor(box.min.z)); y < Math.min(chunk.y0 + CHUNK, Math.ceil(box.max.z)); y++) {
                 for (let x = Math.max(chunk.x0, Math.floor(box.min.x)); x < Math.min(chunk.x0 + CHUNK, Math.ceil(box.max.x)); x++) {
@@ -291,7 +428,7 @@ export class Chunks {
 
         // The buildings and props of any settlement in it, to be built a few at a time
         const pieces = this.overworld.settlements?.piecesIn(cx, cy).filter(({ kind }) => kind !== "tree") ?? [];
-        const drawn = { cx, cy, object, lot, heights, job: null };
+        const drawn = { cx, cy, object, lot, heights, job: null, growth: null, undergrowth: null };
 
         if (pieces.length) {
             const group = new THREE.Group();
@@ -308,6 +445,7 @@ export class Chunks {
     // Throw a chunk away
     #forget(drawn) {
         this.woodland.fell(drawn.lot);
+        this.#uproot(drawn);
 
         // (Its buildings, if they were still being built, go with it)
         if (drawn.job) {
@@ -338,9 +476,9 @@ export class Chunks {
     }
 }
 
-// Water and a bridge, far under the ground where they're never seen, so that their shaders are
-// made while the game loads (with the rest: Game.build) rather than the first time a river or a
-// bridge comes into view
+// Water, a bridge and a tuft of grass, far under the ground where they're never seen, so that
+// their shaders are made while the game loads (with the rest: Game.build) rather than the first
+// time a river, a bridge or the undergrowth comes into view
 function primer() {
     const group = new THREE.Group();
     const mask = new THREE.DataTexture(new Uint8Array([255]), 1, 1, THREE.RedFormat);
@@ -353,6 +491,9 @@ function primer() {
     for (const look of ["planks", "planks-dark", "timber"]) {
         group.add(new THREE.Mesh(box(0, 0, 0, 1, 0.1, 1), bridgeMaterial(look)));
     }
+
+    // (And a tuft of grass, for the undergrowth's)
+    group.add(undergrowthMesh([{ kind: "tuft", land: "meadow", look: 0, x: 0, y: 0, turn: 0, size: 1, tint: [1, 1, 1] }], [0, 0]));
 
     return group;
 }

@@ -346,11 +346,11 @@ drawn whole whichever way the camera looks (about 90 draw calls and 170,000 tria
 
 **Quality levels** trade looks for speed, chosen for the device (debug mode can change them):
 
-| Level | Pixels | Shadow map | Antialiasing | Hair | Skin textures |
-| --- | --- | --- | --- | --- | --- |
-| Low (older phones) | 1× | 1024 | no | a fifth of the strands | 512 |
-| Medium (phones) | up to 1.5× | 2048 | yes | 30% | 512 |
-| High (computers) | up to 2× | 2048 | yes | 45% | 1024 |
+| Level | Pixels | Shadow map | Antialiasing | Hair | Skin textures | Undergrowth |
+| --- | --- | --- | --- | --- | --- | --- |
+| Low (older phones) | 1× | 1024 | no | a fifth of the strands | 512 | half |
+| Medium (phones) | up to 1.5× | 2048 | yes | 30% | 512 | three-quarters |
+| High (computers) | up to 2× | 2048 | yes | 45% | 1024 | all of it |
 
 **Clear of buildings.** In the town, a building can stand between the camera and the player,
 from whichever side it looks. The view marches out along its line from where it looks over the
@@ -382,6 +382,13 @@ with snow, sand on beaches), from one texture of the whole world a texel to the 
 blended between cells, with the edges wandering 26 metres or so so the cells don't show. Every
 chunk's ground shares one shader; chunks of grass alone share a material too.
 
+The grass isn't the same everywhere (`PATCHES`): from a little texture of noise (128 texels,
+tiling, a different noise in each of its four channels: made once), read coarse (170 metres to
+a copy) and fine (43), it's drier and straw-coloured in broad patches, lusher and darker in
+others, and here and there worn to bare earth (the earth taking the land's colour where that's
+strong: grey ash, sand, snow), the patches' edges ragged. None of it touches the roads, fields
+and streets, and it costs a texture read or two.
+
 ### The world outside (world/chunks3d.js)
 
 The world is drawn a chunk at a time round the player: the 25 chunks within two of theirs (160
@@ -408,9 +415,52 @@ much of it, and never a loading screen. Each chunk has:
   built by the art kits as the town's are and merged with the one material (the atlas, above);
   the trees are the chunk's. Buildings are built a few at a time, within 6 ms a frame, so walking
   up to a city never stalls a frame; while loading, the game waits for those round the start.
+- **The land's own features** (core/wilds.js places them: see WORLD.md, *The world in chunks*;
+  kits/wilds.js draws them), one mesh a chunk with the atlas, casting shadows:
+  - boulders (granite, pale limestone, red sandstone, black basalt; mossy in the woods and
+    marsh, snow on their tops in the snow and the mountains, flecked with lichen), rocky
+    outcrops, basalt columns in the volcanic lands, cairns and standing stones;
+  - trees long fallen and gone silver (their trunks bending and tapering, broken branches, the
+    root plate torn up with earth still in it), old stumps (sawn or broken, roots flaring,
+    shelf fungus), dead trees still standing, piles of logs;
+  - bushes (with red, black or white berries, pink or white flowers, the heath's yellow gorse),
+    termite mounds on the savannah, haystacks and scarecrows in the fields, stretches of ruined
+    wall, and in the badlands now and then the ribs, spine and horned skull of some great beast.
+- **Undergrowth**, near the player only (every chunk whose nearest edge is within 64 metres,
+  let go past 84), built a few things at a time in the same 6 ms a frame and drawn in tiles 32
+  metres square, each only while it's within 56 metres of the player:
+  - grass in tufts (short and tall, with seed heads; dry straw on the savannah and in the
+    badlands, marram on beaches, sedge and reeds with bulrushes by water and in the marsh);
+  - wildflowers in drifts of one kind: daisies, poppies, cornflowers, buttercups, dandelions
+    and their clocks, foxgloves, cow parsley, yarrow, campion, thistles, heather, lavender,
+    bluebells in the woods, cotton grass in the marsh and tundra;
+  - ferns and bracken, mushrooms (fly agaric, clusters of brown caps, puffballs, and now and then
+    a fairy ring), pebbles and stones (scree in the mountains), sticks and fallen branches,
+    fallen leaves, molehills, rabbit holes, bones and horned skulls, cacti and tumbleweed,
+    shards of obsidian, shells and driftwood, and the stone ring and charred sticks of someone's
+    old campfire.
 
-The chunks also say how tall their trees and buildings are on each square, for the cutaway. The
-minimap is painted from the same chunks.
+  Where each thing grows comes from its square: grass, not blocked, no road, bridge or water;
+  how much and of what from its land (`UNDERGROWTH`: in a lush meadow about a quarter of the
+  squares have something) and from smooth noise fields across the world, so there are bare
+  stretches and lush ones, flowers in drifts of a kind, tufts in clumps, pebbles where it's
+  rocky, sticks and mushrooms where the land's been let go and in the trees' shade, reeds by the
+  water; thinner, and only the tidier kinds, in the towns. The same every time.
+
+  **How it's drawn cheaply.** Every look is made once, the first time it's wanted, eight of each
+  kind for each land, from a seed: rocks are balls pushed in and out by noise and cut flat by a
+  few planes (their facets); trunks and branches tapered, bent tubes; stumps, mounds, haystacks
+  and mushrooms turned on a lathe. Blades of grass and petals are real triangles, not pictures
+  with holes in (a blade is one triangle, a flower's head five), so nothing is drawn twice over
+  the same pixel and the GPU keeps its early depth test. Each thing is placed turned its own way,
+  stretched, tinted and its texture shifted, so no two look alike, and a tile's are baked into
+  one mesh (a lush chunk's undergrowth is about 20,000 triangles, 4 ms to build). Its material is
+  the atlas's (`wildsMaterial`): both sides lit as the ground is, each blade's tip stirring in the
+  breeze (a `sway` for each vertex), and past 40 metres from the player everything sinking into
+  the ground, gone by 56, so nothing pops in or out. How thick it grows follows the quality level.
+
+The chunks also say how tall their trees, features and buildings are on each square, for the
+cutaway. The minimap is painted from the same chunks.
 
 ### Inside and out (app/game.js)
 
@@ -805,7 +855,8 @@ the 128 metres round the player; inside, the whole floor. Each square is coloure
 (grass in its land's colour, road, cobbles, soil, courtyard, water, bridges) or what stands on it
 (roofs over buildings, blue-grey for the tavern, church and other landmarks, props, trees), with
 a little variation from square to square; the buildings get a dark edge and a light ridge and
-the trees round crowns. That's painted four pixels to the metre: the town once, and the world a
+the trees round crowns, and the land's features marks of their own (boulders grey, fallen trees
+and walls lines, bushes dark green). That's painted four pixels to the metre: the town once, and the world a
 patch 192 metres square at a time round the player, the town's picture laid in it and the other
 settlements' buildings and props painted over their ground the same way, painted again
 when they've gone far enough that what's shown would reach the patch's edge. Each frame (at most 30 times a second)
@@ -1176,11 +1227,23 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   layout asks for (more in cities than villages), a door at the front and a window on every
   floor of it, shops, openings clear of the corners, each other and the floor above, jetties
   only on timber houses, built within their lots in a few hundred to a few thousand triangles,
-  weathered; barns boarded; a wall's openings leaving holes and a gable its outline; every prop
+  weathered; barns boarded; a wall's openings leaving holes and a gable its outline; every
+  landmark of six towns and cities built within its lot, each tavern with its own name board and
+  sign, the guild's, each temple's patron's; every emblem painted, one or several; every prop
   built; the atlas's layers (the same every time, with relief) and a house drawn from it as one
   mesh.
+- `test/wilds.test.js`: the noise (smooth, seeded, tiling when asked); the ground's patches (a
+  tiling texture with dry, lush and bare in it); the land's features (placed across every land,
+  many kinds, a few a chunk; the same every time; taking their squares, hiding what's behind the
+  tall ones, clear of roads, water, the town and the settlements); every kind of thing drawn for
+  every land's look, whole and within its budget of triangles, no two looks alike; a chunk's
+  features as one mesh; the undergrowth only on open grass, the same every time, thinner when
+  asked and in the towns (but not their fields), built a few things at a time in tiles within
+  budget.
 - `e2e/building-lab.spec.js`: the building lab's street of houses (twenty, in fewer than thirty
-  draw calls) and its town.
+  draw calls) and its town; the taverns, guild, temples and smithy with their boards and signs; a
+  village drawn in its chunks; and a meadow with its features and undergrowth, in fewer than 70
+  draw calls.
 - `e2e/pellagos.spec.js`: the whole game in Chromium: loading, debug mode, making a character
   through to playing them, carrying on with a saved character, a fight to the death, walking by
   tapping, running by double-clicking and double-tapping with the stamina bar showing and going,

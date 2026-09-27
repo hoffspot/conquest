@@ -280,9 +280,23 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   the four squares round its point, and can't be seen through. A chunk's trees come from its
   own seed, the same random numbers used for every try, planted or not, so they're the same
   whatever's made round them.
+- **The land's own features** (`core/wilds.js`), tried every 8 metres (a random way in) from
+  the chunk's own random numbers, after its trees: boulders, rocky outcrops, fallen trees,
+  stumps, dead trees still standing, bushes, cairns, standing stones, termite mounds, haystacks
+  and scarecrows (in the fields too), log piles, ruined walls and a great beast's ribs. Each land
+  has about so many a chunk (`LANDS`: none in water, 2 on beaches, 4 in meadows, 7 in the woods,
+  9 in the mountains) of its own kinds, as likely as it says; they gather as they would, the
+  rocky kinds where smooth noise across the world says it's rocky (and bigger there) and fallen
+  wood where it's been let go. Each takes the squares under it (a boulder's disc, a fallen tree's
+  line), and hides what's behind it if it's taller than anyone's eyes (1.65 m), so paths go round
+  them and they can be hidden behind; it keeps two squares from roads, bridges and water, clear of
+  the trees, the town, the settlements' streets and buildings and the places still to come, a
+  square from the next feature, and three squares inside its chunk (so it never meets the next
+  chunk's trees). A world has about three a chunk on average. The grass, flowers, pebbles and
+  sticks between them are the drawing's alone (GAME.md, *The world outside*).
 
 Water can't be walked into, but can be seen over. A chunk takes about 3 to 5 ms to make in Node,
-and laying out a settlement 5 to 80 ms more (once).
+its features about 1 ms more, and laying out a settlement 5 to 80 ms more (once).
 
 ## Next
 
@@ -310,7 +324,8 @@ roads across many chunks, found quickly; the player walking out into the world; 
 quickly. Of the other settlements: every place but the start town, hamlets and farmsteads too;
 laid out as the world near them is made, the same every time; a village's tavern, church, smithy
 and guild; set in as they were laid out, their pieces each drawn with one chunk and their trees
-grown; and the plan's roads carried on from their streets' ends.
+grown; and the plan's roads carried on from their streets' ends. `test/wilds.test.js` checks the
+land's features (GAME.md, *Testing*).
 
 `test/world-plan.test.js` checks, for three seeds:
 
