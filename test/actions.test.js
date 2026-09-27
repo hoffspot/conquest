@@ -696,9 +696,9 @@ describe("arms and hands (actions.js, Rig.reachArm)", () => {
 
     // What each action is done holding (casting, a sword in the other hand, on guard), and what
     // each role carries resting (the player, a sword)
-    const HELD = { sword: ["sword"], staff: ["staff"], wand: ["wand"], grimoire: ["grimoire"], hammer: ["warHammer"], bow: ["bow"], punch: ["spikedGauntlets", "spikedGauntletLeft"], cleaver: ["cleaver"], castHeal: ["sword"], castStun: ["sword"], toast: ["tankard"], serve: ["tankard"], pour: [] };
+    const HELD = { sword: ["sword"], staff: ["staff"], wand: ["wand"], grimoire: ["grimoire"], hammer: ["warHammer"], bow: ["bow"], punch: ["spikedGauntlets", "spikedGauntletLeft"], cleaver: ["cleaver"], castHeal: ["sword"], castStun: ["sword"], toast: ["tankard"], serve: ["tankard"], pour: [], forge: ["smithHammer", "tongs"], heat: ["smithHammer", "tongs"], quench: ["smithHammer", "tongs"], pump: [], crank: [] };
     const GUARDED = { castHeal: "sword", castStun: "sword" };
-    const CARRIED = { barmaid: ["tankard"], patron: ["tankard"], adventurer: ["sword"] };
+    const CARRIED = { barmaid: ["tankard"], patron: ["tankard"], adventurer: ["sword"], smith: ["smithHammer", "tongs"] };
 
     const armed = (held = [], shape = {}) => fighter(shape, held);
 

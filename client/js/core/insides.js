@@ -35,7 +35,7 @@ export const ENTRANCES = Object.freeze({
 });
 
 /** The kinds that can be gone into so far (the rest of ENTERED in time). */
-export const ENTERABLE = Object.freeze(["tavern"]);
+export const ENTERABLE = Object.freeze(["tavern", "blacksmith"]);
 
 // The way to a door, cleared: at least this far either side of its middle, and from this far in
 // behind it to this far out past the lot's front (metres)
@@ -277,7 +277,64 @@ export function tavernFolkOf(building, taproom, upstairs = null) {
     return folk;
 }
 
+// --- Smithies ---
+
+// A smithy, 16 by 12 metres: the forge against the north wall, its bellows beside it, a heap of
+// charcoal and a rack of tools; the anvil before the forge; the quenching trough to the west; a
+// grindstone; the workbench along the west wall and a rack of finished work along the east; the
+// door in the middle of the south wall
+const SMITHY = [
+    "RRRRR..FFFF..OOO",
+    ".......FFFF..OOO",
+    "......PFFFF.....",
+    "................",
+    ".QQ.............",
+    ".QQ.....A.......",
+    "................",
+    "...........G....",
+    "X...............",
+    "X..............R",
+    "X..............R",
+    "X......DD......R",
+];
+
+/** A smithy's floors: its workshop. */
+export function smithyRooms(building) {
+    return [{ suffix: "forge", style: "smithy", name: building.name, rows: SMITHY, ground: GROUND.soil, sound: "smithy" }];
+}
+
+/**
+ * A smithy's folk, worked out from its plan: the smith going between the forge (heating the
+ * work), the anvil (hammering it) and the trough (quenching it); and the apprentice, at the
+ * bellows and the grindstone.
+ */
+export function smithyFolkOf(building, forge) {
+    const random = createRandom(building.seed * 7 + 29);
+    const { n, w } = FACING;
+    const at = (kind) => forge.pieces.find((piece) => piece.kind === kind);
+    const [fire, anvil, trough, bellows, stone] = ["forge", "anvil", "trough", "bellows", "grindstone"].map(at);
+    const heat = { square: [fire.x + 1, fire.y + fire.h], facing: n, act: "heat", wait: [2500, 4000] };
+    const hammer = { square: [anvil.x, anvil.y + 1], facing: n, act: "forge", wait: [4500, 7000] };
+    const quench = { square: [trough.x + trough.w, trough.y], facing: w, act: "quench", wait: [2000, 3500] };
+    const pump = { square: [bellows.x, bellows.y + 1], facing: n, act: "pump" };
+    const crank = { square: [stone.x, stone.y + 1], facing: n, act: "crank" };
+
+    return [
+        { local: "smith", title: "Blacksmith", role: "smith", sex: random.chance(0.85) ? "m" : "f", map: forge.id, square: hammer.square, facing: n, routine: { order: "cycle", wait: [3000, 5000], stops: [heat, hammer, quench, hammer] } },
+        { local: "apprentice", title: "Apprentice", role: "apprentice", sex: random.chance(0.7) ? "m" : "f", map: forge.id, square: pump.square, facing: n, routine: { order: "cycle", wait: [4000, 7000], stops: [pump, crank] } },
+    ];
+}
+
+// Each kind's floors (the first is the one its front door opens into) and its folk
+const KINDS = Object.freeze({
+    tavern: { first: "taproom", rooms: tavernRooms, folk: (building, [taproom, upstairs]) => tavernFolkOf(building, taproom, upstairs) },
+    blacksmith: { first: "forge", rooms: smithyRooms, folk: (building, [forge]) => smithyFolkOf(building, forge) },
+});
+
 // --- The buildings ---
+
+// What a building's called that has no name of its own
+const NAMES = Object.freeze({ blacksmith: "the smithy" });
 
 // Where the buildings' floors are drawn in the 3D world: past the world's edge (and Wenches and
 // Ale's), a hundred metres apart, each building's floors in a column
@@ -340,10 +397,11 @@ export class Interiors {
         }
 
         const entrance = entranceOf(piece, origin);
+        const inside = `${key}/${KINDS[piece.name].first}`;
         const building = {
             key,
             kind: piece.name,
-            name: name ?? piece.tavern?.name ?? piece.name,
+            name: name ?? piece.tavern?.name ?? NAMES[piece.name] ?? piece.name,
             piece,
             tavern: piece.tavern ?? null,
             place,
@@ -362,11 +420,11 @@ export class Interiors {
             building: key,
             ends: [
                 { map: "town", squares: entrance.front, arrive: entrance.outside, facing: back, door: entrance.door },
-                { map: `${key}/taproom`, squares: [], arrive: null, facing: FACING.s, pending: true },
+                { map: inside, squares: [], arrive: null, facing: FACING.s, pending: true },
             ],
         };
         this.buildings.set(key, building);
-        this.byMap.set(`${key}/taproom`, building);
+        this.byMap.set(inside, building);
         this.world.links.push(building.door);
         this.version++;
 
@@ -403,7 +461,8 @@ export class Interiors {
             return building;
         }
 
-        const floors = tavernRooms(building);
+        const kind = KINDS[building.kind];
+        const floors = kind.rooms(building);
         const column = this.placed++;
         const origin = [ORIGINS.x + (column % ORIGINS.across) * ORIGINS.step, Math.floor(column / ORIGINS.across) * ORIGINS.step * 2];
         const maps = floors.map((floor, k) => {
@@ -421,10 +480,10 @@ export class Interiors {
         }
 
         // Its door's inside end: a couple of steps in, turned back to face it (as Wenches and Ale's)
-        const [taproom, upstairs] = maps;
-        const [doorX, doorY] = taproom.marks.D[0];
+        const [ground, upstairs] = maps;
+        const [doorX, doorY] = ground.marks.D[0];
 
-        Object.assign(building.door.ends[1], { squares: taproom.marks.D, arrive: [doorX, doorY - 2], facing: FACING.s, pending: false });
+        Object.assign(building.door.ends[1], { squares: ground.marks.D, arrive: [doorX, doorY - 2], facing: FACING.s, pending: false });
 
         if (upstairs) {
             building.stairs = {
@@ -432,7 +491,7 @@ export class Interiors {
                 kind: "stairs",
                 building: key,
                 ends: [
-                    { map: taproom.id, squares: taproom.marks["<"], arrive: [1, 3], facing: FACING.n },
+                    { map: ground.id, squares: ground.marks["<"], arrive: [1, 3], facing: FACING.n },
                     { map: upstairs.id, squares: upstairs.marks[">"], arrive: [6, 3], facing: FACING.n },
                 ],
             };
@@ -440,7 +499,18 @@ export class Interiors {
         }
 
         // Its folk, named from its seed, each with an id of their own in the world
-        building.folk = namePeople(tavernFolkOf(building, taproom, upstairs), building.seed).map((one) => ({ ...one, id: `${key}/${one.local}`, seed: building.seed * 31 + one.local.length * 7 + one.square[0] * 131 + one.square[1] }));
+        building.folk = namePeople(kind.folk(building, maps), building.seed).map((one) => ({ ...one, id: `${key}/${one.local}`, seed: building.seed * 31 + one.local.length * 7 + one.square[0] * 131 + one.square[1] }));
+
+        // (A smithy's known by its smith: "Hayward's Forge")
+        const smith = building.kind === "blacksmith" ? building.folk.find(({ local }) => local === "smith") : null;
+
+        if (smith) {
+            building.name = `${smith.name.split(" ")[1]}'s Forge`;
+
+            for (const map of maps) {
+                map.name = building.name;
+            }
+        }
         building.made = true;
         this.version++;
 

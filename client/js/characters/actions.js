@@ -149,6 +149,22 @@ const CAST = { ...spine({}), Head: { flex: 0 }, offset: [0, 0, 0] };
 // One way of doing an action: its name and key poses, from and back to `start`
 const variant = (name, start, ...keys) => ({ name, keys: [[0, start], ...keys, [2, start]] });
 
+// The smith's hammer, raised by the right shoulder (its head back, its face up) and brought down
+// flat on the work (the handle level, the face down); the tongs holding the work on the anvil
+const HAMMER_UP = { at: [0.05, 0.3, 0.3], point: [-0.41, 0.41, -0.82], edge: [0.18, 0.91, 0.37] };
+const HAMMER_DOWN = { at: [0.12, -0.92, 0.5], point: [0.67, 0.33, 0.67], edge: [0.67, -0.67, -0.33] };
+const TONGS_ON_ANVIL = { at: [-0.1, -0.72, 0.5], point: [-0.67, -0.33, 0.67], edge: [0.71, 0, 0.71] };
+
+// Both hands on the bellows' lever (side 1: the right), palms down round it: up, or pushed down
+const lever = (side, y) => ({ at: [side * -0.02 + (side > 0 ? 0.14 : -0.14), y, 0.62], palm: [0, -1, 0], towards: [side * 0.2, 0, 1], shape: "grip" });
+
+// The right hand on the grindstone's crank, going round (`turn`: 0 to 1)
+const crank = (turn) => {
+    const angle = turn * Math.PI * 2;
+
+    return { at: [0.12, -0.58 + 0.1 * Math.sin(angle), 0.6 + 0.1 * Math.cos(angle)], palm: [0.8, -0.2, 0], towards: [0, 0, 1], shape: "grip" };
+};
+
 /**
  * Each weapon's attack (weapons.js: an attack's `animation`) and each spell's cast, in five ways
  * (`variants`: { name, keys }), so no two in a row look the same (the character picks one at
@@ -571,6 +587,55 @@ export const ATTACKS = Object.freeze({
                 [1.3, { right: { at: [0.12, -0.6, 0.76], point: [0, 1, 0.1] }, ...spine({ flex: 20 }), offset: [0, -0.02, 0.03] }]),
         ],
     },
+    // The smithy's folk (one way each, key 1 at the moment that matters). Hammering: three blows
+    // on the work on the anvil, the hammer raised and brought down flat, the tongs holding it
+    forge: {
+        variants: [
+            variant("forge", { ...spine({}), Head: { flex: 0 }, offset: [0, 0, 0] },
+                [0.5, { right: HAMMER_UP, left: TONGS_ON_ANVIL, ...spine({ flex: 18, turn: -6 }), Head: { flex: 16 }, offset: [0, -0.02, 0.03] }],
+                [1, { right: HAMMER_DOWN, left: TONGS_ON_ANVIL, ...spine({ flex: 30, turn: 4 }), Head: { flex: 18 }, offset: [0, -0.04, 0.05] }],
+                [1.22, { right: HAMMER_UP, left: TONGS_ON_ANVIL, ...spine({ flex: 18, turn: -6 }) }],
+                [1.44, { right: HAMMER_DOWN, left: TONGS_ON_ANVIL, ...spine({ flex: 30, turn: 4 }) }],
+                [1.64, { right: HAMMER_UP, left: TONGS_ON_ANVIL, ...spine({ flex: 18, turn: -6 }) }],
+                [1.84, { right: HAMMER_DOWN, left: TONGS_ON_ANVIL, ...spine({ flex: 30, turn: 4 }), Head: { flex: 18 }, offset: [0, -0.04, 0.05] }]),
+        ],
+    },
+    // Heating the work: thrust into the forge's coals with the tongs, and turned there
+    heat: {
+        variants: [
+            variant("heat", { ...spine({}), offset: [0, 0, 0] },
+                [0.6, { left: { at: [-0.05, -0.45, 0.7], point: [0, 0, 1], edge: [-0.71, -0.71, 0] }, ...spine({ flex: 16 }), offset: [0, -0.02, 0.04] }],
+                [1, { left: { at: [-0.05, -0.47, 0.72], point: [-0.45, 0, 0.89], edge: [0.89, 0, 0.45] }, ...spine({ flex: 18 }) }],
+                [1.5, { left: { at: [-0.05, -0.45, 0.7], point: [0, 0, 1], edge: [-0.71, -0.71, 0] }, ...spine({ flex: 16 }), offset: [0, -0.02, 0.04] }]),
+        ],
+    },
+    // Quenching it: plunged into the trough with the tongs, hissing, and held there
+    quench: {
+        variants: [
+            variant("quench", { ...spine({}), offset: [0, 0, 0] },
+                [0.6, { left: { at: [-0.05, -0.45, 0.62], point: [0, 0, 1], edge: [-0.71, -0.71, 0] }, ...spine({ flex: 14 }) }],
+                [1, { left: { at: [-0.1, -0.8, 0.55], point: [-0.67, -0.67, 0.33], edge: [0.74, -0.53, 0.42] }, ...spine({ flex: 30 }), offset: [0, -0.04, 0.04] }],
+                [1.5, { left: { at: [-0.1, -0.78, 0.55], point: [-0.58, -0.58, 0.58], edge: [0.71, 0, 0.71] }, ...spine({ flex: 28 }), offset: [0, -0.04, 0.04] }]),
+        ],
+    },
+    // Working the bellows: both hands on the lever, pushing it down and letting it up, thrice
+    pump: {
+        variants: [
+            variant("pump", { ...spine({}) },
+                [0.5, { right: lever(1, -0.3), left: lever(-1, -0.3), ...spine({ flex: 8 }) }],
+                [1, { right: lever(1, -0.6), left: lever(-1, -0.6), ...spine({ flex: 18 }) }],
+                [1.28, { right: lever(1, -0.3), left: lever(-1, -0.3), ...spine({ flex: 8 }) }],
+                [1.54, { right: lever(1, -0.6), left: lever(-1, -0.6), ...spine({ flex: 18 }) }],
+                [1.8, { right: lever(1, -0.3), left: lever(-1, -0.3), ...spine({ flex: 8 }) }]),
+        ],
+    },
+    // Turning the grindstone's crank, round and round, the other hand on the frame
+    crank: {
+        variants: [
+            variant("crank", { ...spine({}) },
+                ...[0.4, 0.55, 0.7, 0.85, 1, 1.15, 1.3, 1.45, 1.6, 1.75].map((time, k) => [time, { right: crank(k / 4), left: { at: [-0.15, -0.62, 0.5], palm: [0, -1, 0], towards: [0, 0, 1], shape: "open" }, ...spine({ flex: 16 }) }])),
+        ],
+    },
     // Beckoning the player over (a courtesan, when she first sees them): facing them, a hand
     // held out palm up, the index finger curling "come here" three times, the other on the hip
     beckon: {
@@ -615,6 +680,76 @@ const flank = (hand, x, y) => ({ at: [hand * x, y, 0.08], palm: [hand * 0.95, 0,
 
 // Arms folded over the chest: each hand tucked under the other arm, the right forearm over the left
 const FOLDED = { right: { at: [0.74, -0.36, 0.24], point: [0, 1, 0], edge: [1, 0, 0] }, left: { at: [-0.74, -0.44, 0.22], point: [0, 1, 0], edge: [-1, 0, 0] } };
+
+// A rest another role has too, under its own name
+const renamed = (rest, name) => ({ ...rest, name });
+
+// The smith holding up the work in the tongs to look it over, turning it this way and that
+const LOOKING_OVER = variant("looking over the work", { ...spine({}), Head: { flex: 0, turn: 0 } },
+    [0.5, { left: { at: [0.02, -0.1, 0.6], point: [0, 0.89, 0.45], edge: [0, -0.45, 0.89] }, Head: { flex: 12, turn: 4 } }],
+    [1, { left: { at: [0.04, -0.08, 0.58], point: [0.41, 0.82, 0.41], edge: [-0.09, -0.41, 0.91] }, Head: { flex: 14, turn: 10 } }],
+    [1.4, { left: { at: [0.02, -0.1, 0.6], point: [0, 0.89, 0.45], edge: [-0.71, -0.32, 0.63] }, Head: { flex: 12, turn: 2 } }],
+    [1.75, { ...spine({}), Head: { flex: 2, turn: 0 } }]);
+
+// A serving wench's rests (some of them the smith's and the apprentice's too)
+const BARMAID_RESTS = [
+    variant("wiping her brow", { ...spine({}), Head: { flex: 0 } },
+        // The back of the wrist across the forehead, then a sigh
+        [0.5, { left: { at: [-0.52, 0.42, 0.26], palm: [0, 0.2, 1], towards: [-1, 0.1, 0], elbow: [0.8, 0.3, 0.3], shape: "relaxed" }, Head: { flex: -6 } }],
+        [1, { left: { at: [-0.12, 0.44, 0.24], palm: [0, 0.2, 1], towards: [-1, 0.1, 0], elbow: [0.8, 0.3, 0.3], shape: "relaxed" }, Head: { flex: -8 } }],
+        [1.4, { left: { at: [0.02, -0.2, 0.2] }, ...spine({ flex: 6 }), Head: { flex: 10 } }]),
+    variant("hand on her hip", { ...spine({}), Head: { bend: 0 }, Hips: { obliquity: 0, turn: 0 }, offset: [0, 0, 0] },
+        // A hand on the hip, the hip cocked, the head tilted
+        [0.5, { left: akimbo(-1), Hips: { obliquity: 5, turn: -6 }, ...spine({ bend: -6 }), Head: { bend: 10 }, offset: [0.03, -0.01, 0] }],
+        [1.6, { left: akimbo(-1), Hips: { obliquity: 6, turn: -8 }, ...spine({ bend: -7 }), Head: { bend: 12 }, offset: [0.035, -0.01, 0] }]),
+    variant("tucking back her hair", { ...spine({}), Head: { bend: 0, flex: 0 } },
+        // The hand up to the side of the head, tucking the hair back behind the ear
+        [0.55, { left: { at: [-0.16, 0.36, 0.14], palm: [-0.95, 0.07, 0.29], towards: [-0.21, 0.54, -0.82], shape: "relaxed" }, Head: { bend: 10, flex: 4 } }],
+        [1, { left: { at: [-0.12, 0.34, -0.02], palm: [-0.99, 0.14, 0], towards: [0.04, 0.3, -0.95], shape: "relaxed" }, Head: { bend: 12, flex: 2 } }],
+        [1.4, { left: { at: [0.02, -0.25, 0.1] }, Head: { bend: 4, flex: 0 } }]),
+    variant("a curtsy", { ...spine({}), Head: { flex: 0 }, offset: [0, 0, 0] },
+        // Bobbing down, the head bowed, the skirt held out to the side
+        [1, { left: { at: [0.34, -0.9, 0.2], palm: [-0.5, -0.2, 0.8], towards: [0.3, -0.9, 0.2], shape: "cup" }, ...spine({ flex: 17 }), Head: { flex: 20 }, offset: [0, -0.045, -0.03] }],
+        [1.3, { left: { at: [0.3, -0.88, 0.18], palm: [-0.5, -0.2, 0.8], towards: [0.3, -0.9, 0.2], shape: "cup" }, ...spine({ flex: 14 }), Head: { flex: 16 }, offset: [0, -0.035, -0.02] }]),
+    variant("stretching her back", { ...spine({}), Head: { flex: 0 }, offset: [0, 0, 0] },
+        // The back of a hand pressed to the small of the back, arching back
+        [0.5, { left: { at: [0.05, -0.65, -0.2], palm: [0, 0, -1], towards: [-0.3, -0.95, 0], elbow: [0.7, -0.2, -0.7], shape: "relaxed" }, ...spine({ flex: -6 }), Head: { flex: -6 } }],
+        [1, { left: { at: [0.03, -0.63, -0.22], palm: [0, 0, -1], towards: [-0.3, -0.95, 0], elbow: [0.7, -0.2, -0.7], shape: "relaxed" }, ...spine({ flex: -13 }), Head: { flex: -14 }, offset: [0, 0, 0.03] }],
+        [1.5, { left: { at: [0.05, -0.65, -0.2], palm: [0, 0, -1], towards: [-0.3, -0.95, 0], elbow: [0.7, -0.2, -0.7], shape: "relaxed" }, ...spine({ flex: -8 }), Head: { flex: -6 }, offset: [0, 0, 0.01] }]),
+];
+
+// The player's rests (some of them the smith's and the apprentice's too)
+const ADVENTURER_RESTS = [
+    variant("stretching", { ...spine({}), Head: { flex: 0 } },
+        // Both arms up high, the back arched, then down
+        [0.55, { right: { at: [0.12, 0.7, 0.2], palm: [0.67, 0.07, 0.74], towards: [-0.04, 1, -0.05], shape: "open" }, left: { at: [-0.12, 0.7, 0.2], palm: [-0.67, 0.07, 0.74], towards: [0.04, 1, -0.05], shape: "open" }, ...spine({ flex: -6 }), Head: { flex: -8 } }],
+        [1, { right: { at: [0.1, 0.96, 0.08], palm: [0.5, 0.5, 0.7], towards: [0, 1, -0.3], shape: "open" }, left: { at: [-0.1, 0.96, 0.08], palm: [-0.5, 0.5, 0.7], towards: [0, 1, -0.3], shape: "open" }, ...spine({ flex: -12 }), Head: { flex: -16 } }],
+        [1.35, { right: { at: [0.1, 0.94, 0.06], palm: [0.5, 0.5, 0.7], towards: [0, 1, -0.3], shape: "open" }, left: { at: [-0.1, 0.94, 0.06], palm: [-0.5, 0.5, 0.7], towards: [0, 1, -0.3], shape: "open" }, ...spine({ flex: -13 }), Head: { flex: -16 } }],
+        [1.7, { right: { at: [-0.1, 0.2, 0.2] }, left: { at: [0.1, 0.2, 0.2] }, ...spine({ flex: 0 }), Head: { flex: 0 } }]),
+    variant("looking about", { ...spine({}), Head: { turn: 0, flex: 0 } },
+        // A hand shading the eyes, looking into the distance one way, then the other
+        [0.5, { left: { at: [-0.32, 0.4, 0.34], palm: [0, -1, 0.2], towards: [-0.7, 0, 0.7], elbow: [0.8, 0.2, 0.3], shape: "open" }, Head: { flex: -4 } }],
+        [0.8, { ...spine({ turn: 14 }), Head: { turn: 26, flex: -4 } }],
+        [1.2, { ...spine({ turn: -14 }), Head: { turn: -26, flex: -4 } }],
+        [1.55, { left: { at: [-0.32, 0.4, 0.34], palm: [0, -1, 0.2], towards: [-0.7, 0, 0.7], elbow: [0.8, 0.2, 0.3], shape: "open" }, ...spine({ turn: 0 }), Head: { turn: 0, flex: -2 } }]),
+    variant("rolling the shoulders", { ...spine({}), LeftShoulder: { elevate: 0, protract: 0 }, RightShoulder: { elevate: 0, protract: 0 }, Neck: { bend: 0 } },
+        // The shoulders rolled up and back, and the neck stretched one way and the other
+        [0.4, { LeftShoulder: { elevate: 22, protract: 14 }, RightShoulder: { elevate: 22, protract: 14 } }],
+        [0.7, { LeftShoulder: { elevate: 26, protract: -18 }, RightShoulder: { elevate: 26, protract: -18 } }],
+        [1, { LeftShoulder: { elevate: 0, protract: -10 }, RightShoulder: { elevate: 0, protract: -10 }, Neck: { bend: 20 } }],
+        [1.35, { LeftShoulder: { elevate: 0, protract: 0 }, RightShoulder: { elevate: 0, protract: 0 }, Neck: { bend: -20 } }],
+        [1.65, { Neck: { bend: 0 } }]),
+    variant("a yawn", { ...spine({}), Head: { flex: 0 }, LeftShoulder: { elevate: 0 }, RightShoulder: { elevate: 0 } },
+        // A hand to the mouth, the head back, the shoulders up
+        [0.5, { left: { at: [-0.34, 0.22, 0.32], palm: [0, 0, -1], towards: [-0.5, 0.85, 0], shape: "relaxed" }, Head: { flex: -12 }, LeftShoulder: { elevate: 12 }, RightShoulder: { elevate: 12 } }],
+        [1, { left: { at: [-0.34, 0.24, 0.32], palm: [0, 0, -1], towards: [-0.5, 0.85, 0], shape: "relaxed" }, ...spine({ flex: -8 }), Head: { flex: -20 }, LeftShoulder: { elevate: 18 }, RightShoulder: { elevate: 18 } }],
+        [1.5, { left: { at: [-0.1, -0.3, 0.2] }, ...spine({ flex: 2 }), Head: { flex: 4 }, LeftShoulder: { elevate: 0 }, RightShoulder: { elevate: 0 } }]),
+    variant("shifting the weight", { ...spine({}), Hips: { obliquity: 0 }, offset: [0, 0, 0] },
+        // From one foot to the other, a thumb in the belt
+        [0.5, { left: { at: [-0.26, -0.62, 0.22], palm: [0, -0.2, -0.98], towards: [-0.2, -0.96, 0.19], shape: "relaxed" }, Hips: { obliquity: -6 }, ...spine({ bend: 5 }), offset: [-0.04, -0.01, 0] }],
+        [1, { left: { at: [-0.26, -0.62, 0.22], palm: [0, -0.2, -0.98], towards: [-0.2, -0.96, 0.19], shape: "relaxed" }, Hips: { obliquity: 6 }, ...spine({ bend: -5 }), offset: [0.04, -0.01, 0] }],
+        [1.5, { left: { at: [-0.26, -0.62, 0.22], palm: [0, -0.2, -0.98], towards: [-0.2, -0.96, 0.19], shape: "relaxed" }, Hips: { obliquity: -3 }, ...spine({ bend: 3 }), offset: [-0.02, 0, 0] }]),
+];
 
 /**
  * How each role passes the time (roles.js ROLES: the rests' names and timings, in the same order):
@@ -661,31 +796,7 @@ const BARKEEP_RESTS = [
 export const RESTS = Object.freeze({
     barkeep: BARKEEP_RESTS,
     innkeeper: BARKEEP_RESTS.map((rest, k) => ({ ...rest, name: ["wiping the counter", "a hand to the chin", "leaning on the counter", "arms folded", "rubbing the neck"][k] })),
-    barmaid: [
-        variant("wiping her brow", { ...spine({}), Head: { flex: 0 } },
-            // The back of the wrist across the forehead, then a sigh
-            [0.5, { left: { at: [-0.52, 0.42, 0.26], palm: [0, 0.2, 1], towards: [-1, 0.1, 0], elbow: [0.8, 0.3, 0.3], shape: "relaxed" }, Head: { flex: -6 } }],
-            [1, { left: { at: [-0.12, 0.44, 0.24], palm: [0, 0.2, 1], towards: [-1, 0.1, 0], elbow: [0.8, 0.3, 0.3], shape: "relaxed" }, Head: { flex: -8 } }],
-            [1.4, { left: { at: [0.02, -0.2, 0.2] }, ...spine({ flex: 6 }), Head: { flex: 10 } }]),
-        variant("hand on her hip", { ...spine({}), Head: { bend: 0 }, Hips: { obliquity: 0, turn: 0 }, offset: [0, 0, 0] },
-            // A hand on the hip, the hip cocked, the head tilted
-            [0.5, { left: akimbo(-1), Hips: { obliquity: 5, turn: -6 }, ...spine({ bend: -6 }), Head: { bend: 10 }, offset: [0.03, -0.01, 0] }],
-            [1.6, { left: akimbo(-1), Hips: { obliquity: 6, turn: -8 }, ...spine({ bend: -7 }), Head: { bend: 12 }, offset: [0.035, -0.01, 0] }]),
-        variant("tucking back her hair", { ...spine({}), Head: { bend: 0, flex: 0 } },
-            // The hand up to the side of the head, tucking the hair back behind the ear
-            [0.55, { left: { at: [-0.16, 0.36, 0.14], palm: [-0.95, 0.07, 0.29], towards: [-0.21, 0.54, -0.82], shape: "relaxed" }, Head: { bend: 10, flex: 4 } }],
-            [1, { left: { at: [-0.12, 0.34, -0.02], palm: [-0.99, 0.14, 0], towards: [0.04, 0.3, -0.95], shape: "relaxed" }, Head: { bend: 12, flex: 2 } }],
-            [1.4, { left: { at: [0.02, -0.25, 0.1] }, Head: { bend: 4, flex: 0 } }]),
-        variant("a curtsy", { ...spine({}), Head: { flex: 0 }, offset: [0, 0, 0] },
-            // Bobbing down, the head bowed, the skirt held out to the side
-            [1, { left: { at: [0.34, -0.9, 0.2], palm: [-0.5, -0.2, 0.8], towards: [0.3, -0.9, 0.2], shape: "cup" }, ...spine({ flex: 17 }), Head: { flex: 20 }, offset: [0, -0.045, -0.03] }],
-            [1.3, { left: { at: [0.3, -0.88, 0.18], palm: [-0.5, -0.2, 0.8], towards: [0.3, -0.9, 0.2], shape: "cup" }, ...spine({ flex: 14 }), Head: { flex: 16 }, offset: [0, -0.035, -0.02] }]),
-        variant("stretching her back", { ...spine({}), Head: { flex: 0 }, offset: [0, 0, 0] },
-            // The back of a hand pressed to the small of the back, arching back
-            [0.5, { left: { at: [0.05, -0.65, -0.2], palm: [0, 0, -1], towards: [-0.3, -0.95, 0], elbow: [0.7, -0.2, -0.7], shape: "relaxed" }, ...spine({ flex: -6 }), Head: { flex: -6 } }],
-            [1, { left: { at: [0.03, -0.63, -0.22], palm: [0, 0, -1], towards: [-0.3, -0.95, 0], elbow: [0.7, -0.2, -0.7], shape: "relaxed" }, ...spine({ flex: -13 }), Head: { flex: -14 }, offset: [0, 0, 0.03] }],
-            [1.5, { left: { at: [0.05, -0.65, -0.2], palm: [0, 0, -1], towards: [-0.3, -0.95, 0], elbow: [0.7, -0.2, -0.7], shape: "relaxed" }, ...spine({ flex: -8 }), Head: { flex: -6 }, offset: [0, 0, 0.01] }]),
-    ],
+    barmaid: BARMAID_RESTS,
     patron: [
         variant("a toast", TOASTING, ...ATTACKS.toast.variants[0].keys.slice(1, -1)),
         variant("a long drink", TOASTING,
@@ -791,37 +902,15 @@ export const RESTS = Object.freeze({
             [1.4, { right: flank(1, 0.02, -0.72), left: flank(-1, 0.02, -0.72), ...spine({ flex: 0 }), Head: { flex: 2 }, Hips: { obliquity: -3 } }],
             [1.65, { right: flank(1, 0.02, -0.76), left: flank(-1, 0.02, -0.76), Hips: { obliquity: 0 } }]),
     ],
-    adventurer: [
-        variant("stretching", { ...spine({}), Head: { flex: 0 } },
-            // Both arms up high, the back arched, then down
-            [0.55, { right: { at: [0.12, 0.7, 0.2], palm: [0.67, 0.07, 0.74], towards: [-0.04, 1, -0.05], shape: "open" }, left: { at: [-0.12, 0.7, 0.2], palm: [-0.67, 0.07, 0.74], towards: [0.04, 1, -0.05], shape: "open" }, ...spine({ flex: -6 }), Head: { flex: -8 } }],
-            [1, { right: { at: [0.1, 0.96, 0.08], palm: [0.5, 0.5, 0.7], towards: [0, 1, -0.3], shape: "open" }, left: { at: [-0.1, 0.96, 0.08], palm: [-0.5, 0.5, 0.7], towards: [0, 1, -0.3], shape: "open" }, ...spine({ flex: -12 }), Head: { flex: -16 } }],
-            [1.35, { right: { at: [0.1, 0.94, 0.06], palm: [0.5, 0.5, 0.7], towards: [0, 1, -0.3], shape: "open" }, left: { at: [-0.1, 0.94, 0.06], palm: [-0.5, 0.5, 0.7], towards: [0, 1, -0.3], shape: "open" }, ...spine({ flex: -13 }), Head: { flex: -16 } }],
-            [1.7, { right: { at: [-0.1, 0.2, 0.2] }, left: { at: [0.1, 0.2, 0.2] }, ...spine({ flex: 0 }), Head: { flex: 0 } }]),
-        variant("looking about", { ...spine({}), Head: { turn: 0, flex: 0 } },
-            // A hand shading the eyes, looking into the distance one way, then the other
-            [0.5, { left: { at: [-0.32, 0.4, 0.34], palm: [0, -1, 0.2], towards: [-0.7, 0, 0.7], elbow: [0.8, 0.2, 0.3], shape: "open" }, Head: { flex: -4 } }],
-            [0.8, { ...spine({ turn: 14 }), Head: { turn: 26, flex: -4 } }],
-            [1.2, { ...spine({ turn: -14 }), Head: { turn: -26, flex: -4 } }],
-            [1.55, { left: { at: [-0.32, 0.4, 0.34], palm: [0, -1, 0.2], towards: [-0.7, 0, 0.7], elbow: [0.8, 0.2, 0.3], shape: "open" }, ...spine({ turn: 0 }), Head: { turn: 0, flex: -2 } }]),
-        variant("rolling the shoulders", { ...spine({}), LeftShoulder: { elevate: 0, protract: 0 }, RightShoulder: { elevate: 0, protract: 0 }, Neck: { bend: 0 } },
-            // The shoulders rolled up and back, and the neck stretched one way and the other
-            [0.4, { LeftShoulder: { elevate: 22, protract: 14 }, RightShoulder: { elevate: 22, protract: 14 } }],
-            [0.7, { LeftShoulder: { elevate: 26, protract: -18 }, RightShoulder: { elevate: 26, protract: -18 } }],
-            [1, { LeftShoulder: { elevate: 0, protract: -10 }, RightShoulder: { elevate: 0, protract: -10 }, Neck: { bend: 20 } }],
-            [1.35, { LeftShoulder: { elevate: 0, protract: 0 }, RightShoulder: { elevate: 0, protract: 0 }, Neck: { bend: -20 } }],
-            [1.65, { Neck: { bend: 0 } }]),
-        variant("a yawn", { ...spine({}), Head: { flex: 0 }, LeftShoulder: { elevate: 0 }, RightShoulder: { elevate: 0 } },
-            // A hand to the mouth, the head back, the shoulders up
-            [0.5, { left: { at: [-0.34, 0.22, 0.32], palm: [0, 0, -1], towards: [-0.5, 0.85, 0], shape: "relaxed" }, Head: { flex: -12 }, LeftShoulder: { elevate: 12 }, RightShoulder: { elevate: 12 } }],
-            [1, { left: { at: [-0.34, 0.24, 0.32], palm: [0, 0, -1], towards: [-0.5, 0.85, 0], shape: "relaxed" }, ...spine({ flex: -8 }), Head: { flex: -20 }, LeftShoulder: { elevate: 18 }, RightShoulder: { elevate: 18 } }],
-            [1.5, { left: { at: [-0.1, -0.3, 0.2] }, ...spine({ flex: 2 }), Head: { flex: 4 }, LeftShoulder: { elevate: 0 }, RightShoulder: { elevate: 0 } }]),
-        variant("shifting the weight", { ...spine({}), Hips: { obliquity: 0 }, offset: [0, 0, 0] },
-            // From one foot to the other, a thumb in the belt
-            [0.5, { left: { at: [-0.26, -0.62, 0.22], palm: [0, -0.2, -0.98], towards: [-0.2, -0.96, 0.19], shape: "relaxed" }, Hips: { obliquity: -6 }, ...spine({ bend: 5 }), offset: [-0.04, -0.01, 0] }],
-            [1, { left: { at: [-0.26, -0.62, 0.22], palm: [0, -0.2, -0.98], towards: [-0.2, -0.96, 0.19], shape: "relaxed" }, Hips: { obliquity: 6 }, ...spine({ bend: -5 }), offset: [0.04, -0.01, 0] }],
-            [1.5, { left: { at: [-0.26, -0.62, 0.22], palm: [0, -0.2, -0.98], towards: [-0.2, -0.96, 0.19], shape: "relaxed" }, Hips: { obliquity: -3 }, ...spine({ bend: 3 }), offset: [-0.02, 0, 0] }]),
+    adventurer: ADVENTURER_RESTS,
+    smith: [
+        renamed(BARMAID_RESTS[0], "wiping the brow"),
+        LOOKING_OVER,
+        ADVENTURER_RESTS[2],
+        renamed(BARMAID_RESTS[4], "stretching the back"),
+        ADVENTURER_RESTS[4],
     ],
+    apprentice: [renamed(BARMAID_RESTS[0], "wiping the brow"), ADVENTURER_RESTS[1], ADVENTURER_RESTS[2], ADVENTURER_RESTS[3], ADVENTURER_RESTS[0]],
 });
 
 // --- Reactions to being hit ---

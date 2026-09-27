@@ -54,6 +54,7 @@ const HOLDS = {
     book: { Arm: { flex: 22, abduct: 10, rotate: 10 }, ForeArm: { flex: 88, pronate: -80 }, Hand: { flex: -8, deviate: 0 }, swing: 0.12 },
     fist: { Arm: { flex: 4, abduct: 10 }, ForeArm: { flex: 38, pronate: 20 }, Hand: { flex: 0 }, swing: 0.7, curl: [92, 94, 96, 98], thumb: [{ flex: 60, oppose: -5 }, { flex: 45 }, { flex: 35 }] },
     tankard: { Arm: { flex: 12, abduct: 8, rotate: 5 }, ForeArm: { flex: 88, pronate: -5 }, Hand: { flex: 0, deviate: 12 }, swing: 0.15 },
+    tongs: { Arm: { flex: 10, abduct: 8, rotate: 5 }, ForeArm: { flex: 60, pronate: 10 }, Hand: { flex: 0, deviate: 5 }, swing: 0.2 },
 };
 
 /**
@@ -125,6 +126,10 @@ export const ITEMS = Object.freeze({
     musket: { label: "Musket (slung)", slot: "back", model: "musket", socket: "back", turn: [0, 0, 2.5], offset: [0, 0, -0.03] },
     tusks: { label: "Tusks", slot: "face", model: "tusks", socket: "mouth" },
     tankard: { label: "Tankard of ale", slot: "mainHand", model: "tankard", socket: "rightHand", grips: true, hold: HOLDS.tankard },
+    // A smith's tools: the hammer in the right hand, the tongs in the left
+    smithHammer: { label: "Smith's hammer", slot: "mainHand", model: "smithHammer", socket: "rightHand", grips: true, hold: HOLDS.hammer },
+    // (The tongs' reins across the palm from its heel, so their jaws point along the forearm)
+    tongs: { label: "Tongs", slot: "offHand", model: "tongs", socket: "leftHand", turn: [1.1, 0, 0], grips: true, hold: HOLDS.tongs },
 });
 
 /** Every piece of equipment by id: { kind: "garment" | "drape" | "item", slot, label, ... }. */

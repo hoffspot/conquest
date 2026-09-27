@@ -15,7 +15,7 @@ const { folkLook } = await import("../client/js/characters/folk.js");
 const { EQUIPMENT } = await import("../client/js/characters/equipment.js");
 const { Battle, STEP_MS } = await import("../client/js/core/battle.js");
 const { upstairsIs } = await import("../client/js/core/dialogue.js");
-const { ENTERABLE, ENTRANCES, entranceOf, FINISHES, LAYOUTS, openEntrances, taproomPlan, tavernFolkOf, tavernRooms } = await import("../client/js/core/insides.js");
+const { ENTERABLE, ENTRANCES, entranceOf, FINISHES, LAYOUTS, openEntrances, smithyFolkOf, smithyRooms, taproomPlan, tavernFolkOf, tavernRooms } = await import("../client/js/core/insides.js");
 const { squaresOf } = await import("../client/js/core/grid.js");
 const { readPlan } = await import("../client/js/core/interiors.js");
 const { CHUNK, buildWorld } = await import("../client/js/core/overworld.js");
@@ -166,6 +166,38 @@ describe("a tavern's floors and folk (insides.js)", () => {
     });
 });
 
+describe("a smithy's workshop and folk (insides.js)", () => {
+    it("has its forge, bellows, anvil, trough and grindstone, all got to from the door, and the smith and apprentice at them", () => {
+        for (let seed = 1; seed < 8; seed++) {
+            const building = { key: `test:smithy:${seed}`, name: "the smithy", seed };
+            const [floor] = smithyRooms(building);
+            const forge = readPlan("forge", floor.name, floor.rows);
+            const door = forge.marks.D[0];
+
+            assert.equal(floor.style, "smithy");
+
+            for (const kind of ["forge", "bellows", "anvil", "trough", "grindstone", "rack", "workbench", "coal"]) {
+                assert.ok(forge.pieces.some((piece) => piece.kind === kind), kind);
+            }
+
+            const folk = smithyFolkOf(building, forge);
+
+            assert.deepEqual(folk.map(({ role }) => role), ["smith", "apprentice"]);
+
+            for (const one of folk) {
+                assert.ok(ROLES[one.role]);
+
+                for (const { square, act } of one.routine.stops) {
+                    assert.ok(!forge.blocked[square[1]][square[0]] && reachable(forge, door, square), `${one.local} at ${square} (${act})`);
+                }
+            }
+
+            assert.deepEqual(folk[0].routine.stops.map(({ act }) => act), ["heat", "forge", "quench", "forge"]);
+            assert.deepEqual(folk[1].routine.stops.map(({ act }) => act), ["pump", "crank"]);
+        }
+    });
+});
+
 describe("the buildings (insides.js Interiors)", () => {
     let world;
     let interiors;
@@ -203,17 +235,17 @@ describe("the buildings (insides.js Interiors)", () => {
         assert.equal(home.folk, world.folk);
     });
 
-    it("puts every settlement's taverns' doors among the world's links as it's laid out, their insides still to make", () => {
-        const taverns = settlement.town.pieces.filter((piece) => piece.kind === "landmark" && ENTERABLE.includes(piece.name));
+    it("puts every settlement's taverns' and smithies' doors among the world's links as it's laid out, their insides still to make", () => {
+        const entered = settlement.town.pieces.filter((piece) => piece.kind === "landmark" && ENTERABLE.includes(piece.name));
 
-        assert.ok(taverns.length >= 1);
+        assert.deepEqual(new Set(entered.map(({ name }) => name)), new Set(["tavern", "blacksmith"]));
 
-        for (const piece of taverns) {
+        for (const piece of entered) {
             const building = interiors.buildings.get(`${settlement.place.id}:${piece.id}`);
             const [outside, inside] = building.door.ends;
 
             assert.ok(world.links.includes(building.door));
-            assert.equal(building.name, piece.tavern.name);
+            assert.equal(building.name, piece.tavern?.name ?? "the smithy");
             assert.equal(outside.map, "town");
             assert.ok(outside.door && outside.squares.length === 2);
             assert.ok(inside.pending);
@@ -229,7 +261,7 @@ describe("the buildings (insides.js Interiors)", () => {
     });
 
     it("makes a building's floors and folk the first time they're wanted, once, each building somewhere of its own", () => {
-        const building = [...interiors.buildings.values()].find(({ place, made }) => place === settlement.place.id && !made);
+        const building = [...interiors.buildings.values()].find(({ place, made, kind }) => place === settlement.place.id && !made && kind === "tavern");
         const links = world.links.length;
 
         assert.equal(interiors.ensure(`${building.key}/taproom`), true);
@@ -266,6 +298,23 @@ describe("the buildings (insides.js Interiors)", () => {
         assert.equal(new Set(origins).size, origins.length);
     });
 
+    it("names a smithy for its smith once it's made, and puts its folk to work", () => {
+        const smithy = [...interiors.buildings.values()].find(({ kind }) => kind === "blacksmith");
+
+        interiors.make(smithy.key);
+
+        const [forge] = smithy.maps.map((id) => world.maps[id]);
+        const smith = smithy.folk.find(({ local }) => local === "smith");
+
+        assert.equal(forge.id, `${smithy.key}/forge`);
+        assert.equal(forge.style, "smithy");
+        assert.equal(smithy.name, `${smith.name.split(" ")[1]}'s Forge`);
+        assert.equal(forge.name, smithy.name);
+        assert.deepEqual(smithy.door.ends[1].squares, forge.marks.D);
+        assert.ok(folkLook(smith).equipment.includes("smithHammer") && folkLook(smith).equipment.includes("tongs"));
+        assert.ok(folkLook(smithy.folk.find(({ local }) => local === "apprentice")).equipment.includes("leatherApron"));
+    });
+
     it("is gone into in the battle: a pending door made as someone goes through it", () => {
         const building = [...interiors.buildings.values()].find(({ made }) => !made);
         const [outside] = building.door.ends;
@@ -281,9 +330,9 @@ describe("the buildings (insides.js Interiors)", () => {
         }
 
         assert.ok(crossed, "went in");
-        assert.equal(crossed.to, `${building.key}/taproom`);
+        assert.equal(crossed.to, building.door.ends[1].map);
         assert.ok(building.made);
-        assert.equal(battle.actor("player").map, `${building.key}/taproom`);
+        assert.equal(battle.actor("player").map, building.door.ends[1].map);
     });
 
     it("is drawn by its floors' style, and its doors picked up as they come", () => {
@@ -312,7 +361,7 @@ describe("the buildings (insides.js Interiors)", () => {
 
 describe("folk made up as they're wanted (characters/folk.js)", () => {
     it("look as their part and sex have them, the same for the same seed, and each their own", () => {
-        const parts = [["barkeep", "barkeep", "m"], ["barmaid", "wench", "f"], ["patron", "drinker", "m"], ["patron", "alewife", "f"], ["patron", "greybeard", "m"], ["innkeeper", "innkeeper", "f"], ["madam", "madam", "f"], ["courtesan", "courtesan", "f"]];
+        const parts = [["barkeep", "barkeep", "m"], ["barmaid", "wench", "f"], ["patron", "drinker", "m"], ["patron", "alewife", "f"], ["patron", "greybeard", "m"], ["innkeeper", "innkeeper", "f"], ["madam", "madam", "f"], ["courtesan", "courtesan", "f"], ["smith", "smith", "m"], ["smith", "smith", "f"], ["apprentice", "apprentice", "m"]];
 
         for (const [role, local, sex] of parts) {
             const looks = new Set();

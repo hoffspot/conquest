@@ -10,7 +10,8 @@
 //  - The bow: a plucked string (Karplus-Strong); spells: rising chimes and a whoosh.
 //  - Spells: a rising shimmer casting a heal, a warm swell as it lands; a dizzy warble for a stun.
 //  - Footsteps on stone, dirt, grass and wooden boards; a body falling; a door opening and
-//    banging shut behind someone; in the tavern, tankards clinking and ale being drawn.
+//    banging shut behind someone; in the tavern, tankards clinking and ale being drawn; in the
+//    smithy, the anvil ringing, the bellows, steam hissing off the trough, the grindstone.
 //  - Cues: a target chosen, an enemy slain, falling, waking again, out of breath; the action
 //    wheel opening, and a slice that can't be used.
 //  - Around the town (the environment): a bird's chirp, leaves rustling, the wind (a loop); and
@@ -347,6 +348,40 @@ export const SOUNDS = {
             }
 
             return shape(flow.map((value, n) => value * (0.55 + (0.45 * Math.abs(gurgle[n])) / most)), swell(length, 0.15));
+        },
+    },
+
+    // The smithy: a hammer on hot iron on the anvil (a bright ring over a dull knock); the work
+    // quenched in the trough (a hiss of steam, dying away); the bellows' breath; the grindstone
+    // cranked round (a rasp, rising and falling as it turns)
+    anvil: {
+        variants: 3,
+        volume: 0.45,
+        make: (random) => {
+            const pitch = 0.94 + random.next() * 0.12;
+
+            return add(ring([[1120 * pitch, 0.55, 0.16], [2750 * pitch, 0.4, 0.09], [4230 * pitch, 0.22, 0.05], [6100 * pitch, 0.1, 0.03]], 0.7), burst(random, 0.06, "lowpass", 700, 0.8, 0.0005, 0.02), 0.8);
+        },
+    },
+    hiss: {
+        variants: 2,
+        volume: 0.35,
+        make: (random) => {
+            const length = 1.4;
+
+            return shape(filter(noise(random, length), "highpass", (t) => 2600 + 1800 * (t / length), 0.7), hit(0.02, 0.45));
+        },
+    },
+    bellows: { variants: 2, volume: 0.3, make: (random) => whoosh(random, { length: 0.7, from: 180, top: 520, to: 220, peak: 0.35, q: 0.8, body: 0.6 }) },
+    grind: {
+        variants: 2,
+        volume: 0.28,
+        make: (random) => {
+            const length = 1.4;
+            const rasp = filter(noise(random, length), "bandpass", (t) => 3200 + 900 * Math.sin((t / length) * Math.PI * 3), 2.5);
+            const rate = rasp.length / length;
+
+            return shape(rasp.map((value, n) => value * (0.6 + 0.4 * Math.sin((n / rate) * TAU * 3))), swell(length, 0.5));
         },
     },
 

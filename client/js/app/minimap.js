@@ -46,6 +46,14 @@ const INSIDE = {
     chest: [96, 66, 38],
     chaise: [118, 40, 74],
     "side-table": [78, 44, 30],
+    forge: [92, 80, 74],
+    bellows: [96, 64, 40],
+    anvil: [60, 60, 66],
+    trough: [74, 96, 110],
+    grindstone: [128, 124, 116],
+    rack: [84, 60, 38],
+    workbench: [112, 76, 42],
+    coal: [34, 30, 28],
 };
 
 // Pixels to the metre of the painted map
@@ -491,7 +499,7 @@ function paintInterior(map) {
                 context.lineWidth = 0.1;
                 context.stroke();
             }
-        } else if (kind === "hearth") {
+        } else if (kind === "hearth" || kind === "forge") {
             context.beginPath();
             context.arc(x + w * 0.62, y + h / 2, 0.55, 0, 2 * Math.PI);
             context.fillStyle = "rgba(255, 128, 40, 0.9)";

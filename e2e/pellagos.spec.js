@@ -1031,7 +1031,7 @@ test("every tavern can be gone into: got ready as the player comes near, its own
         game.stop();
         Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
 
-        const building = [...game.world.interiors.buildings.values()].find((each) => each.entrance);
+        const building = [...game.world.interiors.buildings.values()].find((each) => each.entrance && each.kind === "tavern");
         const before = game.visits.has(building.key);
 
         // (Looked over at the next frame)
@@ -1108,6 +1108,59 @@ test("every tavern can be gone into: got ready as the player comes near, its own
 
     expect(again).toEqual({ map: `${near.key}/taproom`, shown: `${near.key}/taproom`, visible: true, folk: expect.any(Number) });
     expect(again.folk).toBeGreaterThanOrEqual(5);
+});
+
+test("the smithy: the smith heats, hammers and quenches the work, the apprentice pumps the bellows and turns the grindstone, each heard and seen at it", async ({ page }) => {
+    // (Seed 2's town's smithy, a few steps from the start)
+    await playing(page, "/?play&seed=2");
+
+    const smithy = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const building = [...game.world.interiors.buildings.values()].find((each) => each.kind === "blacksmith");
+        const player = game.battle.actor("player");
+        const heard = [];
+        const acts = [];
+        const play = session.sound.play.bind(session.sound);
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        session.sound.play = (name, options) => {
+            heard.push(name);
+
+            return play(name, options);
+        };
+
+        // Straight through its door (built there and then)
+        const [x, y] = building.door.ends[0].squares[0];
+
+        Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [] });
+        game.battle.command("player", { type: "enter", link: building.door.id });
+        game.advance(0.3);
+
+        // A while at work (what each of them does, as the battle says)
+        for (let k = 0; k < 90; k++) {
+            game.advance(0.5);
+
+            for (const id of [`${building.key}/smith`, `${building.key}/apprentice`]) {
+                const name = game.avatars.get(id).actions.attack?.name;
+
+                if (name && !acts.includes(`${id.split("/")[1]}:${name}`)) {
+                    acts.push(`${id.split("/")[1]}:${name}`);
+                }
+            }
+        }
+
+        const smith = game.world.interiors.buildings.get(building.key).folk.find(({ local }) => local === "smith");
+
+        return { map: player.map, name: building.name, smith: smith.name, holding: [...game.avatars.get(smith.id).character.equipment.values()], acts, heard: [...new Set(heard)], place: session.sound.place };
+    });
+
+    expect(smithy.map).toMatch(/blacksmith-\d+\/forge$/);
+    expect(smithy.name).toBe(`${smithy.smith.split(" ")[1]}'s Forge`);
+    expect(smithy.holding).toEqual(expect.arrayContaining(["smithHammer", "tongs", "leatherApron"]));
+    expect(smithy.acts).toEqual(expect.arrayContaining(["smith:heat", "smith:forge", "smith:quench", "apprentice:pump", "apprentice:crank"]));
+    expect(smithy.heard).toEqual(expect.arrayContaining(["anvil", "hiss", "bellows", "grind"]));
+    expect(smithy.place).toBe("smithy");
 });
 
 test("tapping someone walks the player up to talk: their name and what they are, what they say, replies that lead on, Escape to stop", async ({ page }) => {

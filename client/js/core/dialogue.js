@@ -317,6 +317,54 @@ export const TREES = Object.freeze({
             },
         },
     },
+    // The smith: gruff, proud of the work, fond of the apprentice underneath it
+    smith: {
+        start: "greet",
+        nodes: {
+            greet: {
+                say: [
+                    { if: { met: false }, lines: ["Mind the sparks. {name}; I'm the smith. What d'you need?", "Hah! Stand back from the forge, friend. {name}'s the name. Blades, shoes, hinges: if it's iron, I'll make it."] },
+                    { lines: ["{player}. Blade holding up?", "Back again, {player}? Let's see what you've done to that edge."] },
+                ],
+                choices: "more",
+            },
+            more: {
+                say: ["What else?", "Speak up, the fire's loud.", "Anything more?"],
+                choices: [
+                    { say: "Could you put an edge on my blade? (3 coppers)", next: "sharpen", do: [{ buy: "sharpening", price: 3 }] },
+                    { say: "What are you working on?", next: "work" },
+                    { if: { notFlag: "askedApprentice" }, say: "Who's that at the bellows?", next: "apprentice", do: [{ remember: "askedApprentice" }] },
+                    FAREWELL,
+                ],
+            },
+            sharpen: { say: ["There. You could shave a cat with that. Don't.", "Good steel, that. Treat it better and it'll outlive you."], choices: "more" },
+            work: {
+                say: ["Ploughshares for the farms up the road. Not glorious, but folk have to eat.", "A gate for the temple. Dunmar's own work, if I say so myself, and I do.", "Horseshoes. Always horseshoes. The drovers go through them like bread."],
+                choices: [{ say: "Honest work.", next: "more" }, FAREWELL],
+            },
+            apprentice: { say: "That's {apprentice}. Two years with me and still pumps like they're milking a goat. Good heart, though. Don't tell them I said so.", choices: "more" },
+        },
+    },
+    // The smith's apprentice: eager, a little overawed, full of plans
+    apprentice: {
+        start: "greet",
+        nodes: {
+            greet: {
+                say: [
+                    { if: { met: false }, lines: ["Oh! Hello. I'm {name}. I'm the apprentice. Well, one day I'll be the smith, but for now I'm the apprentice.", "Can't stop, sorry, the fire drops if I do. I'm {name}."] },
+                    { lines: ["Hello again! I'm still pumping.", "Ask {smith}, not me. I only know about bellows."] },
+                ],
+                choices: [
+                    { say: "How long have you been at it?", next: "long" },
+                    { say: "Carry on.", next: null },
+                ],
+            },
+            long: {
+                say: "Two years. Two more and I swear my oath to Dunmar, and then I'm a journeyman, and then I go to the city and make swords for knights. That's the plan.",
+                choices: [{ say: "Good luck with it.", next: null }],
+            },
+        },
+    },
     // A courtesan: warm, teasing, and never quite saying it. What she offers (her company, a
     // dance, what she hears from her callers, a favour to be done) is handed to the game to do
     courtesan: {

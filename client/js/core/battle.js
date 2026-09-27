@@ -151,8 +151,8 @@ export class Battle {
         this.links = world.links ?? [];
         this.random = createRandom(seed);
 
-        // The folk's comings and goings (apart, so they don't change how the fighting goes)
-        this.chance = createRandom(seed + 7919);
+        // (The folk's comings and goings are each their own: actor.chance)
+        this.seed = seed;
         this.time = 0;
         this.actors = [];
         this.projectiles = [];
@@ -172,6 +172,7 @@ export class Battle {
      */
     add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, facing = 0, armed = false }) {
         const type = KINDS[kind];
+        const chance = createRandom(this.seed + 7919 + [...id].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, 0));
         const actor = {
             id,
             kind,
@@ -224,7 +225,10 @@ export class Battle {
             // Resting (the folk): when it may next, until when it's at it, and which it did last
             restAt: 0,
             restingUntil: 0,
-            restVariety: new Variety(() => this.chance.next()),
+            restVariety: new Variety(() => chance.next()),
+            // Its own chances for its comings and goings (apart from the fighting's, and from
+            // everyone else's, so folk elsewhere, made or let go, change nothing here)
+            chance,
             // Beckoning (a role that beckons): whether it's beckoned the player since they came
             // into sight, when it last saw them, and until when it's beckoning
             beckoned: false,
@@ -706,7 +710,7 @@ export class Battle {
      */
     #routine(actor) {
         const routine = actor.routine;
-        const between = ([least, most]) => least + this.chance.next() * (most - least);
+        const between = ([least, most]) => least + actor.chance.next() * (most - least);
 
         actor.walkPace = actor.speed;
 
@@ -793,7 +797,7 @@ export class Battle {
                 actor.beckoned = true;
                 actor.facing = Math.atan2(player.x - actor.x, player.y - actor.y);
                 actor.restingUntil = actor.beckoningUntil = this.time + BECKON.duration * 1000;
-                actor.restAt = actor.restingUntil + REST_EVERY[0] + this.chance.next() * (REST_EVERY[1] - REST_EVERY[0]);
+                actor.restAt = actor.restingUntil + REST_EVERY[0] + actor.chance.next() * (REST_EVERY[1] - REST_EVERY[0]);
                 this.#emit("act", { id: actor.id, act: "beckon", target: player.id });
             }
         }
@@ -814,7 +818,7 @@ export class Battle {
         }
 
         if (!this.actors.some((other) => other.kind === "player" && !other.dead && this.canSee(other, actor))) {
-            actor.restAt = this.time + REST_WHEN_SEEN_MS[0] + this.chance.next() * (REST_WHEN_SEEN_MS[1] - REST_WHEN_SEEN_MS[0]);
+            actor.restAt = this.time + REST_WHEN_SEEN_MS[0] + actor.chance.next() * (REST_WHEN_SEEN_MS[1] - REST_WHEN_SEEN_MS[0]);
 
             return false;
         }
@@ -822,7 +826,7 @@ export class Battle {
         const rest = actor.restVariety.next("rest", rests.length);
 
         actor.restingUntil = this.time + rests[rest].duration * 1000;
-        actor.restAt = actor.restingUntil + REST_EVERY[0] + this.chance.next() * (REST_EVERY[1] - REST_EVERY[0]);
+        actor.restAt = actor.restingUntil + REST_EVERY[0] + actor.chance.next() * (REST_EVERY[1] - REST_EVERY[0]);
         this.#emit("rest", { id: actor.id, role: actor.role, rest });
 
         return true;
@@ -835,7 +839,7 @@ export class Battle {
         if (order === "alternate") {
             const others = stops.map((stop, k) => k).filter((k) => stops[k].group !== stops[actor.stop].group);
 
-            return others[Math.floor(this.chance.next() * others.length)] ?? actor.stop;
+            return others[Math.floor(actor.chance.next() * others.length)] ?? actor.stop;
         }
 
         return (actor.stop + 1) % stops.length;

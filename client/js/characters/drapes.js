@@ -24,6 +24,7 @@ export const DRAPES = Object.freeze({
     kirtle: { label: "Red kirtle", slot: "legs", length: 1, flare: 0.55, pleats: 16, colour: "#7a2a22", roughness: 0.88 },
     gown: { label: "Velvet gown", slot: "legs", length: 1.04, flare: 0.75, pleats: 20, colour: "#3b1437", roughness: 0.6, sheen: true },
     apron: { label: "Apron", slot: "apron", length: 0.62, flare: 0.08, pleats: 5, arc: 0.4, over: 0.035, colour: "#d9d0bc", roughness: 0.95 },
+    leatherApron: { label: "Leather apron", slot: "apron", length: 0.78, flare: 0.06, pleats: 3, arc: 0.45, over: 0.04, colour: "#4f3220", roughness: 0.7 },
 });
 
 // Round the body in this many steps; down it in this many rings below the hips

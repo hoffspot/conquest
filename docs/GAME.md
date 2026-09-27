@@ -187,7 +187,7 @@ player is a step, not straight back through.
 ### Every building's inside (core/insides.js)
 
 Wenches and Ale's floors are made with the town, as above. Every other building that can be gone
-into (`ENTERABLE`: taverns so far; temples, smithies and guilds to come), in the start town and in
+into (`ENTERABLE`: taverns and smithies so far; temples and guilds to come), in the start town and in
 every settlement as it's laid out, is known to the world's `interiors` (`Interiors`, by key:
 `${place}:${piece id}`, such as `home:tavern-2`), and its front door is one of the world's links
 from the start (`${key}/door`), its inside end still to make (`pending`). Its floors and folk are
@@ -215,6 +215,27 @@ are kept.
   patrons on the benches (the drinker, the alewife, the farmer, the greybeard, a tinker, a
   drover), and upstairs whoever keeps it, and the courtesans. They're named from the building's
   seed, each with an id of their own (`${key}/barkeep`) and a seed for their looks.
+- **A smithy** (`smithyRooms`) is a workshop 16 by 12 metres, and is known by its smith once
+  they're named ("Oakes's Forge"):
+
+  ```
+  RRRRR..FFFF..OOO   F  forge (hearth and hood)   P  bellows      A  anvil
+  .......FFFF..OOO   Q  quenching trough          G  grindstone   R  racks
+  ......PFFFF.....   X  workbench                 O  charcoal
+  ................
+  .QQ.............
+  .QQ.....A.......
+  ................
+  ...........G....
+  X...............
+  X..............R
+  X..............R
+  X......DD......R
+  ```
+
+  Its folk (`smithyFolkOf`): the smith, going from the forge (heating the work: `heat`) to the
+  anvil (hammering it: `forge`), to the trough (quenching it: `quench`) and back to the anvil;
+  and the apprentice, at the bellows (`pump`) and the grindstone (`crank`).
 
 ## The battle (core/battle.js)
 
@@ -536,9 +557,13 @@ be tapped to fight (a tap walks up to them to talk), and show on the minimap as 
 those on the player's map are drawn and animated; coming onto a map, everyone on it is put where
 they are. Their acts and rests play their animations, and a sound: tankards clinking (at the top
 of a toast, and softly as one's set down), ale pouring from a tap, a tankard thumped on a table.
+In a smithy, each of the smith's three blows rings on the anvil and throws sparks off it; the
+work hisses in the trough, steam rising; the bellows breathe and the forge's fire flares with
+them (`view.flare`); and the grindstone rasps and turns while it's cranked (`interior.drive`).
 
 **Classes and resting** (core/roles.js). Everyone has a class (a role): the barkeep, a serving
-wench, a patron, an innkeeper, the madam, a courtesan, and the player's adventurer. A class has a title and five resting
+wench, a patron, an innkeeper, the madam, a courtesan, the blacksmith and the apprentice, and the
+player's adventurer. A class has a title and five resting
 animations, shared by everyone of it (their poses: actions.js `RESTS`, see
 [CHARACTERS.md](CHARACTERS.md#resting)):
 
@@ -550,6 +575,8 @@ animations, shared by everyone of it (their poses: actions.js `RESTS`, see
 | Patron (seated) | a toast, a long drink, a belly laugh, thumping the table, looking about |
 | Madam | fanning herself, hands on her hips, touching her necklace, drumming her fingers, smoothing her gown |
 | Courtesan | twirling her hair, a slow stretch, a hand on her hip, blowing a kiss, smoothing down her sides |
+| Blacksmith | wiping the brow, looking over the work, rolling the shoulders, stretching the back, shifting the weight |
+| Apprentice | wiping the brow, looking about, rolling the shoulders, a yawn, stretching |
 | Adventurer (the player) | stretching, looking about, rolling the shoulders, a yawn, shifting the weight |
 
 The folk rest when the battle says (every 4 to 9 seconds while the player can see them).
@@ -630,6 +657,14 @@ lit by red-shaded sconces; at an inn, whitewashed walls, beds hung in green, blu
 and linen, and plain glass in the sconces. Each floor is built by its style (`map.style`), each
 taproom with its own walls (`map.finish`). Everything that doesn't move is merged by material (about 100 draw
 calls in all with the characters); the spit and the flames apart.
+
+A smithy has bare stone walls and beaten earth dark with soot; the forge, waist-high stone with a
+bed of glowing coals, two flames and a hood narrowing to the chimney, tongs and pokers hanging
+from its beam, and its fire the room's light; the bellows beside it, their nozzle into the
+forge; the anvil on its stump, a glowing bar on it; the quenching trough, open, iron-banded; a
+grindstone in its frame; racks of tools along the north wall, and of swords and a shield along
+the east; the workbench with its vice and files; and the charcoal heaped in a corner, sacks by
+it. In the smithy the town's music is heard as if through its walls, under the forge's crackle.
 
 The flames are crossed quads with a shader of rising noise, drawn additively and flickering,
 and embers rise from the hearth. The room is open above, and what stands in front of the player
@@ -1211,8 +1246,10 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
 - `test/insides.test.js`: every building's door where the art builds it, whichever way it faces,
   and the way up to it cleared; taprooms set out every way, everything reachable from the door;
   upstairs as the tavern's name has it, or none; the folk worked out from the plan (on the floor,
-  seated on benches, their rounds reachable, who keeps upstairs and how many courtesans); the
-  settlements' taverns' doors among the world's links as they're laid out, their floors and folk
+  seated on benches, their rounds reachable, who keeps upstairs and how many courtesans); a
+  smithy's forge, bellows, anvil, trough and grindstone all got to from its door, the smith and
+  apprentice at them, and the smithy named for its smith; the settlements' taverns' and
+  smithies' doors among the world's links as they're laid out, their floors and folk
   made once when wanted, each building somewhere of its own; going in through a door not made yet
   in the battle; each floor built by its style and the doors picked up; folk made up as they're
   wanted, as their part and sex have them, each their own; what's upstairs in talk; and the
@@ -1321,6 +1358,9 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   them, not taking them back through), the folk there (seen, without name plates, resting, not to be
   fought), tapping the barkeep to walk up and talk (his name and title, what he says, replies
   by tap and by number key, Escape to stop), up the stairs (the madam), down and out again,
+  another tavern got ready as the player comes near (its own taproom, sound, minimap and folk
+  inside), let go far off and built at once if walked straight into, a smithy's smith heating,
+  hammering and quenching and its apprentice at the bellows and grindstone (each heard),
   walking by the
   minimap, walking 300 metres out of the town into the world (the chunks round the player drawn,
   those left behind thrown away, the minimap following), Game options and the volume sliders
