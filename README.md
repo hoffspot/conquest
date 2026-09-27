@@ -84,9 +84,12 @@ you tap an enemy to fight it:
 It takes a moment before you can strike. Ten seconds after the fight, once no enemy is in sight
 or after you, you put it away again. The orc does the same, on its patrol.
 
-**The camera** keeps still while you move a couple of steps either way. Go further, the way the
-map would have to scroll, and it follows you, turning round smoothly to look from behind you the
-way you're going (at the same height and zoom), until you stop.
+**The camera** follows you from your first step, swinging round smoothly (over about a second)
+to look from behind you the way you're going. **Drag** (a finger, or the mouse held down) to turn
+it round you, and up or down to tilt it; it stays where you leave it while you stand, and once
+you walk again it swings back round behind you, facing the way you go. Pinch or scroll to zoom.
+In the town, when a building would stand between you and the camera, it comes in closer than
+the building, or rises over it.
 
 **Blows leave their mark.** Every blow that lands leaves a mark of its weapon's kind where it
 hits, on the body and through the clothes: a sword's cut, a cleaver's gash, an arrow left
@@ -109,17 +112,20 @@ with full health; the orc comes back to its corner half a minute after it falls.
 **The tavern.** Facing the market square (or, where it can't, a street) stands *Wenches and Ale*,
 its name in gold blackletter on a red board along its front and, hanging from an iron bracket by
 the door, a painted sign of a barmaid raising two foaming tankards. **Tap its door**: a green
-glow traces round it, and you walk up to it and go in, coming out just inside the door, facing
-into the taproom. Inside are long tables with benches, candles and tankards; the bar, with
+glow traces round it, and you walk up to it and go in, coming out a couple of steps inside,
+turned back to face the door (so it's in view to tap, and tapping the floor round you walks you
+there rather than straight back out; the same at the stairs, and outside). The rooms are bigger
+inside than the tavern looks from the street, with room to walk about: two metres and more
+between the tables. Inside are long tables with benches, candles and tankards; the bar, with
 barrels on a rack behind it, each with a brass tap; a great stone hearth, its fire flickering
 and throwing embers, with a wild boar turning on a spit over the flames; and stairs up the north
 wall. **Tap the stairs** to go up to the floor above, a brothel: the madam's velvet-topped
-counter, a chaise longue by a side table with wine and candles, and a hallway to four bedrooms,
-each with a canopied bed, a washstand and a chest. Tap the stairwell there to come down, and the
+counter, a chaise longue by a side table with wine and candles, and a wide hallway to four
+bedrooms through curtained doorways, each with a canopied bed, a washstand and a chest. Tap the stairwell there to come down, and the
 inside of the door to go out again. Each floor is a map of its own: going through, the screen
-dips to black and comes up on the other side. Indoors, the walls and everything else higher than
-your waist between you and the camera are cut away, like a doll's house's, so you can always see
-yourself. If the orc is chasing you when you go in, it follows you through the door and up the
+dips to black and comes up on the other side. Indoors, the walls between you and the camera are
+taken down to their stone footing (and anything else higher than your head), like a doll's
+house's, so you can always see yourself, whichever way the camera looks. If the orc is chasing you when you go in, it follows you through the door and up the
 stairs, and the fight carries on; and if you're set to fight something that goes through a door,
 you go after it.
 
@@ -294,7 +300,7 @@ client/                 The game (static files served to the browser)
     session.js          The 3D view and the character kit, and starting games
     creator.js          Making a character; heroes.js has random ones and names
     game.js             Playing: the world, the battle, the characters, taps and the camera
-    camera.js           How the camera follows the player: still in the middle, then from behind
+    camera.js           How the camera follows the player from behind, and turns and tilts by drag
     doors.js            The doors and stairs to tap, and the green glow round them
     hud.js              Health, stamina, names, damage numbers and messages over the game
     wheel.js            The action wheel: hold, flick, cooldowns; icons.js draws its icons
@@ -322,11 +328,12 @@ client/                 The game (static files served to the browser)
                         the town's music and tavern.js the tavern's; instruments.js and
                         samples.js are the band's recordings; sound.js plays it all
   js/world/             Drawing the world
-    view.js             The renderer, lights, sky, the camera, quality levels, the cutaway
+    view.js             The renderer, lights, sky, the camera (clear of buildings), quality
+                        levels, the cutaway
     ground.js           The ground: textures blended square by square
     town3d.js           The town's buildings, props and trees, merged into few meshes
     interiors3d.js      Inside the tavern: its rooms and furniture, the fire, the boar on its
-                        spit, and cutting away what's between the camera and the player
+                        spit, and taking down the walls between the camera and the player
     art/                The art kits the town is built with: houses, landmarks, props, trees,
                         and the tavern's signs
     avatar.js           A character in the world, following its place in the battle

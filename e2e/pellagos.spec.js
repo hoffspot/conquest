@@ -403,18 +403,21 @@ test("swiping up from the player sends them straight ahead, running, as far as t
     }
 
     const moved = await page.evaluate(() => {
-        const { game } = window.pellagos;
+        const { game, session } = window.pellagos;
         const player = game.battle.actor("player");
         const order = player.order;
+        const pitch = session.view.pitch;
 
         game.stop();
         game.advance(1.5);
 
         const avatar = game.avatars.get("player");
 
-        return { order, running: player.running, pace: player.pace, x: avatar.object.position.x, z: avatar.object.position.z };
+        return { order, pitch, running: player.running, pace: player.pace, x: avatar.object.position.x, z: avatar.object.position.z };
     });
 
+    // (A swipe, not a drag: the camera's not tilted)
+    expect(moved.pitch).toBe(45);
     expect(moved.order?.type).toBe("move");
     expect(moved.order.run).toBe(true);
     expect(moved.running).toBe(true);
@@ -427,7 +430,7 @@ test("swiping up from the player sends them straight ahead, running, as far as t
     expect(across).toBeLessThan(1);
 });
 
-test("the camera keeps still while the player moves about the middle, then follows them from behind", async ({ page }) => {
+test("the camera follows from the first step, swinging round behind the player", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     const camera = await page.evaluate(() => {
@@ -439,16 +442,17 @@ test("the camera keeps still while the player moves about the middle, then follo
 
         game.stop();
 
-        // A step within the middle of the screen: the camera keeps still
-        const still = { x: view.focus.x, z: view.focus.z, yaw: view.yaw };
-        const near = spot(1, 0);
+        const start = { x: view.focus.x, yaw: view.yaw, pitch: view.pitch };
 
-        game.tap(near.x, near.y);
-        game.advance(2);
+        // A few steps east: the camera keeps up from the first, and starts round behind them
+        const east = spot(4, 0);
 
-        const afterStep = { x: view.focus.x, z: view.focus.z, yaw: view.yaw };
+        game.tap(east.x, east.y);
+        game.advance(0.8);
 
-        // A long walk east: out of the middle, and the camera turns round behind the player
+        const firstSteps = { x: view.focus.x, yaw: view.yaw };
+
+        // Walking on east: round behind them, the player in the middle of the screen
         const far = spot(12, 0);
 
         game.tap(far.x, far.y);
@@ -456,22 +460,141 @@ test("the camera keeps still while the player moves about the middle, then follo
 
         const from = avatar.object.position.clone();
 
-        game.advance(1.5);
+        game.advance(1);
 
         const heading = avatar.object.position.clone().sub(from);
         const behind = Math.atan2(-heading.x, -heading.z);
-        const onScreen = view.fromMiddle(avatar.point(0.55));
 
-        return { still, afterStep, yaw: view.yaw, off: Math.abs(wrap(view.yaw - behind)), walked: heading.length(), onScreen };
+        return { start, firstSteps, off: Math.abs(wrap(view.yaw - behind)), walked: heading.length(), onScreen: view.fromMiddle(avatar.point(0.55)) };
     });
 
-    expect(camera.afterStep).toEqual(camera.still);
-    expect(camera.still.yaw).toBe(0);
+    expect(camera.start.yaw).toBe(0);
+    expect(camera.start.pitch).toBe(45);
+    expect(camera.firstSteps.x).toBeGreaterThan(camera.start.x + 0.3);
+    expect(camera.firstSteps.yaw).toBeLessThan(-0.15);
     expect(camera.walked).toBeGreaterThan(1.5);
-    expect(Math.abs(camera.yaw)).toBeGreaterThan(0.8);
-    expect(camera.off).toBeLessThan(0.5);
-    expect(Math.abs(camera.onScreen.x)).toBeLessThan(0.34);
-    expect(Math.abs(camera.onScreen.y)).toBeLessThan(0.34);
+    expect(camera.off).toBeLessThan(0.3);
+    expect(Math.abs(camera.onScreen.x)).toBeLessThan(0.2);
+    expect(Math.abs(camera.onScreen.y)).toBeLessThan(0.3);
+});
+
+test("dragging turns the camera round the player and tilts it; it holds while they stand, and swings back behind them once they walk", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const before = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        return { yaw: session.view.yaw, pitch: session.view.pitch, square: [...player.square], width: session.view.canvas.clientWidth, height: session.view.canvas.clientHeight };
+    });
+
+    // A drag from off to the side of the player: right and up
+    const [x, y] = [before.width * 0.2, before.height * 0.75];
+
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+
+    for (let k = 1; k <= 10; k++) {
+        await page.mouse.move(x + k * 18, y - k * 6);
+    }
+
+    await page.mouse.up();
+
+    const dragged = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        game.stop();
+
+        const turned = { yaw: session.view.yaw, pitch: session.view.pitch, order: player.order?.type ?? null };
+
+        // Standing a while: it holds where it was turned
+        game.advance(2);
+
+        return { ...turned, held: { yaw: session.view.yaw, pitch: session.view.pitch } };
+    });
+
+    const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
+
+    // Dragged right, it looks further right (turning clockwise from above); dragged up, it looks
+    // further up (tilting lower), by as much as the drag
+    expect(wrap(dragged.yaw - before.yaw)).toBeCloseTo((-180 / before.width) * Math.PI, 1);
+    expect(dragged.pitch).toBeLessThan(before.pitch - 3);
+    expect(dragged.order).toBe(null);
+    expect(dragged.held.yaw).toBeCloseTo(dragged.yaw, 5);
+    expect(dragged.held.pitch).toBeCloseTo(dragged.pitch, 5);
+
+    // Walking again (north, a few steps): back round behind them, facing the way they go, still
+    // tilted as it was
+    const walked = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        game.battle.command("player", { type: "move", to: [player.square[0], player.square[1] - 6] });
+        game.advance(2.5);
+
+        return { yaw: session.view.yaw, pitch: session.view.pitch };
+    });
+
+    expect(Math.abs(wrap(walked.yaw))).toBeLessThan(0.2);
+    expect(walked.pitch).toBeCloseTo(dragged.pitch, 5);
+});
+
+test("in the town, the camera comes in closer than a building in the way, or rises over it", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const views = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const { view } = session;
+        const map = game.world.maps.town;
+        const buildings = game.town.buildings;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        // Somewhere with a building a couple of squares south of the player (behind them, as the
+        // camera looks north), and somewhere open all round
+        let walled = null;
+        let open = null;
+
+        for (let y = 4; y < map.height - 12 && !(walled && open); y++) {
+            for (let x = 12; x < map.width - 12 && !(walled && open); x++) {
+                const clear = [0, 1].every((dy) => !map.blocked[y + dy][x]);
+
+                if (!walled && clear && buildings[y + 2][x] > 5 && buildings[y + 3][x] > 5) {
+                    walled = [x, y];
+                }
+
+                if (!open && clear && buildings.slice(y - 3, y + 12).every((row) => row.slice(x - 12, x + 12).every((height) => height === 0))) {
+                    open = [x, y];
+                }
+            }
+        }
+
+        const look = ([x, y]) => {
+            const player = game.battle.actor("player");
+
+            Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [], order: null });
+            game.advance(1.5);
+            game.cameraFollow.yaw = 0;
+            game.cameraFollow.turning = 0;
+            game.advance(1.5);
+
+            const camera = view.camera.position;
+            const height = buildings[Math.floor(camera.z)]?.[Math.floor(camera.x)] ?? 0;
+
+            return { pulled: view.pulled, lifted: view.lifted, clearOfIt: camera.y > height, hidden: view.hidden(game.avatars.get("player").point(0.55)) };
+        };
+
+        return { walled: walled && look(walled), open: open && look(open) };
+    });
+
+    expect(views.walled).not.toBe(null);
+    expect(views.walled.pulled + views.walled.lifted).toBeGreaterThan(1);
+    expect(views.walled.clearOfIt).toBe(true);
+    expect(views.open).not.toBe(null);
+    expect(views.open.pulled).toBeLessThan(0.05);
+    expect(views.open.lifted).toBeLessThan(0.5);
 });
 
 test("once a tap lets it make sound, the music plays on recordings of real instruments", async ({ page }) => {
@@ -616,7 +739,7 @@ test("tapping an enemy rings it as the player's target, until they're told to wa
     expect(target.after).toEqual({ visible: false, plate: null });
 });
 
-test("tapping the tavern's door lights its edge green, and the player walks in: inside the door, facing the room; up the stairs (where a courtesan beckons), down, and out", async ({ page }) => {
+test("tapping the tavern's door lights its edge green, and the player walks in: a couple of steps inside, facing the door; up the stairs (where a courtesan beckons), down, and out; each time a tap round them is a step, not back through", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     // Tap the door or stairs (a link's end on the map shown), and play on until through
@@ -637,6 +760,26 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
         return { ...tapped, map: player.map, shown: game.mapId, square: player.square, facing: player.facing, minimap: game.minimap.map.id, heard: session.sound.place };
     }, { map, kind, seconds });
 
+    // Just come through: taps on the ground round the player (either side, and behind them)
+    // walk them there, and don't take them back through
+    const tapsRound = () => page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const avatar = game.avatars.get("player");
+        const orders = [];
+
+        for (const [side, back] of [[1, 0], [-1, 0], [0, -1.2], [1, -1]]) {
+            const facing = avatar.facing;
+            const at = avatar.object.position.clone().add({ x: side * Math.cos(facing) + back * Math.sin(facing), y: 0, z: -side * Math.sin(facing) + back * Math.cos(facing) });
+            const spot = session.view.toScreen(at);
+
+            game.tap(spot.x, spot.y, { time: performance.now() + 5000 * (orders.length + 1) });
+            orders.push(game.battle.actor("player").order?.type ?? null);
+            game.battle.command("player", { type: "stop" });
+        }
+
+        return orders;
+    });
+
     // Outside the door, the orc out of the way
     const outside = await page.evaluate(() => {
         const { game } = window.pellagos;
@@ -646,14 +789,17 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
         game.battle.command("player", { type: "move", to: game.world.tavern.outside });
         game.advance(25);
 
-        return { square: game.battle.actor("player").square, outside: game.world.tavern.outside, inside: game.world.maps.taproom.marks.D[0], top: game.world.maps.upstairs.marks[">"][0] };
+        const [doorX, doorY] = game.world.maps.taproom.marks.D[0];
+
+        return { square: game.battle.actor("player").square, outside: game.world.tavern.outside, inside: [doorX, doorY - 2], top: game.world.maps.upstairs.marks[">"][0] };
     });
 
     expect(outside.square).toEqual(outside.outside);
 
     const inside = await through("town", "door", 5);
 
-    expect(inside).toEqual({ order: "enter", glowing: true, map: "taproom", shown: "taproom", square: outside.inside, facing: Math.PI, minimap: "taproom", heard: "taproom" });
+    expect(inside).toEqual({ order: "enter", glowing: true, map: "taproom", shown: "taproom", square: outside.inside, facing: 0, minimap: "taproom", heard: "taproom" });
+    expect(await tapsRound()).toEqual(["move", "move", "move", "move"]);
     expect(await page.evaluate(() => {
         const { game } = window.pellagos;
 
@@ -709,7 +855,8 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
 
     const up = await through("taproom", "stairs", 6);
 
-    expect(up).toMatchObject({ order: "enter", glowing: true, map: "upstairs", shown: "upstairs", square: outside.top, minimap: "upstairs", heard: "upstairs" });
+    expect(up).toMatchObject({ order: "enter", glowing: true, map: "upstairs", shown: "upstairs", square: [6, 3], facing: Math.PI, minimap: "upstairs", heard: "upstairs" });
+    expect(await tapsRound()).toEqual(["move", "move", "move", "move"]);
     expect(await page.evaluate(() => window.pellagos.game.avatars.get("madam").object.visible)).toBe(true);
 
     // Along the hallway to the first bedroom's door: the courtesan in it (and the one across the
@@ -720,7 +867,7 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
         const courtesan = game.avatars.get("courtesan");
         let seen = null;
 
-        game.battle.command("player", { type: "move", to: [8, 5] });
+        game.battle.command("player", { type: "move", to: [10, 7] });
 
         for (let k = 0; k < 60 && !seen; k++) {
             game.advance(0.25);
@@ -747,7 +894,8 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
     // (Standing at their top, straight down)
     const down = await through("upstairs", "stairs", 3);
 
-    expect(down).toMatchObject({ map: "taproom", shown: "taproom", square: [0, 0] });
+    expect(down).toMatchObject({ map: "taproom", shown: "taproom", square: [1, 3], facing: Math.PI });
+    expect(await tapsRound()).toEqual(["move", "move", "move", "move"]);
 
     // And out (from just inside it, so no one's in the way to tap instead), onto the square
     // outside the door
@@ -761,6 +909,7 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
     const out = await through("taproom", "door", 6);
 
     expect(out).toMatchObject({ order: "enter", map: "town", shown: "town", square: outside.outside, minimap: "town", heard: "town" });
+    expect(await tapsRound()).toEqual(["move", "move", "move", "move"]);
 });
 
 test("tapping someone walks the player up to talk: their name and what they are, what they say, replies that lead on, Escape to stop", async ({ page }) => {
