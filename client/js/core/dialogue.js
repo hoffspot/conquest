@@ -365,6 +365,96 @@ export const TREES = Object.freeze({
             },
         },
     },
+    // A temple's priest: kindly and unhurried, glad to tell of the Six to anyone who asks
+    priest: {
+        start: "greet",
+        nodes: {
+            greet: {
+                say: [
+                    { if: { met: false }, lines: ["Peace of the Hearth be on you, traveller. I'm {name}, and I keep this temple in {patron}'s name, and the other five's.", "Welcome, child of the Hearth. I am {name}. Come in out of the world a while."] },
+                    { lines: ["{player}. The Six have kept you, I see. Come.", "Welcome back, {player}. The candles are lit; they always are."] },
+                ],
+                choices: "more",
+            },
+            more: {
+                say: ["What would you ask of the temple?", "Speak, and be easy.", "Is there more on your heart?"],
+                choices: [
+                    { say: "Tell me of the Six.", next: "six" },
+                    { if: { notFlag: "askedPatron" }, say: "Whose temple is this?", next: "patron", do: [{ remember: "askedPatron" }] },
+                    { say: "I'd have a blessing. (5 coppers to the alms box)", next: "blessing", do: [{ buy: "blessing", price: 5 }] },
+                    { say: "What is the Hollow One?", next: "hollow", do: [{ learn: "hollowOne" }] },
+                    FAREWELL,
+                ],
+            },
+            six: {
+                say: "In the beginning was the Silence, and one ember in it: the Hearth. It burned alone an age of ages, and in its loneliness it broke into six sparks, and each spark woke. Ask me of any of them.",
+                choices: [
+                    { say: "Aurelia?", next: "aurelia" },
+                    { say: "Brannoc?", next: "brannoc" },
+                    { say: "Ithriel?", next: "ithriel" },
+                    { say: "Morvaine?", next: "morvaine" },
+                    { say: "Seliane?", next: "seliane" },
+                    { say: "Dunmar?", next: "dunmar" },
+                    { say: "That's enough for one day.", next: "more" },
+                ],
+            },
+            aurelia: { say: "Aurelia, the Dawnmother, woke first and breathed on the cold world till it greened. Every heartbeat is a spark of her dawn; the sick are healed in her name.", choices: "six" },
+            brannoc: { say: "Brannoc, the Red Horn, woke hungry and ran the whole world in a night. He taught the first people to hunt, and stood at the Hearth's door when the Hollow One came. Soldiers swear by his horn.", choices: "six" },
+            ithriel: { say: "Ithriel, the Veiled Star, read in the stars how the world was made, and hid its laws in a veil. Those who find a thread of it are mages. Mind the thread you pull.", choices: "six" },
+            morvaine: { say: "Morvaine keeps the Last Gate at the edge of the world, with his lantern, so no soul need cross in the dark. He is gentle, and patient, and never late.", choices: "six" },
+            seliane: { say: "Seliane, the Rose of Evening, laughed, and the laugh made the others turn and see each other. Lovers leave roses at her shrine. So do some who only wish they were.", choices: "six" },
+            dunmar: { say: "Dunmar Anvilhand woke with his hands already moving. He built the hills and taught every craft there is. Apprentices swear their oaths to him, and every guild keeps his mark.", choices: "six" },
+            patron: {
+                say: "This is {patron}'s house, {patronTitle}, though all six are honoured here: see the shrines along the walls. {patron} keeps this town, and it keeps {patron}'s days.",
+                choices: "more",
+            },
+            blessing: {
+                say: ["Kneel, then. May the Dawnmother warm your blood, the Red Horn guide your aim, and the Keeper keep his lantern lit for you a long while yet. Go in peace.", "The Six see you, {player}. Go lightly, and come back whole."],
+                choices: "more",
+            },
+            hollow: {
+                say: "The seventh spark, that never woke. It only wanted, and fed on the others' light. The Six drove it under the world, but its hunger seeps up still. The orcs are what it made of the first hunters it caught.",
+                choices: "more",
+            },
+        },
+    },
+    // The acolyte: young, earnest, a little in awe of it all
+    acolyte: {
+        start: "greet",
+        nodes: {
+            greet: {
+                say: [
+                    { if: { met: false }, lines: ["Oh! Welcome to the temple. I'm {name}; I look after the candles. Mostly the candles.", "Be welcome. I'm {name}, an acolyte of {patron}. Can I help you find a shrine?"] },
+                    { lines: ["Hello again, {player}! The candles are all lit today.", "{player}! Have you come for a blessing? {priest} is just there."] },
+                ],
+                choices: [
+                    { say: "Which shrine is which?", next: "shrines" },
+                    { say: "Carry on.", next: null },
+                ],
+            },
+            shrines: {
+                say: "{patron}'s is the great altar. Then along the walls: gold for the Dawnmother, red for the Red Horn, violet for the Veiled Star, grey for the Keeper, rose for the Rose of Evening, blue for Anvilhand. Well, all but {patron}'s own.",
+                choices: [{ say: "Thank you.", next: null }],
+            },
+        },
+    },
+    // A worshipper in the pews: shushing, or glad of company
+    worshipper: {
+        start: "greet",
+        nodes: {
+            greet: {
+                say: ["Shh. {patron} listens best in quiet.", "I come every day. It helps. What brings you?", "Sit a while, friend. The Six don't mind company."],
+                choices: [
+                    { say: "What do you pray for?", next: "pray" },
+                    { say: "Sorry to disturb you.", next: null },
+                ],
+            },
+            pray: {
+                say: ["My son. He went east with the drovers, and there's been no word.", "A good harvest, and the orcs to stay in their hills.", "That's between me and {patron}."],
+                choices: [{ say: "I hope you're heard.", next: null }],
+            },
+        },
+    },
     // A courtesan: warm, teasing, and never quite saying it. What she offers (her company, a
     // dance, what she hears from her callers, a favour to be done) is handed to the game to do
     courtesan: {

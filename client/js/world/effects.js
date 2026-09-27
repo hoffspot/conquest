@@ -40,6 +40,7 @@ const BURSTS = {
     drip: { count: 1, colours: [0xa0120a, 0x5a0503], size: [0.014, 0.024], speed: [0, 0.15], life: [0.5, 0.7], gravity: 9.8, spread: 0.3, glow: false, opacity: 0.95, late: true, drag: 0.2, splash: 1 },
     smoke: { count: 2, colours: [0x2e2824, 0x6a625a], size: [0.1, 0.2], speed: [0.2, 0.5], life: [1, 1.7], gravity: -0.6, spread: 0.8, glow: false, opacity: 0.4, grow: 2.6 },
     embers: { count: 1, colours: [0xffc060, 0xff3a00], size: [0.02, 0.04], speed: [0.3, 0.9], life: [0.4, 0.9], gravity: -1.2, spread: 1.6, glow: true },
+    blessing: { count: 14, colours: [0xfff6d8, 0xffd27a], size: [0.04, 0.09], speed: [0.2, 0.7], life: [0.6, 1.1], gravity: -0.5, spread: 2.2, glow: true, swirl: 2 },
     steam: { count: 14, colours: [0xf2f2ee, 0xb8bcc0], size: [0.14, 0.28], speed: [0.4, 1.1], life: [0.8, 1.4], gravity: -1.3, spread: 1.4, glow: false, opacity: 0.45, grow: 2.4 },
     ash: { count: 10, colours: [0x3a322c, 0x6a625a], size: [0.14, 0.3], speed: [0.4, 1.1], life: [0.8, 1.4], gravity: -1, spread: 1.6, glow: false, opacity: 0.45, grow: 1.8 },
 };

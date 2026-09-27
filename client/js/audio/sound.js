@@ -43,6 +43,8 @@ export const PLACES = Object.freeze({
     upstairs: { score: "tavern", level: 0.4, muffle: 650 },
     // (In a smithy, the town's music as if through its walls, under the forge's roar)
     smithy: { score: "town", level: 0.45, muffle: 900 },
+    // (In a temple, the town's music hushed, far off through thick walls)
+    temple: { score: "town", level: 0.2, muffle: 450 },
 });
 
 /** The buses, and how loud each is to start with (0 to 1, as the sliders show them). */

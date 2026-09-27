@@ -22,6 +22,7 @@ import { folkLook } from "../characters/folk.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
 import { Battle, hostile, STEP_MS, TALK_REACH } from "../core/battle.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
+import { GODS } from "../core/lore/gods.js";
 import { BECKON, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js";
 import { squaresOf } from "../core/grid.js";
 import { GROUND } from "../core/setpieces/pieces.js";
@@ -119,6 +120,9 @@ const ACTS = {
     quench: { hitAt: 0.8, duration: 2.2, sound: "hiss", volume: 1, burst: "steam", ahead: 0.7, height: 0.7 },
     pump: { hitAt: 0.7, duration: 2.1, sound: "bellows", volume: 1, beats: [0, 0.38, 0.76], flare: 0.8 },
     crank: { hitAt: 0.9, duration: 2.6, sound: "grind", volume: 1, drive: "grindstone" },
+    // A temple's: the priest's blessing (a soft chime, a glimmer over the pews), and a candle lit
+    bless: { hitAt: 1, duration: 2.8, sound: "healed", volume: 0.35, burst: "blessing", ahead: 0.5, height: 1.7 },
+    light: { hitAt: 1, duration: 2.4, burst: "embers", ahead: 0.6, height: 1 },
 };
 
 // Going through a door or up the stairs, the screen comes up from black this fast (s)
@@ -935,6 +939,12 @@ export class Game {
         const upstairs = building?.tavern?.storeys > 1 ? building.tavern.upstairs : null;
 
         names.keeper ??= names.innkeeper;
+
+        // (In a temple, its patron: "Aurelia", "the Dawnmother")
+        if (building?.patron) {
+            names.patron = GODS[building.patron].name;
+            names.patronTitle = GODS[building.patron].title;
+        }
         this.memory[npc.id] ??= { talks: 0, flags: [] };
 
         const conversation = new Conversation(tree, {

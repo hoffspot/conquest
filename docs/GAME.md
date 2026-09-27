@@ -187,7 +187,7 @@ player is a step, not straight back through.
 ### Every building's inside (core/insides.js)
 
 Wenches and Ale's floors are made with the town, as above. Every other building that can be gone
-into (`ENTERABLE`: taverns and smithies so far; temples and guilds to come), in the start town and in
+into (`ENTERABLE`: taverns, smithies and temples so far; guilds to come), in the start town and in
 every settlement as it's laid out, is known to the world's `interiors` (`Interiors`, by key:
 `${place}:${piece id}`, such as `home:tavern-2`), and its front door is one of the world's links
 from the start (`${key}/door`), its inside end still to make (`pending`). Its floors and folk are
@@ -236,6 +236,36 @@ are kept.
   Its folk (`smithyFolkOf`): the smith, going from the forge (heating the work: `heat`) to the
   anvil (hammering it: `forge`), to the trough (quenching it: `quench`) and back to the anvil;
   and the apprentice, at the bellows (`pump`) and the grindstone (`crank`).
+- **A temple** (`templeRooms`) is a nave 16 by 18 metres, to all of the Six under its patron
+  ("the Temple of Aurelia"): the patron's altar on a dais at the north end, their statue behind
+  it; a shrine to each of the other five along the walls (`shrinesOf`: in the order they woke),
+  and a stand of votive candles; pews either side of the aisle, facing the altar; and a basin of
+  water either side of the door:
+
+  ```
+  ................   Z  the patron's statue   a  altar    s  shrine
+  ......ZZZZ......   v  votive candles        p  pew      f  basin
+  ......aaaa......
+  ................
+  s..............s
+  ................
+  ..pppp....pppp..
+  ................
+  s.pppp....pppp.s
+  ................
+  ..pppp....pppp..
+  ................
+  s.pppp....pppp.v
+  ................
+  ..pppp....pppp..
+  ................
+  f..............f
+  .......DD.......
+  ```
+
+  Its folk (`templeFolkOf`): the priest (a man or a woman), going between the altar, where they
+  bless the pews (`bless`), and the shrines, lighting their candles (`light`); an acolyte, at
+  the votive candles and the basins; and two to four worshippers seated in the pews.
 
 ## The battle (core/battle.js)
 
@@ -559,11 +589,13 @@ they are. Their acts and rests play their animations, and a sound: tankards clin
 of a toast, and softly as one's set down), ale pouring from a tap, a tankard thumped on a table.
 In a smithy, each of the smith's three blows rings on the anvil and throws sparks off it; the
 work hisses in the trough, steam rising; the bellows breathe and the forge's fire flares with
-them (`view.flare`); and the grindstone rasps and turns while it's cranked (`interior.drive`).
+them (`view.flare`); and the grindstone rasps and turns while it's cranked (`interior.drive`). In
+a temple, the priest's blessing chimes softly and a golden glimmer rises over the pews, and a
+lit candle sends up a spark.
 
 **Classes and resting** (core/roles.js). Everyone has a class (a role): the barkeep, a serving
-wench, a patron, an innkeeper, the madam, a courtesan, the blacksmith and the apprentice, and the
-player's adventurer. A class has a title and five resting
+wench, a patron, an innkeeper, the madam, a courtesan, the blacksmith and the apprentice, the
+priest, an acolyte and the worshippers, and the player's adventurer. A class has a title and five resting
 animations, shared by everyone of it (their poses: actions.js `RESTS`, see
 [CHARACTERS.md](CHARACTERS.md#resting)):
 
@@ -576,6 +608,9 @@ animations, shared by everyone of it (their poses: actions.js `RESTS`, see
 | Madam | fanning herself, hands on her hips, touching her necklace, drumming her fingers, smoothing her gown |
 | Courtesan | twirling her hair, a slow stretch, a hand on her hip, blowing a kiss, smoothing down her sides |
 | Blacksmith | wiping the brow, looking over the work, rolling the shoulders, stretching the back, shifting the weight |
+| Priest | hands folded in prayer, arms raised in praise, a bow of the head, the sign of the Hearth, hands clasped behind |
+| Acolyte | hands folded in prayer, a bow of the head, looking about, the sign of the Hearth, a yawn |
+| Worshipper (seated) | praying, head bowed, looking up, the sign of the Hearth, hands in the lap |
 | Apprentice | wiping the brow, looking about, rolling the shoulders, a yawn, stretching |
 | Adventurer (the player) | stretching, looking about, rolling the shoulders, a yawn, shifting the weight |
 
@@ -665,6 +700,15 @@ forge; the anvil on its stump, a glowing bar on it; the quenching trough, open, 
 grindstone in its frame; racks of tools along the north wall, and of swords and a shield along
 the east; the workbench with its vice and files; and the charcoal heaped in a corner, sacks by
 it. In the smithy the town's music is heard as if through its walls, under the forge's crackle.
+
+A temple has whitewashed walls between pillars, tall windows down both sides, and pale
+flagstones with a red runner up the aisle to the dais: two broad steps to the altar, stone under
+a white cloth bordered in gold, with candlesticks and a book; behind it the patron's statue, a
+robed figure in white with arms held out in blessing and a halo in the god's colour, on a
+plinth, their colours hanging either side. Each shrine is a niche of its god's colour with a
+small white statue of them and three candles before it. There are pews with high backs, a stand
+of votive candles in three iron tiers, stone basins of water on pedestals, and a great ring of
+candles hanging over the nave. In a temple the town's music is hushed, far off.
 
 The flames are crossed quads with a shader of rising noise, drawn additively and flickering,
 and embers rise from the hearth. The room is open above, and what stands in front of the player
@@ -1248,8 +1292,11 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   upstairs as the tavern's name has it, or none; the folk worked out from the plan (on the floor,
   seated on benches, their rounds reachable, who keeps upstairs and how many courtesans); a
   smithy's forge, bellows, anvil, trough and grindstone all got to from its door, the smith and
-  apprentice at them, and the smithy named for its smith; the settlements' taverns' and
-  smithies' doors among the world's links as they're laid out, their floors and folk
+  apprentice at them, and the smithy named for its smith; a temple's altar, statue, five shrines
+  to the other gods, pews, votive candles and basins, the priest's and acolyte's rounds got to
+  from the door, worshippers seated facing the altar, and the priest in white vestments; the
+  settlements' taverns', smithies' and temples' doors among the world's links as they're laid
+  out, their floors and folk
   made once when wanted, each building somewhere of its own; going in through a door not made yet
   in the battle; each floor built by its style and the doors picked up; folk made up as they're
   wanted, as their part and sex have them, each their own; what's upstairs in talk; and the
@@ -1360,7 +1407,9 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   by tap and by number key, Escape to stop), up the stairs (the madam), down and out again,
   another tavern got ready as the player comes near (its own taproom, sound, minimap and folk
   inside), let go far off and built at once if walked straight into, a smithy's smith heating,
-  hammering and quenching and its apprentice at the bellows and grindstone (each heard),
+  hammering and quenching and its apprentice at the bellows and grindstone (each heard), a
+  temple's priest in white blessing and lighting the shrines' candles, worshippers praying, and
+  the priest telling of the temple's patron,
   walking by the
   minimap, walking 300 metres out of the town into the world (the chunks round the player drawn,
   those left behind thrown away, the minimap following), Game options and the volume sliders

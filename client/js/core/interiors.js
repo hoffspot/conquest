@@ -46,6 +46,14 @@ export const PLAN_KEY = Object.freeze({
     R: { kind: "rack", blocks: true, joins: true },
     X: { kind: "workbench", blocks: true, joins: true },
     O: { kind: "coal", blocks: true, joins: true },
+    // A temple's: the patron's statue and altar, the other gods' shrines along the walls, a stand
+    // of votive candles, pews (each square a seat) and basins of water by the door
+    Z: { kind: "statue", blocks: true, opaque: true, joins: true },
+    a: { kind: "altar", blocks: true, joins: true },
+    s: { kind: "shrine", blocks: true },
+    v: { kind: "votive", blocks: true },
+    p: { kind: "pew", blocks: true },
+    f: { kind: "basin", blocks: true },
 });
 
 // The taproom, 18 by 15 metres (roomier than the tavern looks from outside, to walk about in

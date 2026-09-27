@@ -15,7 +15,8 @@ const { folkLook } = await import("../client/js/characters/folk.js");
 const { EQUIPMENT } = await import("../client/js/characters/equipment.js");
 const { Battle, STEP_MS } = await import("../client/js/core/battle.js");
 const { upstairsIs } = await import("../client/js/core/dialogue.js");
-const { ENTERABLE, ENTRANCES, entranceOf, FINISHES, LAYOUTS, openEntrances, smithyFolkOf, smithyRooms, taproomPlan, tavernFolkOf, tavernRooms } = await import("../client/js/core/insides.js");
+const { ENTERABLE, ENTRANCES, entranceOf, FINISHES, LAYOUTS, openEntrances, shrinesOf, smithyFolkOf, smithyRooms, taproomPlan, tavernFolkOf, tavernRooms, templeFolkOf, templeRooms } = await import("../client/js/core/insides.js");
+const { GOD_IDS, GODS } = await import("../client/js/core/lore/gods.js");
 const { squaresOf } = await import("../client/js/core/grid.js");
 const { readPlan } = await import("../client/js/core/interiors.js");
 const { CHUNK, buildWorld } = await import("../client/js/core/overworld.js");
@@ -198,6 +199,63 @@ describe("a smithy's workshop and folk (insides.js)", () => {
     });
 });
 
+describe("a temple's nave and folk (insides.js)", () => {
+    it("has its patron's altar and statue, a shrine to each of the other five, pews, votive candles and basins, all got to from the door", () => {
+        for (const patron of GOD_IDS) {
+            const building = { key: `test:temple:${patron}`, name: `the Temple of ${GODS[patron].name}`, seed: patron.length * 7, patron };
+            const [floor] = templeRooms(building);
+            const nave = readPlan("nave", floor.name, floor.rows);
+            const door = nave.marks.D[0];
+            const count = (kind) => nave.pieces.filter((piece) => piece.kind === kind).length;
+
+            assert.equal(floor.style, "temple");
+            assert.equal(floor.patron, patron);
+            assert.equal(count("altar"), 1);
+            assert.equal(count("statue"), 1);
+            assert.equal(count("shrine"), 5);
+            assert.ok(count("pew") >= 20 && count("votive") === 1 && count("basin") === 2);
+            assert.deepEqual(shrinesOf(patron), GOD_IDS.filter((id) => id !== patron));
+
+            const folk = templeFolkOf(building, nave);
+            const [priest, acolyte, ...worshippers] = folk;
+
+            assert.equal(priest.role, "priest");
+            assert.equal(acolyte.role, "acolyte");
+            assert.ok(worshippers.length >= 2 && worshippers.length <= 4);
+
+            // The priest blesses from before the altar and lights each shrine's candles; the
+            // acolyte tends the votive candles and the basins; everywhere they go got to from the door
+            assert.deepEqual([...new Set(priest.routine.stops.map(({ act }) => act))], ["bless", "light"]);
+            assert.equal(priest.routine.stops.filter(({ act }) => act === "light").length, 5);
+
+            for (const one of [priest, acolyte]) {
+                for (const { square } of one.routine.stops) {
+                    assert.ok(!nave.blocked[square[1]][square[0]] && reachable(nave, door, square), `${one.local} at ${square}`);
+                }
+            }
+
+            // Worshippers seated in the pews, facing the altar
+            for (const one of worshippers) {
+                assert.equal(one.role, "worshipper");
+                assert.equal(nave.plan[one.square[1]][one.square[0]], "p");
+                assert.ok(one.routine.seated);
+                assert.equal(one.facing, Math.PI);
+            }
+        }
+    });
+
+    it("dresses its priest in white vestments", () => {
+        for (const [role, sex] of [["priest", "m"], ["priest", "f"], ["acolyte", "f"]]) {
+            const { equipment } = folkLook({ role, sex, seed: 5 });
+
+            assert.ok(equipment.includes("alb") && equipment.includes("albSkirt"), `${role} (${sex})`);
+            assert.equal(role === "priest", equipment.includes("chasuble"));
+        }
+
+        assert.ok(EQUIPMENT.alb.colour === "#f1ede4" && EQUIPMENT.chasuble.trim);
+    });
+});
+
 describe("the buildings (insides.js Interiors)", () => {
     let world;
     let interiors;
@@ -238,14 +296,14 @@ describe("the buildings (insides.js Interiors)", () => {
     it("puts every settlement's taverns' and smithies' doors among the world's links as it's laid out, their insides still to make", () => {
         const entered = settlement.town.pieces.filter((piece) => piece.kind === "landmark" && ENTERABLE.includes(piece.name));
 
-        assert.deepEqual(new Set(entered.map(({ name }) => name)), new Set(["tavern", "blacksmith"]));
+        assert.deepEqual(new Set(entered.map(({ name }) => name)), new Set(["tavern", "blacksmith", "church"]));
 
         for (const piece of entered) {
             const building = interiors.buildings.get(`${settlement.place.id}:${piece.id}`);
             const [outside, inside] = building.door.ends;
 
             assert.ok(world.links.includes(building.door));
-            assert.equal(building.name, piece.tavern?.name ?? "the smithy");
+            assert.equal(building.name, piece.tavern?.name ?? (piece.patron ? `the Temple of ${GODS[piece.patron].name}` : "the smithy"));
             assert.equal(outside.map, "town");
             assert.ok(outside.door && outside.squares.length === 2);
             assert.ok(inside.pending);

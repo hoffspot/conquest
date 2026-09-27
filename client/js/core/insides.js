@@ -1,7 +1,8 @@
-// Going inside: every building that can be gone into (setpieces/pieces.js ENTERED: taverns, and
-// in time the temples, smithies and guilds) in every settlement, its front door one of the world's
-// links, its floors made the first time they're wanted (the player's walking up to the door, or
-// through it) and kept, each at a place of its own far off in the 3D world, with its folk.
+// Going inside: every building that can be gone into (setpieces/pieces.js ENTERED: taverns,
+// smithies and temples, and in time the guilds) in every settlement, its front door one of the
+// world's links, its floors made the first time they're wanted (the player's walking up to the
+// door, or through it) and kept, each at a place of its own far off in the 3D world, with its
+// folk.
 //
 // A building's door is where the art puts it (ENTRANCES: kits/landmarks.js builds it there): so
 // far in from the front of its lot, so far along it, so wide; the squares in front of it are
@@ -9,15 +10,17 @@
 // for its kind: a tavern's taproom (its tables set out one of several ways, its hearth, bar and
 // barrels, and stairs if it has a floor above) and upstairs, as its name has it (tavern lore:
 // rooms to let with an innkeeper at the counter; rooms with a courtesan or two; or a madam's
-// house). Its folk are worked out from its plan: a barkeep behind the bar and at the barrels,
-// serving wenches between the bar and the tables, patrons on the benches, whoever keeps
-// upstairs, and the courtesans in their rooms.
+// house); a smithy's workshop; a temple's nave. Its folk are worked out from its plan: a
+// barkeep behind the bar and at the barrels, serving wenches between the bar and the tables,
+// patrons on the benches, whoever keeps upstairs, and the courtesans in their rooms; the smith
+// and the apprentice at their work; the priest, an acolyte and worshippers in the pews.
 //
 // The town's own tavern, Wenches and Ale, is made with the town (world.js) and keeps its ids
 // (taproom, upstairs, tavern-door, tavern-stairs) and its folk; it's registered here as made.
 // Pure data, no DOM.
 
 import { FACING, readPlan, tavernFolk, UPSTAIRS_PLAN } from "./interiors.js";
+import { GOD_IDS, GODS } from "./lore/gods.js";
 import { namePeople } from "./names.js";
 import { createRandom } from "./random.js";
 import { ENTERED, GROUND, PLOT } from "./setpieces/pieces.js";
@@ -35,7 +38,7 @@ export const ENTRANCES = Object.freeze({
 });
 
 /** The kinds that can be gone into so far (the rest of ENTERED in time). */
-export const ENTERABLE = Object.freeze(["tavern", "blacksmith"]);
+export const ENTERABLE = Object.freeze(["tavern", "blacksmith", "church"]);
 
 // The way to a door, cleared: at least this far either side of its middle, and from this far in
 // behind it to this far out past the lot's front (metres)
@@ -325,10 +328,98 @@ export function smithyFolkOf(building, forge) {
     ];
 }
 
+// --- Temples ---
+
+// A temple of the Six, 16 by 18 metres: its patron's altar on a dais at the north end, their
+// statue behind it; the other five's shrines along the walls (three west, two east) and a stand of
+// votive candles; pews either side of the aisle, facing the altar; a basin of water either side of
+// the door, in the middle of the south wall
+const TEMPLE = [
+    "................",
+    "......ZZZZ......",
+    "......aaaa......",
+    "................",
+    "s..............s",
+    "................",
+    "..pppp....pppp..",
+    "................",
+    "s.pppp....pppp.s",
+    "................",
+    "..pppp....pppp..",
+    "................",
+    "s.pppp....pppp.v",
+    "................",
+    "..pppp....pppp..",
+    "................",
+    "f..............f",
+    ".......DD.......",
+];
+
+/** A temple's floors: its nave, under its patron. */
+export function templeRooms(building) {
+    return [{ suffix: "nave", style: "temple", name: building.name, rows: TEMPLE, ground: GROUND.cobbles, sound: "temple", patron: building.patron }];
+}
+
+/**
+ * Which of the Six each of a temple's shrines is to, in the order they stand (north to south,
+ * west then east): the five that aren't its patron, in the order they woke.
+ */
+export function shrinesOf(patron) {
+    return GOD_IDS.filter((id) => id !== patron);
+}
+
+/**
+ * A temple's folk, worked out from its plan: the priest, going between the altar (blessing the
+ * pews) and the shrines (lighting their candles); an acolyte at the votive candles and the
+ * basins; and two to four worshippers in the pews, facing the altar.
+ */
+export function templeFolkOf(building, nave) {
+    const random = createRandom(building.seed * 7 + 41);
+    const { n, s, e, w } = FACING;
+    const altar = nave.pieces.find(({ kind }) => kind === "altar");
+    const shrines = nave.pieces.filter(({ kind }) => kind === "shrine");
+    const votive = nave.pieces.find(({ kind }) => kind === "votive");
+    const basins = nave.pieces.filter(({ kind }) => kind === "basin");
+    const before = (piece) => (piece.x === 0 ? { square: [1, piece.y], facing: w } : { square: [nave.width - 2, piece.y], facing: e });
+    const bless = { square: [altar.x + Math.floor(altar.w / 2), altar.y + altar.h], facing: s, act: "bless", group: "altar", wait: [4000, 7000] };
+    const folk = [
+        {
+            local: "priest",
+            title: "Priest",
+            role: "priest",
+            sex: random.chance(0.5) ? "f" : "m",
+            map: nave.id,
+            square: bless.square,
+            facing: s,
+            routine: { order: "alternate", wait: [3000, 5000], stops: [bless, ...shrines.map((shrine) => ({ ...before(shrine), act: "light", group: "shrines" }))] },
+        },
+        {
+            local: "acolyte",
+            title: "Acolyte",
+            role: "acolyte",
+            sex: random.chance(0.5) ? "f" : "m",
+            map: nave.id,
+            square: before(votive).square,
+            facing: e,
+            routine: { order: "cycle", wait: [4000, 8000], stops: [{ ...before(votive), act: "light" }, ...basins.map((basin) => ({ ...before(basin), act: "light" }))] },
+        },
+    ];
+
+    // Worshippers in the pews, each on a seat of their own, facing the altar
+    const seats = random.shuffle([...(nave.marks.p ?? [])]).slice(0, random.int(2, 4));
+
+    seats.forEach(([x, y], k) => {
+        folk.push({ local: `worshipper${k + 1}`, title: "Worshipper", role: "worshipper", sex: random.chance(0.5) ? "f" : "m", map: nave.id, square: [x, y], facing: n, routine: { seated: true } });
+    });
+
+    return folk;
+}
+
 // Each kind's floors (the first is the one its front door opens into) and its folk
 const KINDS = Object.freeze({
     tavern: { first: "taproom", rooms: tavernRooms, folk: (building, [taproom, upstairs]) => tavernFolkOf(building, taproom, upstairs) },
     blacksmith: { first: "forge", rooms: smithyRooms, folk: (building, [forge]) => smithyFolkOf(building, forge) },
+    church: { first: "nave", rooms: templeRooms, folk: (building, [nave]) => templeFolkOf(building, nave) },
 });
 
 // --- The buildings ---
@@ -401,9 +492,10 @@ export class Interiors {
         const building = {
             key,
             kind: piece.name,
-            name: name ?? piece.tavern?.name ?? NAMES[piece.name] ?? piece.name,
+            name: name ?? piece.tavern?.name ?? (piece.patron ? `the Temple of ${GODS[piece.patron].name}` : null) ?? NAMES[piece.name] ?? piece.name,
             piece,
             tavern: piece.tavern ?? null,
+            patron: piece.patron ?? null,
             place,
             seed: piece.seed ?? 1,
             entrance,
@@ -468,7 +560,7 @@ export class Interiors {
         const maps = floors.map((floor, k) => {
             const map = readPlan(`${key}/${floor.suffix}`, floor.name, floor.rows, { ground: floor.ground });
 
-            Object.assign(map, { origin: [origin[0], origin[1] + k * ORIGINS.step], style: floor.style, look: floor.look ?? null, finish: floor.finish ?? null, sound: floor.sound, building: key, layout: floor.layout ?? null });
+            Object.assign(map, { origin: [origin[0], origin[1] + k * ORIGINS.step], style: floor.style, look: floor.look ?? null, finish: floor.finish ?? null, patron: floor.patron ?? null, sound: floor.sound, building: key, layout: floor.layout ?? null });
 
             return map;
         });

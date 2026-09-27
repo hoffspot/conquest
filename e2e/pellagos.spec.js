@@ -1163,6 +1163,77 @@ test("the smithy: the smith heats, hammers and quenches the work, the apprentice
     expect(smithy.place).toBe("smithy");
 });
 
+test("the temple: the priest in white blesses the pews and lights the shrines' candles, worshippers pray, and the priest tells of the temple's patron", async ({ page }) => {
+    // (Seed 2's town's temple, to Aurelia, a few steps from the start)
+    await playing(page, "/?play&seed=2");
+
+    const temple = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const building = [...game.world.interiors.buildings.values()].find((each) => each.kind === "church");
+        const player = game.battle.actor("player");
+        const acts = [];
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        // Straight through its door
+        const [x, y] = building.door.ends[0].squares[0];
+
+        Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [] });
+        game.battle.command("player", { type: "enter", link: building.door.id });
+        game.advance(0.3);
+
+        const folk = game.battle.actors.filter((actor) => actor.map === player.map && actor.id !== "player");
+        const priest = folk.find(({ role }) => role === "priest");
+
+        // A while inside: what the priest and the worshippers do
+        for (let k = 0; k < 80; k++) {
+            game.advance(0.5);
+
+            for (const one of folk) {
+                const name = game.avatars.get(one.id).actions.attack?.name;
+
+                if (name && !acts.includes(`${one.role}:${name}`)) {
+                    acts.push(`${one.role}:${name}`);
+                }
+            }
+        }
+
+        // Up to the priest, to ask whose temple it is
+        game.approaching = priest.id;
+        game.battle.command("player", { type: "approach", target: priest.id });
+
+        for (let k = 0; k < 200 && !game.talking; k++) {
+            game.advance(0.1);
+        }
+
+        const conversation = game.talking?.conversation;
+        const asked = conversation?.choices.findIndex(({ text }) => text.includes("Whose temple"));
+
+        conversation?.choose(asked);
+
+        return {
+            map: player.map,
+            name: building.name,
+            wearing: [...game.avatars.get(priest.id).character.equipment.values()],
+            roles: folk.map(({ role }) => role),
+            acts,
+            patron: conversation?.line ?? null,
+            place: session.sound.place,
+        };
+    });
+
+    expect(temple.map).toMatch(/church-\d+\/nave$/);
+    expect(temple.name).toBe("the Temple of Aurelia");
+    expect(temple.wearing).toEqual(expect.arrayContaining(["alb", "chasuble", "albSkirt"]));
+    expect(temple.roles.slice(0, 2)).toEqual(["priest", "acolyte"]);
+    expect(temple.roles.filter((role) => role === "worshipper").length).toBeGreaterThanOrEqual(2);
+    expect(temple.acts).toEqual(expect.arrayContaining(["priest:bless", "priest:light", "acolyte:light"]));
+    expect(temple.acts.some((act) => act.startsWith("worshipper:rest:"))).toBe(true);
+    expect(temple.patron).toMatch(/This is Aurelia's house, the Dawnmother/);
+    expect(temple.place).toBe("temple");
+});
+
 test("tapping someone walks the player up to talk: their name and what they are, what they say, replies that lead on, Escape to stop", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

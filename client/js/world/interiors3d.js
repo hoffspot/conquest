@@ -19,6 +19,8 @@
 // dark wood, as if solid.
 
 import * as THREE from "three";
+import { shrinesOf } from "../core/insides.js";
+import { GOD_IDS, GODS } from "../core/lore/gods.js";
 import { material as artMaterial } from "./art/engine/materials.js";
 import { Solid } from "./art/engine/solid.js";
 import { merge } from "./town3d.js";
@@ -113,8 +115,9 @@ function material(name, { wall = false } = {}) {
     if (!materials.has(key)) {
         let result;
 
-        if (COLOURS[name] !== undefined) {
-            result = new THREE.MeshLambertMaterial({ color: COLOURS[name] });
+        if (COLOURS[name] !== undefined || name.startsWith("god-")) {
+            // (A god's own colour: "god-aurelia"...)
+            result = new THREE.MeshLambertMaterial({ color: COLOURS[name] ?? GODS[name.slice(4)]?.colours[0] ?? 0xffffff });
             result.name = name;
         } else if (name === "window") {
             // Daylight in the panes
@@ -739,21 +742,7 @@ function taproom(map) {
     }
 
     // A wheel of candles hanging over the tables
-    const wheel = new THREE.Group();
-    const [wheelX, wheelZ, wheelY] = [m(7.5), m(8), m(2.55)];
-
-    wheel.add(new THREE.Mesh(new THREE.TorusGeometry(m(0.7), 0.35, 5, 18).rotateX(Math.PI / 2).translate(wheelX, wheelY, wheelZ), material("timber")));
-
-    for (let k = 0; k < 6; k++) {
-        const angle = (k / 6) * Math.PI * 2;
-        const [x, z] = [wheelX + Math.cos(angle) * m(0.7), wheelZ + Math.sin(angle) * m(0.7)];
-
-        wheel.add(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, m(0.18), 6).translate(x, wheelY + m(0.09), z), material("candle")));
-        wheel.add(new THREE.Mesh(new THREE.ConeGeometry(0.12, m(0.06), 5).translate(x, wheelY + m(0.21), z), material("candle-flame")));
-    }
-
-    wheel.add(new THREE.Mesh(new THREE.BoxGeometry(0.15, m(0.8), 0.15).translate(wheelX, wheelY + m(0.4), wheelZ), material("iron")));
-    solid.add(objectSolid(wheel));
+    solid.add(objectSolid(candleWheel(m(7.5), m(8), m(2.55), m(0.7), 6)));
 
     return {
         solid,
@@ -767,15 +756,34 @@ function taproom(map) {
     };
 }
 
-// Runs of benches along each row (each bench square is a seat)
-function benchRuns(map) {
+// A wheel of `count` candles hanging on a rod, its middle at x, z (art pixels), `y` high, `radius` across
+function candleWheel(wheelX, wheelZ, wheelY, radius, count) {
+    const wheel = new THREE.Group();
+
+    wheel.add(new THREE.Mesh(new THREE.TorusGeometry(radius, 0.35, 5, 18).rotateX(Math.PI / 2).translate(wheelX, wheelY, wheelZ), material("timber")));
+
+    for (let k = 0; k < count; k++) {
+        const angle = (k / count) * Math.PI * 2;
+        const [x, z] = [wheelX + Math.cos(angle) * radius, wheelZ + Math.sin(angle) * radius];
+
+        wheel.add(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, m(0.18), 6).translate(x, wheelY + m(0.09), z), material("candle")));
+        wheel.add(new THREE.Mesh(new THREE.ConeGeometry(0.12, m(0.06), 5).translate(x, wheelY + m(0.21), z), material("candle-flame")));
+    }
+
+    wheel.add(new THREE.Mesh(new THREE.BoxGeometry(0.15, m(0.8), 0.15).translate(wheelX, wheelY + m(0.4), wheelZ), material("iron")));
+
+    return wheel;
+}
+
+// Runs of seats along each row (benches, `b`, or pews, `p`: each square a seat)
+function benchRuns(map, mark = "b") {
     const runs = [];
 
     for (let y = 0; y < map.height; y++) {
         let start = null;
 
         for (let x = 0; x <= map.width; x++) {
-            const seat = map.plan[y][x] === "b";
+            const seat = map.plan[y][x] === mark;
 
             if (seat && start === null) {
                 start = x;
@@ -1103,7 +1111,170 @@ function smithy(map) {
     };
 }
 
-const BUILDERS = { taproom, upstairs, smithy };
+// --- The temple ---
+
+// A figure robed to the ground, in `colour`, on a plinth: a statue of one of the Six, `tall` art
+// pixels, arms out in blessing, their symbol's colour in a disc over their head
+function statue(solid, x, z, tall, robe, halo) {
+    const group = new THREE.Group();
+    const stone = material(robe);
+
+    group.add(new THREE.Mesh(new THREE.CylinderGeometry(tall * 0.13, tall * 0.22, tall * 0.72, 12).translate(x, tall * 0.36, z), stone));
+    group.add(new THREE.Mesh(new THREE.CylinderGeometry(tall * 0.07, tall * 0.13, tall * 0.14, 12).translate(x, tall * 0.79, z), stone));
+    group.add(new THREE.Mesh(new THREE.SphereGeometry(tall * 0.075, 12, 10).translate(x, tall * 0.92, z), stone));
+
+    for (const side of [-1, 1]) {
+        group.add(new THREE.Mesh(new THREE.CylinderGeometry(tall * 0.035, tall * 0.05, tall * 0.34, 8).rotateZ(side * 1.05).translate(x + side * tall * 0.17, tall * 0.7, z + tall * 0.03), stone));
+    }
+
+    group.add(new THREE.Mesh(new THREE.TorusGeometry(tall * 0.1, tall * 0.012, 6, 20).translate(x, tall * 0.96, z - tall * 0.04), material(halo)));
+    solid.add(objectSolid(group));
+}
+
+// A pew: a bench with a back, `x0` to `x1` along its row, its seat at `z0` to `z1`, facing north
+function pew(solid, x0, z0, x1, z1) {
+    const wood = material("planks-dark");
+
+    solid.box(x0, m(0.42), z0 + m(0.1), x1, m(0.48), z1 - m(0.1), wood);
+    solid.box(x0, m(0.48), z1 - m(0.16), x1, m(0.95), z1 - m(0.08), wood);
+    solid.box(x0 - 0.1, m(0.9), z1 - m(0.2), x1 + 0.1, m(0.98), z1 - m(0.02), material("timber"));
+
+    for (const x of [x0 + 0.3, x1 - 1.2]) {
+        solid.box(x, 0, z0 + m(0.1), x + 0.9, m(0.98), z1 - m(0.02), material("timber"));
+    }
+}
+
+function temple(map) {
+    const solid = new Solid();
+    const [w, h] = [m(map.width), m(map.height)];
+    const patron = GODS[map.patron] ?? GODS.aurelia;
+    const others = shrinesOf(map.patron);
+    const at = (kind) => map.pieces.filter((piece) => piece.kind === kind);
+
+    // Pale flagstones, whitewashed walls, a red runner up the aisle to the altar's dais
+    solid.box(-m(0.3), -0.5, -m(0.3), w + m(0.3), 0, h + m(0.3), material("stone-warm"));
+
+    const doors = map.marks.D;
+    const doorMiddle = (doors[0][0] + doors.at(-1)[0] + 1) / 2;
+
+    outerWalls(solid, map, "plaster-white", [{ side: "s", from: doorMiddle - 0.8, to: doorMiddle + 0.8, lintel: 2.6 }]);
+    solid.box(m(doorMiddle - 0.8), 0, h - 0.2, m(doorMiddle + 0.8), m(2.6), h + 0.4, material("planks-dark", WALL));
+    solid.box(m(doorMiddle - 0.5), m(0.02), m(3.4), m(doorMiddle + 0.5), m(0.04), h - m(0.6), material("rug"));
+
+    // Tall windows down both sides, glazed in the Six's colours, and a round one over the altar
+    GOD_IDS.forEach((id, k) => {
+        const z = m(3 + k * 2.4);
+
+        if (z < h - m(2)) {
+            windowIn(solid, "z", k % 2 ? w : 0, z, k % 2 ? 1 : -1);
+        }
+    });
+
+    // Pillars along the walls between the windows
+    for (let z = m(2); z < h - m(1.5); z += m(2.4)) {
+        for (const x of [m(0.25), w - m(0.25)]) {
+            solid.cylinder(x, z, 0, m(STOREY), m(0.22), m(0.22), material("stone-warm", WALL), { segments: 10 });
+        }
+    }
+
+    // The dais: two broad steps up to the altar, a white cloth over it with a gold border, candles,
+    // a book; the patron's statue behind it, and their colours hanging either side
+    const [altar] = at("altar");
+    const [ax0, ax1, az0, az1] = [m(altar.x), m(altar.x + altar.w), m(altar.y), m(altar.y + altar.h)];
+
+    solid.box(ax0 - m(1.5), 0, 0, ax1 + m(1.5), m(0.15), az1 + m(1), material("stone"));
+    solid.box(ax0 - m(1), m(0.15), 0, ax1 + m(1), m(0.3), az1 + m(0.4), material("stone"));
+    solid.box(ax0 + 0.3, m(0.3), az0 + 0.3, ax1 - 0.3, m(1.1), az1 - 0.3, material("stone-warm"));
+    solid.box(ax0, m(1.1), az0, ax1, m(1.14), az1, material("linen"));
+    solid.box(ax0, m(0.8), az1 - 0.05, ax1, m(1.14), az1 + 0.1, material("linen"));
+    solid.box(ax0, m(0.78), az1 - 0.05, ax1, m(0.84), az1 + 0.12, material("brass"));
+
+    for (const x of [ax0 + m(0.35), ax1 - m(0.35)]) {
+        solid.cylinder(x, (az0 + az1) / 2, m(1.14), m(1.2), m(0.08), m(0.06), material("brass"), { segments: 8 });
+        candle(solid, x, (az0 + az1) / 2, m(1.2));
+    }
+
+    solid.box((ax0 + ax1) / 2 - m(0.25), m(1.14), az0 + m(0.3), (ax0 + ax1) / 2 + m(0.25), m(1.2), az0 + m(0.65), material("ledger"));
+
+    const [plinth] = at("statue");
+    const [px, pz] = [m(plinth.x + plinth.w / 2), m(plinth.y + plinth.h / 2)];
+
+    solid.box(px - m(0.6), m(0.3), pz - m(0.45), px + m(0.6), m(0.9), pz + m(0.45), material("stone-warm"));
+    statue(solid, px, pz, m(2.2), "plaster-white", `god-${map.patron}`);
+
+    for (const side of [-1, 1]) {
+        const x = px + side * m(1.8);
+
+        solid.box(x - m(0.4), m(0.6), 0.3, x + m(0.4), m(2.8), 0.5, material(`god-${map.patron}`, WALL));
+        solid.box(x - m(0.45), m(2.8), 0.2, x + m(0.45), m(2.9), 0.7, material("brass", WALL));
+    }
+
+    // The shrines: a niche of the god's colour on the wall, a small statue of them in white on a
+    // ledge, candles before it
+    at("shrine").forEach((shrine, k) => {
+        const id = others[k];
+        const west = shrine.x === 0;
+        const [x, z] = [m(shrine.x + 0.5), m(shrine.y + 0.5)];
+        const wall = west ? 0 : w;
+        const out = west ? 1 : -1;
+
+        solid.box(Math.min(wall, wall + out * m(0.12)), m(0.6), z - m(0.55), Math.max(wall, wall + out * m(0.12)), m(2.4), z + m(0.55), material(`god-${id}`, WALL));
+        solid.box(Math.min(x - out * m(0.5), x + out * m(0.3)), 0, z - m(0.45), Math.max(x - out * m(0.5), x + out * m(0.3)), m(0.9), z + m(0.45), material("stone-warm"));
+        statue(solid, x - out * m(0.2), z, m(1.1), "plaster-white", `god-${id}`);
+
+        for (const dz of [-0.28, 0, 0.28]) {
+            candle(solid, x + out * m(0.2), z + m(dz), m(0.9));
+        }
+    });
+
+    // The stand of votive candles: tiers of iron, rows of little lights
+    for (const stand of at("votive")) {
+        const [x, z] = [m(stand.x + 0.5), m(stand.y + 0.5)];
+
+        for (const [tier, y] of [[0.4, 0.7], [0.28, 0.85], [0.16, 1]]) {
+            solid.box(x - m(tier), m(y) - 0.3, z - m(0.35), x + m(tier), m(y), z + m(0.35), material("iron"));
+
+            for (let dx = -tier + 0.08; dx <= tier - 0.08; dx += 0.12) {
+                candle(solid, x + m(dx), z, m(y));
+            }
+        }
+
+        solid.box(x - 0.3, 0, z - 0.3, x + 0.3, m(0.7), z + 0.3, material("iron"));
+    }
+
+    // Basins of water by the door: stone bowls on pedestals
+    for (const basin of at("basin")) {
+        const [x, z] = [m(basin.x + 0.5), m(basin.y + 0.5)];
+
+        solid.cylinder(x, z, 0, m(0.75), m(0.12), m(0.16), material("stone-warm"), { segments: 10 });
+        solid.cylinder(x, z, m(0.75), m(0.95), m(0.34), m(0.26), material("stone-warm"), { segments: 14 });
+        solid.cylinder(x, z, m(0.9), m(0.92), m(0.3), m(0.3), material("water"), { segments: 14 });
+    }
+
+    // The pews, facing the altar
+    for (const run of benchRuns(map, "p")) {
+        pew(solid, m(run.x), m(run.y), m(run.x + run.w), m(run.y + 1));
+    }
+
+    // A great ring of candles hanging over the nave
+    const [cx, cz] = [w / 2, h * 0.45];
+
+    solid.add(objectSolid(candleWheel(cx, cz, m(2.7), m(1.1), 10)));
+
+    return {
+        solid,
+        moving: [],
+        flames: [],
+        lights: [
+            { kind: "lamp", x: map.width / 2, y: 2.4, z: altar.y + 2, colour: 0xffe2b0, intensity: 8, distance: 16, flicker: 0.04 },
+            { kind: "lamp", x: map.width / 2, y: 2.6, z: map.height * 0.6, colour: 0xe8eeff, intensity: 5, distance: 18, flicker: 0.02 },
+        ],
+        hearth: null,
+        patron,
+    };
+}
+
+const BUILDERS = { taproom, upstairs, smithy, temple };
 
 /**
  * Build a map's inside: { map, object (a Group at the map's place in the world, in metres),

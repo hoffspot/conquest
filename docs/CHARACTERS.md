@@ -216,7 +216,9 @@ cloth round the body:
   it lies over the lap and falls down the shins.
 
 The tavern's folk wear them: wool, green and red skirts, a velvet gown, and the barkeep's apron
-(the smith and apprentice a leather one, longer and stiffer),
+(the smith and apprentice a leather one, longer and stiffer; a temple's priest and acolyte an
+alb's white skirt to the floor, under an alb with long sleeves and, the priest, a chasuble
+bordered in gold),
 over a chemise (low-necked, short-sleeved) and a laced bodice (a band from under the waist to over
 the bust, painted with a cord criss-crossing down the front).
 
@@ -590,6 +592,9 @@ arms flung out, and lies flat. The feet aren't kept planted while falling.
   - **pump** (the apprentice): both hands on the bellows' lever, pushing it down and letting it
     up, three times;
   - **crank**: turning the grindstone's crank round and round, the other hand on its frame.
+- **A temple's**: **bless**, the right hand raised palm out and drawn down and across in the sign
+  of the Hearth, the other on the chest; **light**, reaching forward to a candle's wick, bowing a
+  little.
 - **Beckoning** (a courtesan, when the player comes into her sight): the hip cocked, a hand on
   it, the other held out palm up, its index finger curling "come here" three times (the
   `beckon` finger shape: the index straight, the others loosely curled; a key's `index` curls it).
@@ -638,6 +643,17 @@ as the barkeep does, at the counter.
 | | shifting the weight | (the adventurer's) |
 | Apprentice | wiping the brow | (the serving wench's) |
 | | looking about, rolling the shoulders, a yawn, stretching | (the adventurer's) |
+| Priest | hands folded in prayer | the hands together before the chest, fingers up, the head bowed |
+| | arms raised in praise | both arms up high and wide, palms up, the face lifted |
+| | a bow of the head | hands folded at the waist, a slow bow |
+| | the sign of the Hearth | fingertips to the brow, then the heart, then out palm up |
+| | hands clasped behind | at the small of the back, looking over the pews one way and the other |
+| Acolyte | (the priest's prayer, bow and sign; the adventurer's looking about and yawn) | |
+| Worshipper (seated) | praying | hands together, the head bowed over them |
+| | head bowed | bowed low, the hands folded in the lap |
+| | looking up | hands together, looking up to the altar's god |
+| | the sign of the Hearth | as the priest's |
+| | hands in the lap | palms up, eyes closed |
 | Adventurer | stretching | both arms up high, the back arched |
 | | looking about | a hand shading the eyes, one way then the other |
 | | rolling the shoulders | the shoulders rolled up and back, the neck stretched each way |

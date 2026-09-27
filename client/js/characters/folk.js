@@ -44,6 +44,18 @@ const PARTS = {
         m: { wear: [["tunic", "shirt", "blueTunic"], ["trousers"], ["boots"], ["leatherApron"]], hair: ["short", "buzz", "swept"], beard: ["none", "none", "stubble"], build: { weight: [0.35, 0.6], muscle: [0.45, 0.65], belly: [0, 0.1] } },
         f: { wear: [["shirt", "chemise"], ["breeches", "trousers"], ["boots"], ["leatherApron"]], hair: ["ponytail", "bob"], build: { weight: [0.38, 0.55], muscle: [0.45, 0.6], bust: [0.35, 0.6] } },
     },
+    priest: {
+        m: { wear: [["alb"], ["chasuble"], ["albSkirt"], ["boots"]], hair: ["short", "bald", "swept", "buzz"], beard: ["full", "short", "none", "goatee"], build: { weight: [0.45, 0.75], muscle: [0.35, 0.55], belly: [0, 0.5] } },
+        f: { wear: [["alb"], ["chasuble"], ["albSkirt"], ["boots"]], hair: ["topknot", "long", "bob"], build: { weight: [0.4, 0.65], muscle: [0.35, 0.5], bust: [0.4, 0.7] } },
+    },
+    acolyte: {
+        m: { wear: [["alb"], ["albSkirt"], ["belt"], ["boots"]], hair: ["short", "buzz"], beard: ["none"], build: { weight: [0.35, 0.55], muscle: [0.4, 0.55], belly: [0, 0.1] } },
+        f: { wear: [["alb"], ["albSkirt"], ["belt"], ["boots"]], hair: ["ponytail", "bob", "topknot"], build: { weight: [0.35, 0.55], muscle: [0.38, 0.5], bust: [0.35, 0.6] } },
+    },
+    worshipper: {
+        m: { wear: [["tunic", "greenTunic", "blueTunic", "shirt"], [null, "jerkin"], ["trousers", "breeches"], ["boots"], ["belt"]], hair: ["short", "swept", "buzz", "bald"], beard: ["short", "full", "stubble", "none"], build: { weight: [0.4, 0.85], muscle: [0.4, 0.7], belly: [0, 0.7] } },
+        f: { wear: [["chemise"], [null, "bodice"], ["kirtle", "skirt", "greenSkirt"], ["boots"]], hair: ["long", "bob", "ponytail", "topknot"], build: { weight: [0.4, 0.75], muscle: [0.4, 0.55], bust: [0.45, 0.85] } },
+    },
     madam: { f: { wear: [["chemise"], ["velvetBodice"], ["gown"], ["boots"]], hair: ["topknot", "long"], build: { weight: [0.5, 0.7], muscle: [0.32, 0.42], bust: [0.7, 1] } } },
     courtesan: { f: { wear: "lingerie", hair: ["long", "long", "bob", "ponytail", "topknot"], build: { weight: [0.4, 0.55], muscle: [0.38, 0.46], bust: [0.6, 1] } } },
 };
@@ -57,7 +69,8 @@ const GREY = ["grey", "white"];
 /**
  * A look for one of the folk: { shape, look, equipment, walk } (as presets.js FOLK's), from
  * `one`: { role (roles.js: barkeep, barmaid, patron, innkeeper, madam, courtesan, smith,
- * apprentice), local (their part: wench, greybeard...), sex ("f" or "m"), seed }.
+ * apprentice, priest, acolyte, worshipper), local (their part: wench, greybeard...), sex ("f" or
+ * "m"), seed }.
  */
 export function folkLook({ role, local = role, sex = "m", seed = 1 }) {
     const random = createRandom(seed * 2654435761 + 97);

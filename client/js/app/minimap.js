@@ -54,6 +54,12 @@ const INSIDE = {
     rack: [84, 60, 38],
     workbench: [112, 76, 42],
     coal: [34, 30, 28],
+    statue: [226, 222, 212],
+    altar: [236, 230, 214],
+    shrine: [196, 164, 92],
+    votive: [70, 66, 62],
+    pew: [98, 66, 40],
+    basin: [120, 150, 164],
 };
 
 // Pixels to the metre of the painted map

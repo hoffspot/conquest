@@ -165,6 +165,15 @@ const crank = (turn) => {
     return { at: [0.12, -0.58 + 0.1 * Math.sin(angle), 0.6 + 0.1 * Math.cos(angle)], palm: [0.8, -0.2, 0], towards: [0, 0, 1], shape: "grip" };
 };
 
+// Hands together before the chest in prayer (`y`: how low, arm lengths below the shoulders),
+// fingers up; the right hand raised in blessing, palm out; a hand flat on the chest
+const PRAYING = (y = -0.42) => ({
+    right: { at: [0.28, y, 0.34], palm: [0.89, -0.45, 0], towards: [0.32, 0.63, 0.71], shape: "open" },
+    left: { at: [-0.28, y, 0.34], palm: [-0.89, -0.45, 0], towards: [-0.32, 0.63, 0.71], shape: "open" },
+});
+const BLESSING = { at: [0.05, 0.18, 0.55], palm: [0, 0, 1], towards: [0, 1, 0.1], shape: "open" };
+const ON_CHEST = { at: [-0.3, -0.4, 0.2], palm: [0, 0, -1], towards: [-1, 0, 0], shape: "open" };
+
 /**
  * Each weapon's attack (weapons.js: an attack's `animation`) and each spell's cast, in five ways
  * (`variants`: { name, keys }), so no two in a row look the same (the character picks one at
@@ -636,6 +645,27 @@ export const ATTACKS = Object.freeze({
                 ...[0.4, 0.55, 0.7, 0.85, 1, 1.15, 1.3, 1.45, 1.6, 1.75].map((time, k) => [time, { right: crank(k / 4), left: { at: [-0.15, -0.62, 0.5], palm: [0, -1, 0], towards: [0, 0, 1], shape: "open" }, ...spine({ flex: 16 }) }])),
         ],
     },
+    // A temple's: the priest blessing the pews (the right hand raised, palm out, and drawn down
+    // and across in the sign of the Hearth, the other on the chest), and lighting a candle at a
+    // shrine (reaching forward to its wick, bowing a little)
+    bless: {
+        variants: [
+            variant("bless", { ...spine({}), Head: { flex: 0 } },
+                [0.6, { right: BLESSING, left: ON_CHEST, ...spine({ flex: -3 }), Head: { flex: -4 } }],
+                [1, { right: { ...BLESSING, at: [0.05, 0.28, 0.55] }, left: ON_CHEST, Head: { flex: -6 } }],
+                [1.3, { right: { ...BLESSING, at: [0.05, -0.05, 0.55] }, left: ON_CHEST }],
+                [1.5, { right: { ...BLESSING, at: [-0.12, 0.12, 0.55] }, left: ON_CHEST }],
+                [1.7, { right: { ...BLESSING, at: [0.2, 0.12, 0.55] }, left: ON_CHEST, ...spine({ flex: 4 }), Head: { flex: 6 } }]),
+        ],
+    },
+    light: {
+        variants: [
+            variant("light", { ...spine({}), Head: { flex: 0 } },
+                [0.6, { right: { at: [0.08, -0.5, 0.6], palm: [0.2, -0.4, 0.9], towards: [0, 0.2, 1], shape: "relaxed" }, ...spine({ flex: 16 }), Head: { flex: 14 } }],
+                [1, { right: { at: [0.08, -0.56, 0.66], palm: [0.2, -0.4, 0.9], towards: [0, 0.1, 1], shape: "relaxed" }, left: ON_CHEST, ...spine({ flex: 20 }), Head: { flex: 18 } }],
+                [1.5, { right: { at: [0.08, -0.5, 0.6], palm: [0.2, -0.4, 0.9], towards: [0, 0.2, 1], shape: "relaxed" }, left: ON_CHEST, ...spine({ flex: 12 }), Head: { flex: 10 } }]),
+        ],
+    },
     // Beckoning the player over (a courtesan, when she first sees them): facing them, a hand
     // held out palm up, the index finger curling "come here" three times, the other on the hip
     beckon: {
@@ -749,6 +779,35 @@ const ADVENTURER_RESTS = [
         [0.5, { left: { at: [-0.26, -0.62, 0.22], palm: [0, -0.2, -0.98], towards: [-0.2, -0.96, 0.19], shape: "relaxed" }, Hips: { obliquity: -6 }, ...spine({ bend: 5 }), offset: [-0.04, -0.01, 0] }],
         [1, { left: { at: [-0.26, -0.62, 0.22], palm: [0, -0.2, -0.98], towards: [-0.2, -0.96, 0.19], shape: "relaxed" }, Hips: { obliquity: 6 }, ...spine({ bend: -5 }), offset: [0.04, -0.01, 0] }],
         [1.5, { left: { at: [-0.26, -0.62, 0.22], palm: [0, -0.2, -0.98], towards: [-0.2, -0.96, 0.19], shape: "relaxed" }, Hips: { obliquity: -3 }, ...spine({ bend: 3 }), offset: [-0.02, 0, 0] }]),
+];
+
+// The priest's rests (some of them the acolyte's too)
+const PRIEST_RESTS = [
+    variant("hands folded in prayer", { ...spine({}), Head: { flex: 0 } },
+        // Hands together before the chest, the head bowed, a moment's silence
+        [0.5, { ...PRAYING(), Head: { flex: 16 } }],
+        [1.6, { ...PRAYING(), ...spine({ flex: 4 }), Head: { flex: 20 } }]),
+    variant("arms raised in praise", { ...spine({}), Head: { flex: 0 } },
+        // Both arms raised high and wide, palms up, the face lifted
+        [0.5, { right: { at: [-0.3, 0.6, 0.4], palm: [0.3, 0.7, 0.6], towards: [-0.3, 0.9, 0.2], shape: "open" }, left: { at: [0.3, 0.6, 0.4], palm: [-0.3, 0.7, 0.6], towards: [0.3, 0.9, 0.2], shape: "open" }, ...spine({ flex: -6 }), Head: { flex: -14 } }],
+        [1.4, { right: { at: [-0.32, 0.64, 0.38], palm: [0.3, 0.7, 0.6], towards: [-0.3, 0.9, 0.2], shape: "open" }, left: { at: [0.32, 0.64, 0.38], palm: [-0.3, 0.7, 0.6], towards: [0.3, 0.9, 0.2], shape: "open" }, ...spine({ flex: -8 }), Head: { flex: -18 } }],
+        [1.75, { ...spine({}), Head: { flex: 0 } }]),
+    variant("a bow of the head", { ...spine({}), Head: { flex: 0 } },
+        // Hands folded at the waist, a slow bow
+        [0.5, { right: { at: [0.3, -0.72, 0.3], palm: [0.6, 0.2, 0.7], towards: [0.5, -0.3, 0.8], shape: "relaxed" }, left: { at: [-0.28, -0.74, 0.3], palm: [-0.6, 0.2, 0.7], towards: [-0.5, -0.3, 0.8], shape: "relaxed" } }],
+        [1, { ...spine({ flex: 18 }), Head: { flex: 24 } }],
+        [1.5, { ...spine({ flex: 4 }), Head: { flex: 6 } }]),
+    variant("the sign of the Hearth", { ...spine({}), Head: { flex: 0 } },
+        // Fingertips to the brow, then the heart, then out palm up to all
+        [0.5, { right: { at: [0.3, 0.22, 0.28], palm: [0, 0, -1], towards: [0, 1, 0], shape: "open" }, Head: { flex: 8 } }],
+        [1, { right: { at: [0.3, -0.32, 0.24], palm: [0, -0.45, -0.89], towards: [1, 0, 0], shape: "open" }, Head: { flex: 10 } }],
+        [1.4, { right: { at: [0, -0.3, 0.62], palm: [0, 1, 0.2], towards: [0, 0, 1], shape: "open" }, Head: { flex: 0 } }]),
+    variant("hands clasped behind", { ...spine({}), Head: { flex: 0, turn: 0 } },
+        // Hands clasped at the small of the back, looking over the pews one way and the other
+        [0.5, { right: { at: [0.12, -0.82, -0.16], palm: [0, 0, -1], towards: [0.3, -0.9, 0], shape: "relaxed" }, left: { at: [-0.12, -0.82, -0.16], palm: [0, 0, -1], towards: [-0.3, -0.9, 0], shape: "relaxed" }, ...spine({ flex: -3 }) }],
+        [1, { Head: { turn: 20 } }],
+        [1.5, { Head: { turn: -20 } }],
+        [1.75, { Head: { turn: 0 } }]),
 ];
 
 /**
@@ -911,6 +970,31 @@ export const RESTS = Object.freeze({
         ADVENTURER_RESTS[4],
     ],
     apprentice: [renamed(BARMAID_RESTS[0], "wiping the brow"), ADVENTURER_RESTS[1], ADVENTURER_RESTS[2], ADVENTURER_RESTS[3], ADVENTURER_RESTS[0]],
+    priest: PRIEST_RESTS,
+    acolyte: [PRIEST_RESTS[0], PRIEST_RESTS[2], ADVENTURER_RESTS[1], PRIEST_RESTS[3], ADVENTURER_RESTS[3]],
+    worshipper: [
+        variant("praying", { ...spine({}), Head: { flex: 0 } },
+            // Hands together in prayer, the head bowed over them
+            [0.5, { ...PRAYING(-0.45), ...spine({ flex: 6 }), Head: { flex: 18 } }],
+            [1.6, { ...PRAYING(-0.45), ...spine({ flex: 8 }), Head: { flex: 22 } }]),
+        variant("head bowed", { ...spine({}), Head: { flex: 0 } },
+            // Bowed low, the hands folded in the lap
+            [0.5, { right: { at: [0.26, -0.85, 0.42], palm: [0.3, 1, 0], towards: [0, 0, 1], shape: "relaxed" }, left: { at: [-0.26, -0.85, 0.42], palm: [-0.3, 1, 0], towards: [0, 0, 1], shape: "relaxed" }, ...spine({ flex: 14 }), Head: { flex: 30 } }],
+            [1.6, { ...spine({ flex: 16 }), Head: { flex: 32 } }]),
+        variant("looking up", { ...spine({}), Head: { flex: 0 } },
+            // Hands together, looking up to the altar's god
+            [0.5, { ...PRAYING(-0.35), ...spine({ flex: -4 }), Head: { flex: -20 } }],
+            [1.6, { ...PRAYING(-0.35), ...spine({ flex: -5 }), Head: { flex: -22 } }]),
+        variant("the sign of the Hearth", { ...spine({}), Head: { flex: 0 } },
+            // Fingertips to the brow, then the heart, then out palm up
+            [0.5, { right: { at: [0.3, 0.22, 0.28], palm: [0, 0, -1], towards: [0, 1, 0], shape: "open" }, Head: { flex: 10 } }],
+            [1, { right: { at: [0.3, -0.32, 0.24], palm: [0, -0.45, -0.89], towards: [1, 0, 0], shape: "open" }, Head: { flex: 12 } }],
+            [1.4, { right: { at: [0.1, -0.35, 0.6], palm: [0, 1, 0.2], towards: [0, 0, 1], shape: "open" }, Head: { flex: 4 } }]),
+        variant("hands in the lap", { ...spine({}), Head: { flex: 0 } },
+            // Hands open in the lap, palms up, eyes closed
+            [0.5, { right: { at: [0.22, -0.88, 0.4], palm: [0, 1, 0], towards: [0, 0, 1], shape: "relaxed" }, left: { at: [-0.22, -0.88, 0.4], palm: [0, 1, 0], towards: [0, 0, 1], shape: "relaxed" }, Head: { flex: 12 } }],
+            [1.6, { Head: { flex: 14 } }]),
+    ],
 });
 
 // --- Reactions to being hit ---
