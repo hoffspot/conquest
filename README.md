@@ -323,11 +323,15 @@ npm run build:music     # remakes client/music, the music's instrument recording
 `npm test` checks that `client/js/app/manifest.js` (the loading screen's list of files and their
 sizes) is up to date, so run `npm run build:manifest` after changing the game's code or data. The
 browser tests need Chromium: run `npx playwright install chromium` once, or set `CHROMIUM_PATH`
-to an existing Chromium or Chrome executable.
+to an existing Chromium or Chrome executable. Every browser test has a page of its own, so they
+run side by side (on half the machine's cores; `--workers=N` for more or fewer), and CI splits
+them between three jobs run at once (`--shard=1/3`...). CI runs for each pull request, and for
+main as each is merged; lint and the unit tests are a job of their own.
 
 While the game is running, the browser console reaches it through `pellagos`: for example
 `pellagos.game.battle.actor("orc")`, or `pellagos.game.advance(10)` to play on ten seconds
-without drawing (handy on slow machines).
+without drawing (handy on slow machines), then draw once (`{ render: false }`: not even that, as
+the browser tests do stepping through what happens).
 
 ```
 client/                 The game (static files served to the browser)

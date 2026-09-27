@@ -27,9 +27,23 @@ async function title(page) {
     await expect(page.locator("#title")).toBeVisible({ timeout: 60000 });
 }
 
+// Open the game and wait for it to be playing (checking on a timer: a page with nothing changing
+// on it may draw no frames). If it isn't in time, what the loading screen says, and the page's
+// errors, are in the failure
 async function playing(page, address) {
+    const errors = [];
+
+    page.on("pageerror", (error) => errors.push(error.message));
+    page.on("console", (message) => message.type() === "error" && errors.push(message.text()));
     await page.goto(address);
-    await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 90000 });
+
+    try {
+        await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 90000, polling: 250 });
+    } catch (error) {
+        const where = await page.evaluate(() => ({ screen: document.body.dataset.screen, status: document.querySelector("#loadstatus")?.textContent, amount: document.querySelector("#loadamount")?.textContent })).catch((reason) => ({ unreadable: String(reason) }));
+
+        throw new Error(`Not playing: ${JSON.stringify(where)}; errors: ${JSON.stringify(errors.slice(0, 5))}`, { cause: error });
+    }
 }
 
 // Where a spot so many metres north of the player is on the screen
@@ -266,7 +280,7 @@ test("blows leave wounds of their weapon's kind, worse below each threshold, wit
         game.avatars.get("player").place(player.x, player.y, Math.PI);
 
         for (let second = 0; second < 40 && orc.hp >= orc.maxHp / 2 && !player.dead; second++) {
-            game.advance(0.5);
+            game.advance(0.5, { render: false });
         }
 
         const wounds = game.wounds.get("orc");
@@ -303,7 +317,7 @@ test("blows leave wounds of their weapon's kind, worse below each threshold, wit
         const player = battle.actor("player");
 
         for (let second = 0; second < 40 && !orc.dead && !player.dead; second++) {
-            game.advance(0.5);
+            game.advance(0.5, { render: false });
         }
 
         const fallen = orc.dead ? orc : player;
@@ -773,7 +787,7 @@ test("double-clicking the ground runs there, using stamina, shown by an orange b
         game.stop();
 
         for (let k = 0; k < 20; k++) {
-            game.advance(0.05);
+            game.advance(0.05, { render: false });
             fastest = Math.max(fastest, player.pace);
         }
 
@@ -908,7 +922,7 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
         const acted = new Set();
 
         for (let k = 0; k < 40; k++) {
-            game.advance(0.25);
+            game.advance(0.25, { render: false });
 
             for (const actor of here) {
                 const name = game.avatars.get(actor.id).actions.attack?.name;
@@ -1139,7 +1153,7 @@ test("the smithy: the smith heats, hammers and quenches the work, the apprentice
 
         // A while at work (what each of them does, as the battle says)
         for (let k = 0; k < 90; k++) {
-            game.advance(0.5);
+            game.advance(0.5, { render: false });
 
             for (const id of [`${building.key}/smith`, `${building.key}/apprentice`]) {
                 const name = game.avatars.get(id).actions.attack?.name;
@@ -1188,7 +1202,7 @@ test("the temple: the priest in white blesses the pews and lights the shrines' c
 
         // A while inside: what the priest and the worshippers do
         for (let k = 0; k < 80; k++) {
-            game.advance(0.5);
+            game.advance(0.5, { render: false });
 
             for (const one of folk) {
                 const name = game.avatars.get(one.id).actions.attack?.name;
@@ -1204,7 +1218,7 @@ test("the temple: the priest in white blesses the pews and lights the shrines' c
         game.battle.command("player", { type: "approach", target: priest.id });
 
         for (let k = 0; k < 200 && !game.talking; k++) {
-            game.advance(0.1);
+            game.advance(0.1, { render: false });
         }
 
         const conversation = game.talking?.conversation;
@@ -1259,7 +1273,7 @@ test("the adventurers' guild: the receptionist stamps notices behind her counter
 
         // A while inside: what the receptionist and the adventurers do
         for (let k = 0; k < 60; k++) {
-            game.advance(0.5);
+            game.advance(0.5, { render: false });
 
             for (const one of folk) {
                 const name = game.avatars.get(one.id).actions.attack?.name;
@@ -1275,7 +1289,7 @@ test("the adventurers' guild: the receptionist stamps notices behind her counter
         game.battle.command("player", { type: "approach", target: receptionist.id });
 
         for (let k = 0; k < 200 && !game.talking; k++) {
-            game.advance(0.1);
+            game.advance(0.1, { render: false });
         }
 
         const conversation = game.talking?.conversation;
@@ -1374,7 +1388,7 @@ test("a building gone into is marked on the minimap; holding the minimap opens t
             game.battle.command("player", { type: "enter", link: "tavern-door" });
 
             for (let k = 0; k < 200 && player.map !== map; k++) {
-                game.advance(0.25);
+                game.advance(0.25, { render: false });
             }
         }
 
@@ -1392,12 +1406,12 @@ test("a building gone into is marked on the minimap; holding the minimap opens t
 
             if (!squares.blocked(...to)) {
                 game.battle.command("player", { type: "move", to, run: true });
-                game.advance(0.1);
+                game.advance(0.1, { render: false });
             }
         }
 
         for (let k = 0; k < 120; k++) {
-            game.advance(0.5);
+            game.advance(0.5, { render: false });
         }
 
         return { before, marked, chunks: game.explored.chunksVisited, map: player.map };

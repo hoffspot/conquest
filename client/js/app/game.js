@@ -577,14 +577,17 @@ export class Game {
 
     /**
      * Play on for `seconds` in frames of `frame` seconds without drawing them, then draw once
-     * (for tests and debugging on slow machines).
+     * (unless not to `render`: for tests stepping through what happens, drawn only at the end,
+     * and debugging on slow machines).
      */
-    advance(seconds, { frame = 1 / 30 } = {}) {
+    advance(seconds, { frame = 1 / 30, render = true } = {}) {
         for (let time = 0; time < seconds; time += frame) {
             this.#tick(frame);
         }
 
-        this.view.render();
+        if (render) {
+            this.view.render();
+        }
     }
 
     // --- Each frame ---
