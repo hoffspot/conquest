@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+        <meta name="theme-color" content="#101418">
+        <meta name="description" content="Building lab: the houses, landmarks and towns of Pellagos built in 3D from a seed, to walk round and look at">
+
+        <title>Building Lab</title>
+
+        <link rel="icon" href="images/icons/icon-192.png" type="image/png">
+        <link rel="stylesheet" href="world-map.css">
+        <script type="importmap">
+            {
+                "imports": {
+                    "three": "./vendor/three-r186/three.module.min.js",
+                    "three/addons/": "./vendor/three-r186/addons/"
+                }
+            }
+        </script>
+        <script type="module" src="js/lab/building-lab.js"></script>
+    </head>
+    <body>
+        <main id="atlas">
+            <section id="viewport" aria-label="The buildings">
+                <canvas id="map"></canvas>
+                <div id="status" role="status">Building…</div>
+            </section>
+
+            <aside id="panel" aria-label="Building settings">
+                <h1>Buildings</h1>
+
+                <form id="seedform" class="row">
+                    <label for="seed">Seed</label>
+                    <input id="seed" name="seed" type="number" min="0" step="1" inputmode="numeric">
+                    <button type="submit">Build</button>
+                    <button type="button" id="another">Another</button>
+                </form>
+
+                <div class="row">
+                    <label for="show">Show</label>
+                    <select id="show">
+                        <option value="street">A street of every style</option>
+                        <option value="town">The town</option>
+                    </select>
+                </div>
+
+                <section>
+                    <h2>Drawn</h2>
+                    <ul id="counts" class="key"></ul>
+                </section>
+
+                <p class="hint">Drag to go round, pinch or scroll to come closer.</p>
+            </aside>
+        </main>
+        <noscript>The building lab needs JavaScript.</noscript>
+    </body>
+</html>

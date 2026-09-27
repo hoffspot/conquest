@@ -23,12 +23,12 @@ describe("the loader's manifest (client/js/app/manifest.js)", () => {
         }
     });
 
-    test("has the engine, the code, the body, its skin and the models, and nothing main.js has already loaded", () => {
-        assert.deepEqual(MANIFEST.map(({ id }) => id), ["engine", "code", "body", "skin", "models", "fonts"]);
+    test("has the engine, the code, the body, its skin and the fonts, and nothing main.js has already loaded", () => {
+        assert.deepEqual(MANIFEST.map(({ id }) => id), ["engine", "code", "body", "skin", "fonts"]);
 
         const paths = MANIFEST.flatMap(({ files }) => files.map(([path]) => path));
 
-        for (const needed of ["vendor/three-r186/three.module.min.js", "vendor/three-r186/three.core.min.js", "js/app/game.js", "js/app/creator.js", "characters/human.bin", "characters/masks/lips.jpg", "models/kaykit/barrel.bin", "fonts/UnifrakturMaguntia.woff2"]) {
+        for (const needed of ["vendor/three-r186/three.module.min.js", "vendor/three-r186/three.core.min.js", "js/app/game.js", "js/app/creator.js", "characters/human.bin", "characters/masks/lips.jpg", "fonts/UnifrakturMaguntia.woff2"]) {
             assert.ok(paths.includes(needed), needed);
         }
 

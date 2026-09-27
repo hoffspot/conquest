@@ -34,6 +34,7 @@ import { KINDS, Wounds } from "../world/wounds.js";
 import { Chunks, DECK, REACH } from "../world/chunks3d.js";
 import { buildGround } from "../world/ground.js";
 import { buildTown } from "../world/town3d.js";
+import { prepareAtlas } from "../world/art/engine/atlas.js";
 import { buildInterior, cutFor } from "../world/interiors3d.js";
 import { TREE_WIND } from "../world/art/kits/trees.js";
 import { Minimap, treesOf } from "./minimap.js";
@@ -236,6 +237,9 @@ export class Game {
         let done = 0;
         const step = (label) => onProgress({ label, done: ++done, total: steps });
 
+        // The buildings' textures, painted in workers while the land is laid
+        const atlas = prepareAtlas();
+
         // The town's trees, for hearing their leaves (and the world's, as it's drawn)
         this.townTrees = treesOf(world).map(({ x, y }) => ({ x, z: y }));
         this.sound?.setTrees(this.townTrees);
@@ -260,6 +264,7 @@ export class Game {
         }
 
         step("Building the town");
+        await time("atlas", () => atlas);
 
         const built = done;
 

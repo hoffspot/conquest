@@ -21,7 +21,7 @@
 
 import { createRandom, noise } from "../random.js";
 import { atan2, cos, length, PI, sin, sqrt, TAU } from "./exact.js";
-import { GROUND, HOUSE_STYLES, HOUSE_VARIANTS, houseKey, LANDMARKS, landmarkKey, PLOT, PROPS, propKey, treeKey, TREE_VARIANTS } from "./pieces.js";
+import { GROUND, HOUSE_STYLES, HOUSE_VARIANTS, houseKey, LANDMARKS, landmarkKey, OUTBUILDINGS, PLOT, PROPS, propKey, TRADES, treeKey, TREE_VARIANTS } from "./pieces.js";
 
 /**
  * The kinds of settlement, and how each is laid out: how far its houses reach from the middle
@@ -31,9 +31,9 @@ import { GROUND, HOUSE_STYLES, HOUSE_VARIANTS, houseKey, LANDMARKS, landmarkKey,
  * streets are built on, and its landmarks round the market.
  */
 export const SETTLEMENT_KINDS = Object.freeze({
-    village: { radius: 26, fields: 16, market: [6, 8], main: 3.6, lane: 2.8, rings: [], alleys: 1, width: [6.5, 9], depth: [6.5, 8.5], gap: [2, 6], built: 0.75, landmarks: ["tavern"], windmill: 0.6, stalls: 1 },
-    town: { radius: 48, fields: 18, market: [10, 13], main: 4.4, lane: 3, rings: [0.62], alleys: 3, width: [6, 10], depth: [8, 12], gap: [0, 1.2], built: 0.95, landmarks: ["tavern", "church", "blacksmith"], windmill: 0.8, stalls: 3 },
-    city: { radius: 84, fields: 18, market: [14, 17], main: 5, lane: 3.2, rings: [0.4, 0.72, 0.97], alleys: 8, width: [6, 11], depth: [9, 13], gap: [0, 0.8], built: 0.97, landmarks: ["tavern", "church", "blacksmith", "market"], windmill: 0.9, stalls: 4 },
+    village: { radius: 26, fields: 16, market: [6, 8], main: 3.6, lane: 2.8, rings: [], alleys: 1, width: [6.5, 9], depth: [6.5, 8.5], gap: [2, 6], built: 0.75, landmarks: ["tavern"], windmill: 0.6, stalls: 1, storeys: [[1, 6], [2, 2]], trades: 0.12 },
+    town: { radius: 48, fields: 18, market: [10, 13], main: 4.4, lane: 3, rings: [0.62], alleys: 3, width: [6, 10], depth: [8, 12], gap: [0, 1.2], built: 0.95, landmarks: ["tavern", "church", "blacksmith"], windmill: 0.8, stalls: 3, storeys: [[1, 4], [2, 5], [3, 1]], trades: 0.3 },
+    city: { radius: 84, fields: 18, market: [14, 17], main: 5, lane: 3.2, rings: [0.4, 0.72, 0.97], alleys: 8, width: [6, 11], depth: [9, 13], gap: [0, 0.8], built: 0.97, landmarks: ["tavern", "church", "blacksmith", "market"], windmill: 0.9, stalls: 4, storeys: [[1, 2], [2, 6], [3, 3]], trades: 0.4 },
 });
 
 // How far the streets step as they're laid (metres), and how far a main street bends either way
@@ -411,6 +411,17 @@ function designTown(spec, exits, random, seed) {
     const favourite = random.pick(HOUSE_STYLES);
     const styleOf = () => (random.chance(0.55) ? favourite : random.pick(HOUSE_STYLES));
     const houseSize = () => [random.range(...spec.width), random.range(...spec.depth)].map((metres) => Math.round(metres * 2) / 2);
+
+    // Each house's own (from a random of their own, so the layout's the same with or without
+    // them): how many storeys it has, a trade for a shop on the market or a main street, what a
+    // building behind the houses is, and a seed for its art
+    const own = createRandom(seed * 31 + 11);
+    const details = (street) => ({
+        storeys: own.pickWeighted(spec.storeys, ([, weight]) => weight)[0],
+        use: street !== "lane" && own.chance(spec.trades) ? own.pick(TRADES) : null,
+        seed: own.int(0, 2 ** 30),
+    });
+    let street = "market";
     const edgeAt = (x, y) => {
         const angle = atan2(y - centre[1], x - centre[0]);
 
@@ -435,7 +446,7 @@ function designTown(spec, exits, random, seed) {
         const variant = random.int(0, HOUSE_VARIANTS - 1);
 
         mark(rect, 0, USE.building);
-        place(rect, { key: houseKey(rect.w / PLOT, rect.d / PLOT, style, variant), kind: "house", style, variant });
+        place(rect, { key: houseKey(rect.w / PLOT, rect.d / PLOT, style, variant), kind: "house", style, variant, ...details(street) });
         yard(rect);
 
         return "built";
@@ -504,7 +515,9 @@ function designTown(spec, exits, random, seed) {
 
     const mains = streets.filter(({ main }) => main);
 
+    street = "main";
     alongStreets(mains, random, houseSize, { from: reach * 0.6, gap: spec.gap }, house);
+    street = "lane";
     alongStreets(streets.filter(({ main }) => !main), random, houseSize, { gap: spec.gap }, house);
 
     // Back buildings in the blocks behind the houses, each lined up with the street nearest it
@@ -546,7 +559,7 @@ function designTown(spec, exits, random, seed) {
             const variant = random.int(0, HOUSE_VARIANTS - 1);
 
             mark(rect, 0, USE.building);
-            place(rect, { key: houseKey(rect.w / PLOT, rect.d / PLOT, style, variant), kind: "house", style, variant, back: true });
+            place(rect, { key: houseKey(rect.w / PLOT, rect.d / PLOT, style, variant), kind: "house", style, variant, back: true, storeys: 1, use: own.pick(OUTBUILDINGS), seed: own.int(0, 2 ** 30) });
         }
     }
 

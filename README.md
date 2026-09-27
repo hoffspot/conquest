@@ -15,7 +15,9 @@ roads between them, and the ruins, caves and enemy camps in the wild), is at
 <https://hoffspot.github.io/conquest/world-map.html>. The town map, laying out a village, town or
 city from a seed as the game's towns are laid out (streets wandering out from a market place,
 lanes curving round between them, and houses turned every way to face them), is at
-<https://hoffspot.github.io/conquest/town-map.html>.
+<https://hoffspot.github.io/conquest/town-map.html>. The building lab, building a street of every
+style of house (or a whole town) in 3D from a seed to go round and look at, is at
+<https://hoffspot.github.io/conquest/building-lab.html>.
 
 [docs/GAME.md](docs/GAME.md) describes how the game works: the world, the fighting, the drawing,
 the screens and debug mode. [docs/CHARACTERS.md](docs/CHARACTERS.md) describes the character
@@ -309,7 +311,8 @@ client/                 The game (static files served to the browser)
   sw.js                 Service worker: keeps a copy of the game for offline play
   characters/           The body characters are made from (made by npm run build:characters),
                         MakeHuman's texture masks, and motion capture clips
-  models/kaykit/        Props (KayKit Medieval Hexagon, CC0)
+  models/kaykit/        KayKit Medieval Hexagon models (CC0), no longer used by the game (its props
+                        are its own now), kept for serving glTF
   fonts/                UnifrakturMaguntia, the blackletter of the tavern's signs (SIL OFL)
   music/                The music's instruments: short recordings of real ones, as MP3s (made by
                         npm run build:music from the Versilian Community Sample Library, CC0)
@@ -317,6 +320,7 @@ client/                 The game (static files served to the browser)
   character-lab.html    The character lab (with character-lab.css)
   world-map.html        The world map (with world-map.css)
   town-map.html         The town map (with world-map.css)
+  building-lab.html     The building lab (with world-map.css)
   vendor/three-r186/    Three.js (minified by scripts/vendor-three.js; loaded through an import map)
   js/main.js            The screens, from loading to playing (no Three.js: it loads first)
   js/app/               The game on the page
@@ -368,8 +372,10 @@ client/                 The game (static files served to the browser)
     town3d.js           The town's buildings, props and trees, merged into few meshes
     interiors3d.js      Inside the tavern: its rooms and furniture, the fire, the boar on its
                         spit, and taking down the walls between the camera and the player
-    art/                The art kits the town is built with: houses, landmarks, props, trees,
-                        and the tavern's signs
+    art/                The art the town is built with: engine/ (solid.js's shapes, the
+                        textures' painters.js, materials.js, and atlas.js, the one material
+                        everything built is drawn with) and kits/ (house.js, with framing.js and
+                        roofs.js; landmarks.js, props.js, trees.js, and the tavern's signs)
     avatar.js           A character in the world, following its place in the battle
     effects.js          Arrows, bolts, fireballs, sparks, dust, fire, arcane light, blood and
                         its splashes and pools, smoke and embers, the target ring, spells' light
@@ -391,6 +397,7 @@ client/                 The game (static files served to the browser)
   js/lab/character-lab.js  The character lab
   js/lab/world-map.js   The world map
   js/lab/town-map.js    The town map
+  js/lab/building-lab.js  The building lab
 server/                 A static file server for playing locally (npm start)
 test/                   Unit tests
 e2e/                    Playwright browser tests
@@ -404,8 +411,11 @@ docs/MODERNIZATION.md   The history: the book's Last Colony, modernized, before 
 
 ## Credits and license
 
-- Props: the KayKit Medieval Hexagon Pack by Kay Lousberg
-  (<https://kaylousberg.com>), CC0 (`client/models/kaykit/LICENSE.txt`).
+- The KayKit Medieval Hexagon Pack by Kay Lousberg (<https://kaylousberg.com>), CC0
+  (`client/models/kaykit/LICENSE.txt`): the town's props were these until the game built its own.
+- Houses laid out with a facade grammar after Wonka and Müller's split grammars; their jetties,
+  timber framing and windows sized after the carpenters' own, and BlendBuildingCreator
+  (<https://github.com/plastdrake/BlendBuildingCreator>), studied, not copied.
 - Characters: the body, its shapes, skeleton and skin weights, the texture masks and the walk and
   zombie walk motion capture clips are from MakeHuman (<https://github.com/makehumancommunity>),
   CC0. Gait data from the normal datasets bundled with pyCGM2 (<https://github.com/pyCGM2/pyCGM2>).

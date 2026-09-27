@@ -40,6 +40,13 @@ export const HOUSE_STYLES = Object.freeze(["cottage", "timber", "brick", "stone"
 /** How many different-looking houses there are of each size and style. */
 export const HOUSE_VARIANTS = 3;
 
+/**
+ * The trades a house can keep a shop for, its front open on the street (the art sets out each
+ * one's goods), and what the buildings behind the houses are.
+ */
+export const TRADES = Object.freeze(["baker", "butcher", "greengrocer", "potter", "weaver", "chandler", "cooper", "cobbler", "apothecary"]);
+export const OUTBUILDINGS = Object.freeze(["barn", "shed", "workshop", "stable"]);
+
 /** A town's special buildings, and their sizes. */
 export const LANDMARKS = Object.freeze({
     tavern: [3, 3],
