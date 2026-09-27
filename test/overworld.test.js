@@ -1,12 +1,15 @@
 // The world outside (client/js/core/overworld.js): all 8 km of it on 1-metre squares, made a
-// chunk at a time from the world plan, with the town set in where the player starts
+// chunk at a time from the world plan, with the town set in where the player starts and the
+// other settlements (settlements.js) laid out and set in as the world near them is made
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { Battle, STEP_MS } from "../client/js/core/battle.js";
 import { squaresOf } from "../client/js/core/grid.js";
 import { buildWorld, CHUNK, CHUNKS, FLORA, Overworld, WET, WORLD_SIZE } from "../client/js/core/overworld.js";
 import { findPath } from "../client/js/core/pathfinding.js";
-import { GROUND, TREE_KINDS } from "../client/js/core/setpieces/pieces.js";
+import { Settlements, squareOf, waysOut } from "../client/js/core/settlements.js";
+import { ENTERED, GROUND, TREE_KINDS } from "../client/js/core/setpieces/pieces.js";
+import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
 import { BIOMES, CELL, CELLS } from "../client/js/core/worldplan/plan.js";
 
 let world;
@@ -285,5 +288,127 @@ describe("the world outside (overworld.js)", () => {
         const each = (performance.now() - start) / 16;
 
         assert.ok(each < 40, `${each.toFixed(1)} ms a chunk`);
+    });
+});
+
+describe("the settlements out in the world (settlements.js)", () => {
+    // The village nearest the town that its roads come into, with every chunk it's in made
+    let village;
+    let settlement;
+
+    before(() => {
+        world ??= buildWorld({ seed: 1 });
+        overworld ??= world.maps.town;
+
+        const { plan, start } = world;
+        const roaded = plan.places.filter((place) => place.kind === "village" && plan.roads.some(({ from, to }) => from === place.id || to === place.id));
+
+        village = roaded.reduce((best, place) => (Math.hypot(place.at[0] - start.at[0], place.at[1] - start.at[1]) < Math.hypot(best.at[0] - start.at[0], best.at[1] - start.at[1]) ? place : best));
+
+        const { at, size } = squareOf(village);
+
+        for (let cy = Math.floor(at[1] / CHUNK); cy <= Math.floor((at[1] + size) / CHUNK); cy++) {
+            for (let cx = Math.floor(at[0] / CHUNK); cx <= Math.floor((at[0] + size) / CHUNK); cx++) {
+                overworld.chunk(cx, cy);
+            }
+        }
+
+        settlement = overworld.settlements.laid.get(village.id);
+    });
+
+    it("are every place of the plan but the town the player starts in, hamlets and farmsteads too", () => {
+        const { places } = overworld.settlements;
+
+        assert.ok(!places.includes(world.start));
+        assert.equal(places.length, world.plan.places.filter((place) => SETTLEMENT_KINDS[place.kind]).length - 1);
+
+        for (const kind of ["capital", "city", "town", "village", "hamlet", "farmstead"]) {
+            assert.ok(places.some((place) => place.kind === kind), kind);
+        }
+    });
+
+    it("are laid out as the world near them is first made, the same every time", () => {
+        assert.ok(settlement, "the village is laid out");
+        assert.deepEqual(settlement.at, squareOf(village).at);
+        assert.equal(overworld.settlements.of(village), settlement);
+
+        const again = new Settlements(world.plan, { skip: world.start }).of(village);
+
+        assert.equal(JSON.stringify(again.town), JSON.stringify(settlement.town));
+        // (A main street out for each way its roads go: one for two going much the same way)
+        assert.ok(settlement.town.exits.length >= 1 && settlement.town.exits.length <= waysOut(world.plan, village).length);
+
+        // (Nothing far off is: a place more than a chunk from any chunk made)
+        const far = overworld.settlements.places.filter((place) => !overworld.settlements.laid.has(place.id));
+
+        assert.ok(far.length > overworld.settlements.places.length / 2);
+    });
+
+    it("have a tavern, a church, a smithy and a guild in every village, and each a tavern", () => {
+        const names = settlement.town.pieces.filter(({ kind }) => kind === "landmark").map(({ name }) => name);
+
+        for (const name of ENTERED) {
+            assert.ok(names.includes(name), name);
+        }
+    });
+
+    it("are set into the world as they were laid out, their pieces each in one chunk", () => {
+        const squares = squaresOf(overworld);
+        const { at, size, town } = settlement;
+        let taken = 0;
+
+        for (let y = at[1]; y < at[1] + size; y++) {
+            for (let x = at[0]; x < at[0] + size; x++) {
+                const own = overworld.settlements.squareAt(settlement, x, y);
+
+                if (!own || overworld.inTown(x, y) || overworld.settlements.at(x, y) !== settlement) {
+                    continue;
+                }
+
+                taken += 1;
+                assert.equal(squares.blocked(x, y), Boolean(own.blocked), `${x}, ${y}`);
+                assert.equal(squares.opaque(x, y), Boolean(own.opaque), `${x}, ${y}`);
+                assert.equal(squares.ground(x, y), own.ground, `${x}, ${y}`);
+            }
+        }
+
+        assert.ok(taken > Math.PI * town.radius ** 2 * 0.8, `${taken} squares`);
+
+        // Every building's squares blocked
+        for (const piece of town.pieces.filter(({ kind }) => kind === "house" || kind === "landmark")) {
+            assert.ok(squares.blocked(Math.floor(piece.x + at[0]), Math.floor(piece.y + at[1])), piece.key);
+        }
+
+        // Its pieces, each in the chunk its middle's in
+        let found = 0;
+
+        for (let cy = Math.floor(at[1] / CHUNK); cy <= Math.floor((at[1] + size) / CHUNK); cy++) {
+            for (let cx = Math.floor(at[0] / CHUNK); cx <= Math.floor((at[0] + size) / CHUNK); cx++) {
+                found += overworld.settlements.piecesIn(cx, cy).filter(({ place }) => place === village.id).length;
+            }
+        }
+
+        assert.equal(found, town.pieces.length);
+
+        // And its trees grown with the chunks'
+        const trees = town.pieces.filter(({ kind }) => kind === "tree").length;
+        const grown = [...overworld.chunks.values()].flatMap((chunk) => chunk.trees).filter(({ x, y }) => x >= at[0] && y >= at[1] && x < at[0] + size && y < at[1] + size);
+
+        assert.ok(grown.length >= trees, `${grown.length} trees of ${trees}`);
+    });
+
+    it("carry the plan's roads on from their streets' ends", () => {
+        const lines = new Set([...overworld.roads.values()].flat().map((segment) => segment[5]).filter((line) => line.ends[village.id]));
+        const exits = settlement.town.exits.map(([x, y]) => [x + settlement.at[0], y + settlement.at[1]]);
+        const squares = squaresOf(overworld);
+
+        assert.equal(lines.size, world.plan.roads.filter(({ from, to }) => from === village.id || to === village.id).length);
+
+        for (const line of lines) {
+            const end = line.ends[village.id] === "start" ? line.points[0] : line.points.at(-1);
+
+            assert.ok(exits.some(([x, y]) => x === end[0] && y === end[1]), `a road ends at ${end}`);
+            assert.notEqual(squares.ground(Math.floor(end[0]), Math.floor(end[1])), GROUND.grass);
+        }
     });
 });

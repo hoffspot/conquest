@@ -1,12 +1,21 @@
 // The building lab (building-lab.html): houses and towns built in 3D from a seed, lit as the game
 // lights them, to go round and look at: a street of every style of house, one, two and three
-// storeys, with shops; or the whole town the game would build for the seed. Draw calls and
-// triangles are counted as the game's debug mode counts them.
+// storeys, with shops; a row of the special buildings (taverns, the guild, churches, the smithy);
+// the whole town the game would build for the seed; or a settlement of each kind out in the
+// world, drawn in its chunks as the game draws it. Draw calls and triangles are counted as the
+// game's debug mode counts them.
 //
-// ?seed=N&show=street|town choose; window.buildingLab is there for tests.
+// ?seed=N&show=street|landmarks|town|village|hamlet|farmstead|city|capital choose;
+// window.buildingLab is there for tests.
 
 import * as THREE from "three";
+import { createRandom } from "../core/random.js";
+import { nameTavern } from "../core/lore/taverns.js";
+import { GOD_IDS } from "../core/lore/gods.js";
+import { LANDMARKS } from "../core/setpieces/pieces.js";
+import { buildWorld } from "../core/overworld.js";
 import { generateWorld } from "../core/world.js";
+import { Chunks } from "../world/chunks3d.js";
 import { prepareAtlas } from "../world/art/engine/atlas.js";
 import { STYLES, TRADES } from "../world/art/kits/house.js";
 import { buildGround } from "../world/ground.js";
@@ -18,7 +27,7 @@ const $ = (selector) => document.querySelector(selector);
 const params = new URLSearchParams(location.search);
 const state = {
     seed: Number(params.get("seed")) || 7,
-    show: params.get("show") === "town" ? "town" : "street",
+    show: ["town", "landmarks", "capital", "city", "village", "hamlet", "farmstead"].includes(params.get("show")) ? params.get("show") : "street",
     built: null,
     stats: null,
     ready: false,
@@ -50,6 +59,31 @@ function streetOf(seed) {
     return { width: Math.ceil(x + 4), height: 8 + styles.length * 26 + 4, pieces };
 }
 
+// A row of every special building: taverns of every sort (their names and signs from the seed),
+// the guild, churches to the Six, the smithy, the market hall and the windmill
+function landmarksOf(seed) {
+    const random = createRandom(seed);
+    const pieces = [];
+    const row = [
+        ...[2, 2, 1, 2].map((storeys) => ({ name: "tavern", tavern: nameTavern(random, { storeys }) })),
+        { name: "guild" },
+        ...GOD_IDS.slice(0, 2).map((patron) => ({ name: "church", patron: GOD_IDS[(seed + GOD_IDS.indexOf(patron)) % GOD_IDS.length] })),
+        { name: "blacksmith" },
+        { name: "market" },
+        { name: "windmill" },
+    ];
+    let x = 4;
+
+    for (const [k, own] of row.entries()) {
+        const [w, h] = LANDMARKS[own.name];
+
+        pieces.push({ kind: "landmark", key: `landmark-${own.name}`, ...own, w, h, x: x + (w * 4) / 2, y: 10 + (h * 4) / 2, facing: 0, seed: seed * 100 + k });
+        x += w * 4 + 3;
+    }
+
+    return { width: Math.ceil(x + 4), height: 40, pieces };
+}
+
 async function build() {
     state.ready = false;
     $("#status").hidden = false;
@@ -61,29 +95,57 @@ async function build() {
 
     await prepareAtlas();
 
+    // A settlement out in the world, as the game draws it: the nearest of its kind to where a
+    // player starts, in the chunks round it
+    if (!["street", "landmarks", "town"].includes(state.show)) {
+        const world = buildWorld({ seed: state.seed });
+        const place = world.plan.places.filter(({ kind }) => kind === state.show).sort((a, b) => Math.hypot(a.at[0] - world.start.at[0], a.at[1] - world.start.at[1]) - Math.hypot(b.at[0] - world.start.at[0], b.at[1] - world.start.at[1]))[0];
+        const chunks = new Chunks(world);
+
+        chunks.fill(place.at[0], place.at[1]);
+
+        while (chunks.busy) {
+            chunks.update(place.at[0], place.at[1]);
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+
+        view.scene.add(chunks.object);
+        state.built = chunks.object;
+        orbit.focus.set(place.at[0], 2, place.at[1]);
+        orbit.distance = { capital: 170, city: 130, village: 60, hamlet: 45, farmstead: 40 }[state.show];
+        state.place = place;
+        finish(world.maps.town.settlements.laid.get(place.id).town.pieces.length);
+
+        return;
+    }
+
     const world = generateWorld({ seed: state.seed });
 
-    if (state.show === "street") {
-        const street = streetOf(state.seed);
+    if (state.show !== "town") {
+        const street = state.show === "street" ? streetOf(state.seed) : landmarksOf(state.seed);
 
         Object.assign(world, { town: { ...world.town, pieces: street.pieces }, trees: [], width: street.width, height: street.height, stamp: null, origin: 0 });
     }
 
     const group = new THREE.Group();
-    const ground = buildGround(state.show === "street" ? { ...world, ground: Array.from({ length: world.height }, () => new Uint8Array(world.width)) } : world);
+    const ground = buildGround(state.show !== "town" ? { ...world, ground: Array.from({ length: world.height }, () => new Uint8Array(world.width)) } : world);
     const town = await buildTown(world);
 
     group.add(ground, town.object);
     view.scene.add(group);
     state.built = group;
     orbit.focus.set(world.width / 2, 2, world.height / 2);
-    orbit.distance = state.show === "street" ? 42 : 70;
+    orbit.distance = state.show === "town" ? 70 : 42;
 
-    // Counted as the game counts them: what the camera and the sun draw each frame
+    finish(world.town.pieces.length);
+}
+
+// Counted as the game counts them: what the camera and the sun draw each frame
+function finish(pieces) {
     view.renderer.info.reset();
     place();
     view.render();
-    state.stats = { calls: view.renderer.info.render.calls, triangles: view.renderer.info.render.triangles, pieces: world.town.pieces.length };
+    state.stats = { calls: view.renderer.info.render.calls, triangles: view.renderer.info.render.triangles, pieces };
     $("#counts").replaceChildren(...Object.entries({ "Draw calls": state.stats.calls, Triangles: state.stats.triangles.toLocaleString(), Pieces: state.stats.pieces }).map(([label, value]) => {
         const item = document.createElement("li");
 

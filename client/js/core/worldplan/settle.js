@@ -1,8 +1,10 @@
 // Where the peoples live, and what lies between them: each people's capital, cities, towns and
-// villages (every one but the villages with a branch of the adventurers' guild), named in their
-// own tongue; the roads joining them, and the trade roads between the capitals; the sites in the
-// land between (ruins, caves, shrines, standing stones, watchtowers, castles, each people's own
-// buildings); and the camps of the enemies who raid from the wild places.
+// villages (every one with a branch of the adventurers' guild), named in their own tongue; the
+// roads joining them, and the trade roads between the capitals; the sites in the land between
+// (ruins, caves, shrines, standing stones, watchtowers, castles, each people's own buildings);
+// the camps of the enemies who raid from the wild places; and, settled last (so the rest of the
+// world is as it was before them), hamlets off the roads, a track to each, and farmsteads out in
+// the fields near the villages and towns.
 
 import { createRandom } from "../random.js";
 import { Queue } from "./queue.js";
@@ -12,14 +14,22 @@ import { CELL, CELLS, cellIndex, WATER } from "./terrain.js";
 /**
  * The kinds of settlement: how many each people has, how far (cells) they keep from others (two
  * settlements keep the average of theirs), and how far (metres) they spread round their middle;
- * whether they have a branch of the adventurers' guild.
+ * whether they have a branch of the adventurers' guild (and a smithy and a church: every place
+ * but a hamlet, which has a tavern only, and a farmstead, which hasn't even that).
  */
 export const SETTLEMENTS = Object.freeze({
     capital: { count: [1, 1], apart: 30, radius: 200, guild: true },
     city: { count: [2, 3], apart: 24, radius: 125, guild: true },
     town: { count: [4, 6], apart: 16, radius: 60, guild: true },
-    village: { count: [6, 9], apart: 9, radius: 30, guild: false },
+    village: { count: [6, 9], apart: 9, radius: 30, guild: true },
+    hamlet: { count: [5, 8], apart: 6, radius: 18, guild: false },
+    farmstead: { count: [6, 10], apart: 3, radius: 12, guild: false },
 });
+
+// Farmsteads stand within this many cells of a village or town, on land that can be farmed if
+// there's any
+const FARMS_NEAR = 12;
+const FARMLAND = new Set(["farmland", "meadow", "savannah", "heath"]);
 
 // How far (cells) capitals, cities and towns keep from water
 const DRY = 2;
@@ -537,7 +547,85 @@ export function settleLand(land, seed) {
     const sites = scatter(land, road, places, random, used);
     const camps = encamp(land, road, places, sites, random);
 
+    hamlets(land, road, roads, places, sites, camps, createRandom(seed * 29 + 3), used);
+
     return { places, road, roads, sites, camps };
+}
+
+// The small places, settled last, each people's through their lands: hamlets on dry land clear of
+// everything else, each with a track to the nearest bigger place of its people; farmsteads on
+// land that can be farmed near a village or town, off the roads
+function hamlets(land, road, roads, places, sites, camps, random, used) {
+    RACES.forEach((race, r) => {
+        const cells = [];
+
+        for (let k = 0; k < CELLS * CELLS; k++) {
+            if (land.territory[k] === r + 1 && land.cost[k] < 46 && !road[k] && !land.water[k]) {
+                const [x, y] = [k % CELLS, Math.floor(k / CELLS)];
+                const score = buildable(land, x, y);
+
+                if (score > 0.3 && dry(land, x, y, 1)) {
+                    cells.push({ x, y, score, biome: BIOMES[land.biome[k]].id });
+                }
+            }
+        }
+
+        const bigger = places.filter((place) => place.race === race.id);
+        const mine = [];
+
+        for (const kind of ["hamlet", "farmstead"]) {
+            const want = random.int(...SETTLEMENTS[kind].count);
+            // (Farmsteads on land that can be farmed if there's any near, and on any near if not)
+            const near = cells.filter((cell) => bigger.some((place) => place.kind !== "capital" && apart(place.cell, [cell.x, cell.y]) <= FARMS_NEAR));
+            const order = kind === "hamlet" ? random.shuffle([...cells]) : [...random.shuffle(near.filter((cell) => FARMLAND.has(cell.biome))), ...random.shuffle(near.filter((cell) => !FARMLAND.has(cell.biome)))];
+            let placed = 0;
+
+            for (const cell of order) {
+                if (placed >= want) {
+                    break;
+                }
+
+                const at = centre(cell.x, cell.y);
+                const clear = places.every((place) => apart(place.cell, [cell.x, cell.y]) >= (SETTLEMENTS[kind].apart + SETTLEMENTS[place.kind].apart) / 2) && sites.every((site) => apart(site.cell, [cell.x, cell.y]) >= SITE_CLEAR) && camps.every((camp) => apart(camp.at, at) >= SETTLEMENTS[kind].radius + CAMP_CLEAR);
+
+                if (!clear) {
+                    continue;
+                }
+
+                const place = {
+                    id: `${race.id}-${kind}-${placed + 1}`,
+                    kind,
+                    race: race.id,
+                    name: nameIn(race, random, used),
+                    cell: [cell.x, cell.y],
+                    at,
+                    radius: SETTLEMENTS[kind].radius,
+                    guild: false,
+                    seed: random.seed(),
+                };
+
+                places.push(place);
+                mine.push(place);
+                placed++;
+            }
+        }
+
+        // A track from each hamlet to the nearest bigger place of its people
+        for (const hamlet of mine.filter(({ kind }) => kind === "hamlet")) {
+            const to = bigger.filter(({ kind }) => kind !== "hamlet" && kind !== "farmstead").reduce((best, place) => (!best || apart(place.cell, hamlet.cell) < apart(best.cell, hamlet.cell) ? place : best), null);
+            const cells = to && route(land, road, hamlet.cell, to.cell);
+
+            if (!cells) {
+                continue;
+            }
+
+            for (const [x, y] of cells) {
+                road[cellIndex(x, y)] = Math.max(road[cellIndex(x, y)], ROAD.track);
+            }
+
+            roads.push({ from: hamlet.id, to: to.id, kind: "track", cells, bridges: cells.filter(([x, y]) => land.water[cellIndex(x, y)] === WATER.river) });
+        }
+    });
 }
 
 /**

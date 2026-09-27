@@ -197,8 +197,14 @@ const at = ({ origin, across }, u, v, w = 0, out = [0, 0, 0]) => [origin[0] + ac
  * pixels), eaves, ridge ("x" or "z"), roof, walls (material names), frame, openings ({ front,
  * back, left, right }: each a list per storey of { kind: "door", "window", "shop" or "hatch", u0,
  * u1, v0, v1 }), chimney, dormers, use }.
+ *
+ * A special building built as a house (a tavern, the guild) may ask for more: `front` (where its
+ * front wall stands, world pixels from the back of its lot), `entrance` ({ width, height }: a
+ * wide door in the middle of the front), `board` (a width kept clear over the door for a name
+ * board upstairs), `ground` (its ground floor's walls), `jettied` (true or false, not by chance)
+ * and `lofty` (the least height of its ground floor: room for a name over the door).
  */
-export function planHouse({ w, h, style = "timber", variant = 0, back = false, storeys: asked = null, use = null, seed = null, x = 0, y = 0, facing = 0 }) {
+export function planHouse({ w, h, style = "timber", variant = 0, back = false, storeys: asked = null, use = null, seed = null, x = 0, y = 0, facing = 0, front: frontAt = null, entrance = null, board = null, ground = null, jettied: forceJetty = null, lofty = null }) {
     const barn = back && (use === "barn" || use === "stable");
     const look = barn ? BARN : STYLES[style] ?? STYLES.timber;
     const random = createRandom(seed ?? seedOf(`${x.toFixed?.(2) ?? x},${y.toFixed?.(2) ?? y}-${w}x${h}-${style}-${variant}`));
@@ -213,15 +219,16 @@ export function planHouse({ w, h, style = "timber", variant = 0, back = false, s
 
     // A cottage asked for more than it has gets rooms in its roof, lit by dormers
     const attic = style === "cottage" && (asked ?? 1) > 1;
-    const jettied = Boolean(look.jetty) && count > 1 && random.chance(0.8);
+    const jettied = forceJetty ?? (Boolean(look.jetty) && count > 1 && random.chance(0.8));
     const jetty = jettied ? m(random.range(...look.jetty)) : 0;
     const [x0, x1, z0] = [m(0.25), width - m(0.25), m(0.35)];
-    const front = depth - m(0.25) - jetty * (count - 1);
+    const front = frontAt ?? depth - m(0.25) - jetty * (count - 1);
     const levels = [];
     let floor = m(PLINTH);
 
     for (let s = 0; s < count; s++) {
-        const height = m(random.range(...(s === 0 ? look.storey : look.upper)));
+        const own = m(random.range(...(s === 0 ? look.storey : look.upper)));
+        const height = s === 0 && lofty ? Math.max(own, lofty) : own;
 
         levels.push({ y: floor, height, box: [x0, x1, z0, front + jetty * s] });
         floor += height;
@@ -234,7 +241,7 @@ export function planHouse({ w, h, style = "timber", variant = 0, back = false, s
     const roofName = barn && look.roofs.includes(STYLES[style]?.roofs[0]) ? STYLES[style].roofs[0] : random.pick(look.roofs);
     const wallName = random.pick(look.walls);
     const frame = look.frame ? random.pick(look.frame) : null;
-    const stoneGround = frame && random.chance(look.stoneGround ?? 0) ? random.pick(["stone-warm", "stone"]) : null;
+    const stoneGround = ground ?? (frame && random.chance(look.stoneGround ?? 0) ? random.pick(["stone-warm", "stone"]) : null);
 
     // Doors and windows, bay by bay, wall by wall, storey by storey: lined up bay over bay
     const windowWidth = m(random.range(...look.window));
@@ -300,6 +307,21 @@ export function planHouse({ w, h, style = "timber", variant = 0, back = false, s
 
                 if (free.length) {
                     place("window", (random.pick(free) + 0.5) * bay, ww / 2, sill, sill + wh);
+                }
+            }
+
+            // A public building's wide door in the middle of its front (and its windows clear of
+            // it), and its name board's place upstairs (or over the door) kept clear of windows
+            if (street && entrance) {
+                const middle = length / 2;
+                const clearOf = (half) => list.filter(({ u0, u1 }) => u1 < middle - half || u0 > middle + half);
+
+                if (s === 0) {
+                    list.splice(0, list.length, ...clearOf(entrance.width / 2 + m(0.5)).filter(({ kind }) => kind !== "door"), { kind: "door", u0: middle - entrance.width / 2, u1: middle + entrance.width / 2, v0: 0, v1: entrance.height });
+                }
+
+                if (board && s === Math.min(1, levels.length - 1) && levels.length > 1) {
+                    list.splice(0, list.length, ...clearOf(board / 2 + m(0.2)));
                 }
             }
 

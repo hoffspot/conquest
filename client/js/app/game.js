@@ -252,7 +252,7 @@ export class Game {
             this.chunks = new Chunks(world);
             view.scene.add(this.chunks.object);
             await time("chunks", async () => {
-                while (this.chunks.update(x + 0.5, y + 0.5)) {
+                while (this.chunks.update(x + 0.5, y + 0.5) || this.chunks.busy) {
                     onProgress({ label: `Laying the land (${this.chunks.drawn.size} of ${chunks})`, done: ++done, total: steps });
                     await new Promise((resolve) => setTimeout(resolve, 0));
                 }

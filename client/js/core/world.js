@@ -28,6 +28,7 @@
 
 import { nearestFree } from "./grid.js";
 import { MAP_ORIGINS, tavernFloors, tavernFolk } from "./interiors.js";
+import { WENCHES } from "./lore/taverns.js";
 import { namePeople } from "./names.js";
 import { createRandom } from "./random.js";
 import { GROUND, landmarkKey, PLOT, TREE_VARIANTS } from "./setpieces/pieces.js";
@@ -70,7 +71,11 @@ export const SEE_OVER = /^prop-/;
  */
 export function generateWorld({ seed = 1, kind = "town", exits = null } = {}) {
     const random = createRandom(seed);
-    const town = layoutTown({ seed: random.seed(), kind, exits });
+    const laid = layoutTown({ seed: random.seed(), kind, exits });
+
+    // (The town's first tavern is Wenches and Ale, whatever else the layout would call it)
+    const first = laid.pieces.find(({ key }) => key === landmarkKey("tavern"));
+    const town = { ...laid, pieces: laid.pieces.map((piece) => (piece === first ? { ...piece, tavern: WENCHES } : piece)) };
     const { width, height } = town;
     const blocked = town.blocked.map((row) => Uint8Array.from(row));
     const opaque = town.opaque.map((row) => Uint8Array.from(row));

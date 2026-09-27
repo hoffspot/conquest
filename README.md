@@ -10,13 +10,15 @@ browser on phones, tablets and computers, and can be installed as an app.
 **Play it at <https://hoffspot.github.io/conquest/>.** The character lab, for building and
 dressing characters and watching them walk and fight, is at
 <https://hoffspot.github.io/conquest/character-lab.html>. The world map, showing the whole world
-(8 kilometres square: six peoples, their cities, towns and villages, the
+(8 kilometres square: six peoples, their cities, towns, villages, hamlets and farmsteads, the
 roads between them, and the ruins, caves and enemy camps in the wild), is at
-<https://hoffspot.github.io/conquest/world-map.html>. The town map, laying out a village, town or
-city from a seed as the game's towns are laid out (streets wandering out from a market place,
+<https://hoffspot.github.io/conquest/world-map.html>. The town map, laying out a settlement (a
+farmstead, hamlet, village, town, city or capital) from a seed as the game's are laid out (streets wandering out from a market place,
 lanes curving round between them, and houses turned every way to face them), is at
 <https://hoffspot.github.io/conquest/town-map.html>. The building lab, building a street of every
-style of house (or a whole town) in 3D from a seed to go round and look at, is at
+style of house, the taverns (each named, with its own painted sign), the adventurers' guild, the
+temples and the smithy, a whole town, or any kind of settlement out in the world, in 3D from a
+seed to go round and look at, is at
 <https://hoffspot.github.io/conquest/building-lab.html>.
 
 [docs/GAME.md](docs/GAME.md) describes how the game works: the world, the fighting, the drawing,
@@ -341,6 +343,7 @@ client/                 The game (static files served to the browser)
   js/core/              The rules. No DOM or Three.js, so they also run in Node
     overworld.js        The world: 8 km of it on 1-metre squares, made a chunk at a time from its
                         plan, with the town set in where the player starts
+    settlements.js      Every other settlement, laid out as the world near it is first made
     world.js            The town: on 1-metre squares, fields, trees, where everyone starts, the
                         tavern, and its maps and the links between them
     grid.js             Reading any map's squares (blocked, opaque, ground), in rows or chunks
@@ -354,8 +357,9 @@ client/                 The game (static files served to the browser)
     pathfinding.js      A* paths on the squares (in a window round the way, on a big map)
     variety.js          Choosing one of a few ways of doing something, never the last one again
     random.js           Seeded random numbers
+    lore/               The world's stories: gods.js the Six, taverns.js taverns' names and signs
     setpieces/          Town (and castle) layouts, and the pieces they're made from: town.js lays
-                        out villages, towns and cities, exact.js does their sums the same everywhere
+                        out every kind of settlement, exact.js does their sums the same everywhere
     worldplan/          The world plan (see docs/WORLD.md): plan.js lays it out from a seed;
                         terrain.js the land, climate, rivers and territories; settle.js the
                         settlements, roads, sites and camps; races.js the peoples, lands and foes
@@ -368,14 +372,15 @@ client/                 The game (static files served to the browser)
                         levels, the cutaway
     ground.js           The ground: textures blended square by square, in each land's colours
     chunks3d.js         The world round the player, a chunk at a time as they go: ground, water,
-                        bridges and trees
+                        bridges, trees, and the settlements' buildings
     town3d.js           The town's buildings, props and trees, merged into few meshes
     interiors3d.js      Inside the tavern: its rooms and furniture, the fire, the boar on its
                         spit, and taking down the walls between the camera and the player
     art/                The art the town is built with: engine/ (solid.js's shapes, the
                         textures' painters.js, materials.js, and atlas.js, the one material
                         everything built is drawn with) and kits/ (house.js, with framing.js and
-                        roofs.js; landmarks.js, props.js, trees.js, and the tavern's signs)
+                        roofs.js; landmarks.js, props.js, trees.js, and signs.js and emblems.js,
+                        the taverns' and temples' signs)
     avatar.js           A character in the world, following its place in the battle
     effects.js          Arrows, bolts, fireballs, sparks, dust, fire, arcane light, blood and
                         its splashes and pools, smoke and embers, the target ring, spells' light

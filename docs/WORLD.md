@@ -123,7 +123,9 @@ woods, meadow or marsh break the lands up.
 | Capital | 1, on the best land near their heartland | 200 | 30 | Yes |
 | City | 2 or 3 | 125 | 24 | Yes |
 | Town | 4 to 6 | 60 | 16 | Yes |
-| Village | 6 to 9 (as many as fit) | 30 | 9 | No |
+| Village | 6 to 9 (as many as fit) | 30 | 9 | Yes |
+| Hamlet | 5 to 8 (as many as fit) | 18 | 6 | No |
+| Farmstead | 6 to 10 (as many as fit) | 12 | 3 | No |
 
 - Each is built on flat, dry land in their territory, better by a river or lake. They aren't built
   on beaches, mountains, marsh or volcanic ground.
@@ -132,7 +134,14 @@ woods, meadow or marsh break the lands up.
   twice in a world, and names with a part said twice ("Ingingwick") or three vowels together are
   passed over.
 
-In all, a world has about 6 capitals, 15 cities, 30 towns and 40 to 50 villages.
+- **Hamlets and farmsteads** are settled last, with their own random numbers, so the rest of the
+  world is just as it was before them. A hamlet goes anywhere dry in its people's lands, clear of
+  everything else. A farmstead goes on farmland, a meadow, the savannah or heath within 12 cells
+  of a town, city or village if it can, and elsewhere near one if not. Both keep 320 m clear of
+  camps, like every settlement, and 5 cells from sites.
+
+In all, a world has about 6 capitals, 15 cities, 30 towns, 40 to 50 villages, 30 to 40 hamlets
+and 40 to 55 farmsteads.
 
 **Roads:**
 
@@ -144,6 +153,8 @@ In all, a world has about 6 capitals, 15 cities, 30 towns and 40 to 50 villages.
 - Crossing a river is a **bridge**, and costs more.
 - Following a road already there costs a third, so roads share their way where they meet. Trade
   roads are laid first, then roads, then tracks.
+- Each hamlet has a track to the nearest bigger place of its people. Farmsteads have no road:
+  they're reached over the fields.
 
 **Sites** between the settlements, 5 cells clear of them and 8 from each other:
 
@@ -197,8 +208,8 @@ at the far side of the world.
 
 - **Where a player starts** (`startFor(plan, people)`): a player picks their people and starts in
   their lands, in the town nearest their capital. It has a guild branch.
-- **Branches** (`guilds(plan)`): every capital, city and town has a branch of the adventurers'
-  guild, about 50 in a world. Players will be able to travel quickly between branches.
+- **Branches** (`guilds(plan)`): every capital, city, town and village has a branch of the
+  adventurers' guild, about 95 in a world. Players will be able to travel quickly between branches.
 - **Districts** (`guildFor(plan, x, z)`): each branch's district is the land nearer to it than to
   any other branch.
 - **Points of interest** (`openGround(plan, branch, seed, count)`): a branch will make these up
@@ -239,6 +250,13 @@ every time it's made again. The game draws it round the player as they go (`worl
 see GAME.md). Each square of a chunk comes from the plan's cell under it:
 
 - **The town**, where it's set in: its own squares, just as it was made.
+- **The other settlements** (`core/settlements.js`): each capital, city, town, village, hamlet
+  and farmstead is laid out by the town builder (`layoutTown`, from its own seed and kind, its
+  main streets heading the ways its roads leave it) when the world within a chunk of its square
+  is first made, and kept. The same place is laid out the same every time. Where it has
+  something (its streets, its market or green, its buildings, yards and trees, and everything
+  inside its edge), the world takes its squares; its fields are the land's own. Its buildings,
+  props and trees are drawn with the chunk their middles are in (`piecesIn`).
 - **Lakes and the sea**, their shores blended from cell to cell across the cells' middles, a
   little ragged.
 - **Rivers**: a line from each river cell to the cell it runs into (a lake or the sea beside it,
@@ -246,7 +264,9 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   straight, 3 to 10 metres wide, wider the more water runs in it.
 - **Roads**, along the plan's roads, smoothed from cell to cell (rounded twice at each corner):
   trade roads 4.4 metres wide, roads 3.6, tracks 2.2. The roads from the town start from where
-  its streets leave it. Roads go round lakes, and cross rivers only on bridges: where a road runs
+  its streets leave it. A road to another settlement stops 2 metres short of its square and
+  waits: when the settlement's laid out, it's carried on to the end of the main street nearest
+  where it comes in. Roads go round lakes, and cross rivers only on bridges: where a road runs
   over a river (looked for every half metre along it), a straight deck from 1.5 metres onto one
   bank to 1.5 metres onto the other, 0.4 metres wider each side than the road. Every square under
   it can be walked over. Where roads share their way over a river, the widest of their bridges.
@@ -261,16 +281,16 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   own seed, the same random numbers used for every try, planted or not, so they're the same
   whatever's made round them.
 
-Water can't be walked into, but can be seen over. A chunk takes about 3 to 5 ms to make in Node.
+Water can't be walked into, but can be seen over. A chunk takes about 3 to 5 ms to make in Node,
+and laying out a settlement 5 to 80 ms more (once).
 
 ## Next
 
-This is step 3 of the world's first phase. Step 1 was the plan, step 2 the chunks; step 3 the
-town builder (`core/setpieces/town.js`: see GAME.md, *Towns*), which lays out the start town, and
-can lay out a village, a town or a city (`town-map.html`). The next steps:
+This is step 4 of the world's first phase. Step 1 was the plan, step 2 the chunks, step 3 the
+town builder (`core/setpieces/town.js`: see GAME.md, *Towns*), and step 4 every settlement laid
+out by it and set into the chunks as the player comes near, with its roads built to it. The next
+steps:
 
-- **Places in chunks:** every settlement laid out by the town builder at its kind's size and set
-  into the chunks it's in, as the start town is, and the roads built to them.
 - **Camps and patrols in play:** enemies of each camp's tier, patrols that roam their range, and
   camps that can be destroyed.
 - **The lands drawn:** ground, trees and plants for each biome (two forests for the elves and dark
@@ -287,7 +307,10 @@ however they're come to; the town set in just as it was made, with everything in
 streets carried on as roads, water blocked but seen over, bridges walked over; trees as thick as
 their land has them, of its kinds, clear of roads and water; a way out of the town along the
 roads across many chunks, found quickly; the player walking out into the world; and chunks made
-quickly.
+quickly. Of the other settlements: every place but the start town, hamlets and farmsteads too;
+laid out as the world near them is made, the same every time; a village's tavern, church, smithy
+and guild; set in as they were laid out, their pieces each drawn with one chunk and their trees
+grown; and the plan's roads carried on from their streets' ends.
 
 `test/world-plan.test.js` checks, for three seeds:
 
@@ -299,9 +322,9 @@ quickly.
   - every kind of land is in every world, and the volcano is volcanic.
 - **Rivers:** more than 90% of rivers reach the sea.
 - **Settlements:** each people's are in their lands, on dry land, apart, named once each, with
-  guilds in all but villages.
-- **Roads:** every settlement is joined to its capital, and every capital to the others, over
-  land and bridges.
+  guilds in all but hamlets and farmsteads; farmsteads near a bigger place.
+- **Roads:** every settlement but a farmstead is joined to its capital, and every capital to the
+  others, over land and bridges.
 - **Sites and camps:**
   - sites are where they should be, clear of settlements, and caves are mostly in hills;
   - camps are away from settlements and each other, of factions suited to the land, with patrols

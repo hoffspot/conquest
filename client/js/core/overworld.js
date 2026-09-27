@@ -1,7 +1,9 @@
 // The world outside: all 8 kilometres of it (worldplan/plan.js lays it out), on 1-metre squares
 // like the town's, made a chunk (CHUNK metres square) at a time as it's needed, and the same
 // every time it's made again. The town (world.js) is set into it where a player of their people
-// starts (a town near their capital), its streets carrying on along the plan's roads.
+// starts (a town near their capital), its streets carrying on along the plan's roads; every other
+// settlement (settlements.js) is laid out as the world near it is first made, and set in the same
+// way, the plan's roads carried on from its streets' ends.
 //
 // Each square of a chunk comes from the plan's cell under it (CELL metres square):
 //
@@ -22,6 +24,7 @@
 
 import { MAP_ORIGINS } from "./interiors.js";
 import { createRandom, noise } from "./random.js";
+import { Settlements, squareOf, waysOut } from "./settlements.js";
 import { GROUND, TREE_KINDS } from "./setpieces/pieces.js";
 import { generateWorld } from "./world.js";
 import { BIOME, BIOMES, CELL, CELLS, CHUNK, CHUNKS, planWorld, startFor, WATER, WORLD_SIZE } from "./worldplan/plan.js";
@@ -149,6 +152,10 @@ export class Overworld {
             ...plan.sites.map(({ at }) => ({ at, radius: CLEAR_OF_PLACES })),
             ...plan.camps.map(({ at }) => ({ at, radius: CLEAR_OF_PLACES })),
         ];
+        // The other settlements, laid out as the world near them is made (their roads then joined
+        // to their streets' ends: roads to them wait for that, `waiting`, by place)
+        this.waiting = new Map();
+        this.settlements = new Settlements(plan, { skip: start, onLaid: (settlement) => this.#join(settlement) });
         this.roads = this.#layRoads();
         this.bridges = new Map();
 
@@ -236,6 +243,7 @@ export class Overworld {
         const water = new Uint8Array(SQUARES);
         const bridge = new Uint8Array(SQUARES);
         const { stamp } = this;
+        const settled = this.settlements.settle(cx, cy);
         let town = false;
 
         for (let j = 0; j < CHUNK; j++) {
@@ -253,6 +261,16 @@ export class Overworld {
                     continue;
                 }
 
+                // (A settlement's streets, buildings and yards, where it has them)
+                const own = settled.length ? this.#settledAt(settled, x, y) : null;
+
+                if (own) {
+                    blocked[k] = own.blocked;
+                    opaque[k] = own.opaque;
+                    ground[k] = own.ground;
+                    continue;
+                }
+
                 const land = this.landAt(x, y);
 
                 ground[k] = land.ground;
@@ -267,7 +285,74 @@ export class Overworld {
 
         this.#plant(chunk);
 
+        // The settlements' own trees (their squares are blocked already)
+        for (const piece of this.settlements.piecesIn(cx, cy).filter(({ kind }) => kind === "tree")) {
+            const random = createRandom(Math.round(piece.x * 73 + piece.y * 37));
+
+            chunk.trees.push({ x: Math.round(piece.x), y: Math.round(piece.y), variant: piece.variant, size: random.range(0.85, 1.05), turn: random.next() * Math.PI * 2 });
+        }
+
         return chunk;
+    }
+
+    // What a laid-out settlement near has on a square (settlements.js squareAt), or null
+    #settledAt(settled, x, y) {
+        for (const settlement of settled) {
+            const own = this.settlements.squareAt(settlement, x, y);
+
+            if (own) {
+                return own;
+            }
+        }
+
+        return null;
+    }
+
+    // Join the roads waiting on a settlement just laid out to its streets' ends: each from the end
+    // nearest where it comes in (those chunks aren't made yet: they're within a chunk of it)
+    #join(settlement) {
+        const exits = settlement.town.exits.map(([x, y]) => [x + settlement.at[0], y + settlement.at[1]]);
+
+        for (const line of this.waiting.get(settlement.place.id) ?? []) {
+            const end = line.ends[settlement.place.id];
+            const from = end === "start" ? line.points[0] : line.points.at(-1);
+
+            if (!exits.length) {
+                continue;
+            }
+
+            const exit = exits.reduce((best, e) => (Math.hypot(e[0] - from[0], e[1] - from[1]) < Math.hypot(best[0] - from[0], best[1] - from[1]) ? e : best));
+
+            if (end === "start") {
+                line.points.unshift(exit);
+            } else {
+                line.points.push(exit);
+            }
+
+            this.#index(line, end === "start" ? [exit, from] : [from, exit]);
+        }
+
+        this.waiting.delete(settlement.place.id);
+    }
+
+    // List a road's segment [a, b] by the chunks it passes through
+    #index(line, [a, b]) {
+        const segment = [...a, ...b, line.kind, line];
+        const pad = ROAD_HALF[line.kind] + 1;
+        const [cx0, cx1] = [Math.floor((Math.min(segment[0], segment[2]) - pad) / CHUNK), Math.floor((Math.max(segment[0], segment[2]) + pad) / CHUNK)];
+        const [cy0, cy1] = [Math.floor((Math.min(segment[1], segment[3]) - pad) / CHUNK), Math.floor((Math.max(segment[1], segment[3]) + pad) / CHUNK)];
+
+        for (let cy = cy0; cy <= cy1; cy++) {
+            for (let cx = cx0; cx <= cx1; cx++) {
+                const key = cy * CHUNKS + cx;
+
+                if (!this.roads.has(key)) {
+                    this.roads.set(key, []);
+                }
+
+                this.roads.get(key).push(segment);
+            }
+        }
     }
 
     /**
@@ -503,8 +588,40 @@ export class Overworld {
         const [sx, sy, sw, sh] = [this.stamp.at[0] - 10, this.stamp.at[1] - 10, this.stamp.width + 20, this.stamp.height + 20];
         const near = ([x, y]) => x >= sx && y >= sy && x < sx + sw && y < sy + sh;
 
+        const places = new Map(plan.places.map((place) => [place.id, place]));
+
         for (const road of plan.roads) {
             let points = smooth(road.cells.map(([x, y]) => [(x + 0.5) * CELL, (y + 0.5) * CELL]));
+            const ends = {};
+
+            // At another settlement, the road stops where it comes to the settlement's square,
+            // and waits to be joined to its streets once it's laid out
+            for (const [id, end] of [[road.from, "start"], [road.to, "end"]]) {
+                const place = places.get(id);
+
+                if (!place || place === start || !this.settlements.places.includes(place)) {
+                    continue;
+                }
+
+                const { at, size } = squareOf(place);
+                const outside = ([x, y]) => x < at[0] - 2 || y < at[1] - 2 || x >= at[0] + size + 2 || y >= at[1] + size + 2;
+                const order = end === "start" ? points : [...points].reverse();
+                const out = order.findIndex(outside);
+
+                if (out < 0) {
+                    points = [];
+                    break;
+                }
+
+                const kept = order.slice(out);
+
+                points = end === "start" ? kept : kept.reverse();
+                ends[id] = [end, 0];
+            }
+
+            if (points.length < 2) {
+                continue;
+            }
 
             if (road.from === start.id || road.to === start.id) {
                 // From the town's end: from where its nearest street leaves it, once clear of it
@@ -524,7 +641,17 @@ export class Overworld {
             }
 
             // (Its bridges are found when a chunk it goes through is first made)
-            const line = { points, kind: road.kind, bridges: null };
+            const line = { points, kind: road.kind, bridges: null, ends: {} };
+
+            for (const [id, [end]] of Object.entries(ends)) {
+                line.ends[id] = end;
+
+                if (!this.waiting.has(id)) {
+                    this.waiting.set(id, []);
+                }
+
+                this.waiting.get(id).push(line);
+            }
 
             for (let k = 0; k < points.length - 1; k++) {
                 const segment = [...points[k], ...points[k + 1], road.kind, line];
@@ -634,7 +761,9 @@ export class Overworld {
 
     // Whether a square outside a chunk being made is road or water (or the town)
     #busy(x, y) {
-        if (this.inTown(x, y)) {
+        const settlement = this.settlements.at(x, y);
+
+        if (this.inTown(x, y) || (settlement && this.settlements.squareAt(settlement, x, y))) {
             return true;
         }
 
@@ -642,19 +771,6 @@ export class Overworld {
 
         return land.water !== WET.none || land.road !== null;
     }
-}
-
-// The ways the plan's roads leave a settlement (angles: 0 east, π/2 south): towards where each
-// of its roads is ROAD_SIGHT metres out
-const ROAD_SIGHT = 100;
-
-function waysOut(plan, place) {
-    return plan.roads.filter(({ from, to }) => from === place.id || to === place.id).flatMap((road) => {
-        const cells = road.to === place.id ? [...road.cells].reverse() : road.cells;
-        const far = cells.map(([x, y]) => [(x + 0.5) * CELL, (y + 0.5) * CELL]).find(([x, y]) => Math.hypot(x - place.at[0], y - place.at[1]) >= ROAD_SIGHT);
-
-        return far ? [Math.atan2(far[1] - place.at[1], far[0] - place.at[0])] : [];
-    });
 }
 
 /**

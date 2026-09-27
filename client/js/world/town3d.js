@@ -210,6 +210,44 @@ export async function buildTown(world, { onProgress = () => {} } = {}) {
     return { object, heights, buildings };
 }
 
+/**
+ * A piece built by the art kits (facing south, in world pixels), turned to face the way it does
+ * about its middle and put where it stands (metres: its layout's place plus `origin`), in a
+ * group scaled to world pixels.
+ */
+export function placed(built, piece, [ox, oz] = [0, 0]) {
+    const object = new THREE.Group();
+
+    built.position.set(-piece.w * 10, 0, -piece.h * 10);
+    object.add(built);
+    object.rotation.y = piece.facing;
+    object.position.set((ox + piece.x) / PIXEL, 0, (oz + piece.y) / PIXEL);
+    object.userData.built = BUILT.has(piece.kind);
+    object.userData.piece = piece;
+
+    return object;
+}
+
+/**
+ * Record how high a built piece (placed's, its world matrix up to date) stands over the squares
+ * under it and its eaves (as it's turned, not its turned box), in a height map's rows (or any
+ * `rows`, `x0`, `z0`, `width`, `height` alike), from `origin`.
+ */
+export function standOn(map, object, [ox, oz] = [0, 0]) {
+    const top = new THREE.Box3().setFromObject(object).max.y;
+    const corners = footprint(object.userData.piece, EAVES).map(([x, y]) => [ox + x, oz + y]);
+    const xs = corners.map(([x]) => x);
+    const zs = corners.map(([, z]) => z);
+
+    for (let z = Math.max(map.z0, Math.floor(Math.min(...zs))); z < Math.min(map.z0 + map.height, Math.ceil(Math.max(...zs))); z++) {
+        for (let x = Math.max(map.x0, Math.floor(Math.min(...xs))); x < Math.min(map.x0 + map.width, Math.ceil(Math.max(...xs))); x++) {
+            if (within(corners, x + 0.5, z + 0.5)) {
+                map.rows[z - map.z0][x - map.x0] = Math.max(map.rows[z - map.z0][x - map.x0], top);
+            }
+        }
+    }
+}
+
 // Is a point inside a polygon ([[x, z]...])?
 function within(corners, px, pz) {
     let inside = false;
@@ -225,9 +263,11 @@ function within(corners, px, pz) {
     return inside;
 }
 
-// Cut a hole round the player through the parts of a material nearer the camera than they are,
-// with a dithered edge (the shadows it casts stay whole)
-function cutAway(material) {
+/**
+ * Cut a hole round the player through the parts of a material nearer the camera than they are,
+ * with a dithered edge (the shadows it casts stay whole): once for each material.
+ */
+export function cutAway(material) {
     if (material.userData.cutAway) {
         return;
     }

@@ -21,7 +21,9 @@
 
 import { createRandom, noise } from "../random.js";
 import { atan2, cos, length, PI, sin, sqrt, TAU } from "./exact.js";
-import { GROUND, HOUSE_STYLES, HOUSE_VARIANTS, houseKey, LANDMARKS, landmarkKey, OUTBUILDINGS, PLOT, PROPS, propKey, TRADES, treeKey, TREE_VARIANTS } from "./pieces.js";
+import { patronOf } from "../lore/gods.js";
+import { nameTavern } from "../lore/taverns.js";
+import { ENTERED, GROUND, HOUSE_STYLES, HOUSE_VARIANTS, houseKey, LANDMARKS, landmarkKey, OUTBUILDINGS, PLOT, PROPS, propKey, TRADES, treeKey, TREE_VARIANTS } from "./pieces.js";
 
 /**
  * The kinds of settlement, and how each is laid out: how far its houses reach from the middle
@@ -31,9 +33,12 @@ import { GROUND, HOUSE_STYLES, HOUSE_VARIANTS, houseKey, LANDMARKS, landmarkKey,
  * streets are built on, and its landmarks round the market.
  */
 export const SETTLEMENT_KINDS = Object.freeze({
-    village: { radius: 26, fields: 16, market: [6, 8], main: 3.6, lane: 2.8, rings: [], alleys: 1, width: [6.5, 9], depth: [6.5, 8.5], gap: [2, 6], built: 0.75, landmarks: ["tavern"], windmill: 0.6, stalls: 1, storeys: [[1, 6], [2, 2]], trades: 0.12 },
-    town: { radius: 48, fields: 18, market: [10, 13], main: 4.4, lane: 3, rings: [0.62], alleys: 3, width: [6, 10], depth: [8, 12], gap: [0, 1.2], built: 0.95, landmarks: ["tavern", "church", "blacksmith"], windmill: 0.8, stalls: 3, storeys: [[1, 4], [2, 5], [3, 1]], trades: 0.3 },
-    city: { radius: 84, fields: 18, market: [14, 17], main: 5, lane: 3.2, rings: [0.4, 0.72, 0.97], alleys: 8, width: [6, 11], depth: [9, 13], gap: [0, 0.8], built: 0.97, landmarks: ["tavern", "church", "blacksmith", "market"], windmill: 0.9, stalls: 4, storeys: [[1, 2], [2, 6], [3, 3]], trades: 0.4 },
+    farmstead: { radius: 13, fields: 12, market: [5, 6], main: 3, lane: 2.6, rings: [], alleys: 0, width: [7, 9], depth: [7, 9.5], gap: [3, 7], built: 0.95, landmarks: [], windmill: 0, stalls: 0, storeys: [[1, 3], [2, 1]], trades: 0, farm: true, small: true },
+    hamlet: { radius: 17, fields: 12, market: [5, 6.5], main: 3.2, lane: 2.6, rings: [], alleys: 0, width: [6, 8.5], depth: [6.5, 8.5], gap: [3, 7], built: 0.75, landmarks: ["tavern"], windmill: 0.2, stalls: 0, storeys: [[1, 7], [2, 1]], trades: 0, small: true },
+    village: { radius: 30, fields: 16, market: [8, 10], main: 3.8, lane: 2.8, rings: [], alleys: 1, width: [6.5, 9], depth: [6.5, 8.5], gap: [2, 6], built: 0.75, landmarks: ["tavern", "church", "blacksmith", "guild"], windmill: 0.6, stalls: 1, storeys: [[1, 6], [2, 2]], trades: 0.12 },
+    town: { radius: 48, fields: 18, market: [10, 13], main: 4.4, lane: 3, rings: [0.62], alleys: 3, width: [6, 10], depth: [8, 12], gap: [0, 1.2], built: 0.95, landmarks: ["tavern", "church", "blacksmith", "guild"], extra: [["tavern", 0.5]], windmill: 0.8, stalls: 3, storeys: [[1, 4], [2, 5], [3, 1]], trades: 0.3 },
+    city: { radius: 84, fields: 18, market: [14, 17], main: 5, lane: 3.2, rings: [0.4, 0.72, 0.97], alleys: 8, width: [6, 11], depth: [9, 13], gap: [0, 0.8], built: 0.97, landmarks: ["tavern", "church", "blacksmith", "guild", "market", "tavern"], extra: [["tavern", 0.6], ["blacksmith", 0.5]], windmill: 0.9, stalls: 4, storeys: [[1, 2], [2, 6], [3, 3]], trades: 0.4 },
+    capital: { radius: 112, fields: 20, market: [17, 21], main: 5.5, lane: 3.3, rings: [0.3, 0.55, 0.78, 0.97], alleys: 12, width: [6, 11], depth: [9, 13], gap: [0, 0.6], built: 0.98, landmarks: ["tavern", "church", "blacksmith", "guild", "market", "tavern", "tavern", "blacksmith"], extra: [["tavern", 0.7]], windmill: 0.95, stalls: 6, storeys: [[1, 1], [2, 5], [3, 4]], trades: 0.45 },
 });
 
 // How far the streets step as they're laid (metres), and how far a main street bends either way
@@ -277,7 +282,7 @@ function designTown(spec, exits, random, seed) {
                 for (let i = Math.floor(Math.min(ax, bx) - across); i <= Math.ceil(Math.max(ax, bx) + across); i++) {
                     if (inside(i, j) && fromSegment2(i + 0.5, j + 0.5, ax, ay, bx, by) <= half2) {
                         const [dx, dy] = [i + 0.5 - centre[0], j + 0.5 - centre[1]];
-                        const cobbled = main && dx * dx + dy * dy < (radius * COBBLED) ** 2;
+                        const cobbled = main && !spec.small && dx * dx + dy * dy < (radius * COBBLED) ** 2;
 
                         use[j * width + i] = USE.street;
                         ground[j][i] = cobbled || ground[j][i] === GROUND.cobbles ? GROUND.cobbles : GROUND.road;
@@ -290,8 +295,9 @@ function designTown(spec, exits, random, seed) {
     for (let j = Math.floor(centre[1] - reach * 1.3); j <= Math.ceil(centre[1] + reach * 1.3); j++) {
         for (let i = Math.floor(centre[0] - reach * 1.3); i <= Math.ceil(centre[0] + reach * 1.3); i++) {
             if (inside(i, j) && within(market, i + 0.5, j + 0.5)) {
+                // (A hamlet's middle is a green, a farmstead's its yard)
                 use[j * width + i] = USE.street;
-                ground[j][i] = GROUND.cobbles;
+                ground[j][i] = spec.farm ? GROUND.courtyard : spec.small ? GROUND.grass : GROUND.cobbles;
             }
         }
     }
@@ -341,7 +347,30 @@ function designTown(spec, exits, random, seed) {
         return frame(edge.middle[0] - edge.inward[0] * back + edge.along[0] * shift, edge.middle[1] - edge.inward[1] * back + edge.along[1] * shift, w, d, facingOf(...edge.inward));
     };
 
-    for (const name of spec.landmarks) {
+    // Each landmark's own (from a random of its own: the layout the same with or without them): a
+    // tavern's name, sign and storeys, and what's upstairs; a church's patron
+    const kept = createRandom(seed * 17 + 5);
+    const counts = {};
+    const taken = new Set();
+    const identity = (name) => {
+        counts[name] = (counts[name] ?? 0) + 1;
+
+        const own = { id: `${name}-${counts[name]}`, seed: kept.int(0, 2 ** 30) };
+
+        if (name === "tavern") {
+            const storeys = spec.radius < 20 ? kept.pick([1, 2]) : spec.radius < 40 ? kept.pick([1, 2, 2]) : 2;
+            const named = nameTavern(kept, { storeys, taken });
+
+            taken.add(named.name);
+
+            return { ...own, tavern: named };
+        }
+
+        return name === "church" ? { ...own, patron: patronOf(kept) } : own;
+    };
+    const wanted = [...spec.landmarks, ...(spec.extra ?? []).filter(([, chance]) => kept.chance(chance)).map(([name]) => name)];
+
+    for (const [index, name] of wanted.entries()) {
         const [w, d] = LANDMARKS[name].map((plots) => plots * PLOT);
         let placed = null;
 
@@ -363,8 +392,9 @@ function designTown(spec, exits, random, seed) {
 
         if (placed) {
             mark(placed, 0, USE.building);
-            place(placed, { key: landmarkKey(name), kind: "landmark", name });
-        } else if (name === "tavern") {
+            place(placed, { key: landmarkKey(name), kind: "landmark", name, ...identity(name) });
+        } else if (index < spec.landmarks.length && ENTERED.includes(name)) {
+            // (Every place has its tavern, and a village or bigger its church, smithy and guild)
             return null;
         }
     }
@@ -445,8 +475,11 @@ function designTown(spec, exits, random, seed) {
         const style = styleOf();
         const variant = random.int(0, HOUSE_VARIANTS - 1);
 
+        // (A farmstead is its farmhouse, and its barns and sheds round the yard)
+        const farm = spec.farm && pieces.some(({ kind }) => kind === "house") ? { back: true, storeys: 1, use: own.pick(OUTBUILDINGS), seed: own.int(0, 2 ** 30) } : details(street);
+
         mark(rect, 0, USE.building);
-        place(rect, { key: houseKey(rect.w / PLOT, rect.d / PLOT, style, variant), kind: "house", style, variant, ...details(street) });
+        place(rect, { key: houseKey(rect.w / PLOT, rect.d / PLOT, style, variant), kind: "house", style, variant, ...farm });
         yard(rect);
 
         return "built";

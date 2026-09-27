@@ -52,9 +52,13 @@ export const LANDMARKS = Object.freeze({
     tavern: [3, 3],
     church: [3, 4],
     blacksmith: [3, 3],
+    guild: [4, 3],
     market: [4, 3],
     windmill: [3, 3],
 });
+
+/** The special buildings that can be gone into. */
+export const ENTERED = Object.freeze(["tavern", "church", "blacksmith", "guild"]);
 
 /** Small things standing in courtyards, squares and gardens, and their sizes. */
 export const PROPS = Object.freeze({

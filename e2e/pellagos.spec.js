@@ -386,6 +386,22 @@ test("tapping the ground walks the player there", async ({ page }) => {
 test("swiping up from the player sends them straight ahead, running, as far as the way is clear", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
+    // (Turned first the way that's clearest ahead of them, whatever's round the market where they
+    // start: the well, stalls, a landmark)
+    await page.evaluate(async () => {
+        const { lineAhead } = await import("/js/core/pathfinding.js");
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+        const avatar = game.avatars.get("player");
+        const from = [Math.floor(player.x), Math.floor(player.y)];
+        const ways = Array.from({ length: 8 }, (_, k) => (k * Math.PI) / 4 - Math.PI);
+        const clearest = ways.reduce((best, way) => (lineAhead(game.world.maps[player.map], from, way).length > lineAhead(game.world.maps[player.map], from, best).length ? way : best));
+
+        player.facing = clearest;
+        avatar.facing = clearest;
+        avatar.object.rotation.y = clearest;
+    });
+
     // (The game playing on, taking taps and swipes)
     const start = await page.evaluate(() => {
         const { game, session } = window.pellagos;

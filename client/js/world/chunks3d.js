@@ -5,9 +5,11 @@
 //
 // Each chunk has its ground (ground.js: the grass in its land's colours, with roads, fields and
 // the town's streets blended in), its water (lakes, the sea and rivers, over their beds), bridges
-// where roads cross rivers (straight decks of boards from bank to bank, railed), and its trees (trees.js Woodland: every
-// variant kept once, drawn wherever it stands). The town itself is drawn on its own (town3d.js),
-// over the chunks it's in.
+// where roads cross rivers (straight decks of boards from bank to bank, railed), its trees (trees.js Woodland: every
+// variant kept once, drawn wherever it stands), and the buildings and props of any settlement in
+// it (core/settlements.js), built by the art kits a few at a time each frame (so walking into a
+// town never stalls) and merged into the art's one material when they're all built. The start
+// town itself is drawn on its own (town3d.js), over the chunks it's in.
 
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
@@ -15,9 +17,13 @@ import { CHUNK, CHUNKS, WET } from "../core/overworld.js";
 import { material } from "./art/engine/materials.js";
 import { TREE_WIND, Woodland } from "./art/kits/trees.js";
 import { chunkGround, disposeChunkGround, disposeGrass, landColours } from "./ground.js";
+import { BUILDERS, cutAway, merge, PIXEL, placed, standOn } from "./town3d.js";
 
 /** How many chunks round the player's are drawn (each way), and how far off they're let go. */
 export const REACH = Object.freeze({ drawn: 2, kept: 3 });
+
+/** How long a frame may spend building settlements' buildings (milliseconds). */
+export const BUILD_BUDGET = 6;
 
 // Water: how high over the ground it lies (metres), its colour and how much it shows (the rest
 // the bed under it), and its mask's texels per metre
@@ -49,8 +55,11 @@ export class Chunks {
         this.primer = primer();
         this.object.add(this.woodland.object, this.primer);
 
-        // The chunks drawn, by key: { cx, cy, object, trees (their lot), heights }
+        // The chunks drawn, by key: { cx, cy, object, trees (their lot), heights, job (its
+        // buildings, while they're being built: { pieces, index, group, waiting }) }; and those
+        // whose buildings are being built, in turn
         this.drawn = new Map();
+        this.building = [];
         this.centre = null;
         this.wanted = [];
 
@@ -83,7 +92,92 @@ export class Chunks {
             changed = true;
         }
 
-        return changed;
+        return this.#build() || changed;
+    }
+
+    /** Whether any settlement's buildings are still being built. */
+    get busy() {
+        return this.building.length > 0;
+    }
+
+    // Build what can be built of the settlements' buildings in this frame's budget; whether a
+    // chunk's were all finished
+    #build(budget = BUILD_BUDGET) {
+        const start = performance.now();
+        let finished = false;
+
+        while (this.building.length && performance.now() - start < budget) {
+            const drawn = this.building[0];
+            const { job } = drawn;
+
+            if (job.waiting) {
+                return finished;
+            }
+
+            if (job.index >= job.pieces.length) {
+                this.#finish(drawn);
+                finished = true;
+                continue;
+            }
+
+            const piece = job.pieces[job.index];
+            const built = BUILDERS[piece.kind](piece);
+            const add = (object) => {
+                job.group.add(placed(object, piece));
+                job.index++;
+            };
+
+            if (built instanceof Promise) {
+                // (A landmark waits for its lettering's font: carry on when it's built)
+                job.waiting = true;
+                built.then((object) => {
+                    job.waiting = false;
+                    add(object);
+                });
+
+                return finished;
+            }
+
+            add(built);
+
+            if (job.index >= job.pieces.length) {
+                this.#finish(drawn);
+                finished = true;
+            }
+        }
+
+        return finished;
+    }
+
+    // A chunk's buildings all built: merged into the art's material, and how high they stand
+    #finish(drawn) {
+        const { job } = drawn;
+
+        this.building.shift();
+        drawn.job = null;
+
+        if (!this.drawn.has(key(drawn.cx, drawn.cy))) {
+            return;
+        }
+
+        job.group.updateMatrixWorld(true);
+
+        const map = { x0: drawn.cx * CHUNK, z0: drawn.cy * CHUNK, width: CHUNK, height: CHUNK, rows: Array.from({ length: CHUNK }, (_, j) => drawn.heights.subarray(j * CHUNK, (j + 1) * CHUNK)) };
+
+        for (const object of job.group.children.filter(({ userData }) => userData.built)) {
+            standOn(map, object);
+        }
+
+        const merged = merge(job.group, { atlas: true });
+
+        merged.name = "buildings";
+
+        for (const mesh of merged.children) {
+            cutAway(mesh.material);
+        }
+
+        drawn.object.add(merged);
+        this.version++;
     }
 
     /** How high whatever stands on a square is (the trees: metres, 0 for nothing). */
@@ -194,13 +288,32 @@ export class Chunks {
 
         object.add(lot.object);
         this.object.add(object);
-        this.drawn.set(key(cx, cy), { cx, cy, object, lot, heights });
+
+        // The buildings and props of any settlement in it, to be built a few at a time
+        const pieces = this.overworld.settlements?.piecesIn(cx, cy).filter(({ kind }) => kind !== "tree") ?? [];
+        const drawn = { cx, cy, object, lot, heights, job: null };
+
+        if (pieces.length) {
+            const group = new THREE.Group();
+
+            group.scale.setScalar(PIXEL);
+            drawn.job = { pieces, index: 0, group, waiting: false };
+            this.building.push(drawn);
+        }
+
+        this.drawn.set(key(cx, cy), drawn);
         this.version++;
     }
 
     // Throw a chunk away
     #forget(drawn) {
         this.woodland.fell(drawn.lot);
+
+        // (Its buildings, if they were still being built, go with it)
+        if (drawn.job) {
+            this.building = this.building.filter((other) => other !== drawn);
+            drawn.job.group.traverse((node) => node.geometry?.dispose());
+        }
 
         for (const part of [...drawn.object.children]) {
             if (part.name === "ground") {

@@ -634,9 +634,20 @@ function paintPatch(world, x0, z0, size, town = null) {
     image.town = town ?? paint(home);
     context.drawImage(image.town, (stamp.at[0] - x0) * SCALE, (stamp.at[1] - z0) * SCALE);
 
-    // The trees round it
+    // The other settlements laid out near (their ground's in the chunks'): their buildings'
+    // roofs, edges and ridges, and their props
     context.scale(SCALE, SCALE);
     context.translate(-x0, -z0);
+
+    for (const settlement of overworld.settlements?.laid.values() ?? []) {
+        const { at, size: across, town: layout } = settlement;
+
+        if (at[0] < x0 + size && at[1] < z0 + size && at[0] + across > x0 && at[1] + across > z0) {
+            paintSettlement(context, layout, at);
+        }
+    }
+
+    // The trees round it
 
     for (let cy = Math.floor(z0 / CHUNK); cy * CHUNK < z0 + size; cy++) {
         for (let cx = Math.floor(x0 / CHUNK); cx * CHUNK < x0 + size; cx++) {
@@ -651,6 +662,46 @@ function paintPatch(world, x0, z0, size, town = null) {
     }
 
     return image;
+}
+
+// A settlement's buildings, their roofs in their styles' colours, dark edges and light ridges,
+// and its props, as the town's are painted (its layout's metres from `at`, the world's)
+function paintSettlement(context, layout, at) {
+    for (const piece of layout.pieces) {
+        if (piece.kind === "prop") {
+            const corners = footprint(piece, -(piece.w * PLOT) / 4);
+
+            outline(context, corners, at);
+            context.fillStyle = `rgb(${PROP.join(",")})`;
+            context.fill();
+        } else if (piece.kind === "house" || piece.kind === "landmark") {
+            const corners = footprint(piece, -0.3);
+            const roof = piece.kind === "landmark" ? LANDMARK_ROOF : ROOFS[Math.max(0, HOUSE_STYLES.indexOf(piece.style))];
+            const [a, b, c, d] = corners.map(([x, y]) => [x + at[0], y + at[1]]);
+            const middle = (p, q) => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
+            const ridge = piece.w >= piece.h ? [middle(a, d), middle(b, c)] : [middle(a, b), middle(d, c)];
+
+            outline(context, corners, at);
+            context.fillStyle = `rgb(${roof.join(",")})`;
+            context.fill();
+            context.strokeStyle = "rgba(34, 22, 16, 0.85)";
+            context.lineWidth = 0.6;
+            context.stroke();
+            context.beginPath();
+            context.moveTo(...ridge[0]);
+            context.lineTo(...ridge[1]);
+            context.strokeStyle = "rgba(255, 230, 200, 0.35)";
+            context.lineWidth = 0.5;
+            context.stroke();
+        }
+    }
+}
+
+// A closed path round corners ([x, y]: metres, from `at`)
+function outline(context, corners, at) {
+    context.beginPath();
+    corners.forEach(([x, y], k) => context[k ? "lineTo" : "moveTo"](x + at[0], y + at[1]));
+    context.closePath();
 }
 
 // A tree's crown, round, lit from the top left
