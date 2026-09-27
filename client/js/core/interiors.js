@@ -1,5 +1,6 @@
-// The insides of buildings, each floor a map of its own on the same 1-metre squares as the world:
-// for now, the tavern ("Wenches and Ale"): the taproom, with its tables and benches, the bar and
+// The insides of buildings, each floor a map of its own on the same 1-metre squares as the world
+// (and bigger inside than the building looks from outside, to move about in easily): for now,
+// the tavern ("Wenches and Ale"): the taproom, with its tables and benches, the bar and
 // the barrels behind it, a great hearth with a boar roasting on a spit, and stairs up; and the
 // floor above, a brothel, with the madam's counter by the stairs and a hallway to four bedrooms.
 //
@@ -36,38 +37,49 @@ export const PLAN_KEY = Object.freeze({
     o: { kind: "side-table", blocks: true },
 });
 
-// The taproom, 14 by 11 metres. Stairs up along the north wall, rising east from their foot in
-// the north-west corner; the hearth on the west wall; four long tables with benches; the bar on
-// the east, barrels on the wall behind it; the door in the middle of the south wall.
+// The taproom, 18 by 15 metres (roomier than the tavern looks from outside, to walk about in
+// easily: two metres and more between the tables, round the hearth and behind the bar). Stairs
+// two metres wide up along the north wall, rising east from their foot in the north-west corner;
+// the hearth on the west wall; four long tables with benches; the bar on the east, the barrels on
+// the wall behind it; the door in the middle of the south wall.
 const TAPROOM = [
-    "<SSSS........K",
-    ".............K",
-    "...bb.bb..C..K",
-    "HH.TT.TT..C..K",
-    "HH.bb.bb..C..K",
-    "HH........C..K",
-    "HH.bb.bb..C..K",
-    "...TT.TT.....K",
-    "...bb.bb......",
-    "..............",
-    "......DD......",
+    "<SSSSS............",
+    "<SSSSS...........K",
+    ".................K",
+    "..............C..K",
+    "....bb...bb...C..K",
+    "....TT...TT...C..K",
+    "HH..bb...bb...C..K",
+    "HH............C..K",
+    "HH............C..K",
+    "HH..bb...bb...C..K",
+    "....TT...TT...C..K",
+    "....bb...bb......K",
+    ".................K",
+    "..................",
+    "........DD........",
 ];
 
-// Upstairs, the same size: the stairwell, railed, with the landing at its top (east) end; the
-// madam's counter; a chaise longue and a side table; a hallway east to two bedrooms on each side,
-// each with a canopied bed, a washstand and a chest.
+// Upstairs, the same size: the stairwell, railed, with the landing at its top (east) end; a
+// lounge with the madam's counter, a chaise longue and a side table; a hallway three metres wide
+// east to two bedrooms on each side, through doorways two metres wide, each room four metres by
+// five with a canopied bed, a washstand and a chest.
 const UPSTAIRS = [
-    ".SSSS>WBBwWBBw",
-    "......WBB.WBB.",
-    "......W...W...",
-    "......W..cW..c",
-    "..MMM.WW.WWW.W",
-    "..............",
-    "......WW.WWW.W",
-    "......W..cW..c",
-    "....o.W...W...",
-    "......WBB.WBB.",
-    ".LL...WBBwWBBw",
+    ".SSSSS>.W.BBwW.BBw",
+    ".SSSSS>.W.BB.W.BB.",
+    "........W....W....",
+    "........Wc...Wc...",
+    "........W....W....",
+    "..MMM...WW..WWW..W",
+    "..................",
+    "..................",
+    "..................",
+    "........WW..WWW..W",
+    "........W....W....",
+    "....o...Wc...Wc...",
+    "........W....W....",
+    "........W.BB.W.BB.",
+    ".LL.....W.BBwW.BBw",
 ];
 
 /**
@@ -172,11 +184,13 @@ export function tavernFloors() {
     const taproom = readPlan("taproom", "Wenches and Ale", TAPROOM, { ground: GROUND.cobbles });
     const upstairs = readPlan("upstairs", "Upstairs at Wenches and Ale", UPSTAIRS, { ground: GROUND.planks });
 
-    // Inside the front door, looking into the room; at the foot of the stairs and at their top,
-    // looking into the room
-    const door = { map: "taproom", squares: taproom.marks.D, arrive: taproom.marks.D[0], facing: FACING.n };
-    const foot = { map: "taproom", squares: taproom.marks["<"], arrive: taproom.marks["<"][0], facing: FACING.s };
-    const top = { map: "upstairs", squares: upstairs.marks[">"], arrive: upstairs.marks[">"][0], facing: FACING.s };
+    // Coming through, a couple of steps clear of the door or stairs, turned back to face them (so
+    // they're in view to tap, and a tap round the player isn't on them): inside the front door;
+    // before the foot of the stairs, and before their top
+    const [doorX, doorY] = taproom.marks.D[0];
+    const door = { map: "taproom", squares: taproom.marks.D, arrive: [doorX, doorY - 2], facing: FACING.s };
+    const foot = { map: "taproom", squares: taproom.marks["<"], arrive: [1, 3], facing: FACING.n };
+    const top = { map: "upstairs", squares: upstairs.marks[">"], arrive: [6, 3], facing: FACING.n };
 
     return { taproom, upstairs, door, stairs: { id: "tavern-stairs", kind: "stairs", ends: [foot, top] } };
 }
@@ -195,14 +209,14 @@ export function tavernFolk() {
     const { s, e, n, w } = FACING;
     const seated = (id, title, sex, preset, square, facing) => ({ id, title, role: "patron", sex, preset, map: "taproom", square, facing, routine: { seated: true } });
     const serving = [
-        { square: [9, 3], facing: e, group: "bar" },
-        { square: [9, 5], facing: e, group: "bar" },
-        { square: [5, 3], facing: w, act: "serve", group: "tables" },
-        { square: [8, 3], facing: w, act: "serve", group: "tables" },
-        { square: [2, 3], facing: e, act: "serve", group: "tables" },
-        { square: [5, 7], facing: e, act: "serve", group: "tables" },
-        { square: [2, 7], facing: e, act: "serve", group: "tables" },
-        { square: [8, 7], facing: w, act: "serve", group: "tables" },
+        { square: [13, 5], facing: e, group: "bar" },
+        { square: [13, 8], facing: e, group: "bar" },
+        { square: [6, 5], facing: w, act: "serve", group: "tables" },
+        { square: [11, 5], facing: w, act: "serve", group: "tables" },
+        { square: [3, 5], facing: e, act: "serve", group: "tables" },
+        { square: [8, 10], facing: e, act: "serve", group: "tables" },
+        { square: [3, 10], facing: e, act: "serve", group: "tables" },
+        { square: [11, 10], facing: w, act: "serve", group: "tables" },
     ];
 
     return [
@@ -213,26 +227,26 @@ export function tavernFolk() {
             sex: "m",
             preset: "barkeep",
             map: "taproom",
-            square: [11, 4],
+            square: [15, 6],
             facing: w,
             routine: {
                 order: "alternate",
                 wait: [2500, 6000],
                 stops: [
-                    { square: [11, 3], facing: w, group: "bar" },
-                    { square: [11, 5], facing: w, group: "bar" },
-                    { square: [12, 2], facing: e, act: "pour", group: "barrels" },
-                    { square: [12, 4], facing: e, act: "pour", group: "barrels" },
-                    { square: [12, 6], facing: e, act: "pour", group: "barrels" },
+                    { square: [15, 4], facing: w, group: "bar" },
+                    { square: [15, 8], facing: w, group: "bar" },
+                    { square: [16, 3], facing: e, act: "pour", group: "barrels" },
+                    { square: [16, 6], facing: e, act: "pour", group: "barrels" },
+                    { square: [16, 9], facing: e, act: "pour", group: "barrels" },
                 ],
             },
         },
-        { id: "wench", title: "Serving wench", role: "barmaid", sex: "f", preset: "wench", map: "taproom", square: [9, 4], facing: e, routine: { order: "alternate", wait: [1500, 3500], stops: serving } },
-        { id: "wench2", title: "Serving wench", role: "barmaid", sex: "f", preset: "wench2", map: "taproom", square: [5, 5], facing: s, routine: { order: "alternate", wait: [1500, 3500], stops: [...serving.slice(2), ...serving.slice(0, 2)] } },
-        seated("drinker", "Drinker", "m", "drinker", [3, 2], s),
-        seated("alewife", "Alewife", "f", "alewife", [4, 4], n),
-        seated("farmer", "Farmer", "m", "farmer", [6, 6], s),
-        seated("greybeard", "Greybeard", "m", "greybeard", [7, 8], n),
+        { id: "wench", title: "Serving wench", role: "barmaid", sex: "f", preset: "wench", map: "taproom", square: [13, 6], facing: e, routine: { order: "alternate", wait: [1500, 3500], stops: serving } },
+        { id: "wench2", title: "Serving wench", role: "barmaid", sex: "f", preset: "wench2", map: "taproom", square: [7, 7], facing: s, routine: { order: "alternate", wait: [1500, 3500], stops: [...serving.slice(2), ...serving.slice(0, 2)] } },
+        seated("drinker", "Drinker", "m", "drinker", [4, 4], s),
+        seated("alewife", "Alewife", "f", "alewife", [5, 6], n),
+        seated("farmer", "Farmer", "m", "farmer", [9, 9], s),
+        seated("greybeard", "Greybeard", "m", "greybeard", [10, 11], n),
         {
             id: "madam",
             title: "Madam",
@@ -240,25 +254,26 @@ export function tavernFolk() {
             sex: "f",
             preset: "madam",
             map: "upstairs",
-            square: [3, 3],
+            square: [3, 4],
             facing: s,
             routine: {
                 wait: [4000, 9000],
                 stops: [
-                    { square: [3, 3], facing: s },
-                    { square: [2, 3], facing: s },
-                    { square: [4, 3], facing: s },
-                    { square: [3, 3], facing: e },
+                    { square: [3, 4], facing: s },
+                    { square: [2, 4], facing: s },
+                    { square: [4, 4], facing: s },
+                    { square: [3, 4], facing: e },
                 ],
             },
         },
-        // A courtesan in each bedroom: by its door, looking out into the hallway, or by the bed
-        // (listed after everyone else, so everyone else keeps the name they had before)
+        // A courtesan in each bedroom: just inside its doorway, looking out into the hallway, or
+        // at the foot of the bed (listed after everyone else, so everyone else keeps the name
+        // they had before)
         ...[
-            ["courtesan", [8, 3], [9, 2], s],
-            ["courtesan2", [12, 3], [13, 2], s],
-            ["courtesan3", [8, 7], [9, 8], n],
-            ["courtesan4", [12, 7], [13, 8], n],
+            ["courtesan", [10, 4], [11, 2], s],
+            ["courtesan2", [15, 4], [16, 2], s],
+            ["courtesan3", [10, 10], [11, 12], n],
+            ["courtesan4", [15, 10], [16, 12], n],
         ].map(([id, door, bed, facing]) => ({
             id,
             title: "Courtesan",
