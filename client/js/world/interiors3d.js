@@ -5,10 +5,11 @@
 // bedrooms behind curtained doorways, each with a canopied bed, a washstand and a chest.
 //
 // Built with the art kits' Solid (five art pixels to a metre) and their materials, each map in
-// its own group at its place in the world (MAP_ORIGINS). There are no ceilings, and every
-// material cuts away what stands above waist height on the camera's side of the player
-// (INTERIOR_CUT, set each frame by the game), like a doll's house with its near walls lowered, so
-// the player is always in view whichever way the camera looks.
+// its own group at its place in the world (MAP_ORIGINS). There are no ceilings, and on the
+// camera's side of the player (INTERIOR_CUT, set each frame by the game) the walls are cut away
+// down to their stone footing, and anything else above head height, like a doll's house with its
+// near walls taken down, so the player is always in view whichever way the camera looks; where a
+// cut shows the inside of a wall or a post, it's dark wood, as if solid.
 
 import * as THREE from "three";
 import { material as artMaterial } from "./art/engine/materials.js";
@@ -20,18 +21,24 @@ export const STOREY = 3;
 
 /**
  * Where the player is and which way the camera looks from them (along the ground), shared by
- * every interior material: what's above `height` metres and more than `margin` metres nearer the
- * camera than the player is cut away.
+ * every interior material: what's more than `margin` metres nearer the camera than the player is
+ * cut away above `wall` metres (walls: just above their footing) or `height` (everything else);
+ * where the inside of something cut shows, it's `cap`.
  */
 export const INTERIOR_CUT = Object.freeze({
     player: { value: new THREE.Vector3() },
     toCamera: { value: new THREE.Vector2(0, 1) },
-    height: { value: 1.25 },
+    height: { value: 1.7 },
+    wall: { value: 0.36 },
     margin: { value: 0.1 },
+    cap: { value: new THREE.Color(0x2b1d13) },
 });
 
 const M = 5;
 const m = (metres) => metres * M;
+
+// What's part of a wall (cut away lower than anything else: INTERIOR_CUT)
+const WALL = Object.freeze({ wall: true });
 
 // Colours the art kits don't have
 const COLOURS = {
@@ -52,11 +59,14 @@ const COLOURS = {
     apple: 0xb3261d,
 };
 
-// Each interior's own copies of the materials (the town's are shared, and cut differently)
+// Each interior's own copies of the materials (the town's are shared, and cut differently), and
+// the same again for walls (`wall`: cut lower)
 const materials = new Map();
 
-function material(name) {
-    if (!materials.has(name)) {
+function material(name, { wall = false } = {}) {
+    const key = wall ? `${name}|wall` : name;
+
+    if (!materials.has(key)) {
         let result;
 
         if (COLOURS[name] !== undefined) {
@@ -77,27 +87,35 @@ function material(name) {
             result.name = `${name}-inside`;
         }
 
+        if (wall) {
+            result = result.clone();
+            result.name = `${result.name}-wall`;
+        }
+
         result.shadowSide = THREE.DoubleSide;
-        cutAway(result);
-        materials.set(name, result);
+        cutAway(result, wall ? INTERIOR_CUT.wall : INTERIOR_CUT.height);
+        materials.set(key, result);
     }
 
-    return materials.get(name);
+    return materials.get(key);
 }
 
-// Cut away what stands above INTERIOR_CUT.height on the camera's side of the player
-function cutAway(target) {
+// Cut away what stands above `height` on the camera's side of the player (INTERIOR_CUT); drawn
+// both sides, the inside of whatever's cut showing as solid (the cap colour)
+function cutAway(target, height) {
+    target.side = THREE.DoubleSide;
     target.onBeforeCompile = (shader) => {
-        Object.assign(shader.uniforms, { cutPlayer: INTERIOR_CUT.player, cutToCamera: INTERIOR_CUT.toCamera, cutHeight: INTERIOR_CUT.height, cutMargin: INTERIOR_CUT.margin });
+        Object.assign(shader.uniforms, { cutPlayer: INTERIOR_CUT.player, cutToCamera: INTERIOR_CUT.toCamera, cutHeight: height, cutMargin: INTERIOR_CUT.margin, cutCap: INTERIOR_CUT.cap });
         shader.vertexShader = shader.vertexShader
             .replace("#include <common>", "#include <common>\nvarying vec3 vCutWorld;")
             .replace("#include <project_vertex>", "#include <project_vertex>\nvCutWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;");
         shader.fragmentShader = shader.fragmentShader
-            .replace("#include <common>", "#include <common>\nvarying vec3 vCutWorld;\nuniform vec3 cutPlayer;\nuniform vec2 cutToCamera;\nuniform float cutHeight;\nuniform float cutMargin;")
+            .replace("#include <common>", "#include <common>\nvarying vec3 vCutWorld;\nuniform vec3 cutPlayer;\nuniform vec2 cutToCamera;\nuniform float cutHeight;\nuniform float cutMargin;\nuniform vec3 cutCap;")
             .replace("#include <clipping_planes_fragment>", `#include <clipping_planes_fragment>
 {
     if (vCutWorld.y - cutPlayer.y > cutHeight && dot(vCutWorld.xz - cutPlayer.xz, cutToCamera) > cutMargin) discard;
-}`);
+}`)
+            .replace("#include <dithering_fragment>", "#include <dithering_fragment>\nif (!gl_FrontFacing) gl_FragColor = vec4(cutCap, 1.0);");
     };
     target.customProgramCacheKey = () => `interior-cut-${target.type}`;
     target.needsUpdate = true;
@@ -303,9 +321,9 @@ function wall(solid, x0, z0, x1, z1, thick, finish) {
     const [ax0, az0, ax1, az1] = along === "x" ? [x0, z0 - thick / 2, x1, z0 + thick / 2] : [x0 - thick / 2, z0, x0 + thick / 2, z1];
     const top = m(STOREY);
 
-    solid.box(ax0, 0, az0, ax1, m(0.35), az1, material("stone-warm"));
-    solid.box(ax0 + 0.05, m(0.35), az0 + 0.05, ax1 - 0.05, top, az1 - 0.05, material(finish));
-    solid.box(ax0, top - m(0.18), az0 - 0.2, ax1, top, az1 + 0.2, material("timber"));
+    solid.box(ax0, 0, az0, ax1, m(0.35), az1, material("stone-warm", WALL));
+    solid.box(ax0 + 0.05, m(0.35), az0 + 0.05, ax1 - 0.05, top, az1 - 0.05, material(finish, WALL));
+    solid.box(ax0, top - m(0.18), az0 - 0.2, ax1, top, az1 + 0.2, material("timber", WALL));
 
     const length = along === "x" ? x1 - x0 : z1 - z0;
     const posts = Math.max(1, Math.round(length / m(2)));
@@ -316,11 +334,11 @@ function wall(solid, x0, z0, x1, z1, thick, finish) {
         if (along === "x") {
             const x = x0 + (x1 - x0) * t;
 
-            solid.box(x - 0.6, m(0.35), az0 - 0.2, x + 0.6, top, az1 + 0.2, material("timber"));
+            solid.box(x - 0.6, m(0.35), az0 - 0.2, x + 0.6, top, az1 + 0.2, material("timber", WALL));
         } else {
             const z = z0 + (z1 - z0) * t;
 
-            solid.box(ax0 - 0.2, m(0.35), z - 0.6, ax1 + 0.2, top, z + 0.6, material("timber"));
+            solid.box(ax0 - 0.2, m(0.35), z - 0.6, ax1 + 0.2, top, z + 0.6, material("timber", WALL));
         }
     }
 }
@@ -331,11 +349,11 @@ function windowIn(solid, along, at, centre, out) {
     const [low, high, half] = [m(1.1), m(2.2), m(0.45)];
 
     if (along === "x") {
-        solid.box(centre - half - 0.5, low - 0.5, at - 0.9, centre + half + 0.5, high + 0.5, at + 0.9, material("timber"));
-        solid.face(out > 0 ? [[centre - half, low, at - 1], [centre + half, low, at - 1], [centre + half, high, at - 1], [centre - half, high, at - 1]].reverse() : [[centre - half, low, at + 1], [centre + half, low, at + 1], [centre + half, high, at + 1], [centre - half, high, at + 1]], material("window"));
+        solid.box(centre - half - 0.5, low - 0.5, at - 0.9, centre + half + 0.5, high + 0.5, at + 0.9, material("timber", WALL));
+        solid.face(out > 0 ? [[centre - half, low, at - 1], [centre + half, low, at - 1], [centre + half, high, at - 1], [centre - half, high, at - 1]].reverse() : [[centre - half, low, at + 1], [centre + half, low, at + 1], [centre + half, high, at + 1], [centre - half, high, at + 1]], material("window", WALL));
     } else {
-        solid.box(at - 0.9, low - 0.5, centre - half - 0.5, at + 0.9, high + 0.5, centre + half + 0.5, material("timber"));
-        solid.face(out > 0 ? [[at - 1, low, centre - half], [at - 1, low, centre + half], [at - 1, high, centre + half], [at - 1, high, centre - half]] : [[at + 1, low, centre + half], [at + 1, low, centre - half], [at + 1, high, centre - half], [at + 1, high, centre + half]], material("window"));
+        solid.box(at - 0.9, low - 0.5, centre - half - 0.5, at + 0.9, high + 0.5, centre + half + 0.5, material("timber", WALL));
+        solid.face(out > 0 ? [[at - 1, low, centre - half], [at - 1, low, centre + half], [at - 1, high, centre + half], [at - 1, high, centre - half]] : [[at + 1, low, centre + half], [at + 1, low, centre - half], [at + 1, high, centre - half], [at + 1, high, centre + half]], material("window", WALL));
     }
 }
 
@@ -368,10 +386,10 @@ function outerWalls(solid, map, finish, openings = []) {
                 const [a, b] = [m(gap.from), m(gap.to)];
 
                 if (along === "x") {
-                    solid.box(a, m(gap.lintel), z0 + outward - thick / 2, b, m(STOREY), z0 + outward + thick / 2, material(finish));
-                    solid.box(a - 0.6, m(gap.lintel) - 0.8, z0 + outward - thick / 2 - 0.3, b + 0.6, m(gap.lintel), z0 + outward + thick / 2 + 0.3, material("timber"));
+                    solid.box(a, m(gap.lintel), z0 + outward - thick / 2, b, m(STOREY), z0 + outward + thick / 2, material(finish, WALL));
+                    solid.box(a - 0.6, m(gap.lintel) - 0.8, z0 + outward - thick / 2 - 0.3, b + 0.6, m(gap.lintel), z0 + outward + thick / 2 + 0.3, material("timber", WALL));
                 } else {
-                    solid.box(x0 + outward - thick / 2, m(gap.lintel), a, x0 + outward + thick / 2, m(STOREY), b, material(finish));
+                    solid.box(x0 + outward - thick / 2, m(gap.lintel), a, x0 + outward + thick / 2, m(STOREY), b, material(finish, WALL));
                 }
             }
 
@@ -380,7 +398,8 @@ function outerWalls(solid, map, finish, openings = []) {
     }
 }
 
-// Walls through a floor: each wall square joined to its wall neighbours through its middle
+// Walls through a floor: each wall square joined to its wall neighbours through its middle, and
+// where a wall stops at a doorway, carried on to the doorway's edge
 function innerWalls(solid, map, finish) {
     const isWall = (x, y) => map.plan[y]?.[x] === "W";
     const thick = m(0.18);
@@ -388,53 +407,82 @@ function innerWalls(solid, map, finish) {
     for (const { squares } of map.pieces.filter((piece) => piece.kind === "wall")) {
         for (const [x, y] of squares) {
             const [cx, cz] = [m(x + 0.5), m(y + 0.5)];
+            const [east, west, south, north] = [isWall(x + 1, y), isWall(x - 1, y), isWall(x, y + 1), isWall(x, y - 1)];
 
-            // To each neighbour, or to the map's edge
-            if (isWall(x + 1, y) || x + 1 === map.width) {
+            // To each neighbour, or to the map's edge, or on through the square where a run of
+            // wall stops (at a doorway)
+            if (east || x + 1 === map.width || (west && !south && !north)) {
                 wall(solid, cx, cz, m(x + 1), cz, thick, finish);
             }
 
-            if (isWall(x - 1, y) || x === 0) {
+            if (west || x === 0 || (east && !south && !north)) {
                 wall(solid, m(x), cz, cx, cz, thick, finish);
             }
 
-            if (isWall(x, y + 1) || y + 1 === map.height) {
+            if (south || y + 1 === map.height || (north && !east && !west)) {
                 wall(solid, cx, cz, cx, m(y + 1), thick, finish);
             }
 
-            if (isWall(x, y - 1) || y === 0) {
+            if (north || y === 0 || (south && !east && !west)) {
                 wall(solid, cx, m(y), cx, cz, thick, finish);
             }
         }
     }
 
-    // A curtained doorway where the floor meets wall on both sides
-    for (let y = 0; y < map.height; y++) {
-        for (let x = 0; x < map.width; x++) {
-            if (map.plan[y][x] === "W") {
-                continue;
+    // A curtained doorway (a lintel over it, curtains tied back at its sides) through a wall: a
+    // run of floor one or two squares long with wall at both ends
+    for (const { along, x0, y0, length } of doorways(map)) {
+        const lintel = m(2.2);
+
+        if (along === "x") {
+            const [a, b, cz] = [m(x0), m(x0 + length), m(y0 + 0.5)];
+
+            solid.box(a, lintel, cz - thick / 2, b, m(STOREY), cz + thick / 2, material(finish, WALL));
+            solid.box(a - 0.4, lintel - 0.8, cz - thick / 2 - 0.3, b + 0.4, lintel, cz + thick / 2 + 0.3, material("timber", WALL));
+
+            for (const [c0, c1] of [[a + 0.1, a + 1.2], [b - 1.2, b - 0.1]]) {
+                solid.box(c0, m(0.1), cz - 0.3, c1, lintel - 0.8, cz + 0.3, material("velvet", WALL));
             }
+        } else {
+            const [a, b, cx] = [m(y0), m(y0 + length), m(x0 + 0.5)];
 
-            const acrossX = isWall(x - 1, y) && isWall(x + 1, y);
-            const acrossZ = isWall(x, y - 1) && isWall(x, y + 1);
+            solid.box(cx - thick / 2, lintel, a, cx + thick / 2, m(STOREY), b, material(finish, WALL));
+            solid.box(cx - thick / 2 - 0.3, lintel - 0.8, a - 0.4, cx + thick / 2 + 0.3, lintel, b + 0.4, material("timber", WALL));
 
-            if (!acrossX && !acrossZ) {
-                continue;
-            }
-
-            const [cx, cz] = [m(x + 0.5), m(y + 0.5)];
-            const lintel = m(2.2);
-
-            if (acrossX) {
-                solid.box(m(x), lintel, cz - thick / 2, m(x + 1), m(STOREY), cz + thick / 2, material(finish));
-                solid.box(m(x) - 0.4, lintel - 0.8, cz - thick / 2 - 0.3, m(x + 1) + 0.4, lintel, cz + thick / 2 + 0.3, material("timber"));
-                solid.box(m(x) + 0.1, m(0.1), cz - 0.3, m(x) + 1.2, lintel - 0.8, cz + 0.3, material("velvet"));
-            } else {
-                solid.box(cx - thick / 2, lintel, m(y), cx + thick / 2, m(STOREY), m(y + 1), material(finish));
-                solid.box(cx - 0.3, m(0.1), m(y) + 0.1, cx + 0.3, lintel - 0.8, m(y) + 1.2, material("velvet"));
+            for (const [c0, c1] of [[a + 0.1, a + 1.2], [b - 1.2, b - 0.1]]) {
+                solid.box(cx - 0.3, m(0.1), c0, cx + 0.3, lintel - 0.8, c1, material("velvet", WALL));
             }
         }
     }
+}
+
+/** The doorways through a map's walls: runs of floor one or two squares long, walls at each end: [{ along ("x" or "z"), x0, y0, length }]. */
+export function doorways(map) {
+    const isWall = (x, y) => map.plan[y]?.[x] === "W";
+    const open = (x, y) => x >= 0 && y >= 0 && x < map.width && y < map.height && !isWall(x, y);
+    const found = [];
+
+    for (let y = 0; y < map.height; y++) {
+        for (let x = 0; x < map.width; x++) {
+            for (const [along, dx, dy] of [["x", 1, 0], ["z", 0, 1]]) {
+                if (!open(x, y) || !isWall(x - dx, y - dy)) {
+                    continue;
+                }
+
+                let length = 1;
+
+                while (length <= 2 && open(x + dx * length, y + dy * length)) {
+                    length++;
+                }
+
+                if (length <= 2 && isWall(x + dx * length, y + dy * length)) {
+                    found.push({ along, x0: x, y0: y, length });
+                }
+            }
+        }
+    }
+
+    return found;
 }
 
 // Stairs along x from x0 to x1 (pixels) at z0 to z1, rising from `from` to `to` pixels high as x
@@ -488,26 +536,29 @@ function taproom(map) {
     // The door, shut, in its frame
     const [doorLeft, doorRight, wallZ] = [m(doorMiddle - 0.9), m(doorMiddle + 0.9), h];
 
-    solid.box(doorLeft, 0, wallZ - 0.2, doorRight, m(2.35), wallZ + 0.4, material("planks-dark"));
-    solid.box(doorLeft - 0.8, 0, wallZ - 0.6, doorLeft, m(2.45), wallZ + 0.6, material("timber"));
-    solid.box(doorRight, 0, wallZ - 0.6, doorRight + 0.8, m(2.45), wallZ + 0.6, material("timber"));
-    solid.box(m(doorMiddle - 0.35), m(1.05), wallZ - 0.5, m(doorMiddle - 0.2), m(1.15), wallZ - 0.2, material("iron"));
+    solid.box(doorLeft, 0, wallZ - 0.2, doorRight, m(2.35), wallZ + 0.4, material("planks-dark", WALL));
+    solid.box(doorLeft - 0.8, 0, wallZ - 0.6, doorLeft, m(2.45), wallZ + 0.6, material("timber", WALL));
+    solid.box(doorRight, 0, wallZ - 0.6, doorRight + 0.8, m(2.45), wallZ + 0.6, material("timber", WALL));
+    solid.box(m(doorMiddle - 0.35), m(1.05), wallZ - 0.5, m(doorMiddle - 0.2), m(1.15), wallZ - 0.2, material("iron", WALL));
 
-    // Windows: daylight on the north, south and east walls
-    for (const x of [7.5, 11]) {
+    // Windows: daylight on the north, south and west walls
+    for (const x of [9.5, 14]) {
         windowIn(solid, "x", 0, m(x), -1);
     }
 
-    for (const x of [3, 11]) {
+    for (const x of [3.5, 14]) {
         windowIn(solid, "x", h, m(x), 1);
     }
 
-    windowIn(solid, "z", 0, m(9), -1);
+    for (const z of [3.5, 12]) {
+        windowIn(solid, "z", 0, m(z), -1);
+    }
 
     // The stairs up, along the north wall, rising east from their foot
     const stair = map.pieces.find((piece) => piece.kind === "stairs");
+    const [stairZ0, stairZ1] = [m(stair.y), m(stair.y + stair.h)];
 
-    stairs(solid, m(stair.x), m(stair.x + stair.w), 0, m(1), 0, m(STOREY), m(1));
+    stairs(solid, m(stair.x), m(stair.x + stair.w), stairZ0, stairZ1, 0, m(STOREY), stairZ1);
 
     // The hearth: a stone chimney breast on the west wall, a wide opening, a mantel beam, the
     // hearthstone before it; logs and fire; a boar turning on a spit over the flames
@@ -516,22 +567,24 @@ function taproom(map) {
     const [open0, open1] = [z0 + m(0.85), z1 - m(0.85)];
     const breast = m(0.9);
 
-    solid.box(-m(0.1), 0, z0, breast, m(STOREY), open0, material("stone"));
-    solid.box(-m(0.1), 0, open1, breast, m(STOREY), z1, material("stone"));
-    solid.box(-m(0.1), m(1.6), open0, breast, m(STOREY), open1, material("stone"));
-    solid.box(-m(0.1), 0, open0, m(0.15), m(1.6), open1, material("soot"));
-    solid.box(-m(0.1), m(1.55), z0 - m(0.1), breast + m(0.15), m(1.8), z1 + m(0.1), material("timber"));
+    const hz = hearth.y + hearth.h / 2;
+
+    solid.box(-m(0.1), 0, z0, breast, m(STOREY), open0, material("stone", WALL));
+    solid.box(-m(0.1), 0, open1, breast, m(STOREY), z1, material("stone", WALL));
+    solid.box(-m(0.1), m(1.6), open0, breast, m(STOREY), open1, material("stone", WALL));
+    solid.box(-m(0.1), 0, open0, m(0.15), m(1.6), open1, material("soot", WALL));
+    solid.box(-m(0.1), m(1.55), z0 - m(0.1), breast + m(0.15), m(1.8), z1 + m(0.1), material("timber", WALL));
     solid.box(0, 0, z0 - m(0.2), m(1.9), m(0.08), z1 + m(0.2), material("stone-dark"));
 
     const logs = new THREE.Group();
 
-    for (const [x, z, turn] of [[0.55, 4.6, 0.3], [0.6, 5.3, -0.2], [1.2, 4.8, 0.1], [1.25, 5.25, -0.1]]) {
+    for (const [x, z, turn] of [[0.55, hz - 0.4, 0.3], [0.6, hz + 0.3, -0.2], [1.2, hz - 0.2, 0.1], [1.25, hz + 0.25, -0.1]]) {
         const log = new THREE.Mesh(new THREE.CylinderGeometry(m(0.08), m(0.09), m(0.85), 7).rotateX(Math.PI / 2).rotateY(turn).translate(m(x), m(0.15), m(z)), material("timber-light"));
 
         logs.add(log);
     }
 
-    logs.add(new THREE.Mesh(new THREE.BoxGeometry(m(1.1), 0.4, m(1.6)).translate(m(0.85), m(0.1), m(5)), artMaterial("embers")));
+    logs.add(new THREE.Mesh(new THREE.BoxGeometry(m(1.1), 0.4, m(1.6)).translate(m(0.85), m(0.1), m(hz)), artMaterial("embers")));
     solid.add(objectSolid(logs));
 
     // The spit: iron stands either side, a rod through the boar, a crank
@@ -555,14 +608,14 @@ function taproom(map) {
     // The fires: a tall one in the hearth, a low one under the boar
     const fires = [flame(m(0.9), m(0.9), 1.3), flame(m(1.1), m(0.55), 7.1), flame(m(0.7), m(0.7), 3.7)];
 
-    fires[0].position.set(m(0.5), m(0.12), m(5));
-    fires[1].position.set(spitX - m(0.1), m(0.1), m(4.85));
-    fires[2].position.set(spitX, m(0.1), m(5.4));
+    fires[0].position.set(m(0.5), m(0.12), m(hz));
+    fires[1].position.set(spitX - m(0.1), m(0.1), m(hz - 0.15));
+    fires[2].position.set(spitX, m(0.1), m(hz + 0.4));
 
     // A pair of antlers over the mantel
     for (const side of [-1, 1]) {
-        solid.box(m(0.1), m(2.2), m(5) + side * 1.5, m(0.3), m(2.9), m(5) + side * 2.2, material("candle"));
-        solid.box(m(0.1), m(2.6), m(5) + side * 2.2, m(0.3), m(2.75), m(5) + side * 4.5, material("candle"));
+        solid.box(m(0.1), m(2.2), m(hz) + side * 1.5, m(0.3), m(2.9), m(hz) + side * 2.2, material("candle", WALL));
+        solid.box(m(0.1), m(2.6), m(hz) + side * 2.2, m(0.3), m(2.75), m(hz) + side * 4.5, material("candle", WALL));
     }
 
     // Tables, and benches along them, with tankards, plates and candles
@@ -621,7 +674,7 @@ function taproom(map) {
 
     // A wheel of candles hanging over the tables
     const wheel = new THREE.Group();
-    const [wheelX, wheelZ, wheelY] = [m(5.5), m(5.5), m(2.55)];
+    const [wheelX, wheelZ, wheelY] = [m(7.5), m(8), m(2.55)];
 
     wheel.add(new THREE.Mesh(new THREE.TorusGeometry(m(0.7), 0.35, 5, 18).rotateX(Math.PI / 2).translate(wheelX, wheelY, wheelZ), material("timber")));
 
@@ -641,10 +694,10 @@ function taproom(map) {
         moving,
         flames: fires,
         lights: [
-            { kind: "fire", x: 1.1, y: 1.0, z: 5, colour: 0xff8a3a, intensity: 9, distance: 12, flicker: 0.25 },
-            { kind: "lamp", x: 5.5, y: 2.3, z: 5.5, colour: 0xffc27a, intensity: 5, distance: 14, flicker: 0.05 },
+            { kind: "fire", x: 1.1, y: 1.0, z: hz, colour: 0xff8a3a, intensity: 9, distance: 14, flicker: 0.25 },
+            { kind: "lamp", x: 8, y: 2.3, z: 8, colour: 0xffc27a, intensity: 6, distance: 18, flicker: 0.05 },
         ],
-        hearth: { x: 1.1, y: 0.8, z: 5 },
+        hearth: { x: 1.1, y: 0.8, z: hz },
     };
 }
 
@@ -703,36 +756,37 @@ function upstairs(map) {
     const [w, h] = [m(map.width), m(map.height)];
     const stair = map.pieces.find((piece) => piece.kind === "stairs");
     const [hole0, hole1] = [m(stair.x), m(stair.x + stair.w)];
+    const [well0, well1] = [m(stair.y), m(stair.y + stair.h)];
 
     // Floorboards, with the stairwell open: the stairs going down in it, a rail round it
     solid.box(-m(0.3), -0.5, -m(0.3), hole0, 0, h + m(0.3), material("planks"));
     solid.box(hole1, -0.5, -m(0.3), w + m(0.3), 0, h + m(0.3), material("planks"));
-    solid.box(hole0, -0.5, m(1), hole1, 0, h + m(0.3), material("planks"));
-    stairs(solid, hole0, hole1, 0, m(1), -m(STOREY), 0, m(1));
+    solid.box(hole0, -0.5, well1, hole1, 0, h + m(0.3), material("planks"));
+    stairs(solid, hole0, hole1, well0, well1, -m(STOREY), 0, well1);
 
-    for (const x of [hole0, hole0 + (hole1 - hole0) / 2]) {
-        solid.box(x - 0.35, 0, m(1) - 0.35, x + 0.35, m(1), m(1) + 0.35, material("timber"));
+    for (const x of [hole0, hole0 + (hole1 - hole0) / 3, hole0 + ((hole1 - hole0) * 2) / 3]) {
+        solid.box(x - 0.35, 0, well1 - 0.35, x + 0.35, m(1), well1 + 0.35, material("timber"));
     }
 
-    solid.box(hole0, m(0.95), m(1) - 0.3, hole1 - m(0.4), m(1.05), m(1) + 0.3, material("timber"));
-    solid.box(hole0 - 0.3, m(0.95), 0, hole0 + 0.3, m(1.05), m(1), material("timber"));
+    solid.box(hole0, m(0.95), well1 - 0.3, hole1 - m(0.4), m(1.05), well1 + 0.3, material("timber"));
+    solid.box(hole0 - 0.3, m(0.95), well0, hole0 + 0.3, m(1.05), well1, material("timber"));
     solid.box(hole0 - 0.35, 0, -0.35, hole0 + 0.35, m(1.05), 0.35, material("timber"));
 
     outerWalls(solid, map, "plaster-rose");
     innerWalls(solid, map, "plaster-rose");
 
-    for (const z of [3, 8]) {
+    for (const z of [4, 11]) {
         windowIn(solid, "z", 0, m(z), -1);
     }
 
-    for (const x of [8, 12]) {
+    for (const x of [11, 15.5]) {
         windowIn(solid, "x", 0, m(x), -1);
         windowIn(solid, "x", h, m(x), 1);
     }
 
     // Rugs: a big one before the counter, a runner along the hallway
-    rug(solid, m(0.5), m(5.2), m(5.6), m(9.6));
-    rug(solid, m(6.1), m(5.15), m(13.8), m(5.85));
+    rug(solid, m(0.6), m(6.2), m(7.4), m(12.8));
+    rug(solid, m(8.3), m(6.4), m(17.6), m(8.6));
 
     // The madam's counter: dark wood, a red runner, a ledger, a bell, a candle, flowers
     const counter = map.pieces.find((piece) => piece.kind === "counter");
@@ -800,8 +854,8 @@ function upstairs(map) {
     }
 
     // Sconces with red glass in the hallway and by the counter
-    for (const [x, z] of [[7.6, 4.62], [11.6, 4.62], [7.6, 6.38], [11.6, 6.38], [1, 0.05]]) {
-        solid.box(m(x) - 0.5, m(1.8), m(z) - 0.5, m(x) + 0.5, m(2.1), m(z) + 0.5, material("sconce"));
+    for (const [x, z] of [[9, 5.62], [13.5, 5.62], [9, 9.38], [13.5, 9.38], [0.05, 8]]) {
+        solid.box(m(x) - 0.5, m(1.8), m(z) - 0.5, m(x) + 0.5, m(2.1), m(z) + 0.5, material("sconce", WALL));
     }
 
     return {
@@ -809,8 +863,8 @@ function upstairs(map) {
         moving: [],
         flames: [],
         lights: [
-            { kind: "lamp", x: 3.5, y: 2.4, z: 6, colour: 0xff8a6a, intensity: 6, distance: 12, flicker: 0.06 },
-            { kind: "fire", x: 10, y: 2.2, z: 5.5, colour: 0xff5a5a, intensity: 4, distance: 11, flicker: 0.1 },
+            { kind: "lamp", x: 4, y: 2.4, z: 7.5, colour: 0xff8a6a, intensity: 7, distance: 15, flicker: 0.06 },
+            { kind: "fire", x: 13, y: 2.2, z: 7.5, colour: 0xff5a5a, intensity: 5, distance: 14, flicker: 0.1 },
         ],
         hearth: null,
     };

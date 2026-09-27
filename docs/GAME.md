@@ -41,24 +41,31 @@ to the same town:
 
 ### Maps and links (core/interiors.js)
 
-The town is one map; each floor of a building is another, on the same 1-metre squares:
+The town is one map; each floor of a building is another, on the same 1-metre squares, and
+bigger inside than the building looks from outside (18 by 15 metres in a tavern 12 metres
+square), to walk about in easily: two metres and more between the tables, round the hearth,
+behind the bar and on the stairs, a hallway three metres wide upstairs, and doorways two wide:
 `world.maps` is `{ town, taproom, upstairs }`, each `{ id, width, height, blocked, opaque (what
 blocks sight), ground, origin }`. A floor is drawn as a plan, a row of characters for each row
 of squares, north at the top:
 
 ```
-TAPROOM                UPSTAIRS
-<SSSS........K         .SSSS>WBBwWBBw       .  floor           W  wall      T  table
-.............K         ......WBB.WBB.       D  door            H  hearth    b  bench
-...bb.bb..C..K         ......W...W...       <  foot of stairs  C  bar       K  barrels
-HH.TT.TT..C..K         ......W..cW..c       >  top of stairs   M  counter   B  bed
-HH.bb.bb..C..K         ..MMM.WW.WWW.W       S  stairs          w  washstand c  chest
-HH........C..K         ..............                          L  chaise    o  side table
-HH.bb.bb..C..K         ......WW.WWW.W
-...TT.TT.....K         ......W..cW..c
-...bb.bb......         ....o.W...W...
-..............         ......WBB.WBB.
-......DD......         .LL...WBBwWBBw
+TAPROOM              UPSTAIRS
+<SSSSS............   .SSSSS>.W.BBwW.BBw   .  floor           W  wall      T  table
+<SSSSS...........K   .SSSSS>.W.BB.W.BB.   D  door            H  hearth    b  bench
+.................K   ........W....W....   <  foot of stairs  C  bar       K  barrels
+..............C..K   ........Wc...Wc...   >  top of stairs   M  counter   B  bed
+....bb...bb...C..K   ........W....W....   S  stairs          w  washstand c  chest
+....TT...TT...C..K   ..MMM...WW..WWW..W                      L  chaise    o  side table
+HH..bb...bb...C..K   ..................
+HH............C..K   ..................
+HH............C..K   ..................
+HH..bb...bb...C..K   ........WW..WWW..W
+....TT...TT...C..K   ........W....W....
+....bb...bb......K   ....o...Wc...Wc...
+.................K   ........W....W....
+..................   ........W.BB.W.BB.
+........DD........   .LL.....W.BBwW.BBw
 ```
 
 The tavern's folk (`tavernFolk`, in `world.folk`): in the taproom, the barkeep behind the bar,
@@ -76,8 +83,10 @@ thing is one piece (a table, a bed, a stretch of wall), for the art and the mini
 are joined by links, `world.links`: the tavern's door (from the town's `front` squares to the
 taproom's `D` squares) and its stairs (from `<` to `>`). Each end of a link is `{ map, squares,
 arrive, facing }`: the squares that go through it, and where (and which way facing) whoever
-comes through it from the other end stands: just inside the door facing north into the room, at
-the foot or the top of the stairs facing south, outside the tavern facing away from it.
+comes through it from the other end stands: a couple of steps clear of it, turned back to face
+it (two squares in from the door, before the foot of the stairs and before their top, and on the
+square outside the tavern), so that it's in view to tap, and a tap on the ground round the
+player is a step, not straight back through.
 `routeBetween` finds the links from one map to another.
 
 ## The battle (core/battle.js)
@@ -211,21 +220,30 @@ A WebGL renderer with ACES tone mapping, a sky and fog, a studio environment map
 characters' materials, a hemisphere light and a sun whose shadow map follows the player (a
 little ahead of them, where more of the ground is in view, the further out the more: up to 12
 of its 24 metres; snapped to whole shadow texels, so shadows don't shimmer). The camera looks
-down from 45 degrees above the horizon (low enough to see well ahead of the player), zooming
-between 5 and 32 metres away, from any side (`yaw`: from the south, looking north, to start
-with).
+down from 45 degrees above the horizon to start with (low enough to see well ahead of the
+player: `pitch`), zooming between 5 and 32 metres away, from any side (`yaw`: from the south,
+looking north, to start with), at the player's middle (0.8 metres up).
 
-**Following the player** (app/camera.js). While the player moves about near where it looks (the
-zone: 1.4 metres round it, a couple of steps, however it's zoomed, and never nearer the screen's
-edge than 60% of the way from its middle), the camera keeps still. Once they walk out of it, the way
-the map would have to scroll, it follows them, catching up and turning round to look from behind
-them, the way they're going, at the same height and zoom. It turns on a spring, gathering speed
-and slowing smoothly, never faster than 3 radians a second (a half turn in about a second), and
-the way they're going is averaged over a third of a second, so a path's corners don't swing it
-about. Once they stop and it's caught up, it keeps still again, with a new middle. Put somewhere
-else (coming back to life), it catches them up without turning. While following, it leans
-towards whoever the player is fighting, so both stay in view. The minimap stays north up; what
-the camera sees turns on it.
+**Following the player** (app/camera.js). From the player's first step, the camera keeps up
+with them and turns round to look from behind them, the way they're going, at the same height
+and zoom. It turns on a spring, gathering speed and slowing smoothly, never faster than 4.2
+radians a second: a half turn (the player turning back towards it) is three-quarters done in
+0.8 s and done in about 1.2 s. The way they're going is averaged over a third of a second, so a
+path's corners don't swing it about. Stood still, it stays where it's turned. Put somewhere else
+(coming back to life), it catches them up without turning. It leans towards whoever the player
+is fighting, so both stay in view. The minimap stays north up; what the camera sees turns on it.
+
+**Turning it by hand.** A drag (a finger, or the mouse held down) turns the camera round the
+player: across the screen's width, half round, the view turning the way the drag goes (dragged
+right, it looks further right); up or down its height, it tilts 60 degrees (dragged up, it looks
+further up, lower down). It tilts between 22 degrees (and never so low that the top of the picture
+comes within 6 degrees of the horizon, so no more of the town is drawn than the fog lets be
+seen: 24 degrees on a wide screen, 31 on a tall one) and 75 (almost straight down). While held,
+it doesn't turn itself; let go, it stays where it was turned while the player stands, and once
+they walk again, it swings back round behind them, facing the way they go (keeping its tilt).
+A drag that starts on the player and sets off mostly upwards is a swipe (straight ahead), not a
+turn; two fingers are a pinch (zoom). Tilting costs nothing: the town is a few merged meshes,
+drawn whole whichever way the camera looks (about 90 draw calls and 170,000 triangles either way).
 
 **Quality levels** trade looks for speed, chosen for the device (debug mode can change them):
 
@@ -235,11 +253,20 @@ the camera sees turns on it.
 | Medium (phones) | up to 1.5× | 2048 | yes | 30% | 512 |
 | High (computers) | up to 2× | 2048 | yes | 45% | 1024 |
 
-**The cutaway.** A house can stand between the camera and the player, from whichever side it looks. The
-view marches along the line from the player to the camera over the town's height map, and when
-something is in the way the town's materials cut a round, dithered hole through whatever is
-nearer the camera than the player (a few lines added to their shaders; the shadows they cast
-stay whole).
+**Clear of buildings.** In the town, a building can stand between the camera and the player,
+from whichever side it looks. The view marches out along its line from where it looks over the
+height of what's built on each square (`buildings`: houses, landmarks, walls, towers,
+gatehouses and keeps, not props or trees) and, finding one in the way, comes in closer than it
+(staying 0.6 metres clear of it), or rises over it (up to 85 degrees), whichever leaves the
+camera furthest from the player, a degree higher counting as 0.15 metres nearer, and never nearer
+than 2.6 metres: a building a little way behind brings it in, one right behind lifts it over.
+It comes in (and rises) quickly, and goes back out slowly once the way is clear.
+
+**The cutaway.** Whatever still hides the player (a tree, or a building too close to come in
+front of), the view finds by marching along the line from the player to the camera over the
+town's height map (everything, trees and props too), and the town's materials cut a round,
+dithered hole through whatever is nearer the camera than the player (a few lines added to their
+shaders; the shadows they cast stay whole).
 
 ### The ground (world/ground.js)
 
@@ -357,19 +384,24 @@ and curtained doorways; flagstones in the taproom and planks upstairs. In the ta
 tables with candles, tankards and plates, and benches; the bar, with tankards along its top, and
 behind it two tiers of casks on a stillage, each with a brass tap, and shelves of tankards; the
 hearth, a stone chimney breast with a mantel, logs and embers, three flames and a boar on a spit
-turning slowly over them; a candle wheel; and the stairs, twelve steps and a handrail rising
-3 metres along the north wall. Upstairs, rugs, the counter with a velvet runner, a ledger, a
+turning slowly over them; a candle wheel; and the stairs, two metres wide, twelve steps and a
+handrail rising 3 metres along the north wall. Upstairs, rugs, the counter with a velvet runner, a ledger, a
 bell, a candle and a vase of flowers, a chaise longue and side table, the stairwell with its
 rail, and four bedrooms with canopied beds (their drapes red or purple), washstands and chests,
 lit by red-shaded sconces. Everything that doesn't move is merged by material (about 100 draw
 calls in all with the characters); the spit and the flames apart.
 
 The flames are crossed quads with a shader of rising noise, drawn additively and flickering,
-and embers rise from the hearth. The whole room is shown, like a doll's house with its near side
-cut away: every interior material discards what's more than 1.25 metres above the floor and on
-the camera's side of the player (`INTERIOR_CUT`: the player's position and the direction to the
-camera, set each frame), so walls, the chimney breast and bed canopies between the camera and
-the player are lowered, and everything beyond them stands full height.
+and embers rise from the hearth. The whole room is shown, like a doll's house with its near
+walls taken down: on the camera's side of the player (`INTERIOR_CUT`: the player's position and
+the direction to the camera, set each frame), the walls (and what's on them: posts, beams,
+lintels, doorway curtains, windows, sconces, the chimney breast and the door) are cut away down
+to their stone footing (0.36 metres), and anything else above head height (1.7 metres: bed
+canopies, the shelves over the barrels), so nothing stands between the camera and the player,
+whichever way it looks, and everything beyond them stands full height. Every interior material
+is drawn on both sides, and where a cut shows the inside of something (a wall's end, a post),
+it's dark wood (`cap`), as if solid. Wherever a wall has a gap of one or two squares, it's a
+doorway, with a lintel and its curtains tied back at either side (`doorways`).
 
 ### The town (world/town3d.js, world/art)
 
@@ -720,7 +752,8 @@ closes it.
    each piece of the town, the characters, compiling every shader before the first frame), then
    the game. A tap walks; a press and hold on the player or an enemy opens the action wheel; a second tap within 350 ms and 60 pixels of the first (going by when
    the taps happened, so a slow frame between them doesn't matter) turns it into a run, as does
-   a Shift-click. A swipe up that starts on the player (40 pixels up within 600 ms, mostly up)
+   a Shift-click. A drag turns the camera round the player (and tilts it). A swipe up that
+   starts on the player (40 pixels up within 600 ms, mostly up)
    sends them straight ahead the way they face, running (an `ahead` order), with the ring where
    they'll stop; blocked straight away, it's refused with a sound. The heads-up display
    (app/hud.js) shows the player's name and health in the bottom left corner (the zoom buttons
@@ -807,10 +840,14 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   landing facing the blow at its kind's height (not on the hands or head), healing a stage at a
   time (their arrows with them), gone on coming back to life, glows fading, eight arrows at most,
   and the body's and garments' materials mixing it in.
-- `test/camera.test.js`: the camera keeping still while the player moves a couple of steps about
-  where it looks, following once they go further and turning behind the player (walked away from, it doesn't turn; walked towards, it turns
-  all the way round), smoothly, steady through a path's corners, keeping still again once caught
-  up, and catching up without turning when the player comes back to life elsewhere.
+- `test/camera.test.js`: the camera following from the player's first step, catching up and
+  turning behind them (walked away from, it doesn't turn; walked towards, it turns all the way
+  round), easing round (three-quarters of a half turn in 0.5 to 1.2 s, never a jump), steady
+  through a path's corners, staying where it's turned when they stand; dragged, turning and
+  tilting, no lower than the view allows nor higher than 75 degrees, holding while they stand,
+  not turning itself while held even as they walk, and swinging back behind them once let go and
+  walking; catching up without turning when the player comes back to life elsewhere, and leaning
+  towards a foe.
 - `test/actions.test.js`: attacks (five ways of each, every one landing in front at a fighting
   height, never the same way twice in a row, all five used; their timing, where the hands reach
   on different bodies, two-handed grips, alternating punches), rests (five named for every
@@ -853,9 +890,12 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   a bow fight leaving arrows in bleeding wounds, blood on the ground and a pool under the fallen,
   healed and come back to life without them,
   the music's recordings downloaded and playing after a tap (and carrying on when the browser
-  suspends or closes its sound), the camera keeping still for a step and following a long walk
-  from behind, the target ring, tapping the tavern's door (lit green) to walk in and come out
-  inside it facing the room, the folk there (seen, without name plates, resting, not to be
+  suspends or closes its sound), the camera following from the first step and ending up behind a
+  long walk, a drag turning and tilting it (holding while the player stands, and swinging back
+  behind them once they walk), the camera clear of a building behind the player in the town, the
+  target ring, tapping the tavern's door (lit green) to walk in and come out a couple of steps
+  inside it facing the door (and at each door and stairs after, taps round the player walking
+  them, not taking them back through), the folk there (seen, without name plates, resting, not to be
   fought), tapping the barkeep to walk up and talk (his name and title, what he says, replies
   by tap and by number key, Escape to stop), up the stairs (the madam), down and out again,
   walking by the

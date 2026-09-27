@@ -54,7 +54,7 @@ describe("inside buildings (interiors.js)", () => {
         // From the door: the stairs, behind the bar, the hearth's side and every table's end
         const door = taproom.marks.D[0];
 
-        for (const square of [taproom.marks["<"][0], [11, 4], [2, 4], [5, 3], [5, 7], [9, 5]]) {
+        for (const square of [taproom.marks["<"][0], [15, 4], [2, 7], [3, 5], [6, 5], [8, 10], [11, 10]]) {
             assert.ok(reachable(taproom, door, square), `${square} from the door`);
         }
     });
@@ -76,7 +76,8 @@ describe("inside buildings (interiors.js)", () => {
         }
 
         // Walls block sight between the rooms
-        assert.equal(upstairs.opaque[4][7], 1);
+        assert.equal(upstairs.opaque[3][8], 1);
+        assert.equal(upstairs.opaque[3][13], 1);
     });
 
     it("finds the links at a square, and the way between maps", () => {
@@ -125,7 +126,7 @@ describe("going in and out (battle.js)", () => {
         return { world, battle, player: battle.actor("player") };
     }
 
-    it("walks to the door and comes out inside it, facing into the taproom; up the stairs and down; and out again", () => {
+    it("walks to the door and comes out a couple of steps inside it, facing back to it; up the stairs and down, likewise; and out again", () => {
         const { world, battle, player } = tavern();
 
         battle.command("player", { type: "move", to: world.spawns.player });
@@ -136,27 +137,34 @@ describe("going in and out (battle.js)", () => {
         const cross = events.find((event) => event.type === "cross");
 
         assert.deepEqual([cross.from, cross.to, cross.link], ["town", "taproom", "tavern-door"]);
-        assert.equal(player.map, "taproom");
-        assert.deepEqual(player.square, world.maps.taproom.marks.D[0]);
-        assert.equal(player.facing, Math.PI);
-        assert.equal(player.order, null);
+        const [doorX, doorY] = world.maps.taproom.marks.D[0];
 
-        // Up and down the stairs
+        assert.equal(player.map, "taproom");
+        assert.deepEqual(player.square, [doorX, doorY - 2]);
+        assert.equal(player.facing, 0);
+        assert.equal(player.order, null);
+        assert.equal(linkAt(world.links, "taproom", player.square), null, "not on the door");
+
+        // Up and down the stairs: before their top, and before their foot, facing them
         battle.command("player", { type: "enter", link: "tavern-stairs", run: true });
         run(battle, 8000);
         assert.equal(player.map, "upstairs");
-        assert.deepEqual(player.square, world.maps.upstairs.marks[">"][0]);
+        assert.deepEqual(player.square, [6, 3]);
+        assert.equal(player.facing, Math.PI);
+        assert.equal(linkAt(world.links, "upstairs", player.square), null, "not on the stairs");
 
         battle.command("player", { type: "enter", link: "tavern-stairs" });
-        run(battle, 2000);
+        run(battle, 3000);
         assert.equal(player.map, "taproom");
+        assert.deepEqual(player.square, [1, 3]);
+        assert.equal(player.facing, Math.PI);
 
-        // Out, onto the square outside the door, facing away from it
+        // Out, onto the square outside the door, facing back to it
         battle.command("player", { type: "enter", link: "tavern-door" });
-        run(battle, 10000);
+        run(battle, 12000);
         assert.equal(player.map, "town");
         assert.deepEqual(player.square, world.tavern.outside);
-        assert.equal(player.facing, world.tavern.facing);
+        assert.ok(Math.abs(Math.cos(player.facing - world.tavern.facing) + 1) < 1e-9, "facing the tavern");
     });
 
     it("won't go through a link that isn't where they are, and moves on the map they're on", () => {
@@ -261,7 +269,7 @@ describe("going in and out (battle.js)", () => {
         run(battle, 3000);
         assert.equal(player.map, "taproom");
 
-        battle.add({ id: "orc", kind: "orc", weapon: "cleaver", team: "orcs", square: [6, 9], map: "taproom" });
+        battle.add({ id: "orc", kind: "orc", weapon: "cleaver", team: "orcs", square: [player.square[0], player.square[1] - 1], map: "taproom" });
         player.hp = 1;
 
         const events = run(battle, 12000);
@@ -339,9 +347,9 @@ describe("the tavern's folk (interiors.js, battle.js)", () => {
         }
 
         assert.equal(folk.find(({ id }) => id === "madam").map, "upstairs");
-        assert.equal(upstairs.plan[4][3], "M", "her counter in front of her");
+        assert.equal(upstairs.plan[5][3], "M", "her counter in front of her");
         assert.ok(folk.filter(({ id }) => id.startsWith("wench")).every(({ routine }) => routine.stops.some(({ group }) => group === "bar") && routine.stops.some(({ act }) => act === "serve")));
-        assert.ok(taproom.plan[4].slice(10, 13).startsWith("C"), "the bar between the barkeep and the room");
+        assert.ok(taproom.plan[4].slice(14, 17).startsWith("C"), "the bar between the barkeep and the room");
     });
 
     it("puts a courtesan in each bedroom upstairs, just inside its door", () => {
@@ -355,11 +363,14 @@ describe("the tavern's folk (interiors.js, battle.js)", () => {
             const [x, y] = one.square;
             const ahead = [x + Math.round(Math.sin(one.facing)), y + Math.round(Math.cos(one.facing))];
 
-            // Facing out through the doorway (walls either side of it) into the hallway
+            // Facing out through the doorway (two squares wide, walls either side of it) into the
+            // hallway
+            const row = upstairs.plan[ahead[1]];
+            const [from, to] = [row.lastIndexOf("W", ahead[0]), row.indexOf("W", ahead[0])];
+
             assert.equal(one.map, "upstairs");
-            assert.equal(upstairs.plan[ahead[1]][ahead[0]], ".", `${one.id} faces her doorway`);
-            assert.equal(upstairs.plan[ahead[1]][ahead[0] - 1], "W");
-            assert.equal(upstairs.plan[ahead[1]][ahead[0] + 1], "W");
+            assert.equal(row[ahead[0]], ".", `${one.id} faces her doorway`);
+            assert.equal(to - from - 1, 2, "two squares wide, walls either side");
             assert.equal(upstairs.plan[ahead[1] + Math.round(Math.cos(one.facing))][ahead[0]], ".", "the hallway beyond");
 
             // Every stop in her own room (behind the same doorway), by the door or the bed
@@ -377,7 +388,7 @@ describe("the tavern's folk (interiors.js, battle.js)", () => {
     it("has a courtesan beckon the player in when they come into her sight at her door (not through a wall), once until they've been out of sight a while", () => {
         const { battle } = busy();
         const beckons = () => run(battle, 1000).filter((event) => event.type === "act" && event.act === "beckon");
-        const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "town", square: [2, 5], map: "upstairs" });
+        const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "town", square: [2, 7], map: "upstairs" });
         const courtesan = battle.actor("courtesan");
         const put = (square) => {
             player.square = [...square];
@@ -390,7 +401,7 @@ describe("the tavern's folk (interiors.js, battle.js)", () => {
 
         // At her door (and the door across the hallway): she turns to them and beckons, and so
         // does the courtesan across the way; no one else sees them
-        put([8, 5]);
+        put([10, 7]);
 
         const seen = beckons();
 
@@ -399,15 +410,15 @@ describe("the tavern's folk (interiors.js, battle.js)", () => {
 
         // Not again while they're still in sight, nor straight after they step out of it
         assert.deepEqual(run(battle, 8000).filter((event) => event.act === "beckon" && event.id === "courtesan"), []);
-        put([2, 5]);
+        put([2, 7]);
         run(battle, 1000);
-        put([8, 5]);
+        put([10, 7]);
         assert.deepEqual(beckons().filter(({ id }) => id === "courtesan"), [], "not after a moment out of sight");
 
         // After a while out of sight, again
-        put([2, 5]);
+        put([2, 7]);
         run(battle, BECKON.again + 1000);
-        put([8, 5]);
+        put([10, 7]);
         assert.deepEqual(beckons().map(({ id }) => id), ["courtesan", "courtesan3"]);
     });
 
@@ -418,7 +429,7 @@ describe("the tavern's folk (interiors.js, battle.js)", () => {
         const places = new Map();
 
         // The player by the door, looking in
-        battle.add({ id: "player", kind: "player", weapon: "sword", team: "town", square: [7, 10], map: "taproom" });
+        battle.add({ id: "player", kind: "player", weapon: "sword", team: "town", square: [8, 12], map: "taproom" });
 
         for (let t = 0; t < 90000; t += STEP_MS) {
             for (const event of battle.advance(STEP_MS)) {
@@ -471,18 +482,18 @@ describe("the tavern's folk (interiors.js, battle.js)", () => {
 
             assert.ok(serves.length >= 4, `${id} served ${serves.length} times`);
             assert.ok(new Set(serves.map(({ square }) => square.join())).size >= 3, `${id} goes round the tables`);
-            assert.ok(new Set(places.get(id)).has("9,3") || new Set(places.get(id)).has("9,5"), `${id} goes back to the bar`);
+            assert.ok(new Set(places.get(id)).has("13,5") || new Set(places.get(id)).has("13,8"), `${id} goes back to the bar`);
         }
 
         // The barkeep: drawing ale from the barrels, facing them
         const pours = of("barkeep", "pour");
 
         assert.ok(pours.length >= 4);
-        assert.ok(pours.every(({ square }) => square[0] === 12));
-        assert.ok(places.get("barkeep").every((square) => Number(square.split(",")[0]) >= 11), "he stays behind the bar");
+        assert.ok(pours.every(({ square }) => square[0] === 16));
+        assert.ok(places.get("barkeep").every((square) => Number(square.split(",")[0]) >= 15), "he stays behind the bar");
 
         // The madam keeps to her counter upstairs, where no one can see her: she doesn't rest
-        assert.ok(places.get("madam").every((square) => square.split(",")[1] === "3"));
+        assert.ok(places.get("madam").every((square) => square.split(",")[1] === "4"));
         assert.ok(!rests.some(({ id }) => id === "madam"));
     });
 
@@ -494,7 +505,7 @@ describe("the tavern's folk (interiors.js, battle.js)", () => {
 
         // Upstairs, at the far end of the hallway, the walls between: then at her counter
         const upstairs = busy();
-        const player = upstairs.battle.add({ id: "player", kind: "player", weapon: "sword", team: "town", square: [13, 5], map: "upstairs" });
+        const player = upstairs.battle.add({ id: "player", kind: "player", weapon: "sword", team: "town", square: [16, 7], map: "upstairs" });
         const madam = upstairs.battle.actor("madam");
 
         assert.equal(upstairs.battle.canSee(player, madam), false);
@@ -519,7 +530,7 @@ describe("the tavern's folk (interiors.js, battle.js)", () => {
         const arrived = run(battle, 12000).find(({ type }) => type === "arrived");
 
         assert.deepEqual(arrived && { id: arrived.id, target: arrived.target }, { id: "player", target: "barkeep" });
-        assert.ok(player.square[0] < 10, `in front of the bar, not behind it: ${player.square}`);
+        assert.ok(player.square[0] < 14, `in front of the bar, not behind it: ${player.square}`);
         assert.ok(battle.canTalk(player, barkeep));
         assert.equal(player.order, null);
 

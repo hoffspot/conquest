@@ -1,6 +1,7 @@
 // The game's 3D view: the renderer, the scene with its sky, sun and shadows, and a camera that
-// follows the player from above and behind, looking north, as the town's houses are built to be
-// seen (their doors and windows face south).
+// looks at the player from above and behind (the game turns and tilts it: app/camera.js). In the
+// town it comes in closer than a building that would stand between it and the player, or failing
+// that rises over it; indoors the walls on its side are cut away (world/interiors3d.js).
 //
 // Phones get less: fewer pixels, a smaller shadow map, thinner hair and smaller skin textures
 // (QUALITY: hair is how much of a character's full head of hair to grow, seen from the game's
@@ -30,10 +31,23 @@ export function detectQuality() {
     return touch ? "medium" : "high";
 }
 
-// The camera looks down this far from the horizon (degrees: low enough to see well ahead of the
-// player), from this far away (metres), zooming between
+// The camera looks down this far from the horizon to start with (degrees: low enough to see well
+// ahead of the player), from this far away (metres), zooming between; at a point this high above
+// the ground (metres: the player's middle)
 export const PITCH = 45;
 export const DISTANCE = Object.freeze({ least: 5, start: 10.5, most: 32 });
+const LOOK_UP = 0.8;
+
+// The camera's lowest: the top of the picture this far below the horizon (degrees), so there's no
+// more of the town to draw than the fog lets be seen
+const BELOW_HORIZON = 6;
+
+// Clear of a building in the way (the town's `buildings` heights): coming in closer than it,
+// staying `margin` metres clear of it (along the camera's line), or rising over it (up to
+// `highest` degrees), whichever leaves the camera furthest from the player, a degree higher
+// counting as `lift` metres nearer; never nearer than `least` metres. Coming in (and rising)
+// this quickly, going back out this slowly (per second)
+const PULL = Object.freeze({ least: 2.6, margin: 0.6, highest: 85, lift: 0.15, in: 12, out: 2.5 });
 
 const SKY = 0xa9c8de;
 
@@ -116,9 +130,16 @@ export class View {
         /** How far the camera looks down from the horizon, in degrees. */
         this.pitch = PITCH;
 
-        // What might stand between the camera and the player (the town's height map), the point
-        // on the player to keep in view, and how open the hole cut round them is (0 to 1)
+        // What might stand between the camera and the player (the town's height map, and its
+        // buildings'), the point on the player to keep in view, and how open the hole cut round
+        // them is (0 to 1)
         this.occluders = null;
+        this.buildings = null;
+
+        // How much nearer (metres) and higher (degrees) the camera is than asked, to be clear of
+        // a building in the way
+        this.pulled = 0;
+        this.lifted = 0;
         this.subject = null;
         this.cut = 0;
         this.lastRender = performance.now();
@@ -169,19 +190,90 @@ export class View {
         this.camera.updateProjectionMatrix();
     }
 
-    /** Point the camera at a spot (metres), looking from `yaw` (radians, as `this.yaw`). */
-    look(point, yaw = this.yaw) {
+    /**
+     * Point the camera at a spot (metres), looking from `yaw` (radians, as `this.yaw`), `pitch`
+     * degrees down; `dt` seconds on from the last look (to come in or out from a building in the
+     * way smoothly: Infinity, at once).
+     */
+    look(point, yaw = this.yaw, pitch = this.pitch, dt = Infinity) {
         this.focus.copy(point);
         this.yaw = yaw;
+        this.pitch = pitch;
+        this.#clear(dt);
         this.#place();
     }
 
     /**
-     * The town's height map ({ heights }: buildTown's), for seeing when buildings hide the
-     * player; null for none.
+     * The lowest the camera may look from (degrees down from the horizon): the top of the
+     * picture just below the horizon, the taller the picture the higher.
+     */
+    lowestPitch() {
+        return this.camera.fov / 2 + BELOW_HORIZON;
+    }
+
+    /**
+     * The town's height maps ({ heights, buildings }: buildTown's), for seeing when anything
+     * hides the player, and coming in closer than buildings; null for none (indoors).
      */
     setOccluders(town) {
         this.occluders = town?.heights ?? null;
+        this.buildings = town?.buildings ?? null;
+        this.pulled = 0;
+        this.lifted = 0;
+    }
+
+    /**
+     * How far the camera can be from where it looks, along its line looking `pitch` degrees
+     * down, before a building's in the way (metres: Infinity if none is, out to `distance`).
+     */
+    clearance(pitch = this.pitch, distance = this.distance) {
+        const heights = this.buildings;
+
+        if (!heights) {
+            return Infinity;
+        }
+
+        const tilt = (pitch * Math.PI) / 180;
+        const [across, up] = [Math.cos(tilt), Math.sin(tilt)];
+        const [dx, dz] = [Math.sin(this.yaw) * across, Math.cos(this.yaw) * across];
+        const [x0, y0, z0] = [this.focus.x, this.focus.y + LOOK_UP, this.focus.z];
+
+        for (let along = 0.4; along < distance + PULL.margin; along += 0.2) {
+            const height = heights[Math.floor(z0 + dz * along)]?.[Math.floor(x0 + dx * along)] ?? 0;
+
+            if (height > y0 + up * along - 0.3) {
+                return Math.max(0, along - PULL.margin);
+            }
+        }
+
+        return Infinity;
+    }
+
+    // Come in closer than a building in the way, or rise over it, whichever leaves the camera
+    // further off; or go back out once it's not in the way: quickly in, slowly out
+    #clear(dt) {
+        let pulled = 0;
+        let lifted = 0;
+
+        if (this.buildings && this.clearance() < this.distance) {
+            let best = -Infinity;
+
+            for (let lift = 0; this.pitch + lift <= PULL.highest; lift += 5) {
+                const reach = Math.max(PULL.least, Math.min(this.distance, this.clearance(this.pitch + lift)));
+                const score = reach - PULL.lift * lift;
+
+                if (score > best) {
+                    best = score;
+                    lifted = lift;
+                    pulled = this.distance - reach;
+                }
+            }
+        }
+
+        const toward = (from, to) => from + (to - from) * (1 - Math.exp(-(to > from ? PULL.in : PULL.out) * dt));
+
+        this.pulled = toward(this.pulled, pulled);
+        this.lifted = toward(this.lifted, lifted);
     }
 
     /** The point to keep in view through anything in the way (the player's chest), or null. */
@@ -201,12 +293,13 @@ export class View {
     }
 
     #place() {
-        const { focus, camera, distance, yaw } = this;
-        const pitch = (this.pitch * Math.PI) / 180;
+        const { focus, camera, yaw } = this;
+        const distance = Math.max(Math.min(this.distance, PULL.least), this.distance - this.pulled);
+        const pitch = (Math.min(PULL.highest, this.pitch + this.lifted) * Math.PI) / 180;
         const across = Math.cos(pitch) * distance;
 
-        camera.position.set(focus.x + Math.sin(yaw) * across, focus.y + Math.sin(pitch) * distance, focus.z + Math.cos(yaw) * across);
-        camera.lookAt(focus.x, focus.y + 0.8, focus.z);
+        camera.position.set(focus.x + Math.sin(yaw) * across, focus.y + LOOK_UP + Math.sin(pitch) * distance, focus.z + Math.cos(yaw) * across);
+        camera.lookAt(focus.x, focus.y + LOOK_UP, focus.z);
 
         // The sun's shadows follow the player, a little ahead of them where more of the ground is
         // in view (the further out, the more), snapped to whole shadow texels so they don't shimmer

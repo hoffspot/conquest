@@ -7,7 +7,7 @@
 // the animations, projectiles, sparks and damage numbers that show them.
 //
 // Tap or click the ground to walk there, or an enemy to go and fight it, or a door or stairs to
-// go through them; pinch or scroll to zoom.
+// go through them; drag to turn the camera round the player (or tilt it); pinch or scroll to zoom.
 //
 // The town and each floor of the tavern are maps of their own (core/interiors.js), drawn far
 // apart in the world (each at its origin), and only the one the player is on is shown: going
@@ -84,6 +84,12 @@ const FLICK = 30;
 // (within this long, ms)
 const SWIPE = 40;
 const SWIPE_MS = 600;
+
+// Dragging turns the camera round the player: across the screen's width, half round; up or down
+// its height, tilting it this far (degrees). From the player, a flick up is a swipe (above), not a
+// drag: a drag from them turns the camera only if it sets off more across than up
+const DRAG_TURN = Math.PI;
+const DRAG_TILT = 60;
 
 // How far the camera leans from the player towards who they're fighting: a share of the way,
 // up to so many metres
@@ -382,6 +388,7 @@ export class Game {
 
         for (const pointer of this.pointers.values()) {
             clearTimeout(pointer.hold);
+            this.#letGo(pointer);
         }
 
         this.pointers.clear();
@@ -669,9 +676,8 @@ export class Game {
         object.visible = sinking < 1;
     }
 
-    // The camera (camera.js): still while the player moves about the middle of the screen, then
-    // following them from behind the way they're going, leaning towards whoever they're fighting
-    // so both are in view
+    // The camera (camera.js): following the player from behind the way they're going, or where a
+    // drag has turned it, leaning towards whoever they're fighting so both are in view
     #follow(dt) {
         const player = this.avatars.get("player");
 
@@ -692,13 +698,13 @@ export class Game {
             _focus.add(lean.clampLength(0, LEAN.most));
         }
 
-        const { focus, yaw } = this.cameraFollow.update(dt, {
+        const { focus, yaw, pitch } = this.cameraFollow.update(dt, {
             player: { x: position.x, z: position.z, vx: player.follow.vx, vz: player.follow.vz },
-            screen: this.view.fromMiddle(chest),
             aim: { x: _focus.x, z: _focus.z },
+            lowest: this.view.lowestPitch(),
         });
 
-        this.view.look(_focus.set(focus.x, 0, focus.z), yaw);
+        this.view.look(_focus.set(focus.x, 0, focus.z), yaw, pitch, dt || Infinity);
         this.view.setFocus(chest);
     }
 
@@ -996,7 +1002,7 @@ export class Game {
         const position = this.avatars.get("player").object.position;
 
         this.#showMap(actor.map);
-        this.cameraFollow = new CameraFollow({ x: position.x, z: position.z, yaw: Math.atan2(-Math.sin(actor.facing), -Math.cos(actor.facing)) });
+        this.cameraFollow = new CameraFollow({ x: position.x, z: position.z, yaw: Math.atan2(-Math.sin(actor.facing), -Math.cos(actor.facing)), pitch: this.cameraFollow?.pitch });
         this.#follow(0);
         this.effects.markerAge = Infinity;
 
@@ -1386,7 +1392,7 @@ export class Game {
         const canvas = this.view.canvas;
 
         this.#on(canvas, "pointerdown", (event) => {
-            const pointer = { x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, start: event.timeStamp, moved: false, hold: null, wheel: null, swipe: false };
+            const pointer = { x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, start: event.timeStamp, moved: false, hold: null, wheel: null, swipe: false, drag: null, done: false };
 
             canvas.setPointerCapture?.(event.pointerId);
             this.pointers.set(event.pointerId, pointer);
@@ -1404,8 +1410,11 @@ export class Game {
             if (this.pointers.size === 2) {
                 const [a, b] = [...this.pointers.values()];
 
+                // Two fingers: a pinch, not a drag
                 for (const each of this.pointers.values()) {
                     clearTimeout(each.hold);
+                    each.done = true;
+                    this.#letGo(each);
                 }
 
                 this.#closeWheel();
@@ -1437,10 +1446,27 @@ export class Game {
 
             // Swiped up from the player: straight ahead, as far as the way is clear
             const rise = pointer.startY - pointer.y;
+            const across = pointer.x - pointer.startX;
 
-            if (pointer.swipe && this.pointers.size === 1 && rise > SWIPE && rise > 1.5 * Math.abs(pointer.x - pointer.startX) && event.timeStamp - pointer.start < SWIPE_MS) {
+            if (pointer.swipe && this.pointers.size === 1 && rise > SWIPE && rise > 1.5 * Math.abs(across) && event.timeStamp - pointer.start < SWIPE_MS) {
                 pointer.swipe = false;
+                pointer.done = true;
                 this.forward();
+            }
+
+            // Dragged: the camera turns round the player (and tilts) with it
+            if (pointer.moved && !pointer.drag && !pointer.done && !this.pinch && this.pointers.size === 1 && !(pointer.swipe && rise > 1.5 * Math.abs(across))) {
+                pointer.swipe = false;
+                pointer.drag = { x: pointer.startX, y: pointer.startY };
+                this.cameraFollow?.grab();
+            }
+
+            if (pointer.drag && this.cameraFollow) {
+                const rect = canvas.getBoundingClientRect();
+
+                this.cameraFollow.turn((-(pointer.x - pointer.drag.x) / rect.width) * DRAG_TURN, ((pointer.y - pointer.drag.y) / rect.height) * DRAG_TILT, this.view.lowestPitch());
+                pointer.drag.x = pointer.x;
+                pointer.drag.y = pointer.y;
             }
 
             if (this.pinch && this.pointers.size === 2) {
@@ -1464,6 +1490,7 @@ export class Game {
 
             this.pointers.delete(event.pointerId);
             clearTimeout(pointer.hold);
+            this.#letGo(pointer);
 
             // Let go with the wheel open: whatever was chosen, it closes (in the middle, nothing)
             if (pointer.wheel) {
@@ -1513,6 +1540,14 @@ export class Game {
             event.preventDefault();
             this.view.zoom(Math.exp(event.deltaY * 0.0015));
         }, { passive: false });
+    }
+
+    // A drag lets go of the camera: walking, it swings back round behind the player
+    #letGo(pointer) {
+        if (pointer.drag) {
+            pointer.drag = null;
+            this.cameraFollow?.release();
+        }
     }
 
     /**
