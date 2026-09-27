@@ -249,7 +249,7 @@ export class Game {
             // The world round where the player starts, a chunk at a time (then more as they go)
             const [x, y] = world.spawns.player;
 
-            this.chunks = new Chunks(world);
+            this.chunks = new Chunks(world, { undergrowth: view.quality.undergrowth });
             view.scene.add(this.chunks.object);
             await time("chunks", async () => {
                 while (this.chunks.update(x + 0.5, y + 0.5) || this.chunks.busy) {
@@ -673,6 +673,9 @@ export class Game {
         // The world round the player, drawn as they go (a chunk a frame at most)
         if (this.chunks && this.mapId === "town") {
             const { x, z } = this.avatars.get("player").object.position;
+
+            // (The undergrowth as thick as the quality asks, grown again if that's changed)
+            this.chunks.setUndergrowth(this.view.quality.undergrowth);
 
             if (this.chunks.update(x, z)) {
                 this.#hearTrees();

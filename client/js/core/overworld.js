@@ -25,6 +25,7 @@
 import { MAP_ORIGINS } from "./interiors.js";
 import { createRandom, noise } from "./random.js";
 import { Settlements, squareOf, waysOut } from "./settlements.js";
+import { featuresOf } from "./wilds.js";
 import { GROUND, TREE_KINDS } from "./setpieces/pieces.js";
 import { generateWorld } from "./world.js";
 import { BIOME, BIOMES, CELL, CELLS, CHUNK, CHUNKS, planWorld, startFor, WATER, WORLD_SIZE } from "./worldplan/plan.js";
@@ -226,6 +227,22 @@ export class Overworld {
         return BIOMES[this.plan.biome[cellAt(y) * CELLS + cellAt(x)]].id;
     }
 
+    /**
+     * Whether a square is in a town or settlement (inside its edge, or on its streets, buildings
+     * or yards), not out in its fields or the land.
+     */
+    settled(x, y) {
+        const { middle, radius } = this.stamp;
+
+        if (middle && this.inTown(x, y) && Math.hypot(x + 0.5 - middle[0], y + 0.5 - middle[1]) < radius) {
+            return true;
+        }
+
+        const settlement = this.settlements.at(x, y);
+
+        return Boolean(settlement && this.settlements.squareAt(settlement, x, y));
+    }
+
     /** Whether a square is in the town. */
     inTown(x, y) {
         const { at, width, height } = this.stamp;
@@ -284,6 +301,7 @@ export class Overworld {
         const chunk = { cx, cy, x0, y0, blocked, opaque, ground, water, bridge, trees: [], bridges, town };
 
         this.#plant(chunk);
+        chunk.features = this.#features(chunk);
 
         // The settlements' own trees (their squares are blocked already)
         for (const piece of this.settlements.piecesIn(cx, cy).filter(({ kind }) => kind === "tree")) {
@@ -759,6 +777,45 @@ export class Overworld {
         }
     }
 
+    // A chunk's own features (wilds.js: boulders, fallen trees, bushes...), clear of the trees,
+    // roads, water, the town, the settlements and the places still to come, each taking its squares
+    #features(chunk) {
+        const { plan, stamp } = this;
+        const { x0, y0, blocked, opaque } = chunk;
+        const random = createRandom((Math.imul(chunk.cx + 7, 2654435761) ^ Math.imul(chunk.cy + 11, 40503) ^ Math.imul(plan.seed + 3, 97531)) >>> 0);
+        const clearings = this.clearings.filter(({ at, radius }) => at[0] > x0 - radius && at[0] < x0 + CHUNK + radius && at[1] > y0 - radius && at[1] < y0 + CHUNK + radius);
+        const [tx0, ty0] = [stamp.at[0] - CLEAR_OF_TOWN, stamp.at[1] - CLEAR_OF_TOWN];
+        const [tx1, ty1] = [stamp.at[0] + stamp.width + CLEAR_OF_TOWN, stamp.at[1] + stamp.height + CLEAR_OF_TOWN];
+        const free = (x, y, fields) => {
+            const k = (y - y0) * CHUNK + (x - x0);
+            const ground = chunk.ground[k];
+
+            if (x < x0 || y < y0 || x >= x0 + CHUNK || y >= y0 + CHUNK || blocked[k] || chunk.water[k] || chunk.bridge[k] || (ground !== GROUND.grass && !(fields && ground === GROUND.soil))) {
+                return false;
+            }
+
+            if (x >= tx0 && y >= ty0 && x < tx1 && y < ty1) {
+                return false;
+            }
+
+            const settlement = this.settlements.at(x, y);
+
+            return !(settlement && this.settlements.squareAt(settlement, x, y)) && !clearings.some(({ at, radius }) => Math.hypot(at[0] - x, at[1] - y) < radius);
+        };
+        const features = featuresOf({ x0, y0, size: CHUNK, seed: plan.seed, random, landAt: (x, y) => this.biomeAt(x, y), free });
+
+        for (const { squares, opaque: hides } of features) {
+            for (const [x, y] of squares) {
+                const k = (y - y0) * CHUNK + (x - x0);
+
+                blocked[k] = 1;
+                opaque[k] = hides ? 1 : opaque[k];
+            }
+        }
+
+        return features;
+    }
+
     // Whether a square outside a chunk being made is road or water (or the town)
     #busy(x, y) {
         const settlement = this.settlements.at(x, y);
@@ -786,7 +843,7 @@ export function buildWorld({ seed = 1, race = "human", plan = planWorld(seed) } 
     const start = startFor(plan, race);
     const town = generateWorld({ seed, exits: waysOut(plan, start) });
     const at = [Math.round(start.at[0] - town.width / 2), Math.round(start.at[1] - town.height / 2)];
-    const stamp = { at, width: town.width, height: town.height, blocked: town.blocked, opaque: town.opaque, ground: town.ground };
+    const stamp = { at, width: town.width, height: town.height, blocked: town.blocked, opaque: town.opaque, ground: town.ground, middle: [town.town.centre[0] + town.origin + at[0], town.town.centre[1] + town.origin + at[1]], radius: town.town.radius };
     const overworld = new Overworld({ plan, stamp, start });
     const move = ([x, y]) => [x + at[0], y + at[1]];
     const tavern = town.tavern && {

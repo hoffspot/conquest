@@ -1,11 +1,14 @@
 // The ground under the world: one flat mesh covering the map, its colour blended from tiling
 // textures (grass, road, cobbles, soil, courtyard earth) by a "splat" texture made from the
-// world's ground plan, square by square, with soft, ragged edges between them.
+// world's ground plan, square by square, with soft, ragged edges between them. The grass isn't the
+// same everywhere: patches of it are drier and straw-coloured, others lusher and darker, and here
+// and there it's worn to bare earth (from a small texture of noise, read at large scales).
 //
 // Blending tiling textures in the shader keeps the ground sharp close up for one draw call, where
 // one painted texture of the whole map would have to be huge (or blurry).
 
 import * as THREE from "three";
+import { tiling } from "../core/noise.js";
 import { CHUNK } from "../core/overworld.js";
 import { GROUND } from "../core/setpieces/pieces.js";
 import { BIOMES, CELLS, WORLD_SIZE } from "../core/worldplan/plan.js";
@@ -59,6 +62,23 @@ export const LAND_COLOURS = Object.freeze({
 
 // How far the edges between lands wander (metres), so the plan's cells don't show
 const LAND_WANDER = 26;
+
+/**
+ * The grass's patches: how many metres one copy of the noise covers, read coarse (the patches) and
+ * fine (their ragged edges, and bare earth); how much of each there is (the noise's value where it
+ * starts to show and where it's all there); and how strongly each shows.
+ */
+export const PATCHES = Object.freeze({
+    coarse: 170,
+    fine: 43,
+    dry: [0.5, 0.66, 0.7],
+    lush: [0.54, 0.7, 0.55],
+    bare: [0.645, 0.715, 0.8],
+});
+
+// The patches' noise: texels a side, and lattice cells a side of its coarsest octave
+const PATCH_TEXELS = 128;
+const PATCH_CELLS = 8;
 
 // A pseudo-random value from 0 to 1 for a point (for the edges' raggedness)
 function hash(x, y) {
@@ -196,6 +216,42 @@ function groundTiles() {
     return tiles;
 }
 
+/**
+ * The grass's patches' noise, tiling: RGBA bytes PATCH_TEXELS square, each channel noise of its
+ * own (red: dry grass, green: lush, blue: bare earth, alpha: the patches' ragged edges).
+ */
+export function patchNoise(texels = PATCH_TEXELS) {
+    const data = new Uint8Array(texels * texels * 4);
+
+    for (let y = 0; y < texels; y++) {
+        for (let x = 0; x < texels; x++) {
+            const [u, v] = [(x / texels) * PATCH_CELLS, (y / texels) * PATCH_CELLS];
+
+            for (let channel = 0; channel < 4; channel++) {
+                data[(y * texels + x) * 4 + channel] = Math.round(tiling(u, v, PATCH_CELLS, 101 + channel * 31, 4) * 255);
+            }
+        }
+    }
+
+    return data;
+}
+
+let patches = null;
+
+function patchTexture() {
+    if (!patches) {
+        patches = new THREE.DataTexture(patchNoise(), PATCH_TEXELS, PATCH_TEXELS, THREE.RGBAFormat);
+        patches.wrapS = THREE.RepeatWrapping;
+        patches.wrapT = THREE.RepeatWrapping;
+        patches.magFilter = THREE.LinearFilter;
+        patches.minFilter = THREE.LinearMipmapLinearFilter;
+        patches.generateMipmaps = true;
+        patches.needsUpdate = true;
+    }
+
+    return patches;
+}
+
 // A splat texture (splatOf's) for the GPU
 function splatTexture({ data, width, height }) {
     const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
@@ -267,6 +323,7 @@ export function groundMaterial({ splat = null, area = [0, 0, 1, 1], land = null 
             landSize: { value: landMap.userData.size ?? 1 },
             grassMap: { value: grass.texture },
             grassSize: { value: grass.size },
+            patchMap: { value: patchTexture() },
             ...Object.fromEntries(layers.flatMap(({ texture, size }, k) => [[`layer${k}Map`, { value: texture }], [`layer${k}Size`, { value: size }]])),
         });
         shader.vertexShader = shader.vertexShader
@@ -281,6 +338,7 @@ uniform sampler2D landMap;
 uniform float landSize;
 uniform sampler2D grassMap;
 uniform float grassSize;
+uniform sampler2D patchMap;
 ${layers.map((_, k) => `uniform sampler2D layer${k}Map;\nuniform float layer${k}Size;`).join("\n")}`)
             .replace("#include <map_fragment>", `
 vec4 splat = texture2D(splatMap, (vGround - splatArea.xy) / splatArea.zw);
@@ -290,6 +348,19 @@ vec3 grass = texture2D(grassMap, vGround / grassSize).rgb;
 // The land's colour, its edges wandering (the cells it's read from are ${LAND_WANDER} metres or so)
 vec4 land = texture2D(landMap, (vGround + (vec2(variation, texture2D(grassMap, vGround / 53.0).r) - 0.5) * ${LAND_WANDER.toFixed(1)}) / landSize);
 grass = mix(grass, land.rgb * dot(grass, vec3(0.2126, 0.7152, 0.0722)) / ${brightness.toFixed(4)}, land.a);
+
+// Patches: drier and straw-coloured, lusher and darker, and worn to bare earth here and there
+// (less where the land's own colour is strong: sand, snow, ash)
+vec4 coarse = texture2D(patchMap, vGround / ${PATCHES.coarse.toFixed(1)});
+vec4 fine = texture2D(patchMap, vGround / ${PATCHES.fine.toFixed(1)} + vec2(0.37, 0.71));
+float strength = 1.0 - 0.6 * land.a;
+float dry = smoothstep(${PATCHES.dry[0].toFixed(3)}, ${PATCHES.dry[1].toFixed(3)}, coarse.r * 0.75 + fine.a * 0.25);
+float lush = smoothstep(${PATCHES.lush[0].toFixed(3)}, ${PATCHES.lush[1].toFixed(3)}, coarse.g * 0.75 + fine.r * 0.25) * (1.0 - dry);
+float bare = smoothstep(${PATCHES.bare[0].toFixed(3)}, ${PATCHES.bare[1].toFixed(3)}, fine.b * 0.75 + coarse.b * 0.25);
+grass = mix(grass, grass * vec3(1.3, 1.12, 0.6), dry * ${PATCHES.dry[2].toFixed(2)} * strength);
+grass = mix(grass, grass * vec3(0.72, 0.9, 0.68), lush * ${PATCHES.lush[2].toFixed(2)} * strength);
+vec3 earth = mix(texture2D(layer0Map, vGround / layer0Size).rgb * 0.92, grass * 0.8, land.a * 0.75);
+grass = mix(grass, earth, bare * ${PATCHES.bare[2].toFixed(2)} * strength);
 
 vec3 ground = grass * max(0.0, 1.0 - splat.r - splat.g - splat.b - splat.a);
 ${layers.map((_, k) => `ground += texture2D(layer${k}Map, vGround / layer${k}Size).rgb * splat.${"rgba"[k]};`).join("\n")}

@@ -17,8 +17,9 @@ farmstead, hamlet, village, town, city or capital) from a seed as the game's are
 lanes curving round between them, and houses turned every way to face them), is at
 <https://hoffspot.github.io/conquest/town-map.html>. The building lab, building a street of every
 style of house, the taverns (each named, with its own painted sign), the adventurers' guild, the
-temples and the smithy, a whole town, or any kind of settlement out in the world, in 3D from a
-seed to go round and look at, is at
+temples and the smithy, a whole town, any kind of settlement out in the world, or a stretch of
+any land (its rocks, fallen trees, grass and wildflowers), in 3D from a seed to go round and look
+at, is at
 <https://hoffspot.github.io/conquest/building-lab.html>.
 
 [docs/GAME.md](docs/GAME.md) describes how the game works: the world, the fighting, the drawing,
@@ -344,6 +345,8 @@ client/                 The game (static files served to the browser)
     overworld.js        The world: 8 km of it on 1-metre squares, made a chunk at a time from its
                         plan, with the town set in where the player starts
     settlements.js      Every other settlement, laid out as the world near it is first made
+    wilds.js            The land's own features: boulders, fallen trees, bushes... (where, and
+                        the squares they take); noise.js the smooth noise they're laid out by
     world.js            The town: on 1-metre squares, fields, trees, where everyone starts, the
                         tavern, and its maps and the links between them
     grid.js             Reading any map's squares (blocked, opaque, ground), in rows or chunks
@@ -372,14 +375,16 @@ client/                 The game (static files served to the browser)
                         levels, the cutaway
     ground.js           The ground: textures blended square by square, in each land's colours
     chunks3d.js         The world round the player, a chunk at a time as they go: ground, water,
-                        bridges, trees, and the settlements' buildings
+                        bridges, trees, the land's features, the undergrowth near the player,
+                        and the settlements' buildings
     town3d.js           The town's buildings, props and trees, merged into few meshes
     interiors3d.js      Inside the tavern: its rooms and furniture, the fire, the boar on its
                         spit, and taking down the walls between the camera and the player
     art/                The art the town is built with: engine/ (solid.js's shapes, the
                         textures' painters.js, materials.js, and atlas.js, the one material
                         everything built is drawn with) and kits/ (house.js, with framing.js and
-                        roofs.js; landmarks.js, props.js, trees.js, and signs.js and emblems.js,
+                        roofs.js; landmarks.js, props.js, trees.js; wilds.js, the land's rocks,
+                        fallen trees, grass, flowers and the rest; and signs.js and emblems.js,
                         the taverns' and temples' signs)
     avatar.js           A character in the world, following its place in the battle
     effects.js          Arrows, bolts, fireballs, sparks, dust, fire, arcane light, blood and

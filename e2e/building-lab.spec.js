@@ -81,3 +81,31 @@ test("draws a village out in the world in its chunks, with its tavern, church, s
     expect(village.names).toContain("sign guild");
     expect(village.names).toContain("sign blacksmith");
 });
+
+test("draws the land itself: its features, and the undergrowth near, swaying, in a few draw calls", async ({ page }) => {
+    await page.goto("/building-lab.html?seed=7&show=wilds-meadow");
+    await page.waitForFunction(() => window.buildingLab?.state.ready, null, { timeout: 120000 });
+
+    const land = await page.evaluate(() => {
+        const found = { undergrowth: 0, shown: 0, features: 0, materials: new Set() };
+
+        window.buildingLab.state.built.traverse((node) => {
+            if (node.name === "undergrowth" && node.isMesh) {
+                found.undergrowth++;
+                found.shown += node.visible ? 1 : 0;
+                found.materials.add(node.material.name);
+            } else if (node.name === "wilds") {
+                found.features++;
+            }
+        });
+
+        return { ...found, materials: [...found.materials], stats: window.buildingLab.state.stats };
+    });
+
+    expect(land.undergrowth).toBeGreaterThan(4);
+    expect(land.shown).toBeGreaterThan(2);
+    expect(land.shown).toBeLessThanOrEqual(land.undergrowth);
+    expect(land.features).toBeGreaterThan(2);
+    expect(land.materials).toEqual(["wilds"]);
+    expect(land.stats.calls).toBeLessThan(70);
+});

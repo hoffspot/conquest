@@ -324,6 +324,49 @@ export const PAINTERS = {
         };
     },
 
+    // Natural rock: broad blotches and a fine grain, dark cracks wandering across it, and pale
+    // flecks (crystals, lichen) here and there
+    rock({ base, light, dark }, seed) {
+        const blotch = periodicNoise(seed, 4);
+        const grain = periodicNoise(seed + 1, 48);
+        const veins = periodicNoise(seed + 2, 6);
+        const flecks = periodicNoise(seed + 3, 96);
+
+        return (x, y) => {
+            const [u, v] = [x / SIZE, y / SIZE];
+            const tone = blotch(u * 4, v * 4) * 0.55 + grain(u * 48, v * 48) * 0.45;
+            const crack = Math.abs(veins(u * 6, v * 6) - 0.5);
+            let colour = tone < 0.5 ? mix(dark, base, tone * 2) : mix(base, light, (tone - 0.5) * 2);
+            let lift = 0.45 + grain(u * 48, v * 48) * 0.3 + blotch(u * 4, v * 4) * 0.15;
+
+            if (crack < 0.018) {
+                colour = scale(dark, 0.62);
+                lift = 0.1;
+            } else if (flecks(u * 96, v * 96) > 0.83) {
+                colour = mix(colour, light, 0.6);
+                lift += 0.08;
+            }
+
+            return [...colour, lift];
+        };
+    },
+
+    // Bark: deep fissures running up it, ridges between them broken into plates
+    bark({ base, light, dark }, seed) {
+        const ridges = periodicNoise(seed, 12);
+        const plates = periodicNoise(seed + 1, 8);
+        const grain = periodicNoise(seed + 2, 64);
+
+        return (x, y) => {
+            const [u, v] = [x / SIZE, y / SIZE];
+            const ridge = ridges(u * 12 + plates(u * 8, v * 8) * 1.5, v * 3);
+            const fissure = ridge < 0.35 ? 1 - ridge / 0.35 : 0;
+            const colour = mix(mix(base, light, grain(u * 64, v * 16) * 0.6), dark, fissure * 0.85);
+
+            return [...colour, 0.75 - fissure * 0.6 + grain(u * 64, v * 16) * 0.1];
+        };
+    },
+
     // Ploughed soil: furrows running east to west
     soil({ base, light, dark }, seed) {
         const grain = periodicNoise(seed, 64);
@@ -368,6 +411,14 @@ export const MATERIALS = {
     road: { painter: "earth", world: 64, base: 0x9d7f5a, light: 0xb49770, dark: 0x7f6446, ground: true },
     courtyard: { painter: "earth", world: 64, base: 0xa99b80, light: 0xc3b69b, dark: 0x8b7e66, ground: true },
     soil: { painter: "soil", world: 32, base: 0x6e4d33, light: 0x8a6446, dark: 0x4a3222 },
+    // The land's own: rocks (grey granite, red sandstone, black basalt, pale limestone), bark, and
+    // wood long dead, weathered silver
+    rock: { painter: "rock", world: 12, base: 0x86827b, light: 0xaba69c, dark: 0x5b5752 },
+    "rock-red": { painter: "rock", world: 12, base: 0x9c6448, light: 0xbd8563, dark: 0x6e412d },
+    "rock-dark": { painter: "rock", world: 12, base: 0x3f3d3c, light: 0x5c5957, dark: 0x262424 },
+    "rock-pale": { painter: "rock", world: 12, base: 0xb3ad9c, light: 0xd2ccbc, dark: 0x8a8475 },
+    bark: { painter: "bark", world: 8, base: 0x5a4636, light: 0x7a6450, dark: 0x2f241b },
+    deadwood: { painter: "grain", world: 16, base: 0x756e63, light: 0x958c7c, dark: 0x4a453e },
     grass: { painter: "grass", world: 48, base: 0x62803c, light: 0x86a352, dark: 0x3f5a28, ground: true },
 };
 

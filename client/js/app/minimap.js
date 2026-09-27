@@ -658,6 +658,10 @@ function paintPatch(world, x0, z0, size, town = null) {
             for (const { x, y, size: grown } of overworld.chunk(cx, cy).trees) {
                 crown(context, x, y, 1.8 * grown);
             }
+
+            for (const feature of overworld.chunk(cx, cy).features ?? []) {
+                mark(context, feature);
+            }
         }
     }
 
@@ -702,6 +706,31 @@ function outline(context, corners, at) {
     context.beginPath();
     corners.forEach(([x, y], k) => context[k ? "lineTo" : "moveTo"](x + at[0], y + at[1]));
     context.closePath();
+}
+
+// The colours of the land's own features on the map: stone grey, wood brown, bushes dark green
+const FEATURE_COLOURS = { stone: "rgb(128, 124, 116)", wood: "rgb(112, 88, 62)", bush: "rgb(52, 84, 40)", straw: "rgb(196, 168, 96)", earth: "rgb(150, 96, 60)", bone: "rgb(226, 218, 196)" };
+const FEATURE_LOOKS = { boulder: "stone", outcrop: "stone", cairn: "stone", menhir: "stone", ruin: "stone", log: "wood", stump: "wood", snag: "wood", logpile: "wood", scarecrow: "wood", bush: "bush", haystack: "straw", mound: "earth", ribs: "bone" };
+
+// A feature (core/wilds.js) on the map: a line along a long one, a round mark for the rest
+function mark(context, { kind, x, y, size, turn }) {
+    context.fillStyle = context.strokeStyle = FEATURE_COLOURS[FEATURE_LOOKS[kind]] ?? FEATURE_COLOURS.stone;
+
+    if (kind === "log" || kind === "ruin" || kind === "logpile" || kind === "ribs") {
+        const [dx, dy] = [(Math.cos(turn) * size) / 2, (Math.sin(turn) * size) / 2];
+
+        context.lineWidth = kind === "log" ? 0.9 : 0.7;
+        context.beginPath();
+        context.moveTo(x - dx, y - dy);
+        context.lineTo(x + dx, y + dy);
+        context.stroke();
+
+        return;
+    }
+
+    context.beginPath();
+    context.arc(x, y, Math.max(0.5, kind === "outcrop" ? size * 0.8 : size), 0, 2 * Math.PI);
+    context.fill();
 }
 
 // A tree's crown, round, lit from the top left
