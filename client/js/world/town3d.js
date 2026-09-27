@@ -6,8 +6,9 @@
 //
 // The kits build facing south, in the art's world pixels (a plot is 20, x east, y up and z south),
 // and the world is in metres, so the town is scaled by PIXEL: a plot is PLOT (4) metres, a door 2
-// metres tall. Everything that doesn't move is merged by material, so the whole town draws in a
-// few dozen draw calls, however many houses it has.
+// metres tall. Everything that doesn't move is merged a block of the town (TILE metres square) at
+// a time, all the kits' materials into the art's one (atlas.js), so each block is a draw call or
+// two, and only the blocks in view (and in the sun's shadows) are drawn.
 //
 // The camera looks north over the town, so a house can stand between it and the player. The
 // town's materials can cut a hole round the player through anything nearer the camera than them
@@ -15,6 +16,7 @@
 
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { atlasMaterial, toAtlas } from "./art/engine/atlas.js";
 import { createRandom } from "../core/random.js";
 import { pieceCatalog } from "../core/setpieces/pieces.js";
 import { footprint } from "../core/setpieces/town.js";
@@ -22,7 +24,8 @@ import { PLOT } from "../core/world.js";
 import { gatehouse, keep, tower, wall } from "./art/kits/castle.js";
 import { house } from "./art/kits/house.js";
 import { landmark } from "./art/kits/landmarks.js";
-import { prop, tree } from "./art/kits/town.js";
+import { prop } from "./art/kits/props.js";
+import { tree } from "./art/kits/town.js";
 import { plantTrees } from "./art/kits/trees.js";
 
 /** Metres per art world pixel. */
@@ -41,6 +44,9 @@ export const CUTAWAY = Object.freeze({ centre: { value: new THREE.Vector3() }, r
 
 // How far a building's roof reaches past its footprint (metres: the eaves)
 const EAVES = 0.4;
+
+/** How big a block of the town merged together is (metres a side). */
+export const TILE = 32;
 
 // What the camera pulls in closer than, rather than looking through (view.js): what's built,
 // not the props (carts, wells, stalls) or the trees
@@ -164,7 +170,34 @@ export async function buildTown(world, { onProgress = () => {} } = {}) {
 
     trees.boxes.forEach((box) => stand(box, false));
 
-    const object = merge(art);
+    // Merged a block at a time (by where each piece's middle is), into the art's one material
+    const object = new THREE.Group();
+    const blocks = new Map();
+
+    for (const child of [...art.children]) {
+        const { x, y } = child.userData.piece;
+        const key = `${Math.floor((ox + x) / TILE)},${Math.floor((oz + y) / TILE)}`;
+
+        if (!blocks.has(key)) {
+            const block = new THREE.Group();
+
+            block.scale.setScalar(PIXEL);
+            blocks.set(key, block);
+        }
+
+        blocks.get(key).add(child);
+    }
+
+    for (const [key, block] of blocks) {
+        block.updateMatrixWorld(true);
+
+        const merged = merge(block, { atlas: true });
+
+        for (const mesh of [...merged.children]) {
+            mesh.name = `${mesh.name} ${key}`;
+            object.add(mesh);
+        }
+    }
 
     object.name = "town";
 
@@ -227,8 +260,11 @@ function materialKey(material) {
     return [material.type, material.name, material.map?.uuid ?? "", material.color?.getHexString() ?? "", material.vertexColors, material.side, material.transparent].join("|");
 }
 
-/** Merge every mesh under `root` (baked to its place) into one mesh per material. */
-export function merge(root) {
+/**
+ * Merge every mesh under `root` (baked to its place) into one mesh per material; with `atlas`,
+ * everything the art's one material can draw into one mesh of it (atlas.js).
+ */
+export function merge(root, { atlas = false } = {}) {
     const groups = new Map();
 
     root.traverse((node) => {
@@ -246,11 +282,14 @@ export function merge(root) {
             ? node.geometry.groups.map((group) => [extract(source, group.start, group.count), materials[group.materialIndex]])
             : [[source, materials[0]]];
 
-        for (const [geometry, material] of parts) {
-            const key = materialKey(material);
+        for (const [part, own] of parts) {
+            const drawn = atlas ? toAtlas(part, own) : null;
+            const [geometry, material] = drawn ? [drawn, atlasMaterial()] : [part, own];
+            const key = drawn ? "atlas" : materialKey(material);
+            const keep = drawn ? ["position", "normal", "uv", "color", "layer"] : ["position", "normal", "uv", ...(material.vertexColors ? ["color"] : [])];
 
             for (const name of Object.keys(geometry.attributes)) {
-                if (!["position", "normal", "uv"].includes(name) && !(name === "color" && material.vertexColors)) {
+                if (!keep.includes(name)) {
                     geometry.deleteAttribute(name);
                 }
             }

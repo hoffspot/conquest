@@ -5,9 +5,8 @@
 //
 // The game's code is followed from its entry modules through their imports and the workers they
 // start (and the import map's "three" and "three/addons/" in index.html), leaving out what
-// main.js imports itself (it is already loaded when the loader starts). The character data and masks, and the 3D models
-// with the buffers and textures their glTF files name, are listed too. test/manifest.test.js
-// checks the list is up to date.
+// main.js imports itself (it is already loaded when the loader starts). The character data and
+// masks, and the fonts, are listed too. test/manifest.test.js checks the list is up to date.
 
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -94,27 +93,12 @@ export async function manifestSource() {
     const engine = modules.filter((file) => file.startsWith("vendor/"));
     const code = modules.filter((file) => !file.startsWith("vendor/"));
     const masks = (await readdir(path.join(client, "characters/masks"))).filter((name) => name.endsWith(".jpg")).map((name) => `characters/masks/${name}`);
-    const models = [];
-
-    for (const name of (await readdir(path.join(client, "models/kaykit"))).filter((file) => file.endsWith(".gltf"))) {
-        const gltf = JSON.parse(await readFile(path.join(client, "models/kaykit", name), "utf8"));
-
-        models.push(`models/kaykit/${name}`);
-
-        for (const { uri } of [...(gltf.buffers ?? []), ...(gltf.images ?? [])]) {
-            if (uri && !uri.startsWith("data:")) {
-                models.push(`models/kaykit/${uri}`);
-            }
-        }
-    }
-
     const three = engine.find((file) => /three-r\d+/.test(file))?.match(/three-r(\d+)/)[1];
     const groups = [
         { id: "engine", label: "3D engine", detail: `Three.js r${three}`, files: await sized(engine) },
         { id: "code", label: "Game code", detail: "Pellagos", files: await sized(code) },
         { id: "body", label: "Body and shapes", detail: "MakeHuman base mesh, skeleton and sliders", files: await sized(["characters/human.json", "characters/human.bin"]) },
         { id: "skin", label: "Skin details", detail: "MakeHuman masks", files: await sized(masks) },
-        { id: "models", label: "Props", detail: "KayKit Medieval Hexagon models", files: await sized(new Set(models)) },
         { id: "fonts", label: "Lettering", detail: "UnifrakturMaguntia, for the tavern's signs", files: await sized((await readdir(path.join(client, "fonts"))).filter((name) => name.endsWith(".woff2")).map((name) => `fonts/${name}`)) },
     ];
     const lines = groups.map(({ id, label, detail, files }) => [

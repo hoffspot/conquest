@@ -497,11 +497,38 @@ it's a doorway, with a lintel and its curtains tied back at either side (`doorwa
 The art kits build every piece of the town's layout in the art's world pixels, five to a metre,
 facing south; each is turned about its middle to face the way the layout says:
 
-- **Houses** (kits/house.js) in four styles (whitewashed cottages with thatch, timber-framed,
-  brick, stone), storeys of about 3.5 metres, with 2-metre doors and 1-metre windows on their
-  fronts. Half the houses standing on 64 square metres or more have a second storey: few in a
-  village, more in a town and most in a city, where the houses are bigger. Back buildings are
-  one storey.
+- **Houses** (kits/house.js) in four styles, each house its own from its seed: whitewashed
+  cottages under thick thatch (half-hipped or hipped, pitched over 50 degrees, their eaves
+  rounded and their ridges a raised block with a scalloped edge), timber-framed houses (their
+  upper floors jettied out 30 to 55 cm on a bressummer, with joists' ends and brackets under
+  it), brick houses with stone quoins, bands and dressings, and stone houses with deep-set
+  windows and pointed-arched doors. Barns and stables behind the houses are boarded, with wide
+  doors. The layout says how many storeys each has (a village's mostly one, a town's one to
+  three, a city's mostly two or three; a cottage has rooms in its roof, lit by dormers) and
+  which trade a house on the market or a main street keeps a shop for (baker, butcher,
+  greengrocer, potter, weaver, chandler, cooper, cobbler, apothecary), its front open over a
+  counter of boards, its goods set out, the upper shutter propped up as an awning.
+
+  A house is laid out as a builder would (a facade grammar, after Wonka and Müller's split
+  grammars; its sizes the carpenters', and BlendBuildingCreator's, studied not copied): its
+  storeys, then each wall split into bays, each bay given a door, a window or nothing (the front
+  a door and a window on every floor, bay over bay; the sides and back fewer), then each opening
+  let into its wall (a real hole, its reveal going back to leaded glass, glass with a glazing
+  bar, or a dark opening with shutters, as the house can afford), dressed with a sill and lintel,
+  shutters (painted on a better-off house, open at a slant), window boxes of flowers, a door's
+  strap hinges and step; then the timber frame (kits/framing.js) fitted round the openings:
+  sole plate and top plate, posts at the corners and between the bays, a rail at the sills,
+  studs cut where the windows are, and in the solid panels braces (an upturned V in the lower
+  panels, a St Andrew's cross under a window, a corner brace up top), or close studding on a
+  rich house; then the roof (kits/roofs.js: gabled, hipped or half-hipped, with thickness, the
+  fascia and soffit at its eaves, the verges' bargeboards, ridge and hip tiles, an old ridge
+  sagging), the gables carried up under it (framed on a timber house, with a little window),
+  the chimney stack (up a gable end outside, or through the roof) and dormers.
+
+  Its weathering is painted on its corners: dirt splashed up the foot of the walls, shade under
+  the eaves and jetties and in the reveals, streaks, moss on the roof where it faces north (as
+  the house stands), and each house's limewash a little its own colour. A house is about 300 to
+  2,000 triangles (a two-storey timber house with a jettied front about 1,700).
 - **Special buildings** (kits/landmarks.js): a two-storey tavern with a jettied, timber-framed
   upper floor, its name, *Wenches and Ale*, in gold blackletter (UnifrakturMaguntia, kits/signs.js,
   loaded as a web font) on an oxblood board along its front, and a hanging sign painted on a
@@ -511,8 +538,12 @@ facing south; each is turned about its middle to face the way the layout says:
   trough; a market hall on stone columns with stalls of produce beneath; a windmill with a
   thatched cap and four sails. (KayKit's buildings were tried first, but they're toy-like: their
   doors are twice a person's height.)
-- **Props** (kits/town.js) are KayKit's models, sized to what they are: barrels 95 cm tall,
-  crates 85, a wheelbarrow 1.6 metres long, a well 3.4 metres tall.
+- **Props** (kits/props.js) are built for the game in the same hand: a well (a ring of stone,
+  two posts, a windlass and bucket, a roof of shingles), barrels of staves bellying out under
+  iron hoops, crates battened at their edges, sacks tied at the neck, a handcart, a stack of
+  logs, a pile of stone, a rack of spears, an archery butt painted in rings, and market stalls
+  with striped awnings over counters of goods. (KayKit's models were the town's props before;
+  next to the houses they looked like toys.)
 - **Trees** (kits/trees.js) are grown for the game, nothing to download: seven kinds, each grown
   several ways (24 variants in all, each from its own seed, so the same every time), each tree
   where it stands turned its own way and a little bigger or smaller.
@@ -573,9 +604,19 @@ facing south; each is turned about its middle to face the way the layout says:
 The world round the town, its trees too, is drawn a chunk at a time (world/chunks3d.js, above).
 
 Textures are sized in metres too: bricks courses of 10 cm, slates of 15, stone courses of 35.
-Everything that doesn't move is merged into one mesh per material, so the whole town draws in a
-few dozen draw calls (about 8,000 to 10,000 triangles), however many houses it has. While it's
-built, `buildTown` also records how tall whatever stands on each of the town's squares is (a
+Each is painted (engine/painters.js) with how high each pixel stands as well as its colour:
+mortar low between the bricks, a slate's lower edge over the next, the grain of the timbers.
+
+**One material** (engine/atlas.js). Everything built (houses, landmarks, props) is drawn with
+one Three.js material: every texture is a layer of one texture array (256 pixels square, 26
+layers), painted in workers while the land is laid; each vertex says which layer it's drawn
+from, and its colour (a plain material's colour, times its weathering) multiplies the layer's.
+Its heights are lit as relief (bump mapping, three reads of the texture a pixel), so walls and
+roofs have depth close up at no cost in triangles. Everything that doesn't move is merged a
+block of the town (32 metres square) at a time, so each block is a draw call or two, and only
+the blocks in view (and in the sun's shadows) are drawn: a town of 23,000 to 39,000 triangles
+of buildings and props. While it's built, `buildTown` also records how tall whatever stands on
+each of the town's squares is (a
 `heightMap`, read anywhere with `at(x, z)`; a building over the squares under it and its eaves,
 as it's turned, not its turned box), for the cutaway.
 
@@ -949,7 +990,7 @@ casts shadows, and show the squares characters walk on (blocked ones red) with e
 
 ## Performance
 
-A frame draws the town (a few dozen draw calls, about 8,000 to 10,000 triangles), the ground (one draw
+A frame draws the town (the blocks of it in view: a draw call or two each), the ground (one draw
 call) and two characters (a body, garments and hair each, about 35,000 to 45,000 triangles at
 the game's hair detail), and again from the sun for shadows. In the taproom there are nine
 characters (the folk casting no shadows): about 220 draw calls and 630,000 triangles; only the
@@ -1058,6 +1099,15 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   the recordings (one for every instrument and kind of drum hit, each note played from the
   nearest, every file a small MP3 in `client/music` and nothing else there) and the build
   script's reading of the library's SFZ and WAV files.
+- `test/buildings.test.js`: houses laid out the same for the same piece, with the storeys the
+  layout asks for (more in cities than villages), a door at the front and a window on every
+  floor of it, shops, openings clear of the corners, each other and the floor above, jetties
+  only on timber houses, built within their lots in a few hundred to a few thousand triangles,
+  weathered; barns boarded; a wall's openings leaving holes and a gable its outline; every prop
+  built; the atlas's layers (the same every time, with relief) and a house drawn from it as one
+  mesh.
+- `e2e/building-lab.spec.js`: the building lab's street of houses (twenty, in fewer than thirty
+  draw calls) and its town.
 - `e2e/pellagos.spec.js`: the whole game in Chromium: loading, debug mode, making a character
   through to playing them, carrying on with a saved character, a fight to the death, walking by
   tapping, running by double-clicking and double-tapping with the stamina bar showing and going,

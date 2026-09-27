@@ -63,7 +63,7 @@ test("loads everything, listing what it downloads, then shows the title", async 
     await page.goto("/");
 
     // Each group of files on the loading screen, with the manifest's sizes
-    await expect(page.locator("#loadlist li")).toHaveCount(6);
+    await expect(page.locator("#loadlist li")).toHaveCount(5);
     await expect(page.locator("#loadlist")).toContainText("3D engine");
     await expect(page.locator("#loadlist")).toContainText("Lettering");
     await expect(page.locator("#title")).toBeVisible({ timeout: 60000 });

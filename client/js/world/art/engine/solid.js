@@ -5,6 +5,10 @@
 // material. Texture coordinates are world pixels too (each material's texture says how many
 // pixels one copy of it covers), so brick courses and roof tiles are the same size on every
 // piece and line up across neighbouring faces.
+//
+// Every corner has a colour too, multiplying its material's (white unless `tone` says otherwise):
+// the weathering the kits paint on (dirt at the foot of a wall, shade under the eaves and in a
+// window's reveal), drawn when the pieces are merged into the art's one material (atlas.js).
 
 import * as THREE from "three";
 
@@ -20,6 +24,30 @@ function boxUV(point, normal) {
     return nz >= nx ? [point[0], point[1]] : [-point[2], point[1]];
 }
 
+const WHITE = Object.freeze([1, 1, 1]);
+
+// The height of an outline ([[u, v]...], along a wall) over a point along it
+function outlineAt(line, u) {
+    for (let k = 0; k < line.length - 1; k++) {
+        const [[ua, va], [ub, vb]] = [line[k], line[k + 1]];
+
+        if (u >= ua - 1e-6 && u <= ub + 1e-6) {
+            return ub - ua < 1e-6 ? Math.max(va, vb) : va + ((vb - va) * (u - ua)) / (ub - ua);
+        }
+    }
+
+    return 0;
+}
+
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const add3 = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const times = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const unit = (a) => times(a, 1 / (Math.hypot(...a) || 1));
+
+export { add3, cross, dot, sub, times, unit };
+
 function normalOf(a, b, c) {
     const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
     const v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
@@ -30,36 +58,267 @@ function normalOf(a, b, c) {
 }
 
 export class Solid {
-    // Triangles for each material: { positions, normals, uvs }
+    // Triangles for each material: { positions, normals, uvs, colours }
     #groups = new Map();
     // Ready-made meshes added whole (cylinders and cones)
     #meshes = [];
 
+    /**
+     * The colour each corner multiplies its material's by (linear [r, g, b]), from where it is
+     * and which way its face faces, or null for white: tone(point, normal, material).
+     */
+    tone = null;
+
     #group(material) {
         if (!this.#groups.has(material)) {
-            this.#groups.set(material, { positions: [], normals: [], uvs: [] });
+            this.#groups.set(material, { positions: [], normals: [], uvs: [], colours: [] });
         }
 
         return this.#groups.get(material);
     }
 
+    /** How many triangles there are so far. */
+    get triangles() {
+        let count = 0;
+
+        for (const { positions } of this.#groups.values()) {
+            count += positions.length / 9;
+        }
+
+        for (const { geometry, object } of this.#meshes) {
+            if (geometry) {
+                count += (geometry.index ? geometry.index.count : geometry.attributes.position.count) / 3;
+            } else {
+                object.traverse((node) => {
+                    if (node.isMesh) {
+                        const g = node.geometry;
+
+                        count += (g.index ? g.index.count : g.attributes.position.count) / 3;
+                    }
+                });
+            }
+        }
+
+        return count;
+    }
+
     /**
      * A flat face with 3 or more corners, listed anticlockwise as seen from outside. `uvs` gives
-     * each corner's texture position (in world pixels) instead of the default mapping.
+     * each corner's texture position (in world pixels) instead of the default mapping; `tone` a
+     * colour for all its corners (or a function, as the solid's), instead of the solid's.
      */
-    face(points, material, uvs) {
+    face(points, material, uvs, tone = this.tone) {
         const normal = normalOf(points[0], points[1], points[2]);
         const group = this.#group(material);
+        const colourOf = typeof tone === "function" ? (point) => tone(point, normal, material) ?? WHITE : () => tone ?? WHITE;
+        const colours = points.map(colourOf);
         const corner = (index) => {
             group.positions.push(...points[index]);
             group.normals.push(...normal);
             group.uvs.push(...(uvs ? uvs[index] : boxUV(points[index], normal)));
+            group.colours.push(...colours[index]);
         };
 
         for (let i = 1; i < points.length - 1; i++) {
             corner(0);
             corner(i);
             corner(i + 1);
+        }
+
+        return this;
+    }
+
+    /**
+     * A flat face whose corners may be listed either way round: turned to face `out` (a
+     * direction). For faces worked out from directions rather than laid out by hand.
+     */
+    facing(points, out, material, uvs, tone = this.tone) {
+        const normal = normalOf(points[0], points[1], points[2]);
+
+        if (dot(normal, out) < 0) {
+            return this.face([...points].reverse(), material, uvs && [...uvs].reverse(), tone);
+        }
+
+        return this.face(points, material, uvs, tone);
+    }
+
+    /**
+     * A squared timber (or a stone band, an iron strap) lying on a surface: from `a` to `b` (its
+     * middle line on the surface), `width` across and standing `depth` proud of the surface
+     * facing `out`. Its faces are the front and sides (and its ends, unless `ends` is false);
+     * nothing behind it, which is against the surface. Its texture runs along it.
+     */
+    member(a, b, out, width, depth, material, { ends = true, tone = this.tone } = {}) {
+        const along = sub(b, a);
+        const length = Math.hypot(...along);
+
+        if (length < 1e-6) {
+            return this;
+        }
+
+        const d = times(along, 1 / length);
+        const side = times(unit(cross(out, d)), width / 2);
+        const lift = times(unit(out), depth);
+        const [a0, a1, b0, b1] = [sub(a, side), add3(a, side), sub(b, side), add3(b, side)];
+        const [a0o, a1o, b0o, b1o] = [a0, a1, b0, b1].map((p) => add3(p, lift));
+        const uvs = (w) => [[0, 0], [length, 0], [length, w], [0, w]];
+
+        this.facing([a0o, b0o, b1o, a1o], out, material, uvs(width), tone);
+        this.facing([a0, b0, b0o, a0o], times(side, -1), material, uvs(depth), tone);
+        this.facing([a1, b1, b1o, a1o], side, material, uvs(depth), tone);
+
+        if (ends) {
+            this.facing([a0, a1, a1o, a0o], times(d, -1), material, [[0, 0], [width, 0], [width, depth], [0, depth]], tone);
+            this.facing([b0, b1, b1o, b0o], d, material, [[0, 0], [width, 0], [width, depth], [0, depth]], tone);
+        }
+
+        return this;
+    }
+
+    /**
+     * A squared beam standing free (a strut, a bracket, a post) from `a` to `b`: `width` across
+     * and `height` up (as it would be lying level; `up` says which way that is), all four sides
+     * and its ends.
+     */
+    beam(a, b, width, height, material, { up = [0, 1, 0], ends = true, tone = this.tone } = {}) {
+        const d = unit(sub(b, a));
+        const side = unit(cross(d, up));
+        const lift = unit(cross(side, d));
+        const [s, l] = [times(side, width / 2), times(lift, height / 2)];
+        const corners = (p) => [add3(add3(p, s), l), add3(sub(p, s), l), sub(sub(p, s), l), sub(add3(p, s), l)];
+        const [ca, cb] = [corners(a), corners(b)];
+        const outs = [l, times(s, -1), times(l, -1), s];
+
+        // (Between corners k and k + 1: the top, the left side, the bottom, the right side)
+        for (let k = 0; k < 4; k++) {
+            const j = (k + 1) % 4;
+
+            this.facing([ca[k], ca[j], cb[j], cb[k]], outs[k], material, undefined, tone);
+        }
+
+        if (ends) {
+            this.facing(ca, times(d, -1), material, undefined, tone);
+            this.facing(cb, d, material, undefined, tone);
+        }
+
+        return this;
+    }
+
+    /**
+     * A ridge of triangular section (a roof's ridge tiles, a thatch's ridge) from `a` to `b`,
+     * `half` wide either side and rising `height` in the middle, with its ends closed.
+     */
+    prism(a, b, half, height, material, tone = this.tone) {
+        const d = unit(sub(b, a));
+        const side = times(unit(cross([0, 1, 0], d)), half);
+        const up = [0, height, 0];
+        const [a0, a1, at] = [sub(a, side), add3(a, side), add3(a, up)];
+        const [b0, b1, bt] = [sub(b, side), add3(b, side), add3(b, up)];
+
+        this.facing([a0, b0, bt, at], add3(times(side, -1), up), material, undefined, tone);
+        this.facing([a1, b1, bt, at], add3(side, up), material, undefined, tone);
+        this.facing([a0, a1, at], times(d, -1), material, undefined, tone);
+        this.facing([b0, b1, bt], d, material, undefined, tone);
+
+        return this;
+    }
+
+    /**
+     * A wall's face with openings let into it: the face (a plane: `origin`, a corner at its
+     * foot; `across`, along it; `out`, the way it faces; up is up), `length` along and `height`
+     * up, in `material`, with a hole for each opening ({ u0, u1, v0, v1 (along it and up it,
+     * from the origin), depth (how far in its back is), back (what fills it at the back: a
+     * material, or null for nothing), sides (the reveals' material: the wall's unless given),
+     * arch ("pointed" or "round": the back's top shaped so, the corners above filled with the
+     * wall) }). The reveals are shaded (`reveal`: a colour) as they're out of the light. A gable's
+     * face has an outline (`line`: [[u, v]...] from one end to the other) instead of a level top.
+     */
+    wall({ origin, across, out }, length, height, openings, material, { reveal = [0.72, 0.7, 0.68], line = null } = {}) {
+        const up = [0, 1, 0];
+        const at = (u, v, w = 0) => add3(add3(add3(origin, times(across, u)), times(up, v)), times(out, -w));
+        const cuts = openings.filter(({ u0, u1, v0, v1 }) => u1 > u0 && v1 > v0);
+        const topAt = (u) => (line ? outlineAt(line, u) : height);
+
+        // The face: in columns between the openings' sides (and a gable's corners), each column
+        // in pieces between the openings in it, up to the top (level, or a gable's slope)
+        const us = [...new Set([0, length, ...cuts.flatMap(({ u0, u1 }) => [u0, u1]), ...(line ?? []).map(([u]) => u)])].filter((u) => u >= 0 && u <= length).sort((p, q) => p - q);
+
+        for (let k = 0; k < us.length - 1; k++) {
+            const [ua, ub] = [us[k], us[k + 1]];
+
+            if (ub - ua < 1e-6) {
+                continue;
+            }
+
+            const within = cuts.filter(({ u0, u1 }) => u0 <= ua + 1e-6 && u1 >= ub - 1e-6).sort((p, q) => p.v0 - q.v0);
+            let v = 0;
+
+            for (const { v0, v1 } of within) {
+                if (v0 > v + 1e-6) {
+                    this.facing([at(ua, v), at(ub, v), at(ub, v0), at(ua, v0)], out, material);
+                }
+
+                v = Math.max(v, v1);
+            }
+
+            const [ta, tb] = [topAt(ua), topAt(ub)];
+            const corners = [at(ua, v), at(ub, v), at(ub, Math.max(v, tb)), at(ua, Math.max(v, ta))].filter((point, i, all) => i === 0 || Math.hypot(...sub(point, all[i - 1])) > 1e-6);
+
+            if (corners.length >= 3 && Math.max(ta, tb) > v + 1e-6) {
+                this.facing(corners, out, material);
+            }
+        }
+
+        // Each opening's reveals, and what fills its back
+        for (const { u0, u1, v0, v1, depth, back = null, sides = material, arch = null } of cuts) {
+            const shade = (point, normal) => {
+                const own = typeof this.tone === "function" ? this.tone(point, normal, sides) ?? WHITE : WHITE;
+
+                return own.map((channel, i) => channel * reveal[i]);
+            };
+
+            this.facing([at(u0, v0), at(u0, v1), at(u0, v1, depth), at(u0, v0, depth)], across, sides, undefined, shade);
+            this.facing([at(u1, v0), at(u1, v1), at(u1, v1, depth), at(u1, v0, depth)], times(across, -1), sides, undefined, shade);
+            this.facing([at(u0, v1), at(u1, v1), at(u1, v1, depth), at(u0, v1, depth)], [0, -1, 0], sides, undefined, shade);
+            this.facing([at(u0, v0), at(u1, v0), at(u1, v0, depth), at(u0, v0, depth)], [0, 1, 0], sides, undefined, shade);
+
+            if (!back) {
+                continue;
+            }
+
+            if (!arch) {
+                this.facing([at(u0, v0, depth), at(u1, v0, depth), at(u1, v1, depth), at(u0, v1, depth)], out, back);
+                continue;
+            }
+
+            // An arched back: the leaf up to its springing and the arch over it (a curve from
+            // the left springing to the right), and the wall in the corners above the arch
+            // (each a fan from its corner, which sees the whole of its side of the arch)
+            const width = u1 - u0;
+            const rise = arch === "pointed" ? Math.min(v1 - v0, width * 0.75) : Math.min(v1 - v0, width / 2);
+            const spring = v1 - rise;
+            const steps = 6;
+            const sixty = Math.acos(0.5);
+            const curve = Array.from({ length: steps + 1 }, (_, i) => {
+                const t = i / steps;
+
+                if (arch === "round") {
+                    const angle = Math.PI * (1 - t);
+
+                    return [u0 + width / 2 + (Math.cos(angle) * width) / 2, spring + Math.sin(angle) * rise];
+                }
+
+                // Two arcs meeting at the point, each centred on the other side's springing
+                const angle = (t < 0.5 ? t * 2 : (1 - t) * 2) * sixty;
+                const du = Math.cos(angle) * width;
+
+                return [t < 0.5 ? u1 - du : u0 + du, spring + (Math.sin(angle) / Math.sin(sixty)) * rise];
+            });
+            const half = steps / 2;
+
+            this.facing([at(u0, v0, depth), at(u1, v0, depth), ...[...curve].reverse().map(([u, v]) => at(u, v, depth))], out, back);
+            this.facing([at(u0, v1, depth), ...curve.slice(0, half + 1).reverse().map(([u, v]) => at(u, v, depth))], out, material);
+            this.facing([at(u1, v1, depth), ...curve.slice(half).map(([u, v]) => at(u, v, depth))], out, material);
         }
 
         return this;
@@ -202,16 +461,32 @@ export class Solid {
     toObject() {
         const group = new THREE.Group();
 
-        for (const [material, { positions, normals, uvs }] of this.#groups) {
+        for (const [material, { positions, normals, uvs, colours }] of this.#groups) {
             const geometry = new THREE.BufferGeometry();
 
             geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
             geometry.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
             geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+            geometry.setAttribute("color", new THREE.Float32BufferAttribute(colours, 3));
             group.add(new THREE.Mesh(geometry, material));
         }
 
         for (const { geometry, material, object } of this.#meshes) {
+            if (geometry && !geometry.attributes.color) {
+                // (Coloured as the solid's faces are, corner by corner)
+                const { position, normal } = geometry.attributes;
+                const colours = new Float32Array(position.count * 3);
+
+                for (let i = 0; i < position.count; i++) {
+                    const point = [position.getX(i), position.getY(i), position.getZ(i)];
+                    const colour = (typeof this.tone === "function" ? this.tone(point, [normal.getX(i), normal.getY(i), normal.getZ(i)], material) : this.tone) ?? WHITE;
+
+                    colours.set(colour, i * 3);
+                }
+
+                geometry.setAttribute("color", new THREE.BufferAttribute(colours, 3));
+            }
+
             group.add(object ?? new THREE.Mesh(geometry, material));
         }
 
