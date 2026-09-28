@@ -1613,7 +1613,7 @@ test("an envoy on the road near the player goes by with their escort; struck dow
     await expect(page.locator("#banner")).toContainText("envoy to the Elves has been struck down by the Humans");
 
     // The journal: the orcs bear the humans a grudge
-    const journal = page.locator(".journal");
+    const journal = page.getByRole("dialog", { name: "Journal" });
 
     await page.keyboard.press("j");
     await expect(journal).toBeVisible();
@@ -1764,7 +1764,7 @@ test("an adventurer at the guild, hired for gold, follows the player out and kee
     expect(out.after.apart).toBeLessThan(5);
 
     // The journal: who follows the player, and how they are
-    const journal = page.locator(".journal");
+    const journal = page.getByRole("dialog", { name: "Journal" });
 
     await page.keyboard.press("j");
     await expect(journal).toBeVisible();
@@ -1799,7 +1799,7 @@ test("the player's people brought under another: told, and served; stirred to ri
     await playing(page, "/?play&seed=1");
 
     const fate = page.locator(".fate");
-    const journal = page.locator(".journal");
+    const journal = page.getByRole("dialog", { name: "Journal" });
 
     // Brought under the orcs (as the war tells it): the player's told, and plays on
     await page.evaluate(() => {
@@ -2260,7 +2260,7 @@ test("the town hall: the reeve gives work, and pays for what's done; the journal
     await expect(talk).toBeHidden();
 
     // J: the journal, their rank, the work they carry and where it takes them, and the letter done
-    const journal = page.locator(".journal");
+    const journal = page.getByRole("dialog", { name: "Journal" });
 
     await page.keyboard.press("j");
     await expect(journal).toBeVisible();
