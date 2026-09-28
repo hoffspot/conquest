@@ -17,6 +17,7 @@ const EXPLORED_KEY = "pellagos.explored";
 const WORLD_KEY = "pellagos.world";
 const PROGRESS_KEY = "pellagos.progress";
 const STANDING_KEY = "pellagos.standing";
+const FOLLOWERS_KEY = "pellagos.followers";
 
 /** The save format's version: a save from another version is set aside, not misread. */
 export const SAVE_VERSION = 1;
@@ -140,6 +141,22 @@ export function loadStanding(save) {
 /** Keep where the character stands in a saved game (not in one that isn't saved: ?play). */
 export function saveStanding(save, standing) {
     return save?.created ? write(STANDING_KEY, { created: save.created, seed: save.seed, ...standing.toJSON() }) : false;
+}
+
+/**
+ * The followers a saved game's character leads (docs/WAR.md M9: core/host.js characterOf's
+ * followers: [{ name, calling, sex, seed, people }]), as kept: none yet, or another game's.
+ */
+export function loadFollowers(save) {
+    const kept = read(FOLLOWERS_KEY);
+    const ours = kept && save?.created && kept.created === save.created && kept.seed === save.seed;
+
+    return ours && Array.isArray(kept.followers) ? kept.followers.filter((one) => one && typeof one.name === "string" && typeof one.calling === "string") : [];
+}
+
+/** Keep the followers the character leads, in a saved game. */
+export function saveFollowers(save, followers) {
+    return save?.created ? write(FOLLOWERS_KEY, { created: save.created, seed: save.seed, followers }) : false;
 }
 
 /**

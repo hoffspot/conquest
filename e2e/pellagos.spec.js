@@ -1607,6 +1607,129 @@ test("the barkeep tells the war's news as it's heard in the town", async ({ page
     await page.keyboard.press("Escape");
 });
 
+test("an adventurer at the guild, hired for coppers, follows the player out and keeps up; the journal shows their company, and they're with them the next time", async ({ page }) => {
+    // (Played twice: more than the usual time)
+    test.setTimeout(180000);
+
+    // A saved game in seed 2's world
+    await page.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), { ...SAVE, seed: 2 });
+    await title(page);
+    await page.locator("#continuebutton").click();
+    await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
+
+    // Into the guild with coppers to spare, and up to one of its adventurers
+    const guild = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const building = [...game.world.interiors.buildings.values()].find((each) => each.kind === "guild");
+        const player = game.battle.actor("player");
+        const [x, y] = building.door.ends[0].squares[0];
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        game.progress.gold = 200;
+        Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [] });
+        game.battle.command("player", { type: "enter", link: building.door.id });
+        game.advance(0.3);
+
+        const adventurer = game.battle.actors.find((actor) => actor.map === player.map && actor.role === "adventurer");
+
+        game.approaching = adventurer.id;
+        game.battle.command("player", { type: "approach", target: adventurer.id });
+
+        for (let k = 0; k < 200 && !game.talking; k++) {
+            game.advance(0.1, { render: false });
+        }
+
+        game.start();
+
+        return { name: adventurer.name, door: building.door.id };
+    });
+    const talk = page.locator(".talk");
+
+    await expect(talk).toBeVisible();
+    await expect(talk.locator(".talk-name")).toHaveText(guild.name);
+
+    // Asked to ride along, for their price: paid, and they follow
+    const ask = talk.getByRole("button", { name: /Would you ride with me\? \(\d+ coppers\)$/ });
+    const price = Number((await ask.textContent()).match(/(\d+) coppers/)[1]);
+
+    await ask.click();
+    await expect(talk.locator(".talk-line")).toContainText(/Lead on|Where to\?|killed/);
+    await expect(page.locator("#banner")).toHaveText(`${guild.name} follows you now.`);
+    await expect(page.locator(".coins").first()).toHaveText(`${200 - price} coppers`);
+    await page.keyboard.press("Escape");
+    await expect(talk).toBeHidden();
+
+    // Out of the guild: they come out with the player, and keep up on a walk down the street
+    const out = await page.evaluate((door) => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+        const [id] = [...game.host.followers].find(([, { leader }]) => leader === "player");
+        const follower = game.battle.actor(id);
+        const apart = () => Math.hypot(follower.x - player.x, follower.y - player.y);
+
+        game.stop();
+        game.battle.command("player", { type: "enter", link: door });
+
+        for (let k = 0; k < 100 && player.map !== "town"; k++) {
+            game.advance(0.1, { render: false });
+        }
+
+        game.advance(0.5, { render: false });
+
+        const outside = { map: follower.map, apart: apart(), drawn: game.avatars.has(id) };
+        const start = [...player.square];
+
+        game.battle.command("player", { type: "move", to: game.world.tavern.outside });
+
+        for (let k = 0; k < 300 && (player.path.length || player.to); k++) {
+            game.advance(0.1, { render: false });
+        }
+
+        game.advance(3, { render: false });
+        game.start();
+
+        return { outside, walked: Math.hypot(player.square[0] - start[0], player.square[1] - start[1]), after: { map: follower.map, apart: apart() }, id };
+    }, guild.door);
+
+    expect(out.outside).toEqual({ map: "town", apart: expect.any(Number), drawn: true });
+    expect(out.outside.apart).toBeLessThan(6);
+    expect(out.walked).toBeGreaterThan(8);
+    expect(out.after.map).toBe("town");
+    expect(out.after.apart).toBeLessThan(5);
+
+    // The journal: who follows the player, and how they are
+    const journal = page.locator(".journal");
+
+    await page.keyboard.press("j");
+    await expect(journal).toBeVisible();
+    await expect(journal.locator(".journal-follower-name")).toHaveText([guild.name]);
+    await expect(journal.locator(".journal-follower-state")).toContainText([/^(warrior|ranger|rogue|mage|cleric), 100%$/]);
+    await page.keyboard.press("Escape");
+
+    // Kept with the character: with them again the next time
+    const kept = await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.followers")));
+
+    expect(kept.followers.map(({ name }) => name)).toEqual([guild.name]);
+    await title(page);
+    await page.locator("#continuebutton").click();
+    await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
+
+    const again = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        return [...game.host.followers].map(([id, { name, leader }]) => {
+            const follower = game.battle.actor(id);
+
+            return { name, leader, map: follower.map, apart: Math.hypot(follower.x - player.x, follower.y - player.y), drawn: game.avatars.has(id) };
+        });
+    });
+
+    expect(again).toEqual([{ name: guild.name, leader: "player", map: "town", apart: expect.any(Number), drawn: true }]);
+    expect(again[0].apart).toBeLessThan(6);
+});
+
 test("tapping someone walks the player up to talk: their name and what they are, what they say, replies that lead on, Escape to stop", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

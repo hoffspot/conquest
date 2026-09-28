@@ -39,8 +39,8 @@ export async function createSession({ canvas, quality, sound = true, volumes, fe
  * talks and what it's found, and what it's grown into and carries, and who hears of them; the
  * world's war as it was kept, and who hears of it; and who opens the world map).
  */
-export function createGame({ view, kit, sound, hud, hero, seed, talks, onTalk, explored, onExplore, onWorldMap, war, onWar, progress, onProgress, standing, onStanding }) {
+export function createGame({ view, kit, sound, hud, hero, seed, talks, onTalk, explored, onExplore, onWorldMap, war, onWar, progress, onProgress, standing, onStanding, followers, onFollowers }) {
     const world = buildWorld({ seed });
 
-    return new Game({ view, kit, sound, world, hero, hud, talks, onTalk, explored, onExplore, onWorldMap, war, onWar, progress, onProgress, standing, onStanding });
+    return new Game({ view, kit, sound, world, hero, hud, talks, onTalk, explored, onExplore, onWorldMap, war, onWar, progress, onProgress, standing, onStanding, followers, onFollowers });
 }

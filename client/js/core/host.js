@@ -69,6 +69,19 @@ export const SORTIE = Object.freeze({ raiders: 6, attackers: 16, reach: 10, stay
  */
 export const ENVOY = Object.freeze({ near: 150, far: 300, escort: 2, ahead: 24, past: 6 });
 
+/**
+ * An adventurer hired to follow a player (docs/WAR.md M9), by their calling: what they fight
+ * with, and what it costs to hire them (coppers). How many a player can lead: one, and more as
+ * their Command grows (progress.js TREES).
+ */
+export const HIRES = Object.freeze({
+    warrior: { weapon: "sword", price: 40 },
+    ranger: { weapon: "bow", price: 40 },
+    rogue: { weapon: "sword", price: 30 },
+    mage: { weapon: "staff", price: 60 },
+    cleric: { weapon: "hammer", price: 60 },
+});
+
 /** How near (metres) a people's soldiers must be to see a player bring down their enemy, and owe them for it (M7). */
 export const FAVOUR_SIGHT = 25;
 
@@ -128,7 +141,7 @@ export const BOUGHT = Object.freeze({
 });
 
 /** The skills' experience for each thing done, besides the damage done or taken, or healed. */
-const XP = Object.freeze({ stun: 15, exhausted: 5, talk: 3, effect: 5, trade: 0.5 });
+const XP = Object.freeze({ stun: 15, exhausted: 5, talk: 3, effect: 5, trade: 0.5, command: 0.5 });
 
 /** Why a command wasn't carried out (a command's { ok: false, reason }). */
 export const REFUSALS = Object.freeze({
@@ -140,6 +153,9 @@ export const REFUSALS = Object.freeze({
     far: "Too far away.",
     talking: "Not talking to them.",
     coppers: "Not enough coppers.",
+    hire: "They're not for hire.",
+    company: "You can't lead any more than you have.",
+    follower: "They don't follow you.",
     shop: "They've nothing like that to sell.",
     full: "Your pack is full.",
     unknown: "You haven't learnt that.",
@@ -209,6 +225,17 @@ export class Host {
         this.envoys = new Map();
 
         /**
+         * The adventurers following the players (by id): { leader (a player's id), name, calling,
+         * sex, seed, people, from (the one of the folk they were, by id), waiting (standing where
+         * they were told to) }. A player's go with their character (characterOf).
+         */
+        this.followers = new Map();
+        this.nextFollower = 1;
+
+        /** The folk hired (their ids): never among the folk again, wherever they were. */
+        this.hired = new Set();
+
+        /**
          * The players, by id: { id, hero (their character: { name, shape, look, weapon, boots,
          * race }), realm (the people they're of), talks (what the folk remember of them, what
          * they've learnt: { memory, knowledge }), explored (core/explored.js), progress
@@ -273,7 +300,7 @@ export class Host {
      * app/save.js), at `square` on `map` (the world's start, to begin with; the nearest free
      * square to it). Returns their record (players).
      */
-    join({ id = HOST_PLAYER, hero, talks = {}, explored = {}, progress = {}, standing = {}, square = this.world.spawns?.player, map = "town" }) {
+    join({ id = HOST_PLAYER, hero, talks = {}, explored = {}, progress = {}, standing = {}, followers = [], square = this.world.spawns?.player, map = "town" }) {
         if (this.players.has(id)) {
             return this.players.get(id);
         }
@@ -297,6 +324,12 @@ export class Host {
         this.players.set(id, player);
         this.battle.add({ id, kind: "player", name: hero.name, weapon: hero.weapon, boots: Boolean(hero.boots), team: player.realm, square: at, map });
         this.#outfit(player);
+
+        // (Their followers, with them)
+        for (const one of followers) {
+            this.#follow(player, one);
+        }
+
         this.#event("join", { id });
 
         return player;
@@ -313,16 +346,36 @@ export class Host {
             return null;
         }
 
+        const character = this.characterOf(player);
+
+        for (const follower of this.#company(id)) {
+            this.battle.remove(follower);
+            this.followers.delete(follower);
+        }
+
         this.battle.remove(id);
         this.players.delete(id);
         this.#event("leave", { id });
 
-        return this.characterOf(player);
+        return character;
     }
 
     /** A player's character, as it's kept (as join takes it). */
-    characterOf({ hero, talks, explored, progress, standing }) {
-        return { hero: { ...hero }, talks: { memory: structuredClone(talks.memory), knowledge: [...talks.knowledge] }, explored: explored.toJSON(), progress: progress.toJSON(), standing: standing.toJSON() };
+    characterOf({ id, hero, talks, explored, progress, standing }) {
+        const followers = this.#company(id).map((each) => {
+            const { name, calling, sex, seed, people } = this.followers.get(each);
+
+            return { name, calling, sex, seed, people };
+        });
+
+        return { hero: { ...hero }, talks: { memory: structuredClone(talks.memory), knowledge: [...talks.knowledge] }, explored: explored.toJSON(), progress: progress.toJSON(), standing: standing.toJSON(), followers };
+    }
+
+    /** How many followers a player can lead: one, and more as their Command grows. */
+    mostFollowers(playerId) {
+        const player = this.players.get(playerId);
+
+        return player ? 1 + player.progress.bonuses().followers : 0;
     }
 
     /**
@@ -494,6 +547,20 @@ export class Host {
                 this.#owed(event);
             }
 
+            // (A follower fallen: gone from their company, and taken away a while after)
+            if (event.type === "death" && this.followers.has(event.id)) {
+                const { leader, name } = this.followers.get(event.id);
+
+                this.followers.delete(event.id);
+                this.fallen.push({ id: event.id, at: this.battle.time + FALLEN_MS });
+                this.#event("follower", { id: leader, follower: event.id, name, change: "fallen" });
+            }
+
+            // (A player through a door or up the stairs: their followers with them, unless told to wait)
+            if (event.type === "cross" && this.players.has(event.id)) {
+                this.#bring(event.id);
+            }
+
             // A soldier struck by someone whose people aren't at war with theirs: a grudge
             // between the peoples (and the soldier's fellows fight back: battle.js foes)
             if (event.type === "hit" && event.by && this.soldiers.has(event.id)) {
@@ -584,9 +651,12 @@ export class Host {
             camps: [...this.camps.entries()],
             sorties: [...this.sorties.entries()],
             envoys: [...this.envoys.entries()],
+            followers: [...this.followers.entries()],
+            nextFollower: this.nextFollower,
+            hired: [...this.hired],
             soldiers: [...this.soldiers.entries()],
             fallen: structuredClone(this.fallen),
-            players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: structuredClone(player.boons), readyAt: { ...player.readyAt }, ...this.characterOf(player) })),
+            players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: structuredClone(player.boons), readyAt: { ...player.readyAt }, ...this.characterOf(player), followers: undefined })),
             done: structuredClone(this.done),
         };
     }
@@ -614,6 +684,9 @@ export class Host {
         host.camps = new Map(structuredClone(snapshot.camps ?? []));
         host.sorties = new Map(structuredClone(snapshot.sorties ?? []));
         host.envoys = new Map(structuredClone(snapshot.envoys ?? []));
+        host.followers = new Map(structuredClone(snapshot.followers ?? []));
+        host.nextFollower = snapshot.nextFollower ?? 1;
+        host.hired = new Set(snapshot.hired ?? []);
         host.soldiers = new Map(structuredClone(snapshot.soldiers ?? []));
         host.fallen = structuredClone(snapshot.fallen ?? []);
         host.done = structuredClone(snapshot.done);
@@ -626,9 +699,9 @@ export class Host {
             const building = world.interiors.buildings.get(key);
 
             host.#enthrone(building);
-            host.open.set(key, building.folk.map(({ id }) => id));
+            host.open.set(key, building.folk.filter(({ id }) => !host.hired.has(id)).map(({ id }) => id));
 
-            for (const one of building.folk) {
+            for (const one of building.folk.filter(({ id }) => !host.hired.has(id))) {
                 host.folk.set(one.id, one);
             }
         }
@@ -664,6 +737,29 @@ export class Host {
     // What happened in the battle, for the players' skills: blows landed (up close, from afar)
     // and taken, heals, stuns, running out of breath; and what's on those they fell
     #learn(event) {
+        // (What a player's followers do, their leader's: their Command grows by it, and what they
+        // bring down counts for them)
+        const leads = this.followers.get(event.by);
+
+        if (leads && (event.type === "hit" || event.type === "death")) {
+            const leader = this.players.get(leads.leader);
+
+            if (event.type === "hit") {
+                this.#gain(leader, "command", event.damage * XP.command);
+            }
+
+            if (event.type === "death") {
+                const fallen = this.battle.actor(event.id);
+
+                if (leader && fallen && !this.players.has(fallen.id) && fallen.kind !== "follower") {
+                    this.#loot(leader, fallen);
+                    this.#felled(leader, fallen);
+                }
+            }
+
+            return;
+        }
+
         const by = this.players.get(event.by);
         const own = this.players.get(event.id);
 
@@ -907,7 +1003,7 @@ export class Host {
         }
 
         if (ra || rb) {
-            return a.kind === "player" || b.kind === "player";
+            return a.kind === "player" || b.kind === "player" || a.kind === "follower" || b.kind === "follower";
         }
 
         return true;
@@ -1380,6 +1476,123 @@ export class Host {
         }
     }
 
+    // --- Followers (docs/WAR.md M9) ---
+
+    // A player's followers (their ids)
+    #company(playerId) {
+        return [...this.followers].filter(([, one]) => one.leader === playerId).map(([id]) => id);
+    }
+
+    // One of the adventurers at a guild (or drinking at its tables) hired: out of the folk, and
+    // following the player, for their price
+    #hire(player, actor) {
+        const one = this.folk.get(actor.talkingTo);
+        const calling = one?.look;
+
+        if (!one || !(one.role === "adventurer" || one.talk === "adventurer") || !HIRES[calling]) {
+            return refuse("hire");
+        }
+
+        if (this.#company(player.id).length >= this.mostFollowers(player.id)) {
+            return refuse("company");
+        }
+
+        const { price } = HIRES[calling];
+
+        if (player.progress.gold < price) {
+            return refuse("coppers");
+        }
+
+        player.progress.gold -= price;
+
+        // (Gone from where they sat or read the board, for good)
+        const npc = this.battle.actor(one.id);
+        const at = { square: [...npc.square], map: npc.map };
+
+        this.battle.remove(one.id);
+        this.folk.delete(one.id);
+        this.hired.add(one.id);
+
+        const id = this.#follow(player, { name: one.name, calling, sex: one.sex, seed: one.seed, people: one.people ?? "human", from: one.id }, at);
+
+        actor.talkingTo = null;
+        this.#event("gone", { id: one.id });
+
+        return { ok: true, follower: id, price };
+    }
+
+    // A follower of a player's, into the world by them (or where `at` says): { name, calling,
+    // sex, seed, people }. Returns their id
+    #follow(player, one, at = null) {
+        const leader = this.battle.actor(player.id);
+        const map = at?.map ?? leader.map;
+        const taken = new Set(this.battle.actors.filter((each) => each.map === map).map(({ square: [x, y] }) => squareKey(x, y)));
+        const square = nearestFree(squaresOf(this.world.maps?.[map] ?? this.world), at?.square ?? leader.square, { taken });
+        const id = `follower-${this.nextFollower++}`;
+        const { weapon } = HIRES[one.calling] ?? HIRES.warrior;
+
+        this.followers.set(id, { leader: player.id, name: one.name, calling: one.calling, sex: one.sex ?? "m", seed: one.seed ?? 1, people: one.people ?? "human", from: one.from ?? null, waiting: false });
+        this.battle.add({ id, kind: "follower", name: one.name, weapon, team: player.realm, square, map, ai: "follow", leader: player.id, role: "guard" });
+        this.#event("follower", { id: player.id, follower: id, name: one.name, change: "joined" });
+
+        return id;
+    }
+
+    // A player's followers brought along with them (through a door, up the stairs): by them where
+    // they've come out, unless they were told to wait
+    #bring(playerId) {
+        const leader = this.battle.actor(playerId);
+        const squares = squaresOf(this.world.maps?.[leader.map] ?? this.world);
+        const taken = new Set(this.battle.actors.filter((each) => each.map === leader.map).map(({ square: [x, y] }) => squareKey(x, y)));
+
+        for (const id of this.#company(playerId)) {
+            const follower = this.battle.actor(id);
+
+            if (!follower || follower.dead || follower.map === leader.map || this.followers.get(id).waiting) {
+                continue;
+            }
+
+            try {
+                const square = nearestFree(squares, leader.square, { taken, within: 12 });
+
+                taken.add(squareKey(...square));
+                Object.assign(follower, { map: leader.map, spawnMap: leader.map, square, x: square[0] + 0.5, y: square[1] + 0.5, to: null, path: [], target: null });
+            } catch {
+                // (No room by them: they'll catch up another time)
+            }
+        }
+    }
+
+    // A follower told what to do, by the player they follow: to wait where they stand, to follow
+    // again, or to go their own way (gone)
+    #tell(player, actor, order) {
+        const id = actor.talkingTo;
+        const one = this.followers.get(id);
+        const follower = this.battle.actor(id);
+
+        if (!one || one.leader !== player.id || !follower) {
+            return refuse("follower");
+        }
+
+        if (order === "wait") {
+            one.waiting = true;
+            Object.assign(follower, { ai: "patrol", patrol: [[...follower.square]], patrolIndex: 0, leash: LEASH, post: follower.facing, spawnMap: follower.map });
+        } else if (order === "follow") {
+            one.waiting = false;
+            Object.assign(follower, { ai: "follow", patrol: null, leash: null });
+        } else if (order === "dismiss") {
+            this.followers.delete(id);
+            this.battle.remove(id);
+            actor.talkingTo = null;
+            this.#event("follower", { id: player.id, follower: id, name: one.name, change: "dismissed" });
+            this.#event("gone", { id });
+        } else {
+            return refuse("command");
+        }
+
+        return OK;
+    }
+
     // A town's soldiers let go (its garrison's as the war has it)
     #dismiss(townId) {
         const { ids } = this.mustered.get(townId);
@@ -1445,7 +1658,10 @@ export class Host {
 
         const npc = this.battle.actor(withId);
 
-        if (!npc || npc.dead || npc === actor || !(npc.neutral || (npc.kind === "soldier" && !this.battle.hostile(npc, actor)))) {
+        // (One of the folk, a soldier who isn't an enemy, or one of their own followers)
+        const theirs = npc?.kind === "follower" && this.followers.get(npc.id)?.leader === actor.id;
+
+        if (!npc || npc.dead || npc === actor || !(npc.neutral || theirs || (npc.kind === "soldier" && !this.battle.hostile(npc, actor)))) {
             return refuse("target");
         }
 
@@ -1480,6 +1696,15 @@ export class Host {
         // (Work asked for or taken on, word of it brought, the armoury, counsel: an official's)
         if (effect.work || effect.report || effect.armoury || effect.counsel) {
             return this.#official(player, actor, effect);
+        }
+
+        // (An adventurer hired; a follower told what to do: M9)
+        if (effect.hire) {
+            return this.#hire(player, actor);
+        }
+
+        if (effect.follower) {
+            return this.#tell(player, actor, effect.follower);
         }
 
         const price = Math.max(0, Math.floor(Number(effect.price ?? effect.pay) || 0));
@@ -2022,7 +2247,7 @@ export class Host {
 
     // One of the folk, going about their business in the battle (no one fights them)
     #addFolk(one) {
-        if (this.battle.actor(one.id)) {
+        if (this.battle.actor(one.id) || this.hired.has(one.id)) {
             return false;
         }
 

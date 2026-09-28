@@ -1492,6 +1492,25 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     color: #e0826f;
 }
 
+/* The player's company: each follower, and how they are */
+.journal-follower {
+    display: flex;
+    gap: 10px;
+    padding: 4px 12px;
+    font-size: 14px;
+    color: var(--ink);
+}
+
+.journal-follower-name {
+    flex: 1;
+}
+
+.journal-follower-state {
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: capitalize;
+}
+
 /* How the other peoples regard the player's: grudges in red, favours in gold */
 .journal-list.regard {
     margin-top: 8px;
