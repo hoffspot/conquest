@@ -22,15 +22,18 @@ import { Chunks } from "../world/chunks3d.js";
 import { prepareAtlas } from "../world/art/engine/atlas.js";
 import { STYLES, TRADES } from "../world/art/kits/house.js";
 import { buildGround } from "../world/ground.js";
+import { PEOPLE_KITS } from "../world/art/peoples/index.js";
 import { buildTown } from "../world/town3d.js";
 import { View } from "../world/view.js";
 
 const $ = (selector) => document.querySelector(selector);
 
 const params = new URLSearchParams(location.search);
+const PEOPLES = ["human", "elf", "darkElf", "cat", "lizard", "orc"];
 const state = {
     seed: Number(params.get("seed")) || 7,
-    show: ["town", "landmarks", "capital", "city", "village", "hamlet", "farmstead", ...BIOMES.map(({ id }) => `wilds-${id}`)].includes(params.get("show")) ? params.get("show") : "street",
+    people: PEOPLES.includes(params.get("people")) ? params.get("people") : "human",
+    show: ["town", "landmarks", "structures", "capital", "city", "village", "hamlet", "farmstead", ...BIOMES.map(({ id }) => `wilds-${id}`)].includes(params.get("show")) ? params.get("show") : "street",
     built: null,
     stats: null,
     ready: false,
@@ -60,6 +63,29 @@ function streetOf(seed) {
     }
 
     return { width: Math.ceil(x + 4), height: 8 + styles.length * 26 + 4, pieces };
+}
+
+// A people's street: a row of each type of their houses, poorest to richest
+function peopleStreetOf(seed, people) {
+    const rows = PEOPLE_KITS[people]?.GALLERY?.houses ?? [];
+    const pieces = [];
+    let y = 8;
+    let width = 0;
+
+    for (const [row, [type, w, h]] of rows.entries()) {
+        let x = 4;
+        const count = w > 3 ? 3 : 5;
+
+        for (let k = 0; k < count; k++) {
+            pieces.push({ kind: "house", people, type, key: `house-${people}-${type}-${k}`, variant: k, w, h, x: x + (w * 4) / 2, y: y + (h * 4) / 2, facing: 0, wealth: (k + 0.5) / count, storeys: 1 + (k % 2), seed: seed * 1000 + row * 10 + k });
+            x += w * 4 + 2;
+        }
+
+        width = Math.max(width, x);
+        y += h * 4 + 5;
+    }
+
+    return { width: Math.ceil(width + 4), height: Math.ceil(y + 4), pieces };
 }
 
 // A row of every special building: taverns of every sort (their names and signs from the seed),
@@ -187,7 +213,8 @@ async function build() {
     const world = generateWorld({ seed: state.seed });
 
     if (state.show !== "town") {
-        const street = state.show === "street" ? streetOf(state.seed) : landmarksOf(state.seed);
+        const own = state.people !== "human";
+        const street = state.show === "street" ? (own ? peopleStreetOf(state.seed, state.people) : streetOf(state.seed)) : landmarksOf(state.seed);
 
         Object.assign(world, { town: { ...world.town, pieces: street.pieces }, trees: [], width: street.width, height: street.height, stamp: null, origin: 0 });
     }
@@ -200,7 +227,7 @@ async function build() {
     view.scene.add(group);
     state.built = group;
     orbit.focus.set(world.width / 2, 2, world.height / 2);
-    orbit.distance = state.show === "town" ? 70 : 42;
+    orbit.distance = state.show === "town" ? 70 : Math.max(42, Math.min(90, Math.max(world.width, world.height) * 0.6));
 
     finish(world.town.pieces.length);
 }
@@ -220,7 +247,7 @@ function finish(pieces) {
     }));
     $("#status").hidden = true;
     state.ready = true;
-    history.replaceState(null, "", `?seed=${state.seed}&show=${state.show}`);
+    history.replaceState(null, "", `?seed=${state.seed}&people=${state.people}&show=${state.show}`);
 }
 
 function place() {
@@ -287,6 +314,11 @@ canvas.addEventListener("wheel", (event) => {
 
 $("#seed").value = state.seed;
 $("#show").value = state.show;
+$("#people").value = state.people;
+$("#people").addEventListener("change", () => {
+    state.people = $("#people").value;
+    build();
+});
 $("#seedform").addEventListener("submit", (event) => {
     event.preventDefault();
     state.seed = Number($("#seed").value) || 0;

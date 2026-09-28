@@ -335,12 +335,18 @@ export class Solid {
      * up, in `material`, with a hole for each opening ({ u0, u1, v0, v1 (along it and up it,
      * from the origin), depth (how far in its back is), back (what fills it at the back: a
      * material, or null for nothing), sides (the reveals' material: the wall's unless given),
-     * arch (one of ARCHES: the back shaped so, the rest of the opening filled with the wall) }). The reveals are shaded (`reveal`: a colour) as they're out of the light. A gable's
-     * face has an outline (`line`: [[u, v]...] from one end to the other) instead of a level top.
+     * arch (one of ARCHES: the back shaped so, the rest of the opening filled with the wall) }).
+     * The reveals are shaded (`reveal`: a colour) as they're out of the light. A gable's face has
+     * an outline (`line`: [[u, v]...] from one end to the other) instead of a level top. A
+     * battered wall leans in as it rises (`lean`: how far in for each pixel up), its ends drawn
+     * in with it (`ends`: how far along for each pixel up at its start and its end, where it
+     * meets the next wall leaning in too: `lean` each at a square corner).
      */
-    wall({ origin, across, out }, length, height, openings, material, { reveal = [0.72, 0.7, 0.68], line = null } = {}) {
-        const up = [0, 1, 0];
-        const at = (u, v, w = 0) => add3(add3(add3(origin, times(across, u)), times(up, v)), times(out, -w));
+    wall({ origin, across, out }, length, height, openings, material, { reveal = [0.72, 0.7, 0.68], line = null, lean = 0, ends = [lean, lean] } = {}) {
+        const up = [-out[0] * lean, 1, -out[2] * lean];
+        // (Along a battered wall, its ends drawn in as it rises)
+        const along = lean ? (u, v) => ends[0] * v + (u * (length - (ends[0] + ends[1]) * v)) / length : (u) => u;
+        const at = (u, v, w = 0) => add3(add3(add3(origin, times(across, along(u, v))), times(up, v)), times(out, -w));
         const cuts = openings.filter(({ u0, u1, v0, v1 }) => u1 > u0 && v1 > v0);
         const topAt = (u) => (line ? outlineAt(line, u) : height);
 
@@ -606,16 +612,25 @@ export class Solid {
      */
     walls(points, y, height, openings, material, options = {}) {
         const [mx, mz] = points.reduce(([sx, sz], [x, z]) => [sx + x / points.length, sz + z / points.length], [0, 0]);
-
-        return points.map(([x, z], k) => {
-            const [nx, nz] = points[(k + 1) % points.length];
+        const n = points.length;
+        const sides = points.map(([x, z], k) => {
+            const [nx, nz] = points[(k + 1) % n];
             const length = Math.hypot(nx - x, nz - z);
             const across = [(nx - x) / length, 0, (nz - z) / length];
             const normal = [across[2], 0, -across[0]];
             const out = dot(normal, [(x + nx) / 2 - mx, 0, (z + nz) / 2 - mz]) < 0 ? times(normal, -1) : normal;
-            const face = { origin: [x, y, z], across, out, length };
 
-            this.wall(face, length, height, openings?.[k] ?? [], material, options);
+            return { origin: [x, y, z], across, out, length };
+        });
+        // (A battered plan's walls drawn in at each corner as far as the corner's angle makes
+        // the two leaning walls meet)
+        const lean = options.lean ?? 0;
+        const endAt = (a, b) => lean * Math.tan(Math.acos(Math.max(-1, Math.min(1, dot(sides[a].across, sides[b].across)))) / 2);
+
+        return sides.map((face, k) => {
+            const ends = lean ? [endAt((k - 1 + n) % n, k), endAt(k, (k + 1) % n)] : undefined;
+
+            this.wall(face, face.length, height, openings?.[k] ?? [], material, { ...options, ...(ends ? { ends } : {}) });
 
             return face;
         });

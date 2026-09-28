@@ -385,24 +385,25 @@ export const PAINTERS = {
     banco({ base, light, dark }, seed) {
         const blotch = periodicNoise(seed, 4);
         const grain = periodicNoise(seed + 1, 64);
-        const sweeps = periodicNoise(seed + 2, 12);
+        const palms = periodicNoise(seed + 2, 16);
         const streaks = periodicNoise(seed + 3, 24);
         const cracks = periodicNoise(seed + 4, 8);
 
         return (x, y) => {
             const [u, v] = [x / SIZE, y / SIZE];
-            const sweep = Math.abs(Math.sin((sweeps(u * 12, v * 6) * 3 + v * 9) * Math.PI)) * 0.25;
-            const rain = Math.max(0, streaks(u * 24, v * 2) - 0.62) * 1.6;
-            const tone = blotch(u * 4, v * 4) * 0.55 + grain(u * 64, v * 64) * 0.2 + sweep;
-            let colour = tone < 0.5 ? mix(dark, base, tone * 2) : mix(base, light, Math.min(1, (tone - 0.5) * 2));
-            let lift = 0.5 + grain(u * 64, v * 64) * 0.15 + sweep * 0.3;
+            // (Soft patches where each handful was smoothed on)
+            const palm = palms(u * 16, v * 16);
+            const rain = Math.max(0, streaks(u * 24, v * 1.5) - 0.64) * 1.3;
+            const tone = blotch(u * 4, v * 4) * 0.5 + palm * 0.3 + grain(u * 64, v * 64) * 0.2;
+            let colour = tone < 0.5 ? mix(dark, base, 0.35 + tone * 1.3) : mix(base, light, Math.min(1, (tone - 0.5) * 1.6));
+            let lift = 0.5 + grain(u * 64, v * 64) * 0.12 + palm * 0.18;
 
             colour = mix(colour, dark, rain);
 
-            // (Cracks here and there, not everywhere)
-            if (Math.abs(cracks(u * 8, v * 8) - 0.5) < 0.01 && blotch(u * 4 + 2, v * 4 + 1) > 0.62) {
-                colour = scale(dark, 0.75);
-                lift = 0.2;
+            // (A hairline crack here and there)
+            if (Math.abs(cracks(u * 8, v * 8) - 0.5) < 0.006 && blotch(u * 4 + 2, v * 4 + 1) > 0.7) {
+                colour = mix(colour, dark, 0.6);
+                lift = 0.3;
             }
 
             return [...colour, lift];

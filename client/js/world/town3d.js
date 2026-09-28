@@ -24,6 +24,7 @@ import { PLOT } from "../core/world.js";
 import { gatehouse, keep, tower, wall } from "./art/kits/castle.js";
 import { house } from "./art/kits/house.js";
 import { landmark } from "./art/kits/landmarks.js";
+import { builderFor } from "./art/peoples/index.js";
 import { prop } from "./art/kits/props.js";
 import { tree } from "./art/kits/town.js";
 import { plantTrees } from "./art/kits/trees.js";
@@ -108,9 +109,16 @@ export async function buildTown(world, { onProgress = () => {} } = {}) {
             continue;
         }
 
-        // Everything else is built facing south, and turned to face its street (or the market)
-        // about its middle
-        const built = await BUILDERS[spec.kind](spec);
+        // Everything else is built facing south (by its people's kit, if it's theirs), and turned
+        // to face its street (or the market) about its middle
+        const build = builderFor(spec) ?? BUILDERS[spec.kind];
+
+        if (!build) {
+            onProgress(++done, total);
+            continue;
+        }
+
+        const built = await build(spec);
         const object = new THREE.Group();
 
         built.position.set(-piece.w * 10, 0, -piece.h * 10);
