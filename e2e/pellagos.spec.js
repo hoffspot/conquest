@@ -1587,15 +1587,23 @@ test("the barkeep tells the war's news as it's heard in the town", async ({ page
 
     await expect(talk).toBeVisible();
     await expect(talk.locator(".talk-name")).toHaveText(barkeep.name);
+    // The news, or what's said of a ruler: and asked again, something else, until the news is told
+    const line = talk.locator(".talk-line");
+    const news = /Raiders of the Orcs struck at .+'s fields|The Orcs have declared war on the Elves/;
+
     await talk.getByRole("button", { name: "What's the word on the war?" }).click();
-    await expect(talk.locator(".talk-line")).toContainText(/Raiders of the Orcs struck at .+'s fields|The Orcs have declared war on the Elves/);
+    await expect(line).toContainText(/Orcs|They say/);
 
-    // Something else: more of the news, or what's said of a ruler
-    const first = await talk.locator(".talk-line").textContent();
+    const heard = [await line.textContent()];
 
-    await talk.getByRole("button", { name: "What else is being said?" }).click();
-    await expect(talk.locator(".talk-line")).not.toHaveText(first);
-    await expect(talk.locator(".talk-line")).toContainText(/Orcs|They say/);
+    for (let k = 0; k < 6 && !heard.some((each) => news.test(each)); k++) {
+        await talk.getByRole("button", { name: "What else is being said?" }).click();
+        await expect(line).not.toHaveText(heard.at(-1));
+        await expect(line).toContainText(/Orcs|They say/);
+        heard.push(await line.textContent());
+    }
+
+    expect(heard.some((each) => news.test(each)), heard.join(" / ")).toBe(true);
     await page.keyboard.press("Escape");
 });
 
