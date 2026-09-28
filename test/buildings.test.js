@@ -26,7 +26,7 @@ const { TRADES } = await import("../client/js/core/setpieces/pieces.js");
 const { LAYERS, layerOf, paintLayers, toAtlas } = await import("../client/js/world/art/engine/atlas.js");
 const { material, MATERIALS } = await import("../client/js/world/art/engine/materials.js");
 const { paintLayer } = await import("../client/js/world/art/engine/painters.js");
-const { ARCHES, openingOutline, Solid } = await import("../client/js/world/art/engine/solid.js");
+const { ARCHES, inset, openingOutline, Solid } = await import("../client/js/world/art/engine/solid.js");
 const { buildHouse, house, planHouse, STYLES } = await import("../client/js/world/art/kits/house.js");
 const { EMBLEM_NAMES, paintEmblem } = await import("../client/js/world/art/kits/emblems.js");
 const { landmark, LANDMARK_BUILDERS } = await import("../client/js/world/art/kits/landmarks.js");
@@ -340,7 +340,32 @@ describe("walls with openings (Solid.wall)", () => {
     });
 });
 
-describe("shapes turned about an axis (Solid.lathe)", () => {
+describe("shapes turned about an axis (Solid.lathe), lofted, swept and stood up", () => {
+    const areaFacingUp = (solid) => {
+        let area = 0;
+
+        solid.toObject().traverse((node) => {
+            if (!node.isMesh) {
+                return;
+            }
+
+            const { position } = node.geometry.attributes;
+            const [a, b, c] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+
+            for (let i = 0; i < position.count; i += 3) {
+                a.fromBufferAttribute(position, i);
+                b.fromBufferAttribute(position, i + 1);
+                c.fromBufferAttribute(position, i + 2);
+
+                const normal = b.clone().sub(a).cross(c.clone().sub(a));
+
+                area += normal.clone().normalize().y > 0.99 ? normal.length() / 2 : 0;
+            }
+        });
+
+        return area;
+    };
+
     // Each triangle's normal against the way out from the axis (and up) at its middle
     const facingOut = (solid, cx, cz) => {
         let outward = 0;
@@ -392,6 +417,64 @@ describe("shapes turned about an axis (Solid.lathe)", () => {
 
         assert.equal(triangles, 6 * 2 + 6);
         assert.equal(outward, triangles);
+    });
+
+    it("lofts a surface through cross-sections, a ring closed to a point capped by triangles (Solid.loft)", () => {
+        const solid = new Solid();
+        const ring = (r, y) => Array.from({ length: 8 }, (_, k) => [r * Math.cos((k * Math.PI) / 4), y, r * Math.sin((k * Math.PI) / 4)]);
+
+        solid.loft([ring(10, 0), ring(10, 10), ring(0, 16)], material("plaster"));
+
+        const { outward, triangles } = facingOut(solid, 0, 0);
+
+        assert.equal(triangles, 8 * 2 + 8);
+        assert.equal(outward, triangles);
+    });
+
+    it("runs a rod along a bending path, its faces turned out from the path (Solid.tube)", () => {
+        const solid = new Solid();
+        const path = Array.from({ length: 6 }, (_, k) => [30 * Math.cos((k * Math.PI) / 5), 30 * Math.sin((k * Math.PI) / 5), 0]);
+        let outward = 0;
+        let triangles = 0;
+
+        solid.tube(path, [3, 3, 3, 3, 2, 0], material("timber"), { sides: 5 });
+        solid.toObject().traverse((node) => {
+            if (!node.isMesh) {
+                return;
+            }
+
+            const { position } = node.geometry.attributes;
+            const [a, b, c] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+
+            for (let i = 0; i < position.count; i += 3) {
+                a.fromBufferAttribute(position, i);
+                b.fromBufferAttribute(position, i + 1);
+                c.fromBufferAttribute(position, i + 2);
+
+                const normal = b.clone().sub(a).cross(c.clone().sub(a)).normalize();
+                const middle = a.clone().add(b).add(c).divideScalar(3);
+
+                // (Out is away from the nearest point of the path)
+                const nearest = path.slice(1).map((p, k) => new THREE.Line3(new THREE.Vector3(...path[k]), new THREE.Vector3(...p)).closestPointToPoint(middle, true, new THREE.Vector3())).reduce((best, point) => (point.distanceTo(middle) < best.distanceTo(middle) ? point : best));
+
+                triangles++;
+                outward += normal.dot(middle.clone().sub(nearest)) > 0 ? 1 : 0;
+            }
+        });
+
+        // (Four lengths of five quads, and the last closing to its tip in triangles)
+        assert.equal(triangles, 4 * 5 * 2 + 5);
+        assert.equal(outward, triangles);
+    });
+
+    it("stands a plan up, its sides leaning in as far as asked and its top the plan moved in (Solid.extrude)", () => {
+        const solid = new Solid();
+        const square = [[0, 0], [20, 0], [20, 20], [0, 20]];
+        const top = solid.extrude(square, 0, 10, material("stone"), { batter: 2 });
+
+        assert.deepEqual(top.map(([x, z]) => [Math.round(x * 1e6) / 1e6, Math.round(z * 1e6) / 1e6]), [[2, 2], [18, 2], [18, 18], [2, 18]]);
+        assert.ok(Math.abs(areaFacingUp(solid) - 16 * 16) < 1e-3);
+        assert.deepEqual(inset(square, -1).map(([x, z]) => [Math.round(x), Math.round(z)]), [[-1, -1], [21, -1], [21, 21], [-1, 21]]);
     });
 });
 

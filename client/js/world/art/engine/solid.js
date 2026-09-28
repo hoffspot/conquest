@@ -128,6 +128,32 @@ export function openingOutline(arch, u0, u1, v0, v1, steps = 6) {
     return [[u0, v0], [u1, v0], ...right, ...right.slice(0, -1).reverse().map(([u, v]) => [u0 + u1 - u, v])];
 }
 
+/**
+ * An outline ([x, z] corners in order, either way round) with every side moved `distance` in
+ * towards its middle (out, if negative), the corners mitred.
+ */
+export function inset(outline, distance) {
+    const n = outline.length;
+    const [mx, mz] = outline.reduce(([sx, sz], [x, z]) => [sx + x / n, sz + z / n], [0, 0]);
+    // (Each side's way in: towards the middle)
+    const inward = outline.map(([x, z], k) => {
+        const [nx, nz] = outline[(k + 1) % n];
+        const long = Math.hypot(nx - x, nz - z) || 1;
+        const normal = [-(nz - z) / long, (nx - x) / long];
+        const toMiddle = (mx - (x + nx) / 2) * normal[0] + (mz - (z + nz) / 2) * normal[1];
+
+        return toMiddle < 0 ? [-normal[0], -normal[1]] : normal;
+    });
+
+    return outline.map(([x, z], k) => {
+        const [a, b] = [inward[(k - 1 + n) % n], inward[k]];
+        const along = 1 + a[0] * b[0] + a[1] * b[1];
+        const [ox, oz] = along < 1e-6 ? b : [(a[0] + b[0]) / along, (a[1] + b[1]) / along];
+
+        return [x + ox * distance, z + oz * distance];
+    });
+}
+
 function normalOf(a, b, c) {
     const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
     const v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
@@ -309,8 +335,7 @@ export class Solid {
      * up, in `material`, with a hole for each opening ({ u0, u1, v0, v1 (along it and up it,
      * from the origin), depth (how far in its back is), back (what fills it at the back: a
      * material, or null for nothing), sides (the reveals' material: the wall's unless given),
-     * arch ("pointed" or "round": the back's top shaped so, the corners above filled with the
-     * wall) }). The reveals are shaded (`reveal`: a colour) as they're out of the light. A gable's
+     * arch (one of ARCHES: the back shaped so, the rest of the opening filled with the wall) }). The reveals are shaded (`reveal`: a colour) as they're out of the light. A gable's
      * face has an outline (`line`: [[u, v]...] from one end to the other) instead of a level top.
      */
     wall({ origin, across, out }, length, height, openings, material, { reveal = [0.72, 0.7, 0.68], line = null } = {}) {
@@ -594,6 +619,148 @@ export class Solid {
 
             return face;
         });
+    }
+
+    /**
+     * A surface through a run of cross-sections (`rings`: each a list of [x, y, z], all the same
+     * length), each point joined to the same point of the next: roofs shaped like a boat, a leaf
+     * or a saddle, a hide hall's hull, a petal, a spire that twists. `closed` joins each ring's
+     * last point to its first; each face faces away from the middle of the two rings it joins
+     * (or `out`: a direction, or a function of a face's middle giving one). Its texture runs
+     * round the rings and from each ring to the next.
+     */
+    loft(rings, material, { closed = true, out = null, tone = this.tone } = {}) {
+        const count = rings[0].length;
+        const middleOf = (points) => times(points.reduce(add3, [0, 0, 0]), 1 / points.length);
+        const around = rings.map((ring) => ring.map((_, i) => (i === 0 ? 0 : null)));
+
+        // (How far round each ring each point is, and how far up from the first ring)
+        for (const [k, ring] of rings.entries()) {
+            for (let i = 1; i < count; i++) {
+                around[k][i] = around[k][i - 1] + Math.hypot(...sub(ring[i], ring[i - 1]));
+            }
+        }
+
+        const up = rings.map(() => new Array(count).fill(0));
+
+        for (let k = 1; k < rings.length; k++) {
+            for (let i = 0; i < count; i++) {
+                up[k][i] = up[k - 1][i] + Math.hypot(...sub(rings[k][i], rings[k - 1][i]));
+            }
+        }
+
+        for (let k = 0; k < rings.length - 1; k++) {
+            const [a, b] = [rings[k], rings[k + 1]];
+            const centre = middleOf([...a, ...b]);
+
+            for (let i = 0; i < (closed ? count : count - 1); i++) {
+                const j = (i + 1) % count;
+                const [aj, bj] = [j === 0 ? around[k][count - 1] + Math.hypot(...sub(a[0], a[count - 1])) : around[k][j], j === 0 ? around[k + 1][count - 1] + Math.hypot(...sub(b[0], b[count - 1])) : around[k + 1][j]];
+                const corners = [a[i], a[j], b[j], b[i]];
+                const uvs = [[around[k][i], up[k][i]], [aj, up[k][j]], [bj, up[k + 1][j]], [around[k + 1][i], up[k + 1][i]]];
+                // (A corner shared with the next, where a ring closes to a point: a triangle)
+                const keep = [0, 1, 2, 3].filter((n, m, all) => Math.hypot(...sub(corners[n], corners[all[(m + 1) % 4]])) > 1e-6);
+
+                if (keep.length < 3) {
+                    continue;
+                }
+
+                const middle = middleOf(keep.map((n) => corners[n]));
+                const way = typeof out === "function" ? out(middle) : out ?? sub(middle, centre);
+
+                this.facing(keep.map((n) => corners[n]), way, material, keep.map((n) => uvs[n]), tone);
+            }
+        }
+
+        return this;
+    }
+
+    /**
+     * A round rod along a path (`points`: [x, y, z]...), `radius` thick (a number, or one for
+     * each point: 0 for a point), `sides` sided: a curving rib, a root, a tusk or a horn, a
+     * spike, a rope, a reed bundle bent into an arch. Its rings turn as little as they can as it
+     * bends. Its ends are left open unless `caps`.
+     */
+    tube(points, radius, material, { sides = 6, caps = false, tone = this.tone } = {}) {
+        const radii = points.map((_, i) => (Array.isArray(radius) ? radius[i] : radius));
+        const tangents = points.map((p, i) => unit(sub(points[Math.min(points.length - 1, i + 1)], points[Math.max(0, i - 1)])));
+        let normal = unit(cross(tangents[0], Math.abs(tangents[0][1]) > 0.9 ? [1, 0, 0] : [0, 1, 0]));
+        const rings = points.map((p, i) => {
+            // (Carried along the path: turned only as far as the path turns)
+            if (i > 0) {
+                normal = unit(sub(normal, times(tangents[i], dot(normal, tangents[i]))));
+            }
+
+            const binormal = cross(tangents[i], normal);
+
+            return Array.from({ length: sides }, (_, k) => {
+                const angle = (k * Math.PI * 2) / sides;
+
+                return add3(p, add3(times(normal, Math.cos(angle) * radii[i]), times(binormal, Math.sin(angle) * radii[i])));
+            });
+        });
+
+        for (let k = 0; k < rings.length - 1; k++) {
+            const axis = [points[k], points[k + 1]];
+
+            for (let i = 0; i < sides; i++) {
+                const j = (i + 1) % sides;
+                const corners = [rings[k][i], rings[k][j], rings[k + 1][j], rings[k + 1][i]];
+                const keep = [0, 1, 2, 3].filter((n, m, all) => Math.hypot(...sub(corners[n], corners[all[(m + 1) % 4]])) > 1e-6);
+
+                if (keep.length >= 3) {
+                    const middle = times(keep.map((n) => corners[n]).reduce(add3, [0, 0, 0]), 1 / keep.length);
+                    const centre = times(add3(...axis), 0.5);
+
+                    this.facing(keep.map((n) => corners[n]), sub(middle, centre), material, undefined, tone);
+                }
+            }
+        }
+
+        if (caps) {
+            for (const [k, sign] of [[0, -1], [rings.length - 1, 1]]) {
+                if (radii[k] > 1e-6) {
+                    this.facing(rings[k], times(tangents[k], sign), material, undefined, tone);
+                }
+            }
+        }
+
+        return this;
+    }
+
+    /**
+     * A plan of any shape (`outline`: [x, z] corners in order, every one seen from its middle)
+     * stood up from y0 to y1: a plinth, a platform, a terrace, a slab of a roof. Its sides lean
+     * in by `batter` (world pixels over its height: every side's foot that far further out than
+     * its top, as mud and dry stone walls are built), and its top is `top` (the sides' material
+     * unless given; null for none). Returns the top's outline.
+     */
+    extrude(outline, y0, y1, material, { top = material, batter = 0, bottom = false, tone = this.tone } = {}) {
+        const upper = batter ? inset(outline, batter) : outline;
+        const [mx, mz] = outline.reduce(([sx, sz], [x, z]) => [sx + x / outline.length, sz + z / outline.length], [0, 0]);
+        const n = outline.length;
+
+        for (let k = 0; k < n; k++) {
+            const j = (k + 1) % n;
+            const [a, b, c, d] = [[outline[k][0], y0, outline[k][1]], [outline[j][0], y0, outline[j][1]], [upper[j][0], y1, upper[j][1]], [upper[k][0], y1, upper[k][1]]];
+            const along = Math.hypot(b[0] - a[0], b[2] - a[2]);
+            const slope = Math.hypot(y1 - y0, batter);
+            const way = [(a[0] + b[0]) / 2 - mx, 0, (a[2] + b[2]) / 2 - mz];
+
+            this.facing([a, b, c, d], way, material, [[0, 0], [along, 0], [along, slope], [0, slope]], tone);
+        }
+
+        if (top) {
+            const [ux, uz] = upper.reduce(([sx, sz], [x, z]) => [sx + x / n, sz + z / n], [0, 0]);
+
+            this.facing([[ux, y1, uz], ...upper.map(([x, z]) => [x, y1, z]), [upper[0][0], y1, upper[0][1]]], [0, 1, 0], top, undefined, tone);
+        }
+
+        if (bottom) {
+            this.facing([[mx, y0, mz], ...outline.map(([x, z]) => [x, y0, z]), [outline[0][0], y0, outline[0][1]]], [0, -1, 0], material, undefined, tone);
+        }
+
+        return upper;
     }
 
     /** Add another solid's faces, moved by (dx, dy, dz). */
