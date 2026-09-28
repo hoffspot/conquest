@@ -26,9 +26,16 @@ const CARRIED = new Set(["sword", "bow", "quiver", "staff", "wand", "warHammer",
 /**
  * A soldier's look: { shape, look, equipment, walk, sheathed } (as folk.js folkLook's), for one
  * of a people (a RACES id), fighting with `weapon` (a WEAPONS key), a man or a woman (`sex`),
- * from a seed of their own.
+ * from a seed of their own; an envoy (`part`: "envoy") in a councillor's robes.
  */
-export function soldierLook({ people, weapon, sex = "m", seed = 1 }) {
+export function soldierLook({ people, weapon, sex = "m", seed = 1, part = null }) {
+    // (An envoy: in a councillor's robes, with a staff; orcs' in a tunic over the orc's own)
+    if (part === "envoy") {
+        const envoy = people === "orc" ? { ...soldierLook({ people, weapon, sex, seed }), equipment: [...PRESETS.orc.equipment, "tunic", ...WEAPONS[weapon].equipment] } : folkLook({ role: "councillor", sex, seed, people });
+
+        return { ...envoy, equipment: [...envoy.equipment.filter((id) => !CARRIED.has(id)), ...WEAPONS[weapon].equipment].filter((id, k, all) => all.indexOf(id) === k), sheathed: true };
+    }
+
     if (people === "orc") {
         const orc = peopleLook({ people, sex, seed });
 

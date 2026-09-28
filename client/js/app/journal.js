@@ -3,7 +3,8 @@
 // - their rank, how far to the next, and what each opens;
 // - the requests they carry: who asked, what, how far it's come, where to go and how long's left
 //   (each can be given up);
-// - their people: who rules, whom they're at war with and allied to, how many towns they hold;
+// - their people: who rules, whom they're at war with and allied to, how many towns they hold,
+//   and how the other peoples regard them (grudges and favours: docs/WAR.md M7);
 // - the requests lately done, failed or given up.
 //
 // It only shows and asks: what's done is the host's (core/host.js commands), through the game.
@@ -32,6 +33,30 @@ export function bearing(from, to) {
 }
 
 const STATES = Object.freeze({ done: "Done", failed: "Failed", abandoned: "Given up", void: "Came to nothing" });
+
+/**
+ * How a people regards the player's, in words, from what it thinks of them (the war's standing:
+ * grudges below 0, favours above): { words, tone ("grudge", "favour" or "none") }.
+ */
+export function regardOf(standing) {
+    if (standing <= -30) {
+        return { words: "bear you a deep grudge", tone: "grudge" };
+    }
+
+    if (standing < -5) {
+        return { words: "bear you a grudge", tone: "grudge" };
+    }
+
+    if (standing >= 30) {
+        return { words: "are much in your debt", tone: "favour" };
+    }
+
+    if (standing > 5) {
+        return { words: "owe you a favour", tone: "favour" };
+    }
+
+    return { words: "think little of you either way", tone: "none" };
+}
 
 export class JournalPanel {
     /** @param {HTMLElement} root - The #hud screen (index.html). */
@@ -70,7 +95,8 @@ export class JournalPanel {
     /**
      * Show (or show again) where the player stands: { standing: { title, points, from, to, opens,
      * next }, requests: [{ id, title, from, text, progress, where, left }], people: { name,
-     * ruler, war: [names], allies: [names], towns }, done: [{ title, from, state }] }.
+     * ruler, war: [names], allies: [names], towns, regard: [{ name, words, tone }] }, done: [{
+     * title, from, state }] }.
      */
     show({ standing, requests, people, done }) {
         this.rank.textContent = `${standing.title}${people ? ` of ${people.name}` : ""}`;
@@ -129,6 +155,14 @@ export class JournalPanel {
                 element("p", "journal-line", people.allies.length ? `Allied with ${people.allies.join(", ")}.` : "Allied with no one."),
                 element("p", "journal-note", `${people.towns} ${people.towns === 1 ? "town" : "towns"} held.`),
             );
+
+            // (How the peoples they've met regard them)
+            if (people.regard?.length) {
+                const regard = element("ul", "journal-list regard");
+
+                regard.append(...people.regard.map(({ name, words, tone }) => element("li", `journal-regard ${tone}`, `${name[0].toUpperCase()}${name.slice(1)} ${words}.`)));
+                about.append(regard);
+            }
             sections.push(this.#section("Your people", about));
         }
 

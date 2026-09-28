@@ -25,7 +25,7 @@ export const STANDINGS = Object.freeze([
 ]);
 
 /** The rank that opens each thing. */
-export const OPENS = Object.freeze({ scout: 1, keep: 2, armoury: 2, defend: 2, rout: 2, march: 3, peace: 4, war: 4 });
+export const OPENS = Object.freeze({ scout: 1, keep: 2, armoury: 2, defend: 2, rout: 2, march: 3, escort: 3, waylay: 3, peace: 4, war: 4 });
 
 /** How much a player's counsel weighs with their rulers, by rank (0 below a Knight). */
 export const COUNSEL = Object.freeze([0, 0, 0, 0.4, 0.7, 1]);
@@ -49,10 +49,12 @@ export const REQUESTS = Object.freeze({
     scout: { title: "Scouting", rank: OPENS.scout, turns: 40, reward: { standing: 25, coppers: 15 } },
     defend: { title: "Hold the town", rank: OPENS.defend, turns: null, reward: { standing: 50, coppers: 30 } },
     rout: { title: "Break the camp", rank: OPENS.rout, turns: 40, reward: { standing: 60, coppers: 40 } },
+    escort: { title: "See the envoy there", rank: OPENS.escort, turns: null, reward: { standing: 70, coppers: 40 } },
+    waylay: { title: "Stop their envoy", rank: OPENS.waylay, turns: null, reward: { standing: 70, coppers: 50 } },
 });
 
 /** How near (m) a player goes to see what they're scouting, and to be there to hold a town (from its middle). */
-export const REQUEST_REACH = Object.freeze({ scout: 220, defend: 180, rout: 150 });
+export const REQUEST_REACH = Object.freeze({ scout: 220, defend: 180, rout: 150, escort: 60 });
 
 /** What the keep's gift is worth more than a reeve's (its rewards, times this). */
 export const KEEP_REWARD = 1.5;
@@ -162,12 +164,25 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
         kinds.push("rout");
     }
 
+    // The keep's envoys seen safe on the road, and an enemy's stopped (from a Knight up)
+    const envoys = post === "keep" ? war.forces.filter((force) => force.kind === "envoy") : [];
+    const ours = rank >= OPENS.escort ? envoys.filter((envoy) => war.liege(envoy.realm) === liege && !has("escort", envoy.id)) : [];
+    const theirs = rank >= OPENS.waylay ? envoys.filter((envoy) => war.hostile(liege, war.liege(envoy.realm)) && !has("waylay", envoy.id)) : [];
+
+    if (ours.length) {
+        kinds.push("escort");
+    }
+
+    if (theirs.length) {
+        kinds.push("waylay");
+    }
+
     if (!kinds.length) {
         return null;
     }
 
     // (The keep asks the weightier things when it can)
-    const weighty = kinds.filter((kind) => ["scout", "defend", "rout", "bounty"].includes(kind));
+    const weighty = kinds.filter((kind) => ["scout", "defend", "rout", "escort", "waylay", "bounty"].includes(kind));
     const kind = random.pick(post === "keep" && weighty.length ? weighty : kinds);
     const times = post === "keep" ? KEEP_REWARD : 1;
     const worth = (standing, coppers) => ({ standing: Math.round(standing * times), coppers: Math.round(coppers * times) });
@@ -249,6 +264,32 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
                 reward: worth(reward.standing, reward.coppers),
             };
         }
+        case "escort": {
+            const envoy = random.pick(ours);
+            const to = war.realm(envoy.target);
+
+            return {
+                ...base,
+                key: envoy.id,
+                target: { force: envoy.id, realm: envoy.target, at: [...envoy.at], name: `our envoy to ${to.name}` },
+                text: `Our envoy is on the road to ${to.name}, and not everyone wants them to get there. Find them, and see them safe to ${war.town(to.seat)?.name ?? "their seat"}.`,
+                until: null,
+                reward: worth(reward.standing, reward.coppers),
+            };
+        }
+        case "waylay": {
+            const envoy = random.pick(theirs);
+            const from = war.realm(envoy.realm);
+
+            return {
+                ...base,
+                key: envoy.id,
+                target: { force: envoy.id, realm: envoy.realm, at: [...envoy.at], name: `the envoy of ${from.name}` },
+                text: `${from.name} have an envoy on the road, and whatever they carry, it's no good to us. See they don't get where they're going.`,
+                until: null,
+                reward: worth(reward.standing, reward.coppers),
+            };
+        }
         default:
             return null;
     }
@@ -299,7 +340,7 @@ export function whereTo(request, war) {
     if (target.force) {
         const force = war?.force(target.force);
 
-        return { at: force ? force.at : target.at, name: "the enemy" };
+        return { at: force ? force.at : target.at, name: target.name ?? "the enemy" };
     }
 
     if (target.at) {
@@ -333,6 +374,10 @@ export function progressOf(request) {
             return request.there ? "Hold on until they're gone." : `Get to ${target.name}.`;
         case "rout":
             return request.there ? "Bring its soldiers down." : `Find the camp outside ${target.name}.`;
+        case "escort":
+            return request.there ? "Stay with them to the end of the road." : "Find them on the road.";
+        case "waylay":
+            return "Find them on the road, and stop them.";
         default:
             return "";
     }

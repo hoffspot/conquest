@@ -197,7 +197,7 @@ The engine is built for this from the start. These are its rules:
 | **M4** | Built | The player's people: the keep and town halls, the rulers' requests, a journal, ranks. |
 | **M5** | Built | The other peoples' looks: elves, dark elves, cat folk, lizard folk and orcs, as soldiers and as townsfolk. |
 | **M6** | Built | Camps, raids and conquest played out around the player. |
-| **M7** | | Diplomats on the roads, to escort or waylay; grudges and favours. |
+| **M7** | Built | Diplomats on the roads, to escort or waylay; grudges and favours. |
 | **M8** | | News and rumours: the war told in the taverns and by the folk; the guild's requests. |
 | **M9** | | Followers, mercenaries and adventurers for hire. |
 | **M10** | | The end: victory, and serving an overlord until the rising. |
@@ -303,8 +303,10 @@ stand, `allied`, `neutral` or `hostile`. Realms under the same liege are allied.
 **From the world** (from M2 and M6):
 - `war.loss(id, count)`: losses in fights played out near a player;
 - `war.remember(realm, about, amount)`: grudges and favours earned by players;
-- `war.watch(ids)`: the towns a player's near, whose raids and assaults are played out there;
-- `war.settle(camp, { reached, reckon })`: a sortie over (M6).
+- `war.watch(ids)`: the towns and envoys a player's near, whose raids and assaults are played out
+  there, and who go at their own pace (M6, M7);
+- `war.settle(camp, { reached, reckon })`: a sortie over (M6);
+- `war.move(envoy, at, leg)`, `war.waylaid(envoy, by)`: an envoy's way in the world (M7).
 
 **The news** (`news.js` `tell`): every event in words, "The Orcs have declared war on the
 Humans.", for the war page now and the taverns later.
@@ -508,6 +510,8 @@ that isn't its holders' seat has a governor on the throne. Only a player's own p
 | Scouting | from a Freeholder | the player goes within 220 m of an enemy camp or army near (or their nearest town) | 25 and 15 |
 | Hold the town | from a Retainer, with an enemy camp within 1 km | the player was there (within 180 m of its edge) and the camp's gone, the town still theirs | 50 and 30 |
 | Break the camp | from a Retainer, with an enemy camp within 1 km (M6) | the player was at the camp (within 150 m) and it's gone; failed if it takes the town | 60 and 40 |
+| See the envoy there | from a Knight, at the keep, with one of their envoys on the road (M7) | the player was with them (within 60 m) and they're heard at their road's end; failed if they're waylaid | 70 and 40 |
+| Stop their envoy | from a Knight, at the keep, with an enemy's envoy on the road (M7) | they're waylaid by the player's people; failed if they get there | 70 and 50 |
 
 Each has so long to be done (war turns: a minute's play each; a letter longer the further it
 goes), and fails when it runs out; one whose target's gone comes to nothing. What's done is told
@@ -576,6 +580,37 @@ enemy camp outside one of their towns (above).
 
 **Kept.** The camps pitched and the sorties out are in the host's snapshot, and the watched towns
 and each camp's sortie in the war's, so a saved or joined world carries on exactly.
+
+### Envoys on the roads, grudges and favours (M7)
+
+**Envoys.** An envoy on the road (one of the war's forces: going between two rulers' seats to
+seek a truce, an alliance, or an end to one) is **met** once a player's within 150 metres of
+them (`ENVOY`), and let go once every player's more than 300 off:
+- **the envoy**, in a councillor's robes with a staff (`soldiers.js`, `part: "envoy"`), and **their
+  escort**, two of their people's soldiers;
+- they go along their road (its points in the war) as fast as they walk, making for a point 24
+  metres on at a time. While they're met, the war doesn't move them on itself or waylay them: it's
+  told where they've got to (`war.move`), and hears them at their road's end;
+- **struck down**, the envoy's waylaid (`war.waylaid`), by whoever did it (a player's people, or
+  their soldiers'; or no one's, the wild): what they carried comes to nothing, and their people bear
+  the waylayers a grudge (10);
+- the player's told when an envoy near them arrives, or falls;
+- they can be talked to: "Envoy to the Humans", "Escort to the envoy to the Humans".
+
+**Requests** (above): the keep asks a Knight to see its envoy there, or to stop an enemy's.
+
+**Grudges and favours** (a realm's `standing` towards another: `war.remember`, fading) weigh on
+whom a people makes war on, allies with and heeds (M1). Players earn them:
+- **a grudge** for every blow on a soldier of a people not at war with theirs (M2), for a camp's
+  raids and assaults (M6), and for an envoy waylaid;
+- **a favour** (2) when a player brings down a people's enemy where that people's soldiers can see
+  it (within 25 metres, `FAVOUR_SIGHT`): an ally's, or a neutral's.
+
+**The journal** says how each people the player's have met regards them: "bear you a deep
+grudge" (−30 or worse), "bear you a grudge", "think little of you either way", "owe you a
+favour", "are much in your debt" (30 or more) (`journal.js` `regardOf`).
+
+**Kept.** The envoys met are in the host's snapshot; the war's watched envoys in its own.
 
 ### The other peoples' looks (M5)
 

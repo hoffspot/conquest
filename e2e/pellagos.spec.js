@@ -1497,6 +1497,65 @@ test("an enemy camp near the player is pitched, tents, fire, banner and sentries
     expect(struck).toEqual({ drawn: 0, pitched: 0 });
 });
 
+test("an envoy on the road near the player goes by with their escort; struck down, they're waylaid, and the journal tells of the grudge", async ({ page }) => {
+    await playing(page, "/?play&seed=2");
+
+    // An orcish envoy on the road just outside the town, at war with the humans; the player by them
+    const met = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const war = game.host.war;
+        const [mx, my] = game.world.stamp.middle;
+        const at = [mx + 90, my + 5];
+        const player = game.battle.actor("player");
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        war.relations["human|orc"] = { state: "hostile", since: 0 };
+        war.forces.push({ id: "force-950", realm: "orc", kind: "envoy", size: 0, at: [...at], path: [at, [at[0] + 100, at[1]], [at[0] + 200, at[1]]], leg: 0, target: "elf", home: war.realm("orc").capital, mission: "alliance", about: null, since: war.turn });
+        Object.assign(player, { square: [Math.floor(at[0] - 4), Math.floor(at[1] + 3)], to: null, path: [], hp: 5000, maxHp: 5000 });
+        Object.assign(player, { x: player.square[0] + 0.5, y: player.square[1] + 0.5 });
+        game.advance(1.5);
+
+        const party = game.host.envoys.get("force-950")?.ids ?? [];
+
+        return party.map((id) => ({ id, name: game.battle.actor(id).name, drawn: game.avatars.has(id) }));
+    });
+
+    expect(met.map(({ name }) => name)).toEqual(["Orcish envoy", "Orcish escort", "Orcish escort"]);
+    expect(met.some(({ drawn }) => drawn)).toBe(true);
+
+    // Struck down: waylaid, and the player told
+    const fell = await page.evaluate((id) => {
+        const { game } = window.pellagos;
+        const envoy = game.battle.actor(id);
+        const player = game.battle.actor("player");
+
+        envoy.hp = 1;
+        Object.assign(player, { square: [envoy.square[0] + 1, envoy.square[1]], x: envoy.square[0] + 1.5, y: envoy.square[1] + 0.5, to: null, path: [] });
+        game.battle.command("player", { type: "engage", target: id });
+
+        for (let k = 0; k < 20 && game.host.war.force("force-950"); k++) {
+            game.advance(1);
+        }
+
+        game.start();
+
+        return { gone: !game.host.war.force("force-950"), grudge: game.host.war.realm("orc").standing.human ?? 0 };
+    }, met[0].id);
+
+    expect(fell.gone).toBe(true);
+    expect(fell.grudge).toBeLessThan(-5);
+    await expect(page.locator("#banner")).toContainText("envoy to the Elves has been struck down by the Humans");
+
+    // The journal: the orcs bear the humans a grudge
+    const journal = page.locator(".journal");
+
+    await page.keyboard.press("j");
+    await expect(journal).toBeVisible();
+    await expect(journal.locator(".journal-regard.grudge")).toContainText(["The Orcs bear you"]);
+    await page.keyboard.press("Escape");
+});
+
 test("tapping someone walks the player up to talk: their name and what they are, what they say, replies that lead on, Escape to stop", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
