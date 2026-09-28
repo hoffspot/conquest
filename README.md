@@ -36,7 +36,9 @@ chunks. [docs/WAR.md](docs/WAR.md) sets out the war between the six peoples that
 and how the engine's made ready for other players to hop in and out of a running world.
 [docs/WILDS.md](docs/WILDS.md) describes the wild's creatures: what they are, where and how strong,
 how they behave, what lingers after their blows and its cures, what they leave, trading between
-players, and how they're built and animated in code.
+players, and how they're built and animated in code. [docs/MAGIC.md](docs/MAGIC.md) describes
+magic: the schools and how they grow, wands and grimoires, the tomes and their spells, the wonders
+the host works, the spellbook, and how every spell looks.
 
 ## How to play
 
@@ -235,13 +237,22 @@ and flick towards a slice to do what's in it; let go in the middle to change you
 down (S) and the wheel turns over to its other side, wheel two, opened again under your finger.
 What's on your own wheel and an enemy's, both sides of each, you choose in **Game options,
 Action wheels**: the spells and blows you've learnt, and draughts, meals and ale from your pack
-(each showing how many you have). You start with two spells, both at the top. On yourself, **Heal** (a green cross) gives back 10 to 20 hit points, rolled,
-after a 0.6-second cast. On an enemy, **Stun** (violet, with stars) reaches 9 metres, if you can
-see it: 0.4 seconds later it's dazed for three seconds, unable to move, attack or cast (stars
-circle its head). All spells share one cooldown of three seconds from when one's cast: while it
-runs, their slices are greyed over, and the grey sweeps back as it passes. A flick at a greyed
-slice, or at an empty one, is refused, and a spell that can't be cast (out of reach, out of
-sight, already at full health) says why.
+(each showing how many you have). You start with the first spell of each school of magic, on
+your wheels: **Vigor** on yourself (a little healing), and **Burn**, **Rumble**, **Hurt** and
+**Blister** on an enemy (fire, earth, air and water), with **Stun** too. Each spell has its own
+cooldown: while it runs, its slice is greyed over, and the grey sweeps back as it passes. A flick
+at a greyed slice, or at an empty one, is refused, and a spell that can't be cast (out of reach,
+out of sight, already at full health) says why.
+
+**Magic.** Each school grows with its spells that land, bringing its next spell at each tier:
+Healing up to **Astral Heal** at the fifth, and each element up to its seventh (**Hellfire**,
+**Disintegrate**, **Ionize**, **Absolute Zero**), which fills the screen. A wand or grimoire in
+hand makes spells stronger, by 10% to (very rarely) 100%. Other spells are learnt from **tomes**,
+now and then found on the wild's creatures with hands, or given by the adventurers' guilds for
+their harder work: wards and cures, Teleport, Invisibility, Summon (a creature, or another player:
+with **Resist all summons** in Game options you'll always say no), Zombify, Fear, Polymorph and
+more. The **spellbook** (its button, or B) shows it all, and puts a spell on a wheel. See
+[docs/MAGIC.md](docs/MAGIC.md).
 
 **The pack** (its button, or I) holds 20 slots, each a stack of things alike with its icon and
 how many. Tap a stack to see what it is; hold it (or right-click) and a wheel of what to do with
@@ -416,6 +427,8 @@ client/                 The game (static files served to the browser)
                         split, dropped, thrown away), what's worn, the skills; a shop's wares
     journal.js          The journal: the player's rank, their requests, their people, their
                         company
+    spellbook.js        The spellbook: the schools, how far they've grown, every spell known
+                        and still to come; spellicons.js draws each spell's icon
     fate.js             The war's great turns for the player's people: victory, brought under
                         another, fallen, risen
     together.js         Playing together: a world opened to others, or another's joined, through
@@ -455,7 +468,8 @@ client/                 The game (static files served to the browser)
                         shops, loot, gold and the pack; and from them, might
     standing.js         Standing in a people: its ranks, the requests the rulers make, the
                         armoury's gifts and counsel's weight
-    spells.js           The spells: heal and stun, and their shared cooldown
+    spells.js           Magic: the schools and their tiers, the hexes, and the tomes' spells
+                        (docs/MAGIC.md)
     roles.js            Classes of people (barkeep, patron...): their titles and five rests each
     dialogue.js         Conversations: trees of what's said and the replies, conditions, effects
     names.js            People's names, drawn from the world's seed
@@ -494,10 +508,12 @@ client/                 The game (static files served to the browser)
     drops3d.js          Things dropped on the ground: a bundle, its icon floating over it
     avatar.js           A character in the world, following its place in the battle
     effects.js          Arrows, bolts, fireballs, sparks, dust, fire, arcane light, blood and
-                        its splashes and pools, smoke and embers, the target ring, spells' light
-                        and the stars round a stunned head, in five looks each; the creatures'
-                        fire breathed, venom and lava spat, webs, roots, and what rises off
-                        whoever something lingers on
+                        its splashes and pools, smoke and embers, the target ring, heals'
+                        light and the stars round a stunned head, in five looks each; the
+                        creatures' fire breathed, venom and lava spat, webs, roots, and what
+                        rises off whoever something lingers on
+    spellfx.js          How every spell looks, cast and landing, grander the higher its tier:
+                        the seventh of each element filling the screen
     ailments3d.js       What lingers drawn on whoever has it: a web, roots, ice, a curse's motes
     wounds.js           Battle damage: each blow's mark and each threshold's wound, painted on
                         the body and its clothes
@@ -540,6 +556,7 @@ docs/CHARACTERS.md      The character engine, and the research behind it
 docs/WORLD.md           The world: laid out from a seed as a plan, and built from it in chunks
 docs/WAR.md             The war between the peoples, and playing with others (hop in, hop out)
 docs/WILDS.md           The wild's creatures: roster, tiers, behaviour, and how they're built
+docs/MAGIC.md           Magic: the schools, wands, tomes, wonders, the spellbook, and the spells' looks
 docs/MODERNIZATION.md   The history: the book's Last Colony, modernized, before Pellagos replaced it
 ```
 

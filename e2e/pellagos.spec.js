@@ -2611,6 +2611,103 @@ test("the action wheels: flicked down, the other side; what's on each chosen in 
     expect(await page.evaluate(() => window.pellagos.game.progress.count("potion"))).toBe(1);
 });
 
+test("magic: the spellbook shows every school and the tomes; a tome read teaches its spell, put on a wheel from the book; the seventh tier floods the screen; summoned by another player, asked whether to go", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const book = page.locator(".spellbook");
+
+    // Play on without drawing, then carry on
+    const playOn = (seconds) => page.evaluate((seconds) => {
+        const { game } = window.pellagos;
+
+        game.stop();
+        game.advance(seconds);
+        game.start();
+    }, seconds);
+
+    // The spellbook, from its button: the five schools, the hexes and the tomes; each school's
+    // first spell known and Stun, the rest still to come
+    await page.locator("#spellbookbutton").click();
+    await expect(book).toBeVisible();
+    await expect(book.locator(".journal-heading")).toHaveText(["Healing", "Fire", "Earth", "Air", "Water", "Hexes", "From tomes"]);
+    await expect(book.locator(".spellbook-spell:not(.unknown) .spellbook-name")).toHaveText(["Vigor", "Burn", "Rumble", "Hurt", "Blister", "Stun"]);
+    await expect(book.locator(".spellbook-spell.unknown")).toHaveCount(4 + 6 * 4 + 1);
+
+    // A tome of Levitate in the pack, read: the spell learnt (the book shows it), and put on the
+    // player's own wheel from it
+    expect(await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.progress.stow({ id: "tomeLevitate", quality: "common" });
+
+        return game.host.command(game.me, { type: "use", item: "tomeLevitate" });
+    })).toEqual({ ok: true });
+    await playOn(0.2);
+    await expect(book.locator(".spellbook-spell:not(.unknown) .spellbook-name")).toContainText(["Levitate"]);
+    await book.locator('button[aria-label="Put Levitate on an action wheel"]').click();
+    expect(await page.evaluate(() => Object.values(window.pellagos.game.wheels.self[0]))).toContain("levitate");
+    await page.keyboard.press("Escape");
+    await expect(book).toBeHidden();
+
+    // Fire grown to its seventh tier: Hellfire cast on an orc floods the screen with red, shakes
+    // the camera and fills the ground round it with fire
+    const cast = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor(game.me);
+
+        game.progress.schools.fire = 30000;
+        game.battle.add({ id: "target", kind: "orc", weapon: "cleaver", team: "orcs", square: [me.square[0] + 1, me.square[1] - 3], hp: 5000 });
+        game.enlisting.push("target");
+        game.stop();
+        game.advance(0.5);
+        Object.assign(me, { spellReadyAt: 0, spellsReadyAt: {} });
+
+        const result = game.host.command(game.me, { type: "cast", spell: "hellfire", target: "target" });
+
+        game.advance(1.5);
+
+        const wash = document.querySelector(".spellwash");
+        const seen = { result, washed: wash.getAnimations().length > 0 && wash.style.background.includes("rgba(255, 42, 10"), shaking: game.shaking, showing: game.spellFx.running.length };
+
+        game.start();
+
+        return seen;
+    });
+
+    expect(cast.result).toEqual({ ok: true });
+    expect(cast.washed).toBe(true);
+    expect(cast.shaking).toBeGreaterThan(0);
+    expect(cast.showing).toBeGreaterThan(8);
+
+    // Another player summons them: asked whether to go, and going, they're at their side
+    expect(await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const { host, battle } = game;
+        const me = battle.actor(game.me);
+
+        battle.remove("target");
+        host.join({ id: "guest", hero: { ...host.players.get(game.me).hero, name: "Bram" }, progress: { spells: ["summon"] } });
+        battle.place("guest", "town", [me.square[0] + 24, me.square[1]]);
+        Object.assign(battle.actor("guest"), { spellReadyAt: 0, spellsReadyAt: {} });
+
+        return host.command("guest", { type: "cast", spell: "summon", target: game.me });
+    })).toEqual({ ok: true });
+    await playOn(2);
+
+    const choice = page.locator(".choice");
+
+    await expect(choice.locator(".choice-title")).toHaveText("Bram is summoning you to their side. Go?");
+    await choice.locator(".choice-option", { hasText: "Go to Bram" }).click();
+    await expect(choice).toHaveCount(0);
+    await playOn(0.5);
+    expect(await page.evaluate(() => {
+        const { battle } = window.pellagos.game;
+        const [me, guest] = [battle.actor("player"), battle.actor("guest")];
+
+        return Math.hypot(me.x - guest.x, me.y - guest.y);
+    })).toBeLessThan(5);
+});
+
 test.describe("on a phone", () => {
     test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
