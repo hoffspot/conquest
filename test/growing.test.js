@@ -5,9 +5,9 @@
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
-import { BOUGHT, HOST_PLAYER, Host } from "../client/js/core/host.js";
+import { BOUGHT, GROUND_MS, HOST_PLAYER, Host, UNDO_MS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
-import { priceOf, RANKS } from "../client/js/core/progress.js";
+import { PACK_SIZE, priceOf, RANKS } from "../client/js/core/progress.js";
 import { decode, encode } from "../client/js/core/wire.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
@@ -70,7 +70,7 @@ describe("growing stronger in play (host.js, progress.js)", () => {
         assert.ok(events.some(({ type, tree }) => type === "rank" && tree === "endurance") || progress.rank("endurance") === 0);
         assert.equal(loot?.id, HOST_PLAYER);
         assert.equal(progress.gold, 20 + loot.gold);
-        assert.deepEqual(progress.pack, loot.items);
+        assert.deepEqual(progress.pack.filter(Boolean).map(({ id, quality }) => ({ id, quality })), loot.items);
     });
 
     it("makes the player stronger as they rank up: blows, hit points, armour, and the weapon and gear they carry", () => {
@@ -114,7 +114,7 @@ describe("growing stronger in play (host.js, progress.js)", () => {
 
         assert.deepEqual(host.command(HOST_PLAYER, { type: "buy", item: { id: "meal" }, from: barkeep.id }), { ok: true });
         assert.equal(progress.gold, 30 - priceOf({ id: "meal" }));
-        assert.deepEqual(progress.pack, [{ id: "meal", quality: "common" }]);
+        assert.deepEqual(progress.pack[0], { id: "meal", quality: "common", count: 1 });
         assert.deepEqual(host.command(HOST_PLAYER, { type: "buy", item: { id: "sword" }, from: barkeep.id }), { ok: false, reason: "shop" });
         assert.deepEqual(host.command(HOST_PLAYER, { type: "buy", item: { id: "meal" }, from: "orc" }), { ok: false, reason: "far" });
 
@@ -123,13 +123,19 @@ describe("growing stronger in play (host.js, progress.js)", () => {
 
         assert.deepEqual(host.command(HOST_PLAYER, { type: "sell", index: 0, to: barkeep.id }), { ok: true });
         assert.equal(progress.gold, 1 + priceOf({ id: "meal" }, { selling: true }));
-        assert.deepEqual(progress.pack, []);
+        assert.equal(progress.pack[0], null);
         assert.deepEqual(host.command(HOST_PLAYER, { type: "sell", index: 0, to: barkeep.id }), { ok: false, reason: "item" });
+
+        // (Some of a stack sold at once)
+        progress.stow({ id: "ale" }, 5);
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "sell", index: 0, to: barkeep.id, count: 6 }), { ok: false, reason: "count" });
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "sell", index: 0, to: barkeep.id, count: 3 }), { ok: true });
+        assert.equal(progress.count("ale"), 2);
         assert.ok(progress.skills.trade > 0, "(trading's a skill too)");
 
         const told = run(host, STEP_MS).filter(({ type }) => type === "bought" || type === "sold").map(({ type }) => type);
 
-        assert.deepEqual(told, ["bought", "sold"]);
+        assert.deepEqual(told, ["bought", "sold", "sold"]);
     });
 
     it("puts on gear from the pack, and uses what's for using", () => {
@@ -138,17 +144,17 @@ describe("growing stronger in play (host.js, progress.js)", () => {
 
         assert.deepEqual(host.command(HOST_PLAYER, { type: "equip", index: 0 }), { ok: true });
         assert.ok(Math.abs(player.armor - 0.16) < 1e-9);
-        assert.deepEqual(host.command(HOST_PLAYER, { type: "equip", index: 2 }), { ok: true }, "(the kite shield, with the sword)");
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "equip", index: 3 }), { ok: true }, "(the kite shield, with the sword)");
         assert.ok(Math.abs(player.armor - 0.26) < 1e-9);
 
         // A bow: the shield put away, and the player a bowman now
-        assert.deepEqual(host.command(HOST_PLAYER, { type: "equip", index: 0 }), { ok: true });
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "equip", index: 1 }), { ok: true });
         assert.equal(player.weapon, "bow");
         assert.ok(player.arms.some(({ kind }) => kind === "ranged"));
         assert.ok(Math.abs(player.power.ranged - 1.15) < 1e-9);
         assert.ok(Math.abs(player.armor - 0.16) < 1e-9);
 
-        const shield = host.players.get(HOST_PLAYER).progress.pack.findIndex(({ id }) => id === "kiteShield");
+        const shield = host.players.get(HOST_PLAYER).progress.slotOf("kiteShield");
 
         assert.deepEqual(host.command(HOST_PLAYER, { type: "equip", index: shield }), { ok: false, reason: "shield" });
         assert.deepEqual(host.command(HOST_PLAYER, { type: "unequip", slot: "body" }), { ok: true });
@@ -156,11 +162,11 @@ describe("growing stronger in play (host.js, progress.js)", () => {
 
         player.hp = 10;
 
-        const potion = host.players.get(HOST_PLAYER).progress.pack.findIndex(({ id }) => id === "potion");
+        const potion = host.players.get(HOST_PLAYER).progress.slotOf("potion");
 
         assert.deepEqual(host.command(HOST_PLAYER, { type: "use", index: potion }), { ok: true });
         assert.equal(player.hp, 35);
-        assert.deepEqual(host.command(HOST_PLAYER, { type: "use", index: 0 }), { ok: false, reason: "item" });
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "use", index: potion }), { ok: false, reason: "item" });
 
         // (From a wheel: the first of a kind, by its id; none left, none used)
         host.players.get(HOST_PLAYER).progress.stow({ id: "meal" });
@@ -232,6 +238,75 @@ describe("growing stronger in play (host.js, progress.js)", () => {
         run(host, BOUGHT.blessing.boon.ms + STEP_MS);
         assert.equal(player.power.melee, 1);
         assert.ok(progress.skills.talk > 0 && progress.skills.trade > 0);
+    });
+
+    it("moves stacks about the pack, splits them, and throws them away, to be taken back a moment after", () => {
+        const host = hosted({ pack: [{ id: "potion", count: 5 }, { id: "ale", count: 2 }] });
+        const { progress } = host.players.get(HOST_PLAYER);
+        const command = (what) => host.command(HOST_PLAYER, what);
+
+        // Split, and put back together
+        assert.deepEqual(command({ type: "split", index: 0, count: 2 }), { ok: true });
+        assert.deepEqual(progress.pack.slice(0, 3).map((stack) => stack?.count), [3, 2, 2]);
+        assert.deepEqual(command({ type: "split", index: 0, count: 1, to: 7 }), { ok: true });
+        assert.equal(progress.pack[7].count, 1);
+        assert.deepEqual(command({ type: "split", index: 0, count: 2 }), { ok: false, reason: "count" });
+        assert.deepEqual(command({ type: "arrange", from: 7, to: 2 }), { ok: true });
+        assert.deepEqual(command({ type: "arrange", from: 2, to: 0 }), { ok: true });
+        assert.equal(progress.pack[0].count, 5);
+        assert.deepEqual(command({ type: "arrange", from: 0, to: 1 }), { ok: true }, "swapped with the ale");
+        assert.deepEqual([progress.pack[0].id, progress.pack[1].id], ["ale", "potion"]);
+        assert.deepEqual(command({ type: "arrange", from: 9, to: 1 }), { ok: false, reason: "item" });
+
+        // Thrown away, and taken back; too late, gone for good
+        assert.deepEqual(command({ type: "discard", index: 1 }), { ok: true, item: { id: "potion", quality: "common", count: 5 } });
+        assert.equal(progress.count("potion"), 0);
+        assert.deepEqual(command({ type: "undiscard" }), { ok: true });
+        assert.deepEqual(progress.pack[1], { id: "potion", quality: "common", count: 5 });
+        assert.deepEqual(command({ type: "undiscard" }), { ok: false, reason: "undo" });
+        assert.deepEqual(command({ type: "discard", index: 0 }), { ok: true, item: { id: "ale", quality: "common", count: 2 } });
+        run(host, UNDO_MS + STEP_MS);
+        assert.deepEqual(command({ type: "undiscard" }), { ok: false, reason: "undo" });
+        assert.equal(progress.count("ale"), 0);
+        assert.deepEqual(command({ type: "discard", index: 0 }), { ok: false, reason: "item" });
+        assert.equal(progress.pack.length, PACK_SIZE);
+    });
+
+    it("drops things on the ground where the player stands, for anyone near to pick up, for a while", () => {
+        const host = hosted({ pack: [{ id: "potion", count: 5 }, { id: "sword", quality: "fine", count: 1 }] });
+        const { progress } = host.players.get(HOST_PLAYER);
+        const player = host.battle.actor(HOST_PLAYER);
+        const command = (what) => host.command(HOST_PLAYER, what);
+
+        // Two draughts dropped, and the fine sword
+        const dropped = command({ type: "drop", index: 0, count: 2 });
+
+        assert.equal(dropped.ok, true);
+        assert.equal(progress.count("potion"), 3);
+        assert.deepEqual(host.ground.get(dropped.ground), { id: dropped.ground, item: { id: "potion", quality: "common", count: 2 }, map: player.map, square: [...player.square], until: host.battle.time + GROUND_MS, by: HOST_PLAYER });
+        assert.deepEqual(command({ type: "drop", index: 0, count: 9 }), { ok: false, reason: "count" });
+
+        const sword = command({ type: "drop", index: 1 }).ground;
+
+        assert.equal(progress.count("sword"), 0);
+        assert.ok(run(host, STEP_MS).some(({ type, ground }) => type === "dropped" && ground === sword));
+
+        // Picked up from near it (onto the draughts left), not from afar; once
+        assert.deepEqual(command({ type: "pickUp", ground: dropped.ground }), { ok: true });
+        assert.equal(progress.count("potion"), 5);
+        assert.equal(progress.pack[0].count, 5);
+        assert.deepEqual(command({ type: "pickUp", ground: dropped.ground }), { ok: false, reason: "gone" });
+        put(player, player.map, [player.square[0] + 4, player.square[1]]);
+        assert.deepEqual(command({ type: "pickUp", ground: sword }), { ok: false, reason: "far" });
+
+        // Kept with the world; left a while, gone
+        const again = Host.restore(buildWorld({ seed: 2 }), decode(encode(host.snapshot())));
+
+        assert.deepEqual([...again.ground.values()], [...host.ground.values()]);
+        assert.equal(again.checksum(), host.checksum());
+        run(host, GROUND_MS);
+        assert.equal(host.ground.size, 0);
+        assert.notEqual(again.checksum(), host.checksum());
     });
 
     it("keeps each player's progress, boons and abilities' readiness with the world, and carries on from it", () => {

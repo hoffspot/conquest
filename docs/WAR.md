@@ -444,7 +444,11 @@ sword or a hammer). Each is of a make, which counts in its price and in what it 
 Armour takes a share off every blow (a mail shirt 16%, a kite shield 10%), never more than 60% in
 all. What's worn shows on the character.
 
-**Gold and the pack.** A player starts with 20 gold and room for 20 things. (The money was coppers once: requests carried in games saved then are read as gold.)
+**Gold and the pack.** A player starts with 20 gold and a pack of 20 slots. (The money was coppers once: requests carried in games saved then are read as gold.)
+- **Stacks.** Each slot holds a stack of things alike (the same kind, as well made), as many as
+  there are: a stack of seven draughts takes one slot, and a fine sword and a common one two. What
+  comes into the pack goes onto the first stack alike, or else into the first empty slot
+  (`Progress.stow`). Packs kept before things stacked are read in, those alike put together.
 - **Shops.** The folk who keep a shop sell from it, from their talk's "What have you got for
   sale?":
   - the barkeep, the serving wenches and the innkeeper: ale (stamina) and hot meals (a little
@@ -460,9 +464,26 @@ all. What's worn shows on the character.
   little more of everything).
 - **Found.** Foes carry gold, and sometimes a draught or gear: an orc 5 to 15 gold, a
   soldier 2 to 8.
-- **The pack** (its button, top right, or I) shows the gold, what's carried (to wear, wield
-  or use), what's worn (to take off), and each skill's rank and how far to the next. Trading, it
-  shows the shop's wares too, and what's carried can be sold. Escape closes it.
+- **The pack** (its button, top right, or I) shows the gold, what's carried, what's worn (to take
+  off), and each skill's rank and how far to the next. Trading, it shows the shop's wares too,
+  and what's carried can be sold. Escape closes it.
+  - **What's carried** is a grid of the 20 slots, each stack drawn with its icon and how many,
+    edged by its make (green fine, blue masterwork, orange legendary).
+  - **Tapped**, a stack says what it is and what it does, with buttons for what can be done
+    with it.
+  - **Held** (or right-clicked), a wheel of what can be done with it opens round it, like the
+    action wheel: N to drink or eat it, or wield or wear it; NE to put it on an action wheel (the
+    first empty slice of the player's own); E to split the stack (asked how many); SE to sell
+    it (trading: asked how many, of a stack); S to throw it away; W to drop it (asked how many).
+    Held, a flick chooses; right-clicked, a click.
+  - **Dragged** onto another slot, a stack moves there: onto a stack alike, the two are put
+    together; onto something else, they swap (`arrange`).
+  - **Thrown away**, a stack's gone, but "Undo" takes it back for 8 seconds (`discard`,
+    `undiscard`: `UNDO_MS`), where it was if that's still free.
+  - **Dropped**, things lie on the ground where the player stands, a cloth bundle with their
+    icon floating over it (world/drops3d.js), for 5 minutes (`GROUND_MS`), kept with the world
+    and seen by everyone playing in it. Anyone tapping one walks up to it and picks it up
+    (`pickUp`, from within 1.6 m: `PICK_REACH`), if there's room in their pack.
 
 **Might** is how dangerous a player is: their best fighting rank (or their command of others),
 plus their gear's make, up to 8. The mightiest player's might sets how fast the war comes on

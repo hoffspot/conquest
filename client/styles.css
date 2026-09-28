@@ -1343,15 +1343,6 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     flex: 1;
 }
 
-.pack-slot {
-    flex: none;
-    min-width: 4.5em;
-    font-size: 12px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--muted);
-}
-
 .pack-price {
     flex: none;
     font-size: 13px;
@@ -1388,6 +1379,261 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 .pack-button:disabled {
     opacity: 0.4;
     cursor: default;
+}
+
+/* What's carried: a grid of slots, each a stack of things alike (its icon, and how many), edged
+   by how well made it is */
+.pack-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(54px, 1fr));
+    gap: 6px;
+}
+
+.pack-cell {
+    position: relative;
+    aspect-ratio: 1;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border-radius: 10px;
+    border: 1px solid var(--field-border);
+    background: radial-gradient(circle at 50% 40%, rgba(255, 244, 220, 0.1), rgba(0, 0, 0, 0.25));
+    cursor: pointer;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+}
+
+.pack-cell.empty {
+    background: rgba(0, 0, 0, 0.18);
+    border-style: dashed;
+    cursor: default;
+}
+
+.pack-cell svg {
+    width: 78%;
+    height: 78%;
+    pointer-events: none;
+}
+
+.pack-cell.made-fine {
+    border-color: #6fbf5a;
+    box-shadow: inset 0 0 8px rgba(111, 191, 90, 0.35);
+}
+
+.pack-cell.made-masterwork {
+    border-color: #5a9ee0;
+    box-shadow: inset 0 0 8px rgba(90, 158, 224, 0.4);
+}
+
+.pack-cell.made-legendary {
+    border-color: #f0993a;
+    box-shadow: inset 0 0 10px rgba(240, 153, 58, 0.5);
+}
+
+.pack-cell[aria-selected="true"] {
+    outline: 2px solid var(--gold-bright);
+    outline-offset: 1px;
+}
+
+.pack-cell.target {
+    background: rgba(236, 200, 130, 0.3);
+    border-color: var(--gold-bright);
+}
+
+.pack-count {
+    position: absolute;
+    right: 4px;
+    bottom: 2px;
+    font: 800 13px var(--font-ui);
+    color: #fff8e6;
+    text-shadow: 0 0 3px #000, 0 1px 2px #000;
+    pointer-events: none;
+}
+
+.pack-ghost {
+    position: fixed;
+    z-index: 20;
+    transform: translate(-50%, -60%);
+    pointer-events: none;
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.6));
+}
+
+/* The stack tapped: what it is, and what can be done with it */
+.pack-about {
+    margin-top: 8px;
+    min-height: 40px;
+}
+
+.pack-hint {
+    margin: 4px 2px;
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.pack-what {
+    margin: 4px 2px 6px;
+    font-size: 14px;
+    color: var(--muted);
+}
+
+.pack-what strong {
+    color: var(--ink);
+}
+
+.pack-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+/* What's worn: a tile for each of weapon, body and shield */
+.pack-worn-list {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+}
+
+.pack-worn {
+    display: grid;
+    justify-items: center;
+    align-content: start;
+    gap: 3px;
+    padding: 6px 4px 8px;
+    border-radius: 10px;
+    background: var(--field);
+    border: 1px solid var(--field-border);
+    color: var(--ink);
+    font-size: 13px;
+    text-align: center;
+}
+
+.pack-where {
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.pack-none {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 1px dashed var(--field-border);
+}
+
+.pack-worn .pack-button {
+    margin-top: 4px;
+    min-height: 30px;
+    font-size: 12px;
+}
+
+.pack-icon {
+    flex: none;
+    display: grid;
+    place-items: center;
+}
+
+/* How many? (to split off, sell or drop), over the pack */
+.pack-ask {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: min(320px, calc(100% - 24px));
+    display: grid;
+    gap: 10px;
+    padding: 16px;
+    border-radius: 12px;
+    background: var(--panel-solid);
+    border: 1px solid var(--gold);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7);
+    z-index: 2;
+}
+
+.pack-ask[hidden] {
+    display: none;
+}
+
+.pack-ask-title {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 17px;
+    color: var(--gold-bright);
+    text-align: center;
+}
+
+.pack-ask-count {
+    font: 800 22px var(--font-ui);
+    color: var(--ink);
+    text-align: center;
+}
+
+.pack-ask-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pack-ask-row input {
+    flex: 1;
+}
+
+.pack-ask-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.pack-step {
+    min-width: 40px;
+    font-size: 18px;
+}
+
+.pack-button.primary {
+    background: linear-gradient(180deg, var(--gold-bright), var(--gold));
+    color: #2a1d0b;
+    border-color: var(--gold);
+}
+
+/* A thing's wheel: over the pack; opened by a click, its slices clicked */
+.wheel.item-wheel {
+    z-index: 8;
+}
+
+.wheel.item-wheel .face,
+.wheel.item-wheel .hub {
+    fill: rgba(26, 21, 16, 0.94);
+}
+
+.wheel.item-wheel .empty .face {
+    fill: rgba(26, 21, 16, 0.72);
+}
+
+.wheel.item-wheel.clickable {
+    pointer-events: auto;
+}
+
+.wheel.item-wheel.clickable .slice[data-action] {
+    cursor: pointer;
+}
+
+.wheel.item-wheel.clickable .slice[data-action]:hover .face {
+    fill: rgba(236, 200, 130, 0.35);
+}
+
+/* A message's button (Undo) */
+#banner .banner-action {
+    margin-left: 12px;
+    padding: 4px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--gold);
+    background: rgba(220, 180, 106, 0.2);
+    color: var(--gold-bright);
+    font: 700 15px var(--font-ui);
+    cursor: pointer;
+    pointer-events: auto;
 }
 
 .pack-skill {
@@ -1640,6 +1886,7 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 
 #banner {
     position: absolute;
+    z-index: 7;
     left: 50%;
     top: 28%;
     transform: translateX(-50%);

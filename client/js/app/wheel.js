@@ -66,6 +66,13 @@ export function actionOf(key) {
 /** A slice's icon (SVG), for what's in it. */
 export const iconOf = (key) => ICONS[key] ?? ITEM_ICONS[actionOf(key)?.item] ?? "";
 
+// How what's in a slice looks: its label and icon (and the thing to use it is, if it is one)
+function lookOf(key) {
+    const action = actionOf(key);
+
+    return action && { label: action.label, icon: iconOf(key), item: action.item };
+}
+
 /**
  * What's on each wheel until the player changes it: each side's slices (a direction and what's
  * in it). Heal at the top of their own, Stun at the top of an enemy's; everything else empty. (A
@@ -154,16 +161,18 @@ const edges = (direction) => [ANGLES[direction] - HALF + GAP / 2, ANGLES[directi
  * A wheel's slices drawn as SVG (without its <svg>): each slice's face, icon, label and count,
  * and the hub, for `slots` ({ direction: what's in it }) on `side` (0 or 1) of it, turning to
  * its other side at S if `flip`. `counts` says how many there are of each thing to use in it.
- * (Also drawn by the Action wheels options: app/wheelsetup.js.)
+ * What's in the slices looks as it does on the action wheels, or as `looks` has it ({ key:
+ * { label, icon } }: the pack's wheel for a thing, app/pack.js), with `hub` (an icon) in its
+ * middle. (Also drawn by the Action wheels options: app/wheelsetup.js.)
  */
-export function drawWheel({ slots, side = 0, flip = false, counts = {}, outer = OUTER, inner = INNER }) {
+export function drawWheel({ slots, side = 0, flip = false, counts = {}, looks = null, hub = null, outer = OUTER, inner = INNER }) {
     const scale = outer / OUTER;
     const svg = [];
 
     for (const direction of DIRECTIONS) {
         const flips = flip && direction === FLIP;
         const key = flips ? null : slots[direction];
-        const action = actionOf(key);
+        const action = key ? (looks?.[key] ?? lookOf(key)) : null;
         const [a0, a1] = edges(direction);
         const at = ((outer + inner) / 2) * (ICON_AT / ((OUTER + INNER) / 2));
         const [ix, iy] = [Math.cos(ANGLES[direction]) * at, Math.sin(ANGLES[direction]) * at];
@@ -173,7 +182,7 @@ export function drawWheel({ slots, side = 0, flip = false, counts = {}, outer = 
         svg.push(`<path class="face" d="${sectorPath(inner, outer, a0, a1)}"/>`);
 
         if (action || flips) {
-            svg.push(`<g class="icon" transform="translate(${ix.toFixed(1)} ${(iy - 6 * scale).toFixed(1)}) scale(${(ICON_SCALE * scale).toFixed(3)})">${flips ? ICONS.flip : iconOf(key)}</g>`);
+            svg.push(`<g class="icon" transform="translate(${ix.toFixed(1)} ${(iy - 6 * scale).toFixed(1)}) scale(${(ICON_SCALE * scale).toFixed(3)})">${flips ? ICONS.flip : action.icon}</g>`);
             svg.push(`<text class="label" ${place(21)}>${flips ? `Wheel ${side ? 1 : 2}` : action.label}</text>`);
         }
 
@@ -189,6 +198,10 @@ export function drawWheel({ slots, side = 0, flip = false, counts = {}, outer = 
     }
 
     svg.push(`<circle class="hub" r="${inner - 4}"/>`);
+
+    if (hub) {
+        svg.push(`<g class="hub-icon" transform="scale(${((inner - 8) / 22).toFixed(3)})">${hub}</g>`);
+    }
 
     if (flip) {
         svg.push(`<text class="side" y="5">${side + 1}</text>`);
@@ -216,13 +229,15 @@ export class ActionWheel {
      * showing `slots` ({ direction: what's in it }) on `side` of it (0 or 1), turning over at S
      * if `flip`. `counts` says how many of each thing to use there are, and `off` which slices
      * can't be used as things are (a blow for another kind of weapon, a thing all used up).
+     * `looks` gives what's in the slices their own labels and icons, and `hub` an icon for its
+     * middle (drawWheel).
      */
-    show(x, y, target, slots, { side = 0, flip = false, counts = {}, off = [] } = {}) {
+    show(x, y, target, slots, { side = 0, flip = false, counts = {}, off = [], looks = null, hub = null } = {}) {
         const size = 2 * OUTER + 8;
         const half = OUTER + 4;
 
         useDefs();
-        this.element.innerHTML = `<svg viewBox="${-half} ${-half} ${size} ${size}" width="${size}" height="${size}">${drawWheel({ slots, side, flip, counts })}</svg>`;
+        this.element.innerHTML = `<svg viewBox="${-half} ${-half} ${size} ${size}" width="${size}" height="${size}">${drawWheel({ slots, side, flip, counts, looks, hub })}</svg>`;
 
         for (const slice of this.element.querySelectorAll(".slice")) {
             slice.classList.toggle("off", off.includes(slice.dataset.direction));

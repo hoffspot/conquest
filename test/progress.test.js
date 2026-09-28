@@ -3,10 +3,17 @@
 // gold; a pack; and from all of it, might
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { ABILITIES, itemLabel, ITEMS, LOOT, PACK_SIZE, priceOf, Progress, QUALITIES, RANKS, rollLoot, SELL_SHARE, SHOPS, TREES, wares, weaponOf } from "../client/js/core/progress.js";
+import { ABILITIES, alike, itemLabel, ITEMS, LOOT, PACK_SIZE, priceOf, Progress, QUALITIES, RANKS, rollLoot, SELL_SHARE, SHOPS, TREES, wares, weaponOf } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
 import { SPELLS } from "../client/js/core/spells.js";
 import { STARTING_WEAPONS, WEAPONS } from "../client/js/core/weapons.js";
+
+// A pack full of stacks, two of each, no two alike (and none of the kinds `leaving`)
+function fullPack(leaving = []) {
+    const ids = Object.keys(ITEMS).filter((id) => !leaving.includes(id));
+
+    return Array.from({ length: PACK_SIZE }, (_, k) => ({ id: ids[k % ids.length], quality: Object.keys(QUALITIES)[Math.floor(k / ids.length)], count: 2 }));
+}
 
 describe("growing stronger (progress.js)", () => {
     it("starts untried, with 20 gold, an empty pack, and the weapon the hero chose", () => {
@@ -14,7 +21,7 @@ describe("growing stronger (progress.js)", () => {
 
         assert.ok(Object.keys(TREES).every((tree) => progress.rank(tree) === 0));
         assert.equal(progress.gold, 20);
-        assert.deepEqual(progress.pack, []);
+        assert.deepEqual(progress.pack, Array(PACK_SIZE).fill(null));
         assert.deepEqual(progress.gear, { weapon: { id: "bow", quality: "common" }, body: null, shield: null });
         assert.equal(weaponOf(progress), "bow");
         assert.equal(progress.might(), 0);
@@ -111,21 +118,24 @@ describe("growing stronger (progress.js)", () => {
     });
 
     it("puts gear on from the pack, what it replaces back in it; shields only with a weapon that goes with one", () => {
-        const progress = new Progress({ pack: [{ id: "kiteShield" }, { id: "mail", quality: "fine" }, { id: "bow" }, { id: "potion" }] }, { weapon: "sword" });
+        const progress = new Progress({ pack: [{ id: "kiteShield", count: 1 }, { id: "mail", quality: "fine", count: 1 }, { id: "bow", count: 1 }, { id: "potion", count: 1 }] }, { weapon: "sword" });
 
         assert.equal(progress.equip(3), "item");
+        assert.equal(progress.equip(5), "item", "an empty slot");
         assert.equal(progress.equip(0), null);
         assert.equal(progress.gear.shield.id, "kiteShield");
-        assert.equal(progress.equip(0), null);
+        assert.equal(progress.pack[0], null);
+        assert.equal(progress.equip(1), null);
         assert.deepEqual(progress.gear.body, { id: "mail", quality: "fine" });
         assert.deepEqual(progress.worn(), ["mail", "kiteShield"]);
 
         // A bow: the sword back in the pack, and the shield too
-        assert.equal(progress.equip(progress.pack.findIndex(({ id }) => id === "bow")), null);
+        assert.equal(progress.equip(progress.slotOf("bow")), null);
         assert.equal(progress.gear.weapon.id, "bow");
         assert.equal(progress.gear.shield, null);
-        assert.ok(progress.pack.some(({ id }) => id === "sword") && progress.pack.some(({ id }) => id === "kiteShield"));
-        assert.equal(progress.equip(progress.pack.findIndex(({ id }) => id === "kiteShield")), "shield");
+        assert.equal(progress.count("sword"), 1);
+        assert.equal(progress.count("kiteShield"), 1);
+        assert.equal(progress.equip(progress.slotOf("kiteShield")), "shield");
 
         assert.equal(progress.unequip("body"), null);
         assert.equal(progress.gear.body, null);
@@ -133,19 +143,97 @@ describe("growing stronger (progress.js)", () => {
         assert.equal(progress.unequip("weapon"), "item");
     });
 
+    it("stacks things alike (the same kind, as well made), as many as there are, each stack in its own slot", () => {
+        const progress = new Progress({});
+
+        assert.equal(progress.stow({ id: "potion" }), true);
+        assert.equal(progress.stow({ id: "potion" }, 4), true);
+        assert.equal(progress.stow({ id: "sword", quality: "fine" }), true);
+        assert.equal(progress.stow({ id: "sword" }), true);
+        assert.equal(progress.stow({ id: "sword", quality: "fine" }), true);
+        assert.deepEqual(progress.pack.slice(0, 4), [{ id: "potion", quality: "common", count: 5 }, { id: "sword", quality: "fine", count: 2 }, { id: "sword", quality: "common", count: 1 }, null]);
+        assert.equal(progress.count("potion"), 5);
+        assert.equal(progress.count("sword"), 3);
+        assert.deepEqual(progress.carried(), ["potion", "sword"]);
+        assert.equal(progress.slotOf("sword"), 1);
+        assert.equal(progress.stow({ id: "potion" }, 0), false);
+        assert.equal(alike({ id: "sword" }, { id: "sword", quality: "common" }), true);
+        assert.equal(alike({ id: "sword" }, { id: "sword", quality: "fine" }), false);
+
+        // Taken off a stack, some or all
+        assert.deepEqual(progress.take(0, 2), { id: "potion", quality: "common", count: 2 });
+        assert.equal(progress.pack[0].count, 3);
+        assert.equal(progress.take(0, 4), null, "not so many");
+        assert.equal(progress.take(3), null, "an empty slot");
+        assert.deepEqual(progress.take(2), { id: "sword", quality: "common", count: 1 });
+        assert.equal(progress.pack[2], null);
+    });
+
+    it("moves a stack to another slot: into an empty one, onto one alike (put together), or swapped", () => {
+        const progress = new Progress({ pack: [{ id: "potion", count: 3 }, { id: "ale", count: 2 }, null, { id: "potion", count: 1 }] });
+
+        assert.equal(progress.move(0, 5), null);
+        assert.deepEqual([progress.pack[0], progress.pack[5]], [null, { id: "potion", quality: "common", count: 3 }]);
+        assert.equal(progress.move(3, 5), null);
+        assert.deepEqual([progress.pack[3], progress.pack[5]], [null, { id: "potion", quality: "common", count: 4 }]);
+        assert.equal(progress.move(1, 5), null);
+        assert.deepEqual([progress.pack[1].id, progress.pack[5].id], ["potion", "ale"]);
+        assert.equal(progress.move(1, 1), null);
+        assert.equal(progress.move(2, 1), "item", "nothing to move");
+        assert.equal(progress.move(1, PACK_SIZE), "item");
+    });
+
+    it("splits some off a stack into an empty slot: the first, or one chosen; never all, or none", () => {
+        const progress = new Progress({ pack: [{ id: "potion", count: 7 }, { id: "ale", count: 1 }] });
+
+        assert.equal(progress.split(0, 3), null);
+        assert.deepEqual(progress.pack.slice(0, 3), [{ id: "potion", quality: "common", count: 4 }, { id: "ale", quality: "common", count: 1 }, { id: "potion", quality: "common", count: 3 }]);
+        assert.equal(progress.split(0, 1, 9), null);
+        assert.deepEqual(progress.pack[9], { id: "potion", quality: "common", count: 1 });
+        assert.equal(progress.split(0, 3), "count", "all of it");
+        assert.equal(progress.split(0, 0), "count");
+        assert.equal(progress.split(1, 1), "count", "a stack of one");
+        assert.equal(progress.split(0, 1, 1), "full", "onto something");
+
+        // (None to split into, with the pack full)
+        assert.equal(new Progress({ pack: fullPack() }).split(0, 1), "full");
+    });
+
+    it("reads a pack kept before things stacked: each thing put in, those alike together", () => {
+        const progress = new Progress({ pack: [{ id: "potion" }, { id: "sword", quality: "fine" }, { id: "potion" }, { id: "nonsense" }, { id: "potion", quality: "odd" }] });
+
+        assert.deepEqual(progress.pack.slice(0, 3), [{ id: "potion", quality: "common", count: 3 }, { id: "sword", quality: "fine", count: 1 }, null]);
+    });
+
+    it("puts nothing on without room in the pack for what comes off", () => {
+        const full = new Progress({ pack: fullPack(["boots"]) }, { weapon: "boots" });
+        const before = full.toJSON();
+
+        assert.equal(full.equip(full.slotOf("sword")), "full", "the boots have nowhere to go");
+        assert.deepEqual(full.toJSON(), before);
+
+        const gauntlets = new Progress({ pack: fullPack() }, { weapon: "gauntlets" });
+
+        assert.equal(gauntlets.equip(gauntlets.slotOf("sword")), null, "the gauntlets go on a stack alike");
+        assert.equal(gauntlets.count("gauntlets"), 3);
+    });
+
     it("holds only so much, and keeps just what it should", () => {
-        const progress = new Progress({ pack: Array.from({ length: 30 }, () => ({ id: "potion" })), gold: -5, skills: { blade: "x" } });
+        const progress = new Progress({ pack: [...fullPack(), { id: "wand", quality: "legendary", count: 1 }], gold: -5, skills: { blade: "x" } });
 
         assert.equal(progress.pack.length, PACK_SIZE);
-        assert.equal(progress.stow({ id: "ale" }), false);
+        assert.ok(progress.pack.every(Boolean));
+        assert.ok(progress.pack.every(({ quality }) => quality !== "legendary"), "no room for the legendary wand");
+        assert.equal(progress.stow({ id: "ale", quality: "legendary" }), false);
+        assert.equal(progress.stow({ id: "ale" }), true, "onto a stack alike, however full");
         assert.equal(progress.gold, 0);
         assert.equal(progress.skills.blade, 0);
 
-        const kept = new Progress({ skills: { blade: 320 }, gold: 57, pack: [{ id: "potion" }, { id: "nonsense" }], gear: { weapon: { id: "hammer", quality: "fine" }, body: null, shield: null } });
+        const kept = new Progress({ skills: { blade: 320 }, gold: 57, pack: [{ id: "potion", count: 2 }, { id: "nonsense", count: 1 }, null, { id: "ale", count: 1 }], gear: { weapon: { id: "hammer", quality: "fine" }, body: null, shield: null } });
         const back = new Progress(JSON.parse(JSON.stringify(kept)));
 
         assert.deepEqual(back.toJSON(), kept.toJSON());
-        assert.deepEqual(kept.pack, [{ id: "potion", quality: "common" }]);
+        assert.deepEqual(kept.pack.slice(0, 4), [{ id: "potion", quality: "common", count: 2 }, null, null, { id: "ale", quality: "common", count: 1 }]);
     });
 
     it("finds on fallen foes what their kind carries", () => {

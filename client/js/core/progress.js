@@ -106,8 +106,49 @@ export const LOOT = Object.freeze({
     soldier: { gold: [2, 8], items: [{ id: "potion", chance: 0.15 }, { id: "roundShield", chance: 0.05 }, { id: "mail", chance: 0.03 }, { id: "bow", quality: "fine", chance: 0.03 }] },
 });
 
-/** The most a pack holds. */
+/**
+ * How many slots a pack has. Each holds a stack of things alike (as many as there are: the same
+ * kind, as well made), or nothing.
+ */
 export const PACK_SIZE = 20;
+
+/** Whether two things are alike (the same kind, and as well made): they go on one stack. */
+export const alike = (a, b) => Boolean(a && b) && a.id === b.id && (a.quality ?? "common") === (b.quality ?? "common");
+
+const isSlot = (slot) => Number.isInteger(slot) && slot >= 0 && slot < PACK_SIZE;
+const isCount = (count) => Number.isInteger(count) && count > 0;
+
+// A pack as kept: its slots, each a stack ({ id, quality, count }) or null, in their places; and
+// one kept before things stacked (a list of things, one each), each put in, those alike together
+function packOf(kept) {
+    const pack = Array(PACK_SIZE).fill(null);
+    const loose = [];
+
+    (Array.isArray(kept) ? kept : []).forEach((item, slot) => {
+        if (!ITEMS[item?.id]) {
+            return;
+        }
+
+        const stack = { id: item.id, quality: QUALITIES[item.quality] ? item.quality : "common", count: isCount(item.count) ? item.count : 1 };
+
+        if (isCount(item.count) && isSlot(slot) && !pack[slot]) {
+            pack[slot] = stack;
+        } else {
+            loose.push(stack);
+        }
+    });
+
+    for (const stack of loose) {
+        const into = pack.findIndex((each) => alike(each, stack));
+        const slot = into >= 0 ? into : pack.indexOf(null);
+
+        if (slot >= 0) {
+            pack[slot] = { ...stack, count: (pack[slot]?.count ?? 0) + stack.count };
+        }
+    }
+
+    return pack;
+}
 
 /** A piece of gear's name: "Fine sword". */
 export function itemLabel({ id, quality = "common" }) {
@@ -149,13 +190,15 @@ export function rollLoot(kind, random) {
 /** A player's skills, gold, pack and gear. */
 export class Progress {
     /**
-     * @param {object} [kept] - As toJSON gave it: { skills: { tree: xp }, gold, pack: [items], gear: { weapon, body, shield } }.
+     * @param {object} [kept] - As toJSON gave it: { skills: { tree: xp }, gold, pack: [stacks], gear: { weapon, body, shield } }.
      * @param {object} [hero] - Their hero (for the weapon they started with).
      */
     constructor({ skills = {}, gold = 20, pack = [], gear = null } = {}, { weapon = "sword" } = {}) {
         this.skills = Object.fromEntries(Object.keys(TREES).map((tree) => [tree, Math.max(0, Number(skills[tree]) || 0)]));
         this.gold = Math.max(0, Math.floor(Number(gold) || 0));
-        this.pack = pack.filter((item) => ITEMS[item?.id]).slice(0, PACK_SIZE).map(({ id, quality = "common" }) => ({ id, quality }));
+
+        /** The pack's slots: each a stack of things alike ({ id, quality, count }), or null. */
+        this.pack = packOf(pack);
         this.gear = { weapon: gear?.weapon && ITEMS[gear.weapon.id] ? { ...gear.weapon } : { id: weapon, quality: "common" }, body: gear?.body ?? null, shield: gear?.shield ?? null };
     }
 
@@ -242,35 +285,115 @@ export class Progress {
         return [this.gear.body, this.gear.shield].filter(Boolean).flatMap(({ id }) => ITEMS[id].equipment ?? []);
     }
 
-    /** How many of a thing (an ITEMS id) are in the pack. */
+    /** How many of a thing (an ITEMS id, of any make) are in the pack. */
     count(id) {
-        return this.pack.filter((item) => item.id === id).length;
+        return this.pack.reduce((sum, stack) => sum + (stack?.id === id ? stack.count : 0), 0);
     }
 
     /** Each kind of thing in the pack (ITEMS ids, once each). */
     carried() {
-        return [...new Set(this.pack.map(({ id }) => id))];
+        return [...new Set(this.pack.filter(Boolean).map(({ id }) => id))];
     }
 
-    /** Put something in the pack; whether there was room. */
-    stow(item) {
-        if (this.pack.length >= PACK_SIZE || !ITEMS[item?.id]) {
+    /** The slot the first of a kind of thing (an ITEMS id) is in, or -1. */
+    slotOf(id) {
+        return this.pack.findIndex((stack) => stack?.id === id);
+    }
+
+    /**
+     * Put something in the pack (`count` of it): on the first stack of things alike, or else in
+     * the first empty slot. Whether there was room.
+     */
+    stow(item, count = 1) {
+        if (!ITEMS[item?.id] || !isCount(count)) {
             return false;
         }
 
-        this.pack.push({ id: item.id, quality: item.quality ?? "common" });
+        const thing = { id: item.id, quality: QUALITIES[item.quality] ? item.quality : "common" };
+        const onto = this.pack.findIndex((stack) => alike(stack, thing));
+        const slot = onto >= 0 ? onto : this.pack.indexOf(null);
+
+        if (slot < 0) {
+            return false;
+        }
+
+        this.pack[slot] = { ...thing, count: (this.pack[slot]?.count ?? 0) + count };
 
         return true;
     }
 
     /**
-     * Put on (or take up) the piece of gear at `index` in the pack: what it replaces goes into the
-     * pack. Returns the reason it can't be, or null. (A shield only with a weapon it goes with; no
-     * weapon ever given up for nothing.)
+     * Take `count` things off the stack in a slot (the whole stack, with no count): what was
+     * taken ({ id, quality, count }), or null if there aren't so many.
+     */
+    take(slot, count = this.pack[slot]?.count) {
+        const stack = isSlot(slot) ? this.pack[slot] : null;
+
+        if (!stack || !isCount(count) || count > stack.count) {
+            return null;
+        }
+
+        this.pack[slot] = count === stack.count ? null : { ...stack, count: stack.count - count };
+
+        return { id: stack.id, quality: stack.quality, count };
+    }
+
+    /**
+     * Move the stack in a slot to another: into an empty one, onto a stack of things alike (put
+     * together), or swapped with what's there. Returns the reason it can't be, or null.
+     */
+    move(from, to) {
+        if (!isSlot(from) || !isSlot(to) || !this.pack[from]) {
+            return "item";
+        }
+
+        if (from === to) {
+            return null;
+        }
+
+        const [moving, there] = [this.pack[from], this.pack[to]];
+
+        if (alike(moving, there)) {
+            this.pack[to] = { ...there, count: there.count + moving.count };
+            this.pack[from] = null;
+        } else {
+            this.pack[to] = moving;
+            this.pack[from] = there;
+        }
+
+        return null;
+    }
+
+    /**
+     * Split `count` things off the stack in a slot, into another (`to`, which must be empty; or
+     * the first empty one). Returns the reason it can't be, or null.
+     */
+    split(slot, count, to = this.pack.indexOf(null)) {
+        const stack = isSlot(slot) ? this.pack[slot] : null;
+
+        if (!stack || !isCount(count) || count >= stack.count) {
+            return "count";
+        }
+
+        if (!isSlot(to) || this.pack[to]) {
+            return "full";
+        }
+
+        this.pack[slot] = { ...stack, count: stack.count - count };
+        this.pack[to] = { ...stack, count };
+
+        return null;
+    }
+
+    /**
+     * Put on (or take up) one of the pieces of gear in a slot of the pack: what it replaces goes
+     * into the pack. Returns the reason it can't be, or null. (A shield only with a weapon it
+     * goes with; no weapon ever given up for nothing; nothing put on without room for what comes
+     * off.)
      */
     equip(index) {
-        const item = this.pack[index];
-        const slot = item && ITEMS[item.id].slot;
+        const stack = isSlot(index) ? this.pack[index] : null;
+        const slot = stack && ITEMS[stack.id].slot;
 
         if (!slot) {
             return "item";
@@ -280,19 +403,21 @@ export class Progress {
             return "shield";
         }
 
-        this.pack.splice(index, 1);
+        // (A weapon that can't be carried with a shield: the shield's put away too)
+        const shieldOff = slot === "weapon" && this.gear.shield && !WITH_SHIELD.includes(stack.id);
+        const before = this.pack.map((each) => each && { ...each });
+        const item = this.take(index, 1);
+        const off = [this.gear[slot], shieldOff ? this.gear.shield : null].filter(Boolean);
 
-        const was = this.gear[slot];
+        if (!off.every((piece) => this.stow(piece))) {
+            this.pack = before;
 
-        this.gear[slot] = item;
-
-        if (was) {
-            this.pack.push(was);
+            return "full";
         }
 
-        // (A weapon that can't be carried with a shield: the shield's put away)
-        if (slot === "weapon" && this.gear.shield && !WITH_SHIELD.includes(item.id)) {
-            this.pack.push(this.gear.shield);
+        this.gear[slot] = { id: item.id, quality: item.quality };
+
+        if (shieldOff) {
             this.gear.shield = null;
         }
 
@@ -305,11 +430,10 @@ export class Progress {
             return "item";
         }
 
-        if (this.pack.length >= PACK_SIZE) {
+        if (!this.stow(this.gear[slot])) {
             return "full";
         }
 
-        this.pack.push(this.gear[slot]);
         this.gear[slot] = null;
 
         return null;
@@ -317,7 +441,7 @@ export class Progress {
 
     /** What's kept. */
     toJSON() {
-        return { skills: { ...this.skills }, gold: this.gold, pack: this.pack.map((item) => ({ ...item })), gear: structuredClone(this.gear) };
+        return { skills: { ...this.skills }, gold: this.gold, pack: this.pack.map((stack) => (stack ? { ...stack } : null)), gear: structuredClone(this.gear) };
     }
 }
 
