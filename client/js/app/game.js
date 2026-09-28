@@ -2540,11 +2540,18 @@ export class Game {
             switch (event.type) {
                 case "attack": {
                     const actor = battle.actor(event.id);
+                    const target = battle.actor(event.target);
 
                     // (Kicking with a weapon in hand, the hands stay on guard; and its weapon in
                     // hand, whatever it looked like: once starting the attack has finished any
-                    // drawing or putting away)
-                    avatar.actions.startAttack(event.animation, { hitAt: event.hitAt / 1000, duration: event.duration / 1000, arms: event.animation !== "kick" || ["boots", "gauntlets"].includes(actor.weapon) });
+                    // drawing or putting away. How far off its target is, for a creature that
+                    // reaches it: a frog's tongue)
+                    avatar.actions.startAttack(event.animation, {
+                        hitAt: event.hitAt / 1000,
+                        duration: event.duration / 1000,
+                        arms: event.animation !== "kick" || ["boots", "gauntlets"].includes(actor.weapon),
+                        reach: target ? Math.hypot(target.x - actor.x, target.y - actor.y) : null,
+                    });
 
                     if (avatar.character.sheathed) {
                         avatar.character.sheathe(false);
@@ -2614,6 +2621,21 @@ export class Game {
                     hud.damage(this.#screenAbove(event.id), "Stunned", { kind: "stun" });
                     this.sound?.play("stun", { at: avatar.object.position });
                     break;
+                case "knockdown": {
+                    // Knocked off their feet (away from whoever did it), and up again when the
+                    // battle lets them act again
+                    const by = event.by ? this.avatars.get(event.by) : null;
+
+                    avatar.actions.knockdown?.({ from: by ? avatar.angleTo(by.object.position.x, by.object.position.z) : 0, seconds: (event.until - battle.time) / 1000 });
+                    hud.damage(this.#screenAbove(event.id), "Knocked down", { kind: "stun" });
+                    this.sound?.play("fall", { at: avatar.object.position, delay: FALL_LANDS / 1.35 });
+
+                    if (event.id === this.me) {
+                        hud.message("Knocked off your feet!", 1.2);
+                    }
+
+                    break;
+                }
                 case "exhausted":
                     if (event.id === this.me) {
                         hud.message("Out of breath", 1.5);

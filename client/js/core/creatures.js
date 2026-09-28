@@ -62,6 +62,7 @@ export const CREATURES = Object.freeze({
     bandit: { name: "Bandit", hp: 32, weapon: "sword", speed: 1.3, chase: 2.4, temper: "aggressive", roam: 10, leash: 22, pack: [1, 3], tiers: [2, 7], biomes: ["farmland", "meadow", "woods", "heath"], blood: "red", armor: 0.05 },
     // Far out
     bear: { name: "Brown bear", hp: 60, weapon: "bear", speed: 1.2, chase: 2.8, temper: "territorial", guard: 7, roam: 10, leash: 18, pack: [1, 1], tiers: [3, 7], biomes: ["woods", "mountain", "tundra", "elfwood", "darkwood"], blood: "red" },
+    puma: { name: "Puma", hp: 40, weapon: "puma", speed: 1.4, chase: 3.4, temper: "territorial", guard: 7, roam: 12, leash: 22, pack: [1, 1], tiers: [3, 7], biomes: ["mountain", "woods", "heath", "badlands", "darkwood"], blood: "red" },
     direWolf: { name: "Dire wolf", hp: 30, weapon: "direWolf", speed: 1.5, chase: 3.4, temper: "aggressive", roam: 14, leash: 26, pack: [1, 3], tiers: [3, 8], biomes: ["tundra", "snow", "woods", "heath", "mountain"], blood: "red" },
     goblin: { name: "Goblin raider", hp: 26, weapon: "cleaver", speed: 1.4, chase: 2.6, temper: "aggressive", roam: 10, leash: 22, pack: [2, 5], tiers: [3, 8], biomes: ["heath", "mountain", "badlands", "woods"], blood: "red" },
     skeleton: { name: "Skeleton", hp: 34, weapon: "skeleton", speed: 1, chase: 2, temper: "aggressive", roam: 6, leash: 16, pack: [1, 3], tiers: [3, 9], biomes: ["marsh", "heath", "tundra"], blood: "none", armor: 0.1 },

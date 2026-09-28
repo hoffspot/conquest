@@ -22,6 +22,8 @@
 //  - reaction: how whoever it hits reacts (a slash turns them, a hammer staggers them back, an
 //    arrow jolts them...), which the characters' animations pick out (characters/actions.js)
 //  - stagger: how long a hit stops its target moving or starting an attack, in ms
+//  - knockdown (some): a hit knocks its target off its feet for this long, in ms: it can't move,
+//    fight, cast or use anything till it's up again (a rock tusker's charge)
 //  - projectile: for ranged attacks, what flies (an arrow, a bolt, a fireball) and how fast (m/s)
 //
 // Pure data and arithmetic, no DOM: the battle (battle.js) and the interface both use it.
@@ -162,6 +164,7 @@ export const NATURAL = Object.freeze({
             ranged({ id: "web", reach: 6, damage: [1, 2], hitAt: 450, duration: 900, interval: 2400, stagger: 500, reaction: "punch", animation: "web", projectile: { kind: "web", speed: 11 } }),
         ],
     },
+    puma: { label: "Claws", attacks: [melee({ id: "rake", damage: [3, 7], hitAt: 350, duration: 750, interval: 1150, reaction: "slash", animation: "melee" })] },
     shadowStalker: { label: "Claws", attacks: [melee({ id: "rake", damage: [5, 9], hitAt: 350, duration: 750, interval: 1100, reaction: "slash", animation: "melee" })] },
     hyena: { label: "Jaws", attacks: [melee({ id: "bite", damage: [2, 5], hitAt: 300, duration: 700, interval: 1000, reaction: "hack", animation: "melee" })] },
     scorpion: {
@@ -176,7 +179,8 @@ export const NATURAL = Object.freeze({
     bogFrog: {
         label: "Tongue",
         attacks: [
-            melee({ id: "tongue", damage: [2, 5], hitAt: 350, duration: 750, interval: 1100, reaction: "punch", animation: "melee" }),
+            // (Its tongue shot out at whoever's up to two squares off)
+            melee({ id: "tongue", reach: 2, damage: [2, 5], hitAt: 350, duration: 750, interval: 1100, reaction: "punch", animation: "melee" }),
             ranged({ id: "spit", reach: 5, damage: [2, 4], hitAt: 450, duration: 900, interval: 2000, reaction: "arcane", animation: "spit", projectile: { kind: "venom", speed: 10 } }),
         ],
     },
@@ -188,7 +192,8 @@ export const NATURAL = Object.freeze({
             ranged({ id: "lava", reach: 5, damage: [3, 6], hitAt: 500, duration: 1000, interval: 2200, reaction: "fire", animation: "spit", projectile: { kind: "lava", speed: 8 } }),
         ],
     },
-    rockTusker: { label: "Tusks", attacks: [melee({ id: "gore", damage: [6, 11], hitAt: 500, duration: 1000, interval: 1600, stagger: 450, reaction: "pierce", animation: "melee" })] },
+    // (Its charge knocks whoever it catches off their feet)
+    rockTusker: { label: "Tusks", attacks: [melee({ id: "gore", damage: [6, 11], hitAt: 500, duration: 1000, interval: 1600, stagger: 450, knockdown: 1500, reaction: "pierce", animation: "melee" })] },
     dragon: {
         label: "Fangs and fire",
         attacks: [

@@ -22,6 +22,9 @@ any land (its rocks, fallen trees, grass and wildflowers), in 3D from a seed to 
 at, is at
 <https://hoffspot.github.io/conquest/building-lab.html>.
 
+The creature lab, showing every creature of the wilds walking, running, attacking, resting,
+struck, knocked down and dying, is at <https://hoffspot.github.io/conquest/creature-lab.html>.
+
 The war between the six peoples, played out on a world's map turn by turn (who holds which town,
 the forces out, the rulers and how they stand with each other, and the news), is at
 <https://hoffspot.github.io/conquest/war.html>.
@@ -31,6 +34,8 @@ the screens and debug mode. [docs/CHARACTERS.md](docs/CHARACTERS.md) describes t
 engine, and [docs/WORLD.md](docs/WORLD.md) the world: its plan, and how it's built from it in
 chunks. [docs/WAR.md](docs/WAR.md) sets out the war between the six peoples that's being built,
 and how the engine's made ready for other players to hop in and out of a running world.
+[docs/WILDS.md](docs/WILDS.md) describes the wild's creatures: what they are, where and how strong,
+how they behave, and how they're built and animated in code.
 
 ## How to play
 
@@ -388,6 +393,7 @@ client/                 The game (static files served to the browser)
   town-map.html         The town map (with world-map.css)
   war.html              The war between the peoples (with world-map.css and war.css)
   building-lab.html     The building lab (with world-map.css)
+  creature-lab.html     The creature lab: every creature of the wilds, doing everything it does
   vendor/three-r186/    Three.js (minified by scripts/vendor-three.js; loaded through an import map)
   js/main.js            The screens, from loading to playing (no Three.js: it loads first)
   js/app/               The game on the page
@@ -489,6 +495,13 @@ client/                 The game (static files served to the browser)
     wounds.js           Battle damage: each blow's mark and each threshold's wound, painted on
                         the body and its clothes
     squares.js          Debug mode's squares and paths
+  js/beasts/            The wild's creatures, built and animated in code (see docs/WILDS.md):
+    looks.js            How each looks; beast.js puts one in the world as an avatar is
+    sculpt.js           A body's shapes blended into one skinned mesh; its pieces folded in
+    quadruped.js        Four legs: faces, tails, legs of every kind, bats' wings
+    arachnid.js         Spiders and scorpions, their legs reaching the ground (two-bone IK)
+    biped.js, bones.js  Skeletons (every bone near enough) and treants; cloth.js a cape
+    blob.js, flyers.js  Slimes (a magma slime's molten crust and sparks); swarms, wisps, frogs
   js/characters/        The character engine (see docs/CHARACTERS.md)
     body.js             Loading and shaping the body; macro.js and details.js are the sliders
     rig.js              The skeleton, anatomical joint angles and their limits, two-bone IK
@@ -519,6 +532,7 @@ docs/GAME.md            How the game works
 docs/CHARACTERS.md      The character engine, and the research behind it
 docs/WORLD.md           The world: laid out from a seed as a plan, and built from it in chunks
 docs/WAR.md             The war between the peoples, and playing with others (hop in, hop out)
+docs/WILDS.md           The wild's creatures: roster, tiers, behaviour, and how they're built
 docs/MODERNIZATION.md   The history: the book's Last Colony, modernized, before Pellagos replaced it
 ```
 

@@ -1499,6 +1499,27 @@ export const REACTIONS = Object.freeze({
 
 const FALL = { buckle: 0.28, topple: 0.55, settle: 0.35 };
 
+// Knocked down (and up again): how much quicker the fall is than a death's, how long getting up
+// takes (s, at most half the time down), and the crouch it rises out of (degrees)
+const KNOCKED = {
+    quicker: 1.35,
+    rise: 0.75,
+    crouch: {
+        ...spine({ flex: 22 }),
+        Neck: { flex: 10 },
+        LeftUpLeg: { flex: 105 },
+        RightUpLeg: { flex: 95 },
+        LeftLeg: { flex: 125 },
+        RightLeg: { flex: 115 },
+        LeftFoot: { flex: 25 },
+        RightFoot: { flex: 20 },
+        LeftArm: { flex: 45, abduct: 25 },
+        RightArm: { flex: 40, abduct: 25 },
+        LeftForeArm: { flex: 30 },
+        RightForeArm: { flex: 35 },
+    },
+};
+
 /** How long into a fall the body hits the ground (s): for the sound of it. */
 export const FALL_LANDS = FALL.buckle * 0.6 + FALL.topple;
 
@@ -1739,6 +1760,7 @@ const _axis = new THREE.Vector3();
 const _across = new THREE.Vector3();
 const _frame = new THREE.Quaternion();
 const _shoulder = new THREE.Vector3();
+const _scale = new THREE.Vector3();
 const _item = new THREE.Quaternion();
 const _hand = new THREE.Quaternion();
 const _basis = new THREE.Matrix4();
@@ -1947,6 +1969,18 @@ export class Actions {
         this.guardTarget = 0;
     }
 
+    /**
+     * Knocked off its feet (away from `from`, an angle as for react) and up again `seconds`
+     * later: falling (quicker than a death), a moment on the ground, then sitting up with its feet
+     * drawn in under it, and rising.
+     */
+    knockdown({ from = 0, seconds = 1.5 } = {}) {
+        this.#swapped();
+        this.attack = null;
+        this.reactions = [];
+        this.fall = { start: this.time, backwards: Math.cos(from) >= 0, up: seconds };
+    }
+
     /** Get back up (alive again): no fall, attack or reactions. */
     revive() {
         this.fall = null;
@@ -2012,6 +2046,11 @@ export class Actions {
 
             return true;
         });
+
+        // (Knocked down and up again: done)
+        if (this.fall?.up && this.time - this.fall.start >= this.fall.up) {
+            this.fall = null;
+        }
 
         if (this.fall) {
             this.reaching = [];
@@ -2209,7 +2248,13 @@ export class Actions {
         const body = this.#measure();
         const shoulder = this.rig.bone("Spine2").localToWorld(_shoulder.copy(body.shoulders[side]));
 
-        return new THREE.Vector3().fromArray(at).multiplyScalar(body.arm).applyQuaternion(frame).add(shoulder);
+        return new THREE.Vector3().fromArray(at).multiplyScalar(body.arm * this.#size()).applyQuaternion(frame).add(shoulder);
+    }
+
+    // How much bigger than its own measures the character's drawn (a troll's bigger than life, a
+    // goblin smaller): its measures (in metres, as its body's made) are this many metres in the world
+    #size() {
+        return this.character.object.getWorldScale(_scale).x;
     }
 
     // The frame a hand's place and turn are given in (world): the character's, or turned as far
@@ -2259,10 +2304,11 @@ export class Actions {
             // Further down the other hand's weapon, along it (turned as comes naturally): where
             // it passes nearest this hand's place, or `on` metres down; below the other fist, and
             // where the haft's held (ITEMS: `haft`)
-            const wanted = hand.at ? this.#place(side, hand.at, _frame).sub(other.position).dot(other.point) : -hand.on;
+            const size = this.#size();
+            const wanted = hand.at ? this.#place(side, hand.at, _frame).sub(other.position).dot(other.point) / size : -hand.on;
             const along = Math.min(other.haft?.[1] ?? -FIST, Math.max(other.haft?.[0] ?? -Infinity, wanted));
 
-            position = other.position.clone().addScaledVector(other.point, along);
+            position = other.position.clone().addScaledVector(other.point, along * size);
             point = other.point.clone();
         } else {
             position = this.#place(side, hand.at, _frame);
@@ -2352,7 +2398,7 @@ export class Actions {
         // Where the grip ended up (for a second hand on the same weapon)
         handBone.getWorldQuaternion(_hand);
 
-        const grip = { position: itemPosition.clone().applyQuaternion(_hand).add(handBone.getWorldPosition(_wrist)), point: new THREE.Vector3(), edge: new THREE.Vector3(), haft: ITEMS[item?.name]?.haft ?? null };
+        const grip = { position: itemPosition.clone().multiplyScalar(this.#size()).applyQuaternion(_hand).add(handBone.getWorldPosition(_wrist)), point: new THREE.Vector3(), edge: new THREE.Vector3(), haft: ITEMS[item?.name]?.haft ?? null };
 
         _item.copy(itemQuaternion).premultiply(_hand);
         grip.point.set(0, 1, 0).applyQuaternion(_item);
@@ -2363,9 +2409,14 @@ export class Actions {
 
     // Falling down: the knees give, the body topples (backwards, or forwards when hit from
     // behind) and lands, arms flung out, then lies still
-    #fall(elapsed) {
+    #fall(time) {
         const rig = this.rig;
-        const { backwards } = this.fall;
+        const { backwards, up = 0 } = this.fall;
+
+        // (Knocked down, the fall's quicker; and at the end, getting up: `rise` 0 to 1)
+        const elapsed = up ? time * KNOCKED.quicker : time;
+        const riseFor = up ? Math.min(KNOCKED.rise, up * 0.5) : 1;
+        const rise = up ? Math.min(1, Math.max(0, (time - (up - riseFor)) / riseFor)) : 0;
         const buckle = smooth(0, FALL.buckle, elapsed);
         const toppling = Math.min(1, Math.max(0, (elapsed - FALL.buckle * 0.6) / FALL.topple));
         const tilt = toppling * toppling; // falling faster and faster
@@ -2378,17 +2429,33 @@ export class Actions {
         // Knees and back give way, arms fly out
         const limp = { ...spine({ flex: (backwards ? -8 : 18) * tilt + 14 * buckle * (1 - tilt) }), Neck: { flex: backwards ? -10 : 10 }, Head: { flex: (backwards ? -15 : 5) * tilt }, LeftUpLeg: { flex: 30 * buckle * (1 - tilt) + 8 }, RightUpLeg: { flex: 40 * buckle * (1 - tilt) + 15 }, LeftLeg: { flex: 55 * buckle * (1 - tilt) + 10 }, RightLeg: { flex: 70 * buckle * (1 - tilt) + 25 }, LeftFoot: { flex: -20 }, RightFoot: { flex: -25 }, LeftArm: { abduct: 25 + 50 * tilt, flex: backwards ? 20 : 40 }, RightArm: { abduct: 30 + 45 * tilt, flex: backwards ? 30 : 50 }, LeftForeArm: { flex: 25 }, RightForeArm: { flex: 35 } };
 
+        // Getting up: sitting up (the body turning upright about the pelvis, still on the
+        // ground), the feet drawn in under it in a crouch, then rising out of the crouch
+        const sit = smooth(0, 0.5, rise);
+        const stand = smooth(0.35, 1, rise);
+        const crouch = sit * (1 - stand);
+
         for (const [joint, angles] of Object.entries(limp)) {
             const index = rig.index.get(joint);
             const { kind, side } = rig.joints[index];
 
-            blendRotation(kind, side, rig.rotations[index], jointRotation(kind, side, angles, _rotation), Math.max(buckle, tilt), rig.rotations[index]);
+            blendRotation(kind, side, rig.rotations[index], jointRotation(kind, side, angles, _rotation), Math.max(buckle, tilt) * (1 - sit), rig.rotations[index]);
+        }
+
+        for (const [joint, angles] of Object.entries(crouch > 0 ? KNOCKED.crouch : {})) {
+            const index = rig.index.get(joint);
+            const { kind, side } = rig.joints[index];
+
+            blendRotation(kind, side, rig.rotations[index], jointRotation(kind, side, angles, _rotation), crouch, rig.rotations[index]);
         }
 
         // The whole body turns about the pelvis to lie flat, the pelvis dropping to the ground
-        // and ending up behind (or in front of) where the feet were
-        _fall.setFromAxisAngle(_axis.set(1, 0, 0), direction * angle);
+        // and ending up behind (or in front of) where the feet were (and back, getting up)
+        const lying = [-hips * 0.22 * buckle * (1 - tilt) + (0.14 - hips) * tilt, direction * hips * 0.82 * tilt];
+        const crouched = [-hips * 0.5, direction * hips * 0.12];
+
+        _fall.setFromAxisAngle(_axis.set(1, 0, 0), direction * angle * (1 - sit) + direction * 12 * DEG * crouch);
         rig.rotations[0].premultiply(_fall);
-        rig.offset.set(0, -hips * 0.22 * buckle * (1 - tilt) + (0.14 - hips) * tilt, direction * hips * 0.82 * tilt);
+        rig.offset.set(0, (lying[0] + (crouched[0] - lying[0]) * sit) * (1 - stand), (lying[1] + (crouched[1] - lying[1]) * sit) * (1 - stand));
     }
 }

@@ -126,11 +126,18 @@ export class BeastAvatar {
 
         /** As a character's actions (characters/actions.js), as far as a creature does them. */
         this.actions = {
-            startAttack: (animation, { hitAt = 0.4, duration = 0.8 } = {}) => {
-                doing.attack = { t: 0, hit: Math.min(0.9, hitAt / duration), duration, style: this.#styleFor(animation) };
+            // (`reach`: how far off what it's attacking is, metres, if it's known: a tongue shot
+            // out that far)
+            startAttack: (animation, { hitAt = 0.4, duration = 0.8, reach = null } = {}) => {
+                doing.attack = { t: 0, hit: Math.min(0.9, hitAt / duration), duration, style: this.#styleFor(animation), reach: reach === null ? null : reach / this.scale };
             },
             react: () => {
                 doing.react = { t: 0 };
+            },
+            // (Knocked about: a creature's only jolted)
+            knockdown: () => {
+                doing.react = { t: 0 };
+                doing.attack = null;
             },
             die: ({ from = 0 } = {}) => {
                 // (Falling away from whoever killed it)
@@ -271,7 +278,7 @@ export class BeastAvatar {
             t: this.clock,
             speed,
             run: this.speed > RUN_SPEED * Math.sqrt(this.scale),
-            attack: doing.attack ? { u: Math.min(1, doing.attack.u ?? 0), hit: doing.attack.hit, style: doing.attack.style } : null,
+            attack: doing.attack ? { u: Math.min(1, doing.attack.u ?? 0), hit: doing.attack.hit, style: doing.attack.style, reach: doing.attack.reach } : null,
             rest: this.resting ? { name: this.resting.name, w: smoothstep(this.restWeight), t: this.resting.t } : null,
             react: doing.react ? { u: Math.min(1, doing.react.u ?? 0) } : null,
             dead: doing.dead ? { u: Math.min(1, doing.dead.u ?? 0), side: doing.dead.side } : null,

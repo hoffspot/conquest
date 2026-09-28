@@ -146,6 +146,48 @@ export function joint(parent, name, at = [0, 0, 0]) {
     return pivot;
 }
 
+const DOWN = new THREE.Vector3(0, -1, 0);
+
+/** Which way a limb hangs (down its -y) and a cone points (up its +y): for `aim`. */
+export const LIMB_WAY = DOWN;
+export const CONE_WAY = new THREE.Vector3(0, 1, 0);
+
+/**
+ * The turn ([x, y, z] radians) that points a piece the way `way` ([x, y, z]) goes: a limb (down
+ * its -y), or a cone (up its +y: `from` CONE_WAY).
+ */
+export function aim(way, from = LIMB_WAY) {
+    const euler = new THREE.Euler().setFromQuaternion(new THREE.Quaternion().setFromUnitVectors(from, new THREE.Vector3(...way).normalize()));
+
+    return [euler.x, euler.y, euler.z];
+}
+
+let spot = null;
+
+/**
+ * A soft round spot of light, white (for glows and sparks: tinted by what uses it), made once;
+ * null without a page to draw it on.
+ */
+export function glowSpot() {
+    if (!spot && typeof document !== "undefined") {
+        const canvas = document.createElement("canvas");
+
+        canvas.width = canvas.height = 32;
+
+        const context = canvas.getContext("2d");
+        const gradient = context.createRadialGradient(16, 16, 0, 16, 16, 16);
+
+        gradient.addColorStop(0, "rgba(255,255,255,1)");
+        gradient.addColorStop(0.35, "rgba(255,255,255,0.6)");
+        gradient.addColorStop(1, "rgba(255,255,255,0)");
+        context.fillStyle = gradient;
+        context.fillRect(0, 0, 32, 32);
+        spot = new THREE.CanvasTexture(canvas);
+    }
+
+    return spot;
+}
+
 /** A colour a share lighter (towards white, by `by`) or darker (towards black, by -`by`). */
 export function shade(colour, by) {
     const base = new THREE.Color(colour);

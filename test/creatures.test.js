@@ -13,7 +13,7 @@ import { CAMP_FOLK, candidatesAt, CREATURES, LAIRS, livesOn, packOf, TIER_LAND, 
 import { HOST_PLAYER, Host, WILDS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
-import { armsOf, NATURAL, weaponOf, WEAPONS } from "../client/js/core/weapons.js";
+import { armsOf, chooseAttack, NATURAL, weaponOf, WEAPONS } from "../client/js/core/weapons.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { FACTIONS } from "../client/js/core/worldplan/plan.js";
 
@@ -214,6 +214,44 @@ describe("the wild come to life near the players (host.js, battle.js)", () => {
 
         assert.ok(fight.some((event) => event.type === "hit" && event.id === slimes[0].id));
         assert.equal(slimes[1].target, HOST_PLAYER, "its pack turned on them");
+    });
+
+    it("knocks the player off their feet with a rock tusker's charge: nothing to be done till they're up", () => {
+        const context = outside(hosted());
+        const { host, me } = context;
+
+        run(host, 600);
+
+        for (const beast of about(host)) {
+            host.battle.remove(beast.id);
+            host.wild.delete(beast.id);
+        }
+
+        host.battle.add({ id: "test-tusker", kind: "beast", name: "Rock tusker", weapon: "rockTusker", team: WILD, square: [me.square[0] + 1, me.square[1]], ai: "wild", hp: 5000, speed: 1, chase: 1, wild: { creature: "rockTusker", tier: 4, temper: "aggressive", guard: 0, roam: 0, leash: 12, pack: "test-tusker", leader: null, menace: true } });
+
+        let knocked = null;
+
+        for (let t = 0; t < 8000 && !knocked; t += STEP_MS) {
+            knocked = host.advance(STEP_MS).find((event) => event.type === "knockdown" && event.id === HOST_PLAYER) ?? null;
+        }
+
+        assert.ok(knocked, "the charge knocked them down");
+        assert.equal(knocked.by, "test-tusker");
+        assert.ok(me.downUntil > host.battle.time && me.stunnedUntil >= me.downUntil, "down, and stunned while they are");
+
+        for (const command of [{ type: "move", to: [me.square[0] - 3, me.square[1]] }, { type: "engage", target: "test-tusker" }, { type: "cast", spell: "heal" }]) {
+            assert.deepEqual(host.command(HOST_PLAYER, command), { ok: false, reason: "down" }, command.type);
+        }
+
+        // (Up again: the tusker gone, they can go)
+        host.battle.remove("test-tusker");
+        run(host, me.downUntil - host.battle.time + STEP_MS);
+        assert.equal(host.command(HOST_PLAYER, { type: "move", to: [me.square[0] - 3, me.square[1]] }).ok, true);
+    });
+
+    it("lets a bog frog's tongue reach two squares off", () => {
+        assert.equal(chooseAttack("bogFrog", [0, 0], [2, 1])?.id, "tongue");
+        assert.equal(chooseAttack("bogFrog", [0, 0], [4, 0])?.id, "spit");
     });
 
     it("sends the town's guards after a menace near them, and leaves a harmless creature be", () => {

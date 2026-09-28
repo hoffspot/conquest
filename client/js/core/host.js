@@ -203,7 +203,11 @@ export const REFUSALS = Object.freeze({
     count: "There aren't so many as that.",
     gone: "It isn't there any more.",
     undo: "Too late to take that back.",
+    down: "You're down: get up first.",
 });
+
+// What can't be done while knocked off one's feet (battle.js: a knockdown)
+const DOWN_HELD = new Set(["move", "ahead", "engage", "approach", "enter", "cast", "ability", "use", "talk"]);
 
 // A whole number, and a square [x, y] of whole numbers
 const whole = (value) => Number.isFinite(value) && Math.floor(value) === value;
@@ -496,6 +500,11 @@ export class Host {
 
         if (!command || typeof command.type !== "string") {
             return refuse("command");
+        }
+
+        // (Knocked off their feet: nothing but getting up, till they're up)
+        if (DOWN_HELD.has(command.type) && this.battle.time < (actor.downUntil ?? 0)) {
+            return refuse("down");
         }
 
         const run = Boolean(command.run);

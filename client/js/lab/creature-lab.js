@@ -28,6 +28,7 @@ const ABOUT = {
     snake: ["Adder", "Further out"],
     bandit: ["Bandit", "Further out", "sword"],
     bear: ["Brown bear", "Far out"],
+    puma: ["Puma", "Far out, in the hills and woods"],
     direWolf: ["Dire wolf", "Far out"],
     goblin: ["Goblin raider", "Far out", "cleaver"],
     skeleton: ["Skeleton", "Far out, and in ruins"],
@@ -193,6 +194,7 @@ function act(what, which = null) {
     }
 
     avatar.actions.revive();
+    again = 0;
 
     if (what === "attack") {
         const attack = weapon ? WEAPONS[weapon].attacks[0] : { animation: "bite", hitAt: 450, duration: 900 };
@@ -214,6 +216,8 @@ function act(what, which = null) {
         avatar.actions.react(weapon ? "slash" : "strike", { from: 0.5 });
     } else if (what === "die") {
         avatar.actions.die({ from: 0.8 });
+    } else if (what === "knockdown") {
+        avatar.actions.knockdown?.({ from: 0, seconds: 1.5 });
     }
 }
 
@@ -237,7 +241,7 @@ function advance(seconds, step = 1 / 60) {
 
         again += dt;
 
-        if ((action === "attack" || action === "react") && again > 2) {
+        if ((action === "attack" || action === "react" || action === "knockdown") && again > (action === "knockdown" ? 2.6 : 2)) {
             again = 0;
             act(action);
         }
@@ -256,7 +260,7 @@ function advance(seconds, step = 1 / 60) {
 // --- The controls ---
 
 const groups = [
-    ["Near home", ["rat", "porcupine", "slime", "bats", "wolf", "boar", "snake", "bandit", "bear", "direWolf", "goblin", "skeleton", "cultist", "troll", "ogre", "wyvern"]],
+    ["Near home", ["rat", "porcupine", "slime", "bats", "wolf", "boar", "snake", "bandit", "bear", "puma", "direWolf", "goblin", "skeleton", "cultist", "troll", "ogre", "wyvern"]],
     ["Each people's own", ["blackShuck", "boggart", "wisp", "treant", "caveSpider", "shadowStalker", "hyena", "scorpion", "bogFrog", "crocodile", "magmaSlime", "rockTusker"]],
     ["For the mightiest", ["dragon", "wightLord", "frostTroll"]],
 ];
@@ -319,11 +323,20 @@ window.lab = {
     },
     act,
     advance,
+    avatar: () => current.avatar,
     current: () => ({ id: current.id, humanoid: !current.avatar.plan, attacks: current.avatar.attacks ?? [], specials: current.avatar.specials ?? [], rests: current.avatar.rests ?? [] }),
     pause: () => {
         playing = false;
     },
-    view: ({ turn = 0, lift = 0, zoom = 1 } = {}) => {
+    view: ({ turn = 0, lift = 0, zoom = 1, at = null } = {}) => {
+        // (Looking at a height, metres: its head, say)
+        if (at !== null) {
+            const shift = at - controls.target.y;
+
+            controls.target.y += shift;
+            camera.position.y += shift;
+        }
+
         const offset = camera.position.clone().sub(controls.target);
         const spherical = new THREE.Spherical().setFromVector3(offset);
 

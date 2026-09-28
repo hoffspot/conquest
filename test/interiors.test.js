@@ -606,7 +606,7 @@ describe("the tavern's folk (interiors.js, battle.js)", () => {
         battle.command("player", { type: "engage", target: "drinker" });
         run(battle, 200);
         assert.notEqual(player.order?.type, "engage");
-        assert.deepEqual(battle.cast("player", "stun", "wench"), { ok: false, reason: "target" });
+        assert.deepEqual(battle.cast("player", "stun", "wench"), { ok: false, reason: "friendly" });
 
         // Standing right by one, nobody strikes anybody
         const calm = busy();

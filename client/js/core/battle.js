@@ -293,8 +293,9 @@ export class Battle {
             readyAt: 0,
             staggeredUntil: 0,
             // Stunned until (ms), the spell it's casting ({ spell, target, start, landsAt }), and
-            // when it can cast another
+            // when it can cast another; knocked down until (ms: stunned till then too)
             stunnedUntil: 0,
+            downUntil: 0,
             casting: null,
             spellReadyAt: 0,
             dead: false,
@@ -1871,6 +1872,19 @@ export class Battle {
             projectile,
         });
 
+        // A blow that knocks its target off its feet: it can't move, fight or cast till it's up
+        if (attack.knockdown && target.hp > 0) {
+            target.stunnedUntil = Math.max(target.stunnedUntil, this.time + attack.knockdown);
+            target.downUntil = Math.max(target.downUntil ?? 0, this.time + attack.knockdown);
+            target.casting = null;
+
+            if (target.attack && !target.attack.struck) {
+                target.attack = null;
+            }
+
+            this.#emit("knockdown", { id: target.id, by: attacker?.id ?? null, until: target.downUntil });
+        }
+
         // Whoever is hit fights back
         if (attacker && (target.ai === "patrol" || target.ai === "wild")) {
             target.target = attacker.id;
@@ -1954,6 +1968,7 @@ export class Battle {
             readyAt: this.time,
             staggeredUntil: 0,
             stunnedUntil: 0,
+            downUntil: 0,
             casting: null,
             spellReadyAt: this.time,
             target: null,

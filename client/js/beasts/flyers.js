@@ -10,7 +10,7 @@
 
 import * as THREE from "three";
 import { Sculpt } from "./sculpt.js";
-import { ellipsoid, joint, membrane, part, shade, skin } from "./shapes.js";
+import { ellipsoid, joint, limb, membrane, part, shade, skin } from "./shapes.js";
 
 const TAU = Math.PI * 2;
 const smooth = (u) => u * u * (3 - 2 * u);
@@ -187,10 +187,16 @@ export function frog(look, random, key = null) {
     const sac = joint(jaw, "sac", [0, -size * 0.1, size * 0.2]);
 
     part(sac, ellipsoid(size * 0.28, size * 0.18, size * 0.25, 12), sacSkin, { shadow: false });
-    const tongue = joint(head, "tongue", [0, -size * 0.08, size * 0.3]);
+    // Its tongue: a long pink rope with a sticky knob on its end, kept rolled up in its mouth,
+    // shot out as far as what it's after (a metre long, stretched to reach)
+    const mouthAt = [0, -size * 0.08, size * 0.3];
+    const tongue = joint(head, "tongue", mouthAt);
+    const knob = joint(head, "tongue-tip", mouthAt);
 
-    part(tongue, ellipsoid(size * 0.06, size * 0.04, size * 0.5), tongueSkin, { at: [0, 0, size * 0.5], shadow: false });
-    tongue.scale.z = 0.05;
+    part(tongue, limb(1, size * 0.07, size * 0.055, 8), tongueSkin, { turn: [-Math.PI / 2, 0, 0], shadow: false });
+    part(knob, ellipsoid(size * 0.12, size * 0.1, size * 0.12, 10), tongueSkin, { shadow: false });
+    tongue.scale.set(1, 1, 0.01);
+    knob.scale.setScalar(0.01);
 
     // Legs: long hind legs folded under (thigh, shin and a webbed foot), short forelegs
     const legs = [];
@@ -246,7 +252,8 @@ export function frog(look, random, key = null) {
             const hunker = rest?.name === "hunker" ? rest.w : 0;
             const look = rest?.name === "look" ? rest.w : 0;
 
-            tongue.scale.z = 0.05;
+            let lick = 0;
+
             jaw.rotation.x = 0;
             head.rotation.y = Math.sin(t * 0.8) * 0.5 * look;
 
@@ -261,12 +268,20 @@ export function frog(look, random, key = null) {
                 } else if (style === "spit") {
                     jaw.rotation.x = 0.5 * out;
                 } else {
-                    tongue.scale.z = 0.05 + out * 3.2;
-                    jaw.rotation.x = 0.35 * out;
+                    // (Shot out fast, drawn back slower: as far as its prey, less its own
+                    // length to its mouth)
+                    const far = Math.max(size, (attack.reach ?? size * 4.5) - size * 0.9);
+
+                    lick = far * (u < hit ? Math.sqrt(smooth(u / hit)) : out);
+                    jaw.rotation.x = 0.45 * Math.min(1, out * 2);
                 }
             } else {
                 body.position.z = 0;
             }
+
+            tongue.scale.set(1, 1, Math.max(0.01, lick));
+            knob.position.set(mouthAt[0], mouthAt[1], mouthAt[2] + lick);
+            knob.scale.setScalar(lick > size * 0.2 ? 1 : 0.01);
 
             body.position.y = size * (0.42 - hunker * 0.12) + air * size * 0.9;
             body.rotation.set(-0.35 - air * 0.4 + hunker * 0.2, 0, 0);
