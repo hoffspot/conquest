@@ -32,6 +32,8 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     shadows: true,
     squares: false,
     minimap: true,
+    // (Summoned by another player: said no to at once, not asked)
+    resistSummons: false,
     sound: true,
     // How loud each kind of sound is, 0 to 1 (audio/sound.js VOLUME_DEFAULTS), and the scale
     // they're on: volumes saved on another (louder) scale are forgotten, for the defaults

@@ -186,8 +186,11 @@ export const rollTome = (random) => random.pickWeighted(TOMES, (id) => TOME_RARI
 /** Spells known by other names before (a wheel kept from then). */
 export const RENAMED = Object.freeze({ heal: "vigor", greaterHeal: "mendWounds" });
 
-/** The spell a spell looks as (its school; or itself, or the one it's a greater form of). */
-export const lookOf = (id) => SPELLS[id]?.like ?? (SPELLS[id]?.school === "healing" ? "heal" : (SPELLS[id]?.school ?? id));
+/**
+ * The spell a spell looks as (its school; or itself, or the one it's a greater form of; a tome's,
+ * as healing if it's a kindness, as a hex if it's cast at an enemy).
+ */
+export const lookOf = (id) => SPELLS[id]?.like ?? (SPELLS[id]?.school === "healing" ? "heal" : SPELLS[id]?.tome ? (SPELLS[id].target === "enemy" ? "stun" : "heal") : (SPELLS[id]?.school ?? id));
 
 /** How much a heal restores: a whole number from its least to its most, each as likely. */
 export function rollHeal(spell, random) {

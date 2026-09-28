@@ -2,7 +2,8 @@
 // a name and health bar over every other character, numbers for the damage each blow does, and
 // messages across the middle of the screen. Under a health bar, an orange bar shows stamina
 // while it isn't full; under that, an icon for each thing lingering on them (poison, a web...),
-// darkening round as it wears off.
+// and each spell lasting on them (a ward, Reflect...), darkening round as it wears off. A choice
+// to be made (who to summon; whether to go to someone summoning them) asked in a small panel.
 
 import { ICONS } from "./icons.js";
 
@@ -87,8 +88,8 @@ export class Hud {
 
     /**
      * Show what's lingering on a character (the player's plate, or over another's bar): an icon
-     * for each ([{ kind, icon (an ICONS key), label, left (the share of its time still to go) }]),
-     * or none.
+     * for each ([{ kind, icon (an ICONS key), label, left (the share of its time still to go),
+     * buff (a spell lasting on them, not an affliction) }]), or none.
      */
     setAfflictions(id, ailments) {
         const plate = this.#plateOf(id);
@@ -116,8 +117,8 @@ export class Hud {
         if (row.dataset.key !== key) {
             row.dataset.key = key;
             row.replaceChildren(
-                ...ailments.map(({ kind, icon, label }) => {
-                    const each = element("span", `ail ail-${kind}`);
+                ...ailments.map(({ kind, icon, label, buff = false }) => {
+                    const each = element("span", `ail ail-${kind}${buff ? " buff" : ""}`);
 
                     each.title = label;
                     each.setAttribute("role", "img");
@@ -214,12 +215,68 @@ export class Hud {
         this.banner.append(" ", act);
     }
 
+    /**
+     * Ask the player to choose (`title`; `options`: [{ label, value }]), in a small panel over
+     * the middle of the screen: `onChoose` hears the value chosen, or nothing (`cancel`'s label, if
+     * there's a way out: null for none), or `lapse` (a value) if `seconds` go by first. Asked
+     * again, the last is forgotten (heard as cancelled). Returns a way to withdraw it.
+     */
+    choose(title, options, onChoose, { cancel = "Cancel", seconds = null, lapse = undefined } = {}) {
+        this.choice?.withdraw();
+
+        const panel = element("div", "choice");
+        const heading = element("p", "choice-title", title);
+        const buttons = element("div", "choice-options");
+        let timer = null;
+        const done = (value) => {
+            clearTimeout(timer);
+            panel.remove();
+
+            if (this.choice === asked) {
+                this.choice = null;
+            }
+
+            onChoose(value);
+        };
+        const asked = { withdraw: () => done(undefined), panel };
+
+        panel.setAttribute("role", "dialog");
+        panel.setAttribute("aria-label", title);
+
+        for (const { label, value } of options) {
+            const button = element("button", "button choice-option", label);
+
+            button.type = "button";
+            button.addEventListener("click", () => done(value));
+            buttons.append(button);
+        }
+
+        if (cancel) {
+            const button = element("button", "button choice-cancel", cancel);
+
+            button.type = "button";
+            button.addEventListener("click", () => done(undefined));
+            buttons.append(button);
+        }
+
+        panel.append(heading, buttons);
+        this.root.append(panel);
+        this.choice = asked;
+
+        if (seconds) {
+            timer = setTimeout(() => done(lapse), seconds * 1000);
+        }
+
+        return asked;
+    }
+
     /** Remove every floating bar and number. */
     clear() {
         this.floaters.replaceChildren();
         this.tracked.clear();
         this.targeted = null;
         this.message("");
+        this.choice?.withdraw();
     }
 
     #plateOf(id) {

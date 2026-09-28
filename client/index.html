@@ -158,6 +158,10 @@
                 </button>
             </header>
             <ul class="worldmap-key" id="worldmapkey" aria-label="Key"></ul>
+            <div class="worldmap-pick" id="worldmappick" hidden>
+                <p id="worldmappicktext">Wizard's Walk: tap somewhere you've been</p>
+                <button type="button" class="button" id="worldmapcancel">Cancel</button>
+            </div>
             <div class="worldmap-tools">
                 <button type="button" id="worldmaphere" class="hud-button" aria-label="Where you are" title="Where you are">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
@@ -217,6 +221,11 @@
                     <label class="switch option">
                         <span class="text">Minimap<small>The map in the top right</small></span>
                         <input type="checkbox" id="minimapswitch" role="switch">
+                        <span class="track" aria-hidden="true"></span>
+                    </label>
+                    <label class="switch option">
+                        <span class="text">Resist all summons<small>Another player's Summon: said no to, without asking</small></span>
+                        <input type="checkbox" id="resistswitch" role="switch">
                         <span class="track" aria-hidden="true"></span>
                     </label>
                     <label class="switch option">

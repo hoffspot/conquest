@@ -193,6 +193,10 @@ export class WorldMap {
         this.pointers = new Map();
         this.pinch = null;
 
+        /** Heard with the point tapped ([x, z], metres) while picking somewhere (Wizard's Walk), or null. */
+        this.onPick = null;
+        this.pressed = null;
+
         /** What was drawn last (for tests): { chunks (shown in detail), fogged, names, icons }. */
         this.drawn = null;
 
@@ -225,6 +229,18 @@ export class WorldMap {
         this.view = { scale: Math.max(NEAREST, OPENED / Math.max(1, Math.min(width, height))), x: player.x, z: player.z };
         this.#clamp();
         this.draw();
+    }
+
+    /** The world's point (metres: [x, z]) at a point on the canvas (pixels from its top left corner). */
+    pointAt(sx, sy) {
+        const [width, height] = this.#size();
+
+        return [this.view.x + (sx - width / 2) * this.view.scale, this.view.z + (sy - height / 2) * this.view.scale];
+    }
+
+    /** Whether somewhere's been uncovered (a point: metres). */
+    uncovered([x, z]) {
+        return this.explored?.isVisited(Math.floor(x / CHUNK), Math.floor(z / CHUNK)) ?? false;
     }
 
     /** Zoom in (`factor` below 1) or out, about the middle of the screen. */
@@ -574,6 +590,7 @@ export class WorldMap {
     #down(event) {
         this.canvas.setPointerCapture?.(event.pointerId);
         this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        this.pressed = this.pointers.size === 1 ? { x: event.clientX, y: event.clientY, moved: 0 } : null;
 
         if (this.pointers.size === 2) {
             const [a, b] = [...this.pointers.values()];
@@ -593,6 +610,10 @@ export class WorldMap {
 
         pointer.x = event.clientX;
         pointer.y = event.clientY;
+
+        if (this.pressed) {
+            this.pressed.moved += Math.abs(dx) + Math.abs(dy);
+        }
 
         if (this.pointers.size === 2 && this.pinch) {
             const [a, b] = [...this.pointers.values()];
@@ -618,6 +639,15 @@ export class WorldMap {
 
     #up(event) {
         this.pointers.delete(event.pointerId);
+
+        // (Picking somewhere: a tap, not a drag)
+        if (this.onPick && this.pressed && this.pressed.moved < 8 && event.type === "pointerup") {
+            const rect = this.canvas.getBoundingClientRect();
+
+            this.onPick(this.pointAt(event.clientX - rect.left, event.clientY - rect.top));
+        }
+
+        this.pressed = null;
 
         if (this.pointers.size < 2) {
             this.pinch = null;

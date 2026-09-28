@@ -225,6 +225,7 @@ const AILING = Object.freeze({
     burn: { bursts: ["flames", "smoke"], every: 0.06, at: [0.05, 0.85], round: 0.18, tint: [0.24, 0.07, 0], hurt: "flames" },
     bleed: { bursts: ["drip"], every: 0.22, at: [0.4, 0.65], round: 0.17, tint: null, hurt: "blood" },
     slow: { bursts: [], every: 0.3, at: [0.05, 0.4], round: 0.2, tint: null, hurt: null },
+    fear: { bursts: ["shadows"], every: 0.3, at: [0.7, 1], round: 0.25, tint: [0.03, 0.03, 0.06], hurt: null },
 });
 
 // Slowed, as it was done: webbed, rooted, chilled (each drawn, and each its own icon and words)
@@ -235,12 +236,12 @@ const HELD = Object.freeze({
 });
 
 // What the player's told when something takes hold of them
-const TAKEN = Object.freeze({ poison: "You're poisoned!", disease: "You've caught a sickness!", wither: "A curse withers you!", burn: "You're on fire!", bleed: "You're bleeding!", slow: "You're slowed!" });
+const TAKEN = Object.freeze({ poison: "You're poisoned!", disease: "You've caught a sickness!", wither: "A curse withers you!", burn: "You're on fire!", bleed: "You're bleeding!", slow: "You're slowed!", fear: "You're terrified!" });
 
 // The icon, words and what's drawn for what's lingering on someone (its kind, and look)
 function ailmentOf(kind, look = null) {
     const held = kind === "slow" ? HELD[look] : null;
-    const icons = { poison: "poisoned", disease: "diseased", wither: "withered", burn: "burning", bleed: "bleeding", slow: "slowed" };
+    const icons = { poison: "poisoned", disease: "diseased", wither: "withered", burn: "burning", bleed: "bleeding", slow: "slowed", fear: "fear" };
 
     return {
         icon: held?.icon ?? icons[kind],
@@ -279,7 +280,21 @@ const SPILLS = Object.freeze({
 const SPELL_LOOKS = Object.freeze({ fire: "fireball", earth: "roots", air: "bolt", water: "bolt" });
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "rank", "loot", "bought", "sold", "used", "gear", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "gift", "counsel", "trade", "tier", "learnt"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "rank", "loot", "bought", "sold", "used", "gear", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted"]);
+
+// What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
+// anywhere on it (effects.js BURSTS)
+const GROUNDS = Object.freeze({
+    fire: ["flames", "embers"],
+    acid: ["venomBubbles", "steam"],
+    rot: ["miasma", "flies"],
+    lava: ["lavaSplash", "embers"],
+    venom: ["venomBubbles"],
+});
+
+// What the player's told of a spell of theirs lasting on them wearing off, or being called off
+// (Invisibility: they've been seen), by the spell
+const WORN_OFF = Object.freeze({ invisibility: "You're seen again." });
 
 const _focus = new THREE.Vector3();
 const _lean = new THREE.Vector3();
@@ -384,6 +399,13 @@ export class Game {
         // Those with something lingering on them (their ids), and when each's next shows it (by
         // id and kind: s); those whose skin's tinged by it
         this.ailed = new Set();
+
+        /** Whether another player's Summon is said no to at once, not asked (Game options). */
+        this.resistSummons = false;
+
+        // What lies on the ground (battle.js hazards: by id, as told), and when each next shows
+        this.grounds = new Map();
+        this.groundsAt = new Map();
         this.ailingAt = new Map();
         this.tinged = new Set();
 
@@ -1155,6 +1177,7 @@ export class Game {
         hud.setTarget(target?.id ?? null);
         this.#bleed(dt);
         this.#ailing();
+        this.#grounds();
         this.ailments?.update(dt);
         this.#keepTalking();
         this.#keepShopping();
@@ -2793,6 +2816,17 @@ export class Game {
                 continue;
             }
 
+            // (Something lying on the ground, or gone from it: no one's)
+            if (event.type === "hazard") {
+                if (event.change === "on") {
+                    this.grounds.set(event.hazard, event);
+                } else {
+                    this.grounds.delete(event.hazard);
+                }
+
+                continue;
+            }
+
             const avatar = this.avatars.get(event.id);
 
             // (Someone not drawn yet: one of the folk of a building being got ready)
@@ -2889,11 +2923,38 @@ export class Game {
 
                     this.wounds.get(event.id)?.heal(actor.hp, actor.maxHp);
                     effects.heal(avatar.object.position, avatar.character.height, this.#landing(event.id, "heal"));
-                    hud.damage(this.#screenAbove(event.id), `+${event.amount}`, { kind: "heal" });
+                    hud.damage(this.#screenAbove(event.id), event.amount || !event.cured?.length ? `+${event.amount}` : "Cured", { kind: "heal" });
                     hud.setHealth(event.id, actor.hp, actor.maxHp);
                     this.sound?.play("healed", { at: avatar.object.position });
                     break;
                 }
+                case "buffed":
+                case "unbuffed":
+                    this.#buffed(event, avatar);
+                    break;
+                case "dodged":
+                    hud.damage(this.#screenAbove(event.id), "Dodged", { kind: "stun" });
+                    effects.burst("dust", avatar.point(0.1));
+                    break;
+                case "resisted":
+                    hud.damage(this.#screenAbove(event.id), event.always ? "Immune" : "Resisted", { kind: "stun" });
+
+                    if (event.by === this.me) {
+                        this.hud.message(`${battle.actor(event.id)?.name ?? "It"} ${event.used ? "is past fearing you, for now" : event.always ? "can't be swayed by that" : "shrugs off your spell"}.`, 2);
+                    }
+
+                    break;
+                case "pacified":
+                    hud.damage(this.#screenAbove(event.id), "Calmed", { kind: "heal" });
+                    effects.burst("blessing", avatar.point(0.8));
+                    break;
+                case "seen":
+                    if (event.target === this.me) {
+                        this.hud.message(`${avatar.character ? battle.actor(event.id)?.name ?? "Something" : "Something"} sees through your invisibility!`, 3);
+                        this.sound?.play("denied");
+                    }
+
+                    break;
                 case "stunned":
                     effects.stun(avatar.point(0.9), avatar.object, avatar.character.height * 1.08, (event.until - battle.time) / 1000, this.#landing(event.id, "stun"));
                     hud.damage(this.#screenAbove(event.id), "Stunned", { kind: "stun" });
@@ -3073,7 +3134,7 @@ export class Game {
                 break;
             case "follower":
                 if (event.id === this.me) {
-                    this.hud.message({ joined: `${event.name} follows you now.`, fallen: `${event.name} has fallen!`, dismissed: `${event.name} goes their own way.` }[event.change], 3);
+                    this.hud.message({ joined: `${event.name} follows you now.`, fallen: `${event.name} has fallen!`, dismissed: `${event.name} goes their own way.`, lost: `${event.name} is left behind: back where you hired them, when you're next there.` }[event.change], 3);
                     this.hud.setGold(this.progress.gold);
                     this.#mirror();
 
@@ -3172,6 +3233,55 @@ export class Game {
                 }
 
                 break;
+            case "grown":
+                // (A spell that grows with use grown: Vampirism, Dodge, Poison)
+                if (event.id === this.me) {
+                    this.hud.message(`${SPELLS[event.spell].label} grows stronger (${event.level} of 5).`, 3);
+                    this.onProgress(this.progress);
+                }
+
+                break;
+            case "companion":
+                this.#companion(event);
+                break;
+            case "summons":
+                this.#summons(event);
+                break;
+            case "carried":
+                if (event.id === this.me) {
+                    this.hud.message({ teleport: "The world lurches, and you're somewhere else entirely.", recall: "You stand at the temple's door.", walk: "One step, and you're there.", summoned: "You're at their side." }[event.why] ?? "", 3);
+                }
+
+                break;
+            case "polymorphed": {
+                // (Made again as what it is now, in a puff of smoke)
+                const actor = this.battle.actor(event.id);
+
+                if (actor && this.avatars.has(event.id)) {
+                    const at = this.avatars.get(event.id).point(0.5);
+
+                    this.#undress(event.id);
+                    this.enlisting.push(event.id);
+                    this.effects.burst("smoke", at);
+                    this.effects.burst("arcane", at);
+                }
+
+                break;
+            }
+            case "attracted": {
+                // (Out of a puff of smoke)
+                const [ox, oz] = this.originOf("town");
+                const at = new THREE.Vector3(ox + event.x, 0.6, oz + event.y);
+
+                this.effects.burst("smoke", at);
+                this.effects.burst("dust", at);
+
+                if (event.id === this.me) {
+                    this.hud.message(`A ${CREATURES[event.creature]?.name.toLowerCase() ?? "creature"} comes out of the smoke!`, 2.5);
+                }
+
+                break;
+            }
             default:
                 break;
         }
@@ -3327,6 +3437,116 @@ export class Game {
         }
     }
 
+    // A spell lasting on someone, or ended: shown on their plate (#ailing), and the player told of
+    // their own (by whom, if it's someone else's); what's shown of them now (Invisibility)
+    #buffed({ type, id, kind, by, over }, avatar) {
+        const label = SPELLS[kind]?.label ?? kind;
+
+        this.ailed.add(id);
+
+        if (kind === "invisibility") {
+            this.#unseen(avatar, type === "buffed");
+        }
+
+        if (id !== this.me) {
+            return;
+        }
+
+        if (type === "buffed" && by && by !== this.me) {
+            this.hud.message(`${this.battle.actor(by)?.name ?? "Someone"} casts ${label} on you.`, 2.5);
+        } else if (type === "unbuffed") {
+            this.hud.message(WORN_OFF[kind] ?? `${label} ${over ? "wears off" : "ends"}.`, 2);
+        }
+    }
+
+    // Someone unseen (Invisibility): all but gone, a shimmer of them (their materials made their
+    // own the first time, copies of any shared with anyone else's, and made see-through while it lasts)
+    #unseen(avatar, on) {
+        avatar.object.traverse((part) => {
+            if (part.material && !part.userData.ownMaterial) {
+                part.material = Array.isArray(part.material) ? part.material.map((each) => each.clone()) : part.material.clone();
+                part.userData.ownMaterial = true;
+            }
+
+            for (const material of [part.material].flat().filter(Boolean)) {
+                material.userData.opacity ??= material.opacity;
+                material.userData.transparent ??= material.transparent;
+                material.transparent = on || material.userData.transparent;
+                material.opacity = on ? material.userData.opacity * 0.22 : material.userData.opacity;
+                material.needsUpdate = true;
+            }
+        });
+    }
+
+    // A creature at the player's side by magic, or gone from it: told
+    #companion({ id, creature, change }) {
+        if (id !== this.me) {
+            return;
+        }
+
+        const name = CREATURES[creature]?.name.toLowerCase() ?? "creature";
+        const said = { risen: `The ${name} rises from the dead to follow you!`, called: `A ${name} answers your call, at your side.`, over: `Your ${name} is gone, its time up.`, fallen: `Your ${name} has fallen.`, lost: `Your ${name} is left behind.` }[change];
+
+        if (said) {
+            this.hud.message(said, 3);
+        }
+    }
+
+    // Summoned by another player (come, or resist: said no to at once, with Resist all summons
+    // on), or someone they've summoned coming or not
+    #summons(event) {
+        if (event.id !== this.me) {
+            return;
+        }
+
+        const nameOf = (id) => this.host.players.get(id)?.hero.name ?? "They";
+
+        if (event.change === "asked" && this.resistSummons) {
+            this.#command({ type: "summoned", come: false });
+            this.hud.message(`You resist ${event.name}'s summons.`, 3);
+        } else if (event.change === "asked") {
+            this.sound?.play("wake");
+            this.hud.choose(`${event.name} is summoning you to their side. Go?`, [{ label: `Go to ${event.name}`, value: true }, { label: "Resist", value: false }], (come) => come !== undefined && this.#command({ type: "summoned", come }), { cancel: null, seconds: Math.max(1, (event.until - this.battle.time) / 1000) });
+        } else if (event.change === "sent") {
+            this.hud.message(`You call to ${event.name}...`, 2.5);
+        } else if (event.change === "came" && event.target) {
+            this.hud.message(`${nameOf(event.target)} comes to your side.`, 3);
+        } else if (event.change === "resisted" && event.target) {
+            this.hud.message(`${nameOf(event.target)} resists your summons.`, 3);
+        } else if (event.change === "resisted") {
+            this.hud.choice?.withdraw();
+        }
+    }
+
+    // What lies on the ground on the player's map, as it shows: flames licking up off it, acid
+    // bubbling, rot festering... anywhere on it, now and then
+    #grounds() {
+        const point = new THREE.Vector3();
+
+        for (const [id, ground] of this.grounds) {
+            if (ground.map !== this.mapId || this.clock < (this.groundsAt.get(id) ?? 0)) {
+                continue;
+            }
+
+            const [ox, oz] = this.originOf(ground.map);
+
+            this.groundsAt.set(id, this.clock + 0.05 + Math.random() * 0.08 / Math.max(1, ground.radius));
+
+            for (const burst of GROUNDS[ground.kind] ?? []) {
+                const angle = Math.random() * Math.PI * 2;
+                const reach = Math.sqrt(Math.random()) * ground.radius;
+
+                this.effects.burst(burst, point.set(ox + ground.x + Math.cos(angle) * reach, 0.05, oz + ground.y + Math.sin(angle) * reach));
+            }
+        }
+
+        for (const id of this.groundsAt.keys()) {
+            if (!this.grounds.has(id)) {
+                this.groundsAt.delete(id);
+            }
+        }
+    }
+
     // What lingers on everyone shown, as it goes: an icon for each on their plate (the time it's
     // got left darkening round it), and rising off them now and then (bubbles, flies, motes,
     // flames, blood, silk...), those on the player's map
@@ -3337,7 +3557,7 @@ export class Game {
         for (const id of this.ailed) {
             const actor = battle.actor(id);
 
-            if (!actor?.afflictions?.length || actor.dead) {
+            if ((!actor?.afflictions?.length && !actor?.buffs?.length) || actor.dead) {
                 this.ailed.delete(id);
                 hud.setAfflictions(id, []);
 
@@ -3348,7 +3568,7 @@ export class Game {
         }
 
         for (const actor of battle.actors) {
-            if (!actor.afflictions?.length || actor.dead) {
+            if ((!actor.afflictions?.length && !actor.buffs?.length) || actor.dead) {
                 continue;
             }
 
@@ -3359,10 +3579,11 @@ export class Game {
             }
 
             this.ailed.add(actor.id);
-            hud.setAfflictions(
-                actor.id,
-                actor.afflictions.map(({ kind, until, look }) => ({ kind, ...ailmentOf(kind, look), left: (until - battle.time) / (AFFLICTIONS[kind]?.ms ?? 1) })),
-            );
+            hud.setAfflictions(actor.id, [
+                ...actor.afflictions.map(({ kind, until, look }) => ({ kind, ...ailmentOf(kind, look), left: (until - battle.time) / (AFFLICTIONS[kind]?.ms ?? 1) })),
+                // (And the spells lasting on them: a ward, Reflect...)
+                ...(actor.buffs ?? []).map(({ kind, until }) => ({ kind, icon: kind, label: SPELLS[kind]?.label ?? kind, left: (until - battle.time) / (SPELLS[kind]?.lasts ?? 1), buff: true })),
+            ]);
 
             if (actor.map !== this.mapId || !avatar.object.visible) {
                 continue;
@@ -3758,6 +3979,16 @@ export class Game {
 
         const { spell, order, ability, item } = actionOf(action) ?? {};
         const on = target === "self" ? null : target;
+
+        // (Somewhere to go, picked on the world map; someone to summon, chosen)
+        if (spell && SPELLS[spell].target === "place") {
+            return this.#pickPlace(spell);
+        }
+
+        if (spell && SPELLS[spell].target === "summon" && on === null && this.#summonable().length) {
+            return this.#chooseSummons(spell);
+        }
+
         const command = spell ? { type: "cast", spell, target: on } : ability ? { type: "ability", ability, target: on } : order ? { type: order, target } : item ? { type: "use", item } : null;
 
         const heard = (result) => {
@@ -3779,6 +4010,64 @@ export class Game {
         }
 
         return this.#command(command, heard);
+    }
+
+    // Why a spell can't be cast just now, before choosing where or on whom (or null): not known,
+    // cooling down, or not the right thing in hand
+    #unready(spell) {
+        const actor = this.battle.actor(this.me);
+        const needs = SPELLS[spell].needs;
+
+        return !this.progress.knows(spell) ? "unknown" : this.battle.cooldown(this.me, spell) > 0 ? "cooldown" : needs && actor?.weapon !== needs ? needs : null;
+    }
+
+    // Told why a spell wasn't cast (or nothing, if it was)
+    #castHeard(result) {
+        if (!result.ok) {
+            this.hud.message(REFUSALS[result.reason] ?? CAST_FAILURES[result.reason], 1.4);
+            this.sound?.play("denied");
+        }
+    }
+
+    // Wizard's Walk: somewhere picked on the world map (somewhere they've been), then cast
+    #pickPlace(spell) {
+        const why = this.#unready(spell);
+
+        if (why) {
+            this.#castHeard({ ok: false, reason: why });
+
+            return { ok: false, reason: why };
+        }
+
+        this.onWorldMap({ pick: (point) => point && this.#command({ type: "cast", spell, at: point }, (result) => this.#castHeard(result)) });
+
+        return { ok: true };
+    }
+
+    // The other players who could be summoned (none of a people at war with the player's)
+    #summonable() {
+        const me = this.battle.actor(this.me);
+
+        return [...this.host.players.values()].filter(({ id }) => id !== this.me && this.battle.actor(id) && !this.battle.hostile(this.battle.actor(id), me));
+    }
+
+    // Summon: a creature of these parts, or another player (chosen), then cast
+    #chooseSummons(spell) {
+        const why = this.#unready(spell);
+
+        if (why) {
+            this.#castHeard({ ok: false, reason: why });
+
+            return { ok: false, reason: why };
+        }
+
+        this.hud.choose("Summon", [{ label: "A creature of these parts", value: null }, ...this.#summonable().map(({ id, hero }) => ({ label: hero.name, value: id }))], (target) => {
+            if (target !== undefined) {
+                this.#command({ type: "cast", spell, target }, (result) => this.#castHeard(result));
+            }
+        });
+
+        return { ok: true };
     }
 
     // Who is under a point on the screen, within PICK_RADIUS of their feet, middle or head: the

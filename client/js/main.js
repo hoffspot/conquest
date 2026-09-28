@@ -32,7 +32,7 @@ const debug = new Debug($("#debug"), { settings, onChange: applySetting });
 
 // What's been loaded and made: the loader, the game's modules, the view and character kit, the
 // heads-up display, and the game being played
-const state = { loader: null, modules: null, session: null, hud: null, game: null, save: null, creator: null, worldMap: null, together: null, joinAfter: null };
+const state = { loader: null, modules: null, session: null, hud: null, game: null, save: null, creator: null, worldMap: null, picking: null, together: null, joinAfter: null };
 
 window.pellagos = {
     get game() {
@@ -204,6 +204,7 @@ $("#newbutton").addEventListener("click", (event) => {
 
 $("#debugswitch").checked = settings.debug;
 $("#minimapswitch").checked = settings.minimap;
+$("#resistswitch").checked = settings.resistSummons;
 $("#soundswitch").checked = settings.sound;
 $("#debugswitch").addEventListener("change", (event) => applySetting("debug", event.target.checked));
 
@@ -289,6 +290,7 @@ async function play(save) {
     await game.build(({ label, done, total }) => setProgress(done / total, label, `${done} of ${total}`));
     game.showSquares(settings.squares);
     showMinimap(settings.minimap);
+    game.resistSummons = settings.resistSummons;
     debug.watch({ game });
     show("hud");
     game.start();
@@ -348,10 +350,14 @@ async function openWheels() {
 
 // --- The world map (the minimap held, or M) ---
 
-async function openWorldMap() {
+// (Opened to pick somewhere to go: Wizard's Walk. `pick` hears the point tapped, somewhere
+// uncovered, or null if it's called off)
+async function openWorldMap({ pick = null } = {}) {
     const game = state.game;
 
     if (!game?.running || $("#menu").open || $("#worldmap").open) {
+        pick?.(null);
+
         return;
     }
 
@@ -367,10 +373,40 @@ async function openWorldMap() {
         keyOf();
     }
 
-    state.worldMap.open(game.worldMapView());
+    const map = state.worldMap;
+
+    state.picking = pick;
+    $("#worldmappick").hidden = !pick;
+    $("#worldmappicktext").textContent = "Wizard's Walk: tap somewhere you've been";
+    map.onPick = pick
+        ? (point) => {
+              if (!map.uncovered(point)) {
+                  $("#worldmappicktext").textContent = "You haven't been there: somewhere you've been";
+
+                  return;
+              }
+
+              state.picking = null;
+              closeWorldMap();
+              pick(point);
+          }
+        : null;
+    map.open(game.worldMapView());
 }
 
 function closeWorldMap() {
+    // (Closed while picking somewhere: called off)
+    const picking = state.picking;
+
+    state.picking = null;
+
+    if (state.worldMap) {
+        state.worldMap.onPick = null;
+    }
+
+    $("#worldmappick").hidden = true;
+    picking?.(null);
+
     if ($("#worldmap").open) {
         $("#worldmap").close();
         state.game?.start();
@@ -400,6 +436,7 @@ async function keyOf() {
 }
 
 $("#worldmapclose").addEventListener("click", closeWorldMap);
+$("#worldmapcancel").addEventListener("click", closeWorldMap);
 $("#worldmapin").addEventListener("click", () => state.worldMap?.zoom(0.6));
 $("#worldmapout").addEventListener("click", () => state.worldMap?.zoom(1 / 0.6));
 $("#worldmaphere").addEventListener("click", () => state.worldMap?.centre());
@@ -595,6 +632,7 @@ async function playJoined(save, welcome, joining) {
     await game.build(({ label, done, total }) => setProgress(done / total, label, `${done} of ${total}`));
     game.showSquares(settings.squares);
     showMinimap(settings.minimap);
+    game.resistSummons = settings.resistSummons;
     debug.watch({ game });
     show("hud");
     game.start();
@@ -643,6 +681,7 @@ $("#optionsback").addEventListener("click", () => menuPage("main"));
 $("#wheelsbutton").addEventListener("click", openWheels);
 $("#wheelsback").addEventListener("click", () => menuPage("options"));
 $("#minimapswitch").addEventListener("change", (event) => applySetting("minimap", event.target.checked));
+$("#resistswitch").addEventListener("change", (event) => applySetting("resistSummons", event.target.checked));
 $("#soundswitch").addEventListener("change", (event) => applySetting("sound", event.target.checked));
 
 // How loud each kind of sound is: as the slider moves, and remembered when let go. Moving the
@@ -755,6 +794,10 @@ function applySetting(key, value) {
         state.game?.showSquares(value);
     } else if (key === "minimap") {
         showMinimap(value);
+    } else if (key === "resistSummons") {
+        if (state.game) {
+            state.game.resistSummons = value;
+        }
     } else if (key === "sound") {
         state.session?.sound.setEnabled(value);
         showVolumes(value);
