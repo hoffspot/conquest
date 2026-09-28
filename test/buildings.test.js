@@ -23,7 +23,7 @@ const THREE = await import("three");
 const { layoutTown } = await import("../client/js/core/setpieces/town.js");
 const { GODS } = await import("../client/js/core/lore/gods.js");
 const { TRADES } = await import("../client/js/core/setpieces/pieces.js");
-const { LAYERS, layerOf, paintLayers, toAtlas } = await import("../client/js/world/art/engine/atlas.js");
+const { LAYERS, layerOf, paintLayers, toAtlas, toGlow } = await import("../client/js/world/art/engine/atlas.js");
 const { material, MATERIALS } = await import("../client/js/world/art/engine/materials.js");
 const { paintLayer } = await import("../client/js/world/art/engine/painters.js");
 const { ARCHES, inset, openingOutline, Solid } = await import("../client/js/world/art/engine/solid.js");
@@ -540,5 +540,37 @@ describe("the atlas (engine/atlas.js)", () => {
         assert.ok(plain.attributes.color.array[0] < 0.1);
         assert.deepEqual([...textured.attributes.uv.array], [0, 0, 2, 0, 0, 1]);
         assert.equal(textured.attributes.layer.array[0], LAYERS.indexOf("planks"));
+    });
+
+    it("draws a tinted material from the layer it's tinted from, in its tint, and every light with the one glowing material", () => {
+        const geometry = new THREE.BufferGeometry();
+
+        geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
+        geometry.setAttribute("uv", new THREE.Float32BufferAttribute([0, 0, 40, 0, 0, 20], 2));
+
+        const red = toAtlas(geometry, material("mud-red"));
+
+        assert.equal(layerOf(material("mud-red")), LAYERS.indexOf("mud"));
+        assert.deepEqual([...red.attributes.uv.array], [0, 0, 1, 0, 0, 0.5]);
+        assert.ok(Math.abs(red.attributes.color.array[1] - 0.56) < 1e-6);
+
+        // (A light isn't drawn with the atlas, but merged with the others into one mesh)
+        assert.equal(layerOf(material("glow-violet")), -1);
+
+        const solid = new Solid();
+
+        solid.box(0, 0, 0, 10, 10, 10, material("glow-violet"));
+        solid.box(20, 0, 0, 30, 10, 10, material("glow-lamp"));
+        solid.box(40, 0, 0, 50, 10, 10, material("mud"));
+
+        const group = new THREE.Group();
+
+        group.add(solid.toObject());
+        group.updateMatrixWorld(true);
+
+        const merged = merge(group, { atlas: true });
+
+        assert.deepEqual(merged.children.map(({ material: { name } }) => name).sort(), ["atlas", "glow"]);
+        assert.ok(toGlow(geometry, material("glow-violet")).attributes.color.array[2] > 0.9);
     });
 });

@@ -9,9 +9,9 @@
 // the same pattern sampled between the pixels.
 
 import * as THREE from "three";
-import { COLOURS, GLOWING, MATERIALS, painterOf, SIZE } from "./painters.js";
+import { COLOURS, GLOWING, GLOWS, MATERIALS, painterOf, SIZE, TINTS } from "./painters.js";
 
-export { COLOURS, GLOWING, MATERIALS, paintLayer } from "./painters.js";
+export { COLOURS, GLOWING, GLOWS, MATERIALS, paintLayer, TINTS } from "./painters.js";
 
 // Paint a texture: paint(x, y) returns the colour at canvas pixel (x, y) (and how high it stands,
 // which a canvas leaves out). Returns the canvas.
@@ -48,7 +48,10 @@ export function textureCanvas(name) {
     return { canvas: paintTexture(painterOf(name)), world: MATERIALS[name].world };
 }
 
-/** The shared material with this name: a texture from MATERIALS or a plain colour from COLOURS. */
+/**
+ * The shared material with this name: a texture from MATERIALS (or one of them tinted: TINTS), a
+ * plain colour from COLOURS, or a light from GLOWS.
+ */
 export function material(name) {
     if (cache.has(name)) {
         return cache.get(name);
@@ -56,8 +59,9 @@ export function material(name) {
 
     let result;
 
-    if (MATERIALS[name]) {
-        const { canvas, world } = textureCanvas(name);
+    if (MATERIALS[name] || TINTS[name]) {
+        // (A tinted material painted as the one it's tinted from, in its tint)
+        const { canvas, world } = textureCanvas(TINTS[name]?.from ?? name);
         const texture = new THREE.CanvasTexture(canvas);
 
         texture.colorSpace = THREE.SRGBColorSpace;
@@ -66,6 +70,14 @@ export function material(name) {
         texture.repeat.set(1 / world, 1 / world);
         texture.anisotropy = 8;
         result = new THREE.MeshLambertMaterial({ map: texture });
+
+        if (TINTS[name]) {
+            result.color.setRGB(...TINTS[name].tint);
+        }
+    } else if (GLOWS[name] !== undefined) {
+        // (Light: its own colour whatever the light round it)
+        result = new THREE.MeshBasicMaterial({ color: GLOWS[name] });
+        result.userData.glow = GLOWS[name];
     } else if (COLOURS[name] !== undefined) {
         result = new THREE.MeshLambertMaterial({ color: COLOURS[name] });
     } else if (GLOWING[name]) {

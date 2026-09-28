@@ -16,7 +16,7 @@
 
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { atlasMaterial, toAtlas } from "./art/engine/atlas.js";
+import { atlasMaterial, glowMaterial, toAtlas, toGlow } from "./art/engine/atlas.js";
 import { createRandom } from "../core/random.js";
 import { pieceCatalog } from "../core/setpieces/pieces.js";
 import { footprint } from "../core/setpieces/town.js";
@@ -324,8 +324,10 @@ export function merge(root, { atlas = false } = {}) {
 
         for (const [part, own] of parts) {
             const drawn = atlas ? toAtlas(part, own) : null;
-            const [geometry, material] = drawn ? [drawn, atlasMaterial()] : [part, own];
-            const key = drawn ? "atlas" : materialKey(material);
+            // (Every light in one mesh of its own, each face in its own colour)
+            const lit = atlas && !drawn ? toGlow(part, own) : null;
+            const [geometry, material] = drawn ? [drawn, atlasMaterial()] : lit ? [lit, glowMaterial()] : [part, own];
+            const key = drawn ? "atlas" : lit ? "glow" : materialKey(material);
             const keep = drawn ? ["position", "normal", "uv", "color", "layer"] : ["position", "normal", "uv", ...(material.vertexColors ? ["color"] : [])];
 
             for (const name of Object.keys(geometry.attributes)) {
