@@ -77,7 +77,7 @@ export function actionOf(key) {
 
     const item = typeof key === "string" && key.startsWith("item:") ? key.slice(5) : null;
 
-    return item && ITEMS[item]?.use ? { label: SHORT[item] ?? ITEMS[item].label, item, on: "self" } : null;
+    return item && ITEMS[item]?.use && !ITEMS[item].tome ? { label: SHORT[item] ?? ITEMS[item].label, item, on: "self" } : null;
 }
 
 /** A slice's icon (SVG), for what's in it. */

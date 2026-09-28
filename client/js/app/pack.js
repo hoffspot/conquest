@@ -359,7 +359,8 @@ export class PackPanel {
             actions.push({ key: "use", label: stack.use ?? stack.equip });
         }
 
-        if (stack.use && !trading) {
+        // (A tome's read, not put on a wheel)
+        if (stack.use && stack.use !== "Read" && !trading) {
             actions.push({ key: "onWheel", label: "Put on a wheel" });
         }
 

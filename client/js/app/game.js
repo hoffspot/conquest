@@ -179,11 +179,18 @@ function thingsOf({ id, quality, count = 1 }) {
     return count > 1 ? `${count} ${name.endsWith("s") ? name : `${name}s`}` : `${/^[aeiou]/.test(name) ? "an" : "a"} ${name}`;
 }
 
+// What a request's reward is, in words: its gold, and any tome besides ("your name in the rolls", for nothing)
+const rewardOf = ({ gold, tome }) => [gold ? `${gold} gold` : null, tome ? `the Tome of ${SPELLS[tome].label}` : null].filter(Boolean).join(", and ") || "your name in the rolls";
+
 // What a thing in the pack is, in words: what it does, and how well made it is
 function aboutOf({ id, quality }) {
-    const { use, slot, armor = 0, part = false, price } = ITEMS[id];
+    const { use, slot, armor = 0, part = false, price, tome } = ITEMS[id];
     const power = QUALITIES[quality]?.power ?? 1;
     const worth = part ? ` The adventurers' guild pays ${price} gold for it.` : "";
+
+    if (tome) {
+        return `Read it to learn ${SPELLS[tome].label} at once: ${SPELLS[tome].about} (${SPELLS[tome].tome}; the adventurers' guild buys tomes)`;
+    }
 
     if (use?.cure) {
         const { label, about } = AFFLICTIONS[use.cure];
@@ -272,7 +279,7 @@ const SPILLS = Object.freeze({
 const SPELL_LOOKS = Object.freeze({ fire: "fireball", earth: "roots", air: "bolt", water: "bolt" });
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "rank", "loot", "bought", "sold", "used", "gear", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "gift", "counsel", "trade", "tier"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "rank", "loot", "bought", "sold", "used", "gear", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "gift", "counsel", "trade", "tier", "learnt"]);
 
 const _focus = new THREE.Vector3();
 const _lean = new THREE.Vector3();
@@ -1669,7 +1676,7 @@ export class Game {
             if (effect.work === "ask") {
                 state.offer = result.ok ? result.request : null;
                 names.offer = state.offer?.text ?? "";
-                names.reward = state.offer ? (state.offer.reward.gold ? `${state.offer.reward.gold} gold` : "your name in the rolls") : "";
+                names.reward = state.offer ? rewardOf(state.offer.reward) : "";
             } else if (effect.work === "accept") {
                 state.offer = null;
 
@@ -2039,6 +2046,8 @@ export class Game {
             this.hud.message(`You take ${things.join(", ")}.${event.left ? " There's no room for the rest: it's still there." : ""}`, 2.5);
         } else if (event.type === "picked") {
             this.hud.message(`You pick up ${thingsOf(event.item)}.`, 2);
+        } else if (event.type === "spoils" && event.given) {
+            this.hud.message("There's no room in your pack: it's at your feet. Tap the sack to take it.", 3);
         } else if (event.type === "spoils") {
             this.hud.message(`The ${CREATURES[event.creature]?.name.toLowerCase() ?? "creature"} left something: tap the sack to take it.`, 2.5);
             this.sound?.play("coins");
@@ -2087,7 +2096,7 @@ export class Game {
                 count: `${request.title}: ${request.count} of ${request.target.need}.`,
                 ready: request.kind === "scout" ? `You've seen enough. ${back}` : `${request.title}: done. ${back}`,
                 there: `You're here to hold ${request.target.name}. Stay till they're gone.`,
-                done: `${request.title}: done.${event.reward?.gold ? ` ${event.reward.gold} gold.` : ""}`,
+                done: `${request.title}: done.${event.reward?.gold ? ` ${event.reward.gold} gold.` : ""}${event.reward?.tome ? ` And the Tome of ${SPELLS[event.reward.tome].label}.` : ""}`,
                 failed: `${request.title}: failed. Your standing suffers.`,
                 void: `${request.title}: it's come to nothing.`,
                 abandoned: `${request.title}: given up.`,
@@ -2408,7 +2417,7 @@ export class Game {
             return { tree, name, rank, title: ["Untried", "Trained", "Adept", "Veteran", "Master", "Legend"][rank], xp, from, to, grows, ability: learnt.length ? `Learnt: ${learnt.join(", ")}` : null };
         });
         const gear = ["weapon", "body", "shield"].map((slot) => ({ slot, item: progress.gear[slot], label: progress.gear[slot] ? itemLabel(progress.gear[slot]) : null }));
-        const pack = progress.pack.map((stack) => stack && { ...stack, label: itemLabel(stack), about: aboutOf(stack), use: ITEMS[stack.id].use ? (stack.id === "meal" || ITEMS[stack.id].food ? "Eat" : "Drink") : null, equip: ITEMS[stack.id].slot ? (ITEMS[stack.id].slot === "weapon" ? "Wield" : "Wear") : null, price: priceOf(stack, { haggle, selling: true }) });
+        const pack = progress.pack.map((stack) => stack && { ...stack, label: itemLabel(stack), about: aboutOf(stack), use: ITEMS[stack.id].use ? (ITEMS[stack.id].tome ? "Read" : stack.id === "meal" || ITEMS[stack.id].food ? "Eat" : "Drink") : null, equip: ITEMS[stack.id].slot ? (ITEMS[stack.id].slot === "weapon" ? "Wield" : "Wear") : null, price: priceOf(stack, { haggle, selling: true }) });
         const shop = this.shopping && {
             name: this.shopping.name,
             wares: wares(this.shopping.shop).map((item) => {
@@ -3149,6 +3158,15 @@ export class Game {
                 // (A school of magic come to its next tier: its spell known now, and kept)
                 if (event.id === this.me) {
                     this.hud.message(`${SCHOOLS[event.school].label}: you can cast ${SPELLS[event.spell].label} now! Put it on an action wheel (Game options).`, 5);
+                    this.sound?.play("wake");
+                    this.onProgress(this.progress);
+                }
+
+                break;
+            case "learnt":
+                // (A spell learnt from a tome: known now, and kept)
+                if (event.id === this.me) {
+                    this.hud.message(`You've learnt ${SPELLS[event.spell].label}! Put it on an action wheel (Game options).`, 5);
                     this.sound?.play("wake");
                     this.onProgress(this.progress);
                 }

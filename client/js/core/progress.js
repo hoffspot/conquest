@@ -17,7 +17,7 @@
 // the character (app/save.js), and the host's to change (core/host.js). Pure JavaScript, no DOM.
 
 import { CURES } from "./afflictions.js";
-import { SCHOOLS, SPELLS, tierAt } from "./spells.js";
+import { growthAt, SCHOOLS, SPELLS, TOME_RARITY, TOMES, tierAt, tomeOf } from "./spells.js";
 import { PARTS } from "./spoils.js";
 import { WEAPONS } from "./weapons.js";
 
@@ -92,6 +92,9 @@ export const ITEMS = Object.freeze({
     ale: { label: "Tankard of ale", use: { stamina: 1000 }, price: 2 },
     // The cures for what lingers after some creatures' blows (afflictions.js): each ends one
     ...Object.fromEntries(Object.entries(CURES).map(([id, { label, cure, price }]) => [id, { label, use: { cure }, price }])),
+    // The spells' tomes (spells.js TOMES): each read to learn its spell at once; found on creatures
+    // with hands, or given for a guild's contract; the rarer, the dearer
+    ...Object.fromEntries(TOMES.map((spell) => [tomeOf(spell), { label: `Tome of ${SPELLS[spell].label}`, tome: spell, use: { learn: spell }, price: TOME_RARITY[SPELLS[spell].tome].price }])),
     // The wild's creatures' parts (spoils.js): what the adventurers' guild pays for each; some to
     // eat or drink
     ...Object.fromEntries(Object.entries(PARTS).map(([id, { label, worth, use, icon }]) => [id, { label, price: worth, part: true, ...(use ? { use } : {}), ...(icon === "meat" ? { food: true } : {}) }])),
@@ -248,7 +251,7 @@ export class Progress {
      * @param {object} [kept] - As toJSON gave it: { skills: { tree: xp }, gold, pack: [stacks], gear: { weapon, body, shield } }.
      * @param {object} [hero] - Their hero (for the weapon they started with).
      */
-    constructor({ skills = {}, schools = null, spells = [], gold = 20, pack = [], gear = null } = {}, { weapon = "sword" } = {}) {
+    constructor({ skills = {}, schools = null, spells = [], spellXp = {}, gold = 20, pack = [], gear = null } = {}, { weapon = "sword" } = {}) {
         this.skills = Object.fromEntries(Object.keys(TREES).map((tree) => [tree, Math.max(0, Number(skills[tree]) || 0)]));
 
         /**
@@ -261,6 +264,9 @@ export class Progress {
 
         /** The spells learnt from tomes (spells.js SPELLS ids). */
         this.spells = [...new Set((Array.isArray(spells) ? spells : []).filter((id) => SPELLS[id]))];
+
+        /** Each spell that grows as it's used's experience (spells.js `grows`: Vampirism, Dodge, Poison). */
+        this.spellXp = Object.fromEntries(Object.entries(spellXp ?? {}).filter(([id, xp]) => SPELLS[id]?.grows && Number(xp) > 0).map(([id, xp]) => [id, Number(xp)]));
         this.gold = Math.max(0, Math.floor(Number(gold) || 0));
 
         /** The pack's slots: each a stack of things alike ({ id, quality, count, and a wand's boost }), or null. */
@@ -311,6 +317,24 @@ export class Progress {
     /** Whether they can cast a spell (a spells.js id). */
     knows(spell) {
         return this.known().includes(spell);
+    }
+
+    /** A spell that grows as it's used's level (1 to 5; 1 for any other). */
+    levelOf(spell) {
+        return growthAt(this.spellXp[spell] ?? 0);
+    }
+
+    /** A spell that grows as it's used used (and landing): its level now, if that's a new one, else null. */
+    growSpell(spell, amount) {
+        if (!SPELLS[spell]?.grows || !(amount > 0)) {
+            return null;
+        }
+
+        const before = this.levelOf(spell);
+
+        this.spellXp[spell] = (this.spellXp[spell] ?? 0) + amount;
+
+        return this.levelOf(spell) > before ? this.levelOf(spell) : null;
     }
 
     /** A spell learnt (from a tome): whether it's new to them. */
@@ -604,7 +628,7 @@ export class Progress {
 
     /** What's kept. */
     toJSON() {
-        return { skills: { ...this.skills }, schools: { ...this.schools }, spells: [...this.spells], gold: this.gold, pack: this.pack.map((stack) => (stack ? { ...stack } : null)), gear: structuredClone(this.gear) };
+        return { skills: { ...this.skills }, schools: { ...this.schools }, spells: [...this.spells], spellXp: { ...this.spellXp }, gold: this.gold, pack: this.pack.map((stack) => (stack ? { ...stack } : null)), gear: structuredClone(this.gear) };
     }
 }
 

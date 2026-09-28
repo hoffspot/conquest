@@ -173,6 +173,12 @@ export const SPELLS = Object.freeze({
 /** The spells learnt from tomes, by their ids. */
 export const TOMES = Object.freeze(Object.keys(SPELLS).filter((id) => SPELLS[id].tome));
 
+/** The thing (progress.js ITEMS id) that's a spell's tome: "tomeFear" for Fear. */
+export const tomeOf = (spell) => `tome${spell[0].toUpperCase()}${spell.slice(1)}`;
+
+/** A tome's spell, found or given (random.js random): any, each as likely as its rarity has it. */
+export const rollTome = (random) => random.pickWeighted(TOMES, (id) => TOME_RARITY[SPELLS[id].tome].weight);
+
 /** Spells known by other names before (a wheel kept from then). */
 export const RENAMED = Object.freeze({ heal: "vigor", greaterHeal: "mendWounds" });
 

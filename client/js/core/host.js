@@ -18,7 +18,7 @@ import { Battle, FOE_MS, KINDS, TALK_REACH } from "./battle.js";
 import { Explored } from "./explored.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { ABILITIES, alike, ITEMS, priceOf, Progress, QUALITIES, rollBoost, rollLoot, wares, weaponOf, WITH_SHIELD } from "./progress.js";
-import { SPELL_XP, SPELLS } from "./spells.js";
+import { SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { createRandom } from "./random.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
 import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, encounterAt, LAIRS, menaces, packOf, tierPower, WILD } from "./creatures.js";
@@ -225,6 +225,7 @@ export const REFUSALS = Object.freeze({
     changed: "Something offered isn't there any more: look again.",
     theirs: "They haven't room for all that.",
     unafflicted: "There's nothing for that to cure.",
+    known: "You know that spell already.",
 });
 
 // What can't be done while knocked off one's feet (battle.js: a knockdown)
@@ -1211,8 +1212,8 @@ export class Host {
             return refuse("item");
         }
 
-        // (The creatures' parts: only the adventurers' guild buys those)
-        if (ITEMS[stack.id]?.part && trading.shop !== "guild") {
+        // (The creatures' parts, and tomes: only the adventurers' guild buys those)
+        if ((ITEMS[stack.id]?.part || ITEMS[stack.id]?.tome) && trading.shop !== "guild") {
             return refuse("wanted");
         }
 
@@ -1604,7 +1605,7 @@ export class Host {
         return OK;
     }
 
-    // Something from the pack used (drunk, eaten): one off its stack
+    // Something from the pack used (drunk, eaten; a tome read): one off its stack
     #use(player, actor, index) {
         const stack = player.progress.pack[index];
         const use = stack && ITEMS[stack.id].use;
@@ -1615,6 +1616,21 @@ export class Host {
 
         if (actor.dead) {
             return refuse("dead");
+        }
+
+        // (A tome: its spell learnt at once, and the tome gone; unless it's known already)
+        if (use.learn) {
+            if (player.progress.knows(use.learn)) {
+                return refuse("known");
+            }
+
+            const item = player.progress.take(index, 1);
+
+            player.progress.learn(use.learn);
+            this.#event("used", { id: player.id, item });
+            this.#event("learnt", { id: player.id, spell: use.learn });
+
+            return OK;
         }
 
         // (A cure: only for what's on them)
@@ -2900,6 +2916,12 @@ export class Host {
 
         standing.close(request.id, "done");
         player.progress.gold += reward.gold;
+
+        // (A tome from the guild's library besides: in the pack, or at their feet if there's no room)
+        if (reward.tome) {
+            this.#give(player, { id: tomeOf(reward.tome), quality: "common", count: 1 });
+        }
+
         this.#event("request", { id: player.id, change: "done", request: structuredClone(request), reward: { ...reward } });
 
         for (const up of standing.gain(reward.standing)) {
@@ -2912,6 +2934,21 @@ export class Host {
         this.#stir(player, request.from.post === "guild" ? STIR.contract : !own ? 0 : request.kind === "tithe" ? STIR.tithe : STIR.request);
 
         return structuredClone(request);
+    }
+
+    // Something given to a player: into their pack, or, with no room there, at their feet (for
+    // them alone, as spoils are)
+    #give(player, item) {
+        const actor = this.battle.actor(player.id);
+
+        if (player.progress.stow(item, item.count) || !actor) {
+            return;
+        }
+
+        const ground = `ground-${this.nextGround++}`;
+
+        this.ground.set(ground, { id: ground, bundle: { gold: 0, items: [item] }, for: player.id, map: actor.map, square: [...actor.square], until: this.battle.time + GROUND_MS });
+        this.#event("spoils", { id: player.id, ground, from: player.id, given: true });
     }
 
     // A player's people, serving another or fallen, stirred towards rising (M10) by what they've done
