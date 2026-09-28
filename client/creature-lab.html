@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+        <meta name="theme-color" content="#101418">
+        <meta name="description" content="Creature lab: every creature of the wilds, standing, walking, running, attacking, struck and dying">
+
+        <title>Creature Lab</title>
+
+        <link rel="icon" href="images/icons/icon-192.png" type="image/png">
+        <style>
+            :root {
+                --background: #101418;
+                --panel: #171d23;
+                --line: #2d3843;
+                --text: #dce5ee;
+                --muted: #8a99a8;
+                --accent: #e0a24a;
+                --accent-text: #1b1206;
+
+                color-scheme: dark;
+                font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            }
+
+            [hidden] {
+                display: none !important;
+            }
+
+            html,
+            body {
+                margin: 0;
+                height: 100%;
+                background: var(--background);
+                color: var(--text);
+                overflow: hidden;
+            }
+
+            #view {
+                position: fixed;
+                inset: 0;
+                width: 100%;
+                height: 100%;
+                display: block;
+                touch-action: none;
+            }
+
+            .bar {
+                position: fixed;
+                left: max(12px, env(safe-area-inset-left));
+                right: max(12px, env(safe-area-inset-right));
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                align-items: center;
+            }
+
+            #top {
+                top: max(12px, env(safe-area-inset-top));
+            }
+
+            #bottom {
+                bottom: max(12px, env(safe-area-inset-bottom));
+            }
+
+            select,
+            button {
+                font: inherit;
+                color: var(--text);
+                background: var(--panel);
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                padding: 8px 12px;
+                min-height: 40px;
+            }
+
+            button[aria-pressed="true"] {
+                background: var(--accent);
+                color: var(--accent-text);
+                border-color: var(--accent);
+            }
+
+            #name {
+                font-size: 18px;
+                font-weight: 600;
+                text-shadow: 0 1px 3px #000;
+            }
+
+            #about {
+                color: var(--muted);
+                text-shadow: 0 1px 3px #000;
+            }
+
+            #status {
+                position: fixed;
+                inset: 0;
+                display: grid;
+                place-items: center;
+                color: var(--muted);
+                pointer-events: none;
+            }
+
+            body.shot .bar {
+                display: none;
+            }
+        </style>
+        <script type="importmap">
+            {
+                "imports": {
+                    "three": "./vendor/three-r186/three.module.min.js",
+                    "three/addons/": "./vendor/three-r186/addons/"
+                }
+            }
+        </script>
+        <script type="module" src="js/lab/creature-lab.js"></script>
+    </head>
+    <body>
+        <canvas id="view"></canvas>
+
+        <div class="bar" id="top">
+            <select id="picker" aria-label="Creature"></select>
+            <button type="button" id="another">Another one</button>
+            <span id="name"></span>
+            <span id="about"></span>
+        </div>
+
+        <div class="bar" id="bottom" role="toolbar" aria-label="What it does">
+            <button type="button" data-action="stand" aria-pressed="true">Stand</button>
+            <button type="button" data-action="walk" aria-pressed="false">Walk</button>
+            <button type="button" data-action="run" aria-pressed="false">Run</button>
+            <button type="button" data-action="attack" aria-pressed="false">Attack</button>
+            <button type="button" data-action="react" aria-pressed="false">Struck</button>
+            <button type="button" data-action="rest" aria-pressed="false">Rest</button>
+            <button type="button" data-action="die" aria-pressed="false">Die</button>
+        </div>
+
+        <div id="status" role="status">Loading…</div>
+        <noscript>The creature lab needs JavaScript.</noscript>
+    </body>
+</html>
