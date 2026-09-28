@@ -1424,6 +1424,79 @@ test("the town's guards stand at its ways out under its people's banner, and tal
     expect(war.plates).toBeGreaterThan(0);
 });
 
+test("an enemy camp near the player is pitched, tents, fire, banner and sentries; its raiders come for the town's fields, and the player's told", async ({ page }) => {
+    await playing(page, "/?play&seed=2");
+
+    // An orc camp just outside the town, at war with the humans; the player by it
+    const camp = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const war = game.host.war;
+        const home = war.town(game.world.start.id);
+        const [mx, my] = game.world.stamp.middle;
+        const at = [mx + 110, my + 5];
+        const player = game.battle.actor("player");
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        war.relations["human|orc"] = { state: "hostile", since: 0 };
+        war.stage = 3;
+        war.forces.push({ id: "force-900", realm: "orc", kind: "camp", size: 20, at, path: [at], leg: 0, target: home.id, home: war.realm("orc").capital, mission: null, about: null, since: 1000, sortie: null });
+        Object.assign(player, { square: [Math.floor(at[0] - 3), Math.floor(at[1] + 10)], to: null, path: [], hp: 5000, maxHp: 5000 });
+        Object.assign(player, { x: player.square[0] + 0.5, y: player.square[1] + 0.5 });
+        game.advance(1.5);
+
+        const sentries = game.host.camps.get("force-900")?.ids ?? [];
+
+        return {
+            drawn: game.camps.size,
+            tents: game.camps.camps.get("force-900")?.object.children.length ?? 0,
+            banner: game.banners.group.children.some(({ name }) => name === "banner:camp:force-900"),
+            sentries: sentries.map((id) => ({ name: game.battle.actor(id).name, drawn: game.avatars.has(id), hostile: game.battle.hostile(game.battle.actor(id), player) })),
+        };
+    });
+
+    expect(camp.drawn).toBe(1);
+    expect(camp.tents).toBeGreaterThan(5);
+    expect(camp.banner).toBe(true);
+    expect(camp.sentries.length).toBe(6);
+    expect(camp.sentries.every(({ name, hostile }) => name === "Orcish sentry" && hostile)).toBe(true);
+    expect(camp.sentries.some(({ drawn }) => drawn)).toBe(true);
+
+    // A raid, sooner or later: its raiders drawn, and the player told
+    const raid = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        for (let turn = 0; turn < 30 && !game.host.sorties.size; turn++) {
+            game.advance(60, { render: false });
+        }
+
+        game.advance(1);
+
+        const sortie = game.host.sorties.get("force-900");
+
+        return sortie && { kind: sortie.kind, raiders: sortie.ids.map((id) => ({ name: game.battle.actor(id).name, drawn: game.avatars.has(id) })) };
+    });
+
+    expect(raid.kind).toBe("raid");
+    expect(raid.raiders.every(({ name }) => name === "Orcish raider")).toBe(true);
+    expect(raid.raiders.some(({ drawn }) => drawn)).toBe(true);
+    await expect(page.locator("#banner")).toContainText("Raiders of the Orcs are coming for");
+
+    // Far off: the camp struck, its tents down
+    const struck = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+        const [mx, my] = game.world.stamp.middle;
+
+        Object.assign(player, { square: [Math.floor(mx - 250), Math.floor(my)], x: Math.floor(mx - 250) + 0.5, y: Math.floor(my) + 0.5, to: null, path: [] });
+        game.advance(1.5);
+
+        return { drawn: game.camps.size, pitched: game.host.camps.size };
+    });
+
+    expect(struck).toEqual({ drawn: 0, pitched: 0 });
+});
+
 test("tapping someone walks the player up to talk: their name and what they are, what they say, replies that lead on, Escape to stop", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

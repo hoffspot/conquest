@@ -7,7 +7,7 @@ import { before, describe, it } from "node:test";
 import { describeLeader, REALMS, TEMPERAMENTS, TRAITS } from "../client/js/core/war/peoples.js";
 import { ACROSS_COUNTRY, Roads } from "../client/js/core/war/roads.js";
 import { tell } from "../client/js/core/war/news.js";
-import { COUNSEL_TURNS, HOLDINGS, REACH, SERVES, SIEGE, STAGES, TURN_MS, TURNS_PER_STAGE, War } from "../client/js/core/war/war.js";
+import { COUNSEL_TURNS, HOLDINGS, REACH, SERVES, SIEGE, SORTIE_TURNS, STAGES, TURN_MS, TURNS_PER_STAGE, War } from "../client/js/core/war/war.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { planWorld, RACES } from "../client/js/core/worldplan/plan.js";
 
@@ -299,6 +299,131 @@ describe("the war (core/war)", () => {
         assert.equal(town.garrison, 0);
     });
 
+    it("sends a camp's raids and assaults on a town a player's near out as sorties, to be played out there, and settles them", () => {
+        // (An orc camp before a human town, at war, as far on as the war goes)
+        const setUp = ({ size = 30, since = 0 } = {}) => {
+            const war = new War(plan);
+            const town = war.towns.find(({ kind, owner }) => kind === "town" && owner === "human");
+            const at = [town.at[0] + 300, town.at[1]];
+            const camp = { id: "force-900", realm: "orc", kind: "camp", size, at, path: [at], leg: 0, target: town.id, home: war.realm("orc").capital, mission: null, about: null, since, sortie: null };
+
+            war.relations["human|orc"] = { state: "hostile", since: 0 };
+            war.stage = STAGES.length - 1;
+            war.forces.push(camp);
+            war.watch([town.id]);
+
+            return { war, town, camp };
+        };
+
+        // An assault: out, and held until it's settled
+        {
+            const { war, town, camp } = setUp();
+
+            war.turn = 10;
+
+            const sortie = war.advance(TURN_MS).find(({ type }) => type === "sortie");
+
+            // (All of it, as it is after the turn's upkeep)
+            assert.deepEqual({ kind: sortie.kind, force: sortie.force, town: sortie.town, party: sortie.party }, { kind: "assault", force: camp.id, town: town.id, party: camp.size });
+            assert.equal(camp.sortie.kind, "assault");
+            assert.ok(!war.advance(TURN_MS).some(({ type }) => type === "sortie" || type === "assault"), "(out: nothing more till it's settled)");
+
+            // The town's defenders all fall: taken
+            war.loss(camp.id, 6);
+            war.loss(town.id, town.garrison);
+
+            const left = camp.size;
+
+            assert.equal(war.settle(camp.id), "taken");
+            assert.equal(town.owner, "orc");
+            assert.equal(town.garrison, Math.min(Math.round(HOLDINGS.town.garrison * 1.5), left));
+            assert.ok(!war.force(camp.id));
+            assert.equal(war.settle(camp.id), null);
+        }
+
+        // Thrown back, and broken
+        {
+            const { war, town, camp } = setUp();
+
+            war.turn = 10;
+            war.advance(TURN_MS);
+            war.loss(camp.id, 28);
+            assert.equal(war.settle(camp.id), "broken");
+            assert.equal(town.owner, "human");
+            assert.ok(!war.force(camp.id));
+        }
+
+        // A raid: the fields reached, the taxes stopped; or driven off
+        {
+            const { war, town, camp } = setUp({ since: 1000 });
+            let sortie = null;
+
+            for (let k = 0; k < 40 && !sortie; k++) {
+                sortie = war.advance(TURN_MS).find(({ type }) => type === "sortie");
+            }
+
+            assert.equal(sortie.kind, "raid");
+            assert.equal(sortie.party, Math.ceil(camp.size * 0.3));
+
+            const grudge = war.realm("human").standing.orc ?? 0;
+
+            assert.equal(war.settle(camp.id, { reached: true }), "raided");
+            assert.equal(town.raidedAt, war.turn);
+            assert.ok(war.realm("human").standing.orc < grudge);
+            assert.ok(war.events.some(({ type, played, reached }) => type === "raid" && played && reached));
+
+            for (let k = 0; k < 40 && !camp.sortie; k++) {
+                war.advance(TURN_MS);
+            }
+
+            town.raidedAt = -Infinity;
+            assert.equal(war.settle(camp.id, { reached: false }), "repulsed");
+            assert.equal(town.raidedAt, -Infinity);
+            assert.ok(tell(war.events.findLast(({ type }) => type === "raid"), war).includes("driven off"));
+        }
+
+        // Not near anyone: reckoned here, as ever; and one out too long, reckoned too
+        {
+            const { war, town, camp } = setUp();
+
+            war.watch([]);
+            war.turn = 10;
+
+            const events = war.advance(TURN_MS);
+
+            assert.ok(!events.some(({ type }) => type === "sortie"));
+            assert.ok(events.some(({ type, town: at }) => type === "assault" && at === town.id));
+            assert.ok(!camp.sortie);
+        }
+
+        {
+            const { war, camp } = setUp();
+
+            war.turn = 10;
+            war.advance(TURN_MS);
+            assert.ok(camp.sortie);
+
+            const events = play(war, SORTIE_TURNS);
+
+            assert.ok(events.some(({ type, played }) => type === "assault" && !played), "(the rest reckoned)");
+            assert.ok(!war.force(camp.id)?.sortie);
+        }
+
+        // Kept in a snapshot
+        {
+            const { war, camp } = setUp();
+
+            war.turn = 10;
+            war.advance(TURN_MS);
+
+            const again = War.restore(plan, decode(encode(war.snapshot())));
+
+            assert.deepEqual(again.force(camp.id).sortie, camp.sortie);
+            assert.deepEqual([...again.watched], [...war.watched]);
+            assert.equal(encode(again.snapshot()), encode(war.snapshot()));
+        }
+    });
+
     it("takes a tithe into a realm's treasury", () => {
         const war = new War(plan);
         const before = war.realm("human").treasury;
@@ -418,6 +543,9 @@ describe("the war (core/war)", () => {
         for (const type of ["declared", "marched", "camped", "raid", "assault", "taken", "envoy", "treaty", "subjugated"]) {
             assert.ok(seen.has(type), type);
         }
+
+        assert.match(tell({ type: "sortie", kind: "raid", realm: "orc", town: long.war.towns[0].id }, long.war), /^Raiders of the Orcs set out for .+'s fields\.$/);
+        assert.match(tell({ type: "sortie", kind: "assault", realm: "orc", town: long.war.towns[0].id }, long.war), /^The Orcs march out of their camp to storm .+\.$/);
     });
 
     it("says what each people's leader is like, the most marked first", () => {

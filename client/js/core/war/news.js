@@ -48,7 +48,13 @@ export function tell(event, war) {
         case "reinforced":
             return `More of ${people(event.realm)} join the camp outside ${town(event.target)}.`;
         case "raid":
+            if (event.played && !event.reached) {
+                return `Raiders of ${people(event.realm)} came for ${town(event.town)}'s fields, and were driven off.`;
+            }
+
             return `Raiders of ${people(event.realm)} struck at ${town(event.town)}'s fields${event.killed ? `, killing ${event.killed} of its guard` : ""}.`;
+        case "sortie":
+            return event.kind === "raid" ? `Raiders of ${people(event.realm)} set out for ${town(event.town)}'s fields.` : `${People(event.realm)} march out of their camp to storm ${town(event.town)}.`;
         case "assault":
             return event.won ? `${People(event.realm)} stormed ${town(event.town)}.` : `${People(event.realm)} stormed ${town(event.town)}, and were thrown back.`;
         case "taken":
