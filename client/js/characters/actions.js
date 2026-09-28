@@ -1505,18 +1505,18 @@ const KNOCKED = {
     quicker: 1.35,
     rise: 0.75,
     crouch: {
-        ...spine({ flex: 22 }),
-        Neck: { flex: 10 },
-        LeftUpLeg: { flex: 105 },
-        RightUpLeg: { flex: 95 },
-        LeftLeg: { flex: 125 },
-        RightLeg: { flex: 115 },
-        LeftFoot: { flex: 25 },
-        RightFoot: { flex: 20 },
-        LeftArm: { flex: 45, abduct: 25 },
-        RightArm: { flex: 40, abduct: 25 },
-        LeftForeArm: { flex: 30 },
-        RightForeArm: { flex: 35 },
+        ...spine({ flex: 30 }),
+        Neck: { flex: -10 },
+        LeftUpLeg: { flex: 112 },
+        RightUpLeg: { flex: 104 },
+        LeftLeg: { flex: 132 },
+        RightLeg: { flex: 124 },
+        LeftFoot: { flex: 28 },
+        RightFoot: { flex: 24 },
+        LeftArm: { flex: 55, abduct: 20 },
+        RightArm: { flex: 50, abduct: 22 },
+        LeftForeArm: { flex: 25 },
+        RightForeArm: { flex: 30 },
     },
 };
 
@@ -2452,9 +2452,9 @@ export class Actions {
         // The whole body turns about the pelvis to lie flat, the pelvis dropping to the ground
         // and ending up behind (or in front of) where the feet were (and back, getting up)
         const lying = [-hips * 0.22 * buckle * (1 - tilt) + (0.14 - hips) * tilt, direction * hips * 0.82 * tilt];
-        const crouched = [-hips * 0.5, direction * hips * 0.12];
+        const crouched = [-hips * 0.62, -hips * 0.26];
 
-        _fall.setFromAxisAngle(_axis.set(1, 0, 0), direction * angle * (1 - sit) + direction * 12 * DEG * crouch);
+        _fall.setFromAxisAngle(_axis.set(1, 0, 0), direction * angle * (1 - sit));
         rig.rotations[0].premultiply(_fall);
         rig.offset.set(0, (lying[0] + (crouched[0] - lying[0]) * sit) * (1 - stand), (lying[1] + (crouched[1] - lying[1]) * sit) * (1 - stand));
     }

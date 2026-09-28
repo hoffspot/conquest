@@ -338,7 +338,7 @@ export function biped(look, random, key = null) {
 
     return {
         object,
-        height: H * 0.93,
+        height: H * (treant ? 1.12 : 0.93),
         length: H * 0.3,
         joints: { torso: chest, head, jaw, mouth: arms.right.hand, left: arms.left.hand, body },
         materials: { body: main },
