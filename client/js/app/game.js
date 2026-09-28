@@ -31,11 +31,11 @@ import { STEP_MS, TALK_REACH } from "../core/battle.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
 import { HIRES, HOST_PLAYER, Host, REFUSALS, SHOP_REACH, SHOPKEEPERS } from "../core/host.js";
 import { ABILITIES, itemLabel, ITEMS, priceOf, TREES, wares } from "../core/progress.js";
-import { MOST_REQUESTS, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
+import { COUNSEL, MOST_REQUESTS, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
 import { describeLeader } from "../core/war/peoples.js";
 import { peopleOf, rumourOfRuler, rumoursAt } from "../core/war/news.js";
 import { ADJECTIVES } from "../core/war/peoples.js";
-import { STAGES } from "../core/war/war.js";
+import { RISING, STAGES } from "../core/war/war.js";
 import { GODS } from "../core/lore/gods.js";
 import { BECKON, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js";
 import { squaresOf } from "../core/grid.js";
@@ -58,6 +58,7 @@ import { TREE_WIND } from "../world/art/kits/trees.js";
 import { Minimap, treesOf } from "./minimap.js";
 import { CameraFollow } from "./camera.js";
 import { Doors } from "./doors.js";
+import { FatePanel, fateWords } from "./fate.js";
 import { JournalPanel, bearing, regardOf } from "./journal.js";
 import { PackPanel } from "./pack.js";
 import { TalkPanel } from "./talk.js";
@@ -158,7 +159,7 @@ const EMBERS = 5;
 const VISITS = Object.freeze({ every: 0.5, budget: 6 });
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "gone", "rank", "loot", "bought", "sold", "used", "gear", "ability", "request", "standing", "gift", "counsel"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "rank", "loot", "bought", "sold", "used", "gear", "ability", "request", "standing", "gift", "counsel"]);
 
 const _focus = new THREE.Vector3();
 const _lean = new THREE.Vector3();
@@ -474,6 +475,7 @@ export class Game {
             this.#showJournal();
         };
         this.journal.onClose = () => this.closeJournal();
+        this.fate = new FatePanel(this.hud.root);
         this.talk.onChoose = (index) => this.#say(index);
         this.talk.onClose = () => this.#endTalk();
         this.effects.camera = view.camera;
@@ -744,6 +746,7 @@ export class Game {
         this.talk?.panel.remove();
         this.pack?.panel.remove();
         this.journal?.panel.remove();
+        this.fate?.panel.remove();
         this.curtain?.remove();
         this.view.setOccluders(null);
         this.view.setFocus(null);
@@ -1397,6 +1400,12 @@ export class Game {
         };
         const sayings = describeLeader(leader, rulers.id).map(({ saying }) => saying);
         const foes = war.enemiesOf(war.liege(town.owner)).map((id) => `the ${peopleOf(id)}`);
+
+        // (Serving another people: how near they are to rising, and whether the player's word, as
+        // it weighs by their rank, would be enough: docs/WAR.md M10)
+        const oppressor = war.oppressor(this.self.realm);
+        const unrest = war.realm(this.self.realm)?.unrest ?? 0;
+        const ready = unrest >= RISING.ready * (1 - COUNSEL[rank] * (1 - RISING.early));
         const state = { offer: null, reported: false };
         const giftDue = () => rank >= OPENS.armoury && Array.from({ length: rank - OPENS.armoury + 1 }, (_, k) => OPENS.armoury + k).some((each) => !standing.claimed.includes(each));
 
@@ -1410,6 +1419,8 @@ export class Game {
             standingNext: next ? `Another ${next.points - standing.points} and you'd be ${next.title}: ${next.opens.charAt(0).toLowerCase()}${next.opens.slice(1)}` : "There's none higher.",
             traits: sayings.length ? `They say ${leader.title} ${leader.name} is ${sayings.slice(0, 2).join(", and ")}.` : `${leader.title} ${leader.name}? Hard to read. As steady as their people, they say.`,
             ...Object.fromEntries(Object.entries(options).flatMap(([kind, list]) => list.map(({ name }, k) => [`${kind}${k + 1}`, name]))),
+            oppressor: oppressor ? `the ${peopleOf(oppressor)}` : "no one",
+            unrest: `the people are ${Math.round((unrest / RISING.ready) * 100)}% of the way to rising`,
         };
 
         const holds = {
@@ -1420,9 +1431,12 @@ export class Game {
             reported: () => state.reported,
             keep: () => rank >= OPENS.keep,
             armoury: () => own && giftDue(),
-            counselMarch: () => own && rank >= OPENS.march && options.march.length > 0,
-            counselPeace: () => own && rank >= OPENS.peace && options.peace.length > 0,
-            counselWar: () => own && rank >= OPENS.war && options.war.length > 0,
+            counselMarch: () => own && !oppressor && rank >= OPENS.march && options.march.length > 0,
+            counselPeace: () => own && !oppressor && rank >= OPENS.peace && options.peace.length > 0,
+            counselWar: () => own && !oppressor && rank >= OPENS.war && options.war.length > 0,
+            counselRise: () => Boolean(oppressor) && town.owner === this.self.realm && rank >= OPENS.rise,
+            ready: () => ready,
+            serving: () => Boolean(war.realm(town.owner)?.overlord),
         };
         const coppers = (count) => `${count} ${count === 1 ? "copper" : "coppers"}`;
 
@@ -1441,8 +1455,8 @@ export class Game {
             handles: (effect) => Boolean(effect.work || effect.report || effect.armoury || effect.counsel),
             effect: (effect) => {
                 const [kind, index] = Object.entries(effect.counsel ?? {})[0] ?? [];
-                const chosen = kind ? options[kind]?.[index - 1] : null;
-                const result = this.#command({ type: "effect", effect: kind ? { counsel: { [kind]: chosen?.id } } : effect });
+                const chosen = kind && kind !== "rise" ? options[kind]?.[index - 1] : null;
+                const result = this.#command({ type: "effect", effect: kind && kind !== "rise" ? { counsel: { [kind]: chosen?.id } } : effect });
 
                 if (effect.work === "ask") {
                     state.offer = result.ok ? result.request : null;
@@ -1464,7 +1478,7 @@ export class Game {
                 } else if (effect.armoury) {
                     names.gift = result.ok ? `From the armoury, for your rank: ${itemLabel(result.item).toLowerCase()}. Wear it well.` : REFUSALS[result.reason] ?? "There's nothing for you.";
                 } else if (kind) {
-                    const said = { march: `So be it. We march on ${chosen?.name} when we can.`, peace: `Peace with ${chosen?.name}... Very well. An envoy will go, when one can be spared.`, war: `${chosen?.name}? Yes. They've had it coming.` };
+                    const said = { march: `So be it. We march on ${chosen?.name} when we can.`, peace: `Peace with ${chosen?.name}... Very well. An envoy will go, when one can be spared.`, war: `${chosen?.name}? Yes. They've had it coming.`, rise: `Then it's today. Send word to every town: we're done serving ${words.oppressor}!` };
 
                     names.counsel = result.ok ? said[kind] : "No. That cannot be.";
                 }
@@ -1920,6 +1934,7 @@ export class Game {
                       regard: war.realms
                           .filter((other) => other.alive && war.liege(other.id) !== liege && war.relation(other.id, realm.id) !== "unknown")
                           .map((other) => ({ name: people(other.id), ...regardOf(other.standing[realm.id] ?? 0) })),
+                      fate: this.#fateLine(realm),
                   }
                 : null,
             done: standing.done.slice(0, 6).map(({ title, from: giver, state }) => ({ title, from: giver.townName, state })),
@@ -1932,6 +1947,30 @@ export class Game {
                 }),
             most: this.host.mostFollowers(this.me),
         });
+    }
+
+    // Where the player's people stand in the war's end (docs/WAR.md M10), in a line: serving
+    // another, or fallen, and how near they are to rising; ruling the continent; or another's
+    // ruling it. Null if none of these
+    #fateLine(realm) {
+        const war = this.host.war;
+        const people = (id) => `the ${peopleOf(id)}`;
+        const oppressor = war.oppressor(realm.id);
+        const rising = `${Math.round(((realm.unrest ?? 0) / RISING.ready) * 100)}% of the way to rising`;
+
+        if (war.victor === realm.id) {
+            return "Your people rule the continent. Every other people serves them.";
+        }
+
+        if (oppressor && realm.alive) {
+            return `You serve ${people(oppressor)}${war.victor === oppressor ? ", who rule the continent" : ""}. Your people are ${rising}.`;
+        }
+
+        if (oppressor) {
+            return `Your people have fallen; ${people(oppressor)} hold most of their old towns. They're ${rising} again.`;
+        }
+
+        return war.victor ? `${people(war.victor)[0].toUpperCase()}${people(war.victor).slice(1)} rule the continent.` : null;
     }
 
     /** Open the pack (or close it, if it's open): the player's skills, gear, and what they carry. */
@@ -2457,6 +2496,18 @@ export class Game {
                 }
 
                 break;
+            case "fate":
+                if (event.id === this.me) {
+                    this.#fate(event);
+                }
+
+                break;
+            case "unrest":
+                if (event.id === this.me && this.journal?.open) {
+                    this.#showJournal();
+                }
+
+                break;
             case "farewell":
                 this.enlisting = this.enlisting.filter((id) => !event.ids.includes(id));
 
@@ -2512,6 +2563,31 @@ export class Game {
                 break;
             default:
                 break;
+        }
+    }
+
+    // A turn of the war for the player's people (docs/WAR.md M10: host.js #fate): told in the
+    // fate panel, or in a word (ready to rise); the war kept, and the journal as it is now
+    #fate({ fate, realm, by, town }) {
+        const war = this.host.war;
+        const own = `the ${peopleOf(realm)}`;
+        const them = by ? `the ${peopleOf(by)}` : "their overlords";
+
+        if (fate === "restless") {
+            this.hud.message(`${own[0].toUpperCase()}${own.slice(1)} are ready to rise against ${them}!`, 4);
+        } else {
+            const words = fateWords({ fate, own, by: them, town: town ? war?.town(town)?.name : null });
+
+            if (words) {
+                this.fate.show(words);
+            }
+        }
+
+        this.onWar(war);
+        this.onStanding(this.standing);
+
+        if (this.journal?.open) {
+            this.#showJournal();
         }
     }
 
@@ -2793,11 +2869,12 @@ export class Game {
 
             const plain = !event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey;
 
-            if (event.key === "Escape" && (this.pack?.open || this.journal?.open)) {
+            if (event.key === "Escape" && (this.pack?.open || this.journal?.open || this.fate?.open)) {
                 event.preventDefault();
                 event.stopPropagation();
                 this.closePack();
                 this.closeJournal();
+                this.fate?.hide();
             } else if ((event.key === "i" || event.key === "I") && plain) {
                 this.togglePack();
             } else if ((event.key === "j" || event.key === "J") && plain) {

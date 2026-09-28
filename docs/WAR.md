@@ -200,7 +200,7 @@ The engine is built for this from the start. These are its rules:
 | **M7** | Built | Diplomats on the roads, to escort or waylay; grudges and favours. |
 | **M8** | Built | News and rumours: the war told in the taverns and by the folk; the guild's requests. |
 | **M9** | Built | Followers, mercenaries and adventurers for hire. |
-| **M10** | | The end: victory, and serving an overlord until the rising. |
+| **M10** | Built | The end: victory, and serving an overlord until the rising. |
 | **M11** | | Hop in, hop out: other players joining a running world. |
 
 ## What's built
@@ -284,8 +284,10 @@ longer before a capital can.
    - Otherwise it may **raid**: a few of its soldiers out against the town's fields, killing a few
      of its guard and stopping its taxes.
 8. **Envoys** passing an enemy's forces may be **waylaid**.
-9. **Vassals** that have served 60 turns may **rise** against their overlord: rarely, and likelier
-   the stronger they are beside them, the more they resent them, and the harder pressed they are.
+9. **Vassals** grow **restless** as they serve, and rise once they're ready (M10, below). Those
+   that have served 60 turns may **rise** against their overlord sooner: rarely, and likelier the
+   stronger they are beside them, the more they resent them, the harder pressed they are, and the
+   more restless. A **fallen** people rises again in one of its old towns, once it's stirred to it.
 10. **The reckoning.** A people whose every rival serves it has **won**; play goes on. A rising
     can undo it.
 
@@ -580,6 +582,60 @@ enemy camp outside one of their towns (above).
 
 **Kept.** The camps pitched and the sorties out are in the host's snapshot, and the watched towns
 and each camp's sortie in the war's, so a saved or joined world carries on exactly.
+
+### The war's end (M10)
+
+**Unrest** (`war.js` `RISING`). A people that serves another, or has fallen, has an unrest from 0
+to 100 (`realm.unrest`, kept with the war), towards rising against its **oppressor**
+(`war.oppressor`): the one at the top of those it serves; for a fallen people, whoever holds most of
+its old towns.
+- A vassal grows restless as it serves: a quarter a turn, and as much again if it bears its
+  overlord a grudge. A fallen people only by what's done for it.
+- Its players stir it (`war.stir`, from the host: `STIR`):
+
+| Done | Unrest |
+| --- | --- |
+| A request done for their own people's rulers (not their overlord's) | 10 |
+| A tithe paid to them | 15 |
+| A contract from a guild's board | 4 |
+| One of their oppressors' soldiers brought down | 3 |
+
+- While they serve, their own people's halls and keep ask tithes for the rising, whatever the
+  treasury holds.
+
+**The rising.** Ready (100), a people **rises** at the war's next turn; the players hear it's
+ready first ("restless"). A player's **counsel** can call it sooner, at the ruler's feet in their
+own people's keep (not their overlord's), from a Knight up: "Is it time we rose against the Orcs?".
+It's heard once the people are ready enough for their word: at 80 for a Knight, 65 for a Lord,
+half the way for a Councillor (`war.rise(realm, { weight })`, weighing their rank's `COUNSEL`).
+- **A vassal rising** throws off its overlord, gets a new ruler, and is at war with whoever it
+  served (the one at the top). A vassal's vassals go with it.
+- **A fallen people rising** takes back the one of its old towns nearest a player of theirs (or
+  the least held), held by six tenths of the soldiers a town of its kind keeps. It rules from there,
+  and it's at war with those who held it.
+- Either way its unrest is spent, and a victory it undoes is told ("undone").
+
+**Serving.** Brought under another, the player's people's enemies are their overlord's, and their
+overlord's halls and keep give them work as their own do (M4); their counsel on marching, war and
+peace isn't heard (their overlord decides). The ruler tells how near the people are to rising.
+
+**Told to the player** (`host.js` `#fate`, the host's `fate` events; `app/fate.js`): each of the war's
+great turns for their people, in a panel over the game that plays on once it's read (Play on, or
+Escape):
+
+| Fate | When | Told |
+| --- | --- | --- |
+| Victory | Every other people serves theirs | "Victory", and `HONOURS` standing (200) |
+| Serving | Another's won, and theirs serves them | "The continent is theirs" |
+| Defeat | Another's won, and theirs has fallen | "Defeat" |
+| Brought under | Their people's seat is taken | "Brought under" |
+| Fallen | Their people hold no town | "Fallen" |
+| Risen | Their people rise | "Risen!" |
+| Rule broken | Their victory undone | "Rule broken" |
+| Restless | Their people are ready to rise | in a word, across the screen |
+
+The journal says where their people stand: whom they serve and how near they are to rising, or
+that they've fallen; that they rule the continent, or who does.
 
 ### Followers (M9)
 

@@ -65,7 +65,11 @@ export function tell(event, war) {
         case "fallen":
             return `${People(event.realm)} hold no town any more.`;
         case "rebelled":
-            return `${People(event.realm)} have risen against ${people(event.from)}!`;
+            return `${People(event.realm)} have risen against ${people(event.against ?? event.from)}!`;
+        case "restless":
+            return `${People(event.realm)} are restless under ${people(event.against)}. There's talk of rising.`;
+        case "risen":
+            return `${People(event.realm)} have risen in ${town(event.town)}, and thrown out ${people(event.from)}!`;
         case "sally":
             return event.won ? `The guard of ${town(event.town)} sallied out and broke the ${own(event.against)} camp.` : `The guard of ${town(event.town)} sallied out against the ${own(event.against)} camp, and was driven back.`;
         case "relief":
@@ -91,7 +95,7 @@ export function tell(event, war) {
 
 // What's heard of wherever it happened (the rest only near it): the war's turns, and what
 // happens between rulers
-const EVERYWHERE = new Set(["stage", "declared", "joined", "broke", "treaty", "subjugated", "fallen", "rebelled", "victory", "undone"]);
+const EVERYWHERE = new Set(["stage", "declared", "joined", "broke", "treaty", "subjugated", "fallen", "rebelled", "restless", "risen", "victory", "undone"]);
 
 // What isn't talked of in the taverns
 const UNTOLD = new Set(["met", "counsel", "unpaid", "sortie", "envoy", "reinforced"]);

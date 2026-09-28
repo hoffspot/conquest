@@ -1730,6 +1730,88 @@ test("an adventurer at the guild, hired for coppers, follows the player out and 
     expect(again[0].apart).toBeLessThan(6);
 });
 
+test("the player's people brought under another: told, and served; stirred to rising, they rise; and their victory, told and honoured", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const fate = page.locator(".fate");
+    const journal = page.locator(".journal");
+
+    // Brought under the orcs (as the war tells it): the player's told, and plays on
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const war = game.host.war;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        war.events.push({ type: "subjugated", turn: war.turn, realm: "human", by: "orc", was: null });
+        Object.assign(war.realm("human"), { overlord: "orc", since: war.turn });
+        game.advance(0.1, { render: false });
+        game.start();
+    });
+    await expect(fate).toBeVisible();
+    await expect(fate.locator(".fate-title")).toHaveText("Brought under");
+    await expect(fate.locator(".fate-text")).toContainText("The Humans' seat has fallen, and they bend the knee to the Orcs. You serve them now");
+    await fate.getByRole("button", { name: "Play on" }).click();
+    await expect(fate).toBeHidden();
+
+    // The journal: whom they serve, and how near they are to rising
+    await page.keyboard.press("j");
+    await expect(journal.locator(".journal-fate")).toHaveText(/^You serve the Orcs\. Your people are \d+% of the way to rising\.$/);
+    await page.keyboard.press("Escape");
+
+    // Stirred to the brim: ready (told in a word), then risen at the war's next turn
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+        game.host.war.stir("human", 100);
+        game.advance(0.1, { render: false });
+        game.start();
+    });
+    await expect(page.locator("#banner")).toHaveText("The Humans are ready to rise against the Orcs!");
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+        game.advance(61, { render: false });
+        game.start();
+    });
+    await expect(fate.locator(".fate-title")).toHaveText("Risen!");
+    await expect(fate).toHaveAttribute("data-tone", "hope");
+    await page.keyboard.press("Escape");
+    await expect(fate).toBeHidden();
+
+    // Every other people brought under them: victory, and the rulers' honours
+    const points = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const before = game.standing.points;
+
+        game.stop();
+
+        for (const realm of game.host.war.realms.filter(({ id }) => id !== "human")) {
+            Object.assign(realm, { overlord: "human", since: game.host.war.turn });
+        }
+
+        game.advance(61, { render: false });
+        game.start();
+
+        return game.standing.points - before;
+    });
+
+    expect(points).toBe(200);
+    await expect(fate.locator(".fate-title")).toHaveText("Victory");
+    await expect(fate).toHaveAttribute("data-tone", "won");
+    await fate.getByRole("button", { name: "Play on" }).click();
+    await page.keyboard.press("j");
+    await expect(journal.locator(".journal-fate")).toHaveText("Your people rule the continent. Every other people serves them.");
+    await page.keyboard.press("Escape");
+
+    // Kept with the war
+    const kept = await page.evaluate(() => window.pellagos.game.host.war.victor);
+
+    expect(kept).toBe("human");
+});
+
 test("tapping someone walks the player up to talk: their name and what they are, what they say, replies that lead on, Escape to stop", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

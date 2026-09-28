@@ -6,6 +6,8 @@
 // - their people: who rules, whom they're at war with and allied to, how many towns they hold,
 //   and how the other peoples regard them (grudges and favours: docs/WAR.md M7);
 // - the requests lately done, failed or given up;
+// - where their people stand at the war's end: serving another and how near to rising, fallen, or
+//   ruling the continent (docs/WAR.md M10);
 // - their company: the followers they lead (docs/WAR.md M9), and how many more they could.
 //
 // It only shows and asks: what's done is the host's (core/host.js commands), through the game.
@@ -96,7 +98,8 @@ export class JournalPanel {
     /**
      * Show (or show again) where the player stands: { standing: { title, points, from, to, opens,
      * next }, requests: [{ id, title, from, text, progress, where, left }], people: { name,
-     * ruler, war: [names], allies: [names], towns, regard: [{ name, words, tone }] }, done: [{
+     * ruler, war: [names], allies: [names], towns, regard: [{ name, words, tone }], fate (a line, or
+     * null: serving another, fallen, ruling the continent) }, done: [{
      * title, from, state }] }.
      */
     show({ standing, requests, people, done, company = [], most = 1 }) {
@@ -149,6 +152,11 @@ export class JournalPanel {
         // Their people
         if (people) {
             const about = element("div", "journal-people");
+
+            // (Serving another, fallen, or ruling the continent: docs/WAR.md M10)
+            if (people.fate) {
+                about.append(element("p", "journal-line journal-fate", people.fate));
+            }
 
             about.append(
                 element("p", "journal-line", `Ruled by ${people.ruler}, from ${people.seat}.`),

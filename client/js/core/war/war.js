@@ -81,6 +81,15 @@ export const TRIBUTE = 0.5;
 /** How many turns a vassal serves before it might rise against its overlord. */
 export const SERVES = 60;
 
+/**
+ * A people's rising (docs/WAR.md M10). Serving another, or fallen, its unrest grows towards `ready`:
+ * by `perTurn` while it serves (and by `grudge` more if it bears its overlord a grudge), and by
+ * what its players do (stir). Ready, it rises; a player's counsel can call it sooner (as early
+ * as `early` of the way for the weightiest). A fallen people rises in one of its old towns, held
+ * by `garrison` of the soldiers a town of its kind keeps.
+ */
+export const RISING = Object.freeze({ ready: 100, perTurn: 0.25, grudge: 0.25, early: 0.5, garrison: 0.6 });
+
 /** How many turns a player's counsel is heeded (if it's not been acted on sooner). */
 export const COUNSEL_TURNS = 20;
 
@@ -120,7 +129,8 @@ export class War {
          * (where its rulers sit now), leader ({ name, title, woman, traits }), treasury,
          * overlord (a realm's id, or null), since (the turn it last changed hands), standing (what
          * it thinks of each other realm: grudges below 0, favours above), counsel (a player's,
-         * heeded for a while: counsel()), alive }.
+         * heeded for a while: counsel()), unrest (towards rising, serving or fallen: RISING),
+         * alive }.
          */
         this.realms = RACES.map((race) => {
             const capital = plan.places.find((place) => place.race === race.id && place.kind === "capital");
@@ -137,6 +147,7 @@ export class War {
                 since: 0,
                 standing: {},
                 counsel: null,
+                unrest: 0,
                 alive: true,
             };
         });
@@ -513,6 +524,65 @@ export class War {
         if (realm && about !== id && this.realm(about)) {
             realm.standing[about] = clamp((realm.standing[about] ?? 0) + amount, -100, 100);
         }
+    }
+
+    /**
+     * Whom a people would rise against (docs/WAR.md M10): the one at the top of those it serves;
+     * for a fallen people, whoever holds the most of its old towns. Null if it's free.
+     */
+    oppressor(id) {
+        const realm = this.realm(id);
+
+        if (!realm) {
+            return null;
+        }
+
+        if (realm.alive) {
+            return realm.overlord ? this.liege(realm.overlord) : null;
+        }
+
+        const holders = {};
+
+        for (const town of this.towns.filter(({ race }) => race === realm.race)) {
+            const liege = this.liege(town.owner);
+
+            holders[liege] = (holders[liege] ?? 0) + 1;
+        }
+
+        return Object.entries(holders).sort(([, a], [, b]) => b - a)[0]?.[0] ?? null;
+    }
+
+    /**
+     * A people that serves another, or has fallen, stirred towards rising by `amount` (what its
+     * players do). Returns its unrest (0 to RISING.ready), or null if it's free.
+     */
+    stir(id, amount) {
+        const realm = this.realm(id);
+
+        if (!this.oppressor(id) || !(amount > 0)) {
+            return this.oppressor(id) ? (realm.unrest ?? 0) : null;
+        }
+
+        this.#unrest(realm, amount);
+
+        return realm.unrest;
+    }
+
+    /**
+     * A people rising now, at a player's counsel (weighing `weight`, 0 to 1, by their standing),
+     * if it's restless enough: a vassal throws off its overlord; a fallen people takes back the one
+     * of its old towns nearest `near` ([x, y] metres; else the least held). Returns whether it rose.
+     */
+    rise(id, { weight = 0, near = null } = {}) {
+        const realm = this.realm(id);
+
+        if (!this.oppressor(id) || (realm.unrest ?? 0) < RISING.ready * (1 - clamp(weight, 0, 1) * (1 - RISING.early))) {
+            return false;
+        }
+
+        this.#rise(realm, { near, led: weight > 0 });
+
+        return true;
     }
 
     // --- Keeping it ---
@@ -1342,6 +1412,7 @@ export class War {
 
         realm.overlord = by === realm.id ? null : by;
         realm.since = this.turn;
+        realm.unrest = 0;
         realm.leader = rollLeader(realm.race, this.random);
 
         // Its own dealings are its liege's now; and whom it knew, its liege knows
@@ -1401,27 +1472,82 @@ export class War {
         }
     }
 
-    // A vassal that's served a while may rise against its overlord: the likelier the stronger it
-    // is beside them, the more it resents them, and the harder pressed they are
+    // A people that serves another, or has fallen, restless enough, rises. And a vassal grows
+    // more restless while it serves; once it's served a while it may rise anyway: the likelier the
+    // stronger it is beside its overlord, the more it resents them, the harder pressed they are,
+    // and the more restless it is
     #rebel() {
         for (const realm of this.realms) {
-            if (!realm.alive || !realm.overlord || this.turn - realm.since < SERVES) {
+            if ((realm.unrest ?? 0) >= RISING.ready && this.oppressor(realm.id)) {
+                this.#rise(realm);
+
+                continue;
+            }
+
+            if (!realm.alive || !realm.overlord) {
                 continue;
             }
 
             const overlord = realm.overlord;
+
+            this.#unrest(realm, RISING.perTurn + ((realm.standing[overlord] ?? 0) < -30 ? RISING.grudge : 0));
+
+            if (this.turn - realm.since < SERVES) {
+                continue;
+            }
+
             const ratio = this.power(realm.id) / Math.max(1, this.strength(this.liege(overlord)));
-            const chance = 0.001 + Math.max(0, ratio - 0.5) * 0.04 + ((realm.standing[overlord] ?? 0) < -30 ? 0.004 : 0) + (this.enemiesOf(this.liege(overlord)).length ? 0.002 : 0);
+            const chance = 0.001 + Math.max(0, ratio - 0.5) * 0.04 + ((realm.standing[overlord] ?? 0) < -30 ? 0.004 : 0) + (this.enemiesOf(this.liege(overlord)).length ? 0.002 : 0) + ((realm.unrest ?? 0) / RISING.ready) * 0.01;
 
             if (this.random.chance(chance)) {
-                realm.overlord = null;
-                realm.since = this.turn;
-                realm.leader = rollLeader(realm.race, this.random);
-                this.#set(realm.id, overlord, "hostile");
-                this.remember(overlord, realm.id, -30);
-                this.#emit("rebelled", { realm: realm.id, from: overlord });
+                this.#rise(realm);
             }
         }
+    }
+
+    // A people's unrest grown (told of once it's ready to rise)
+    #unrest(realm, amount) {
+        const was = realm.unrest ?? 0;
+
+        realm.unrest = clamp(was + amount, 0, RISING.ready);
+
+        if (was < RISING.ready && realm.unrest >= RISING.ready) {
+            this.#emit("restless", { realm: realm.id, against: this.oppressor(realm.id) });
+        }
+    }
+
+    // A people risen: a vassal free of its overlord, and at war with the one at the top of those it
+    // served; a fallen people back in one of its old towns (the nearest `near`, or the least held),
+    // at war with those who held it. A new ruler, either way
+    #rise(realm, { near = null, led = false } = {}) {
+        const against = this.oppressor(realm.id);
+
+        realm.unrest = 0;
+        realm.since = this.turn;
+        realm.leader = rollLeader(realm.race, this.random);
+
+        if (realm.alive) {
+            const from = realm.overlord;
+
+            realm.overlord = null;
+            this.#set(realm.id, against, "hostile");
+            this.remember(against, realm.id, -30);
+            this.#emit("rebelled", { realm: realm.id, from, against, led });
+
+            return;
+        }
+
+        const old = this.towns.filter(({ race }) => race === realm.race);
+        const town = near ? old.reduce((best, each) => (apart(each.at, near) < apart(best.at, near) ? each : best)) : old.reduce((best, each) => (each.garrison < best.garrison ? each : best));
+        const from = town.owner;
+
+        Object.assign(town, { owner: realm.id, garrison: Math.ceil(HOLDINGS[town.kind].garrison * RISING.garrison) });
+        Object.assign(realm, { alive: true, overlord: null, seat: town.id, treasury: Math.max(realm.treasury, COSTS.start / 2) });
+
+        // (Any camp before it was the old holders' friends': now it's a camp against a rising)
+        this.#set(realm.id, this.liege(from), "hostile");
+        this.remember(this.liege(from), realm.id, -30);
+        this.#emit("risen", { realm: realm.id, town: town.id, from, against, led });
     }
 
     // Has anyone brought every other people under them?

@@ -19,13 +19,13 @@ export const STANDINGS = Object.freeze([
     { title: "Commoner", points: 0, opens: "Work from the reeves at the town halls." },
     { title: "Freeholder", points: 60, opens: "Scouting for the reeves." },
     { title: "Retainer", points: 180, opens: "An audience at the keep, work from the ruler, and the pick of its armoury." },
-    { title: "Knight", points: 400, opens: "A say in where the next expedition marches." },
+    { title: "Knight", points: 400, opens: "A say in where the next expedition marches, and, serving another, when to rise." },
     { title: "Lord", points: 800, opens: "A say in war and peace." },
     { title: "Councillor", points: 1500, opens: "A seat on the council: your word weighs the most." },
 ]);
 
 /** The rank that opens each thing. */
-export const OPENS = Object.freeze({ scout: 1, keep: 2, armoury: 2, defend: 2, rout: 2, march: 3, escort: 3, waylay: 3, peace: 4, war: 4 });
+export const OPENS = Object.freeze({ scout: 1, keep: 2, armoury: 2, defend: 2, rout: 2, march: 3, escort: 3, waylay: 3, rise: 3, peace: 4, war: 4 });
 
 /** How much a player's counsel weighs with their rulers, by rank (0 below a Knight). */
 export const COUNSEL = Object.freeze([0, 0, 0, 0.4, 0.7, 1]);
@@ -133,8 +133,10 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
         kinds.push("message");
     }
 
-    // A tithe, while the treasury's thin
-    if (war.realm(realm).treasury < 40 && !has("tithe")) {
+    // A tithe, while the treasury's thin; or, while they serve another, for the rising (M10)
+    const rising = war.oppressor?.(realm) && town.owner === realm ? war.oppressor(realm) : null;
+
+    if ((war.realm(realm).treasury < 40 || rising) && !has("tithe")) {
         kinds.push("tithe");
     }
 
@@ -212,7 +214,9 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
         case "tithe": {
             const amount = 20 + 10 * Math.min(4, rank + war.stage);
 
-            return { ...base, key: "tithe", target: { coppers: amount }, text: `The treasury's thin. Bring ${amount} coppers for it, and it won't be forgotten.`, until: war.turn + turns, reward: worth(amount / 2, 0) };
+            const text = rising ? `Quietly, now. We're putting by arms against ${war.realm(rising).name}, for when the day comes. Bring ${amount} coppers for them.` : `The treasury's thin. Bring ${amount} coppers for it, and it won't be forgotten.`;
+
+            return { ...base, key: "tithe", target: { coppers: amount }, text, until: war.turn + turns, reward: worth(amount / 2, 0) };
         }
         case "bounty": {
             const foe = random.pick(enemies);

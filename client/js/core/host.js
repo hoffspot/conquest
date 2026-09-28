@@ -23,7 +23,7 @@ import { SETTLEMENT_KINDS } from "./setpieces/town.js";
 import { armouryGift, COUNSEL, FAILED, MOST_REQUESTS, offerContract, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
 import { bannersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, roundsOf, sortieOf } from "./war/muster.js";
 import { ADJECTIVES } from "./war/peoples.js";
-import { HOLDINGS, War } from "./war/war.js";
+import { HOLDINGS, RISING, War } from "./war/war.js";
 import { distanceBetween, WEAPONS } from "./weapons.js";
 
 /** The id of the player whose game the world runs in (the only one, playing alone). */
@@ -84,6 +84,16 @@ export const HIRES = Object.freeze({
 
 /** How near (metres) a people's soldiers must be to see a player bring down their enemy, and owe them for it (M7). */
 export const FAVOUR_SIGHT = 25;
+
+/**
+ * How a player stirs their people towards rising (docs/WAR.md M10), while they serve another or
+ * have fallen: each request done for their own people's rulers (a tithe the more), each contract
+ * from a guild's board, and each of their oppressors' soldiers they bring down.
+ */
+export const STIR = Object.freeze({ request: 10, tithe: 15, contract: 4, soldier: 3 });
+
+/** The standing a player's given when their people bring every other under them (M10). */
+export const HONOURS = 200;
 
 /** How long the fallen soldiers lie before they're taken away (battle ms). */
 const FALLEN_MS = 10000;
@@ -170,6 +180,7 @@ export const REFUSALS = Object.freeze({
     due: "You've nothing to tell them.",
     claimed: "The armoury's given you all it will, for now.",
     counsel: "That counsel can't be taken.",
+    unready: "Not yet: your people aren't ready to rise.",
     request: "No such request.",
 });
 
@@ -579,8 +590,18 @@ export class Host {
         if (this.war) {
             const turn = this.war.turn;
 
+            // (A fallen people restless enough rises where a player of theirs is)
+            for (const player of this.players.values()) {
+                const realm = this.war.realm(player.realm);
+
+                if (realm && !realm.alive && (realm.unrest ?? 0) >= RISING.ready) {
+                    this.war.rise(realm.id, { near: this.#whereIs(player) });
+                }
+            }
+
             for (const event of this.war.advance(ms)) {
                 this.#event("war", { event });
+                this.#fate(event);
 
                 // (A camp's sortie against a town a player's near: out into the world)
                 if (event.type === "sortie") {
@@ -1915,6 +1936,21 @@ export class Host {
                 return refuse("rank");
             }
 
+            // (A rising, counselled in their own people's keep, not their overlord's)
+            if (kind === "rise") {
+                if (post.owner !== player.realm) {
+                    return refuse("stranger");
+                }
+
+                if (!this.war.rise(player.realm, { weight: COUNSEL[rank] })) {
+                    return refuse("unready");
+                }
+
+                this.#event("counsel", { id: player.id, advice: { rise: true } });
+
+                return OK;
+            }
+
             if (!this.war.counsel(player.realm, effect.counsel, COUNSEL[rank])) {
                 return refuse("counsel");
             }
@@ -1940,7 +1976,56 @@ export class Host {
             this.#event("standing", { id: player.id, ...up });
         }
 
+        // (Done for their own people while they serve another, or from a guild's board: their people stirred)
+        const own = this.war?.town(request.from.town)?.owner === player.realm;
+
+        this.#stir(player, request.from.post === "guild" ? STIR.contract : !own ? 0 : request.kind === "tithe" ? STIR.tithe : STIR.request);
+
         return structuredClone(request);
+    }
+
+    // A player's people, serving another or fallen, stirred towards rising (M10) by what they've done
+    #stir(player, amount) {
+        if (!this.war?.oppressor(player.realm) || !(amount > 0)) {
+            return;
+        }
+
+        const unrest = this.war.stir(player.realm, amount);
+
+        this.#event("unrest", { id: player.id, realm: player.realm, unrest, amount });
+    }
+
+    // What the war's turns mean for each player's people (M10): won (honoured), brought under
+    // another, fallen, risen again, or their rule undone; restless enough to rise
+    #fate(event) {
+        const war = this.war;
+
+        for (const player of this.players.values()) {
+            const mine = event.realm === player.realm;
+            const fate =
+                event.type === "victory"
+                    ? mine
+                        ? "victory"
+                        : war.liege(player.realm) === event.realm
+                          ? "serving"
+                          : "defeat"
+                    : !mine
+                      ? null
+                      : { subjugated: "subjugated", fallen: "fallen", rebelled: "risen", risen: "risen", undone: "undone", restless: "restless" }[event.type];
+
+            if (!fate) {
+                continue;
+            }
+
+            this.#event("fate", { id: player.id, fate, realm: player.realm, by: event.by ?? event.against ?? event.from ?? event.realm, town: event.town ?? null });
+
+            // (Their people's victory: honours for them)
+            if (fate === "victory") {
+                for (const up of player.standing.gain(HONOURS)) {
+                    this.#event("standing", { id: player.id, ...up });
+                }
+            }
+        }
     }
 
     // A request given up: a little standing lost
@@ -1957,8 +2042,13 @@ export class Host {
         return OK;
     }
 
-    // A foe a player's brought down, for the requests they carry: an enemy's soldier, or one of the wild
+    // A foe a player's brought down, for the requests they carry: an enemy's soldier, or one of the
+    // wild. One of their oppressors' soldiers stirs their people (M10)
     #felled(player, fallen) {
+        if (fallen.kind === "soldier" && this.war?.oppressor(player.realm) && this.war.liege(fallen.team) === this.war.oppressor(player.realm)) {
+            this.#stir(player, STIR.soldier);
+        }
+
         for (const request of [...player.standing.requests]) {
             if (request.state !== "open") {
                 continue;

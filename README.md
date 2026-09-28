@@ -374,7 +374,10 @@ client/                 The game (static files served to the browser)
     debug.js            Debug mode's overlay
     talk.js             The talk: who's talking, what they say, and the replies to choose from
     pack.js             The pack: coppers, what's carried and worn, the skills; a shop's wares
-    journal.js          The journal: the player's rank, their requests, their people
+    journal.js          The journal: the player's rank, their requests, their people, their
+                        company
+    fate.js             The war's great turns for the player's people: victory, brought under
+                        another, fallen, risen
     save.js             The saved character, what they've grown into and carry, what's been
                         said and found, and settings (local storage)
     device.js           Full screen and the service worker
