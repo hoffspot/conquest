@@ -9,7 +9,9 @@ animated.
 
 The code: `client/js/core/creatures.js` (what each is), `core/battle.js` (how they fight),
 `core/host.js` (keeping them about the players), `core/weapons.js` `NATURAL` (their fangs, claws
-and breath), and `client/js/beasts/` (how each looks and moves). The creature lab
+and breath), `core/afflictions.js` (what lingers after their blows, and the cures),
+`client/js/beasts/` (how each looks and moves), and `world/effects.js`, `world/ailments3d.js`
+(their fire, venom, webs and roots, and what shows on whoever they hit). The creature lab
 (`creature-lab.html`) shows every one, doing everything it does.
 
 ## The creatures
@@ -57,7 +59,8 @@ A few do something besides biting and clawing: the adder, bog frog and magma sli
 venom, lava), the will-o'-wisp looses bolts of light, the treant calls up roots, the cave spider
 spits webs, the dragon breathes fire and the wight lord lays a curse (each flies as a projectile).
 The bog frog's tongue reaches two squares off. The rock tusker's charge knocks whoever it catches
-off their feet (below).
+off their feet (below). Many leave something lingering: poison, a sickness, a curse, fire, a
+bleeding wound, a web or roots holding them (below: "What lingers").
 
 ## How strong, and where
 
@@ -99,6 +102,48 @@ it plays out the same on every machine.
   the rock tusker's charge, 1.5 s) stuns them for that long. They fall (quicker than a death), lie
   a moment, sit up with their feet drawn under them and rise; until they're up they can't move,
   fight, cast, use anything or talk (the host refuses: "You're down: get up first").
+
+## What lingers
+
+Some creatures' blows leave something behind (`core/afflictions.js`; each attack's `afflict` in
+`core/weapons.js` `NATURAL`: which, and how likely). Each hurts a little every so often, or
+hinders, until it wears off; the one who did it is who brought down anyone it's the last of.
+Struck again with it while it's on, it lasts from then (as strong as the stronger). The hurt each
+time is as strong as the creature (its tier's power), so a far-out scorpion's venom is worse than
+an adder's near home.
+
+| Affliction | Lasts | Hurts | Besides | From | Cure (at the guild) |
+| --- | --- | --- | --- | --- | --- |
+| Poisoned | 9 s | 1 every 1.5 s | | adder, bog frog (spit), wyvern and scorpion stings, cave spider's bite | Cure poison draught, 12 gold |
+| Diseased | 45 s | 1 every 5 s | stamina comes back at 40% | rats, bats, hyenas, skeletons, boggarts | Cure disease draught, 18 gold |
+| Withered | 20 s | 1 every 2.5 s | healing takes half as well | the wight lord's curse, the black shuck's bite | Invigorating draught, 22 gold |
+| Burning | 4 s | 1 every 0.8 s | | the dragon's fire, a magma slime's lava and slam | Burn salve, 8 gold |
+| Bleeding | 10 s | 1 every 2 s | | wolves, boars, bears, pumas, crocodiles, the dragon's bite... | Bandage, 5 gold |
+| Slowed | 5 s | | moving at half pace | a spider's web, a treant's roots, a frost troll's club | Quickening draught, 10 gold |
+
+A cure ends it at once (and only it: used with nothing to cure, it isn't used). Each can go on an
+action wheel, as a draught can.
+
+**How it shows.**
+- **On the player's plate**, an icon for each (a venom drop with a skull in it, a pocked ball with
+  flies, a cracked grey heart, a flame, a drop of blood, a web or roots or a snowflake for what's
+  slowing them), ringed in its colour, darkening round as it wears off. Over the bars of anyone
+  else with something on them, the same, smaller. The player's told when something takes hold
+  ("You're poisoned!"), the first time with the cure and where it's sold, and when it's over.
+- **On whoever has it:** venom's bubbles rising and green drips falling, and their skin tinged
+  green; a sickness's flies circling and a yellow miasma; a curse's violet motes circling them,
+  dark shadow rising, a shadow pooled under them; flames licking up them, smoke rising, their skin
+  aglow; blood dripping; a web wound round their legs and anchored to the ground; roots burst up
+  round their feet and coiled up their legs; ice crusting their feet, frost glittering. Each hurt,
+  a number the colour of it over them, and a puff of it.
+
+**The creatures' own attacks.** Fire's breathed in a roaring stream from the dragon's jaws to
+whoever it's at, smoke rolling off it; venom and lava are spat in an arc and splash where they
+land (spattering sparks and smoke, for lava); a web's thrown and bursts; roots burrow along the
+ground and break it up at their feet; a curse bursts in shadow. What doesn't bleed red spills its
+own when struck: a slime's gel, a spider's or scorpion's ichor, a treant's sap, a skeleton's and a
+wight lord's bone chips, a rock tusker's stone chips, lava from a magma slime, shadow from a
+black shuck or a shadow stalker.
 
 ## What they leave
 

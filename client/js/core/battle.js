@@ -53,6 +53,7 @@
 // Nothing here draws anything: every step returns events ("attack", "hit", "death"...) for the
 // interface to show. Pure JavaScript with seeded random numbers, no DOM.
 
+import { AFFLICTIONS, shareOf } from "./afflictions.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { routeBetween } from "./interiors.js";
 import { findPath, lineAhead } from "./pathfinding.js";
@@ -300,6 +301,8 @@ export class Battle {
             spellReadyAt: 0,
             dead: false,
             respawnAt: 0,
+            // What lingers on it after some blows (afflictions.js): poison, a web...
+            afflictions: [],
             target: null,
             lastSeen: -Infinity,
             lastPathAt: -Infinity,
@@ -355,7 +358,8 @@ export class Battle {
         if (hp > 0) {
             const before = actor.hp;
 
-            actor.hp = Math.min(actor.maxHp, actor.hp + hp);
+            // (Withered, it takes less well)
+            actor.hp = Math.min(actor.maxHp, actor.hp + Math.round(hp * shareOf(actor, "healing")));
             this.#emit("healed", { id: actor.id, by: null, spell: null, amount: actor.hp - before, hp: actor.hp, maxHp: actor.maxHp });
         }
 
@@ -612,6 +616,49 @@ export class Battle {
         return { ok: true };
     }
 
+    /**
+     * Something lingering on someone (afflictions.js: a kind), from now: by whom (an id), as
+     * strong as their power has it (the hurt each time), and how it shows (`look`). Again while
+     * it's on them, it lasts from now, as strong as the stronger. Whether it took.
+     */
+    afflict(id, kind, { by = null, power = 1, look = null } = {}) {
+        const actor = this.actor(id);
+        const affliction = AFFLICTIONS[kind];
+
+        if (!actor || actor.dead || !affliction) {
+            return false;
+        }
+
+        const damage = affliction.damage ? Math.max(1, Math.round(affliction.damage * power)) : 0;
+        const until = this.time + affliction.ms;
+        const had = actor.afflictions.find((each) => each.kind === kind);
+
+        if (had) {
+            Object.assign(had, { until: Math.max(had.until, until), damage: Math.max(had.damage, damage), by: by ?? had.by, look: look ?? had.look });
+        } else {
+            actor.afflictions.push({ kind, until, next: affliction.every ? this.time + affliction.every : Infinity, damage, by, look });
+        }
+
+        this.#emit("afflicted", { id, kind, change: "on", until: Math.max(had?.until ?? 0, until), by, look: look ?? had?.look ?? null });
+
+        return true;
+    }
+
+    /** What's lingering on someone ended at once (a cure): whether it was on them. */
+    cure(id, kind) {
+        const actor = this.actor(id);
+        const had = actor?.afflictions.find((each) => each.kind === kind);
+
+        if (!had) {
+            return false;
+        }
+
+        actor.afflictions.splice(actor.afflictions.indexOf(had), 1);
+        this.#emit("afflicted", { id, kind, change: "cured", look: had.look });
+
+        return true;
+    }
+
     /** How long until a character can cast a spell again, as a share of the cooldown (0: ready). */
     cooldown(id) {
         const actor = this.actor(id);
@@ -767,6 +814,7 @@ export class Battle {
         }
 
         this.#fly();
+        this.#ail();
     }
 
     // --- Drawing weapons and putting them away ---
@@ -1469,7 +1517,7 @@ export class Battle {
         actor.pace = want > actor.pace ? Math.min(want, actor.pace + ACCELERATION * seconds) : Math.max(want, actor.pace - BRAKING * seconds);
 
         const held = this.time < actor.staggeredUntil || this.time < actor.stunnedUntil || ((actor.attack || actor.casting) && !actor.to);
-        const travelled = held ? 0 : this.#travel(actor, actor.pace * seconds);
+        const travelled = held ? 0 : this.#travel(actor, actor.pace * seconds * shareOf(actor, "speed"));
 
         // Standing still, it starts again from a walk
         if (travelled === 0) {
@@ -1479,7 +1527,7 @@ export class Battle {
         // Running uses stamina, anything else gets it back (in hundredths, so it adds up exactly)
         actor.running = run && travelled > 0;
 
-        const stamina = actor.stamina + (actor.running ? -STAMINA_DRAIN : STAMINA_RECOVERY) * seconds;
+        const stamina = actor.stamina + (actor.running ? -STAMINA_DRAIN : STAMINA_RECOVERY * shareOf(actor, "recovery")) * seconds;
 
         actor.stamina = Math.min(actor.maxStamina, Math.max(0, Math.round(stamina * 100) / 100));
     }
@@ -1773,7 +1821,7 @@ export class Battle {
         if (spell.heal) {
             const before = target.hp;
 
-            target.hp = Math.min(target.maxHp, target.hp + Math.round(rollHeal(spell, this.random) * (actor.power?.heal ?? 1)));
+            target.hp = Math.min(target.maxHp, target.hp + Math.round(rollHeal(spell, this.random) * (actor.power?.heal ?? 1) * shareOf(target, "healing")));
             this.#emit("healed", { id: target.id, by: actor.id, spell: id, amount: target.hp - before, hp: target.hp, maxHp: target.maxHp });
         }
 
@@ -1847,6 +1895,34 @@ export class Battle {
         }
     }
 
+    // What lingers on those afflicted: hurting them now and then (and bringing down any it's the
+    // last of), till it wears off
+    #ail() {
+        for (const actor of this.actors) {
+            if (actor.dead || !actor.afflictions.length) {
+                continue;
+            }
+
+            for (const ailing of [...actor.afflictions]) {
+                if (this.time >= ailing.next) {
+                    ailing.next += AFFLICTIONS[ailing.kind].every;
+                    actor.hp = Math.max(0, actor.hp - ailing.damage);
+                    this.#emit("ail", { id: actor.id, kind: ailing.kind, damage: ailing.damage, hp: actor.hp, maxHp: actor.maxHp, by: ailing.by });
+
+                    if (actor.hp === 0) {
+                        this.#die(actor, this.actor(ailing.by));
+                        break;
+                    }
+                }
+
+                if (this.time >= ailing.until) {
+                    actor.afflictions.splice(actor.afflictions.indexOf(ailing), 1);
+                    this.#emit("afflicted", { id: actor.id, kind: ailing.kind, change: "over", look: ailing.look });
+                }
+            }
+        }
+    }
+
     #hit(attacker, target, attack, projectile = null) {
         // A blow as strong as the attacker's power for its kind (and its next blow made stronger,
         // if it is), less what the target's armour takes off: never less than 1
@@ -1885,6 +1961,11 @@ export class Battle {
             this.#emit("knockdown", { id: target.id, by: attacker?.id ?? null, until: target.downUntil });
         }
 
+        // A blow that leaves something lingering (venom, a web, fire...), sometimes
+        if (attack.afflict && target.hp > 0 && this.random.chance(attack.afflict.chance)) {
+            this.afflict(target.id, attack.afflict.kind, { by: attacker?.id ?? null, power: attacker?.power?.[blow] ?? 1, look: attack.afflict.look ?? null });
+        }
+
         // Whoever is hit fights back
         if (attacker && (target.ai === "patrol" || target.ai === "wild")) {
             target.target = attacker.id;
@@ -1913,6 +1994,7 @@ export class Battle {
     #die(actor, killer) {
         actor.dead = true;
         actor.respawnAt = this.time + actor.respawnMs;
+        actor.afflictions = [];
         actor.drawing = null;
         actor.attack = null;
         actor.casting = null;
@@ -1969,6 +2051,7 @@ export class Battle {
             staggeredUntil: 0,
             stunnedUntil: 0,
             downUntil: 0,
+            afflictions: [],
             casting: null,
             spellReadyAt: this.time,
             target: null,

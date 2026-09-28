@@ -223,6 +223,7 @@ export const REFUSALS = Object.freeze({
     elsewhere: "They're trading with someone else.",
     changed: "Something offered isn't there any more: look again.",
     theirs: "They haven't room for all that.",
+    unafflicted: "There's nothing for that to cure.",
 });
 
 // What can't be done while knocked off one's feet (battle.js: a knockdown)
@@ -1591,7 +1592,16 @@ export class Host {
             return refuse("dead");
         }
 
+        // (A cure: only for what's on them)
+        if (use.cure && !actor.afflictions.some(({ kind }) => kind === use.cure)) {
+            return refuse("unafflicted");
+        }
+
         const item = player.progress.take(index, 1);
+
+        if (use.cure) {
+            this.battle.cure(actor.id, use.cure);
+        }
 
         this.battle.mend(actor.id, { hp: use.heal ?? 0, stamina: use.stamina ?? 0 });
         this.#event("used", { id: player.id, item });

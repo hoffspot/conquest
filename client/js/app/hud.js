@@ -1,7 +1,10 @@
 // The game's heads-up display, drawn with the page (not in 3D): the player's name and health,
 // a name and health bar over every other character, numbers for the damage each blow does, and
 // messages across the middle of the screen. Under a health bar, an orange bar shows stamina
-// while it isn't full.
+// while it isn't full; under that, an icon for each thing lingering on them (poison, a web...),
+// darkening round as it wears off.
+
+import { ICONS } from "./icons.js";
 
 const element = (tag, className, text = "") => Object.assign(document.createElement(tag), { className, textContent: text });
 
@@ -80,6 +83,53 @@ export class Hud {
         if (plate) {
             this.#setBar(plate, hp, maxHp);
         }
+    }
+
+    /**
+     * Show what's lingering on a character (the player's plate, or over another's bar): an icon
+     * for each ([{ kind, icon (an ICONS key), label, left (the share of its time still to go) }]),
+     * or none.
+     */
+    setAfflictions(id, ailments) {
+        const plate = this.#plateOf(id);
+
+        if (!plate) {
+            return;
+        }
+
+        let row = plate.querySelector(".ails");
+
+        if (!ailments.length) {
+            row?.remove();
+
+            return;
+        }
+
+        if (!row) {
+            row = element("div", "ails");
+            plate.append(row);
+        }
+
+        // (Made again only when what's on them changes; how long each has to go, every time)
+        const key = ailments.map(({ kind, icon }) => `${kind}:${icon}`).join(",");
+
+        if (row.dataset.key !== key) {
+            row.dataset.key = key;
+            row.replaceChildren(
+                ...ailments.map(({ kind, icon, label }) => {
+                    const each = element("span", `ail ail-${kind}`);
+
+                    each.title = label;
+                    each.setAttribute("role", "img");
+                    each.setAttribute("aria-label", label);
+                    each.innerHTML = `<svg viewBox="-24 -24 48 48" aria-hidden="true">${ICONS[icon] ?? ""}</svg>`;
+
+                    return each;
+                }),
+            );
+        }
+
+        ailments.forEach(({ left }, index) => row.children[index]?.style.setProperty("--left", Math.max(0, Math.min(1, left)).toFixed(3)));
     }
 
     /** Change a character's stamina: its orange bar, shown while it isn't full. */

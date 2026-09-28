@@ -11,6 +11,7 @@
 // talker hires the might they don't have: M9). Everything here is plain data (toJSON), kept with
 // the character (app/save.js), and the host's to change (core/host.js). Pure JavaScript, no DOM.
 
+import { CURES } from "./afflictions.js";
 import { PARTS } from "./spoils.js";
 import { WEAPONS } from "./weapons.js";
 
@@ -85,6 +86,8 @@ export const ITEMS = Object.freeze({
     potion: { label: "Healing draught", use: { heal: 25 }, price: 15 },
     meal: { label: "Hot meal", use: { heal: 15 }, price: 5 },
     ale: { label: "Tankard of ale", use: { stamina: 1000 }, price: 2 },
+    // The cures for what lingers after some creatures' blows (afflictions.js): each ends one
+    ...Object.fromEntries(Object.entries(CURES).map(([id, { label, cure, price }]) => [id, { label, use: { cure }, price }])),
     // The wild's creatures' parts (spoils.js): what the adventurers' guild pays for each; some to
     // eat or drink
     ...Object.fromEntries(Object.entries(PARTS).map(([id, { label, worth, use, icon }]) => [id, { label, price: worth, part: true, ...(use ? { use } : {}), ...(icon === "meat" ? { food: true } : {}) }])),
@@ -98,7 +101,7 @@ export const SHOPS = Object.freeze({
     smith: { items: ["sword", "hammer", "staff", "bow", "gauntlets", "boots", "gambeson", "mail", "roundShield", "kiteShield"], best: "masterwork" },
     tavern: { items: ["ale", "meal"], best: "common" },
     temple: { items: ["potion"], best: "common" },
-    guild: { items: ["wand", "grimoire", "potion"], best: "fine" },
+    guild: { items: ["wand", "grimoire", "potion", ...Object.keys(CURES)], best: "fine" },
 });
 
 /** What sells for what (a share of its price), before haggling. */

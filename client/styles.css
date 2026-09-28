@@ -944,6 +944,17 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     font-size: 20px;
 }
 
+/* What lingers hurting them: smaller, the colour of it */
+.damage.ail {
+    font-size: 15px;
+}
+
+.damage.ail-poison { color: #9af05a; }
+.damage.ail-disease { color: #d8c850; }
+.damage.ail-wither { color: #c8a0ff; }
+.damage.ail-burn { color: #ffa040; }
+.damage.ail-bleed { color: #ff5a4a; }
+
 /* The action wheel: eight see-through slices round whoever was held on, S turning it over */
 .wheel {
     position: absolute;
@@ -1453,6 +1464,70 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 .pack-cell.target {
     background: rgba(236, 200, 130, 0.3);
     border-color: var(--gold-bright);
+}
+
+/* What's lingering on someone (poison, a web...): an icon each, darkening round as it wears off */
+.plate .ails {
+    display: flex;
+    justify-content: center;
+    gap: 3px;
+    margin-top: 3px;
+}
+
+.plate .ail {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: rgba(20, 15, 10, 0.78);
+    box-shadow: 0 0 0 1px rgba(236, 200, 130, 0.55);
+    animation: ail-pulse 1.8s ease-in-out infinite;
+}
+
+#playerplate .ails {
+    justify-content: flex-start;
+    gap: 5px;
+    margin-top: 5px;
+}
+
+#playerplate .ail {
+    width: 28px;
+    height: 28px;
+}
+
+.plate .ail svg {
+    width: 88%;
+    height: 88%;
+}
+
+.plate .ail::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: conic-gradient(transparent calc(var(--left, 1) * 360deg), rgba(0, 0, 0, 0.6) 0);
+    pointer-events: none;
+}
+
+.plate .ail-poison { box-shadow: 0 0 0 1px #7ad04a, 0 0 6px rgba(122, 208, 74, 0.6); }
+.plate .ail-disease { box-shadow: 0 0 0 1px #c8b84a, 0 0 6px rgba(200, 184, 74, 0.55); }
+.plate .ail-wither { box-shadow: 0 0 0 1px #a888d8, 0 0 6px rgba(168, 136, 216, 0.6); }
+.plate .ail-burn { box-shadow: 0 0 0 1px #ff8a2a, 0 0 7px rgba(255, 138, 42, 0.7); }
+.plate .ail-bleed { box-shadow: 0 0 0 1px #d8342a, 0 0 6px rgba(216, 52, 42, 0.6); }
+.plate .ail-slow { box-shadow: 0 0 0 1px #9ad0f0, 0 0 6px rgba(154, 208, 240, 0.55); }
+
+@keyframes ail-pulse {
+    50% {
+        transform: scale(1.08);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .plate .ail {
+        animation: none;
+    }
 }
 
 /* Offered in a trade with another player */

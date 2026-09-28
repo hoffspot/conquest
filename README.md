@@ -35,7 +35,8 @@ engine, and [docs/WORLD.md](docs/WORLD.md) the world: its plan, and how it's bui
 chunks. [docs/WAR.md](docs/WAR.md) sets out the war between the six peoples that's being built,
 and how the engine's made ready for other players to hop in and out of a running world.
 [docs/WILDS.md](docs/WILDS.md) describes the wild's creatures: what they are, where and how strong,
-how they behave, and how they're built and animated in code.
+how they behave, what lingers after their blows and its cures, what they leave, trading between
+players, and how they're built and animated in code.
 
 ## How to play
 
@@ -446,7 +447,10 @@ client/                 The game (static files served to the browser)
                         muster.js where a town's guards stand and its patrols go, how a camp is
                         laid out, and where its raids come from
     battle.js           Moving, fighting, damage, dying and coming back; the orc's patrol
-    weapons.js          The weapons and their attacks
+    weapons.js          The weapons and their attacks (and the wild's creatures' own)
+    creatures.js        The wild's creatures: what each is, where and how strong (docs/WILDS.md)
+    spoils.js           What they leave: their parts, and what the guild pays for them
+    afflictions.js      What lingers after some of their blows (poison, a web...) and the cures
     progress.js         Growing stronger: skills and their trees, abilities, gear and its make,
                         shops, loot, gold and the pack; and from them, might
     standing.js         Standing in a people: its ranks, the requests the rulers make, the
@@ -491,7 +495,10 @@ client/                 The game (static files served to the browser)
     avatar.js           A character in the world, following its place in the battle
     effects.js          Arrows, bolts, fireballs, sparks, dust, fire, arcane light, blood and
                         its splashes and pools, smoke and embers, the target ring, spells' light
-                        and the stars round a stunned head, in five looks each
+                        and the stars round a stunned head, in five looks each; the creatures'
+                        fire breathed, venom and lava spat, webs, roots, and what rises off
+                        whoever something lingers on
+    ailments3d.js       What lingers drawn on whoever has it: a web, roots, ice, a curse's motes
     wounds.js           Battle damage: each blow's mark and each threshold's wound, painted on
                         the body and its clothes
     squares.js          Debug mode's squares and paths

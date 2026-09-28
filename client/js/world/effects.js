@@ -3,6 +3,10 @@
 // badly hurt, splashed on the ground and pooling under the fallen, smoke and embers rising from
 // burns, arrows left stuck in whoever they hit, a ring on the ground where the player is walking
 // to, and a red ring round the enemy they're set to fight.
+// The wild's creatures' own: fire breathed in a roaring stream, venom and lava spat in an arc,
+// splashing where they land, a web bursting, roots breaking the ground; and what lingers on
+// whoever they hit, rising off them (venom's bubbles and drips, a sickness's flies and miasma, a
+// curse's motes and shadows, flames, frost, silk).
 // Spells: green light gathering in a healer's hand and rising round them, with a green ring
 // spreading on the ground; violet sparks in a hand casting a stun, a burst where it lands, and
 // stars circling the stunned one's head until it wears off.
@@ -19,7 +23,7 @@
 import * as THREE from "three";
 
 // How many particles there can be at once
-const PARTICLES = 800;
+const PARTICLES = 1400;
 
 // Each burst: how many particles, their colours (from, to), size (metres), speed (m/s), how long
 // they last (s), how much gravity pulls them (m/s²; negative rises), and how they spread. Ones
@@ -43,6 +47,32 @@ const BURSTS = {
     blessing: { count: 14, colours: [0xfff6d8, 0xffd27a], size: [0.04, 0.09], speed: [0.2, 0.7], life: [0.6, 1.1], gravity: -0.5, spread: 2.2, glow: true, swirl: 2 },
     steam: { count: 14, colours: [0xf2f2ee, 0xb8bcc0], size: [0.14, 0.28], speed: [0.4, 1.1], life: [0.8, 1.4], gravity: -1.3, spread: 1.4, glow: false, opacity: 0.45, grow: 2.4 },
     ash: { count: 10, colours: [0x3a322c, 0x6a625a], size: [0.14, 0.3], speed: [0.4, 1.1], life: [0.8, 1.4], gravity: -1, spread: 1.6, glow: false, opacity: 0.45, grow: 1.8 },
+    // What the wild's creatures that don't bleed red spill when struck: a slime's gel, a spider's
+    // or scorpion's ichor, a treant's sap, chips of bone or stone
+    slimeSplash: { count: 16, colours: [0xc8ff9a, 0x4a9a2a], size: [0.04, 0.09], speed: [1.2, 3], life: [0.4, 0.7], gravity: 9.8, spread: 1, glow: false, opacity: 0.75, late: true, drag: 0.8 },
+    ichor: { count: 16, colours: [0xe8e060, 0x7a8a10], size: [0.02, 0.05], speed: [1.4, 3.4], life: [0.4, 0.7], gravity: 9.8, spread: 0.9, glow: false, opacity: 0.95, late: true, drag: 0.8 },
+    sap: { count: 14, colours: [0xf0a830, 0x7a4a08], size: [0.025, 0.05], speed: [1, 2.6], life: [0.45, 0.8], gravity: 9.8, spread: 0.9, glow: false, opacity: 0.95, late: true, drag: 0.8 },
+    boneChips: { count: 12, colours: [0xf2ead0, 0xb8a888], size: [0.02, 0.045], speed: [1.6, 3.6], life: [0.35, 0.6], gravity: 9.8, spread: 1.2, glow: false, opacity: 1, late: true, drag: 0.5 },
+    stoneChips: { count: 14, colours: [0x9a8a78, 0x4a4038], size: [0.025, 0.05], speed: [1.8, 3.8], life: [0.35, 0.6], gravity: 9.8, spread: 1.2, glow: false, opacity: 1, late: true, drag: 0.5 },
+    // Where the wild's creatures' own land: venom splashing, lava spattering, a web bursting,
+    // earth thrown up by roots, a curse's shadows
+    venomSplash: { count: 26, colours: [0xd8ff8a, 0x3a7a10], size: [0.03, 0.08], speed: [1.2, 3], life: [0.35, 0.7], gravity: 9, spread: 1.4, glow: false, opacity: 0.9, late: true, drag: 0.6 },
+    lavaSplash: { count: 24, colours: [0xffe080, 0xa01800], size: [0.04, 0.1], speed: [1.4, 3.2], life: [0.4, 0.8], gravity: 9, spread: 1.4, glow: true, drag: 0.5 },
+    webSplat: { count: 20, colours: [0xffffff, 0xd8d8cc], size: [0.03, 0.07], speed: [0.8, 2.2], life: [0.3, 0.6], gravity: 3, spread: 1.8, glow: false, opacity: 0.95 },
+    earth: { count: 26, colours: [0x6a5438, 0x3a2a18], size: [0.05, 0.12], speed: [1.6, 3.6], life: [0.5, 0.9], gravity: 9, spread: 0.7, glow: false, opacity: 0.95, late: true, drag: 0.4 },
+    // What lingers on someone, rising off them now and then (core/afflictions.js)
+    venomBubbles: { count: 2, colours: [0xc8f47a, 0x3a8a10], size: [0.045, 0.085], speed: [0.2, 0.45], life: [0.6, 1], gravity: -0.6, spread: 1.4, glow: false, opacity: 0.9, late: true, drag: 1.5 },
+    venomDrip: { count: 1, colours: [0x9ad83a, 0x2a5a08], size: [0.025, 0.04], speed: [0, 0.1], life: [0.5, 0.7], gravity: 9.8, spread: 0.3, glow: false, opacity: 0.95, late: true, drag: 0.2 },
+    flies: { count: 2, colours: [0x141008, 0x2a2418], size: [0.025, 0.035], speed: [0.35, 0.6], life: [1, 1.6], gravity: 0, spread: 2, glow: false, opacity: 1, late: true, swirl: 22, drag: 0.4 },
+    miasma: { count: 1, colours: [0xb0a040, 0x6a5a18], size: [0.24, 0.4], speed: [0.1, 0.25], life: [1.2, 1.8], gravity: -0.25, spread: 1.6, glow: false, opacity: 0.42, grow: 1.5 },
+    wither: { count: 2, colours: [0xc898ff, 0x4a1a70], size: [0.05, 0.09], speed: [0.2, 0.5], life: [0.8, 1.3], gravity: 0.5, spread: 2, glow: false, opacity: 0.9, late: true, swirl: 3 },
+    shadows: { count: 2, colours: [0x2a1438, 0x0c0612], size: [0.24, 0.4], speed: [0.1, 0.3], life: [0.9, 1.4], gravity: 0.2, spread: 1.4, glow: false, opacity: 0.45, grow: 1.4 },
+    flames: { count: 3, colours: [0xfff0a0, 0xff3a0a], size: [0.14, 0.3], speed: [0.3, 0.9], life: [0.35, 0.6], gravity: -2.6, spread: 1.4, glow: true, late: true, grow: 0.2 },
+    frost: { count: 2, colours: [0xffffff, 0x7ac8f0], size: [0.04, 0.07], speed: [0.1, 0.4], life: [0.5, 0.9], gravity: 0.4, spread: 2, glow: false, opacity: 0.95, late: true },
+    webbed: { count: 1, colours: [0xffffff, 0xe0e0d4], size: [0.025, 0.045], speed: [0.05, 0.2], life: [0.6, 1], gravity: 0.3, spread: 1, glow: false, opacity: 0.9 },
+    // Fire breathed: a stream of it, and smoke rolling off (effects.breathe)
+    breath: { count: 5, colours: [0xfff2a8, 0xff2a00], size: [0.1, 0.24], speed: [7, 10], life: [0.3, 0.45], gravity: -1.5, spread: 0.32, glow: true, grow: 2.2, drag: 0.9 },
+    breathSmoke: { count: 1, colours: [0x3a2e26, 0x1a1410], size: [0.16, 0.28], speed: [4, 6], life: [0.5, 0.8], gravity: -1.2, spread: 0.5, glow: false, opacity: 0.35, grow: 2.4, drag: 1.2 },
 };
 
 // Blood on the ground: how many spots and pools there can be at once, how long they stay (s)
@@ -572,6 +602,9 @@ export class Effects {
         this.pulses = [];
         this.dazed = [];
         this.later = [];
+
+        // Fire breathed, streaming a while: { from, to (points, got each frame), left (s) }
+        this.streams = [];
         this.star = new THREE.ShapeGeometry(starShape(0.075, 0.032));
 
         /** The camera, for turning the stars to face it (the game sets it). */
@@ -817,6 +850,20 @@ export class Effects {
         return flight && flight.kind !== "arrow" ? flight.look : null;
     }
 
+    /** What kind of projectile one in flight is ("arrow", "venom"...), or null (gone). */
+    kindOf(id) {
+        return this.flying.get(id)?.kind ?? null;
+    }
+
+    /**
+     * Fire breathed for `seconds`: a roaring stream from one point to another (each a function
+     * giving it as it is then: the jaws, as the head moves; whoever it's at), flames spreading
+     * and slowing as they go, smoke rolling off.
+     */
+    breathe(from, to, seconds) {
+        this.streams.push({ from, to, left: seconds, age: 0 });
+    }
+
     /**
      * Move a projectile along its path to a point (metres): arrows pointing the way they're
      * flying; bolts and fireballs flickering, spiralling, jittering or circling as their look
@@ -969,6 +1016,37 @@ export class Effects {
 
             return job.left > 0;
         });
+        // Fire breathed: flames thrown along the stream each moment, as far as whoever it's at
+        this.streams = this.streams.filter((stream) => {
+            stream.left -= dt;
+            stream.age += dt;
+
+            const from = stream.from();
+            const way = stream.to().sub(from);
+            const reach = way.length();
+
+            if (stream.left <= 0 || reach < 0.01) {
+                return false;
+            }
+
+            way.divideScalar(reach);
+
+            // (Fast enough to reach them before the flames die down: harder as it roars, then
+            // guttering at the end)
+            const strength = Math.min(1, stream.age / 0.12, stream.left / 0.15);
+            const speed = reach / 0.36;
+
+            for (let k = 0; k < 2; k++) {
+                this.glow.emit({ ...BURSTS.breath, count: Math.round(BURSTS.breath.count * strength), speed: [speed * 0.85, speed * 1.15] }, from, way);
+            }
+
+            if (Math.random() < dt * 14) {
+                this.dust.emit({ ...BURSTS.breathSmoke, speed: [speed * 0.5, speed * 0.7] }, from, way);
+            }
+
+            return true;
+        });
+
         this.glow.update(dt, pixels);
         this.dust.update(dt, pixels, (x, z, size) => this.splats.add(x, z, size * (2.5 + Math.random() * 2)));
         this.splats.update(dt);

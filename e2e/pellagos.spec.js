@@ -2036,6 +2036,47 @@ test("the pack shows what's grown and carried; a skill ranks up with use; tradin
     expect(kept.skills.blade).toBeGreaterThanOrEqual(100);
 });
 
+test("what lingers after a creature's blow shows on the player's plate, and its cure from the guild ends it", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // Poisoned (as an adder's bite leaves them), a cure in their pack
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.host.players.get(game.me).progress.stow({ id: "antidote" }, 1);
+        game.battle.afflict(game.me, "poison", { by: null });
+    });
+
+    const icon = page.locator('#playerplate .ail[aria-label="Poisoned"]');
+
+    await expect(icon).toBeVisible();
+    await expect(page.locator("#banner")).toContainText("You're poisoned! (Cure poison draught: the adventurers' guild sells them.)");
+
+    // (Hurting now and then: less health)
+    await expect.poll(() => page.evaluate(() => window.pellagos.game.battle.actor(window.pellagos.game.me).hp), { timeout: 20000 }).toBeLessThan(50);
+
+    // The cure drunk from the pack: gone at once
+    await page.keyboard.press("i");
+
+    const pack = page.locator(".pack");
+
+    await pack.locator('.carried .pack-cell[data-item="antidote"]').click();
+    await expect(pack.locator(".pack-about")).toContainText("Cures what's poisoned at once.");
+    await pack.locator(".pack-about").getByRole("button", { name: /^Drink/ }).click();
+    await expect(icon).toHaveCount(0);
+    await expect(page.locator("#banner")).toContainText("No longer poisoned.");
+    expect(await page.evaluate(() => window.pellagos.game.battle.actor(window.pellagos.game.me).afflictions)).toEqual([]);
+
+    // (With nothing to cure, a cure's kept)
+    await page.evaluate(() => window.pellagos.game.host.players.get(window.pellagos.game.me).progress.stow({ id: "antidote" }, 1));
+    await page.keyboard.press("i");
+    await page.keyboard.press("i");
+    await pack.locator('.carried .pack-cell[data-item="antidote"]').click();
+    await pack.locator(".pack-about").getByRole("button", { name: /^Drink/ }).click();
+    await expect(page.locator("#banner")).toContainText("There's nothing for that to cure.");
+    expect(await page.evaluate(() => window.pellagos.game.progress.count("antidote"))).toBe(1);
+});
+
 test("the pack stacks things alike: dragged together, split by how many, held for a thing's wheel; thrown away and taken back; dropped on the ground, and picked up", async ({ page }) => {
     // (A long walk through: more than the usual time, with others running beside it)
     test.setTimeout(180000);

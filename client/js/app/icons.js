@@ -37,6 +37,26 @@ const ITEM_DEFS = `
     <stop offset="0.55" stop-color="#d9262e"/>
     <stop offset="1" stop-color="#6e0a10"/>
 </radialGradient>
+<radialGradient id="icon-cure-poison" cx="0.38" cy="0.35" r="0.7">
+    <stop offset="0" stop-color="#e4ffb0"/>
+    <stop offset="0.55" stop-color="#5cbf2a"/>
+    <stop offset="1" stop-color="#1c4a0c"/>
+</radialGradient>
+<radialGradient id="icon-cure-disease" cx="0.38" cy="0.35" r="0.7">
+    <stop offset="0" stop-color="#fff0b8"/>
+    <stop offset="0.55" stop-color="#e0a020"/>
+    <stop offset="1" stop-color="#6a3a06"/>
+</radialGradient>
+<radialGradient id="icon-cure-wither" cx="0.38" cy="0.35" r="0.7">
+    <stop offset="0" stop-color="#fff8d8"/>
+    <stop offset="0.5" stop-color="#f0c850"/>
+    <stop offset="1" stop-color="#8a5a10"/>
+</radialGradient>
+<radialGradient id="icon-cure-slow" cx="0.38" cy="0.35" r="0.7">
+    <stop offset="0" stop-color="#e0f6ff"/>
+    <stop offset="0.55" stop-color="#3aa8e8"/>
+    <stop offset="1" stop-color="#0c3a6a"/>
+</radialGradient>
 <radialGradient id="icon-glass" cx="0.35" cy="0.3" r="0.8">
     <stop offset="0" stop-color="#ffffff" stop-opacity="0.55"/>
     <stop offset="1" stop-color="#bfe3f2" stop-opacity="0.18"/>
@@ -201,6 +221,84 @@ export const ICONS = Object.freeze({
         <ellipse cx="-4" cy="2" rx="13" ry="4.5" fill="#f2cf5c" stroke="#6b4a0c" stroke-width="1.1"/>
         <circle cx="11" cy="-9" r="9" fill="#f2cf5c" stroke="#6b4a0c" stroke-width="1.3"/>
         <circle cx="11" cy="-9" r="5.5" fill="none" stroke="#b8862e" stroke-width="1.1"/>`,
+
+    // What lingers after some blows (core/afflictions.js), each as it shows on the player's plate:
+    // a drop of venom with a little skull in it
+    poisoned: `
+        <path d="M0,-19 C6,-9 13,-2 13,6 A13,13 0 0 1 -13,6 C-13,-2 -6,-9 0,-19 Z" fill="#6cc03a" stroke="#1f4a10" stroke-width="1.4"/>
+        <circle cx="-4" cy="3" r="2.6" fill="#1f3a10"/>
+        <circle cx="4" cy="3" r="2.6" fill="#1f3a10"/>
+        <path d="M-4,10 L4,10 M-2,10 L-2,13 M0,10 L0,13 M2,10 L2,13" stroke="#1f3a10" stroke-width="1.2"/>
+        <ellipse cx="-6" cy="-4" rx="1.8" ry="3.6" fill="#e4ffb0" opacity="0.6" transform="rotate(25 -6 -4)"/>`,
+
+    // A sickly pocked ball, flies about it
+    diseased: `
+        <circle cy="2" r="14.5" fill="#b8b04a" stroke="#4a4210" stroke-width="1.4"/>
+        <circle cx="-6" cy="-3" r="3.2" fill="#7a5a1a"/>
+        <circle cx="5" cy="-5" r="2.2" fill="#7a5a1a"/>
+        <circle cx="7" cy="7" r="3.4" fill="#7a5a1a"/>
+        <circle cx="-4" cy="9" r="2.4" fill="#7a5a1a"/>
+        <circle cx="1" cy="2" r="1.6" fill="#7a5a1a"/>
+        <g fill="#2a2418">
+            <ellipse cx="14" cy="-16" rx="2" ry="1.3"/>
+            <ellipse cx="-16" cy="-12" rx="1.8" ry="1.2"/>
+            <ellipse cx="18" cy="-4" rx="1.6" ry="1.1"/>
+        </g>
+        <g fill="#e8eef2" opacity="0.7">
+            <ellipse cx="13" cy="-18" rx="1.6" ry="0.9"/>
+            <ellipse cx="-17" cy="-14" rx="1.4" ry="0.8"/>
+            <ellipse cx="17" cy="-6" rx="1.3" ry="0.7"/>
+        </g>`,
+
+    // A grey heart, cracked, dark motes falling from it
+    withered: `
+        <circle r="18" fill="#3a2a4a" opacity="0.55"/>
+        <path d="M0,14 C-13,5 -17,-3 -13,-9 C-9,-15 -3,-13 0,-7 C3,-13 9,-15 13,-9 C17,-3 13,5 0,14 Z" fill="#8a7a96" stroke="#2a1a3a" stroke-width="1.4"/>
+        <path d="M0,-7 L-3,-1 L2,3 L-2,9" fill="none" stroke="#2a1a3a" stroke-width="1.8" stroke-linejoin="round"/>
+        <circle cx="-11" cy="15" r="1.7" fill="#c8a8e8"/>
+        <circle cx="9" cy="18" r="1.3" fill="#c8a8e8"/>
+        <circle cx="15" cy="10" r="1" fill="#c8a8e8"/>`,
+
+    // A flame
+    burning: `
+        <path d="M0,19 C-11,19 -15,10 -12,2 C-10,-4 -5,-6 -6,-14 C0,-10 3,-5 2,1 C5,-2 6,-7 5,-12 C12,-5 15,4 12,11 C10,16 6,19 0,19 Z" fill="#ff6a14" stroke="#7a2a00" stroke-width="1.3"/>
+        <path d="M0,17 C-6,17 -8,12 -6,8 C-4,4 -1,3 -1,-2 C3,2 5,6 4,10 C6,9 7,7 7,4 C9,9 8,17 0,17 Z" fill="#ffd060"/>`,
+
+    // A drop of blood, and another falling
+    bleeding: `
+        <path d="M-3,-17 C3,-7 10,-1 10,7 A13,13 0 0 1 -16,7 C-16,-1 -9,-7 -3,-17 Z" fill="#b0140c" stroke="#4a0503" stroke-width="1.4"/>
+        <path d="M13,5 C15,9 17,11 17,14 A4,4 0 0 1 9,14 C9,11 11,9 13,5 Z" fill="#b0140c" stroke="#4a0503" stroke-width="1"/>
+        <ellipse cx="-9" cy="3" rx="2.2" ry="4.2" fill="#ff8a7a" opacity="0.55" transform="rotate(20 -9 3)"/>`,
+
+    // Slowed: a snail
+    slowed: `
+        <path d="M-19,13 L13,13 C17,13 19,10 17,7 L11,7" fill="#c8b08a" stroke="#4a3a20" stroke-width="1.3"/>
+        <circle cx="-3" cy="1" r="11" fill="#a8743f" stroke="#4a2c14" stroke-width="1.4"/>
+        <path d="M-3,1 m0,-7 a7,7 0 1 1 -7,7 a4.6,4.6 0 1 1 4.6,-4.6 a2.3,2.3 0 1 1 -2.3,2.3" fill="none" stroke="#4a2c14" stroke-width="1.3"/>
+        <path d="M14,7 L16,-2 M16,8 L20,0" stroke="#4a3a20" stroke-width="1.4" stroke-linecap="round"/>`,
+
+    // ...caught in a web
+    webbed: `
+        <g stroke="#f2f2e8" stroke-width="1.3" fill="none" stroke-linejoin="round">
+            <path d="M0,-18 L0,18 M-18,0 L18,0 M-13,-13 L13,13 M13,-13 L-13,13"/>
+            <path d="M0,-6 L4.2,-4.2 L6,0 L4.2,4.2 L0,6 L-4.2,4.2 L-6,0 L-4.2,-4.2 Z"/>
+            <path d="M0,-11.5 Q6,-9.5 8.1,-8.1 Q9.5,-6 11.5,0 Q9.5,6 8.1,8.1 Q6,9.5 0,11.5 Q-6,9.5 -8.1,8.1 Q-9.5,6 -11.5,0 Q-9.5,-6 -8.1,-8.1 Q-6,-9.5 0,-11.5 Z"/>
+            <path d="M0,-17 Q8,-14 12,-12 Q14,-8 17,0 Q14,8 12,12 Q8,14 0,17 Q-8,14 -12,12 Q-14,8 -17,0 Q-14,-8 -12,-12 Q-8,-14 0,-17 Z"/>
+        </g>
+        <circle cx="5" cy="-8" r="2.4" fill="#2a2018"/>`,
+
+    // ...held by roots
+    rooted: `
+        <path d="M-19,17 L19,17" stroke="#3a2a14" stroke-width="2.6" stroke-linecap="round"/>
+        <path d="M-14,17 C-9,8 -14,-2 -6,-12 M-6,-12 C-4,-15 -2,-15 -1,-17 M1,17 C3,6 -3,-1 3,-15 M3,-15 L6,-18 M14,17 C8,9 13,-1 9,-10 M9,-10 L12,-13" fill="none" stroke="#6a5030" stroke-width="3.2" stroke-linecap="round"/>
+        <path d="M-10,4 C-6,2 -2,4 2,2 C6,0 9,3 12,1" fill="none" stroke="#8a6a40" stroke-width="2" stroke-linecap="round"/>`,
+
+    // ...chilled to the bone
+    chilled: `
+        <g stroke="#bfe8ff" stroke-width="2.4" stroke-linecap="round" fill="none">
+            <path d="M0,-18 L0,18 M-15.6,-9 L15.6,9 M-15.6,9 L15.6,-9"/>
+            <path d="M-4,-14 L0,-10 L4,-14 M-4,14 L0,10 L4,14 M-14,-3 L-9,-6 L-10,-11 M14,3 L9,6 L10,11 M-14,3 L-9,6 L-10,11 M14,-3 L9,-6 L10,-11"/>
+        </g>`,
 
     // Two arrows passing each other, the one going gold: offered in trade
     offer: `
@@ -388,6 +486,16 @@ const COINS = `
     <ellipse cx="8" cy="-6" rx="5.5" ry="5.5" fill="none" stroke="#b8892a" stroke-width="1"/>`;
 
 /** Each thing that can be carried's icon (core/progress.js ITEMS): SVG drawn round 0, 0, about 44 across. */
+// A draught of a cure, its liquid the colour of what it cures (a gradient in DEFS: icon-cure-...)
+function draught(cures) {
+    return `
+        <circle cy="6" r="13.5" fill="url(#icon-glass)" stroke="#3a2f45" stroke-width="1.3"/>
+        <path d="M-12.6,3 A13,13 0 1 0 12.6,3 Z" transform="translate(0 0.5) scale(0.97)" fill="url(#icon-cure-${cures})"/>
+        <path d="M-4,-14 L4,-14 L4,-6 L-4,-6 Z" fill="url(#icon-glass)" stroke="#3a2f45" stroke-width="1.2"/>
+        <rect x="-5.5" y="-20" width="11" height="7" rx="1.8" fill="#6a6a70" stroke="#2a2a30" stroke-width="1"/>
+        <ellipse cx="-5.5" cy="1" rx="2.6" ry="4.4" fill="#ffffff" opacity="0.55" transform="rotate(25 -5.5 1)"/>`;
+}
+
 export const ITEM_ICONS = Object.freeze({
     // (The creatures' parts, each in its colour; gold)
     ...Object.fromEntries(Object.entries(PARTS).map(([id, part]) => [id, partIcon(part)])),
@@ -496,6 +604,23 @@ export const ITEM_ICONS = Object.freeze({
         <path d="M-4,-14 L4,-14 L4,-6 L-4,-6 Z" fill="url(#icon-glass)" stroke="#3a2f45" stroke-width="1.2"/>
         <rect x="-5.5" y="-20" width="11" height="7" rx="1.8" fill="#a8743f" stroke="#4a2c14" stroke-width="1"/>
         <ellipse cx="-5.5" cy="1" rx="2.6" ry="4.4" fill="#ffffff" opacity="0.55" transform="rotate(25 -5.5 1)"/>`,
+
+    // The cures (core/afflictions.js CURES): draughts of their colours, a salve, a bandage
+    antidote: draught("poison"),
+    cureDisease: draught("disease"),
+    invigorate: draught("wither"),
+    quickening: draught("slow"),
+    burnSalve: `
+        <path d="M-15,-2 L15,-2 L13,15 C13,17 11,18 9,18 L-9,18 C-11,18 -13,17 -13,15 Z" fill="#b8703a" stroke="#4a2410" stroke-width="1.3"/>
+        <ellipse cy="-2" rx="15" ry="4" fill="#f4ecd0" stroke="#4a2410" stroke-width="1.2"/>
+        <path d="M-6,-4 C-2,-14 6,-16 12,-20 C10,-12 4,-8 -2,-4" fill="#6ab04a" stroke="#2a5a1a" stroke-width="1.1"/>
+        <path d="M-12,6 L12,6" stroke="#8a4a20" stroke-width="1.4"/>`,
+    bandage: `
+        <ellipse cx="-4" cy="2" rx="12" ry="14" fill="#f2ead8" stroke="#6a5a40" stroke-width="1.3"/>
+        <ellipse cx="-4" cy="2" rx="5" ry="6" fill="#d8ccb0" stroke="#6a5a40" stroke-width="1.1"/>
+        <path d="M6,-9 L19,-5 L17,6 L7,10" fill="#f2ead8" stroke="#6a5a40" stroke-width="1.2"/>
+        <path d="M-14,-4 C-12,-8 -8,-11 -4,-12 M-15,6 C-13,10 -9,13 -4,16" fill="none" stroke="#b8a888" stroke-width="1"/>
+        <path d="M13,-2 L15,4" stroke="#c83a2a" stroke-width="1.6" stroke-linecap="round"/>`,
 
     // A bowl of stew, steaming, a spoon in it
     meal: `
