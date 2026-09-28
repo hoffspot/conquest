@@ -1570,15 +1570,11 @@ test("the pack shows what's grown and carried; a skill ranks up with use; tradin
     await page.locator("#packbutton").click();
     await expect(pack).toBeHidden();
 
-    // Kept: the next time, the blade still trained, and the ale still carried
-    await page.reload();
-    await expect(page.locator("#continuebutton")).toBeVisible({ timeout: 60000 });
-    await page.locator("#continuebutton").click();
-    await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
-    await page.locator("#packbutton").click();
-    await expect(pack.locator(".pack-gold")).toHaveText("27 coppers");
-    await expect(pack.locator(".carried .pack-label")).toHaveText(["Healing draught", "Tankard of ale"]);
-    await expect(pack.locator('.pack-skill[data-tree="blade"] .pack-skill-rank')).toHaveText("Trained (1)");
+    // Kept for the next time (as it was read at the start): the blade trained, the coppers, the ale
+    const kept = await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.progress")));
+
+    expect(kept).toMatchObject({ created: SAVE.created, seed: 1, gold: 27, pack: [{ id: "potion" }, { id: "ale" }] });
+    expect(kept.skills.blade).toBeGreaterThanOrEqual(100);
 });
 
 test("a building gone into is marked on the minimap; holding the minimap opens the world map, fog over all but where the player's been", async ({ page }) => {

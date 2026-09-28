@@ -1170,11 +1170,20 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     }
 }
 
-/* The player's coppers, under their name */
+/* The player's coppers, on the line with their name (at its right), the bars across under both */
+#playerplate {
+    grid-template-columns: 1fr auto;
+    align-items: baseline;
+    column-gap: 12px;
+}
+
+#playerplate .bar {
+    grid-column: 1 / -1;
+}
+
 .plate .coins {
     font-size: 12px;
     color: var(--gold);
-    margin-top: -3px;
 }
 
 .plate .coins:empty {
