@@ -53,6 +53,7 @@
 // Nothing here draws anything: every step returns events ("attack", "hit", "death"...) for the
 // interface to show. Pure JavaScript with seeded random numbers, no DOM.
 
+import { AFFLICTIONS, shareOf } from "./afflictions.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { routeBetween } from "./interiors.js";
 import { findPath, lineAhead } from "./pathfinding.js";
@@ -60,7 +61,7 @@ import { createRandom } from "./random.js";
 import { BECKON, REST_EVERY, ROLES } from "./roles.js";
 import { rollHeal, SPELL_COOLDOWN, SPELLS } from "./spells.js";
 import { Variety } from "./variety.js";
-import { armsOf, chooseAttack, distanceBetween, longestReach, rollDamage, WEAPONS } from "./weapons.js";
+import { armsOf, chooseAttack, distanceBetween, longestReach, MELEE_REACH, ringsApart, rollDamage, WEAPONS } from "./weapons.js";
 
 /**
  * How near (squares) two people have to be to talk, seeing each other: next to each other, or
@@ -93,6 +94,8 @@ export const KINDS = Object.freeze({
     soldier: { hp: 40, speed: 1.3, chase: 2.3, respawn: Infinity },
     // (A player's follower: a hired sword, keeping up with them; one who falls is gone: M9)
     follower: { hp: 50, speed: 1.7, chase: 2.3, respawn: Infinity },
+    // (One of the wild's creatures: core/creatures.js has how strong and fast each is)
+    beast: { hp: 30, speed: 1.2, chase: 2.4, respawn: Infinity },
 });
 
 /**
@@ -130,6 +133,11 @@ const GIVE_UP_MS = 3000;
 
 // How long an enemy waits at each end of its patrol (ms)
 const PATROL_PAUSE_MS = 1500;
+
+// How long one of the wild's creatures rests between wanderings (ms), and how near (squares) one
+// of a pack keeps to its leader
+const WILD_REST = [4000, 12000];
+const WILD_PACK = 3;
 
 // How often a chase finds a new path to a target that has moved (ms)
 const REPATH_MS = 500;
@@ -201,8 +209,9 @@ export class Battle {
      * it's added. The folk have a `role` (roles.js ROLES: how they rest). A patrol goes round its
      * points in turn (a guard's one point: its post, facing out the way it's added facing).
      */
-    add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, facing = 0, armed = false, leash = null, leader = null }) {
-        const type = KINDS[kind];
+    add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, facing = 0, armed = false, leash = null, leader = null, hp = null, speed = null, chase = null, power = null, armor = 0, wild = null }) {
+        const kindOf = KINDS[kind];
+        const type = { ...kindOf, hp: hp ?? kindOf.hp, speed: speed ?? kindOf.speed, chase: chase ?? speed ?? kindOf.chase };
         const chance = createRandom(this.seed + 7919 + [...id].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, 0));
         const actor = {
             id,
@@ -229,8 +238,8 @@ export class Battle {
             // own (a player's skills and gear: core/progress.js), the share of each blow its
             // armour takes off, and how much stronger its next blow is (a power strike: null
             // for none)
-            power: { melee: 1, ranged: 1, heal: 1, stun: 1 },
-            armor: 0,
+            power: { melee: 1, ranged: 1, heal: 1, stun: 1, ...power },
+            armor,
             empowered: null,
             // The map it's on, where it comes back to life, and the last link it went through
             // ({ link, from, to, time })
@@ -285,12 +294,15 @@ export class Battle {
             readyAt: 0,
             staggeredUntil: 0,
             // Stunned until (ms), the spell it's casting ({ spell, target, start, landsAt }), and
-            // when it can cast another
+            // when it can cast another; knocked down until (ms: stunned till then too)
             stunnedUntil: 0,
+            downUntil: 0,
             casting: null,
             spellReadyAt: 0,
             dead: false,
             respawnAt: 0,
+            // What lingers on it after some blows (afflictions.js): poison, a web...
+            afflictions: [],
             target: null,
             lastSeen: -Infinity,
             lastPathAt: -Infinity,
@@ -298,6 +310,9 @@ export class Battle {
             blockedSince: null,
             patrolIndex: patrol && patrol.length > 1 ? 1 : 0,
             waitUntil: 0,
+            // (One of the wild's creatures: { creature, tier, temper, guard, roam, leash, leader }:
+            // #wild)
+            wild,
         };
 
         this.actors.push(actor);
@@ -343,7 +358,8 @@ export class Battle {
         if (hp > 0) {
             const before = actor.hp;
 
-            actor.hp = Math.min(actor.maxHp, actor.hp + hp);
+            // (Withered, it takes less well)
+            actor.hp = Math.min(actor.maxHp, actor.hp + Math.round(hp * shareOf(actor, "healing")));
             this.#emit("healed", { id: actor.id, by: null, spell: null, amount: actor.hp - before, hp: actor.hp, maxHp: actor.maxHp });
         }
 
@@ -544,8 +560,10 @@ export class Battle {
     /**
      * Have a character cast a spell (a SPELLS key), on an enemy (`target`, an id) if it's that
      * kind of spell. Returns { ok: true }, or { ok: false, reason } if it can't be cast now:
-     * "cooldown", "busy" (staggered, stunned or already casting), "full" (healing at full
-     * health), "dead", "target" (not an enemy), "range" or "sight" (CAST_FAILURES says them).
+     * "cooldown", "busy" (staggered, stunned or already casting), "healthy" (healing at full
+     * health), "lifeless" (no one living there), "friendly" (not an enemy), "range" or "sight"
+     * (CAST_FAILURES says them: none of them the host's own refusals, host.js REFUSALS, but for
+     * the cooldown, which is the same).
      */
     cast(id, spellId, targetId = null) {
         const actor = this.actor(id);
@@ -569,11 +587,11 @@ export class Battle {
             target = this.actor(targetId);
 
             if (!target || target.dead) {
-                return { ok: false, reason: "dead" };
+                return { ok: false, reason: "lifeless" };
             }
 
             if (!this.hostile(actor, target)) {
-                return { ok: false, reason: "target" };
+                return { ok: false, reason: "friendly" };
             }
 
             if (distanceBetween(actor.square, target.square) > spell.reach) {
@@ -586,7 +604,7 @@ export class Battle {
 
             actor.facing = Math.atan2(target.x - actor.x, target.y - actor.y);
         } else if (spell.heal && actor.hp >= actor.maxHp) {
-            return { ok: false, reason: "full" };
+            return { ok: false, reason: "healthy" };
         }
 
         // Casting calls off an attack
@@ -596,6 +614,49 @@ export class Battle {
         this.#emit("cast", { id: actor.id, spell: spellId, target: target.id, castTime: spell.castTime });
 
         return { ok: true };
+    }
+
+    /**
+     * Something lingering on someone (afflictions.js: a kind), from now: by whom (an id), as
+     * strong as their power has it (the hurt each time), and how it shows (`look`). Again while
+     * it's on them, it lasts from now, as strong as the stronger. Whether it took.
+     */
+    afflict(id, kind, { by = null, power = 1, look = null } = {}) {
+        const actor = this.actor(id);
+        const affliction = AFFLICTIONS[kind];
+
+        if (!actor || actor.dead || !affliction) {
+            return false;
+        }
+
+        const damage = affliction.damage ? Math.max(1, Math.round(affliction.damage * power)) : 0;
+        const until = this.time + affliction.ms;
+        const had = actor.afflictions.find((each) => each.kind === kind);
+
+        if (had) {
+            Object.assign(had, { until: Math.max(had.until, until), damage: Math.max(had.damage, damage), by: by ?? had.by, look: look ?? had.look });
+        } else {
+            actor.afflictions.push({ kind, until, next: affliction.every ? this.time + affliction.every : Infinity, damage, by, look });
+        }
+
+        this.#emit("afflicted", { id, kind, change: "on", until: Math.max(had?.until ?? 0, until), by, look: look ?? had?.look ?? null });
+
+        return true;
+    }
+
+    /** What's lingering on someone ended at once (a cure): whether it was on them. */
+    cure(id, kind) {
+        const actor = this.actor(id);
+        const had = actor?.afflictions.find((each) => each.kind === kind);
+
+        if (!had) {
+            return false;
+        }
+
+        actor.afflictions.splice(actor.afflictions.indexOf(had), 1);
+        this.#emit("afflicted", { id, kind, change: "cured", look: had.look });
+
+        return true;
     }
 
     /** How long until a character can cast a spell again, as a share of the cooldown (0: ready). */
@@ -753,6 +814,7 @@ export class Battle {
         }
 
         this.#fly();
+        this.#ail();
     }
 
     // --- Drawing weapons and putting them away ---
@@ -853,6 +915,8 @@ export class Battle {
 
         if (actor.ai === "patrol") {
             this.#patrol(actor);
+        } else if (actor.ai === "wild") {
+            this.#wild(actor);
         } else if (actor.ai === "follow") {
             this.#follow(actor);
         } else if (actor.ai === "routine") {
@@ -1087,7 +1151,8 @@ export class Battle {
         }
 
         if (!actor.to && !actor.path.length) {
-            const target = this.#nearestEnemy(actor, (enemy) => this.#reachable(actor, enemy));
+            // (Not a creature that's leaving everyone be: only on purpose, told to engage it)
+            const target = this.#nearestEnemy(actor, (enemy) => this.#reachable(actor, enemy) && !(enemy.wild?.temper === "defensive" && enemy.target === null));
 
             if (target) {
                 this.#attack(actor, target);
@@ -1176,6 +1241,79 @@ export class Battle {
         }
     }
 
+    /**
+     * One of the wild's creatures (core/creatures.js): wandering near where it was found (a pack
+     * keeping with its leader), resting between; fighting as its temper has it (whoever it sees,
+     * if it's aggressive; whoever comes within its guard, if it's territorial; only whoever's
+     * struck it or its pack, if it's defensive); never going further than its leash from where it
+     * was found after anyone, and making its way back there if it's further.
+     */
+    #wild(actor) {
+        const wild = actor.wild;
+        const home = actor.spawn;
+        const provoked = (enemy) => (actor.foes[enemy.id] ?? -Infinity) > this.time;
+        const leashed = (other) => distanceBetween(home, other.square) <= wild.leash;
+        const rouses = (enemy) => provoked(enemy) || wild.temper === "aggressive" || (wild.temper === "territorial" && distanceBetween(actor.square, enemy.square) <= wild.guard);
+        const seen = this.#nearestEnemy(actor, (enemy) => leashed(enemy) && this.canSee(actor, enemy) && rouses(enemy));
+
+        if (seen) {
+            actor.target = seen.id;
+            actor.lastSeen = this.time;
+        } else if (actor.target !== null) {
+            const chased = this.actor(actor.target);
+
+            if (!chased || chased.dead || chased.map !== actor.map || this.time - actor.lastSeen > GIVE_UP_MS || !leashed(chased)) {
+                actor.target = null;
+                actor.path = [];
+                actor.pathGoal = null;
+                actor.waitUntil = 0;
+            }
+        }
+
+        const target = actor.target === null ? null : this.actor(actor.target);
+
+        if (target) {
+            actor.walkPace = actor.chaseSpeed;
+            this.#pursue(actor, target);
+
+            return;
+        }
+
+        actor.walkPace = actor.speed;
+
+        if (actor.to || actor.path.length || this.time < actor.waitUntil) {
+            return;
+        }
+
+        // Keeping with its pack's leader, or wandering from place to place near home (back there,
+        // first, if it's strayed), resting a while at each
+        const leader = wild.leader === null ? null : this.actor(wild.leader);
+        const away = distanceBetween(actor.square, home) > wild.leash;
+        let goal = null;
+
+        if (leader && !leader.dead && leader.map === actor.map && !away) {
+            if (distanceBetween(actor.square, leader.square) > WILD_PACK) {
+                goal = leader.square;
+            }
+
+            actor.waitUntil = this.time + REPATH_MS;
+        } else {
+            const angle = actor.chance.next() * Math.PI * 2;
+            const reach = away ? 0 : actor.chance.next() * wild.roam;
+
+            goal = [Math.floor(home[0] + Math.cos(angle) * reach), Math.floor(home[1] + Math.sin(angle) * reach)];
+            actor.waitUntil = this.time + WILD_REST[0] + actor.chance.next() * (WILD_REST[1] - WILD_REST[0]);
+        }
+
+        if (goal) {
+            try {
+                this.#pathTo(actor, nearestFree(this.#squares(actor.map), goal, { within: 4 }), leader);
+            } catch {
+                // (Nowhere to stand there: another time)
+            }
+        }
+    }
+
     // A follower (M9): after an enemy of its leader's it can see near them (or one that's after
     // it), else keeping within a few steps of them, at their pace
     #follow(actor) {
@@ -1211,9 +1349,12 @@ export class Battle {
         }
     }
 
-    // Go after a target: attack it if it's within reach, otherwise walk towards it
+    // Go after a target: attack it if it's within reach, otherwise walk towards it (a creature
+    // with a ranged attack not ready yet closing in to strike up close, if it can)
     #pursue(actor, target) {
-        if (this.#reachable(actor, target)) {
+        const closing = actor.wild && this.time < actor.readyAt && ringsApart(actor.square, target.square) > MELEE_REACH && actor.arms.some((attack) => attack.kind === "melee");
+
+        if (!closing && this.#reachable(actor, target)) {
             if (!actor.to) {
                 actor.path = [];
                 this.#attack(actor, target);
@@ -1376,7 +1517,7 @@ export class Battle {
         actor.pace = want > actor.pace ? Math.min(want, actor.pace + ACCELERATION * seconds) : Math.max(want, actor.pace - BRAKING * seconds);
 
         const held = this.time < actor.staggeredUntil || this.time < actor.stunnedUntil || ((actor.attack || actor.casting) && !actor.to);
-        const travelled = held ? 0 : this.#travel(actor, actor.pace * seconds);
+        const travelled = held ? 0 : this.#travel(actor, actor.pace * seconds * shareOf(actor, "speed"));
 
         // Standing still, it starts again from a walk
         if (travelled === 0) {
@@ -1386,7 +1527,7 @@ export class Battle {
         // Running uses stamina, anything else gets it back (in hundredths, so it adds up exactly)
         actor.running = run && travelled > 0;
 
-        const stamina = actor.stamina + (actor.running ? -STAMINA_DRAIN : STAMINA_RECOVERY) * seconds;
+        const stamina = actor.stamina + (actor.running ? -STAMINA_DRAIN : STAMINA_RECOVERY * shareOf(actor, "recovery")) * seconds;
 
         actor.stamina = Math.min(actor.maxStamina, Math.max(0, Math.round(stamina * 100) / 100));
     }
@@ -1680,7 +1821,7 @@ export class Battle {
         if (spell.heal) {
             const before = target.hp;
 
-            target.hp = Math.min(target.maxHp, target.hp + Math.round(rollHeal(spell, this.random) * (actor.power?.heal ?? 1)));
+            target.hp = Math.min(target.maxHp, target.hp + Math.round(rollHeal(spell, this.random) * (actor.power?.heal ?? 1) * shareOf(target, "healing")));
             this.#emit("healed", { id: target.id, by: actor.id, spell: id, amount: target.hp - before, hp: target.hp, maxHp: target.maxHp });
         }
 
@@ -1694,7 +1835,7 @@ export class Battle {
                 target.attack = null;
             }
 
-            if (target.ai === "patrol") {
+            if (target.ai === "patrol" || target.ai === "wild") {
                 target.target = actor.id;
                 target.lastSeen = this.time + stun;
             }
@@ -1754,6 +1895,34 @@ export class Battle {
         }
     }
 
+    // What lingers on those afflicted: hurting them now and then (and bringing down any it's the
+    // last of), till it wears off
+    #ail() {
+        for (const actor of this.actors) {
+            if (actor.dead || !actor.afflictions.length) {
+                continue;
+            }
+
+            for (const ailing of [...actor.afflictions]) {
+                if (this.time >= ailing.next) {
+                    ailing.next += AFFLICTIONS[ailing.kind].every;
+                    actor.hp = Math.max(0, actor.hp - ailing.damage);
+                    this.#emit("ail", { id: actor.id, kind: ailing.kind, damage: ailing.damage, hp: actor.hp, maxHp: actor.maxHp, by: ailing.by });
+
+                    if (actor.hp === 0) {
+                        this.#die(actor, this.actor(ailing.by));
+                        break;
+                    }
+                }
+
+                if (this.time >= ailing.until) {
+                    actor.afflictions.splice(actor.afflictions.indexOf(ailing), 1);
+                    this.#emit("afflicted", { id: actor.id, kind: ailing.kind, change: "over", look: ailing.look });
+                }
+            }
+        }
+    }
+
     #hit(attacker, target, attack, projectile = null) {
         // A blow as strong as the attacker's power for its kind (and its next blow made stronger,
         // if it is), less what the target's armour takes off: never less than 1
@@ -1779,8 +1948,26 @@ export class Battle {
             projectile,
         });
 
+        // A blow that knocks its target off its feet: it can't move, fight or cast till it's up
+        if (attack.knockdown && target.hp > 0) {
+            target.stunnedUntil = Math.max(target.stunnedUntil, this.time + attack.knockdown);
+            target.downUntil = Math.max(target.downUntil ?? 0, this.time + attack.knockdown);
+            target.casting = null;
+
+            if (target.attack && !target.attack.struck) {
+                target.attack = null;
+            }
+
+            this.#emit("knockdown", { id: target.id, by: attacker?.id ?? null, until: target.downUntil });
+        }
+
+        // A blow that leaves something lingering (venom, a web, fire...), sometimes
+        if (attack.afflict && target.hp > 0 && this.random.chance(attack.afflict.chance)) {
+            this.afflict(target.id, attack.afflict.kind, { by: attacker?.id ?? null, power: attacker?.power?.[blow] ?? 1, look: attack.afflict.look ?? null });
+        }
+
         // Whoever is hit fights back
-        if (attacker && target.ai === "patrol") {
+        if (attacker && (target.ai === "patrol" || target.ai === "wild")) {
             target.target = attacker.id;
             target.lastSeen = this.time;
         }
@@ -1790,7 +1977,10 @@ export class Battle {
             const until = this.time + FOE_MS;
 
             for (const other of this.actors) {
-                if (other === target || (other.team === target.team && !other.neutral && !other.dead && other.map === target.map && (this.canSee(other, target) || this.canSee(other, attacker)))) {
+                // (A creature: only its own pack)
+                const own = other.team === target.team && (!target.wild || other.wild?.pack === target.wild.pack);
+
+                if (other === target || (own && !other.neutral && !other.dead && other.map === target.map && (this.canSee(other, target) || this.canSee(other, attacker)))) {
                     other.foes[attacker.id] = until;
                 }
             }
@@ -1804,6 +1994,7 @@ export class Battle {
     #die(actor, killer) {
         actor.dead = true;
         actor.respawnAt = this.time + actor.respawnMs;
+        actor.afflictions = [];
         actor.drawing = null;
         actor.attack = null;
         actor.casting = null;
@@ -1859,6 +2050,8 @@ export class Battle {
             readyAt: this.time,
             staggeredUntil: 0,
             stunnedUntil: 0,
+            downUntil: 0,
+            afflictions: [],
             casting: null,
             spellReadyAt: this.time,
             target: null,

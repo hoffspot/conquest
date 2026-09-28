@@ -17,10 +17,12 @@
 import { Battle, FOE_MS, KINDS, TALK_REACH } from "./battle.js";
 import { Explored } from "./explored.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
-import { ABILITIES, alike, ITEMS, priceOf, Progress, rollLoot, wares, weaponOf, WITH_SHIELD } from "./progress.js";
+import { ABILITIES, alike, ITEMS, priceOf, Progress, QUALITIES, rollLoot, wares, weaponOf, WITH_SHIELD } from "./progress.js";
 import { createRandom } from "./random.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
-import { CHUNK } from "./worldplan/plan.js";
+import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, encounterAt, LAIRS, menaces, packOf, tierPower, WILD } from "./creatures.js";
+import { rollSpoils } from "./spoils.js";
+import { campTier, CHUNK, landAt, RACE, startFor } from "./worldplan/plan.js";
 import { armouryGift, COUNSEL, FAILED, MOST_REQUESTS, offerContract, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
 import { bannersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, roundsOf, sortieOf } from "./war/muster.js";
 import { ADJECTIVES } from "./war/peoples.js";
@@ -99,9 +101,30 @@ export const HONOURS = 200;
 /** How long the fallen soldiers lie before they're taken away (battle ms). */
 const FALLEN_MS = 10000;
 
+/**
+ * The wild's creatures about the players (docs/WILDS.md): how many are kept about each player out
+ * in the world (within `about` metres), put out `from` to `to` metres away (out of sight), clear
+ * of the settlements by `clear` metres; let go once every player's `far` away (not while
+ * fighting). A wild camp's folk come out once a player's `camp` metres from it (a few more than
+ * its patrols roam), and are let go `campFar` away.
+ */
+export const WILDS = Object.freeze({ count: 8, about: 60, from: 30, to: 44, clear: 25, far: 90, camp: 60, campFar: 140 });
+
+/**
+ * How near (m) a player has to be to a creature when it falls to find their own bundle on it (its
+ * spoils: spoils.js).
+ */
+export const SPOILS_REACH = 30;
+
 /** How long something dropped lies on the ground before it's gone (ms), and how near (m) it's picked up from. */
 export const GROUND_MS = 5 * 60 * 1000;
 export const PICK_REACH = 1.6;
+
+/**
+ * Trading face to face (docs/WILDS.md): how near (m) two players must be to begin, and how far
+ * apart they can get before it's off; how long (ms) asking to trade waits for an answer.
+ */
+export const TRADE = Object.freeze({ reach: 4, apart: 7, asking: 30000 });
 
 /** How long something thrown away can be taken back (ms). */
 export const UNDO_MS = 8000;
@@ -135,7 +158,7 @@ export const OFFICIALS = Object.freeze({
 const KEEP_DONE = 50;
 
 /** Bumped whenever what a snapshot holds changes, so an old one isn't read wrong. */
-export const SNAPSHOT_VERSION = 3;
+export const SNAPSHOT_VERSION = 4;
 
 /** Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS). */
 export const SHOPKEEPERS = Object.freeze({ smith: "smith", apprentice: "smith", barkeep: "tavern", barmaid: "tavern", innkeeper: "tavern", priest: "temple", acolyte: "temple", receptionist: "guild" });
@@ -193,7 +216,18 @@ export const REFUSALS = Object.freeze({
     count: "There aren't so many as that.",
     gone: "It isn't there any more.",
     undo: "Too late to take that back.",
+    down: "You're down: get up first.",
+    wanted: "They've no use for that: the adventurers' guild buys such things.",
+    trade: "You're not trading with anyone.",
+    trading: "You're trading with someone already.",
+    elsewhere: "They're trading with someone else.",
+    changed: "Something offered isn't there any more: look again.",
+    theirs: "They haven't room for all that.",
+    unafflicted: "There's nothing for that to cure.",
 });
+
+// What can't be done while knocked off one's feet (battle.js: a knockdown)
+const DOWN_HELD = new Set(["move", "ahead", "engage", "approach", "enter", "cast", "ability", "use", "talk", "trade"]);
 
 // A whole number, and a square [x, y] of whole numbers
 const whole = (value) => Number.isFinite(value) && Math.floor(value) === value;
@@ -276,11 +310,33 @@ export class Host {
         this.hired = new Set();
 
         /**
+         * The wild's creatures out near the players (by id): { creature, tier, pack (its pack's
+         * id), camp (the wild camp it's of), lair (the perilous site it's of) }; the wild camps
+         * whose folk are out, and the perilous sites whose master and guards are there (by id:
+         * { ids }); when each site's master, slain, is back (battle ms, by site id).
+         */
+        this.wild = new Map();
+        this.nextWild = 1;
+        this.wildCamps = new Map();
+        this.lairs = new Map();
+        this.slain = {};
+
+
+        /**
          * What's been dropped on the ground (by id): { id, item ({ id, quality, count }), map,
          * square, until (when it's gone), by (the player who dropped it) }.
          */
         this.ground = new Map();
         this.nextGround = 1;
+
+        /**
+         * The players' trades, face to face (by id): { id, from (the player who asked), to (who
+         * they asked), open (once the other's said yes; till then, `until`: when the asking's
+         * forgotten), offers (by player: { gold, items: [{ id, quality, count }] }), agreed (by
+         * player: whether they'll take the other's offer for theirs) }.
+         */
+        this.trades = new Map();
+        this.nextTrade = 1;
 
         /**
          * The players, by id: { id, hero (their character: { name, shape, look, weapon, boots,
@@ -400,6 +456,12 @@ export class Host {
 
         const character = this.characterOf(player);
 
+        for (const trade of [...this.trades.values()]) {
+            if (trade.from === id || trade.to === id) {
+                this.#endTrade(trade, "left");
+            }
+        }
+
         for (const follower of this.#company(id)) {
             this.battle.remove(follower);
             this.followers.delete(follower);
@@ -456,7 +518,12 @@ export class Host {
      *  - { type: "ability", ability, target }: use an ability they've learnt (core/progress.js
      *    ABILITIES), on a target for a stronger blow (fighting it);
      *  - { type: "abandon", request }: give up a request they carry (by its id), for a little
-     *    standing lost.
+     *    standing lost;
+     *  - { type: "trade", with }: ask another player near them to trade (by id), or say yes to
+     *    their asking; { type: "offer", gold, items: [{ id, quality, count }] }: what they'll
+     *    give (all of it, each time); { type: "agree" }: take the other's offer for theirs (once
+     *    both have, it's done); { type: "cancel", with }: call off the trade (or say no to a
+     *    player's asking, or stop asking).
      * Returns { ok: true } (with what came of it, for some: an offer of work, what was handed
      * in) or { ok: false, reason } (a REFUSALS key; a spell's own reasons: spells.js
      * CAST_FAILURES).
@@ -473,6 +540,11 @@ export class Host {
 
         if (!command || typeof command.type !== "string") {
             return refuse("command");
+        }
+
+        // (Knocked off their feet: nothing but getting up, till they're up)
+        if (DOWN_HELD.has(command.type) && this.battle.time < (actor.downUntil ?? 0)) {
+            return refuse("down");
         }
 
         const run = Boolean(command.run);
@@ -558,6 +630,14 @@ export class Host {
                 return this.#talk(actor, command.with ?? null);
             case "effect":
                 return this.#effect(player, actor, command.effect);
+            case "trade":
+                return this.#trade(player, actor, command.with);
+            case "offer":
+                return this.#offer(player, command);
+            case "agree":
+                return this.#agree(player);
+            case "cancel":
+                return this.#cancel(player, command.with ?? null);
             default:
                 return refuse("command");
         }
@@ -583,7 +663,7 @@ export class Host {
     /**
      * Advance the world by `ms` (the battle's whole steps: battle.js advance; the war's turns).
      * Returns what happened: the battle's events, and the host's own ("join", "leave", "open",
-     * "close", "explored", "talk", "effect"; "war", with each of the war's events, and "turn",
+     * "close", "explored", "talk", "effect", "roused" (the wild's creatures put out), "trade"; "war", with each of the war's events, and "turn",
      * once each of its turns is over).
      */
     advance(ms) {
@@ -603,6 +683,17 @@ export class Host {
             }
         }
 
+        // Trades off once the two are apart (or either's fallen), and asking forgotten after a while
+        for (const trade of [...this.trades.values()]) {
+            const [a, b] = [this.battle.actor(trade.from), this.battle.actor(trade.to)];
+
+            if (!a || !b || a.dead || b.dead || !Host.#near(a, b, TRADE.apart)) {
+                this.#endTrade(trade, "apart");
+            } else if (!trade.open && trade.until <= this.battle.time) {
+                this.#endTrade(trade, "unanswered");
+            }
+        }
+
         // Boons worn off
         for (const player of this.players.values()) {
             if (player.boons.some(({ until }) => until <= this.battle.time)) {
@@ -611,8 +702,20 @@ export class Host {
             }
         }
 
-        // The fallen soldiers: their garrison the fewer; taken away a while after
+        // The fallen soldiers: their garrison the fewer; taken away a while after (and the wild's
+        // creatures, a perilous site's master gone a long while)
         for (const event of events) {
+            const beast = event.type === "death" ? this.wild.get(event.id) : null;
+
+            if (beast) {
+                this.fallen.push({ id: event.id, at: this.battle.time + FALLEN_MS });
+                this.#spoils(event.id, beast);
+
+                if (beast.lair && beast.master) {
+                    this.slain[beast.lair] = this.battle.time + LAIRS[this.#siteOf(beast.lair).kind].back;
+                }
+            }
+
             const soldier = event.type === "death" ? this.soldiers.get(event.id) : null;
 
             if (soldier) {
@@ -717,6 +820,7 @@ export class Host {
             this.lookAt = this.battle.time + RELEVANCE.every;
             this.#lookAround();
             this.#muster();
+            this.#wilds();
             this.#watchRequests();
         }
 
@@ -749,8 +853,15 @@ export class Host {
             followers: [...this.followers.entries()],
             nextFollower: this.nextFollower,
             hired: [...this.hired],
+            wild: [...this.wild.entries()],
+            nextWild: this.nextWild,
+            wildCamps: [...this.wildCamps.entries()],
+            lairs: [...this.lairs.entries()],
+            slain: { ...this.slain },
             ground: structuredClone([...this.ground.values()]),
             nextGround: this.nextGround,
+            trades: structuredClone([...this.trades.values()]),
+            nextTrade: this.nextTrade,
             soldiers: [...this.soldiers.entries()],
             fallen: structuredClone(this.fallen),
             players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: structuredClone(player.boons), readyAt: { ...player.readyAt }, discarded: structuredClone(player.discarded ?? null), ...this.characterOf(player), followers: undefined })),
@@ -808,8 +919,15 @@ export class Host {
         host.followers = new Map(structuredClone(snapshot.followers ?? []));
         host.nextFollower = snapshot.nextFollower ?? 1;
         host.hired = new Set(snapshot.hired ?? []);
+        host.wild = new Map(structuredClone(snapshot.wild ?? []));
+        host.nextWild = snapshot.nextWild ?? 1;
+        host.wildCamps = new Map(structuredClone(snapshot.wildCamps ?? []));
+        host.lairs = new Map(structuredClone(snapshot.lairs ?? []));
+        host.slain = { ...(snapshot.slain ?? {}) };
         host.ground = new Map((snapshot.ground ?? []).map((dropped) => [dropped.id, structuredClone(dropped)]));
         host.nextGround = snapshot.nextGround ?? 1;
+        host.trades = new Map((snapshot.trades ?? []).map((trade) => [trade.id, structuredClone(trade)]));
+        host.nextTrade = snapshot.nextTrade ?? 1;
         host.soldiers = new Map(structuredClone(snapshot.soldiers ?? []));
         host.fallen = structuredClone(snapshot.fallen ?? []);
         host.done = structuredClone(snapshot.done);
@@ -867,7 +985,11 @@ export class Host {
         mix(this.players.size);
         mix(this.ground.size);
 
+        mix(this.trades.size);
+
         for (const player of this.players.values()) {
+            mix(player.progress.gold);
+
             for (const stack of player.progress.pack) {
                 mix(stack?.count ?? 0);
             }
@@ -1065,6 +1187,11 @@ export class Host {
             return refuse("item");
         }
 
+        // (The creatures' parts: only the adventurers' guild buys those)
+        if (ITEMS[stack.id]?.part && trading.shop !== "guild") {
+            return refuse("wanted");
+        }
+
         const price = priceOf(stack, { haggle: player.progress.bonuses().haggle, selling: true }) * count;
         const item = player.progress.take(index, count);
 
@@ -1149,7 +1276,8 @@ export class Host {
     #pickUp(player, actor, id) {
         const dropped = this.ground.get(id);
 
-        if (!dropped) {
+        // (Someone else's spoils: not there, for them)
+        if (!dropped || (dropped.for && dropped.for !== player.id)) {
             return refuse("gone");
         }
 
@@ -1161,6 +1289,29 @@ export class Host {
             return refuse("far");
         }
 
+        // (A bundle of a creature's spoils: its gold, and each thing there's room for; what
+        // there isn't stays in it)
+        if (dropped.bundle) {
+            const { gold, items } = dropped.bundle;
+            const got = items.filter((item) => player.progress.stow(item, item.count));
+            const left = items.filter((item) => !got.includes(item));
+
+            if (!gold && !got.length) {
+                return refuse("full");
+            }
+
+            player.progress.gold += gold;
+            dropped.bundle = { gold: 0, items: left };
+
+            if (!left.length) {
+                this.ground.delete(id);
+            }
+
+            this.#event("picked", { id: player.id, ground: id, bundle: { gold, items: got }, left: left.length });
+
+            return left.length ? { ok: true, left: left.length } : OK;
+        }
+
         if (!player.progress.stow(dropped.item, dropped.item.count)) {
             return refuse("full");
         }
@@ -1169,6 +1320,251 @@ export class Host {
         this.#event("picked", { id: player.id, ground: id, item: dropped.item });
 
         return OK;
+    }
+
+    // --- Trading face to face ---
+
+    // Two in the battle within `reach` of each other, on the same map
+    static #near(a, b, reach) {
+        return a.map === b.map && Math.hypot(a.x - b.x, a.y - b.y) <= reach;
+    }
+
+    // The trade a player's in (said yes to by both), if any
+    #tradeOf(playerId) {
+        return [...this.trades.values()].find((trade) => trade.open && (trade.from === playerId || trade.to === playerId)) ?? null;
+    }
+
+    // Tell both players in a trade how it's going (a "trade" event each: its `change`)
+    #tellTrade(trade, change, details = {}) {
+        for (const [one, other] of [[trade.from, trade.to], [trade.to, trade.from]]) {
+            this.#event("trade", { id: one, with: other, name: this.players.get(other)?.hero.name ?? null, trade: trade.id, from: trade.from, change, ...details });
+        }
+    }
+
+    // Ask another player to trade: or, if they've asked already, it's begun
+    #trade(player, actor, withId) {
+        const other = this.players.get(withId);
+        const them = other && this.battle.actor(other.id);
+
+        if (!them || other === player) {
+            return refuse("target");
+        }
+
+        if (actor.dead || them.dead) {
+            return refuse("dead");
+        }
+
+        if (!Host.#near(actor, them, TRADE.reach)) {
+            return refuse("far");
+        }
+
+        if (this.#tradeOf(player.id)) {
+            return refuse("trading");
+        }
+
+        if (this.#tradeOf(other.id)) {
+            return refuse("elsewhere");
+        }
+
+        const asked = [...this.trades.values()].find((trade) => trade.from === other.id && trade.to === player.id);
+
+        // (They'd asked: it's begun, with nothing offered yet, and neither's asking anyone else)
+        if (asked) {
+            for (const trade of [...this.trades.values()]) {
+                if (trade !== asked && (trade.from === player.id || trade.from === other.id)) {
+                    this.trades.delete(trade.id);
+                }
+            }
+
+            Object.assign(asked, { open: true, until: null, offers: { [other.id]: { gold: 0, items: [] }, [player.id]: { gold: 0, items: [] } }, agreed: { [other.id]: false, [player.id]: false } });
+            this.#tellTrade(asked, "open");
+
+            return { ok: true, trade: asked.id, open: true };
+        }
+
+        // (Asking: whoever they'd asked before is asked no longer)
+        for (const trade of [...this.trades.values()]) {
+            if (trade.from === player.id) {
+                this.trades.delete(trade.id);
+            }
+        }
+
+        const trade = { id: `trade-${this.nextTrade++}`, from: player.id, to: other.id, open: false, until: this.battle.time + TRADE.asking, offers: {}, agreed: {} };
+
+        this.trades.set(trade.id, trade);
+        this.#tellTrade(trade, "asked");
+
+        return { ok: true, trade: trade.id, open: false };
+    }
+
+    // What a player will give, in place of what they offered before: gold, and things from their
+    // pack (as many as they have of each, of each make). Neither's agreed to it yet.
+    #offer(player, { gold = 0, items = [] }) {
+        const trade = this.#tradeOf(player.id);
+
+        if (!trade) {
+            return refuse("trade");
+        }
+
+        if (!whole(gold) || gold < 0 || !Array.isArray(items)) {
+            return refuse("command");
+        }
+
+        if (gold > player.progress.gold) {
+            return refuse("gold");
+        }
+
+        const offered = [];
+
+        for (const each of items) {
+            const { id, quality = "common", count } = each ?? {};
+
+            if (!ITEMS[id] || !QUALITIES[quality] || !whole(count) || count < 1) {
+                return refuse("item");
+            }
+
+            const same = offered.find((item) => item.id === id && item.quality === quality);
+
+            if (same) {
+                same.count += count;
+            } else {
+                offered.push({ id, quality, count });
+            }
+        }
+
+        if (offered.some(({ id, quality, count }) => player.progress.held(id, quality) < count)) {
+            return refuse("count");
+        }
+
+        trade.offers[player.id] = { gold, items: offered };
+        trade.agreed = { [trade.from]: false, [trade.to]: false };
+        this.#tellTrade(trade, "offer", { by: player.id });
+
+        return OK;
+    }
+
+    // A player takes the other's offer for theirs: once both have, what's offered changes hands
+    #agree(player) {
+        const trade = this.#tradeOf(player.id);
+
+        if (!trade) {
+            return refuse("trade");
+        }
+
+        const other = trade.from === player.id ? trade.to : trade.from;
+
+        trade.agreed[player.id] = true;
+
+        if (!trade.agreed[other]) {
+            this.#tellTrade(trade, "agreed", { by: player.id });
+
+            return OK;
+        }
+
+        const swapped = this.#swap(trade);
+
+        // (It couldn't be done: neither's agreed now, and why's said)
+        if (!swapped.given) {
+            trade.agreed = { [trade.from]: false, [trade.to]: false };
+            this.#tellTrade(trade, "failed", { reason: swapped.reason, short: swapped.short });
+
+            return refuse(swapped.reason === "full" && swapped.short !== player.id ? "theirs" : swapped.reason);
+        }
+
+        this.trades.delete(trade.id);
+
+        for (const [one, from] of [[trade.from, trade.to], [trade.to, trade.from]]) {
+            this.#event("trade", { id: one, with: from, name: this.players.get(from)?.hero.name ?? null, trade: trade.id, from: trade.from, change: "done", got: swapped.given[from], gave: swapped.given[one] });
+        }
+
+        return OK;
+    }
+
+    // What each offered, changing hands at once: or, if either hasn't it all now or hasn't room
+    // for what they're given, nothing at all. Returns { given (by player: { gold, items }) }, or
+    // { reason, short (whose pack it was) }.
+    #swap(trade) {
+        const both = [this.players.get(trade.from), this.players.get(trade.to)];
+        const before = both.map(({ progress }) => ({ gold: progress.gold, pack: progress.pack.map((stack) => stack && { ...stack }) }));
+        const undo = (reason, short) => {
+            both.forEach(({ progress }, index) => Object.assign(progress, before[index]));
+
+            return { reason, short };
+        };
+        const given = {};
+
+        for (const { id, progress } of both) {
+            const { gold, items } = trade.offers[id] ?? { gold: 0, items: [] };
+
+            if (progress.gold < gold || !items.every((item) => progress.remove(item.id, item.count, item.quality))) {
+                return undo("changed", id);
+            }
+
+            progress.gold -= gold;
+            given[id] = { gold, items: items.map((item) => ({ ...item })) };
+        }
+
+        for (const [{ id, progress }, { id: from }] of [both, [...both].reverse()]) {
+            progress.gold += given[from].gold;
+
+            if (!given[from].items.every((item) => progress.stow(item, item.count))) {
+                return undo("full", id);
+            }
+        }
+
+        return { given };
+    }
+
+    // A player calls off their trade, or stops asking, or says no to another's asking (`with`)
+    #cancel(player, withId) {
+        const theirs = (trade) => trade.from === player.id || trade.to === player.id;
+        const trade = [...this.trades.values()].find((each) => theirs(each) && (withId === null ? each.open || each.from === player.id : each.from === withId || each.to === withId));
+
+        if (!trade) {
+            return refuse("trade");
+        }
+
+        this.#endTrade(trade, "cancelled", player.id);
+
+        return OK;
+    }
+
+    // A trade (or the asking) at an end, nothing changing hands: why ("cancelled", `by` whom;
+    // "apart", "unanswered", "left")
+    #endTrade(trade, why, by = null) {
+        this.trades.delete(trade.id);
+        this.#tellTrade(trade, "off", { why, by, open: trade.open });
+    }
+
+    // What each player near a creature when it fell finds on it (spoils.js): their own bundle,
+    // rolled for them alone and seen by them alone (the ground's `for`), there to pick up a while
+    #spoils(id, beast) {
+        const fallen = this.battle.actor(id);
+
+        if (!fallen) {
+            return;
+        }
+
+        const least = CREATURES[beast.creature]?.tiers[0] ?? beast.tier;
+
+        for (const player of this.players.values()) {
+            const actor = this.battle.actor(player.id);
+
+            if (!actor || actor.dead || actor.map !== fallen.map || Math.hypot(actor.x - fallen.x, actor.y - fallen.y) > SPOILS_REACH) {
+                continue;
+            }
+
+            const bundle = rollSpoils(beast.creature, beast.tier, this.random, least);
+
+            if (!bundle.gold && !bundle.items.length) {
+                continue;
+            }
+
+            const ground = `ground-${this.nextGround++}`;
+
+            this.ground.set(ground, { id: ground, bundle, for: player.id, from: beast.creature, map: fallen.map, square: [...fallen.square], until: this.battle.time + GROUND_MS });
+            this.#event("spoils", { id: player.id, ground, from: id, creature: beast.creature });
+        }
     }
 
     // Gear put on or taken off (the reason it couldn't be: progress.js equip, unequip)
@@ -1196,7 +1592,16 @@ export class Host {
             return refuse("dead");
         }
 
+        // (A cure: only for what's on them)
+        if (use.cure && !actor.afflictions.some(({ kind }) => kind === use.cure)) {
+            return refuse("unafflicted");
+        }
+
         const item = player.progress.take(index, 1);
+
+        if (use.cure) {
+            this.battle.cure(actor.id, use.cure);
+        }
 
         this.battle.mend(actor.id, { hp: use.heal ?? 0, stamina: use.stamina ?? 0 });
         this.#event("used", { id: player.id, item });
@@ -1251,8 +1656,20 @@ export class Host {
 
     // Two characters on different teams (battle.js hostile asks, the folk and foes aside): as their
     // peoples stand in the war; the wild (the orc, the camps' foes: no people's) set against the
-    // players, and not the peoples' soldiers; anyone, without a war
+    // players, and not the peoples' soldiers; anyone, without a war. The wild's creatures
+    // (creatures.js) are every player's enemies, and the soldiers' and followers' when they're a
+    // menace or fighting; no one else's (the orc's)
     #against(a, b) {
+        if (a.team === WILD || b.team === WILD) {
+            const [beast, other] = a.team === WILD ? [a, b] : [b, a];
+
+            if (other.kind === "player") {
+                return true;
+            }
+
+            return (other.kind === "soldier" || other.kind === "follower") && Boolean(beast.wild?.menace || beast.target !== null);
+        }
+
         const war = this.war;
         const [ra, rb] = [war?.realm(a.team), war?.realm(b.team)];
 
@@ -1480,6 +1897,248 @@ export class Host {
 
         this.fallen = this.fallen.filter(({ id: each }) => !ids.includes(each));
         this.#event("strike", { camp: id, ids });
+    }
+
+    // --- The wild (docs/WILDS.md) ---
+
+    // The wild's creatures about the players: those far from every player let go; the wild camps
+    // and perilous sites near a player come to life (and those far, let go); and each player out
+    // in the world with fewer than WILDS.count about them, one more pack put out, out of sight
+    #wilds() {
+        const plan = this.world.plan;
+
+        if (!plan || !this.world.maps?.town?.chunk) {
+            return;
+        }
+
+        const places = this.#whereabouts();
+        const distanceTo = (actor) => Math.min(...places.map(([x, y]) => Math.hypot(actor.x - x, actor.y - y)));
+        const homes = [...this.players.values()].map((player) => ({ at: this.#whereIs(player), home: this.#homeOf(player) })).filter(({ at }) => at);
+
+        for (const [id, one] of [...this.wild]) {
+            const actor = this.battle.actor(id);
+
+            if (!actor) {
+                this.#unwild(id);
+            } else if (!actor.dead && !one.camp && !one.lair && actor.target === null && distanceTo(actor) > WILDS.far) {
+                this.#release(id);
+            }
+        }
+
+        this.#wildCamps(homes);
+        this.#lairs(places);
+
+        for (const player of this.players.values()) {
+            const actor = this.battle.actor(player.id);
+
+            if (!actor || actor.dead || actor.map !== "town") {
+                continue;
+            }
+
+            const about = [...this.wild].filter(([id, one]) => {
+                const beast = !one.camp && !one.lair ? this.battle.actor(id) : null;
+
+                return beast && !beast.dead && Math.hypot(beast.x - actor.x, beast.y - actor.y) < WILDS.about;
+            }).length;
+
+            if (about < WILDS.count) {
+                this.#putOut([actor.x, actor.y], this.#homeOf(player), WILDS.count - about);
+            }
+        }
+    }
+
+    // Where a player's home is: the town their people's players start in (the wild's tamest near
+    // it: creatures.js tierAt)
+    #homeOf(player) {
+        const plan = this.world.plan;
+
+        return RACE[player.realm] ? startFor(plan, player.realm).at : (this.world.start?.at ?? [0, 0]);
+    }
+
+    // A pack of what lives there put out near a place (out of sight of it, as strong as its
+    // distance from `home` has it), clear of the settlements and the water, no bigger than `room`
+    #putOut([x, y], home, room) {
+        const plan = this.world.plan;
+
+        for (let tries = 0; tries < 6; tries++) {
+            const angle = this.random.next() * Math.PI * 2;
+            const reach = WILDS.from + this.random.next() * (WILDS.to - WILDS.from);
+            const at = [x + Math.cos(angle) * reach, y + Math.sin(angle) * reach];
+
+            if (!clearOfSettlements(plan, at, WILDS.clear) || landAt(plan, ...at).water) {
+                continue;
+            }
+
+            const encounter = encounterAt(plan, at, [home], this.random);
+
+            if (encounter) {
+                this.#pack({ ...encounter, count: Math.max(1, Math.min(room, encounter.count)) }, at);
+
+                return;
+            }
+        }
+    }
+
+    // A pack of creatures put out at a place (`count` of `creature` at `tier`), the first its
+    // leader; what they're of (`camp`, `lair`) and how they keep (`roam`, `temper`): their ids
+    #pack({ creature, tier, count }, [x, y], { master = false, ...more } = {}) {
+        const free = this.#spots();
+        const pack = `pack-${this.nextWild}`;
+        const ids = [];
+
+        try {
+            for (let k = 0; k < count; k++) {
+                const id = `wild-${this.nextWild++}`;
+
+                this.#rouse(id, creature, tier, free([x + (k % 3) - 1, y + Math.floor(k / 3)]), { pack, leader: ids[0] ?? null, master: master && k === 0, ...more });
+                ids.push(id);
+            }
+        } catch {
+            // (No free ground there: those found are out, and no more)
+        }
+
+        if (ids.length) {
+            this.#event("roused", { ids, creature });
+        }
+
+        return ids;
+    }
+
+    // One of the wild's creatures into the world: as strong as its tier has it (creatures.js)
+    #rouse(id, creature, tier, square, { pack, leader, master = false, camp = null, lair = null, roam = null, temper = null }) {
+        const spec = CREATURES[creature];
+        const power = tierPower(tier);
+
+        this.wild.set(id, { creature, tier, pack, camp, lair, master });
+        this.battle.add({
+            id,
+            kind: "beast",
+            name: spec.name,
+            weapon: spec.weapon,
+            team: WILD,
+            square,
+            ai: "wild",
+            hp: Math.round(spec.hp * power),
+            speed: spec.speed,
+            chase: spec.chase,
+            power: { melee: power, ranged: power },
+            armor: spec.armor ?? 0,
+            wild: { creature, tier, temper: temper ?? spec.temper, guard: spec.guard ?? 0, roam: roam ?? spec.roam, leash: spec.leash + (roam ?? 0), pack, leader, menace: menaces(creature) },
+        });
+    }
+
+    // A creature let go (wandered off, far from every player)
+    #release(id) {
+        this.battle.remove(id);
+        this.#unwild(id);
+        this.#event("gone", { id });
+    }
+
+    // A creature no longer about: out of its camp's or site's too
+    #unwild(id) {
+        const one = this.wild.get(id);
+
+        if (!one) {
+            return;
+        }
+
+        this.wild.delete(id);
+
+        for (const held of [one.camp && this.wildCamps.get(one.camp), one.lair && this.lairs.get(one.lair)]) {
+            if (held) {
+                held.ids = held.ids.filter((each) => each !== id);
+            }
+        }
+    }
+
+    // The wild camps (the world plan's) near a player: their folk out, round the camp and on its
+    // patrols, as strong as its tier (from the home of the player nearest it: few, near home);
+    // let go once every player's far
+    #wildCamps(homes) {
+        const near = (at, within) => homes.some(({ at: [x, y] }) => Math.hypot(x - at[0], y - at[1]) < within);
+
+        for (const [id, held] of [...this.wildCamps]) {
+            const camp = this.world.plan.camps.find((each) => each.id === id);
+
+            if (!near(camp.at, camp.roam + WILDS.campFar)) {
+                for (const each of [...held.ids]) {
+                    if (!this.battle.actor(each)?.dead) {
+                        this.#release(each);
+                    }
+                }
+
+                this.wildCamps.delete(id);
+            }
+        }
+
+        for (const camp of this.world.plan.camps) {
+            if (this.wildCamps.has(camp.id) || !near(camp.at, camp.roam + WILDS.camp) || !CAMP_FOLK[camp.faction]) {
+                continue;
+            }
+
+            const nearest = homes.reduce((best, each) => (Math.hypot(each.at[0] - camp.at[0], each.at[1] - camp.at[1]) < Math.hypot(best.at[0] - camp.at[0], best.at[1] - camp.at[1]) ? each : best));
+            const tier = campTier(camp, nearest.home);
+            const creature = campFolk(camp.faction, tier);
+            const patrols = Math.min(camp.patrols, 1 + Math.floor(tier / 3));
+            const ids = this.#pack({ creature, tier, count: Math.min(5, 1 + Math.floor(tier / 2)) }, camp.at, { camp: camp.id, roam: 4, temper: "territorial" });
+
+            // (Its patrols, roaming out from it: as many as it has, fewer near home)
+            for (let k = 0; k < patrols; k++) {
+                const angle = ((k + 0.5) / patrols) * Math.PI * 2;
+                const out = camp.roam * 0.5;
+
+                ids.push(...this.#pack({ creature, tier, count: Math.max(1, packOf(creature, tier) - (tier <= 2 ? 1 : 0)) }, [camp.at[0] + Math.cos(angle) * out, camp.at[1] + Math.sin(angle) * out], { camp: camp.id, roam: camp.roam * 0.4 }));
+            }
+
+            this.wildCamps.set(camp.id, { ids });
+        }
+    }
+
+    // The perilous sites (a dragon's lair, the ruined castles) near a player: their master (unless
+    // slain lately) and its guards there; let go once every player's far
+    #lairs(places) {
+        const near = (at, within) => places.some(([x, y]) => Math.hypot(x - at[0], y - at[1]) < within);
+
+        for (const [id, held] of [...this.lairs]) {
+            const site = this.#siteOf(id);
+
+            if (!near(site.at, LAIRS[site.kind].near * 2)) {
+                for (const each of [...held.ids]) {
+                    if (!this.battle.actor(each)?.dead) {
+                        this.#release(each);
+                    }
+                }
+
+                this.lairs.delete(id);
+            }
+        }
+
+        for (const site of this.world.plan.sites) {
+            const lair = LAIRS[site.kind];
+
+            if (!lair || this.lairs.has(site.id) || !near(site.at, lair.near)) {
+                continue;
+            }
+
+            const ids = [];
+            const [master, tier] = lair.master;
+
+            if ((this.slain[site.id] ?? -Infinity) <= this.battle.time) {
+                ids.push(...this.#pack({ creature: master, tier, count: 1 }, site.at, { lair: site.id, master: true, roam: 3 }));
+            }
+
+            lair.guards.forEach(([creature, count, guardTier], k) => {
+                const angle = (k / lair.guards.length) * Math.PI * 2;
+
+                ids.push(...this.#pack({ creature, tier: guardTier, count }, [site.at[0] + Math.cos(angle) * 6, site.at[1] + Math.sin(angle) * 6], { lair: site.id, roam: 6 }));
+            });
+
+            this.lairs.set(site.id, { ids });
+        }
+    }
+
+    #siteOf(id) {
+        return this.world.plan.sites.find((site) => site.id === id);
     }
 
     // A camp's sortie against a town a player's near (the war's "sortie"): its raiders, or
@@ -1872,6 +2531,7 @@ export class Host {
 
         this.battle.remove(id);
         this.soldiers.delete(id);
+        this.#unwild(id);
 
         const mustered = soldier && (soldier.envoy ? null : soldier.camp ? this.camps.get(soldier.camp) : this.mustered.get(soldier.town));
 
@@ -2036,7 +2696,10 @@ export class Host {
                 return request.target.town === post.town && request.target.post === post.post;
             }
 
-            return request.from.town === post.town && request.from.post === post.post && (request.state === "done" || request.kind === "tithe");
+            // (Creatures' parts wanted at the guild: due once they're all in the pack)
+            const brought = request.kind === "parts" && player.progress.held(request.target.part) >= request.target.need;
+
+            return request.from.town === post.town && request.from.post === post.post && (request.state === "done" || request.kind === "tithe" || brought);
         });
     }
 
@@ -2117,6 +2780,11 @@ export class Host {
 
                     player.progress.gold -= request.target.gold;
                     this.war.give(player.realm, request.target.gold * TITHE_RATE);
+                }
+
+                // (Creatures' parts handed over, out of the pack)
+                if (request.kind === "parts" && !player.progress.remove(request.target.part, request.target.need)) {
+                    continue;
                 }
 
                 handed.push(this.#rewarded(player, request));

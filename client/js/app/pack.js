@@ -5,7 +5,9 @@
 // - their gear (weapon, body, shield: armour can be taken off);
 // - each skill: its rank and title, how far to the next, what makes it grow, what it's brought.
 // Trading with a shopkeeper (their talk's "Show me what you have"), it shows the shop's wares
-// too, each to buy, and what they carry can be sold.
+// too, each to buy, and what they carry can be sold. Trading with another player (face to face:
+// core/host.js), it shows what each offers: what they carry is offered (as many as they like),
+// or taken back, and gold; once both agree, it changes hands.
 //
 // A thing in the pack is tapped to see what it is (and buttons for what can be done with it);
 // held (or right-clicked), a wheel of what can be done with it opens round it, like the action
@@ -25,7 +27,7 @@ const DRAG = 8;
 const FLICK = 30;
 
 // Where each thing that can be done with something goes on its wheel
-const PLACES = { use: "n", onWheel: "ne", split: "e", sell: "se", discard: "s", drop: "w" };
+const PLACES = { use: "n", onWheel: "ne", split: "e", sell: "se", offer: "se", discard: "s", drop: "w" };
 
 const element = (tag, className, text = "") => Object.assign(document.createElement(tag), { className, textContent: text });
 
@@ -102,8 +104,8 @@ export class PackPanel {
 
         /**
          * What the player asks (the game does it): a command for the host (core/host.js: equip,
-         * unequip, use, buy, sell, arrange, split, discard, drop), a thing to put on an action
-         * wheel (its id), and to close.
+         * unequip, use, buy, sell, arrange, split, discard, drop; trading with another player,
+         * offer, agree and cancel), a thing to put on an action wheel (its id), and to close.
          */
         this.onCommand = () => {};
         this.onWheel = () => {};
@@ -118,17 +120,20 @@ export class PackPanel {
      * Show (or show again) what the player has: { gold, skills: [{ tree, name, rank, title, xp,
      * from, to, grows, ability }], gear: [{ slot, label, item }], pack: [a slot each: null, or
      * { id, quality, count, label, about, use ("Drink", "Eat"), equip ("Wield", "Wear"), price
-     * (each, sold) }], shop: null or { name, wares: [{ item, label, price, affordable }] } }.
+     * (each, sold) }], shop: null or { name, wares: [{ item, label, price, affordable }] },
+     * trade: null or (trading with another player) { name, mine, theirs (what each offers:
+     * { gold, items: [{ id, quality, count, label }] }), agreed: { mine, theirs } } }.
      */
     show(view) {
-        const { gold, skills, gear, pack, shop } = view;
+        const { gold, skills, gear, pack, shop, trade = null } = view;
 
         useDefs();
         this.view = view;
-        this.title.textContent = shop ? `Trading with ${shop.name}` : "Pack";
+        this.title.textContent = shop ? `Trading with ${shop.name}` : trade ? `Trading with ${trade.name}` : "Pack";
         this.gold.textContent = `${gold} gold`;
         this.panel.hidden = false;
-        this.panel.classList.toggle("trading", Boolean(shop));
+        this.panel.classList.toggle("trading", Boolean(shop || trade));
+        this.panel.classList.toggle("bartering", Boolean(trade));
 
         if (this.selected !== null && !pack[this.selected]) {
             this.selected = null;
@@ -151,6 +156,12 @@ export class PackPanel {
                 }),
             );
             sections.push(this.#section("For sale", list));
+        }
+
+        // Trading with another player: what they offer, and what the player does
+        if (trade) {
+            sections.push(this.#section(`${trade.name} offers`, this.#offered(trade.theirs), element("p", `pack-agreed${trade.agreed.theirs ? " yes" : ""}`, trade.agreed.theirs ? `${trade.name} agrees to this.` : `${trade.name} hasn't agreed yet.`)));
+            sections.push(this.#section("You offer", this.#offered(trade.mine, { mine: true }), this.#barter(trade, gold)));
         }
 
         // What they carry: a slot for each stack, and what can be done with the one tapped
@@ -176,7 +187,7 @@ export class PackPanel {
                 piece.querySelector(".pack-where").textContent = { weapon: "Weapon", body: "Body", shield: "Shield" }[slot];
                 piece.querySelector(".pack-label").textContent = item ? label : "—";
 
-                if (item && slot !== "weapon" && !shop) {
+                if (item && slot !== "weapon" && !shop && !trade) {
                     piece.append(button("Take off", () => this.onCommand({ type: "unequip", slot }), { label: `Take off ${label}` }));
                 }
 
@@ -186,7 +197,7 @@ export class PackPanel {
         sections.push(this.#section("Worn", worn));
 
         // Their skills
-        if (!shop) {
+        if (!shop && !trade) {
             const list = element("ul", "pack-list skills");
 
             list.append(
@@ -235,9 +246,84 @@ export class PackPanel {
         if (stack) {
             cell.dataset.item = stack.id;
             cell.innerHTML = `${icon(stack.id)}${stack.count > 1 ? `<span class="pack-count">${stack.count}</span>` : ""}`;
+            cell.classList.toggle("offered", Boolean(this.#offeredOf(stack)));
         }
 
         return cell;
+    }
+
+    // How many of a kind of thing (as the stack is) the player offers, trading (or none)
+    #offeredOf({ id, quality }) {
+        return this.view.trade?.mine.items.find((item) => item.id === id && item.quality === quality)?.count ?? 0;
+    }
+
+    // What one side of a trade offers: its things and its gold (and, the player's, each to take back)
+    #offered({ gold, items }, { mine = false } = {}) {
+        const list = element("ul", `pack-list offer${mine ? " mine" : ""}`);
+        const rows = items.map(({ id, quality, count, label }) => {
+            const row = element("li", "pack-row");
+            const picture = element("span", "pack-icon");
+
+            picture.innerHTML = icon(id, 28);
+            row.append(picture, element("span", "pack-label", `${label}${count > 1 ? ` ×${count}` : ""}`));
+
+            if (mine) {
+                row.append(button("Take back", () => this.#reoffer({ item: { id, quality }, count: 0 }), { label: `Take back ${label}` }));
+            }
+
+            return row;
+        });
+
+        if (gold) {
+            const row = element("li", "pack-row");
+            const picture = element("span", "pack-icon");
+
+            picture.innerHTML = icon("gold", 28);
+            row.append(picture, element("span", "pack-label", `${gold} gold`));
+
+            if (mine) {
+                row.append(button("Take back", () => this.#reoffer({ gold: 0 }), { label: "Take back the gold" }));
+            }
+
+            rows.push(row);
+        }
+
+        list.append(...(rows.length ? rows : [element("li", "pack-hint", mine ? "Nothing yet: tap something you carry to offer it." : "Nothing yet.")]));
+
+        return list;
+    }
+
+    // Trading with another player: gold to offer, agreeing to it, calling it off
+    #barter(trade, gold) {
+        const actions = element("div", "pack-actions pack-barter");
+        const offerGold = async () => {
+            const count = await this.#howMany({ title: "Offer gold", verb: "Offer", most: gold, value: trade.mine.gold || Math.min(gold, 10) });
+
+            if (count) {
+                this.#reoffer({ gold: count });
+            }
+        };
+
+        actions.append(
+            button(trade.mine.gold ? "Change the gold" : "Offer gold", offerGold, { disabled: !gold }),
+            button("Call it off", () => this.onCommand({ type: "cancel" })),
+            button(trade.agreed.mine ? "Agreed" : "Agree", () => this.onCommand({ type: "agree" }), { label: trade.agreed.mine ? "You've agreed" : `Agree to trade with ${trade.name}`, disabled: trade.agreed.mine, className: "pack-button primary" }),
+        );
+
+        return actions;
+    }
+
+    // What the player offers, changed: as many of a kind of thing as `count` (none: taken back),
+    // or the gold; the rest as it was
+    #reoffer({ item = null, count = 0, gold = null }) {
+        const { mine } = this.view.trade;
+        const items = mine.items.filter(({ id, quality }) => !(item && id === item.id && quality === item.quality)).map(({ id, quality, count: each }) => ({ id, quality, count: each }));
+
+        if (item && count > 0) {
+            items.push({ id: item.id, quality: item.quality, count });
+        }
+
+        this.onCommand({ type: "offer", gold: gold ?? mine.gold, items });
     }
 
     // What the stack tapped is, and buttons for what can be done with it
@@ -245,7 +331,9 @@ export class PackPanel {
         const stack = this.selected === null ? null : this.view.pack[this.selected];
 
         if (!stack) {
-            this.about.replaceChildren(element("p", "pack-hint", this.view.pack.some(Boolean) ? "Tap something to see it. Hold it (or right-click) for what to do with it; drag it to move it." : "Nothing but lint."));
+            const hint = !this.view.pack.some(Boolean) ? "Nothing but lint." : this.view.trade ? "Tap something to see it, and offer it." : "Tap something to see it. Hold it (or right-click) for what to do with it; drag it to move it.";
+
+            this.about.replaceChildren(element("p", "pack-hint", hint));
 
             return;
         }
@@ -258,10 +346,14 @@ export class PackPanel {
         this.about.replaceChildren(line, actions);
     }
 
-    // What can be done with a stack: [{ key, label }]
+    // What can be done with a stack: [{ key, label }] (trading with another player, only offering it)
     #actionsFor(stack) {
         const trading = Boolean(this.view.shop);
         const actions = [];
+
+        if (this.view.trade) {
+            return [{ key: "offer", label: this.#offeredOf(stack) ? "Offer more or fewer" : "Offer" }];
+        }
 
         if ((stack.use || stack.equip) && !trading) {
             actions.push({ key: "use", label: stack.use ?? stack.equip });
@@ -311,6 +403,14 @@ export class PackPanel {
             }
         } else if (key === "discard") {
             this.onCommand({ type: "discard", index });
+        } else if (key === "offer" && this.view.trade) {
+            // (As many as they carry of it, of its make, in whichever stacks)
+            const most = this.view.pack.reduce((sum, each) => sum + (each?.id === stack.id && each.quality === stack.quality ? each.count : 0), 0);
+            const count = most > 1 ? await this.#howMany({ title: `Offer ${stack.label}`, verb: "Offer", most, value: this.#offeredOf(stack) || most }) : 1;
+
+            if (count) {
+                this.#reoffer({ item: stack, count });
+            }
         }
     }
 
@@ -461,7 +561,7 @@ export class PackPanel {
 
         for (const { key, label } of this.#actionsFor(stack)) {
             slots[PLACES[key]] = key;
-            looks[key] = { label: key === "sell" ? "Sell" : label, icon: key === "use" ? ITEM_ICONS[stack.id] : ICONS[key] };
+            looks[key] = { label: key === "sell" ? "Sell" : key === "offer" ? "Offer" : label, icon: key === "use" ? ITEM_ICONS[stack.id] : ICONS[key] };
         }
 
         const box = press.cell.getBoundingClientRect();

@@ -693,7 +693,7 @@ test("in the town, the camera comes in closer than a building in the way, or ris
     expect(views.open.lifted).toBeLessThan(0.5);
 });
 
-test("walks out of the town into the world, drawn round the player as they go, with no loading", async ({ page }) => {
+test("walks out of the town into the world, drawn round the player as they go, with no loading; the wild's creatures about them there", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     const trip = await page.evaluate(() => {
@@ -728,6 +728,11 @@ test("walks out of the town into the world, drawn round the player as they go, w
         game.minimap.drawn = -Infinity;
         game.advance(1);
 
+        // (The creatures put out lately drawn a few at a time: all of them, given a moment)
+        for (let k = 0; k < 20 && game.enlisting.length; k++) {
+            game.advance(0.25);
+        }
+
         const [cx, cy] = [Math.floor(player.x / 64), Math.floor(player.y / 64)];
         const [x0, z0, across] = game.minimap.shown();
         const round = [];
@@ -738,6 +743,9 @@ test("walks out of the town into the world, drawn round the player as they go, w
             }
         }
 
+        // (The wild's creatures about them out here, each drawn as its kind looks)
+        const beasts = [...game.host.wild.keys()].map((id) => game.battle.actor(id)).filter((actor) => actor && !actor.dead);
+
         return {
             arrived: Math.hypot(player.x - goal[0] - 0.5, player.y - goal[1] - 0.5) < 1.5,
             outside: !world.inTown(Math.floor(player.x), Math.floor(player.y)),
@@ -745,6 +753,9 @@ test("walks out of the town into the world, drawn round the player as they go, w
             near: [...game.chunks.drawn.values()].every((drawn) => Math.max(Math.abs(drawn.cx - cx), Math.abs(drawn.cy - cy)) <= 3),
             dropped: before.filter((drawn) => !game.chunks.drawn.has(drawn)).length,
             mapped: player.x > x0 && player.x < x0 + across && player.y > z0 && player.y < z0 + across,
+            beasts: beasts.length,
+            drawn: beasts.filter((actor) => game.avatars.has(actor.id)).length,
+            kinds: beasts.every((actor) => actor.kind === "beast" && actor.wild?.creature),
         };
     });
 
@@ -754,6 +765,9 @@ test("walks out of the town into the world, drawn round the player as they go, w
     expect(trip.near).toBe(true);
     expect(trip.dropped).toBeGreaterThan(0);
     expect(trip.mapped).toBe(true);
+    expect(trip.beasts).toBeGreaterThan(0);
+    expect(trip.drawn).toBe(trip.beasts);
+    expect(trip.kinds).toBe(true);
 });
 
 test("once a tap lets it make sound, the music plays on recordings of real instruments", async ({ page }) => {
@@ -2020,6 +2034,47 @@ test("the pack shows what's grown and carried; a skill ranks up with use; tradin
     expect(kept).toMatchObject({ created: SAVE.created, seed: 1, gold: 27 });
     expect(kept.pack.slice(0, 3)).toEqual([{ id: "potion", quality: "common", count: 1 }, { id: "ale", quality: "common", count: 1 }, null]);
     expect(kept.skills.blade).toBeGreaterThanOrEqual(100);
+});
+
+test("what lingers after a creature's blow shows on the player's plate, and its cure from the guild ends it", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // Poisoned (as an adder's bite leaves them), a cure in their pack
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.host.players.get(game.me).progress.stow({ id: "antidote" }, 1);
+        game.battle.afflict(game.me, "poison", { by: null });
+    });
+
+    const icon = page.locator('#playerplate .ail[aria-label="Poisoned"]');
+
+    await expect(icon).toBeVisible();
+    await expect(page.locator("#banner")).toContainText("You're poisoned! (Cure poison draught: the adventurers' guild sells them.)");
+
+    // (Hurting now and then: less health)
+    await expect.poll(() => page.evaluate(() => window.pellagos.game.battle.actor(window.pellagos.game.me).hp), { timeout: 20000 }).toBeLessThan(50);
+
+    // The cure drunk from the pack: gone at once
+    await page.keyboard.press("i");
+
+    const pack = page.locator(".pack");
+
+    await pack.locator('.carried .pack-cell[data-item="antidote"]').click();
+    await expect(pack.locator(".pack-about")).toContainText("Cures what's poisoned at once.");
+    await pack.locator(".pack-about").getByRole("button", { name: /^Drink/ }).click();
+    await expect(icon).toHaveCount(0);
+    await expect(page.locator("#banner")).toContainText("No longer poisoned.");
+    expect(await page.evaluate(() => window.pellagos.game.battle.actor(window.pellagos.game.me).afflictions)).toEqual([]);
+
+    // (With nothing to cure, a cure's kept)
+    await page.evaluate(() => window.pellagos.game.host.players.get(window.pellagos.game.me).progress.stow({ id: "antidote" }, 1));
+    await page.keyboard.press("i");
+    await page.keyboard.press("i");
+    await pack.locator('.carried .pack-cell[data-item="antidote"]').click();
+    await pack.locator(".pack-about").getByRole("button", { name: /^Drink/ }).click();
+    await expect(page.locator("#banner")).toContainText("There's nothing for that to cure.");
+    expect(await page.evaluate(() => window.pellagos.game.progress.count("antidote"))).toBe(1);
 });
 
 test("the pack stacks things alike: dragged together, split by how many, held for a thing's wheel; thrown away and taken back; dropped on the ground, and picked up", async ({ page }) => {

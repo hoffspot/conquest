@@ -1,6 +1,7 @@
 // Things dropped on the ground (core/host.js: a player's "drop"): a little cloth bundle where each
 // lies, its icon floating over it, bobbing and turning to the camera, until it's picked up or
-// it's lain there too long. Anyone near can tap it to pick it up (app/game.js).
+// it's lain there too long. Anyone near can tap it to pick it up (app/game.js). A creature's
+// spoils (host.js: a bundle for one player) are a leather sack, and only that player sees theirs.
 //
 // The icons are painted by whoever makes this (`picture`: an item id to a texture), so the world
 // needn't know how they're drawn.
@@ -36,20 +37,22 @@ export class Drops {
         this.knot = new THREE.ConeGeometry(BUNDLE.radius * 0.35, BUNDLE.radius * 0.6, 8);
         this.knot.translate(0, BUNDLE.radius * (2 * BUNDLE.squash + 0.2), 0);
         this.cloth = new THREE.MeshStandardMaterial({ color: 0x8a6a44, roughness: 0.95 });
+        this.leather = new THREE.MeshStandardMaterial({ color: 0x5e3a1e, roughness: 0.8 });
         this.tie = new THREE.MeshStandardMaterial({ color: 0x5a3f22, roughness: 0.9 });
     }
 
     /**
-     * Draw what's on the ground now (host.js ground: { id, item, map, square }), those on `map`
-     * and within `reach` metres of `near` ({ x, z }), where `originOf(map)` puts the map ([x, z]).
+     * Draw what's on the ground now (host.js ground: { id, item or bundle, for, map, square }),
+     * those on `map` and within `reach` metres of `near` ({ x, z }), where `originOf(map)` puts
+     * the map ([x, z]); of the spoils, only those for `mine` (a player's id).
      */
-    sync(ground, { map, near, reach, originOf }) {
+    sync(ground, { map, near, reach, originOf, mine = null }) {
         const seen = new Set();
         const [ox, oz] = originOf(map);
         const onSquare = new Map();
 
         for (const dropped of ground.values()) {
-            if (dropped.map !== map) {
+            if (dropped.map !== map || (dropped.for && dropped.for !== mine)) {
                 continue;
             }
 
@@ -116,6 +119,7 @@ export class Drops {
         this.bundle.dispose();
         this.knot.dispose();
         this.cloth.dispose();
+        this.leather.dispose();
         this.tie.dispose();
 
         for (const { icon } of this.drawn.values()) {
@@ -127,9 +131,10 @@ export class Drops {
 
     #draw(dropped, x, z) {
         const object = new THREE.Group();
-        const bundle = new THREE.Mesh(this.bundle, this.cloth);
+        const bundle = new THREE.Mesh(this.bundle, dropped.bundle ? this.leather : this.cloth);
         const knot = new THREE.Mesh(this.knot, this.tie);
-        const icon = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.picture(dropped.item.id), transparent: true, depthWrite: false }));
+        const shown = dropped.bundle ? (dropped.bundle.items[0]?.id ?? "gold") : dropped.item.id;
+        const icon = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.picture(shown), transparent: true, depthWrite: false }));
         const seed = [...dropped.id].reduce((sum, character) => sum + character.charCodeAt(0), 0);
 
         bundle.castShadow = true;

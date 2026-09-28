@@ -27,9 +27,12 @@ import { Character } from "../characters/character.js";
 import { folkLook } from "../characters/folk.js";
 import { soldierLook } from "../characters/soldiers.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
+import { BeastAvatar, dressCreature } from "../beasts/beast.js";
+import { AFFLICTIONS } from "../core/afflictions.js";
 import { STEP_MS, TALK_REACH } from "../core/battle.js";
+import { CREATURES } from "../core/creatures.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
-import { HIRES, HOST_PLAYER, Host, PICK_REACH, REFUSALS, SHOP_REACH, SHOPKEEPERS, UNDO_MS } from "../core/host.js";
+import { HIRES, HOST_PLAYER, Host, PICK_REACH, REFUSALS, SHOP_REACH, SHOPKEEPERS, TRADE, UNDO_MS } from "../core/host.js";
 import { ABILITIES, itemLabel, ITEMS, priceOf, QUALITIES, TREES, wares } from "../core/progress.js";
 import { PACE } from "../core/netplay.js";
 import { COUNSEL, MOST_REQUESTS, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
@@ -43,11 +46,12 @@ import { squaresOf } from "../core/grid.js";
 import { GROUND } from "../core/setpieces/pieces.js";
 import { CAST_FAILURES, lookOf, SPELLS } from "../core/spells.js";
 import { Variety } from "../core/variety.js";
-import { distanceBetween, longestReach, WEAPONS } from "../core/weapons.js";
+import { distanceBetween, longestReach, weaponOf, WEAPONS } from "../core/weapons.js";
 import { Avatar } from "../world/avatar.js";
 import { Banners } from "../world/banners3d.js";
 import { Camps } from "../world/camps3d.js";
 import { Drops } from "../world/drops3d.js";
+import { Ailments3D } from "../world/ailments3d.js";
 import { Effects, LOOKS } from "../world/effects.js";
 import { Squares } from "../world/squares.js";
 import { KINDS, Wounds } from "../world/wounds.js";
@@ -82,7 +86,7 @@ export function heroEquipment(weapon, boots = false, worn = [], parts = []) {
 }
 
 /** How a character holds its weapon to fight (actions.js GUARDS, DRAWS), for its WEAPONS key. */
-export const guardOf = (weapon) => WEAPONS[weapon].attacks[0].animation;
+export const guardOf = (weapon) => weaponOf(weapon)?.attacks[0].animation ?? null;
 
 // The sound of drawing each kind of weapon and putting it away (at the moment the hand takes it
 // or lets it go): a blade from its scabbard, something slung off the back or from a belt, fists
@@ -177,11 +181,22 @@ function thingsOf({ id, quality, count = 1 }) {
 
 // What a thing in the pack is, in words: what it does, and how well made it is
 function aboutOf({ id, quality }) {
-    const { use, slot, armor = 0 } = ITEMS[id];
+    const { use, slot, armor = 0, part = false, price } = ITEMS[id];
     const power = QUALITIES[quality]?.power ?? 1;
+    const worth = part ? ` The adventurers' guild pays ${price} gold for it.` : "";
+
+    if (use?.cure) {
+        const { label, about } = AFFLICTIONS[use.cure];
+
+        return `Cures what's ${label.toLowerCase()} at once. (${about})`;
+    }
 
     if (use) {
-        return use.heal ? `Heals ${use.heal} hit points.` : "Fills your stamina.";
+        return `${use.heal ? `Heals ${use.heal} hit points.` : "Fills your stamina."}${worth}`;
+    }
+
+    if (part) {
+        return worth.trim();
     }
 
     if (slot === "weapon") {
@@ -191,8 +206,69 @@ function aboutOf({ id, quality }) {
     return `Armour: takes ${Math.round(armor * power * 100)}% off each blow.`;
 }
 
+// What lingers on someone after some blows (core/afflictions.js), as it shows: rising off them
+// now and then (`bursts`: effects.js BURSTS, every `every` seconds or so, from anywhere between
+// `at` shares of their height up, `round` metres out from the middle of them: on them, not in
+// them), the tinge on their skin (`tint`, pulsing), a number the colour of it when it hurts
+// (`hurt`: a burst there too), and what's drawn on them (world/ailments3d.js), by its look
+const AILING = Object.freeze({
+    poison: { bursts: ["venomBubbles", "venomDrip"], every: 0.18, at: [0.3, 0.8], round: 0.2, tint: [0, 0.1, 0], hurt: "venomBubbles" },
+    disease: { bursts: ["flies", "miasma"], every: 0.35, at: [0.75, 0.95], round: 0.3, tint: [0.07, 0.06, 0], hurt: "miasma" },
+    wither: { bursts: ["wither", "shadows"], every: 0.25, at: [0.2, 0.9], round: 0.3, tint: [0.04, 0, 0.08], hurt: "wither", drawn: "curse" },
+    burn: { bursts: ["flames", "smoke"], every: 0.06, at: [0.05, 0.85], round: 0.18, tint: [0.24, 0.07, 0], hurt: "flames" },
+    bleed: { bursts: ["drip"], every: 0.22, at: [0.4, 0.65], round: 0.17, tint: null, hurt: "blood" },
+    slow: { bursts: [], every: 0.3, at: [0.05, 0.4], round: 0.2, tint: null, hurt: null },
+});
+
+// Slowed, as it was done: webbed, rooted, chilled (each drawn, and each its own icon and words)
+const HELD = Object.freeze({
+    web: { icon: "webbed", label: "Webbed: slowed", on: "You're caught in a web!", drawn: "web", bursts: ["webbed"] },
+    roots: { icon: "rooted", label: "Rooted: slowed", on: "Roots hold you fast!", drawn: "roots", bursts: [] },
+    frost: { icon: "chilled", label: "Chilled: slowed", on: "You're chilled to the bone!", drawn: "frost", bursts: ["frost"], tint: [0.03, 0.07, 0.14] },
+});
+
+// What the player's told when something takes hold of them
+const TAKEN = Object.freeze({ poison: "You're poisoned!", disease: "You've caught a sickness!", wither: "A curse withers you!", burn: "You're on fire!", bleed: "You're bleeding!", slow: "You're slowed!" });
+
+// The icon, words and what's drawn for what's lingering on someone (its kind, and look)
+function ailmentOf(kind, look = null) {
+    const held = kind === "slow" ? HELD[look] : null;
+    const icons = { poison: "poisoned", disease: "diseased", wither: "withered", burn: "burning", bleed: "bleeding", slow: "slowed" };
+
+    return {
+        icon: held?.icon ?? icons[kind],
+        label: held?.label ?? AFFLICTIONS[kind]?.label ?? kind,
+        on: held?.on ?? TAKEN[kind],
+        drawn: held?.drawn ?? AILING[kind]?.drawn ?? null,
+        bursts: held ? [...AILING[kind].bursts, ...held.bursts] : AILING[kind]?.bursts ?? [],
+        tint: held?.tint ?? AILING[kind]?.tint ?? null,
+    };
+}
+
+// How the wild's creatures' spit and the like fly (app/game.js #fly): lobbed in an arc (`arc`:
+// how high, m), or along the ground (roots burrowing: `ground`)
+const FLIGHT = Object.freeze({ arrow: { arc: 0.25 }, venom: { arc: 0.55 }, lava: { arc: 0.75 }, web: { arc: 0.4 }, roots: { ground: true }, flame: { arc: 0 } });
+
+// What bursts where each of the creatures' own lands (besides the burst in its look)
+const SPLASHES = Object.freeze({ venom: ["venomSplash"], lava: ["lavaSplash", "embers", "smoke"], web: ["webSplat"], roots: ["earth"], curse: ["shadows", "wither"], flame: ["flames", "smoke"] });
+
+// What a creature that doesn't bleed red spills where it's struck (effects.js BURSTS): by its
+// blood (creatures.js), or, with none, by what it is
+const SPILLS = Object.freeze({
+    slime: ["slimeSplash"],
+    ichor: ["ichor"],
+    sap: ["sap", "dust"],
+    skeleton: ["boneChips", "dust"],
+    wightLord: ["boneChips", "shadows"],
+    blackShuck: ["shadows"],
+    shadowStalker: ["shadows"],
+    wisp: ["wither"],
+    magmaSlime: ["lavaSplash", "embers"],
+    rockTusker: ["stoneChips", "dust"],
+});
+
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "rank", "loot", "bought", "sold", "used", "gear", "discarded", "dropped", "picked", "ability", "request", "standing", "gift", "counsel"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "rank", "loot", "bought", "sold", "used", "gear", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "gift", "counsel", "trade"]);
 
 const _focus = new THREE.Vector3();
 const _lean = new THREE.Vector3();
@@ -293,6 +369,15 @@ export class Game {
         this.lastAttack = new Map();
         this.flights = new Map();
         this.flash = new Map();
+
+        // Those with something lingering on them (their ids), and when each's next shows it (by
+        // id and kind: s); those whose skin's tinged by it
+        this.ailed = new Set();
+        this.ailingAt = new Map();
+        this.tinged = new Set();
+
+        // What lingering things the player's been told the cure for already (their kinds)
+        this.curesTold = new Set();
 
         /** What's to happen a little later (the game's clock, s): [{ at, then }]. */
         this.later = [];
@@ -505,6 +590,7 @@ export class Game {
         step("Getting ready to draw");
 
         this.effects = new Effects(view.scene);
+        this.ailments = new Ailments3D(this.effects.group);
 
         for (const actor of this.battle.actors) {
             this.#place(actor);
@@ -606,6 +692,11 @@ export class Game {
             return this.#addAvatar(actor.id, character, { walk: "natural", guard: guardOf(weapon) });
         }
 
+        // One of the wild's creatures (core/creatures.js): as its kind looks (beasts/)
+        if (actor.kind === "beast") {
+            return this.#addBeast(actor);
+        }
+
         // The orc
         const preset = PRESETS.orc;
         const character = new Character(this.kit, { shape: preset.shape, look: preset.look, equipment: [...preset.equipment, ...WEAPONS[actor.weapon].equipment], hairDetail });
@@ -672,7 +763,24 @@ export class Game {
     }
 
     #addAvatar(id, character, { wounds = true, ...options }) {
-        const avatar = new Avatar(character, options);
+        return this.#register(id, new Avatar(character, options), { wounds });
+    }
+
+    // One of the wild's creatures, as its kind looks (the same one of its kind every time, from
+    // its id); holding its weapon, if it's people-shaped (and wounded as people are)
+    #addBeast(actor) {
+        const seed = [...actor.id].reduce((hash, letter) => (Math.imul(hash, 31) + letter.charCodeAt(0)) | 0, 7) >>> 0;
+        const weapon = WEAPONS[actor.weapon];
+        const avatar = dressCreature(this.kit, actor.wild.creature, { seed, equipment: weapon?.equipment ?? [], guard: weapon ? guardOf(actor.weapon) : null, hairDetail: Math.min(this.view.quality.hair, FOLK_HAIR) });
+
+        avatar.character.sheathe(true);
+
+        return this.#register(actor.id, avatar, { wounds: !(avatar instanceof BeastAvatar) });
+    }
+
+    // An avatar drawn, its footsteps heard
+    #register(id, avatar, { wounds }) {
+        const character = avatar.character;
 
         // Footsteps, on whatever ground the foot lands on
         avatar.walker.onStep = (foot, speed) => {
@@ -1004,7 +1112,7 @@ export class Game {
                 const target = this.avatars.get(projectile.target);
                 const left = Math.hypot(target.object.position.x - x, target.object.position.z - z);
                 const along = flight.distance > 0 ? Math.min(1, Math.max(0, 1 - left / flight.distance)) : 1;
-                const height = flight.height + (target.character.height * 0.72 - flight.height) * along;
+                const height = flight.ground ? flight.height : flight.height + (target.character.height * 0.72 - flight.height) * along;
 
                 this.effects.fly(projectile.id, new THREE.Vector3(x, height + Math.sin(Math.PI * along) * flight.arc, z));
             }
@@ -1035,6 +1143,8 @@ export class Game {
         this.effects.setTarget(ringed?.object ?? null, ringed ? Math.max(0.5, ringed.character.height * 0.33) : 0.6);
         hud.setTarget(target?.id ?? null);
         this.#bleed(dt);
+        this.#ailing();
+        this.ailments?.update(dt);
         this.#keepTalking();
         this.#keepShopping();
         this.#restPlayer();
@@ -1092,12 +1202,35 @@ export class Game {
             }
         }
 
-        // Skin flushing red where hit
-        for (const [id, left] of this.flash) {
-            const material = this.avatars.get(id).character.materials.body;
+        // Skin flushing red where hit, and tinged by what lingers on them (green with venom, a
+        // sickly yellow, a curse's violet, fire's glow), pulsing
+        const tinged = new Set([...this.flash.keys(), ...this.ailed, ...this.tinged]);
+
+        this.tinged.clear();
+
+        for (const id of tinged) {
+            const avatar = this.avatars.get(id);
+
+            if (!avatar) {
+                this.flash.delete(id);
+                continue;
+            }
+
+            const material = avatar.character.materials.body;
+            const left = this.flash.get(id) ?? 0;
             const remaining = left - dt;
+            const tint = this.#tintOf(battle.actor(id));
 
             material.emissive.setRGB(0.5, 0.04, 0.02).multiplyScalar(Math.max(0, remaining / 0.25));
+
+            if (tint) {
+                material.emissive.add(tint);
+                this.tinged.add(id);
+            }
+
+            if (!this.flash.has(id)) {
+                continue;
+            }
 
             if (remaining <= 0) {
                 this.flash.delete(id);
@@ -1852,13 +1985,20 @@ export class Game {
             }
         }
 
-        // The soldiers brought out, drawn a few at a time (those on the player's map first)
+        // The soldiers brought out and the wild's creatures put out, drawn a few at a time (those
+        // on the player's map first); a creature's bar over it
         while (this.enlisting.length && performance.now() < until) {
             const actor = this.battle.actor(this.enlisting.shift());
 
             if (actor && !this.avatars.has(actor.id)) {
                 this.#dress(actor);
                 this.#place(actor);
+
+                if (actor.kind === "beast") {
+                    const me = this.battle.actor(this.me);
+
+                    this.hud.track(actor.id, { ...actor, hostile: Boolean(me) && this.battle.hostile(actor, me) });
+                }
             }
         }
 
@@ -1889,8 +2029,15 @@ export class Game {
             const things = [event.gold ? `${event.gold} gold` : null, ...event.items.map((item) => itemLabel(item).toLowerCase())].filter(Boolean);
 
             this.hud.message(`You find ${things.join(", ")}.`, 2.5);
+        } else if (event.type === "picked" && event.bundle) {
+            const things = [event.bundle.gold ? `${event.bundle.gold} gold` : null, ...event.bundle.items.map(thingsOf)].filter(Boolean);
+
+            this.hud.message(`You take ${things.join(", ")}.${event.left ? " There's no room for the rest: it's still there." : ""}`, 2.5);
         } else if (event.type === "picked") {
             this.hud.message(`You pick up ${thingsOf(event.item)}.`, 2);
+        } else if (event.type === "spoils") {
+            this.hud.message(`The ${CREATURES[event.creature]?.name.toLowerCase() ?? "creature"} left something: tap the sack to take it.`, 2.5);
+            this.sound?.play("coins");
         }
 
         if (actor) {
@@ -2120,6 +2267,122 @@ export class Game {
     closePack() {
         this.shopping = null;
         this.pack?.hide();
+
+        // (Trading with another player: closed, it's called off)
+        if (this.#tradeNow()) {
+            this.#command({ type: "cancel" });
+        }
+    }
+
+    // The trade the player's in with another player (host.js trades: both said yes), if any
+    #tradeNow() {
+        return [...(this.host.trades?.values() ?? [])].find((trade) => trade.open && (trade.from === this.me || trade.to === this.me)) ?? null;
+    }
+
+    // Ask another player to trade (or say yes to their asking), walking up to them first if
+    // they're further off than trading's done from
+    #tradeWith(other, { run = false } = {}) {
+        const player = this.battle.actor(this.me);
+
+        if (!player || player.dead || other.dead) {
+            return;
+        }
+
+        this.#endTalk();
+
+        if (player.map !== other.map || Math.hypot(player.x - other.x, player.y - other.y) > TRADE.reach - 0.5) {
+            this.approaching = other.id;
+            this.#command({ type: "approach", target: other.id, run });
+
+            return;
+        }
+
+        this.approaching = null;
+        this.#command({ type: "stop" });
+        this.#command({ type: "trade", with: other.id }, (result) => {
+            if (!result.ok) {
+                this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.6);
+                this.sound?.play("denied");
+            }
+        });
+    }
+
+    // How a trade with another player's going (host.js "trade" events): told, the pack showing it
+    #traded(event) {
+        if (event.id !== this.me) {
+            return;
+        }
+
+        const them = event.name ?? "They";
+
+        switch (event.change) {
+            case "asked":
+                if (event.from === this.me) {
+                    this.hud.message(`You ask ${them} to trade.`, 2);
+                } else {
+                    this.hud.offer(`${them} would trade with you.`, "Trade", () => {
+                        const other = this.battle.actor(event.with);
+
+                        if (other) {
+                            this.#tradeWith(other);
+                        }
+                    }, TRADE.asking / 1000);
+                    this.sound?.play("wake");
+                }
+
+                return;
+            case "open":
+                this.closeJournal();
+                this.shopping = null;
+                this.hud.message(`Trading with ${them}: offer what you will, then agree.`, 3);
+                break;
+            case "offer":
+                if (event.by !== this.me) {
+                    this.hud.message(`${them} changes their offer.`, 1.6);
+                }
+
+                break;
+            case "agreed":
+                if (event.by !== this.me) {
+                    this.hud.message(`${them} agrees. Agree too, and it's done.`, 2.5);
+                }
+
+                break;
+            case "failed":
+                this.hud.message(event.reason === "full" ? (event.short === this.me ? "You haven't room for all that." : `${them} hasn't room for all that.`) : event.short === this.me ? "Something you offered isn't there any more." : `Something ${them} offered isn't there any more.`, 3);
+                this.sound?.play("denied");
+                break;
+            case "done": {
+                const got = [event.got.gold ? `${event.got.gold} gold` : null, ...event.got.items.map(thingsOf)].filter(Boolean);
+
+                this.hud.message(`You trade with ${them}${got.length ? `: you get ${got.join(", ")}` : ""}.`, 3);
+                this.sound?.play("coins");
+                this.hud.setGold(this.progress.gold);
+                this.onProgress(this.progress);
+                break;
+            }
+            case "off": {
+                const told = {
+                    cancelled: event.by === this.me ? (event.open ? "You call the trade off." : null) : event.open ? `${them} calls the trade off.` : `${them} won't trade just now.`,
+                    apart: event.open ? `The trade's off: you and ${them} have parted.` : null,
+                    unanswered: null,
+                    left: `${them} has gone: the trade's off.`,
+                }[event.why];
+
+                if (told) {
+                    this.hud.message(told, 2.5);
+                }
+
+                break;
+            }
+            default:
+                break;
+        }
+
+        // (The pack showing the trade as it is now: opened for it, or as it was once it's over)
+        if (event.change === "open" || this.pack?.open) {
+            this.#showPack();
+        }
     }
 
     // Trade with a shopkeeper: the pack open, their wares in it
@@ -2141,7 +2404,7 @@ export class Game {
             return { tree, name, rank, title: ["Untried", "Trained", "Adept", "Veteran", "Master", "Legend"][rank], xp, from, to, grows, ability: learnt.length ? `Learnt: ${learnt.join(", ")}` : null };
         });
         const gear = ["weapon", "body", "shield"].map((slot) => ({ slot, item: progress.gear[slot], label: progress.gear[slot] ? itemLabel(progress.gear[slot]) : null }));
-        const pack = progress.pack.map((stack) => stack && { ...stack, label: itemLabel(stack), about: aboutOf(stack), use: ITEMS[stack.id].use ? (stack.id === "meal" ? "Eat" : "Drink") : null, equip: ITEMS[stack.id].slot ? (ITEMS[stack.id].slot === "weapon" ? "Wield" : "Wear") : null, price: priceOf(stack, { haggle, selling: true }) });
+        const pack = progress.pack.map((stack) => stack && { ...stack, label: itemLabel(stack), about: aboutOf(stack), use: ITEMS[stack.id].use ? (stack.id === "meal" || ITEMS[stack.id].food ? "Eat" : "Drink") : null, equip: ITEMS[stack.id].slot ? (ITEMS[stack.id].slot === "weapon" ? "Wield" : "Wear") : null, price: priceOf(stack, { haggle, selling: true }) });
         const shop = this.shopping && {
             name: this.shopping.name,
             wares: wares(this.shopping.shop).map((item) => {
@@ -2151,7 +2414,18 @@ export class Game {
             }),
         };
 
-        this.pack.show({ gold: progress.gold, skills, gear, pack, shop });
+        const trade = this.#tradeNow();
+        const other = trade && (trade.from === this.me ? trade.to : trade.from);
+        const offer = (side) => ({ gold: side?.gold ?? 0, items: (side?.items ?? []).map((item) => ({ ...item, label: itemLabel(item) })) });
+
+        this.pack.show({
+            gold: progress.gold,
+            skills,
+            gear,
+            pack,
+            shop,
+            trade: trade && { name: this.host.players.get(other)?.hero.name ?? "them", mine: offer(trade.offers[this.me]), theirs: offer(trade.offers[other]), agreed: { mine: Boolean(trade.agreed[this.me]), theirs: Boolean(trade.agreed[other]) } },
+        });
     }
 
     // Something asked of the pack: done by the host, or why not said (with whoever's being traded
@@ -2246,7 +2520,7 @@ export class Game {
 
         const [ox, oz] = this.originOf(me.map);
 
-        this.drops.sync(this.host.ground, { map: me.map, near: { x: ox + me.x, z: oz + me.y }, reach: DRAW_REACH, originOf: (map) => this.originOf(map) });
+        this.drops.sync(this.host.ground, { map: me.map, near: { x: ox + me.x, z: oz + me.y }, reach: DRAW_REACH, originOf: (map) => this.originOf(map), mine: this.me });
         this.drops.update(this.clock ?? 0);
 
         const picking = this.picking && this.host.ground.get(this.picking);
@@ -2516,11 +2790,18 @@ export class Game {
             switch (event.type) {
                 case "attack": {
                     const actor = battle.actor(event.id);
+                    const target = battle.actor(event.target);
 
                     // (Kicking with a weapon in hand, the hands stay on guard; and its weapon in
                     // hand, whatever it looked like: once starting the attack has finished any
-                    // drawing or putting away)
-                    avatar.actions.startAttack(event.animation, { hitAt: event.hitAt / 1000, duration: event.duration / 1000, arms: event.animation !== "kick" || ["boots", "gauntlets"].includes(actor.weapon) });
+                    // drawing or putting away. How far off its target is, for a creature that
+                    // reaches it: a frog's tongue)
+                    avatar.actions.startAttack(event.animation, {
+                        hitAt: event.hitAt / 1000,
+                        duration: event.duration / 1000,
+                        arms: event.animation !== "kick" || ["boots", "gauntlets"].includes(actor.weapon),
+                        reach: target ? Math.hypot(target.x - actor.x, target.y - actor.y) : null,
+                    });
 
                     if (avatar.character.sheathed) {
                         avatar.character.sheathe(false);
@@ -2535,21 +2816,30 @@ export class Game {
                     break;
                 case "projectile": {
                     const target = this.avatars.get(event.target);
-                    const hand = WEAPONS[battle.actor(event.id).weapon].equipment.includes("bow") ? "Left" : "Right";
+                    const hand = weaponOf(battle.actor(event.id).weapon)?.equipment?.includes("bow") ? "Left" : "Right";
                     const from = avatar.hand(hand);
 
                     const [ox, oz] = this.originOf(battle.actor(event.id).map);
 
                     const look = LOOKS[event.kind] ? this.#look(event.id, event.kind) : 0;
 
-                    effects.launch(event.projectile, event.kind, from, look);
+                    const shape = FLIGHT[event.kind] ?? { arc: 0.05 };
+
+                    effects.launch(event.projectile, event.kind, shape.ground ? from.clone().setY(0.08) : from, look);
                     this.sound?.launch(event.kind, from, { rate: LOOKS[event.kind]?.[look].pitch ?? 1 });
                     this.flights.set(event.projectile, {
                         previous: new THREE.Vector2(event.x, event.y),
                         distance: Math.hypot(target.object.position.x - ox - event.x, target.object.position.z - oz - event.y),
-                        height: from.y,
-                        arc: event.kind === "arrow" ? 0.25 : 0.05,
+                        height: shape.ground ? 0.08 : from.y,
+                        arc: shape.arc ?? 0,
+                        ground: Boolean(shape.ground),
                     });
+
+                    // (Fire breathed: a roaring stream from its jaws to whoever it's at, a moment)
+                    if (event.kind === "flame") {
+                        effects.breathe(() => avatar.hand("Right"), () => target.point(0.6), 0.7);
+                    }
+
                     break;
                 }
                 case "hit":
@@ -2561,6 +2851,12 @@ export class Game {
                 case "fizzle":
                     effects.land(event.projectile);
                     this.flights.delete(event.projectile);
+                    break;
+                case "ail":
+                    this.#ail(event, avatar);
+                    break;
+                case "afflicted":
+                    this.#afflicted(event, avatar);
                     break;
                 case "cast": {
                     const spell = SPELLS[event.spell];
@@ -2590,6 +2886,21 @@ export class Game {
                     hud.damage(this.#screenAbove(event.id), "Stunned", { kind: "stun" });
                     this.sound?.play("stun", { at: avatar.object.position });
                     break;
+                case "knockdown": {
+                    // Knocked off their feet (away from whoever did it), and up again when the
+                    // battle lets them act again
+                    const by = event.by ? this.avatars.get(event.by) : null;
+
+                    avatar.actions.knockdown?.({ from: by ? avatar.angleTo(by.object.position.x, by.object.position.z) : 0, seconds: (event.until - battle.time) / 1000 });
+                    hud.damage(this.#screenAbove(event.id), "Knocked down", { kind: "stun" });
+                    this.sound?.play("fall", { at: avatar.object.position, delay: FALL_LANDS / 1.35 });
+
+                    if (event.id === this.me) {
+                        hud.message("Knocked off your feet!", 1.2);
+                    }
+
+                    break;
+                }
                 case "exhausted":
                     if (event.id === this.me) {
                         hud.message("Out of breath", 1.5);
@@ -2606,7 +2917,9 @@ export class Game {
                     this.sound?.play("fall", { at: avatar.object.position, delay: FALL_LANDS });
 
                     // Blood pools under their chest once they're down
-                    this.pools.set(event.id, { left: FALL_LANDS + 0.2, spot: null });
+                    if (this.#bleeds(battle.actor(event.id))) {
+                        this.pools.set(event.id, { left: FALL_LANDS + 0.2, spot: null });
+                    }
 
                     if (event.id === this.me) {
                         hud.message("You have fallen. You'll wake in the market square…", (event.respawnAt - battle.time) / 1000);
@@ -2626,10 +2939,17 @@ export class Game {
                     this.#rest(event, avatar);
                     break;
                 case "arrived":
-                    // Walked up to someone to talk to them
+                    // Walked up to someone to talk to them (or, another player, to trade)
                     if (event.id === this.me && event.target === this.approaching) {
+                        const other = battle.actor(event.target);
+
                         this.approaching = null;
-                        this.#openTalk(battle.actor(event.target));
+
+                        if (other?.kind === "player") {
+                            this.#tradeWith(other);
+                        } else {
+                            this.#openTalk(other);
+                        }
                     }
 
                     break;
@@ -2714,6 +3034,10 @@ export class Game {
                 break;
             case "gone":
                 this.#mirror();
+                break;
+            case "roused":
+                // (The wild's creatures put out near a player: drawn a few at a time)
+                this.enlisting.push(...event.ids);
                 break;
             case "muster":
                 this.#muster(event);
@@ -2805,6 +3129,7 @@ export class Game {
             case "discarded":
             case "dropped":
             case "picked":
+            case "spoils":
                 this.#progressed(event);
                 break;
             case "request":
@@ -2812,6 +3137,9 @@ export class Game {
             case "gift":
             case "counsel":
                 this.#stood(event);
+                break;
+            case "trade":
+                this.#traded(event);
                 break;
             default:
                 break;
@@ -2849,7 +3177,7 @@ export class Game {
         const actor = this.battle.actor(id);
         const guard = guardOf(actor.weapon);
 
-        if (actor.map !== this.mapId || actor.dead) {
+        if (actor.map !== this.mapId || actor.dead || actor.kind === "beast") {
             avatar.actions.stopResting();
             avatar.character.sheathe(!on);
 
@@ -2886,9 +3214,16 @@ export class Game {
         effects.impact(reaction?.effect ?? "sparks", at, direction, event.projectile ? effects.lookOf(event.projectile) : null);
 
         // Blood sprays from it, gushing from a wound (and a killing blow), with a splash on the
-        // ground beyond; burns smoke
-        if (kind.blood > 0) {
+        // ground beyond (not from a creature that doesn't bleed red); burns smoke
+        if (kind.blood > 0 && this.#bleeds(actor)) {
             effects.bleed(at, direction, { amount: kind.blood * (landed?.mark ? 0.7 : 1.4), gush: !landed?.mark || event.hp <= 0 });
+        } else if (actor?.kind === "beast") {
+            // (Or what it spills instead: gel, ichor, sap, chips of bone or stone, shadow...)
+            const { blood } = CREATURES[actor.wild?.creature] ?? {};
+
+            for (const spill of SPILLS[blood] ?? SPILLS[actor.wild?.creature] ?? []) {
+                effects.burst(spill, at, direction ? direction.clone().setY(0.4) : null);
+            }
         }
 
         if (kind.glow === "fire") {
@@ -2896,6 +3231,14 @@ export class Game {
         }
 
         if (event.projectile) {
+            const flown = effects.kindOf(event.projectile);
+
+            // (Venom splashing, lava spattering, a web bursting, roots breaking the ground at
+            // their feet, a curse's shadows)
+            for (const splash of SPLASHES[flown] ?? []) {
+                effects.burst(splash, flown === "roots" ? victim.point(0.02) : at, direction);
+            }
+
             const arrow = effects.land(event.projectile, landed ? wounds.boneOf(landed) : victim.character.rig.bone("Spine2"), { at: landed ? at : null, keep: Boolean(landed) });
 
             if (arrow && landed) {
@@ -2908,6 +3251,146 @@ export class Game {
         hud.damage(this.#screenAbove(event.id), event.damage, { toPlayer: event.id === this.me });
         hud.setHealth(event.id, actor.hp, actor.maxHp);
         this.flash.set(event.id, 0.25);
+    }
+
+    // --- What lingers after some blows (core/afflictions.js) ---
+
+    // It hurts them: a number the colour of it over them, their bar, and a puff of it
+    #ail({ id, kind, damage, hp, maxHp }, avatar) {
+        const hurt = AILING[kind]?.hurt;
+
+        this.hud.setHealth(id, hp, maxHp);
+        this.hud.damage(this.#screenAbove(id), damage, { toPlayer: id === this.me, kind: `ail ail-${kind}` });
+
+        if (hurt && this.battle.actor(id)?.map === this.mapId) {
+            this.effects.burst(hurt, this.#onThem(avatar, AILING[kind]));
+        }
+    }
+
+    // It takes hold of someone (drawn on them: a web, roots...), or it's over (cured, or worn
+    // off); the player told of their own (and, the first time, where the cure's to be had)
+    #afflicted({ id, kind, change, look }, avatar) {
+        const { drawn, on, label } = ailmentOf(kind, look);
+
+        if (change === "on") {
+            if (drawn) {
+                this.ailments.add(id, drawn, avatar.object, avatar.character.height);
+            }
+        } else if (drawn) {
+            this.ailments.remove(id, drawn);
+        }
+
+        if (id !== this.me) {
+            return;
+        }
+
+        if (change === "on") {
+            const cure = ITEMS[AFFLICTIONS[kind]?.cure];
+            const told = this.curesTold.has(kind);
+
+            this.curesTold.add(kind);
+            this.hud.message(told || !cure ? on : `${on} (${cure.label}: the adventurers' guild sells them.)`, told ? 2 : 4);
+            this.sound?.play("denied");
+        } else {
+            this.hud.message(`No longer ${label.split(":")[0].toLowerCase()}.`, change === "cured" ? 2 : 1.5);
+        }
+    }
+
+    // What lingers on everyone shown, as it goes: an icon for each on their plate (the time it's
+    // got left darkening round it), and rising off them now and then (bubbles, flies, motes,
+    // flames, blood, silk...), those on the player's map
+    #ailing() {
+        const { battle, hud, effects } = this;
+        const point = new THREE.Vector3();
+
+        for (const id of this.ailed) {
+            const actor = battle.actor(id);
+
+            if (!actor?.afflictions?.length || actor.dead) {
+                this.ailed.delete(id);
+                hud.setAfflictions(id, []);
+
+                if (!actor || actor.dead) {
+                    this.ailments.clear(id);
+                }
+            }
+        }
+
+        for (const actor of battle.actors) {
+            if (!actor.afflictions?.length || actor.dead) {
+                continue;
+            }
+
+            const avatar = this.avatars.get(actor.id);
+
+            if (!avatar) {
+                continue;
+            }
+
+            this.ailed.add(actor.id);
+            hud.setAfflictions(
+                actor.id,
+                actor.afflictions.map(({ kind, until, look }) => ({ kind, ...ailmentOf(kind, look), left: (until - battle.time) / (AFFLICTIONS[kind]?.ms ?? 1) })),
+            );
+
+            if (actor.map !== this.mapId || !avatar.object.visible) {
+                continue;
+            }
+
+            for (const { kind, look } of actor.afflictions) {
+                const style = AILING[kind];
+                const key = `${actor.id}:${kind}`;
+
+                if (!style || this.clock < (this.ailingAt.get(key) ?? 0)) {
+                    continue;
+                }
+
+                this.ailingAt.set(key, this.clock + style.every * (0.7 + Math.random() * 0.6));
+
+                for (const burst of ailmentOf(kind, look).bursts) {
+                    effects.burst(burst, this.#onThem(avatar, style, point));
+                }
+            }
+        }
+    }
+
+    // Somewhere on someone, for what lingers on them to show at: between its heights, round them
+    #onThem(avatar, { at: [low, high], round }, point = new THREE.Vector3()) {
+        const angle = Math.random() * Math.PI * 2;
+        const scale = avatar.character.height / 1.75;
+
+        avatar.point(low + Math.random() * (high - low), point);
+        point.x += Math.cos(angle) * round * scale;
+        point.z += Math.sin(angle) * round * scale;
+
+        return point;
+    }
+
+    // How what lingers on someone tinges their skin just now (pulsing), or null
+    #tintOf(actor) {
+        if (!actor?.afflictions?.length || actor.dead) {
+            return null;
+        }
+
+        const tint = new THREE.Color(0, 0, 0);
+        const pulse = 0.6 + 0.4 * Math.sin(this.clock * 5);
+
+        for (const { kind, look } of actor.afflictions) {
+            const colour = ailmentOf(kind, look).tint;
+
+            if (colour) {
+                tint.r += colour[0] * pulse;
+                tint.g += colour[1] * pulse;
+                tint.b += colour[2] * pulse;
+            }
+        }
+
+        return tint.r + tint.g + tint.b > 0 ? tint : null;
+    }
+
+    // Does a character bleed red (not a skeleton, a slime, a spider, a wisp...)?
+    #bleeds(actor) {
+        return actor?.kind !== "beast" || CREATURES[actor.wild?.creature]?.blood === "red";
     }
 
     // Wounds glow and fade; burns smoke and throw embers; the badly hurt drip blood (the worse
@@ -3173,10 +3656,16 @@ export class Game {
         const who = this.#whoIsAt(clientX, clientY, { player: false, folk: true })?.actor ?? null;
         const me = this.battle.actor(this.me);
 
-        // Someone to talk to (one of the folk, a soldier who isn't an enemy): go up to them
+        // Someone to talk to (one of the folk, a soldier who isn't an enemy): go up to them; another
+        // player (not an enemy): trade with them
         if (who && me && !this.battle.hostile(who, me)) {
             this.lastTap = { time, x: clientX, y: clientY, from: "view" };
-            this.#talkTo(who, { run });
+
+            if (who.kind === "player") {
+                this.#tradeWith(who, { run });
+            } else {
+                this.#talkTo(who, { run });
+            }
 
             return;
         }
@@ -3261,7 +3750,7 @@ export class Game {
     }
 
     // Who is under a point on the screen, within PICK_RADIUS of their feet, middle or head: the
-    // nearest living enemy, one of the folk or a soldier who isn't an enemy (if `folk`), a soldier
+    // nearest living enemy, one of the folk, a soldier who isn't an enemy or another player (if `folk`), a soldier
     // of a people not friendly to the player's (if `soldiers`: to pick a fight with), or the
     // player (if `player`); { actor, wheel: "enemy", "talk", "provoke" or "self" }
     #whoIsAt(clientX, clientY, { player: withPlayer = true, folk = false, soldiers = false } = {}) {
@@ -3277,7 +3766,7 @@ export class Game {
             const mine = actor === player;
 
             const enemy = !mine && this.battle.hostile(actor, player);
-            const talks = actor.neutral || actor.kind === "soldier" || (actor.kind === "follower" && this.host.followers.get(actor.id)?.leader === this.me);
+            const talks = actor.neutral || actor.kind === "soldier" || actor.kind === "player" || (actor.kind === "follower" && this.host.followers.get(actor.id)?.leader === this.me);
             const provokes = actor.kind === "soldier" && !enemy && this.host.canFight(player, actor);
 
             if (actor.dead || (mine && !withPlayer) || (!mine && !enemy && !(folk && talks) && !(soldiers && provokes)) || actor.map !== player.map || !this.avatars.has(actor.id)) {

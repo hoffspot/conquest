@@ -139,3 +139,102 @@ test("a world opened to others: an elf joins it by its code, is brought in by th
     await hostContext.close();
     await guestContext.close();
 });
+
+// A human who joins by the host's own town, carrying two wolf pelts
+const BRYN = {
+    version: 1,
+    seed: 778,
+    created: "2026-09-03T12:00:00.000Z",
+    hero: {
+        name: "Bryn",
+        weapon: "sword",
+        race: "human",
+        parts: [],
+        shape: { macro: { gender: 0.8, muscle: 0.6, weight: 0.4, height: 0.6, bust: 0.2, african: 0.1, asian: 0.1, caucasian: 0.8 }, details: {} },
+        look: { skin: { tone: "#d9b08c" }, eyes: { iris: "#5a7a3a" }, hair: { style: "short", beard: "none", colour: "#4a3020" } },
+    },
+};
+
+test("two players side by side trade face to face: one asks, the other says yes, each offers, both agree, and it changes hands in both worlds", async ({ browser }) => {
+    const hostContext = await browser.newContext();
+    const guestContext = await browser.newContext();
+    const host = await hostContext.newPage();
+    const guest = await guestContext.newPage();
+
+    for (const page of [host, guest]) {
+        page.on("pageerror", (error) => {
+            throw error;
+        });
+    }
+
+    await guest.addInitScript((save) => {
+        localStorage.setItem("pellagos.save", JSON.stringify(save));
+        localStorage.setItem("pellagos.progress", JSON.stringify({ created: save.created, seed: save.seed, skills: {}, gold: 20, pack: [{ id: "wolfPelt", quality: "common", count: 2 }] }));
+    }, BRYN);
+
+    await host.goto("/?play&seed=2");
+    await playing(host);
+    await host.locator("#menubutton").click();
+    await host.locator("#invitebutton").click();
+
+    const invite = host.locator("#invite");
+
+    await expect(invite.locator("#invitecode")).toHaveText(/^[A-Z]{4}$/, { timeout: 15000 });
+
+    const code = await invite.locator("#invitecode").textContent();
+    const ada = await host.evaluate(() => window.pellagos.game.host.players.get("player").hero.name);
+
+    await invite.getByRole("button", { name: "Back to the game" }).click();
+    await guest.goto(`/?join=${code}`);
+    await expect(guest.locator("#join")).toBeVisible({ timeout: 60000 });
+    await guest.locator("#join").getByRole("button", { name: "Join" }).click();
+    await playing(guest);
+    await expect(host.locator("#banner")).toContainText("Bryn has come into the world", { timeout: 30000 });
+
+    // Bryn taps the host's player beside them: asked to trade, the host says yes
+    await guest.evaluate(() => {
+        const { game } = window.pellagos;
+        const at = game.view.toScreen(game.avatars.get("player").point(0.5));
+
+        game.tap(at.x, at.y);
+    });
+    await expect(host.locator("#banner")).toContainText("Bryn would trade with you.", { timeout: 30000 });
+    await host.locator("#banner .banner-action").click();
+    await expect(host.locator(".pack-title")).toHaveText("Trading with Bryn", { timeout: 30000 });
+    await expect(guest.locator(".pack-title")).toHaveText(`Trading with ${ada}`, { timeout: 30000 });
+
+    // Bryn offers both pelts; the host, ten gold
+    await guest.locator('.pack-cell[data-item="wolfPelt"]').click();
+    await guest.locator(".pack-about").getByRole("button", { name: /^Offer/ }).click();
+    await guest.locator(".pack-ask").getByRole("button", { name: "Offer", exact: true }).click();
+    await expect(host.locator(".pack-section", { hasText: "Bryn offers" })).toContainText("Wolf pelt ×2", { timeout: 30000 });
+    await expect(guest.locator('.pack-cell[data-item="wolfPelt"]')).toHaveClass(/offered/);
+
+    await host.locator(".pack-barter").getByRole("button", { name: "Offer gold" }).click();
+    await host.locator(".pack-ask").getByRole("button", { name: "Offer", exact: true }).click();
+    await expect(guest.locator(".pack-section", { hasText: `${ada} offers` })).toContainText("10 gold", { timeout: 30000 });
+
+    // Both agree: it's done, in both worlds alike
+    await guest.locator(".pack-barter").getByRole("button", { name: /^Agree to trade/ }).click();
+    await expect(host.locator(".pack-agreed")).toHaveText("Bryn agrees to this.", { timeout: 30000 });
+    await host.locator(".pack-barter").getByRole("button", { name: /^Agree to trade/ }).click();
+    await expect(host.locator("#banner")).toContainText("You trade with Bryn: you get 2 wolf pelts.", { timeout: 30000 });
+    await expect(guest.locator("#banner")).toContainText(`You trade with ${ada}: you get 10 gold.`, { timeout: 30000 });
+    await expect(host.locator(".pack-title")).toHaveText("Pack");
+
+    for (const page of [host, guest]) {
+        const held = await page.evaluate(() => {
+            const players = window.pellagos.game.host.players;
+            const [mine, theirs] = [players.get("player").progress, players.get("guest-1").progress];
+
+            return [mine.gold, mine.held("wolfPelt"), theirs.gold, theirs.held("wolfPelt")];
+        });
+
+        expect(held).toEqual([10, 2, 30, 0]);
+    }
+
+    expect(await guest.evaluate(() => window.pellagos.game.remote.resyncs)).toBe(0);
+
+    await hostContext.close();
+    await guestContext.close();
+});

@@ -12,6 +12,8 @@
 //
 // Pure data and a little bookkeeping, no DOM.
 
+import { CREATURES } from "./creatures.js";
+import { PARTS, SPOILS } from "./spoils.js";
 import { ADJECTIVES } from "./war/peoples.js";
 
 /** The ranks: each one's title, the standing it takes, and what it opens. */
@@ -55,7 +57,19 @@ export const REQUESTS = Object.freeze({
     beasts: { title: "Beasts on the roads", rank: 0, turns: 45, reward: { standing: 0, gold: 10, each: { standing: 0, gold: 7 } } },
     hunt: { title: "A bounty", rank: 0, turns: 60, reward: { standing: 0, gold: 8, each: { standing: 0, gold: 6 } } },
     camp: { title: "The camp outside the walls", rank: 0, turns: 40, reward: { standing: 0, gold: 70 } },
+    parts: { title: "Wanted at the guild", rank: 0, turns: 60, reward: { standing: 0, gold: 4, share: 1.6 } },
 });
+
+/**
+ * What the guilds want brought in (docs/WILDS.md): the parts of the creatures found anywhere, not
+ * too far out (the first three tiers), by their ids.
+ */
+export const WANTED_PARTS = Object.freeze(
+    [...new Set(Object.entries(SPOILS).filter(([id]) => !CREATURES[id].people && !CREATURES[id].perilous && CREATURES[id].tiers[0] <= 3).flatMap(([, { items }]) => items.map(({ id }) => id).filter((id) => PARTS[id])))],
+);
+
+// A thing's name for more than one ("wolf fangs", "slime jelly", "frog legs")
+const many = (label) => (/(s|y|dust|silk|meat|jelly|blood|skin)$/i.test(label) ? label : `${label}s`).toLowerCase();
 
 /** How near (m) a player goes to see what they're scouting, and to be there to hold a town (from its middle). */
 export const REQUEST_REACH = Object.freeze({ scout: 220, defend: 180, rout: 150, escort: 60 });
@@ -326,7 +340,8 @@ export function offerContract({ war, town: townId, giver, held = [], random }) {
     const holders = war.liege(town.owner);
     const foes = war.enemiesOf(holders).filter((foe) => !has("hunt", foe));
     const camps = war.forces.filter((force) => force.kind === "camp" && force.target === town.id && war.hostile(force.realm, town.owner) && !has("camp", force.id));
-    const kinds = [...(has("beasts", town.id) ? [] : ["beasts", "beasts"]), ...(foes.length ? ["hunt"] : []), ...(camps.length ? ["camp", "camp"] : [])];
+    const wanted = WANTED_PARTS.filter((part) => !has("parts", part));
+    const kinds = [...(has("beasts", town.id) ? [] : ["beasts", "beasts"]), ...(foes.length ? ["hunt"] : []), ...(camps.length ? ["camp", "camp"] : []), ...(wanted.length ? ["parts", "parts"] : [])];
 
     if (!kinds.length) {
         return null;
@@ -349,6 +364,16 @@ export function offerContract({ war, town: townId, giver, held = [], random }) {
             const need = 2 + random.int(0, 2);
 
             return { ...base, key: foe, target: { realm: foe, need }, text: `Bounty, posted for ${war.realm(holders).name}: ${need} of the ${soldiersOf(foe)}, brought down wherever they're found.`, until: war.turn + turns, reward: pay(reward.gold + reward.each.gold * need) };
+        }
+        case "parts": {
+            // (Creatures' parts brought in: a few of the cheapest, fewer of the dearer; paid more
+            // than the guild would give for them over the counter)
+            const part = random.pick(wanted);
+            const { label, worth } = PARTS[part];
+            const need = (worth <= 4 ? 3 : 2) + random.int(0, 2);
+            const gold = reward.gold + worth * need * reward.share;
+
+            return { ...base, key: part, target: { part, name: label, need }, text: `Wanted at the guild in ${town.name}: ${need} ${many(label)}, for the makers who use them. ${Math.round(gold)} gold for the lot, brought in.`, until: war.turn + turns, reward: pay(gold) };
         }
         case "camp": {
             const camp = random.pick(camps);
@@ -435,6 +460,8 @@ export function progressOf(request) {
         case "beasts":
         case "hunt":
             return `${count} of ${target.need} brought down.`;
+        case "parts":
+            return `Bring ${target.need} ${many(target.name)} to ${request.from.name} in ${request.from.townName}.`;
         case "scout":
             return "Go near enough to see them.";
         case "defend":

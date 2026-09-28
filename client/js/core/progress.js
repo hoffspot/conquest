@@ -11,6 +11,8 @@
 // talker hires the might they don't have: M9). Everything here is plain data (toJSON), kept with
 // the character (app/save.js), and the host's to change (core/host.js). Pure JavaScript, no DOM.
 
+import { CURES } from "./afflictions.js";
+import { PARTS } from "./spoils.js";
 import { WEAPONS } from "./weapons.js";
 
 /** A rank's title, and the experience it takes to reach it. */
@@ -84,6 +86,11 @@ export const ITEMS = Object.freeze({
     potion: { label: "Healing draught", use: { heal: 25 }, price: 15 },
     meal: { label: "Hot meal", use: { heal: 15 }, price: 5 },
     ale: { label: "Tankard of ale", use: { stamina: 1000 }, price: 2 },
+    // The cures for what lingers after some creatures' blows (afflictions.js): each ends one
+    ...Object.fromEntries(Object.entries(CURES).map(([id, { label, cure, price }]) => [id, { label, use: { cure }, price }])),
+    // The wild's creatures' parts (spoils.js): what the adventurers' guild pays for each; some to
+    // eat or drink
+    ...Object.fromEntries(Object.entries(PARTS).map(([id, { label, worth, use, icon }]) => [id, { label, price: worth, part: true, ...(use ? { use } : {}), ...(icon === "meat" ? { food: true } : {}) }])),
 });
 
 /** The weapons a shield can be carried with (one-handed, up close). */
@@ -94,7 +101,7 @@ export const SHOPS = Object.freeze({
     smith: { items: ["sword", "hammer", "staff", "bow", "gauntlets", "boots", "gambeson", "mail", "roundShield", "kiteShield"], best: "masterwork" },
     tavern: { items: ["ale", "meal"], best: "common" },
     temple: { items: ["potion"], best: "common" },
-    guild: { items: ["wand", "grimoire", "potion"], best: "fine" },
+    guild: { items: ["wand", "grimoire", "potion", ...Object.keys(CURES)], best: "fine" },
 });
 
 /** What sells for what (a share of its price), before haggling. */
@@ -162,7 +169,10 @@ export function itemLabel({ id, quality = "common" }) {
 export function priceOf({ id, quality = "common" }, { haggle = 0, selling = false } = {}) {
     const base = (ITEMS[id]?.price ?? 0) * (QUALITIES[quality]?.price ?? 1);
 
-    return Math.max(1, Math.round(selling ? base * SELL_SHARE * (1 + haggle) : base * (1 - haggle)));
+    // (A creature's part sells for what it's worth: its price is what the guild pays)
+    const share = ITEMS[id]?.part ? 1 : SELL_SHARE;
+
+    return Math.max(1, Math.round(selling ? base * share * (1 + haggle) : base * (1 - haggle)));
 }
 
 /** What a shop has for sale ([{ id, quality }]): each thing it keeps, common, and better made as far as it goes. */
@@ -318,6 +328,38 @@ export class Progress {
         }
 
         this.pack[slot] = { ...thing, count: (this.pack[slot]?.count ?? 0) + count };
+
+        return true;
+    }
+
+    /** How many of a kind of thing (an ITEMS id, however well made, or only of one make) are in the pack. */
+    held(id, quality = null) {
+        return this.pack.reduce((sum, stack) => sum + (stack?.id === id && (quality === null || stack.quality === quality) ? stack.count : 0), 0);
+    }
+
+    /**
+     * Take `count` of a kind of thing (of any make, or only of one) out of the pack, from
+     * whichever stacks hold it (the smallest first): true, or false (and nothing taken) if there
+     * aren't so many.
+     */
+    remove(id, count, quality = null) {
+        if (!isCount(count) || this.held(id, quality) < count) {
+            return false;
+        }
+
+        let left = count;
+        const slots = this.pack.map((stack, slot) => (stack?.id === id && (quality === null || stack.quality === quality) ? slot : -1)).filter((slot) => slot >= 0).sort((a, b) => this.pack[a].count - this.pack[b].count);
+
+        for (const slot of slots) {
+            const taken = Math.min(left, this.pack[slot].count);
+
+            this.take(slot, taken);
+            left -= taken;
+
+            if (!left) {
+                break;
+            }
+        }
 
         return true;
     }

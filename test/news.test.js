@@ -98,18 +98,18 @@ describe("news and rumours, and the guild's board (news.js, standing.js, host.js
         }
     });
 
-    it("puts contracts on the guild's board for anyone: beasts, a bounty on the holders' enemies, the camp outside", () => {
+    it("puts contracts on the guild's board for anyone: beasts, creatures' parts wanted, a bounty on the holders' enemies, the camp outside", () => {
         const war = new War(plan);
         const town = war.towns.find(({ kind, owner }) => kind === "town" && owner === "human");
         const giver = { id: "guild/receptionist", name: "Mirabel Wren", title: "" };
         const random = createRandom(2);
         const kinds = () => new Set(Array.from({ length: 60 }, () => offerContract({ war, town: town.id, giver, random })?.kind));
 
-        assert.deepEqual([...kinds()], ["beasts"]);
+        assert.deepEqual([...kinds()].sort(), ["beasts", "parts"]);
 
         war.relations["human|orc"] = { state: "hostile", since: 0 };
         war.forces.push({ id: "force-900", realm: "orc", kind: "camp", size: 20, at: [town.at[0] + 300, town.at[1]], path: [], leg: 0, target: town.id, home: war.realm("orc").capital, since: 0 });
-        assert.deepEqual([...kinds()].sort(), ["beasts", "camp", "hunt"]);
+        assert.deepEqual([...kinds()].sort(), ["beasts", "camp", "hunt", "parts"]);
 
         for (let k = 0; k < 30; k++) {
             const contract = offerContract({ war, town: town.id, giver, random });
@@ -162,8 +162,13 @@ describe("news and rumours, and the guild's board (news.js, standing.js, host.js
         const taken = host.command(HOST_PLAYER, { type: "effect", effect: { work: "accept" } }).request;
         const held = player.standing.find(taken.id);
 
-        // Done (as if the beasts or soldiers were brought down), and told of at the counter
-        Object.assign(held, { state: "done", count: held.target.need ?? 0 });
+        // Done (as if the beasts or soldiers were brought down, or the parts found), and told of at
+        // the counter
+        if (held.kind === "parts") {
+            player.progress.stow({ id: held.target.part }, held.target.need);
+        } else {
+            Object.assign(held, { state: "done", count: held.target.need ?? 0 });
+        }
 
         const [gold, points] = [player.progress.gold, player.standing.points];
         const told = host.command(HOST_PLAYER, { type: "effect", effect: { report: true } });
