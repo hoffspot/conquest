@@ -520,6 +520,13 @@ export class Interiors {
         this.byMap = new Map();
         this.placed = 0;
 
+        /**
+         * The buildings made (their keys), in the order they were: where each is drawn follows
+         * from it, so a world made again (a saved one, or a joining player's: core/host.js) makes
+         * them in the same order.
+         */
+        this.order = [];
+
         /** Bumped whenever a building is added or made (for the doors to catch up). */
         this.version = 0;
     }
@@ -678,6 +685,7 @@ export class Interiors {
             }
         }
         building.made = true;
+        this.order.push(key);
         this.version++;
 
         return building;

@@ -1,6 +1,12 @@
 // The game: the world drawn in 3D (world/view.js), the player and an orc in it, and the battle
 // between them (core/battle.js).
 //
+// It shows the world, but doesn't change it: the world is the host's (core/host.js), the one
+// authority over it, with however many players are in it. What this game's own player does (the
+// player whose id is `me`) goes to the host as a command, and everyone in the battle is drawn as
+// the host has them: so another player's game can later show the same world, sent to it over the
+// wire (docs/WAR.md).
+//
 // The battle runs in fixed steps of STEP_MS, the same on every device; the picture is drawn as
 // often as the screen allows, with everyone shown between where they were at the last two steps,
 // so they move smoothly whatever the frame rate. Each step's events (attacks, hits, deaths) start
@@ -20,9 +26,9 @@ import { DRAWS, FALL_LANDS, REACTIONS } from "../characters/actions.js";
 import { Character } from "../characters/character.js";
 import { folkLook } from "../characters/folk.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
-import { Battle, hostile, STEP_MS, TALK_REACH } from "../core/battle.js";
+import { hostile, STEP_MS, TALK_REACH } from "../core/battle.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
-import { Explored } from "../core/explored.js";
+import { HOST_PLAYER, Host, REFUSALS } from "../core/host.js";
 import { GODS } from "../core/lore/gods.js";
 import { BECKON, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js";
 import { squaresOf } from "../core/grid.js";
@@ -66,9 +72,6 @@ export const guardOf = (weapon) => WEAPONS[weapon].attacks[0].animation;
 // or lets it go): a blade from its scabbard, something slung off the back or from a belt, fists
 // clenched
 const DRAW_SOUNDS = { sword: ["unsheathe", "sheathe"], punch: ["knuckles", null], kick: ["knuckles", null] };
-
-// The orc, and what it fights with
-const ORC_WEAPON = "cleaver";
 
 // How long the dead lie before sinking out of sight (s), and how long they take to sink
 const LIE_STILL = 4;
@@ -137,10 +140,13 @@ const FADE_IN = 0.45;
 // Embers rise from the hearth this often (a second)
 const EMBERS = 5;
 
-// The buildings round the player, looked over this often (s): those whose doors are this near
-// (m) got ready to go into (their floors and folk built, a piece at a time, for at most `budget`
-// ms a frame), and those this far let go (their plans are kept: built again if they come back)
-const VISITS = Object.freeze({ every: 0.5, near: 22, far: 90, budget: 6 });
+// The buildings the host has got ready to go into (those near any player: core/host.js
+// RELEVANCE), their floors and folk built a piece at a time, for at most `budget` ms a frame; and
+// how often (s) the doors of the settlements come to since are picked up
+const VISITS = Object.freeze({ every: 0.5, budget: 6 });
+
+// What the host tells of besides the battle's events (#hear)
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect"]);
 
 const _focus = new THREE.Vector3();
 const _lean = new THREE.Vector3();
@@ -162,15 +168,25 @@ export class Game {
      *     loadExplored: core/explored.js Explored's toJSON).
      * @param {Function} [options.onExplore] - Hears it whenever they find more (to keep it).
      * @param {Function} [options.onWorldMap] - Asked to open the world map (the minimap held).
+     * @param {Host} [options.host] - The world's host (core/host.js): made here if not given
+     *     (playing alone), with the player joining it.
+     * @param {string} [options.me] - The player's id in it.
      */
-    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {} }) {
+    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, host = null, me = HOST_PLAYER }) {
         this.view = view;
         this.kit = kit;
         this.sound = sound;
         this.world = world;
         this.hero = hero;
         this.hud = hud;
-        this.battle = new Battle(world, { seed: world.seed });
+
+        // The world (the host's: made here, playing alone), this game's player in it (by id,
+        // come in before the world's own people), and the battle as the host has it
+        this.me = me;
+        this.host = host ?? new Host(world, { populate: false });
+        this.host.join({ id: me, hero, talks, explored });
+        this.host.populate();
+        this.battle = this.host.battle;
         this.avatars = new Map();
         this.previous = new Map();
         this.running = false;
@@ -233,28 +249,48 @@ export class Game {
         this.restAt = null;
 
         /**
-         * Talking (core/dialogue.js): what each of the folk remembers of the player (by id), what
-         * the player has learnt, the talk under way ({ id, conversation }) or who the player's
-         * going to talk to (an id), and what's been done in the world by talking (things bought,
-         * rooms rented: not yet anything more than kept here).
+         * Talking (core/dialogue.js): who hears what the folk remember of the player and what the
+         * player's learnt (the player's own: memory, knowledge), and the talk under way ({ id,
+         * conversation }) or who the player's going to talk to (an id).
          */
-        this.memory = talks.memory;
-        this.knowledge = new Set(talks.knowledge);
         this.onTalk = onTalk;
 
         /**
-         * What the player's found of the world (core/explored.js): the buildings they've gone
-         * into and the chunks they've set foot in; the icons over those buildings, for the maps
-         * (made again as more are found); and who hears of it.
+         * What the player's found of the world (explored: the host keeps it, as they go): who
+         * hears of it, and the icons over the buildings they've been in, for the maps (made again
+         * as more are found).
          */
-        this.explored = explored instanceof Explored ? explored : new Explored(explored);
         this.onExplore = onExplore;
         this.onWorldMap = onWorldMap;
         this.landmarks = { version: -1, icons: [] };
         this.talking = null;
         this.approaching = null;
         this.talkVariety = new Variety();
-        this.done = [];
+    }
+
+    /** This game's player, as the host has them (core/host.js players). */
+    get self() {
+        return this.host.players.get(this.me);
+    }
+
+    /** What each of the folk remembers of the player (by id). */
+    get memory() {
+        return this.self.talks.memory;
+    }
+
+    /** What the player's learnt, talking (a Set). */
+    get knowledge() {
+        return this.self.talks.knowledge;
+    }
+
+    /** What the player's found of the world (core/explored.js). */
+    get explored() {
+        return this.self.explored;
+    }
+
+    /** What's been done in the world by talking (things bought, rooms rented: the host's). */
+    get done() {
+        return this.host.done;
     }
 
     /** Where a map is drawn in the world ([x, z] metres). */
@@ -268,7 +304,7 @@ export class Game {
      * hears how far it's got.
      */
     async build(onProgress = () => {}) {
-        const { view, world, kit } = this;
+        const { view, world } = this;
         const timings = {};
         const time = async (name, work) => {
             const start = performance.now();
@@ -347,28 +383,18 @@ export class Game {
         this.doors = new Doors(world, view.scene);
         step(`Dressing ${this.hero.name}`);
 
-        // The player
-        const hairDetail = view.quality.hair;
-        const hero = await time("hero", () => new Character(kit, { shape: this.hero.shape, look: this.hero.look, equipment: heroEquipment(this.hero.weapon, this.hero.boots), hairDetail }));
+        // Everyone in the world as the host has them: the player (and anyone else playing), the
+        // orc, and the tavern's folk going about their business (no one fights them)
+        let filled = 0;
 
-        // (Weapons put away to start with: drawn for a fight)
-        hero.sheathe(true);
-        this.#addAvatar("player", hero, { walk: "natural", guard: guardOf(this.hero.weapon) });
-        this.battle.add({ id: "player", kind: "player", name: this.hero.name, weapon: this.hero.weapon, boots: Boolean(this.hero.boots), team: "town", square: world.spawns.player });
-        step("Waking the orc");
+        for (const actor of [...this.battle.actors]) {
+            if (actor.kind === "folk") {
+                step(`Filling the tavern (${++filled} of ${folk.length})`);
+            } else if (actor.id !== this.me) {
+                step(actor.kind === "player" ? `Dressing ${actor.name}` : `Waking the ${actor.name.toLowerCase()}`);
+            }
 
-        // The orc
-        const preset = PRESETS.orc;
-        const orc = await time("orc", () => new Character(kit, { shape: preset.shape, look: preset.look, equipment: [...preset.equipment, ...WEAPONS[ORC_WEAPON].equipment], hairDetail }));
-
-        orc.sheathe(true);
-        this.#addAvatar("orc", orc, { walk: preset.walk, guard: guardOf(ORC_WEAPON) });
-        this.battle.add({ id: "orc", kind: "orc", name: "Orc", weapon: ORC_WEAPON, team: "orcs", square: world.spawns.orc, ai: "patrol", patrol: world.patrol });
-
-        // The tavern's folk, going about their business (no one fights them)
-        for (const [k, one] of folk.entries()) {
-            step(`Filling the tavern (${k + 1} of ${folk.length})`);
-            await time(one.id, () => this.#addFolk(one));
+            await time(actor.id === this.me ? "hero" : actor.id, () => this.#dress(actor));
         }
 
         step("Getting ready to draw");
@@ -380,7 +406,7 @@ export class Game {
         }
 
         // The camera starts on the player, looking north
-        const start = this.avatars.get("player").object.position;
+        const start = this.avatars.get(this.me).object.position;
 
         this.cameraFollow = new CameraFollow({ x: start.x, z: start.z });
         this.#follow(0);
@@ -405,18 +431,84 @@ export class Game {
 
         this.timings = timings;
 
-        const player = this.battle.actor("player");
+        const player = this.battle.actor(this.me);
 
         this.hud.clear();
         this.hud.setPlayer(player);
 
-        for (const actor of this.battle.actors.filter((other) => other.id !== "player" && !other.neutral)) {
+        for (const actor of this.battle.actors.filter((other) => other.id !== this.me && !other.neutral)) {
             this.hud.track(actor.id, { ...actor, hostile: hostile(actor, player) });
         }
     }
 
+    // Someone in the battle, drawn (once): a player as they made themselves, the orc, one of the
+    // folk. Returns their avatar
+    #dress(actor) {
+        if (this.avatars.has(actor.id)) {
+            return this.avatars.get(actor.id);
+        }
+
+        const hairDetail = this.view.quality.hair;
+
+        if (actor.kind === "folk") {
+            return this.#addFolk(this.host.folk.get(actor.id));
+        }
+
+        if (actor.kind === "player") {
+            const { shape, look, weapon, boots } = this.host.players.get(actor.id).hero;
+            const character = new Character(this.kit, { shape, look, equipment: heroEquipment(weapon, boots), hairDetail });
+
+            // (Weapons put away to start with: drawn for a fight)
+            character.sheathe(true);
+
+            return this.#addAvatar(actor.id, character, { walk: "natural", guard: guardOf(weapon) });
+        }
+
+        // The orc
+        const preset = PRESETS.orc;
+        const character = new Character(this.kit, { shape: preset.shape, look: preset.look, equipment: [...preset.equipment, ...WEAPONS[actor.weapon].equipment], hairDetail });
+
+        character.sheathe(true);
+
+        return this.#addAvatar(actor.id, character, { walk: preset.walk, guard: guardOf(actor.weapon) });
+    }
+
+    // Everyone in the battle drawn, and no one who isn't: a player come or gone, the folk of a
+    // building let go (those of a building being got ready are drawn a piece at a time: #visit)
+    #mirror() {
+        const me = this.battle.actor(this.me);
+
+        for (const actor of this.battle.actors) {
+            if (!this.avatars.has(actor.id) && actor.kind !== "folk") {
+                this.#dress(actor);
+                this.#place(actor);
+                this.hud.track(actor.id, { ...actor, hostile: Boolean(me) && hostile(actor, me) });
+            }
+        }
+
+        for (const id of [...this.avatars.keys()]) {
+            if (!this.battle.actor(id)) {
+                this.#undress(id);
+            }
+        }
+    }
+
+    // Someone gone from the battle, no longer drawn
+    #undress(id) {
+        const avatar = this.avatars.get(id);
+
+        avatar?.character.object.removeFromParent();
+        avatar?.character.dispose();
+        this.wounds.get(id)?.dispose();
+        this.hud.untrack(id);
+
+        for (const each of [this.avatars, this.previous, this.flash, this.lastAttack, this.variety, this.casting, this.landing, this.wounds, this.pools]) {
+            each.delete(id);
+        }
+    }
+
     // One of the folk, looking as they do (Wenches and Ale's as they always have; anyone else as
-    // their part and seed have them), going about their business in the battle
+    // their part and seed have them). Returns their avatar
     #addFolk(one) {
         const look = one.preset ? FOLK[one.preset] : folkLook(one);
         const character = new Character(this.kit, { shape: look.shape, look: look.look, equipment: look.equipment, hairDetail: Math.min(this.view.quality.hair, FOLK_HAIR) });
@@ -434,7 +526,7 @@ export class Game {
 
         avatar.actions.setSeated(Boolean(one.routine.seated));
 
-        return this.battle.add({ id: one.id, kind: "folk", name: one.name, team: "folk", square: one.square, map: one.map, ai: "routine", neutral: true, routine: one.routine, role: one.role, facing: one.facing });
+        return avatar;
     }
 
     #addAvatar(id, character, { wounds = true, ...options }) {
@@ -463,25 +555,50 @@ export class Game {
 
     /** Start playing: the battle and the drawing run, and taps and clicks are listened to. */
     start() {
+        // (Listening again, after a pause that couldn't stop the world: pause)
+        if (!this.listeners.length) {
+            this.#listen();
+        }
+
         if (this.running) {
             return;
         }
 
         this.running = true;
         this.lastFrame = performance.now();
-        this.#listen();
         this.view.renderer.setAnimationLoop((now) => this.#frame(now));
         this.sound?.setAmbient(this.mapId === "town");
         this.sound?.setPlace(this.#soundOf(this.mapId));
         this.sound?.setPaused(false);
     }
 
-    /** Stop (pause): nothing moves until start() again. */
+    /** Stop: nothing moves until start() again. */
     stop() {
         this.running = false;
         this.view.renderer.setAnimationLoop(null);
         this.sound?.setPaused(true);
+        this.#deafen();
+    }
 
+    /**
+     * Pause (the menu open, or the world map): the world stops if it can (with no one else in it:
+     * core/host.js pausable), else it goes on, and only the player's taps and clicks aren't
+     * listened to, until start() again. Returns whether it stopped.
+     */
+    pause() {
+        if (this.host.pausable) {
+            this.stop();
+
+            return true;
+        }
+
+        this.#deafen();
+
+        return false;
+    }
+
+    // No more listening to taps, clicks and keys (and whatever the fingers were doing, let go)
+    #deafen() {
         for (const [target, type, listener, options] of this.listeners) {
             target.removeEventListener(type, listener, options);
         }
@@ -556,7 +673,7 @@ export class Game {
      * out in the world, those round the player.
      */
     showSquares(on) {
-        const player = this.battle.actor("player");
+        const player = this.battle.actor(this.me);
         const around = player ? [player.x, player.y] : null;
 
         if (on && (this.squares?.mapId !== this.mapId || (around && this.squares.strayed(around)))) {
@@ -644,8 +761,10 @@ export class Game {
             for (const actor of this.battle.actors) {
                 const previous = this.previous.get(actor.id);
 
-                previous.x = actor.x;
-                previous.y = actor.y;
+                if (previous) {
+                    previous.x = actor.x;
+                    previous.y = actor.y;
+                }
             }
 
             for (const projectile of this.battle.projectiles) {
@@ -656,7 +775,7 @@ export class Game {
                 }
             }
 
-            this.#handle(this.battle.advance(STEP_MS));
+            this.#handle(this.host.advance(STEP_MS));
             this.accumulator -= STEP_MS;
             steps++;
         }
@@ -676,6 +795,11 @@ export class Game {
             const avatar = this.avatars.get(actor.id);
             const previous = this.previous.get(actor.id);
             const [ox, oz] = this.originOf(actor.map);
+
+            // (Not drawn yet: one of a building's folk)
+            if (!avatar) {
+                continue;
+            }
 
             // (Only those on the player's map are seen, and moved)
             if (actor.map !== this.mapId) {
@@ -711,18 +835,18 @@ export class Game {
 
         // The wheel's spells, greyed for as long as they're cooling down
         if (this.wheel?.open) {
-            this.wheel.setCooldown(battle.cooldown("player"));
+            this.wheel.setCooldown(battle.cooldown(this.me));
         }
 
         // Light gathers in the hand of anyone casting a spell
         for (const actor of battle.actors) {
-            if (actor.casting && Math.random() < dt * 30) {
+            if (actor.casting && this.avatars.has(actor.id) && Math.random() < dt * 30) {
                 this.effects.charge(actor.casting.spell, this.avatars.get(actor.id).hand("Left"), this.casting.get(actor.id) ?? 0);
             }
         }
 
         // Everything is heard from where the player is
-        const me = this.avatars.get("player");
+        const me = this.avatars.get(this.me);
 
         this.sound?.setListener(me.object.position.x, me.object.position.z);
         this.sound?.update(dt);
@@ -746,7 +870,7 @@ export class Game {
 
         // The world round the player, drawn as they go (a chunk a frame at most)
         if (this.chunks && this.mapId === "town") {
-            const { x, z } = this.avatars.get("player").object.position;
+            const { x, z } = this.avatars.get(this.me).object.position;
 
             // (The undergrowth as thick as the quality asks, grown again if that's changed)
             this.chunks.setUndergrowth(this.view.quality.undergrowth);
@@ -762,8 +886,9 @@ export class Game {
 
         // Bars over the heads of the others on the player's map
         for (const actor of battle.actors) {
-            if (actor.id !== "player") {
-                const avatar = this.avatars.get(actor.id);
+            const avatar = this.avatars.get(actor.id);
+
+            if (actor.id !== this.me && avatar) {
                 const head = avatar.point(1.08);
 
                 hud.place(actor.id, actor.dead || actor.map !== this.mapId ? null : view.toScreen(head));
@@ -832,7 +957,7 @@ export class Game {
     // The camera (camera.js): following the player from behind the way they're going, or where a
     // drag has turned it, leaning towards whoever they're fighting so both are in view
     #follow(dt) {
-        const player = this.avatars.get("player");
+        const player = this.avatars.get(this.me);
 
         if (!player || !this.cameraFollow) {
             return;
@@ -870,8 +995,8 @@ export class Game {
         }
 
         const { battle, view } = this;
-        const actor = battle.actor("player");
-        const me = this.avatars.get("player");
+        const actor = battle.actor(this.me);
+        const me = this.avatars.get(this.me);
         const [ox, oz] = this.originOf(this.mapId);
         const rect = view.canvas.getBoundingClientRect();
         const corners = [[rect.left, rect.top], [rect.right, rect.top], [rect.right, rect.bottom], [rect.left, rect.bottom]].map(([x, y]) => {
@@ -919,10 +1044,10 @@ export class Game {
      * and radians, on the world outside: inside, at the building's door) and the icons.
      */
     worldMapView() {
-        const actor = this.battle.actor("player");
+        const actor = this.battle.actor(this.me);
         const building = this.world.interiors?.of(actor.map);
         const outside = actor.map === "town" ? [actor.x, actor.y] : (building?.at ?? building?.door?.ends[0].arrive ?? [actor.x, actor.y]);
-        const facing = this.avatars.get("player")?.facing ?? actor.facing;
+        const facing = this.avatars.get(this.me)?.facing ?? actor.facing;
 
         return { player: { x: outside[0], z: outside[1], facing }, icons: this.icons() };
     }
@@ -934,7 +1059,7 @@ export class Game {
 
     // Who the player was told to fight (and is still alive), or null
     #target() {
-        const player = this.battle.actor("player");
+        const player = this.battle.actor(this.me);
         const order = player && !player.dead ? player.order : null;
         const target = order?.type === "engage" ? this.battle.actor(order.target) : null;
 
@@ -944,7 +1069,7 @@ export class Game {
     // Who the player is fighting: who they were told to fight, or the nearest enemy after them
     #foe() {
         const battle = this.battle;
-        const player = battle.actor("player");
+        const player = battle.actor(this.me);
 
         if (!player || player.dead) {
             return null;
@@ -966,7 +1091,7 @@ export class Game {
     // Go and talk to one of the folk: at once if they're next to the player, or once the player's
     // walked up to them
     #talkTo(npc, { run = false } = {}) {
-        const player = this.battle.actor("player");
+        const player = this.battle.actor(this.me);
 
         if (!player || player.dead || this.talking?.id === npc.id) {
             return;
@@ -976,14 +1101,14 @@ export class Game {
 
         if (this.battle.canTalk(player, npc) && !player.to) {
             this.approaching = null;
-            this.battle.command("player", { type: "stop" });
+            this.#command({ type: "stop" });
             this.#openTalk(npc);
 
             return;
         }
 
         this.approaching = npc.id;
-        this.battle.command("player", { type: "approach", target: npc.id, run });
+        this.#command({ type: "approach", target: npc.id, run });
     }
 
     // Start talking to one of the folk: they stop and face the player, and the talk shows
@@ -1013,6 +1138,12 @@ export class Game {
             names.patron = GODS[building.patron].name;
             names.patronTitle = GODS[building.patron].title;
         }
+
+        // (They stop and face the player, if they can talk now: the host says)
+        if (!this.#command({ type: "talk", with: npc.id }).ok) {
+            return;
+        }
+
         this.memory[npc.id] ??= { talks: 0, flags: [] };
 
         const conversation = new Conversation(tree, {
@@ -1024,14 +1155,12 @@ export class Game {
             memory: this.memory[npc.id],
             knowledge: this.knowledge,
             variety: this.talkVariety,
-            onEffect: (effect, speaker) => this.#effect(effect, speaker),
+            onEffect: (effect) => this.#command({ type: "effect", effect }),
         });
 
         this.talking = { id: npc.id, conversation };
-        this.battle.talk(npc.id, "player");
-        this.battle.talk("player", npc.id);
         this.avatars.get(npc.id)?.actions.stopResting();
-        this.avatars.get("player")?.actions.stopResting();
+        this.avatars.get(this.me)?.actions.stopResting();
         this.talk.show({ name: npc.name, title }, conversation);
         this.#keepTalks();
     }
@@ -1059,8 +1188,7 @@ export class Game {
             return;
         }
 
-        this.battle.talk(this.talking.id, null);
-        this.battle.talk("player", null);
+        this.#command({ type: "talk", with: null });
         this.talking = null;
         this.talk?.hide();
     }
@@ -1074,19 +1202,12 @@ export class Game {
             return;
         }
 
-        const player = this.battle.actor("player");
+        const player = this.battle.actor(this.me);
         const npc = this.battle.actor(talking.id);
 
         if (!player || !npc || player.dead || npc.dead || npc.map !== player.map || distanceBetween(player.square, npc.square) > TALK_REACH.across + 1 || this.#threatened(player)) {
             this.#endTalk();
         }
-    }
-
-    // Something done in the world by talking (buying, paying, renting, a quest moving on...):
-    // for now, only kept (the last few), for the world to act on later
-    #effect(effect, speaker) {
-        this.done.push({ ...effect, by: speaker.id, at: this.clock });
-        this.done.splice(0, Math.max(0, this.done.length - 50));
     }
 
     // Keep what's been said (the game's save: save.js)
@@ -1100,14 +1221,14 @@ export class Game {
     #wake() {
         this.lastInput = this.clock;
         this.restAt = null;
-        this.avatars.get("player")?.actions.stopResting();
+        this.avatars.get(this.me)?.actions.stopResting();
     }
 
     // The player, standing a while with nothing going on (no input, no one to fight or after
     // them, no one to talk to): now and then one of the adventurer's rests (roles.js)
     #restPlayer() {
-        const player = this.battle.actor("player");
-        const actions = this.avatars.get("player")?.actions;
+        const player = this.battle.actor(this.me);
+        const actions = this.avatars.get(this.me)?.actions;
 
         if (!player || !actions) {
             return;
@@ -1211,7 +1332,7 @@ export class Game {
             this.interiors.get(this.mapId)?.drive(how.drive, this.clock + how.hitAt * 0.5, how.duration - how.hitAt * 0.5);
         }
 
-        if (act === "beckon" && target === "player" && !this.talking) {
+        if (act === "beckon" && target === this.me && !this.talking) {
             this.hud.message(`${actor.name.split(" ")[0]} beckons you over`, 2.5);
         }
     }
@@ -1233,7 +1354,7 @@ export class Game {
     // The player has come through a door or up or down the stairs (or woken elsewhere): the
     // screen comes up from black on the map they're on, the camera behind them the way they face
     #arrive(actor) {
-        const position = this.avatars.get("player").object.position;
+        const position = this.avatars.get(this.me).object.position;
 
         this.#showMap(actor.map);
         this.cameraFollow = new CameraFollow({ x: position.x, z: position.z, yaw: Math.atan2(-Math.sin(actor.facing), -Math.cos(actor.facing)), pitch: this.cameraFollow?.pitch });
@@ -1251,12 +1372,11 @@ export class Game {
 
     // --- Going inside ---
 
-    // Every so often, the buildings near the player got ready to go into, and those far behind
-    // them let go; and, every frame, a little more of those being got ready built
+    // Every frame, a little more of the buildings being got ready built (the host says which:
+    // those near any player, core/host.js); and every so often, the doors of the settlements come
+    // to since picked up
     #visit(dt) {
-        const interiors = this.world.interiors;
-
-        if (!interiors) {
+        if (!this.world.interiors) {
             return;
         }
 
@@ -1270,52 +1390,20 @@ export class Game {
 
         this.visitClock -= dt;
 
-        const player = this.battle.actor("player");
-
-        // Out in the world, the chunk the player's in is visited: the fog lifts off it
-        if (player?.map === "town" && this.explored.visit(player.x, player.y)) {
-            this.#explored();
-        }
-
-        // (Inside, nothing's let go or got ready: the town's as it was left)
-        if (this.visitClock > 0 || !player || player.map !== "town") {
-            return;
-        }
-
-        this.visitClock = VISITS.every;
-
-        // (The doors of the settlements come to since)
-        this.doors?.sync();
-
-        const heading = player.order?.type === "enter" ? this.battle.links.find(({ id }) => id === player.order.link)?.building : null;
-
-        for (const building of interiors.buildings.values()) {
-            if (!building.entrance) {
-                continue;
-            }
-
-            const { x, z } = building.entrance.door;
-            const distance = Math.hypot(x - player.x, z - player.y);
-
-            if (!this.visits.has(building.key) && (distance < VISITS.near || heading === building.key)) {
-                this.#prepare(building);
-            } else if (this.visits.has(building.key) && distance > VISITS.far) {
-                this.#release(building.key);
-            }
+        if (this.visitClock <= 0) {
+            this.visitClock = VISITS.every;
+            this.doors?.sync();
         }
     }
 
-    // Start getting a building ready: its plans made, then each floor and each of its folk built,
-    // one to a piece of work, and the doors told of its insides
+    // Start building a building the host's got ready: each floor and each of its folk, one to a
+    // piece of work, and the doors told of its insides
     #prepare(building) {
         const visit = { key: building.key, queue: [], maps: [], folk: [] };
 
-        visit.queue.push(() => {
-            this.world.interiors.make(building.key);
-            visit.queue.push(...building.maps.map((id) => () => this.#furnish(visit, id)));
-            visit.queue.push(...building.folk.map((one) => () => this.#people(visit, one)));
-            visit.queue.push(() => this.doors?.sync());
-        });
+        visit.queue.push(...building.maps.map((id) => () => this.#furnish(visit, id)));
+        visit.queue.push(...(this.host.open.get(building.key) ?? []).map((id) => () => this.#people(visit, id)));
+        visit.queue.push(() => this.doors?.sync());
         this.visits.set(building.key, visit);
 
         return visit;
@@ -1347,34 +1435,32 @@ export class Game {
         visit.maps.push(mapId);
     }
 
-    // One of a building's folk, where they are in it
-    #people(visit, one) {
-        if (this.battle.actor(one.id)) {
+    // One of a building's folk (by id), drawn where they are in it
+    #people(visit, id) {
+        const actor = this.battle.actor(id);
+
+        if (!actor || this.avatars.has(id)) {
             return;
         }
 
-        this.#place(this.#addFolk(one));
-        visit.folk.push(one.id);
+        this.#dress(actor);
+        this.#place(actor);
+        visit.folk.push(id);
     }
 
-    // Let a building go: its folk out of the battle and gone, its floors thrown away (its plans
-    // are kept, and the battle can still go in: its floors are built again if the player comes
-    // back)
+    // A building the host's let go: its folk no longer drawn, its floors thrown away (built again
+    // if it's got ready again)
     #release(key) {
         const visit = this.visits.get(key);
+
+        if (!visit) {
+            return;
+        }
 
         this.visits.delete(key);
 
         for (const id of visit.folk) {
-            const avatar = this.avatars.get(id);
-
-            this.battle.remove(id);
-            avatar?.character.object.removeFromParent();
-            avatar?.character.dispose();
-
-            for (const each of [this.avatars, this.previous, this.flash, this.lastAttack, this.variety, this.casting, this.landing, this.flights]) {
-                each.delete(id);
-            }
+            this.#undress(id);
         }
 
         for (const id of visit.maps) {
@@ -1404,7 +1490,7 @@ export class Game {
 
         // Everyone else here where they are now (they weren't moved while out of sight)
         for (const actor of this.battle.actors) {
-            if (actor.map === mapId && actor.id !== "player") {
+            if (actor.map === mapId && actor.id !== this.me) {
                 this.#place(actor);
             }
         }
@@ -1441,10 +1527,10 @@ export class Game {
     // glow round the doors and stairs the player's making for
     #inside(dt) {
         const interior = this.interiors.get(this.mapId);
-        const player = this.battle.actor("player");
+        const player = this.battle.actor(this.me);
 
         if (interior) {
-            cutFor(interior.map, this.avatars.get("player").object.position, this.view.camera.position);
+            cutFor(interior.map, this.avatars.get(this.me).object.position, this.view.camera.position);
             interior.update(dt, this.clock);
             this.view.flicker(this.clock);
 
@@ -1464,7 +1550,17 @@ export class Game {
         const { battle, hud, effects } = this;
 
         for (const event of events) {
+            if (HOST_EVENTS.has(event.type)) {
+                this.#hear(event);
+                continue;
+            }
+
             const avatar = this.avatars.get(event.id);
+
+            // (Someone not drawn yet: one of the folk of a building being got ready)
+            if (!avatar) {
+                continue;
+            }
 
             switch (event.type) {
                 case "attack": {
@@ -1543,7 +1639,7 @@ export class Game {
                     this.sound?.play("stun", { at: avatar.object.position });
                     break;
                 case "exhausted":
-                    if (event.id === "player") {
+                    if (event.id === this.me) {
                         hud.message("Out of breath", 1.5);
                         this.sound?.play("breath");
                     }
@@ -1560,7 +1656,7 @@ export class Game {
                     // Blood pools under their chest once they're down
                     this.pools.set(event.id, { left: FALL_LANDS + 0.2, spot: null });
 
-                    if (event.id === "player") {
+                    if (event.id === this.me) {
                         hud.message("You have fallen. You'll wake in the market square…", (event.respawnAt - battle.time) / 1000);
                         this.sound?.play("fallen");
                     } else {
@@ -1579,7 +1675,7 @@ export class Game {
                     break;
                 case "arrived":
                     // Walked up to someone to talk to them
-                    if (event.id === "player" && event.target === this.approaching) {
+                    if (event.id === this.me && event.target === this.approaching) {
                         this.approaching = null;
                         this.#openTalk(battle.actor(event.target));
                     }
@@ -1591,16 +1687,11 @@ export class Game {
 
                     this.#place(actor);
 
-                    if (event.id === "player") {
+                    if (event.id === this.me) {
                         const building = this.world.interiors?.of(event.to);
 
                         // (Walked straight in: whatever of it isn't built yet, built now)
                         this.#ready(building?.key);
-
-                        // The first time in, it's marked on the maps
-                        if (building && this.explored.enter(building.key)) {
-                            this.#explored();
-                        }
                         this.#arrive(actor);
                         this.sound?.setListener(avatar.object.position.x, avatar.object.position.z);
                     }
@@ -1620,7 +1711,7 @@ export class Game {
                     this.#place(actor);
                     avatar.deadFor = 0;
 
-                    if (event.id === "player" && actor.map !== this.mapId) {
+                    if (event.id === this.me && actor.map !== this.mapId) {
                         this.#arrive(actor);
                     }
 
@@ -1630,7 +1721,7 @@ export class Game {
                     this.pools.delete(event.id);
                     hud.setHealth(actor.id, actor.hp, actor.maxHp);
 
-                    if (event.id === "player") {
+                    if (event.id === this.me) {
                         hud.message("");
                         this.sound?.play("wake");
                     }
@@ -1640,6 +1731,39 @@ export class Game {
                 default:
                     break;
             }
+        }
+    }
+
+    // What the host tells of besides the battle (core/host.js advance): a building got ready or
+    // let go, a player come or gone, the player finding more of the world
+    #hear(event) {
+        switch (event.type) {
+            case "open": {
+                const building = this.world.interiors?.buildings.get(event.key);
+
+                if (building && !this.visits.has(event.key)) {
+                    this.#prepare(building);
+                }
+
+                break;
+            }
+            case "close":
+                this.#release(event.key);
+                this.#mirror();
+                break;
+            case "join":
+            case "leave":
+                this.#mirror();
+                break;
+            case "explored":
+                // (Marked on the maps, and kept)
+                if (event.id === this.me) {
+                    this.#explored();
+                }
+
+                break;
+            default:
+                break;
         }
     }
 
@@ -1705,7 +1829,7 @@ export class Game {
             this.flights.delete(event.projectile);
         }
 
-        hud.damage(this.#screenAbove(event.id), event.damage, { toPlayer: event.id === "player" });
+        hud.damage(this.#screenAbove(event.id), event.damage, { toPlayer: event.id === this.me });
         hud.setHealth(event.id, actor.hp, actor.maxHp);
         this.flash.set(event.id, 0.25);
     }
@@ -1972,14 +2096,14 @@ export class Game {
     forward() {
         this.#wake();
 
-        const avatar = this.avatars.get("player");
-        const player = this.battle.actor("player");
+        const avatar = this.avatars.get(this.me);
+        const player = this.battle.actor(this.me);
 
         if (!avatar || !player || player.dead) {
             return;
         }
 
-        this.battle.command("player", { type: "ahead", facing: avatar.facing, run: true });
+        this.#command({ type: "ahead", facing: avatar.facing, run: true });
 
         const goal = player.order?.to;
         const [ox, oz] = this.originOf(player.map);
@@ -1999,10 +2123,10 @@ export class Game {
         this.#wake();
 
         const spell = ACTIONS[action]?.spell;
-        const result = spell ? this.battle.cast("player", spell, target === "self" ? null : target) : { ok: false, reason: "busy" };
+        const result = spell ? this.#command({ type: "cast", spell, target: target === "self" ? null : target }) : { ok: false, reason: "busy" };
 
         if (!result.ok) {
-            this.hud.message(CAST_FAILURES[result.reason], 1.4);
+            this.hud.message(CAST_FAILURES[result.reason] ?? REFUSALS[result.reason], 1.4);
             this.sound?.play("denied");
         }
 
@@ -2013,7 +2137,7 @@ export class Game {
     // nearest living enemy, one of the folk (if `folk`), or the player (if `player`); { actor,
     // wheel: "enemy", "talk" or "self" }
     #whoIsAt(clientX, clientY, { player: withPlayer = true, folk = false } = {}) {
-        const player = this.battle.actor("player");
+        const player = this.battle.actor(this.me);
         let best = null;
         let bestDistance = PICK_RADIUS;
 
@@ -2047,7 +2171,7 @@ export class Game {
 
     // The finger's been held on someone: open the wheel round them
     #openWheel(pointer, { actor, wheel }) {
-        const player = this.battle.actor("player");
+        const player = this.battle.actor(this.me);
 
         if (!this.running || player.dead || actor.dead || this.pointers.size !== 1) {
             return;
@@ -2061,7 +2185,7 @@ export class Game {
 
         pointer.wheel = { originX: pointer.x, originY: pointer.y, target: wheel === "self" ? "self" : actor.id, refused: null, done: false };
         this.wheel.show(centre.x, centre.y, wheel, pointer.wheel.target);
-        this.wheel.setCooldown(this.battle.cooldown("player"));
+        this.wheel.setCooldown(this.battle.cooldown(this.me));
         this.sound?.play("wheel");
         globalThis.navigator?.vibrate?.(12);
     }
@@ -2084,7 +2208,7 @@ export class Game {
             return;
         }
 
-        const cooling = SPELLS[ACTIONS[action]?.spell] && this.battle.cooldown("player") > 0;
+        const cooling = SPELLS[ACTIONS[action]?.spell] && this.battle.cooldown(this.me) > 0;
 
         if (!action || cooling) {
             if (open.refused !== direction) {
@@ -2116,7 +2240,7 @@ export class Game {
     mapTap({ x, z, reach = 3, clientX = 0, clientY = 0, run = false, time = performance.now() }) {
         this.#wake();
 
-        const player = this.battle.actor("player");
+        const player = this.battle.actor(this.me);
         const enemies = this.battle.actors.filter((actor) => player && hostile(actor, player) && !actor.dead && actor.map === player.map);
         const distance = (actor) => Math.hypot(actor.x - x, actor.y - z);
         const enemy = enemies.filter((actor) => distance(actor) <= reach).sort((a, b) => distance(a) - distance(b))[0] ?? null;
@@ -2128,7 +2252,7 @@ export class Game {
     // on the ground ([x, z] metres, on their map), running if told to or tapped twice in quick
     // succession (in the same place: the view or the minimap)
     #order({ enemy, door = null, ground }, { clientX, clientY, run, time, from }) {
-        const player = this.battle.actor("player");
+        const player = this.battle.actor(this.me);
         const last = this.lastTap;
 
         this.lastTap = { time, x: clientX, y: clientY, from };
@@ -2146,7 +2270,7 @@ export class Game {
         if (enemy) {
             const chosen = player.order?.type === "engage" && player.order.target === enemy.id;
 
-            this.battle.command("player", { type: "engage", target: enemy.id, run });
+            this.#command({ type: "engage", target: enemy.id, run });
 
             if (!chosen) {
                 this.sound?.play("lock");
@@ -2157,7 +2281,7 @@ export class Game {
 
         // The door's edge glows green as they make for it
         if (door) {
-            this.battle.command("player", { type: "enter", link: door.link.id, run });
+            this.#command({ type: "enter", link: door.link.id, run });
             this.doors.light(door, this.clock);
 
             return;
@@ -2172,10 +2296,16 @@ export class Game {
         const x = Math.min(map.width - 1, Math.max(0, Math.floor(ground[0])));
         const y = Math.min(map.height - 1, Math.max(0, Math.floor(ground[1])));
 
-        this.battle.command("player", { type: "move", to: [x, y], run });
+        this.#command({ type: "move", to: [x, y], run });
 
-        const goal = this.battle.actor("player").order?.to ?? [x, y];
+        const goal = this.battle.actor(this.me).order?.to ?? [x, y];
 
         this.effects.markTarget(ox + goal[0] + 0.5, oz + goal[1] + 0.5);
+    }
+
+    // What the player does, sent to the host (core/host.js command): { ok }, or { ok: false,
+    // reason } if it can't be done
+    #command(command) {
+        return this.host.command(this.me, command);
     }
 }

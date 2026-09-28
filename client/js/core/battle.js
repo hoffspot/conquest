@@ -274,6 +274,49 @@ export class Battle {
     }
 
     /**
+     * Everything the battle is just now, as plain data (numbers, strings, arrays and plain
+     * objects: ±Infinity among them, which core/wire.js carries): to keep, or to send to a player
+     * joining (docs/WAR.md), and carry on from with Battle.restore exactly as this one would. The
+     * world it's on isn't in it: that's made again from its seed (and its buildings' insides
+     * made again in the same order: core/host.js).
+     */
+    snapshot() {
+        return {
+            seed: this.seed,
+            time: this.time,
+            lag: this.lag,
+            random: this.random.state,
+            nextProjectile: this.nextProjectile,
+            actors: this.actors.map(({ chance, restVariety, steering, ...actor }) => ({
+                ...structuredClone(actor),
+                chance: chance.state,
+                restVariety: restVariety.toJSON(),
+                // (Heading straight for a square of the path it's on: made again for any other)
+                steering: steering?.path === actor.path ? structuredClone({ ...steering, path: null }) : null,
+            })),
+            projectiles: structuredClone(this.projectiles),
+        };
+    }
+
+    /** A battle on `world` carrying on from a snapshot (snapshot()). */
+    static restore(world, snapshot) {
+        const battle = new Battle(world, { seed: snapshot.seed });
+
+        Object.assign(battle, { time: snapshot.time, lag: snapshot.lag, nextProjectile: snapshot.nextProjectile, projectiles: structuredClone(snapshot.projectiles) });
+        battle.random.state = snapshot.random;
+        battle.actors = snapshot.actors.map(({ chance: state, restVariety, steering, ...kept }) => {
+            const actor = structuredClone(kept);
+            const chance = createRandom(0);
+
+            chance.state = state;
+
+            return Object.assign(actor, { chance, restVariety: new Variety(() => chance.next(), restVariety), steering: steering ? { ...structuredClone(steering), path: actor.path } : null });
+        });
+
+        return battle;
+    }
+
+    /**
      * Take a character out (one of the folk, gone with their building when the player's far
      * away): no one's after them, talking to them or shooting at them any more. Whether they were
      * there.

@@ -266,11 +266,12 @@ async function play(save) {
 }
 
 function pause() {
-    if (!state.game?.running) {
+    if (!state.game?.running || $("#menu").open) {
         return;
     }
 
-    state.game.stop();
+    // (The world stops only with no one else in it: else it goes on under the menu)
+    state.game.pause();
     menuPage("main");
     $("#menu").showModal();
 }
@@ -299,7 +300,7 @@ async function openWorldMap() {
         return;
     }
 
-    game.stop();
+    game.pause();
     $("#worldmap").showModal();
 
     // (Made the first time, for the world being played)

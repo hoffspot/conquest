@@ -8,7 +8,9 @@ The code is in three layers, each only using the ones below it:
 
 - **The rules** (`client/js/core`): the world, the battle, the weapons. Plain JavaScript with
   seeded random numbers and no DOM or Three.js, so it runs the same everywhere and is tested in
-  Node. One player's game could later be the authority for others'.
+  Node. The world's **host** (`core/host.js`) is the one authority over it: the game only shows
+  it, and sends what its player does as commands, so other players can later hop in and out
+  (see [WAR.md](WAR.md), *Hop in, hop out*).
 - **The drawing** (`client/js/world`, `client/js/characters`): the 3D view, the town, the ground,
   the characters, their animations and the effects.
 - **The page** (`client/js/app`, `client/js/main.js`): the loading screen, the title, making a

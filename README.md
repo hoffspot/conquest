@@ -25,7 +25,8 @@ at, is at
 [docs/GAME.md](docs/GAME.md) describes how the game works: the world, the fighting, the drawing,
 the screens and debug mode. [docs/CHARACTERS.md](docs/CHARACTERS.md) describes the character
 engine, and [docs/WORLD.md](docs/WORLD.md) the world: its plan, and how it's built from it in
-chunks.
+chunks. [docs/WAR.md](docs/WAR.md) sets out the war between the six peoples that's being built,
+and how the engine's made ready for other players to hop in and out of a running world.
 
 ## How to play
 
@@ -383,6 +384,9 @@ client/                 The game (static files served to the browser)
     insides.js          Every building that can be gone into: its door, and its floors and folk
                         made the first time they're wanted
     explored.js         What the player has found: the buildings gone into, the chunks walked
+    host.js             The one authority over a running world: its players (by id), their
+                        commands, the buildings near them got ready, kept and made again
+    wire.js             What goes between host and players, and into a save, as text
     battle.js           Moving, fighting, damage, dying and coming back; the orc's patrol
     weapons.js          The weapons and their attacks
     spells.js           The spells: heal and stun, and their shared cooldown
@@ -450,6 +454,7 @@ scripts/                vendor-three.js, build-characters.js, build-manifest.js,
 docs/GAME.md            How the game works
 docs/CHARACTERS.md      The character engine, and the research behind it
 docs/WORLD.md           The world: laid out from a seed as a plan, and built from it in chunks
+docs/WAR.md             The war between the peoples, and playing with others (hop in, hop out)
 docs/MODERNIZATION.md   The history: the book's Last Colony, modernized, before Pellagos replaced it
 ```
 
