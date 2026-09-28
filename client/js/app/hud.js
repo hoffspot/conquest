@@ -140,6 +140,24 @@ export class Hud {
         }
     }
 
+    /**
+     * A message with something to be done about it (a button, `action`: "Undo"), for a while:
+     * the button tapped, `onAction` is heard and the message goes.
+     */
+    offer(text, action, onAction, seconds = 6) {
+        const act = document.createElement("button");
+
+        this.message(text, seconds);
+        act.type = "button";
+        act.className = "banner-action";
+        act.textContent = action;
+        act.addEventListener("click", () => {
+            this.message("");
+            onAction();
+        });
+        this.banner.append(" ", act);
+    }
+
     /** Remove every floating bar and number. */
     clear() {
         this.floaters.replaceChildren();

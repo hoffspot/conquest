@@ -17,7 +17,7 @@
 import { Battle, FOE_MS, KINDS, TALK_REACH } from "./battle.js";
 import { Explored } from "./explored.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
-import { ABILITIES, ITEMS, priceOf, Progress, rollLoot, wares, weaponOf, WITH_SHIELD } from "./progress.js";
+import { ABILITIES, alike, ITEMS, priceOf, Progress, rollLoot, wares, weaponOf, WITH_SHIELD } from "./progress.js";
 import { createRandom } from "./random.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
 import { CHUNK } from "./worldplan/plan.js";
@@ -98,6 +98,13 @@ export const HONOURS = 200;
 
 /** How long the fallen soldiers lie before they're taken away (battle ms). */
 const FALLEN_MS = 10000;
+
+/** How long something dropped lies on the ground before it's gone (ms), and how near (m) it's picked up from. */
+export const GROUND_MS = 5 * 60 * 1000;
+export const PICK_REACH = 1.6;
+
+/** How long something thrown away can be taken back (ms). */
+export const UNDO_MS = 8000;
 
 /** What each people's soldiers fight with: guards the first, patrols each in turn (characters/soldiers.js dresses them to match). */
 export const SOLDIERS_ARMS = Object.freeze({
@@ -183,6 +190,9 @@ export const REFUSALS = Object.freeze({
     counsel: "That counsel can't be taken.",
     unready: "Not yet: your people aren't ready to rise.",
     request: "No such request.",
+    count: "There aren't so many as that.",
+    gone: "It isn't there any more.",
+    undo: "Too late to take that back.",
 });
 
 // A whole number, and a square [x, y] of whole numbers
@@ -264,6 +274,13 @@ export class Host {
 
         /** The folk hired (their ids): never among the folk again, wherever they were. */
         this.hired = new Set();
+
+        /**
+         * What's been dropped on the ground (by id): { id, item ({ id, quality, count }), map,
+         * square, until (when it's gone), by (the player who dropped it) }.
+         */
+        this.ground = new Map();
+        this.nextGround = 1;
 
         /**
          * The players, by id: { id, hero (their character: { name, shape, look, weapon, boots,
@@ -348,6 +365,7 @@ export class Host {
             // Boons for a while ([{ id, label, until, melee...}]), and when each ability's ready again
             boons: [],
             readyAt: {},
+            discarded: null,
             offers: {},
         };
         const taken = new Set(this.battle.actors.filter((actor) => actor.map === map).map(({ square: [x, y] }) => squareKey(x, y)));
@@ -422,10 +440,19 @@ export class Host {
      *  - { type: "effect", effect }: something done by talking (buying, paying, renting...), to
      *    whoever they're talking to (paid for in gold, if it has a price);
      *  - { type: "buy", item, from }: buy something ({ id, quality }) from a shopkeeper near them
-     *    (an id); { type: "sell", index, to }: sell what's at `index` in their pack to one;
+     *    (an id); { type: "sell", index, to, count }: sell things (one, with no count) from the
+     *    stack at `index` in their pack to one;
      *  - { type: "equip", index }, { type: "unequip", slot }: put on (or take up) gear from their
      *    pack, or take armour off; { type: "use", index }: use something in their pack (or
      *    { type: "use", item }: the first of a kind of thing in it, by its id);
+     *  - { type: "arrange", from, to }: move what's in one slot of their pack to another (put
+     *    together with things alike, or swapped); { type: "split", index, count, to }: split
+     *    some off a stack (into slot `to`, or the first empty one);
+     *  - { type: "discard", index }: throw away a stack, for good once a moment's passed;
+     *    { type: "undiscard" }: take back what was just thrown away;
+     *  - { type: "drop", index, count }: drop things from a stack (all of it, with no count) on
+     *    the ground where they stand; { type: "pickUp", ground }: pick up something dropped
+     *    (by its id), from near it;
      *  - { type: "ability", ability, target }: use an ability they've learnt (core/progress.js
      *    ABILITIES), on a target for a stronger blow (fighting it);
      *  - { type: "abandon", request }: give up a request they carry (by its id), for a little
@@ -510,7 +537,19 @@ export class Host {
             case "unequip":
                 return this.#gear(player, player.progress.unequip(command.slot));
             case "use":
-                return this.#use(player, actor, Number.isInteger(command.index) ? command.index : player.progress.pack.findIndex(({ id }) => id === command.item));
+                return this.#use(player, actor, Number.isInteger(command.index) ? command.index : player.progress.slotOf(command.item));
+            case "arrange":
+                return this.#packed(player.progress.move(command.from, command.to));
+            case "split":
+                return this.#packed(player.progress.split(command.index, command.count, Number.isInteger(command.to) ? command.to : undefined));
+            case "discard":
+                return this.#discard(player, command.index);
+            case "undiscard":
+                return this.#undiscard(player);
+            case "drop":
+                return this.#drop(player, actor, command.index, command.count);
+            case "pickUp":
+                return this.#pickUp(player, actor, command.ground);
             case "ability":
                 return this.#ability(player, actor, command.ability, command.target ?? null);
             case "abandon":
@@ -555,6 +594,13 @@ export class Host {
         // What the players did: their skills grow by it, and they find what's on the fallen
         for (const event of events) {
             this.#learn(event);
+        }
+
+        // Things left lying on the ground: gone after a while
+        for (const [id, dropped] of this.ground) {
+            if (dropped.until <= this.battle.time) {
+                this.ground.delete(id);
+            }
         }
 
         // Boons worn off
@@ -703,9 +749,11 @@ export class Host {
             followers: [...this.followers.entries()],
             nextFollower: this.nextFollower,
             hired: [...this.hired],
+            ground: structuredClone([...this.ground.values()]),
+            nextGround: this.nextGround,
             soldiers: [...this.soldiers.entries()],
             fallen: structuredClone(this.fallen),
-            players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: structuredClone(player.boons), readyAt: { ...player.readyAt }, ...this.characterOf(player), followers: undefined })),
+            players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: structuredClone(player.boons), readyAt: { ...player.readyAt }, discarded: structuredClone(player.discarded ?? null), ...this.characterOf(player), followers: undefined })),
             done: structuredClone(this.done),
         };
     }
@@ -760,6 +808,8 @@ export class Host {
         host.followers = new Map(structuredClone(snapshot.followers ?? []));
         host.nextFollower = snapshot.nextFollower ?? 1;
         host.hired = new Set(snapshot.hired ?? []);
+        host.ground = new Map((snapshot.ground ?? []).map((dropped) => [dropped.id, structuredClone(dropped)]));
+        host.nextGround = snapshot.nextGround ?? 1;
         host.soldiers = new Map(structuredClone(snapshot.soldiers ?? []));
         host.fallen = structuredClone(snapshot.fallen ?? []);
         host.done = structuredClone(snapshot.done);
@@ -779,8 +829,8 @@ export class Host {
             }
         }
 
-        for (const { id, realm, hero, talks, explored, progress, standing, boons, readyAt } of snapshot.players) {
-            host.players.set(id, { id, realm, hero, talks: { memory: talks.memory, knowledge: new Set(talks.knowledge) }, explored: new Explored(explored), progress: new Progress(progress, hero), standing: new Standing(standing), boons: structuredClone(boons ?? []), readyAt: { ...readyAt }, offers: {} });
+        for (const { id, realm, hero, talks, explored, progress, standing, boons, readyAt, discarded } of snapshot.players) {
+            host.players.set(id, { id, realm, hero, talks: { memory: talks.memory, knowledge: new Set(talks.knowledge) }, explored: new Explored(explored), progress: new Progress(progress, hero), standing: new Standing(standing), boons: structuredClone(boons ?? []), readyAt: { ...readyAt }, discarded: structuredClone(discarded ?? null), offers: {} });
         }
 
         host.random.state = snapshot.random ?? host.random.state;
@@ -789,7 +839,7 @@ export class Host {
     /**
      * A number that tells two copies of a world apart (docs/WAR.md M11: whether one that's
      * joined has gone astray from its host's): the battle's time, and everyone in it, where they
-     * are and how they are; the war's turn and clock.
+     * are and how they are; the war's turn and clock; what's on the ground, and in each pack.
      */
     checksum() {
         let sum = 2166136261;
@@ -815,6 +865,13 @@ export class Host {
         mix(this.war?.turn ?? 0);
         mix(Math.round(this.war?.clock ?? 0));
         mix(this.players.size);
+        mix(this.ground.size);
+
+        for (const player of this.players.values()) {
+            for (const stack of player.progress.pack) {
+                mix(stack?.count ?? 0);
+            }
+        }
 
         return sum;
     }
@@ -996,24 +1053,120 @@ export class Host {
         return OK;
     }
 
-    #sell(player, actor, { index, to }) {
+    #sell(player, actor, { index, to, count = 1 }) {
         const trading = this.#shopkeeper(actor, to);
-        const item = player.progress.pack[index];
+        const stack = player.progress.pack[index];
 
         if (!trading) {
             return refuse("far");
         }
 
+        if (!stack) {
+            return refuse("item");
+        }
+
+        const price = priceOf(stack, { haggle: player.progress.bonuses().haggle, selling: true }) * count;
+        const item = player.progress.take(index, count);
+
+        if (!item) {
+            return refuse("count");
+        }
+
+        player.progress.gold += price;
+        this.#gain(player, "trade", price * XP.trade);
+        this.#event("sold", { id: player.id, item: { id: item.id, quality: item.quality }, count, price, to: trading.keeper.id });
+
+        return OK;
+    }
+
+    // Things in the pack moved or split (the reason they couldn't be: progress.js move, split)
+    #packed(why) {
+        return why ? refuse(why) : OK;
+    }
+
+    // A stack thrown away: gone, but kept a moment to take back
+    #discard(player, index) {
+        const item = player.progress.take(index);
+
         if (!item) {
             return refuse("item");
         }
 
-        const price = priceOf(item, { haggle: player.progress.bonuses().haggle, selling: true });
+        player.discarded = { item, index, until: this.battle.time + UNDO_MS };
+        this.#event("discarded", { id: player.id, item });
 
-        player.progress.pack.splice(index, 1);
-        player.progress.gold += price;
-        this.#gain(player, "trade", price * XP.trade);
-        this.#event("sold", { id: player.id, item, price, to: trading.keeper.id });
+        return { ok: true, item };
+    }
+
+    // What was just thrown away, taken back: where it was, if that's free (or has things alike),
+    // or wherever there's room
+    #undiscard(player) {
+        const kept = player.discarded;
+        const pack = player.progress.pack;
+
+        if (!kept || kept.until < this.battle.time) {
+            return refuse("undo");
+        }
+
+        if (!pack[kept.index] || alike(pack[kept.index], kept.item)) {
+            pack[kept.index] = { ...kept.item, count: kept.item.count + (pack[kept.index]?.count ?? 0) };
+        } else if (!player.progress.stow(kept.item, kept.item.count)) {
+            return refuse("full");
+        }
+
+        player.discarded = null;
+
+        return OK;
+    }
+
+    // Things dropped on the ground where the player stands, for anyone to pick up a while
+    #drop(player, actor, index, count) {
+        const stack = player.progress.pack[index];
+
+        if (actor.dead) {
+            return refuse("dead");
+        }
+
+        if (!stack) {
+            return refuse("item");
+        }
+
+        const item = player.progress.take(index, count ?? stack.count);
+
+        if (!item) {
+            return refuse("count");
+        }
+
+        const id = `ground-${this.nextGround++}`;
+
+        this.ground.set(id, { id, item, map: actor.map, square: [...actor.square], until: this.battle.time + GROUND_MS, by: player.id });
+        this.#event("dropped", { id: player.id, ground: id, item });
+
+        return { ok: true, ground: id };
+    }
+
+    // Something on the ground picked up, from near it, into the pack (if there's room)
+    #pickUp(player, actor, id) {
+        const dropped = this.ground.get(id);
+
+        if (!dropped) {
+            return refuse("gone");
+        }
+
+        if (actor.dead) {
+            return refuse("dead");
+        }
+
+        if (dropped.map !== actor.map || Math.hypot(actor.x - dropped.square[0] - 0.5, actor.y - dropped.square[1] - 0.5) > PICK_REACH) {
+            return refuse("far");
+        }
+
+        if (!player.progress.stow(dropped.item, dropped.item.count)) {
+            return refuse("full");
+        }
+
+        this.ground.delete(id);
+        this.#event("picked", { id: player.id, ground: id, item: dropped.item });
 
         return OK;
     }
@@ -1030,10 +1183,10 @@ export class Host {
         return OK;
     }
 
-    // Something from the pack used (drunk, eaten)
+    // Something from the pack used (drunk, eaten): one off its stack
     #use(player, actor, index) {
-        const item = player.progress.pack[index];
-        const use = item && ITEMS[item.id].use;
+        const stack = player.progress.pack[index];
+        const use = stack && ITEMS[stack.id].use;
 
         if (!use) {
             return refuse("item");
@@ -1043,7 +1196,8 @@ export class Host {
             return refuse("dead");
         }
 
-        player.progress.pack.splice(index, 1);
+        const item = player.progress.take(index, 1);
+
         this.battle.mend(actor.id, { hp: use.heal ?? 0, stamina: use.stamina ?? 0 });
         this.#event("used", { id: player.id, item });
 

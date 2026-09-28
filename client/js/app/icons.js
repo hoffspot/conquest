@@ -184,6 +184,46 @@ export const ICONS = Object.freeze({
         <path d="${star(2, -16, 6.2, 2.6)}" fill="url(#icon-stun-star)" stroke="#a86b00" stroke-width="0.9" filter="url(#icon-glow)"/>
         <path d="${star(17, -6, 4.6, 2)}" fill="url(#icon-stun-star)" stroke="#a86b00" stroke-width="0.9" filter="url(#icon-glow)"/>`,
 
+    // Two stacks, one taken off the other: a stack split
+    split: `
+        <rect x="-20" y="-6" width="13" height="18" rx="2" fill="url(#icon-wood)" stroke="#3f2410" stroke-width="1.2"/>
+        <rect x="-20" y="-12" width="13" height="6" rx="1.5" fill="#c79159" stroke="#3f2410" stroke-width="1.2"/>
+        <rect x="7" y="2" width="13" height="10" rx="2" fill="url(#icon-wood)" stroke="#3f2410" stroke-width="1.2"/>
+        <path d="M-3,-12 L-3,16" stroke="#f2e6cf" stroke-width="1.4" stroke-dasharray="3 2.5"/>
+        <path d="M-1,-4 L6,-4 M3,-7 L6,-4 L3,-1" fill="none" stroke="#f2e6cf" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`,
+
+    // A stack of gold coins, and one on its edge: sold
+    sell: `
+        <ellipse cx="-4" cy="12" rx="13" ry="4.5" fill="#c99a2e" stroke="#6b4a0c" stroke-width="1.1"/>
+        <ellipse cx="-4" cy="7" rx="13" ry="4.5" fill="#e0b440" stroke="#6b4a0c" stroke-width="1.1"/>
+        <ellipse cx="-4" cy="2" rx="13" ry="4.5" fill="#f2cf5c" stroke="#6b4a0c" stroke-width="1.1"/>
+        <circle cx="11" cy="-9" r="9" fill="#f2cf5c" stroke="#6b4a0c" stroke-width="1.3"/>
+        <circle cx="11" cy="-9" r="5.5" fill="none" stroke="#b8862e" stroke-width="1.1"/>`,
+
+    // Something let fall to the ground
+    drop: `
+        <path d="M0,-19 L0,1" stroke="#f2e6cf" stroke-width="3.4" stroke-linecap="round"/>
+        <path d="M-8,-3 L0,7 L8,-3 Z" fill="#f2e6cf"/>
+        <path d="M-18,14 L18,14" stroke="#b09062" stroke-width="3.2" stroke-linecap="round"/>
+        <path d="M-12,19 L-6,19 M2,19 L10,19" stroke="#8a7050" stroke-width="2" stroke-linecap="round"/>`,
+
+    // Crossed out, in red: thrown away
+    discard: `
+        <circle r="16" fill="#6e1812" stroke="#e05a4a" stroke-width="2.2"/>
+        <path d="M-7,-7 L7,7 M7,-7 L-7,7" stroke="#ffe4de" stroke-width="3.4" stroke-linecap="round"/>`,
+
+    // A little action wheel, a slice lit: put on one
+    onWheel: `
+        <circle r="18" fill="#2a2016" stroke="#ecc882" stroke-width="1.6"/>
+        <path d="M0,0 L-6.9,-16.6 A18,18 0 0 1 6.9,-16.6 Z" fill="#ecc882" opacity="0.7"/>
+        <path d="M0,-18 L0,18 M-18,0 L18,0 M-12.7,-12.7 L12.7,12.7 M12.7,-12.7 L-12.7,12.7" stroke="#ecc882" stroke-width="0.9" opacity="0.6"/>
+        <circle r="5.5" fill="#2a2016" stroke="#ecc882" stroke-width="1.4"/>`,
+
+    // An arrow curving up and away: taken off
+    takeOff: `
+        <path d="M-12,14 C-12,-2 -4,-10 8,-10" fill="none" stroke="#f2e6cf" stroke-width="3.4" stroke-linecap="round"/>
+        <path d="M5,-17 L15,-10 L5,-3 Z" fill="#f2e6cf"/>`,
+
     // Two arrows chasing each other round: the wheel turned to its other side
     flip: `
         <circle r="19" fill="#f2e6cf" opacity="0.12"/>
@@ -322,3 +362,10 @@ export const ITEM_ICONS = Object.freeze({
         <path d="M-16,-8 C-18,-14 -12,-18 -8,-15 C-6,-21 3,-21 5,-15 C9,-17 13,-13 10,-8 Z" fill="#fff8e6" stroke="#b8a680" stroke-width="1"/>
         <path d="M-13,-8 C-14,-4 -12,-2 -11,-1" fill="none" stroke="#fff8e6" stroke-width="2" stroke-linecap="round"/>`,
 });
+
+/**
+ * A thing's icon as an SVG document of its own (its gradients in it), on a dark round ground: to
+ * paint into a picture (the icon floating over something dropped in the world: app/game.js).
+ */
+export const itemPicture = (id, size = 128) =>
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-24 -24 48 48" width="${size}" height="${size}"><defs>${DEFS}</defs><circle r="23" fill="#1a1510" fill-opacity="0.72" stroke="#ecc882" stroke-width="1.2"/><g transform="scale(0.86)">${ITEM_ICONS[id] ?? ""}</g></svg>`;

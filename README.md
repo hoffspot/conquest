@@ -237,6 +237,14 @@ runs, their slices are greyed over, and the grey sweeps back as it passes. A fli
 slice, or at an empty one, is refused, and a spell that can't be cast (out of reach, out of
 sight, already at full health) says why.
 
+**The pack** (its button, or I) holds 20 slots, each a stack of things alike with its icon and
+how many. Tap a stack to see what it is; hold it (or right-click) and a wheel of what to do with
+it opens: drink or eat it, wield or wear it, put it on an action wheel, split the stack (choosing
+how many), sell it when trading, throw it away (with a moment to undo), or drop it. Drag a stack
+onto one alike to put them together, or elsewhere to move it. What's dropped lies on the ground
+for a while, a bundle with its icon over it, for you or anyone playing with you to tap and pick
+up.
+
 **Sound**, in three kinds, each with its own volume:
 
 - **Effects**: swords, staffs, hammers and fists swish; bows twang and spells crackle and chime;
@@ -397,7 +405,8 @@ client/                 The game (static files served to the browser)
     worldmap.js         The world map: the whole world, under a fog where the player hasn't been
     debug.js            Debug mode's overlay
     talk.js             The talk: who's talking, what they say, and the replies to choose from
-    pack.js             The pack: gold, what's carried and worn, the skills; a shop's wares
+    pack.js             The pack: gold, a grid of stacks (dragged, held for their wheel,
+                        split, dropped, thrown away), what's worn, the skills; a shop's wares
     journal.js          The journal: the player's rank, their requests, their people, their
                         company
     fate.js             The war's great turns for the player's people: victory, brought under
@@ -472,6 +481,7 @@ client/                 The game (static files served to the browser)
                         the taverns' and temples' signs)
     banners3d.js        The peoples' banners by their towns' roads out, in their colours
     camps3d.js          The war's camps near the player: tents round a fire
+    drops3d.js          Things dropped on the ground: a bundle, its icon floating over it
     avatar.js           A character in the world, following its place in the battle
     effects.js          Arrows, bolts, fireballs, sparks, dust, fire, arcane light, blood and
                         its splashes and pools, smoke and embers, the target ring, spells' light

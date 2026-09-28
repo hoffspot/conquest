@@ -1939,8 +1939,9 @@ test("the pack shows what's grown and carried; a skill ranks up with use; tradin
     await page.keyboard.press("i");
     await expect(pack).toBeVisible();
     await expect(pack.locator(".pack-gold")).toHaveText("30 gold");
-    await expect(pack.locator(".carried .pack-row")).toHaveText(["Healing draughtUse"]);
-    await expect(pack.locator(".gear .pack-row").first()).toHaveText("WeaponStaff");
+    await expect(pack.locator(".carried .pack-cell[data-item]")).toHaveAttribute("aria-label", "Healing draught");
+    await expect(pack.locator(".carried .pack-cell")).toHaveCount(20);
+    await expect(pack.locator(".gear .pack-worn").first()).toHaveText(/^Weapon\s*Staff$/);
     await expect(pack.locator('.pack-skill[data-tree="blade"] .pack-skill-rank')).toHaveText("Untried (0)");
     await page.keyboard.press("Escape");
     await expect(pack).toBeHidden();
@@ -2002,10 +2003,11 @@ test("the pack shows what's grown and carried; a skill ranks up with use; tradin
     await pack.getByRole("button", { name: "Buy Tankard of ale for 2 gold" }).click();
     await expect(pack.locator(".pack-gold")).toHaveText("28 gold");
     await expect(page.locator("#playerplate .coins")).toHaveText("28 gold");
-    await expect(pack.locator(".carried .pack-label")).toHaveText(["Healing draught", "Tankard of ale"]);
+    expect(await pack.locator(".carried .pack-cell[data-item]").evaluateAll((cells) => cells.map((cell) => cell.getAttribute("aria-label")))).toEqual(["Healing draught", "Tankard of ale"]);
 
     // Sold back (for a gold piece), then bought again; the pack closed with its button
-    await pack.getByRole("button", { name: /Sell Tankard of ale/ }).click();
+    await pack.locator('.carried .pack-cell[data-item="ale"]').click();
+    await pack.getByRole("button", { name: /^Sell .*: Tankard of ale$/ }).click();
     await expect(pack.locator(".pack-gold")).toHaveText("29 gold");
     await pack.getByRole("button", { name: "Buy Tankard of ale for 2 gold" }).click();
     await expect(pack.locator(".pack-gold")).toHaveText("27 gold");
@@ -2015,8 +2017,120 @@ test("the pack shows what's grown and carried; a skill ranks up with use; tradin
     // Kept for the next time (as it was read at the start): the blade trained, the gold, the ale
     const kept = await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.progress")));
 
-    expect(kept).toMatchObject({ created: SAVE.created, seed: 1, gold: 27, pack: [{ id: "potion" }, { id: "ale" }] });
+    expect(kept).toMatchObject({ created: SAVE.created, seed: 1, gold: 27 });
+    expect(kept.pack.slice(0, 3)).toEqual([{ id: "potion", quality: "common", count: 1 }, { id: "ale", quality: "common", count: 1 }, null]);
     expect(kept.skills.blade).toBeGreaterThanOrEqual(100);
+});
+
+test("the pack stacks things alike: dragged together, split by how many, held for a thing's wheel; thrown away and taken back; dropped on the ground, and picked up", async ({ page }) => {
+    // (A long walk through: more than the usual time, with others running beside it)
+    test.setTimeout(180000);
+    await playing(page, "/?play&seed=1");
+
+    const pack = page.locator(".pack");
+    const cell = (index) => pack.locator(`.carried .pack-cell[data-index="${index}"]`);
+    const middle = async (locator) => {
+        const box = await locator.boundingBox();
+
+        return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    };
+
+    // Two draughts in the first slot, an ale in the second, three more draughts in the sixth
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const { pack } = game.host.players.get(game.me).progress;
+
+        pack[0] = { id: "potion", quality: "common", count: 2 };
+        pack[1] = { id: "ale", quality: "common", count: 1 };
+        pack[5] = { id: "potion", quality: "common", count: 3 };
+    });
+    await page.keyboard.press("i");
+    await expect(cell(0).locator(".pack-count")).toHaveText("2");
+
+    // (The world stops being drawn while the pack's used: drawn without a GPU, a frame can take
+    // longer than a hold, and a drag would be taken for one)
+    await page.evaluate(() => window.pellagos.game.stop());
+    await expect(cell(5).locator(".pack-count")).toHaveText("3");
+    await expect(cell(1).locator(".pack-count")).toHaveCount(0);
+
+    // The three dragged onto the two: five, together
+    const from = await middle(cell(5));
+    const onto = await middle(cell(0));
+
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(from.x + 20, from.y, { steps: 3 });
+    await page.mouse.move(onto.x, onto.y, { steps: 8 });
+    await page.mouse.up();
+    await expect(cell(0).locator(".pack-count")).toHaveText("5");
+    await expect(cell(5)).toHaveClass(/empty/);
+
+    // Held on the five: their wheel (drink, put on a wheel, split, throw away, drop); flicked E,
+    // how many to split off (two, to start with), and split off into the first empty slot
+    const five = await middle(cell(0));
+    const wheel = page.locator(".item-wheel");
+
+    await page.mouse.move(five.x, five.y);
+    await page.mouse.down();
+    await expect(wheel).toBeVisible();
+
+    const slice = (direction) => wheel.locator(`.slice[data-direction="${direction}"] .label`);
+
+    await expect(slice("n")).toHaveText("Drink");
+    await expect(slice("ne")).toHaveText("Put on a wheel");
+    await expect(slice("e")).toHaveText("Split");
+    await expect(slice("s")).toHaveText("Throw away");
+    await expect(slice("w")).toHaveText("Drop");
+    await page.mouse.move(five.x + 20, five.y, { steps: 2 });
+    await page.mouse.move(five.x + 50, five.y, { steps: 2 });
+    await page.mouse.up();
+
+    const ask = pack.locator(".pack-ask");
+
+    await expect(ask).toBeVisible();
+    await expect(ask.locator(".pack-ask-title")).toHaveText("Split Healing draught");
+    await expect(ask.locator(".pack-ask-count")).toHaveText("2");
+    await ask.getByRole("button", { name: "Split off" }).click();
+    await expect(cell(0).locator(".pack-count")).toHaveText("3");
+    await expect(cell(2).locator(".pack-count")).toHaveText("2");
+
+    // Put on the player's own wheel, from its buttons
+    await cell(0).click();
+    await pack.getByRole("button", { name: "Put on a wheel: Healing draught" }).click();
+    await expect(page.locator("#banner")).toHaveText("Draught put on your own wheel one, at NE.");
+    expect(await page.evaluate(() => window.pellagos.game.wheels.self[0])).toEqual({ n: "heal", ne: "item:potion" });
+
+    // The two thrown away, and taken back
+    await cell(2).click();
+    await pack.getByRole("button", { name: "Throw away: Healing draught" }).click();
+    await expect(cell(2)).toHaveClass(/empty/);
+    await expect(page.locator("#banner")).toContainText("Thrown away: 2 healing draughts.");
+    await page.locator("#banner .banner-action").click();
+    await expect(cell(2).locator(".pack-count")).toHaveText("2");
+
+    // Right-clicked, the ale's wheel stays open to click: dropped where the player stands
+    await cell(1).click({ button: "right" });
+    await expect(wheel).toBeVisible();
+    await wheel.locator('.slice[data-action="drop"]').click();
+    await expect(cell(1)).toHaveClass(/empty/);
+    expect(await page.evaluate(() => [...window.pellagos.game.host.ground.values()].map(({ item }) => item))).toEqual([{ id: "ale", quality: "common", count: 1 }]);
+    await page.evaluate(() => window.pellagos.game.start());
+    await page.keyboard.press("Escape");
+    await expect(pack).toBeHidden();
+
+    // A bundle where it lies, its icon over it; tapped, picked up
+    await expect.poll(() => page.evaluate(() => window.pellagos.game.drops.drawn.size)).toBe(1);
+
+    const bundle = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const [drawn] = game.drops.drawn.values();
+
+        return session.view.toScreen(drawn.object.position.clone());
+    });
+
+    await page.mouse.click(bundle.x, bundle.y);
+    await expect(page.locator("#banner")).toHaveText("You pick up a tankard of ale.");
+    expect(await page.evaluate(() => ({ ground: window.pellagos.game.host.ground.size, ale: window.pellagos.game.progress.count("ale") }))).toEqual({ ground: 0, ale: 1 });
 });
 
 test("the town hall: the reeve gives work, and pays for what's done; the journal shows where the player stands, what they carry and where it takes them; given up, it's set down", async ({ page }) => {
@@ -2264,9 +2378,12 @@ test("the minimap walks the player where it's tapped, and Game options turn it a
 });
 
 test("holding on an enemy or the player opens the action wheel: flick up (N) to stun it, or to heal", async ({ page }) => {
+    // (Held three times, with the world played on between: more than the usual time, with others
+    // running beside it)
+    test.setTimeout(180000);
     await playing(page, "/?play&seed=1");
 
-    const wheel = page.locator(".wheel");
+    const wheel = page.locator(".action-wheel");
     const up = wheel.locator('.slice[data-direction="n"]');
 
     // The orc standing a few squares from the player, who's hurt
@@ -2360,7 +2477,7 @@ test("holding on an enemy or the player opens the action wheel: flick up (N) to 
 test("the action wheels: flicked down, the other side; what's on each chosen in Game options, from what's learnt and carried; a draught drunk from wheel two", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
-    const wheel = page.locator(".wheel");
+    const wheel = page.locator(".action-wheel");
     const menu = page.locator("#menu");
     const setup = page.locator("#wheelsetup");
 

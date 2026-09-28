@@ -29,8 +29,8 @@ import { soldierLook } from "../characters/soldiers.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
 import { STEP_MS, TALK_REACH } from "../core/battle.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
-import { HIRES, HOST_PLAYER, Host, REFUSALS, SHOP_REACH, SHOPKEEPERS } from "../core/host.js";
-import { ABILITIES, itemLabel, ITEMS, priceOf, TREES, wares } from "../core/progress.js";
+import { HIRES, HOST_PLAYER, Host, PICK_REACH, REFUSALS, SHOP_REACH, SHOPKEEPERS, UNDO_MS } from "../core/host.js";
+import { ABILITIES, itemLabel, ITEMS, priceOf, QUALITIES, TREES, wares } from "../core/progress.js";
 import { PACE } from "../core/netplay.js";
 import { COUNSEL, MOST_REQUESTS, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
 import { describeLeader } from "../core/war/peoples.js";
@@ -47,6 +47,7 @@ import { distanceBetween, longestReach, WEAPONS } from "../core/weapons.js";
 import { Avatar } from "../world/avatar.js";
 import { Banners } from "../world/banners3d.js";
 import { Camps } from "../world/camps3d.js";
+import { Drops } from "../world/drops3d.js";
 import { Effects, LOOKS } from "../world/effects.js";
 import { Squares } from "../world/squares.js";
 import { KINDS, Wounds } from "../world/wounds.js";
@@ -60,10 +61,11 @@ import { Minimap, treesOf } from "./minimap.js";
 import { CameraFollow } from "./camera.js";
 import { Doors } from "./doors.js";
 import { FatePanel, fateWords } from "./fate.js";
+import { itemPicture } from "./icons.js";
 import { JournalPanel, bearing, regardOf } from "./journal.js";
 import { PackPanel } from "./pack.js";
 import { TalkPanel } from "./talk.js";
-import { ActionWheel, actionOf, assignable, directionOf, readWheels, SIDES, WHEELS } from "./wheel.js";
+import { ActionWheel, actionOf, assignable, directionOf, PLACES, readWheels, SIDES, WHEELS } from "./wheel.js";
 
 /** What every new character wears; their weapon (and a bow's quiver) are added to it. */
 export const STARTING_OUTFIT = Object.freeze(["tunic", "bracers", "breeches", "boots"]);
@@ -166,8 +168,31 @@ const FLUSH_EVERY = 0.1;
 // whoever's near them, aren't (docs/WAR.md M11)
 const DRAW_REACH = 160;
 
+// Some of a thing, in words: "a healing draught", "3 healing draughts"
+function thingsOf({ id, quality, count = 1 }) {
+    const name = itemLabel({ id, quality }).toLowerCase();
+
+    return count > 1 ? `${count} ${name.endsWith("s") ? name : `${name}s`}` : `${/^[aeiou]/.test(name) ? "an" : "a"} ${name}`;
+}
+
+// What a thing in the pack is, in words: what it does, and how well made it is
+function aboutOf({ id, quality }) {
+    const { use, slot, armor = 0 } = ITEMS[id];
+    const power = QUALITIES[quality]?.power ?? 1;
+
+    if (use) {
+        return use.heal ? `Heals ${use.heal} hit points.` : "Fills your stamina.";
+    }
+
+    if (slot === "weapon") {
+        return power > 1 ? `A weapon: its blows ${Math.round((power - 1) * 100)}% harder.` : "A weapon.";
+    }
+
+    return `Armour: takes ${Math.round(armor * power * 100)}% off each blow.`;
+}
+
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "rank", "loot", "bought", "sold", "used", "gear", "ability", "request", "standing", "gift", "counsel"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "rank", "loot", "bought", "sold", "used", "gear", "discarded", "dropped", "picked", "ability", "request", "standing", "gift", "counsel"]);
 
 const _focus = new THREE.Vector3();
 const _lean = new THREE.Vector3();
@@ -460,6 +485,7 @@ export class Game {
         this.doors = new Doors(world, view.scene);
         this.banners = new Banners(view.scene);
         this.camps = new Camps(view.scene);
+        this.drops = new Drops(view.scene, { picture: (id) => this.#itemPicture(id) });
         step(`Dressing ${this.hero.name}`);
 
         // Everyone in the world as the host has them: the player (and anyone else playing), the
@@ -494,13 +520,11 @@ export class Game {
         this.minimap = await time("minimap", () => new Minimap(this.hud.map, world, { onTap: (tap) => this.mapTap(tap), onHold: () => this.onWorldMap() }));
         this.minimap.show(this.minimapShown ?? true);
         this.wheel = new ActionWheel(this.hud.root);
+        this.wheel.element.classList.add("action-wheel");
         this.talk = new TalkPanel(this.hud.root);
         this.pack = new PackPanel(this.hud.root);
-        this.pack.onEquip = (index) => this.#packCommand({ type: "equip", index });
-        this.pack.onUnequip = (slot) => this.#packCommand({ type: "unequip", slot });
-        this.pack.onUse = (index) => this.#packCommand({ type: "use", index });
-        this.pack.onBuy = (item) => this.#packCommand({ type: "buy", item, from: this.shopping?.keeper });
-        this.pack.onSell = (index) => this.#packCommand({ type: "sell", index, to: this.shopping?.keeper });
+        this.pack.onCommand = (command) => this.#packCommand(command);
+        this.pack.onWheel = (id) => this.#putOnWheel(id);
         this.pack.onClose = () => this.closePack();
         this.journal = new JournalPanel(this.hud.root);
         this.journal.onAbandon = (id) => {
@@ -776,7 +800,8 @@ export class Game {
         this.minimap?.dispose();
         this.wheel?.element.remove();
         this.talk?.panel.remove();
-        this.pack?.panel.remove();
+        this.pack?.dispose();
+        this.drops?.dispose();
         this.journal?.panel.remove();
         this.fate?.panel.remove();
         this.curtain?.remove();
@@ -1014,6 +1039,7 @@ export class Game {
         this.#keepShopping();
         this.#restPlayer();
         this.effects.update(dt, view.pixelsPerMetre());
+        this.#drawDrops();
         this.#drawMinimap(target);
 
         if (this.squares?.object.visible) {
@@ -1863,6 +1889,8 @@ export class Game {
             const things = [event.gold ? `${event.gold} gold` : null, ...event.items.map((item) => itemLabel(item).toLowerCase())].filter(Boolean);
 
             this.hud.message(`You find ${things.join(", ")}.`, 2.5);
+        } else if (event.type === "picked") {
+            this.hud.message(`You pick up ${thingsOf(event.item)}.`, 2);
         }
 
         if (actor) {
@@ -2113,7 +2141,7 @@ export class Game {
             return { tree, name, rank, title: ["Untried", "Trained", "Adept", "Veteran", "Master", "Legend"][rank], xp, from, to, grows, ability: learnt.length ? `Learnt: ${learnt.join(", ")}` : null };
         });
         const gear = ["weapon", "body", "shield"].map((slot) => ({ slot, item: progress.gear[slot], label: progress.gear[slot] ? itemLabel(progress.gear[slot]) : null }));
-        const pack = progress.pack.map((item) => ({ label: itemLabel(item), use: Boolean(ITEMS[item.id].use), equip: ITEMS[item.id].slot ?? null, price: priceOf(item, { haggle, selling: true }) }));
+        const pack = progress.pack.map((stack) => stack && { ...stack, label: itemLabel(stack), about: aboutOf(stack), use: ITEMS[stack.id].use ? (stack.id === "meal" ? "Eat" : "Drink") : null, equip: ITEMS[stack.id].slot ? (ITEMS[stack.id].slot === "weapon" ? "Wield" : "Wear") : null, price: priceOf(stack, { haggle, selling: true }) });
         const shop = this.shopping && {
             name: this.shopping.name,
             wares: wares(this.shopping.shop).map((item) => {
@@ -2126,21 +2154,132 @@ export class Game {
         this.pack.show({ gold: progress.gold, skills, gear, pack, shop });
     }
 
-    // Something asked of the pack: done by the host, or why not said
-    #packCommand(command) {
+    // Something asked of the pack: done by the host, or why not said (with whoever's being traded
+    // with, buying or selling). Something thrown away can be taken back a moment after.
+    #packCommand(asked) {
+        const command = asked.type === "buy" ? { ...asked, from: this.shopping?.keeper } : asked.type === "sell" ? { ...asked, to: this.shopping?.keeper } : asked;
+
         return this.#command(command, (result) => {
             if (!result.ok) {
                 this.hud.message(REFUSALS[result.reason] ?? CAST_FAILURES[result.reason] ?? "Can't do that.", 1.6);
                 this.sound?.play("denied");
             } else {
-                // (The gold shown at once: the events it made are heard with the next step)
+                // (The gold shown at once, and what's carried kept: the events it made are heard
+                // with the next step, and moving things about makes none)
                 this.hud.setGold(this.progress.gold);
+                this.onProgress(this.progress);
+
+                if (command.type === "discard" && result.item) {
+                    this.hud.offer(`Thrown away: ${thingsOf(result.item)}.`, "Undo", () => this.#packCommand({ type: "undiscard" }), UNDO_MS / 1000);
+                }
             }
 
             if (this.pack.open) {
                 this.#showPack();
             }
         });
+    }
+
+    // A thing to use put on the player's own action wheel, in its first empty slice (unless it's
+    // on one already), and kept
+    #putOnWheel(id) {
+        const key = `item:${id}`;
+        const label = actionOf(key)?.label ?? itemLabel({ id });
+        const where = (side, place) => `your own wheel ${side ? "two" : "one"}, at ${place.toUpperCase()}`;
+        const self = this.wheels.self;
+
+        for (let side = 0; side < SIDES; side++) {
+            const place = PLACES.find((each) => self[side][each] === key);
+
+            if (place) {
+                this.hud.message(`${label} is on ${where(side, place)} already.`, 3);
+
+                return;
+            }
+        }
+
+        for (let side = 0; side < SIDES; side++) {
+            const place = PLACES.find((each) => !self[side][each]);
+
+            if (place) {
+                self[side][place] = key;
+                this.setWheels(this.wheels);
+                this.hud.message(`${label} put on ${where(side, place)}.`, 3);
+
+                return;
+            }
+        }
+
+        this.hud.message("Your own wheels are full: change them in Game options, Action wheels.", 3.5);
+    }
+
+    // Go and pick up something dropped on the ground: at once if the player's near it, or once
+    // they've walked there
+    #pickUp(id, { run = false } = {}) {
+        const dropped = this.host.ground.get(id);
+        const me = this.battle.actor(this.me);
+
+        if (!dropped || !me || me.dead) {
+            return;
+        }
+
+        if (dropped.map === me.map && Math.hypot(me.x - dropped.square[0] - 0.5, me.y - dropped.square[1] - 0.5) <= PICK_REACH) {
+            this.#packCommand({ type: "pickUp", ground: id });
+
+            return;
+        }
+
+        const [ox, oz] = this.originOf(dropped.map);
+
+        this.picking = id;
+        this.#command({ type: "move", to: [...dropped.square], run });
+        this.effects.markTarget(ox + dropped.square[0] + 0.5, oz + dropped.square[1] + 0.5);
+    }
+
+    // What's dropped near the player drawn; and something they've walked up to, picked up
+    #drawDrops() {
+        const me = this.battle.actor(this.me);
+
+        if (!this.drops || !me) {
+            return;
+        }
+
+        const [ox, oz] = this.originOf(me.map);
+
+        this.drops.sync(this.host.ground, { map: me.map, near: { x: ox + me.x, z: oz + me.y }, reach: DRAW_REACH, originOf: (map) => this.originOf(map) });
+        this.drops.update(this.clock ?? 0);
+
+        const picking = this.picking && this.host.ground.get(this.picking);
+
+        if (this.picking && !picking) {
+            this.picking = null;
+        } else if (picking && picking.map === me.map && Math.hypot(me.x - picking.square[0] - 0.5, me.y - picking.square[1] - 0.5) <= PICK_REACH) {
+            this.picking = null;
+            this.#packCommand({ type: "pickUp", ground: picking.id });
+        }
+    }
+
+    // A thing's icon painted for the world (over something dropped): made once for each kind, and
+    // filled in once its picture's drawn
+    #itemPicture(id) {
+        this.itemPictures ??= new Map();
+
+        if (!this.itemPictures.has(id)) {
+            const canvas = document.createElement("canvas");
+            const texture = new THREE.CanvasTexture(canvas);
+            const image = new Image();
+
+            canvas.width = canvas.height = 128;
+            texture.colorSpace = THREE.SRGBColorSpace;
+            image.onload = () => {
+                canvas.getContext("2d").drawImage(image, 0, 0, 128, 128);
+                texture.needsUpdate = true;
+            };
+            image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(itemPicture(id))}`;
+            this.itemPictures.set(id, texture);
+        }
+
+        return this.itemPictures.get(id);
     }
 
     // A town's soldiers out: to be drawn, and its banners up, in its holders' colours
@@ -2663,6 +2802,9 @@ export class Game {
             case "bought":
             case "sold":
             case "used":
+            case "discarded":
+            case "dropped":
+            case "picked":
                 this.#progressed(event);
                 break;
             case "request":
@@ -3035,6 +3177,18 @@ export class Game {
         if (who && me && !this.battle.hostile(who, me)) {
             this.lastTap = { time, x: clientX, y: clientY, from: "view" };
             this.#talkTo(who, { run });
+
+            return;
+        }
+
+        // Something dropped on the ground: go and pick it up
+        const dropped = who ? null : this.drops?.at(clientX, clientY, (point) => this.view.toScreen(point));
+
+        this.picking = null;
+
+        if (dropped) {
+            this.lastTap = { time, x: clientX, y: clientY, from: "view" };
+            this.#pickUp(dropped, { run });
 
             return;
         }

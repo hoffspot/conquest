@@ -142,6 +142,38 @@ describe("playing together (netplay.js)", () => {
         assert.equal(joining.host.checksum(), host.checksum());
     });
 
+    it("drops a joined player's things on the ground in every copy, for another to pick up there", () => {
+        const { host, join, play, catchUp, deliver } = opened();
+        const { joining } = join({ ...guest("Bryn"), progress: { gold: 50, pack: [{ id: "potion", count: 4 }] } });
+        const heard = [];
+
+        // Two draughts dropped by the one who's joined, where they stand
+        joining.command({ type: "drop", index: 0, count: 2 }, (result) => heard.push(result));
+        deliver();
+        play(1);
+        catchUp(joining);
+        assert.equal(heard[0].ok, true);
+        assert.deepEqual([...host.ground.values()].map(({ item, by }) => ({ item, by })), [{ item: { id: "potion", quality: "common", count: 2 }, by: "guest-1" }]);
+        assert.deepEqual([...joining.host.ground.values()], [...host.ground.values()]);
+        assert.equal(joining.host.players.get("guest-1").progress.count("potion"), 2);
+
+        // The host's player there picks them up: gone from every copy, in the host's pack
+        const [dropped] = host.ground.values();
+
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "move", to: [...dropped.square] }), { ok: true });
+
+        for (let k = 0; k < 40 && host.command(HOST_PLAYER, { type: "pickUp", ground: dropped.id }).ok !== true; k++) {
+            play(10);
+        }
+
+        play(1);
+        catchUp(joining);
+        assert.equal(host.ground.size, 0);
+        assert.equal(joining.host.ground.size, 0);
+        assert.equal(host.players.get(HOST_PLAYER).progress.count("potion"), 2);
+        assert.equal(joining.host.checksum(), host.checksum());
+    });
+
     it("brings a player of another people in by their own people's town, of their people", () => {
         const { host, join } = opened();
         const { joining } = join(guest("Syl", "elf"));
