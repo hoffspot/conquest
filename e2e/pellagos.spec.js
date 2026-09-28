@@ -728,6 +728,11 @@ test("walks out of the town into the world, drawn round the player as they go, w
         game.minimap.drawn = -Infinity;
         game.advance(1);
 
+        // (The creatures put out lately drawn a few at a time: all of them, given a moment)
+        for (let k = 0; k < 20 && game.enlisting.length; k++) {
+            game.advance(0.25);
+        }
+
         const [cx, cy] = [Math.floor(player.x / 64), Math.floor(player.y / 64)];
         const [x0, z0, across] = game.minimap.shown();
         const round = [];

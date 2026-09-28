@@ -484,6 +484,9 @@ all. What's worn shows on the character.
     icon floating over it (world/drops3d.js), for 5 minutes (`GROUND_MS`), kept with the world
     and seen by everyone playing in it. Anyone tapping one walks up to it and picks it up
     (`pickUp`, from within 1.6 m: `PICK_REACH`), if there's room in their pack.
+  - **Trading with another player**, face to face (docs/WILDS.md), it shows what each offers:
+    tapped or held, a stack is offered (SE on its wheel); gold's offered, and it's agreed to or
+    called off, below.
 
 **Might** is how dangerous a player is: their best fighting rank (or their command of others),
 plus their gear's make, up to 8. The mightiest player's might sets how fast the war comes on
@@ -620,6 +623,9 @@ made first).
   own people's players start (`spawnFor`).
 - **What they bring:** their skills, gear, gold, standing and followers, kept with their own
   character as they play; the world isn't theirs to keep.
+- **What's shared:** the world and its creatures, fought together; what a creature leaves each
+  finds for themselves, seen by them alone. The one way anything passes between players is
+  trading face to face (docs/WILDS.md).
 - **Refused:** a game of another version, a character that isn't one, or a world with 8 in it
   already (`NET_REFUSALS`).
 

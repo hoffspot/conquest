@@ -202,6 +202,13 @@ export const ICONS = Object.freeze({
         <circle cx="11" cy="-9" r="9" fill="#f2cf5c" stroke="#6b4a0c" stroke-width="1.3"/>
         <circle cx="11" cy="-9" r="5.5" fill="none" stroke="#b8862e" stroke-width="1.1"/>`,
 
+    // Two arrows passing each other, the one going gold: offered in trade
+    offer: `
+        <path d="M-16,-6 L9,-6" stroke="#f2cf5c" stroke-width="3.4" stroke-linecap="round"/>
+        <path d="M6,-13 L17,-6 L6,1 Z" fill="#f2cf5c" stroke="#6b4a0c" stroke-width="0.8"/>
+        <path d="M16,8 L-9,8" stroke="#f2e6cf" stroke-width="3.4" stroke-linecap="round"/>
+        <path d="M-6,1 L-17,8 L-6,15 Z" fill="#f2e6cf"/>`,
+
     // Something let fall to the ground
     drop: `
         <path d="M0,-19 L0,1" stroke="#f2e6cf" stroke-width="3.4" stroke-linecap="round"/>

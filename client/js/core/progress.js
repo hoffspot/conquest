@@ -329,22 +329,23 @@ export class Progress {
         return true;
     }
 
-    /** How many of a kind of thing (an ITEMS id, however well made) are in the pack. */
-    held(id) {
-        return this.pack.reduce((sum, stack) => sum + (stack?.id === id ? stack.count : 0), 0);
+    /** How many of a kind of thing (an ITEMS id, however well made, or only of one make) are in the pack. */
+    held(id, quality = null) {
+        return this.pack.reduce((sum, stack) => sum + (stack?.id === id && (quality === null || stack.quality === quality) ? stack.count : 0), 0);
     }
 
     /**
-     * Take `count` of a kind of thing out of the pack, from whichever stacks hold it (the
-     * smallest first): true, or false (and nothing taken) if there aren't so many.
+     * Take `count` of a kind of thing (of any make, or only of one) out of the pack, from
+     * whichever stacks hold it (the smallest first): true, or false (and nothing taken) if there
+     * aren't so many.
      */
-    remove(id, count) {
-        if (!isCount(count) || this.held(id) < count) {
+    remove(id, count, quality = null) {
+        if (!isCount(count) || this.held(id, quality) < count) {
             return false;
         }
 
         let left = count;
-        const slots = this.pack.map((stack, slot) => (stack?.id === id ? slot : -1)).filter((slot) => slot >= 0).sort((a, b) => this.pack[a].count - this.pack[b].count);
+        const slots = this.pack.map((stack, slot) => (stack?.id === id && (quality === null || stack.quality === quality) ? slot : -1)).filter((slot) => slot >= 0).sort((a, b) => this.pack[a].count - this.pack[b].count);
 
         for (const slot of slots) {
             const taken = Math.min(left, this.pack[slot].count);

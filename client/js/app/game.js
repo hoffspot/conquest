@@ -31,7 +31,7 @@ import { BeastAvatar, dressCreature } from "../beasts/beast.js";
 import { STEP_MS, TALK_REACH } from "../core/battle.js";
 import { CREATURES } from "../core/creatures.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
-import { HIRES, HOST_PLAYER, Host, PICK_REACH, REFUSALS, SHOP_REACH, SHOPKEEPERS, UNDO_MS } from "../core/host.js";
+import { HIRES, HOST_PLAYER, Host, PICK_REACH, REFUSALS, SHOP_REACH, SHOPKEEPERS, TRADE, UNDO_MS } from "../core/host.js";
 import { ABILITIES, itemLabel, ITEMS, priceOf, QUALITIES, TREES, wares } from "../core/progress.js";
 import { PACE } from "../core/netplay.js";
 import { COUNSEL, MOST_REQUESTS, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
@@ -199,7 +199,7 @@ function aboutOf({ id, quality }) {
 }
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "rank", "loot", "bought", "sold", "used", "gear", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "gift", "counsel"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "rank", "loot", "bought", "sold", "used", "gear", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "gift", "counsel", "trade"]);
 
 const _focus = new THREE.Vector3();
 const _lean = new THREE.Vector3();
@@ -1881,13 +1881,20 @@ export class Game {
             }
         }
 
-        // The soldiers brought out, drawn a few at a time (those on the player's map first)
+        // The soldiers brought out and the wild's creatures put out, drawn a few at a time (those
+        // on the player's map first); a creature's bar over it
         while (this.enlisting.length && performance.now() < until) {
             const actor = this.battle.actor(this.enlisting.shift());
 
             if (actor && !this.avatars.has(actor.id)) {
                 this.#dress(actor);
                 this.#place(actor);
+
+                if (actor.kind === "beast") {
+                    const me = this.battle.actor(this.me);
+
+                    this.hud.track(actor.id, { ...actor, hostile: Boolean(me) && this.battle.hostile(actor, me) });
+                }
             }
         }
 
@@ -2156,6 +2163,122 @@ export class Game {
     closePack() {
         this.shopping = null;
         this.pack?.hide();
+
+        // (Trading with another player: closed, it's called off)
+        if (this.#tradeNow()) {
+            this.#command({ type: "cancel" });
+        }
+    }
+
+    // The trade the player's in with another player (host.js trades: both said yes), if any
+    #tradeNow() {
+        return [...(this.host.trades?.values() ?? [])].find((trade) => trade.open && (trade.from === this.me || trade.to === this.me)) ?? null;
+    }
+
+    // Ask another player to trade (or say yes to their asking), walking up to them first if
+    // they're further off than trading's done from
+    #tradeWith(other, { run = false } = {}) {
+        const player = this.battle.actor(this.me);
+
+        if (!player || player.dead || other.dead) {
+            return;
+        }
+
+        this.#endTalk();
+
+        if (player.map !== other.map || Math.hypot(player.x - other.x, player.y - other.y) > TRADE.reach - 0.5) {
+            this.approaching = other.id;
+            this.#command({ type: "approach", target: other.id, run });
+
+            return;
+        }
+
+        this.approaching = null;
+        this.#command({ type: "stop" });
+        this.#command({ type: "trade", with: other.id }, (result) => {
+            if (!result.ok) {
+                this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.6);
+                this.sound?.play("denied");
+            }
+        });
+    }
+
+    // How a trade with another player's going (host.js "trade" events): told, the pack showing it
+    #traded(event) {
+        if (event.id !== this.me) {
+            return;
+        }
+
+        const them = event.name ?? "They";
+
+        switch (event.change) {
+            case "asked":
+                if (event.from === this.me) {
+                    this.hud.message(`You ask ${them} to trade.`, 2);
+                } else {
+                    this.hud.offer(`${them} would trade with you.`, "Trade", () => {
+                        const other = this.battle.actor(event.with);
+
+                        if (other) {
+                            this.#tradeWith(other);
+                        }
+                    }, TRADE.asking / 1000);
+                    this.sound?.play("wake");
+                }
+
+                return;
+            case "open":
+                this.closeJournal();
+                this.shopping = null;
+                this.hud.message(`Trading with ${them}: offer what you will, then agree.`, 3);
+                break;
+            case "offer":
+                if (event.by !== this.me) {
+                    this.hud.message(`${them} changes their offer.`, 1.6);
+                }
+
+                break;
+            case "agreed":
+                if (event.by !== this.me) {
+                    this.hud.message(`${them} agrees. Agree too, and it's done.`, 2.5);
+                }
+
+                break;
+            case "failed":
+                this.hud.message(event.reason === "full" ? (event.short === this.me ? "You haven't room for all that." : `${them} hasn't room for all that.`) : event.short === this.me ? "Something you offered isn't there any more." : `Something ${them} offered isn't there any more.`, 3);
+                this.sound?.play("denied");
+                break;
+            case "done": {
+                const got = [event.got.gold ? `${event.got.gold} gold` : null, ...event.got.items.map(thingsOf)].filter(Boolean);
+
+                this.hud.message(`You trade with ${them}${got.length ? `: you get ${got.join(", ")}` : ""}.`, 3);
+                this.sound?.play("coins");
+                this.hud.setGold(this.progress.gold);
+                this.onProgress(this.progress);
+                break;
+            }
+            case "off": {
+                const told = {
+                    cancelled: event.by === this.me ? (event.open ? "You call the trade off." : null) : event.open ? `${them} calls the trade off.` : `${them} won't trade just now.`,
+                    apart: event.open ? `The trade's off: you and ${them} have parted.` : null,
+                    unanswered: null,
+                    left: `${them} has gone: the trade's off.`,
+                }[event.why];
+
+                if (told) {
+                    this.hud.message(told, 2.5);
+                }
+
+                break;
+            }
+            default:
+                break;
+        }
+
+        // (The pack showing the trade as it is now: opened for it, or as it was once it's over)
+        if (event.change === "open" || this.pack?.open) {
+            this.#showPack();
+        }
     }
 
     // Trade with a shopkeeper: the pack open, their wares in it
@@ -2187,7 +2310,18 @@ export class Game {
             }),
         };
 
-        this.pack.show({ gold: progress.gold, skills, gear, pack, shop });
+        const trade = this.#tradeNow();
+        const other = trade && (trade.from === this.me ? trade.to : trade.from);
+        const offer = (side) => ({ gold: side?.gold ?? 0, items: (side?.items ?? []).map((item) => ({ ...item, label: itemLabel(item) })) });
+
+        this.pack.show({
+            gold: progress.gold,
+            skills,
+            gear,
+            pack,
+            shop,
+            trade: trade && { name: this.host.players.get(other)?.hero.name ?? "them", mine: offer(trade.offers[this.me]), theirs: offer(trade.offers[other]), agreed: { mine: Boolean(trade.agreed[this.me]), theirs: Boolean(trade.agreed[other]) } },
+        });
     }
 
     // Something asked of the pack: done by the host, or why not said (with whoever's being traded
@@ -2686,10 +2820,17 @@ export class Game {
                     this.#rest(event, avatar);
                     break;
                 case "arrived":
-                    // Walked up to someone to talk to them
+                    // Walked up to someone to talk to them (or, another player, to trade)
                     if (event.id === this.me && event.target === this.approaching) {
+                        const other = battle.actor(event.target);
+
                         this.approaching = null;
-                        this.#openTalk(battle.actor(event.target));
+
+                        if (other?.kind === "player") {
+                            this.#tradeWith(other);
+                        } else {
+                            this.#openTalk(other);
+                        }
                     }
 
                     break;
@@ -2774,6 +2915,10 @@ export class Game {
                 break;
             case "gone":
                 this.#mirror();
+                break;
+            case "roused":
+                // (The wild's creatures put out near a player: drawn a few at a time)
+                this.enlisting.push(...event.ids);
                 break;
             case "muster":
                 this.#muster(event);
@@ -2873,6 +3018,9 @@ export class Game {
             case "gift":
             case "counsel":
                 this.#stood(event);
+                break;
+            case "trade":
+                this.#traded(event);
                 break;
             default:
                 break;
@@ -3239,10 +3387,16 @@ export class Game {
         const who = this.#whoIsAt(clientX, clientY, { player: false, folk: true })?.actor ?? null;
         const me = this.battle.actor(this.me);
 
-        // Someone to talk to (one of the folk, a soldier who isn't an enemy): go up to them
+        // Someone to talk to (one of the folk, a soldier who isn't an enemy): go up to them; another
+        // player (not an enemy): trade with them
         if (who && me && !this.battle.hostile(who, me)) {
             this.lastTap = { time, x: clientX, y: clientY, from: "view" };
-            this.#talkTo(who, { run });
+
+            if (who.kind === "player") {
+                this.#tradeWith(who, { run });
+            } else {
+                this.#talkTo(who, { run });
+            }
 
             return;
         }
@@ -3327,7 +3481,7 @@ export class Game {
     }
 
     // Who is under a point on the screen, within PICK_RADIUS of their feet, middle or head: the
-    // nearest living enemy, one of the folk or a soldier who isn't an enemy (if `folk`), a soldier
+    // nearest living enemy, one of the folk, a soldier who isn't an enemy or another player (if `folk`), a soldier
     // of a people not friendly to the player's (if `soldiers`: to pick a fight with), or the
     // player (if `player`); { actor, wheel: "enemy", "talk", "provoke" or "self" }
     #whoIsAt(clientX, clientY, { player: withPlayer = true, folk = false, soldiers = false } = {}) {
@@ -3343,7 +3497,7 @@ export class Game {
             const mine = actor === player;
 
             const enemy = !mine && this.battle.hostile(actor, player);
-            const talks = actor.neutral || actor.kind === "soldier" || (actor.kind === "follower" && this.host.followers.get(actor.id)?.leader === this.me);
+            const talks = actor.neutral || actor.kind === "soldier" || actor.kind === "player" || (actor.kind === "follower" && this.host.followers.get(actor.id)?.leader === this.me);
             const provokes = actor.kind === "soldier" && !enemy && this.host.canFight(player, actor);
 
             if (actor.dead || (mine && !withPlayer) || (!mine && !enemy && !(folk && talks) && !(soldiers && provokes)) || actor.map !== player.map || !this.avatars.has(actor.id)) {

@@ -17,7 +17,7 @@
 import { Battle, FOE_MS, KINDS, TALK_REACH } from "./battle.js";
 import { Explored } from "./explored.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
-import { ABILITIES, alike, ITEMS, priceOf, Progress, rollLoot, wares, weaponOf, WITH_SHIELD } from "./progress.js";
+import { ABILITIES, alike, ITEMS, priceOf, Progress, QUALITIES, rollLoot, wares, weaponOf, WITH_SHIELD } from "./progress.js";
 import { createRandom } from "./random.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
 import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, encounterAt, LAIRS, menaces, packOf, tierPower, WILD } from "./creatures.js";
@@ -120,6 +120,12 @@ export const SPOILS_REACH = 30;
 export const GROUND_MS = 5 * 60 * 1000;
 export const PICK_REACH = 1.6;
 
+/**
+ * Trading face to face (docs/WILDS.md): how near (m) two players must be to begin, and how far
+ * apart they can get before it's off; how long (ms) asking to trade waits for an answer.
+ */
+export const TRADE = Object.freeze({ reach: 4, apart: 7, asking: 30000 });
+
 /** How long something thrown away can be taken back (ms). */
 export const UNDO_MS = 8000;
 
@@ -212,10 +218,15 @@ export const REFUSALS = Object.freeze({
     undo: "Too late to take that back.",
     down: "You're down: get up first.",
     wanted: "They've no use for that: the adventurers' guild buys such things.",
+    trade: "You're not trading with anyone.",
+    trading: "You're trading with someone already.",
+    elsewhere: "They're trading with someone else.",
+    changed: "Something offered isn't there any more: look again.",
+    theirs: "They haven't room for all that.",
 });
 
 // What can't be done while knocked off one's feet (battle.js: a knockdown)
-const DOWN_HELD = new Set(["move", "ahead", "engage", "approach", "enter", "cast", "ability", "use", "talk"]);
+const DOWN_HELD = new Set(["move", "ahead", "engage", "approach", "enter", "cast", "ability", "use", "talk", "trade"]);
 
 // A whole number, and a square [x, y] of whole numbers
 const whole = (value) => Number.isFinite(value) && Math.floor(value) === value;
@@ -316,6 +327,15 @@ export class Host {
          */
         this.ground = new Map();
         this.nextGround = 1;
+
+        /**
+         * The players' trades, face to face (by id): { id, from (the player who asked), to (who
+         * they asked), open (once the other's said yes; till then, `until`: when the asking's
+         * forgotten), offers (by player: { gold, items: [{ id, quality, count }] }), agreed (by
+         * player: whether they'll take the other's offer for theirs) }.
+         */
+        this.trades = new Map();
+        this.nextTrade = 1;
 
         /**
          * The players, by id: { id, hero (their character: { name, shape, look, weapon, boots,
@@ -435,6 +455,12 @@ export class Host {
 
         const character = this.characterOf(player);
 
+        for (const trade of [...this.trades.values()]) {
+            if (trade.from === id || trade.to === id) {
+                this.#endTrade(trade, "left");
+            }
+        }
+
         for (const follower of this.#company(id)) {
             this.battle.remove(follower);
             this.followers.delete(follower);
@@ -491,7 +517,12 @@ export class Host {
      *  - { type: "ability", ability, target }: use an ability they've learnt (core/progress.js
      *    ABILITIES), on a target for a stronger blow (fighting it);
      *  - { type: "abandon", request }: give up a request they carry (by its id), for a little
-     *    standing lost.
+     *    standing lost;
+     *  - { type: "trade", with }: ask another player near them to trade (by id), or say yes to
+     *    their asking; { type: "offer", gold, items: [{ id, quality, count }] }: what they'll
+     *    give (all of it, each time); { type: "agree" }: take the other's offer for theirs (once
+     *    both have, it's done); { type: "cancel", with }: call off the trade (or say no to a
+     *    player's asking, or stop asking).
      * Returns { ok: true } (with what came of it, for some: an offer of work, what was handed
      * in) or { ok: false, reason } (a REFUSALS key; a spell's own reasons: spells.js
      * CAST_FAILURES).
@@ -598,6 +629,14 @@ export class Host {
                 return this.#talk(actor, command.with ?? null);
             case "effect":
                 return this.#effect(player, actor, command.effect);
+            case "trade":
+                return this.#trade(player, actor, command.with);
+            case "offer":
+                return this.#offer(player, command);
+            case "agree":
+                return this.#agree(player);
+            case "cancel":
+                return this.#cancel(player, command.with ?? null);
             default:
                 return refuse("command");
         }
@@ -623,7 +662,7 @@ export class Host {
     /**
      * Advance the world by `ms` (the battle's whole steps: battle.js advance; the war's turns).
      * Returns what happened: the battle's events, and the host's own ("join", "leave", "open",
-     * "close", "explored", "talk", "effect"; "war", with each of the war's events, and "turn",
+     * "close", "explored", "talk", "effect", "roused" (the wild's creatures put out), "trade"; "war", with each of the war's events, and "turn",
      * once each of its turns is over).
      */
     advance(ms) {
@@ -640,6 +679,17 @@ export class Host {
         for (const [id, dropped] of this.ground) {
             if (dropped.until <= this.battle.time) {
                 this.ground.delete(id);
+            }
+        }
+
+        // Trades off once the two are apart (or either's fallen), and asking forgotten after a while
+        for (const trade of [...this.trades.values()]) {
+            const [a, b] = [this.battle.actor(trade.from), this.battle.actor(trade.to)];
+
+            if (!a || !b || a.dead || b.dead || !Host.#near(a, b, TRADE.apart)) {
+                this.#endTrade(trade, "apart");
+            } else if (!trade.open && trade.until <= this.battle.time) {
+                this.#endTrade(trade, "unanswered");
             }
         }
 
@@ -809,6 +859,8 @@ export class Host {
             slain: { ...this.slain },
             ground: structuredClone([...this.ground.values()]),
             nextGround: this.nextGround,
+            trades: structuredClone([...this.trades.values()]),
+            nextTrade: this.nextTrade,
             soldiers: [...this.soldiers.entries()],
             fallen: structuredClone(this.fallen),
             players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: structuredClone(player.boons), readyAt: { ...player.readyAt }, discarded: structuredClone(player.discarded ?? null), ...this.characterOf(player), followers: undefined })),
@@ -873,6 +925,8 @@ export class Host {
         host.slain = { ...(snapshot.slain ?? {}) };
         host.ground = new Map((snapshot.ground ?? []).map((dropped) => [dropped.id, structuredClone(dropped)]));
         host.nextGround = snapshot.nextGround ?? 1;
+        host.trades = new Map((snapshot.trades ?? []).map((trade) => [trade.id, structuredClone(trade)]));
+        host.nextTrade = snapshot.nextTrade ?? 1;
         host.soldiers = new Map(structuredClone(snapshot.soldiers ?? []));
         host.fallen = structuredClone(snapshot.fallen ?? []);
         host.done = structuredClone(snapshot.done);
@@ -930,7 +984,11 @@ export class Host {
         mix(this.players.size);
         mix(this.ground.size);
 
+        mix(this.trades.size);
+
         for (const player of this.players.values()) {
+            mix(player.progress.gold);
+
             for (const stack of player.progress.pack) {
                 mix(stack?.count ?? 0);
             }
@@ -1261,6 +1319,220 @@ export class Host {
         this.#event("picked", { id: player.id, ground: id, item: dropped.item });
 
         return OK;
+    }
+
+    // --- Trading face to face ---
+
+    // Two in the battle within `reach` of each other, on the same map
+    static #near(a, b, reach) {
+        return a.map === b.map && Math.hypot(a.x - b.x, a.y - b.y) <= reach;
+    }
+
+    // The trade a player's in (said yes to by both), if any
+    #tradeOf(playerId) {
+        return [...this.trades.values()].find((trade) => trade.open && (trade.from === playerId || trade.to === playerId)) ?? null;
+    }
+
+    // Tell both players in a trade how it's going (a "trade" event each: its `change`)
+    #tellTrade(trade, change, details = {}) {
+        for (const [one, other] of [[trade.from, trade.to], [trade.to, trade.from]]) {
+            this.#event("trade", { id: one, with: other, name: this.players.get(other)?.hero.name ?? null, trade: trade.id, from: trade.from, change, ...details });
+        }
+    }
+
+    // Ask another player to trade: or, if they've asked already, it's begun
+    #trade(player, actor, withId) {
+        const other = this.players.get(withId);
+        const them = other && this.battle.actor(other.id);
+
+        if (!them || other === player) {
+            return refuse("target");
+        }
+
+        if (actor.dead || them.dead) {
+            return refuse("dead");
+        }
+
+        if (!Host.#near(actor, them, TRADE.reach)) {
+            return refuse("far");
+        }
+
+        if (this.#tradeOf(player.id)) {
+            return refuse("trading");
+        }
+
+        if (this.#tradeOf(other.id)) {
+            return refuse("elsewhere");
+        }
+
+        const asked = [...this.trades.values()].find((trade) => trade.from === other.id && trade.to === player.id);
+
+        // (They'd asked: it's begun, with nothing offered yet, and neither's asking anyone else)
+        if (asked) {
+            for (const trade of [...this.trades.values()]) {
+                if (trade !== asked && (trade.from === player.id || trade.from === other.id)) {
+                    this.trades.delete(trade.id);
+                }
+            }
+
+            Object.assign(asked, { open: true, until: null, offers: { [other.id]: { gold: 0, items: [] }, [player.id]: { gold: 0, items: [] } }, agreed: { [other.id]: false, [player.id]: false } });
+            this.#tellTrade(asked, "open");
+
+            return { ok: true, trade: asked.id, open: true };
+        }
+
+        // (Asking: whoever they'd asked before is asked no longer)
+        for (const trade of [...this.trades.values()]) {
+            if (trade.from === player.id) {
+                this.trades.delete(trade.id);
+            }
+        }
+
+        const trade = { id: `trade-${this.nextTrade++}`, from: player.id, to: other.id, open: false, until: this.battle.time + TRADE.asking, offers: {}, agreed: {} };
+
+        this.trades.set(trade.id, trade);
+        this.#tellTrade(trade, "asked");
+
+        return { ok: true, trade: trade.id, open: false };
+    }
+
+    // What a player will give, in place of what they offered before: gold, and things from their
+    // pack (as many as they have of each, of each make). Neither's agreed to it yet.
+    #offer(player, { gold = 0, items = [] }) {
+        const trade = this.#tradeOf(player.id);
+
+        if (!trade) {
+            return refuse("trade");
+        }
+
+        if (!whole(gold) || gold < 0 || !Array.isArray(items)) {
+            return refuse("command");
+        }
+
+        if (gold > player.progress.gold) {
+            return refuse("gold");
+        }
+
+        const offered = [];
+
+        for (const each of items) {
+            const { id, quality = "common", count } = each ?? {};
+
+            if (!ITEMS[id] || !QUALITIES[quality] || !whole(count) || count < 1) {
+                return refuse("item");
+            }
+
+            const same = offered.find((item) => item.id === id && item.quality === quality);
+
+            if (same) {
+                same.count += count;
+            } else {
+                offered.push({ id, quality, count });
+            }
+        }
+
+        if (offered.some(({ id, quality, count }) => player.progress.held(id, quality) < count)) {
+            return refuse("count");
+        }
+
+        trade.offers[player.id] = { gold, items: offered };
+        trade.agreed = { [trade.from]: false, [trade.to]: false };
+        this.#tellTrade(trade, "offer", { by: player.id });
+
+        return OK;
+    }
+
+    // A player takes the other's offer for theirs: once both have, what's offered changes hands
+    #agree(player) {
+        const trade = this.#tradeOf(player.id);
+
+        if (!trade) {
+            return refuse("trade");
+        }
+
+        const other = trade.from === player.id ? trade.to : trade.from;
+
+        trade.agreed[player.id] = true;
+
+        if (!trade.agreed[other]) {
+            this.#tellTrade(trade, "agreed", { by: player.id });
+
+            return OK;
+        }
+
+        const swapped = this.#swap(trade);
+
+        // (It couldn't be done: neither's agreed now, and why's said)
+        if (!swapped.given) {
+            trade.agreed = { [trade.from]: false, [trade.to]: false };
+            this.#tellTrade(trade, "failed", { reason: swapped.reason, short: swapped.short });
+
+            return refuse(swapped.reason === "full" && swapped.short !== player.id ? "theirs" : swapped.reason);
+        }
+
+        this.trades.delete(trade.id);
+
+        for (const [one, from] of [[trade.from, trade.to], [trade.to, trade.from]]) {
+            this.#event("trade", { id: one, with: from, name: this.players.get(from)?.hero.name ?? null, trade: trade.id, from: trade.from, change: "done", got: swapped.given[from], gave: swapped.given[one] });
+        }
+
+        return OK;
+    }
+
+    // What each offered, changing hands at once: or, if either hasn't it all now or hasn't room
+    // for what they're given, nothing at all. Returns { given (by player: { gold, items }) }, or
+    // { reason, short (whose pack it was) }.
+    #swap(trade) {
+        const both = [this.players.get(trade.from), this.players.get(trade.to)];
+        const before = both.map(({ progress }) => ({ gold: progress.gold, pack: progress.pack.map((stack) => stack && { ...stack }) }));
+        const undo = (reason, short) => {
+            both.forEach(({ progress }, index) => Object.assign(progress, before[index]));
+
+            return { reason, short };
+        };
+        const given = {};
+
+        for (const { id, progress } of both) {
+            const { gold, items } = trade.offers[id] ?? { gold: 0, items: [] };
+
+            if (progress.gold < gold || !items.every((item) => progress.remove(item.id, item.count, item.quality))) {
+                return undo("changed", id);
+            }
+
+            progress.gold -= gold;
+            given[id] = { gold, items: items.map((item) => ({ ...item })) };
+        }
+
+        for (const [{ id, progress }, { id: from }] of [both, [...both].reverse()]) {
+            progress.gold += given[from].gold;
+
+            if (!given[from].items.every((item) => progress.stow(item, item.count))) {
+                return undo("full", id);
+            }
+        }
+
+        return { given };
+    }
+
+    // A player calls off their trade, or stops asking, or says no to another's asking (`with`)
+    #cancel(player, withId) {
+        const theirs = (trade) => trade.from === player.id || trade.to === player.id;
+        const trade = [...this.trades.values()].find((each) => theirs(each) && (withId === null ? each.open || each.from === player.id : each.from === withId || each.to === withId));
+
+        if (!trade) {
+            return refuse("trade");
+        }
+
+        this.#endTrade(trade, "cancelled", player.id);
+
+        return OK;
+    }
+
+    // A trade (or the asking) at an end, nothing changing hands: why ("cancelled", `by` whom;
+    // "apart", "unanswered", "left")
+    #endTrade(trade, why, by = null) {
+        this.trades.delete(trade.id);
+        this.#tellTrade(trade, "off", { why, by, open: trade.open });
     }
 
     // What each player near a creature when it fell finds on it (spoils.js): their own bundle,
@@ -1713,6 +1985,10 @@ export class Host {
             }
         } catch {
             // (No free ground there: those found are out, and no more)
+        }
+
+        if (ids.length) {
+            this.#event("roused", { ids, creature });
         }
 
         return ids;

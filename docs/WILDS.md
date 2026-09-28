@@ -108,8 +108,8 @@ ones a little gold and gear (`core/spoils.js`). Every player within 30 m when it
 own bundle on it, rolled for them alone: a leather sack where it fell, seen only by them, there
 for five minutes to tap and take (what doesn't fit in the pack stays in the sack). Nothing's
 certain: each thing has its chance, a little better for each tier the creature's above its least,
-and gold's as much more as the creature's stronger. The only way to share what's found is to hand
-it over.
+and gold's as much more as the creature's stronger. The only way to share what's found is to trade
+it (below).
 
 The parts are worth what the adventurers' guild pays for them (only the guild buys them; other
 shops have no use for them): a couple of gold for a rat's tail near home, a few for a wolf's pelt,
@@ -122,6 +122,30 @@ The guilds' boards want them too ("Wanted at the guild": `standing.js` `offerCon
 one creature's parts (a creature found near home, anywhere), brought to the counter, paid half as
 much again as they'd sell for (and handed over out of the pack). "Beasts on the roads" counts the
 creatures brought down.
+
+## Trading face to face
+
+What each player finds is theirs alone; the one way anything passes between players is trading,
+face to face (`core/host.js`: `trade`, `offer`, `agree`, `cancel`; `TRADE`):
+
+- **Asking.** Tapping another player who isn't an enemy walks up to them (within 4 m) and asks
+  them to trade. They're told ("Bryn would trade with you", with a Trade button, for 30 seconds);
+  tapping it, or tapping the one who asked, says yes. Asking someone else stops asking the first;
+  anyone trading already can't be asked ("They're trading with someone else").
+- **Offering.** Once they've said yes, both players' packs open on the trade: what the other
+  offers at the top ("Bryn agrees to this", once they have), then what they offer themselves, with
+  gold to offer and buttons to agree or call it off, then what they carry. Tapping (or holding)
+  something carried offers it, as many as they like of all they have of it (its stacks lit gold);
+  anything offered can be taken back. Each change is the whole offer again, and whoever changes
+  theirs undoes both players' agreeing: what's agreed to is what's there.
+- **Agreeing.** Once both have agreed, everything offered changes hands at once: all of it, or
+  (if either hasn't all they offered any more, or hasn't room in their pack for what they're
+  given) none of it, and neither's agreed any more, with why said.
+- **Off.** Closing the pack calls it off; so does either walking more than 7 m from the other,
+  falling, or leaving the world.
+
+The host does it all, as it does everything, so every copy of a world played together has it
+alike (and a trade's kept with the world: `snapshot`).
 
 ## How they're built
 
