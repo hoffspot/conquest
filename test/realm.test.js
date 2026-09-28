@@ -8,6 +8,7 @@ import { before, describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { HOST_PLAYER, Host, OFFICIALS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
+import { layoutTown } from "../client/js/core/setpieces/town.js";
 import { FAILED, OPENS, STANDINGS, TITHE_RATE } from "../client/js/core/standing.js";
 import { COUNSEL_TURNS } from "../client/js/core/war/war.js";
 
@@ -87,6 +88,16 @@ describe("a player's part in their people (host.js, standing.js)", () => {
         }
 
         assert.deepEqual(Object.keys(OFFICIALS).sort(), ["clerk", "councillor", "reeve", "ruler", "steward"]);
+
+        // (The same seat every time, and only where it should be)
+        for (const seed of [1, 2, 3]) {
+            const seats = (kind) => layoutTown({ seed, kind }).pieces.filter(({ name }) => name === "hall" || name === "keep").map(({ name }) => name);
+
+            assert.deepEqual(seats("village"), []);
+            assert.deepEqual(seats("town"), ["hall"]);
+            assert.deepEqual(seats("city"), ["hall"]);
+            assert.deepEqual(seats("capital"), ["keep"]);
+        }
     });
 
     it("sits a reeve in the town hall for their people, who gives work to their own and none to strangers", () => {

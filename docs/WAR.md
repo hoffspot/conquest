@@ -194,7 +194,7 @@ The engine is built for this from the start. These are its rules:
 | **M1** | Built | The war on its own: realms, towns, garrisons, treasuries, turns, expeditions, camps, raids, conquest and vassals, relations and envoys, as numbers. A page to watch it play out. |
 | **M2** | Built | The war in the world: banners over the towns, guards and patrols of each people, hostility by relations, the war's forces brought to life near the player. |
 | **M3** | Built | Growing stronger: skills that grow by use along their trees, gear, gold, a pack, shops. |
-| **M4** | | The player's people: the keep and town halls, the rulers' requests, a journal, ranks. |
+| **M4** | Built | The player's people: the keep and town halls, the rulers' requests, a journal, ranks. |
 | **M5** | | The other peoples' looks. |
 | **M6** | | Camps, raids and conquest played out around the player. |
 | **M7** | | Diplomats on the roads, to escort or waylay; grudges and favours. |
@@ -461,17 +461,90 @@ all. What's worn shows on the character.
 plus their gear's make, up to 8. The mightiest player's might sets how fast the war comes on
 (`war.setMight`).
 
+### The player's people (M4)
+
+A player stands in their people (`Standing`, `core/standing.js`), kept with their character
+(`app/save.js`) and changed only by the host.
+
+**Where their people are ruled from.** A town hall in every town and city, and a keep in every
+capital: the biggest house by the market, made over (docs/GAME.md). In them:
+
+| Who | Where | Does |
+| --- | --- | --- |
+| The reeve | a town hall | gives work, and pays for it done; takes letters for the town |
+| The clerk | a town hall | takes word of work done |
+| Petitioners | a town hall | wait, and grumble |
+| The ruler | a keep's throne | gives the keep's work to those of rank; hears counsel |
+| The steward | a keep | gives the keep's work to those of rank; takes letters and tithes; the armoury |
+| Councillors | a keep | tell what the ruler's like |
+| Sentries | a keep | stand guard |
+
+The ruler is their people's own (as the war has them: their name and title), crowned; a keep
+that isn't its holders' seat has a governor on the throne. Only a player's own people's officials
+(or their liege's) give them work.
+
+**Standing** is earned by what's done for their people, and lost by what's failed or given up
+(5 each):
+
+| Rank | Standing | Opens |
+| --- | --- | --- |
+| Commoner | 0 | Work from the reeves at the town halls. |
+| Freeholder | 60 | Scouting for the reeves. |
+| Retainer | 180 | An audience at the keep, work from the ruler, and the pick of its armoury. |
+| Knight | 400 | A say in where the next expedition marches. |
+| Lord | 800 | A say in war and peace. |
+| Councillor | 1500 | A seat on the council: your word weighs the most. |
+
+**Requests** are offered from how the war stands (`offerRequest`), at most three carried at once:
+
+| Request | Asked | Done when | Worth |
+| --- | --- | --- | --- |
+| A letter to carry | to one of the three nearest of their own towns | it's handed to the reeve there (or a capital's steward) | 10 standing and 6 coppers, and 5 and 3 for each km |
+| A tithe for the treasury | while the treasury's thin | its coppers are paid (a quarter goes into the treasury as gold) | half its coppers in standing |
+| Thin their numbers | in a war | so many of the enemy's soldiers are brought down | 4 and 4, and 6 and 3 for each |
+| Clear the roads | always | so many of the wild are brought down | 6 and 6, and 8 and 4 for each |
+| Scouting | from a Freeholder | the player goes within 220 m of an enemy camp or army near (or their nearest town) | 25 and 15 |
+| Hold the town | from a Retainer, with an enemy camp within 1 km | the player was there (within 180 m of its edge) and the camp's gone, the town still theirs | 50 and 30 |
+
+Each has so long to be done (war turns: a minute's play each; a letter longer the further it
+goes), and fails when it runs out; one whose target's gone comes to nothing. What's done is told
+to whoever asked (a letter, to whoever it's for) for its reward. The keep's are worth half as
+much again, and it asks the weightier things.
+
+**The armoury** gives a gift for each rank from a Retainer up, once: a fine mail shirt; a
+masterwork of the player's own weapon; a masterwork kite shield (or mail, with a weapon that takes
+no shield); a legendary weapon.
+
+**Counsel.** At the throne, a Knight can say where the next expedition should march (one of the
+three nearest enemy towns); a Lord can counsel peace with an enemy, or war on a people they're
+neutral with (`War.counsel`). It weighs more the higher their rank (0.4, 0.7, 1), and is heeded
+for 20 turns or until it's acted on:
+- **March:** the town counts as far nearer in choosing the next expedition's target.
+- **Peace:** each turn, a chance (the counsel's weight, more with a cautious ruler) of sending an
+  envoy for a truce.
+- **War:** each turn, a chance (the weight, more with a warlike ruler) of declaring war.
+
+**The journal** (its button, top right, or J) shows:
+- the player's rank, how far to the next, and what each opens;
+- each request they carry: who asked, what, how far it's come, which way and how far to go, and
+  how long's left (each can be given up);
+- their people: who rules them and from where, whom they're at war with and allied to, how many
+  towns they hold;
+- what's lately done, failed or given up.
+
+Where the requests take the player is marked on the world map with a gold star.
+
 ### The host (core/host.js)
 
 `new Host(world)` holds everything that changes in the world:
 - **the battle** (`host.battle`);
-- **the players** (`host.players`, by id): each is `{ id, hero, realm, talks, explored, progress, boons }`;
+- **the players** (`host.players`, by id): each is `{ id, hero, realm, talks, explored, progress, standing, boons }`;
 - **the folk** in the battle (`host.folk`, by id: how each looks and talks);
 - **the buildings got ready** (`host.open`, by key: their folk's ids);
 - **what's been done by talking** (`host.done`, the last 50).
 
 **Players.**
-- `join({ id, hero, talks, explored, progress })` puts a player in, at the world's start or the
+- `join({ id, hero, talks, explored, progress, standing })` puts a player in, at the world's start or the
   nearest free square to it, dressed in what they wear.
 - `leave(id)` takes them out, and returns their character as it's to be kept.
 - `populate()` puts in the world's own people (the orc, the tavern's folk) after whoever's there
@@ -489,13 +562,14 @@ plus their gear's make, up to 8. The mightiest player's might sets how fast the 
 | `{ type: "stop" }` | Stop. |
 | `{ type: "cast", spell, target }` | Cast a spell. |
 | `{ type: "talk", with }` | Start talking to one of the folk near them (or stop: `null`). |
-| `{ type: "effect", effect }` | Something done by talking, to whoever they're talking to. |
+| `{ type: "effect", effect }` | Something done by talking, to whoever they're talking to: an official's work asked for or taken on (`work`), what's done told of (`report`), the armoury's gift (`armoury`), counsel (`counsel`). |
 | `{ type: "buy", item, from }` | Buy something from a shopkeeper near them. |
 | `{ type: "sell", index, to }` | Sell something from their pack. |
 | `{ type: "equip", index }` | Wear or wield something from their pack. |
 | `{ type: "unequip", slot }` | Take off their body armour or shield. |
 | `{ type: "use", index }` | Drink or eat something from their pack. |
 | `{ type: "ability", ability, target }` | Use an ability they've learnt. |
+| `{ type: "abandon", request }` | Give up a request they carry. |
 
 Any order can have `run: true`. A command that can't be done is refused, with a reason
 (`REFUSALS`, or a spell's own: `CAST_FAILURES`):
@@ -505,7 +579,9 @@ Any order can have `run: true`. A command that can't be done is refused, with a 
 - too far to talk;
 - not talking to anyone.
 - not enough coppers, nothing like that for sale, a full pack;
-- an ability not learnt, or not ready yet.
+- an ability not learnt, or not ready yet;
+- not the one to ask, a stranger, not of the rank, nothing to offer or to tell of, enough carried
+  already, the armoury's gifts had, counsel that can't be taken.
 
 **Advancing.** `advance(ms)` runs the battle and returns its events, with the host's own:
 
@@ -521,6 +597,9 @@ Any order can have `run: true`. A command that can't be done is refused, with a 
 | `bought`, `sold`, `used` | A player bought, sold, or used something. |
 | `gear` | What a player wears and wields changed. |
 | `ability` | A player used an ability. |
+| `request` | A player's request was taken, counted, done (to be told of), told of and rewarded, failed, given up or came to nothing. |
+| `standing` | A player reached a new rank in their people. |
+| `gift`, `counsel` | A player had the armoury's gift, or gave counsel. |
 
 **Keeping it.** `snapshot()` gives all of it as plain data. `Host.restore(world, snapshot)` carries
 on from it, in a world made again from the same seed:

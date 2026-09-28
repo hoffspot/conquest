@@ -31,6 +31,8 @@ import { STEP_MS, TALK_REACH } from "../core/battle.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
 import { HOST_PLAYER, Host, REFUSALS, SHOP_REACH, SHOPKEEPERS } from "../core/host.js";
 import { ABILITIES, itemLabel, ITEMS, priceOf, TREES, wares } from "../core/progress.js";
+import { MOST_REQUESTS, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
+import { describeLeader } from "../core/war/peoples.js";
 import { peopleOf } from "../core/war/news.js";
 import { STAGES } from "../core/war/war.js";
 import { GODS } from "../core/lore/gods.js";
@@ -54,6 +56,7 @@ import { TREE_WIND } from "../world/art/kits/trees.js";
 import { Minimap, treesOf } from "./minimap.js";
 import { CameraFollow } from "./camera.js";
 import { Doors } from "./doors.js";
+import { JournalPanel, bearing } from "./journal.js";
 import { PackPanel } from "./pack.js";
 import { TalkPanel } from "./talk.js";
 import { ACTIONS, ActionWheel, directionOf, WHEELS } from "./wheel.js";
@@ -153,7 +156,7 @@ const EMBERS = 5;
 const VISITS = Object.freeze({ every: 0.5, budget: 6 });
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "gone", "rank", "loot", "bought", "sold", "used", "gear", "ability"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "gone", "rank", "loot", "bought", "sold", "used", "gear", "ability", "request", "standing", "gift", "counsel"]);
 
 const _focus = new THREE.Vector3();
 const _lean = new THREE.Vector3();
@@ -185,8 +188,11 @@ export class Game {
      * @param {object} [options.progress] - The player's skills, coppers, pack and gear, as kept
      *     (save.js loadProgress: core/progress.js Progress's toJSON).
      * @param {Function} [options.onProgress] - Hears them whenever they change (to keep them).
+     * @param {object} [options.standing] - Where they stand with their people, and the requests
+     *     they carry, as kept (save.js loadStanding: core/standing.js Standing's toJSON).
+     * @param {Function} [options.onStanding] - Hears it whenever it changes (to keep it).
      */
-    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {}, progress = {}, onProgress = () => {} }) {
+    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {}, progress = {}, onProgress = () => {}, standing = {}, onStanding = () => {} }) {
         this.view = view;
         this.kit = kit;
         this.sound = sound;
@@ -199,8 +205,9 @@ export class Game {
         this.me = me;
         this.host = host ?? new Host(world, { populate: false, war });
         this.onWar = onWar;
-        this.host.join({ id: me, hero, talks, explored, progress });
+        this.host.join({ id: me, hero, talks, explored, progress, standing });
         this.onProgress = onProgress;
+        this.onStanding = onStanding;
 
         /** Trading with a shopkeeper (from their talk): { shop, keeper (their id), name }, or null. */
         this.shopping = null;
@@ -294,6 +301,11 @@ export class Game {
     /** This game's player, as the host has them (core/host.js players). */
     get self() {
         return this.host.players.get(this.me);
+    }
+
+    /** Where the player stands with their people, and the requests they carry (core/standing.js Standing). */
+    get standing() {
+        return this.self.standing;
     }
 
     /** The player's skills, coppers, pack and gear (core/progress.js Progress). */
@@ -452,6 +464,12 @@ export class Game {
         this.pack.onBuy = (item) => this.#packCommand({ type: "buy", item, from: this.shopping?.keeper });
         this.pack.onSell = (index) => this.#packCommand({ type: "sell", index, to: this.shopping?.keeper });
         this.pack.onClose = () => this.closePack();
+        this.journal = new JournalPanel(this.hud.root);
+        this.journal.onAbandon = (id) => {
+            this.#command({ type: "abandon", request: id });
+            this.#showJournal();
+        };
+        this.journal.onClose = () => this.closeJournal();
         this.talk.onChoose = (index) => this.#say(index);
         this.talk.onClose = () => this.#endTalk();
         this.effects.camera = view.camera;
@@ -709,6 +727,7 @@ export class Game {
         this.wheel?.element.remove();
         this.talk?.panel.remove();
         this.pack?.panel.remove();
+        this.journal?.panel.remove();
         this.curtain?.remove();
         this.view.setOccluders(null);
         this.view.setFocus(null);
@@ -1121,7 +1140,17 @@ export class Game {
         const outside = actor.map === "town" ? [actor.x, actor.y] : (building?.at ?? building?.door?.ends[0].arrive ?? [actor.x, actor.y]);
         const facing = this.avatars.get(this.me)?.facing ?? actor.facing;
 
-        return { player: { x: outside[0], z: outside[1], facing }, icons: this.icons() };
+        return { player: { x: outside[0], z: outside[1], facing }, icons: this.icons(), marks: this.requestMarks() };
+    }
+
+    /** Where the requests the player carries take them (for the world map): [{ x, z, label }]. */
+    requestMarks() {
+        const war = this.host.war;
+
+        return this.standing.requests
+            .map((request) => ({ request, where: whereTo(request, war) }))
+            .filter(({ where }) => where.at)
+            .map(({ request, where }) => ({ x: where.at[0], z: where.at[1], label: request.title }));
     }
 
     // The player's found more of the world: keep it
@@ -1198,8 +1227,11 @@ export class Game {
         }
 
         const soldier = npc.kind === "soldier" ? this.#soldierWords(npc) : null;
+        const names = {};
+        const official = this.#officialOf(npc, building, names);
         const title = soldier?.title ?? folk.find(({ id }) => id === npc.id)?.title ?? ROLES[npc.role]?.title ?? "";
-        const names = Object.fromEntries(folk.map(({ id, local = id, name }) => [local, name.split(" ")[0]]));
+        Object.assign(names, Object.fromEntries(folk.map(({ id, local = id, name }) => [local, name.split(" ")[0]])));
+
         const upstairs = building?.tavern?.storeys > 1 ? building.tavern.upstairs : null;
 
         names.keeper ??= names.innkeeper;
@@ -1212,7 +1244,7 @@ export class Game {
             names.patronTitle = GODS[building.patron].title;
         }
 
-        Object.assign(names, soldier?.names);
+        Object.assign(names, soldier?.names, official?.words);
 
         // (They stop and face the player, if they can talk now: the host says)
         if (!this.#command({ type: "talk", with: npc.id }).ok) {
@@ -1226,11 +1258,18 @@ export class Game {
             player: { name: this.hero.name },
             place: building?.name,
             names,
-            check: (condition) => ("upstairs" in condition ? upstairsIs(condition.upstairs, upstairs) : "stance" in condition ? soldier?.stance === condition.stance : true),
+            check: (condition) => ("upstairs" in condition ? upstairsIs(condition.upstairs, upstairs) : "stance" in condition ? soldier?.stance === condition.stance : official ? official.check(condition) : true),
             memory: this.memory[npc.id],
             knowledge: this.knowledge,
             variety: this.talkVariety,
             onEffect: (effect) => {
+                // (Work, word of it, the armoury, counsel: an official's, their words filled in from what came of it)
+                if (official?.handles(effect)) {
+                    official.effect(effect);
+
+                    return;
+                }
+
                 const result = this.#command({ type: "effect", effect });
 
                 // (Their wares, once the talk's over; what can't be paid for, said)
@@ -1252,6 +1291,120 @@ export class Game {
         this.avatars.get(this.me)?.actions.stopResting();
         this.talk.show({ name: npc.name, title }, conversation);
         this.#keepTalks();
+    }
+
+    // What one of the officials of a town hall or keep (or those about them) can tell of, and
+    // what they ask the game (dialogue.js's reeve, clerk, petitioner, ruler, steward, councillor
+    // and sentry): their words (`words`: the town, who holds it and rules them, the war, the
+    // player's rank and the next, what's said of the ruler, the counsel that can be given), their
+    // conditions (`check`), and what's done by talking to them (`effect`: sent to the host, and
+    // the talk's words, `names`, filled in from what came of it)
+    #officialOf(npc, building, names) {
+        const war = this.host.war;
+        const town = building && war ? war.town(building.place === "home" ? this.world.start?.id : building.place) : null;
+
+        if (!town || !["reeve", "clerk", "petitioner", "ruler", "steward", "councillor", "sentry"].includes(npc.role)) {
+            return null;
+        }
+
+        const liege = war.liege(this.self.realm);
+        const own = war.liege(town.owner) === liege;
+        const rulers = war.realm(war.realm(town.owner)?.seat === town.id ? town.owner : war.liege(town.owner));
+        const { leader } = rulers;
+        const standing = this.standing;
+        const rank = standing.rank();
+        const next = STANDINGS[rank + 1];
+        const seat = war.town(war.realm(liege)?.seat)?.at ?? town.at;
+        const enemies = war.enemiesOf(liege);
+        const people = (id) => ({ id, name: `the ${peopleOf(id)}` });
+        const options = {
+            march: war.towns
+                .filter((each) => enemies.includes(war.liege(each.owner)))
+                .sort((a, b) => Math.hypot(a.at[0] - seat[0], a.at[1] - seat[1]) - Math.hypot(b.at[0] - seat[0], b.at[1] - seat[1]))
+                .slice(0, 3)
+                .map(({ id, name }) => ({ id, name })),
+            peace: enemies.slice(0, 3).map(people),
+            war: war.realms.filter((realm) => realm.alive && !realm.overlord && realm.id !== liege && war.relation(liege, realm.id) === "neutral").slice(0, 3).map(({ id }) => people(id)),
+        };
+        const sayings = describeLeader(leader, rulers.id).map(({ saying }) => saying);
+        const foes = war.enemiesOf(war.liege(town.owner)).map((id) => `the ${peopleOf(id)}`);
+        const state = { offer: null, reported: false };
+        const giftDue = () => rank >= OPENS.armoury && Array.from({ length: rank - OPENS.armoury + 1 }, (_, k) => OPENS.armoury + k).some((each) => !standing.claimed.includes(each));
+
+        const words = {
+            town: town.name,
+            holder: `the ${peopleOf(town.owner)}`,
+            ruler: `${leader.title} ${leader.name}`,
+            age: STAGES[war.stage].name.toLowerCase(),
+            foes: foes.length ? foes.join(" and ") : "no one, for now",
+            rank: standing.title(),
+            standingNext: next ? `Another ${next.points - standing.points} and you'd be ${next.title}: ${next.opens.charAt(0).toLowerCase()}${next.opens.slice(1)}` : "There's none higher.",
+            traits: sayings.length ? `They say ${leader.title} ${leader.name} is ${sayings.slice(0, 2).join(", and ")}.` : `${leader.title} ${leader.name}? Hard to read. As steady as their people, they say.`,
+            ...Object.fromEntries(Object.entries(options).flatMap(([kind, list]) => list.map(({ name }, k) => [`${kind}${k + 1}`, name]))),
+        };
+
+        const holds = {
+            own: () => own,
+            room: () => standing.requests.length < MOST_REQUESTS,
+            offer: () => Boolean(state.offer),
+            due: () => this.host.dueTo(this.me, npc.id).length > 0,
+            reported: () => state.reported,
+            keep: () => rank >= OPENS.keep,
+            armoury: () => own && giftDue(),
+            counselMarch: () => own && rank >= OPENS.march && options.march.length > 0,
+            counselPeace: () => own && rank >= OPENS.peace && options.peace.length > 0,
+            counselWar: () => own && rank >= OPENS.war && options.war.length > 0,
+        };
+        const coppers = (count) => `${count} ${count === 1 ? "copper" : "coppers"}`;
+
+        return {
+            words,
+            check: (condition) => {
+                const [[key, value]] = Object.entries(condition);
+                const choice = /^(march|peace|war)([1-3])$/.exec(key);
+
+                if (choice) {
+                    return Boolean(options[choice[1]][choice[2] - 1]) === value;
+                }
+
+                return holds[key] ? holds[key]() === value : true;
+            },
+            handles: (effect) => Boolean(effect.work || effect.report || effect.armoury || effect.counsel),
+            effect: (effect) => {
+                const [kind, index] = Object.entries(effect.counsel ?? {})[0] ?? [];
+                const chosen = kind ? options[kind]?.[index - 1] : null;
+                const result = this.#command({ type: "effect", effect: kind ? { counsel: { [kind]: chosen?.id } } : effect });
+
+                if (effect.work === "ask") {
+                    state.offer = result.ok ? result.request : null;
+                    names.offer = state.offer?.text ?? "";
+                    names.reward = state.offer ? (state.offer.reward.coppers ? coppers(state.offer.reward.coppers) : "your name in the rolls") : "";
+                } else if (effect.work === "accept") {
+                    state.offer = null;
+
+                    if (!result.ok) {
+                        this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.6);
+                    }
+                } else if (effect.report) {
+                    const handed = result.ok ? result.reported : [];
+                    const paid = handed.reduce((sum, { reward }) => sum + reward.coppers, 0);
+                    const first = handed[0];
+
+                    state.reported = result.ok;
+                    names.reported = !first ? "" : `${first.kind === "message" ? `A letter from ${first.from.townName}? I'll see it read.` : first.kind === "tithe" ? "The treasury thanks you." : "Done, and well done."}${handed.length > 1 ? " And the rest besides." : ""}${paid ? ` ${coppers(paid)}, for your trouble.` : ""}`;
+                } else if (effect.armoury) {
+                    names.gift = result.ok ? `From the armoury, for your rank: ${itemLabel(result.item).toLowerCase()}. Wear it well.` : REFUSALS[result.reason] ?? "There's nothing for you.";
+                } else if (kind) {
+                    const said = { march: `So be it. We march on ${chosen?.name} when we can.`, peace: `Peace with ${chosen?.name}... Very well. An envoy will go, when one can be spared.`, war: `${chosen?.name}? Yes. They've had it coming.` };
+
+                    names.counsel = result.ok ? said[kind] : "No. That cannot be.";
+                }
+
+                this.hud.setCoppers(this.progress.gold);
+                this.onProgress(this.progress);
+                this.onStanding(this.standing);
+            },
+        };
     }
 
     // What a soldier can tell of: the town they guard, whose it is, their ruler, the war (as
@@ -1583,11 +1736,128 @@ export class Game {
         avatar.actions.setWeapon(guardOf(weapon));
     }
 
+    // --- Standing in their people (core/standing.js) ---
+
+    // A request taken, moved on, done, failed; a new rank; the armoury's gift; counsel given:
+    // told, shown in the journal, and kept
+    #stood(event) {
+        if (event.id !== this.me) {
+            return;
+        }
+
+        if (event.type === "request") {
+            const { change, request } = event;
+            const back = `Back to ${request.from.name} in ${request.from.townName}.`;
+            const told = {
+                taken: `New request: ${request.title}. (J for your journal.)`,
+                count: `${request.title}: ${request.count} of ${request.target.need}.`,
+                ready: request.kind === "scout" ? `You've seen enough. ${back}` : `${request.title}: done. ${back}`,
+                there: `You're here to hold ${request.target.name}. Stay till they're gone.`,
+                done: `${request.title}: done.${event.reward?.coppers ? ` ${event.reward.coppers} coppers.` : ""}`,
+                failed: `${request.title}: failed. Your standing suffers.`,
+                void: `${request.title}: it's come to nothing.`,
+                abandoned: `${request.title}: given up.`,
+            }[change];
+
+            if (told) {
+                this.hud.message(told, 3);
+            }
+        } else if (event.type === "standing") {
+            this.hud.message(`You're ${/^[AEIOU]/.test(event.title) ? "an" : "a"} ${event.title} of your people now. ${STANDINGS[event.rank].opens}`, 4);
+            this.sound?.play("wake");
+        }
+
+        this.hud.setCoppers(this.progress.gold);
+        this.onProgress(this.progress);
+        this.onStanding(this.standing);
+
+        if (this.journal?.open) {
+            this.#showJournal();
+        }
+
+        if (this.pack?.open) {
+            this.#showPack();
+        }
+    }
+
+    // Where the player is in the world ([x, y] metres): out in it, or at the door of the building they're in
+    #whereAmI() {
+        const actor = this.battle.actor(this.me);
+
+        if (!actor) {
+            return null;
+        }
+
+        if (actor.map === "town") {
+            return [actor.x, actor.y];
+        }
+
+        const door = this.world.interiors?.of(actor.map)?.entrance?.door ?? this.world.tavern?.door;
+
+        return door ? [door.x, door.z] : null;
+    }
+
+    /** Open the journal (or close it, if it's open): where the player stands, and what they've been asked. */
+    toggleJournal() {
+        if (this.journal?.open) {
+            this.closeJournal();
+        } else {
+            this.closePack();
+            this.#showJournal();
+        }
+    }
+
+    /** Close the journal. */
+    closeJournal() {
+        this.journal?.hide();
+    }
+
+    // The journal as it is now
+    #showJournal() {
+        const war = this.host.war;
+        const standing = this.standing;
+        const rank = standing.rank();
+        const { points, from, to } = standing.toNext();
+        const at = this.#whereAmI();
+        const liege = war?.liege(this.self.realm);
+        const realm = war?.realm(this.self.realm);
+        const people = (id) => `the ${peopleOf(id)}`;
+
+        this.journal.show({
+            standing: { title: standing.title(), points, from, to, opens: STANDINGS[rank].opens, next: STANDINGS[rank + 1] ?? null },
+            requests: standing.requests.map((request) => {
+                const where = whereTo(request, war);
+
+                return {
+                    id: request.id,
+                    title: request.title,
+                    from: `${request.from.name}, ${request.from.title.toLowerCase()}, ${request.from.townName}`,
+                    text: request.text,
+                    progress: progressOf(request),
+                    where: where.at && at ? bearing(at, where.at) : "",
+                    left: request.until === null || !war ? "" : `${Math.max(0, request.until - war.turn)} min left`,
+                };
+            }),
+            people: realm
+                ? {
+                      name: realm.name,
+                      ruler: `${realm.leader.title} ${realm.leader.name}`,
+                      seat: war.town(realm.seat)?.name ?? "nowhere",
+                      war: war.enemiesOf(liege).map(people),
+                      allies: war.realms.filter((other) => other.alive && other.id !== realm.id && war.friendly(realm.id, other.id)).map(({ id }) => people(id)),
+                      towns: war.towns.filter(({ owner }) => owner === realm.id).length,
+                  }
+                : null,
+            done: standing.done.slice(0, 6).map(({ title, from: giver, state }) => ({ title, from: giver.townName, state })),
+        });
+    }
+
     /** Open the pack (or close it, if it's open): the player's skills, gear, and what they carry. */
     togglePack() {
         if (this.pack?.open) {
             this.closePack();
         } else {
+            this.closeJournal();
             this.#showPack();
         }
     }
@@ -1600,6 +1870,7 @@ export class Game {
 
     // Trade with a shopkeeper: the pack open, their wares in it
     #openShop({ shop, keeper, name }) {
+        this.closeJournal();
         this.shopping = { shop, keeper, name };
         this.#showPack();
     }
@@ -2033,8 +2304,13 @@ export class Game {
 
                 break;
             case "turn":
-                // (The war kept as it goes)
+                // (The war kept as it goes; the journal's time left with it)
                 this.onWar(this.host.war);
+
+                if (this.journal?.open) {
+                    this.#showJournal();
+                }
+
                 break;
             case "gear":
                 this.#regear(event);
@@ -2046,6 +2322,12 @@ export class Game {
             case "sold":
             case "used":
                 this.#progressed(event);
+                break;
+            case "request":
+            case "standing":
+            case "gift":
+            case "counsel":
+                this.#stood(event);
                 break;
             default:
                 break;
@@ -2322,17 +2604,23 @@ export class Game {
 
         // The pack: its button, or I; Escape closes it (not the menu)
         this.#on(this.hud.root.querySelector("#packbutton") ?? document.createElement("button"), "click", () => this.togglePack());
+        this.#on(this.hud.root.querySelector("#journalbutton") ?? document.createElement("button"), "click", () => this.toggleJournal());
         this.#on(document, "keydown", (event) => {
             if (!this.running || this.talk?.open) {
                 return;
             }
 
-            if (event.key === "Escape" && this.pack?.open) {
+            const plain = !event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey;
+
+            if (event.key === "Escape" && (this.pack?.open || this.journal?.open)) {
                 event.preventDefault();
                 event.stopPropagation();
                 this.closePack();
-            } else if ((event.key === "i" || event.key === "I") && !event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey) {
+                this.closeJournal();
+            } else if ((event.key === "i" || event.key === "I") && plain) {
                 this.togglePack();
+            } else if ((event.key === "j" || event.key === "J") && plain) {
+                this.toggleJournal();
             }
         }, { capture: true });
 

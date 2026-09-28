@@ -1763,7 +1763,12 @@ function keep(map) {
         solid,
         moving: [],
         flames: fires.map(({ fire }) => fire),
-        lights: [...fires.map(({ light }) => light), { kind: "lamp", x: map.width / 2, y: 2.8, z: 5, colour: 0xffd6a0, intensity: 6, distance: 16, flicker: 0.05 }, { kind: "lamp", x: map.width / 2, y: 2.8, z: 11, colour: 0xffd6a0, intensity: 6, distance: 16, flicker: 0.05 }],
+        lights: [
+            ...fires.map(({ light }) => light),
+            { kind: "lamp", x: map.width / 2, y: 2.8, z: 2.5, colour: 0xffd6a0, intensity: 9, distance: 16, flicker: 0.05 },
+            { kind: "lamp", x: map.width / 2, y: 2.8, z: 8, colour: 0xffd6a0, intensity: 9, distance: 18, flicker: 0.05 },
+            { kind: "lamp", x: map.width / 2, y: 2.8, z: 13, colour: 0xffd6a0, intensity: 8, distance: 16, flicker: 0.05 },
+        ],
         hearth: fires[0]?.at ?? null,
     };
 }

@@ -63,7 +63,7 @@ function streetOf(seed) {
 }
 
 // A row of every special building: taverns of every sort (their names and signs from the seed),
-// the guild, churches to the Six, the smithy, the market hall and the windmill
+// the guild, churches to the Six, the smithy, the market hall, the windmill, a town hall and a keep
 function landmarksOf(seed) {
     const random = createRandom(seed);
     const pieces = [];
@@ -74,6 +74,8 @@ function landmarksOf(seed) {
         { name: "blacksmith" },
         { name: "market" },
         { name: "windmill" },
+        { name: "hall", style: ["timber", "stone", "brick"][seed % 3], storeys: 2 },
+        { name: "keep" },
     ];
     let x = 4;
 

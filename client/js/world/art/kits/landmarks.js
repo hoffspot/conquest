@@ -627,7 +627,8 @@ export async function keep(piece) {
     const slitsAlong = (face, from, to, fixed) => {
         for (let u = from + m(2); u < to - m(1.6); u += m(2.4)) {
             for (const [y, tall] of [[m(4.2), m(1.2)], [height * 0.62, m(1.8)], [height * 0.82, m(1.4)]]) {
-                if (face === "front" && Math.abs(u - mid) < m(2.6) && y < m(6.5)) {
+                // (Clear of the door, and of the banners either side of it)
+                if (face === "front" && ((Math.abs(u - mid) < m(2.6) && y < m(6.5)) || (Math.abs(Math.abs(u - mid) - m(3.2)) < m(0.9) && y + tall > m(3.4) && y < height * 0.72))) {
                     continue;
                 }
 
