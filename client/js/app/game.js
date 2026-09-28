@@ -196,7 +196,7 @@ export class Game {
      *     host made here to carry on from.
      * @param {Function} [options.onWar] - Hears the war (core/war/war.js) after each of its
      *     turns (to keep it).
-     * @param {object} [options.progress] - The player's skills, coppers, pack and gear, as kept
+     * @param {object} [options.progress] - The player's skills, gold, pack and gear, as kept
      *     (save.js loadProgress: core/progress.js Progress's toJSON).
      * @param {Function} [options.onProgress] - Hears them whenever they change (to keep them).
      * @param {object} [options.standing] - Where they stand with their people, and the requests
@@ -338,7 +338,7 @@ export class Game {
         return this.self.standing;
     }
 
-    /** The player's skills, coppers, pack and gear (core/progress.js Progress). */
+    /** The player's skills, gold, pack and gear (core/progress.js Progress). */
     get progress() {
         return this.self.progress;
     }
@@ -520,7 +520,7 @@ export class Game {
 
         this.hud.clear();
         this.hud.setPlayer(player);
-        this.hud.setCoppers(this.progress.gold);
+        this.hud.setGold(this.progress.gold);
 
         for (const actor of this.battle.actors.filter((other) => other.id !== this.me && !other.neutral)) {
             this.hud.track(actor.id, { ...actor, hostile: this.battle.hostile(actor, player) });
@@ -1373,7 +1373,7 @@ export class Game {
                     if (!result.ok) {
                         this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.6);
                     } else if (effect.price || effect.pay) {
-                        this.hud.setCoppers(this.progress.gold);
+                        this.hud.setGold(this.progress.gold);
                         this.onProgress(this.progress);
                     }
                 });
@@ -1493,15 +1493,13 @@ export class Game {
             ready: () => ready,
             serving: () => Boolean(war.realm(town.owner)?.overlord),
         };
-        const coppers = (count) => `${count} ${count === 1 ? "copper" : "coppers"}`;
-
         // What came of something asked, for their words: heard at once; or, joined to another's
         // world (docs/WAR.md M11), a moment later, and what's being said said again as it now is
         const heard = (effect, result, kind, chosen) => {
             if (effect.work === "ask") {
                 state.offer = result.ok ? result.request : null;
                 names.offer = state.offer?.text ?? "";
-                names.reward = state.offer ? (state.offer.reward.coppers ? coppers(state.offer.reward.coppers) : "your name in the rolls") : "";
+                names.reward = state.offer ? (state.offer.reward.gold ? `${state.offer.reward.gold} gold` : "your name in the rolls") : "";
             } else if (effect.work === "accept") {
                 state.offer = null;
 
@@ -1510,11 +1508,11 @@ export class Game {
                 }
             } else if (effect.report) {
                 const handed = result.ok ? (result.reported ?? []) : [];
-                const paid = handed.reduce((sum, { reward }) => sum + reward.coppers, 0);
+                const paid = handed.reduce((sum, { reward }) => sum + reward.gold, 0);
                 const first = handed[0];
 
                 state.reported = result.ok;
-                names.reported = !first ? "" : `${first.kind === "message" ? `A letter from ${first.from.townName}? I'll see it read.` : first.kind === "tithe" ? "The treasury thanks you." : "Done, and well done."}${handed.length > 1 ? " And the rest besides." : ""}${paid ? ` ${coppers(paid)}, for your trouble.` : ""}`;
+                names.reported = !first ? "" : `${first.kind === "message" ? `A letter from ${first.from.townName}? I'll see it read.` : first.kind === "tithe" ? "The treasury thanks you." : "Done, and well done."}${handed.length > 1 ? " And the rest besides." : ""}${paid ? ` ${paid} gold, for your trouble.` : ""}`;
             } else if (effect.armoury) {
                 names.gift = result.ok && result.item ? `From the armoury, for your rank: ${itemLabel(result.item).toLowerCase()}. Wear it well.` : (REFUSALS[result.reason] ?? "There's nothing for you.");
             } else if (kind) {
@@ -1523,7 +1521,7 @@ export class Game {
                 names.counsel = result.ok ? said[kind] : "No. That cannot be.";
             }
 
-            this.hud.setCoppers(this.progress.gold);
+            this.hud.setGold(this.progress.gold);
             this.onProgress(this.progress);
             this.onStanding(this.standing);
 
@@ -1855,7 +1853,7 @@ export class Game {
             this.hud.message(`${TREES[event.tree].name}: ${event.title}!${ability}`, 3);
             this.sound?.play("wake");
         } else if (event.type === "loot") {
-            const things = [event.gold ? `${event.gold} coppers` : null, ...event.items.map((item) => itemLabel(item).toLowerCase())].filter(Boolean);
+            const things = [event.gold ? `${event.gold} gold` : null, ...event.items.map((item) => itemLabel(item).toLowerCase())].filter(Boolean);
 
             this.hud.message(`You find ${things.join(", ")}.`, 2.5);
         }
@@ -1864,7 +1862,7 @@ export class Game {
             this.hud.setHealth(this.me, actor.hp, actor.maxHp);
         }
 
-        this.hud.setCoppers(this.progress.gold);
+        this.hud.setGold(this.progress.gold);
         this.onProgress(this.progress);
 
         if (this.pack?.open) {
@@ -1903,7 +1901,7 @@ export class Game {
                 count: `${request.title}: ${request.count} of ${request.target.need}.`,
                 ready: request.kind === "scout" ? `You've seen enough. ${back}` : `${request.title}: done. ${back}`,
                 there: `You're here to hold ${request.target.name}. Stay till they're gone.`,
-                done: `${request.title}: done.${event.reward?.coppers ? ` ${event.reward.coppers} coppers.` : ""}`,
+                done: `${request.title}: done.${event.reward?.gold ? ` ${event.reward.gold} gold.` : ""}`,
                 failed: `${request.title}: failed. Your standing suffers.`,
                 void: `${request.title}: it's come to nothing.`,
                 abandoned: `${request.title}: given up.`,
@@ -1917,7 +1915,7 @@ export class Game {
             this.sound?.play("wake");
         }
 
-        this.hud.setCoppers(this.progress.gold);
+        this.hud.setGold(this.progress.gold);
         this.onProgress(this.progress);
         this.onStanding(this.standing);
 
@@ -2128,8 +2126,8 @@ export class Game {
                 this.hud.message(REFUSALS[result.reason] ?? CAST_FAILURES[result.reason] ?? "Can't do that.", 1.6);
                 this.sound?.play("denied");
             } else {
-                // (The coppers shown at once: the events it made are heard with the next step)
-                this.hud.setCoppers(this.progress.gold);
+                // (The gold shown at once: the events it made are heard with the next step)
+                this.hud.setGold(this.progress.gold);
             }
 
             if (this.pack.open) {
@@ -2593,7 +2591,7 @@ export class Game {
             case "follower":
                 if (event.id === this.me) {
                     this.hud.message({ joined: `${event.name} follows you now.`, fallen: `${event.name} has fallen!`, dismissed: `${event.name} goes their own way.` }[event.change], 3);
-                    this.hud.setCoppers(this.progress.gold);
+                    this.hud.setGold(this.progress.gold);
                     this.#mirror();
 
                     // (Kept with the character)

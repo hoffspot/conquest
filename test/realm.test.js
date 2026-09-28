@@ -27,7 +27,7 @@ function run(host, ms) {
 const put = (actor, map, [x, y]) => Object.assign(actor, { map, square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [], order: null, target: null });
 
 // A request as the officials make them (standing.js offerRequest), for the tests to hand a player
-const request = (kind, fields) => ({ kind, title: kind, from: { id: "home:hall-1/reeve", name: "Reeve", title: "Reeve", town: null, townName: "Home", post: "hall" }, given: 0, state: "open", count: 0, until: 999, reward: { standing: 20, coppers: 10 }, text: "", key: kind, ...fields });
+const request = (kind, fields) => ({ kind, title: kind, from: { id: "home:hall-1/reeve", name: "Reeve", title: "Reeve", town: null, townName: "Home", post: "hall" }, given: 0, state: "open", count: 0, until: 999, reward: { standing: 20, gold: 10 }, text: "", key: kind, ...fields });
 
 describe("a player's part in their people (host.js, standing.js)", () => {
     let world;
@@ -136,13 +136,13 @@ describe("a player's part in their people (host.js, standing.js)", () => {
         assert.equal(host.postOf(clerk.id).report, true);
     });
 
-    it("takes a letter from whoever it's for, and a tithe, paying what they're worth: standing, coppers, and a rank when it's reached", () => {
+    it("takes a letter from whoever it's for, and a tithe, paying what they're worth: standing, gold, and a rank when it's reached", () => {
         const { host, player } = hosted({ points: STANDINGS[1].points - 5 });
         const home = host.world.start.id;
 
         player.progress.gold = 100;
-        player.standing.take(request("message", { target: { town: home, name: "Home", at: [0, 0], post: "hall" }, reward: { standing: 12, coppers: 7 } }));
-        player.standing.take(request("tithe", { from: { ...request().from, town: home }, target: { coppers: 30 }, reward: { standing: 15, coppers: 0 } }));
+        player.standing.take(request("message", { target: { town: home, name: "Home", at: [0, 0], post: "hall" }, reward: { standing: 12, gold: 7 } }));
+        player.standing.take(request("tithe", { from: { ...request().from, town: home }, target: { gold: 30 }, reward: { standing: 15, gold: 0 } }));
 
         const treasury = host.war.realm("human").treasury;
 

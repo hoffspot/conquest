@@ -205,7 +205,7 @@ describe("conversations (dialogue.js)", () => {
 
         reply(wench, "for your trouble");
         assert.match(wench.line, /generous/);
-        assert.ok(wench.choices.some(({ text }) => text.includes("Another copper")));
+        assert.ok(wench.choices.some(({ text }) => text.includes("Another coin")));
         assert.deepEqual(memory.flags, ["tipped"]);
     });
 });

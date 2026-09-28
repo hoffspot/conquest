@@ -1170,7 +1170,7 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     }
 }
 
-/* The player's coppers, on the line with their name (at its right), the bars across under both */
+/* The player's gold, on the line with their name (at its right), the bars across under both */
 #playerplate {
     grid-template-columns: 1fr auto;
     align-items: baseline;

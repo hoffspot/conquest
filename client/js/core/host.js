@@ -72,7 +72,7 @@ export const ENVOY = Object.freeze({ near: 150, far: 300, escort: 2, ahead: 24, 
 
 /**
  * An adventurer hired to follow a player (docs/WAR.md M9), by their calling: what they fight
- * with, and what it costs to hire them (coppers). How many a player can lead: one, and more as
+ * with, and what it costs to hire them (gold). How many a player can lead: one, and more as
  * their Command grows (progress.js TREES).
  */
 export const HIRES = Object.freeze({
@@ -163,7 +163,7 @@ export const REFUSALS = Object.freeze({
     link: "No way through there.",
     far: "Too far away.",
     talking: "Not talking to them.",
-    coppers: "Not enough coppers.",
+    gold: "Not enough gold.",
     hire: "They're not for hire.",
     company: "You can't lead any more than you have.",
     follower: "They don't follow you.",
@@ -420,7 +420,7 @@ export class Host {
      *  - { type: "cast", spell, target }: cast a spell (target: an id, or none for themselves);
      *  - { type: "talk", with }: start talking to one of the folk (an id), or stop (null);
      *  - { type: "effect", effect }: something done by talking (buying, paying, renting...), to
-     *    whoever they're talking to (paid for in coppers, if it has a price);
+     *    whoever they're talking to (paid for in gold, if it has a price);
      *  - { type: "buy", item, from }: buy something ({ id, quality }) from a shopkeeper near them
      *    (an id); { type: "sell", index, to }: sell what's at `index` in their pack to one;
      *  - { type: "equip", index }, { type: "unequip", slot }: put on (or take up) gear from their
@@ -899,7 +899,7 @@ export class Host {
         }
     }
 
-    // What a player finds on a foe they've felled: coppers, and things (into their pack, while there's room)
+    // What a player finds on a foe they've felled: gold, and things (into their pack, while there's room)
     #loot(player, fallen) {
         const { gold, items } = rollLoot(fallen.kind, this.random);
         const kept = items.filter((item) => player.progress.stow(item));
@@ -981,7 +981,7 @@ export class Host {
         const price = priceOf(item, { haggle: player.progress.bonuses().haggle });
 
         if (price > player.progress.gold) {
-            return refuse("coppers");
+            return refuse("gold");
         }
 
         if (!player.progress.stow(item)) {
@@ -1603,7 +1603,7 @@ export class Host {
         const { price } = HIRES[calling];
 
         if (player.progress.gold < price) {
-            return refuse("coppers");
+            return refuse("gold");
         }
 
         player.progress.gold -= price;
@@ -1813,7 +1813,7 @@ export class Host {
         const price = Math.max(0, Math.floor(Number(effect.price ?? effect.pay) || 0));
 
         if (price > player.progress.gold) {
-            return refuse("coppers");
+            return refuse("gold");
         }
 
         if (price) {
@@ -1954,20 +1954,20 @@ export class Host {
             const handed = [];
 
             for (const request of due) {
-                // (A tithe paid, if they've the coppers: into their people's treasury)
+                // (A tithe paid, if they've the gold: into their people's treasury)
                 if (request.kind === "tithe") {
-                    if (player.progress.gold < request.target.coppers) {
+                    if (player.progress.gold < request.target.gold) {
                         continue;
                     }
 
-                    player.progress.gold -= request.target.coppers;
-                    this.war.give(player.realm, request.target.coppers * TITHE_RATE);
+                    player.progress.gold -= request.target.gold;
+                    this.war.give(player.realm, request.target.gold * TITHE_RATE);
                 }
 
                 handed.push(this.#rewarded(player, request));
             }
 
-            return handed.length ? { ok: true, reported: handed } : refuse("coppers");
+            return handed.length ? { ok: true, reported: handed } : refuse("gold");
         }
 
         if (effect.armoury) {
@@ -2045,13 +2045,13 @@ export class Host {
         return refuse("command");
     }
 
-    // A request done and told of: set down, its reward paid (coppers, standing: any rank it brings told of)
+    // A request done and told of: set down, its reward paid (gold, standing: any rank it brings told of)
     #rewarded(player, request) {
         const { standing } = player;
         const { reward } = request;
 
         standing.close(request.id, "done");
-        player.progress.gold += reward.coppers;
+        player.progress.gold += reward.gold;
         this.#event("request", { id: player.id, change: "done", request: structuredClone(request), reward: { ...reward } });
 
         for (const up of standing.gain(reward.standing)) {

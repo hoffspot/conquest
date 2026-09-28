@@ -186,7 +186,7 @@ export class JournalPanel {
 
                 return row;
             }),
-            element("li", "journal-empty", company.length ? `You can lead ${most} in all.` : `No one follows you. Adventurers at the guilds will, for coppers: you can lead ${most}.`),
+            element("li", "journal-empty", company.length ? `You can lead ${most} in all.` : `No one follows you. Adventurers at the guilds will, for gold: you can lead ${most}.`),
         );
         sections.push(this.#section("Your company", band));
 

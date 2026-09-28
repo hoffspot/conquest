@@ -193,4 +193,21 @@ describe("standing (standing.js)", () => {
         // (Nonsense kept is let go)
         assert.deepEqual(new Standing({ points: -4, requests: [{ kind: "nonsense" }], claimed: ["x", 2] }).toJSON(), { points: 0, claimed: [2], requests: [], done: [], next: 1 });
     });
+
+    it("reads requests kept when the money was coppers as gold", () => {
+        const kept = {
+            requests: [{ id: "request-1", kind: "tithe", from: { name: "Ida Crane", townName: "Home" }, target: { coppers: 30 }, reward: { standing: 15, coppers: 0 } }],
+            done: [{ id: "request-2", kind: "wild", target: { wild: true, need: 2 }, reward: { standing: 22, coppers: 14 } }],
+            next: 3,
+        };
+        const standing = new Standing(kept);
+
+        assert.deepEqual(standing.requests[0].target, { gold: 30 });
+        assert.deepEqual(standing.requests[0].reward, { standing: 15, gold: 0 });
+        assert.deepEqual(standing.done[0].target, { wild: true, need: 2 });
+        assert.deepEqual(standing.done[0].reward, { standing: 22, gold: 14 });
+        assert.equal(progressOf(standing.requests[0]), "Bring 30 gold to Ida Crane in Home.");
+        // (What was kept is left as it was)
+        assert.deepEqual(kept.requests[0].target, { coppers: 30 });
+    });
 });

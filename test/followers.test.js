@@ -1,5 +1,5 @@
 // Followers (client/js/core/host.js, core/battle.js; docs/WAR.md M9): an adventurer at a guild
-// hired for coppers, as many as a player's Command lets them lead; following them, through doors
+// hired for gold, as many as a player's Command lets them lead; following them, through doors
 // too, fighting their enemies near them (what they bring down counting for their leader, whose
 // Command grows by it); told to wait, to follow, or to go; one who falls, gone; and all of it kept
 // with the character, and with the world
@@ -26,7 +26,7 @@ function run(host, ms) {
 
 const put = (actor, map, [x, y]) => Object.assign(actor, { map, square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [], order: null, target: null });
 
-// A world with its player in it, before the home guild's adventurers, coppers in hand
+// A world with its player in it, before the home guild's adventurers, gold in hand
 function atTheGuild({ gold = 200 } = {}) {
     const host = new Host(buildWorld({ seed: 2 }), { populate: false });
 
@@ -73,7 +73,7 @@ describe("followers (host.js, battle.js)", () => {
         // (No more than they can lead)
         assert.equal(hire(host, guild, 1).result.reason, "company");
 
-        // (Nor for those who aren't for hire, nor without the coppers)
+        // (Nor for those who aren't for hire, nor without the gold)
         const receptionist = guild.folk.find(({ role }) => role === "receptionist");
         const me = host.battle.actor(HOST_PLAYER);
         const npc = host.battle.actor(receptionist.id);
@@ -84,7 +84,7 @@ describe("followers (host.js, battle.js)", () => {
 
         const poor = atTheGuild({ gold: 5 });
 
-        assert.equal(hire(poor.host, poor.guild).result.reason, "coppers");
+        assert.equal(hire(poor.host, poor.guild).result.reason, "gold");
     });
 
     it("follows them, through doors too, and fights their enemies near them: what they bring down counts for their leader", () => {

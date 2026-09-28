@@ -107,7 +107,7 @@ describe("growing stronger in play (host.js, progress.js)", () => {
         assert.equal(player.maxHp, 50 + 15 + 30);
     });
 
-    it("buys from, and sells to, the folk who keep shops, near them, as far as the coppers go", () => {
+    it("buys from, and sells to, the folk who keep shops, near them, as far as the gold goes", () => {
         const host = hosted({ gold: 30 });
         const barkeep = atTheBar(host);
         const { progress } = host.players.get(HOST_PLAYER);
@@ -119,7 +119,7 @@ describe("growing stronger in play (host.js, progress.js)", () => {
         assert.deepEqual(host.command(HOST_PLAYER, { type: "buy", item: { id: "meal" }, from: "orc" }), { ok: false, reason: "far" });
 
         progress.gold = 1;
-        assert.deepEqual(host.command(HOST_PLAYER, { type: "buy", item: { id: "meal" }, from: barkeep.id }), { ok: false, reason: "coppers" });
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "buy", item: { id: "meal" }, from: barkeep.id }), { ok: false, reason: "gold" });
 
         assert.deepEqual(host.command(HOST_PLAYER, { type: "sell", index: 0, to: barkeep.id }), { ok: true });
         assert.equal(progress.gold, 1 + priceOf({ id: "meal" }, { selling: true }));
@@ -217,7 +217,7 @@ describe("growing stronger in play (host.js, progress.js)", () => {
 
         assert.deepEqual(host.command(HOST_PLAYER, { type: "effect", effect: { buy: "blessing", price: 5 } }), { ok: true });
         assert.ok(Math.abs(player.power.melee - 1.05) < 1e-9 && Math.abs(player.armor - 0.03) < 1e-9);
-        assert.deepEqual(host.command(HOST_PLAYER, { type: "effect", effect: { rent: "room", price: 10 } }), { ok: false, reason: "coppers" });
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "effect", effect: { rent: "room", price: 10 } }), { ok: false, reason: "gold" });
         assert.equal(progress.gold, 12 - 2 - 2 - 5);
 
         // The blessing wears off
