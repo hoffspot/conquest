@@ -48,6 +48,15 @@ export class Hud {
         this.setStamina(id, stamina, maxStamina);
     }
 
+    /** Show how many coppers the player has, under their name. */
+    setCoppers(coppers) {
+        const coins = this.plate.querySelector(".coins");
+
+        if (coins) {
+            coins.textContent = `${coppers} coppers`;
+        }
+    }
+
     /** Take away the bar over a character (gone from the world). */
     untrack(id) {
         this.tracked.get(id)?.remove();

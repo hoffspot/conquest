@@ -1477,6 +1477,106 @@ test("tapping someone walks the player up to talk: their name and what they are,
     expect(await page.evaluate(() => ({ talking: window.pellagos.game.battle.actor("barkeep").talkingTo, remembered: window.pellagos.game.memory.barkeep.talks }))).toEqual({ talking: null, remembered: 1 });
 });
 
+test("the pack shows what's grown and carried; a skill ranks up with use; trading with the barkeep, the coppers change hands; all kept for the next time", async ({ page }) => {
+    // A saved game whose hero is a blow from their next rank with the blade, with 30 coppers and a draught
+    await page.addInitScript((save) => {
+        localStorage.setItem("pellagos.save", JSON.stringify(save));
+
+        if (!localStorage.getItem("pellagos.progress")) {
+            localStorage.setItem("pellagos.progress", JSON.stringify({ created: save.created, seed: save.seed, skills: { blade: 99 }, gold: 30, pack: [{ id: "potion" }], gear: null }));
+        }
+    }, { ...SAVE, seed: 1 });
+    await title(page);
+    await page.locator("#continuebutton").click();
+    await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
+
+    // I opens the pack: the coppers, the draught to use, the staff in hand, each skill untried
+    const pack = page.locator(".pack");
+
+    await expect(page.locator("#playerplate .coins")).toHaveText("30 coppers");
+    await page.keyboard.press("i");
+    await expect(pack).toBeVisible();
+    await expect(pack.locator(".pack-gold")).toHaveText("30 coppers");
+    await expect(pack.locator(".carried .pack-row")).toHaveText(["Healing draughtUse"]);
+    await expect(pack.locator(".gear .pack-row").first()).toHaveText("WeaponStaff");
+    await expect(pack.locator('.pack-skill[data-tree="blade"] .pack-skill-rank')).toHaveText("Untried (0)");
+    await page.keyboard.press("Escape");
+    await expect(pack).toBeHidden();
+
+    // A blow at the orc: the blade's first rank, told
+    const ranked = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const orc = game.battle.actor("orc");
+        const player = game.battle.actor("player");
+
+        game.stop();
+        Object.assign(player, { x: orc.x, y: orc.y + 2, square: [orc.square[0], orc.square[1] + 2] });
+        game.previous.set("player", { x: player.x, y: player.y });
+        game.avatars.get("player").place(player.x, player.y, Math.PI);
+
+        for (let step = 0; step < 80 && game.progress.rank("blade") < 1 && !player.dead; step++) {
+            game.advance(0.5, { render: false });
+        }
+
+        const told = document.querySelector("#banner").textContent;
+
+        Object.assign(orc, { dead: true, respawnAt: Infinity });
+
+        return { rank: game.progress.rank("blade"), told };
+    });
+
+    expect(ranked).toEqual({ rank: 1, told: "Blade: Trained!" });
+
+    // Into the taproom to the barkeep, and what he has for sale: an ale bought for 2 coppers
+    await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        player.hp = player.maxHp;
+        game.battle.command("player", { type: "enter", link: "tavern-door" });
+
+        for (let second = 0; second < 120 && player.map !== "taproom"; second += 5) {
+            game.advance(5, { render: false });
+        }
+
+        game.battle.command("player", { type: "move", to: [7, 6] });
+        game.advance(5);
+
+        const spot = session.view.toScreen(game.avatars.get("barkeep").point(0.6));
+
+        game.tap(spot.x, spot.y, { time: performance.now() + 9000 });
+        game.advance(8);
+        game.start();
+    });
+
+    const talk = page.locator(".talk");
+
+    await expect(talk).toBeVisible();
+    await talk.getByRole("button", { name: /for sale/ }).click();
+    await expect(talk).toBeHidden();
+    await expect(pack).toBeVisible();
+    await expect(pack.locator(".pack-title")).toContainText("Trading with");
+    await expect(pack.locator(".wares .pack-row")).toHaveText(["Tankard of ale2 coppersBuy", "Hot meal5 coppersBuy"]);
+    await pack.getByRole("button", { name: "Buy Tankard of ale for 2 coppers" }).click();
+    await expect(pack.locator(".pack-gold")).toHaveText("28 coppers");
+    await expect(page.locator("#playerplate .coins")).toHaveText("28 coppers");
+    await expect(pack.locator(".carried .pack-label")).toHaveText(["Healing draught", "Tankard of ale"]);
+
+    // Sold back (for a copper), then bought again; the pack closed with its button
+    await pack.getByRole("button", { name: /Sell Tankard of ale/ }).click();
+    await expect(pack.locator(".pack-gold")).toHaveText("29 coppers");
+    await pack.getByRole("button", { name: "Buy Tankard of ale for 2 coppers" }).click();
+    await expect(pack.locator(".pack-gold")).toHaveText("27 coppers");
+    await page.locator("#packbutton").click();
+    await expect(pack).toBeHidden();
+
+    // Kept for the next time (as it was read at the start): the blade trained, the coppers, the ale
+    const kept = await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.progress")));
+
+    expect(kept).toMatchObject({ created: SAVE.created, seed: 1, gold: 27, pack: [{ id: "potion" }, { id: "ale" }] });
+    expect(kept.skills.blade).toBeGreaterThanOrEqual(100);
+});
+
 test("a building gone into is marked on the minimap; holding the minimap opens the world map, fog over all but where the player's been", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

@@ -29,14 +29,15 @@ import { soldierLook } from "../characters/soldiers.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
 import { STEP_MS, TALK_REACH } from "../core/battle.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
-import { HOST_PLAYER, Host, REFUSALS } from "../core/host.js";
+import { HOST_PLAYER, Host, REFUSALS, SHOP_REACH, SHOPKEEPERS } from "../core/host.js";
+import { ABILITIES, itemLabel, ITEMS, priceOf, TREES, wares } from "../core/progress.js";
 import { peopleOf } from "../core/war/news.js";
 import { STAGES } from "../core/war/war.js";
 import { GODS } from "../core/lore/gods.js";
 import { BECKON, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js";
 import { squaresOf } from "../core/grid.js";
 import { GROUND } from "../core/setpieces/pieces.js";
-import { CAST_FAILURES, SPELLS } from "../core/spells.js";
+import { CAST_FAILURES, lookOf, SPELLS } from "../core/spells.js";
 import { Variety } from "../core/variety.js";
 import { distanceBetween, longestReach, WEAPONS } from "../core/weapons.js";
 import { Avatar } from "../world/avatar.js";
@@ -53,20 +54,22 @@ import { TREE_WIND } from "../world/art/kits/trees.js";
 import { Minimap, treesOf } from "./minimap.js";
 import { CameraFollow } from "./camera.js";
 import { Doors } from "./doors.js";
+import { PackPanel } from "./pack.js";
 import { TalkPanel } from "./talk.js";
-import { ACTIONS, ActionWheel, directionOf } from "./wheel.js";
+import { ACTIONS, ActionWheel, directionOf, WHEELS } from "./wheel.js";
 
 /** What every new character wears; their weapon (and a bow's quiver) are added to it. */
 export const STARTING_OUTFIT = Object.freeze(["tunic", "bracers", "breeches", "boots"]);
 
 /**
  * Everything a character with a starting weapon wears and carries (EQUIPMENT ids): in spiked
- * boots (`boots`, or the boots on their own), instead of leather ones.
+ * boots (`boots`, or the boots on their own), instead of leather ones; and any armour worn over
+ * it all (`worn`: core/progress.js Progress worn).
  */
-export function heroEquipment(weapon, boots = false) {
+export function heroEquipment(weapon, boots = false, worn = []) {
     const kicks = boots || weapon === "boots";
 
-    return [...STARTING_OUTFIT.filter((id) => !(kicks && id === "boots")), ...WEAPONS[weapon].equipment, ...(kicks && weapon !== "boots" ? WEAPONS.boots.equipment : [])];
+    return [...STARTING_OUTFIT.filter((id) => !(kicks && id === "boots")), ...WEAPONS[weapon].equipment, ...(kicks && weapon !== "boots" ? WEAPONS.boots.equipment : []), ...worn];
 }
 
 /** How a character holds its weapon to fight (actions.js GUARDS, DRAWS), for its WEAPONS key. */
@@ -150,7 +153,7 @@ const EMBERS = 5;
 const VISITS = Object.freeze({ every: 0.5, budget: 6 });
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "gone"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "gone", "rank", "loot", "bought", "sold", "used", "gear", "ability"]);
 
 const _focus = new THREE.Vector3();
 const _lean = new THREE.Vector3();
@@ -179,8 +182,11 @@ export class Game {
      *     host made here to carry on from.
      * @param {Function} [options.onWar] - Hears the war (core/war/war.js) after each of its
      *     turns (to keep it).
+     * @param {object} [options.progress] - The player's skills, coppers, pack and gear, as kept
+     *     (save.js loadProgress: core/progress.js Progress's toJSON).
+     * @param {Function} [options.onProgress] - Hears them whenever they change (to keep them).
      */
-    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {} }) {
+    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {}, progress = {}, onProgress = () => {} }) {
         this.view = view;
         this.kit = kit;
         this.sound = sound;
@@ -193,7 +199,12 @@ export class Game {
         this.me = me;
         this.host = host ?? new Host(world, { populate: false, war });
         this.onWar = onWar;
-        this.host.join({ id: me, hero, talks, explored });
+        this.host.join({ id: me, hero, talks, explored, progress });
+        this.onProgress = onProgress;
+
+        /** Trading with a shopkeeper (from their talk): { shop, keeper (their id), name }, or null. */
+        this.shopping = null;
+        this.shopWanted = null;
         this.host.populate();
         this.battle = this.host.battle;
         this.avatars = new Map();
@@ -283,6 +294,11 @@ export class Game {
     /** This game's player, as the host has them (core/host.js players). */
     get self() {
         return this.host.players.get(this.me);
+    }
+
+    /** The player's skills, coppers, pack and gear (core/progress.js Progress). */
+    get progress() {
+        return this.self.progress;
     }
 
     /** What each of the folk remembers of the player (by id). */
@@ -429,6 +445,13 @@ export class Game {
         this.minimap.show(this.minimapShown ?? true);
         this.wheel = new ActionWheel(this.hud.root);
         this.talk = new TalkPanel(this.hud.root);
+        this.pack = new PackPanel(this.hud.root);
+        this.pack.onEquip = (index) => this.#packCommand({ type: "equip", index });
+        this.pack.onUnequip = (slot) => this.#packCommand({ type: "unequip", slot });
+        this.pack.onUse = (index) => this.#packCommand({ type: "use", index });
+        this.pack.onBuy = (item) => this.#packCommand({ type: "buy", item, from: this.shopping?.keeper });
+        this.pack.onSell = (index) => this.#packCommand({ type: "sell", index, to: this.shopping?.keeper });
+        this.pack.onClose = () => this.closePack();
         this.talk.onChoose = (index) => this.#say(index);
         this.talk.onClose = () => this.#endTalk();
         this.effects.camera = view.camera;
@@ -448,6 +471,7 @@ export class Game {
 
         this.hud.clear();
         this.hud.setPlayer(player);
+        this.hud.setCoppers(this.progress.gold);
 
         for (const actor of this.battle.actors.filter((other) => other.id !== this.me && !other.neutral)) {
             this.hud.track(actor.id, { ...actor, hostile: this.battle.hostile(actor, player) });
@@ -482,8 +506,8 @@ export class Game {
         }
 
         if (actor.kind === "player") {
-            const { shape, look, weapon, boots } = this.host.players.get(actor.id).hero;
-            const character = new Character(this.kit, { shape, look, equipment: heroEquipment(weapon, boots), hairDetail });
+            const { hero: { shape, look, weapon, boots }, progress } = this.host.players.get(actor.id);
+            const character = new Character(this.kit, { shape, look, equipment: heroEquipment(weapon, boots, progress.worn()), hairDetail });
 
             // (Weapons put away to start with: drawn for a fight)
             character.sheathe(true);
@@ -684,6 +708,7 @@ export class Game {
         this.minimap?.dispose();
         this.wheel?.element.remove();
         this.talk?.panel.remove();
+        this.pack?.panel.remove();
         this.curtain?.remove();
         this.view.setOccluders(null);
         this.view.setFocus(null);
@@ -869,7 +894,7 @@ export class Game {
         // Light gathers in the hand of anyone casting a spell
         for (const actor of battle.actors) {
             if (actor.casting && this.avatars.has(actor.id) && Math.random() < dt * 30) {
-                this.effects.charge(actor.casting.spell, this.avatars.get(actor.id).hand("Left"), this.casting.get(actor.id) ?? 0);
+                this.effects.charge(lookOf(actor.casting.spell), this.avatars.get(actor.id).hand("Left"), this.casting.get(actor.id) ?? 0);
             }
         }
 
@@ -887,6 +912,7 @@ export class Game {
         hud.setTarget(target?.id ?? null);
         this.#bleed(dt);
         this.#keepTalking();
+        this.#keepShopping();
         this.#restPlayer();
         this.effects.update(dt, view.pixelsPerMetre());
         this.#drawMinimap(target);
@@ -1204,7 +1230,21 @@ export class Game {
             memory: this.memory[npc.id],
             knowledge: this.knowledge,
             variety: this.talkVariety,
-            onEffect: (effect) => this.#command({ type: "effect", effect }),
+            onEffect: (effect) => {
+                const result = this.#command({ type: "effect", effect });
+
+                // (Their wares, once the talk's over; what can't be paid for, said)
+                if (effect.shop && SHOPKEEPERS[npc.role]) {
+                    this.shopWanted = { shop: effect.shop, keeper: npc.id, name: npc.name };
+                }
+
+                if (!result.ok) {
+                    this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.6);
+                } else if (effect.price || effect.pay) {
+                    this.hud.setCoppers(this.progress.gold);
+                    this.onProgress(this.progress);
+                }
+            },
         });
 
         this.talking = { id: npc.id, conversation };
@@ -1266,6 +1306,21 @@ export class Game {
         this.#command({ type: "talk", with: null });
         this.talking = null;
         this.talk?.hide();
+
+        if (this.shopWanted) {
+            this.#openShop(this.shopWanted);
+            this.shopWanted = null;
+        }
+    }
+
+    // Trading ends once the player's walked away from the shopkeeper (or they're gone)
+    #keepShopping() {
+        const keeper = this.shopping && this.battle.actor(this.shopping.keeper);
+        const player = this.battle.actor(this.me);
+
+        if (this.shopping && (!keeper || !player || keeper.map !== player.map || distanceBetween(player.square, keeper.square) > SHOP_REACH)) {
+            this.closePack();
+        }
     }
 
     // A talk ends if it can't go on: either of them gone (dead, or elsewhere), the player walked
@@ -1479,6 +1534,118 @@ export class Game {
             this.visitClock = VISITS.every;
             this.doors?.sync();
         }
+    }
+
+    // --- Growing stronger (core/progress.js) ---
+
+    // The player's progress changed (a rank, loot, trade, gear): told, shown, and kept
+    #progressed(event) {
+        if (event.id !== this.me) {
+            return;
+        }
+
+        const actor = this.battle.actor(this.me);
+
+        if (event.type === "rank") {
+            const ability = event.ability ? ` You can use ${ABILITIES[event.ability].label.toLowerCase()} now.` : "";
+
+            this.hud.message(`${TREES[event.tree].name}: ${event.title}!${ability}`, 3);
+            this.sound?.play("wake");
+        } else if (event.type === "loot") {
+            const things = [event.gold ? `${event.gold} coppers` : null, ...event.items.map((item) => itemLabel(item).toLowerCase())].filter(Boolean);
+
+            this.hud.message(`You find ${things.join(", ")}.`, 2.5);
+        }
+
+        if (actor) {
+            this.hud.setHealth(this.me, actor.hp, actor.maxHp);
+        }
+
+        this.hud.setCoppers(this.progress.gold);
+        this.onProgress(this.progress);
+
+        if (this.pack?.open) {
+            this.#showPack();
+        }
+    }
+
+    // Someone's gear changed: what they wear and carry shown (and how they hold their weapon)
+    #regear({ id, weapon, worn }) {
+        const avatar = this.avatars.get(id);
+        const hero = this.host.players.get(id)?.hero;
+
+        if (!avatar || !hero) {
+            return;
+        }
+
+        avatar.character.setEquipment(heroEquipment(weapon, hero.boots, worn));
+        avatar.character.sheathe(!this.battle.actor(id)?.armed);
+        avatar.actions.setWeapon(guardOf(weapon));
+    }
+
+    /** Open the pack (or close it, if it's open): the player's skills, gear, and what they carry. */
+    togglePack() {
+        if (this.pack?.open) {
+            this.closePack();
+        } else {
+            this.#showPack();
+        }
+    }
+
+    /** Close the pack (and stop trading). */
+    closePack() {
+        this.shopping = null;
+        this.pack?.hide();
+    }
+
+    // Trade with a shopkeeper: the pack open, their wares in it
+    #openShop({ shop, keeper, name }) {
+        this.shopping = { shop, keeper, name };
+        this.#showPack();
+    }
+
+    // The pack as it is now (and the shop's wares, trading)
+    #showPack() {
+        const progress = this.progress;
+        const { haggle } = progress.bonuses();
+        const skills = Object.entries(TREES).map(([tree, { name, grows, abilities }]) => {
+            const rank = progress.rank(tree);
+            const { xp, from, to } = progress.toNext(tree);
+            const learnt = Object.entries(abilities).filter(([at]) => rank >= Number(at)).map(([, ability]) => ABILITIES[ability].label);
+
+            return { tree, name, rank, title: ["Untried", "Trained", "Adept", "Veteran", "Master", "Legend"][rank], xp, from, to, grows, ability: learnt.length ? `Learnt: ${learnt.join(", ")}` : null };
+        });
+        const gear = ["weapon", "body", "shield"].map((slot) => ({ slot, item: progress.gear[slot], label: progress.gear[slot] ? itemLabel(progress.gear[slot]) : null }));
+        const pack = progress.pack.map((item) => ({ label: itemLabel(item), use: Boolean(ITEMS[item.id].use), equip: ITEMS[item.id].slot ?? null, price: priceOf(item, { haggle, selling: true }) }));
+        const shop = this.shopping && {
+            name: this.shopping.name,
+            wares: wares(this.shopping.shop).map((item) => {
+                const price = priceOf(item, { haggle });
+
+                return { item, label: itemLabel(item), price, affordable: price <= progress.gold };
+            }),
+        };
+
+        this.pack.show({ gold: progress.gold, skills, gear, pack, shop });
+    }
+
+    // Something asked of the pack: done by the host, or why not said
+    #packCommand(command) {
+        const result = this.#command(command);
+
+        if (!result.ok) {
+            this.hud.message(REFUSALS[result.reason] ?? CAST_FAILURES[result.reason] ?? "Can't do that.", 1.6);
+            this.sound?.play("denied");
+        } else {
+            // (The coppers shown at once: the events it made are heard with the next step)
+            this.hud.setCoppers(this.progress.gold);
+        }
+
+        if (this.pack.open) {
+            this.#showPack();
+        }
+
+        return result;
     }
 
     // A town's soldiers out: to be drawn, and its banners up, in its holders' colours
@@ -1706,14 +1873,15 @@ export class Game {
                     break;
                 case "cast": {
                     const spell = SPELLS[event.spell];
-                    const look = this.#look(event.id, event.spell);
+                    const kind = lookOf(event.spell);
+                    const look = this.#look(event.id, kind);
 
                     // (Gathering in the hand, and landing on whom it's cast on, in the same look)
                     this.casting.set(event.id, look);
                     this.landing.set(event.target, look);
 
-                    avatar.actions.startAttack(event.spell === "heal" ? "castHeal" : "castStun", { hitAt: spell.castTime / 1000, duration: (spell.castTime / 1000) * 1.7 });
-                    this.sound?.play(event.spell === "heal" ? "castHeal" : "bolt", { at: avatar.object.position });
+                    avatar.actions.startAttack(kind === "heal" ? "castHeal" : "castStun", { hitAt: spell.castTime / 1000, duration: (spell.castTime / 1000) * 1.7 });
+                    this.sound?.play(kind === "heal" ? "castHeal" : "bolt", { at: avatar.object.position });
                     break;
                 }
                 case "healed": {
@@ -1867,6 +2035,17 @@ export class Game {
             case "turn":
                 // (The war kept as it goes)
                 this.onWar(this.host.war);
+                break;
+            case "gear":
+                this.#regear(event);
+                this.#progressed(event);
+                break;
+            case "rank":
+            case "loot":
+            case "bought":
+            case "sold":
+            case "used":
+                this.#progressed(event);
                 break;
             default:
                 break;
@@ -2141,6 +2320,22 @@ export class Game {
             this.#on(document, type, () => this.#wake(), { capture: true, passive: true });
         }
 
+        // The pack: its button, or I; Escape closes it (not the menu)
+        this.#on(this.hud.root.querySelector("#packbutton") ?? document.createElement("button"), "click", () => this.togglePack());
+        this.#on(document, "keydown", (event) => {
+            if (!this.running || this.talk?.open) {
+                return;
+            }
+
+            if (event.key === "Escape" && this.pack?.open) {
+                event.preventDefault();
+                event.stopPropagation();
+                this.closePack();
+            } else if ((event.key === "i" || event.key === "I") && !event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey) {
+                this.togglePack();
+            }
+        }, { capture: true });
+
         // Talking, the number keys say what's next to them, and Escape stops (not the menu)
         this.#on(document, "keydown", (event) => {
             if (!this.talk?.open || !this.running) {
@@ -2229,8 +2424,9 @@ export class Game {
     act(action, target) {
         this.#wake();
 
-        const { spell, order } = ACTIONS[action] ?? {};
-        const result = spell ? this.#command({ type: "cast", spell, target: target === "self" ? null : target }) : order ? this.#command({ type: order, target }) : { ok: false, reason: "busy" };
+        const { spell, order, ability } = ACTIONS[action] ?? {};
+        const on = target === "self" ? null : target;
+        const result = spell ? this.#command({ type: "cast", spell, target: on }) : ability ? this.#command({ type: "ability", ability, target: on }) : order ? this.#command({ type: order, target }) : { ok: false, reason: "busy" };
 
         // (Setting on someone: the lock heard, as a tap on an enemy)
         if (order && result.ok) {
@@ -2238,7 +2434,7 @@ export class Game {
         }
 
         if (!result.ok) {
-            this.hud.message(CAST_FAILURES[result.reason] ?? REFUSALS[result.reason], 1.4);
+            this.hud.message(REFUSALS[result.reason] ?? CAST_FAILURES[result.reason], 1.4);
             this.sound?.play("denied");
         }
 
@@ -2301,10 +2497,33 @@ export class Game {
         }
 
         pointer.wheel = { originX: pointer.x, originY: pointer.y, target: wheel === "self" ? "self" : actor.id, refused: null, done: false };
-        this.wheel.show(centre.x, centre.y, wheel, pointer.wheel.target);
+        this.wheel.show(centre.x, centre.y, wheel, pointer.wheel.target, this.#slotsOf(wheel));
         this.wheel.setCooldown(this.battle.cooldown(this.me));
         this.sound?.play("wheel");
         globalThis.navigator?.vibrate?.(12);
+    }
+
+    // A wheel's slices, with the abilities the player's learnt: the greater heal on their own;
+    // the hold, and a power strike (or, with a weapon for shooting, an aimed shot), on an enemy's
+    #slotsOf(wheel) {
+        const learnt = this.progress.abilities();
+        const slots = { ...WHEELS[wheel] };
+        const shoots = WEAPONS[this.battle.actor(this.me)?.weapon]?.attacks.some(({ kind }) => kind === "ranged");
+        const blow = shoots ? "aimedShot" : "powerStrike";
+
+        if (wheel === "self" && learnt.includes("greaterHeal")) {
+            slots.right = "greaterHeal";
+        }
+
+        if (wheel === "enemy" && learnt.includes("hold")) {
+            slots.left = "hold";
+        }
+
+        if (wheel === "enemy" && learnt.includes(blow)) {
+            slots.right = blow;
+        }
+
+        return slots;
     }
 
     // The finger moves with the wheel open: into a slice, try its action (once)

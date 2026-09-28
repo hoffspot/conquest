@@ -16,16 +16,24 @@ export const DIRECTIONS = Object.freeze(["up", "right", "down", "left"]);
 
 const ANGLES = { up: -Math.PI / 2, right: 0, down: Math.PI / 2, left: Math.PI };
 
-/** What each action does: a spell (core/spells.js), or an order (core/host.js command), and its label. */
+/**
+ * What each action does: a spell (core/spells.js), an ability (core/progress.js ABILITIES:
+ * learnt as the skills grow), or an order (core/host.js command), and its label.
+ */
 export const ACTIONS = Object.freeze({
     heal: { label: "Heal", spell: "heal" },
     stun: { label: "Stun", spell: "stun" },
     fight: { label: "Fight", order: "engage" },
+    greaterHeal: { label: "Greater heal", spell: "greaterHeal" },
+    hold: { label: "Hold", spell: "hold" },
+    powerStrike: { label: "Power strike", ability: "powerStrike" },
+    aimedShot: { label: "Aimed shot", ability: "aimedShot" },
 });
 
 /**
  * Each wheel's slices: the player's own ("self"), an enemy's, and a soldier's of a people that
  * isn't the player's friend ("provoke": picking a fight with them). Empty slices are left out.
+ * (The abilities learnt join them as the player's skills grow: app/game.js.)
  */
 export const WHEELS = Object.freeze({
     self: { up: "heal" },
@@ -83,10 +91,9 @@ export class ActionWheel {
 
     /**
      * Open it at a point on the screen (client pixels) for a target ("self" or an enemy's id),
-     * with the slices of `wheel` (a WHEELS key).
+     * with the slices of `wheel` (a WHEELS key), or `slots` ({ up, right, down, left }: ACTIONS).
      */
-    show(x, y, wheel, target) {
-        const slots = WHEELS[wheel];
+    show(x, y, wheel, target, slots = WHEELS[wheel]) {
         const svg = [`<svg viewBox="${-OUTER - 4} ${-OUTER - 4} ${2 * OUTER + 8} ${2 * OUTER + 8}" width="${2 * OUTER + 8}" height="${2 * OUTER + 8}"><defs>${DEFS}</defs>`];
 
         for (const direction of DIRECTIONS) {

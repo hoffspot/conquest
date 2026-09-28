@@ -14,14 +14,16 @@
 //
 // Pure JavaScript, no DOM: it runs in the browser of the player who's hosting, or in Node.
 
-import { Battle, FOE_MS, TALK_REACH } from "./battle.js";
+import { Battle, FOE_MS, KINDS, TALK_REACH } from "./battle.js";
 import { Explored } from "./explored.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
+import { ABILITIES, ITEMS, priceOf, Progress, rollLoot, wares, weaponOf } from "./progress.js";
+import { createRandom } from "./random.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
 import { bannersOf, PATROL_SIZE, POSTED, postsOf, roundsOf } from "./war/muster.js";
 import { ADJECTIVES } from "./war/peoples.js";
 import { HOLDINGS, War } from "./war/war.js";
-import { distanceBetween } from "./weapons.js";
+import { distanceBetween, WEAPONS } from "./weapons.js";
 
 /** The id of the player whose game the world runs in (the only one, playing alone). */
 export const HOST_PLAYER = "player";
@@ -62,7 +64,31 @@ export const SOLDIERS_ARMS = Object.freeze({
 const KEEP_DONE = 50;
 
 /** Bumped whenever what a snapshot holds changes, so an old one isn't read wrong. */
-export const SNAPSHOT_VERSION = 1;
+export const SNAPSHOT_VERSION = 2;
+
+/** Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS). */
+export const SHOPKEEPERS = Object.freeze({ smith: "smith", apprentice: "smith", barkeep: "tavern", barmaid: "tavern", innkeeper: "tavern", priest: "temple", acolyte: "temple", receptionist: "guild" });
+
+/**
+ * How near a shopkeeper a player trades with them (squares): a talk's reach across a counter,
+ * and a few steps more, as they go about behind it.
+ */
+export const SHOP_REACH = TALK_REACH.across + 3;
+
+/**
+ * What the things bought by talking do (their `buy` or `rent`): mend hurts, fill stamina, or a
+ * boon for a while (the share more a player's blows, heals and armour are: ms).
+ */
+export const BOUGHT = Object.freeze({
+    ale: { stamina: 1000 },
+    stew: { hp: 15 },
+    room: { hp: 1000, stamina: 1000 },
+    sharpening: { boon: { id: "sharpening", label: "A keen edge", melee: 0.1, ms: 600000 } },
+    blessing: { boon: { id: "blessing", label: "Blessed", melee: 0.05, ranged: 0.05, heal: 0.1, armor: 0.03, ms: 600000 } },
+});
+
+/** The skills' experience for each thing done, besides the damage done or taken, or healed. */
+const XP = Object.freeze({ stun: 15, exhausted: 5, talk: 3, effect: 5, trade: 0.5 });
 
 /** Why a command wasn't carried out (a command's { ok: false, reason }). */
 export const REFUSALS = Object.freeze({
@@ -73,6 +99,13 @@ export const REFUSALS = Object.freeze({
     link: "No way through there.",
     far: "Too far away.",
     talking: "Not talking to them.",
+    coppers: "Not enough coppers.",
+    shop: "They've nothing like that to sell.",
+    full: "Your pack is full.",
+    unknown: "You haven't learnt that.",
+    item: "You can't do that with it.",
+    shield: "Not with that weapon.",
+    cooldown: "Not ready yet.",
 });
 
 // A whole number, and a square [x, y] of whole numbers
@@ -127,6 +160,9 @@ export class Host {
         /** What's been done in the world by talking (buying, renting...): the last few. */
         this.done = [];
 
+        // The host's own chances (what's found on the fallen)
+        this.random = createRandom(((world.seed ?? 1) * 2654435761) >>> 0);
+
         // What's happened besides the battle's own (given out with them by advance)
         this.events = [];
 
@@ -168,7 +204,7 @@ export class Host {
      * app/save.js), at `square` on `map` (the world's start, to begin with; the nearest free
      * square to it). Returns their record (players).
      */
-    join({ id = HOST_PLAYER, hero, talks = {}, explored = {}, square = this.world.spawns?.player, map = "town" }) {
+    join({ id = HOST_PLAYER, hero, talks = {}, explored = {}, progress = {}, square = this.world.spawns?.player, map = "town" }) {
         if (this.players.has(id)) {
             return this.players.get(id);
         }
@@ -179,12 +215,17 @@ export class Host {
             realm: hero.race ?? "human",
             talks: { memory: talks.memory ?? {}, knowledge: new Set(talks.knowledge ?? []) },
             explored: explored instanceof Explored ? explored : new Explored(explored),
+            progress: progress instanceof Progress ? progress : new Progress(progress, hero),
+            // Boons for a while ([{ id, label, until, melee...}]), and when each ability's ready again
+            boons: [],
+            readyAt: {},
         };
         const taken = new Set(this.battle.actors.filter((actor) => actor.map === map).map(({ square: [x, y] }) => squareKey(x, y)));
         const at = taken.size ? nearestFree(squaresOf(this.world.maps?.[map] ?? this.world), square, { taken }) : square;
 
         this.players.set(id, player);
         this.battle.add({ id, kind: "player", name: hero.name, weapon: hero.weapon, boots: Boolean(hero.boots), team: player.realm, square: at, map });
+        this.#outfit(player);
         this.#event("join", { id });
 
         return player;
@@ -209,8 +250,8 @@ export class Host {
     }
 
     /** A player's character, as it's kept (as join takes it). */
-    characterOf({ hero, talks, explored }) {
-        return { hero: { ...hero }, talks: { memory: structuredClone(talks.memory), knowledge: [...talks.knowledge] }, explored: explored.toJSON() };
+    characterOf({ hero, talks, explored, progress }) {
+        return { hero: { ...hero }, talks: { memory: structuredClone(talks.memory), knowledge: [...talks.knowledge] }, explored: explored.toJSON(), progress: progress.toJSON() };
     }
 
     /**
@@ -221,7 +262,13 @@ export class Host {
      *  - { type: "cast", spell, target }: cast a spell (target: an id, or none for themselves);
      *  - { type: "talk", with }: start talking to one of the folk (an id), or stop (null);
      *  - { type: "effect", effect }: something done by talking (buying, paying, renting...), to
-     *    whoever they're talking to.
+     *    whoever they're talking to (paid for in coppers, if it has a price);
+     *  - { type: "buy", item, from }: buy something ({ id, quality }) from a shopkeeper near them
+     *    (an id); { type: "sell", index, to }: sell what's at `index` in their pack to one;
+     *  - { type: "equip", index }, { type: "unequip", slot }: put on (or take up) gear from their
+     *    pack, or take armour off; { type: "use", index }: use something in their pack;
+     *  - { type: "ability", ability, target }: use an ability they've learnt (core/progress.js
+     *    ABILITIES), on a target for a stronger blow (fighting it).
      * Returns { ok: true } or { ok: false, reason } (a REFUSALS key; a spell's own reasons:
      * spells.js CAST_FAILURES).
      */
@@ -284,11 +331,28 @@ export class Host {
             case "stop":
                 return this.#order(actor, { type: "stop" });
             case "cast":
+                // (The greater spells only once they're learnt)
+                if (!["heal", "stun"].includes(command.spell) && !Object.entries(ABILITIES).some(([id, { spell }]) => spell === command.spell && player.progress.abilities().includes(id))) {
+                    return refuse("unknown");
+                }
+
                 return this.battle.cast(actor.id, command.spell, command.target ?? null);
+            case "buy":
+                return this.#buy(player, actor, command);
+            case "sell":
+                return this.#sell(player, actor, command);
+            case "equip":
+                return this.#gear(player, player.progress.equip(command.index));
+            case "unequip":
+                return this.#gear(player, player.progress.unequip(command.slot));
+            case "use":
+                return this.#use(player, actor, command.index);
+            case "ability":
+                return this.#ability(player, actor, command.ability, command.target ?? null);
             case "talk":
                 return this.#talk(actor, command.with ?? null);
             case "effect":
-                return this.#effect(actor, command.effect);
+                return this.#effect(player, actor, command.effect);
             default:
                 return refuse("command");
         }
@@ -319,6 +383,19 @@ export class Host {
      */
     advance(ms) {
         const events = this.battle.advance(ms);
+
+        // What the players did: their skills grow by it, and they find what's on the fallen
+        for (const event of events) {
+            this.#learn(event);
+        }
+
+        // Boons worn off
+        for (const player of this.players.values()) {
+            if (player.boons.some(({ until }) => until <= this.battle.time)) {
+                player.boons = player.boons.filter(({ until }) => until > this.battle.time);
+                this.#outfit(player);
+            }
+        }
 
         // The fallen soldiers: their garrison the fewer; taken away a while after
         for (const event of events) {
@@ -408,10 +485,11 @@ export class Host {
             lookAt: this.lookAt,
             battle: this.battle.snapshot(),
             war: this.war?.snapshot() ?? null,
+            random: this.random.state,
             mustered: [...this.mustered.entries()],
             soldiers: [...this.soldiers.entries()],
             fallen: structuredClone(this.fallen),
-            players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, ...this.characterOf(player) })),
+            players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: structuredClone(player.boons), readyAt: { ...player.readyAt }, ...this.characterOf(player) })),
             done: structuredClone(this.done),
         };
     }
@@ -454,11 +532,263 @@ export class Host {
             }
         }
 
-        for (const { id, realm, hero, talks, explored } of snapshot.players) {
-            host.players.set(id, { id, realm, hero, talks: { memory: talks.memory, knowledge: new Set(talks.knowledge) }, explored: new Explored(explored) });
+        for (const { id, realm, hero, talks, explored, progress, boons, readyAt } of snapshot.players) {
+            host.players.set(id, { id, realm, hero, talks: { memory: talks.memory, knowledge: new Set(talks.knowledge) }, explored: new Explored(explored), progress: new Progress(progress, hero), boons: structuredClone(boons ?? []), readyAt: { ...readyAt } });
         }
 
+        host.random.state = snapshot.random ?? host.random.state;
+
         return host;
+    }
+
+    // --- Growing stronger (core/progress.js) ---
+
+    // A player's skill grows: each rank it comes to told of ("rank"), and what it brings put on
+    #gain(player, tree, amount) {
+        if (!player || !(amount > 0)) {
+            return;
+        }
+
+        const ups = player.progress.gain(tree, amount);
+
+        for (const up of ups) {
+            this.#event("rank", { id: player.id, ...up });
+        }
+
+        if (ups.length) {
+            this.#outfit(player);
+        }
+    }
+
+    // What happened in the battle, for the players' skills: blows landed (up close, from afar)
+    // and taken, heals, stuns, running out of breath; and what's on those they fell
+    #learn(event) {
+        const by = this.players.get(event.by);
+        const own = this.players.get(event.id);
+
+        switch (event.type) {
+            case "hit":
+                this.#gain(by, event.projectile === null ? "blade" : "marksman", event.damage);
+                this.#gain(own, "endurance", event.damage);
+                break;
+            case "healed":
+                // (Their own spells: not a draught or a room)
+                if (event.spell) {
+                    this.#gain(by, "healing", event.amount);
+                }
+
+                break;
+            case "stunned":
+                this.#gain(by, "hexes", XP.stun);
+                break;
+            case "exhausted":
+                this.#gain(own, "endurance", XP.exhausted);
+                break;
+            case "death": {
+                const fallen = this.battle.actor(event.id);
+
+                if (by && fallen && !this.players.has(fallen.id)) {
+                    this.#loot(by, fallen);
+                }
+
+                break;
+            }
+            default:
+                break;
+        }
+    }
+
+    // What a player finds on a foe they've felled: coppers, and things (into their pack, while there's room)
+    #loot(player, fallen) {
+        const { gold, items } = rollLoot(fallen.kind, this.random);
+        const kept = items.filter((item) => player.progress.stow(item));
+
+        if (!gold && !kept.length) {
+            return;
+        }
+
+        player.progress.gold += gold;
+        this.#event("loot", { id: player.id, from: fallen.id, gold, items: kept });
+    }
+
+    // A player's character in the battle as their skills, gear and boons have them: the weapon
+    // they wield, how strong their blows, heals and stuns are, their armour, their hit points and
+    // stamina; and the war as mighty as the mightiest player
+    #outfit(player) {
+        const actor = this.battle.actor(player.id);
+
+        if (!actor) {
+            return;
+        }
+
+        const bonus = player.progress.bonuses();
+
+        for (const boon of player.boons) {
+            for (const key of ["melee", "ranged", "heal", "stun", "armor"]) {
+                bonus[key] += boon[key] ?? 0;
+            }
+        }
+
+        const weapon = weaponOf(player.progress);
+
+        if (actor.weapon !== weapon) {
+            this.battle.rearm(actor.id, weapon, Boolean(player.hero.boots) && weapon !== "boots");
+            player.hero.weapon = weapon;
+        }
+
+        actor.power = { melee: 1 + bonus.melee, ranged: 1 + bonus.ranged, heal: 1 + bonus.heal, stun: 1 + bonus.stun };
+        actor.armor = Math.min(0.6, bonus.armor);
+
+        const [hp, stamina] = [KINDS.player.hp + bonus.hp, KINDS.player.hp + bonus.stamina];
+
+        if (actor.maxHp !== hp) {
+            actor.hp = actor.dead ? 0 : Math.max(1, Math.round((actor.hp * hp) / actor.maxHp));
+            actor.maxHp = hp;
+        }
+
+        if (actor.maxStamina !== stamina) {
+            actor.stamina = Math.round((actor.stamina * stamina) / actor.maxStamina);
+            actor.maxStamina = stamina;
+        }
+
+        this.war?.setMight(Math.max(0, ...[...this.players.values()].map((each) => each.progress.might())));
+    }
+
+    // The shopkeeper a player's trading with (an id): one of the folk who keeps a shop, near them
+    #shopkeeper(actor, id) {
+        const keeper = this.battle.actor(id);
+        const shop = keeper && SHOPKEEPERS[keeper.role];
+
+        if (!shop || keeper.dead || keeper.map !== actor.map || distanceBetween(actor.square, keeper.square) > SHOP_REACH) {
+            return null;
+        }
+
+        return { keeper, shop };
+    }
+
+    #buy(player, actor, { item, from }) {
+        const trading = this.#shopkeeper(actor, from);
+
+        if (!trading) {
+            return refuse("far");
+        }
+
+        if (!item || !wares(trading.shop).some(({ id, quality }) => id === item.id && quality === (item.quality ?? "common"))) {
+            return refuse("shop");
+        }
+
+        const price = priceOf(item, { haggle: player.progress.bonuses().haggle });
+
+        if (price > player.progress.gold) {
+            return refuse("coppers");
+        }
+
+        if (!player.progress.stow(item)) {
+            return refuse("full");
+        }
+
+        player.progress.gold -= price;
+        this.#gain(player, "trade", price * XP.trade);
+        this.#event("bought", { id: player.id, item: { id: item.id, quality: item.quality ?? "common" }, price, from: trading.keeper.id });
+
+        return OK;
+    }
+
+    #sell(player, actor, { index, to }) {
+        const trading = this.#shopkeeper(actor, to);
+        const item = player.progress.pack[index];
+
+        if (!trading) {
+            return refuse("far");
+        }
+
+        if (!item) {
+            return refuse("item");
+        }
+
+        const price = priceOf(item, { haggle: player.progress.bonuses().haggle, selling: true });
+
+        player.progress.pack.splice(index, 1);
+        player.progress.gold += price;
+        this.#gain(player, "trade", price * XP.trade);
+        this.#event("sold", { id: player.id, item, price, to: trading.keeper.id });
+
+        return OK;
+    }
+
+    // Gear put on or taken off (the reason it couldn't be: progress.js equip, unequip)
+    #gear(player, why) {
+        if (why) {
+            return refuse(why);
+        }
+
+        this.#outfit(player);
+        this.#event("gear", { id: player.id, weapon: player.hero.weapon, worn: player.progress.worn() });
+
+        return OK;
+    }
+
+    // Something from the pack used (drunk, eaten)
+    #use(player, actor, index) {
+        const item = player.progress.pack[index];
+        const use = item && ITEMS[item.id].use;
+
+        if (!use) {
+            return refuse("item");
+        }
+
+        if (actor.dead) {
+            return refuse("dead");
+        }
+
+        player.progress.pack.splice(index, 1);
+        this.battle.mend(actor.id, { hp: use.heal ?? 0, stamina: use.stamina ?? 0 });
+        this.#event("used", { id: player.id, item });
+
+        return OK;
+    }
+
+    // An ability learnt: a greater spell cast, or the next blow made stronger (and a target
+    // fought, if one's given); each blow's ability ready again only after a while
+    #ability(player, actor, id, target) {
+        const ability = ABILITIES[id];
+
+        if (!ability || !player.progress.abilities().includes(id)) {
+            return refuse("unknown");
+        }
+
+        if (ability.spell) {
+            return this.battle.cast(actor.id, ability.spell, target);
+        }
+
+        if (actor.dead) {
+            return refuse("dead");
+        }
+
+        if ((player.readyAt[id] ?? 0) > this.battle.time) {
+            return refuse("cooldown");
+        }
+
+        // (A blow up close with a weapon for it; a shot from afar with one for that)
+        if (!WEAPONS[actor.weapon]?.attacks.some(({ kind }) => (kind === "ranged" ? "ranged" : "melee") === ability.blow)) {
+            return refuse("item");
+        }
+
+        const foe = target === null ? null : this.battle.actor(target);
+
+        if (foe && !this.canFight(actor, foe)) {
+            return refuse("target");
+        }
+
+        this.battle.empower(actor.id, ability.blow, ability.factor);
+        player.readyAt[id] = this.battle.time + ability.cooldown;
+        this.#event("ability", { id: actor.id, ability: id });
+
+        if (foe) {
+            return this.command(actor.id, { type: "engage", target: foe.id });
+        }
+
+        return OK;
     }
 
     // --- Who fights whom ---
@@ -679,13 +1009,15 @@ export class Host {
         this.battle.talk(npc.id, actor.id);
         this.battle.talk(actor.id, npc.id);
         this.#event("talk", { id: actor.id, with: npc.id });
+        this.#gain(this.players.get(actor.id), "talk", XP.talk);
 
         return OK;
     }
 
-    // Something done by talking, to whoever the player's talking to: kept (the last few), and
-    // told of (an "effect" event), for the world to act on
-    #effect(actor, effect) {
+    // Something done by talking, to whoever the player's talking to: paid for (if it has a
+    // price, and they can), done (what's bought: BOUGHT), kept (the last few), and told of (an
+    // "effect" event), for the world to act on
+    #effect(player, actor, effect) {
         if (!effect || typeof effect !== "object" || Array.isArray(effect)) {
             return refuse("command");
         }
@@ -693,6 +1025,29 @@ export class Host {
         if (actor.talkingTo === null) {
             return refuse("talking");
         }
+
+        const price = Math.max(0, Math.floor(Number(effect.price ?? effect.pay) || 0));
+
+        if (price > player.progress.gold) {
+            return refuse("coppers");
+        }
+
+        if (price) {
+            player.progress.gold -= price;
+            this.#gain(player, "trade", price * XP.trade);
+        }
+
+        // (What's bought for themselves: drunk, eaten, slept on, or a boon)
+        const bought = effect.for === "them" ? null : BOUGHT[effect.buy ?? effect.rent];
+
+        if (bought?.boon) {
+            player.boons = [...player.boons.filter(({ id }) => id !== bought.boon.id), { ...bought.boon, until: this.battle.time + bought.boon.ms }];
+            this.#outfit(player);
+        } else if (bought) {
+            this.battle.mend(actor.id, { hp: bought.hp ?? 0, stamina: bought.stamina ?? 0 });
+        }
+
+        this.#gain(player, "talk", XP.effect);
 
         const done = { ...structuredClone(effect), by: actor.talkingTo, player: actor.id, at: this.battle.time };
 

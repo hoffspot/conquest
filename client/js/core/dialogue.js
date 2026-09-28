@@ -64,6 +64,7 @@ export const TREES = Object.freeze({
             more: {
                 say: ["Anything else?", "What else can I do for you?", "Something else?"],
                 choices: [
+                    { say: "What have you got for sale?", next: null, do: [{ shop: "tavern" }] },
                     { say: "An ale, if you please. (2 coppers)", next: "ale", do: [{ buy: "ale", price: 2 }] },
                     { say: "Heard any news?", next: "news" },
                     { if: { notFlag: "askedPlace" }, say: "Tell me about this place.", next: "place", do: [{ remember: "askedPlace" }] },
@@ -294,6 +295,7 @@ export const TREES = Object.freeze({
             more: {
                 say: ["Anything else?", "What can I do for you?", "Yes?"],
                 choices: [
+                    { say: "What have you got for sale?", next: null, do: [{ shop: "tavern" }] },
                     { say: "A room for the night. (8 coppers)", next: "room", do: [{ rent: "room", price: 8 }] },
                     { if: { upstairs: "mixed" }, say: "And the ladies down the hall?", next: "ladies" },
                     { say: "Who stays here?", next: "guests" },
@@ -331,6 +333,7 @@ export const TREES = Object.freeze({
             more: {
                 say: ["What else?", "Speak up, the fire's loud.", "Anything more?"],
                 choices: [
+                    { say: "Show me what you have for sale.", next: null, do: [{ shop: "smith" }] },
                     { say: "Could you put an edge on my blade? (3 coppers)", next: "sharpen", do: [{ buy: "sharpening", price: 3 }] },
                     { say: "What are you working on?", next: "work" },
                     { if: { notFlag: "askedApprentice" }, say: "Who's that at the bellows?", next: "apprentice", do: [{ remember: "askedApprentice" }] },
@@ -379,6 +382,7 @@ export const TREES = Object.freeze({
             more: {
                 say: ["What would you ask of the temple?", "Speak, and be easy.", "Is there more on your heart?"],
                 choices: [
+                    { say: "Have you healing draughts to sell?", next: null, do: [{ shop: "temple" }] },
                     { say: "Tell me of the Six.", next: "six" },
                     { if: { notFlag: "askedPatron" }, say: "Whose temple is this?", next: "patron", do: [{ remember: "askedPatron" }] },
                     { say: "I'd have a blessing. (5 coppers to the alms box)", next: "blessing", do: [{ buy: "blessing", price: 5 }] },
@@ -470,6 +474,7 @@ export const TREES = Object.freeze({
             more: {
                 say: ["Anything else?", "What else can I help with?", "Yes? I'm listening!"],
                 choices: [
+                    { say: "Does the guild sell supplies?", next: null, do: [{ shop: "guild" }] },
                     { if: { notFlag: "registered" }, say: "I'd like to register as an adventurer.", next: "register" },
                     { say: "What's the quest board?", next: "board" },
                     { say: "How do the ranks work?", next: "ranks" },

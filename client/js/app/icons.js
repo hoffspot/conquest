@@ -51,6 +51,44 @@ const SWORD = `
 
 /** Each action's icon: SVG drawn round 0, 0, about 44 across. */
 export const ICONS = Object.freeze({
+    // A great green cross in a ring of light, with more sparkles: the greater heal
+    greaterHeal: `
+        <circle r="22" fill="url(#icon-heal-glow)"/>
+        <circle r="17" fill="none" stroke="#c9ffd8" stroke-width="1.6" stroke-dasharray="3 2.5" opacity="0.85"/>
+        <path d="M-5,-15 h10 a2,2 0 0 1 2,2 v8 h8 a2,2 0 0 1 2,2 v10 a2,2 0 0 1 -2,2 h-8 v8 a2,2 0 0 1 -2,2 h-10 a2,2 0 0 1 -2,-2 v-8 h-8 a2,2 0 0 1 -2,-2 v-10 a2,2 0 0 1 2,-2 h8 v-8 a2,2 0 0 1 2,-2 z"
+            fill="url(#icon-heal-cross)" stroke="#0b5a26" stroke-width="1.4" filter="url(#icon-glow)" transform="translate(0 -1) scale(0.82)"/>
+        <path d="${star(15, -15, 4.6, 1.2, 4, 0)}" fill="#e9fff0"/>
+        <path d="${star(-16, -12, 3.6, 1, 4, 0)}" fill="#b8ffcc"/>
+        <path d="${star(-15, 14, 3.2, 0.9, 4, 0)}" fill="#e9fff0"/>
+        <path d="${star(16, 13, 3.6, 1, 4, 0)}" fill="#b8ffcc"/>`,
+
+    // The dazed head bound round with chains: the hold
+    hold: `
+        <circle cy="4" r="12" fill="url(#icon-stun-head)" stroke="#2c1363" stroke-width="1.4"/>
+        <path d="M-4.5,2 l3,3 m0,-3 l-3,3 M1.5,2 l3,3 m0,-3 l-3,3" stroke="#f4e9ff" stroke-width="1.5" stroke-linecap="round"/>
+        <g fill="none" stroke="#c8c2d8" stroke-width="2.2">
+            <ellipse cx="-13" cy="-4" rx="4" ry="2.6" transform="rotate(-30 -13 -4)"/>
+            <ellipse cx="-6" cy="-9" rx="4" ry="2.6" transform="rotate(-10 -6 -9)"/>
+            <ellipse cx="2" cy="-10" rx="4" ry="2.6"/>
+            <ellipse cx="10" cy="-7" rx="4" ry="2.6" transform="rotate(20 10 -7)"/>
+            <ellipse cx="15" cy="0" rx="4" ry="2.6" transform="rotate(50 15 0)"/>
+        </g>
+        <path d="${star(-16, 13, 4.6, 2)}" fill="url(#icon-stun-star)" stroke="#a86b00" stroke-width="0.9"/>`,
+
+    // A sword striking down through a burst of light: a power strike
+    powerStrike: `
+        <path d="${star(0, 4, 20, 7, 10)}" fill="#ffcc4d" opacity="0.55"/>
+        <g transform="rotate(35)">${SWORD}</g>`,
+
+    // An arrow in the middle of a target: an aimed shot
+    aimedShot: `
+        <circle r="18" fill="#f2e6cf" stroke="#6b1f1f" stroke-width="1.4"/>
+        <circle r="12" fill="#c83a2a"/>
+        <circle r="6.5" fill="#f2e6cf"/>
+        <circle r="2.6" fill="#c83a2a"/>
+        <path d="M0,0 L17,-17" stroke="#6b4a22" stroke-width="2.2" stroke-linecap="round"/>
+        <path d="M13,-21 L21,-21 L17,-17 Z M17,-13 L21,-21 L17,-17 Z" fill="#e8e1d2" stroke="#8a7d68" stroke-width="0.8"/>`,
+
     // Two swords crossed, over a red glow: picking a fight
     fight: `
         <circle r="20" fill="#7a1a14" opacity="0.45"/>

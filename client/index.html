@@ -117,6 +117,9 @@
         <section id="hud" class="screen" hidden aria-label="Game">
             <div id="floaters" aria-hidden="true"></div>
             <div class="hud-top">
+                <button type="button" id="packbutton" class="hud-button" aria-label="Pack" title="Pack (I)">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7V5.5a4 4 0 0 1 8 0V7M5 8.5h14l-1.2 11H6.2zM9.5 12h5"/></svg>
+                </button>
                 <button type="button" id="menubutton" class="hud-button" aria-label="Menu" title="Menu (Esc)">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
                 </button>
@@ -125,10 +128,11 @@
             <div id="banner" role="status" hidden></div>
             <div class="plate" id="playerplate">
                 <span class="name"></span>
+                <span class="coins"></span>
                 <div class="bar"><div class="fill"></div><span class="value"></span></div>
                 <div class="bar stamina" hidden><div class="fill"></div><span class="value"></span></div>
             </div>
-            <p class="hint" id="hint">Tap the ground to walk, double&#8209;tap to run, tap an enemy to fight it, or someone to talk to them. Hold on yourself or an enemy for spells, or on the minimap for the world map.</p>
+            <p class="hint" id="hint">Tap the ground to walk, double&#8209;tap to run, tap an enemy to fight it, or someone to talk to them. Hold on yourself or an enemy for spells, or on the minimap for the world map. Your pack's top right (or I).</p>
             <div class="hud-bottom">
                 <button type="button" id="zoomin" class="hud-button" aria-label="Zoom in" title="Zoom in">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>

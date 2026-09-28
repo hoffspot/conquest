@@ -15,6 +15,7 @@ const SETTINGS_KEY = "pellagos.settings";
 const TALKS_KEY = "pellagos.talks";
 const EXPLORED_KEY = "pellagos.explored";
 const WORLD_KEY = "pellagos.world";
+const PROGRESS_KEY = "pellagos.progress";
 
 /** The save format's version: a save from another version is set aside, not misread. */
 export const SAVE_VERSION = 1;
@@ -106,6 +107,22 @@ export function loadExplored(save) {
 /** Keep what's been found in a saved game (not in one that isn't saved: ?play). */
 export function saveExplored(save, explored) {
     return save?.created ? write(EXPLORED_KEY, { created: save.created, seed: save.seed, ...explored.toJSON() }) : false;
+}
+
+/**
+ * What the character of a saved game ({ seed, created }) has grown into and carries (core/
+ * progress.js Progress's toJSON: { skills, gold, pack, gear }); nothing yet for another game.
+ */
+export function loadProgress(save) {
+    const progress = read(PROGRESS_KEY);
+    const ours = progress && save?.created && progress.created === save.created && progress.seed === save.seed;
+
+    return ours ? { skills: progress.skills ?? {}, gold: progress.gold, pack: progress.pack ?? [], gear: progress.gear ?? null } : {};
+}
+
+/** Keep what's grown and carried in a saved game (not in one that isn't saved: ?play). */
+export function saveProgress(save, progress) {
+    return save?.created ? write(PROGRESS_KEY, { created: save.created, seed: save.seed, ...progress.toJSON() }) : false;
 }
 
 /**

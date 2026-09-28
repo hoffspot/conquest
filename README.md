@@ -373,8 +373,9 @@ client/                 The game (static files served to the browser)
     worldmap.js         The world map: the whole world, under a fog where the player hasn't been
     debug.js            Debug mode's overlay
     talk.js             The talk: who's talking, what they say, and the replies to choose from
-    save.js             The saved character, what's been said and found, and settings (local
-                        storage)
+    pack.js             The pack: coppers, what's carried and worn, the skills; a shop's wares
+    save.js             The saved character, what they've grown into and carry, what's been
+                        said and found, and settings (local storage)
     device.js           Full screen and the service worker
   js/core/              The rules. No DOM or Three.js, so they also run in Node
     overworld.js        The world: 8 km of it on 1-metre squares, made a chunk at a time from its
@@ -398,6 +399,8 @@ client/                 The game (static files served to the browser)
                         muster.js where a town's guards stand and its patrols go
     battle.js           Moving, fighting, damage, dying and coming back; the orc's patrol
     weapons.js          The weapons and their attacks
+    progress.js         Growing stronger: skills and their trees, abilities, gear and its make,
+                        shops, loot, coppers and the pack; and from them, might
     spells.js           The spells: heal and stun, and their shared cooldown
     roles.js            Classes of people (barkeep, patron...): their titles and five rests each
     dialogue.js         Conversations: trees of what's said and the replies, conditions, effects

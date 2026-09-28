@@ -1,0 +1,315 @@
+// Growing stronger (docs/WAR.md M3): skills that grow by being used, each along a tree of its own
+// ranks; gear, bought and found, of better and worse make; gold; and a pack to carry it all in.
+// And from all of it, a player's might, which brings the war on (war/war.js setMight).
+//
+// A skill grows by what it's used for: landing blows up close (blade), from afar (marksman),
+// healing (healing), stunning (hexes), taking blows (endurance), buying and selling (trade),
+// talking (talk), and leading followers (command, from M9). Each rank up its tree makes it
+// stronger, and some bring a new ability: a power strike, an aimed shot, a greater heal, a hold.
+//
+// The fighting trees and the gear make a player mighty; so does leading others (a healer or a
+// talker hires the might they don't have: M9). Everything here is plain data (toJSON), kept with
+// the character (app/save.js), and the host's to change (core/host.js). Pure JavaScript, no DOM.
+
+import { WEAPONS } from "./weapons.js";
+
+/** A rank's title, and the experience it takes to reach it. */
+export const RANKS = Object.freeze([
+    { title: "Untried", xp: 0 },
+    { title: "Trained", xp: 100 },
+    { title: "Adept", xp: 300 },
+    { title: "Veteran", xp: 800 },
+    { title: "Master", xp: 2000 },
+    { title: "Legend", xp: 4500 },
+]);
+
+/**
+ * The skill trees: each one's name, what makes it grow, whether it's a fighting skill (for might),
+ * what each rank of it gives (a list for each bonus: its value at ranks 0 to 5), and the ability
+ * a rank brings (by rank).
+ *
+ * The bonuses: melee, ranged (the share more damage their blows do), heal (more healed), stun
+ * (longer stuns), hp, stamina (more of each), armor (the share of each blow taken off), haggle
+ * (the share off what's bought, and on what's sold), persuade (M4, M7), followers (M9).
+ */
+export const TREES = Object.freeze({
+    blade: { name: "Blade", grows: "landing blows up close", fighting: true, bonus: { melee: [0, 0.1, 0.2, 0.3, 0.45, 0.6], hp: [0, 0, 0, 10, 15, 20] }, abilities: { 2: "powerStrike" } },
+    marksman: { name: "Marksman", grows: "landing shots from afar", fighting: true, bonus: { ranged: [0, 0.1, 0.2, 0.3, 0.45, 0.6] }, abilities: { 2: "aimedShot" } },
+    healing: { name: "Healing", grows: "healing", fighting: false, bonus: { heal: [0, 0.15, 0.3, 0.5, 0.75, 1] }, abilities: { 2: "greaterHeal" } },
+    hexes: { name: "Hexes", grows: "stunning your foes", fighting: true, bonus: { stun: [0, 0.15, 0.3, 0.5, 0.75, 1] }, abilities: { 2: "hold" } },
+    endurance: { name: "Endurance", grows: "taking blows and running hard", fighting: false, bonus: { hp: [0, 5, 10, 20, 30, 40], stamina: [0, 5, 10, 20, 30, 40], armor: [0, 0, 0.03, 0.05, 0.08, 0.1] }, abilities: {} },
+    trade: { name: "Trade", grows: "buying and selling", fighting: false, bonus: { haggle: [0, 0.05, 0.1, 0.15, 0.2, 0.25] }, abilities: {} },
+    talk: { name: "Talk", grows: "talking with people", fighting: false, bonus: { persuade: [0, 0.1, 0.2, 0.3, 0.45, 0.6] }, abilities: {} },
+    command: { name: "Command", grows: "leading your followers", fighting: false, bonus: { followers: [0, 1, 2, 3, 4, 6] }, abilities: {} },
+});
+
+/**
+ * The abilities the trees bring: what each is (a spell cast as the one it's a greater form of,
+ * or the next blow made stronger), and how it's shown.
+ */
+export const ABILITIES = Object.freeze({
+    powerStrike: { label: "Power strike", tree: "blade", blow: "melee", factor: 2, cooldown: 12000 },
+    aimedShot: { label: "Aimed shot", tree: "marksman", blow: "ranged", factor: 2, cooldown: 12000 },
+    greaterHeal: { label: "Greater heal", tree: "healing", spell: "greaterHeal" },
+    hold: { label: "Hold", tree: "hexes", spell: "hold" },
+});
+
+/** How well made a piece of gear is: what it adds to (a weapon's blows, armour's protection), and what it costs. */
+export const QUALITIES = Object.freeze({
+    common: { label: "", power: 1, price: 1, might: 0 },
+    fine: { label: "Fine", power: 1.15, price: 3, might: 0.5 },
+    masterwork: { label: "Masterwork", power: 1.3, price: 8, might: 1 },
+    legendary: { label: "Legendary", power: 1.5, price: 30, might: 1.5 },
+});
+
+/**
+ * Everything that can be carried: weapons (any of the WEAPONS a hero can start with, in the
+ * weapon slot), armour (body and shield slots: `armor`, the share of each blow it takes off, and
+ * what it looks like: `equipment`), and things to use (heal hit points, fill stamina). `price` is
+ * what a common one costs (gold).
+ */
+export const ITEMS = Object.freeze({
+    sword: { label: "Sword", slot: "weapon", price: 30 },
+    staff: { label: "Staff", slot: "weapon", price: 20 },
+    wand: { label: "Wand", slot: "weapon", price: 40 },
+    grimoire: { label: "Grimoire", slot: "weapon", price: 45 },
+    hammer: { label: "War hammer", slot: "weapon", price: 35 },
+    bow: { label: "Bow", slot: "weapon", price: 35 },
+    gauntlets: { label: "Spiked gauntlets", slot: "weapon", price: 25 },
+    boots: { label: "Spiked boots", slot: "weapon", price: 25 },
+    gambeson: { label: "Gambeson", slot: "body", armor: 0.08, price: 25, equipment: ["gambeson"], might: 0.5 },
+    mail: { label: "Mail shirt", slot: "body", armor: 0.16, price: 80, equipment: ["mail"], might: 1 },
+    roundShield: { label: "Round shield", slot: "shield", armor: 0.06, price: 20, equipment: ["roundShield"], might: 0.25 },
+    kiteShield: { label: "Kite shield", slot: "shield", armor: 0.1, price: 45, equipment: ["kiteShield"], might: 0.5 },
+    potion: { label: "Healing draught", use: { heal: 25 }, price: 15 },
+    meal: { label: "Hot meal", use: { heal: 15 }, price: 5 },
+    ale: { label: "Tankard of ale", use: { stamina: 1000 }, price: 2 },
+});
+
+/** The weapons a shield can be carried with (one-handed, up close). */
+export const WITH_SHIELD = Object.freeze(["sword", "hammer"]);
+
+/** What each shop sells: the things it keeps, and the best make it has of each. */
+export const SHOPS = Object.freeze({
+    smith: { items: ["sword", "hammer", "staff", "bow", "gauntlets", "boots", "gambeson", "mail", "roundShield", "kiteShield"], best: "masterwork" },
+    tavern: { items: ["ale", "meal"], best: "common" },
+    temple: { items: ["potion"], best: "common" },
+    guild: { items: ["wand", "grimoire", "potion"], best: "fine" },
+});
+
+/** What sells for what (a share of its price), before haggling. */
+export const SELL_SHARE = 0.4;
+
+/** What each kind of foe has on them when they fall: gold ([least, most]), and things (each with its chance). */
+export const LOOT = Object.freeze({
+    orc: { gold: [5, 15], items: [{ id: "potion", chance: 0.3 }, { id: "gambeson", chance: 0.08 }, { id: "sword", quality: "fine", chance: 0.06 }] },
+    soldier: { gold: [2, 8], items: [{ id: "potion", chance: 0.15 }, { id: "roundShield", chance: 0.05 }, { id: "mail", chance: 0.03 }, { id: "bow", quality: "fine", chance: 0.03 }] },
+});
+
+/** The most a pack holds. */
+export const PACK_SIZE = 20;
+
+/** A piece of gear's name: "Fine sword". */
+export function itemLabel({ id, quality = "common" }) {
+    const { label } = ITEMS[id] ?? { label: id };
+    const made = QUALITIES[quality]?.label;
+
+    return made ? `${made} ${label.toLowerCase()}` : label;
+}
+
+/** What something costs (gold): its price by its make, less the haggling (or, sold, a share of it and more for haggling). */
+export function priceOf({ id, quality = "common" }, { haggle = 0, selling = false } = {}) {
+    const base = (ITEMS[id]?.price ?? 0) * (QUALITIES[quality]?.price ?? 1);
+
+    return Math.max(1, Math.round(selling ? base * SELL_SHARE * (1 + haggle) : base * (1 - haggle)));
+}
+
+/** What a shop has for sale ([{ id, quality }]): each thing it keeps, common, and better made as far as it goes. */
+export function wares(shop) {
+    const { items, best } = SHOPS[shop] ?? { items: [], best: "common" };
+    const makes = Object.keys(QUALITIES).slice(0, Object.keys(QUALITIES).indexOf(best) + 1);
+
+    return items.flatMap((id) => (ITEMS[id].slot ? makes.map((quality) => ({ id, quality })) : [{ id, quality: "common" }]));
+}
+
+/** What a fallen foe of a kind has on them (random.js random): { gold, items }. */
+export function rollLoot(kind, random) {
+    const table = LOOT[kind];
+
+    if (!table) {
+        return { gold: 0, items: [] };
+    }
+
+    return {
+        gold: random.int(...table.gold),
+        items: table.items.filter(({ chance }) => random.chance(chance)).map(({ id, quality = "common" }) => ({ id, quality })),
+    };
+}
+
+/** A player's skills, gold, pack and gear. */
+export class Progress {
+    /**
+     * @param {object} [kept] - As toJSON gave it: { skills: { tree: xp }, gold, pack: [items], gear: { weapon, body, shield } }.
+     * @param {object} [hero] - Their hero (for the weapon they started with).
+     */
+    constructor({ skills = {}, gold = 20, pack = [], gear = null } = {}, { weapon = "sword" } = {}) {
+        this.skills = Object.fromEntries(Object.keys(TREES).map((tree) => [tree, Math.max(0, Number(skills[tree]) || 0)]));
+        this.gold = Math.max(0, Math.floor(Number(gold) || 0));
+        this.pack = pack.filter((item) => ITEMS[item?.id]).slice(0, PACK_SIZE).map(({ id, quality = "common" }) => ({ id, quality }));
+        this.gear = { weapon: gear?.weapon && ITEMS[gear.weapon.id] ? { ...gear.weapon } : { id: weapon, quality: "common" }, body: gear?.body ?? null, shield: gear?.shield ?? null };
+    }
+
+    /** A tree's rank (0 to 5). */
+    rank(tree) {
+        return RANKS.findLastIndex(({ xp }) => this.skills[tree] >= xp);
+    }
+
+    /** How far a tree is to its next rank: { xp, from, to } (to: null at the top). */
+    toNext(tree) {
+        const rank = this.rank(tree);
+
+        return { xp: this.skills[tree], from: RANKS[rank].xp, to: RANKS[rank + 1]?.xp ?? null };
+    }
+
+    /** Use a skill: its experience grows by `amount`. Returns the ranks it's come to ([{ tree, rank, title, ability }]). */
+    gain(tree, amount) {
+        if (!TREES[tree] || !(amount > 0)) {
+            return [];
+        }
+
+        const before = this.rank(tree);
+
+        this.skills[tree] = Math.round((this.skills[tree] + amount) * 10) / 10;
+
+        const after = this.rank(tree);
+        const ups = [];
+
+        for (let rank = before + 1; rank <= after; rank++) {
+            ups.push({ tree, rank, title: RANKS[rank].title, ability: TREES[tree].abilities[rank] ?? null });
+        }
+
+        return ups;
+    }
+
+    /** Everything the trees and gear give: { melee, ranged, heal, stun, hp, stamina, armor, haggle, persuade, followers }. */
+    bonuses() {
+        const totals = { melee: 0, ranged: 0, heal: 0, stun: 0, hp: 0, stamina: 0, armor: 0, haggle: 0, persuade: 0, followers: 0 };
+
+        for (const [tree, { bonus }] of Object.entries(TREES)) {
+            const rank = this.rank(tree);
+
+            for (const [key, values] of Object.entries(bonus)) {
+                totals[key] += values[rank];
+            }
+        }
+
+        // The gear's: a weapon's make, armour
+        const made = QUALITIES[this.gear.weapon?.quality]?.power ?? 1;
+
+        totals.melee = (1 + totals.melee) * made - 1;
+        totals.ranged = (1 + totals.ranged) * made - 1;
+
+        for (const piece of [this.gear.body, this.gear.shield]) {
+            if (piece) {
+                totals.armor += (ITEMS[piece.id].armor ?? 0) * (QUALITIES[piece.quality]?.power ?? 1);
+            }
+        }
+
+        totals.armor = Math.min(0.6, totals.armor);
+
+        return totals;
+    }
+
+    /** The abilities the trees have brought. */
+    abilities() {
+        return Object.entries(TREES).flatMap(([tree, { abilities }]) => Object.entries(abilities).filter(([rank]) => this.rank(tree) >= Number(rank)).map(([, ability]) => ability));
+    }
+
+    /**
+     * How mighty they are (0 to 8), for the war to come on with: their best fighting rank (or
+     * their command of others, as good), and their gear.
+     */
+    might() {
+        const fighting = Math.max(...Object.entries(TREES).filter(([, { fighting }]) => fighting).map(([tree]) => this.rank(tree)));
+        const command = this.rank("command");
+        const gear = (QUALITIES[this.gear.weapon?.quality]?.might ?? 0) + [this.gear.body, this.gear.shield].reduce((sum, piece) => sum + (piece ? (ITEMS[piece.id].might ?? 0) * (QUALITIES[piece.quality]?.power ?? 1) : 0), 0);
+
+        return Math.min(8, Math.floor(Math.max(fighting, command) + gear));
+    }
+
+    /** What they wear and carry that shows (their body armour, their shield: equipment ids). */
+    worn() {
+        return [this.gear.body, this.gear.shield].filter(Boolean).flatMap(({ id }) => ITEMS[id].equipment ?? []);
+    }
+
+    /** Put something in the pack; whether there was room. */
+    stow(item) {
+        if (this.pack.length >= PACK_SIZE || !ITEMS[item?.id]) {
+            return false;
+        }
+
+        this.pack.push({ id: item.id, quality: item.quality ?? "common" });
+
+        return true;
+    }
+
+    /**
+     * Put on (or take up) the piece of gear at `index` in the pack: what it replaces goes into the
+     * pack. Returns the reason it can't be, or null. (A shield only with a weapon it goes with; no
+     * weapon ever given up for nothing.)
+     */
+    equip(index) {
+        const item = this.pack[index];
+        const slot = item && ITEMS[item.id].slot;
+
+        if (!slot) {
+            return "item";
+        }
+
+        if (slot === "shield" && !WITH_SHIELD.includes(this.gear.weapon.id)) {
+            return "shield";
+        }
+
+        this.pack.splice(index, 1);
+
+        const was = this.gear[slot];
+
+        this.gear[slot] = item;
+
+        if (was) {
+            this.pack.push(was);
+        }
+
+        // (A weapon that can't be carried with a shield: the shield's put away)
+        if (slot === "weapon" && this.gear.shield && !WITH_SHIELD.includes(item.id)) {
+            this.pack.push(this.gear.shield);
+            this.gear.shield = null;
+        }
+
+        return null;
+    }
+
+    /** Take off armour (a slot: body or shield), into the pack. Returns the reason it can't be, or null. */
+    unequip(slot) {
+        if (!["body", "shield"].includes(slot) || !this.gear[slot]) {
+            return "item";
+        }
+
+        if (this.pack.length >= PACK_SIZE) {
+            return "full";
+        }
+
+        this.pack.push(this.gear[slot]);
+        this.gear[slot] = null;
+
+        return null;
+    }
+
+    /** What's kept. */
+    toJSON() {
+        return { skills: { ...this.skills }, gold: this.gold, pack: this.pack.map((item) => ({ ...item })), gear: structuredClone(this.gear) };
+    }
+}
+
+/** The weapon a player fights with (a WEAPONS key), from their gear. */
+export const weaponOf = (progress) => (WEAPONS[progress.gear.weapon?.id] ? progress.gear.weapon.id : "sword");
