@@ -221,6 +221,7 @@ async function create() {
     state.creator = null;
 
     if (!hero) {
+        state.joinAfter = null;
         title();
 
         return;
