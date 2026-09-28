@@ -158,7 +158,7 @@ its spell is (`TOME_RARITY`): common ones found ten times as often as the rare, 
 | Summon | common | a creature, or a player | 1500 ms | 60 s | one of the creatures of these parts at your side, five minutes; or another player, if they'll come |
 | Levitate | common | oneself | 600 ms | 20 s | float above the ground, five minutes: nothing on it touches you |
 | Fear | uncommon | an enemy | 500 ms | 8 s | it runs blindly away, ten seconds |
-| Polymorph | rare | an enemy | 900 ms | 20 s | a creature turned into another, any at all |
+| Polymorph | rare | an enemy | 900 ms | 20 s | a creature turned into another of the world's |
 | Attraction | uncommon | oneself | 800 ms | 30 s | a puff of smoke, and out of it one of the creatures of these parts |
 | Inertial Barrier | uncommon | oneself or a friend | 700 ms | 20 s | a quarter less from blows and arrows, five minutes |
 | Surge | uncommon | oneself | 500 ms | 60 s | blows and arrows 30% stronger, everything hurts 15% more, two minutes |
@@ -206,19 +206,20 @@ What a spell does beyond the battle, the host does when it hears the spell land 
 same for everyone playing (docs/GAME.md: hosting and joining):
 
 - **Zombify** raises an enemy creature fallen in the last half minute (they lie 30 s: long enough)
-  as the caster's companion, **Summon** (on a creature) and **Attraction** call one of the
-  creatures of these parts: a companion follows its player and fights their enemies, five
-  minutes (`SUMMONING_MS`... its time up, it crumbles). One left more than 14 metres behind (stuck,
-  or on another floor) is brought to a few squares behind them (`COMPANION`). They're lost when
-  their player's carried off by magic.
+  as the caster's companion, and **Summon** (on a creature) calls one of the creatures of these
+  parts as one: a companion follows its player and fights their enemies, five minutes (its time
+  up, it's gone). One left more than 14 metres behind (stuck, or on another floor) is brought to
+  a few squares behind them (`COMPANION`). They're lost when their player's carried off by magic.
+- **Attraction** brings one of the creatures of these parts out of a puff of smoke in front of
+  the caster: as wild as any other (to hunt, for its parts or a guild's contract).
 - **Summon** on a player (of a people not the caster's enemy) asks them to come: they have 30
-  seconds to answer ("Go to Aldric" or "Resist"; with **Resist all summons** on in Game options,
+  seconds to answer (`SUMMONING_MS`) ("Go to Aldric" or "Resist"; with **Resist all summons** on in Game options,
   they say no at once), and coming, they're carried to the caster's side.
 - **Teleport** carries the caster anywhere at all in the world; **Word of Recall** to the door of
   the nearest temple; **Wizard's Walk** to the place they pick on the world map (the map opens to
   pick on: anywhere they've uncovered). Whoever was with them is left behind.
-- **Polymorph** turns a creature into another of the world's creatures, any at all, keeping its
-  tier (and how hurt it is, as a share).
+- **Polymorph** turns a creature into another of the world's creatures, any but the perilous
+  places' own, as strong as its tier has it.
 
 ## The spellbook (app/spellbook.js)
 
