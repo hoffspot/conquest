@@ -14,12 +14,19 @@ export const SPELL_COOLDOWN = 3000;
  * Every spell: its name, who it's cast on ("self" or "enemy"), how long it takes to cast (ms),
  * how far it reaches (squares, for enemies, who must be in sight too) and what it does: heal
  * restores [least, most] hit points (a whole number rolled evenly between them); stun stops the
- * target moving, attacking or doing anything else for so many ms.
+ * target moving, attacking or doing anything else for so many ms. The greater spells (learnt as
+ * the healing and hexes skills grow: core/progress.js) look as the ones they're greater forms of
+ * (`like`), cast a little longer.
  */
 export const SPELLS = Object.freeze({
     heal: { label: "Heal", target: "self", castTime: 600, heal: [10, 20] },
     stun: { label: "Stun", target: "enemy", castTime: 400, reach: 9, stun: 3000 },
+    greaterHeal: { label: "Greater heal", target: "self", castTime: 900, heal: [25, 40], like: "heal" },
+    hold: { label: "Hold", target: "enemy", castTime: 600, reach: 9, stun: 6000, like: "stun" },
 });
+
+/** The spell a spell looks as (itself, or the one it's a greater form of). */
+export const lookOf = (id) => SPELLS[id]?.like ?? id;
 
 /** How much a heal restores: a whole number from its least to its most, each as likely. */
 export function rollHeal(spell, random) {

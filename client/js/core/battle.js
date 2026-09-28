@@ -215,6 +215,13 @@ export class Battle {
             post: facing,
             // Whom it holds a grudge against (by id), and until when (FOE_MS)
             foes: {},
+            // How much stronger its blows (up close, from afar), heals and stuns are than their
+            // own (a player's skills and gear: core/progress.js), the share of each blow its
+            // armour takes off, and how much stronger its next blow is (a power strike: null
+            // for none)
+            power: { melee: 1, ranged: 1, heal: 1, stun: 1 },
+            armor: 0,
+            empowered: null,
             // The map it's on, where it comes back to life, and the last link it went through
             // ({ link, from, to, time })
             map,
@@ -290,6 +297,47 @@ export class Battle {
 
     actor(id) {
         return this.actors.find((actor) => actor.id === id) ?? null;
+    }
+
+    /**
+     * Make a character's next blow of a kind ("melee" or "ranged") `factor` times as strong (a
+     * power strike, an aimed shot: core/progress.js ABILITIES).
+     */
+    empower(id, blow, factor) {
+        const actor = this.actor(id);
+
+        if (actor && !actor.dead) {
+            actor.empowered = { blow, factor };
+        }
+    }
+
+    /** Arm a character with another weapon (a WEAPONS key; spiked boots or not): put away to start with. */
+    rearm(id, weapon, boots = false) {
+        const actor = this.actor(id);
+
+        if (!actor) {
+            return;
+        }
+
+        Object.assign(actor, { weapon, boots: boots || weapon === "boots", arms: armsOf(weapon, boots), attack: null, drawing: null, armed: false, empowered: null });
+    }
+
+    /** Mend a character's hurts (`hp`) and fill its stamina (`stamina`), as far as they go ("healed" if it's hurts). */
+    mend(id, { hp = 0, stamina = 0 } = {}) {
+        const actor = this.actor(id);
+
+        if (!actor || actor.dead) {
+            return;
+        }
+
+        if (hp > 0) {
+            const before = actor.hp;
+
+            actor.hp = Math.min(actor.maxHp, actor.hp + hp);
+            this.#emit("healed", { id: actor.id, by: null, spell: null, amount: actor.hp - before, hp: actor.hp, maxHp: actor.maxHp });
+        }
+
+        actor.stamina = Math.min(actor.maxStamina, actor.stamina + stamina);
     }
 
     /**
@@ -1585,12 +1633,14 @@ export class Battle {
         if (spell.heal) {
             const before = target.hp;
 
-            target.hp = Math.min(target.maxHp, target.hp + rollHeal(spell, this.random));
+            target.hp = Math.min(target.maxHp, target.hp + Math.round(rollHeal(spell, this.random) * (actor.power?.heal ?? 1)));
             this.#emit("healed", { id: target.id, by: actor.id, spell: id, amount: target.hp - before, hp: target.hp, maxHp: target.maxHp });
         }
 
         if (spell.stun) {
-            target.stunnedUntil = Math.max(target.stunnedUntil, this.time + spell.stun);
+            const stun = Math.round(spell.stun * (actor.power?.stun ?? 1));
+
+            target.stunnedUntil = Math.max(target.stunnedUntil, this.time + stun);
             target.casting = null;
 
             if (target.attack && !target.attack.struck) {
@@ -1599,7 +1649,7 @@ export class Battle {
 
             if (target.ai === "patrol") {
                 target.target = actor.id;
-                target.lastSeen = this.time + spell.stun;
+                target.lastSeen = this.time + stun;
             }
 
             this.#emit("stunned", { id: target.id, by: actor.id, spell: id, until: target.stunnedUntil });
@@ -1658,7 +1708,15 @@ export class Battle {
     }
 
     #hit(attacker, target, attack, projectile = null) {
-        const damage = rollDamage(attack, this.random);
+        // A blow as strong as the attacker's power for its kind (and its next blow made stronger,
+        // if it is), less what the target's armour takes off: never less than 1
+        const blow = attack.kind === "ranged" ? "ranged" : "melee";
+        const empowered = attacker?.empowered?.blow === blow ? attacker.empowered.factor : 1;
+        const damage = Math.max(1, Math.round(rollDamage(attack, this.random) * (attacker?.power?.[blow] ?? 1) * empowered * (1 - (target.armor ?? 0))));
+
+        if (empowered > 1) {
+            attacker.empowered = null;
+        }
 
         target.hp = Math.max(0, target.hp - damage);
         target.staggeredUntil = Math.max(target.staggeredUntil, this.time + attack.stagger);

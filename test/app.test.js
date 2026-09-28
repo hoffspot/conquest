@@ -7,6 +7,7 @@ import { ICONS } from "../client/js/app/icons.js";
 import { buildingsOf, interiorColours, mapColours, treesOf } from "../client/js/app/minimap.js";
 import { ACTIONS, DIRECTIONS, directionOf, sectorPath, WHEELS } from "../client/js/app/wheel.js";
 import { SPELLS } from "../client/js/core/spells.js";
+import { ABILITIES } from "../client/js/core/progress.js";
 import { isHero, loadExplored, loadSave, loadSettings, loadTalks, loadWorld, newSeed, SAVE_VERSION, saveExplored, saveSettings, saveTalks, saveWorld, SETTINGS_DEFAULTS, writeSave, clearSave } from "../client/js/app/save.js";
 import { Explored } from "../client/js/core/explored.js";
 import { BEARDS, HAIRSTYLES } from "../client/js/characters/hair.js";
@@ -351,11 +352,11 @@ describe("the action wheel (wheel.js, icons.js)", () => {
         assert.ok(path.startsWith("M-67.88,-67.88"), path);
     });
 
-    it("puts Heal up on the player's own wheel, Stun up on an enemy's and Fight up on a soldier's of a people not friendly to theirs, each with an icon", () => {
+    it("puts Heal up on the player's own wheel, Stun up on an enemy's and Fight up on a soldier's of a people not friendly to theirs, each with an icon (and the abilities learnt, each with theirs)", () => {
         assert.deepEqual(WHEELS, { self: { up: "heal" }, enemy: { up: "stun" }, provoke: { up: "fight" } });
 
         for (const [id, action] of Object.entries(ACTIONS)) {
-            assert.ok(SPELLS[action.spell] || action.order === "engage", id);
+            assert.ok(SPELLS[action.spell] || ABILITIES[action.ability] || action.order === "engage", id);
             assert.equal(typeof action.label, "string");
             assert.match(ICONS[id], /<(path|circle|ellipse)/, `${id} has an icon`);
         }

@@ -193,7 +193,7 @@ The engine is built for this from the start. These are its rules:
 | **M0** | Built | The engine made ready for other players: the host, players by id, commands, snapshots, pausing only when alone. This file. |
 | **M1** | Built | The war on its own: realms, towns, garrisons, treasuries, turns, expeditions, camps, raids, conquest and vassals, relations and envoys, as numbers. A page to watch it play out. |
 | **M2** | Built | The war in the world: banners over the towns, guards and patrols of each people, hostility by relations, the war's forces brought to life near the player. |
-| **M3** | | Growing stronger: skills that grow by use along their trees, gear, gold, a pack, shops. |
+| **M3** | Built | Growing stronger: skills that grow by use along their trees, gear, gold, a pack, shops. |
 | **M4** | | The player's people: the keep and town halls, the rulers' requests, a journal, ranks. |
 | **M5** | | The other peoples' looks. |
 | **M6** | | Camps, raids and conquest played out around the player. |
@@ -399,18 +399,80 @@ whoever holds the town, and whom they fight is as their peoples stand.
 - A bar over each soldier who's an enemy (or who's hurt); none over the rest.
 - Soldiers drawn a few at a time as they come out (within the budget buildings are built in).
 
+### Growing stronger (M3)
+
+A player grows by what they do (`Progress`, `core/progress.js`), kept with their character
+(`app/save.js`) and changed only by the host.
+
+**Skills.** Eight trees, each grown by its own use. A rank takes 100, 300, 800, 2,000 and 4,500
+experience in all: Untried, Trained, Adept, Veteran, Master, Legend.
+
+| Tree | Grows by | Brings, by Legend | Rank 2 ability |
+| --- | --- | --- | --- |
+| Blade | landing blows up close (their damage) | +60% damage up close, +20 hit points | Power strike |
+| Marksman | landing shots from afar (their damage) | +60% damage from afar | Aimed shot |
+| Healing | healing with spells (what's healed) | +100% healed | Greater heal |
+| Hexes | stunning foes (15 a stun) | stuns twice as long | Hold |
+| Endurance | taking blows (their damage), running out of stamina | +40 hit points and stamina, 10% of each blow taken off | |
+| Trade | buying and selling (half a point a copper) | 25% off what's bought, 25% more for what's sold | |
+| Talk | talking with the folk | persuasion (M4, M7) | |
+| Command | leading followers | more followers (M9) | |
+
+**Abilities** come with a tree's second rank, and join the action wheel:
+- **Greater heal** (the player's own wheel, right): a slower cast healing 25 to 40.
+- **Hold** (an enemy's wheel, left): a longer stun, from 9 squares.
+- **Power strike** and **aimed shot** (an enemy's wheel, right): the next blow (up close, or from
+  afar) does twice the damage. Each is ready again 12 seconds after.
+
+**Gear** is a weapon, something on the body (a gambeson, a mail shirt) and a shield (only with a
+sword or a hammer). Each is of a make, which counts in its price and in what it does:
+
+| Make | Blows / protection | Price | Might |
+| --- | --- | --- | --- |
+| Common | ×1 | ×1 | +0 |
+| Fine | ×1.15 | ×3 | +0.5 |
+| Masterwork | ×1.3 | ×8 | +1 |
+| Legendary | ×1.5 | ×30 | +1.5 |
+
+Armour takes a share off every blow (a mail shirt 16%, a kite shield 10%), never more than 60% in
+all. What's worn shows on the character.
+
+**Coppers and the pack.** A player starts with 20 coppers and room for 20 things.
+- **Shops.** The folk who keep a shop sell from it, from their talk's "What have you got for
+  sale?":
+  - the barkeep, the serving wenches and the innkeeper: ale (stamina) and hot meals (a little
+    healing);
+  - the smith and the apprentice: weapons, armour and shields, up to masterwork;
+  - the priest: healing draughts;
+  - the guild's receptionist: wands, grimoires and draughts, up to fine.
+
+  What's carried sells for 40% of its price. The shop stays open while the player's within a few
+  steps of the keeper.
+- **Bought by talking.** A room, an ale or a meal bought in talk is had at once; a sharpening at
+  the smithy or a blessing at the temple is a boon for ten minutes (sharper blows up close; a
+  little more of everything).
+- **Found.** Foes carry coppers, and sometimes a draught or gear: an orc 5 to 15 coppers, a
+  soldier 2 to 8.
+- **The pack** (its button, top right, or I) shows the coppers, what's carried (to wear, wield
+  or use), what's worn (to take off), and each skill's rank and how far to the next. Trading, it
+  shows the shop's wares too, and what's carried can be sold. Escape closes it.
+
+**Might** is how dangerous a player is: their best fighting rank (or their command of others),
+plus their gear's make, up to 8. The mightiest player's might sets how fast the war comes on
+(`war.setMight`).
+
 ### The host (core/host.js)
 
 `new Host(world)` holds everything that changes in the world:
 - **the battle** (`host.battle`);
-- **the players** (`host.players`, by id): each is `{ id, hero, realm, talks, explored }`;
+- **the players** (`host.players`, by id): each is `{ id, hero, realm, talks, explored, progress, boons }`;
 - **the folk** in the battle (`host.folk`, by id: how each looks and talks);
 - **the buildings got ready** (`host.open`, by key: their folk's ids);
 - **what's been done by talking** (`host.done`, the last 50).
 
 **Players.**
-- `join({ id, hero, talks, explored })` puts a player in, at the world's start or the nearest free
-  square to it.
+- `join({ id, hero, talks, explored, progress })` puts a player in, at the world's start or the
+  nearest free square to it, dressed in what they wear.
 - `leave(id)` takes them out, and returns their character as it's to be kept.
 - `populate()` puts in the world's own people (the orc, the tavern's folk) after whoever's there
   to start with.
@@ -428,6 +490,12 @@ whoever holds the town, and whom they fight is as their peoples stand.
 | `{ type: "cast", spell, target }` | Cast a spell. |
 | `{ type: "talk", with }` | Start talking to one of the folk near them (or stop: `null`). |
 | `{ type: "effect", effect }` | Something done by talking, to whoever they're talking to. |
+| `{ type: "buy", item, from }` | Buy something from a shopkeeper near them. |
+| `{ type: "sell", index, to }` | Sell something from their pack. |
+| `{ type: "equip", index }` | Wear or wield something from their pack. |
+| `{ type: "unequip", slot }` | Take off their body armour or shield. |
+| `{ type: "use", index }` | Drink or eat something from their pack. |
+| `{ type: "ability", ability, target }` | Use an ability they've learnt. |
 
 Any order can have `run: true`. A command that can't be done is refused, with a reason
 (`REFUSALS`, or a spell's own: `CAST_FAILURES`):
@@ -436,6 +504,8 @@ Any order can have `run: true`. A command that can't be done is refused, with a 
 - a door that isn't there;
 - too far to talk;
 - not talking to anyone.
+- not enough coppers, nothing like that for sale, a full pack;
+- an ability not learnt, or not ready yet.
 
 **Advancing.** `advance(ms)` runs the battle and returns its events, with the host's own:
 
@@ -446,6 +516,11 @@ Any order can have `run: true`. A command that can't be done is refused, with a 
 | `explored` | A player found a new chunk, or went into a building for the first time. |
 | `talk` | A player started or stopped talking. |
 | `effect` | Something was done by talking. |
+| `rank` | A player's skill reached a new rank (and any ability it brings). |
+| `loot` | A player found coppers and things on a fallen foe. |
+| `bought`, `sold`, `used` | A player bought, sold, or used something. |
+| `gear` | What a player wears and wields changed. |
+| `ability` | A player used an ability. |
 
 **Keeping it.** `snapshot()` gives all of it as plain data. `Host.restore(world, snapshot)` carries
 on from it, in a world made again from the same seed:
