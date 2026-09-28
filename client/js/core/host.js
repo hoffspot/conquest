@@ -20,7 +20,8 @@ import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { ABILITIES, alike, ITEMS, priceOf, Progress, rollLoot, wares, weaponOf, WITH_SHIELD } from "./progress.js";
 import { createRandom } from "./random.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
-import { CHUNK } from "./worldplan/plan.js";
+import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, encounterAt, LAIRS, menaces, packOf, tierPower, WILD } from "./creatures.js";
+import { campTier, CHUNK, landAt, RACE, startFor } from "./worldplan/plan.js";
 import { armouryGift, COUNSEL, FAILED, MOST_REQUESTS, offerContract, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
 import { bannersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, roundsOf, sortieOf } from "./war/muster.js";
 import { ADJECTIVES } from "./war/peoples.js";
@@ -99,6 +100,15 @@ export const HONOURS = 200;
 /** How long the fallen soldiers lie before they're taken away (battle ms). */
 const FALLEN_MS = 10000;
 
+/**
+ * The wild's creatures about the players (docs/WILDS.md): how many are kept about each player out
+ * in the world (within `about` metres), put out `from` to `to` metres away (out of sight), clear
+ * of the settlements by `clear` metres; let go once every player's `far` away (not while
+ * fighting). A wild camp's folk come out once a player's `camp` metres from it (a few more than
+ * its patrols roam), and are let go `campFar` away.
+ */
+export const WILDS = Object.freeze({ count: 8, about: 60, from: 30, to: 44, clear: 25, far: 90, camp: 60, campFar: 140 });
+
 /** How long something dropped lies on the ground before it's gone (ms), and how near (m) it's picked up from. */
 export const GROUND_MS = 5 * 60 * 1000;
 export const PICK_REACH = 1.6;
@@ -135,7 +145,7 @@ export const OFFICIALS = Object.freeze({
 const KEEP_DONE = 50;
 
 /** Bumped whenever what a snapshot holds changes, so an old one isn't read wrong. */
-export const SNAPSHOT_VERSION = 3;
+export const SNAPSHOT_VERSION = 4;
 
 /** Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS). */
 export const SHOPKEEPERS = Object.freeze({ smith: "smith", apprentice: "smith", barkeep: "tavern", barmaid: "tavern", innkeeper: "tavern", priest: "temple", acolyte: "temple", receptionist: "guild" });
@@ -274,6 +284,19 @@ export class Host {
 
         /** The folk hired (their ids): never among the folk again, wherever they were. */
         this.hired = new Set();
+
+        /**
+         * The wild's creatures out near the players (by id): { creature, tier, pack (its pack's
+         * id), camp (the wild camp it's of), lair (the perilous site it's of) }; the wild camps
+         * whose folk are out, and the perilous sites whose master and guards are there (by id:
+         * { ids }); when each site's master, slain, is back (battle ms, by site id).
+         */
+        this.wild = new Map();
+        this.nextWild = 1;
+        this.wildCamps = new Map();
+        this.lairs = new Map();
+        this.slain = {};
+
 
         /**
          * What's been dropped on the ground (by id): { id, item ({ id, quality, count }), map,
@@ -611,8 +634,19 @@ export class Host {
             }
         }
 
-        // The fallen soldiers: their garrison the fewer; taken away a while after
+        // The fallen soldiers: their garrison the fewer; taken away a while after (and the wild's
+        // creatures, a perilous site's master gone a long while)
         for (const event of events) {
+            const beast = event.type === "death" ? this.wild.get(event.id) : null;
+
+            if (beast) {
+                this.fallen.push({ id: event.id, at: this.battle.time + FALLEN_MS });
+
+                if (beast.lair && beast.master) {
+                    this.slain[beast.lair] = this.battle.time + LAIRS[this.#siteOf(beast.lair).kind].back;
+                }
+            }
+
             const soldier = event.type === "death" ? this.soldiers.get(event.id) : null;
 
             if (soldier) {
@@ -717,6 +751,7 @@ export class Host {
             this.lookAt = this.battle.time + RELEVANCE.every;
             this.#lookAround();
             this.#muster();
+            this.#wilds();
             this.#watchRequests();
         }
 
@@ -749,6 +784,11 @@ export class Host {
             followers: [...this.followers.entries()],
             nextFollower: this.nextFollower,
             hired: [...this.hired],
+            wild: [...this.wild.entries()],
+            nextWild: this.nextWild,
+            wildCamps: [...this.wildCamps.entries()],
+            lairs: [...this.lairs.entries()],
+            slain: { ...this.slain },
             ground: structuredClone([...this.ground.values()]),
             nextGround: this.nextGround,
             soldiers: [...this.soldiers.entries()],
@@ -808,6 +848,11 @@ export class Host {
         host.followers = new Map(structuredClone(snapshot.followers ?? []));
         host.nextFollower = snapshot.nextFollower ?? 1;
         host.hired = new Set(snapshot.hired ?? []);
+        host.wild = new Map(structuredClone(snapshot.wild ?? []));
+        host.nextWild = snapshot.nextWild ?? 1;
+        host.wildCamps = new Map(structuredClone(snapshot.wildCamps ?? []));
+        host.lairs = new Map(structuredClone(snapshot.lairs ?? []));
+        host.slain = { ...(snapshot.slain ?? {}) };
         host.ground = new Map((snapshot.ground ?? []).map((dropped) => [dropped.id, structuredClone(dropped)]));
         host.nextGround = snapshot.nextGround ?? 1;
         host.soldiers = new Map(structuredClone(snapshot.soldiers ?? []));
@@ -1251,8 +1296,20 @@ export class Host {
 
     // Two characters on different teams (battle.js hostile asks, the folk and foes aside): as their
     // peoples stand in the war; the wild (the orc, the camps' foes: no people's) set against the
-    // players, and not the peoples' soldiers; anyone, without a war
+    // players, and not the peoples' soldiers; anyone, without a war. The wild's creatures
+    // (creatures.js) are every player's enemies, and the soldiers' and followers' when they're a
+    // menace or fighting; no one else's (the orc's)
     #against(a, b) {
+        if (a.team === WILD || b.team === WILD) {
+            const [beast, other] = a.team === WILD ? [a, b] : [b, a];
+
+            if (other.kind === "player") {
+                return true;
+            }
+
+            return (other.kind === "soldier" || other.kind === "follower") && Boolean(beast.wild?.menace || beast.target !== null);
+        }
+
         const war = this.war;
         const [ra, rb] = [war?.realm(a.team), war?.realm(b.team)];
 
@@ -1480,6 +1537,244 @@ export class Host {
 
         this.fallen = this.fallen.filter(({ id: each }) => !ids.includes(each));
         this.#event("strike", { camp: id, ids });
+    }
+
+    // --- The wild (docs/WILDS.md) ---
+
+    // The wild's creatures about the players: those far from every player let go; the wild camps
+    // and perilous sites near a player come to life (and those far, let go); and each player out
+    // in the world with fewer than WILDS.count about them, one more pack put out, out of sight
+    #wilds() {
+        const plan = this.world.plan;
+
+        if (!plan || !this.world.maps?.town?.chunk) {
+            return;
+        }
+
+        const places = this.#whereabouts();
+        const distanceTo = (actor) => Math.min(...places.map(([x, y]) => Math.hypot(actor.x - x, actor.y - y)));
+        const homes = [...this.players.values()].map((player) => ({ at: this.#whereIs(player), home: this.#homeOf(player) })).filter(({ at }) => at);
+
+        for (const [id, one] of [...this.wild]) {
+            const actor = this.battle.actor(id);
+
+            if (!actor) {
+                this.#unwild(id);
+            } else if (!actor.dead && !one.camp && !one.lair && actor.target === null && distanceTo(actor) > WILDS.far) {
+                this.#release(id);
+            }
+        }
+
+        this.#wildCamps(homes);
+        this.#lairs(places);
+
+        for (const player of this.players.values()) {
+            const actor = this.battle.actor(player.id);
+
+            if (!actor || actor.dead || actor.map !== "town") {
+                continue;
+            }
+
+            const about = [...this.wild].filter(([id, one]) => {
+                const beast = !one.camp && !one.lair ? this.battle.actor(id) : null;
+
+                return beast && !beast.dead && Math.hypot(beast.x - actor.x, beast.y - actor.y) < WILDS.about;
+            }).length;
+
+            if (about < WILDS.count) {
+                this.#putOut([actor.x, actor.y], this.#homeOf(player), WILDS.count - about);
+            }
+        }
+    }
+
+    // Where a player's home is: the town their people's players start in (the wild's tamest near
+    // it: creatures.js tierAt)
+    #homeOf(player) {
+        const plan = this.world.plan;
+
+        return RACE[player.realm] ? startFor(plan, player.realm).at : (this.world.start?.at ?? [0, 0]);
+    }
+
+    // A pack of what lives there put out near a place (out of sight of it, as strong as its
+    // distance from `home` has it), clear of the settlements and the water, no bigger than `room`
+    #putOut([x, y], home, room) {
+        const plan = this.world.plan;
+
+        for (let tries = 0; tries < 6; tries++) {
+            const angle = this.random.next() * Math.PI * 2;
+            const reach = WILDS.from + this.random.next() * (WILDS.to - WILDS.from);
+            const at = [x + Math.cos(angle) * reach, y + Math.sin(angle) * reach];
+
+            if (!clearOfSettlements(plan, at, WILDS.clear) || landAt(plan, ...at).water) {
+                continue;
+            }
+
+            const encounter = encounterAt(plan, at, [home], this.random);
+
+            if (encounter) {
+                this.#pack({ ...encounter, count: Math.max(1, Math.min(room, encounter.count)) }, at);
+
+                return;
+            }
+        }
+    }
+
+    // A pack of creatures put out at a place (`count` of `creature` at `tier`), the first its
+    // leader; what they're of (`camp`, `lair`) and how they keep (`roam`, `temper`): their ids
+    #pack({ creature, tier, count }, [x, y], { master = false, ...more } = {}) {
+        const free = this.#spots();
+        const pack = `pack-${this.nextWild}`;
+        const ids = [];
+
+        try {
+            for (let k = 0; k < count; k++) {
+                const id = `wild-${this.nextWild++}`;
+
+                this.#rouse(id, creature, tier, free([x + (k % 3) - 1, y + Math.floor(k / 3)]), { pack, leader: ids[0] ?? null, master: master && k === 0, ...more });
+                ids.push(id);
+            }
+        } catch {
+            // (No free ground there: those found are out, and no more)
+        }
+
+        return ids;
+    }
+
+    // One of the wild's creatures into the world: as strong as its tier has it (creatures.js)
+    #rouse(id, creature, tier, square, { pack, leader, master = false, camp = null, lair = null, roam = null, temper = null }) {
+        const spec = CREATURES[creature];
+        const power = tierPower(tier);
+
+        this.wild.set(id, { creature, tier, pack, camp, lair, master });
+        this.battle.add({
+            id,
+            kind: "beast",
+            name: spec.name,
+            weapon: spec.weapon,
+            team: WILD,
+            square,
+            ai: "wild",
+            hp: Math.round(spec.hp * power),
+            speed: spec.speed,
+            chase: spec.chase,
+            power: { melee: power, ranged: power },
+            armor: spec.armor ?? 0,
+            wild: { creature, tier, temper: temper ?? spec.temper, guard: spec.guard ?? 0, roam: roam ?? spec.roam, leash: spec.leash + (roam ?? 0), pack, leader, menace: menaces(creature) },
+        });
+    }
+
+    // A creature let go (wandered off, far from every player)
+    #release(id) {
+        this.battle.remove(id);
+        this.#unwild(id);
+        this.#event("gone", { id });
+    }
+
+    // A creature no longer about: out of its camp's or site's too
+    #unwild(id) {
+        const one = this.wild.get(id);
+
+        if (!one) {
+            return;
+        }
+
+        this.wild.delete(id);
+
+        for (const held of [one.camp && this.wildCamps.get(one.camp), one.lair && this.lairs.get(one.lair)]) {
+            if (held) {
+                held.ids = held.ids.filter((each) => each !== id);
+            }
+        }
+    }
+
+    // The wild camps (the world plan's) near a player: their folk out, round the camp and on its
+    // patrols, as strong as its tier (from the home of the player nearest it: few, near home);
+    // let go once every player's far
+    #wildCamps(homes) {
+        const near = (at, within) => homes.some(({ at: [x, y] }) => Math.hypot(x - at[0], y - at[1]) < within);
+
+        for (const [id, held] of [...this.wildCamps]) {
+            const camp = this.world.plan.camps.find((each) => each.id === id);
+
+            if (!near(camp.at, camp.roam + WILDS.campFar)) {
+                for (const each of [...held.ids]) {
+                    if (!this.battle.actor(each)?.dead) {
+                        this.#release(each);
+                    }
+                }
+
+                this.wildCamps.delete(id);
+            }
+        }
+
+        for (const camp of this.world.plan.camps) {
+            if (this.wildCamps.has(camp.id) || !near(camp.at, camp.roam + WILDS.camp) || !CAMP_FOLK[camp.faction]) {
+                continue;
+            }
+
+            const nearest = homes.reduce((best, each) => (Math.hypot(each.at[0] - camp.at[0], each.at[1] - camp.at[1]) < Math.hypot(best.at[0] - camp.at[0], best.at[1] - camp.at[1]) ? each : best));
+            const tier = campTier(camp, nearest.home);
+            const creature = campFolk(camp.faction, tier);
+            const patrols = Math.min(camp.patrols, 1 + Math.floor(tier / 3));
+            const ids = this.#pack({ creature, tier, count: Math.min(5, 1 + Math.floor(tier / 2)) }, camp.at, { camp: camp.id, roam: 4, temper: "territorial" });
+
+            // (Its patrols, roaming out from it: as many as it has, fewer near home)
+            for (let k = 0; k < patrols; k++) {
+                const angle = ((k + 0.5) / patrols) * Math.PI * 2;
+                const out = camp.roam * 0.5;
+
+                ids.push(...this.#pack({ creature, tier, count: Math.max(1, packOf(creature, tier) - (tier <= 2 ? 1 : 0)) }, [camp.at[0] + Math.cos(angle) * out, camp.at[1] + Math.sin(angle) * out], { camp: camp.id, roam: camp.roam * 0.4 }));
+            }
+
+            this.wildCamps.set(camp.id, { ids });
+        }
+    }
+
+    // The perilous sites (a dragon's lair, the ruined castles) near a player: their master (unless
+    // slain lately) and its guards there; let go once every player's far
+    #lairs(places) {
+        const near = (at, within) => places.some(([x, y]) => Math.hypot(x - at[0], y - at[1]) < within);
+
+        for (const [id, held] of [...this.lairs]) {
+            const site = this.#siteOf(id);
+
+            if (!near(site.at, LAIRS[site.kind].near * 2)) {
+                for (const each of [...held.ids]) {
+                    if (!this.battle.actor(each)?.dead) {
+                        this.#release(each);
+                    }
+                }
+
+                this.lairs.delete(id);
+            }
+        }
+
+        for (const site of this.world.plan.sites) {
+            const lair = LAIRS[site.kind];
+
+            if (!lair || this.lairs.has(site.id) || !near(site.at, lair.near)) {
+                continue;
+            }
+
+            const ids = [];
+            const [master, tier] = lair.master;
+
+            if ((this.slain[site.id] ?? -Infinity) <= this.battle.time) {
+                ids.push(...this.#pack({ creature: master, tier, count: 1 }, site.at, { lair: site.id, master: true, roam: 3 }));
+            }
+
+            lair.guards.forEach(([creature, count, guardTier], k) => {
+                const angle = (k / lair.guards.length) * Math.PI * 2;
+
+                ids.push(...this.#pack({ creature, tier: guardTier, count }, [site.at[0] + Math.cos(angle) * 6, site.at[1] + Math.sin(angle) * 6], { lair: site.id, roam: 6 }));
+            });
+
+            this.lairs.set(site.id, { ids });
+        }
+    }
+
+    #siteOf(id) {
+        return this.world.plan.sites.find((site) => site.id === id);
     }
 
     // A camp's sortie against a town a player's near (the war's "sortie"): its raiders, or
@@ -1872,6 +2167,7 @@ export class Host {
 
         this.battle.remove(id);
         this.soldiers.delete(id);
+        this.#unwild(id);
 
         const mustered = soldier && (soldier.envoy ? null : soldier.camp ? this.camps.get(soldier.camp) : this.mustered.get(soldier.town));
 

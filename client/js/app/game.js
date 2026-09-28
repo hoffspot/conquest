@@ -27,7 +27,9 @@ import { Character } from "../characters/character.js";
 import { folkLook } from "../characters/folk.js";
 import { soldierLook } from "../characters/soldiers.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
+import { BeastAvatar, dressCreature } from "../beasts/beast.js";
 import { STEP_MS, TALK_REACH } from "../core/battle.js";
+import { CREATURES } from "../core/creatures.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
 import { HIRES, HOST_PLAYER, Host, PICK_REACH, REFUSALS, SHOP_REACH, SHOPKEEPERS, UNDO_MS } from "../core/host.js";
 import { ABILITIES, itemLabel, ITEMS, priceOf, QUALITIES, TREES, wares } from "../core/progress.js";
@@ -43,7 +45,7 @@ import { squaresOf } from "../core/grid.js";
 import { GROUND } from "../core/setpieces/pieces.js";
 import { CAST_FAILURES, lookOf, SPELLS } from "../core/spells.js";
 import { Variety } from "../core/variety.js";
-import { distanceBetween, longestReach, WEAPONS } from "../core/weapons.js";
+import { distanceBetween, longestReach, weaponOf, WEAPONS } from "../core/weapons.js";
 import { Avatar } from "../world/avatar.js";
 import { Banners } from "../world/banners3d.js";
 import { Camps } from "../world/camps3d.js";
@@ -82,7 +84,7 @@ export function heroEquipment(weapon, boots = false, worn = [], parts = []) {
 }
 
 /** How a character holds its weapon to fight (actions.js GUARDS, DRAWS), for its WEAPONS key. */
-export const guardOf = (weapon) => WEAPONS[weapon].attacks[0].animation;
+export const guardOf = (weapon) => weaponOf(weapon)?.attacks[0].animation ?? null;
 
 // The sound of drawing each kind of weapon and putting it away (at the moment the hand takes it
 // or lets it go): a blade from its scabbard, something slung off the back or from a belt, fists
@@ -606,6 +608,11 @@ export class Game {
             return this.#addAvatar(actor.id, character, { walk: "natural", guard: guardOf(weapon) });
         }
 
+        // One of the wild's creatures (core/creatures.js): as its kind looks (beasts/)
+        if (actor.kind === "beast") {
+            return this.#addBeast(actor);
+        }
+
         // The orc
         const preset = PRESETS.orc;
         const character = new Character(this.kit, { shape: preset.shape, look: preset.look, equipment: [...preset.equipment, ...WEAPONS[actor.weapon].equipment], hairDetail });
@@ -672,7 +679,24 @@ export class Game {
     }
 
     #addAvatar(id, character, { wounds = true, ...options }) {
-        const avatar = new Avatar(character, options);
+        return this.#register(id, new Avatar(character, options), { wounds });
+    }
+
+    // One of the wild's creatures, as its kind looks (the same one of its kind every time, from
+    // its id); holding its weapon, if it's people-shaped (and wounded as people are)
+    #addBeast(actor) {
+        const seed = [...actor.id].reduce((hash, letter) => (Math.imul(hash, 31) + letter.charCodeAt(0)) | 0, 7) >>> 0;
+        const weapon = WEAPONS[actor.weapon];
+        const avatar = dressCreature(this.kit, actor.wild.creature, { seed, equipment: weapon?.equipment ?? [], guard: weapon ? guardOf(actor.weapon) : null, hairDetail: Math.min(this.view.quality.hair, FOLK_HAIR) });
+
+        avatar.character.sheathe(true);
+
+        return this.#register(actor.id, avatar, { wounds: !(avatar instanceof BeastAvatar) });
+    }
+
+    // An avatar drawn, its footsteps heard
+    #register(id, avatar, { wounds }) {
+        const character = avatar.character;
 
         // Footsteps, on whatever ground the foot lands on
         avatar.walker.onStep = (foot, speed) => {
@@ -2535,7 +2559,7 @@ export class Game {
                     break;
                 case "projectile": {
                     const target = this.avatars.get(event.target);
-                    const hand = WEAPONS[battle.actor(event.id).weapon].equipment.includes("bow") ? "Left" : "Right";
+                    const hand = weaponOf(battle.actor(event.id).weapon)?.equipment?.includes("bow") ? "Left" : "Right";
                     const from = avatar.hand(hand);
 
                     const [ox, oz] = this.originOf(battle.actor(event.id).map);
@@ -2606,7 +2630,9 @@ export class Game {
                     this.sound?.play("fall", { at: avatar.object.position, delay: FALL_LANDS });
 
                     // Blood pools under their chest once they're down
-                    this.pools.set(event.id, { left: FALL_LANDS + 0.2, spot: null });
+                    if (this.#bleeds(battle.actor(event.id))) {
+                        this.pools.set(event.id, { left: FALL_LANDS + 0.2, spot: null });
+                    }
 
                     if (event.id === this.me) {
                         hud.message("You have fallen. You'll wake in the market square…", (event.respawnAt - battle.time) / 1000);
@@ -2849,7 +2875,7 @@ export class Game {
         const actor = this.battle.actor(id);
         const guard = guardOf(actor.weapon);
 
-        if (actor.map !== this.mapId || actor.dead) {
+        if (actor.map !== this.mapId || actor.dead || actor.kind === "beast") {
             avatar.actions.stopResting();
             avatar.character.sheathe(!on);
 
@@ -2886,8 +2912,8 @@ export class Game {
         effects.impact(reaction?.effect ?? "sparks", at, direction, event.projectile ? effects.lookOf(event.projectile) : null);
 
         // Blood sprays from it, gushing from a wound (and a killing blow), with a splash on the
-        // ground beyond; burns smoke
-        if (kind.blood > 0) {
+        // ground beyond (not from a creature that doesn't bleed red); burns smoke
+        if (kind.blood > 0 && this.#bleeds(actor)) {
             effects.bleed(at, direction, { amount: kind.blood * (landed?.mark ? 0.7 : 1.4), gush: !landed?.mark || event.hp <= 0 });
         }
 
@@ -2908,6 +2934,11 @@ export class Game {
         hud.damage(this.#screenAbove(event.id), event.damage, { toPlayer: event.id === this.me });
         hud.setHealth(event.id, actor.hp, actor.maxHp);
         this.flash.set(event.id, 0.25);
+    }
+
+    // Does a character bleed red (not a skeleton, a slime, a spider, a wisp...)?
+    #bleeds(actor) {
+        return actor?.kind !== "beast" || CREATURES[actor.wild?.creature]?.blood === "red";
     }
 
     // Wounds glow and fade; burns smoke and throw embers; the badly hurt drip blood (the worse

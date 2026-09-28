@@ -97,6 +97,7 @@ export const LOOKS = Object.freeze({
         colours: { bone: 0xd8cfb4, eyes: 0xff6020, metal: 0x6e6458 },
         attacks: ["slash", "thrust", "chop"], rests: ["slump", "rattle", "look"],
     },
+    cultist: { body: "humanoid", scale: [0.95, 1.05] },
     troll: { body: "humanoid", scale: [1.4, 1.5] },
     ogre: { body: "humanoid", scale: [1.3, 1.4] },
     wyvern: {
@@ -284,14 +285,16 @@ const BRUTES = {
 /**
  * One of the people-shaped creatures (a HUMANOIDS id), from a seed: { shape, look, equipment,
  * walk } (as presets.js's), not yet armed (the game adds its weapon's). Bandits are human
- * cutthroats, dressed as rogues; the others are their kind's.
+ * cutthroats, dressed as rogues, and cultists wear mages' robes; the others are their kind's.
  */
 export function humanoidLook(id, seed = 1) {
-    if (id === "bandit") {
+    // (Bandits: cutthroats, dressed as rogues; cultists in mages' robes, hatless)
+    if (id === "bandit" || id === "cultist") {
         const sex = seed % 4 === 0 ? "f" : "m";
-        const rogue = folkLook({ role: "adventurer", look: "rogue", sex, seed });
+        const folk = folkLook({ role: "adventurer", look: id === "bandit" ? "rogue" : "mage", sex, seed });
+        const carried = new Set(["sword", "staff", "wand", "wizardHat"]);
 
-        return { shape: rogue.shape, look: rogue.look, equipment: rogue.equipment.filter((each) => each !== "sword"), walk: "natural" };
+        return { shape: folk.shape, look: folk.look, equipment: folk.equipment.filter((each) => !carried.has(each)), walk: "natural" };
     }
 
     const spec = BRUTES[id];

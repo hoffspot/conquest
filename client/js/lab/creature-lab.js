@@ -31,6 +31,7 @@ const ABOUT = {
     direWolf: ["Dire wolf", "Far out"],
     goblin: ["Goblin raider", "Far out", "cleaver"],
     skeleton: ["Skeleton", "Far out, and in ruins"],
+    cultist: ["Cultist", "Far out, in camps", "wand"],
     troll: ["Troll", "The far wilds", "hammer"],
     ogre: ["Ogre", "The far wilds", "hammer"],
     wyvern: ["Wyvern", "The far wilds, and the mountains"],
@@ -255,7 +256,7 @@ function advance(seconds, step = 1 / 60) {
 // --- The controls ---
 
 const groups = [
-    ["Near home", ["rat", "porcupine", "slime", "bats", "wolf", "boar", "snake", "bandit", "bear", "direWolf", "goblin", "skeleton", "troll", "ogre", "wyvern"]],
+    ["Near home", ["rat", "porcupine", "slime", "bats", "wolf", "boar", "snake", "bandit", "bear", "direWolf", "goblin", "skeleton", "cultist", "troll", "ogre", "wyvern"]],
     ["Each people's own", ["blackShuck", "boggart", "wisp", "treant", "caveSpider", "shadowStalker", "hyena", "scorpion", "bogFrog", "crocodile", "magmaSlime", "rockTusker"]],
     ["For the mightiest", ["dragon", "wightLord", "frostTroll"]],
 ];

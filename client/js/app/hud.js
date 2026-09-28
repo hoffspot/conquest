@@ -32,7 +32,8 @@ export class Hud {
     }
 
     /** Show a bar over another character (hostile ones in red). */
-    track(id, { name, hp, maxHp, stamina = maxHp, maxStamina = maxHp, hostile = true }) {
+    track(id, { name, hp, maxHp, stamina = maxHp, maxStamina = maxHp, hostile = true, wild = null }) {
+        const level = wild?.tier ?? null;
         const plate = element("div", `floater plate${hostile ? " hostile" : ""}`);
         const bar = element("div", "bar");
         const breath = element("div", "bar stamina");
@@ -42,6 +43,11 @@ export class Hud {
         breath.hidden = true;
         plate.append(element("span", "name", name), bar, breath);
         plate.dataset.id = id;
+
+        // (A creature of the wild's: its level, by its name)
+        if (level) {
+            plate.querySelector(".name").append(element("span", "level", String(level)));
+        }
         this.floaters.append(plate);
         this.tracked.set(id, plate);
         this.setHealth(id, hp, maxHp);

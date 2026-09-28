@@ -826,6 +826,19 @@ input[type="range"] {
     color: #f0a08c;
 }
 
+.floater .level {
+    margin-left: 6px;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted, #b8c0c8);
+}
+
+.floater .level::before {
+    content: "Lv ";
+    font-size: 9px;
+    letter-spacing: 0.04em;
+}
+
 .floater.hostile .bar .fill {
     background: linear-gradient(180deg, #e8735c, var(--hostile));
 }

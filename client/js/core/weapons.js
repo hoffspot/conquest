@@ -103,6 +103,112 @@ export const WEAPONS = Object.freeze({
     },
 });
 
+// A creature's melee attack that's one of two, at random each time (a scorpion's pincers or its sting)
+const eitherOf = (a, b) => ({ kind: "melee", reach: MELEE_REACH, either: [a, b] });
+
+/**
+ * The wild's creatures' own weapons (core/creatures.js), by creature: their teeth, tusks, claws
+ * and stings up close (animation "melee": a creature strikes each of its own ways in turn), and
+ * what some of them do from further off (venom spat, a web, roots called up, a curse, a bolt of
+ * light, lava, fire breathed: named as the creature does it). Their damage is at the first tier's:
+ * a creature further out is stronger (its power: creatures.js).
+ */
+export const NATURAL = Object.freeze({
+    rat: { label: "Teeth", attacks: [melee({ id: "bite", damage: [2, 4], hitAt: 300, duration: 650, interval: 1000, reaction: "hack", animation: "melee" })] },
+    porcupine: { label: "Quills", attacks: [melee({ id: "quills", damage: [3, 5], hitAt: 450, duration: 900, interval: 1300, reaction: "pierce", animation: "melee" })] },
+    slime: { label: "Slime", attacks: [melee({ id: "slam", damage: [2, 5], hitAt: 500, duration: 900, interval: 1200, stagger: 200, reaction: "crush", animation: "melee" })] },
+    bats: { label: "Teeth", attacks: [melee({ id: "bite", damage: [2, 4], hitAt: 250, duration: 600, interval: 900, stagger: 80, reaction: "hack", animation: "melee" })] },
+    wolf: { label: "Fangs", attacks: [melee({ id: "bite", damage: [2, 4], hitAt: 350, duration: 700, interval: 1100, reaction: "hack", animation: "melee" })] },
+    boar: { label: "Tusks", attacks: [melee({ id: "gore", damage: [4, 7], hitAt: 450, duration: 900, interval: 1500, stagger: 300, reaction: "pierce", animation: "melee" })] },
+    snake: {
+        label: "Fangs",
+        attacks: [
+            melee({ id: "bite", damage: [3, 6], hitAt: 300, duration: 700, interval: 1200, reaction: "pierce", animation: "melee" }),
+            ranged({ id: "spit", reach: 5, damage: [2, 4], hitAt: 450, duration: 900, interval: 1800, reaction: "arcane", animation: "spit", projectile: { kind: "venom", speed: 10 } }),
+        ],
+    },
+    bear: { label: "Claws", attacks: [melee({ id: "maul", damage: [5, 10], hitAt: 600, duration: 1100, interval: 1600, stagger: 400, reaction: "crush", animation: "melee" })] },
+    direWolf: { label: "Fangs", attacks: [melee({ id: "bite", damage: [3, 6], hitAt: 350, duration: 700, interval: 1100, reaction: "hack", animation: "melee" })] },
+    skeleton: { label: "Rusty sword", attacks: [melee({ id: "slash", damage: [4, 8], hitAt: 380, duration: 760, interval: 1100, reaction: "slash", animation: "melee" })] },
+    wyvern: {
+        label: "Fangs and sting",
+        attacks: [
+            eitherOf(
+                melee({ id: "bite", damage: [5, 9], hitAt: 400, duration: 800, interval: 1300, reaction: "hack", animation: "melee" }),
+                melee({ id: "sting", damage: [4, 8], hitAt: 500, duration: 950, interval: 1500, reaction: "pierce", animation: "sting" }),
+            ),
+        ],
+    },
+    blackShuck: { label: "Fangs", attacks: [melee({ id: "bite", damage: [4, 8], hitAt: 350, duration: 750, interval: 1200, reaction: "hack", animation: "melee" })] },
+    boggart: { label: "Claws", attacks: [melee({ id: "claw", damage: [3, 6], hitAt: 170, duration: 420, interval: 900, stagger: 80, reaction: "slash", animation: "punch" })] },
+    wisp: {
+        label: "Light",
+        attacks: [
+            melee({ id: "flare", damage: [2, 4], hitAt: 400, duration: 800, interval: 1200, reaction: "arcane", animation: "melee" }),
+            ranged({ id: "bolt", reach: 7, damage: [3, 6], hitAt: 500, duration: 1000, interval: 1600, reaction: "arcane", animation: "bolt", projectile: { kind: "wisp", speed: 9 } }),
+        ],
+    },
+    treant: {
+        label: "Limbs",
+        attacks: [
+            melee({ id: "slam", damage: [6, 12], hitAt: 700, duration: 1200, interval: 1800, stagger: 450, reaction: "crush", animation: "melee" }),
+            ranged({ id: "roots", reach: 6, damage: [2, 5], hitAt: 600, duration: 1100, interval: 2600, stagger: 600, reaction: "crush", animation: "roots", projectile: { kind: "roots", speed: 7 } }),
+        ],
+    },
+    caveSpider: {
+        label: "Fangs",
+        attacks: [
+            melee({ id: "bite", damage: [3, 5], hitAt: 300, duration: 700, interval: 1100, reaction: "pierce", animation: "melee" }),
+            ranged({ id: "web", reach: 6, damage: [1, 2], hitAt: 450, duration: 900, interval: 2400, stagger: 500, reaction: "punch", animation: "web", projectile: { kind: "web", speed: 11 } }),
+        ],
+    },
+    shadowStalker: { label: "Claws", attacks: [melee({ id: "rake", damage: [5, 9], hitAt: 350, duration: 750, interval: 1100, reaction: "slash", animation: "melee" })] },
+    hyena: { label: "Jaws", attacks: [melee({ id: "bite", damage: [2, 5], hitAt: 300, duration: 700, interval: 1000, reaction: "hack", animation: "melee" })] },
+    scorpion: {
+        label: "Pincers and sting",
+        attacks: [
+            eitherOf(
+                melee({ id: "pinch", damage: [3, 5], hitAt: 350, duration: 750, interval: 1200, reaction: "slash", animation: "melee" }),
+                melee({ id: "sting", damage: [3, 6], hitAt: 450, duration: 900, interval: 1400, reaction: "pierce", animation: "sting" }),
+            ),
+        ],
+    },
+    bogFrog: {
+        label: "Tongue",
+        attacks: [
+            melee({ id: "tongue", damage: [2, 5], hitAt: 350, duration: 750, interval: 1100, reaction: "punch", animation: "melee" }),
+            ranged({ id: "spit", reach: 5, damage: [2, 4], hitAt: 450, duration: 900, interval: 2000, reaction: "arcane", animation: "spit", projectile: { kind: "venom", speed: 10 } }),
+        ],
+    },
+    crocodile: { label: "Jaws", attacks: [melee({ id: "bite", damage: [5, 9], hitAt: 500, duration: 1000, interval: 1600, stagger: 350, reaction: "hack", animation: "melee" })] },
+    magmaSlime: {
+        label: "Molten rock",
+        attacks: [
+            melee({ id: "slam", damage: [4, 8], hitAt: 500, duration: 900, interval: 1400, stagger: 250, reaction: "fire", animation: "melee" }),
+            ranged({ id: "lava", reach: 5, damage: [3, 6], hitAt: 500, duration: 1000, interval: 2200, reaction: "fire", animation: "spit", projectile: { kind: "lava", speed: 8 } }),
+        ],
+    },
+    rockTusker: { label: "Tusks", attacks: [melee({ id: "gore", damage: [6, 11], hitAt: 500, duration: 1000, interval: 1600, stagger: 450, reaction: "pierce", animation: "melee" })] },
+    dragon: {
+        label: "Fangs and fire",
+        attacks: [
+            melee({ id: "bite", damage: [8, 14], hitAt: 500, duration: 1000, interval: 1600, stagger: 400, reaction: "hack", animation: "melee" }),
+            ranged({ id: "breath", reach: 6, damage: [6, 12], hitAt: 700, duration: 1400, interval: 3000, stagger: 300, reaction: "fire", animation: "breath", projectile: { kind: "flame", speed: 14 } }),
+        ],
+    },
+    wightLord: {
+        label: "Greatsword and curse",
+        attacks: [
+            melee({ id: "cleave", damage: [6, 11], hitAt: 600, duration: 1100, interval: 1500, stagger: 350, reaction: "slash", animation: "melee" }),
+            ranged({ id: "curse", reach: 7, damage: [4, 8], hitAt: 700, duration: 1300, interval: 3200, reaction: "arcane", animation: "curse", projectile: { kind: "curse", speed: 8 } }),
+        ],
+    },
+    frostTroll: { label: "Frozen club", attacks: [melee({ id: "smash", damage: [6, 12], hitAt: 640, duration: 1100, interval: 1700, stagger: 450, reaction: "crush", animation: "hammer" })] },
+});
+
+/** A weapon (a WEAPONS key) or a creature's own (a NATURAL key), or null. */
+export const weaponOf = (id) => (id ? (WEAPONS[id] ?? NATURAL[id] ?? null) : null);
+
 /** The weapons a new character can start with, in the order to offer them. */
 export const STARTING_WEAPONS = Object.freeze(["sword", "staff", "wand", "grimoire", "hammer", "bow", "gauntlets", "boots"]);
 
@@ -117,7 +223,7 @@ export const averageDamage = (a, b) => [(a.damage[0] + b.damage[0]) / 2, (a.dama
  */
 export function armsOf(weapon, boots = false) {
     const kick = WEAPONS.boots.attacks[0];
-    const attacks = weapon ? WEAPONS[weapon].attacks : [];
+    const attacks = weaponOf(weapon)?.attacks ?? [];
 
     if (!boots || weapon === "boots") {
         return attacks;
@@ -159,8 +265,8 @@ export function inReach(attack, from, to) {
     return attack.kind === "melee" ? rings <= attack.reach : distanceBetween(from, to) <= attack.reach;
 }
 
-// A weapon's attacks (a WEAPONS key) or a character's (armsOf)
-const listOf = (arms) => (typeof arms === "string" ? WEAPONS[arms].attacks : (arms ?? []));
+// A weapon's attacks (a WEAPONS or NATURAL key) or a character's (armsOf)
+const listOf = (arms) => (typeof arms === "string" ? weaponOf(arms).attacks : (arms ?? []));
 
 /**
  * The first attack that reaches from one square to another, of a weapon (a WEAPONS key) or a
