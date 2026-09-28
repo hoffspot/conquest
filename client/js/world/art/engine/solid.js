@@ -447,6 +447,69 @@ export class Solid {
         return this.cylinder(cx, cz, y0, y0 + height, radius, 0, material, { segments, capped: false });
     }
 
+    /**
+     * A shape turned about an upright axis at (cx, cz): its outline (`profile`: [[radius, height]...]
+     * from the bottom up) swept round from `from` to `to` (radians from east, towards the south)
+     * in `segments` steps. Domes, beehive huts, thatch that swells and curls in at its crown,
+     * granaries, onion and pointed domes, a leaf's curve; a radius of 0 closes it to a point.
+     * Its texture runs round it (world pixels, at each ring's own radius) and up the outline.
+     */
+    lathe(cx, cz, profile, material, { segments = 16, from = 0, to = Math.PI * 2, tone = this.tone } = {}) {
+        const step = (to - from) / segments;
+        const point = ([r, y], a) => [cx + r * Math.cos(a), y, cz + r * Math.sin(a)];
+        let up = 0;
+
+        for (let k = 0; k < profile.length - 1; k++) {
+            const [lower, upper] = [profile[k], profile[k + 1]];
+            const [dr, dy] = [upper[0] - lower[0], upper[1] - lower[1]];
+            const slope = Math.hypot(dr, dy);
+
+            if (slope < 1e-6) {
+                continue;
+            }
+
+            for (let i = 0; i < segments; i++) {
+                const [a0, a1] = [from + i * step, from + (i + 1) * step];
+                const middle = (a0 + a1) / 2;
+                // (Outwards from the axis as far as the outline leans out, up as far as it leans in)
+                const out = [Math.cos(middle) * dy, -dr, Math.sin(middle) * dy];
+                const corners = [point(lower, a0), point(lower, a1), point(upper, a1), point(upper, a0)];
+                const uvs = [[lower[0] * a0, up], [lower[0] * a1, up], [upper[0] * a1, up + slope], [upper[0] * a0, up + slope]];
+                // (A ring closed to a point, at the foot or the top, is a triangle)
+                const keep = lower[0] < 1e-6 ? [0, 2, 3] : upper[0] < 1e-6 ? [0, 1, 2] : [0, 1, 2, 3];
+
+                this.facing(keep.map((j) => corners[j]), out, material, keep.map((j) => uvs[j]), tone);
+            }
+
+            up += slope;
+        }
+
+        return this;
+    }
+
+    /**
+     * Walls round a plan of any shape (`points`: its corners [x, z] in order, either way round),
+     * standing on `y`, `height` tall: each side a wall's face (as `wall`, facing out from the
+     * middle) with that side's openings let into it (`openings[k]`: the side from corner k to
+     * k + 1). A round or oval house is a plan of many short sides. Returns each side's face.
+     */
+    walls(points, y, height, openings, material, options = {}) {
+        const [mx, mz] = points.reduce(([sx, sz], [x, z]) => [sx + x / points.length, sz + z / points.length], [0, 0]);
+
+        return points.map(([x, z], k) => {
+            const [nx, nz] = points[(k + 1) % points.length];
+            const length = Math.hypot(nx - x, nz - z);
+            const across = [(nx - x) / length, 0, (nz - z) / length];
+            const normal = [across[2], 0, -across[0]];
+            const out = dot(normal, [(x + nx) / 2 - mx, 0, (z + nz) / 2 - mz]) < 0 ? times(normal, -1) : normal;
+            const face = { origin: [x, y, z], across, out, length };
+
+            this.wall(face, length, height, openings?.[k] ?? [], material, options);
+
+            return face;
+        });
+    }
+
     /** Add another solid's faces, moved by (dx, dy, dz). */
     add(other, dx = 0, dy = 0, dz = 0) {
         const object = other.toObject();

@@ -294,6 +294,81 @@ describe("walls with openings (Solid.wall)", () => {
         solid.wall({ origin: [0, 0, 0], across: [1, 0, 0], out: [0, 0, 1] }, 20, 8, [], material("plaster"), { line: [[0, 0], [10, 8], [20, 0]] });
         assert.ok(Math.abs(areaFacing(solid, [0, 0, 1]) - 80) < 1e-6);
     });
+
+    it("go round a plan of any shape, each side facing out, with its own openings (Solid.walls)", () => {
+        const solid = new Solid();
+        const octagon = Array.from({ length: 8 }, (_, k) => [30 + 20 * Math.cos((k * Math.PI) / 4), 30 + 20 * Math.sin((k * Math.PI) / 4)]);
+        const side = Math.hypot(octagon[1][0] - octagon[0][0], octagon[1][1] - octagon[0][1]);
+        const faces = solid.walls(octagon, 2, 15, { 1: [{ u0: side / 2 - 2, u1: side / 2 + 2, v0: 0, v1: 10, depth: 1, back: material("planks-dark") }] }, material("plaster"));
+
+        assert.equal(faces.length, 8);
+
+        for (const { origin, out, length } of faces) {
+            // (Facing away from the middle)
+            assert.ok((origin[0] - 30) * out[0] + (origin[2] - 30) * out[2] > 0);
+            assert.ok(Math.abs(length - side) < 1e-6);
+        }
+
+        // Every side whole (the door's back fills its hole), and the door's reveal round it
+        const door = faces[1].out;
+
+        assert.ok(Math.abs(areaFacing(solid, door) - side * 15) < 1e-3);
+    });
+});
+
+describe("shapes turned about an axis (Solid.lathe)", () => {
+    // Each triangle's normal against the way out from the axis (and up) at its middle
+    const facingOut = (solid, cx, cz) => {
+        let outward = 0;
+        let triangles = 0;
+
+        solid.toObject().traverse((node) => {
+            if (!node.isMesh) {
+                return;
+            }
+
+            const { position } = node.geometry.attributes;
+            const [a, b, c] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+
+            for (let i = 0; i < position.count; i += 3) {
+                a.fromBufferAttribute(position, i);
+                b.fromBufferAttribute(position, i + 1);
+                c.fromBufferAttribute(position, i + 2);
+
+                const normal = b.clone().sub(a).cross(c.clone().sub(a)).normalize();
+                const middle = a.clone().add(b).add(c).divideScalar(3);
+
+                triangles++;
+                outward += normal.dot(new THREE.Vector3(middle.x - cx, 0, middle.z - cz).normalize()) + Math.max(0, normal.y) > 0 ? 1 : 0;
+            }
+        });
+
+        return { outward, triangles };
+    };
+
+    it("makes a dome over a round wall, every face turned out, closed to a point at the top", () => {
+        const solid = new Solid();
+        const profile = Array.from({ length: 7 }, (_, k) => [20 * Math.cos((k * Math.PI) / 12), 10 + 20 * Math.sin((k * Math.PI) / 12)]);
+
+        solid.lathe(40, 40, [[20, 0], [20, 10], ...profile.slice(1)], material("plaster"), { segments: 12 });
+
+        const { outward, triangles } = facingOut(solid, 40, 40);
+
+        // (The wall's quads, the dome's rings of quads, and its top ring of triangles)
+        assert.equal(triangles, 12 * 2 + 12 * 2 * 5 + 12);
+        assert.equal(outward, triangles);
+    });
+
+    it("turns only part of the way round when asked (a half dome over an apse)", () => {
+        const solid = new Solid();
+
+        solid.lathe(0, 0, [[10, 0], [8, 5], [0, 8]], material("thatch"), { segments: 6, from: 0, to: Math.PI });
+
+        const { outward, triangles } = facingOut(solid, 0, 0);
+
+        assert.equal(triangles, 6 * 2 + 6);
+        assert.equal(outward, triangles);
+    });
 });
 
 describe("props (kits/props.js)", () => {
