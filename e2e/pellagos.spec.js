@@ -188,6 +188,57 @@ test("makes a character: a random look, a weapon and a name, then plays them in 
     expect(game.saved.hero.boots).toBe(true);
 });
 
+test("makes a character of another people: a cat folk's ears, tail and fur, their colours, random as one of them; played, they wake in a town of their people's, as one of them", async ({ page }) => {
+    test.setTimeout(180000);
+    await title(page);
+    await page.getByRole("button", { name: "New character" }).click();
+    await page.waitForFunction(() => window.pellagos.creator?.avatar);
+
+    // The peoples to choose from: humans to start with
+    const peoples = page.getByRole("radiogroup", { name: "People" });
+
+    await expect(peoples.getByRole("radio")).toHaveText(["Human", "Elf", "Dark elf", "Cat folk", "Lizard folk", "Orc"]);
+    await expect(peoples.getByRole("radio", { name: "Human" })).toHaveAttribute("aria-checked", "true");
+
+    // Cat folk: their ears and tail on, furred, their colours to choose from
+    await peoples.getByRole("radio", { name: "Cat folk" }).click();
+    await expect(page.getByRole("radiogroup", { name: "People" }).getByRole("radio", { name: "Cat folk" })).toHaveAttribute("aria-checked", "true");
+    await page.waitForFunction(() => [...window.pellagos.creator.avatar.character.equipment.values()].includes("catTail"));
+
+    const cat = await page.evaluate(() => {
+        const { creator } = window.pellagos;
+
+        return { race: creator.hero.race, parts: creator.hero.parts, fur: creator.hero.look.skin.fur, equipment: [...creator.avatar.character.equipment.values()] };
+    });
+
+    expect(cat.race).toBe("cat");
+    expect(cat.parts).toEqual(["catEars", "catTail"]);
+    expect(cat.fur).toBeGreaterThan(0.5);
+    expect(cat.equipment).toEqual(expect.arrayContaining(["catEars", "catTail"]));
+
+    await page.getByRole("tab", { name: "Colours & hair" }).click();
+    await expect(page.getByRole("radiogroup", { name: "Tone" }).getByRole("radio")).toHaveCount(6);
+
+    // Random: another of them
+    await page.getByRole("button", { name: "Random" }).click();
+    expect(await page.evaluate(() => [window.pellagos.creator.hero.race, window.pellagos.creator.hero.parts])).toEqual(["cat", ["catEars", "catTail"]]);
+
+    // Named, and played: in a town of theirs, of their people, their ears and tail on
+    await page.getByRole("button", { name: "Next: weapon" }).click();
+    await page.getByRole("button", { name: "Next: name" }).click();
+    await page.locator("#nameinput").fill("Mirra");
+    await page.getByRole("button", { name: "Begin" }).click();
+    await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
+
+    const played = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        return { start: game.world.start.race, team: game.battle.actor("player").team, realm: game.self.realm, equipment: [...game.avatars.get("player").character.equipment.values()], saved: JSON.parse(localStorage.getItem("pellagos.save")).hero.race };
+    });
+
+    expect(played).toEqual({ start: "cat", team: "cat", realm: "cat", equipment: expect.arrayContaining(["catEars", "catTail"]), saved: "cat" });
+});
+
 test("carries on with the saved character, in the same world", async ({ page }) => {
     await page.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), SAVE);
     await title(page);
@@ -1728,6 +1779,88 @@ test("an adventurer at the guild, hired for coppers, follows the player out and 
 
     expect(again).toEqual([{ name: guild.name, leader: "player", map: "town", apart: expect.any(Number), drawn: true }]);
     expect(again[0].apart).toBeLessThan(6);
+});
+
+test("the player's people brought under another: told, and served; stirred to rising, they rise; and their victory, told and honoured", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const fate = page.locator(".fate");
+    const journal = page.locator(".journal");
+
+    // Brought under the orcs (as the war tells it): the player's told, and plays on
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const war = game.host.war;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        war.events.push({ type: "subjugated", turn: war.turn, realm: "human", by: "orc", was: null });
+        Object.assign(war.realm("human"), { overlord: "orc", since: war.turn });
+        game.advance(0.1, { render: false });
+        game.start();
+    });
+    await expect(fate).toBeVisible();
+    await expect(fate.locator(".fate-title")).toHaveText("Brought under");
+    await expect(fate.locator(".fate-text")).toContainText("The Humans' seat has fallen, and they bend the knee to the Orcs. You serve them now");
+    await fate.getByRole("button", { name: "Play on" }).click();
+    await expect(fate).toBeHidden();
+
+    // The journal: whom they serve, and how near they are to rising
+    await page.keyboard.press("j");
+    await expect(journal.locator(".journal-fate")).toHaveText(/^You serve the Orcs\. Your people are \d+% of the way to rising\.$/);
+    await page.keyboard.press("Escape");
+
+    // Stirred to the brim: ready (told in a word), then risen at the war's next turn
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+        game.host.war.stir("human", 100);
+        game.advance(0.1, { render: false });
+        game.start();
+    });
+    await expect(page.locator("#banner")).toHaveText("The Humans are ready to rise against the Orcs!");
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+        game.advance(61, { render: false });
+        game.start();
+    });
+    await expect(fate.locator(".fate-title")).toHaveText("Risen!");
+    await expect(fate).toHaveAttribute("data-tone", "hope");
+    await page.keyboard.press("Escape");
+    await expect(fate).toBeHidden();
+
+    // Every other people brought under them: victory, and the rulers' honours
+    const points = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const before = game.standing.points;
+
+        game.stop();
+
+        for (const realm of game.host.war.realms.filter(({ id }) => id !== "human")) {
+            Object.assign(realm, { overlord: "human", since: game.host.war.turn });
+        }
+
+        game.advance(61, { render: false });
+        game.start();
+
+        return game.standing.points - before;
+    });
+
+    expect(points).toBe(200);
+    await expect(fate.locator(".fate-title")).toHaveText("Victory");
+    await expect(fate).toHaveAttribute("data-tone", "won");
+    await fate.getByRole("button", { name: "Play on" }).click();
+    await page.keyboard.press("j");
+    await expect(journal.locator(".journal-fate")).toHaveText("Your people rule the continent. Every other people serves them.");
+    await page.keyboard.press("Escape");
+
+    // Kept with the war
+    const kept = await page.evaluate(() => window.pellagos.game.host.war.victor);
+
+    expect(kept).toBe("human");
 });
 
 test("tapping someone walks the player up to talk: their name and what they are, what they say, replies that lead on, Escape to stop", async ({ page }) => {

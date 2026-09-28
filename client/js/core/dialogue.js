@@ -655,7 +655,8 @@ export const TREES = Object.freeze({
     // people's (`own`), whether they've room for more work (`room`), what's offered (`offer`),
     // whether they've something to tell of (`due`), how it went (`reported`), whether they've the
     // rank for the keep (`keep`), an armoury gift due (`armoury`), counsel they can give
-    // (`counselMarch`, `counselPeace`, `counselWar`) and its choices (`march1`... `war3`)
+    // (`counselMarch`, `counselPeace`, `counselWar`) and its choices (`march1`... `war3`); serving
+    // another people, whether it's time to rise (`counselRise`, `ready`: docs/WAR.md M10)
     reeve: {
         start: "greet",
         nodes: {
@@ -770,6 +771,7 @@ export const TREES = Object.freeze({
                     { if: { counselMarch: true }, say: "Where will we strike next?", next: "march" },
                     { if: { counselPeace: true }, say: "Have you thought of peace?", next: "peace" },
                     { if: { counselWar: true }, say: "There are others we could bring to heel.", next: "warOn" },
+                    { if: { counselRise: true }, say: "Is it time we rose against {oppressor}?", next: "rise" },
                     { say: "How goes the war?", next: "war" },
                     { say: "By your leave.", next: null },
                 ],
@@ -820,12 +822,25 @@ export const TREES = Object.freeze({
                     { say: "Forget I spoke.", next: "more" },
                 ],
             },
+            rise: {
+                say: [
+                    { if: { ready: true }, lines: ["Softly. The people are ready, near enough: {unrest}. Say the word, and we rise.", "{unrest}. It's enough, if you're with us. Is it now?"] },
+                    { lines: ["Not yet. {unrest}: rise now and they'd crush us. Do what you can for us, and ask me again.", "Softly! No. {unrest}. We'd be hanged by the week's end."] },
+                ],
+                choices: [
+                    { if: { ready: true }, say: "Now. We rise!", next: "heeded", do: [{ counsel: { rise: true } }] },
+                    { say: "Then we wait.", next: "more" },
+                ],
+            },
             heeded: {
                 say: ["{counsel}"],
                 choices: "more",
             },
             war: {
-                say: ["These are days of {age}. We stand against {foes}.", "{age}. We've {foes} to answer, and answer them we will."],
+                say: [
+                    { if: { serving: true }, lines: ["We answer to {oppressor} now. We stand against {foes}, because they tell us to.", "These are days of {age}, and we serve {oppressor} in them. For now."] },
+                    { lines: ["These are days of {age}. We stand against {foes}.", "{age}. We've {foes} to answer, and answer them we will."] },
+                ],
                 choices: "more",
             },
         },
@@ -1196,6 +1211,17 @@ export class Conversation {
         return choice;
     }
 
+    /**
+     * Say what it's at again, as things now are (what came of something done, heard a moment
+     * later: docs/WAR.md M11): the same line, filled in afresh, if its lines still hold (else one
+     * of those that do), and its choices as they now hold.
+     */
+    retell() {
+        if (!this.ended) {
+            this.#go(this.node, { again: true });
+        }
+    }
+
     /** Does a condition hold now? */
     holds(condition) {
         if (!condition) {
@@ -1237,7 +1263,7 @@ export class Conversation {
     }
 
     // Go to a node (null: the end), saying one of its lines and offering its choices
-    #go(id) {
+    #go(id, { again = false } = {}) {
         const node = id === null ? null : this.tree.nodes[id];
 
         if (!node) {
@@ -1253,8 +1279,9 @@ export class Conversation {
         // Its lines: the first group whose condition holds, or all of them
         const say = typeof node.say === "string" ? [node.say] : node.say ?? [];
         const lines = typeof say[0] === "object" ? say.find((group) => this.holds(group.if))?.lines ?? [] : say;
-        const pick = lines.length ? this.variety.next(`${this.speaker.id}:${id}`, lines.length) : 0;
+        const pick = again && lines === this.said?.lines ? this.said.pick : lines.length ? this.variety.next(`${this.speaker.id}:${id}`, lines.length) : 0;
 
+        this.said = { lines, pick };
         this.line = lines.length ? this.fill(lines[pick]) : "";
 
         // Its choices (or another node's), those that hold now; with none, just goodbye

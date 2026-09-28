@@ -16,7 +16,7 @@ import { HAIR_COLOURS } from "../characters/skin.js";
 import { armsOf, STARTING_WEAPONS, WEAPONS } from "../core/weapons.js";
 import { Avatar } from "../world/avatar.js";
 import { guardOf, heroEquipment } from "./game.js";
-import { cleanName, defaultHero, HUMAN_TONES, IRIS_COLOURS, randomHero, suggestName } from "./heroes.js";
+import { cleanName, defaultHero, HERO_PEOPLES, heroOfPeople, IRIS_COLOURS, randomHero, suggestName, tonesOf } from "./heroes.js";
 
 const STEPS = ["look", "weapon", "name"];
 
@@ -180,7 +180,7 @@ export class Creator {
         this.avatar?.object.removeFromParent();
         this.avatar?.character.dispose();
 
-        const character = new Character(this.kit, { shape: hero.shape, look: hero.look, equipment: heroEquipment(hero.weapon, hero.boots) });
+        const character = new Character(this.kit, { shape: hero.shape, look: hero.look, equipment: heroEquipment(hero.weapon, hero.boots, [], hero.parts ?? []) });
 
         this.avatar = new Avatar(character, { guard: guardOf(hero.weapon) });
         this.avatar.place(0, 0, 0);
@@ -212,7 +212,7 @@ export class Creator {
         }
 
         if (pending.has("weapon")) {
-            character.setEquipment(heroEquipment(hero.weapon, hero.boots));
+            character.setEquipment(heroEquipment(hero.weapon, hero.boots, [], hero.parts ?? []));
             avatar.actions.setWeapon(guardOf(hero.weapon));
             avatar.actions.setGuard(this.step !== "look");
             this.#showDraw();
@@ -458,8 +458,21 @@ export class Creator {
 
     #randomise() {
         this.hero = randomHero(this.hero);
-        this.#change("shape", "look");
+        this.#change("shape", "look", "weapon");
         this.#refresh();
+    }
+
+    // One of another people (docs/WAR.md M11): looking as one of them, their own parts on (ears,
+    // tails, tusks), and the colours to choose from theirs
+    #choosePeople(race) {
+        if ((this.hero.race ?? "human") === race) {
+            return;
+        }
+
+        this.hero = heroOfPeople(this.hero, race);
+        this.#buildCharacter();
+        this.avatar.actions.setGuard(this.step !== "look");
+        this.#buildPanel();
     }
 
     #refresh() {
@@ -599,8 +612,10 @@ export class Creator {
 
     #bodyTab() {
         const gender = (value) => (value < 0.35 ? "Female" : value > 0.65 ? "Male" : "Between");
+        const peoples = Object.fromEntries(HERO_PEOPLES.map(({ id, label }) => [id, { label }]));
 
         return [
+            this.#choices("People", peoples, { get: () => this.hero.race ?? "human", set: (race) => this.#choosePeople(race) }),
             element("div", { class: "group" }, element("h3", {}, "Build"),
                 this.#macro("gender", "Body", { format: gender }),
                 this.#macro("muscle", "Muscle"),
@@ -627,7 +642,7 @@ export class Creator {
         const skin = (key, label) => this.#slider(label, look("skin", key));
 
         return [
-            element("div", { class: "group" }, element("h3", {}, "Skin"), this.#swatches("Tone", HUMAN_TONES, look("skin", "tone")), skin("blush", "Redness"), skin("freckles", "Freckles")),
+            element("div", { class: "group" }, element("h3", {}, "Skin"), this.#swatches("Tone", tonesOf(this.hero.race), look("skin", "tone")), skin("blush", "Redness"), skin("freckles", "Freckles")),
             element("div", { class: "group" }, element("h3", {}, "Eyes"), this.#swatches("Colour", IRIS_COLOURS, look("eyes", "iris"))),
             element("div", { class: "group" }, element("h3", {}, "Hair"), this.#swatches("Colour", HAIR_COLOURS, look("hair", "colour")), skin("brows", "Brows")),
             this.#choices("Hairstyle", HAIRSTYLES, look("hair", "style")),

@@ -6,11 +6,15 @@
 //  3. Making a character (creator.js): body, face, colours and hair; a weapon; a name.
 //  4. Building the world (the town, the characters, their shaders) and playing (game.js), until
 //     the menu goes back to the title.
+//  5. Playing together (docs/WAR.md M11): the world opened to others from the menu (Invite
+//     others), or another's joined from the title (Join a world), through the relay
+//     (app/together.js).
 //
 // Nothing here imports Three.js: it and the rest of the game are downloaded by the loader first,
 // and only then imported.
 //
-// ?play goes straight into a game with a random character (with ?weapon=, ?seed= and ?quality=).
+// ?play goes straight into a game with a random character (with ?weapon=, ?seed=, ?people= and
+// ?quality=). ?join=CODE opens the title's Join a world with the code in it.
 
 import { registerServiceWorker } from "./app/device.js";
 import { Debug } from "./app/debug.js";
@@ -28,7 +32,7 @@ const debug = new Debug($("#debug"), { settings, onChange: applySetting });
 
 // What's been loaded and made: the loader, the game's modules, the view and character kit, the
 // heads-up display, and the game being played
-const state = { loader: null, modules: null, session: null, hud: null, game: null, save: null, creator: null, worldMap: null };
+const state = { loader: null, modules: null, session: null, hud: null, game: null, save: null, creator: null, worldMap: null, together: null, joinAfter: null };
 
 window.pellagos = {
     get game() {
@@ -45,6 +49,9 @@ window.pellagos = {
     },
     get worldMap() {
         return state.worldMap;
+    },
+    get together() {
+        return state.together;
     },
     debug,
     playing: false,
@@ -164,6 +171,7 @@ function title() {
 
     state.save = save;
     show("title");
+    $("#titlenote").hidden = true;
     continueButton.hidden = !save;
     note.hidden = !save;
     newButton.textContent = "New character";
@@ -213,6 +221,7 @@ async function create() {
     state.creator = null;
 
     if (!hero) {
+        state.joinAfter = null;
         title();
 
         return;
@@ -222,6 +231,17 @@ async function create() {
 
     if (!writeSave(save)) {
         console.warn("This browser won't keep the character: it will be forgotten when the page closes.");
+    }
+
+    // (Made to join someone's world: back to joining it)
+    if (state.joinAfter !== null) {
+        const code = state.joinAfter;
+
+        state.joinAfter = null;
+        title();
+        openJoin(code);
+
+        return;
     }
 
     play(save);
@@ -278,8 +298,11 @@ function pause() {
         return;
     }
 
-    // (The world stops only with no one else in it: else it goes on under the menu)
+    // (The world stops only with no one else in it: else it goes on under the menu. Joined to
+    // another's world, it isn't this game's to open to others)
     state.game.pause();
+    $("#invitebutton").hidden = Boolean(state.game.remote);
+    $("#invitebutton").textContent = state.together ? "Who's here" : "Invite others";
     menuPage("main");
     $("#menu").showModal();
 }
@@ -365,12 +388,226 @@ window.addEventListener("resize", () => $("#worldmap").open && state.worldMap?.r
 function quit() {
     closeWorldMap();
     $("#menu").close();
+    $("#invite").close();
+    state.together?.close();
+    state.together = null;
     state.game?.dispose();
     state.game = null;
     window.pellagos.playing = false;
     debug.watch({ game: null });
     title();
 }
+
+// --- Playing together (docs/WAR.md M11) ---
+
+// The world opened to others, from the menu: its code, and who's come
+async function invite() {
+    const game = state.game;
+
+    if (!game || game.remote) {
+        return;
+    }
+
+    $("#menu").close();
+    $("#invite").showModal();
+    showInvite();
+
+    if (state.together) {
+        return;
+    }
+
+    const { openWorld, RELAY_ERRORS } = await import("./app/together.js");
+
+    try {
+        state.together = await openWorld(game, {
+            // (Someone come or gone: shown; and the world goes on, for them, even with the menu open)
+            onChange: () => {
+                showInvite();
+
+                if (!state.game?.running) {
+                    state.game?.start();
+                }
+            },
+            onDrop: () => {
+                state.together = null;
+                showInvite(RELAY_ERRORS.unreachable);
+            },
+        });
+        showInvite();
+    } catch (error) {
+        showInvite(RELAY_ERRORS[error.message] ?? RELAY_ERRORS.unreachable);
+    }
+}
+
+function showInvite(problem = "") {
+    const code = state.together?.code;
+    const others = code && state.game ? state.game.others() : [];
+
+    $("#invitestatus").textContent = problem || (code ? "Your world's open to others. Give them this code:" : "Opening your world to others…");
+    $("#invitecode").hidden = !code;
+    $("#invitecode").textContent = code ?? "";
+    $("#invitehow").hidden = !code;
+    $("#invitestop").hidden = !code;
+
+    if (code) {
+        const link = `${location.origin}${location.pathname}?join=${code}`;
+
+        $("#invitelink").href = link;
+        $("#invitelink").textContent = link;
+    }
+
+    $("#inviteplayers").replaceChildren(...others.map(({ name, people, hostile }) => {
+        const row = document.createElement("li");
+
+        row.append(Object.assign(document.createElement("span"), { textContent: name }), Object.assign(document.createElement("span"), { className: `people${hostile ? " hostile" : ""}`, textContent: `the ${people}${hostile ? ", at war with yours" : ""}` }));
+
+        return row;
+    }));
+}
+
+function closeInvite() {
+    $("#invite").close();
+    state.game?.start();
+}
+
+// Joining a world someone else has opened: its code (the saved character comes; with none, one's
+// made first)
+function openJoin(code = "") {
+    const people = state.save?.hero.race && state.save.hero.race !== "human" ? state.save.hero.race : "human";
+
+    $("#joincode").value = String(code).toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4);
+    $("#joinwho").textContent = state.save ? `You'll come as ${state.save.hero.name} (${people === "human" ? "human" : people.replace(/([A-Z])/g, " $1").toLowerCase()}): at peace or at war with whoever's there as your peoples are.` : "You'll make a character first.";
+    $("#joinstatus").textContent = "";
+    $("#joingo").disabled = false;
+    $("#join").showModal();
+    $("#joincode").focus();
+}
+
+async function join(event) {
+    event.preventDefault();
+
+    const code = $("#joincode").value.toUpperCase().replace(/[^A-Z]/g, "");
+
+    if (code.length !== 4) {
+        $("#joinstatus").textContent = "A world's code is four letters.";
+
+        return;
+    }
+
+    if (!state.save) {
+        $("#join").close();
+        state.joinAfter = code;
+        create();
+
+        return;
+    }
+
+    const save = state.save;
+    const { joinWorld, RELAY_ERRORS, NET_REFUSALS } = await import("./app/together.js");
+
+    $("#joingo").disabled = true;
+    $("#joinstatus").textContent = "Joining…";
+
+    let joined;
+
+    try {
+        joined = await joinWorld({
+            code,
+            character: { hero: save.hero, talks: loadTalks(save), progress: loadProgress(save), standing: loadStanding(save), followers: loadFollowers(save) },
+            onClosed: () => leftWorld("The world's host has closed it to others."),
+            onDrop: () => leftWorld("The link to the world was lost."),
+        });
+    } catch (error) {
+        $("#joingo").disabled = false;
+        $("#joinstatus").textContent = RELAY_ERRORS[error.message] ?? RELAY_ERRORS.unreachable;
+
+        return;
+    }
+
+    state.together = joined;
+    joined.joining.onRefused = (reason) => {
+        joined.close();
+        state.together = null;
+        $("#joingo").disabled = false;
+        $("#joinstatus").textContent = NET_REFUSALS[reason] ?? "You couldn't join that world.";
+    };
+    joined.joining.onWelcome = (welcome) => playJoined(save, welcome, joined.joining);
+    joined.joining.onState = () => state.game?.rehost();
+}
+
+// Into the world joined: made again from its seed, the host's copy of it restored (the player's
+// progress, standing and followers kept with their character as they go; the world's not theirs
+// to keep)
+async function playJoined(save, welcome, joining) {
+    const { createJoinedGame } = state.modules;
+    const { view, kit, sound } = state.session;
+
+    $("#join").close();
+    state.game?.dispose();
+    show("loading");
+    $("#loadlist").replaceChildren();
+    setProgress(0, "Building the world you've joined");
+
+    const game = createJoinedGame({
+        view,
+        kit,
+        sound,
+        hud: state.hud,
+        hero: save.hero,
+        welcome,
+        joining,
+        onTalk: (talks) => saveTalks(save, talks),
+        onProgress: (progress) => saveProgress(save, progress),
+        onStanding: (standing) => saveStanding(save, standing),
+        onFollowers: (followers) => saveFollowers(save, followers),
+        onWorldMap: openWorldMap,
+    });
+
+    state.worldMap?.dispose();
+    state.worldMap = null;
+    state.game = game;
+    await game.build(({ label, done, total }) => setProgress(done / total, label, `${done} of ${total}`));
+    game.showSquares(settings.squares);
+    showMinimap(settings.minimap);
+    debug.watch({ game });
+    show("hud");
+    game.start();
+    window.pellagos.playing = true;
+}
+
+// Out of a world joined (its host gone, or the link lost): back to the title, saying why
+function leftWorld(why) {
+    state.together = null;
+
+    if (!state.game?.remote) {
+        return;
+    }
+
+    closeWorldMap();
+    $("#menu").close();
+    state.game.dispose();
+    state.game = null;
+    window.pellagos.playing = false;
+    debug.watch({ game: null });
+    title();
+    $("#titlenote").textContent = why;
+    $("#titlenote").hidden = false;
+}
+
+$("#joinbutton").addEventListener("click", () => openJoin());
+$("#joinform").addEventListener("submit", join);
+$("#joincancel").addEventListener("click", () => $("#join").close());
+$("#invitebutton").addEventListener("click", invite);
+$("#inviteback").addEventListener("click", closeInvite);
+$("#invitestop").addEventListener("click", () => {
+    state.together?.close();
+    state.together = null;
+    closeInvite();
+});
+$("#invite").addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeInvite();
+});
 
 $("#menubutton").addEventListener("click", pause);
 $("#resumebutton").addEventListener("click", resume);
@@ -535,8 +772,8 @@ async function start() {
     }
 
     if (params.has("play")) {
-        const { randomHero, suggestName } = await import("./app/heroes.js");
-        const hero = randomHero();
+        const { heroOfPeople, randomHero, suggestName } = await import("./app/heroes.js");
+        const hero = params.get("people") ? heroOfPeople(randomHero(), params.get("people")) : randomHero();
 
         hero.name = suggestName(hero);
         hero.weapon = WEAPONS[params.get("weapon")] ? params.get("weapon") : "sword";
@@ -547,6 +784,10 @@ async function start() {
     }
 
     title();
+
+    if (params.has("join")) {
+        openJoin(params.get("join"));
+    }
 }
 
 start();

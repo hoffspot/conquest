@@ -63,8 +63,10 @@
                 <div class="menu">
                     <button type="button" id="continuebutton" class="button primary" hidden>Continue</button>
                     <button type="button" id="newbutton" class="button">New character</button>
+                    <button type="button" id="joinbutton" class="button">Join a world</button>
                 </div>
                 <p class="note" id="savenote" hidden></p>
+                <p class="note warning" id="titlenote" role="status" hidden></p>
                 <label class="switch" title="Show how fast the game runs and what it draws">
                     <input type="checkbox" id="debugswitch" role="switch">
                     <span class="track" aria-hidden="true"></span>
@@ -169,12 +171,42 @@
             </div>
         </dialog>
 
+        <!-- Joining a world someone else has opened: its code -->
+        <dialog id="join" class="together" aria-labelledby="jointitle">
+            <form method="dialog" id="joinform">
+                <h2 id="jointitle">Join a world</h2>
+                <p class="note">Someone playing can open their world to others (in its menu: Invite others). Type the code they give you.</p>
+                <label class="field" for="joincode">Code</label>
+                <input type="text" id="joincode" class="code" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text" placeholder="ABCD" required>
+                <p class="note" id="joinwho"></p>
+                <p class="note warning" id="joinstatus" role="status"></p>
+                <div class="menu">
+                    <button type="submit" class="button primary" id="joingo">Join</button>
+                    <button type="button" class="button" id="joincancel">Back</button>
+                </div>
+            </form>
+        </dialog>
+
+        <!-- The world opened to others: its code, and who's come -->
+        <dialog id="invite" class="together" aria-labelledby="invitetitle">
+            <h2 id="invitetitle">Invite others</h2>
+            <p class="note" id="invitestatus" role="status">Opening your world to others…</p>
+            <p class="code" id="invitecode" hidden></p>
+            <p class="note" id="invitehow" hidden>They choose Join a world on the title screen and type the code, or open <a id="invitelink" href="#" target="_blank" rel="noopener"></a>. Each comes as one of the people they play, at peace or at war with yours as your peoples are.</p>
+            <ul class="together-players" id="inviteplayers" aria-label="Who's here"></ul>
+            <div class="menu">
+                <button type="button" class="button primary" id="inviteback">Back to the game</button>
+                <button type="button" class="button" id="invitestop" hidden>Close the world to others</button>
+            </div>
+        </dialog>
+
         <!-- Paused -->
         <dialog id="menu" aria-labelledby="menutitle">
             <div class="menupage" id="menumain">
                 <h2 id="menutitle">Paused</h2>
                 <div class="menu">
                     <button type="button" class="button primary" id="resumebutton">Resume</button>
+                    <button type="button" class="button" id="invitebutton">Invite others</button>
                     <button type="button" class="button" id="optionsbutton">Game options</button>
                     <button type="button" class="button" id="quitbutton">Back to the title</button>
                 </div>

@@ -2,11 +2,13 @@
 // maker's Random button) and names to suggest.
 //
 // A hero is plain data, saved as it is (save.js): { name, shape: { macro, details }, look: { skin,
-// eyes, hair }, weapon }.
+// eyes, hair }, weapon, race (their people: humans, or one of the others, docs/WAR.md M11), parts
+// (their people's own: ears, tails, tusks) }.
 
 import { DETAILS } from "../characters/details.js";
 import { BEARDS, HAIRSTYLES } from "../characters/hair.js";
 import { MACRO_DEFAULTS } from "../characters/macro.js";
+import { LOOKS, peopleLook } from "../characters/peoples.js";
 import { PRESETS } from "../characters/presets.js";
 import { EYE_DEFAULTS, HAIR_COLOURS, SKIN_DEFAULTS, SKIN_TONES } from "../characters/skin.js";
 
@@ -22,6 +24,48 @@ const NAMES = {
 };
 
 const clone = (value) => structuredClone(value);
+
+/** The peoples a hero can be of (docs/WAR.md M11), as the character maker offers them. */
+export const HERO_PEOPLES = Object.freeze([
+    { id: "human", label: "Human" },
+    { id: "elf", label: "Elf" },
+    { id: "darkElf", label: "Dark elf" },
+    { id: "cat", label: "Cat folk" },
+    { id: "lizard", label: "Lizard folk" },
+    { id: "orc", label: "Orc" },
+]);
+
+// Orcs' skins, as the orcs' own are (peoples.js)
+const ORC_TONES = ["#4c5c2e", "#56663a", "#44532a", "#5a5a30", "#4a5a3a", "#606b34"];
+
+/** The skin tones a hero of a people can have, to choose from: { name: colour }. */
+export function tonesOf(race = "human") {
+    const spec = LOOKS[race];
+    const tones = race === "orc" ? ORC_TONES : (spec?.tones ?? spec?.furs?.map(({ tone }) => tone));
+
+    return tones ? Object.fromEntries(tones.map((tone, k) => [`shade ${k + 1}`, tone])) : HUMAN_TONES;
+}
+
+/**
+ * A hero become one of a people (keeping their name, weapon and whether they're a man or a
+ * woman), looking as one of them does, from a random seed: a human as randomHero makes them.
+ */
+export function heroOfPeople(hero, race, random = Math.random) {
+    if (!race || race === "human" || !HERO_PEOPLES.some(({ id }) => id === race)) {
+        return randomHero({ ...hero, race: "human", parts: [] }, random);
+    }
+
+    const sex = (hero.shape?.macro?.gender ?? 1) < 0.5 ? "f" : "m";
+    const look = peopleLook({ people: race, sex, seed: 1 + Math.floor(random() * 1e9) });
+
+    return {
+        ...hero,
+        race,
+        parts: [...look.parts],
+        shape: { macro: { ...MACRO_DEFAULTS, ...clone(look.shape.macro) }, details: clone(look.shape.details) },
+        look: { skin: { ...SKIN_DEFAULTS, ...clone(look.look.skin) }, eyes: { ...EYE_DEFAULTS, ...clone(look.look.eyes) }, hair: clone(look.look.hair) },
+    };
+}
 
 /** A new hero, as the character maker starts: the human preset, not yet named or armed. */
 export function defaultHero() {
@@ -60,6 +104,11 @@ export function suggestName(hero, except = "", random = Math.random) {
  * clearly a man or a woman, with hair and beards to suit.
  */
 export function randomHero(hero = defaultHero(), random = Math.random) {
+    // (One of another people: as one of them)
+    if (hero.race && hero.race !== "human") {
+        return heroOfPeople(hero, hero.race, random);
+    }
+
     const between = (low, high) => low + random() * (high - low);
     const pick = (list) => list[Math.floor(random() * list.length)];
     const roll = random();
