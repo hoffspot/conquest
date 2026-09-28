@@ -51,6 +51,10 @@ export const REQUESTS = Object.freeze({
     rout: { title: "Break the camp", rank: OPENS.rout, turns: 40, reward: { standing: 60, coppers: 40 } },
     escort: { title: "See the envoy there", rank: OPENS.escort, turns: null, reward: { standing: 70, coppers: 40 } },
     waylay: { title: "Stop their envoy", rank: OPENS.waylay, turns: null, reward: { standing: 70, coppers: 50 } },
+    // The adventurers' guild's contracts (M8): open to anyone, paid in coppers
+    beasts: { title: "Beasts on the roads", rank: 0, turns: 45, reward: { standing: 0, coppers: 10, each: { standing: 0, coppers: 7 } } },
+    hunt: { title: "A bounty", rank: 0, turns: 60, reward: { standing: 0, coppers: 8, each: { standing: 0, coppers: 6 } } },
+    camp: { title: "The camp outside the walls", rank: 0, turns: 40, reward: { standing: 0, coppers: 70 } },
 });
 
 /** How near (m) a player goes to see what they're scouting, and to be there to hold a town (from its middle). */
@@ -295,6 +299,63 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
     }
 }
 
+/**
+ * A contract from an adventurers' guild's board in a town (docs/WAR.md M8), for anyone of any
+ * people (no standing needed, and none given: coppers): beasts off the roads round it; a bounty on
+ * the soldiers of a people at war with those who hold it; the camp outside it broken up. Null if
+ * there's nothing on the board they haven't got already.
+ * @param {object} options
+ * @param {object} options.war - The war (war.js).
+ * @param {string} options.town - The town the guild's in (an id).
+ * @param {object} options.giver - Who's at the counter: { id, name, title }.
+ * @param {object[]} [options.held] - The requests they carry.
+ * @param {object} options.random - Random numbers (random.js).
+ */
+export function offerContract({ war, town: townId, giver, held = [], random }) {
+    const town = war.town(townId);
+
+    if (!town || held.length >= MOST_REQUESTS) {
+        return null;
+    }
+
+    const has = (kind, key) => held.some((request) => request.kind === kind && request.key === key);
+    const holders = war.liege(town.owner);
+    const foes = war.enemiesOf(holders).filter((foe) => !has("hunt", foe));
+    const camps = war.forces.filter((force) => force.kind === "camp" && force.target === town.id && war.hostile(force.realm, town.owner) && !has("camp", force.id));
+    const kinds = [...(has("beasts", town.id) ? [] : ["beasts", "beasts"]), ...(foes.length ? ["hunt"] : []), ...(camps.length ? ["camp", "camp"] : [])];
+
+    if (!kinds.length) {
+        return null;
+    }
+
+    const kind = random.pick(kinds);
+    const { title, turns, reward } = REQUESTS[kind];
+    const from = { id: giver.id, name: giver.name, title: giver.title || "Guild receptionist", town: town.id, townName: town.name, post: "guild" };
+    const base = { kind, title, from, given: war.turn, state: "open", count: 0 };
+    const pay = (coppers) => ({ standing: 0, coppers: Math.round(coppers) });
+
+    switch (kind) {
+        case "beasts": {
+            const need = 2 + random.int(0, 2);
+
+            return { ...base, key: town.id, target: { wild: true, need }, text: `Wanted: someone to see off the beasts on the roads round ${town.name}. ${need} of them, and the carters will breathe again.`, until: war.turn + turns, reward: pay(reward.coppers + reward.each.coppers * need) };
+        }
+        case "hunt": {
+            const foe = random.pick(foes);
+            const need = 2 + random.int(0, 2);
+
+            return { ...base, key: foe, target: { realm: foe, need }, text: `Bounty, posted for ${war.realm(holders).name}: ${need} of the ${soldiersOf(foe)}, brought down wherever they're found.`, until: war.turn + turns, reward: pay(reward.coppers + reward.each.coppers * need) };
+        }
+        case "camp": {
+            const camp = random.pick(camps);
+
+            return { ...base, key: camp.id, target: { force: camp.id, realm: camp.realm, at: [...camp.at], town: town.id, name: town.name }, text: `${war.realm(camp.realm).name} have a camp outside ${town.name}, and the merchants want it gone. Break it up.`, until: war.turn + turns, reward: pay(reward.coppers) };
+        }
+        default:
+            return null;
+    }
+}
+
 // What there is to scout near a town, for a people: enemy camps and armies within a few km, or
 // failing those the nearest enemy town
 function scoutable(war, liege, town) {
@@ -367,12 +428,15 @@ export function progressOf(request) {
             return `Bring ${target.coppers} coppers to ${request.from.name} in ${request.from.townName}.`;
         case "bounty":
         case "wild":
+        case "beasts":
+        case "hunt":
             return `${count} of ${target.need} brought down.`;
         case "scout":
             return "Go near enough to see them.";
         case "defend":
             return request.there ? "Hold on until they're gone." : `Get to ${target.name}.`;
         case "rout":
+        case "camp":
             return request.there ? "Bring its soldiers down." : `Find the camp outside ${target.name}.`;
         case "escort":
             return request.there ? "Stay with them to the end of the road." : "Find them on the road.";

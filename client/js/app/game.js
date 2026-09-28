@@ -33,7 +33,7 @@ import { HOST_PLAYER, Host, REFUSALS, SHOP_REACH, SHOPKEEPERS } from "../core/ho
 import { ABILITIES, itemLabel, ITEMS, priceOf, TREES, wares } from "../core/progress.js";
 import { MOST_REQUESTS, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
 import { describeLeader } from "../core/war/peoples.js";
-import { peopleOf } from "../core/war/news.js";
+import { peopleOf, rumourOfRuler, rumoursAt } from "../core/war/news.js";
 import { ADJECTIVES } from "../core/war/peoples.js";
 import { STAGES } from "../core/war/war.js";
 import { GODS } from "../core/lore/gods.js";
@@ -1248,7 +1248,7 @@ export class Game {
             names.patronTitle = GODS[building.patron].title;
         }
 
-        Object.assign(names, soldier?.names, official?.words);
+        Object.assign(names, soldier?.names, official?.words, this.#rumours(building));
 
         // (They stop and face the player, if they can talk now: the host says)
         if (!this.#command({ type: "talk", with: npc.id }).ok) {
@@ -1262,7 +1262,8 @@ export class Game {
             player: { name: this.hero.name },
             place: building?.name,
             names,
-            check: (condition) => ("upstairs" in condition ? upstairsIs(condition.upstairs, upstairs) : "stance" in condition ? soldier?.stance === condition.stance : official ? official.check(condition) : true),
+            check: (condition) =>
+                "upstairs" in condition ? upstairsIs(condition.upstairs, upstairs) : "stance" in condition ? soldier?.stance === condition.stance : "rumour" in condition ? Boolean(names.rumour1) === condition.rumour : official ? official.check(condition) : true,
             memory: this.memory[npc.id],
             knowledge: this.knowledge,
             variety: this.talkVariety,
@@ -1297,6 +1298,34 @@ export class Game {
         this.#keepTalks();
     }
 
+    // The war's news as it's heard where the player's talking (docs/WAR.md M8): {rumour1} to
+    // {rumour3}, newest first (the latest again, where there's less to tell), and {rumourRuler},
+    // what's said of one of the rulers the town's people know of. None, with no war
+    #rumours(building) {
+        const war = this.host.war;
+        const place = building?.place === "home" ? this.world.start : this.world.plan?.places.find(({ id }) => id === building?.place);
+        const at = place?.at ?? this.world.start?.at;
+
+        if (!war || !at) {
+            return {};
+        }
+
+        const heard = rumoursAt(war, at);
+        const town = war.holdingAt(at);
+        const holders = town ? war.liege(town.owner) : war.liege(this.self.realm);
+        const rulers = war.realms.filter((realm) => realm.alive && (realm.id === holders || war.relation(realm.id, holders) !== "unknown"));
+        const sayings = rulers.map((realm) => rumourOfRuler(war, realm.id)).filter(Boolean);
+        const ruler = sayings.length ? sayings[this.talkVariety.next("rumourRuler", sayings.length)] : null;
+
+        if (!heard.length && !ruler) {
+            return {};
+        }
+
+        const said = heard.length ? heard : [ruler];
+
+        return { rumour1: said[0], rumour2: said[1] ?? said[0], rumour3: said[2] ?? said[0], rumourRuler: ruler ?? said[0] };
+    }
+
     // What one of the officials of a town hall or keep (or those about them) can tell of, and
     // what they ask the game (dialogue.js's reeve, clerk, petitioner, ruler, steward, councillor
     // and sentry): their words (`words`: the town, who holds it and rules them, the war, the
@@ -1307,7 +1336,7 @@ export class Game {
         const war = this.host.war;
         const town = building && war ? war.town(building.place === "home" ? this.world.start?.id : building.place) : null;
 
-        if (!town || !["reeve", "clerk", "petitioner", "ruler", "steward", "councillor", "sentry"].includes(npc.role)) {
+        if (!town || !["reeve", "clerk", "petitioner", "ruler", "steward", "councillor", "sentry", "receptionist"].includes(npc.role)) {
             return null;
         }
 

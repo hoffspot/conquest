@@ -1556,6 +1556,57 @@ test("an envoy on the road near the player goes by with their escort; struck dow
     await page.keyboard.press("Escape");
 });
 
+test("the barkeep tells the war's news as it's heard in the town", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // News of a raid on the town, and a war declared far off
+    const barkeep = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const war = game.host.war;
+        const home = war.town(game.world.start.id);
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        war.log.push({ type: "raid", turn: war.turn, realm: "orc", town: home.id, owner: home.owner, killed: 2, lost: 1 });
+        war.log.push({ type: "declared", turn: war.turn, by: "orc", on: "elf" });
+
+        // Into the taproom, and the barkeep tapped
+        game.battle.command("player", { type: "enter", link: "tavern-door" });
+        game.advance(30);
+        game.battle.command("player", { type: "move", to: [7, 6] });
+        game.advance(5);
+
+        const spot = session.view.toScreen(game.avatars.get("barkeep").point(0.6));
+
+        game.tap(spot.x, spot.y, { time: performance.now() + 9000 });
+        game.advance(8);
+
+        return { name: game.world.folk.find(({ id }) => id === "barkeep").name };
+    });
+    const talk = page.locator(".talk");
+
+    await expect(talk).toBeVisible();
+    await expect(talk.locator(".talk-name")).toHaveText(barkeep.name);
+    // The news, or what's said of a ruler: and asked again, something else, until the news is told
+    const line = talk.locator(".talk-line");
+    const news = /Raiders of the Orcs struck at .+'s fields|The Orcs have declared war on the Elves/;
+
+    await talk.getByRole("button", { name: "What's the word on the war?" }).click();
+    await expect(line).toContainText(/Orcs|They say/);
+
+    const heard = [await line.textContent()];
+
+    for (let k = 0; k < 6 && !heard.some((each) => news.test(each)); k++) {
+        await talk.getByRole("button", { name: "What else is being said?" }).click();
+        await expect(line).not.toHaveText(heard.at(-1));
+        await expect(line).toContainText(/Orcs|They say/);
+        heard.push(await line.textContent());
+    }
+
+    expect(heard.some((each) => news.test(each)), heard.join(" / ")).toBe(true);
+    await page.keyboard.press("Escape");
+});
+
 test("tapping someone walks the player up to talk: their name and what they are, what they say, replies that lead on, Escape to stop", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

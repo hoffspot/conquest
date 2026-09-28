@@ -2,6 +2,7 @@
 // would go round. The war viewer lists them, and the taverns and folk will tell them (M8).
 
 import { RACES } from "../worldplan/races.js";
+import { describeLeader } from "./peoples.js";
 import { STAGES } from "./war.js";
 
 const MISSIONS = Object.freeze({ truce: "a truce", alliance: "an alliance", break: "an end to their alliance" });
@@ -87,3 +88,52 @@ export function tell(event, war) {
             return event.type;
     }
 }
+
+// What's heard of wherever it happened (the rest only near it): the war's turns, and what
+// happens between rulers
+const EVERYWHERE = new Set(["stage", "declared", "joined", "broke", "treaty", "subjugated", "fallen", "rebelled", "victory", "undone"]);
+
+// What isn't talked of in the taverns
+const UNTOLD = new Set(["met", "counsel", "unpaid", "sortie", "envoy", "reinforced"]);
+
+/**
+ * The war's news as it's heard at `at` ([x, y] metres: a town's), newest first (docs/WAR.md M8):
+ * what's happened within `reach` metres of it, and what's heard everywhere, told in words, no
+ * two the same; `count` of them at most.
+ */
+export function rumoursAt(war, at, { count = 3, reach = 5000 } = {}) {
+    const heard = [];
+    const near = (id) => {
+        const town = war.town(id);
+
+        return Boolean(town) && Math.hypot(town.at[0] - at[0], town.at[1] - at[1]) <= reach;
+    };
+
+    for (let k = war.log.length - 1; k >= 0 && heard.length < count; k--) {
+        const event = war.log[k];
+
+        if (UNTOLD.has(event.type) || !(EVERYWHERE.has(event.type) || near(event.town ?? event.target))) {
+            continue;
+        }
+
+        const words = tell(event, war);
+
+        if (!heard.includes(words)) {
+            heard.push(words);
+        }
+    }
+
+    return heard;
+}
+
+/**
+ * What's said of a ruler (a realm's leader: their marked traits), as it's said in a tavern: "They
+ * say the Warchief Gorgash of the Orcs is spoiling for a fight." Null if there's nothing marked.
+ */
+export function rumourOfRuler(war, realmId) {
+    const realm = war.realm(realmId);
+    const [first] = realm ? describeLeader(realm.leader, realm.id) : [];
+
+    return first ? `They say ${realm.leader.title} ${realm.leader.name} of the ${peopleOf(realm.id)} is ${first.saying}.` : null;
+}
+

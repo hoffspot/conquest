@@ -198,7 +198,7 @@ The engine is built for this from the start. These are its rules:
 | **M5** | Built | The other peoples' looks: elves, dark elves, cat folk, lizard folk and orcs, as soldiers and as townsfolk. |
 | **M6** | Built | Camps, raids and conquest played out around the player. |
 | **M7** | Built | Diplomats on the roads, to escort or waylay; grudges and favours. |
-| **M8** | | News and rumours: the war told in the taverns and by the folk; the guild's requests. |
+| **M8** | Built | News and rumours: the war told in the taverns and by the folk; the guild's requests. |
 | **M9** | | Followers, mercenaries and adventurers for hire. |
 | **M10** | | The end: victory, and serving an overlord until the rising. |
 | **M11** | | Hop in, hop out: other players joining a running world. |
@@ -580,6 +580,36 @@ enemy camp outside one of their towns (above).
 
 **Kept.** The camps pitched and the sorties out are in the host's snapshot, and the watched towns
 and each camp's sortie in the war's, so a saved or joined world carries on exactly.
+
+### News and rumours, and the guild's board (M8)
+
+**The war's news** is heard as it goes round (`news.js` `rumoursAt`):
+- in a town: what's happened within 5 km of it (raids, assaults, towns taken, camps made, armies
+  marching...), and what's heard everywhere (wars declared and joined, alliances broken, truces and
+  treaties, peoples brought under another, risings, the war's new ages, victory);
+- newest first, told in words (`tell`), three at most, none twice; not the war's small business
+  (who's met whom, counsel, unpaid soldiers).
+
+**What's said of the rulers** (`rumourOfRuler`): the most marked of a ruler's traits, of the town's
+holders or a people they know of: "They say Warchief Gorgash of the Orcs is spoiling for a fight."
+
+**Who tells it**: asked "What's the word on the war?", the barkeep, the patrons, the innkeeper and
+the barmaids tell it, each their own way; an adventurer tells what they've heard on the road. The
+game fills in what's heard where they are (`{rumour1}` to `{rumour3}`, `{rumourRuler}`), and they're
+only asked when there's something to tell. The guards and officials say how the war goes too (M2,
+M4).
+
+**The adventurers' guild's board** (`standing.js` `offerContract`): its receptionist gives
+contracts to any registered adventurer, of whatever people (no standing needed, none given; paid
+in coppers):
+
+| Contract | On the board | Done when | Pays |
+| --- | --- | --- | --- |
+| Beasts on the roads | always | 2 to 4 of the wild brought down | 10, and 7 for each |
+| A bounty | the town's holders at war | 2 to 4 of their enemies' soldiers brought down | 8, and 6 for each |
+| The camp outside the walls | an enemy camp before the town (M6) | the player was at it, and it's gone | 70 |
+
+They're carried like the rulers' requests (the journal shows them), and told of at the counter.
 
 ### Envoys on the roads, grudges and favours (M7)
 

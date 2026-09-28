@@ -6,7 +6,8 @@ import { generateWorld } from "../client/js/core/world.js";
 import { BYNAMES, GIVEN_NAMES, namePeople } from "../client/js/core/names.js";
 
 const world = generateWorld({ seed: 1 });
-const names = Object.fromEntries(world.folk.map(({ id, name }) => [id, name.split(" ")[0]]));
+// (The folk's given names; and the war's news, as the game fills it in wherever it's heard: M8)
+const names = { ...Object.fromEntries(world.folk.map(({ id, name }) => [id, name.split(" ")[0]])), rumour1: "A", rumour2: "B", rumour3: "C", rumourRuler: "D" };
 const speakerOf = (id) => {
     const one = world.folk.find((each) => each.id === id);
 
