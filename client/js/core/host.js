@@ -20,7 +20,7 @@ import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { ABILITIES, ITEMS, priceOf, Progress, rollLoot, wares, weaponOf, WITH_SHIELD } from "./progress.js";
 import { createRandom } from "./random.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
-import { armouryGift, COUNSEL, FAILED, MOST_REQUESTS, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
+import { armouryGift, COUNSEL, FAILED, MOST_REQUESTS, offerContract, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
 import { bannersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, roundsOf, sortieOf } from "./war/muster.js";
 import { ADJECTIVES } from "./war/peoples.js";
 import { HOLDINGS, War } from "./war/war.js";
@@ -96,6 +96,8 @@ export const OFFICIALS = Object.freeze({
     ruler: { post: "keep", work: true, report: true, counsel: true },
     steward: { post: "keep", work: true, report: true, armoury: true },
     councillor: { post: "keep" },
+    // (An adventurers' guild's: its board's contracts, for anyone: docs/WAR.md M8)
+    receptionist: { post: "guild", work: true, report: true },
 });
 
 /** What's kept of the things done by talking (the last so many). */
@@ -1573,7 +1575,8 @@ export class Host {
                 return refuse("official");
             }
 
-            if (!own) {
+            // (The guild's board is for anyone, of any people)
+            if (!own && post.post !== "guild") {
                 return refuse("stranger");
             }
 
@@ -1589,7 +1592,8 @@ export class Host {
             const kept = player.offers[post.id];
 
             if (effect.work === "ask") {
-                const request = kept?.turn === this.war.turn ? kept.request : offerRequest({ war: this.war, realm: player.realm, town: post.town, post: post.post, giver: post, rank, held: standing.requests, random: this.random });
+                const offer = post.post === "guild" ? offerContract : offerRequest;
+                const request = kept?.turn === this.war.turn ? kept.request : offer({ war: this.war, realm: player.realm, town: post.town, post: post.post, giver: post, rank, held: standing.requests, random: this.random });
 
                 player.offers[post.id] = { turn: this.war.turn, request };
 
@@ -1736,9 +1740,9 @@ export class Host {
             }
 
             const counts =
-                request.kind === "bounty"
+                request.kind === "bounty" || request.kind === "hunt"
                     ? fallen.kind === "soldier" && this.war?.liege(fallen.team) === request.target.realm
-                    : request.kind === "wild" && !fallen.neutral && fallen.kind !== "soldier" && fallen.kind !== "player" && !this.war?.realm(fallen.team);
+                    : (request.kind === "wild" || request.kind === "beasts") && !fallen.neutral && fallen.kind !== "soldier" && fallen.kind !== "player" && !this.war?.realm(fallen.team);
 
             if (counts) {
                 request.count += 1;
@@ -1829,7 +1833,8 @@ export class Host {
 
                 return war.force(request.target.camp) ? null : request.there ? "ready" : "void";
             }
-            case "rout": {
+            case "rout":
+            case "camp": {
                 const camp = war.force(request.target.force);
 
                 if (camp && !request.there && near(camp.at, REQUEST_REACH.rout)) {

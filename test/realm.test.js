@@ -87,7 +87,7 @@ describe("a player's part in their people (host.js, standing.js)", () => {
             assert.ok(hall.folk.some(({ role }) => role === kind), kind);
         }
 
-        assert.deepEqual(Object.keys(OFFICIALS).sort(), ["clerk", "councillor", "reeve", "ruler", "steward"]);
+        assert.deepEqual(Object.keys(OFFICIALS).sort(), ["clerk", "councillor", "receptionist", "reeve", "ruler", "steward"]);
 
         // (The same seat every time, and only where it should be)
         for (const seed of [1, 2, 3]) {

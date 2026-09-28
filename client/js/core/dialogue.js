@@ -67,9 +67,17 @@ export const TREES = Object.freeze({
                     { say: "What have you got for sale?", next: null, do: [{ shop: "tavern" }] },
                     { say: "An ale, if you please. (2 coppers)", next: "ale", do: [{ buy: "ale", price: 2 }] },
                     { say: "Heard any news?", next: "news" },
+                    { if: { rumour: true }, say: "What's the word on the war?", next: "war" },
                     { if: { notFlag: "askedPlace" }, say: "Tell me about this place.", next: "place", do: [{ remember: "askedPlace" }] },
                     { if: { upstairs: true }, say: "I'm after a bed for the night.", next: "room", do: [{ learn: "sentByBarkeep" }] },
                     FAREWELL,
+                ],
+            },
+            war: {
+                say: ["{rumour1}", "Word from the road: {rumour2}", "You'll have heard? {rumour3}", "{rumourRuler}", "A carter swore to it: {rumour1}"],
+                choices: [
+                    { say: "What else is being said?", next: "war" },
+                    { say: "Thanks for that.", next: "more" },
                 ],
             },
             ale: {
@@ -139,9 +147,17 @@ export const TREES = Object.freeze({
                 choices: [
                     { say: "Something to eat? (4 coppers)", next: "food", do: [{ buy: "stew", price: 4 }] },
                     { say: "How's the work?", next: "work" },
+                    { if: { rumour: true }, say: "What's the word on the war?", next: "war" },
                     { if: { notFlag: "tipped" }, say: "Here, for your trouble. (1 copper)", next: "tip", do: [{ pay: 1 }, { remember: "tipped" }] },
                     { if: { flag: "tipped" }, say: "Another copper for your trouble. (1 copper)", next: "tipAgain", do: [{ pay: 1 }] },
                     FAREWELL,
+                ],
+            },
+            war: {
+                say: ["You hear everything, carrying trays. {rumour1}", "The soldiers were saying: {rumour2}", "{rumour3} That's what they're all on about.", "{rumourRuler}"],
+                choices: [
+                    { say: "What else is being said?", next: "war" },
+                    { say: "Thanks for that.", next: "more" },
                 ],
             },
             food: {
@@ -200,8 +216,16 @@ export const TREES = Object.freeze({
                 choices: [
                     { say: "Buy you a drink? (2 coppers)", next: "drink", do: [{ buy: "ale", price: 2, for: "them" }, { remember: "boughtDrink" }] },
                     { say: "What's the news?", next: "news" },
+                    { if: { rumour: true }, say: "What's the word on the war?", next: "war" },
                     { say: "Seen the orc about?", next: "orc", do: [{ learn: "orc" }] },
                     FAREWELL,
+                ],
+            },
+            war: {
+                say: ["Well, since you ask. {rumour1}", "Heard it from a soldier, so it must be true: {rumour2}", "{rumour3} Or so they say.", "{rumourRuler} Makes you think.", "Keep this to yourself. {rumour1}"],
+                choices: [
+                    { say: "What else is being said?", next: "war" },
+                    { say: "Thanks for that.", next: "more" },
                 ],
             },
             drink: { say: ["Now there's a friend! Your health!", "Bless you. Bless your boots, even."], choices: "more" },
@@ -299,7 +323,15 @@ export const TREES = Object.freeze({
                     { say: "A room for the night. (8 coppers)", next: "room", do: [{ rent: "room", price: 8 }] },
                     { if: { upstairs: "mixed" }, say: "And the ladies down the hall?", next: "ladies" },
                     { say: "Who stays here?", next: "guests" },
+                    { if: { rumour: true }, say: "What's the word on the war?", next: "war" },
                     FAREWELL,
+                ],
+            },
+            war: {
+                say: ["The guests bring it in with the mud on their boots. {rumour1}", "A merchant stayed last night. {rumour2}", "{rumour3} Bad for trade, all of it.", "{rumourRuler}"],
+                choices: [
+                    { say: "What else is being said?", next: "war" },
+                    { say: "Thanks for that.", next: "more" },
                 ],
             },
             room: {
@@ -476,6 +508,8 @@ export const TREES = Object.freeze({
                 choices: [
                     { say: "Does the guild sell supplies?", next: null, do: [{ shop: "guild" }] },
                     { if: { notFlag: "registered" }, say: "I'd like to register as an adventurer.", next: "register" },
+                    { if: { due: true }, say: "I've finished a job from the board.", next: "reported", do: [{ report: true }] },
+                    { if: { all: [{ flag: "registered" }, { room: true }] }, say: "Anything on the board for me?", next: "offer", do: [{ work: "ask" }] },
                     { say: "What's the quest board?", next: "board" },
                     { say: "How do the ranks work?", next: "ranks" },
                     { say: "Are there other branches?", next: "branches" },
@@ -487,7 +521,26 @@ export const TREES = Object.freeze({
                 choices: [{ say: "Thank you!", next: "more", do: [{ remember: "registered" }, { learn: "guildMember" }] }],
             },
             board: {
-                say: "That's where the jobs go up! Villages, merchants, the odd wizard with a lost cat. Take a notice down, bring it to me, and it's yours. Well, soon: the new notices are still being written up.",
+                say: "That's where the jobs go up! Beasts on the roads, camps outside the walls, bounties from whoever's paying. Register, ask me what's up, and bring me word when it's done. Coppers on the counter, straight away!",
+                choices: "more",
+            },
+            offer: {
+                say: [
+                    { if: { offer: true }, lines: ["Ooh, this one's just gone up! {offer} It pays {reward}.", "Let me see... here! {offer} {reward}, when it's done. Don't die!"] },
+                    { lines: ["Oh! The board's bare right now. Someone took the last one this morning. Try again later?", "Nothing for you just now, sorry! Check back in a little while."] },
+                ],
+                choices: [
+                    { if: { offer: true }, say: "I'll take it.", next: "accepted", do: [{ work: "accept" }] },
+                    { if: { offer: true }, say: "Not that one.", next: "more" },
+                    { if: { offer: false }, say: "I'll come back.", next: "more" },
+                ],
+            },
+            accepted: {
+                say: ["It's yours! I've stamped it. Come back and tell me when it's done.", "Wonderful! Off you go, then. Carefully!"],
+                choices: "more",
+            },
+            reported: {
+                say: [{ if: { reported: true }, lines: ["{reported}"] }, { lines: ["Hmm, the board says it's not done yet. Come back when it is!"] }],
                 choices: "more",
             },
             ranks: {
@@ -510,6 +563,15 @@ export const TREES = Object.freeze({
                     { lines: ["{player}. Still breathing? Good.", "Oh, you again. Seen anything worth the walk?"] },
                 ],
                 choices: [
+                    { say: "Any advice?", next: "advice" },
+                    { if: { rumour: true }, say: "Heard anything on the road?", next: "war" },
+                    { say: "Good hunting.", next: null },
+                ],
+            },
+            war: {
+                say: ["On the road, you hear things. {rumour1}", "Came past it myself: {rumour2}", "{rumour3} Good for business, war.", "{rumourRuler} I'd not want to cross them."],
+                choices: [
+                    { say: "What else?", next: "war" },
                     { say: "Any advice?", next: "advice" },
                     { say: "Good hunting.", next: null },
                 ],
