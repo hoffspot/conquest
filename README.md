@@ -41,9 +41,13 @@ character, or make a **New character**.
 
 **Making a character** takes three steps:
 
-1. **Look.** Shape the body (build, height, bust, heritage and physique), the face, and the
-   colours and hair (skin, eyes, hairstyle, beard). **Random** makes someone new. Drag across the
-   picture to walk round them; each tab frames what it changes.
+1. **Look.** Choose your **people**: human, elf, dark elf, cat folk, lizard folk or orc. Each
+   looks as their people do (elves' long ears, cat folk's ears, tail and fur, lizard folk's
+   scales, snout and tail, orcs' tusks), with their own skin colours to choose from, and you'll
+   wake in one of their towns, as one of them. Shape the body (build, height, bust, heritage and
+   physique), the face, and the colours and hair (skin, eyes, hairstyle, beard). **Random** makes
+   someone new, of the same people. Drag across the picture to walk round them; each tab frames
+   what it changes.
 2. **Weapon.** Everyone starts in a tunic, leather bracers, leather pants and leather boots, and
    chooses one weapon (a bow comes with a quiver of arrows on the back). **Spiked boots** can be
    chosen on their own, or worn with any other weapon (a switch under the list):
@@ -270,6 +274,18 @@ remembered.
 | Cast a spell | Hold on yourself or an enemy, then flick to a slice | Hold the button down on them, then flick the mouse |
 | Pause, Game options | The menu button | The menu button or Escape |
 
+**Playing together.** Anyone playing can open their world to others: in the menu, **Invite
+others** gives a four-letter code, and a link with it in. Others choose **Join a world** on the
+title screen and type the code (or open the link), and come in with their saved character (or
+make one first). Each comes as one of their own people, by one of their people's towns if it
+isn't yours, so they're at peace or at war with you as your peoples are. Come and go as you
+like: the world goes on, and its menu no longer pauses it while anyone else is in it. The world is
+yours, the one who opened it: what others do is done in it, and when you close it to others (or
+leave), they're told, and go back to their title screen. What their characters grow into,
+carry and earn goes with them. Games play together through the relay on the game's server
+(`npm start` serves both); from GitHub Pages, add `?relay=wss://your.server/relay` to use one.
+See [docs/WAR.md](docs/WAR.md#playing-together-m11).
+
 **Debug mode.** The switch on the title screen shows an overlay, on every screen, of how the game
 is running: frame rate and a graph of frame times, how long updating and drawing take, what's
 drawn (draw calls, triangles, textures, shaders), memory, the GPU and screen, the battle, and how
@@ -287,8 +303,12 @@ npm start
 ```
 
 Open <http://localhost:8080>. To go straight into a game with a random character, open
-<http://localhost:8080/?play> (add `&weapon=bow`, `&boots` for spiked boots too, `&seed=12` for another town, or
-`&quality=low`).
+<http://localhost:8080/?play> (add `&weapon=bow`, `&boots` for spiked boots too, `&seed=12` for another town,
+`&people=elf` for one of another people, or `&quality=low`). `?join=ABCD` opens Join a world with a
+world's code in it.
+
+The server also carries the relay that games playing together talk through (at `/relay`: a
+WebSocket), so others on your network can join your world at your computer's address.
 
 The game is plain ES modules with no build step, so any static web server can serve the
 `client/` folder.
@@ -378,6 +398,8 @@ client/                 The game (static files served to the browser)
                         company
     fate.js             The war's great turns for the player's people: victory, brought under
                         another, fallen, risen
+    together.js         Playing together: a world opened to others, or another's joined, through
+                        the relay (a WebSocket)
     save.js             The saved character, what they've grown into and carry, what's been
                         said and found, and settings (local storage)
     device.js           Full screen and the service worker
@@ -397,6 +419,8 @@ client/                 The game (static files served to the browser)
     host.js             The one authority over a running world: its players (by id), their
                         commands, the buildings near them got ready, kept and made again
     wire.js             What goes between host and players, and into a save, as text
+    netplay.js          Playing together: what's done in a hosted world, sent to those who've
+                        joined it and done again on their copies of it, step for step
     war/                The war between the peoples (see docs/WAR.md): war.js the realms, towns,
                         forces, turns and conquest; peoples.js their temperaments and rulers;
                         roads.js the ways their forces go; news.js the war told in words;
@@ -471,7 +495,8 @@ client/                 The game (static files served to the browser)
   js/lab/war.js         The war
   js/lab/land.js        The land of a world plan painted as a picture, for the maps
   js/lab/building-lab.js  The building lab
-server/                 A static file server for playing locally (npm start)
+server/                 A static file server for playing locally (npm start), and the relay that
+                        games playing together talk through (relay.js)
 test/                   Unit tests
 e2e/                    Playwright browser tests
 scripts/                vendor-three.js, build-characters.js, build-manifest.js, build-music.js

@@ -4,6 +4,7 @@
 
 import { Sound } from "../audio/sound.js";
 import { loadCharacterKit } from "../characters/kit.js";
+import { Host } from "../core/host.js";
 import { buildWorld } from "../core/overworld.js";
 import { View } from "../world/view.js";
 import { Game } from "./game.js";
@@ -35,12 +36,27 @@ export async function createSession({ canvas, quality, sound = true, volumes, fe
 
 /**
  * A new game in the world of `seed` (the whole world, laid out from its plan, with the town set
- * in where a human starts), for a hero: { name, shape, look, weapon } (and what's kept of it: its
+ * in where one of the hero's people starts), for a hero: { name, shape, look, weapon, race } (and what's kept of it: its
  * talks and what it's found, and what it's grown into and carries, and who hears of them; the
  * world's war as it was kept, and who hears of it; and who opens the world map).
  */
 export function createGame({ view, kit, sound, hud, hero, seed, talks, onTalk, explored, onExplore, onWorldMap, war, onWar, progress, onProgress, standing, onStanding, followers, onFollowers }) {
-    const world = buildWorld({ seed });
+    const world = buildWorld({ seed, race: hero.race ?? "human" });
 
     return new Game({ view, kit, sound, world, hero, hud, talks, onTalk, explored, onExplore, onWorldMap, war, onWar, progress, onProgress, standing, onStanding, followers, onFollowers });
+}
+
+/**
+ * A game joined to a world someone else hosts (docs/WAR.md M11), from their welcome (core/netplay.js
+ * Joining's: the world's seed and whose people's town it's set in, and a snapshot of it): the world
+ * made again from its seed, the host's copy of it restored, and played on as `joining` hears the
+ * host play it. The rest as createGame (what's kept of the character, and who hears of it).
+ */
+export function createJoinedGame({ view, kit, sound, hud, hero, welcome, joining, talks, onTalk, onWorldMap, progress, onProgress, standing, onStanding, followers, onFollowers }) {
+    const world = buildWorld({ seed: welcome.seed, race: welcome.race });
+    const host = Host.restore(world, welcome.snapshot);
+
+    joining.attach(host);
+
+    return new Game({ view, kit, sound, world, hero, hud, host, me: welcome.id, remote: joining, talks, onTalk, onWorldMap, progress, onProgress, standing, onStanding, followers, onFollowers });
 }

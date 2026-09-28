@@ -31,6 +31,7 @@ import { STEP_MS, TALK_REACH } from "../core/battle.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
 import { HIRES, HOST_PLAYER, Host, REFUSALS, SHOP_REACH, SHOPKEEPERS } from "../core/host.js";
 import { ABILITIES, itemLabel, ITEMS, priceOf, TREES, wares } from "../core/progress.js";
+import { PACE } from "../core/netplay.js";
 import { COUNSEL, MOST_REQUESTS, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
 import { describeLeader } from "../core/war/peoples.js";
 import { peopleOf, rumourOfRuler, rumoursAt } from "../core/war/news.js";
@@ -72,10 +73,10 @@ export const STARTING_OUTFIT = Object.freeze(["tunic", "bracers", "breeches", "b
  * boots (`boots`, or the boots on their own), instead of leather ones; and any armour worn over
  * it all (`worn`: core/progress.js Progress worn).
  */
-export function heroEquipment(weapon, boots = false, worn = []) {
+export function heroEquipment(weapon, boots = false, worn = [], parts = []) {
     const kicks = boots || weapon === "boots";
 
-    return [...STARTING_OUTFIT.filter((id) => !(kicks && id === "boots")), ...WEAPONS[weapon].equipment, ...(kicks && weapon !== "boots" ? WEAPONS.boots.equipment : []), ...worn];
+    return [...STARTING_OUTFIT.filter((id) => !(kicks && id === "boots")), ...WEAPONS[weapon].equipment, ...(kicks && weapon !== "boots" ? WEAPONS.boots.equipment : []), ...worn, ...parts];
 }
 
 /** How a character holds its weapon to fight (actions.js GUARDS, DRAWS), for its WEAPONS key. */
@@ -158,6 +159,13 @@ const EMBERS = 5;
 // how often (s) the doors of the settlements come to since are picked up
 const VISITS = Object.freeze({ every: 0.5, budget: 6 });
 
+// How often a hosted world's goings-on are sent to those who've joined it (seconds: docs/WAR.md M11)
+const FLUSH_EVERY = 0.1;
+
+// How far away (metres, either way) anyone's drawn out in the world: another player far off, and
+// whoever's near them, aren't (docs/WAR.md M11)
+const DRAW_REACH = 160;
+
 // What the host tells of besides the battle's events (#hear)
 const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "rank", "loot", "bought", "sold", "used", "gear", "ability", "request", "standing", "gift", "counsel"]);
 
@@ -195,7 +203,7 @@ export class Game {
      *     they carry, as kept (save.js loadStanding: core/standing.js Standing's toJSON).
      * @param {Function} [options.onStanding] - Hears it whenever it changes (to keep it).
      */
-    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {}, progress = {}, onProgress = () => {}, standing = {}, onStanding = () => {}, followers = [], onFollowers = () => {} }) {
+    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {}, progress = {}, onProgress = () => {}, standing = {}, onStanding = () => {}, followers = [], onFollowers = () => {}, remote = null }) {
         this.view = view;
         this.kit = kit;
         this.sound = sound;
@@ -208,7 +216,21 @@ export class Game {
         this.me = me;
         this.host = host ?? new Host(world, { populate: false, war });
         this.onWar = onWar;
-        this.host.join({ id: me, hero, talks, explored, progress, standing, followers });
+
+        /**
+         * Playing together (docs/WAR.md M11): joined to a world someone else hosts, how this game
+         * plays its copy of it on and sends its player's commands (core/netplay.js Joining; its
+         * player's already in it); or hosting one opened to others, what sends them what's done
+         * (Hosting: set by whoever opens it).
+         */
+        this.remote = remote;
+        this.hosting = null;
+        this.flushedAt = 0;
+
+        if (!remote) {
+            this.host.join({ id: me, hero, talks, explored, progress, standing, followers });
+        }
+
         this.onFollowers = onFollowers;
         this.onProgress = onProgress;
         this.onStanding = onStanding;
@@ -216,7 +238,11 @@ export class Game {
         /** Trading with a shopkeeper (from their talk): { shop, keeper (their id), name }, or null. */
         this.shopping = null;
         this.shopWanted = null;
-        this.host.populate();
+
+        if (!remote) {
+            this.host.populate();
+        }
+
         this.battle = this.host.battle;
         this.avatars = new Map();
         this.previous = new Map();
@@ -471,8 +497,7 @@ export class Game {
         this.pack.onClose = () => this.closePack();
         this.journal = new JournalPanel(this.hud.root);
         this.journal.onAbandon = (id) => {
-            this.#command({ type: "abandon", request: id });
-            this.#showJournal();
+            this.#command({ type: "abandon", request: id }, () => this.journal.open && this.#showJournal());
         };
         this.journal.onClose = () => this.closeJournal();
         this.fate = new FatePanel(this.hud.root);
@@ -542,7 +567,7 @@ export class Game {
 
         if (actor.kind === "player") {
             const { hero: { shape, look, weapon, boots }, progress } = this.host.players.get(actor.id);
-            const character = new Character(this.kit, { shape, look, equipment: heroEquipment(weapon, boots, progress.worn()), hairDetail });
+            const character = new Character(this.kit, { shape, look, equipment: heroEquipment(weapon, boots, progress.worn(), this.host.players.get(actor.id).hero.parts ?? []), hairDetail });
 
             // (Weapons put away to start with: drawn for a fight)
             character.sheathe(true);
@@ -866,9 +891,36 @@ export class Game {
                 }
             }
 
-            this.#handle(this.host.advance(STEP_MS));
+            // (Joined to another's world: its steps as the host played them, when they've come)
+            const events = this.remote ? this.remote.step() : this.host.advance(STEP_MS);
+
+            if (!events) {
+                this.accumulator = Math.min(this.accumulator, STEP_MS);
+
+                break;
+            }
+
+            this.#handle(events);
             this.accumulator -= STEP_MS;
             steps++;
+        }
+
+        // (Fallen behind the host: caught up, a little at a time)
+        for (let extra = 0; this.remote && this.remote.behind > PACE.behind && extra < PACE.catchUp; extra++) {
+            const events = this.remote.step();
+
+            if (!events) {
+                break;
+            }
+
+            this.#handle(events);
+            steps++;
+        }
+
+        // (Hosting: what's been done, to those who've joined, every so often)
+        if (this.hosting && this.clock - this.flushedAt >= FLUSH_EVERY) {
+            this.flushedAt = this.clock;
+            this.hosting.flush();
         }
 
         this.#update(dt, this.accumulator / STEP_MS);
@@ -878,6 +930,7 @@ export class Game {
 
     #update(dt, alpha) {
         const { battle, view, hud } = this;
+        const mine = battle.actor(this.me);
 
         this.clock += dt;
         TREE_WIND.time.value = this.clock;
@@ -892,8 +945,9 @@ export class Game {
                 continue;
             }
 
-            // (Only those on the player's map are seen, and moved)
-            if (actor.map !== this.mapId) {
+            // (Only those on the player's map are seen, and moved; and out in the world, only
+            // those near them)
+            if (actor.map !== this.mapId || (mine && actor !== mine && (Math.abs(actor.x - mine.x) > DRAW_REACH || Math.abs(actor.y - mine.y) > DRAW_REACH))) {
                 avatar.object.visible = false;
                 continue;
             }
@@ -1276,7 +1330,7 @@ export class Game {
         }
 
         // (They stop and face the player, if they can talk now: the host says)
-        if (!this.#command({ type: "talk", with: npc.id }).ok) {
+        if (!this.#command({ type: "talk", with: npc.id }, (result) => !result.ok && this.talking?.id === npc.id && this.#endTalk()).ok) {
             return;
         }
 
@@ -1314,18 +1368,19 @@ export class Game {
                     return;
                 }
 
-                const result = this.#command({ type: "effect", effect });
+                // (What can't be paid for, said)
+                this.#command({ type: "effect", effect }, (result) => {
+                    if (!result.ok) {
+                        this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.6);
+                    } else if (effect.price || effect.pay) {
+                        this.hud.setCoppers(this.progress.gold);
+                        this.onProgress(this.progress);
+                    }
+                });
 
-                // (Their wares, once the talk's over; what can't be paid for, said)
+                // (Their wares, once the talk's over)
                 if (effect.shop && SHOPKEEPERS[npc.role]) {
                     this.shopWanted = { shop: effect.shop, keeper: npc.id, name: npc.name };
-                }
-
-                if (!result.ok) {
-                    this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.6);
-                } else if (effect.price || effect.pay) {
-                    this.hud.setCoppers(this.progress.gold);
-                    this.onProgress(this.progress);
                 }
             },
         });
@@ -1440,6 +1495,44 @@ export class Game {
         };
         const coppers = (count) => `${count} ${count === 1 ? "copper" : "coppers"}`;
 
+        // What came of something asked, for their words: heard at once; or, joined to another's
+        // world (docs/WAR.md M11), a moment later, and what's being said said again as it now is
+        const heard = (effect, result, kind, chosen) => {
+            if (effect.work === "ask") {
+                state.offer = result.ok ? result.request : null;
+                names.offer = state.offer?.text ?? "";
+                names.reward = state.offer ? (state.offer.reward.coppers ? coppers(state.offer.reward.coppers) : "your name in the rolls") : "";
+            } else if (effect.work === "accept") {
+                state.offer = null;
+
+                if (!result.ok) {
+                    this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.6);
+                }
+            } else if (effect.report) {
+                const handed = result.ok ? (result.reported ?? []) : [];
+                const paid = handed.reduce((sum, { reward }) => sum + reward.coppers, 0);
+                const first = handed[0];
+
+                state.reported = result.ok;
+                names.reported = !first ? "" : `${first.kind === "message" ? `A letter from ${first.from.townName}? I'll see it read.` : first.kind === "tithe" ? "The treasury thanks you." : "Done, and well done."}${handed.length > 1 ? " And the rest besides." : ""}${paid ? ` ${coppers(paid)}, for your trouble.` : ""}`;
+            } else if (effect.armoury) {
+                names.gift = result.ok && result.item ? `From the armoury, for your rank: ${itemLabel(result.item).toLowerCase()}. Wear it well.` : (REFUSALS[result.reason] ?? "There's nothing for you.");
+            } else if (kind) {
+                const said = { march: `So be it. We march on ${chosen?.name} when we can.`, peace: `Peace with ${chosen?.name}... Very well. An envoy will go, when one can be spared.`, war: `${chosen?.name}? Yes. They've had it coming.`, rise: `Then it's today. Send word to every town: we're done serving ${words.oppressor}!` };
+
+                names.counsel = result.ok ? said[kind] : "No. That cannot be.";
+            }
+
+            this.hud.setCoppers(this.progress.gold);
+            this.onProgress(this.progress);
+            this.onStanding(this.standing);
+
+            if (this.remote && this.talking?.id === npc.id) {
+                this.talking.conversation.retell();
+                this.talk.update(this.talking.conversation);
+            }
+        };
+
         return {
             words,
             check: (condition) => {
@@ -1456,36 +1549,8 @@ export class Game {
             effect: (effect) => {
                 const [kind, index] = Object.entries(effect.counsel ?? {})[0] ?? [];
                 const chosen = kind && kind !== "rise" ? options[kind]?.[index - 1] : null;
-                const result = this.#command({ type: "effect", effect: kind && kind !== "rise" ? { counsel: { [kind]: chosen?.id } } : effect });
 
-                if (effect.work === "ask") {
-                    state.offer = result.ok ? result.request : null;
-                    names.offer = state.offer?.text ?? "";
-                    names.reward = state.offer ? (state.offer.reward.coppers ? coppers(state.offer.reward.coppers) : "your name in the rolls") : "";
-                } else if (effect.work === "accept") {
-                    state.offer = null;
-
-                    if (!result.ok) {
-                        this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.6);
-                    }
-                } else if (effect.report) {
-                    const handed = result.ok ? result.reported : [];
-                    const paid = handed.reduce((sum, { reward }) => sum + reward.coppers, 0);
-                    const first = handed[0];
-
-                    state.reported = result.ok;
-                    names.reported = !first ? "" : `${first.kind === "message" ? `A letter from ${first.from.townName}? I'll see it read.` : first.kind === "tithe" ? "The treasury thanks you." : "Done, and well done."}${handed.length > 1 ? " And the rest besides." : ""}${paid ? ` ${coppers(paid)}, for your trouble.` : ""}`;
-                } else if (effect.armoury) {
-                    names.gift = result.ok ? `From the armoury, for your rank: ${itemLabel(result.item).toLowerCase()}. Wear it well.` : REFUSALS[result.reason] ?? "There's nothing for you.";
-                } else if (kind) {
-                    const said = { march: `So be it. We march on ${chosen?.name} when we can.`, peace: `Peace with ${chosen?.name}... Very well. An envoy will go, when one can be spared.`, war: `${chosen?.name}? Yes. They've had it coming.`, rise: `Then it's today. Send word to every town: we're done serving ${words.oppressor}!` };
-
-                    names.counsel = result.ok ? said[kind] : "No. That cannot be.";
-                }
-
-                this.hud.setCoppers(this.progress.gold);
-                this.onProgress(this.progress);
-                this.onStanding(this.standing);
+                this.#command({ type: "effect", effect: kind && kind !== "rise" ? { counsel: { [kind]: chosen?.id } } : effect }, (result) => heard(effect, result, kind, chosen));
             },
         };
     }
@@ -1816,7 +1881,7 @@ export class Game {
             return;
         }
 
-        avatar.character.setEquipment(heroEquipment(weapon, hero.boots, worn));
+        avatar.character.setEquipment(heroEquipment(weapon, hero.boots, worn, hero.parts ?? []));
         avatar.character.sheathe(!this.battle.actor(id)?.armed);
         avatar.actions.setWeapon(guardOf(weapon));
     }
@@ -1973,6 +2038,41 @@ export class Game {
         return war.victor ? `${people(war.victor)[0].toUpperCase()}${people(war.victor).slice(1)} rule the continent.` : null;
     }
 
+    /**
+     * Everyone else playing in the world (docs/WAR.md M11): { id, name, people ("Elves"), hostile
+     * (their people at war with the player's) }.
+     */
+    others() {
+        return [...this.host.players.values()]
+            .filter(({ id }) => id !== this.me)
+            .map((player) => ({ id: player.id, name: player.hero.name, people: peopleOf(player.realm), hostile: Boolean(this.host.war?.hostile(this.self.realm, player.realm)) }));
+    }
+
+    /**
+     * The world as it now is, set right after it went astray (docs/WAR.md M11: a joined game's
+     * copy, sent again): everyone in it drawn as they now are, and the buildings got ready that
+     * weren't.
+     */
+    rehost() {
+        this.battle = this.host.battle;
+
+        for (const actor of this.battle.actors) {
+            if (actor.kind === "soldier" && !this.avatars.has(actor.id) && !this.enlisting.includes(actor.id)) {
+                this.enlisting.push(actor.id);
+            }
+        }
+
+        for (const key of this.host.open.keys()) {
+            const building = this.world.interiors?.buildings.get(key);
+
+            if (building && !this.visits.has(key)) {
+                this.#prepare(building);
+            }
+        }
+
+        this.#mirror();
+    }
+
     /** Open the pack (or close it, if it's open): the player's skills, gear, and what they carry. */
     togglePack() {
         if (this.pack?.open) {
@@ -2023,21 +2123,19 @@ export class Game {
 
     // Something asked of the pack: done by the host, or why not said
     #packCommand(command) {
-        const result = this.#command(command);
+        return this.#command(command, (result) => {
+            if (!result.ok) {
+                this.hud.message(REFUSALS[result.reason] ?? CAST_FAILURES[result.reason] ?? "Can't do that.", 1.6);
+                this.sound?.play("denied");
+            } else {
+                // (The coppers shown at once: the events it made are heard with the next step)
+                this.hud.setCoppers(this.progress.gold);
+            }
 
-        if (!result.ok) {
-            this.hud.message(REFUSALS[result.reason] ?? CAST_FAILURES[result.reason] ?? "Can't do that.", 1.6);
-            this.sound?.play("denied");
-        } else {
-            // (The coppers shown at once: the events it made are heard with the next step)
-            this.hud.setCoppers(this.progress.gold);
-        }
-
-        if (this.pack.open) {
-            this.#showPack();
-        }
-
-        return result;
+            if (this.pack.open) {
+                this.#showPack();
+            }
+        });
     }
 
     // A town's soldiers out: to be drawn, and its banners up, in its holders' colours
@@ -2463,6 +2561,13 @@ export class Game {
                 break;
             case "join":
             case "leave":
+                // (Someone else come into the world, or gone from it: docs/WAR.md M11)
+                if (event.id !== this.me && event.name) {
+                    this.hud.message(event.type === "join" ? `${event.name} has come into the world, of the ${peopleOf(event.realm)}.` : `${event.name} has left the world.`, 3);
+                }
+
+                this.#mirror();
+                break;
             case "gone":
                 this.#mirror();
                 break;
@@ -2972,19 +3077,27 @@ export class Game {
 
         const { spell, order, ability } = ACTIONS[action] ?? {};
         const on = target === "self" ? null : target;
-        const result = spell ? this.#command({ type: "cast", spell, target: on }) : ability ? this.#command({ type: "ability", ability, target: on }) : order ? this.#command({ type: order, target }) : { ok: false, reason: "busy" };
+        const command = spell ? { type: "cast", spell, target: on } : ability ? { type: "ability", ability, target: on } : order ? { type: order, target } : null;
 
-        // (Setting on someone: the lock heard, as a tap on an enemy)
-        if (order && result.ok) {
-            this.sound?.play("lock");
+        const heard = (result) => {
+            // (Setting on someone: the lock heard, as a tap on an enemy)
+            if (order && result.ok) {
+                this.sound?.play("lock");
+            }
+
+            if (!result.ok) {
+                this.hud.message(REFUSALS[result.reason] ?? CAST_FAILURES[result.reason], 1.4);
+                this.sound?.play("denied");
+            }
+        };
+
+        if (!command) {
+            heard({ ok: false, reason: "busy" });
+
+            return { ok: false, reason: "busy" };
         }
 
-        if (!result.ok) {
-            this.hud.message(REFUSALS[result.reason] ?? CAST_FAILURES[result.reason], 1.4);
-            this.sound?.play("denied");
-        }
-
-        return result;
+        return this.#command(command, heard);
     }
 
     // Who is under a point on the screen, within PICK_RADIUS of their feet, middle or head: the
@@ -3187,7 +3300,17 @@ export class Game {
 
     // What the player does, sent to the host (core/host.js command): { ok }, or { ok: false,
     // reason } if it can't be done
-    #command(command) {
-        return this.host.command(this.me, command);
+    // A command of the player's, to the host: `then` hears what came of it (at once, playing alone
+    // or hosting; joined to another's world, once the host's done it and it's been done here too)
+    #command(command, then = null) {
+        if (this.remote) {
+            return this.remote.command(command, then);
+        }
+
+        const result = this.host.command(this.me, command);
+
+        then?.(result);
+
+        return result;
     }
 }

@@ -183,8 +183,8 @@ The engine is built for this from the start. These are its rules:
       - commands up to the host;
       - the host's events and state back down: a joiner gets the seed and a snapshot, then the
         events as they happen.
-    - **How it gets there** is a separate matter: WebRTC data channels between browsers (with a
-      small signalling service), or a WebSocket to a Node host.
+    - **How it gets there** is a separate matter: through a relay, a WebSocket endpoint on the
+      game's own server (M11). The host stays in the browser of the player who opened the world.
 
 ## Milestones
 
@@ -201,7 +201,7 @@ The engine is built for this from the start. These are its rules:
 | **M8** | Built | News and rumours: the war told in the taverns and by the folk; the guild's requests. |
 | **M9** | Built | Followers, mercenaries and adventurers for hire. |
 | **M10** | Built | The end: victory, and serving an overlord until the rising. |
-| **M11** | | Hop in, hop out: other players joining a running world. |
+| **M11** | Built | Hop in, hop out: other players joining a running world. |
 
 ## What's built
 
@@ -583,6 +583,53 @@ enemy camp outside one of their towns (above).
 **Kept.** The camps pitched and the sorties out are in the host's snapshot, and the watched towns
 and each camp's sortie in the war's, so a saved or joined world carries on exactly.
 
+### Playing together (M11)
+
+**Opening a world.** In the menu, **Invite others** opens the world to others. It gets a room at
+the relay, with a four-letter code (`server/relay.js`), and shows the code, a link with it in
+(`?join=CODE`), and who's come. **Close the world to others** puts them all out again.
+
+**Joining.** From the title, **Join a world**: the code, and the saved character (with none, one's
+made first).
+- **Their people:** they come as one of the people they play (`hero.race`, chosen in the character
+  maker: human, elf, dark elf, cat folk, lizard folk or orc). So they're at peace or at war with the
+  host's player as their peoples are.
+- **Where:** by the world's start if they're of the host's people. Else by the town where their
+  own people's players start (`spawnFor`).
+- **What they bring:** their skills, gear, coppers, standing and followers, kept with their own
+  character as they play; the world isn't theirs to keep.
+- **Refused:** a game of another version, a character that isn't one, or a world with 8 in it
+  already (`NET_REFUSALS`).
+
+**Coming and going.** Everyone's told of anyone who comes into the world or leaves it. Anyone
+can leave, and the world goes on. When the host closes the world to others (or leaves), those
+still in it go back to their title screen and are told. Menus and the world map don't pause the
+world while anyone else is in it (rule 6, M0).
+
+**How it's kept the same** (`core/netplay.js`):
+- **One authority.** The host's game is the world's one authority. Everything done to its world
+  it records as it's done (`host.recorder`), and sends every tenth of a second: each step it's
+  moved on, each command anyone gives, each player come or gone.
+- **Copies.** One who joins is sent the world as it is (a snapshot, `Host.restore`), then all that's
+  recorded. They play it again on their own copy of the world, step for step, and it comes out the
+  same (the engine's made so: seeded random numbers, and nothing hanging on what any game's drawn).
+- **Pace.** A copy plays steps as they come, and catches up when it falls more than 6 behind
+  (`PACE`).
+- **Commands.** A joined player's own commands go to the host, and come back among the rest. What
+  came of them (a request offered, coppers paid, a door gone through) is what came of them on
+  their copy, a moment later: the talk says it again as it now is (`Conversation.retell`).
+- **Checks.** Every 100 steps the host says how the world should stand (`Host.checksum`: everyone
+  in it, where and how they are, and the war's turn and clock). A copy that doesn't match (a
+  browser whose sums come out a hair different) asks for the world again and carries on from it
+  (`Host.adopt`, `game.rehost`).
+- **What's drawn.** Each game draws what's round its own player: others far off, and whoever's near
+  them, aren't drawn (`DRAW_REACH`).
+
+**The relay** (`server/relay.js`, on `npm start`'s server at `/relay`) passes what's said between
+a room's host and those who've joined it, untouched. It knows nothing of the game. It's a WebSocket
+written out in full (RFC 6455), so the server needs nothing but Node. Pages served elsewhere (GitHub
+Pages) name the relay to use: `?relay=wss://...`.
+
 ### The war's end (M10)
 
 **Unrest** (`war.js` `RISING`). A people that serves another, or has fallen, has an unrest from 0
@@ -835,6 +882,13 @@ on from it, in a world made again from the same seed:
 `test/host.test.js` checks that a restored world runs step for step the same as the one it was
 kept from.
 
+**Playing together** (M11): `host.recorder`, if set, is told of everything done to the world as
+it's done (`["a", ms]`, `["c", playerId, command]`, `["j", options]`, `["l", id]`, `["p"]`), for
+those who've joined to do again. `adopt(snapshot)` carries on from a snapshot in place. `checksum()`
+tells two copies of a world apart. Buildings are looked over in the order of their keys, and the
+settlements round each player are laid out by the world itself, so what's got ready, and when,
+never hangs on what a game's drawn.
+
 ### The game (app/game.js)
 
 The game makes a host when it's given none (playing alone), and joins its player to it as `me`.
@@ -849,3 +903,7 @@ From then on it only shows the world:
   as they change.
 - **Pausing.** `game.pause()` stops the world only when it can. `game.stop()` stops it whatever
   (for tests stepping it on by hand).
+- **Playing together** (M11). Hosting, it sends what's done to those who've joined
+  (`game.hosting`: `core/netplay.js` Hosting). Joined to another's world, it's given the host's
+  copy (`createJoinedGame`) and plays it on as the host's steps come (`game.remote`: Joining),
+  sending its player's commands to the host and hearing what came of them a moment later.

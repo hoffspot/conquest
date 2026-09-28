@@ -1211,6 +1211,17 @@ export class Conversation {
         return choice;
     }
 
+    /**
+     * Say what it's at again, as things now are (what came of something done, heard a moment
+     * later: docs/WAR.md M11): the same line, filled in afresh, if its lines still hold (else one
+     * of those that do), and its choices as they now hold.
+     */
+    retell() {
+        if (!this.ended) {
+            this.#go(this.node, { again: true });
+        }
+    }
+
     /** Does a condition hold now? */
     holds(condition) {
         if (!condition) {
@@ -1252,7 +1263,7 @@ export class Conversation {
     }
 
     // Go to a node (null: the end), saying one of its lines and offering its choices
-    #go(id) {
+    #go(id, { again = false } = {}) {
         const node = id === null ? null : this.tree.nodes[id];
 
         if (!node) {
@@ -1268,8 +1279,9 @@ export class Conversation {
         // Its lines: the first group whose condition holds, or all of them
         const say = typeof node.say === "string" ? [node.say] : node.say ?? [];
         const lines = typeof say[0] === "object" ? say.find((group) => this.holds(group.if))?.lines ?? [] : say;
-        const pick = lines.length ? this.variety.next(`${this.speaker.id}:${id}`, lines.length) : 0;
+        const pick = again && lines === this.said?.lines ? this.said.pick : lines.length ? this.variety.next(`${this.speaker.id}:${id}`, lines.length) : 0;
 
+        this.said = { lines, pick };
         this.line = lines.length ? this.fill(lines[pick]) : "";
 
         // Its choices (or another node's), those that hold now; with none, just goodbye

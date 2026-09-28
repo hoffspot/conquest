@@ -20,6 +20,7 @@ import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { ABILITIES, ITEMS, priceOf, Progress, rollLoot, wares, weaponOf, WITH_SHIELD } from "./progress.js";
 import { createRandom } from "./random.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
+import { CHUNK } from "./worldplan/plan.js";
 import { armouryGift, COUNSEL, FAILED, MOST_REQUESTS, offerContract, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
 import { bannersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, roundsOf, sortieOf } from "./war/muster.js";
 import { ADJECTIVES } from "./war/peoples.js";
@@ -203,6 +204,24 @@ export class Host {
     constructor(world, { seed = world.seed ?? 1, populate = true, war = null } = {}) {
         this.world = world;
 
+        /**
+         * Told of everything done to the world, as it's done (docs/WAR.md M11: a world opened to
+         * others records it, for those who've joined to do again: core/netplay.js), or null:
+         * ["a", ms] moved on, ["c", playerId, command], ["j", options] a player come, ["l", id]
+         * gone, ["p"] its own people put in.
+         */
+        this.recorder = null;
+        this.#reset({ seed, war });
+
+        if (populate) {
+            this.populate();
+        }
+    }
+
+    // Everything that changes in the world, as it is before anything's happened in it
+    #reset({ seed, war }) {
+        const world = this.world;
+
         /** The war between the peoples (war/war.js), in a world laid out from a plan. */
         this.war = world.plan ? Host.#war(world.plan, war) : null;
         this.battle = new Battle(world, { seed, relations: (a, b) => this.#against(a, b) });
@@ -272,10 +291,6 @@ export class Host {
 
         // What's happened besides the battle's own (given out with them by advance)
         this.events = [];
-
-        if (populate) {
-            this.populate();
-        }
     }
 
     // The war, carried on from how it was kept if it can be (a save from another version, or
@@ -295,6 +310,8 @@ export class Host {
 
     /** The world's own people: the orc on its patrol, and the tavern's folk. */
     populate() {
+        this.recorder?.(["p"]);
+
         const { spawns, patrol } = this.world;
 
         if (spawns?.orc && !this.battle.actor("orc")) {
@@ -312,6 +329,10 @@ export class Host {
      * square to it). Returns their record (players).
      */
     join({ id = HOST_PLAYER, hero, talks = {}, explored = {}, progress = {}, standing = {}, followers = [], square = this.world.spawns?.player, map = "town" }) {
+        const plain = (value) => (typeof value?.toJSON === "function" ? value.toJSON() : structuredClone(value));
+
+        this.recorder?.(["j", { id, hero: structuredClone(hero), talks: { memory: structuredClone(talks.memory ?? {}), knowledge: [...(talks.knowledge ?? [])] }, explored: plain(explored), progress: plain(progress), standing: plain(standing), followers: structuredClone(followers), square: square && [...square], map }]);
+
         if (this.players.has(id)) {
             return this.players.get(id);
         }
@@ -341,7 +362,7 @@ export class Host {
             this.#follow(player, one);
         }
 
-        this.#event("join", { id });
+        this.#event("join", { id, name: hero.name, realm: player.realm });
 
         return player;
     }
@@ -351,6 +372,8 @@ export class Host {
      * it), or null if they weren't here.
      */
     leave(id) {
+        this.recorder?.(["l", id]);
+
         const player = this.players.get(id);
 
         if (!player) {
@@ -366,7 +389,7 @@ export class Host {
 
         this.battle.remove(id);
         this.players.delete(id);
-        this.#event("leave", { id });
+        this.#event("leave", { id, name: player.hero.name });
 
         return character;
     }
@@ -411,6 +434,8 @@ export class Host {
      * CAST_FAILURES).
      */
     command(playerId, command) {
+        this.recorder?.(["c", playerId, structuredClone(command)]);
+
         const player = this.players.get(playerId);
         const actor = this.battle.actor(playerId);
 
@@ -522,6 +547,8 @@ export class Host {
      * once each of its turns is over).
      */
     advance(ms) {
+        this.recorder?.(["a", ms]);
+
         const events = this.battle.advance(ms);
 
         // What the players did: their skills grow by it, and they find what's on the fallen
@@ -687,11 +714,35 @@ export class Host {
      * buildings' insides made again in the same order, and everyone where they were.
      */
     static restore(world, snapshot) {
-        if (snapshot.version !== SNAPSHOT_VERSION) {
-            throw new Error(`A world kept by another version of the game (${snapshot.version})`);
-        }
+        Host.#readable(snapshot);
 
         const host = new Host(world, { seed: snapshot.battle.seed, populate: false, war: snapshot.war });
+
+        host.#load(snapshot);
+
+        return host;
+    }
+
+    /**
+     * This world carried on from a snapshot of it instead, in place (docs/WAR.md M11: a copy
+     * that's gone astray from its host's, set right). What it's told of is told of still.
+     */
+    adopt(snapshot) {
+        Host.#readable(snapshot);
+        this.#reset({ seed: snapshot.battle.seed, war: snapshot.war });
+        this.#load(snapshot);
+    }
+
+    static #readable(snapshot) {
+        if (snapshot?.version !== SNAPSHOT_VERSION) {
+            throw new Error(`A world kept by another version of the game (${snapshot?.version})`);
+        }
+    }
+
+    // Everything as a snapshot has it (the world made again from its seed, or this one)
+    #load(snapshot) {
+        const host = this;
+        const world = this.world;
 
         for (const key of snapshot.made) {
             if (host.#building(key)) {
@@ -732,8 +783,39 @@ export class Host {
         }
 
         host.random.state = snapshot.random ?? host.random.state;
+    }
 
-        return host;
+    /**
+     * A number that tells two copies of a world apart (docs/WAR.md M11: whether one that's
+     * joined has gone astray from its host's): the battle's time, and everyone in it, where they
+     * are and how they are; the war's turn and clock.
+     */
+    checksum() {
+        let sum = 2166136261;
+
+        const mix = (value) => {
+            sum = Math.imul(sum ^ (value | 0), 16777619) >>> 0;
+        };
+
+        mix(this.battle.time);
+        mix(this.battle.actors.length);
+
+        for (const actor of this.battle.actors) {
+            for (let k = 0; k < actor.id.length; k++) {
+                mix(actor.id.charCodeAt(k));
+            }
+
+            mix(Math.round(actor.x * 1000));
+            mix(Math.round(actor.y * 1000));
+            mix(Math.round(actor.hp * 100));
+            mix(actor.dead ? 1 : 0);
+        }
+
+        mix(this.war?.turn ?? 0);
+        mix(Math.round(this.war?.clock ?? 0));
+        mix(this.players.size);
+
+        return sum;
     }
 
     // --- Growing stronger (core/progress.js) ---
@@ -2244,7 +2326,26 @@ export class Host {
             }
         }
 
-        for (const building of interiors.buildings.values()) {
+        // (The settlements round each player laid out by the world itself, and its buildings
+        // looked over in the order of their keys: so what's got ready, and when, doesn't hang on
+        // what any game's drawn of the world, and every copy of it (docs/WAR.md M11) gets the same)
+        const settlements = this.world.maps?.town?.settlements;
+
+        if (settlements) {
+            for (const place of places) {
+                if (place?.out) {
+                    const [cx, cy] = [Math.floor(place.x / CHUNK), Math.floor(place.y / CHUNK)];
+
+                    for (let dy = -1; dy <= 1; dy++) {
+                        for (let dx = -1; dx <= 1; dx++) {
+                            settlements.settle(cx + dx, cy + dy);
+                        }
+                    }
+                }
+            }
+        }
+
+        for (const building of [...interiors.buildings.values()].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))) {
             if (!building.entrance) {
                 continue;
             }

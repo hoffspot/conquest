@@ -1,5 +1,6 @@
 // Pellagos server: serves the game client over HTTP, for playing locally and on other devices on
-// the same network (GitHub Pages serves the same files online).
+// the same network (GitHub Pages serves the same files online), and the relay that games playing
+// in one world talk through (relay.js: docs/WAR.md M11).
 //
 //   npm start                 -> http://localhost:8080
 //   PORT=3000 npm start       -> use a different port
@@ -7,22 +8,25 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { attachRelay } from "./relay.js";
 import { createStaticHandler } from "./static.js";
 
 const CLIENT_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../client");
 
 /**
- * Create (but don't start) the HTTP server.
- * @returns {{httpServer: http.Server, close: () => Promise<void>}}
+ * Create (but don't start) the HTTP server, with the relay on it.
+ * @returns {{httpServer: http.Server, relay: object, close: () => Promise<void>}}
  */
 export function createServer({ clientDirectory = CLIENT_DIRECTORY } = {}) {
     const httpServer = http.createServer(createStaticHandler(clientDirectory));
+    const relay = attachRelay(httpServer);
     const close = () => new Promise((resolve) => {
+        relay.close();
         httpServer.closeAllConnections?.();
         httpServer.close(() => resolve());
     });
 
-    return { httpServer, close };
+    return { httpServer, relay, close };
 }
 
 // Start the server when this file is run directly (not when imported by the tests)

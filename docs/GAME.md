@@ -1318,11 +1318,15 @@ closes it.
    cache. Then the last part of the bar is starting the 3D view and unpacking the body. Nothing
    before the loader imports Three.js, so the engine's download is counted too.
 2. **The title.** Continue with the saved character, or make a new one (which asks before
-   replacing a saved one), and the debug mode switch.
+   replacing a saved one), join a world someone else has opened (its code: docs/WAR.md M11), and
+   the debug mode switch.
 3. **Making a character** (app/creator.js): the character stands on a plinth, lit from the front
    and edged in blue light from behind, while the panel beside it (below it on an upright phone)
    changes them. The camera frames what each tab changes: the whole body, the face close up, the
-   head and shoulders for colours and hair. The weapon step lists the eight weapons (spiked boots
+   head and shoulders for colours and hair. The body tab starts with their people (human, elf,
+   dark elf, cat folk, lizard folk or orc: characters/peoples.js), which makes them one of that
+   people, their own parts on and their skin tones to choose from (app/heroes.js
+   `heroOfPeople`); they start in one of their people's towns. The weapon step lists the eight weapons (spiked boots
    among them) and a switch to wear spiked boots with any other, showing how their damage mixes.
    It shows the weapon chosen drawn with its flourish, then held on guard and swung every few
    seconds (in spiked boots too, a kick every other time). The hero's `boots` is saved with them.
@@ -1339,8 +1343,9 @@ closes it.
    full, "Out of breath" when a run
    ends for want of it, the minimap, bars over the other characters (the target's lit red), and
    the damage each blow does.
-5. **The menu** (the menu button, or Escape) pauses the game: Resume, Game options, or back to
-   the title. **Game options** has a switch for the minimap, a switch that turns all the sound
+5. **The menu** (the menu button, or Escape) pauses the game (unless others are playing in the
+   world too): Resume, Invite others (the world opened to others: a code, and who's come),
+   Game options, or back to the title. **Game options** has a switch for the minimap, a switch that turns all the sound
    on or off, and a slider (0 to 100%) for each bus: sound effects, environment and music (a
    sound plays as the first two are moved, to hear how loud). Back (or Escape) returns to the
    menu.

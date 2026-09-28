@@ -1,7 +1,8 @@
 // The game's page-side modules that need no screen: saving, heroes, the loader
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { cleanName, defaultHero, HUMAN_TONES, randomHero, suggestName } from "../client/js/app/heroes.js";
+import { cleanName, defaultHero, HERO_PEOPLES, heroOfPeople, HUMAN_TONES, randomHero, suggestName, tonesOf } from "../client/js/app/heroes.js";
+import { LOOKS } from "../client/js/characters/peoples.js";
 import { formatBytes, Loader } from "../client/js/app/loader.js";
 import { ICONS } from "../client/js/app/icons.js";
 import { buildingsOf, interiorColours, mapColours, treesOf } from "../client/js/app/minimap.js";
@@ -241,6 +242,39 @@ describe("heroes (heroes.js)", () => {
         assert.equal(cleanName("x".repeat(40)).length, 20);
         assert.equal(cleanName("   "), "");
     });
+
+    it("makes a hero one of any people (docs/WAR.md M11): looking as one of them, their parts on, their colours; random as one of them", () => {
+        const random = createRandom(12);
+        const woman = { ...defaultHero(), name: "Kept", weapon: "bow", shape: { ...defaultHero().shape, macro: { ...defaultHero().shape.macro, gender: 0 } } };
+
+        assert.deepEqual(HERO_PEOPLES.map(({ id }) => id), ["human", "elf", "darkElf", "cat", "lizard", "orc"]);
+
+        for (const { id } of HERO_PEOPLES.slice(1)) {
+            const hero = heroOfPeople(woman, id, random.next);
+
+            assert.equal(hero.race, id);
+            assert.equal(hero.name, "Kept");
+            assert.equal(hero.weapon, "bow");
+            assert.equal(hero.shape.macro.gender, 0, `${id}: still a woman`);
+            assert.deepEqual(hero.parts, { cat: ["catEars", "catTail"], lizard: ["lizardTail"], orc: ["tusks"] }[id] ?? [], id);
+            assert.ok(Object.values(tonesOf(id)).map((tone) => tone.toLowerCase()).includes(hero.look.skin.tone.toLowerCase()), `${id}: ${hero.look.skin.tone}`);
+
+            // (Random: another of the same people)
+            const again = randomHero(hero, random.next);
+
+            assert.equal(again.race, id);
+            assert.deepEqual(again.parts, hero.parts);
+        }
+
+        // Back to a human: none of the others' parts
+        const human = heroOfPeople(heroOfPeople(woman, "cat", random.next), "human", random.next);
+
+        assert.equal(human.race, "human");
+        assert.deepEqual(human.parts, []);
+        assert.deepEqual(tonesOf("human"), HUMAN_TONES);
+        assert.equal(Object.keys(tonesOf("lizard")).length, LOOKS.lizard.tones.length);
+        assert.equal(Object.keys(tonesOf("cat")).length, LOOKS.cat.furs.length);
+    });
 });
 
 describe("a hero's kit (game.js, creator.js)", () => {
@@ -249,6 +283,7 @@ describe("a hero's kit (game.js, creator.js)", () => {
         assert.deepEqual(heroEquipment("bow", true), ["tunic", "bracers", "breeches", "bow", "quiver", "spikedBoots"]);
         assert.deepEqual(heroEquipment("boots"), ["tunic", "bracers", "breeches", "spikedBoots"]);
         assert.deepEqual(heroEquipment("boots", true), heroEquipment("boots"));
+        assert.deepEqual(heroEquipment("sword", false, [], ["catEars", "catTail"]), ["tunic", "bracers", "breeches", "boots", "sword", "catEars", "catTail"]);
         assert.equal(guardOf("boots"), "kick");
         assert.equal(guardOf("gauntlets"), "punch");
     });

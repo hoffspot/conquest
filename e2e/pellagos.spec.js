@@ -188,6 +188,57 @@ test("makes a character: a random look, a weapon and a name, then plays them in 
     expect(game.saved.hero.boots).toBe(true);
 });
 
+test("makes a character of another people: a cat folk's ears, tail and fur, their colours, random as one of them; played, they wake in a town of their people's, as one of them", async ({ page }) => {
+    test.setTimeout(180000);
+    await title(page);
+    await page.getByRole("button", { name: "New character" }).click();
+    await page.waitForFunction(() => window.pellagos.creator?.avatar);
+
+    // The peoples to choose from: humans to start with
+    const peoples = page.getByRole("radiogroup", { name: "People" });
+
+    await expect(peoples.getByRole("radio")).toHaveText(["Human", "Elf", "Dark elf", "Cat folk", "Lizard folk", "Orc"]);
+    await expect(peoples.getByRole("radio", { name: "Human" })).toHaveAttribute("aria-checked", "true");
+
+    // Cat folk: their ears and tail on, furred, their colours to choose from
+    await peoples.getByRole("radio", { name: "Cat folk" }).click();
+    await expect(page.getByRole("radiogroup", { name: "People" }).getByRole("radio", { name: "Cat folk" })).toHaveAttribute("aria-checked", "true");
+    await page.waitForFunction(() => [...window.pellagos.creator.avatar.character.equipment.values()].includes("catTail"));
+
+    const cat = await page.evaluate(() => {
+        const { creator } = window.pellagos;
+
+        return { race: creator.hero.race, parts: creator.hero.parts, fur: creator.hero.look.skin.fur, equipment: [...creator.avatar.character.equipment.values()] };
+    });
+
+    expect(cat.race).toBe("cat");
+    expect(cat.parts).toEqual(["catEars", "catTail"]);
+    expect(cat.fur).toBeGreaterThan(0.5);
+    expect(cat.equipment).toEqual(expect.arrayContaining(["catEars", "catTail"]));
+
+    await page.getByRole("tab", { name: "Colours & hair" }).click();
+    await expect(page.getByRole("radiogroup", { name: "Tone" }).getByRole("radio")).toHaveCount(6);
+
+    // Random: another of them
+    await page.getByRole("button", { name: "Random" }).click();
+    expect(await page.evaluate(() => [window.pellagos.creator.hero.race, window.pellagos.creator.hero.parts])).toEqual(["cat", ["catEars", "catTail"]]);
+
+    // Named, and played: in a town of theirs, of their people, their ears and tail on
+    await page.getByRole("button", { name: "Next: weapon" }).click();
+    await page.getByRole("button", { name: "Next: name" }).click();
+    await page.locator("#nameinput").fill("Mirra");
+    await page.getByRole("button", { name: "Begin" }).click();
+    await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
+
+    const played = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        return { start: game.world.start.race, team: game.battle.actor("player").team, realm: game.self.realm, equipment: [...game.avatars.get("player").character.equipment.values()], saved: JSON.parse(localStorage.getItem("pellagos.save")).hero.race };
+    });
+
+    expect(played).toEqual({ start: "cat", team: "cat", realm: "cat", equipment: expect.arrayContaining(["catEars", "catTail"]), saved: "cat" });
+});
+
 test("carries on with the saved character, in the same world", async ({ page }) => {
     await page.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), SAVE);
     await title(page);
