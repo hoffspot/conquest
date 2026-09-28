@@ -5,7 +5,11 @@
 // which JavaScript computes identically everywhere, and never Math.random, Math.sin and the like
 // (whose results can differ slightly between browsers).
 
-/** A random number generator (mulberry32) that always gives the same sequence for a seed. */
+/**
+ * A random number generator (mulberry32) that always gives the same sequence for a seed. Its
+ * `state` can be read and set (a whole number) to save and restore where it's got to: a game's
+ * host sends it to players who join (docs/WAR.md), and a restored battle carries on as before.
+ */
 export function createRandom(seed) {
     let state = seed >>> 0;
 
@@ -60,6 +64,13 @@ export function createRandom(seed) {
         },
         /** A new seed, for a separate generator. */
         seed: () => Math.floor(next() * 4294967296),
+        /** Where it's got to (to save, and to set to carry on from there). */
+        get state() {
+            return state;
+        },
+        set state(value) {
+            state = value >>> 0;
+        },
     };
 }
 

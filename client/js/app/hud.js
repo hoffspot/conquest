@@ -16,12 +16,16 @@ export class Hud {
         /** The minimap's canvas (app/minimap.js draws it). */
         this.map = root.querySelector("#minimap");
         this.tracked = new Map();
+
+        /** The id of the player the plate's for (this game's own: app/game.js me). */
+        this.playerId = "player";
         this.bannerTimer = null;
         this.targeted = null;
     }
 
-    /** Show the player's name, health and stamina. */
-    setPlayer({ name, hp, maxHp, stamina = maxHp, maxStamina = maxHp }) {
+    /** Show the player's name, health and stamina (their id: what's said of them after). */
+    setPlayer({ id = "player", name, hp, maxHp, stamina = maxHp, maxStamina = maxHp }) {
+        this.playerId = id;
         this.plate.querySelector(".name").textContent = name;
         this.#setBar(this.plate, hp, maxHp);
         this.#setStamina(this.plate, stamina, maxStamina);
@@ -42,6 +46,16 @@ export class Hud {
         this.tracked.set(id, plate);
         this.setHealth(id, hp, maxHp);
         this.setStamina(id, stamina, maxStamina);
+    }
+
+    /** Take away the bar over a character (gone from the world). */
+    untrack(id) {
+        this.tracked.get(id)?.remove();
+        this.tracked.delete(id);
+
+        if (this.targeted === id) {
+            this.targeted = null;
+        }
     }
 
     /** Change a character's health (the player's plate, or its bar). */
@@ -126,7 +140,7 @@ export class Hud {
     }
 
     #plateOf(id) {
-        return this.tracked.get(id) ?? (id === "player" ? this.plate : null);
+        return this.tracked.get(id) ?? (id === this.playerId ? this.plate : null);
     }
 
     #setBar(plate, hp, maxHp) {

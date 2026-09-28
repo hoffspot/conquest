@@ -21,11 +21,18 @@ export function pickAnother(count, previous = null, random = Math.random) {
     return pick >= previous ? pick + 1 : pick;
 }
 
-/** Remembers the last choice made for each kind of thing (by key), to choose another next time. */
+/**
+ * Remembers the last choice made for each kind of thing (by key), to choose another next time.
+ * What it remembers can be kept (toJSON: [[key, choice]...]) and given back to a new one.
+ */
 export class Variety {
-    constructor(random = Math.random) {
+    constructor(random = Math.random, last = []) {
         this.random = random;
-        this.last = new Map();
+        this.last = new Map(last);
+    }
+
+    toJSON() {
+        return [...this.last];
     }
 
     /** One of `count` ways of doing `key`, never the one chosen for it last time. */

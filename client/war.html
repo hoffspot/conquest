@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+        <meta name="theme-color" content="#101418">
+        <meta name="description" content="The war for the continent of Pellagos: the six peoples' realms, their towns, forces, envoys and rulers, played out turn by turn">
+
+        <title>The War</title>
+
+        <link rel="icon" href="images/icons/icon-192.png" type="image/png">
+        <link rel="stylesheet" href="world-map.css">
+        <link rel="stylesheet" href="war.css">
+        <script type="module" src="js/lab/war.js"></script>
+    </head>
+    <body>
+        <main id="atlas">
+            <section id="viewport" aria-label="The continent at war">
+                <canvas id="map"></canvas>
+                <div id="hover" role="status" aria-live="off" hidden></div>
+                <div id="status" role="status">Laying out the world…</div>
+                <div class="zoom">
+                    <button type="button" id="zoomin" aria-label="Zoom in">+</button>
+                    <button type="button" id="zoomout" aria-label="Zoom out">−</button>
+                    <button type="button" id="zoomall" aria-label="Show the whole world">⤢</button>
+                </div>
+            </section>
+
+            <aside id="panel" aria-label="The war">
+                <h1>The war</h1>
+
+                <form id="seedform" class="row">
+                    <label for="seed">Seed</label>
+                    <input id="seed" name="seed" type="number" min="0" step="1" inputmode="numeric">
+                    <button type="submit">Lay out</button>
+                    <button type="button" id="another">Another</button>
+                </form>
+
+                <div class="row">
+                    <button type="button" id="play" aria-pressed="false">Play</button>
+                    <button type="button" id="next">Next turn</button>
+                    <label for="speed">Speed</label>
+                    <select id="speed">
+                        <option value="1">1 turn a second</option>
+                        <option value="4" selected>4 turns a second</option>
+                        <option value="16">16 turns a second</option>
+                        <option value="64">64 turns a second</option>
+                    </select>
+                </div>
+
+                <div class="row">
+                    <label for="might">Players' might</label>
+                    <input id="might" type="range" min="0" max="8" step="1" value="0">
+                    <output id="mightvalue" for="might">0</output>
+                </div>
+
+                <p id="age" class="muted"></p>
+
+                <section>
+                    <h2>The realms</h2>
+                    <ul id="realms" class="realms"></ul>
+                </section>
+
+                <section>
+                    <h2>How they stand</h2>
+                    <table id="relations" class="relations"></table>
+                    <ul id="relationkey" class="key"></ul>
+                </section>
+
+                <section>
+                    <h2>The news</h2>
+                    <ol id="news" class="news" reversed></ol>
+                </section>
+            </aside>
+        </main>
+        <noscript>The war needs JavaScript.</noscript>
+    </body>
+</html>

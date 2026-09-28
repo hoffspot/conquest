@@ -1050,7 +1050,7 @@ test("every tavern can be gone into: got ready as the player comes near, its own
 
         // (Looked over at the next frame)
         window.put("player", building.door.ends[0].arrive);
-        game.visitClock = 0;
+        game.host.lookAt = 0;
         game.advance(0.1);
 
         const visit = game.visits.get(building.key);
@@ -1098,7 +1098,7 @@ test("every tavern can be gone into: got ready as the player comes near, its own
         const out = game.battle.actor("player").map;
 
         window.put("player", game.world.spawns.player.map((value) => value - 100));
-        game.visitClock = 0;
+        game.host.lookAt = 0;
         game.advance(0.2);
 
         return { out, visited: game.visits.has(key), folk: game.battle.actors.filter(({ id }) => id.startsWith(`${key}/`)).length, floors: building.maps.filter((id) => game.interiors.has(id)).length, plans: building.maps.filter((id) => game.world.maps[id]).length };

@@ -16,7 +16,7 @@ import { registerServiceWorker } from "./app/device.js";
 import { Debug } from "./app/debug.js";
 import { formatBytes, Loader } from "./app/loader.js";
 import { MANIFEST } from "./app/manifest.js";
-import { loadExplored, loadSave, loadSettings, loadTalks, newSeed, saveExplored, saveSettings, saveTalks, writeSave } from "./app/save.js";
+import { loadExplored, loadSave, loadSettings, loadTalks, loadWorld, newSeed, saveExplored, saveSettings, saveTalks, saveWorld, writeSave } from "./app/save.js";
 import { WEAPONS } from "./core/weapons.js";
 
 const params = new URLSearchParams(location.search);
@@ -249,6 +249,8 @@ async function play(save) {
         onTalk: (talks) => saveTalks(save, talks),
         explored: loadExplored(save),
         onExplore: (explored) => saveExplored(save, explored),
+        war: loadWorld(save),
+        onWar: (war) => saveWorld(save, war.snapshot()),
         onWorldMap: openWorldMap,
     });
 
@@ -266,11 +268,12 @@ async function play(save) {
 }
 
 function pause() {
-    if (!state.game?.running) {
+    if (!state.game?.running || $("#menu").open) {
         return;
     }
 
-    state.game.stop();
+    // (The world stops only with no one else in it: else it goes on under the menu)
+    state.game.pause();
     menuPage("main");
     $("#menu").showModal();
 }
@@ -299,7 +302,7 @@ async function openWorldMap() {
         return;
     }
 
-    game.stop();
+    game.pause();
     $("#worldmap").showModal();
 
     // (Made the first time, for the world being played)

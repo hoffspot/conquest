@@ -2,15 +2,19 @@
 // (and the seed of the world it lives in), what the folk in it remember of them and what they've
 // learnt talking (core/dialogue.js), what they've found of the world (core/explored.js: the
 // buildings gone into, the chunks set foot in), and settings (the game options, debug mode,
-// drawing quality).
+// drawing quality). Kept apart from the character: the world's own state, the war between its
+// peoples (core/war/war.js), as it's got to (docs/WAR.md: a world's save is its host's).
 //
 // Storage can be missing or refuse to work (private browsing, blocked site data), so every read
 // and write is guarded: without it the game still plays, it just doesn't remember.
+
+import { decode, encode } from "../core/wire.js";
 
 const SAVE_KEY = "pellagos.save";
 const SETTINGS_KEY = "pellagos.settings";
 const TALKS_KEY = "pellagos.talks";
 const EXPLORED_KEY = "pellagos.explored";
+const WORLD_KEY = "pellagos.world";
 
 /** The save format's version: a save from another version is set aside, not misread. */
 export const SAVE_VERSION = 1;
@@ -102,6 +106,36 @@ export function loadExplored(save) {
 /** Keep what's been found in a saved game (not in one that isn't saved: ?play). */
 export function saveExplored(save, explored) {
     return save?.created ? write(EXPLORED_KEY, { created: save.created, seed: save.seed, ...explored.toJSON() }) : false;
+}
+
+/**
+ * The war in a saved game's world ({ seed, created }), as it was kept (core/war/war.js snapshot),
+ * or null (none yet, or another game's).
+ */
+export function loadWorld(save) {
+    try {
+        const text = globalThis.localStorage?.getItem(WORLD_KEY);
+        const world = text ? decode(text) : null;
+
+        return world && save?.created && world.created === save.created && world.seed === save.seed ? world.war : null;
+    } catch {
+        return null;
+    }
+}
+
+/** Keep the war in a saved game's world (not in one that isn't saved: ?play). */
+export function saveWorld(save, war) {
+    if (!save?.created) {
+        return false;
+    }
+
+    try {
+        globalThis.localStorage?.setItem(WORLD_KEY, encode({ created: save.created, seed: save.seed, war }));
+
+        return true;
+    } catch {
+        return false;
+    }
 }
 
 /** Forget the saved game. */

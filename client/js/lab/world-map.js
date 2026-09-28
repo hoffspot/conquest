@@ -6,15 +6,11 @@
 //
 // ?seed=N&race=id choose the world and the start; window.worldMap is there for tests.
 
-import { BIOMES, campTier, CELL, CELLS, FACTIONS, guildFor, guilds, landAt, planWorld, RACES, ROAD, SETTLEMENTS, startFor, WATER, WORLD_SIZE } from "../core/worldplan/plan.js";
+import { BIOMES, campTier, CELL, CELLS, FACTIONS, guildFor, guilds, landAt, planWorld, RACES, ROAD, SETTLEMENTS, startFor, WORLD_SIZE } from "../core/worldplan/plan.js";
+import { hex, paintLand, PEOPLE_COLOURS, picture, PIXELS, RIVER } from "./land.js";
 
 const $ = (selector) => document.querySelector(selector);
 
-// How many pixels of the land's picture a cell is
-const PIXELS = 4;
-
-const PEOPLE_COLOURS = { human: "#f0c96a", elf: "#7fe6a2", darkElf: "#b98fff", cat: "#ffb35c", lizard: "#4fd8c8", orc: "#ff6b5c" };
-const RIVER = [70, 130, 185];
 const ROAD_COLOURS = { trade: "#f4e2b8", road: "#e1caa0", track: "#c9ae84" };
 const SITE_MARKS = {
     ruins: "▦",
@@ -58,49 +54,6 @@ const context = canvas.getContext("2d");
 let ready = null;
 
 // --- Pictures of the land (drawn once for each world) ---
-
-function picture(draw) {
-    const result = document.createElement("canvas");
-
-    result.width = result.height = CELLS * PIXELS;
-    draw(result.getContext("2d"), result);
-
-    return result;
-}
-
-const hex = (colour) => [1, 3, 5].map((k) => parseInt(colour.slice(k, k + 2), 16));
-
-// The land: each cell its biome's colour, shaded as if lit from the north-west, rivers in blue
-function paintLand(plan) {
-    return picture((paint) => {
-        const image = paint.createImageData(CELLS * PIXELS, CELLS * PIXELS);
-        const colours = BIOMES.map(({ colour }) => hex(colour));
-        const at = (x, y) => plan.height[Math.min(CELLS - 1, Math.max(0, y)) * CELLS + Math.min(CELLS - 1, Math.max(0, x))];
-
-        for (let y = 0; y < CELLS; y++) {
-            for (let x = 0; x < CELLS; x++) {
-                const k = y * CELLS + x;
-                const water = plan.water[k];
-                const shade = water === WATER.sea || water === WATER.lake ? 1 : Math.min(1.35, Math.max(0.65, 1 + (at(x - 1, y) - at(x + 1, y) + at(x, y - 1) - at(x, y + 1)) * 3));
-                const colour = water === WATER.river ? RIVER : colours[plan.biome[k]];
-
-                for (let dy = 0; dy < PIXELS; dy++) {
-                    for (let dx = 0; dx < PIXELS; dx++) {
-                        const p = ((y * PIXELS + dy) * CELLS * PIXELS + x * PIXELS + dx) * 4;
-                        const grain = water ? 1 : 0.96 + (((x * 7 + dx) * 13 + (y * 11 + dy) * 17) % 9) / 100;
-
-                        image.data[p] = colour[0] * shade * grain;
-                        image.data[p + 1] = colour[1] * shade * grain;
-                        image.data[p + 2] = colour[2] * shade * grain;
-                        image.data[p + 3] = 255;
-                    }
-                }
-            }
-        }
-
-        paint.putImageData(image, 0, 0);
-    });
-}
 
 // Each people's lands, lightly tinted their colour, edged where they end
 function paintTerritories(plan) {

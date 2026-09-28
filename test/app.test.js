@@ -7,7 +7,7 @@ import { ICONS } from "../client/js/app/icons.js";
 import { buildingsOf, interiorColours, mapColours, treesOf } from "../client/js/app/minimap.js";
 import { ACTIONS, DIRECTIONS, directionOf, sectorPath, WHEELS } from "../client/js/app/wheel.js";
 import { SPELLS } from "../client/js/core/spells.js";
-import { isHero, loadExplored, loadSave, loadSettings, loadTalks, newSeed, SAVE_VERSION, saveExplored, saveSettings, saveTalks, SETTINGS_DEFAULTS, writeSave, clearSave } from "../client/js/app/save.js";
+import { isHero, loadExplored, loadSave, loadSettings, loadTalks, loadWorld, newSeed, SAVE_VERSION, saveExplored, saveSettings, saveTalks, saveWorld, SETTINGS_DEFAULTS, writeSave, clearSave } from "../client/js/app/save.js";
 import { Explored } from "../client/js/core/explored.js";
 import { BEARDS, HAIRSTYLES } from "../client/js/characters/hair.js";
 import { MACRO_DEFAULTS } from "../client/js/characters/macro.js";
@@ -143,6 +143,23 @@ describe("saving (save.js)", () => {
         assert.equal(new Explored(loadExplored({ ...save, created: "2026-09-27T10:00:00.000Z" })).chunksVisited, 0);
         assert.equal(new Explored(loadExplored({ ...save, seed: 13 })).entered.size, 0);
         assert.equal(saveExplored({ seed: 1 }, explored), false);
+    });
+
+    it("keeps the war in a saved game's world apart from its character, as it was (never yet and all); not for another", () => {
+        useStorage();
+
+        const save = { seed: 12, created: "2026-09-26T10:00:00.000Z" };
+        const war = { version: 1, seed: 12, turn: 40, towns: [{ id: "human-town-1", raidedAt: -Infinity }] };
+
+        assert.equal(loadWorld(save), null);
+        assert.equal(saveWorld(save, war), true);
+        assert.deepEqual(loadWorld(save), war);
+        assert.equal(loadWorld(save).towns[0].raidedAt, -Infinity);
+
+        // Another character (or world) starts afresh; a game not saved (?play) keeps nothing
+        assert.equal(loadWorld({ ...save, created: "2026-09-27T10:00:00.000Z" }), null);
+        assert.equal(loadWorld({ ...save, seed: 13 }), null);
+        assert.equal(saveWorld({ seed: 1 }, war), false);
     });
 
     it("still plays when the browser won't store anything", () => {
