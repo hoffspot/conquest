@@ -2,10 +2,14 @@
 // piece whose `people` isn't human is built by its people's kit if it has a builder for that
 // kind of piece (house, landmark, structure, wall, gate...), and by the human kits otherwise.
 
-import * as cat from "./cat.js";
+import * as catHouses from "./cat.js";
+import * as catLandmarks from "./cat-landmarks.js";
+import * as catPlaces from "./cat-places.js";
 
-/** The kits, by people. */
-export const PEOPLE_KITS = Object.freeze({ cat });
+/** The kits, by people: each a builder for each kind of piece they build, and what the building lab shows. */
+export const PEOPLE_KITS = Object.freeze({
+    cat: { house: catHouses.house, landmark: catLandmarks.landmark, structure: catPlaces.structure, wall: catPlaces.wall, gatehouse: catPlaces.gatehouse, tower: catPlaces.bastion, GALLERY: { ...catHouses.GALLERY, structures: catPlaces.STRUCTURE_SIZES } },
+});
 
 /** What builds a piece for its people (a function of the piece), or null for the human kits'. */
 export function builderFor(piece) {

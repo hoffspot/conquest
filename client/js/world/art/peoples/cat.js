@@ -112,7 +112,8 @@ function toron(solid, face, lean, ends, rows, every, random, { clear = [], margi
             const long = reach * random.range(0.8, 1.2);
             const [from, to] = [at(u, v, -m(0.05)), at(u, v - long * random.range(0.02, 0.1), long)];
 
-            solid.beam(from, to, m(0.08), m(0.08), material(name));
+            // (Three-sided, and only its outer end capped: there are hundreds of them)
+            solid.tube([from, to], m(0.05), material(name), { sides: 3, caps: true });
         }
     }
 }
@@ -388,18 +389,18 @@ function block(solid, x0, z0, x1, z1, { wall, name, random, wealth, paint }) {
  * small grilled windows upstairs and slits below, spouts off its flat roof, and on a better house
  * a stair-house on the roof and ears on every pinnacle.
  */
-function townHouse(solid, x0, z0, x1, z1, { storeys = [m(3), m(2.8)], name, random, wealth, paint, trim = "mud-pale" }) {
+function townHouse(solid, x0, z0, x1, z1, { storeys = [m(3), m(2.8)], name, random, wealth, paint, trim = "mud-pale", doorway = { width: m(1.2), height: m(2.3) }, recess = m(0.35), plinth = m(0.25), parapet = m(0.85), roofHouse = wealth > 0.45 }) {
     const outline = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
     const lean = 0.045;
-    const plinth = m(0.25);
     const height = storeys.reduce((a, b) => a + b, 0);
     const [width] = [x1 - x0];
-    // (The front is the side from (x1, z1) to (x0, z1): along it runs east to west)
-    const bays = Math.max(3, Math.round(width / m(2.6)));
+    // (The front is the side from (x1, z1) to (x0, z1): along it runs east to west; an odd
+    // number of bays, the door in the middle one)
+    const bays = Math.max(3, Math.round(width / m(2.6))) | 1;
     const bay = width / bays;
     const doorBay = Math.floor(bays / 2);
     const openings = { 0: [], 1: [], 2: [], 3: [] };
-    const door = { u0: (doorBay + 0.5) * bay - m(0.6), u1: (doorBay + 0.5) * bay + m(0.6), v0: 0, v1: m(2.3), depth: m(0.35), back: material("planks-dark"), arch: wealth > 0.5 ? "round" : null };
+    const door = { u0: width / 2 - doorway.width / 2, u1: width / 2 + doorway.width / 2, v0: 0, v1: doorway.height, depth: recess, back: material("planks-dark"), arch: wealth > 0.5 ? "round" : null };
 
     openings[2].push(door);
 
@@ -483,7 +484,6 @@ function townHouse(solid, x0, z0, x1, z1, { storeys = [m(3), m(2.8)], name, rand
     studded(solid, front, [door.u0, door.u1, door.v1], door.depth);
 
     // Buttresses between the bays of the front, rising past the parapet into pinnacles
-    const parapet = m(0.85);
     const rise = parapet + m(random.range(0.6, 1.1));
 
     for (let b = 0; b <= bays; b++) {
@@ -525,7 +525,7 @@ function townHouse(solid, x0, z0, x1, z1, { storeys = [m(3), m(2.8)], name, rand
     }
 
     // A stair-house on the roof, at the back corner
-    if (wealth > 0.45) {
+    if (roofHouse) {
         const [sx0, sz0] = [top[0][0] + m(0.3), top[0][1] + m(0.3)];
         const room = [[sx0, sz0], [sx0 + m(2.2), sz0], [sx0 + m(2.2), sz0 + m(2)], [sx0, sz0 + m(2)]];
         solid.walls(room, eaves - m(0.05), m(2.1), { 2: [{ u0: m(0.6), u1: m(1.4), v0: 0, v1: m(1.8), depth: m(0.25), back: material("shadow"), arch: "round" }] }, material(name));
@@ -534,7 +534,7 @@ function townHouse(solid, x0, z0, x1, z1, { storeys = [m(3), m(2.8)], name, rand
         ears(solid, [sx0 + m(1.1), eaves + m(2.2), sz0 + m(1.9)], [1, 0], m(0.25), m(0.4), name);
     }
 
-    return eaves + parapet;
+    return { top: eaves + parapet, eaves, faces, front, door, lean, bayTop, roof: top };
 }
 
 /** A beehive hut of grass over a frame: a poor house, or a herder's out in the fields. */
@@ -575,11 +575,13 @@ export function granary(solid, cx, cz, { r = m(0.85), height = m(2.1), random, t
     finial(solid, cx, peak - m(0.06), cz, top, random);
 }
 
-// A mat awning on forked poles: the poles at the corners of x0..x1 by z0..z1, the mat `height`
-// up, sagging a little
-function awning(solid, x0, z0, x1, z1, height, random, { cloth = "matting" } = {}) {
+// A mat awning on forked poles: the poles at the corners of x0..x1 by z0..z1 standing on `y`,
+// the mat `rise` up, sagging a little
+function awning(solid, x0, z0, x1, z1, rise, random, { cloth = "matting", y = 0 } = {}) {
+    const height = y + rise;
+
     for (const [x, z] of [[x0, z0], [x1, z0], [x1, z1], [x0, z1]]) {
-        post(solid, x, 0, z, height, m(0.07), "timber-light", { lean: [random.range(-1, 1) * m(0.05), random.range(-1, 1) * m(0.05)], sides: 5 });
+        post(solid, x, y, z, rise, m(0.07), "timber-light", { lean: [random.range(-1, 1) * m(0.05), random.range(-1, 1) * m(0.05)], sides: 5 });
     }
 
     const sag = m(0.12);
@@ -610,8 +612,8 @@ function hearth(solid, x, z, random) {
     solid.lathe(x, z, [[m(0.5), 0], [m(0.45), m(0.03)], [0, m(0.03)]], material("shadow"), { segments: 8 });
 }
 
-function jar(solid, x, z, size, name = "clay") {
-    solid.lathe(x, z, [[size * 0.35, 0], [size * 0.55, size * 0.35], [size * 0.5, size * 0.75], [size * 0.28, size * 0.95], [size * 0.3, size * 1.05], [0, size * 1.05]], material(name), { segments: 8 });
+function jar(solid, x, z, size, name = "clay", y = 0) {
+    solid.lathe(x, z, [[size * 0.35, y], [size * 0.55, y + size * 0.35], [size * 0.5, y + size * 0.75], [size * 0.28, y + size * 0.95], [size * 0.3, y + size * 1.05], [0, y + size * 1.05]], material(name), { segments: 8 });
 }
 
 function jars(solid, x, z, random, count = 3) {
@@ -649,6 +651,11 @@ function compound(solid, W, D, random, { wealth, name }) {
     }
 
     band(solid, wall, 0, m(1.9), m(0.35), name, { closed: false, rounded: true, lean: 0.03 });
+
+    // (The court's floor of beaten earth)
+    const floor = inset(ring, m(0.3));
+
+    solid.facing([[cx, m(0.03), cz], ...floor.map(([x, z]) => [x, m(0.03), z]), [floor[0][0], m(0.03), floor[0][1]]], [0, 1, 0], material("mud-pale"));
 
     // The zaure, straddling the wall's gap
     const [zx0, zx1, zz0, zz1] = [cx - zaure, cx + zaure, cz + rz - m(2.2), cz + rz + m(1.2)];

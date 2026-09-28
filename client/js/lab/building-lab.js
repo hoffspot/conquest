@@ -88,25 +88,50 @@ function peopleStreetOf(seed, people) {
     return { width: Math.ceil(width + 4), height: Math.ceil(y + 4), pieces };
 }
 
+// A people's own places: each of their special structures and their castle, and a stretch of
+// their town wall with a gate and a tower in it
+function structuresOf(seed, people) {
+    const sizes = PEOPLE_KITS[people]?.GALLERY?.structures ?? {};
+    const pieces = [];
+    let x = 4;
+
+    for (const [k, [name, [w, h]]] of Object.entries(sizes).entries()) {
+        pieces.push({ kind: "structure", people, name, key: `structure-${people}-${name}`, w, h, x: x + (w * 4) / 2, y: 6 + (h * 4) / 2, facing: 0, seed: seed * 100 + k });
+        x += w * 4 + 6;
+    }
+
+    const wallY = 6 + Math.max(0, ...Object.values(sizes).map(([, h]) => h)) * 4 + 10;
+    const walls = [["wall", 4, 1], ["tower", 2, 2], ["wall", 3, 1], ["gatehouse", 3, 2], ["wall", 4, 1]];
+    let wx = 4;
+
+    for (const [k, [kind, w, h]] of walls.entries()) {
+        pieces.push({ kind, people, key: `${kind}-${people}-${k}`, w, h, x: wx + (w * 4) / 2, y: wallY + (h * 4) / 2 - (h > 1 ? 2 : 0), facing: 0, seed: seed * 10 + k });
+        wx += w * 4;
+    }
+
+    return { width: Math.ceil(Math.max(x, wx) + 4), height: Math.ceil(wallY + 14), pieces };
+}
+
 // A row of every special building: taverns of every sort (their names and signs from the seed),
 // the guild, churches to the Six, the smithy, the market hall, the windmill, a town hall and a keep
-function landmarksOf(seed) {
+function landmarksOf(seed, people = "human") {
     const random = createRandom(seed);
     const pieces = [];
+    const own = people !== "human";
     const row = [
-        ...[2, 2, 1, 2].map((storeys) => ({ name: "tavern", tavern: nameTavern(random, { storeys }) })),
+        ...(own ? [2, 1] : [2, 2, 1, 2]).map((storeys) => ({ name: "tavern", tavern: nameTavern(random, { storeys }) })),
         { name: "guild" },
-        ...GOD_IDS.slice(0, 2).map((patron) => ({ name: "church", patron: GOD_IDS[(seed + GOD_IDS.indexOf(patron)) % GOD_IDS.length] })),
+        ...GOD_IDS.slice(0, own ? 1 : 2).map((patron) => ({ name: "church", patron: GOD_IDS[(seed + GOD_IDS.indexOf(patron)) % GOD_IDS.length] })),
         { name: "blacksmith" },
         { name: "market" },
-        { name: "windmill" },
-        { name: "hall", style: ["timber", "stone", "brick"][seed % 3], storeys: 2 },
-        { name: "keep" },
-    ];
+        ...(own ? [] : [{ name: "windmill" }]),
+        { name: "hall", style: ["timber", "stone", "brick"][seed % 3], storeys: 2, ...(own ? { size: [3, 3.25] } : {}) },
+        { name: "keep", ...(own ? { size: [3.5, 4] } : {}) },
+    ].map((piece) => (own ? { ...piece, people } : piece));
     let x = 4;
 
     for (const [k, own] of row.entries()) {
-        const [w, h] = LANDMARKS[own.name];
+        const [w, h] = own.size ?? LANDMARKS[own.name];
 
         pieces.push({ kind: "landmark", key: `landmark-${own.name}`, ...own, w, h, x: x + (w * 4) / 2, y: 10 + (h * 4) / 2, facing: 0, seed: seed * 100 + k });
         x += w * 4 + 3;
@@ -188,7 +213,7 @@ async function build() {
 
     // A settlement out in the world, as the game draws it: the nearest of its kind to where a
     // player starts, in the chunks round it
-    if (!["street", "landmarks", "town"].includes(state.show)) {
+    if (!["street", "landmarks", "structures", "town"].includes(state.show)) {
         const world = buildWorld({ seed: state.seed });
         const place = world.plan.places.filter(({ kind }) => kind === state.show).sort((a, b) => Math.hypot(a.at[0] - world.start.at[0], a.at[1] - world.start.at[1]) - Math.hypot(b.at[0] - world.start.at[0], b.at[1] - world.start.at[1]))[0];
         const chunks = new Chunks(world);
@@ -214,7 +239,7 @@ async function build() {
 
     if (state.show !== "town") {
         const own = state.people !== "human";
-        const street = state.show === "street" ? (own ? peopleStreetOf(state.seed, state.people) : streetOf(state.seed)) : landmarksOf(state.seed);
+        const street = state.show === "street" ? (own ? peopleStreetOf(state.seed, state.people) : streetOf(state.seed)) : state.show === "structures" ? structuresOf(state.seed, state.people) : landmarksOf(state.seed, state.people);
 
         Object.assign(world, { town: { ...world.town, pieces: street.pieces }, trees: [], width: street.width, height: street.height, stamp: null, origin: 0 });
     }
