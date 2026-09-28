@@ -44,6 +44,7 @@ import { Variety } from "../core/variety.js";
 import { distanceBetween, longestReach, WEAPONS } from "../core/weapons.js";
 import { Avatar } from "../world/avatar.js";
 import { Banners } from "../world/banners3d.js";
+import { Camps } from "../world/camps3d.js";
 import { Effects, LOOKS } from "../world/effects.js";
 import { Squares } from "../world/squares.js";
 import { KINDS, Wounds } from "../world/wounds.js";
@@ -156,7 +157,7 @@ const EMBERS = 5;
 const VISITS = Object.freeze({ every: 0.5, budget: 6 });
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "gone", "rank", "loot", "bought", "sold", "used", "gear", "ability", "request", "standing", "gift", "counsel"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "camp", "strike", "sortie", "sortied", "gone", "rank", "loot", "bought", "sold", "used", "gear", "ability", "request", "standing", "gift", "counsel"]);
 
 const _focus = new THREE.Vector3();
 const _lean = new THREE.Vector3();
@@ -422,6 +423,7 @@ export class Game {
 
         this.doors = new Doors(world, view.scene);
         this.banners = new Banners(view.scene);
+        this.camps = new Camps(view.scene);
         step(`Dressing ${this.hero.name}`);
 
         // Everyone in the world as the host has them: the player (and anyone else playing), the
@@ -718,6 +720,7 @@ export class Game {
         this.interiors.clear();
         this.doors?.dispose();
         this.banners?.dispose();
+        this.camps?.dispose();
 
         for (const object of [this.ground, this.town?.object, this.chunks?.object, this.effects?.group, this.effects?.marker, this.effects?.targetRing, this.squares?.object]) {
             object?.removeFromParent();
@@ -1927,6 +1930,55 @@ export class Game {
         this.banners?.raise(town, people, banners.map(({ at: [x, y], facing }) => ({ x: ox + x, z: oz + y, facing })));
     }
 
+    // A camp near the player pitched: its tents and fire, its banner by the fire, and its sentries
+    // to be drawn
+    #pitch({ camp, people, ids, fire, tents }) {
+        const [ox, oz] = this.originOf("town");
+        const [fx, fy] = fire;
+
+        this.camps?.pitch(camp, people, { fire: [ox + fx, oz + fy], tents: tents.map(({ at: [x, y], facing }) => ({ at: [ox + x, oz + y], facing })) });
+        this.banners?.raise(`camp:${camp}`, people, [{ x: ox + fx + 2.2, z: oz + fy + 2.2, facing: 0 }]);
+        this.enlisting.push(...ids);
+    }
+
+    // A camp struck (its tents down, its sentries gone), or a sortie's raiders or attackers back
+    // to their camp: said how it went, if the player was there
+    #strike(event) {
+        const ids = event.type === "strike" ? event.ids : event.back;
+
+        if (event.type === "strike") {
+            this.camps?.strike(event.camp);
+            this.banners?.lower(`camp:${event.camp}`);
+        } else if (event.result) {
+            const them = `the ${peopleOf(event.people)}`;
+            const said = {
+                raided: `${them[0].toUpperCase()}${them.slice(1)} have burnt ${event.name}'s fields, and gone back to their camp.`,
+                repulsed: event.kind === "raid" ? `The raid on ${event.name} is driven off.` : `The assault on ${event.name} is thrown back.`,
+                taken: `${event.name} has fallen to ${them}!`,
+                broken: `The camp outside ${event.name} is broken.`,
+            }[event.result];
+
+            if (said) {
+                this.hud.message(said, 4);
+            }
+        }
+
+        this.enlisting = this.enlisting.filter((id) => !ids.includes(id));
+
+        for (const id of ids) {
+            this.#undress(id);
+        }
+    }
+
+    // A camp's sortie out against the town the player's at: its raiders or attackers to be drawn,
+    // and the player told
+    #sortie({ kind, people, name, ids }) {
+        const them = `the ${peopleOf(people)}`;
+
+        this.enlisting.push(...ids);
+        this.hud.message(kind === "raid" ? `Raiders of ${them} are coming for ${name}'s fields!` : `${them[0].toUpperCase()}${them.slice(1)} are storming ${name}!`, 4);
+    }
+
     // Start building a building the host's got ready: each floor and each of its folk, one to a
     // piece of work, and the doors told of its insides
     #prepare(building) {
@@ -2073,6 +2125,7 @@ export class Game {
         }
 
         this.doors?.update(dt, this.clock, { map: this.mapId, heading: player?.order?.type === "enter" ? player.order.link : null });
+        this.camps?.update(this.clock);
     }
 
     // --- What happened in the battle ---
@@ -2290,6 +2343,16 @@ export class Game {
                 break;
             case "muster":
                 this.#muster(event);
+                break;
+            case "camp":
+                this.#pitch(event);
+                break;
+            case "strike":
+            case "sortied":
+                this.#strike(event);
+                break;
+            case "sortie":
+                this.#sortie(event);
                 break;
             case "dismiss":
                 this.banners?.lower(event.town);

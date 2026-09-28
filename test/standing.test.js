@@ -142,7 +142,7 @@ describe("standing (standing.js)", () => {
         // The keep asks the weightier things, for more
         const keep = offers(fresh, { town: town.id, rank: OPENS.defend, post: "keep" }).filter(Boolean);
 
-        assert.ok(keep.every(({ kind }) => ["scout", "defend", "bounty"].includes(kind)));
+        assert.ok(keep.every(({ kind }) => ["scout", "defend", "rout", "bounty"].includes(kind)));
 
         const [hall] = offers(fresh, { town: town.id, rank: OPENS.defend, seed: 5, count: 1 });
         const [kept] = offers(fresh, { town: town.id, rank: OPENS.defend, seed: 5, count: 1, post: "keep" });

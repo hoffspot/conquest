@@ -248,7 +248,7 @@ void main() {
 }`;
 
 /** A flame: crossed upright quads (width, height metres) with an animated flame on them. */
-function flame(width, height, seed) {
+export function flame(width, height, seed) {
     const shader = new THREE.ShaderMaterial({
         vertexShader: FLAME_VERTEX,
         fragmentShader: FLAME_FRAGMENT,

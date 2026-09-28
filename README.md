@@ -397,7 +397,8 @@ client/                 The game (static files served to the browser)
     war/                The war between the peoples (see docs/WAR.md): war.js the realms, towns,
                         forces, turns and conquest; peoples.js their temperaments and rulers;
                         roads.js the ways their forces go; news.js the war told in words;
-                        muster.js where a town's guards stand and its patrols go
+                        muster.js where a town's guards stand and its patrols go, how a camp is
+                        laid out, and where its raids come from
     battle.js           Moving, fighting, damage, dying and coming back; the orc's patrol
     weapons.js          The weapons and their attacks
     progress.js         Growing stronger: skills and their trees, abilities, gear and its make,
@@ -439,6 +440,7 @@ client/                 The game (static files served to the browser)
                         fallen trees, grass, flowers and the rest; and signs.js and emblems.js,
                         the taverns' and temples' signs)
     banners3d.js        The peoples' banners by their towns' roads out, in their colours
+    camps3d.js          The war's camps near the player: tents round a fire
     avatar.js           A character in the world, following its place in the battle
     effects.js          Arrows, bolts, fireballs, sparks, dust, fire, arcane light, blood and
                         its splashes and pools, smoke and embers, the target ring, spells' light

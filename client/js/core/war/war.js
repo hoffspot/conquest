@@ -63,6 +63,12 @@ export const SIEGE = 3;
 export const RAIDING = 0.4;
 
 /**
+ * How many turns a camp's sortie against a town a player's near (a raid or an assault, played out
+ * in the world: M6) may go on before the rest of it is reckoned here.
+ */
+export const SORTIE_TURNS = 3;
+
+/**
  * How near (metres): two peoples' towns or forces for them to meet; an expedition to its target
  * to camp; a relief force to the camp it's after, to fall on it; an enemy force to an envoy, to
  * waylay it; an enemy camp to a town, to threaten it.
@@ -161,6 +167,12 @@ export class War {
         /** What's happened (the last KEEP_LOG events), and what's happened since advance last returned. */
         this.log = [];
         this.events = [];
+
+        /**
+         * The towns a player's near (their ids: watch()). What a camp does against one of them is
+         * played out in the world (a sortie: settle()), not reckoned here.
+         */
+        this.watched = new Set();
 
         this.#discover({ quietly: true });
     }
@@ -334,6 +346,74 @@ export class War {
         }
     }
 
+    /** The towns a player's near (ids): a camp's raids and assaults on them are played out in the world. */
+    watch(ids) {
+        this.watched = new Set(ids);
+    }
+
+    /**
+     * A camp's sortie (a raid or an assault on its town, played out in the world near a player)
+     * over: its losses and the town's are in already (loss). A raid that `reached` the town's
+     * fields stops its taxes; an assault that left no one in the town takes it. With `reckon`, what's
+     * left of it is fought out here instead (the players gone). Returns how it ended: "raided",
+     * "repulsed", "taken", "broken", or null if the camp had none out.
+     */
+    settle(id, { reached = false, reckon = false } = {}) {
+        const camp = this.force(id);
+        const sortie = camp?.sortie;
+
+        if (!sortie) {
+            return null;
+        }
+
+        camp.sortie = null;
+
+        const town = this.town(camp.target);
+
+        if (!town) {
+            return null;
+        }
+
+        const killed = Math.max(0, sortie.garrison - town.garrison);
+        const lost = Math.max(0, sortie.size - camp.size);
+
+        if (reckon) {
+            return sortie.kind === "assault" ? this.#assault(camp, town, { killed, lost }) : this.#raid(camp, town, { killed, lost });
+        }
+
+        let result = "repulsed";
+
+        if (sortie.kind === "raid") {
+            if (reached) {
+                town.raidedAt = this.turn;
+                this.remember(town.owner, camp.realm, -3);
+                result = "raided";
+            }
+
+            this.#emit("raid", { realm: camp.realm, town: town.id, owner: town.owner, killed, lost, reached, played: true });
+        } else {
+            const won = town.garrison <= 0 && camp.size > 0;
+
+            this.remember(town.owner, camp.realm, -5);
+            this.#emit("assault", { realm: camp.realm, town: town.id, owner: town.owner, won, killed, lost, played: true });
+
+            if (won) {
+                this.#take(town, camp);
+
+                return "taken";
+            }
+        }
+
+        if (camp.size < 3) {
+            this.forces.splice(this.forces.indexOf(camp), 1);
+            this.#emit("broken", { realm: camp.realm, target: town.id });
+
+            return "broken";
+        }
+
+        return result;
+    }
+
     /** Gold given to a realm's treasury (a player's tithe). Returns whether it was taken. */
     give(id, amount) {
         const realm = this.realm(id);
@@ -409,6 +489,7 @@ export class War {
             known: this.known,
             victor: this.victor,
             log: this.log,
+            watched: [...this.watched],
         });
     }
 
@@ -428,6 +509,7 @@ export class War {
         }
 
         war.events = [];
+        war.watched = new Set(kept.watched ?? []);
 
         return war;
     }
@@ -1051,6 +1133,16 @@ export class War {
                 continue;
             }
 
+            // (Out against a town a player's near: played out there, until it's settled, or it's
+            // gone on too long, and the rest of it is reckoned here)
+            if (camp.sortie) {
+                if (this.turn - camp.sortie.turn >= SORTIE_TURNS) {
+                    this.settle(camp.id, { reckon: true });
+                }
+
+                continue;
+            }
+
             if (camp.size < 3) {
                 this.forces.splice(this.forces.indexOf(camp), 1);
                 this.#emit("broken", { realm: camp.realm, target: town.id });
@@ -1059,6 +1151,7 @@ export class War {
 
             const { traits } = this.realm(this.liege(camp.realm)).leader;
             const walls = HOLDINGS[town.kind].walls;
+            const watched = this.watched.has(town.id);
 
             // A sally
             if (town.garrison > camp.size * 1.6 + 4) {
@@ -1077,19 +1170,10 @@ export class War {
             }
 
             if (stage.take.includes(town.kind) && this.turn - camp.since >= SIEGE && camp.size >= town.garrison * walls * (1.25 - traits.aggression * 0.35)) {
-                const before = { camp: camp.size, town: town.garrison };
-                const { attackers, defenders } = this.#fight(camp.size, town.garrison, walls);
-
-                camp.size = attackers;
-                town.garrison = defenders;
-                this.#emit("assault", { realm: camp.realm, town: town.id, owner: town.owner, won: defenders === 0, killed: before.town - defenders, lost: before.camp - attackers });
-                this.remember(town.owner, camp.realm, -5);
-
-                if (!defenders) {
-                    this.#take(town, camp);
-                } else if (camp.size < 3) {
-                    this.forces.splice(this.forces.indexOf(camp), 1);
-                    this.#emit("broken", { realm: camp.realm, target: town.id });
+                if (watched) {
+                    this.#sortie(camp, town, "assault", camp.size);
+                } else {
+                    this.#assault(camp, town);
                 }
 
                 continue;
@@ -1098,16 +1182,65 @@ export class War {
             // A raid: a few of the camp out against the town's fields and roads
             if (this.random.chance(RAIDING)) {
                 const party = Math.max(1, Math.ceil(camp.size * 0.3));
-                const killed = Math.min(town.garrison, Math.round(party * 0.3 * this.random.range(0.5, 1.5)));
-                const lost = Math.min(party, Math.round(town.garrison * 0.08 * this.random.range(0.5, 1.5)));
 
-                town.garrison -= killed;
-                camp.size -= lost;
-                town.raidedAt = this.turn;
-                this.remember(town.owner, camp.realm, -3);
-                this.#emit("raid", { realm: camp.realm, town: town.id, owner: town.owner, killed, lost });
+                if (watched) {
+                    this.#sortie(camp, town, "raid", party);
+                } else {
+                    this.#raid(camp, town, { party });
+                }
             }
         }
+    }
+
+    // A camp's sortie against a town a player's near: out, to be played out in the world (the
+    // host's), and settled (settle)
+    #sortie(camp, town, kind, party) {
+        camp.sortie = { kind, turn: this.turn, party, size: camp.size, garrison: town.garrison };
+        this.#emit("sortie", { kind, realm: camp.realm, force: camp.id, town: town.id, owner: town.owner, party });
+    }
+
+    // A camp storms its town, reckoned here, round by round (with what's been killed and lost
+    // already, in a sortie played out before it: `before`)
+    #assault(camp, town, before = { killed: 0, lost: 0 }) {
+        const walls = HOLDINGS[town.kind].walls;
+        const start = { camp: camp.size, town: town.garrison };
+        const { attackers, defenders } = this.#fight(camp.size, town.garrison, walls);
+
+        camp.size = attackers;
+        town.garrison = defenders;
+        this.#emit("assault", { realm: camp.realm, town: town.id, owner: town.owner, won: defenders === 0, killed: before.killed + start.town - defenders, lost: before.lost + start.camp - attackers });
+        this.remember(town.owner, camp.realm, -5);
+
+        if (!defenders && camp.size > 0) {
+            this.#take(town, camp);
+
+            return "taken";
+        }
+
+        if (camp.size < 3) {
+            this.forces.splice(this.forces.indexOf(camp), 1);
+            this.#emit("broken", { realm: camp.realm, target: town.id });
+
+            return "broken";
+        }
+
+        return "repulsed";
+    }
+
+    // A camp's raid on its town's fields and roads, reckoned here: a few of its guard killed, a
+    // few of the raiders lost, and its taxes stopped (with what's been killed and lost already)
+    #raid(camp, town, { party = Math.max(1, Math.ceil(camp.size * 0.3)), killed: before = 0, lost: gone = 0 } = {}) {
+        const killed = Math.min(town.garrison, Math.round(party * 0.3 * this.random.range(0.5, 1.5)));
+        const lost = Math.min(party, camp.size, Math.round(town.garrison * 0.08 * this.random.range(0.5, 1.5)));
+
+        town.garrison -= killed;
+        camp.size -= lost;
+        town.raidedAt = this.turn;
+        this.remember(town.owner, camp.realm, -3);
+        this.#emit("raid", { realm: camp.realm, town: town.id, owner: town.owner, killed: before + killed, lost: gone + lost });
+
+        // (A camp too few to hold is broken at its next turn)
+        return "raided";
     }
 
     // Two sides fight it out, round by round, until one's gone or the attack breaks. The

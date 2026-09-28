@@ -25,7 +25,7 @@ export const STANDINGS = Object.freeze([
 ]);
 
 /** The rank that opens each thing. */
-export const OPENS = Object.freeze({ scout: 1, keep: 2, armoury: 2, defend: 2, march: 3, peace: 4, war: 4 });
+export const OPENS = Object.freeze({ scout: 1, keep: 2, armoury: 2, defend: 2, rout: 2, march: 3, peace: 4, war: 4 });
 
 /** How much a player's counsel weighs with their rulers, by rank (0 below a Knight). */
 export const COUNSEL = Object.freeze([0, 0, 0, 0.4, 0.7, 1]);
@@ -48,10 +48,11 @@ export const REQUESTS = Object.freeze({
     wild: { title: "Clear the roads", rank: 0, turns: 45, reward: { standing: 6, coppers: 6, each: { standing: 8, coppers: 4 } } },
     scout: { title: "Scouting", rank: OPENS.scout, turns: 40, reward: { standing: 25, coppers: 15 } },
     defend: { title: "Hold the town", rank: OPENS.defend, turns: null, reward: { standing: 50, coppers: 30 } },
+    rout: { title: "Break the camp", rank: OPENS.rout, turns: 40, reward: { standing: 60, coppers: 40 } },
 });
 
 /** How near (m) a player goes to see what they're scouting, and to be there to hold a town (from its middle). */
-export const REQUEST_REACH = Object.freeze({ scout: 220, defend: 180 });
+export const REQUEST_REACH = Object.freeze({ scout: 220, defend: 180, rout: 150 });
 
 /** What the keep's gift is worth more than a reeve's (its rewards, times this). */
 export const KEEP_REWARD = 1.5;
@@ -154,12 +155,19 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
         kinds.push("defend", "defend");
     }
 
+    // An enemy camp before one of their towns broken up (the reeve's own; any of them, from the keep)
+    const camps = rank >= OPENS.rout ? threatenedTowns(war, realm).filter(({ town: each, camp }) => (post === "keep" || each.id === town.id) && !has("rout", camp.id)) : [];
+
+    if (camps.length) {
+        kinds.push("rout");
+    }
+
     if (!kinds.length) {
         return null;
     }
 
     // (The keep asks the weightier things when it can)
-    const weighty = kinds.filter((kind) => ["scout", "defend", "bounty"].includes(kind));
+    const weighty = kinds.filter((kind) => ["scout", "defend", "rout", "bounty"].includes(kind));
     const kind = random.pick(post === "keep" && weighty.length ? weighty : kinds);
     const times = post === "keep" ? KEEP_REWARD : 1;
     const worth = (standing, coppers) => ({ standing: Math.round(standing * times), coppers: Math.round(coppers * times) });
@@ -226,6 +234,18 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
                 target: { town: held.id, name: held.name, at: [...held.at], camp: camp.id, realm: camp.realm },
                 text: `${war.realm(camp.realm).name} have camped within a march of ${held.name}. Get there, and help hold it until they're gone.`,
                 until: null,
+                reward: worth(reward.standing, reward.coppers),
+            };
+        }
+        case "rout": {
+            const { town: held, camp } = random.pick(camps);
+
+            return {
+                ...base,
+                key: camp.id,
+                target: { force: camp.id, realm: camp.realm, at: [...camp.at], town: held.id, name: held.name },
+                text: `${war.realm(camp.realm).name} have a camp outside ${held.name}. Take what help you can find, and break it up: bring its soldiers down until it's too few to hold.`,
+                until: war.turn + turns,
                 reward: worth(reward.standing, reward.coppers),
             };
         }
@@ -311,6 +331,8 @@ export function progressOf(request) {
             return "Go near enough to see them.";
         case "defend":
             return request.there ? "Hold on until they're gone." : `Get to ${target.name}.`;
+        case "rout":
+            return request.there ? "Bring its soldiers down." : `Find the camp outside ${target.name}.`;
         default:
             return "";
     }

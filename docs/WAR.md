@@ -196,7 +196,7 @@ The engine is built for this from the start. These are its rules:
 | **M3** | Built | Growing stronger: skills that grow by use along their trees, gear, gold, a pack, shops. |
 | **M4** | Built | The player's people: the keep and town halls, the rulers' requests, a journal, ranks. |
 | **M5** | Built | The other peoples' looks: elves, dark elves, cat folk, lizard folk and orcs, as soldiers and as townsfolk. |
-| **M6** | | Camps, raids and conquest played out around the player. |
+| **M6** | Built | Camps, raids and conquest played out around the player. |
 | **M7** | | Diplomats on the roads, to escort or waylay; grudges and favours. |
 | **M8** | | News and rumours: the war told in the taverns and by the folk; the guild's requests. |
 | **M9** | | Followers, mercenaries and adventurers for hire. |
@@ -302,7 +302,9 @@ stand, `allied`, `neutral` or `hostile`. Realms under the same liege are allied.
 
 **From the world** (from M2 and M6):
 - `war.loss(id, count)`: losses in fights played out near a player;
-- `war.remember(realm, about, amount)`: grudges and favours earned by players.
+- `war.remember(realm, about, amount)`: grudges and favours earned by players;
+- `war.watch(ids)`: the towns a player's near, whose raids and assaults are played out there;
+- `war.settle(camp, { reached, reckon })`: a sortie over (M6).
 
 **The news** (`news.js` `tell`): every event in words, "The Orcs have declared war on the
 Humans.", for the war page now and the taverns later.
@@ -505,6 +507,7 @@ that isn't its holders' seat has a governor on the throne. Only a player's own p
 | Clear the roads | always | so many of the wild are brought down | 6 and 6, and 8 and 4 for each |
 | Scouting | from a Freeholder | the player goes within 220 m of an enemy camp or army near (or their nearest town) | 25 and 15 |
 | Hold the town | from a Retainer, with an enemy camp within 1 km | the player was there (within 180 m of its edge) and the camp's gone, the town still theirs | 50 and 30 |
+| Break the camp | from a Retainer, with an enemy camp within 1 km (M6) | the player was at the camp (within 150 m) and it's gone; failed if it takes the town | 60 and 40 |
 
 Each has so long to be done (war turns: a minute's play each; a letter longer the further it
 goes), and fails when it runs out; one whose target's gone comes to nothing. What's done is told
@@ -533,6 +536,46 @@ for 20 turns or until it's acted on:
 - what's lately done, failed or given up.
 
 Where the requests take the player is marked on the world map with a gold star.
+
+### Camps, raids and conquest in play (M6)
+
+Near a player, the war's camps and what they do come to life.
+
+**Camps.** A camp (one of the war's forces) is **pitched** once a player's within 150 metres of it
+(`CAMP_NEAR`), and struck once every player's more than 300 off, or it's gone from the war
+(broken, gone home, or into the town it took). Pitched (`war/muster.js` `campOf`, the same every
+time for a camp):
+- **five tents** round its fire, their doors to it: ridge tents of undyed canvas with a little of
+  their people's colour (`world/camps3d.js`);
+- **a fire** in a ring of stones, logs crossed in it, flames flickering; **its banner** beside it;
+- **its sentries**, round the tents facing out (a third of the camp, up to six), each going after an
+  enemy within 18 metres of their post. Each stands for a share of the camp: one who falls takes
+  that share off it in the war (`war.loss`). A camp too few to hold (under 3) is broken.
+
+**Sorties.** While a town's soldiers are out (a player near it: `war.watch`), what a camp does
+against it isn't reckoned in the war but **played out** there: the war sends it out as a **sortie**
+(`war.js` `#sortie`, the host's `#setOut`) and waits for it to be settled (`war.settle`):
+
+| | Who comes | From, and making for | Over when | Then |
+| --- | --- | --- | --- | --- |
+| **A raid** | raiders (a third of the camp, up to 6) | 40 m out from the town's edge on the camp's side, to its fields just outside it | they're all down; or 30 s after reaching the fields (within 10 m) | reached: the town's taxes stopped, a grudge (`raided`); else driven off (`repulsed`) |
+| **An assault** | attackers (the whole camp, up to 16) | the same, into the town | they're all down; or the town's defenders are | none of its defenders left: the town's **taken**, its new holders' soldiers out at once; else thrown back |
+
+- Each raider or attacker stands for a share of those the camp sent. Their losses and the town's
+  are the war's as they fall. Those still standing when it's over go back to their camp.
+- A sortie goes on 2.5 minutes at most. If every player leaves the town first, the rest of it is
+  reckoned in the war (as it would have been), and one out for 3 turns (`SORTIE_TURNS`) is too.
+- A sally from the town, relief against a camp and the rest of the war are reckoned as ever.
+- **On the screen:** "Raiders of the Orcs are coming for Ashford's fields!", "The Orcs are
+  storming Ashford!"; and how it ended: the fields burnt, the raid driven off, the assault thrown
+  back, the town fallen, the camp broken. The news tells of it too (`news.js`: "sortie", and a
+  raid "driven off").
+
+**Break the camp.** From a Retainer up, a reeve (or the keep) may ask the player to break up an
+enemy camp outside one of their towns (above).
+
+**Kept.** The camps pitched and the sorties out are in the host's snapshot, and the watched towns
+and each camp's sortie in the war's, so a saved or joined world carries on exactly.
 
 ### The other peoples' looks (M5)
 
