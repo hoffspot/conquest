@@ -1,6 +1,6 @@
 // The pack: a panel over the game (opened with its button, or I) showing what the player's grown
 // into and what they carry (core/progress.js):
-// - their coppers;
+// - their gold;
 // - each skill: its rank and title, how far to the next, what makes it grow, what it's brought;
 // - their gear (weapon, body, shield: armour can be taken off);
 // - what they carry (to put on, or use).
@@ -70,7 +70,7 @@ export class PackPanel {
         const { gold, skills, gear, pack, shop } = view;
 
         this.title.textContent = shop ? `Trading with ${shop.name}` : "Pack";
-        this.gold.textContent = `${gold} coppers`;
+        this.gold.textContent = `${gold} gold`;
         this.panel.hidden = false;
         this.panel.classList.toggle("trading", Boolean(shop));
 
@@ -83,7 +83,7 @@ export class PackPanel {
                 ...shop.wares.map(({ item, label, price, affordable }) => {
                     const row = element("li", "pack-row");
 
-                    row.append(element("span", "pack-label", label), element("span", "pack-price", `${price} coppers`), button("Buy", () => this.onBuy(item), { label: `Buy ${label} for ${price} coppers`, disabled: !affordable }));
+                    row.append(element("span", "pack-label", label), element("span", "pack-price", `${price} gold`), button("Buy", () => this.onBuy(item), { label: `Buy ${label} for ${price} gold`, disabled: !affordable }));
 
                     return row;
                 }),
@@ -101,7 +101,7 @@ export class PackPanel {
                 row.append(element("span", "pack-label", label));
 
                 if (shop) {
-                    row.append(element("span", "pack-price", `${price} coppers`), button("Sell", () => this.onSell(index), { label: `Sell ${label} for ${price} coppers` }));
+                    row.append(element("span", "pack-price", `${price} gold`), button("Sell", () => this.onSell(index), { label: `Sell ${label} for ${price} gold` }));
                 } else if (equip) {
                     row.append(button(equip === "weapon" ? "Wield" : "Wear", () => this.onEquip(index), { label: `${equip === "weapon" ? "Wield" : "Wear"} ${label}` }));
                 } else if (use) {

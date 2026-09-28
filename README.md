@@ -393,7 +393,7 @@ client/                 The game (static files served to the browser)
     worldmap.js         The world map: the whole world, under a fog where the player hasn't been
     debug.js            Debug mode's overlay
     talk.js             The talk: who's talking, what they say, and the replies to choose from
-    pack.js             The pack: coppers, what's carried and worn, the skills; a shop's wares
+    pack.js             The pack: gold, what's carried and worn, the skills; a shop's wares
     journal.js          The journal: the player's rank, their requests, their people, their
                         company
     fate.js             The war's great turns for the player's people: victory, brought under
@@ -429,7 +429,7 @@ client/                 The game (static files served to the browser)
     battle.js           Moving, fighting, damage, dying and coming back; the orc's patrol
     weapons.js          The weapons and their attacks
     progress.js         Growing stronger: skills and their trees, abilities, gear and its make,
-                        shops, loot, coppers and the pack; and from them, might
+                        shops, loot, gold and the pack; and from them, might
     standing.js         Standing in a people: its ranks, the requests the rulers make, the
                         armoury's gifts and counsel's weight
     spells.js           The spells: heal and stun, and their shared cooldown

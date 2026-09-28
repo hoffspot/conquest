@@ -420,7 +420,7 @@ experience in all: Untried, Trained, Adept, Veteran, Master, Legend.
 | Healing | healing with spells (what's healed) | +100% healed | Greater heal |
 | Hexes | stunning foes (15 a stun) | stuns twice as long | Hold |
 | Endurance | taking blows (their damage), running out of stamina | +40 hit points and stamina, 10% of each blow taken off | |
-| Trade | buying and selling (half a point a copper) | 25% off what's bought, 25% more for what's sold | |
+| Trade | buying and selling (half a point a gold piece) | 25% off what's bought, 25% more for what's sold | |
 | Talk | talking with the folk | persuasion (M4, M7) | |
 | Command | leading followers | more followers (M9) | |
 
@@ -443,7 +443,7 @@ sword or a hammer). Each is of a make, which counts in its price and in what it 
 Armour takes a share off every blow (a mail shirt 16%, a kite shield 10%), never more than 60% in
 all. What's worn shows on the character.
 
-**Coppers and the pack.** A player starts with 20 coppers and room for 20 things.
+**Gold and the pack.** A player starts with 20 gold and room for 20 things. (The money was coppers once: requests carried in games saved then are read as gold.)
 - **Shops.** The folk who keep a shop sell from it, from their talk's "What have you got for
   sale?":
   - the barkeep, the serving wenches and the innkeeper: ale (stamina) and hot meals (a little
@@ -457,9 +457,9 @@ all. What's worn shows on the character.
 - **Bought by talking.** A room, an ale or a meal bought in talk is had at once; a sharpening at
   the smithy or a blessing at the temple is a boon for ten minutes (sharper blows up close; a
   little more of everything).
-- **Found.** Foes carry coppers, and sometimes a draught or gear: an orc 5 to 15 coppers, a
+- **Found.** Foes carry gold, and sometimes a draught or gear: an orc 5 to 15 gold, a
   soldier 2 to 8.
-- **The pack** (its button, top right, or I) shows the coppers, what's carried (to wear, wield
+- **The pack** (its button, top right, or I) shows the gold, what's carried (to wear, wield
   or use), what's worn (to take off), and each skill's rank and how far to the next. Trading, it
   shows the shop's wares too, and what's carried can be sold. Escape closes it.
 
@@ -505,8 +505,8 @@ that isn't its holders' seat has a governor on the throne. Only a player's own p
 
 | Request | Asked | Done when | Worth |
 | --- | --- | --- | --- |
-| A letter to carry | to one of the three nearest of their own towns | it's handed to the reeve there (or a capital's steward) | 10 standing and 6 coppers, and 5 and 3 for each km |
-| A tithe for the treasury | while the treasury's thin | its coppers are paid (a quarter goes into the treasury as gold) | half its coppers in standing |
+| A letter to carry | to one of the three nearest of their own towns | it's handed to the reeve there (or a capital's steward) | 10 standing and 6 gold, and 5 and 3 for each km |
+| A tithe for the treasury | while the treasury's thin | its gold is paid (a quarter of it goes into the treasury) | half its gold in standing |
 | Thin their numbers | in a war | so many of the enemy's soldiers are brought down | 4 and 4, and 6 and 3 for each |
 | Clear the roads | always | so many of the wild are brought down | 6 and 6, and 8 and 4 for each |
 | Scouting | from a Freeholder | the player goes within 220 m of an enemy camp or army near (or their nearest town) | 25 and 15 |
@@ -596,7 +596,7 @@ made first).
   host's player as their peoples are.
 - **Where:** by the world's start if they're of the host's people. Else by the town where their
   own people's players start (`spawnFor`).
-- **What they bring:** their skills, gear, coppers, standing and followers, kept with their own
+- **What they bring:** their skills, gear, gold, standing and followers, kept with their own
   character as they play; the world isn't theirs to keep.
 - **Refused:** a game of another version, a character that isn't one, or a world with 8 in it
   already (`NET_REFUSALS`).
@@ -616,7 +616,7 @@ world while anyone else is in it (rule 6, M0).
 - **Pace.** A copy plays steps as they come, and catches up when it falls more than 6 behind
   (`PACE`).
 - **Commands.** A joined player's own commands go to the host, and come back among the rest. What
-  came of them (a request offered, coppers paid, a door gone through) is what came of them on
+  came of them (a request offered, gold paid, a door gone through) is what came of them on
   their copy, a moment later: the talk says it again as it now is (`Conversation.retell`).
 - **Checks.** Every 100 steps the host says how the world should stand (`Host.checksum`: everyone
   in it, where and how they are, and the war's turn and clock). A copy that doesn't match (a
@@ -687,7 +687,7 @@ that they've fallen; that they rule the continent, or who does.
 ### Followers (M9)
 
 **Hiring.** The adventurers at a guild (reading its board, or drinking at its tables) can be
-hired, for coppers by their calling (`HIRES`):
+hired, for gold by their calling (`HIRES`):
 
 | Calling | Fights with | Price |
 | --- | --- | --- |
@@ -699,7 +699,7 @@ hired, for coppers by their calling (`HIRES`):
 
 A player leads one follower, and more as their **Command** grows (1 more at rank 1, up to 6 more at
 rank 5: `progress.js`). Command grows by leading: a share of every blow their followers land.
-Hired, an adventurer's gone from the guild for good (`host.hired`). Asked without the coppers, they
+Hired, an adventurer's gone from the guild for good (`host.hired`). Asked without the gold, they
 say what they'd want and stay where they are.
 
 **Following** (`battle.js`, ai `"follow"`, `FOLLOW`):
@@ -737,7 +737,7 @@ M4).
 
 **The adventurers' guild's board** (`standing.js` `offerContract`): its receptionist gives
 contracts to any registered adventurer, of whatever people (no standing needed, none given; paid
-in coppers):
+in gold):
 
 | Contract | On the board | Done when | Pays |
 | --- | --- | --- | --- |
@@ -851,7 +851,7 @@ Any order can have `run: true`. A command that can't be done is refused, with a 
 - a door that isn't there;
 - too far to talk;
 - not talking to anyone.
-- not enough coppers, nothing like that for sale, a full pack;
+- not enough gold, nothing like that for sale, a full pack;
 - an ability not learnt, or not ready yet;
 - not the one to ask, a stranger, not of the rank, nothing to offer or to tell of, enough carried
   already, the armoury's gifts had, counsel that can't be taken.
@@ -866,7 +866,7 @@ Any order can have `run: true`. A command that can't be done is refused, with a 
 | `talk` | A player started or stopped talking. |
 | `effect` | Something was done by talking. |
 | `rank` | A player's skill reached a new rank (and any ability it brings). |
-| `loot` | A player found coppers and things on a fallen foe. |
+| `loot` | A player found gold and things on a fallen foe. |
 | `bought`, `sold`, `used` | A player bought, sold, or used something. |
 | `gear` | What a player wears and wields changed. |
 | `ability` | A player used an ability. |

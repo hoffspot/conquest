@@ -29,7 +29,7 @@ import { decode, encode } from "./wire.js";
 import { RACE, startFor } from "./worldplan/plan.js";
 
 /** Bumped whenever what's said changes: a game of another version can't join. */
-export const NET_VERSION = 1;
+export const NET_VERSION = 2;
 
 /** How many steps the host plays between telling how the world should stand. */
 export const CHECK_EVERY = 100;

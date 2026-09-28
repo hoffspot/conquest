@@ -2,7 +2,7 @@
 // core/standing.js offerContract; core/host.js; core/dialogue.js; docs/WAR.md M8): the war's news
 // as it's heard in a town, newest first, what's near and what's heard everywhere; what's said of
 // its rulers; told in the taverns and by adventurers; the guild's contracts, for anyone, paid in
-// coppers, taken and told of at its counter
+// gold, taken and told of at its counter
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
@@ -117,7 +117,7 @@ describe("news and rumours, and the guild's board (news.js, standing.js, host.js
             assert.equal(contract.from.post, "guild");
             assert.equal(contract.from.title, "Guild receptionist");
             assert.equal(contract.reward.standing, 0);
-            assert.ok(contract.reward.coppers > 0);
+            assert.ok(contract.reward.gold > 0);
             assert.ok(progressOf(contract).length > 5);
 
             if (contract.kind === "hunt") {
@@ -132,7 +132,7 @@ describe("news and rumours, and the guild's board (news.js, standing.js, host.js
         assert.equal(offerContract({ war, town: town.id, giver, random, held: Array.from({ length: MOST_REQUESTS }, () => ({ kind: "x" })) }), null);
     });
 
-    it("gives a guild's contracts to a player of any people at its counter, and pays in coppers when they're done", () => {
+    it("gives a guild's contracts to a player of any people at its counter, and pays in gold when they're done", () => {
         const host = new Host(buildWorld({ seed: 2 }), { populate: false });
 
         host.join({ id: HOST_PLAYER, hero: HERO });
@@ -169,7 +169,7 @@ describe("news and rumours, and the guild's board (news.js, standing.js, host.js
         const told = host.command(HOST_PLAYER, { type: "effect", effect: { report: true } });
 
         assert.equal(told.ok, true, JSON.stringify(told));
-        assert.equal(player.progress.gold, gold + taken.reward.coppers);
+        assert.equal(player.progress.gold, gold + taken.reward.gold);
         assert.equal(player.standing.points, points);
         assert.ok(!player.standing.find(taken.id));
         run(host, TURN_MS / 60);

@@ -48,12 +48,12 @@ export class Hud {
         this.setStamina(id, stamina, maxStamina);
     }
 
-    /** Show how many coppers the player has, under their name. */
-    setCoppers(coppers) {
+    /** Show how much gold the player has, under their name. */
+    setGold(gold) {
         const coins = this.plate.querySelector(".coins");
 
         if (coins) {
-            coins.textContent = `${coppers} coppers`;
+            coins.textContent = `${gold} gold`;
         }
     }
 

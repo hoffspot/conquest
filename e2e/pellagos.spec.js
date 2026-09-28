@@ -1658,7 +1658,7 @@ test("the barkeep tells the war's news as it's heard in the town", async ({ page
     await page.keyboard.press("Escape");
 });
 
-test("an adventurer at the guild, hired for coppers, follows the player out and keeps up; the journal shows their company, and they're with them the next time", async ({ page }) => {
+test("an adventurer at the guild, hired for gold, follows the player out and keeps up; the journal shows their company, and they're with them the next time", async ({ page }) => {
     // (Played twice: more than the usual time)
     test.setTimeout(180000);
 
@@ -1668,7 +1668,7 @@ test("an adventurer at the guild, hired for coppers, follows the player out and 
     await page.locator("#continuebutton").click();
     await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
 
-    // Into the guild with coppers to spare, and up to one of its adventurers
+    // Into the guild with gold to spare, and up to one of its adventurers
     const guild = await page.evaluate(() => {
         const { game } = window.pellagos;
         const building = [...game.world.interiors.buildings.values()].find((each) => each.kind === "guild");
@@ -1701,13 +1701,13 @@ test("an adventurer at the guild, hired for coppers, follows the player out and 
     await expect(talk.locator(".talk-name")).toHaveText(guild.name);
 
     // Asked to ride along, for their price: paid, and they follow
-    const ask = talk.getByRole("button", { name: /Would you ride with me\? \(\d+ coppers\)$/ });
-    const price = Number((await ask.textContent()).match(/(\d+) coppers/)[1]);
+    const ask = talk.getByRole("button", { name: /Would you ride with me\? \(\d+ gold\)$/ });
+    const price = Number((await ask.textContent()).match(/(\d+) gold/)[1]);
 
     await ask.click();
     await expect(talk.locator(".talk-line")).toContainText(/Lead on|Where to\?|killed/);
     await expect(page.locator("#banner")).toHaveText(`${guild.name} follows you now.`);
-    await expect(page.locator(".coins").first()).toHaveText(`${200 - price} coppers`);
+    await expect(page.locator(".coins").first()).toHaveText(`${200 - price} gold`);
     await page.keyboard.press("Escape");
     await expect(talk).toBeHidden();
 
@@ -1916,11 +1916,11 @@ test("tapping someone walks the player up to talk: their name and what they are,
     expect(await page.evaluate(() => ({ talking: window.pellagos.game.battle.actor("barkeep").talkingTo, remembered: window.pellagos.game.memory.barkeep.talks }))).toEqual({ talking: null, remembered: 1 });
 });
 
-test("the pack shows what's grown and carried; a skill ranks up with use; trading with the barkeep, the coppers change hands; all kept for the next time", async ({ page }) => {
+test("the pack shows what's grown and carried; a skill ranks up with use; trading with the barkeep, the gold changes hands; all kept for the next time", async ({ page }) => {
     // (A long walk through: more than the usual time, with others running beside it)
     test.setTimeout(180000);
 
-    // A saved game whose hero is a blow from their next rank with the blade, with 30 coppers and a draught
+    // A saved game whose hero is a blow from their next rank with the blade, with 30 gold and a draught
     await page.addInitScript((save) => {
         localStorage.setItem("pellagos.save", JSON.stringify(save));
 
@@ -1932,13 +1932,13 @@ test("the pack shows what's grown and carried; a skill ranks up with use; tradin
     await page.locator("#continuebutton").click();
     await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
 
-    // I opens the pack: the coppers, the draught to use, the staff in hand, each skill untried
+    // I opens the pack: the gold, the draught to use, the staff in hand, each skill untried
     const pack = page.locator(".pack");
 
-    await expect(page.locator("#playerplate .coins")).toHaveText("30 coppers");
+    await expect(page.locator("#playerplate .coins")).toHaveText("30 gold");
     await page.keyboard.press("i");
     await expect(pack).toBeVisible();
-    await expect(pack.locator(".pack-gold")).toHaveText("30 coppers");
+    await expect(pack.locator(".pack-gold")).toHaveText("30 gold");
     await expect(pack.locator(".carried .pack-row")).toHaveText(["Healing draughtUse"]);
     await expect(pack.locator(".gear .pack-row").first()).toHaveText("WeaponStaff");
     await expect(pack.locator('.pack-skill[data-tree="blade"] .pack-skill-rank')).toHaveText("Untried (0)");
@@ -1969,7 +1969,7 @@ test("the pack shows what's grown and carried; a skill ranks up with use; tradin
 
     expect(ranked).toEqual({ rank: 1, told: "Blade: Trained!" });
 
-    // Into the taproom to the barkeep, and what he has for sale: an ale bought for 2 coppers
+    // Into the taproom to the barkeep, and what he has for sale: an ale bought for 2 gold
     await page.evaluate(() => {
         const { game, session } = window.pellagos;
         const player = game.battle.actor("player");
@@ -1998,21 +1998,21 @@ test("the pack shows what's grown and carried; a skill ranks up with use; tradin
     await expect(talk).toBeHidden();
     await expect(pack).toBeVisible();
     await expect(pack.locator(".pack-title")).toContainText("Trading with");
-    await expect(pack.locator(".wares .pack-row")).toHaveText(["Tankard of ale2 coppersBuy", "Hot meal5 coppersBuy"]);
-    await pack.getByRole("button", { name: "Buy Tankard of ale for 2 coppers" }).click();
-    await expect(pack.locator(".pack-gold")).toHaveText("28 coppers");
-    await expect(page.locator("#playerplate .coins")).toHaveText("28 coppers");
+    await expect(pack.locator(".wares .pack-row")).toHaveText(["Tankard of ale2 goldBuy", "Hot meal5 goldBuy"]);
+    await pack.getByRole("button", { name: "Buy Tankard of ale for 2 gold" }).click();
+    await expect(pack.locator(".pack-gold")).toHaveText("28 gold");
+    await expect(page.locator("#playerplate .coins")).toHaveText("28 gold");
     await expect(pack.locator(".carried .pack-label")).toHaveText(["Healing draught", "Tankard of ale"]);
 
-    // Sold back (for a copper), then bought again; the pack closed with its button
+    // Sold back (for a gold piece), then bought again; the pack closed with its button
     await pack.getByRole("button", { name: /Sell Tankard of ale/ }).click();
-    await expect(pack.locator(".pack-gold")).toHaveText("29 coppers");
-    await pack.getByRole("button", { name: "Buy Tankard of ale for 2 coppers" }).click();
-    await expect(pack.locator(".pack-gold")).toHaveText("27 coppers");
+    await expect(pack.locator(".pack-gold")).toHaveText("29 gold");
+    await pack.getByRole("button", { name: "Buy Tankard of ale for 2 gold" }).click();
+    await expect(pack.locator(".pack-gold")).toHaveText("27 gold");
     await page.locator("#packbutton").click();
     await expect(pack).toBeHidden();
 
-    // Kept for the next time (as it was read at the start): the blade trained, the coppers, the ale
+    // Kept for the next time (as it was read at the start): the blade trained, the gold, the ale
     const kept = await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.progress")));
 
     expect(kept).toMatchObject({ created: SAVE.created, seed: 1, gold: 27, pack: [{ id: "potion" }, { id: "ale" }] });
@@ -2066,7 +2066,7 @@ test("the town hall: the reeve gives work, and pays for what's done; the journal
     await expect(talk.locator(".talk-name")).toHaveText(reeve);
     await expect(talk.locator(".talk-title")).toHaveText("Reeve");
     await talk.getByRole("button", { name: /work for me/ }).click();
-    await expect(talk.locator(".talk-line")).toContainText(/coppers|rolls/);
+    await expect(talk.locator(".talk-line")).toContainText(/gold|rolls/);
     await talk.getByRole("button", { name: "I'll do it." }).click();
     await expect(page.locator("#banner")).toContainText("New request");
 
@@ -2080,13 +2080,13 @@ test("the town hall: the reeve gives work, and pays for what's done; the journal
         const { game } = window.pellagos;
         const home = game.world.start;
 
-        game.standing.take({ kind: "message", title: "A letter to carry", key: home.id, from: { id: "x", name: "Ida Crane", title: "Reeve", town: "elsewhere", townName: "Elsewhere", post: "hall" }, target: { town: home.id, name: home.name, at: [...home.at], post: "hall" }, text: "Carry this letter.", given: 0, until: 999, state: "open", count: 0, reward: { standing: 20, coppers: 9 } });
+        game.standing.take({ kind: "message", title: "A letter to carry", key: home.id, from: { id: "x", name: "Ida Crane", title: "Reeve", town: "elsewhere", townName: "Elsewhere", post: "hall" }, target: { town: home.id, name: home.name, at: [...home.at], post: "hall" }, text: "Carry this letter.", given: 0, until: 999, state: "open", count: 0, reward: { standing: 20, gold: 9 } });
     });
     await talk.getByRole("button", { name: /Where do I stand/ }).click();
     await expect(talk.locator(".talk-line")).toContainText("Commoner");
     await talk.getByRole("button", { name: /It's done/ }).click();
     await expect(talk.locator(".talk-line")).toContainText("A letter from Elsewhere");
-    await expect(page.locator("#playerplate .coins")).toHaveText("29 coppers");
+    await expect(page.locator("#playerplate .coins")).toHaveText("29 gold");
     await page.keyboard.press("Escape");
     await expect(talk).toBeHidden();
 

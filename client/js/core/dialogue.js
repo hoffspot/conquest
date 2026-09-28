@@ -65,7 +65,7 @@ export const TREES = Object.freeze({
                 say: ["Anything else?", "What else can I do for you?", "Something else?"],
                 choices: [
                     { say: "What have you got for sale?", next: null, do: [{ shop: "tavern" }] },
-                    { say: "An ale, if you please. (2 coppers)", next: "ale", do: [{ buy: "ale", price: 2 }] },
+                    { say: "An ale, if you please. (2 gold)", next: "ale", do: [{ buy: "ale", price: 2 }] },
                     { say: "Heard any news?", next: "news" },
                     { if: { rumour: true }, say: "What's the word on the war?", next: "war" },
                     { if: { notFlag: "askedPlace" }, say: "Tell me about this place.", next: "place", do: [{ remember: "askedPlace" }] },
@@ -91,7 +91,7 @@ export const TREES = Object.freeze({
             news: {
                 say: [
                     "There's an orc prowling the fields north-west of town. Came down from the hills after the harvest, they say.",
-                    "A merchant came through asking after the old ruins east of here. Paid in gold, too, which is always a bad sign.",
+                    "A merchant came through asking after the old ruins east of here. Paid in foreign coin, too, which is always a bad sign.",
                     "{greybeard} swears the well in the square whispers at night. Mind you, he swears a lot of things after his fourth.",
                     "The miller's put his prices up again. Bread's dearer than ale now, and that's not natural.",
                 ],
@@ -145,11 +145,11 @@ export const TREES = Object.freeze({
             more: {
                 say: ["Anything else, love?", "What else?", "Something more?"],
                 choices: [
-                    { say: "Something to eat? (4 coppers)", next: "food", do: [{ buy: "stew", price: 4 }] },
+                    { say: "Something to eat? (4 gold)", next: "food", do: [{ buy: "stew", price: 4 }] },
                     { say: "How's the work?", next: "work" },
                     { if: { rumour: true }, say: "What's the word on the war?", next: "war" },
-                    { if: { notFlag: "tipped" }, say: "Here, for your trouble. (1 copper)", next: "tip", do: [{ pay: 1 }, { remember: "tipped" }] },
-                    { if: { flag: "tipped" }, say: "Another copper for your trouble. (1 copper)", next: "tipAgain", do: [{ pay: 1 }] },
+                    { if: { notFlag: "tipped" }, say: "Here, for your trouble. (1 gold)", next: "tip", do: [{ pay: 1 }, { remember: "tipped" }] },
+                    { if: { flag: "tipped" }, say: "Another coin for your trouble. (1 gold)", next: "tipAgain", do: [{ pay: 1 }] },
                     FAREWELL,
                 ],
             },
@@ -214,7 +214,7 @@ export const TREES = Object.freeze({
             more: {
                 say: ["What else?", "Go on, then.", "Anything else? I'm very busy. Drinking."],
                 choices: [
-                    { say: "Buy you a drink? (2 coppers)", next: "drink", do: [{ buy: "ale", price: 2, for: "them" }, { remember: "boughtDrink" }] },
+                    { say: "Buy you a drink? (2 gold)", next: "drink", do: [{ buy: "ale", price: 2, for: "them" }, { remember: "boughtDrink" }] },
                     { say: "What's the news?", next: "news" },
                     { if: { rumour: true }, say: "What's the word on the war?", next: "war" },
                     { say: "Seen the orc about?", next: "orc", do: [{ learn: "orc" }] },
@@ -278,7 +278,7 @@ export const TREES = Object.freeze({
             more: {
                 say: ["What else can I do for you, darling?", "Anything else?", "Well?"],
                 choices: [
-                    { say: "A room for the night. (10 coppers)", next: "room", do: [{ rent: "room", price: 10 }] },
+                    { say: "A room for the night. (10 gold)", next: "room", do: [{ rent: "room", price: 10 }] },
                     { say: "What sort of house is this?", next: "house" },
                     { say: "Just looking.", next: "looking" },
                     FAREWELL,
@@ -320,7 +320,7 @@ export const TREES = Object.freeze({
                 say: ["Anything else?", "What can I do for you?", "Yes?"],
                 choices: [
                     { say: "What have you got for sale?", next: null, do: [{ shop: "tavern" }] },
-                    { say: "A room for the night. (8 coppers)", next: "room", do: [{ rent: "room", price: 8 }] },
+                    { say: "A room for the night. (8 gold)", next: "room", do: [{ rent: "room", price: 8 }] },
                     { if: { upstairs: "mixed" }, say: "And the ladies down the hall?", next: "ladies" },
                     { say: "Who stays here?", next: "guests" },
                     { if: { rumour: true }, say: "What's the word on the war?", next: "war" },
@@ -366,7 +366,7 @@ export const TREES = Object.freeze({
                 say: ["What else?", "Speak up, the fire's loud.", "Anything more?"],
                 choices: [
                     { say: "Show me what you have for sale.", next: null, do: [{ shop: "smith" }] },
-                    { say: "Could you put an edge on my blade? (3 coppers)", next: "sharpen", do: [{ buy: "sharpening", price: 3 }] },
+                    { say: "Could you put an edge on my blade? (3 gold)", next: "sharpen", do: [{ buy: "sharpening", price: 3 }] },
                     { say: "What are you working on?", next: "work" },
                     { if: { notFlag: "askedApprentice" }, say: "Who's that at the bellows?", next: "apprentice", do: [{ remember: "askedApprentice" }] },
                     FAREWELL,
@@ -417,7 +417,7 @@ export const TREES = Object.freeze({
                     { say: "Have you healing draughts to sell?", next: null, do: [{ shop: "temple" }] },
                     { say: "Tell me of the Six.", next: "six" },
                     { if: { notFlag: "askedPatron" }, say: "Whose temple is this?", next: "patron", do: [{ remember: "askedPatron" }] },
-                    { say: "I'd have a blessing. (5 coppers to the alms box)", next: "blessing", do: [{ buy: "blessing", price: 5 }] },
+                    { say: "I'd have a blessing. (5 gold to the alms box)", next: "blessing", do: [{ buy: "blessing", price: 5 }] },
                     { say: "What is the Hollow One?", next: "hollow", do: [{ learn: "hollowOne" }] },
                     FAREWELL,
                 ],
@@ -521,7 +521,7 @@ export const TREES = Object.freeze({
                 choices: [{ say: "Thank you!", next: "more", do: [{ remember: "registered" }, { learn: "guildMember" }] }],
             },
             board: {
-                say: "That's where the jobs go up! Beasts on the roads, camps outside the walls, bounties from whoever's paying. Register, ask me what's up, and bring me word when it's done. Coppers on the counter, straight away!",
+                say: "That's where the jobs go up! Beasts on the roads, camps outside the walls, bounties from whoever's paying. Register, ask me what's up, and bring me word when it's done. Gold on the counter, straight away!",
                 choices: "more",
             },
             offer: {
@@ -586,17 +586,17 @@ export const TREES = Object.freeze({
                 choices: [
                     { say: "Any advice?", next: "advice" },
                     { if: { rumour: true }, say: "Heard anything on the road?", next: "war" },
-                    { if: { hire: true, purse: true }, say: "Would you ride with me? ({hirePrice} coppers)", next: "hired", do: [{ hire: true }] },
-                    { if: { hire: true, purse: false }, say: "Would you ride with me? ({hirePrice} coppers)", next: "short" },
+                    { if: { hire: true, purse: true }, say: "Would you ride with me? ({hirePrice} gold)", next: "hired", do: [{ hire: true }] },
+                    { if: { hire: true, purse: false }, say: "Would you ride with me? ({hirePrice} gold)", next: "short" },
                     { say: "Good hunting.", next: null },
                 ],
             },
             hired: {
-                say: ["Coppers up front, and I'm yours. Lead on, {player}.", "Done. I've waited long enough for a job worth taking. Where to?", "{hirePrice} coppers? You've a deal. Try not to get us both killed."],
+                say: ["Gold up front, and I'm yours. Lead on, {player}.", "Done. I've waited long enough for a job worth taking. Where to?", "{hirePrice} gold? You've a deal. Try not to get us both killed."],
                 choices: [{ say: "Let's go.", next: null }],
             },
             short: {
-                say: ["{hirePrice} coppers, and I see you've not got them. Come back when you have.", "I don't ride for promises. {hirePrice} coppers, up front."],
+                say: ["{hirePrice} gold, and I see you've not got it. Come back when you have.", "I don't ride for promises. {hirePrice} gold, up front."],
                 choices: [{ say: "Another time, then.", next: null }],
             },
             war: {
@@ -979,7 +979,7 @@ export const TREES = Object.freeze({
             },
             herself: {
                 say: [
-                    "A fisherman's daughter from the coast, with a laugh too loud for chapel and legs too long for mending nets. {madam} found me singing for coppers on the quay. Now I sing for silver, and only when I feel like it.",
+                    "A fisherman's daughter from the coast, with a laugh too loud for chapel and legs too long for mending nets. {madam} found me singing for pennies on the quay. Now I sing for gold, and only when I feel like it.",
                     "I was a lady's maid at the keep, once. The lady's husband liked me better than she did, so here I am. The pay's better, and nobody makes me curtsy.",
                     "A miller's girl, run off with a travelling player. He left; I stayed. {madam} says I've a gift for making men forget their troubles. And their purses.",
                 ],
@@ -1000,7 +1000,7 @@ export const TREES = Object.freeze({
             offer: {
                 say: "Company, sweetling. A fire, a glass of something red, a pair of warm hands for your aching shoulders, and a listening ear. Whatever happens after that, {madam} doesn't ask and I don't tell.",
                 choices: [
-                    { say: "Your company for the evening. (20 coppers)", next: "company", do: [{ hire: "company", price: 20 }] },
+                    { say: "Your company for the evening. (20 gold)", next: "company", do: [{ hire: "company", price: 20 }] },
                     { say: "Just a dance, then.", next: "dance", do: [{ remember: "danced" }] },
                     { say: "Just talk.", next: "more" },
                 ],
@@ -1019,7 +1019,7 @@ export const TREES = Object.freeze({
             secretsPrice: {
                 say: "Men tell me all sorts, lying back with their eyes closed. But secrets aren't free, sweetling.",
                 choices: [
-                    { say: "For your trouble. (5 coppers)", next: "secrets", do: [{ pay: 5 }, { learn: "courtesanRumours" }] },
+                    { say: "For your trouble. (5 gold)", next: "secrets", do: [{ pay: 5 }, { learn: "courtesanRumours" }] },
                     { say: "Keep them, then.", next: "more" },
                 ],
             },
@@ -1032,7 +1032,7 @@ export const TREES = Object.freeze({
                 ],
                 choices: [
                     { if: { notKnows: "orc" }, say: "Anything about an orc?", next: "orc", do: [{ learn: "orc" }] },
-                    { say: "Tell me another. (5 coppers)", next: "secrets", do: [{ pay: 5 }] },
+                    { say: "Tell me another. (5 gold)", next: "secrets", do: [{ pay: 5 }] },
                     { say: "Thank you.", next: "more" },
                 ],
             },
@@ -1098,7 +1098,7 @@ export const OWN_TREES = Object.freeze({
                 ],
                 choices: [
                     { say: "The siege of Harrowmere?", next: "siege" },
-                    { say: "Buy you a drink? (2 coppers)", next: "drink", do: [{ buy: "ale", price: 2, for: "them" }] },
+                    { say: "Buy you a drink? (2 gold)", next: "drink", do: [{ buy: "ale", price: 2, for: "them" }] },
                     { say: "Another time, old-timer.", next: null },
                 ],
             },

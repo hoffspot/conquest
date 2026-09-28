@@ -39,22 +39,22 @@ const KEEP_DONE = 12;
 /**
  * What's asked, and what it's worth: each kind's title, the rank it's first offered at, how long
  * there is to do it (war turns: a minute's play each; with `perKm`, more the further it is), and
- * its reward (standing and coppers; `each` for each foe, `perKm` for each km to go).
+ * its reward (standing and gold; `each` for each foe, `perKm` for each km to go).
  */
 export const REQUESTS = Object.freeze({
-    message: { title: "A letter to carry", rank: 0, turns: 12, perKm: 10, reward: { standing: 10, coppers: 6, perKm: { standing: 5, coppers: 3 } } },
-    tithe: { title: "A tithe for the treasury", rank: 0, turns: 30, reward: { standing: 0, coppers: 0 } },
-    bounty: { title: "Thin their numbers", rank: 0, turns: 60, reward: { standing: 4, coppers: 4, each: { standing: 6, coppers: 3 } } },
-    wild: { title: "Clear the roads", rank: 0, turns: 45, reward: { standing: 6, coppers: 6, each: { standing: 8, coppers: 4 } } },
-    scout: { title: "Scouting", rank: OPENS.scout, turns: 40, reward: { standing: 25, coppers: 15 } },
-    defend: { title: "Hold the town", rank: OPENS.defend, turns: null, reward: { standing: 50, coppers: 30 } },
-    rout: { title: "Break the camp", rank: OPENS.rout, turns: 40, reward: { standing: 60, coppers: 40 } },
-    escort: { title: "See the envoy there", rank: OPENS.escort, turns: null, reward: { standing: 70, coppers: 40 } },
-    waylay: { title: "Stop their envoy", rank: OPENS.waylay, turns: null, reward: { standing: 70, coppers: 50 } },
-    // The adventurers' guild's contracts (M8): open to anyone, paid in coppers
-    beasts: { title: "Beasts on the roads", rank: 0, turns: 45, reward: { standing: 0, coppers: 10, each: { standing: 0, coppers: 7 } } },
-    hunt: { title: "A bounty", rank: 0, turns: 60, reward: { standing: 0, coppers: 8, each: { standing: 0, coppers: 6 } } },
-    camp: { title: "The camp outside the walls", rank: 0, turns: 40, reward: { standing: 0, coppers: 70 } },
+    message: { title: "A letter to carry", rank: 0, turns: 12, perKm: 10, reward: { standing: 10, gold: 6, perKm: { standing: 5, gold: 3 } } },
+    tithe: { title: "A tithe for the treasury", rank: 0, turns: 30, reward: { standing: 0, gold: 0 } },
+    bounty: { title: "Thin their numbers", rank: 0, turns: 60, reward: { standing: 4, gold: 4, each: { standing: 6, gold: 3 } } },
+    wild: { title: "Clear the roads", rank: 0, turns: 45, reward: { standing: 6, gold: 6, each: { standing: 8, gold: 4 } } },
+    scout: { title: "Scouting", rank: OPENS.scout, turns: 40, reward: { standing: 25, gold: 15 } },
+    defend: { title: "Hold the town", rank: OPENS.defend, turns: null, reward: { standing: 50, gold: 30 } },
+    rout: { title: "Break the camp", rank: OPENS.rout, turns: 40, reward: { standing: 60, gold: 40 } },
+    escort: { title: "See the envoy there", rank: OPENS.escort, turns: null, reward: { standing: 70, gold: 40 } },
+    waylay: { title: "Stop their envoy", rank: OPENS.waylay, turns: null, reward: { standing: 70, gold: 50 } },
+    // The adventurers' guild's contracts (M8): open to anyone, paid in gold
+    beasts: { title: "Beasts on the roads", rank: 0, turns: 45, reward: { standing: 0, gold: 10, each: { standing: 0, gold: 7 } } },
+    hunt: { title: "A bounty", rank: 0, turns: 60, reward: { standing: 0, gold: 8, each: { standing: 0, gold: 6 } } },
+    camp: { title: "The camp outside the walls", rank: 0, turns: 40, reward: { standing: 0, gold: 70 } },
 });
 
 /** How near (m) a player goes to see what they're scouting, and to be there to hold a town (from its middle). */
@@ -63,7 +63,7 @@ export const REQUEST_REACH = Object.freeze({ scout: 220, defend: 180, rout: 150,
 /** What the keep's gift is worth more than a reeve's (its rewards, times this). */
 export const KEEP_REWARD = 1.5;
 
-/** What the treasury's given for each copper tithed (the war's gold). */
+/** What goes into the treasury (the war's gold) for each gold piece tithed. */
 export const TITHE_RATE = 0.25;
 
 /** A request that fails (let run out, or lost): standing lost. */
@@ -191,7 +191,7 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
     const weighty = kinds.filter((kind) => ["scout", "defend", "rout", "escort", "waylay", "bounty"].includes(kind));
     const kind = random.pick(post === "keep" && weighty.length ? weighty : kinds);
     const times = post === "keep" ? KEEP_REWARD : 1;
-    const worth = (standing, coppers) => ({ standing: Math.round(standing * times), coppers: Math.round(coppers * times) });
+    const worth = (standing, gold) => ({ standing: Math.round(standing * times), gold: Math.round(gold * times) });
     const { title, turns, reward } = REQUESTS[kind];
     const from = { id: giver.id, name: giver.name, title: giver.title, town: town.id, townName: town.name, post };
     const base = { kind, title, from, given: war.turn, state: "open", count: 0 };
@@ -208,15 +208,15 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
                 target: { town: to.id, name: to.name, at: [...to.at], post: to.kind === "capital" ? "keep" : "hall" },
                 text: `Carry this letter to ${whom}. It's sealed: see it stays that way.`,
                 until: war.turn + Math.ceil(turns + km * REQUESTS.message.perKm),
-                reward: worth(reward.standing + reward.perKm.standing * km, reward.coppers + reward.perKm.coppers * km),
+                reward: worth(reward.standing + reward.perKm.standing * km, reward.gold + reward.perKm.gold * km),
             };
         }
         case "tithe": {
             const amount = 20 + 10 * Math.min(4, rank + war.stage);
 
-            const text = rising ? `Quietly, now. We're putting by arms against ${war.realm(rising).name}, for when the day comes. Bring ${amount} coppers for them.` : `The treasury's thin. Bring ${amount} coppers for it, and it won't be forgotten.`;
+            const text = rising ? `Quietly, now. We're putting by arms against ${war.realm(rising).name}, for when the day comes. Bring ${amount} gold for them.` : `The treasury's thin. Bring ${amount} gold for it, and it won't be forgotten.`;
 
-            return { ...base, key: "tithe", target: { coppers: amount }, text, until: war.turn + turns, reward: worth(amount / 2, 0) };
+            return { ...base, key: "tithe", target: { gold: amount }, text, until: war.turn + turns, reward: worth(amount / 2, 0) };
         }
         case "bounty": {
             const foe = random.pick(enemies);
@@ -228,7 +228,7 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
                 target: { realm: foe, need },
                 text: `We're at war with ${war.realm(foe).name}. Bring down ${need} of the ${soldiersOf(foe)}, wherever you find them.`,
                 until: war.turn + turns,
-                reward: worth(reward.standing + reward.each.standing * need, reward.coppers + reward.each.coppers * need),
+                reward: worth(reward.standing + reward.each.standing * need, reward.gold + reward.each.gold * need),
             };
         }
         case "wild": {
@@ -240,13 +240,13 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
                 target: { wild: true, need },
                 text: `Beasts and worse have been at travellers on the roads round ${town.name}. Put an end to ${need === 1 ? "one of them" : `${need} of them`}.`,
                 until: war.turn + turns,
-                reward: worth(reward.standing + reward.each.standing * need, reward.coppers + reward.each.coppers * need),
+                reward: worth(reward.standing + reward.each.standing * need, reward.gold + reward.each.gold * need),
             };
         }
         case "scout": {
             const { key, target, what } = random.pick(scouting);
 
-            return { ...base, key, target, text: `Go and look at ${what}: how many, how armed, how dug in. Then come back and tell me.`, until: war.turn + turns, reward: worth(reward.standing, reward.coppers) };
+            return { ...base, key, target, text: `Go and look at ${what}: how many, how armed, how dug in. Then come back and tell me.`, until: war.turn + turns, reward: worth(reward.standing, reward.gold) };
         }
         case "defend": {
             const { town: held, camp } = random.pick(threatened);
@@ -257,7 +257,7 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
                 target: { town: held.id, name: held.name, at: [...held.at], camp: camp.id, realm: camp.realm },
                 text: `${war.realm(camp.realm).name} have camped within a march of ${held.name}. Get there, and help hold it until they're gone.`,
                 until: null,
-                reward: worth(reward.standing, reward.coppers),
+                reward: worth(reward.standing, reward.gold),
             };
         }
         case "rout": {
@@ -269,7 +269,7 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
                 target: { force: camp.id, realm: camp.realm, at: [...camp.at], town: held.id, name: held.name },
                 text: `${war.realm(camp.realm).name} have a camp outside ${held.name}. Take what help you can find, and break it up: bring its soldiers down until it's too few to hold.`,
                 until: war.turn + turns,
-                reward: worth(reward.standing, reward.coppers),
+                reward: worth(reward.standing, reward.gold),
             };
         }
         case "escort": {
@@ -282,7 +282,7 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
                 target: { force: envoy.id, realm: envoy.target, at: [...envoy.at], name: `our envoy to ${to.name}` },
                 text: `Our envoy is on the road to ${to.name}, and not everyone wants them to get there. Find them, and see them safe to ${war.town(to.seat)?.name ?? "their seat"}.`,
                 until: null,
-                reward: worth(reward.standing, reward.coppers),
+                reward: worth(reward.standing, reward.gold),
             };
         }
         case "waylay": {
@@ -295,7 +295,7 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
                 target: { force: envoy.id, realm: envoy.realm, at: [...envoy.at], name: `the envoy of ${from.name}` },
                 text: `${from.name} have an envoy on the road, and whatever they carry, it's no good to us. See they don't get where they're going.`,
                 until: null,
-                reward: worth(reward.standing, reward.coppers),
+                reward: worth(reward.standing, reward.gold),
             };
         }
         default:
@@ -305,7 +305,7 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
 
 /**
  * A contract from an adventurers' guild's board in a town (docs/WAR.md M8), for anyone of any
- * people (no standing needed, and none given: coppers): beasts off the roads round it; a bounty on
+ * people (no standing needed, and none given: gold): beasts off the roads round it; a bounty on
  * the soldiers of a people at war with those who hold it; the camp outside it broken up. Null if
  * there's nothing on the board they haven't got already.
  * @param {object} options
@@ -336,24 +336,24 @@ export function offerContract({ war, town: townId, giver, held = [], random }) {
     const { title, turns, reward } = REQUESTS[kind];
     const from = { id: giver.id, name: giver.name, title: giver.title || "Guild receptionist", town: town.id, townName: town.name, post: "guild" };
     const base = { kind, title, from, given: war.turn, state: "open", count: 0 };
-    const pay = (coppers) => ({ standing: 0, coppers: Math.round(coppers) });
+    const pay = (gold) => ({ standing: 0, gold: Math.round(gold) });
 
     switch (kind) {
         case "beasts": {
             const need = 2 + random.int(0, 2);
 
-            return { ...base, key: town.id, target: { wild: true, need }, text: `Wanted: someone to see off the beasts on the roads round ${town.name}. ${need} of them, and the carters will breathe again.`, until: war.turn + turns, reward: pay(reward.coppers + reward.each.coppers * need) };
+            return { ...base, key: town.id, target: { wild: true, need }, text: `Wanted: someone to see off the beasts on the roads round ${town.name}. ${need} of them, and the carters will breathe again.`, until: war.turn + turns, reward: pay(reward.gold + reward.each.gold * need) };
         }
         case "hunt": {
             const foe = random.pick(foes);
             const need = 2 + random.int(0, 2);
 
-            return { ...base, key: foe, target: { realm: foe, need }, text: `Bounty, posted for ${war.realm(holders).name}: ${need} of the ${soldiersOf(foe)}, brought down wherever they're found.`, until: war.turn + turns, reward: pay(reward.coppers + reward.each.coppers * need) };
+            return { ...base, key: foe, target: { realm: foe, need }, text: `Bounty, posted for ${war.realm(holders).name}: ${need} of the ${soldiersOf(foe)}, brought down wherever they're found.`, until: war.turn + turns, reward: pay(reward.gold + reward.each.gold * need) };
         }
         case "camp": {
             const camp = random.pick(camps);
 
-            return { ...base, key: camp.id, target: { force: camp.id, realm: camp.realm, at: [...camp.at], town: town.id, name: town.name }, text: `${war.realm(camp.realm).name} have a camp outside ${town.name}, and the merchants want it gone. Break it up.`, until: war.turn + turns, reward: pay(reward.coppers) };
+            return { ...base, key: camp.id, target: { force: camp.id, realm: camp.realm, at: [...camp.at], town: town.id, name: town.name }, text: `${war.realm(camp.realm).name} have a camp outside ${town.name}, and the merchants want it gone. Break it up.`, until: war.turn + turns, reward: pay(reward.gold) };
         }
         default:
             return null;
@@ -429,7 +429,7 @@ export function progressOf(request) {
         case "message":
             return `Take it to ${target.post === "keep" ? "the steward" : "the reeve"} in ${target.name}.`;
         case "tithe":
-            return `Bring ${target.coppers} coppers to ${request.from.name} in ${request.from.townName}.`;
+            return `Bring ${target.gold} gold to ${request.from.name} in ${request.from.townName}.`;
         case "bounty":
         case "wild":
         case "beasts":
@@ -451,6 +451,21 @@ export function progressOf(request) {
     }
 }
 
+/** A request as kept: one kept when the money was coppers has what it pays and asks read as gold. */
+function inGold(request) {
+    const kept = { ...request };
+
+    for (const key of ["reward", "target"]) {
+        if (request[key] && "coppers" in request[key]) {
+            const { coppers, ...rest } = request[key];
+
+            kept[key] = { ...rest, gold: coppers };
+        }
+    }
+
+    return kept;
+}
+
 /** A player's standing: their points, their rank from them, the requests they carry, and those done. */
 export class Standing {
     /**
@@ -463,8 +478,8 @@ export class Standing {
         this.claimed = claimed.filter((rank) => Number.isInteger(rank));
 
         /** The requests carried (at most MOST_REQUESTS), and the last done or failed (newest first). */
-        this.requests = requests.filter((request) => REQUESTS[request?.kind]).slice(0, MOST_REQUESTS);
-        this.done = done.filter((request) => REQUESTS[request?.kind]).slice(0, KEEP_DONE);
+        this.requests = requests.filter((request) => REQUESTS[request?.kind]).slice(0, MOST_REQUESTS).map(inGold);
+        this.done = done.filter((request) => REQUESTS[request?.kind]).slice(0, KEEP_DONE).map(inGold);
         this.next = Number.isInteger(next) && next > 0 ? next : 1;
     }
 

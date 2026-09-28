@@ -291,7 +291,7 @@ describe("a player's people at the war's end (host.js)", () => {
 
             put(actor, npc.map, [npc.square[0], npc.square[1] + 2]);
             assert.equal(host.command(HOST_PLAYER, { type: "talk", with: id }).ok, true);
-            player.standing.take({ title: request.kind, given: 0, state: "open", count: 0, until: 999, reward: { standing: 5, coppers: 5 }, text: "", key: request.kind, ...request });
+            player.standing.take({ title: request.kind, given: 0, state: "open", count: 0, until: 999, reward: { standing: 5, gold: 5 }, text: "", key: request.kind, ...request });
             assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { report: true } }).ok, true);
 
             return human.unrest;
@@ -302,7 +302,7 @@ describe("a player's people at the war's end (host.js)", () => {
         // A letter from the overlords: no stir; from their own: stirred; a tithe for their own, the more
         assert.equal(report("home:hall-1", "reeve", letter(theirs)), 0);
         assert.equal(report("home:hall-1", "reeve", letter(home)), STIR.request);
-        assert.equal(report("home:hall-1", "reeve", { kind: "tithe", from: from(home, "hall"), target: { coppers: 20 } }), STIR.request + STIR.tithe);
+        assert.equal(report("home:hall-1", "reeve", { kind: "tithe", from: from(home, "hall"), target: { gold: 20 } }), STIR.request + STIR.tithe);
 
         // A guild's contract
         const guild = [...host.world.interiors.buildings.values()].find(({ kind, place }) => kind === "guild" && place === "home");
