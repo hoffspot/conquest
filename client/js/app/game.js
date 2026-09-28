@@ -44,7 +44,7 @@ import { GODS } from "../core/lore/gods.js";
 import { BECKON, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js";
 import { squaresOf } from "../core/grid.js";
 import { GROUND } from "../core/setpieces/pieces.js";
-import { CAST_FAILURES, lookOf, SCHOOLS, SPELLS } from "../core/spells.js";
+import { CAST_FAILURES, GROWTH_XP, lookOf, SCHOOLS, SPELLS, TOMES } from "../core/spells.js";
 import { Variety } from "../core/variety.js";
 import { distanceBetween, longestReach, weaponOf, WEAPONS } from "../core/weapons.js";
 import { Avatar } from "../world/avatar.js";
@@ -67,9 +67,10 @@ import { Doors } from "./doors.js";
 import { FatePanel, fateWords } from "./fate.js";
 import { itemPicture } from "./icons.js";
 import { JournalPanel, bearing, regardOf } from "./journal.js";
+import { SpellbookPanel } from "./spellbook.js";
 import { PackPanel } from "./pack.js";
 import { TalkPanel } from "./talk.js";
-import { ActionWheel, actionOf, assignable, directionOf, forFriends, PLACES, readWheels, SIDES, WHEELS } from "./wheel.js";
+import { ACTIONS, ActionWheel, actionOf, assignable, directionOf, forFriends, PLACES, readWheels, SIDES, WHEELS } from "./wheel.js";
 
 /** What every new character wears; their weapon (and a bow's quiver) are added to it. */
 export const STARTING_OUTFIT = Object.freeze(["tunic", "bracers", "breeches", "boots"]);
@@ -643,7 +644,10 @@ export class Game {
         this.talk = new TalkPanel(this.hud.root);
         this.pack = new PackPanel(this.hud.root);
         this.pack.onCommand = (command) => this.#packCommand(command);
-        this.pack.onWheel = (id) => this.#putOnWheel(id);
+        this.pack.onWheel = (id) => this.#putOnWheel(`item:${id}`);
+        this.spellbook = new SpellbookPanel(this.hud.root);
+        this.spellbook.onWheel = (id) => this.#putOnWheel(id, ACTIONS[id]?.on === "enemy" ? "enemy" : "self");
+        this.spellbook.onClose = () => this.closeSpellbook();
         this.pack.onClose = () => this.closePack();
         this.journal = new JournalPanel(this.hud.root);
         this.journal.onAbandon = (id) => {
@@ -944,6 +948,7 @@ export class Game {
         this.pack?.dispose();
         this.drops?.dispose();
         this.journal?.panel.remove();
+        this.spellbook?.panel.remove();
         this.fate?.panel.remove();
         this.curtain?.remove();
         this.view.setOccluders(null);
@@ -2169,8 +2174,55 @@ export class Game {
             this.closeJournal();
         } else {
             this.closePack();
+            this.closeSpellbook();
             this.#showJournal();
         }
+    }
+
+    /** Open the spellbook (or close it, if it's open): the player's magic, school by school. */
+    toggleSpellbook() {
+        if (this.spellbook?.open) {
+            this.closeSpellbook();
+        } else {
+            this.closePack();
+            this.closeJournal();
+            this.#showSpellbook();
+        }
+    }
+
+    /** Close the spellbook. */
+    closeSpellbook() {
+        this.spellbook?.hide();
+    }
+
+    // The spellbook as it is now
+    #showSpellbook() {
+        const progress = this.progress;
+        const known = progress.known();
+        const weapon = progress.gear.weapon;
+        const spellOf = (id, extra = {}) => {
+            const { label, about, tier = null, cooldown, castTime, target, needs = null } = SPELLS[id];
+
+            return { id, label, about, tier, known: known.includes(id), cooldown, castTime, target, needs, ...extra };
+        };
+
+        this.spellbook.show({
+            boost: ITEMS[weapon?.id]?.magic && weapon.boost ? { label: itemLabel({ id: weapon.id, quality: weapon.quality }), share: weapon.boost } : null,
+            schools: Object.entries(SCHOOLS).map(([id, { label, tiers, xp }]) => {
+                const { xp: has, from, to } = progress.toNextTier(id);
+                const tier = progress.tierOf(id);
+
+                return { id, label, tier, last: tiers.length, xp: has, from, to, next: to === null ? null : SPELLS[tiers[tier]].label, spells: tiers.map((spell, k) => spellOf(spell, { at: `${xp[k]} ${label}` })) };
+            }),
+            hexes: ["stun", "hold"].map((id) => spellOf(id, { at: "Hexes: Adept" })),
+            tomes: progress.spells.filter((id) => SPELLS[id]?.tome).map((id) => {
+                const grows = SPELLS[id].grows;
+                const level = grows ? progress.levelOf(id) : null;
+
+                return spellOf(id, { level, growth: grows ? { xp: progress.spellXp[id] ?? 0, from: GROWTH_XP[level - 1], to: GROWTH_XP[level] ?? null } : null });
+            }),
+            more: TOMES.filter((id) => !progress.spells.includes(id)).length,
+        });
     }
 
     /** Close the journal. */
@@ -2295,6 +2347,7 @@ export class Game {
             this.closePack();
         } else {
             this.closeJournal();
+            this.closeSpellbook();
             this.#showPack();
         }
     }
@@ -2492,14 +2545,16 @@ export class Game {
 
     // A thing to use put on the player's own action wheel, in its first empty slice (unless it's
     // on one already), and kept
-    #putOnWheel(id) {
-        const key = `item:${id}`;
-        const label = actionOf(key)?.label ?? itemLabel({ id });
-        const where = (side, place) => `your own wheel ${side ? "two" : "one"}, at ${place.toUpperCase()}`;
-        const self = this.wheels.self;
+    // Something put on an action wheel (an ACTIONS key, or "item:" and a thing to use): the
+    // player's own (`wheel`: "self"), or an enemy's; at the first empty slice
+    #putOnWheel(key, wheel = "self") {
+        const label = actionOf(key)?.label ?? itemLabel({ id: key.slice(5) });
+        const whose = wheel === "self" ? "your own wheel" : "an enemy's wheel";
+        const where = (side, place) => `${whose} ${side ? "two" : "one"}, at ${place.toUpperCase()}`;
+        const sides = this.wheels[wheel];
 
         for (let side = 0; side < SIDES; side++) {
-            const place = PLACES.find((each) => self[side][each] === key);
+            const place = PLACES.find((each) => sides[side][each] === key);
 
             if (place) {
                 this.hud.message(`${label} is on ${where(side, place)} already.`, 3);
@@ -2509,10 +2564,10 @@ export class Game {
         }
 
         for (let side = 0; side < SIDES; side++) {
-            const place = PLACES.find((each) => !self[side][each]);
+            const place = PLACES.find((each) => !sides[side][each]);
 
             if (place) {
-                self[side][place] = key;
+                sides[side][place] = key;
                 this.setWheels(this.wheels);
                 this.hud.message(`${label} put on ${where(side, place)}.`, 3);
 
@@ -2520,7 +2575,7 @@ export class Game {
             }
         }
 
-        this.hud.message("Your own wheels are full: change them in Game options, Action wheels.", 3.5);
+        this.hud.message(`${wheel === "self" ? "Your own" : "An enemy's"} wheels are full: change them in Game options, Action wheels.`, 3.5);
     }
 
     // Go and pick up something dropped on the ground: at once if the player's near it, or once
@@ -3218,18 +3273,26 @@ export class Game {
             case "tier":
                 // (A school of magic come to its next tier: its spell known now, and kept)
                 if (event.id === this.me) {
-                    this.hud.message(`${SCHOOLS[event.school].label}: you can cast ${SPELLS[event.spell].label} now! Put it on an action wheel (Game options).`, 5);
+                    this.hud.message(`${SCHOOLS[event.school].label}: you can cast ${SPELLS[event.spell].label} now! Put it on an action wheel (your spellbook, B).`, 5);
                     this.sound?.play("wake");
                     this.onProgress(this.progress);
+
+                    if (this.spellbook?.open) {
+                        this.#showSpellbook();
+                    }
                 }
 
                 break;
             case "learnt":
                 // (A spell learnt from a tome: known now, and kept)
                 if (event.id === this.me) {
-                    this.hud.message(`You've learnt ${SPELLS[event.spell].label}! Put it on an action wheel (Game options).`, 5);
+                    this.hud.message(`You've learnt ${SPELLS[event.spell].label}! Put it on an action wheel (your spellbook, B).`, 5);
                     this.sound?.play("wake");
                     this.onProgress(this.progress);
+
+                    if (this.spellbook?.open) {
+                        this.#showSpellbook();
+                    }
                 }
 
                 break;
@@ -3238,6 +3301,10 @@ export class Game {
                 if (event.id === this.me) {
                     this.hud.message(`${SPELLS[event.spell].label} grows stronger (${event.level} of 5).`, 3);
                     this.onProgress(this.progress);
+                }
+
+                if (this.spellbook?.open && event.id === this.me) {
+                    this.#showSpellbook();
                 }
 
                 break;
@@ -3850,6 +3917,7 @@ export class Game {
         // The pack: its button, or I; Escape closes it (not the menu)
         this.#on(this.hud.root.querySelector("#packbutton") ?? document.createElement("button"), "click", () => this.togglePack());
         this.#on(this.hud.root.querySelector("#journalbutton") ?? document.createElement("button"), "click", () => this.toggleJournal());
+        this.#on(this.hud.root.querySelector("#spellbookbutton") ?? document.createElement("button"), "click", () => this.toggleSpellbook());
         this.#on(document, "keydown", (event) => {
             if (!this.running || this.talk?.open) {
                 return;
@@ -3857,16 +3925,19 @@ export class Game {
 
             const plain = !event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey;
 
-            if (event.key === "Escape" && (this.pack?.open || this.journal?.open || this.fate?.open)) {
+            if (event.key === "Escape" && (this.pack?.open || this.journal?.open || this.spellbook?.open || this.fate?.open)) {
                 event.preventDefault();
                 event.stopPropagation();
                 this.closePack();
                 this.closeJournal();
+                this.closeSpellbook();
                 this.fate?.hide();
             } else if ((event.key === "i" || event.key === "I") && plain) {
                 this.togglePack();
             } else if ((event.key === "j" || event.key === "J") && plain) {
                 this.toggleJournal();
+            } else if ((event.key === "b" || event.key === "B") && plain) {
+                this.toggleSpellbook();
             }
         }, { capture: true });
 
