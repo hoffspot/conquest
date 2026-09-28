@@ -394,7 +394,8 @@ client/                 The game (static files served to the browser)
     wire.js             What goes between host and players, and into a save, as text
     war/                The war between the peoples (see docs/WAR.md): war.js the realms, towns,
                         forces, turns and conquest; peoples.js their temperaments and rulers;
-                        roads.js the ways their forces go; news.js the war told in words
+                        roads.js the ways their forces go; news.js the war told in words;
+                        muster.js where a town's guards stand and its patrols go
     battle.js           Moving, fighting, damage, dying and coming back; the orc's patrol
     weapons.js          The weapons and their attacks
     spells.js           The spells: heal and stun, and their shared cooldown
@@ -431,6 +432,7 @@ client/                 The game (static files served to the browser)
                         roofs.js; landmarks.js, props.js, trees.js; wilds.js, the land's rocks,
                         fallen trees, grass, flowers and the rest; and signs.js and emblems.js,
                         the taverns' and temples' signs)
+    banners3d.js        The peoples' banners by their towns' roads out, in their colours
     avatar.js           A character in the world, following its place in the battle
     effects.js          Arrows, bolts, fireballs, sparks, dust, fire, arcane light, blood and
                         its splashes and pools, smoke and embers, the target ring, spells' light
@@ -450,6 +452,7 @@ client/                 The game (static files served to the browser)
     bvh.js              Motion capture: reading BVH files and retargeting them
     presets.js          The human, heroine and orc, and Wenches and Ale's folk
     folk.js             Everyone else's looks, made up from their part, sex and seed
+    soldiers.js         The peoples' soldiers' looks, carrying what they fight with
   js/lab/character-lab.js  The character lab
   js/lab/world-map.js   The world map
   js/lab/town-map.js    The town map

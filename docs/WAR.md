@@ -192,7 +192,7 @@ The engine is built for this from the start. These are its rules:
 | --- | --- | --- |
 | **M0** | Built | The engine made ready for other players: the host, players by id, commands, snapshots, pausing only when alone. This file. |
 | **M1** | Built | The war on its own: realms, towns, garrisons, treasuries, turns, expeditions, camps, raids, conquest and vassals, relations and envoys, as numbers. A page to watch it play out. |
-| **M2** | | The war in the world: banners over the towns, guards and patrols of each people, hostility by relations, the war's forces brought to life near the player. |
+| **M2** | Built | The war in the world: banners over the towns, guards and patrols of each people, hostility by relations, the war's forces brought to life near the player. |
 | **M3** | | Growing stronger: skills that grow by use along their trees, gear, gold, a pack, shops. |
 | **M4** | | The player's people: the keep and town halls, the rulers' requests, a journal, ranks. |
 | **M5** | | The other peoples' looks. |
@@ -322,6 +322,82 @@ from it the next time. Nothing in the world shows it yet (M2).
 
 Play it a turn at a time or faster, and turn the players' might up to bring the next age on.
 `?seed=N&might=M` chooses the world and the might.
+
+### The war come to life (M2)
+
+Near a player, the war's towns come to life: their soldiers are real people in the battle, of
+whoever holds the town, and whom they fight is as their peoples stand.
+
+**Mustering** (`host.js`, `war/muster.js`).
+- **When.** Every half a second the host looks over the war's towns. A town's soldiers come out
+  once any player is within 120 metres of its edge (out in the world, or in one of its buildings).
+  They're let go once every player is more than 250 metres off. A town that's changed hands has
+  its soldiers let go, and its new holders' come out.
+- **Guards.** Guards stand in pairs either side of each road out of the town, just past its edge,
+  facing out, then round the edge if it has fewer roads than guards. How many:
+  - as many as its garrison has, up to its posts: a capital 8, a city 6, a town 4, a village 2;
+  - each goes after an enemy within 14 metres of its post (its **leash**), and comes back to it.
+- **Patrols.** Patrols of two walk a round of six points just outside the town's edge, each round
+  the other way from the last (as many as the town has: `HOLDINGS` patrols), while its garrison's
+  at least half full.
+- **Each soldier stands for a share of the garrison.** One who falls takes that share off it in
+  the war (`war.loss`), and is taken away 10 seconds after. A soldier never comes back to life:
+  the town musters again from what's left of its garrison the next time a player comes.
+- **Banners.** A banner stands beside each road out with guards at it, 3 metres further out than
+  them: its people's colour, a trim, and their emblem (`world/banners3d.js`):
+
+  | People | Emblem |
+  | --- | --- |
+  | Humans | a crown |
+  | Elves | a leaf |
+  | Dark elves | a spider |
+  | Cat folk | a sun |
+  | Lizard folk | a serpent |
+  | Orcs | a skull |
+
+  When the town changes hands, its banners come down and the new holders' go up.
+- **What they carry** (`characters/soldiers.js`) is what they fight with. Guards carry the first
+  of their people's weapons; patrols carry each of them in turn:
+
+  | People | Guards | Patrols |
+  | --- | --- | --- |
+  | Humans | sword | sword, bow |
+  | Elves | bow | bow, sword |
+  | Dark elves | sword | sword, wand |
+  | Cat folk | spiked gauntlets | spiked gauntlets, bow |
+  | Lizard folk | staff | staff, bow |
+  | Orcs | cleaver | cleaver |
+
+  Orcs look as the orc does. The rest are dressed as the adventurers' guild's warriors and
+  rangers until they have looks of their own (M5).
+
+**Who fights whom** (`Battle.hostile`, and the host's `relations`):
+- The folk: no one, ever.
+- Anyone who has lately struck someone, or someone of their own they saw: the one struck, and its
+  fellows who saw, hold it against them for a minute (`FOE_MS`), whatever their peoples.
+- Two of the same people: never, otherwise.
+- Two peoples' soldiers, or players: as their peoples stand in the war. At war, they fight on
+  sight.
+- The wild (the orc, and later the camps' foes, which are no people's) is set against the players,
+  but not against the peoples' soldiers. A player's own soldiers who see the player struck fight
+  for them.
+
+**A neutral people's guards** can be talked to, or fought:
+- Holding on one opens a wheel with **Fight** (crossed swords): picking a fight with them.
+- The one picked on, and its fellows who see, fight back.
+- Every blow on a soldier whose people aren't at war with the striker's is a grudge between the
+  peoples (`war.remember`).
+
+**Talking to soldiers.** A soldier who isn't an enemy can be tapped to talk to, as the folk can
+(the `guard` talk):
+- what they say depends on how their people stand with the player's (their `stance`: their own,
+  allies, or neither);
+- they tell who holds the town and who rules them, and how the war goes: its age, and who
+  they're at war with.
+
+**On the screen:**
+- A bar over each soldier who's an enemy (or who's hurt); none over the rest.
+- Soldiers drawn a few at a time as they come out (within the budget buildings are built in).
 
 ### The host (core/host.js)
 

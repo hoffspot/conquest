@@ -515,6 +515,43 @@ export const TREES = Object.freeze({
             },
         },
     },
+    // A soldier of a town's guard, or on its patrols: what they say depends on how their people
+    // stand with the player's (`stance`: their own, allies, or neither), and they tell of the town,
+    // who holds it and rules them, and the war
+    guard: {
+        start: "greet",
+        nodes: {
+            greet: {
+                say: [
+                    { if: { stance: "own" }, lines: ["Keep your wits about you out there, {player}.", "All quiet at {town}. For now.", "Good to see one of our own. The roads aren't what they were."] },
+                    { if: { stance: "allied" }, lines: ["Friend of {holder}? Then pass, and welcome to {town}.", "Our peoples stand together. Mind you don't make me regret it."] },
+                    { lines: ["State your business in {town}, stranger.", "{holder} keep the peace here. See that you keep it too.", "No trouble now. We're watching you."] },
+                ],
+                choices: [
+                    { say: "Who holds this place?", next: "holder" },
+                    { say: "How goes the war?", next: "war" },
+                    { say: "Farewell.", next: null },
+                ],
+            },
+            holder: {
+                say: [
+                    { if: { stance: "own" }, lines: ["{town} is ours: {holder} hold it, and {ruler} rules us all. Long may it last."] },
+                    { lines: ["{town} is held by {holder}, under {ruler}. Remember it."] },
+                ],
+                choices: [
+                    { say: "How goes the war?", next: "war" },
+                    { say: "Farewell.", next: null },
+                ],
+            },
+            war: {
+                say: ["These are days of {age}. We stand against {foes}.", "{age}, they're calling it. {holder} are at war with {foes}.", "Ask the taverns for the news. All I know is {age}, and we've {foes} to watch for."],
+                choices: [
+                    { say: "Who holds this place?", next: "holder" },
+                    { say: "Stay safe.", next: null },
+                ],
+            },
+        },
+    },
     // A courtesan: warm, teasing, and never quite saying it. What she offers (her company, a
     // dance, what she hears from her callers, a favour to be done) is handed to the game to do
     courtesan: {

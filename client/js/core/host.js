@@ -14,10 +14,13 @@
 //
 // Pure JavaScript, no DOM: it runs in the browser of the player who's hosting, or in Node.
 
-import { Battle, hostile, TALK_REACH } from "./battle.js";
+import { Battle, FOE_MS, TALK_REACH } from "./battle.js";
 import { Explored } from "./explored.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
-import { War } from "./war/war.js";
+import { SETTLEMENT_KINDS } from "./setpieces/town.js";
+import { bannersOf, PATROL_SIZE, POSTED, postsOf, roundsOf } from "./war/muster.js";
+import { ADJECTIVES } from "./war/peoples.js";
+import { HOLDINGS, War } from "./war/war.js";
 import { distanceBetween } from "./weapons.js";
 
 /** The id of the player whose game the world runs in (the only one, playing alone). */
@@ -32,6 +35,28 @@ export const RELEVANCE = Object.freeze({ every: 500, near: 22, far: 90 });
 
 /** The orc's weapon (the town's one enemy, for now). */
 export const ORC_WEAPON = "cleaver";
+
+/**
+ * When a town's soldiers come to life (docs/WAR.md M2): once a player's this near its edge
+ * (metres, out in the world); let go once every player's this far.
+ */
+export const MUSTER = Object.freeze({ near: 120, far: 250 });
+
+/** How far from its post a guard goes after an enemy (metres). */
+export const LEASH = 14;
+
+/** How long the fallen soldiers lie before they're taken away (battle ms). */
+const FALLEN_MS = 10000;
+
+/** What each people's soldiers fight with: guards the first, patrols each in turn (characters/soldiers.js dresses them to match). */
+export const SOLDIERS_ARMS = Object.freeze({
+    human: ["sword", "bow"],
+    elf: ["bow", "sword"],
+    darkElf: ["sword", "wand"],
+    cat: ["gauntlets", "bow"],
+    lizard: ["staff", "bow"],
+    orc: ["cleaver", "cleaver"],
+});
 
 /** What's kept of the things done by talking (the last so many). */
 const KEEP_DONE = 50;
@@ -68,10 +93,20 @@ export class Host {
      */
     constructor(world, { seed = world.seed ?? 1, populate = true, war = null } = {}) {
         this.world = world;
-        this.battle = new Battle(world, { seed });
 
         /** The war between the peoples (war/war.js), in a world laid out from a plan. */
         this.war = world.plan ? Host.#war(world.plan, war) : null;
+        this.battle = new Battle(world, { seed, relations: (a, b) => this.#against(a, b) });
+
+        /**
+         * The towns whose soldiers are out, near a player (by the town's id): { people (who
+         * holds it), ids (its soldiers'), share (how many of its garrison each stands for),
+         * banners ([{ at, facing }]) }; and each soldier (by id): { town, people, weapon, sex,
+         * seed } (how they look), and the fallen, to be taken away ([{ id, at }]).
+         */
+        this.mustered = new Map();
+        this.soldiers = new Map();
+        this.fallen = [];
 
         /**
          * The players, by id: { id, hero (their character: { name, shape, look, weapon, boots,
@@ -149,7 +184,7 @@ export class Host {
         const at = taken.size ? nearestFree(squaresOf(this.world.maps?.[map] ?? this.world), square, { taken }) : square;
 
         this.players.set(id, player);
-        this.battle.add({ id, kind: "player", name: hero.name, weapon: hero.weapon, boots: Boolean(hero.boots), team: "town", square: at, map });
+        this.battle.add({ id, kind: "player", name: hero.name, weapon: hero.weapon, boots: Boolean(hero.boots), team: player.realm, square: at, map });
         this.#event("join", { id });
 
         return player;
@@ -221,8 +256,13 @@ export class Host {
             case "approach": {
                 const target = this.battle.actor(command.target);
 
-                if (!target || target === actor || (command.type === "engage" && !hostile(actor, target))) {
+                if (!target || target === actor || (command.type === "engage" && !this.canFight(actor, target))) {
                     return refuse("target");
+                }
+
+                // (Picking a fight with someone who's no enemy: the player holds it against them)
+                if (command.type === "engage" && !this.battle.hostile(actor, target)) {
+                    actor.foes[target.id] = this.battle.time + FOE_MS;
                 }
 
                 return this.#order(actor, { type: command.type, target: target.id, run });
@@ -255,6 +295,23 @@ export class Host {
     }
 
     /**
+     * Can one fight another? An enemy, or a soldier of a people not friendly to theirs (a guard of
+     * a neutral town: picking a fight with one turns its fellows against them). Never one of the
+     * folk, or anyone of their own people or its allies.
+     */
+    canFight(actor, target) {
+        if (target.neutral || target === actor) {
+            return false;
+        }
+
+        if (this.battle.hostile(actor, target)) {
+            return true;
+        }
+
+        return target.kind === "soldier" && target.team !== actor.team && !this.war?.friendly(actor.team, target.team);
+    }
+
+    /**
      * Advance the world by `ms` (the battle's whole steps: battle.js advance; the war's turns).
      * Returns what happened: the battle's events, and the host's own ("join", "leave", "open",
      * "close", "explored", "talk", "effect"; "war", with each of the war's events, and "turn",
@@ -262,6 +319,30 @@ export class Host {
      */
     advance(ms) {
         const events = this.battle.advance(ms);
+
+        // The fallen soldiers: their garrison the fewer; taken away a while after
+        for (const event of events) {
+            const soldier = event.type === "death" ? this.soldiers.get(event.id) : null;
+
+            if (soldier) {
+                this.war?.loss(soldier.town, this.mustered.get(soldier.town)?.share ?? 1);
+                this.fallen.push({ id: event.id, at: this.battle.time + FALLEN_MS });
+            }
+
+            // A soldier struck by someone whose people aren't at war with theirs: a grudge
+            // between the peoples (and the soldier's fellows fight back: battle.js foes)
+            if (event.type === "hit" && event.by && this.soldiers.has(event.id)) {
+                const [struck, by] = [this.battle.actor(event.id), this.battle.actor(event.by)];
+
+                if (struck && by && this.war?.realm(by.team) && !this.war.hostile(struck.team, by.team)) {
+                    this.war.remember(struck.team, by.team, -2);
+                }
+            }
+        }
+
+        while (this.fallen.length && this.fallen[0].at <= this.battle.time) {
+            this.#gone(this.fallen.shift().id);
+        }
 
         if (this.war) {
             const turn = this.war.turn;
@@ -303,6 +384,7 @@ export class Host {
         if (this.battle.time >= this.lookAt) {
             this.lookAt = this.battle.time + RELEVANCE.every;
             this.#lookAround();
+            this.#muster();
         }
 
         const own = this.events;
@@ -326,6 +408,9 @@ export class Host {
             lookAt: this.lookAt,
             battle: this.battle.snapshot(),
             war: this.war?.snapshot() ?? null,
+            mustered: [...this.mustered.entries()],
+            soldiers: [...this.soldiers.entries()],
+            fallen: structuredClone(this.fallen),
             players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, ...this.characterOf(player) })),
             done: structuredClone(this.done),
         };
@@ -348,8 +433,11 @@ export class Host {
             }
         }
 
-        host.battle = Battle.restore(world, snapshot.battle);
+        host.battle = Battle.restore(world, snapshot.battle, { relations: (a, b) => host.#against(a, b) });
         host.lookAt = snapshot.lookAt;
+        host.mustered = new Map(structuredClone(snapshot.mustered ?? []));
+        host.soldiers = new Map(structuredClone(snapshot.soldiers ?? []));
+        host.fallen = structuredClone(snapshot.fallen ?? []);
         host.done = structuredClone(snapshot.done);
 
         for (const one of world.folk ?? []) {
@@ -371,6 +459,175 @@ export class Host {
         }
 
         return host;
+    }
+
+    // --- Who fights whom ---
+
+    // Two characters on different teams (battle.js hostile asks, the folk and foes aside): as their
+    // peoples stand in the war; the wild (the orc, the camps' foes: no people's) set against the
+    // players, and not the peoples' soldiers; anyone, without a war
+    #against(a, b) {
+        const war = this.war;
+        const [ra, rb] = [war?.realm(a.team), war?.realm(b.team)];
+
+        if (ra && rb) {
+            return war.hostile(a.team, b.team);
+        }
+
+        if (ra || rb) {
+            return a.kind === "player" || b.kind === "player";
+        }
+
+        return true;
+    }
+
+    // --- The war come to life ---
+
+    // Where the players are out in the world (and those in buildings, at their doors)
+    #whereabouts() {
+        const interiors = this.world.interiors;
+        const places = [];
+
+        for (const player of this.players.values()) {
+            const actor = this.battle.actor(player.id);
+
+            if (actor?.map === "town") {
+                places.push([actor.x, actor.y]);
+            } else if (actor) {
+                const door = interiors?.of(actor.map)?.entrance?.door ?? this.world.tavern?.door;
+
+                if (door) {
+                    places.push([door.x, door.z]);
+                }
+            }
+        }
+
+        return places;
+    }
+
+    // Each town the war's fought over, near a player: its soldiers out (again, if it's changed
+    // hands); and those far from every player let go
+    #muster() {
+        const war = this.war;
+
+        if (!war || !this.world.maps?.town?.chunk) {
+            return;
+        }
+
+        const places = this.#whereabouts();
+
+        for (const town of war.towns) {
+            const place = this.#placeOf(town.id);
+            const middle = this.#middleOf(place);
+            const edge = SETTLEMENT_KINDS[place.kind].radius;
+            const distances = places.map(([x, y]) => Math.hypot(x - middle[0], y - middle[1]) - edge);
+            const mustered = this.mustered.get(town.id);
+
+            if (mustered && (mustered.people !== town.owner || distances.every((distance) => distance > MUSTER.far))) {
+                this.#dismiss(town.id);
+            }
+
+            if (!this.mustered.has(town.id) && distances.some((distance) => distance < MUSTER.near)) {
+                this.#raise(town, place, middle);
+            }
+        }
+    }
+
+    #placeOf(id) {
+        return this.world.plan.places.find((place) => place.id === id);
+    }
+
+    // Where a place's middle is: the town the player starts in is set in a little off its place
+    #middleOf(place) {
+        return place.id === this.world.start?.id && this.world.stamp?.middle ? this.world.stamp.middle : place.at;
+    }
+
+    // A town's soldiers out: its guards at their posts, as many as its garrison has (up to its
+    // posts), and its patrols on their rounds (as many as it has, while its garrison's half full)
+    #raise(town, place, middle) {
+        const map = this.world.maps.town;
+        const squares = squaresOf(map);
+        const full = HOLDINGS[town.kind].garrison;
+        const posts = postsOf(this.world.plan, place, { middle });
+        const guards = Math.min(posts.length, Math.ceil((town.garrison / full) * POSTED[town.kind]));
+        const rounds = roundsOf(this.world.plan, place, { middle }).slice(0, town.garrison * 2 >= full ? undefined : 0);
+        const shown = guards + rounds.length * PATROL_SIZE;
+        const [guardArms, patrolArms] = SOLDIERS_ARMS[town.owner] ?? SOLDIERS_ARMS.human;
+        const taken = new Set(this.battle.actors.filter((actor) => actor.map === "town").map(({ square: [x, y] }) => squareKey(x, y)));
+        const free = ([x, y]) => {
+            const square = nearestFree(squares, [Math.floor(x), Math.floor(y)], { taken, within: 24 });
+
+            taken.add(squareKey(...square));
+
+            return square;
+        };
+        const ids = [];
+        const enlist = (id, weapon, square, orders) => {
+            const seed = [...id].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, this.world.seed ?? 1) >>> 0;
+            const sex = seed % 4 === 0 ? "f" : "m";
+
+            this.soldiers.set(id, { town: town.id, people: town.owner, weapon, sex, seed });
+            this.battle.add({ id, kind: "soldier", name: `${ADJECTIVES[town.owner][0].toUpperCase()}${ADJECTIVES[town.owner].slice(1)} ${orders.patrol.length > 1 ? "patrol" : "guard"}`, weapon, team: town.owner, square, ai: "patrol", role: "guard", ...orders });
+            ids.push(id);
+        };
+
+        if (!shown) {
+            return;
+        }
+
+        try {
+            for (const [k, post] of posts.slice(0, guards).entries()) {
+                const square = free(post.at);
+
+                enlist(`${town.id}/guard-${k}`, guardArms, square, { patrol: [square], leash: LEASH, facing: post.facing });
+            }
+
+            for (const [k, round] of rounds.entries()) {
+                const points = round.map((point) => nearestFree(squares, [Math.floor(point[0]), Math.floor(point[1])], { within: 24 }));
+
+                for (let m = 0; m < PATROL_SIZE; m++) {
+                    enlist(`${town.id}/patrol-${k}-${m}`, m % 2 ? patrolArms : guardArms, free(points[0]), { patrol: points, leash: LEASH * 2 });
+                }
+            }
+        } catch {
+            // (No free ground there: those found are out, and no more)
+        }
+
+        const banners = bannersOf(this.world.plan, place, { middle }).slice(0, Math.ceil(guards / 2));
+
+        this.mustered.set(town.id, { people: town.owner, ids, share: town.garrison / Math.max(1, ids.length), banners });
+        this.#event("muster", { town: town.id, people: town.owner, ids, banners });
+    }
+
+    // A town's soldiers let go (its garrison's as the war has it)
+    #dismiss(townId) {
+        const { ids } = this.mustered.get(townId);
+
+        this.mustered.delete(townId);
+
+        for (const id of ids) {
+            this.battle.remove(id);
+            this.soldiers.delete(id);
+        }
+
+        this.fallen = this.fallen.filter(({ id }) => !ids.includes(id));
+        this.#event("dismiss", { town: townId, ids });
+    }
+
+    // A fallen soldier taken away
+    #gone(id) {
+        const soldier = this.soldiers.get(id);
+
+        this.battle.remove(id);
+        this.soldiers.delete(id);
+
+        const mustered = soldier && this.mustered.get(soldier.town);
+
+        if (mustered) {
+            mustered.ids = mustered.ids.filter((each) => each !== id);
+        }
+
+        this.#event("gone", { id });
     }
 
     // --- Commands ---
@@ -407,7 +664,7 @@ export class Host {
 
         const npc = this.battle.actor(withId);
 
-        if (!npc || npc.dead || !npc.neutral || npc === actor) {
+        if (!npc || npc.dead || npc === actor || !(npc.neutral || (npc.kind === "soldier" && !this.battle.hostile(npc, actor)))) {
             return refuse("target");
         }
 

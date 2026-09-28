@@ -82,15 +82,25 @@ export const SHEATHE_AFTER_MS = 10000;
 /** How far characters can see, in squares. */
 export const SIGHT = 12;
 
-/** Each kind of character: hit points, walking speed (m/s), chasing speed, and how long (ms) until it comes back after dying. */
+/**
+ * Each kind of character: hit points, walking speed (m/s), chasing speed, and how long (ms) until
+ * it comes back after dying (a soldier never does: its town's garrison is one the fewer).
+ */
 export const KINDS = Object.freeze({
     player: { hp: 50, speed: 1.7, respawn: 5000 },
     orc: { hp: 50, speed: 1.1, chase: 1.8, respawn: 30000 },
     folk: { hp: 50, speed: 1.2, respawn: 5000 },
+    soldier: { hp: 40, speed: 1.3, chase: 2.3, respawn: Infinity },
 });
 
-/** Are two characters enemies: on different teams, and neither one of the folk no one fights? */
+/**
+ * Are two characters' teams enemies: on different teams, and neither one of the folk no one
+ * fights? (A battle asks more: Battle's hostile.)
+ */
 export const hostile = (a, b) => a.team !== b.team && !a.neutral && !b.neutral;
+
+/** How long (ms) someone struck, and those of its own who saw, hold it against the striker. */
+export const FOE_MS = 60000;
 
 /**
  * How many times as fast as it walks a character sprints: as people do, walking at about 1.4
@@ -150,9 +160,12 @@ export class Battle {
      * @param {object} world - From generateWorld (world.js): its blocked squares and spawns.
      * @param {object} [options]
      * @param {number} [options.seed] - Seeds the damage rolls.
+     * @param {Function} [options.relations] - Whether two characters on different teams are
+     *     enemies (the host's: how their peoples stand in the war); else they always are.
      */
-    constructor(world, { seed = 1 } = {}) {
+    constructor(world, { seed = 1, relations = null } = {}) {
         this.world = world;
+        this.relations = relations;
 
         // The maps (the world itself if it has only the one) and the links between them
         this.maps = world.maps ?? { town: world };
@@ -175,10 +188,12 @@ export class Battle {
      * ([x, y]), map (a map's id: "town" to start with), ai ("patrol" for enemies, "routine" for
      * the folk), patrol ([[x, y], [x, y]], on its map), neutral (one of the folk: no one fights
      * them, and they fight no one), routine (the folk's: see #routine), facing, armed (its
-     * weapon drawn to start with; else it's put away) }. It comes back to life where it's added.
-     * The folk have a `role` (roles.js ROLES: how they rest).
+     * weapon drawn to start with; else it's put away), leash (a guard's: how far from its post,
+     * its patrol's first point, it goes after an enemy, metres) }. It comes back to life where
+     * it's added. The folk have a `role` (roles.js ROLES: how they rest). A patrol goes round its
+     * points in turn (a guard's one point: its post, facing out the way it's added facing).
      */
-    add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, facing = 0, armed = false }) {
+    add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, facing = 0, armed = false, leash = null }) {
         const type = KINDS[kind];
         const chance = createRandom(this.seed + 7919 + [...id].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, 0));
         const actor = {
@@ -196,6 +211,10 @@ export class Battle {
             team,
             ai,
             patrol,
+            leash,
+            post: facing,
+            // Whom it holds a grudge against (by id), and until when (FOE_MS)
+            foes: {},
             // The map it's on, where it comes back to life, and the last link it went through
             // ({ link, from, to, time })
             map,
@@ -260,7 +279,7 @@ export class Battle {
             lastPathAt: -Infinity,
             pathGoal: null,
             blockedSince: null,
-            patrolIndex: 1,
+            patrolIndex: patrol && patrol.length > 1 ? 1 : 0,
             waitUntil: 0,
         };
 
@@ -271,6 +290,27 @@ export class Battle {
 
     actor(id) {
         return this.actors.find((actor) => actor.id === id) ?? null;
+    }
+
+    /**
+     * Are two characters enemies? Never one of the folk (no one fights them), or itself; always
+     * if either's lately struck the other or one of its own (FOE_MS); never on the same team;
+     * otherwise as their teams stand (`relations`: the peoples' war), or always, without that.
+     */
+    hostile(a, b) {
+        if (a === b || a.neutral || b.neutral) {
+            return false;
+        }
+
+        if ((a.foes?.[b.id] ?? -Infinity) > this.time || (b.foes?.[a.id] ?? -Infinity) > this.time) {
+            return true;
+        }
+
+        if (a.team === b.team) {
+            return false;
+        }
+
+        return this.relations ? this.relations(a, b) : true;
     }
 
     /**
@@ -298,9 +338,9 @@ export class Battle {
         };
     }
 
-    /** A battle on `world` carrying on from a snapshot (snapshot()). */
-    static restore(world, snapshot) {
-        const battle = new Battle(world, { seed: snapshot.seed });
+    /** A battle on `world` carrying on from a snapshot (snapshot()), its teams standing as `relations` has them. */
+    static restore(world, snapshot, { relations = null } = {}) {
+        const battle = new Battle(world, { seed: snapshot.seed, relations });
 
         Object.assign(battle, { time: snapshot.time, lag: snapshot.lag, nextProjectile: snapshot.nextProjectile, projectiles: structuredClone(snapshot.projectiles) });
         battle.random.state = snapshot.random;
@@ -474,7 +514,7 @@ export class Battle {
                 return { ok: false, reason: "dead" };
             }
 
-            if (!hostile(actor, target)) {
+            if (!this.hostile(actor, target)) {
                 return { ok: false, reason: "target" };
             }
 
@@ -700,7 +740,7 @@ export class Battle {
             return true;
         }
 
-        return this.actors.some((other) => hostile(other, actor) && !other.dead && other.map === actor.map && (other.target === actor.id || other.attack?.target === actor.id || (other.order?.type === "engage" && other.order.target === actor.id) || this.canSee(actor, other)));
+        return this.actors.some((other) => this.hostile(other, actor) && !other.dead && other.map === actor.map && (other.target === actor.id || other.attack?.target === actor.id || (other.order?.type === "engage" && other.order.target === actor.id) || this.canSee(actor, other)));
     }
 
     // --- Deciding what to do ---
@@ -721,6 +761,16 @@ export class Battle {
         // Talking: facing whoever it's talking to (sitting, just the way it sits), nothing else
         // (once it's stopped where it was going)
         const partner = actor.talkingTo === null ? null : this.actor(actor.talkingTo);
+
+        if (partner && !partner.dead && partner.map === actor.map && actor.kind === "soldier" && !this.#nearestEnemy(actor, (enemy) => this.canSee(actor, enemy))) {
+            // (A soldier on its rounds stops to talk, while there's no enemy about)
+            if (!actor.to) {
+                actor.path = [];
+                actor.facing = Math.atan2(partner.x - actor.x, partner.y - actor.y);
+            }
+
+            return;
+        }
 
         if (partner && !partner.dead && partner.map === actor.map && actor.ai !== "patrol") {
             const face = () => (actor.facing = Math.atan2(partner.x - actor.x, partner.y - actor.y));
@@ -957,7 +1007,7 @@ export class Battle {
         if (order?.type === "engage") {
             const target = this.actor(order.target);
 
-            if (!target || target.dead || !hostile(actor, target)) {
+            if (!target || target.dead || !this.hostile(actor, target)) {
                 actor.order = null;
             } else if (target.map !== actor.map) {
                 // Gone through a door or up the stairs from here: after them, the same way
@@ -988,7 +1038,7 @@ export class Battle {
     // An enemy: patrol, chase what it sees (through doors and up stairs, if they went through
     // just after it saw them), attack what it catches
     #patrol(actor) {
-        const seen = this.#nearestEnemy(actor, (enemy) => this.canSee(actor, enemy));
+        const seen = this.#nearestEnemy(actor, (enemy) => this.canSee(actor, enemy) && this.#leashed(actor, enemy));
         const chased = actor.target === null ? null : this.actor(actor.target);
         const trail = chased?.crossed;
         const following = chased && !chased.dead && chased.map !== actor.map && trail && trail.from === actor.map && trail.time - actor.lastSeen <= GIVE_UP_MS;
@@ -1008,7 +1058,7 @@ export class Battle {
         if (seen) {
             actor.target = seen.id;
             actor.lastSeen = this.time;
-        } else if (actor.target !== null && this.time - actor.lastSeen > GIVE_UP_MS) {
+        } else if (actor.target !== null && (this.time - actor.lastSeen > GIVE_UP_MS || !this.#leashed(actor, this.actor(actor.target)))) {
             actor.target = null;
             actor.path = [];
             actor.pathGoal = null;
@@ -1045,11 +1095,18 @@ export class Battle {
         const goal = actor.patrol[actor.patrolIndex];
 
         if (same(actor.square, goal) && !actor.to) {
+            // (A guard at its post: facing out, as it was posted)
+            if (actor.patrol.length === 1) {
+                actor.facing = actor.post;
+
+                return;
+            }
+
             if (!actor.waitUntil) {
                 actor.waitUntil = this.time + PATROL_PAUSE_MS;
             } else if (this.time >= actor.waitUntil) {
                 actor.waitUntil = 0;
-                actor.patrolIndex = 1 - actor.patrolIndex;
+                actor.patrolIndex = (actor.patrolIndex + 1) % actor.patrol.length;
             }
         } else if (!actor.path.length && !actor.to && !same(actor.pathGoal, goal)) {
             this.#pathTo(actor, goal);
@@ -1092,12 +1149,17 @@ export class Battle {
         return attack !== null && (attack.kind === "melee" || this.canSee(actor, target));
     }
 
+    // Is someone within a guard's leash of its post (always, for those with none)?
+    #leashed(actor, other) {
+        return !actor.leash || !other || (other.map === actor.spawnMap && distanceBetween(actor.patrol[0], other.square) <= actor.leash);
+    }
+
     #nearestEnemy(actor, test) {
         let best = null;
         let bestDistance = Infinity;
 
         for (const other of this.actors) {
-            if (hostile(other, actor) && !other.dead && other.map === actor.map && test(other)) {
+            if (this.hostile(other, actor) && !other.dead && other.map === actor.map && test(other)) {
                 const distance = distanceBetween(actor.square, other.square);
 
                 if (distance < bestDistance) {
@@ -1618,6 +1680,17 @@ export class Battle {
             target.lastSeen = this.time;
         }
 
+        // And holds it against whoever struck it for a while, as do those of its own who saw
+        if (attacker && attacker.team !== target.team) {
+            const until = this.time + FOE_MS;
+
+            for (const other of this.actors) {
+                if (other === target || (other.team === target.team && !other.neutral && !other.dead && other.map === target.map && (this.canSee(other, target) || this.canSee(other, attacker)))) {
+                    other.foes[attacker.id] = until;
+                }
+            }
+        }
+
         if (target.hp === 0) {
             this.#die(target, attacker);
         }
@@ -1684,7 +1757,7 @@ export class Battle {
             casting: null,
             spellReadyAt: this.time,
             target: null,
-            patrolIndex: 1,
+            patrolIndex: actor.patrol?.length > 1 ? 1 : 0,
             waitUntil: 0,
             pathGoal: null,
             armed: false,
