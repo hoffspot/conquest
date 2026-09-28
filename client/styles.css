@@ -711,6 +711,14 @@ input[type="range"] {
     pointer-events: none;
 }
 
+/* The colour the greater spells wash the view with a moment (strongest at its edges: game.js #wash) */
+#hud .spellwash {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+
 /* The player's name, health and stamina, in the bottom left corner (the stamina bar, when it
    shows, growing it upwards) */
 #playerplate {

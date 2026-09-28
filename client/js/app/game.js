@@ -53,6 +53,7 @@ import { Camps } from "../world/camps3d.js";
 import { Drops } from "../world/drops3d.js";
 import { Ailments3D } from "../world/ailments3d.js";
 import { Effects, LOOKS } from "../world/effects.js";
+import { SpellFx } from "../world/spellfx.js";
 import { Squares } from "../world/squares.js";
 import { KINDS, Wounds } from "../world/wounds.js";
 import { Chunks, DECK, REACH } from "../world/chunks3d.js";
@@ -276,9 +277,19 @@ const SPILLS = Object.freeze({
     rockTusker: ["stoneChips", "dust"],
 });
 
-// How each school's spells look for now (effects.js LOOKS): healing as healing, the elements as
-// the fire and light bolts are
+// How each school's spells are cast (the caster's movements and the sound: effects.js LOOKS):
+// healing as healing, the elements as the fire and light bolts are. (How each looks gathering and
+// landing is its own: spellfx.js)
 const SPELL_LOOKS = Object.freeze({ fire: "fireball", earth: "roots", air: "bolt", water: "bolt" });
+
+// A spell lasting on someone shows on them this often (a mote of its colour: times a second)
+const LINGER = 5;
+
+// Levitating: how high off the ground (m), bobbing so much (m), so fast (radians a second)
+const LIFT = Object.freeze({ height: 0.35, swing: 0.06, bob: 2.2 });
+
+// How fast the camera's shaking dies away (a share of it, a second)
+const SHAKE_DIES = 4;
 
 // What the host tells of besides the battle's events (#hear)
 const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "rank", "loot", "bought", "sold", "used", "gear", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted"]);
@@ -418,12 +429,17 @@ export class Game {
 
         /**
          * How each character's spells and bolts look (effects.js LOOKS: never the same twice in a
-         * row), and the look of each spell being cast and on its way (by whom it's cast, and on
-         * whom it lands).
+         * row), and the look of each spell on its way (on whom it lands).
          */
         this.variety = new Map();
-        this.casting = new Map();
         this.landing = new Map();
+
+        /**
+         * Those each spell landing struck ("caster:spell": their ids, told as "hit" before the
+         * spell's "spell"), and how hard the camera's shaking (metres, dying away).
+         */
+        this.struck = new Map();
+        this.shaking = 0;
 
         /** Each character's wounds (wounds.js), and the pools of blood under the fallen: { left, spot }. */
         this.wounds = new Map();
@@ -625,6 +641,11 @@ export class Game {
 
         this.effects = new Effects(view.scene);
         this.ailments = new Ailments3D(this.effects.group);
+        this.spellFx = new SpellFx(this.effects, view.scene, { lights: view.lamps.map((lamp) => lamp.light) });
+        this.spellFx.camera = view.camera;
+        this.spellFx.onShake = (amount) => (this.shaking = Math.max(this.shaking, amount));
+        this.spellFx.onScreen = (colour, strength, seconds) => this.#wash(colour, strength, seconds);
+        this.spellFx.warm();
 
         for (const actor of this.battle.actors) {
             this.#place(actor);
@@ -659,10 +680,14 @@ export class Game {
         this.talk.onClose = () => this.#endTalk();
         this.effects.camera = view.camera;
 
-        // The black the screen dips to going through a door
+        // The black the screen dips to going through a door, and the colour it's washed with
+        // by the greater spells
         this.curtain = document.createElement("div");
         this.curtain.className = "curtain";
         this.hud.root.prepend(this.curtain);
+        this.washing = document.createElement("div");
+        this.washing.className = "spellwash";
+        this.hud.root.prepend(this.washing);
 
         // Compile every shader now rather than when each thing first comes into view
         await time("shaders", () => view.renderer.compileAsync(view.scene, view.camera));
@@ -772,7 +797,7 @@ export class Game {
         this.wounds.get(id)?.dispose();
         this.hud.untrack(id);
 
-        for (const each of [this.avatars, this.previous, this.flash, this.lastAttack, this.variety, this.casting, this.landing, this.wounds, this.pools]) {
+        for (const each of [this.avatars, this.previous, this.flash, this.lastAttack, this.variety, this.landing, this.wounds, this.pools]) {
             each.delete(id);
         }
     }
@@ -938,7 +963,9 @@ export class Game {
         this.banners?.dispose();
         this.camps?.dispose();
 
-        for (const object of [this.ground, this.town?.object, this.chunks?.object, this.effects?.group, this.effects?.marker, this.effects?.targetRing, this.squares?.object]) {
+        this.spellFx?.clear();
+
+        for (const object of [this.ground, this.town?.object, this.chunks?.object, this.effects?.group, this.effects?.marker, this.effects?.targetRing, this.spellFx?.group, this.squares?.object]) {
             object?.removeFromParent();
         }
 
@@ -951,6 +978,7 @@ export class Game {
         this.spellbook?.panel.remove();
         this.fate?.panel.remove();
         this.curtain?.remove();
+        this.washing?.remove();
         this.view.setOccluders(null);
         this.view.setFocus(null);
         this.view.setIndoors(null);
@@ -1161,10 +1189,17 @@ export class Game {
             this.wheel.setCooldown(this.#cooldowns(this.wheel.slots));
         }
 
-        // Light gathers in the hand of anyone casting a spell
+        // Spells being cast and landing (light gathering in the casters' hands...), and those
+        // lasting on anyone here showing on them now and then
+        this.spellFx.update(dt);
+
         for (const actor of battle.actors) {
-            if (actor.casting && this.avatars.has(actor.id) && Math.random() < dt * 30) {
-                this.effects.charge(lookOf(actor.casting.spell) === "heal" ? "heal" : "stun", this.avatars.get(actor.id).hand("Left"), this.casting.get(actor.id) ?? 0);
+            const avatar = this.avatars.get(actor.id);
+
+            for (const { kind } of actor.buffs ?? []) {
+                if (avatar?.object.visible && kind !== "invisibility" && Math.random() < dt * LINGER) {
+                    this.spellFx.linger(kind, avatar.point(0.5));
+                }
             }
         }
 
@@ -1308,9 +1343,12 @@ export class Game {
         const object = avatar.object;
 
         if (!actor.dead) {
+            const lift = this.battle.buffOf(actor, "levitate") ? LIFT.height + Math.sin(this.clock * LIFT.bob) * LIFT.swing : 0;
+
             object.visible = true;
             avatar.standing = (avatar.standing ?? ground) + (ground - (avatar.standing ?? ground)) * Math.min(1, dt * 12);
-            object.position.y = avatar.standing;
+            avatar.lift = (avatar.lift ?? 0) + (lift - (avatar.lift ?? 0)) * Math.min(1, dt * 4);
+            object.position.y = avatar.standing + avatar.lift;
 
             return;
         }
@@ -1353,6 +1391,30 @@ export class Game {
 
         this.view.look(_focus.set(focus.x, 0, focus.z), yaw, pitch, dt || Infinity);
         this.view.setFocus(chest);
+
+        // (Shaken by the greater spells, dying away)
+        if (this.shaking > 0.005) {
+            const camera = this.view.camera;
+
+            camera.position.x += (Math.random() - 0.5) * this.shaking;
+            camera.position.y += (Math.random() - 0.5) * this.shaking * 0.6;
+            camera.position.z += (Math.random() - 0.5) * this.shaking;
+            this.shaking *= Math.exp(-SHAKE_DIES * dt);
+        } else {
+            this.shaking = 0;
+        }
+    }
+
+    // The screen washed with a colour a moment (the greater spells): strongest at its edges
+    #wash(colour, strength, seconds) {
+        const [r, g, b] = [(colour >> 16) & 255, (colour >> 8) & 255, colour & 255];
+
+        if (!this.washing?.animate) {
+            return;
+        }
+
+        this.washing.style.background = `radial-gradient(ellipse at 50% 55%, rgba(${r},${g},${b},${strength * 0.45}) 0%, rgba(${r},${g},${b},${strength}) 100%)`;
+        this.washing.animate([{ opacity: 1 }, { opacity: 0 }], { duration: seconds * 1000, easing: "ease-in" });
     }
 
     // The minimap: everyone on it, where the player is going and what the camera sees
@@ -2794,7 +2856,18 @@ export class Game {
     #showMap(mapId) {
         const interior = this.interiors.get(mapId) ?? null;
 
+        // (Spells on a map left gone, not those where they've come to on this one: carried
+        // across it by magic; and the view's lamps lent to their flashes only out of doors)
+        if (this.spellFx) {
+            if (mapId !== this.mapId) {
+                this.spellFx.clear();
+            }
+
+            this.spellFx.lit = !interior;
+        }
+
         this.mapId = mapId;
+
         this.town.object.visible = !interior;
 
         for (const outside of [this.ground, this.chunks?.object]) {
@@ -2865,6 +2938,9 @@ export class Game {
     #handle(events) {
         const { battle, hud, effects } = this;
 
+        // (A spell's "hit"s are told in the same step as its "spell")
+        this.struck.clear();
+
         for (const event of events) {
             if (HOST_EVENTS.has(event.type)) {
                 this.#hear(event);
@@ -2875,6 +2951,12 @@ export class Game {
             if (event.type === "hazard") {
                 if (event.change === "on") {
                     this.grounds.set(event.hazard, event);
+
+                    if (event.map === this.mapId) {
+                        const [ox, oz] = this.originOf(event.map);
+
+                        this.spellFx.ground(new THREE.Vector3(ox + event.x, 0, oz + event.y), event.kind, event.radius, (event.until - battle.time) / 1000);
+                    }
                 } else {
                     this.grounds.delete(event.hazard);
                 }
@@ -2965,9 +3047,23 @@ export class Game {
                     const kind = SPELL_LOOKS[lookOf(event.spell)] ?? lookOf(event.spell);
                     const look = this.#look(event.id, kind);
 
-                    // (Gathering in the hand, and landing on whom it's cast on, in the same look)
-                    this.casting.set(event.id, look);
+                    // (Landing on whom it's cast on in the same look; and gathering in the hand,
+                    // for as long as they're casting it, a heal's or a stun's in its look too)
                     this.landing.set(event.target, look);
+
+                    if (battle.actor(event.id)?.map === this.mapId) {
+                        const on = this.avatars.get(event.target);
+
+                        this.spellFx.cast(event.id, event.spell, {
+                            hand: () => avatar.hand("Left"),
+                            feet: () => avatar.object.position,
+                            target: () => on?.object.position ?? null,
+                            aim: () => on?.point(0.6) ?? null,
+                            still: () => battle.actor(event.id)?.casting?.spell === event.spell,
+                            castTime: event.castTime,
+                            glow: LOOKS[kind]?.[look]?.charge ?? null,
+                        });
+                    }
 
                     avatar.actions.startAttack(kind === "heal" ? "castHeal" : "castStun", { hitAt: spell.castTime / 1000, duration: (spell.castTime / 1000) * 1.7 });
                     this.sound?.play(kind === "heal" ? "castHeal" : kind === "fireball" ? "fireball" : "bolt", { at: avatar.object.position });
@@ -2983,6 +3079,9 @@ export class Game {
                     this.sound?.play("healed", { at: avatar.object.position });
                     break;
                 }
+                case "spell":
+                    this.#spellLanded(event, avatar);
+                    break;
                 case "buffed":
                 case "unbuffed":
                     this.#buffed(event, avatar);
@@ -3315,6 +3414,12 @@ export class Game {
                 this.#summons(event);
                 break;
             case "carried":
+                if (event.map === this.mapId) {
+                    const [ox, oz] = this.originOf(event.map);
+
+                    this.spellFx.appear(new THREE.Vector3(ox + event.square[0] + 0.5, 0, oz + event.square[1] + 0.5), event.why);
+                }
+
                 if (event.id === this.me) {
                     this.hud.message({ teleport: "The world lurches, and you're somewhere else entirely.", recall: "You stand at the temple's door.", walk: "One step, and you're there.", summoned: "You're at their side." }[event.why] ?? "", 3);
                 }
@@ -3411,6 +3516,18 @@ export class Game {
 
         victim.actions.react(event.reaction, { from });
         this.sound?.hit(event.reaction, victim.object.position);
+
+        // (Struck by a spell: drawn with the rest it struck as it lands; or one turned back on
+        // them, flashing from whoever turned it)
+        if (event.spell && event.by && !event.ground && !event.reflected) {
+            const key = `${event.by}:${event.spell}`;
+
+            this.struck.set(key, [...(this.struck.get(key) ?? []), event.id]);
+        }
+
+        if (event.reflected && attacker && actor?.map === this.mapId) {
+            this.spellFx.bounce(() => attacker.point(0.6), () => victim.point(0.6));
+        }
 
         // The wound it leaves (or mark), where the blow lands, and which way it was going
         const wounds = this.wounds.get(event.id);
@@ -3526,6 +3643,27 @@ export class Game {
         }
     }
 
+    // A spell lands (battle.js "spell"): drawn where it lands, each its own, with those it struck
+    // (told as "hit" first), on the player's map
+    #spellLanded(event, avatar) {
+        const key = `${event.id}:${event.spell}`;
+        const struck = this.struck.get(key) ?? [];
+        const target = this.avatars.get(event.target);
+
+        this.struck.delete(key);
+
+        if (!target || this.battle.actor(event.target)?.map !== this.mapId) {
+            this.spellFx.stop(event.id);
+
+            return;
+        }
+
+        const where = (one) => ({ feet: () => one.object.position, point: () => one.point(0.6), hand: () => one.hand("Left") });
+        const others = struck.filter((id) => id !== event.target && this.avatars.has(id)).map((id) => where(this.avatars.get(id)));
+
+        this.spellFx.land(event.id, event.spell, { caster: where(avatar), target: where(target), struck: others });
+    }
+
     // Someone unseen (Invisibility): all but gone, a shimmer of them (their materials made their
     // own the first time, copies of any shared with anyone else's, and made see-through while it lasts)
     #unseen(avatar, on) {
@@ -3545,8 +3683,18 @@ export class Game {
         });
     }
 
-    // A creature at the player's side by magic, or gone from it: told
-    #companion({ id, creature, change }) {
+    // A creature at the player's side by magic, or gone from it: seen coming (or going), and told
+    #companion({ id, companion, creature, change }) {
+        // (Where it is: drawn, or, not drawn yet, where it's come; gone, where it was last drawn)
+        const one = this.battle.actor(companion);
+        const avatar = this.avatars.get(companion);
+        const [ox, oz] = this.originOf(this.mapId);
+        const at = avatar?.object.visible ? avatar.object.position.clone() : one?.map === this.mapId ? new THREE.Vector3(ox + one.x, 0, oz + one.y) : null;
+
+        if (at && ["risen", "called", "over", "lost"].includes(change)) {
+            this.spellFx.appear(at, change);
+        }
+
         if (id !== this.me) {
             return;
         }
