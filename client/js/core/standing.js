@@ -14,6 +14,7 @@
 
 import { CREATURES } from "./creatures.js";
 import { PARTS, SPOILS } from "./spoils.js";
+import { rollTome, SPELLS } from "./spells.js";
 import { ADJECTIVES } from "./war/peoples.js";
 
 /** The ranks: each one's title, the standing it takes, and what it opens. */
@@ -318,6 +319,16 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
 }
 
 /**
+ * How likely a guild's contract of each kind is to pay a spell's tome besides its gold (from the
+ * guild's library: spells.js TOMES, as rare as each is): breaking a camp always, a bounty now and
+ * then.
+ */
+export const GUILD_TOMES = Object.freeze({ camp: 1, hunt: 0.35 });
+
+// A tome offered with a contract, in words
+const fromTheLibrary = (tome) => `The guild will add the Tome of ${SPELLS[tome].label} from its library.`;
+
+/**
  * A contract from an adventurers' guild's board in a town (docs/WAR.md M8), for anyone of any
  * people (no standing needed, and none given: gold): beasts off the roads round it; a bounty on
  * the soldiers of a people at war with those who hold it; the camp outside it broken up. Null if
@@ -362,8 +373,9 @@ export function offerContract({ war, town: townId, giver, held = [], random }) {
         case "hunt": {
             const foe = random.pick(foes);
             const need = 2 + random.int(0, 2);
+            const tome = random.chance(GUILD_TOMES.hunt) ? rollTome(random) : null;
 
-            return { ...base, key: foe, target: { realm: foe, need }, text: `Bounty, posted for ${war.realm(holders).name}: ${need} of the ${soldiersOf(foe)}, brought down wherever they're found.`, until: war.turn + turns, reward: pay(reward.gold + reward.each.gold * need) };
+            return { ...base, key: foe, target: { realm: foe, need }, text: `Bounty, posted for ${war.realm(holders).name}: ${need} of the ${soldiersOf(foe)}, brought down wherever they're found.${tome ? ` ${fromTheLibrary(tome)}` : ""}`, until: war.turn + turns, reward: { ...pay(reward.gold + reward.each.gold * need), ...(tome ? { tome } : {}) } };
         }
         case "parts": {
             // (Creatures' parts brought in: a few of the cheapest, fewer of the dearer; paid more
@@ -377,8 +389,9 @@ export function offerContract({ war, town: townId, giver, held = [], random }) {
         }
         case "camp": {
             const camp = random.pick(camps);
+            const tome = random.chance(GUILD_TOMES.camp) ? rollTome(random) : null;
 
-            return { ...base, key: camp.id, target: { force: camp.id, realm: camp.realm, at: [...camp.at], town: town.id, name: town.name }, text: `${war.realm(camp.realm).name} have a camp outside ${town.name}, and the merchants want it gone. Break it up.`, until: war.turn + turns, reward: pay(reward.gold) };
+            return { ...base, key: camp.id, target: { force: camp.id, realm: camp.realm, at: [...camp.at], town: town.id, name: town.name }, text: `${war.realm(camp.realm).name} have a camp outside ${town.name}, and the merchants want it gone. Break it up.${tome ? ` ${fromTheLibrary(tome)}` : ""}`, until: war.turn + turns, reward: { ...pay(reward.gold), ...(tome ? { tome } : {}) } };
         }
         default:
             return null;

@@ -19,6 +19,9 @@ export const AFFLICTIONS = Object.freeze({
     burn: { label: "Burning", about: "Aflame: it hurts fast, till it's out.", ms: 4000, every: 800, damage: 1, cure: "burnSalve" },
     bleed: { label: "Bleeding", about: "A deep wound, bleeding: it hurts every couple of moments.", ms: 10000, every: 2000, damage: 1, cure: "bandage" },
     slow: { label: "Slowed", about: "Held back: moving at half the pace.", ms: 5000, speed: 0.5, cure: "quickening" },
+    // (Fear, the spell's: running blindly away from whoever cast it, and nothing else. No draught
+    // for it: Embolden ends it)
+    fear: { label: "Afraid", about: "Terrified: running blindly away.", ms: 10000, flee: true },
 });
 
 /**

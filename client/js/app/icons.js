@@ -4,7 +4,9 @@
 // `DEFS` holds the gradients, glows and patterns they share: put in the page once (`useDefs`),
 // where every icon drawn anywhere in it finds them.
 
+import { SPELLS, TOMES, tomeOf } from "../core/spells.js";
 import { PARTS } from "../core/spoils.js";
+import { SPELL_DEFS, SPELL_ICONS } from "./spellicons.js";
 
 /** The gear's and things' gradients and patterns. */
 const ITEM_DEFS = `
@@ -116,7 +118,7 @@ const ACTION_DEFS = `
 </filter>`;
 
 /** Gradients, glows and patterns the icons use. */
-export const DEFS = ACTION_DEFS + ITEM_DEFS;
+export const DEFS = ACTION_DEFS + SPELL_DEFS + ITEM_DEFS;
 
 // A star with `points` points, `outer` and `inner` radii, at x, y
 function star(x, y, outer, inner, points = 5, turn = -Math.PI / 2) {
@@ -140,8 +142,10 @@ const SWORD = `
         <rect x="-1.8" y="9" width="3.6" height="9" fill="#6b3f1d" stroke="#2f1a09" stroke-width="0.8"/>
         <circle cy="19.5" r="2.6" fill="#c8962e" stroke="#5a3b0c" stroke-width="0.9"/>`;
 
-/** Each action's icon: SVG drawn round 0, 0, about 44 across. */
+/** Each action's icon: SVG drawn round 0, 0, about 44 across (the spells' own: spellicons.js). */
 export const ICONS = Object.freeze({
+    ...SPELL_ICONS,
+
     // A great green cross in a ring of light, with more sparkles: the greater heal
     greaterHeal: `
         <circle r="22" fill="url(#icon-heal-glow)"/>
@@ -496,9 +500,29 @@ function draught(cures) {
         <ellipse cx="-5.5" cy="1" rx="2.6" ry="4.4" fill="#ffffff" opacity="0.55" transform="rotate(25 -5.5 1)"/>`;
 }
 
+// A spell's tome: a bound book, the spell's own icon on its cover, its corners as rare as it is
+// (silver, green, violet and gold)
+const CORNERS = { common: "#c8ccd4", uncommon: "#5ad06a", rare: "#c070ff" };
+
+function tomeIcon(spell) {
+    const corner = CORNERS[SPELLS[spell].tome] ?? CORNERS.common;
+
+    return `
+        <path d="M-15,-19 L13,-19 L16,-16 L16,19 L-12,19 L-15,16 Z" fill="#efe4c8" stroke="#6a5a3a" stroke-width="1"/>
+        <path d="M-13,17 L14,17 M-13,15 L14,15" stroke="#c8b890" stroke-width="0.7"/>
+        <rect x="-17" y="-21" width="30" height="37" rx="2.5" fill="url(#icon-grimoire)" stroke="#1a0818" stroke-width="1.3"/>
+        <path d="M-13,-21 L-13,16" stroke="#1a0818" stroke-width="1.2" opacity="0.6"/>
+        <rect x="-10" y="-17" width="20" height="29" rx="1.5" fill="none" stroke="#d8b860" stroke-width="0.9"/>
+        <g transform="translate(0 -2.5) scale(0.42)">${ICONS[spell] ?? ""}</g>
+        <g fill="${corner}" stroke="#2a1a28" stroke-width="0.6">
+            <path d="M-17,-21 L-11,-21 L-17,-15 Z"/><path d="M13,-21 L7,-21 L13,-15 Z"/><path d="M-17,16 L-11,16 L-17,10 Z"/><path d="M13,16 L7,16 L13,10 Z"/>
+        </g>`;
+}
+
 export const ITEM_ICONS = Object.freeze({
-    // (The creatures' parts, each in its colour; gold)
+    // (The creatures' parts, each in its colour; gold; the spells' tomes)
     ...Object.fromEntries(Object.entries(PARTS).map(([id, part]) => [id, partIcon(part)])),
+    ...Object.fromEntries(TOMES.map((spell) => [tomeOf(spell), tomeIcon(spell)])),
     gold: COINS,
 
     sword: `<g transform="rotate(45)">${SWORD}</g>`,

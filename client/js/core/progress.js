@@ -3,15 +3,21 @@
 // And from all of it, a player's might, which brings the war on (war/war.js setMight).
 //
 // A skill grows by what it's used for: landing blows up close (blade), from afar (marksman),
-// healing (healing), stunning (hexes), taking blows (endurance), buying and selling (trade),
-// talking (talk), and leading followers (command, from M9). Each rank up its tree makes it
-// stronger, and some bring a new ability: a power strike, an aimed shot, a greater heal, a hold.
+// stunning (hexes), taking blows (endurance), buying and selling (trade), talking (talk), and
+// leading followers (command, from M9). Each rank up its tree makes it stronger, and some bring a
+// new ability: a power strike, an aimed shot, a hold.
+//
+// Magic's schools (core/spells.js SCHOOLS: Healing, Fire, Earth, Air, Water) grow by the spells
+// of each that land: each tier a school comes to, its next spell. And spells learnt from tomes.
+// A wand or a grimoire makes spells stronger, each by its own share (rolled when it's made:
+// rollBoost).
 //
 // The fighting trees and the gear make a player mighty; so does leading others (a healer or a
 // talker hires the might they don't have: M9). Everything here is plain data (toJSON), kept with
 // the character (app/save.js), and the host's to change (core/host.js). Pure JavaScript, no DOM.
 
 import { CURES } from "./afflictions.js";
+import { growthAt, SCHOOLS, SPELLS, TOME_RARITY, TOMES, tierAt, tomeOf } from "./spells.js";
 import { PARTS } from "./spoils.js";
 import { WEAPONS } from "./weapons.js";
 
@@ -37,7 +43,6 @@ export const RANKS = Object.freeze([
 export const TREES = Object.freeze({
     blade: { name: "Blade", grows: "landing blows up close", fighting: true, bonus: { melee: [0, 0.1, 0.2, 0.3, 0.45, 0.6], hp: [0, 0, 0, 10, 15, 20] }, abilities: { 2: "powerStrike" } },
     marksman: { name: "Marksman", grows: "landing shots from afar", fighting: true, bonus: { ranged: [0, 0.1, 0.2, 0.3, 0.45, 0.6] }, abilities: { 2: "aimedShot" } },
-    healing: { name: "Healing", grows: "healing", fighting: false, bonus: { heal: [0, 0.15, 0.3, 0.5, 0.75, 1] }, abilities: { 2: "greaterHeal" } },
     hexes: { name: "Hexes", grows: "stunning your foes", fighting: true, bonus: { stun: [0, 0.15, 0.3, 0.5, 0.75, 1] }, abilities: { 2: "hold" } },
     endurance: { name: "Endurance", grows: "taking blows and running hard", fighting: false, bonus: { hp: [0, 5, 10, 20, 30, 40], stamina: [0, 5, 10, 20, 30, 40], armor: [0, 0, 0.03, 0.05, 0.08, 0.1] }, abilities: {} },
     trade: { name: "Trade", grows: "buying and selling", fighting: false, bonus: { haggle: [0, 0.05, 0.1, 0.15, 0.2, 0.25] }, abilities: {} },
@@ -52,7 +57,6 @@ export const TREES = Object.freeze({
 export const ABILITIES = Object.freeze({
     powerStrike: { label: "Power strike", tree: "blade", blow: "melee", factor: 2, cooldown: 12000 },
     aimedShot: { label: "Aimed shot", tree: "marksman", blow: "ranged", factor: 2, cooldown: 12000 },
-    greaterHeal: { label: "Greater heal", tree: "healing", spell: "greaterHeal" },
     hold: { label: "Hold", tree: "hexes", spell: "hold" },
 });
 
@@ -73,8 +77,8 @@ export const QUALITIES = Object.freeze({
 export const ITEMS = Object.freeze({
     sword: { label: "Sword", slot: "weapon", price: 30 },
     staff: { label: "Staff", slot: "weapon", price: 20 },
-    wand: { label: "Wand", slot: "weapon", price: 40 },
-    grimoire: { label: "Grimoire", slot: "weapon", price: 45 },
+    wand: { label: "Wand", slot: "weapon", price: 40, magic: true },
+    grimoire: { label: "Grimoire", slot: "weapon", price: 45, magic: true },
     hammer: { label: "War hammer", slot: "weapon", price: 35 },
     bow: { label: "Bow", slot: "weapon", price: 35 },
     gauntlets: { label: "Spiked gauntlets", slot: "weapon", price: 25 },
@@ -88,6 +92,9 @@ export const ITEMS = Object.freeze({
     ale: { label: "Tankard of ale", use: { stamina: 1000 }, price: 2 },
     // The cures for what lingers after some creatures' blows (afflictions.js): each ends one
     ...Object.fromEntries(Object.entries(CURES).map(([id, { label, cure, price }]) => [id, { label, use: { cure }, price }])),
+    // The spells' tomes (spells.js TOMES): each read to learn its spell at once; found on creatures
+    // with hands, or given for a guild's contract; the rarer, the dearer
+    ...Object.fromEntries(TOMES.map((spell) => [tomeOf(spell), { label: `Tome of ${SPELLS[spell].label}`, tome: spell, use: { learn: spell }, price: TOME_RARITY[SPELLS[spell].tome].price }])),
     // The wild's creatures' parts (spoils.js): what the adventurers' guild pays for each; some to
     // eat or drink
     ...Object.fromEntries(Object.entries(PARTS).map(([id, { label, worth, use, icon }]) => [id, { label, price: worth, part: true, ...(use ? { use } : {}), ...(icon === "meat" ? { food: true } : {}) }])),
@@ -119,10 +126,49 @@ export const LOOT = Object.freeze({
  */
 export const PACK_SIZE = 20;
 
-/** Whether two things are alike (the same kind, and as well made): they go on one stack. */
-export const alike = (a, b) => Boolean(a && b) && a.id === b.id && (a.quality ?? "common") === (b.quality ?? "common");
+/**
+ * How much stronger a wand or grimoire makes spells (a share: 0.1 to 1), rolled when one's made:
+ * each band ([least, most]) as likely as its `weight` has it, then anywhere in it. The weaker are
+ * common, the strongest very rare.
+ */
+export const BOOSTS = Object.freeze([
+    { band: [0.1, 0.2], weight: 40, rarity: "common" },
+    { band: [0.2, 0.3], weight: 25, rarity: "fairly common" },
+    { band: [0.3, 0.4], weight: 15, rarity: "uncommon" },
+    { band: [0.4, 0.6], weight: 10, rarity: "somewhat rare" },
+    { band: [0.6, 0.8], weight: 6, rarity: "rare" },
+    { band: [0.8, 0.9], weight: 3, rarity: "quite rare" },
+    { band: [0.9, 1], weight: 1, rarity: "very rare" },
+]);
+
+/** The boost a wand or grimoire a new character starts with has (a common one). */
+export const STARTING_BOOST = 0.12;
+
+/** A wand's or grimoire's boost to spells, rolled (random.js random): a whole percent, 10 to 100. */
+export function rollBoost(random) {
+    const total = BOOSTS.reduce((sum, { weight }) => sum + weight, 0);
+    let pick = random.next() * total;
+    const { band } = BOOSTS.find(({ weight }) => (pick -= weight) < 0) ?? BOOSTS[0];
+
+    return Math.round((band[0] + random.next() * (band[1] - band[0])) * 100) / 100;
+}
+
+/** How rare a boost is (BOOSTS: "common" to "very rare"). */
+export const rarityOf = (boost) => (BOOSTS.find(({ band }) => boost < band[1]) ?? BOOSTS.at(-1)).rarity;
+
+/** Whether two things are alike (the same kind, as well made, and as strong a boost): they go on one stack. */
+export const alike = (a, b) => Boolean(a && b) && a.id === b.id && (a.quality ?? "common") === (b.quality ?? "common") && (a.boost ?? null) === (b.boost ?? null);
+
+// A thing as it's kept: its kind, its make, and (a wand or grimoire) its boost
+const thingOf = (item) => ({ id: item.id, quality: QUALITIES[item.quality] ? item.quality : "common", ...(ITEMS[item.id]?.magic ? { boost: boostOf(item) } : {}) });
+
+// A wand's or grimoire's boost: as it is, or (one made before they had them) a common one
+const boostOf = (item) => (Number.isFinite(item.boost) ? Math.max(0.1, Math.min(1, item.boost)) : STARTING_BOOST);
 
 const isSlot = (slot) => Number.isInteger(slot) && slot >= 0 && slot < PACK_SIZE;
+
+// Whether a stack is of a kind of thing (of any make, or only one; of any boost, or only one)
+const matches = (stack, id, quality, boost) => stack?.id === id && (quality === null || stack.quality === quality) && (boost === null || (stack.boost ?? null) === boost);
 const isCount = (count) => Number.isInteger(count) && count > 0;
 
 // A pack as kept: its slots, each a stack ({ id, quality, count }) or null, in their places; and
@@ -136,7 +182,7 @@ function packOf(kept) {
             return;
         }
 
-        const stack = { id: item.id, quality: QUALITIES[item.quality] ? item.quality : "common", count: isCount(item.count) ? item.count : 1 };
+        const stack = { ...thingOf(item), count: isCount(item.count) ? item.count : 1 };
 
         if (isCount(item.count) && isSlot(slot) && !pack[slot]) {
             pack[slot] = stack;
@@ -157,17 +203,19 @@ function packOf(kept) {
     return pack;
 }
 
-/** A piece of gear's name: "Fine sword". */
-export function itemLabel({ id, quality = "common" }) {
-    const { label } = ITEMS[id] ?? { label: id };
+/** A piece of gear's name: "Fine sword"; a wand or grimoire with its boost: "Wand (+34% spells)". */
+export function itemLabel({ id, quality = "common", boost = null }) {
+    const { label, magic } = ITEMS[id] ?? { label: id };
     const made = QUALITIES[quality]?.label;
+    const name = made ? `${made} ${label.toLowerCase()}` : label;
 
-    return made ? `${made} ${label.toLowerCase()}` : label;
+    return magic && boost ? `${name} (+${Math.round(boost * 100)}% spells)` : name;
 }
 
 /** What something costs (gold): its price by its make, less the haggling (or, sold, a share of it and more for haggling). */
-export function priceOf({ id, quality = "common" }, { haggle = 0, selling = false } = {}) {
-    const base = (ITEMS[id]?.price ?? 0) * (QUALITIES[quality]?.price ?? 1);
+export function priceOf({ id, quality = "common", boost = null }, { haggle = 0, selling = false } = {}) {
+    // (A wand or grimoire worth the more the more it boosts spells: known once it's been made)
+    const base = (ITEMS[id]?.price ?? 0) * (QUALITIES[quality]?.price ?? 1) * (ITEMS[id]?.magic && boost ? 1 + 4 * (boost - 0.1) : 1);
 
     // (A creature's part sells for what it's worth: its price is what the guild pays)
     const share = ITEMS[id]?.part ? 1 : SELL_SHARE;
@@ -203,13 +251,101 @@ export class Progress {
      * @param {object} [kept] - As toJSON gave it: { skills: { tree: xp }, gold, pack: [stacks], gear: { weapon, body, shield } }.
      * @param {object} [hero] - Their hero (for the weapon they started with).
      */
-    constructor({ skills = {}, gold = 20, pack = [], gear = null } = {}, { weapon = "sword" } = {}) {
+    constructor({ skills = {}, schools = null, spells = [], spellXp = {}, gold = 20, pack = [], gear = null } = {}, { weapon = "sword" } = {}) {
         this.skills = Object.fromEntries(Object.keys(TREES).map((tree) => [tree, Math.max(0, Number(skills[tree]) || 0)]));
+
+        /**
+         * Each school of magic's experience (core/spells.js SCHOOLS). (Kept from before there
+         * were schools: the healing skill's, as Healing's)
+         */
+        const kept = schools ?? { healing: skills.healing ?? 0 };
+
+        this.schools = Object.fromEntries(Object.keys(SCHOOLS).map((school) => [school, Math.max(0, Number(kept[school]) || 0)]));
+
+        /** The spells learnt from tomes (spells.js SPELLS ids). */
+        this.spells = [...new Set((Array.isArray(spells) ? spells : []).filter((id) => SPELLS[id]))];
+
+        /** Each spell that grows as it's used's experience (spells.js `grows`: Vampirism, Dodge, Poison). */
+        this.spellXp = Object.fromEntries(Object.entries(spellXp ?? {}).filter(([id, xp]) => SPELLS[id]?.grows && Number(xp) > 0).map(([id, xp]) => [id, Number(xp)]));
         this.gold = Math.max(0, Math.floor(Number(gold) || 0));
 
-        /** The pack's slots: each a stack of things alike ({ id, quality, count }), or null. */
+        /** The pack's slots: each a stack of things alike ({ id, quality, count, and a wand's boost }), or null. */
         this.pack = packOf(pack);
-        this.gear = { weapon: gear?.weapon && ITEMS[gear.weapon.id] ? { ...gear.weapon } : { id: weapon, quality: "common" }, body: gear?.body ?? null, shield: gear?.shield ?? null };
+        this.gear = { weapon: thingOf(gear?.weapon && ITEMS[gear.weapon.id] ? gear.weapon : { id: weapon }), body: gear?.body ?? null, shield: gear?.shield ?? null };
+    }
+
+    /** A school of magic's tier (1 to its last: 5 for Healing, 7 for the elements). */
+    tierOf(school) {
+        return tierAt(school, this.schools[school] ?? 0);
+    }
+
+    /** How far a school is to its next tier: { xp, from, to } (to: null at its last). */
+    toNextTier(school) {
+        const { xp: steps } = SCHOOLS[school];
+        const tier = this.tierOf(school);
+
+        return { xp: this.schools[school], from: steps[tier - 1], to: steps[tier] ?? null };
+    }
+
+    /**
+     * A school grows by `amount`: the spells it comes to (those of each tier it's reached now,
+     * that it hadn't: spells.js ids).
+     */
+    growSchool(school, amount) {
+        if (!SCHOOLS[school] || !(amount > 0)) {
+            return [];
+        }
+
+        const before = this.tierOf(school);
+
+        this.schools[school] += amount;
+
+        return SCHOOLS[school].tiers.slice(before, this.tierOf(school));
+    }
+
+    /**
+     * The spells they can cast (spells.js ids): each school's up to its tier; Stun (anyone can)
+     * and Hold (once Hexes brings it); and those learnt from tomes.
+     */
+    known() {
+        const schooled = Object.keys(SCHOOLS).flatMap((school) => SCHOOLS[school].tiers.slice(0, this.tierOf(school)));
+        const hexes = ["stun", ...(this.abilities().includes("hold") ? ["hold"] : [])];
+
+        return [...new Set([...schooled, ...hexes, ...this.spells])];
+    }
+
+    /** Whether they can cast a spell (a spells.js id). */
+    knows(spell) {
+        return this.known().includes(spell);
+    }
+
+    /** A spell that grows as it's used's level (1 to 5; 1 for any other). */
+    levelOf(spell) {
+        return growthAt(this.spellXp[spell] ?? 0);
+    }
+
+    /** A spell that grows as it's used used (and landing): its level now, if that's a new one, else null. */
+    growSpell(spell, amount) {
+        if (!SPELLS[spell]?.grows || !(amount > 0)) {
+            return null;
+        }
+
+        const before = this.levelOf(spell);
+
+        this.spellXp[spell] = (this.spellXp[spell] ?? 0) + amount;
+
+        return this.levelOf(spell) > before ? this.levelOf(spell) : null;
+    }
+
+    /** A spell learnt (from a tome): whether it's new to them. */
+    learn(spell) {
+        if (!SPELLS[spell] || this.knows(spell)) {
+            return false;
+        }
+
+        this.spells.push(spell);
+
+        return true;
     }
 
     /** A tree's rank (0 to 5). */
@@ -246,7 +382,7 @@ export class Progress {
 
     /** Everything the trees and gear give: { melee, ranged, heal, stun, hp, stamina, armor, haggle, persuade, followers }. */
     bonuses() {
-        const totals = { melee: 0, ranged: 0, heal: 0, stun: 0, hp: 0, stamina: 0, armor: 0, haggle: 0, persuade: 0, followers: 0 };
+        const totals = { melee: 0, ranged: 0, heal: 0, stun: 0, spell: 0, hp: 0, stamina: 0, armor: 0, haggle: 0, persuade: 0, followers: 0 };
 
         for (const [tree, { bonus }] of Object.entries(TREES)) {
             const rank = this.rank(tree);
@@ -261,6 +397,11 @@ export class Progress {
 
         totals.melee = (1 + totals.melee) * made - 1;
         totals.ranged = (1 + totals.ranged) * made - 1;
+
+        // (A wand or a grimoire in hand: spells as much stronger as its boost)
+        if (ITEMS[this.gear.weapon?.id]?.magic) {
+            totals.spell += boostOf(this.gear.weapon);
+        }
 
         for (const piece of [this.gear.body, this.gear.shield]) {
             if (piece) {
@@ -283,7 +424,8 @@ export class Progress {
      * their command of others, as good), and their gear.
      */
     might() {
-        const fighting = Math.max(...Object.entries(TREES).filter(([, { fighting }]) => fighting).map(([tree]) => this.rank(tree)));
+        const casting = ["fire", "earth", "air", "water"].map((school) => Math.floor(((this.tierOf(school) - 1) * 5) / 6));
+        const fighting = Math.max(...Object.entries(TREES).filter(([, { fighting }]) => fighting).map(([tree]) => this.rank(tree)), ...casting);
         const command = this.rank("command");
         const gear = (QUALITIES[this.gear.weapon?.quality]?.might ?? 0) + [this.gear.body, this.gear.shield].reduce((sum, piece) => sum + (piece ? (ITEMS[piece.id].might ?? 0) * (QUALITIES[piece.quality]?.power ?? 1) : 0), 0);
 
@@ -319,7 +461,7 @@ export class Progress {
             return false;
         }
 
-        const thing = { id: item.id, quality: QUALITIES[item.quality] ? item.quality : "common" };
+        const thing = thingOf(item);
         const onto = this.pack.findIndex((stack) => alike(stack, thing));
         const slot = onto >= 0 ? onto : this.pack.indexOf(null);
 
@@ -332,9 +474,12 @@ export class Progress {
         return true;
     }
 
-    /** How many of a kind of thing (an ITEMS id, however well made, or only of one make) are in the pack. */
-    held(id, quality = null) {
-        return this.pack.reduce((sum, stack) => sum + (stack?.id === id && (quality === null || stack.quality === quality) ? stack.count : 0), 0);
+    /**
+     * How many of a kind of thing (an ITEMS id, however well made, or only of one make; and, a
+     * wand or grimoire, of any boost or only of one) are in the pack.
+     */
+    held(id, quality = null, boost = null) {
+        return this.pack.reduce((sum, stack) => sum + (matches(stack, id, quality, boost) ? stack.count : 0), 0);
     }
 
     /**
@@ -342,13 +487,13 @@ export class Progress {
      * whichever stacks hold it (the smallest first): true, or false (and nothing taken) if there
      * aren't so many.
      */
-    remove(id, count, quality = null) {
-        if (!isCount(count) || this.held(id, quality) < count) {
+    remove(id, count, quality = null, boost = null) {
+        if (!isCount(count) || this.held(id, quality, boost) < count) {
             return false;
         }
 
         let left = count;
-        const slots = this.pack.map((stack, slot) => (stack?.id === id && (quality === null || stack.quality === quality) ? slot : -1)).filter((slot) => slot >= 0).sort((a, b) => this.pack[a].count - this.pack[b].count);
+        const slots = this.pack.map((stack, slot) => (matches(stack, id, quality, boost) ? slot : -1)).filter((slot) => slot >= 0).sort((a, b) => this.pack[a].count - this.pack[b].count);
 
         for (const slot of slots) {
             const taken = Math.min(left, this.pack[slot].count);
@@ -377,7 +522,7 @@ export class Progress {
 
         this.pack[slot] = count === stack.count ? null : { ...stack, count: stack.count - count };
 
-        return { id: stack.id, quality: stack.quality, count };
+        return { ...thingOf(stack), count };
     }
 
     /**
@@ -457,7 +602,7 @@ export class Progress {
             return "full";
         }
 
-        this.gear[slot] = { id: item.id, quality: item.quality };
+        this.gear[slot] = thingOf(item);
 
         if (shieldOff) {
             this.gear.shield = null;
@@ -483,7 +628,7 @@ export class Progress {
 
     /** What's kept. */
     toJSON() {
-        return { skills: { ...this.skills }, gold: this.gold, pack: this.pack.map((stack) => (stack ? { ...stack } : null)), gear: structuredClone(this.gear) };
+        return { skills: { ...this.skills }, schools: { ...this.schools }, spells: [...this.spells], spellXp: { ...this.spellXp }, gold: this.gold, pack: this.pack.map((stack) => (stack ? { ...stack } : null)), gear: structuredClone(this.gear) };
     }
 }
 

@@ -23,7 +23,7 @@
 import * as THREE from "three";
 
 // How many particles there can be at once
-const PARTICLES = 1400;
+const PARTICLES = 3000;
 
 // Each burst: how many particles, their colours (from, to), size (metres), speed (m/s), how long
 // they last (s), how much gravity pulls them (m/s²; negative rises), and how they spread. Ones
@@ -36,9 +36,7 @@ const BURSTS = {
     arcane: { count: 30, colours: [0xd9c4ff, 0x6a4dff], size: [0.06, 0.16], speed: [1, 3], life: [0.3, 0.6], gravity: -1.5, spread: 2, glow: true, swirl: 6 },
     fire: { count: 34, colours: [0xffe08a, 0xff3a0a], size: [0.18, 0.36], speed: [0.8, 2.4], life: [0.35, 0.75], gravity: -3, spread: 1.8, glow: true, grow: 0.4 },
     heal: { count: 30, colours: [0xdcffe0, 0x28d05a], size: [0.08, 0.18], speed: [0.4, 1.3], life: [0.7, 1.2], gravity: -1.8, spread: 2.2, glow: true, swirl: 3 },
-    healCharge: { count: 3, colours: [0xeaffec, 0x5ef08a], size: [0.05, 0.1], speed: [0.1, 0.5], life: [0.25, 0.45], gravity: -0.8, spread: 2, glow: true },
     stun: { count: 30, colours: [0xfff4a0, 0x9a5cff], size: [0.06, 0.15], speed: [1.5, 3.2], life: [0.25, 0.55], gravity: 0, spread: 2, glow: true, swirl: 8 },
-    stunCharge: { count: 3, colours: [0xe8d8ff, 0x8a4dff], size: [0.05, 0.1], speed: [0.2, 0.7], life: [0.2, 0.35], gravity: 0, spread: 2, glow: true, swirl: 5 },
     blood: { count: 18, colours: [0xc0180c, 0x5a0503], size: [0.02, 0.05], speed: [1.4, 3.6], life: [0.4, 0.75], gravity: 9.8, spread: 0.9, glow: false, opacity: 0.95, late: true, drag: 0.8, splash: 0.2 },
     gush: { count: 42, colours: [0xd01a0e, 0x5a0503], size: [0.025, 0.07], speed: [1.8, 4.6], life: [0.5, 0.95], gravity: 9.8, spread: 1.2, glow: false, opacity: 0.95, late: true, drag: 0.8, splash: 0.15 },
     drip: { count: 1, colours: [0xa0120a, 0x5a0503], size: [0.014, 0.024], speed: [0, 0.15], life: [0.5, 0.7], gravity: 9.8, spread: 0.3, glow: false, opacity: 0.95, late: true, drag: 0.2, splash: 1 },
@@ -94,7 +92,7 @@ const POOL_DRAINS = 2;
  * (`stretch`) or trails smoke (`smoke`), the burst where it hits (`burst`: colours and a size),
  * and its whoosh's pitch. Heals: the light rising (`burst`), from where (`from`: a share of the
  * height), the rings spreading on the ground (colour, and a second one after a moment), and the
- * light gathering in the hand as it's cast (`charge`). Stuns: the flash (`burst`), and the stars
+ * light gathering in the hand as it's cast (`charge`: spellfx.js). Stuns: the flash (`burst`), and the stars
  * circling the head: how many, their colours, how far round (m), how fast (rad/s), how big, and
  * how tilted and wobbling their circle is.
  */
@@ -796,14 +794,6 @@ export class Effects {
                 this.later.push({ left: 0.22 * k, run: () => this.pulse(ground.x, ground.z, colour) });
             }
         });
-    }
-
-    /** Light gathering in a hand casting a spell ("heal" or "stun"), in the look it'll land in. */
-    charge(spell, at, look = 0) {
-        const looks = spell === "heal" ? LOOKS.heal : LOOKS.stun;
-        const style = looks[look] ?? looks[0];
-
-        this.glow.emit({ ...BURSTS[spell === "heal" ? "healCharge" : "stunCharge"], colours: style.charge }, at, null);
     }
 
     /** No more stars round a character's head (it's fallen). */

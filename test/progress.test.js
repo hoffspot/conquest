@@ -45,17 +45,17 @@ describe("growing stronger (progress.js)", () => {
     });
 
     it("gives each tree's bonuses at its rank, and its abilities, every one a spell or a stronger blow", () => {
-        const progress = new Progress({ skills: { blade: 300, healing: 800, endurance: 2000, trade: 100 } });
+        const progress = new Progress({ skills: { blade: 300, hexes: 300, endurance: 2000, trade: 100 } });
         const bonus = progress.bonuses();
 
         assert.ok(Math.abs(bonus.melee - 0.2) < 1e-9);
         assert.equal(bonus.ranged, 0);
-        assert.ok(Math.abs(bonus.heal - 0.5) < 1e-9);
+        assert.ok(Math.abs(bonus.stun - 0.3) < 1e-9);
         assert.equal(bonus.hp, 30);
         assert.equal(bonus.stamina, 30);
         assert.ok(Math.abs(bonus.armor - 0.08) < 1e-9);
         assert.ok(Math.abs(bonus.haggle - 0.05) < 1e-9);
-        assert.deepEqual(progress.abilities().sort(), ["greaterHeal", "powerStrike"]);
+        assert.deepEqual(progress.abilities().sort(), ["hold", "powerStrike"]);
 
         for (const [id, ability] of Object.entries(ABILITIES)) {
             assert.ok(TREES[ability.tree].abilities[2] === id);

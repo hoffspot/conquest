@@ -244,7 +244,7 @@ describe("the wild come to life near the players (host.js, battle.js)", () => {
         assert.equal(knocked.by, "test-tusker");
         assert.ok(me.downUntil > host.battle.time && me.stunnedUntil >= me.downUntil, "down, and stunned while they are");
 
-        for (const command of [{ type: "move", to: [me.square[0] - 3, me.square[1]] }, { type: "engage", target: "test-tusker" }, { type: "cast", spell: "heal" }]) {
+        for (const command of [{ type: "move", to: [me.square[0] - 3, me.square[1]] }, { type: "engage", target: "test-tusker" }, { type: "cast", spell: "vigor" }]) {
             assert.deepEqual(host.command(HOST_PLAYER, command), { ok: false, reason: "down" }, command.type);
         }
 

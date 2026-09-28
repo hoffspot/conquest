@@ -59,7 +59,7 @@ import { routeBetween } from "./interiors.js";
 import { findPath, lineAhead } from "./pathfinding.js";
 import { createRandom } from "./random.js";
 import { BECKON, REST_EVERY, ROLES } from "./roles.js";
-import { rollHeal, SPELL_COOLDOWN, SPELLS } from "./spells.js";
+import { rollHeal, rollSpell, SPELL_COOLDOWN, SPELLS, WARD } from "./spells.js";
 import { Variety } from "./variety.js";
 import { armsOf, chooseAttack, distanceBetween, longestReach, MELEE_REACH, ringsApart, rollDamage, WEAPONS } from "./weapons.js";
 
@@ -112,6 +112,44 @@ export const hostile = (a, b) => a.team !== b.team && !a.neutral && !b.neutral;
 
 /** How long (ms) someone struck, and those of its own who saw, hold it against the striker. */
 export const FOE_MS = 60000;
+
+/**
+ * What lies on the ground a while, hurting whoever of the other side stands in it (not one who's
+ * levitating): fire (Flamefill, Hellfire), acid (Acidify), rot (Putrify), a magma slime's lava and
+ * a spitter's venom. How often it hurts (ms), how much (`share` of the spell's hurt that left it;
+ * or `damage`, times the creature's power), what may take hold, and its element (for wards).
+ */
+export const HAZARDS = Object.freeze({
+    fire: { every: 700, share: 0.12, afflict: { kind: "burn", chance: 0.3 }, element: "fire", reaction: "fire" },
+    acid: { every: 800, share: 0.1, afflict: { kind: "poison", chance: 0.3, look: "acid" }, element: "earth", reaction: "arcane" },
+    rot: { every: 1000, share: 0.1, afflict: { kind: "disease", chance: 0.25 }, element: "water", reaction: "arcane" },
+    lava: { every: 700, damage: 2, afflict: { kind: "burn", chance: 0.4 }, element: "fire", reaction: "fire" },
+    venom: { every: 800, damage: 1, afflict: { kind: "poison", chance: 0.35 }, element: null, reaction: "arcane" },
+});
+
+/**
+ * How much likelier one of the wild's mightier creatures is to shrug off a spell that would bend
+ * its will (Fear, Pacify, Polymorph) for each tier past the middle ones (from none at tier 4 to
+ * RESIST.most); the unique (the perilous places' own) and players never bend.
+ */
+export const RESIST = Object.freeze({ from: 4, perTier: 0.15, most: 0.9 });
+
+/** How long after first being frightened a creature's fear wears thin (Fear: half as long, then not at all), ms. */
+export const FEAR_MEMORY = 60000;
+
+/**
+ * Seeing through Invisibility: only the mightiest (a creature of this tier or more, or one of the
+ * unique) near (within `near` m, and in sight) of someone invisible, a chance each second that
+ * grows the longer they're near (`perSecond`, times the seconds so far) of seeing them.
+ */
+export const SEE_THROUGH = Object.freeze({ tier: 7, near: 8, perSecond: 0.02 });
+
+// The element of a blow that isn't a spell (for wards: spells.js `ward`), by what it throws
+const THROWN = Object.freeze({ bolt: "magic", wisp: "magic", curse: "magic", fireball: "fire", flame: "fire", lava: "fire", roots: "earth" });
+const elementOf = (attack) => attack.element ?? THROWN[attack.projectile?.kind] ?? (attack.reaction === "fire" ? "fire" : attack.afflict?.look === "frost" ? "water" : null);
+
+// Is a blow magic (a spell, or a wand's or grimoire's bolt, a curse, a wisp's)? (Not a blow of the body: Surge and Inertial Barrier have nothing to do with it)
+const magicOf = (attack, spell) => Boolean(spell) || THROWN[attack.projectile?.kind] === "magic" || attack.projectile?.kind === "fireball";
 
 /**
  * How many times as fast as it walks a character sprints: as people do, walking at about 1.4
@@ -196,6 +234,11 @@ export class Battle {
         this.events = [];
         this.lag = 0;
         this.nextProjectile = 1;
+
+        // What lies on the ground hurting those who stand in it (HAZARDS): { id, kind, map, x, y,
+        // radius, until, next, damage, by, team, spell }
+        this.hazards = [];
+        this.nextHazard = 1;
     }
 
     /**
@@ -299,10 +342,21 @@ export class Battle {
             downUntil: 0,
             casting: null,
             spellReadyAt: 0,
+            // When each spell it's cast is ready again (by spell: ms)
+            spellsReadyAt: {},
             dead: false,
             respawnAt: 0,
             // What lingers on it after some blows (afflictions.js): poison, a web...
             afflictions: [],
+            // The spells that last on it (Resist Fire, Reflect, Invisibility...): { kind (the
+            // spell), until, by, level }
+            buffs: [],
+            // Who it's been calmed towards (Pacify: by id), how often lately it's been frightened
+            // ({ count, since }), and who it's seen through the Invisibility of (by id: seconds
+            // near them so far, or true once it has)
+            spared: {},
+            feared: null,
+            seeing: {},
             target: null,
             lastSeen: -Infinity,
             lastPathAt: -Infinity,
@@ -347,6 +401,65 @@ export class Battle {
         Object.assign(actor, { weapon, boots: boots || weapon === "boots", arms: armsOf(weapon, boots), attack: null, drawing: null, armed: false, empowered: null });
     }
 
+    /**
+     * Someone carried off by magic (Teleport, Word of Recall, Wizard's Walk, a summons: host.js):
+     * to a square on a map (the nearest free to it), facing a way, whatever they were doing left
+     * off. Told as a "cross" (of the kind "magic", through no link: no one follows them). Where
+     * they came to, or null if there's no room there.
+     */
+    place(id, map, square, { facing = null } = {}) {
+        const actor = this.actor(id);
+
+        if (!actor || !this.maps[map]) {
+            return null;
+        }
+
+        let there;
+
+        try {
+            there = nearestFree(this.#squares(map), square, { taken: this.#others(map, actor), within: 12 });
+        } catch {
+            return null;
+        }
+
+        const from = actor.map;
+
+        Object.assign(actor, { map, square: there, x: there[0] + 0.5, y: there[1] + 0.5, to: null, path: [], pathGoal: null, facing: facing ?? actor.facing, pace: actor.walkPace, attack: null, casting: null, order: null, target: null, crossed: null });
+
+        // (No one's after them where they were)
+        for (const other of this.actors) {
+            if (other.target === id) {
+                Object.assign(other, { target: null, path: [], pathGoal: null });
+            }
+
+            if (other.order?.target === id) {
+                other.order = null;
+            }
+        }
+
+        this.#emit("cross", { id, link: null, kind: "magic", from, to: map, square: there, facing: actor.facing });
+
+        return there;
+    }
+
+    /**
+     * A creature made into another (Polymorph: host.js), as hurt as it was for its size: its name,
+     * weapon, hit points, pace, armour and what it is (`wild`).
+     */
+    reshape(id, { name, weapon, hp, speed, chase, armor = 0, wild }) {
+        const actor = this.actor(id);
+
+        if (!actor) {
+            return;
+        }
+
+        const share = actor.hp / actor.maxHp;
+
+        this.rearm(id, weapon);
+        Object.assign(actor, { name, maxHp: hp, hp: Math.max(1, Math.round(hp * share)), maxStamina: hp, stamina: hp, speed, chaseSpeed: chase ?? speed, walkPace: speed, pace: speed, armor, wild: { ...actor.wild, ...wild }, target: null, path: [], pathGoal: null });
+        this.#emit("reshaped", { id, name, weapon, hp: actor.hp, maxHp: actor.maxHp });
+    }
+
     /** Mend a character's hurts (`hp`) and fill its stamina (`stamina`), as far as they go ("healed" if it's hurts). */
     mend(id, { hp = 0, stamina = 0 } = {}) {
         const actor = this.actor(id);
@@ -380,7 +493,8 @@ export class Battle {
             return true;
         }
 
-        if (a.team === b.team) {
+        // (Calmed towards them: Pacify, till they strike it)
+        if (a.team === b.team || a.spared?.[b.id] || b.spared?.[a.id]) {
             return false;
         }
 
@@ -409,6 +523,8 @@ export class Battle {
                 steering: steering?.path === actor.path ? structuredClone({ ...steering, path: null }) : null,
             })),
             projectiles: structuredClone(this.projectiles),
+            hazards: structuredClone(this.hazards),
+            nextHazard: this.nextHazard,
         };
     }
 
@@ -416,7 +532,7 @@ export class Battle {
     static restore(world, snapshot, { relations = null } = {}) {
         const battle = new Battle(world, { seed: snapshot.seed, relations });
 
-        Object.assign(battle, { time: snapshot.time, lag: snapshot.lag, nextProjectile: snapshot.nextProjectile, projectiles: structuredClone(snapshot.projectiles) });
+        Object.assign(battle, { time: snapshot.time, lag: snapshot.lag, nextProjectile: snapshot.nextProjectile, projectiles: structuredClone(snapshot.projectiles), hazards: structuredClone(snapshot.hazards ?? []), nextHazard: snapshot.nextHazard ?? 1 });
         battle.random.state = snapshot.random;
         battle.actors = snapshot.actors.map(({ chance: state, restVariety, steering, ...kept }) => {
             const actor = structuredClone(kept);
@@ -558,14 +674,19 @@ export class Battle {
     }
 
     /**
-     * Have a character cast a spell (a SPELLS key), on an enemy (`target`, an id) if it's that
-     * kind of spell. Returns { ok: true }, or { ok: false, reason } if it can't be cast now:
-     * "cooldown", "busy" (staggered, stunned or already casting), "healthy" (healing at full
-     * health), "lifeless" (no one living there), "friendly" (not an enemy), "range" or "sight"
-     * (CAST_FAILURES says them: none of them the host's own refusals, host.js REFUSALS, but for
-     * the cooldown, which is the same).
+     * Have a character cast a spell (a SPELLS key) on whoever its `target` kind has it
+     * (spells.js): an enemy (`targetId`); anyone, or a friend (themselves if there's no
+     * `targetId`); themselves; one fallen (a corpse's id: Zombify); or another player anywhere
+     * (Summon, or themselves: a creature). `level`: how far a spell that grows with use has
+     * (spells.js `grows`); `at`: where it takes them ([x, y] m: Wizard's Walk). Returns
+     * { ok: true }, or { ok: false, reason } if it can't be cast now: "cooldown", "busy"
+     * (staggered, stunned or already casting), "wand" or "grimoire" (it needs one in hand),
+     * "healthy" (healing at full health), "uncursed" (a cure with nothing to cure), "lifeless" (no
+     * one living there), "corpse" (no one fallen there), "friendly" (not an enemy), "hostile" (an
+     * enemy), "range" or "sight" (CAST_FAILURES says them: none of them the host's own refusals,
+     * host.js REFUSALS, but for the cooldown, which is the same).
      */
-    cast(id, spellId, targetId = null) {
+    cast(id, spellId, targetId = null, { level = 1, at = null } = {}) {
         const actor = this.actor(id);
         const spell = SPELLS[spellId];
 
@@ -573,7 +694,7 @@ export class Battle {
             return { ok: false, reason: "busy" };
         }
 
-        if (this.time < actor.spellReadyAt) {
+        if (this.time < actor.spellReadyAt || this.time < (actor.spellsReadyAt?.[spellId] ?? 0)) {
             return { ok: false, reason: "cooldown" };
         }
 
@@ -581,47 +702,108 @@ export class Battle {
             return { ok: false, reason: "busy" };
         }
 
-        let target = actor;
+        // (A wand's or a grimoire's spell: only with one in hand)
+        if (spell.needs && actor.weapon !== spell.needs) {
+            return { ok: false, reason: spell.needs };
+        }
 
-        if (spell.target === "enemy") {
-            target = this.actor(targetId);
+        const target = this.#castOn(actor, spell, targetId);
 
-            if (!target || target.dead) {
-                return { ok: false, reason: "lifeless" };
-            }
+        if (target.reason) {
+            return { ok: false, reason: target.reason };
+        }
 
-            if (!this.hostile(actor, target)) {
-                return { ok: false, reason: "friendly" };
-            }
-
-            if (distanceBetween(actor.square, target.square) > spell.reach) {
-                return { ok: false, reason: "range" };
-            }
-
-            if (!this.canSee(actor, target)) {
-                return { ok: false, reason: "sight" };
-            }
-
+        if (target !== actor) {
             actor.facing = Math.atan2(target.x - actor.x, target.y - actor.y);
-        } else if (spell.heal && actor.hp >= actor.maxHp) {
+        }
+
+        // (Healing someone at full health, with nothing for it to cure: nothing to do; a cure with
+        // nothing to cure, the same)
+        if ((spell.heal || spell.full) && target.hp >= target.maxHp && !this.#cures(spell, target).length) {
             return { ok: false, reason: "healthy" };
+        }
+
+        if (spell.cures && !spell.heal && !spell.full && !this.#cures(spell, target).length) {
+            return { ok: false, reason: "uncursed" };
         }
 
         // Casting calls off an attack
         actor.attack = null;
-        actor.casting = { spell: spellId, target: target.id, start: this.time, landsAt: this.time + spell.castTime };
+        actor.casting = { spell: spellId, target: target.id, start: this.time, landsAt: this.time + spell.castTime, level, at: at ? [...at] : null };
         actor.spellReadyAt = this.time + SPELL_COOLDOWN;
+        actor.spellsReadyAt = { ...actor.spellsReadyAt, [spellId]: this.time + (spell.cooldown ?? SPELL_COOLDOWN) };
         this.#emit("cast", { id: actor.id, spell: spellId, target: target.id, castTime: spell.castTime });
+
+        // (Casting anything else, they're seen)
+        if (spellId !== "invisibility") {
+            this.unbuff(actor.id, "invisibility");
+        }
 
         return { ok: true };
     }
 
+    // Whom a spell's cast on, by its kind of target (the caster, if that's who), or why it can't be: { reason }
+    #castOn(actor, spell, targetId) {
+        const kind = spell.target;
+
+        // (On themselves, or somewhere, or on no one: the caster)
+        if (kind === "self" || kind === "place" || ((kind === "any" || kind === "friend" || kind === "summon") && targetId === null)) {
+            return actor;
+        }
+
+        const target = this.actor(targetId);
+
+        if (kind === "corpse") {
+            return !target || !target.dead || target.map !== actor.map || distanceBetween(actor.square, target.square) > spell.reach ? { reason: "corpse" } : target;
+        }
+
+        if (!target || target.dead) {
+            return { reason: "lifeless" };
+        }
+
+        if (target === actor) {
+            return kind === "enemy" ? { reason: "friendly" } : actor;
+        }
+
+        // (Harm only to enemies; wards only to friends; healing to anyone, friend, neutral or foe)
+        if (kind === "enemy" && !this.hostile(actor, target)) {
+            return { reason: "friendly" };
+        }
+
+        if ((kind === "friend" || kind === "summon") && this.hostile(actor, target)) {
+            return { reason: "hostile" };
+        }
+
+        // (Another player called, wherever they are)
+        if (kind === "summon") {
+            return target.kind === "player" ? target : { reason: "lifeless" };
+        }
+
+        if (target.map !== actor.map || distanceBetween(actor.square, target.square) > spell.reach) {
+            return { reason: "range" };
+        }
+
+        if (!this.canSee(actor, target)) {
+            return { reason: "sight" };
+        }
+
+        return target;
+    }
+
+    #cures(spell, target) {
+        const on = (target.afflictions ?? []).map(({ kind }) => kind);
+
+        return spell.cures === "all" ? on : on.filter((kind) => spell.cures?.includes(kind));
+    }
+
     /**
      * Something lingering on someone (afflictions.js: a kind), from now: by whom (an id), as
-     * strong as their power has it (the hurt each time), and how it shows (`look`). Again while
-     * it's on them, it lasts from now, as strong as the stronger. Whether it took.
+     * strong as their power has it (the hurt each time; or `damage`, as given), for as long as it
+     * lasts (or `ms`), and how it shows (`look`). Warded against it (spells.js `ward`), 30% less
+     * each time and for less long. Again while it's on them, it lasts from now, as strong as the
+     * stronger. Whether it took.
      */
-    afflict(id, kind, { by = null, power = 1, look = null } = {}) {
+    afflict(id, kind, { by = null, power = 1, look = null, ms = null, damage: given = null } = {}) {
         const actor = this.actor(id);
         const affliction = AFFLICTIONS[kind];
 
@@ -629,8 +811,10 @@ export class Battle {
             return false;
         }
 
-        const damage = affliction.damage ? Math.max(1, Math.round(affliction.damage * power)) : 0;
-        const until = this.time + affliction.ms;
+        const warded = this.#warded(actor, { affliction: kind, look });
+        const hurts = given ?? (affliction.damage ? affliction.damage * power : 0);
+        const damage = hurts ? Math.max(1, Math.round(hurts * (warded ? WARD : 1))) : 0;
+        const until = this.time + Math.round((ms ?? affliction.ms) * (warded ? WARD : 1));
         const had = actor.afflictions.find((each) => each.kind === kind);
 
         if (had) {
@@ -659,11 +843,90 @@ export class Battle {
         return true;
     }
 
-    /** How long until a character can cast a spell again, as a share of the cooldown (0: ready). */
-    cooldown(id) {
+    /**
+     * A spell that lasts put on someone (spells.js `lasts`: a ward, Reflect, Invisibility...),
+     * from now for `ms`: by whom, and how far it's grown (`level`: Dodge's). Again while it's on
+     * them, it lasts from now. Whether it took.
+     */
+    buff(id, kind, { ms, by = null, level = 1 } = {}) {
         const actor = this.actor(id);
 
-        return actor ? Math.max(0, Math.min(1, (actor.spellReadyAt - this.time) / SPELL_COOLDOWN)) : 0;
+        if (!actor || actor.dead || !SPELLS[kind]) {
+            return false;
+        }
+
+        const until = this.time + ms;
+        const had = actor.buffs.find((each) => each.kind === kind);
+
+        if (had) {
+            Object.assign(had, { until, by, level: Math.max(had.level, level) });
+        } else {
+            actor.buffs.push({ kind, until, by, level });
+        }
+
+        // (Unseen: whoever was after them loses them, but those who've seen through it before)
+        if (kind === "invisibility") {
+            for (const other of this.actors) {
+                if (other.target === id && other.seeing?.[id] !== true) {
+                    Object.assign(other, { target: null, path: [], pathGoal: null });
+                }
+
+                if (other.attack?.target === id && !other.attack.struck && other.seeing?.[id] !== true) {
+                    other.attack = null;
+                }
+            }
+        }
+
+        this.#emit("buffed", { id, kind, until, by, level: had?.level ?? level });
+
+        return true;
+    }
+
+    /** A spell that lasts ended on someone (Invisibility, when they do something: host.js): whether it was on them. */
+    unbuff(id, kind) {
+        const actor = this.actor(id);
+        const had = actor?.buffs?.find((each) => each.kind === kind);
+
+        if (!had) {
+            return false;
+        }
+
+        actor.buffs.splice(actor.buffs.indexOf(had), 1);
+        this.#emit("unbuffed", { id, kind });
+
+        return true;
+    }
+
+    /** A spell lasting on someone just now ({ kind, until, by, level }), or null. */
+    buffOf(actor, kind) {
+        return actor?.buffs?.find((each) => each.kind === kind && each.until > this.time) ?? null;
+    }
+
+    // Is someone warded against something (a school's spell, an element's blow, an affliction or
+    // how it shows): a ward lasting on them that's against it?
+    #warded(actor, { school = null, element = null, affliction = null, look = null }) {
+        return (actor?.buffs ?? []).some(({ kind, until }) => {
+            const ward = until > this.time && SPELLS[kind]?.ward;
+
+            return ward && ((school && ward.schools.includes(school)) || (element && ward.elements.includes(element)) || (affliction && ward.afflictions.includes(affliction)) || (look && ward.looks.includes(look)));
+        });
+    }
+
+    /**
+     * How long until a character can cast a spell again (any spell: the shared cooldown; or one,
+     * by its id: the longer of that and its own), as a share of the cooldown (0: ready).
+     */
+    cooldown(id, spellId = null) {
+        const actor = this.actor(id);
+
+        if (!actor) {
+            return 0;
+        }
+
+        const shared = Math.max(0, Math.min(1, (actor.spellReadyAt - this.time) / SPELL_COOLDOWN));
+        const own = spellId && SPELLS[spellId] ? Math.max(0, Math.min(1, ((actor.spellsReadyAt?.[spellId] ?? 0) - this.time) / (SPELLS[spellId].cooldown ?? SPELL_COOLDOWN))) : 0;
+
+        return Math.max(shared, own);
     }
 
     /**
@@ -814,6 +1077,7 @@ export class Battle {
         }
 
         this.#fly();
+        this.#ground();
         this.#ail();
     }
 
@@ -911,6 +1175,22 @@ export class Battle {
             if (!actor.to && !actor.path.length && !actor.order) {
                 face();
             }
+        }
+
+        // (Whoever it was after gone unseen: lost)
+        const chased = actor.target === null ? null : this.actor(actor.target);
+
+        if (chased && !this.#noticed(actor, chased)) {
+            Object.assign(actor, { target: null, path: [], pathGoal: null });
+        }
+
+        // (Frightened: running, and nothing else)
+        const fear = actor.kind !== "player" ? actor.afflictions.find(({ kind }) => AFFLICTIONS[kind]?.flee) : null;
+
+        if (fear) {
+            this.#flee(actor, fear);
+
+            return;
         }
 
         if (actor.ai === "patrol") {
@@ -1150,7 +1430,8 @@ export class Battle {
             }
         }
 
-        if (!actor.to && !actor.path.length) {
+        // (Unseen, they strike only on purpose: told to engage it)
+        if (!actor.to && !actor.path.length && !this.buffOf(actor, "invisibility")) {
             // (Not a creature that's leaving everyone be: only on purpose, told to engage it)
             const target = this.#nearestEnemy(actor, (enemy) => this.#reachable(actor, enemy) && !(enemy.wild?.temper === "defensive" && enemy.target === null));
 
@@ -1395,7 +1676,7 @@ export class Battle {
         let bestDistance = Infinity;
 
         for (const other of this.actors) {
-            if (this.hostile(other, actor) && !other.dead && other.map === actor.map && test(other)) {
+            if (this.hostile(other, actor) && !other.dead && other.map === actor.map && this.#noticed(actor, other) && test(other)) {
                 const distance = distanceBetween(actor.square, other.square);
 
                 if (distance < bestDistance) {
@@ -1527,7 +1808,8 @@ export class Battle {
         // Running uses stamina, anything else gets it back (in hundredths, so it adds up exactly)
         actor.running = run && travelled > 0;
 
-        const stamina = actor.stamina + (actor.running ? -STAMINA_DRAIN : STAMINA_RECOVERY * shareOf(actor, "recovery")) * seconds;
+        const drain = STAMINA_DRAIN * (this.buffOf(actor, "swole") ? SPELLS.swole.stamina : 1);
+        const stamina = actor.stamina + (actor.running ? -drain : STAMINA_RECOVERY * shareOf(actor, "recovery")) * seconds;
 
         actor.stamina = Math.min(actor.maxStamina, Math.max(0, Math.round(stamina * 100) / 100));
     }
@@ -1767,6 +2049,9 @@ export class Battle {
 
         actor.attack = { attack, target: target.id, start: this.time, struck: false };
         actor.readyAt = this.time + attack.interval;
+
+        // (Striking, they're seen)
+        this.unbuff(actor.id, "invisibility");
         this.#emit("attack", { id: actor.id, target: target.id, weapon: actor.weapon, attack: attack.id, animation: attack.animation, duration: attack.duration, hitAt: attack.hitAt });
     }
 
@@ -1806,42 +2091,253 @@ export class Battle {
         }
     }
 
-    // A spell lands: healing, or stunning its target (who then turns on the caster)
+    // A spell lands: healing (and curing), harming (its target, and those round them or it leaps
+    // to), stunning its target (who then turns on the caster), lasting on whoever it's cast on (a
+    // ward, Reflect...), curing, frightening, calming, drawing life, poisoning. What the host does
+    // (Zombify, Summon, Teleport...: host.js) it does when it's told of it. Told as "spell": how
+    // many it landed on (for the caster's school, or the spell, to grow by it: host.js), and
+    // anything the host needs (`level`, `at`)
     #land(actor) {
-        const { spell: id, target: targetId } = actor.casting;
+        const { spell: id, target: targetId, level = 1, at = null } = actor.casting;
         const spell = SPELLS[id];
         const target = this.actor(targetId);
 
         actor.casting = null;
 
-        if (!target || target.dead) {
+        if (!target || (target.dead && spell.target !== "corpse")) {
             return;
         }
 
-        if (spell.heal) {
+        let landed = 0;
+
+        if (spell.heal || spell.full) {
             const before = target.hp;
+            const cured = this.#cures(spell, target);
 
-            target.hp = Math.min(target.maxHp, target.hp + Math.round(rollHeal(spell, this.random) * (actor.power?.heal ?? 1) * shareOf(target, "healing")));
-            this.#emit("healed", { id: target.id, by: actor.id, spell: id, amount: target.hp - before, hp: target.hp, maxHp: target.maxHp });
-        }
-
-        if (spell.stun) {
-            const stun = Math.round(spell.stun * (actor.power?.stun ?? 1));
-
-            target.stunnedUntil = Math.max(target.stunnedUntil, this.time + stun);
-            target.casting = null;
-
-            if (target.attack && !target.attack.struck) {
-                target.attack = null;
+            for (const kind of cured) {
+                this.cure(target.id, kind);
             }
 
-            if (target.ai === "patrol" || target.ai === "wild") {
-                target.target = actor.id;
-                target.lastSeen = this.time + stun;
+            target.hp = spell.full ? target.maxHp : Math.min(target.maxHp, target.hp + Math.round(rollHeal(spell, this.random) * (actor.power?.heal ?? 1) * shareOf(target, "healing")));
+            this.#emit("healed", { id: target.id, by: actor.id, spell: id, amount: target.hp - before, hp: target.hp, maxHp: target.maxHp, cured });
+            landed += target.hp > before || cured.length ? 1 : 0;
+        } else if (spell.cures) {
+            // (A cure: what it's for ended, told as healing that restores nothing)
+            const cured = this.#cures(spell, target);
+
+            for (const kind of cured) {
+                this.cure(target.id, kind);
             }
 
-            this.#emit("stunned", { id: target.id, by: actor.id, spell: id, until: target.stunnedUntil });
+            this.#emit("healed", { id: target.id, by: actor.id, spell: id, amount: 0, hp: target.hp, maxHp: target.maxHp, cured });
+            landed += cured.length ? 1 : 0;
         }
+
+        if (spell.damage) {
+            landed += this.#smite(actor, target, id, spell);
+        } else if (spell.stun) {
+            this.#stun(actor, target, id, Math.round(spell.stun * (actor.power?.stun ?? 1)));
+            landed += 1;
+        } else if (spell.lasts && (spell.target === "self" || spell.target === "friend")) {
+            landed += this.buff(target.id, id, { ms: spell.lasts, by: actor.id, level }) ? 1 : 0;
+        } else if (spell.flee) {
+            landed += this.#frighten(actor, target, id, spell);
+        } else if (id === "pacify") {
+            landed += this.#pacify(actor, target, id);
+        } else if (id === "polymorph") {
+            // (The host changes it, if it doesn't shrug it off: only one of the wild's creatures)
+            landed += this.#resisted(actor, target, id, { always: !target.wild }) ? 0 : 1;
+        } else if (spell.drain) {
+            landed += this.#drain(actor, target, id, spell, level);
+        } else if (spell.venom) {
+            this.#provoke(actor, target);
+            landed += this.afflict(target.id, "poison", { by: actor.id, damage: spell.venom[Math.min(level, spell.venom.length) - 1] * (actor.power?.spell ?? 1) }) ? 1 : 0;
+        } else if (!spell.cures && !spell.heal && !spell.full) {
+            // (A wonder the host works: Zombify, Summon, Teleport, Word of Recall, Wizard's Walk, Attraction)
+            landed += 1;
+        }
+
+        this.#emit("spell", { id: actor.id, spell: id, target: target.id, landed, level, at });
+    }
+
+    // Would one of the wild's mightier creatures shrug off a spell bending its will (RESIST)? A
+    // player, or one of the unique, always (or anyone, `always`). Told as "resisted"
+    #resisted(caster, target, id, { always: anyway = false } = {}) {
+        const tier = target.wild?.tier ?? 0;
+        const always = anyway || target.kind === "player" || Boolean(target.wild?.unique);
+        const resists = always || this.random.chance(Math.min(RESIST.most, Math.max(0, (tier - RESIST.from) * RESIST.perTier)));
+
+        if (resists) {
+            this.#emit("resisted", { id: target.id, by: caster.id, spell: id, always });
+            this.#provoke(caster, target);
+        }
+
+        return resists;
+    }
+
+    // Fear: the target runs blindly away from the caster (its `flee` ms: half that if it's been
+    // frightened in the last FEAR_MEMORY, and not at all the time after). Whether it took
+    #frighten(caster, target, id, spell) {
+        if (this.#resisted(caster, target, id)) {
+            return 0;
+        }
+
+        const lately = target.feared && this.time - target.feared.since < FEAR_MEMORY ? target.feared : { count: 0, since: this.time };
+        const ms = lately.count === 0 ? spell.flee : lately.count === 1 ? spell.flee / 2 : 0;
+
+        target.feared = { count: lately.count + 1, since: lately.since };
+
+        if (!ms) {
+            this.#emit("resisted", { id: target.id, by: caster.id, spell: id, always: false, used: true });
+
+            return 0;
+        }
+
+        Object.assign(target, { attack: target.attack?.struck ? target.attack : null, casting: null, target: null, path: [], pathGoal: null });
+        this.afflict(target.id, "fear", { by: caster.id, ms });
+        this.#provoke(caster, target, { turn: false });
+
+        return 1;
+    }
+
+    // Pacify: the target's no longer hostile to the caster (till the caster strikes it). Whether it took
+    #pacify(caster, target, id) {
+        if (this.#resisted(caster, target, id)) {
+            return 0;
+        }
+
+        target.spared = { ...target.spared, [caster.id]: true };
+        delete target.foes[caster.id];
+        delete caster.foes?.[target.id];
+
+        if (target.target === caster.id) {
+            Object.assign(target, { target: null, path: [], pathGoal: null });
+        }
+
+        if (target.attack?.target === caster.id && !target.attack.struck) {
+            target.attack = null;
+        }
+
+        this.#emit("pacified", { id: target.id, by: caster.id });
+
+        return 1;
+    }
+
+    // Vampirism: life drawn out of the target into the caster (as much as it grows to: `level`). Whether it drew any
+    #drain(caster, target, id, spell, level) {
+        const [least, most] = spell.drain[Math.min(level, spell.drain.length) - 1];
+        const dealt = this.#hit(caster, target, { id, kind: "spell", reaction: "arcane", stagger: 200 }, null, { damage: Math.max(1, Math.round(this.random.int(least, most) * (caster.power?.spell ?? 1))), spell: id });
+
+        if (dealt > 0 && !caster.dead) {
+            const before = caster.hp;
+
+            caster.hp = Math.min(caster.maxHp, caster.hp + Math.round(dealt * shareOf(caster, "healing")));
+            this.#emit("healed", { id: caster.id, by: caster.id, spell: id, amount: caster.hp - before, hp: caster.hp, maxHp: caster.maxHp, cured: [], from: target.id });
+        }
+
+        return dealt > 0 ? 1 : 0;
+    }
+
+    // Something left on the ground a while (HAZARDS), round [x, y] on a map, by whom (their side
+    // hurt by it, not their own), hurting so much each time; told as "hazard"
+    #lay(by, map, x, y, { kind, ms, radius }, damage, spell = null) {
+        const hazard = { id: this.nextHazard++, kind, map, x, y, radius, until: this.time + ms, next: this.time + HAZARDS[kind].every, damage: Math.max(1, Math.round(damage)), by: by?.id ?? null, team: by?.team ?? null, spell };
+
+        this.hazards.push(hazard);
+        this.#emit("hazard", { hazard: hazard.id, kind, map, x, y, radius, until: hazard.until, by: hazard.by, change: "on" });
+    }
+
+    // What lies on the ground hurting whoever of the other side stands in it (never one who's
+    // levitating), till it's gone
+    #ground() {
+        for (const hazard of [...this.hazards]) {
+            const { every, afflict, element, reaction } = HAZARDS[hazard.kind];
+            const by = hazard.by === null ? null : this.actor(hazard.by);
+
+            if (this.time >= hazard.next) {
+                hazard.next += every;
+
+                for (const actor of this.actors) {
+                    const theirs = by ? this.hostile(by, actor) : actor.team !== hazard.team && !actor.neutral;
+
+                    if (!actor.dead && actor.map === hazard.map && theirs && Math.hypot(actor.x - hazard.x, actor.y - hazard.y) <= hazard.radius && !this.buffOf(actor, "levitate")) {
+                        this.#hit(by, actor, { id: hazard.kind, kind: "hazard", reaction, stagger: 0, afflict, element }, null, { damage: hazard.damage, spell: hazard.spell, ground: true });
+                    }
+                }
+            }
+
+            if (this.time >= hazard.until) {
+                this.hazards.splice(this.hazards.indexOf(hazard), 1);
+                this.#emit("hazard", { hazard: hazard.id, kind: hazard.kind, map: hazard.map, change: "over" });
+            }
+        }
+    }
+
+    // An attack spell landing on its target: and on every enemy of the caster's round them (its
+    // `area`), and leaping on to others near (its `chain`), each less; with whatever else it does.
+    // How many it struck.
+    #smite(caster, target, id, spell) {
+        // (Each struck, and how many leaps it is from the target: 0 for those round it)
+        const struck = [{ one: target, leap: 0 }];
+        const near = (from, reach) => this.actors.filter((other) => !other.dead && other.map === from.map && !struck.some(({ one }) => one === other) && this.hostile(caster, other) && Math.hypot(other.x - from.x, other.y - from.y) <= reach);
+
+        if (spell.area) {
+            struck.push(...near(target, spell.area).map((one) => ({ one, leap: 0 })));
+        }
+
+        // (Leaping from the last struck to the nearest enemy not struck yet, within 3 m)
+        let from = target;
+
+        for (let leap = 1; leap <= (spell.chain ?? 0); leap++) {
+            const next = near(from, 3).sort((a, b) => Math.hypot(a.x - from.x, a.y - from.y) - Math.hypot(b.x - from.x, b.y - from.y))[0];
+
+            if (!next) {
+                break;
+            }
+
+            struck.push({ one: next, leap });
+            from = next;
+        }
+
+        for (const { one, leap } of struck) {
+            const damage = Math.max(1, Math.round(rollSpell(spell, this.random) * (caster.power?.spell ?? 1) * (spell.falls ?? 0.7) ** leap));
+
+            this.#hit(caster, one, { id, kind: "spell", reaction: spell.reaction ?? "arcane", stagger: spell.stagger ?? 200, knockdown: spell.knockdown ?? 0, afflict: spell.effect ?? null }, null, { damage, spell: id });
+
+            if (!one.dead && spell.stun && this.random.chance(spell.stunChance ?? 1)) {
+                this.#stun(caster, one, id, spell.stun);
+            }
+        }
+
+        // (What it leaves on the ground round them: fire, acid, rot)
+        if (spell.hazard) {
+            this.#lay(caster, target.map, target.x, target.y, spell.hazard, ((spell.damage[0] + spell.damage[1]) / 2) * (caster.power?.spell ?? 1) * HAZARDS[spell.hazard.kind].share, id);
+        }
+
+        return struck.length;
+    }
+
+    // Stunned by a spell, for `ms`: whatever it was doing stops; a creature or a guard turns on
+    // whoever did it
+    #stun(caster, target, id, ms) {
+        // (Warded against the spell's school, or magic: less long)
+        if (this.#warded(target, { school: SPELLS[id]?.school ?? "magic" })) {
+            ms = Math.round(ms * WARD);
+        }
+
+        target.stunnedUntil = Math.max(target.stunnedUntil, this.time + ms);
+        target.casting = null;
+
+        if (target.attack && !target.attack.struck) {
+            target.attack = null;
+        }
+
+        if (target.ai === "patrol" || target.ai === "wild") {
+            target.target = caster.id;
+            target.lastSeen = this.time + ms;
+        }
+
+        this.#emit("stunned", { id: target.id, by: caster.id, spell: id, until: target.stunnedUntil });
     }
 
     #launch(actor, target, attack) {
@@ -1888,6 +2384,11 @@ export class Battle {
             if (distance <= travel) {
                 this.projectiles.splice(this.projectiles.indexOf(projectile), 1);
                 this.#hit(attacker, target, projectile.attack, projectile.id);
+
+                // (Some spat leaves a pool where it lands: lava, venom)
+                if (projectile.attack.pool) {
+                    this.#lay(attacker, target.map, target.x, target.y, projectile.attack.pool, HAZARDS[projectile.attack.pool.kind].damage * (attacker?.power?.ranged ?? 1));
+                }
             } else {
                 projectile.x += (dx / distance) * travel;
                 projectile.y += (dy / distance) * travel;
@@ -1896,8 +2397,21 @@ export class Battle {
     }
 
     // What lingers on those afflicted: hurting them now and then (and bringing down any it's the
-    // last of), till it wears off
+    // last of), till it wears off; and the spells lasting on anyone, till they do
     #ail() {
+        for (const actor of this.actors) {
+            for (const buff of actor.buffs?.length ? [...actor.buffs] : []) {
+                if (this.time >= buff.until) {
+                    actor.buffs.splice(actor.buffs.indexOf(buff), 1);
+                    this.#emit("unbuffed", { id: actor.id, kind: buff.kind, over: true });
+                }
+            }
+
+            if (this.buffOf(actor, "invisibility")) {
+                this.#seeThrough(actor);
+            }
+        }
+
         for (const actor of this.actors) {
             if (actor.dead || !actor.afflictions.length) {
                 continue;
@@ -1923,12 +2437,87 @@ export class Battle {
         }
     }
 
-    #hit(attacker, target, attack, projectile = null) {
-        // A blow as strong as the attacker's power for its kind (and its next blow made stronger,
-        // if it is), less what the target's armour takes off: never less than 1
+    /**
+     * A blow, a spell or the ground striking someone: as strong as the attacker's power for its
+     * kind (and its next blow made stronger, if it is), less what the target's armour takes off
+     * (never less than 1); a spell's hurt as it's given (armour's no help against it). Then what's
+     * lasting on either: slipped (Dodge), stronger (Surge, the attacker's, for blows of the body),
+     * less (Inertial Barrier, against blows of the body; a ward against its school or element),
+     * more (Surge, the target's), and some of it turned back (Reflect). How much it hurt.
+     */
+    // The mightiest near someone invisible (SEE_THROUGH), in sight of them, a little likelier each
+    // moment the longer they're near to see through it (told as "seen"); the rest never do
+    #seeThrough(actor) {
+        const seconds = STEP_MS / 1000;
+
+        for (const other of this.actors) {
+            const mighty = (other.wild?.tier ?? 0) >= SEE_THROUGH.tier || Boolean(other.wild?.unique);
+            const near = mighty && !other.dead && other.map === actor.map && this.hostile(other, actor) && Math.hypot(other.x - actor.x, other.y - actor.y) <= SEE_THROUGH.near && this.canSee(other, actor);
+
+            const seeing = near ? (other.seeing ??= {}) : null;
+
+            if (!near || seeing[actor.id] === true) {
+                continue;
+            }
+
+            const so = (seeing[actor.id] ?? 0) + seconds;
+
+            seeing[actor.id] = this.random.chance(SEE_THROUGH.perSecond * so * seconds) ? true : so;
+
+            if (seeing[actor.id] === true) {
+                this.#emit("seen", { id: other.id, target: actor.id });
+            }
+        }
+    }
+
+    // Can `looker` make out `actor`: not if it's invisible, unless the looker's seen through it
+    #noticed(looker, actor) {
+        return !this.buffOf(actor, "invisibility") || looker.seeing?.[actor.id] === true;
+    }
+
+    // Running blindly away from whoever frightened it (Fear), somewhere off that way, then
+    // further; fighting no one meanwhile
+    #flee(actor, fear) {
+        const from = this.actor(fear.by);
+
+        actor.target = null;
+        actor.walkPace = actor.chaseSpeed ?? actor.speed;
+
+        if (actor.to || actor.path.length) {
+            return;
+        }
+
+        const away = from && from.map === actor.map ? Math.atan2(actor.y - from.y, actor.x - from.x) : this.random.next() * Math.PI * 2;
+        const angle = away + (this.random.next() - 0.5) * 1.6;
+        const goal = [Math.floor(actor.x + Math.cos(angle) * 6), Math.floor(actor.y + Math.sin(angle) * 6)];
+
+        try {
+            this.#pathTo(actor, nearestFree(this.#squares(actor.map), goal, { within: 3 }));
+        } catch {
+            // (Nowhere to run that way: cowering, till another moment)
+        }
+    }
+
+    #hit(attacker, target, attack, projectile = null, { damage: given = null, spell = null, ground = false } = {}) {
+        const magic = magicOf(attack, spell);
+
+        // Slipped (Dodge): nothing, but they know they were set on
+        const dodge = !ground && attacker && attacker !== target && this.buffOf(target, "dodge");
+
+        if (dodge && this.random.chance(SPELLS.dodge.dodge[Math.min(dodge.level, SPELLS.dodge.dodge.length) - 1])) {
+            this.#emit("dodged", { id: target.id, by: attacker.id, attack: attack.id, spell, projectile });
+            this.#provoke(attacker, target);
+
+            return 0;
+        }
+
         const blow = attack.kind === "ranged" ? "ranged" : "melee";
-        const empowered = attacker?.empowered?.blow === blow ? attacker.empowered.factor : 1;
-        const damage = Math.max(1, Math.round(rollDamage(attack, this.random) * (attacker?.power?.[blow] ?? 1) * empowered * (1 - (target.armor ?? 0))));
+        const empowered = given === null && attacker?.empowered?.blow === blow ? attacker.empowered.factor : 1;
+        const base = given ?? Math.max(1, Math.round(rollDamage(attack, this.random) * (attacker?.power?.[blow] ?? 1) * empowered * (1 - (target.armor ?? 0))));
+        const school = spell ? (SPELLS[spell]?.school ?? "magic") : null;
+        const warded = this.#warded(target, { school, element: spell ? null : elementOf(attack) });
+        const factor = (!magic && this.buffOf(attacker, "surge") ? SPELLS.surge.might : 1) * (!magic && this.buffOf(target, "inertialBarrier") ? SPELLS.inertialBarrier.physical : 1) * (warded ? WARD : 1) * (this.buffOf(target, "surge") ? SPELLS.surge.exposed : 1);
+        const damage = factor === 1 ? base : Math.max(1, Math.round(base * factor));
 
         if (empowered > 1) {
             attacker.empowered = null;
@@ -1946,12 +2535,18 @@ export class Battle {
             hp: target.hp,
             maxHp: target.maxHp,
             projectile,
+            spell,
+            ...(ground ? { ground: true } : {}),
+            ...(attack.reflected ? { reflected: true } : {}),
         });
 
         // A blow that knocks its target off its feet: it can't move, fight or cast till it's up
+        // (warded against its school, less long)
         if (attack.knockdown && target.hp > 0) {
-            target.stunnedUntil = Math.max(target.stunnedUntil, this.time + attack.knockdown);
-            target.downUntil = Math.max(target.downUntil ?? 0, this.time + attack.knockdown);
+            const down = Math.round(attack.knockdown * (warded ? WARD : 1));
+
+            target.stunnedUntil = Math.max(target.stunnedUntil, this.time + down);
+            target.downUntil = Math.max(target.downUntil ?? 0, this.time + down);
             target.casting = null;
 
             if (target.attack && !target.attack.struck) {
@@ -1963,17 +2558,41 @@ export class Battle {
 
         // A blow that leaves something lingering (venom, a web, fire...), sometimes
         if (attack.afflict && target.hp > 0 && this.random.chance(attack.afflict.chance)) {
-            this.afflict(target.id, attack.afflict.kind, { by: attacker?.id ?? null, power: attacker?.power?.[blow] ?? 1, look: attack.afflict.look ?? null });
+            this.afflict(target.id, attack.afflict.kind, { by: attacker?.id ?? null, power: attacker?.power?.[spell ? "spell" : blow] ?? 1, look: attack.afflict.look ?? null });
         }
 
-        // Whoever is hit fights back
-        if (attacker && (target.ai === "patrol" || target.ai === "wild")) {
+        if (attacker) {
+            this.#provoke(attacker, target);
+        }
+
+        if (target.hp === 0) {
+            this.#die(target, attacker);
+        }
+
+        // (Some of it turned back on whoever dealt it: Reflect. Never what's itself turned back)
+        const reflect = !ground && !attack.reflected && attacker && attacker !== target && !attacker.dead && this.buffOf(target, "reflect");
+
+        if (reflect) {
+            this.#hit(target, attacker, { id: "reflect", kind: "spell", reaction: "arcane", stagger: 0, reflected: true }, null, { damage: Math.max(1, Math.round(damage * SPELLS.reflect.reflect)), spell: "reflect" });
+        }
+
+        return damage;
+    }
+
+    // Someone set on (struck, or a spell cast at them): they fight back (`turn`: a creature or a
+    // guard turns on whoever did it), calm towards them no longer (Pacify), and hold it against
+    // them a while, as do those of their own who saw
+    #provoke(attacker, target, { turn = true } = {}) {
+        if (turn && (target.ai === "patrol" || target.ai === "wild")) {
             target.target = attacker.id;
             target.lastSeen = this.time;
         }
 
-        // And holds it against whoever struck it for a while, as do those of its own who saw
-        if (attacker && attacker.team !== target.team) {
+        if (target.spared?.[attacker.id]) {
+            delete target.spared[attacker.id];
+        }
+
+        if (attacker.team !== target.team) {
             const until = this.time + FOE_MS;
 
             for (const other of this.actors) {
@@ -1985,16 +2604,13 @@ export class Battle {
                 }
             }
         }
-
-        if (target.hp === 0) {
-            this.#die(target, attacker);
-        }
     }
 
     #die(actor, killer) {
         actor.dead = true;
         actor.respawnAt = this.time + actor.respawnMs;
         actor.afflictions = [];
+        actor.buffs = [];
         actor.drawing = null;
         actor.attack = null;
         actor.casting = null;
@@ -2052,8 +2668,11 @@ export class Battle {
             stunnedUntil: 0,
             downUntil: 0,
             afflictions: [],
+            buffs: [],
+            feared: null,
             casting: null,
             spellReadyAt: this.time,
+            spellsReadyAt: {},
             target: null,
             patrolIndex: actor.patrol?.length > 1 ? 1 : 0,
             waitUntil: 0,

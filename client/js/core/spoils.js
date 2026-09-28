@@ -8,7 +8,8 @@
 //
 // Pure data and arithmetic, no DOM.
 
-import { tierPower } from "./creatures.js";
+import { CREATURES, tierPower } from "./creatures.js";
+import { rollTome, tomeOf } from "./spells.js";
 
 /**
  * The creatures' parts: each one's name, what the guild pays for it (gold), what it looks like in
@@ -115,6 +116,14 @@ export const SPOILS = Object.freeze({
     frostTroll: { items: [{ id: "frostHeart", chance: 0.45 }, { id: "frostHide", chance: 0.5 }] },
 });
 
+/**
+ * A spell's tome (spells.js TOMES), carried now and then by a creature with hands (creatures.js
+ * `hands`: never a beast) from the middle tiers on (`tier`): as likely as `chance` at that tier, a
+ * little likelier each tier beyond (`perTier`); on one of the perilous places' unique creatures,
+ * `perilous`. Which tome, as rare as each is (spells.js TOME_RARITY).
+ */
+export const TOME_DROP = Object.freeze({ tier: 4, chance: 0.03, perTier: 0.005, perilous: 0.2 });
+
 /** How much likelier a thing is to be found for each tier a creature's above its least (up to MOST_CHANCE). */
 export const CHANCE_PER_TIER = 0.04;
 const MOST_CHANCE = 0.95;
@@ -139,6 +148,13 @@ export function rollSpoils(creature, tier, random, least = tier) {
         if (random.chance(Math.min(MOST_CHANCE, chance + above * CHANCE_PER_TIER))) {
             items.push({ id, quality: "common", count: random.int(...count) });
         }
+    }
+
+    // (Now and then, carried by one with hands, from the middle tiers on: a tome)
+    const { hands, perilous } = CREATURES[creature] ?? {};
+
+    if (hands && tier >= TOME_DROP.tier && random.chance(perilous ? TOME_DROP.perilous : TOME_DROP.chance + (tier - TOME_DROP.tier) * TOME_DROP.perTier)) {
+        items.push({ id: tomeOf(rollTome(random)), quality: "common", count: 1 });
     }
 
     return { gold, items };

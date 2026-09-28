@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { Battle, DRAW_MS, KINDS, SHEATHE_AFTER_MS, SHEATHE_MS, SIGHT, SPRINT, STAMINA_DRAIN, STAMINA_RECOVERY, STEP_MS } from "../client/js/core/battle.js";
 import { REFUSALS } from "../client/js/core/host.js";
 import { createRandom } from "../client/js/core/random.js";
-import { CAST_FAILURES, SPELL_COOLDOWN, SPELLS } from "../client/js/core/spells.js";
+import { CAST_FAILURES, SCHOOLS, SPELL_COOLDOWN, SPELLS } from "../client/js/core/spells.js";
 import { armsOf, averageDamage, chooseAttack, inReach, longestReach, MELEE_REACH, rollDamage, STARTING_WEAPONS, WEAPONS } from "../client/js/core/weapons.js";
 import { generateWorld } from "../client/js/core/world.js";
 import { parseGrid } from "./helpers.js";
@@ -701,7 +701,7 @@ describe("the battle (battle.js)", () => {
         assert.ok(player.stamina >= player.maxStamina - 1, `with ${player.stamina} stamina`);
     });
 
-    it("heals by a rolled 10 to 20 hit points after a moment's casting, never past full health", () => {
+    it("heals by Vigor's rolled 8 to 12 hit points after a moment's casting, never past full health", () => {
         const amounts = new Set();
 
         for (let seed = 1; seed <= 40; seed++) {
@@ -710,12 +710,12 @@ describe("the battle (battle.js)", () => {
 
             player.hp = seed % 2 ? 20 : 45;
 
-            assert.deepEqual(battle.cast("player", "heal"), { ok: true });
+            assert.deepEqual(battle.cast("player", "vigor"), { ok: true });
 
-            const cast = run(battle, SPELLS.heal.castTime - STEP_MS);
+            const cast = run(battle, SPELLS.vigor.castTime - STEP_MS);
 
             assert.equal(player.hp, seed % 2 ? 20 : 45, "not yet");
-            assert.ok(cast.some((event) => event.type === "cast" && event.spell === "heal" && event.target === "player"), "the cast is an event");
+            assert.ok(cast.some((event) => event.type === "cast" && event.spell === "vigor" && event.target === "player"), "the cast is an event");
 
             const healed = run(battle, STEP_MS * 2).find((event) => event.type === "healed");
 
@@ -723,14 +723,14 @@ describe("the battle (battle.js)", () => {
             assert.equal(player.hp, Math.min(player.maxHp, (seed % 2 ? 20 : 45) + healed.amount));
 
             if (seed % 2) {
-                assert.ok(Number.isInteger(healed.amount) && healed.amount >= 10 && healed.amount <= 20);
+                assert.ok(Number.isInteger(healed.amount) && healed.amount >= 8 && healed.amount <= 12);
                 amounts.add(healed.amount);
             } else {
                 assert.equal(player.hp, player.maxHp, "no more than full");
             }
         }
 
-        assert.ok(amounts.size >= 6, `rolled ${[...amounts].sort()}`);
+        assert.ok(amounts.size >= 4, `rolled ${[...amounts].sort()}`);
     });
 
     it("stuns an enemy it can see within reach: it can't move or attack for three seconds", () => {
@@ -782,26 +782,38 @@ describe("the battle (battle.js)", () => {
         assert.equal(orcHits.length, 0, "no blows while stunned");
     });
 
-    it("shares one three-second cooldown between every spell", () => {
+    it("gives each spell a cooldown of its own, and all a short one they share", () => {
         const battle = new Battle(open(20, 5), { seed: 1 });
         const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [2, 2] });
 
         battle.add({ id: "orc", kind: "orc", weapon: "cleaver", team: "orcs", square: [8, 2] });
         player.hp = 10;
 
-        assert.equal(SPELL_COOLDOWN, 3000);
+        assert.equal(SPELL_COOLDOWN, 1000);
         assert.equal(battle.cooldown("player"), 0);
-        assert.ok(battle.cast("player", "heal").ok);
+        assert.ok(battle.cast("player", "vigor").ok);
         assert.equal(battle.cooldown("player"), 1);
-        assert.deepEqual(battle.cast("player", "stun", "orc"), { ok: false, reason: "cooldown" }, "stun waits for heal's cooldown");
+        assert.equal(battle.cooldown("player", "vigor"), 1);
+        assert.deepEqual(battle.cast("player", "stun", "orc"), { ok: false, reason: "cooldown" }, "stun waits for the shared cooldown");
 
-        run(battle, 1500);
-        assert.ok(Math.abs(battle.cooldown("player") - 0.5) < 0.02, `half way: ${battle.cooldown("player")}`);
-        assert.equal(battle.cast("player", "heal").reason, "cooldown");
-
-        run(battle, 1500);
+        // After the shared one: another spell's ready, but Vigor waits for its own
+        run(battle, SPELL_COOLDOWN);
         assert.equal(battle.cooldown("player"), 0);
-        assert.ok(battle.cast("player", "stun", "orc").ok, "ready again");
+        assert.equal(battle.cooldown("player", "stun"), 0);
+        assert.ok(Math.abs(battle.cooldown("player", "vigor") - (1 - SPELL_COOLDOWN / SPELLS.vigor.cooldown)) < 0.02, `${battle.cooldown("player", "vigor")}`);
+        assert.equal(battle.cast("player", "vigor").reason, "cooldown");
+        assert.ok(battle.cast("player", "stun", "orc").ok, "another spell");
+
+        run(battle, SPELLS.vigor.cooldown);
+        assert.equal(battle.cooldown("player", "vigor"), 0);
+        assert.ok(battle.cast("player", "vigor").ok, "ready again");
+
+        // (Each tier of a school's slower to come round again than the last)
+        for (const school of ["healing", "fire", "earth", "air", "water"]) {
+            const cooldowns = SCHOOLS[school].tiers.map((id) => SPELLS[id].cooldown);
+
+            assert.ok(cooldowns.every((each, k) => k === 0 || each > cooldowns[k - 1]), `${school}: ${cooldowns}`);
+        }
     });
 
     it("sees and shoots over what's low (barrels: blocked, not opaque) but not through a wall", () => {
@@ -858,7 +870,7 @@ describe("the battle (battle.js)", () => {
         assert.equal(battle.cast("player", "stun", "hidden").reason, "sight");
         assert.equal(battle.cast("player", "stun", "friend").reason, "friendly");
         assert.equal(battle.cast("player", "stun", "nobody").reason, "lifeless");
-        assert.equal(battle.cast("player", "heal").reason, "healthy");
+        assert.equal(battle.cast("player", "vigor").reason, "healthy");
 
         for (const reason of ["range", "sight", "friendly", "lifeless", "healthy", "cooldown", "busy"]) {
             assert.equal(typeof CAST_FAILURES[reason], "string", reason);

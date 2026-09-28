@@ -27,6 +27,8 @@
 //  - projectile: for ranged attacks, what flies (an arrow, a bolt, a fireball) and how fast (m/s)
 //  - afflict (some of the wild's creatures'): what a hit leaves lingering (afflictions.js: a kind),
 //    how likely it is to (`chance`), and how it shows (`look`: a web, roots, frost)
+//  - pool (some spat): what it leaves on the ground where it lands a while (battle.js HAZARDS: its
+//    `kind`, `ms`, `radius` in metres), hurting whoever stands in it
 //
 // Pure data and arithmetic, no DOM: the battle (battle.js) and the interface both use it.
 
@@ -59,16 +61,16 @@ export const WEAPONS = Object.freeze({
     wand: {
         label: "Wand",
         school: "Magic",
-        about: "A crystal-tipped wand. Quick bolts of arcane light, from 7 metres.",
+        about: "A crystal-tipped wand: it makes spells stronger. Its own bolts of light, from 7 metres, are weak.",
         equipment: ["wand"],
-        attacks: [ranged({ id: "bolt", reach: 7, damage: [2, 6], hitAt: 300, duration: 620, interval: 1000, reaction: "arcane", animation: "wand", projectile: { kind: "bolt", speed: 14 } })],
+        attacks: [ranged({ id: "bolt", reach: 7, damage: [1, 3], hitAt: 300, duration: 620, interval: 1000, reaction: "arcane", animation: "wand", projectile: { kind: "bolt", speed: 14 } })],
     },
     grimoire: {
         label: "Grimoire",
         school: "Magic",
-        about: "A book of fire spells. Slow, heavy fireballs, from 7 metres.",
+        about: "A book of spells: it makes them stronger. Its own little fireballs, from 7 metres, are weak.",
         equipment: ["grimoire"],
-        attacks: [ranged({ id: "fireball", reach: 7, damage: [4, 9], hitAt: 720, duration: 1100, interval: 1800, stagger: 250, reaction: "fire", animation: "grimoire", projectile: { kind: "fireball", speed: 9 } })],
+        attacks: [ranged({ id: "fireball", reach: 7, damage: [2, 4], hitAt: 720, duration: 1100, interval: 1800, stagger: 250, reaction: "fire", animation: "grimoire", projectile: { kind: "fireball", speed: 9 } })],
     },
     hammer: {
         label: "War hammer",
@@ -128,7 +130,7 @@ export const NATURAL = Object.freeze({
         label: "Fangs",
         attacks: [
             melee({ id: "bite", damage: [3, 6], hitAt: 300, duration: 700, interval: 1200, reaction: "pierce", animation: "melee", afflict: { kind: "poison", chance: 0.5 } }),
-            ranged({ id: "spit", reach: 5, damage: [2, 4], hitAt: 450, duration: 900, interval: 1800, reaction: "arcane", animation: "spit", projectile: { kind: "venom", speed: 10 }, afflict: { kind: "poison", chance: 0.6 } }),
+            ranged({ id: "spit", reach: 5, damage: [2, 4], hitAt: 450, duration: 900, interval: 1800, reaction: "arcane", animation: "spit", projectile: { kind: "venom", speed: 10 }, afflict: { kind: "poison", chance: 0.6 }, pool: { kind: "venom", ms: 4000, radius: 0.8 } }),
         ],
     },
     bear: { label: "Claws", attacks: [melee({ id: "maul", damage: [5, 10], hitAt: 600, duration: 1100, interval: 1600, stagger: 400, reaction: "crush", animation: "melee", afflict: { kind: "bleed", chance: 0.3 } })] },
@@ -183,7 +185,7 @@ export const NATURAL = Object.freeze({
         attacks: [
             // (Its tongue shot out at whoever's up to two squares off)
             melee({ id: "tongue", reach: 2, damage: [2, 5], hitAt: 350, duration: 750, interval: 1100, reaction: "punch", animation: "melee" }),
-            ranged({ id: "spit", reach: 5, damage: [2, 4], hitAt: 450, duration: 900, interval: 2000, reaction: "arcane", animation: "spit", projectile: { kind: "venom", speed: 10 }, afflict: { kind: "poison", chance: 0.5 } }),
+            ranged({ id: "spit", reach: 5, damage: [2, 4], hitAt: 450, duration: 900, interval: 2000, reaction: "arcane", animation: "spit", projectile: { kind: "venom", speed: 10 }, afflict: { kind: "poison", chance: 0.5 }, pool: { kind: "venom", ms: 4000, radius: 0.8 } }),
         ],
     },
     crocodile: { label: "Jaws", attacks: [melee({ id: "bite", damage: [5, 9], hitAt: 500, duration: 1000, interval: 1600, stagger: 350, reaction: "hack", animation: "melee", afflict: { kind: "bleed", chance: 0.35 } })] },
@@ -191,7 +193,7 @@ export const NATURAL = Object.freeze({
         label: "Molten rock",
         attacks: [
             melee({ id: "slam", damage: [4, 8], hitAt: 500, duration: 900, interval: 1400, stagger: 250, reaction: "fire", animation: "melee", afflict: { kind: "burn", chance: 0.4 } }),
-            ranged({ id: "lava", reach: 5, damage: [3, 6], hitAt: 500, duration: 1000, interval: 2200, reaction: "fire", animation: "spit", projectile: { kind: "lava", speed: 8 }, afflict: { kind: "burn", chance: 0.8 } }),
+            ranged({ id: "lava", reach: 5, damage: [3, 6], hitAt: 500, duration: 1000, interval: 2200, reaction: "fire", animation: "spit", projectile: { kind: "lava", speed: 8 }, afflict: { kind: "burn", chance: 0.8 }, pool: { kind: "lava", ms: 4000, radius: 0.9 } }),
         ],
     },
     // (Its charge knocks whoever it catches off their feet)

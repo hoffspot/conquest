@@ -6,8 +6,10 @@ import { expect, test } from "@playwright/test";
 // joined does is done in the host's world; they leave, and are gone from it; the host closes the
 // world to others, and anyone still in it is told.
 
-// (Two worlds drawn at once, without a GPU: more than the usual time)
+// (Two worlds drawn at once, without a GPU: more than the usual time; and these tests one after
+// the other, never side by side: four worlds drawn at once slow each to a crawl)
 test.setTimeout(300000);
+test.describe.configure({ mode: "default" });
 
 const ELF = {
     version: 1,
@@ -208,7 +210,7 @@ test("two players side by side trade face to face: one asks, the other says yes,
     await guest.locator(".pack-about").getByRole("button", { name: /^Offer/ }).click();
     await guest.locator(".pack-ask").getByRole("button", { name: "Offer", exact: true }).click();
     await expect(host.locator(".pack-section", { hasText: "Bryn offers" })).toContainText("Wolf pelt ×2", { timeout: 30000 });
-    await expect(guest.locator('.pack-cell[data-item="wolfPelt"]')).toHaveClass(/offered/);
+    await expect(guest.locator('.pack-cell[data-item="wolfPelt"]')).toHaveClass(/offered/, { timeout: 30000 });
 
     await host.locator(".pack-barter").getByRole("button", { name: "Offer gold" }).click();
     await host.locator(".pack-ask").getByRole("button", { name: "Offer", exact: true }).click();

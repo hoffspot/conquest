@@ -179,7 +179,8 @@ describe("the host (host.js)", () => {
         assert.deepEqual({ ...host.battle.actor(HOST_PLAYER).order, to: null }, { type: "move", to: null, run: true });
         assert.deepEqual(host.command(HOST_PLAYER, { type: "engage", target: "orc" }), { ok: true });
         assert.equal(host.battle.actor(HOST_PLAYER).order.target, "orc");
-        assert.deepEqual(host.command(HOST_PLAYER, { type: "cast", spell: "heal" }), { ok: false, reason: "healthy" });
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "cast", spell: "vigor" }), { ok: false, reason: "healthy" });
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "cast", spell: "hellfire", target: "orc" }), { ok: false, reason: "unknown" });
     });
 
     it("lets a player talk to one of the folk near them, and keeps what's done by talking", () => {

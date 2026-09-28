@@ -384,17 +384,18 @@ draws anything.
 - **Damage** is rolled for each hit: a whole number from the attack's least to its most, each
   equally likely (the battle's seeded random numbers). It comes off the target's hit points and
   staggers them for a moment (they can't move or start an attack): a punch 0.08 s, a hammer 0.45.
-- **Spells** (spells.js), cast with `cast(id, spell, target)`, take a moment to cast, then
-  land. **Heal** is cast on yourself (0.6 s) and gives back a whole number of hit points from 10
-  to 20, rolled, never above the most. **Stun** is cast on an enemy within 9 metres that the
-  caster can see (0.4 s): for 3 seconds it can't move, attack, cast or think, and whatever it
-  was starting is called off; the orc then turns on whoever stunned it. All of a character's
-  spells share one cooldown: none can be cast for 3 seconds from when one was. A spell that
-  can't be cast says why (`cooldown`, `busy` while staggered, stunned or casting, `healthy` at
-  full health, `range`, `sight`, `lifeless` with no one living there, `friendly` on someone who
-  isn't an enemy) and nothing happens; none of these shares a name with the host's own refusals
-  (so healing at full health says "Already at full health", not "Your pack is full"). Casting stands still, and
-  calls off an attack that hasn't landed; walking off doesn't stop a spell once it's begun.
+- **Spells** (spells.js: every one, in docs/MAGIC.md), cast with `cast(id, spell, target)`,
+  take a moment to cast, then land: healing (on anyone), harming (an enemy, and those round them
+  or it leaps to), stunning, lasting on whoever it's cast on, and the wonders the host works.
+  **Stun** (the Hexes') is cast on an enemy within 9 metres that the caster can see (0.4 s): for
+  3 seconds it can't move, attack, cast or think, and whatever it was starting is called off;
+  the orc then turns on whoever stunned it. Each spell has its own cooldown, and after any, none
+  can be cast for a second. A spell that can't be cast says why (`cooldown`, `busy` while
+  staggered, stunned or casting, `healthy` at full health, `range`, `sight`, `lifeless` with no
+  one living there, `friendly` on someone who isn't an enemy...) and nothing happens; none of
+  these shares a name with the host's own refusals (so healing at full health says "Already at
+  full health", not "Your pack is full"). Casting stands still, and calls off an attack that
+  hasn't landed; walking off doesn't stop a spell once it's begun.
 - **Dying and coming back.** At no hit points a character falls; the player gets up in the
   market square 5 seconds later, with full health, and the orc back in its corner 30 seconds
   later (whichever map they fell on).
@@ -444,10 +445,13 @@ would be one line in weapons.js):
 | Spiked boots | kick | melee | 3–7 | 360 | 760 | 1050 | 220 | kick |
 | Orc cleaver | hack | melee | 3–8 | 520 | 900 | 1400 | 200 | hack |
 
-| Spell | On | Reach | Casts in | Does | Cooldown (shared) |
+| Spell | On | Reach | Casts in | Does | Cooldown |
 | --- | --- | --- | --- | --- | --- |
-| Heal | yourself | | 600 ms | 10–20 hit points back | 3000 ms |
+| Vigor | anyone | 8 m | 500 ms | 8–12 hit points back | 4000 ms |
+| Burn | an enemy | 8 m, in sight | 450 ms | 9–15, may set them burning | 2500 ms |
 | Stun | an enemy | 9 m, in sight | 400 ms | can't act for 3000 ms | 3000 ms |
+
+(The rest, each school's tiers and the tomes' spells, are in docs/MAGIC.md.)
 
 Both sides have 50 hit points. In play-testing (test/combat.test.js simulates fights on
 generated worlds), a sword fight with the orc lasts about 10 seconds and the player usually wins
@@ -1060,8 +1064,9 @@ without the scene's tone mapping so it stays red. It closes in on the enemy when
 it until it falls or the player is told to do something else. Its bar over its head is lit red
 too.
 
-Spells gather light in the caster's left hand as they're cast (green for Heal, violet or gold
-for Stun), in the look they'll land in. A heal lands in green light round the character and a
+Spells gather light in the caster's left hand as they're cast (in their school's colours; a
+heal's or a stun's in the look it'll land in), and each lands in its own look, grander the higher
+its tier (world/spellfx.js: docs/MAGIC.md, "How spells look"). A heal lands in green light round the character and a
 ring (or two, one after the other) spreading over the ground: sparkles swirling up round them, a
 fountain thrown up from their feet, a tight spiral column, petals of light falling from over their
 head, or a white flash. A stun lands in a flash, and stars circle the stunned character's head
@@ -1162,8 +1167,9 @@ about as loud as the others (by its loudest 30 ms), then played at its own volum
   arrows, bolts and fireballs; a **hit** for each reaction (a blade's ring for slashes, a knock
   for the staff, a heavy thump for the hammer, a thunk for arrows, a zap for arcane bolts, a
   roar for fire, a meaty thud for punches); a body **falling** as it hits the ground.
-- **Spells**: a rising chime casting Heal and a warm chord as it lands; the bolt's crackle
-  casting Stun and a zap and warble as it lands.
+- **Spells**: a rising chime casting a heal and a warm chord as it lands; the bolt's crackle
+  casting Stun and the other spells (a fireball's whoosh for fire's) and a zap and warble as a
+  stun lands.
 - **Footsteps**, as each foot lands (the walker says when), on stone, dirt, grass or wooden
   boards (upstairs in the tavern), louder running.
 - **A door**: its latch lifting, its hinges creaking and it banging shut, when anyone goes through
@@ -1305,17 +1311,18 @@ and from there back to wheel one) opens again under the finger, to flick from th
 says which side it is. The other seven slices (`PLACES`) hold what the player's put there.
 
 **What's on them.** The player has two wheels to set, each with two sides (`SETTABLE`):
-- **Their own** (held on themselves): Heal, the greater heal once learnt, and things from the
-  pack to use (a healing draught, a hot meal, an ale: `item:potion`...), each showing how many
+- **Their own** (held on themselves): the heals and the spells cast on oneself or a friend
+  (docs/MAGIC.md), and things from the pack to use (a healing draught, a hot meal, an ale: `item:potion`...), each showing how many
   there are, and greyed out once none are left.
-- **An enemy's**: Stun, and once learnt Hold, a power strike and an aimed shot (a blow for another
-  kind of weapon than the one in hand is greyed out).
+- **An enemy's**: the elements' spells, Stun, and once learnt Hold and the tomes' spells cast at
+  enemies, a power strike and an aimed shot (a blow for another kind of weapon than the one in
+  hand is greyed out).
 
 A soldier of a people not friendly to the player's has a wheel of its own, with just Fight
 (picking a fight with them), and no other side.
 
-A new character's wheels have Heal at N on their own and Stun at N on an enemy's
-(`WHEELS`); everything else starts empty, until the player puts something there in **Game
+A new character's wheels have Vigor at N on their own, and Burn (N), Hurt (NE), Rumble (NW),
+Blister (E) and Stun (W) on an enemy's (`WHEELS`); everything else starts empty, until the player puts something there in **Game
 options, Action wheels** (app/wheelsetup.js). There, tabs choose whose wheel and which side;
 the wheel's drawn as it opens in play, and tapping a slice lists what can go in it
 (`assignable`): "Nothing", and what's been learnt and is carried. Tapping S turns it over, as
@@ -1324,11 +1331,11 @@ and read back safely (`readWheels`: only what goes on each wheel, in its seven s
 ranking up with an ability says to put it on a wheel.
 
 Each action (`ACTIONS`, or `item:` and a thing to use: `actionOf`) has an icon (app/icons.js:
-SVG, in colours that say what it does: a glowing green cross for Heal, gold stars round a violet
-dazed head for Stun; a red draught, a steaming bowl, a frothing tankard). The icons' gradients
+SVG, in colours that say what it does: a glowing green cross for Vigor, gold stars round a violet
+dazed head for Stun, every spell its own (app/spellicons.js); a red draught, a steaming bowl, a frothing tankard). The icons' gradients
 are put in the page once, where every icon finds them (`useDefs`).
 
-While a slice is cooling down (the spells' shared three seconds, or a blow's own twelve), it's
+While a slice is cooling down (a spell's own cooldown, or a blow's own twelve seconds), it's
 greyed over as much of it as the cooldown has left, the grey drawing back as it passes. A flick
 at a greyed slice, an empty one or one that can't be used flashes it red and is refused. The
 game plays on while it's open; a second finger (a pinch) closes it.
@@ -1441,7 +1448,7 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   staggering, death and respawn, the orc's patrol, chase and giving up, running (its speed,
   speeding up and slowing down, charging), stamina (used, got back, running out, never below
   none or above its most), spells (heal rolls, stun freezing the orc and calling off its blow,
-  the shared cooldown, every reason a cast fails), going straight ahead (to the first wall,
+  the cooldowns, every reason a cast fails), going straight ahead (to the first wall,
   sprinting, then walking with no stamina), and a simulated minute on a generated world.
   `test/overworld.test.js`: the world outside (blocked off its edges, the same chunks however
   they're come to, the town set in just as it was made with everything in it moved, its streets
