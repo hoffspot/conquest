@@ -634,7 +634,8 @@ one (after enemies, before the ground) tells the player to go through; it glows 
 
 **The folk in the game.** Wenches and Ale's are built at the start, like the player and the orc
 (their looks and clothes are `presets.js`'s `FOLK`), and every other building's as it's got
-ready, each looking as their part, sex and seed have them (`characters/folk.js`, `folkLook`:
+ready, each of the people whose place it is (docs/WAR.md M5: a cat folk's town's are cat folk,
+named in their own tongue) and looking as their part, sex and seed have them (`characters/folk.js`, `folkLook`:
 their height, build and face, their forebears' skin, eyes and hair, how they wear their hair and
 beard, and what their part wears: the barkeep's apron, a wench's bodice and skirt, a patron's
 tunic or kirtle, the madam's gown, a courtesan's lingerie in one of four colours, the priest's

@@ -32,9 +32,17 @@ export const DETAILS = Object.freeze([
     { id: "earSize", label: "Ear size", group: "face", decr: each("ears", both("ear-scale-decr")), incr: each("ears", both("ear-scale-incr")) },
     { id: "earPoint", label: "Pointed ears", group: "face", decr: [], incr: each("ears", both("ear-shape-pointed")) },
     { id: "earFlare", label: "Ears stick out", group: "face", decr: each("ears", both("ear-wing-decr")), incr: each("ears", both("ear-wing-incr")) },
+    // (An elf's: long, their tips drawn up into a point, swept back and set high)
+    { id: "earLength", label: "Ear length", group: "face", decr: each("ears", both("ear-scale-vert-decr")), incr: each("ears", both("ear-scale-vert-incr")) },
+    { id: "earTip", label: "Ear tips", group: "face", decr: [], incr: each("ears", both("ear-shape-triangle")) },
+    { id: "earBack", label: "Ears swept back", group: "face", decr: each("ears", both("ear-rot-forward")), incr: each("ears", both("ear-rot-backward")) },
+    { id: "earHeight", label: "Ears set high", group: "face", decr: each("ears", both("ear-trans-down")), incr: each("ears", both("ear-trans-up")) },
+    // (A lizard's snout: the nose, the mouth and the jaw drawn forward and deepened)
+    { id: "snout", label: "Snout", group: "face", decr: [], incr: [...each("nose", ["nose-trans-forward", "nose-scale-depth-incr"]), ...each("mouth", ["mouth-trans-forward", "mouth-scale-depth-incr"]), ...each("chin", ["chin-prognathism-incr"]), ...each("head", ["head-scale-depth-incr"])] },
 
     // Physique
     { id: "neck", label: "Neck thickness", group: "body", decr: each("neck", ["measure-neck-circ-decr"]), incr: each("neck", ["measure-neck-circ-incr"]) },
+    { id: "neckLength", label: "Neck length", group: "body", decr: each("neck", ["measure-neck-height-decr"]), incr: each("neck", ["measure-neck-height-incr"]) },
     { id: "shoulders", label: "Shoulder width", group: "body", decr: each("torso", ["measure-shoulder-dist-decr"]), incr: each("torso", ["measure-shoulder-dist-incr"]) },
     { id: "vShape", label: "V-shaped torso", group: "body", decr: each("torso", ["torso-vshape-decr"]), incr: each("torso", ["torso-vshape-incr"]) },
     { id: "belly", label: "Belly", group: "body", decr: each("stomach", ["stomach-pregnant-decr"]), incr: each("stomach", ["stomach-pregnant-incr"]) },

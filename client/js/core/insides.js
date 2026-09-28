@@ -654,7 +654,7 @@ export class Interiors {
     constructor(world) {
         this.world = world;
 
-        /** Each building: { key, kind, name, piece, place, seed, entrance, made, maps (ids), folk }. */
+        /** Each building: { key, kind, name, piece, place, people, seed, entrance, made, maps (ids), folk }. */
         this.buildings = new Map();
 
         // Which building each map is in, and how many have been given a place to be drawn
@@ -677,7 +677,7 @@ export class Interiors {
      * the town), and where its middle is (`at`: [x, y] metres, in the world).
      */
     adopt({ key, kind, name, maps, folk, piece = null, tavern = null, at = null }) {
-        const building = { key, kind, name, piece, tavern, place: null, seed: 0, at, entrance: null, made: true, maps, folk };
+        const building = { key, kind, name, piece, tavern, place: null, people: "human", seed: 0, at, entrance: null, made: true, maps, folk };
 
         this.buildings.set(key, building);
 
@@ -693,9 +693,10 @@ export class Interiors {
     /**
      * Add a settlement's building (a layout piece of a kind that can be gone into), placed from
      * `origin` (metres: its layout's corner in the world), in the place `place` (an id): its
-     * front door joins the world's links. Returns it (null if it can't be gone into).
+     * front door joins the world's links; its folk of the people `people` (a RACES id: whose
+     * the place is). Returns it (null if it can't be gone into).
      */
-    add(piece, { origin = 0, place = "home", name = null } = {}) {
+    add(piece, { origin = 0, place = "home", name = null, people = "human" } = {}) {
         if (!ENTERABLE.includes(piece.name)) {
             return null;
         }
@@ -717,6 +718,7 @@ export class Interiors {
             tavern: piece.tavern ?? null,
             patron: piece.patron ?? null,
             place,
+            people: people ?? "human",
             seed: piece.seed ?? 1,
             // (Its middle, in the world: metres)
             at: [ox + piece.x, oy + piece.y],
@@ -813,7 +815,7 @@ export class Interiors {
         }
 
         // Its folk, named from its seed, each with an id of their own in the world
-        building.folk = namePeople(kind.folk(building, maps), building.seed).map((one) => ({ ...one, id: `${key}/${one.local}`, seed: building.seed * 31 + one.local.length * 7 + one.square[0] * 131 + one.square[1] }));
+        building.folk = namePeople(kind.folk(building, maps), building.seed, building.people).map((one) => ({ ...one, id: `${key}/${one.local}`, people: building.people, seed: building.seed * 31 + one.local.length * 7 + one.square[0] * 131 + one.square[1] }));
 
         // (A smithy's known by its smith: "Hayward's Forge")
         const smith = building.kind === "blacksmith" ? building.folk.find(({ local }) => local === "smith") : null;

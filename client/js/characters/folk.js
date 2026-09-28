@@ -3,10 +3,12 @@
 // their part, their sex and a seed of their own, so no two buildings' folk look alike. Their body
 // (height, build, bust, belly, face), where their forebears came from and the skin, eyes and hair
 // that go with it, how they wear their hair and beard, and what they wear and carry for their
-// part, each picked from the seed. Wenches and Ale's folk keep their own looks (presets.js FOLK).
-// Pure data, no DOM.
+// part, each picked from the seed. Folk of another people than humans have their people's bodies,
+// skins and parts (peoples.js), built and dressed as their part has them. Wenches and Ale's folk
+// keep their own looks (presets.js FOLK). Pure data, no DOM.
 
 import { createRandom } from "../core/random.js";
+import { LOOKS, peopleLook } from "./peoples.js";
 import { HAIR_COLOURS, SKIN_TONES } from "./skin.js";
 
 // Where their forebears came from ([african, asian, caucasian]), with the skin, eyes and hair
@@ -124,14 +126,17 @@ const BRIGHT = Object.freeze({ irises: ["#3fa6e8", "#56c48a", "#9a6ae0", "#e0a03
 // Grey with age (the greybeard), or now and then
 const GREY = ["grey", "white"];
 
+// What won't go on over a cat's ears (a crown sits between them)
+const OVER_EARS = new Set(["nasalHelm", "orcHelm", "wizardHat"]);
+
 /**
  * A look for one of the folk: { shape, look, equipment, walk, sheathed } (as presets.js FOLK's),
  * from `one`: { role (roles.js: barkeep, barmaid, patron, innkeeper, madam, courtesan, smith,
  * apprentice, priest, acolyte, worshipper, receptionist), local (their part: wench, greybeard...),
  * look (their look, if not their role's: an adventurer's calling, warrior, ranger, mage, rogue or
- * cleric), sex ("f" or "m"), seed }.
+ * cleric), sex ("f" or "m"), seed, people (a RACES id: humans if not given) }.
  */
-export function folkLook({ role, local = role, look: calling = null, sex = "m", seed = 1 }) {
+export function folkLook({ role, local = role, look: calling = null, sex = "m", seed = 1, people = "human" }) {
     const random = createRandom(seed * 2654435761 + 97);
     const part = calling ?? ({ barmaid: "wench", petitioner: "worshipper" }[role] ?? role);
     const spec = PARTS[part]?.[sex] ?? PARTS.patron[sex] ?? PARTS.patron.m;
@@ -206,5 +211,48 @@ export function folkLook({ role, local = role, look: calling = null, sex = "m", 
     }
 
     // (What they carry put away, as they're not fighting: `sheathed`)
-    return { label: local, shape: { macro, details }, look, equipment, walk: "natural", sheathed: Boolean(spec.armed) };
+    const human = { label: local, shape: { macro, details }, look, equipment, walk: "natural", sheathed: Boolean(spec.armed) };
+
+    return people === "human" ? human : ofPeople(human, { people, part, sex, seed });
+}
+
+// One of the folk of another people: their people's body, skin, eyes and hair (peoples.js), as
+// heavy and strong as their part has them (halfway between), with their part's belly (a man's)
+// and figure (a courtesan's), their hair worn as their part has it if their people wear it so,
+// dressed for their part, with the parts of their own (a cat's ears and tail...)
+function ofPeople(human, { people, part, sex, seed }) {
+    const own = peopleLook({ people, sex, seed });
+
+    if (!own) {
+        return human;
+    }
+
+    const { macro, details } = own.shape;
+    const theirs = human.shape;
+
+    macro.weight = (macro.weight + theirs.macro.weight) / 2;
+    macro.muscle = (macro.muscle + theirs.macro.muscle) / 2;
+
+    if (sex === "f" && theirs.macro.bust !== undefined) {
+        macro.bust = ((macro.bust ?? theirs.macro.bust) + theirs.macro.bust) / 2;
+    }
+
+    if (sex === "m" && theirs.details.belly) {
+        details.belly = Math.max(details.belly ?? 0, theirs.details.belly);
+    }
+
+    if (part === "courtesan") {
+        Object.assign(details, { waist: theirs.details.waist, hips: theirs.details.hips, buttocks: theirs.details.buttocks, thighs: theirs.details.thighs });
+    }
+
+    const styles = LOOKS[people]?.styles;
+
+    if (styles && (styles[sex] ?? styles.m).includes(human.look.hair.style)) {
+        own.look.hair.style = human.look.hair.style;
+    }
+
+    const ears = own.parts.includes("catEars");
+    const equipment = [...human.equipment.filter((id) => !(ears && OVER_EARS.has(id))), ...own.parts];
+
+    return { ...human, shape: own.shape, look: own.look, equipment, walk: own.walk };
 }

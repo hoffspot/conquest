@@ -4,6 +4,8 @@
 // a neutral people's guard; soldiers who fall are its garrison the fewer
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { EQUIPMENT } from "../client/js/characters/equipment.js";
+import { ARMS, soldierLook } from "../client/js/characters/soldiers.js";
 import { Battle, FOE_MS, STEP_MS } from "../client/js/core/battle.js";
 import { HOST_PLAYER, Host, LEASH, MUSTER, RELEVANCE } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
@@ -260,3 +262,37 @@ describe("guards, patrols and grudges (battle.js)", () => {
         assert.equal(battle.actor("s").respawnAt, Infinity);
     });
 });
+
+describe("the peoples' soldiers' looks (characters/soldiers.js)", () => {
+    it("dresses each people's soldiers in their own bodies and parts, with what they fight with", () => {
+        for (const [people, arms] of Object.entries(ARMS)) {
+            for (const weapon of new Set(arms)) {
+                for (const sex of ["m", "f"]) {
+                    const look = soldierLook({ people, weapon, sex, seed: 11 });
+
+                    assert.deepEqual(soldierLook({ people, weapon, sex, seed: 11 }), look);
+                    assert.equal(look.shape.macro.gender, sex === "f" ? 0 : 1, `${people} ${sex}`);
+                    assert.ok(look.sheathed);
+
+                    for (const id of look.equipment) {
+                        assert.ok(EQUIPMENT[id], `${people}: ${id}`);
+                    }
+
+                    assert.ok(look.equipment.length >= 5, `${people}: dressed`);
+                }
+            }
+        }
+
+        const cat = soldierLook({ people: "cat", weapon: "bow", seed: 4 });
+        const lizard = soldierLook({ people: "lizard", weapon: "staff", seed: 4 });
+        const elves = [1, 2, 3].map((seed) => soldierLook({ people: "elf", weapon: "bow", seed }));
+
+        assert.ok(cat.equipment.includes("catEars") && cat.equipment.includes("catTail") && cat.look.skin.fur > 0);
+        assert.ok(lizard.equipment.includes("lizardTail") && lizard.look.skin.scales > 0);
+        assert.ok(elves.every(({ shape }) => shape.details.earLength >= 0.8));
+        assert.equal(new Set(elves.map((look) => JSON.stringify(look.shape))).size, 3, "each their own");
+        assert.ok(soldierLook({ people: "orc", weapon: "cleaver", sex: "f", seed: 4 }).equipment.includes("tunic"));
+        assert.equal(soldierLook({ people: "orc", weapon: "cleaver", seed: 4 }).walk, "orc");
+    });
+});
+

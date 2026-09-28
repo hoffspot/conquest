@@ -1,5 +1,6 @@
-// The character lab (character-lab.html): build a hero or an orc, change how they look, dress
-// and arm them, and watch them walk.
+// The character lab (character-lab.html): build a hero, an orc, or one of the other peoples (an
+// elf, a dark elf, one of the cat folk or the lizard folk: characters/peoples.js), change how they
+// look, dress and arm them, and watch them walk.
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -15,6 +16,7 @@ import { BEARDS, HAIRSTYLES } from "../characters/hair.js";
 import { loadCharacterKit } from "../characters/kit.js";
 import { Walker, WALK_STYLES } from "../characters/locomotion.js";
 import { MACRO_DEFAULTS } from "../characters/macro.js";
+import { peopleLook } from "../characters/peoples.js";
 import { PRESETS } from "../characters/presets.js";
 import { EYE_DEFAULTS, HAIR_COLOURS, SKIN_DEFAULTS, SKIN_TONES } from "../characters/skin.js";
 import { WEAPONS } from "../core/weapons.js";
@@ -111,8 +113,20 @@ function resize() {
 
 const kit = await loadCharacterKit();
 const clone = (value) => structuredClone(value);
+
+// Every character to pick: the presets, and one of each of the other peoples, in plain clothes
+const CHARACTERS = {
+    ...PRESETS,
+    ...Object.fromEntries(
+        [["elf", "Elf"], ["darkElf", "Dark elf"], ["cat", "Cat folk"], ["lizard", "Lizard folk"]].map(([people, label]) => {
+            const { shape, look, parts, walk } = peopleLook({ people, sex: "m", seed: 3 });
+
+            return [people, { label, shape, look, equipment: ["briefs", "tunic", "breeches", "boots", "belt", ...parts], walk }];
+        }),
+    ),
+};
 const state = {
-    preset: PRESETS[params.get("character")] ? params.get("character") : "hero",
+    preset: CHARACTERS[params.get("character")] ? params.get("character") : "hero",
     shape: null,
     look: null,
     equipment: null,
@@ -122,7 +136,7 @@ const state = {
 };
 
 function presetState(name) {
-    const preset = PRESETS[name];
+    const preset = CHARACTERS[name];
 
     state.preset = name;
     state.shape = { macro: { ...MACRO_DEFAULTS, ...clone(preset.shape.macro) }, details: clone(preset.shape.details ?? {}) };
@@ -453,7 +467,7 @@ function choosePreset(name) {
     }
 }
 
-for (const [name, preset] of Object.entries(PRESETS)) {
+for (const [name, preset] of Object.entries(CHARACTERS)) {
     picker.append(element("button", { type: "button", role: "radio", "data-preset": name, "aria-checked": String(name === state.preset), onclick: () => choosePreset(name) }, preset.label));
 }
 
@@ -517,7 +531,7 @@ function bodyTab() {
             element("button", {
                 type: "button", class: "button",
                 onclick: () => {
-                    const preset = PRESETS[state.preset];
+                    const preset = CHARACTERS[state.preset];
 
                     state.shape = { macro: { ...MACRO_DEFAULTS, ...clone(preset.shape.macro) }, details: clone(preset.shape.details ?? {}) };
                     change("shape");
@@ -957,7 +971,7 @@ function drawGait() {
     }
 }
 
-window.lab = { THREE, scene, camera, controls, renderer, character, kit, walker, actions, fight, arm, attack, rest, freeze, state, step, change, choosePreset, setCamera, chooseClip, get player() { return player; }, PRESETS, WALK_STYLES, ready: true };
+window.lab = { THREE, scene, camera, controls, renderer, character, kit, walker, actions, fight, arm, attack, rest, freeze, state, step, change, choosePreset, setCamera, chooseClip, get player() { return player; }, PRESETS, CHARACTERS, WALK_STYLES, ready: true };
 
 // ?weapon=sword&action=attack&at=1 shows one moment of an action, frozen (for pictures);
 // ?action=rest&rest=barkeep&way=2&at=1 one of a class's rests

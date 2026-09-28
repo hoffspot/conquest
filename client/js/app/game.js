@@ -2294,6 +2294,13 @@ export class Game {
             case "dismiss":
                 this.banners?.lower(event.town);
                 this.enlisting = this.enlisting.filter((id) => !event.ids.includes(id));
+
+                // (Let go of, even if others are out at their posts already: a town's new holders'
+                // soldiers have the old ones' ids, and are drawn as their own people)
+                for (const id of event.ids) {
+                    this.#undress(id);
+                }
+
                 this.#mirror();
                 break;
             case "explored":

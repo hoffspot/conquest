@@ -251,7 +251,7 @@ export class Overworld {
     #enter(settlement) {
         for (const piece of settlement.town.pieces) {
             if (piece.kind === "landmark") {
-                this.interiors?.add(piece, { origin: settlement.at, place: settlement.place.id });
+                this.interiors?.add(piece, { origin: settlement.at, place: settlement.place.id, people: settlement.place.race });
             }
         }
     }
@@ -921,7 +921,7 @@ export function buildWorld({ seed = 1, race = "human", plan = planWorld(seed) } 
 
     for (const piece of town.town.pieces) {
         if (piece.kind === "landmark" && piece.tavern !== WENCHES) {
-            interiors.add(piece, { origin: world.origin, place: "home" });
+            interiors.add(piece, { origin: world.origin, place: "home", people: start.race });
         }
     }
 

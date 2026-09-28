@@ -12,6 +12,7 @@ globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContex
 
 const { Doors } = await import("../client/js/app/doors.js");
 const { folkLook } = await import("../client/js/characters/folk.js");
+const { GIVEN_NAMES, namePeople } = await import("../client/js/core/names.js");
 const { EQUIPMENT } = await import("../client/js/characters/equipment.js");
 const { Battle, STEP_MS } = await import("../client/js/core/battle.js");
 const { treeFor, upstairsIs } = await import("../client/js/core/dialogue.js");
@@ -506,10 +507,26 @@ describe("the buildings (insides.js Interiors)", () => {
 
         world.maps.town.settlements.of(capital);
 
+        // (And a town of another people's)
+        const foreign = world.plan.places.find(({ kind, race }) => kind === "town" && race && race !== "human");
+
+        world.maps.town.settlements.of(foreign);
+
+        const theirs = [...interiors.buildings.values()].find(({ place }) => place === foreign.id);
+
+        interiors.make(theirs.key);
+        assert.ok(theirs.folk.length && theirs.folk.every(({ people }) => people === foreign.race), foreign.race);
+
+        // (Each building's folk of the people whose place it is)
+        for (const building of interiors.buildings.values()) {
+            assert.equal(building.people, building.place === "home" ? world.start.race : (world.plan.places.find(({ id }) => id === building.place)?.race ?? "human"), building.key);
+        }
+
         for (const kind of ENTERABLE) {
             const one = [...interiors.buildings.values()].find((each) => each.kind === kind && each.key !== "home:tavern");
 
             interiors.make(one.key);
+            assert.ok(one.folk.every(({ people }) => people === one.people), kind);
 
             for (const id of one.maps) {
                 const interior = buildInterior(world.maps[id]);
@@ -552,6 +569,55 @@ describe("folk made up as they're wanted (characters/folk.js)", () => {
         assert.ok(folkLook({ role: "barmaid", sex: "f", seed: 3 }).equipment.includes("tankard"));
         assert.ok(folkLook({ role: "barkeep", sex: "m", seed: 3 }).equipment.includes("apron"));
         assert.ok(folkLook({ role: "courtesan", sex: "f", seed: 3 }).equipment.some((id) => id.startsWith("laceBra")));
+    });
+
+    it("of another people: their people's bodies, skins and parts, dressed for their part", () => {
+        for (const people of ["elf", "darkElf", "cat", "lizard", "orc"]) {
+            for (const [role, local, sex] of [["smith", "smith", "m"], ["barmaid", "wench", "f"], ["sentry", "sentry", "f"], ["reeve", "reeve", "m"]]) {
+                const look = folkLook({ role, local, sex, seed: 4, people });
+                const human = folkLook({ role, local, sex, seed: 4 });
+
+                assert.deepEqual(folkLook({ role, local, sex, seed: 4, people }), look);
+                assert.notDeepEqual(look.shape, human.shape, `${people} ${local}`);
+                assert.equal(look.shape.macro.gender, sex === "f" ? 0 : 1);
+
+                for (const id of look.equipment) {
+                    assert.ok(EQUIPMENT[id], `${people} ${local}: ${id}`);
+                }
+
+                // (Dressed and carrying what their part has them do)
+                for (const id of human.equipment.filter((each) => !["nasalHelm", "wizardHat"].includes(each))) {
+                    assert.ok(look.equipment.includes(id), `${people} ${local}: ${id}`);
+                }
+            }
+        }
+
+        const cat = folkLook({ role: "sentry", sex: "m", seed: 2, people: "cat" });
+
+        assert.ok(cat.equipment.includes("catEars") && cat.equipment.includes("catTail"));
+        assert.ok(!cat.equipment.includes("nasalHelm"), "no helm over a cat's ears");
+        assert.ok(folkLook({ role: "sentry", sex: "m", seed: 2, people: "lizard" }).equipment.includes("nasalHelm"));
+        assert.equal(folkLook({ role: "priest", sex: "m", seed: 2, people: "lizard" }).look.hair.style, "bald");
+        assert.equal(folkLook({ role: "priest", sex: "m", seed: 2, people: "orc" }).walk, "orc");
+        assert.ok(folkLook({ role: "ruler", sex: "f", seed: 2, people: "cat" }).equipment.includes("crown"), "a crown sits between the ears");
+        assert.equal(folkLook({ role: "priest", sex: "m", seed: 2, people: "elf" }).look.hair.beard, "none");
+        assert.deepEqual(folkLook({ role: "priest", sex: "m", seed: 2, people: "human" }), folkLook({ role: "priest", sex: "m", seed: 2 }));
+    });
+
+    it("are named in their own people's tongue", () => {
+        const folk = Array.from({ length: 8 }, (_, k) => ({ sex: k % 2 ? "f" : "m" }));
+        const human = namePeople(folk, 3);
+        const given = new Set([...GIVEN_NAMES.f, ...GIVEN_NAMES.m]);
+
+        assert.ok(human.every(({ name }) => given.has(name.split(" ")[0])));
+
+        for (const people of ["elf", "darkElf", "cat", "lizard", "orc"]) {
+            const named = namePeople(folk, 3, people);
+
+            assert.deepEqual(namePeople(folk, 3, people), named);
+            assert.equal(new Set(named.map(({ name }) => name)).size, folk.length, people);
+            assert.ok(named.every(({ name }) => /^[A-Z][a-z]+ [A-Z][a-z]+$/.test(name) && !given.has(name.split(" ")[0])), `${people}: ${named.map(({ name }) => name)}`);
+        }
     });
 });
 

@@ -18,6 +18,8 @@ import { Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
 import { allBustTargetNames, allMacroTargetNames, bustTargets, components, MACRO_DEFAULTS, macroTargets } from "../client/js/characters/macro.js";
 import { buildDrape, DRAPES } from "../client/js/characters/drapes.js";
 import { decodeSection, encodeSection, Packer } from "../client/js/characters/pack.js";
+import { buildItem } from "../client/js/characters/items.js";
+import { LOOKS, PEOPLES, peopleLook } from "../client/js/characters/peoples.js";
 import { FOLK, PRESETS } from "../client/js/characters/presets.js";
 import { JOINTS, jointOf, jointRotation, limitRotation, Rig } from "../client/js/characters/rig.js";
 import { paintEye, paintSkin, SkinAtlas } from "../client/js/characters/skin.js";
@@ -1237,3 +1239,126 @@ describe("presets (presets.js)", () => {
         assert.deepEqual(Object.keys(MACRO_DEFAULTS).sort(), ["african", "asian", "bust", "caucasian", "gender", "height", "muscle", "weight"]);
     });
 });
+
+describe("the other peoples (peoples.js, equipment.js, skin.js)", () => {
+    const sliders = new Set(DETAILS.map(({ id }) => id));
+
+    it("gives each people a look of their own, each one a little different, the same from the same seed", () => {
+        for (const people of PEOPLES) {
+            for (const sex of ["m", "f"]) {
+                const look = peopleLook({ people, sex, seed: 7 });
+
+                assert.deepEqual(peopleLook({ people, sex, seed: 7 }), look, `${people} ${sex}`);
+                assert.notDeepEqual(peopleLook({ people, sex, seed: 8 }).shape, look.shape, `${people} ${sex}: another seed, another body`);
+                assert.equal(look.shape.macro.gender, sex === "f" ? 0 : 1);
+
+                for (const id of Object.keys(look.shape.details)) {
+                    assert.ok(sliders.has(id), `${people}: ${id}`);
+                }
+
+                for (const id of look.parts) {
+                    assert.ok(ITEMS[id], `${people}: ${id}`);
+                }
+
+                const spec = LOOKS[people];
+
+                if (spec) {
+                    for (const [id, [least, most]] of Object.entries(spec.build[sex])) {
+                        assert.ok(look.shape.macro[id] >= least - 1e-9 && look.shape.macro[id] <= most + 1e-9, `${people} ${sex}: ${id}`);
+                    }
+
+                    assert.ok(Math.abs(look.shape.macro.african + look.shape.macro.asian + look.shape.macro.caucasian - 1) < 1e-9);
+                    assert.ok((spec.styles[sex] ?? spec.styles.m).includes(look.look.hair.style), `${people}: ${look.look.hair.style}`);
+                }
+            }
+        }
+
+        assert.equal(peopleLook({ people: "troll" }), null);
+    });
+
+    it("gives elves long, pointed ears and cat folk and lizard folk slit eyes, fur, stripes and scales, ears and tails", () => {
+        for (const people of ["elf", "darkElf"]) {
+            const { shape, parts } = peopleLook({ people, seed: 3 });
+
+            assert.ok(shape.details.earLength >= 0.8 && shape.details.earPoint >= 0.85, people);
+            assert.deepEqual(parts, []);
+        }
+
+        const cats = Array.from({ length: 12 }, (_, seed) => peopleLook({ people: "cat", seed }));
+        const lizard = peopleLook({ people: "lizard", seed: 3 });
+
+        assert.ok(cats.every(({ look, parts }) => look.eyes.slit && look.skin.fur >= 0.8 && parts.includes("catEars") && parts.includes("catTail")));
+        assert.ok(cats.some(({ look }) => look.skin.stripes > 0) && cats.some(({ look }) => !look.skin.stripes), "some are striped");
+        assert.ok(lizard.look.eyes.slit && lizard.look.skin.scales >= 0.85 && lizard.shape.details.snout >= 0.8);
+        assert.deepEqual(lizard.parts, ["lizardTail"]);
+        assert.equal(lizard.look.hair.style, "bald");
+    });
+
+    it("makes orcs each a little different from the orc, their women women", () => {
+        const orcs = Array.from({ length: 8 }, (_, seed) => peopleLook({ people: "orc", seed }));
+        const woman = peopleLook({ people: "orc", sex: "f", seed: 2 });
+
+        assert.ok(new Set(orcs.map(({ shape }) => shape.macro.height)).size > 4);
+        assert.ok(orcs.every(({ parts, walk }) => parts.includes("tusks") && walk === "orc"));
+        assert.equal(woman.shape.macro.gender, 0);
+        assert.ok(woman.shape.details.jawWidth < PRESETS.orc.shape.details.jawWidth);
+    });
+
+    it("puts cat folk's ears on top of the head and tails at the base of the spine, in their skin's colour", () => {
+        const f = figure(peopleLook({ people: "cat", seed: 3 }).shape);
+        const head = (name) => f.rig.heads[f.rig.index.get(name)];
+        const where = (socket) => {
+            const place = placed(socketOn(f, socket), {});
+
+            return place.position.clone().add(head(place.bone));
+        };
+        const [left, right, tail] = [where("leftEar"), where("rightEar"), where("tail")];
+        const hips = head("Hips");
+
+        assert.ok(left.x > 0.02 && right.x < -0.02 && Math.abs(left.x + right.x) < 0.01, "either side");
+        assert.ok(left.y > head("Head").y + 0.08 && Math.abs(left.y - right.y) < 0.005, "on top of the head");
+        assert.ok(Math.abs(tail.x) < 0.01 && tail.z < hips.z - 0.05 && Math.abs(tail.y - hips.y) < 0.1, `behind the hips: ${tail.toArray().map((v) => v.toFixed(2))}`);
+
+        for (const id of ["catEars", "catTail", "lizardTail"]) {
+            const item = ITEMS[id];
+
+            assert.ok(item.tinted && SLOTS.some(({ id: slot }) => slot === item.slot), id);
+
+            for (const { model } of item.parts ?? [item]) {
+                const names = [];
+
+                buildItem(model, {}).traverse((mesh) => mesh.isMesh && names.push(mesh.material.name));
+                assert.ok(names.includes("skin"), `${id}: ${names}`);
+            }
+        }
+
+        assert.ok(ITEMS.catTail.sway > 0 && ITEMS.lizardTail.sway > 0, "tails sway");
+    });
+
+    it("paints fur (striped) and scales over the skin", () => {
+        const atlas = new SkinAtlas(human, {}, 128);
+        const spread = (data) => {
+            let [sum, squares, count] = [0, 0, 0];
+
+            for (let i = 0; i < atlas.covered.length; i++) {
+                if (atlas.covered[i]) {
+                    sum += data[i * 4];
+                    squares += data[i * 4] ** 2;
+                    count++;
+                }
+            }
+
+            return Math.sqrt(squares / count - (sum / count) ** 2);
+        };
+        const plain = paintSkin(atlas, { tone: "#b88a52", variation: 0, blush: 0, brows: 0 });
+        const striped = paintSkin(atlas, { tone: "#b88a52", variation: 0, blush: 0, brows: 0, fur: 1, stripes: 1, stripeColour: "#3a2410" });
+        const scaled = paintSkin(atlas, { tone: "#5f7d4a", variation: 0, blush: 0, brows: 0, scales: 1 });
+        const smooth = paintSkin(atlas, { tone: "#5f7d4a", variation: 0, blush: 0, brows: 0 });
+
+        assert.ok(atlas.fields.fur && atlas.fields.scales, "the fields for them made when first wanted");
+        assert.ok(spread(striped.data) > spread(plain.data) + 5, `stripes: ${spread(striped.data)} against ${spread(plain.data)}`);
+        assert.ok(spread(scaled.data) > spread(smooth.data) + 3, `scales: ${spread(scaled.data)} against ${spread(smooth.data)}`);
+        assert.notDeepEqual(scaled.bump, smooth.bump, "the scales raised");
+    });
+});
+

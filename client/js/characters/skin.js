@@ -11,7 +11,7 @@
 // Pure data (the DOM is only needed to load the masks: loadMasks), so it can be tested in Node.
 
 import { aboveHairline, beardAmount, faceFrame, nearEar } from "./face.js";
-import { fbm, gaussian, hash3, smoothstep, valueNoise } from "./noise.js";
+import { cells, fbm, gaussian, hash3, smoothstep, valueNoise } from "./noise.js";
 
 /** Skin tones, light to dark (sRGB), and a few that aren't human. */
 export const SKIN_TONES = Object.freeze({
@@ -58,6 +58,12 @@ export const SKIN_DEFAULTS = Object.freeze({
     warts: 0,
     warpaint: null, // colour of stripes across the eyes, or null
     veins: 0,
+    // (Cat folk's and lizard folk's: fur, lying one way; stripes on it, of `stripeColour`, with a
+    // paler belly; scales, each a little different)
+    fur: 0,
+    stripes: 0,
+    stripeColour: null, // null: darker than the tone
+    scales: 0,
     image: null, // a whole texture ({ width, height, data } RGBA): replaces the painted skin
 });
 
@@ -122,42 +128,78 @@ export class SkinAtlas {
         }
 
         this.fields.brow.fill(255);
+        this.human = human;
 
         this.#analyse(human, masks);
     }
 
-    #analyse(human, masks) {
+    /**
+     * The fields only the other peoples' skins need (fur, stripes, a paler belly, scales: made
+     * the first time they're wanted, as working out the scales is slow): `fields` has them after.
+     */
+    furAndScales() {
+        if (this.fields.scales) {
+            return;
+        }
+
+        const count = this.size * this.size;
+
+        for (const name of ["fur", "stripes", "belly", "scales", "scaleTint"]) {
+            this.fields[name] = new Uint8Array(count);
+        }
+
+        const { middle } = faceFrame(this.human, this.human.basePositions);
+        const handBones = new Set(this.human.bones.map(({ name }, i) => (/Hand/.test(name) ? i : -1)));
+        const headBones = new Set([this.human.boneIndex.get("Head"), this.human.boneIndex.get("Neck")]);
+
+        this.#raster(this.human, (i, p, n, bone) => this.#furAndScales(i, p, n, [p[0] - middle[0], p[1] - middle[1], p[2] - middle[2]], headBones.has(bone), handBones.has(bone)));
+
+        // (The texels just outside the triangles as their neighbours, so seams don't show)
+        for (let g = 0; g < this.gutter.length; g += 2) {
+            for (const name of ["fur", "stripes", "belly", "scales", "scaleTint"]) {
+                this.fields[name][this.gutter[g]] = this.fields[name][this.gutter[g + 1]];
+            }
+        }
+    }
+
+    #furAndScales(i, p, n, face, onHead, onHand) {
+        const f = this.fields;
+        const set = (name, value) => (f[name][i] = Math.round(Math.min(1, Math.max(0, value)) * 255));
+        const [fx, fy] = face;
+
+        // Fur: fine strands lying down the body (long along it, narrow across)
+        set("fur", valueNoise(p[0] * 520, p[1] * 70, p[2] * 520) * 0.65 + hash3(Math.floor(p[0] * 1800), Math.floor(p[1] * 300), Math.floor(p[2] * 1800)) * 0.35);
+
+        // Stripes: bands round the body and limbs, wavering, broken here and there; a paler belly
+        // and chest, throat and inner arms
+        const warp = fbm(p[0] * 7 + 3, p[1] * 7, p[2] * 7, 3) - 0.5;
+        const bands = 0.5 + 0.5 * Math.sin(p[1] * 70 + warp * 9 + (onHead ? fx * 90 : 0));
+        const broken = smoothstep(0.35, 0.6, fbm(p[0] * 22, p[1] * 5, p[2] * 22, 2));
+
+        set("stripes", smoothstep(0.62, 0.82, bands) * broken * (1 - smoothstep(0.35, 0.75, n[2]) * (onHead ? 0 : 0.8)));
+        set("belly", onHead ? smoothstep(-0.02, -0.06, fy) * smoothstep(0.2, 0.6, n[2]) * 0.8 : smoothstep(0.3, 0.8, n[2]) * smoothstep(0.16, 0.05, Math.abs(p[0])) + smoothstep(0.2, 0.8, -n[1]) * 0.4);
+
+        // Scales: cells a centimetre or so across (finer on the face and hands), edged, each its
+        // own shade
+        const fine = onHead || onHand ? 180 : 95;
+        const cell = cells(p[0] * fine, p[1] * fine * 0.8, p[2] * fine);
+
+        set("scales", smoothstep(0.18, 0.02, cell.next - cell.near));
+        set("scaleTint", cell.cell);
+    }
+
+    // Every texel of the body's triangles in texture space, once: where it is on the base body
+    // (`p`), its normal (`n`), its triangle's first vertex (`v`) and weights (`w`), and its bone
+    #raster(human, visit) {
         const size = this.size;
         const positions = human.basePositions;
-        const normals = human.normals(positions);
-
-        // Landmarks, in the base mesh: eyes, and joints
-        const { middle, eyeX } = faceFrame(human, positions);
-        const joint = (name, end = 0) => {
-            const at = human.boneIndex.get(name) * 6 + end * 3;
-
-            return [human.jointBase[at], human.jointBase[at + 1], human.jointBase[at + 2]];
-        };
-        const joints = {
-            elbows: [joint("LeftForeArm"), joint("RightForeArm")],
-            knees: [joint("LeftLeg"), joint("RightLeg")],
-            armpits: [joint("LeftArm"), joint("RightArm")],
-            neck: joint("Neck"),
-            head: joint("Head"),
-        };
-        const handBones = new Set(human.bones.map(({ name }, i) => (/Hand/.test(name) ? i : -1)));
-        const footBones = new Set(human.bones.map(({ name }, i) => (/Foot|Toe/.test(name) ? i : -1)));
-        const headBones = new Set([human.boneIndex.get("Head"), human.boneIndex.get("Neck")]);
-        const dist2 = (p, q) => (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2;
-
-        // Rasterise the body's triangles in texture space
+        const normals = (this.normals ??= human.normals(positions));
         const indices = human.renderIndices("body");
         const uvs = human.uvs;
         const source = human.renderSource;
-        const cavity = this.#cavity(human, positions, normals, indices);
+        const seen = new Uint8Array(size * size);
         const p = [0, 0, 0];
         const n = [0, 0, 0];
-        const face = [0, 0, 0];
 
         for (let t = 0; t < indices.length; t += 3) {
             const r = [indices[t], indices[t + 1], indices[t + 2]];
@@ -185,22 +227,58 @@ export class SkinAtlas {
                     const w2 = 1 - w0 - w1;
                     const i = py * size + px;
 
-                    if (w0 < -0.02 || w1 < -0.02 || w2 < -0.02 || this.covered[i]) {
+                    if (w0 < -0.02 || w1 < -0.02 || w2 < -0.02 || seen[i]) {
                         continue;
                     }
 
                     for (let k = 0; k < 3; k++) {
                         p[k] = w0 * positions[v[0] * 3 + k] + w1 * positions[v[1] * 3 + k] + w2 * positions[v[2] * 3 + k];
                         n[k] = w0 * normals[v[0] * 3 + k] + w1 * normals[v[1] * 3 + k] + w2 * normals[v[2] * 3 + k];
-                        face[k] = p[k] - middle[k];
                     }
 
-                    this.covered[i] = 1;
-                    this.fields.cavity[i] = Math.round(Math.min(1, Math.max(0, 0.5 + 2.5 * (w0 * cavity[v[0]] + w1 * cavity[v[1]] + w2 * cavity[v[2]]))) * 255);
-                    this.#texel(i, p, n, face, bone, { eyeX, joints, handBones, footBones, headBones, dist2, masks });
+                    seen[i] = 1;
+                    visit(i, p, n, bone, v, [w0, w1, w2]);
                 }
             }
         }
+    }
+
+    #analyse(human, masks) {
+        const positions = human.basePositions;
+        const normals = (this.normals = human.normals(positions));
+
+        // Landmarks, in the base mesh: eyes, and joints
+        const { middle, eyeX } = faceFrame(human, positions);
+        const joint = (name, end = 0) => {
+            const at = human.boneIndex.get(name) * 6 + end * 3;
+
+            return [human.jointBase[at], human.jointBase[at + 1], human.jointBase[at + 2]];
+        };
+        const joints = {
+            elbows: [joint("LeftForeArm"), joint("RightForeArm")],
+            knees: [joint("LeftLeg"), joint("RightLeg")],
+            armpits: [joint("LeftArm"), joint("RightArm")],
+            neck: joint("Neck"),
+            head: joint("Head"),
+        };
+        const handBones = new Set(human.bones.map(({ name }, i) => (/Hand/.test(name) ? i : -1)));
+        const footBones = new Set(human.bones.map(({ name }, i) => (/Foot|Toe/.test(name) ? i : -1)));
+        const headBones = new Set([human.boneIndex.get("Head"), human.boneIndex.get("Neck")]);
+        const dist2 = (p, q) => (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2;
+
+        // Rasterise the body's triangles in texture space
+        const cavity = this.#cavity(human, positions, normals, human.renderIndices("body"));
+        const face = [0, 0, 0];
+
+        this.#raster(human, (i, p, n, bone, v, [w0, w1, w2]) => {
+            for (let k = 0; k < 3; k++) {
+                face[k] = p[k] - middle[k];
+            }
+
+            this.covered[i] = 1;
+            this.fields.cavity[i] = Math.round(Math.min(1, Math.max(0, 0.5 + 2.5 * (w0 * cavity[v[0]] + w1 * cavity[v[1]] + w2 * cavity[v[2]]))) * 255);
+            this.#texel(i, p, n, face, bone, { eyeX, joints, handBones, footBones, headBones, dist2, masks });
+        });
 
         this.#gutter();
     }
@@ -273,6 +351,7 @@ export class SkinAtlas {
 
         set("warts", smoothstep(0.8, 0.9, fbm(p[0] * 180 + 5, p[1] * 180, p[2] * 180, 2)));
         set("veins", this.#veins(p));
+
 
         if (!onHead) {
             // Freckles on the shoulders and upper chest
@@ -398,6 +477,12 @@ export function rgb(hex) {
  */
 export function paintSkin(atlas, settings = {}) {
     const look = { ...SKIN_DEFAULTS, ...settings };
+
+    // (Fur, stripes and scales: the fields for them made, the first time)
+    if (look.fur || look.stripes || look.scales) {
+        atlas.furAndScales();
+    }
+
     const size = atlas.size;
     const count = size * size;
     const data = new Uint8ClampedArray(count * 4);
@@ -409,6 +494,7 @@ export function paintSkin(atlas, settings = {}) {
     const brow = look.browColour ? rgb(look.browColour) : hair.map((c) => c * 0.8);
     const lip = look.lips ? rgb(look.lips) : [tone[0] * 0.84, tone[1] * 0.64, tone[2] * 0.66];
     const paint = look.warpaint ? rgb(look.warpaint) : null;
+    const stripeColour = look.stripeColour ? rgb(look.stripeColour) : tone.map((c) => c * 0.45);
     const image = look.image;
     const colour = [0, 0, 0];
     const mix = (target, amount) => {
@@ -469,6 +555,29 @@ export function paintSkin(atlas, settings = {}) {
             if (paint) {
                 mix(paint, (f.paint[i] / 255) * (0.8 + 0.2 * fine));
             }
+
+            // Fur: its strands lighter and darker; stripes; the belly paler
+            if (look.fur) {
+                const strand = f.fur[i] / 255 - 0.5;
+
+                mix([colour[0] * (1 + strand * 0.5), colour[1] * (1 + strand * 0.5), colour[2] * (1 + strand * 0.45)], look.fur);
+            }
+
+            if (look.stripes) {
+                mix(stripeColour, (f.stripes[i] / 255) * look.stripes * (0.8 + 0.2 * (f.fur[i] / 255)));
+            }
+
+            if (look.fur || look.scales) {
+                mix([Math.min(1, tone[0] * 1.25 + 0.12), Math.min(1, tone[1] * 1.22 + 0.1), Math.min(1, tone[2] * 1.15 + 0.08)], (f.belly[i] / 255) * 0.55 * Math.max(look.fur, look.scales));
+            }
+
+            // Scales: each its own shade, the cracks between them dark
+            if (look.scales) {
+                const tint = f.scaleTint[i] / 255 - 0.5;
+
+                mix([colour[0] * (1 + tint * 0.3), colour[1] * (1 + tint * 0.25), colour[2] * (1 + tint * 0.2)], look.scales);
+                mix([colour[0] * 0.45, colour[1] * 0.48, colour[2] * 0.42], (f.scales[i] / 255) * look.scales * 0.8);
+            }
         }
 
         // Creases darker, ridges a little lighter
@@ -502,7 +611,7 @@ export function paintSkin(atlas, settings = {}) {
         data[i * 4 + 2] = colour[2] * 255;
         data[i * 4 + 3] = 255;
 
-        bump[i] = 128 + 40 * fine + 14 * (grain - 0.5) + 40 * (f.warts[i] / 255) * look.warts + 25 * browAlpha + 12 * stubble - 30 * (f.lips[i] / 255) * fine;
+        bump[i] = 128 + 40 * fine + 14 * (grain - 0.5) + 40 * (f.warts[i] / 255) * look.warts + 25 * browAlpha + 12 * stubble - 30 * (f.lips[i] / 255) * fine + (look.fur ? 30 * look.fur * (f.fur[i] / 255 - 0.5) : 0) - (look.scales ? 55 * look.scales * (f.scales[i] / 255) : 0);
     }
 
     // Seams: copy each gutter texel from its neighbour

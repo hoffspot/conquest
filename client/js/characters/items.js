@@ -33,10 +33,15 @@ export function itemMaterial(name) {
             foam: { color: 0xf3ead2, roughness: 0.95 },
             hotIron: { color: 0xff7a2a, emissive: 0xff4a0a, emissiveIntensity: 1.4, roughness: 0.6 },
             gold: { color: 0xe0b44a, metalness: 1, roughness: 0.25 },
+            // (Stands for the character's own skin or fur: a character gives what's made of it its
+            // own colour, character.js)
+            skin: { color: 0xc8a080, roughness: 0.8 },
+            earInner: { color: 0xd9a3a0, roughness: 0.75 },
             ruby: { color: 0xb3142a, emissive: 0x3a0008, emissiveIntensity: 0.6, roughness: 0.15 },
         }[name];
 
-        materials.set(name, new THREE.MeshStandardMaterial(settings));
+        // (Named, so that a character can find what's made of its skin)
+        materials.set(name, Object.assign(new THREE.MeshStandardMaterial(settings), { name }));
     }
 
     return materials.get(name);
@@ -476,6 +481,77 @@ function crown(radius) {
     return assemble(parts, "crown");
 }
 
+// A tube along a curve through `points` ([x, y, z]), `from` thick at its start tapering to `to`
+// (radii), closed at its tip with a round end
+function taperedTube(points, from, to, { segments = 18, sides = 10 } = {}) {
+    const curve = new THREE.CatmullRomCurve3(points.map(([x, y, z]) => new THREE.Vector3(x, y, z)));
+    const { normals, binormals } = curve.computeFrenetFrames(segments, false);
+    const positions = [];
+    const indices = [];
+
+    for (let k = 0; k <= segments; k++) {
+        const t = k / segments;
+        const centre = curve.getPointAt(t);
+        const radius = from + (to - from) * t;
+
+        for (let j = 0; j <= sides; j++) {
+            const angle = (j / sides) * Math.PI * 2;
+            const out = normals[k].clone().multiplyScalar(Math.cos(angle)).add(binormals[k].clone().multiplyScalar(Math.sin(angle)));
+
+            positions.push(centre.x + out.x * radius, centre.y + out.y * radius, centre.z + out.z * radius);
+        }
+    }
+
+    for (let k = 0; k < segments; k++) {
+        for (let j = 0; j < sides; j++) {
+            const [a, b] = [k * (sides + 1) + j, (k + 1) * (sides + 1) + j];
+
+            indices.push(a, b, a + 1, b, b + 1, a + 1);
+        }
+    }
+
+    const tube = new THREE.BufferGeometry();
+
+    tube.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    tube.setIndex(indices);
+    tube.computeVertexNormals();
+
+    const tip = curve.getPointAt(1);
+    const end = new THREE.SphereGeometry(to, sides, 6).translate(tip.x, tip.y, tip.z);
+
+    return [tube, end];
+}
+
+// A cat's ear, on top of the head (`side`: 1 the character's left): a flattened, pointed cone
+// in the fur's colour, leaning out, its inside pink and facing forward
+function catEar(scale, side) {
+    const s = scale;
+    const outer = new THREE.ConeGeometry(0.036 * s, 0.085 * s, 6, 1).scale(1, 1, 0.42).translate(0, 0.035 * s, 0);
+    const inner = new THREE.ConeGeometry(0.024 * s, 0.062 * s, 6, 1).scale(1, 1, 0.2).translate(0, 0.03 * s, 0.009 * s);
+    const lean = [-0.12, 0, -side * 0.38];
+
+    return assemble([
+        [at(outer, 0, 0, 0, ...lean), "skin"],
+        [at(inner, 0, 0, 0, ...lean), "earInner"],
+    ], "ear");
+}
+
+// A cat's tail, from the base of the spine: down behind the legs, curling up at its end
+function catTail(scale) {
+    const s = scale;
+    const points = [[0, 0, 0], [0, -0.05, -0.1], [0, -0.2, -0.22], [0, -0.38, -0.3], [0.02, -0.5, -0.38], [0.04, -0.48, -0.52], [0.05, -0.4, -0.6]].map(([x, y, z]) => [x * s, y * s, z * s]);
+
+    return assemble(taperedTube(points, 0.034 * s, 0.022 * s).map((geometry) => [geometry, "skin"]), "tail");
+}
+
+// A lizard's tail: thick at its root, down and out behind to a point near the ground
+function lizardTail(scale) {
+    const s = scale;
+    const points = [[0, 0, 0], [0, -0.1, -0.12], [0, -0.35, -0.3], [0, -0.62, -0.5], [0, -0.78, -0.78], [0, -0.82, -1.05]].map(([x, y, z]) => [x * s, y * s, z * s]);
+
+    return assemble(taperedTube(points, 0.085 * s, 0.012 * s, { segments: 22 }).map((geometry) => [geometry, "skin"]), "tail");
+}
+
 function backpack() {
     return assemble([
         [at(new THREE.BoxGeometry(0.26, 0.36, 0.14), 0, 0, -0.07), "canvas"],
@@ -612,6 +688,12 @@ export function buildItem(model, fit = {}) {
             return wizardHat(headRadius);
         case "crown":
             return crown(headRadius);
+        case "catEar":
+            return catEar(fit.scale ?? 1, fit.side ?? 1);
+        case "catTail":
+            return catTail(fit.scale ?? 1);
+        case "lizardTail":
+            return lizardTail(fit.scale ?? 1);
         case "backpack":
             return backpack();
         case "quiver":

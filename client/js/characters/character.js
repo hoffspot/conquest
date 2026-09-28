@@ -70,6 +70,8 @@ export class Character {
             eyes: materials.eyes ?? new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.25, clearcoat: 1, clearcoatRoughness: 0.05 }),
             lashes: materials.lashes ?? new THREE.MeshStandardMaterial({ color: 0x1a1210, roughness: 0.9, transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false }),
             hair: materials.hair ?? new THREE.MeshStandardMaterial({ map: hairTexture(), alphaTest: 0.4, alphaToCoverage: true, side: THREE.DoubleSide, roughness: 0.65, envMapIntensity: 0.5, vertexColors: true }),
+            // (Parts of their own in their skin's or fur's colour: a cat's ears and tail)
+            tint: materials.tint ?? new THREE.MeshStandardMaterial({ color: 0xc8a080, roughness: 0.8 }),
         };
 
         /** The hair and beard (null when bald and clean-shaven). */
@@ -251,9 +253,19 @@ export class Character {
                 const model = new THREE.Group();
                 const look = buildItem(part.model, socket.fit);
 
+                // (What's of their skin or fur, in its colour)
+                if (item.tinted) {
+                    look.traverse((mesh) => {
+                        if (mesh.isMesh && mesh.material.name === "skin") {
+                            mesh.material = this.materials.tint;
+                        }
+                    });
+                }
+
                 model.name = id;
                 model.add(look);
                 model.userData.home = home;
+                model.userData.sway = item.sway ?? 0;
                 model.userData.hand = /^(left|right)Hand$/.test(part.socket) ? (part.socket.startsWith("left") ? "Left" : "Right") : null;
 
                 const sheath = part === item && item.sheath && !item.sheath.worn ? item.sheath : null;
@@ -355,8 +367,17 @@ export class Character {
 
     /** Move weapons settling into a hand or sheath on by `dt` seconds (Character.sheathe). */
     settle(dt) {
+        this.swayed = (this.swayed ?? 0) + dt;
+
         for (const model of this.items) {
             const settling = model.userData.settling;
+
+            // (A tail swaying from side to side, and a little up and down)
+            if (model.userData.sway) {
+                const { sway, home } = model.userData;
+
+                model.quaternion.copy(home.quaternion).multiply(_sway.setFromEuler(_swayAngles.set(Math.sin(this.swayed * 2.1) * sway * 0.25, Math.sin(this.swayed * 1.3) * sway, 0)));
+            }
 
             if (settling) {
                 settling.left = Math.max(0, settling.left - dt);
@@ -503,6 +524,8 @@ export class Character {
         } else {
             this.materials.body.color.set(skin.tone);
         }
+
+        this.materials.tint.color.set(skin.tone);
 
         const eye = paintEye(eyes);
 
@@ -706,6 +729,9 @@ export class Character {
         }
     }
 }
+
+const _sway = new THREE.Quaternion();
+const _swayAngles = new THREE.Euler();
 
 /** One byte a pixel to RGBA grey. */
 function greyscale(values) {
