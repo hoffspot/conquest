@@ -18,6 +18,7 @@ const WORLD_KEY = "pellagos.world";
 const PROGRESS_KEY = "pellagos.progress";
 const STANDING_KEY = "pellagos.standing";
 const FOLLOWERS_KEY = "pellagos.followers";
+const WHEELS_KEY = "pellagos.wheels";
 
 /** The save format's version: a save from another version is set aside, not misread. */
 export const SAVE_VERSION = 1;
@@ -157,6 +158,22 @@ export function loadFollowers(save) {
 /** Keep the followers the character leads, in a saved game. */
 export function saveFollowers(save, followers) {
     return save?.created ? write(FOLLOWERS_KEY, { created: save.created, seed: save.seed, followers }) : false;
+}
+
+/**
+ * What a saved game's character has put on their action wheels (app/wheel.js readWheels), as
+ * kept: null for nothing yet (what they start with), or another game's.
+ */
+export function loadWheels(save) {
+    const kept = read(WHEELS_KEY);
+    const ours = kept && save?.created && kept.created === save.created && kept.seed === save.seed;
+
+    return ours && kept.wheels && typeof kept.wheels === "object" ? kept.wheels : null;
+}
+
+/** Keep what the character's put on their action wheels, in a saved game. */
+export function saveWheels(save, wheels) {
+    return save?.created ? write(WHEELS_KEY, { created: save.created, seed: save.seed, wheels }) : false;
 }
 
 /**

@@ -931,7 +931,7 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     font-size: 20px;
 }
 
-/* The action wheel: four see-through slices round whoever was held on */
+/* The action wheel: eight see-through slices round whoever was held on, S turning it over */
 .wheel {
     position: absolute;
     left: 0;
@@ -954,26 +954,56 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     overflow: visible;
 }
 
-.wheel .face {
+:is(.wheel, .wheels-compass) .face {
     fill: rgba(24, 19, 14, 0.6);
     stroke: rgba(236, 200, 130, 0.6);
     stroke-width: 1.5;
     transition: fill 0.1s;
 }
 
-.wheel .empty .face {
+:is(.wheel, .wheels-compass) .empty .face {
     fill: rgba(24, 19, 14, 0.28);
     stroke: rgba(236, 200, 130, 0.25);
     stroke-dasharray: 4 4;
 }
 
-.wheel .label {
+:is(.wheel, .wheels-compass) .flip .face {
+    fill: rgba(40, 52, 70, 0.55);
+    stroke: rgba(170, 200, 236, 0.55);
+}
+
+:is(.wheel, .wheels-compass) .label {
     fill: #f6ead2;
-    font: 700 11px var(--font-ui);
+    font: 700 10px var(--font-ui);
     text-anchor: middle;
     paint-order: stroke;
     stroke: rgba(0, 0, 0, 0.75);
     stroke-width: 3px;
+}
+
+:is(.wheel, .wheels-compass) .count {
+    fill: #fff8e6;
+    font: 800 11px var(--font-ui);
+    text-anchor: middle;
+    paint-order: stroke;
+    stroke: rgba(0, 0, 0, 0.85);
+    stroke-width: 3px;
+}
+
+:is(.wheel, .wheels-compass) .side {
+    fill: #f6ead2;
+    font: 800 15px var(--font-ui);
+    text-anchor: middle;
+    opacity: 0.8;
+}
+
+:is(.wheel, .wheels-compass) .off .icon,
+:is(.wheel, .wheels-compass) .off .label {
+    opacity: 0.35;
+}
+
+:is(.wheel, .wheels-compass) .off .face {
+    fill: rgba(24, 19, 14, 0.35);
 }
 
 .wheel .cooldown {
@@ -992,7 +1022,7 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     fill: rgba(200, 50, 40, 0.55);
 }
 
-.wheel .hub {
+:is(.wheel, .wheels-compass) .hub {
     fill: rgba(24, 19, 14, 0.4);
     stroke: rgba(236, 200, 130, 0.45);
     stroke-width: 1.5;
@@ -1879,6 +1909,109 @@ dialog#menu .options {
 
 .volumes.off {
     opacity: 0.45;
+}
+
+/* Action wheels: whose wheel and which side, the wheel drawn as it opens, and what can go in
+   the slice chosen */
+dialog#menu.wide {
+    width: min(460px, calc(100% - 24px));
+    max-height: calc(100% - 24px);
+    overflow: auto;
+    padding: 20px 18px;
+}
+
+.wheels-note {
+    margin: 6px 0 12px;
+    font-size: 13px;
+    color: var(--muted);
+    text-align: center;
+}
+
+.wheels-whose,
+.wheels-sides {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+.wheels-tab {
+    padding: 8px;
+    border: 1px solid var(--field-border);
+    border-radius: 8px;
+    background: var(--field);
+    color: var(--ink);
+    font: 600 14px var(--font-ui);
+    cursor: pointer;
+}
+
+.wheels-tab[aria-selected="true"] {
+    border-color: var(--gold);
+    background: linear-gradient(180deg, var(--gold-bright), var(--gold));
+    color: #2a1d0b;
+}
+
+.wheels-compass {
+    display: flex;
+    justify-content: center;
+    margin: 10px 0 4px;
+}
+
+.wheels-compass svg {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    overflow: visible;
+}
+
+.wheels-compass .slice {
+    cursor: pointer;
+    outline: none;
+}
+
+.wheels-compass .slice.picked .face,
+.wheels-compass .slice:focus-visible .face {
+    fill: rgba(236, 200, 130, 0.32);
+    stroke: var(--gold-bright);
+    stroke-width: 2.5;
+    stroke-dasharray: none;
+}
+
+.wheels-heading {
+    margin: 4px 0 8px;
+    font-size: 14px;
+    color: var(--gold-bright);
+    text-align: center;
+}
+
+.wheels-choices {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+    gap: 6px;
+    margin-bottom: 14px;
+}
+
+.wheels-choice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    border: 1px solid var(--field-border);
+    border-radius: 8px;
+    background: var(--field);
+    color: var(--ink);
+    font: 600 13px var(--font-ui);
+    text-align: left;
+    cursor: pointer;
+}
+
+.wheels-choice svg {
+    flex: none;
+}
+
+.wheels-choice[aria-selected="true"] {
+    border-color: var(--gold-bright);
+    background: rgba(236, 200, 130, 0.18);
 }
 
 /* --- Debug mode --- */

@@ -4,12 +4,12 @@ import { describe, it } from "node:test";
 import { cleanName, defaultHero, HERO_PEOPLES, heroOfPeople, HUMAN_TONES, randomHero, suggestName, tonesOf } from "../client/js/app/heroes.js";
 import { LOOKS } from "../client/js/characters/peoples.js";
 import { formatBytes, Loader } from "../client/js/app/loader.js";
-import { ICONS } from "../client/js/app/icons.js";
+import { ICONS, ITEM_ICONS } from "../client/js/app/icons.js";
 import { buildingsOf, interiorColours, mapColours, treesOf } from "../client/js/app/minimap.js";
-import { ACTIONS, DIRECTIONS, directionOf, sectorPath, WHEELS } from "../client/js/app/wheel.js";
+import { ACTIONS, actionOf, assignable, DIRECTIONS, directionOf, drawWheel, FLIP, iconOf, PLACES, readWheels, sectorPath, WHEELS } from "../client/js/app/wheel.js";
 import { SPELLS } from "../client/js/core/spells.js";
-import { ABILITIES } from "../client/js/core/progress.js";
-import { isHero, loadExplored, loadSave, loadSettings, loadStanding, loadTalks, loadWorld, newSeed, SAVE_VERSION, saveExplored, saveSettings, saveStanding, saveTalks, saveWorld, SETTINGS_DEFAULTS, writeSave, clearSave } from "../client/js/app/save.js";
+import { ABILITIES, ITEMS } from "../client/js/core/progress.js";
+import { isHero, loadExplored, loadSave, loadSettings, loadStanding, loadTalks, loadWheels, loadWorld, newSeed, SAVE_VERSION, saveExplored, saveSettings, saveStanding, saveTalks, saveWheels, saveWorld, SETTINGS_DEFAULTS, writeSave, clearSave } from "../client/js/app/save.js";
 import { Standing } from "../client/js/core/standing.js";
 import { Explored } from "../client/js/core/explored.js";
 import { BEARDS, HAIRSTYLES } from "../client/js/characters/hair.js";
@@ -176,6 +176,20 @@ describe("saving (save.js)", () => {
         assert.deepEqual(new Standing(loadStanding(save)).toJSON(), standing.toJSON());
         assert.deepEqual(loadStanding({ ...save, seed: 13 }), {});
         assert.equal(saveStanding({ seed: 1 }, standing), false);
+    });
+
+    it("keeps what a saved game's character has put on their action wheels; not for another", () => {
+        useStorage();
+
+        const save = { seed: 12, created: "2026-09-26T10:00:00.000Z" };
+        const wheels = { self: [{ n: "heal", ne: "item:potion" }, { e: "item:ale" }], enemy: [{ n: "stun" }, { w: "hold" }] };
+
+        assert.equal(loadWheels(save), null);
+        assert.equal(saveWheels(save, wheels), true);
+        assert.deepEqual(loadWheels(save), wheels);
+        assert.deepEqual(readWheels(loadWheels(save)), wheels);
+        assert.equal(loadWheels({ ...save, created: "2026-09-27T10:00:00.000Z" }), null);
+        assert.equal(saveWheels({ seed: 1 }, wheels), false);
     });
 
     it("still plays when the browser won't store anything", () => {
@@ -380,18 +394,27 @@ describe("the minimap (minimap.js)", () => {
 });
 
 describe("the action wheel (wheel.js, icons.js)", () => {
-    it("tells which slice a finger is in: none near the middle, then up, right, down or left", () => {
-        assert.deepEqual(DIRECTIONS, ["up", "right", "down", "left"]);
+    it("tells which of eight slices a finger is in, like a compass: none near the middle, then N, NE, E, SE, S, SW, W or NW", () => {
+        assert.deepEqual(DIRECTIONS, ["n", "ne", "e", "se", "s", "sw", "w", "nw"]);
         assert.equal(directionOf(0, 0), null);
         assert.equal(directionOf(10, -12, 30), null, "still in the middle");
-        assert.equal(directionOf(0, -40), "up");
-        assert.equal(directionOf(40, 5), "right");
-        assert.equal(directionOf(-3, 50), "down");
-        assert.equal(directionOf(-60, -10), "left");
+        assert.equal(directionOf(0, -40), "n");
+        assert.equal(directionOf(30, -30), "ne");
+        assert.equal(directionOf(40, 5), "e");
+        assert.equal(directionOf(28, 32), "se");
+        assert.equal(directionOf(-3, 50), "s");
+        assert.equal(directionOf(-30, 30), "sw");
+        assert.equal(directionOf(-60, -10), "w");
+        assert.equal(directionOf(-35, -30), "nw");
 
-        // Slices are a quarter each, cut on the diagonals
-        assert.equal(directionOf(30, -32), "up");
-        assert.equal(directionOf(32, -30), "right");
+        // Slices are an eighth each, cut halfway between (22.5 degrees either side)
+        assert.equal(directionOf(Math.sin(0.38) * 50, -Math.cos(0.38) * 50), "n");
+        assert.equal(directionOf(Math.sin(0.41) * 50, -Math.cos(0.41) * 50), "ne");
+    });
+
+    it("turns over at S: the other seven slices hold what the player puts there", () => {
+        assert.equal(FLIP, "s");
+        assert.deepEqual(PLACES, ["n", "ne", "e", "se", "sw", "w", "nw"]);
     });
 
     it("draws each slice as a ring's sector", () => {
@@ -401,12 +424,14 @@ describe("the action wheel (wheel.js, icons.js)", () => {
         assert.ok(path.startsWith("M-67.88,-67.88"), path);
     });
 
-    it("puts Heal up on the player's own wheel, Stun up on an enemy's and Fight up on a soldier's of a people not friendly to theirs, each with an icon (and the abilities learnt, each with theirs)", () => {
-        assert.deepEqual(WHEELS, { self: { up: "heal" }, enemy: { up: "stun" }, provoke: { up: "fight" } });
+    it("starts with Heal at the top of the player's own wheel, Stun at the top of an enemy's, and Fight on a soldier's of a people not friendly to theirs, each with an icon", () => {
+        assert.deepEqual(WHEELS, { self: [{ n: "heal" }, {}], enemy: [{ n: "stun" }, {}], provoke: [{ n: "fight" }] });
+        assert.deepEqual(readWheels(null), { self: [{ n: "heal" }, {}], enemy: [{ n: "stun" }, {}] });
 
         for (const [id, action] of Object.entries(ACTIONS)) {
             assert.ok(SPELLS[action.spell] || ABILITIES[action.ability] || action.order === "engage", id);
             assert.equal(typeof action.label, "string");
+            assert.ok(["self", "enemy", "provoke"].includes(action.on), id);
             assert.match(ICONS[id], /<(path|circle|ellipse)/, `${id} has an icon`);
         }
 
@@ -418,6 +443,45 @@ describe("the action wheel (wheel.js, icons.js)", () => {
         assert.match(ICONS.stun, /url\(#icon-stun-star\)/);
         assert.equal(SPELLS.heal.target, "self");
         assert.equal(SPELLS.stun.target, "enemy");
+    });
+
+    it("gives everything that can be carried an icon, and puts things to use on the player's own wheel by a short name", () => {
+        for (const id of Object.keys(ITEMS)) {
+            assert.match(ITEM_ICONS[id], /<(path|circle|ellipse|rect)/, `${id} has an icon`);
+        }
+
+        assert.deepEqual(actionOf("item:potion"), { label: "Draught", item: "potion", on: "self" });
+        assert.equal(actionOf("item:ale").label, "Ale");
+        assert.equal(actionOf("item:sword"), null, "gear isn't used from a wheel");
+        assert.equal(actionOf("item:nonsense"), null);
+        assert.equal(iconOf("item:meal"), ITEM_ICONS.meal);
+        assert.equal(iconOf("heal"), ICONS.heal);
+    });
+
+    it("offers each wheel what goes on it: Heal and Stun from the start, the rest once learnt, and the things to use carried", () => {
+        assert.deepEqual(assignable("self"), ["heal"]);
+        assert.deepEqual(assignable("enemy"), ["stun"]);
+        assert.deepEqual(assignable("self", { learnt: ["greaterHeal", "powerStrike"], carries: ["potion", "sword", "potion", "ale"] }), ["heal", "greaterHeal", "item:potion", "item:ale"]);
+        assert.deepEqual(assignable("enemy", { learnt: ["greaterHeal", "hold", "powerStrike", "aimedShot"], carries: ["potion"] }), ["stun", "hold", "powerStrike", "aimedShot"]);
+    });
+
+    it("reads the wheels as kept, keeping only what goes on each wheel, in its seven slices, on two sides", () => {
+        const kept = { self: [{ n: "heal", ne: "item:potion", s: "heal", e: "stun", w: "nonsense" }, { nw: "greaterHeal" }, { n: "heal" }], enemy: "nonsense" };
+
+        assert.deepEqual(readWheels(kept), { self: [{ n: "heal", ne: "item:potion" }, { nw: "greaterHeal" }], enemy: [{ n: "stun" }, {}] });
+        assert.deepEqual(readWheels({ self: [], enemy: [{}, {}] }), { self: [{}, {}], enemy: [{}, {}] });
+    });
+
+    it("draws a side: its slices, what's in each with a count for things to use, and S to turn it over", () => {
+        const svg = drawWheel({ slots: { n: "heal", ne: "item:potion" }, side: 0, flip: true, counts: { potion: 3 } });
+
+        assert.equal((svg.match(/class="slice/g) ?? []).length, 8);
+        assert.match(svg, /class="slice flip" data-direction="s"/);
+        assert.match(svg, />Wheel 2</);
+        assert.match(svg, /class="count"[^>]*>3</);
+        assert.equal((svg.match(/class="slice empty"/g) ?? []).length, 5);
+        assert.match(drawWheel({ slots: {}, side: 1, flip: true }), />Wheel 1</);
+        assert.doesNotMatch(drawWheel({ slots: { n: "fight" } }), /flip/);
     });
 });
 

@@ -424,11 +424,12 @@ experience in all: Untried, Trained, Adept, Veteran, Master, Legend.
 | Talk | talking with the folk | persuasion (M4, M7) | |
 | Command | leading followers | more followers (M9) | |
 
-**Abilities** come with a tree's second rank, and join the action wheel:
-- **Greater heal** (the player's own wheel, right): a slower cast healing 25 to 40.
-- **Hold** (an enemy's wheel, left): a longer stun, from 9 squares.
-- **Power strike** and **aimed shot** (an enemy's wheel, right): the next blow (up close, or from
-  afar) does twice the damage. Each is ready again 12 seconds after.
+**Abilities** come with a tree's second rank, and can then be put on an action wheel (Game
+options, Action wheels: docs/GAME.md):
+- **Greater heal** (the player's own wheel): a slower cast healing 25 to 40.
+- **Hold** (an enemy's wheel): a longer stun, from 9 squares.
+- **Power strike** and **aimed shot** (an enemy's wheel): the next blow (up close, or from
+  afar) does twice the damage. Each is ready again 12 seconds after, its slice greyed till then.
 
 **Gear** is a weapon, something on the body (a gambeson, a mail shirt) and a shield (only with a
 sword or a hammer). Each is of a make, which counts in its price and in what it does:
