@@ -558,6 +558,7 @@ export class Host {
         for (const key of snapshot.open) {
             const building = world.interiors.buildings.get(key);
 
+            host.#enthrone(building);
             host.open.set(key, building.folk.map(({ id }) => id));
 
             for (const one of building.folk) {
@@ -1523,7 +1524,8 @@ export class Host {
     }
 
     // Who sits on a keep's throne, as the war has it: the ruler of the people who hold it, if
-    // it's their seat (their name, and their title: "Queen"); else a governor for them
+    // it's their seat (their name, and their title: "Queen"); else a governor for them (one of
+    // them, whoever's town it was)
     #enthrone(building) {
         const one = building.kind === "keep" ? building.folk.find(({ role }) => role === "ruler") : null;
         const town = one && this.war?.town(building.place === "home" ? this.world.start?.id : building.place);
@@ -1534,12 +1536,12 @@ export class Host {
 
         const realm = this.war.realm(town.owner);
 
-        one.born ??= { name: one.name, sex: one.sex };
+        one.born ??= { name: one.name, sex: one.sex, people: one.people };
 
         if (realm?.seat === town.id) {
-            Object.assign(one, { name: realm.leader.name, title: realm.leader.title, sex: realm.leader.woman ? "f" : "m" });
+            Object.assign(one, { name: realm.leader.name, title: realm.leader.title, sex: realm.leader.woman ? "f" : "m", people: realm.race ?? town.owner });
         } else {
-            Object.assign(one, { name: one.born.name, title: `Governor of ${town.name}`, sex: one.born.sex });
+            Object.assign(one, { name: one.born.name, title: `Governor of ${town.name}`, sex: one.born.sex, people: realm?.race ?? town.owner ?? one.born.people });
         }
     }
 

@@ -457,8 +457,9 @@ client/                 The game (static files served to the browser)
     actions.js          Attacking and casting (five ways of each), flinching when hit, falling
     bvh.js              Motion capture: reading BVH files and retargeting them
     presets.js          The human, heroine and orc, and Wenches and Ale's folk
-    folk.js             Everyone else's looks, made up from their part, sex and seed
-    soldiers.js         The peoples' soldiers' looks, carrying what they fight with
+    folk.js             Everyone else's looks, made up from their part, sex, seed and people
+    peoples.js          The other peoples' bodies, skins, ears and tails (elves, cat folk...)
+    soldiers.js         The peoples' soldiers' looks, of their people, carrying what they fight with
   js/lab/character-lab.js  The character lab
   js/lab/world-map.js   The world map
   js/lab/town-map.js    The town map

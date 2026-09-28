@@ -248,6 +248,7 @@ describe("a player's part in their people (host.js, standing.js)", () => {
 
         assert.equal(ruler.name, leader.name);
         assert.equal(ruler.title, leader.title);
+        assert.equal(ruler.people, "human");
         assert.equal(host.battle.actor(ruler.id).name, leader.name);
 
         // A commoner: turned away
@@ -276,6 +277,27 @@ describe("a player's part in their people (host.js, standing.js)", () => {
         assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { counsel: { peace: enemy } } }).reason, "rank", "(peace takes a lord)");
         assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { counsel: { march: target.id } } }).ok, true);
         assert.deepEqual(host.war.realm("human").counsel, { march: target.id, weight: 0.4, until: host.war.turn + COUNSEL_TURNS });
+    });
+
+    it("seats a governor of the holders' people in a keep taken from its own, and seats them again in a world carried on", () => {
+        const { host } = hosted();
+        const capital = host.world.plan.places.find(({ kind, race }) => kind === "capital" && race === "human");
+        const enemy = host.war.realms.find(({ id }) => id !== "human").id;
+
+        host.war.town(capital.id).owner = enemy;
+
+        const keep = atTheKeep(host);
+        const governor = keep.folk.find(({ role }) => role === "ruler");
+
+        assert.equal(governor.title, `Governor of ${host.war.town(capital.id).name}`);
+        assert.equal(governor.people, enemy);
+        assert.ok(keep.folk.filter(({ role }) => role !== "ruler").every(({ people }) => people === "human"), "(the townsfolk stay)");
+
+        const again = Host.restore(buildWorld({ seed: 2 }), JSON.parse(JSON.stringify(host.snapshot())));
+        const seated = again.folk.get(governor.id);
+
+        assert.equal(seated.title, governor.title);
+        assert.equal(seated.people, enemy);
     });
 
     it("keeps a player's standing and requests in their character, and in a snapshot", () => {

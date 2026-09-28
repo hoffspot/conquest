@@ -49,6 +49,37 @@ export function fbm(x, y, z, octaves = 4) {
     return sum / total;
 }
 
+/**
+ * Cell noise in 3D (Worley's), with a cell about every unit: how far a point is from the nearest
+ * of the cells' seed points (`near`) and the next (`next`), and the nearest cell's own random
+ * number (`cell`, 0 to 1). `next - near` is 0 on the edges between cells: scales, cobbles, cracks.
+ */
+export function cells(x, y, z) {
+    const [xi, yi, zi] = [Math.floor(x), Math.floor(y), Math.floor(z)];
+    let near = Infinity;
+    let next = Infinity;
+    let cell = 0;
+
+    for (let dz = -1; dz <= 1; dz++) {
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                const [cx, cy, cz] = [xi + dx, yi + dy, zi + dz];
+                const d = Math.hypot(cx + hash3(cx, cy, cz) - x, cy + hash3(cy, cz, cx + 7) - y, cz + hash3(cz + 13, cx, cy) - z);
+
+                if (d < near) {
+                    next = near;
+                    near = d;
+                    cell = hash3(cx + 31, cy + 17, cz + 5);
+                } else if (d < next) {
+                    next = d;
+                }
+            }
+        }
+    }
+
+    return { near, next, cell };
+}
+
 export function smoothstep(edge0, edge1, x) {
     const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
 

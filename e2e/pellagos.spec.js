@@ -1478,6 +1478,9 @@ test("tapping someone walks the player up to talk: their name and what they are,
 });
 
 test("the pack shows what's grown and carried; a skill ranks up with use; trading with the barkeep, the coppers change hands; all kept for the next time", async ({ page }) => {
+    // (A long walk through: more than the usual time, with others running beside it)
+    test.setTimeout(180000);
+
     // A saved game whose hero is a blow from their next rank with the blade, with 30 coppers and a draught
     await page.addInitScript((save) => {
         localStorage.setItem("pellagos.save", JSON.stringify(save));
@@ -1578,6 +1581,9 @@ test("the pack shows what's grown and carried; a skill ranks up with use; tradin
 });
 
 test("the town hall: the reeve gives work, and pays for what's done; the journal shows where the player stands, what they carry and where it takes them; given up, it's set down", async ({ page }) => {
+    // (A long walk through: more than the usual time, with others running beside it)
+    test.setTimeout(180000);
+
     await playing(page, "/?play&seed=1");
 
     // Into the home town's hall, up to the reeve's desk

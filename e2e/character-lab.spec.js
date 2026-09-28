@@ -95,6 +95,49 @@ test("sizes a woman's bust, and not a man's", async ({ page }) => {
     await expect.poll(chestFront).toBeGreaterThan(before + 0.02);
 });
 
+test("shows the other peoples: elves' ears, cat folk's ears, tail and fur, lizard folk's scales and tail", async ({ page }) => {
+    await openLab(page);
+
+    await page.getByRole("radio", { name: "Elf", exact: true }).click();
+    await page.waitForFunction(() => window.lab.state.shape.details.earLength >= 0.8);
+
+    await page.getByRole("radio", { name: "Cat folk" }).click();
+    await page.waitForFunction(() => window.lab.character.equipment.get("tail") === "catTail");
+
+    const cat = await page.evaluate(() => {
+        const { character, step } = window.lab;
+        const tail = character.items.find((item) => item.name === "catTail");
+        const before = tail.quaternion.clone();
+
+        for (let i = 0; i < 20; i++) {
+            step(1 / 30);
+        }
+
+        let tinted = false;
+
+        tail.traverse((mesh) => {
+            tinted ||= mesh.isMesh && mesh.material === character.materials.tint;
+        });
+
+        return {
+            ears: character.equipment.get("ears"),
+            swayed: before.angleTo(tail.quaternion),
+            tinted,
+            tint: character.materials.tint.color.getHexString(),
+            tone: window.lab.state.look.skin.tone.replace("#", "").toLowerCase(),
+        };
+    });
+
+    expect(cat.ears).toBe("catEars");
+    expect(cat.swayed).toBeGreaterThan(0.001);
+    expect(cat.tinted).toBe(true);
+    expect(cat.tint).toBe(cat.tone);
+
+    await page.getByRole("radio", { name: "Lizard folk" }).click();
+    await page.waitForFunction(() => window.lab.character.equipment.get("tail") === "lizardTail" && !window.lab.character.equipment.has("ears"));
+    expect(await page.evaluate(() => window.lab.state.look.skin.scales)).toBeGreaterThan(0.8);
+});
+
 test("plays a motion capture clip", async ({ page }) => {
     await openLab(page, "/character-lab.html?clip=zombie-walk&tab=motion");
     await page.waitForFunction(() => window.lab.player?.clip.frames.length > 10);

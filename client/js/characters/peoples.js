@@ -9,7 +9,8 @@
 // - cat folk lithe, furred (striped, some of them), with a cat's ears on top of their heads, a
 //   long tail, slit eyes, and a short, broad nose;
 // - lizard folk broad and strong, scaled, with a snout and a heavy tail, no hair, slit eyes;
-// - orcs as the orc is (presets.js).
+// - orcs as the orc is (presets.js), some taller or leaner, greener or browner, than he is, and
+//   their women a little less heavy in the brow and jaw.
 // Every one of a people is a little different, from a seed of their own. Pure data, no DOM.
 
 import { createRandom } from "../core/random.js";
@@ -80,6 +81,7 @@ export const LOOKS = Object.freeze({
         skin: { blush: [0, 0], brows: [0, 0], variation: [0.8, 1.2], scales: [0.85, 1], lips: ["#3f4a33", "#35402e"] },
         irises: ["#e0a03a", "#e8d24a", "#d25a2a", "#b8c83a"],
         slit: true,
+        hair: ["black"],
         styles: { m: ["bald"], f: ["bald"] },
         beards: ["none"],
         parts: ["lizardTail"],
@@ -89,13 +91,11 @@ export const LOOKS = Object.freeze({
 /**
  * A look for one of a people (a PEOPLES id): { shape: { macro, details }, look: { skin, eyes,
  * hair }, parts (the parts of their own they wear: equipment ids), walk }, a man or a woman
- * (`sex`), from a seed of their own. Orcs are all the orc (presets.js).
+ * (`sex`), from a seed of their own. Orcs are each a little different from the orc (presets.js).
  */
 export function peopleLook({ people, sex = "m", seed = 1 }) {
     if (people === "orc") {
-        const orc = PRESETS.orc;
-
-        return { shape: structuredClone(orc.shape), look: structuredClone(orc.look), parts: ["tusks"], walk: orc.walk };
+        return orcLook({ sex, seed });
     }
 
     const spec = LOOKS[people];
@@ -164,4 +164,34 @@ export function peopleLook({ people, sex = "m", seed = 1 }) {
         parts: [...spec.parts],
         walk: "natural",
     };
+}
+
+// Orcs' skins: the orc's green, and near it
+const ORC_TONES = ["#4c5c2e", "#56663a", "#44532a", "#5a5a30", "#4a5a3a", "#606b34"];
+
+// One of the orcs, from the orc (presets.js): a little taller or shorter, leaner or heavier, their
+// skin greener or browner, their hair worn their own way; their women less heavy in the brow and
+// jaw, and not all of them painted
+function orcLook({ sex, seed }) {
+    const orc = PRESETS.orc;
+    const random = createRandom(seed * 2246822519 + 131);
+    const shape = structuredClone(orc.shape);
+    const look = structuredClone(orc.look);
+
+    Object.assign(shape.macro, { height: orc.shape.macro.height + random.range(-0.1, 0.06), weight: orc.shape.macro.weight + random.range(-0.15, 0.08), muscle: 1 - random.range(0, 0.2) });
+
+    if (sex === "f") {
+        Object.assign(shape.macro, { gender: 0, bust: random.range(0.35, 0.6), height: shape.macro.height - 0.06 });
+        Object.assign(shape.details, { underbite: 0.6, jawWidth: 0.45, browRidge: 0.55, headSquare: 0.35, neck: 0.55, shoulders: 0.45, vShape: 0.3, eyeSize: -0.2 });
+    }
+
+    look.skin.tone = random.pick(ORC_TONES);
+
+    if (random.chance(0.35)) {
+        look.skin.warpaint = null;
+    }
+
+    look.hair.style = random.pick(sex === "f" ? ["topknot", "ponytail", "long", "mohawk"] : ["topknot", "mohawk", "bald", "topknot", "long"]);
+
+    return { shape, look, parts: ["tusks"], walk: orc.walk };
 }

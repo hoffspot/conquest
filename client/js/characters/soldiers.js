@@ -1,12 +1,13 @@
-// The peoples' soldiers (docs/WAR.md M2): a town's guards and patrols, as the war brings them to
-// life near a player. What each carries is what it fights with in the battle (core/weapons.js).
+// The peoples' soldiers (docs/WAR.md M2, M5): a town's guards and patrols, as the war brings them
+// to life near a player. What each carries is what it fights with in the battle (core/weapons.js).
 //
-// Humans (and, until they have looks of their own, docs/WAR.md M5, the other peoples but the
-// orcs) are dressed as an adventurers' guild dresses its warriors and rangers (folk.js), with the
-// weapon their people fights with; orcs look as the orc does. Pure data, no DOM.
+// Each is of their own people, in their people's body, skin and parts (peoples.js), dressed as an
+// adventurers' guild dresses its warriors and rangers (folk.js), with the weapon their people
+// fights with; orcs are dressed as the orc is (their women with a tunic on too). Pure data, no DOM.
 
 import { WEAPONS } from "../core/weapons.js";
 import { folkLook } from "./folk.js";
+import { peopleLook } from "./peoples.js";
 import { PRESETS } from "./presets.js";
 
 /** What each people's soldiers fight with: guards the first, patrols each of them in turn. */
@@ -29,12 +30,12 @@ const CARRIED = new Set(["sword", "bow", "quiver", "staff", "wand", "warHammer",
  */
 export function soldierLook({ people, weapon, sex = "m", seed = 1 }) {
     if (people === "orc") {
-        const orc = PRESETS.orc;
+        const orc = peopleLook({ people, sex, seed });
 
-        return { shape: orc.shape, look: orc.look, equipment: [...orc.equipment, ...WEAPONS[weapon].equipment], walk: orc.walk, sheathed: true };
+        return { shape: orc.shape, look: orc.look, equipment: [...PRESETS.orc.equipment, ...(sex === "f" ? ["tunic"] : []), ...WEAPONS[weapon].equipment], walk: orc.walk, sheathed: true };
     }
 
-    const base = folkLook({ role: "soldier", look: weapon === "bow" ? "ranger" : "warrior", sex, seed });
+    const base = folkLook({ role: "soldier", look: weapon === "bow" ? "ranger" : "warrior", sex, seed, people });
     const shield = weapon === "sword" && base.equipment.find((id) => id.endsWith("Shield"));
 
     return { ...base, equipment: [...base.equipment.filter((id) => !CARRIED.has(id)), ...WEAPONS[weapon].equipment, ...(shield ? [shield] : [])], sheathed: true };

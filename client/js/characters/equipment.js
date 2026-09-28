@@ -35,6 +35,8 @@ export const SLOTS = Object.freeze([
     { id: "shins", label: "Shins" },
     { id: "feet", label: "Feet" },
     { id: "back", label: "Back" },
+    { id: "ears", label: "Ears" },
+    { id: "tail", label: "Tail" },
     { id: "mainHand", label: "Main hand" },
     { id: "offHand", label: "Off hand" },
 ]);
@@ -126,6 +128,12 @@ export const ITEMS = Object.freeze({
     quiver: { label: "Quiver", slot: "back", model: "quiver", socket: "back", turn: [0.25, 0, 0.5], offset: [0, 0.02, -0.04] },
     musket: { label: "Musket (slung)", slot: "back", model: "musket", socket: "back", turn: [0, 0, 2.5], offset: [0, 0, -0.03] },
     tusks: { label: "Tusks", slot: "face", model: "tusks", socket: "mouth" },
+    // The other peoples' own (characters/peoples.js), in the colour of their skin or fur
+    // (`tinted`): cat folk's ears on top of their heads, their tails, and lizard folk's; a tail
+    // sways as they go (`sway`: how far)
+    catEars: { label: "Cat's ears", slot: "ears", tinted: true, parts: [{ model: "catEar", socket: "leftEar" }, { model: "catEar", socket: "rightEar" }] },
+    catTail: { label: "Cat's tail", slot: "tail", model: "catTail", socket: "tail", tinted: true, sway: 0.35 },
+    lizardTail: { label: "Lizard's tail", slot: "tail", model: "lizardTail", socket: "tail", tinted: true, sway: 0.15 },
     tankard: { label: "Tankard of ale", slot: "mainHand", model: "tankard", socket: "rightHand", grips: true, hold: HOLDS.tankard },
     // A smith's tools: the hammer in the right hand, the tongs in the left
     smithHammer: { label: "Smith's hammer", slot: "mainHand", model: "smithHammer", socket: "rightHand", grips: true, hold: HOLDS.hammer },
@@ -256,6 +264,33 @@ export function socketOn(character, socket) {
             const mouth = new THREE.Vector3(...face.fromFace(0, (lip?.[1] ?? -0.08) + 0.004, (lip?.[2] ?? 0.03) - 0.012));
 
             return { bone: "Head", position: mouth.sub(head("Head")), quaternion: new THREE.Quaternion(), fit };
+        }
+        case "leftEar":
+        case "rightEar": {
+            // On top of the head, to one side, a little behind the crown (a cat's ears): the model
+            // leans out to its side (`fit.side`: 1 the character's left)
+            const side = socket === "leftEar" ? 1 : -1;
+            const at = new THREE.Vector3(...face.fromFace(side * 0.047, 0.1, -0.06));
+
+            return { bone: "Head", position: at.sub(head("Head")), quaternion: new THREE.Quaternion(), fit: { ...fit, side } };
+        }
+        case "tail": {
+            // At the base of the spine, on the skin: the backmost point of the body's middle,
+            // just above the buttocks
+            const hips = head("Hips");
+            let back = Infinity;
+
+            for (let v = 0; v < human.vertexCount; v++) {
+                const y = positions[v * 3 + 1];
+
+                if (human.partOf[v] === 0 && Math.abs(positions[v * 3]) < 0.025 && y > hips.y + 0.01 && y < hips.y + 0.06) {
+                    back = Math.min(back, positions[v * 3 + 2]);
+                }
+            }
+
+            const position = new THREE.Vector3(0, hips.y + 0.035, back + 0.012).sub(hips);
+
+            return { bone: "Hips", position, quaternion: new THREE.Quaternion(), fit };
         }
         case "back": {
             // On the upper back, on the skin's surface

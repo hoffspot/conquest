@@ -195,7 +195,7 @@ The engine is built for this from the start. These are its rules:
 | **M2** | Built | The war in the world: banners over the towns, guards and patrols of each people, hostility by relations, the war's forces brought to life near the player. |
 | **M3** | Built | Growing stronger: skills that grow by use along their trees, gear, gold, a pack, shops. |
 | **M4** | Built | The player's people: the keep and town halls, the rulers' requests, a journal, ranks. |
-| **M5** | | The other peoples' looks. |
+| **M5** | Built | The other peoples' looks: elves, dark elves, cat folk, lizard folk and orcs, as soldiers and as townsfolk. |
 | **M6** | | Camps, raids and conquest played out around the player. |
 | **M7** | | Diplomats on the roads, to escort or waylay; grudges and favours. |
 | **M8** | | News and rumours: the war told in the taverns and by the folk; the guild's requests. |
@@ -368,8 +368,8 @@ whoever holds the town, and whom they fight is as their peoples stand.
   | Lizard folk | staff | staff, bow |
   | Orcs | cleaver | cleaver |
 
-  Orcs look as the orc does. The rest are dressed as the adventurers' guild's warriors and
-  rangers until they have looks of their own (M5).
+  Each is of their own people, in their people's body, skin and parts (M5), dressed as the
+  adventurers' guild's warriors and rangers; orcs are dressed as the orc is.
 
 **Who fights whom** (`Battle.hostile`, and the host's `relations`):
 - The folk: no one, ever.
@@ -533,6 +533,35 @@ for 20 turns or until it's acted on:
 - what's lately done, failed or given up.
 
 Where the requests take the player is marked on the world map with a gold star.
+
+### The other peoples' looks (M5)
+
+Each people has bodies of their own (`characters/peoples.js`), made from the one body there is
+(MakeHuman's, `characters/body.js`) by its sliders, its skin and parts worn like gear. Each one of
+a people is a little different, from a seed of their own:
+
+| People | Body | Skin, eyes, hair | Their own |
+| --- | --- | --- | --- |
+| Humans | as their forebears were (`characters/folk.js`) | | |
+| Elves | tall and slender, fine-faced, long legs and neck | fair; blue, green or amber eyes; pale or bright hair, long | long ears, pointed and swept back |
+| Dark elves | the same, a little stronger | grey to violet, dark lips, pale brows; red, gold or violet eyes; white or silver hair | the same ears |
+| Cat folk | lithe, short-nosed and broad across it, big-eyed | furred (a dun, ginger, grey, black, cream or white coat, some of them striped); slit eyes | a cat's ears on top of the head, and a long tail |
+| Lizard folk | broad and strong, a snout, a heavy brow and a thick neck | scaled green, olive or teal; slit eyes; no hair | a heavy tail |
+| Orcs | as the orc is, some taller or leaner; their women less heavy in brow and jaw | the orc's green, or near it, some painted | tusks |
+
+- **Sliders** added for them (`characters/details.js`): the ears' length, tips, sweep and height,
+  a snout, and the neck's length.
+- **Fur, stripes and scales** are painted on the skin (`characters/skin.js`): the fields for them
+  (Worley cells for scales, `characters/noise.js`) made the first time anyone wants them.
+- **Ears and tails** are worn in slots of their own (`ears`, `tail`), on sockets on top of the head
+  and at the base of the spine; they're in their wearer's own skin's colour, and tails sway as
+  they go.
+- **Soldiers** of every people are of it (`characters/soldiers.js`).
+- **Townsfolk** are the people of the place (`Interiors.add`'s `people`): a cat folk's town's
+  barkeep, reeve and patrons are cat folk, dressed for their parts, and named in their own tongue
+  (`core/names.js`: "Khekan Mirrzeh", "Silwen Nimarilond"). Conquered townsfolk stay as they were:
+  only a keep's governor is of its new holders' people.
+- **The character lab** shows each people (Elf, Dark elf, Cat folk, Lizard folk).
 
 ### The host (core/host.js)
 

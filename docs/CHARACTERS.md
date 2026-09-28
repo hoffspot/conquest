@@ -53,6 +53,8 @@ to them.
 | `locomotion.js` | The walker: poses the skeleton from the gait data as the character walks and runs |
 | `bvh.js` | Motion capture: reading BVH files and retargeting them to our skeleton |
 | `presets.js` | The human, heroine and orc |
+| `peoples.js` | The other peoples' bodies, skins and parts: elves, dark elves, cat folk, lizard folk and orcs (docs/WAR.md M5) |
+| `folk.js`, `soldiers.js` | Townsfolk and soldiers made up from a part, a sex, a seed and a people |
 | `kit.js` | Loads everything characters share, once |
 
 The lab itself is `client/character-lab.html`, `character-lab.css` and `client/js/lab/character-lab.js`.
@@ -115,6 +117,11 @@ skin. That covers the lab's "Load skin…" and the skins made in MakeHuman or pa
 - **Painting.** Painting a skin then only mixes colours per texel: tone, blotches, redness,
   darker creases, lighter palms, lips, nails, freckles, veins, warts, war paint, and hair painted
   on (brows, stubble, a buzz cut or the scalp under longer hair). It also makes a bump map.
+- **Fur, stripes and scales** (for cat folk and lizard folk): fur is fine streaks along the body
+  with a paler belly, throat and inner arms; stripes are bands across the body and limbs, broken
+  up by noise, in a darker shade; scales are Worley cells (`noise.js` `cells`), each a little
+  different in shade, darker at the edges, and raised in the bump map. Their fields are made the
+  first time a skin wants them (`SkinAtlas.furAndScales`), so no one else pays for them.
 
 **Eyes.** Eyes are painted too (iris fibres, limbal ring, pupil or slit, sclera). They are drawn
 on MakeHuman's eye helper mesh with a glossy clear coat.
@@ -160,6 +167,23 @@ second at the most detailed.
 Hair near the head is skinned to the head; long hair hands over to the neck and upper back.
 Beards grow from the jaw the same way, lying along the face. Under a helmet or hat, only hair from
 below the rim is grown, so long hair hangs from under a helmet.
+
+### The other peoples
+
+`peoples.js` makes each people's look from a seed (`peopleLook`): the build (macro sliders' ranges
+by sex), their features (detail sliders' ranges: an elf's long, swept-back ears; a lizard's snout),
+their skin (tones, fur, stripes, scales), eyes (slit for cats and lizards), hair, and the parts of
+their own they wear:
+
+- **Cat's ears** (`catEars`, slot `ears`): a pointed, flattened cone either side of the top of the
+  head, leaning out, pink inside.
+- **Tails** (`catTail`, `lizardTail`, slot `tail`): tubes tapering along a curve from the base of
+  the spine, a cat's down behind the legs and curling up, a lizard's thick and down to the ground.
+  They sway as their wearer goes (`Character.settle`).
+
+What's made of their skin (the item material named `skin`) is drawn in their own skin's colour
+(`tinted` items: `Character.materials.tint`). Cat folk wear no helmet or hat over their ears (a
+crown sits between them).
 
 ### Equipment
 
