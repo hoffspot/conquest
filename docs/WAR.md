@@ -199,7 +199,7 @@ The engine is built for this from the start. These are its rules:
 | **M6** | Built | Camps, raids and conquest played out around the player. |
 | **M7** | Built | Diplomats on the roads, to escort or waylay; grudges and favours. |
 | **M8** | Built | News and rumours: the war told in the taverns and by the folk; the guild's requests. |
-| **M9** | | Followers, mercenaries and adventurers for hire. |
+| **M9** | Built | Followers, mercenaries and adventurers for hire. |
 | **M10** | | The end: victory, and serving an overlord until the rising. |
 | **M11** | | Hop in, hop out: other players joining a running world. |
 
@@ -580,6 +580,39 @@ enemy camp outside one of their towns (above).
 
 **Kept.** The camps pitched and the sorties out are in the host's snapshot, and the watched towns
 and each camp's sortie in the war's, so a saved or joined world carries on exactly.
+
+### Followers (M9)
+
+**Hiring.** The adventurers at a guild (reading its board, or drinking at its tables) can be
+hired, for coppers by their calling (`HIRES`):
+
+| Calling | Fights with | Price |
+| --- | --- | --- |
+| Warrior | sword | 40 |
+| Ranger | bow | 40 |
+| Rogue | sword | 30 |
+| Mage | staff | 60 |
+| Cleric | hammer | 60 |
+
+A player leads one follower, and more as their **Command** grows (1 more at rank 1, up to 6 more at
+rank 5: `progress.js`). Command grows by leading: a share of every blow their followers land.
+Hired, an adventurer's gone from the guild for good (`host.hired`). Asked without the coppers, they
+say what they'd want and stay where they are.
+
+**Following** (`battle.js`, ai `"follow"`, `FOLLOW`):
+- a follower keeps within 3 steps of their leader, at their pace (running when they run);
+- they go after any enemy of their leader's they can see within 12 steps of them;
+- through a door or up the stairs, they come out beside their leader;
+- they stand with their leader against the wild, and as their people stand with the others;
+- what they bring down counts for their leader: its loot is theirs, and it counts towards their
+  requests.
+
+**Orders** (talking to them): wait here (they stand guard where they are), come on (they follow
+again), or go their own way (dismissed). A follower who falls is gone.
+
+**Kept** with the character (`characterOf`'s `followers`: name, calling, looks, people;
+`save.js` `saveFollowers`), so they come along to any world; and in the host's snapshot. The
+journal shows the player's company: each follower, how they are, and how many they can lead.
 
 ### News and rumours, and the guild's board (M8)
 

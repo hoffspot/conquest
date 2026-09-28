@@ -5,7 +5,8 @@
 //   (each can be given up);
 // - their people: who rules, whom they're at war with and allied to, how many towns they hold,
 //   and how the other peoples regard them (grudges and favours: docs/WAR.md M7);
-// - the requests lately done, failed or given up.
+// - the requests lately done, failed or given up;
+// - their company: the followers they lead (docs/WAR.md M9), and how many more they could.
 //
 // It only shows and asks: what's done is the host's (core/host.js commands), through the game.
 
@@ -98,7 +99,7 @@ export class JournalPanel {
      * ruler, war: [names], allies: [names], towns, regard: [{ name, words, tone }] }, done: [{
      * title, from, state }] }.
      */
-    show({ standing, requests, people, done }) {
+    show({ standing, requests, people, done, company = [], most = 1 }) {
         this.rank.textContent = `${standing.title}${people ? ` of ${people.name}` : ""}`;
         this.panel.hidden = false;
 
@@ -165,6 +166,21 @@ export class JournalPanel {
             }
             sections.push(this.#section("Your people", about));
         }
+
+        // Their company
+        const band = element("ul", "journal-list company");
+
+        band.append(
+            ...company.map(({ name, calling, hp, maxHp, waiting }) => {
+                const row = element("li", "journal-follower");
+
+                row.append(element("span", "journal-follower-name", name), element("span", "journal-follower-state", `${calling}, ${Math.max(0, Math.round((hp / maxHp) * 100))}%${waiting ? ", waiting" : ""}`));
+
+                return row;
+            }),
+            element("li", "journal-empty", company.length ? `You can lead ${most} in all.` : `No one follows you. Adventurers at the guilds will, for coppers: you can lead ${most}.`),
+        );
+        sections.push(this.#section("Your company", band));
 
         // What's been done
         if (done.length) {

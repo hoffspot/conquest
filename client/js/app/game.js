@@ -29,7 +29,7 @@ import { soldierLook } from "../characters/soldiers.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
 import { STEP_MS, TALK_REACH } from "../core/battle.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
-import { HOST_PLAYER, Host, REFUSALS, SHOP_REACH, SHOPKEEPERS } from "../core/host.js";
+import { HIRES, HOST_PLAYER, Host, REFUSALS, SHOP_REACH, SHOPKEEPERS } from "../core/host.js";
 import { ABILITIES, itemLabel, ITEMS, priceOf, TREES, wares } from "../core/progress.js";
 import { MOST_REQUESTS, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
 import { describeLeader } from "../core/war/peoples.js";
@@ -158,7 +158,7 @@ const EMBERS = 5;
 const VISITS = Object.freeze({ every: 0.5, budget: 6 });
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "gone", "rank", "loot", "bought", "sold", "used", "gear", "ability", "request", "standing", "gift", "counsel"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "gone", "rank", "loot", "bought", "sold", "used", "gear", "ability", "request", "standing", "gift", "counsel"]);
 
 const _focus = new THREE.Vector3();
 const _lean = new THREE.Vector3();
@@ -194,7 +194,7 @@ export class Game {
      *     they carry, as kept (save.js loadStanding: core/standing.js Standing's toJSON).
      * @param {Function} [options.onStanding] - Hears it whenever it changes (to keep it).
      */
-    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {}, progress = {}, onProgress = () => {}, standing = {}, onStanding = () => {} }) {
+    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {}, progress = {}, onProgress = () => {}, standing = {}, onStanding = () => {}, followers = [], onFollowers = () => {} }) {
         this.view = view;
         this.kit = kit;
         this.sound = sound;
@@ -207,7 +207,8 @@ export class Game {
         this.me = me;
         this.host = host ?? new Host(world, { populate: false, war });
         this.onWar = onWar;
-        this.host.join({ id: me, hero, talks, explored, progress, standing });
+        this.host.join({ id: me, hero, talks, explored, progress, standing, followers });
+        this.onFollowers = onFollowers;
         this.onProgress = onProgress;
         this.onStanding = onStanding;
 
@@ -522,6 +523,17 @@ export class Game {
             character.object.traverse((node) => {
                 node.castShadow = false;
             });
+
+            return this.#addAvatar(actor.id, character, { walk: look.walk, guard: guardOf(actor.weapon) });
+        }
+
+        // A follower: as the adventurer they were, their weapon put away till there's a fight
+        if (actor.kind === "follower") {
+            const { calling, sex, seed, people } = this.host.followers.get(actor.id) ?? { calling: "warrior" };
+            const look = folkLook({ role: "adventurer", look: calling, sex, seed, people });
+            const character = new Character(this.kit, { shape: look.shape, look: look.look, equipment: look.equipment, hairDetail: Math.min(hairDetail, FOLK_HAIR) });
+
+            character.sheathe(true);
 
             return this.#addAvatar(actor.id, character, { walk: look.walk, guard: guardOf(actor.weapon) });
         }
@@ -1224,7 +1236,7 @@ export class Game {
         const folk = building?.folk ?? this.world.folk ?? [];
 
         // (Their talk: their role's, or another's: an adventurer drinking at a guild's table)
-        const tree = npc && !npc.dead ? treeFor({ ...npc, talk: folk.find(({ id }) => id === npc.id)?.talk }) : null;
+        const tree = npc && !npc.dead ? treeFor({ ...npc, talk: npc.kind === "follower" ? "follower" : folk.find(({ id }) => id === npc.id)?.talk }) : null;
 
         if (!tree) {
             return;
@@ -1250,6 +1262,16 @@ export class Game {
 
         Object.assign(names, soldier?.names, official?.words, this.#rumours(building));
 
+        // (An adventurer who could be hired, and for how much; a follower waiting or following)
+        const one = folk.find(({ id }) => id === npc.id);
+        const hire = one && (one.role === "adventurer" || one.talk === "adventurer") ? HIRES[one.look] : null;
+        const following = npc.kind === "follower" ? this.host.followers.get(npc.id) : null;
+        const company = [...this.host.followers.values()].filter(({ leader }) => leader === this.me).length;
+
+        if (hire) {
+            names.hirePrice = String(hire.price);
+        }
+
         // (They stop and face the player, if they can talk now: the host says)
         if (!this.#command({ type: "talk", with: npc.id }).ok) {
             return;
@@ -1263,7 +1285,21 @@ export class Game {
             place: building?.name,
             names,
             check: (condition) =>
-                "upstairs" in condition ? upstairsIs(condition.upstairs, upstairs) : "stance" in condition ? soldier?.stance === condition.stance : "rumour" in condition ? Boolean(names.rumour1) === condition.rumour : official ? official.check(condition) : true,
+                "upstairs" in condition
+                    ? upstairsIs(condition.upstairs, upstairs)
+                    : "stance" in condition
+                      ? soldier?.stance === condition.stance
+                      : "rumour" in condition
+                        ? Boolean(names.rumour1) === condition.rumour
+                        : "hire" in condition
+                          ? Boolean(hire && company < this.host.mostFollowers(this.me)) === condition.hire
+                          : "purse" in condition
+                            ? (this.progress.gold >= (hire?.price ?? 0)) === condition.purse
+                            : "waiting" in condition
+                              ? Boolean(following?.waiting) === condition.waiting
+                              : official
+                                ? official.check(condition)
+                                : true,
             memory: this.memory[npc.id],
             knowledge: this.knowledge,
             variety: this.talkVariety,
@@ -1887,6 +1923,14 @@ export class Game {
                   }
                 : null,
             done: standing.done.slice(0, 6).map(({ title, from: giver, state }) => ({ title, from: giver.townName, state })),
+            company: [...this.host.followers]
+                .filter(([, { leader }]) => leader === this.me)
+                .map(([id, { name, calling, waiting }]) => {
+                    const actor = this.battle.actor(id);
+
+                    return { name, calling, hp: actor?.hp ?? 0, maxHp: actor?.maxHp ?? 1, waiting };
+                }),
+            most: this.host.mostFollowers(this.me),
         });
     }
 
@@ -2402,6 +2446,17 @@ export class Game {
             case "envoyed":
                 this.#envoyed(event);
                 break;
+            case "follower":
+                if (event.id === this.me) {
+                    this.hud.message({ joined: `${event.name} follows you now.`, fallen: `${event.name} has fallen!`, dismissed: `${event.name} goes their own way.` }[event.change], 3);
+                    this.hud.setCoppers(this.progress.gold);
+                    this.#mirror();
+
+                    // (Kept with the character)
+                    this.onFollowers(this.host.characterOf(this.host.players.get(this.me)).followers);
+                }
+
+                break;
             case "farewell":
                 this.enlisting = this.enlisting.filter((id) => !event.ids.includes(id));
 
@@ -2872,7 +2927,7 @@ export class Game {
             const mine = actor === player;
 
             const enemy = !mine && this.battle.hostile(actor, player);
-            const talks = actor.neutral || actor.kind === "soldier";
+            const talks = actor.neutral || actor.kind === "soldier" || (actor.kind === "follower" && this.host.followers.get(actor.id)?.leader === this.me);
             const provokes = actor.kind === "soldier" && !enemy && this.host.canFight(player, actor);
 
             if (actor.dead || (mine && !withPlayer) || (!mine && !enemy && !(folk && talks) && !(soldiers && provokes)) || actor.map !== player.map || !this.avatars.has(actor.id)) {

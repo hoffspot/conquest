@@ -16,7 +16,7 @@ import { registerServiceWorker } from "./app/device.js";
 import { Debug } from "./app/debug.js";
 import { formatBytes, Loader } from "./app/loader.js";
 import { MANIFEST } from "./app/manifest.js";
-import { loadExplored, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadWorld, newSeed, saveExplored, saveProgress, saveSettings, saveStanding, saveTalks, saveWorld, writeSave } from "./app/save.js";
+import { loadExplored, loadFollowers, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadWorld, newSeed, saveExplored, saveFollowers, saveProgress, saveSettings, saveStanding, saveTalks, saveWorld, writeSave } from "./app/save.js";
 import { WEAPONS } from "./core/weapons.js";
 
 const params = new URLSearchParams(location.search);
@@ -253,6 +253,8 @@ async function play(save) {
         onProgress: (progress) => saveProgress(save, progress),
         standing: loadStanding(save),
         onStanding: (standing) => saveStanding(save, standing),
+        followers: loadFollowers(save),
+        onFollowers: (followers) => saveFollowers(save, followers),
         war: loadWorld(save),
         onWar: (war) => saveWorld(save, war.snapshot()),
         onWorldMap: openWorldMap,

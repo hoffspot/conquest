@@ -553,6 +553,27 @@ export const TREES = Object.freeze({
             },
         },
     },
+    // One of the player's followers (docs/WAR.md M9): told to wait, to follow, or to go
+    follower: {
+        start: "greet",
+        nodes: {
+            greet: {
+                say: [
+                    { if: { waiting: true }, lines: ["Still here, {player}, like you said.", "Holding this spot. Are we moving?"] },
+                    { lines: ["Orders, {player}?", "What is it?", "Right behind you. What do you need?"] },
+                ],
+                choices: [
+                    { if: { waiting: false }, say: "Wait here.", next: "waiting", do: [{ follower: "wait" }] },
+                    { if: { waiting: true }, say: "Come on, with me.", next: "following", do: [{ follower: "follow" }] },
+                    { say: "We part here. Go your own way.", next: "parted", do: [{ follower: "dismiss" }] },
+                    { say: "Nothing. Carry on.", next: null },
+                ],
+            },
+            waiting: { say: ["I'll be here.", "Right. I'll hold here till you're back."], choices: [{ say: "Good.", next: null }] },
+            following: { say: ["About time. Lead on.", "With you."], choices: [{ say: "Good.", next: null }] },
+            parted: { say: ["Fair enough. It was good work while it lasted.", "Then I'll be off. Look me up if you need a blade again."], choices: [{ say: "Farewell.", next: null }] },
+        },
+    },
     // An adventurer at the guild: seasoned, a little wry, glad to give advice
     adventurer: {
         start: "greet",
@@ -565,8 +586,18 @@ export const TREES = Object.freeze({
                 choices: [
                     { say: "Any advice?", next: "advice" },
                     { if: { rumour: true }, say: "Heard anything on the road?", next: "war" },
+                    { if: { hire: true, purse: true }, say: "Would you ride with me? ({hirePrice} coppers)", next: "hired", do: [{ hire: true }] },
+                    { if: { hire: true, purse: false }, say: "Would you ride with me? ({hirePrice} coppers)", next: "short" },
                     { say: "Good hunting.", next: null },
                 ],
+            },
+            hired: {
+                say: ["Coppers up front, and I'm yours. Lead on, {player}.", "Done. I've waited long enough for a job worth taking. Where to?", "{hirePrice} coppers? You've a deal. Try not to get us both killed."],
+                choices: [{ say: "Let's go.", next: null }],
+            },
+            short: {
+                say: ["{hirePrice} coppers, and I see you've not got them. Come back when you have.", "I don't ride for promises. {hirePrice} coppers, up front."],
+                choices: [{ say: "Another time, then.", next: null }],
             },
             war: {
                 say: ["On the road, you hear things. {rumour1}", "Came past it myself: {rumour2}", "{rumour3} Good for business, war.", "{rumourRuler} I'd not want to cross them."],

@@ -91,7 +91,15 @@ export const KINDS = Object.freeze({
     orc: { hp: 50, speed: 1.1, chase: 1.8, respawn: 30000 },
     folk: { hp: 50, speed: 1.2, respawn: 5000 },
     soldier: { hp: 40, speed: 1.3, chase: 2.3, respawn: Infinity },
+    // (A player's follower: a hired sword, keeping up with them; one who falls is gone: M9)
+    follower: { hp: 50, speed: 1.7, chase: 2.3, respawn: Infinity },
 });
+
+/**
+ * How a follower keeps with its leader (docs/WAR.md M9): how near (squares) it keeps, and how far
+ * from its leader (squares) it goes after an enemy of theirs it can see.
+ */
+export const FOLLOW = Object.freeze({ near: 3, guard: 12 });
 
 /**
  * Are two characters' teams enemies: on different teams, and neither one of the folk no one
@@ -193,7 +201,7 @@ export class Battle {
      * it's added. The folk have a `role` (roles.js ROLES: how they rest). A patrol goes round its
      * points in turn (a guard's one point: its post, facing out the way it's added facing).
      */
-    add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, facing = 0, armed = false, leash = null }) {
+    add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, facing = 0, armed = false, leash = null, leader = null }) {
         const type = KINDS[kind];
         const chance = createRandom(this.seed + 7919 + [...id].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, 0));
         const actor = {
@@ -212,6 +220,8 @@ export class Battle {
             ai,
             patrol,
             leash,
+            // (A follower's: whom it follows, by id)
+            leader,
             post: facing,
             // Whom it holds a grudge against (by id), and until when (FOE_MS)
             foes: {},
@@ -843,6 +853,8 @@ export class Battle {
 
         if (actor.ai === "patrol") {
             this.#patrol(actor);
+        } else if (actor.ai === "follow") {
+            this.#follow(actor);
         } else if (actor.ai === "routine") {
             this.#routine(actor);
         } else {
@@ -1161,6 +1173,41 @@ export class Battle {
         } else if (!actor.path.length && !actor.to) {
             // Couldn't get there last time (someone in the way): try again in a while
             actor.pathGoal = this.time - actor.lastPathAt > REPATH_MS ? null : actor.pathGoal;
+        }
+    }
+
+    // A follower (M9): after an enemy of its leader's it can see near them (or one that's after
+    // it), else keeping within a few steps of them, at their pace
+    #follow(actor) {
+        const leader = this.actor(actor.leader);
+
+        if (!leader || leader.dead || leader.map !== actor.map) {
+            actor.target = null;
+
+            return;
+        }
+
+        // (Anyone after it, too, wherever they are)
+        const seen = this.#nearestEnemy(actor, (enemy) => this.canSee(actor, enemy) && (distanceBetween(leader.square, enemy.square) <= FOLLOW.guard || enemy.target === actor.id || enemy.attack?.target === actor.id));
+
+        if (seen) {
+            actor.target = seen.id;
+            actor.lastSeen = this.time;
+            actor.walkPace = actor.chaseSpeed;
+            this.#pursue(actor, seen);
+
+            return;
+        }
+
+        actor.target = null;
+        actor.walkPace = Math.max(actor.speed, leader.walkPace ?? 0);
+
+        if (distanceBetween(actor.square, leader.square) > FOLLOW.near) {
+            if (!actor.to && (!actor.path.length || (!same(actor.pathGoal, leader.square) && this.time - actor.lastPathAt >= REPATH_MS))) {
+                this.#pathTo(actor, leader.square, leader);
+            }
+        } else if (!actor.to) {
+            actor.path = [];
         }
     }
 
