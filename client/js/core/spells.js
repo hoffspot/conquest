@@ -40,6 +40,9 @@ const attack = (school, tier, label, settings) => ({ label, school, tier, target
 /** How long a spell that lasts lasts, unless it's said otherwise (ms): five minutes. */
 export const LASTING = 300000;
 
+/** What's left of what a ward's against (a share): 30% less. */
+export const WARD = 0.7;
+
 /**
  * How rare each tome is (TOMES): its weight when one's found or given, and what one sells for
  * (gold) at the adventurers' guild.
@@ -57,7 +60,7 @@ const tome = (label, rarity, settings) => ({ label, tome: rarity, reach: 8, cast
 // A ward (a tome's): on oneself or anyone not an enemy, 30% less from what it's against for five
 // minutes (as `ward` says: attack spells of those schools, `hits` of those natural attacks'
 // elements, and those afflictions, both how much they hurt and how long they last)
-const ward = (label, about, against) => tome(label, "common", { about, target: "friend", cooldown: 15000, lasts: LASTING, ward: { share: 0.7, schools: [], elements: [], afflictions: [], ...against } });
+const ward = (label, about, against) => tome(label, "common", { about, target: "friend", cooldown: 15000, lasts: LASTING, ward: { schools: [], elements: [], afflictions: [], looks: [], ...against } });
 
 // A cure (a tome's): on anyone, friend or foe (never taken as an attack), ending an affliction
 const cure = (label, about, kind) => tome(label, "common", { about, target: "any", castTime: 500, cooldown: 6000, cures: [kind] });
@@ -77,7 +80,8 @@ export const GROWTH_XP = Object.freeze([0, 60, 200, 500, 1200]);
  *    every enemy of the caster's within so many metres of whoever it's cast on, `chain`: leaping
  *    on to so many more enemies near them (each hit at `falls` of the last), and what else it may
  *    do: `effect` (an affliction taking hold, `chance` of the time: its `kind` and `look`),
- *    `knockdown` or `stun` (ms), `stagger` (ms, as a blow's);
+ *    `knockdown` or `stun` (ms), `stagger` (ms, as a blow's), and `hazard`: what it leaves on the
+ *    ground round them a while (battle.js HAZARDS: its `kind`, `ms`, `radius` in metres);
  *  - stun: stops the target for so many ms (Hexes);
  *  - `reaction`: how whoever's struck by it reacts (as a weapon's blow: characters/actions.js).
  * Healing restores less as damage is dealt more: tier 1 of either is weak, as a new adventurer is.
@@ -95,9 +99,9 @@ export const SPELLS = Object.freeze({
     fireball: attack("fire", 2, "Fireball", { about: "A ball of fire: may set them burning.", castTime: 600, cooldown: 3500, damage: [12, 18], effect: { kind: "burn", chance: 0.3 }, reaction: "fire" }),
     burstflame: attack("fire", 3, "Burstflame", { about: "Fire bursting round them: burns all near.", castTime: 700, cooldown: 5000, damage: [16, 24], area: 1.5, effect: { kind: "burn", chance: 0.35 }, reaction: "fire" }),
     immolate: attack("fire", 4, "Immolate", { about: "Wreathes them in fire: sets them burning.", castTime: 800, cooldown: 7000, damage: [20, 30], effect: { kind: "burn", chance: 1 }, reaction: "fire" }),
-    flamefill: attack("fire", 5, "Flamefill", { about: "Floods the ground round them with fire.", castTime: 900, cooldown: 9000, damage: [26, 38], area: 2.2, effect: { kind: "burn", chance: 0.5 }, reaction: "fire" }),
+    flamefill: attack("fire", 5, "Flamefill", { about: "Floods the ground round them with fire, that burns a while.", castTime: 900, cooldown: 9000, damage: [26, 38], area: 2.2, effect: { kind: "burn", chance: 0.5 }, hazard: { kind: "fire", ms: 5000, radius: 2.2 }, reaction: "fire" }),
     inferno: attack("fire", 6, "Inferno", { about: "A roaring inferno: everything near burns.", castTime: 1000, cooldown: 12000, damage: [34, 50], area: 3, effect: { kind: "burn", chance: 0.6 }, stagger: 400, reaction: "fire" }),
-    hellfire: attack("fire", 7, "Hellfire", { about: "Fire from below: it falls on them and all round them, burning, throwing them down.", castTime: 1200, cooldown: 16000, damage: [44, 62], area: 4, effect: { kind: "burn", chance: 1 }, knockdown: 900, reaction: "fire" }),
+    hellfire: attack("fire", 7, "Hellfire", { about: "Fire from below: it falls on them and all round them, burning, throwing them down.", castTime: 1200, cooldown: 16000, damage: [44, 62], area: 4, effect: { kind: "burn", chance: 1 }, knockdown: 900, hazard: { kind: "fire", ms: 6000, radius: 3 }, reaction: "fire" }),
 
     // --- Earth: stone and ground ---
     rumble: attack("earth", 1, "Rumble", { about: "The ground shudders under them: may slow them.", castTime: 450, cooldown: 2500, damage: [9, 15], effect: { kind: "slow", chance: 0.2, look: "rubble" }, reaction: "crush" }),
@@ -105,7 +109,7 @@ export const SPELLS = Object.freeze({
     shatterstone: attack("earth", 3, "Shatterstone", { about: "Stone bursts into shards round them: they may bleed.", castTime: 700, cooldown: 5000, damage: [16, 24], area: 1.5, effect: { kind: "bleed", chance: 0.3 }, reaction: "pierce" }),
     engulf: attack("earth", 4, "Engulf", { about: "The earth rises round them and holds them.", castTime: 800, cooldown: 7000, damage: [20, 30], effect: { kind: "slow", chance: 1, look: "earth" }, reaction: "crush" }),
     earthquake: attack("earth", 5, "Earthquake", { about: "The ground heaves: everyone near's thrown down.", castTime: 900, cooldown: 9000, damage: [26, 38], area: 3, knockdown: 1200, reaction: "crush" }),
-    acidify: attack("earth", 6, "Acidify", { about: "Acid wells up round them, eating at them.", castTime: 1000, cooldown: 12000, damage: [34, 50], area: 2, effect: { kind: "poison", chance: 1, look: "acid" }, reaction: "arcane" }),
+    acidify: attack("earth", 6, "Acidify", { about: "Acid wells up round them, eating at them, and pools there a while.", castTime: 1000, cooldown: 12000, damage: [34, 50], area: 2, effect: { kind: "poison", chance: 1, look: "acid" }, hazard: { kind: "acid", ms: 5000, radius: 2 }, reaction: "arcane" }),
     disintegrate: attack("earth", 7, "Disintegrate", { about: "Unmakes them: a beam that grinds flesh and stone to dust, and all near it.", castTime: 1200, cooldown: 16000, damage: [48, 66], area: 1.5, stagger: 600, reaction: "crush" }),
 
     // --- Air: wind and lightning ---
@@ -123,7 +127,7 @@ export const SPELLS = Object.freeze({
     steamblast: attack("water", 3, "Steamblast", { about: "A blast of steam round them: it scalds all near.", castTime: 700, cooldown: 5000, damage: [16, 24], area: 1.5, effect: { kind: "burn", chance: 0.4, look: "scald" }, reaction: "arcane" }),
     bloodboil: attack("water", 4, "Bloodboil", { about: "Their blood boils in them: they bleed.", castTime: 800, cooldown: 7000, damage: [20, 30], effect: { kind: "bleed", chance: 1 }, reaction: "arcane" }),
     iceblade: attack("water", 5, "Iceblade", { about: "A blade of ice: it chills them, slowing them.", castTime: 900, cooldown: 9000, damage: [26, 38], effect: { kind: "slow", chance: 1, look: "frost" }, reaction: "slash" }),
-    putrify: attack("water", 6, "Putrify", { about: "Foul water that rots: sickens everyone near.", castTime: 1000, cooldown: 12000, damage: [34, 50], area: 2, effect: { kind: "disease", chance: 1 }, reaction: "arcane" }),
+    putrify: attack("water", 6, "Putrify", { about: "Foul water that rots: sickens everyone near, and lies there festering a while.", castTime: 1000, cooldown: 12000, damage: [34, 50], area: 2, effect: { kind: "disease", chance: 1 }, hazard: { kind: "rot", ms: 6000, radius: 2 }, reaction: "arcane" }),
     absoluteZero: attack("water", 7, "Absolute Zero", { about: "Cold beyond cold: everyone near's frozen solid, then slowed.", castTime: 1200, cooldown: 16000, damage: [44, 62], area: 3, stun: 1500, stunChance: 1, effect: { kind: "slow", chance: 1, look: "frost" }, reaction: "arcane" }),
 
     // --- Hexes (the Hexes skill: core/progress.js) ---

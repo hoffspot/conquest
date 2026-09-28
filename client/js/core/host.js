@@ -102,6 +102,26 @@ export const HONOURS = 200;
 /** How long the fallen soldiers lie before they're taken away (battle ms). */
 const FALLEN_MS = 10000;
 
+/** How long one of the wild's creatures lies where it fell (ms): long enough to be raised (Zombify). */
+const CORPSE_MS = 30000;
+
+/**
+ * The creatures at a player's side by magic (Zombify's risen dead, Summon's): how far behind them
+ * one can fall (m: stuck, or left on another floor) before it's brought to them, a few squares
+ * behind them (`behind`).
+ */
+export const COMPANION = Object.freeze({ far: 14, behind: 2 });
+
+/** How long a player being summoned by another has to come (ms): no answer, and they've resisted. */
+export const SUMMONING_MS = 30000;
+
+// What a player does that has to do with the world round them (and so ends their Invisibility:
+// casting and striking do too, battle.js); moving about, or seeing to their pack, doesn't
+const SEEN = new Set(["enter", "buy", "sell", "use", "drop", "pickUp", "talk", "effect", "trade", "offer", "agree"]);
+
+// The kinds of settlement with a temple (setpieces/town.js), for Word of Recall
+const TEMPLED = new Set(Object.keys(SETTLEMENT_KINDS).filter((kind) => SETTLEMENT_KINDS[kind].landmarks.includes("church")));
+
 /**
  * The wild's creatures about the players (docs/WILDS.md): how many are kept about each player out
  * in the world (within `about` metres), put out `from` to `to` metres away (out of sight), clear
@@ -226,6 +246,8 @@ export const REFUSALS = Object.freeze({
     theirs: "They haven't room for all that.",
     unafflicted: "There's nothing for that to cure.",
     known: "You know that spell already.",
+    unexplored: "You haven't been there.",
+    unsummoned: "No one's calling you.",
 });
 
 // What can't be done while knocked off one's feet (battle.js: a knockdown)
@@ -339,6 +361,17 @@ export class Host {
          */
         this.trades = new Map();
         this.nextTrade = 1;
+
+        /**
+         * The creatures at the players' sides by magic (by id): { leader (a player's id), creature,
+         * tier, until (when they're gone: five minutes on), risen (Zombify's; else Summon's) }. Lost
+         * if the player's carried off by magic (Teleport...).
+         */
+        this.companions = new Map();
+        this.nextCompanion = 1;
+
+        /** Players being summoned by another (by id): { by (who), until (when it's taken they've resisted) }. */
+        this.summonings = new Map();
 
         /**
          * The players, by id: { id, hero (their character: { name, shape, look, weapon, boots,
@@ -549,6 +582,11 @@ export class Host {
             return refuse("down");
         }
 
+        // (Doing anything with the world round them: seen again)
+        if (SEEN.has(command.type)) {
+            this.battle.unbuff(actor.id, "invisibility");
+        }
+
         const run = Boolean(command.run);
 
         switch (command.type) {
@@ -595,13 +633,43 @@ export class Host {
             }
             case "stop":
                 return this.#order(actor, { type: "stop" });
-            case "cast":
+            case "cast": {
                 // (Only the spells they know: their schools' up to their tiers, and those learnt)
                 if (!player.progress.knows(command.spell)) {
                     return refuse("unknown");
                 }
 
-                return this.battle.cast(actor.id, command.spell, command.target ?? null);
+                const spell = SPELLS[command.spell];
+                let target = command.target ?? null;
+                let at = null;
+
+                // (Zombify: one of the wild's creatures fallen near them lately, the nearest if
+                // they've named none)
+                if (spell.target === "corpse") {
+                    target = this.#corpseNear(actor, spell.reach, target)?.id ?? null;
+
+                    if (target === null) {
+                        return { ok: false, reason: "corpse" };
+                    }
+                }
+
+                // (Wizard's Walk: somewhere on the map they've uncovered)
+                if (spell.target === "place") {
+                    if (!Array.isArray(command.at) || command.at.length !== 2 || !command.at.every(Number.isFinite)) {
+                        return refuse("command");
+                    }
+
+                    if (!player.explored.isVisited(Math.floor(command.at[0] / CHUNK), Math.floor(command.at[1] / CHUNK))) {
+                        return refuse("unexplored");
+                    }
+
+                    at = [command.at[0], command.at[1]];
+                }
+
+                return this.battle.cast(actor.id, command.spell, target, { level: player.progress.levelOf(command.spell), at });
+            }
+            case "summoned":
+                return this.#answer(player, Boolean(command.come));
             case "buy":
                 return this.#buy(player, actor, command);
             case "sell":
@@ -673,9 +741,25 @@ export class Host {
 
         const events = this.battle.advance(ms);
 
-        // What the players did: their skills grow by it, and they find what's on the fallen
+        // What the players did: their skills grow by it, and they find what's on the fallen; and
+        // the wonders their spells work (Zombify, Summon, Teleport...)
         for (const event of events) {
             this.#learn(event);
+
+            if (event.type === "spell" && event.landed > 0) {
+                this.#wonder(event);
+            }
+        }
+
+        this.#companionsKept();
+
+        // (Summoned, and no answer in time: resisted)
+        for (const [id, asked] of [...this.summonings]) {
+            if (asked.until <= this.battle.time) {
+                this.summonings.delete(id);
+                this.#event("summons", { id: asked.by, target: id, change: "resisted" });
+                this.#event("summons", { id, by: asked.by, change: "resisted" });
+            }
         }
 
         // Things left lying on the ground: gone after a while
@@ -710,7 +794,7 @@ export class Host {
             const beast = event.type === "death" ? this.wild.get(event.id) : null;
 
             if (beast) {
-                this.fallen.push({ id: event.id, at: this.battle.time + FALLEN_MS });
+                this.#fall(event.id, CORPSE_MS);
                 this.#spoils(event.id, beast);
 
                 if (beast.lair && beast.master) {
@@ -729,7 +813,7 @@ export class Host {
                     this.war?.loss(soldier.camp ?? soldier.town, soldier.share ?? this.mustered.get(soldier.town)?.share ?? 1);
                 }
 
-                this.fallen.push({ id: event.id, at: this.battle.time + FALLEN_MS });
+                this.#fall(event.id, FALLEN_MS);
             }
 
             // (A people's enemy brought down by a player, before their soldiers' eyes)
@@ -742,8 +826,17 @@ export class Host {
                 const { leader, name } = this.followers.get(event.id);
 
                 this.followers.delete(event.id);
-                this.fallen.push({ id: event.id, at: this.battle.time + FALLEN_MS });
+                this.#fall(event.id, FALLEN_MS);
                 this.#event("follower", { id: leader, follower: event.id, name, change: "fallen" });
+            }
+
+            // (A companion by magic fallen: gone from their side, and taken away a while after)
+            if (event.type === "death" && this.companions.has(event.id)) {
+                const { leader, creature } = this.companions.get(event.id);
+
+                this.companions.delete(event.id);
+                this.#fall(event.id, FALLEN_MS);
+                this.#event("companion", { id: leader, companion: event.id, creature, change: "fallen" });
             }
 
             // (A player through a door or up the stairs: their followers with them, unless told to wait)
@@ -864,6 +957,9 @@ export class Host {
             nextGround: this.nextGround,
             trades: structuredClone([...this.trades.values()]),
             nextTrade: this.nextTrade,
+            companions: structuredClone([...this.companions.entries()]),
+            nextCompanion: this.nextCompanion,
+            summonings: structuredClone([...this.summonings.entries()]),
             soldiers: [...this.soldiers.entries()],
             fallen: structuredClone(this.fallen),
             players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: structuredClone(player.boons), readyAt: { ...player.readyAt }, discarded: structuredClone(player.discarded ?? null), ...this.characterOf(player), followers: undefined })),
@@ -930,6 +1026,9 @@ export class Host {
         host.nextGround = snapshot.nextGround ?? 1;
         host.trades = new Map((snapshot.trades ?? []).map((trade) => [trade.id, structuredClone(trade)]));
         host.nextTrade = snapshot.nextTrade ?? 1;
+        host.companions = new Map(structuredClone(snapshot.companions ?? []));
+        host.nextCompanion = snapshot.nextCompanion ?? 1;
+        host.summonings = new Map(structuredClone(snapshot.summonings ?? []));
         host.soldiers = new Map(structuredClone(snapshot.soldiers ?? []));
         host.fallen = structuredClone(snapshot.fallen ?? []);
         host.done = structuredClone(snapshot.done);
@@ -1072,6 +1171,13 @@ export class Host {
 
                 if (caster && spell?.school && event.landed > 0) {
                     this.#school(caster, spell.school, SPELL_XP * spell.tier);
+                }
+
+                // (A spell that grows as it's used: Vampirism, Dodge, Poison)
+                const grown = caster && event.landed > 0 ? caster.progress.growSpell(event.spell, SPELL_XP) : null;
+
+                if (grown) {
+                    this.#event("grown", { id: caster.id, spell: event.spell, level: grown });
                 }
 
                 break;
@@ -1708,7 +1814,7 @@ export class Host {
                 return true;
             }
 
-            return (other.kind === "soldier" || other.kind === "follower") && Boolean(beast.wild?.menace || beast.target !== null);
+            return (other.kind === "soldier" || other.kind === "follower" || Boolean(other.leader)) && Boolean(beast.wild?.menace || beast.target !== null);
         }
 
         const war = this.war;
@@ -1719,7 +1825,7 @@ export class Host {
         }
 
         if (ra || rb) {
-            return a.kind === "player" || b.kind === "player" || a.kind === "follower" || b.kind === "follower";
+            return a.kind === "player" || b.kind === "player" || a.kind === "follower" || b.kind === "follower" || Boolean(a.leader || b.leader);
         }
 
         return true;
@@ -2064,7 +2170,7 @@ export class Host {
             chase: spec.chase,
             power: { melee: power, ranged: power },
             armor: spec.armor ?? 0,
-            wild: { creature, tier, temper: temper ?? spec.temper, guard: spec.guard ?? 0, roam: roam ?? spec.roam, leash: spec.leash + (roam ?? 0), pack, leader, menace: menaces(creature) },
+            wild: { creature, tier, temper: temper ?? spec.temper, guard: spec.guard ?? 0, roam: roam ?? spec.roam, leash: spec.leash + (roam ?? 0), pack, leader, menace: menaces(creature), unique: Boolean(spec.perilous) },
         });
     }
 
@@ -2503,10 +2609,10 @@ export class Host {
         const squares = squaresOf(this.world.maps?.[leader.map] ?? this.world);
         const taken = new Set(this.battle.actors.filter((each) => each.map === leader.map).map(({ square: [x, y] }) => squareKey(x, y)));
 
-        for (const id of this.#company(playerId)) {
+        for (const id of [...this.#company(playerId), ...[...this.companions].filter(([, one]) => one.leader === playerId).map(([each]) => each)]) {
             const follower = this.battle.actor(id);
 
-            if (!follower || follower.dead || follower.map === leader.map || this.followers.get(id).waiting) {
+            if (!follower || follower.dead || follower.map === leader.map || this.followers.get(id)?.waiting) {
                 continue;
             }
 
@@ -2581,6 +2687,370 @@ export class Host {
         }
 
         this.#event("gone", { id });
+    }
+
+    // Someone fallen taken away `ms` from now (in turn: the soonest first)
+    #fall(id, ms) {
+        const at = this.battle.time + ms;
+        const k = this.fallen.findIndex((each) => each.at > at);
+
+        this.fallen.splice(k < 0 ? this.fallen.length : k, 0, { id, at });
+    }
+
+    // --- Magic's wonders (spells.js: the tomes' spells the host works) ---
+
+    // One of the wild's creatures fallen near someone lately, still lying there (the one named, or the nearest): or null
+    #corpseNear(actor, reach, named = null) {
+        const lies = (one) => Boolean(one?.dead && one.map === actor.map && this.wild.has(one.id) && Math.hypot(one.x - actor.x, one.y - actor.y) <= reach);
+
+        if (named !== null) {
+            const one = this.battle.actor(named);
+
+            return lies(one) ? one : null;
+        }
+
+        return this.battle.actors.filter(lies).sort((a, b) => Math.hypot(a.x - actor.x, a.y - actor.y) - Math.hypot(b.x - actor.x, b.y - actor.y))[0] ?? null;
+    }
+
+    // A spell landed that the host works the wonder of (a player's): raising the dead, calling a
+    // creature or another player, drawing one out of the smoke, changing one, carrying the caster off
+    #wonder({ id, spell, target, at }) {
+        const player = this.players.get(id);
+        const caster = this.battle.actor(id);
+
+        if (!player || !caster || caster.dead) {
+            return;
+        }
+
+        switch (spell) {
+            case "zombify":
+                this.#raiseDead(player, target);
+                break;
+            case "summon":
+                if (target === id) {
+                    this.#call(player);
+                } else {
+                    this.#summon(player, target);
+                }
+
+                break;
+            case "attraction":
+                this.#attract(player);
+                break;
+            case "polymorph":
+                this.#polymorph(target);
+                break;
+            case "teleport":
+                this.#teleport(player);
+                break;
+            case "wordOfRecall":
+                this.#recall(player);
+                break;
+            case "wizardsWalk":
+                this.#walkTo(player, at);
+                break;
+            default:
+                break;
+        }
+    }
+
+    // Zombify: one of the wild's creatures, fallen, risen to follow the player a while
+    #raiseDead(player, corpseId) {
+        const corpse = this.battle.actor(corpseId);
+        const beast = this.wild.get(corpseId);
+
+        if (!corpse || !beast) {
+            return;
+        }
+
+        const at = { map: corpse.map, square: [...corpse.square] };
+
+        this.fallen = this.fallen.filter(({ id }) => id !== corpseId);
+        this.battle.remove(corpseId);
+        this.#unwild(corpseId);
+        this.#event("gone", { id: corpseId, risen: true });
+        this.#companion(player, beast.creature, beast.tier, at, { risen: true });
+    }
+
+    // A creature at a player's side a while (SPELLS.summon.lasts), following them and fighting
+    // whoever's their enemy: risen from the dead (Zombify), or called (Summon). Its id
+    #companion(player, creature, tier, { map, square }, { risen = false } = {}) {
+        const spec = CREATURES[creature];
+        const power = tierPower(tier);
+        const id = `companion-${this.nextCompanion++}`;
+        const taken = new Set(this.battle.actors.filter((each) => each.map === map).map(({ square: [x, y] }) => squareKey(x, y)));
+        let free;
+
+        try {
+            free = nearestFree(squaresOf(this.world.maps?.[map] ?? this.world), square, { taken, within: 8 });
+        } catch {
+            return null;
+        }
+
+        this.companions.set(id, { leader: player.id, creature, tier, until: this.battle.time + SPELLS[risen ? "zombify" : "summon"].lasts, risen });
+        this.battle.add({
+            id,
+            kind: "beast",
+            name: risen ? `Risen ${spec.name.toLowerCase()}` : spec.name,
+            weapon: spec.weapon,
+            team: player.realm,
+            square: free,
+            map,
+            ai: "follow",
+            leader: player.id,
+            hp: Math.round(spec.hp * power),
+            speed: spec.speed,
+            chase: spec.chase,
+            power: { melee: power, ranged: power },
+            armor: spec.armor ?? 0,
+            wild: { creature, tier, temper: "aggressive", guard: 0, roam: 0, leash: 0, pack: id, leader: null, menace: false, unique: false, companion: risen ? "risen" : "called" },
+        });
+        this.#event("roused", { ids: [id], creature });
+        this.#event("companion", { id: player.id, companion: id, creature, change: risen ? "risen" : "called" });
+
+        return id;
+    }
+
+    // The creatures at the players' sides: gone when their time's up (or their player's gone);
+    // one fallen too far behind (stuck, or left on another floor) brought to them, behind them
+    #companionsKept() {
+        for (const [id, one] of [...this.companions]) {
+            const actor = this.battle.actor(id);
+            const leader = this.battle.actor(one.leader);
+
+            if (!actor || !leader || !this.players.has(one.leader) || this.battle.time >= one.until) {
+                this.#letGo(id, "over");
+                continue;
+            }
+
+            if (!actor.dead && !leader.dead && (actor.map !== leader.map || Math.hypot(actor.x - leader.x, actor.y - leader.y) > COMPANION.far)) {
+                const square = this.#behind(leader);
+
+                if (square) {
+                    Object.assign(actor, { map: leader.map, spawnMap: leader.map, square, x: square[0] + 0.5, y: square[1] + 0.5, to: null, path: [], pathGoal: null, target: null });
+                    this.#event("companion", { id: one.leader, companion: id, creature: one.creature, change: "caught up" });
+                }
+            }
+        }
+    }
+
+    // A companion gone (its time up; lost when its player was carried off): crumbled, or vanished
+    #letGo(id, why) {
+        const one = this.companions.get(id);
+
+        this.companions.delete(id);
+        this.battle.remove(id);
+        this.#event("companion", { id: one?.leader ?? null, companion: id, creature: one?.creature ?? null, change: why });
+        this.#event("gone", { id });
+    }
+
+    // A free square behind someone (the way they're facing: behind them), near them: or null
+    #behind(actor) {
+        const [dx, dy] = [Math.sin(actor.facing), Math.cos(actor.facing)];
+        const goal = [Math.floor(actor.x - dx * COMPANION.behind), Math.floor(actor.y - dy * COMPANION.behind)];
+        const taken = new Set(this.battle.actors.filter((each) => each.map === actor.map && each !== actor).map(({ square: [x, y] }) => squareKey(x, y)));
+
+        taken.add(squareKey(...actor.square));
+
+        try {
+            return nearestFree(squaresOf(this.world.maps?.[actor.map] ?? this.world), goal, { taken, within: 6 });
+        } catch {
+            return null;
+        }
+    }
+
+    // What lives where a player is (creatures.js encounterAt: as strong as it is there), or a
+    // creature near home, with no world plan
+    #local(player) {
+        const actor = this.battle.actor(player.id);
+        const plan = this.world.plan;
+        const at = this.#whereIs(player) ?? [actor.x, actor.y];
+        const found = plan ? encounterAt(plan, at, [this.#homeOf(player)], this.random) : null;
+
+        return found ?? { creature: "wolf", tier: 1 };
+    }
+
+    // Summon, on themselves: a creature of these parts at their side a while
+    #call(player) {
+        const actor = this.battle.actor(player.id);
+        const { creature, tier } = this.#local(player);
+
+        this.#companion(player, creature, tier, { map: actor.map, square: this.#behind(actor) ?? actor.square });
+    }
+
+    // Attraction: out of a puff of smoke in front of them, one of the creatures of these parts
+    #attract(player) {
+        const actor = this.battle.actor(player.id);
+        const { creature, tier } = this.#local(player);
+        const [dx, dy] = [Math.sin(actor.facing), Math.cos(actor.facing)];
+        const ids = actor.map === "town" ? this.#pack({ creature, tier, count: 1 }, [actor.x + dx * 3, actor.y + dy * 3]) : [];
+
+        if (ids.length) {
+            const beast = this.battle.actor(ids[0]);
+
+            this.#event("attracted", { id: player.id, creature, ids, x: beast.x, y: beast.y });
+        }
+    }
+
+    // Polymorph: one of the wild's creatures made into another of the world's (not one of the
+    // unique), as strong as its tier has it, as hurt as it was
+    #polymorph(targetId) {
+        const beast = this.wild.get(targetId);
+        const actor = this.battle.actor(targetId);
+
+        if (!beast || !actor || actor.dead) {
+            return;
+        }
+
+        const from = beast.creature;
+        const creature = this.random.pick(Object.keys(CREATURES).filter((id) => id !== from && !CREATURES[id].perilous));
+        const spec = CREATURES[creature];
+        const power = tierPower(beast.tier);
+
+        beast.creature = creature;
+        this.battle.reshape(targetId, { name: spec.name, weapon: spec.weapon, hp: Math.round(spec.hp * power), speed: spec.speed, chase: spec.chase, armor: spec.armor ?? 0, wild: { creature, temper: spec.temper, guard: spec.guard ?? 0, menace: menaces(creature) } });
+        this.#event("polymorphed", { id: targetId, creature, from });
+    }
+
+    // Teleport: somewhere, anywhere, on the world's land (away from its settlements), those with them left behind
+    #teleport(player) {
+        const plan = this.world.plan;
+        const size = plan?.size ?? 0;
+
+        for (let tries = 0; plan && this.world.maps?.town?.chunk && tries < 60; tries++) {
+            const at = [200 + this.random.next() * (size - 400), 200 + this.random.next() * (size - 400)];
+
+            if (landAt(plan, ...at).water || !clearOfSettlements(plan, at, WILDS.clear)) {
+                continue;
+            }
+
+            if (this.#carry(player, "town", [Math.floor(at[0]), Math.floor(at[1])], "teleport")) {
+                return;
+            }
+        }
+    }
+
+    // Word of Recall: to the door of the nearest temple
+    #recall(player) {
+        const door = this.#nearestTemple(this.#whereIs(player) ?? [0, 0]);
+
+        if (door) {
+            this.#carry(player, door.map, door.arrive, "recall", door.facing);
+        }
+    }
+
+    // The way out of the nearest temple (the home town's, or a settlement's laid out now to find
+    // it): { map, arrive, facing }, or null
+    #nearestTemple([x, y]) {
+        const buildings = this.world.interiors?.buildings;
+
+        if (!buildings) {
+            return null;
+        }
+
+        const apart = (at) => Math.hypot(at[0] - x, at[1] - y);
+        const home = [...buildings.values()].find(({ kind, place }) => kind === "church" && place === "home");
+        const places = (this.world.plan?.places ?? []).filter(({ id, kind }) => TEMPLED.has(kind) && id !== this.world.start?.id).sort((a, b) => apart(a.at) - apart(b.at));
+        const doorOf = (building) => building?.door?.ends?.[0] ?? null;
+
+        for (const place of places.slice(0, 4)) {
+            if (home?.at && apart(home.at) <= apart(place.at)) {
+                break;
+            }
+
+            this.world.maps?.town?.settlements?.of(place);
+
+            const temple = [...buildings.values()].find((building) => building.kind === "church" && building.place === place.id);
+
+            if (doorOf(temple)) {
+                return doorOf(temple);
+            }
+        }
+
+        return doorOf(home);
+    }
+
+    // Wizard's Walk: to somewhere on the map they've uncovered (the nearest free square to it)
+    #walkTo(player, at) {
+        if (at && this.world.maps?.town) {
+            this.#carry(player, "town", [Math.floor(at[0]), Math.floor(at[1])], "walk");
+        }
+    }
+
+    // A player carried off by magic, to a square on a map: whoever was with them left behind.
+    // Whether there was room for them there
+    #carry(player, map, square, why, facing = null) {
+        const actor = this.battle.actor(player.id);
+        const from = { map: actor.map, x: actor.x, y: actor.y };
+
+        this.#loseRetinue(player);
+
+        const there = this.battle.place(player.id, map, square, { facing });
+
+        if (there) {
+            this.#event("carried", { id: player.id, why, from, map, square: there });
+        }
+
+        return Boolean(there);
+    }
+
+    // Those with a player, lost when they're carried off by magic: their followers gone back to
+    // where they were hired (the next time it's open), their companions by magic vanished
+    #loseRetinue(player) {
+        for (const id of this.#company(player.id)) {
+            const one = this.followers.get(id);
+
+            this.followers.delete(id);
+            this.battle.remove(id);
+
+            if (one.from) {
+                this.hired.delete(one.from);
+            }
+
+            this.#event("follower", { id: player.id, follower: id, name: one.name, change: "lost" });
+            this.#event("gone", { id });
+        }
+
+        for (const [id, one] of [...this.companions]) {
+            if (one.leader === player.id) {
+                this.#letGo(id, "lost");
+            }
+        }
+    }
+
+    // Summon, on another player: asked if they'll come (their people not the caster's enemy:
+    // battle.js), a while to answer
+    #summon(player, targetId) {
+        if (!this.players.has(targetId) || targetId === player.id) {
+            return;
+        }
+
+        const until = this.battle.time + SUMMONING_MS;
+
+        this.summonings.set(targetId, { by: player.id, until });
+        this.#event("summons", { id: targetId, by: player.id, name: player.hero.name, until, change: "asked" });
+        this.#event("summons", { id: player.id, target: targetId, name: this.players.get(targetId).hero.name, change: "sent" });
+    }
+
+    // A player summoned answering: coming (to the caster's side, behind them, those with them
+    // left behind), or resisting
+    #answer(player, come) {
+        const asked = this.summonings.get(player.id);
+
+        if (!asked) {
+            return refuse("unsummoned");
+        }
+
+        this.summonings.delete(player.id);
+
+        const caller = this.battle.actor(asked.by);
+        const square = come && caller && !caller.dead ? this.#behind(caller) : null;
+        const came = Boolean(square) && this.#carry(player, caller.map, square, "summoned", caller.facing);
+
+        this.#event("summons", { id: asked.by, target: player.id, change: came ? "came" : "resisted" });
+        this.#event("summons", { id: player.id, by: asked.by, change: came ? "came" : "resisted" });
+
+        return OK;
     }
 
     // --- Commands ---
