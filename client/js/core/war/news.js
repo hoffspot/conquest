@@ -40,7 +40,7 @@ export function tell(event, war) {
 
             return event.accepted ? `${People(event.from)} and ${people(event.to)} have made ${MISSIONS[event.mission]}.` : `${People(event.to)} would not hear of ${MISSIONS[event.mission]} with ${people(event.from)}.`;
         case "waylaid":
-            return `The ${own(event.realm)} envoy to ${people(event.to)} was waylaid on the road by ${people(event.by)}.`;
+            return `The ${own(event.realm)} envoy to ${people(event.to)} was waylaid on the road${event.by ? ` by ${people(event.by)}` : ""}.`;
         case "marched":
             return `${People(event.realm)} march on ${town(event.target)}, ${event.size} strong.`;
         case "camped":

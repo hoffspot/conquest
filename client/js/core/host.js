@@ -62,6 +62,16 @@ export const CAMP_NEAR = Object.freeze({ near: 150, far: 300 });
  */
 export const SORTIE = Object.freeze({ raiders: 6, attackers: 16, reach: 10, stay: 30000, most: 150000 });
 
+/**
+ * An envoy on the road near a player (docs/WAR.md M7): met once a player's this near (metres),
+ * let go once every player's this far; how many ride with them as their escort; how far ahead
+ * along their road they make for at a time, and how near a point on it counts as passing it.
+ */
+export const ENVOY = Object.freeze({ near: 150, far: 300, escort: 2, ahead: 24, past: 6 });
+
+/** How near (metres) a people's soldiers must be to see a player bring down their enemy, and owe them for it (M7). */
+export const FAVOUR_SIGHT = 25;
+
 /** How long the fallen soldiers lie before they're taken away (battle ms). */
 const FALLEN_MS = 10000;
 
@@ -187,6 +197,14 @@ export class Host {
          */
         this.camps = new Map();
         this.sorties = new Map();
+
+        /**
+         * The envoys met on the road near a player (by the envoy's id): { people, to (whose seat
+         * they're bound for), mission, ids (the envoy's, then their escort's), leg (the point on
+         * their road they've passed), mark (the square they're making for), at (where the envoy
+         * was last), over (null; or "arrived" or "waylaid", once they're gone from the war) }.
+         */
+        this.envoys = new Map();
 
         /**
          * The players, by id: { id, hero (their character: { name, shape, look, weapon, boots,
@@ -458,8 +476,20 @@ export class Host {
             const soldier = event.type === "death" ? this.soldiers.get(event.id) : null;
 
             if (soldier) {
-                this.war?.loss(soldier.camp ?? soldier.town, soldier.share ?? this.mustered.get(soldier.town)?.share ?? 1);
+                if (soldier.envoy) {
+                    if (soldier.part === "envoy") {
+                        this.#envoyFell(soldier.envoy, event.by);
+                    }
+                } else {
+                    this.war?.loss(soldier.camp ?? soldier.town, soldier.share ?? this.mustered.get(soldier.town)?.share ?? 1);
+                }
+
                 this.fallen.push({ id: event.id, at: this.battle.time + FALLEN_MS });
+            }
+
+            // (A people's enemy brought down by a player, before their soldiers' eyes)
+            if (event.type === "death") {
+                this.#owed(event);
             }
 
             // A soldier struck by someone whose people aren't at war with theirs: a grudge
@@ -551,6 +581,7 @@ export class Host {
             mustered: [...this.mustered.entries()],
             camps: [...this.camps.entries()],
             sorties: [...this.sorties.entries()],
+            envoys: [...this.envoys.entries()],
             soldiers: [...this.soldiers.entries()],
             fallen: structuredClone(this.fallen),
             players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: structuredClone(player.boons), readyAt: { ...player.readyAt }, ...this.characterOf(player) })),
@@ -580,6 +611,7 @@ export class Host {
         host.mustered = new Map(structuredClone(snapshot.mustered ?? []));
         host.camps = new Map(structuredClone(snapshot.camps ?? []));
         host.sorties = new Map(structuredClone(snapshot.sorties ?? []));
+        host.envoys = new Map(structuredClone(snapshot.envoys ?? []));
         host.soldiers = new Map(structuredClone(snapshot.soldiers ?? []));
         host.fallen = structuredClone(snapshot.fallen ?? []);
         host.done = structuredClone(snapshot.done);
@@ -926,9 +958,6 @@ export class Host {
             }
         }
 
-        // (What a camp does against a town with its soldiers out is played out here)
-        war.watch([...this.mustered.keys()]);
-
         // The camps near a player pitched, and those far from every player (or gone) struck
         const near = (camp, within) => places.some(([x, y]) => Math.hypot(x - camp.at[0], y - camp.at[1]) < within);
 
@@ -947,6 +976,25 @@ export class Host {
         }
 
         this.#watchSorties();
+
+        // The envoys near a player met on the road, and let go once they're far (or gone, and far)
+        for (const [id, met] of [...this.envoys]) {
+            if (!near({ at: met.at }, ENVOY.far) || (!met.over && war.force(id)?.kind !== "envoy")) {
+                this.#farewell(id);
+            }
+        }
+
+        for (const envoy of war.forces) {
+            if (envoy.kind === "envoy" && !this.envoys.has(envoy.id) && near(envoy, ENVOY.near)) {
+                this.#meet(envoy);
+            }
+        }
+
+        this.#watchEnvoys();
+
+        // (What a camp does against a town with its soldiers out is played out here, and the
+        // envoys met go at their own pace)
+        war.watch([...this.mustered.keys(), ...[...this.envoys].filter(([, met]) => !met.over).map(([id]) => id)]);
     }
 
     #placeOf(id) {
@@ -1183,6 +1231,153 @@ export class Host {
         this.#event("sortied", { camp: id, town: sortie.town, name: town?.name ?? null, kind: sortie.kind, people: sortie.people, result, back });
     }
 
+    // An envoy on the road near a player met (docs/WAR.md M7): them, and their escort, where the
+    // war has them, making for a point a little further along their road
+    #meet(envoy) {
+        const [guardArms, patrolArms] = SOLDIERS_ARMS[envoy.realm] ?? SOLDIERS_ARMS.human;
+        const free = this.#spots();
+        const ids = [];
+        const met = { people: envoy.realm, to: envoy.target, mission: envoy.mission, ids, leg: envoy.leg, mark: null, at: [...envoy.at], over: null };
+
+        try {
+            met.mark = this.#ahead(envoy, envoy.at, envoy.leg);
+
+            for (let k = 0; k <= ENVOY.escort; k++) {
+                const id = k ? `${envoy.id}/escort-${k}` : `${envoy.id}/envoy`;
+
+                this.#enlist(id, { people: envoy.realm, weapon: k ? (k % 2 ? patrolArms : guardArms) : "staff", square: free(envoy.at), name: k ? "escort" : "envoy", record: { envoy: envoy.id, share: 0, part: k ? "escort" : "envoy" }, patrol: [free(met.mark)] });
+                ids.push(id);
+            }
+        } catch {
+            // (No free ground there: those found are out, and no more)
+        }
+
+        this.envoys.set(envoy.id, met);
+        this.#event("envoy", { envoy: envoy.id, people: envoy.realm, to: envoy.target, mission: envoy.mission, ids });
+    }
+
+    // The square `ENVOY.ahead` metres further along an envoy's road from `at` (past its point `leg`)
+    #ahead(envoy, at, leg) {
+        let [x, y] = at;
+        let left = ENVOY.ahead;
+
+        for (let k = leg + 1; k < envoy.path.length && left > 0; k++) {
+            const [nx, ny] = envoy.path[k];
+            const distance = Math.hypot(nx - x, ny - y);
+
+            if (distance <= left) {
+                [x, y, left] = [nx, ny, left - distance];
+            } else {
+                [x, y, left] = [x + ((nx - x) / distance) * left, y + ((ny - y) / distance) * left, 0];
+            }
+        }
+
+        return nearestFree(squaresOf(this.world.maps.town), [Math.floor(x), Math.floor(y)], { within: 24 });
+    }
+
+    // Each envoy met, on their way: where they've got to told to the war (which hears them, at
+    // their road's end), and, once they're at the point they were making for, the next
+    #watchEnvoys() {
+        for (const [id, met] of this.envoys) {
+            const envoy = this.war.force(id);
+            const leader = this.battle.actor(met.ids[0]);
+
+            if (met.over || envoy?.kind !== "envoy" || !leader || leader.dead) {
+                continue;
+            }
+
+            met.at = [leader.x, leader.y];
+
+            let leg = met.leg;
+
+            while (leg < envoy.path.length - 1 && Math.hypot(envoy.path[leg + 1][0] - leader.x, envoy.path[leg + 1][1] - leader.y) <= ENVOY.past) {
+                leg++;
+            }
+
+            if (this.war.move(id, met.at, leg)) {
+                met.over = "arrived";
+                this.#event("envoyed", { envoy: id, people: met.people, to: met.to, over: "arrived" });
+                continue;
+            }
+
+            met.leg = leg;
+
+            // (There, or nearly: on to the next point along)
+            if (distanceBetween(leader.square, met.mark) <= 2 || (!leader.path.length && !leader.to && !leader.target)) {
+                try {
+                    const free = this.#spots();
+
+                    met.mark = this.#ahead(envoy, met.at, leg);
+
+                    for (const [k, each] of met.ids.entries()) {
+                        const actor = this.battle.actor(each);
+
+                        if (actor && !actor.dead) {
+                            Object.assign(actor, { patrol: [k ? free(met.mark) : met.mark], patrolIndex: 0 });
+                        }
+                    }
+                } catch {
+                    // (Nowhere free ahead just now: tried again next time)
+                }
+            }
+        }
+    }
+
+    // An envoy struck down: waylaid, by whoever did it (their people, or no one's)
+    #envoyFell(id, byId) {
+        const met = this.envoys.get(id);
+        const by = byId ? this.battle.actor(byId) : null;
+        const realm = by ? (this.players.get(by.id)?.realm ?? by.team) : null;
+
+        this.war?.waylaid(id, realm);
+
+        if (met && !met.over) {
+            met.over = "waylaid";
+            this.#event("envoyed", { envoy: id, people: met.people, to: met.to, over: "waylaid", by: realm });
+        }
+    }
+
+    // An envoy's party let go: out of the world
+    #farewell(id) {
+        const { ids } = this.envoys.get(id);
+
+        this.envoys.delete(id);
+
+        for (const each of ids) {
+            this.battle.remove(each);
+            this.soldiers.delete(each);
+        }
+
+        this.fallen = this.fallen.filter(({ id: each }) => !ids.includes(each));
+        this.#event("farewell", { envoy: id, ids });
+    }
+
+    // A people's enemy brought down by a player, before their soldiers' eyes: they owe the
+    // player's people a favour for it (docs/WAR.md M7). Their own people owe them nothing more
+    #owed({ id, by }) {
+        const player = by && this.players.get(by);
+        const fallen = this.battle.actor(id);
+
+        if (!player || !fallen || !this.war?.realm(fallen.team)) {
+            return;
+        }
+
+        const seen = new Set();
+
+        for (const other of this.battle.actors) {
+            const people = other.team;
+
+            if (other.kind !== "soldier" || other.dead || other.map !== fallen.map || people === player.realm || seen.has(people) || !this.war.realm(people)) {
+                continue;
+            }
+
+            if (this.war.hostile(people, fallen.team) && distanceBetween(other.square, fallen.square) <= FAVOUR_SIGHT) {
+                seen.add(people);
+                this.war.remember(people, player.realm, 2);
+            }
+        }
+    }
+
     // A town's soldiers let go (its garrison's as the war has it)
     #dismiss(townId) {
         const { ids } = this.mustered.get(townId);
@@ -1205,7 +1400,7 @@ export class Host {
         this.battle.remove(id);
         this.soldiers.delete(id);
 
-        const mustered = soldier && (soldier.camp ? this.camps.get(soldier.camp) : this.mustered.get(soldier.town));
+        const mustered = soldier && (soldier.envoy ? null : soldier.camp ? this.camps.get(soldier.camp) : this.mustered.get(soldier.town));
 
         if (mustered) {
             mustered.ids = mustered.ids.filter((each) => each !== id);
@@ -1648,6 +1843,28 @@ export class Host {
 
                 // (Gone: broken, or gone home; or it took the town, and the request's failed)
                 return war.town(request.target.town)?.owner === request.target.realm ? "failed" : request.there ? "ready" : "void";
+            }
+            case "escort":
+            case "waylay": {
+                const envoy = war.force(request.target.force);
+
+                if (envoy) {
+                    if (request.kind === "escort" && !request.there && near(envoy.at, REQUEST_REACH.escort)) {
+                        request.there = true;
+                        this.#event("request", { id: player.id, change: "there", request: structuredClone(request) });
+                    }
+
+                    return null;
+                }
+
+                // (Gone: heard at the end of the road, or waylaid on it, and by whom)
+                const end = war.log.findLast(({ force }) => force === request.target.force);
+
+                if (request.kind === "escort") {
+                    return end?.type === "treaty" ? (request.there ? "ready" : "void") : "failed";
+                }
+
+                return end?.type === "waylaid" && end.by && war.liege(end.by) === liege ? "ready" : end?.type === "waylaid" ? "void" : "failed";
             }
             default:
                 return null;

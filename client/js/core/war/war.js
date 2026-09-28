@@ -346,9 +346,55 @@ export class War {
         }
     }
 
-    /** The towns a player's near (ids): a camp's raids and assaults on them are played out in the world. */
+    /**
+     * The towns and envoys a player's near (ids): a camp's raids and assaults on those towns are
+     * played out in the world, and those envoys go on it (move), as fast as they walk.
+     */
     watch(ids) {
         this.watched = new Set(ids);
+    }
+
+    /**
+     * An envoy a player's near, where it's got to in the world: `at` ([x, y] metres), past the
+     * point `leg` of its path. At the end of it, it's heard (and gone). Returns whether it's arrived.
+     */
+    move(id, at, leg) {
+        const envoy = this.force(id);
+
+        if (envoy?.kind !== "envoy") {
+            return false;
+        }
+
+        envoy.at = [Math.round(at[0] * 10) / 10, Math.round(at[1] * 10) / 10];
+        envoy.leg = Math.max(envoy.leg, Math.min(leg, envoy.path.length - 1));
+
+        if (envoy.leg >= envoy.path.length - 1) {
+            this.#hear(envoy);
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * An envoy struck down in the world by one of the people `by` (a realm's id): what it carried
+     * comes to nothing, and its people bear them a grudge for it.
+     */
+    waylaid(id, by) {
+        const envoy = this.force(id);
+
+        if (envoy?.kind !== "envoy") {
+            return;
+        }
+
+        this.forces.splice(this.forces.indexOf(envoy), 1);
+
+        if (this.realm(by)) {
+            this.remember(envoy.realm, by, -10);
+        }
+
+        this.#emit("waylaid", { realm: envoy.realm, by: this.realm(by) ? by : null, to: envoy.target, mission: envoy.mission, force: envoy.id, played: true });
     }
 
     /**
@@ -961,7 +1007,8 @@ export class War {
     // envoys are heard
     #march() {
         for (const force of [...this.forces]) {
-            if (force.kind === "camp" || !this.forces.includes(force)) {
+            // (Camps stay put; an envoy a player's near goes as it's seen to go there: move)
+            if (force.kind === "camp" || !this.forces.includes(force) || (force.kind === "envoy" && this.watched.has(force.id))) {
                 continue;
             }
 
@@ -1081,7 +1128,7 @@ export class War {
         const to = this.realm(envoy.target);
 
         if (!to?.alive || to.overlord || from.overlord) {
-            this.#emit("treaty", { from: from.id, to: envoy.target, mission: envoy.mission, about: envoy.about, accepted: false });
+            this.#emit("treaty", { from: from.id, to: envoy.target, mission: envoy.mission, about: envoy.about, accepted: false, force: envoy.id });
 
             return;
         }
@@ -1113,7 +1160,7 @@ export class War {
             this.remember(to.id, from.id, 5);
         }
 
-        this.#emit("treaty", { from: from.id, to: to.id, mission: envoy.mission, about: envoy.about, accepted });
+        this.#emit("treaty", { from: from.id, to: to.id, mission: envoy.mission, about: envoy.about, accepted, force: envoy.id });
     }
 
     // The camps: an assault on their town if the stage allows it and they're strong enough; else
@@ -1343,13 +1390,13 @@ export class War {
 
     // Envoys passing an enemy's forces may be waylaid (the more warlike the enemy, the likelier)
     #waylay() {
-        for (const envoy of this.forces.filter(({ kind }) => kind === "envoy")) {
+        for (const envoy of this.forces.filter(({ kind, id }) => kind === "envoy" && !this.watched.has(id))) {
             const by = this.forces.find((force) => force.kind !== "envoy" && this.hostile(force.realm, envoy.realm) && apart(force.at, envoy.at) <= REACH.waylay);
 
             if (by && this.random.chance(this.realm(this.liege(by.realm)).leader.traits.aggression * 0.25)) {
                 this.forces.splice(this.forces.indexOf(envoy), 1);
                 this.remember(envoy.realm, by.realm, -10);
-                this.#emit("waylaid", { realm: envoy.realm, by: by.realm, to: envoy.target, mission: envoy.mission });
+                this.#emit("waylaid", { realm: envoy.realm, by: by.realm, to: envoy.target, mission: envoy.mission, force: envoy.id });
             }
         }
     }

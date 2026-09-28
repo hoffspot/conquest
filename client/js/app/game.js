@@ -34,6 +34,7 @@ import { ABILITIES, itemLabel, ITEMS, priceOf, TREES, wares } from "../core/prog
 import { MOST_REQUESTS, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
 import { describeLeader } from "../core/war/peoples.js";
 import { peopleOf } from "../core/war/news.js";
+import { ADJECTIVES } from "../core/war/peoples.js";
 import { STAGES } from "../core/war/war.js";
 import { GODS } from "../core/lore/gods.js";
 import { BECKON, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js";
@@ -57,7 +58,7 @@ import { TREE_WIND } from "../world/art/kits/trees.js";
 import { Minimap, treesOf } from "./minimap.js";
 import { CameraFollow } from "./camera.js";
 import { Doors } from "./doors.js";
-import { JournalPanel, bearing } from "./journal.js";
+import { JournalPanel, bearing, regardOf } from "./journal.js";
 import { PackPanel } from "./pack.js";
 import { TalkPanel } from "./talk.js";
 import { ACTIONS, ActionWheel, directionOf, WHEELS } from "./wheel.js";
@@ -157,7 +158,7 @@ const EMBERS = 5;
 const VISITS = Object.freeze({ every: 0.5, budget: 6 });
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "camp", "strike", "sortie", "sortied", "gone", "rank", "loot", "bought", "sold", "used", "gear", "ability", "request", "standing", "gift", "counsel"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "gone", "rank", "loot", "bought", "sold", "used", "gear", "ability", "request", "standing", "gift", "counsel"]);
 
 const _focus = new THREE.Vector3();
 const _lean = new THREE.Vector3();
@@ -1423,8 +1424,10 @@ export class Game {
         const foes = war ? war.enemiesOf(war.liege(npc.team)).map((id) => `the ${peopleOf(id)}`) : [];
         const stance = npc.team === mine || relation === "vassal" || relation === "overlord" ? "own" : relation === "allied" ? "allied" : "neutral";
 
+        const met = soldier?.envoy ? this.host.envoys.get(soldier.envoy) : null;
+
         return {
-            title: town ? `Of the guard of ${town.name}` : "",
+            title: met ? (soldier.part === "envoy" ? `Envoy to the ${peopleOf(met.to)}` : `Escort to the envoy to the ${peopleOf(met.to)}`) : town ? `Of the guard of ${town.name}` : "",
             stance,
             names: {
                 town: town?.name ?? "this place",
@@ -1849,6 +1852,9 @@ export class Game {
                       war: war.enemiesOf(liege).map(people),
                       allies: war.realms.filter((other) => other.alive && other.id !== realm.id && war.friendly(realm.id, other.id)).map(({ id }) => people(id)),
                       towns: war.towns.filter(({ owner }) => owner === realm.id).length,
+                      regard: war.realms
+                          .filter((other) => other.alive && war.liege(other.id) !== liege && war.relation(other.id, realm.id) !== "unknown")
+                          .map((other) => ({ name: people(other.id), ...regardOf(other.standing[realm.id] ?? 0) })),
                   }
                 : null,
             done: standing.done.slice(0, 6).map(({ title, from: giver, state }) => ({ title, from: giver.townName, state })),
@@ -1977,6 +1983,13 @@ export class Game {
 
         this.enlisting.push(...ids);
         this.hud.message(kind === "raid" ? `Raiders of ${them} are coming for ${name}'s fields!` : `${them[0].toUpperCase()}${them.slice(1)} are storming ${name}!`, 4);
+    }
+
+    // An envoy near the player at the end of their road, or waylaid on it: the player told
+    #envoyed({ people, to, over, by }) {
+        const theirs = `The ${ADJECTIVES[people] ?? people} envoy`;
+
+        this.hud.message(over === "arrived" ? `${theirs} has reached the ${peopleOf(to)}.` : `${theirs} to the ${peopleOf(to)} has been struck down${by ? ` by the ${peopleOf(by)}` : ""}!`, 4);
     }
 
     // Start building a building the host's got ready: each floor and each of its folk, one to a
@@ -2353,6 +2366,20 @@ export class Game {
                 break;
             case "sortie":
                 this.#sortie(event);
+                break;
+            case "envoy":
+                this.enlisting.push(...event.ids);
+                break;
+            case "envoyed":
+                this.#envoyed(event);
+                break;
+            case "farewell":
+                this.enlisting = this.enlisting.filter((id) => !event.ids.includes(id));
+
+                for (const id of event.ids) {
+                    this.#undress(id);
+                }
+
                 break;
             case "dismiss":
                 this.banners?.lower(event.town);

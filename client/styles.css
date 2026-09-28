@@ -1492,6 +1492,25 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     color: #e0826f;
 }
 
+/* How the other peoples regard the player's: grudges in red, favours in gold */
+.journal-list.regard {
+    margin-top: 8px;
+}
+
+.journal-regard {
+    padding: 2px 12px;
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.journal-regard.grudge {
+    color: #e0826f;
+}
+
+.journal-regard.favour {
+    color: var(--gold);
+}
+
 @media (prefers-reduced-motion: reduce) {
     .pack,
     .journal {
