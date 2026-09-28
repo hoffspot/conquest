@@ -36,10 +36,10 @@ export function rollHeal(spell, random) {
 /** Why a spell can't be cast, for people: the reasons battle.cast() gives. */
 export const CAST_FAILURES = Object.freeze({
     cooldown: "Not ready yet",
-    dead: "Nothing there to cast on",
+    lifeless: "Nothing there to cast on",
     busy: "Can't cast right now",
-    full: "Already at full health",
+    healthy: "Already at full health",
     range: "Out of reach",
     sight: "Can't see it",
-    target: "Not something to cast that on",
+    friendly: "Not something to cast that on",
 });

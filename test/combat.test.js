@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Battle, DRAW_MS, KINDS, SHEATHE_AFTER_MS, SHEATHE_MS, SIGHT, SPRINT, STAMINA_DRAIN, STAMINA_RECOVERY, STEP_MS } from "../client/js/core/battle.js";
+import { REFUSALS } from "../client/js/core/host.js";
 import { createRandom } from "../client/js/core/random.js";
 import { CAST_FAILURES, SPELL_COOLDOWN, SPELLS } from "../client/js/core/spells.js";
 import { armsOf, averageDamage, chooseAttack, inReach, longestReach, MELEE_REACH, rollDamage, STARTING_WEAPONS, WEAPONS } from "../client/js/core/weapons.js";
@@ -855,12 +856,18 @@ describe("the battle (battle.js)", () => {
 
         assert.equal(battle.cast("player", "stun", "far").reason, "range");
         assert.equal(battle.cast("player", "stun", "hidden").reason, "sight");
-        assert.equal(battle.cast("player", "stun", "friend").reason, "target");
-        assert.equal(battle.cast("player", "stun", "nobody").reason, "dead");
-        assert.equal(battle.cast("player", "heal").reason, "full");
+        assert.equal(battle.cast("player", "stun", "friend").reason, "friendly");
+        assert.equal(battle.cast("player", "stun", "nobody").reason, "lifeless");
+        assert.equal(battle.cast("player", "heal").reason, "healthy");
 
-        for (const reason of ["range", "sight", "target", "dead", "full", "cooldown", "busy"]) {
+        for (const reason of ["range", "sight", "friendly", "lifeless", "healthy", "cooldown", "busy"]) {
             assert.equal(typeof CAST_FAILURES[reason], "string", reason);
+        }
+
+        // (Said as themselves, never as one of the host's refusals of the same name: healing at
+        // full health isn't "Your pack is full")
+        for (const reason of Object.keys(CAST_FAILURES)) {
+            assert.ok(!(reason in REFUSALS) || reason === "cooldown", `${reason} is also a refusal`);
         }
 
         // Failing costs nothing: it's still ready

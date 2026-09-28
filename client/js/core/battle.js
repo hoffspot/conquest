@@ -555,8 +555,10 @@ export class Battle {
     /**
      * Have a character cast a spell (a SPELLS key), on an enemy (`target`, an id) if it's that
      * kind of spell. Returns { ok: true }, or { ok: false, reason } if it can't be cast now:
-     * "cooldown", "busy" (staggered, stunned or already casting), "full" (healing at full
-     * health), "dead", "target" (not an enemy), "range" or "sight" (CAST_FAILURES says them).
+     * "cooldown", "busy" (staggered, stunned or already casting), "healthy" (healing at full
+     * health), "lifeless" (no one living there), "friendly" (not an enemy), "range" or "sight"
+     * (CAST_FAILURES says them: none of them the host's own refusals, host.js REFUSALS, but for
+     * the cooldown, which is the same).
      */
     cast(id, spellId, targetId = null) {
         const actor = this.actor(id);
@@ -580,11 +582,11 @@ export class Battle {
             target = this.actor(targetId);
 
             if (!target || target.dead) {
-                return { ok: false, reason: "dead" };
+                return { ok: false, reason: "lifeless" };
             }
 
             if (!this.hostile(actor, target)) {
-                return { ok: false, reason: "target" };
+                return { ok: false, reason: "friendly" };
             }
 
             if (distanceBetween(actor.square, target.square) > spell.reach) {
@@ -597,7 +599,7 @@ export class Battle {
 
             actor.facing = Math.atan2(target.x - actor.x, target.y - actor.y);
         } else if (spell.heal && actor.hp >= actor.maxHp) {
-            return { ok: false, reason: "full" };
+            return { ok: false, reason: "healthy" };
         }
 
         // Casting calls off an attack

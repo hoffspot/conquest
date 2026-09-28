@@ -390,8 +390,10 @@ draws anything.
   caster can see (0.4 s): for 3 seconds it can't move, attack, cast or think, and whatever it
   was starting is called off; the orc then turns on whoever stunned it. All of a character's
   spells share one cooldown: none can be cast for 3 seconds from when one was. A spell that
-  can't be cast says why (`cooldown`, `busy` while staggered, stunned or casting, `full` at full
-  health, `range`, `sight`, `dead`, `target`) and nothing happens. Casting stands still, and
+  can't be cast says why (`cooldown`, `busy` while staggered, stunned or casting, `healthy` at
+  full health, `range`, `sight`, `lifeless` with no one living there, `friendly` on someone who
+  isn't an enemy) and nothing happens; none of these shares a name with the host's own refusals
+  (so healing at full health says "Already at full health", not "Your pack is full"). Casting stands still, and
   calls off an attack that hasn't landed; walking off doesn't stop a spell once it's begun.
 - **Dying and coming back.** At no hit points a character falls; the player gets up in the
   market square 5 seconds later, with full health, and the orc back in its corner 30 seconds
