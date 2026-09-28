@@ -816,7 +816,7 @@ export const TINTS = {
     "leafscale-gold": { from: "leafscale", tint: [1.5, 1.05, 0.6] },
     "timber-char": { from: "timber-grey", tint: [0.26, 0.24, 0.28] },
     "slate-violet": { from: "slate-grey", tint: [0.42, 0.36, 0.46] },
-    "planks-char": { from: "planks-dark", tint: [0.38, 0.34, 0.4] },
+    "planks-char": { from: "planks-dark", tint: [0.24, 0.22, 0.27] },
     "thatch-palm": { from: "thatch", tint: [0.92, 0.9, 0.78] },
 };
 
