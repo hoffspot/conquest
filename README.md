@@ -374,6 +374,7 @@ client/                 The game (static files served to the browser)
     debug.js            Debug mode's overlay
     talk.js             The talk: who's talking, what they say, and the replies to choose from
     pack.js             The pack: coppers, what's carried and worn, the skills; a shop's wares
+    journal.js          The journal: the player's rank, their requests, their people
     save.js             The saved character, what they've grown into and carry, what's been
                         said and found, and settings (local storage)
     device.js           Full screen and the service worker
@@ -401,6 +402,8 @@ client/                 The game (static files served to the browser)
     weapons.js          The weapons and their attacks
     progress.js         Growing stronger: skills and their trees, abilities, gear and its make,
                         shops, loot, coppers and the pack; and from them, might
+    standing.js         Standing in a people: its ranks, the requests the rulers make, the
+                        armoury's gifts and counsel's weight
     spells.js           The spells: heal and stun, and their shared cooldown
     roles.js            Classes of people (barkeep, patron...): their titles and five rests each
     dialogue.js         Conversations: trees of what's said and the replies, conditions, effects

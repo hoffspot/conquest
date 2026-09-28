@@ -16,7 +16,7 @@ import { registerServiceWorker } from "./app/device.js";
 import { Debug } from "./app/debug.js";
 import { formatBytes, Loader } from "./app/loader.js";
 import { MANIFEST } from "./app/manifest.js";
-import { loadExplored, loadProgress, loadSave, loadSettings, loadTalks, loadWorld, newSeed, saveExplored, saveProgress, saveSettings, saveTalks, saveWorld, writeSave } from "./app/save.js";
+import { loadExplored, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadWorld, newSeed, saveExplored, saveProgress, saveSettings, saveStanding, saveTalks, saveWorld, writeSave } from "./app/save.js";
 import { WEAPONS } from "./core/weapons.js";
 
 const params = new URLSearchParams(location.search);
@@ -251,6 +251,8 @@ async function play(save) {
         onExplore: (explored) => saveExplored(save, explored),
         progress: loadProgress(save),
         onProgress: (progress) => saveProgress(save, progress),
+        standing: loadStanding(save),
+        onStanding: (standing) => saveStanding(save, standing),
         war: loadWorld(save),
         onWar: (war) => saveWorld(save, war.snapshot()),
         onWorldMap: openWorldMap,
@@ -333,7 +335,7 @@ async function keyOf() {
 
     list.replaceChildren();
 
-    for (const [kind, label] of [["tavern", "Tavern"], ["blacksmith", "Smithy"], ["church", "Temple"], ["guild", "Adventurers' guild"]]) {
+    for (const [kind, label] of [["tavern", "Tavern"], ["blacksmith", "Smithy"], ["church", "Temple"], ["guild", "Adventurers' guild"], ["hall", "Town hall"], ["keep", "Keep"]]) {
         const item = document.createElement("li");
         const icon = Object.assign(document.createElement("canvas"), { width: 44, height: 44 });
 

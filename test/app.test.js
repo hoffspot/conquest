@@ -8,7 +8,8 @@ import { buildingsOf, interiorColours, mapColours, treesOf } from "../client/js/
 import { ACTIONS, DIRECTIONS, directionOf, sectorPath, WHEELS } from "../client/js/app/wheel.js";
 import { SPELLS } from "../client/js/core/spells.js";
 import { ABILITIES } from "../client/js/core/progress.js";
-import { isHero, loadExplored, loadSave, loadSettings, loadTalks, loadWorld, newSeed, SAVE_VERSION, saveExplored, saveSettings, saveTalks, saveWorld, SETTINGS_DEFAULTS, writeSave, clearSave } from "../client/js/app/save.js";
+import { isHero, loadExplored, loadSave, loadSettings, loadStanding, loadTalks, loadWorld, newSeed, SAVE_VERSION, saveExplored, saveSettings, saveStanding, saveTalks, saveWorld, SETTINGS_DEFAULTS, writeSave, clearSave } from "../client/js/app/save.js";
+import { Standing } from "../client/js/core/standing.js";
 import { Explored } from "../client/js/core/explored.js";
 import { BEARDS, HAIRSTYLES } from "../client/js/characters/hair.js";
 import { MACRO_DEFAULTS } from "../client/js/characters/macro.js";
@@ -161,6 +162,19 @@ describe("saving (save.js)", () => {
         assert.equal(loadWorld({ ...save, created: "2026-09-27T10:00:00.000Z" }), null);
         assert.equal(loadWorld({ ...save, seed: 13 }), null);
         assert.equal(saveWorld({ seed: 1 }, war), false);
+    });
+
+    it("keeps where a saved game's character stands with their people, and what they've been asked; not for another", () => {
+        useStorage();
+
+        const save = { seed: 12, created: "2026-09-26T10:00:00.000Z" };
+        const standing = new Standing({ points: 75, claimed: [], requests: [{ kind: "wild", key: "wild", target: { wild: true, need: 2 }, state: "open", count: 1 }], next: 2 });
+
+        assert.deepEqual(loadStanding(save), {});
+        assert.equal(saveStanding(save, standing), true);
+        assert.deepEqual(new Standing(loadStanding(save)).toJSON(), standing.toJSON());
+        assert.deepEqual(loadStanding({ ...save, seed: 13 }), {});
+        assert.equal(saveStanding({ seed: 1 }, standing), false);
     });
 
     it("still plays when the browser won't store anything", () => {

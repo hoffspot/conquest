@@ -16,6 +16,7 @@ const TALKS_KEY = "pellagos.talks";
 const EXPLORED_KEY = "pellagos.explored";
 const WORLD_KEY = "pellagos.world";
 const PROGRESS_KEY = "pellagos.progress";
+const STANDING_KEY = "pellagos.standing";
 
 /** The save format's version: a save from another version is set aside, not misread. */
 export const SAVE_VERSION = 1;
@@ -123,6 +124,22 @@ export function loadProgress(save) {
 /** Keep what's grown and carried in a saved game (not in one that isn't saved: ?play). */
 export function saveProgress(save, progress) {
     return save?.created ? write(PROGRESS_KEY, { created: save.created, seed: save.seed, ...progress.toJSON() }) : false;
+}
+
+/**
+ * Where a saved game's character stands with their people, and the requests they carry
+ * (core/standing.js Standing's toJSON), as kept: {} for none yet, or another game's.
+ */
+export function loadStanding(save) {
+    const standing = read(STANDING_KEY);
+    const ours = standing && save?.created && standing.created === save.created && standing.seed === save.seed;
+
+    return ours ? { points: standing.points, claimed: standing.claimed ?? [], requests: standing.requests ?? [], done: standing.done ?? [], next: standing.next } : {};
+}
+
+/** Keep where the character stands in a saved game (not in one that isn't saved: ?play). */
+export function saveStanding(save, standing) {
+    return save?.created ? write(STANDING_KEY, { created: save.created, seed: save.seed, ...standing.toJSON() }) : false;
 }
 
 /**

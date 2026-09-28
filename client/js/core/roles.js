@@ -1,7 +1,8 @@
 // What sort of person each character is: their class (a role), such as the barkeep, a serving
 // wench, a patron at the tables, the innkeeper, the madam or a courtesan upstairs, the smith and
 // the apprentice, the priest, an acolyte and the worshippers, a guild's receptionist, or an
-// adventurer (the player, or one of the guild's).
+// adventurer (the player, or one of the guild's); a town hall's reeve, clerk and petitioners; a
+// keep's ruler, steward, councillors and sentries.
 //
 // A role says what the character is called (its `title`, under its name in a talk: dialogue.js),
 // whether it beckons the player over when they come into sight (`beckons`: the courtesans
@@ -152,6 +153,83 @@ export const ROLES = Object.freeze({
             { name: "rolling the shoulders", hitAt: 1, duration: 2.8 },
             { name: "a yawn", hitAt: 1, duration: 2.8 },
             { name: "shifting the weight", hitAt: 1, duration: 3.2 },
+        ],
+    },
+    // A town hall's: the reeve who runs the town for its people's rulers, their clerk, and
+    // petitioners waiting to be heard
+    reeve: {
+        title: "Reeve",
+        rests: [
+            { name: "arms folded", hitAt: 1.2, duration: 3.6 },
+            { name: "looking over the work", hitAt: 1, duration: 3 },
+            { name: "a hand to the chin", hitAt: 1, duration: 2.8 },
+            { name: "hands clasped behind", hitAt: 1, duration: 3 },
+            { name: "rubbing the neck", hitAt: 1, duration: 2.8 },
+        ],
+    },
+    clerk: {
+        title: "Clerk",
+        rests: [
+            { name: "wiping the brow", hitAt: 1, duration: 2.6 },
+            { name: "looking about", hitAt: 1, duration: 3.4 },
+            { name: "a yawn", hitAt: 1, duration: 2.8 },
+            { name: "rubbing the neck", hitAt: 1, duration: 2.8 },
+            { name: "shifting the weight", hitAt: 1, duration: 3.2 },
+        ],
+    },
+    petitioner: {
+        title: "Petitioner",
+        seated: true,
+        rests: [
+            { name: "waiting, head bowed", hitAt: 1, duration: 3 },
+            { name: "looking about", hitAt: 1, duration: 3.2 },
+            { name: "hands in the lap", hitAt: 1, duration: 3 },
+            { name: "rubbing the neck", hitAt: 1, duration: 2.8 },
+            { name: "looking up", hitAt: 1, duration: 2.6 },
+        ],
+    },
+    // A keep's: the ruler on the throne (their title their people's: war/peoples.js), their
+    // steward, the councillors at the table, and sentries at the door and the throne
+    ruler: {
+        title: "Ruler",
+        seated: true,
+        rests: [
+            { name: "hands on the knees", hitAt: 1, duration: 3 },
+            { name: "gazing over the hall", hitAt: 1, duration: 2.6 },
+            { name: "looking about the hall", hitAt: 1, duration: 3.2 },
+            { name: "brooding", hitAt: 1, duration: 3 },
+            { name: "stroking the chin", hitAt: 1, duration: 2.8 },
+        ],
+    },
+    steward: {
+        title: "Steward",
+        rests: [
+            { name: "arms folded", hitAt: 1.2, duration: 3.6 },
+            { name: "hands clasped behind", hitAt: 1, duration: 3 },
+            { name: "a hand to the chin", hitAt: 1, duration: 2.8 },
+            { name: "looking about", hitAt: 1, duration: 3.4 },
+            { name: "a bow of the head", hitAt: 0.9, duration: 2.4 },
+        ],
+    },
+    councillor: {
+        title: "Councillor",
+        seated: true,
+        rests: [
+            { name: "hands folded", hitAt: 1, duration: 3.4 },
+            { name: "deep in thought", hitAt: 1, duration: 3 },
+            { name: "looking about", hitAt: 1, duration: 3.2 },
+            { name: "hands in the lap", hitAt: 1, duration: 3 },
+            { name: "stroking the chin", hitAt: 1, duration: 2.8 },
+        ],
+    },
+    sentry: {
+        title: "Sentry",
+        rests: [
+            { name: "looking about", hitAt: 1, duration: 3.4 },
+            { name: "rolling the shoulders", hitAt: 1, duration: 2.8 },
+            { name: "shifting the weight", hitAt: 1, duration: 3.2 },
+            { name: "arms folded", hitAt: 1.2, duration: 3.6 },
+            { name: "hands clasped behind", hitAt: 1, duration: 3 },
         ],
     },
 });

@@ -73,6 +73,8 @@ export function tell(event, war) {
             return `${People(event.realm)} can't pay their soldiers, and some are leaving.`;
         case "victory":
             return `Every people bows to ${people(event.realm)}. The continent is theirs.`;
+        case "counsel":
+            return event.march ? `${People(event.realm)} are counselled to march on ${town(event.march)}.` : event.peace ? `${People(event.realm)} are counselled to seek peace with ${people(event.peace)}.` : `${People(event.realm)} are counselled to war with ${people(event.war)}.`;
         case "undone":
             return `${People(event.realm)} no longer rule the whole continent.`;
         default:

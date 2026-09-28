@@ -1,7 +1,8 @@
 // Icons for the buildings the player has gone into, on the minimap and the world map: a round
 // badge, rimmed in the colour of what the building is, with its sign in it: a foaming tankard
-// for a tavern, an anvil for a smithy, a temple's columns under its pediment for a temple, and
-// crossed swords behind a shield for an adventurers' guild. Drawn on a canvas, from paths on a
+// for a tavern, an anvil for a smithy, a temple's columns under its pediment for a temple,
+// crossed swords behind a shield for an adventurers' guild, crossed keys for a town hall, and a
+// crown for a keep. Drawn on a canvas, from paths on a
 // grid 24 across, centred on 0, 0.
 
 // Each kind's look: its rim's colour, and its sign's parts ([path, fill, stroke, width])
@@ -48,6 +49,26 @@ const LOOKS = {
             ["M-3.5,1.5 l3.5,-3 l3.5,3", null, "#e8c35a", 1.6],
         ],
     },
+    hall: {
+        rim: "#b8463c",
+        parts: [
+            // Two keys crossed, the town's: their bows, shafts and bits
+            ["M-8,8 L6,-6 M8,8 L-6,-6", null, "#2a1a0e", 3.4],
+            ["M-8,8 L6,-6 M8,8 L-6,-6", null, "#e2b54a", 1.8],
+            ["M-9.4,5.6 a2.6,2.6 0 1 0 3.8,3.8 a2.6,2.6 0 1 0 -3.8,-3.8 z M9.4,5.6 a2.6,2.6 0 1 1 -3.8,3.8 a2.6,2.6 0 1 1 3.8,-3.8 z", "#e2b54a", "#2a1a0e", 1],
+            ["M4,-4 l2.4,2.4 M2,-2 l2.4,2.4 M-4,-4 l-2.4,2.4 M-2,-2 l-2.4,2.4", null, "#2a1a0e", 1.2],
+        ],
+    },
+    keep: {
+        rim: "#8f6ad6",
+        parts: [
+            // A crown: its band and five points, a jewel on each
+            ["M-9,6 h18 v3 h-18 z", "#e2b54a", "#2a1a0e", 1],
+            ["M-9,6 L-9,-5 L-4.5,0 L0,-8 L4.5,0 L9,-5 L9,6 z", "#e2b54a", "#2a1a0e", 1.1],
+            ["M-9,-5.5 a1.4,1.4 0 1 1 0.01,0 z M0,-8.5 a1.4,1.4 0 1 1 0.01,0 z M9,-5.5 a1.4,1.4 0 1 1 0.01,0 z", "#d0413a", "#2a1a0e", 0.8],
+            ["M-4,3 h8", null, "#8f6ad6", 2],
+        ],
+    },
 };
 
 // The paths, made once (Path2D: only in the browser)
@@ -63,7 +84,7 @@ function pathsOf(kind) {
 export const ICON_KINDS = Object.freeze(Object.keys(LOOKS));
 
 /**
- * Draw the icon of a building of `kind` (tavern, blacksmith, church, guild) on a canvas's
+ * Draw the icon of a building of `kind` (tavern, blacksmith, church, guild, hall, keep) on a canvas's
  * context, centred at x, y, `size` pixels across.
  */
 export function drawBuildingIcon(context, kind, x, y, size) {

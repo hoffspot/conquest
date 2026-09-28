@@ -36,9 +36,9 @@ export const SETTLEMENT_KINDS = Object.freeze({
     farmstead: { radius: 13, fields: 12, market: [5, 6], main: 3, lane: 2.6, rings: [], alleys: 0, width: [7, 9], depth: [7, 9.5], gap: [3, 7], built: 0.95, landmarks: [], windmill: 0, stalls: 0, storeys: [[1, 3], [2, 1]], trades: 0, farm: true, small: true },
     hamlet: { radius: 17, fields: 12, market: [5, 6.5], main: 3.2, lane: 2.6, rings: [], alleys: 0, width: [6, 8.5], depth: [6.5, 8.5], gap: [3, 7], built: 0.75, landmarks: ["tavern"], windmill: 0.2, stalls: 0, storeys: [[1, 7], [2, 1]], trades: 0, small: true },
     village: { radius: 30, fields: 16, market: [8, 10], main: 3.8, lane: 2.8, rings: [], alleys: 1, width: [6.5, 9], depth: [6.5, 8.5], gap: [2, 6], built: 0.75, landmarks: ["tavern", "church", "blacksmith", "guild"], windmill: 0.6, stalls: 1, storeys: [[1, 6], [2, 2]], trades: 0.12 },
-    town: { radius: 48, fields: 18, market: [10, 13], main: 4.4, lane: 3, rings: [0.62], alleys: 3, width: [6, 10], depth: [8, 12], gap: [0, 1.2], built: 0.95, landmarks: ["tavern", "church", "blacksmith", "guild"], extra: [["tavern", 0.5]], windmill: 0.8, stalls: 3, storeys: [[1, 4], [2, 5], [3, 1]], trades: 0.3 },
-    city: { radius: 84, fields: 18, market: [14, 17], main: 5, lane: 3.2, rings: [0.4, 0.72, 0.97], alleys: 8, width: [6, 11], depth: [9, 13], gap: [0, 0.8], built: 0.97, landmarks: ["tavern", "church", "blacksmith", "guild", "market", "tavern"], extra: [["tavern", 0.6], ["blacksmith", 0.5]], windmill: 0.9, stalls: 4, storeys: [[1, 2], [2, 6], [3, 3]], trades: 0.4 },
-    capital: { radius: 112, fields: 20, market: [17, 21], main: 5.5, lane: 3.3, rings: [0.3, 0.55, 0.78, 0.97], alleys: 12, width: [6, 11], depth: [9, 13], gap: [0, 0.6], built: 0.98, landmarks: ["tavern", "church", "blacksmith", "guild", "market", "tavern", "tavern", "blacksmith"], extra: [["tavern", 0.7]], windmill: 0.95, stalls: 6, storeys: [[1, 1], [2, 5], [3, 4]], trades: 0.45 },
+    town: { radius: 48, seat: "hall", fields: 18, market: [10, 13], main: 4.4, lane: 3, rings: [0.62], alleys: 3, width: [6, 10], depth: [8, 12], gap: [0, 1.2], built: 0.95, landmarks: ["tavern", "church", "blacksmith", "guild"], extra: [["tavern", 0.5]], windmill: 0.8, stalls: 3, storeys: [[1, 4], [2, 5], [3, 1]], trades: 0.3 },
+    city: { radius: 84, seat: "hall", fields: 18, market: [14, 17], main: 5, lane: 3.2, rings: [0.4, 0.72, 0.97], alleys: 8, width: [6, 11], depth: [9, 13], gap: [0, 0.8], built: 0.97, landmarks: ["tavern", "church", "blacksmith", "guild", "market", "tavern"], extra: [["tavern", 0.6], ["blacksmith", 0.5]], windmill: 0.9, stalls: 4, storeys: [[1, 2], [2, 6], [3, 3]], trades: 0.4 },
+    capital: { radius: 112, seat: "keep", fields: 20, market: [17, 21], main: 5.5, lane: 3.3, rings: [0.3, 0.55, 0.78, 0.97], alleys: 12, width: [6, 11], depth: [9, 13], gap: [0, 0.6], built: 0.98, landmarks: ["tavern", "church", "blacksmith", "guild", "market", "tavern", "tavern", "blacksmith"], extra: [["tavern", 0.7]], windmill: 0.95, stalls: 6, storeys: [[1, 1], [2, 5], [3, 4]], trades: 0.45 },
 });
 
 // How far the streets step as they're laid (metres), and how far a main street bends either way
@@ -667,6 +667,31 @@ function designTown(spec, exits, random, seed) {
 
     if (houses.length < (spec.radius > 30 ? 12 : 4)) {
         return null;
+    }
+
+    // Where the town's ruled from (a town hall; a capital's keep): its biggest house near the
+    // market, made over, and nothing else moved
+    if (spec.seat) {
+        const near = radius * 0.6;
+        const seat = houses
+            .filter(({ back, x, y }) => !back && length(x - centre[0], y - centre[1]) <= near)
+            .reduce((best, house) => {
+                const [size, bestSize] = [house.w * house.h, best ? best.w * best.h : -1];
+
+                return size > bestSize + 1e-9 || (Math.abs(size - bestSize) <= 1e-9 && length(house.x - centre[0], house.y - centre[1]) < length(best.x - centre[0], best.y - centre[1])) ? house : best;
+            }, null);
+
+        if (seat) {
+            const { style, storeys } = seat;
+
+            for (const key of Object.keys(seat)) {
+                if (!["x", "y", "w", "h", "facing"].includes(key)) {
+                    delete seat[key];
+                }
+            }
+
+            Object.assign(seat, { key: landmarkKey(spec.seat), kind: "landmark", name: spec.seat, ...identity(spec.seat), style, storeys: Math.max(2, storeys ?? 2) });
+        }
     }
 
     return {

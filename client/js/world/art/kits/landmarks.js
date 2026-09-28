@@ -2,7 +2,8 @@
 // pixels to a metre): taverns (each its own, from its name down: house.js builds them as it does
 // the houses, with their names and signs), the adventurers' guild's hall, a stone church with a
 // spired tower, a blacksmith's smithy with an open forge, a market hall on columns with stalls
-// beneath, and a windmill. Each is built facing south; the town turns it to face its street.
+// beneath, a windmill, a town hall, and a capital's keep. Each is built facing south; the town
+// turns it to face its street.
 
 import { GODS } from "../../../core/lore/gods.js";
 import { createRandom } from "../../../core/random.js";
@@ -518,8 +519,165 @@ export function windmill({ w, h }) {
     return solid.toObject();
 }
 
+/**
+ * A town hall: the town's biggest house near the market, made over (setpieces/town.js), in its
+ * street's look: a wide door in the middle of its front up a step, "Town Hall" on a board over
+ * it, a sign of the keys of the town, and lanterns either side of the door.
+ */
+export async function hall(piece) {
+    await loadSignFont();
+
+    const { w, h } = piece;
+    // (In its street's look, but never a cottage's: a hall has a storey above for its board)
+    const style = HOUSE_STYLES[piece.style] && HOUSE_STYLES[piece.style].storeys > 1 ? piece.style : piece.style === "cottage" ? "timber" : "stone";
+    const reveal = HOUSE_STYLES[style].reveal + 0.04;
+    const [width, depth] = [w * 20, h * 20];
+    const board = Math.min(m(5.5), width - m(3));
+    const plan = planHouse({
+        w,
+        h,
+        style,
+        storeys: Math.max(2, piece.storeys ?? 2),
+        seed: seedOf(piece),
+        x: piece.x,
+        y: piece.y,
+        facing: piece.facing,
+        front: depth - m(ENTRY) + m(reveal),
+        entrance: { width: m(2), height: m(2.5) },
+        board,
+        jettied: false,
+    });
+    const solid = buildHouse(plan);
+    const ground = plan.levels[0];
+    const face = frontOf(ground);
+    const middle = face.length / 2;
+    const level = plan.levels[1];
+    const boardHeight = (board * 9) / 56;
+    const v0 = Math.min(level.height - boardHeight - m(0.3), m(0.9));
+
+    nameBoard(solid, frontOf(level), [middle - board / 2, middle + board / 2, v0, v0 + boardHeight], nameBoardTexture({ name: "Town Hall", ground: "#4a1c1c", dark: "#260c0c" }), "board hall", plan.frame ?? "timber");
+    hangingSign(solid, face, middle + m(1.9), m(3), emblemSignTexture({ name: "Town Hall", emblem: "keys", tint: seedOf(piece) % 6 }), "sign hall");
+
+    // A stone step before the door, and a lantern on an iron arm either side of it
+    const [x0, z] = [face.origin[0] + middle, face.origin[2]];
+
+    solid.box(x0 - m(1.5), 0, z, x0 + m(1.5), m(0.3), z + m(0.8), material("stone"));
+
+    for (const side of [-1, 1]) {
+        const x = x0 + side * m(1.5);
+
+        solid.beam([x, m(2.6), z], [x, m(2.6), z + m(0.45)], m(0.05), m(0.05), material("iron"));
+        solid.box(x - m(0.14), m(2.15), z + m(0.3), x + m(0.14), m(2.55), z + m(0.58), material("iron"));
+        solid.box(x - m(0.1), m(2.2), z + m(0.34), x + m(0.1), m(2.5), z + m(0.54), material("glass-lit"));
+    }
+
+    return solid.toObject();
+}
+
+/**
+ * A capital's keep: its biggest house near the market made over (setpieces/town.js) into a
+ * great stone tower, battlemented, with a turret at each corner under a cone of slate, a hipped
+ * roof within the battlements, windows in rows, and a door in the middle of its front up two
+ * steps, under the crown's sign, between two long banners.
+ */
+export async function keep(piece) {
+    await loadSignFont();
+
+    const solid = new Solid();
+    const random = createRandom(seedOf(piece));
+    const stone = random.pick(["stone", "stone-warm", "stone-dark"]);
+    const roof = random.pick(["slate", "slate-grey"]);
+    const s = material(stone);
+    const [width, depth] = [piece.w * 20, piece.h * 20];
+    const [x0, x1, z0, z1] = [m(0.7), width - m(0.7), m(0.7), depth - m(KEEP_ENTRY)];
+    const height = m(11 + Math.min(piece.w, piece.h) * 0.8);
+    const turret = m(1.4);
+    const merlon = m(0.5);
+    const mid = (x0 + x1) / 2;
+
+    // The mass: a battered plinth, the tower, the battlements round its top
+    solid.box(x0 - m(0.3), 0, z0 - m(0.3), x1 + m(0.3), m(1), z1 + m(0.3), s);
+    solid.box(x0, m(1), z0, x1, height, z1, s);
+    solid.box(x0 - m(0.2), height, z0 - m(0.2), x1 + m(0.2), height + m(0.35), z1 + m(0.2), s);
+
+    const teeth = (ax, az, bx, bz) => {
+        const length = Math.hypot(bx - ax, bz - az);
+        const count = Math.max(2, Math.round(length / (merlon * 2.2)));
+
+        for (let k = 0; k < count; k++) {
+            const t = (k + 0.5) / count;
+            const [x, z] = [ax + (bx - ax) * t, az + (bz - az) * t];
+
+            solid.box(x - merlon / 2, height + m(0.35), z - merlon / 2, x + merlon / 2, height + m(1.2), z + merlon / 2, s);
+        }
+    };
+
+    teeth(x0, z0, x1, z0);
+    teeth(x0, z1, x1, z1);
+    teeth(x0, z0, x0, z1);
+    teeth(x1, z0, x1, z1);
+    solid.roof(x0 + m(1.2), z0 + m(1.2), x1 - m(1.2), z1 - m(1.2), height + m(0.35), Math.min(x1 - x0, z1 - z0) * 0.4, { ridge: x1 - x0 >= z1 - z0 ? "x" : "z", hipped: true, material: material(roof) });
+
+    for (const [x, z] of [[x0, z0], [x1, z0], [x0, z1], [x1, z1]]) {
+        solid.cylinder(x, z, m(1), height + m(2.2), turret, turret, s, { segments: 14 });
+        solid.cone(x, z, height + m(2.2), m(3.2), turret + m(0.35), material(roof), 14);
+    }
+
+    // Windows: arrow slits low down, taller lights above, on every face
+    const slitsAlong = (face, from, to, fixed) => {
+        for (let u = from + m(2); u < to - m(1.6); u += m(2.4)) {
+            for (const [y, tall] of [[m(4.2), m(1.2)], [height * 0.62, m(1.8)], [height * 0.82, m(1.4)]]) {
+                // (Clear of the door, and of the banners either side of it)
+                if (face === "front" && ((Math.abs(u - mid) < m(2.6) && y < m(6.5)) || (Math.abs(Math.abs(u - mid) - m(3.2)) < m(0.9) && y + tall > m(3.4) && y < height * 0.72))) {
+                    continue;
+                }
+
+                if (face === "front") {
+                    solid.box(u - m(0.25), y, fixed, u + m(0.25), y + tall, fixed + 0.6, material("shadow"));
+                } else if (face === "back") {
+                    solid.box(u - m(0.25), y, fixed - 0.6, u + m(0.25), y + tall, fixed, material("shadow"));
+                } else {
+                    solid.box(fixed - 0.3, y, u - m(0.25), fixed + 0.3, y + tall, u + m(0.25), material("shadow"));
+                }
+            }
+        }
+    };
+
+    slitsAlong("front", x0, x1, z1);
+    slitsAlong("back", x0, x1, z0);
+    slitsAlong("left", z0, z1, x0);
+    slitsAlong("right", z0, z1, x1);
+
+    // The door: an arch of dressed stone, the leaf, and two steps up to it
+    const [dw, dh, floor] = [m(KEEP_DOOR.width), m(KEEP_DOOR.height), m(KEEP_DOOR.floor)];
+
+    solid.box(mid - dw / 2 - m(0.4), floor - m(0.1), z1, mid + dw / 2 + m(0.4), floor + dh + m(0.5), z1 + m(0.25), material("stone-warm"));
+    solid.box(mid - dw / 2, floor, z1 + m(0.25), mid + dw / 2, floor + dh, z1 + m(0.35), material("planks-dark"));
+    solid.box(mid - m(0.06), floor, z1 + m(0.35), mid + m(0.06), floor + dh, z1 + m(0.4), material("iron"));
+    solid.box(mid - dw / 2 - m(0.6), 0, z1, mid + dw / 2 + m(0.6), m(0.4), z1 + m(1.2), material(stone));
+    solid.box(mid - dw / 2 - m(0.4), m(0.4), z1, mid + dw / 2 + m(0.4), floor, z1 + m(0.6), material(stone));
+
+    // Long banners either side of the door, and the crown's sign over it
+    for (const side of [-1, 1]) {
+        const x = mid + side * m(3.2);
+
+        solid.box(x - m(0.55), m(3.4), z1, x + m(0.55), height * 0.72, z1 + m(0.12), material("banner"));
+        solid.box(x - m(0.2), height * 0.6, z1 + m(0.12), x + m(0.2), height * 0.66, z1 + m(0.16), material("gold"));
+    }
+
+    const face = { origin: [x0, 0, z1 + m(0.25)], across: [1, 0, 0], out: [0, 0, 1], length: x1 - x0 };
+
+    hangingSign(solid, face, mid - x0 + m(1.9), m(4.6), emblemSignTexture({ name: "The Keep", emblem: "crown", tint: seedOf(piece) % 6 }), "sign keep");
+
+    return solid.toObject();
+}
+
+// Where a keep's door stands: this far in from the front of its lot (metres), and its size and sill
+const KEEP_ENTRY = 1.4;
+const KEEP_DOOR = Object.freeze({ width: 2.4, height: 3.2, floor: 0.8 });
+
 /** Every special building, by name (setpieces/pieces.js LANDMARKS). */
-export const LANDMARK_BUILDERS = Object.freeze({ tavern, church, blacksmith, guild, market, windmill });
+export const LANDMARK_BUILDERS = Object.freeze({ tavern, church, blacksmith, guild, market, windmill, hall, keep });
 
 /** A town's special building (its layout piece), filling its footprint. */
 export function landmark(piece) {

@@ -69,9 +69,9 @@ east and y south. See any at `town-map.html?seed=5&kind=town` (`SETTLEMENT_KINDS
 | Farmstead | 13 | | None: a farmhouse, its barns, stable and sheds round a yard |
 | Hamlet | 17 | | A tavern, on a green |
 | Village | 30 | | A tavern, a church, a smithy and an adventurers' guild; sometimes a windmill |
-| Town | 48 | 1 | The same, and half the time a second tavern |
-| City | 84 | 3 | The same, a market hall and a second tavern; often a third tavern and a second smithy |
-| Capital | 112 | 4 | The same, a market hall, three taverns (often four) and two smithies |
+| Town | 48 | 1 | The same, and half the time a second tavern; a town hall |
+| City | 84 | 3 | The same, a market hall and a second tavern; often a third tavern and a second smithy; a town hall |
+| Capital | 112 | 4 | The same, a market hall, three taverns (often four) and two smithies; the keep |
 
 A farmstead's or hamlet's streets are earth, not cobbled; a farmstead's yard is beaten earth and
 a hamlet's middle is a green. Its houses have one storey, or two now and then.
@@ -96,8 +96,12 @@ a hamlet's middle is a green. Its houses have one storey, or two now and then.
   the market, slid along its edge if need be but never round its corner (or, failing that,
   facing a main street near it); a well and stalls on it, clear of where the main streets leave;
   a windmill out at the edge, by a main street. A layout that can't place the four that can be
-  entered (`ENTERED`: tavern, church, smithy, guild) is laid out again. Each has an `id` of its
-  own in the layout (`tavern-1`) and a seed. A tavern has its name, sign and storeys, and what's
+  entered (tavern, church, smithy, guild) is laid out again. Each has an `id` of its
+  own in the layout (`tavern-1`) and a seed.
+- **Where it's ruled from**: in a town or a city, a town hall; in a capital, the keep. Once all
+  else is laid out, the biggest house within six tenths of the radius of the market (the nearest,
+  of two as big) is made over into it, keeping its style and storeys (two at least), so nothing
+  else in the layout moves. It can be entered too (`ENTERED` has them all). A tavern has its name, sign and storeys, and what's
   upstairs (`core/lore/taverns.js`: below); a church its patron, one of the Six
   (`core/lore/gods.js`: below).
 - **Trees** dotted about the open ground left.
@@ -189,7 +193,7 @@ player is a step, not straight back through.
 ### Every building's inside (core/insides.js)
 
 Wenches and Ale's floors are made with the town, as above. Every other building that can be gone
-into (`ENTERABLE`: taverns, smithies, temples and adventurers' guilds), in the start town and in
+into (`ENTERABLE`: taverns, smithies, temples, adventurers' guilds, town halls and keeps), in the start town and in
 every settlement as it's laid out, is known to the world's `interiors` (`Interiors`, by key:
 `${place}:${piece id}`, such as `home:tavern-2`), and its front door is one of the world's links
 from the start (`${key}/door`), its inside end still to make (`pending`). Its floors and folk are
@@ -299,6 +303,19 @@ are kept.
   (warrior, ranger, mage, rogue or cleric: every one before any comes twice), dressed and armed
   as it has them, their weapons sheathed; those at the tables hold tankards instead of their
   swords, staves and hammers. The quest board's notices can't be taken yet.
+- **A town hall** (`hallRooms`) is a chamber 18 by 14 metres: shelves of the town's rolls along
+  the north wall and the reeve's long desk before them, the council table with its benches, the
+  notices on the west wall, a hearth on the east, strongboxes, and petitioners' benches by the
+  door. Its folk (`hallFolkOf`): the reeve at the desk (stamping, and at the rolls), the clerk
+  between the rolls and the notices, and a petitioner or three on the benches, waiting.
+- **A keep** (`keepRooms`) is a great hall 22 by 16 metres: two thrones on a dais against the
+  north wall, a red carpet from them to the door, pillars down the hall, the council's two
+  tables, a hearth in each side wall, the steward's desk and shelves, strongboxes, and the
+  armoury's racks of swords, spears and shields. Its folk (`keepFolkOf`): the ruler on the
+  throne (crowned; named and titled for their people's ruler by the host, or a governor if the
+  keep isn't its holders' seat), the steward, councillors at the tables, and four sentries in
+  mail by the thrones and the door. What the officials of both do is in
+  [WAR.md](WAR.md) (*The player's people*).
 
 ## The battle (core/battle.js)
 
@@ -840,6 +857,12 @@ facing south; each is turned about its middle to face the way the layout says:
   - **The adventurers' guild**: a two-storey hall of stone, timber or brick, 16 by 12 metres,
     its name on a blue board, its crest (a shield over crossed swords) hanging by the door,
     blue banners with gold either side, and a board of notices outside.
+  - **The town hall**: the house it was, in its street's look (a cottage's made timber, for a
+    storey above), with a wide door in the middle of its front up a stone step, "Town Hall" on a
+    dark red board over it, the sign of the town's keys by the door, and a lantern either side.
+  - **The keep**: a great stone tower, battlemented, a round turret at each corner under a cone
+    of slate, a hipped roof inside the battlements, arrow slits and taller lights on every face,
+    and a door of dressed stone up two steps between two long red banners, the crown's sign by it.
   - **The church**: a stone nave, buttressed, with tall windows, and a tower with a spire at the
     front, the Six's gilded sun of six rays on its top, and its patron's sign by the door (the
     patron's emblem: Aurelia's sun, Brannoc's stag, Ithriel's star, Morvaine's lantern,
@@ -1068,7 +1091,8 @@ the doorway; only those on the same floor as the player are shown.
 the player has been inside (a house that can't be entered never has one): a round dark badge
 rimmed in the colour of what it is, with its sign: a foaming tankard for a tavern (amber), an
 anvil throwing a spark for a smithy (steel), a temple's columns under its pediment for a temple
-(white and gold), and crossed swords behind a blue shield for an adventurers' guild (gold). They're
+(white and gold), crossed swords behind a blue shield for an adventurers' guild (gold), crossed
+gold keys for a town hall (red), and a jewelled crown for a keep (violet). They're
 drawn on a canvas from paths on a 24-unit grid, the same on the minimap (22 pixels), the world
 map (24) and its key.
 

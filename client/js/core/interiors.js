@@ -58,6 +58,11 @@ export const PLAN_KEY = Object.freeze({
     // behind the counter
     q: { kind: "board", blocks: true, joins: true },
     e: { kind: "shelves", blocks: true, joins: true },
+    // A keep's: the thrones (each square a seat), the pillars holding up the roof, and a carpet
+    // laid from the door to the thrones
+    Y: { kind: "throne", blocks: true },
+    I: { kind: "pillar", blocks: true },
+    r: { kind: "carpet", joins: true },
 });
 
 // The taproom, 18 by 15 metres (roomier than the tavern looks from outside, to walk about in

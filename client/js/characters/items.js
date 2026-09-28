@@ -32,6 +32,8 @@ export function itemMaterial(name) {
             pewter: { color: 0x9a9ea0, metalness: 0.85, roughness: 0.42 },
             foam: { color: 0xf3ead2, roughness: 0.95 },
             hotIron: { color: 0xff7a2a, emissive: 0xff4a0a, emissiveIntensity: 1.4, roughness: 0.6 },
+            gold: { color: 0xe0b44a, metalness: 1, roughness: 0.25 },
+            ruby: { color: 0xb3142a, emissive: 0x3a0008, emissiveIntensity: 0.6, roughness: 0.15 },
         }[name];
 
         materials.set(name, new THREE.MeshStandardMaterial(settings));
@@ -456,6 +458,24 @@ function wizardHat(radius) {
     ], "hat");
 }
 
+// A ruler's crown: a band of gold round the brow, five points rising from it, a ruby in the front
+function crown(radius) {
+    const r = radius * 1.04;
+    const parts = [[at(new THREE.CylinderGeometry(r * 0.92, r * 0.9, r * 0.22, 32, 1, true), 0, r * 0.36, 0), "gold"]];
+
+    for (let k = 0; k < 5; k++) {
+        const angle = (k / 5) * Math.PI * 2;
+        const [x, z] = [Math.sin(angle) * r * 0.9, Math.cos(angle) * r * 0.9];
+
+        parts.push([at(new THREE.ConeGeometry(r * 0.1, r * 0.3, 8), x, r * 0.6, z), "gold"]);
+        parts.push([at(new THREE.SphereGeometry(r * 0.045, 8, 6), x * 1.02, r * 0.76, z * 1.02), "gold"]);
+    }
+
+    parts.push([at(new THREE.SphereGeometry(r * 0.07, 10, 8), 0, r * 0.36, r * 0.93), "ruby"]);
+
+    return assemble(parts, "crown");
+}
+
 function backpack() {
     return assemble([
         [at(new THREE.BoxGeometry(0.26, 0.36, 0.14), 0, 0, -0.07), "canvas"],
@@ -590,6 +610,8 @@ export function buildItem(model, fit = {}) {
             return helmet(headRadius, "orc");
         case "wizardHat":
             return wizardHat(headRadius);
+        case "crown":
+            return crown(headRadius);
         case "backpack":
             return backpack();
         case "quiver":

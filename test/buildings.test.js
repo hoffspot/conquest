@@ -202,6 +202,23 @@ describe("landmarks (kits/landmarks.js)", () => {
         }
     });
 
+    it("builds a town hall in its street's look and a capital's keep, within their lots, with their boards and signs", async () => {
+        const seats = [1, 2].flatMap((seed) => ["town", "capital"].map((kind) => layoutTown({ seed, kind }).pieces.find(({ name }) => name === "hall" || name === "keep")));
+
+        assert.deepEqual(seats.map(({ name }) => name), ["hall", "keep", "hall", "keep"]);
+
+        for (const piece of seats) {
+            const object = await landmark(piece);
+            const box = new THREE.Box3().setFromObject(object);
+            const triangles = trianglesOf(object);
+            const names = materialsOf(object);
+
+            assert.ok(triangles > 100 && triangles < 9000, `${piece.name}: ${triangles} triangles`);
+            assert.ok(box.min.x > -M * 1.5 && box.min.z > -M * 1.5 && box.max.x < piece.w * 20 + M * 1.5 && box.max.z < piece.h * 20 + M * 1.5, `${piece.name} spills out of its lot`);
+            assert.ok(piece.name === "hall" ? names.includes("board hall") && names.includes("sign hall") : names.includes("sign keep"), piece.name);
+        }
+    });
+
     it("hangs each tavern's own name and sign, the guild's, and each church's patron's", async () => {
         for (const piece of landmarks.filter(({ name }) => name === "tavern" || name === "guild" || name === "church")) {
             const names = materialsOf(await landmark(piece));

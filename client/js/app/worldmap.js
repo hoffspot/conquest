@@ -211,12 +211,14 @@ export class WorldMap {
 
     /**
      * Open it on where the player is (`player` { x, z, facing }: metres, radians), with icons
-     * over `icons` ([{ kind, x, z }]: the buildings they've gone into).
+     * over `icons` ([{ kind, x, z }]: the buildings they've gone into), and marks where their
+     * requests take them (`marks`: [{ x, z, label }]).
      */
-    open({ player, icons = [] }) {
+    open({ player, icons = [], marks = [] }) {
         this.land ??= paintLand(this.world.plan);
         this.player = player;
         this.icons = icons;
+        this.marks = marks;
 
         const [width, height] = this.#size();
 
@@ -387,6 +389,34 @@ export class WorldMap {
             }
         }
 
+        // Where the player's requests take them: a gold ring with a star in it, fog or no
+        for (const mark of this.marks ?? []) {
+            const [x, y] = at(mark.x, mark.z);
+
+            if (x < -20 || y < -20 || x > width + 20 || y > height + 20) {
+                continue;
+            }
+
+            context.beginPath();
+            context.arc(x, y, 9, 0, Math.PI * 2);
+            context.fillStyle = "rgba(30, 20, 8, 0.75)";
+            context.fill();
+            context.lineWidth = 2.4;
+            context.strokeStyle = "#f0c96a";
+            context.stroke();
+            context.beginPath();
+
+            for (let k = 0; k < 10; k++) {
+                const [r, angle] = [k % 2 ? 2.4 : 6, -Math.PI / 2 + (k * Math.PI) / 5];
+
+                context.lineTo(x + Math.cos(angle) * r, y + Math.sin(angle) * r);
+            }
+
+            context.closePath();
+            context.fillStyle = "#f0c96a";
+            context.fill();
+        }
+
         // Where the player is, the way they face
         if (this.player) {
             const [x, y] = at(this.player.x, this.player.z);
@@ -408,7 +438,7 @@ export class WorldMap {
             context.restore();
         }
 
-        this.drawn = { chunks, fogged: CHUNKS * CHUNKS - this.explored.chunksVisited, names, icons, scale: view.scale };
+        this.drawn = { chunks, fogged: CHUNKS * CHUNKS - this.explored.chunksVisited, names, icons, marks: (this.marks ?? []).length, scale: view.scale };
     }
 
     /** Stop listening, and let go of what it painted. */

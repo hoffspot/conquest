@@ -7,7 +7,7 @@ import { before, describe, it } from "node:test";
 import { describeLeader, REALMS, TEMPERAMENTS, TRAITS } from "../client/js/core/war/peoples.js";
 import { ACROSS_COUNTRY, Roads } from "../client/js/core/war/roads.js";
 import { tell } from "../client/js/core/war/news.js";
-import { HOLDINGS, REACH, SERVES, SIEGE, STAGES, TURN_MS, TURNS_PER_STAGE, War } from "../client/js/core/war/war.js";
+import { COUNSEL_TURNS, HOLDINGS, REACH, SERVES, SIEGE, STAGES, TURN_MS, TURNS_PER_STAGE, War } from "../client/js/core/war/war.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { planWorld, RACES } from "../client/js/core/worldplan/plan.js";
 
@@ -297,6 +297,87 @@ describe("the war (core/war)", () => {
         assert.equal(town.garrison, HOLDINGS[town.kind].garrison - 3);
         war.loss(town.id, 1000);
         assert.equal(town.garrison, 0);
+    });
+
+    it("takes a tithe into a realm's treasury", () => {
+        const war = new War(plan);
+        const before = war.realm("human").treasury;
+
+        assert.equal(war.give("human", 12), true);
+        assert.equal(war.realm("human").treasury, before + 12);
+        assert.equal(war.give("human", -5), false);
+        assert.equal(war.give("nowhere", 5), false);
+    });
+
+    it("heeds a player's counsel, if it can be done: marching where they say, seeking peace, or going to war", () => {
+        const setUp = () => {
+            const war = new War(plan);
+
+            war.setMight(8);
+
+            war.realm("human").treasury = 1e5;
+
+            for (const realm of war.realms) {
+                realm.leader.traits = { aggression: 0.5, greed: 0.5, loyalty: 0.5, grudge: 0.5, caution: 0.5 };
+            }
+
+            return war;
+        };
+
+        // Only fitting counsel, to a realm that decides for itself
+        const war = setUp();
+        const enemy = war.realms.find(({ id }) => id !== "human" && war.relation("human", id) === "neutral").id;
+        const theirs = war.towns.find(({ owner }) => owner === enemy);
+
+        assert.equal(war.counsel("human", { march: theirs.id }, 1), false, "(not at war with them)");
+        assert.equal(war.counsel("human", { peace: enemy }, 1), false, "(no war to make peace in)");
+        assert.equal(war.counsel("human", { war: enemy }, 0), false, "(counsel that weighs nothing)");
+        assert.equal(war.counsel("human", { nonsense: enemy }, 1), false);
+        assert.equal(war.counsel("human", { war: enemy }, 1), true);
+        assert.deepEqual(war.realm("human").counsel, { war: enemy, weight: 1, until: war.turn + COUNSEL_TURNS });
+        assert.equal(tell(war.log.at(-1), war).startsWith("The Humans are counselled to war with"), true);
+
+        war.realm("elf").overlord = "human";
+        assert.equal(war.counsel("elf", { war: enemy }, 1), false, "(a vassal's overlord decides)");
+        war.realm("elf").overlord = null;
+
+        // Counselled to war, they go to war (sooner or later)
+        const events = play(war, COUNSEL_TURNS);
+
+        assert.ok(events.some(({ type, by, on }) => type === "declared" && by === "human" && on === enemy));
+        assert.equal(war.realm("human").counsel, null);
+
+        // Counselled to march on the furthest of an enemy's towns: they march there
+        const marching = setUp();
+        const home = marching.town(marching.realm("human").capital);
+        const far = marching.towns.filter(({ owner }) => owner === enemy).sort((a, b) => apart(b.at, home.at) - apart(a.at, home.at))[0];
+
+        marching.relations[["human", enemy].sort().join("|")] = { state: "hostile", since: 0 };
+        assert.equal(marching.counsel("human", { march: far.id }, 1), true);
+
+        const marched = play(marching, 3).filter(({ type, realm }) => type === "marched" && realm === "human");
+
+        assert.equal(marched[0]?.target, far.id);
+        assert.equal(marching.realm("human").counsel, null);
+
+        // Counselled to peace, they send an envoy for a truce
+        const suing = setUp();
+
+        suing.relations[["human", enemy].sort().join("|")] = { state: "hostile", since: 0 };
+        assert.equal(suing.counsel("human", { peace: enemy }, 1), true);
+
+        const envoys = play(suing, 10).filter(({ type, from }) => type === "envoy" && from === "human");
+
+        assert.ok(envoys.some(({ to, mission }) => to === enemy && mission === "truce"));
+
+        // Counsel not acted on is let go in time
+        const idle = setUp();
+        const other = idle.realms.find(({ id }) => id !== "human" && idle.relation("human", id) === "neutral").id;
+
+        idle.realm("human").leader.traits.aggression = 0;
+        idle.counsel("human", { war: other }, 0.01);
+        play(idle, COUNSEL_TURNS + 2);
+        assert.equal(idle.realm("human").counsel, null);
     });
 
     it("lets a vassal that's served a while rise against its overlord", () => {

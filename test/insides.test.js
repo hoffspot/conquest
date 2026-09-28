@@ -500,7 +500,12 @@ describe("the buildings (insides.js Interiors)", () => {
         assert.ok(doors.targets.length > count);
         assert.ok(doors.targets.some(({ end }) => end === fresh.door.ends[1]));
 
-        // (Every kind drawn: a taproom, a smithy's workshop, a temple's nave, a guild's hall)
+        // (Every kind drawn: a taproom, a smithy's workshop, a temple's nave, a guild's hall, a town
+        // hall's chamber, a keep's great hall: the nearest capital laid out for one)
+        const capital = world.plan.places.filter(({ kind }) => kind === "capital").sort((a, b) => Math.hypot(a.at[0] - world.start.at[0], a.at[1] - world.start.at[1]) - Math.hypot(b.at[0] - world.start.at[0], b.at[1] - world.start.at[1]))[0];
+
+        world.maps.town.settlements.of(capital);
+
         for (const kind of ENTERABLE) {
             const one = [...interiors.buildings.values()].find((each) => each.kind === kind && each.key !== "home:tavern");
 

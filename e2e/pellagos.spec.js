@@ -1577,6 +1577,92 @@ test("the pack shows what's grown and carried; a skill ranks up with use; tradin
     expect(kept.skills.blade).toBeGreaterThanOrEqual(100);
 });
 
+test("the town hall: the reeve gives work, and pays for what's done; the journal shows where the player stands, what they carry and where it takes them; given up, it's set down", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // Into the home town's hall, up to the reeve's desk
+    const hall = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const building = game.world.interiors.buildings.get("home:hall-1");
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        game.battle.command("player", { type: "enter", link: building.door.id });
+
+        for (let second = 0; second < 90 && game.battle.actor("player").map === "town"; second += 5) {
+            game.advance(5, { render: false });
+        }
+
+        game.battle.command("player", { type: "move", to: [8, 5] });
+        game.advance(6, { render: false });
+        game.battle.command("player", { type: "move", to: [8, 4] });
+        game.advance(3);
+
+        return { map: game.battle.actor("player").map, roles: building.folk.map(({ role }) => role), name: building.name };
+    });
+
+    expect(hall.map).toBe("home:hall-1/chamber");
+    expect(hall.roles).toEqual(expect.arrayContaining(["reeve", "clerk"]));
+
+    // The reeve: work, taken on
+    const reeve = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const spot = session.view.toScreen(game.avatars.get("home:hall-1/reeve").point(0.6));
+
+        game.tap(spot.x, spot.y, { time: performance.now() + 9000 });
+        game.advance(8);
+        game.start();
+
+        return game.world.interiors.buildings.get("home:hall-1").folk.find(({ role }) => role === "reeve").name;
+    });
+    const talk = page.locator(".talk");
+
+    await expect(talk).toBeVisible();
+    await expect(talk.locator(".talk-name")).toHaveText(reeve);
+    await expect(talk.locator(".talk-title")).toHaveText("Reeve");
+    await talk.getByRole("button", { name: /work for me/ }).click();
+    await expect(talk.locator(".talk-line")).toContainText(/coppers|rolls/);
+    await talk.getByRole("button", { name: "I'll do it." }).click();
+    await expect(page.locator("#banner")).toContainText("New request");
+
+    const taken = await page.evaluate(() => window.pellagos.game.standing.requests.map(({ title, from }) => ({ title, from: from.name })));
+
+    expect(taken).toHaveLength(1);
+    expect(taken[0].from).toBe(reeve);
+
+    // A letter for the reeve (as if brought from another town), handed over and paid for
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const home = game.world.start;
+
+        game.standing.take({ kind: "message", title: "A letter to carry", key: home.id, from: { id: "x", name: "Ida Crane", title: "Reeve", town: "elsewhere", townName: "Elsewhere", post: "hall" }, target: { town: home.id, name: home.name, at: [...home.at], post: "hall" }, text: "Carry this letter.", given: 0, until: 999, state: "open", count: 0, reward: { standing: 20, coppers: 9 } });
+    });
+    await talk.getByRole("button", { name: /Where do I stand/ }).click();
+    await expect(talk.locator(".talk-line")).toContainText("Commoner");
+    await talk.getByRole("button", { name: /It's done/ }).click();
+    await expect(talk.locator(".talk-line")).toContainText("A letter from Elsewhere");
+    await expect(page.locator("#playerplate .coins")).toHaveText("29 coppers");
+    await page.keyboard.press("Escape");
+    await expect(talk).toBeHidden();
+
+    // J: the journal, their rank, the work they carry and where it takes them, and the letter done
+    const journal = page.locator(".journal");
+
+    await page.keyboard.press("j");
+    await expect(journal).toBeVisible();
+    await expect(journal.locator(".journal-rank")).toContainText("Commoner of the Kingdom of");
+    await expect(journal.locator(".journal-request-title")).toHaveText([taken[0].title]);
+    await expect(journal.locator(".journal-done")).toContainText(["A letter to carry"]);
+    await expect(journal.locator(".journal-people")).toContainText("Ruled by");
+
+    // Given up: set down, and the journal closed with its button
+    await journal.getByRole("button", { name: `Give up ${taken[0].title}` }).click();
+    await expect(journal.locator(".journal-request")).toHaveCount(0);
+    await expect(journal.locator(".journal-done").first()).toContainText("Given up");
+    await page.locator("#journalbutton").click();
+    await expect(journal).toBeHidden();
+});
+
 test("a building gone into is marked on the minimap; holding the minimap opens the world map, fog over all but where the player's been", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
@@ -1651,7 +1737,7 @@ test("a building gone into is marked on the minimap; holding the minimap opens t
     expect(map.drawn.icons).toEqual(["tavern"]);
     expect(map.drawn.names).toContain(map.town);
     await expect(page.getByRole("heading", { name: "The world" })).toBeVisible();
-    await expect(page.locator("#worldmapkey li")).toHaveCount(5);
+    await expect(page.locator("#worldmapkey li")).toHaveCount(7);
 
     // Zoomed right out, the whole world under its fog; Escape closes it and the game goes on
     await page.locator("#worldmapout").click();
