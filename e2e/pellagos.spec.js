@@ -693,7 +693,7 @@ test("in the town, the camera comes in closer than a building in the way, or ris
     expect(views.open.lifted).toBeLessThan(0.5);
 });
 
-test("walks out of the town into the world, drawn round the player as they go, with no loading", async ({ page }) => {
+test("walks out of the town into the world, drawn round the player as they go, with no loading; the wild's creatures about them there", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     const trip = await page.evaluate(() => {
@@ -738,6 +738,9 @@ test("walks out of the town into the world, drawn round the player as they go, w
             }
         }
 
+        // (The wild's creatures about them out here, each drawn as its kind looks)
+        const beasts = [...game.host.wild.keys()].map((id) => game.battle.actor(id)).filter((actor) => actor && !actor.dead);
+
         return {
             arrived: Math.hypot(player.x - goal[0] - 0.5, player.y - goal[1] - 0.5) < 1.5,
             outside: !world.inTown(Math.floor(player.x), Math.floor(player.y)),
@@ -745,6 +748,9 @@ test("walks out of the town into the world, drawn round the player as they go, w
             near: [...game.chunks.drawn.values()].every((drawn) => Math.max(Math.abs(drawn.cx - cx), Math.abs(drawn.cy - cy)) <= 3),
             dropped: before.filter((drawn) => !game.chunks.drawn.has(drawn)).length,
             mapped: player.x > x0 && player.x < x0 + across && player.y > z0 && player.y < z0 + across,
+            beasts: beasts.length,
+            drawn: beasts.filter((actor) => game.avatars.has(actor.id)).length,
+            kinds: beasts.every((actor) => actor.kind === "beast" && actor.wild?.creature),
         };
     });
 
@@ -754,6 +760,9 @@ test("walks out of the town into the world, drawn round the player as they go, w
     expect(trip.near).toBe(true);
     expect(trip.dropped).toBeGreaterThan(0);
     expect(trip.mapped).toBe(true);
+    expect(trip.beasts).toBeGreaterThan(0);
+    expect(trip.drawn).toBe(trip.beasts);
+    expect(trip.kinds).toBe(true);
 });
 
 test("once a tap lets it make sound, the music plays on recordings of real instruments", async ({ page }) => {
