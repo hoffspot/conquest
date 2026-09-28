@@ -146,7 +146,7 @@ const EMBERS = 5;
 const VISITS = Object.freeze({ every: 0.5, budget: 6 });
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn"]);
 
 const _focus = new THREE.Vector3();
 const _lean = new THREE.Vector3();
@@ -171,8 +171,12 @@ export class Game {
      * @param {Host} [options.host] - The world's host (core/host.js): made here if not given
      *     (playing alone), with the player joining it.
      * @param {string} [options.me] - The player's id in it.
+     * @param {object} [options.war] - The world's war as it was kept (save.js loadWorld), for a
+     *     host made here to carry on from.
+     * @param {Function} [options.onWar] - Hears the war (core/war/war.js) after each of its
+     *     turns (to keep it).
      */
-    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, host = null, me = HOST_PLAYER }) {
+    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {} }) {
         this.view = view;
         this.kit = kit;
         this.sound = sound;
@@ -183,7 +187,8 @@ export class Game {
         // The world (the host's: made here, playing alone), this game's player in it (by id,
         // come in before the world's own people), and the battle as the host has it
         this.me = me;
-        this.host = host ?? new Host(world, { populate: false });
+        this.host = host ?? new Host(world, { populate: false, war });
+        this.onWar = onWar;
         this.host.join({ id: me, hero, talks, explored });
         this.host.populate();
         this.battle = this.host.battle;
@@ -1761,6 +1766,10 @@ export class Game {
                     this.#explored();
                 }
 
+                break;
+            case "turn":
+                // (The war kept as it goes)
+                this.onWar(this.host.war);
                 break;
             default:
                 break;

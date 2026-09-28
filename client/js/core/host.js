@@ -2,7 +2,8 @@
 //
 // Whatever changes the world happens here, and nowhere else: the battle (battle.js) and who's in
 // it; the players, however many there are, each by an id of their own; which buildings' insides
-// are made and peopled, for whoever's near them; and, from later on, the war between the realms.
+// are made and peopled, for whoever's near them; and the war between the realms (war/war.js),
+// moving on as they play.
 // A player's game (app/game.js) only shows the world and sends what its player does as a command
 // (`command(playerId, command)`), checked here before anything's done: so a player on another
 // machine can later do just the same, their commands coming over the wire (core/wire.js).
@@ -16,6 +17,7 @@
 import { Battle, hostile, TALK_REACH } from "./battle.js";
 import { Explored } from "./explored.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
+import { War } from "./war/war.js";
 import { distanceBetween } from "./weapons.js";
 
 /** The id of the player whose game the world runs in (the only one, playing alone). */
@@ -61,10 +63,15 @@ export class Host {
      * @param {number} [options.seed] - Seeds the battle (the world's own seed to start with).
      * @param {boolean} [options.populate] - Whether the world's own people (the orc, the
      *     tavern's folk) are put in now; else by `populate()`, after whoever joins first.
+     * @param {object} [options.war] - The war as it was kept (War snapshot), to carry on from;
+     *     else it starts afresh (in a world with a plan: buildWorld's).
      */
-    constructor(world, { seed = world.seed ?? 1, populate = true } = {}) {
+    constructor(world, { seed = world.seed ?? 1, populate = true, war = null } = {}) {
         this.world = world;
         this.battle = new Battle(world, { seed });
+
+        /** The war between the peoples (war/war.js), in a world laid out from a plan. */
+        this.war = world.plan ? Host.#war(world.plan, war) : null;
 
         /**
          * The players, by id: { id, hero (their character: { name, shape, look, weapon, boots,
@@ -90,6 +97,16 @@ export class Host {
 
         if (populate) {
             this.populate();
+        }
+    }
+
+    // The war, carried on from how it was kept if it can be (a save from another version, or
+    // another world, starts afresh)
+    static #war(plan, kept) {
+        try {
+            return kept?.seed === (plan.seed ?? 1) ? War.restore(plan, kept) : new War(plan);
+        } catch {
+            return new War(plan);
         }
     }
 
@@ -238,12 +255,25 @@ export class Host {
     }
 
     /**
-     * Advance the world by `ms` (the battle's whole steps: battle.js advance). Returns what
-     * happened: the battle's events, and the host's own ("join", "leave", "open", "close",
-     * "explored", "talk", "effect").
+     * Advance the world by `ms` (the battle's whole steps: battle.js advance; the war's turns).
+     * Returns what happened: the battle's events, and the host's own ("join", "leave", "open",
+     * "close", "explored", "talk", "effect"; "war", with each of the war's events, and "turn",
+     * once each of its turns is over).
      */
     advance(ms) {
         const events = this.battle.advance(ms);
+
+        if (this.war) {
+            const turn = this.war.turn;
+
+            for (const event of this.war.advance(ms)) {
+                this.#event("war", { event });
+            }
+
+            if (this.war.turn !== turn) {
+                this.#event("turn", { turn: this.war.turn });
+            }
+        }
 
         for (const event of events) {
             // A player into a building: it's ready (if it wasn't), and the first time in, it's
@@ -295,6 +325,7 @@ export class Host {
             open: [...this.open.keys()],
             lookAt: this.lookAt,
             battle: this.battle.snapshot(),
+            war: this.war?.snapshot() ?? null,
             players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, ...this.characterOf(player) })),
             done: structuredClone(this.done),
         };
@@ -309,7 +340,7 @@ export class Host {
             throw new Error(`A world kept by another version of the game (${snapshot.version})`);
         }
 
-        const host = new Host(world, { seed: snapshot.battle.seed, populate: false });
+        const host = new Host(world, { seed: snapshot.battle.seed, populate: false, war: snapshot.war });
 
         for (const key of snapshot.made) {
             if (host.#building(key)) {

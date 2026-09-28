@@ -36,10 +36,11 @@ export async function createSession({ canvas, quality, sound = true, volumes, fe
 /**
  * A new game in the world of `seed` (the whole world, laid out from its plan, with the town set
  * in where a human starts), for a hero: { name, shape, look, weapon } (and what's kept of it: its
- * talks and what it's found, and who hears of them; and who opens the world map).
+ * talks and what it's found, and who hears of them; the world's war as it was kept, and who
+ * hears of it; and who opens the world map).
  */
-export function createGame({ view, kit, sound, hud, hero, seed, talks, onTalk, explored, onExplore, onWorldMap }) {
+export function createGame({ view, kit, sound, hud, hero, seed, talks, onTalk, explored, onExplore, onWorldMap, war, onWar }) {
     const world = buildWorld({ seed });
 
-    return new Game({ view, kit, sound, world, hero, hud, talks, onTalk, explored, onExplore, onWorldMap });
+    return new Game({ view, kit, sound, world, hero, hud, talks, onTalk, explored, onExplore, onWorldMap, war, onWar });
 }

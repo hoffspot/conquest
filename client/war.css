@@ -1,0 +1,125 @@
+/* The war (war.html): the world map's page (world-map.css), with the realms, how they stand with
+   each other, and the news of the war in its panel. */
+
+:root {
+    --panel-width: 380px;
+    --allied: #4caf6e;
+    --neutral: #56606b;
+    --hostile: #d9453a;
+    --vassal: #9b6ad6;
+}
+
+#panel button[aria-pressed="true"] {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--accent-text);
+}
+
+#might {
+    flex: 1;
+    min-width: 120px;
+}
+
+#mightvalue {
+    min-width: 1.5em;
+    font-weight: 600;
+    text-align: right;
+}
+
+.realms {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.realms li {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 2px 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel-raised);
+}
+
+.realms li.fallen {
+    opacity: 0.5;
+}
+
+.realms .swatch {
+    grid-row: span 3;
+    margin-top: 3px;
+}
+
+.realms strong {
+    font-weight: 600;
+}
+
+.realms .leader,
+.realms .holds {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.relations {
+    border-collapse: collapse;
+    margin-bottom: 8px;
+    font-size: 12px;
+}
+
+.relations th {
+    padding: 2px 4px;
+    font-weight: 600;
+    color: var(--muted);
+}
+
+.relations td {
+    width: 44px;
+    height: 26px;
+    border: 1px solid var(--background);
+    text-align: center;
+    color: #fff;
+}
+
+.relations td.allied {
+    background: var(--allied);
+}
+
+.relations td.neutral {
+    background: var(--neutral);
+}
+
+.relations td.hostile {
+    background: var(--hostile);
+}
+
+.relations td.vassal,
+.relations td.overlord {
+    background: var(--vassal);
+}
+
+.relations td.unknown,
+.relations td.self {
+    background: transparent;
+    color: var(--muted);
+}
+
+.news {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0 0 0 2.6em;
+    font-size: 13px;
+}
+
+.news li::marker {
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.news li.big {
+    font-weight: 600;
+    color: var(--accent);
+}

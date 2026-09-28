@@ -191,7 +191,7 @@ The engine is built for this from the start. These are its rules:
 | | | |
 | --- | --- | --- |
 | **M0** | Built | The engine made ready for other players: the host, players by id, commands, snapshots, pausing only when alone. This file. |
-| **M1** | | The war on its own: realms, towns, garrisons, treasuries, turns, expeditions, camps, raids, conquest and vassals, relations and diplomats, as numbers. A page to watch it play out. |
+| **M1** | Built | The war on its own: realms, towns, garrisons, treasuries, turns, expeditions, camps, raids, conquest and vassals, relations and envoys, as numbers. A page to watch it play out. |
 | **M2** | | The war in the world: banners over the towns, guards and patrols of each people, hostility by relations, the war's forces brought to life near the player. |
 | **M3** | | Growing stronger: skills that grow by use along their trees, gear, gold, a pack, shops. |
 | **M4** | | The player's people: the keep and town halls, the rulers' requests, a journal, ranks. |
@@ -204,6 +204,124 @@ The engine is built for this from the start. These are its rules:
 | **M11** | | Hop in, hop out: other players joining a running world. |
 
 ## What's built
+
+### The war (core/war)
+
+The war is played out as numbers (`War`, `core/war/war.js`), from the world's plan, a turn every
+minute of play (`TURN_MS`). Everything in it is plain data with seeded random numbers:
+`war.snapshot()` and `War.restore(plan, snapshot)` carry on from where it was, the same every time
+for a seed. A turn takes a millisecond or two.
+
+**The realms.** Each people's realm holds:
+- its **capital**, where its rulers sit (its `seat`);
+- its **leader**, with a name, a title and traits (`peoples.js`). Each trait is rolled about the
+  people's temperament: orcs warlike, elves slow to anger and slow to forget, dark elves scheming,
+  cat folk proud and greedy, lizard folk patient, humans steady. `describeLeader` says what's
+  marked about a leader, for rumours;
+- its **treasury** (60 gold to start with), and its **standing** with each other realm (grudges
+  and favours, fading a little every turn, more slowly the more the leader holds a grudge);
+- its **overlord**, once it's been brought under another. A vassal of a vassal serves the top
+  one.
+
+**The towns.** The plan's capitals, cities, towns and villages are fought over (`HOLDINGS`).
+Hamlets and farmsteads go with the town nearest them (`holdingAt`).
+
+| | Garrison when full | Taxes a turn | Walls | Patrols (from M2) |
+| --- | --- | --- | --- | --- |
+| Capital | 40 | 6 | ×1.6 | 3 |
+| City | 24 | 4 | ×1.35 | 2 |
+| Town | 12 | 2 | ×1.15 | 1 |
+| Village | 5 | 1 | ×1 | 1 |
+
+**The ages of the war** (`STAGES`) say what can be taken, how big an expedition can be, and how
+many forces each realm can have out:
+
+| Age | Comes with might | What can be taken | Biggest expedition | Forces out |
+| --- | --- | --- | --- | --- |
+| An uneasy peace | 0 | Nothing: camps only raid | 8 | 1 |
+| Border wars | 2 | Villages | 16 | 2 |
+| War | 4 | Villages, towns and cities | 30 | 3 |
+| Conquest | 6 | Capitals too | 60 | 4 |
+
+The next age comes with the strongest player's **might** (`war.setMight`, 0 to 8: from their
+skills, gear and followers, from M3), or after 90 turns each (an hour and a half of play) whatever.
+It never goes back. So a player has an hour and a half before a village can be taken, and far
+longer before a capital can.
+
+**Each turn:**
+1. **The age** moves on, if it's time.
+2. **Meeting.** Peoples whose towns or forces come within 1.5 km of each other meet (neutral to
+   start with).
+3. **Taxes and keep.** Every town pays its holder, unless it was raided this turn or last. A
+   vassal pays half of it to its liege. Every soldier costs 0.1 gold a turn. A realm that can't pay
+   loses a twentieth of each garrison.
+4. **Grudges and favours** fade.
+5. **Each liege's rulers decide**, for their realm and its vassals:
+   - **Garrisons:** fill them up (five a town at most), the seat first, then those threatened,
+     keeping gold back for the troops' keep and, at war, for the war.
+   - **Envoys** (one out at a time, 10 gold), to the other ruler's seat:
+     - to sue for peace in a war going badly (the more cautious, the sooner);
+     - to part an enemy from its ally;
+     - to win over a neutral against a shared enemy (the more loyal, the likelier).
+   - **War**, on a neutral they think they can beat or bear a grudge against. It's likelier the
+     more warlike and greedy the ruler, the further the war's come, and the longer it's gone on.
+     Its allies may join in against them. Once there's no one else to fight, the greedy and warlike
+     may break with their allies.
+   - **Relief** for their own or an ally's town with an enemy camp outside it stronger than its
+     garrison.
+   - **Expeditions** against the enemy's weakest near town. They go for one of their camps
+     already outside first, to reinforce it, then for the enemy's seat, once it can be taken and
+     they're strong enough. Each is as big as it takes, and as the age and the treasury allow
+     (5 gold a soldier).
+6. **The march.** Forces go along the roads (`roads.js`), or across country where there's none
+   (counting 1.8 times as long): 250 m a turn, envoys 400. An expedition within 350 m of its
+   target camps there, or joins its people's camp there.
+7. **The camps.** Each turn a camp does one of these:
+   - Is **sallied out** against by a garrison much stronger than it.
+   - **Storms** its town, if the age allows it, it's sat there 3 turns (`SIEGE`), and it's strong
+     enough for its ruler's taste. The fight goes round by round, the defenders' walls counting
+     for them, until one side's gone or the attack breaks.
+   - Otherwise it may **raid**: a few of its soldiers out against the town's fields, killing a few
+     of its guard and stopping its taxes.
+8. **Envoys** passing an enemy's forces may be **waylaid**.
+9. **Vassals** that have served 60 turns may **rise** against their overlord: rarely, and likelier
+   the stronger they are beside them, the more they resent them, and the harder pressed they are.
+10. **The reckoning.** A people whose every rival serves it has **won**; play goes on. A rising
+    can undo it.
+
+**A town taken** is the attacker's: its garrison is what's left of their camp, and its folk stay
+under their new rulers. **A realm's seat taken** makes it the taker's liege's **vassal**, with any
+realms that served it:
+- it gets a new ruler, and rules from its seat again (its seat is given back to it);
+- its own dealings end: its liege's friends and enemies are its own;
+- its forces fight for its liege.
+
+**Relations** (`war.relation(a, b)`): `self`, `overlord`, `vassal`, `unknown`, or, as their lieges
+stand, `allied`, `neutral` or `hostile`. Realms under the same liege are allied. `hostile` and
+`friendly` answer the question the world will ask (from M2): will these two fight?
+
+**From the world** (from M2 and M6):
+- `war.loss(id, count)`: losses in fights played out near a player;
+- `war.remember(realm, about, amount)`: grudges and favours earned by players.
+
+**The news** (`news.js` `tell`): every event in words, "The Orcs have declared war on the
+Humans.", for the war page now and the taverns later.
+
+**In the game** the host keeps the war (`host.war`) and moves it on as the world's played. Its
+events come as the host's `war` events, and a `turn` event after each turn. The war is kept with
+the saved world, apart from the character (`save.js` `loadWorld`, `saveWorld`), and made again
+from it the next time. Nothing in the world shows it yet (M2).
+
+**The war page** (`war.html`, `lab/war.js`) plays the war out on a world's map:
+- every town in the colour of whoever holds it, ringed in its builders' colour if it's been taken,
+  with its garrison beside it;
+- the forces out: shields for expeditions and relief, with the way they're going; tents for camps;
+  scrolls for envoys;
+- each realm, its ruler, what they're like, what it holds and its gold;
+- how each stands with each other, and the news.
+
+Play it a turn at a time or faster, and turn the players' might up to bring the next age on.
+`?seed=N&might=M` chooses the world and the might.
 
 ### The host (core/host.js)
 

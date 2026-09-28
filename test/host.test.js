@@ -7,6 +7,7 @@ import { before, describe, it } from "node:test";
 import { Battle, STEP_MS } from "../client/js/core/battle.js";
 import { HOST_PLAYER, Host, RELEVANCE } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
+import { TURN_MS, War } from "../client/js/core/war/war.js";
 import { createRandom } from "../client/js/core/random.js";
 import { Variety } from "../client/js/core/variety.js";
 import { decode, encode } from "../client/js/core/wire.js";
@@ -298,6 +299,36 @@ describe("the host (host.js)", () => {
         assert.deepEqual(theirs, ours);
         assert.equal(stateOf(again), stateOf(host));
         assert.equal(again.players.get("guest").explored.hasEntered(building.key), true);
+    });
+
+    it("moves the war on as the world's played, a turn at a time, kept with the world", () => {
+        const host = hosted();
+
+        host.war.setMight(8);
+
+        const events = run(host, TURN_MS * 2);
+        const turns = events.filter(({ type }) => type === "turn").map(({ turn }) => turn);
+        const war = events.filter(({ type }) => type === "war").map(({ event }) => event);
+
+        assert.deepEqual(turns, [1, 2]);
+        assert.ok(war.some(({ type }) => type === "stage"), "(its events among the host's)");
+
+        // Kept with the world, and carried on from
+        const again = Host.restore(buildWorld({ seed: 2 }), decode(encode(host.snapshot())));
+
+        assert.equal(encode(again.war.snapshot()), encode(host.war.snapshot()));
+        host.war.step();
+        again.war.step();
+        assert.equal(encode(again.war.snapshot()), encode(host.war.snapshot()));
+
+        // (A war kept for another world, or by another version, starts afresh)
+        const fresh = new Host(buildWorld({ seed: 2 }), { war: { ...host.war.snapshot(), seed: 99 } });
+
+        assert.equal(fresh.war.turn, 0);
+        assert.equal(new Host(buildWorld({ seed: 2 }), { war: { ...host.war.snapshot(), version: 0 } }).war.turn, 0);
+        assert.equal(new Host(buildWorld({ seed: 2 }), { war: host.war.snapshot() }).war.turn, 3);
+        assert.ok(fresh.war instanceof War);
+        assert.equal(new Host(generateWorld({ seed: 2 })).war, null, "(a town on its own has no war)");
     });
 
     it("won't carry on from a world kept by another version of the game", () => {
