@@ -389,7 +389,7 @@ test("blows leave wounds of their weapon's kind, worse below each threshold, wit
         const worst = game.wounds.get(standing.id).stage;
 
         // (A little better by the time it lands, so it takes them back above half)
-        battle.cast(standing.id, "heal");
+        battle.cast(standing.id, "vigor");
         standing.hp = Math.round(standing.maxHp * 0.4);
         game.advance(1);
 
@@ -2153,7 +2153,7 @@ test("the pack stacks things alike: dragged together, split by how many, held fo
     await cell(0).click();
     await pack.getByRole("button", { name: "Put on a wheel: Healing draught" }).click();
     await expect(page.locator("#banner")).toHaveText("Draught put on your own wheel one, at NE.");
-    expect(await page.evaluate(() => window.pellagos.game.wheels.self[0])).toEqual({ n: "heal", ne: "item:potion" });
+    expect(await page.evaluate(() => window.pellagos.game.wheels.self[0])).toEqual({ n: "vigor", ne: "item:potion" });
 
     // The two thrown away, and taken back
     await cell(2).click();
@@ -2432,7 +2432,7 @@ test("the minimap walks the player where it's tapped, and Game options turn it a
     await expect(page.locator("#musicvolume")).toHaveValue("60");
 });
 
-test("holding on an enemy or the player opens the action wheel: flick up (N) to stun it, or to heal", async ({ page }) => {
+test("holding on an enemy or the player opens the action wheel: flick left (W) to stun it, or up (N) to heal", async ({ page }) => {
     // (Held three times, with the world played on between: more than the usual time, with others
     // running beside it)
     test.setTimeout(180000);
@@ -2440,6 +2440,7 @@ test("holding on an enemy or the player opens the action wheel: flick up (N) to 
 
     const wheel = page.locator(".action-wheel");
     const up = wheel.locator('.slice[data-direction="n"]');
+    const left = wheel.locator('.slice[data-direction="w"]');
 
     // The orc standing a few squares from the player, who's hurt
     const orcAt = await page.evaluate(() => {
@@ -2466,6 +2467,10 @@ test("holding on an enemy or the player opens the action wheel: flick up (N) to 
         await page.mouse.move(x, y - 25, { steps: 2 });
         await page.mouse.move(x, y - 60, { steps: 2 });
     };
+    const flickLeft = async ({ x, y }) => {
+        await page.mouse.move(x - 25, y, { steps: 2 });
+        await page.mouse.move(x - 60, y, { steps: 2 });
+    };
     // Play on without drawing, then carry on
     const playOn = (seconds) => page.evaluate((seconds) => {
         const { game } = window.pellagos;
@@ -2475,27 +2480,28 @@ test("holding on an enemy or the player opens the action wheel: flick up (N) to 
         game.start();
     }, seconds);
 
-    // Held on the orc: its wheel's eight slices, with Stun at the top, S to turn it over, and the
-    // rest empty
+    // Held on the orc: its wheel's eight slices, the four elements' first spells round the top
+    // (Burn at N), Stun at W, S to turn it over, and the rest empty
     await hold(orcAt);
-    await expect(up.locator(".label")).toHaveText("Stun");
+    await expect(up.locator(".label")).toHaveText("Burn");
+    await expect(left.locator(".label")).toHaveText("Stun");
     await expect(wheel.locator(".slice")).toHaveCount(8);
     await expect(wheel.locator('.slice.flip[data-direction="s"] .label')).toHaveText("Wheel 2");
-    await expect(wheel.locator(".slice.empty")).toHaveCount(6);
-    await flickUp(orcAt);
+    await expect(wheel.locator(".slice.empty")).toHaveCount(2);
+    await flickLeft(orcAt);
     await page.mouse.up();
     await playOn(0.6);
 
     const stunned = await page.evaluate(() => {
         const { battle } = window.pellagos.game;
 
-        return { stunned: battle.actor("orc").stunnedUntil > battle.time, cooldown: battle.cooldown("player") };
+        return { stunned: battle.actor("orc").stunnedUntil > battle.time, cooldown: battle.cooldown("player", "stun") };
     });
 
     expect(stunned.stunned).toBe(true);
     expect(stunned.cooldown).toBeGreaterThan(0.5);
 
-    // Held on the player while spells cool down: Heal greyed over, and a flick at it refused. (The
+    // Held on the player while spells cool down: Vigor greyed over, and a flick at it refused. (The
     // game plays on in real time meanwhile, so the cooldown's started again, not to run out first.)
     const meAt = await page.evaluate(() => {
         const { game, session } = window.pellagos;
@@ -2507,7 +2513,7 @@ test("holding on an enemy or the player opens the action wheel: flick up (N) to 
     });
 
     await hold(meAt);
-    await expect(up.locator(".label")).toHaveText("Heal");
+    await expect(up.locator(".label")).toHaveText("Vigor");
     await expect(up).toHaveClass(/cooling/);
     expect(await up.locator(".cooldown").getAttribute("d")).not.toBe("");
     await flickUp(meAt);
@@ -2515,7 +2521,7 @@ test("holding on an enemy or the player opens the action wheel: flick up (N) to 
     await page.mouse.up();
     expect(await page.evaluate(() => window.pellagos.game.battle.actor("player").casting)).toBeNull();
 
-    // Once it's over, the flick heals, by 10 to 20
+    // Once it's over, the flick heals, by 8 to 12
     await playOn(3);
     await hold(meAt);
     await expect(up).not.toHaveClass(/cooling/);
@@ -2525,8 +2531,8 @@ test("holding on an enemy or the player opens the action wheel: flick up (N) to 
 
     const hp = await page.evaluate(() => window.pellagos.game.battle.actor("player").hp);
 
-    expect(hp).toBeGreaterThanOrEqual(30);
-    expect(hp).toBeLessThanOrEqual(40);
+    expect(hp).toBeGreaterThanOrEqual(28);
+    expect(hp).toBeLessThanOrEqual(32);
 });
 
 test("the action wheels: flicked down, the other side; what's on each chosen in Game options, from what's learnt and carried; a draught drunk from wheel two", async ({ page }) => {
@@ -2536,30 +2542,30 @@ test("the action wheels: flicked down, the other side; what's on each chosen in 
     const menu = page.locator("#menu");
     const setup = page.locator("#wheelsetup");
 
-    // Two draughts in the pack, and the greater heal learnt; the player hurt
+    // Two draughts in the pack, and Healing's second spell come to; the player hurt
     await page.evaluate(() => {
         const { game } = window.pellagos;
         const progress = game.host.players.get(game.me).progress;
 
         progress.stow({ id: "potion" });
         progress.stow({ id: "potion" });
-        progress.skills.healing = 300;
+        progress.schools.healing = 300;
         game.battle.actor(game.me).hp = 20;
     });
 
-    // Game options, Action wheels: the player's own, wheel one, with Heal at N
+    // Game options, Action wheels: the player's own, wheel one, with Vigor at N
     await page.locator("#menubutton").click();
     await page.locator("#optionsbutton").click();
     await page.locator("#wheelsbutton").click();
     await expect(menu.locator("#wheelstitle")).toBeVisible();
     await expect(setup.locator('.wheels-tab[aria-selected="true"]')).toHaveText(["Yourself", "Wheel one"]);
-    await expect(setup.locator('.slice[data-direction="n"] .label')).toHaveText("Heal");
+    await expect(setup.locator('.slice[data-direction="n"] .label')).toHaveText("Vigor");
 
-    // What can go on it: nothing, Heal, the greater heal learnt, and the draughts carried; a
-    // foe's has Stun, and no draughts
-    await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Heal", "Greater heal", "Draught"]);
+    // What can go on it: nothing, the healing spells known, and the draughts carried; a foe's
+    // has those, the elements' spells and Stun, and no draughts
+    await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Draught"]);
     await setup.getByRole("tab", { name: "A foe" }).click();
-    await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Stun"]);
+    await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Burn", "Rumble", "Hurt", "Blister", "Stun"]);
     await setup.getByRole("tab", { name: "Yourself" }).click();
 
     // A draught at NE of wheel two (tapping S turns it over, as flicking it does)
@@ -2570,7 +2576,7 @@ test("the action wheels: flicked down, the other side; what's on each chosen in 
     await setup.locator('.wheels-choice[data-action="item:potion"]').click();
     await expect(setup.locator('.slice[data-direction="ne"] .label')).toHaveText("Draught");
     await expect(setup.locator('.slice[data-direction="ne"] .count')).toHaveText("2");
-    expect(await page.evaluate(() => window.pellagos.game.wheels.self)).toEqual([{ n: "heal" }, { ne: "item:potion" }]);
+    expect(await page.evaluate(() => window.pellagos.game.wheels.self)).toEqual([{ n: "vigor" }, { ne: "item:potion" }]);
 
     // Escape goes back a page, and again; then the game
     await page.keyboard.press("Escape");

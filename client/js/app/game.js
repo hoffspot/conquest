@@ -44,7 +44,7 @@ import { GODS } from "../core/lore/gods.js";
 import { BECKON, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js";
 import { squaresOf } from "../core/grid.js";
 import { GROUND } from "../core/setpieces/pieces.js";
-import { CAST_FAILURES, lookOf, SPELLS } from "../core/spells.js";
+import { CAST_FAILURES, lookOf, SCHOOLS, SPELLS } from "../core/spells.js";
 import { Variety } from "../core/variety.js";
 import { distanceBetween, longestReach, weaponOf, WEAPONS } from "../core/weapons.js";
 import { Avatar } from "../world/avatar.js";
@@ -69,7 +69,7 @@ import { itemPicture } from "./icons.js";
 import { JournalPanel, bearing, regardOf } from "./journal.js";
 import { PackPanel } from "./pack.js";
 import { TalkPanel } from "./talk.js";
-import { ActionWheel, actionOf, assignable, directionOf, PLACES, readWheels, SIDES, WHEELS } from "./wheel.js";
+import { ActionWheel, actionOf, assignable, directionOf, forFriends, PLACES, readWheels, SIDES, WHEELS } from "./wheel.js";
 
 /** What every new character wears; their weapon (and a bow's quiver) are added to it. */
 export const STARTING_OUTFIT = Object.freeze(["tunic", "bracers", "breeches", "boots"]);
@@ -267,8 +267,12 @@ const SPILLS = Object.freeze({
     rockTusker: ["stoneChips", "dust"],
 });
 
+// How each school's spells look for now (effects.js LOOKS): healing as healing, the elements as
+// the fire and light bolts are
+const SPELL_LOOKS = Object.freeze({ fire: "fireball", earth: "roots", air: "bolt", water: "bolt" });
+
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "rank", "loot", "bought", "sold", "used", "gear", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "gift", "counsel", "trade"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "rank", "loot", "bought", "sold", "used", "gear", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "gift", "counsel", "trade", "tier"]);
 
 const _focus = new THREE.Vector3();
 const _lean = new THREE.Vector3();
@@ -1126,7 +1130,7 @@ export class Game {
         // Light gathers in the hand of anyone casting a spell
         for (const actor of battle.actors) {
             if (actor.casting && this.avatars.has(actor.id) && Math.random() < dt * 30) {
-                this.effects.charge(lookOf(actor.casting.spell), this.avatars.get(actor.id).hand("Left"), this.casting.get(actor.id) ?? 0);
+                this.effects.charge(lookOf(actor.casting.spell) === "heal" ? "heal" : "stun", this.avatars.get(actor.id).hand("Left"), this.casting.get(actor.id) ?? 0);
             }
         }
 
@@ -2860,7 +2864,7 @@ export class Game {
                     break;
                 case "cast": {
                     const spell = SPELLS[event.spell];
-                    const kind = lookOf(event.spell);
+                    const kind = SPELL_LOOKS[lookOf(event.spell)] ?? lookOf(event.spell);
                     const look = this.#look(event.id, kind);
 
                     // (Gathering in the hand, and landing on whom it's cast on, in the same look)
@@ -2868,7 +2872,7 @@ export class Game {
                     this.landing.set(event.target, look);
 
                     avatar.actions.startAttack(kind === "heal" ? "castHeal" : "castStun", { hitAt: spell.castTime / 1000, duration: (spell.castTime / 1000) * 1.7 });
-                    this.sound?.play(kind === "heal" ? "castHeal" : "bolt", { at: avatar.object.position });
+                    this.sound?.play(kind === "heal" ? "castHeal" : kind === "fireball" ? "fireball" : "bolt", { at: avatar.object.position });
                     break;
                 }
                 case "healed": {
@@ -3140,6 +3144,15 @@ export class Game {
                 break;
             case "trade":
                 this.#traded(event);
+                break;
+            case "tier":
+                // (A school of magic come to its next tier: its spell known now, and kept)
+                if (event.id === this.me) {
+                    this.hud.message(`${SCHOOLS[event.school].label}: you can cast ${SPELLS[event.spell].label} now! Put it on an action wheel (Game options).`, 5);
+                    this.sound?.play("wake");
+                    this.onProgress(this.progress);
+                }
+
                 break;
             default:
                 break;
@@ -3469,8 +3482,9 @@ export class Game {
             canvas.setPointerCapture?.(event.pointerId);
             this.pointers.set(event.pointerId, pointer);
 
-            // Held on the player, an enemy, or a soldier to pick a fight with: the action wheel
-            const who = this.pointers.size === 1 ? this.#whoIsAt(event.clientX, event.clientY, { soldiers: true }) : null;
+            // Held on the player, an enemy, a soldier to pick a fight with, or anyone else (to heal
+            // them): the action wheel
+            const who = this.pointers.size === 1 ? this.#whoIsAt(event.clientX, event.clientY, { soldiers: true, allies: true }) : null;
 
             if (who) {
                 pointer.hold = setTimeout(() => this.#openWheel(pointer, who), HOLD_MS);
@@ -3753,7 +3767,7 @@ export class Game {
     // nearest living enemy, one of the folk, a soldier who isn't an enemy or another player (if `folk`), a soldier
     // of a people not friendly to the player's (if `soldiers`: to pick a fight with), or the
     // player (if `player`); { actor, wheel: "enemy", "talk", "provoke" or "self" }
-    #whoIsAt(clientX, clientY, { player: withPlayer = true, folk = false, soldiers = false } = {}) {
+    #whoIsAt(clientX, clientY, { player: withPlayer = true, folk = false, soldiers = false, allies = false } = {}) {
         const player = this.battle.actor(this.me);
         let best = null;
         let bestDistance = PICK_RADIUS;
@@ -3769,7 +3783,8 @@ export class Game {
             const talks = actor.neutral || actor.kind === "soldier" || actor.kind === "player" || (actor.kind === "follower" && this.host.followers.get(actor.id)?.leader === this.me);
             const provokes = actor.kind === "soldier" && !enemy && this.host.canFight(player, actor);
 
-            if (actor.dead || (mine && !withPlayer) || (!mine && !enemy && !(folk && talks) && !(soldiers && provokes)) || actor.map !== player.map || !this.avatars.has(actor.id)) {
+            // (Anyone else who isn't an enemy, `allies`: to heal them)
+            if (actor.dead || (mine && !withPlayer) || (!mine && !enemy && !(folk && talks) && !(soldiers && provokes) && !allies) || actor.map !== player.map || !this.avatars.has(actor.id)) {
                 continue;
             }
 
@@ -3781,7 +3796,7 @@ export class Game {
 
                 // (Enemies first, where they and the player overlap)
                 if (distance < bestDistance - (mine ? 6 : 0)) {
-                    best = { actor, wheel: mine ? "self" : enemy ? "enemy" : provokes && soldiers ? "provoke" : "talk" };
+                    best = { actor, wheel: mine ? "self" : enemy ? "enemy" : provokes && soldiers ? "provoke" : allies ? "ally" : "talk" };
                     bestDistance = distance;
                 }
             }
@@ -3813,10 +3828,10 @@ export class Game {
     // A wheel open (or turned over) at a point on the screen: its side's slices, how many of each
     // thing to use there are, which can't be used as things are, and what's cooling down
     #showWheel(open, x, y) {
-        const slots = open.kind === "provoke" ? WHEELS.provoke[0] : (this.wheels[open.kind]?.[open.side] ?? {});
+        const slots = open.kind === "provoke" ? WHEELS.provoke[0] : (this.wheels[open.kind === "ally" ? "self" : open.kind]?.[open.side] ?? {});
         const counts = {};
         const off = [];
-        const learnt = this.progress.abilities();
+        const learnt = [...this.progress.known(), ...this.progress.abilities()];
         const weapon = WEAPONS[this.battle.actor(this.me)?.weapon];
 
         for (const [direction, key] of Object.entries(slots)) {
@@ -3827,8 +3842,11 @@ export class Game {
                 counts[action.item] = this.progress.count(action.item);
             }
 
-            // (A thing all used up; an ability not learnt; a blow for another kind of weapon)
-            if ((action?.item && !counts[action.item]) || (action?.learnt && !learnt.includes(action.learnt)) || (blow && !weapon?.attacks.some(({ kind }) => (kind === "ranged" ? "ranged" : "melee") === blow))) {
+            // (A thing all used up; an ability not learnt; a blow for another kind of weapon; held
+            // on someone else who isn't an enemy, anything but a spell that can be cast on them)
+            const notForThem = open.kind === "ally" && (action?.spell ? !forFriends(action.spell) : Boolean(action));
+
+            if (notForThem || (action?.item && !counts[action.item]) || (action?.learnt && !learnt.includes(action.learnt)) || (blow && !weapon?.attacks.some(({ kind }) => (kind === "ranged" ? "ranged" : "melee") === blow))) {
                 off.push(direction);
             }
         }
@@ -3837,11 +3855,10 @@ export class Game {
         this.wheel.setCooldown(this.#cooldowns(slots));
     }
 
-    // How much of each slice's cooldown is left (0 to 1, by direction): the spells' (all cast
-    // share one), and each blow's own
+    // How much of each slice's cooldown is left (0 to 1, by direction): each spell's (its own, or
+    // the one all share, whichever's longer), and each blow's own
     #cooldowns(slots) {
         const shares = {};
-        const spells = this.battle.cooldown(this.me);
         const readyAt = this.host.players.get(this.me)?.readyAt ?? {};
 
         for (const [direction, key] of Object.entries(slots ?? {})) {
@@ -3849,7 +3866,7 @@ export class Game {
             const cooldown = ABILITIES[action?.ability]?.cooldown;
 
             if (action?.spell) {
-                shares[direction] = spells;
+                shares[direction] = this.battle.cooldown(this.me, action.spell);
             } else if (cooldown) {
                 shares[direction] = Math.max(0, Math.min(1, ((readyAt[action.ability] ?? 0) - this.battle.time) / cooldown));
             }
@@ -3913,7 +3930,7 @@ export class Game {
      * Action wheels options.
      */
     wheelSetup() {
-        const learnt = this.progress.abilities();
+        const learnt = [...this.progress.known(), ...this.progress.abilities()];
         const carries = this.progress.carried();
 
         const counts = Object.fromEntries(Object.keys(ITEMS).map((id) => [id, this.progress.count(id)]));

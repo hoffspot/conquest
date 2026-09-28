@@ -59,16 +59,16 @@ export const WEAPONS = Object.freeze({
     wand: {
         label: "Wand",
         school: "Magic",
-        about: "A crystal-tipped wand. Quick bolts of arcane light, from 7 metres.",
+        about: "A crystal-tipped wand: it makes spells stronger. Its own bolts of light, from 7 metres, are weak.",
         equipment: ["wand"],
-        attacks: [ranged({ id: "bolt", reach: 7, damage: [2, 6], hitAt: 300, duration: 620, interval: 1000, reaction: "arcane", animation: "wand", projectile: { kind: "bolt", speed: 14 } })],
+        attacks: [ranged({ id: "bolt", reach: 7, damage: [1, 3], hitAt: 300, duration: 620, interval: 1000, reaction: "arcane", animation: "wand", projectile: { kind: "bolt", speed: 14 } })],
     },
     grimoire: {
         label: "Grimoire",
         school: "Magic",
-        about: "A book of fire spells. Slow, heavy fireballs, from 7 metres.",
+        about: "A book of spells: it makes them stronger. Its own little fireballs, from 7 metres, are weak.",
         equipment: ["grimoire"],
-        attacks: [ranged({ id: "fireball", reach: 7, damage: [4, 9], hitAt: 720, duration: 1100, interval: 1800, stagger: 250, reaction: "fire", animation: "grimoire", projectile: { kind: "fireball", speed: 9 } })],
+        attacks: [ranged({ id: "fireball", reach: 7, damage: [2, 4], hitAt: 720, duration: 1100, interval: 1800, stagger: 250, reaction: "fire", animation: "grimoire", projectile: { kind: "fireball", speed: 9 } })],
     },
     hammer: {
         label: "War hammer",

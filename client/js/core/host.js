@@ -17,7 +17,8 @@
 import { Battle, FOE_MS, KINDS, TALK_REACH } from "./battle.js";
 import { Explored } from "./explored.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
-import { ABILITIES, alike, ITEMS, priceOf, Progress, QUALITIES, rollLoot, wares, weaponOf, WITH_SHIELD } from "./progress.js";
+import { ABILITIES, alike, ITEMS, priceOf, Progress, QUALITIES, rollBoost, rollLoot, wares, weaponOf, WITH_SHIELD } from "./progress.js";
+import { SPELL_XP, SPELLS } from "./spells.js";
 import { createRandom } from "./random.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
 import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, encounterAt, LAIRS, menaces, packOf, tierPower, WILD } from "./creatures.js";
@@ -594,8 +595,8 @@ export class Host {
             case "stop":
                 return this.#order(actor, { type: "stop" });
             case "cast":
-                // (The greater spells only once they're learnt)
-                if (!["heal", "stun"].includes(command.spell) && !Object.entries(ABILITIES).some(([id, { spell }]) => spell === command.spell && player.progress.abilities().includes(id))) {
+                // (Only the spells they know: their schools' up to their tiers, and those learnt)
+                if (!player.progress.knows(command.spell)) {
                     return refuse("unknown");
                 }
 
@@ -1017,6 +1018,13 @@ export class Host {
         }
     }
 
+    // A school of magic grows (by `amount`): each tier it comes to, its spell told of ("tier")
+    #school(player, school, amount) {
+        for (const spell of player.progress.growSchool(school, amount)) {
+            this.#event("tier", { id: player.id, school, spell, tier: SPELLS[spell].tier });
+        }
+    }
+
     // What happened in the battle, for the players' skills: blows landed (up close, from afar)
     // and taken, heals, stuns, running out of breath; and what's on those they fell
     #learn(event) {
@@ -1048,18 +1056,31 @@ export class Host {
 
         switch (event.type) {
             case "hit":
-                this.#gain(by, event.projectile === null ? "blade" : "marksman", event.damage);
+                // (A spell's: its school grows by it landing, below)
+                if (!event.spell) {
+                    this.#gain(by, event.projectile === null ? "blade" : "marksman", event.damage);
+                }
+
                 this.#gain(own, "endurance", event.damage);
                 break;
-            case "healed":
-                // (Their own spells: not a draught or a room)
-                if (event.spell) {
-                    this.#gain(by, "healing", event.amount);
+            case "spell": {
+                // A spell of a school landing (healing someone, or striking): the school grows,
+                // the more for a spell of a higher tier
+                const spell = SPELLS[event.spell];
+                const caster = this.players.get(event.id);
+
+                if (caster && spell?.school && event.landed > 0) {
+                    this.#school(caster, spell.school, SPELL_XP * spell.tier);
                 }
 
                 break;
+            }
             case "stunned":
-                this.#gain(by, "hexes", XP.stun);
+                // (Stunning with a hex: not a spell of the air's that stuns as it strikes)
+                if (!SPELLS[event.spell]?.school) {
+                    this.#gain(by, "hexes", XP.stun);
+                }
+
                 break;
             case "exhausted":
                 this.#gain(own, "endurance", XP.exhausted);
@@ -1105,7 +1126,7 @@ export class Host {
         const bonus = player.progress.bonuses();
 
         for (const boon of player.boons) {
-            for (const key of ["melee", "ranged", "heal", "stun", "armor"]) {
+            for (const key of ["melee", "ranged", "heal", "stun", "spell", "armor"]) {
                 bonus[key] += boon[key] ?? 0;
             }
         }
@@ -1117,7 +1138,7 @@ export class Host {
             player.hero.weapon = weapon;
         }
 
-        actor.power = { melee: 1 + bonus.melee, ranged: 1 + bonus.ranged, heal: 1 + bonus.heal, stun: 1 + bonus.stun };
+        actor.power = { melee: 1 + bonus.melee, ranged: 1 + bonus.ranged, heal: 1 + bonus.heal, stun: 1 + bonus.stun, spell: 1 + bonus.spell };
         actor.armor = Math.min(0.6, bonus.armor);
 
         const [hp, stamina] = [KINDS.player.hp + bonus.hp, KINDS.player.hp + bonus.stamina];
@@ -1164,13 +1185,16 @@ export class Host {
             return refuse("gold");
         }
 
-        if (!player.progress.stow(item)) {
+        // (A wand or a grimoire: how much it boosts spells is rolled as it's bought, rarely high)
+        const bought = { id: item.id, quality: item.quality ?? "common", ...(ITEMS[item.id].magic ? { boost: rollBoost(this.random) } : {}) };
+
+        if (!player.progress.stow(bought)) {
             return refuse("full");
         }
 
         player.progress.gold -= price;
         this.#gain(player, "trade", price * XP.trade);
-        this.#event("bought", { id: player.id, item: { id: item.id, quality: item.quality ?? "common" }, price, from: trading.keeper.id });
+        this.#event("bought", { id: player.id, item: bought, price, from: trading.keeper.id });
 
         return OK;
     }
@@ -1417,22 +1441,23 @@ export class Host {
         const offered = [];
 
         for (const each of items) {
-            const { id, quality = "common", count } = each ?? {};
+            const { id, quality = "common", count, boost = null } = each ?? {};
 
-            if (!ITEMS[id] || !QUALITIES[quality] || !whole(count) || count < 1) {
+            if (!ITEMS[id] || !QUALITIES[quality] || !whole(count) || count < 1 || (boost !== null && !Number.isFinite(boost))) {
                 return refuse("item");
             }
 
-            const same = offered.find((item) => item.id === id && item.quality === quality);
+            // (A wand or a grimoire: that very one, by its boost)
+            const same = offered.find((item) => item.id === id && item.quality === quality && (item.boost ?? null) === boost);
 
             if (same) {
                 same.count += count;
             } else {
-                offered.push({ id, quality, count });
+                offered.push({ id, quality, count, ...(boost === null ? {} : { boost }) });
             }
         }
 
-        if (offered.some(({ id, quality, count }) => player.progress.held(id, quality) < count)) {
+        if (offered.some(({ id, quality, count, boost = null }) => player.progress.held(id, quality, boost) < count)) {
             return refuse("count");
         }
 
@@ -1496,7 +1521,7 @@ export class Host {
         for (const { id, progress } of both) {
             const { gold, items } = trade.offers[id] ?? { gold: 0, items: [] };
 
-            if (progress.gold < gold || !items.every((item) => progress.remove(item.id, item.count, item.quality))) {
+            if (progress.gold < gold || !items.every((item) => progress.remove(item.id, item.count, item.quality, item.boost ?? null))) {
                 return undo("changed", id);
             }
 

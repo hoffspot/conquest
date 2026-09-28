@@ -182,7 +182,7 @@ describe("saving (save.js)", () => {
         useStorage();
 
         const save = { seed: 12, created: "2026-09-26T10:00:00.000Z" };
-        const wheels = { self: [{ n: "heal", ne: "item:potion" }, { e: "item:ale" }], enemy: [{ n: "stun" }, { w: "hold" }] };
+        const wheels = { self: [{ n: "vigor", ne: "item:potion" }, { e: "item:ale" }], enemy: [{ n: "stun" }, { w: "hold" }] };
 
         assert.equal(loadWheels(save), null);
         assert.equal(saveWheels(save, wheels), true);
@@ -424,14 +424,16 @@ describe("the action wheel (wheel.js, icons.js)", () => {
         assert.ok(path.startsWith("M-67.88,-67.88"), path);
     });
 
-    it("starts with Heal at the top of the player's own wheel, Stun at the top of an enemy's, and Fight on a soldier's of a people not friendly to theirs, each with an icon", () => {
-        assert.deepEqual(WHEELS, { self: [{ n: "heal" }, {}], enemy: [{ n: "stun" }, {}], provoke: [{ n: "fight" }] });
-        assert.deepEqual(readWheels(null), { self: [{ n: "heal" }, {}], enemy: [{ n: "stun" }, {}] });
+    it("starts with Vigor at the top of the player's own wheel, the elements' first spells and Stun on an enemy's, and Fight on a soldier's of a people not friendly to theirs, each with an icon", () => {
+        const enemy = { n: "burn", ne: "hurt", nw: "rumble", e: "blister", w: "stun" };
+
+        assert.deepEqual(WHEELS, { self: [{ n: "vigor" }, {}], enemy: [enemy, {}], provoke: [{ n: "fight" }] });
+        assert.deepEqual(readWheels(null), { self: [{ n: "vigor" }, {}], enemy: [enemy, {}] });
 
         for (const [id, action] of Object.entries(ACTIONS)) {
             assert.ok(SPELLS[action.spell] || ABILITIES[action.ability] || action.order === "engage", id);
             assert.equal(typeof action.label, "string");
-            assert.ok(["self", "enemy", "provoke"].includes(action.on), id);
+            assert.ok(["self", "any", "friend", "enemy", "provoke"].includes(action.on), id);
             assert.match(ICONS[id], /<(path|circle|ellipse)/, `${id} has an icon`);
         }
 
@@ -441,7 +443,8 @@ describe("the action wheel (wheel.js, icons.js)", () => {
         // Green for healing; gold stars for a stun
         assert.match(ICONS.heal, /url\(#icon-heal-cross\)/);
         assert.match(ICONS.stun, /url\(#icon-stun-star\)/);
-        assert.equal(SPELLS.heal.target, "self");
+        assert.equal(SPELLS.vigor.target, "any", "healing: on anyone");
+        assert.equal(SPELLS.burn.target, "enemy");
         assert.equal(SPELLS.stun.target, "enemy");
     });
 
@@ -455,20 +458,25 @@ describe("the action wheel (wheel.js, icons.js)", () => {
         assert.equal(actionOf("item:sword"), null, "gear isn't used from a wheel");
         assert.equal(actionOf("item:nonsense"), null);
         assert.equal(iconOf("item:meal"), ITEM_ICONS.meal);
-        assert.equal(iconOf("heal"), ICONS.heal);
+        assert.equal(iconOf("vigor"), ICONS.vigor);
+        assert.equal(iconOf("heal"), ICONS.vigor, "a spell by the name it had before");
     });
 
-    it("offers each wheel what goes on it: Heal and Stun from the start, the rest once learnt, and the things to use carried", () => {
-        assert.deepEqual(assignable("self"), ["heal"]);
-        assert.deepEqual(assignable("enemy"), ["stun"]);
-        assert.deepEqual(assignable("self", { learnt: ["greaterHeal", "powerStrike"], carries: ["potion", "sword", "potion", "ale"] }), ["heal", "greaterHeal", "item:potion", "item:ale"]);
-        assert.deepEqual(assignable("enemy", { learnt: ["greaterHeal", "hold", "powerStrike", "aimedShot"], carries: ["potion"] }), ["stun", "hold", "powerStrike", "aimedShot"]);
+    it("offers each wheel what goes on it: the spells known (healing on either), the blows learnt, and the things to use carried", () => {
+        const starting = ["vigor", "burn", "rumble", "hurt", "blister", "stun"];
+
+        assert.deepEqual(assignable("self"), [], "nothing not known");
+        assert.deepEqual(assignable("self", { learnt: starting }), ["vigor"]);
+        assert.deepEqual(assignable("enemy", { learnt: starting }), ["vigor", "burn", "rumble", "hurt", "blister", "stun"]);
+        assert.deepEqual(assignable("self", { learnt: [...starting, "mendWounds", "powerStrike"], carries: ["potion", "sword", "potion", "ale"] }), ["vigor", "mendWounds", "item:potion", "item:ale"]);
+        assert.deepEqual(assignable("enemy", { learnt: ["mendWounds", "fireball", "hold", "powerStrike", "aimedShot"], carries: ["potion"] }), ["mendWounds", "fireball", "hold", "powerStrike", "aimedShot"]);
     });
 
     it("reads the wheels as kept, keeping only what goes on each wheel, in its seven slices, on two sides", () => {
         const kept = { self: [{ n: "heal", ne: "item:potion", s: "heal", e: "stun", w: "nonsense" }, { nw: "greaterHeal" }, { n: "heal" }], enemy: "nonsense" };
 
-        assert.deepEqual(readWheels(kept), { self: [{ n: "heal", ne: "item:potion" }, { nw: "greaterHeal" }], enemy: [{ n: "stun" }, {}] });
+        // (Heal and Greater heal, as kept before they were renamed: Vigor and Mend Wounds now)
+        assert.deepEqual(readWheels(kept), { self: [{ n: "vigor", ne: "item:potion" }, { nw: "mendWounds" }], enemy: [{ n: "burn", ne: "hurt", nw: "rumble", e: "blister", w: "stun" }, {}] });
         assert.deepEqual(readWheels({ self: [], enemy: [{}, {}] }), { self: [{}, {}], enemy: [{}, {}] });
     });
 

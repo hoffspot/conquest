@@ -6,8 +6,10 @@
 // Each wheel has two sides: flicking S turns it to its other side (wheel two, and back to wheel
 // one), opened again under the finger to flick from there. The player sets what's on each side's
 // other seven slices themselves (Game options, Action wheels: app/wheelsetup.js): for their own
-// wheel ("self"), their healing, and things from their pack to use; for an enemy's, their stuns
-// and blows. What's in each slice is an action (ACTIONS), or a thing to use ("item:potion").
+// wheel ("self": opened on themselves, or held on anyone else who isn't an enemy), their healing,
+// and things from their pack to use; for an enemy's, their attack spells, hexes and blows (and
+// healing: it can be cast on anyone). What's in each slice is an action (ACTIONS), or a thing to
+// use ("item:potion").
 //
 // While a slice's action is cooling down, the slice is greyed out over as much of it as the
 // cooldown has left, sweeping back as it passes. A thing to use shows how many there are.
@@ -15,6 +17,7 @@
 // The wheel is SVG over the game; the game (game.js) follows the finger and says what to do.
 
 import { ITEMS } from "../core/progress.js";
+import { RENAMED, SPELLS } from "../core/spells.js";
 import { ICONS, ITEM_ICONS, useDefs } from "./icons.js";
 
 /** The directions, clockwise from the top, and where each slice's middle points (radians). */
@@ -31,20 +34,31 @@ export const PLACES = Object.freeze(DIRECTIONS.filter((direction) => direction !
 /** How many sides each wheel has. */
 export const SIDES = 2;
 
+// Whose wheel a spell goes on, by who it's cast on (core/spells.js `target`): an enemy's; "any"
+// (either wheel, and a friend's: healing, cures, cast on anyone); "friend" (the player's own, and
+// a friend's: wards); or only the player's own (on themselves, or somewhere, or something, it
+// finds for itself: a fallen enemy to raise, a place to walk to)
+const ON = Object.freeze({ enemy: "enemy", any: "any", friend: "friend" });
+
 /**
- * What each action does: a spell (core/spells.js), an ability (core/progress.js ABILITIES:
- * learnt as the skills grow), or an order (core/host.js command); its label; and whose wheel it
- * goes on (`on`: the player's own, or an enemy's).
+ * What each action does: a spell (core/spells.js: each once they know it), an ability
+ * (core/progress.js ABILITIES: learnt as the skills grow), or an order (core/host.js command); its
+ * label; and whose wheel it goes on (`on`: the player's own ("self"), an enemy's, "any": either,
+ * as healing, which can be cast on anyone, or "friend": the player's own, cast on them or on a
+ * friend held on).
  */
 export const ACTIONS = Object.freeze({
-    heal: { label: "Heal", spell: "heal", on: "self" },
-    greaterHeal: { label: "Greater heal", spell: "greaterHeal", learnt: "greaterHeal", on: "self" },
-    stun: { label: "Stun", spell: "stun", on: "enemy" },
-    hold: { label: "Hold", spell: "hold", learnt: "hold", on: "enemy" },
+    ...Object.fromEntries(Object.entries(SPELLS).map(([id, { label, target }]) => [id, { label, spell: id, learnt: id, on: ON[target] ?? "self" }])),
     powerStrike: { label: "Power strike", ability: "powerStrike", learnt: "powerStrike", on: "enemy" },
     aimedShot: { label: "Aimed shot", ability: "aimedShot", learnt: "aimedShot", on: "enemy" },
     fight: { label: "Fight", order: "engage", on: "provoke" },
 });
+
+// Whether an action goes on a wheel
+const goesOn = (action, wheel) => action?.on === wheel || (action?.on === "any" && SETTABLE.includes(wheel)) || (action?.on === "friend" && wheel === "self");
+
+/** Whether a spell can be cast on a friend (held on them: their wheel is the player's own). */
+export const forFriends = (spell) => ["any", "friend"].includes(SPELLS[spell]?.target);
 
 /** The things to use a wheel shows by a shorter name than their own (core/progress.js ITEMS). */
 const SHORT = { potion: "Draught", meal: "Meal", ale: "Ale" };
@@ -54,6 +68,9 @@ const SHORT = { potion: "Draught", meal: "Meal", ale: "Ale" };
  * order, item, on }, or null for nothing that can be.
  */
 export function actionOf(key) {
+    // (Spells known by other names before: a wheel kept from then)
+    key = RENAMED[key] ?? key;
+
     if (ACTIONS[key]) {
         return ACTIONS[key];
     }
@@ -64,7 +81,7 @@ export function actionOf(key) {
 }
 
 /** A slice's icon (SVG), for what's in it. */
-export const iconOf = (key) => ICONS[key] ?? ITEM_ICONS[actionOf(key)?.item] ?? "";
+export const iconOf = (key) => ICONS[RENAMED[key] ?? key] ?? ITEM_ICONS[actionOf(key)?.item] ?? ICONS[SPELLS[key]?.like] ?? ICONS[SPELLS[key]?.school === "healing" ? "heal" : `school-${SPELLS[key]?.school}`] ?? "";
 
 // How what's in a slice looks: its label and icon (and the thing to use it is, if it is one)
 function lookOf(key) {
@@ -75,12 +92,13 @@ function lookOf(key) {
 
 /**
  * What's on each wheel until the player changes it: each side's slices (a direction and what's
- * in it). Heal at the top of their own, Stun at the top of an enemy's; everything else empty. (A
- * soldier's of a people not friendly to theirs has one side: Fight, to pick a fight with them.)
+ * in it). Vigor at the top of their own; the four elements' first spells and Stun on an enemy's;
+ * everything else empty. (A soldier's of a people not friendly to theirs has one side: Fight, to
+ * pick a fight with them.)
  */
 export const WHEELS = Object.freeze({
-    self: Object.freeze([Object.freeze({ n: "heal" }), Object.freeze({})]),
-    enemy: Object.freeze([Object.freeze({ n: "stun" }), Object.freeze({})]),
+    self: Object.freeze([Object.freeze({ n: "vigor" }), Object.freeze({})]),
+    enemy: Object.freeze([Object.freeze({ n: "burn", ne: "hurt", nw: "rumble", e: "blister", w: "stun" }), Object.freeze({})]),
     provoke: Object.freeze([Object.freeze({ n: "fight" })]),
 });
 
@@ -100,7 +118,7 @@ export function readWheels(kept) {
         wheels[wheel] = Array.from({ length: SIDES }, (_, side) => {
             const slots = sides[side] && typeof sides[side] === "object" ? sides[side] : {};
 
-            return Object.fromEntries(PLACES.filter((place) => actionOf(slots[place])?.on === wheel).map((place) => [place, slots[place]]));
+            return Object.fromEntries(PLACES.filter((place) => goesOn(actionOf(slots[place]), wheel)).map((place) => [place, RENAMED[slots[place]] ?? slots[place]]));
         });
     }
 
@@ -108,13 +126,14 @@ export function readWheels(kept) {
 }
 
 /**
- * What can be put on a wheel ("self" or "enemy"), for a player who's `learnt` some abilities
- * (core/progress.js Progress abilities) and `carries` some things (item ids): Heal and Stun from
- * the start, the greater spells and blows once learnt, and each thing to use they carry.
+ * What can be put on a wheel ("self" or "enemy"), for a player who's `learnt` some spells and
+ * abilities (core/progress.js Progress known, abilities) and `carries` some things (item ids): the
+ * spells they know that go on it, the blows they've learnt, and (their own) each thing to use they
+ * carry.
  */
 export function assignable(wheel, { learnt = [], carries = [] } = {}) {
     const actions = Object.entries(ACTIONS)
-        .filter(([, action]) => action.on === wheel && (!action.learnt || learnt.includes(action.learnt)))
+        .filter(([, action]) => goesOn(action, wheel) && (!action.learnt || learnt.includes(action.learnt)))
         .map(([key]) => key);
     const items = wheel === "self" ? [...new Set(carries)].filter((id) => ITEMS[id]?.use).map((id) => `item:${id}`) : [];
 

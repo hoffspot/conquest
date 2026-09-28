@@ -198,13 +198,13 @@ describe("growing stronger in play (host.js, progress.js)", () => {
     });
 
     it("lets a player use the abilities they've learnt, and not before", () => {
-        const host = hosted({ skills: { blade: 300, healing: 99 } });
+        const host = hosted({ skills: { blade: 300 }, schools: { healing: 99 } });
         const player = host.battle.actor(HOST_PLAYER);
 
         put(host.battle.actor("orc"), "town", [player.square[0] + 1, player.square[1]]);
 
-        assert.deepEqual(host.command(HOST_PLAYER, { type: "ability", ability: "greaterHeal" }), { ok: false, reason: "unknown" });
-        assert.deepEqual(host.command(HOST_PLAYER, { type: "cast", spell: "greaterHeal" }), { ok: false, reason: "unknown" });
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "ability", ability: "hold" }), { ok: false, reason: "unknown" });
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "cast", spell: "mendWounds" }), { ok: false, reason: "unknown" });
         assert.deepEqual(host.command(HOST_PLAYER, { type: "ability", ability: "aimedShot" }), { ok: false, reason: "unknown" });
         assert.deepEqual(host.command(HOST_PLAYER, { type: "ability", ability: "powerStrike", target: "orc" }), { ok: true });
         assert.deepEqual(player.empowered, { blow: "melee", factor: 2 });
@@ -218,11 +218,11 @@ describe("growing stronger in play (host.js, progress.js)", () => {
         assert.ok(first.damage >= 2 * 3, `(${first.damage})`);
         assert.equal(player.empowered, null);
 
-        // Healing learnt: the greater heal
-        host.players.get(HOST_PLAYER).progress.gain("healing", 300);
+        // Healing grown to its second tier: Mend Wounds
+        host.players.get(HOST_PLAYER).progress.growSchool("healing", 300);
         player.hp = 10;
         run(host, 3000);
-        assert.deepEqual(host.command(HOST_PLAYER, { type: "cast", spell: "greaterHeal" }), { ok: true });
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "cast", spell: "mendWounds" }), { ok: true });
     });
 
     it("pays for what's bought by talking, and does it: ale fills stamina, a blessing's a boon for a while", () => {

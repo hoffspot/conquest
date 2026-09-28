@@ -5,6 +5,7 @@
 // where every icon drawn anywhere in it finds them.
 
 import { PARTS } from "../core/spoils.js";
+import { SPELL_DEFS, SPELL_ICONS } from "./spellicons.js";
 
 /** The gear's and things' gradients and patterns. */
 const ITEM_DEFS = `
@@ -116,7 +117,7 @@ const ACTION_DEFS = `
 </filter>`;
 
 /** Gradients, glows and patterns the icons use. */
-export const DEFS = ACTION_DEFS + ITEM_DEFS;
+export const DEFS = ACTION_DEFS + SPELL_DEFS + ITEM_DEFS;
 
 // A star with `points` points, `outer` and `inner` radii, at x, y
 function star(x, y, outer, inner, points = 5, turn = -Math.PI / 2) {
@@ -140,8 +141,10 @@ const SWORD = `
         <rect x="-1.8" y="9" width="3.6" height="9" fill="#6b3f1d" stroke="#2f1a09" stroke-width="0.8"/>
         <circle cy="19.5" r="2.6" fill="#c8962e" stroke="#5a3b0c" stroke-width="0.9"/>`;
 
-/** Each action's icon: SVG drawn round 0, 0, about 44 across. */
+/** Each action's icon: SVG drawn round 0, 0, about 44 across (the spells' own: spellicons.js). */
 export const ICONS = Object.freeze({
+    ...SPELL_ICONS,
+
     // A great green cross in a ring of light, with more sparkles: the greater heal
     greaterHeal: `
         <circle r="22" fill="url(#icon-heal-glow)"/>

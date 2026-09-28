@@ -59,7 +59,7 @@ import { routeBetween } from "./interiors.js";
 import { findPath, lineAhead } from "./pathfinding.js";
 import { createRandom } from "./random.js";
 import { BECKON, REST_EVERY, ROLES } from "./roles.js";
-import { rollHeal, SPELL_COOLDOWN, SPELLS } from "./spells.js";
+import { rollHeal, rollSpell, SPELL_COOLDOWN, SPELLS } from "./spells.js";
 import { Variety } from "./variety.js";
 import { armsOf, chooseAttack, distanceBetween, longestReach, MELEE_REACH, ringsApart, rollDamage, WEAPONS } from "./weapons.js";
 
@@ -299,6 +299,8 @@ export class Battle {
             downUntil: 0,
             casting: null,
             spellReadyAt: 0,
+            // When each spell it's cast is ready again (by spell: ms)
+            spellsReadyAt: {},
             dead: false,
             respawnAt: 0,
             // What lingers on it after some blows (afflictions.js): poison, a web...
@@ -573,7 +575,7 @@ export class Battle {
             return { ok: false, reason: "busy" };
         }
 
-        if (this.time < actor.spellReadyAt) {
+        if (this.time < actor.spellReadyAt || this.time < (actor.spellsReadyAt?.[spellId] ?? 0)) {
             return { ok: false, reason: "cooldown" };
         }
 
@@ -583,27 +585,33 @@ export class Battle {
 
         let target = actor;
 
-        if (spell.target === "enemy") {
+        if (spell.target !== "self" && (spell.target === "enemy" || targetId !== null)) {
             target = this.actor(targetId);
 
             if (!target || target.dead) {
                 return { ok: false, reason: "lifeless" };
             }
 
-            if (!this.hostile(actor, target)) {
+            // (Harm only to enemies; healing to anyone, friend, neutral or foe)
+            if (spell.target === "enemy" && !this.hostile(actor, target)) {
                 return { ok: false, reason: "friendly" };
             }
 
-            if (distanceBetween(actor.square, target.square) > spell.reach) {
+            if (target !== actor && distanceBetween(actor.square, target.square) > spell.reach) {
                 return { ok: false, reason: "range" };
             }
 
-            if (!this.canSee(actor, target)) {
+            if (target !== actor && !this.canSee(actor, target)) {
                 return { ok: false, reason: "sight" };
             }
 
-            actor.facing = Math.atan2(target.x - actor.x, target.y - actor.y);
-        } else if (spell.heal && actor.hp >= actor.maxHp) {
+            if (target !== actor) {
+                actor.facing = Math.atan2(target.x - actor.x, target.y - actor.y);
+            }
+        }
+
+        // (Healing someone at full health, with nothing for it to cure: nothing to do)
+        if ((spell.heal || spell.full) && target.hp >= target.maxHp && !this.#cures(spell, target).length) {
             return { ok: false, reason: "healthy" };
         }
 
@@ -611,9 +619,17 @@ export class Battle {
         actor.attack = null;
         actor.casting = { spell: spellId, target: target.id, start: this.time, landsAt: this.time + spell.castTime };
         actor.spellReadyAt = this.time + SPELL_COOLDOWN;
+        actor.spellsReadyAt = { ...actor.spellsReadyAt, [spellId]: this.time + (spell.cooldown ?? SPELL_COOLDOWN) };
         this.#emit("cast", { id: actor.id, spell: spellId, target: target.id, castTime: spell.castTime });
 
         return { ok: true };
+    }
+
+    // What a spell would cure on someone (the kinds on them it ends)
+    #cures(spell, target) {
+        const on = (target.afflictions ?? []).map(({ kind }) => kind);
+
+        return spell.cures === "all" ? on : on.filter((kind) => spell.cures?.includes(kind));
     }
 
     /**
@@ -659,11 +675,21 @@ export class Battle {
         return true;
     }
 
-    /** How long until a character can cast a spell again, as a share of the cooldown (0: ready). */
-    cooldown(id) {
+    /**
+     * How long until a character can cast a spell again (any spell: the shared cooldown; or one,
+     * by its id: the longer of that and its own), as a share of the cooldown (0: ready).
+     */
+    cooldown(id, spellId = null) {
         const actor = this.actor(id);
 
-        return actor ? Math.max(0, Math.min(1, (actor.spellReadyAt - this.time) / SPELL_COOLDOWN)) : 0;
+        if (!actor) {
+            return 0;
+        }
+
+        const shared = Math.max(0, Math.min(1, (actor.spellReadyAt - this.time) / SPELL_COOLDOWN));
+        const own = spellId && SPELLS[spellId] ? Math.max(0, Math.min(1, ((actor.spellsReadyAt?.[spellId] ?? 0) - this.time) / (SPELLS[spellId].cooldown ?? SPELL_COOLDOWN))) : 0;
+
+        return Math.max(shared, own);
     }
 
     /**
@@ -1806,7 +1832,9 @@ export class Battle {
         }
     }
 
-    // A spell lands: healing, or stunning its target (who then turns on the caster)
+    // A spell lands: healing (and curing), harming (its target, and those round them or it leaps
+    // to), or stunning its target (who then turns on the caster). Told as "spell": whom it landed
+    // on (for the caster's school to grow by it: host.js)
     #land(actor) {
         const { spell: id, target: targetId } = actor.casting;
         const spell = SPELLS[id];
@@ -1818,30 +1846,86 @@ export class Battle {
             return;
         }
 
-        if (spell.heal) {
+        let landed = 0;
+
+        if (spell.heal || spell.full) {
             const before = target.hp;
+            const cured = this.#cures(spell, target);
 
-            target.hp = Math.min(target.maxHp, target.hp + Math.round(rollHeal(spell, this.random) * (actor.power?.heal ?? 1) * shareOf(target, "healing")));
-            this.#emit("healed", { id: target.id, by: actor.id, spell: id, amount: target.hp - before, hp: target.hp, maxHp: target.maxHp });
-        }
-
-        if (spell.stun) {
-            const stun = Math.round(spell.stun * (actor.power?.stun ?? 1));
-
-            target.stunnedUntil = Math.max(target.stunnedUntil, this.time + stun);
-            target.casting = null;
-
-            if (target.attack && !target.attack.struck) {
-                target.attack = null;
+            for (const kind of cured) {
+                this.cure(target.id, kind);
             }
 
-            if (target.ai === "patrol" || target.ai === "wild") {
-                target.target = actor.id;
-                target.lastSeen = this.time + stun;
+            target.hp = spell.full ? target.maxHp : Math.min(target.maxHp, target.hp + Math.round(rollHeal(spell, this.random) * (actor.power?.heal ?? 1) * shareOf(target, "healing")));
+            this.#emit("healed", { id: target.id, by: actor.id, spell: id, amount: target.hp - before, hp: target.hp, maxHp: target.maxHp, cured });
+            landed += target.hp > before || cured.length ? 1 : 0;
+        }
+
+        if (spell.damage) {
+            landed += this.#smite(actor, target, id, spell);
+        } else if (spell.stun) {
+            this.#stun(actor, target, id, Math.round(spell.stun * (actor.power?.stun ?? 1)));
+            landed += 1;
+        }
+
+        this.#emit("spell", { id: actor.id, spell: id, target: target.id, landed });
+    }
+
+    // An attack spell landing on its target: and on every enemy of the caster's round them (its
+    // `area`), and leaping on to others near (its `chain`), each less; with whatever else it does.
+    // How many it struck.
+    #smite(caster, target, id, spell) {
+        // (Each struck, and how many leaps it is from the target: 0 for those round it)
+        const struck = [{ one: target, leap: 0 }];
+        const near = (from, reach) => this.actors.filter((other) => !other.dead && other.map === from.map && !struck.some(({ one }) => one === other) && this.hostile(caster, other) && Math.hypot(other.x - from.x, other.y - from.y) <= reach);
+
+        if (spell.area) {
+            struck.push(...near(target, spell.area).map((one) => ({ one, leap: 0 })));
+        }
+
+        // (Leaping from the last struck to the nearest enemy not struck yet, within 3 m)
+        let from = target;
+
+        for (let leap = 1; leap <= (spell.chain ?? 0); leap++) {
+            const next = near(from, 3).sort((a, b) => Math.hypot(a.x - from.x, a.y - from.y) - Math.hypot(b.x - from.x, b.y - from.y))[0];
+
+            if (!next) {
+                break;
             }
 
-            this.#emit("stunned", { id: target.id, by: actor.id, spell: id, until: target.stunnedUntil });
+            struck.push({ one: next, leap });
+            from = next;
         }
+
+        for (const { one, leap } of struck) {
+            const damage = Math.max(1, Math.round(rollSpell(spell, this.random) * (caster.power?.spell ?? 1) * (spell.falls ?? 0.7) ** leap));
+
+            this.#hit(caster, one, { id, kind: "spell", reaction: spell.reaction ?? "arcane", stagger: spell.stagger ?? 200, knockdown: spell.knockdown ?? 0, afflict: spell.effect ?? null }, null, { damage, spell: id });
+
+            if (!one.dead && spell.stun && this.random.chance(spell.stunChance ?? 1)) {
+                this.#stun(caster, one, id, spell.stun);
+            }
+        }
+
+        return struck.length;
+    }
+
+    // Stunned by a spell, for `ms`: whatever it was doing stops; a creature or a guard turns on
+    // whoever did it
+    #stun(caster, target, id, ms) {
+        target.stunnedUntil = Math.max(target.stunnedUntil, this.time + ms);
+        target.casting = null;
+
+        if (target.attack && !target.attack.struck) {
+            target.attack = null;
+        }
+
+        if (target.ai === "patrol" || target.ai === "wild") {
+            target.target = caster.id;
+            target.lastSeen = this.time + ms;
+        }
+
+        this.#emit("stunned", { id: target.id, by: caster.id, spell: id, until: target.stunnedUntil });
     }
 
     #launch(actor, target, attack) {
@@ -1923,12 +2007,13 @@ export class Battle {
         }
     }
 
-    #hit(attacker, target, attack, projectile = null) {
+    #hit(attacker, target, attack, projectile = null, { damage: given = null, spell = null } = {}) {
         // A blow as strong as the attacker's power for its kind (and its next blow made stronger,
-        // if it is), less what the target's armour takes off: never less than 1
+        // if it is), less what the target's armour takes off: never less than 1. (A spell's hurt
+        // is as it's given: armour's no help against it)
         const blow = attack.kind === "ranged" ? "ranged" : "melee";
-        const empowered = attacker?.empowered?.blow === blow ? attacker.empowered.factor : 1;
-        const damage = Math.max(1, Math.round(rollDamage(attack, this.random) * (attacker?.power?.[blow] ?? 1) * empowered * (1 - (target.armor ?? 0))));
+        const empowered = given === null && attacker?.empowered?.blow === blow ? attacker.empowered.factor : 1;
+        const damage = given ?? Math.max(1, Math.round(rollDamage(attack, this.random) * (attacker?.power?.[blow] ?? 1) * empowered * (1 - (target.armor ?? 0))));
 
         if (empowered > 1) {
             attacker.empowered = null;
@@ -1946,6 +2031,7 @@ export class Battle {
             hp: target.hp,
             maxHp: target.maxHp,
             projectile,
+            spell,
         });
 
         // A blow that knocks its target off its feet: it can't move, fight or cast till it's up
@@ -1963,7 +2049,7 @@ export class Battle {
 
         // A blow that leaves something lingering (venom, a web, fire...), sometimes
         if (attack.afflict && target.hp > 0 && this.random.chance(attack.afflict.chance)) {
-            this.afflict(target.id, attack.afflict.kind, { by: attacker?.id ?? null, power: attacker?.power?.[blow] ?? 1, look: attack.afflict.look ?? null });
+            this.afflict(target.id, attack.afflict.kind, { by: attacker?.id ?? null, power: attacker?.power?.[spell ? "spell" : blow] ?? 1, look: attack.afflict.look ?? null });
         }
 
         // Whoever is hit fights back
@@ -2054,6 +2140,7 @@ export class Battle {
             afflictions: [],
             casting: null,
             spellReadyAt: this.time,
+            spellsReadyAt: {},
             target: null,
             patrolIndex: actor.patrol?.length > 1 ? 1 : 0,
             waitUntil: 0,
