@@ -26,7 +26,7 @@ const { TRADES } = await import("../client/js/core/setpieces/pieces.js");
 const { LAYERS, layerOf, paintLayers, toAtlas } = await import("../client/js/world/art/engine/atlas.js");
 const { material, MATERIALS } = await import("../client/js/world/art/engine/materials.js");
 const { paintLayer } = await import("../client/js/world/art/engine/painters.js");
-const { Solid } = await import("../client/js/world/art/engine/solid.js");
+const { ARCHES, openingOutline, Solid } = await import("../client/js/world/art/engine/solid.js");
 const { buildHouse, house, planHouse, STYLES } = await import("../client/js/world/art/kits/house.js");
 const { EMBLEM_NAMES, paintEmblem } = await import("../client/js/world/art/kits/emblems.js");
 const { landmark, LANDMARK_BUILDERS } = await import("../client/js/world/art/kits/landmarks.js");
@@ -286,6 +286,30 @@ describe("walls with openings (Solid.wall)", () => {
 
         // The wall's face and the backs, all facing out: the whole wall
         assert.ok(Math.abs(areaFacing(solid, [0, 0, 1]) - 20 * 15) < 1e-6);
+    });
+
+    it("take every arch's shape, filling the wall round it (each outline seen whole from its middle)", () => {
+        for (const arch of ARCHES) {
+            for (const [width, height] of [[4, 10], [6, 6], [8, 3]]) {
+                const solid = new Solid();
+                const outline = openingOutline(arch, 5, 5 + width, 1, 1 + height);
+
+                solid.wall({ origin: [0, 0, 10], across: [1, 0, 0], out: [0, 0, 1] }, 20, 15, [{ u0: 5, u1: 5 + width, v0: 1, v1: 1 + height, depth: 1, back: material("glass"), arch }], material("plaster"));
+
+                // The wall's face, what fills round the arch and its back: the whole wall
+                assert.ok(Math.abs(areaFacing(solid, [0, 0, 1]) - 20 * 15) < 1e-3, `${arch} ${width}x${height}`);
+
+                // Within the opening, and anticlockwise all the way round its middle
+                const [mu, mv] = [5 + width / 2, 1 + height / 2];
+
+                for (const [i, [u, v]] of outline.entries()) {
+                    const [nu, nv] = outline[(i + 1) % outline.length];
+
+                    assert.ok(u >= 5 - 1e-9 && u <= 5 + width + 1e-9 && v >= 1 - 1e-9 && v <= 1 + height + 1e-9, `${arch}: inside`);
+                    assert.ok((u - mu) * (nv - mv) - (v - mv) * (nu - mu) >= -1e-9, `${arch}: anticlockwise`);
+                }
+            }
+        }
     });
 
     it("follow a gable's outline", () => {

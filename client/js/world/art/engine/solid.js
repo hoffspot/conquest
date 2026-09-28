@@ -48,6 +48,86 @@ const unit = (a) => times(a, 1 / (Math.hypot(...a) || 1));
 
 export { add3, cross, dot, sub, times, unit };
 
+const TAU = Math.PI * 2;
+
+/**
+ * The shapes an opening's back can take (Solid.wall's `arch`): "round" and "pointed" arches (a
+ * pointed one's two arcs centred on the other side's springing), a steeper "lancet", an "ogee"
+ * (curving out, then in to a point), a "keyhole" (a round top over a narrow slot) and a round
+ * "moon" window. Its outline in the opening (u0 to u1 along the wall, v0 to v1 up it) from the
+ * bottom left anticlockwise, as [[u, v]...].
+ */
+export const ARCHES = Object.freeze(["round", "pointed", "lancet", "ogee", "keyhole", "moon"]);
+
+export function openingOutline(arch, u0, u1, v0, v1, steps = 6) {
+    const width = u1 - u0;
+    const middle = (u0 + u1) / 2;
+    const arc = (cu, cv, r, from, to, count) => Array.from({ length: count + 1 }, (_, i) => {
+        const angle = from + ((to - from) * i) / count;
+
+        return [cu + Math.cos(angle) * r, cv + Math.sin(angle) * r];
+    });
+
+    if (arch === "moon") {
+        const r = Math.min(width, v1 - v0) / 2;
+
+        return arc(middle, (v0 + v1) / 2, r, -Math.PI / 2, (Math.PI * 3) / 2, steps * 2).slice(0, -1);
+    }
+
+    if (arch === "keyhole") {
+        const r = Math.min(width / 2, (v1 - v0) / 3);
+        const slot = r * 0.9;
+        const cv = v1 - r;
+        const below = Math.asin(slot / r);
+        const drop = Math.sqrt(r * r - slot * slot);
+
+        return [[middle - slot, v0], [middle + slot, v0], [middle + slot, cv - drop], ...arc(middle, cv, r, below - Math.PI / 2, (Math.PI * 3) / 2 - below, steps * 2).slice(1, -1), [middle - slot, cv - drop]];
+    }
+
+    if (arch === "round") {
+        const rise = Math.min(v1 - v0, width / 2);
+        const spring = v1 - rise;
+        const top = Array.from({ length: steps + 1 }, (_, i) => {
+            const angle = (Math.PI * i) / steps;
+
+            return [middle + (Math.cos(angle) * width) / 2, spring + Math.sin(angle) * rise];
+        });
+
+        return [[u0, v0], [u1, v0], ...top];
+    }
+
+    if (arch === "ogee") {
+        // (Up from each springing, swelling in, and turning up to meet at a point)
+        const rise = Math.min(v1 - v0, width * 0.95);
+        const spring = v1 - rise;
+        const half = Array.from({ length: steps + 1 }, (_, i) => {
+            const t = i / steps;
+
+            return [u0 + (width / 2) * (0.5 - 0.5 * Math.cos(Math.PI * t)), spring + rise * t];
+        });
+
+        return [[u0, v0], [u1, v0], ...half.map(([u, v]) => [u0 + u1 - u, v]), ...half.slice(0, -1).reverse()];
+    }
+
+    // Pointed and lancet: two arcs of radius `k` times the width, each centred out from the
+    // other side's springing, meeting at the point
+    const k = arch === "lancet" ? 1.6 : 1;
+    const r = k * width;
+    const peak = Math.acos((r - width / 2) / r);
+    const rise0 = Math.sin(peak) * r;
+    const rise = Math.min(v1 - v0, rise0);
+    const spring = v1 - rise;
+    const scale = rise / rise0;
+    const right = Array.from({ length: steps + 1 }, (_, i) => {
+        // (The right side: centred on the left side's springing, from the springing up to the point)
+        const angle = (peak * i) / steps;
+
+        return [u1 - r + Math.cos(angle) * r, spring + Math.sin(angle) * r * scale];
+    });
+
+    return [[u0, v0], [u1, v0], ...right, ...right.slice(0, -1).reverse().map(([u, v]) => [u0 + u1 - u, v])];
+}
+
 function normalOf(a, b, c) {
     const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
     const v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
@@ -291,34 +371,40 @@ export class Solid {
                 continue;
             }
 
-            // An arched back: the leaf up to its springing and the arch over it (a curve from
-            // the left springing to the right), and the wall in the corners above the arch
-            // (each a fan from its corner, which sees the whole of its side of the arch)
-            const width = u1 - u0;
-            const rise = arch === "pointed" ? Math.min(v1 - v0, width * 0.75) : Math.min(v1 - v0, width / 2);
-            const spring = v1 - rise;
-            const steps = 6;
-            const sixty = Math.acos(0.5);
-            const curve = Array.from({ length: steps + 1 }, (_, i) => {
-                const t = i / steps;
+            // A shaped back (an arch, a round or keyhole opening: its outline round from the
+            // bottom left, anticlockwise, and every point of it seen from its middle), in a fan
+            // from the middle; and the wall filling the rest of the opening round it, between
+            // each side of the outline and where the lines out from the middle through its ends
+            // meet the opening's edge (with any corner of the opening between them)
+            const outline = openingOutline(arch, u0, u1, v0, v1);
+            const [mu, mv] = [(u0 + u1) / 2, (v0 + v1) / 2];
+            const angleOf = ([u, v]) => Math.atan2(v - mv, u - mu);
+            const toEdge = ([u, v]) => {
+                const [du, dv] = [u - mu, v - mv];
+                const t = Math.min(Math.abs(du) > 1e-9 ? (u1 - mu) / Math.abs(du) : Infinity, Math.abs(dv) > 1e-9 ? (v1 - mv) / Math.abs(dv) : Infinity);
 
-                if (arch === "round") {
-                    const angle = Math.PI * (1 - t);
+                return [mu + du * t, mv + dv * t];
+            };
+            const corners = [[u0, v0], [u1, v0], [u1, v1], [u0, v1]].map((corner) => ({ corner, angle: angleOf(corner) }));
+            const turn = (from, to) => (((to - from) % TAU) + TAU) % TAU;
 
-                    return [u0 + width / 2 + (Math.cos(angle) * width) / 2, spring + Math.sin(angle) * rise];
+            this.facing([[mu, mv], ...outline, outline[0]].map(([u, v]) => at(u, v, depth)), out, back);
+
+            outline.forEach((a, i) => {
+                const b = outline[(i + 1) % outline.length];
+                const [from, span] = [angleOf(a), turn(angleOf(a), angleOf(b))];
+                const between = corners.filter(({ angle }) => turn(from, angle) > 1e-9 && turn(from, angle) < span - 1e-9).sort((p, q) => turn(from, q.angle) - turn(from, p.angle));
+                const piece = [a, b, toEdge(b), ...between.map(({ corner }) => corner), toEdge(a)];
+
+                for (let k = 1; k < piece.length - 1; k++) {
+                    const [p, q, r] = [piece[0], piece[k], piece[k + 1]];
+
+                    // (Nothing to fill where the outline runs along the opening's own edge)
+                    if (Math.abs((q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])) > 1e-6) {
+                        this.facing([p, q, r].map(([u, v]) => at(u, v, depth)), out, material);
+                    }
                 }
-
-                // Two arcs meeting at the point, each centred on the other side's springing
-                const angle = (t < 0.5 ? t * 2 : (1 - t) * 2) * sixty;
-                const du = Math.cos(angle) * width;
-
-                return [t < 0.5 ? u1 - du : u0 + du, spring + (Math.sin(angle) / Math.sin(sixty)) * rise];
             });
-            const half = steps / 2;
-
-            this.facing([at(u0, v0, depth), at(u1, v0, depth), ...[...curve].reverse().map(([u, v]) => at(u, v, depth))], out, back);
-            this.facing([at(u0, v1, depth), ...curve.slice(0, half + 1).reverse().map(([u, v]) => at(u, v, depth))], out, material);
-            this.facing([at(u1, v1, depth), ...curve.slice(half).map(([u, v]) => at(u, v, depth))], out, material);
         }
 
         return this;
