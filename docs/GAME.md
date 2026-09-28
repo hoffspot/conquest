@@ -1293,18 +1293,43 @@ never says have ended can't use them up.
 ### The action wheel (app/wheel.js)
 
 Press and hold (0.4 s, without moving) on the player or an enemy, and a see-through wheel
-(SVG, 200 pixels across, kept on the screen) opens round them, cut into four slices: up, right,
-down and left. Keep holding and flick: as soon as the finger is 30 pixels from where it opened,
-the slice it's in is tried, lit gold if it's used; letting go before then does nothing. Each
-wheel's slices (`WHEELS`) hold actions (`ACTIONS`), each with an icon (app/icons.js: SVG, in
-colours that say what it does, a glowing green cross for Heal, gold stars round a violet dazed
-head for Stun). The player's own wheel has Heal at the top; an enemy's, Stun; the other slices
-are empty for now.
+(SVG, 264 pixels across, kept on the screen) opens round them, cut into eight slices like a
+compass: N, NE, E, SE, S, SW, W and NW (`DIRECTIONS`). Keep holding and flick: as soon as the
+finger is 30 pixels from where it opened, the slice it's in is tried, lit gold if it's used;
+letting go before then does nothing.
 
-While spells are cooling down, their slices are greyed over as much of the slice as the cooldown
-has left, the grey drawing back as it passes. A flick at a greyed slice, or an empty
-one, flashes it red and is refused. The game plays on while it's open; a second finger (a pinch)
-closes it.
+**Two sides.** S (`FLIP`) turns the wheel over: flicked into, the wheel's other side (wheel two,
+and from there back to wheel one) opens again under the finger, to flick from there. Its hub
+says which side it is. The other seven slices (`PLACES`) hold what the player's put there.
+
+**What's on them.** The player has two wheels to set, each with two sides (`SETTABLE`):
+- **Their own** (held on themselves): Heal, the greater heal once learnt, and things from the
+  pack to use (a healing draught, a hot meal, an ale: `item:potion`...), each showing how many
+  there are, and greyed out once none are left.
+- **An enemy's**: Stun, and once learnt Hold, a power strike and an aimed shot (a blow for another
+  kind of weapon than the one in hand is greyed out).
+
+A soldier of a people not friendly to the player's has a wheel of its own, with just Fight
+(picking a fight with them), and no other side.
+
+A new character's wheels have Heal at N on their own and Stun at N on an enemy's
+(`WHEELS`); everything else starts empty, until the player puts something there in **Game
+options, Action wheels** (app/wheelsetup.js). There, tabs choose whose wheel and which side;
+the wheel's drawn as it opens in play, and tapping a slice lists what can go in it
+(`assignable`): "Nothing", and what's been learnt and is carried. Tapping S turns it over, as
+flicking it does. What's on the wheels is kept with the character (save.js `pellagos.wheels`),
+and read back safely (`readWheels`: only what goes on each wheel, in its seven slices). A skill
+ranking up with an ability says to put it on a wheel.
+
+Each action (`ACTIONS`, or `item:` and a thing to use: `actionOf`) has an icon (app/icons.js:
+SVG, in colours that say what it does: a glowing green cross for Heal, gold stars round a violet
+dazed head for Stun; a red draught, a steaming bowl, a frothing tankard). The icons' gradients
+are put in the page once, where every icon finds them (`useDefs`).
+
+While a slice is cooling down (the spells' shared three seconds, or a blow's own twelve), it's
+greyed over as much of it as the cooldown has left, the grey drawing back as it passes. A flick
+at a greyed slice, an empty one or one that can't be used flashes it red and is refused. The
+game plays on while it's open; a second finger (a pinch) closes it.
 
 ## The screens (main.js)
 
@@ -1332,7 +1357,7 @@ closes it.
    seconds (in spiked boots too, a kick every other time). The hero's `boots` is saved with them.
 4. **Playing** (app/game.js): building the world, with a progress bar for each part (the ground,
    each piece of the town, the characters, compiling every shader before the first frame), then
-   the game. A tap walks; a press and hold on the player or an enemy opens the action wheel; a second tap within 350 ms and 60 pixels of the first (going by when
+   the game. A tap walks; a press and hold on the player or an enemy opens the action wheel (flicking down turns it to its other side); a second tap within 350 ms and 60 pixels of the first (going by when
    the taps happened, so a slow frame between them doesn't matter) turns it into a run, as does
    a Shift-click. A drag turns the camera round the player (and tilts it). A swipe up that
    starts on the player (40 pixels up within 600 ms, mostly up)
@@ -1498,8 +1523,9 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   (and what's been said in talks, and what's been found of the world, for the saved character
   only),
   heroes (and forgetting volumes saved on the old scale), the minimap's colours (in the town and
-  inside), the action wheel (which slice a flick is in, its shapes, its
-  actions and icons), the loader's byte counting, the ground's blending, the town's
+  inside), the action wheels (which of eight slices a flick is in, its shapes, its
+  actions and icons, every item's icon, what goes on each wheel, and reading them back), the
+  loader's byte counting, the ground's blending, the town's
   builders, the loading list and the service worker.
 - `test/audio.test.js`: every sound (clean, as loud as the others, no clicks, swings timed to
   their blows, a sound for every attack, each on its bus, the bow's plucked string in tune), the
@@ -1565,6 +1591,7 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   town's name on it, zooming out, closed by Escape and by M), walking 300 metres out of the town into the world (the chunks round the player drawn,
   those left behind thrown away, the minimap following), Game options and the volume sliders
   (remembered), the
-  action wheel (stunning the orc, a flick refused while cooling down, then a heal), and a phone
+  action wheel (stunning the orc, a flick refused while cooling down, then a heal), the action
+  wheels set in Game options (a draught put on wheel two, drunk by flicking down then NE), and a phone
   screen. Drawing without a GPU is slow, so fights are played on with
   `game.advance(seconds)`, which runs the game without drawing each frame.

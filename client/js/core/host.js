@@ -424,7 +424,8 @@ export class Host {
      *  - { type: "buy", item, from }: buy something ({ id, quality }) from a shopkeeper near them
      *    (an id); { type: "sell", index, to }: sell what's at `index` in their pack to one;
      *  - { type: "equip", index }, { type: "unequip", slot }: put on (or take up) gear from their
-     *    pack, or take armour off; { type: "use", index }: use something in their pack;
+     *    pack, or take armour off; { type: "use", index }: use something in their pack (or
+     *    { type: "use", item }: the first of a kind of thing in it, by its id);
      *  - { type: "ability", ability, target }: use an ability they've learnt (core/progress.js
      *    ABILITIES), on a target for a stronger blow (fighting it);
      *  - { type: "abandon", request }: give up a request they carry (by its id), for a little
@@ -509,7 +510,7 @@ export class Host {
             case "unequip":
                 return this.#gear(player, player.progress.unequip(command.slot));
             case "use":
-                return this.#use(player, actor, command.index);
+                return this.#use(player, actor, Number.isInteger(command.index) ? command.index : player.progress.pack.findIndex(({ id }) => id === command.item));
             case "ability":
                 return this.#ability(player, actor, command.ability, command.target ?? null);
             case "abandon":

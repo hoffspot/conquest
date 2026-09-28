@@ -2263,11 +2263,11 @@ test("the minimap walks the player where it's tapped, and Game options turn it a
     await expect(page.locator("#musicvolume")).toHaveValue("60");
 });
 
-test("holding on an enemy or the player opens the action wheel: flick up to stun it, or to heal", async ({ page }) => {
+test("holding on an enemy or the player opens the action wheel: flick up (N) to stun it, or to heal", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     const wheel = page.locator(".wheel");
-    const up = wheel.locator('.slice[data-direction="up"]');
+    const up = wheel.locator('.slice[data-direction="n"]');
 
     // The orc standing a few squares from the player, who's hurt
     const orcAt = await page.evaluate(() => {
@@ -2303,10 +2303,13 @@ test("holding on an enemy or the player opens the action wheel: flick up to stun
         game.start();
     }, seconds);
 
-    // Held on the orc: its wheel, with Stun at the top
+    // Held on the orc: its wheel's eight slices, with Stun at the top, S to turn it over, and the
+    // rest empty
     await hold(orcAt);
     await expect(up.locator(".label")).toHaveText("Stun");
-    await expect(wheel.locator(".slice.empty")).toHaveCount(3);
+    await expect(wheel.locator(".slice")).toHaveCount(8);
+    await expect(wheel.locator('.slice.flip[data-direction="s"] .label')).toHaveText("Wheel 2");
+    await expect(wheel.locator(".slice.empty")).toHaveCount(6);
     await flickUp(orcAt);
     await page.mouse.up();
     await playOn(0.6);
@@ -2352,6 +2355,82 @@ test("holding on an enemy or the player opens the action wheel: flick up to stun
 
     expect(hp).toBeGreaterThanOrEqual(30);
     expect(hp).toBeLessThanOrEqual(40);
+});
+
+test("the action wheels: flicked down, the other side; what's on each chosen in Game options, from what's learnt and carried; a draught drunk from wheel two", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const wheel = page.locator(".wheel");
+    const menu = page.locator("#menu");
+    const setup = page.locator("#wheelsetup");
+
+    // Two draughts in the pack, and the greater heal learnt; the player hurt
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const progress = game.host.players.get(game.me).progress;
+
+        progress.stow({ id: "potion" });
+        progress.stow({ id: "potion" });
+        progress.skills.healing = 300;
+        game.battle.actor(game.me).hp = 20;
+    });
+
+    // Game options, Action wheels: the player's own, wheel one, with Heal at N
+    await page.locator("#menubutton").click();
+    await page.locator("#optionsbutton").click();
+    await page.locator("#wheelsbutton").click();
+    await expect(menu.locator("#wheelstitle")).toBeVisible();
+    await expect(setup.locator('.wheels-tab[aria-selected="true"]')).toHaveText(["Yourself", "Wheel one"]);
+    await expect(setup.locator('.slice[data-direction="n"] .label')).toHaveText("Heal");
+
+    // What can go on it: nothing, Heal, the greater heal learnt, and the draughts carried; a
+    // foe's has Stun, and no draughts
+    await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Heal", "Greater heal", "Draught"]);
+    await setup.getByRole("tab", { name: "A foe" }).click();
+    await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Stun"]);
+    await setup.getByRole("tab", { name: "Yourself" }).click();
+
+    // A draught at NE of wheel two (tapping S turns it over, as flicking it does)
+    await setup.locator('.slice[data-direction="s"]').click();
+    await expect(setup.locator('.wheels-tab[aria-selected="true"]')).toHaveText(["Yourself", "Wheel two"]);
+    await setup.locator('.slice[data-direction="ne"]').click();
+    await expect(setup.locator(".wheels-heading")).toHaveText("Yourself, wheel two, NE");
+    await setup.locator('.wheels-choice[data-action="item:potion"]').click();
+    await expect(setup.locator('.slice[data-direction="ne"] .label')).toHaveText("Draught");
+    await expect(setup.locator('.slice[data-direction="ne"] .count')).toHaveText("2");
+    expect(await page.evaluate(() => window.pellagos.game.wheels.self)).toEqual([{ n: "heal" }, { ne: "item:potion" }]);
+
+    // Escape goes back a page, and again; then the game
+    await page.keyboard.press("Escape");
+    await expect(menu.locator("#optionstitle")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await page.locator("#resumebutton").click();
+    await expect(menu).toBeHidden();
+
+    // Held on the player: wheel one; flicked down, wheel two, opened again under the finger
+    const me = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+
+        return session.view.toScreen(game.avatars.get(game.me).point(0.5));
+    });
+
+    await page.mouse.move(me.x, me.y);
+    await page.mouse.down();
+    await expect(wheel).toBeVisible();
+    await expect(wheel).toHaveAttribute("data-side", "1");
+    await page.mouse.move(me.x, me.y + 25, { steps: 2 });
+    await page.mouse.move(me.x, me.y + 55, { steps: 2 });
+    await expect(wheel).toHaveAttribute("data-side", "2");
+    await expect(wheel.locator('.slice[data-direction="ne"] .label')).toHaveText("Draught");
+    await expect(wheel.locator('.slice[data-direction="ne"] .count')).toHaveText("2");
+    await expect(wheel.locator('.slice.flip[data-direction="s"] .label')).toHaveText("Wheel 1");
+
+    // Flicked NE from there: a draught drunk
+    await page.mouse.move(me.x + 20, me.y + 35, { steps: 2 });
+    await page.mouse.move(me.x + 40, me.y + 15, { steps: 2 });
+    await page.mouse.up();
+    await expect.poll(() => page.evaluate(() => window.pellagos.game.battle.actor(window.pellagos.game.me).hp)).toBe(45);
+    expect(await page.evaluate(() => window.pellagos.game.progress.count("potion"))).toBe(1);
 });
 
 test.describe("on a phone", () => {

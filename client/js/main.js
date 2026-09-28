@@ -20,7 +20,7 @@ import { registerServiceWorker } from "./app/device.js";
 import { Debug } from "./app/debug.js";
 import { formatBytes, Loader } from "./app/loader.js";
 import { MANIFEST } from "./app/manifest.js";
-import { loadExplored, loadFollowers, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadWorld, newSeed, saveExplored, saveFollowers, saveProgress, saveSettings, saveStanding, saveTalks, saveWorld, writeSave } from "./app/save.js";
+import { loadExplored, loadFollowers, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadWheels, loadWorld, newSeed, saveExplored, saveFollowers, saveProgress, saveSettings, saveStanding, saveTalks, saveWheels, saveWorld, writeSave } from "./app/save.js";
 import { WEAPONS } from "./core/weapons.js";
 
 const params = new URLSearchParams(location.search);
@@ -275,6 +275,8 @@ async function play(save) {
         onStanding: (standing) => saveStanding(save, standing),
         followers: loadFollowers(save),
         onFollowers: (followers) => saveFollowers(save, followers),
+        wheels: loadWheels(save),
+        onWheels: (wheels) => saveWheels(save, wheels),
         war: loadWorld(save),
         onWar: (war) => saveWorld(save, war.snapshot()),
         onWorldMap: openWorldMap,
@@ -312,14 +314,36 @@ function resume() {
     state.game?.start();
 }
 
-// The menu's pages: the main one, and Game options
-function menuPage(page) {
-    const options = page === "options";
+// The menu's pages: the main one, Game options, and its Action wheels
+const MENU_PAGES = { main: ["#menumain", "menutitle", "#resumebutton"], options: ["#menuoptions", "optionstitle", "#minimapswitch"], wheels: ["#menuwheels", "wheelstitle", "#wheelsback"] };
 
-    $("#menumain").hidden = options;
-    $("#menuoptions").hidden = !options;
-    $("#menu").setAttribute("aria-labelledby", options ? "optionstitle" : "menutitle");
-    (options ? $("#minimapswitch") : $("#resumebutton")).focus();
+function menuPage(page) {
+    for (const [each, [id]] of Object.entries(MENU_PAGES)) {
+        $(id).hidden = each !== page;
+    }
+
+    $("#menu").setAttribute("aria-labelledby", MENU_PAGES[page][1]);
+    $("#menu").classList.toggle("wide", page === "wheels");
+    $(MENU_PAGES[page][2]).focus();
+}
+
+// What's on the player's action wheels, to change (app/wheelsetup.js: loaded the first time)
+async function openWheels() {
+    const game = state.game;
+
+    if (!game) {
+        return;
+    }
+
+    if (!state.wheelSetup) {
+        const { WheelSetup } = await import("./app/wheelsetup.js");
+
+        state.wheelSetup = new WheelSetup($("#wheelsetup"));
+    }
+
+    state.wheelSetup.onChange = (wheels) => state.game?.setWheels(wheels);
+    state.wheelSetup.show(game.wheelSetup());
+    menuPage("wheels");
 }
 
 // --- The world map (the minimap held, or M) ---
@@ -560,6 +584,8 @@ async function playJoined(save, welcome, joining) {
         onProgress: (progress) => saveProgress(save, progress),
         onStanding: (standing) => saveStanding(save, standing),
         onFollowers: (followers) => saveFollowers(save, followers),
+        wheels: loadWheels(save),
+        onWheels: (wheels) => saveWheels(save, wheels),
         onWorldMap: openWorldMap,
     });
 
@@ -614,6 +640,8 @@ $("#resumebutton").addEventListener("click", resume);
 $("#quitbutton").addEventListener("click", quit);
 $("#optionsbutton").addEventListener("click", () => menuPage("options"));
 $("#optionsback").addEventListener("click", () => menuPage("main"));
+$("#wheelsbutton").addEventListener("click", openWheels);
+$("#wheelsback").addEventListener("click", () => menuPage("options"));
 $("#minimapswitch").addEventListener("change", (event) => applySetting("minimap", event.target.checked));
 $("#soundswitch").addEventListener("change", (event) => applySetting("sound", event.target.checked));
 
@@ -657,11 +685,14 @@ function showVolumes(on) {
 
 showVolumes(settings.sound);
 
-// Escape goes back from Game options, and closes the menu from the main page
+// Escape goes back a page (from Action wheels to Game options, from there to the main page), and
+// closes the menu from the main page
 $("#menu").addEventListener("cancel", (event) => {
     event.preventDefault();
 
-    if ($("#menumain").hidden) {
+    if (!$("#menuwheels").hidden) {
+        menuPage("options");
+    } else if ($("#menumain").hidden) {
         menuPage("main");
     } else {
         resume();

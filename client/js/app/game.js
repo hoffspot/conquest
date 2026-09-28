@@ -63,7 +63,7 @@ import { FatePanel, fateWords } from "./fate.js";
 import { JournalPanel, bearing, regardOf } from "./journal.js";
 import { PackPanel } from "./pack.js";
 import { TalkPanel } from "./talk.js";
-import { ACTIONS, ActionWheel, directionOf, WHEELS } from "./wheel.js";
+import { ActionWheel, actionOf, assignable, directionOf, readWheels, SIDES, WHEELS } from "./wheel.js";
 
 /** What every new character wears; their weapon (and a bow's quiver) are added to it. */
 export const STARTING_OUTFIT = Object.freeze(["tunic", "bracers", "breeches", "boots"]);
@@ -202,8 +202,11 @@ export class Game {
      * @param {object} [options.standing] - Where they stand with their people, and the requests
      *     they carry, as kept (save.js loadStanding: core/standing.js Standing's toJSON).
      * @param {Function} [options.onStanding] - Hears it whenever it changes (to keep it).
+     * @param {object} [options.wheels] - What the player's put on their action wheels, as kept
+     *     (save.js loadWheels: app/wheel.js readWheels), or nothing (what they start with).
+     * @param {Function} [options.onWheels] - Hears them whenever they're changed (to keep them).
      */
-    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {}, progress = {}, onProgress = () => {}, standing = {}, onStanding = () => {}, followers = [], onFollowers = () => {}, remote = null }) {
+    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {}, progress = {}, onProgress = () => {}, standing = {}, onStanding = () => {}, followers = [], onFollowers = () => {}, wheels = null, onWheels = () => {}, remote = null }) {
         this.view = view;
         this.kit = kit;
         this.sound = sound;
@@ -232,6 +235,10 @@ export class Game {
         }
 
         this.onFollowers = onFollowers;
+
+        /** What's on the player's action wheels: their own and an enemy's, each two sides (app/wheel.js). */
+        this.wheels = readWheels(wheels);
+        this.onWheels = onWheels;
         this.onProgress = onProgress;
         this.onStanding = onStanding;
 
@@ -978,9 +985,9 @@ export class Game {
             }
         }
 
-        // The wheel's spells, greyed for as long as they're cooling down
+        // The wheel's spells and blows, greyed for as long as they're cooling down
         if (this.wheel?.open) {
-            this.wheel.setCooldown(battle.cooldown(this.me));
+            this.wheel.setCooldown(this.#cooldowns(this.wheel.slots));
         }
 
         // Light gathers in the hand of anyone casting a spell
@@ -1848,9 +1855,9 @@ export class Game {
         const actor = this.battle.actor(this.me);
 
         if (event.type === "rank") {
-            const ability = event.ability ? ` You can use ${ABILITIES[event.ability].label.toLowerCase()} now.` : "";
+            const ability = event.ability ? ` You can use ${ABILITIES[event.ability].label.toLowerCase()} now: put it on an action wheel (Game options).` : "";
 
-            this.hud.message(`${TREES[event.tree].name}: ${event.title}!${ability}`, 3);
+            this.hud.message(`${TREES[event.tree].name}: ${event.title}!${ability}`, ability ? 5 : 3);
             this.sound?.play("wake");
         } else if (event.type === "loot") {
             const things = [event.gold ? `${event.gold} gold` : null, ...event.items.map((item) => itemLabel(item).toLowerCase())].filter(Boolean);
@@ -3067,15 +3074,16 @@ export class Game {
     }
 
     /**
-     * Try an action (an ACTIONS key) on a target: "self" (the player) or an enemy's id. Returns
-     * the battle's answer: { ok } or { ok: false, reason }, saying why not to the player.
+     * Try an action (app/wheel.js: an ACTIONS key, or "item:" and a thing to use) on a target:
+     * "self" (the player) or an enemy's id. Returns the battle's answer: { ok } or { ok: false,
+     * reason }, saying why not to the player.
      */
     act(action, target) {
         this.#wake();
 
-        const { spell, order, ability } = ACTIONS[action] ?? {};
+        const { spell, order, ability, item } = actionOf(action) ?? {};
         const on = target === "self" ? null : target;
-        const command = spell ? { type: "cast", spell, target: on } : ability ? { type: "ability", ability, target: on } : order ? { type: order, target } : null;
+        const command = spell ? { type: "cast", spell, target: on } : ability ? { type: "ability", ability, target: on } : order ? { type: order, target } : item ? { type: "use", item } : null;
 
         const heard = (result) => {
             // (Setting on someone: the lock heard, as a tap on an enemy)
@@ -3139,7 +3147,7 @@ export class Game {
         return best;
     }
 
-    // The finger's been held on someone: open the wheel round them
+    // The finger's been held on someone: open the wheel round them, at its first side
     #openWheel(pointer, { actor, wheel }) {
         const player = this.battle.actor(this.me);
 
@@ -3153,37 +3161,62 @@ export class Game {
             return;
         }
 
-        pointer.wheel = { originX: pointer.x, originY: pointer.y, target: wheel === "self" ? "self" : actor.id, refused: null, done: false };
-        this.wheel.show(centre.x, centre.y, wheel, pointer.wheel.target, this.#slotsOf(wheel));
-        this.wheel.setCooldown(this.battle.cooldown(this.me));
+        pointer.wheel = { originX: pointer.x, originY: pointer.y, target: wheel === "self" ? "self" : actor.id, kind: wheel, side: 0, refused: null, done: false };
+        this.#showWheel(pointer.wheel, centre.x, centre.y);
         this.sound?.play("wheel");
         globalThis.navigator?.vibrate?.(12);
     }
 
-    // A wheel's slices, with the abilities the player's learnt: the greater heal on their own;
-    // the hold, and a power strike (or, with a weapon for shooting, an aimed shot), on an enemy's
-    #slotsOf(wheel) {
+    // A wheel open (or turned over) at a point on the screen: its side's slices, how many of each
+    // thing to use there are, which can't be used as things are, and what's cooling down
+    #showWheel(open, x, y) {
+        const slots = open.kind === "provoke" ? WHEELS.provoke[0] : (this.wheels[open.kind]?.[open.side] ?? {});
+        const counts = {};
+        const off = [];
         const learnt = this.progress.abilities();
-        const slots = { ...WHEELS[wheel] };
-        const shoots = WEAPONS[this.battle.actor(this.me)?.weapon]?.attacks.some(({ kind }) => kind === "ranged");
-        const blow = shoots ? "aimedShot" : "powerStrike";
+        const weapon = WEAPONS[this.battle.actor(this.me)?.weapon];
 
-        if (wheel === "self" && learnt.includes("greaterHeal")) {
-            slots.right = "greaterHeal";
+        for (const [direction, key] of Object.entries(slots)) {
+            const action = actionOf(key);
+            const blow = ABILITIES[action?.ability]?.blow;
+
+            if (action?.item) {
+                counts[action.item] = this.progress.count(action.item);
+            }
+
+            // (A thing all used up; an ability not learnt; a blow for another kind of weapon)
+            if ((action?.item && !counts[action.item]) || (action?.learnt && !learnt.includes(action.learnt)) || (blow && !weapon?.attacks.some(({ kind }) => (kind === "ranged" ? "ranged" : "melee") === blow))) {
+                off.push(direction);
+            }
         }
 
-        if (wheel === "enemy" && learnt.includes("hold")) {
-            slots.left = "hold";
-        }
-
-        if (wheel === "enemy" && learnt.includes(blow)) {
-            slots.right = blow;
-        }
-
-        return slots;
+        this.wheel.show(x, y, open.target, slots, { side: open.side, flip: open.kind !== "provoke", counts, off });
+        this.wheel.setCooldown(this.#cooldowns(slots));
     }
 
-    // The finger moves with the wheel open: into a slice, try its action (once)
+    // How much of each slice's cooldown is left (0 to 1, by direction): the spells' (all cast
+    // share one), and each blow's own
+    #cooldowns(slots) {
+        const shares = {};
+        const spells = this.battle.cooldown(this.me);
+        const readyAt = this.host.players.get(this.me)?.readyAt ?? {};
+
+        for (const [direction, key] of Object.entries(slots ?? {})) {
+            const action = actionOf(key);
+            const cooldown = ABILITIES[action?.ability]?.cooldown;
+
+            if (action?.spell) {
+                shares[direction] = spells;
+            } else if (cooldown) {
+                shares[direction] = Math.max(0, Math.min(1, ((readyAt[action.ability] ?? 0) - this.battle.time) / cooldown));
+            }
+        }
+
+        return shares;
+    }
+
+    // The finger moves with the wheel open: into a slice, try its action (once); into S, turn
+    // the wheel over, opened again under the finger
     #steerWheel(pointer) {
         const open = pointer.wheel;
 
@@ -3192,7 +3225,6 @@ export class Game {
         }
 
         const direction = directionOf(pointer.x - open.originX, pointer.y - open.originY, FLICK);
-        const action = direction ? this.wheel.actionAt(direction) : null;
 
         if (!direction) {
             open.refused = null;
@@ -3201,9 +3233,22 @@ export class Game {
             return;
         }
 
-        const cooling = SPELLS[ACTIONS[action]?.spell] && this.battle.cooldown(this.me) > 0;
+        if (this.wheel.flipsAt(direction)) {
+            open.side = (open.side + 1) % SIDES;
+            open.originX = pointer.x;
+            open.originY = pointer.y;
+            open.refused = null;
+            this.#showWheel(open, pointer.x, pointer.y);
+            this.sound?.play("wheel");
+            globalThis.navigator?.vibrate?.(8);
 
-        if (!action || cooling) {
+            return;
+        }
+
+        const action = this.wheel.actionAt(direction);
+        const cooling = (this.#cooldowns({ [direction]: action })[direction] ?? 0) > 0;
+
+        if (!action || cooling || this.wheel.offAt(direction)) {
             if (open.refused !== direction) {
                 open.refused = direction;
                 this.wheel.mark(direction, "refused");
@@ -3217,6 +3262,26 @@ export class Game {
         this.wheel.mark(direction, "chosen");
         this.wheel.hide({ after: 180 });
         this.act(action, open.target);
+    }
+
+    /**
+     * What's on the player's action wheels (their own and an enemy's, two sides each), what can
+     * be put on each (app/wheel.js assignable), and how many of each thing they carry: for the
+     * Action wheels options.
+     */
+    wheelSetup() {
+        const learnt = this.progress.abilities();
+        const carries = this.progress.carried();
+
+        const counts = Object.fromEntries(Object.keys(ITEMS).map((id) => [id, this.progress.count(id)]));
+
+        return { wheels: structuredClone(this.wheels), choices: { self: assignable("self", { learnt, carries }), enemy: assignable("enemy", { learnt, carries }) }, counts };
+    }
+
+    /** Put things on the player's action wheels (as the Action wheels options have them), and keep them. */
+    setWheels(wheels) {
+        this.wheels = readWheels(wheels);
+        this.onWheels(structuredClone(this.wheels));
     }
 
     #closeWheel() {

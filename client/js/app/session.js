@@ -40,10 +40,10 @@ export async function createSession({ canvas, quality, sound = true, volumes, fe
  * talks and what it's found, and what it's grown into and carries, and who hears of them; the
  * world's war as it was kept, and who hears of it; and who opens the world map).
  */
-export function createGame({ view, kit, sound, hud, hero, seed, talks, onTalk, explored, onExplore, onWorldMap, war, onWar, progress, onProgress, standing, onStanding, followers, onFollowers }) {
+export function createGame({ view, kit, sound, hud, hero, seed, talks, onTalk, explored, onExplore, onWorldMap, war, onWar, progress, onProgress, standing, onStanding, followers, onFollowers, wheels, onWheels }) {
     const world = buildWorld({ seed, race: hero.race ?? "human" });
 
-    return new Game({ view, kit, sound, world, hero, hud, talks, onTalk, explored, onExplore, onWorldMap, war, onWar, progress, onProgress, standing, onStanding, followers, onFollowers });
+    return new Game({ view, kit, sound, world, hero, hud, talks, onTalk, explored, onExplore, onWorldMap, war, onWar, progress, onProgress, standing, onStanding, followers, onFollowers, wheels, onWheels });
 }
 
 /**
@@ -52,11 +52,11 @@ export function createGame({ view, kit, sound, hud, hero, seed, talks, onTalk, e
  * made again from its seed, the host's copy of it restored, and played on as `joining` hears the
  * host play it. The rest as createGame (what's kept of the character, and who hears of it).
  */
-export function createJoinedGame({ view, kit, sound, hud, hero, welcome, joining, talks, onTalk, onWorldMap, progress, onProgress, standing, onStanding, followers, onFollowers }) {
+export function createJoinedGame({ view, kit, sound, hud, hero, welcome, joining, talks, onTalk, onWorldMap, progress, onProgress, standing, onStanding, followers, onFollowers, wheels, onWheels }) {
     const world = buildWorld({ seed: welcome.seed, race: welcome.race });
     const host = Host.restore(world, welcome.snapshot);
 
     joining.attach(host);
 
-    return new Game({ view, kit, sound, world, hero, hud, host, me: welcome.id, remote: joining, talks, onTalk, onWorldMap, progress, onProgress, standing, onStanding, followers, onFollowers });
+    return new Game({ view, kit, sound, world, hero, hud, host, me: welcome.id, remote: joining, talks, onTalk, onWorldMap, progress, onProgress, standing, onStanding, followers, onFollowers, wheels, onWheels });
 }

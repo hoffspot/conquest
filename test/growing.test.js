@@ -162,6 +162,14 @@ describe("growing stronger in play (host.js, progress.js)", () => {
         assert.equal(player.hp, 35);
         assert.deepEqual(host.command(HOST_PLAYER, { type: "use", index: 0 }), { ok: false, reason: "item" });
 
+        // (From a wheel: the first of a kind, by its id; none left, none used)
+        host.players.get(HOST_PLAYER).progress.stow({ id: "meal" });
+        assert.equal(host.players.get(HOST_PLAYER).progress.count("meal"), 1);
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "use", item: "meal" }), { ok: true });
+        assert.equal(player.hp, 50);
+        assert.equal(host.players.get(HOST_PLAYER).progress.count("meal"), 0);
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "use", item: "meal" }), { ok: false, reason: "item" });
+
         const gear = run(host, STEP_MS).filter(({ type }) => type === "gear");
 
         assert.equal(gear.length, 4);

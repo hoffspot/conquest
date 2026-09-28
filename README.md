@@ -223,10 +223,13 @@ minimap shows it, with the names of the places you've been and the icons of the 
 gone into. Drag to look about, pinch or scroll to zoom, and close it with the cross, Escape or M.
 What you've found is saved with your character.
 
-**Spells.** Press and hold on yourself or on an enemy, and a see-through wheel opens round
-them, cut in four like a pizza: up, right, down and left. Keep holding and flick towards a slice
-to cast what's in it; let go in the middle to change your mind. For now there are two spells,
-both at the top. On yourself, **Heal** (a green cross) gives back 10 to 20 hit points, rolled,
+**Spells, and the action wheels.** Press and hold on yourself or on an enemy, and a see-through
+wheel opens round them, cut in eight like a compass: N, NE, E, SE, S, SW, W and NW. Keep holding
+and flick towards a slice to do what's in it; let go in the middle to change your mind. Flick
+down (S) and the wheel turns over to its other side, wheel two, opened again under your finger.
+What's on your own wheel and an enemy's, both sides of each, you choose in **Game options,
+Action wheels**: the spells and blows you've learnt, and draughts, meals and ale from your pack
+(each showing how many you have). You start with two spells, both at the top. On yourself, **Heal** (a green cross) gives back 10 to 20 hit points, rolled,
 after a 0.6-second cast. On an enemy, **Stun** (violet, with stars) reaches 9 metres, if you can
 see it: 0.4 seconds later it's dazed for three seconds, unable to move, attack or cast (stars
 circle its head). All spells share one cooldown of three seconds from when one's cast: while it
@@ -387,7 +390,8 @@ client/                 The game (static files served to the browser)
     camera.js           How the camera follows the player from behind, and turns and tilts by drag
     doors.js            The doors and stairs to tap, and the green glow round them
     hud.js              Health, stamina, names, damage numbers and messages over the game
-    wheel.js            The action wheel: hold, flick, cooldowns; icons.js draws its icons
+    wheel.js            The action wheels: hold, flick, two sides, cooldowns; icons.js draws
+                        their icons, and every item's; wheelsetup.js sets what's on them
     minimap.js          The minimap: the map the player is on from above (out in the world, the
                         patch round them), with everyone on it; mapicons.js the buildings' icons
     worldmap.js         The world map: the whole world, under a fog where the player hasn't been

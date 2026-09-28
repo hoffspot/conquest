@@ -242,6 +242,16 @@ export class Progress {
         return [this.gear.body, this.gear.shield].filter(Boolean).flatMap(({ id }) => ITEMS[id].equipment ?? []);
     }
 
+    /** How many of a thing (an ITEMS id) are in the pack. */
+    count(id) {
+        return this.pack.filter((item) => item.id === id).length;
+    }
+
+    /** Each kind of thing in the pack (ITEMS ids, once each). */
+    carried() {
+        return [...new Set(this.pack.map(({ id }) => id))];
+    }
+
     /** Put something in the pack; whether there was room. */
     stow(item) {
         if (this.pack.length >= PACK_SIZE || !ITEMS[item?.id]) {
