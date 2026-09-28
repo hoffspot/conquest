@@ -121,6 +121,15 @@ export async function buildTown(world, { onProgress = () => {} } = {}) {
         const built = await build(spec);
         const object = new THREE.Group();
 
+        // (Trees a piece grows round itself, as the elves build into great trees: planted with
+        // the town's, where they stand as the piece is turned)
+        for (const { x, z, variant, size = 1 } of built.userData?.trees ?? []) {
+            const [lx, lz] = [(x - piece.w * 10) * PIXEL, (z - piece.h * 10) * PIXEL];
+            const [c, s] = [Math.cos(piece.facing), Math.sin(piece.facing)];
+
+            plant(ox + piece.x + lx * c + lz * s, oz + piece.y - lx * s + lz * c, variant, size);
+        }
+
         built.position.set(-piece.w * 10, 0, -piece.h * 10);
         object.add(built);
         object.rotation.y = piece.facing;

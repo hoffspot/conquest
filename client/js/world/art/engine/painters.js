@@ -792,7 +792,7 @@ export const MATERIALS = {
     "planks-pale": { painter: "planks", world: 14, base: 0x9c8a6e, light: 0xb5a286, dark: 0x6e604c },
     marble: { painter: "marble", world: 80, base: 0xe4e2d8, light: 0xf2f1ea, dark: 0xc4c2b6, mortar: 0xa9a99e },
     "stone-moon": { painter: "ashlar", world: 18, base: 0xdad8cc, light: 0xecebe2, dark: 0xb9b7aa, mortar: 0xa3a195 },
-    leafscale: { painter: "leafscale", world: 12, base: 0x86a95e, light: 0xa3c47a, dark: 0x55733a },
+    leafscale: { painter: "leafscale", world: 9, base: 0x86a95e, light: 0x9fbf78, dark: 0x6a8a4a },
     "bark-silver": { painter: "bark", world: 8, base: 0xc4c3b8, light: 0xe2e1d8, dark: 0x5e5d56 },
     heartwood: { painter: "grain", world: 16, base: 0xb08a5a, light: 0xcca878, dark: 0x7e5e3a },
     "stone-black": { painter: "ashlar", world: 14, base: 0x2a2830, light: 0x3c3944, dark: 0x1c1b21, mortar: 0x121116 },
