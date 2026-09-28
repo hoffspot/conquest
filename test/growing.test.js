@@ -51,6 +51,20 @@ describe("growing stronger in play (host.js, progress.js)", () => {
         return barkeep;
     };
 
+    it("sells the creatures' parts only to the adventurers' guild, for what they're worth", () => {
+        const host = hosted({ gold: 0 });
+        const barkeep = atTheBar(host);
+        const { progress } = host.players.get(HOST_PLAYER);
+
+        progress.stow({ id: "wolfPelt" }, 2);
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "sell", index: 0, to: barkeep.id }), { ok: false, reason: "wanted" });
+        assert.equal(progress.pack[0].count, 2, "kept");
+
+        // (What the guild pays: all it's worth, not the share a shop gives for its own wares)
+        assert.equal(priceOf({ id: "wolfPelt" }, { selling: true }), 7);
+        assert.equal(priceOf({ id: "sword" }, { selling: true }), 12);
+    });
+
     it("grows the blade and endurance by fighting the orc, and finds what's on it when it falls", () => {
         const host = hosted();
         const player = host.battle.actor(HOST_PLAYER);

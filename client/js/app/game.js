@@ -179,11 +179,16 @@ function thingsOf({ id, quality, count = 1 }) {
 
 // What a thing in the pack is, in words: what it does, and how well made it is
 function aboutOf({ id, quality }) {
-    const { use, slot, armor = 0 } = ITEMS[id];
+    const { use, slot, armor = 0, part = false, price } = ITEMS[id];
     const power = QUALITIES[quality]?.power ?? 1;
+    const worth = part ? ` The adventurers' guild pays ${price} gold for it.` : "";
 
     if (use) {
-        return use.heal ? `Heals ${use.heal} hit points.` : "Fills your stamina.";
+        return `${use.heal ? `Heals ${use.heal} hit points.` : "Fills your stamina."}${worth}`;
+    }
+
+    if (part) {
+        return worth.trim();
     }
 
     if (slot === "weapon") {
@@ -194,7 +199,7 @@ function aboutOf({ id, quality }) {
 }
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "rank", "loot", "bought", "sold", "used", "gear", "discarded", "dropped", "picked", "ability", "request", "standing", "gift", "counsel"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "rank", "loot", "bought", "sold", "used", "gear", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "gift", "counsel"]);
 
 const _focus = new THREE.Vector3();
 const _lean = new THREE.Vector3();
@@ -1913,8 +1918,15 @@ export class Game {
             const things = [event.gold ? `${event.gold} gold` : null, ...event.items.map((item) => itemLabel(item).toLowerCase())].filter(Boolean);
 
             this.hud.message(`You find ${things.join(", ")}.`, 2.5);
+        } else if (event.type === "picked" && event.bundle) {
+            const things = [event.bundle.gold ? `${event.bundle.gold} gold` : null, ...event.bundle.items.map(thingsOf)].filter(Boolean);
+
+            this.hud.message(`You take ${things.join(", ")}.${event.left ? " There's no room for the rest: it's still there." : ""}`, 2.5);
         } else if (event.type === "picked") {
             this.hud.message(`You pick up ${thingsOf(event.item)}.`, 2);
+        } else if (event.type === "spoils") {
+            this.hud.message(`The ${CREATURES[event.creature]?.name.toLowerCase() ?? "creature"} left something: tap the sack to take it.`, 2.5);
+            this.sound?.play("coins");
         }
 
         if (actor) {
@@ -2165,7 +2177,7 @@ export class Game {
             return { tree, name, rank, title: ["Untried", "Trained", "Adept", "Veteran", "Master", "Legend"][rank], xp, from, to, grows, ability: learnt.length ? `Learnt: ${learnt.join(", ")}` : null };
         });
         const gear = ["weapon", "body", "shield"].map((slot) => ({ slot, item: progress.gear[slot], label: progress.gear[slot] ? itemLabel(progress.gear[slot]) : null }));
-        const pack = progress.pack.map((stack) => stack && { ...stack, label: itemLabel(stack), about: aboutOf(stack), use: ITEMS[stack.id].use ? (stack.id === "meal" ? "Eat" : "Drink") : null, equip: ITEMS[stack.id].slot ? (ITEMS[stack.id].slot === "weapon" ? "Wield" : "Wear") : null, price: priceOf(stack, { haggle, selling: true }) });
+        const pack = progress.pack.map((stack) => stack && { ...stack, label: itemLabel(stack), about: aboutOf(stack), use: ITEMS[stack.id].use ? (stack.id === "meal" || ITEMS[stack.id].food ? "Eat" : "Drink") : null, equip: ITEMS[stack.id].slot ? (ITEMS[stack.id].slot === "weapon" ? "Wield" : "Wear") : null, price: priceOf(stack, { haggle, selling: true }) });
         const shop = this.shopping && {
             name: this.shopping.name,
             wares: wares(this.shopping.shop).map((item) => {
@@ -2270,7 +2282,7 @@ export class Game {
 
         const [ox, oz] = this.originOf(me.map);
 
-        this.drops.sync(this.host.ground, { map: me.map, near: { x: ox + me.x, z: oz + me.y }, reach: DRAW_REACH, originOf: (map) => this.originOf(map) });
+        this.drops.sync(this.host.ground, { map: me.map, near: { x: ox + me.x, z: oz + me.y }, reach: DRAW_REACH, originOf: (map) => this.originOf(map), mine: this.me });
         this.drops.update(this.clock ?? 0);
 
         const picking = this.picking && this.host.ground.get(this.picking);
@@ -2853,6 +2865,7 @@ export class Game {
             case "discarded":
             case "dropped":
             case "picked":
+            case "spoils":
                 this.#progressed(event);
                 break;
             case "request":

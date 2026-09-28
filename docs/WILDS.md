@@ -100,6 +100,29 @@ it plays out the same on every machine.
   a moment, sit up with their feet drawn under them and rise; until they're up they can't move,
   fight, cast, use anything or talk (the host refuses: "You're down: get up first").
 
+## What they leave
+
+A creature brought down may leave something: its parts (a wolf's pelt and fangs, a boar's tusks
+and meat, a wyvern's scales and sting, a dragon's scales, fangs and heart), and the people-shaped
+ones a little gold and gear (`core/spoils.js`). Every player within 30 m when it falls finds their
+own bundle on it, rolled for them alone: a leather sack where it fell, seen only by them, there
+for five minutes to tap and take (what doesn't fit in the pack stays in the sack). Nothing's
+certain: each thing has its chance, a little better for each tier the creature's above its least,
+and gold's as much more as the creature's stronger. The only way to share what's found is to hand
+it over.
+
+The parts are worth what the adventurers' guild pays for them (only the guild buys them; other
+shops have no use for them): a couple of gold for a rat's tail near home, a few for a wolf's pelt,
+fifteen or so for a bear's, sixty for a dragon's scale and two hundred and fifty for its heart. So
+a creature near home is worth a gold piece or two a kill on average (often nothing), a bear a dozen,
+and a dragon a fortune. Some are good to eat or drink: boar, bear and frog meat heal, troll's blood
+heals more, a wisp's essence fills your stamina. Each has its picture in the pack, in its colour.
+
+The guilds' boards want them too ("Wanted at the guild": `standing.js` `offerContract`): a few of
+one creature's parts (a creature found near home, anywhere), brought to the counter, paid half as
+much again as they'd sell for (and handed over out of the pack). "Beasts on the roads" counts the
+creatures brought down.
+
 ## How they're built
 
 Every creature's made in code (no models downloaded), from its look (`beasts/looks.js`), on one of

@@ -4,6 +4,8 @@
 // `DEFS` holds the gradients, glows and patterns they share: put in the page once (`useDefs`),
 // where every icon drawn anywhere in it finds them.
 
+import { PARTS } from "../core/spoils.js";
+
 /** The gear's and things' gradients and patterns. */
 const ITEM_DEFS = `
 <linearGradient id="icon-steel" x1="0" y1="0" x2="1" y2="1">
@@ -236,8 +238,154 @@ export const ICONS = Object.freeze({
 // A tunic's outline (a gambeson's, a mail shirt's): shoulders, sleeves and a round neck
 const TUNIC = "M-8,-18 L-18,-13 L-22,1 L-16,3 L-13,-4 L-13,20 L13,20 L13,-4 L16,3 L22,1 L18,-13 L8,-18 C5,-13 -5,-13 -8,-18 Z";
 
+// A colour a share lighter (+) or darker (-), as #rrggbb
+function tone(hex, by) {
+    const value = parseInt(hex.slice(1), 16);
+    const channel = (shift) => {
+        const c = (value >> shift) & 255;
+
+        return Math.round(by >= 0 ? c + (255 - c) * by : c * (1 + by));
+    };
+
+    return `#${[16, 8, 0].map((shift) => channel(shift).toString(16).padStart(2, "0")).join("")}`;
+}
+
+// The creatures' parts' pictures (core/spoils.js PARTS: each part's `icon`), in its colour
+const PART_PICTURES = {
+    pelt: (c) => `
+        <path d="M-17,-12 C-12,-19 -4,-15 0,-18 C4,-15 12,-19 17,-12 C14,-4 19,4 15,12 C10,19 3,15 0,19 C-3,15 -10,19 -15,12 C-19,4 -14,-4 -17,-12 Z" fill="${c}" stroke="${tone(c, -0.55)}" stroke-width="1.3"/>
+        <path d="M-9,-6 C-6,-2 -8,4 -5,8 M0,-10 C2,-3 -1,4 1,11 M9,-6 C6,-1 8,5 5,9" fill="none" stroke="${tone(c, -0.3)}" stroke-width="1.2" stroke-linecap="round"/>
+        <path d="M-12,-10 C-6,-13 6,-13 12,-10" fill="none" stroke="${tone(c, 0.35)}" stroke-width="1.4" stroke-linecap="round" opacity="0.7"/>`,
+    hide: (c) => `
+        <path d="M-18,-9 L-9,-15 L0,-12 L9,-16 L18,-9 L14,0 L19,9 L9,15 L0,12 L-9,16 L-18,9 L-14,0 Z" fill="${c}" stroke="${tone(c, -0.55)}" stroke-width="1.3"/>
+        <path d="M-10,-5 L10,-5 M-11,1 L11,1 M-10,7 L10,7" stroke="${tone(c, -0.25)}" stroke-width="1" stroke-dasharray="2 2"/>`,
+    skin: (c) => `
+        <path d="M-16,14 C-20,4 -8,2 -10,-6 C-12,-14 2,-19 8,-14 C14,-9 6,-3 10,4 C14,11 4,19 -4,17 Z" fill="${c}" stroke="${tone(c, -0.55)}" stroke-width="1.3"/>
+        <path d="M-10,8 L-4,4 M-6,-4 L0,-8 M2,6 L7,2" stroke="${tone(c, -0.35)}" stroke-width="1.6" stroke-linecap="round"/>`,
+    fang: (c) => `
+        <path d="M-6,-17 C-2,-19 6,-18 8,-15 C10,-6 4,6 -2,18 C-3,8 -9,-6 -6,-17 Z" fill="${c}" stroke="${tone(c, -0.5)}" stroke-width="1.3"/>
+        <path d="M-3,-14 C-3,-6 -2,2 -1,8" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" opacity="0.6"/>`,
+    tusk: (c) => `
+        <path d="M-17,14 C-18,-2 -6,-16 14,-17 C6,-12 -4,-2 -9,16 Z" fill="${c}" stroke="${tone(c, -0.5)}" stroke-width="1.3"/>
+        <path d="M-13,10 L-8,12 M-11,4 L-6,7" stroke="${tone(c, -0.35)}" stroke-width="1.2"/>`,
+    claw: (c) => `
+        <path d="M-14,16 C-16,0 -6,-14 12,-17 C4,-10 -2,-2 -3,16 Z" fill="${c}" stroke="${tone(c, 0.35)}" stroke-width="1.3"/>
+        <path d="M-10,12 C-10,2 -4,-6 4,-11" fill="none" stroke="${tone(c, 0.5)}" stroke-width="1.2" stroke-linecap="round" opacity="0.7"/>`,
+    sting: (c) => `
+        <path d="M-12,-16 C0,-18 14,-10 14,4 C14,10 8,14 2,18 C4,10 2,4 -4,0 C-10,-4 -14,-8 -12,-16 Z" fill="${c}" stroke="${tone(c, -0.5)}" stroke-width="1.3"/>
+        <circle cx="2" cy="18" r="1.8" fill="${tone(c, -0.6)}"/>`,
+    quill: (c) => `
+        <path d="M-15,15 L15,-15" stroke="${tone(c, -0.45)}" stroke-width="4" stroke-linecap="round"/>
+        <path d="M-15,15 L15,-15" stroke="${c}" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M-15,15 L-8,8" stroke="#2a221a" stroke-width="3" stroke-linecap="round"/>
+        <path d="M-8,18 L12,-12 M-18,8 L6,-16" stroke="${c}" stroke-width="1.6" stroke-linecap="round" opacity="0.7"/>`,
+    tail: (c) => `
+        <path d="M-16,-12 C-4,-16 6,-6 4,4 C2,12 10,16 16,14" fill="none" stroke="${tone(c, -0.4)}" stroke-width="5.4" stroke-linecap="round"/>
+        <path d="M-16,-12 C-4,-16 6,-6 4,4 C2,12 10,16 16,14" fill="none" stroke="${c}" stroke-width="3.4" stroke-linecap="round"/>`,
+    gel: (c) => `
+        <path d="M-16,10 C-18,-4 -8,-16 0,-16 C8,-16 18,-4 16,10 C12,18 -12,18 -16,10 Z" fill="${c}" fill-opacity="0.85" stroke="${tone(c, -0.5)}" stroke-width="1.3"/>
+        <ellipse cx="-6" cy="-6" rx="4" ry="5" fill="#ffffff" opacity="0.45"/>
+        <circle cx="5" cy="4" r="2.4" fill="${tone(c, -0.35)}"/>`,
+    wing: (c) => `
+        <path d="M-18,-6 L0,-14 L18,-6 L12,4 L8,0 L4,10 L0,4 L-4,10 L-8,0 L-12,4 Z" fill="${c}" stroke="${tone(c, -0.6)}" stroke-width="1.2" stroke-linejoin="round"/>
+        <path d="M0,-14 L-12,4 M0,-14 L-4,10 M0,-14 L4,10 M0,-14 L12,4" stroke="${tone(c, 0.3)}" stroke-width="1"/>`,
+    meat: (c) => `
+        <path d="M-15,4 C-19,-8 -6,-17 6,-14 C17,-11 18,4 9,10 C3,14 -11,14 -15,4 Z" fill="${c}" stroke="${tone(c, -0.5)}" stroke-width="1.3"/>
+        <path d="M-9,-2 C-4,-8 4,-9 10,-4" fill="none" stroke="#f3d6c4" stroke-width="2" stroke-linecap="round"/>
+        <path d="M8,9 L16,17" stroke="#efe6d0" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="17" cy="18" r="2.8" fill="#efe6d0"/>`,
+    gland: (c) => `
+        <path d="M0,-17 C4,-12 14,-6 13,5 C12,14 -12,14 -13,5 C-14,-6 -4,-12 0,-17 Z" fill="${c}" stroke="${tone(c, -0.55)}" stroke-width="1.3"/>
+        <ellipse cx="-4" cy="0" rx="3" ry="5" fill="#ffffff" opacity="0.4"/>
+        <path d="M-6,8 C-2,6 2,10 6,7" fill="none" stroke="${tone(c, -0.35)}" stroke-width="1.2"/>`,
+    ear: (c) => `
+        <path d="M-10,16 C-16,4 -12,-14 12,-18 C8,-8 10,6 2,16 Z" fill="${c}" stroke="${tone(c, -0.5)}" stroke-width="1.3"/>
+        <path d="M-5,11 C-8,2 -4,-8 7,-12" fill="none" stroke="${tone(c, -0.3)}" stroke-width="2.2" stroke-linecap="round"/>`,
+    dust: (c) => `
+        <path d="M-14,-6 C-14,-14 14,-14 14,-6 L12,14 C12,18 -12,18 -12,14 Z" fill="#8a6a44" stroke="#3f2a14" stroke-width="1.3"/>
+        <ellipse cy="-6" rx="14" ry="4" fill="${c}" stroke="#3f2a14" stroke-width="1"/>
+        <path d="M-9,-14 C-6,-17 -2,-16 0,-18 C3,-15 7,-17 9,-14" fill="none" stroke="#5a3f22" stroke-width="1.6"/>`,
+    skull: (c) => `
+        <path d="M-13,2 C-17,-18 17,-18 13,2 L10,6 L10,14 L-10,14 L-10,6 Z" fill="${c}" stroke="${tone(c, -0.55)}" stroke-width="1.3"/>
+        <ellipse cx="-5.5" cy="-2" rx="4" ry="4.5" fill="#1a1510"/>
+        <ellipse cx="5.5" cy="-2" rx="4" ry="4.5" fill="#1a1510"/>
+        <path d="M0,4 L-2,8 L2,8 Z" fill="#1a1510"/>
+        <path d="M-6,11 L-6,14 M-2,11 L-2,14 M2,11 L2,14 M6,11 L6,14" stroke="${tone(c, -0.5)}" stroke-width="1"/>`,
+    sigil: (c) => `
+        <circle r="16" fill="${tone(c, -0.35)}" stroke="#c8a840" stroke-width="2"/>
+        <path d="M0,-11 L6.5,9 L-10.5,-3.4 L10.5,-3.4 L-6.5,9 Z" fill="none" stroke="#e8c870" stroke-width="1.6"/>
+        <circle r="3" fill="${c}"/>`,
+    vial: (c) => `
+        <path d="M-5,-12 L5,-12 L5,-4 C12,0 12,14 0,16 C-12,14 -12,0 -5,-4 Z" fill="url(#icon-glass)" stroke="#3a2f45" stroke-width="1.3"/>
+        <path d="M-9,4 C-9,12 9,12 9,4 C5,6 -5,6 -9,4 Z" fill="${c}"/>
+        <rect x="-6" y="-18" width="12" height="6" rx="1.5" fill="#a8743f" stroke="#4a2c14" stroke-width="1"/>`,
+    scale: (c) => `
+        <path d="M0,-17 C12,-12 16,0 12,10 C8,17 -8,17 -12,10 C-16,0 -12,-12 0,-17 Z" fill="${c}" stroke="${tone(c, -0.55)}" stroke-width="1.3"/>
+        <path d="M0,-14 L0,12 M-8,-4 C-4,0 4,0 8,-4" fill="none" stroke="${tone(c, 0.3)}" stroke-width="1.2"/>
+        <ellipse cx="-5" cy="-7" rx="2.6" ry="4" fill="#ffffff" opacity="0.35"/>`,
+    plate: (c) => `
+        <path d="M-17,-6 C-10,-14 10,-14 17,-6 L14,10 C8,15 -8,15 -14,10 Z" fill="${c}" stroke="${tone(c, -0.55)}" stroke-width="1.3"/>
+        <path d="M-15,0 C-8,-6 8,-6 15,0 M-13,6 C-7,1 7,1 13,6" fill="none" stroke="${tone(c, -0.3)}" stroke-width="1.2"/>`,
+    charm: (c) => `
+        <path d="M-10,-18 C-4,-12 4,-12 10,-18" fill="none" stroke="#5a3f22" stroke-width="1.6"/>
+        <path d="M0,-12 L0,-6" stroke="#5a3f22" stroke-width="1.6"/>
+        <path d="M-9,-6 L9,-6 L6,12 L0,17 L-6,12 Z" fill="${c}" stroke="${tone(c, -0.55)}" stroke-width="1.3"/>
+        <circle cy="3" r="3.2" fill="#e8c870" stroke="${tone(c, -0.55)}" stroke-width="0.8"/>`,
+    essence: (c) => `
+        <circle r="16" fill="${c}" opacity="0.25"/>
+        <circle r="10" fill="${c}" opacity="0.55"/>
+        <circle r="5.5" fill="#ffffff" opacity="0.95"/>
+        <path d="M0,-18 L0,-12 M0,12 L0,18 M-18,0 L-12,0 M12,0 L18,0" stroke="${c}" stroke-width="1.6" stroke-linecap="round"/>`,
+    wood: (c) => `
+        <path d="M-16,-8 L10,-14 L16,6 L-10,14 Z" fill="${c}" stroke="${tone(c, -0.55)}" stroke-width="1.3"/>
+        <ellipse cx="13" cy="-4" rx="4" ry="10" transform="rotate(-18 13 -4)" fill="${tone(c, 0.35)}" stroke="${tone(c, -0.55)}" stroke-width="1"/>
+        <path d="M-12,-3 L8,-8 M-10,4 L10,-1 M-8,10 L12,5" stroke="${tone(c, -0.3)}" stroke-width="1"/>`,
+    fungus: (c) => `
+        <path d="M-4,4 L-3,17 L4,17 L4,4 Z" fill="#e8dcc8" stroke="#6a5a48" stroke-width="1.1"/>
+        <path d="M-17,4 C-17,-12 17,-12 17,4 Z" fill="${c}" stroke="${tone(c, -0.55)}" stroke-width="1.3"/>
+        <circle cx="-7" cy="-4" r="2.2" fill="${tone(c, 0.5)}"/>
+        <circle cx="5" cy="-6" r="2.6" fill="${tone(c, 0.5)}"/>
+        <circle cx="10" cy="0" r="1.6" fill="${tone(c, 0.5)}"/>`,
+    silk: (c) => `
+        <ellipse rx="15" ry="11" fill="${c}" stroke="${tone(c, -0.35)}" stroke-width="1.3"/>
+        <path d="M-15,-3 C-5,6 5,-8 15,2 M-12,-8 C-2,2 8,-12 14,-4 M-13,6 C-3,12 7,2 13,8" fill="none" stroke="${tone(c, -0.2)}" stroke-width="1"/>
+        <path d="M14,4 C18,10 16,16 20,19" fill="none" stroke="${c}" stroke-width="1.2"/>`,
+    jaw: (c) => `
+        <path d="M-17,-8 L-13,6 C-8,15 8,15 13,6 L17,-8 L12,-8 L9,3 C5,8 -5,8 -9,3 L-12,-8 Z" fill="${c}" stroke="${tone(c, -0.55)}" stroke-width="1.3"/>
+        <path d="M-9,1 L-8,-4 M-5,4 L-5,-1 M5,4 L5,-1 M9,1 L8,-4" stroke="#fffaf0" stroke-width="1.8" stroke-linecap="round"/>`,
+    core: (c) => `
+        <path d="M0,-16 L13,-7 L13,8 L0,17 L-13,8 L-13,-7 Z" fill="${tone(c, -0.6)}" stroke="#1a1510" stroke-width="1.3"/>
+        <path d="M0,-9 L7,-4 L7,5 L0,10 L-7,5 L-7,-4 Z" fill="${c}"/>
+        <circle r="3.5" fill="#ffffff" opacity="0.8"/>`,
+    shard: (c) => `
+        <path d="M-4,-18 L8,-6 L4,17 L-9,4 Z" fill="${c}" stroke="${tone(c, -0.5)}" stroke-width="1.3" stroke-linejoin="round"/>
+        <path d="M-4,-18 L-1,2 L4,17 M-1,2 L8,-6" fill="none" stroke="${tone(c, 0.45)}" stroke-width="1"/>`,
+    heart: (c) => `
+        <path d="M0,16 C-18,4 -18,-14 -8,-14 C-3,-14 0,-10 0,-7 C0,-10 3,-14 8,-14 C18,-14 18,4 0,16 Z" fill="${c}" stroke="${tone(c, -0.55)}" stroke-width="1.3"/>
+        <ellipse cx="-7" cy="-6" rx="3" ry="4" fill="#ffffff" opacity="0.4"/>`,
+    ingot: (c) => `
+        <path d="M-16,6 L-10,-6 L16,-6 L10,6 Z" fill="${tone(c, 0.3)}" stroke="#1a1c20" stroke-width="1.2"/>
+        <path d="M-16,6 L10,6 L10,13 L-16,13 Z" fill="${c}" stroke="#1a1c20" stroke-width="1.2"/>
+        <path d="M10,6 L16,-6 L16,1 L10,13 Z" fill="${tone(c, -0.35)}" stroke="#1a1c20" stroke-width="1.2"/>`,
+};
+
+/** A creature's part's picture (spoils.js PARTS: `icon`, `tint`). */
+export const partIcon = ({ icon, tint }) => (PART_PICTURES[icon] ?? PART_PICTURES.gel)(tint);
+
+// A few gold coins, stacked and scattered (what's found on a creature besides its parts)
+const COINS = `
+    <ellipse cx="-6" cy="10" rx="10" ry="4" fill="#b8892a" stroke="#5a3f10" stroke-width="1.2"/>
+    <ellipse cx="-6" cy="6" rx="10" ry="4" fill="#d9a83a" stroke="#5a3f10" stroke-width="1.2"/>
+    <ellipse cx="-6" cy="2" rx="10" ry="4" fill="#f0c858" stroke="#5a3f10" stroke-width="1.2"/>
+    <ellipse cx="8" cy="-6" rx="9" ry="9" fill="#f0c858" stroke="#5a3f10" stroke-width="1.2"/>
+    <ellipse cx="8" cy="-6" rx="5.5" ry="5.5" fill="none" stroke="#b8892a" stroke-width="1"/>`;
+
 /** Each thing that can be carried's icon (core/progress.js ITEMS): SVG drawn round 0, 0, about 44 across. */
 export const ITEM_ICONS = Object.freeze({
+    // (The creatures' parts, each in its colour; gold)
+    ...Object.fromEntries(Object.entries(PARTS).map(([id, part]) => [id, partIcon(part)])),
+    gold: COINS,
+
     sword: `<g transform="rotate(45)">${SWORD}</g>`,
 
     // A gnarled staff, a crystal glowing in its crook

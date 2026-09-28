@@ -13,6 +13,11 @@ import { CAMP_FOLK, candidatesAt, CREATURES, LAIRS, livesOn, packOf, TIER_LAND, 
 import { HOST_PLAYER, Host, WILDS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
+import { ITEMS } from "../client/js/core/progress.js";
+import { createRandom } from "../client/js/core/random.js";
+import { PARTS, rollSpoils, SPOILS } from "../client/js/core/spoils.js";
+import { offerContract, WANTED_PARTS } from "../client/js/core/standing.js";
+import { War } from "../client/js/core/war/war.js";
 import { armsOf, chooseAttack, NATURAL, weaponOf, WEAPONS } from "../client/js/core/weapons.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { FACTIONS } from "../client/js/core/worldplan/plan.js";
@@ -247,6 +252,147 @@ describe("the wild come to life near the players (host.js, battle.js)", () => {
         host.battle.remove("test-tusker");
         run(host, me.downUntil - host.battle.time + STEP_MS);
         assert.equal(host.command(HOST_PLAYER, { type: "move", to: [me.square[0] - 3, me.square[1]] }).ok, true);
+    });
+
+    it("leaves each player near a creature that falls their own bundle, seen and taken by them alone", () => {
+        const context = outside(hosted());
+        const { host, me } = context;
+
+        run(host, 600);
+
+        for (const beast of about(host)) {
+            host.battle.remove(beast.id);
+            host.wild.delete(beast.id);
+        }
+
+        // (Another player beside them, and one far off)
+        for (const [id, square] of [["p2", [me.square[0], me.square[1] + 2]], ["p3", [me.square[0] + 60, me.square[1]]]]) {
+            host.join({ id, hero: { ...HERO, name: id } });
+            put(host.battle.actor(id), square);
+            Object.assign(host.battle.actor(id), { hp: 5000, maxHp: 5000, map: me.map });
+        }
+
+        // (A dragon, near dead: it always has gold on it)
+        const square = [me.square[0] + 1, me.square[1]];
+
+        host.wild.set("test-dragon", { creature: "dragon", tier: 10, pack: "test-dragon", camp: null, lair: null, master: false });
+        host.battle.add({ id: "test-dragon", kind: "beast", name: "Dragon", weapon: "dragon", team: WILD, square, ai: "wild", hp: 1, speed: 0.1, chase: 0.1, wild: { creature: "dragon", tier: 10, temper: "defensive", guard: 0, roam: 0, leash: 2, pack: "test-dragon", leader: null, menace: false } });
+        host.command(HOST_PLAYER, { type: "engage", target: "test-dragon" });
+
+        const events = run(host, 5000);
+        const found = events.filter((event) => event.type === "spoils");
+        const bundles = [...host.ground.values()].filter((dropped) => dropped.bundle);
+
+        assert.deepEqual(found.map(({ id }) => id).sort(), [HOST_PLAYER, "p2"].sort(), "those near found theirs; the one far off, none");
+        assert.equal(bundles.length, 2);
+        assert.ok(bundles.every((dropped) => dropped.bundle.gold > 0 && dropped.bundle.items.every(({ id }) => PARTS[id])));
+
+        const mine = bundles.find((dropped) => dropped.for === HOST_PLAYER);
+        const theirs = bundles.find((dropped) => dropped.for === "p2");
+        const { progress } = host.players.get(HOST_PLAYER);
+        const before = progress.gold;
+        const bundle = structuredClone(mine.bundle);
+
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "pickUp", ground: theirs.id }), { ok: false, reason: "gone" }, "not theirs to take");
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "pickUp", ground: mine.id }), { ok: true });
+        assert.equal(progress.gold, before + bundle.gold);
+        assert.ok(bundle.items.every(({ id, count }) => progress.pack.some((stack) => stack?.id === id && stack.count >= count)));
+        assert.ok(!host.ground.has(mine.id) && host.ground.has(theirs.id));
+    });
+
+    it("rolls creatures' spoils as their tables say, never certain but for a dragon's gold, worth more the mightier", () => {
+        const random = createRandom(7);
+        const tally = (creature, tier, n = 2000) => {
+            let worth = 0;
+            let nothing = 0;
+
+            for (let k = 0; k < n; k++) {
+                const { gold, items } = rollSpoils(creature, tier, random, CREATURES[creature].tiers[0]);
+                const value = gold + items.reduce((sum, { id, count }) => sum + ITEMS[id].price * count, 0);
+
+                worth += value;
+                nothing += value === 0 ? 1 : 0;
+            }
+
+            return { worth: worth / n, nothing: nothing / n };
+        };
+
+        for (const [id, table] of Object.entries(SPOILS)) {
+            assert.ok(CREATURES[id], id);
+            assert.ok(table.items.every(({ id: item, chance }) => ITEMS[item] && chance > 0 && chance < 1), `${id}: things it might have`);
+        }
+
+        assert.deepEqual(Object.keys(SPOILS).sort(), Object.keys(CREATURES).sort(), "every creature has its spoils");
+
+        // (Near home, a few gold's worth a kill, and often nothing; the mightiest, a fortune)
+        const rat = tally("rat", 1);
+        const wolf = tally("wolf", 2);
+        const bear = tally("bear", 4);
+        const dragon = tally("dragon", 10, 400);
+
+        assert.ok(rat.worth > 0.5 && rat.worth < 3 && rat.nothing > 0.25, JSON.stringify(rat));
+        assert.ok(wolf.worth > rat.worth && wolf.worth < 8, JSON.stringify(wolf));
+        assert.ok(bear.worth > wolf.worth && bear.worth < 25, JSON.stringify(bear));
+        assert.ok(dragon.worth > 200 && dragon.nothing === 0, JSON.stringify(dragon));
+    });
+
+    it("has the guild want creatures' parts brought in, paid better than over the counter, taken from the pack", () => {
+        // (Offered on the board, now and then: some of what's near home, fewer of the dearer)
+        const war = new War(buildWorld({ seed: 2 }).plan, { seed: 2 });
+        const town = war.towns[0];
+        const offered = [];
+
+        for (let seed = 1; seed < 80; seed++) {
+            const contract = offerContract({ war, town: town.id, giver: { id: "clerk", name: "Mira", title: "" }, random: createRandom(seed) });
+
+            if (contract?.kind === "parts") {
+                offered.push(contract);
+            }
+        }
+
+        assert.ok(offered.length > 5, `${offered.length} parts contracts`);
+
+        for (const { target, reward, text } of offered) {
+            assert.ok(WANTED_PARTS.includes(target.part) && target.need >= 2 && target.need <= 5, JSON.stringify(target));
+            assert.ok(reward.gold > PARTS[target.part].worth * target.need, "more than they'd fetch sold");
+            assert.ok(text.includes(String(reward.gold)), text);
+        }
+
+        // Handed in at the guild: the parts out of the pack, the gold in hand
+        const host = new Host(buildWorld({ seed: 2 }), { populate: false });
+
+        host.join({ id: HOST_PLAYER, hero: HERO });
+        host.populate();
+
+        const player = host.players.get(HOST_PLAYER);
+        const me = host.battle.actor(HOST_PLAYER);
+        const guild = [...host.world.interiors.buildings.values()].find(({ kind, place }) => kind === "guild" && place === "home");
+
+        put(me, guild.door.ends[0].squares[0]);
+        Object.assign(me, { map: "town" });
+        assert.equal(host.command(HOST_PLAYER, { type: "enter", link: guild.door.id }).ok, true);
+        run(host, STEP_MS * 4);
+
+        const receptionist = host.battle.actor(guild.folk.find(({ role }) => role === "receptionist").id);
+
+        put(me, [receptionist.square[0], receptionist.square[1] + 2]);
+        Object.assign(me, { map: receptionist.map });
+        assert.equal(host.command(HOST_PLAYER, { type: "talk", with: receptionist.id }).ok, true);
+
+        const contract = { kind: "parts", title: "Wanted at the guild", from: { id: receptionist.id, name: "Mira", title: "", town: host.world.start.id, townName: "Home", post: "guild" }, given: 0, state: "open", count: 0, until: 999, key: "wolfFang", target: { part: "wolfFang", name: "Wolf fang", need: 3 }, reward: { standing: 0, gold: 23 }, text: "" };
+
+        player.standing.take(contract);
+        player.progress.stow({ id: "wolfFang" }, 2);
+        assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { report: true } }).reason, "due", "not all of them yet");
+
+        player.progress.stow({ id: "wolfFang" }, 2);
+
+        const gold = player.progress.gold;
+
+        assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { report: true } }).ok, true);
+        assert.equal(player.progress.gold, gold + 23);
+        assert.equal(player.progress.held("wolfFang"), 1, "three handed over, one kept");
+        assert.equal(player.standing.requests.length, 0);
     });
 
     it("lets a bog frog's tongue reach two squares off", () => {

@@ -766,6 +766,7 @@ in gold):
 | Beasts on the roads | always | 2 to 4 of the wild brought down | 10, and 7 for each |
 | A bounty | the town's holders at war | 2 to 4 of their enemies' soldiers brought down | 8, and 6 for each |
 | The camp outside the walls | an enemy camp before the town (M6) | the player was at it, and it's gone | 70 |
+| Wanted at the guild | always | 2 to 5 of a creature's parts (docs/WILDS.md) brought to the counter | 4, and 1.6 times what they'd sell for |
 
 They're carried like the rulers' requests (the journal shows them), and told of at the counter.
 

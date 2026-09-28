@@ -292,6 +292,12 @@ export const SOUNDS = {
     lock: { variants: 1, volume: 0.35, make: () => notes([[740, 0], [1110, 0.07]], { decay: 0.06, length: 0.3 }) },
     slain: { variants: 1, volume: 0.4, make: () => notes([[523, 0], [659, 0.09], [784, 0.18], [1047, 0.27]], { decay: 0.35, length: 1.2 }) },
     fallen: { variants: 1, volume: 0.4, make: () => notes([[392, 0], [311, 0.24], [262, 0.48]], { decay: 0.6, harmonics: [[1, 1], [2, 0.12]], length: 1.8 }) },
+    // A few coins chinking together (something found on a creature)
+    coins: {
+        variants: 2,
+        volume: 0.3,
+        make: (random) => notes([0, 0.05, 0.11, 0.16].map((at) => [2400 + random.next() * 1600, at + random.next() * 0.02]), { decay: 0.08, harmonics: [[1, 1], [2.4, 0.4], [3.9, 0.2]], length: 0.5 }),
+    },
     wake: { variants: 1, volume: 0.35, make: () => notes([[880, 0], [1320, 0.12]], { decay: 0.7, harmonics: [[1, 1], [2.76, 0.2], [5.4, 0.06]], length: 1.6 }) },
     breath: {
         variants: 2,

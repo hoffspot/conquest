@@ -21,6 +21,7 @@ import { ABILITIES, alike, ITEMS, priceOf, Progress, rollLoot, wares, weaponOf, 
 import { createRandom } from "./random.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
 import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, encounterAt, LAIRS, menaces, packOf, tierPower, WILD } from "./creatures.js";
+import { rollSpoils } from "./spoils.js";
 import { campTier, CHUNK, landAt, RACE, startFor } from "./worldplan/plan.js";
 import { armouryGift, COUNSEL, FAILED, MOST_REQUESTS, offerContract, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
 import { bannersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, roundsOf, sortieOf } from "./war/muster.js";
@@ -108,6 +109,12 @@ const FALLEN_MS = 10000;
  * its patrols roam), and are let go `campFar` away.
  */
 export const WILDS = Object.freeze({ count: 8, about: 60, from: 30, to: 44, clear: 25, far: 90, camp: 60, campFar: 140 });
+
+/**
+ * How near (m) a player has to be to a creature when it falls to find their own bundle on it (its
+ * spoils: spoils.js).
+ */
+export const SPOILS_REACH = 30;
 
 /** How long something dropped lies on the ground before it's gone (ms), and how near (m) it's picked up from. */
 export const GROUND_MS = 5 * 60 * 1000;
@@ -204,6 +211,7 @@ export const REFUSALS = Object.freeze({
     gone: "It isn't there any more.",
     undo: "Too late to take that back.",
     down: "You're down: get up first.",
+    wanted: "They've no use for that: the adventurers' guild buys such things.",
 });
 
 // What can't be done while knocked off one's feet (battle.js: a knockdown)
@@ -650,6 +658,7 @@ export class Host {
 
             if (beast) {
                 this.fallen.push({ id: event.id, at: this.battle.time + FALLEN_MS });
+                this.#spoils(event.id, beast);
 
                 if (beast.lair && beast.master) {
                     this.slain[beast.lair] = this.battle.time + LAIRS[this.#siteOf(beast.lair).kind].back;
@@ -1119,6 +1128,11 @@ export class Host {
             return refuse("item");
         }
 
+        // (The creatures' parts: only the adventurers' guild buys those)
+        if (ITEMS[stack.id]?.part && trading.shop !== "guild") {
+            return refuse("wanted");
+        }
+
         const price = priceOf(stack, { haggle: player.progress.bonuses().haggle, selling: true }) * count;
         const item = player.progress.take(index, count);
 
@@ -1203,7 +1217,8 @@ export class Host {
     #pickUp(player, actor, id) {
         const dropped = this.ground.get(id);
 
-        if (!dropped) {
+        // (Someone else's spoils: not there, for them)
+        if (!dropped || (dropped.for && dropped.for !== player.id)) {
             return refuse("gone");
         }
 
@@ -1215,6 +1230,29 @@ export class Host {
             return refuse("far");
         }
 
+        // (A bundle of a creature's spoils: its gold, and each thing there's room for; what
+        // there isn't stays in it)
+        if (dropped.bundle) {
+            const { gold, items } = dropped.bundle;
+            const got = items.filter((item) => player.progress.stow(item, item.count));
+            const left = items.filter((item) => !got.includes(item));
+
+            if (!gold && !got.length) {
+                return refuse("full");
+            }
+
+            player.progress.gold += gold;
+            dropped.bundle = { gold: 0, items: left };
+
+            if (!left.length) {
+                this.ground.delete(id);
+            }
+
+            this.#event("picked", { id: player.id, ground: id, bundle: { gold, items: got }, left: left.length });
+
+            return left.length ? { ok: true, left: left.length } : OK;
+        }
+
         if (!player.progress.stow(dropped.item, dropped.item.count)) {
             return refuse("full");
         }
@@ -1223,6 +1261,37 @@ export class Host {
         this.#event("picked", { id: player.id, ground: id, item: dropped.item });
 
         return OK;
+    }
+
+    // What each player near a creature when it fell finds on it (spoils.js): their own bundle,
+    // rolled for them alone and seen by them alone (the ground's `for`), there to pick up a while
+    #spoils(id, beast) {
+        const fallen = this.battle.actor(id);
+
+        if (!fallen) {
+            return;
+        }
+
+        const least = CREATURES[beast.creature]?.tiers[0] ?? beast.tier;
+
+        for (const player of this.players.values()) {
+            const actor = this.battle.actor(player.id);
+
+            if (!actor || actor.dead || actor.map !== fallen.map || Math.hypot(actor.x - fallen.x, actor.y - fallen.y) > SPOILS_REACH) {
+                continue;
+            }
+
+            const bundle = rollSpoils(beast.creature, beast.tier, this.random, least);
+
+            if (!bundle.gold && !bundle.items.length) {
+                continue;
+            }
+
+            const ground = `ground-${this.nextGround++}`;
+
+            this.ground.set(ground, { id: ground, bundle, for: player.id, from: beast.creature, map: fallen.map, square: [...fallen.square], until: this.battle.time + GROUND_MS });
+            this.#event("spoils", { id: player.id, ground, from: id, creature: beast.creature });
+        }
     }
 
     // Gear put on or taken off (the reason it couldn't be: progress.js equip, unequip)
@@ -2341,7 +2410,10 @@ export class Host {
                 return request.target.town === post.town && request.target.post === post.post;
             }
 
-            return request.from.town === post.town && request.from.post === post.post && (request.state === "done" || request.kind === "tithe");
+            // (Creatures' parts wanted at the guild: due once they're all in the pack)
+            const brought = request.kind === "parts" && player.progress.held(request.target.part) >= request.target.need;
+
+            return request.from.town === post.town && request.from.post === post.post && (request.state === "done" || request.kind === "tithe" || brought);
         });
     }
 
@@ -2422,6 +2494,11 @@ export class Host {
 
                     player.progress.gold -= request.target.gold;
                     this.war.give(player.realm, request.target.gold * TITHE_RATE);
+                }
+
+                // (Creatures' parts handed over, out of the pack)
+                if (request.kind === "parts" && !player.progress.remove(request.target.part, request.target.need)) {
+                    continue;
                 }
 
                 handed.push(this.#rewarded(player, request));
