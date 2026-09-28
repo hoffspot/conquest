@@ -5,7 +5,7 @@ import { layoutCastle } from "../client/js/core/setpieces/castle.js";
 import { atan2, cos, sin, sqrt } from "../client/js/core/setpieces/exact.js";
 import { GROUND, pieceCatalog, PLOT } from "../client/js/core/setpieces/pieces.js";
 import { Plan } from "../client/js/core/setpieces/plan.js";
-import { footprint, layoutTown, SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
+import { footprint, layoutTown, PEOPLE_TOWNS, SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
 
 const SEEDS = Array.from({ length: 30 }, (_, index) => index * 7919 + 3);
 const KEYS = new Set(pieceCatalog().map((piece) => piece.key));
@@ -339,6 +339,69 @@ describe("town layouts (town.js)", () => {
 
         // Ways close together are one
         assert.equal(layoutTown({ kind: "town", seed: 1, exits: [0, 0.3, Math.PI] }).exits.length, 2);
+    });
+
+    it("lays out each people's settlements its own way: its houses, its wall, the lizard folk's lagoon", () => {
+        const TYPES = { cat: ["hut", "twin", "block", "townhouse", "compound"], orc: ["roundhut", "block", "longhouse"], lizard: ["marsh", "deck", "saddle", "reed"], elf: ["ground", "pagoda", "trunk", "canopy"], darkElf: ["pod", "thorn", "spire"] };
+
+        for (const people of Object.keys(PEOPLE_TOWNS).filter((name) => name !== "human")) {
+            for (const kind of KINDS) {
+                for (const seed of [3, 11]) {
+                    const where = `${people} ${kind} ${seed}`;
+                    const town = layoutTown({ kind, seed, people });
+                    const names = town.pieces.filter((piece) => piece.kind === "landmark").map(({ name }) => name);
+                    const reached = walk(town, market(town));
+
+                    assert.deepEqual(town, layoutTown({ kind, seed, people }), where);
+                    assert.equal(town.people, people);
+
+                    // Its landmarks, as any people's
+                    assert.equal(names.includes("tavern"), kind !== "farmstead", `${where}: a tavern`);
+
+                    for (const name of ["church", "blacksmith", "guild"]) {
+                        assert.equal(names.includes(name), kind !== "farmstead" && kind !== "hamlet", `${where}: a ${name}`);
+                    }
+
+                    // Everything built its people's, each house one of its kinds
+                    for (const piece of town.pieces.filter(({ kind: k }) => k !== "tree" && k !== "prop")) {
+                        assert.equal(piece.people, people, `${where}: ${piece.key} is ${people}`);
+                    }
+
+                    for (const piece of town.pieces.filter(({ kind: k, back }) => k === "house" && !back)) {
+                        assert.ok(TYPES[people].includes(piece.type), `${where}: a ${piece.type} house`);
+                    }
+
+                    // Walled from its size up, a gate on each main street, every way out still reached
+                    const walled = SETTLEMENT_KINDS[kind].radius >= PEOPLE_TOWNS[people].wall;
+
+                    assert.equal(town.pieces.some((piece) => piece.kind === "wall"), walled, `${where}: walled`);
+                    assert.equal(town.pieces.filter((piece) => piece.kind === "gatehouse").length > 0, walled, `${where}: gated`);
+
+                    for (const [x, y] of town.exits) {
+                        assert.ok(reached(Math.floor(x), Math.floor(y)), `${where}: the way out at ${x}, ${y}`);
+                    }
+
+                    // (The lizard folk's houses over water, which no one walks on but by the plank walks)
+                    if (people === "lizard") {
+                        assert.ok(town.water.some((row) => row.includes(1)), `${where}: water`);
+
+                        for (let y = 0; y < town.height; y++) {
+                            for (let x = 0; x < town.width; x++) {
+                                if (town.ground[y][x] === GROUND.water) {
+                                    assert.equal(town.blocked[y][x], 1, `${where}: water at ${x}, ${y}`);
+                                }
+                            }
+                        }
+
+                        if (kind !== "farmstead" && kind !== "hamlet") {
+                            assert.ok(town.pieces.some((piece) => piece.water), `${where}: a house over the water`);
+                        }
+                    } else {
+                        assert.equal(town.water, null);
+                    }
+                }
+            }
+        }
     });
 });
 
