@@ -16,16 +16,21 @@ export const DIRECTIONS = Object.freeze(["up", "right", "down", "left"]);
 
 const ANGLES = { up: -Math.PI / 2, right: 0, down: Math.PI / 2, left: Math.PI };
 
-/** What each action does: a spell (core/spells.js) and its label. */
+/** What each action does: a spell (core/spells.js), or an order (core/host.js command), and its label. */
 export const ACTIONS = Object.freeze({
     heal: { label: "Heal", spell: "heal" },
     stun: { label: "Stun", spell: "stun" },
+    fight: { label: "Fight", order: "engage" },
 });
 
-/** Each wheel's slices: the player's own ("self") and an enemy's. Empty slices are left out. */
+/**
+ * Each wheel's slices: the player's own ("self"), an enemy's, and a soldier's of a people that
+ * isn't the player's friend ("provoke": picking a fight with them). Empty slices are left out.
+ */
 export const WHEELS = Object.freeze({
     self: { up: "heal" },
     enemy: { up: "stun" },
+    provoke: { up: "fight" },
 });
 
 // Sizes (pixels): the wheel's outer and inner radii, the gap between slices (radians), where

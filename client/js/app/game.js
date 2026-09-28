@@ -25,10 +25,13 @@ import * as THREE from "three";
 import { DRAWS, FALL_LANDS, REACTIONS } from "../characters/actions.js";
 import { Character } from "../characters/character.js";
 import { folkLook } from "../characters/folk.js";
+import { soldierLook } from "../characters/soldiers.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
-import { hostile, STEP_MS, TALK_REACH } from "../core/battle.js";
+import { STEP_MS, TALK_REACH } from "../core/battle.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
 import { HOST_PLAYER, Host, REFUSALS } from "../core/host.js";
+import { peopleOf } from "../core/war/news.js";
+import { STAGES } from "../core/war/war.js";
 import { GODS } from "../core/lore/gods.js";
 import { BECKON, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js";
 import { squaresOf } from "../core/grid.js";
@@ -37,6 +40,7 @@ import { CAST_FAILURES, SPELLS } from "../core/spells.js";
 import { Variety } from "../core/variety.js";
 import { distanceBetween, longestReach, WEAPONS } from "../core/weapons.js";
 import { Avatar } from "../world/avatar.js";
+import { Banners } from "../world/banners3d.js";
 import { Effects, LOOKS } from "../world/effects.js";
 import { Squares } from "../world/squares.js";
 import { KINDS, Wounds } from "../world/wounds.js";
@@ -146,7 +150,7 @@ const EMBERS = 5;
 const VISITS = Object.freeze({ every: 0.5, budget: 6 });
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "gone"]);
 
 const _focus = new THREE.Vector3();
 const _lean = new THREE.Vector3();
@@ -245,6 +249,9 @@ export class Game {
          */
         this.visits = new Map();
         this.visitClock = 0;
+
+        /** The soldiers the host's brought out, still to be drawn (a few a frame: #visit). */
+        this.enlisting = [];
 
         /**
          * When the player last did anything (the game's clock, s), and when they next rest (null
@@ -386,6 +393,7 @@ export class Game {
         }
 
         this.doors = new Doors(world, view.scene);
+        this.banners = new Banners(view.scene);
         step(`Dressing ${this.hero.name}`);
 
         // Everyone in the world as the host has them: the player (and anyone else playing), the
@@ -442,7 +450,7 @@ export class Game {
         this.hud.setPlayer(player);
 
         for (const actor of this.battle.actors.filter((other) => other.id !== this.me && !other.neutral)) {
-            this.hud.track(actor.id, { ...actor, hostile: hostile(actor, player) });
+            this.hud.track(actor.id, { ...actor, hostile: this.battle.hostile(actor, player) });
         }
     }
 
@@ -457,6 +465,20 @@ export class Game {
 
         if (actor.kind === "folk") {
             return this.#addFolk(this.host.folk.get(actor.id));
+        }
+
+        // A soldier: as their people's are dressed, carrying what they fight with
+        if (actor.kind === "soldier") {
+            const soldier = this.host.soldiers.get(actor.id);
+            const look = soldierLook(soldier);
+            const character = new Character(this.kit, { shape: look.shape, look: look.look, equipment: look.equipment, hairDetail: Math.min(hairDetail, FOLK_HAIR) });
+
+            character.sheathe(true);
+            character.object.traverse((node) => {
+                node.castShadow = false;
+            });
+
+            return this.#addAvatar(actor.id, character, { walk: look.walk, guard: guardOf(actor.weapon) });
         }
 
         if (actor.kind === "player") {
@@ -484,10 +506,10 @@ export class Game {
         const me = this.battle.actor(this.me);
 
         for (const actor of this.battle.actors) {
-            if (!this.avatars.has(actor.id) && actor.kind !== "folk") {
+            if (!this.avatars.has(actor.id) && actor.kind !== "folk" && actor.kind !== "soldier") {
                 this.#dress(actor);
                 this.#place(actor);
-                this.hud.track(actor.id, { ...actor, hostile: Boolean(me) && hostile(actor, me) });
+                this.hud.track(actor.id, { ...actor, hostile: Boolean(me) && this.battle.hostile(actor, me) });
             }
         }
 
@@ -653,6 +675,7 @@ export class Game {
 
         this.interiors.clear();
         this.doors?.dispose();
+        this.banners?.dispose();
 
         for (const object of [this.ground, this.town?.object, this.chunks?.object, this.effects?.group, this.effects?.marker, this.effects?.targetRing, this.squares?.object]) {
             object?.removeFromParent();
@@ -889,6 +912,24 @@ export class Game {
         this.#follow(dt);
         this.#inside(dt);
 
+        // Bars over the soldiers who are enemies (or hurt), none over the rest
+        const player = battle.actor(this.me);
+
+        for (const actor of battle.actors) {
+            if (actor.kind !== "soldier" || !this.avatars.has(actor.id) || !player) {
+                continue;
+            }
+
+            const shown = hud.tracked.has(actor.id);
+            const wanted = !actor.dead && (battle.hostile(actor, player) || actor.hp < actor.maxHp);
+
+            if (wanted && !shown) {
+                hud.track(actor.id, { ...actor, hostile: battle.hostile(actor, player) });
+            } else if (!wanted && shown) {
+                hud.untrack(actor.id);
+            }
+        }
+
         // Bars over the heads of the others on the player's map
         for (const actor of battle.actors) {
             const avatar = this.avatars.get(actor.id);
@@ -928,7 +969,7 @@ export class Game {
 
         const reach = longestReach(actor.weapon) + 2;
 
-        return this.battle.actors.some((other) => hostile(other, actor) && !other.dead && other.map === actor.map && Math.hypot(other.x - actor.x, other.y - actor.y) <= reach && this.battle.canSee(actor, other));
+        return this.battle.actors.some((other) => this.battle.hostile(other, actor) && !other.dead && other.map === actor.map && Math.hypot(other.x - actor.x, other.y - actor.y) <= reach && this.battle.canSee(actor, other));
     }
 
     // How high the ground is where someone stands on a map (metres): a bridge's deck, or the ground
@@ -1016,10 +1057,10 @@ export class Game {
 
         minimap.draw({
             player: actor.dead ? null : { x: me.object.position.x - ox, z: me.object.position.z - oz, facing: me.facing },
-            others: battle.actors.filter((other) => other !== actor && !other.dead && other.map === this.mapId).map((other) => {
+            others: battle.actors.filter((other) => other !== actor && !other.dead && other.map === this.mapId && this.avatars.has(other.id)).map((other) => {
                 const position = this.avatars.get(other.id).object.position;
 
-                return { x: position.x - ox, z: position.z - oz, hostile: hostile(other, actor), targeted: other === target };
+                return { x: position.x - ox, z: position.z - oz, hostile: this.battle.hostile(other, actor), targeted: other === target };
             }),
             destination: actor.order?.type === "move" ? [actor.order.to[0] + 0.5, actor.order.to[1] + 0.5] : null,
             view: corners,
@@ -1086,7 +1127,7 @@ export class Game {
             return ordered;
         }
 
-        const after = battle.actors.filter((actor) => hostile(actor, player) && !actor.dead && actor.map === player.map && (actor.target === player.id || actor.attack?.target === player.id || player.attack?.target === actor.id));
+        const after = battle.actors.filter((actor) => this.battle.hostile(actor, player) && !actor.dead && actor.map === player.map && (actor.target === player.id || actor.attack?.target === player.id || player.attack?.target === actor.id));
 
         return after.sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))[0] ?? null;
     }
@@ -1130,7 +1171,8 @@ export class Game {
             return;
         }
 
-        const title = folk.find(({ id }) => id === npc.id)?.title ?? ROLES[npc.role]?.title ?? "";
+        const soldier = npc.kind === "soldier" ? this.#soldierWords(npc) : null;
+        const title = soldier?.title ?? folk.find(({ id }) => id === npc.id)?.title ?? ROLES[npc.role]?.title ?? "";
         const names = Object.fromEntries(folk.map(({ id, local = id, name }) => [local, name.split(" ")[0]]));
         const upstairs = building?.tavern?.storeys > 1 ? building.tavern.upstairs : null;
 
@@ -1144,6 +1186,8 @@ export class Game {
             names.patronTitle = GODS[building.patron].title;
         }
 
+        Object.assign(names, soldier?.names);
+
         // (They stop and face the player, if they can talk now: the host says)
         if (!this.#command({ type: "talk", with: npc.id }).ok) {
             return;
@@ -1156,7 +1200,7 @@ export class Game {
             player: { name: this.hero.name },
             place: building?.name,
             names,
-            check: (condition) => !("upstairs" in condition) || upstairsIs(condition.upstairs, upstairs),
+            check: (condition) => ("upstairs" in condition ? upstairsIs(condition.upstairs, upstairs) : "stance" in condition ? soldier?.stance === condition.stance : true),
             memory: this.memory[npc.id],
             knowledge: this.knowledge,
             variety: this.talkVariety,
@@ -1168,6 +1212,32 @@ export class Game {
         this.avatars.get(this.me)?.actions.stopResting();
         this.talk.show({ name: npc.name, title }, conversation);
         this.#keepTalks();
+    }
+
+    // What a soldier can tell of: the town they guard, whose it is, their ruler, the war (as
+    // their words' {town}, {holder}, {ruler}, {age}, {foes}), how their people stand with the
+    // player's (their `stance`: "own", "allied" or "neutral"), and their title
+    #soldierWords(npc) {
+        const war = this.host.war;
+        const soldier = this.host.soldiers.get(npc.id);
+        const town = war?.town(soldier?.town);
+        const realm = war?.realm(war.liege(npc.team));
+        const mine = this.self.realm;
+        const relation = war?.relation(mine, npc.team);
+        const foes = war ? war.enemiesOf(war.liege(npc.team)).map((id) => `the ${peopleOf(id)}`) : [];
+        const stance = npc.team === mine || relation === "vassal" || relation === "overlord" ? "own" : relation === "allied" ? "allied" : "neutral";
+
+        return {
+            title: town ? `Of the guard of ${town.name}` : "",
+            stance,
+            names: {
+                town: town?.name ?? "this place",
+                holder: `the ${peopleOf(npc.team)}`,
+                ruler: realm ? `${realm.leader.title} ${realm.leader.name}` : "our ruler",
+                age: war ? STAGES[war.stage].name.toLowerCase() : "peace",
+                foes: foes.length ? foes.join(" and ") : "no one, for now",
+            },
+        };
     }
 
     // Say one of the replies: the talk goes on, or ends
@@ -1260,7 +1330,7 @@ export class Game {
 
     // Is anyone after the player, or can they see an enemy? (No time to rest.)
     #threatened(player) {
-        return this.battle.actors.some((other) => hostile(other, player) && !other.dead && other.map === player.map && (other.target === player.id || this.battle.canSee(player, other)));
+        return this.battle.actors.some((other) => this.battle.hostile(other, player) && !other.dead && other.map === player.map && (other.target === player.id || this.battle.canSee(player, other)));
     }
 
     // One of the folk rests (battle.js #rest): seen and heard only on the player's map
@@ -1393,12 +1463,30 @@ export class Game {
             }
         }
 
+        // The soldiers brought out, drawn a few at a time (those on the player's map first)
+        while (this.enlisting.length && performance.now() < until) {
+            const actor = this.battle.actor(this.enlisting.shift());
+
+            if (actor && !this.avatars.has(actor.id)) {
+                this.#dress(actor);
+                this.#place(actor);
+            }
+        }
+
         this.visitClock -= dt;
 
         if (this.visitClock <= 0) {
             this.visitClock = VISITS.every;
             this.doors?.sync();
         }
+    }
+
+    // A town's soldiers out: to be drawn, and its banners up, in its holders' colours
+    #muster({ town, people, ids, banners }) {
+        const [ox, oz] = this.originOf("town");
+
+        this.enlisting.push(...ids);
+        this.banners?.raise(town, people, banners.map(({ at: [x, y], facing }) => ({ x: ox + x, z: oz + y, facing })));
     }
 
     // Start building a building the host's got ready: each floor and each of its folk, one to a
@@ -1758,6 +1846,15 @@ export class Game {
                 break;
             case "join":
             case "leave":
+            case "gone":
+                this.#mirror();
+                break;
+            case "muster":
+                this.#muster(event);
+                break;
+            case "dismiss":
+                this.banners?.lower(event.town);
+                this.enlisting = this.enlisting.filter((id) => !event.ids.includes(id));
                 this.#mirror();
                 break;
             case "explored":
@@ -1919,8 +2016,8 @@ export class Game {
             canvas.setPointerCapture?.(event.pointerId);
             this.pointers.set(event.pointerId, pointer);
 
-            // Held on the player or an enemy: the action wheel
-            const who = this.pointers.size === 1 ? this.#whoIsAt(event.clientX, event.clientY) : null;
+            // Held on the player, an enemy, or a soldier to pick a fight with: the action wheel
+            const who = this.pointers.size === 1 ? this.#whoIsAt(event.clientX, event.clientY, { soldiers: true }) : null;
 
             if (who) {
                 pointer.hold = setTimeout(() => this.#openWheel(pointer, who), HOLD_MS);
@@ -2081,9 +2178,10 @@ export class Game {
         this.#wake();
 
         const who = this.#whoIsAt(clientX, clientY, { player: false, folk: true })?.actor ?? null;
+        const me = this.battle.actor(this.me);
 
-        // Someone to talk to: go up to them
-        if (who?.neutral) {
+        // Someone to talk to (one of the folk, a soldier who isn't an enemy): go up to them
+        if (who && me && !this.battle.hostile(who, me)) {
             this.lastTap = { time, x: clientX, y: clientY, from: "view" };
             this.#talkTo(who, { run });
 
@@ -2131,8 +2229,13 @@ export class Game {
     act(action, target) {
         this.#wake();
 
-        const spell = ACTIONS[action]?.spell;
-        const result = spell ? this.#command({ type: "cast", spell, target: target === "self" ? null : target }) : { ok: false, reason: "busy" };
+        const { spell, order } = ACTIONS[action] ?? {};
+        const result = spell ? this.#command({ type: "cast", spell, target: target === "self" ? null : target }) : order ? this.#command({ type: order, target }) : { ok: false, reason: "busy" };
+
+        // (Setting on someone: the lock heard, as a tap on an enemy)
+        if (order && result.ok) {
+            this.sound?.play("lock");
+        }
 
         if (!result.ok) {
             this.hud.message(CAST_FAILURES[result.reason] ?? REFUSALS[result.reason], 1.4);
@@ -2143,9 +2246,10 @@ export class Game {
     }
 
     // Who is under a point on the screen, within PICK_RADIUS of their feet, middle or head: the
-    // nearest living enemy, one of the folk (if `folk`), or the player (if `player`); { actor,
-    // wheel: "enemy", "talk" or "self" }
-    #whoIsAt(clientX, clientY, { player: withPlayer = true, folk = false } = {}) {
+    // nearest living enemy, one of the folk or a soldier who isn't an enemy (if `folk`), a soldier
+    // of a people not friendly to the player's (if `soldiers`: to pick a fight with), or the
+    // player (if `player`); { actor, wheel: "enemy", "talk", "provoke" or "self" }
+    #whoIsAt(clientX, clientY, { player: withPlayer = true, folk = false, soldiers = false } = {}) {
         const player = this.battle.actor(this.me);
         let best = null;
         let bestDistance = PICK_RADIUS;
@@ -2157,7 +2261,11 @@ export class Game {
         for (const actor of this.battle.actors) {
             const mine = actor === player;
 
-            if (actor.dead || (mine && !withPlayer) || (!mine && !hostile(actor, player) && !(folk && actor.neutral)) || actor.map !== player.map) {
+            const enemy = !mine && this.battle.hostile(actor, player);
+            const talks = actor.neutral || actor.kind === "soldier";
+            const provokes = actor.kind === "soldier" && !enemy && this.host.canFight(player, actor);
+
+            if (actor.dead || (mine && !withPlayer) || (!mine && !enemy && !(folk && talks) && !(soldiers && provokes)) || actor.map !== player.map || !this.avatars.has(actor.id)) {
                 continue;
             }
 
@@ -2169,7 +2277,7 @@ export class Game {
 
                 // (Enemies first, where they and the player overlap)
                 if (distance < bestDistance - (mine ? 6 : 0)) {
-                    best = { actor, wheel: mine ? "self" : actor.neutral ? "talk" : "enemy" };
+                    best = { actor, wheel: mine ? "self" : enemy ? "enemy" : provokes && soldiers ? "provoke" : "talk" };
                     bestDistance = distance;
                 }
             }
@@ -2250,7 +2358,7 @@ export class Game {
         this.#wake();
 
         const player = this.battle.actor(this.me);
-        const enemies = this.battle.actors.filter((actor) => player && hostile(actor, player) && !actor.dead && actor.map === player.map);
+        const enemies = this.battle.actors.filter((actor) => player && this.battle.hostile(actor, player) && !actor.dead && actor.map === player.map);
         const distance = (actor) => Math.hypot(actor.x - x, actor.y - z);
         const enemy = enemies.filter((actor) => distance(actor) <= reach).sort((a, b) => distance(a) - distance(b))[0] ?? null;
 

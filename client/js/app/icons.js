@@ -41,8 +41,22 @@ function star(x, y, outer, inner, points = 5, turn = -Math.PI / 2) {
     return `M${corners.join("L")}Z`;
 }
 
+// A sword drawn upright round 0, 0 (to be turned): its blade, guard, grip and pommel
+const SWORD = `
+        <path d="M-2.4,-20 L0,-23.5 L2.4,-20 L2.4,6 L-2.4,6 Z" fill="#e3e9ee" stroke="#39434c" stroke-width="1"/>
+        <path d="M0,-21 L0,5" stroke="#9aa6b1" stroke-width="0.8"/>
+        <rect x="-8" y="6" width="16" height="3" rx="1.2" fill="#c8962e" stroke="#5a3b0c" stroke-width="0.9"/>
+        <rect x="-1.8" y="9" width="3.6" height="9" fill="#6b3f1d" stroke="#2f1a09" stroke-width="0.8"/>
+        <circle cy="19.5" r="2.6" fill="#c8962e" stroke="#5a3b0c" stroke-width="0.9"/>`;
+
 /** Each action's icon: SVG drawn round 0, 0, about 44 across. */
 export const ICONS = Object.freeze({
+    // Two swords crossed, over a red glow: picking a fight
+    fight: `
+        <circle r="20" fill="#7a1a14" opacity="0.45"/>
+        <g transform="rotate(40)">${SWORD}</g>
+        <g transform="rotate(-40)">${SWORD}</g>`,
+
     // A glowing green cross, with sparkles
     heal: `
         <circle r="21" fill="url(#icon-heal-glow)"/>

@@ -1319,6 +1319,111 @@ test("the adventurers' guild: the receptionist stamps notices behind her counter
     expect(guild.place).toBe("guild");
 });
 
+test("the town's guards stand at its ways out under its people's banner, and talk of the town and the war; a people at war with the player's attacks them", async ({ page }) => {
+    await playing(page, "/?play&seed=2");
+
+    // Out as soon as the game's played: guards at the roads out, a patrol going round, a banner by each road
+    const out = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        game.advance(1.5, { render: false });
+
+        const soldiers = game.battle.actors.filter(({ kind }) => kind === "soldier");
+
+        return {
+            soldiers: soldiers.map(({ id, team, name, weapon }) => ({ id, team, name, weapon, drawn: game.avatars.has(id) })),
+            banners: game.banners.group.children.length,
+            town: game.host.war.town(game.world.start.id).name,
+        };
+    });
+
+    expect(out.soldiers.length).toBeGreaterThanOrEqual(5);
+    expect(out.soldiers.every(({ team, drawn }) => team === "human" && drawn)).toBe(true);
+    expect(out.soldiers.map(({ name }) => name)).toContain("Human guard");
+    expect(out.soldiers.map(({ name }) => name)).toContain("Human patrol");
+    expect(out.banners).toBeGreaterThanOrEqual(1);
+
+    // Tapping a guard: the player walks up to talk to them, and they tell of their town
+    const guard = out.soldiers.find(({ id }) => id.endsWith("/guard-0"));
+    const tapped = await page.evaluate((id) => {
+        const { game, session } = window.pellagos;
+        const soldier = game.battle.actor(id);
+        const player = game.battle.actor("player");
+
+        // (A few steps out in front of them: they face out of the town)
+        const [x, y] = [soldier.square[0] + Math.round(Math.sin(soldier.post) * 4), soldier.square[1] + Math.round(Math.cos(soldier.post) * 4)];
+
+        Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [], order: null });
+        game.avatars.get("player").place(x + 0.5, y + 0.5, player.facing);
+        game.previous.set("player", { x: player.x, y: player.y });
+        game.advance(0.5);
+
+        const spot = session.view.toScreen(game.avatars.get(id).point(0.6));
+
+        game.tap(spot.x, spot.y, { time: performance.now() + 9000 });
+
+        const order = player.order?.type ?? null;
+
+        game.advance(6);
+
+        return { order, talking: soldier.talkingTo };
+    }, guard.id);
+
+    expect(tapped).toEqual({ order: "approach", talking: "player" });
+
+    const talk = page.locator(".talk");
+
+    await expect(talk).toBeVisible();
+    await expect(talk.locator(".talk-name")).toHaveText("Human guard");
+    await expect(talk.locator(".talk-title")).toHaveText(`Of the guard of ${out.town}`);
+    await talk.getByRole("button", { name: /Who holds this place/ }).click();
+    await expect(talk.locator(".talk-line")).toContainText(`${out.town} is ours: the Humans hold it`);
+    await talk.getByRole("button", { name: /How goes the war/ }).click();
+    await expect(talk.locator(".talk-line")).toContainText(/an uneasy peace/i);
+    await page.evaluate(() => window.pellagos.game.start());
+    await page.keyboard.press("Escape");
+    await expect(talk).toBeHidden();
+
+    // Taken by the orcs, at war with the humans: orcish soldiers now, under their banner, and they come for the player
+    const war = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const { war } = game.host;
+
+        game.stop();
+        const home = war.town(game.world.start.id);
+
+        home.owner = "orc";
+        war.known.push("human|orc");
+        war.relations["human|orc"] = { state: "hostile", since: war.turn };
+        game.host.lookAt = 0;
+
+        const player = game.battle.actor("player");
+        let [after, hurt, plates] = [false, false, 0];
+
+        for (let k = 0; k < 60 && !hurt; k++) {
+            game.advance(0.1, { render: false });
+
+            const soldiers = game.battle.actors.filter(({ kind }) => kind === "soldier");
+
+            after ||= soldiers.some(({ target }) => target === "player");
+            hurt ||= player.hp < player.maxHp || player.dead;
+            plates = Math.max(plates, soldiers.filter(({ id }) => game.hud.tracked.has(id)).length);
+        }
+
+        const soldiers = game.battle.actors.filter(({ kind }) => kind === "soldier");
+
+        return { teams: [...new Set(soldiers.map(({ team }) => team))], banner: game.banners.towns.get(home.id)?.people, after, hurt, plates };
+    });
+
+    expect(war.teams).toEqual(["orc"]);
+    expect(war.banner).toBe("orc");
+    expect(war.after).toBe(true);
+    expect(war.hurt).toBe(true);
+    expect(war.plates).toBeGreaterThan(0);
+});
+
 test("tapping someone walks the player up to talk: their name and what they are, what they say, replies that lead on, Escape to stop", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

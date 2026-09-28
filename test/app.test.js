@@ -351,14 +351,17 @@ describe("the action wheel (wheel.js, icons.js)", () => {
         assert.ok(path.startsWith("M-67.88,-67.88"), path);
     });
 
-    it("puts Heal up on the player's own wheel and Stun up on an enemy's, each a spell with an icon", () => {
-        assert.deepEqual(WHEELS, { self: { up: "heal" }, enemy: { up: "stun" } });
+    it("puts Heal up on the player's own wheel, Stun up on an enemy's and Fight up on a soldier's of a people not friendly to theirs, each with an icon", () => {
+        assert.deepEqual(WHEELS, { self: { up: "heal" }, enemy: { up: "stun" }, provoke: { up: "fight" } });
 
         for (const [id, action] of Object.entries(ACTIONS)) {
-            assert.ok(SPELLS[action.spell], id);
+            assert.ok(SPELLS[action.spell] || action.order === "engage", id);
             assert.equal(typeof action.label, "string");
             assert.match(ICONS[id], /<(path|circle|ellipse)/, `${id} has an icon`);
         }
+
+        // (Crossed swords, to pick a fight)
+        assert.equal(ICONS.fight.match(/rotate\(/g).length, 2);
 
         // Green for healing; gold stars for a stun
         assert.match(ICONS.heal, /url\(#icon-heal-cross\)/);
