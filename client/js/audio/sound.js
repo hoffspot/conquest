@@ -47,6 +47,9 @@ export const PLACES = Object.freeze({
     temple: { score: "town", level: 0.2, muffle: 450 },
     // (In an adventurers' guild, the tavern's jig: it's as lively)
     guild: { score: "tavern", level: 0.7, muffle: null },
+    // (In a town hall, the town's music through its windows; in a keep, far off through stone)
+    hall: { score: "town", level: 0.35, muffle: 800 },
+    keep: { score: "town", level: 0.25, muffle: 500 },
 });
 
 /** The buses, and how loud each is to start with (0 to 1, as the sliders show them). */

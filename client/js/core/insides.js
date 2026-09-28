@@ -36,10 +36,12 @@ export const ENTRANCES = Object.freeze({
     guild: { depth: 1.8, offset: 0, width: 2.2, height: 2.6, floor: 0.3 },
     church: { depth: 1.2, offset: 0, width: 1.6, height: 2.6, floor: 0.6 },
     blacksmith: { depth: 2.2, offset: -1.2, width: 1.3, height: 2.1, floor: 0.3 },
+    hall: { depth: 1.8, offset: 0, width: 2, height: 2.5, floor: 0.3 },
+    keep: { depth: 1.4, offset: 0, width: 2.4, height: 3.2, floor: 0.8 },
 });
 
 /** The kinds that can be gone into. */
-export const ENTERABLE = Object.freeze(["tavern", "blacksmith", "church", "guild"]);
+export const ENTERABLE = Object.freeze(["tavern", "blacksmith", "church", "guild", "hall", "keep"]);
 
 // The way to a door, cleared: at least this far either side of its middle, and from this far in
 // behind it to this far out past the lot's front (metres)
@@ -485,18 +487,157 @@ export function guildFolkOf(building, hall) {
     return folk;
 }
 
+// --- Town halls ---
+
+// A town hall's chamber, 18 by 14 metres: shelves of the town's rolls along the north wall, the
+// reeve's long desk before them; the council table in the middle with benches either side; the
+// notices on the west wall; a hearth on the east; the strongboxes by the walls; benches for
+// petitioners along the south wall either side of the door
+const HALL = [
+    "eeeee.......eeeee.",
+    "..................",
+    "...MMMMMMMMMM.....",
+    ".................H",
+    "q................H",
+    "q...bbbbbbbb.....H",
+    "q...TTTTTTTT......",
+    "q...bbbbbbbb......",
+    "..................",
+    "c................c",
+    "..................",
+    "bbbb..........bbbb",
+    "..................",
+    "........DD........",
+];
+
+/** A town hall's floors: its chamber. */
+export function hallRooms(building) {
+    return [{ suffix: "chamber", style: "hall", name: building.name, rows: HALL, ground: GROUND.planks, sound: "hall" }];
+}
+
+/**
+ * A town hall's folk, worked out from its plan: the reeve behind the desk (stamping, and at the
+ * rolls); the clerk at the rolls and the notices; and petitioners on the benches, waiting.
+ */
+export function hallFolkOf(building, chamber) {
+    const random = createRandom(building.seed * 11 + 17);
+    const { n, s, w } = FACING;
+    const desk = chamber.pieces.find(({ kind }) => kind === "counter");
+    const shelves = chamber.pieces.filter(({ kind }) => kind === "shelves");
+    const board = chamber.pieces.find(({ kind }) => kind === "board");
+    const behind = [desk.x + 2, desk.x + desk.w - 3].map((x) => ({ square: [x, desk.y - 1], facing: s, act: "stamp", group: "desk" }));
+    const rolls = shelves.map((each) => ({ square: [each.x + 2, each.y + 1], facing: n, act: "file", group: "rolls" }));
+    const notices = [1, 2].map((dy) => ({ square: [board.x + 1, board.y + dy], facing: w, act: "read", group: "notices", wait: [4000, 8000] }));
+    const sex = () => (random.chance(0.5) ? "f" : "m");
+    const folk = [
+        { local: "reeve", title: "Reeve", role: "reeve", sex: sex(), map: chamber.id, square: behind[0].square, facing: s, routine: { order: "alternate", wait: [4000, 7000], stops: [...behind, rolls[0]] } },
+        { local: "clerk", title: "Clerk", role: "clerk", sex: sex(), map: chamber.id, square: rolls[1].square, facing: n, routine: { order: "cycle", wait: [4000, 8000], stops: [rolls[1], notices[0], rolls[0], notices[1]] } },
+    ];
+
+    // Petitioners on the benches by the door, waiting their turn
+    const southern = (chamber.marks.b ?? []).filter(([, y]) => y > desk.y + 6);
+    const seats = random.shuffle([...southern]).slice(0, random.int(1, 3));
+
+    seats.forEach(([x, y], k) => {
+        folk.push({ local: `petitioner${k + 1}`, title: "Petitioner", role: "petitioner", sex: sex(), map: chamber.id, square: [x, y], facing: n, routine: { seated: true } });
+    });
+
+    return folk;
+}
+
+// --- Keeps ---
+
+// A keep's great hall, 22 by 16 metres: two thrones against the north wall, the carpet laid from
+// them to the door in the middle of the south wall; the steward's desk to the west of the thrones
+// and the armoury's racks in the north-west corner, shelves in the north-east and strongboxes
+// by them; the council's two tables with their benches either side of the carpet; a hearth in
+// each side wall; pillars down the hall
+const KEEP = [
+    "RRR.......YY.......eee",
+    "..........rr..........",
+    "..MMM.....rr.....c..c.",
+    "..........rr..........",
+    "...I......rr......I...",
+    "H.........rr.........H",
+    "H..bbbbb..rr..bbbbb..H",
+    "H..TTTTT..rr..TTTTT..H",
+    "...bbbbb..rr..bbbbb...",
+    "...I......rr......I...",
+    "..........rr..........",
+    "..........rr..........",
+    "...I......rr......I...",
+    "..........rr..........",
+    "..........rr..........",
+    "..........DD..........",
+];
+
+/** A keep's floors: its great hall. */
+export function keepRooms(building) {
+    return [{ suffix: "great-hall", style: "keep", name: building.name, rows: KEEP, ground: GROUND.cobbles, sound: "keep" }];
+}
+
+/**
+ * A keep's folk, worked out from its plan: the ruler on their throne (named for their people's
+ * ruler by the host, as the war has them: core/host.js); the steward between the desk, the
+ * shelves and the throne; councillors at the tables; and sentries either side of the thrones and
+ * of the door.
+ */
+export function keepFolkOf(building, hall) {
+    const random = createRandom(building.seed * 13 + 29);
+    const { n, s, e } = FACING;
+    const [throne] = hall.marks.Y;
+    const desk = hall.pieces.find(({ kind }) => kind === "counter");
+    const shelves = hall.pieces.find(({ kind }) => kind === "shelves");
+    const [door] = hall.marks.D;
+    const sex = () => (random.chance(0.5) ? "f" : "m");
+    const stops = [
+        { square: [desk.x + 1, desk.y - 1], facing: s, act: "stamp", group: "desk" },
+        { square: [shelves.x + 1, shelves.y + 1], facing: n, act: "file", group: "shelves" },
+        { square: [throne[0] - 1, throne[1] + 1], facing: e, group: "throne", wait: [5000, 9000] },
+    ];
+    const folk = [
+        { local: "ruler", title: "Ruler", role: "ruler", sex: sex(), map: hall.id, square: [...throne], facing: s, routine: { seated: true } },
+        { local: "steward", title: "Steward", role: "steward", sex: sex(), map: hall.id, square: stops[0].square, facing: s, routine: { order: "alternate", wait: [4000, 8000], stops } },
+    ];
+
+    // Councillors at the tables, a seat each
+    const seats = random.shuffle([...(hall.marks.b ?? [])]).slice(0, random.int(2, 3));
+
+    seats.forEach(([x, y], k) => {
+        const facing = hall.plan[y + 1]?.[x] === "T" ? s : n;
+
+        folk.push({ local: `councillor${k + 1}`, title: "Councillor", role: "councillor", sex: sex(), map: hall.id, square: [x, y], facing, routine: { seated: true } });
+    });
+
+    // Sentries: either side of the thrones, and inside the door
+    const posts = [
+        [[throne[0] - 2, throne[1] + 1], s],
+        [[throne[0] + 3, throne[1] + 1], s],
+        [[door[0] - 2, door[1] - 1], n],
+        [[door[0] + 3, door[1] - 1], n],
+    ];
+
+    posts.forEach(([square, facing], k) => {
+        folk.push({ local: `sentry${k + 1}`, title: "Sentry", role: "sentry", sex: random.chance(0.25) ? "f" : "m", map: hall.id, square, facing, routine: { order: "cycle", wait: [8000, 14000], stops: [{ square, facing }] } });
+    });
+
+    return folk;
+}
+
 // Each kind's floors (the first is the one its front door opens into) and its folk
 const KINDS = Object.freeze({
     tavern: { first: "taproom", rooms: tavernRooms, folk: (building, [taproom, upstairs]) => tavernFolkOf(building, taproom, upstairs) },
     blacksmith: { first: "forge", rooms: smithyRooms, folk: (building, [forge]) => smithyFolkOf(building, forge) },
     church: { first: "nave", rooms: templeRooms, folk: (building, [nave]) => templeFolkOf(building, nave) },
     guild: { first: "hall", rooms: guildRooms, folk: (building, [hall]) => guildFolkOf(building, hall) },
+    hall: { first: "chamber", rooms: hallRooms, folk: (building, [chamber]) => hallFolkOf(building, chamber) },
+    keep: { first: "great-hall", rooms: keepRooms, folk: (building, [hall]) => keepFolkOf(building, hall) },
 });
 
 // --- The buildings ---
 
 // What a building's called that has no name of its own
-const NAMES = Object.freeze({ blacksmith: "the smithy", guild: "the Adventurers' Guild" });
+const NAMES = Object.freeze({ blacksmith: "the smithy", guild: "the Adventurers' Guild", hall: "the town hall", keep: "the keep" });
 
 // Where the buildings' floors are drawn in the 3D world: past the world's edge (and Wenches and
 // Ale's), a hundred metres apart, each building's floors in a column

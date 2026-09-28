@@ -82,6 +82,33 @@ const PARTS = {
         f: { wear: [["alb"], ["mail"], ["albSkirt"], ["boots"], ["belt"], ["warHammer"]], hair: ["topknot", "bob", "ponytail"], build: { weight: [0.45, 0.65], muscle: [0.45, 0.65], bust: [0.45, 0.75] }, armed: true },
     },
     madam: { f: { wear: [["chemise"], ["velvetBodice"], ["gown"], ["boots"]], hair: ["topknot", "long"], build: { weight: [0.5, 0.7], muscle: [0.32, 0.42], bust: [0.7, 1] } } },
+    // A town hall's reeve, in good cloth; their clerk, plainer; petitioners as any townsfolk
+    reeve: {
+        m: { wear: [["shirt"], ["jerkin"], ["breeches", "trousers"], ["boots"], ["belt"], ["gloves", null]], hair: ["short", "swept", "bald"], beard: ["short", "full", "goatee"], build: { weight: [0.5, 0.85], muscle: [0.4, 0.6], belly: [0.2, 0.8] } },
+        f: { wear: [["chemise"], ["velvetBodice"], ["gown", "kirtle"], ["boots"]], hair: ["topknot", "bob", "long"], build: { weight: [0.45, 0.75], muscle: [0.38, 0.5], bust: [0.45, 0.85] } },
+    },
+    clerk: {
+        m: { wear: [["shirt", "blueTunic"], ["trousers", "breeches"], ["boots"], ["belt"]], hair: ["short", "swept", "buzz"], beard: ["none", "stubble", "none"], build: { weight: [0.3, 0.5], muscle: [0.3, 0.45], belly: [0, 0.2] } },
+        f: { wear: [["chemise"], ["bodice"], ["kirtle", "skirt"], ["boots"]], hair: ["bob", "ponytail", "topknot"], build: { weight: [0.35, 0.55], muscle: [0.35, 0.45], bust: [0.35, 0.7] } },
+    },
+    // A keep's: the ruler crowned, in velvet and a gown, or in mail with a sword; their steward;
+    // the councillors in robes; the sentries in mail with sword and shield
+    ruler: {
+        m: { wear: [["shirt"], ["gambeson", "mail"], ["breeches"], ["boots"], ["belt"], ["gloves"], ["crown"], ["sword"]], hair: ["long", "swept", "short"], beard: ["full", "short", "goatee"], build: { weight: [0.5, 0.8], muscle: [0.5, 0.8], belly: [0, 0.5] }, armed: true },
+        f: { wear: [["chemise"], ["velvetBodice"], ["gown"], ["boots"], ["crown"]], hair: ["long", "topknot"], build: { weight: [0.42, 0.65], muscle: [0.36, 0.5], bust: [0.5, 0.85] } },
+    },
+    steward: {
+        m: { wear: [["shirt"], ["jerkin"], ["breeches"], ["boots"], ["belt"]], hair: ["short", "swept", "bald"], beard: ["short", "goatee", "none"], build: { weight: [0.4, 0.7], muscle: [0.35, 0.55], belly: [0, 0.5] } },
+        f: { wear: [["chemise"], ["velvetBodice"], ["kirtle", "gown"], ["boots"]], hair: ["topknot", "bob"], build: { weight: [0.4, 0.65], muscle: [0.35, 0.5], bust: [0.45, 0.8] } },
+    },
+    councillor: {
+        m: { wear: [["blueTunic", "shirt"], ["mageRobe"], ["boots"], ["belt"]], hair: ["bald", "short", "long"], beard: ["full", "goatee", "short"], build: { weight: [0.45, 0.85], muscle: [0.3, 0.5], belly: [0.2, 0.8] } },
+        f: { wear: [["chemise"], ["velvetBodice"], ["gown"], ["boots"]], hair: ["topknot", "long"], build: { weight: [0.45, 0.7], muscle: [0.32, 0.45], bust: [0.45, 0.8] } },
+    },
+    sentry: {
+        m: { wear: [["shirt"], ["mail", "gambeson"], ["breeches"], ["boots"], ["belt"], ["nasalHelm"], ["sword"], ["kiteShield"]], hair: ["short", "buzz"], beard: ["short", "stubble", "none"], build: { weight: [0.5, 0.8], muscle: [0.65, 0.9], belly: [0, 0.2] }, armed: true },
+        f: { wear: [["shirt"], ["mail", "gambeson"], ["breeches"], ["boots"], ["belt"], ["nasalHelm"], ["sword"], ["kiteShield"]], hair: ["ponytail", "bob"], build: { weight: [0.45, 0.65], muscle: [0.55, 0.75], bust: [0.35, 0.65] }, armed: true },
+    },
     courtesan: { f: { wear: "lingerie", hair: ["long", "long", "bob", "ponytail", "topknot"], build: { weight: [0.4, 0.55], muscle: [0.38, 0.46], bust: [0.6, 1] } } },
 };
 
@@ -106,7 +133,7 @@ const GREY = ["grey", "white"];
  */
 export function folkLook({ role, local = role, look: calling = null, sex = "m", seed = 1 }) {
     const random = createRandom(seed * 2654435761 + 97);
-    const part = calling ?? (role === "barmaid" ? "wench" : role);
+    const part = calling ?? ({ barmaid: "wench", petitioner: "worshipper" }[role] ?? role);
     const spec = PARTS[part]?.[sex] ?? PARTS.patron[sex] ?? PARTS.patron.m;
     const lineage = random.pick(LINEAGES);
     const [african, asian, caucasian] = lineage.mix.map((share) => Math.max(0, share + random.range(-0.08, 0.08)));

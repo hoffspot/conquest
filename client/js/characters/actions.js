@@ -880,7 +880,7 @@ const BARKEEP_RESTS = [
         [1.65, { right: { at: [0.26, 0.16, -0.02], palm: [0, 0, 1], towards: [1, 0.3, 0], elbow: [-0.5, 0.4, 0.8], shape: "relaxed" }, ...spine({ flex: 4 }), Head: { flex: 4, bend: 0 } }]),
 ];
 
-export const RESTS = Object.freeze({
+const BASE_RESTS = {
     barkeep: BARKEEP_RESTS,
     innkeeper: BARKEEP_RESTS.map((rest, k) => ({ ...rest, name: ["wiping the counter", "a hand to the chin", "leaning on the counter", "arms folded", "rubbing the neck"][k] })),
     barmaid: BARMAID_RESTS,
@@ -1045,6 +1045,22 @@ export const RESTS = Object.freeze({
             [0.5, { right: { at: [0.22, -0.88, 0.4], palm: [0, 1, 0], towards: [0, 0, 1], shape: "relaxed" }, left: { at: [-0.22, -0.88, 0.4], palm: [0, 1, 0], towards: [0, 0, 1], shape: "relaxed" }, Head: { flex: 12 } }],
             [1.6, { Head: { flex: 14 } }]),
     ],
+};
+
+// The officials of the town halls and keeps (built from the rests of others): a reeve and their
+// clerk; a ruler on the throne, their steward, councillors at the table, sentries at the door;
+// and petitioners waiting on the benches
+const { patron: PATRON, worshipper: WORSHIPPER } = BASE_RESTS;
+
+export const RESTS = Object.freeze({
+    ...BASE_RESTS,
+    reeve: [renamed(BARKEEP_RESTS[3], "arms folded"), LOOKING_OVER, renamed(BARKEEP_RESTS[1], "a hand to the chin"), PRIEST_RESTS[4], renamed(BARKEEP_RESTS[4], "rubbing the neck")],
+    clerk: [renamed(BARMAID_RESTS[0], "wiping the brow"), ADVENTURER_RESTS[1], ADVENTURER_RESTS[3], renamed(BARKEEP_RESTS[4], "rubbing the neck"), ADVENTURER_RESTS[4]],
+    ruler: [renamed(WORSHIPPER[4], "hands on the knees"), renamed(WORSHIPPER[2], "gazing over the hall"), renamed(PATRON[4], "looking about the hall"), renamed(WORSHIPPER[1], "brooding"), renamed(BARKEEP_RESTS[1], "stroking the chin")],
+    steward: [renamed(BARKEEP_RESTS[3], "arms folded"), PRIEST_RESTS[4], renamed(BARKEEP_RESTS[1], "a hand to the chin"), ADVENTURER_RESTS[1], PRIEST_RESTS[2]],
+    councillor: [renamed(WORSHIPPER[0], "hands folded"), renamed(WORSHIPPER[1], "deep in thought"), renamed(PATRON[4], "looking about"), renamed(WORSHIPPER[4], "hands in the lap"), renamed(BARKEEP_RESTS[1], "stroking the chin")],
+    sentry: [ADVENTURER_RESTS[1], ADVENTURER_RESTS[2], ADVENTURER_RESTS[4], renamed(BARKEEP_RESTS[3], "arms folded"), PRIEST_RESTS[4]],
+    petitioner: [renamed(WORSHIPPER[1], "waiting, head bowed"), renamed(PATRON[4], "looking about"), WORSHIPPER[4], renamed(BARKEEP_RESTS[4], "rubbing the neck"), renamed(WORSHIPPER[2], "looking up")],
 });
 
 // --- Reactions to being hit ---

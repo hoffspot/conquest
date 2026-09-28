@@ -121,6 +121,7 @@ export const ITEMS = Object.freeze({
     nasalHelm: { label: "Nasal helm", slot: "head", model: "nasalHelm", socket: "head", hides: ["hair"] },
     orcHelm: { label: "Horned helm", slot: "head", model: "orcHelm", socket: "head", hides: ["hair"] },
     wizardHat: { label: "Wizard's hat", slot: "head", model: "wizardHat", socket: "head", hides: ["hair"] },
+    crown: { label: "Crown", slot: "head", model: "crown", socket: "head" },
     backpack: { label: "Backpack", slot: "back", model: "backpack", socket: "back", garment: "straps" },
     quiver: { label: "Quiver", slot: "back", model: "quiver", socket: "back", turn: [0.25, 0, 0.5], offset: [0, 0.02, -0.04] },
     musket: { label: "Musket (slung)", slot: "back", model: "musket", socket: "back", turn: [0, 0, 2.5], offset: [0, 0, -0.03] },

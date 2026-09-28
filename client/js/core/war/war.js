@@ -75,6 +75,9 @@ export const TRIBUTE = 0.5;
 /** How many turns a vassal serves before it might rise against its overlord. */
 export const SERVES = 60;
 
+/** How many turns a player's counsel is heeded (if it's not been acted on sooner). */
+export const COUNSEL_TURNS = 20;
+
 /** Bumped whenever what a snapshot holds changes. */
 export const WAR_VERSION = 1;
 
@@ -110,7 +113,8 @@ export class War {
          * Each people's realm (in RACES order): { id, race, name, capital (its capital's id), seat
          * (where its rulers sit now), leader ({ name, title, woman, traits }), treasury,
          * overlord (a realm's id, or null), since (the turn it last changed hands), standing (what
-         * it thinks of each other realm: grudges below 0, favours above), alive }.
+         * it thinks of each other realm: grudges below 0, favours above), counsel (a player's,
+         * heeded for a while: counsel()), alive }.
          */
         this.realms = RACES.map((race) => {
             const capital = plan.places.find((place) => place.race === race.id && place.kind === "capital");
@@ -126,6 +130,7 @@ export class War {
                 overlord: null,
                 since: 0,
                 standing: {},
+                counsel: null,
                 alive: true,
             };
         });
@@ -329,6 +334,52 @@ export class War {
         }
     }
 
+    /** Gold given to a realm's treasury (a player's tithe). Returns whether it was taken. */
+    give(id, amount) {
+        const realm = this.realm(id);
+
+        if (!realm?.alive || !(amount > 0)) {
+            return false;
+        }
+
+        realm.treasury += amount;
+
+        return true;
+    }
+
+    /**
+     * A player's counsel to a realm's rulers (not a vassal's: its overlord's decide), weighing
+     * `weight` (0 to 1, by their standing: core/standing.js COUNSEL):
+     * - { march: a town's id }: the next expedition sent against it (one of an enemy's towns);
+     * - { peace: a realm's id }: an envoy sent to it for a truce (a realm they're at war with);
+     * - { war: a realm's id }: war declared on it (a realm they know, and are neutral with).
+     * Heeded for COUNSEL_TURNS, or until it's acted on; a newer counsel takes the place of the
+     * last. Returns whether it could be given.
+     */
+    counsel(id, advice, weight) {
+        const realm = this.realm(id);
+        const [kind, about] = Object.entries(advice ?? {}).find(([key]) => ["march", "peace", "war"].includes(key)) ?? [];
+
+        if (!realm?.alive || realm.overlord || !kind || !(weight > 0)) {
+            return false;
+        }
+
+        const fitting = {
+            march: () => this.town(about) && this.hostile(id, this.liege(this.town(about).owner)),
+            peace: () => this.realm(about)?.alive && this.hostile(id, about),
+            war: () => this.realm(about)?.alive && !this.realm(about).overlord && this.relation(id, about) === "neutral",
+        }[kind];
+
+        if (!fitting()) {
+            return false;
+        }
+
+        realm.counsel = { [kind]: about, weight: clamp(weight, 0, 1), until: this.turn + COUNSEL_TURNS };
+        this.#emit("counsel", { realm: id, [kind]: about });
+
+        return true;
+    }
+
     /** A realm remembers something done to it by another: a grudge (below 0) or a favour (above). */
     remember(id, about, amount) {
         const realm = this.realm(id);
@@ -491,6 +542,12 @@ export class War {
     // A liege's rulers decide what to do this turn, for their realm and its vassals
     #decide(realm) {
         const { traits } = realm.leader;
+
+        // (A player's counsel is heeded only so long)
+        if (realm.counsel && this.turn > realm.counsel.until) {
+            realm.counsel = null;
+        }
+
         const own = [realm, ...this.realms.filter((other) => other.alive && other.overlord && this.liege(other.id) === realm.id)];
 
         for (const each of own) {
@@ -553,6 +610,15 @@ export class War {
 
         const enemies = this.enemiesOf(realm.id);
         const strength = this.strength(realm.id);
+        const counsel = realm.counsel;
+
+        // (Counselled to seek peace: the more, the weightier the counsel and the warier the ruler)
+        if (counsel?.peace && enemies.includes(counsel.peace) && this.random.chance(counsel.weight * (0.4 + traits.caution * 0.6))) {
+            realm.counsel = null;
+            this.#envoy(realm, counsel.peace, "truce");
+
+            return;
+        }
 
         for (const enemy of enemies) {
             if (this.strength(enemy) > strength * (1 + (1 - traits.caution)) && this.random.chance(0.5)) {
@@ -619,6 +685,16 @@ export class War {
                 this.#set(realm.id, other.id, "neutral");
                 this.#emit("broke", { by: realm.id, with: other.id });
             }
+        }
+
+        // (Counselled to war: the weightier the counsel and the bolder the ruler, the likelier)
+        const counsel = realm.counsel;
+
+        if (counsel?.war && this.relation(realm.id, counsel.war) === "neutral" && this.random.chance(counsel.weight * (0.3 + traits.aggression * 0.7))) {
+            realm.counsel = null;
+            this.#war(realm.id, counsel.war);
+
+            return;
         }
 
         if (this.enemiesOf(realm.id).length >= 1 + Math.round(traits.aggression * 2)) {
@@ -762,7 +838,10 @@ export class War {
                 // (Their rulers' seat, to bring them under: when it can be taken, and it's strong enough to)
                 const seat = takeable && town.id === this.realm(town.owner).seat && this.strength(liege.id) >= this.strength(this.liege(town.owner));
 
-                return { town, from, score: distance / 1000 + town.garrison / 15 - (camped ? 2 : 0) - (takeable ? HOLDINGS[town.kind].worth * traits.greed : 0) - (seat ? 3 * traits.aggression : 0) + this.random.range(0, 0.5) };
+                // (And where a player's counselled them to march)
+                const counselled = liege.counsel?.march === town.id ? 4 * liege.counsel.weight : 0;
+
+                return { town, from, score: distance / 1000 + town.garrison / 15 - (camped ? 2 : 0) - (takeable ? HOLDINGS[town.kind].worth * traits.greed : 0) - (seat ? 3 * traits.aggression : 0) - counselled + this.random.range(0, 0.5) };
             })
             .filter(({ from }) => from)
             .sort((a, b) => a.score - b.score);
@@ -784,6 +863,11 @@ export class War {
 
         if (!route) {
             return;
+        }
+
+        // (Counsel acted on)
+        if (liege.counsel?.march === town.id) {
+            liege.counsel = null;
         }
 
         realm.treasury -= size * COSTS.troop;

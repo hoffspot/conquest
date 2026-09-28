@@ -344,12 +344,14 @@ describe("the settlements out in the world (settlements.js)", () => {
         assert.ok(far.length > overworld.settlements.places.length / 2);
     });
 
-    it("have a tavern, a church, a smithy and a guild in every village, and each a tavern", () => {
+    it("have a tavern, a church, a smithy and a guild in every village, and each a tavern (a town hall only in a town or city, a keep in a capital)", () => {
         const names = settlement.town.pieces.filter(({ kind }) => kind === "landmark").map(({ name }) => name);
 
-        for (const name of ENTERED) {
+        for (const name of ENTERED.filter((each) => each !== "hall" && each !== "keep")) {
             assert.ok(names.includes(name), name);
         }
+
+        assert.ok(!names.includes("hall") && !names.includes("keep"));
     });
 
     it("are set into the world as they were laid out, their pieces each in one chunk", () => {

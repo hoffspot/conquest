@@ -17,9 +17,10 @@
 import { Battle, FOE_MS, KINDS, TALK_REACH } from "./battle.js";
 import { Explored } from "./explored.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
-import { ABILITIES, ITEMS, priceOf, Progress, rollLoot, wares, weaponOf } from "./progress.js";
+import { ABILITIES, ITEMS, priceOf, Progress, rollLoot, wares, weaponOf, WITH_SHIELD } from "./progress.js";
 import { createRandom } from "./random.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
+import { armouryGift, COUNSEL, FAILED, MOST_REQUESTS, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
 import { bannersOf, PATROL_SIZE, POSTED, postsOf, roundsOf } from "./war/muster.js";
 import { ADJECTIVES } from "./war/peoples.js";
 import { HOLDINGS, War } from "./war/war.js";
@@ -60,11 +61,24 @@ export const SOLDIERS_ARMS = Object.freeze({
     orc: ["cleaver", "cleaver"],
 });
 
+/**
+ * Who sits where in their people's rule (by role: docs/WAR.md M4), and what each does: gives work
+ * (`work`), takes word of it done (`report`), hands out the armoury's gifts (`armoury`), hears
+ * counsel (`counsel`). A town hall's reeve and clerk; a keep's ruler, steward and councillors.
+ */
+export const OFFICIALS = Object.freeze({
+    reeve: { post: "hall", work: true, report: true },
+    clerk: { post: "hall", report: true },
+    ruler: { post: "keep", work: true, report: true, counsel: true },
+    steward: { post: "keep", work: true, report: true, armoury: true },
+    councillor: { post: "keep" },
+});
+
 /** What's kept of the things done by talking (the last so many). */
 const KEEP_DONE = 50;
 
 /** Bumped whenever what a snapshot holds changes, so an old one isn't read wrong. */
-export const SNAPSHOT_VERSION = 2;
+export const SNAPSHOT_VERSION = 3;
 
 /** Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS). */
 export const SHOPKEEPERS = Object.freeze({ smith: "smith", apprentice: "smith", barkeep: "tavern", barmaid: "tavern", innkeeper: "tavern", priest: "temple", acolyte: "temple", receptionist: "guild" });
@@ -106,6 +120,15 @@ export const REFUSALS = Object.freeze({
     item: "You can't do that with it.",
     shield: "Not with that weapon.",
     cooldown: "Not ready yet.",
+    official: "They're not the one to ask.",
+    stranger: "They've nothing for a stranger.",
+    rank: "They won't hear that from you. Not yet.",
+    work: "They've nothing for you just now.",
+    requests: "You've enough to be getting on with.",
+    due: "You've nothing to tell them.",
+    claimed: "The armoury's given you all it will, for now.",
+    counsel: "That counsel can't be taken.",
+    request: "No such request.",
 });
 
 // A whole number, and a square [x, y] of whole numbers
@@ -144,7 +167,9 @@ export class Host {
         /**
          * The players, by id: { id, hero (their character: { name, shape, look, weapon, boots,
          * race }), realm (the people they're of), talks (what the folk remember of them, what
-         * they've learnt: { memory, knowledge }), explored (core/explored.js) }.
+         * they've learnt: { memory, knowledge }), explored (core/explored.js), progress
+         * (core/progress.js), standing (core/standing.js), boons, readyAt, offers (the work
+         * each official last offered them: { turn, request }) }.
          */
         this.players = new Map();
 
@@ -204,7 +229,7 @@ export class Host {
      * app/save.js), at `square` on `map` (the world's start, to begin with; the nearest free
      * square to it). Returns their record (players).
      */
-    join({ id = HOST_PLAYER, hero, talks = {}, explored = {}, progress = {}, square = this.world.spawns?.player, map = "town" }) {
+    join({ id = HOST_PLAYER, hero, talks = {}, explored = {}, progress = {}, standing = {}, square = this.world.spawns?.player, map = "town" }) {
         if (this.players.has(id)) {
             return this.players.get(id);
         }
@@ -216,9 +241,11 @@ export class Host {
             talks: { memory: talks.memory ?? {}, knowledge: new Set(talks.knowledge ?? []) },
             explored: explored instanceof Explored ? explored : new Explored(explored),
             progress: progress instanceof Progress ? progress : new Progress(progress, hero),
+            standing: standing instanceof Standing ? standing : new Standing(standing),
             // Boons for a while ([{ id, label, until, melee...}]), and when each ability's ready again
             boons: [],
             readyAt: {},
+            offers: {},
         };
         const taken = new Set(this.battle.actors.filter((actor) => actor.map === map).map(({ square: [x, y] }) => squareKey(x, y)));
         const at = taken.size ? nearestFree(squaresOf(this.world.maps?.[map] ?? this.world), square, { taken }) : square;
@@ -250,8 +277,8 @@ export class Host {
     }
 
     /** A player's character, as it's kept (as join takes it). */
-    characterOf({ hero, talks, explored, progress }) {
-        return { hero: { ...hero }, talks: { memory: structuredClone(talks.memory), knowledge: [...talks.knowledge] }, explored: explored.toJSON(), progress: progress.toJSON() };
+    characterOf({ hero, talks, explored, progress, standing }) {
+        return { hero: { ...hero }, talks: { memory: structuredClone(talks.memory), knowledge: [...talks.knowledge] }, explored: explored.toJSON(), progress: progress.toJSON(), standing: standing.toJSON() };
     }
 
     /**
@@ -268,9 +295,12 @@ export class Host {
      *  - { type: "equip", index }, { type: "unequip", slot }: put on (or take up) gear from their
      *    pack, or take armour off; { type: "use", index }: use something in their pack;
      *  - { type: "ability", ability, target }: use an ability they've learnt (core/progress.js
-     *    ABILITIES), on a target for a stronger blow (fighting it).
-     * Returns { ok: true } or { ok: false, reason } (a REFUSALS key; a spell's own reasons:
-     * spells.js CAST_FAILURES).
+     *    ABILITIES), on a target for a stronger blow (fighting it);
+     *  - { type: "abandon", request }: give up a request they carry (by its id), for a little
+     *    standing lost.
+     * Returns { ok: true } (with what came of it, for some: an offer of work, what was handed
+     * in) or { ok: false, reason } (a REFUSALS key; a spell's own reasons: spells.js
+     * CAST_FAILURES).
      */
     command(playerId, command) {
         const player = this.players.get(playerId);
@@ -349,6 +379,8 @@ export class Host {
                 return this.#use(player, actor, command.index);
             case "ability":
                 return this.#ability(player, actor, command.ability, command.target ?? null);
+            case "abandon":
+                return this.#abandon(player, command.request);
             case "talk":
                 return this.#talk(actor, command.with ?? null);
             case "effect":
@@ -462,6 +494,7 @@ export class Host {
             this.lookAt = this.battle.time + RELEVANCE.every;
             this.#lookAround();
             this.#muster();
+            this.#watchRequests();
         }
 
         const own = this.events;
@@ -532,8 +565,8 @@ export class Host {
             }
         }
 
-        for (const { id, realm, hero, talks, explored, progress, boons, readyAt } of snapshot.players) {
-            host.players.set(id, { id, realm, hero, talks: { memory: talks.memory, knowledge: new Set(talks.knowledge) }, explored: new Explored(explored), progress: new Progress(progress, hero), boons: structuredClone(boons ?? []), readyAt: { ...readyAt } });
+        for (const { id, realm, hero, talks, explored, progress, standing, boons, readyAt } of snapshot.players) {
+            host.players.set(id, { id, realm, hero, talks: { memory: talks.memory, knowledge: new Set(talks.knowledge) }, explored: new Explored(explored), progress: new Progress(progress, hero), standing: new Standing(standing), boons: structuredClone(boons ?? []), readyAt: { ...readyAt }, offers: {} });
         }
 
         host.random.state = snapshot.random ?? host.random.state;
@@ -589,6 +622,7 @@ export class Host {
 
                 if (by && fallen && !this.players.has(fallen.id)) {
                     this.#loot(by, fallen);
+                    this.#felled(by, fallen);
                 }
 
                 break;
@@ -815,24 +849,20 @@ export class Host {
 
     // Where the players are out in the world (and those in buildings, at their doors)
     #whereabouts() {
-        const interiors = this.world.interiors;
-        const places = [];
+        return [...this.players.values()].map((player) => this.#whereIs(player)).filter(Boolean);
+    }
 
-        for (const player of this.players.values()) {
-            const actor = this.battle.actor(player.id);
+    // Where a player is in the world ([x, y] metres): out in it, or in a building (at its door)
+    #whereIs(player) {
+        const actor = this.battle.actor(player.id);
 
-            if (actor?.map === "town") {
-                places.push([actor.x, actor.y]);
-            } else if (actor) {
-                const door = interiors?.of(actor.map)?.entrance?.door ?? this.world.tavern?.door;
-
-                if (door) {
-                    places.push([door.x, door.z]);
-                }
-            }
+        if (actor?.map === "town") {
+            return [actor.x, actor.y];
         }
 
-        return places;
+        const door = actor ? (this.world.interiors?.of(actor.map)?.entrance?.door ?? this.world.tavern?.door) : null;
+
+        return door ? [door.x, door.z] : null;
     }
 
     // Each town the war's fought over, near a player: its soldiers out (again, if it's changed
@@ -1026,6 +1056,11 @@ export class Host {
             return refuse("talking");
         }
 
+        // (Work asked for or taken on, word of it brought, the armoury, counsel: an official's)
+        if (effect.work || effect.report || effect.armoury || effect.counsel) {
+            return this.#official(player, actor, effect);
+        }
+
         const price = Math.max(0, Math.floor(Number(effect.price ?? effect.pay) || 0));
 
         if (price > player.progress.gold) {
@@ -1056,6 +1091,343 @@ export class Host {
         this.#event("effect", { id: actor.id, effect: done });
 
         return OK;
+    }
+
+    // --- Standing in their people (core/standing.js) ---
+
+    /**
+     * Where one of the folk sits in their people's rule, if they do (by id): { id, role, name,
+     * title, town (a war town's id), owner (who holds it), post ("hall" or "keep"), and what they
+     * do (OFFICIALS) }; or null.
+     */
+    postOf(id) {
+        const one = this.folk.get(id);
+        const official = OFFICIALS[one?.role];
+        const actor = this.battle.actor(id);
+
+        if (!official || !actor || !this.war) {
+            return null;
+        }
+
+        const building = this.world.interiors?.of(actor.map);
+        const town = this.war.town(building?.place === "home" ? this.world.start?.id : building?.place);
+
+        return town ? { id, role: one.role, name: one.name, title: one.title ?? "", town: town.id, owner: town.owner, ...official } : null;
+    }
+
+    /**
+     * What a player can tell one of the folk (by id) of: letters for them, and what's been done
+     * of what they asked (or a tithe to be paid them). Their requests, as the player carries them.
+     */
+    dueTo(playerId, id) {
+        const player = this.players.get(playerId);
+        const post = this.postOf(id);
+
+        if (!player || !post?.report) {
+            return [];
+        }
+
+        return player.standing.requests.filter((request) => {
+            if (request.kind === "message") {
+                return request.target.town === post.town && request.target.post === post.post;
+            }
+
+            return request.from.town === post.town && request.from.post === post.post && (request.state === "done" || request.kind === "tithe");
+        });
+    }
+
+    // Something asked of an official the player's talking to: work (offered, then taken on), word
+    // of what's done (rewarded), the armoury's gift for their rank, or counsel to their rulers
+    #official(player, actor, effect) {
+        const post = this.postOf(actor.talkingTo);
+
+        if (!post) {
+            return refuse("official");
+        }
+
+        const { standing } = player;
+        const rank = standing.rank();
+        const own = this.war.liege(post.owner) === this.war.liege(player.realm);
+
+        if (effect.work === "ask" || effect.work === "accept") {
+            if (!post.work) {
+                return refuse("official");
+            }
+
+            if (!own) {
+                return refuse("stranger");
+            }
+
+            if (post.post === "keep" && rank < OPENS.keep) {
+                return refuse("rank");
+            }
+
+            if (standing.requests.length >= MOST_REQUESTS) {
+                return refuse("requests");
+            }
+
+            // (What they offer holds for the turn: asking again doesn't change it)
+            const kept = player.offers[post.id];
+
+            if (effect.work === "ask") {
+                const request = kept?.turn === this.war.turn ? kept.request : offerRequest({ war: this.war, realm: player.realm, town: post.town, post: post.post, giver: post, rank, held: standing.requests, random: this.random });
+
+                player.offers[post.id] = { turn: this.war.turn, request };
+
+                return request ? { ok: true, request: structuredClone(request) } : refuse("work");
+            }
+
+            if (!kept?.request) {
+                return refuse("work");
+            }
+
+            const taken = standing.take(kept.request);
+
+            delete player.offers[post.id];
+            this.#event("request", { id: player.id, change: "taken", request: structuredClone(taken) });
+
+            return { ok: true, request: structuredClone(taken) };
+        }
+
+        if (effect.report) {
+            if (!post.report) {
+                return refuse("official");
+            }
+
+            const due = this.dueTo(player.id, post.id);
+
+            if (!due.length) {
+                return refuse("due");
+            }
+
+            const handed = [];
+
+            for (const request of due) {
+                // (A tithe paid, if they've the coppers: into their people's treasury)
+                if (request.kind === "tithe") {
+                    if (player.progress.gold < request.target.coppers) {
+                        continue;
+                    }
+
+                    player.progress.gold -= request.target.coppers;
+                    this.war.give(player.realm, request.target.coppers * TITHE_RATE);
+                }
+
+                handed.push(this.#rewarded(player, request));
+            }
+
+            return handed.length ? { ok: true, reported: handed } : refuse("coppers");
+        }
+
+        if (effect.armoury) {
+            if (!post.armoury) {
+                return refuse("official");
+            }
+
+            if (!own) {
+                return refuse("stranger");
+            }
+
+            if (rank < OPENS.armoury) {
+                return refuse("rank");
+            }
+
+            // (The first rank's gift not had yet: something for the weapon they carry)
+            const due = Array.from({ length: rank - OPENS.armoury + 1 }, (_, k) => OPENS.armoury + k).find((each) => !standing.claimed.includes(each));
+
+            if (due === undefined) {
+                return refuse("claimed");
+            }
+
+            const weapon = weaponOf(player.progress);
+            const gift = armouryGift(due, ITEMS[weapon]?.slot === "weapon" ? weapon : "sword", WITH_SHIELD.includes(weapon));
+
+            if (!player.progress.stow(gift)) {
+                return refuse("full");
+            }
+
+            standing.claimed.push(due);
+            this.#event("gift", { id: player.id, item: gift, rank: due });
+
+            return { ok: true, item: gift };
+        }
+
+        if (effect.counsel) {
+            const [kind] = Object.keys(effect.counsel);
+
+            if (!post.counsel) {
+                return refuse("official");
+            }
+
+            if (!own) {
+                return refuse("stranger");
+            }
+
+            if (!(rank >= (OPENS[kind] ?? Infinity))) {
+                return refuse("rank");
+            }
+
+            if (!this.war.counsel(player.realm, effect.counsel, COUNSEL[rank])) {
+                return refuse("counsel");
+            }
+
+            this.#event("counsel", { id: player.id, advice: { ...effect.counsel } });
+
+            return OK;
+        }
+
+        return refuse("command");
+    }
+
+    // A request done and told of: set down, its reward paid (coppers, standing: any rank it brings told of)
+    #rewarded(player, request) {
+        const { standing } = player;
+        const { reward } = request;
+
+        standing.close(request.id, "done");
+        player.progress.gold += reward.coppers;
+        this.#event("request", { id: player.id, change: "done", request: structuredClone(request), reward: { ...reward } });
+
+        for (const up of standing.gain(reward.standing)) {
+            this.#event("standing", { id: player.id, ...up });
+        }
+
+        return structuredClone(request);
+    }
+
+    // A request given up: a little standing lost
+    #abandon(player, id) {
+        const request = player.standing.close(id, "abandoned");
+
+        if (!request) {
+            return refuse("request");
+        }
+
+        player.standing.gain(-FAILED);
+        this.#event("request", { id: player.id, change: "abandoned", request: structuredClone(request) });
+
+        return OK;
+    }
+
+    // A foe a player's brought down, for the requests they carry: an enemy's soldier, or one of the wild
+    #felled(player, fallen) {
+        for (const request of [...player.standing.requests]) {
+            if (request.state !== "open") {
+                continue;
+            }
+
+            const counts =
+                request.kind === "bounty"
+                    ? fallen.kind === "soldier" && this.war?.liege(fallen.team) === request.target.realm
+                    : request.kind === "wild" && !fallen.neutral && fallen.kind !== "soldier" && fallen.kind !== "player" && !this.war?.realm(fallen.team);
+
+            if (counts) {
+                request.count += 1;
+                this.#settle(player, request, request.count >= request.target.need ? "ready" : "count");
+            }
+        }
+    }
+
+    // How the players' requests stand, as the war goes on and they go about the world: run out
+    // of time; seen what they were to scout; there when their town needed holding (and it held);
+    // come to nothing (their target gone, or gone over to their own)
+    #watchRequests() {
+        const war = this.war;
+
+        if (!war) {
+            return;
+        }
+
+        for (const player of this.players.values()) {
+            const at = this.#whereIs(player);
+
+            for (const request of [...player.standing.requests]) {
+                const change = this.#check(player, request, at);
+
+                if (change) {
+                    this.#settle(player, request, change);
+                }
+            }
+        }
+    }
+
+    #check(player, request, at) {
+        const war = this.war;
+        const liege = war.liege(player.realm);
+
+        if (request.until !== null && war.turn > request.until) {
+            return "failed";
+        }
+
+        if (request.state === "done") {
+            return null;
+        }
+
+        // (How near a place a player is: from a town's middle, less its reach)
+        const near = (point, reach) => Boolean(at && point) && Math.hypot(at[0] - point[0], at[1] - point[1]) <= reach;
+        const townAt = (town) => {
+            const place = this.#placeOf(town.id);
+
+            return { middle: place ? this.#middleOf(place) : town.at, radius: SETTLEMENT_KINDS[place?.kind]?.radius ?? 0 };
+        };
+
+        switch (request.kind) {
+            case "message": {
+                const to = war.town(request.target.town);
+
+                return to && war.liege(to.owner) === liege ? null : "void";
+            }
+            case "scout": {
+                if (request.target.force) {
+                    const force = war.force(request.target.force);
+
+                    return !force ? "void" : near(force.at, REQUEST_REACH.scout) ? "ready" : null;
+                }
+
+                const town = war.town(request.target.town);
+
+                if (!town || !war.hostile(liege, war.liege(town.owner))) {
+                    return "void";
+                }
+
+                const { middle, radius } = townAt(town);
+
+                return near(middle, radius + REQUEST_REACH.scout) ? "ready" : null;
+            }
+            case "defend": {
+                const town = war.town(request.target.town);
+
+                if (!town || war.liege(town.owner) !== liege) {
+                    return "failed";
+                }
+
+                const { middle, radius } = townAt(town);
+
+                if (!request.there && near(middle, radius + REQUEST_REACH.defend)) {
+                    request.there = true;
+                    this.#event("request", { id: player.id, change: "there", request: structuredClone(request) });
+                }
+
+                return war.force(request.target.camp) ? null : request.there ? "ready" : "void";
+            }
+            default:
+                return null;
+        }
+    }
+
+    // A request moved on: counted, done (to be told of), failed (standing lost) or come to nothing
+    #settle(player, request, change) {
+        if (change === "ready") {
+            request.state = "done";
+        } else if (change === "failed" || change === "void") {
+            player.standing.close(request.id, change);
+
+            if (change === "failed") {
+                player.standing.gain(-FAILED);
+            }
+        }
+
+        this.#event("request", { id: player.id, change, request: structuredClone(request) });
     }
 
     // --- The buildings near the players ---
@@ -1142,11 +1514,33 @@ export class Host {
         }
 
         this.world.interiors.make(key);
+        this.#enthrone(building);
 
         const folk = building.folk.filter((one) => this.#addFolk(one)).map(({ id }) => id);
 
         this.open.set(key, folk);
         this.#event("open", { key, folk });
+    }
+
+    // Who sits on a keep's throne, as the war has it: the ruler of the people who hold it, if
+    // it's their seat (their name, and their title: "Queen"); else a governor for them
+    #enthrone(building) {
+        const one = building.kind === "keep" ? building.folk.find(({ role }) => role === "ruler") : null;
+        const town = one && this.war?.town(building.place === "home" ? this.world.start?.id : building.place);
+
+        if (!town) {
+            return;
+        }
+
+        const realm = this.war.realm(town.owner);
+
+        one.born ??= { name: one.name, sex: one.sex };
+
+        if (realm?.seat === town.id) {
+            Object.assign(one, { name: realm.leader.name, title: realm.leader.title, sex: realm.leader.woman ? "f" : "m" });
+        } else {
+            Object.assign(one, { name: one.born.name, title: `Governor of ${town.name}`, sex: one.born.sex });
+        }
     }
 
     // Let a building go: its folk out of the battle (its plans are kept, and anyone can still go

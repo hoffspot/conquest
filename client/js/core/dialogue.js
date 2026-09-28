@@ -557,6 +557,287 @@ export const TREES = Object.freeze({
             },
         },
     },
+    // The officials of their people's rule (docs/WAR.md M4): what they say is asked of the game
+    // (core/host.js postOf, dueTo; app/game.js fills their words): whether the player's their own
+    // people's (`own`), whether they've room for more work (`room`), what's offered (`offer`),
+    // whether they've something to tell of (`due`), how it went (`reported`), whether they've the
+    // rank for the keep (`keep`), an armoury gift due (`armoury`), counsel they can give
+    // (`counselMarch`, `counselPeace`, `counselWar`) and its choices (`march1`... `war3`)
+    reeve: {
+        start: "greet",
+        nodes: {
+            greet: {
+                say: [
+                    { if: { own: false }, lines: ["You're not of {holder}, stranger. The hall's no business of yours.", "{town} answers to {holder}. You don't. Say what you want and be on your way."] },
+                    { if: { met: false }, lines: ["Reeve of {town}. I keep its rolls, its taxes and its peace, for {ruler}. And you'd be {player}.", "{name}, reeve here. {town} runs on its rolls, and I keep them. What brings you, {player}?"] },
+                    { lines: ["{player}. Back again. What is it?", "Ah, {player}. The rolls never end. Speak.", "{player}. I hope you've come with good news."] },
+                ],
+                choices: "more",
+            },
+            more: {
+                say: ["What else?", "Anything more?", "Well?", "Go on."],
+                choices: [
+                    { if: { due: true }, say: "It's done, what was asked.", next: "reported", do: [{ report: true }] },
+                    { if: { all: [{ own: true }, { room: true }] }, say: "Is there work for me?", next: "offer", do: [{ work: "ask" }] },
+                    { if: { own: true }, say: "Where do I stand with our people?", next: "standing" },
+                    { say: "How goes the war?", next: "war" },
+                    FAREWELL,
+                ],
+            },
+            offer: {
+                say: [
+                    { if: { offer: true }, lines: ["{offer} There's {reward} in it for you.", "Here's one for you. {offer} {reward}, when it's done."] },
+                    { lines: ["Nothing just now. Come back in a while: there's always something.", "The rolls are quiet today. Try me again later."] },
+                ],
+                choices: [
+                    { if: { offer: true }, say: "I'll do it.", next: "accepted", do: [{ work: "accept" }] },
+                    { if: { offer: true }, say: "Not this time.", next: "more" },
+                    { if: { offer: false }, say: "I'll come back.", next: "more" },
+                ],
+            },
+            accepted: {
+                say: ["Good. It's in the rolls now: don't make me strike it out.", "Then go. Come back to me when it's done.", "I'll hold you to it, {player}."],
+                choices: "more",
+            },
+            reported: {
+                say: [{ if: { reported: true }, lines: ["{reported}"] }, { lines: ["Not yet, it isn't. Come back when it is."] }],
+                choices: "more",
+            },
+            standing: {
+                say: ["The rolls have you down as {rank}. {standingNext}", "{rank}, by the rolls. {standingNext}"],
+                choices: "more",
+            },
+            war: {
+                say: ["These are days of {age}. {holder} stand against {foes}.", "{age}, they're calling it. We've {foes} to reckon with.", "Taxes up, men gone to the camps. That's {age} for you. We're against {foes}."],
+                choices: "more",
+            },
+        },
+    },
+    clerk: {
+        start: "greet",
+        nodes: {
+            greet: {
+                say: ["It's the reeve you'll want, not me. I only keep the rolls.", "Mind the ink. Are you here for the reeve?", "{player}, isn't it? You're in the rolls."],
+                choices: [
+                    { if: { due: true }, say: "I've word for the rolls: it's done.", next: "reported", do: [{ report: true }] },
+                    { say: "What's the talk of the hall?", next: "news" },
+                    FAREWELL,
+                ],
+            },
+            reported: {
+                say: [{ if: { reported: true }, lines: ["{reported}"] }, { lines: ["The rolls don't say so. See the reeve."] }],
+                choices: [
+                    { say: "What's the talk of the hall?", next: "news" },
+                    FAREWELL,
+                ],
+            },
+            news: {
+                say: ["Days of {age}. Every other letter's about {foes}.", "More soldiers wanted, more taxes wanted. {age}, the reeve calls it.", "Letters from {ruler}'s steward every week. It's {foes} they're worried about."],
+                choices: [FAREWELL],
+            },
+        },
+    },
+    petitioner: {
+        start: "greet",
+        nodes: {
+            greet: {
+                say: [
+                    "I've waited since dawn to see the reeve about my neighbour's goats. Since dawn!",
+                    "They've doubled the tithe again. For the war, they say. What war? I've a roof to mend.",
+                    "My son went to the camps a month ago. I've come to ask if there's word.",
+                    "A boundary stone, moved in the night. I know who did it. I'll have it in the rolls.",
+                ],
+                choices: [
+                    { say: "I hope you're heard soon.", next: "thanks" },
+                    FAREWELL,
+                ],
+            },
+            thanks: {
+                say: ["So do I. Or I'll be sleeping on this bench.", "Kind of you. Nobody else here's said as much."],
+                choices: [FAREWELL],
+            },
+        },
+    },
+    ruler: {
+        start: "greet",
+        nodes: {
+            greet: {
+                say: [
+                    { if: { own: false }, lines: ["You stand before {ruler} of {holder}. Say what you came to say, stranger, then go.", "One not of {holder}, in my hall? Speak quickly."] },
+                    { if: { keep: false }, lines: ["And who might you be? My steward sees to petitioners. Make a name for yourself, {player}, and then we'll talk.", "The throne's time is for those who've earned it. You've not, {player}. Not yet."] },
+                    { lines: ["{player}. You've served us well. What would you have of us?", "Our {rank}. Come, speak.", "{player}. We were speaking of you. Well, what is it?"] },
+                ],
+                choices: "more",
+            },
+            more: {
+                say: ["Well?", "What more?", "Go on.", "We're listening."],
+                choices: [
+                    { if: { due: true }, say: "It's done, as you asked.", next: "reported", do: [{ report: true }] },
+                    { if: { all: [{ own: true }, { keep: true }, { room: true }] }, say: "How may I serve?", next: "offer", do: [{ work: "ask" }] },
+                    { if: { counselMarch: true }, say: "Where will we strike next?", next: "march" },
+                    { if: { counselPeace: true }, say: "Have you thought of peace?", next: "peace" },
+                    { if: { counselWar: true }, say: "There are others we could bring to heel.", next: "warOn" },
+                    { say: "How goes the war?", next: "war" },
+                    { say: "By your leave.", next: null },
+                ],
+            },
+            offer: {
+                say: [
+                    { if: { offer: true }, lines: ["{offer} Do it, and there's {reward}.", "There's a thing. {offer} {reward}, and our thanks."] },
+                    { lines: ["Nothing needs you just now. We'll send for you.", "Rest a while. There'll be need of you soon enough."] },
+                ],
+                choices: [
+                    { if: { offer: true }, say: "It will be done.", next: "accepted", do: [{ work: "accept" }] },
+                    { if: { offer: true }, say: "Not this, I think.", next: "more" },
+                    { if: { offer: false }, say: "As you wish.", next: "more" },
+                ],
+            },
+            accepted: {
+                say: ["Good. Go.", "We'll hear of it, one way or the other.", "Then don't keep us waiting."],
+                choices: "more",
+            },
+            reported: {
+                say: [{ if: { reported: true }, lines: ["{reported}"] }, { lines: ["Is it? We've heard nothing of it."] }],
+                choices: "more",
+            },
+            march: {
+                say: "Speak, then. Where would you have us march?",
+                choices: [
+                    { if: { march1: true }, say: "On {march1}.", next: "heeded", do: [{ counsel: { march: 1 } }] },
+                    { if: { march2: true }, say: "On {march2}.", next: "heeded", do: [{ counsel: { march: 2 } }] },
+                    { if: { march3: true }, say: "On {march3}.", next: "heeded", do: [{ counsel: { march: 3 } }] },
+                    { say: "I'll think on it.", next: "more" },
+                ],
+            },
+            peace: {
+                say: "Peace. With whom?",
+                choices: [
+                    { if: { peace1: true }, say: "With {peace1}.", next: "heeded", do: [{ counsel: { peace: 1 } }] },
+                    { if: { peace2: true }, say: "With {peace2}.", next: "heeded", do: [{ counsel: { peace: 2 } }] },
+                    { if: { peace3: true }, say: "With {peace3}.", next: "heeded", do: [{ counsel: { peace: 3 } }] },
+                    { say: "Forget I spoke.", next: "more" },
+                ],
+            },
+            warOn: {
+                say: "Bring whom to heel?",
+                choices: [
+                    { if: { war1: true }, say: "{war1}.", next: "heeded", do: [{ counsel: { war: 1 } }] },
+                    { if: { war2: true }, say: "{war2}.", next: "heeded", do: [{ counsel: { war: 2 } }] },
+                    { if: { war3: true }, say: "{war3}.", next: "heeded", do: [{ counsel: { war: 3 } }] },
+                    { say: "Forget I spoke.", next: "more" },
+                ],
+            },
+            heeded: {
+                say: ["{counsel}"],
+                choices: "more",
+            },
+            war: {
+                say: ["These are days of {age}. We stand against {foes}.", "{age}. We've {foes} to answer, and answer them we will."],
+                choices: "more",
+            },
+        },
+    },
+    steward: {
+        start: "greet",
+        nodes: {
+            greet: {
+                say: [
+                    { if: { own: false }, lines: ["The keep's business is with {holder}, stranger. State yours."] },
+                    { if: { keep: false }, lines: ["{ruler} isn't receiving, not for the likes of you. Not yet. But letters and tithes come to me. What have you?", "Steward of the keep. Letters, tithes, petitions: through me. What is it, {player}?"] },
+                    { lines: ["{player}. The keep has use for you, if you want it.", "Ah, our {rank}. What can the keep do for you?"] },
+                ],
+                choices: "more",
+            },
+            more: {
+                say: ["What else?", "Anything more?", "Well?"],
+                choices: [
+                    { if: { due: true }, say: "I've brought what was asked.", next: "reported", do: [{ report: true }] },
+                    { if: { all: [{ own: true }, { keep: true }, { room: true }] }, say: "Is there work from the keep?", next: "offer", do: [{ work: "ask" }] },
+                    { if: { armoury: true }, say: "I'm told the armoury has something for me.", next: "gift", do: [{ armoury: true }] },
+                    { if: { own: true }, say: "Where do I stand?", next: "standing" },
+                    { say: "How goes the war?", next: "war" },
+                    FAREWELL,
+                ],
+            },
+            offer: {
+                say: [
+                    { if: { offer: true }, lines: ["{offer} The keep pays {reward}.", "This, from the keep: {offer} {reward}, on your return."] },
+                    { lines: ["Nothing for you just now. Come back tomorrow.", "The keep's needs are met, for now."] },
+                ],
+                choices: [
+                    { if: { offer: true }, say: "I'll do it.", next: "accepted", do: [{ work: "accept" }] },
+                    { if: { offer: true }, say: "Not this time.", next: "more" },
+                    { if: { offer: false }, say: "Tomorrow, then.", next: "more" },
+                ],
+            },
+            accepted: {
+                say: ["Good. I'll note it.", "It's written. Go."],
+                choices: "more",
+            },
+            reported: {
+                say: [{ if: { reported: true }, lines: ["{reported}"] }, { lines: ["I've nothing that says so."] }],
+                choices: "more",
+            },
+            gift: {
+                say: ["{gift}"],
+                choices: "more",
+            },
+            standing: {
+                say: ["You're {rank}, by the keep's reckoning. {standingNext}"],
+                choices: "more",
+            },
+            war: {
+                say: ["Days of {age}. {foes}, and the treasury none the fuller for it.", "{age}. We stand against {foes}, and the grain stores are counted twice a day."],
+                choices: "more",
+            },
+        },
+    },
+    councillor: {
+        start: "greet",
+        nodes: {
+            greet: {
+                say: ["Hm? Oh. Yes? The council's sitting, you know. More or less.", "You'll forgive me: we've been at it since the bells.", "Another petitioner? No? Well, then."],
+                choices: [
+                    { say: "Tell me of {ruler}.", next: "ruler" },
+                    { say: "What does the council say of the war?", next: "war" },
+                    FAREWELL,
+                ],
+            },
+            ruler: {
+                say: ["Between us? {traits}", "{traits} But you didn't hear it from me."],
+                choices: [
+                    { say: "What does the council say of the war?", next: "war" },
+                    FAREWELL,
+                ],
+            },
+            war: {
+                say: ["Days of {age}, and {foes} to think of. The council's divided, as ever.", "{foes}. Some want more war, some want less. I want my supper."],
+                choices: [
+                    { say: "Tell me of {ruler}.", next: "ruler" },
+                    FAREWELL,
+                ],
+            },
+        },
+    },
+    sentry: {
+        start: "greet",
+        nodes: {
+            greet: {
+                say: [
+                    { if: { own: false }, lines: ["Keep your hands where I can see them.", "One wrong move, stranger."] },
+                    { lines: ["Move along.", "Nothing to see. Move along.", "The throne's that way, if you've business there."] },
+                ],
+                choices: [
+                    { say: "Who rules here?", next: "ruler" },
+                    FAREWELL,
+                ],
+            },
+            ruler: {
+                say: ["{ruler}. Long may they reign.", "{ruler}, of {holder}. Mind your manners in there."],
+                choices: [FAREWELL],
+            },
+        },
+    },
     // A courtesan: warm, teasing, and never quite saying it. What she offers (her company, a
     // dance, what she hears from her callers, a favour to be done) is handed to the game to do
     courtesan: {
