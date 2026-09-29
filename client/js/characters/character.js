@@ -821,7 +821,8 @@ export class Character {
             material.needsUpdate = true;
         }
 
-        texture.image.getContext("2d").putImageData(new ImageData(data, size, size), 0, 0);
+        // (Read back to draw garments all at once: #composite)
+        texture.image.getContext("2d", { willReadFrequently: true }).putImageData(new ImageData(data, size, size), 0, 0);
         texture.needsUpdate = true;
     }
 

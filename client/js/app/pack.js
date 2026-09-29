@@ -683,7 +683,7 @@ export class PackPanel {
             }
 
             const thing = this.#thingAt(place);
-            const press = { id: event.pointerId, place, x: event.clientX, y: event.clientY, hold: null, mode: null };
+            const press = { id: event.pointerId, place, x: event.clientX, y: event.clientY, at: event.timeStamp, hold: null, mode: null };
 
             // Held: gear goes on or comes off; anything else, its wheel
             if (thing) {
@@ -775,7 +775,14 @@ export class PackPanel {
                 this.#dropOn(press.place, to);
             }
         } else if (event.type === "pointerup" && !press.mode) {
-            this.#select(press.place);
+            // (Held long enough, though the page was too busy to notice in time: gear on or off)
+            const thing = this.#thingAt(press.place);
+
+            if (event.timeStamp - press.at >= HOLD_MS && thing && (press.place.slot || thing.equip) && !this.view.shop && !this.view.trade) {
+                this.#held(press);
+            } else {
+                this.#select(press.place);
+            }
         }
     }
 
