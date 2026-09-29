@@ -777,6 +777,41 @@ describe("clothing and armour (garments.js)", () => {
         }
     });
 
+    it("spreads each picture a few texels past the body's pieces, so seams don't show, by a list the texel map makes once", () => {
+        const map = texelMap(human, 128);
+        const { size, covered, spread } = map;
+        const filled = covered.slice();
+        const ring = new Uint8Array(size * size);
+        let last = 1;
+
+        assert.ok(spread.length > 0 && spread.length % 2 === 0);
+
+        // Each texel spread to is outside the pieces, filled once, from a neighbour beside it
+        // (left, right, above or below) that's painted or was spread to in an earlier ring; three
+        // rings out at most
+        for (let p = 0; p < spread.length; p += 2) {
+            const [i, from] = [spread[p], spread[p + 1]];
+
+            assert.equal(covered[i], 0);
+            assert.equal(filled[i], 0, "each texel filled once");
+            assert.ok([1, size].includes(Math.abs(i - from)), "from a neighbour");
+            assert.equal(filled[from], 1);
+            ring[i] = covered[from] ? 1 : ring[from] + 1;
+            assert.ok(ring[i] >= last && ring[i] <= 3, "the rings in turn");
+            last = ring[i];
+            filled[i] = 1;
+        }
+
+        // A garment's picture, spread: each texel spread to has its neighbour's colour and height
+        const { data, bump } = paintGarment(map, GARMENTS["livery.human"]);
+
+        for (let p = 0; p < spread.length; p += 2) {
+            const [i, from] = [spread[p], spread[p + 1]];
+
+            assert.deepEqual([...data.subarray(i * 4, i * 4 + 4), bump[i]], [...data.subarray(from * 4, from * 4 + 4), bump[from]]);
+        }
+    });
+
     it("paints lingerie from its design: clear where there's none, lace to see through, opaque where it's lined or a band, white to be tinted", () => {
         const map = texelMap(human, 512);
 

@@ -267,7 +267,13 @@ slots, sockets and hidden skin.
 4. **Hem.** A hem folds back to the skin, so edges have visible thickness.
 5. **Skinning and texture.** Every garment vertex comes from the body, so it inherits the body's
    skin weights (it bends exactly like the skin) and texture coordinates. It is painted in the
-   body's texture layout (cloth, leather, quilting, mail, plate, embroidered trim).
+   body's texture layout (cloth, leather, quilting, mail, plate, embroidered trim), then spread a
+   few texels past the edges of the layout's pieces so no seam shows as it's minified. Which
+   texel is spread to from which is the same for every picture painted over the texel map, so
+   the map lists it once (`spread`, three rings of texels round the pieces' edges) and each
+   picture just copies along the list, rather than every texel being looked at three times for
+   each: in headless Chromium, spreading the start town's garments and outfits went from 280 ms
+   to 30, and putting the outfits' pictures together from about 210 to 90.
 6. **Hiding.** Skin under a garment isn't drawn, and neither is a garment under another one.
    Layers go underwear, clothing, mid layer, armour, belts and straps.
 7. **Drawn all at once** (`merge`: everyone but a player). A soldier in uniform wears nine or

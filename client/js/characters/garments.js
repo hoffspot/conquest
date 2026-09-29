@@ -1372,7 +1372,7 @@ export function texelMap(human, size = 512) {
         }
     }
 
-    return { size, covered, positions: where, bones, names: human.bones.map((bone) => bone.name), triangles, weights, corners };
+    return { size, covered, positions: where, bones, names: human.bones.map((bone) => bone.name), triangles, weights, corners, spread: spreadOf(size, covered) };
 }
 
 /** The bumpScale a composite's heights are for (compositeGarments). */
@@ -1465,9 +1465,9 @@ export function* compositingGarments(map, layers) {
     }
 
     yield;
-    dilate(size, covered, data, new Uint8ClampedArray(count));
+    dilate(map, data);
     yield;
-    dilate(size, covered, surface, new Uint8ClampedArray(count));
+    dilate(map, surface);
 
     return { size, data, surface };
 }
@@ -1629,7 +1629,7 @@ export function* paintingGarment(map, garment) {
     }
 
     yield;
-    dilate(size, covered, data, bump);
+    dilate(map, data, bump);
 
     return { size, data, bump };
 }
@@ -1697,8 +1697,14 @@ export function emblemAt(mark, u, v) {
     }
 }
 
-/** Spread painted texels a few texels outward, so seams don't show. */
-function dilate(size, covered, data, bump) {
+// Where the painted texels are spread a few texels outward, so seams don't show: each texel just
+// outside the body's pieces (three rings of them), with the one it takes its colour from (the
+// first painted of its neighbours, left, right, above, below; the rings in turn, each from those
+// painted before it), as pairs [texel, from, texel, from...]. The same for every picture painted
+// over a texel map, so found once with it: the few thousand texels round the pieces' edges, not
+// all of them looked at three times for every picture
+function spreadOf(size, covered) {
+    const pairs = [];
     let filled = covered.slice();
 
     for (let pass = 0; pass < 3; pass++) {
@@ -1709,8 +1715,7 @@ function dilate(size, covered, data, bump) {
                 continue;
             }
 
-            // (The first filled of its neighbours, left, right, above, below: looked at in turn,
-            // not listed, as this is done for every texel)
+            // (Looked at in turn, not listed, as this is done for every texel)
             const x = i % size;
             let neighbour = -1;
 
@@ -1725,13 +1730,27 @@ function dilate(size, covered, data, bump) {
             }
 
             if (neighbour >= 0) {
-                data.copyWithin(i * 4, neighbour * 4, neighbour * 4 + 4);
-                bump[i] = bump[neighbour];
+                pairs.push(i, neighbour);
                 next[i] = 1;
             }
         }
 
         filled = next;
+    }
+
+    return Int32Array.from(pairs);
+}
+
+/** Spread painted texels a few texels outward, so seams don't show (the map's `spread`). */
+function dilate({ spread }, data, bump = null) {
+    for (let p = 0; p < spread.length; p += 2) {
+        const [i, from] = [spread[p], spread[p + 1]];
+
+        data.copyWithin(i * 4, from * 4, from * 4 + 4);
+
+        if (bump) {
+            bump[i] = bump[from];
+        }
     }
 }
 
@@ -2053,7 +2072,7 @@ function paintDesign(map, name) {
         bump[i] = relief * 255;
     }
 
-    dilate(size, covered, data, bump);
+    dilate(map, data, bump);
 
     return { size, data, bump };
 }
