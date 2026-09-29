@@ -332,7 +332,17 @@ function materialKey(material) {
  * everything the art's one material can draw into one mesh of it (atlas.js).
  */
 export function merge(root, { atlas = false } = {}) {
-    const groups = new Map();
+    return joined(partsOf(root, { atlas }));
+}
+
+/**
+ * The meshes under `root` (their world matrices up to date), each baked to its place and made
+ * ready to be merged: a part for each material group, drawn into the art's one material if it can
+ * be, with `atlas`. [{ key, material, geometry }], for `joined` (merge's first half, so that the
+ * parts of what's built a piece at a time can be made a piece at a time: chunks3d.js).
+ */
+export function partsOf(root, { atlas = false } = {}) {
+    const parts = [];
 
     root.traverse((node) => {
         if (!node.isMesh) {
@@ -345,11 +355,11 @@ export function merge(root, { atlas = false } = {}) {
         source.applyMatrix4(node.matrixWorld);
 
         // One part per material group (most meshes have one)
-        const parts = node.geometry.groups.length && materials.length > 1
+        const split = node.geometry.groups.length && materials.length > 1
             ? node.geometry.groups.map((group) => [extract(source, group.start, group.count), materials[group.materialIndex]])
             : [[source, materials[0]]];
 
-        for (const [part, own] of parts) {
+        for (const [part, own] of split) {
             const drawn = atlas ? toAtlas(part, own) : null;
             // (Every light in one mesh of its own, each face in its own colour)
             const lit = atlas && !drawn ? toGlow(part, own) : null;
@@ -367,13 +377,24 @@ export function merge(root, { atlas = false } = {}) {
                 geometry.setAttribute("uv", new THREE.Float32BufferAttribute(new Float32Array(geometry.attributes.position.count * 2), 2));
             }
 
-            if (!groups.has(key)) {
-                groups.set(key, { material, geometries: [] });
-            }
-
-            groups.get(key).geometries.push(geometry);
+            parts.push({ key, material, geometry });
         }
     });
+
+    return parts;
+}
+
+/** Parts (partsOf's, in order) merged: one mesh per material (merge's second half). */
+export function joined(parts) {
+    const groups = new Map();
+
+    for (const { key, material, geometry } of parts) {
+        if (!groups.has(key)) {
+            groups.set(key, { material, geometries: [] });
+        }
+
+        groups.get(key).geometries.push(geometry);
+    }
 
     const result = new THREE.Group();
 

@@ -615,6 +615,9 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
   built by the art kits as the town's are and merged with the one material (the atlas, above);
   the trees are the chunk's. Buildings are built a few at a time, within 6 ms a frame, so walking
   up to a city never stalls a frame; while loading, the game waits for those round the start.
+  Each piece's meshes are made ready to merge (baked to their places, drawn into the atlas:
+  town3d.js `partsOf`) in a step of their own after it's built, so the chunk's merge once they're
+  all built is only joining them (`joined`): a capital's chunk's was one piece of 10 to 28 ms.
 - **Each people's castle, special places and watchtowers** (core/sites.js: WORLD.md), each
   whose middle is in the chunk, built by its people's kit as a settlement's pieces are (the
   humans' castle laid out by castle.js, their abbey, windmill and manor as their landmarks).
@@ -722,7 +725,10 @@ every lit material's shaders.
 **Getting buildings ready.** Every half a second, outside, the game looks over the buildings
 that can be gone into: one whose door is within 22 metres of the player (or whose door they're
 making for) is got ready: its plans made, then each floor built and each of its folk, one to a
-piece of work, for at most 6 ms a frame, so it's ready well before the player's at the door. If
+piece of work, for at most 6 ms a frame, so it's ready well before the player's at the door. A
+floor is built a step at a time too (interiors3d.js `buildingInterior`: its rooms and furniture
+laid out, made into meshes, made ready to merge, merged), and each of its folk (CHARACTERS.md,
+*Built a step at a time*). If
 they're through it first, whatever's still to build is built at once. Once the player is 90
 metres away (and outside), it's let go: its folk out of the battle, their characters and its
 floors thrown away (built again if they come back); the plans are kept. Wenches and Ale is
@@ -1067,7 +1073,11 @@ openings, lathes, lofts, tubes, the one atlas material and its weathering) and t
 of a layout (a house of a type and size, a landmark, a structure, a wall, a tower, a gatehouse,
 a prop), each people's kit (`PEOPLE_KITS`, `builderFor`) building them its own way; the humans'
 are the kits above. Each builds from its seed, never the same twice, within a budget of
-triangles (a house under 6,000, a landmark 9,000, a special place 14,000).
+triangles (a house under 6,000, a landmark 9,000, a special place 14,000). A solid's faces work
+out each corner's texture position and colour once, however many triangles it's in, and keep
+their corners as they're drawn, 32-bit floats in room that grows (`Floats`), not lists of
+numbers turned into them after: the same bytes, a quarter less time building a capital's and
+a city's chunks of each people, and less garbage to collect.
 
 - **The cat folk** (cat.js, cat-landmarks.js, cat-places.js), after the Sahel's mud-brick
   (Djenné, Timbuktu, the Tiébélé compounds): round huts and beehive huts of mud under thatch,
@@ -1670,7 +1680,9 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   `test/chunks.test.js`: the world drawn round the player (a chunk a step at a time, hidden till
   it's whole, no more than one begun a frame; one half drawn thrown away when the player's gone,
   and all near drawn at once when asked; the undergrowth grown over several frames, the same as
-  all at once; the splat and the undergrowth's places the same a step at a time); and the
+  all at once; the splat and the undergrowth's places the same a step at a time; a settlement's
+  buildings built a piece at a time, each made ready to merge in a step of its own, merged the
+  same as all at once); and the
   settlements ahead laid out off the page's thread (asked for nearest first and once each, and
   taken as they were laid out; the same laid out in another thread, and one laid out from
   anything else not taken).
@@ -1687,7 +1699,8 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   guild's counter, shelves, quest board, tables and hearth, the receptionist stamping behind the
   counter and filing at the shelves, adventurers of every calling at the board and the tables,
   the receptionist in the guild's uniform with twin tails or a bob, adventurers sheathed and
-  those drinking holding tankards; every kind of building drawn by its style; the
+  those drinking holding tankards; every kind of building drawn by its style, and a floor built
+  a step at a time the same as at once; the
   settlements' taverns', smithies', temples' and guilds' doors among the world's links as they're laid
   out, their floors and folk
   made once when wanted, each building somewhere of its own; going in through a door not made yet
@@ -1792,7 +1805,7 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   landmark of six towns and cities built within its lot, each tavern with its own name board and
   sign, the guild's, each temple's patron's; every emblem painted, one or several; every prop
   built; the atlas's layers (the same every time, with relief) and a house drawn from it as one
-  mesh.
+  mesh; a solid's faces kept as the 32-bit floats they're drawn with, however many there are.
 - `test/wilds.test.js`: the noise (smooth, seeded, tiling when asked); the ground's patches (a
   tiling texture with dry, lush and bare in it); the land's features (placed across every land,
   many kinds, a few a chunk; the same every time; taking their squares, hiding what's behind the

@@ -25,6 +25,9 @@ globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContex
 
 const { buildWorld, CHUNK } = await import("../client/js/core/overworld.js");
 const { Chunks, REACH } = await import("../client/js/world/chunks3d.js");
+const { BUILDERS, merge, PIXEL, placed } = await import("../client/js/world/town3d.js");
+const { builderFor } = await import("../client/js/world/art/peoples/index.js");
+const THREE = await import("three");
 const { AHEAD, Layouts } = await import("../client/js/world/layouts.js");
 const { splatOf, splatting } = await import("../client/js/world/ground.js");
 const { sowing, undergrowthMesh, undergrowthOf } = await import("../client/js/world/art/kits/wilds.js");
@@ -99,6 +102,52 @@ describe("the world outside, drawn round the player (chunks3d.js)", () => {
         assert.equal(near.length, 9);
         assert.ok(near.every(({ drawing, object }) => !drawing && object.visible));
         assert.equal(chunks.drawing, null);
+        chunks.dispose();
+    });
+
+    it("builds a settlement's buildings a piece at a time, each made ready to merge in a step of its own, merged the same as all at once", async () => {
+        const chunks = new Chunks(world, { undergrowth: 0 });
+        const place = world.maps.town.settlements.places.find(({ kind, id }) => kind === "village" && id !== world.start.id);
+        const [x, z] = place.at;
+
+        chunks.fill(x, z, 0);
+
+        const drawn = [...chunks.drawn.values()][0];
+        const pieces = drawn.job.pieces;
+        let [frames, between] = [0, 0];
+
+        // (Between frames, the page's events: a sign's lettering waits for its font)
+        while (drawn.job && frames < 5000) {
+            chunks.update(x, z, { budget: 1 });
+            frames++;
+
+            // (A piece built, its meshes not yet made ready: that's a step of its own)
+            between += drawn.job?.built ? 1 : 0;
+            await new Promise((resolve) => setImmediate(resolve));
+        }
+
+        assert.equal(drawn.job, null);
+
+        assert.ok(pieces.length > 2 && frames > 1, `${frames} frames for ${pieces.length} pieces`);
+        assert.ok(between > 0);
+
+        const group = new THREE.Group();
+
+        group.scale.setScalar(PIXEL);
+
+        for (const piece of pieces) {
+            const build = builderFor(piece) ?? BUILDERS[piece.kind];
+
+            if (build) {
+                group.add(placed(await build(piece), piece));
+            }
+        }
+
+        group.updateMatrixWorld(true);
+
+        const arrays = (meshes) => meshes.map(({ material, geometry }) => [material.name, ...Object.entries(geometry.attributes).map(([name, { array }]) => `${name}:${[...array].join()}`)].join("|"));
+
+        assert.deepEqual(arrays(drawn.object.getObjectByName("buildings").children), arrays(merge(group, { atlas: true }).children));
         chunks.dispose();
     });
 

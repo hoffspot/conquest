@@ -13,15 +13,54 @@
 import * as THREE from "three";
 
 // For each face, which two coordinates run across its texture: faces that face mostly up use x
-// and z, faces facing north or south use x and y, faces facing east or west use z and y
-function boxUV(point, normal) {
-    const [nx, ny, nz] = normal.map(Math.abs);
+// and z, faces facing north or south use x and y, faces facing east or west use z and y. Each
+// corner's, for a face's corners
+function boxUVs(points, normal) {
+    const [nx, ny, nz] = [Math.abs(normal[0]), Math.abs(normal[1]), Math.abs(normal[2])];
 
     if (ny >= nx && ny >= nz) {
-        return [point[0], -point[2]];
+        return points.map((point) => [point[0], -point[2]]);
     }
 
-    return nz >= nx ? [point[0], point[1]] : [-point[2], point[1]];
+    return nz >= nx ? points.map((point) => [point[0], point[1]]) : points.map((point) => [-point[2], point[1]]);
+}
+
+// Numbers kept as they'll be drawn, 32-bit floats (the same as a list of them turned into a
+// Float32Array), in room that grows as they're added: `array` holds `length` of them
+class Floats {
+    array = new Float32Array(192);
+    length = 0;
+
+    add(a, b, c) {
+        const size = c === undefined ? 2 : 3;
+
+        if (this.length + size > this.array.length) {
+            const bigger = new Float32Array(this.array.length * 2);
+
+            bigger.set(this.array);
+            this.array = bigger;
+        }
+
+        this.array[this.length++] = a;
+        this.array[this.length++] = b;
+
+        if (size === 3) {
+            this.array[this.length++] = c;
+        }
+    }
+
+    /** Those added, in an array of their own. */
+    get numbers() {
+        return this.array.slice(0, this.length);
+    }
+}
+
+// One corner of a triangle, onto a material's lists (Solid #group's)
+function lay(group, point, normal, uv, colour) {
+    group.positions.add(point[0], point[1], point[2]);
+    group.normals.add(normal[0], normal[1], normal[2]);
+    group.uvs.add(uv[0], uv[1]);
+    group.colours.add(colour[0], colour[1], colour[2]);
 }
 
 const WHITE = Object.freeze([1, 1, 1]);
@@ -154,13 +193,14 @@ export function inset(outline, distance) {
     });
 }
 
+// (Worked out with numbers, not arrays: it's done for every face)
 function normalOf(a, b, c) {
-    const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
-    const v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-    const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
-    const length = Math.hypot(...n) || 1;
+    const [ux, uy, uz] = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const [vx, vy, vz] = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    const [nx, ny, nz] = [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx];
+    const length = Math.hypot(nx, ny, nz) || 1;
 
-    return n.map((value) => value / length);
+    return [nx / length, ny / length, nz / length];
 }
 
 export class Solid {
@@ -177,7 +217,7 @@ export class Solid {
 
     #group(material) {
         if (!this.#groups.has(material)) {
-            this.#groups.set(material, { positions: [], normals: [], uvs: [], colours: [] });
+            this.#groups.set(material, { positions: new Floats(), normals: new Floats(), uvs: new Floats(), colours: new Floats() });
         }
 
         return this.#groups.get(material);
@@ -216,19 +256,15 @@ export class Solid {
     face(points, material, uvs, tone = this.tone) {
         const normal = normalOf(points[0], points[1], points[2]);
         const group = this.#group(material);
-        const colourOf = typeof tone === "function" ? (point) => tone(point, normal, material) ?? WHITE : () => tone ?? WHITE;
-        const colours = points.map(colourOf);
-        const corner = (index) => {
-            group.positions.push(...points[index]);
-            group.normals.push(...normal);
-            group.uvs.push(...(uvs ? uvs[index] : boxUV(points[index], normal)));
-            group.colours.push(...colours[index]);
-        };
+        // (Each corner's texture position and colour worked out once, for all its triangles)
+        const across = uvs ?? boxUVs(points, normal);
+        const colours = typeof tone === "function" ? points.map((point) => tone(point, normal, material) ?? WHITE) : null;
+        const colour = (index) => colours?.[index] ?? tone ?? WHITE;
 
         for (let i = 1; i < points.length - 1; i++) {
-            corner(0);
-            corner(i);
-            corner(i + 1);
+            lay(group, points[0], normal, across[0], colour(0));
+            lay(group, points[i], normal, across[i], colour(i));
+            lay(group, points[i + 1], normal, across[i + 1], colour(i + 1));
         }
 
         return this;
@@ -805,10 +841,10 @@ export class Solid {
         for (const [material, { positions, normals, uvs, colours }] of this.#groups) {
             const geometry = new THREE.BufferGeometry();
 
-            geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-            geometry.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
-            geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
-            geometry.setAttribute("color", new THREE.Float32BufferAttribute(colours, 3));
+            geometry.setAttribute("position", new THREE.BufferAttribute(positions.numbers, 3));
+            geometry.setAttribute("normal", new THREE.BufferAttribute(normals.numbers, 3));
+            geometry.setAttribute("uv", new THREE.BufferAttribute(uvs.numbers, 2));
+            geometry.setAttribute("color", new THREE.BufferAttribute(colours.numbers, 3));
             group.add(new THREE.Mesh(geometry, material));
         }
 

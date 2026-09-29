@@ -281,6 +281,38 @@ describe("emblems (kits/emblems.js)", () => {
     });
 });
 
+describe("faces (Solid.face)", () => {
+    it("keep every corner of every triangle as the 32-bit floats it's drawn with, however many there are", () => {
+        const solid = new Solid();
+        const [positions, uvs, colours] = [[], [], []];
+
+        // (Level quads, each two triangles, their texture across x and z; enough that the room
+        // they're kept in grows several times)
+        for (let k = 0; k < 120; k++) {
+            const [x, z, size] = [k * 1.1 + 0.123456789, -k * 0.7 - 0.987654321, 1 + k / 7];
+            const quad = [[x, 2.5, z], [x, 2.5, z + size], [x + size, 2.5, z + size], [x + size, 2.5, z]];
+            const tone = [0.9 + k / 1000, 0.8, 0.7 - k / 1000];
+
+            solid.face(quad, material("plaster"), undefined, tone);
+
+            for (const i of [0, 1, 2, 0, 2, 3]) {
+                positions.push(...quad[i]);
+                uvs.push(quad[i][0], -quad[i][2]);
+                colours.push(...tone);
+            }
+        }
+
+        assert.equal(solid.triangles, 240);
+
+        const [mesh] = solid.toObject().children;
+
+        assert.deepEqual(mesh.geometry.attributes.position.array, Float32Array.from(positions));
+        assert.deepEqual(mesh.geometry.attributes.uv.array, Float32Array.from(uvs));
+        assert.deepEqual(mesh.geometry.attributes.color.array, Float32Array.from(colours));
+        assert.ok(mesh.geometry.attributes.normal.array.every((value, i) => value === (i % 3 === 1 ? 1 : 0)));
+    });
+});
+
 describe("walls with openings (Solid.wall)", () => {
     // The area of a solid's faces facing `out`
     const areaFacing = (solid, out) => {

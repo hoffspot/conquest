@@ -29,7 +29,7 @@ import { featureLooks, featureMesh, Growth, sowing, TILE, undergrowthLooks, unde
 import { disposeChunkGround, disposeGrass, landColours, layingGround } from "./ground.js";
 import { Layouts } from "./layouts.js";
 import { builderFor } from "./art/peoples/index.js";
-import { BUILDERS, cutAway, merge, PIXEL, placed, standOn } from "./town3d.js";
+import { BUILDERS, cutAway, joined, partsOf, PIXEL, placed, standOn } from "./town3d.js";
 
 /** How many chunks round the player's are drawn (each way), and how far off they're let go. */
 export const REACH = Object.freeze({ drawn: 2, kept: 3 });
@@ -93,7 +93,7 @@ export class Chunks {
 
         // The chunks drawn, by key: { cx, cy, object, lot (its trees), heights, drawing (while
         // it's still being drawn, hidden), job (its buildings, while they're being built: {
-        // pieces, index, group, waiting }), growth (its undergrowth while it's being grown: its
+        // pieces, index, group, waiting, trees, built, parts }), growth (its undergrowth while it's being grown: its
         // steps), undergrowth (its meshes) }; the steps of the one being drawn; those whose
         // buildings are being built, in turn; and those whose undergrowth is being grown
         this.drawn = new Map();
@@ -276,6 +276,14 @@ export class Chunks {
                 return finished;
             }
 
+            // (The piece built last: its meshes made ready to merge, a step of their own, so the
+            // chunk's merge when they're all built is only joining them: town3d.js partsOf)
+            if (job.built) {
+                job.parts.push(...partsOf(job.built, { atlas: true }));
+                job.built = null;
+                continue;
+            }
+
             if (job.index >= job.pieces.length) {
                 this.#finish(drawn);
                 finished = true;
@@ -292,7 +300,9 @@ export class Chunks {
             }
 
             const add = (object) => {
-                job.group.add(placed(object, piece));
+                job.built = placed(object, piece);
+                job.group.add(job.built);
+                job.built.updateMatrixWorld(true);
                 job.trees.push(...grownRound(object, piece));
                 job.index++;
             };
@@ -329,11 +339,6 @@ export class Chunks {
             }
 
             add(built);
-
-            if (job.index >= job.pieces.length) {
-                this.#finish(drawn);
-                finished = true;
-            }
         }
 
         return finished;
@@ -358,7 +363,7 @@ export class Chunks {
             standOn(map, object);
         }
 
-        const merged = merge(job.group, { atlas: true });
+        const merged = joined(job.parts);
 
         merged.name = "buildings";
         drawn.signs = [];
@@ -577,7 +582,11 @@ export class Chunks {
             const group = new THREE.Group();
 
             group.scale.setScalar(PIXEL);
-            drawn.job = { pieces, index: 0, group, waiting: false, trees: [] };
+            group.updateMatrixWorld();
+
+            // (Each piece built, then its parts made ready to merge: `built` the one whose parts
+            // aren't yet)
+            drawn.job = { pieces, index: 0, group, waiting: false, trees: [], built: null, parts: [] };
             this.building.push(drawn);
         }
 
