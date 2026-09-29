@@ -994,7 +994,8 @@ export class Character {
     #setTexture(material, slot, data, size, colour) {
         const texture = material[slot];
 
-        if (texture?.image.width === size && texture.image.data.length === data.length) {
+        // (Not one given it on a canvas: materials, the constructor's option)
+        if (texture?.isDataTexture && texture.image.width === size && texture.image.data.length === data.length) {
             texture.image.data = bytesOf(data);
             texture.needsUpdate = true;
 
