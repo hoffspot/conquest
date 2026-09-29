@@ -108,8 +108,20 @@ export class View {
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(SKY);
         this.scene.fog = new THREE.Fog(SKY, 55, 130);
-        this.scene.environment = new THREE.PMREMGenerator(this.renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+        this.#light();
         this.scene.environmentIntensity = 0.55;
+
+        /**
+         * Told when the drawing is lost (as a phone does when short of memory, or switching apps:
+         * nothing is drawn until it's given back), and when it's given back.
+         */
+        this.onLost = null;
+        this.onRestored = null;
+        canvas.addEventListener("webglcontextlost", () => this.onLost?.());
+        canvas.addEventListener("webglcontextrestored", () => {
+            this.#restore();
+            this.onRestored?.();
+        });
 
         this.hemisphere = new THREE.HemisphereLight(0xcfe0ff, 0x5a4a32, 1.1);
         this.scene.add(this.hemisphere);
@@ -169,6 +181,31 @@ export class View {
         this.lastRender = performance.now();
 
         this.setQuality(quality);
+    }
+
+    // The light the scene's materials reflect: made once (again if the drawing's lost), the
+    // generator and the room it's made from let go once it's made (they hold a few megabytes of
+    // render targets and shaders)
+    #light() {
+        const pmrem = new THREE.PMREMGenerator(this.renderer);
+        const room = new RoomEnvironment();
+
+        this.scene.environment?.dispose();
+        this.scene.environment = pmrem.fromScene(room, 0.04).texture;
+        pmrem.dispose();
+        room.dispose();
+    }
+
+    // The drawing given back: Three.js uploads the geometries and textures again as they're
+    // drawn, but what was drawn into (the light, the shadows, the picture behind the pack) is
+    // made again here, and the canvas sized afresh
+    #restore() {
+        this.#light();
+        this.sun.shadow.map?.dispose();
+        this.sun.shadow.map = null;
+        this.#thaw();
+        this.size = null;
+        this.resize();
     }
 
     /** Draw fewer pixels than the quality level says (0.5 to 1), to see what it saves. */

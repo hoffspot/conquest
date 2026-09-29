@@ -711,7 +711,10 @@ world while anyone else is in it (rule 6, M0).
 **The relay** (`server/relay.js`, on `npm start`'s server at `/relay`) passes what's said between
 a room's host and those who've joined it, untouched. It knows nothing of the game. It's a WebSocket
 written out in full (RFC 6455), so the server needs nothing but Node. Pages served elsewhere (GitHub
-Pages) name the relay to use: `?relay=wss://...`.
+Pages) name the relay to use: `?relay=wss://...`. What it takes is bounded (`RELAY_LIMITS`): a
+message no longer than 4 MB (a world's state is about 100 KB after a good while's play), read in
+the pieces it comes in and joined once it's all there; and one who's too slow to take what's sent
+them (8 MB waiting) is let go rather than piling it up.
 
 ### The war's end (M10)
 

@@ -413,9 +413,10 @@ export class Overworld {
         this.waiting.delete(settlement.place.id);
     }
 
-    // List a road's segment [a, b] by the chunks it passes through
+    // List a road's segment [a, b] by the chunks it passes through (one joined to a settlement's
+    // street: marked so, for #bridgesNear)
     #index(line, [a, b]) {
-        const segment = [...a, ...b, line.kind, line];
+        const segment = [...a, ...b, line.kind, line, true];
         const pad = ROAD_HALF[line.kind] + 1;
         const [cx0, cx1] = [Math.floor((Math.min(segment[0], segment[2]) - pad) / CHUNK), Math.floor((Math.max(segment[0], segment[2]) + pad) / CHUNK)];
         const [cy0, cy1] = [Math.floor((Math.min(segment[1], segment[3]) - pad) / CHUNK), Math.floor((Math.max(segment[1], segment[3]) + pad) / CHUNK)];
@@ -584,13 +585,18 @@ export class Overworld {
 
         if (!this.bridges.has(key)) {
             const [x0, y0] = [cx * CHUNK, cy * CHUNK];
-            const lines = new Set((this.roads.get(key) ?? []).map((segment) => segment[5]));
+            // (The roads through it as planned: not those only joined in since, which depends on
+            // which settlements have been laid out)
+            const lines = new Set((this.roads.get(key) ?? []).filter((segment) => !segment[6]).map((segment) => segment[5]));
             const near = [...lines].flatMap((line) => this.#bridgesOf(line)).filter(({ a, b, half }) => Math.max(a[0], b[0]) + half >= x0 && Math.min(a[0], b[0]) - half < x0 + CHUNK && Math.max(a[1], b[1]) + half >= y0 && Math.min(a[1], b[1]) - half < y0 + CHUNK);
             const middle = ({ a, b }) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
             const kept = [];
 
-            // (Where roads share their way over a river, one bridge: the widest)
-            for (const bridge of near.sort((p, q) => q.half - p.half)) {
+            // (Where roads share their way over a river, one bridge: the widest; of those as
+            // wide, the westernmost, then the northernmost, whatever order they were listed in)
+            const order = (p, q) => q.half - p.half || middle(p)[0] - middle(q)[0] || middle(p)[1] - middle(q)[1];
+
+            for (const bridge of near.sort(order)) {
                 const [mx, my] = middle(bridge);
 
                 if (!kept.some((other) => Math.hypot(middle(other)[0] - mx, middle(other)[1] - my) < 2 * other.half)) {
@@ -609,9 +615,10 @@ export class Overworld {
     #bridgesOf(line) {
         if (!line.bridges) {
             const along = [];
+            const points = line.planned;
 
-            for (let k = 0; k < line.points.length - 1; k++) {
-                const [[ax, ay], [bx, by]] = [line.points[k], line.points[k + 1]];
+            for (let k = 0; k < points.length - 1; k++) {
+                const [[ax, ay], [bx, by]] = [points[k], points[k + 1]];
                 const steps = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / BRIDGE.step));
 
                 for (let j = k ? 1 : 0; j <= steps; j++) {
@@ -703,8 +710,13 @@ export class Overworld {
 
             if (road.from === start.id || road.to === start.id) {
                 // From the town's end: from where its nearest street leaves it, once clear of it
+                // (turned round to start there, so the settlement at its other end is at its end)
                 if (road.to === start.id) {
                     points = [...points].reverse();
+
+                    for (const end of Object.values(ends)) {
+                        end[0] = end[0] === "start" ? "end" : "start";
+                    }
                 }
 
                 const out = points.findIndex((point) => !near(point));
@@ -718,8 +730,10 @@ export class Overworld {
                 points = [exit, ...points.slice(out)];
             }
 
-            // (Its bridges are found when a chunk it goes through is first made)
-            const line = { points, kind: road.kind, bridges: null, ends: {} };
+            // (Its bridges are found when a chunk it goes through is first made, on the road as
+            // planned: `planned`, never the bit joined to a settlement's street when it's laid
+            // out, so that they're the same whichever chunks are made first)
+            const line = { points, planned: [...points], kind: road.kind, bridges: null, ends: {} };
 
             for (const [id, [end]] of Object.entries(ends)) {
                 line.ends[id] = end;

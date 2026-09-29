@@ -22,6 +22,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { CHUNK, CHUNKS, WET } from "../core/overworld.js";
 import { material } from "./art/engine/materials.js";
 import { WILDS } from "./art/engine/atlas.js";
+import { holdSign, isSign, letGoSign, releaseSign } from "./art/kits/signs.js";
 import { TREE_WIND, Woodland } from "./art/kits/trees.js";
 import { featureMesh, Growth, TILE, undergrowthMesh, undergrowthOf } from "./art/kits/wilds.js";
 import { chunkGround, disposeChunkGround, disposeGrass, landColours } from "./ground.js";
@@ -250,20 +251,39 @@ export class Chunks {
                 continue;
             }
 
-            const built = build(piece);
             const add = (object) => {
                 job.group.add(placed(object, piece));
                 job.trees.push(...grownRound(object, piece));
                 job.index++;
             };
+            // (A piece that fails to build is left out, and the rest of its chunk built without
+            // it, rather than tried again every frame)
+            const skip = (error) => {
+                console.warn(`Left out ${piece.key ?? piece.kind}: it failed to build.`, error);
+                job.index++;
+            };
+            let built;
+
+            try {
+                built = build(piece);
+            } catch (error) {
+                skip(error);
+                continue;
+            }
 
             if (built instanceof Promise) {
                 // (A landmark waits for its lettering's font: carry on when it's built)
                 job.waiting = true;
-                built.then((object) => {
-                    job.waiting = false;
-                    add(object);
-                });
+                built.then(
+                    (object) => {
+                        job.waiting = false;
+                        add(object);
+                    },
+                    (error) => {
+                        job.waiting = false;
+                        skip(error);
+                    },
+                );
 
                 return finished;
             }
@@ -301,9 +321,16 @@ export class Chunks {
         const merged = merge(job.group, { atlas: true });
 
         merged.name = "buildings";
+        drawn.signs = [];
 
         for (const mesh of merged.children) {
             cutAway(mesh.material);
+
+            // (Its signs' pictures kept while it's drawn: signs.js)
+            if (isSign(mesh.material.map)) {
+                holdSign(mesh.material.map);
+                drawn.signs.push(mesh.material.map);
+            }
         }
 
         drawn.object.add(merged);
@@ -483,10 +510,21 @@ export class Chunks {
 
         this.#uproot(drawn);
 
-        // (Its buildings, if they were still being built, go with it)
+        // (Its buildings, if they were still being built, go with it, and the pictures of any
+        // signs painted for them)
         if (drawn.job) {
             this.building = this.building.filter((other) => other !== drawn);
-            drawn.job.group.traverse((node) => node.geometry?.dispose());
+            drawn.job.group.traverse((node) => {
+                node.geometry?.dispose();
+
+                if (isSign(node.material?.map)) {
+                    letGoSign(node.material.map);
+                }
+            });
+        }
+
+        for (const texture of drawn.signs ?? []) {
+            releaseSign(texture);
         }
 
         for (const part of [...drawn.object.children]) {

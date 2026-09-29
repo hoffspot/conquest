@@ -35,6 +35,19 @@ const { merge } = await import("../client/js/world/town3d.js");
 
 const M = 5;
 
+// Every corner and normal of an object's meshes a number (no NaN from a side of no length)
+function finite(object) {
+    let whole = true;
+
+    object.traverse((node) => {
+        if (node.isMesh) {
+            whole &&= ["position", "normal"].every((name) => node.geometry.attributes[name]?.array.every(Number.isFinite) ?? true);
+        }
+    });
+
+    return whole;
+}
+
 function trianglesOf(object) {
     let count = 0;
 
@@ -217,6 +230,27 @@ describe("landmarks (kits/landmarks.js)", () => {
             assert.ok(box.min.x > -M * 1.5 && box.min.z > -M * 1.5 && box.max.x < piece.w * 20 + M * 1.5 && box.max.z < piece.h * 20 + M * 1.5, `${piece.name} spills out of its lot`);
             assert.ok(piece.name === "hall" ? names.includes("board hall") && names.includes("sign hall") : names.includes("sign keep"), piece.name);
         }
+    });
+
+    it("keeps a sign's picture while anything drawn shows it, and lets it go (to be painted again) once nothing does", async () => {
+        const { holdSign, isSign, letGoSign, nameBoardTexture, releaseSign } = await import("../client/js/world/art/kits/signs.js");
+        const board = nameBoardTexture({ name: "The Kept Sign" });
+        let disposed = 0;
+
+        board.addEventListener("dispose", () => disposed++);
+        assert.ok(isSign(board));
+        assert.equal(nameBoardTexture({ name: "The Kept Sign" }), board, "painted once for all that show it");
+
+        // (Two chunks show it: let go only when both have gone)
+        holdSign(board);
+        holdSign(board);
+        releaseSign(board);
+        letGoSign(board);
+        assert.equal(disposed, 0);
+        assert.equal(nameBoardTexture({ name: "The Kept Sign" }), board);
+        releaseSign(board);
+        assert.equal(disposed, 1);
+        assert.notEqual(nameBoardTexture({ name: "The Kept Sign" }), board, "painted again when wanted again");
     });
 
     it("hangs each tavern's own name and sign, the guild's, and each church's patron's", async () => {
@@ -599,6 +633,21 @@ describe("each people's buildings (peoples/)", () => {
                 const triangles = trianglesOf(object);
 
                 assert.ok(triangles > 20 && triangles < budget[piece.kind], `${people} ${piece.kind} ${piece.type ?? piece.name ?? ""}: ${triangles}`);
+                assert.ok(finite(object), `${people} ${piece.kind} ${piece.type ?? piece.name ?? ""}: every corner and normal a number`);
+            }
+        }
+    });
+
+    it("builds each people's landmarks whole on a lot of any size a town gives them, small keeps stepping up fewer times", async () => {
+        const { PEOPLE_KITS } = await import("../client/js/world/art/peoples/index.js");
+
+        for (const [people, kit] of Object.entries(PEOPLE_KITS)) {
+            for (const [w, h] of [[2, 2], [2.5, 2.5], [2.6, 2.5], [3, 3], [4.5, 4]]) {
+                for (const name of ["keep", "hall", "tavern", "church", "guild", "market", "blacksmith"]) {
+                    const object = await kit.landmark({ kind: "landmark", name, w, h, people, x: 5, y: 7, seed: 3 });
+
+                    assert.ok(finite(object), `${people} ${name} on ${w} by ${h} plots: every corner and normal a number`);
+                }
             }
         }
     });

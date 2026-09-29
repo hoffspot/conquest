@@ -343,6 +343,24 @@ describe("the battle (battle.js)", () => {
         assert.ok(!throughTheWall, "went round the wall");
     });
 
+    it("walks a tap far out on open water to the shore on the way there, and stays put when there's no shore near", () => {
+        // (A lake 60 squares across, the player on its western shore)
+        const rows = Array.from({ length: 70 }, (_, y) => Array.from({ length: 80 }, (_, x) => (x >= 6 && y >= 4 && y < 66 ? "#" : ".")).join(""));
+        const battle = new Battle(worldOf(rows), { seed: 3 });
+
+        battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [2, 35] });
+        battle.command("player", { type: "move", to: [50, 35] });
+        assert.deepEqual(battle.actor("player").order?.to, [5, 35], "the shore on the way out");
+
+        // (Out of reach of any shore both round the tap and back along the way: no order)
+        const sea = worldOf(Array.from({ length: 300 }, (_, y) => Array.from({ length: 300 }, (_, x) => (x < 3 && y < 3 ? "." : "#")).join("")));
+        const lost = new Battle(sea, { seed: 3 });
+
+        lost.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [1, 1] });
+        assert.doesNotThrow(() => lost.command("player", { type: "move", to: [250, 250] }));
+        assert.equal(lost.actor("player").order, null);
+    });
+
     it("walks open ground in a straight line to where it's going, not zig-zagging from square to square", () => {
         for (const [from, to] of [[[2, 14], [50, 3]], [[2, 2], [47, 17]], [[40, 2], [3, 18]], [[5, 10], [55, 10]]]) {
             const battle = new Battle(open(60, 20), { seed: 1 });

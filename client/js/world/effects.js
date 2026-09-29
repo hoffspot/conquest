@@ -541,19 +541,30 @@ function arrowModel() {
     return group;
 }
 
+// The balls' spheres (by radius) and materials (the white core's, and a halo's by colour),
+// shared by every ball, so that a shot makes nothing that would have to be freed when it lands
+const BALLS = { spheres: new Map(), core: null, halos: new Map() };
+
 // A glowing ball: a bright core in a soft halo. (No light of its own: adding and removing lights
 // makes Three.js rebuild every lit material's shaders, which would stall the game each cast.)
 function glowBall(colour, radius) {
-    const ball = new THREE.Mesh(
-        new THREE.SphereGeometry(radius, 12, 8),
-        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }),
-    );
-    const halo = new THREE.Mesh(
-        new THREE.SphereGeometry(radius * 2.2, 12, 8),
-        new THREE.MeshBasicMaterial({ color: colour, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false }),
-    );
+    const sphere = (size) => {
+        if (!BALLS.spheres.has(size)) {
+            BALLS.spheres.set(size, new THREE.SphereGeometry(size, 12, 8));
+        }
 
-    ball.add(halo);
+        return BALLS.spheres.get(size);
+    };
+
+    BALLS.core ??= new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
+
+    if (!BALLS.halos.has(colour)) {
+        BALLS.halos.set(colour, new THREE.MeshBasicMaterial({ color: colour, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false }));
+    }
+
+    const ball = new THREE.Mesh(sphere(radius), BALLS.core);
+
+    ball.add(new THREE.Mesh(sphere(radius * 2.2), BALLS.halos.get(colour)));
 
     return ball;
 }
@@ -711,6 +722,31 @@ export class Effects {
         if (object !== (this.target?.object ?? null)) {
             this.target = object ? { object, radius, age: 0 } : null;
         }
+    }
+
+    /**
+     * Let go of all it made (the game's over): its particles, blood, rings, arrows and stars, their
+     * geometries, materials and textures. (The balls' spheres and materials are kept: shared.)
+     */
+    dispose() {
+        const shared = new Set([...BALLS.spheres.values(), BALLS.core, ...BALLS.halos.values()]);
+        const free = (node) => {
+            for (const thing of [node.geometry, ...[node.material ?? []].flat()]) {
+                if (thing && !shared.has(thing)) {
+                    thing.map?.dispose();
+                    thing.dispose();
+                }
+            }
+        };
+
+        for (const object of [this.group, this.marker, this.targetRing, this.arrow, this.bloodied]) {
+            object.traverse(free);
+            object.removeFromParent();
+        }
+
+        this.star.dispose();
+        this.starMaterials?.forEach((material) => material.dispose());
+        this.flying.clear();
     }
 
     /** A ring spreading on the ground from a point (metres), in a colour, fading as it goes. */

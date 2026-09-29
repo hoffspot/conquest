@@ -137,6 +137,9 @@ export class Sound {
         this.paused = true;
         this.hidden = false;
         this.context = null;
+
+        // (Whether there's been a tap yet, which the browser wants before its sound can start)
+        this.tapped = false;
         this.master = null;
         this.buses = {};
 
@@ -234,7 +237,11 @@ export class Sound {
      * call again and again.
      */
     unlock() {
-        if (this.context || this.#start()) {
+        // (Turned off, the browser's sound isn't started at all, so that it isn't kept working
+        // on silence: it's started when it's turned on, with that tap)
+        this.tapped = true;
+
+        if (this.context || (this.enabled && this.#start())) {
             this.#revive({ tap: true });
         }
     }
@@ -421,7 +428,12 @@ export class Sound {
     setEnabled(on) {
         this.enabled = on;
 
+        // (Not started yet: turned on after a tap (the switch's), started now)
         if (!this.context) {
+            if (on && this.tapped) {
+                this.unlock();
+            }
+
             return;
         }
 

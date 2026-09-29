@@ -362,6 +362,21 @@ describe("playing sounds (sound.js)", () => {
         sound.close();
     });
 
+    it("doesn't start the browser's sound at all while turned off, only once turned on (with a tap)", async () => {
+        await making;
+        fakeAudio();
+
+        const sound = new Sound({ fetch: fromDisk, enabled: false });
+
+        sound.samples = new Map(made.samples);
+        sound.unlock();
+        assert.equal(sound.context, null, "a tap, turned off: nothing started");
+        sound.setEnabled(true);
+        assert.ok(sound.context, "turned on after a tap: started");
+        assert.equal(sound.playing, true);
+        sound.close();
+    });
+
     it("plays the score a little ahead of time, on the music bus, round again without a gap", async () => {
         const { sound, played } = await started();
         const context = sound.context;

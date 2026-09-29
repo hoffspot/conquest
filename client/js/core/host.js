@@ -571,11 +571,22 @@ export class Host {
      *    player's asking, or stop asking).
      * Returns { ok: true } (with what came of it, for some: an offer of work, what was handed
      * in) or { ok: false, reason } (a REFUSALS key; a spell's own reasons: spells.js
-     * CAST_FAILURES).
+     * CAST_FAILURES). (A command that fails to be carried out is refused, told in the console,
+     * rather than throwing: whoever sent it, the host or a joiner replaying it, carries on.)
      */
     command(playerId, command) {
         this.recorder?.(["c", playerId, structuredClone(command)]);
 
+        try {
+            return this.#command(playerId, command);
+        } catch (error) {
+            console.warn(`Refused ${command?.type} from ${playerId}: it failed.`, error);
+
+            return refuse("command");
+        }
+    }
+
+    #command(playerId, command) {
         const player = this.players.get(playerId);
         const actor = this.battle.actor(playerId);
 

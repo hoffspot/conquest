@@ -1026,6 +1026,21 @@ export class SpellFx {
         this.casting.clear();
         this.missiles.clear();
     }
+
+    /** Stop everything showing and let go of the shapes and pictures it made (the game's over). */
+    dispose() {
+        this.clear();
+
+        for (const geometry of Object.values(this.geometries)) {
+            geometry.dispose();
+        }
+
+        for (const texture of Object.values(this.textures)) {
+            texture.dispose();
+        }
+
+        this.group.removeFromParent();
+    }
 }
 
 // A jagged line from one point to another (lightning's): the points along it

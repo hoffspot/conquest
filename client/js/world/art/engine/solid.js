@@ -608,7 +608,8 @@ export class Solid {
      * Walls round a plan of any shape (`points`: its corners [x, z] in order, either way round),
      * standing on `y`, `height` tall: each side a wall's face (as `wall`, facing out from the
      * middle) with that side's openings let into it (`openings[k]`: the side from corner k to
-     * k + 1). A round or oval house is a plan of many short sides. Returns each side's face.
+     * k + 1). A round or oval house is a plan of many short sides. Returns each side's face. (A
+     * side with no length, two corners at one point, is left out, and its openings with it.)
      */
     walls(points, y, height, openings, material, options = {}) {
         const [mx, mz] = points.reduce(([sx, sz], [x, z]) => [sx + x / points.length, sz + z / points.length], [0, 0]);
@@ -616,6 +617,11 @@ export class Solid {
         const sides = points.map(([x, z], k) => {
             const [nx, nz] = points[(k + 1) % n];
             const length = Math.hypot(nx - x, nz - z);
+
+            if (!(length > 1e-6)) {
+                return { origin: [x, y, z], across: [1, 0, 0], out: [0, 0, 1], length: 0 };
+            }
+
             const across = [(nx - x) / length, 0, (nz - z) / length];
             const normal = [across[2], 0, -across[0]];
             const out = dot(normal, [(x + nx) / 2 - mx, 0, (z + nz) / 2 - mz]) < 0 ? times(normal, -1) : normal;
@@ -628,6 +634,10 @@ export class Solid {
         const endAt = (a, b) => lean * Math.tan(Math.acos(Math.max(-1, Math.min(1, dot(sides[a].across, sides[b].across)))) / 2);
 
         return sides.map((face, k) => {
+            if (!face.length) {
+                return face;
+            }
+
             const ends = lean ? [endAt((k - 1 + n) % n, k), endAt(k, (k + 1) % n)] : undefined;
 
             this.wall(face, face.length, height, openings?.[k] ?? [], material, { ...options, ...(ends ? { ends } : {}) });
