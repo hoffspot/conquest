@@ -1679,7 +1679,11 @@ hidden till they're gone into: 1,300 of a town's 2,200 nodes, 0.52 ms a frame do
 headless Chromium. The bars over the others' heads are placed only for those who have one, from
 where the canvas is on the page, kept till it's resized (`View.toScreen`): reading it after a
 bar's been moved made the browser lay the page out again, once for everyone in sight, every frame
-(5–6% of a steady frame's JavaScript; now under 1%).
+(5–6% of a steady frame's JavaScript; now under 1%). Characters are posed only as often as
+they're seen, each pose cheaper (see *Characters in the world*): a frame's JavaScript in headless
+Chromium at 1280 × 720, the median and the 90th percentile, went from 2.3 and 4.1 ms to 1.3 and
+2.1 in the town, 2.6 and 4.7 to 1.9 and 3.0 in the taproom (nearly everyone there's big on the
+screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of the town.
 
 ## Testing
 
