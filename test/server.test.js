@@ -49,6 +49,26 @@ describe("HTTP server", () => {
         assert.equal((await response.arrayBuffer()).byteLength, length);
     });
 
+    it("says a file hasn't changed since the copy the browser has, rather than sending it again", async () => {
+        const first = await fetch(`${baseUrl}/js/main.js`);
+        const modified = first.headers.get("last-modified");
+
+        await first.arrayBuffer();
+        assert.ok(modified);
+
+        const same = await fetch(`${baseUrl}/js/main.js`, { headers: { "If-Modified-Since": modified } });
+
+        assert.equal(same.status, 304);
+        assert.equal(same.headers.get("last-modified"), modified);
+        assert.equal((await same.arrayBuffer()).byteLength, 0);
+
+        // (A copy from before it changed: all of it again)
+        const older = await fetch(`${baseUrl}/js/main.js`, { headers: { "If-Modified-Since": new Date(Date.parse(modified) - 1000).toUTCString() } });
+
+        assert.equal(older.status, 200);
+        assert.ok((await older.arrayBuffer()).byteLength > 0);
+    });
+
     it("does not serve files outside the client directory", async () => {
         for (const path of ["/../package.json", "/%2e%2e/package.json", "/..%2fpackage.json", "/%2e%2e%2fserver/index.js"]) {
             const response = await fetch(baseUrl + path);
