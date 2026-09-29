@@ -1483,7 +1483,8 @@ export class Game {
 
         const reach = longestReach(actor.weapon) + 2;
 
-        return this.battle.actors.some((other) => this.battle.hostile(other, actor) && !other.dead && other.map === actor.map && Math.hypot(other.x - actor.x, other.y - actor.y) <= reach && this.battle.canSee(actor, other));
+        // (The cheap checks first: how their peoples stand, and what's in the way, only for one near)
+        return this.battle.actors.some((other) => !other.dead && other.map === actor.map && Math.hypot(other.x - actor.x, other.y - actor.y) <= reach && this.battle.hostile(other, actor) && this.battle.canSee(actor, other));
     }
 
     // How high the ground is where someone stands on a map (metres): a bridge's deck, or the ground

@@ -103,6 +103,12 @@ const MOST = 120000;
 // in isn't searched for over the whole window, again and again, while they stand there
 const CROWDED = Object.freeze({ least: 4000, per: 100 });
 
+// A goal walled in (by others standing round it, as a rule) is searched for everywhere the start
+// can get to before it's given up on: thousands of squares, milliseconds, for a goal a step or two
+// away. So a search that's gone on for `after` squares looks out from the goal too: if all it can
+// get to from there is a pocket of no more than `most` squares, the start not in it, there's no way
+const POCKET = Object.freeze({ after: 256, most: 256 });
+
 // Kept from one search to the next (big enough for the biggest window yet)
 let buffers = { size: 0, gScore: null, parent: null, closed: null };
 
@@ -228,6 +234,10 @@ export function findPath(grid, start, end, { taken = null } = {}) {
         closed[index] = 1;
         explored++;
 
+        if (explored === POCKET.after && walledIn(free, [endX, endY], [startX, startY], POCKET.most)) {
+            return [];
+        }
+
         const x = (index % cols) + x0;
         const y = Math.floor(index / cols) + y0;
 
@@ -271,6 +281,44 @@ export function findPath(grid, start, end, { taken = null } = {}) {
     }
 
     return [];
+}
+
+// Is a goal walled in: everywhere it can get to (moving as characters do, and as the search does
+// between the same two squares either way), no more than `most` squares, the start not among
+// them? (No, as far as this can say, if there's more)
+function walledIn(free, [endX, endY], [startX, startY], most) {
+    const seen = new Set([squareKey(endX, endY)]);
+    const queue = [endX, endY];
+
+    for (let k = 0; k < queue.length; k += 2) {
+        const [x, y] = [queue[k], queue[k + 1]];
+
+        for (const [dx, dy] of NEIGHBOURS) {
+            const [nx, ny] = [x + dx, y + dy];
+
+            // (Diagonally, only where it doesn't cut a corner)
+            if (dx !== 0 && dy !== 0 && !(free(nx, y) && free(x, ny))) {
+                continue;
+            }
+
+            if (nx === startX && ny === startY) {
+                return false;
+            }
+
+            if (!free(nx, ny) || seen.has(squareKey(nx, ny))) {
+                continue;
+            }
+
+            if (seen.size >= most) {
+                return false;
+            }
+
+            seen.add(squareKey(nx, ny));
+            queue.push(nx, ny);
+        }
+    }
+
+    return true;
 }
 
 /**
