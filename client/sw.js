@@ -2,10 +2,17 @@
 //
 // Code, pages and the characters' data are fetched from the network first (so updates show up
 // straight away), falling back to the saved copy when offline. They are always checked with the
-// server, never reused from the browser's own caches: GitHub Pages lets browsers reuse files for
-// ten minutes, so right after an update a page could otherwise be put together from some old
-// files and some new ones, which don't work together. (Files that haven't changed come back as
-// short "not modified" replies.)
+// server, never reused from the browser's own caches: a host may let browsers reuse files for a
+// while (GitHub Pages, ten minutes), so right after an update a page could otherwise be put
+// together from some old files and some new ones, which don't work together. (Files that haven't
+// changed come back as short "not modified" replies, from any host that says when they last did:
+// the game's own server does too, server/static.js.)
+//
+// Checked once for a page is enough, though: the loader fetches every file the game needs, and
+// the page then imports the same files, a level of the code at a time, straight after. A file
+// the same page had checked with the server in the last minute comes from the saved copy (just
+// checked, so still the same version as the rest), rather than asking again, 13 round trips deep.
+// A page loaded afresh (a reload) checks everything again, so an update shows at once.
 //
 // Images, 3D models and the music's recordings rarely change, so they come from the saved copy
 // first. Change the version in CACHE_NAME when they change to replace the saved copies (the
@@ -16,6 +23,12 @@ const CACHE_NAME = `${CACHE_PREFIX}v1`;
 
 // Copies kept by the game this one replaced (Last Colony), on the same site
 const OLD_PREFIXES = ["last-colony-"];
+
+// How long a file checked with the server is taken as checked for the page that asked (ms), and
+// when each was (by page and address; lost when the browser stops the worker, which then just
+// checks again)
+const FRESH = 60000;
+const checked = new Map();
 
 self.addEventListener("install", () => {
     self.skipWaiting();
@@ -46,7 +59,7 @@ self.addEventListener("fetch", (event) => {
 
     const isAsset = /\.(png|gif|jpg|webp|gltf|glb|mp3)$/.test(url.pathname) || /\/models\/.+\.bin$/.test(url.pathname);
 
-    event.respondWith(isAsset ? cacheFirst(request) : networkFirst(request));
+    event.respondWith(isAsset ? cacheFirst(request) : networkFirst(request, event));
 });
 
 async function cacheFirst(request) {
@@ -66,8 +79,18 @@ async function cacheFirst(request) {
     return response;
 }
 
-async function networkFirst(request) {
+async function networkFirst(request, event) {
     const cache = await caches.open(CACHE_NAME);
+    const key = event.clientId ? `${event.clientId} ${request.url}` : null;
+
+    // (Checked for this page a moment ago: the copy saved then)
+    if (key && Date.now() - (checked.get(key) ?? -Infinity) < FRESH) {
+        const cached = await cache.match(request);
+
+        if (cached) {
+            return fresh(cached);
+        }
+    }
 
     try {
         // Pages are fetched by address, as a page request can't be copied with different options
@@ -77,14 +100,13 @@ async function networkFirst(request) {
             return response;
         }
 
-        cache.put(request, response.clone());
+        // (Taken as checked once its copy's saved, not before: asked for again meanwhile, it's
+        // checked again, rather than the older copy given)
+        const at = Date.now();
 
-        // Tell the page not to reuse its copy without asking again, whatever the server allowed
-        const headers = new Headers(response.headers);
+        event.waitUntil(cache.put(request, response.clone()).then(() => key && remember(key, at)));
 
-        headers.set("Cache-Control", "no-cache");
-
-        return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+        return fresh(response);
     } catch (error) {
         const cached = await cache.match(request);
 
@@ -94,4 +116,27 @@ async function networkFirst(request) {
 
         throw error;
     }
+}
+
+// A file checked for a page at `at` (and those checked over a minute ago forgotten, now and then:
+// pages come and go)
+function remember(key, at) {
+    checked.set(key, at);
+
+    if (checked.size > 1000) {
+        for (const [each, when] of checked) {
+            if (at - when >= FRESH) {
+                checked.delete(each);
+            }
+        }
+    }
+}
+
+// Tell the page not to reuse its copy without asking again, whatever the server allowed
+function fresh(response) {
+    const headers = new Headers(response.headers);
+
+    headers.set("Cache-Control", "no-cache");
+
+    return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }

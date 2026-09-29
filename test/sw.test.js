@@ -14,9 +14,11 @@ function loadServiceWorker({ offline = false, stored = [] } = {}) {
     const saved = new Map();
     const requests = [];
     const deleted = [];
+    const clock = { now: 1000000, network: offline ? "offline" : "online" };
 
     const context = vm.createContext({
         URL, Headers, Request, Response, console,
+        Date: { now: () => clock.now },
         self: {
             location: { origin: ORIGIN },
             addEventListener: (type, handler) => {
@@ -42,11 +44,11 @@ function loadServiceWorker({ offline = false, stored = [] } = {}) {
         fetch: async (input, options = {}) => {
             requests.push({ url: typeof input === "string" ? input : input.url, cache: options.cache });
 
-            if (offline) {
+            if (clock.network === "offline") {
                 throw new TypeError("Failed to fetch");
             }
 
-            const response = new Response("new version", { status: 200, headers: { "Cache-Control": "max-age=600", "Content-Type": "text/javascript" } });
+            const response = new Response(clock.version ?? "new version", { status: 200, headers: { "Cache-Control": "max-age=600", "Content-Type": "text/javascript" } });
 
             // A response from the page's own site, as browsers give them
             return Object.defineProperty(response, "type", { value: "basic" });
@@ -57,17 +59,25 @@ function loadServiceWorker({ offline = false, stored = [] } = {}) {
 
     // Send a request to the service worker, as the page would (a path on the game's site, or an
     // address elsewhere). Returns its response, or undefined if it leaves the request alone.
-    const request = async (path, { mode = "cors" } = {}) => {
+    const request = async (path, { mode = "cors", page = "page-1" } = {}) => {
         let responded;
+        const waiting = [];
 
         handlers.fetch({
             request: { url: path.startsWith("/") ? `${ORIGIN}${path}` : path, method: "GET", mode },
+            clientId: mode === "navigate" ? "" : page,
             respondWith: (promise) => {
                 responded = promise;
             },
+            waitUntil: (promise) => waiting.push(promise),
         });
 
-        return responded;
+        const response = await responded;
+
+        // (What it carries on with after answering: its copy saved)
+        await Promise.all(waiting);
+
+        return response;
     };
 
     const activate = async () => {
@@ -77,7 +87,7 @@ function loadServiceWorker({ offline = false, stored = [] } = {}) {
         await done;
     };
 
-    return { request, requests, saved, deleted, activate };
+    return { request, requests, saved, deleted, activate, clock };
 }
 
 describe("service worker", () => {
@@ -111,6 +121,50 @@ describe("service worker", () => {
         const offline = loadServiceWorker({ offline: true });
 
         await assert.rejects(offline.request("/js/main.js"), /Failed to fetch/, "nothing saved yet");
+    });
+
+    it("checks a file once for a page: asked for again straight after (the page importing what the loader fetched), it's the copy just checked", async () => {
+        const worker = loadServiceWorker();
+
+        await worker.request("/js/main.js");
+        worker.clock.now += 20000;
+        worker.clock.version = "newer version";
+
+        const again = await worker.request("/js/main.js");
+
+        assert.equal(worker.requests.length, 1, "not asked again");
+        assert.equal(await again.text(), "new version", "the copy just checked");
+        assert.equal(again.headers.get("Cache-Control"), "no-cache");
+
+        // (The page loaded afresh, a reload: checked with the server again, the update shown)
+        assert.equal(await (await worker.request("/js/main.js", { page: "page-2" })).text(), "newer version");
+        assert.equal(worker.requests.length, 2);
+
+        // (And a minute on, by the same page)
+        worker.clock.now += 60000;
+        worker.clock.version = "newest version";
+
+        assert.equal(await (await worker.request("/js/main.js", { page: "page-2" })).text(), "newest version");
+        assert.equal(worker.requests.length, 3);
+    });
+
+    it("checks a file it hasn't a copy of, or couldn't reach the server for, whenever it's asked", async () => {
+        const worker = loadServiceWorker();
+
+        await worker.request("/js/a.js");
+        await worker.request("/js/b.js");
+        assert.deepEqual(worker.requests.map(({ url }) => url), [`${ORIGIN}/js/a.js`, `${ORIGIN}/js/b.js`]);
+
+        // (Offline: the copy it had; back online, checked straight away)
+        const offline = loadServiceWorker();
+
+        await offline.request("/js/main.js");
+        offline.clock.now += 120000;
+        offline.clock.network = "offline";
+        assert.equal(await (await offline.request("/js/main.js")).text(), "new version");
+        offline.clock.network = "online";
+        offline.clock.version = "newer version";
+        assert.equal(await (await offline.request("/js/main.js")).text(), "newer version");
     });
 
     it("keeps 3D models and images, taking them from its copy first", async () => {

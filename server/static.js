@@ -75,13 +75,28 @@ export function createStaticHandler(rootDirectory) {
             return;
         }
 
+        const modified = fileStats.mtime.toUTCString();
+        const headers = {
+            // Always revalidate, so that edits show up on reload during development
+            "Cache-Control": "no-cache",
+            "Last-Modified": modified,
+            "X-Content-Type-Options": "nosniff",
+        };
+
+        // Not changed since the copy the browser has (to the second, as the date says): "not
+        // modified", rather than the whole file again (every file's checked on every load)
+        const since = Date.parse(request.headers["if-modified-since"] ?? "");
+
+        if (since >= Date.parse(modified)) {
+            response.writeHead(304, headers).end();
+
+            return;
+        }
+
         response.writeHead(200, {
             "Content-Type": MIME_TYPES[path.extname(filePath).toLowerCase()] ?? "application/octet-stream",
             "Content-Length": fileStats.size,
-            // Always revalidate, so that edits show up on reload during development
-            "Cache-Control": "no-cache",
-            "Last-Modified": fileStats.mtime.toUTCString(),
-            "X-Content-Type-Options": "nosniff",
+            ...headers,
         });
 
         if (request.method === "HEAD") {

@@ -1610,13 +1610,22 @@ game plays on while it's open; a second finger (a pinch) closes it.
 
 1. **Loading.** The loader (app/loader.js) downloads everything listed in `app/manifest.js`
    (made by `npm run build:manifest`, which follows the game's imports, and checked by a test),
-   six files at a time, reading each as it arrives. The bar shows the bytes downloaded out of the
+   sixteen files at a time (in one round trip over HTTP/2 or 3; over HTTP/1.1 the browser keeps to
+   six at a time itself, so asking for more costs nothing), reading each as it arrives. The bar
+   shows the bytes downloaded out of the
    total (the files' sizes on disk, which is what arrives, whatever compression the server uses),
    and each group of files has its own row and bar: the 3D engine, the game's code, the body and
    its shapes, its skin details, and the props. The data is kept in memory and handed
    to the character kit and the model loader from there; the code is imported from the browser's
    cache. Then the last part of the bar is starting the 3D view and unpacking the body. Nothing
    before the loader imports Three.js, so the engine's download is counted too.
+   The service worker (`sw.js`) checks every file with the server once for each page load: the
+   page's imports straight after the loader (13 levels of the code, a round trip each) come from
+   the copies it's just checked, rather than asking again. A reload checks everything afresh, so
+   an update shows at once, whole. Any host that says when a file last changed answers "not
+   modified" for those that haven't, the game's own server (`npm start`) too. With 100 ms added to
+   every reply (a phone's 4G), to the title screen on a repeat visit: 8.7 to 9.1 s before, 6.1 to
+   6.2 now over HTTP/2; 10.8 to 11.5 before, 7.7 to 7.8 now over HTTP/1.1.
 2. **The title.** Continue with the saved character, or make a new one (which asks before
    replacing a saved one), join a world someone else has opened (its code: docs/WAR.md M11), and
    the debug mode switch.
