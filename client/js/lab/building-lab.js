@@ -417,7 +417,7 @@ function finish(pieces) {
     }));
     $("#status").hidden = true;
     state.ready = true;
-    history.replaceState(null, "", `?seed=${state.seed}&people=${state.people}&show=${state.show}`);
+    history.replaceState(null, "", `?seed=${state.seed}${state.people === "human" ? "" : `&people=${state.people}`}&show=${state.show}`);
 }
 
 function place() {

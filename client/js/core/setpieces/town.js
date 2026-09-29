@@ -50,13 +50,14 @@ export const SETTLEMENT_KINDS = Object.freeze({
  * folk's compounds), the gaps between them, how often a tree is tried on open ground (`trees`:
  * square metres), whether its houses stand over a band of water (`water`: from and to, shares of
  * the radius: the lizard folk's lagoon), whether it has a windmill, how much bigger its market
- * place is, and from what size of settlement (its radius, metres) it's walled (`wall`).
+ * place is, from what size of settlement (its radius, metres) it's walled (`wall`), and whether
+ * its market and main streets are cobbled (`paved`: or beaten earth).
  */
 export const PEOPLE_TOWNS = Object.freeze({
     human: {},
-    cat: { lots: { width: [8, 12], depth: [9, 12] }, far: { width: [16, 19], depth: [16, 19] }, gap: [1.5, 3], windmill: false, wall: 48, near: 0.45 },
-    orc: { ways: "cross", bend: 0.06, rings: [0.72], lots: { width: [14, 20], depth: [8, 9.5] }, gap: [1.5, 3.5], windmill: false, wall: 30, market: 1.25 },
-    lizard: { bend: 0.08, lots: { width: [8, 11], depth: [8, 10] }, gap: [2, 4], water: [0.46, 0.84], windmill: false, wall: 84 },
+    cat: { lots: { width: [8, 12], depth: [9, 12] }, far: { width: [16, 19], depth: [16, 19] }, gap: [1.5, 3], windmill: false, wall: 48, near: 0.45, paved: false },
+    orc: { ways: "cross", bend: 0.06, rings: [0.72], lots: { width: [14, 20], depth: [8, 9.5] }, gap: [1.5, 3.5], windmill: false, wall: 30, market: 1.25, paved: false },
+    lizard: { bend: 0.08, lots: { width: [8, 11], depth: [8, 10] }, gap: [2, 4], water: [0.46, 0.84], windmill: false, wall: 84, paved: false },
     elf: { bend: 0.9, lots: { width: [11, 14], depth: [11, 14] }, gap: [2.5, 5], trees: 45, windmill: false, wall: 48 },
     darkElf: { ways: "web", spokes: 7, bend: 0.1, rings: [0.38, 0.68, 0.96], lots: { width: [8, 11], depth: [9, 11] }, gap: [0, 0.6], windmill: false, wall: 30, market: 1.35 },
 });
@@ -296,7 +297,10 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
         }
     }
 
-    // The streets' squares, and the market's
+    // The streets' squares, and the market's: cobbled, or (the cat folk, the orcs and the lizard
+    // folk) of beaten earth
+    const paving = look.paved === false ? GROUND.courtyard : GROUND.cobbles;
+
     for (const { points, width: across, main } of streets) {
         const half2 = (across / 2) * (across / 2);
 
@@ -310,7 +314,7 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
                         const cobbled = main && !spec.small && dx * dx + dy * dy < (radius * COBBLED) ** 2;
 
                         use[j * width + i] = USE.street;
-                        ground[j][i] = cobbled || ground[j][i] === GROUND.cobbles ? GROUND.cobbles : GROUND.road;
+                        ground[j][i] = cobbled || ground[j][i] === paving ? paving : GROUND.road;
                     }
                 }
             }
@@ -322,7 +326,7 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
             if (inside(i, j) && within(market, i + 0.5, j + 0.5)) {
                 // (A hamlet's middle is a green, a farmstead's its yard)
                 use[j * width + i] = USE.street;
-                ground[j][i] = spec.farm ? GROUND.courtyard : spec.small ? GROUND.grass : GROUND.cobbles;
+                ground[j][i] = spec.farm ? GROUND.courtyard : spec.small ? GROUND.grass : paving;
             }
         }
     }

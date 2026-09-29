@@ -257,6 +257,20 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   something (its streets, its market or green, its buildings, yards and trees, and everything
   inside its edge), the world takes its squares; its fields are the land's own. Its buildings,
   props and trees are drawn with the chunk their middles are in (`piecesIn`).
+  Each people's settlements are laid out and built their own way (`layoutTown({ people })`:
+  GAME.md, *Towns*), the start town too: a cat folk's start is a cat folk's town. A lizard
+  folk's lagoon is the world's water, its plank walks drawn as bridges.
+- **Each people's castle, special places and watchtowers** (`core/sites.js`, `Sites`): the
+  plan's castle for each people, their three buildings of their own (the cat folk's sun temple,
+  pride rock and watering hole; the orcs' war totem, skull pit and fighting pit; the lizard
+  folk's ziggurat, hatchery and serpent pool; the elves' moonwell, tree hall and starwatch; the
+  dark elves' spider shrine, obsidian spire and shadow gate; the humans' abbey, windmill and
+  manor) and the watchtowers, built at their size (`siteSize`: a human castle 18 by 16 plots,
+  laid out by castle.js; a tower 2 by 2). Each is set down the first time a chunk near it is made
+  (`settle`), at its cell's middle or as near as it can be (up to 48 metres off, in 4-metre
+  steps round it) clear of roads and water, facing the nearest road within six cells; it takes
+  the squares under it (blocked, and not seen through), and trees and the land's features keep
+  6 metres clear of it. The same every time.
 - **Lakes and the sea**, their shores blended from cell to cell across the cells' middles, a
   little ragged.
 - **Rivers**: a line from each river cell to the cell it runs into (a lake or the sea beside it,
@@ -270,12 +284,15 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   over a river (looked for every half metre along it), a straight deck from 1.5 metres onto one
   bank to 1.5 metres onto the other, 0.4 metres wider each side than the road. Every square under
   it can be walked over. Where roads share their way over a river, the widest of their bridges.
-- **The ground**: grass (drawn in each land's colours), soil in fields in farmland, road, planks
-  on bridges.
+- **The ground**: grass (drawn in each land's colours, and in each people's homeland, the
+  plan's territory as first claimed, its own ground: GAME.md, *The ground*), soil in fields in
+  farmland, road, planks on bridges.
 - **Trees**, tried every 4 metres (a random way in): as many as the land has (`FLORA`, trees to
   100 square metres: a wood 0.9, the darkwood 1.1, jungle 1.2, a meadow 0.25, farmland 0.12, the
   badlands 0.04; beaches and water none), of its kinds (oak, beech, birch and apple in meadows;
-  spruce and pine in the darkwood). Each keeps 2 squares from roads and water, 3 metres from the
+  spruce and pine in the darkwood); in a people's homeland seven in ten are their own tree
+  (`HOME_TREES`: the cat folk's acacias, the orcs' ironbarks, the lizard folk's willows, the
+  elves' silverbarks, the dark elves' nightspires). Each keeps 2 squares from roads and water, 3 metres from the
   town, and 12 metres from the settlements, sites and camps still to be built; its trunk blocks
   the four squares round its point, and can't be seen through. A chunk's trees come from its
   own seed, the same random numbers used for every try, planted or not, so they're the same
@@ -292,24 +309,24 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   them and they can be hidden behind; it keeps two squares from roads, bridges and water, clear of
   the trees, the town, the settlements' streets and buildings and the places still to come, a
   square from the next feature, and three squares inside its chunk (so it never meets the next
-  chunk's trees). A world has about three a chunk on average. The grass, flowers, pebbles and
-  sticks between them are the drawing's alone (GAME.md, *The world outside*).
+  chunk's trees). In a people's homeland their own things are among them (`HOMELANDS`: the
+  cat folk's termite spires and kopjes, the orcs' skulls on poles, stakes and the wrack of old
+  fights, the lizard folk's mangroves and stelae, the elves' moonstones and leaf lamps, the dark
+  elves' webbed stumps, cocoons and black crystal), a chunk having as many as its land's or
+  three quarters of both together, whichever's more. A world has about three a chunk on
+  average. The grass, flowers, pebbles and sticks between them are the drawing's alone
+  (GAME.md, *The world outside*).
 
 Water can't be walked into, but can be seen over. A chunk takes about 3 to 5 ms to make in Node,
 its features about 1 ms more, and laying out a settlement 5 to 80 ms more (once).
 
 ## Next
 
-This is step 4 of the world's first phase. Step 1 was the plan, step 2 the chunks, step 3 the
-town builder (`core/setpieces/town.js`: see GAME.md, *Towns*), and step 4 every settlement laid
-out by it and set into the chunks as the player comes near, with its roads built to it. The next
-steps:
-
-- **Camps and patrols in play:** enemies of each camp's tier, patrols that roam their range, and
-  camps that can be destroyed.
-- **The lands drawn:** ground, trees and plants for each biome (two forests for the elves and dark
-  elves; savannah grasses; jungle; ash and lava; snow).
-- **Each people's own building styles.**
+The world's first phase is done: the plan, the chunks, the town builder (`core/setpieces/
+town.js`: see GAME.md, *Towns*), every settlement laid out by it and set into the chunks as the
+player comes near with its roads built to it, each people's own buildings, castles and special
+places built their way, and each people's homeland its own ground, trees and things lying about.
+Next: **sites to go into**, the ruins, caves, shrines and castles as places of their own.
 
 Height on the ground (each cell's `height` shaping the land) is paused. Free terrain with a
 navigation mesh isn't planned.
@@ -324,8 +341,9 @@ roads across many chunks, found quickly; the player walking out into the world; 
 quickly. Of the other settlements: every place but the start town, hamlets and farmsteads too;
 laid out as the world near them is made, the same every time; a village's tavern, church, smithy
 and guild; set in as they were laid out, their pieces each drawn with one chunk and their trees
-grown; and the plan's roads carried on from their streets' ends. `test/wilds.test.js` checks the
-land's features (GAME.md, *Testing*).
+grown; and the plan's roads carried on from their streets' ends. Each people's own trees grow
+in its homeland, most of the trees there, and nowhere else. `test/wilds.test.js` checks the
+land's features (GAME.md, *Testing*), each people's own in its homeland and only there.
 
 `test/world-plan.test.js` checks, for three seeds:
 

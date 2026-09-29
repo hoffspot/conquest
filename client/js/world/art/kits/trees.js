@@ -146,9 +146,9 @@ export const SPECIES = Object.freeze({
     silverbark: {
         height: [11, 14],
         trunk: { radius: 0.22, reach: 0.93, taper: 0.3, lean: 0.03, crook: 0.05 },
-        boughs: { count: [12, 15], from: 0.38, to: 0.97, angle: [26, 44], length: [0.26, 0.34], shape: "oval", bend: 0.06, crook: 0.15, thickness: 0.42 },
+        boughs: { count: [10, 12], from: 0.38, to: 0.97, angle: [26, 44], length: [0.26, 0.34], shape: "oval", bend: 0.06, crook: 0.15, thickness: 0.42 },
         branches: { count: [3, 4], from: 0.3, angle: [25, 45], length: [0.45, 0.6], bend: 0.04, crook: 0.2 },
-        leaves: { size: [1.4, 1.8], perBranch: 7, from: 0.15 },
+        leaves: { size: [1.6, 2], perBranch: 6, from: 0.15 },
         foot: { flare: 0.9, roots: [5, 7], reach: [0.7, 1], tint: [0.72, 0.74, 0.7] },
         bark: "silverbark",
     },
