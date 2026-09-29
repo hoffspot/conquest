@@ -2046,7 +2046,7 @@ test("the pack shows what's grown and carried; a skill ranks up with use; tradin
     await page.locator("#continuebutton").click();
     await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
 
-    // I opens the pack: the gold, the draught to use, the staff in hand, each skill untried
+    // I opens the pack: the gold, the draught to use, the staff in hand, each skill untried (its tab)
     const pack = page.locator(".pack");
 
     await expect(page.locator("#playerplate .coins")).toHaveText("30 gold");
@@ -2056,6 +2056,7 @@ test("the pack shows what's grown and carried; a skill ranks up with use; tradin
     await expect(pack.locator(".carried .pack-cell[data-item]")).toHaveAttribute("aria-label", "Healing draught");
     await expect(pack.locator(".carried .pack-cell")).toHaveCount(20);
     await expect(pack.locator('.gear .pack-worn[data-slot="mainHand"]')).toHaveText(/^Weapon\s*Staff$/);
+    await pack.getByRole("tab", { name: "Skills" }).click();
     await expect(pack.locator('.pack-skill[data-tree="blade"] .pack-skill-rank')).toHaveText("Untried (0)");
     await page.keyboard.press("Escape");
     await expect(pack).toBeHidden();
@@ -2099,10 +2100,15 @@ test("the pack shows what's grown and carried; a skill ranks up with use; tradin
         game.battle.command("player", { type: "move", to: [7, 6] });
         game.advance(5);
 
-        const spot = session.view.toScreen(game.avatars.get("barkeep").point(0.6));
+        // (Tapped again as he goes about the room, till the player's up to him: where he is
+        // depends on how long the game ran before it was stopped)
+        for (let tap = 0; tap < 12 && game.battle.actor("barkeep").talkingTo !== "player"; tap++) {
+            const spot = session.view.toScreen(game.avatars.get("barkeep").point(0.6));
 
-        game.tap(spot.x, spot.y, { time: performance.now() + 9000 });
-        game.advance(8);
+            game.tap(spot.x, spot.y, { time: performance.now() + 9000 * (tap + 1) });
+            game.advance(4);
+        }
+
         game.start();
     });
 
