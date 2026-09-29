@@ -1,16 +1,16 @@
 // Characters built a step at a time (client/js/characters: Character.building), so that someone new
 // coming into view is spread over frames, not a stall: the same character as built all at once;
 // each piece (the skin, the hair, each garment, the garments' pictures) the same step by step;
-// the hair grown once; each garment's cut kept for everyone measured alike; and a look of eye's
-// picture shared
+// the hair grown once; each garment's cut kept for everyone measured alike; a look of eye's
+// picture shared; and the skin painted elsewhere (a worker: skins.js), waited for, the same
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { gunzipSync } from "node:zlib";
 
-// (Pictures are painted on a canvas and read back from it, to be drawn all at once: enough of one
-// for that in Node, keeping what's put on it)
+// (Some pictures, the eyes', are put on a canvas: enough of one for that in Node, keeping what's
+// put on it)
 globalThis.ImageData ??= class {
     constructor(data, width, height) {
         Object.assign(this, { data, width, height });
@@ -42,7 +42,36 @@ const { buildGarment, compositeGarments, compositingGarments, fittingGarment, GA
 const { folkLook } = await import("../client/js/characters/folk.js");
 const { paintingSkin, paintSkin, SkinAtlas } = await import("../client/js/characters/skin.js");
 const { soldierLook } = await import("../client/js/characters/soldiers.js");
-const { allAtOnce } = await import("../client/js/core/steps.js");
+const { allAtOnce, NOW, Steps, WAITING } = await import("../client/js/core/steps.js");
+const { Skins } = await import("../client/js/characters/skins.js");
+
+// The skin worker (skin-worker.js), run here: what's sent to it copied to it, and what it sends
+// back kept till it's delivered
+const scope = { sent: [], postMessage: (data) => scope.sent.push(data) };
+
+globalThis.self = scope;
+await import("../client/js/characters/skin-worker.js");
+
+class Worker {
+    constructor() {
+        Worker.last = this;
+    }
+
+    postMessage(data) {
+        scope.onmessage({ data: structuredClone(data) });
+    }
+
+    terminate() {}
+
+    // (What it's painted by now, sent back)
+    async deliver() {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
+        for (const data of scope.sent.splice(0)) {
+            this.onmessage({ data });
+        }
+    }
+}
 
 const manifest = JSON.parse(readFileSync(new URL("../client/characters/human.json", import.meta.url), "utf8"));
 const unpacked = gunzipSync(readFileSync(new URL("../client/characters/human.bin", import.meta.url)));
@@ -170,6 +199,79 @@ describe("characters built a step at a time (Character.building)", () => {
         assert.deepEqual(again.geometry.attributes.position.array, first.geometry.attributes.position.array);
         assert.deepEqual([...again.covers], [...first.covers]);
         assert.ok(first.covers instanceof Set && first.covers !== again.covers);
+    });
+
+    it("tells a step waiting on work done elsewhere to do it now, if the steps can't wait; comes back to it later, if they can", () => {
+        const told = [];
+        const waiting = function* () {
+            yield;
+            told.push(yield WAITING);
+            told.push(yield WAITING);
+
+            return "made";
+        };
+
+        assert.equal(allAtOnce(waiting()), "made");
+        assert.deepEqual(told.splice(0), [NOW, NOW]);
+
+        const steps = new Steps(waiting());
+
+        assert.equal(steps.take(Infinity, { wait: true }), false);
+        assert.ok(steps.waiting);
+        assert.equal(steps.take(Infinity, { wait: true }), false, "still waiting");
+        assert.equal(steps.take(Infinity), true, "done now, without an end to wait for");
+        assert.equal(steps.value, "made");
+        assert.deepEqual(told, [undefined, NOW]);
+    });
+
+    it("paints a skin in a worker while the rest of them is built, and puts it on when it's back: the same character", async () => {
+        globalThis.Worker = Worker;
+
+        try {
+            const kit = { human, atlas, skins: new Skins(atlas) };
+            const worker = Worker.last;
+            const steps = new Steps(Character.building(kit, options(soldier)));
+
+            // (Asked for as it starts; everything else built meanwhile, then waited for)
+            assert.equal(steps.take(Infinity, { wait: true }), false);
+            assert.ok(steps.waiting);
+            assert.equal(kit.skins.jobs.size, 1);
+            await worker.deliver();
+            assert.equal(steps.take(Infinity, { wait: true }), true);
+            assert.equal(kit.skins.jobs.size, 0);
+            assert.equal(hashOf(steps.value), hashOf(new Character(kitOf(), options(soldier))));
+
+            // Cat folk's fur and stripes, lizard folk's scales: their fields sent over when first
+            // wanted, and painted there the same
+            for (const people of ["cat", "lizard"]) {
+                const look = soldierLook({ people, weapon: "sword", seed: 3 });
+                const furred = new Steps(Character.building(kit, options(look)));
+
+                assert.ok(look.look.skin.fur || look.look.skin.scales, people);
+                assert.equal(furred.take(Infinity, { wait: true }), false);
+                await worker.deliver();
+                assert.equal(furred.take(Infinity, { wait: true }), true);
+                assert.equal(hashOf(furred.value), hashOf(new Character(kitOf(), options(look))), people);
+            }
+
+            // Can't wait (all at once): painted here, the same, and no longer wanted there
+            const now = allAtOnce(Character.building(kit, options(wench)));
+
+            assert.equal(hashOf(now), hashOf(new Character(kitOf(), options(wench))));
+            assert.equal(kit.skins.jobs.size, 0);
+            await worker.deliver();
+
+            // The worker failing: painted here from then on
+            const failing = new Steps(Character.building(kit, options(wench)));
+
+            assert.equal(failing.take(Infinity, { wait: true }), false);
+            worker.onerror();
+            assert.equal(failing.take(Infinity, { wait: true }), true);
+            assert.equal(hashOf(failing.value), hashOf(now));
+            assert.equal(kit.skins.ask(wench.look.skin), null);
+        } finally {
+            delete globalThis.Worker;
+        }
     });
 
     it("shares a look of eye's picture between those with it, kept a while once none are", () => {

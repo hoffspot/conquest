@@ -127,27 +127,12 @@ function mergeGeometries(geometries) {
     return merged;
 }
 
-/** A texture's picture (RGBA), from the canvas it was painted on. */
-function pixelsOf(texture) {
-    const { width, height } = texture.image;
-
-    return texture.image.getContext("2d").getImageData(0, 0, width, height).data;
-}
-
-/** A picture's red, a byte a texel. */
-function redOf(data) {
-    const red = new Uint8ClampedArray(data.length / 4);
-
-    for (let i = 0; i < red.length; i++) {
-        red[i] = data[i * 4];
-    }
-
-    return red;
-}
-
-/** A texture from a painted picture (RGBA, rows from the top), mipmapped. */
+/**
+ * A texture from a painted picture (rows from the top: RGBA, or a byte a texel for heights, which
+ * a bump map reads from its red), mipmapped. Its picture stays in `image.data`.
+ */
 function dataTexture(data, size, colour) {
-    const texture = new THREE.DataTexture(new Uint8Array(data.buffer), size, size);
+    const texture = new THREE.DataTexture(bytesOf(data), size, size, data.length === size * size ? THREE.RedFormat : THREE.RGBAFormat);
 
     texture.flipY = true;
     texture.colorSpace = colour ? THREE.SRGBColorSpace : THREE.NoColorSpace;
@@ -158,6 +143,33 @@ function dataTexture(data, size, colour) {
     texture.needsUpdate = true;
 
     return texture;
+}
+
+// A picture's bytes as a texture takes them
+function bytesOf(data) {
+    return new Uint8Array(data.buffer, data.byteOffset, data.length);
+}
+
+// A look (Character setLook's) with everything it doesn't say as LOOK_DEFAULTS have it, and its
+// skin's hair colour its hair's
+function lookOf(look) {
+    const hair = { ...LOOK_DEFAULTS.hair, ...look.hair };
+
+    return { skin: { ...SKIN_DEFAULTS, ...look.skin, hairColour: hair.colour }, eyes: { ...EYE_DEFAULTS, ...look.eyes }, hair };
+}
+
+// The skin as it's painted for a look (lookOf's): with hair painted on the scalp and jaw under the
+// strands (or as a buzz cut or stubble)
+function paintedSkin({ skin, hair }) {
+    const style = HAIRSTYLES[hair.style] ?? HAIRSTYLES.short;
+    const beard = BEARDS[hair.beard] ?? BEARDS.none;
+
+    return {
+        ...skin,
+        // (under hair strands, solid: none of the skin shows between them)
+        scalp: Math.max(skin.scalp, style.scalp ?? (style.strands ? 1.4 : 1)),
+        stubble: Math.max(skin.stubble, beard.stubble),
+    };
 }
 
 /**
@@ -179,7 +191,9 @@ export function placed(socket, { at = [0, 0, 0], point = [0, 1, 0], edge = [0, 0
 
 export class Character {
     /**
-     * @param {object} kit - What characters are made from (loadCharacterKit): { human, atlas }.
+     * @param {object} kit - What characters are made from (loadCharacterKit): { human, atlas }, and
+     *   where the skins of those built a step at a time are painted, if not here (skins.js Skins),
+     *   `skins`.
      * @param {object} [options]
      * @param {object} [options.shape] - Slider settings: { macro: {...}, details: {...} }.
      * @param {object} [options.look] - Skin, eyes and hair: { skin: {...}, eyes: {...}, hair: {...} }
@@ -258,19 +272,28 @@ export class Character {
         const character = new Character(kit, options, LATER);
 
         yield;
-        yield* character.#building(options);
+        yield* character.#building(options, { elsewhere: true });
 
         return character;
     }
 
-    *#building({ shape = {}, look = {}, equipment = [] }) {
+    // Built a step at a time; its skin painted elsewhere, if `elsewhere` and it can be (the kit's
+    // `skins`: skins.js): asked for first, so it's painted while the rest of it's built, and put on
+    // last
+    *#building({ shape = {}, look = {}, equipment = [] }, { elsewhere = false } = {}) {
+        const job = elsewhere && this.kit.atlas ? this.kit.skins?.ask(paintedSkin(lookOf(look))) ?? null : null;
+
         this.setShape(shape);
         yield;
         this.#wear(equipment);
 
         // (Its hair grown once: under a hat or helmet, when it's dressed, only below the rim)
-        yield* this.#looking(look, { hair: !this.#hidesHair() });
+        yield* this.#looking(look, { hair: !this.#hidesHair(), skin: !job });
         yield* this.#dressing();
+
+        if (job) {
+            yield* this.#skinning(job);
+        }
     }
 
     /**
@@ -712,14 +735,14 @@ export class Character {
 
             const painted = yield* paintingGarment(kit.texelMap, garment);
             const material = new THREE.MeshStandardMaterial({
+                map: dataTexture(painted.data, painted.size, true),
+                bumpMap: dataTexture(painted.bump, painted.size, false),
+                bumpScale: garment.metalness ? 0.6 : 1.5,
                 roughness: garment.roughness ?? 0.8,
                 metalness: garment.metalness ?? 0,
                 side: THREE.DoubleSide,
             });
 
-            this.#setTexture(material, "map", painted.data, painted.size, true);
-            this.#setTexture(material, "bumpMap", greyscale(painted.bump), painted.size, false);
-            material.bumpScale = garment.metalness ? 0.6 : 1.5;
             kit.garmentMaterials.set(id, material);
         }
 
@@ -758,8 +781,8 @@ export class Character {
                 const material = this.#garmentMaterial(id);
 
                 return {
-                    data: pixelsOf(material.map),
-                    bump: redOf(pixelsOf(material.bumpMap)),
+                    data: material.map.image.data,
+                    bump: material.bumpMap.image.data,
                     tint: garment.base ? material.color.toArray() : null,
                     bumpScale: material.bumpScale,
                     roughness: material.roughness,
@@ -844,33 +867,16 @@ export class Character {
         allAtOnce(this.#looking(look));
     }
 
-    // The same, a step at a time (each a yield: its skin painted a few rows a step); its hair
-    // grown too, unless `hair` is false (grown when it's dressed, then)
-    *#looking(look, { hair: grow = true } = {}) {
-        const hair = { ...LOOK_DEFAULTS.hair, ...look.hair };
-        const style = HAIRSTYLES[hair.style] ?? HAIRSTYLES.short;
-        const beard = BEARDS[hair.beard] ?? BEARDS.none;
-        const skin = { ...SKIN_DEFAULTS, ...look.skin, hairColour: hair.colour };
-        const eyes = { ...EYE_DEFAULTS, ...look.eyes };
+    // The same, a step at a time (each a yield: its skin painted a few rows a step, unless `skin`
+    // is false: put on later, then); its hair grown too, unless `hair` is false (grown when it's
+    // dressed, then)
+    *#looking(look, { hair: grow = true, skin: paint = true } = {}) {
+        this.look = lookOf(look);
 
-        this.look = { skin, eyes, hair };
+        const { skin, eyes, hair } = this.look;
 
-        // Paint hair on the scalp and jaw under the strands (or as a buzz cut or stubble)
-        const painted = {
-            ...skin,
-            // (under hair strands, solid: none of the skin shows between them)
-            scalp: Math.max(skin.scalp, style.scalp ?? (style.strands ? 1.4 : 1)),
-            stubble: Math.max(skin.stubble, beard.stubble),
-        };
-
-        if (this.kit.atlas) {
-            const texture = yield* paintingSkin(this.kit.atlas, painted);
-
-            this.#setTexture(this.materials.body, "map", texture.data, texture.width, true);
-            this.#setTexture(this.materials.body, "bumpMap", greyscale(texture.bump), texture.width, false);
-            this.materials.body.bumpScale = 1.2;
-        } else {
-            this.materials.body.color.set(skin.tone);
+        if (paint) {
+            yield* this.#skinning();
         }
 
         this.materials.tint.color.set(skin.tone);
@@ -882,6 +888,24 @@ export class Character {
         if (grow) {
             yield* this.#growingHair();
         }
+    }
+
+    // Its skin painted as it looks, a step at a time (or, if it was asked for elsewhere, `job`,
+    // taken once it's painted there: skins.js), and put on
+    *#skinning(job = null) {
+        const settings = paintedSkin(this.look);
+
+        if (!this.kit.atlas) {
+            this.materials.body.color.set(settings.tone);
+
+            return;
+        }
+
+        const { data, bump, width } = job ? yield* this.kit.skins.painting(job) : yield* paintingSkin(this.kit.atlas, settings);
+
+        this.#setTexture(this.materials.body, "map", data, width, true);
+        this.#setTexture(this.materials.body, "bumpMap", bump, width, false);
+        this.materials.body.bumpScale = 1.2;
     }
 
     // Its eyes' picture: painted once for each look of eye, and shared by everyone with it
@@ -963,26 +987,23 @@ export class Character {
         return triangles;
     }
 
-    /** Put RGBA pixels (rows from the top) into a material's texture, reusing its canvas. */
+    /**
+     * Put a painted picture (rows from the top: RGBA, or a byte a texel for heights) into a
+     * material's texture, reusing it if it's the same size.
+     */
     #setTexture(material, slot, data, size, colour) {
-        let texture = material[slot];
+        const texture = material[slot];
 
-        if (!texture || texture.image.width !== size) {
-            texture?.dispose();
+        if (texture?.image.width === size && texture.image.data.length === data.length) {
+            texture.image.data = bytesOf(data);
+            texture.needsUpdate = true;
 
-            const canvas = document.createElement("canvas");
-
-            canvas.width = canvas.height = size;
-            texture = new THREE.CanvasTexture(canvas);
-            texture.colorSpace = colour ? THREE.SRGBColorSpace : THREE.NoColorSpace;
-            texture.anisotropy = 4;
-            material[slot] = texture;
-            material.needsUpdate = true;
+            return;
         }
 
-        // (Read back to draw garments all at once: #composite)
-        texture.image.getContext("2d", { willReadFrequently: true }).putImageData(new ImageData(data, size, size), 0, 0);
-        texture.needsUpdate = true;
+        texture?.dispose();
+        material[slot] = dataTexture(data, size, colour);
+        material.needsUpdate = true;
     }
 
     /** Change the body's shape (slider settings: { macro, details }). */
@@ -1099,9 +1120,21 @@ export class Character {
         this.rig.apply();
     }
 
-    /** The skin texture as it is now (a canvas), say to save as a template for painting skins. */
+    /** The skin's picture as it is now, on a canvas, say to save as a template for painting skins. */
     get skinCanvas() {
-        return this.materials.body.map?.image ?? null;
+        const image = this.materials.body.map?.image;
+
+        if (!image) {
+            return null;
+        }
+
+        const canvas = document.createElement("canvas");
+
+        canvas.width = image.width;
+        canvas.height = image.height;
+        canvas.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(image.data.buffer, image.data.byteOffset, image.data.length), image.width, image.height), 0, 0);
+
+        return canvas;
     }
 
     dispose() {
@@ -1152,14 +1185,3 @@ function known(id) {
 const _sway = new THREE.Quaternion();
 const _swayAngles = new THREE.Euler();
 
-/** One byte a pixel to RGBA grey. */
-function greyscale(values) {
-    const data = new Uint8ClampedArray(values.length * 4);
-
-    for (let i = 0; i < values.length; i++) {
-        data[i * 4] = data[i * 4 + 1] = data[i * 4 + 2] = values[i];
-        data[i * 4 + 3] = 255;
-    }
-
-    return data;
-}

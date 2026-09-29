@@ -1607,7 +1607,10 @@ characters on the player's map are drawn or animated. Building the eight folk ad
 seconds to loading on a desktop computer. Anyone who comes into view while playing (soldiers,
 the folk of a building near, the wild's people-shaped creatures) is built a step at a time
 within the frames' budget (CHARACTERS.md, *Built a step at a time*): the longest step 10 to 40
-ms on a desktop, where each was one piece of 300 to 800 ms. A beast's body is still built at once
+ms on a desktop, where each was one piece of 300 to 800 ms. Their skins are painted meanwhile in a
+worker (CHARACTERS.md, *Skins painted elsewhere*), so a town's guards are all out in about 4 s of
+frames and a tavern's folk in about 3 (headless Chromium on "high"). Someone still being built
+when the player comes onto their map is put where they are when they're drawn. A beast's body is still built at once
 the first time each of its kind's three looks is seen (100 to 280 ms on a desktop), then kept. On phones the quality level draws
 fewer pixels and thinner hair and uses smaller textures, and debug mode shows what each costs.
 With the world round the town, in the browser tests' views a frame makes 80 to 150 draw calls
@@ -1709,7 +1712,11 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
 - `test/character-building.test.js`: characters built a step at a time the same as all at once
   (soldiers, folk and a hero); the skin, hair, a boot, a garment's picture and an outfit's the
   same step by step; the hair grown once (none hidden by a tankard; under a helmet only below its
-  rim); a garment's cut kept for everyone measured alike; a look of eye's picture shared.
+  rim); a garment's cut kept for everyone measured alike; a look of eye's picture shared; a step
+  waiting on work done elsewhere told to do it now when the steps can't wait, and come back to
+  when they can; and skins painted in the worker (run in the test), cat folk's fur and lizard
+  folk's scales too, waited for and put on last: the same characters, painted here instead when
+  the steps can't wait or the worker fails.
 - `test/wounds.test.js`: battle damage on the real body: the thresholds, a kind for every
   reaction, a mark every blow and a wound for each threshold crossed, each kind painted its own
   way (cuts bleed, blunt blows bruise, fire chars and never bleeds, arcane light leaves veins),

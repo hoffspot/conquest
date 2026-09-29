@@ -298,6 +298,26 @@ helmet or hat, only what's below its rim, when it's dressed (it was grown whole 
 again for anyone carrying anything). Tests build soldiers, folk and a hero both ways and check
 they're the same, and each piece the same step by step as at once.
 
+**Skins painted elsewhere.** Painting a skin is about half of building someone (a couple of hundred
+milliseconds at 1024, a phone's at 512 as long). The game gives the kit a painter (`skins.js`
+`Skins`, made with the kit in `app/session.js`) that paints them in a worker (`skin-worker.js`),
+sent a copy of the skin atlas's fields once (and the fields for fur and scales when first wanted).
+A character built a step at a time asks for its skin first (`ask`), so it's painted while the rest
+of it is built, and puts it on last (`painting`): if it isn't back yet, that step yields `WAITING`
+(`core/steps.js`), and whatever's taking the steps comes back to it next frame (`Steps`), or, if
+it can't wait (all at once, or the game played on at once in a test), passes it `NOW`, and it's
+painted here. The picture is the same wherever it's painted. Where there are no workers (or one
+fails), or for a whole skin picture loaded in the character lab, it's painted here as ever. In
+headless Chromium on "high", this took a town's six guards from 10 s of frames to 4, and a
+tavern's eight folk from 9 to 3, at 6 ms a frame.
+
+**Pictures kept as data.** A character's skin and height pictures, and each garment's, are kept as
+the painted bytes (`DataTexture`s), not put on a canvas: no canvas's worth of memory kept beside
+each, no reading a garment's picture back off its canvas to draw an outfit (`#compositing` takes
+the bytes), and the heights one byte a texel (a red texture: a bump map reads its red), not grey
+RGBA, a quarter of the size to keep and send to the GPU. The character lab's *Save skin* puts the
+picture on a canvas when it's asked for (`skinCanvas`).
+
 **Drapes** (`drapes.js`) are clothes that hang from the body rather than wrapping it: skirts,
 gowns and aprons. A garment can't hang between the legs, so a drape is built instead, as rings of
 cloth round the body:

@@ -60,7 +60,7 @@ import { SpellFx } from "../world/spellfx.js";
 import { Squares } from "../world/squares.js";
 import { KINDS, Wounds } from "../world/wounds.js";
 import { Chunks, DECK, LOAD_BUDGET, REACH } from "../world/chunks3d.js";
-import { allAtOnce } from "../core/steps.js";
+import { allAtOnce, Steps } from "../core/steps.js";
 import { buildGround } from "../world/ground.js";
 import { buildTown } from "../world/town3d.js";
 import { prepareAtlas } from "../world/art/engine/atlas.js";
@@ -487,6 +487,10 @@ export class Game {
 
         // The one of them being drawn just now, a step at a time: { actor, steps }
         this.enlistee = null;
+
+        // (Whether what's built a step at a time can wait on work done elsewhere, a worker's: not
+        // while playing on at once, advance)
+        this.waits = true;
 
         /**
          * When the player last did anything (the game's clock, s), and when they next rest (null
@@ -1107,11 +1111,19 @@ export class Game {
     /**
      * Play on for `seconds` in frames of `frame` seconds without drawing them, then draw once
      * (unless not to `render`: for tests stepping through what happens, drawn only at the end,
-     * and debugging on slow machines).
+     * and debugging on slow machines). Nothing done elsewhere (a worker's skins) can come back
+     * while it plays on, so what would wait on it is done here then, unless it's to `wait` (for
+     * a caller that lets the page's events in between, as frames do).
      */
-    advance(seconds, { frame = 1 / 30, render = true } = {}) {
-        for (let time = 0; time < seconds; time += frame) {
-            this.#tick(frame);
+    advance(seconds, { frame = 1 / 30, render = true, wait = false } = {}) {
+        this.waits = wait;
+
+        try {
+            for (let time = 0; time < seconds; time += frame) {
+                this.#tick(frame);
+            }
+        } finally {
+            this.waits = true;
         }
 
         if (render) {
@@ -2242,22 +2254,22 @@ export class Game {
                 const actor = this.battle.actor(this.enlisting.shift());
 
                 if (actor && !this.avatars.has(actor.id)) {
-                    this.enlistee = { actor, steps: this.#dressing(actor) };
+                    this.enlistee = { actor, steps: new Steps(this.#dressing(actor)) };
                 }
 
                 continue;
             }
 
             const { actor, steps } = this.enlistee;
-            const step = steps.next();
 
-            if (!step.done) {
-                continue;
+            // (Its skin not yet painted elsewhere: come back to them next frame)
+            if (!steps.take(until, { wait: this.waits })) {
+                break;
             }
 
             this.enlistee = null;
 
-            const avatar = step.value;
+            const avatar = steps.value;
 
             if (avatar) {
                 this.#place(actor);
@@ -2996,17 +3008,20 @@ export class Game {
     }
 
     // Do what can be done of a building's getting ready before `until` (performance.now()'s; all
-    // of it, without): each piece of work at once, or a step at a time if it's in steps (its folk)
+    // of it, without): each piece of work at once, or a step at a time if it's in steps (its folk;
+    // one waiting on work done elsewhere, a skin, come back to next frame)
     #work(visit, until = Infinity) {
         while ((visit.steps || visit.queue.length) && performance.now() < until) {
             if (!visit.steps) {
                 const work = visit.queue.shift()();
 
-                visit.steps = typeof work?.next === "function" ? work : null;
+                visit.steps = typeof work?.next === "function" ? new Steps(work) : null;
             }
 
-            if (visit.steps?.next().done) {
+            if (visit.steps?.take(until, { wait: this.waits && until !== Infinity })) {
                 visit.steps = null;
+            } else if (visit.steps?.waiting) {
+                return;
             }
         }
     }
@@ -3086,9 +3101,10 @@ export class Game {
             }
         }
 
-        // Everyone else here where they are now (they weren't moved while out of sight)
+        // Everyone else here where they are now (they weren't moved while out of sight; those still
+        // being drawn, a step at a time, are put there when they are)
         for (const actor of this.battle.actors) {
-            if (actor.map === mapId && actor.id !== this.me) {
+            if (actor.map === mapId && actor.id !== this.me && this.avatars.has(actor.id)) {
                 this.#place(actor);
             }
         }

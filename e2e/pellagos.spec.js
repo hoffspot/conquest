@@ -46,6 +46,29 @@ async function playing(page, address) {
     }
 }
 
+// Play on (the game stopped) till `done` (a function run in the page) says so, or `seconds` of the
+// game's time go by: whether it did. Half a second at a time, a frame at a time, the page's events
+// let in between them as between frames, so what's done elsewhere (skins painted in a worker)
+// comes back to be waited on, as in play
+async function playUntil(page, done, { seconds = 30 } = {}) {
+    for (let time = 0; time < seconds; time += 0.5) {
+        if (await page.evaluate(done)) {
+            return true;
+        }
+
+        await page.evaluate(async () => {
+            const { game } = window.pellagos;
+
+            for (let k = 0; k < 15; k++) {
+                game.advance(1 / 30, { render: false, wait: true });
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        });
+    }
+
+    return page.evaluate(done);
+}
+
 // Where a spot so many metres north of the player is on the screen
 async function spotNorth(page, metres) {
     return page.evaluate((metres) => {
@@ -1149,7 +1172,7 @@ test("every tavern can be gone into: got ready as the player comes near, its own
     await page.evaluate(helpers);
 
     // Near its door, it's got ready a piece at a time: its floors, then its folk
-    const near = await page.evaluate(() => {
+    const started = await page.evaluate(() => {
         const { game } = window.pellagos;
 
         game.stop();
@@ -1164,12 +1187,21 @@ test("every tavern can be gone into: got ready as the player comes near, its own
         game.advance(0.1);
 
         const visit = game.visits.get(building.key);
-        const started = { maps: visit.maps.length, folk: visit.folk.length, left: visit.queue.length };
 
-        game.advance(2);
+        window.visit = visit;
 
-        return { key: building.key, name: building.name, before, started, ready: { maps: visit.maps.length, folk: visit.folk.length, left: visit.queue.length }, hidden: visit.maps.every((id) => !game.interiors.get(id).object.visible) };
+        return { key: building.key, name: building.name, before, started: { maps: visit.maps.length, folk: visit.folk.length, left: visit.queue.length } };
     });
+
+    // (A few seconds' building: everyone in it built a step at a time, a few milliseconds a frame)
+    expect(await playUntil(page, () => !window.visit.queue.length && !window.visit.steps)).toBe(true);
+
+    const near = await page.evaluate((started) => {
+        const { game } = window.pellagos;
+        const { visit } = window;
+
+        return { ...started, ready: { maps: visit.maps.length, folk: visit.folk.length, left: visit.queue.length }, hidden: visit.maps.every((id) => !game.interiors.get(id).object.visible) };
+    }, started);
 
     expect(near.name).toBe("The Stag's Head");
     expect(near.before).toBe(false);
@@ -1432,14 +1464,23 @@ test("the adventurers' guild: the receptionist stamps notices behind her counter
 test("the town's guards stand at its ways out under its people's banner, and talk of the town and the war; a people at war with the player's attacks them", async ({ page }) => {
     await playing(page, "/?play&seed=2");
 
-    // Out as soon as the game's played: guards at the roads out, a patrol going round, a banner by each road
-    const out = await page.evaluate(() => {
+    // Out as soon as the game's played: guards at the roads out, a patrol going round, a banner by
+    // each road (drawn over a few seconds, a step at a time)
+    await page.evaluate(() => {
         const { game } = window.pellagos;
 
         game.stop();
         Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
-        game.advance(1.5, { render: false });
+        game.advance(0.1, { render: false });
+    });
+    expect(await playUntil(page, () => {
+        const { game } = window.pellagos;
 
+        return !game.enlistee && !game.enlisting.length;
+    })).toBe(true);
+
+    const out = await page.evaluate(() => {
+        const { game } = window.pellagos;
         const soldiers = game.battle.actors.filter(({ kind }) => kind === "soldier");
 
         return {
@@ -1510,7 +1551,7 @@ test("the town's guards stand at its ways out under its people's banner, and tal
         game.host.lookAt = 0;
 
         const player = game.battle.actor("player");
-        let [after, hurt, plates] = [false, false, 0];
+        let [after, hurt] = [false, false];
 
         for (let k = 0; k < 60 && !hurt; k++) {
             game.advance(0.1, { render: false });
@@ -1519,26 +1560,31 @@ test("the town's guards stand at its ways out under its people's banner, and tal
 
             after ||= soldiers.some(({ target }) => target === "player");
             hurt ||= player.hp < player.maxHp || player.dead;
-            plates = Math.max(plates, soldiers.filter(({ id }) => game.hud.tracked.has(id)).length);
         }
 
         const soldiers = game.battle.actors.filter(({ kind }) => kind === "soldier");
 
-        return { teams: [...new Set(soldiers.map(({ team }) => team))], banner: game.banners.towns.get(home.id)?.people, after, hurt, plates };
+        return { teams: [...new Set(soldiers.map(({ team }) => team))], banner: game.banners.towns.get(home.id)?.people, after, hurt };
     });
 
     expect(war.teams).toEqual(["orc"]);
     expect(war.banner).toBe("orc");
     expect(war.after).toBe(true);
     expect(war.hurt).toBe(true);
-    expect(war.plates).toBeGreaterThan(0);
+
+    // (Bars over them, the player's enemies, once they're drawn: over a few seconds, a step at a time)
+    expect(await playUntil(page, () => {
+        const { game } = window.pellagos;
+
+        return game.battle.actors.some(({ id, kind }) => kind === "soldier" && game.hud.tracked.has(id));
+    })).toBe(true);
 });
 
 test("an enemy camp near the player is pitched, tents, fire, banner and sentries; its raiders come for the town's fields, and the player's told", async ({ page }) => {
     await playing(page, "/?play&seed=2");
 
     // An orc camp just outside the town, at war with the humans; the player by it
-    const camp = await page.evaluate(() => {
+    await page.evaluate(() => {
         const { game } = window.pellagos;
         const war = game.host.war;
         const home = war.town(game.world.start.id);
@@ -1553,8 +1599,19 @@ test("an enemy camp near the player is pitched, tents, fire, banner and sentries
         war.forces.push({ id: "force-900", realm: "orc", kind: "camp", size: 20, at, path: [at], leg: 0, target: home.id, home: war.realm("orc").capital, mission: null, about: null, since: 1000, sortie: null });
         Object.assign(player, { square: [Math.floor(at[0] - 3), Math.floor(at[1] + 10)], to: null, path: [], hp: 5000, maxHp: 5000 });
         Object.assign(player, { x: player.square[0] + 0.5, y: player.square[1] + 0.5 });
-        game.advance(1.5);
+        game.advance(0.1);
+    });
 
+    // (Its sentries drawn over a few seconds, a step at a time, after the town's guards)
+    await playUntil(page, () => {
+        const { game } = window.pellagos;
+
+        return (game.host.camps.get("force-900")?.ids ?? []).some((id) => game.avatars.has(id));
+    });
+
+    const camp = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
         const sentries = game.host.camps.get("force-900")?.ids ?? [];
 
         return {
@@ -1572,16 +1629,27 @@ test("an enemy camp near the player is pitched, tents, fire, banner and sentries
     expect(camp.sentries.every(({ name, hostile }) => name === "Orcish sentry" && hostile)).toBe(true);
     expect(camp.sentries.some(({ drawn }) => drawn)).toBe(true);
 
-    // A raid, sooner or later: its raiders drawn, and the player told
-    const raid = await page.evaluate(() => {
+    // A raid, sooner or later: the player told, and its raiders drawn (over a few seconds)
+    const sortied = await page.evaluate(() => {
         const { game } = window.pellagos;
 
         for (let turn = 0; turn < 30 && !game.host.sorties.size; turn++) {
             game.advance(60, { render: false });
         }
 
-        game.advance(1);
+        return game.host.sorties.has("force-900");
+    });
 
+    expect(sortied).toBe(true);
+    await expect(page.locator("#banner")).toContainText("Raiders of the Orcs are coming for");
+    await playUntil(page, () => {
+        const { game } = window.pellagos;
+
+        return (game.host.sorties.get("force-900")?.ids ?? []).some((id) => game.avatars.has(id));
+    });
+
+    const raid = await page.evaluate(() => {
+        const { game } = window.pellagos;
         const sortie = game.host.sorties.get("force-900");
 
         return sortie && { kind: sortie.kind, raiders: sortie.ids.map((id) => ({ name: game.battle.actor(id).name, drawn: game.avatars.has(id) })) };
@@ -1590,7 +1658,6 @@ test("an enemy camp near the player is pitched, tents, fire, banner and sentries
     expect(raid.kind).toBe("raid");
     expect(raid.raiders.every(({ name }) => name === "Orcish raider")).toBe(true);
     expect(raid.raiders.some(({ drawn }) => drawn)).toBe(true);
-    await expect(page.locator("#banner")).toContainText("Raiders of the Orcs are coming for");
 
     // Far off: the camp struck, its tents down
     const struck = await page.evaluate(() => {
