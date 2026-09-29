@@ -324,6 +324,106 @@ export const PAINTERS = {
         };
     },
 
+    // Each people's homeland underfoot (the ground's own: drawn by the ground's shader, not the
+    // atlas). The cat folk's: pale gold grass in dry tussocks, red laterite showing between them
+    savannah({ base, light, dark, mortar }, seed) {
+        const patches = periodicNoise(seed, 4);
+        const tussocks = periodicNoise(seed + 1, 16);
+        const blades = periodicNoise(seed + 2, 128);
+
+        return (x, y) => {
+            const [u, v] = [x / SIZE, y / SIZE];
+            const bare = patches(u * 4, v * 4) * 0.6 + tussocks(u * 16, v * 16) * 0.4;
+            const tone = blades(u * 128, v * 128) * 0.6 + tussocks(u * 16, v * 16) * 0.4;
+            const grass = tone < 0.5 ? mix(dark, base, tone * 2) : mix(base, light, (tone - 0.5) * 2);
+
+            return bare > 0.55 ? mix(grass, scale(mortar, 0.9 + blades(u * 128, v * 128) * 0.2), Math.min(1, (bare - 0.55) * 5)) : grass;
+        };
+    },
+
+    // The orcs': red clay baked hard and cracked into plates, black grit and ash between them
+    cracked({ base, light, dark, mortar }, seed) {
+        const blotch = periodicNoise(seed, 4);
+        const plates = periodicNoise(seed + 1, 10);
+        const grit = periodicNoise(seed + 2, 96);
+
+        return (x, y) => {
+            const [u, v] = [x / SIZE, y / SIZE];
+            const edge = Math.abs(plates(u * 10, v * 10) - 0.5);
+            const tone = blotch(u * 4, v * 4) * 0.6 + grit(u * 96, v * 96) * 0.4;
+            let colour = tone < 0.5 ? mix(dark, base, tone * 2) : mix(base, light, (tone - 0.5) * 2);
+
+            if (edge < 0.018) {
+                colour = scale(mortar, 0.8);
+            } else if (edge < 0.04) {
+                colour = scale(colour, 0.75);
+            } else if (grit(u * 96, v * 96) > 0.82) {
+                colour = mix(colour, mortar, 0.7);
+            }
+
+            return colour;
+        };
+    },
+
+    // The lizard folk's: black mud, wet and shining in its hollows, moss spreading over it
+    mire({ base, light, dark, mortar }, seed) {
+        const moss = periodicNoise(seed, 5);
+        const lumps = periodicNoise(seed + 1, 20);
+        const fine = periodicNoise(seed + 2, 96);
+
+        return (x, y) => {
+            const [u, v] = [x / SIZE, y / SIZE];
+            const green = moss(u * 5, v * 5) * 0.7 + lumps(u * 20, v * 20) * 0.3;
+            const mud = mix(dark, mortar, lumps(u * 20, v * 20) * 0.5 + fine(u * 96, v * 96) * 0.3);
+            const growth = mix(base, light, fine(u * 96, v * 96));
+            const wet = lumps(u * 20, v * 20) < 0.28 ? 0.35 : 0;
+
+            return mix(mix(mud, growth, Math.max(0, Math.min(1, (green - 0.42) * 4))), light, wet * 0.3);
+        };
+    },
+
+    // The elves': deep moss and clover, fallen gold leaves and white blossom in it
+    moss({ base, light, dark, mortar }, seed) {
+        const patches = periodicNoise(seed, 4);
+        const clumps = periodicNoise(seed + 1, 24);
+        const fine = periodicNoise(seed + 2, 128);
+        const fall = periodicNoise(seed + 3, 48);
+
+        return (x, y) => {
+            const [u, v] = [x / SIZE, y / SIZE];
+            const tone = patches(u * 4, v * 4) * 0.45 + clumps(u * 24, v * 24) * 0.35 + fine(u * 128, v * 128) * 0.2;
+            let colour = tone < 0.5 ? mix(dark, base, tone * 2) : mix(base, light, (tone - 0.5) * 2);
+            const leaf = fall(u * 48, v * 48);
+
+            if (leaf > 0.8) {
+                colour = mix(colour, mortar, Math.min(1, (leaf - 0.8) * 8));
+            } else if (fine(u * 128, v * 128) > 0.86) {
+                colour = mix(colour, [240, 240, 232], 0.7);
+            }
+
+            return colour;
+        };
+    },
+
+    // The dark elves': black loam under dead leaves gone grey and violet, and ash
+    litter({ base, light, dark, mortar }, seed) {
+        const patches = periodicNoise(seed, 4);
+        const leaves = periodicNoise(seed + 1, 32);
+        const fine = periodicNoise(seed + 2, 128);
+
+        return (x, y) => {
+            const [u, v] = [x / SIZE, y / SIZE];
+            const tone = patches(u * 4, v * 4) * 0.5 + leaves(u * 32, v * 32) * 0.3 + fine(u * 128, v * 128) * 0.2;
+            let colour = tone < 0.5 ? mix(dark, base, tone * 2) : mix(base, light, (tone - 0.5) * 2);
+
+            if (leaves(u * 32, v * 32) > 0.78) {
+                colour = mix(colour, mortar, 0.4);
+            }
+
+            return colour;
+        };
+    },
+
     // Natural rock: broad blotches and a fine grain, dark cracks wandering across it, and pale
     // flecks (crystals, lichen) here and there
     rock({ base, light, dark }, seed) {
@@ -773,6 +873,12 @@ export const MATERIALS = {
     bark: { painter: "bark", world: 8, base: 0x5a4636, light: 0x7a6450, dark: 0x2f241b },
     deadwood: { painter: "grain", world: 16, base: 0x756e63, light: 0x958c7c, dark: 0x4a453e },
     grass: { painter: "grass", world: 48, base: 0x62803c, light: 0x86a352, dark: 0x3f5a28, ground: true },
+    // Each people's homeland underfoot, over its lands' own ground (world/ground.js)
+    "home-cat": { painter: "savannah", world: 40, base: 0xb89a58, light: 0xdcc684, dark: 0x8a6c3a, mortar: 0xa65c3a, ground: true },
+    "home-orc": { painter: "cracked", world: 30, base: 0x8e5c3c, light: 0xae7852, dark: 0x5c3a26, mortar: 0x221c1c, ground: true },
+    "home-lizard": { painter: "mire", world: 36, base: 0x4e6a30, light: 0x74904a, dark: 0x22241a, mortar: 0x3a3424, ground: true },
+    "home-elf": { painter: "moss", world: 36, base: 0x4f8a3e, light: 0x86c060, dark: 0x2c5a26, mortar: 0xd8a83c, ground: true },
+    "home-darkElf": { painter: "litter", world: 36, base: 0x3c3642, light: 0x57505e, dark: 0x1a181e, mortar: 0x6a4a8a, ground: true },
     // The other peoples': the cat folk's mud plaster, mats and dry stone; the orcs' hides,
     // basalt and riveted iron; the lizard folk's palm thatch, reeds, bamboo, limestone and its
     // carved friezes, and planks bleached by the sun; the elves' marble and moonstone, leaf

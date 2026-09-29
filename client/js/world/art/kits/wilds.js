@@ -1338,6 +1338,491 @@ function campfire(mesher, random) {
     }
 }
 
+// --- Each people's own lands ---
+//
+// What lies about round each people's homes: the cat folk's termite spires and kopjes, bleached
+// horned skulls and potsherds in the dry grass; the orcs' skulls on poles, clusters of sharpened
+// stakes, the wrack of old battles and bones; the lizard folk's mangrove roots, glyph-carved
+// stelae with a serpent on top, broken eggshells and carved stones; the elves' moonstones, leaf
+// lamps on slender posts, fallen petals and moon-pale buds; the dark elves' dead stumps shrouded
+// in web, silk cocoons, clusters of black crystal with violet hearts, glowing caps and blackthorn.
+// Features are about a metre across (placed at their size and height); the little things lying
+// about are at their own size.
+
+const BONE = linear(0xe8e0cc);
+const IRON = linear(0x5a5c60);
+const SILK = linear(0xe6e2ea);
+// (Lights: as bright as the land's things are drawn, a little brighter than white)
+const VIOLET = linear(0xb070ff).map((v) => v * 1.3);
+const MOONLIGHT = linear(0xd8ecff).map((v) => v * 1.25);
+
+// A flat ring of triangles round `at` in the plane of `u` and `v` (a disc facing out), coloured
+function disc(mesher, at, u, v, radius, sides, colour, rim = colour) {
+    const point = (k) => {
+        const a = (k / sides) * TAU;
+
+        return [at[0] + (u[0] * Math.cos(a) + v[0] * Math.sin(a)) * radius, at[1] + (u[1] * Math.cos(a) + v[1] * Math.sin(a)) * radius, at[2] + (u[2] * Math.cos(a) + v[2] * Math.sin(a)) * radius];
+    };
+
+    for (let k = 0; k < sides; k++) {
+        mesher.tri(at, point(k), point(k + 1), { colours: [colour, rim, rim] });
+        mesher.tri(at, point(k + 1), point(k), { colours: [colour, rim, rim] });
+    }
+}
+
+// A thin strand (silk, a hair, a rope) from `a` to `b`, seen from both sides
+function strand(mesher, a, b, width, colour) {
+    const side = unit(cross(sub(b, a), [0.2, 1, 0.3])).map((v) => v * width);
+    const quad = [[a[0] - side[0], a[1] - side[1], a[2] - side[2]], [b[0] - side[0], b[1] - side[1], b[2] - side[2]], [b[0] + side[0], b[1] + side[1], b[2] + side[2]], [a[0] + side[0], a[1] + side[1], a[2] + side[2]]];
+
+    mesher.quad(quad[0], quad[1], quad[2], quad[3], { colours: colour });
+    mesher.quad(quad[3], quad[2], quad[1], quad[0], { colours: colour });
+}
+
+// A horned beast's skull (an antelope's, an ox's) at `at`, facing `facing`, `size` long
+function hornedSkull(mesher, random, at, facing, size, { spiral = false } = {}) {
+    const [dx, dz] = [Math.cos(facing), Math.sin(facing)];
+    const skull = made((inner) => rock(inner, random, { detail: 0, rough: 0.1, cuts: 2, squash: 0.6, layer: "plain", lichen: 0 }));
+
+    place(mesher, skull, { at: [at[0], at[1] - size * 0.08, at[2]], turn: -facing, scale: [size, size * 0.6, size * 0.55], tint: BONE });
+
+    for (const side of [-1, 1]) {
+        const [sx, sz] = [-dz * side, dx * side];
+        const root = [at[0] - dx * size * 0.2 + sx * size * 0.18, at[1] + size * 0.22, at[2] - dz * size * 0.2 + sz * size * 0.18];
+        const points = spiral
+            ? Array.from({ length: 6 }, (_, k) => {
+                const t = k / 5;
+
+                return [root[0] - dx * size * 1.1 * t + sx * size * 0.12 * Math.sin(t * 9), root[1] + size * 0.5 * t + size * 0.1 * Math.cos(t * 9), root[2] - dz * size * 1.1 * t + sz * size * 0.12 * Math.sin(t * 9)];
+            })
+            : [root, [root[0] + sx * size * 0.45, root[1] + size * 0.12, root[2] + sz * size * 0.45], [root[0] + sx * size * 0.62 - dx * size * 0.1, root[1] + size * 0.5, root[2] + sz * size * 0.62 - dz * size * 0.1]];
+
+        tube(mesher, points, points.map((_, k) => size * 0.07 * (1 - k / points.length)), 4, { colours: BONE.map((v) => v * 0.82) });
+    }
+}
+
+// The cat folk's: a termite mound, a fluted spire of red earth, eroded into fins and chimneys
+function termiteMound(mesher, random) {
+    const earth = linear(random.pick([0xa0583a, 0xb06a42, 0x94502e]));
+    const spires = random.int(1, 3);
+
+    for (let k = 0; k < spires; k++) {
+        const angle = random.range(0, TAU);
+        const out = k === 0 ? 0 : random.range(0.2, 0.32);
+        const [cx, cz] = [Math.cos(angle) * out, Math.sin(angle) * out];
+        const tall = k === 0 ? 1 : random.range(0.35, 0.6);
+        const r = k === 0 ? 0.42 : random.range(0.14, 0.22);
+        const shift = () => ({ tri: (a, b, c, o) => mesher.tri(...[a, b, c].map(([x, y, z]) => [x + cx, y, z + cz]), o), quad: (a, b, c, d, o) => mesher.quad(...[a, b, c, d].map(([x, y, z]) => [x + cx, y, z + cz]), o) });
+
+        lathe(shift(), [[r, -0.03], [r * 0.82, tall * 0.18], [r * 0.52, tall * 0.5], [r * 0.3, tall * 0.8], [r * 0.12, tall * 0.97], [0, tall]], 9, { layer: LAYER.mud, uvScale: METRES.mud * 0.3, jitter: 0.28, random, colours: [earth.map((v) => v * 0.75), earth, earth.map((v) => v * 1.08), earth.map((v) => v * 1.12), earth.map((v) => v * 1.15), earth.map((v) => v * 1.2)] });
+    }
+}
+
+// The cat folk's: a kopje, rounded granite boulders heaped where the savannah breaks
+function kopje(mesher, random) {
+    const count = random.int(3, 6);
+
+    for (let k = 0; k < count; k++) {
+        const angle = random.range(0, TAU);
+        const out = k === 0 ? 0 : random.range(0.2, 0.4);
+        const size = k === 0 ? random.range(0.6, 0.75) : random.range(0.28, 0.5);
+        const lift = k > 2 ? random.range(0.25, 0.4) : -0.05;
+        const part = made((inner) => rock(inner, random, { detail: k === 0 ? 1 : 0, rough: 0.12, cuts: 1, squash: random.range(0.7, 0.95), layer: random.pick(["granite", "rock-red"]), lichen: 0.3 }));
+
+        place(mesher, part, { at: [Math.cos(angle) * out, lift, Math.sin(angle) * out], turn: random.range(0, TAU), tilt: [random.range(-0.2, 0.2), random.range(-0.2, 0.2)], scale: [size, size * 0.85, size * random.range(0.8, 1)], shift: [random.next(), random.next()] });
+    }
+
+    // (A sun painted on its biggest stone)
+    if (random.chance(0.35)) {
+        disc(mesher, [0.02, 0.42, 0.33], [1, 0, 0], [0, 1, 0.2], 0.09, 10, linear(0xd8a030), linear(0xb86a20));
+    }
+}
+
+// The cat folk's: bleached horned skulls in the grass
+function hornSkull(mesher, random) {
+    hornedSkull(mesher, random, [0, 0.06, 0], random.range(0, TAU), random.range(0.22, 0.3), { spiral: random.chance(0.6) });
+
+    for (let k = 0; k < random.int(0, 3); k++) {
+        const a = random.range(0, TAU);
+
+        tube(mesher, [[Math.cos(a) * 0.3, 0.015, Math.sin(a) * 0.3], [Math.cos(a + 0.4) * 0.5, 0.015, Math.sin(a + 0.4) * 0.5]], [0.016, 0.012], 4, { colours: BONE, caps: [true, true] });
+    }
+}
+
+// The cat folk's: the shards of a broken water jar, painted
+function potsherds(mesher, random) {
+    const clay = linear(random.pick([0xb8683e, 0xc47a48, 0xa85a34]));
+    const paint = linear(random.pick([0xe8dcc0, 0x2a2420, 0x8a3a20]));
+
+    for (let k = 0; k < random.int(4, 8); k++) {
+        const [x, z] = [random.range(-0.3, 0.3), random.range(-0.3, 0.3)];
+        const a = random.range(0, TAU);
+        const [l, w] = [random.range(0.05, 0.1), random.range(0.04, 0.08)];
+        const lift = random.range(0.005, 0.04);
+        const corners = [[x - Math.cos(a) * l, 0.006, z - Math.sin(a) * l], [x - Math.sin(a) * w, lift, z + Math.cos(a) * w], [x + Math.cos(a) * l, 0.006, z + Math.sin(a) * l], [x + Math.sin(a) * w, 0.01, z - Math.cos(a) * w]];
+        const colour = k % 3 === 0 ? paint : clay;
+
+        mesher.quad(...corners, { colours: colour });
+        mesher.quad(corners[3], corners[2], corners[1], corners[0], { colours: clay.map((v) => v * 0.7) });
+    }
+
+    // (And the jar's foot, still whole)
+    if (random.chance(0.5)) {
+        lathe(mesher, [[0.08, -0.01], [0.11, 0.06], [0.12, 0.1]], 8, { colours: [clay.map((v) => v * 0.8), clay, clay] });
+    }
+}
+
+// The orcs': a skull on a pole, horned, rags of red hanging from it
+function skullPole(mesher, random) {
+    const lean = [random.range(-0.06, 0.06), 0, random.range(-0.06, 0.06)];
+    const top = [lean[0], 1, lean[2]];
+
+    tube(mesher, [[0, -0.02, 0], top], [0.035, 0.028], 5, { layer: LAYER.deadwood, uvScale: 0.25 });
+    tube(mesher, [[top[0], 1, top[2]], [top[0], 1.08, top[2]]], [0.03, 0], 4, { colours: IRON });
+    hornedSkull(mesher, random, [top[0], 0.9, top[2] + 0.03], Math.PI / 2, 0.16);
+
+    for (let k = 0; k < random.int(2, 4); k++) {
+        const a = random.range(0, TAU);
+        const from = [top[0] + Math.cos(a) * 0.03, 0.8, top[2] + Math.sin(a) * 0.03];
+        const drop = random.range(0.2, 0.45);
+
+        strand(mesher, from, [from[0] + Math.cos(a) * 0.05, 0.8 - drop, from[2] + Math.sin(a) * 0.05], random.range(0.02, 0.045), linear(random.pick([0x8a1e18, 0x5a1410, 0x2a2420])));
+    }
+}
+
+// The orcs': a cluster of sharpened stakes driven in at angles, points out
+function stakes(mesher, random) {
+    const count = random.int(5, 9);
+
+    for (let k = 0; k < count; k++) {
+        const a = (k / count) * TAU + random.range(-0.2, 0.2);
+        const foot = [Math.cos(a) * 0.15, -0.02, Math.sin(a) * 0.15];
+        const out = random.range(0.3, 0.55);
+        const tip = [Math.cos(a) * out, random.range(0.6, 1), Math.sin(a) * out];
+        const mid = lerp(foot, tip, 0.8);
+
+        tube(mesher, [foot, mid, tip], [0.035, 0.03, 0.001], 5, { layer: LAYER.deadwood, uvScale: 0.25 });
+    }
+
+    // (Lashed together round the middle)
+    tube(mesher, Array.from({ length: 9 }, (_, k) => [Math.cos((k / 8) * TAU) * 0.2, 0.25, Math.sin((k / 8) * TAU) * 0.2]), Array(9).fill(0.012), 3, { colours: linear(0x6a5a3a) });
+}
+
+// The orcs': the wrack of an old fight: a broken cart wheel, a shield, spears, a helm, bones
+function wrack(mesher, random) {
+    const wood = linear(0x6a4a2e);
+
+    // (A wheel lying on its side, spokes broken)
+    const hub = [random.range(-0.2, 0.2), 0.04, random.range(-0.2, 0.2)];
+    const rim = Array.from({ length: 13 }, (_, k) => [hub[0] + Math.cos((k / 12) * TAU) * 0.4, 0.04 + Math.sin(k) * 0.01, hub[2] + Math.sin((k / 12) * TAU) * 0.4]);
+
+    tube(mesher, rim.slice(0, random.int(8, 13)), Array(13).fill(0.03), 3, { colours: wood });
+
+    for (let k = 0; k < 6; k += random.int(1, 2)) {
+        tube(mesher, [hub, rim[k * 2]], [0.018, 0.015], 3, { colours: wood });
+    }
+
+    // (A round shield, painted, tipped against it; two spears)
+    disc(mesher, [hub[0] + 0.35, 0.28, hub[2] - 0.1], [0, 1, 0.35], [1, 0, 0], 0.26, 10, linear(0x8a1e18), linear(0x3a2a1e));
+
+    for (let k = 0; k < 2; k++) {
+        const a = random.range(0, TAU);
+        const [x, z] = [random.range(-0.3, 0.3), random.range(-0.3, 0.3)];
+        const [a0, a1] = [[x - Math.cos(a) * 0.6, 0.02, z - Math.sin(a) * 0.6], [x + Math.cos(a) * 0.6, 0.02, z + Math.sin(a) * 0.6]];
+
+        tube(mesher, [a0, a1], [0.015, 0.015], 3, { colours: wood });
+        tube(mesher, [a1, [a1[0] + Math.cos(a) * 0.14, 0.02, a1[2] + Math.sin(a) * 0.14]], [0.025, 0], 4, { colours: IRON });
+    }
+
+    bones(mesher, random);
+}
+
+// The orcs': bones heaped where something was eaten, a skull on top
+function bonePile(mesher, random) {
+    for (let k = 0; k < random.int(6, 11); k++) {
+        const a = random.range(0, TAU);
+        const [x, z] = [random.range(-0.18, 0.18), random.range(-0.18, 0.18)];
+        const l = random.range(0.15, 0.35);
+        const y = 0.02 + k * 0.012;
+
+        tube(mesher, [[x - Math.cos(a) * l / 2, y, z - Math.sin(a) * l / 2], [x + Math.cos(a) * l / 2, y + random.range(-0.02, 0.04), z + Math.sin(a) * l / 2]], [0.018, 0.014], 4, { colours: BONE.map((v) => v * random.range(0.78, 1.02)), caps: [true, true] });
+    }
+
+    hornedSkull(mesher, random, [0, 0.13, 0], random.range(0, TAU), 0.15);
+}
+
+// The orcs': a broken blade or two and a split shield, lying where they fell
+function brokenBlades(mesher, random) {
+    for (let k = 0; k < random.int(1, 3); k++) {
+        const a = random.range(0, TAU);
+        const [x, z] = [random.range(-0.2, 0.2), random.range(-0.2, 0.2)];
+        const l = random.range(0.2, 0.45);
+        const [ux, uz, sx, sz] = [Math.cos(a), Math.sin(a), -Math.sin(a) * 0.025, Math.cos(a) * 0.025];
+
+        mesher.quad([x + sx, 0.012, z + sz], [x + ux * l + sx * 0.4, 0.012, z + uz * l + sz * 0.4], [x + ux * l - sx * 0.4, 0.012, z + uz * l - sz * 0.4], [x - sx, 0.012, z - sz], { normals: [UP, UP, UP, UP], colours: IRON.map((v) => v * 1.3) });
+        tube(mesher, [[x - ux * 0.12, 0.02, z - uz * 0.12], [x, 0.02, z]], [0.016, 0.016], 4, { colours: linear(0x3a2a1e) });
+    }
+
+    if (random.chance(0.6)) {
+        disc(mesher, [random.range(-0.15, 0.15), 0.02, random.range(-0.15, 0.15)], [1, 0, 0], [0, 0.08, 1], 0.2, 9, linear(0x5a3a22), linear(0x3a3a3e));
+    }
+}
+
+// The lizard folk's: mangrove roots arching out of the mud round a short trunk
+function mangrove(mesher, random) {
+    const bark = { layer: LAYER.bark, uvScale: METRES.bark };
+    const crown = [random.range(-0.05, 0.05), random.range(0.7, 0.9), random.range(-0.05, 0.05)];
+
+    tube(mesher, [[0, 0.35, 0], [crown[0] * 0.5, 0.6, crown[2] * 0.5], crown], [0.09, 0.08, 0.06], 6, bark);
+
+    for (let k = 0; k < random.int(6, 9); k++) {
+        const a = random.range(0, TAU);
+        const out = random.range(0.35, 0.5);
+        const from = [Math.cos(a) * 0.04, random.range(0.3, 0.55), Math.sin(a) * 0.04];
+        const knee = [Math.cos(a) * out * 0.6, from[1] + random.range(0.02, 0.12), Math.sin(a) * out * 0.6];
+        const foot = [Math.cos(a) * out, -0.03, Math.sin(a) * out];
+
+        tube(mesher, [from, knee, foot], [0.04, 0.03, 0.025], 4, bark);
+    }
+
+    // (A tuft of leaves at its top)
+    for (let k = 0; k < 6; k++) {
+        const a = (k / 6) * TAU;
+        const tip = [crown[0] + Math.cos(a) * 0.3, crown[1] + random.range(-0.05, 0.12), crown[2] + Math.sin(a) * 0.3];
+
+        mesher.tri(crown, tip, [tip[0] + Math.sin(a) * 0.1, tip[1] - 0.03, tip[2] - Math.cos(a) * 0.1], { colours: linear(random.pick([0x2e6a28, 0x3a7a30])), sways: [0, 1, 1] });
+        mesher.tri(crown, [tip[0] + Math.sin(a) * 0.1, tip[1] - 0.03, tip[2] - Math.cos(a) * 0.1], tip, { colours: linear(0x2a5a22), sways: [0, 1, 1] });
+    }
+}
+
+// The lizard folk's: a stela of lime-washed stone carved with glyphs, a serpent's head on top
+function stela(mesher) {
+    const lime = linear(0xe6e0d0);
+    const [w, d, h] = [0.32, 0.16, 1];
+    const box = (x0, y0, z0, x1, y1, z1, colour, layer = LAYER.plain) => {
+        const c = [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1], [x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1]];
+
+        for (const [a, b, e, f] of [[0, 1, 5, 4], [1, 2, 6, 5], [2, 3, 7, 6], [3, 0, 4, 7], [4, 5, 6, 7]]) {
+            mesher.quad(c[a], c[b], c[e], c[f], { layer, colours: colour, uvScale: 0.5 });
+        }
+    };
+
+    box(-w * 0.6, -0.02, -d * 0.7, w * 0.6, 0.12, d * 0.7, lime.map((v) => v * 0.8));
+    box(-w / 2, 0.12, -d / 2, w / 2, h * 0.8, d / 2, lime, LAYER.glyphs ?? LAYER.plain);
+
+    // (The serpent's head, jaws open, a crest of red, jade eyes)
+    const head = [0, h * 0.88, 0];
+
+    tube(mesher, [[0, h * 0.78, -0.02], head, [0, h * 0.92, 0.2]], [0.13, 0.12, 0.06], 6, { colours: lime, caps: [false, true] });
+    tube(mesher, [[0, h * 0.83, 0.02], [0, h * 0.8, 0.19]], [0.07, 0.03], 4, { colours: linear(0xb83a2a) });
+
+    for (const side of [-1, 1]) {
+        bud(mesher, [side * 0.08, h * 0.95, 0.08], 0.025, linear(0x2a9a6a).map((v) => v * 1.6), 0);
+        tube(mesher, [[side * 0.04, h * 0.98, -0.04], [side * 0.05, h * 1.08, -0.12]], [0.025, 0], 3, { colours: linear(0xb83a2a) });
+    }
+}
+
+// The lizard folk's: eggshells, broken and hatched, pale green and speckled
+function eggshells(mesher, random) {
+    for (let k = 0; k < random.int(2, 4); k++) {
+        const [x, z] = [random.range(-0.25, 0.25), random.range(-0.25, 0.25)];
+        const r = random.range(0.05, 0.08);
+        const shell = linear(random.pick([0xd8e4c8, 0xc8d8b0, 0xe8e4d4]));
+        const at = (p) => [p[0] + x, p[1], p[2] + z];
+
+        lathe({ tri: (a, b, c, o) => mesher.tri(at(a), at(b), at(c), o), quad: (a, b, c, d, o) => mesher.quad(at(a), at(b), at(c), at(d), o) }, [[0.001, 0], [r * 0.7, r * 0.2], [r, r * 0.7], [r * 0.95, r * 1.1]], 6, { colours: [shell.map((v) => v * 0.8), shell, shell, shell.map((v) => v * 0.9)] });
+
+        for (let s = 0; s < 2; s++) {
+            const a = random.range(0, TAU);
+
+            bud(mesher, at([Math.cos(a) * r * 0.97, r * random.range(0.3, 0.9), Math.sin(a) * r * 0.97]), r * 0.12, linear(0x5a6a3a), 0, 0.4);
+        }
+    }
+}
+
+// The lizard folk's: a carved stone, sunk in the mud, glyphs on it
+function glyphStone(mesher, random) {
+    const part = made((inner) => rock(inner, random, { detail: 0, rough: 0.1, cuts: 5, squash: 0.8, layer: "glyphs", lichen: 0.5 }));
+
+    place(mesher, part, { at: [0, -0.04, 0], turn: random.range(0, TAU), tilt: [random.range(-0.2, 0.2), random.range(-0.2, 0.2)], scale: [0.4, 0.34, 0.32], tint: [0.95, 1, 0.92], shift: [random.next(), random.next()] });
+}
+
+// The elves': a moonstone, a pale standing stone with a crescent cut in it that holds the light
+function moonstone(mesher, random) {
+    const part = made((inner) => rock(inner, random, { detail: 1, rough: 0.08, cuts: 3, squash: 1, layer: random.pick(["marble", "rock-pale"]), lichen: 0.2, moss: 0.4 }));
+
+    place(mesher, part, { at: [0, -0.05, 0], turn: random.range(0, TAU), tilt: [random.range(-0.05, 0.05), random.range(-0.05, 0.05)], scale: [0.36, 1.2, 0.24], shift: [random.next(), random.next()] });
+
+    // (The crescent, facing south, and its twin to the north)
+    for (const face of [1, -1]) {
+        const points = Array.from({ length: 7 }, (_, k) => {
+            const a = -1.2 + (k / 6) * 2.4;
+
+            return [Math.cos(a) * 0.1, 0.72 + Math.sin(a) * 0.1, face * 0.125];
+        });
+        const inner = points.map(([x, y, z]) => [x * 0.55 + 0.035, 0.72 + (y - 0.72) * 0.75, z]);
+
+        for (let k = 0; k < 6; k++) {
+            const quad = [points[k], points[k + 1], inner[k + 1], inner[k]];
+
+            mesher.quad(...(face > 0 ? quad : [...quad].reverse()), { colours: MOONLIGHT });
+        }
+    }
+}
+
+// The elves': a slender post of verdigris curling over at its head, a glowing bud hanging from it
+function leafLamp(mesher, random) {
+    const green = linear(0x4a8a78);
+    const crook = Array.from({ length: 8 }, (_, k) => {
+        const t = k / 7;
+        const a = t * Math.PI * 1.1;
+
+        return t < 0.6 ? [0, t / 0.6 * 0.9, 0] : [Math.sin((t - 0.6) * 5) * 0.18, 0.9 + Math.sin(a) * 0.08, 0];
+    });
+
+    tube(mesher, crook, crook.map((_, k) => 0.03 * (1 - k / 10)), 5, { colours: green });
+
+    const tip = crook.at(-1);
+
+    tube(mesher, [tip, [tip[0], tip[1] - 0.12, tip[2]]], [0.005, 0.005], 3, { colours: green });
+    lathe({ tri: (a, b, c, o) => mesher.tri(...[a, b, c].map(([x, y, z]) => [x + tip[0], y + tip[1] - 0.12, z + tip[2]]), o), quad: (a, b, c, d, o) => mesher.quad(...[a, b, c, d].map(([x, y, z]) => [x + tip[0], y + tip[1] - 0.12, z + tip[2]]), o) }, [[0, -0.14], [0.045, -0.1], [0.05, -0.04], [0.02, 0]], 6, { colours: MOONLIGHT });
+
+    // (Leaves of copper curling round its foot)
+    for (let k = 0; k < 3; k++) {
+        const a = (k / 3) * TAU + random.range(-0.3, 0.3);
+
+        mesher.tri([0, 0.02, 0], [Math.cos(a) * 0.14, 0.1, Math.sin(a) * 0.14], [Math.cos(a + 0.5) * 0.08, 0.2, Math.sin(a + 0.5) * 0.08], { colours: green.map((v) => v * 1.2) });
+        mesher.tri([0, 0.02, 0], [Math.cos(a + 0.5) * 0.08, 0.2, Math.sin(a + 0.5) * 0.08], [Math.cos(a) * 0.14, 0.1, Math.sin(a) * 0.14], { colours: green });
+    }
+}
+
+// The elves': fallen petals and golden leaves, and moss
+function petals(mesher, random) {
+    const colours = [linear(0xf4d8e0), linear(0xfaf0f4), linear(0xe8c050), linear(0xf0e0a0), linear(0xd8a8c8)];
+
+    for (let k = 0; k < random.int(14, 26); k++) {
+        const [x, z] = [random.range(-0.4, 0.4), random.range(-0.4, 0.4)];
+        const a = random.range(0, TAU);
+        const [l, w] = [random.range(0.025, 0.05), random.range(0.015, 0.03)];
+        const [ax, az, bx, bz] = [Math.cos(a) * l, Math.sin(a) * l, -Math.sin(a) * w, Math.cos(a) * w];
+        const y = 0.008 + k * 0.0004;
+
+        mesher.quad([x - ax, y, z - az], [x + bx, y, z + bz], [x + ax, y, z + az], [x - bx, y, z - bz], { normals: [UP, UP, UP, UP], colours: random.pick(colours) });
+    }
+}
+
+// The elves': moon-pale buds on slender stems, glowing a little
+function moonbuds(mesher, random) {
+    for (let k = 0; k < random.int(3, 7); k++) {
+        const [x, z] = [random.range(-0.18, 0.18), random.range(-0.18, 0.18)];
+        const top = [x + random.range(-0.03, 0.03), random.range(0.15, 0.32), z + random.range(-0.03, 0.03)];
+
+        stem(mesher, [x, 0, z], top, linear(0x4a8a5a));
+        bud(mesher, top, random.range(0.018, 0.028), MOONLIGHT.map((v) => v * random.range(0.8, 1)), 1, 1.3);
+    }
+}
+
+// The dark elves': a dead stump shrouded in web
+function webStump(mesher, random) {
+    stump(mesher, random);
+
+    const r = 0.5;
+
+    for (let k = 0; k < random.int(7, 11); k++) {
+        const a = random.range(0, TAU);
+        const from = [Math.cos(a) * r * 0.9, random.range(0.3, 0.8), Math.sin(a) * r * 0.9];
+        const to = [Math.cos(a + random.range(-0.6, 0.6)) * random.range(0.9, 1.5), 0.01, Math.sin(a + random.range(-0.6, 0.6)) * random.range(0.9, 1.5)];
+
+        strand(mesher, from, to, 0.006, SILK);
+    }
+
+    // (A sheet of web over its top)
+    const rim = Array.from({ length: 8 }, (_, k) => [Math.cos((k / 8) * TAU) * r * 1.1, 0.55 + random.range(0, 0.25), Math.sin((k / 8) * TAU) * r * 1.1]);
+
+    for (let k = 0; k < 8; k++) {
+        mesher.tri([0, 0.95, 0], rim[(k + 1) % 8], rim[k], { colours: SILK.map((v) => v * 0.8) });
+        mesher.tri([0, 0.95, 0], rim[k], rim[(k + 1) % 8], { colours: SILK.map((v) => v * 0.7) });
+    }
+}
+
+// The dark elves': something wrapped in silk, lying where the spiders left it
+function cocoon(mesher, random) {
+    const lie = random.range(0, TAU);
+    const [dx, dz] = [Math.cos(lie), Math.sin(lie)];
+    const points = Array.from({ length: 6 }, (_, k) => {
+        const t = k / 5 - 0.5;
+
+        return [dx * t * 0.9, 0.16 + Math.sin((k / 5) * Math.PI) * 0.04, dz * t * 0.9];
+    });
+
+    tube(mesher, points, [0.05, 0.14, 0.17, 0.16, 0.12, 0.04], 7, { colours: SILK.map((v) => v * 0.85), caps: [true, true], wobble: (k, j) => 1 + ((k * 7 + j * 3) % 5) * 0.03 });
+
+    // (Its lines still out to the grass)
+    for (let k = 0; k < 6; k++) {
+        const t = random.range(0, 1);
+        const p = points[Math.floor(t * 5)];
+        const a = random.range(0, TAU);
+
+        strand(mesher, p, [p[0] + Math.cos(a) * 0.5, 0.01, p[2] + Math.sin(a) * 0.5], 0.004, SILK);
+    }
+}
+
+// The dark elves': a cluster of black crystal, violet light at its heart
+function crystals(mesher, random) {
+    for (let k = 0; k < random.int(4, 8); k++) {
+        const a = random.range(0, TAU);
+        const out = k === 0 ? 0 : random.range(0.1, 0.35);
+        const [x, z] = [Math.cos(a) * out, Math.sin(a) * out];
+        const h = k === 0 ? 1 : random.range(0.3, 0.7);
+        const r = k === 0 ? 0.14 : random.range(0.05, 0.1);
+        const lean = [Math.cos(a) * out * 0.8, 0, Math.sin(a) * out * 0.8];
+        const tip = [x + lean[0], h, z + lean[2]];
+        const shoulder = [x + lean[0] * 0.8, h * 0.8, z + lean[2] * 0.8];
+        const base = Array.from({ length: 5 }, (_, j) => [x + Math.cos((j / 5) * TAU + k) * r, -0.02, z + Math.sin((j / 5) * TAU + k) * r]);
+        const upper = base.map(([bx, , bz]) => [bx + (shoulder[0] - x) + (bx - x) * -0.1, shoulder[1], bz + (shoulder[2] - z) + (bz - z) * -0.1]);
+        const black = linear(random.pick([0x16141c, 0x1e1a28]));
+
+        for (let j = 0; j < 5; j++) {
+            mesher.quad(base[j], base[(j + 1) % 5], upper[(j + 1) % 5], upper[j], { colours: [black, black, black.map((v) => v * 4), black.map((v) => v * 4)] });
+            mesher.tri(upper[j], upper[(j + 1) % 5], tip, { colours: [black.map((v) => v * 4), black.map((v) => v * 4), VIOLET] });
+        }
+    }
+}
+
+// The dark elves': toadstools that glow violet in the dark
+function glowcaps(mesher, random) {
+    for (let k = 0; k < random.int(3, 7); k++) {
+        const a = random.range(0, TAU);
+        const [x, z] = [Math.cos(a) * random.range(0, 0.15), Math.sin(a) * random.range(0, 0.15)];
+        const h = random.range(0.04, 0.12);
+        const r = random.range(0.025, 0.05);
+        const at = (p) => [p[0] + x, p[1], p[2] + z];
+
+        tube(mesher, [[x, -0.01, z], [x, h, z]], [r * 0.25, r * 0.2], 3, { colours: linear(0x3a3040) });
+        lathe({ tri: (p, q, s, o) => mesher.tri(at(p), at(q), at(s), o), quad: (p, q, s, t, o) => mesher.quad(at(p), at(q), at(s), at(t), o) }, [[r * 0.3, h - 0.004], [r, h + r * 0.12], [r * 0.6, h + r * 0.5], [0, h + r * 0.6]], 6, { colours: [VIOLET.map((v) => v * 0.6), VIOLET, VIOLET, VIOLET] });
+    }
+}
+
+// The dark elves': blackthorn, a tangle of black twigs set with long thorns
+function blackthorn(mesher, random) {
+    const black = linear(0x1a1618);
+
+    for (let k = 0; k < random.int(4, 7); k++) {
+        const a = random.range(0, TAU);
+        const from = [random.range(-0.05, 0.05), 0, random.range(-0.05, 0.05)];
+        const to = [Math.cos(a) * random.range(0.2, 0.4), random.range(0.15, 0.45), Math.sin(a) * random.range(0.2, 0.4)];
+        const points = bent(random, from, to, 4, 0.06);
+
+        tube(mesher, points, [0.012, 0.009, 0.006, 0.002], 3, { colours: black });
+
+        for (const p of points.slice(1, 3)) {
+            const b = random.range(0, TAU);
+
+            tube(mesher, [p, [p[0] + Math.cos(b) * 0.06, p[1] + 0.03, p[2] + Math.sin(b) * 0.06]], [0.005, 0], 3, { colours: black });
+        }
+    }
+}
+
 // --- Each land's look ---
 
 /**
@@ -1386,6 +1871,18 @@ export const UNDERGROWTH = Object.freeze({
     snow: { density: 0.05, kinds: { tuft: 2, pebbles: 2, stones: 2 } },
     mountain: { density: 0.12, kinds: { tuft: 4, heather: 1, pebbles: 3, stones: 3, scree: 1.5, bones: 0.2 } },
     beach: { density: 0.08, kinds: { marram: 4, shore: 3, pebbles: 2, sticks: 0.5 } },
+});
+
+/**
+ * What else lies about in each people's homeland (where the plan's territory is theirs), mixed
+ * with its land's own undergrowth, and how likely each is (as the land's kinds are weighed).
+ */
+export const HOME_UNDERGROWTH = Object.freeze({
+    cat: { potsherds: 0.6, hornskull: 0.45 },
+    orc: { bonepile: 0.9, blades: 0.9 },
+    lizard: { eggshells: 0.8, glyphstone: 0.5 },
+    elf: { petals: 3, moonbuds: 2.5 },
+    darkElf: { glowcaps: 1.6, blackthorn: 2 },
 });
 
 /** Kinds that gather where it's rocky; where the land's let go; in trees' shade; by water. */
@@ -1512,6 +2009,51 @@ function draw(mesher, random, kind, land) {
             return shore(mesher, random);
         case "campfire":
             return campfire(mesher, random);
+        // Each people's own lands'
+        case "termites":
+            return termiteMound(mesher, random);
+        case "kopje":
+            return kopje(mesher, random);
+        case "hornskull":
+            return hornSkull(mesher, random);
+        case "potsherds":
+            return potsherds(mesher, random);
+        case "skullpole":
+            return skullPole(mesher, random);
+        case "stakes":
+            return stakes(mesher, random);
+        case "wrack":
+            return wrack(mesher, random);
+        case "bonepile":
+            return bonePile(mesher, random);
+        case "blades":
+            return brokenBlades(mesher, random);
+        case "mangrove":
+            return mangrove(mesher, random);
+        case "stela":
+            return stela(mesher);
+        case "eggshells":
+            return eggshells(mesher, random);
+        case "glyphstone":
+            return glyphStone(mesher, random);
+        case "moonstone":
+            return moonstone(mesher, random);
+        case "leaflamp":
+            return leafLamp(mesher, random);
+        case "petals":
+            return petals(mesher, random);
+        case "moonbuds":
+            return moonbuds(mesher, random);
+        case "webstump":
+            return webStump(mesher, random);
+        case "cocoon":
+            return cocoon(mesher, random);
+        case "crystals":
+            return crystals(mesher, random);
+        case "glowcaps":
+            return glowcaps(mesher, random);
+        case "blackthorn":
+            return blackthorn(mesher, random);
         default:
             return FLOWERS[kind] ? flowers(mesher, random, kind) : undefined;
     }
@@ -1700,10 +2242,11 @@ export function undergrowthOf(overworld, chunk, { density = 1 } = {}) {
             }
 
             const [rocky, dead, clump] = [field("rocky", i, j), field("dead", i, j), field("clump", i, j)];
+            const home = HOME_UNDERGROWTH[overworld.homeAt?.(x, y)];
             const weights = [];
             let total = 0;
 
-            for (const [kind, weight] of Object.entries(spec.kinds)) {
+            for (const [kind, weight] of home ? [...Object.entries(spec.kinds), ...Object.entries(home)] : Object.entries(spec.kinds)) {
                 let w = weight;
 
                 if (tended && !TENDED.has(kind)) {
@@ -1849,8 +2392,11 @@ export function undergrowthMesh(items, origin) {
     return group;
 }
 
+// The peoples' homelands' own features (core/wilds.js HOMELANDS)
+const HOME_FEATURES = ["termites", "kopje", "skullpole", "stakes", "wrack", "mangrove", "stela", "moonstone", "leaflamp", "webstump", "cocoon", "crystals"];
+
 /** Every kind drawn here (the features' and the undergrowth's), for tests and the lab. */
-export const KINDS = Object.freeze([...new Set(["boulder", "outcrop", "log", "stump", "snag", "bush", "cairn", "menhir", "mound", "haystack", "scarecrow", "logpile", "ruin", "ribs", ...Object.values(UNDERGROWTH).flatMap(({ kinds }) => Object.keys(kinds))])]);
+export const KINDS = Object.freeze([...new Set(["boulder", "outcrop", "log", "stump", "snag", "bush", "cairn", "menhir", "mound", "haystack", "scarecrow", "logpile", "ruin", "ribs", ...HOME_FEATURES, ...Object.values(UNDERGROWTH).flatMap(({ kinds }) => Object.keys(kinds)), ...Object.values(HOME_UNDERGROWTH).flatMap((kinds) => Object.keys(kinds))])]);
 
 /** One look of a kind for a land, as a geometry on its own (for tests and the lab). */
 export function lookGeometry(kind, land = "meadow", index = 0) {

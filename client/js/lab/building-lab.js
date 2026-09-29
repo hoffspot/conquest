@@ -9,8 +9,8 @@
 // village|hamlet|farmstead|city|capital choose (another people's settlements laid out on their
 // own), or
 // show=wilds-meadow (or any land: wilds-woods, wilds-badlands...) for the land itself, well away
-// from any settlement or road (&undergrowth=0.5 to thin it, 0 for none); window.buildingLab is
-// there for tests.
+// from any settlement or road (&undergrowth=0.5 to thin it, 0 for none), or show=home for the
+// middle of the people's homeland; window.buildingLab is there for tests.
 
 import * as THREE from "three";
 import { createRandom } from "../core/random.js";
@@ -18,7 +18,9 @@ import { nameTavern } from "../core/lore/taverns.js";
 import { GOD_IDS } from "../core/lore/gods.js";
 import { LANDMARKS } from "../core/setpieces/pieces.js";
 import { buildWorld } from "../core/overworld.js";
+import { siteSize } from "../core/sites.js";
 import { BIOMES, CELL, CELLS } from "../core/worldplan/plan.js";
+import { RACES } from "../core/worldplan/races.js";
 import { generateWorld } from "../core/world.js";
 import { readPlan } from "../core/interiors.js";
 import { guildRooms, hallRooms, keepRooms, smithyRooms, tavernRooms, templeRooms } from "../core/insides.js";
@@ -41,7 +43,7 @@ const HOMELANDS = { human: "meadow", elf: "elfwood", darkElf: "darkwood", cat: "
 const state = {
     seed: Number(params.get("seed")) || 7,
     people: PEOPLES.includes(params.get("people")) ? params.get("people") : "human",
-    show: ["town", "landmarks", "structures", "insides", "capital", "city", "village", "hamlet", "farmstead", ...BIOMES.map(({ id }) => `wilds-${id}`)].includes(params.get("show")) ? params.get("show") : "street",
+    show: ["town", "landmarks", "structures", "insides", "castle", "place", "capital", "city", "village", "hamlet", "farmstead", "home", ...BIOMES.map(({ id }) => `wilds-${id}`)].includes(params.get("show")) ? params.get("show") : "street",
     built: null,
     frames: [],
     stats: null,
@@ -155,14 +157,17 @@ function landmarksOf(seed, people = "human") {
 }
 
 // A spot in the middle of a stretch of a land (metres), as far from the plan's places and roads as
-// can be found: the land itself, as the game draws it
+// can be found: the land itself, as the game draws it. `land` a land's id, or a people's
+// ({ people }) for the middle of their homeland
 function wildsOf(plan, land) {
-    const biome = BIOMES.findIndex(({ id }) => id === land);
+    const owner = land.people ? RACES.findIndex(({ id }) => id === land.people) + 1 : 0;
+    const biome = owner ? -1 : BIOMES.findIndex(({ id }) => id === land);
+    const inLand = (k) => (owner ? plan.territory[k] === owner && !plan.water?.[k] : plan.biome[k] === biome);
     const roads = new Set(plan.roads.flatMap(({ cells }) => cells.map(([x, y]) => y * CELLS + x)));
     let best = null;
 
     for (let k = 0; k < CELLS * CELLS; k++) {
-        if (plan.biome[k] !== biome) {
+        if (!inLand(k)) {
             continue;
         }
 
@@ -174,7 +179,7 @@ function wildsOf(plan, land) {
             for (let dx = -3; dx <= 3; dx++) {
                 const at = (y + dy) * CELLS + (x + dx);
 
-                score += plan.biome[at] === biome && !roads.has(at) ? 1 : -2;
+                score += inLand(at) && !roads.has(at) ? 1 : -2;
             }
         }
 
@@ -269,9 +274,9 @@ async function build() {
     await prepareAtlas();
 
     // A stretch of a land, as the game draws it
-    if (state.show.startsWith("wilds-")) {
+    if (state.show.startsWith("wilds-") || state.show === "home") {
         const world = buildWorld({ seed: state.seed });
-        const [x, z] = wildsOf(world.plan, state.show.slice(6));
+        const [x, z] = wildsOf(world.plan, state.show === "home" ? { people: state.people } : state.show.slice(6));
         const chunks = new Chunks(world, { undergrowth: Number(params.get("undergrowth") ?? 1) });
 
         chunks.fill(x, z, 1);
@@ -292,14 +297,18 @@ async function build() {
         return;
     }
 
-    // A settlement out in the world, as the game draws it: the nearest of its kind to where a
-    // player starts, in the chunks round it (another people's: laid out and built as theirs, on
-    // its own)
-    const own = state.people !== "human";
+    // A settlement out in the world, as the game draws it: the nearest of its kind (the people's
+    // own, for another people) to where a player starts, in the chunks round it; or a people's
+    // castle, or its first special place, where the world sets it down (sites.js)
+    const sited = state.show === "castle" || state.show === "place";
 
-    if (!["street", "landmarks", "structures", "insides", "town"].includes(state.show) && !own) {
+    if (sited || !["street", "landmarks", "structures", "insides", "town"].includes(state.show)) {
         const world = buildWorld({ seed: state.seed });
-        const place = world.plan.places.filter(({ kind }) => kind === state.show).sort((a, b) => Math.hypot(a.at[0] - world.start.at[0], a.at[1] - world.start.at[1]) - Math.hypot(b.at[0] - world.start.at[0], b.at[1] - world.start.at[1]))[0];
+        const overworld = world.maps.town;
+        const distance = ({ at }) => Math.hypot(at[0] - world.start.at[0], at[1] - world.start.at[1]);
+        const whose = ({ race }) => state.people === "human" || race === state.people;
+        const site = sited ? world.plan.sites.filter(({ race, kind }) => race === state.people && (state.show === "castle" ? kind === "castle" : siteSize({ race, kind }) && kind !== "castle" && kind !== "watchtower"))[0] : null;
+        const place = site ?? world.plan.places.filter((one) => one.kind === state.show && whose(one)).sort((a, b) => distance(a) - distance(b))[0];
         const chunks = new Chunks(world);
 
         chunks.fill(place.at[0], place.at[1]);
@@ -309,12 +318,17 @@ async function build() {
             await new Promise((resolve) => setTimeout(resolve, 0));
         }
 
+        const set = site && overworld.sites.set.get(site.id);
+        const [fx, fz] = set ? [set.x, set.y] : place.at;
+
         view.scene.add(chunks.object);
         state.built = chunks.object;
-        orbit.focus.set(place.at[0], 2, place.at[1]);
-        orbit.distance = { capital: 170, city: 130, village: 60, hamlet: 45, farmstead: 40 }[state.show];
+        state.chunks = chunks;
+        orbit.focus.set(fx, 2, fz);
+        orbit.distance = sited ? Math.max(30, (set?.radius ?? 20) * 2.6) : { capital: 170, city: 130, town: 90, village: 60, hamlet: 45, farmstead: 40 }[state.show];
         state.place = place;
-        finish(world.maps.town.settlements.laid.get(place.id).town.pieces.length);
+        state.frames = [{ label: state.show, x: fx, z: fz, w: orbit.distance, d: orbit.distance }];
+        finish(sited ? set?.pieces.length ?? 0 : overworld.settlements.laid.get(place.id).town.pieces.length);
 
         return;
     }
@@ -337,13 +351,13 @@ async function build() {
     const world = generateWorld({ seed: state.seed, ...(settlement ? { kind: state.show, people: state.people } : {}) });
 
     if (!settlement) {
-        const street = state.show === "street" ? (own ? peopleStreetOf(state.seed, state.people) : streetOf(state.seed)) : state.show === "structures" ? structuresOf(state.seed, state.people) : landmarksOf(state.seed, state.people);
+        const street = state.show === "street" ? (state.people !== "human" ? peopleStreetOf(state.seed, state.people) : streetOf(state.seed)) : state.show === "structures" ? structuresOf(state.seed, state.people) : landmarksOf(state.seed, state.people);
 
         Object.assign(world, { town: { ...world.town, pieces: street.pieces }, trees: [], width: street.width, height: street.height, stamp: null, origin: 0 });
     }
 
     const group = new THREE.Group();
-    const ground = buildGround(settlement ? world : { ...world, ground: Array.from({ length: world.height }, () => new Uint8Array(world.width)) }, { land: landColour(HOMELANDS[state.people]) });
+    const ground = buildGround(settlement ? world : { ...world, ground: Array.from({ length: world.height }, () => new Uint8Array(world.width)) }, { land: landColour(HOMELANDS[state.people], state.people) });
     const town = await buildTown(world);
     const lagoon = lagoonOf(world.town.water, world.town.walks);
 

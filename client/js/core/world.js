@@ -146,6 +146,13 @@ export function generateWorld({ seed = 1, kind = "town", exits = null, people = 
 
         maps.taproom = floors.taproom;
         maps.upstairs = floors.upstairs;
+
+        // (Built and dressed inside as its people build: interiors3d.js)
+        if (people !== "human") {
+            maps.taproom.people = people;
+            maps.upstairs.people = people;
+        }
+
         // Coming out, just clear of the door, turned back to face it (so it's in view to tap, and
         // a tap round the player isn't on it)
         const back = tavern.facing > 0 ? tavern.facing - Math.PI : tavern.facing + Math.PI;
@@ -169,7 +176,7 @@ export function generateWorld({ seed = 1, kind = "town", exits = null, people = 
         tavern,
         maps,
         links,
-        folk: tavern ? namePeople(tavernFolk(), seed) : [],
+        folk: !tavern ? [] : people === "human" ? namePeople(tavernFolk(), seed) : namePeople(tavernFolk(), seed, people).map((one) => ({ ...one, people })),
     };
 }
 

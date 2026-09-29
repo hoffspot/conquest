@@ -25,12 +25,13 @@
 import { MAP_ORIGINS } from "./interiors.js";
 import { createRandom, noise } from "./random.js";
 import { Settlements, squareOf, waysOut } from "./settlements.js";
+import { Sites } from "./sites.js";
 import { Interiors } from "./insides.js";
 import { WENCHES } from "./lore/taverns.js";
 import { featuresOf } from "./wilds.js";
 import { GROUND, TREE_KINDS } from "./setpieces/pieces.js";
 import { generateWorld } from "./world.js";
-import { BIOME, BIOMES, CELL, CELLS, CHUNK, CHUNKS, planWorld, startFor, WATER, WORLD_SIZE } from "./worldplan/plan.js";
+import { BIOME, BIOMES, CELL, CELLS, CHUNK, CHUNKS, planWorld, RACES, startFor, WATER, WORLD_SIZE } from "./worldplan/plan.js";
 
 export { CHUNK, CHUNKS, WORLD_SIZE };
 
@@ -150,9 +151,12 @@ export class Overworld {
 
         // The places trees keep clear of: the settlements (but the town, which is set in), the
         // sites and the camps
+        // (Each people's castle and special places, set down as the world near them is made:
+        // their clearings growing to their size, where they're set)
+        this.sites = new Sites(plan, { landAt: (x, y) => this.landAt(x, y), clearing: CLEAR_OF_PLACES });
         this.clearings = [
             ...plan.places.filter((place) => place !== start).map(({ at, radius }) => ({ at, radius: radius + CLEAR_OF_PLACES })),
-            ...plan.sites.map(({ at }) => ({ at, radius: CLEAR_OF_PLACES })),
+            ...plan.sites.map(({ id }) => this.sites.clearings.get(id)),
             ...plan.camps.map(({ at }) => ({ at, radius: CLEAR_OF_PLACES })),
         ];
         // The other settlements, laid out as the world near them is made (their roads then joined
@@ -200,8 +204,9 @@ export class Overworld {
      * north-west square), blocked, opaque, ground, water (WET), bridge (Uint8Array, a square
      * each: under a bridge's deck), trees ([{ x, y (a trunk's point, where four squares meet),
      * variant, size, turn }]), bridges (those whose middles are in it: [{ a, b ([x, y] metres:
-     * its deck's ends, along the road), half (its deck's half-width) }]), town (whether the
-     * town's in it) }.
+     * its deck's ends, along the road), half (its deck's half-width) }]), walks (the plank walks
+     * over a settlement's lagoon whose middles are in it, the same way), town (whether the town's
+     * in it) }.
      */
     chunk(cx, cy) {
         const last = this.last;
@@ -233,6 +238,16 @@ export class Overworld {
     /** The land (BIOMES id) at a point (metres). */
     biomeAt(x, y) {
         return BIOMES[this.plan.biome[cellAt(y) * CELLS + cellAt(x)]].id;
+    }
+
+    /**
+     * Whose homeland a square is (a people's id: the plan's territory, as it was first claimed,
+     * whoever holds it now), or null in the wild between them.
+     */
+    homeAt(x, y) {
+        const owner = this.plan.territory[cellAt(y) * CELLS + cellAt(x)];
+
+        return owner ? RACES[owner - 1].id : null;
     }
 
     /**
@@ -292,6 +307,8 @@ export class Overworld {
         const settled = this.settlements.settle(cx, cy);
         let town = false;
 
+        this.sites.settle(cx, cy);
+
         for (let j = 0; j < CHUNK; j++) {
             for (let i = 0; i < CHUNK; i++) {
                 const [x, y] = [x0 + i, y0 + j];
@@ -303,6 +320,7 @@ export class Overworld {
                     blocked[k] = stamp.blocked[ty][tx];
                     opaque[k] = stamp.opaque[ty][tx];
                     ground[k] = stamp.ground[ty][tx];
+                    water[k] = stamp.water?.[ty]?.[tx] ? WET.still : WET.none;
                     town = true;
                     continue;
                 }
@@ -314,6 +332,7 @@ export class Overworld {
                     blocked[k] = own.blocked;
                     opaque[k] = own.opaque;
                     ground[k] = own.ground;
+                    water[k] = own.water ? WET.still : WET.none;
                     continue;
                 }
 
@@ -323,11 +342,20 @@ export class Overworld {
                 water[k] = land.water;
                 bridge[k] = land.bridge ? 1 : 0;
                 blocked[k] = land.water && !land.bridge ? 1 : 0;
+
+                // (A castle's, or a people's own place's: what's built there stands on it)
+                if (this.sites.squareAt(x, y)) {
+                    blocked[k] = 1;
+                    opaque[k] = 1;
+                }
             }
         }
 
-        const bridges = this.#bridgesNear(cx, cy).filter(({ a, b }) => Math.floor((a[0] + b[0]) / 2 / CHUNK) === cx && Math.floor((a[1] + b[1]) / 2 / CHUNK) === cy);
-        const chunk = { cx, cy, x0, y0, blocked, opaque, ground, water, bridge, trees: [], bridges, town };
+        const inChunk = ({ a, b }) => Math.floor((a[0] + b[0]) / 2 / CHUNK) === cx && Math.floor((a[1] + b[1]) / 2 / CHUNK) === cy;
+        const bridges = this.#bridgesNear(cx, cy).filter(inChunk);
+        // (And the plank walks over a lagoon, the lizard folk's: the town's, and each settlement's)
+        const walks = [...(stamp?.walks ?? []).filter(inChunk), ...this.settlements.walksIn(cx, cy)];
+        const chunk = { cx, cy, x0, y0, blocked, opaque, ground, water, bridge, trees: [], bridges, walks, town };
 
         this.#plant(chunk);
         chunk.features = this.#features(chunk);
@@ -831,7 +859,7 @@ export class Overworld {
 
             return !(settlement && this.settlements.squareAt(settlement, x, y)) && !clearings.some(({ at, radius }) => Math.hypot(at[0] - x, at[1] - y) < radius);
         };
-        const features = featuresOf({ x0, y0, size: CHUNK, seed: plan.seed, random, landAt: (x, y) => this.biomeAt(x, y), free });
+        const features = featuresOf({ x0, y0, size: CHUNK, seed: plan.seed, random, landAt: (x, y) => this.biomeAt(x, y), homeAt: (x, y) => this.homeAt(x, y), free });
 
         for (const { squares, opaque: hides } of features) {
             for (const [x, y] of squares) {
@@ -849,7 +877,7 @@ export class Overworld {
     #busy(x, y) {
         const settlement = this.settlements.at(x, y);
 
-        if (this.inTown(x, y) || (settlement && this.settlements.squareAt(settlement, x, y))) {
+        if (this.inTown(x, y) || (settlement && this.settlements.squareAt(settlement, x, y)) || this.sites.squareAt(x, y)) {
             return true;
         }
 
@@ -870,9 +898,10 @@ export class Overworld {
  */
 export function buildWorld({ seed = 1, race = "human", plan = planWorld(seed) } = {}) {
     const start = startFor(plan, race);
-    const town = generateWorld({ seed, exits: waysOut(plan, start) });
+    const town = generateWorld({ seed, exits: waysOut(plan, start), people: start.race });
     const at = [Math.round(start.at[0] - town.width / 2), Math.round(start.at[1] - town.height / 2)];
-    const stamp = { at, width: town.width, height: town.height, blocked: town.blocked, opaque: town.opaque, ground: town.ground, middle: [town.town.centre[0] + town.origin + at[0], town.town.centre[1] + town.origin + at[1]], radius: town.town.radius };
+    const walks = town.town.walks.map(({ a, b, half }) => ({ a: [a[0] + at[0], a[1] + at[1]], b: [b[0] + at[0], b[1] + at[1]], half }));
+    const stamp = { at, width: town.width, height: town.height, blocked: town.blocked, opaque: town.opaque, ground: town.ground, water: town.town.water, walks, middle: [town.town.centre[0] + town.origin + at[0], town.town.centre[1] + town.origin + at[1]], radius: town.town.radius };
     const overworld = new Overworld({ plan, stamp, start });
     const move = ([x, y]) => [x + at[0], y + at[1]];
     const tavern = town.tavern && {
@@ -916,7 +945,7 @@ export function buildWorld({ seed = 1, race = "human", plan = planWorld(seed) } 
         const piece = town.town.pieces.find((one) => one.tavern === WENCHES);
         const [ox, oy] = Array.isArray(world.origin) ? world.origin : [world.origin, world.origin];
 
-        interiors.adopt({ key: "home:tavern", kind: "tavern", name: WENCHES.name, tavern: WENCHES, maps: ["taproom", "upstairs"], folk: town.folk, piece, at: piece ? [ox + piece.x, oy + piece.y] : null });
+        interiors.adopt({ key: "home:tavern", kind: "tavern", name: WENCHES.name, tavern: WENCHES, maps: ["taproom", "upstairs"], folk: town.folk, piece, at: piece ? [ox + piece.x, oy + piece.y] : null, people: start.race });
     }
 
     for (const piece of town.town.pieces) {

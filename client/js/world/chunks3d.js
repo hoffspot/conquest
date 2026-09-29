@@ -25,6 +25,7 @@ import { WILDS } from "./art/engine/atlas.js";
 import { TREE_WIND, Woodland } from "./art/kits/trees.js";
 import { featureMesh, Growth, TILE, undergrowthMesh, undergrowthOf } from "./art/kits/wilds.js";
 import { chunkGround, disposeChunkGround, disposeGrass, landColours } from "./ground.js";
+import { builderFor } from "./art/peoples/index.js";
 import { BUILDERS, cutAway, merge, PIXEL, placed, standOn } from "./town3d.js";
 
 /** How many chunks round the player's are drawn (each way), and how far off they're let go. */
@@ -241,9 +242,18 @@ export class Chunks {
             }
 
             const piece = job.pieces[job.index];
-            const built = BUILDERS[piece.kind](piece);
+            // (Built by its people's kit, if it's theirs: peoples/index.js)
+            const build = builderFor(piece) ?? BUILDERS[piece.kind];
+
+            if (!build) {
+                job.index++;
+                continue;
+            }
+
+            const built = build(piece);
             const add = (object) => {
                 job.group.add(placed(object, piece));
+                job.trees.push(...grownRound(object, piece));
                 job.index++;
             };
 
@@ -297,6 +307,23 @@ export class Chunks {
         }
 
         drawn.object.add(merged);
+
+        // (And the great trees they're built round, the elves', planted with the rest)
+        if (job.trees.length) {
+            drawn.grown = this.woodland.plant(job.trees);
+            drawn.object.add(drawn.grown.object);
+
+            for (const box of drawn.grown.boxes) {
+                for (let y = Math.max(map.z0, Math.floor(box.min.z)); y < Math.min(map.z0 + CHUNK, Math.ceil(box.max.z)); y++) {
+                    for (let x = Math.max(map.x0, Math.floor(box.min.x)); x < Math.min(map.x0 + CHUNK, Math.ceil(box.max.x)); x++) {
+                        const at = (y - map.z0) * CHUNK + (x - map.x0);
+
+                        drawn.heights[at] = Math.max(drawn.heights[at], box.max.y);
+                    }
+                }
+            }
+        }
+
         this.version++;
     }
 
@@ -332,6 +359,7 @@ export class Chunks {
         });
         this.woodland.dispose();
         disposeGrass(this.land);
+        this.land.userData.home?.forEach((home) => home.dispose());
         this.land.dispose();
         this.object.removeFromParent();
     }
@@ -385,8 +413,10 @@ export class Chunks {
 
         const water = waterOf(this.overworld, chunk);
         const bridges = bridgesOf(chunk);
+        // (The plank walks over a settlement's lagoon: decks on stilts, no rails)
+        const walks = chunk.walks?.length ? bridgesOf({ bridges: chunk.walks }, { rails: false }) : null;
 
-        for (const part of [water, bridges]) {
+        for (const part of [water, bridges, walks]) {
             if (part) {
                 object.add(part);
             }
@@ -427,14 +457,15 @@ export class Chunks {
         this.object.add(object);
 
         // The buildings and props of any settlement in it, to be built a few at a time
-        const pieces = this.overworld.settlements?.piecesIn(cx, cy).filter(({ kind }) => kind !== "tree") ?? [];
+        // (And each people's castle and places, and their lookouts: sites.js)
+        const pieces = [...(this.overworld.settlements?.piecesIn(cx, cy).filter(({ kind }) => kind !== "tree") ?? []), ...(this.overworld.sites?.piecesIn(cx, cy) ?? [])];
         const drawn = { cx, cy, object, lot, heights, job: null, growth: null, undergrowth: null };
 
         if (pieces.length) {
             const group = new THREE.Group();
 
             group.scale.setScalar(PIXEL);
-            drawn.job = { pieces, index: 0, group, waiting: false };
+            drawn.job = { pieces, index: 0, group, waiting: false, trees: [] };
             this.building.push(drawn);
         }
 
@@ -445,6 +476,11 @@ export class Chunks {
     // Throw a chunk away
     #forget(drawn) {
         this.woodland.fell(drawn.lot);
+
+        if (drawn.grown) {
+            this.woodland.fell(drawn.grown);
+        }
+
         this.#uproot(drawn);
 
         // (Its buildings, if they were still being built, go with it)
@@ -496,6 +532,20 @@ function primer() {
     group.add(undergrowthMesh([{ kind: "tuft", land: "meadow", look: 0, x: 0, y: 0, turn: 0, size: 1, tint: [1, 1, 1] }], [0, 0]));
 
     return group;
+}
+
+// The great trees a piece is built round (its builder's userData.trees: in its own pixels, as
+// it's built facing south), where they stand in the world as it's turned: [{ x, z, variant, size,
+// turn }] to plant
+function grownRound(object, piece) {
+    const trees = object.userData?.trees ?? [];
+    const [c, s] = [Math.cos(piece.facing), Math.sin(piece.facing)];
+
+    return trees.map(({ x, z, variant, size = 1 }, k) => {
+        const [lx, lz] = [(x - piece.w * 10) * PIXEL, (z - piece.h * 10) * PIXEL];
+
+        return { x: piece.x + lx * c + lz * s, z: piece.y - lx * s + lz * c, variant, size, turn: (piece.x * 7 + piece.y * 3 + k) % (Math.PI * 2) };
+    });
 }
 
 // --- Water ---

@@ -51,7 +51,7 @@ export const TILE = 32;
 
 // What the camera pulls in closer than, rather than looking through (view.js): what's built,
 // not the props (carts, wells, stalls) or the trees
-const BUILT = new Set(["house", "landmark", "wall", "tower", "gatehouse", "keep"]);
+const BUILT = new Set(["house", "landmark", "structure", "wall", "tower", "gatehouse", "keep"]);
 
 /**
  * How high whatever stands on each square of an area is (metres): { x0, z0 (its north-west

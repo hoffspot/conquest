@@ -93,7 +93,7 @@ export class Settlements {
         let settlement = this.laid.get(place.id);
 
         if (!settlement) {
-            const town = layoutTown({ seed: place.seed, kind: place.kind, exits: waysOut(this.plan, place) });
+            const town = layoutTown({ seed: place.seed, kind: place.kind, exits: waysOut(this.plan, place), people: place.race ?? "human" });
             const { at, size } = squareOf(place);
 
             // (The way up to the doors of its buildings that can be gone into, cleared)
@@ -113,8 +113,9 @@ export class Settlements {
     }
 
     /**
-     * What a laid-out settlement has on a square of the world: { blocked, opaque, ground }, or null
-     * where it has nothing (its fields: the land's own).
+     * What a laid-out settlement has on a square of the world: { blocked, opaque, ground, water (1
+     * over its lagoon, the lizard folk's) }, or null where it has nothing (its fields: the land's
+     * own).
      */
     squareAt(settlement, x, y) {
         const { at, size, town } = settlement;
@@ -124,9 +125,31 @@ export class Settlements {
             return null;
         }
 
-        const [blocked, opaque, ground] = [town.blocked[j][i], town.opaque[j][i], town.ground[j][i]];
+        const [blocked, opaque, ground, water] = [town.blocked[j][i], town.opaque[j][i], town.ground[j][i], town.water?.[j][i] ?? 0];
 
-        return blocked || opaque || ground !== GROUND.grass || inside(town, i + 0.5, j + 0.5) ? { blocked, opaque, ground } : null;
+        return blocked || opaque || water || ground !== GROUND.grass || inside(town, i + 0.5, j + 0.5) ? { blocked, opaque, ground, water } : null;
+    }
+
+    /**
+     * The plank walks over the lagoons of the settlements laid out near a chunk whose middles are
+     * in it, in the world's metres: [{ a, b, half }] (layoutTown's walks).
+     */
+    walksIn(cx, cy) {
+        const found = [];
+
+        for (const place of this.near(cx, cy)) {
+            const settlement = this.laid.get(place.id);
+
+            for (const { a, b, half } of settlement?.town.walks ?? []) {
+                const [ax, ay, bx, by] = [a[0] + settlement.at[0], a[1] + settlement.at[1], b[0] + settlement.at[0], b[1] + settlement.at[1]];
+
+                if (Math.floor((ax + bx) / 2 / CHUNK) === cx && Math.floor((ay + by) / 2 / CHUNK) === cy) {
+                    found.push({ a: [ax, ay], b: [bx, by], half });
+                }
+            }
+        }
+
+        return found;
     }
 
     /**

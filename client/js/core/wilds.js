@@ -54,6 +54,21 @@ export const LANDS = Object.freeze({
     mountain: { count: 9, kinds: { outcrop: 5, boulder: 5, cairn: 0.5, snag: 0.5 } },
 });
 
+/**
+ * Each people's homeland's own features, mixed with its lands' (where the plan's territory is
+ * theirs): about how many more to a chunk, and how likely each kind is. The cat folk's termite
+ * spires and granite kopjes; the orcs' skulls on poles, clusters of stakes and the wrack of old
+ * fights; the lizard folk's mangroves and carved stelae; the elves' moonstones and leaf lamps; the
+ * dark elves' webbed stumps, cocoons and black crystal.
+ */
+export const HOMELANDS = Object.freeze({
+    cat: { count: 4, kinds: { termites: 5, kopje: 3 } },
+    orc: { count: 4, kinds: { skullpole: 3, stakes: 3, wrack: 2 } },
+    lizard: { count: 4, kinds: { mangrove: 4, stela: 1.5 } },
+    elf: { count: 3, kinds: { moonstone: 2, leaflamp: 3 } },
+    darkElf: { count: 5, kinds: { webstump: 3, cocoon: 2, crystals: 3 } },
+});
+
 /** The kinds a rocky stretch has more of, and those land let go has more of. */
 export const ROCKY = Object.freeze(["boulder", "outcrop", "cairn", "menhir"]);
 export const DEAD = Object.freeze(["log", "stump", "snag", "logpile"]);
@@ -79,7 +94,51 @@ export const FEATURES = Object.freeze({
     logpile: { size: [1.6, 2.4], height: [0.35, 0.45], long: true, take: 0.6 },
     ruin: { size: [3, 5.5], height: [0.25, 0.45], long: true, take: 0.5 },
     ribs: { size: [5, 7], height: [0.5, 0.7], long: true, take: 1 },
+    // The peoples' homelands' own (HOMELANDS)
+    termites: { size: [0.5, 0.9], height: [2.5, 4], take: 0.9 },
+    kopje: { size: [1.4, 2.6], height: [0.6, 1], take: 0.8 },
+    skullpole: { size: [0.2, 0.3], height: [8, 11], take: 1 },
+    stakes: { size: [0.6, 0.9], height: [1.2, 1.6], take: 0.9 },
+    wrack: { size: [0.7, 1], height: [0.45, 0.65], take: 0.8 },
+    mangrove: { size: [0.8, 1.3], height: [1.6, 2.4], take: 0.8 },
+    stela: { size: [0.35, 0.45], height: [4.5, 6], take: 1 },
+    moonstone: { size: [0.4, 0.55], height: [4.5, 6], take: 1 },
+    leaflamp: { size: [0.3, 0.4], height: [6, 7.5], take: 1 },
+    webstump: { size: [0.5, 0.8], height: [1.5, 2], take: 0.9 },
+    cocoon: { size: [0.5, 0.7], height: [0.6, 0.8], take: 0.8 },
+    crystals: { size: [0.5, 0.9], height: [2, 3], take: 0.9 },
 });
+
+// The kinds that don't hide what's behind them, however tall (poles, lamps, stakes)
+const SEE_THROUGH = new Set(["scarecrow", "ribs", "skullpole", "leaflamp", "stakes"]);
+
+// A land's features, and a homeland's mixed in where there's one
+const mixed = new Map();
+
+function featuresFor(land, home) {
+    if (!home) {
+        return LANDS[land];
+    }
+
+    const key = `${land}:${home}`;
+
+    if (!mixed.has(key)) {
+        const own = LANDS[land] ?? { count: 0, kinds: {} };
+        const theirs = HOMELANDS[home];
+
+        // (A few more than the land's alone, about half of them theirs)
+        mixed.set(key, own.count ? { count: Math.max(own.count, (own.count + theirs.count) * 0.75), kinds: { ...scaled(own.kinds, own.count), ...scaled(theirs.kinds, theirs.count) } } : own);
+    }
+
+    return mixed.get(key);
+}
+
+// Weights scaled to add up to `total`
+function scaled(kinds, total) {
+    const sum = Object.values(kinds).reduce((a, b) => a + b, 0);
+
+    return Object.fromEntries(Object.entries(kinds).map(([kind, weight]) => [kind, (weight / sum) * total]));
+}
 
 // A smoothstep from a to b
 const ease = (a, b, x) => {
@@ -101,12 +160,13 @@ export function neglect(x, y, seed) {
 /**
  * A chunk's features: [{ kind, x, y (its middle, metres), size, height, turn (radians), variant
  * (0 to 1: which of its looks), squares ([x, y]: those it takes), opaque }]. `random` is the
- * chunk's own (features' only: the same numbers every time), `landAt(x, y)` the land's id, and
+ * chunk's own (features' only: the same numbers every time), `landAt(x, y)` the land's id,
+ * `homeAt(x, y)` whose homeland it is (a people's id, or null: HOMELANDS' mixed in), and
  * `free(x, y, fields)` whether a square (the chunk's or not) can have a feature on it and near it:
  * grass (or ploughed, if `fields`), not blocked, not a road, bridge or water, in no settlement or
  * clearing.
  */
-export function featuresOf({ x0, y0, size, seed, random, landAt, free }) {
+export function featuresOf({ x0, y0, size, seed, random, landAt, homeAt = () => null, free }) {
     const features = [];
     const taken = new Set();
     const steps = size / FEATURE_GRID;
@@ -117,7 +177,8 @@ export function featuresOf({ x0, y0, size, seed, random, landAt, free }) {
             // same whatever's round it)
             const [fx, fy, chance, pick, grow, tall, turn, variant] = Array.from({ length: 8 }, () => random.next());
             const [x, y] = [x0 + (gx + fx) * FEATURE_GRID, y0 + (gy + fy) * FEATURE_GRID];
-            const land = LANDS[landAt(Math.floor(x), Math.floor(y))];
+            const home = homeAt(Math.floor(x), Math.floor(y));
+            const land = featuresFor(landAt(Math.floor(x), Math.floor(y)), HOMELANDS[home] ? home : null);
 
             if (!land?.count) {
                 continue;
@@ -143,7 +204,7 @@ export function featuresOf({ x0, y0, size, seed, random, landAt, free }) {
 
             feature.height = feature.size * (spec.height[0] + (spec.height[1] - spec.height[0]) * tall);
             feature.squares = squaresOf(feature, spec);
-            feature.opaque = feature.height > EYES && kind !== "scarecrow" && kind !== "ribs";
+            feature.opaque = feature.height > EYES && !SEE_THROUGH.has(kind);
 
             if (feature.squares.every(([sx, sy]) => sx >= x0 + EDGE && sy >= y0 + EDGE && sx < x0 + size - EDGE && sy < y0 + size - EDGE && !taken.has(`${sx},${sy}`)) && clear(feature.squares, (cx, cy) => free(cx, cy, spec.fields))) {
                 for (const [sx, sy] of feature.squares) {

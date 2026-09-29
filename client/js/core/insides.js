@@ -676,8 +676,8 @@ export class Interiors {
      * Add a building that's been made already, with its maps and folk (Wenches and Ale, made with
      * the town), and where its middle is (`at`: [x, y] metres, in the world).
      */
-    adopt({ key, kind, name, maps, folk, piece = null, tavern = null, at = null }) {
-        const building = { key, kind, name, piece, tavern, place: null, people: "human", seed: 0, at, entrance: null, made: true, maps, folk };
+    adopt({ key, kind, name, maps, folk, piece = null, tavern = null, at = null, people = "human" }) {
+        const building = { key, kind, name, piece, tavern, place: null, people, seed: 0, at, entrance: null, made: true, maps, folk };
 
         this.buildings.set(key, building);
 

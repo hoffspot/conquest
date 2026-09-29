@@ -11,9 +11,9 @@ globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContex
 const { fractal, noise, tiling } = await import("../client/js/core/noise.js");
 const { buildWorld, CHUNK, Overworld } = await import("../client/js/core/overworld.js");
 const { GROUND } = await import("../client/js/core/setpieces/pieces.js");
-const { FEATURES, LANDS } = await import("../client/js/core/wilds.js");
+const { FEATURES, HOMELANDS, LANDS } = await import("../client/js/core/wilds.js");
 const { patchNoise } = await import("../client/js/world/ground.js");
-const { featureMesh, Growth, KINDS, LOOKS, lookGeometry, TILE, undergrowthOf, UNDERGROWTH } = await import("../client/js/world/art/kits/wilds.js");
+const { featureMesh, Growth, HOME_UNDERGROWTH, KINDS, LOOKS, lookGeometry, TILE, undergrowthOf, UNDERGROWTH } = await import("../client/js/world/art/kits/wilds.js");
 
 let world;
 let overworld;
@@ -85,8 +85,11 @@ describe("the land's features (core/wilds.js)", () => {
             for (const feature of chunk.features) {
                 const land = overworld.biomeAt(Math.floor(feature.x), Math.floor(feature.y));
 
+                // (A land's own kinds, or its people's where it's their homeland)
+                const home = HOMELANDS[overworld.homeAt(Math.floor(feature.x), Math.floor(feature.y))];
+
                 kinds.add(feature.kind);
-                assert.ok(LANDS[land]?.kinds[feature.kind] !== undefined || land !== overworld.biomeAt(Math.floor(feature.x), Math.floor(feature.y)), `${feature.kind} on ${land}`);
+                assert.ok(LANDS[land]?.kinds[feature.kind] !== undefined || home?.kinds[feature.kind] !== undefined, `${feature.kind} on ${land}`);
                 lands.set(land, (lands.get(land) ?? 0) + 1);
             }
         }
@@ -96,6 +99,27 @@ describe("the land's features (core/wilds.js)", () => {
         assert.ok(total > chunks.length * 1.5, `${total} features in ${chunks.length} chunks`);
         assert.ok(kinds.size >= 10, [...kinds].join(", "));
         assert.ok(lands.size >= 8, [...lands.keys()].join(", "));
+    });
+
+    it("has each people's own in its homeland, and only there", () => {
+        const found = new Map();
+
+        for (let cy = 4; cy < 124; cy += 3) {
+            for (let cx = 4; cx < 124; cx += 3) {
+                for (const feature of overworld.chunk(cx, cy).features) {
+                    const home = overworld.homeAt(Math.floor(feature.x), Math.floor(feature.y));
+
+                    for (const [people, { kinds }] of Object.entries(HOMELANDS)) {
+                        if (kinds[feature.kind] !== undefined) {
+                            assert.equal(home, people, `${feature.kind} in ${home ?? "the wild"}'s land`);
+                            found.set(people, (found.get(people) ?? 0) + 1);
+                        }
+                    }
+                }
+            }
+        }
+
+        assert.deepEqual([...found.keys()].sort(), Object.keys(HOMELANDS).sort(), JSON.stringify([...found]));
     });
 
     it("are the same every time a chunk is made", () => {
@@ -136,7 +160,7 @@ describe("the land's features (core/wilds.js)", () => {
                     assert.ok(!settlement || !overworld.settlements.squareAt(settlement, x, y), `${feature.kind} in a settlement`);
                 }
 
-                assert.equal(feature.opaque, feature.height > 1.65 && feature.kind !== "scarecrow" && feature.kind !== "ribs");
+                assert.equal(feature.opaque, feature.height > 1.65 && !["scarecrow", "ribs", "skullpole", "leaflamp", "stakes"].includes(feature.kind));
             }
         }
     });
@@ -200,7 +224,7 @@ describe("the land's things drawn (world/art/kits/wilds.js)", () => {
 
             assert.equal(chunk.ground[k], GROUND.grass);
             assert.ok(!chunk.blocked[k] && !chunk.water[k]);
-            assert.ok(UNDERGROWTH[land].kinds[kind] !== undefined, `${kind} on ${land}`);
+            assert.ok(UNDERGROWTH[land].kinds[kind] !== undefined || HOME_UNDERGROWTH[overworld.homeAt(Math.floor(x), Math.floor(y))]?.[kind] !== undefined, `${kind} on ${land}`);
         }
 
         const thin = undergrowthOf(overworld, chunk, { density: 0.5 });
