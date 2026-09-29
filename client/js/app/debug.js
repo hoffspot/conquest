@@ -117,7 +117,11 @@ export class Debug {
         if (game) {
             const { stats } = game;
 
-            lines.push(`FPS ${stats.fps.toFixed(0)}  frame ${ms(stats.frame)}`, `CPU update ${ms(stats.update)}  draw ${ms(stats.render)}`);
+            // (How often the screen refreshes, and the most the quality level draws: app/pacing.js)
+            const refresh = game.pacing.refresh;
+            const most = game.view.quality.frameRate;
+
+            lines.push(`FPS ${stats.fps.toFixed(0)}  frame ${ms(stats.frame)}  screen ${Number.isFinite(refresh) ? `${Math.round(1000 / refresh)} Hz` : "?"}${most ? `, drawn at most ${most}` : ""}`, `CPU update ${ms(stats.update)}  draw ${ms(stats.render)}`);
         }
 
         if (view) {

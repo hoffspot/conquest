@@ -544,11 +544,23 @@ drawn whole whichever way the camera looks (about 90 draw calls and 170,000 tria
 
 **Quality levels** trade looks for speed, chosen for the device (debug mode can change them):
 
-| Level | Pixels | Shadow map | Antialiasing | Hair | Skin textures | Undergrowth |
-| --- | --- | --- | --- | --- | --- | --- |
-| Low (older phones) | 1× | 1024 | no | a fifth of the strands | 512 | half |
-| Medium (phones) | up to 1.5× | 2048 | yes | 30% | 512 | three-quarters |
-| High (computers) | up to 2× | 2048 | yes | 45% | 1024 | all of it |
+| Level | Pixels | Shadow map | Antialiasing | Hair | Skin textures | Undergrowth | Frames a second, at most |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Low (older phones) | 1× | 1024 | no | a fifth of the strands | 512 | half | 30 |
+| Medium (phones) | up to 1.5× | 2048 | yes | 30% | 512 | three-quarters | 60 |
+| High (computers) | up to 2× | 2048 | yes | 45% | 1024 | all of it | as the screen refreshes |
+
+**How often it's drawn** (`app/pacing.js`). The browser asks for a frame each time the screen
+refreshes: 60 times a second on most screens, 90, 120 or 144 on many phones and monitors. Drawn
+every time, a phone with a 120 Hz screen did twice the work of 60 for a picture no one can tell
+from it, grew hot, and slowed itself down to cool. A quality level draws no oftener than its
+rate (`frameRate`): a frame's drawn when the browser asks within 0.6 of the screen's refresh of
+when one's due, so the frames keep to the screen's beat. At 60: every other frame at 120 Hz, every
+other at 144 (72 a second), every frame at 90 (which has no even 60; never fewer frames than the
+rate asks for, rather than uneven ones). Low draws a steady 30. A frame that takes longer to draw
+than the rate allows is followed by the next at once. The screen's refresh is the shortest time
+between the browser's askings over the last 30 (so it follows a screen changing its rate). The
+battle keeps its own time, whatever the frame rate (a step each twentieth of a second).
 
 **Clear of buildings.** In the town, a building can stand between the camera and the player,
 from whichever side it looks. The view marches out along its line from where it looks over the
@@ -1638,8 +1650,9 @@ browser won't store anything (private browsing), the game still plays, it just f
 The switch on the title screen turns on an overlay (app/debug.js) on every screen, until it's
 switched off (in the game, under the minimap). It folds away to just the frame rate. It shows:
 
-- the frame rate, a graph of the last 120 frames' times (green under a sixtieth of a second, amber
-  under a thirtieth, red over), and how long each frame's update and drawing take on the CPU;
+- the frame rate, the screen's refresh and the most the quality level draws, a graph of the last
+  120 frames' times (green under a sixtieth of a second, amber under a thirtieth, red over), and
+  how long each frame's update and drawing take on the CPU;
 - what was drawn: draw calls, triangles, points; geometries, textures and shader programs in
   memory; the quality level, pixel ratio and drawing buffer size;
 - the GPU (where the browser says), the JavaScript heap (Chrome), the screen, cores and memory;
@@ -1804,6 +1817,9 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   landing facing the blow at its kind's height (not on the hands or head), healing a stage at a
   time (their arrows with them), gone on coming back to life, glows fading, eight arrows at most,
   and the body's and garments' materials mixing it in.
+- `test/pacing.test.js`: how often the world's drawn: every other frame of a 120 Hz screen at 60,
+  evenly; a 144 Hz one at 72 and a 90 Hz one at 90; 30 on low; every frame with no rate, or when
+  drawing takes longer than the rate allows; following the screen changing its rate.
 - `test/camera.test.js`: the camera following from the player's first step, catching up and
   turning behind them (walked away from, it doesn't turn; walked towards, it turns all the way
   round), easing round (three-quarters of a half turn in 0.5 to 1.2 s, never a jump), steady
