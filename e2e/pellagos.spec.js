@@ -1249,6 +1249,33 @@ test("every tavern can be gone into: got ready as the player comes near, its own
 
     expect(far).toEqual({ out: "town", visited: false, folk: 0, floors: 0, plans: 2 });
 
+    // (What someone does, told in the step they're taken out of the battle in, as a building's
+    // folk are let go: nothing shown, nothing thrown)
+    const told = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const id = [...game.avatars.keys()].find((each) => each !== game.me);
+        const advance = game.host.advance.bind(game.host);
+
+        game.host.advance = (ms) => {
+            const events = advance(ms);
+
+            game.host.advance = advance;
+            game.battle.remove(id);
+
+            return [...events, { type: "act", id, act: "toast" }, { type: "rest", id, role: "patron", rest: 0 }];
+        };
+
+        try {
+            game.advance(0.1);
+
+            return "quietly";
+        } catch (error) {
+            return error.message;
+        }
+    });
+
+    expect(told).toBe("quietly");
+
     // Straight back in through the door, before it's got ready: built there and then
     const again = await page.evaluate((key) => {
         const { game } = window.pellagos;
