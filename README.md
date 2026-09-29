@@ -18,8 +18,11 @@ lanes curving round between them, and houses turned every way to face them), is 
 <https://hoffspot.github.io/conquest/town-map.html>. The building lab, building a street of every
 style of house, the taverns (each named, with its own painted sign), the adventurers' guild, the
 temples and the smithy, a whole town, any kind of settlement out in the world, or a stretch of
-any land (its rocks, fallen trees, grass and wildflowers), in 3D from a seed to go round and look
-at, is at
+any land (its rocks, fallen trees, grass and wildflowers), for any of the six peoples (each
+building its own way: the cat folk's Sahel mud-brick, the orcs' hide longhouses and ring forts,
+the lizard folk's stilt houses over their lagoons, the elves' and dark elves' flowing stone and
+great trees), their castles and special places, their homelands' own ground, trees and things
+lying about, and their war camps, in 3D from a seed to go round and look at, is at
 <https://hoffspot.github.io/conquest/building-lab.html>.
 
 The creature lab, showing every creature of the wilds walking, running, attacking, resting,
@@ -440,6 +443,8 @@ client/                 The game (static files served to the browser)
     overworld.js        The world: 8 km of it on 1-metre squares, made a chunk at a time from its
                         plan, with the town set in where the player starts
     settlements.js      Every other settlement, laid out as the world near it is first made
+    sites.js            Each people's castle, special places and watchtowers, set down where
+                        the plan puts them, clear of roads and water, facing the nearest road
     wilds.js            The land's own features: boulders, fallen trees, bushes... (where, and
                         the squares they take); noise.js the smooth noise they're laid out by
     world.js            The town: on 1-metre squares, fields, trees, where everyone starts, the
@@ -490,6 +495,7 @@ client/                 The game (static files served to the browser)
     view.js             The renderer, lights, sky, the camera (clear of buildings), quality
                         levels, the cutaway
     ground.js           The ground: textures blended square by square, in each land's colours
+                        and each people's homeland its own ground
     chunks3d.js         The world round the player, a chunk at a time as they go: ground, water,
                         bridges, trees, the land's features, the undergrowth near the player,
                         and the settlements' buildings
@@ -502,9 +508,11 @@ client/                 The game (static files served to the browser)
                         everything built is drawn with) and kits/ (house.js, with framing.js and
                         roofs.js; landmarks.js, props.js, trees.js; wilds.js, the land's rocks,
                         fallen trees, grass, flowers and the rest; and signs.js and emblems.js,
-                        the taverns' and temples' signs)
+                        the taverns' and temples' signs), and peoples/ (each other people's
+                        own houses, landmarks, special places, castles, walls, props and war
+                        camp tents: cat.js, orc.js, lizard.js, elf.js, darkelf.js...)
     banners3d.js        The peoples' banners by their towns' roads out, in their colours
-    camps3d.js          The war's camps near the player: tents round a fire
+    camps3d.js          The war's camps near the player: each people's tents round a fire
     drops3d.js          Things dropped on the ground: a bundle, its icon floating over it
     avatar.js           A character in the world, following its place in the battle
     effects.js          Arrows, bolts, fireballs, sparks, dust, fire, arcane light, blood and

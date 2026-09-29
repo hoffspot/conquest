@@ -5,10 +5,12 @@
 // world, drawn in its chunks as the game draws it. Draw calls and triangles are counted as the
 // game's debug mode counts them.
 //
-// ?seed=N&show=street|landmarks|town|village|hamlet|farmstead|city|capital choose, or
+// ?seed=N&people=human|elf|darkElf|cat|lizard|orc&show=street|landmarks|structures|insides|town|
+// village|hamlet|farmstead|city|capital choose (another people's settlements laid out on their
+// own), or
 // show=wilds-meadow (or any land: wilds-woods, wilds-badlands...) for the land itself, well away
-// from any settlement or road (&undergrowth=0.5 to thin it, 0 for none); window.buildingLab is
-// there for tests.
+// from any settlement or road (&undergrowth=0.5 to thin it, 0 for none), or show=home for the
+// middle of the people's homeland; window.buildingLab is there for tests.
 
 import * as THREE from "three";
 import { createRandom } from "../core/random.js";
@@ -16,22 +18,35 @@ import { nameTavern } from "../core/lore/taverns.js";
 import { GOD_IDS } from "../core/lore/gods.js";
 import { LANDMARKS } from "../core/setpieces/pieces.js";
 import { buildWorld } from "../core/overworld.js";
+import { siteSize } from "../core/sites.js";
 import { BIOMES, CELL, CELLS } from "../core/worldplan/plan.js";
+import { RACES } from "../core/worldplan/races.js";
 import { generateWorld } from "../core/world.js";
-import { Chunks } from "../world/chunks3d.js";
+import { readPlan } from "../core/interiors.js";
+import { guildRooms, hallRooms, keepRooms, smithyRooms, tavernRooms, templeRooms } from "../core/insides.js";
+import { buildInterior, INTERIOR_CUT } from "../world/interiors3d.js";
+import { Camps } from "../world/camps3d.js";
+import { Chunks, lagoonOf } from "../world/chunks3d.js";
 import { prepareAtlas } from "../world/art/engine/atlas.js";
 import { STYLES, TRADES } from "../world/art/kits/house.js";
-import { buildGround } from "../world/ground.js";
+import { buildGround, landColour } from "../world/ground.js";
+import { PEOPLE_KITS } from "../world/art/peoples/index.js";
 import { buildTown } from "../world/town3d.js";
 import { View } from "../world/view.js";
 
 const $ = (selector) => document.querySelector(selector);
 
 const params = new URLSearchParams(location.search);
+const PEOPLES = ["human", "elf", "darkElf", "cat", "lizard", "orc"];
+
+// The land each people's settlements are shown in (its colour over the grass)
+const HOMELANDS = { human: "meadow", elf: "elfwood", darkElf: "darkwood", cat: "savannah", lizard: "marsh", orc: "badlands" };
 const state = {
     seed: Number(params.get("seed")) || 7,
-    show: ["town", "landmarks", "capital", "city", "village", "hamlet", "farmstead", ...BIOMES.map(({ id }) => `wilds-${id}`)].includes(params.get("show")) ? params.get("show") : "street",
+    people: PEOPLES.includes(params.get("people")) ? params.get("people") : "human",
+    show: ["town", "landmarks", "structures", "insides", "castle", "place", "capital", "city", "village", "hamlet", "farmstead", "home", "camps", ...BIOMES.map(({ id }) => `wilds-${id}`)].includes(params.get("show")) ? params.get("show") : "street",
     built: null,
+    frames: [],
     stats: null,
     ready: false,
 };
@@ -62,25 +77,78 @@ function streetOf(seed) {
     return { width: Math.ceil(x + 4), height: 8 + styles.length * 26 + 4, pieces };
 }
 
+// A people's street: a row of each type of their houses, poorest to richest
+function peopleStreetOf(seed, people) {
+    const rows = PEOPLE_KITS[people]?.GALLERY?.houses ?? [];
+    const pieces = [];
+    let y = 8;
+    let width = 0;
+
+    for (const [row, [type, w, h]] of rows.entries()) {
+        let x = 4;
+        const count = w > 3 ? 3 : 5;
+
+        for (let k = 0; k < count; k++) {
+            pieces.push({ kind: "house", people, type, key: `house-${people}-${type}-${k}`, variant: k, w, h, x: x + (w * 4) / 2, y: y + (h * 4) / 2, facing: 0, wealth: (k + 0.5) / count, storeys: 1 + (k % 2), seed: seed * 1000 + row * 10 + k });
+            x += w * 4 + 2;
+        }
+
+        width = Math.max(width, x);
+        y += h * 4 + 5;
+    }
+
+    return { width: Math.ceil(width + 4), height: Math.ceil(y + 4), pieces };
+}
+
+// A people's own places: each of their special structures and their castle, a stretch of their
+// town wall with a gate and a tower in it, and their well and stalls
+function structuresOf(seed, people) {
+    const sizes = PEOPLE_KITS[people]?.GALLERY?.structures ?? {};
+    const pieces = [];
+    let x = 4;
+
+    for (const [k, [name, [w, h]]] of Object.entries(sizes).entries()) {
+        pieces.push({ kind: "structure", people, name, key: `structure-${people}-${name}`, w, h, x: x + (w * 4) / 2, y: 6 + (h * 4) / 2, facing: 0, seed: seed * 100 + k });
+        x += w * 4 + 6;
+    }
+
+    const wallY = 6 + Math.max(0, ...Object.values(sizes).map(([, h]) => h)) * 4 + 10;
+    const walls = [["wall", 4, 1], ["tower", 2, 2], ["wall", 3, 1], ["gatehouse", 3, 2], ["wall", 4, 1]];
+    let wx = 4;
+
+    for (const [k, [kind, w, h]] of walls.entries()) {
+        pieces.push({ kind, people, key: `${kind}-${people}-${k}`, w, h, x: wx + (w * 4) / 2, y: wallY + (h * 4) / 2 - (h > 1 ? 2 : 0), facing: 0, seed: seed * 10 + k });
+        wx += w * 4;
+    }
+
+    // (And what's on their market: their well, and a stall or two)
+    for (const [k, name] of ["well", "tent", "tent"].entries()) {
+        pieces.push({ kind: "prop", people, name, key: `prop-${people}-${name}-${k}`, w: 2, h: 2, x: wx + 8 + k * 10, y: wallY + 4, facing: 0, seed: seed * 10 + k });
+    }
+
+    return { width: Math.ceil(Math.max(x, wx + 36) + 4), height: Math.ceil(wallY + 14), pieces };
+}
+
 // A row of every special building: taverns of every sort (their names and signs from the seed),
 // the guild, churches to the Six, the smithy, the market hall, the windmill, a town hall and a keep
-function landmarksOf(seed) {
+function landmarksOf(seed, people = "human") {
     const random = createRandom(seed);
     const pieces = [];
+    const own = people !== "human";
     const row = [
-        ...[2, 2, 1, 2].map((storeys) => ({ name: "tavern", tavern: nameTavern(random, { storeys }) })),
+        ...(own ? [2, 1] : [2, 2, 1, 2]).map((storeys) => ({ name: "tavern", tavern: nameTavern(random, { storeys }) })),
         { name: "guild" },
-        ...GOD_IDS.slice(0, 2).map((patron) => ({ name: "church", patron: GOD_IDS[(seed + GOD_IDS.indexOf(patron)) % GOD_IDS.length] })),
+        ...GOD_IDS.slice(0, own ? 1 : 2).map((patron) => ({ name: "church", patron: GOD_IDS[(seed + GOD_IDS.indexOf(patron)) % GOD_IDS.length] })),
         { name: "blacksmith" },
         { name: "market" },
-        { name: "windmill" },
-        { name: "hall", style: ["timber", "stone", "brick"][seed % 3], storeys: 2 },
-        { name: "keep" },
-    ];
+        ...(own ? [] : [{ name: "windmill" }]),
+        { name: "hall", style: ["timber", "stone", "brick"][seed % 3], storeys: 2, ...(own ? { size: [3, 3.25] } : {}) },
+        { name: "keep", ...(own ? { size: [3.5, 4] } : {}) },
+    ].map((piece) => (own ? { ...piece, people } : piece));
     let x = 4;
 
     for (const [k, own] of row.entries()) {
-        const [w, h] = LANDMARKS[own.name];
+        const [w, h] = own.size ?? LANDMARKS[own.name];
 
         pieces.push({ kind: "landmark", key: `landmark-${own.name}`, ...own, w, h, x: x + (w * 4) / 2, y: 10 + (h * 4) / 2, facing: 0, seed: seed * 100 + k });
         x += w * 4 + 3;
@@ -90,14 +158,17 @@ function landmarksOf(seed) {
 }
 
 // A spot in the middle of a stretch of a land (metres), as far from the plan's places and roads as
-// can be found: the land itself, as the game draws it
+// can be found: the land itself, as the game draws it. `land` a land's id, or a people's
+// ({ people }) for the middle of their homeland
 function wildsOf(plan, land) {
-    const biome = BIOMES.findIndex(({ id }) => id === land);
+    const owner = land.people ? RACES.findIndex(({ id }) => id === land.people) + 1 : 0;
+    const biome = owner ? -1 : BIOMES.findIndex(({ id }) => id === land);
+    const inLand = (k) => (owner ? plan.territory[k] === owner && !plan.water?.[k] : plan.biome[k] === biome);
     const roads = new Set(plan.roads.flatMap(({ cells }) => cells.map(([x, y]) => y * CELLS + x)));
     let best = null;
 
     for (let k = 0; k < CELLS * CELLS; k++) {
-        if (plan.biome[k] !== biome) {
+        if (!inLand(k)) {
             continue;
         }
 
@@ -109,7 +180,7 @@ function wildsOf(plan, land) {
             for (let dx = -3; dx <= 3; dx++) {
                 const at = (y + dy) * CELLS + (x + dx);
 
-                score += plan.biome[at] === biome && !roads.has(at) ? 1 : -2;
+                score += inLand(at) && !roads.has(at) ? 1 : -2;
             }
         }
 
@@ -125,6 +196,73 @@ function wildsOf(plan, land) {
     return best.at;
 }
 
+// What's there to look at, one thing (or row of the same things) at a time: { label, x, z (its
+// middle), w, d (metres) }, for pictures of each (window.buildingLab.state.frames)
+function framesOf(pieces) {
+    const groups = new Map();
+
+    for (const piece of pieces) {
+        const label = piece.kind === "house" ? `house ${piece.type ?? piece.style}` : piece.kind === "prop" ? "stalls" : ["wall", "tower", "gatehouse"].includes(piece.kind) ? "walls" : piece.kind === "tree" ? null : `${piece.kind} ${piece.name ?? ""}`.trim();
+
+        if (label) {
+            const [hw, hd] = [piece.w * 2, piece.h * 2];
+            const box = groups.get(label) ?? [Infinity, Infinity, -Infinity, -Infinity];
+
+            groups.set(label, [Math.min(box[0], piece.x - hw), Math.min(box[1], piece.y - hd), Math.max(box[2], piece.x + hw), Math.max(box[3], piece.y + hd)]);
+        }
+    }
+
+    return [...groups].map(([label, [x0, z0, x1, z1]]) => ({ label, x: (x0 + x1) / 2, z: (z0 + z1) / 2, w: x1 - x0, d: z1 - z0 }));
+}
+
+// A people's insides, side by side, roofless: a tavern's taproom and upstairs, a smithy, a temple,
+// a guild, a town hall and a keep, each as its people builds and dresses it, its lamps lit
+function insidesOf(seed, people) {
+    const group = new THREE.Group();
+    const kinds = [
+        [tavernRooms, { tavern: { storeys: 2, upstairs: "inn" } }],
+        [smithyRooms, {}],
+        [templeRooms, { patron: GOD_IDS[seed % GOD_IDS.length] }],
+        [guildRooms, {}],
+        [hallRooms, {}],
+        [keepRooms, {}],
+    ];
+    const frames = [];
+    let x = 0;
+
+    // (Nothing cut away: there's no one inside to see past the walls)
+    INTERIOR_CUT.width.value = 0;
+
+    for (const [k, [rooms, own]] of kinds.entries()) {
+        const building = { seed: seed * 10 + k, name: "Inside", people, ...own };
+        let width = 0;
+
+        for (const [n, floor] of rooms(building).entries()) {
+            const map = readPlan(`inside-${k}-${n}`, floor.name, floor.rows, { ground: floor.ground });
+
+            Object.assign(map, { origin: [x, n * 24], style: floor.style, look: floor.look ?? null, finish: floor.finish ?? null, patron: floor.patron ?? null, layout: floor.layout ?? null, people });
+
+            const inside = buildInterior(map);
+
+            group.add(inside.object);
+
+            for (const light of inside.lights) {
+                const lamp = new THREE.PointLight(light.colour, light.intensity, light.distance, 1.4);
+
+                lamp.position.set(light.x, light.y, light.z);
+                group.add(lamp);
+            }
+
+            width = Math.max(width, map.width);
+            frames.push({ label: `inside ${floor.style}`, x: x + map.width / 2, z: n * 24 + map.height / 2, w: map.width, d: map.height });
+        }
+
+        x += width + 6;
+    }
+
+    return { group, frames, width: x, height: 48 };
+}
+
 async function build() {
     state.ready = false;
     $("#status").hidden = false;
@@ -137,9 +275,9 @@ async function build() {
     await prepareAtlas();
 
     // A stretch of a land, as the game draws it
-    if (state.show.startsWith("wilds-")) {
+    if (state.show.startsWith("wilds-") || state.show === "home") {
         const world = buildWorld({ seed: state.seed });
-        const [x, z] = wildsOf(world.plan, state.show.slice(6));
+        const [x, z] = wildsOf(world.plan, state.show === "home" ? { people: state.people } : state.show.slice(6));
         const chunks = new Chunks(world, { undergrowth: Number(params.get("undergrowth") ?? 1) });
 
         chunks.fill(x, z, 1);
@@ -160,11 +298,48 @@ async function build() {
         return;
     }
 
-    // A settlement out in the world, as the game draws it: the nearest of its kind to where a
-    // player starts, in the chunks round it
-    if (!["street", "landmarks", "town"].includes(state.show)) {
+    // Every people's war camp in a row, each its tents round a fire (camps3d.js)
+    if (state.show === "camps") {
+        const group = new THREE.Group();
+        const peoples = ["human", "cat", "orc", "lizard", "elf", "darkElf"];
+        const camps = new Camps(group);
+        const width = peoples.length * 16 + 8;
+        const world = { width, height: 24, ground: Array.from({ length: 24 }, () => new Uint8Array(width)) };
+
+        group.add(buildGround(world, { land: landColour(HOMELANDS[state.people], state.people) }));
+        state.frames = peoples.map((people, k) => {
+            const [x, z] = [12 + k * 16, 12];
+            const tents = Array.from({ length: 4 }, (_, j) => {
+                const a = (j / 4) * Math.PI * 2 + 0.4;
+
+                return { at: [x + Math.cos(a) * 4.5, z + Math.sin(a) * 4.5], facing: Math.atan2(-Math.cos(a), -Math.sin(a)) };
+            });
+
+            camps.pitch(`camp-${people}`, people, { fire: [x, z], tents });
+
+            return { label: `camp ${people}`, x, z, w: 14, d: 14 };
+        });
+        view.scene.add(group);
+        state.built = group;
+        orbit.focus.set(width / 2, 1, 12);
+        orbit.distance = 60;
+        finish(group.children.length);
+
+        return;
+    }
+
+    // A settlement out in the world, as the game draws it: the nearest of its kind (the people's
+    // own, for another people) to where a player starts, in the chunks round it; or a people's
+    // castle, or its first special place, where the world sets it down (sites.js)
+    const sited = state.show === "castle" || state.show === "place";
+
+    if (sited || !["street", "landmarks", "structures", "insides", "town"].includes(state.show)) {
         const world = buildWorld({ seed: state.seed });
-        const place = world.plan.places.filter(({ kind }) => kind === state.show).sort((a, b) => Math.hypot(a.at[0] - world.start.at[0], a.at[1] - world.start.at[1]) - Math.hypot(b.at[0] - world.start.at[0], b.at[1] - world.start.at[1]))[0];
+        const overworld = world.maps.town;
+        const distance = ({ at }) => Math.hypot(at[0] - world.start.at[0], at[1] - world.start.at[1]);
+        const whose = ({ race }) => state.people === "human" || race === state.people;
+        const site = sited ? world.plan.sites.filter(({ race, kind }) => race === state.people && (state.show === "castle" ? kind === "castle" : siteSize({ race, kind }) && kind !== "castle" && kind !== "watchtower"))[0] : null;
+        const place = site ?? world.plan.places.filter((one) => one.kind === state.show && whose(one)).sort((a, b) => distance(a) - distance(b))[0];
         const chunks = new Chunks(world);
 
         chunks.fill(place.at[0], place.at[1]);
@@ -174,34 +349,56 @@ async function build() {
             await new Promise((resolve) => setTimeout(resolve, 0));
         }
 
+        const set = site && overworld.sites.set.get(site.id);
+        const [fx, fz] = set ? [set.x, set.y] : place.at;
+
         view.scene.add(chunks.object);
         state.built = chunks.object;
-        orbit.focus.set(place.at[0], 2, place.at[1]);
-        orbit.distance = { capital: 170, city: 130, village: 60, hamlet: 45, farmstead: 40 }[state.show];
+        state.chunks = chunks;
+        orbit.focus.set(fx, 2, fz);
+        orbit.distance = sited ? Math.max(30, (set?.radius ?? 20) * 2.6) : { capital: 170, city: 130, town: 90, village: 60, hamlet: 45, farmstead: 40 }[state.show];
         state.place = place;
-        finish(world.maps.town.settlements.laid.get(place.id).town.pieces.length);
+        state.frames = [{ label: state.show, x: fx, z: fz, w: orbit.distance, d: orbit.distance }];
+        finish(sited ? set?.pieces.length ?? 0 : overworld.settlements.laid.get(place.id).town.pieces.length);
 
         return;
     }
 
-    const world = generateWorld({ seed: state.seed });
+    if (state.show === "insides") {
+        const { group, frames, width, height } = insidesOf(state.seed, state.people);
 
-    if (state.show !== "town") {
-        const street = state.show === "street" ? streetOf(state.seed) : landmarksOf(state.seed);
+        view.scene.add(group);
+        state.built = group;
+        state.frames = frames;
+        orbit.focus.set(width / 2, 0, height / 4);
+        orbit.distance = 80;
+        orbit.pitch = 55;
+        finish(group.children.length);
+
+        return;
+    }
+
+    const settlement = !["street", "landmarks", "structures"].includes(state.show);
+    const world = generateWorld({ seed: state.seed, ...(settlement ? { kind: state.show, people: state.people } : {}) });
+
+    if (!settlement) {
+        const street = state.show === "street" ? (state.people !== "human" ? peopleStreetOf(state.seed, state.people) : streetOf(state.seed)) : state.show === "structures" ? structuresOf(state.seed, state.people) : landmarksOf(state.seed, state.people);
 
         Object.assign(world, { town: { ...world.town, pieces: street.pieces }, trees: [], width: street.width, height: street.height, stamp: null, origin: 0 });
     }
 
     const group = new THREE.Group();
-    const ground = buildGround(state.show !== "town" ? { ...world, ground: Array.from({ length: world.height }, () => new Uint8Array(world.width)) } : world);
+    const ground = buildGround(settlement ? world : { ...world, ground: Array.from({ length: world.height }, () => new Uint8Array(world.width)) }, { land: landColour(HOMELANDS[state.people], state.people) });
     const town = await buildTown(world);
+    const lagoon = lagoonOf(world.town.water, world.town.walks);
 
-    group.add(ground, town.object);
+    group.add(ground, town.object, ...(lagoon ? [lagoon] : []));
     view.scene.add(group);
     state.built = group;
-    orbit.focus.set(world.width / 2, 2, world.height / 2);
-    orbit.distance = state.show === "town" ? 70 : 42;
+    orbit.focus.set(settlement ? world.town.centre[0] : world.width / 2, 2, settlement ? world.town.centre[1] : world.height / 2);
+    orbit.distance = settlement ? { capital: 170, city: 130, town: 70, village: 60, hamlet: 45, farmstead: 40 }[state.show] : Math.max(42, Math.min(90, Math.max(world.width, world.height) * 0.6));
 
+    state.frames = settlement ? [{ label: "town", x: world.town.centre[0], z: world.town.centre[1], w: world.town.radius * 2, d: world.town.radius * 2 }, { label: "market", x: world.town.centre[0], z: world.town.centre[1], w: 30, d: 30 }, ...framesOf(world.town.pieces.filter(({ kind }) => kind === "structure"))] : framesOf(world.town.pieces);
     finish(world.town.pieces.length);
 }
 
@@ -220,7 +417,7 @@ function finish(pieces) {
     }));
     $("#status").hidden = true;
     state.ready = true;
-    history.replaceState(null, "", `?seed=${state.seed}&show=${state.show}`);
+    history.replaceState(null, "", `?seed=${state.seed}${state.people === "human" ? "" : `&people=${state.people}`}&show=${state.show}`);
 }
 
 function place() {
@@ -287,6 +484,11 @@ canvas.addEventListener("wheel", (event) => {
 
 $("#seed").value = state.seed;
 $("#show").value = state.show;
+$("#people").value = state.people;
+$("#people").addEventListener("change", () => {
+    state.people = $("#people").value;
+    build();
+});
 $("#seedform").addEventListener("submit", (event) => {
     event.preventDefault();
     state.seed = Number($("#seed").value) || 0;

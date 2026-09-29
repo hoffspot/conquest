@@ -676,8 +676,8 @@ export class Interiors {
      * Add a building that's been made already, with its maps and folk (Wenches and Ale, made with
      * the town), and where its middle is (`at`: [x, y] metres, in the world).
      */
-    adopt({ key, kind, name, maps, folk, piece = null, tavern = null, at = null }) {
-        const building = { key, kind, name, piece, tavern, place: null, people: "human", seed: 0, at, entrance: null, made: true, maps, folk };
+    adopt({ key, kind, name, maps, folk, piece = null, tavern = null, at = null, people = "human" }) {
+        const building = { key, kind, name, piece, tavern, place: null, people, seed: 0, at, entrance: null, made: true, maps, folk };
 
         this.buildings.set(key, building);
 
@@ -784,7 +784,7 @@ export class Interiors {
         const maps = floors.map((floor, k) => {
             const map = readPlan(`${key}/${floor.suffix}`, floor.name, floor.rows, { ground: floor.ground });
 
-            Object.assign(map, { origin: [origin[0], origin[1] + k * ORIGINS.step], style: floor.style, look: floor.look ?? null, finish: floor.finish ?? null, patron: floor.patron ?? null, sound: floor.sound, building: key, layout: floor.layout ?? null });
+            Object.assign(map, { origin: [origin[0], origin[1] + k * ORIGINS.step], style: floor.style, look: floor.look ?? null, finish: floor.finish ?? null, patron: floor.patron ?? null, sound: floor.sound, building: key, layout: floor.layout ?? null, people: building.people ?? "human" });
 
             return map;
         });

@@ -1,17 +1,35 @@
 // The trees (client/js/world/art/kits/trees.js): grown from rules for each kind, from a seed
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { TREE_VARIANTS } from "../client/js/core/setpieces/pieces.js";
+import { HOME_TREES, homeTree, TREE_KINDS, TREE_VARIANTS } from "../client/js/core/setpieces/pieces.js";
 import { growTree, KINDS, plantTrees, SPECIES, treeMaterials, VARIANTS, Woodland } from "../client/js/world/art/kits/trees.js";
 
 // The corners of a grown part: [x, y, z] for each vertex
 const points = ({ position }) => Array.from({ length: position.length / 3 }, (_, k) => position.slice(k * 3, k * 3 + 3));
 
 describe("the trees (trees.js)", () => {
-    it("has as many variants as the town's plans pick from, every kind among them", () => {
-        assert.equal(VARIANTS.length, TREE_VARIANTS);
+    it("has a variant for every tree the plans pick, every kind among them: anyone's first, then each people's own", () => {
+        const anyones = ["oak", "beech", "birch", "pine", "spruce", "poplar", "apple"];
+
+        assert.equal(VARIANTS, TREE_KINDS);
         assert.deepEqual([...new Set(VARIANTS.map(([kind]) => kind))].sort(), [...KINDS].sort());
-        assert.deepEqual(KINDS, ["oak", "beech", "birch", "pine", "spruce", "poplar", "apple"]);
+        assert.deepEqual(KINDS, [...anyones, ...Object.values(HOME_TREES)]);
+        assert.ok(VARIANTS.slice(0, TREE_VARIANTS).every(([kind]) => anyones.includes(kind)));
+        assert.ok(VARIANTS.slice(TREE_VARIANTS).every(([kind]) => Object.values(HOME_TREES).includes(kind)));
+    });
+
+    it("gives each people its own trees three times in five, and the humans anyone's", () => {
+        for (const [people, kind] of Object.entries(HOME_TREES)) {
+            const picked = Array.from({ length: TREE_VARIANTS }, (_, variant) => VARIANTS[homeTree(people, variant)][0]);
+            const own = picked.filter((one) => one === kind).length;
+
+            assert.ok(Math.abs(own / picked.length - 0.6) < 0.1, `${people}: ${own} of ${picked.length}`);
+            assert.ok(picked.every((one) => one === kind || !Object.values(HOME_TREES).includes(one)), people);
+        }
+
+        for (let variant = 0; variant < TREE_VARIANTS; variant++) {
+            assert.equal(homeTree("human", variant), variant);
+        }
     });
 
     it("grows the same tree from the same seed, and a different one from another", () => {

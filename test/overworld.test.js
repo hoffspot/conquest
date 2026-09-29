@@ -8,7 +8,7 @@ import { squaresOf } from "../client/js/core/grid.js";
 import { buildWorld, CHUNK, CHUNKS, FLORA, Overworld, WET, WORLD_SIZE } from "../client/js/core/overworld.js";
 import { findPath } from "../client/js/core/pathfinding.js";
 import { Settlements, squareOf, waysOut } from "../client/js/core/settlements.js";
-import { ENTERED, GROUND, TREE_KINDS } from "../client/js/core/setpieces/pieces.js";
+import { ENTERED, GROUND, HOME_TREES, TREE_KINDS } from "../client/js/core/setpieces/pieces.js";
 import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
 import { BIOMES, CELL, CELLS } from "../client/js/core/worldplan/plan.js";
 
@@ -160,6 +160,33 @@ describe("the world outside (overworld.js)", () => {
         }
     });
 
+    it("grows each people's own trees in its homeland, most of the trees there, and nowhere else", () => {
+        const kinds = new Map(TREE_KINDS.map(([kind], variant) => [variant, kind]));
+        const home = (cx, cy) => {
+            const corners = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([i, j]) => overworld.homeAt(Math.min(WORLD_SIZE - 1, (cx + i) * CHUNK), Math.min(WORLD_SIZE - 1, (cy + j) * CHUNK)));
+
+            return corners.every((one) => one === corners[0]) ? corners[0] : undefined;
+        };
+
+        for (const people of [...Object.keys(HOME_TREES), null]) {
+            const trees = [];
+
+            for (let cy = 0; cy < CHUNKS && trees.length < 60; cy += 3) {
+                for (let cx = 0; cx < CHUNKS && trees.length < 60; cx += 3) {
+                    if (home(cx, cy) === people) {
+                        trees.push(...overworld.chunk(cx, cy).trees.map(({ variant }) => kinds.get(variant)));
+                    }
+                }
+            }
+
+            assert.ok(trees.length >= 20, `${people}: ${trees.length} trees`);
+
+            const own = trees.filter((kind) => kind === HOME_TREES[people]).length;
+
+            assert.ok(people ? own / trees.length > 0.5 : trees.every((kind) => !Object.values(HOME_TREES).includes(kind)), `${people}: ${own} of ${trees.length} its own`);
+        }
+    });
+
     it("grows trees as thick as the land has them, of its own kinds, clear of roads and water", () => {
         const counts = {};
         const kinds = new Map(TREE_KINDS.map(([kind], variant) => [variant, kind]));
@@ -191,8 +218,9 @@ describe("the world outside (overworld.js)", () => {
             assert.ok(chunks.length >= 3, id);
             counts[id] = chunks.reduce((sum, chunk) => sum + chunk.trees.length, 0) / chunks.length;
 
+            // (Or, in a people's homeland, their own)
             for (const { x, y, variant } of chunks.flatMap((chunk) => chunk.trees)) {
-                assert.ok(FLORA[overworld.biomeAt(x, y)].kinds.includes(kinds.get(variant)), `${id}: a ${kinds.get(variant)}`);
+                assert.ok(FLORA[overworld.biomeAt(x, y)].kinds.includes(kinds.get(variant)) || HOME_TREES[overworld.homeAt(x, y)] === kinds.get(variant), `${id}: a ${kinds.get(variant)}`);
             }
         }
 

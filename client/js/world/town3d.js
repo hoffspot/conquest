@@ -16,7 +16,7 @@
 
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { atlasMaterial, toAtlas } from "./art/engine/atlas.js";
+import { atlasMaterial, glowMaterial, toAtlas, toGlow } from "./art/engine/atlas.js";
 import { createRandom } from "../core/random.js";
 import { pieceCatalog } from "../core/setpieces/pieces.js";
 import { footprint } from "../core/setpieces/town.js";
@@ -24,6 +24,7 @@ import { PLOT } from "../core/world.js";
 import { gatehouse, keep, tower, wall } from "./art/kits/castle.js";
 import { house } from "./art/kits/house.js";
 import { landmark } from "./art/kits/landmarks.js";
+import { builderFor } from "./art/peoples/index.js";
 import { prop } from "./art/kits/props.js";
 import { tree } from "./art/kits/town.js";
 import { plantTrees } from "./art/kits/trees.js";
@@ -50,7 +51,7 @@ export const TILE = 32;
 
 // What the camera pulls in closer than, rather than looking through (view.js): what's built,
 // not the props (carts, wells, stalls) or the trees
-const BUILT = new Set(["house", "landmark", "wall", "tower", "gatehouse", "keep"]);
+const BUILT = new Set(["house", "landmark", "structure", "wall", "tower", "gatehouse", "keep"]);
 
 /**
  * How high whatever stands on each square of an area is (metres): { x0, z0 (its north-west
@@ -108,10 +109,26 @@ export async function buildTown(world, { onProgress = () => {} } = {}) {
             continue;
         }
 
-        // Everything else is built facing south, and turned to face its street (or the market)
-        // about its middle
-        const built = await BUILDERS[spec.kind](spec);
+        // Everything else is built facing south (by its people's kit, if it's theirs), and turned
+        // to face its street (or the market) about its middle
+        const build = builderFor(spec) ?? BUILDERS[spec.kind];
+
+        if (!build) {
+            onProgress(++done, total);
+            continue;
+        }
+
+        const built = await build(spec);
         const object = new THREE.Group();
+
+        // (Trees a piece grows round itself, as the elves build into great trees: planted with
+        // the town's, where they stand as the piece is turned)
+        for (const { x, z, variant, size = 1 } of built.userData?.trees ?? []) {
+            const [lx, lz] = [(x - piece.w * 10) * PIXEL, (z - piece.h * 10) * PIXEL];
+            const [c, s] = [Math.cos(piece.facing), Math.sin(piece.facing)];
+
+            plant(ox + piece.x + lx * c + lz * s, oz + piece.y - lx * s + lz * c, variant, size);
+        }
 
         built.position.set(-piece.w * 10, 0, -piece.h * 10);
         object.add(built);
@@ -324,8 +341,10 @@ export function merge(root, { atlas = false } = {}) {
 
         for (const [part, own] of parts) {
             const drawn = atlas ? toAtlas(part, own) : null;
-            const [geometry, material] = drawn ? [drawn, atlasMaterial()] : [part, own];
-            const key = drawn ? "atlas" : materialKey(material);
+            // (Every light in one mesh of its own, each face in its own colour)
+            const lit = atlas && !drawn ? toGlow(part, own) : null;
+            const [geometry, material] = drawn ? [drawn, atlasMaterial()] : lit ? [lit, glowMaterial()] : [part, own];
+            const key = drawn ? "atlas" : lit ? "glow" : materialKey(material);
             const keep = drawn ? ["position", "normal", "uv", "color", "layer"] : ["position", "normal", "uv", ...(material.vertexColors ? ["color"] : [])];
 
             for (const name of Object.keys(geometry.attributes)) {

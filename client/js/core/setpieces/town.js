@@ -23,7 +23,7 @@ import { createRandom, noise } from "../random.js";
 import { atan2, cos, length, PI, sin, sqrt, TAU } from "./exact.js";
 import { patronOf } from "../lore/gods.js";
 import { nameTavern } from "../lore/taverns.js";
-import { ENTERED, GROUND, HOUSE_STYLES, HOUSE_VARIANTS, houseKey, LANDMARKS, landmarkKey, OUTBUILDINGS, PLOT, PROPS, propKey, TRADES, treeKey, TREE_VARIANTS } from "./pieces.js";
+import { ENTERED, GROUND, homeTree, HOUSE_STYLES, HOUSE_VARIANTS, houseKey, LANDMARKS, landmarkKey, OUTBUILDINGS, PEOPLE_PLACES, PLOT, PROPS, propKey, TRADES, treeKey, TREE_VARIANTS } from "./pieces.js";
 
 /**
  * The kinds of settlement, and how each is laid out: how far its houses reach from the middle
@@ -39,6 +39,27 @@ export const SETTLEMENT_KINDS = Object.freeze({
     town: { radius: 48, seat: "hall", fields: 18, market: [10, 13], main: 4.4, lane: 3, rings: [0.62], alleys: 3, width: [6, 10], depth: [8, 12], gap: [0, 1.2], built: 0.95, landmarks: ["tavern", "church", "blacksmith", "guild"], extra: [["tavern", 0.5]], windmill: 0.8, stalls: 3, storeys: [[1, 4], [2, 5], [3, 1]], trades: 0.3 },
     city: { radius: 84, seat: "hall", fields: 18, market: [14, 17], main: 5, lane: 3.2, rings: [0.4, 0.72, 0.97], alleys: 8, width: [6, 11], depth: [9, 13], gap: [0, 0.8], built: 0.97, landmarks: ["tavern", "church", "blacksmith", "guild", "market", "tavern"], extra: [["tavern", 0.6], ["blacksmith", 0.5]], windmill: 0.9, stalls: 4, storeys: [[1, 2], [2, 6], [3, 3]], trades: 0.4 },
     capital: { radius: 112, seat: "keep", fields: 20, market: [17, 21], main: 5.5, lane: 3.3, rings: [0.3, 0.55, 0.78, 0.97], alleys: 12, width: [6, 11], depth: [9, 13], gap: [0, 0.6], built: 0.98, landmarks: ["tavern", "church", "blacksmith", "guild", "market", "tavern", "tavern", "blacksmith"], extra: [["tavern", 0.7]], windmill: 0.95, stalls: 6, storeys: [[1, 1], [2, 5], [3, 4]], trades: 0.45 },
+});
+
+/**
+ * How each people lays its settlements out, where it differs from the humans' (the kinds' own
+ * sizes stay): how far its main streets bend (`bend`: radians either way), how its ways out are
+ * chosen (`ways`: "cross", four at right angles, as the orcs' ring forts; "web", a spoke every so
+ * often, `spokes` of them, the dark elves' orb web), its rings of lanes (`rings`: shares of the
+ * radius, always laid), its lots (`lots`: across and deep, metres; `far` for the lanes, the cat
+ * folk's compounds), the gaps between them, how often a tree is tried on open ground (`trees`:
+ * square metres), whether its houses stand over a band of water (`water`: from and to, shares of
+ * the radius: the lizard folk's lagoon), whether it has a windmill, how much bigger its market
+ * place is, from what size of settlement (its radius, metres) it's walled (`wall`), and whether
+ * its market and main streets are cobbled (`paved`: or trodden earth, as the roads are).
+ */
+export const PEOPLE_TOWNS = Object.freeze({
+    human: {},
+    cat: { lots: { width: [8, 12], depth: [9, 12] }, far: { width: [16, 19], depth: [16, 19] }, gap: [1.5, 3], windmill: false, wall: 48, near: 0.45, paved: false },
+    orc: { ways: "cross", bend: 0.06, rings: [0.72], lots: { width: [14, 20], depth: [8, 9.5] }, gap: [1.5, 3.5], windmill: false, wall: 30, market: 1.25, paved: false },
+    lizard: { bend: 0.08, lots: { width: [8, 11], depth: [8, 10] }, gap: [2, 4], water: [0.46, 0.84], windmill: false, wall: 84, paved: false },
+    elf: { bend: 0.9, lots: { width: [11, 14], depth: [11, 14] }, gap: [2.5, 5], trees: 45, windmill: false, wall: 48 },
+    darkElf: { ways: "web", spokes: 7, bend: 0.1, rings: [0.38, 0.68, 0.96], lots: { width: [8, 11], depth: [9, 11] }, gap: [0, 0.6], windmill: false, wall: 30, market: 1.35 },
 });
 
 // How far the streets step as they're laid (metres), and how far a main street bends either way
@@ -88,15 +109,18 @@ const ATTEMPTS = 20;
 /**
  * A settlement of a kind (SETTLEMENT_KINDS) from a seed, its main streets leaving the ways given
  * (`exits`: angles in radians, 0 east and π/2 south; or, if none are given, three or four ways
- * round). Returns { kind, seed, width, height (metres: the town and the fields round it),
- * centre ([x, y]), radius, market ({ corners, centre }), streets ([{ points, width, main }]),
+ * round), laid out as `people` lays out its settlements (PEOPLE_TOWNS; its pieces then carry
+ * `people`, and its houses their `type`). Returns { kind, seed, people, width, height (metres:
+ * the town and the fields round it), centre ([x, y]), radius, market ({ corners, centre }),
+ * streets ([{ points, width, main }]),
  * exits ([x, y]: where the main streets reach the edge), pieces ([{ key, kind, name, style,
  * variant, x, y (its middle, metres), w, h (its size across and deep, in plots, as the art kits
  * build it), facing (the way its front faces: radians, 0 south, π/2 east, as characters face) }]),
  * ground, blocked, opaque (rows of squares: GROUND kinds, 1 where no one can go, 1 where nothing
- * behind can be seen) }.
+ * behind can be seen), water (rows of squares, 1 for water, or null for none), walks (the plank
+ * walks over it: [{ a, b ([x, y]: its ends), half (half its width) }]) }.
  */
-export function layoutTown({ seed = 1, kind = "town", exits = null } = {}) {
+export function layoutTown({ seed = 1, kind = "town", exits = null, people = "human" } = {}) {
     const spec = SETTLEMENT_KINDS[kind];
 
     if (!spec) {
@@ -104,12 +128,13 @@ export function layoutTown({ seed = 1, kind = "town", exits = null } = {}) {
     }
 
     const random = createRandom(seed);
+    const look = PEOPLE_TOWNS[people] ?? PEOPLE_TOWNS.human;
 
     for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
-        const town = designTown(spec, exits, createRandom(random.seed()), seed + attempt * 7919);
+        const town = designTown(spec, exits, createRandom(random.seed()), seed + attempt * 7919, look, people);
 
         if (town) {
-            return { kind, seed, ...town };
+            return { kind, seed, people, ...town };
         }
     }
 
@@ -215,7 +240,8 @@ const facingOf = (vx, vy) => atan2(vx, vy);
 
 // --- Laying it out ---
 
-function designTown(spec, exits, random, seed) {
+function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people = "human") {
+    const other = people !== "human";
     const size = 2 * Math.round(spec.radius + spec.fields);
     const [width, height] = [size, size];
     const centre = [width / 2 + random.range(-3, 3), height / 2 + random.range(-3, 3)];
@@ -229,7 +255,7 @@ function designTown(spec, exits, random, seed) {
     // nearer or further
     const sides = random.int(5, 7);
     const turn = random.next() * TAU;
-    const reach = random.range(...spec.market);
+    const reach = random.range(...spec.market) * (look.market ?? 1);
     const market = Array.from({ length: sides }, (_, k) => {
         const angle = turn + (TAU * (k + random.range(-0.2, 0.2))) / sides;
         const r = reach * random.range(0.8, 1.15);
@@ -239,18 +265,18 @@ function designTown(spec, exits, random, seed) {
 
     // The ways out: those asked for (those closer together than 50 degrees made one), or three or
     // four round
-    const ways = wayOut(exits, random);
+    const ways = look.ways === "cross" ? crossWays(exits, random) : look.ways === "web" ? webWays(exits, random, Math.min(look.spokes, 4 + Math.floor(spec.radius / 20))) : wayOut(exits, random);
 
     // Main streets from the middle to the edge, each bending as it goes
-    const streets = ways.map((angle) => ({ points: mainStreet(centre, angle, width, height, random, seed), width: spec.main, main: true }));
+    const streets = ways.map((angle) => ({ points: mainStreet(centre, angle, width, height, random, seed, look.bend ?? BEND), width: spec.main, main: true }));
 
     // Rings of lanes between neighbouring main streets, and alleys off them
     if (streets.length >= 2) {
         const order = ways.map((angle, k) => ({ angle, k })).sort((a, b) => a.angle - b.angle);
 
-        for (const share of spec.rings) {
+        for (const share of look.rings ? (spec.small ? [] : look.rings.filter((r) => r * spec.radius > reach * 1.15 + 14)) : spec.rings) {
             for (let n = 0; n < order.length; n++) {
-                if (random.chance(0.8)) {
+                if (random.chance(look.rings ? 1 : 0.8)) {
                     const lane = ring(streets[order[n].k].points, streets[order[(n + 1) % order.length].k].points, centre, radius * share, random, seed);
 
                     if (lane) {
@@ -271,7 +297,10 @@ function designTown(spec, exits, random, seed) {
         }
     }
 
-    // The streets' squares, and the market's
+    // The streets' squares, and the market's: cobbled, or (the cat folk, the orcs and the lizard
+    // folk) trodden earth, as the roads are
+    const paving = look.paved === false ? GROUND.road : GROUND.cobbles;
+
     for (const { points, width: across, main } of streets) {
         const half2 = (across / 2) * (across / 2);
 
@@ -285,7 +314,7 @@ function designTown(spec, exits, random, seed) {
                         const cobbled = main && !spec.small && dx * dx + dy * dy < (radius * COBBLED) ** 2;
 
                         use[j * width + i] = USE.street;
-                        ground[j][i] = cobbled || ground[j][i] === GROUND.cobbles ? GROUND.cobbles : GROUND.road;
+                        ground[j][i] = cobbled || ground[j][i] === paving ? paving : GROUND.road;
                     }
                 }
             }
@@ -297,7 +326,57 @@ function designTown(spec, exits, random, seed) {
             if (inside(i, j) && within(market, i + 0.5, j + 0.5)) {
                 // (A hamlet's middle is a green, a farmstead's its yard)
                 use[j * width + i] = USE.street;
-                ground[j][i] = spec.farm ? GROUND.courtyard : spec.small ? GROUND.grass : GROUND.cobbles;
+                ground[j][i] = spec.farm ? GROUND.courtyard : spec.small ? GROUND.grass : paving;
+            }
+        }
+    }
+
+    // The lizard folk's lagoon: a band of water round the middle, ragged, over a bed of mud (as
+    // the world's lakes lie), the streets crossing it on plank walks
+    const water = look.water ? Array.from({ length: height }, () => new Uint8Array(width)) : null;
+    const walks = [];
+
+    if (water) {
+        const [from, to] = look.water;
+
+        for (let j = 0; j < height; j++) {
+            for (let i = 0; i < width; i++) {
+                const [dx, dy] = [i + 0.5 - centre[0], j + 0.5 - centre[1]];
+                const r = length(dx, dy) / radius;
+                const wobble = (noise(i, j, seed + 31, 9, 2) - 0.5) * 0.18;
+
+                if (r > from + wobble && r < to + wobble) {
+                    water[j][i] = 1;
+
+                    ground[j][i] = use[j * width + i] === USE.street ? GROUND.planks : GROUND.soil;
+                }
+            }
+        }
+
+        // (The walks: each street's straight runs over the water, a metre onto the bank at each
+        // end, as wide as the street)
+        for (const { points, width: across } of streets) {
+            for (let k = 1; k < points.length; k++) {
+                const [a, b] = [points[k - 1], points[k]];
+                const steps = Math.max(1, Math.ceil(length(b[0] - a[0], b[1] - a[1])));
+                const at = (t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+                let run = null;
+
+                for (let s = 0; s <= steps; s++) {
+                    const [x, y] = at(s / steps);
+                    const wet = water[Math.floor(y)]?.[Math.floor(x)] === 1;
+
+                    if (wet) {
+                        run = [run?.[0] ?? s / steps, s / steps];
+                    }
+
+                    if (run && (!wet || s === steps)) {
+                        const extra = 1 / steps;
+
+                        walks.push({ a: at(Math.max(0, run[0] - extra)), b: at(Math.min(1, run[1] + extra)), half: across / 2 });
+                        run = null;
+                    }
+                }
             }
         }
     }
@@ -313,7 +392,7 @@ function designTown(spec, exits, random, seed) {
 
     // What's placed, as a piece: its size in plots, as the art kits build it
     const place = (rect, fields) => {
-        const piece = { ...fields, x: rect.x, y: rect.y, w: rect.w / PLOT, h: rect.d / PLOT, facing: rect.facing };
+        const piece = { ...fields, ...(other && fields.kind !== "tree" ? { people } : {}), x: rect.x, y: rect.y, w: rect.w / PLOT, h: rect.d / PLOT, facing: rect.facing };
 
         pieces.push(piece);
 
@@ -388,7 +467,7 @@ function designTown(spec, exits, random, seed) {
             }
         }
 
-        placed ??= firstAlong(streets.filter(({ main }) => main), random, [w, d], { from: reach, to: radius * 0.6 }, building);
+        placed ??= firstAlong(streets.filter(({ main }) => main), random, [w, d], { from: reach, to: radius * (other ? 0.9 : 0.6) }, building);
 
         if (placed) {
             mark(placed, 0, USE.building);
@@ -436,11 +515,81 @@ function designTown(spec, exits, random, seed) {
         }
     }
 
+    // A people's wall round its town (the cat folk's mud, the orcs' stakes, the dark elves'
+    // black stone...): lengths of wall round a circle past its houses, a gatehouse where each
+    // main street goes through, a tower every few lengths
+    if (other && look.wall && spec.radius >= look.wall) {
+        const around = spec.radius + Math.min(spec.fields - 4, spec.radius * 0.18);
+        const crossings = streets.filter(({ main }) => main).map(({ points }) => crossingAt(points, centre, around)).filter(Boolean);
+        const gates = crossings.map(([x, y]) => atan2(y - centre[1], x - centre[0]));
+        const span = 4 * PLOT;
+        const count = Math.max(8, Math.round((TAU * around) / span));
+        const clearOf = (angle, reach) => gates.every((gate) => {
+            const off = Math.abs(((angle - gate + PI * 3) % TAU) - PI);
+
+            return off * around > reach;
+        });
+
+        for (let k = 0; k < count; k++) {
+            const angle = (k * TAU) / count;
+            const [x, y] = [centre[0] + cos(angle) * around, centre[1] + sin(angle) * around];
+            const outward = facingOf(cos(angle), sin(angle));
+
+            if (!clearOf(angle, span / 2 + 7)) {
+                continue;
+            }
+
+            const tower = k % 4 === 0;
+            const rect = tower ? frame(x, y, 2 * PLOT, 2 * PLOT, outward) : frame(x, y, (TAU * around) / count + 0.6, PLOT, outward);
+
+            if (fits(rect, 0, [USE.street, USE.building])) {
+                mark(rect, 0.4, USE.building);
+                place(rect, { key: `${tower ? "tower" : "wall"}-${people}`, kind: tower ? "tower" : "wall" });
+            }
+        }
+
+        // (Each gatehouse across its street, which runs on through its gate)
+        for (const [x, y, heading] of crossings) {
+            const rect = frame(x, y, 3 * PLOT, 2 * PLOT, heading);
+
+            eachSquare(rect, 0.2, (i, j) => {
+                if (inside(i, j) && use[j * width + i] !== USE.street) {
+                    use[j * width + i] = USE.building;
+                }
+            });
+            place(rect, { key: `gatehouse-${people}`, kind: "gatehouse" });
+        }
+    }
+
+    // A people's own places in its bigger settlements, where the humans would have a windmill
+    // (the cat folk's sun temple, the orcs' fighting pit, the elves' moonwell...): along the main
+    // streets, out past the market, as many as fit of one for a town, two for a city, three for a
+    // capital
+    if (other && PEOPLE_PLACES[people] && !spec.small) {
+        const wanted = spec.radius >= 112 ? 3 : spec.radius >= 84 ? 2 : spec.radius >= 48 ? 1 : 0;
+        const names = random.shuffle(Object.keys(PEOPLE_PLACES[people]).filter((name) => name !== "castle"));
+        let placed = 0;
+
+        for (const name of names) {
+            const [w, d] = PEOPLE_PLACES[people][name].map((plots) => plots * PLOT);
+            const rect = placed < wanted ? firstAlong(random.shuffle(streets.filter(({ main }) => main)), random, [w, d], { from: reach * 1.2, to: radius * 0.9 }, building) : null;
+
+            if (rect) {
+                mark(rect, 0, USE.building);
+                place(rect, { key: `structure-${people}-${name}`, kind: "structure", name, seed: random.int(0, 2 ** 30) });
+                placed++;
+            }
+        }
+    }
+
     // Houses: round the market first, then along the main streets from the middle out, then the
     // lanes; each town favouring one style
     const favourite = random.pick(HOUSE_STYLES);
     const styleOf = () => (random.chance(0.55) ? favourite : random.pick(HOUSE_STYLES));
-    const houseSize = () => [random.range(...spec.width), random.range(...spec.depth)].map((metres) => Math.round(metres * 2) / 2);
+    const lots = look.lots && !spec.small ? look.lots : { width: spec.width, depth: spec.depth };
+    const houseSize = () => [random.range(...lots.width), random.range(...lots.depth)].map((metres) => Math.round(metres * 2) / 2);
+    const farSize = look.far && !spec.small ? () => [random.range(...look.far.width), random.range(...look.far.depth)].map((metres) => Math.round(metres * 2) / 2) : houseSize;
+    const gap = look.gap ?? spec.gap;
 
     // Each house's own (from a random of their own, so the layout's the same with or without
     // them): how many storeys it has, a trade for a shop on the market or a main street, what a
@@ -477,9 +626,12 @@ function designTown(spec, exits, random, seed) {
 
         // (A farmstead is its farmhouse, and its barns and sheds round the yard)
         const farm = spec.farm && pieces.some(({ kind }) => kind === "house") ? { back: true, storeys: 1, use: own.pick(OUTBUILDINGS), seed: own.int(0, 2 ** 30) } : details(street);
+        // (Another people's house: what kind of house it is, and whether it stands over water)
+        const wet = water?.[Math.floor(rect.y)]?.[Math.floor(rect.x)] === 1;
+        const kind = other && !farm.back ? typeFor(people, rect, length(dx, dy) / radius, street, wet, own, look) : null;
 
         mark(rect, 0, USE.building);
-        place(rect, { key: houseKey(rect.w / PLOT, rect.d / PLOT, style, variant), kind: "house", style, variant, ...farm });
+        place(rect, { key: houseKey(rect.w / PLOT, rect.d / PLOT, style, variant), kind: "house", style, variant, ...farm, ...(kind ? { type: kind } : {}), ...(wet ? { water: true } : {}) });
         yard(rect);
 
         return "built";
@@ -535,7 +687,8 @@ function designTown(spec, exits, random, seed) {
             use[j * width + i] = USE.thing;
         }
 
-        const variant = random.int(0, TREE_VARIANTS - 1);
+        // (Another people's own trees among them)
+        const variant = homeTree(people, random.int(0, TREE_VARIANTS - 1));
 
         pieces.push({ key: treeKey(variant), kind: "tree", variant, x, y, w: 0.5, h: 0.5, facing: 0 });
 
@@ -549,9 +702,16 @@ function designTown(spec, exits, random, seed) {
     const mains = streets.filter(({ main }) => main);
 
     street = "main";
-    alongStreets(mains, random, houseSize, { from: reach * 0.6, gap: spec.gap }, house);
+
+    if (look.far) {
+        alongStreets(mains, random, houseSize, { from: reach * 0.6, to: radius * look.near, gap }, house);
+        alongStreets(mains, random, farSize, { from: radius * look.near, gap }, house);
+    } else {
+        alongStreets(mains, random, houseSize, { from: reach * 0.6, gap }, house);
+    }
+
     street = "lane";
-    alongStreets(streets.filter(({ main }) => !main), random, houseSize, { gap: spec.gap }, house);
+    alongStreets(streets.filter(({ main }) => !main), random, farSize, { gap }, house);
 
     // Back buildings in the blocks behind the houses, each lined up with the street nearest it
     // and facing it
@@ -597,7 +757,7 @@ function designTown(spec, exits, random, seed) {
     }
 
     // A windmill out at the edge of town, beside a main street
-    if (random.chance(spec.windmill)) {
+    if (look.windmill !== false && random.chance(spec.windmill)) {
         const [w, d] = LANDMARKS.windmill.map((plots) => plots * PLOT);
 
         for (const street of random.shuffle([...mains])) {
@@ -612,7 +772,7 @@ function designTown(spec, exits, random, seed) {
     }
 
     // Trees on the open ground in town, clear of the streets and houses
-    for (let tries = 0; tries < (PI * radius * radius) / TREE_EVERY; tries++) {
+    for (let tries = 0; tries < (PI * radius * radius) / (look.trees ?? TREE_EVERY); tries++) {
         const angle = random.next() * TAU;
         const r = radius * sqrt(random.next());
         const [x, y] = [Math.round(centre[0] + cos(angle) * r), Math.round(centre[1] + sin(angle) * r)];
@@ -653,19 +813,22 @@ function designTown(spec, exits, random, seed) {
         }
     }
 
-    // (Nothing stands on a street: a street square under a piece's edge is left open)
+    // (Nothing stands on a street: a street square under a piece's edge is left open; no one
+    // walks on water)
     for (let j = 0; j < height; j++) {
         for (let i = 0; i < width; i++) {
             if (use[j * width + i] === USE.street) {
                 blocked[j][i] = 0;
                 opaque[j][i] = 0;
+            } else if (water?.[j][i]) {
+                blocked[j][i] = 1;
             }
         }
     }
 
     const houses = pieces.filter(({ kind }) => kind === "house");
 
-    if (houses.length < (spec.radius > 30 ? 12 : 4)) {
+    if (houses.length < (spec.radius > 30 ? (other ? 8 : 12) : other ? 3 : 4)) {
         return null;
     }
 
@@ -685,7 +848,7 @@ function designTown(spec, exits, random, seed) {
             const { style, storeys } = seat;
 
             for (const key of Object.keys(seat)) {
-                if (!["x", "y", "w", "h", "facing"].includes(key)) {
+                if (!["x", "y", "w", "h", "facing", "people", "water"].includes(key)) {
                     delete seat[key];
                 }
             }
@@ -706,7 +869,65 @@ function designTown(spec, exits, random, seed) {
         ground,
         blocked,
         opaque,
+        water,
+        walks,
     };
+}
+
+// What kind of house another people builds on a lot (their kits' types): by how far out it is
+// (a share of the radius), how big, which street it's on, whether it stands over water
+function typeFor(people, rect, out, street, wet, own, look) {
+    const area = rect.w * rect.d;
+
+    if (people === "cat") {
+        return out < look.near && street !== "lane" ? (area > 100 ? "townhouse" : own.pick(["townhouse", "twin", "block"])) : rect.w >= 15 && rect.d >= 15 ? "compound" : own.pick(["hut", "twin", "block"]);
+    }
+
+    if (people === "orc") {
+        return rect.w / rect.d > 1.6 ? "longhouse" : own.pick(["roundhut", "roundhut", "block"]);
+    }
+
+    if (people === "lizard") {
+        return wet ? own.pick(["marsh", "deck", "saddle"]) : area > 90 ? "saddle" : own.pick(["marsh", "deck", "reed"]);
+    }
+
+    if (people === "elf") {
+        return out < 0.45 ? own.pick(["ground", "pagoda"]) : own.pick(["trunk", "canopy", "trunk", "ground"]);
+    }
+
+    if (people === "darkElf") {
+        return area > 95 && own.chance(0.4) ? "spire" : own.pick(["thorn", "thorn", "pod"]);
+    }
+
+    return null;
+}
+
+// The orcs' ways out: four, at right angles, the first towards the first road
+function crossWays(exits, random) {
+    const base = exits?.length ? exits[0] : random.next() * TAU;
+
+    return [0, 1, 2, 3].map((k) => base + (k * PI) / 2);
+}
+
+// The dark elves' ways out: `spokes` of them evenly round (an orb web's), one along each road
+function webWays(exits, random, spokes) {
+    const base = exits?.length ? exits[0] : random.next() * TAU;
+    const ways = Array.from({ length: spokes }, (_, k) => base + (k * TAU) / spokes + (k ? random.range(-0.08, 0.08) : 0));
+
+    // (Each road's nearest spoke turned onto it)
+    for (const exit of exits ?? []) {
+        let best = 0;
+
+        for (let k = 1; k < ways.length; k++) {
+            const off = (angle) => Math.abs(((angle - exit + PI * 3) % TAU) - PI);
+
+            best = off(ways[k]) < off(ways[best]) ? k : best;
+        }
+
+        ways[best] = exit;
+    }
+
+    return ways;
 }
 
 // The ways out ([angles]): those asked for, those within 50 degrees of each other made one; or
@@ -742,13 +963,13 @@ function wayOut(exits, random) {
 
 // A main street from the middle, heading out at an angle and bending as it goes, to the layout's
 // edge (its last point on the edge)
-function mainStreet(centre, angle, width, height, random, seed) {
+function mainStreet(centre, angle, width, height, random, seed, bend = BEND) {
     const points = [centre];
     const phase = random.next() * 1000;
     let [x, y] = centre;
 
     for (let k = 1; k < 200; k++) {
-        const heading = angle + (noise(k, phase, seed + 5, 3, 2) - 0.5) * 2 * BEND;
+        const heading = angle + (noise(k, phase, seed + 5, 3, 2) - 0.5) * 2 * bend;
         const [nx, ny] = [x + cos(heading) * STEP, y + sin(heading) * STEP];
 
         if (nx <= 0 || ny <= 0 || nx >= width || ny >= height) {
@@ -792,6 +1013,15 @@ function atDistance(points, centre, r) {
     }
 
     return null;
+}
+
+// Where a street goes through a circle round the middle: [x, y, the way it heads there, as a
+// facing], or null if it never does
+function crossingAt(points, centre, r) {
+    const at = atDistance(points, centre, r);
+    const k = at && points.findIndex(([x, y]) => (x - centre[0]) ** 2 + (y - centre[1]) ** 2 >= r * r);
+
+    return at ? [...at, facingOf(points[k][0] - points[k - 1][0], points[k][1] - points[k - 1][1])] : null;
 }
 
 // A lane curving round from one main street to the next (the way the angles go), about `r` from

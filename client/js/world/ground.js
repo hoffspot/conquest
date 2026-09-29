@@ -12,6 +12,8 @@ import { tiling } from "../core/noise.js";
 import { CHUNK } from "../core/overworld.js";
 import { GROUND } from "../core/setpieces/pieces.js";
 import { BIOMES, CELLS, WORLD_SIZE } from "../core/worldplan/plan.js";
+import { RACES } from "../core/worldplan/races.js";
+import { paintLayer, SIZE } from "./art/engine/painters.js";
 import { textureCanvas } from "./art/engine/materials.js";
 
 // Splat texels per metre (edges are shaped at this resolution)
@@ -62,6 +64,23 @@ export const LAND_COLOURS = Object.freeze({
 
 // How far the edges between lands wander (metres), so the plan's cells don't show
 const LAND_WANDER = 26;
+
+/**
+ * The peoples whose homelands (the world plan's territories) have ground of their own, painted
+ * as materials "home-<people>" (painters.js): the cat folk's gold grass and red earth, the orcs'
+ * cracked red clay, the lizard folk's black mire, the elves' moss and clover, the dark elves'
+ * leaf litter. In this order in the home maps' channels (the first four in one, the rest in
+ * another) and the home layers.
+ */
+export const HOMES = Object.freeze(["cat", "orc", "lizard", "elf", "darkElf"]);
+
+// How many metres one copy of a homeland's ground covers, and how much of it shows over the
+// grass (where the homeland's all round)
+const HOME_METRES = 6;
+const HOME_AMOUNT = 0.9;
+
+// The lands no homeland's ground is laid under (the water's own bed shows)
+const UNDER_WATER = new Set(["sea", "lake"]);
 
 /**
  * The grass's patches: how many metres one copy of the noise covers, read coarse (the patches) and
@@ -281,20 +300,72 @@ export function landColours(plan) {
         return [1, 3, 5].map((at) => parseInt(colour.slice(at, at + 2), 16)).concat(Math.round(amount * 255));
     });
 
+    const homes = [new Uint8Array(cells * cells * 4), new Uint8Array(cells * cells * 4)];
+    const wet = BIOMES.map(({ id }) => UNDER_WATER.has(id));
+    const owners = RACES.map(({ id }) => HOMES.indexOf(id));
+
     for (let k = 0; k < cells * cells; k++) {
         data.set(colours[plan.biome[k]], k * 4);
+
+        const home = plan.territory?.[k] ? owners[plan.territory[k] - 1] : -1;
+
+        if (home >= 0 && !wet[plan.biome[k]]) {
+            homes[home >> 2][k * 4 + (home & 3)] = 255;
+        }
     }
 
+    const texture = cellTexture(data, cells, THREE.SRGBColorSpace);
+
+    texture.userData.size = WORLD_SIZE;
+    texture.userData.home = homes.map((home) => cellTexture(home, cells));
+
+    return texture;
+}
+
+// A texture of the plan's cells (or one), blended between them
+function cellTexture(data, cells, colorSpace = THREE.NoColorSpace) {
     const texture = new THREE.DataTexture(data, cells, cells, THREE.RGBAFormat);
 
-    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.colorSpace = colorSpace;
     texture.magFilter = THREE.LinearFilter;
     texture.minFilter = THREE.LinearFilter;
     texture.flipY = false;
     texture.needsUpdate = true;
-    texture.userData.size = WORLD_SIZE;
 
     return texture;
+}
+
+// The homelands' grounds, one layer each (HOMES' order), painted the first time a homeland's seen
+let homeLayers = null;
+
+function homeTexture() {
+    if (!homeLayers) {
+        const data = new Uint8Array(SIZE * SIZE * 4 * HOMES.length);
+
+        HOMES.forEach((people, k) => {
+            const layer = paintLayer(`home-${people}`, SIZE);
+
+            for (let i = 3; i < layer.length; i += 4) {
+                layer[i] = 255;
+            }
+
+            data.set(layer, k * layer.length);
+        });
+
+        homeLayers = new THREE.DataArrayTexture(data, SIZE, SIZE, HOMES.length);
+        homeLayers.format = THREE.RGBAFormat;
+        homeLayers.type = THREE.UnsignedByteType;
+        homeLayers.colorSpace = THREE.SRGBColorSpace;
+        homeLayers.wrapS = THREE.RepeatWrapping;
+        homeLayers.wrapT = THREE.RepeatWrapping;
+        homeLayers.magFilter = THREE.LinearFilter;
+        homeLayers.minFilter = THREE.LinearMipmapLinearFilter;
+        homeLayers.generateMipmaps = true;
+        homeLayers.anisotropy = 8;
+        homeLayers.needsUpdate = true;
+    }
+
+    return homeLayers;
 }
 
 /**
@@ -312,6 +383,11 @@ export function groundMaterial({ splat = null, area = [0, 0, 1, 1], land = null 
     }
 
     const landMap = land ?? noLand;
+    const home = landMap.userData.home ?? null;
+
+    if (!home) {
+        noHome ??= cellTexture(new Uint8Array(4), 1);
+    }
 
     material.name = "ground";
     material.userData.splat = splat;
@@ -321,6 +397,9 @@ export function groundMaterial({ splat = null, area = [0, 0, 1, 1], land = null 
             splatArea: { value: new THREE.Vector4(...area) },
             landMap: { value: landMap },
             landSize: { value: landMap.userData.size ?? 1 },
+            homeMap: { value: home?.[0] ?? noHome },
+            homeMap2: { value: home?.[1] ?? noHome },
+            homeLayers: { value: home ? homeTexture() : null },
             grassMap: { value: grass.texture },
             grassSize: { value: grass.size },
             patchMap: { value: patchTexture() },
@@ -336,6 +415,9 @@ uniform sampler2D splatMap;
 uniform vec4 splatArea;
 uniform sampler2D landMap;
 uniform float landSize;
+uniform sampler2D homeMap;
+uniform sampler2D homeMap2;
+uniform highp sampler2DArray homeLayers;
 uniform sampler2D grassMap;
 uniform float grassSize;
 uniform sampler2D patchMap;
@@ -346,14 +428,33 @@ float variation = texture2D(grassMap, vGround / ${VARIATION_METRES.toFixed(1)}).
 vec3 grass = texture2D(grassMap, vGround / grassSize).rgb;
 
 // The land's colour, its edges wandering (the cells it's read from are ${LAND_WANDER} metres or so)
-vec4 land = texture2D(landMap, (vGround + (vec2(variation, texture2D(grassMap, vGround / 53.0).r) - 0.5) * ${LAND_WANDER.toFixed(1)}) / landSize);
+vec2 landAt = (vGround + (vec2(variation, texture2D(grassMap, vGround / 53.0).r) - 0.5) * ${LAND_WANDER.toFixed(1)}) / landSize;
+vec4 land = texture2D(landMap, landAt);
 grass = mix(grass, land.rgb * dot(grass, vec3(0.2126, 0.7152, 0.0722)) / ${brightness.toFixed(4)}, land.a);
+
+// A people's homeland its own ground, the most of whichever's there (its edges wandering as the
+// land's do)
+vec4 homes = texture2D(homeMap, landAt);
+float homeWeight = homes.r;
+float homeLayer = 0.0;
+if (homes.g > homeWeight) { homeWeight = homes.g; homeLayer = 1.0; }
+if (homes.b > homeWeight) { homeWeight = homes.b; homeLayer = 2.0; }
+if (homes.a > homeWeight) { homeWeight = homes.a; homeLayer = 3.0; }
+float homes2 = texture2D(homeMap2, landAt).r;
+if (homes2 > homeWeight) { homeWeight = homes2; homeLayer = 4.0; }
+float home = smoothstep(0.2, 0.75, homeWeight) * ${HOME_AMOUNT.toFixed(2)};
+if (home > 0.0) {
+    // (Read at two scales, one turned, so its repeats don't show)
+    vec3 homeNear = texture(homeLayers, vec3(vGround / ${HOME_METRES.toFixed(1)}, homeLayer)).rgb;
+    vec3 homeFar = texture(homeLayers, vec3(mat2(0.8, -0.6, 0.6, 0.8) * vGround / ${(HOME_METRES * 2.9).toFixed(1)}, homeLayer)).rgb;
+    grass = mix(grass, mix(homeNear, homeFar, 0.4), home);
+}
 
 // Patches: drier and straw-coloured, lusher and darker, and worn to bare earth here and there
 // (less where the land's own colour is strong: sand, snow, ash)
 vec4 coarse = texture2D(patchMap, vGround / ${PATCHES.coarse.toFixed(1)});
 vec4 fine = texture2D(patchMap, vGround / ${PATCHES.fine.toFixed(1)} + vec2(0.37, 0.71));
-float strength = 1.0 - 0.6 * land.a;
+float strength = (1.0 - 0.6 * land.a) * (1.0 - 0.6 * home);
 float dry = smoothstep(${PATCHES.dry[0].toFixed(3)}, ${PATCHES.dry[1].toFixed(3)}, coarse.r * 0.75 + fine.a * 0.25);
 float lush = smoothstep(${PATCHES.lush[0].toFixed(3)}, ${PATCHES.lush[1].toFixed(3)}, coarse.g * 0.75 + fine.r * 0.25) * (1.0 - dry);
 float bare = smoothstep(${PATCHES.bare[0].toFixed(3)}, ${PATCHES.bare[1].toFixed(3)}, fine.b * 0.75 + coarse.b * 0.25);
@@ -372,6 +473,9 @@ diffuseColor.rgb *= ground;`);
     return material;
 }
 
+// No homeland's
+let noHome = null;
+
 // A splat with nothing on it
 let empty = null;
 
@@ -382,12 +486,35 @@ function noSplat() {
 }
 
 /**
- * The ground mesh for a world on its own (generateWorld's: in metres, x east and z south, the
- * map's corner at the origin), carrying on past its edges.
+ * One land's colour over all the ground (a land's id, LAND_COLOURS'), as landColours' texture is
+ * for the whole world, and a people's homeland's ground if `people` has one (HOMES): for a
+ * settlement shown on its own in its people's land.
  */
-export function buildGround(world) {
+export function landColour(id, people = null) {
+    const [colour, amount] = LAND_COLOURS[id] ?? ["#000000", 0];
+    const texture = cellTexture(Uint8Array.from([1, 3, 5].map((at) => parseInt(colour.slice(at, at + 2), 16)).concat(Math.round(amount * 255))), 1, THREE.SRGBColorSpace);
+    const home = HOMES.indexOf(people);
+
+    texture.userData.size = WORLD_SIZE;
+
+    if (home >= 0) {
+        const homes = [new Uint8Array(4), new Uint8Array(4)];
+
+        homes[home >> 2][home & 3] = 255;
+        texture.userData.home = homes.map((data) => cellTexture(data, 1));
+    }
+
+    return texture;
+}
+
+/**
+ * The ground mesh for a world on its own (generateWorld's: in metres, x east and z south, the
+ * map's corner at the origin), carrying on past its edges; tinted by `land` (landColour's, or
+ * none).
+ */
+export function buildGround(world, { land = null } = {}) {
     const splat = splatTexture(splatData(world));
-    const material = groundMaterial({ splat, area: [0, 0, world.width, world.height] });
+    const material = groundMaterial({ splat, area: [0, 0, world.width, world.height], land });
 
     // The ground carries on past the map's edge into the distance (the splat's edge, and so the
     // roads leaving the map, carrying on with it)

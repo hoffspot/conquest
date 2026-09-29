@@ -324,6 +324,106 @@ export const PAINTERS = {
         };
     },
 
+    // Each people's homeland underfoot (the ground's own: drawn by the ground's shader, not the
+    // atlas). The cat folk's: pale gold grass in dry tussocks, red laterite showing between them
+    savannah({ base, light, dark, mortar }, seed) {
+        const patches = periodicNoise(seed, 4);
+        const tussocks = periodicNoise(seed + 1, 16);
+        const blades = periodicNoise(seed + 2, 128);
+
+        return (x, y) => {
+            const [u, v] = [x / SIZE, y / SIZE];
+            const bare = patches(u * 4, v * 4) * 0.6 + tussocks(u * 16, v * 16) * 0.4;
+            const tone = blades(u * 128, v * 128) * 0.6 + tussocks(u * 16, v * 16) * 0.4;
+            const grass = tone < 0.5 ? mix(dark, base, tone * 2) : mix(base, light, (tone - 0.5) * 2);
+
+            return bare > 0.55 ? mix(grass, scale(mortar, 0.9 + blades(u * 128, v * 128) * 0.2), Math.min(1, (bare - 0.55) * 5)) : grass;
+        };
+    },
+
+    // The orcs': red clay baked hard and cracked into plates, black grit and ash between them
+    cracked({ base, light, dark, mortar }, seed) {
+        const blotch = periodicNoise(seed, 4);
+        const plates = periodicNoise(seed + 1, 10);
+        const grit = periodicNoise(seed + 2, 96);
+
+        return (x, y) => {
+            const [u, v] = [x / SIZE, y / SIZE];
+            const edge = Math.abs(plates(u * 10, v * 10) - 0.5);
+            const tone = blotch(u * 4, v * 4) * 0.6 + grit(u * 96, v * 96) * 0.4;
+            let colour = tone < 0.5 ? mix(dark, base, tone * 2) : mix(base, light, (tone - 0.5) * 2);
+
+            if (edge < 0.018) {
+                colour = scale(mortar, 0.8);
+            } else if (edge < 0.04) {
+                colour = scale(colour, 0.75);
+            } else if (grit(u * 96, v * 96) > 0.82) {
+                colour = mix(colour, mortar, 0.7);
+            }
+
+            return colour;
+        };
+    },
+
+    // The lizard folk's: black mud, wet and shining in its hollows, moss spreading over it
+    mire({ base, light, dark, mortar }, seed) {
+        const moss = periodicNoise(seed, 5);
+        const lumps = periodicNoise(seed + 1, 20);
+        const fine = periodicNoise(seed + 2, 96);
+
+        return (x, y) => {
+            const [u, v] = [x / SIZE, y / SIZE];
+            const green = moss(u * 5, v * 5) * 0.7 + lumps(u * 20, v * 20) * 0.3;
+            const mud = mix(dark, mortar, lumps(u * 20, v * 20) * 0.5 + fine(u * 96, v * 96) * 0.3);
+            const growth = mix(base, light, fine(u * 96, v * 96));
+            const wet = lumps(u * 20, v * 20) < 0.28 ? 0.35 : 0;
+
+            return mix(mix(mud, growth, Math.max(0, Math.min(1, (green - 0.42) * 4))), light, wet * 0.3);
+        };
+    },
+
+    // The elves': deep moss and clover, fallen gold leaves and white blossom in it
+    moss({ base, light, dark, mortar }, seed) {
+        const patches = periodicNoise(seed, 4);
+        const clumps = periodicNoise(seed + 1, 24);
+        const fine = periodicNoise(seed + 2, 128);
+        const fall = periodicNoise(seed + 3, 48);
+
+        return (x, y) => {
+            const [u, v] = [x / SIZE, y / SIZE];
+            const tone = patches(u * 4, v * 4) * 0.45 + clumps(u * 24, v * 24) * 0.35 + fine(u * 128, v * 128) * 0.2;
+            let colour = tone < 0.5 ? mix(dark, base, tone * 2) : mix(base, light, (tone - 0.5) * 2);
+            const leaf = fall(u * 48, v * 48);
+
+            if (leaf > 0.8) {
+                colour = mix(colour, mortar, Math.min(1, (leaf - 0.8) * 8));
+            } else if (fine(u * 128, v * 128) > 0.86) {
+                colour = mix(colour, [240, 240, 232], 0.7);
+            }
+
+            return colour;
+        };
+    },
+
+    // The dark elves': black loam under dead leaves gone grey and violet, and ash
+    litter({ base, light, dark, mortar }, seed) {
+        const patches = periodicNoise(seed, 4);
+        const leaves = periodicNoise(seed + 1, 32);
+        const fine = periodicNoise(seed + 2, 128);
+
+        return (x, y) => {
+            const [u, v] = [x / SIZE, y / SIZE];
+            const tone = patches(u * 4, v * 4) * 0.5 + leaves(u * 32, v * 32) * 0.3 + fine(u * 128, v * 128) * 0.2;
+            let colour = tone < 0.5 ? mix(dark, base, tone * 2) : mix(base, light, (tone - 0.5) * 2);
+
+            if (leaves(u * 32, v * 32) > 0.78) {
+                colour = mix(colour, mortar, 0.4);
+            }
+
+            return colour;
+        };
+    },
+
     // Natural rock: broad blotches and a fine grain, dark cracks wandering across it, and pale
     // flecks (crystals, lichen) here and there
     rock({ base, light, dark }, seed) {
@@ -379,6 +479,359 @@ export const PAINTERS = {
             return [...mix(colour, base, 0.3), 0.3 + ridge * 0.5];
         };
     },
+
+    // Mud plaster (banco), hand-smoothed: soft blotches, the sweep of the plasterers' palms,
+    // streaks where the rain has run down it, and fine cracks
+    banco({ base, light, dark }, seed) {
+        const blotch = periodicNoise(seed, 4);
+        const grain = periodicNoise(seed + 1, 64);
+        const palms = periodicNoise(seed + 2, 16);
+        const streaks = periodicNoise(seed + 3, 24);
+        const cracks = periodicNoise(seed + 4, 8);
+
+        return (x, y) => {
+            const [u, v] = [x / SIZE, y / SIZE];
+            // (Soft patches where each handful was smoothed on)
+            const palm = palms(u * 16, v * 16);
+            const rain = Math.max(0, streaks(u * 24, v * 1.5) - 0.64) * 1.3;
+            const tone = blotch(u * 4, v * 4) * 0.5 + palm * 0.3 + grain(u * 64, v * 64) * 0.2;
+            let colour = tone < 0.5 ? mix(dark, base, 0.35 + tone * 1.3) : mix(base, light, Math.min(1, (tone - 0.5) * 1.6));
+            let lift = 0.5 + grain(u * 64, v * 64) * 0.12 + palm * 0.18;
+
+            colour = mix(colour, dark, rain);
+
+            // (A hairline crack here and there)
+            if (Math.abs(cracks(u * 8, v * 8) - 0.5) < 0.006 && blotch(u * 4 + 2, v * 4 + 1) > 0.7) {
+                colour = mix(colour, dark, 0.6);
+                lift = 0.3;
+            }
+
+            return [...colour, lift];
+        };
+    },
+
+    // Woven grass or palm mats: strands over and under in a basket weave, each shaded across
+    // its width
+    matting({ base, light, dark }, seed) {
+        const random = createRandom(seed);
+        const tones = Array.from({ length: 64 }, () => random.next());
+        const cell = SIZE / 16;
+
+        return (x, y) => {
+            const [i, j] = [Math.floor(x / cell), Math.floor(y / cell)];
+            const across = (Math.floor(i / 2) + Math.floor(j / 2)) % 2 === 0;
+            const t = across ? (y % cell) / cell : (x % cell) / cell;
+            const strand = tones[((across ? j : i) * 7 + Math.floor((across ? i : j) / 2) * 3) % tones.length];
+            const round = 1 - (t * 2 - 1) ** 2;
+            const colour = mix(mix(dark, light, strand * 0.7 + round * 0.3), base, 0.3);
+
+            return [...scale(colour, 0.75 + round * 0.3), 0.25 + round * 0.6];
+        };
+    },
+
+    // Dry stone and rough-cut blocks: irregular stones laid in rough courses (wider than they
+    // are tall), deep joints, each stone its own shade, lit on its upper edge
+    rubble({ base, light, dark, mortar }, seed) {
+        const random = createRandom(seed);
+        const [across, down] = [7, 11];
+        const [cw, ch] = [SIZE / across, SIZE / down];
+        const points = Array.from({ length: across * down }, () => ({ x: random.next(), y: random.next(), shade: random.next() }));
+        const grain = periodicNoise(seed + 1, 32);
+
+        return (x, y) => {
+            const [cx, cy] = [Math.floor(x / cw), Math.floor(y / ch)];
+            let [nearest, second, shade, above] = [Infinity, Infinity, 0, 0];
+
+            for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    const [gx, gy] = [cx + dx, cy + dy];
+                    const point = points[((gy + down) % down) * across + ((gx + across) % across)];
+                    const [px, py] = [(gx + 0.15 + point.x * 0.7) * cw, (gy + 0.25 + point.y * 0.5) * ch];
+                    // (Squarer than round: the stones are split, not rolled)
+                    const distance = Math.max(Math.abs(x - px) / cw, Math.abs(y - py) / ch) * 0.7 + Math.hypot((x - px) / cw, (y - py) / ch) * 0.3;
+
+                    if (distance < nearest) {
+                        [second, nearest, shade, above] = [nearest, distance, point.shade, y - py];
+                    } else if (distance < second) {
+                        second = distance;
+                    }
+                }
+            }
+
+            const edge = second - nearest;
+
+            if (edge < 0.07) {
+                return [...mortar, 0.08];
+            }
+
+            const round = Math.min(1, edge / 0.25);
+            const lit = above < 0 ? 0.15 * round : 0;
+            const colour = mix(mix(dark, light, shade * 0.75 + lit), base, 0.25);
+
+            return [...scale(colour, 0.78 + round * 0.22 + grain((x / SIZE) * 32, (y / SIZE) * 32) * 0.1), 0.35 + round * 0.55];
+        };
+    },
+
+    // Hides stitched together: big panels, mottled and creased, joined by darker seams with
+    // the stitches across them
+    hide({ base, light, dark, mortar }, seed) {
+        const random = createRandom(seed);
+        const mottle = periodicNoise(seed, 6);
+        const creases = periodicNoise(seed + 1, 16);
+        const rows = [0, ...Array.from({ length: 2 }, (_, k) => Math.round(((k + 1) * SIZE) / 3 + random.range(-6, 6)))];
+        const offsets = rows.map(() => random.next() * SIZE);
+
+        return (x, y) => {
+            const row = rows.findLastIndex((top) => y >= top);
+            const [top, bottom] = [rows[row], rows[row + 1] ?? SIZE];
+            const along = (x + offsets[row]) % (SIZE / 2);
+            const seamH = Math.min(y - top, bottom - y);
+            const seamV = Math.min(along, SIZE / 2 - along);
+            const seam = Math.min(seamH, seamV);
+            const tone = mottle((x / SIZE) * 6, (y / SIZE) * 6) * 0.7 + creases((x / SIZE) * 16, (y / SIZE) * 16) * 0.3;
+            const colour = tone < 0.5 ? mix(dark, base, tone * 2) : mix(base, light, (tone - 0.5) * 2);
+
+            if (seam < 1.4) {
+                return [...mortar, 0.15];
+            }
+
+            // (Stitches every few pixels across each seam)
+            if (seam < 3.2 && ((seamH < seamV ? x : y) % 5) < 1.6) {
+                return [...mix(mortar, light, 0.35), 0.7];
+            }
+
+            return [...colour, 0.45 + Math.min(1, seam / 10) * 0.3 + creases((x / SIZE) * 16, (y / SIZE) * 16) * 0.15];
+        };
+    },
+
+    // Iron plates riveted together, rust running down from the rivets
+    plates({ base, light, dark, mortar }, seed) {
+        const blotch = periodicNoise(seed + 1, 8);
+        const streaks = periodicNoise(seed + 2, 32);
+
+        return courses(seed, 4, [48, 64, 80], (u, v, { shade }, row, length, height) => {
+            const [px, py] = [u * length, v * height];
+
+            if (px < 1.5 || py < 1.5) {
+                return [...scale(dark, 0.7), 0.1];
+            }
+
+            // (Rivets along the plate's edges)
+            const nearEdge = Math.min(px, length - px, py, height - py);
+            const step = 8;
+            const [rx, ry] = [px < 5 || length - px < 5 ? (px < 5 ? 4 : length - 4) : Math.round(px / step) * step, py < 5 || height - py < 5 ? (py < 5 ? 4 : height - 4) : Math.round(py / step) * step];
+
+            if (nearEdge < 6 && Math.hypot(px - rx, py - ry) < 1.8) {
+                return [...light, 0.95];
+            }
+
+            const rust = Math.max(0, streaks(((u * length) / SIZE) * 32 + row * 5, v * 3) - 0.55) * 2 + Math.max(0, blotch(u * 2 + row, v * 2) - 0.6) * 1.5;
+            const colour = mix(mix(mix(dark, light, 0.25 + shade * 0.3), base, 0.3), mortar, Math.min(0.8, rust));
+
+            return [...colour, 0.55 - rust * 0.15];
+        });
+    },
+
+    // Palm-frond thatch: rows of fronds laid over each other, their leaflets slanting down from
+    // the midrib, each row's lower edge in shadow
+    palm({ base, light, dark }, seed) {
+        const random = createRandom(seed);
+        const tones = Array.from({ length: 64 }, () => random.next());
+        const wobble = periodicNoise(seed + 1, 8);
+
+        return (x, y) => {
+            const course = SIZE / 8;
+            const row = Math.floor(y / course);
+            const within = (y % course) / course;
+            const frond = SIZE / 8;
+            const shift = (row % 2) * (frond / 2);
+            const across = ((x + shift) % frond) / frond;
+            // (Leaflets slanting away from the midrib either side)
+            const slant = (across < 0.5 ? across : 1 - across) * 1.6 + within;
+            const leaflet = (slant * 9 + wobble((x / SIZE) * 8, (y / SIZE) * 8)) % 1;
+            const tone = tones[(Math.floor((x + shift) / frond) + row * 5) % tones.length];
+            let colour = mix(mix(dark, light, tone * 0.6 + leaflet * 0.4), base, 0.3);
+
+            if (Math.abs(across - 0.5) < 0.04) {
+                colour = mix(colour, dark, 0.5);
+            }
+
+            const lift = 0.35 + leaflet * 0.3 + (1 - within) * 0.25;
+
+            return within > 0.8 ? [...mix(colour, dark, (within - 0.8) * 3), lift * 0.6] : [...colour, lift];
+        };
+    },
+
+    // Reeds standing side by side, bound in bundles by darker lashings
+    reeds({ base, light, dark, mortar }, seed) {
+        const random = createRandom(seed);
+        const stalks = [];
+
+        for (let x = 0; x < SIZE;) {
+            const width = 2 + Math.floor(random.next() * 3);
+
+            stalks.push({ from: x, width, shade: random.next() });
+            x += width;
+        }
+
+        const grain = periodicNoise(seed + 1, 64);
+
+        return (x, y) => {
+            const stalk = stalks.find(({ from, width }) => x >= from && x < from + width) ?? stalks.at(-1);
+            const t = (x - stalk.from) / stalk.width;
+            const round = 1 - (t * 2 - 1) ** 2;
+
+            // (A lashing across every third of the way)
+            if ((y % (SIZE / 3)) < 3.5) {
+                return [...mix(mortar, dark, round * 0.3), 0.8];
+            }
+
+            const colour = mix(mix(dark, light, stalk.shade * 0.6 + round * 0.4), base, 0.3);
+
+            return [...scale(colour, 0.9 + grain((x / SIZE) * 4, (y / SIZE) * 64) * 0.15), 0.3 + round * 0.55];
+        };
+    },
+
+    // Bamboo culms side by side, rounded across, ringed at their nodes
+    bamboo({ base, light, dark }, seed) {
+        const random = createRandom(seed);
+        const culms = Array.from({ length: 8 }, () => ({ node: random.next() * SIZE, shade: random.next() }));
+        const width = SIZE / culms.length;
+
+        return (x, y) => {
+            const culm = culms[Math.floor(x / width)];
+            const t = (x % width) / width;
+            const round = 1 - (t * 2 - 1) ** 2;
+            const spacing = SIZE / 2;
+            const fromNode = Math.abs((((y - culm.node) % spacing) + spacing) % spacing - spacing / 2);
+
+            if (t < 0.06 || t > 0.94) {
+                return [...scale(dark, 0.6), 0.1];
+            }
+
+            let colour = mix(mix(dark, light, culm.shade * 0.4 + round * 0.6), base, 0.3);
+
+            if (fromNode > spacing / 2 - 2.5) {
+                colour = mix(colour, dark, 0.45);
+
+                return [...colour, 0.85];
+            }
+
+            return [...colour, 0.3 + round * 0.55];
+        };
+    },
+
+    // Carved stone: squared blocks, each carved with a glyph (a stepped fret, a spiral, rings,
+    // a face of dots) cut into its face
+    glyphs({ base, light, dark, mortar }, seed) {
+        const grain = periodicNoise(seed + 1, 32);
+
+        return courses(seed, 4, [32], (u, v, { shade, index }, row, length, height) => {
+            const [px, py] = [u * length, v * height];
+
+            if (px < 1.8 || py < 1.8) {
+                return [...mortar, 0.1];
+            }
+
+            const [cu, cv] = [u * 2 - 1, v * 2 - 1];
+            const kind = (index + row * 3) % 4;
+            const r = Math.hypot(cu, cv);
+            let cut = false;
+
+            if (Math.max(Math.abs(cu), Math.abs(cv)) > 0.78 && Math.max(Math.abs(cu), Math.abs(cv)) < 0.88) {
+                cut = true;
+            } else if (kind === 0) {
+                // A stepped fret: a hooked spiral in squares
+                const [qx, qy] = [Math.floor((cu + 1) * 3), Math.floor((cv + 1) * 3)];
+
+                cut = (qx === 1 && qy >= 1 && qy <= 4) || (qy === 4 && qx >= 1 && qx <= 4) || (qx === 4 && qy >= 2 && qy <= 4) || (qy === 2 && qx >= 3 && qx <= 4);
+            } else if (kind === 1) {
+                cut = Math.abs(r - 0.55) < 0.08 || Math.abs(r - 0.25) < 0.08;
+            } else if (kind === 2) {
+                // A stepped mountain (a temple), a sun over it
+                const step = Math.floor((cv + 1) * 4);
+
+                cut = (cv > -0.1 && Math.abs(cu) < 0.6 - (3 - Math.min(3, step)) * 0.15 && Math.abs(cu) > 0.5 - (3 - Math.min(3, step)) * 0.15 - 0.1) || (step >= 3 && cv > 0.55 && Math.abs(cu) < 0.6) || Math.hypot(cu, cv + 0.5) < 0.16;
+            } else {
+                const angle = Math.atan2(cv, cu);
+
+                cut = Math.abs(((r * 4 - angle / Math.PI + 4) % 1) - 0.5) < 0.12 && r < 0.7;
+            }
+
+            const colour = mix(mix(dark, light, 0.35 + shade * 0.4), base, 0.35);
+
+            return cut ? [...scale(colour, 0.62), 0.15] : [...scale(colour, 0.94 + grain(u * 3 + index, v * 3) * 0.12), 0.7];
+        });
+    },
+
+    // Pale stone smoothed to a sheen: soft clouding and thin veins wandering across it
+    marble({ base, light, dark, mortar }, seed) {
+        const cloud = periodicNoise(seed, 4);
+        const vein = periodicNoise(seed + 1, 6);
+        const fine = periodicNoise(seed + 2, 16);
+
+        return (x, y) => {
+            const [u, v] = [x / SIZE, y / SIZE];
+            const tone = cloud(u * 4, v * 4) * 0.7 + fine(u * 16, v * 16) * 0.3;
+            const line = Math.abs(vein(u * 6 + fine(u * 16, v * 16) * 0.6, v * 6) - 0.5);
+            let colour = tone < 0.5 ? mix(dark, base, 0.4 + tone * 1.2) : mix(base, light, (tone - 0.5) * 2);
+
+            if (line < 0.012 && cloud(u * 4 + 1, v * 4 + 3) > 0.45) {
+                colour = mix(colour, mortar, (1 - line / 0.012) * 0.7);
+            }
+
+            return [...colour, 0.55 + tone * 0.1];
+        };
+    },
+
+    // Leaf shingles: rows of pointed leaves laid over each other like scales, a vein down each
+    leafscale({ base, light, dark }, seed) {
+        const random = createRandom(seed);
+        const tones = Array.from({ length: 64 }, () => random.next());
+        const rows = 8;
+        const [w, h] = [SIZE / 8, SIZE / rows];
+
+        return (x, y) => {
+            const row = Math.floor(y / h);
+            const shift = (row % 2) * (w / 2);
+            const col = Math.floor((x + shift) / w);
+            const [u, v] = [((x + shift) % w) / w, (y % h) / h];
+            // (Each leaf hangs from the row above: widest a third of the way down, pointed at
+            // its foot, the next row's leaves over its top)
+            const half = 0.5 * Math.sin(Math.PI * Math.min(1, v * 1.05)) ** 0.7;
+            const inside = Math.abs(u - 0.5) < half;
+            const tone = tones[(col * 7 + row * 13) % tones.length];
+
+            if (!inside) {
+                return [...scale(dark, 0.7), 0.2];
+            }
+
+            let colour = mix(mix(dark, light, tone * 0.5 + (1 - v) * 0.3), base, 0.35);
+
+            if (Math.abs(u - 0.5) < 0.03) {
+                colour = mix(colour, light, 0.35);
+            }
+
+            const edge = half - Math.abs(u - 0.5);
+
+            return [...colour, 0.35 + v * 0.35 + Math.min(1, edge * 6) * 0.2];
+        };
+    },
+
+    // Obsidian: glassy black, bands of sheen across it and the ripples of its breaks
+    obsidian({ base, light, dark }, seed) {
+        const bands = periodicNoise(seed, 3);
+        const ripple = periodicNoise(seed + 1, 8);
+
+        return (x, y) => {
+            const [u, v] = [x / SIZE, y / SIZE];
+            const band = Math.max(0, Math.sin((u * 2 + v * 3 + bands(u * 3, v * 3) * 1.5) * Math.PI * 2)) ** 6;
+            const rings = Math.abs(Math.sin(ripple(u * 8, v * 8) * 18)) ** 8;
+            const colour = mix(mix(dark, base, 0.5 + bands(u * 3, v * 3) * 0.5), light, band * 0.55 + rings * 0.12);
+
+            return [...colour, 0.5 + rings * 0.2];
+        };
+    },
 };
 
 // Colours for each material, and how many world pixels one copy of its texture covers (five to a
@@ -420,6 +873,57 @@ export const MATERIALS = {
     bark: { painter: "bark", world: 8, base: 0x5a4636, light: 0x7a6450, dark: 0x2f241b },
     deadwood: { painter: "grain", world: 16, base: 0x756e63, light: 0x958c7c, dark: 0x4a453e },
     grass: { painter: "grass", world: 48, base: 0x62803c, light: 0x86a352, dark: 0x3f5a28, ground: true },
+    // Each people's homeland underfoot, over its lands' own ground (world/ground.js)
+    "home-cat": { painter: "savannah", world: 40, base: 0xb89a58, light: 0xdcc684, dark: 0x8a6c3a, mortar: 0xa65c3a, ground: true },
+    "home-orc": { painter: "cracked", world: 30, base: 0x8e5c3c, light: 0xae7852, dark: 0x5c3a26, mortar: 0x221c1c, ground: true },
+    "home-lizard": { painter: "mire", world: 36, base: 0x4e6a30, light: 0x74904a, dark: 0x22241a, mortar: 0x3a3424, ground: true },
+    "home-elf": { painter: "moss", world: 36, base: 0x4f8a3e, light: 0x86c060, dark: 0x2c5a26, mortar: 0xd8a83c, ground: true },
+    "home-darkElf": { painter: "litter", world: 36, base: 0x3c3642, light: 0x57505e, dark: 0x1a181e, mortar: 0x6a4a8a, ground: true },
+    // The other peoples': the cat folk's mud plaster, mats and dry stone; the orcs' hides,
+    // basalt and riveted iron; the lizard folk's palm thatch, reeds, bamboo, limestone and its
+    // carved friezes, and planks bleached by the sun; the elves' marble and moonstone, leaf
+    // shingles, silver bark and honey-coloured heartwood; the dark elves' black stone and
+    // obsidian
+    mud: { painter: "banco", world: 40, base: 0xb88a5a, light: 0xcfa676, dark: 0x93683f },
+    matting: { painter: "matting", world: 12, base: 0xc2a870, light: 0xdcc48c, dark: 0x8e7646 },
+    granite: { painter: "rubble", world: 30, base: 0x9a948a, light: 0xbab4a8, dark: 0x6e6962, mortar: 0x4a4640 },
+    hide: { painter: "hide", world: 60, base: 0xa87a4e, light: 0xc09264, dark: 0x7a5332, mortar: 0x3e2a1a },
+    basalt: { painter: "rubble", world: 30, base: 0x3e3b3e, light: 0x57534f, dark: 0x282629, mortar: 0x1a191b },
+    plates: { painter: "plates", world: 30, base: 0x4a4d52, light: 0x6a6e74, dark: 0x2e3034, mortar: 0x8b3a1e },
+    palm: { painter: "palm", world: 12, base: 0xb49a5a, light: 0xccb477, dark: 0x7a6638 },
+    reeds: { painter: "reeds", world: 16, base: 0xd2bc7a, light: 0xe6d39a, dark: 0xa08c52, mortar: 0x6e5e3e },
+    bamboo: { painter: "bamboo", world: 10, base: 0x9c8a50, light: 0xbba968, dark: 0x6e6036 },
+    "stone-lime": { painter: "ashlar", world: 14, base: 0xdcd4bc, light: 0xeee8d6, dark: 0xb8af96, mortar: 0x9a927c },
+    glyphs: { painter: "glyphs", world: 20, base: 0xd8cfb6, light: 0xece4ce, dark: 0xa89e86, mortar: 0x8a826c },
+    "planks-pale": { painter: "planks", world: 14, base: 0x9c8a6e, light: 0xb5a286, dark: 0x6e604c },
+    marble: { painter: "marble", world: 80, base: 0xe4e2d8, light: 0xf2f1ea, dark: 0xc4c2b6, mortar: 0xa9a99e },
+    "stone-moon": { painter: "ashlar", world: 18, base: 0xdad8cc, light: 0xecebe2, dark: 0xb9b7aa, mortar: 0xa3a195 },
+    leafscale: { painter: "leafscale", world: 9, base: 0x86a95e, light: 0x9fbf78, dark: 0x6a8a4a },
+    "bark-silver": { painter: "bark", world: 8, base: 0xc4c3b8, light: 0xe2e1d8, dark: 0x5e5d56 },
+    heartwood: { painter: "grain", world: 16, base: 0xb08a5a, light: 0xcca878, dark: 0x7e5e3a },
+    "stone-black": { painter: "ashlar", world: 14, base: 0x2a2830, light: 0x3c3944, dark: 0x1c1b21, mortar: 0x121116 },
+    obsidian: { painter: "obsidian", world: 30, base: 0x121018, light: 0x6e6680, dark: 0x07060a },
+};
+
+/**
+ * Materials painted as another is, in its colours times a tint ([r, g, b], more than 1 to
+ * lighten): drawn from that one's layer of the atlas, so they cost no more painting.
+ */
+export const TINTS = {
+    "mud-pale": { from: "mud", tint: [1.1, 1.1, 1.12] },
+    "mud-red": { from: "mud", tint: [0.95, 0.56, 0.5] },
+    "mud-dark": { from: "mud", tint: [0.7, 0.62, 0.55] },
+    "hide-dark": { from: "hide", tint: [0.56, 0.48, 0.43] },
+    "plaster-red": { from: "plaster-white", tint: [0.68, 0.25, 0.18] },
+    "plaster-blue": { from: "plaster-white", tint: [0.45, 0.62, 0.7] },
+    "plaster-jade": { from: "plaster-white", tint: [0.4, 0.62, 0.5] },
+    "leafscale-sage": { from: "leafscale", tint: [1.1, 1.02, 1.3] },
+    "leafscale-silver": { from: "leafscale", tint: [1.15, 0.98, 1.6] },
+    "leafscale-gold": { from: "leafscale", tint: [1.5, 1.05, 0.6] },
+    "timber-char": { from: "timber-grey", tint: [0.26, 0.24, 0.28] },
+    "slate-violet": { from: "slate-grey", tint: [0.42, 0.36, 0.46] },
+    "planks-char": { from: "planks-dark", tint: [0.24, 0.22, 0.27] },
+    "thatch-palm": { from: "thatch", tint: [0.92, 0.9, 0.78] },
 };
 
 // Plain colours (no texture): trims, doors, glass, metal
@@ -449,11 +953,56 @@ export const COLOURS = {
     bread: 0xc89a5a,
     rope: 0x9c8a62,
     "canvas-sack": 0xb9a67e,
+    // The other peoples' trims, paints and cloths
+    bone: 0xe8dcc0,
+    silver: 0xc3c9cb,
+    verdigris: 0x5e8c7a,
+    "vert-wagon": 0x3a4742,
+    jade: 0x3e8b6a,
+    "jade-dark": 0x2f6b52,
+    "maya-blue": 0x4fa3b3,
+    silk: 0xd9d4e6,
+    "iron-black": 0x232228,
+    rust: 0x8b3a1e,
+    "war-red": 0x8e1b1b,
+    black: 0x151515,
+    indigo: 0x2e3a6b,
+    ochre: 0xd9a441,
+    kaolin: 0xede4d0,
+    laterite: 0xa4462b,
+    "sun-gold": 0xe0a526,
+    "cloth-violet": 0x4a2d6b,
+    "cloth-green": 0x4f7a55,
+    "glass-green": 0x2f4a40,
+    "glass-violet": 0x241c30,
+    egg: 0xe8e0c8,
+    "water-green": 0x3f6a5a,
+    calabash: 0xc89b4e,
+    fur: 0x6b5236,
+    "fur-grey": 0x8a8278,
 };
 
 // Colours that glow (the forge's coals)
 export const GLOWING = {
     embers: { color: 0xff8a3a, emissive: 0xff4a0a, emissiveIntensity: 1.6 },
+};
+
+/**
+ * Light that isn't lit (lamps, faerie fire, moonwell water, lava, a hearth's glow, windows lit
+ * from within): drawn in its own colour whatever the light, all of them with one material
+ * (atlas.js glowMaterial), each face's colour its own.
+ */
+export const GLOWS = {
+    "glow-violet": 0xb98fff,
+    "glow-deep": 0x7b4dff,
+    "glow-blue": 0x5a8cff,
+    "glow-green": 0x6dff9e,
+    "glow-moon": 0x9fe6e4,
+    "glow-lamp": 0xffe2a0,
+    "glow-fire": 0xff8a3c,
+    "glow-lava": 0xff6a1a,
+    "glow-hearth": 0xff9a4a,
+    "glow-gold": 0xffd36a,
 };
 
 // A textured material's painter, with its colours and seed

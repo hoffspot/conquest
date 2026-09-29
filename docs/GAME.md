@@ -106,6 +106,20 @@ a hamlet's middle is a green. Its houses have one storey, or two now and then.
   (`core/lore/gods.js`: below).
 - **Trees** dotted about the open ground left.
 
+**Each people's own** (`layoutTown({ ..., people })`, `PEOPLE_TOWNS`): the same builder, laid
+out their way, their buildings built by their own kits (below, *Each people's buildings*). The
+cat folk's houses stand in lots of their own, with walled compounds out past the town houses; the
+orcs' settlements are ring forts, four straight ways crossing at a big market with a ring road
+round them, their longhouses on long lots; the lizard folk's houses stand on stilts over a
+lagoon, a ragged band of water round the middle over a bed of mud, with plank walks on stilts
+along the streets over it; the elves' ways wind among trees (a tree tried every 45 square metres
+of open ground); the dark elves' is an orb web, seven spokes and three rings round a big market,
+their houses packed close. None has a windmill: their towns, cities and capitals raise their own
+special places instead (up to three, by size). From a size of their own each is walled in their
+way, a gatehouse across each main street where it leaves. The cat folk's, orcs' and lizard folk's
+markets and main streets are trodden earth, as their roads are, not cobbled; their trees are mostly their own
+(`homeTree`: three in five). The humans' layouts are just as they were.
+
 Every piece is a rectangle turned to face some way (`facing`, as characters face): its middle,
 its size in plots as the art kits build it, and `footprint(piece)` its corners. A town is 20 to
 50 houses, a city 50 to 80, a capital 90 or more, a village 5 to 15, a hamlet or farmstead 3 to
@@ -528,6 +542,18 @@ with snow, sand on beaches), from one texture of the whole world a texel to the 
 blended between cells, with the edges wandering 26 metres or so so the cells don't show. Every
 chunk's ground shares one shader; chunks of grass alone share a material too.
 
+**Each people's homeland** (the world plan's territories, as first claimed) has its own ground
+over the grass (`HOMES`, painted as the materials `home-cat` and so on: painters.js): the cat
+folk's gold grass on red earth, the orcs' red clay baked hard and cracked into plates with black
+grit between, the lizard folk's black mire shining wet in its hollows with moss spreading over
+it, the elves' deep moss and clover strewn with fallen gold leaves and white blossom, the dark
+elves' black leaf litter with violet in it. Two small textures a texel to the plan's cell say
+how much of each people's homeland is at each point (one with four peoples in its channels, the
+other the fifth), read where the land's colour is, so the edges wander the same way; the most
+of any there draws that people's ground from a texture array of the five (6 metres to a copy,
+read again at 17 metres turned, so the repeats don't show), over the land's colour. None is laid
+under the sea or lakes. The patches (below) show less over it.
+
 The grass isn't the same everywhere (`PATCHES`): from a little texture of noise (128 texels,
 tiling, a different noise in each of its four channels: made once), read coarse (170 metres to
 a copy) and fine (43), it's drier and straw-coloured in broad patches, lusher and darker in
@@ -561,6 +587,9 @@ much of it, and never a loading screen. Each chunk has:
   built by the art kits as the town's are and merged with the one material (the atlas, above);
   the trees are the chunk's. Buildings are built a few at a time, within 6 ms a frame, so walking
   up to a city never stalls a frame; while loading, the game waits for those round the start.
+- **Each people's castle, special places and watchtowers** (core/sites.js: WORLD.md), each
+  whose middle is in the chunk, built by its people's kit as a settlement's pieces are (the
+  humans' castle laid out by castle.js, their abbey, windmill and manor as their landmarks).
 - **The land's own features** (core/wilds.js places them: see WORLD.md, *The world in chunks*;
   kits/wilds.js draws them), one mesh a chunk with the atlas, casting shadows:
   - boulders (granite, pale limestone, red sandstone, black basalt; mossy in the woods and
@@ -571,7 +600,14 @@ much of it, and never a loading screen. Each chunk has:
     shelf fungus), dead trees still standing, piles of logs;
   - bushes (with red, black or white berries, pink or white flowers, the heath's yellow gorse),
     termite mounds on the savannah, haystacks and scarecrows in the fields, stretches of ruined
-    wall, and in the badlands now and then the ribs, spine and horned skull of some great beast.
+    wall, and in the badlands now and then the ribs, spine and horned skull of some great beast;
+  - in each people's homeland, their own besides the land's (`HOMELANDS`): the cat folk's red
+    termite spires and granite kopjes, the orcs' horned skulls on poles hung with red rags,
+    clusters of sharpened stakes and the wrack of old fights (a broken cart wheel, a shield,
+    spears, a helm, bones), the lizard folk's mangrove roots arching out of the mud and stelae
+    carved with glyphs under a serpent's head, the elves' moonstones (a crescent cut in each that
+    holds the light) and bud lamps hanging from curling verdigris posts, the dark elves' stumps
+    shrouded in web, silk cocoons and clusters of black crystal with violet hearts.
 - **Undergrowth**, near the player only (every chunk whose nearest edge is within 64 metres,
   let go past 84), built a few things at a time in the same 6 ms a frame and drawn in tiles 32
   metres square, each only while it's within 56 metres of the player:
@@ -584,7 +620,11 @@ much of it, and never a loading screen. Each chunk has:
     a fairy ring), pebbles and stones (scree in the mountains), sticks and fallen branches,
     fallen leaves, molehills, rabbit holes, bones and horned skulls, cacti and tumbleweed,
     shards of obsidian, shells and driftwood, and the stone ring and charred sticks of someone's
-    old campfire.
+    old campfire;
+  - in each people's homeland, its own among them (`HOME_UNDERGROWTH`): the cat folk's potsherds
+    and horned skulls, the orcs' bone piles and broken blades, the lizard folk's eggshells and
+    glyph stones, the elves' white petals and glowing moon buds, the dark elves' glowing caps and
+    blackthorn.
 
   Where each thing grows comes from its square: grass, not blocked, no road, bridge or water;
   how much and of what from its land (`UNDERGROWTH`: in a lush meadow about a quarter of the
@@ -962,6 +1002,70 @@ of buildings and props. While it's built, `buildTown` also records how tall what
 each of the town's squares is (a
 `heightMap`, read anywhere with `at(x, z)`; a building over the squares under it and its eaves,
 as it's turned, not its turned box), for the cutaway.
+
+### Each people's buildings (world/art/peoples)
+
+Every people builds with the same engine as the humans (engine/solid.js: walls with real
+openings, lathes, lofts, tubes, the one atlas material and its weathering) and the same pieces
+of a layout (a house of a type and size, a landmark, a structure, a wall, a tower, a gatehouse,
+a prop), each people's kit (`PEOPLE_KITS`, `builderFor`) building them its own way; the humans'
+are the kits above. Each builds from its seed, never the same twice, within a budget of
+triangles (a house under 6,000, a landmark 9,000, a special place 14,000).
+
+- **The cat folk** (cat.js, cat-landmarks.js, cat-places.js), after the Sahel's mud-brick
+  (Djenné, Timbuktu, the Tiébélé compounds): round huts and beehive huts of mud under thatch,
+  granaries, figure-eight houses, flat-roofed block houses and Sahel town houses with timber
+  spikes (toron) and pinnacles, walled compounds, their walls battered and whitewashed in bands;
+  a court tavern, a Djenné-style temple, a smithy with its clay furnace, a domed guild hall, a
+  town hall with stone cats, a kasbah keep and a mat-roofed market; the sun temple, pride rock
+  and the watering hole; a kasbah castle, mud walls, gatehouse and bastions.
+- **The orcs** (orc.js, orc-places.js): bow-sided longhouses of hide on battered basalt, round
+  hide huts on rings of stone, basalt block houses and hide tents; a grog hall, a broch temple, a
+  great forge, the war council's and chieftain's halls, a broch keep and a loot market; the war
+  totem, the skull pit and the fighting pit; a ring-fort castle, a palisade of sharpened stakes,
+  a gate and lookouts; skulls, horns, iron spikes and war-red banners.
+- **The lizard folk** (lizard.js, lizard-places.js), after the Maya's houses and temples:
+  apsidal marsh huts, deck houses and saddle-roofed clan houses on stilts, reed-arch halls, palm
+  thatch and bamboo; a reed-hall tavern, a stepped temple, a forge shed, a spirit house, a
+  palace hall, a platform keep and a floating market; the ziggurat, the hatchery and the serpent
+  pool; a temple-fortress, a serpent wall, a gate and a lookout; serpents' heads and frets.
+- **The elves** (elf.js, sylvan.js): ground houses and pagodas of pale stone under petal roofs,
+  houses round great trees and up in their canopies; a hall of leaves, a colonnaded temple, a
+  pavilion smithy, a stave-roofed guild, a council tree, a tiered keep and a market under leaf
+  canopies; the moonwell, the tree hall and the starwatch; a tree castle, wave-topped walls and
+  an ogee gate. A piece can grow great trees with the town's.
+- **The dark elves** (darkelf.js, sylvan.js: the same flowing lines, turned sharp): thorn
+  houses of black stone and charred planks under swept hips with fins and fangs, spire houses
+  and pods; a hall tavern with a spider on its sign, an octagon temple gripped by spider-leg
+  buttresses, a smithy, a stepped-gable guild, the Archon's hall, the Black Tower and a
+  web-strung market; the spider shrine, the obsidian spire and the shadow gate; a ring castle,
+  thorn walls and a gate; faerie fire violet in their lancets and along their eaves.
+
+Each has its own well and stalls on its market (props.js), and builds its insides of its own
+stuff (world/interiors3d.js: the cat folk's mud and laterite, the orcs' basalt, hides and logs,
+the lizard folk's lime and bamboo, the elves' marble and heartwood, the dark elves' black stone
+and charred planks), lighting its lamps its own way (firelight, pale moonlight, violet) and
+dressing its walls (sun discs, horned skulls, a Maya fret, a vine with moon buds, obsidian fangs
+and webs).
+
+**Their trees** (kits/trees.js, `HOME_TREES`): in each people's homeland most of the trees
+(seven in ten) are their own, and in their settlements three in five: the cat folk's acacia (a
+short trunk forking into climbing limbs, spreading level at the top in a flat umbrella), the
+orcs' ironbark (squat, blasted and twisted, a few rust-red leaves left on it), the lizard folk's
+weeping willow, the elves' silverbark (tall and straight, pale as birch without the black, its
+leaves gold-green) and the dark elves' nightspire (a spruce's tiers, taller and narrower, black,
+its needles violet). They're grown by the same rules as the rest, three ways each.
+
+**Their war camps** (camps3d.js, peoples/camp.js): the humans pitch ridge tents of canvas in
+their colour; the cat folk low domes of matting banded with ochre, a mat on forked posts over
+the door; the orcs cones of hide on poles crossed above them, a horned skull lashed at the top;
+the lizard folk palm thatch on decks of planks on bamboo legs; the elves leaves of green cloth, a
+silver rib along each; the dark elves steep violet and black pyramids, a spike at the top and
+silk strung over the door. Each people's tent is built once and copied.
+
+See them all at `building-lab.html?people=cat&show=street` (or `landmarks`, `structures`,
+`insides`, `castle`, `place`, `village`..., `home` for the middle of their homeland, `camps` for
+every people's camp).
 
 ### Characters in the world (world/avatar.js)
 
@@ -1421,7 +1525,10 @@ seconds to loading on a desktop computer. On phones the quality level draws
 fewer pixels and thinner hair and uses smaller textures, and debug mode shows what each costs.
 With the world round the town, in the browser tests' views a frame makes 80 to 150 draw calls
 and draws 180,000 to 260,000 triangles, in the town or out of it, shadows included (the world's
-trees are culled one by one, so only those in view are drawn). A chunk takes
+trees are culled one by one, so only those in view are drawn). Starting as each people, on a
+phone's quality, a frame is 70 to 95 draw calls and 160,000 to 200,000 triangles in their town
+(the elves' about 390,000, among its great trees), and 85 to 105 draw calls and 220,000 to
+350,000 triangles out in their homeland. A chunk takes
 about 35 ms to build in the browser tests, one a frame at most. The camera sees no further than
 150 metres (the fog's all there is by 130).
 Everything that can be is built once: the town is merged, shaders are compiled while loading,

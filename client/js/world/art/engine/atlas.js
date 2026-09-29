@@ -15,7 +15,7 @@
 // glowing coals) keep their own: `toAtlas` says which can be drawn with the atlas.
 
 import * as THREE from "three";
-import { COLOURS, MATERIALS, paintLayer } from "./painters.js";
+import { COLOURS, GLOWS, MATERIALS, paintLayer, TINTS } from "./painters.js";
 
 /** How many pixels square each layer is painted. */
 export const LAYER_SIZE = 256;
@@ -39,6 +39,10 @@ export function layerOf(material) {
 
     if (index.has(material.name) && MATERIALS[material.name]) {
         return index.get(material.name);
+    }
+
+    if (TINTS[material.name]) {
+        return index.get(TINTS[material.name].from);
     }
 
     return COLOURS[material.name] !== undefined ? PLAIN : -1;
@@ -258,6 +262,54 @@ if (atlasRelief > 0.0) {
 
 const _colour = new THREE.Color();
 
+let glowing = null;
+
+/**
+ * The one material every light is drawn with (GLOWS: lamps, faerie fire, lava): unlit, each
+ * vertex its own colour.
+ */
+export function glowMaterial() {
+    if (!glowing) {
+        glowing = new THREE.MeshBasicMaterial({ vertexColors: true });
+        glowing.name = "glow";
+        glowing.shadowSide = THREE.DoubleSide;
+    }
+
+    return glowing;
+}
+
+/**
+ * A (non-indexed) geometry drawn in one of the GLOWS made ready to be drawn with glowMaterial:
+ * its colours (white if it had none) times the light's. Null if it isn't one.
+ */
+export function toGlow(geometry, material) {
+    const light = material?.userData?.glow ?? (material && GLOWS[material.name]);
+
+    if (light === undefined) {
+        return null;
+    }
+
+    const count = geometry.attributes.position.count;
+    const result = geometry.clone();
+    const colours = new Float32Array(count * 3).fill(1);
+
+    if (geometry.attributes.color) {
+        colours.set(geometry.attributes.color.array.subarray(0, count * 3));
+    }
+
+    _colour.setHex(light);
+
+    for (let i = 0; i < count; i++) {
+        colours[i * 3] *= _colour.r;
+        colours[i * 3 + 1] *= _colour.g;
+        colours[i * 3 + 2] *= _colour.b;
+    }
+
+    result.setAttribute("color", new THREE.BufferAttribute(colours, 3));
+
+    return result;
+}
+
 /**
  * A (non-indexed) geometry drawn in `material` made ready to be drawn with the atlas instead: its
  * texture coordinates scaled to the material's, a `layer` for each vertex, and its colours (white
@@ -287,11 +339,20 @@ export function toAtlas(geometry, material) {
             colours[i * 3 + 1] *= _colour.g;
             colours[i * 3 + 2] *= _colour.b;
         }
-    } else if (geometry.attributes.uv) {
-        const world = MATERIALS[material.name].world;
+    } else {
+        const tint = TINTS[material.name];
+        const world = MATERIALS[tint?.from ?? material.name].world;
 
-        for (let i = 0; i < count * 2; i++) {
-            uvs[i] = geometry.attributes.uv.array[i] / world;
+        if (geometry.attributes.uv) {
+            for (let i = 0; i < count * 2; i++) {
+                uvs[i] = geometry.attributes.uv.array[i] / world;
+            }
+        }
+
+        if (tint) {
+            for (let i = 0; i < count * 3; i++) {
+                colours[i] *= tint.tint[i % 3];
+            }
         }
     }
 

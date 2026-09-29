@@ -32,7 +32,7 @@ import { MAP_ORIGINS, tavernFloors, tavernFolk } from "./interiors.js";
 import { WENCHES } from "./lore/taverns.js";
 import { namePeople } from "./names.js";
 import { createRandom } from "./random.js";
-import { GROUND, landmarkKey, PLOT, TREE_VARIANTS } from "./setpieces/pieces.js";
+import { GROUND, homeTree, landmarkKey, PLOT, TREE_VARIANTS } from "./setpieces/pieces.js";
 import { layoutTown } from "./setpieces/town.js";
 
 export { PLOT };
@@ -59,7 +59,8 @@ export const SEE_OVER = /^prop-/;
 
 /**
  * Generate the world for a seed, a settlement of a kind (setpieces/town.js SETTLEMENT_KINDS) whose
- * main streets leave the ways `exits` says (angles: 0 east, π/2 south): { seed, width, height
+ * main streets leave the ways `exits` says (angles: 0 east, π/2 south), laid out and built as
+ * `people` builds (town.js PEOPLE_TOWNS): { seed, width, height
  * (squares, 1 m each), plot, origin (where the town's layout starts, in metres: 0, its layout
  * being the whole map), town (its layout: town.js), blocked[y][x] (1 where characters can't go),
  * opaque[y][x] (1 where nothing behind can be seen: see SEE_OVER), ground[y][x] (GROUND kinds),
@@ -70,9 +71,9 @@ export const SEE_OVER = /^prop-/;
  * facing }, ...] }]: the tavern's door and stairs), folk (the tavern's: interiors.js tavernFolk,
  * each named: names.js; none without a tavern) }.
  */
-export function generateWorld({ seed = 1, kind = "town", exits = null } = {}) {
+export function generateWorld({ seed = 1, kind = "town", exits = null, people = "human" } = {}) {
     const random = createRandom(seed);
-    const laid = layoutTown({ seed: random.seed(), kind, exits });
+    const laid = layoutTown({ seed: random.seed(), kind, exits, people });
 
     // (The town's first tavern is Wenches and Ale, whatever else the layout would call it)
     const first = laid.pieces.find(({ key }) => key === landmarkKey("tavern"));
@@ -123,7 +124,7 @@ export function generateWorld({ seed = 1, kind = "town", exits = null } = {}) {
                 opaque[by][bx] = 1;
             }
 
-            trees.push({ x, y, variant: random.int(0, TREE_VARIANTS - 1) });
+            trees.push({ x, y, variant: homeTree(people, random.int(0, TREE_VARIANTS - 1)) });
             placed++;
         }
     }
@@ -145,6 +146,13 @@ export function generateWorld({ seed = 1, kind = "town", exits = null } = {}) {
 
         maps.taproom = floors.taproom;
         maps.upstairs = floors.upstairs;
+
+        // (Built and dressed inside as its people build: interiors3d.js)
+        if (people !== "human") {
+            maps.taproom.people = people;
+            maps.upstairs.people = people;
+        }
+
         // Coming out, just clear of the door, turned back to face it (so it's in view to tap, and
         // a tap round the player isn't on it)
         const back = tavern.facing > 0 ? tavern.facing - Math.PI : tavern.facing + Math.PI;
@@ -168,7 +176,7 @@ export function generateWorld({ seed = 1, kind = "town", exits = null } = {}) {
         tavern,
         maps,
         links,
-        folk: tavern ? namePeople(tavernFolk(), seed) : [],
+        folk: !tavern ? [] : people === "human" ? namePeople(tavernFolk(), seed) : namePeople(tavernFolk(), seed, people).map((one) => ({ ...one, people })),
     };
 }
 
