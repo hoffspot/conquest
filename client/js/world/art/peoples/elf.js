@@ -11,6 +11,7 @@
 // collar round the trunk, a spiral stair up to it; and the canopy house, a cabin on a platform
 // high in a great tree, reached by a ladder. The great trees are grown by the game's tree kit.
 
+import { PEOPLE_PLACES } from "../../../core/setpieces/pieces.js";
 import { material } from "../engine/materials.js";
 import { inset, Solid } from "../engine/solid.js";
 import { emblemSignTexture, loadSignFont, nameBoardTexture, signMaterial } from "../kits/signs.js";
@@ -856,7 +857,7 @@ function castle(piece) {
     return object;
 }
 
-export const STRUCTURE_SIZES = Object.freeze({ moonwell: [4, 4], "tree hall": [7, 7], starwatch: [5, 5], castle: [15, 15] });
+export const STRUCTURE_SIZES = PEOPLE_PLACES.elf;
 
 const STRUCTURES = Object.freeze({ moonwell, "tree hall": treeHall, starwatch, castle });
 

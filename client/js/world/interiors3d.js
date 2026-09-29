@@ -114,7 +114,13 @@ const TINTED = { "earth-sooty": ["road", 0x6a5e54] };
 // the same again for walls (`wall`: cut lower)
 const materials = new Map();
 
-function material(name, { wall = false } = {}) {
+// The people whose inside is being built: its materials (PALETTES) in place of the humans', and
+// whether its walls are framed with posts and a beam (FRAMED) as the humans' are
+let palette = null;
+let framed = true;
+
+function material(asked, { wall = false } = {}) {
+    const name = palette?.[asked] ?? asked;
     const key = wall ? `${name}|wall` : name;
 
     if (!materials.has(key)) {
@@ -393,6 +399,11 @@ function wall(solid, x0, z0, x1, z1, thick, finish) {
 
     solid.box(ax0, 0, az0, ax1, m(0.35), az1, material("stone-warm"));
     solid.box(ax0 + 0.05, m(0.35), az0 + 0.05, ax1 - 0.05, top, az1 - 0.05, material(finish, WALL));
+
+    if (!framed) {
+        return;
+    }
+
     solid.box(ax0, top - m(0.18), az0 - 0.2, ax1, top, az1 + 0.2, material("timber", WALL));
 
     const length = along === "x" ? x1 - x0 : z1 - z0;
@@ -1775,6 +1786,178 @@ function keep(map) {
 
 const BUILDERS = { taproom, upstairs, smithy, temple, guild, hall, keep };
 
+// --- Each people's own ---
+
+// What each people builds its insides of, in place of the humans' plaster, flagstones, oak and
+// pewter (by name): the cat folk's mud, whitewash and laterite, mats and calabashes; the orcs'
+// basalt, hides and charred wood, iron and furs; the lizard folk's lime-washed stone, reeds and
+// bamboo, jade and Maya blue; the elves' marble and moonstone, heartwood and silver; the dark
+// elves' black stone and charred planks, violet cloth and silk
+const PALETTES = Object.freeze({
+    cat: { stone: "mud-pale", "stone-warm": "mud-red", "stone-dark": "mud-dark", plaster: "mud", "plaster-ochre": "mud-red", timber: "timber-light", planks: "planks-pale", "planks-dark": "timber-light", velvet: "laterite", "velvet-purple": "indigo", rug: "indigo", "rug-border": "ochre", pewter: "clay", brass: "sun-gold", "guild-blue": "indigo", "guild-gold": "sun-gold", leather: "hide", "wool-blue": "indigo", "wool-green": "ochre" },
+    orc: { stone: "basalt", "stone-warm": "rock-dark", "stone-dark": "basalt", plaster: "planks-dark", "plaster-white": "hide", "plaster-ochre": "hide-dark", timber: "deadwood", "timber-light": "deadwood", planks: "planks-dark", "planks-dark": "timber-char", velvet: "war-red", "velvet-purple": "war-red", rug: "fur", "rug-border": "fur-grey", pewter: "iron-black", brass: "rust", "guild-blue": "war-red", "guild-gold": "bone", linen: "fur-grey", leather: "hide-dark", "wool-blue": "fur", "wool-green": "fur-grey" },
+    lizard: { stone: "stone-lime", "stone-warm": "stone-lime", "stone-dark": "jade-dark", plaster: "reeds", "plaster-ochre": "plaster-red", timber: "bamboo", "timber-light": "bamboo", planks: "planks-pale", "planks-dark": "bamboo", velvet: "jade", "velvet-purple": "maya-blue", rug: "maya-blue", "rug-border": "plaster-red", pewter: "calabash", brass: "jade", "guild-blue": "maya-blue", "guild-gold": "jade", leather: "reeds", "wool-blue": "maya-blue", "wool-green": "jade" },
+    elf: { stone: "marble", "stone-warm": "stone-moon", "stone-dark": "stone-moon", plaster: "stone-moon", "plaster-white": "marble", "plaster-ochre": "heartwood", timber: "heartwood", "timber-light": "bark-silver", planks: "planks-pale", "planks-dark": "heartwood", velvet: "cloth-green", "velvet-purple": "cloth-green", rug: "cloth-green", "rug-border": "silver", pewter: "silver", brass: "verdigris", "guild-blue": "cloth-green", "guild-gold": "silver", "wool-blue": "cloth-green" },
+    darkElf: { stone: "stone-black", "stone-warm": "stone-black", "stone-dark": "obsidian", plaster: "stone-black", "plaster-white": "planks-char", "plaster-ochre": "slate-violet", timber: "timber-char", "timber-light": "timber-char", planks: "planks-char", "planks-dark": "timber-char", velvet: "cloth-violet", "velvet-purple": "cloth-violet", rug: "cloth-violet", "rug-border": "black", pewter: "iron-black", brass: "silver", "guild-blue": "cloth-violet", "guild-gold": "silver", linen: "silk", "wool-blue": "cloth-violet", "wool-green": "black" },
+});
+
+// The peoples whose walls inside are framed with posts and a beam, as the humans' are (the orcs'
+// with logs, the lizard folk's with bamboo); the rest are plain: mud, stone, marble
+const FRAMED = new Set(["orc", "lizard"]);
+
+// The light each people's lamps give, in place of candlelight (their fires burn as anyone's)
+const LAMPLIGHT = Object.freeze({ orc: 0xffa060, elf: 0xcfe0ff, darkElf: 0xa47cff, lizard: 0xe8ffc8 });
+
+// What each people puts up round its walls, high over the windows and the furniture: along each
+// run of wall (`at(s, y, d)`: s along it, y up, d out from it into the room; `along` and `out`
+// its ways; `spots` places for things), cut away with the walls
+const ACCENTS = {
+    // The cat folk: a frieze of laterite and whitewash, and a sun in gold between its rays
+    cat(solid, { length, at, box, disc, spots }) {
+        box(0, length, m(2.4), m(2.48), 0.5, "laterite");
+        box(0, length, m(2.48), m(2.54), 0.5, "kaolin");
+
+        for (const s of spots) {
+            disc(s, m(2.74), m(0.2), 0.8, "sun-gold", 12);
+
+            for (let k = 0; k < 8; k++) {
+                const a = (k * Math.PI) / 4;
+                const tri = [[s + Math.cos(a - 0.2) * m(0.24), m(2.74) + Math.sin(a - 0.2) * m(0.24)], [s + Math.cos(a) * m(0.36), m(2.74) + Math.sin(a) * m(0.36)], [s + Math.cos(a + 0.2) * m(0.24), m(2.74) + Math.sin(a + 0.2) * m(0.24)]];
+
+                solid.facing(tri.map(([u, y]) => at(u, y, 0.6)), at.outward, material("ochre", WALL));
+            }
+        }
+    },
+
+    // The orcs: a band of dark hide, and horned skulls
+    orc(solid, { length, at, along, box, spots }) {
+        box(0, length, m(2.38), m(2.56), 0.6, "hide-dark");
+
+        for (const s of spots) {
+            const [x, y, z] = at(s, m(2.72), m(0.2));
+            const bone = material("bone", WALL);
+
+            solid.lathe(x, z, [[0, y - m(0.15)], [m(0.13), y - m(0.08)], [m(0.15), y + m(0.01)], [m(0.11), y + m(0.1)], [0, y + m(0.13)]], bone, { segments: 7 });
+
+            for (const side of [-1, 1]) {
+                const root = [x + along[0] * side * m(0.12), y + m(0.05), z + along[1] * side * m(0.12)];
+
+                solid.tube([root, [root[0] + along[0] * side * m(0.2), root[1] + m(0.08), root[2] + along[1] * side * m(0.2)], [root[0] + along[0] * side * m(0.26), root[1] + m(0.3), root[2] + along[1] * side * m(0.26)]], [m(0.045), m(0.035), 0], bone, { sides: 5 });
+            }
+        }
+    },
+
+    // The lizard folk: a stepped fret of Maya blue and red, and jade set between
+    lizard(solid, { length, box, disc, spots }) {
+        const step = m(0.35);
+
+        for (let k = 0; k * step < length; k++) {
+            box(k * step, Math.min(length, (k + 1) * step), m(2.42) + (k % 2) * m(0.08), m(2.6) + (k % 2) * m(0.08), 0.5, k % 2 ? "maya-blue" : "plaster-red");
+        }
+
+        for (const s of spots) {
+            disc(s, m(2.82), m(0.1), 0.7, "jade", 4);
+        }
+    },
+
+    // The elves: a vine along the wall, waving, its leaves out either side, moon buds hanging
+    elf(solid, { length, at, spots }) {
+        const wave = (s) => m(2.62) + Math.sin(s / m(0.9)) * m(0.12);
+        const points = Array.from({ length: Math.ceil(length / m(0.4)) + 1 }, (_, k) => Math.min(length, k * m(0.4)));
+
+        solid.tube(points.map((s) => at(s, wave(s), 0.6)), m(0.035), material("heartwood", WALL), { sides: 4 });
+
+        points.forEach((s, k) => {
+            const up = k % 2 ? 1 : -1;
+            const leaf = [[s, wave(s)], [s + m(0.12), wave(s) + up * m(0.14)], [s + m(0.02), wave(s) + up * m(0.26)], [s - m(0.08), wave(s) + up * m(0.12)]];
+
+            solid.facing(leaf.map(([u, y]) => at(u, y, 0.7)), at.outward, material("leaves", WALL));
+        });
+
+        for (const s of spots) {
+            const [x, y, z] = at(s, wave(s) - m(0.05), m(0.12));
+
+            solid.lathe(x, z, [[0, y - m(0.3)], [m(0.07), y - m(0.24)], [m(0.08), y - m(0.16)], [m(0.04), y - m(0.08)], [0, y]], material("glow-moon", WALL), { segments: 6 });
+        }
+    },
+
+    // The dark elves: fangs of obsidian along the top of the walls, webs in the corners, violet
+    // lamps hanging
+    darkElf(solid, { length, at, along, spots }) {
+        for (let s = m(0.3); s < length; s += m(0.5)) {
+            solid.tube([at(s, m(2.97), 0.6), at(s, m(2.62), 0.8)], [m(0.06), 0], material("obsidian", WALL), { sides: 4 });
+        }
+
+        for (const end of [m(0.1), length - m(0.1)]) {
+            const corner = at(end, m(2.95), 0.5);
+            const inward = end < length / 2 ? 1 : -1;
+            const silk = material("silk", WALL);
+
+            for (let k = 0; k <= 5; k++) {
+                const a = (k * Math.PI) / 10;
+                const tip = [corner[0] + along[0] * inward * Math.cos(a) * m(0.8), corner[1] - Math.sin(a) * m(0.8), corner[2] + along[1] * inward * Math.cos(a) * m(0.8)];
+
+                solid.tube([corner, tip], m(0.012), silk, { sides: 3 });
+            }
+
+            for (const r of [0.3, 0.55]) {
+                const arc = Array.from({ length: 6 }, (_, k) => {
+                    const a = (k * Math.PI) / 10;
+
+                    return [corner[0] + along[0] * inward * Math.cos(a) * m(r), corner[1] - Math.sin(a) * m(r), corner[2] + along[1] * inward * Math.cos(a) * m(r)];
+                });
+
+                solid.tube(arc, m(0.01), silk, { sides: 3 });
+            }
+        }
+
+        for (const s of spots) {
+            const [x, y, z] = at(s, m(2.45), m(0.3));
+
+            solid.tube([[x, m(2.95), z], [x, y + m(0.12), z]], m(0.012), material("iron-black", WALL), { sides: 3 });
+            solid.lathe(x, z, [[0, y - m(0.12)], [m(0.11), y - m(0.05)], [m(0.12), y + m(0.02)], [m(0.08), y + m(0.1)], [0, y + m(0.13)]], material("glow-violet", WALL), { segments: 6 });
+        }
+    },
+};
+
+// A people's things round the walls of an inside (all but the south one, with its door)
+function accents(solid, map, people) {
+    const [w, h] = [m(map.width), m(map.height)];
+    const runs = [
+        { from: [m(0.6), 0], to: [w - m(0.6), 0], out: [0, 1] },
+        { from: [0, m(0.6)], to: [0, h - m(0.6)], out: [1, 0] },
+        { from: [w, m(0.6)], to: [w, h - m(0.6)], out: [-1, 0] },
+    ];
+
+    for (const { from, to, out } of runs) {
+        const length = Math.hypot(to[0] - from[0], to[1] - from[1]);
+        const along = [(to[0] - from[0]) / length, (to[1] - from[1]) / length];
+        const at = (s, y, d = 0) => [from[0] + along[0] * s + out[0] * d, y, from[1] + along[1] * s + out[1] * d];
+        const count = Math.max(1, Math.floor(length / m(3)));
+        const spots = Array.from({ length: count }, (_, k) => ((k + 0.5) * length) / count);
+
+        at.outward = [out[0], 0, out[1]];
+
+        // (A band along the wall from s0 to s1, y0 up to y1, `d` out; a disc of `count` corners)
+        const box = (s0, s1, y0, y1, d, name) => {
+            const [a, b] = [at(s0, y0, 0), at(s1, y1, d)];
+
+            solid.box(Math.min(a[0], b[0]), y0, Math.min(a[2], b[2]), Math.max(a[0], b[0]), y1, Math.max(a[2], b[2]), material(name, WALL));
+        };
+        const disc = (s, y, r, d, name, corners) => {
+            const points = Array.from({ length: corners }, (_, k) => {
+                const a = (k * Math.PI * 2) / corners + Math.PI / 4;
+
+                return at(s + Math.cos(a) * r, y + Math.sin(a) * r, d);
+            });
+
+            solid.facing(points, at.outward, material(name, WALL));
+        };
+
+        ACCENTS[people]?.(solid, { length, along, out, at, box, disc, spots });
+    }
+}
+
 /**
  * Build a map's inside: { map, object (a Group at the map's place in the world, in metres),
  * lights (point lights to place: { kind, x, y, z (world metres), colour, intensity, distance,
@@ -1782,7 +1965,24 @@ const BUILDERS = { taproom, upstairs, smithy, temple, guild, hall, keep };
  * moves the flames), drive(name, time, seconds) (turns a named part a while), dispose() }.
  */
 export function buildInterior(map) {
-    const built = BUILDERS[map.style ?? map.id](map);
+    const people = PALETTES[map.people] ? map.people : null;
+    let built;
+
+    // (Built of its people's materials, and dressed as they dress their walls)
+    palette = PALETTES[people] ?? null;
+    framed = !people || FRAMED.has(people);
+
+    try {
+        built = BUILDERS[map.style ?? map.id](map);
+
+        if (people) {
+            accents(built.solid, map, people);
+        }
+    } finally {
+        palette = null;
+        framed = true;
+    }
+
     const art = new THREE.Group();
     const [ox, oz] = map.origin;
 
@@ -1833,7 +2033,7 @@ export function buildInterior(map) {
     return {
         map,
         object,
-        lights: built.lights.map((light) => ({ ...light, x: ox + light.x, z: oz + light.z })),
+        lights: built.lights.map((light) => ({ ...light, colour: (light.kind === "lamp" && LAMPLIGHT[people]) || light.colour, x: ox + light.x, z: oz + light.z })),
         hearth: built.hearth ? { x: ox + built.hearth.x, y: built.hearth.y, z: oz + built.hearth.z } : null,
         update(dt, time) {
             for (const part of built.moving) {

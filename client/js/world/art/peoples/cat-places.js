@@ -16,6 +16,7 @@
 // - Town walls of mud leaning in as they rise, rounded along the top with pinnacles like ears,
 //   bristling with toron; gatehouses with two ear towers; round bastions.
 
+import { PEOPLE_PLACES } from "../../../core/setpieces/pieces.js";
 import { material } from "../engine/materials.js";
 import { add3, inset, Solid } from "../engine/solid.js";
 import { ears, finial, granary, hut, jars, MUDS, studded, toron } from "./cat.js";
@@ -467,7 +468,7 @@ function castle(piece) {
 const STRUCTURES = Object.freeze({ "sun temple": sunTemple, "pride rock": prideRock, "watering hole": wateringHole, castle });
 
 /** How big each structure is (plots across and deep). */
-export const STRUCTURE_SIZES = Object.freeze({ "sun temple": [8, 9], "pride rock": [9, 7], "watering hole": [10, 7], castle: [10, 10] });
+export const STRUCTURE_SIZES = PEOPLE_PLACES.cat;
 
 export function structure(piece) {
     return STRUCTURES[piece.name](piece);

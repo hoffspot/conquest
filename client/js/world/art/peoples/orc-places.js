@@ -15,6 +15,7 @@
 //   motte and a broch keep, a stone gate with a great lintel), a palisade of leaning stakes on a
 //   bank, its gate and lookout towers.
 
+import { PEOPLE_PLACES } from "../../../core/setpieces/pieces.js";
 import { material } from "../engine/materials.js";
 import { add3, inset, Solid } from "../engine/solid.js";
 import { emblemSignTexture, loadSignFont, nameBoardTexture, signMaterial } from "../kits/signs.js";
@@ -699,7 +700,7 @@ function castle(piece) {
     return solid.toObject();
 }
 
-export const STRUCTURE_SIZES = Object.freeze({ "war totem": [6, 6], "skull pit": [7, 8], "fighting pit": [7, 7], castle: [13, 13] });
+export const STRUCTURE_SIZES = PEOPLE_PLACES.orc;
 
 const STRUCTURES = Object.freeze({ "war totem": warTotem, "skull pit": skullPit, "fighting pit": fightingPit, castle });
 

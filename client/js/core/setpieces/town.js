@@ -23,7 +23,7 @@ import { createRandom, noise } from "../random.js";
 import { atan2, cos, length, PI, sin, sqrt, TAU } from "./exact.js";
 import { patronOf } from "../lore/gods.js";
 import { nameTavern } from "../lore/taverns.js";
-import { ENTERED, GROUND, HOUSE_STYLES, HOUSE_VARIANTS, houseKey, LANDMARKS, landmarkKey, OUTBUILDINGS, PLOT, PROPS, propKey, TRADES, treeKey, TREE_VARIANTS } from "./pieces.js";
+import { ENTERED, GROUND, HOUSE_STYLES, HOUSE_VARIANTS, houseKey, LANDMARKS, landmarkKey, OUTBUILDINGS, PEOPLE_PLACES, PLOT, PROPS, propKey, TRADES, treeKey, TREE_VARIANTS } from "./pieces.js";
 
 /**
  * The kinds of settlement, and how each is laid out: how far its houses reach from the middle
@@ -554,6 +554,27 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
                 }
             });
             place(rect, { key: `gatehouse-${people}`, kind: "gatehouse" });
+        }
+    }
+
+    // A people's own places in its bigger settlements, where the humans would have a windmill
+    // (the cat folk's sun temple, the orcs' fighting pit, the elves' moonwell...): along the main
+    // streets, out past the market, as many as fit of one for a town, two for a city, three for a
+    // capital
+    if (other && PEOPLE_PLACES[people] && !spec.small) {
+        const wanted = spec.radius >= 112 ? 3 : spec.radius >= 84 ? 2 : spec.radius >= 48 ? 1 : 0;
+        const names = random.shuffle(Object.keys(PEOPLE_PLACES[people]).filter((name) => name !== "castle"));
+        let placed = 0;
+
+        for (const name of names) {
+            const [w, d] = PEOPLE_PLACES[people][name].map((plots) => plots * PLOT);
+            const rect = placed < wanted ? firstAlong(random.shuffle(streets.filter(({ main }) => main)), random, [w, d], { from: reach * 1.2, to: radius * 0.9 }, building) : null;
+
+            if (rect) {
+                mark(rect, 0, USE.building);
+                place(rect, { key: `structure-${people}-${name}`, kind: "structure", name, seed: random.int(0, 2 ** 30) });
+                placed++;
+            }
         }
     }
 

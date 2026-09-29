@@ -63,6 +63,18 @@ export const LANDMARKS = Object.freeze({
     keep: [2.75, 3.25],
 });
 
+/**
+ * Each people's own places (plots across and deep, as their kits build them facing south): their
+ * special structures, and their castle.
+ */
+export const PEOPLE_PLACES = Object.freeze({
+    cat: Object.freeze({ "sun temple": [8, 9], "pride rock": [9, 7], "watering hole": [10, 7], castle: [10, 10] }),
+    orc: Object.freeze({ "war totem": [6, 6], "skull pit": [7, 8], "fighting pit": [7, 7], castle: [13, 13] }),
+    lizard: Object.freeze({ ziggurat: [14, 10], hatchery: [8, 6], "serpent pool": [6, 6], castle: [16, 16] }),
+    elf: Object.freeze({ moonwell: [4, 4], "tree hall": [7, 7], starwatch: [5, 5], castle: [15, 15] }),
+    darkElf: Object.freeze({ "spider shrine": [5, 5], "obsidian spire": [6, 6], "shadow gate": [4, 3], castle: [15, 15] }),
+});
+
 /** The special buildings that can be gone into. */
 export const ENTERED = Object.freeze(["tavern", "church", "blacksmith", "guild", "hall", "keep"]);
 

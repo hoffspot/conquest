@@ -574,3 +574,72 @@ describe("the atlas (engine/atlas.js)", () => {
         assert.ok(toGlow(geometry, material("glow-violet")).attributes.color.array[2] > 0.9);
     });
 });
+
+describe("each people's buildings (peoples/)", () => {
+    it("builds every piece of each people's, within a budget of triangles: houses, landmarks, their own places, walls, gates, towers, and their well and stalls", async () => {
+        const { PEOPLE_KITS } = await import("../client/js/world/art/peoples/index.js");
+        const { PEOPLE_PLACES } = await import("../client/js/core/setpieces/pieces.js");
+        const budget = { house: 6000, landmark: 9000, structure: 14000, wall: 4000, gatehouse: 5000, tower: 4000, prop: 1200 };
+
+        for (const [people, kit] of Object.entries(PEOPLE_KITS)) {
+            const pieces = [
+                ...kit.GALLERY.houses.map(([type, w, h]) => ({ kind: "house", type, w, h, wealth: 0.7 })),
+                ...["tavern", "church", "blacksmith", "guild", "hall", "keep", "market"].map((name) => ({ kind: "landmark", name, w: name === "guild" || name === "market" ? 4 : 3, h: name === "church" ? 4 : 3 })),
+                ...Object.entries(PEOPLE_PLACES[people]).map(([name, [w, h]]) => ({ kind: "structure", name, w, h })),
+                { kind: "wall", w: 4, h: 1 },
+                { kind: "gatehouse", w: 3, h: 2 },
+                { kind: "tower", w: 2, h: 2 },
+                ...["well", "tent", "barrels"].map((name) => ({ kind: "prop", name, w: name === "barrels" ? 1 : 2, h: name === "barrels" ? 1 : 2 })),
+            ];
+
+            assert.deepEqual(kit.GALLERY.structures, PEOPLE_PLACES[people]);
+
+            for (const piece of pieces) {
+                const object = await kit[piece.kind]({ ...piece, people, x: 5, y: 7, seed: 3 });
+                const triangles = trianglesOf(object);
+
+                assert.ok(triangles > 20 && triangles < budget[piece.kind], `${people} ${piece.kind} ${piece.type ?? piece.name ?? ""}: ${triangles}`);
+            }
+        }
+    });
+
+    it("builds each people's insides of its own stuff, its lamps lit its own way", async () => {
+        const { readPlan } = await import("../client/js/core/interiors.js");
+        const { tavernRooms } = await import("../client/js/core/insides.js");
+        const { buildInterior } = await import("../client/js/world/interiors3d.js");
+        const taproom = (people) => {
+            const [floor] = tavernRooms({ seed: 5, name: "Inside", people, tavern: { storeys: 1 } });
+            const map = readPlan(`taproom-${people}`, floor.name, floor.rows, { ground: floor.ground });
+
+            Object.assign(map, { origin: [0, 0], style: floor.style, finish: floor.finish, layout: floor.layout, people });
+
+            return buildInterior(map);
+        };
+        const namesOf = (inside) => {
+            const names = new Set();
+
+            inside.object.traverse((node) => node.isMesh && names.add(node.material.name));
+
+            return names;
+        };
+        const human = taproom("human");
+        const lampOf = (inside) => inside.lights.find(({ kind }) => kind === "lamp").colour;
+
+        assert.ok(namesOf(human).has("stone-inside") && namesOf(human).has("timber-inside-wall"));
+
+        for (const [people, own] of [["cat", "mud-pale-inside"], ["orc", "basalt-inside"], ["lizard", "stone-lime-inside"], ["elf", "marble-inside"], ["darkElf", "stone-black-inside"]]) {
+            const inside = taproom(people);
+            const names = namesOf(inside);
+
+            assert.ok(names.has(own), `${people}: ${[...names].join(", ")}`);
+            assert.ok(!names.has("stone-inside") && !names.has("timber-inside"), `${people}: no flagstones nor oak`);
+
+            inside.dispose();
+        }
+
+        assert.notEqual(lampOf(taproom("darkElf")), lampOf(human));
+        assert.notEqual(lampOf(taproom("elf")), lampOf(human));
+        // (A human's inside afterwards is the humans' again)
+        assert.ok(namesOf(taproom("human")).has("stone-inside"));
+    });
+});

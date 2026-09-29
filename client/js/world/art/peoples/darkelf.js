@@ -9,6 +9,7 @@
 // The common thorn house has two storeys under a steep hip; the rich add an octagonal tower with
 // a needle spire; the poor live in hexagonal pods clustered against them.
 
+import { PEOPLE_PLACES } from "../../../core/setpieces/pieces.js";
 import { material } from "../engine/materials.js";
 import { inset, Solid } from "../engine/solid.js";
 import { emblemSignTexture, loadSignFont, nameBoardTexture, signMaterial } from "../kits/signs.js";
@@ -810,7 +811,7 @@ function castle(piece) {
     return solid.toObject();
 }
 
-export const STRUCTURE_SIZES = Object.freeze({ "spider shrine": [5, 5], "obsidian spire": [6, 6], "shadow gate": [4, 3], castle: [15, 15] });
+export const STRUCTURE_SIZES = PEOPLE_PLACES.darkElf;
 
 const STRUCTURES = Object.freeze({ "spider shrine": spiderShrine, "obsidian spire": obsidianSpire, "shadow gate": shadowGate, castle });
 

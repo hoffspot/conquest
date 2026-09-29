@@ -17,6 +17,7 @@
 //   raised square in its moat, a summit pyramid, causeways and stepped gate towers); walls: a
 //   serpent wall and a stockade leaning out, gates of two stepped towers.
 
+import { PEOPLE_PLACES } from "../../../core/setpieces/pieces.js";
 import { material } from "../engine/materials.js";
 import { inset, Solid } from "../engine/solid.js";
 import { emblemSignTexture, loadSignFont, nameBoardTexture, signMaterial } from "../kits/signs.js";
@@ -697,7 +698,7 @@ function castle(piece) {
     return solid.toObject();
 }
 
-export const STRUCTURE_SIZES = Object.freeze({ ziggurat: [14, 10], hatchery: [8, 6], "serpent pool": [6, 6], castle: [16, 16] });
+export const STRUCTURE_SIZES = PEOPLE_PLACES.lizard;
 
 const STRUCTURES = Object.freeze({ ziggurat, hatchery, "serpent pool": serpentPool, castle });
 

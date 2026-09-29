@@ -784,7 +784,7 @@ export class Interiors {
         const maps = floors.map((floor, k) => {
             const map = readPlan(`${key}/${floor.suffix}`, floor.name, floor.rows, { ground: floor.ground });
 
-            Object.assign(map, { origin: [origin[0], origin[1] + k * ORIGINS.step], style: floor.style, look: floor.look ?? null, finish: floor.finish ?? null, patron: floor.patron ?? null, sound: floor.sound, building: key, layout: floor.layout ?? null });
+            Object.assign(map, { origin: [origin[0], origin[1] + k * ORIGINS.step], style: floor.style, look: floor.look ?? null, finish: floor.finish ?? null, patron: floor.patron ?? null, sound: floor.sound, building: key, layout: floor.layout ?? null, people: building.people ?? "human" });
 
             return map;
         });
