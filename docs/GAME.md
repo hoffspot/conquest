@@ -360,7 +360,13 @@ draws anything.
   others in the way it gives up sooner (after 4,000 squares and 100 more for each square across,
   squared), so a goal they've shut in isn't searched for over the whole window again and again
   while they stand there: 16 raiders setting out take 0.5 ms each on average, where they took 6
-  (the most 12 ms, where it was 150). The player walks at 1.7 m/s; the orc patrols at 1.1 and chases at 1.8.
+  (the most 12 ms, where it was 150). A goal they've walled in a step or two away was still
+  searched for over those 4,000 squares, 6 ms each time, several times a step in a crowded fight.
+  So a search that's gone on for 256 squares looks out from the goal too (`walledIn`): if all it
+  can get to from there is a pocket of no more than 256 squares, the start not in it, there's no
+  way. That's the answer the search would have come to: 68 fighting outside the town spent 25 ms
+  a minute on searches that found no way, where they spent 350 (the most 1.2 ms, where it was
+  6.6). The player walks at 1.7 m/s; the orc patrols at 1.1 and chases at 1.8.
 - **Running and stamina.** Told to run (a move or fight order with `run`), a character sprints
   at `SPRINT` times its walking speed, 6.5 / 1.4 (about 4.6): as much faster as people sprint
   (about 6.5 m/s) than walk (about 1.4 m/s). For the player that's 7.9 m/s. It speeds up at
@@ -378,7 +384,18 @@ draws anything.
 - **Reach.** A melee attack reaches the eight squares touching the attacker's: N, NE, E, SE, S,
   SW, W and NW (Chebyshev distance 1). A ranged attack reaches any square whose middle is within
   its range and that the attacker can see: a line between the two squares' middles that crosses
-  no opaque square (a wall or a house hides a target; a table or barrels don't).
+  no opaque square (a wall or a house hides a target; a table or barrels don't). The line is
+  looked along four points a metre, each square it crosses asked about once.
+- **Looking for enemies.** Every step, each armed character asks whether it's in a fight, and
+  each on patrol, in the wild or following someone which enemy it can see is nearest: each of
+  them about everyone else. How two peoples stand in the war takes the longest to ask (the war's
+  realms, their overlords and what's between them), so the cheap questions come first: someone
+  dead, on another map, or more than 12 squares off either way (further than anyone sees) and not
+  after it isn't asked about; nor is anyone no nearer than the nearest enemy yet. The answers are
+  the same. With these and the walled-in goals, a step of 68 fighting outside the town (40
+  raiders, the town's guards and the player, in Node; every character where it was and doing what
+  it was every half second, as before) takes 0.35 to 0.41 ms on average, where it took 0.89 to
+  1.07, and one in a hundred more than 2.8 ms, where it was 16 to 20.
 - **Spiked boots** (`boots`, or the boots on their own: weapons.js `armsOf`) add kicks. With a
   melee weapon, each blow is a kick or the weapon, one or the other at random (the battle's seeded
   random numbers), both doing the damage halfway between the two: a range with halves, rolled as
@@ -1726,8 +1743,10 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   settlements ahead laid out off the page's thread (asked for nearest first and once each, and
   taken as they were laid out; the same laid out in another thread, and one laid out from
   anything else not taken).
-  `test/pathfinding.test.js`: A* paths, and the line of squares straight ahead (stopping at a
-  wall or the world's edge, never cutting a blocked corner).
+  `test/pathfinding.test.js`: A* paths (a goal others have walled in given up on, and a way found
+  wherever there is one and none where there isn't, over 200 random maps with others about), and
+  the line of squares straight ahead (stopping at a wall or the world's edge, never cutting a
+  blocked corner).
 - `test/insides.test.js`: every building's door where the art builds it, whichever way it faces,
   and the way up to it cleared; taprooms set out every way, everything reachable from the door;
   upstairs as the tavern's name has it, or none; the folk worked out from the plan (on the floor,

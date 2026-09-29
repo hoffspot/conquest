@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { squareKey } from "../client/js/core/grid.js";
 import { findPath, lineAhead } from "../client/js/core/pathfinding.js";
+import { createRandom } from "../client/js/core/random.js";
 import { parseGrid } from "./helpers.js";
 
 // Every step in a path must move to a neighbouring tile without cutting obstacle corners
@@ -143,7 +145,94 @@ describe("findPath", () => {
 
         assert.deepEqual(findPath(grid, [0, 3], [9, 0]), findPath(grid, [0, 3], [9, 0]));
     });
+
+    it("gives up on a goal others have walled in, a step or two away across open ground", () => {
+        const grid = parseGrid(Array.from({ length: 120 }, () => ".".repeat(120)));
+        const ring = [];
+
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                if (dx || dy) {
+                    ring.push(squareKey(62 + dx, 60 + dy));
+                }
+            }
+        }
+
+        assert.deepEqual(findPath(grid, [59, 60], [62, 60], { taken: new Set(ring) }), []);
+
+        // (One of them stepping aside, the way in's open)
+        const open = findPath(grid, [59, 60], [62, 60], { taken: new Set(ring.filter((key) => key !== squareKey(61, 60))) });
+
+        assert.deepEqual(open.at(-1), [62, 60]);
+        assertValidPath(grid, open);
+    });
+
+    it("finds a way wherever there is one, and none where there isn't, however the ground and others lie", () => {
+        const random = createRandom(7);
+        const size = 48;
+        let found = 0;
+        let none = 0;
+
+        for (let trial = 0; trial < 200; trial++) {
+            const grid = Array.from({ length: size }, () => Array.from({ length: size }, () => (random.next() < 0.25 ? 1 : 0)));
+            const taken = new Set();
+
+            for (let k = 0; k < 120; k++) {
+                taken.add(squareKey(Math.floor(random.next() * size), Math.floor(random.next() * size)));
+            }
+
+            const start = [Math.floor(random.next() * size), Math.floor(random.next() * size)];
+            const goal = [Math.floor(random.next() * size), Math.floor(random.next() * size)];
+            const path = findPath(grid, start, goal, { taken });
+            const reachable = reaches(grid, taken, start, goal);
+
+            assert.equal(path.length > 0, reachable, `trial ${trial}: from ${start} to ${goal}`);
+
+            if (reachable) {
+                found++;
+                assertValidPath(grid, path);
+                assert.ok(path.slice(1).every(([x, y]) => !taken.has(squareKey(x, y))), `trial ${trial} goes through someone`);
+            } else {
+                none++;
+            }
+        }
+
+        assert.ok(found > 20 && none > 20, `both kinds tried (${found} found, ${none} none)`);
+    });
 });
+
+// Can `goal` be got to from `start` at all (every square it can get to, one after another, moving
+// as characters do: never onto a blocked or taken square, never cutting a corner)?
+function reaches(grid, taken, [sx, sy], [gx, gy]) {
+    const free = (x, y) => y >= 0 && x >= 0 && y < grid.length && x < grid[0].length && !grid[y][x] && !taken.has(squareKey(x, y));
+    const seen = new Set([squareKey(sx, sy)]);
+    const queue = [[sx, sy]];
+
+    if (sx === gx && sy === gy) {
+        return true;
+    }
+
+    while (queue.length) {
+        const [x, y] = queue.shift();
+
+        for (const [dx, dy] of [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]]) {
+            const [nx, ny] = [x + dx, y + dy];
+
+            if (!free(nx, ny) || seen.has(squareKey(nx, ny)) || (dx && dy && !(free(nx, y) && free(x, ny)))) {
+                continue;
+            }
+
+            if (nx === gx && ny === gy) {
+                return true;
+            }
+
+            seen.add(squareKey(nx, ny));
+            queue.push([nx, ny]);
+        }
+    }
+
+    return false;
+}
 
 describe("lineAhead", () => {
     // Facing (radians from south, towards east): north is π, east π/2

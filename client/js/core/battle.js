@@ -1032,15 +1032,23 @@ export class Battle {
         return !this.#between(this.#squares(mapId).opaque, from, to, distance);
     }
 
-    // Is any square `marked` (x, y) on the way between two squares (not counting them)?
+    // Is any square `marked` (x, y) on the way between two squares (not counting them)? (Four
+    // points a metre along the line: most squares get more than one, asked about once)
     #between(marked, [ax, ay], [bx, by], distance = distanceBetween([ax, ay], [bx, by])) {
         const steps = Math.ceil(distance * 4);
+        let [lastX, lastY] = [ax, ay];
 
         for (let k = 1; k < steps; k++) {
             const x = Math.floor(ax + 0.5 + ((bx - ax) * k) / steps);
             const y = Math.floor(ay + 0.5 + ((by - ay) * k) / steps);
 
-            if (marked(x, y) && !(x === ax && y === ay) && !(x === bx && y === by)) {
+            if (x === lastX && y === lastY) {
+                continue;
+            }
+
+            [lastX, lastY] = [x, y];
+
+            if (marked(x, y) && !(x === bx && y === by)) {
                 return true;
             }
         }
@@ -1187,7 +1195,17 @@ export class Battle {
             return true;
         }
 
-        return this.actors.some((other) => this.hostile(other, actor) && !other.dead && other.map === actor.map && (other.target === actor.id || other.attack?.target === actor.id || (other.order?.type === "engage" && other.order.target === actor.id) || this.canSee(actor, other)));
+        // (The cheap checks first: whether it's after it, or near enough to be seen, before how
+        // their peoples stand, and only then whether anything's in the way)
+        return this.actors.some((other) => {
+            if (other.dead || other.map !== actor.map) {
+                return false;
+            }
+
+            const after = other.target === actor.id || other.attack?.target === actor.id || (other.order?.type === "engage" && other.order.target === actor.id);
+
+            return (after || this.#near(actor, other, SIGHT)) && this.hostile(other, actor) && (after || this.canSee(actor, other));
+        });
     }
 
     // --- Deciding what to do ---
@@ -1209,7 +1227,7 @@ export class Battle {
         // (once it's stopped where it was going)
         const partner = actor.talkingTo === null ? null : this.actor(actor.talkingTo);
 
-        if (partner && !partner.dead && partner.map === actor.map && actor.kind === "soldier" && !this.#nearestEnemy(actor, (enemy) => this.canSee(actor, enemy))) {
+        if (partner && !partner.dead && partner.map === actor.map && actor.kind === "soldier" && !this.#nearestSeen(actor)) {
             // (A soldier on its rounds stops to talk, while there's no enemy about)
             if (!actor.to) {
                 actor.path = [];
@@ -1507,7 +1525,7 @@ export class Battle {
     // An enemy: patrol, chase what it sees (through doors and up stairs, if they went through
     // just after it saw them), attack what it catches
     #patrol(actor) {
-        const seen = this.#nearestEnemy(actor, (enemy) => this.canSee(actor, enemy) && this.#leashed(actor, enemy));
+        const seen = this.#nearestSeen(actor, (enemy) => this.#leashed(actor, enemy));
         const chased = actor.target === null ? null : this.actor(actor.target);
         const trail = chased?.crossed;
         const following = chased && !chased.dead && chased.map !== actor.map && trail && trail.from === actor.map && trail.time - actor.lastSeen <= GIVE_UP_MS;
@@ -1598,7 +1616,7 @@ export class Battle {
         const provoked = (enemy) => (actor.foes[enemy.id] ?? -Infinity) > this.time;
         const leashed = (other) => distanceBetween(home, other.square) <= wild.leash;
         const rouses = (enemy) => provoked(enemy) || wild.temper === "aggressive" || (wild.temper === "territorial" && distanceBetween(actor.square, enemy.square) <= wild.guard);
-        const seen = this.#nearestEnemy(actor, (enemy) => leashed(enemy) && this.canSee(actor, enemy) && rouses(enemy));
+        const seen = this.#nearestSeen(actor, (enemy) => leashed(enemy) && rouses(enemy));
 
         if (seen) {
             actor.target = seen.id;
@@ -1670,7 +1688,7 @@ export class Battle {
         }
 
         // (Anyone after it, too, wherever they are)
-        const seen = this.#nearestEnemy(actor, (enemy) => this.canSee(actor, enemy) && (distanceBetween(leader.square, enemy.square) <= FOLLOW.guard || enemy.target === actor.id || enemy.attack?.target === actor.id));
+        const seen = this.#nearestSeen(actor, (enemy) => distanceBetween(leader.square, enemy.square) <= FOLLOW.guard || enemy.target === actor.id || enemy.attack?.target === actor.id);
 
         if (seen) {
             actor.target = seen.id;
@@ -1734,22 +1752,38 @@ export class Battle {
         return !actor.leash || !other || (other.map === actor.spawnMap && distanceBetween(actor.patrol[0], other.square) <= actor.leash);
     }
 
-    #nearestEnemy(actor, test) {
+    // The nearest enemy on its map that it's noticed (not unseen: Invisibility), within `within`
+    // squares each way, that passes `test`
+    #nearestEnemy(actor, test, within = Infinity) {
         let best = null;
         let bestDistance = Infinity;
 
+        // (The cheap checks first, and `test` for none no nearer than the nearest yet)
         for (const other of this.actors) {
-            if (this.hostile(other, actor) && !other.dead && other.map === actor.map && this.#noticed(actor, other) && test(other)) {
-                const distance = distanceBetween(actor.square, other.square);
+            if (other.dead || other.map !== actor.map || !this.#near(actor, other, within) || !this.hostile(other, actor) || !this.#noticed(actor, other)) {
+                continue;
+            }
 
-                if (distance < bestDistance) {
-                    best = other;
-                    bestDistance = distance;
-                }
+            const distance = distanceBetween(actor.square, other.square);
+
+            if (distance < bestDistance && test(other)) {
+                best = other;
+                bestDistance = distance;
             }
         }
 
         return best;
+    }
+
+    // The nearest enemy it can see that passes `test` (none further than it can see)
+    #nearestSeen(actor, test = () => true) {
+        return this.#nearestEnemy(actor, (enemy) => this.canSee(actor, enemy) && test(enemy), SIGHT);
+    }
+
+    // Could two characters be within `reach` of each other: no more than that many squares apart
+    // either way? (Cheap, before anything dearer: how their peoples stand, what's between them)
+    #near(a, b, reach) {
+        return Math.abs(a.square[0] - b.square[0]) <= reach && Math.abs(a.square[1] - b.square[1]) <= reach;
     }
 
     // --- Walking ---
