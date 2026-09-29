@@ -2,7 +2,7 @@
 // their own climate and lands, their settlements (with guilds), roads, rivers, sites and camps
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
-import { BIOME, BIOMES, campTier, CELL, CELLS, FACTIONS, guildFor, guilds, landAt, openGround, planWorld, RACES, ROAD, SETTLEMENTS, SITES, startFor, WATER } from "../client/js/core/worldplan/plan.js";
+import { BIOME, BIOMES, campTier, CELL, CELLS, FACTIONS, guildFor, guilds, landAt, layOutWorld, openGround, planWorld, RACES, ROAD, SETTLEMENTS, SITES, startFor, WATER } from "../client/js/core/worldplan/plan.js";
 
 const SEEDS = [1, 2, 3];
 const plans = new Map();
@@ -19,9 +19,9 @@ describe("the world plan (worldplan/plan.js)", () => {
         }
     });
 
-    it("lays out the same world from the same seed, and another from another, quickly", () => {
+    it("lays out the same world from the same seed, and another from another, quickly; once, shared and frozen", () => {
         const start = performance.now();
-        const again = planWorld(1);
+        const again = layOutWorld(1);
         const took = performance.now() - start;
 
         assert.deepEqual(again.places, plans.get(1).places);
@@ -29,6 +29,12 @@ describe("the world plan (worldplan/plan.js)", () => {
         assert.notDeepEqual(plans.get(2).places.map(({ name }) => name), plans.get(1).places.map(({ name }) => name));
         assert.equal(plans.get(1).size, 8192);
         assert.ok(took < 8000, `${took.toFixed(0)} ms`);
+
+        // (Asked for again, the same plan: frozen, so nothing changes it for everyone else)
+        assert.equal(planWorld(1), plans.get(1));
+        assert.throws(() => {
+            plans.get(1).places[0].name = "Elsewhere";
+        }, TypeError);
     });
 
     it("gives each people its own lands, in its own climate, with wild land between", () => {

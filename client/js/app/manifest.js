@@ -122,7 +122,7 @@ export const MANIFEST = Object.freeze([
             ["js/core/war/war.js", 59437],
             ["js/core/wilds.js", 13585],
             ["js/core/world.js", 9994],
-            ["js/core/worldplan/plan.js", 6139],
+            ["js/core/worldplan/plan.js", 7233],
             ["js/core/worldplan/queue.js", 1917],
             ["js/core/worldplan/races.js", 7862],
             ["js/core/worldplan/settle.js", 24018],

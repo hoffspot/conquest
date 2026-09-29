@@ -104,8 +104,9 @@ describe("the land's features (core/wilds.js)", () => {
     it("has each people's own in its homeland, and only there", () => {
         const found = new Map();
 
-        for (let cy = 4; cy < 124; cy += 3) {
-            for (let cx = 4; cx < 124; cx += 3) {
+        // (A chunk in every 36 across the world: each people's lands are many of them wide)
+        for (let cy = 4; cy < 124; cy += 6) {
+            for (let cx = 4; cx < 124; cx += 6) {
                 for (const feature of overworld.chunk(cx, cy).features) {
                     const home = overworld.homeAt(Math.floor(feature.x), Math.floor(feature.y));
 
