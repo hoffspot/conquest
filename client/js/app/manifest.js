@@ -105,7 +105,7 @@ export const MANIFEST = Object.freeze([
             ["js/core/setpieces/exact.js", 2466],
             ["js/core/setpieces/pieces.js", 8596],
             ["js/core/setpieces/plan.js", 4271],
-            ["js/core/setpieces/town.js", 50628],
+            ["js/core/setpieces/town.js", 50658],
             ["js/core/settlements.js", 7976],
             ["js/core/sites.js", 9907],
             ["js/core/spells.js", 22498],
