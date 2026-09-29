@@ -196,55 +196,59 @@ function splitRotation(rotation, axis, swing) {
     return twist;
 }
 
+// Each kind of joint's twist about the bone (or none) and its other movements, the swing (found
+// once: limitRotation is called dozens of times a frame for each arm reaching somewhere)
+const SPLIT = Object.fromEntries(Object.entries(JOINTS).map(([kind, movements]) => [kind, { twist: movements.find((movement) => movement.twist) ?? null, swings: movements.filter((movement) => !movement.twist) }]));
+const _swingVector = new THREE.Vector3();
+const _swingAngles = new Float64Array(3);
+
 /**
  * Keep a joint rotation (in the anatomical frame) within the joint's range: the twist about the
  * bone within its range, the swing within the ellipse its other two movements' ranges make.
  */
 export function limitRotation(kind, side, rotation) {
-    const movements = JOINTS[kind];
-    const twistMovement = movements.find((movement) => movement.twist);
-    const swings = movements.filter((movement) => !movement.twist);
-
     if (kind === "pelvis") {
         return rotation;
     }
 
+    const { twist: twistMovement, swings } = SPLIT[kind];
+
     // The twist about the bone's own axis, and the swing (as a rotation vector, degrees), in
-    // terms of the other movements
+    // terms of the other movements (their angles in _swingAngles, in order)
     const twistAngle = splitRotation(rotation, twistMovement ? axisFor(twistMovement.axis, side) : null, _vector) / DEG;
+    const angles = _swingAngles;
 
     _vector.divideScalar(DEG);
 
-    const angles = {};
     let outside = 0;
 
-    for (const { name, axis, range } of swings) {
+    for (let k = 0; k < swings.length; k++) {
+        const { axis, range } = swings[k];
         const value = _vector.dot(axisFor(axis, side));
         const limit = value >= 0 ? range[1] : -range[0];
 
-        angles[name] = value;
+        angles[k] = value;
         outside += limit > 0 ? (value / limit) ** 2 : value ? Infinity : 0;
     }
 
     if (outside > 1) {
         const shrink = Number.isFinite(outside) ? 1 / Math.sqrt(outside) : 0;
 
-        for (const { name, range } of swings) {
-            const limit = angles[name] >= 0 ? range[1] : -range[0];
+        for (let k = 0; k < swings.length; k++) {
+            const { range } = swings[k];
+            const limit = angles[k] >= 0 ? range[1] : -range[0];
 
-            angles[name] = limit > 0 ? angles[name] * shrink : 0;
+            angles[k] = limit > 0 ? angles[k] * shrink : 0;
         }
     }
 
-    if (twistMovement) {
-        angles[twistMovement.name] = Math.min(twistMovement.range[1], Math.max(twistMovement.range[0], twistAngle));
-    }
+    const twist = twistMovement ? Math.min(twistMovement.range[1], Math.max(twistMovement.range[0], twistAngle)) : 0;
 
     // Rebuild: swing (as a rotation vector) after twist
-    const swingVector = new THREE.Vector3();
+    const swingVector = _swingVector.set(0, 0, 0);
 
-    for (const { name, axis } of swings) {
-        swingVector.addScaledVector(axisFor(axis, side), angles[name] * DEG);
+    for (let k = 0; k < swings.length; k++) {
+        swingVector.addScaledVector(axisFor(swings[k].axis, side), angles[k] * DEG);
     }
 
     const swingAngle = swingVector.length();
@@ -256,7 +260,7 @@ export function limitRotation(kind, side, rotation) {
     }
 
     if (twistMovement) {
-        rotation.multiply(_q.setFromAxisAngle(axisFor(twistMovement.axis, side), angles[twistMovement.name] * DEG));
+        rotation.multiply(_q.setFromAxisAngle(axisFor(twistMovement.axis, side), twist * DEG));
     }
 
     return rotation;
@@ -269,7 +273,7 @@ export function limitRotation(kind, side, rotation) {
  * can swing an elbow sideways on the way). Into `target` (which may be `from`).
  */
 export function blendRotation(kind, side, from, to, t, target = new THREE.Quaternion()) {
-    const twistMovement = JOINTS[kind].find((movement) => movement.twist);
+    const twistMovement = SPLIT[kind].twist;
     const axis = twistMovement ? axisFor(twistMovement.axis, side) : null;
     const twistFrom = splitRotation(from, axis, _from);
     const twist = twistFrom + (splitRotation(to, axis, _to) - twistFrom) * t;
@@ -370,6 +374,18 @@ const _body = new THREE.Quaternion();
 const _left = new THREE.Vector3();
 const _back = new THREE.Vector3();
 const _down = new THREE.Vector3(0, -1, 0);
+const _up = new THREE.Vector3(0, 1, 0);
+const _relaxedFore = new THREE.Quaternion();
+const _relaxedHand = new THREE.Quaternion();
+const _handLimited = new THREE.Quaternion();
+const _offsetWorld = new THREE.Vector3();
+const _wanted = new THREE.Quaternion();
+const _partly = new THREE.Quaternion();
+const _aimAxis = new THREE.Vector3();
+const _start = new THREE.Quaternion();
+
+// How far round from last time a reaching arm's elbow is tried first (radians)
+const NUDGES = [0, -0.2, 0.2, -0.45, 0.45];
 
 const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
 
@@ -379,6 +395,15 @@ export class Rig {
     constructor(bones) {
         this.definition = bones;
         this.bones = bones.map(({ name }) => Object.assign(new THREE.Bone(), { name }));
+
+        // Bones are posed by their quaternions alone, and nothing reads their Euler angles: so
+        // three.js isn't to work each bone's Euler angles out again every time its quaternion's
+        // set (a matrix made and taken apart: about a twelfth of a walking character's frame).
+        // `bone.rotation` goes stale; setting it still sets the quaternion
+        for (const bone of this.bones) {
+            bone.quaternion._onChange(() => {});
+        }
+
         bones.forEach(({ parent }, i) => parent >= 0 && this.bones[parent].add(this.bones[i]));
         this.root = this.bones[0];
         this.skeleton = new THREE.Skeleton(this.bones, bones.map(() => new THREE.Matrix4()));
@@ -641,15 +666,18 @@ export class Rig {
         _left.set(1, 0, 0).applyQuaternion(_body);
         _back.set(0, 0, -1).applyQuaternion(_body);
 
-        const relaxedFore = jointRotation("ForeArm", s, { pronate }, new THREE.Quaternion());
-        const relaxedHand = jointRotation("Hand", s, wrist ?? { flex: -8, deviate: -4 }, new THREE.Quaternion());
-        const handLimited = new THREE.Quaternion();
-        const offsetWorld = new THREE.Vector3();
-        const wanted = new THREE.Quaternion();
-        const partly = new THREE.Quaternion();
-        const axis = new THREE.Vector3();
+        const relaxedFore = jointRotation("ForeArm", s, { pronate }, _relaxedFore);
+        const relaxedHand = jointRotation("Hand", s, wrist ?? { flex: -8, deviate: -4 }, _relaxedHand);
+        const handLimited = _handLimited;
+        const offsetWorld = _offsetWorld;
+        const wanted = _wanted;
+        const partly = _partly;
+        const axis = _aimAxis;
         const best = { phi: 0, cost: Infinity, strain: 0 };
         let target = null;
+        // (What the last swivel tried cost, and how far past their ranges it strained the joints)
+        let cost = 0;
+        let strained = 0;
 
         // The frames and strain for one swivel; kept in _Farm, _Ffore, _Fhand (and _W: the wrist)
         const evaluate = (phi) => {
@@ -752,14 +780,17 @@ export class Rig {
             const natural = _prefer.lengthSq() > 1e-6 ? 1 - _bend.dot(_prefer.normalize()) : 0;
             const moved = swivel === null ? 0 : wrap(phi - swivel) / DEG;
 
-            return { cost: strain + comfort + (bend ? NATURAL + (HINTED - NATURAL) * bent : NATURAL) * natural + STEADY * moved * moved, strain };
+            cost = strain + comfort + (bend ? NATURAL + (HINTED - NATURAL) * bent : NATURAL) * natural + STEADY * moved * moved;
+            strained = strain;
         };
 
         const tryPhi = (phi) => {
-            const { cost, strain } = evaluate(phi);
+            evaluate(phi);
 
             if (cost < best.cost) {
-                Object.assign(best, { phi: wrap(phi), cost, strain });
+                best.phi = wrap(phi);
+                best.cost = cost;
+                best.strain = strained;
             }
         };
 
@@ -770,7 +801,7 @@ export class Rig {
             best.cost = Infinity;
 
             if (swivel !== null) {
-                for (const nudge of [0, -0.2, 0.2, -0.45, 0.45]) {
+                for (const nudge of NUDGES) {
                     tryPhi(swivel + nudge);
                 }
             }
@@ -795,12 +826,11 @@ export class Rig {
         if (hand) {
             solve(hand);
         } else {
-            _qa.setFromUnitVectors(_down.clone().negate(), _dir.copy(grip).sub(_S).normalize().negate());
-            solve(_qa.clone());
+            solve(_start.setFromUnitVectors(_up, _dir.copy(grip).sub(_S).normalize().negate()));
         }
 
         // Again, from the hand's frame as it could be (the grip moves with it)
-        solve(_Fhand.clone());
+        solve(_start.copy(_Fhand));
 
         // Pose the bones: each one's world rotation is its anatomical frame out of its rest frame
         _qa.copy(_Farm).multiply(_qb.copy(this.frames[iArm]).invert());

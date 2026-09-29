@@ -83,10 +83,16 @@ const SHADOW_REACH = 24;
 const CUT_SIZE = 1.25;
 const CUT_SPEED = 5;
 
+// How far round something's middle it's taken to reach, times its height, when asking whether
+// it was in view (heightOnScreen): generous, for what it holds out and the camera's turning
+const REACH_ROUND = 1;
+
 const _point = new THREE.Vector3();
 const _up = new THREE.Vector3();
 const _toCamera = new THREE.Vector3();
 const _size = new THREE.Vector2();
+const _viewProjection = new THREE.Matrix4();
+const _sphere = new THREE.Sphere();
 
 export class View {
     /**
@@ -184,6 +190,10 @@ export class View {
         this.subject = null;
         this.cut = 0;
         this.lastRender = performance.now();
+
+        // What the camera saw when the world was last drawn (for heightOnScreen; none yet, all's
+        // taken to be in view)
+        this.frustum = null;
 
         this.setQuality(quality);
     }
@@ -612,6 +622,27 @@ export class View {
 
         this.renderer.info.reset();
         this.renderer.render(scene, camera);
+
+        if (scene === this.scene && camera === this.camera) {
+            this.frustum ??= new THREE.Frustum();
+            this.frustum.setFromProjectionMatrix(_viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse), camera.coordinateSystem);
+        }
+    }
+
+    /**
+     * How tall something `height` metres tall standing at `position` looked when the world was
+     * last drawn (drawing buffer pixels; `pixels`, pixelsPerMetre()), or 0 if it was out of view
+     * (unless `anywhere`: how tall it would look, in view or not).
+     */
+    heightOnScreen(position, height, pixels = this.pixelsPerMetre(), { anywhere = false } = {}) {
+        _sphere.center.set(position.x, position.y + height / 2, position.z);
+        _sphere.radius = height * REACH_ROUND;
+
+        if (!anywhere && this.frustum && !this.frustum.intersectsSphere(_sphere)) {
+            return 0;
+        }
+
+        return (height * pixels) / Math.max(this.camera.near, _sphere.center.distanceTo(this.camera.position));
     }
 
     // The place in the world of everything shown worked out, as drawing would of everything

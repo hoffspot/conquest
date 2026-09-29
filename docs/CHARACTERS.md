@@ -837,6 +837,46 @@ The lab applies changes at most once a frame.
 levels: a fifth to 45% of the strands) this roughly halves a character's triangles: the long
 style's 48,000 hair triangles become about 14,000 at high quality.
 
+**Posing.** Posing a character each frame (its walk, what it's doing layered over it, its feet
+kept on the ground and its hands reaching where they're wanted) costs, per character, in Node on
+a desktop-class machine:
+
+| | Walking | Running | On guard | Resting |
+|---|---|---|---|---|
+| Before | 123 µs | 129 µs | 314 µs | 256 µs |
+| Now | 108 µs | 102 µs | 222 µs | 184 µs |
+
+The poses are exactly the same, bone for bone, over 480 frames of walking, running, fighting,
+resting and sitting. What went:
+
+- **A matrix pass.** The walker worked out every node's world matrix (74 for a soldier) before
+  setting the joints as well as after. Nothing between reads them but through
+  `getWorldQuaternion` and the like, which work out their own, so now it's only after (the
+  character's own place before, `updateWorldMatrix(true, false)`).
+- **Euler angles nobody reads.** three.js works out a bone's Euler angles again every time its
+  quaternion's set: a matrix made and taken apart, about a twelfth of a walking character's
+  frame. Bones are posed by quaternion alone, so the rig switches that off (`Rig`: `bone.rotation`
+  goes stale; setting it still sets the quaternion).
+- **Allocations in the arm's reach.** `Rig.reachArm` tries 18 to 42 swivels an arm a frame, and
+  each made an object; `limitRotation` found its joint's movements and made an object and a
+  vector every call. Now they're found once and the rest is kept in scratch objects.
+- **Sprinting curves walking.** The sprint's curves (made of keys, each read making four small
+  arrays) were worked out and multiplied by nothing while walking. Now they're not, and reading
+  keys makes no arrays.
+
+**How often.** In the game, a character's posed only as often as it's seen (`Avatar.every`, from
+`posingEvery`): every frame when it's 150 pixels tall on the screen or taller, and the player
+always; every 2, 3 or 4 frames smaller (75, 35 pixels); every 8 when it's out of view (posed
+straight away when it comes back into it). A character moving fast enough that the quickest of
+it would be out by more than a pixel and a half between poses is posed more often: a foot on
+the ground slides along with the body, and in the middle of a blow, a flinch or a fall its hands
+are taken to go 4 metres a second (`Actions.quick`), so a fight's posed every frame unless it's
+tiny. It follows its actor every frame whatever, so it goes smoothly; between poses the whole
+of it moves as it was last posed, and when it's posed it's for all the time and way since. One
+that casts a shadow (soldiers and folk don't; a player does) isn't taken to be out of view, as its
+shadow might not be. The walk and the actions already cope with any frame's length, and
+the tests check the feet stay on the ground posed every third frame.
+
 For many enemies on screen, the next steps are:
 
 - merging the rest of a character's parts into one mesh (its garments already are, but a player's)

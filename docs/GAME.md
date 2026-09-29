@@ -1157,6 +1157,18 @@ it turns smoothly to face the way it's going (standing or attacking, the way its
 of their hair (the quality level's share, in fewer, wider strands: at the game's distance it
 looks the same), which roughly halves their triangles.
 
+**Posed as often as they're seen.** Posing a body (the walk, what's layered over it, the feet on
+the ground and the hands reaching) is most of what a character costs a frame, so it's done only
+as often as it can be seen to be (`Avatar.every`, `posingEvery`, from `View.heightOnScreen`: how
+tall it looked when the world was last drawn, or out of view): the player every frame, and anyone
+150 pixels tall on the screen or taller; smaller, every 2, 3 or 4 frames; out of view, every 8,
+and at once when it comes back into it. Anyone moving fast enough for it to show is posed more
+often: a foot on the ground mustn't slide more than a pixel and a half with the body between
+poses, and in a blow, a flinch or a fall the hands count as going 4 metres a second, so a fight
+is posed every frame unless it's tiny. Everyone follows their actor every frame whatever; a
+body's posed for all the time and way since it last was. One that casts a shadow (a player's) is
+never taken to be out of view. Creatures are posed every frame: they cost 10 to 40 µs.
+
 Attacks, flinches and falls (characters/actions.js, described in
 [CHARACTERS.md](CHARACTERS.md#fighting-actionsjs)) are started by the battle's events: an
 `attack` event starts the weapon's attack (in any of its five ways but the one it last used),
@@ -1667,7 +1679,11 @@ hidden till they're gone into: 1,300 of a town's 2,200 nodes, 0.52 ms a frame do
 headless Chromium. The bars over the others' heads are placed only for those who have one, from
 where the canvas is on the page, kept till it's resized (`View.toScreen`): reading it after a
 bar's been moved made the browser lay the page out again, once for everyone in sight, every frame
-(5–6% of a steady frame's JavaScript; now under 1%).
+(5–6% of a steady frame's JavaScript; now under 1%). Characters are posed only as often as
+they're seen, each pose cheaper (see *Characters in the world*): a frame's JavaScript in headless
+Chromium at 1280 × 720, the median and the 90th percentile, went from 2.3 and 4.1 ms to 1.3 and
+2.1 in the town, 2.6 and 4.7 to 1.9 and 3.0 in the taproom (nearly everyone there's big on the
+screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of the town.
 
 ## Testing
 
@@ -1788,7 +1804,10 @@ bar's been moved made the browser lay the page out again, once for everyone in s
   height, never the same way twice in a row, all five used; their timing, where the hands reach
   on different bodies, two-handed grips, alternating punches), rests (five named for every
   class, never the same twice running, easing out when stopped, the hands where each says,
-  patrons staying seated), reactions and falls, on the real body.
+  patrons staying seated), reactions and falls, on the real body; a character posed as often as
+  it's seen (every frame big on the screen, less often smaller or out of view, more often moving
+  fast or in a blow), following its actor every frame and posed for all the time and way since,
+  a foot on the ground each time.
 - `test/dialogue.test.js`: names (for each one's sex, none twice, the same for the same world),
   and conversations: one for everyone, every tree hanging together (every reply leads somewhere,
   every node can be got to, every talk can end), every name filled in, strangers and friends

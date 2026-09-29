@@ -49,7 +49,7 @@ import { GROUND } from "../core/setpieces/pieces.js";
 import { CAST_FAILURES, GROWTH_XP, lookOf, SCHOOLS, SPELLS, TOMES } from "../core/spells.js";
 import { Variety } from "../core/variety.js";
 import { distanceBetween, longestReach, weaponOf, WEAPONS } from "../core/weapons.js";
-import { Avatar } from "../world/avatar.js";
+import { Avatar, posingEvery } from "../world/avatar.js";
 import { Banners } from "../world/banners3d.js";
 import { Camps } from "../world/camps3d.js";
 import { Flyers } from "../world/flyers3d.js";
@@ -1285,6 +1285,7 @@ export class Game {
     #update(dt, alpha) {
         const { battle, view, hud } = this;
         const mine = battle.actor(this.me);
+        const pixels = view.pixelsPerMetre();
 
         this.clock += dt;
         TREE_WIND.time.value = this.clock;
@@ -1310,6 +1311,7 @@ export class Game {
             const z = previous.y + (actor.y - previous.y) * alpha;
 
             avatar.actions.setGuard(!actor.dead && actor.armed && this.#fighting(actor));
+            avatar.every = this.#posing(actor, avatar, dt, pixels);
             avatar.update(dt, ox + x, oz + z, actor.facing, !actor.attack);
             this.#updateBody(actor, avatar, dt, this.#standsAt(actor.map, x, z));
             hud.setStamina(actor.id, actor.stamina, actor.maxStamina);
@@ -1489,6 +1491,22 @@ export class Game {
         const map = this.world.maps?.[mapId];
 
         return map?.chunk && squaresOf(map).ground(Math.floor(x), Math.floor(y)) === GROUND.planks ? DECK.top : 0;
+    }
+
+    // How often a character's body is posed (Avatar.every): the player's every frame, anyone
+    // else's as often as how big it is on the screen and how fast it's moving need
+    // (posingEvery). One out of view is posed seldom, unless its shadow may be seen (a player's).
+    // (A creature's posed every frame)
+    #posing(actor, avatar, dt, pixels) {
+        if (actor.id === this.me || !(avatar instanceof Avatar)) {
+            return 1;
+        }
+
+        const { position } = avatar.object;
+        const { height, mesh } = avatar.character;
+        const tall = this.view.heightOnScreen(position, height, pixels, { anywhere: mesh.castShadow });
+
+        return posingEvery(tall, (avatar.motion * dt * tall) / height);
     }
 
     // Standing on the ground (stepping up onto a bridge's deck, and down off it); or, dead, lying

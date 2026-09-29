@@ -226,7 +226,9 @@ export class Walker {
             object.translateZ(step);
         }
 
-        object.updateMatrixWorld(true);
+        // (Where it is now: the bones are posed, and their matrices worked out, once the joints
+        // are set, #pose)
+        object.updateWorldMatrix(true, false);
 
         this.#pose(dt);
     }
@@ -359,6 +361,8 @@ export class Walker {
         const p = phases[0];
         const walk = 1 - r;
         const mix = (a, b) => a * walk + b * r;
+        // (A sprinting curve, not worked out when it's not running at all)
+        const running = (curve, phase) => (r > 0 ? curveAt(curve, phase) : 0);
 
         rig.reset();
 
@@ -396,19 +400,19 @@ export class Walker {
             const crouch = style.crouch * walk;
 
             rig.setAngles(`${side}UpLeg`, {
-                flex: mix(s * (curveAt(CURVES.hipFlexion, phase) - PELVIC_TILT), curveAt(RUN_CURVES.thigh, phase)) + crouch + lean * 0.3,
+                flex: mix(s * (curveAt(CURVES.hipFlexion, phase) - PELVIC_TILT), running(RUN_CURVES.thigh, phase)) + crouch + lean * 0.3,
                 abduct: -mix(s, 1.2) * curveAt(CURVES.hipAdduction, phase) - inward,
                 rotate: -style.toeOut * 0.5 * walk,
             });
-            rig.setAngles(`${side}Leg`, { flex: mix(s * curveAt(CURVES.kneeFlexion, phase), curveAt(RUN_CURVES.kneeFlexion, phase)) + crouch * 1.6 });
-            rig.setAngles(`${side}Foot`, { flex: mix(s * curveAt(CURVES.ankleDorsiflexion, phase), curveAt(RUN_CURVES.ankleDorsiflexion, phase)) + crouch * 0.6, rotate: style.toeOut * 0.5 * walk, invert: inward * 0.6 });
+            rig.setAngles(`${side}Leg`, { flex: mix(s * curveAt(CURVES.kneeFlexion, phase), running(RUN_CURVES.kneeFlexion, phase)) + crouch * 1.6 });
+            rig.setAngles(`${side}Foot`, { flex: mix(s * curveAt(CURVES.ankleDorsiflexion, phase), running(RUN_CURVES.ankleDorsiflexion, phase)) + crouch * 0.6, rotate: style.toeOut * 0.5 * walk, invert: inward * 0.6 });
 
             // Arms swing against the legs (pumping, running), or carry what's in the hand
             const hold = this.character.holds[side];
             const swing = s * curveAt(CURVES.shoulderFlexion, phase);
             const elbowSwing = s * (curveAt(CURVES.elbowFlexion, phase) - 10);
-            const pump = curveAt(RUN_CURVES.shoulderFlexion, phase);
-            const bend = curveAt(RUN_CURVES.elbowFlexion, phase);
+            const pump = running(RUN_CURVES.shoulderFlexion, phase);
+            const bend = running(RUN_CURVES.elbowFlexion, phase);
 
             rig.setAngles(`${side}Shoulder`, { elevate: 0, protract: mix(swing, pump) * 0.15 });
 
