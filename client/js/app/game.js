@@ -485,8 +485,9 @@ export class Game {
         /** The soldiers the host's brought out, still to be drawn (a few a frame: #visit). */
         this.enlisting = [];
 
-        // The one of them being drawn just now, a step at a time: { actor, steps }
-        this.enlistee = null;
+        // Those of them begun, being drawn a step at a time (the nearest the player first: one
+        // further off put by for one nearer, and taken up again after): id -> { actor, steps }
+        this.enlistees = new Map();
 
         // (Whether what's built a step at a time can wait on work done elsewhere, a worker's: not
         // while playing on at once, advance)
@@ -2223,14 +2224,39 @@ export class Game {
 
     // --- Going inside ---
 
-    // Some no longer to be drawn (those let go of, or gone): off the list, and the one being drawn
-    // stopped if it's one of them
+    // Some no longer to be drawn (those let go of, or gone): off the list, and any being drawn
+    // stopped
     #unenlist(ids) {
         this.enlisting = this.enlisting.filter((id) => !ids.includes(id));
 
-        if (ids.includes(this.enlistee?.actor.id)) {
-            this.enlistee = null;
+        for (const id of ids) {
+            this.enlistees.delete(id);
         }
+    }
+
+    // Of those to be drawn, the one to take the next step of: the nearest the player (on their map
+    // before any on another), begun if it isn't yet, and none of those put by this frame (waiting
+    // on their skins, painted elsewhere). { actor, steps }, or null if there's none
+    #nextEnlistee(put) {
+        const me = this.battle.actor(this.me);
+        const far = (actor) => (me && actor.map === me.map ? Math.hypot(actor.x - me.x, actor.y - me.y) : Infinity);
+        let nearest = null;
+
+        // (Those gone, or drawn some other way meanwhile, off the list)
+        this.enlisting = this.enlisting.filter((id) => this.battle.actor(id) && !this.avatars.has(id) && !this.enlistees.has(id));
+
+        for (const actor of [...[...this.enlistees.values()].map(({ actor }) => actor), ...this.enlisting.map((id) => this.battle.actor(id))]) {
+            if (!put.has(actor.id) && (!nearest || far(actor) < far(nearest))) {
+                nearest = actor;
+            }
+        }
+
+        if (nearest && !this.enlistees.has(nearest.id)) {
+            this.enlisting = this.enlisting.filter((id) => id !== nearest.id);
+            this.enlistees.set(nearest.id, { actor: nearest, steps: new Steps(this.#dressing(nearest)) });
+        }
+
+        return nearest ? this.enlistees.get(nearest.id) : null;
     }
 
     // Every frame, a little more of the buildings being got ready built (the host says which:
@@ -2247,27 +2273,30 @@ export class Game {
             this.#work(visit, until);
         }
 
-        // The soldiers brought out and the wild's creatures put out, drawn a few at a time, each
-        // a step at a time (those on the player's map first); a creature's bar over it
-        while ((this.enlistee || this.enlisting.length) && performance.now() < until) {
-            if (!this.enlistee) {
-                const actor = this.battle.actor(this.enlisting.shift());
+        // The soldiers brought out and the wild's creatures put out, each drawn a step at a time,
+        // the nearest the player first; a creature's bar over it
+        const put = new Set();
 
-                if (actor && !this.avatars.has(actor.id)) {
-                    this.enlistee = { actor, steps: new Steps(this.#dressing(actor)) };
+        while (performance.now() < until) {
+            const next = this.#nextEnlistee(put);
+
+            if (!next) {
+                break;
+            }
+
+            const { actor, steps } = next;
+
+            if (!steps.take(until, { wait: this.waits })) {
+                // (Its skin not yet painted elsewhere: the next nearest meanwhile, and back to
+                // them next frame)
+                if (steps.waiting) {
+                    put.add(actor.id);
                 }
 
                 continue;
             }
 
-            const { actor, steps } = this.enlistee;
-
-            // (Its skin not yet painted elsewhere: come back to them next frame)
-            if (!steps.take(until, { wait: this.waits })) {
-                break;
-            }
-
-            this.enlistee = null;
+            this.enlistees.delete(actor.id);
 
             const avatar = steps.value;
 
@@ -2576,7 +2605,7 @@ export class Game {
         this.battle = this.host.battle;
 
         for (const actor of this.battle.actors) {
-            if (actor.kind === "soldier" && !this.avatars.has(actor.id) && !this.enlisting.includes(actor.id) && this.enlistee?.actor.id !== actor.id) {
+            if (actor.kind === "soldier" && !this.avatars.has(actor.id) && !this.enlisting.includes(actor.id) && !this.enlistees.has(actor.id)) {
                 this.enlisting.push(actor.id);
             }
         }

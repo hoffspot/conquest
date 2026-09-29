@@ -1476,7 +1476,7 @@ test("the town's guards stand at its ways out under its people's banner, and tal
     expect(await playUntil(page, () => {
         const { game } = window.pellagos;
 
-        return !game.enlistee && !game.enlisting.length;
+        return !game.enlistees.size && !game.enlisting.length;
     })).toBe(true);
 
     const out = await page.evaluate(() => {
@@ -1678,7 +1678,7 @@ test("an envoy on the road near the player goes by with their escort; struck dow
     await playing(page, "/?play&seed=2");
 
     // An orcish envoy on the road just outside the town, at war with the humans; the player by them
-    const met = await page.evaluate(() => {
+    await page.evaluate(() => {
         const { game } = window.pellagos;
         const war = game.host.war;
         const [mx, my] = game.world.stamp.middle;
@@ -1691,8 +1691,18 @@ test("an envoy on the road near the player goes by with their escort; struck dow
         war.forces.push({ id: "force-950", realm: "orc", kind: "envoy", size: 0, at: [...at], path: [at, [at[0] + 100, at[1]], [at[0] + 200, at[1]]], leg: 0, target: "elf", home: war.realm("orc").capital, mission: "alliance", about: null, since: war.turn });
         Object.assign(player, { square: [Math.floor(at[0] - 4), Math.floor(at[1] + 3)], to: null, path: [], hp: 5000, maxHp: 5000 });
         Object.assign(player, { x: player.square[0] + 0.5, y: player.square[1] + 0.5 });
-        game.advance(1.5);
+        game.advance(0.1);
+    });
 
+    // (Drawn over a few frames, a step at a time, the nearest the player first)
+    await playUntil(page, () => {
+        const { game } = window.pellagos;
+
+        return (game.host.envoys.get("force-950")?.ids ?? []).some((id) => game.avatars.has(id));
+    });
+
+    const met = await page.evaluate(() => {
+        const { game } = window.pellagos;
         const party = game.host.envoys.get("force-950")?.ids ?? [];
 
         return party.map((id) => ({ id, name: game.battle.actor(id).name, drawn: game.avatars.has(id) }));
@@ -2814,8 +2824,9 @@ test("magic: the spellbook shows every school and the tomes; a tome read teaches
     await expect(book).toBeHidden();
 
     // Fire grown to its seventh tier: Hellfire cast on an orc floods the screen with red, shakes
-    // the camera and fills the ground round it with fire
-    const cast = await page.evaluate(() => {
+    // the camera and fills the ground round it with fire (the orc drawn first, the nearest the
+    // player, over a few frames)
+    await page.evaluate(() => {
         const { game } = window.pellagos;
         const me = game.battle.actor(game.me);
 
@@ -2823,7 +2834,13 @@ test("magic: the spellbook shows every school and the tomes; a tome read teaches
         game.battle.add({ id: "target", kind: "orc", weapon: "cleaver", team: "orcs", square: [me.square[0] + 1, me.square[1] - 3], hp: 5000 });
         game.enlisting.push("target");
         game.stop();
-        game.advance(0.5);
+    });
+    expect(await playUntil(page, () => window.pellagos.game.avatars.has("target"))).toBe(true);
+
+    const cast = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor(game.me);
+
         Object.assign(me, { spellReadyAt: 0, spellsReadyAt: {} });
 
         const result = game.host.command(game.me, { type: "cast", spell: "hellfire", target: "target" });

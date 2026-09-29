@@ -1609,8 +1609,12 @@ the folk of a building near, the wild's people-shaped creatures) is built a step
 within the frames' budget (CHARACTERS.md, *Built a step at a time*): the longest step 10 to 40
 ms on a desktop, where each was one piece of 300 to 800 ms. Their skins are painted meanwhile in a
 worker (CHARACTERS.md, *Skins painted elsewhere*), so a town's guards are all out in about 4 s of
-frames and a tavern's folk in about 3 (headless Chromium on "high"). Someone still being built
-when the player comes onto their map is put where they are when they're drawn. A beast's body is still built at once
+frames and a tavern's folk in about 3 (headless Chromium on "high"). Soldiers and creatures are
+drawn the nearest the player first (`#nextEnlistee`): one begun further off is put by for one
+nearer, and taken up again after, and one waiting on its skin lets the next nearest be built
+meanwhile, so an enemy by the player isn't left undrawn while guards across the town are built.
+Someone still being built when the player comes onto their map is put where they are when
+they're drawn. A beast's body is still built at once
 the first time each of its kind's three looks is seen (100 to 280 ms on a desktop), then kept. On phones the quality level draws
 fewer pixels and thinner hair and uses smaller textures, and debug mode shows what each costs.
 With the world round the town, in the browser tests' views a frame makes 80 to 150 draw calls
