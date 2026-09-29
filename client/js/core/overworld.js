@@ -29,7 +29,7 @@ import { Sites } from "./sites.js";
 import { Interiors } from "./insides.js";
 import { WENCHES } from "./lore/taverns.js";
 import { featuresOf } from "./wilds.js";
-import { GROUND, TREE_KINDS } from "./setpieces/pieces.js";
+import { GROUND, HOME_TREES, TREE_KINDS } from "./setpieces/pieces.js";
 import { generateWorld } from "./world.js";
 import { BIOME, BIOMES, CELL, CELLS, CHUNK, CHUNKS, planWorld, RACES, startFor, WATER, WORLD_SIZE } from "./worldplan/plan.js";
 
@@ -64,6 +64,9 @@ export const FLORA = Object.freeze({
     snow: { density: 0.08, kinds: ["spruce"] },
     mountain: { density: 0.3, kinds: ["pine", "spruce"] },
 });
+
+// How many of the trees in a people's homeland are their own kind (HOME_TREES)
+const HOME_TREE_SHARE = 0.7;
 
 // Roads' half-widths (metres), by kind
 const ROAD_HALF = Object.freeze({ trade: 2.2, road: 1.8, track: 1.1 });
@@ -820,9 +823,12 @@ export class Overworld {
                     continue;
                 }
 
-                const kind = flora.kinds[Math.floor(pick * flora.kinds.length)];
+                // (In a people's homeland, most of the trees are their own)
+                const own = HOME_TREES[this.homeAt(x, y)];
+                const kinds = own && (pick * 7.31) % 1 < HOME_TREE_SHARE ? [own] : flora.kinds;
+                const kind = kinds[Math.floor(pick * kinds.length)];
                 const variants = VARIANTS_OF[kind];
-                const variant = variants[Math.floor(((pick * flora.kinds.length) % 1) * variants.length)];
+                const variant = variants[Math.floor(((pick * kinds.length) % 1) * variants.length)];
 
                 for (const [bx, by] of [[x - 1, y - 1], [x, y - 1], [x - 1, y], [x, y]]) {
                     blocked[(by - y0) * CHUNK + (bx - x0)] = 1;

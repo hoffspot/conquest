@@ -93,18 +93,43 @@ export const PROPS = Object.freeze({
 });
 
 /**
+ * Each people's own tree, grown in its homeland and its settlements: the cat folk's flat-topped
+ * acacia, the orcs' blasted ironbark, the lizard folk's weeping willow, the elves' tall
+ * silverbark, the dark elves' black nightspire.
+ */
+export const HOME_TREES = Object.freeze({ cat: "acacia", orc: "ironbark", lizard: "willow", elf: "silverbark", darkElf: "nightspire" });
+
+/**
  * The trees there are ([kind, seed]): each kind grown several ways (world/art/kits/trees.js grows
- * them), the broadleaved ones more often than the rest, as in the fields round an old town.
+ * them), the broadleaved ones more often than the rest, as in the fields round an old town; then
+ * each people's own (HOME_TREES), three ways each.
  */
 export const TREE_KINDS = Object.freeze([
     ["oak", 1], ["beech", 1], ["birch", 1], ["spruce", 1], ["pine", 1], ["oak", 2],
     ["poplar", 1], ["birch", 2], ["spruce", 2], ["beech", 2], ["apple", 1], ["oak", 3],
     ["pine", 2], ["spruce", 3], ["birch", 3], ["beech", 3], ["oak", 4], ["spruce", 4],
     ["poplar", 2], ["apple", 2], ["birch", 4], ["pine", 3], ["beech", 4], ["oak", 5],
+    ...Object.values(HOME_TREES).flatMap((kind) => [[kind, 1], [kind, 2], [kind, 3]]),
 ]);
 
-/** How many different trees there are (each fills one square): TREE_KINDS's. */
-export const TREE_VARIANTS = TREE_KINDS.length;
+/**
+ * How many trees anyone's town and the land anywhere grow (each fills one square): the first of
+ * TREE_KINDS. The rest are the peoples' own.
+ */
+export const TREE_VARIANTS = TREE_KINDS.length - Object.keys(HOME_TREES).length * 3;
+
+// Each people's own trees (TREE_KINDS indices)
+const HOME_VARIANTS = Object.fromEntries(Object.entries(HOME_TREES).map(([people, kind]) => [people, TREE_KINDS.flatMap(([own], k) => (own === kind ? [k] : []))]));
+
+/**
+ * A tree of a people's own, three times in five, or `variant` (one of TREE_VARIANTS, chosen as if
+ * for anyone) for a people without their own, or the other two times.
+ */
+export function homeTree(people, variant) {
+    const own = HOME_VARIANTS[people];
+
+    return own && variant % 5 < 3 ? own[variant % own.length] : variant;
+}
 
 /**
  * How many metres a grid square of the art is: the kits build a piece `w` by `h` squares, and a
@@ -173,7 +198,7 @@ export function pieceCatalog() {
         pieces.push({ key: propKey(name), kind: "prop", name, w, h });
     }
 
-    for (let variant = 0; variant < TREE_VARIANTS; variant++) {
+    for (let variant = 0; variant < TREE_KINDS.length; variant++) {
         pieces.push({ key: treeKey(variant), kind: "tree", variant, w: 1, h: 1 });
     }
 

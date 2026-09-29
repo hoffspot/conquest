@@ -108,6 +108,60 @@ export const SPECIES = Object.freeze({
         foot: { flare: 0.5, roots: [3, 4], reach: [0.35, 0.55], tint: [0.6, 0.62, 0.5] },
         bark: "apple",
     },
+
+    // Each people's own (core/setpieces/pieces.js HOME_TREES). The cat folk's acacia: a short trunk
+    // forking into a few climbing limbs, spreading out level at the top in a flat umbrella
+    acacia: {
+        height: [5.5, 7],
+        trunk: { radius: 0.24, reach: 0.5, taper: 0.45, lean: 0.12, crook: 0.3 },
+        boughs: { count: [7, 9], from: 0.85, to: 1, angle: [55, 75], length: [0.45, 0.58], shape: "column", bend: 0.1, crook: 0.35, thickness: 0.5 },
+        branches: null,
+        leaves: { size: [1.6, 2], perBranch: 9, from: 0.7, flat: true },
+        foot: { flare: 0.5, roots: [3, 4], reach: [0.4, 0.6], tint: [0.66, 0.62, 0.52] },
+        bark: "acacia",
+    },
+    // The orcs' ironbark: a squat, blasted, twisted thing, a few rust-red leaves left on it
+    ironbark: {
+        height: [5, 6.5],
+        trunk: { radius: 0.36, reach: 0.75, taper: 0.55, lean: 0.14, crook: 0.4 },
+        boughs: { count: [4, 6], from: 0.4, to: 0.95, angle: [40, 75], length: [0.3, 0.45], shape: "spread", bend: 0.14, crook: 0.8, thickness: 0.55 },
+        branches: { count: [2, 3], from: 0.3, angle: [35, 70], length: [0.4, 0.6], bend: 0.18, crook: 0.8 },
+        leaves: { size: [0.9, 1.2], perBranch: 3, from: 0.55 },
+        foot: { flare: 0.9, roots: [4, 6], reach: [0.6, 0.9], tint: [0.55, 0.5, 0.48] },
+        bark: "ironbark",
+    },
+    // The lizard folk's willow: a stout trunk, its boughs arching out and its long twigs hanging
+    // down all round in curtains
+    willow: {
+        height: [7, 9],
+        trunk: { radius: 0.32, reach: 0.5, taper: 0.4, lean: 0.1, crook: 0.2 },
+        boughs: { count: [7, 9], from: 0.5, to: 1, angle: [30, 55], length: [0.32, 0.42], shape: "dome", bend: 0.02, crook: 0.3, thickness: 0.55 },
+        branches: { count: [5, 7], from: 0.25, angle: [25, 50], length: [0.7, 1], bend: -0.9, crook: 0.1 },
+        leaves: { size: [1.3, 1.7], perBranch: 7, from: 0.2 },
+        foot: { flare: 0.9, roots: [5, 7], reach: [0.7, 1], tint: [0.5, 0.58, 0.44] },
+        bark: "willow",
+    },
+    // The elves' silverbark: tall and straight, its bark pale as birch without the black, its
+    // leaves gold-green
+    silverbark: {
+        height: [11, 14],
+        trunk: { radius: 0.22, reach: 0.93, taper: 0.3, lean: 0.03, crook: 0.05 },
+        boughs: { count: [12, 15], from: 0.38, to: 0.97, angle: [26, 44], length: [0.26, 0.34], shape: "oval", bend: 0.06, crook: 0.15, thickness: 0.42 },
+        branches: { count: [3, 4], from: 0.3, angle: [25, 45], length: [0.45, 0.6], bend: 0.04, crook: 0.2 },
+        leaves: { size: [1.4, 1.8], perBranch: 7, from: 0.15 },
+        foot: { flare: 0.9, roots: [5, 7], reach: [0.7, 1], tint: [0.72, 0.74, 0.7] },
+        bark: "silverbark",
+    },
+    // The dark elves' nightspire: a spruce's tiers, taller and narrower, black, its needles violet
+    nightspire: {
+        height: [9, 11.5],
+        trunk: { radius: 0.24, reach: 1, taper: 0.1, lean: 0.03, crook: 0.05 },
+        boughs: { count: [49, 63], whorl: 7, from: 0.1, to: 0.97, angle: [70, 95], length: [0.24, 0.3], shape: "cone", bend: -0.3, crook: 0.14, thickness: 0.3, sides: 3, segments: 3 },
+        branches: null,
+        leaves: { size: [1.1, 1.45], perBranch: 7, from: 0.05, flat: true },
+        foot: { flare: 0.6, roots: [4, 5], reach: [0.5, 0.8], tint: [0.5, 0.48, 0.55] },
+        bark: "nightspire",
+    },
 });
 
 /** The kinds, in the order of their pictures across the bark and the leaves' pictures. */
@@ -677,6 +731,12 @@ const BARKS = {
     spruce: { base: "#5d4a3d", dark: "#2c2119", light: "#7a6555" },
     poplar: { base: "#76705f", dark: "#3b372d", light: "#8f8a78" },
     apple: { base: "#574434", dark: "#2a1f16", light: "#77624d" },
+    // (The peoples' own, patterned as one of those)
+    acacia: { base: "#6e6152", dark: "#342a20", light: "#8e8070", pattern: "oak" },
+    ironbark: { base: "#3b3431", dark: "#161211", light: "#5d514b", pattern: "oak" },
+    willow: { base: "#5b5243", dark: "#2c261e", light: "#7a6f5c", pattern: "oak" },
+    silverbark: { base: "#cfd2cb", dark: "#8c948f", light: "#eceee8", pattern: "beech" },
+    nightspire: { base: "#2c2630", dark: "#110d14", light: "#4a4054", pattern: "spruce" },
 };
 
 // A kind's bark, 128 by 256 pixels, repeating up it
@@ -684,6 +744,7 @@ function barkPicture(context, kind) {
     const [width, height] = [128, 256];
     const random = createRandom(kind.length * 31 + kind.charCodeAt(0));
     const colours = BARKS[kind];
+    const pattern = colours.pattern ?? kind;
 
     context.fillStyle = colours.base;
     context.fillRect(0, 0, width, height);
@@ -705,10 +766,10 @@ function barkPicture(context, kind) {
 
     context.globalAlpha = 1;
 
-    if (kind === "oak" || kind === "poplar" || kind === "apple") {
+    if (pattern === "oak" || pattern === "poplar" || pattern === "apple") {
         // Deep furrows between ridges, running up and meeting
-        for (let k = 0; k < (kind === "oak" ? 26 : 16); k++) {
-            const x = (k / (kind === "oak" ? 26 : 16)) * width + random.next() * 6;
+        for (let k = 0; k < (pattern === "oak" ? 26 : 16); k++) {
+            const x = (k / (pattern === "oak" ? 26 : 16)) * width + random.next() * 6;
             let y = random.next() * height;
             const points = [];
 
@@ -718,14 +779,14 @@ function barkPicture(context, kind) {
             }
 
             context.strokeStyle = colours.dark;
-            context.lineWidth = kind === "oak" ? 3 + random.next() * 3 : 2 + random.next() * 2;
+            context.lineWidth = pattern === "oak" ? 3 + random.next() * 3 : 2 + random.next() * 2;
             wrapped(context, width, height, () => {
                 context.beginPath();
                 points.forEach(([px, py], j) => (j ? context.lineTo(px, py) : context.moveTo(px, py)));
                 context.stroke();
             });
         }
-    } else if (kind === "birch") {
+    } else if (pattern === "birch") {
         // Black lenticels across the white, and rough dark patches
         for (let k = 0; k < 60; k++) {
             const [x, y, w, h] = [random.next() * width, random.next() * height, 6 + random.next() * 22, 1 + random.next() * 2.5];
@@ -751,9 +812,9 @@ function barkPicture(context, kind) {
         }
 
         context.globalAlpha = 1;
-    } else if (kind === "pine" || kind === "spruce") {
+    } else if (pattern === "pine" || pattern === "spruce") {
         // Plates (a pine's orange, a spruce's small scales), cracked apart
-        const [across, up] = kind === "pine" ? [4, 7] : [7, 16];
+        const [across, up] = pattern === "pine" ? [4, 7] : [7, 16];
 
         for (let row = 0; row < up; row++) {
             for (let column = 0; column < across; column++) {
@@ -764,7 +825,7 @@ function barkPicture(context, kind) {
 
                 context.fillStyle = random.chance(0.5) ? colours.light : colours.base;
                 context.strokeStyle = colours.dark;
-                context.lineWidth = kind === "pine" ? 3 : 2;
+                context.lineWidth = pattern === "pine" ? 3 : 2;
                 wrapped(context, width, height, () => {
                     context.beginPath();
 
@@ -821,11 +882,16 @@ const FOLIAGE = {
     apple: { greens: ["#365f1f", "#4a7a29", "#60913a"], shape: "oval", length: [36, 48], count: 32, fruit: "#b82a1e" },
     spruce: { greens: ["#2e5234", "#3d6844", "#528055"], needles: "spray" },
     pine: { greens: ["#34522a", "#466a33", "#5a7f3f"], needles: "tufts" },
+    acacia: { greens: ["#4e5e26", "#687a30", "#869640"], shape: "oval", length: [14, 20], count: 110 },
+    ironbark: { greens: ["#4a2014", "#6e2e18", "#8e4a22"], shape: "toothed", length: [24, 34], count: 20 },
+    willow: { greens: ["#4c6420", "#6a8428", "#8ea43a"], shape: "narrow", length: [40, 56], count: 60 },
+    silverbark: { greens: ["#6e8c46", "#a6bc6a", "#d8cf86"], shape: "oval", length: [38, 50], count: 34 },
+    nightspire: { greens: ["#221e2a", "#312a3e", "#473b5a"], needles: "spray" },
 };
 
 // One leaf, its stalk at (0, 0), pointing up the y axis (negative), `length` long
 function leaf(context, shape, length, fill, vein) {
-    const w = length * (shape === "toothed" ? 0.62 : shape === "heart" ? 0.8 : shape === "lobed" ? 0.55 : 0.5);
+    const w = length * (shape === "toothed" ? 0.62 : shape === "heart" ? 0.8 : shape === "lobed" ? 0.55 : shape === "narrow" ? 0.24 : 0.5);
 
     context.beginPath();
     context.moveTo(0, 0);
@@ -857,7 +923,7 @@ function leaf(context, shape, length, fill, vein) {
             }
         }
     } else {
-        // An oval (beech, apple) or a heart (poplar), pointed at the tip
+        // An oval (beech, apple), a narrow blade (willow) or a heart (poplar), pointed at the tip
         const shoulder = shape === "heart" ? 0.25 : 0.45;
 
         context.bezierCurveTo(w * 0.7, -length * shoulder * 0.4, w * 0.6, -length * (shoulder + 0.35), 0, -length);
@@ -1019,6 +1085,11 @@ const LITTER = {
     spruce: { needles: ["#5e4630", "#6a5036", "#4e3c28"], cones: "#44301e" },
     poplar: { leaves: ["#847438", "#6e6434", "#5a5630", "#907e44"], size: 6 },
     apple: { leaves: ["#646036", "#72683a", "#52502e"], size: 6, fruit: ["#8a3226", "#a08036"] },
+    acacia: { leaves: ["#8a7a40", "#9a8a4a", "#6e6434"], size: 3 },
+    ironbark: { leaves: ["#3a2a22", "#4a2a1e", "#2a2220"], size: 6 },
+    willow: { leaves: ["#7a7038", "#6a6232", "#8a7a3e"], size: 6 },
+    silverbark: { leaves: ["#c8a848", "#b89a40", "#d8c070", "#a08a3c"], size: 7 },
+    nightspire: { needles: ["#3a3044", "#2c2434", "#4a3c56"], cones: "#1e1822" },
 };
 
 // The patch round a tree's foot, seen from above, fading out at its edge: bare earth, moss, and

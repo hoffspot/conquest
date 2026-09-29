@@ -23,7 +23,7 @@ import { createRandom, noise } from "../random.js";
 import { atan2, cos, length, PI, sin, sqrt, TAU } from "./exact.js";
 import { patronOf } from "../lore/gods.js";
 import { nameTavern } from "../lore/taverns.js";
-import { ENTERED, GROUND, HOUSE_STYLES, HOUSE_VARIANTS, houseKey, LANDMARKS, landmarkKey, OUTBUILDINGS, PEOPLE_PLACES, PLOT, PROPS, propKey, TRADES, treeKey, TREE_VARIANTS } from "./pieces.js";
+import { ENTERED, GROUND, homeTree, HOUSE_STYLES, HOUSE_VARIANTS, houseKey, LANDMARKS, landmarkKey, OUTBUILDINGS, PEOPLE_PLACES, PLOT, PROPS, propKey, TRADES, treeKey, TREE_VARIANTS } from "./pieces.js";
 
 /**
  * The kinds of settlement, and how each is laid out: how far its houses reach from the middle
@@ -683,7 +683,8 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
             use[j * width + i] = USE.thing;
         }
 
-        const variant = random.int(0, TREE_VARIANTS - 1);
+        // (Another people's own trees among them)
+        const variant = homeTree(people, random.int(0, TREE_VARIANTS - 1));
 
         pieces.push({ key: treeKey(variant), kind: "tree", variant, x, y, w: 0.5, h: 0.5, facing: 0 });
 

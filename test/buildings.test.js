@@ -603,6 +603,29 @@ describe("each people's buildings (peoples/)", () => {
         }
     });
 
+    it("pitches each people's own tents in its war camps: on the ground, a few metres round, the way in towards the fire", async () => {
+        const { CAMP_PEOPLES, campTent } = await import("../client/js/world/art/peoples/camp.js");
+        const { M } = await import("../client/js/world/art/peoples/kit.js");
+
+        assert.deepEqual([...CAMP_PEOPLES].sort(), ["cat", "darkElf", "elf", "lizard", "orc"]);
+        assert.equal(campTent("human"), null);
+
+        for (const people of CAMP_PEOPLES) {
+            const tent = campTent(people);
+            const box = new THREE.Box3().setFromObject(tent);
+            const doors = [];
+
+            tent.traverse((node) => node.isMesh && node.material.name === "shadow" && doors.push(new THREE.Box3().setFromObject(node)));
+
+            assert.ok(trianglesOf(tent) > 60 && trianglesOf(tent) < 600, `${people}: ${trianglesOf(tent)} triangles`);
+            assert.ok(box.min.y > -0.1 * M && box.max.y > 1.6 * M && box.max.y < 4.2 * M, `${people}: ${box.min.y / M} to ${box.max.y / M} m high`);
+            assert.ok(Math.max(-box.min.x, box.max.x, -box.min.z, box.max.z) < 2.1 * M, `${people}: ${box.min.toArray()} to ${box.max.toArray()}`);
+            // (The lizard folk's open at the front, under their thatch)
+            assert.equal(doors.length, people === "lizard" ? 0 : 1, people);
+            assert.ok(doors.every((door) => door.min.z > 0.3 * M), `${people}: its doorway at the front`);
+        }
+    });
+
     it("builds each people's insides of its own stuff, its lamps lit its own way", async () => {
         const { readPlan } = await import("../client/js/core/interiors.js");
         const { tavernRooms } = await import("../client/js/core/insides.js");

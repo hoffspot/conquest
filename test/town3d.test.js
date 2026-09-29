@@ -4,8 +4,10 @@ import { describe, it } from "node:test";
 import { GROUND, LANDMARKS, pieceCatalog } from "../client/js/core/setpieces/pieces.js";
 import { generateWorld } from "../client/js/core/world.js";
 import { LANDMARK_BUILDERS } from "../client/js/world/art/kits/landmarks.js";
-import { LAND_COLOURS, splatData, splatOf } from "../client/js/world/ground.js";
-import { BIOMES } from "../client/js/core/worldplan/plan.js";
+import { HOMES, LAND_COLOURS, landColour, landColours, splatData, splatOf } from "../client/js/world/ground.js";
+import { BIOMES, CELLS } from "../client/js/core/worldplan/plan.js";
+import { RACES } from "../client/js/core/worldplan/races.js";
+import { MATERIALS, paintLayer } from "../client/js/world/art/engine/painters.js";
 import { BUILDERS, heightMap, PIXEL } from "../client/js/world/town3d.js";
 
 describe("the town in 3D (town3d.js)", () => {
@@ -99,6 +101,41 @@ describe("the ground (ground.js)", () => {
 
         assert.equal(LAND_COLOURS.meadow[1], 0, "the grass as it is in meadows");
         assert.ok(LAND_COLOURS.snow[1] > 0.9 && LAND_COLOURS.woods[1] < 0.5);
+    });
+
+    it("lays each people's own ground over its homeland (none under the water), the humans' the grass", () => {
+        const biome = new Uint8Array(CELLS * CELLS).fill(BIOMES.findIndex(({ id }) => id === "meadow"));
+        const territory = new Uint8Array(CELLS * CELLS);
+        const sea = BIOMES.findIndex(({ id }) => id === "sea");
+
+        // (A cell of each people's, and one of the orcs' under the sea)
+        RACES.forEach((_, k) => (territory[k] = k + 1));
+        territory[CELLS] = RACES.findIndex(({ id }) => id === "orc") + 1;
+        biome[CELLS] = sea;
+
+        const land = landColours({ biome, territory });
+        const [first, second] = land.userData.home.map((texture) => texture.image.data);
+        const weights = (k) => [...first.slice(k * 4, k * 4 + 4), second[k * 4]];
+
+        assert.deepEqual(HOMES, ["cat", "orc", "lizard", "elf", "darkElf"]);
+
+        RACES.forEach(({ id }, k) => {
+            assert.deepEqual(weights(k), HOMES.map((people) => (people === id ? 255 : 0)), id);
+        });
+        assert.deepEqual(weights(CELLS), [0, 0, 0, 0, 0], "under the sea");
+        assert.deepEqual(weights(CELLS + 1), [0, 0, 0, 0, 0], "the wild");
+
+        // (Each painted, as a ground: tiling, and not the grass)
+        for (const people of HOMES) {
+            const name = `home-${people}`;
+            const layer = paintLayer(name, 16);
+
+            assert.ok(MATERIALS[name]?.ground, name);
+            assert.equal(layer.length, 16 * 16 * 4);
+        }
+
+        assert.equal(landColour("savannah", "cat").userData.home[0].image.data[0], 255);
+        assert.equal(landColour("meadow", "human").userData.home, undefined);
     });
 });
 

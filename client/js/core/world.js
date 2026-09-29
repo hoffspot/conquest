@@ -32,7 +32,7 @@ import { MAP_ORIGINS, tavernFloors, tavernFolk } from "./interiors.js";
 import { WENCHES } from "./lore/taverns.js";
 import { namePeople } from "./names.js";
 import { createRandom } from "./random.js";
-import { GROUND, landmarkKey, PLOT, TREE_VARIANTS } from "./setpieces/pieces.js";
+import { GROUND, homeTree, landmarkKey, PLOT, TREE_VARIANTS } from "./setpieces/pieces.js";
 import { layoutTown } from "./setpieces/town.js";
 
 export { PLOT };
@@ -124,7 +124,7 @@ export function generateWorld({ seed = 1, kind = "town", exits = null, people = 
                 opaque[by][bx] = 1;
             }
 
-            trees.push({ x, y, variant: random.int(0, TREE_VARIANTS - 1) });
+            trees.push({ x, y, variant: homeTree(people, random.int(0, TREE_VARIANTS - 1)) });
             placed++;
         }
     }

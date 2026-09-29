@@ -25,6 +25,7 @@ import { generateWorld } from "../core/world.js";
 import { readPlan } from "../core/interiors.js";
 import { guildRooms, hallRooms, keepRooms, smithyRooms, tavernRooms, templeRooms } from "../core/insides.js";
 import { buildInterior, INTERIOR_CUT } from "../world/interiors3d.js";
+import { Camps } from "../world/camps3d.js";
 import { Chunks, lagoonOf } from "../world/chunks3d.js";
 import { prepareAtlas } from "../world/art/engine/atlas.js";
 import { STYLES, TRADES } from "../world/art/kits/house.js";
@@ -43,7 +44,7 @@ const HOMELANDS = { human: "meadow", elf: "elfwood", darkElf: "darkwood", cat: "
 const state = {
     seed: Number(params.get("seed")) || 7,
     people: PEOPLES.includes(params.get("people")) ? params.get("people") : "human",
-    show: ["town", "landmarks", "structures", "insides", "castle", "place", "capital", "city", "village", "hamlet", "farmstead", "home", ...BIOMES.map(({ id }) => `wilds-${id}`)].includes(params.get("show")) ? params.get("show") : "street",
+    show: ["town", "landmarks", "structures", "insides", "castle", "place", "capital", "city", "village", "hamlet", "farmstead", "home", "camps", ...BIOMES.map(({ id }) => `wilds-${id}`)].includes(params.get("show")) ? params.get("show") : "street",
     built: null,
     frames: [],
     stats: null,
@@ -293,6 +294,36 @@ async function build() {
         orbit.distance = 11;
         orbit.pitch = 42;
         finish(chunks.drawn.size);
+
+        return;
+    }
+
+    // Every people's war camp in a row, each its tents round a fire (camps3d.js)
+    if (state.show === "camps") {
+        const group = new THREE.Group();
+        const peoples = ["human", "cat", "orc", "lizard", "elf", "darkElf"];
+        const camps = new Camps(group);
+        const width = peoples.length * 16 + 8;
+        const world = { width, height: 24, ground: Array.from({ length: 24 }, () => new Uint8Array(width)) };
+
+        group.add(buildGround(world, { land: landColour(HOMELANDS[state.people], state.people) }));
+        state.frames = peoples.map((people, k) => {
+            const [x, z] = [12 + k * 16, 12];
+            const tents = Array.from({ length: 4 }, (_, j) => {
+                const a = (j / 4) * Math.PI * 2 + 0.4;
+
+                return { at: [x + Math.cos(a) * 4.5, z + Math.sin(a) * 4.5], facing: Math.atan2(-Math.cos(a), -Math.sin(a)) };
+            });
+
+            camps.pitch(`camp-${people}`, people, { fire: [x, z], tents });
+
+            return { label: `camp ${people}`, x, z, w: 14, d: 14 };
+        });
+        view.scene.add(group);
+        state.built = group;
+        orbit.focus.set(width / 2, 1, 12);
+        orbit.distance = 60;
+        finish(group.children.length);
 
         return;
     }

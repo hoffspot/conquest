@@ -1,13 +1,16 @@
-// The war's camps (docs/WAR.md M6), drawn where they're pitched near a player: ridge tents of
-// canvas in their people's colour round a fire in a ring of stones, with logs crossed in it and
-// flames flickering over them. Their banner is the banners' (banners3d.js), and their sentries are
-// soldiers like any others.
+// The war's camps (docs/WAR.md M6), drawn where they're pitched near a player: each people's
+// tents round a fire in a ring of stones, with logs crossed in it and flames flickering over them
+// (the humans' ridge tents of canvas in their colour; the other peoples' their own: art/peoples/
+// camp.js). Their banner is the banners' (banners3d.js), and their sentries are soldiers like any
+// others.
 //
 // The tents' shapes, the stones' and the logs' are made once and shared by every camp; each
 // people's canvas is one material.
 
 import * as THREE from "three";
 import { COLOURS } from "../core/war/peoples.js";
+import { campTent } from "./art/peoples/camp.js";
+import { M } from "./art/peoples/kit.js";
 import { flame } from "./interiors3d.js";
 
 // A tent's size (metres): its width across, its length front to back, its ridge's height
@@ -63,6 +66,9 @@ export class Camps {
         };
         this.canvases = new Map();
 
+        // Each people's own tent, built once (null for the humans, whose are drawn here)
+        this.tents = new Map();
+
         /** Each camp drawn, by its id: { object, flames }. */
         this.camps = new Map();
     }
@@ -78,6 +84,18 @@ export class Camps {
         return this.canvases.get(people);
     }
 
+    // A people's own tent (in metres), or null if theirs are drawn here
+    #tentOf(people) {
+        if (!this.tents.has(people)) {
+            const built = campTent(people);
+
+            built?.scale.setScalar(1 / M);
+            this.tents.set(people, built);
+        }
+
+        return this.tents.get(people);
+    }
+
     /**
      * Pitch a camp: `people` (whose it is), its fire ([x, z] world metres) and tents ([{ at: [x,
      * z], facing }]: each facing the fire, as the battle has facings). Any it had come down first.
@@ -87,10 +105,21 @@ export class Camps {
 
         const object = new THREE.Group();
         const canvas = this.#canvasOf(people);
+        const own = this.#tentOf(people);
 
         object.name = `camp:${id}`;
 
         for (const { at: [x, z], facing } of tents) {
+            if (own) {
+                const tent = new THREE.Group();
+
+                tent.add(own.clone());
+                tent.position.set(x, 0, z);
+                tent.rotation.y = facing;
+                object.add(tent);
+                continue;
+            }
+
             const tent = new THREE.Group();
             const cloth = new THREE.Mesh(this.tent, canvas);
             const door = new THREE.Mesh(this.door, this.materials.dark);
@@ -191,6 +220,11 @@ export class Camps {
 
         for (const geometry of [this.tent, this.door, this.pole, this.stone, this.log]) {
             geometry.dispose();
+        }
+
+        // (The peoples' own tents' shapes; their materials are the art's, shared)
+        for (const tent of this.tents.values()) {
+            tent?.traverse((node) => node.isMesh && node.geometry.dispose());
         }
 
         for (const material of [...Object.values(this.materials), ...this.canvases.values()]) {

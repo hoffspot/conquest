@@ -110,3 +110,61 @@ test("draws the land itself: its features, and the undergrowth near, swaying, in
     expect(land.materials).toEqual(["wilds"]);
     expect(land.stats.calls).toBeLessThan(70);
 });
+
+test("draws a people's homeland: its own ground, its own trees, and its own things lying about", async ({ page }) => {
+    await page.goto("/building-lab.html?seed=7&people=orc&show=home");
+    await page.waitForFunction(() => window.buildingLab?.state.ready, null, { timeout: 120000 });
+
+    const home = await page.evaluate(async () => {
+        const { HOME_TREES, TREE_KINDS } = await import("/js/core/setpieces/pieces.js");
+        const { HOMELANDS } = await import("/js/core/wilds.js");
+        const { chunks } = window.buildingLab.state;
+        const { x, z } = window.buildingLab.orbit.focus;
+        const [cx, cy] = [Math.floor(x / 64), Math.floor(z / 64)];
+        const near = [-1, 0, 1].flatMap((dy) => [-1, 0, 1].map((dx) => chunks.overworld.chunk(cx + dx, cy + dy)));
+        const trees = near.flatMap((chunk) => chunk.trees.map(({ variant }) => TREE_KINDS[variant][0]));
+
+        return {
+            people: chunks.overworld.homeAt(x, z),
+            ground: chunks.land.userData.home?.length ?? 0,
+            own: trees.filter((kind) => kind === HOME_TREES.orc).length,
+            trees: trees.length,
+            things: near.flatMap((chunk) => chunk.features.map(({ kind }) => kind)).filter((kind) => HOMELANDS.orc.kinds[kind]).length,
+        };
+    });
+
+    expect(home.people).toBe("orc");
+    expect(home.ground).toBe(2);
+    expect(home.own).toBeGreaterThan(home.trees / 2);
+    expect(home.things).toBeGreaterThan(2);
+});
+
+test("pitches every people's war camp, each of its own tents round a fire", async ({ page }) => {
+    await page.goto("/building-lab.html?seed=7&show=camps");
+    await page.waitForFunction(() => window.buildingLab?.state.ready, null, { timeout: 120000 });
+
+    const camps = await page.evaluate(() => {
+        const found = {};
+
+        window.buildingLab.state.built.traverse((node) => {
+            const camp = node.name.startsWith("camp:") ? node.name.slice(5) : null;
+
+            if (camp) {
+                const names = new Set();
+
+                node.traverse((part) => part.isMesh && names.add(part.material.name));
+                found[camp] = [...names];
+            }
+        });
+
+        return found;
+    });
+
+    expect(Object.keys(camps).sort()).toEqual(["camp-cat", "camp-darkElf", "camp-elf", "camp-human", "camp-lizard", "camp-orc"]);
+    expect(camps["camp-orc"]).toContain("hide-dark");
+    expect(camps["camp-cat"]).toContain("matting");
+    expect(camps["camp-lizard"]).toContain("thatch-palm");
+    expect(camps["camp-elf"]).toContain("cloth-green");
+    expect(camps["camp-darkElf"]).toContain("cloth-violet");
+    expect(camps["camp-human"]).not.toContain("hide-dark");
+});
