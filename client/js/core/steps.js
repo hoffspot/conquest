@@ -24,6 +24,25 @@ export function allAtOnce(steps) {
 }
 
 /**
+ * Take every step of some steps (a generator's) as fast as they go, but wait for any that's
+ * WAITING on work done elsewhere (the page's other work going on meanwhile: a worker heard from)
+ * rather than doing it here: resolves with what they make. (For work nothing's drawn during,
+ * such as the game's loading, which would otherwise do all of it here: allAtOnce.) Taking longer
+ * than `patience` (ms, all told: whatever it's waiting on gone quiet, as a worker a phone's
+ * stopped can), it's told NOW, and does the work itself.
+ */
+export async function allWaiting(steps, { patience = 10000 } = {}) {
+    const taking = new Steps(steps);
+    const start = performance.now();
+
+    while (!taking.take(Infinity, { wait: performance.now() - start < patience })) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    return taking.value;
+}
+
+/**
  * Steps (a generator's) taken as there's time: `take(until)` takes them till `until`
  * (performance.now()'s: Infinity, all of them), stopping early if one is WAITING, unless it's not
  * to `wait` (as when there's no end to the time): then it's told NOW. `done` once they're all

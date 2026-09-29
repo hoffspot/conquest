@@ -60,7 +60,7 @@ import { SpellFx } from "../world/spellfx.js";
 import { Squares } from "../world/squares.js";
 import { KINDS, Wounds } from "../world/wounds.js";
 import { Chunks, DECK, LOAD_BUDGET, REACH } from "../world/chunks3d.js";
-import { allAtOnce, Steps } from "../core/steps.js";
+import { allAtOnce, allWaiting, Steps } from "../core/steps.js";
 import { buildGround } from "../world/ground.js";
 import { buildTown } from "../world/town3d.js";
 import { prepareAtlas } from "../world/art/engine/atlas.js";
@@ -666,7 +666,9 @@ export class Game {
         step(`Dressing ${this.hero.name}`);
 
         // Everyone in the world as the host has them: the player (and anyone else playing), the
-        // orc, and the tavern's folk going about their business (no one fights them)
+        // orc, and the tavern's folk going about their business (no one fights them). Each built a
+        // step at a time, as they are in play, so that their skin's painted by the skins worker
+        // (characters/skins.js) while the rest of them is built here, rather than here after it
         let filled = 0;
 
         for (const actor of [...this.battle.actors]) {
@@ -676,7 +678,7 @@ export class Game {
                 step(actor.kind === "player" ? `Dressing ${actor.name}` : `Waking the ${actor.name.toLowerCase()}`);
             }
 
-            await time(actor.id === this.me ? "hero" : actor.id, () => this.#dress(actor));
+            await time(actor.id === this.me ? "hero" : actor.id, () => allWaiting(this.#dressing(actor)));
         }
 
         step("Getting ready to draw");

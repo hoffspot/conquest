@@ -613,6 +613,23 @@ describe("the atlas (engine/atlas.js)", () => {
         assert.equal(paintLayers(16).length, 16 * 16 * 4 * LAYERS.length);
     });
 
+    it("draws with the layers prepareAtlas paints, asked for before they're done, rather than painting them again", async () => {
+        // (A copy of the module of its own: nothing asked of it yet)
+        const { atlasMaterial, prepareAtlas, wildsMaterial } = await import("../client/js/world/art/engine/atlas.js?preparing");
+        const painting = prepareAtlas(16);
+        const texture = atlasMaterial().userData.uniforms.atlasMap.value;
+
+        assert.equal(texture.image.data, null);
+        assert.equal(texture.version, 0, "not to be drawn yet");
+        assert.equal(wildsMaterial({ value: 0 }).userData.uniforms.atlasMap.value, texture);
+
+        const painted = await painting;
+
+        assert.equal(texture.image.data, painted);
+        assert.deepEqual([texture.image.width, texture.image.depth, painted.length], [16, LAYERS.length, 16 * 16 * 4 * LAYERS.length]);
+        assert.equal(texture.version, 1);
+    });
+
     it("draws a house as one mesh of the atlas, texture coordinates scaled to each material's", () => {
         const plan = planHouse({ w: 2, h: 2.5, style: "timber", storeys: 2, x: 5, y: 5 });
         const group = new THREE.Group();

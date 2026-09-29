@@ -1100,7 +1100,9 @@ mortar low between the bricks, a slate's lower edge over the next, the grain of 
 
 **One material** (engine/atlas.js). Everything built (houses, landmarks, props) is drawn with
 one Three.js material: every texture is a layer of one texture array (256 pixels square, 26
-layers), painted in workers while the land is laid; each vertex says which layer it's drawn
+layers), painted in workers while the land is laid (asked for before they're done, the texture
+takes theirs once they are, rather than painting them all again on the page: 1.4 s of it in
+headless Chromium, about 5 s on a phone); each vertex says which layer it's drawn
 from, and its colour (a plain material's colour, times its weathering) multiplies the layer's.
 The kits still ask for their materials by name (engine/materials.js `material`), and a textured
 one's own picture is painted only when it's first wanted (drawn, or asked for: `paintPicture`):
@@ -1647,7 +1649,14 @@ game plays on while it's open; a second finger (a pinch) closes it.
    each piece of the town, the characters, compiling every shader before the first frame), then
    the game. (The loading screen is drawn before the world starts to be built, so a tap on
    Continue shows at once; if getting the world ready fails, it says so, with Back to the title
-   and Load afresh.) A tap walks; a press and hold on the player or an enemy opens the action wheel (flicking down turns it to its other side); a second tap within 350 ms and 60 pixels of the first (going by when
+   and Load afresh.) The world's planned while the skin atlas may still be being worked out in the
+   skins worker, and waited for only once the characters are built; the buildings' atlas is
+   painted in workers while the land is laid, and not painted again on the page (the ground's
+   undergrowth asks for it first); and everyone's built a step at a time, as they are in play, so
+   that each one's skin is painted in the skins worker while the rest of them is built
+   (CHARACTERS.md, *Skins painted elsewhere*). In headless Chromium on "high", from opening
+   `?play` to playing: the page's own work 11.7 to 13.5 s before, 9.7 to 10.4 s now; building the
+   world (`Game.build`) 7.4 s of it before, 4.2 to 4.7 s now. A tap walks; a press and hold on the player or an enemy opens the action wheel (flicking down turns it to its other side); a second tap within 350 ms and 60 pixels of the first (going by when
    the taps happened, so a slow frame between them doesn't matter) turns it into a run, as does
    a Shift-click. A drag turns the camera round the player (and tilts it). A swipe up that
    starts on the player (40 pixels up within 600 ms, mostly up)
