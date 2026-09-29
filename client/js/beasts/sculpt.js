@@ -14,12 +14,69 @@
 // A body's made once for each kind (`key`) and shared by every one of it after.
 
 import * as THREE from "three";
+import { allAtOnce } from "../core/steps.js";
 import { ellipsoid, limb, part, skin } from "./shapes.js";
 
 const bodies = new Map();
 
 // About how many points a body's skin has (twice as many triangles)
 const BUDGET = 4200;
+
+// How much of making a body is a step, when it's made a step at a time (sculpting): so many
+// points of its field sampled, cells of its grid netted, or points of its skin bound to a shape;
+// or so many of its pieces folded
+const STEP = 6000;
+const PIECES = 32;
+
+// Bodies and pieces being made a step at a time (sculpting), by key, and whether they're wanted
+// so now: what isn't made yet isn't made there and then, but given back to be (Unmade)
+const making = new Map();
+let staging = false;
+
+/** What's not yet made, given back to be made a step at a time (`steps`), until it's `made()`. */
+class Unmade {
+    constructor(steps, made) {
+        this.steps = steps;
+        this.made = made;
+    }
+}
+
+/**
+ * Make something whose making builds bodies (`make`: new BeastAvatar...) a step at a time (each
+ * a yield), returning what it makes: each body it wants that isn't made yet is sculpted in steps,
+ * and its pieces folded, then `make` is done again. (Both are shared by key, so it's only a
+ * kind's first that takes steps; `make` is begun again from the start, so it's to have nothing to
+ * undo.)
+ */
+export function* sculpting(make) {
+    for (;;) {
+        let unmade;
+
+        staging = true;
+
+        try {
+            return make();
+        } catch (error) {
+            if (!(error instanceof Unmade)) {
+                throw error;
+            }
+
+            unmade = error;
+        } finally {
+            staging = false;
+        }
+
+        // (Unless it's made meanwhile: by another of its kind, built at once; and built again in a
+        // step of its own)
+        yield;
+
+        while (!unmade.made() && !unmade.steps.next().done) {
+            yield;
+        }
+
+        yield;
+    }
+}
 
 // A smooth minimum of two distances, blending within k of each other
 function smin(a, b, k) {
@@ -210,10 +267,21 @@ export class Sculpt {
         let body = key ? bodies.get(key) : null;
 
         if (!body) {
-            body = this.#mesh(root, bones);
+            // (Wanted a step at a time: given back to be sculpted so, shared by any other of its
+            // kind wanted meanwhile)
+            if (key && staging) {
+                if (!making.has(key)) {
+                    making.set(key, this.#sculpting(root, bones, key));
+                }
+
+                throw new Unmade(making.get(key), () => bodies.has(key));
+            }
+
+            body = allAtOnce(this.#meshing(root, bones));
 
             if (key) {
                 bodies.set(key, body);
+                making.delete(key);
             }
         }
 
@@ -264,7 +332,16 @@ export class Sculpt {
         }
     }
 
-    #mesh(root, bones) {
+    // A body sculpted a step at a time, and kept for its kind
+    *#sculpting(root, bones, key) {
+        const body = yield* this.#meshing(root, bones);
+
+        bodies.set(key, body);
+        making.delete(key);
+    }
+
+    // The body's skin, a step at a time (each a yield)
+    *#meshing(root, bones) {
         const shapes = this.shapes;
 
         this.#place(root, shapes);
@@ -282,7 +359,12 @@ export class Sculpt {
         const longest = Math.max(...bounds.getSize(new THREE.Vector3()).toArray());
         const groupsOf = (list) => [...new Set(list.map((shape) => shape.group))].map((group) => list.filter((shape) => shape.group === group));
         const coarse = this.#grid(bounds, longest / 40);
-        const crossed = groupsOf(shapes).reduce((sum, group) => sum + this.#crossings(this.#field(group, coarse), coarse), 0);
+        let crossed = 0;
+
+        for (const group of groupsOf(shapes)) {
+            crossed += this.#crossings(yield* this.#field(group, coarse), coarse);
+        }
+
         const cell = Math.max(longest / 160, Math.min(coarse.cell * Math.sqrt(crossed / BUDGET), this.detail ?? Infinity));
 
         // (What's thinner than that is left out of the skin, and made as a piece of its own: a
@@ -295,7 +377,7 @@ export class Sculpt {
         const indices = [];
 
         for (const group of groupsOf(kept)) {
-            this.#surface(this.#field(group, grid), grid, positions, indices);
+            yield* this.#surface(yield* this.#field(group, grid), grid, positions, indices);
         }
 
         const geometry = new THREE.BufferGeometry();
@@ -303,7 +385,8 @@ export class Sculpt {
         geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
         geometry.setIndex(indices);
         geometry.computeVertexNormals();
-        this.#skin(geometry, bones, kept);
+        yield;
+        yield* this.#skin(geometry, bones, kept);
         geometry.computeBoundingSphere();
 
         return { geometry, thin };
@@ -317,9 +400,11 @@ export class Sculpt {
         return { nx: Math.ceil(size.x / cell) + 1, ny: Math.ceil(size.y / cell) + 1, nz: Math.ceil(size.z / cell) + 1, origin: box.min, cell };
     }
 
-    // Some shapes melted together, sampled at each point of a grid (each shape only near it)
-    #field(shapes, { nx, ny, nz, origin, cell }) {
+    // Some shapes melted together, sampled at each point of a grid (each shape only near it): a
+    // few slices of it a step
+    *#field(shapes, { nx, ny, nz, origin, cell }) {
         const field = new Float32Array(nx * ny * nz).fill(1e3);
+        let work = 0;
 
         for (const shape of shapes) {
             const reach = shape.blend + cell;
@@ -341,6 +426,13 @@ export class Sculpt {
 
                         field[index] = smin(field[index], distanceOf(shape, origin.x + i * cell, y, z), shape.blend);
                     }
+                }
+
+                work += (j1 - j0 + 1) * (i1 - i0 + 1);
+
+                if (work >= STEP) {
+                    work = 0;
+                    yield;
                 }
             }
         }
@@ -367,8 +459,9 @@ export class Sculpt {
         return count;
     }
 
-    // A surface netted from its field: a point in each cell it passes through, joined in quads
-    #surface(field, { nx, ny, nz, origin, cell }, positions, indices) {
+    // A surface netted from its field: a point in each cell it passes through, joined in quads; a
+    // few slices of it a step
+    *#surface(field, { nx, ny, nz, origin, cell }, positions, indices) {
         const at = (i, j, k) => i + nx * (j + ny * k);
 
         // A point in each cell the surface passes through: where it crosses the cell's edges, averaged
@@ -379,7 +472,9 @@ export class Sculpt {
         const first = positions.length / 3;
         const EDGES = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
         const corner = new Float32Array(8);
+        const slice = (nx - 1) * (ny - 1);
         let count = 0;
+        let work = 0;
 
         for (let k = 0; k < nz - 1; k++) {
             for (let j = 0; j < ny - 1; j++) {
@@ -414,6 +509,11 @@ export class Sculpt {
                     positions.push(origin.x + (i + sx / crossings) * cell, origin.y + (j + sy / crossings) * cell, origin.z + (k + sz / crossings) * cell);
                     vertexOf[cellAt(i, j, k)] = first + count++;
                 }
+            }
+
+            if ((work += slice) >= STEP) {
+                work = 0;
+                yield;
             }
         }
 
@@ -452,11 +552,17 @@ export class Sculpt {
                     }
                 }
             }
+
+            if ((work += slice) >= STEP) {
+                work = 0;
+                yield;
+            }
         }
     }
 
-    // Bind each point of the skin to the joints of the shapes nearest it, and colour it
-    #skin(geometry, bones, shapes) {
+    // Bind each point of the skin to the joints of the shapes nearest it, and colour it: so many
+    // points a step
+    *#skin(geometry, bones, shapes) {
         const position = geometry.attributes.position;
         const normal = geometry.attributes.normal;
         const count = position.count;
@@ -467,8 +573,13 @@ export class Sculpt {
         const colour = new THREE.Color();
         const tint = new THREE.Color();
         const point = new THREE.Vector3();
+        const each = Math.max(1, Math.floor(STEP / (shapes.length + this.paints.length)));
 
         for (let v = 0; v < count; v++) {
+            if (v > 0 && v % each === 0) {
+                yield;
+            }
+
             const x = position.getX(v);
             const y = position.getY(v);
             const z = position.getZ(v);
@@ -551,6 +662,80 @@ function alive(node) {
     return Boolean(node.material.userData.alive);
 }
 
+// One kind of a creature's pieces folded into one geometry, each bound wholly to its joint: so
+// many pieces a step
+function* folding(members, kind, boneOf, inverseRoot) {
+    const matrix = new THREE.Matrix4();
+
+    // (Its points counted first, each piece's triangles apart, to be gathered into arrays made once)
+    const total = members.reduce((sum, { geometry: each }) => sum + (each.index ?? each.attributes.position).count, 0);
+    const positions = new Float32Array(total * 3);
+    const normals = new Float32Array(total * 3);
+    const colours = new Float32Array(total * 3);
+    const skinIndex = new Uint16Array(total * 4);
+    const skinWeight = new Float32Array(total * 4);
+    let start = 0;
+
+    for (const [p, piece] of members.entries()) {
+        if (p > 0 && p % PIECES === 0) {
+            yield;
+        }
+
+        const part = piece.geometry.index ? piece.geometry.toNonIndexed() : piece.geometry.clone();
+        let bone = piece.parent;
+
+        while (bone && !bone.isBone) {
+            bone = bone.parent;
+        }
+
+        part.applyMatrix4(matrix.multiplyMatrices(inverseRoot, piece.matrixWorld));
+
+        const material = piece.material;
+        const colour = kind === "glow" ? material.emissive.clone().multiplyScalar(Math.min(3, material.emissiveIntensity)).add(material.color.clone().multiplyScalar(0.2)) : material.color;
+        const count = part.attributes.position.count;
+        const index = boneOf.get(bone) ?? 0;
+
+        positions.set(part.attributes.position.array, start * 3);
+
+        if (part.attributes.normal) {
+            normals.set(part.attributes.normal.array, start * 3);
+        }
+
+        for (let v = start; v < start + count; v++) {
+            colours[v * 3] = colour.r;
+            colours[v * 3 + 1] = colour.g;
+            colours[v * 3 + 2] = colour.b;
+            skinIndex[v * 4] = index;
+            skinWeight[v * 4] = 1;
+        }
+
+        start += count;
+        part.dispose();
+    }
+
+    const geometry = new THREE.BufferGeometry();
+
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
+    geometry.setAttribute("color", new THREE.BufferAttribute(colours, 3));
+    geometry.setAttribute("skinIndex", new THREE.BufferAttribute(skinIndex, 4));
+    geometry.setAttribute("skinWeight", new THREE.BufferAttribute(skinWeight, 4));
+    geometry.computeBoundingSphere();
+
+    return geometry;
+}
+
+// Every kind of them folded, and kept for its creature's kind
+function* foldingAll(kinds, key, boneOf, inverseRoot) {
+    for (const [kind, members] of kinds) {
+        const geometry = yield* folding(members, kind, boneOf, inverseRoot);
+
+        folds.set(`${key}:${kind}`, geometry);
+    }
+
+    making.delete(`fold:${key}`);
+}
+
 /**
  * Fold a creature's pieces (its eyes, teeth, horns, quills, bones...: each a mesh hung from one of
  * its joints) into a few skinned meshes, one for each kind of material they're made of (glowing,
@@ -597,7 +782,17 @@ export function fold(root, key = null) {
     }
 
     const became = new Map();
-    const matrix = new THREE.Matrix4();
+
+    // (Wanted a step at a time, and not all folded yet: given back to be folded so)
+    const folded = () => [...kinds.keys()].every((kind) => folds.has(`${key}:${kind}`));
+
+    if (key && staging && !folded()) {
+        if (!making.has(`fold:${key}`)) {
+            making.set(`fold:${key}`, foldingAll(kinds, key, boneOf, inverseRoot));
+        }
+
+        throw new Unmade(making.get(`fold:${key}`), folded);
+    }
 
     for (const kind of [...kinds.keys()].sort()) {
         const members = kinds.get(kind);
@@ -605,43 +800,7 @@ export function fold(root, key = null) {
         let geometry = cacheKey ? folds.get(cacheKey) : null;
 
         if (!geometry) {
-            const positions = [];
-            const normals = [];
-            const colours = [];
-            const skinIndex = [];
-
-            for (const piece of members) {
-                const part = piece.geometry.index ? piece.geometry.toNonIndexed() : piece.geometry.clone();
-                let bone = piece.parent;
-
-                while (bone && !bone.isBone) {
-                    bone = bone.parent;
-                }
-
-                part.applyMatrix4(matrix.multiplyMatrices(inverseRoot, piece.matrixWorld));
-
-                const material = piece.material;
-                const colour = kind === "glow" ? material.emissive.clone().multiplyScalar(Math.min(3, material.emissiveIntensity)).add(material.color.clone().multiplyScalar(0.2)) : material.color;
-                const count = part.attributes.position.count;
-
-                positions.push(...part.attributes.position.array);
-                normals.push(...(part.attributes.normal?.array ?? new Float32Array(count * 3)));
-
-                for (let v = 0; v < count; v++) {
-                    colours.push(colour.r, colour.g, colour.b);
-                    skinIndex.push(boneOf.get(bone) ?? 0, 0, 0, 0);
-                }
-
-                part.dispose();
-            }
-
-            geometry = new THREE.BufferGeometry();
-            geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-            geometry.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
-            geometry.setAttribute("color", new THREE.Float32BufferAttribute(colours, 3));
-            geometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(skinIndex, 4));
-            geometry.setAttribute("skinWeight", new THREE.Float32BufferAttribute(skinIndex.map((_, index) => (index % 4 === 0 ? 1 : 0)), 4));
-            geometry.computeBoundingSphere();
+            geometry = allAtOnce(folding(members, kind, boneOf, inverseRoot));
 
             if (cacheKey) {
                 folds.set(cacheKey, geometry);
@@ -680,6 +839,8 @@ export function fold(root, key = null) {
         piece.removeFromParent();
         piece.material.dispose();
     }
+
+    making.delete(`fold:${key}`);
 
     return became;
 }

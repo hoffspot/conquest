@@ -774,8 +774,9 @@ test("walks out of the town into the world, drawn round the player as they go, w
         game.minimap.drawn = -Infinity;
         game.advance(1);
 
-        // (The creatures put out lately drawn a few at a time: all of them, given a moment)
-        for (let k = 0; k < 20 && game.enlisting.length; k++) {
+        // (The creatures put out lately drawn a step at a time, the nearest first: all of them,
+        // given a moment; the first of each kind's looks takes a while to sculpt)
+        for (let k = 0; k < 120 && (game.enlisting.length || game.enlistees.size); k++) {
             game.advance(0.25);
         }
 
