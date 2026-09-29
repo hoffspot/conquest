@@ -970,11 +970,16 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
     }, { map, kind, seconds });
 
     // Just come through: taps on the ground round the player (either side, and behind them)
-    // walk them there, and don't take them back through
+    // walk them there, and don't take them back through. (Looking down more steeply than the
+    // camera starts, so no one sitting at a table nearby is in the way of the ground tapped:
+    // tapping them talks to them)
     const tapsRound = () => page.evaluate(() => {
         const { game, session } = window.pellagos;
         const avatar = game.avatars.get("player");
         const orders = [];
+
+        game.cameraFollow.pitch = 45;
+        game.advance(0.1);
 
         for (const [side, back] of [[1, 0], [-1, 0], [0, -1.2], [1, -1]]) {
             const facing = avatar.facing;
