@@ -1,6 +1,8 @@
 // A queue that gives back the lowest first (ties: the one put in first, so the same every time),
 // for flooding the land and spreading outwards over it (terrain.js), and finding ways over it
-// (settle.js).
+// (settle.js). A binary heap, kept as three lists side by side (each item's key, the item, and
+// when it was put in); what's put in or taken out moves into its place past the others, rather
+// than being swapped with each in turn.
 
 export class Queue {
     #keys = [];
@@ -16,64 +18,72 @@ export class Queue {
         const keys = this.#keys;
         const items = this.#items;
         const order = this.#order;
+        const at = this.#count++;
         let k = items.length;
 
-        keys.push(key);
-        items.push(item);
-        order.push(this.#count++);
-
+        // (Each above it that comes after it moved down, till it's where it goes)
         while (k > 0) {
             const parent = (k - 1) >> 1;
 
-            if (keys[parent] < keys[k] || (keys[parent] === keys[k] && order[parent] < order[k])) {
+            if (keys[parent] < key || (keys[parent] === key && order[parent] < at)) {
                 break;
             }
 
-            this.#swap(k, parent);
+            keys[k] = keys[parent];
+            items[k] = items[parent];
+            order[k] = order[parent];
             k = parent;
         }
+
+        keys[k] = key;
+        items[k] = item;
+        order[k] = at;
     }
 
     pop() {
         const keys = this.#keys;
         const items = this.#items;
         const order = this.#order;
-        const top = items[0];
-        const key = keys[0];
-        const last = items.length - 1;
+        const top = { item: items[0], key: keys[0] };
 
-        this.#swap(0, last);
-        keys.pop();
-        items.pop();
-        order.pop();
+        // (The last put where the first was, and each below it that comes before it moved up,
+        // till it's where it goes)
+        const key = keys.pop();
+        const item = items.pop();
+        const at = order.pop();
+        const size = items.length;
 
-        let k = 0;
+        if (size > 0) {
+            let k = 0;
 
-        for (;;) {
-            const left = 2 * k + 1;
-            const right = left + 1;
-            let least = k;
+            for (;;) {
+                let child = 2 * k + 1;
 
-            for (const child of [left, right]) {
-                if (child < items.length && (keys[child] < keys[least] || (keys[child] === keys[least] && order[child] < order[least]))) {
-                    least = child;
+                if (child >= size) {
+                    break;
                 }
+
+                const right = child + 1;
+
+                if (right < size && (keys[right] < keys[child] || (keys[right] === keys[child] && order[right] < order[child]))) {
+                    child = right;
+                }
+
+                if (key < keys[child] || (key === keys[child] && at < order[child])) {
+                    break;
+                }
+
+                keys[k] = keys[child];
+                items[k] = items[child];
+                order[k] = order[child];
+                k = child;
             }
 
-            if (least === k) {
-                break;
-            }
-
-            this.#swap(k, least);
-            k = least;
+            keys[k] = key;
+            items[k] = item;
+            order[k] = at;
         }
 
-        return { item: top, key };
-    }
-
-    #swap(a, b) {
-        for (const list of [this.#keys, this.#items, this.#order]) {
-            [list[a], list[b]] = [list[b], list[a]];
-        }
+        return top;
     }
 }

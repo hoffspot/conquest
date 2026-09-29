@@ -268,6 +268,16 @@ async function create() {
 // holds it up for a while
 const painted = () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
 
+// Playing (as tests are told: window.pellagos.playing) once the game's under way, its world
+// stepped and drawn, not just started (unless it's been left meanwhile)
+function underway(game) {
+    game.underway.then(() => {
+        if (state.game === game) {
+            window.pellagos.playing = true;
+        }
+    });
+}
+
 // Getting a game ready failed: said on the loading screen, with the ways on from there (back to
 // the title, or loading the page again; what's saved is kept as it goes)
 function failed(error) {
@@ -358,7 +368,7 @@ async function playing(save) {
     debug.watch({ game });
     show("hud");
     game.start();
-    window.pellagos.playing = true;
+    underway(game);
 }
 
 function pause() {
@@ -716,7 +726,7 @@ async function playingJoined(save, welcome, joining) {
     debug.watch({ game });
     show("hud");
     game.start();
-    window.pellagos.playing = true;
+    underway(game);
 }
 
 // Out of a world joined (its host gone, or the link lost): back to the title, saying why

@@ -3,6 +3,8 @@
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { BIOME, BIOMES, campTier, CELL, CELLS, FACTIONS, guildFor, guilds, landAt, layOutWorld, openGround, planWorld, RACES, ROAD, SETTLEMENTS, SITES, startFor, WATER } from "../client/js/core/worldplan/plan.js";
+import { Queue } from "../client/js/core/worldplan/queue.js";
+import { createRandom } from "../client/js/core/random.js";
 
 const SEEDS = [1, 2, 3];
 const plans = new Map();
@@ -35,6 +37,35 @@ describe("the world plan (worldplan/plan.js)", () => {
         assert.throws(() => {
             plans.get(1).places[0].name = "Elsewhere";
         }, TypeError);
+    });
+
+    it("floods and finds its ways lowest first, ties in the order they came (its queue, against a list searched each time)", () => {
+        const random = createRandom(5);
+        const queue = new Queue();
+        const reference = [];
+        let order = 0;
+
+        // (Put in and taken out by turns, many keys the same, then emptied)
+        for (let round = 0; round < 3000; round++) {
+            for (let k = random.int(0, 3); k > 0; k--) {
+                const item = { key: random.int(0, 40) / 4, order: order++ };
+
+                queue.push(item, item.key);
+                reference.push(item);
+            }
+
+            while (queue.size && (round === 2999 || random.next() < 0.4)) {
+                const lowest = reference.reduce((best, each) => (each.key < best.key || (each.key === best.key && each.order < best.order) ? each : best));
+                const { item, key } = queue.pop();
+
+                assert.equal(item, lowest);
+                assert.equal(key, lowest.key);
+                reference.splice(reference.indexOf(lowest), 1);
+                assert.equal(queue.size, reference.length);
+            }
+        }
+
+        assert.equal(queue.size, 0);
     });
 
     it("gives each people its own lands, in its own climate, with wild land between", () => {

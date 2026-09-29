@@ -1958,6 +1958,9 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   draw calls) and its town; the taverns, guild, temples and smithy with their boards and signs; a
   village drawn in its chunks; and a meadow with its features and undergrowth, in fewer than 70
   draw calls.
+- (The tests wait for `window.pellagos.playing`, which the page sets once the game is under way,
+  its world stepped and drawn a frame (`Game.underway`), not just started: before then, a tap
+  can land where the camera was, and nothing's been explored yet.)
 - `e2e/pellagos.spec.js`: the whole game in Chromium: loading, debug mode, making a character
   through to playing them, carrying on with a saved character, a fight to the death, walking by
   tapping, running by double-clicking and double-tapping with the stamina bar showing and going,
