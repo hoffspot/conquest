@@ -1,4 +1,4 @@
-// What a player wears and wields (docs/GAME.md, "Gear"): a slot for each part of them, and the
+// What a player wears and wields (docs/WAR.md, "Gear"): a slot for each part of them, and the
 // pieces that go in each, as in the old dungeon games' inventories:
 //
 //  - head, amulet, cloak, chest, bracers, gloves, belt, legs, boots, two rings, and both hands;

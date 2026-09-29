@@ -11,7 +11,7 @@ import * as THREE from "three";
 import { Rig } from "./rig.js";
 import { EQUIPMENT, socketOn } from "./equipment.js";
 import { buildDrape, drapeMaterial, DRAPES } from "./drapes.js";
-import { buildGarment, GARMENTS, measureBody, paintGarment, texelMap } from "./garments.js";
+import { buildGarment, COMPOSITE_BUMP, compositeGarments, GARMENTS, insideOf, measureBody, paintGarment, texelMap } from "./garments.js";
 import { BEARDS, buildHair, hairTexture, HAIRSTYLES } from "./hair.js";
 import { buildItem } from "./items.js";
 import { EYE_DEFAULTS, HAIR_COLOURS, paintEye, paintSkin, SKIN_DEFAULTS } from "./skin.js";
@@ -25,6 +25,100 @@ export const LOOK_DEFAULTS = Object.freeze({
 
 // The parts of the base mesh, in the order they're drawn (with a material each)
 const DRAWN = ["body", "eyes", "lashes"];
+
+// How many pictures of outfits no one is wearing just now are kept, for the next to wear one
+const IDLE_COMPOSITES = 8;
+
+/**
+ * A body of the usual shape's measurements (garments.js measureBody), made once per kit: what
+ * garments drawn all at once are fitted to (Character `merge`), so each fits the same picture.
+ */
+function referenceMeasures(kit) {
+    if (!kit.referenceMeasures) {
+        const human = kit.human;
+        const { positions, joints } = human.shape({});
+        const rig = new Rig(human.bones);
+        let height = 0;
+
+        for (let v = 0; v < human.vertexCount; v++) {
+            if (human.partOf[v] === 0) {
+                height = Math.max(height, positions[v * 3 + 1]);
+            }
+        }
+
+        rig.fit(joints);
+        kit.referenceMeasures = measureBody({ human, rig, positions, height });
+    }
+
+    return kit.referenceMeasures;
+}
+
+/** Several skinned geometries as one (their vertices one after another). */
+function mergeGeometries(geometries) {
+    const names = ["position", "normal", "uv", "skinIndex", "skinWeight"];
+    const count = geometries.reduce((sum, geometry) => sum + geometry.attributes.position.count, 0);
+    const indices = [];
+    let offset = 0;
+    const merged = new THREE.BufferGeometry();
+
+    for (const name of names) {
+        const first = geometries[0].attributes[name];
+        const array = new first.array.constructor(count * first.itemSize);
+        let at = 0;
+
+        for (const geometry of geometries) {
+            array.set(geometry.attributes[name].array, at);
+            at += geometry.attributes[name].array.length;
+        }
+
+        merged.setAttribute(name, new THREE.BufferAttribute(array, first.itemSize, first.normalized));
+    }
+
+    for (const geometry of geometries) {
+        for (const index of geometry.index.array) {
+            indices.push(index + offset);
+        }
+
+        offset += geometry.attributes.position.count;
+    }
+
+    merged.setIndex(count > 65535 ? new THREE.Uint32BufferAttribute(indices, 1) : new THREE.Uint16BufferAttribute(indices, 1));
+
+    return merged;
+}
+
+/** A texture's picture (RGBA), from the canvas it was painted on. */
+function pixelsOf(texture) {
+    const { width, height } = texture.image;
+
+    return texture.image.getContext("2d").getImageData(0, 0, width, height).data;
+}
+
+/** A picture's red, a byte a texel. */
+function redOf(data) {
+    const red = new Uint8ClampedArray(data.length / 4);
+
+    for (let i = 0; i < red.length; i++) {
+        red[i] = data[i * 4];
+    }
+
+    return red;
+}
+
+/** A texture from a painted picture (RGBA, rows from the top), mipmapped. */
+function dataTexture(data, size, colour) {
+    const texture = new THREE.DataTexture(new Uint8Array(data.buffer), size, size);
+
+    texture.flipY = true;
+    texture.colorSpace = colour ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.generateMipmaps = true;
+    texture.anisotropy = 4;
+    texture.needsUpdate = true;
+
+    return texture;
+}
 
 /**
  * An item's place on a socket, from where its grip goes (`at`) and which ways its point and edge
@@ -53,12 +147,18 @@ export class Character {
      * @param {string[]} [options.equipment] - What it wears and carries (EQUIPMENT ids).
      * @param {number} [options.hairDetail] - How much of its hair to grow, 0 to 1 (less for
      *   characters seen from afar: hair.js).
+     * @param {boolean} [options.merge] - Draw its garments all at once (one mesh, one picture of
+     *   them all: for the many folk and soldiers about, not a player, who changes what they wear).
      */
-    constructor(kit, { shape = {}, look = {}, equipment = [], materials = {}, hairDetail = 1 } = {}) {
+    constructor(kit, { shape = {}, look = {}, equipment = [], materials = {}, hairDetail = 1, merge = false } = {}) {
         const human = kit.human;
 
         this.kit = kit;
         this.hairDetail = hairDetail;
+        this.merge = merge;
+
+        /** The outfit whose picture its garments are drawn with, when they're drawn at once. */
+        this.composite = null;
         this.human = human;
         this.object = new THREE.Group();
         this.object.name = "character";
@@ -143,6 +243,7 @@ export class Character {
         this.garments = [];
         this.items = [];
         this.holds = {};
+        this.#release();
 
         const garmentIds = [];
         const drapeIds = [];
@@ -167,10 +268,14 @@ export class Character {
             }
         }
 
-        // Garments, under ones first; each hides the skin (and garments) under it
+        // Garments, under ones first; each hides the skin (and garments) under it. (Drawn all at
+        // once, they're fitted as they'd fit a body of the usual shape: each outfit's picture is
+        // then the same for everyone, however they're built)
         const measures = measureBody(this);
-        const built = garmentIds.map((id) => buildGarment(this, id, measures)).filter(Boolean).sort((a, b) => a.garment.layer - b.garment.layer);
+        const fitted = this.merge ? referenceMeasures(this.kit) : measures;
+        const built = garmentIds.map((id) => buildGarment(this, id, fitted)).filter(Boolean).sort((a, b) => a.garment.layer - b.garment.layer);
         const hidden = new Set();
+        const parts = [];
 
         built.forEach(({ geometry, covers, sources, garment }, i) => {
             const over = new Set();
@@ -200,7 +305,33 @@ export class Character {
                 hidden.add(t);
             }
 
-            const id = Object.keys(GARMENTS).find((key) => GARMENTS[key] === garment);
+            parts.push({ id: Object.keys(GARMENTS).find((key) => GARMENTS[key] === garment), geometry, garment });
+        });
+
+        // All at once (but lace, see-through), outermost last: by layer, then how far out
+        const merged = this.merge ? parts.filter(({ garment }) => !garment.design) : [];
+        const reach = ({ garment }) => garment.thickness + (garment.loose ?? 0);
+
+        if (merged.length > 1) {
+            merged.sort((a, b) => a.garment.layer - b.garment.layer || reach(a) - reach(b) || (a.id < b.id ? -1 : 1));
+
+            const mesh = new THREE.SkinnedMesh(mergeGeometries(merged.map(({ geometry }) => geometry)), this.#composite(merged.map(({ id }) => id)));
+
+            for (const { geometry } of merged) {
+                geometry.dispose();
+            }
+
+            mesh.name = "garments";
+            mesh.userData.merged = merged.map(({ id }) => id);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            mesh.bind(this.rig.skeleton, new THREE.Matrix4());
+            mesh.boundingSphere = this.mesh.boundingSphere;
+            this.object.add(mesh);
+            this.garments.push(mesh);
+        }
+
+        for (const { id, geometry, garment } of merged.length > 1 ? parts.filter((part) => !merged.includes(part)) : parts) {
             const mesh = new THREE.SkinnedMesh(geometry, this.#garmentMaterial(id));
 
             mesh.name = id;
@@ -211,7 +342,7 @@ export class Character {
             mesh.boundingSphere = this.mesh.boundingSphere;
             this.object.add(mesh);
             this.garments.push(mesh);
-        });
+        }
 
         this.setHidden(hidden);
 
@@ -473,6 +604,92 @@ export class Character {
     }
 
     /**
+     * The material of an outfit's garments drawn all at once (ids, outermost last): one picture of
+     * them all (garments.js compositeGarments), its heights, roughness and metalness in another.
+     * Made once per kit for each outfit, and let go when no one's worn it for a while.
+     */
+    #composite(ids) {
+        const kit = this.kit;
+        const key = ids.join(" ");
+
+        kit.composites ??= new Map();
+
+        if (!kit.composites.has(key)) {
+            kit.texelMap ??= texelMap(this.human, 512);
+            kit.garmentInsides ??= new Map();
+
+            const layers = ids.map((id) => {
+                const garment = GARMENTS[id];
+                const material = this.#garmentMaterial(id);
+
+                if (!kit.garmentInsides.has(id)) {
+                    // (A boot's toes are the toe box's, drawn with the boot's picture)
+                    kit.garmentInsides.set(id, insideOf(this.human, garment, referenceMeasures(kit), { toes: true }));
+                }
+
+                return {
+                    data: pixelsOf(material.map),
+                    bump: redOf(pixelsOf(material.bumpMap)),
+                    tint: garment.base ? material.color.toArray() : null,
+                    bumpScale: material.bumpScale,
+                    roughness: material.roughness,
+                    metalness: material.metalness,
+                    inside: kit.garmentInsides.get(id),
+                };
+            });
+            const { size, data, surface } = compositeGarments(kit.texelMap, layers);
+            const surfaceMap = dataTexture(surface, size, false);
+            const material = new THREE.MeshStandardMaterial({
+                map: dataTexture(data, size, true),
+                bumpMap: surfaceMap,
+                bumpScale: COMPOSITE_BUMP,
+                roughnessMap: surfaceMap,
+                roughness: 1,
+                metalnessMap: surfaceMap,
+                metalness: 1,
+                side: THREE.DoubleSide,
+            });
+
+            // (Metal and cloth both: wounds.js tells which is where)
+            material.userData.mixed = true;
+            kit.composites.set(key, { material, users: 0 });
+        }
+
+        const entry = kit.composites.get(key);
+
+        entry.users++;
+        this.composite = key;
+
+        return entry.material;
+    }
+
+    // No longer wearing the outfit whose picture it was drawn with: once no one is, it's kept
+    // for a while, then let go (the longest unworn first)
+    #release() {
+        const composites = this.kit.composites;
+        const key = this.composite;
+        const entry = key && composites?.get(key);
+
+        this.composite = null;
+
+        if (!entry || --entry.users > 0) {
+            return;
+        }
+
+        composites.delete(key);
+        composites.set(key, entry);
+
+        const idle = [...composites].filter(([, other]) => other.users === 0);
+
+        for (const [unworn, { material }] of idle.slice(0, Math.max(0, idle.length - IDLE_COMPOSITES))) {
+            material.map.dispose();
+            material.bumpMap.dispose();
+            material.dispose();
+            composites.delete(unworn);
+        }
+    }
+
+    /**
      * Lingerie's material: its design's texture (painted once per kit, white, shared by every
      * colour) tinted, and see-through where the texture is. The texture keeps its colour where
      * it's clear, so the edges of what's there don't darken as it's minified.
@@ -730,6 +947,16 @@ export class Character {
         this.geometry.dispose();
 
         this.hairMesh?.geometry.dispose();
+
+        for (const mesh of this.garments) {
+            mesh.geometry.dispose();
+        }
+
+        for (const item of this.items) {
+            item.traverse((part) => part.geometry?.dispose());
+        }
+
+        this.#release();
 
         for (const [name, material] of Object.entries(this.materials)) {
             if (name !== "hair") {

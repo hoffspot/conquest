@@ -1,5 +1,5 @@
 // Each people's colours, as their soldiers wear them in uniform and their officials in livery
-// (docs/GAME.md, "Uniforms and livery"), chosen to set off their skin or fur:
+// (docs/CHARACTERS.md, "Uniforms and livery"), chosen to set off their skin or fur:
 //
 //  - humans (of every colour): royal blue and gold, bright steel;
 //  - elves (pale): forest green and silver, silvered steel;

@@ -431,20 +431,59 @@ options, Action wheels: docs/GAME.md):
 - **Power strike** and **aimed shot** (an enemy's wheel): the next blow (up close, or from
   afar) does twice the damage. Each is ready again 12 seconds after, its slice greyed till then.
 
-**Gear** is a weapon, something on the body (a gambeson, a mail shirt) and a shield (only with a
-sword or a hammer). Each is of a make, which counts in its price and in what it does:
+**Gear** (`core/gear.js`) goes in a slot for each part of a player, as in the old dungeon
+games' inventories: head, amulet, cloak, chest, bracers, gloves, belt, legs, boots, two rings, and
+both hands.
+- **The hands.** A weapon goes in the main hand. One held in both (a staff, a war hammer, a bow,
+  spiked gauntlets, a grimoire held open) leaves nothing for the other hand, except a bow, whose
+  other hand takes a quiver (+5% ranged damage); a one-handed one (a sword, a wand) leaves it
+  for a shield (`offHandFits`, `offHandFree`). Taking up a two-handed weapon puts the shield
+  back in the pack. Spiked boots kick; worn with nothing in hand, they're all a player fights
+  with (so the weapon only comes off with them on, and they only come off with a weapon in hand).
+- **What each does.** Shields, helms, body armour, bracers, gloves, belts, legs, boots and
+  cloaks take a share off every blow (a mail shirt 14%, plate 20%, a kite shield 10%), never more
+  than 60% in all (`ARMOR_CAP`). Some have a bonus of their own: a belt or a cloak +5 stamina, a
+  wizard's hat +5% spell power. Rings and an amulet only have bonuses.
+- **Makes.** Each piece is of a make, which counts in its price and in what it does:
 
-| Make | Blows / protection | Price | Might |
-| --- | --- | --- | --- |
-| Common | ×1 | ×1 | +0 |
-| Fine | ×1.15 | ×3 | +0.5 |
-| Masterwork | ×1.3 | ×8 | +1 |
-| Legendary | ×1.5 | ×30 | +1.5 |
+| Make | Blows / protection | Price | Might | Bonuses rolled on it |
+| --- | --- | --- | --- | --- |
+| Common | ×1 | ×1 | +0 | none (jewellery one) |
+| Fine | ×1.15 | ×3 | +0.5 | one |
+| Masterwork | ×1.3 | ×8 | +1 | two, a quarter stronger |
+| Legendary | ×1.5 | ×30 | +1.5 | three, half as strong again, and a name of its own |
 
-Armour takes a share off every blow (a mail shirt 16%, a kite shield 10%), never more than 60% in
-all. What's worn shows on the character.
+- **Rolled bonuses** (`rollGear`, `AFFIXES`) are rolled as a piece is made (bought, found,
+  given), each adding to something different that fits the piece: armour (Sturdy), melee
+  damage (Keen), ranged damage (True), spell power (Arcane), stamina (Tireless), hit points (of
+  the Bear), healing (of Mending), stun length (of Binding), haggling (of the Fox: a better price
+  from shops) and persuasion (of Eloquence). A piece is named for them ("Keen sword of the Bear");
+  a legendary one has its own name ("Stormward"). Only pieces alike (the same make, people and
+  bonuses) stack.
+- **Each people's uniform.** Each people's soldiers wear their own (`UNIFORM`: a helm, a hauberk,
+  vambraces, gauntlets, a war belt, leg guards, war boots, a cloak and a shield), made in their
+  colours and metal (docs/CHARACTERS.md, "Uniforms and livery"). Worn together, a people's pieces are
+  a set (`SETS`), with bonuses at three pieces and more at six: the humans' Kingdom's Guard
+  (+3% armour; +20 hit points and +5% melee), the elves' Court Wardens (+8% ranged; +20 stamina
+  and +10% healing), the dark elves' Dominion's Shadow (+15% stun; +10% spells and +5% melee),
+  the cat folk's Pride of the Sun (+15 stamina; +10% melee and +5% haggling), the lizard folk's
+  Covenant Scales (+15 hit points; +15% healing and +3% armour) and the orcs' Horde Ironhide
+  (+8% melee; +25 hit points and +10% stun).
+- **Passing for one of them.** A player in another people's helm, chest and cloak
+  (`DISGUISE`) passes for one of their soldiers (`Progress.disguise`, the host's `guise`): their
+  soldiers leave them be, and they're told so. Those near them look them over: each second a
+  soldier of that people within 3 squares who can see them has a 2% chance of seeing through it
+  (twice that, a step away: `SCRUTINY`). Seen through, or striking one of that people, they're
+  known for what they are for two minutes (`UNMASKED_MS`), and fought as they would be.
+- **Where gear comes from.** A new character starts with their weapon, leather bracers,
+  breeches and boots. The smiths sell every piece up to masterwork, and the pieces of their own
+  people's uniform; a fallen soldier sometimes carries a piece of their people's uniform (15%;
+  an orc 12%); the keep's armoury gives a gift at each rank (`armouryGift`): a fine hauberk of the
+  player's people at Retainer, a masterwork weapon at Knight, a masterwork shield (or, with both
+  hands on their weapon, a helm) of their people's at Lord, and a legendary weapon at Councillor.
 
-**Gold and the pack.** A player starts with 20 gold and a pack of 20 slots. (The money was coppers once: requests carried in games saved then are read as gold.)
+**Gold and the pack.** A player starts with 20 gold and a pack of 40 slots, shown two pages of 20
+at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carried in games saved then are read as gold.)
 - **Stacks.** Each slot holds a stack of things alike (the same kind, as well made), as many as
   there are: a stack of seven draughts takes one slot, and a fine sword and a common one two. What
   comes into the pack goes onto the first stack alike, or else into the first empty slot
@@ -453,7 +492,8 @@ all. What's worn shows on the character.
   sale?":
   - the barkeep, the serving wenches and the innkeeper: ale (stamina) and hot meals (a little
     healing);
-  - the smith and the apprentice: weapons, armour and shields, up to masterwork;
+  - the smith and the apprentice: weapons, armour and shields, up to masterwork, and the pieces
+    of their people's uniform;
   - the priest: healing draughts;
   - the guild's receptionist: wands, grimoires and draughts, up to fine.
 
@@ -464,29 +504,44 @@ all. What's worn shows on the character.
   little more of everything).
 - **Found.** Foes carry gold, and sometimes a draught or gear: an orc 5 to 15 gold, a
   soldier 2 to 8.
-- **The pack** (its button, top right, or I) shows the gold, what's carried, what's worn (to take
-  off), and each skill's rank and how far to the next. Trading, it shows the shop's wares too,
-  and what's carried can be sold. Escape closes it.
-  - **What's carried** is a grid of the 20 slots, each stack drawn with its icon and how many,
-    edged by its make (green fine, blue masterwork, orange legendary).
-  - **Tapped**, a stack says what it is and what it does, with buttons for what can be done
-    with it.
-  - **Held** (or right-clicked), a wheel of what can be done with it opens round it, like the
-    action wheel: N to drink or eat it, or wield or wear it; NE to put it on an action wheel (the
-    first empty slice of the player's own); E to split the stack (asked how many); SE to sell
-    it (trading: asked how many, of a stack); S to throw it away; W to drop it (asked how many).
-    Held, a flick chooses; right-clicked, a click.
+- **The pack** (`app/pack.js`: its button, top right, or I) has two tabs, Gear and Skills. Escape
+  closes it.
+  - **The paperdoll.** The Gear tab shows the player themself, drawn live in the middle (drag
+    across them to turn them round), with a slot for each part of them round them: what's worn
+    in each edged by its make, or a faint picture of what goes there. Behind a two-handed weapon
+    the other hand is greyed out (a quiver's still shown with a bow). Under it, the totals of
+    everything worn and grown into (armour, hit points, stamina, damage, spells, healing, stun,
+    haggling, persuasion), each set worn and how many of its pieces, and who they pass for.
+  - **What's carried** is a grid of 20 slots at a time, with a tab for each page, each stack
+    drawn with its icon (a uniform's piece in its people's colours) and how many, edged by its
+    make (green fine, blue masterwork, orange legendary). "Sort" puts the pack in order: gear
+    first (by where it's worn, the best made first), then things to use, tomes, and creatures'
+    parts; things alike put together (`sort`).
+  - **Tapped**, a thing says what it is (`app/gearinfo.js`: its name in the colour of its make,
+    what it does and what was rolled on it, its set; a piece in the pack compared with what's
+    worn there, each change in green or red), with buttons for what can be done with it.
+  - **Held**, a piece of gear goes on (from the pack) or comes off (worn), back into the pack;
+    double-clicked too. Anything else held (or right-clicked) opens a wheel of what can be done
+    with it round it, like the action wheel: N to drink or eat it; NE to put it on an action
+    wheel (the first empty slice of the player's own); E to split the stack (asked how many); SE
+    to sell it (trading: asked how many, of a stack); S to throw it away; W to drop it (asked how
+    many). Held, a flick chooses; right-clicked, a click.
   - **Dragged** onto another slot, a stack moves there: onto a stack alike, the two are put
-    together; onto something else, they swap (`arrange`).
+    together; onto something else, they swap (`arrange`). A piece dragged onto the paperdoll
+    goes on there (the slots it can go in lit as it's picked up; a ring onto either hand), and
+    one worn dragged into the pack comes off into that slot. Dragged over a page's tab, that page
+    is turned to.
   - **Thrown away**, a stack's gone, but "Undo" takes it back for 8 seconds (`discard`,
     `undiscard`: `UNDO_MS`), where it was if that's still free.
   - **Dropped**, things lie on the ground where the player stands, a cloth bundle with their
     icon floating over it (world/drops3d.js), for 5 minutes (`GROUND_MS`), kept with the world
     and seen by everyone playing in it. Anyone tapping one walks up to it and picks it up
     (`pickUp`, from within 1.6 m: `PICK_REACH`), if there's room in their pack.
-  - **Trading with another player**, face to face (docs/WILDS.md), it shows what each offers:
-    tapped or held, a stack is offered (SE on its wheel); gold's offered, and it's agreed to or
-    called off, below.
+  - **Trading** with a shopkeeper, it shows the shop's wares too, each to buy, and what's
+    carried can be sold. **With another player**, face to face (docs/WILDS.md), it shows what
+    each offers: tapped or held, a stack is offered (SE on its wheel); gold's offered, and it's
+    agreed to or called off, below.
+  - **The Skills tab** shows each skill's rank and how far to the next.
 
 **Might** is how dangerous a player is: their best fighting rank (or their command of others),
 plus their gear's make, up to 8. The mightiest player's might sets how fast the war comes on
@@ -867,8 +922,10 @@ a people is a little different, from a seed of their own:
 | `{ type: "effect", effect }` | Something done by talking, to whoever they're talking to: an official's work asked for or taken on (`work`), what's done told of (`report`), the armoury's gift (`armoury`), counsel (`counsel`). |
 | `{ type: "buy", item, from }` | Buy something from a shopkeeper near them. |
 | `{ type: "sell", index, to }` | Sell something from their pack. |
-| `{ type: "equip", index }` | Wear or wield something from their pack. |
-| `{ type: "unequip", slot }` | Take off their body armour or shield. |
+| `{ type: "equip", index, to }` | Wear or wield something from their pack (in a slot, `to`: which ring). |
+| `{ type: "unequip", slot, to }` | Take off what's in a slot (core/gear.js GEAR_SLOTS), into the pack (a slot of it, `to`). |
+| `{ type: "arrange", from, to }` | Move a stack in their pack (onto things alike, put together; else swapped). |
+| `{ type: "sort" }` | Put their pack in order. |
 | `{ type: "use", index }` | Drink or eat something from their pack. |
 | `{ type: "ability", ability, target }` | Use an ability they've learnt. |
 | `{ type: "abandon", request }` | Give up a request they carry. |
@@ -897,7 +954,8 @@ Any order can have `run: true`. A command that can't be done is refused, with a 
 | `rank` | A player's skill reached a new rank (and any ability it brings). |
 | `loot` | A player found gold and things on a fallen foe. |
 | `bought`, `sold`, `used` | A player bought, sold, or used something. |
-| `gear` | What a player wears and wields changed. |
+| `gear` | What a player wears and wields changed (what shows: `worn`, `[{ id, people }]`). |
+| `disguise` | A player passes for one of a people's soldiers (`on`), or no longer (`off`); was seen through (`seen`, by whom), or is known for what they are, having struck one of them (`known`). |
 | `ability` | A player used an ability. |
 | `request` | A player's request was taken, counted, done (to be told of), told of and rewarded, failed, given up or came to nothing. |
 | `standing` | A player reached a new rank in their people. |

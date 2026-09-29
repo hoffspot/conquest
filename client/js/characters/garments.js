@@ -325,16 +325,8 @@ function lingerie(name, colour) {
 export function buildGarment(character, id, measures) {
     const garment = GARMENTS[id];
     const { human, positions, normals } = character;
-    const { vertices, landmarks } = measures;
-    const inside = new Float32Array(human.vertexCount);
-
-    // Footwear with a toe box stops at the ball of the foot; the toe box is built separately
-    const cut = (v) => (garment.toeBox && vertices[v].region === "foot" ? Math.min(1, TOE_CUT - vertices[v].foot) : 1);
-
-    for (let v = 0; v < human.vertexCount; v++) {
-        inside[v] = human.partOf[v] === 0 ? Math.min(garment.inside(vertices[v], landmarks), cut(v)) : OUTSIDE;
-    }
-
+    const { vertices } = measures;
+    const inside = insideOf(human, garment, measures);
     const body = human.renderIndices("body");
     const source = human.renderSource;
     const covers = new Set();
@@ -645,6 +637,22 @@ export function buildGarment(character, id, measures) {
 
 // Footwear with a toe box is cut this far along the foot (1 is the ball of the foot)
 const TOE_CUT = 0.85;
+
+/**
+ * How far inside a garment's region each of the body's vertices is (above 0 inside it; along
+ * any edge between two, where it crosses 0 is where the garment's edge is). Footwear with a toe
+ * box stops at the ball of the foot (the toe box is built separately), unless `toes`.
+ */
+export function insideOf(human, garment, { vertices, landmarks }, { toes = false } = {}) {
+    const inside = new Float32Array(human.vertexCount);
+    const cut = (v) => (garment.toeBox && !toes && vertices[v].region === "foot" ? Math.min(1, TOE_CUT - vertices[v].foot) : 1);
+
+    for (let v = 0; v < human.vertexCount; v++) {
+        inside[v] = human.partOf[v] === 0 ? Math.min(garment.inside(vertices[v], landmarks), cut(v)) : OUTSIDE;
+    }
+
+    return inside;
+}
 
 /**
  * A toe box for one foot (side 1 left, -1 right): a smooth cap lofted forward from where the
@@ -1200,17 +1208,22 @@ function mixSkin(human, a, b, t) {
 /**
  * Where every texel of a (smaller) body texture is on the base body, for painting garments:
  * { size, covered, positions (3 floats a texel), bones (each texel's main bone), names (the
- * bones' names) }.
+ * bones' names), triangles (the body triangle each texel is in, by its place in the body's
+ * triangles), weights (how near it is to that triangle's first two corners: 2 floats a texel),
+ * corners (each body triangle's three vertices) }.
  */
 export function texelMap(human, size = 512) {
     const count = size * size;
     const covered = new Uint8Array(count);
     const where = new Float32Array(count * 3);
     const bones = new Uint8Array(count);
+    const triangles = new Int32Array(count).fill(-1);
+    const weights = new Float32Array(count * 2);
     const positions = human.basePositions;
     const indices = human.renderIndices("body");
     const uvs = human.uvs;
     const source = human.renderSource;
+    const corners = Int32Array.from(indices, (r) => source[r]);
 
     for (let t = 0; t < indices.length; t += 3) {
         const r = [indices[t], indices[t + 1], indices[t + 2]];
@@ -1238,6 +1251,9 @@ export function texelMap(human, size = 512) {
 
                 covered[i] = 1;
                 bones[i] = human.skinIndices[v[0] * 4];
+                triangles[i] = t / 3;
+                weights[i * 2] = w0;
+                weights[i * 2 + 1] = w1;
 
                 for (let k = 0; k < 3; k++) {
                     where[i * 3 + k] = w0 * positions[v[0] * 3 + k] + w1 * positions[v[1] * 3 + k] + w2 * positions[v[2] * 3 + k];
@@ -1246,7 +1262,90 @@ export function texelMap(human, size = 512) {
         }
     }
 
-    return { size, covered, positions: where, bones, names: human.bones.map((bone) => bone.name) };
+    return { size, covered, positions: where, bones, names: human.bones.map((bone) => bone.name), triangles, weights, corners };
+}
+
+/** The bumpScale a composite's heights are for (compositeGarments). */
+export const COMPOSITE_BUMP = 1.5;
+
+// sRGB to linear and back (0 to 1)
+const toLinear = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+const toSRGB = (c) => (c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055);
+
+/**
+ * One picture of all a character's garments together, to draw them all at once (each is painted
+ * on the whole body, and they're all laid out on the body's texture): at each texel, the
+ * outermost garment that's there. `layers`, under ones first: { data (its picture, RGBA), bump
+ * (its heights, a byte a texel), tint (linear [r, g, b] its picture is multiplied by, or null),
+ * bumpScale, roughness, metalness, inside (insideOf: which of the body it covers, and where its
+ * edges are) }. Where none is (under a gap between them, or bare skin), the one nearest to being
+ * there, so edges don't blend into anything else. Returns { size, data (RGBA, sRGB colours),
+ * surface (RGBA: height, roughness, metalness, for a bump, roughness and metalness map; heights
+ * scaled for a bumpScale of COMPOSITE_BUMP) }.
+ */
+export function compositeGarments(map, layers) {
+    const { size, covered, triangles, weights, corners } = map;
+    const count = size * size;
+    const data = new Uint8ClampedArray(count * 4);
+    const surface = new Uint8ClampedArray(count * 4);
+    const looks = layers.map(({ tint, bumpScale = COMPOSITE_BUMP, roughness = 0.8, metalness = 0 }) => ({
+        // (Each channel's tint as a table, sRGB in and out)
+        tables: tint && tint.map((c) => Uint8ClampedArray.from({ length: 256 }, (_, k) => Math.round(255 * toSRGB(Math.min(1, c * toLinear(k / 255)))))),
+        height: bumpScale / COMPOSITE_BUMP,
+        roughness: Math.round(roughness * 255),
+        metalness: Math.round(metalness * 255),
+    }));
+
+    for (let i = 0; i < count; i++) {
+        if (!covered[i]) {
+            continue;
+        }
+
+        const t = triangles[i] * 3;
+        const a = corners[t];
+        const b = corners[t + 1];
+        const c = corners[t + 2];
+        const w0 = weights[i * 2];
+        const w1 = weights[i * 2 + 1];
+        const w2 = 1 - w0 - w1;
+        let chosen = -1;
+        let nearest = -Infinity;
+
+        for (let g = layers.length - 1; g >= 0; g--) {
+            const inside = layers[g].inside;
+            const value = w0 * inside[a] + w1 * inside[b] + w2 * inside[c];
+
+            if (value > 0) {
+                chosen = g;
+                break;
+            }
+
+            if (value > nearest) {
+                nearest = value;
+                chosen = g;
+            }
+        }
+
+        const layer = layers[chosen];
+        const look = looks[chosen];
+
+        for (let k = 0; k < 3; k++) {
+            const value = layer.data[i * 4 + k];
+
+            data[i * 4 + k] = look.tables ? look.tables[k][value] : value;
+        }
+
+        data[i * 4 + 3] = 255;
+        surface[i * 4] = 128 + (layer.bump[i] - 128) * look.height;
+        surface[i * 4 + 1] = look.roughness;
+        surface[i * 4 + 2] = look.metalness;
+        surface[i * 4 + 3] = 255;
+    }
+
+    dilate(size, covered, data, new Uint8ClampedArray(count));
+    dilate(size, covered, surface, new Uint8ClampedArray(count));
+
+    return { size, data, surface };
 }
 
 /**

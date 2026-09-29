@@ -59,21 +59,14 @@ const ARROWS = 8;
 
 // What the shaders mix in (linear colours): fresh and thick blood, bruising, char, the raw edges
 // and dark inside of a cut, torn cloth; and the glows
-const SHADER = /* glsl */ `
-#ifdef USE_MAP
-    vec4 wound = texture2D( damageMap, vMapUv );
-#else
-    vec4 wound = vec4( 0.0 );
-#endif
-    vec3 blood = mix( vec3( 0.14, 0.004, 0.003 ), vec3( 0.06, 0.002, 0.001 ), smoothstep( 0.5, 1.0, wound.r ) );
-    float bloodied = smoothstep( 0.05, 0.45, wound.r );
-    float charred = smoothstep( 0.1, 0.8, wound.b );
-#if defined( WOUNDED_METAL )
+const METAL_SHADER = /* glsl */ `
     // Metal: scratched bright where cut, dented dark where struck, bloodied and blackened
     diffuseColor.rgb = mix( diffuseColor.rgb, min( vec3( 1.0 ), diffuseColor.rgb * 1.8 + 0.06 ), smoothstep( 0.2, 0.6, wound.a ) );
     diffuseColor.rgb *= 1.0 - 0.3 * wound.g;
     diffuseColor.rgb = mix( mix( diffuseColor.rgb, blood, bloodied ), vec3( 0.025, 0.018, 0.014 ), charred );
-#elif defined( WOUNDED_CLOTH )
+`;
+
+const CLOTH_SHADER = /* glsl */ `
     // Cloth: scuffed where struck, soaked with blood, scorched; torn (or burnt) through, its
     // edges frayed pale (singed brown round a burn), showing the wound in the skin beneath
     diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb * 1.6 + vec3( 0.07, 0.06, 0.05 ), wound.g * 0.6 );
@@ -84,6 +77,28 @@ const SHADER = /* glsl */ `
     float frayed = smoothstep( 0.18, 0.3, wound.a ) * ( 1.0 - smoothstep( 0.4, 0.46, wound.a ) );
     diffuseColor.rgb = mix( diffuseColor.rgb, mix( threads, blood, wound.r * 0.5 ), frayed );
     diffuseColor.rgb = mix( diffuseColor.rgb, beneath, smoothstep( 0.4, 0.46, wound.a ) );
+`;
+
+const SHADER = /* glsl */ `
+#ifdef USE_MAP
+    vec4 wound = texture2D( damageMap, vMapUv );
+#else
+    vec4 wound = vec4( 0.0 );
+#endif
+    vec3 blood = mix( vec3( 0.14, 0.004, 0.003 ), vec3( 0.06, 0.002, 0.001 ), smoothstep( 0.5, 1.0, wound.r ) );
+    float bloodied = smoothstep( 0.05, 0.45, wound.r );
+    float charred = smoothstep( 0.1, 0.8, wound.b );
+#if defined( WOUNDED_METAL )
+${METAL_SHADER}
+#elif defined( WOUNDED_CLOTH )
+${CLOTH_SHADER}
+#elif defined( WOUNDED_MIXED ) && defined( USE_METALNESSMAP )
+    // (Garments drawn all at once: metal where their metalness map says so, cloth elsewhere)
+    if ( texture2D( metalnessMap, vMetalnessMapUv ).b > 0.3 ) {
+${METAL_SHADER}
+    } else {
+${CLOTH_SHADER}
+    }
 #else
     // Skin: bruised, cut open (raw at the edges, dark inside), bloodied, charred
     diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.07, 0.02, 0.09 ), wound.g * 0.85 );
@@ -449,7 +464,9 @@ export class Wounds {
             }
 
             const own = cloth ? material.clone() : material;
-            const metal = cloth && material.metalness > 0.3;
+            const mixed = cloth && Boolean(material.userData.mixed);
+            const metal = cloth && !mixed && material.metalness > 0.3;
+            const kind = mixed ? "MIXED" : metal ? "METAL" : "CLOTH";
 
             own.onBeforeCompile = (shader) => {
                 Object.assign(shader.uniforms, this.uniforms);
@@ -460,10 +477,10 @@ export class Wounds {
                     .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>\n${GLOW_SHADER}`);
 
                 if (cloth) {
-                    shader.fragmentShader = `#define ${metal ? "WOUNDED_METAL" : "WOUNDED_CLOTH"}\n${shader.fragmentShader}`;
+                    shader.fragmentShader = `#define WOUNDED_${kind}\n${shader.fragmentShader}`;
                 }
             };
-            own.customProgramCacheKey = () => (metal ? "wounded-metal" : cloth ? "wounded-cloth" : "wounded-skin");
+            own.customProgramCacheKey = () => (cloth ? `wounded-${kind.toLowerCase()}` : "wounded-skin");
             own.needsUpdate = true;
             this.patched.add(own);
 

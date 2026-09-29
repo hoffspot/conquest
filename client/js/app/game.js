@@ -749,7 +749,7 @@ export class Game {
         if (actor.kind === "soldier") {
             const soldier = this.host.soldiers.get(actor.id);
             const look = soldierLook(soldier);
-            const character = new Character(this.kit, { shape: look.shape, look: look.look, equipment: look.equipment, hairDetail: Math.min(hairDetail, FOLK_HAIR) });
+            const character = new Character(this.kit, { shape: look.shape, look: look.look, equipment: look.equipment, hairDetail: Math.min(hairDetail, FOLK_HAIR), merge: true });
 
             character.sheathe(true);
             character.object.traverse((node) => {
@@ -763,7 +763,7 @@ export class Game {
         if (actor.kind === "follower") {
             const { calling, sex, seed, people } = this.host.followers.get(actor.id) ?? { calling: "warrior" };
             const look = folkLook({ role: "adventurer", look: calling, sex, seed, people });
-            const character = new Character(this.kit, { shape: look.shape, look: look.look, equipment: look.equipment, hairDetail: Math.min(hairDetail, FOLK_HAIR) });
+            const character = new Character(this.kit, { shape: look.shape, look: look.look, equipment: look.equipment, hairDetail: Math.min(hairDetail, FOLK_HAIR), merge: true });
 
             character.sheathe(true);
 
@@ -787,7 +787,7 @@ export class Game {
 
         // The orc
         const preset = PRESETS.orc;
-        const character = new Character(this.kit, { shape: preset.shape, look: preset.look, equipment: [...preset.equipment, ...WEAPONS[actor.weapon].equipment], hairDetail });
+        const character = new Character(this.kit, { shape: preset.shape, look: preset.look, equipment: [...preset.equipment, ...WEAPONS[actor.weapon].equipment], hairDetail, merge: true });
 
         character.sheathe(true);
 
@@ -832,7 +832,7 @@ export class Game {
     // their part and seed have them). Returns their avatar
     #addFolk(one) {
         const look = one.preset ? FOLK[one.preset] : folkLook(one);
-        const character = new Character(this.kit, { shape: look.shape, look: look.look, equipment: look.equipment, hairDetail: Math.min(this.view.quality.hair, FOLK_HAIR) });
+        const character = new Character(this.kit, { shape: look.shape, look: look.look, equipment: look.equipment, hairDetail: Math.min(this.view.quality.hair, FOLK_HAIR), merge: true });
         const avatar = this.#addAvatar(one.id, character, { walk: look.walk, wounds: false });
 
         // (Weapons put away: adventurers about the guild)

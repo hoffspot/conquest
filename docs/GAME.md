@@ -1133,6 +1133,22 @@ a character only stands on guard with its weapon out; a
 from, flushes their skin red for a moment and shows the damage; a `death` makes them fall away
 from the killing blow, lie still for 4 seconds and sink out of sight until they come back.
 
+**Everyone but a player** has their garments drawn all at once, one mesh with one picture of
+the whole outfit (docs/CHARACTERS.md, "Equipment"), so a soldier in their people's uniform is 12
+to 17 draw calls rather than 21 to 26. A player's own are drawn one by one: they change what
+they wear.
+
+### The paperdoll (app/pack.js, world/view.js)
+
+The pack's Gear tab shows the player themself in the middle of its slots, drawn live
+(`View.renderPreview`): while it's open, the world isn't drawn. It was drawn once as the pack
+opened, into a picture half as sharp, which is shown behind the panel, still and dimmed. Then
+each frame the player alone (their character and the lights on a layer of their own, `PREVIEW`)
+is drawn into the paperdoll's box, from in front of them, framed on the whole box (as much of it
+as isn't scrolled out of sight: a scissor, and the camera's view offset), without redrawing the
+shadows. So what they wear shows at once as it goes on, walking on the spot, and dragging across
+them turns them round. The panel's clear there, its ground drawn round the box.
+
 ### Effects (world/effects.js)
 
 Arrows, bolts and fireballs fly from the attacker's hand to the target's chest (arrows arcing a

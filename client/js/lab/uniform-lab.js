@@ -2,6 +2,7 @@
 // cloak with the weapon their guards carry, a soldier with their patrols'), and their officials in
 // their livery (a reeve and their ruler), side by side, a row for each people
 // (characters/liveries.js). ?people=<a people, or all>&show=<soldiers, officials, all>&facing=<front, side, back>
+// &drawn=<merged: their garments drawn all at once, as in the game; apart: each on its own>
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -20,6 +21,7 @@ const choice = {
     people: LIVERIED.includes(params.get("people")) ? params.get("people") : "all",
     show: ["soldiers", "officials"].includes(params.get("show")) ? params.get("show") : "all",
     facing: ["side", "back"].includes(params.get("facing")) ? params.get("facing") : "front",
+    drawn: params.get("drawn") === "apart" ? "apart" : "merged",
 };
 
 // What each people's colours are, in words
@@ -90,7 +92,7 @@ const turn = { front: 0, side: Math.PI / 2, back: Math.PI }[choice.facing];
 
 for (const [row, people] of peoples.entries()) {
     for (const [column, { label, look }] of cast(people).entries()) {
-        const character = new Character(kit, { shape: look.shape, look: look.look, equipment: look.equipment });
+        const character = new Character(kit, { shape: look.shape, look: look.look, equipment: look.equipment, merge: choice.drawn === "merged" });
         const walker = new Walker(character, WALK_STYLES[look.walk] ?? WALK_STYLES.natural);
 
         character.sheathe(true);
@@ -135,7 +137,7 @@ function frame(time) {
 renderer.setAnimationLoop(frame);
 
 // The settings: chosen again, the page's address changed and built afresh
-for (const id of ["people", "show", "facing"]) {
+for (const id of ["people", "show", "facing", "drawn"]) {
     const select = document.querySelector(`#${id}`);
 
     select.value = choice[id];
