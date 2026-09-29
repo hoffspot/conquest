@@ -1496,8 +1496,13 @@ export class Game {
     // How often a character's body is posed (Avatar.every): the player's every frame, anyone
     // else's as often as how big it is on the screen and how fast it's moving need
     // (posingEvery). One out of view is posed seldom, unless its shadow may be seen (a player's).
-    // (A creature's posed every frame)
+    // (A creature's posed every frame, but what's only for looking at, a cape blown about, only
+    // in view: BeastAvatar.seen)
     #posing(actor, avatar, dt, pixels) {
+        if (avatar instanceof BeastAvatar) {
+            avatar.seen = this.view.heightOnScreen(avatar.object.position, avatar.character.height, pixels) > 0;
+        }
+
         if (actor.id === this.me || !(avatar instanceof Avatar)) {
             return 1;
         }

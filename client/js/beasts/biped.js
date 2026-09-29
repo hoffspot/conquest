@@ -342,10 +342,11 @@ export function biped(look, random, key = null) {
         length: H * 0.3,
         joints: { torso: chest, head, jaw, mouth: arms.right.hand, left: arms.left.hand, body },
         materials: { body: main },
+        cloth: cloth?.mesh ?? null,
         attacks: treant ? ["slam", "sweep", "roots"] : ["slash", "thrust", "chop", "curse"],
         rests: treant ? ["root", "sway", "creak"] : ["slump", "rattle", "look"],
 
-        pose({ dt, t, speed, run, attack, react, dead, rest: resting, onStep }) {
+        pose({ dt, t, speed, run, attack, react, dead, rest: resting, onStep, seen = true }) {
             const moving = Math.min(1, speed / 0.5);
             const stride = legLength * (run ? 3.4 : 2.3);
 
@@ -536,7 +537,8 @@ export function biped(look, random, key = null) {
             }
 
             // Its cape hanging from its shoulders, streaming back as it goes, kept out of its legs
-            if (cloth) {
+            // (out of view, left as it is: it goes on from there when it's seen again)
+            if (cloth && seen) {
                 object.updateWorldMatrix(false, true);
                 inverse.copy(object.matrixWorld).invert();
 

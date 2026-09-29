@@ -276,3 +276,28 @@ playing, its body is made a step at a time within the frame's budget, as everyon
 - **Folding** a creature's pieces gathers their points into arrays made once, counted first,
   rather than grown a number at a time: a skeleton's or the wight lord's first build, mostly
   folding, went from 54 to 102 ms to 17 to 47 (in Node).
+
+### Drawn only in view
+
+three.js leaves undrawn what's out of the camera's view (and out of a shadow's, in the shadow's
+pass) by a sphere round each mesh. A skinned mesh's sphere is worked out from the pose it was
+first drawn in, which goes stale as it moves, so the creatures' bodies were marked always to be
+drawn: every creature near the player was drawn, and cast its shadow, wherever the camera looked.
+
+- **One sphere round each creature** (`beast.js`, `BOUNDS`), shared by its skinned meshes and its
+  cape, as a character's are by one round it whatever its pose (`character.js`): the sphere round its body at rest, twice as big, for how it moves. None moves further than
+  1.75 times as far, measured over every kind's walk, run, attacks, rests, flinch, fall and
+  flight. A swarm says where its bats fly (`spread`). Attacking, the sphere reaches further by as
+  far as the attack does (at least 2 m, in its own measures): a frog's tongue shot out, a slime
+  engulfing.
+- **In view or not** is the camera's and each shadow's own test, so a creature behind the camera
+  still casts its shadow into the picture.
+- **The wight lord's cape** is cloth, stepped every frame (about 0.6 ms). Out of view
+  (`BeastAvatar.seen`, from `View.heightOnScreen`) it's left as it is, hanging from the lord as
+  it was, and goes on from there when the lord's seen again.
+- **Measured:** 17 creatures of the wild (porcupines, rats, slimes and bats) in a ring 8 to 40 m
+  round the player, the camera turned eight ways: the creatures took 66 draw calls and 252,000
+  triangles whichever way it looked; now 10 to 18 and 35,000 to 57,000. The wight lord's frame
+  out of view went from 0.6 ms to under 0.02.
+- `test/beast-culling.test.js`: every kind stays in its sphere through all it does, its cape too,
+  and the cape's left as it is out of view and blown about again once seen.

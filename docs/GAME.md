@@ -1167,7 +1167,9 @@ often: a foot on the ground mustn't slide more than a pixel and a half with the 
 poses, and in a blow, a flinch or a fall the hands count as going 4 metres a second, so a fight
 is posed every frame unless it's tiny. Everyone follows their actor every frame whatever; a
 body's posed for all the time and way since it last was. One that casts a shadow (a player's) is
-never taken to be out of view. Creatures are posed every frame: they cost 10 to 40 µs.
+never taken to be out of view. Creatures are posed every frame: they cost 10 to 40 µs. They're
+drawn only in view, and the wight lord's cape is blown about only in view (WILDS.md, *Drawn
+only in view*).
 
 Attacks, flinches and falls (characters/actions.js, described in
 [CHARACTERS.md](CHARACTERS.md#fighting-actionsjs)) are started by the battle's events: an
