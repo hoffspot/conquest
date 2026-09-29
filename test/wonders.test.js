@@ -384,7 +384,7 @@ describe("the tomes' wonders (host.js)", () => {
     const hosted = (spells = [], { weapon = "sword", seed = 2 } = {}) => {
         const host = new Host(buildWorld({ seed }), { populate: false });
 
-        host.join({ id: HOST_PLAYER, hero: { ...HERO, weapon }, progress: { spells, gear: { weapon: { id: weapon, quality: "common" } } } });
+        host.join({ id: HOST_PLAYER, hero: { ...HERO, weapon }, progress: { spells, gear: { mainHand: { id: weapon, quality: "common" } } } });
 
         return host;
     };

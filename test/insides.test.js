@@ -12,6 +12,7 @@ globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContex
 
 const { Doors } = await import("../client/js/app/doors.js");
 const { folkLook } = await import("../client/js/characters/folk.js");
+const { liveryKit, soldierKit } = await import("../client/js/characters/liveries.js");
 const { GIVEN_NAMES, namePeople } = await import("../client/js/core/names.js");
 const { EQUIPMENT } = await import("../client/js/characters/equipment.js");
 const { Battle, STEP_MS } = await import("../client/js/core/battle.js");
@@ -585,8 +586,11 @@ describe("folk made up as they're wanted (characters/folk.js)", () => {
                     assert.ok(EQUIPMENT[id], `${people} ${local}: ${id}`);
                 }
 
-                // (Dressed and carrying what their part has them do)
-                for (const id of human.equipment.filter((each) => !["nasalHelm", "wizardHat"].includes(each))) {
+                // (Dressed and carrying what their part has them do: a sentry in their people's
+                // uniform, a reeve in its livery, liveries.js)
+                const dressed = local === "sentry" ? soldierKit(people, "sword") : local === "reeve" ? liveryKit(people, "reeve", sex) : human.equipment.filter((each) => !["nasalHelm", "wizardHat"].includes(each));
+
+                for (const id of dressed) {
                     assert.ok(look.equipment.includes(id), `${people} ${local}: ${id}`);
                 }
             }
@@ -595,8 +599,10 @@ describe("folk made up as they're wanted (characters/folk.js)", () => {
         const cat = folkLook({ role: "sentry", sex: "m", seed: 2, people: "cat" });
 
         assert.ok(cat.equipment.includes("catEars") && cat.equipment.includes("catTail"));
-        assert.ok(!cat.equipment.includes("nasalHelm"), "no helm over a cat's ears");
-        assert.ok(folkLook({ role: "sentry", sex: "m", seed: 2, people: "lizard" }).equipment.includes("nasalHelm"));
+        assert.ok(cat.equipment.includes("helm.cat"), "their helm opens round the ears");
+        assert.ok(folkLook({ role: "sentry", sex: "m", seed: 2, people: "lizard" }).equipment.includes("helm.lizard"));
+        assert.ok(!folkLook({ role: "mage", sex: "m", seed: 2, people: "cat" }).equipment.includes("wizardHat"), "no hat over a cat's ears");
+        assert.ok(folkLook({ role: "reeve", sex: "m", seed: 2, people: "elf" }).equipment.includes("livery.elf"), "officials in their people's livery");
         assert.equal(folkLook({ role: "priest", sex: "m", seed: 2, people: "lizard" }).look.hair.style, "bald");
         assert.equal(folkLook({ role: "priest", sex: "m", seed: 2, people: "orc" }).walk, "orc");
         assert.ok(folkLook({ role: "ruler", sex: "f", seed: 2, people: "cat" }).equipment.includes("crown"), "a crown sits between the ears");

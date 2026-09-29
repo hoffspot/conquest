@@ -3,7 +3,8 @@
 // gold; a pack; and from all of it, might
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { ABILITIES, alike, itemLabel, ITEMS, LOOT, PACK_SIZE, priceOf, Progress, QUALITIES, RANKS, rollLoot, SELL_SHARE, SHOPS, TREES, wares, weaponOf } from "../client/js/core/progress.js";
+import { UNIFORM } from "../client/js/core/gear.js";
+import { ABILITIES, alike, ARMOR_CAP, itemLabel, ITEMS, LOOT, PACK_PAGE, PACK_SIZE, priceOf, Progress, QUALITIES, RANKS, rollLoot, SELL_SHARE, SHOPS, startingGear, TREES, wares, weaponOf } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
 import { SPELLS } from "../client/js/core/spells.js";
 import { STARTING_WEAPONS, WEAPONS } from "../client/js/core/weapons.js";
@@ -16,14 +17,25 @@ function fullPack(leaving = []) {
 }
 
 describe("growing stronger (progress.js)", () => {
-    it("starts untried, with 20 gold, an empty pack, and the weapon the hero chose", () => {
+    it("starts untried, with 20 gold, an empty pack of two pages, and the weapon the hero chose, in leather bracers, breeches and boots", () => {
         const progress = new Progress({}, { weapon: "bow" });
+        const common = (id) => ({ id, quality: "common" });
 
         assert.ok(Object.keys(TREES).every((tree) => progress.rank(tree) === 0));
         assert.equal(progress.gold, 20);
         assert.deepEqual(progress.pack, Array(PACK_SIZE).fill(null));
-        assert.deepEqual(progress.gear, { weapon: { id: "bow", quality: "common" }, body: null, shield: null });
+        assert.equal(PACK_SIZE, 2 * PACK_PAGE);
+        assert.deepEqual(progress.gear, { head: null, amulet: null, cloak: null, chest: null, bracers: common("bracers"), gloves: null, belt: null, legs: common("breeches"), boots: common("leatherBoots"), ring1: null, ring2: null, mainHand: common("bow"), offHand: null });
+        assert.deepEqual(progress.gear, startingGear({ weapon: "bow" }));
+        assert.deepEqual(progress.worn(), [{ id: "bracers" }, { id: "breeches" }, { id: "leatherBoots" }]);
         assert.equal(weaponOf(progress), "bow");
+        assert.equal(progress.kicks(), false);
+
+        // (In spiked boots: kicking too; in them alone, nothing in hand)
+        assert.equal(new Progress({}, { weapon: "sword", boots: true }).gear.boots.id, "boots");
+        assert.equal(new Progress({}, { weapon: "sword", boots: true }).kicks(), true);
+        assert.equal(new Progress({}, { weapon: "boots" }).gear.mainHand, null);
+        assert.equal(weaponOf(new Progress({}, { weapon: "boots" })), "boots");
         assert.equal(progress.might(), 0);
         assert.deepEqual(progress.abilities(), []);
     });
@@ -45,7 +57,7 @@ describe("growing stronger (progress.js)", () => {
     });
 
     it("gives each tree's bonuses at its rank, and its abilities, every one a spell or a stronger blow", () => {
-        const progress = new Progress({ skills: { blade: 300, hexes: 300, endurance: 2000, trade: 100 } });
+        const progress = new Progress({ skills: { blade: 300, hexes: 300, endurance: 2000, trade: 100 }, gear: { mainHand: { id: "sword" } } });
         const bonus = progress.bonuses();
 
         assert.ok(Math.abs(bonus.melee - 0.2) < 1e-9);
@@ -63,27 +75,38 @@ describe("growing stronger (progress.js)", () => {
         }
     });
 
-    it("counts the make of a weapon in its blows, and armour's protection, to a point", () => {
-        const plain = new Progress().bonuses();
-        const armed = new Progress({ gear: { weapon: { id: "sword", quality: "masterwork" }, body: { id: "mail", quality: "fine" }, shield: { id: "kiteShield", quality: "common" } } }).bonuses();
+    it("counts the make of a weapon in its blows, and everything worn: its armour, its bonuses and its sets', to a point", () => {
+        const plain = new Progress({ gear: { mainHand: { id: "sword" } } }).bonuses();
+        const armed = new Progress({ gear: { mainHand: { id: "sword", quality: "masterwork" }, chest: { id: "mail", quality: "fine" }, offHand: { id: "kiteShield", quality: "common" }, belt: { id: "belt" }, ring1: { id: "ring", bonuses: { hp: 8 }, affixes: ["bear"] } } }).bonuses();
 
         assert.equal(plain.melee, 0);
+        assert.equal(plain.armor, 0);
         assert.ok(Math.abs(armed.melee - 0.3) < 1e-9);
-        assert.ok(Math.abs(armed.armor - (0.16 * 1.15 + 0.1)) < 1e-9);
+        assert.ok(Math.abs(armed.armor - (0.14 * 1.15 + 0.1 + 0.005)) < 1e-9);
+        assert.equal(armed.stamina, 5, "(the belt's own)");
+        assert.equal(armed.hp, 8, "(the ring's)");
 
-        const piled = new Progress({ skills: { endurance: 99999 }, gear: { weapon: { id: "sword", quality: "legendary" }, body: { id: "mail", quality: "legendary" }, shield: { id: "kiteShield", quality: "legendary" } } });
+        // A people's uniform worn together: three pieces, then six
+        const uniform = (count) => Object.fromEntries([["head", "helm"], ["chest", "hauberk"], ["cloak", "cloak"], ["bracers", "vambraces"], ["gloves", "warGloves"], ["legs", "legguards"]].slice(0, count).map(([slot, id]) => [slot, { id, people: "orc" }]));
+        const melee = (count) => new Progress({ gear: { mainHand: { id: "sword" }, ...uniform(count) } }).bonuses();
 
-        // (The best there is, and the most enduring: never more than 0.6)
-        assert.ok(Math.abs(piled.bonuses().armor - (0.16 * 1.5 + 0.1 * 1.5 + 0.1)) < 1e-9);
-        assert.ok(piled.bonuses().armor <= 0.6);
+        assert.equal(melee(2).melee, 0);
+        assert.ok(Math.abs(melee(3).melee - 0.08) < 1e-9);
+        assert.equal(melee(6).hp, 25);
+
+        const piled = new Progress({ skills: { endurance: 99999 }, gear: { mainHand: { id: "sword", quality: "legendary" }, chest: { id: "plate", quality: "legendary" }, offHand: { id: "kiteShield", quality: "legendary" }, head: { id: "nasalHelm", quality: "legendary" }, legs: { id: "greaves", quality: "legendary" } } });
+
+        // (The best there is, and the most enduring: never more than the cap)
+        assert.equal(piled.bonuses().armor, ARMOR_CAP);
     });
 
     it("is as mighty as its best fighting skill (or its command of others) and its gear, up to 8", () => {
         assert.equal(new Progress({ skills: { blade: 300 } }).might(), 2);
         assert.equal(new Progress({ skills: { healing: 99999, trade: 99999, talk: 99999, endurance: 99999 } }).might(), 0, "(healing and trade aren't might)");
         assert.equal(new Progress({ skills: { healing: 99999, command: 2000 } }).might(), 4, "(but leading others is)");
-        assert.equal(new Progress({ skills: { marksman: 800 }, gear: { weapon: { id: "bow", quality: "masterwork" }, body: { id: "mail", quality: "common" } } }).might(), 5);
-        assert.equal(new Progress({ skills: { blade: 99999 }, gear: { weapon: { id: "sword", quality: "legendary" }, body: { id: "mail", quality: "legendary" }, shield: { id: "kiteShield", quality: "legendary" } } }).might(), 8);
+        assert.equal(new Progress({ skills: { marksman: 800 }, gear: { mainHand: { id: "bow", quality: "masterwork" }, chest: { id: "mail", quality: "common" } } }).might(), 4);
+        assert.equal(new Progress({ skills: { marksman: 800 }, gear: { mainHand: { id: "bow", quality: "masterwork" }, chest: { id: "plate", quality: "common" }, head: { id: "nasalHelm" }, ring1: { id: "ring", bonuses: { ranged: 0.05 }, affixes: ["trueShot"] } } }).might(), 5);
+        assert.equal(new Progress({ skills: { blade: 99999 }, gear: { mainHand: { id: "sword", quality: "legendary" }, chest: { id: "mail", quality: "legendary" }, offHand: { id: "kiteShield", quality: "legendary" } } }).might(), 8);
     });
 
     it("prices things by their make, with haggling off what's bought and on what's sold", () => {
@@ -94,13 +117,19 @@ describe("growing stronger (progress.js)", () => {
         assert.equal(priceOf({ id: "sword" }, { selling: true, haggle: 0.25 }), Math.round(30 * SELL_SHARE * 1.25));
         assert.equal(priceOf({ id: "ale" }, { selling: true }), 1);
         assert.equal(itemLabel({ id: "mail", quality: "masterwork" }), "Masterwork mail shirt");
+        assert.equal(itemLabel({ id: "mail", quality: "masterwork", bonuses: { armor: 0.02, hp: 9 }, affixes: ["sturdy", "bear"] }), "Sturdy mail shirt of the Bear");
+        assert.equal(itemLabel({ id: "helm", quality: "fine", people: "orc", bonuses: { hp: 9 }, affixes: ["bear"] }), "Orcish helm of the Bear");
+        assert.equal(itemLabel({ id: "ring", quality: "legendary", bonuses: { hp: 9 }, affixes: ["bear"], name: "Emberheart" }), "Emberheart");
         assert.equal(itemLabel({ id: "potion" }), "Healing draught");
     });
 
-    it("stocks each shop with what it keeps, better made as far as it goes", () => {
+    it("stocks each shop with what it keeps, better made as far as it goes; a smith, its own people's uniform", () => {
         const smith = wares("smith");
 
         assert.ok(smith.some(({ id, quality }) => id === "mail" && quality === "masterwork"));
+        assert.ok(smith.some(({ id, people }) => id === "helm" && people === "human"));
+        assert.ok(wares("smith", "lizard").some(({ id, people }) => id === "cloak" && people === "lizard"));
+        assert.ok(wares("guild").some(({ id }) => id === "ring"));
         assert.ok(!smith.some(({ quality }) => quality === "legendary"));
         assert.deepEqual(wares("tavern"), [{ id: "ale", quality: "common" }, { id: "meal", quality: "common" }]);
         assert.deepEqual(wares("nowhere"), []);
@@ -112,35 +141,101 @@ describe("growing stronger (progress.js)", () => {
         // (Every weapon a hero can start with can be bought, somewhere)
         for (const weapon of STARTING_WEAPONS) {
             assert.ok(Object.values(SHOPS).some(({ items }) => items.includes(weapon)), weapon);
-            assert.equal(ITEMS[weapon].slot, "weapon");
+            assert.equal(ITEMS[weapon].slot, weapon === "boots" ? "boots" : "mainHand");
             assert.ok(WEAPONS[weapon]);
         }
     });
 
-    it("puts gear on from the pack, what it replaces back in it; shields only with a weapon that goes with one", () => {
-        const progress = new Progress({ pack: [{ id: "kiteShield", count: 1 }, { id: "mail", quality: "fine", count: 1 }, { id: "bow", count: 1 }, { id: "potion", count: 1 }] }, { weapon: "sword" });
+    it("puts gear on from the pack, in its slot, what it replaces back where it was; the other hand as the weapon leaves it", () => {
+        const progress = new Progress({ pack: [{ id: "kiteShield", count: 1 }, { id: "mail", quality: "fine", count: 1 }, { id: "bow", count: 1 }, { id: "potion", count: 1 }, { id: "quiver", count: 1 }, { id: "sabatons", count: 1 }] }, { weapon: "sword" });
 
         assert.equal(progress.equip(3), "item");
-        assert.equal(progress.equip(5), "item", "an empty slot");
+        assert.equal(progress.equip(7), "item", "an empty slot");
+        assert.equal(progress.equip(4), "quiver", "a quiver only with a bow");
         assert.equal(progress.equip(0), null);
-        assert.equal(progress.gear.shield.id, "kiteShield");
+        assert.equal(progress.gear.offHand.id, "kiteShield");
         assert.equal(progress.pack[0], null);
         assert.equal(progress.equip(1), null);
-        assert.deepEqual(progress.gear.body, { id: "mail", quality: "fine" });
-        assert.deepEqual(progress.worn(), ["mail", "kiteShield"]);
+        assert.deepEqual(progress.gear.chest, { id: "mail", quality: "fine" });
+        assert.deepEqual(progress.worn().map(({ id }) => id), ["chest", "bracers", "legs", "boots", "offHand"].map((slot) => progress.gear[slot].id));
 
-        // A bow: the sword back in the pack, and the shield too
+        // (What comes off goes where what went on was)
+        assert.equal(progress.equip(5), null);
+        assert.deepEqual(progress.pack[5], { id: "leatherBoots", quality: "common", count: 1 });
+
+        // A bow, two-handed: the sword back in the pack, and the shield too; its other hand takes a quiver, and nothing else
         assert.equal(progress.equip(progress.slotOf("bow")), null);
-        assert.equal(progress.gear.weapon.id, "bow");
-        assert.equal(progress.gear.shield, null);
+        assert.equal(progress.gear.mainHand.id, "bow");
+        assert.equal(progress.gear.offHand, null);
         assert.equal(progress.count("sword"), 1);
         assert.equal(progress.count("kiteShield"), 1);
-        assert.equal(progress.equip(progress.slotOf("kiteShield")), "shield");
+        assert.equal(progress.equip(progress.slotOf("kiteShield")), "bow");
+        assert.equal(progress.equip(progress.slotOf("quiver")), null);
 
-        assert.equal(progress.unequip("body"), null);
-        assert.equal(progress.gear.body, null);
-        assert.equal(progress.unequip("body"), "item");
-        assert.equal(progress.unequip("weapon"), "item");
+        // A hammer, two-handed: the quiver comes off; nothing in the other hand
+        progress.stow({ id: "hammer" });
+        assert.equal(progress.equip(progress.slotOf("hammer")), null);
+        assert.equal(progress.gear.offHand, null);
+        assert.equal(progress.count("quiver"), 1);
+        assert.equal(progress.equip(progress.slotOf("kiteShield")), "twoHanded");
+
+        assert.equal(progress.unequip("chest"), null);
+        assert.equal(progress.gear.chest, null);
+        assert.equal(progress.unequip("chest"), "item");
+        assert.equal(progress.unequip("mainHand"), "unarmed", "nothing to fight with");
+        assert.equal(progress.unequip("nowhere"), "item");
+    });
+
+    it("puts a ring on either hand, and takes things off into the pack where asked", () => {
+        const progress = new Progress({ pack: [{ id: "ring", bonuses: { hp: 5 }, affixes: ["bear"], count: 1 }, { id: "ring", bonuses: { melee: 0.05 }, affixes: ["keen"], count: 1 }, { id: "ring", bonuses: { stun: 0.1 }, affixes: ["binding"], count: 1 }, { id: "cap", count: 1 }] }, { weapon: "sword" });
+
+        assert.equal(progress.equip(0), null);
+        assert.equal(progress.gear.ring1.bonuses.hp, 5);
+        assert.equal(progress.equip(1), null);
+        assert.equal(progress.gear.ring2.bonuses.melee, 0.05);
+        assert.equal(progress.equip(2, "ring1"), null);
+        assert.equal(progress.gear.ring1.bonuses.stun, 0.1);
+        assert.equal(progress.pack[2].bonuses.hp, 5, "(the ring taken off, where the one put on was)");
+        assert.equal(progress.equip(3, "ring2"), "slot", "a cap isn't a ring");
+
+        assert.equal(progress.unequip("ring2", 9), null);
+        assert.equal(progress.pack[9].bonuses.melee, 0.05);
+        assert.equal(progress.unequip("ring1", 9), "full", "something else there");
+        assert.equal(progress.unequip("ring1", PACK_SIZE), "item");
+    });
+
+    it("fights in spiked boots alone: the weapon off only with them on, and they only off with a weapon in hand", () => {
+        const progress = new Progress({ pack: [{ id: "leatherBoots", count: 1 }] }, { weapon: "sword", boots: true });
+
+        assert.equal(progress.unequip("mainHand"), null);
+        assert.equal(weaponOf(progress), "boots");
+        assert.equal(progress.unequip("boots"), "unarmed");
+        assert.equal(progress.equip(0), "unarmed", "(ordinary boots on: nothing to fight with)");
+        assert.equal(progress.equip(progress.slotOf("sword")), null);
+        assert.equal(progress.equip(progress.slotOf("leatherBoots")), null);
+        assert.equal(progress.kicks(), false);
+    });
+
+    it("reads gear kept before there was a slot for everything: the weapon, body and shield in theirs, what a new character starts with on, and what can't be worn in the pack", () => {
+        const progress = new Progress({ gear: { weapon: { id: "hammer", quality: "fine" }, body: { id: "mail", quality: "fine" }, shield: { id: "kiteShield", quality: "common" } } }, { weapon: "hammer" });
+
+        assert.deepEqual(progress.gear.mainHand, { id: "hammer", quality: "fine" });
+        assert.deepEqual(progress.gear.chest, { id: "mail", quality: "fine" });
+        assert.equal(progress.gear.offHand, null, "the hammer takes both hands");
+        assert.equal(progress.count("kiteShield"), 1);
+        assert.equal(progress.gear.boots.id, "leatherBoots");
+
+        const kicking = new Progress({ gear: { weapon: { id: "boots" }, body: null, shield: null } }, { weapon: "boots" });
+
+        assert.equal(kicking.gear.mainHand, null);
+        assert.equal(kicking.gear.boots.id, "boots");
+        assert.equal(new Progress({ gear: { weapon: { id: "sword" }, body: null, shield: null } }, { weapon: "sword", boots: true }).kicks(), true);
+
+        // (Something in the wrong slot, or nothing to fight with: put right)
+        const muddled = new Progress({ gear: { head: { id: "mail" }, mainHand: null, boots: { id: "leatherBoots" } } }, { weapon: "staff" });
+
+        assert.equal(muddled.gear.head, null);
+        assert.equal(muddled.gear.mainHand.id, "staff");
     });
 
     it("stacks things alike (the same kind, as well made), as many as there are, each stack in its own slot", () => {
@@ -206,10 +301,10 @@ describe("growing stronger (progress.js)", () => {
     });
 
     it("puts nothing on without room in the pack for what comes off", () => {
-        const full = new Progress({ pack: fullPack(["boots"]) }, { weapon: "boots" });
+        const full = new Progress({ pack: fullPack(["leatherBoots"]) }, { weapon: "sword" });
         const before = full.toJSON();
 
-        assert.equal(full.equip(full.slotOf("sword")), "full", "the boots have nowhere to go");
+        assert.equal(full.equip(full.slotOf("sabatons")), "full", "the leather boots have nowhere to go");
         assert.deepEqual(full.toJSON(), before);
 
         const gauntlets = new Progress({ pack: fullPack() }, { weapon: "gauntlets" });
@@ -225,15 +320,16 @@ describe("growing stronger (progress.js)", () => {
         assert.ok(progress.pack.every(Boolean));
         assert.ok(progress.pack.every(({ quality }) => quality !== "legendary"), "no room for the legendary wand");
         assert.equal(progress.stow({ id: "ale", quality: "legendary" }), false);
-        assert.equal(progress.stow({ id: "ale" }), true, "onto a stack alike, however full");
+        assert.equal(progress.stow({ id: "sword" }), true, "onto a stack alike, however full");
         assert.equal(progress.gold, 0);
         assert.equal(progress.skills.blade, 0);
 
-        const kept = new Progress({ skills: { blade: 320 }, gold: 57, pack: [{ id: "potion", count: 2 }, { id: "nonsense", count: 1 }, null, { id: "ale", count: 1 }], gear: { weapon: { id: "hammer", quality: "fine" }, body: null, shield: null } });
+        const kept = new Progress({ skills: { blade: 320 }, gold: 57, pack: [{ id: "potion", count: 2 }, { id: "nonsense", count: 1 }, null, { id: "ale", count: 1 }], gear: { mainHand: { id: "hammer", quality: "fine" }, head: { id: "helm", quality: "legendary", people: "elf", bonuses: { hp: 12, spell: 0.1, bad: 3 }, affixes: ["bear", "arcane"], name: "Starward" }, ring1: { id: "ring", bonuses: { stun: 0.1 }, affixes: ["binding"] } } });
         const back = new Progress(JSON.parse(JSON.stringify(kept)));
 
         assert.deepEqual(back.toJSON(), kept.toJSON());
         assert.deepEqual(kept.pack.slice(0, 4), [{ id: "potion", quality: "common", count: 2 }, null, null, { id: "ale", quality: "common", count: 1 }]);
+        assert.deepEqual(kept.gear.head, { id: "helm", quality: "legendary", people: "elf", bonuses: { hp: 12, spell: 0.1 }, affixes: ["bear", "arcane"], name: "Starward" });
     });
 
     it("finds on fallen foes what their kind carries", () => {
@@ -244,5 +340,13 @@ describe("growing stronger (progress.js)", () => {
         assert.ok(rolls.some(({ items }) => items.some(({ id }) => id === "potion")));
         assert.ok(rolls.every(({ items }) => items.every(({ id, quality }) => ITEMS[id] && QUALITIES[quality])));
         assert.deepEqual(rollLoot("folk", random), { gold: 0, items: [] });
+
+        // A soldier's: pieces of their people's uniform, as well made as they happen to be
+        const found = Array.from({ length: 400 }, () => rollLoot("soldier", random, { people: "cat" })).flatMap(({ items }) => items).filter(({ id }) => UNIFORM.includes(id));
+
+        assert.ok(found.length > 20);
+        assert.ok(found.every(({ people }) => people === "cat"));
+        assert.ok(found.some(({ quality }) => quality === "fine") && found.some(({ quality }) => quality === "common"));
+        assert.ok(found.filter(({ quality }) => quality !== "common").every(({ bonuses }) => Object.keys(bonuses ?? {}).length >= 1));
     });
 });

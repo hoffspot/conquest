@@ -1055,7 +1055,7 @@ describe("skirts, gowns and aprons (drapes.js)", () => {
     };
 
     it("hangs every drape from the waist, fitted round the body, flaring to its hem", () => {
-        for (const id of Object.keys(DRAPES)) {
+        for (const id of Object.keys(DRAPES).filter((each) => !DRAPES[each].cape)) {
             const { geometry } = buildDrape(f, id, measures);
             const points = vertices(geometry);
             const top = Math.max(...points.map(({ y }) => y));
@@ -1080,6 +1080,33 @@ describe("skirts, gowns and aprons (drapes.js)", () => {
 
         assert.ok(Math.min(...apron.map(({ y }) => y)) > l.ankle + 0.25);
         assert.ok(apron.every(({ z }) => z > middle - 0.12), "the apron's at the front");
+    });
+
+    it("hangs a cloak from the shoulders down the back, behind the arms, edged in its trim, swinging with the legs below the hips", () => {
+        for (const id of Object.keys(DRAPES).filter((each) => DRAPES[each].cape)) {
+            const { geometry } = buildDrape(f, id, measures);
+            const points = vertices(geometry);
+            const top = Math.max(...points.map(({ y }) => y));
+            const hem = Math.min(...points.map(({ y }) => y));
+            const colours = geometry.attributes.color;
+            const trim = new THREE.Color(DRAPES[id].trim);
+            const indices = geometry.attributes.skinIndex;
+            const legs = new Set(["LeftUpLeg", "RightUpLeg"].map((name) => f.rig.index.get(name)));
+
+            assert.ok(points.every(({ x, y, z }) => [x, y, z].every(Number.isFinite)), `${id}: no broken vertices`);
+            assert.ok(points.every(({ weight }) => Math.abs(weight - 1) < 1e-5), `${id}: skin weights sum to one`);
+            assert.ok(top > l.armpit && top < l.neck, `${id}: from the shoulders`);
+            assert.ok(hem < l.crotch - 0.2 && hem > l.ankle, `${id}: down past the knees`);
+
+            // (Behind: every point below the shoulders further back than the body's middle)
+            assert.ok(points.filter(({ y }) => y < l.armpit).every(({ z }) => z < 0.06), `${id}: down the back`);
+
+            // (Its hem in its trim, and swinging with the thighs)
+            const last = colours.count - 1;
+
+            assert.ok(Math.abs(colours.getX(last) / trim.r - colours.getY(last) / trim.g) < 0.05, `${id}: trimmed`);
+            assert.ok(Array.from({ length: indices.count }, (_, i) => i).some((i) => points[i].y < l.crotch && [0, 1, 2, 3].some((k) => legs.has(indices.getComponent(i, k)))), `${id}: moves with the legs`);
+        }
     });
 
     it("swings with the thighs and shins below the hips, each side with its own", () => {

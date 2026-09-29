@@ -7,6 +7,7 @@
 
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { LIVERIES } from "./liveries.js";
 
 const materials = new Map();
 
@@ -38,13 +39,31 @@ export function itemMaterial(name) {
             skin: { color: 0xc8a080, roughness: 0.8 },
             earInner: { color: 0xd9a3a0, roughness: 0.75 },
             ruby: { color: 0xb3142a, emissive: 0x3a0008, emissiveIntensity: 0.6, roughness: 0.15 },
-        }[name];
+        }[name] ?? dyed(name);
 
         // (Named, so that a character can find what's made of its skin)
         materials.set(name, Object.assign(new THREE.MeshStandardMaterial(settings), { name }));
     }
 
     return materials.get(name);
+}
+
+// A material of a colour of a people's (characters/liveries.js): "metal:#c3c8cc", "cloth:#27407a",
+// "paint:#7a1a14" (a painted face, a little glossy)
+function dyed(name) {
+    const [kind, colour] = name.split(":");
+    const color = new THREE.Color(colour ?? "#ff00ff");
+
+    switch (kind) {
+        case "metal":
+            return { color, metalness: 1, roughness: 0.32 };
+        case "cloth":
+            return { color, roughness: 0.88, side: THREE.DoubleSide };
+        case "paint":
+            return { color, roughness: 0.55 };
+        default:
+            return { color: 0xff00ff };
+    }
 }
 
 /** Merge geometries by material into one group of meshes (one draw call per material). */
@@ -641,9 +660,360 @@ function tusks(scale) {
     return assemble(parts, "tusks");
 }
 
-/** Build an item's model. `fit` says how big the body is: { headRadius, scale }. */
+
+// --- Each people's own helm and shield, in their colours (characters/liveries.js) ---
+
+const metalOf = (livery) => `metal:${livery.metal}`;
+const clothOf = (colour) => `cloth:${colour}`;
+const paintOf = (colour) => `paint:${colour}`;
+
+// A flat shape from points ([x, y] each), for a polygon
+function polygon(points) {
+    const shape = new THREE.Shape();
+
+    shape.moveTo(...points[0]);
+    points.slice(1).forEach((point) => shape.lineTo(...point));
+
+    return shape;
+}
+
+// A thin slab of a shape (`depth` thick, across z from 0), for an emblem on a face
+const slab = (shape, depth = 0.004) => new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false, curveSegments: 10 });
+
+// A thin bar from one point to another (in x and y), `width` wide, `depth` thick
+function bar([x0, y0], [x1, y1], width, depth = 0.004) {
+    const length = Math.hypot(x1 - x0, y1 - y0);
+
+    return at(new THREE.BoxGeometry(width, length, depth), (x0 + x1) / 2, (y0 + y1) / 2, depth / 2, 0, 0, -Math.atan2(x1 - x0, y1 - y0));
+}
+
+/**
+ * A people's emblem as flat geometry, `size` across (metres), in x and y about the origin, a
+ * little thickness along z from 0: the crown, the leaf, the spider, the sun, the serpent, the claws.
+ */
+function emblemGeometry(emblem, size) {
+    const s = size / 2;
+    const w = s * 0.14;
+    const parts = [];
+
+    switch (emblem) {
+        case "crown":
+            parts.push(slab(polygon([[-0.85, -0.55], [0.85, -0.55], [0.85, 0.35], [0.45, -0.05], [0, 0.6], [-0.45, -0.05], [-0.85, 0.35]].map(([x, y]) => [x * s, y * s]))));
+            break;
+        case "leaf": {
+            const leaf = new THREE.Shape();
+
+            leaf.moveTo(0, -s);
+            leaf.bezierCurveTo(0.75 * s, -0.4 * s, 0.75 * s, 0.4 * s, 0, s);
+            leaf.bezierCurveTo(-0.75 * s, 0.4 * s, -0.75 * s, -0.4 * s, 0, -s);
+            parts.push(slab(leaf));
+            break;
+        }
+        case "spider": {
+            const body = new THREE.Shape();
+            const abdomen = new THREE.Shape();
+
+            body.absarc(0, 0.28 * s, 0.24 * s, 0, Math.PI * 2);
+            abdomen.absellipse(0, -0.22 * s, 0.3 * s, 0.4 * s, 0, Math.PI * 2);
+            parts.push(slab(body), slab(abdomen));
+
+            for (const side of [-1, 1]) {
+                for (const [from, knee, foot] of [[[0.15, 0.35], [0.7, 0.75], [0.95, 0.3]], [[0.2, 0.2], [0.8, 0.3], [0.95, -0.1]], [[0.2, 0.05], [0.75, -0.2], [0.85, -0.6]], [[0.15, -0.05], [0.5, -0.55], [0.5, -0.95]]]) {
+                    const [a, b, c] = [from, knee, foot].map(([x, y]) => [side * x * s, y * s]);
+
+                    parts.push(bar(a, b, w), bar(b, c, w));
+                }
+            }
+
+            break;
+        }
+        case "sun": {
+            const points = [];
+
+            for (let k = 0; k < 24; k++) {
+                const angle = (k / 24) * Math.PI * 2;
+                const r = (k % 2 ? 0.55 : 1) * s;
+
+                points.push([Math.sin(angle) * r, Math.cos(angle) * r]);
+            }
+
+            parts.push(slab(polygon(points)));
+            break;
+        }
+        case "serpent": {
+            const curve = new THREE.CatmullRomCurve3([[-0.2, 0.85], [0.45, 0.55], [0, 0], [-0.45, -0.5], [0.2, -0.9]].map(([x, y]) => new THREE.Vector3(x * s, y * s, 0)));
+            const tube = new THREE.TubeGeometry(curve, 24, w * 0.9, 6, false).scale(1, 1, 0.25).translate(0, 0, w * 0.25);
+            const head = new THREE.Shape();
+
+            head.absellipse(-0.25 * s, 0.9 * s, 0.2 * s, 0.14 * s, 0, Math.PI * 2);
+            parts.push(tube, slab(head));
+            break;
+        }
+        case "claws":
+            parts.push(bar([-0.6 * s, 0.8 * s], [-0.3 * s, -0.8 * s], w * 1.4), bar([-0.1 * s, 0.9 * s], [0.2 * s, -0.7 * s], w * 1.4), bar([0.4 * s, 0.8 * s], [0.65 * s, -0.6 * s], w * 1.4));
+            break;
+        default:
+            break;
+    }
+
+    return mergeGeometries(parts.map((geometry) => (geometry.index ? geometry.toNonIndexed() : geometry)).map((geometry) => {
+        geometry.deleteAttribute("uv");
+
+        return geometry;
+    }));
+}
+
+/**
+ * A people's helm (characters/liveries.js), fitting a head of `radius`, its origin at the head's
+ * middle. `open`: on a cat's head, its ears through it (a brow band and a crest over the top from
+ * front to back, not a dome).
+ */
+function peopleHelm(people, radius, open = false) {
+    const livery = LIVERIES[people] ?? LIVERIES.human;
+    const r = radius * 1.08;
+    const metal = metalOf(livery);
+    const parts = [];
+    const opened = open || people === "cat";
+
+    if (opened) {
+        // A brow band, a ridge from the brow to the nape, cheek guards and a nasal
+        const band = new THREE.CylinderGeometry(r * 0.98, r * 1.0, r * 0.26, 28, 1, true);
+
+        band.scale(0.88, 1, 1.03);
+        parts.push([at(band, 0, -r * 0.02, 0), metal]);
+        parts.push([at(new THREE.TorusGeometry(r * 0.96, r * 0.07, 6, 24, Math.PI), 0, r * 0.08, 0, 0, Math.PI / 2, 0), metal]);
+        parts.push([at(new THREE.BoxGeometry(r * 0.12, r * 0.55, r * 0.05), 0, -r * 0.25, r * 1.06, -0.12, 0, 0), metal]);
+
+        for (const side of [-1, 1]) {
+            parts.push([at(arcPlate(r * 0.95, r * 0.05, r * 0.5, side * 0.9, side * 1.9), 0, -r * 0.35, 0), metal]);
+        }
+
+        // (A crest of horsehair along the ridge, in their trim)
+        const [tube, end] = taperedTube([[0, r * 1.05, r * 0.45], [0, r * 1.18, 0], [0, r * 1.05, -r * 0.5], [0, r * 0.75, -r * 0.95]], r * 0.1, r * 0.05, { segments: 14, sides: 6 });
+
+        parts.push([tube.scale(0.45, 1, 1), clothOf(people === "cat" ? livery.trim : livery.main)], [end, clothOf(people === "cat" ? livery.trim : livery.main)]);
+
+        return assemble(parts, "helmet");
+    }
+
+    // A dome, banded in their colour
+    const tall = people === "elf" ? 1.18 : people === "darkElf" ? 1.12 : people === "lizard" ? 0.9 : 1;
+    const dome = new THREE.SphereGeometry(r, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.55);
+
+    dome.scale(0.86, 0.98 * tall, 1.02);
+    parts.push([dome, metal]);
+
+    const band = new THREE.CylinderGeometry(r, r, r * 0.18, 32, 1, true);
+
+    band.scale(0.87, 1, 1.03);
+    parts.push([at(band, 0, -r * 0.02, 0), people === "human" ? metalOf({ metal: livery.trim }) : clothOf(livery.main)]);
+
+    switch (people) {
+        case "human": {
+            // A nasal, and a plume sweeping back
+            parts.push([at(new THREE.BoxGeometry(r * 0.12, r * 0.55, r * 0.05), 0, -r * 0.2, r * 1.08, -0.12, 0, 0), metal]);
+
+            const [tube, end] = taperedTube([[0, r * 0.9, 0.05 * r], [0, r * 1.3, -r * 0.15], [0, r * 1.35, -r * 0.6], [0, r * 1.05, -r * 1.05]], r * 0.14, r * 0.05, { segments: 14, sides: 8 });
+
+            parts.push([tube, clothOf(livery.main)], [end, clothOf(livery.main)]);
+            break;
+        }
+        case "elf": {
+            // A leaf of silver standing along the crown, and cheek guards
+            const leaf = new THREE.Shape();
+
+            leaf.moveTo(0, 0);
+            leaf.bezierCurveTo(r * 0.5, r * 0.2, r * 0.9, r * 0.55, r * 1.25, r * 0.75);
+            leaf.bezierCurveTo(r * 0.8, r * 0.3, r * 0.4, r * 0.05, 0, 0);
+
+            const crest = new THREE.ExtrudeGeometry(leaf, { depth: r * 0.04, bevelEnabled: false, curveSegments: 10 });
+
+            parts.push([at(crest, -r * 0.02, r * 0.95, r * 0.55, 0, -Math.PI / 2, 0), metal]);
+
+            for (const side of [-1, 1]) {
+                parts.push([at(arcPlate(r * 0.94, r * 0.04, r * 0.55, side * 0.95, side * 1.8), 0, -r * 0.35, 0), metal]);
+            }
+
+            break;
+        }
+        case "darkElf": {
+            // A crest of spikes along the top, two more swept back from the sides, and cheek guards
+            for (let k = 0; k < 5; k++) {
+                const angle = -0.9 + k * 0.45;
+
+                parts.push([at(new THREE.ConeGeometry(r * 0.07, r * (0.45 - Math.abs(k - 2) * 0.08), 6), 0, Math.cos(angle) * r * 1.02 * tall, Math.sin(angle) * r * 1.02, angle, 0, 0), metal]);
+            }
+
+            for (const side of [-1, 1]) {
+                parts.push([at(new THREE.ConeGeometry(r * 0.08, r * 0.7, 6), side * r * 0.82, r * 0.2, -r * 0.35, -1.1, 0, -side * 0.6), metal]);
+                parts.push([at(arcPlate(r * 0.94, r * 0.04, r * 0.6, side * 0.9, side * 1.8), 0, -r * 0.38, 0), metal]);
+            }
+
+            break;
+        }
+        case "lizard": {
+            // A fan of feathers from the back of the crown, crimson and turquoise
+            for (let k = 0; k < 7; k++) {
+                const angle = -0.9 + (k * 1.8) / 6;
+
+                parts.push([at(new THREE.BoxGeometry(r * 0.12, r * 0.95, r * 0.01), Math.sin(angle) * r * 0.45, r * 1.15, -r * 0.55, -0.5, 0, -angle * 0.7), clothOf(k % 2 ? livery.trim : livery.main)]);
+            }
+
+            parts.push([at(new THREE.SphereGeometry(r * 0.13, 12, 8), 0, r * 0.35, r * 0.98), paintOf(livery.trim)]);
+            break;
+        }
+        case "orc": {
+            // Horns of bone, curving out and up, and a spike on top
+            for (const side of [-1, 1]) {
+                const horn = new THREE.ConeGeometry(r * 0.22, r * 1.5, 12, 8);
+                const position = horn.attributes.position;
+
+                for (let i = 0; i < position.count; i++) {
+                    const y = position.getY(i) + r * 0.75;
+
+                    position.setX(i, position.getX(i) + side * (y * y) * 1.2);
+                }
+
+                horn.computeVertexNormals();
+                parts.push([at(horn, side * r * 0.95, r * 0.55, 0, 0, 0, -side * 1.15), "bone"]);
+            }
+
+            parts.push([at(new THREE.ConeGeometry(r * 0.1, r * 0.55, 6), 0, r * 1.15, -r * 0.1, -0.2, 0, 0), metal]);
+            break;
+        }
+        default:
+            break;
+    }
+
+    return assemble(parts, "helmet");
+}
+
+/**
+ * A people's shield, strapped to the forearm, facing +x (as the others): its face in their colour,
+ * rimmed, their emblem on it.
+ */
+function peopleShield(people) {
+    const livery = LIVERIES[people] ?? LIVERIES.human;
+    const metal = metalOf(livery);
+    const face = paintOf(livery.main);
+    let outline;
+    let emblemAt = [0, 0.02];
+    let emblemSize = 0.3;
+    let bend = 0.6;
+    const parts = [];
+
+    switch (people) {
+        case "elf": {
+            // Long, leaf-shaped
+            outline = new THREE.Shape();
+            outline.moveTo(0, 0.44);
+            outline.bezierCurveTo(0.3, 0.2, 0.3, -0.25, 0, -0.5);
+            outline.bezierCurveTo(-0.3, -0.25, -0.3, 0.2, 0, 0.44);
+            emblemSize = 0.26;
+            break;
+        }
+        case "cat": {
+            // A tall oval of hide, a stick down its middle behind
+            outline = new THREE.Shape();
+            outline.absellipse(0, -0.02, 0.23, 0.44, 0, Math.PI * 2);
+            parts.push([at(new THREE.CylinderGeometry(0.012, 0.012, 1.02, 6), 0, -0.02, -0.01), "wood"]);
+            emblemSize = 0.3;
+            break;
+        }
+        case "lizard":
+        case "orc": {
+            // Round
+            outline = new THREE.Shape();
+            outline.absarc(0, 0, people === "orc" ? 0.32 : 0.3, 0, Math.PI * 2);
+            emblemSize = 0.32;
+            bend = 0.35;
+            break;
+        }
+        default: {
+            // A kite, the humans'; the dark elves' longer, sharper
+            const long = people === "darkElf" ? 1.15 : 1;
+
+            outline = new THREE.Shape();
+            outline.moveTo(0, 0.36);
+            outline.quadraticCurveTo(0.27, 0.34, 0.26, 0.12);
+            outline.quadraticCurveTo(0.22, -0.25 * long, 0, -0.52 * long);
+            outline.quadraticCurveTo(-0.22, -0.25 * long, -0.26, 0.12);
+            outline.quadraticCurveTo(-0.27, 0.34, 0, 0.36);
+            emblemAt = [0, 0.05];
+        }
+    }
+
+    const depth = 0.02;
+    const body = new THREE.ExtrudeGeometry(outline, { depth, bevelEnabled: true, bevelThickness: 0.006, bevelSize: 0.01, bevelSegments: 1, curveSegments: 20 });
+    const rim = new THREE.ExtrudeGeometry(outline, { depth: 0.012, bevelEnabled: true, bevelThickness: 0.004, bevelSize: 0.022, bevelSegments: 1, curveSegments: 20 }).translate(0, 0, -0.006);
+    const emblem = emblemGeometry(livery.emblem, emblemSize).translate(emblemAt[0], emblemAt[1], depth + 0.007);
+
+    parts.push([body, face], [rim, people === "cat" ? "darkLeather" : metal], [emblem, people === "orc" ? paintOf(livery.trim) : metalOf({ metal: livery.trim })]);
+
+    // (A boss and spikes: the orcs'; spikes round the dark elves')
+    if (people === "orc") {
+        parts.push([at(new THREE.ConeGeometry(0.05, 0.12, 8), 0, 0, depth + 0.06, Math.PI / 2, 0, 0), metal]);
+    }
+
+    if (people === "darkElf") {
+        for (const [x, y] of [[0.27, 0.2], [-0.27, 0.2], [0.2, -0.2], [-0.2, -0.2]]) {
+            parts.push([at(new THREE.ConeGeometry(0.018, 0.09, 6), x * 1.08, y, 0.01, 0, 0, -Math.atan2(x, y) + Math.PI), metal]);
+        }
+    }
+
+    // (A fringe of feathers under the lizard folk's)
+    if (people === "lizard") {
+        for (let k = 0; k < 9; k++) {
+            const angle = Math.PI + (k - 4) * 0.16;
+
+            parts.push([at(new THREE.BoxGeometry(0.035, 0.14, 0.004), Math.sin(angle) * 0.33, Math.cos(angle) * 0.33 - 0.05, 0.005, 0, 0, -angle + Math.PI), clothOf(k % 2 ? livery.trim : livery.main)]);
+        }
+    }
+
+    // Curved round the arm a little, then turned to face out (+x)
+    for (const [geometry] of parts) {
+        const position = geometry.attributes.position;
+
+        for (let i = 0; i < position.count; i++) {
+            const x = position.getX(i);
+
+            position.setZ(i, position.getZ(i) - x * x * bend);
+        }
+
+        geometry.computeVertexNormals();
+        geometry.rotateY(Math.PI / 2);
+    }
+
+    // (Its grip, behind it, where the forearm's strapped: the kite's boss is on its face)
+    return assemble(parts, "shield");
+}
+
+// A leather cap, close round the top of the head, a rim round its edge (on a cat's head, `open`:
+// the rim, and a strap over the top between the ears)
+function leatherCap(radius, open = false) {
+    const r = radius * 1.05;
+    const top = open ? new THREE.TorusGeometry(r * 0.93, r * 0.07, 6, 20, Math.PI).rotateY(Math.PI / 2).scale(1, 1.02, 1) : new THREE.SphereGeometry(r, 24, 12, 0, Math.PI * 2, 0, Math.PI * 0.5).scale(0.88, 0.95, 1.03);
+
+    return assemble([
+        [top, "leather"],
+        [at(new THREE.CylinderGeometry(r * 0.99, r * 1.0, r * 0.14, 24, 1, true).scale(0.89, 1, 1.04), 0, -r * 0.02, 0), "darkLeather"],
+    ], "helmet");
+}
+
+/** Build an item's model. `fit` says how big the body is: { headRadius, scale, ears (a cat's: a helm opens round them) }. */
 export function buildItem(model, fit = {}) {
     const headRadius = fit.headRadius ?? 0.1;
+
+    // (Each people's helm and shield: "helm.orc", "shield.elf")
+    const [kind, people] = model.split(".");
+
+    if (people && kind === "helm") {
+        return peopleHelm(people, headRadius, Boolean(fit.ears));
+    }
+
+    if (people && kind === "shield") {
+        return peopleShield(people);
+    }
 
     switch (model) {
         case "sword":
@@ -681,9 +1051,11 @@ export function buildItem(model, fit = {}) {
         case "kiteShield":
             return kiteShield();
         case "nasalHelm":
-            return helmet(headRadius, "nasal");
+            return fit.ears ? peopleHelm("human", headRadius, true) : helmet(headRadius, "nasal");
         case "orcHelm":
-            return helmet(headRadius, "orc");
+            return fit.ears ? peopleHelm("orc", headRadius, true) : helmet(headRadius, "orc");
+        case "leatherCap":
+            return leatherCap(headRadius, Boolean(fit.ears));
         case "wizardHat":
             return wizardHat(headRadius);
         case "crown":

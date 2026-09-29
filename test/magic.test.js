@@ -265,12 +265,12 @@ describe("magic (spells.js)", () => {
     it("makes spells as much stronger as the wand in hand boosts them; wands of different boosts are kept apart", () => {
         const host = new Host(buildWorld({ seed: 2 }), { populate: false });
 
-        host.join({ id: HOST_PLAYER, hero: { ...HERO, weapon: "wand" }, progress: { gear: { weapon: { id: "wand", quality: "common", boost: 0.6 } } } });
+        host.join({ id: HOST_PLAYER, hero: { ...HERO, weapon: "wand" }, progress: { gear: { mainHand: { id: "wand", quality: "common", boost: 0.6 } } } });
 
         const { progress } = host.players.get(HOST_PLAYER);
 
         assert.ok(Math.abs(host.battle.actor(HOST_PLAYER).power.spell - 1.6) < 1e-9);
-        assert.equal(new Progress({}, { weapon: "grimoire" }).gear.weapon.boost, STARTING_BOOST, "a new character's is a common one");
+        assert.equal(new Progress({}, { weapon: "grimoire" }).gear.mainHand.boost, STARTING_BOOST, "a new character's is a common one");
 
         progress.stow({ id: "wand", boost: 0.2 });
         progress.stow({ id: "wand", boost: 0.3 });

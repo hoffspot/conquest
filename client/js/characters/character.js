@@ -251,7 +251,8 @@ export class Character {
                 }
 
                 const model = new THREE.Group();
-                const look = buildItem(part.model, socket.fit);
+                // (A helm on a cat's head opens round its ears)
+                const look = buildItem(part.model, { ...socket.fit, ears: this.equipment.get("ears") === "catEars" });
 
                 // (What's of their skin or fur, in its colour)
                 if (item.tinted) {
@@ -430,12 +431,23 @@ export class Character {
         return kit.drapeMaterials.get(id);
     }
 
-    /** A garment's material, its texture painted once per kit. */
+    /**
+     * A garment's material, its texture painted once per kit; a people's make of one that only
+     * differs in colour (`base`: liveries.js), its picture tinted to its colour.
+     */
     #garmentMaterial(id) {
         const kit = this.kit;
         const garment = GARMENTS[id];
 
         kit.garmentMaterials ??= new Map();
+
+        if (garment.base && !kit.garmentMaterials.has(id)) {
+            const material = this.#garmentMaterial(garment.base).clone();
+            const [from, to] = [new THREE.Color(GARMENTS[garment.base].colour), new THREE.Color(garment.colour)];
+
+            material.color.setRGB(to.r / Math.max(0.03, from.r), to.g / Math.max(0.03, from.g), to.b / Math.max(0.03, from.b));
+            kit.garmentMaterials.set(id, material);
+        }
 
         if (garment.design && !kit.garmentMaterials.has(id)) {
             kit.garmentMaterials.set(id, this.#designMaterial(garment));

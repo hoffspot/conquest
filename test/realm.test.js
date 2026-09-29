@@ -262,8 +262,10 @@ describe("a player's part in their people (host.js, standing.js)", () => {
 
         const gift = host.command(HOST_PLAYER, { type: "effect", effect: { armoury: true } });
 
-        assert.deepEqual(gift.item, { id: "mail", quality: "fine" });
-        assert.ok(player.progress.pack.some(({ id, quality }) => id === "mail" && quality === "fine"));
+        // (Their people's hauberk, a bonus rolled on it)
+        assert.deepEqual([gift.item.id, gift.item.quality, gift.item.people], ["hauberk", "fine", player.realm]);
+        assert.equal(Object.keys(gift.item.bonuses).length, 1);
+        assert.ok(player.progress.pack.some((stack) => stack?.id === "hauberk" && stack.quality === "fine"));
         assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { armoury: true } }).reason, "claimed");
 
         // Counsel: a knight's, where to march, at the ruler's feet

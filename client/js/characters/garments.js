@@ -15,6 +15,7 @@
 
 import * as THREE from "three";
 import { faceFrame } from "./face.js";
+import { LIVERIES } from "./liveries.js";
 import { fbm, hash3, smoothstep } from "./noise.js";
 
 const ARM = /^(Left|Right)(Arm|ForeArm)$/;
@@ -152,7 +153,7 @@ function bottoms(waist, length) {
  * smoothing, and look (colour, roughness, metalness, a pattern painted in, a tiling detail); or,
  * for lingerie, the design it's cut from (DESIGNS), clear wherever that has no fabric.
  */
-export const GARMENTS = Object.freeze({
+const MADE = {
     briefs: { label: "Briefs", slot: "underwear", layer: 0, thickness: 0.0015, smooth: 2, colour: "#d8d2c4", roughness: 0.8, pattern: "cloth", inside: bottoms((l) => l.hips + 0.02, 0.1) },
     // Round the bust, whatever its size: from a little under the fullest bust (which reaches two
     // thirds of the way down from the chest to the waist) to above the armpits, smoothed enough to
@@ -208,7 +209,89 @@ export const GARMENTS = Object.freeze({
     ...lingerie("Ivory", "#eee4d2"),
     corset: { label: "Corset", slot: "chest", layer: 2, thickness: 0.006, smooth: 4, colour: "#7e1223", roughness: 0.45, design: "corset", inside: band((l) => l.hips - 0.04, (l) => l.chest + 0.02) },
     choker: { label: "Velvet choker", slot: "neck", layer: 1, thickness: 0.003, smooth: 2, colour: "#16101a", roughness: 0.7, design: "choker", inside: (v, l) => (v.region === "torso" || v.region === "head" ? 0.06 - Math.abs(v.y - l.neck) : OUTSIDE) },
-});
+
+    // Uniforms and livery (characters/liveries.js: each people's make of them, below): a surcoat,
+    // sleeveless to the hips over the armour, trimmed at the neck and hem, the people's emblem
+    // on the chest; plate vambraces; a tunic of livery with the emblem; a chain of office in gold,
+    // over the shoulders and down the front
+    surcoat: { label: "Surcoat", slot: "surcoat", layer: 4, thickness: 0.005, loose: 0.008, smooth: 6, colour: "#27407a", roughness: 0.82, pattern: "surcoat", trim: "#d9b44a", inside: top((l) => l.hips - 0.07, 0.02, 0.05) },
+    vambraces: { label: "Vambraces", slot: "forearms", layer: 3, thickness: 0.011, smooth: 6, colour: "#a8aeb2", roughness: 0.3, metalness: 1, pattern: "plate", inside: (v) => (v.region === "arm" ? Math.min(v.arm - 0.62, 0.93 - v.arm) : OUTSIDE) },
+    livery: { label: "Livery", slot: "shirt", layer: 1, thickness: 0.004, loose: 0.008, smooth: 4, colour: "#27407a", roughness: 0.85, pattern: "trim", trim: "#d9b44a", inside: top((l) => l.hips - 0.06, 0.95) },
+    chain: {
+        label: "Chain of office",
+        slot: "neck",
+        layer: 5,
+        thickness: 0.018,
+        smooth: 2,
+        colour: "#d8b24a",
+        roughness: 0.3,
+        metalness: 1,
+        pattern: "chain",
+        inside: (v, l) => {
+            if (v.region !== "torso") {
+                return OUTSIDE;
+            }
+
+            // (A U down the front, from over each shoulder to the breastbone, its links a band
+            // as wide however steep it runs; straight across the back)
+            const s = l.height / 1.7;
+            const reach = 0.11 * s;
+            const drop = 0.2 * s;
+            const x = Math.min(1, Math.abs(v.x) / reach);
+
+            if (v.z <= 0) {
+                return 0.011 * s - Math.abs(v.y - (l.neck - 0.035 * s));
+            }
+
+            const line = l.neck - 0.02 * s - drop * (1 - x * x);
+            const slope = (2 * drop * x) / reach;
+
+            return 0.011 * s - Math.abs(v.y - line) / Math.sqrt(1 + slope * slope);
+        },
+    },
+};
+
+/**
+ * Each people's make of what their uniforms and livery are made of (characters/liveries.js),
+ * `${id}.${people}`: in their colours and their metal; those that only differ in colour from the
+ * garment they're made from (`base`) are drawn with its picture, tinted; a surcoat, a livery
+ * tunic and the orcs' breastplate with the people's emblem painted on the chest (`emblem`).
+ */
+function liveried(made) {
+    const garments = {};
+
+    for (const [people, { main, trim, dark, metal, leather, emblem }] of Object.entries(LIVERIES)) {
+        const tinted = (id, colour, change = {}) => {
+            garments[`${id}.${people}`] = { ...made[id], colour, base: id, ...change };
+        };
+        const painted = (id, change) => {
+            garments[`${id}.${people}`] = { ...made[id], ...change };
+        };
+
+        tinted("mail", metal);
+        tinted("gambeson", people === "lizard" ? "#e6dcc2" : main);
+        tinted("vambraces", metal);
+        tinted("gauntlets", metal);
+        tinted("greaves", metal);
+        tinted("sabatons", metal);
+        tinted("trousers", dark);
+        // (A belt over the surcoat, the chain of office over the livery: further out than either)
+        tinted("belt", leather, { layer: 5, thickness: 0.018 });
+        painted("surcoat", { colour: main, trim, emblem: { mark: emblem, colour: trim } });
+        painted("livery", { colour: main, trim, emblem: { mark: emblem, colour: trim, size: 0.055 } });
+
+        // (The orcs' lacquered red, their claws on it in black)
+        if (people === "orc") {
+            painted("breastplate", { colour: main, metalness: 0.45, roughness: 0.4, emblem: { mark: emblem, colour: trim } });
+        } else {
+            tinted("breastplate", metal);
+        }
+    }
+
+    return garments;
+}
+
+export const GARMENTS = Object.freeze({ ...MADE, ...liveried(MADE) });
 
 /**
  * One colour of lingerie: a lace bra, briefs, a suspender belt and stockings, named for it
@@ -1182,6 +1265,7 @@ export function paintGarment(map, garment) {
     const colour = new THREE.Color(garment.colour);
     const trim = new THREE.Color(garment.trim ?? garment.colour);
     const pattern = garment.pattern ?? "cloth";
+    const mark = garment.emblem ? { mark: garment.emblem.mark, colour: new THREE.Color(garment.emblem.colour), size: garment.emblem.size ?? 0.075 } : null;
 
     for (let i = 0; i < count; i++) {
         const x = positions[i * 3];
@@ -1252,6 +1336,28 @@ export function paintGarment(map, garment) {
 
                 break;
             }
+            case "surcoat": {
+                const weave = fbm(x * 160, y * 160, z * 160, 2);
+
+                shade = 0.9 + 0.12 * (weave - 0.5) + 0.06 * (fbm(x * 10, y * 10, z * 10, 2) - 0.5);
+                height = 0.5 + 0.2 * (weave - 0.5);
+
+                // Trimmed at the neck and the hem
+                if (Math.abs(y - 0.585) < 0.014 || Math.abs(y - 0.04) < 0.02) {
+                    c = trim;
+                    height += 0.2;
+                }
+
+                break;
+            }
+            case "chain": {
+                // Links, each catching the light
+                const link = Math.sin(Math.atan2(x, z) * 140 + y * 300);
+
+                shade = 0.75 + 0.3 * link * link;
+                height = 0.5 + 0.4 * link;
+                break;
+            }
             case "trim": {
                 const weave = fbm(x * 160, y * 160, z * 160, 2);
 
@@ -1277,6 +1383,12 @@ export function paintGarment(map, garment) {
             }
         }
 
+        // (The people's emblem on the chest, embroidered or painted)
+        if (mark && z > 0.04 && emblemAt(mark.mark, x / mark.size, (y - EMBLEM_Y) / mark.size)) {
+            c = mark.colour;
+            height += 0.15;
+        }
+
         data[i * 4] = Math.min(255, c.r * shade * 255);
         data[i * 4 + 1] = Math.min(255, c.g * shade * 255);
         data[i * 4 + 2] = Math.min(255, c.b * shade * 255);
@@ -1287,6 +1399,69 @@ export function paintGarment(map, garment) {
     dilate(size, covered, data, bump);
 
     return { size, data, bump };
+}
+
+// Where the emblem goes on the chest (the base body's height, metres), and its shape: whether a
+// point (u to one side, v up: -1 to 1 across it) is in it
+const EMBLEM_Y = 0.36;
+
+// How far a point is from a segment (points [x, y])
+function toSegment(u, v, [ax, ay], [bx, by]) {
+    const [dx, dy] = [bx - ax, by - ay];
+    const t = Math.max(0, Math.min(1, ((u - ax) * dx + (v - ay) * dy) / (dx * dx + dy * dy)));
+
+    return Math.hypot(u - ax - t * dx, v - ay - t * dy);
+}
+
+// Whether a point is in a polygon (points [x, y])
+function inPolygon(u, v, points) {
+    let inside = false;
+
+    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+        const [xi, yi] = points[i];
+        const [xj, yj] = points[j];
+
+        if (yi > v !== yj > v && u < ((xj - xi) * (v - yi)) / (yj - yi) + xi) {
+            inside = !inside;
+        }
+    }
+
+    return inside;
+}
+
+const CROWN = [[-0.85, -0.55], [0.85, -0.55], [0.85, 0.35], [0.45, -0.05], [0, 0.6], [-0.45, -0.05], [-0.85, 0.35]];
+const SPIDER_LEGS = [[[0.15, 0.35], [0.7, 0.75], [0.95, 0.3]], [[0.2, 0.2], [0.8, 0.3], [0.95, -0.1]], [[0.2, 0.05], [0.75, -0.2], [0.85, -0.6]], [[0.15, -0.05], [0.5, -0.55], [0.5, -0.95]]];
+
+/** Whether a point (u, v: -1 to 1 across it) is in a people's emblem (characters/liveries.js). */
+export function emblemAt(mark, u, v) {
+    if (Math.abs(u) > 1.05 || Math.abs(v) > 1.05) {
+        return false;
+    }
+
+    switch (mark) {
+        case "crown":
+            return inPolygon(u, v, CROWN);
+        case "leaf":
+            return Math.abs(v) < 1 && Math.abs(u) < 0.58 * Math.cos((v * Math.PI) / 2) && Math.abs(u) > 0.05;
+        case "spider":
+            return Math.hypot(u, v - 0.28) < 0.24 || Math.hypot(u / 0.3, (v + 0.22) / 0.4) < 1 || SPIDER_LEGS.some(([a, b, c]) => [a, b].some((p, k) => toSegment(Math.abs(u), v, p, [a, b, c][k + 1]) < 0.07));
+        case "sun": {
+            const r = Math.hypot(u, v);
+            const step = (Math.PI * 2) / 12;
+            const ray = 1 - Math.abs((((Math.atan2(u, v) / step) % 1) + 1) % 1 - 0.5) * 2;
+
+            return r < 0.45 || r < 0.5 + 0.5 * ray ** 2;
+        }
+        case "serpent": {
+            const curve = 0.45 * Math.sin(v * Math.PI * 0.95);
+
+            return (Math.abs(v) < 0.9 && Math.abs(u - curve) < 0.14) || Math.hypot((u + 0.2) / 0.22, (v - 0.9) / 0.15) < 1;
+        }
+        case "claws":
+            return [[[-0.6, 0.8], [-0.3, -0.8]], [[-0.1, 0.9], [0.2, -0.7]], [[0.4, 0.8], [0.65, -0.6]]].some(([a, b]) => toSegment(u, v, a, b) < 0.1);
+        default:
+            return false;
+    }
 }
 
 /** Spread painted texels a few texels outward, so seams don't show. */

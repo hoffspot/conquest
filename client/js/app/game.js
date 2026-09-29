@@ -33,7 +33,8 @@ import { STEP_MS, TALK_REACH } from "../core/battle.js";
 import { CREATURES } from "../core/creatures.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
 import { HIRES, HOST_PLAYER, Host, PICK_REACH, REFUSALS, SHOP_REACH, SHOPKEEPERS, TRADE, UNDO_MS } from "../core/host.js";
-import { ABILITIES, itemLabel, ITEMS, priceOf, QUALITIES, TREES, wares } from "../core/progress.js";
+import { dress } from "../characters/liveries.js";
+import { ABILITIES, itemLabel, ITEMS, priceOf, Progress, QUALITIES, TREES, wares } from "../core/progress.js";
 import { PACE } from "../core/netplay.js";
 import { COUNSEL, MOST_REQUESTS, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
 import { describeLeader } from "../core/war/peoples.js";
@@ -74,18 +75,19 @@ import { PackPanel } from "./pack.js";
 import { TalkPanel } from "./talk.js";
 import { ACTIONS, ActionWheel, actionOf, assignable, directionOf, forFriends, PLACES, readWheels, SIDES, WHEELS } from "./wheel.js";
 
-/** What every new character wears; their weapon (and a bow's quiver) are added to it. */
-export const STARTING_OUTFIT = Object.freeze(["tunic", "bracers", "breeches", "boots"]);
+/** What every character wears under their gear: a tunic, and trousers if nothing's on their legs. */
+export const BASE_OUTFIT = Object.freeze(["tunic", "trousers"]);
 
 /**
- * Everything a character with a starting weapon wears and carries (EQUIPMENT ids): in spiked
- * boots (`boots`, or the boots on their own), instead of leather ones; and any armour worn over
- * it all (`worn`: core/progress.js Progress worn).
+ * Everything a character wears and carries (EQUIPMENT ids): what's under their gear, the weapon
+ * in their hand (a WEAPONS key), each piece of gear they wear (`pieces`: core/progress.js
+ * Progress worn; none given, what a new character starts with on: core/progress.js
+ * startingGear), and the parts of their own (a cat's ears and tail).
  */
-export function heroEquipment(weapon, boots = false, worn = [], parts = []) {
-    const kicks = boots || weapon === "boots";
+export function heroEquipment(weapon, pieces = null, parts = []) {
+    const worn = pieces ?? new Progress({}, { weapon }).worn();
 
-    return [...STARTING_OUTFIT.filter((id) => !(kicks && id === "boots")), ...WEAPONS[weapon].equipment, ...(kicks && weapon !== "boots" ? WEAPONS.boots.equipment : []), ...worn, ...parts];
+    return [...new Set([...BASE_OUTFIT, ...WEAPONS[weapon].equipment, ...dress(worn), ...parts])];
 }
 
 /** How a character holds its weapon to fight (actions.js GUARDS, DRAWS), for its WEAPONS key. */
@@ -758,8 +760,8 @@ export class Game {
         }
 
         if (actor.kind === "player") {
-            const { hero: { shape, look, weapon, boots }, progress } = this.host.players.get(actor.id);
-            const character = new Character(this.kit, { shape, look, equipment: heroEquipment(weapon, boots, progress.worn(), this.host.players.get(actor.id).hero.parts ?? []), hairDetail });
+            const { hero: { shape, look, weapon }, progress } = this.host.players.get(actor.id);
+            const character = new Character(this.kit, { shape, look, equipment: heroEquipment(weapon, progress.worn(), this.host.players.get(actor.id).hero.parts ?? []), hairDetail });
 
             // (Weapons put away to start with: drawn for a fight)
             character.sheathe(true);
@@ -2189,7 +2191,7 @@ export class Game {
             return;
         }
 
-        avatar.character.setEquipment(heroEquipment(weapon, hero.boots, worn, hero.parts ?? []));
+        avatar.character.setEquipment(heroEquipment(weapon, worn, hero.parts ?? []));
         avatar.character.sheathe(!this.battle.actor(id)?.armed);
         avatar.actions.setWeapon(guardOf(weapon));
     }

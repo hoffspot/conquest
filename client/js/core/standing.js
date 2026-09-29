@@ -85,17 +85,19 @@ export const TITHE_RATE = 0.25;
 export const FAILED = 5;
 
 /**
- * The armoury's gift for each rank from a Retainer up, once each: something for the weapon the
- * player carries (a hero's `weapon`, as items.js knows it: progress.js ITEMS).
+ * The armoury's gift for each rank from a Retainer up, once each: a piece of their people's
+ * uniform (`people`), or something for the weapon the player carries (a hero's `weapon`, as
+ * progress.js ITEMS knows it): a shield for one that leaves a hand free (`withShield`), else a
+ * helm. (Its bonuses are rolled as it's given: core/gear.js rollGear)
  */
-export function armouryGift(rank, weapon, withShield) {
+export function armouryGift(rank, weapon, withShield, people = "human") {
     switch (rank) {
         case 2:
-            return { id: "mail", quality: "fine" };
+            return { id: "hauberk", quality: "fine", people };
         case 3:
             return { id: weapon, quality: "masterwork" };
         case 4:
-            return withShield ? { id: "kiteShield", quality: "masterwork" } : { id: "mail", quality: "masterwork" };
+            return withShield ? { id: "shield", quality: "masterwork", people } : { id: "helm", quality: "masterwork", people };
         case 5:
             return { id: weapon, quality: "legendary" };
         default:

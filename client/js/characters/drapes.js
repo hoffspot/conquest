@@ -11,6 +11,7 @@
 // the hem swings as the legs walk, and sitting, it lies over the lap and falls down the shins.
 
 import * as THREE from "three";
+import { LIVERIES } from "./liveries.js";
 
 /**
  * Every drape: its slot, how far down it hangs (`length`: 0 at the hips, 1 at the ankle), how
@@ -28,6 +29,14 @@ export const DRAPES = Object.freeze({
     albSkirt: { label: "Alb (its skirt)", slot: "legs", length: 1.06, flare: 0.5, pleats: 18, colour: "#f1ede4", roughness: 0.9 },
     guildSkirt: { label: "Guild skirt", slot: "legs", length: 0.55, flare: 0.55, pleats: 16, colour: "#23365e", roughness: 0.8 },
     mageRobe: { label: "Mage's robe", slot: "legs", length: 1.05, flare: 0.55, pleats: 16, colour: "#2e3f78", roughness: 0.85 },
+    // A cloak (`cape`), from the shoulders down the back to below the knees, behind the arms,
+    // edged at its hem and sides in its trim (`trim`)
+    travelCloak: { label: "Travelling cloak", slot: "cloak", cape: true, length: 0.55, flare: 0.3, pleats: 7, colour: "#5e4e3a", trim: "#3e3226", roughness: 0.92 },
+    // Each people's: their cloak in their colours, and an official's long robe (liveries.js)
+    ...Object.fromEntries(Object.entries(LIVERIES).flatMap(([people, { main, trim, dark }]) => [
+        [`cloak.${people}`, { label: "Cloak", slot: "cloak", cape: true, length: 0.55, flare: 0.3, pleats: 7, colour: main, trim, roughness: 0.85 }],
+        [`robe.${people}`, { label: "Robe", slot: "legs", length: 1.05, flare: 0.5, pleats: 16, colour: people === "orc" ? dark : main, roughness: 0.85 }],
+    ])),
 });
 
 // Round the body in this many steps; down it in this many rings below the hips
@@ -118,6 +127,11 @@ function outline(character, measures, bottom, top, centre = null) {
  */
 export function buildDrape(character, id, measures) {
     const drape = DRAPES[id];
+
+    if (drape.cape) {
+        return buildCape(character, id, measures);
+    }
+
     const { landmarks: l } = measures;
     const { rig } = character;
     const scale = character.height / 1.7;
@@ -236,8 +250,166 @@ export function buildDrape(character, id, measures) {
     return { geometry, drape, rings: rings.length, columns };
 }
 
+
+// A cloak's rings, from the shoulders to the hem: each ring's height, and how far round the back
+// it goes either side (radians from straight behind: over the shoulders at the top, behind the
+// arms at the armpits, widening as it falls)
+const CAPE_ROUND = { top: 1.75, armpit: 1.2, hips: 1.35, hem: 1.6 };
+
+// How far out from the back it hangs (metres): close at the shoulders, falling free below them
+const CAPE_EASE = { top: 0.012, back: 0.03 };
+
+/**
+ * Build a cloak on a character: from the base of the neck over the shoulders and down the back,
+ * behind the arms, falling straight from the shoulder blades (never in to the small of the back)
+ * then flaring to its hem; skinned to the upper back at the top, the lower back, the pelvis, and
+ * below the hips the thighs and shins as a skirt is, so it swings as they walk. Its colours are in
+ * its vertices: the cloth, and the trim at its sides and hem.
+ */
+function buildCape(character, id, measures) {
+    const drape = DRAPES[id];
+    const { landmarks: l } = measures;
+    const { rig } = character;
+    const scale = character.height / 1.7;
+    const hipsY = Math.min(l.hips, l.crotch + 0.06 * scale);
+    const topY = l.neck - 0.035 * scale;
+    const hemY = hipsY + (l.ankle - 0.03 * scale - hipsY) * drape.length;
+    const hips = outline(character, measures, l.crotch - 0.02 * scale, l.hips + 0.03 * scale);
+    const middle = hips.middle;
+    const bands = [topY, (topY + l.armpit) / 2, l.armpit, l.chest - 0.02 * scale, l.waist, hipsY];
+    const across = bands.map((y) => outline(character, measures, y - 0.025 * scale, y + 0.025 * scale, middle).reach);
+    const rings = [];
+
+    for (let r = 0; r < bands.length; r++) {
+        rings.push({ y: bands[r], t: 0, reach: across[r] });
+    }
+
+    for (let r = 1; r <= DOWN; r++) {
+        rings.push({ y: hipsY + (hemY - hipsY) * (r / DOWN), t: r / DOWN, reach: hips.reach });
+    }
+
+    const columns = 25;
+    const bones = {
+        upper: rig.index.get("Spine2"),
+        middle: rig.index.get("Spine1"),
+        spine: rig.index.get("Spine"),
+        hips: rig.index.get("Hips"),
+        left: rig.index.get("LeftUpLeg"),
+        right: rig.index.get("RightUpLeg"),
+        leftShin: rig.index.get("LeftLeg"),
+        rightShin: rig.index.get("RightLeg"),
+    };
+    const kneeY = rig.heads[bones.leftShin].y;
+    const cloth = new THREE.Color(drape.colour);
+    const trim = new THREE.Color(drape.trim ?? drape.colour);
+    const positions = [];
+    const colours = [];
+    const skinIndex = [];
+    const skinWeight = [];
+
+    // How far round it goes at a height, either side of straight behind
+    const roundAt = (y) => {
+        if (y >= l.armpit) {
+            return CAPE_ROUND.armpit + (CAPE_ROUND.top - CAPE_ROUND.armpit) * smoothstep(l.armpit, topY, y);
+        }
+
+        if (y >= hipsY) {
+            return CAPE_ROUND.armpit + (CAPE_ROUND.hips - CAPE_ROUND.armpit) * smoothstep(l.armpit, hipsY, y);
+        }
+
+        return CAPE_ROUND.hips + (CAPE_ROUND.hem - CAPE_ROUND.hips) * smoothstep(hipsY, hemY, y);
+    };
+
+    // (Hanging straight down from the furthest the back reaches above: behind straight down from
+    // the shoulder blades, never in towards the waist)
+    const hanging = new Float32Array(AROUND);
+
+    rings.forEach(({ y, t, reach }, r) => {
+        const round = roundAt(y);
+        const ease = r === 0 ? CAPE_EASE.top : CAPE_EASE.back;
+
+        for (let k = 0; k < AROUND; k++) {
+            hanging[k] = r === 0 ? reach[k] : Math.max(hanging[k], reach[k]);
+        }
+
+        for (let c = 0; c < columns; c++) {
+            const share = c / (columns - 1);
+            const angle = Math.PI + (share - 0.5) * 2 * round;
+            const at = (((angle / (2 * Math.PI)) * AROUND) % AROUND + AROUND) % AROUND;
+            const k = Math.floor(at);
+            const reachHere = hanging[k] * (1 - (at - k)) + hanging[(k + 1) % AROUND] * (at - k);
+            const pleat = 1 + PLEAT_DEPTH * t * Math.sin(share * Math.PI * 2 * drape.pleats);
+            const out = (reachHere + ease) * (1 + drape.flare * t * t) * pleat;
+            const x = middle.x + Math.sin(angle) * out;
+            const z = middle.z + Math.cos(angle) * out;
+            const shade = 0.84 + 0.16 * (0.5 + 0.5 * Math.sin(share * Math.PI * 2 * drape.pleats)) * Math.min(1, t * 3 + 0.3);
+            const edged = c === 0 || c === columns - 1 || r === rings.length - 1;
+            const colour = edged ? trim : cloth;
+
+            positions.push(x, y, z);
+            colours.push(colour.r * shade, colour.g * shade, colour.b * shade);
+
+            // Over the shoulders and down the back with the spine; below the hips, as a skirt
+            const left = smoothstep(-0.35, 0.35, Math.sin(angle));
+
+            if (y >= l.chest) {
+                skinIndex.push(bones.upper, 0, 0, 0);
+                skinWeight.push(1, 0, 0, 0);
+            } else if (y >= l.waist) {
+                const down = smoothstep(l.chest, l.waist, y);
+
+                skinIndex.push(bones.upper, bones.middle, bones.spine, 0);
+                skinWeight.push(1 - down, down * 0.6, down * 0.4, 0);
+            } else if (y >= hipsY) {
+                const down = smoothstep(l.waist, hipsY, y);
+
+                skinIndex.push(bones.spine, bones.hips, 0, 0);
+                skinWeight.push(1 - down, down, 0, 0);
+            } else if (y >= kneeY) {
+                const legs = ON_THIGHS * 0.8 * smoothstep(hipsY, kneeY, y);
+
+                skinIndex.push(bones.hips, bones.left, bones.right, 0);
+                skinWeight.push(1 - legs, legs * left, legs * (1 - left), 0);
+            } else {
+                const onShins = ON_SHINS * 0.6 * smoothstep(kneeY, hemY, y);
+                const [thighs, shins] = [ON_THIGHS * 0.8 * (1 - onShins), ON_THIGHS * 0.8 * onShins];
+
+                skinIndex.push(bones.hips, left >= 0.5 ? bones.left : bones.right, left >= 0.5 ? bones.leftShin : bones.rightShin, left >= 0.5 ? bones.right : bones.left);
+                skinWeight.push(1 - ON_THIGHS * 0.8, thighs * Math.max(left, 1 - left), shins * Math.max(left, 1 - left), (thighs + shins) * Math.min(left, 1 - left));
+            }
+        }
+    });
+
+    const index = [];
+
+    for (let r = 0; r < rings.length - 1; r++) {
+        for (let c = 0; c < columns - 1; c++) {
+            const a = r * columns + c;
+            const b = a + 1;
+
+            index.push(a, b, a + columns, b, b + columns, a + columns);
+        }
+    }
+
+    const geometry = new THREE.BufferGeometry();
+
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute("color", new THREE.Float32BufferAttribute(colours, 3));
+    geometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(skinIndex, 4));
+    geometry.setAttribute("skinWeight", new THREE.Float32BufferAttribute(skinWeight, 4));
+    geometry.setIndex(index);
+    geometry.computeVertexNormals();
+
+    return { geometry, drape, rings: rings.length, columns };
+}
+
 /** A drape's material: its colour, shaded in its pleats, both sides of the cloth drawn. */
 export function drapeMaterial(drape) {
+    // (A cloak's colours are in its vertices)
+    if (drape.cape) {
+        return new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: drape.roughness, vertexColors: true, side: THREE.DoubleSide });
+    }
+
     const material = drape.sheen
         ? new THREE.MeshPhysicalMaterial({ color: drape.colour, roughness: drape.roughness, sheen: 0.6, sheenColor: new THREE.Color(drape.colour).offsetHSL(0, -0.2, 0.12), sheenRoughness: 0.5 })
         : new THREE.MeshStandardMaterial({ color: drape.colour, roughness: drape.roughness });

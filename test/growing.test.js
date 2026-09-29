@@ -35,7 +35,8 @@ describe("growing stronger in play (host.js, progress.js)", () => {
     const hosted = (progress = {}) => {
         const host = new Host(buildWorld({ seed: 2 }), { populate: false });
 
-        host.join({ id: HOST_PLAYER, hero: HERO, progress });
+        // (In nothing but the weapon they chose: no armour to count)
+        host.join({ id: HOST_PLAYER, hero: HERO, progress: { gear: { mainHand: { id: HERO.weapon } }, ...progress } });
         host.populate();
 
         return host;
@@ -88,16 +89,16 @@ describe("growing stronger in play (host.js, progress.js)", () => {
     });
 
     it("makes the player stronger as they rank up: blows, hit points, armour, and the weapon and gear they carry", () => {
-        const host = hosted({ skills: { blade: 800, endurance: 2000 }, gear: { weapon: { id: "hammer", quality: "masterwork" }, body: { id: "mail", quality: "common" }, shield: null } });
+        const host = hosted({ skills: { blade: 800, endurance: 2000 }, gear: { mainHand: { id: "hammer", quality: "masterwork" }, chest: { id: "mail", quality: "common" } } });
         const player = host.battle.actor(HOST_PLAYER);
 
         assert.equal(player.weapon, "hammer", "(the weapon they carry, not the one they started with)");
         assert.ok(Math.abs(player.power.melee - 1.3 * 1.3) < 1e-9);
         assert.equal(player.maxHp, 50 + 10 + 30);
         assert.equal(player.maxStamina, 50 + 30);
-        assert.ok(Math.abs(player.armor - (0.16 + 0.08)) < 1e-9);
+        assert.ok(Math.abs(player.armor - (0.14 + 0.08)) < 1e-9);
         assert.equal(host.players.get(HOST_PLAYER).hero.weapon, "hammer");
-        assert.equal(host.war.might, 3 + 1 + 1, "(the war as mighty as the mightiest player)");
+        assert.equal(host.war.might, 3 + 1, "(the war as mighty as the mightiest player)");
 
         // Ranking up further: told of, and stronger straight away
         const events = [];
@@ -157,21 +158,21 @@ describe("growing stronger in play (host.js, progress.js)", () => {
         const player = host.battle.actor(HOST_PLAYER);
 
         assert.deepEqual(host.command(HOST_PLAYER, { type: "equip", index: 0 }), { ok: true });
-        assert.ok(Math.abs(player.armor - 0.16) < 1e-9);
+        assert.ok(Math.abs(player.armor - 0.14) < 1e-9);
         assert.deepEqual(host.command(HOST_PLAYER, { type: "equip", index: 3 }), { ok: true }, "(the kite shield, with the sword)");
-        assert.ok(Math.abs(player.armor - 0.26) < 1e-9);
+        assert.ok(Math.abs(player.armor - 0.24) < 1e-9);
 
         // A bow: the shield put away, and the player a bowman now
         assert.deepEqual(host.command(HOST_PLAYER, { type: "equip", index: 1 }), { ok: true });
         assert.equal(player.weapon, "bow");
         assert.ok(player.arms.some(({ kind }) => kind === "ranged"));
         assert.ok(Math.abs(player.power.ranged - 1.15) < 1e-9);
-        assert.ok(Math.abs(player.armor - 0.16) < 1e-9);
+        assert.ok(Math.abs(player.armor - 0.14) < 1e-9);
 
         const shield = host.players.get(HOST_PLAYER).progress.slotOf("kiteShield");
 
-        assert.deepEqual(host.command(HOST_PLAYER, { type: "equip", index: shield }), { ok: false, reason: "shield" });
-        assert.deepEqual(host.command(HOST_PLAYER, { type: "unequip", slot: "body" }), { ok: true });
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "equip", index: shield }), { ok: false, reason: "bow" });
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "unequip", slot: "chest" }), { ok: true });
         assert.equal(player.armor, 0);
 
         player.hp = 10;
