@@ -286,7 +286,10 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   where it comes in. Roads go round lakes, and cross rivers only on bridges: where a road runs
   over a river (looked for every half metre along it), a straight deck from 1.5 metres onto one
   bank to 1.5 metres onto the other, 0.4 metres wider each side than the road. Every square under
-  it can be walked over. Where roads share their way over a river, the widest of their bridges.
+  it can be walked over. Where roads share their way over a river, the widest of their bridges
+  (of those as wide, the westernmost). Bridges are found on the roads as planned, never on the
+  bit carried on to a settlement's street, so a chunk is the same whichever chunks were made
+  first (a test makes the chunks between the town and a neighbour in both orders).
 - **The ground**: grass (drawn in each land's colours, and in each people's homeland, the
   plan's territory as first claimed, its own ground: GAME.md, *The ground*), soil in fields in
   farmland, road, planks on bridges.

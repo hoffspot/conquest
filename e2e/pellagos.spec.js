@@ -250,6 +250,16 @@ test("carries on with the saved character, in the same world", async ({ page }) 
 
     expect(game).toEqual({ seed: 4242, weapon: "staff", name: "Wren" });
 
+    // The picture lost (as a phone short of memory does): the game paused, the player told; given
+    // back, made again, and carried on
+    await page.evaluate(() => window.pellagos.session.view.renderer.forceContextLoss());
+    await expect(page.locator("#menu")).toBeVisible();
+    await expect(page.locator("#banner")).toContainText("picture was lost");
+    await page.evaluate(() => window.pellagos.session.view.renderer.forceContextRestore());
+    await expect(page.locator("#banner")).toBeHidden({ timeout: 60000 });
+    await page.locator("#resumebutton").click();
+    await expect(page.locator("#menu")).toBeHidden();
+
     // The menu pauses, and goes back to the title
     await page.locator("#menubutton").click();
     await expect(page.locator("#menu")).toBeVisible();

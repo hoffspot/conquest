@@ -1440,7 +1440,9 @@ of a touch, a click or a key: Safari on iPhones counts only the end of a touch, 
 something played in it, so a moment of silence is). On an iPhone or iPad, Safari mutes a page's
 Web Audio (which this is) while the ring switch is on silent. While the game
 is paused, the music and the wind play on (the birds and leaves wait). Everything is silent
-while the page is hidden, and off (suspended) when turned off in Game options.
+while the page is hidden, and off (suspended) when turned off in Game options; turned off from
+the start, the browser's sound isn't started at all (taps don't start it), so it isn't kept
+working on silence, until it's turned on.
 
 The browser's sound can also stop on its own, and `sound.js` starts it again however it stops:
 
@@ -1527,7 +1529,9 @@ game plays on while it's open; a second finger (a pinch) closes it.
    seconds (in spiked boots too, a kick every other time). The hero's `boots` is saved with them.
 4. **Playing** (app/game.js): building the world, with a progress bar for each part (the ground,
    each piece of the town, the characters, compiling every shader before the first frame), then
-   the game. A tap walks; a press and hold on the player or an enemy opens the action wheel (flicking down turns it to its other side); a second tap within 350 ms and 60 pixels of the first (going by when
+   the game. (The loading screen is drawn before the world starts to be built, so a tap on
+   Continue shows at once; if getting the world ready fails, it says so, with Back to the title
+   and Load afresh.) A tap walks; a press and hold on the player or an enemy opens the action wheel (flicking down turns it to its other side); a second tap within 350 ms and 60 pixels of the first (going by when
    the taps happened, so a slow frame between them doesn't matter) turns it into a run, as does
    a Shift-click. A drag turns the camera round the player (and tilts it). A swipe up that
    starts on the player (40 pixels up within 600 ms, mostly up)
@@ -1544,6 +1548,12 @@ game plays on while it's open; a second finger (a pinch) closes it.
    on or off, and a slider (0 to 100%) for each bus: sound effects, environment and music (a
    sound plays as the first two are moved, to hear how loud). Back (or Escape) returns to the
    menu.
+
+If the browser takes the picture away (as phones do when short of memory, or switching apps), the
+game pauses and says so ("The picture was lost…"); when it's given back, what was drawn into (the
+light the materials reflect, the shadows) is made again and the shaders compiled again, and the
+message goes. A frame whose work throws an error is told once in the console, and the world is
+still drawn; a piece of a settlement that fails to build is left out, the rest built without it.
 
 The character is saved in the browser's local storage as `pellagos.save`: `{ version, hero,
 seed, created }`, where `hero` is `{ name, shape: { macro, details }, look: { skin, eyes, hair },

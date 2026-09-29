@@ -398,15 +398,25 @@ export class BeastAvatar {
     /** Let go of what it's made of (its materials: its shapes are shared by its kind). */
     dispose() {
         const materials = new Set();
+        const skeletons = new Set();
 
         this.object.traverse((node) => {
             if (node.material) {
                 materials.add(node.material);
             }
+
+            if (node.isSkinnedMesh) {
+                skeletons.add(node.skeleton);
+            }
         });
 
         for (const material of materials) {
             material.dispose();
+        }
+
+        // (Their bone textures, made when they were first drawn)
+        for (const skeleton of skeletons) {
+            skeleton.dispose();
         }
     }
 }

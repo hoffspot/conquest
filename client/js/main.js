@@ -32,7 +32,7 @@ const debug = new Debug($("#debug"), { settings, onChange: applySetting });
 
 // What's been loaded and made: the loader, the game's modules, the view and character kit, the
 // heads-up display, and the game being played
-const state = { loader: null, modules: null, session: null, hud: null, game: null, save: null, creator: null, worldMap: null, picking: null, together: null, joinAfter: null };
+const state = { loader: null, modules: null, session: null, hud: null, game: null, save: null, creator: null, worldMap: null, picking: null, together: null, joinAfter: null, building: false };
 
 window.pellagos = {
     get game() {
@@ -156,6 +156,17 @@ async function load() {
         onProgress: (label) => step(label, label.startsWith("Unpacking") ? 0.3 : 0.15),
     });
     state.hud = new hud.Hud($("#hud"));
+
+    // (The drawing lost, as phones do when short of memory: the game paused and the player told,
+    // until it's given back and the shaders made again)
+    state.session.view.onLost = () => {
+        pause();
+        state.hud.message("The picture was lost. Waiting for it to come back…", 0);
+    };
+    state.session.view.onRestored = async () => {
+        await state.session.view.renderer.compileAsync(state.session.view.scene, state.session.view.camera);
+        state.hud.message("");
+    };
     applyViewSettings();
     debug.watch({ view: state.session.view, builds: { modules: imported - started, body: performance.now() - imported } });
     setProgress(1, "Ready");
@@ -250,7 +261,53 @@ async function create() {
 
 // --- Playing ---
 
+// A moment for the page to draw what's just been shown (the loading screen) before work that
+// holds it up for a while
+const painted = () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+
+// Getting a game ready failed: said on the loading screen, with the ways on from there (back to
+// the title, or loading the page again; what's saved is kept as it goes)
+function failed(error) {
+    console.error(error);
+
+    try {
+        state.game?.dispose();
+    } catch {
+        // (Half made: what there is of it goes with the page)
+    }
+
+    state.game = null;
+    state.together?.close();
+    state.together = null;
+    window.pellagos.playing = false;
+    debug.watch({ game: null });
+    show("loading");
+    setProgress(0, "The world couldn't be got ready. Go back to the title and try again, or load the game afresh.", String(error?.message ?? error));
+
+    const button = (text, primary, onClick) => {
+        const element = Object.assign(document.createElement("button"), { type: "button", className: `button${primary ? " primary" : ""}`, textContent: text });
+
+        element.addEventListener("click", onClick);
+
+        return element;
+    };
+
+    $("#loadlist").replaceChildren(button("Back to the title", true, () => title()), button("Load afresh", false, () => location.reload()));
+}
+
 async function play(save) {
+    state.building = true;
+
+    try {
+        await playing(save);
+    } catch (error) {
+        failed(error);
+    } finally {
+        state.building = false;
+    }
+}
+
+async function playing(save) {
     const { createGame } = state.modules;
     const { view, kit, sound } = state.session;
 
@@ -258,6 +315,7 @@ async function play(save) {
     show("loading");
     $("#loadlist").replaceChildren();
     setProgress(0, "Building the world");
+    await painted();
 
     const game = createGame({
         view,
@@ -600,6 +658,18 @@ async function join(event) {
 // progress, standing and followers kept with their character as they go; the world's not theirs
 // to keep)
 async function playJoined(save, welcome, joining) {
+    state.building = true;
+
+    try {
+        await playingJoined(save, welcome, joining);
+    } catch (error) {
+        failed(error);
+    } finally {
+        state.building = false;
+    }
+}
+
+async function playingJoined(save, welcome, joining) {
     const { createJoinedGame } = state.modules;
     const { view, kit, sound } = state.session;
 
@@ -608,6 +678,7 @@ async function playJoined(save, welcome, joining) {
     show("loading");
     $("#loadlist").replaceChildren();
     setProgress(0, "Building the world you've joined");
+    await painted();
 
     const game = createJoinedGame({
         view,
@@ -830,6 +901,16 @@ function applyViewSettings() {
 async function start() {
     debug.show(settings.debug);
     registerServiceWorker();
+
+    // (Anything that fails with no one to catch it: told in the console, and, while a game's
+    // being got ready, on the loading screen)
+    window.addEventListener("unhandledrejection", (event) => {
+        console.error(event.reason);
+
+        if (state.building) {
+            failed(event.reason);
+        }
+    });
 
     try {
         await load();

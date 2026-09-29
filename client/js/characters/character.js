@@ -205,8 +205,15 @@ export class Character {
         this.setEquipment(equipment);
     }
 
-    /** Put on or pick up a piece of equipment (an EQUIPMENT id), replacing what's in its slot. */
+    /**
+     * Put on or pick up a piece of equipment (an EQUIPMENT id), replacing what's in its slot. (An
+     * id it doesn't know, from an older save or another version's player, is left out.)
+     */
     equip(id) {
+        if (!known(id)) {
+            return;
+        }
+
         this.equipment.set(EQUIPMENT[id].slot, id);
         this.#dress();
     }
@@ -217,11 +224,11 @@ export class Character {
         this.#dress();
     }
 
-    /** Wear and carry exactly these (EQUIPMENT ids). */
+    /** Wear and carry exactly these (EQUIPMENT ids: any it doesn't know left out). */
     setEquipment(ids) {
         this.equipment.clear();
 
-        for (const id of ids) {
+        for (const id of ids.filter(known)) {
             this.equipment.set(EQUIPMENT[id].slot, id);
         }
 
@@ -947,6 +954,8 @@ export class Character {
     dispose() {
         this.geometry.dispose();
 
+        // (The skeleton's bone texture, made when it was first drawn)
+        this.rig.skeleton.dispose();
         this.hairMesh?.geometry.dispose();
 
         for (const mesh of this.garments) {
@@ -968,6 +977,22 @@ export class Character {
             material.dispose();
         }
     }
+}
+
+// Whether a piece of equipment is one there is (told once in the console if not)
+const unknown = new Set();
+
+function known(id) {
+    if (EQUIPMENT[id]) {
+        return true;
+    }
+
+    if (!unknown.has(id)) {
+        unknown.add(id);
+        console.warn(`Left out ${id}: there's no such equipment.`);
+    }
+
+    return false;
 }
 
 const _sway = new THREE.Quaternion();

@@ -89,15 +89,59 @@ function gold(context, top, bottom) {
     return gradient;
 }
 
+// The pictures painted (by what they show), and how many drawn things hold each: a picture is
+// let go when nothing drawn shows it any more (painted again should the player come back), so
+// that the boards of every town passed on the way don't pile up
 const textures = new Map();
+const holds = new Map();
 
 // A picture painted once for all that show it (by what it shows)
 function once(key, paint) {
     if (!textures.has(key)) {
-        textures.set(key, paint());
+        const texture = paint();
+
+        texture.userData.sign = key;
+        textures.set(key, texture);
     }
 
     return textures.get(key);
+}
+
+/** Is a texture a sign's picture (painted here)? */
+export function isSign(texture) {
+    return Boolean(texture?.userData.sign);
+}
+
+/** Keep a sign's picture for as long as something drawn shows it (until `releaseSign`). */
+export function holdSign(texture) {
+    holds.set(texture, (holds.get(texture) ?? 0) + 1);
+}
+
+/** Something drawn that showed a sign's picture is gone: the picture let go if nothing else holds it. */
+export function releaseSign(texture) {
+    const left = (holds.get(texture) ?? 0) - 1;
+
+    if (left > 0) {
+        holds.set(texture, left);
+
+        return;
+    }
+
+    holds.delete(texture);
+    letGoSign(texture);
+}
+
+/** A sign's picture painted for something never drawn: let go, unless something drawn holds it. */
+export function letGoSign(texture) {
+    if (holds.has(texture)) {
+        return;
+    }
+
+    if (textures.get(texture.userData.sign) === texture) {
+        textures.delete(texture.userData.sign);
+    }
+
+    texture.dispose();
 }
 
 /**

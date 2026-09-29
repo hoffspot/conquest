@@ -27,11 +27,13 @@ import crypto from "node:crypto";
 export const RELAY_PATH = "/relay";
 
 /**
- * How much the relay carries: the longest message (bytes: a world's state is the biggest), how
- * many rooms at once, how many in each besides its host; how often it checks each is still there,
- * and how long before one that doesn't answer is let go (ms).
+ * How much the relay carries: the longest message (bytes: a world's state is the biggest, about
+ * 100 KB after a good while's play, so this is plenty), how much can wait to go to one who's slow
+ * to take it before they're let go (bytes), how many rooms at once, how many in each besides its
+ * host; how often it checks each is still there, and how long before one that doesn't answer is
+ * let go (ms).
  */
-export const RELAY_LIMITS = Object.freeze({ message: 32 * 1024 * 1024, rooms: 500, peers: 15, ping: 20000, timeout: 60000 });
+export const RELAY_LIMITS = Object.freeze({ message: 4 * 1024 * 1024, backlog: 8 * 1024 * 1024, rooms: 500, peers: 15, ping: 20000, timeout: 60000 });
 
 /** The letters a room's code is made of (no I or O, which look like 1 and 0). */
 export const CODE_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -56,10 +58,17 @@ function split(text) {
  * it can't make sense of, or too long, close it.
  */
 export class Socket {
-    constructor(socket, head = Buffer.alloc(0), { limit = RELAY_LIMITS.message } = {}) {
+    constructor(socket, head = Buffer.alloc(0), { limit = RELAY_LIMITS.message, backlog = RELAY_LIMITS.backlog } = {}) {
         this.socket = socket;
         this.limit = limit;
+        this.backlog = backlog;
         this.buffer = head;
+
+        // What's come since, kept in pieces until there's enough of it for the frame being read
+        // (`needed` bytes, with `buffer`): joined once, not again with every piece
+        this.incoming = [];
+        this.incomingLength = 0;
+        this.needed = 0;
         this.parts = [];
         this.partsLength = 0;
         this.open = true;
@@ -71,7 +80,16 @@ export class Socket {
 
         socket.setNoDelay?.(true);
         socket.on("data", (data) => {
-            this.buffer = this.buffer.length ? Buffer.concat([this.buffer, data]) : data;
+            this.incoming.push(data);
+            this.incomingLength += data.length;
+
+            if (this.buffer.length + this.incomingLength < this.needed) {
+                return;
+            }
+
+            this.buffer = this.buffer.length || this.incoming.length > 1 ? Buffer.concat([this.buffer, ...this.incoming]) : data;
+            this.incoming = [];
+            this.incomingLength = 0;
             this.#read();
         });
         socket.on("close", () => this.#closed());
@@ -83,11 +101,19 @@ export class Socket {
         }
     }
 
-    /** Send a message (text). */
+    /** Send a message (text). One too slow to take what's sent (too much waiting to go) is let go. */
     send(text) {
-        if (this.open) {
-            this.#frame(OPCODES.text, Buffer.from(text, "utf8"));
+        if (!this.open) {
+            return;
         }
+
+        if (this.socket.writableLength > this.backlog) {
+            this.close(1008);
+
+            return;
+        }
+
+        this.#frame(OPCODES.text, Buffer.from(text, "utf8"));
     }
 
     /** Ask whether it's still there. */
@@ -107,14 +133,21 @@ export class Socket {
 
         payload.writeUInt16BE(code);
         this.#frame(OPCODES.close, payload);
+
+        // (The closing frame, and anything before it, let go out before the socket's destroyed)
         this.socket.end();
-        this.#closed();
+        this.#closed({ now: false });
+        setTimeout(() => this.socket.destroy(), 2000).unref?.();
     }
 
-    #closed() {
+    #closed({ now = true } = {}) {
         if (this.open) {
             this.open = false;
-            this.socket.destroy();
+
+            if (now) {
+                this.socket.destroy();
+            }
+
             this.onClose();
         }
     }
@@ -141,6 +174,8 @@ export class Socket {
 
     // The frames in what's come so far (a client's are always masked)
     #read() {
+        this.needed = 0;
+
         while (this.open && this.buffer.length >= 2) {
             const first = this.buffer[0];
             const second = this.buffer[1];
@@ -181,6 +216,8 @@ export class Socket {
             }
 
             if (this.buffer.length < offset + 4 + length) {
+                this.needed = offset + 4 + length;
+
                 return;
             }
 
@@ -364,7 +401,7 @@ export function attachRelay(httpServer, { path = RELAY_PATH, limits = RELAY_LIMI
 
         socket.write(["HTTP/1.1 101 Switching Protocols", "Upgrade: websocket", "Connection: Upgrade", `Sec-WebSocket-Accept: ${accept}`, "", ""].join("\r\n"));
 
-        const one = new Socket(socket, head, { limit: limits.message });
+        const one = new Socket(socket, head, { limit: limits.message, backlog: limits.backlog ?? RELAY_LIMITS.backlog });
 
         sockets.add(one);
         one.onClose = () => sockets.delete(one);

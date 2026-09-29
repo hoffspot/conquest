@@ -118,7 +118,17 @@ export async function buildTown(world, { onProgress = () => {} } = {}) {
             continue;
         }
 
-        const built = await build(spec);
+        // (A piece that fails to build is left out rather than keeping the town from being drawn)
+        let built;
+
+        try {
+            built = await build(spec);
+        } catch (error) {
+            console.warn(`Left out ${spec.key ?? spec.kind}: it failed to build.`, error);
+            onProgress(++done, total);
+            continue;
+        }
+
         const object = new THREE.Group();
 
         // (Trees a piece grows round itself, as the elves build into great trees: planted with

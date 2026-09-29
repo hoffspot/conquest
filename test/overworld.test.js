@@ -78,6 +78,48 @@ describe("the world outside (overworld.js)", () => {
         assert.deepEqual(again.chunk(around[0].cx, around[0].cy).trees, around[0].trees);
     });
 
+    it("makes the same chunks whatever order they're first made in: roads to the town's neighbours joined at their own ends, bridges from the plan alone", () => {
+        // (Seed 2's start town has a capital for a neighbour whose road to it once got joined at
+        // the town's end: a road straight across the fields, in the chunks made after the capital)
+        const madeIn = (order) => {
+            const other = buildWorld({ seed: 2 }).maps.town;
+
+            return new Map(order.map(([cx, cy]) => [`${cx},${cy}`, other.chunk(cx, cy)]));
+        };
+        // (The chunks from the town to the nearest settlement whose road the plan runs to the
+        // town, rather than from it: made from the settlement's side first, it's laid out before
+        // the rest are made; from the town's, after)
+        const { plan, start, stamp } = buildWorld({ seed: 2 }).maps.town;
+        const neighbour = plan.roads
+            .filter(({ to }) => to === start.id)
+            .map(({ from }) => plan.places.find((place) => place.id === from))
+            .sort((a, b) => Math.hypot(a.at[0] - start.at[0], a.at[1] - start.at[1]) - Math.hypot(b.at[0] - start.at[0], b.at[1] - start.at[1]))[0];
+
+        assert.ok(neighbour, "a road runs to the town from another settlement");
+        const [from, to] = [squareOf(neighbour).at, stamp.at].map((at) => at.map((v) => Math.floor(v / CHUNK)));
+        const order = [];
+
+        for (let cy = Math.min(from[1], to[1]) - 1; cy <= Math.max(from[1], to[1]) + 1; cy++) {
+            for (let cx = Math.min(from[0], to[0]) - 1; cx <= Math.max(from[0], to[0]) + 1; cx++) {
+                order.push([cx, cy]);
+            }
+        }
+
+        if (from[0] > to[0] || (from[0] === to[0] && from[1] > to[1])) {
+            order.reverse();
+        }
+
+        const [first, reversed] = [madeIn(order), madeIn([...order].reverse())];
+
+        for (const [key, chunk] of first) {
+            for (const layer of ["blocked", "opaque", "ground", "water", "bridge"]) {
+                assert.deepEqual(reversed.get(key)[layer], chunk[layer], `${key}: ${layer}`);
+            }
+
+            assert.deepEqual(reversed.get(key).trees, chunk.trees, `${key}: trees`);
+        }
+    });
+
     it("sets the town in where the player's people start, just as it was made", () => {
         const { stamp, home, start } = world;
         const squares = squaresOf(overworld);

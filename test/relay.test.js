@@ -5,7 +5,8 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { after, before, describe, it } from "node:test";
-import { CODE_LENGTH, CODE_LETTERS, RELAY_PATH, roomCode } from "../server/relay.js";
+import { EventEmitter } from "node:events";
+import { CODE_LENGTH, CODE_LETTERS, RELAY_PATH, roomCode, Socket } from "../server/relay.js";
 import { createServer } from "../server/index.js";
 
 let server;
@@ -144,6 +145,40 @@ describe("the relay (server/relay.js)", () => {
         late.send(`join ${code}`);
         assert.equal(await late.next(), "error no-room");
         await late.closed;
+    });
+
+    it("reads a big message come in many small pieces whole, and lets go of one too slow to take what's sent it", () => {
+        // (A socket of its own, fed a client's masked frame a kilobyte at a time)
+        const wire = Object.assign(new EventEmitter(), { writableLength: 0, written: [], write: (data) => wire.written.push(data), end() {}, destroy() {} });
+        const socket = new Socket(wire);
+        const heard = [];
+        const text = "x".repeat(200 * 1024);
+        const payload = Buffer.from(text);
+        const mask = Buffer.from([1, 2, 3, 4]);
+        const header = Buffer.alloc(10);
+
+        header[0] = 0x81;
+        header[1] = 0x80 | 127;
+        header.writeBigUInt64BE(BigInt(payload.length), 2);
+
+        const frame = Buffer.concat([header, mask, payload.map((byte, k) => byte ^ mask[k & 3])]);
+
+        socket.onMessage = (message) => heard.push(message);
+
+        for (let at = 0; at < frame.length; at += 1024) {
+            wire.emit("data", frame.subarray(at, at + 1024));
+        }
+
+        assert.equal(heard.length, 1);
+        assert.equal(heard[0], text);
+
+        // (A great deal still waiting to go to it: let go rather than piled up)
+        let closed = false;
+
+        socket.onClose = () => (closed = true);
+        wire.writableLength = 64 * 1024 * 1024;
+        socket.send("more");
+        assert.ok(closed);
     });
 
     it("turns away anything but the relay's WebSockets, and those who don't say who they are", async () => {

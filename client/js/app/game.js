@@ -411,6 +411,9 @@ export class Game {
 
         /** Timings for the debug overlay (milliseconds, smoothed), and the last frames' times. */
         this.stats = { frame: 0, update: 0, render: 0, steps: 0, fps: 0 };
+
+        // (The errors a frame's work has thrown, each reported once: #fault)
+        this.faults = new Set();
         this.frameTimes = new Float32Array(120);
         this.frameIndex = 0;
         this.frames = 0;
@@ -976,7 +979,7 @@ export class Game {
         this.ground?.geometry.dispose();
         this.ground?.material.dispose();
         this.chunks?.dispose();
-        this.effects?.group.traverse((node) => node.geometry?.dispose());
+        this.effects?.dispose();
 
         // The interiors' merged meshes (their materials are shared by every game)
         for (const interior of this.interiors.values()) {
@@ -990,9 +993,9 @@ export class Game {
         this.camps?.dispose();
         this.flyers?.dispose();
 
-        this.spellFx?.clear();
+        this.spellFx?.dispose();
 
-        for (const object of [this.ground, this.town?.object, this.chunks?.object, this.effects?.group, this.effects?.marker, this.effects?.targetRing, this.spellFx?.group, this.squares?.object]) {
+        for (const object of [this.ground, this.town?.object, this.chunks?.object, this.squares?.object]) {
             object?.removeFromParent();
         }
 
@@ -1064,7 +1067,16 @@ export class Game {
 
         this.lastFrame = now;
 
-        const steps = this.#tick(dt);
+        // (An error in the frame's work is reported, and the world still drawn, rather than the
+        // picture freezing on it)
+        let steps = 0;
+
+        try {
+            steps = this.#tick(dt);
+        } catch (error) {
+            this.#fault(error);
+        }
+
         const updated = performance.now();
         const mine = this.avatars.get(this.me);
 
@@ -1092,6 +1104,28 @@ export class Game {
             this.stats.fps = (this.frames * 1000) / (now - this.fpsTime);
             this.frames = 0;
             this.fpsTime = now;
+        }
+    }
+
+    // Any projectile drawn in flight that the battle no longer has, landed (taken away)
+    #landStrays() {
+        const flying = new Set(this.battle.projectiles.map(({ id }) => id));
+
+        for (const id of [...this.flights.keys()]) {
+            if (!flying.has(id)) {
+                this.effects.land(id);
+                this.flights.delete(id);
+            }
+        }
+    }
+
+    // An error thrown in a frame's work: told in the console once (it may be thrown every frame)
+    #fault(error) {
+        const told = String(error?.stack ?? error);
+
+        if (!this.faults.has(told)) {
+            this.faults.add(told);
+            console.error("A frame's work failed:", error);
         }
     }
 
@@ -1142,6 +1176,12 @@ export class Game {
             this.#handle(events);
             this.accumulator -= STEP_MS;
             steps++;
+        }
+
+        // (Projectiles the battle let go of without a word, their shooter or target taken out of
+        // it: out of the air too)
+        if (steps && this.flights.size) {
+            this.#landStrays();
         }
 
         // (Fallen behind the host: caught up, a little at a time)
@@ -1208,10 +1248,11 @@ export class Game {
                 const [ox, oz] = this.originOf(projectile.map);
                 const x = ox + flight.previous.x + (projectile.x - flight.previous.x) * alpha;
                 const z = oz + flight.previous.y + (projectile.y - flight.previous.y) * alpha;
+                // (Towards its target as drawn; or, its target not drawn, straight on at the height it left at)
                 const target = this.avatars.get(projectile.target);
-                const left = Math.hypot(target.object.position.x - x, target.object.position.z - z);
+                const left = target ? Math.hypot(target.object.position.x - x, target.object.position.z - z) : flight.distance;
                 const along = flight.distance > 0 ? Math.min(1, Math.max(0, 1 - left / flight.distance)) : 1;
-                const height = flight.ground ? flight.height : flight.height + (target.character.height * 0.72 - flight.height) * along;
+                const height = flight.ground || !target ? flight.height : flight.height + (target.character.height * 0.72 - flight.height) * along;
 
                 this.effects.fly(projectile.id, new THREE.Vector3(x, height + Math.sin(Math.PI * along) * flight.arc, z));
             }
@@ -3042,6 +3083,13 @@ export class Game {
                 continue;
             }
 
+            // (A projectile gone astray, its target gone or through a door: no one's, out of the air)
+            if (event.type === "fizzle") {
+                effects.land(event.projectile);
+                this.flights.delete(event.projectile);
+                continue;
+            }
+
             const avatar = this.avatars.get(event.id);
 
             // (Someone not drawn yet: one of the folk of a building being got ready)
@@ -3077,11 +3125,14 @@ export class Game {
                     this.#draw(event, avatar);
                     break;
                 case "projectile": {
+                    // (Its target as drawn, or, not drawn yet, where it is)
                     const target = this.avatars.get(event.target);
+                    const aim = battle.actor(event.target);
                     const hand = weaponOf(battle.actor(event.id).weapon)?.equipment?.includes("bow") ? "Left" : "Right";
                     const from = avatar.hand(hand);
 
                     const [ox, oz] = this.originOf(battle.actor(event.id).map);
+                    const [tx, ty] = target ? [target.object.position.x - ox, target.object.position.z - oz] : [aim?.x ?? event.x, aim?.y ?? event.y];
 
                     const look = LOOKS[event.kind] ? this.#look(event.id, event.kind) : 0;
 
@@ -3091,14 +3142,14 @@ export class Game {
                     this.sound?.launch(event.kind, from, { rate: LOOKS[event.kind]?.[look].pitch ?? 1 });
                     this.flights.set(event.projectile, {
                         previous: new THREE.Vector2(event.x, event.y),
-                        distance: Math.hypot(target.object.position.x - ox - event.x, target.object.position.z - oz - event.y),
+                        distance: Math.hypot(tx - event.x, ty - event.y),
                         height: shape.ground ? 0.08 : from.y,
                         arc: shape.arc ?? 0,
                         ground: Boolean(shape.ground),
                     });
 
                     // (Fire breathed: a roaring stream from its jaws to whoever it's at, a moment)
-                    if (event.kind === "flame") {
+                    if (event.kind === "flame" && target) {
                         effects.breathe(() => avatar.hand("Right"), () => target.point(0.6), 0.7);
                     }
 
@@ -3109,10 +3160,6 @@ export class Game {
                     break;
                 case "miss":
                     hud.damage(this.#screenAbove(event.target), "Miss");
-                    break;
-                case "fizzle":
-                    effects.land(event.projectile);
-                    this.flights.delete(event.projectile);
                     break;
                 case "ail":
                     this.#ail(event, avatar);

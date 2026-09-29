@@ -16,8 +16,10 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const client = path.join(root, "client");
 const output = path.join(client, "js/app/manifest.js");
 
-// The modules the game imports once everything is downloaded (main.js: import())
-const ENTRIES = ["js/app/session.js", "js/app/creator.js", "js/app/worldmap.js"];
+// The modules the game imports once everything is downloaded (main.js: import()), and those it
+// imports only when they're first wanted (the action wheels' set-up, playing together), so that
+// they're there offline too
+const ENTRIES = ["js/app/session.js", "js/app/creator.js", "js/app/worldmap.js", "js/app/wheelsetup.js", "js/app/together.js"];
 
 // A module's static imports and re-exports, and its import()s (minified code may have no spaces)
 const STATIC = /(?:^|[;\s}])(?:import|export)\s*(?:[\w*{}\s,$]*?\s*from\s*)?["']([^"']+)["']/g;

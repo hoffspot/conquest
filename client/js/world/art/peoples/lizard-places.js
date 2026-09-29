@@ -358,7 +358,10 @@ export async function keep(piece) {
 
     toned(solid, random, []);
 
-    const top = pyramid(solid, cx, cz, base, base, 3, m(2.2), m(1.3), random, { stairs: [], frieze: true });
+    // (As many tiers, up to three, as leave room on top for the palace and its shrine: a small
+    // keep's platform steps up fewer times rather than closing to a point)
+    const tiers = Math.max(1, Math.min(3, Math.floor((base / 2 - m(2.6)) / m(1.3))));
+    const top = pyramid(solid, cx, cz, base, base, tiers, m(2.2), m(1.3), random, { stairs: [], frieze: true });
     const portal = [[cx - m(1.8), doorFace - m(1.4)], [cx + m(1.8), doorFace - m(1.4)], [cx + m(1.8), doorFace], [cx - m(1.8), doorFace]];
 
     solid.extrude(inset(portal, -m(0.2)), 0, m(0.8), material("stone-lime"));
@@ -376,7 +379,10 @@ export async function keep(piece) {
         roof += m(0.35);
     }
 
-    shrine(solid, [cx - m(2), cz - m(1.5), cx + m(2), cz + m(1.5)], roof, { height: m(1.8), comb: m(2.4) });
+    // (The shrine no wider than the palace's roof)
+    const [across, deep] = [Math.min(m(2), top.half - m(0.6)), Math.min(m(1.5), top.deep - m(0.6))];
+
+    shrine(solid, [cx - across, cz - deep, cx + across, cz + deep], roof, { height: m(1.8), comb: m(2.4) });
 
     for (const side of [-1, 1]) {
         serpent(solid, [cx + side * m(2.6), m(0.9), doorFace + m(0.4)], 0, m(1.4), { name: "stone-lime" });

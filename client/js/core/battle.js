@@ -183,6 +183,12 @@ const WILD_PACK = 3;
 // How often a chase finds a new path to a target that has moved (ms)
 const REPATH_MS = 500;
 
+// A move order's goal: the nearest free square this many squares or less from where it's asked
+// for; or, none there (open water), the first free one back towards the walker, no further back
+// than this (so a tap far out to sea makes no more of the world than that)
+const MOVE_NEAR = 24;
+const MOVE_BACK = 96;
+
 // How long a character waits for someone in its way before finding a way round them (ms)
 const BLOCKED_WAIT_MS = 400;
 
@@ -567,6 +573,30 @@ export class Battle {
         return battle;
     }
 
+    // Where to walk to be as near a square as can be (for a move order): the nearest free square
+    // within MOVE_NEAR of it; or, out on open water, the first free one on the way back from it
+    // towards the walker (looked for no further than MOVE_BACK); or null
+    #goalNear(actor, [x, y]) {
+        const squares = this.#squares(actor.map);
+
+        try {
+            return nearestFree(squares, [x, y], { within: MOVE_NEAR });
+        } catch {
+            const [dx, dy] = [actor.x - x, actor.y - y];
+            const steps = Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)));
+
+            for (let k = 1; k <= Math.min(steps, MOVE_BACK); k++) {
+                const [sx, sy] = [Math.floor(x + (dx * k) / steps), Math.floor(y + (dy * k) / steps)];
+
+                if (!squares.blocked(sx, sy)) {
+                    return [sx, sy];
+                }
+            }
+
+            return null;
+        }
+    }
+
     /**
      * Take a character out (one of the folk, gone with their building when the player's far
      * away): no one's after them, talking to them or shooting at them any more. Whether they were
@@ -598,6 +628,13 @@ export class Battle {
             if (other.talkingTo === id) {
                 other.talkingTo = null;
             }
+
+            // (And no one holds a grudge against it, or remembers seeing or sparing it)
+            for (const kept of [other.foes, other.seeing, other.spared]) {
+                if (kept && id in kept) {
+                    delete kept[id];
+                }
+            }
         }
 
         return true;
@@ -626,7 +663,12 @@ export class Battle {
 
         switch (order.type) {
             case "move": {
-                const goal = nearestFree(this.#squares(actor.map), order.to);
+                const goal = this.#goalNear(actor, order.to);
+
+                // (Nowhere to walk to near there at all: stays where it is)
+                if (!goal) {
+                    break;
+                }
 
                 actor.order = { type: "move", to: goal, run: Boolean(order.run) };
                 this.#pathTo(actor, goal);
