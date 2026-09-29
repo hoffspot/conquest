@@ -117,7 +117,7 @@ of open ground); the dark elves' is an orb web, seven spokes and three rings rou
 their houses packed close. None has a windmill: their towns, cities and capitals raise their own
 special places instead (up to three, by size). From a size of their own each is walled in their
 way, a gatehouse across each main street where it leaves. The cat folk's, orcs' and lizard folk's
-markets and main streets are beaten earth, not cobbled; their trees are mostly their own
+markets and main streets are trodden earth, as their roads are, not cobbled; their trees are mostly their own
 (`homeTree`: three in five). The humans' layouts are just as they were.
 
 Every piece is a rectangle turned to face some way (`facing`, as characters face): its middle,

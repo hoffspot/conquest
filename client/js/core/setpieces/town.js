@@ -51,7 +51,7 @@ export const SETTLEMENT_KINDS = Object.freeze({
  * square metres), whether its houses stand over a band of water (`water`: from and to, shares of
  * the radius: the lizard folk's lagoon), whether it has a windmill, how much bigger its market
  * place is, from what size of settlement (its radius, metres) it's walled (`wall`), and whether
- * its market and main streets are cobbled (`paved`: or beaten earth).
+ * its market and main streets are cobbled (`paved`: or trodden earth, as the roads are).
  */
 export const PEOPLE_TOWNS = Object.freeze({
     human: {},
@@ -298,8 +298,8 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
     }
 
     // The streets' squares, and the market's: cobbled, or (the cat folk, the orcs and the lizard
-    // folk) of beaten earth
-    const paving = look.paved === false ? GROUND.courtyard : GROUND.cobbles;
+    // folk) trodden earth, as the roads are
+    const paving = look.paved === false ? GROUND.road : GROUND.cobbles;
 
     for (const { points, width: across, main } of streets) {
         const half2 = (across / 2) * (across / 2);
