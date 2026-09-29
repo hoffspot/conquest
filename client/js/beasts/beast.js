@@ -83,6 +83,12 @@ export class BeastAvatar {
         this.doing = { attack: null, react: null, dead: null };
         this.random = own;
 
+        /** Flying (a winged one: `winged`), if it is: { beat, bank, climb } (fly/soar/arrive). */
+        this.flight = null;
+        this.arrival = null;
+        this.winged = Boolean(look.wings);
+        this.object.rotation.order = "YXZ";
+
         // Its ways of attacking and of resting (LOOKS: those its body can do)
         this.attacks = (look.attacks ?? this.plan.attacks ?? []).filter((style) => this.plan.attacks?.includes(style));
         this.specials = (look.specials ?? []).filter((style) => this.plan.attacks?.includes(style));
@@ -194,10 +200,57 @@ export class BeastAvatar {
         this.speed = 0;
     }
 
+    /**
+     * Come down out of the sky to land where it's put (a winged one's: a wyvern's, a dragon's):
+     * from `from` ([x, y, z], metres; or from far up behind it), gliding down and beating its
+     * wings as it flares to land, over `duration` seconds. It's where its actor is all along;
+     * it's only drawn coming down.
+     */
+    arrive({ from = null, duration = 5 } = {}) {
+        if (!this.winged) {
+            return;
+        }
+
+        const { x, z } = this.object.position;
+        const away = this.random() * Math.PI * 2;
+        const start = from ? new THREE.Vector3(...from) : new THREE.Vector3(x + Math.sin(away) * 55, 34 + this.random() * 10, z + Math.cos(away) * 55);
+
+        this.arrival = { t: 0, duration, from: start };
+    }
+
+    /** Is it coming down out of the sky still (arrive)? */
+    get arriving() {
+        return Boolean(this.arrival);
+    }
+
+    /**
+     * Fly (a winged one), not following an actor: at a point (metres, `y` up), heading a way
+     * (radians, as `facing`), beating its wings so hard (`beat`: 0 gliding to 1), leaning into its
+     * turn (`bank`, radians, + to its right) and climbing (`climb`, radians, + nose up).
+     */
+    soar(dt, x, y, z, heading, { beat = 0.5, bank = 0, climb = 0 } = {}) {
+        this.object.position.set(x, y, z);
+        this.object.rotation.set(-climb, heading, bank);
+        this.facing = heading;
+        this.flight = { amount: 1, beat };
+        this.speed = 0;
+        this.animate(dt);
+    }
+
     /** As Avatar.update: follow its actor there, turning the way it goes, and move itself. */
     update(dt, x, z, facing, steer = true) {
         const object = this.object;
         const follow = this.follow;
+
+        // (Coming down out of the sky to where its actor is)
+        if (this.arrival) {
+            Object.assign(follow, { x, z, vx: 0, vz: 0 });
+            this.last.set(x, 0, z);
+            this.#land(dt, x, z, facing);
+
+            return;
+        }
+
         const decay = Math.exp(-FOLLOW * dt);
         const ex = follow.x - x;
         const ez = follow.z - z;
@@ -224,6 +277,36 @@ export class BeastAvatar {
         }
 
         this.animate(dt);
+    }
+
+    // Gliding down to land at (x, z): along a curve from where it came from, sinking faster the
+    // nearer it comes, its body level, then flaring (nose up, beating hard) and touching down,
+    // turning to face the way its actor faces
+    #land(dt, x, z, facing) {
+        const arrival = this.arrival;
+
+        arrival.t += dt;
+
+        const u = Math.min(1, arrival.t / arrival.duration);
+        const glide = 1 - (1 - u) ** 2;
+        const { from } = arrival;
+        const heading = Math.atan2(x - from.x, z - from.z);
+        const flare = smoothstep(Math.max(0, (u - 0.72) / 0.28));
+        const height = from.y * (1 - u) ** 1.7;
+
+        this.object.position.set(from.x + (x - from.x) * glide, height, from.z + (z - from.z) * glide);
+        this.facing = wrapAngle(heading + wrapAngle(facing - heading) * flare);
+        this.object.rotation.set(-0.35 * flare * (1 - u) * 4, this.facing, 0);
+        this.flight = { amount: 1 - smoothstep(Math.max(0, (u - 0.9) / 0.1)), beat: 0.15 + 0.85 * flare };
+        this.speed = 0;
+        this.animate(dt);
+
+        if (u >= 1) {
+            this.arrival = null;
+            this.flight = null;
+            this.object.position.y = 0;
+            this.object.rotation.set(0, this.facing, 0);
+        }
     }
 
     /** Move itself for a moment (dt seconds) as it's going and doing (update does this). */
@@ -283,7 +366,13 @@ export class BeastAvatar {
             react: doing.react ? { u: Math.min(1, doing.react.u ?? 0) } : null,
             dead: doing.dead ? { u: Math.min(1, doing.dead.u ?? 0), side: doing.dead.side } : null,
             onStep: (foot, pace) => this.walker.onStep?.(foot, pace * this.scale),
+            fly: this.flight,
         });
+
+        // (Flying only while it's told to: soar and arrive say so each moment)
+        if (!this.arrival) {
+            this.flight = null;
+        }
 
         // Its glow, and any flush of red on it
         const skin = this.plan.materials.body;

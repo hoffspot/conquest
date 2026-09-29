@@ -26,7 +26,7 @@ lying about, and their war camps, in 3D from a seed to go round and look at, is 
 <https://hoffspot.github.io/conquest/building-lab.html>.
 
 The creature lab, showing every creature of the wilds walking, running, attacking, resting,
-struck, knocked down and dying, is at <https://hoffspot.github.io/conquest/creature-lab.html>.
+struck, knocked down and dying (and the wyvern and the dragon flying and coming down to land), is at <https://hoffspot.github.io/conquest/creature-lab.html>.
 
 The war between the six peoples, played out on a world's map turn by turn (who holds which town,
 the forces out, the rulers and how they stand with each other, and the news), is at
@@ -513,6 +513,10 @@ client/                 The game (static files served to the browser)
                         camp tents: cat.js, orc.js, lizard.js, elf.js, darkelf.js...)
     banners3d.js        The peoples' banners by their towns' roads out, in their colours
     camps3d.js          The war's camps near the player: each people's tents round a fire
+    sky.js              The sky outdoors: blue overhead to the haze at the horizon, the sun,
+                        clouds drifting
+    flyers3d.js         What flies over the world: flocks of each land's birds, wyverns over
+                        the wild lands, the dragon near its lair
     drops3d.js          Things dropped on the ground: a bundle, its icon floating over it
     avatar.js           A character in the world, following its place in the battle
     effects.js          Arrows, bolts, fireballs, sparks, dust, fire, arcane light, blood and

@@ -17,7 +17,9 @@
 // and tail swaying), breathing and looking about when it stands, and resting its ways; lunging
 // and snapping (or rearing and mauling, goring, bristling, stinging, breathing fire) to attack,
 // flinching when struck, and falling on its side when it dies. A wyvern or a dragon folds its
-// wings along its flanks, and opens them to beat when it runs or strikes.
+// wings along its flanks, and opens them to beat when it runs or strikes; and it flies: its legs
+// tucked up under it, its neck stretched out ahead and its tail streaming behind, its wings spread
+// wide, beating or held out to glide.
 
 import * as THREE from "three";
 import { Sculpt } from "./sculpt.js";
@@ -928,9 +930,11 @@ export function quadruped(look, random, key = null) {
         /**
          * Put it in its pose for a moment: `speed` (m/s), `run` (galloping), `t` (seconds), and
          * what it's doing (`attack`: { u: 0 to 1 through it, hit, style }; `react`, `dead`: { u };
-         * `rest`: { name, w: how far into it, t: seconds }), telling each footfall (`onStep`).
+         * `rest`: { name, w: how far into it, t: seconds }; flying, if it has wings, `fly`: {
+         * amount: 0 on the ground to 1 aloft, beat: 0 gliding to 1 beating hard }), telling each
+         * footfall (`onStep`).
          */
-        pose({ dt, t, speed, run, attack, react, dead, rest: resting, onStep }) {
+        pose({ dt, t, speed, run, attack, react, dead, rest: resting, onStep, fly = null }) {
             const stride = lowSlung ? length * 0.42 : bodyY * (run ? 3.4 : 2.3);
             const moving = Math.min(1, speed / 0.5);
             const gait = run && !lowSlung ? GALLOP : TROT;
@@ -992,6 +996,24 @@ export function quadruped(look, random, key = null) {
             });
             quills.scale.setScalar(1);
 
+            // Flying: its legs tucked up under it, its neck out ahead and its head level, its tail
+            // streaming out behind, rising a little with each downstroke
+            const aloft = fly && wings.length ? smooth(Math.min(1, fly.amount)) : 0;
+
+            if (aloft > 0) {
+                for (const leg of Object.values(legs)) {
+                    bendLeg(leg, leg.front > 0 ? [1.5, -2, 1.4] : [1.4, -0.4, 1], aloft);
+                }
+
+                neck.rotation.x += (rest.neck + 0.45 - neck.rotation.x) * aloft;
+                head.rotation.x += (rest.head - 0.35 - head.rotation.x) * aloft;
+                body.position.y += Math.sin(wingPhase) * girth * 0.35 * fly.beat * aloft;
+                tailParts.forEach((each, k) => {
+                    each.rotation.x += (rest.tail[k] * 0.2 + Math.sin(t * 1.3 - k * 0.7) * 0.04 - each.rotation.x) * aloft;
+                    each.rotation.y *= 1 - aloft * 0.7;
+                });
+            }
+
             // Resting, weighted in and out
             if (resting && RESTS[resting.name] && !dead) {
                 RESTS[resting.name](resting.w, resting.t);
@@ -1009,13 +1031,14 @@ export function quadruped(look, random, key = null) {
 
             // The wings: folded along the flanks, opening to beat when it runs or strikes (slower,
             // the bigger they are), and held spread a while when it stretches
-            const spread = attack || run ? 1 : Math.max(0, open);
+            // (Flying, spread wide, beating slower the bigger they are, or held out to glide)
+            const spread = attack || run || aloft > 0.5 ? 1 : Math.max(0, open);
 
             opened += (spread - opened) * Math.min(1, dt * 3);
-            wingPhase += dt * (7 / Math.sqrt(look.wings?.span ?? 1)) * (attack ? 1.3 : 1);
+            wingPhase += dt * (aloft > 0 ? (TAU * 1.6 * (0.55 + 0.45 * fly.beat)) / Math.sqrt(look.wings?.span ?? 1) : (7 / Math.sqrt(look.wings?.span ?? 1)) * (attack ? 1.3 : 1));
 
             for (const wing of wings) {
-                spreadWing(wing, opened, attack || run ? 1 : 0.15 * opened, wingPhase);
+                spreadWing(wing, Math.max(opened, aloft), aloft > 0 ? Math.max(0.08, fly.beat) * aloft + (attack || run ? 1 : 0.15 * opened) * (1 - aloft) : attack || run ? 1 : 0.15 * opened, wingPhase);
             }
 
             // Struck: flinching away, head up

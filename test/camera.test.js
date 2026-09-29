@@ -144,6 +144,40 @@ describe("the camera following the player (camera.js)", () => {
         assert.equal(camera.pitch, 31);
     });
 
+    it("starts looking 35 degrees down, and dragged, looks up into the sky, 45 degrees over the horizon at most", () => {
+        const camera = new CameraFollow({ x: 0, z: 0 });
+
+        assert.equal(camera.pitch, 35);
+        camera.grab();
+        camera.turn(0, -60);
+        assert.equal(camera.pitch, -25);
+        camera.turn(0, -60);
+        assert.equal(camera.pitch, -45);
+    });
+
+    it("looking up, stays looking up while they stand; walking, looks down again to see where they go", () => {
+        const camera = new CameraFollow({ x: 0, z: 0 });
+
+        camera.grab();
+        camera.turn(0, -70);
+        camera.release();
+        stand(camera, { x: 0, z: 0 }, 2);
+        assert.equal(camera.pitch, -35);
+
+        walk(camera, { from: { x: 0, z: 0 }, vx: 0, vz: -1.7, seconds: 2 });
+        assert.ok(camera.pitch >= PITCH.walking && camera.pitch <= PITCH.start, `pitch ${camera.pitch.toFixed(1)}`);
+
+        // (Looking down, it's left as it is)
+        camera.grab();
+        camera.turn(0, 20);
+        camera.release();
+
+        const pitch = camera.pitch;
+
+        walk(camera, { from: { x: 0, z: -3.4 }, vx: 0, vz: -1.7, seconds: 2 });
+        assert.equal(camera.pitch, pitch);
+    });
+
     it("held by a drag, doesn't turn itself even while the player walks; let go, swings back round behind them", () => {
         const camera = new CameraFollow({ x: 0, z: 0 });
 
