@@ -479,9 +479,19 @@ A WebGL renderer with ACES tone mapping, a sky and fog, a studio environment map
 characters' materials, a hemisphere light and a sun whose shadow map follows the player (a
 little ahead of them, where more of the ground is in view, the further out the more: up to 12
 of its 24 metres; snapped to whole shadow texels, so shadows don't shimmer). The camera looks
-down from 45 degrees above the horizon to start with (low enough to see well ahead of the
-player: `pitch`), zooming between 5 and 32 metres away, from any side (`yaw`: from the south,
-looking north, to start with), at the player's middle (0.8 metres up).
+down from 35 degrees above the horizon to start with (low enough to see well ahead of the
+player, high enough to see a little of the sky over the rooftops: `pitch`), zooming between 5 and
+32 metres away, from any side (`yaw`: from the south, looking north, to start with), at the
+player's middle (0.8 metres up).
+
+**The sky** (world/sky.js), outdoors, a fair day: deep blue overhead paling to the haze at the
+horizon (the fog's colour, so the world's far edge melts into it), the sun where the shadows come
+from (a bright disc in a warm glow), and clouds drifting slowly across on the wind, soft-edged,
+white where the sun's on them and grey-blue underneath, thinning towards the horizon. It's one
+dome round the camera, drawn first and behind everything (it writes no depth), in the picture's
+own colours (untouched by the tone mapping, as the fog and the background are): a gradient, the
+sun, and two reads of a small tiling texture of noise (128 texels) for the clouds, drifting at
+their own speeds, so it costs little even when it fills the screen. Indoors there's none.
 
 **Following the player** (app/camera.js). From the player's first step, the camera keeps up
 with them and turns round to look from behind them, the way they're going, at the same height
@@ -495,11 +505,15 @@ is fighting, so both stay in view. The minimap stays north up; what the camera s
 **Turning it by hand.** A drag (a finger, or the mouse held down) turns the camera round the
 player: across the screen's width, half round, the view turning the way the drag goes (dragged
 right, it looks further right); up or down its height, it tilts 60 degrees (dragged up, it looks
-further up, lower down). It tilts between 22 degrees (and never so low that the top of the picture
-comes within 6 degrees of the horizon, so no more of the town is drawn than the fog lets be
-seen: 24 degrees on a wide screen, 31 on a tall one) and 75 (almost straight down). While held,
-it doesn't turn itself; let go, it stays where it was turned while the player stands, and once
-they walk again, it swings back round behind them, facing the way they go (keeping its tilt).
+further up, lower down). It tilts between 75 degrees (almost straight down) and, outdoors, 45
+degrees *above* the horizon: looking up into the sky, the camera comes down behind the player to
+just over the ground (0.45 metres) and then tilts up from there, the player sinking down the
+picture and, at the last, out of it. Indoors it stops with the top of the picture 6 degrees
+below the horizon (24 degrees down on a wide screen, 31 on a tall one), so there's no more of the
+room to draw than there is. While held, it doesn't turn itself; let go, it stays where it was
+turned while the player stands, and once they walk again, it swings back round behind them,
+facing the way they go (keeping its tilt, unless it was looking up past 15 degrees down: then it
+eases back down to 35 to see where they're going).
 A drag that starts on the player and sets off mostly upwards is a swipe (straight ahead), not a
 turn; two fingers are a pinch (zoom). Tilting costs nothing: the town is a few merged meshes,
 drawn whole whichever way the camera looks (about 90 draw calls and 170,000 triangles either way).
@@ -647,6 +661,33 @@ much of it, and never a loading screen. Each chunk has:
 
 The chunks also say how tall their trees, features and buildings are on each square, for the
 cutaway. The minimap is painted from the same chunks.
+
+### What flies (world/flyers3d.js)
+
+Now and then (a try every 5 to 14 seconds, seven in ten coming to something, three flocks at
+most) a flock of the land's birds flies by: songbirds and crows over the fields and woods, gulls
+by the water, vultures circling high over the savannah, the badlands and the mountains, herons
+over the marsh, parrots over the jungle, geese in a V over the tundra and the snow (`LAND_BIRDS`).
+A flock comes from 95 metres off to one side and flies across, passing by near the player, or
+circles a while over somewhere near them (vultures mostly do) before it goes; it's gone once it's
+115 metres off. Each bird flies at its kind's height (songbirds 5 to 16 metres up, vultures 28 to
+42) and speed, bobbing a little out of its place in the flock, its wings beating in time of their
+own and, as much of the time as its kind does (a vulture nearly always), held out to glide. Each
+kind of bird is one instanced mesh (a dozen or two triangles a bird, drawn whatever the number),
+its wings beaten in the shader; so a sky full of birds costs a draw call a kind.
+
+Over the wild lands wyverns hunt in (the mountains, the badlands, volcanic land and the snow),
+a wyvern flies over now and then (a try every 40 to 110 seconds), 18 to 30 metres up; and within
+420 metres of a dragon's lair, while its dragon's alive and not down on the ground to be fought,
+the dragon circles over its lair's side of the player, 28 to 40 metres up. They're the creatures
+as they're drawn on the ground (beasts/), flying: legs tucked up, neck out ahead, tail streaming,
+wings spread wide, beating or held out to glide, leaning into their turns. A wyvern or the dragon
+put out near the player (within 140 metres) to fight is seen coming down out of the sky to where
+it is: one already flying about, if there is one, or from far up behind (`BeastAvatar.arrive`),
+gliding lower all the way, then flaring, nose up and beating hard, and touching down facing the
+way it will fight. It's where its battle's creature is all along; it's only drawn coming down.
+Nothing in the air can be fought. Each player's game draws its own fliers, from its own random
+numbers.
 
 ### Inside and out (app/game.js)
 
@@ -1616,8 +1657,17 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   through a path's corners, staying where it's turned when they stand; dragged, turning and
   tilting, no lower than the view allows nor higher than 75 degrees, holding while they stand,
   not turning itself while held even as they walk, and swinging back behind them once let go and
-  walking; catching up without turning when the player comes back to life elsewhere, and leaning
-  towards a foe.
+  walking; starting 35 degrees down and looking up to 45 degrees over the horizon at most, easing
+  back down once they walk if it was looking up; catching up without turning when the player
+  comes back to life elsewhere, and leaning towards a foe.
+- `test/sky.test.js`: the sky's dome round the camera, drawn behind everything, its horizon the
+  haze's colour; birds for every land, a dozen triangles or so each; flocks of the land's birds
+  now and then, never too many, at their heights, gone once far off; a wyvern over the lands they
+  hunt in and none over a meadow; the dragon circling within sight on its lair's side of the
+  player, handed over to land and gone from the air, and flying off when its lair's no longer
+  near; none of it indoors; a wyvern coming down out of the sky to where its actor is, lower all
+  the way, landing facing its way; a dragon soaring where it's put; nothing without wings coming
+  down out of the sky.
 - `test/actions.test.js`: attacks (five ways of each, every one landing in front at a fighting
   height, never the same way twice in a row, all five used; their timing, where the hands reach
   on different bodies, two-handed grips, alternating punches), rests (five named for every
@@ -1688,7 +1738,9 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   the music's recordings downloaded and playing after a tap (and carrying on when the browser
   suspends or closes its sound), the camera following from the first step and ending up behind a
   long walk, a drag turning and tilting it (holding while the player stands, and swinging back
-  behind them once they walk), the camera clear of a building behind the player in the town, the
+  behind them once they walk), dragged up to look into the sky (the camera over the ground, the
+  sky drawn, birds flying by, drawn one mesh a kind) and looking down again once they walk, the
+  camera clear of a building behind the player in the town, the
   target ring, tapping the tavern's door (lit green) to walk in and come out a couple of steps
   inside it facing the door (and at each door and stairs after, taps round the player walking
   them, not taking them back through), the folk there (seen, without name plates, resting, not to be

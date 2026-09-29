@@ -1,17 +1,21 @@
 // How the camera follows the player: it keeps up with them from their first step, swinging
 // round behind them the way they're going, easing round over about a second when they turn
 // (all the way round, walking back towards it). Dragged across the screen, it turns round
-// them (and up or down, tilts), and holds there while they stand; once they walk again, it
-// swings back round behind them. Its height and zoom are the view's (world/view.js).
+// them (and up or down, tilts: outdoors, up past the horizon into the sky), and holds there
+// while they stand; once they walk again, it swings back round behind them, and if it was
+// looking up, down again to see where they're going. Its height and zoom are the view's
+// (world/view.js).
 //
 // Pure maths on plain numbers (no Three.js), so it's tested in Node: the game (game.js) says
 // where the player is and how fast they're going, and puts the view's camera where this says.
 
 /**
- * How far the camera looks down from the horizon (degrees): where it starts, and how far a drag
- * can tilt it (the view may keep it higher still: view.js lowestPitch).
+ * How far the camera looks down from the horizon (degrees; up, less than 0): where it starts, and
+ * how far a drag can tilt it (up to 45 degrees above the horizon; the view may keep it lower
+ * still: view.js lowestPitch, indoors); and walking, the least it eases back down to if it was
+ * looking higher (to see where they're going), at `settle` a second.
  */
-export const PITCH = Object.freeze({ least: 22, start: 45, most: 75 });
+export const PITCH = Object.freeze({ least: -45, start: 35, most: 75, walking: 15, settle: 2.5 });
 
 // Going faster than this (m/s) is going somewhere
 const MOVING = 0.4;
@@ -100,6 +104,11 @@ export class CameraFollow {
 
         if (this.held) {
             return this;
+        }
+
+        // Walking, looking down again if it was looking up into the sky
+        if (speed > MOVING && this.pitch < PITCH.walking) {
+            this.pitch += (PITCH.start - this.pitch) * ease(PITCH.settle, dt);
         }
 
         // Round behind them, the way they're going (when it's clear which way that is), or, stood

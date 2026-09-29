@@ -50,6 +50,7 @@ import { distanceBetween, longestReach, weaponOf, WEAPONS } from "../core/weapon
 import { Avatar } from "../world/avatar.js";
 import { Banners } from "../world/banners3d.js";
 import { Camps } from "../world/camps3d.js";
+import { Flyers } from "../world/flyers3d.js";
 import { Drops } from "../world/drops3d.js";
 import { Ailments3D } from "../world/ailments3d.js";
 import { Effects, LOOKS } from "../world/effects.js";
@@ -125,6 +126,9 @@ const SWIPE_MS = 600;
 // drag: a drag from them turns the camera only if it sets off more across than up
 const DRAG_TURN = Math.PI;
 const DRAG_TILT = 60;
+
+// A wyvern or dragon put out this near the player (metres) is seen coming down out of the sky
+const ARRIVE_WITHIN = 140;
 
 // How far the camera leans from the player towards who they're fighting: a share of the way,
 // up to so many metres
@@ -621,6 +625,15 @@ export class Game {
         this.banners = new Banners(view.scene);
         this.camps = new Camps(view.scene);
         this.drops = new Drops(view.scene, { picture: (id) => this.#itemPicture(id) });
+
+        // What flies over the world outside: birds of each land, and the wyverns and the dragon
+        // near their lairs (flyers3d.js)
+        const overworld = world.maps?.town;
+
+        if (overworld?.biomeAt) {
+            this.flyers = new Flyers({ landAt: (x, z) => overworld.biomeAt(x, z), lairs: () => this.#lairsAloft() });
+            view.scene.add(this.flyers.object);
+        }
         step(`Dressing ${this.hero.name}`);
 
         // Everyone in the world as the host has them: the player (and anyone else playing), the
@@ -962,6 +975,7 @@ export class Game {
         this.doors?.dispose();
         this.banners?.dispose();
         this.camps?.dispose();
+        this.flyers?.dispose();
 
         this.spellFx?.clear();
 
@@ -2092,13 +2106,24 @@ export class Game {
             const actor = this.battle.actor(this.enlisting.shift());
 
             if (actor && !this.avatars.has(actor.id)) {
-                this.#dress(actor);
+                const avatar = this.#dress(actor);
+
                 this.#place(actor);
 
                 if (actor.kind === "beast") {
                     const me = this.battle.actor(this.me);
 
                     this.hud.track(actor.id, { ...actor, hostile: Boolean(me) && this.battle.hostile(actor, me) });
+
+                    // (A wyvern or the dragon put out near the player comes down out of the sky to
+                    // land there: one already flying about, if there is one)
+                    const { x, z } = avatar.object.position;
+                    const mine = this.avatars.get(this.me)?.object.position;
+                    const near = mine && me.map === actor.map && !this.interiors.get(actor.map) && Math.hypot(x - mine.x, z - mine.z) < ARRIVE_WITHIN;
+
+                    if (avatar.winged && near && !actor.dead) {
+                        avatar.arrive({ from: this.flyers?.takeAloft(avatar.id, [x, z]) ?? null });
+                    }
                 }
             }
         }
@@ -2931,6 +2956,20 @@ export class Game {
 
         this.doors?.update(dt, this.clock, { map: this.mapId, heading: player?.order?.type === "enter" ? player.order.link : null });
         this.camps?.update(this.clock);
+
+        const me = this.avatars.get(this.me)?.object.position;
+
+        if (me) {
+            this.flyers?.update(dt, this.clock, { x: me.x, z: me.z }, { outdoors: !interior });
+        }
+    }
+
+    // The dragons' lairs a dragon's to be seen circling over: those whose dragon's alive (as far as
+    // this game knows) and isn't down on the ground near its lair to be fought
+    #lairsAloft() {
+        const onGround = [...this.avatars.values()].filter((avatar) => avatar.id === "dragon").map((avatar) => avatar.object.position);
+
+        return this.world.plan.sites.filter((site) => site.kind === "dragon's lair" && (this.host?.slain?.[site.id] ?? -Infinity) <= this.battle.time && !onGround.some(({ x, z }) => Math.hypot(x - site.at[0], z - site.at[1]) < 250));
     }
 
     // --- What happened in the battle ---

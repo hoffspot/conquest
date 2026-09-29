@@ -216,7 +216,11 @@ smaller, its colour a little different, its markings its own.
   ridge of scutes, and a dragon's spade. Wings as a bat's: an upper arm and forearm, three long
   fingers fanning from the wrist, skin stretched between them and back to the flank (a mesh of its
   own bound to the finger bones either side, so it stretches as they spread), folded along the
-  flank at rest and beating when it runs or strikes.
+  flank at rest and beating when it runs or strikes. It flies too (`fly`): legs tucked up under
+  it, neck stretched out ahead and head level, tail streaming behind, wings spread wide, beating
+  (slower the bigger they are) or held out to glide, rising a little with each downstroke; so
+  wyverns and the dragon are seen in the air near where they hunt and come down out of the sky to
+  fight (GAME.md, *What flies*). The creature lab's Fly and Land show it.
 - **Eight-legged** (`arachnid.js`): each leg reaches for its own place on the ground, spread round
   the body like the spokes of a wheel so none crosses another or the body, and bends its two bones
   to reach it each moment (knee up); walking, the feet stay planted as the body goes over them,

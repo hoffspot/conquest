@@ -9,6 +9,7 @@
 
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { Sky, SKY_COLOURS } from "./sky.js";
 import { CUTAWAY } from "./town3d.js";
 
 /** How much each quality level draws (`undergrowth`: how thick the grass and flowers grow, chunks3d.js). */
@@ -34,13 +35,19 @@ export function detectQuality() {
 // The camera looks down this far from the horizon to start with (degrees: low enough to see well
 // ahead of the player), from this far away (metres), zooming between; at a point this high above
 // the ground (metres: the player's middle)
-export const PITCH = 45;
+export const PITCH = 35;
 export const DISTANCE = Object.freeze({ least: 5, start: 10.5, most: 32 });
 const LOOK_UP = 0.8;
 
-// The camera's lowest: the top of the picture this far below the horizon (degrees), so there's no
-// more of the town to draw than the fog lets be seen
+// Indoors, the camera's lowest: the top of the picture this far below the horizon (degrees), so
+// there's no more of the room to draw than there is; outdoors it can look up into the sky, this
+// far above the horizon (degrees)
 const BELOW_HORIZON = 6;
+const ABOVE_HORIZON = 45;
+
+// Looking up, the camera comes down behind the player no lower than this over the ground
+// (metres), and past that tilts up from where it is, the player sinking down the picture
+const CAMERA_FLOOR = 0.45;
 
 // Clear of a building in the way (the town's `buildings` heights): coming in closer than it,
 // staying `margin` metres clear of it (along the camera's line), or rising over it (up to
@@ -49,7 +56,8 @@ const BELOW_HORIZON = 6;
 // this quickly, going back out this slowly (per second)
 const PULL = Object.freeze({ least: 2.6, margin: 0.6, highest: 85, lift: 0.15, in: 12, out: 2.5 });
 
-const SKY = 0xa9c8de;
+// The haze at the horizon: the fog's colour and the background's, which the sky pales to
+const SKY = SKY_COLOURS.horizon;
 
 // Indoors: no sky, a dim warm room lit from above, and lamps (the hearth's fire, candles) that
 // flicker; outdoors the lamps are out. (The lamps are always there, so that going in and out
@@ -119,6 +127,10 @@ export class View {
         });
         this.sunDirection = SUN_DIRECTION.clone();
         this.indoors = false;
+
+        // The sky outdoors, its sun where the shadows come from (sky.js)
+        this.sky = new Sky(this.sunDirection);
+        this.scene.add(this.sky.object);
 
         this.camera = new THREE.PerspectiveCamera(36, 1, 0.3, 150);
         this.focus = new THREE.Vector3();
@@ -207,11 +219,11 @@ export class View {
     }
 
     /**
-     * The lowest the camera may look from (degrees down from the horizon): the top of the
-     * picture just below the horizon, the taller the picture the higher.
+     * The lowest the camera may look from (degrees down from the horizon; up, less than 0):
+     * outdoors, well up into the sky; indoors, the top of the picture just below the horizon.
      */
     lowestPitch() {
-        return this.camera.fov / 2 + BELOW_HORIZON;
+        return this.indoors ? this.camera.fov / 2 + BELOW_HORIZON : -ABOVE_HORIZON;
     }
 
     /**
@@ -259,11 +271,12 @@ export class View {
         let pulled = 0;
         let lifted = 0;
 
-        if (this.buildings && this.clearance() < this.distance) {
+        // (Looking up, the camera's no lower than level with the player: see #place)
+        if (this.buildings && this.clearance(Math.max(0, this.pitch)) < this.distance) {
             let best = -Infinity;
 
-            for (let lift = 0; this.pitch + lift <= PULL.highest; lift += 5) {
-                const reach = Math.max(PULL.least, Math.min(this.distance, this.clearance(this.pitch + lift)));
+            for (let lift = 0; Math.max(0, this.pitch) + lift <= PULL.highest; lift += 5) {
+                const reach = Math.max(PULL.least, Math.min(this.distance, this.clearance(Math.max(0, this.pitch) + lift)));
                 const score = reach - PULL.lift * lift;
 
                 if (score > best) {
@@ -299,11 +312,18 @@ export class View {
     #place() {
         const { focus, camera, yaw } = this;
         const distance = Math.max(Math.min(this.distance, PULL.least), this.distance - this.pulled);
-        const pitch = (Math.min(PULL.highest, this.pitch + this.lifted) * Math.PI) / 180;
+        const looking = (Math.min(PULL.highest, this.pitch + this.lifted) * Math.PI) / 180;
+        // (Looking up, the camera comes down behind the player to just over the ground, then
+        // tilts up from there)
+        const pitch = Math.max(looking, Math.asin(Math.max(-1, Math.min(0, (CAMERA_FLOOR - focus.y - LOOK_UP) / distance))));
         const across = Math.cos(pitch) * distance;
 
         camera.position.set(focus.x + Math.sin(yaw) * across, focus.y + LOOK_UP + Math.sin(pitch) * distance, focus.z + Math.cos(yaw) * across);
         camera.lookAt(focus.x, focus.y + LOOK_UP, focus.z);
+
+        if (pitch > looking) {
+            camera.rotateX(pitch - looking);
+        }
 
         // The sun's shadows follow the player, a little ahead of them where more of the ground is
         // in view (the further out, the more), snapped to whole shadow texels so they don't shimmer
@@ -334,6 +354,8 @@ export class View {
         this.sun.intensity = look.sun[1];
         this.sunDirection.set(...look.sunFrom).normalize();
         this.scene.environmentIntensity = look.environment;
+        this.sky.object.visible = !interior;
+        this.sky.setSun(this.sunDirection);
 
         this.lamps.forEach((lamp, k) => {
             const spec = interior?.lights[k];
@@ -418,6 +440,7 @@ export class View {
 
         if (scene === this.scene) {
             this.#cutAway(dt);
+            this.sky.update(camera, now / 1000);
         }
 
         this.renderer.info.reset();

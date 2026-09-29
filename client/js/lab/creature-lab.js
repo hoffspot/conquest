@@ -135,8 +135,9 @@ let current = null;
 let action = "stand";
 let seed = Number(params.get("seed") ?? 1);
 
-// Along the ground it goes, walking or running, as the battle would move it (metres a second)
-const PACE = { stand: 0, walk: 1.3, run: 3.2 };
+// Along the ground it goes, walking or running, as the battle would move it; or flying (metres a
+// second)
+const PACE = { stand: 0, walk: 1.3, run: 3.2, fly: 7 };
 let along = 0;
 
 /** Show one of the creatures (a LOOKS id), one of its kind (`which`). */
@@ -159,6 +160,11 @@ function show(id, which = seed) {
     document.querySelector("#about").textContent = ABOUT[id]?.[1] ?? "";
     frame();
     act("stand");
+
+    // (Only a winged one flies, and comes down to land)
+    for (const button of document.querySelectorAll("[data-action=fly], [data-action=land]")) {
+        button.hidden = !avatar.winged;
+    }
 
     return current;
 }
@@ -218,6 +224,9 @@ function act(what, which = null) {
         avatar.actions.die({ from: 0.8 });
     } else if (what === "knockdown") {
         avatar.actions.knockdown?.({ from: 0, seconds: 1.5 });
+    } else if (what === "land") {
+        // (Coming down out of the sky from behind it and up)
+        avatar.arrive?.({ from: [along - 30 * avatar.scale, 14 * avatar.scale, 6], duration: 4.5 });
     }
 }
 
@@ -236,8 +245,16 @@ function advance(seconds, step = 1 / 60) {
     for (let left = seconds; left > 1e-6; left -= step) {
         const dt = Math.min(step, left);
 
-        along += PACE[action] !== undefined ? PACE[action] * dt : 0;
-        avatar.update(dt, along, 0, Math.PI / 2, action !== "attack");
+        along += PACE[action] !== undefined ? PACE[action] * dt * (action === "fly" ? avatar.scale ?? 1 : 1) : 0;
+
+        if (action === "fly") {
+            // (Flying along level, a little over its own height up, beating and gliding by turns)
+            const t = (avatar.clock ?? 0) + dt;
+
+            avatar.soar(dt, along, avatar.character.height * 1.3, 0, Math.PI / 2, { beat: 0.55 + 0.45 * Math.sin(t * 0.4), bank: Math.sin(t * 0.3) * 0.15 });
+        } else {
+            avatar.update(dt, along, 0, Math.PI / 2, action !== "attack");
+        }
 
         again += dt;
 
@@ -247,9 +264,9 @@ function advance(seconds, step = 1 / 60) {
         }
     }
 
-    // (The camera and the sun keep up with it)
-    const { x, z } = avatar.object.position;
-    const shift = new THREE.Vector3(x - controls.target.x, 0, z - controls.target.z);
+    // (The camera and the sun keep up with it, up in the air too)
+    const { x, y, z } = avatar.object.position;
+    const shift = new THREE.Vector3(x - controls.target.x, y + avatar.character.height * 0.5 - controls.target.y, z - controls.target.z);
 
     controls.target.add(shift);
     camera.position.add(shift);

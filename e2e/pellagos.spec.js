@@ -499,7 +499,7 @@ test("swiping up from the player sends them straight ahead, running, as far as t
     });
 
     // (A swipe, not a drag: the camera's not tilted)
-    expect(moved.pitch).toBe(45);
+    expect(moved.pitch).toBe(35);
     expect(moved.order?.type).toBe("move");
     expect(moved.order.run).toBe(true);
     expect(moved.running).toBe(true);
@@ -551,7 +551,7 @@ test("the camera follows from the first step, swinging round behind the player",
     });
 
     expect(camera.start.yaw).toBe(0);
-    expect(camera.start.pitch).toBe(45);
+    expect(camera.start.pitch).toBe(35);
     expect(camera.firstSteps.x).toBeGreaterThan(camera.start.x + 0.3);
     expect(camera.firstSteps.yaw).toBeLessThan(-0.15);
     expect(camera.walked).toBeGreaterThan(1.5);
@@ -620,6 +620,42 @@ test("dragging turns the camera round the player and tilts it; it holds while th
 
     expect(Math.abs(wrap(walked.yaw))).toBeLessThan(0.2);
     expect(walked.pitch).toBeCloseTo(dragged.pitch, 5);
+});
+
+test("dragged up, the camera looks up into the sky (clouds and the sun in it, birds flying by), and walking, it looks down again", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const sky = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const { view } = session;
+        const player = game.battle.actor("player");
+        const me = game.avatars.get(game.me).object.position;
+
+        game.stop();
+
+        // (Tilted up as far as it goes)
+        game.cameraFollow.turn(0, -120, view.lowestPitch());
+        game.flyers.send("crow", { x: me.x, z: me.z });
+        game.advance(1);
+
+        const looking = view.camera.getWorldDirection(view.camera.position.clone());
+        const up = { pitch: view.pitch, lowest: view.lowestPitch(), height: view.camera.position.y, looking: looking.y, sky: view.sky.object.visible && view.scene.children.includes(view.sky.object), birds: game.flyers.counts.birds, drawn: game.flyers.meshes.get("crow").count };
+
+        // Walking again: looking down to see where they go
+        game.battle.command("player", { type: "move", to: [player.square[0], player.square[1] - 6] });
+        game.advance(2.5);
+
+        return { up, walking: view.pitch };
+    });
+
+    expect(sky.up.lowest).toBe(-45);
+    expect(sky.up.pitch).toBe(-45);
+    expect(sky.up.height).toBeGreaterThan(0.3);
+    expect(sky.up.looking).toBeGreaterThan(0.5);
+    expect(sky.up.sky).toBe(true);
+    expect(sky.up.birds).toBeGreaterThan(0);
+    expect(sky.up.drawn).toBe(sky.up.birds);
+    expect(sky.walking).toBeGreaterThanOrEqual(15);
 });
 
 test("in the town, the camera comes in closer than a building in the way, or rises over it", async ({ page }) => {
