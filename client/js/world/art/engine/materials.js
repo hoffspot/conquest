@@ -41,6 +41,48 @@ function paintTexture(paint) {
     return canvas;
 }
 
+// A texture's picture, painted the first time it's wanted (to be drawn, most likely). The
+// buildings out in the world are drawn with the atlas instead (atlas.js toAtlas: it needs only a
+// material's name), so most of the textured materials the art asks for are never drawn at all
+class PaintedWhenWanted extends THREE.TextureSource {
+    constructor(painter) {
+        super(null);
+        this.painter = painter;
+    }
+
+    get data() {
+        this.paint();
+
+        return this.picture;
+    }
+
+    set data(picture) {
+        this.picture = picture;
+    }
+
+    // Paint it, if it's not painted yet: whether it was
+    paint() {
+        if (!this.painter) {
+            return false;
+        }
+
+        this.picture = this.painter();
+        this.painter = null;
+
+        return true;
+    }
+}
+
+/**
+ * Paint a material's picture now, if it's one painted when it's first wanted and it isn't yet
+ * (else it's painted in the frame it's first drawn in): whether it was.
+ */
+export function paintPicture(material) {
+    const source = material?.map?.source;
+
+    return source instanceof PaintedWhenWanted && source.paint();
+}
+
 const cache = new Map();
 
 /** The canvas for a textured material (for drawing the ground, which is 2D). */
@@ -60,10 +102,14 @@ export function material(name) {
     let result;
 
     if (MATERIALS[name] || TINTS[name]) {
-        // (A tinted material painted as the one it's tinted from, in its tint)
-        const { canvas, world } = textureCanvas(TINTS[name]?.from ?? name);
-        const texture = new THREE.CanvasTexture(canvas);
+        // (A tinted material painted as the one it's tinted from, in its tint; its picture painted
+        // when it's first drawn)
+        const from = TINTS[name]?.from ?? name;
+        const world = MATERIALS[from].world;
+        const texture = new THREE.Texture();
 
+        texture.source = new PaintedWhenWanted(() => paintTexture(painterOf(from)));
+        texture.needsUpdate = true;
         texture.colorSpace = THREE.SRGBColorSpace;
         texture.wrapS = THREE.RepeatWrapping;
         texture.wrapT = THREE.RepeatWrapping;

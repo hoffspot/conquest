@@ -24,7 +24,7 @@ const { layoutTown } = await import("../client/js/core/setpieces/town.js");
 const { GODS } = await import("../client/js/core/lore/gods.js");
 const { TRADES } = await import("../client/js/core/setpieces/pieces.js");
 const { LAYERS, layerOf, paintLayers, toAtlas, toGlow } = await import("../client/js/world/art/engine/atlas.js");
-const { material, MATERIALS } = await import("../client/js/world/art/engine/materials.js");
+const { material, MATERIALS, paintPicture } = await import("../client/js/world/art/engine/materials.js");
 const { paintLayer } = await import("../client/js/world/art/engine/painters.js");
 const { ARCHES, inset, openingOutline, Solid } = await import("../client/js/world/art/engine/solid.js");
 const { buildHouse, house, planHouse, STYLES } = await import("../client/js/world/art/kits/house.js");
@@ -551,6 +551,38 @@ describe("props (kits/props.js)", () => {
 
             assert.ok(triangles > 10 && triangles < 900, `${name}: ${triangles}`);
         }
+    });
+});
+
+describe("materials (engine/materials.js)", () => {
+    it("paint a textured one's picture only when it's wanted (drawn, or asked for), once for it and its copies", () => {
+        // (A house asks for its materials: none of their pictures painted by it, merged into the
+        // atlas as it is out in the world)
+        const object = house(houses[1]);
+        const textured = new Set();
+
+        object.traverse((node) => {
+            if (node.isMesh && node.material.map) {
+                textured.add(node.material);
+            }
+        });
+
+        merge(object, { atlas: true });
+        assert.ok(textured.size >= 2, `${textured.size} textured materials`);
+        assert.ok([...textured].every((each) => paintPicture(each)), "each painted only when asked");
+
+        // (Painted once, whichever copy asks: a bridge's planks, an inside's walls)
+        const plaster = material("plaster");
+        const copy = plaster.clone();
+
+        copy.map = plaster.map.clone();
+
+        const picture = copy.map.image;
+
+        assert.equal(picture.width, 128);
+        assert.equal(plaster.map.image, picture);
+        assert.equal(paintPicture(plaster), false);
+        assert.equal(material("plaster"), plaster);
     });
 });
 

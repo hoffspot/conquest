@@ -21,7 +21,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { CHUNK, CHUNKS, WET } from "../core/overworld.js";
 import { allAtOnce } from "../core/steps.js";
-import { material } from "./art/engine/materials.js";
+import { material, paintPicture } from "./art/engine/materials.js";
 import { WILDS } from "./art/engine/atlas.js";
 import { holdSign, isSign, letGoSign, releaseSign } from "./art/kits/signs.js";
 import { TREE_WIND, Woodland } from "./art/kits/trees.js";
@@ -279,7 +279,15 @@ export class Chunks {
             // (The piece built last: its meshes made ready to merge, a step of their own, so the
             // chunk's merge when they're all built is only joining them: town3d.js partsOf)
             if (job.built) {
-                job.parts.push(...partsOf(job.built, { atlas: true }));
+                const parts = partsOf(job.built, { atlas: true });
+
+                // (One drawn in a picture of its own, not the atlas's, has it painted now rather
+                // than in the frame it's first drawn in: materials.js paintPicture)
+                for (const { material: own } of parts) {
+                    paintPicture(own);
+                }
+
+                job.parts.push(...parts);
                 job.built = null;
                 continue;
             }
@@ -929,6 +937,7 @@ function bridgeMaterial(look) {
         }
 
         own.name = `bridge ${look}`;
+        paintPicture(own);
         bridgeMaterials.set(look, own);
     }
 
