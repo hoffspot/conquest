@@ -306,7 +306,10 @@ A character built a step at a time asks for its skin first (`ask`), so it's pain
 of it is built, and puts it on last (`painting`): if it isn't back yet, that step yields `WAITING`
 (`core/steps.js`), and whatever's taking the steps comes back to it next frame (`Steps`), or, if
 it can't wait (all at once, or the game played on at once in a test), passes it `NOW`, and it's
-painted here. The picture is the same wherever it's painted. Where there are no workers (or one
+painted here. The game's loading, which draws nothing meanwhile, takes each character's steps as
+fast as they go but waits for its skin (`allWaiting`: the worker's heard from between; or, the
+worker gone quiet for ten seconds, as a phone short of memory can stop one, painted here), so the
+start town's folk have theirs painted there too (1.3 s of the page's work in headless Chromium). The picture is the same wherever it's painted. Where there are no workers (or one
 fails), or for a whole skin picture loaded in the character lab, it's painted here as ever. In
 headless Chromium on "high", this took a town's six guards from 10 s of frames to 4, and a
 tavern's eight folk from 9 to 3, at 6 ms a frame.

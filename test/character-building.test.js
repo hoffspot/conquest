@@ -42,7 +42,7 @@ const { buildGarment, compositeGarments, compositingGarments, fittingGarment, GA
 const { folkLook } = await import("../client/js/characters/folk.js");
 const { paintingSkin, paintSkin, SkinAtlas } = await import("../client/js/characters/skin.js");
 const { soldierLook } = await import("../client/js/characters/soldiers.js");
-const { allAtOnce, NOW, Steps, WAITING } = await import("../client/js/core/steps.js");
+const { allAtOnce, allWaiting, NOW, Steps, WAITING } = await import("../client/js/core/steps.js");
 const { Skins } = await import("../client/js/characters/skins.js");
 
 // The skin worker (skin-worker.js), run here: what's sent to it copied to it, and what it sends
@@ -224,6 +224,25 @@ describe("characters built a step at a time (Character.building)", () => {
         assert.deepEqual(told, [undefined, NOW]);
     });
 
+    it("comes back to a step waiting on work done elsewhere where nothing's drawn meanwhile, till it's done (or, gone quiet, has it done now)", async () => {
+        let done = false;
+        const waiting = function* () {
+            while (!done) {
+                if ((yield WAITING) === NOW) {
+                    return "here";
+                }
+            }
+
+            return "there";
+        };
+        const there = allWaiting(waiting());
+
+        setTimeout(() => (done = true), 30);
+        assert.equal(await there, "there");
+        done = false;
+        assert.equal(await allWaiting(waiting(), { patience: 30 }), "here");
+    });
+
     it("paints a skin in a worker while the rest of them is built, and puts it on when it's back: the same character", async () => {
         globalThis.Worker = Worker;
 
@@ -269,6 +288,37 @@ describe("characters built a step at a time (Character.building)", () => {
             assert.equal(failing.take(Infinity, { wait: true }), true);
             assert.equal(hashOf(failing.value), hashOf(now));
             assert.equal(kit.skins.ask(wench.look.skin), null);
+        } finally {
+            delete globalThis.Worker;
+        }
+    });
+
+    it("waits for a skin painted in the worker where nothing's drawn meanwhile (the game loading), rather than painting it here", async () => {
+        globalThis.Worker = Worker;
+
+        try {
+            const kit = { human, atlas, skins: new Skins(atlas) };
+            const worker = Worker.last;
+            const told = [];
+            const post = worker.postMessage.bind(worker);
+
+            worker.postMessage = (data) => told.push(Object.keys(data)[0]) && post(data);
+
+            // (Asked for as it starts, everything else built at once, then waited for: not
+            // called off to be painted here)
+            const building = allWaiting(Character.building(kit, options(soldier)));
+
+            assert.equal(kit.skins.jobs.size, 1);
+
+            while (kit.skins.jobs.size) {
+                await worker.deliver();
+            }
+
+            const character = await building;
+
+            assert.equal(kit.skins.jobs.size, 0);
+            assert.deepEqual(told, ["id"]);
+            assert.equal(hashOf(character), hashOf(new Character(kitOf(), options(soldier))));
         } finally {
             delete globalThis.Worker;
         }

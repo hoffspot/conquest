@@ -87,7 +87,8 @@ let prepared = null;
 
 /**
  * Start painting the layers in workers (a few at once, off the page's thread), for the material
- * to have when it's first asked for: resolves with them. Painted here and now if workers can't.
+ * (which, asked for before they're done, takes them once they are): resolves with them. Painted
+ * here and now if workers can't.
  */
 export function prepareAtlas(size = LAYER_SIZE) {
     if (prepared) {
@@ -126,7 +127,7 @@ export function prepareAtlas(size = LAYER_SIZE) {
         return stack(painted, size);
     })();
 
-    prepared = { promise, data: null };
+    prepared = { promise, data: null, size };
     promise.then((data) => {
         prepared.data = data;
     });
@@ -150,7 +151,7 @@ vec3 reliefNormal(vec3 position, vec3 normal, vec2 slope, float faceDirection) {
 
 /**
  * The shared material (made the first time it's asked for, its layers painted then unless
- * prepareAtlas has painted them already): a Lambert material drawing from the atlas with vertex
+ * prepareAtlas is painting them or has): a Lambert material drawing from the atlas with vertex
  * colours and relief.
  */
 export function atlasMaterial() {
@@ -218,12 +219,18 @@ transformed.y = mix(transformed.y, -0.06, smoothstep(wildsFade.x, wildsFade.y, d
     return material;
 }
 
-// The atlas's texture array, made once: its layers as painted (prepareAtlas's, or here and now)
+// The atlas's texture array, made once: its layers as painted (prepareAtlas's, or here and now).
+// Asked for while prepareAtlas's are still being painted (as the game gets the land ready), it
+// takes theirs once they are, rather than painting them all again here: until then it has none,
+// and isn't drawn (the game waits for them before it draws anything)
 let texture = null;
 
 function atlasTexture() {
     if (!texture) {
-        texture = new THREE.DataArrayTexture(prepared?.data ?? paintLayers(), LAYER_SIZE, LAYER_SIZE, LAYERS.length);
+        const waiting = Boolean(prepared && !prepared.data);
+        const size = prepared?.size ?? LAYER_SIZE;
+
+        texture = new THREE.DataArrayTexture(waiting ? null : (prepared?.data ?? paintLayers()), size, size, LAYERS.length);
         texture.format = THREE.RGBAFormat;
         texture.type = THREE.UnsignedByteType;
         texture.colorSpace = THREE.SRGBColorSpace;
@@ -233,7 +240,15 @@ function atlasTexture() {
         texture.minFilter = THREE.LinearMipmapLinearFilter;
         texture.generateMipmaps = true;
         texture.anisotropy = 4;
-        texture.needsUpdate = true;
+
+        if (waiting) {
+            prepared.promise.then((data) => {
+                texture.image.data = data;
+                texture.needsUpdate = true;
+            });
+        } else {
+            texture.needsUpdate = true;
+        }
     }
 
     return texture;

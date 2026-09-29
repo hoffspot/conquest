@@ -319,8 +319,9 @@ async function playing(save) {
     $("#loadlist").replaceChildren();
     setProgress(0, "Building the world");
     await painted();
-    await kit.ready;
 
+    // (The world planned while the skin atlas may still be being worked out elsewhere: it's
+    // needed only once the game's building its characters)
     const game = createGame({
         view,
         kit,
@@ -349,6 +350,7 @@ async function playing(save) {
     state.worldMap = null;
 
     state.game = game;
+    await kit.ready;
     await game.build(({ label, done, total }) => setProgress(done / total, label, `${done} of ${total}`));
     game.showSquares(settings.squares);
     showMinimap(settings.minimap);
@@ -684,8 +686,8 @@ async function playingJoined(save, welcome, joining) {
     $("#loadlist").replaceChildren();
     setProgress(0, "Building the world you've joined");
     await painted();
-    await kit.ready;
 
+    // (As playing's: the skin atlas waited for once it's needed)
     const game = createJoinedGame({
         view,
         kit,
@@ -706,6 +708,7 @@ async function playingJoined(save, welcome, joining) {
     state.worldMap?.dispose();
     state.worldMap = null;
     state.game = game;
+    await kit.ready;
     await game.build(({ label, done, total }) => setProgress(done / total, label, `${done} of ${total}`));
     game.showSquares(settings.squares);
     showMinimap(settings.minimap);
