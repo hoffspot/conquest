@@ -1419,11 +1419,11 @@ export class Game {
             }
         }
 
-        // Bars over the heads of the others on the player's map
+        // Bars over the heads of the others on the player's map (those that have one)
         for (const actor of battle.actors) {
             const avatar = this.avatars.get(actor.id);
 
-            if (actor.id !== this.me && avatar) {
+            if (actor.id !== this.me && avatar && hud.tracked.has(actor.id)) {
                 const head = avatar.point(1.08);
 
                 hud.place(actor.id, actor.dead || actor.map !== this.mapId ? null : view.toScreen(head));

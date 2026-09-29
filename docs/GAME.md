@@ -1658,9 +1658,16 @@ Everything that can be is built once: the town is merged, shaders are compiled w
 (and a character, creature, wyvern or dragon that comes later has its compiled before it's first
 drawn, hidden till then: `View.prepare`, in the background where the browser can, so a kind not
 seen before doesn't stall the frame it appears in; the birds each have their own colour from the
-start, so their shader's the one compiled while loading), particles reuse two buffers, blood on the ground is one instanced mesh, and projectiles and
+start, so their shader's the one compiled while loading), particles reuse two buffers (uploaded and drawn only as far as the highest one alive, and not at all with none: they were 192 KB a frame, 6,000 points drawn, whatever was alive), blood on the ground is one instanced mesh, and projectiles and
 effects add no lights. Battle damage costs a texture lookup or two a pixel on each character,
 and a small texture (a megabyte) each, uploaded again only when a blow lands or a wound heals.
+Each frame works out the place in the world of only what's shown (`View #updateShown`: the
+scene's own update is off), not the floors and folk of the buildings got ready near the player,
+hidden till they're gone into: 1,300 of a town's 2,200 nodes, 0.52 ms a frame down to 0.10 in
+headless Chromium. The bars over the others' heads are placed only for those who have one, from
+where the canvas is on the page, kept till it's resized (`View.toScreen`): reading it after a
+bar's been moved made the browser lay the page out again, once for everyone in sight, every frame
+(5–6% of a steady frame's JavaScript; now under 1%).
 
 ## Testing
 
@@ -1790,7 +1797,7 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
 - `test/effects.test.js`: five looks each for fireballs, bolts, heals and stuns, each like what it
   is (fireballs orange and red, bolts violet and blue, heals green, stars bright); flying in them
   (straight, spiralling, jittering, as twins, drawn out), bursting in their colours, rings and
-  stars.
+  stars; particles uploaded and drawn only as far as the highest one alive, and none with none.
 - `test/explored.test.js`: the buildings gone into, once each; a chunk's fog lifted when it's set
   foot in, and only that chunk, to the world's corners and nothing off it; kept and read back
   just as it was.
