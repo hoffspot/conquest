@@ -196,7 +196,7 @@ function framesOf(pieces) {
     const groups = new Map();
 
     for (const piece of pieces) {
-        const label = piece.kind === "house" ? `house ${piece.type ?? piece.style}` : piece.kind === "prop" ? "market" : ["wall", "tower", "gatehouse"].includes(piece.kind) ? "walls" : piece.kind === "tree" ? null : `${piece.kind} ${piece.name ?? ""}`.trim();
+        const label = piece.kind === "house" ? `house ${piece.type ?? piece.style}` : piece.kind === "prop" ? "stalls" : ["wall", "tower", "gatehouse"].includes(piece.kind) ? "walls" : piece.kind === "tree" ? null : `${piece.kind} ${piece.name ?? ""}`.trim();
 
         if (label) {
             const [hw, hd] = [piece.w * 2, piece.h * 2];
