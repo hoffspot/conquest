@@ -18,8 +18,26 @@ export { CELL, CELLS, WATER, WORLD_SIZE } from "./terrain.js";
 export const CHUNK = 64;
 export const CHUNKS = WORLD_SIZE / CHUNK;
 
+// Worlds already laid out, by seed (the few most recently asked for). A plan is the same every
+// time for a seed and takes a second or two to lay out, so it's laid out once and shared: frozen,
+// so nothing can change it for everyone else (its typed arrays aside, which can't be)
+const PLANNED = new Map();
+const KEPT = 4;
+
+function freeze(value) {
+    if (value && typeof value === "object" && !ArrayBuffer.isView(value) && !Object.isFrozen(value)) {
+        Object.freeze(value);
+
+        for (const each of Object.values(value)) {
+            freeze(each);
+        }
+    }
+
+    return value;
+}
+
 /**
- * Lay out a world from a seed: {
+ * Lay out a world from a seed (once: laid out again, the same plan, frozen): {
  *   seed, size (metres a side), cell (metres), cells (a side),
  *   height, temperature, moisture (Float32Array, 0 to 1, a cell each), water (Uint8Array: WATER),
  *   flow (Float32Array: how much rain drains through each cell: the wider a river),
@@ -34,6 +52,21 @@ export const CHUNKS = WORLD_SIZE / CHUNK;
  * }
  */
 export function planWorld(seed) {
+    const plan = PLANNED.get(seed) ?? freeze(layOutWorld(seed));
+
+    // (The most recently asked for kept last, the longest unasked for let go)
+    PLANNED.delete(seed);
+    PLANNED.set(seed, plan);
+
+    if (PLANNED.size > KEPT) {
+        PLANNED.delete(PLANNED.keys().next().value);
+    }
+
+    return plan;
+}
+
+/** A world laid out afresh from a seed, not kept (planWorld keeps and shares what it lays out). */
+export function layOutWorld(seed) {
     const land = shapeLand(seed);
     const settled = settleLand(land, seed);
 

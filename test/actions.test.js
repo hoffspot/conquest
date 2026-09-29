@@ -955,7 +955,11 @@ describe("arms and hands (actions.js, Rig.reachArm)", () => {
 
             const cell = cellOf(at);
 
-            cells.set(cell, [...(cells.get(cell) ?? []), { at, normal: normal.normalize(), hand: onHand[v] }]);
+            if (!cells.has(cell)) {
+                cells.set(cell, []);
+            }
+
+            cells.get(cell).push({ at, normal: normal.normalize(), hand: onHand[v] });
         }
 
         let deepest = -Infinity;
