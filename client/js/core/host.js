@@ -148,6 +148,12 @@ export const PICK_REACH = 1.6;
  */
 export const TRADE = Object.freeze({ reach: 4, apart: 7, asking: 30000 });
 
+/**
+ * How closely a people's soldiers look at someone passing for one of them: those this near
+ * (squares) who can see them, each second a chance to see through it (twice that right beside them).
+ */
+export const SCRUTINY = Object.freeze({ reach: 3, chance: 0.02 });
+
 /** How long something thrown away can be taken back (ms). */
 export const UNDO_MS = 8000;
 
@@ -786,6 +792,8 @@ export class Host {
             }
         }
 
+        this.#scrutiny(ms);
+
         // Boons worn off
         for (const player of this.players.values()) {
             if (player.boons.some(({ until }) => until <= this.battle.time)) {
@@ -1253,6 +1261,15 @@ export class Host {
             player.hero.boots = kicks;
         }
 
+        // (In a people's uniform, passing for one of their soldiers: not their own)
+        const guise = player.progress.disguise();
+        const passing = guise && guise !== player.realm ? guise : null;
+
+        if ((actor.guise ?? null) !== passing) {
+            actor.guise = passing;
+            this.#event("disguise", { id: player.id, people: passing, change: passing ? "on" : "off" });
+        }
+
         actor.power = { melee: 1 + bonus.melee, ranged: 1 + bonus.ranged, heal: 1 + bonus.heal, stun: 1 + bonus.stun, spell: 1 + bonus.spell };
         actor.armor = Math.min(ARMOR_CAP, bonus.armor);
 
@@ -1281,6 +1298,32 @@ export class Host {
         }
 
         return { keeper, shop, people: this.folk.get(keeper.id)?.people ?? "human" };
+    }
+
+    // Players passing for one of a people's soldiers, looked at by those near them: now and then
+    // one sees through it (the nearer, the likelier), and they're all told
+    #scrutiny(ms) {
+        for (const player of this.players.values()) {
+            const actor = this.battle.actor(player.id);
+
+            // (Seen through by striking one of them: told once)
+            if (actor?.guise && (actor.unmasked ?? -Infinity) > this.battle.time && player.seenThrough !== actor.unmasked) {
+                player.seenThrough = actor.unmasked;
+                this.#event("disguise", { id: player.id, people: actor.guise, change: "known" });
+            }
+
+            if (!actor?.guise || actor.dead || !this.battle.passes(actor, { team: actor.guise })) {
+                continue;
+            }
+
+            const watcher = this.battle.actors.find((other) => other.kind === "soldier" && other.team === actor.guise && !other.dead && other.map === actor.map && distanceBetween(other.square, actor.square) <= SCRUTINY.reach && this.battle.canSee(other, actor));
+
+            if (watcher && this.random.chance(SCRUTINY.chance * (ms / 1000) * (distanceBetween(watcher.square, actor.square) <= 1.5 ? 2 : 1))) {
+                this.battle.unmask(actor);
+                player.seenThrough = actor.unmasked;
+                this.#event("disguise", { id: player.id, people: actor.guise, change: "seen", by: watcher.id });
+            }
+        }
     }
 
     // A piece of gear as it's made for a player (bought, given): with what's rolled on it (core/

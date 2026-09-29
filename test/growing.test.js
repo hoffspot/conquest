@@ -4,7 +4,7 @@
 // boons, and the war coming on with the players' might
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
-import { STEP_MS } from "../client/js/core/battle.js";
+import { STEP_MS, UNMASKED_MS } from "../client/js/core/battle.js";
 import { BOUGHT, GROUND_MS, HOST_PLAYER, Host, UNDO_MS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { PACK_SIZE, priceOf, RANKS } from "../client/js/core/progress.js";
@@ -196,6 +196,49 @@ describe("growing stronger in play (host.js, progress.js)", () => {
         assert.equal(gear.length, 4);
         assert.deepEqual(gear.at(-1).worn, []);
         assert.equal(gear.at(-1).weapon, "bow");
+    });
+
+    it("passes for one of a people's soldiers in their helm, hauberk and cloak: not their enemy, till seen through or they strike one", () => {
+        const host = hosted({ gear: { mainHand: { id: "sword" }, head: { id: "helm", people: "orc" }, chest: { id: "hauberk", people: "orc" } }, pack: [{ id: "cloak", people: "orc", count: 1 }] });
+        const player = host.battle.actor(HOST_PLAYER);
+        const [x, y] = player.square;
+
+        host.battle.relations = () => true;
+        host.battle.add({ id: "orc-guard", kind: "soldier", name: "Orcish guard", weapon: "cleaver", team: "orc", square: [x + 6, y], ai: "patrol", role: "guard", patrol: [[x + 6, y]] });
+
+        const guard = host.battle.actor("orc-guard");
+
+        assert.equal(host.battle.hostile(player, guard), true, "not dressed as one of them");
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "equip", index: 0 }), { ok: true });
+        assert.equal(player.guise, "orc");
+        assert.equal(host.battle.hostile(player, guard), false, "passing for one of them");
+        assert.deepEqual(run(host, STEP_MS).filter(({ type }) => type === "disguise").map(({ people, change }) => [people, change]), [["orc", "on"]]);
+
+        // Stood beside them a while: seen through, and their enemy again
+        guard.square = [x + 1, y];
+        guard.x = x + 1.5;
+
+        const seen = [];
+
+        for (let t = 0; t < 120000 && !seen.length; t += STEP_MS) {
+            seen.push(...host.advance(STEP_MS).filter(({ type, change }) => type === "disguise" && change === "seen"));
+            guard.square = [player.square[0] + 1, player.square[1]];
+        }
+
+        assert.equal(seen.length, 1);
+        assert.equal(host.battle.hostile(player, guard), true);
+
+        // Forgotten after a while (out of their sight); then, striking one of them, known at once
+        host.battle.time += UNMASKED_MS;
+        assert.equal(host.battle.hostile(player, guard), false);
+        host.battle.unmask(player, 0);
+        guard.foes = {};
+        assert.equal(host.battle.passes(player, guard), true);
+
+        // (Out of the uniform: themselves again)
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "unequip", slot: "cloak" }), { ok: true });
+        assert.equal(player.guise, null);
+        assert.equal(host.battle.hostile(player, guard), true);
     });
 
     it("lets a player use the abilities they've learnt, and not before", () => {

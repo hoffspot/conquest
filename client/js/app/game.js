@@ -182,6 +182,14 @@ const FLUSH_EVERY = 0.1;
 // whoever's near them, aren't (docs/WAR.md M11)
 const DRAW_REACH = 160;
 
+// Passing for one of a people's soldiers (core/host.js "disguise" events), in words
+const DISGUISES = Object.freeze({
+    on: (people) => `In their uniform, you pass for one of the ${people} soldiers.`,
+    off: () => "Out of their uniform, you're yourself again.",
+    seen: (people) => `One of the ${people} soldiers sees through your disguise!`,
+    known: (people) => `You've shown yourself for what you are: the ${people} soldiers know you now.`,
+});
+
 // Some of a thing, in words: "a healing draught", "3 healing draughts"
 function thingsOf({ id, quality, count = 1 }) {
     const name = itemLabel({ id, quality }).toLowerCase();
@@ -297,7 +305,7 @@ const LIFT = Object.freeze({ height: 0.35, swing: 0.06, bob: 2.2 });
 const SHAKE_DIES = 4;
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "rank", "loot", "bought", "sold", "used", "gear", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -3418,6 +3426,12 @@ export class Game {
             case "gear":
                 this.#regear(event);
                 this.#progressed(event);
+                break;
+            case "disguise":
+                if (event.id === this.me) {
+                    this.hud.message(DISGUISES[event.change]?.(ADJECTIVES[event.people] ?? event.people) ?? "", 3.5);
+                }
+
                 break;
             case "rank":
             case "loot":
