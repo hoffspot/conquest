@@ -1628,7 +1628,7 @@ meanwhile, so an enemy by the player isn't left undrawn while guards across the 
 Someone still being built when the player comes onto their map is put where they are when
 they're drawn. A beast's body is sculpted and its pieces folded a step at a time too, the first
 time each of its kind's three looks is wanted (WILDS.md, *Built a step at a time*): about 70 ms
-(up to 310) in one piece before, now steps of half a millisecond (a few, at most 15), then kept. On phones the quality level draws
+(up to 310) in one piece before, now steps of half a millisecond (a few longer, up to 18: the first built, its code compiled then), then kept. On phones the quality level draws
 fewer pixels and thinner hair and uses smaller textures, and debug mode shows what each costs.
 With the world round the town, in the browser tests' views a frame makes 80 to 150 draw calls
 and draws 180,000 to 260,000 triangles, in the town or out of it, shadows included (the world's

@@ -265,7 +265,7 @@ playing, its body is made a step at a time within the frame's budget, as everyon
 - **The steps:** so many points of the body's field sampled, cells of its grid netted into a
   surface, or points of its skin bound to its bones (6,000); then its pieces folded, 32 at a time.
   Half a millisecond in the browser, as a rule; the longest, a few builders' first run (their code
-  compiled), up to 15.
+  compiled), up to 18.
 - **Wanted twice at once** (two wolves of a look coming together), the second takes up the
   sculpting where the first had got to. One made all at once meanwhile (the creature lab) ends
   the steps.
