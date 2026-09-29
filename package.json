@@ -12,6 +12,7 @@
     "dev": "node --watch server/index.js",
     "test": "node --test test/*.test.js",
     "test:e2e": "playwright test",
+    "e2e:durations": "node scripts/e2e-durations.js",
     "lint": "eslint .",
     "check": "npm run lint && npm test",
     "vendor:three": "node scripts/vendor-three.js",
