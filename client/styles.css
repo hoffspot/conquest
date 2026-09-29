@@ -1273,6 +1273,14 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     animation: talk-in 0.22s ease-out;
 }
 
+.pack {
+    width: min(900px, calc(100% - var(--safe-left) - var(--safe-right) - 24px));
+}
+
+.pack.trading {
+    width: min(560px, calc(100% - var(--safe-left) - var(--safe-right) - 24px));
+}
+
 .pack[hidden],
 .journal[hidden] {
     display: none;
@@ -1447,21 +1455,6 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     width: 78%;
     height: 78%;
     pointer-events: none;
-}
-
-.pack-cell.made-fine {
-    border-color: #6fbf5a;
-    box-shadow: inset 0 0 8px rgba(111, 191, 90, 0.35);
-}
-
-.pack-cell.made-masterwork {
-    border-color: #5a9ee0;
-    box-shadow: inset 0 0 8px rgba(90, 158, 224, 0.4);
-}
-
-.pack-cell.made-legendary {
-    border-color: #f0993a;
-    box-shadow: inset 0 0 10px rgba(240, 153, 58, 0.5);
 }
 
 .pack-cell[aria-selected="true"] {
@@ -1643,45 +1636,348 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     gap: 6px;
 }
 
-/* What's worn: a tile for each of weapon, body and shield */
-.pack-worn-list {
+/* The paperdoll: the player drawn live in the middle (by the game, on the canvas behind a clear
+   box), a slot for each part of them round it, the off hand greyed out behind a two-handed weapon;
+   the totals beneath */
+.pack-main {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    gap: 14px;
+    align-items: start;
+}
+
+.pack.trading .pack-main {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.doll {
+    --slot: 62px;
+    display: grid;
+    grid-template-columns: var(--slot) minmax(0, 1fr) var(--slot);
+    grid-template-rows: repeat(5, var(--slot)) var(--slot);
     gap: 6px;
 }
 
-.pack-worn {
+.doll-side {
     display: grid;
-    justify-items: center;
-    align-content: start;
-    gap: 3px;
-    padding: 6px 4px 8px;
+    gap: 6px;
+}
+
+.doll-side.left {
+    grid-column: 1;
+    grid-row: 1 / 6;
+    grid-template-rows: repeat(5, var(--slot));
+}
+
+.doll-side.right {
+    grid-column: 3;
+    grid-row: 1 / 6;
+    grid-template-rows: repeat(5, var(--slot));
+}
+
+.doll-side.foot {
+    grid-column: 1 / 4;
+    grid-row: 6;
+    grid-template-columns: repeat(3, var(--slot));
+    justify-content: center;
+}
+
+/* (Clear: the player's drawn on the canvas underneath it) */
+.doll-view {
+    grid-column: 2;
+    grid-row: 1 / 6;
+    min-height: calc(5 * var(--slot) + 24px);
+    border-radius: 12px;
+    border: 1px solid var(--field-border);
+    background: transparent;
+    box-shadow: inset 0 0 26px rgba(0, 0, 0, 0.55);
+    cursor: grab;
+    touch-action: none;
+}
+
+/* (The paperdoll showing: the panel clear, so the player drawn on the canvas beneath shows
+   through the paperdoll's box, its ground the box's shadow, under everything else in it) */
+.pack.dolled {
+    background: transparent;
+}
+
+.pack.dolled .pack-header {
+    background: var(--panel-solid);
+    border-radius: 14px 14px 0 0;
+}
+
+.pack.dolled .pack-body {
+    border-radius: 0 0 14px 14px;
+}
+
+.pack-dolled #minimap {
+    visibility: hidden;
+}
+
+.pack.dolled .doll-view {
+    position: relative;
+    z-index: -1;
+    box-shadow: inset 0 0 26px rgba(0, 0, 0, 0.55), 0 0 0 200vmax var(--panel-solid);
+}
+
+.doll-slot,
+.pack-worn {
+    position: relative;
+    display: grid;
+    place-items: center;
+    padding: 0;
     border-radius: 10px;
-    background: var(--field);
+    background: radial-gradient(circle at 50% 40%, rgba(255, 244, 220, 0.1), rgba(0, 0, 0, 0.3));
     border: 1px solid var(--field-border);
     color: var(--ink);
-    font-size: 13px;
-    text-align: center;
+    cursor: pointer;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+}
+
+.doll-slot svg {
+    width: 70%;
+    height: 70%;
+    pointer-events: none;
+}
+
+.doll-slot.empty svg {
+    opacity: 0.16;
+    filter: grayscale(1);
+}
+
+/* (Behind a two-handed weapon: its ghost, greyed out, striped across) */
+.doll-slot.locked {
+    cursor: not-allowed;
+    background: repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.35) 0 6px, rgba(255, 255, 255, 0.04) 6px 12px);
+}
+
+.doll-slot.locked svg {
+    opacity: 0.28;
+    filter: grayscale(1);
+}
+
+.doll-slot[aria-selected="true"] {
+    outline: 2px solid var(--gold-bright);
+    outline-offset: 1px;
+}
+
+.doll-slot.can-take {
+    box-shadow: 0 0 0 2px rgba(243, 207, 130, 0.65) inset;
+}
+
+.doll-slot.target {
+    background: rgba(236, 200, 130, 0.3);
+    border-color: var(--gold-bright);
+}
+
+.doll-slot.worn-now,
+.pack-cell.worn-now {
+    animation: worn-now 0.35s ease-out;
+}
+
+@keyframes worn-now {
+    from {
+        box-shadow: 0 0 0 3px var(--gold-bright);
+    }
 }
 
 .pack-where {
-    font-size: 11px;
+    position: absolute;
+    left: 5px;
+    top: 3px;
+    font-size: 9px;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--muted);
+    pointer-events: none;
 }
 
-.pack-none {
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    border: 1px dashed var(--field-border);
+.doll-slot .pack-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
 }
 
-.pack-worn .pack-button {
-    margin-top: 4px;
+/* How well made things are: common plain, fine blue, masterwork gold, legendary orange */
+.rarity-fine {
+    --rarity: #6aa6ff;
+}
+
+.rarity-masterwork {
+    --rarity: #e8c35a;
+}
+
+.rarity-legendary {
+    --rarity: #f08a3a;
+}
+
+.doll-slot[class*="rarity-"]:not(.rarity-common),
+.pack-cell[class*="rarity-"]:not(.rarity-common) {
+    border-color: var(--rarity);
+    box-shadow: inset 0 0 9px color-mix(in srgb, var(--rarity) 45%, transparent);
+}
+
+.pack-name[class*="rarity-"] {
+    color: var(--rarity, var(--ink));
+}
+
+.pack-row[class*="rarity-"] .pack-label {
+    color: var(--rarity, var(--ink));
+}
+
+/* The totals beside the paperdoll: all they wear and have grown into, their sets, who they pass for */
+.doll-totals {
+    margin-top: 10px;
+    font-size: 13px;
+}
+
+.doll-stats {
+    display: grid;
+    grid-template-columns: auto 1fr auto 1fr;
+    gap: 2px 10px;
+    margin: 0;
+}
+
+.doll-stats dt {
+    color: var(--muted);
+}
+
+.doll-stats dd {
+    margin: 0;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+}
+
+.doll-set {
+    margin: 6px 0 0;
+    color: #7ee08a;
+}
+
+.doll-disguise {
+    margin: 6px 0 0;
+    color: var(--gold-bright);
+    font-style: italic;
+}
+
+/* The tabs (Gear, Skills), the pack's pages and putting it in order */
+.pack-tabs {
+    display: flex;
+    gap: 4px;
+}
+
+.pack-tab {
     min-height: 30px;
+    padding: 0 12px;
+    border-radius: 8px;
+    border: 1px solid var(--field-border);
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.pack-tab[aria-selected="true"] {
+    background: var(--field);
+    color: var(--gold-bright);
+    border-color: var(--panel-border);
+}
+
+.pack-pages {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.pack-page {
+    width: 34px;
+    height: 30px;
+    border-radius: 8px;
+    border: 1px solid var(--field-border);
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    cursor: pointer;
+}
+
+.pack-page[aria-pressed="true"] {
+    background: var(--field);
+    color: var(--gold-bright);
+    border-color: var(--panel-border);
+}
+
+.pack-page.target {
+    border-color: var(--gold-bright);
+}
+
+.pack-sort {
+    margin-left: auto;
+}
+
+/* A thing tapped: its name in its make's colour, what it is, what it does, and against what's worn */
+.pack-card {
+    display: grid;
+    gap: 4px;
+}
+
+.pack-kind,
+.pack-worth {
+    margin: 0;
     font-size: 12px;
+    color: var(--muted);
+}
+
+.pack-lines,
+.pack-compare {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.pack-compare {
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid var(--field-border);
+}
+
+.pack-compare-title {
+    color: var(--muted);
+}
+
+.tone-bonus {
+    color: #8fb8ff;
+}
+
+.tone-set,
+.tone-better {
+    color: #7ee08a;
+}
+
+.tone-worse {
+    color: #e88a78;
+}
+
+.tone-note {
+    color: var(--faint);
+    font-style: italic;
+}
+
+@media (max-width: 720px) {
+    .pack-main {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .doll {
+        --slot: 54px;
+    }
 }
 
 .pack-icon {

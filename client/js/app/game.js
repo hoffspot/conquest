@@ -34,6 +34,7 @@ import { CREATURES } from "../core/creatures.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
 import { HIRES, HOST_PLAYER, Host, PICK_REACH, REFUSALS, SHOP_REACH, SHOPKEEPERS, TRADE, UNDO_MS } from "../core/host.js";
 import { dress } from "../characters/liveries.js";
+import { GEAR, GEAR_SLOTS, offHandFree } from "../core/gear.js";
 import { ABILITIES, itemLabel, ITEMS, priceOf, Progress, QUALITIES, TREES, wares } from "../core/progress.js";
 import { PACE } from "../core/netplay.js";
 import { COUNSEL, MOST_REQUESTS, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
@@ -72,6 +73,7 @@ import { itemPicture } from "./icons.js";
 import { JournalPanel, bearing, regardOf } from "./journal.js";
 import { SpellbookPanel } from "./spellbook.js";
 import { PackPanel } from "./pack.js";
+import { describe, totals } from "./gearinfo.js";
 import { TalkPanel } from "./talk.js";
 import { ACTIONS, ActionWheel, actionOf, assignable, directionOf, forFriends, PLACES, readWheels, SIDES, WHEELS } from "./wheel.js";
 
@@ -214,11 +216,8 @@ function aboutOf({ id, quality }) {
         return worth.trim();
     }
 
-    if (slot === "weapon") {
-        return power > 1 ? `A weapon: its blows ${Math.round((power - 1) * 100)}% harder.` : "A weapon.";
-    }
-
-    return `Armour: takes ${Math.round(armor * power * 100)}% off each blow.`;
+    // (Gear: what it does is told piece by piece, app/gearinfo.js)
+    return slot === "mainHand" ? "A weapon." : `Armour: takes ${Math.round(armor * power * 100)}% off each blow.`;
 }
 
 // What lingers on someone after some blows (core/afflictions.js), as it shows: rising off them
@@ -681,6 +680,10 @@ export class Game {
         this.pack = new PackPanel(this.hud.root);
         this.pack.onCommand = (command) => this.#packCommand(command);
         this.pack.onWheel = (id) => this.#putOnWheel(`item:${id}`);
+        this.dollTurn = 0;
+        this.pack.onTurn = (angle) => {
+            this.dollTurn += angle;
+        };
         this.spellbook = new SpellbookPanel(this.hud.root);
         this.spellbook.onWheel = (id) => this.#putOnWheel(id, ACTIONS[id]?.on === "enemy" ? "enemy" : "self");
         this.spellbook.onClose = () => this.closeSpellbook();
@@ -1055,8 +1058,14 @@ export class Game {
 
         const steps = this.#tick(dt);
         const updated = performance.now();
+        const mine = this.avatars.get(this.me);
 
-        this.view.render();
+        // (The pack open on the paperdoll: the player alone drawn, live, the world behind it still)
+        if (this.pack?.showingDoll && mine) {
+            this.view.renderPreview(this.pack.dollView, mine.object, { height: mine.character.height ?? 1.7, turn: this.dollTurn, clip: this.pack.body });
+        } else {
+            this.view.render();
+        }
 
         const rendered = performance.now();
 
@@ -2566,7 +2575,7 @@ export class Game {
     // Trade with a shopkeeper: the pack open, their wares in it
     #openShop({ shop, keeper, name }) {
         this.closeJournal();
-        this.shopping = { shop, keeper, name };
+        this.shopping = { shop, keeper, name, people: this.host.folk.get(keeper)?.people ?? "human" };
         this.#showPack();
     }
 
@@ -2581,11 +2590,30 @@ export class Game {
 
             return { tree, name, rank, title: ["Untried", "Trained", "Adept", "Veteran", "Master", "Legend"][rank], xp, from, to, grows, ability: learnt.length ? `Learnt: ${learnt.join(", ")}` : null };
         });
-        const gear = ["weapon", "body", "shield"].map((slot) => ({ slot, item: progress.gear[slot], label: progress.gear[slot] ? itemLabel(progress.gear[slot]) : null }));
-        const pack = progress.pack.map((stack) => stack && { ...stack, label: itemLabel(stack), about: aboutOf(stack), use: ITEMS[stack.id].use ? (ITEMS[stack.id].tome ? "Read" : stack.id === "meal" || ITEMS[stack.id].food ? "Eat" : "Drink") : null, equip: ITEMS[stack.id].slot ? (ITEMS[stack.id].slot === "weapon" ? "Wield" : "Wear") : null, price: priceOf(stack, { haggle, selling: true }) });
+        // Each slot of the paperdoll: what's in it and what it does; the off hand greyed out behind
+        // a two-handed weapon (but for a bow's quiver)
+        const held = progress.gear.mainHand?.id ?? null;
+        const gear = GEAR_SLOTS.map(({ id: slot, label, takes }) => {
+            const piece = progress.gear[slot];
+            const item = piece && { ...piece, label: itemLabel(piece) };
+
+            return { slot, label, takes, item: item && { ...item, info: describe(piece, progress, { label: item.label, haggle }) }, locked: slot === "offHand" && !offHandFree(held) && !GEAR[held]?.quiver, only: slot === "offHand" && GEAR[held]?.quiver ? "Quiver" : null };
+        });
+        const pack = progress.pack.map((stack, index) => {
+            if (!stack) {
+                return null;
+            }
+
+            const def = ITEMS[stack.id];
+            const label = itemLabel(stack);
+
+            return { ...stack, label, about: aboutOf(stack), use: def.use ? (def.tome ? "Read" : stack.id === "meal" || def.food ? "Eat" : "Drink") : null, equip: def.slot ? (def.slot === "mainHand" ? "Wield" : "Wear") : null, takes: def.slot ?? null, price: priceOf(stack, { haggle, selling: true }), info: def.slot ? describe(stack, progress, { index, label, haggle }) : null };
+        });
+        const me = this.battle.actor(this.me);
+        const summed = totals(progress, { hp: me ? me.maxHp - progress.bonuses().hp : 50, stamina: me ? me.maxStamina - progress.bonuses().stamina : 50 });
         const shop = this.shopping && {
             name: this.shopping.name,
-            wares: wares(this.shopping.shop).map((item) => {
+            wares: wares(this.shopping.shop, this.shopping.people).map((item) => {
                 const price = priceOf(item, { haggle });
 
                 return { item, label: itemLabel(item), price, affordable: price <= progress.gold };
@@ -2600,6 +2628,7 @@ export class Game {
             gold: progress.gold,
             skills,
             gear,
+            totals: summed,
             pack,
             shop,
             trade: trade && { name: this.host.players.get(other)?.hero.name ?? "them", mine: offer(trade.offers[this.me]), theirs: offer(trade.offers[other]), agreed: { mine: Boolean(trade.agreed[this.me]), theirs: Boolean(trade.agreed[other]) } },

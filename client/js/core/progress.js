@@ -527,12 +527,18 @@ export class Progress {
             }
         }
 
-        // The gear's: a weapon's make
+        // The gear's: a weapon's make, in the blows it makes (up close, from afar)
         const weapon = this.gear.mainHand;
         const made = QUALITIES[weapon?.quality]?.power ?? 1;
+        const kinds = new Set((WEAPONS[weapon?.id]?.attacks ?? []).map(({ kind }) => kind));
 
-        totals.melee = (1 + totals.melee) * made - 1;
-        totals.ranged = (1 + totals.ranged) * made - 1;
+        if (kinds.has("melee")) {
+            totals.melee = (1 + totals.melee) * made - 1;
+        }
+
+        if (kinds.has("ranged")) {
+            totals.ranged = (1 + totals.ranged) * made - 1;
+        }
 
         // (A wand or a grimoire in hand: spells as much stronger as its boost)
         if (ITEMS[weapon?.id]?.magic) {
@@ -835,6 +841,46 @@ export class Progress {
         if (quiver) {
             this.gear.offHand = null;
         }
+
+        return null;
+    }
+
+    /**
+     * What putting on a piece from the pack would change (as equip, `to`): { reason (why it can't
+     * be, or null), before and after (bonuses()), off (what would come off: pieces), weapon (the
+     * one they'd fight with) }. Nothing's changed.
+     */
+    trying(index, to = null) {
+        const trial = new Progress(this.toJSON());
+        const before = this.bonuses();
+        const was = { ...trial.gear };
+        const reason = trial.equip(index, to);
+        const off = reason ? [] : SLOT_IDS.filter((slot) => was[slot] && trial.gear[slot] !== was[slot] && !alike(trial.gear[slot], was[slot])).map((slot) => was[slot]);
+
+        return { reason, before, after: reason ? before : trial.bonuses(), off, weapon: weaponOf(trial) };
+    }
+
+    /**
+     * Put the pack in order: gear first (by where it's worn, the best made first), then things to
+     * use, then tomes, then creatures' parts; things alike put together.
+     */
+    sort() {
+        const order = (stack) => {
+            const def = ITEMS[stack.id];
+            const group = def.slot ? 0 : def.use && !def.tome && !def.part ? 1 : def.tome ? 2 : 3;
+            const slot = def.slot ? GEAR_SLOTS.findIndex(({ takes }) => takes === def.slot) : 0;
+
+            return [group, slot, -Object.keys(QUALITIES).indexOf(stack.quality ?? "common"), def.label];
+        };
+        const stacks = packOf(this.pack.filter(Boolean)).filter(Boolean);
+
+        stacks.sort((a, b) => {
+            const [x, y] = [order(a), order(b)];
+
+            return x.findIndex((value, k) => value !== y[k]) === -1 ? 0 : x.map((value, k) => (value < y[k] ? -1 : value > y[k] ? 1 : 0)).find((sign) => sign !== 0);
+        });
+
+        this.pack = [...stacks, ...Array(PACK_SIZE - stacks.length).fill(null)];
 
         return null;
     }

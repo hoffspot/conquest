@@ -542,8 +542,9 @@ export class Host {
      *  - { type: "buy", item, from }: buy something ({ id, quality }) from a shopkeeper near them
      *    (an id); { type: "sell", index, to, count }: sell things (one, with no count) from the
      *    stack at `index` in their pack to one;
-     *  - { type: "equip", index }, { type: "unequip", slot }: put on (or take up) gear from their
-     *    pack, or take armour off; { type: "use", index }: use something in their pack (or
+     *  - { type: "equip", index, to }, { type: "unequip", slot, to }: put on (or take up) gear from
+     *    their pack (in a slot, `to`: a ring's hand), or take it off (into a slot of the pack,
+     *    `to`); { type: "sort" }: put the pack in order; { type: "use", index }: use something in their pack (or
      *    { type: "use", item }: the first of a kind of thing in it, by its id);
      *  - { type: "arrange", from, to }: move what's in one slot of their pack to another (put
      *    together with things alike, or swapped); { type: "split", index, count, to }: split
@@ -685,6 +686,8 @@ export class Host {
                 return this.#use(player, actor, Number.isInteger(command.index) ? command.index : player.progress.slotOf(command.item));
             case "arrange":
                 return this.#packed(player.progress.move(command.from, command.to));
+            case "sort":
+                return this.#packed(player.progress.sort());
             case "split":
                 return this.#packed(player.progress.split(command.index, command.count, Number.isInteger(command.to) ? command.to : undefined));
             case "discard":
