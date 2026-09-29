@@ -18,7 +18,7 @@ import { frog, swarm, wisp } from "./flyers.js";
 import { humanoidLook, LOOKS } from "./looks.js";
 import { quadruped } from "./quadruped.js";
 import { serpent } from "./serpent.js";
-import { fold } from "./sculpt.js";
+import { fold, sculpting } from "./sculpt.js";
 import { seeded } from "./shapes.js";
 
 /** What builds each body. */
@@ -433,11 +433,12 @@ export function dressCreature(kit, id, options) {
 
 /**
  * The same (dressCreature), a step at a time (each a yield: a people-shaped one's character is
- * built in steps, Character.building's; a beast is built at once), returning it.
+ * built in steps, Character.building's; a beast's body, the first time one of its kind's is
+ * wanted, sculpted in steps, sculpting's), returning it.
  */
 export function* dressingCreature(kit, id, { seed = 1, equipment = [], guard = null, hairDetail = 1 } = {}) {
     if (LOOKS[id].body !== "humanoid") {
-        return new BeastAvatar(id, { seed });
+        return yield* sculpting(() => new BeastAvatar(id, { seed }));
     }
 
     const look = humanoidLook(id, seed);

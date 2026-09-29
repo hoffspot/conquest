@@ -112,14 +112,16 @@ describe("what flies in the sky (flyers3d.js)", () => {
         flyers.dispose();
     });
 
-    it("sends a wyvern over the wild lands they hunt in now and then, and none over a meadow", () => {
+    it("sends a wyvern over the wild lands they hunt in now and then, built a little each frame before it comes, and none over a meadow", () => {
         for (const [land, expected] of [["mountain", true], ["meadow", false]]) {
             const flyers = new Flyers({ landAt: () => land, random: seeded(7) });
             let wyverns = 0;
+            let hatching = 0;
 
             for (let t = 0; t < 600; t += 0.1) {
                 flyers.update(0.1, t, { x: 0, z: 0 });
                 wyverns = Math.max(wyverns, flyers.aloft.filter(({ kind }) => kind === "wyvern").length);
+                hatching += flyers.hatching ? 1 : 0;
 
                 for (const flier of flyers.aloft) {
                     assert.ok(flier.y >= ALOFT.wyvern[0] && flier.y <= ALOFT.wyvern[1]);
@@ -127,6 +129,7 @@ describe("what flies in the sky (flyers3d.js)", () => {
             }
 
             assert.equal(wyverns > 0, expected, land);
+            assert.equal(hatching > 1, expected, `${land}: ${hatching} frames building one`);
             assert.ok(wyverns <= 1);
             assert.ok(WYVERN_LANDS.includes(land) === expected);
             flyers.dispose();

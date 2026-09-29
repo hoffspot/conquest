@@ -3242,8 +3242,10 @@ export class Game {
 
             const avatar = this.avatars.get(event.id);
 
-            // (Someone not drawn yet: one of the folk of a building being got ready)
-            if (!avatar) {
+            // (Someone not drawn yet: one of the folk of a building being got ready; or taken out
+            // of the battle in the same step, a building's folk let go, still drawn till the game
+            // lets them go too: nothing to show)
+            if (!avatar || !battle.actor(event.id)) {
                 continue;
             }
 

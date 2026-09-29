@@ -9,10 +9,14 @@
 // Each kind of bird is one instanced mesh (a dozen triangles a bird), its wings beating in the
 // shader, each bird's own time; each flock flies across near the player, or circles, and is gone
 // once it's far off. The wyverns and the dragon are the creatures as they're drawn on the ground,
-// flying. Every flier is drawn by each player's own game, from its own random numbers.
+// flying: each built a little each frame before it comes (the first of each of its kind's looks
+// takes a while to sculpt: beasts/sculpt.js). Every flier is drawn by each player's own game, from
+// its own random numbers.
 
 import * as THREE from "three";
 import { BeastAvatar } from "../beasts/beast.js";
+import { sculpting } from "../beasts/sculpt.js";
+import { Steps } from "../core/steps.js";
 
 /**
  * The birds: how big (metres across the wings), their colours (one of them each: sRGB), how many
@@ -63,6 +67,9 @@ export const FLYING = Object.freeze({ every: [5, 14], chance: 0.7, flocks: 3, wy
 
 /** How high the wyverns and the dragon fly (metres). */
 export const ALOFT = Object.freeze({ wyvern: [18, 30], dragon: [28, 40] });
+
+// How long (ms) a frame gives to building a wyvern or dragon that's to come
+const HATCHING = 2;
 
 const TAU = Math.PI * 2;
 const MOST = 32;
@@ -182,6 +189,9 @@ export class Flyers {
 
         /** The wyverns and dragons up in the air: { kind, beast, mode, ... }. */
         this.aloft = [];
+
+        /** A wyvern or dragon being built to come (one at a time): { kind, steps, up(beast, player) }. */
+        this.hatching = null;
         this.next = between(random, FLYING.every) * 0.5;
         this.nextWyvern = between(random, FLYING.wyvern);
         this._matrix = new THREE.Matrix4();
@@ -208,6 +218,7 @@ export class Flyers {
 
         this.flocks = this.flocks.filter((flock) => !flock.gone);
         this.#dragon(player);
+        this.#hatchOn(player);
 
         for (const flier of this.aloft) {
             this.#fly(flier, dt, player);
@@ -248,7 +259,7 @@ export class Flyers {
             this.flocks.at(-1).mode = circles ? "circle" : this.flocks.at(-1).mode;
             Object.assign(this.flocks.at(-1), circles ? this.#course(player, { speed: this.flocks.at(-1).speed, height: BIRDS[kind].height, circles: true }) : {});
         } else {
-            this.aloft.push({ kind, beast: this.#beast(kind), ...this.#course(player, { speed: kind === "dragon" ? 13 : 11, height: ALOFT[kind], circles, radius: [24, 36] }) });
+            this.aloft.push({ kind, beast: this.#beast(new BeastAvatar(kind, { seed: this.#seed() })), ...this.#course(player, { speed: kind === "dragon" ? 13 : 11, height: ALOFT[kind], circles, radius: [24, 36] }) });
         }
     }
 
@@ -277,10 +288,10 @@ export class Flyers {
         if (this.nextWyvern <= 0) {
             this.nextWyvern = between(this.random, FLYING.wyvern);
 
-            if (WYVERN_LANDS.includes(land) && !this.aloft.some(({ kind }) => kind === "wyvern") && this.random() < FLYING.wyvernChance) {
+            if (WYVERN_LANDS.includes(land) && !this.aloft.some(({ kind }) => kind === "wyvern") && !this.hatching && this.random() < FLYING.wyvernChance) {
                 const circles = this.random() < 0.5;
 
-                this.aloft.push({ kind: "wyvern", beast: this.#beast("wyvern"), ...this.#course(player, { speed: 11, height: ALOFT.wyvern, circles, radius: [20, 30] }) });
+                this.#hatch("wyvern", (beast, now) => this.aloft.push({ kind: "wyvern", beast, ...this.#course(now, { speed: 11, height: ALOFT.wyvern, circles, radius: [20, 30] }) }));
             }
         }
     }
@@ -406,16 +417,37 @@ export class Flyers {
         const share = Math.min(1, 70 / Math.max(away, 1));
         const centre = [player.x + (lx - player.x) * share, player.z + (lz - player.z) * share];
 
-        if (!flying) {
-            this.aloft.push({ kind: "dragon", beast: this.#beast("dragon"), ...this.#course(player, { speed: 13, height: ALOFT.dragon, circles: true, radius: [30, 40] }), centre, left: Infinity });
-        } else if (flying.mode === "circle") {
+        if (!flying && !this.hatching) {
+            this.#hatch("dragon", (beast, now) => this.aloft.push({ kind: "dragon", beast, ...this.#course(now, { speed: 13, height: ALOFT.dragon, circles: true, radius: [30, 40] }), centre, left: Infinity }));
+        } else if (flying?.mode === "circle") {
             flying.centre = centre;
         }
     }
 
-    #beast(kind) {
-        const beast = new BeastAvatar(kind, { seed: 1 + Math.floor(this.random() * 1000) });
+    // Which one of its kind a wyvern or dragon is (sizes and colours: BeastAvatar's seed)
+    #seed() {
+        return 1 + Math.floor(this.random() * 1000);
+    }
 
+    // A wyvern or dragon to come: built a step at a time, then sent `up` from where the player is
+    #hatch(kind, up) {
+        const seed = this.#seed();
+
+        this.hatching = { kind, steps: new Steps(sculpting(() => new BeastAvatar(kind, { seed }))), up };
+    }
+
+    // The one being built, built on a little (HATCHING), and sent up once it's built
+    #hatchOn(player) {
+        const hatching = this.hatching;
+
+        if (hatching?.steps.take(performance.now() + HATCHING)) {
+            this.hatching = null;
+            hatching.up(this.#beast(hatching.steps.value), player);
+        }
+    }
+
+    // A wyvern or dragon put in the sky
+    #beast(beast) {
         // (So high up, its shadow would fall far off: none, to spare drawing it again)
         beast.object.traverse((node) => {
             node.castShadow = false;
@@ -489,6 +521,8 @@ export class Flyers {
         for (const flier of [...this.aloft]) {
             this.#let(flier);
         }
+
+        this.hatching = null;
 
         for (const mesh of this.meshes.values()) {
             mesh.geometry.dispose();

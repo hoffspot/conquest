@@ -204,7 +204,8 @@ smaller, its colour a little different, its markings its own.
   with fur, scales, bark or stone in its grain and its belly paler, and bound to its bones (each
   point to the nearest few, weighted by distance) so it bends where they do. The rest of its
   pieces (claws, teeth, horns, quills) are folded into a few meshes on the same bones (`fold`),
-  so a creature's two to eight things to draw, 12,000 to 21,000 triangles.
+  so a creature's two to eight things to draw, 12,000 to 21,000 triangles. Both are made once
+  for each of a kind's three looks and shared by every one of it after.
 - **Four-legged** (`quadruped.js`): a deep chest, a waist and haunch (sloping down behind for a
   hyena); a neck and head with a muzzle and jaw, or a cat's short face with whisker pads and
   whiskers, or a crocodile's long flat jaws with rows of teeth and its eyes and nostrils raised on
@@ -246,3 +247,32 @@ Each moves itself (`pose`): walking and running, breathing and looking about, th
 of attacking it varies between, three to six ways of passing the time when nothing's near
 (sitting, lying down, sniffing, grooming, howling, coiling, crouching, rooting), flinching when
 struck, and dying its own way.
+
+### Built a step at a time
+
+Sculpting a body is the most of building a creature: about 70 ms in the browser the first time
+each of a kind's three looks is wanted, up to 310 (a skeleton has no body to sculpt, but 300
+bones to fold). Done in one piece in the middle of play, that's a frame or several lost. So where a creature comes while
+playing, its body is made a step at a time within the frame's budget, as everyone's is
+(CHARACTERS.md, *Built a step at a time*):
+
+- **`sculpting(make)`** (`sculpt.js`) makes something whose making builds bodies (`make`: `new
+  BeastAvatar(...)`) a step at a time. A body not made yet isn't made there and then: its build
+  gives it back (`Unmade`), and `make` is done again once it's been made. That's the way React's
+  Suspense works: the builders (5,000 lines of them) stay as they are, rather than each becoming
+  steps of its own. It takes a few milliseconds to build a creature again, and a body made once
+  for its look is shared by every one of it after, so only a look's first takes steps.
+- **The steps:** so many points of the body's field sampled, cells of its grid netted into a
+  surface, or points of its skin bound to its bones (6,000); then its pieces folded, 32 at a time.
+  Half a millisecond in the browser, as a rule; the longest, a few builders' first run (their code
+  compiled), up to 18.
+- **Wanted twice at once** (two wolves of a look coming together), the second takes up the
+  sculpting where the first had got to. One made all at once meanwhile (the creature lab) ends
+  the steps.
+- **The same:** a body made a step at a time is byte for byte what it was made all at once.
+- **Where:** creatures coming into view (`dressingCreature`, as the game draws the wild's), and a
+  wyvern or the dragon before it comes into the sky (GAME.md, *What flies*). The creature lab
+  builds at once.
+- **Folding** a creature's pieces gathers their points into arrays made once, counted first,
+  rather than grown a number at a time: a skeleton's or the wight lord's first build, mostly
+  folding, went from 54 to 102 ms to 17 to 47 (in Node).
