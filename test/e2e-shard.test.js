@@ -1,5 +1,6 @@
 // Splitting the end-to-end tests between CI's jobs by how long each takes (scripts/e2e-shard.js)
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { split, testName, testsIn } from "../scripts/e2e-shard.js";
 
@@ -34,7 +35,7 @@ describe("the end-to-end tests split between CI's jobs (scripts/e2e-shard.js)", 
         );
     });
 
-    it("names the tests as --test-list takes them, from a Playwright JSON report", () => {
+    it("names the tests as --test-list takes them, from a Playwright JSON report, and has a time for each", () => {
         const report = {
             suites: [
                 {
@@ -51,5 +52,11 @@ describe("the end-to-end tests split between CI's jobs (scripts/e2e-shard.js)", 
             ["game.spec.js › loads", "game.spec.js › on a phone › fits the screen"],
         );
         assert.equal(testName("a.spec.js", ["b", "c"]), "a.spec.js › b › c");
+
+        // (The times kept are for tests by those names: every one a number of seconds)
+        const durations = JSON.parse(readFileSync(new URL("../e2e/durations.json", import.meta.url), "utf8"));
+
+        assert.ok(Object.keys(durations).length > 0);
+        assert.ok(Object.entries(durations).every(([name, seconds]) => /\.spec\.js › /.test(name) && seconds > 0));
     });
 });

@@ -391,15 +391,21 @@ npm run build:manifest  # after changing what the game downloads: lists it for t
 npm run vendor:three    # after changing the three version in package.json: copies it to client/vendor
 npm run build:characters -- --mpfb2=../mpfb2  # rebuilds client/characters from MakeHuman's MPFB2
 npm run build:music     # remakes client/music, the music's instrument recordings, from the VCSL
+npm run e2e:durations -- report.json  # keeps how long each browser test took, for CI's split
 ```
 
 `npm test` checks that `client/js/app/manifest.js` (the loading screen's list of files and their
 sizes) is up to date, so run `npm run build:manifest` after changing the game's code or data. The
 browser tests need Chromium: run `npx playwright install chromium` once, or set `CHROMIUM_PATH`
 to an existing Chromium or Chrome executable. Every browser test has a page of its own, so they
-run side by side (on half the machine's cores; `--workers=N` for more or fewer), and CI splits
-them between three jobs run at once (`--shard=1/3`...). CI runs for each pull request, and for
-main as each is merged; lint and the unit tests are a job of their own.
+run side by side (on half the machine's cores; `--workers=N` for more or fewer). CI splits them
+between eight jobs run at once, each about as long as the others: `scripts/e2e-shard.js` gives
+each job its share by how long each test last took (`e2e/durations.json`; a test not timed yet
+counts as the median), and the job runs it with `--test-list`. After adding tests or making them
+much slower or quicker, time them one at a time as CI runs them and keep the times:
+`PLAYWRIGHT_JSON_OUTPUT_NAME=report.json npx playwright test --workers=1 --reporter=json`, then
+`npm run e2e:durations -- report.json`. CI runs for each pull request, and for main as each is
+merged; lint and the unit tests are a job of their own.
 
 While the game is running, the browser console reaches it through `pellagos`: for example
 `pellagos.game.battle.actor("orc")`, or `pellagos.game.advance(10)` to play on ten seconds
@@ -588,8 +594,9 @@ client/                 The game (static files served to the browser)
 server/                 A static file server for playing locally (npm start), and the relay that
                         games playing together talk through (relay.js)
 test/                   Unit tests
-e2e/                    Playwright browser tests
-scripts/                vendor-three.js, build-characters.js, build-manifest.js, build-music.js
+e2e/                    Playwright browser tests, and how long each took (durations.json)
+scripts/                vendor-three.js, build-characters.js, build-manifest.js, build-music.js,
+                        e2e-shard.js and e2e-durations.js (CI's split of the browser tests)
 .github/workflows/      CI (ci.yml) and publishing to GitHub Pages (pages.yml)
 docs/GAME.md            How the game works
 docs/CHARACTERS.md      The character engine, and the research behind it

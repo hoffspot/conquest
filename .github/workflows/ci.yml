@@ -25,14 +25,16 @@ jobs:
       - run: npm test
 
   # The end-to-end tests, split between jobs run side by side, each job's about as long as the
-  # others' (scripts/e2e-shard.js: by how long each test took, e2e/durations.json). More jobs
-  # here, the shorter each; the longest test is as short as a job can be
+  # others' (scripts/e2e-shard.js: by how long each test took, e2e/durations.json). Eight jobs
+  # take about 4½ minutes each (and another 40 s or so getting ready): more would be quicker,
+  # down to the longest test's 1¾ minutes, but a run is then 9 jobs, and two runs at once (a
+  # merge's and the next pull request's) stay within GitHub's 20 at a time
   e2e:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     name: e2e (${{ matrix.shard }} of ${{ strategy.job-total }})
     steps:
       - uses: actions/checkout@v5
