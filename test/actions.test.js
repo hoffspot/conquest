@@ -16,7 +16,7 @@ import { Battle, STEP_MS } from "../client/js/core/battle.js";
 import { PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../client/js/core/roles.js";
 import { pickAnother, Variety } from "../client/js/core/variety.js";
 import { STARTING_WEAPONS, WEAPONS } from "../client/js/core/weapons.js";
-import { Avatar } from "../client/js/world/avatar.js";
+import { Avatar, POSING, posingEvery } from "../client/js/world/avatar.js";
 
 const manifest = JSON.parse(readFileSync(new URL("../client/characters/human.json", import.meta.url), "utf8"));
 const unpacked = gunzipSync(readFileSync(new URL("../client/characters/human.bin", import.meta.url)));
@@ -567,6 +567,66 @@ describe("characters in the world (avatar.js)", () => {
         const { frames } = follow({ type: "move", to: [50, 3] }, 12);
 
         assert.ok(Math.max(...frames.map(({ lag }) => lag)) < 0.33);
+    });
+
+    it("is posed every frame big on the screen, less often smaller, seldom out of view, and more often moving fast", () => {
+        assert.equal(posingEvery(400), 1);
+        assert.equal(posingEvery(150), 1);
+        assert.equal(posingEvery(100), 2);
+        assert.equal(posingEvery(50), 3);
+        assert.equal(posingEvery(20), 4);
+        assert.equal(posingEvery(0), POSING.unseen);
+        // (Going across the screen a pixel a frame, a foot on the ground mustn't slide more than
+        // POSING.slide between poses: every other frame at most)
+        assert.equal(posingEvery(20, 1), 2);
+        assert.equal(posingEvery(20, 0.4), 4);
+        assert.equal(posingEvery(20, 5), 1);
+
+        // In the middle of a blow, its hands go as fast as a sprinter: even 50 pixels tall, it's
+        // posed every frame (at 60 frames a second)
+        const avatar = new Avatar(figure());
+
+        assert.equal(avatar.motion, 0);
+        avatar.actions.startAttack("sword", { hitAt: 0.4, duration: 0.8 });
+        assert.equal(avatar.motion, POSING.swing);
+        assert.equal(posingEvery(50, (avatar.motion * 50) / 60 / avatar.character.height), 1);
+    });
+
+    it("posed every so many frames, follows its actor every frame, and is posed for all the time and way since", () => {
+        const avatar = new Avatar(figure());
+        const walker = avatar.walker;
+        const update = walker.update.bind(walker);
+        const dt = 1 / 60;
+        const poses = [];
+        const positions = [];
+
+        // (Each pose: for how long and how far, where it was then, and its feet)
+        walker.update = (seconds, { moved }) => {
+            update(seconds, { moved });
+            poses.push({ seconds, moved, at: avatar.object.position.z, feet: Math.min(walker.footHeight(0), walker.footHeight(1)) });
+        };
+
+        avatar.place(0, 0, 0);
+        avatar.every = 3;
+
+        for (let k = 1; k <= 90; k++) {
+            avatar.update(dt, 0, k * dt * 1.3, 0);
+            positions.push(avatar.object.position.z);
+        }
+
+        // (Its first pose comes whenever its count, started anywhere up to POSING.unseen, reaches 3)
+        assert.ok(poses.length >= 29 && poses.length <= 30, `posed ${poses.length} times in 90 frames`);
+        assert.equal(new Set(positions).size, 90, "moved every frame");
+        assert.ok(poses.slice(1).every(({ seconds }) => Math.abs(seconds - 3 * dt) < 1e-9), "posed for three frames' time");
+        assert.ok(Math.abs(poses.reduce((sum, { moved }) => sum + moved, 0) - poses.at(-1).at) < 1e-9, "and all the way it went");
+        assert.ok(poses.every(({ feet }) => Math.abs(feet) < 0.01), "with a foot on the ground");
+
+        // Seen big on the screen again, it's posed at the very next update
+        const before = poses.length;
+
+        avatar.every = 1;
+        avatar.update(dt, 0, 91 * dt * 1.3, 0);
+        assert.equal(poses.length, before + 1);
     });
 });
 

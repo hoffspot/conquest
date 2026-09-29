@@ -49,37 +49,41 @@ export function curveAt(curve, phase) {
         return keyedAt(curve.keys, phase);
     }
 
+    const harmonics = curve.harmonics;
     let angle = curve.mean;
 
-    curve.harmonics.forEach(([a, b], i) => {
+    for (let i = 0; i < harmonics.length; i++) {
+        const [a, b] = harmonics[i];
         const x = 2 * Math.PI * (i + 1) * phase;
 
         angle += a * Math.cos(x) + b * Math.sin(x);
-    });
+    }
 
     return angle;
 }
+
+// The `i`th key's phase and value (the keys going round and round: whole strides before and after)
+const keyTime = (keys, i) => keys[((i % keys.length) + keys.length) % keys.length][0] + Math.floor(i / keys.length);
+const keyValue = (keys, i) => keys[((i % keys.length) + keys.length) % keys.length][1];
 
 // A value on the smooth, looping curve through [phase, value] keys (Catmull-Rom, the last key
 // leading back round to the first)
 function keyedAt(keys, phase) {
     const p = ((phase % 1) + 1) % 1;
-    const count = keys.length;
-    let k = count - 1;
+    let k = keys.length - 1;
 
     while (k > 0 && keys[k][0] > p) {
         k--;
     }
 
-    const key = (i) => {
-        const [time, value] = keys[((i % count) + count) % count];
-
-        return [time + Math.floor(i / count), value];
-    };
-    const [t0, v0] = key(k);
-    const [t1, v1] = key(k + 1);
-    const [tb, vb] = key(k - 1);
-    const [ta, va] = key(k + 2);
+    const t0 = keyTime(keys, k);
+    const v0 = keyValue(keys, k);
+    const t1 = keyTime(keys, k + 1);
+    const v1 = keyValue(keys, k + 1);
+    const tb = keyTime(keys, k - 1);
+    const vb = keyValue(keys, k - 1);
+    const ta = keyTime(keys, k + 2);
+    const va = keyValue(keys, k + 2);
     const m0 = ((v1 - vb) / (t1 - tb)) * (t1 - t0);
     const m1 = ((va - v0) / (ta - t0)) * (t1 - t0);
     const u = ((p < t0 ? p + 1 : p) - t0) / (t1 - t0);

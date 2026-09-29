@@ -1552,6 +1552,29 @@ test("the town's guards stand at its ways out under its people's banner, and tal
 
     expect(tapped).toEqual({ order: "approach", talking: "player" });
 
+    // Posed as often as each is seen (Avatar.every): the player, and the guard they're talking to,
+    // near (the camera in close), every frame; those out of view seldom; and so some less often
+    // than every frame
+    const posing = await page.evaluate(async (id) => {
+        const { game, session } = window.pellagos;
+        const { POSING } = await import("/js/world/avatar.js");
+
+        session.view.zoom(0.1);
+        game.advance(0.25);
+
+        const shown = game.battle.actors.filter((one) => one.kind === "soldier" && game.avatars.get(one.id)?.object.visible).map((one) => game.avatars.get(one.id));
+        const unseen = shown.filter(({ object, character }) => session.view.heightOnScreen(object.position, character.height) === 0);
+
+        game.advance(1 / 60, { render: false });
+
+        return { player: game.avatars.get("player").every, guard: game.avatars.get(id).every, unseen: unseen.map(({ every }) => every), seldom: POSING.unseen, fewer: shown.filter(({ every }) => every > 1).length };
+    }, guard.id);
+
+    expect(posing.player).toBe(1);
+    expect(posing.guard).toBe(1);
+    expect(posing.fewer).toBeGreaterThan(0);
+    expect(posing.unseen.every((every) => every === posing.seldom)).toBe(true);
+
     const talk = page.locator(".talk");
 
     await expect(talk).toBeVisible();

@@ -1994,6 +1994,13 @@ export class Actions {
         return Boolean(this.attack || this.reactions.length || this.fall);
     }
 
+    /** Is anything quick under way: a blow, a weapon drawn or put away, a flinch, a fall till it lies still? */
+    get quick() {
+        const falling = this.fall && (this.fall.up || this.time - this.fall.start < FALL.buckle + FALL.topple + FALL.settle);
+
+        return Boolean(this.attack || this.reactions.length || falling);
+    }
+
     /**
      * Layer the actions over the pose the walk has set (rig.rotations and rig.offset). Returns
      * false while falling or lying dead (the feet aren't to be kept planted).
