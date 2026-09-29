@@ -74,6 +74,7 @@ import { itemPicture } from "./icons.js";
 import { JournalPanel, bearing, regardOf } from "./journal.js";
 import { SpellbookPanel } from "./spellbook.js";
 import { PackPanel } from "./pack.js";
+import { Pacing } from "./pacing.js";
 import { describe, totals } from "./gearinfo.js";
 import { TalkPanel } from "./talk.js";
 import { ACTIONS, ActionWheel, actionOf, assignable, directionOf, forFriends, PLACES, readWheels, SIDES, WHEELS } from "./wheel.js";
@@ -409,6 +410,9 @@ export class Game {
         this.running = false;
         this.accumulator = 0;
         this.lastFrame = 0;
+
+        /** When to draw the world: no oftener than the quality level does (app/pacing.js). */
+        this.pacing = new Pacing();
 
         /** Timings for the debug overlay (milliseconds, smoothed), and the last frames' times. */
         this.stats = { frame: 0, update: 0, render: 0, steps: 0, fps: 0 };
@@ -1135,6 +1139,11 @@ export class Game {
     // --- Each frame ---
 
     #frame(now) {
+        // (No oftener than the quality level draws: a phone's 120 Hz screen drawn at 60)
+        if (!this.pacing.due(now, this.view.quality.frameRate)) {
+            return;
+        }
+
         const frameStart = performance.now();
         const dt = Math.min(0.1, Math.max(0, (now - this.lastFrame) / 1000));
 
