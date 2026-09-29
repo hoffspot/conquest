@@ -202,7 +202,8 @@ comes through it from the other end stands: a couple of steps clear of it, turne
 it (two squares in from the door, before the foot of the stairs and before their top, and on the
 square outside the tavern), so that it's in view to tap, and a tap on the ground round the
 player is a step, not straight back through.
-`routeBetween` finds the links from one map to another.
+`routeBetween` finds the links from one map to another (breadth first, looking only at the links
+of each map on the way: a list of them by map, made again when links are added).
 
 ### Every building's inside (core/insides.js)
 
@@ -353,7 +354,13 @@ draws anything.
   `ground` for any square, blocked off the map), whether kept in rows or in chunks. On a big map
   (the world outside), A* looks only in a window round the start and the goal, 64 squares wider
   each way, and gives up after 120,000 squares; the others in the way are a set of squares to
-  keep off, not written into a copy of the map. The player walks at 1.7 m/s; the orc patrols at 1.1 and chases at 1.8.
+  keep off, not written into a copy of the map. Its estimate of the way left is how far it is
+  moving straight and diagonally (never more than it is, so the path's still the shortest). A
+  goal that can't be stood on, or that's shut in on every side, is given up on at once; and with
+  others in the way it gives up sooner (after 4,000 squares and 100 more for each square across,
+  squared), so a goal they've shut in isn't searched for over the whole window again and again
+  while they stand there: 16 raiders setting out take 0.5 ms each on average, where they took 6
+  (the most 12 ms, where it was 150). The player walks at 1.7 m/s; the orc patrols at 1.1 and chases at 1.8.
 - **Running and stamina.** Told to run (a move or fight order with `run`), a character sprints
   at `SPRINT` times its walking speed, 6.5 / 1.4 (about 4.6): as much faster as people sprint
   (about 6.5 m/s) than walk (about 1.4 m/s). For the player that's 7.9 m/s. It speeds up at
@@ -579,9 +586,16 @@ and streets, and it costs a texture read or two.
 
 The world is drawn a chunk at a time round the player: the 25 chunks within two of theirs (160
 metres or more each way, into the fog). Loading, those round where they start are built (about
-a second); after, as they go, the nearest chunk not yet drawn is built each frame, one at most,
-and those more than three chunks away are thrown away, so however far they go there's only so
-much of it, and never a loading screen. Each chunk has:
+a second); after, as they go, the nearest chunk not yet drawn is built, and those more than three
+chunks away are thrown away, so however far they go there's only so much of it, and never a
+loading screen. A chunk is drawn a step at a time, hidden till it's whole: its ground's splat a
+few rows at a time, the looks its features want (each made the first time it's wanted) one a
+step, then its features, its trees. Each frame draws what it can in its budget (`BUILD_BUDGET`, 6
+ms, shared with the settlements' buildings and the undergrowth), a step at least, and begins no
+more than one chunk; while the game loads, a turn gets 40 ms (`LOAD_BUDGET`). A chunk is 64
+metres, so it's a few frames from begun to drawn, two chunks off in the fog. The settlements a
+little further off (within five chunks) are laid out ahead in a worker (world/layouts.js: see
+WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk has:
 
 - **Its ground** (above).
 - **Water**: a sheet over the lakes, the sea and rivers, drawn where a mask (a texel a square)
@@ -654,7 +668,9 @@ much of it, and never a loading screen. Each chunk has:
   with holes in (a blade is one triangle, a flower's head five), so nothing is drawn twice over
   the same pixel and the GPU keeps its early depth test. Each thing is placed turned its own way,
   stretched, tinted and its texture shifted, so no two look alike, and a tile's are baked into
-  one mesh (a lush chunk's undergrowth is about 20,000 triangles, 4 ms to build). Its material is
+  one mesh (a lush chunk's undergrowth is about 20,000 triangles, 4 ms to build, grown a step at
+  a time in the frames' budget: where it grows a few rows of squares at a time, the looks it
+  wants made one a step, placed a millisecond at a time, a tile's mesh a step). Its material is
   the atlas's (`wildsMaterial`): both sides lit as the ground is, each blade's tip stirring in the
   breeze (a `sway` for each vertex), and past 40 metres from the player everything sinking into
   the ground, gone by 56, so nothing pops in or out. How thick it grows follows the quality level.
@@ -1598,11 +1614,15 @@ phone's quality, a frame is 70 to 95 draw calls and 160,000 to 200,000 triangles
 350,000 triangles out in their homeland. Looking level towards the horizon shows more of the world
 (an orc's town: 136 draw calls and 300,000 triangles); looking up into the sky, less (about 100
 and 240,000). The sky's dome is one draw call; the birds one a kind flying; a wyvern or the
-dragon in the air about 18,000 triangles in seven draw calls, casting no shadow. A chunk takes
-about 35 ms to build in the browser tests, one a frame at most. The camera sees no further than
+dragon in the air about 18,000 triangles in seven draw calls, casting no shadow. A chunk is
+drawn a step at a time within each frame's budget (the longest step a few milliseconds on a
+desktop): walking across the world, no frame's streaming takes over 8 ms there. The camera sees no further than
 150 metres (the fog's all there is by 130).
-Everything that can be is built once: the town is merged, shaders are compiled while loading,
-particles reuse two buffers, blood on the ground is one instanced mesh, and projectiles and
+Everything that can be is built once: the town is merged, shaders are compiled while loading
+(and a character, creature, wyvern or dragon that comes later has its compiled before it's first
+drawn, hidden till then: `View.prepare`, in the background where the browser can, so a kind not
+seen before doesn't stall the frame it appears in; the birds each have their own colour from the
+start, so their shader's the one compiled while loading), particles reuse two buffers, blood on the ground is one instanced mesh, and projectiles and
 effects add no lights. Battle damage costs a texture lookup or two a pixel on each character,
 and a small texture (a megabyte) each, uploaded again only when a blow lands or a wound heals.
 
@@ -1634,7 +1654,15 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   across many chunks, found quickly; the player walking out into the world; chunks made quickly;
   the other settlements laid out as the world near them is made, the same every time, set in as
   they were laid out, each piece with one chunk, and the plan's roads carried on to their
-  streets' ends).
+  streets' ends; each people's castle and places set down clear of roads and water, each square's
+  land looked at once).
+  `test/chunks.test.js`: the world drawn round the player (a chunk a step at a time, hidden till
+  it's whole, no more than one begun a frame; one half drawn thrown away when the player's gone,
+  and all near drawn at once when asked; the undergrowth grown over several frames, the same as
+  all at once; the splat and the undergrowth's places the same a step at a time); and the
+  settlements ahead laid out off the page's thread (asked for nearest first and once each, and
+  taken as they were laid out; the same laid out in another thread, and one laid out from
+  anything else not taken).
   `test/pathfinding.test.js`: A* paths, and the line of squares straight ahead (stopping at a
   wall or the world's edge, never cutting a blocked corner).
 - `test/insides.test.js`: every building's door where the art builds it, whichever way it faces,

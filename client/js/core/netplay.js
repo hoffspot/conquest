@@ -39,9 +39,11 @@ export const MOST_PLAYERS = 8;
 
 /**
  * How far behind the host a joined game lets itself get (steps waiting to be played) before it
- * plays faster to catch up, and how many more steps it plays in a frame at most, catching up.
+ * plays faster to catch up, how many more steps it plays in a frame at most, catching up, and
+ * for how long (ms of the frame: on a slow phone, fewer steps a frame, so that catching up
+ * doesn't make the frame so long it falls further behind).
  */
-export const PACE = Object.freeze({ behind: 6, catchUp: 40 });
+export const PACE = Object.freeze({ behind: 6, catchUp: 40, catchUpMs: 8 });
 
 /** Why a game can't join: shown to its player. */
 export const NET_REFUSALS = Object.freeze({

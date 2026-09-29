@@ -256,7 +256,12 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
 - **The other settlements** (`core/settlements.js`): each capital, city, town, village, hamlet
   and farmstead is laid out by the town builder (`layoutTown`, from its own seed and kind, its
   main streets heading the ways its roads leave it) when the world within a chunk of its square
-  is first made, and kept. The same place is laid out the same every time. Where it has
+  is first made, and kept. The same place is laid out the same every time. A town takes tens of
+  milliseconds to lay out, a capital up to two hundred (more on a phone), so the game lays out
+  those within five chunks of the player ahead, in a worker (`world/layouts.js`), and gives them
+  to the world (`give`), which takes one when it's first wanted if it was laid out from just what
+  it would be laid out from here (`specOf`), and otherwise lays it out itself: the same either
+  way, so everyone playing together has the same world, and in the same order. Where it has
   something (its streets, its market or green, its buildings, yards and trees, and everything
   inside its edge), the world takes its squares; its fields are the land's own. Its buildings,
   props and trees are drawn with the chunk their middles are in (`piecesIn`).
@@ -271,7 +276,10 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   manor) and the watchtowers, built at their size (`siteSize`: a human castle 18 by 16 plots,
   laid out by castle.js; a tower 2 by 2). Each is set down the first time a chunk near it is made
   (`settle`), at its cell's middle or as near as it can be (up to 48 metres off, in 4-metre
-  steps round it) clear of roads and water, facing the nearest road within six cells; it takes
+  steps round it) clear of roads and water, facing the nearest road within six cells (each
+  square's land looked at once however many tries it's under, and the squares that ruled out
+  earlier tries looked for first: a castle that has to move is set down in a few tens of
+  milliseconds, where it took up to a second); it takes
   the squares under it (blocked, and not seen through), and trees and the land's features keep
   6 metres clear of it. The same every time.
 - **Lakes and the sea**, their shores blended from cell to cell across the cells' middles, a
@@ -347,7 +355,10 @@ roads across many chunks, found quickly; the player walking out into the world; 
 quickly. Of the other settlements: every place but the start town, hamlets and farmsteads too;
 laid out as the world near them is made, the same every time; a village's tavern, church, smithy
 and guild; set in as they were laid out, their pieces each drawn with one chunk and their trees
-grown; and the plan's roads carried on from their streets' ends. Each people's own trees grow
+grown; and the plan's roads carried on from their streets' ends. Each people's castle and places
+are set down clear of roads and water, each square's land looked at once. `test/chunks.test.js`
+checks the settlements laid out ahead: asked for nearest first and once each, the same laid out
+in another thread, and taken only when laid out from what they'd be laid out from here. Each people's own trees grow
 in its homeland, most of the trees there, and nowhere else. `test/wilds.test.js` checks the
 land's features (GAME.md, *Testing*), each people's own in its homeland and only there.
 
