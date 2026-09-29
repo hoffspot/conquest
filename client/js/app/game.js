@@ -27,7 +27,7 @@ import { Character } from "../characters/character.js";
 import { folkLook } from "../characters/folk.js";
 import { soldierLook } from "../characters/soldiers.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
-import { BeastAvatar, dressCreature } from "../beasts/beast.js";
+import { BeastAvatar, dressingCreature } from "../beasts/beast.js";
 import { AFFLICTIONS } from "../core/afflictions.js";
 import { STEP_MS, TALK_REACH } from "../core/battle.js";
 import { CREATURES } from "../core/creatures.js";
@@ -60,6 +60,7 @@ import { SpellFx } from "../world/spellfx.js";
 import { Squares } from "../world/squares.js";
 import { KINDS, Wounds } from "../world/wounds.js";
 import { Chunks, DECK, LOAD_BUDGET, REACH } from "../world/chunks3d.js";
+import { allAtOnce } from "../core/steps.js";
 import { buildGround } from "../world/ground.js";
 import { buildTown } from "../world/town3d.js";
 import { prepareAtlas } from "../world/art/engine/atlas.js";
@@ -484,6 +485,9 @@ export class Game {
         /** The soldiers the host's brought out, still to be drawn (a few a frame: #visit). */
         this.enlisting = [];
 
+        // The one of them being drawn just now, a step at a time: { actor, steps }
+        this.enlistee = null;
+
         /**
          * When the player last did anything (the game's clock, s), and when they next rest (null
          * until they've stood a while with nothing going on: roles.js PLAYER_RESTS_AFTER).
@@ -738,6 +742,12 @@ export class Game {
     // Someone in the battle, drawn (once): a player as they made themselves, the orc, one of the
     // folk. Returns their avatar
     #dress(actor) {
+        return allAtOnce(this.#dressing(actor));
+    }
+
+    // The same, a step at a time (each a yield: Character.building's), so that drawing someone new
+    // is spread over frames. Returns their avatar (none if they've gone meanwhile)
+    *#dressing(actor) {
         if (this.avatars.has(actor.id)) {
             return this.avatars.get(actor.id);
         }
@@ -745,14 +755,18 @@ export class Game {
         const hairDetail = this.view.quality.hair;
 
         if (actor.kind === "folk") {
-            return this.#addFolk(this.host.folk.get(actor.id));
+            return yield* this.#addingFolk(this.host.folk.get(actor.id));
         }
 
         // A soldier: as their people's are dressed, carrying what they fight with
         if (actor.kind === "soldier") {
             const soldier = this.host.soldiers.get(actor.id);
             const look = soldierLook(soldier);
-            const character = new Character(this.kit, { shape: look.shape, look: look.look, equipment: look.equipment, hairDetail: Math.min(hairDetail, FOLK_HAIR), merge: true });
+            const character = yield* this.#built(actor, { shape: look.shape, look: look.look, equipment: look.equipment, hairDetail: Math.min(hairDetail, FOLK_HAIR), merge: true });
+
+            if (!character) {
+                return this.avatars.get(actor.id) ?? null;
+            }
 
             character.sheathe(true);
             character.object.traverse((node) => {
@@ -766,7 +780,11 @@ export class Game {
         if (actor.kind === "follower") {
             const { calling, sex, seed, people } = this.host.followers.get(actor.id) ?? { calling: "warrior" };
             const look = folkLook({ role: "adventurer", look: calling, sex, seed, people });
-            const character = new Character(this.kit, { shape: look.shape, look: look.look, equipment: look.equipment, hairDetail: Math.min(hairDetail, FOLK_HAIR), merge: true });
+            const character = yield* this.#built(actor, { shape: look.shape, look: look.look, equipment: look.equipment, hairDetail: Math.min(hairDetail, FOLK_HAIR), merge: true });
+
+            if (!character) {
+                return this.avatars.get(actor.id) ?? null;
+            }
 
             character.sheathe(true);
 
@@ -775,7 +793,11 @@ export class Game {
 
         if (actor.kind === "player") {
             const { hero: { shape, look, weapon }, progress } = this.host.players.get(actor.id);
-            const character = new Character(this.kit, { shape, look, equipment: heroEquipment(weapon, progress.worn(), this.host.players.get(actor.id).hero.parts ?? []), hairDetail });
+            const character = yield* this.#built(actor, { shape, look, equipment: heroEquipment(weapon, progress.worn(), this.host.players.get(actor.id).hero.parts ?? []), hairDetail });
+
+            if (!character) {
+                return this.avatars.get(actor.id) ?? null;
+            }
 
             // (Weapons put away to start with: drawn for a fight)
             character.sheathe(true);
@@ -785,16 +807,34 @@ export class Game {
 
         // One of the wild's creatures (core/creatures.js): as its kind looks (beasts/)
         if (actor.kind === "beast") {
-            return this.#addBeast(actor);
+            return yield* this.#addingBeast(actor);
         }
 
         // The orc
         const preset = PRESETS.orc;
-        const character = new Character(this.kit, { shape: preset.shape, look: preset.look, equipment: [...preset.equipment, ...WEAPONS[actor.weapon].equipment], hairDetail, merge: true });
+        const character = yield* this.#built(actor, { shape: preset.shape, look: preset.look, equipment: [...preset.equipment, ...WEAPONS[actor.weapon].equipment], hairDetail, merge: true });
+
+        if (!character) {
+            return this.avatars.get(actor.id) ?? null;
+        }
 
         character.sheathe(true);
 
         return this.#addAvatar(actor.id, character, { walk: preset.walk, guard: guardOf(actor.weapon) });
+    }
+
+    // A character for someone, built a step at a time (Character.building); null (and thrown away)
+    // if they've gone from the battle meanwhile, or been drawn some other way
+    *#built(actor, options) {
+        const character = yield* Character.building(this.kit, options);
+
+        if (this.avatars.has(actor.id) || !this.battle.actor(actor.id)) {
+            character.dispose();
+
+            return null;
+        }
+
+        return character;
     }
 
     // Everyone in the battle drawn, and no one who isn't: a player come or gone, the folk of a
@@ -832,10 +872,15 @@ export class Game {
     }
 
     // One of the folk, looking as they do (Wenches and Ale's as they always have; anyone else as
-    // their part and seed have them). Returns their avatar
-    #addFolk(one) {
+    // their part and seed have them), a step at a time. Returns their avatar
+    *#addingFolk(one) {
         const look = one.preset ? FOLK[one.preset] : folkLook(one);
-        const character = new Character(this.kit, { shape: look.shape, look: look.look, equipment: look.equipment, hairDetail: Math.min(this.view.quality.hair, FOLK_HAIR), merge: true });
+        const character = yield* this.#built(this.battle.actor(one.id), { shape: look.shape, look: look.look, equipment: look.equipment, hairDetail: Math.min(this.view.quality.hair, FOLK_HAIR), merge: true });
+
+        if (!character) {
+            return this.avatars.get(one.id) ?? null;
+        }
+
         const avatar = this.#addAvatar(one.id, character, { walk: look.walk, wounds: false });
 
         // (Weapons put away: adventurers about the guild)
@@ -858,11 +903,19 @@ export class Game {
     }
 
     // One of the wild's creatures, as its kind looks (the same one of its kind every time, from
-    // its id); holding its weapon, if it's people-shaped (and wounded as people are)
-    #addBeast(actor) {
+    // its id); holding its weapon, if it's people-shaped (and wounded as people are): a step at a
+    // time (a people-shaped one's character is built in steps)
+    *#addingBeast(actor) {
         const seed = [...actor.id].reduce((hash, letter) => (Math.imul(hash, 31) + letter.charCodeAt(0)) | 0, 7) >>> 0;
         const weapon = WEAPONS[actor.weapon];
-        const avatar = dressCreature(this.kit, actor.wild.creature, { seed, equipment: weapon?.equipment ?? [], guard: weapon ? guardOf(actor.weapon) : null, hairDetail: Math.min(this.view.quality.hair, FOLK_HAIR) });
+        const avatar = yield* dressingCreature(this.kit, actor.wild.creature, { seed, equipment: weapon?.equipment ?? [], guard: weapon ? guardOf(actor.weapon) : null, hairDetail: Math.min(this.view.quality.hair, FOLK_HAIR) });
+
+        // (Gone from the battle, or drawn some other way, while it was being built)
+        if (this.avatars.has(actor.id) || !this.battle.actor(actor.id)) {
+            avatar.character.dispose();
+
+            return this.avatars.get(actor.id) ?? null;
+        }
 
         avatar.character.sheathe(true);
 
@@ -2158,6 +2211,16 @@ export class Game {
 
     // --- Going inside ---
 
+    // Some no longer to be drawn (those let go of, or gone): off the list, and the one being drawn
+    // stopped if it's one of them
+    #unenlist(ids) {
+        this.enlisting = this.enlisting.filter((id) => !ids.includes(id));
+
+        if (ids.includes(this.enlistee?.actor.id)) {
+            this.enlistee = null;
+        }
+    }
+
     // Every frame, a little more of the buildings being got ready built (the host says which:
     // those near any player, core/host.js); and every so often, the doors of the settlements come
     // to since picked up
@@ -2169,19 +2232,34 @@ export class Game {
         const until = performance.now() + VISITS.budget;
 
         for (const visit of this.visits.values()) {
-            while (visit.queue.length && performance.now() < until) {
-                visit.queue.shift()();
-            }
+            this.#work(visit, until);
         }
 
-        // The soldiers brought out and the wild's creatures put out, drawn a few at a time (those
-        // on the player's map first); a creature's bar over it
-        while (this.enlisting.length && performance.now() < until) {
-            const actor = this.battle.actor(this.enlisting.shift());
+        // The soldiers brought out and the wild's creatures put out, drawn a few at a time, each
+        // a step at a time (those on the player's map first); a creature's bar over it
+        while ((this.enlistee || this.enlisting.length) && performance.now() < until) {
+            if (!this.enlistee) {
+                const actor = this.battle.actor(this.enlisting.shift());
 
-            if (actor && !this.avatars.has(actor.id)) {
-                const avatar = this.#dress(actor);
+                if (actor && !this.avatars.has(actor.id)) {
+                    this.enlistee = { actor, steps: this.#dressing(actor) };
+                }
 
+                continue;
+            }
+
+            const { actor, steps } = this.enlistee;
+            const step = steps.next();
+
+            if (!step.done) {
+                continue;
+            }
+
+            this.enlistee = null;
+
+            const avatar = step.value;
+
+            if (avatar) {
                 this.#place(actor);
 
                 if (actor.kind === "beast") {
@@ -2486,7 +2564,7 @@ export class Game {
         this.battle = this.host.battle;
 
         for (const actor of this.battle.actors) {
-            if (actor.kind === "soldier" && !this.avatars.has(actor.id) && !this.enlisting.includes(actor.id)) {
+            if (actor.kind === "soldier" && !this.avatars.has(actor.id) && !this.enlisting.includes(actor.id) && this.enlistee?.actor.id !== actor.id) {
                 this.enlisting.push(actor.id);
             }
         }
@@ -2869,7 +2947,7 @@ export class Game {
             }
         }
 
-        this.enlisting = this.enlisting.filter((id) => !ids.includes(id));
+        this.#unenlist(ids);
 
         for (const id of ids) {
             this.#undress(id);
@@ -2914,10 +2992,22 @@ export class Game {
             return;
         }
 
-        const visit = this.visits.get(key) ?? this.#prepare(building);
+        this.#work(this.visits.get(key) ?? this.#prepare(building));
+    }
 
-        while (visit.queue.length) {
-            visit.queue.shift()();
+    // Do what can be done of a building's getting ready before `until` (performance.now()'s; all
+    // of it, without): each piece of work at once, or a step at a time if it's in steps (its folk)
+    #work(visit, until = Infinity) {
+        while ((visit.steps || visit.queue.length) && performance.now() < until) {
+            if (!visit.steps) {
+                const work = visit.queue.shift()();
+
+                visit.steps = typeof work?.next === "function" ? work : null;
+            }
+
+            if (visit.steps?.next().done) {
+                visit.steps = null;
+            }
         }
     }
 
@@ -2931,17 +3021,18 @@ export class Game {
         visit.maps.push(mapId);
     }
 
-    // One of a building's folk (by id), drawn where they are in it
-    #people(visit, id) {
+    // One of a building's folk (by id), drawn where they are in it, a step at a time
+    *#people(visit, id) {
         const actor = this.battle.actor(id);
 
         if (!actor || this.avatars.has(id)) {
             return;
         }
 
-        this.#dress(actor);
-        this.#place(actor);
-        visit.folk.push(id);
+        if (yield* this.#dressing(actor)) {
+            this.#place(actor);
+            visit.folk.push(id);
+        }
     }
 
     // A building the host's let go: its folk no longer drawn, its floors thrown away (built again
@@ -3449,7 +3540,7 @@ export class Game {
 
                 break;
             case "farewell":
-                this.enlisting = this.enlisting.filter((id) => !event.ids.includes(id));
+                this.#unenlist(event.ids);
 
                 for (const id of event.ids) {
                     this.#undress(id);
@@ -3458,7 +3549,7 @@ export class Game {
                 break;
             case "dismiss":
                 this.banners?.lower(event.town);
-                this.enlisting = this.enlisting.filter((id) => !event.ids.includes(id));
+                this.#unenlist(event.ids);
 
                 // (Let go of, even if others are out at their posts already: a town's new holders'
                 // soldiers have the old ones' ids, and are drawn as their own people)

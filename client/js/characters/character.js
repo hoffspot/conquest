@@ -11,10 +11,11 @@ import * as THREE from "three";
 import { Rig } from "./rig.js";
 import { EQUIPMENT, socketOn } from "./equipment.js";
 import { buildDrape, drapeMaterial, DRAPES } from "./drapes.js";
-import { buildGarment, COMPOSITE_BUMP, compositeGarments, GARMENTS, insideOf, measureBody, paintGarment, texelMap } from "./garments.js";
-import { BEARDS, buildHair, hairTexture, HAIRSTYLES } from "./hair.js";
+import { COMPOSITE_BUMP, compositingGarments, fittingGarment, GARMENTS, insideOf, measureBody, paintGarment, paintingGarment, texelMap } from "./garments.js";
+import { BEARDS, growingHair, hairTexture, HAIRSTYLES } from "./hair.js";
 import { buildItem } from "./items.js";
-import { EYE_DEFAULTS, HAIR_COLOURS, paintEye, paintSkin, SKIN_DEFAULTS } from "./skin.js";
+import { EYE_DEFAULTS, HAIR_COLOURS, paintEye, paintingSkin, SKIN_DEFAULTS } from "./skin.js";
+import { allAtOnce } from "../core/steps.js";
 
 /** How a character looks unless told otherwise. */
 export const LOOK_DEFAULTS = Object.freeze({
@@ -26,8 +27,47 @@ export const LOOK_DEFAULTS = Object.freeze({
 // The parts of the base mesh, in the order they're drawn (with a material each)
 const DRAWN = ["body", "eyes", "lashes"];
 
-// How many pictures of outfits no one is wearing just now are kept, for the next to wear one
+// How many pictures of outfits (or of eyes) no one is wearing just now are kept, for the next to
+// wear one
 const IDLE_COMPOSITES = 8;
+const IDLE_EYES = 8;
+
+// (Given to the constructor by Character.building: built a step at a time there, not at once)
+const LATER = Symbol("later");
+
+// Something made once for a kit and shared by the characters with it, by key (a cache of them:
+// { value, users }): made by `make` the first time it's wanted, if it isn't there already
+function take(cache, key, make) {
+    if (!cache.has(key)) {
+        cache.set(key, { value: make(), users: 0 });
+    }
+
+    const entry = cache.get(key);
+
+    entry.users++;
+
+    return entry.value;
+}
+
+// A character no longer using one: once no one is, it's kept for a while, then let go (the
+// longest unused first, beyond `idle` of them unused)
+function letGo(cache, key, idle, dispose) {
+    const entry = key !== null && cache?.get(key);
+
+    if (!entry || --entry.users > 0) {
+        return;
+    }
+
+    cache.delete(key);
+    cache.set(key, entry);
+
+    const unused = [...cache].filter(([, other]) => other.users === 0);
+
+    for (const [gone, { value }] of unused.slice(0, Math.max(0, unused.length - idle))) {
+        dispose(value);
+        cache.delete(gone);
+    }
+}
 
 /**
  * A body of the usual shape's measurements (garments.js measureBody), made once per kit: what
@@ -150,7 +190,8 @@ export class Character {
      * @param {boolean} [options.merge] - Draw its garments all at once (one mesh, one picture of
      *   them all: for the many folk and soldiers about, not a player, who changes what they wear).
      */
-    constructor(kit, { shape = {}, look = {}, equipment = [], materials = {}, hairDetail = 1, merge = false } = {}) {
+    constructor(kit, options = {}, later = null) {
+        const { materials = {}, hairDetail = 1, merge = false } = options;
         const human = kit.human;
 
         this.kit = kit;
@@ -159,6 +200,9 @@ export class Character {
 
         /** The outfit whose picture its garments are drawn with, when they're drawn at once. */
         this.composite = null;
+
+        // (The look of eye whose picture its eyes are drawn with: shared)
+        this.eyePicture = null;
         this.human = human;
         this.object = new THREE.Group();
         this.object.name = "character";
@@ -200,9 +244,33 @@ export class Character {
         /** Body triangles hidden under clothing (indices of the body part's triangles). */
         this.hidden = new Set();
 
+        if (later !== LATER) {
+            allAtOnce(this.#building(options));
+        }
+    }
+
+    /**
+     * The same as `new Character(kit, options)`, built a step at a time (each a yield, so the work
+     * can be spread over frames: its shape, its skin painted a few rows at a time, its eyes, each
+     * garment, the pictures of what it wears, each thing it carries), returning it.
+     */
+    static *building(kit, options = {}) {
+        const character = new Character(kit, options, LATER);
+
+        yield;
+        yield* character.#building(options);
+
+        return character;
+    }
+
+    *#building({ shape = {}, look = {}, equipment = [] }) {
         this.setShape(shape);
-        this.setLook(look);
-        this.setEquipment(equipment);
+        yield;
+        this.#wear(equipment);
+
+        // (Its hair grown once: under a hat or helmet, when it's dressed, only below the rim)
+        yield* this.#looking(look, { hair: !this.#hidesHair() });
+        yield* this.#dressing();
     }
 
     /**
@@ -226,17 +294,35 @@ export class Character {
 
     /** Wear and carry exactly these (EQUIPMENT ids: any it doesn't know left out). */
     setEquipment(ids) {
+        this.#wear(ids);
+        this.#dress();
+    }
+
+    // What it's to wear and carry (EQUIPMENT ids), not yet dressed in
+    #wear(ids) {
         this.equipment.clear();
 
         for (const id of ids.filter(known)) {
             this.equipment.set(EQUIPMENT[id].slot, id);
         }
+    }
 
-        this.#dress();
+    // Whether what it carries hides its hair (a hat or helmet)
+    #hidesHair() {
+        return [...this.equipment.values()].some((id) => {
+            const { kind, hides } = EQUIPMENT[id];
+
+            return kind !== "garment" && kind !== "drape" && Boolean(hides?.includes("hair"));
+        });
     }
 
     /** Build everything worn and carried (after equipping, or when the body changes). */
     #dress() {
+        allAtOnce(this.#dressing());
+    }
+
+    // The same, a step at a time (each a yield)
+    *#dressing() {
         for (const mesh of this.garments) {
             mesh.geometry.dispose();
             mesh.removeFromParent();
@@ -278,9 +364,24 @@ export class Character {
         // Garments, under ones first; each hides the skin (and garments) under it. (Drawn all at
         // once, they're fitted as they'd fit a body of the usual shape: each outfit's picture is
         // then the same for everyone, however they're built)
+        yield;
+
         const measures = measureBody(this);
         const fitted = this.merge ? referenceMeasures(this.kit) : measures;
-        const built = garmentIds.map((id) => buildGarment(this, id, fitted)).filter(Boolean).sort((a, b) => a.garment.layer - b.garment.layer);
+        const built = [];
+
+        for (const id of garmentIds) {
+            yield;
+
+            const garment = yield* fittingGarment(this, id, fitted);
+
+            if (garment) {
+                built.push(garment);
+            }
+        }
+
+        yield;
+        built.sort((a, b) => a.garment.layer - b.garment.layer);
         const hidden = new Set();
         const parts = [];
 
@@ -322,7 +423,11 @@ export class Character {
         if (merged.length > 1) {
             merged.sort((a, b) => a.garment.layer - b.garment.layer || reach(a) - reach(b) || (a.id < b.id ? -1 : 1));
 
-            const mesh = new THREE.SkinnedMesh(mergeGeometries(merged.map(({ geometry }) => geometry)), this.#composite(merged.map(({ id }) => id)));
+            const material = yield* this.#compositing(merged.map(({ id }) => id));
+
+            yield;
+
+            const mesh = new THREE.SkinnedMesh(mergeGeometries(merged.map(({ geometry }) => geometry)), material);
 
             for (const { geometry } of merged) {
                 geometry.dispose();
@@ -355,6 +460,8 @@ export class Character {
 
         // Skirts, gowns and aprons, hanging over what's under them
         for (const id of drapeIds) {
+            yield;
+
             const { geometry } = buildDrape(this, id, measures);
             const mesh = new THREE.SkinnedMesh(geometry, this.#drapeMaterial(id));
 
@@ -370,10 +477,10 @@ export class Character {
 
         // Items on their sockets (where they're held or worn: `home`), and weapons' places put
         // away (`sheath`) with what they hang in there
-        let hairHidden = false;
-
         for (const id of itemIds) {
             const item = EQUIPMENT[id];
+
+            yield;
 
             // (Some are in several parts, each on its own socket: spiked boots' iron)
             for (const part of item.parts ?? [item]) {
@@ -440,17 +547,17 @@ export class Character {
 
                 this.items.push(model);
             }
-
-            hairHidden ||= item.hides?.includes("hair");
         }
 
         // Each weapon in hand or put away, as it was
         this.sheathe(this.sheathed);
 
         // Under a hat or helmet, only the hair below its rim shows
+        const hairHidden = this.#hidesHair();
+
         if (this.hairHidden !== hairHidden) {
             this.hairHidden = hairHidden;
-            this.#buildHair();
+            yield* this.#growingHair();
         }
     }
 
@@ -574,13 +681,19 @@ export class Character {
      * differs in colour (`base`: liveries.js), its picture tinted to its colour.
      */
     #garmentMaterial(id) {
+        return allAtOnce(this.#readying(id));
+    }
+
+    // The same, a step at a time (each a yield: its picture painted a few rows at a time, the
+    // first time), returning it
+    *#readying(id) {
         const kit = this.kit;
         const garment = GARMENTS[id];
 
         kit.garmentMaterials ??= new Map();
 
         if (garment.base && !kit.garmentMaterials.has(id)) {
-            const material = this.#garmentMaterial(garment.base).clone();
+            const material = (yield* this.#readying(garment.base)).clone();
             const [from, to] = [new THREE.Color(GARMENTS[garment.base].colour), new THREE.Color(garment.colour)];
 
             material.color.setRGB(to.r / Math.max(0.03, from.r), to.g / Math.max(0.03, from.g), to.b / Math.max(0.03, from.b));
@@ -592,9 +705,12 @@ export class Character {
         }
 
         if (!kit.garmentMaterials.has(id)) {
-            kit.texelMap ??= texelMap(this.human, 512);
+            if (!kit.texelMap) {
+                kit.texelMap = texelMap(this.human, 512);
+                yield;
+            }
 
-            const painted = paintGarment(kit.texelMap, garment);
+            const painted = yield* paintingGarment(kit.texelMap, garment);
             const material = new THREE.MeshStandardMaterial({
                 roughness: garment.roughness ?? 0.8,
                 metalness: garment.metalness ?? 0,
@@ -615,7 +731,7 @@ export class Character {
      * them all (garments.js compositeGarments), its heights, roughness and metalness in another.
      * Made once per kit for each outfit, and let go when no one's worn it for a while.
      */
-    #composite(ids) {
+    *#compositing(ids) {
         const kit = this.kit;
         const key = ids.join(" ");
 
@@ -625,14 +741,21 @@ export class Character {
             kit.texelMap ??= texelMap(this.human, 512);
             kit.garmentInsides ??= new Map();
 
-            const layers = ids.map((id) => {
-                const garment = GARMENTS[id];
-                const material = this.#garmentMaterial(id);
+            // (Each garment's own picture painted, and where it is on the body found, in steps
+            // the first time: then the picture of them all)
+            for (const id of ids) {
+                yield* this.#readying(id);
 
                 if (!kit.garmentInsides.has(id)) {
                     // (A boot's toes are the toe box's, drawn with the boot's picture)
-                    kit.garmentInsides.set(id, insideOf(this.human, garment, referenceMeasures(kit), { toes: true }));
+                    kit.garmentInsides.set(id, insideOf(this.human, GARMENTS[id], referenceMeasures(kit), { toes: true }));
+                    yield;
                 }
+            }
+
+            const layers = ids.map((id) => {
+                const garment = GARMENTS[id];
+                const material = this.#garmentMaterial(id);
 
                 return {
                     data: pixelsOf(material.map),
@@ -644,7 +767,7 @@ export class Character {
                     inside: kit.garmentInsides.get(id),
                 };
             });
-            const { size, data, surface } = compositeGarments(kit.texelMap, layers);
+            const { size, data, surface } = yield* compositingGarments(kit.texelMap, layers);
             const surfaceMap = dataTexture(surface, size, false);
             const material = new THREE.MeshStandardMaterial({
                 map: dataTexture(data, size, true),
@@ -659,41 +782,24 @@ export class Character {
 
             // (Metal and cloth both: wounds.js tells which is where)
             material.userData.mixed = true;
-            kit.composites.set(key, { material, users: 0 });
+            kit.composites.set(key, { value: material, users: 0 });
+            yield;
         }
 
-        const entry = kit.composites.get(key);
-
-        entry.users++;
         this.composite = key;
 
-        return entry.material;
+        return take(kit.composites, key);
     }
 
-    // No longer wearing the outfit whose picture it was drawn with: once no one is, it's kept
-    // for a while, then let go (the longest unworn first)
+    // No longer wearing the outfit whose picture it was drawn with: kept a while, for the next
+    // to wear it
     #release() {
-        const composites = this.kit.composites;
-        const key = this.composite;
-        const entry = key && composites?.get(key);
-
-        this.composite = null;
-
-        if (!entry || --entry.users > 0) {
-            return;
-        }
-
-        composites.delete(key);
-        composites.set(key, entry);
-
-        const idle = [...composites].filter(([, other]) => other.users === 0);
-
-        for (const [unworn, { material }] of idle.slice(0, Math.max(0, idle.length - IDLE_COMPOSITES))) {
+        letGo(this.kit.composites, this.composite, IDLE_COMPOSITES, (material) => {
             material.map.dispose();
             material.bumpMap.dispose();
             material.dispose();
-            composites.delete(unworn);
-        }
+        });
+        this.composite = null;
     }
 
     /**
@@ -735,6 +841,12 @@ export class Character {
 
     /** Change how the character looks: { skin, eyes, hair } (see LOOK_DEFAULTS). */
     setLook(look = {}) {
+        allAtOnce(this.#looking(look));
+    }
+
+    // The same, a step at a time (each a yield: its skin painted a few rows a step); its hair
+    // grown too, unless `hair` is false (grown when it's dressed, then)
+    *#looking(look, { hair: grow = true } = {}) {
         const hair = { ...LOOK_DEFAULTS.hair, ...look.hair };
         const style = HAIRSTYLES[hair.style] ?? HAIRSTYLES.short;
         const beard = BEARDS[hair.beard] ?? BEARDS.none;
@@ -752,7 +864,7 @@ export class Character {
         };
 
         if (this.kit.atlas) {
-            const texture = paintSkin(this.kit.atlas, painted);
+            const texture = yield* paintingSkin(this.kit.atlas, painted);
 
             this.#setTexture(this.materials.body, "map", texture.data, texture.width, true);
             this.#setTexture(this.materials.body, "bumpMap", greyscale(texture.bump), texture.width, false);
@@ -762,18 +874,58 @@ export class Character {
         }
 
         this.materials.tint.color.set(skin.tone);
-
-        const eye = paintEye(eyes);
-
-        this.#setTexture(this.materials.eyes, "map", eye.data, eye.width, true);
+        yield;
+        this.#setEyes(eyes);
         this.materials.lashes.color.set(skin.browColour ?? hair.colour).multiplyScalar(0.6);
         this.materials.hair.color.set(hair.colour);
-        this.#buildHair();
+
+        if (grow) {
+            yield* this.#growingHair();
+        }
+    }
+
+    // Its eyes' picture: painted once for each look of eye, and shared by everyone with it
+    #setEyes(eyes) {
+        const kit = this.kit;
+        const key = JSON.stringify(eyes);
+
+        if (key === this.eyePicture) {
+            return;
+        }
+
+        kit.eyes ??= new Map();
+        this.#releaseEyes();
+        this.materials.eyes.map = take(kit.eyes, key, () => {
+            const { data, width } = paintEye(eyes);
+            const canvas = document.createElement("canvas");
+            const texture = new THREE.CanvasTexture(canvas);
+
+            canvas.width = canvas.height = width;
+            canvas.getContext("2d").putImageData(new ImageData(data, width, width), 0, 0);
+            texture.colorSpace = THREE.SRGBColorSpace;
+            texture.anisotropy = 4;
+
+            return texture;
+        });
+        this.materials.eyes.needsUpdate = true;
+        this.eyePicture = key;
+    }
+
+    // No longer drawing its eyes with the picture it did: kept a while, for the next with them
+    #releaseEyes() {
+        letGo(this.kit.eyes, this.eyePicture, IDLE_EYES, (texture) => texture.dispose());
+        this.materials.eyes.map = null;
+        this.eyePicture = null;
     }
 
     #buildHair() {
+        allAtOnce(this.#growingHair());
+    }
+
+    // The same, a step at a time (each a yield: hair.js growingHair's)
+    *#growingHair() {
         const { style, beard } = this.look.hair;
-        const geometry = buildHair(this, style, beard, { below: this.hairHidden ? 0.0 : Infinity, detail: this.hairDetail });
+        const geometry = yield* growingHair(this, style, beard, { below: this.hairHidden ? 0.0 : Infinity, detail: this.hairDetail });
 
         if (this.hairMesh) {
             this.hairMesh.geometry.dispose();
@@ -880,7 +1032,8 @@ export class Character {
             this.#buildHair();
         }
 
-        if (this.equipment) {
+        // (What it wears refitted: when it's wearing anything)
+        if (this.equipment.size) {
             this.#dress();
         }
     }
@@ -967,6 +1120,7 @@ export class Character {
         }
 
         this.#release();
+        this.#releaseEyes();
 
         for (const [name, material] of Object.entries(this.materials)) {
             if (name !== "hair") {

@@ -17,6 +17,7 @@ import * as THREE from "three";
 import { faceFrame } from "./face.js";
 import { LIVERIES } from "./liveries.js";
 import { fbm, hash3, smoothstep } from "./noise.js";
+import { allAtOnce } from "../core/steps.js";
 
 const ARM = /^(Left|Right)(Arm|ForeArm)$/;
 const HAND = /^(Left|Right)Hand/;
@@ -317,14 +318,39 @@ function lingerie(name, colour) {
     return pieces;
 }
 
+// Each garment's cut (cutOf), for the measures it was cut for: made once for each, as garments
+// drawn all at once are all fitted to the same measures (Character `merge`); the most recently
+// wanted kept, this many for each measures (a few hundred kilobytes each)
+const cutsByMeasures = new WeakMap();
+const CUTS_KEPT = 40;
+
 /**
- * Build a garment on a character: { geometry, covers (the body triangles it hides, a Set of
- * body triangle numbers), sources (the body triangle each of its triangles comes from), garment }.
- * `measures` is measureBody(character).
+ * What a garment is on the body, whatever the body's own shape (its positions): the body's
+ * triangles it takes in, cut along the edge of its region; which of its points are one; what's
+ * beside what, its edge and where its hem goes; its texture coordinates and skin weights; and the
+ * body triangles it hides. Or null, where it takes in none. The same for everyone measured the
+ * same (`measures`: measureBody's), so kept for each measures, and not to be changed.
  */
-export function buildGarment(character, id, measures) {
-    const garment = GARMENTS[id];
-    const { human, positions, normals } = character;
+function cutOf(human, id, measures) {
+    if (!cutsByMeasures.has(measures)) {
+        cutsByMeasures.set(measures, new Map());
+    }
+
+    const cuts = cutsByMeasures.get(measures);
+    const cut = cuts.has(id) ? cuts.get(id) : cutGarment(human, GARMENTS[id], measures);
+
+    // (The most recently wanted last, and the longest unwanted let go)
+    cuts.delete(id);
+    cuts.set(id, cut);
+
+    if (cuts.size > CUTS_KEPT) {
+        cuts.delete(cuts.keys().next().value);
+    }
+
+    return cut;
+}
+
+function cutGarment(human, garment, measures) {
     const { vertices } = measures;
     const inside = insideOf(human, garment, measures);
     const body = human.renderIndices("body");
@@ -422,32 +448,13 @@ export function buildGarment(character, id, measures) {
         return shared.get(key);
     });
     const count = shared.size;
-    const base = new Float32Array(count * 3);
-    const normal = new Float32Array(count * 3);
     const onEdge = new Uint8Array(count);
 
-    list.forEach(({ a, b, t }, i) => {
-        const s = sharedOf[i];
-        const sa = source[a] * 3;
-        const sb = source[b] * 3;
-
-        for (let k = 0; k < 3; k++) {
-            base[s * 3 + k] = positions[sa + k] * (1 - t) + positions[sb + k] * t;
-            normal[s * 3 + k] = normals[sa + k] * (1 - t) + normals[sb + k] * t;
-        }
-
+    list.forEach(({ t }, i) => {
         if (t > 0 && t < 1) {
-            onEdge[s] = 1;
+            onEdge[sharedOf[i]] = 1;
         }
     });
-
-    for (let s = 0; s < count; s++) {
-        const length = Math.hypot(normal[s * 3], normal[s * 3 + 1], normal[s * 3 + 2]) || 1;
-
-        normal[s * 3] /= length;
-        normal[s * 3 + 1] /= length;
-        normal[s * 3 + 2] /= length;
-    }
 
     // Neighbours and the garment's edge (sides used by one triangle only)
     const neighbours = Array.from({ length: count }, () => new Set());
@@ -475,6 +482,132 @@ export function buildGarment(character, id, measures) {
         }
     }
 
+    // Points on the toe box cut (where the toe box joins on, with no hem)
+    const onCut = new Uint8Array(count);
+
+    if (garment.toeBox) {
+        list.forEach(({ a, b, t }, i) => {
+            const va = vertices[source[a]];
+            const vb = vertices[source[b]];
+
+            if (va.region === "foot" && vb.region === "foot" && Math.abs(va.foot * (1 - t) + vb.foot * t - TOE_CUT) < 1e-4) {
+                onCut[sharedOf[i]] = 1;
+            }
+        });
+    }
+
+    // The hem's sides: each edge side (not on the toe box cut), as [i, j] (the triangle's
+    // vertices, in its winding) and the triangle it's of
+    const hem = [];
+
+    for (let t = 0; t < triangles.length; t += 3) {
+        for (let k = 0; k < 3; k++) {
+            const i = triangles[t + k];
+            const j = triangles[t + ((k + 1) % 3)];
+            const a = sharedOf[i];
+            const b = sharedOf[j];
+            const key = a < b ? `${a}:${b}` : `${b}:${a}`;
+
+            if (sides.get(key) === 1 && !(onCut[a] && onCut[b])) {
+                hem.push(i, j, t / 3);
+            }
+        }
+    }
+
+    // Each vertex's texture coordinates and skin weights
+    const size = list.length;
+    const uvs = new Float64Array(size * 2);
+    const skinIndices = new Uint8Array(size * 4);
+    const skinWeights = new Uint8Array(size * 4);
+
+    list.forEach(({ a, b, t }, i) => {
+        const [indices, weights] = mixSkin(human, source[a], source[b], t);
+
+        uvs[i * 2] = human.uvs[a * 2] * (1 - t) + human.uvs[b * 2] * t;
+        uvs[i * 2 + 1] = human.uvs[a * 2 + 1] * (1 - t) + human.uvs[b * 2 + 1] * t;
+        skinIndices.set(indices, i * 4);
+        skinWeights.set(weights, i * 4);
+    });
+
+    // (Kept compact, in typed arrays: the neighbours a list for each point, in one list, from
+    // where each starts; the edge's sides as pairs of points)
+    const near = { start: new Int32Array(count + 1), list: new Int32Array(neighbours.reduce((sum, set) => sum + set.size, 0)) };
+
+    neighbours.forEach((set, n) => {
+        near.start[n + 1] = near.start[n] + set.size;
+        near.list.set([...set], near.start[n]);
+    });
+
+    const edge = Int32Array.from([...sides].filter(([, uses]) => uses === 1).flatMap(([key]) => key.split(":").map(Number)));
+
+    return {
+        size,
+        from: Int32Array.from(list, ({ a }) => a),
+        to: Int32Array.from(list, ({ b }) => b),
+        along: Float64Array.from(list, ({ t }) => t),
+        triangles: Int32Array.from(triangles),
+        sources: Int32Array.from(sources),
+        covers: Int32Array.from(covers),
+        sharedOf: Int32Array.from(sharedOf),
+        count,
+        onEdge,
+        near,
+        edge,
+        onCut,
+        hem: Int32Array.from(hem),
+        uvs,
+        skinIndices,
+        skinWeights,
+    };
+}
+
+/**
+ * Build a garment on a character: { geometry, covers (the body triangles it hides, a Set of
+ * body triangle numbers), sources (the body triangle each of its triangles
+ * comes from), garment }. `measures` is measureBody(character). (Its cut is the same for everyone
+ * measured the same: cutOf)
+ */
+export function buildGarment(character, id, measures) {
+    return allAtOnce(fittingGarment(character, id, measures));
+}
+
+/** The same (buildGarment), a step at a time (each a yield: its shell, each toe box, its mesh), returning it. */
+export function* fittingGarment(character, id, measures) {
+    const garment = GARMENTS[id];
+    const { human, positions, normals } = character;
+    const { vertices } = measures;
+    const cut = cutOf(human, id, measures);
+
+    if (!cut) {
+        return null;
+    }
+
+    const { size, from, to, along, triangles, covers, sharedOf, count, onEdge, near, edge, onCut, hem } = cut;
+    const source = human.renderSource;
+    const sources = Array.from(cut.sources);
+    const base = new Float32Array(count * 3);
+    const normal = new Float32Array(count * 3);
+
+    for (let i = 0; i < size; i++) {
+        const s = sharedOf[i];
+        const sa = source[from[i]] * 3;
+        const sb = source[to[i]] * 3;
+        const t = along[i];
+
+        for (let k = 0; k < 3; k++) {
+            base[s * 3 + k] = positions[sa + k] * (1 - t) + positions[sb + k] * t;
+            normal[s * 3 + k] = normals[sa + k] * (1 - t) + normals[sb + k] * t;
+        }
+    }
+
+    for (let s = 0; s < count; s++) {
+        const length = Math.hypot(normal[s * 3], normal[s * 3 + 1], normal[s * 3 + 2]) || 1;
+
+        normal[s * 3] /= length;
+        normal[s * 3 + 1] /= length;
+        normal[s * 3 + 2] /= length;
+    }
+
     // Grow outward, then smooth, keeping at least most of the thickness everywhere
     const thickness = garment.thickness + (garment.loose ?? 0);
     const shell = new Float32Array(count * 3);
@@ -488,18 +621,20 @@ export function buildGarment(character, id, measures) {
             const next = shell.slice();
 
             for (let s = 0; s < count; s++) {
-                if (onEdge[s] || !neighbours[s].size || (only && !only.has(s))) {
+                const [first, end] = [near.start[s], near.start[s + 1]];
+
+                if (onEdge[s] || first === end || (only && !only.has(s))) {
                     continue;
                 }
 
                 for (let k = 0; k < 3; k++) {
                     let sum = 0;
 
-                    for (const n of neighbours[s]) {
-                        sum += shell[n * 3 + k];
+                    for (let m = first; m < end; m++) {
+                        sum += shell[near.list[m] * 3 + k];
                     }
 
-                    next[s * 3 + k] = shell[s * 3 + k] * 0.4 + (sum / neighbours[s].size) * 0.6;
+                    next[s * 3 + k] = shell[s * 3 + k] * 0.4 + (sum / (end - first)) * 0.6;
                 }
 
                 if (!keepOut) {
@@ -520,27 +655,13 @@ export function buildGarment(character, id, measures) {
         }
     };
 
-    // Points on the toe box cut (where the toe box joins on, with no hem)
-    const onCut = new Uint8Array(count);
-
-    if (garment.toeBox) {
-        list.forEach(({ a, b, t }, i) => {
-            const va = vertices[source[a]];
-            const vb = vertices[source[b]];
-
-            if (va.region === "foot" && vb.region === "foot" && Math.abs(va.foot * (1 - t) + vb.foot * t - TOE_CUT) < 1e-4) {
-                onCut[sharedOf[i]] = 1;
-            }
-        });
-    }
-
     // The cut round each foot is the boot's edge, so the smoothing below keeps it where it is:
     // it's put onto a smooth outline first, for the boot and its toe box to carry on from
     const cuts = {};
 
     if (garment.toeBox) {
         for (const side of [1, -1]) {
-            const loop = cutLoop(sides, onCut, shell, side);
+            const loop = cutLoop(edge, onCut, shell, side);
 
             if (loop) {
                 cuts[side] = { loop, fractions: roundOffCut(loop, shell) };
@@ -549,6 +670,7 @@ export function buildGarment(character, id, measures) {
     }
 
     smoothPasses(garment.smooth ?? 0, true);
+    yield;
 
     // The mesh: the shell, then a hem folding back to the skin along the garment's edge
     const out = {
@@ -558,63 +680,51 @@ export function buildGarment(character, id, measures) {
         skinWeights: [],
         indices: [],
     };
-    const skinOf = (a, b, t) => mixSkin(human, source[a], source[b], t);
 
-    list.forEach(({ a, b, t }, i) => {
+    for (let i = 0; i < size; i++) {
         const s = sharedOf[i];
 
         out.positions.push(shell[s * 3], shell[s * 3 + 1], shell[s * 3 + 2]);
-        out.uvs.push(human.uvs[a * 2] * (1 - t) + human.uvs[b * 2] * t, human.uvs[a * 2 + 1] * (1 - t) + human.uvs[b * 2 + 1] * t);
+    }
 
-        const [indices, weights] = skinOf(a, b, t);
-
-        out.skinIndices.push(...indices);
-        out.skinWeights.push(...weights);
-    });
-
+    out.uvs.push(...cut.uvs);
+    out.skinIndices.push(...cut.skinIndices);
+    out.skinWeights.push(...cut.skinWeights);
     out.indices.push(...triangles);
 
     // Hem: for each edge side, a strip from the shell back down to near the skin
     const hemDepth = Math.max(0.0015, thickness * 0.85);
 
-    for (let t = 0; t < triangles.length; t += 3) {
-        for (let k = 0; k < 3; k++) {
-            const i = triangles[t + k];
-            const j = triangles[t + ((k + 1) % 3)];
-            const a = sharedOf[i];
-            const b = sharedOf[j];
-            const key = a < b ? `${a}:${b}` : `${b}:${a}`;
+    for (let h = 0; h < hem.length; h += 3) {
+        const [i, j, t] = [hem[h], hem[h + 1], hem[h + 2]];
+        const first = out.positions.length / 3;
 
-            if (sides.get(key) !== 1 || (onCut[a] && onCut[b])) {
-                continue;
+        for (const [index, s] of [[i, sharedOf[i]], [j, sharedOf[j]]]) {
+            for (let k2 = 0; k2 < 3; k2++) {
+                out.positions.push(shell[s * 3 + k2] - normal[s * 3 + k2] * hemDepth);
             }
 
-            const first = out.positions.length / 3;
-
-            for (const [index, s] of [[i, a], [j, b]]) {
-                for (let k2 = 0; k2 < 3; k2++) {
-                    out.positions.push(shell[s * 3 + k2] - normal[s * 3 + k2] * hemDepth);
-                }
-
-                out.uvs.push(out.uvs[index * 2], out.uvs[index * 2 + 1]);
-                out.skinIndices.push(...out.skinIndices.slice(index * 4, index * 4 + 4));
-                out.skinWeights.push(...out.skinWeights.slice(index * 4, index * 4 + 4));
-            }
-
-            // The triangle runs i -> j, so its outside is to the right: keep the same winding
-            out.indices.push(j, i, first, j, first, first + 1);
-            sources.push(sources[t / 3], sources[t / 3]);
+            out.uvs.push(out.uvs[index * 2], out.uvs[index * 2 + 1]);
+            out.skinIndices.push(...out.skinIndices.slice(index * 4, index * 4 + 4));
+            out.skinWeights.push(...out.skinWeights.slice(index * 4, index * 4 + 4));
         }
+
+        // The triangle runs i -> j, so its outside is to the right: keep the same winding
+        out.indices.push(j, i, first, j, first, first + 1);
+        sources.push(sources[t], sources[t]);
     }
 
     if (garment.toeBox) {
-        const cap = { shell, sharedOf, onCut, neighbours, out, sources, human, positions, normals, vertices, thickness, triangles };
+        const cap = { shell, sharedOf, onCut, near, out, sources, human, positions, normals, vertices, thickness, triangles };
 
         for (const side of [1, -1]) {
             if (cuts[side]) {
+                yield;
                 addToeCap(cap, cuts[side], side);
             }
         }
+
+        yield;
     }
 
     const geometry = new THREE.BufferGeometry();
@@ -626,13 +736,13 @@ export function buildGarment(character, id, measures) {
     geometry.setIndex(out.positions.length / 3 > 65535 ? new THREE.Uint32BufferAttribute(out.indices, 1) : new THREE.Uint16BufferAttribute(out.indices, 1));
     geometry.computeVertexNormals();
     // Hem and toe cap vertices keep their own normals
-    smoothNormalsAcrossSeams(geometry, [...sharedOf, ...new Array(out.positions.length / 3 - list.length).fill(-1)]);
+    smoothNormalsAcrossSeams(geometry, [...sharedOf, ...new Array(out.positions.length / 3 - size).fill(-1)]);
 
     if (garment.toeBox) {
         joinToeCaps(geometry, out.capJoins ?? []);
     }
 
-    return { geometry, covers, sources: Int32Array.from(sources), garment };
+    return { geometry, covers: new Set(covers), sources: Int32Array.from(sources), garment };
 }
 
 // Footwear with a toe box is cut this far along the foot (1 is the ball of the foot)
@@ -662,7 +772,7 @@ export function insideOf(human, garment, { vertices, landmarks }, { toes = false
  * the toes, so it bends with them.
  */
 function addToeCap(cap, { loop, fractions }, side) {
-    const { shell, sharedOf, onCut, neighbours, out, sources, human, positions, normals, vertices, thickness, triangles } = cap;
+    const { shell, sharedOf, onCut, near, out, sources, human, positions, normals, vertices, thickness, triangles } = cap;
     const RINGS = 20;
 
     // Which of the boot's vertices each stretch of the cut uses at its ends. Where the cut
@@ -831,7 +941,7 @@ function addToeCap(cap, { loop, fractions }, side) {
     // The boot's slope at each point of the cut (sideways and up, for each step forward), from
     // the boot just behind it, for the cap to set off along so there's no crease where they join
     let slopes = loop.map((s, i) => {
-        const behind = [...neighbours[s]].filter((other) => !onCut[other]);
+        const behind = Array.from(near.list.subarray(near.start[s], near.start[s + 1])).filter((other) => !onCut[other]);
 
         return behind.length ? [0, 1, 2].map((k) => loopPoints[i][k] - behind.reduce((sum, other) => sum + shell[other * 3 + k], 0) / behind.length) : [0, 0, 1];
     });
@@ -911,13 +1021,13 @@ function addToeCap(cap, { loop, fractions }, side) {
 }
 
 /** The toe box cut round one foot (side 1 left, -1 right): its shared points in order, or null. */
-function cutLoop(sides, onCut, shell, side) {
+function cutLoop(edge, onCut, shell, side) {
     const next = new Map();
 
-    for (const [key, uses] of sides) {
-        const [a, b] = key.split(":").map(Number);
+    for (let e = 0; e < edge.length; e += 2) {
+        const [a, b] = [edge[e], edge[e + 1]];
 
-        if (uses === 1 && onCut[a] && onCut[b] && Math.sign(shell[a * 3]) === side) {
+        if (onCut[a] && onCut[b] && Math.sign(shell[a * 3]) === side) {
             next.set(a, [...(next.get(a) ?? []), b]);
             next.set(b, [...(next.get(b) ?? []), a]);
         }
@@ -1284,6 +1394,14 @@ const toSRGB = (c) => (c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.0
  * scaled for a bumpScale of COMPOSITE_BUMP) }.
  */
 export function compositeGarments(map, layers) {
+    return allAtOnce(compositingGarments(map, layers));
+}
+
+// How many texels the garments' pictures are painted (or put together) a step
+const TEXELS_A_STEP = 16384;
+
+/** The same (compositeGarments), a step at a time (each a yield: a few rows of texels), returning it. */
+export function* compositingGarments(map, layers) {
     const { size, covered, triangles, weights, corners } = map;
     const count = size * size;
     const data = new Uint8ClampedArray(count * 4);
@@ -1297,6 +1415,10 @@ export function compositeGarments(map, layers) {
     }));
 
     for (let i = 0; i < count; i++) {
+        if (i % TEXELS_A_STEP === 0) {
+            yield;
+        }
+
         if (!covered[i]) {
             continue;
         }
@@ -1342,7 +1464,9 @@ export function compositeGarments(map, layers) {
         surface[i * 4 + 3] = 255;
     }
 
+    yield;
     dilate(size, covered, data, new Uint8ClampedArray(count));
+    yield;
     dilate(size, covered, surface, new Uint8ClampedArray(count));
 
     return { size, data, surface };
@@ -1353,6 +1477,11 @@ export function compositeGarments(map, layers) {
  * design is painted white (its material's colour tints it), clear where there's no fabric.
  */
 export function paintGarment(map, garment) {
+    return allAtOnce(paintingGarment(map, garment));
+}
+
+/** The same (paintGarment), painted a step at a time (each a yield: a few rows of texels), returning it. */
+export function* paintingGarment(map, garment) {
     if (garment.design) {
         return paintDesign(map, garment.design);
     }
@@ -1367,6 +1496,10 @@ export function paintGarment(map, garment) {
     const mark = garment.emblem ? { mark: garment.emblem.mark, colour: new THREE.Color(garment.emblem.colour), size: garment.emblem.size ?? 0.075 } : null;
 
     for (let i = 0; i < count; i++) {
+        if (i % TEXELS_A_STEP === 0) {
+            yield;
+        }
+
         const x = positions[i * 3];
         const y = positions[i * 3 + 1];
         const z = positions[i * 3 + 2];
@@ -1495,6 +1628,7 @@ export function paintGarment(map, garment) {
         bump[i] = height * 255;
     }
 
+    yield;
     dilate(size, covered, data, bump);
 
     return { size, data, bump };
@@ -1575,10 +1709,22 @@ function dilate(size, covered, data, bump) {
                 continue;
             }
 
+            // (The first filled of its neighbours, left, right, above, below: looked at in turn,
+            // not listed, as this is done for every texel)
             const x = i % size;
-            const neighbour = [x > 0 ? i - 1 : -1, x < size - 1 ? i + 1 : -1, i - size, i + size].find((j) => j >= 0 && j < size * size && filled[j]);
+            let neighbour = -1;
 
-            if (neighbour !== undefined) {
+            if (x > 0 && filled[i - 1]) {
+                neighbour = i - 1;
+            } else if (x < size - 1 && filled[i + 1]) {
+                neighbour = i + 1;
+            } else if (i - size >= 0 && filled[i - size]) {
+                neighbour = i - size;
+            } else if (i + size < size * size && filled[i + size]) {
+                neighbour = i + size;
+            }
+
+            if (neighbour >= 0) {
                 data.copyWithin(i * 4, neighbour * 4, neighbour * 4 + 4);
                 bump[i] = bump[neighbour];
                 next[i] = 1;
