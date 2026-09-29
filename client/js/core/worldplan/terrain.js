@@ -165,7 +165,12 @@ export function shapeLand(seed) {
             }
 
             // The land: rolling, with mountains rising away from the heartlands (between peoples)
-            const nearest = Math.min(...heartlands.map(([hx, hy]) => Math.hypot(hx - x, hy - y)));
+            let nearest = Infinity;
+
+            for (const [hx, hy] of heartlands) {
+                nearest = Math.min(nearest, Math.hypot(hx - x, hy - y));
+            }
+
             const rolling = noise(x, y, seed + 101, 48, 4);
             const ridge = 1 - Math.abs(2 * noise(x, y, seed + 202, 56, 3) - 1);
             const away = Math.min(1, Math.max(0, (nearest - 32) / 26));

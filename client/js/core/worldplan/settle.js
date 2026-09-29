@@ -97,12 +97,15 @@ function nameIn(race, random, used) {
     }
 }
 
+// The lands no one builds on
+const UNBUILDABLE = [BIOME.beach, BIOME.mountain, BIOME.snow, BIOME.volcanic, BIOME.marsh];
+
 // How good a cell is to build on: flat, dry, not too high, better by water
 function buildable(land, x, y) {
     const k = cellIndex(x, y);
     const { height, water, biome } = land;
 
-    if (k < 0 || water[k] || height[k] >= 0.62 || [BIOME.beach, BIOME.mountain, BIOME.snow, BIOME.volcanic, BIOME.marsh].includes(biome[k])) {
+    if (k < 0 || water[k] || height[k] >= 0.62 || UNBUILDABLE.includes(biome[k])) {
         return 0;
     }
 
@@ -211,59 +214,83 @@ function settle(land, random, used) {
     return places;
 }
 
-// The cheapest way over the land from one cell to another (A*), along roads already there where
-// it can; null if there's none
-function route(land, road, from, to) {
+// A way-finder over the land (`route(road, from, to)`): the cheapest way from one cell to another
+// (A*), along roads already there where it can; null if there's none. One for all a world's roads,
+// working in the same lists (each cell's cost so far, and where from), each way putting back only
+// the cells it touched (a few thousand of 65,536) rather than every road making its own
+function router(land) {
     const { height, water, biome } = land;
     const count = CELLS * CELLS;
     const cost = new Float64Array(count).fill(Infinity);
     const came = new Int32Array(count).fill(-1);
-    const queue = new Queue();
-    const start = cellIndex(...from);
-    const goal = cellIndex(...to);
-    const guess = (k) => Math.hypot((k % CELLS) - to[0], Math.floor(k / CELLS) - to[1]) * REUSE;
+    const touched = [];
+    const over = BIOMES.map(({ id }) => ROAD_COST[id] ?? 0);
 
-    cost[start] = 0;
-    queue.push(start, guess(start));
+    const search = (road, from, to) => {
+        const queue = new Queue();
+        const start = cellIndex(...from);
+        const goal = cellIndex(...to);
+        const guess = (k) => Math.hypot((k % CELLS) - to[0], Math.floor(k / CELLS) - to[1]) * REUSE;
 
-    while (queue.size) {
-        const { item: k, key } = queue.pop();
+        cost[start] = 0;
+        touched.push(start);
+        queue.push(start, guess(start));
 
-        if (k === goal) {
-            const path = [];
+        while (queue.size) {
+            const { item: k, key } = queue.pop();
 
-            for (let at = goal; at >= 0; at = came[at]) {
-                path.push([at % CELLS, Math.floor(at / CELLS)]);
+            if (k === goal) {
+                const path = [];
+
+                for (let at = goal; at >= 0; at = came[at]) {
+                    path.push([at % CELLS, Math.floor(at / CELLS)]);
+                }
+
+                return path.reverse();
             }
 
-            return path.reverse();
-        }
-
-        if (key - guess(k) > cost[k] + 1e-9) {
-            continue;
-        }
-
-        const [x, y] = [k % CELLS, Math.floor(k / CELLS)];
-
-        for (const [dx, dy, step] of NEIGHBOURS) {
-            const n = cellIndex(x + dx, y + dy);
-
-            if (n < 0 || water[n] === WATER.sea || water[n] === WATER.lake) {
+            if (key - guess(k) > cost[k] + 1e-9) {
                 continue;
             }
 
-            const over = 1 + (ROAD_COST[BIOMES[biome[n]].id] ?? 0) + 10 * Math.abs(height[n] - height[k]) + (water[n] === WATER.river ? BRIDGE : 0);
-            const next = cost[k] + step * (road[n] ? REUSE : over);
+            const [x, y] = [k % CELLS, Math.floor(k / CELLS)];
 
-            if (next < cost[n]) {
-                cost[n] = next;
-                came[n] = k;
-                queue.push(n, next + guess(n));
+            for (const [dx, dy, step] of NEIGHBOURS) {
+                const n = cellIndex(x + dx, y + dy);
+
+                if (n < 0 || water[n] === WATER.sea || water[n] === WATER.lake) {
+                    continue;
+                }
+
+                const next = cost[k] + step * (road[n] ? REUSE : 1 + over[biome[n]] + 10 * Math.abs(height[n] - height[k]) + (water[n] === WATER.river ? BRIDGE : 0));
+
+                if (next < cost[n]) {
+                    if (cost[n] === Infinity) {
+                        touched.push(n);
+                    }
+
+                    cost[n] = next;
+                    came[n] = k;
+                    queue.push(n, next + guess(n));
+                }
             }
         }
-    }
 
-    return null;
+        return null;
+    };
+
+    return (road, from, to) => {
+        try {
+            return search(road, from, to);
+        } finally {
+            for (const k of touched) {
+                cost[k] = Infinity;
+                came[k] = -1;
+            }
+
+            touched.length = 0;
+        }
+    };
 }
 
 // The shortest joins making one network of `nodes` (Prim's), and then a few more, where going
@@ -341,7 +368,7 @@ function network(nodes, extra) {
 
 // The roads: each people's settlements joined up (tracks to the villages), and the capitals by
 // trade roads; each laid over the land the easiest way, sharing the way where roads meet
-function lay(land, places) {
+function lay(land, places, route) {
     const road = new Uint8Array(CELLS * CELLS);
     const roads = [];
     const joins = [];
@@ -366,7 +393,7 @@ function lay(land, places) {
     joins.sort((p, q) => rank[p.kind] - rank[q.kind] || apart(p.from.cell, p.to.cell) - apart(q.from.cell, q.to.cell));
 
     for (const { from, to, kind } of joins) {
-        const cells = route(land, road, from.cell, to.cell);
+        const cells = route(road, from.cell, to.cell);
 
         if (!cells) {
             continue;
@@ -542,12 +569,13 @@ function encamp(land, road, places, sites, random) {
 export function settleLand(land, seed) {
     const random = createRandom(seed * 13 + 7);
     const used = new Set();
+    const route = router(land);
     const places = settle(land, random, used);
-    const { road, roads } = lay(land, places);
+    const { road, roads } = lay(land, places, route);
     const sites = scatter(land, road, places, random, used);
     const camps = encamp(land, road, places, sites, random);
 
-    hamlets(land, road, roads, places, sites, camps, createRandom(seed * 29 + 3), used);
+    hamlets(land, road, roads, places, sites, camps, createRandom(seed * 29 + 3), used, route);
 
     return { places, road, roads, sites, camps };
 }
@@ -555,7 +583,7 @@ export function settleLand(land, seed) {
 // The small places, settled last, each people's through their lands: hamlets on dry land clear of
 // everything else, each with a track to the nearest bigger place of its people; farmsteads on
 // land that can be farmed near a village or town, off the roads
-function hamlets(land, road, roads, places, sites, camps, random, used) {
+function hamlets(land, road, roads, places, sites, camps, random, used, route) {
     RACES.forEach((race, r) => {
         const cells = [];
 
@@ -613,7 +641,7 @@ function hamlets(land, road, roads, places, sites, camps, random, used) {
         // A track from each hamlet to the nearest bigger place of its people
         for (const hamlet of mine.filter(({ kind }) => kind === "hamlet")) {
             const to = bigger.filter(({ kind }) => kind !== "hamlet" && kind !== "farmstead").reduce((best, place) => (!best || apart(place.cell, hamlet.cell) < apart(best.cell, hamlet.cell) ? place : best), null);
-            const cells = to && route(land, road, hamlet.cell, to.cell);
+            const cells = to && route(road, hamlet.cell, to.cell);
 
             if (!cells) {
                 continue;

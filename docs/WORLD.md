@@ -152,7 +152,12 @@ and 40 to 55 farmsteads.
   going round by the network is much further. Roads to villages are tracks.
 - The capitals are joined by **trade roads**.
 - Each road is laid over the land the easiest way (A* over the cells). Going up and over woods,
-  marsh, jungle, mountains, snow or volcanic ground costs more.
+  marsh, jungle, mountains, snow or volcanic ground costs more. (One way-finder lays all of a
+  world's roads, about 150, in the same lists, each putting back only the cells it touched,
+  rather than each road making and filling its own lists of all 65,536; and the queue that
+  floods the land and finds the ways, `queue.js`, a binary heap, moves what's put in or taken
+  out into its place rather than swapping it along. Laying out a world takes 0.7 s in headless
+  Chromium, 0.84 to 0.9 s before; the same worlds, checked seed by seed.)
 - Crossing a river is a **bridge**, and costs more.
 - Following a road already there costs a third, so roads share their way where they meet. Trade
   roads are laid first, then roads, then tracks.
