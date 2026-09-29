@@ -162,7 +162,7 @@ export const MANIFEST = Object.freeze([
             ["js/world/chunks3d.js", 29934],
             ["js/world/drops3d.js", 5929],
             ["js/world/effects.js", 56887],
-            ["js/world/flyers3d.js", 21396],
+            ["js/world/flyers3d.js", 21478],
             ["js/world/ground.js", 22956],
             ["js/world/interiors3d.js", 98817],
             ["js/world/sky.js", 6451],

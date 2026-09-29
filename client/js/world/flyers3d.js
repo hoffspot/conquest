@@ -408,8 +408,9 @@ export class Flyers {
     #beast(kind) {
         const beast = new BeastAvatar(kind, { seed: 1 + Math.floor(this.random() * 1000) });
 
+        // (So high up, its shadow would fall far off: none, to spare drawing it again)
         beast.object.traverse((node) => {
-            node.castShadow = node.isMesh;
+            node.castShadow = false;
         });
         this.object.add(beast.object);
 

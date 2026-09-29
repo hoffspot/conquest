@@ -1569,7 +1569,10 @@ and draws 180,000 to 260,000 triangles, in the town or out of it, shadows includ
 trees are culled one by one, so only those in view are drawn). Starting as each people, on a
 phone's quality, a frame is 70 to 95 draw calls and 160,000 to 200,000 triangles in their town
 (the elves' about 390,000, among its great trees), and 85 to 105 draw calls and 220,000 to
-350,000 triangles out in their homeland. A chunk takes
+350,000 triangles out in their homeland. Looking level towards the horizon shows more of the world
+(an orc's town: 136 draw calls and 300,000 triangles); looking up into the sky, less (about 100
+and 240,000). The sky's dome is one draw call; the birds one a kind flying; a wyvern or the
+dragon in the air about 18,000 triangles in seven draw calls, casting no shadow. A chunk takes
 about 35 ms to build in the browser tests, one a frame at most. The camera sees no further than
 150 metres (the fog's all there is by 130).
 Everything that can be is built once: the town is merged, shaders are compiled while loading,
