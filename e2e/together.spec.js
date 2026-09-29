@@ -25,6 +25,14 @@ const ELF = {
     },
 };
 
+// Two worlds drawn at once in software are slow enough to starve the pages of frames, so each is
+// drawn cheaply: at low quality, half the pixels, no shadows (what's tested isn't how they look)
+async function cheaply(...pages) {
+    for (const page of pages) {
+        await page.addInitScript(() => localStorage.setItem("pellagos.settings", JSON.stringify({ quality: "low", renderScale: 0.5, shadows: false })));
+    }
+}
+
 // Wait for a page's game to be playing (checking on a timer)
 async function playing(page) {
     await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 120000, polling: 250 });
@@ -35,6 +43,8 @@ test("a world opened to others: an elf joins it by its code, is brought in by th
     const guestContext = await browser.newContext();
     const host = await hostContext.newPage();
     const guest = await guestContext.newPage();
+
+    await cheaply(host, guest);
 
     for (const page of [host, guest]) {
         page.on("pageerror", (error) => {
@@ -162,6 +172,8 @@ test("two players side by side trade face to face: one asks, the other says yes,
     const guestContext = await browser.newContext();
     const host = await hostContext.newPage();
     const guest = await guestContext.newPage();
+
+    await cheaply(host, guest);
 
     for (const page of [host, guest]) {
         page.on("pageerror", (error) => {
