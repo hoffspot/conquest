@@ -2037,9 +2037,15 @@ export class Host {
 
             for (const [k, round] of rounds.entries()) {
                 const points = round.map((point) => nearestFree(squares, [Math.floor(point[0]), Math.floor(point[1])], { within: 24 }));
+                // (Each of a patrol walks its own round, a step beside the one before's, so that
+                // none of them waits at a point for another to move off it)
+                const beside = new Set();
 
                 for (let m = 0; m < PATROL_SIZE; m++) {
-                    enlist(`${town.id}/patrol-${k}-${m}`, m % 2 ? patrolArms : guardArms, free(points[0]), { patrol: points, leash: LEASH * 2 });
+                    const own = points.map((point) => nearestFree(squares, point, { within: 24, taken: beside }));
+
+                    own.forEach(([x, y]) => beside.add(squareKey(x, y)));
+                    enlist(`${town.id}/patrol-${k}-${m}`, m % 2 ? patrolArms : guardArms, free(own[0]), { patrol: own, leash: LEASH * 2 });
                 }
             }
         } catch {
@@ -2392,7 +2398,9 @@ export class Host {
             for (let k = 0; k < count; k++) {
                 const each = `${id}/${kind}-${this.war.turn}-${k}`;
 
-                this.#enlist(each, { people: camp.realm, weapon: k % 2 ? patrolArms : guardArms, square: free(from), name: kind === "raid" ? "raider" : "attacker", record: { camp: id, share: party / count, sortie: true }, patrol: [mark] });
+                // (Each making for its own square by the mark, spread over the fields round it,
+                // rather than all for the one, where all but one would wait for ever)
+                this.#enlist(each, { people: camp.realm, weapon: k % 2 ? patrolArms : guardArms, square: free(from), name: kind === "raid" ? "raider" : "attacker", record: { camp: id, share: party / count, sortie: true }, patrol: [free(mark)] });
                 ids.push(each);
             }
         } catch {

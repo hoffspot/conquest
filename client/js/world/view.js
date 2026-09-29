@@ -208,6 +208,15 @@ export class View {
         this.resize();
     }
 
+    /**
+     * Get something newly put in the scene (a character, a creature) ready to draw: its shaders
+     * compiled, in the background where the browser can, so that a kind not drawn before doesn't
+     * stall the frame it's first drawn in. Resolves once it's ready (keep it hidden till then).
+     */
+    prepare(object) {
+        return this.renderer.compileAsync(object, this.camera, this.scene);
+    }
+
     /** Draw fewer pixels than the quality level says (0.5 to 1), to see what it saves. */
     setRenderScale(scale) {
         this.renderScale = scale;

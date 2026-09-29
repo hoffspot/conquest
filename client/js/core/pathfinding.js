@@ -89,11 +89,19 @@ class MinHeap {
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
+// The eight squares round one
+const NEIGHBOURS = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]];
+
 // A map bigger than this many squares (the world, in chunks) is searched only round the start and
 // the end: this far beyond them (squares), and no more than MOST squares in all before giving up
 const WHOLE = 1 << 16;
 const MARGIN = 64;
 const MOST = 120000;
+
+// With others in the way (`taken`), a search gives up sooner, after this many squares and this
+// many more for each square across between the start and the end, squared: a goal they've shut
+// in isn't searched for over the whole window, again and again, while they stand there
+const CROWDED = Object.freeze({ least: 4000, per: 100 });
 
 // Kept from one search to the next (big enough for the biggest window yet)
 let buffers = { size: 0, gScore: null, parent: null, closed: null };
@@ -153,9 +161,24 @@ export function findPath(grid, start, end, { taken = null } = {}) {
     const size = cols * (y1 - y0);
     const free = (x, y) => x >= x0 && y >= y0 && x < x1 && y < y1 && !squares.blocked(x, y) && !taken?.has(squareKey(x, y));
 
+    // (A goal that can't be stood on, or that's shut in on every side (unless the start's beside
+    // it), can't be reached: said at once, rather than after searching the whole window)
+    const across = Math.max(Math.abs(endX - startX), Math.abs(endY - startY));
+
+    if (!free(endX, endY) || (across > 1 && !NEIGHBOURS.some(([dx, dy]) => free(endX + dx, endY + dy)))) {
+        return [];
+    }
+
     const startIndex = (startY - y0) * cols + (startX - x0);
     const endIndex = (endY - y0) * cols + (endX - x0);
-    const heuristic = (x, y) => Math.sqrt((x - endX) * (x - endX) + (y - endY) * (y - endY));
+    // (How far it is at the least, moving as characters do: straight, or diagonally at √2 a square)
+    const heuristic = (x, y) => {
+        const dx = Math.abs(x - endX);
+        const dy = Math.abs(y - endY);
+
+        return Math.max(dx, dy) + (Math.SQRT2 - 1) * Math.min(dx, dy);
+    };
+    const most = taken ? Math.min(MOST, CROWDED.least + CROWDED.per * across * across) : MOST;
     const { gScore, parent, closed } = buffersFor(size);
     const open = new MinHeap();
 
@@ -184,7 +207,7 @@ export function findPath(grid, start, end, { taken = null } = {}) {
     gScore[startIndex] = 0;
     open.push({ index: startIndex, f: heuristic(startX, startY), h: heuristic(startX, startY), seq: sequence++ });
 
-    while (open.size > 0 && explored < MOST) {
+    while (open.size > 0 && explored < most) {
         const { index } = open.pop();
 
         if (closed[index]) {

@@ -130,6 +130,31 @@ export class Sites {
     #setDown(site, [w, h]) {
         const facing = this.#facing(site);
         const size = WORLD_SIZE;
+        // (Its land looked at every other square: no road or stream is narrower; each square
+        // looked at once, however many of the tries it's under)
+        const looked = new Map();
+        const clear = (i, j) => {
+            if (i < 0 || j < 0 || i >= size || j >= size) {
+                return false;
+            }
+
+            if (i % 2 || j % 2) {
+                return true;
+            }
+
+            const k = j * size + i;
+
+            if (!looked.has(k)) {
+                const land = this.landAt(i, j);
+
+                looked.set(k, !land.road && !land.water);
+            }
+
+            return looked.get(k);
+        };
+        // (The squares that weren't clear under earlier tries: most tries overlap the last, so
+        // one of these is under most of those that fail, and looked for first)
+        const unclear = [];
 
         for (let r = 0; r <= SHIFT; r += SHIFT_STEP) {
             const tries = r === 0 ? 1 : Math.round((TAU * r) / SHIFT_STEP);
@@ -138,23 +163,31 @@ export class Sites {
                 const a = (k / tries) * TAU;
                 const [x, y] = [Math.round(site.at[0] + Math.cos(a) * r), Math.round(site.at[1] + Math.sin(a) * r)];
                 const corners = footprint({ x, y, w, h, facing });
-                const squares = inside(corners);
-                // (Its land looked at every other square: no road or stream is narrower)
-                const clear = ([i, j]) => i >= 0 && j >= 0 && i < size && j < size && (i % 2 || j % 2 || (!this.landAt(i, j).road && !this.landAt(i, j).water));
 
-                if (squares.every(clear)) {
-                    return {
-                        site,
-                        x,
-                        y,
-                        facing,
-                        w,
-                        h,
-                        pieces: this.#pieces(site, x, y, facing, [w, h]),
-                        squares: new Set(squares.map(([i, j]) => j * size + i)),
-                        radius: Math.hypot(w, h) * (PLOT / 2),
-                    };
+                if (unclear.some(([i, j]) => within(corners, i + 0.5, j + 0.5))) {
+                    continue;
                 }
+
+                const found = firstInside(corners, (i, j) => !clear(i, j));
+
+                if (found) {
+                    unclear.push(found);
+                    continue;
+                }
+
+                const squares = inside(corners);
+
+                return {
+                    site,
+                    x,
+                    y,
+                    facing,
+                    w,
+                    h,
+                    pieces: this.#pieces(site, x, y, facing, [w, h]),
+                    squares: new Set(squares.map(([i, j]) => j * size + i)),
+                    radius: Math.hypot(w, h) * (PLOT / 2),
+                };
             }
         }
 
@@ -214,31 +247,88 @@ export class Sites {
 
 // The squares whose middles are inside a turned rectangle's corners ([[x, y] x4]): [[i, j]]
 function inside(corners) {
-    const xs = corners.map(([x]) => x);
-    const ys = corners.map(([, y]) => y);
     const squares = [];
 
-    for (let j = Math.floor(Math.min(...ys)); j < Math.ceil(Math.max(...ys)); j++) {
-        for (let i = Math.floor(Math.min(...xs)); i < Math.ceil(Math.max(...xs)); i++) {
-            if (within(corners, i + 0.5, j + 0.5)) {
-                squares.push([i, j]);
-            }
-        }
-    }
+    eachInside(corners, (i, j) => {
+        squares.push([i, j]);
+    });
 
     return squares;
 }
 
-function within(corners, px, py) {
-    let inPolygon = false;
+// The first square whose middle is inside a turned rectangle's corners (as inside's) for which
+// test(i, j) holds: [i, j], or null
+function firstInside(corners, test) {
+    let found = null;
 
-    for (let k = 0, last = corners.length - 1; k < corners.length; last = k++) {
-        const [[ax, ay], [bx, by]] = [corners[k], corners[last]];
+    eachInside(corners, (i, j) => {
+        if (test(i, j)) {
+            found = [i, j];
 
-        if (ay > py !== by > py && px < ((bx - ax) * (py - ay)) / (by - ay) + ax) {
-            inPolygon = !inPolygon;
+            return false;
+        }
+
+        return true;
+    });
+
+    return found;
+}
+
+// Visit(i, j) each square whose middle is inside a polygon's corners, a row at a time; stops, and
+// returns false, as soon as a visit returns false. (A middle is inside if it's left of an odd
+// number of the places the polygon's sides cross its row: found once a row, not for every square)
+function eachInside(corners, visit) {
+    const xs = corners.map(([x]) => x);
+    const ys = corners.map(([, y]) => y);
+    const [i0, i1] = [Math.floor(Math.min(...xs)), Math.ceil(Math.max(...xs))];
+
+    for (let j = Math.floor(Math.min(...ys)); j < Math.ceil(Math.max(...ys)); j++) {
+        const crossings = crossingsAt(corners, j + 0.5);
+
+        for (let i = i0; i < i1; i++) {
+            const px = i + 0.5;
+            let left = 0;
+
+            for (const x of crossings) {
+                if (px < x) {
+                    left++;
+                }
+            }
+
+            if (left % 2 === 1 && visit(i, j) === false) {
+                return false;
+            }
         }
     }
 
-    return inPolygon;
+    return true;
+}
+
+// Whether a point is inside a polygon's corners (as eachInside has it)
+function within(corners, px, py) {
+    let left = 0;
+
+    for (const x of crossingsAt(corners, py)) {
+        if (px < x) {
+            left++;
+        }
+    }
+
+    return left % 2 === 1;
+}
+
+// Where a polygon's sides cross a row (py): their x
+function crossingsAt(corners, py) {
+    const crossings = [];
+
+    for (let k = 0, last = corners.length - 1; k < corners.length; last = k++) {
+        const [ax, ay] = corners[k];
+        const [bx, by] = corners[last];
+
+        if (ay > py !== by > py) {
+            crossings.push(((bx - ax) * (py - ay)) / (by - ay) + ax);
+        }
+    }
+
+    return crossings;
 }

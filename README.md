@@ -469,6 +469,7 @@ client/                 The game (static files served to the browser)
     world.js            The town: on 1-metre squares, fields, trees, where everyone starts, the
                         tavern, and its maps and the links between them
     grid.js             Reading any map's squares (blocked, opaque, ground), in rows or chunks
+    steps.js            Work done a step at a time (generators), or all at once
     interiors.js        Inside buildings: the tavern's floors, drawn as plans of their squares
     insides.js          Every building that can be gone into: its door, and its floors and folk
                         made the first time they're wanted
@@ -519,7 +520,10 @@ client/                 The game (static files served to the browser)
                         and each people's homeland its own ground
     chunks3d.js         The world round the player, a chunk at a time as they go: ground, water,
                         bridges, trees, the land's features, the undergrowth near the player,
-                        and the settlements' buildings
+                        and the settlements' buildings, each drawn a step at a time in each
+                        frame's budget
+    layouts.js          The settlements a little way ahead, laid out in a worker
+                        (layout-worker.js) for the world to take when it first wants them
     town3d.js           The town's buildings, props and trees, merged into few meshes
     interiors3d.js      Inside the buildings: the taverns', smithies', temples' and guilds'
                         rooms and furniture, the fires, the boar on its spit, and taking

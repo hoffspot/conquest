@@ -332,11 +332,40 @@ export function linkAt(links, map, [x, y]) {
     return null;
 }
 
+// Each list of links' links by the maps they join (in the list's order), made again when links
+// have been added to it (they're only ever added: a building's doors as its settlement's laid out),
+// so that a way between maps is found by looking at the links of each map on the way, not all
+const indexes = new WeakMap();
+
+function linksByMap(links) {
+    let index = indexes.get(links);
+
+    if (index?.count !== links.length) {
+        const byMap = new Map();
+
+        for (const link of links) {
+            for (const map of new Set(link.ends.map((end) => end.map))) {
+                if (!byMap.has(map)) {
+                    byMap.set(map, []);
+                }
+
+                byMap.get(map).push(link);
+            }
+        }
+
+        index = { count: links.length, byMap };
+        indexes.set(links, index);
+    }
+
+    return index.byMap;
+}
+
 /**
  * The way from one map to another through the links (breadth first): the links to go through, in
  * order ([] already there; null no way).
  */
 export function routeBetween(links, from, to) {
+    const byMap = linksByMap(links);
     const queue = [[from, []]];
     const visited = new Set([from]);
 
@@ -347,7 +376,7 @@ export function routeBetween(links, from, to) {
             return route;
         }
 
-        for (const link of links) {
+        for (const link of byMap.get(map) ?? []) {
             const here = link.ends.find((end) => end.map === map);
             const there = link.ends.find((end) => end !== here);
 

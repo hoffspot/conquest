@@ -8,6 +8,7 @@ import { squaresOf } from "../client/js/core/grid.js";
 import { buildWorld, CHUNK, CHUNKS, FLORA, Overworld, WET, WORLD_SIZE } from "../client/js/core/overworld.js";
 import { findPath } from "../client/js/core/pathfinding.js";
 import { Settlements, squareOf, waysOut } from "../client/js/core/settlements.js";
+import { siteSize, Sites } from "../client/js/core/sites.js";
 import { ENTERED, GROUND, HOME_TREES, TREE_KINDS } from "../client/js/core/setpieces/pieces.js";
 import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
 import { BIOMES, CELL, CELLS } from "../client/js/core/worldplan/plan.js";
@@ -345,6 +346,49 @@ describe("the world outside (overworld.js)", () => {
 
         assert.ok(Math.hypot(player.x - (goal[0] + 0.5), player.y - (goal[1] + 0.5)) < 1.5, `at ${player.x.toFixed(1)}, ${player.y.toFixed(1)}; going to ${goal}, from ${x}, ${y}`);
         assert.ok(!overworld.inTown(Math.floor(player.x), Math.floor(player.y)));
+    });
+
+    it("sets each people's castle and places down clear of roads and water, moved off them where it must be, each square's land looked at once", () => {
+        const looked = new Map();
+        const sites = new Sites(world.plan, {
+            landAt: (x, y) => {
+                looked.set(y * WORLD_SIZE + x, (looked.get(y * WORLD_SIZE + x) ?? 0) + 1);
+
+                return overworld.landAt(x, y);
+            },
+        });
+        let moved = 0;
+
+        for (const site of world.plan.sites.filter((each) => siteSize(each))) {
+            const [cx, cy] = site.at.map((v) => Math.floor(v / CHUNK));
+            const before = sites.set.size;
+
+            looked.clear();
+            sites.settle(cx, cy);
+
+            // (Once for each site set down then, at most)
+            assert.ok(Math.max(0, ...looked.values()) <= sites.set.size - before, `${site.kind} ${site.id}`);
+
+            const set = sites.set.get(site.id);
+
+            if (!set) {
+                continue;
+            }
+
+            moved += set.x !== Math.round(site.at[0]) || set.y !== Math.round(site.at[1]) ? 1 : 0;
+
+            for (const square of set.squares) {
+                const [x, y] = [square % WORLD_SIZE, Math.floor(square / WORLD_SIZE)];
+
+                if (x % 2 === 0 && y % 2 === 0) {
+                    const land = overworld.landAt(x, y);
+
+                    assert.ok(!land.road && !land.water, `${site.kind} on ${land.road ? "a road" : "water"} at ${x}, ${y}`);
+                }
+            }
+        }
+
+        assert.ok(moved >= 1, "some moved off a road");
     });
 
     it("makes chunks quickly", () => {

@@ -20,20 +20,34 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { CHUNK, CHUNKS, WET } from "../core/overworld.js";
+import { allAtOnce } from "../core/steps.js";
 import { material } from "./art/engine/materials.js";
 import { WILDS } from "./art/engine/atlas.js";
 import { holdSign, isSign, letGoSign, releaseSign } from "./art/kits/signs.js";
 import { TREE_WIND, Woodland } from "./art/kits/trees.js";
-import { featureMesh, Growth, TILE, undergrowthMesh, undergrowthOf } from "./art/kits/wilds.js";
-import { chunkGround, disposeChunkGround, disposeGrass, landColours } from "./ground.js";
+import { featureLooks, featureMesh, Growth, sowing, TILE, undergrowthLooks, undergrowthMesh } from "./art/kits/wilds.js";
+import { disposeChunkGround, disposeGrass, landColours, layingGround } from "./ground.js";
+import { Layouts } from "./layouts.js";
 import { builderFor } from "./art/peoples/index.js";
 import { BUILDERS, cutAway, merge, PIXEL, placed, standOn } from "./town3d.js";
 
 /** How many chunks round the player's are drawn (each way), and how far off they're let go. */
 export const REACH = Object.freeze({ drawn: 2, kept: 3 });
 
-/** How long a frame may spend building settlements' buildings and undergrowth (milliseconds). */
+/**
+ * How long a frame may spend drawing chunks, building settlements' buildings and growing
+ * undergrowth (milliseconds): each is done a step at a time, until the frame's budget is spent.
+ */
 export const BUILD_BUDGET = 6;
+
+/**
+ * The same while the game loads, with only the loading screen to draw between (which each time
+ * waits at least a few milliseconds for the page: so fewer, longer turns).
+ */
+export const LOAD_BUDGET = 40;
+
+// How long placing undergrowth goes on for in a step (milliseconds)
+const PLACING = 1;
 
 /**
  * Undergrowth is grown for chunks whose nearest edge is within `grow` metres of the player, and let
@@ -68,17 +82,22 @@ export class Chunks {
         this.land = landColours(world.plan);
         this.woodland = new Woodland();
 
+        // (The settlements a little further off laid out ahead, off the page's thread)
+        this.layouts = this.overworld.settlements ? new Layouts(this.overworld.settlements) : null;
+
         /** Everything drawn: add it to the scene. */
         this.object = new THREE.Group();
         this.object.name = "chunks";
         this.primer = primer();
         this.object.add(this.woodland.object, this.primer);
 
-        // The chunks drawn, by key: { cx, cy, object, trees (their lot), heights, job (its
-        // buildings, while they're being built: { pieces, index, group, waiting }), growth (its
-        // undergrowth while it's being grown: Growth), undergrowth (its mesh) }; those whose
+        // The chunks drawn, by key: { cx, cy, object, lot (its trees), heights, drawing (while
+        // it's still being drawn, hidden), job (its buildings, while they're being built: {
+        // pieces, index, group, waiting }), growth (its undergrowth while it's being grown: its
+        // steps), undergrowth (its meshes) }; the steps of the one being drawn; those whose
         // buildings are being built, in turn; and those whose undergrowth is being grown
         this.drawn = new Map();
+        this.drawing = null;
         this.building = [];
         this.growing = [];
         this.centre = null;
@@ -92,6 +111,12 @@ export class Chunks {
     fill(x, z, reach = REACH.drawn) {
         this.#aim(x, z);
 
+        // (Any being drawn finished first)
+        if (this.drawing) {
+            allAtOnce(this.drawing);
+            this.drawing = null;
+        }
+
         for (const [cx, cy] of this.wanted) {
             if (Math.max(Math.abs(cx - this.centre[0]), Math.abs(cy - this.centre[1])) <= reach) {
                 this.#draw(cx, cy);
@@ -102,26 +127,22 @@ export class Chunks {
     }
 
     /**
-     * Each frame, with the player at a point (metres): draw the nearest chunk they're near that
-     * isn't drawn yet (at most one a frame), and throw away those they've left far behind.
-     * Returns whether anything changed.
+     * Each frame, with the player at a point (metres): throw away the chunks they've left far
+     * behind, then, in the frame's `budget` (milliseconds), draw the nearest chunk they're near
+     * that isn't drawn yet (a step of it at least, and no more than one begun a frame), then build
+     * settlements' buildings, then grow the undergrowth near them. Returns whether anything changed.
      */
-    update(x, z) {
-        let changed = this.#aim(x, z);
-        const next = this.wanted.find(([cx, cy]) => !this.drawn.has(key(cx, cy)));
-
-        if (next) {
-            this.#draw(...next);
-            changed = true;
-        }
+    update(x, z, { budget = BUILD_BUDGET } = {}) {
+        const until = performance.now() + budget;
+        const changed = this.#aim(x, z);
+        const drew = this.#drawSome(until);
 
         this.#tend(x, z);
 
-        const start = performance.now();
-        const built = this.#build();
-        const grown = this.#grow(start + BUILD_BUDGET);
+        const built = this.#build(until);
+        const grown = this.#grow(until);
 
-        return built || grown || changed;
+        return built || grown || drew || changed;
     }
 
     /** Grow the undergrowth this thick from now on (as the constructor's `undergrowth`): grown again if it's changed. */
@@ -137,9 +158,9 @@ export class Chunks {
         }
     }
 
-    /** Whether any settlement's buildings, or any undergrowth near, are still being built. */
+    /** Whether any chunk near, any settlement's buildings, or any undergrowth near, are still to be drawn. */
     get busy() {
-        return this.building.length > 0 || this.growing.length > 0;
+        return this.drawing !== null || this.building.length > 0 || this.growing.length > 0 || this.wanted.some(([cx, cy]) => !this.drawn.has(key(cx, cy)));
     }
 
     // Keep the undergrowth where the player is: grown for the chunks near them (queued), let go
@@ -152,11 +173,15 @@ export class Chunks {
         }
 
         for (const drawn of this.drawn.values()) {
+            if (drawn.drawing) {
+                continue;
+            }
+
             const [x0, z0] = [drawn.cx * CHUNK, drawn.cy * CHUNK];
             const off = Math.hypot(Math.max(x0 - x, 0, x - (x0 + CHUNK)), Math.max(z0 - z, 0, z - (z0 + CHUNK)));
 
             if (off <= UNDERGROWTH.grow && !drawn.growth && !drawn.undergrowth) {
-                drawn.growth = { items: null, growth: null };
+                drawn.growth = this.#growing(drawn);
                 this.growing.push(drawn);
             } else if (off > UNDERGROWTH.drop && (drawn.growth || drawn.undergrowth)) {
                 this.#uproot(drawn);
@@ -174,39 +199,55 @@ export class Chunks {
         this.growing.sort((a, b) => Math.hypot(a.cx * CHUNK + CHUNK / 2 - x, a.cy * CHUNK + CHUNK / 2 - z) - Math.hypot(b.cx * CHUNK + CHUNK / 2 - x, b.cy * CHUNK + CHUNK / 2 - z));
     }
 
-    // Grow what undergrowth can be grown before `until` (performance.now()'s); whether a chunk's
-    // was finished
+    // Grow what undergrowth can be grown before `until` (performance.now()'s), a step at a time;
+    // whether a chunk's was finished
     #grow(until) {
         let finished = false;
 
         while (this.growing.length && performance.now() < until) {
             const drawn = this.growing[0];
-            const job = drawn.growth;
+            const step = drawn.growth.next();
 
-            if (!job.growth) {
-                const chunk = this.overworld.chunk(drawn.cx, drawn.cy);
+            if (step.done) {
+                this.growing.shift();
+                drawn.growth = null;
+                drawn.undergrowth = step.value;
 
-                job.growth = new Growth(undergrowthOf(this.overworld, chunk, { density: this.undergrowth }), [chunk.x0, chunk.y0]);
-                continue;
+                for (const mesh of drawn.undergrowth) {
+                    drawn.object.add(mesh);
+                }
+
+                finished = true;
+                this.version++;
             }
-
-            if (!job.growth.grow(until)) {
-                break;
-            }
-
-            this.growing.shift();
-            drawn.growth = null;
-            drawn.undergrowth = job.growth.meshes();
-
-            for (const mesh of drawn.undergrowth) {
-                drawn.object.add(mesh);
-            }
-
-            finished = true;
-            this.version++;
         }
 
         return finished;
+    }
+
+    // Grow a chunk's undergrowth, a step at a time (each a yield), returning its meshes: where it
+    // grows (a few rows of squares a step), the looks it wants made (a look a step), placed (a
+    // millisecond's worth a step), then a tile's mesh a step
+    *#growing(drawn) {
+        const chunk = this.overworld.chunk(drawn.cx, drawn.cy);
+        const items = yield* sowing(this.overworld, chunk, { density: this.undergrowth });
+
+        yield* undergrowthLooks(items);
+
+        const growth = new Growth(items, [chunk.x0, chunk.y0]);
+
+        while (!growth.grow(performance.now() + PLACING)) {
+            yield;
+        }
+
+        const meshes = [];
+
+        for (const mesh of growth.meshing()) {
+            meshes.push(mesh);
+            yield;
+        }
+
+        return meshes;
     }
 
     // Let a chunk's undergrowth go (or stop growing it)
@@ -222,13 +263,12 @@ export class Chunks {
         drawn.undergrowth = null;
     }
 
-    // Build what can be built of the settlements' buildings in this frame's budget; whether a
-    // chunk's were all finished
-    #build(budget = BUILD_BUDGET) {
-        const start = performance.now();
+    // Build what can be built of the settlements' buildings before `until` (performance.now()'s);
+    // whether a chunk's were all finished
+    #build(until) {
         let finished = false;
 
-        while (this.building.length && performance.now() - start < budget) {
+        while (this.building.length && performance.now() < until) {
             const drawn = this.building[0];
             const { job } = drawn;
 
@@ -372,6 +412,8 @@ export class Chunks {
 
     /** Throw everything away. */
     dispose() {
+        this.drawing = null;
+
         for (const drawn of [...this.drawn.values()]) {
             this.#forget(drawn);
         }
@@ -385,6 +427,7 @@ export class Chunks {
             }
         });
         this.woodland.dispose();
+        this.layouts?.dispose();
         disposeGrass(this.land);
         this.land.userData.home?.forEach((home) => home.dispose());
         this.land.dispose();
@@ -402,6 +445,7 @@ export class Chunks {
 
         this.centre = [cx, cy];
         this.wanted = [];
+        this.layouts?.ahead(cx, cy);
 
         for (let dy = -REACH.drawn; dy <= REACH.drawn; dy++) {
             for (let dx = -REACH.drawn; dx <= REACH.drawn; dx++) {
@@ -426,17 +470,53 @@ export class Chunks {
         return changed;
     }
 
-    // Draw a chunk
-    #draw(cx, cy) {
-        if (this.drawn.has(key(cx, cy))) {
-            return;
+    // Draw what can be drawn before `until` (performance.now()'s) of the nearest chunk wanted
+    // that isn't drawn yet: a step of it at least, and no more than one chunk begun a frame;
+    // whether one was finished
+    #drawSome(until) {
+        if (!this.drawing) {
+            const next = this.wanted.find(([cx, cy]) => !this.drawn.has(key(cx, cy)));
+
+            if (!next) {
+                return false;
+            }
+
+            this.drawing = this.#drawing(...next);
         }
 
+        do {
+            if (this.drawing.next().done) {
+                this.drawing = null;
+
+                return true;
+            }
+        } while (performance.now() < until);
+
+        return false;
+    }
+
+    // Draw a chunk all at once
+    #draw(cx, cy) {
+        if (!this.drawn.has(key(cx, cy))) {
+            allAtOnce(this.#drawing(cx, cy));
+        }
+    }
+
+    // Draw a chunk, a step at a time (each a yield), hidden until it's all drawn
+    *#drawing(cx, cy) {
         const chunk = this.overworld.chunk(cx, cy);
         const object = new THREE.Group();
+        const heights = new Float32Array(CHUNK * CHUNK);
+        const drawn = { cx, cy, object, lot: null, heights, drawing: true, job: null, growth: null, undergrowth: null };
 
         object.name = `chunk ${cx}, ${cy}`;
-        object.add(chunkGround(this.overworld, chunk, this.land));
+        object.visible = false;
+        this.object.add(object);
+        this.drawn.set(key(cx, cy), drawn);
+        yield;
+
+        object.add(yield* layingGround(this.overworld, chunk, this.land));
+        yield;
 
         const water = waterOf(this.overworld, chunk);
         const bridges = bridgesOf(chunk);
@@ -449,13 +529,13 @@ export class Chunks {
             }
         }
 
-        // The trees, and how high they stand on each square
-        const lot = this.woodland.plant(chunk.trees.map(({ x, y, variant, size, turn }) => ({ x, z: y, variant, size, turn })));
-        const heights = new Float32Array(CHUNK * CHUNK);
-
-        // The land's own features, and how high they stand
+        // The land's own features (their looks made first, a step each), and how high they stand
         if (chunk.features.length) {
-            const wild = featureMesh(chunk.features, (x, y) => this.overworld.biomeAt(x, y), [chunk.x0, chunk.y0]);
+            const landAt = (x, y) => this.overworld.biomeAt(x, y);
+
+            yield* featureLooks(chunk.features, landAt);
+
+            const wild = featureMesh(chunk.features, landAt, [chunk.x0, chunk.y0]);
 
             object.add(wild.mesh);
 
@@ -470,6 +550,13 @@ export class Chunks {
             }
         }
 
+        yield;
+
+        // The trees, and how high they stand on each square
+        const lot = this.woodland.plant(chunk.trees.map(({ x, y, variant, size, turn }) => ({ x, z: y, variant, size, turn })));
+
+        drawn.lot = lot;
+
         for (const box of lot.boxes) {
             for (let y = Math.max(chunk.y0, Math.floor(box.min.z)); y < Math.min(chunk.y0 + CHUNK, Math.ceil(box.max.z)); y++) {
                 for (let x = Math.max(chunk.x0, Math.floor(box.min.x)); x < Math.min(chunk.x0 + CHUNK, Math.ceil(box.max.x)); x++) {
@@ -481,12 +568,10 @@ export class Chunks {
         }
 
         object.add(lot.object);
-        this.object.add(object);
 
         // The buildings and props of any settlement in it, to be built a few at a time
         // (And each people's castle and places, and their lookouts: sites.js)
         const pieces = [...(this.overworld.settlements?.piecesIn(cx, cy).filter(({ kind }) => kind !== "tree") ?? []), ...(this.overworld.sites?.piecesIn(cx, cy) ?? [])];
-        const drawn = { cx, cy, object, lot, heights, job: null, growth: null, undergrowth: null };
 
         if (pieces.length) {
             const group = new THREE.Group();
@@ -496,13 +581,21 @@ export class Chunks {
             this.building.push(drawn);
         }
 
-        this.drawn.set(key(cx, cy), drawn);
+        drawn.drawing = false;
+        object.visible = true;
         this.version++;
     }
 
     // Throw a chunk away
     #forget(drawn) {
-        this.woodland.fell(drawn.lot);
+        // (Its drawing stopped, if it wasn't finished)
+        if (drawn.drawing) {
+            this.drawing = null;
+        }
+
+        if (drawn.lot) {
+            this.woodland.fell(drawn.lot);
+        }
 
         if (drawn.grown) {
             this.woodland.fell(drawn.grown);

@@ -11,6 +11,7 @@ import * as THREE from "three";
 import { tiling } from "../core/noise.js";
 import { CHUNK } from "../core/overworld.js";
 import { GROUND } from "../core/setpieces/pieces.js";
+import { allAtOnce } from "../core/steps.js";
 import { BIOMES, CELLS, WORLD_SIZE } from "../core/worldplan/plan.js";
 import { RACES } from "../core/worldplan/races.js";
 import { paintLayer, SIZE } from "./art/engine/painters.js";
@@ -18,6 +19,9 @@ import { textureCanvas } from "./art/engine/materials.js";
 
 // Splat texels per metre (edges are shaped at this resolution)
 const SPLAT_RESOLUTION = 4;
+
+// How many rows of texels splatting makes a step
+const SPLAT_ROWS = 32;
 
 // The kinds of ground blended over the grass, in the splat's red, green, blue and alpha, and
 // how many metres one copy of each texture covers (cobbles about 16 cm across, a road's pebbles a
@@ -137,7 +141,12 @@ export function splatData(world, resolution = SPLAT_RESOLUTION) {
  * layer's ground is in it at all) }. Its edges' raggedness is the same wherever it's cut, so
  * the parts of a map that meet match.
  */
-export function splatOf(kindAt, [x0, y0, width, height], resolution = SPLAT_RESOLUTION) {
+export function splatOf(kindAt, area, resolution) {
+    return allAtOnce(splatting(kindAt, area, resolution));
+}
+
+/** The same (splatOf), made a step at a time (each a yield: the squares' kinds, then a few rows of texels), returning it. */
+export function* splatting(kindAt, [x0, y0, width, height], resolution = SPLAT_RESOLUTION) {
     const w = width * resolution;
     const h = height * resolution;
     const data = new Uint8Array(w * h * 4);
@@ -166,6 +175,10 @@ export function splatOf(kindAt, [x0, y0, width, height], resolution = SPLAT_RESO
     const layerAt = (i, j) => kinds[(j + 1) * (width + 2) + i + 1];
 
     for (let j = 0; j < h; j++) {
+        if (j % SPLAT_ROWS === 0) {
+            yield;
+        }
+
         // Blend the four squares round each texel by how near their middles are
         const fy = (j + 0.5) / resolution - 0.5;
         const y = Math.floor(fy);
@@ -175,16 +188,34 @@ export function splatOf(kindAt, [x0, y0, width, height], resolution = SPLAT_RESO
             const fx = (i + 0.5) / resolution - 0.5;
             const x = Math.floor(fx);
             const tx = fx - x;
-            const corners = [layerAt(x, y), layerAt(x + 1, y), layerAt(x, y + 1), layerAt(x + 1, y + 1)];
+            // (Its four corners' layers, and each weighed in: in locals, not arrays, as this is
+            // done for every texel of every chunk)
+            const c0 = layerAt(x, y);
+            const c1 = layerAt(x + 1, y);
+            const c2 = layerAt(x, y + 1);
+            const c3 = layerAt(x + 1, y + 1);
 
-            if (corners[0] < 0 && corners[1] < 0 && corners[2] < 0 && corners[3] < 0) {
+            if (c0 < 0 && c1 < 0 && c2 < 0 && c3 < 0) {
                 continue;
             }
 
-            const weights = [(1 - tx) * (1 - ty), tx * (1 - ty), (1 - tx) * ty, tx * ty];
-
             amounts.fill(0);
-            corners.forEach((layer, k) => layer >= 0 && (amounts[layer] += weights[k]));
+
+            if (c0 >= 0) {
+                amounts[c0] += (1 - tx) * (1 - ty);
+            }
+
+            if (c1 >= 0) {
+                amounts[c1] += tx * (1 - ty);
+            }
+
+            if (c2 >= 0) {
+                amounts[c2] += (1 - tx) * ty;
+            }
+
+            if (c3 >= 0) {
+                amounts[c3] += tx * ty;
+            }
 
             // Ragged edges: noise moves where each edge falls (the same wherever the map's cut)
             const noise = edgeNoise(i + x0 * resolution, j + y0 * resolution, resolution * 1.5) - 0.5;
@@ -539,6 +570,11 @@ let chunkPlane = null;
  * a mesh at its place. Chunks of grass alone share a material; the rest have their own splat.
  */
 export function chunkGround(overworld, chunk, land) {
+    return allAtOnce(layingGround(overworld, chunk, land));
+}
+
+/** The same (chunkGround), made a step at a time (each a yield: its splat's), returning it. */
+export function* layingGround(overworld, chunk, land) {
     const { x0, y0 } = chunk;
     const size = CHUNK;
 
@@ -546,7 +582,7 @@ export function chunkGround(overworld, chunk, land) {
 
     // (One square further round than the chunk, so the kinds of ground blend across its edges
     // as they would were there no edge)
-    const splat = splatOf((x, y) => overworld.squares.ground(x, y), [x0 - 1, y0 - 1, size + 2, size + 2]);
+    const splat = yield* splatting((x, y) => overworld.squares.ground(x, y), [x0 - 1, y0 - 1, size + 2, size + 2]);
     let material;
 
     if (splat.any) {

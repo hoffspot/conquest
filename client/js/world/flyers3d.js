@@ -126,6 +126,10 @@ function birdMesh(kind) {
     const mesh = new THREE.InstancedMesh(birdGeometry(spec.shape), material, MOST);
     const flap = new THREE.InstancedBufferAttribute(new Float32Array(MOST * 2), 2);
 
+    // (Each bird's own colour, there from the start: made on the first bird's, it would change the
+    // shader, compiled while flying rather than with the rest while loading)
+    mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MOST * 3).fill(1), 3);
+
     mesh.geometry.setAttribute("flap", flap);
     material.name = `bird ${kind}`;
     material.onBeforeCompile = (shader) => {
@@ -160,10 +164,14 @@ const between = (random, [least, most]) => least + random() * (most - least);
  * numbers to use (Math.random).
  */
 export class Flyers {
-    constructor({ landAt, lairs = () => [], random = Math.random }) {
+    constructor({ landAt, lairs = () => [], random = Math.random, prepare = null }) {
         this.landAt = landAt;
         this.lairs = lairs;
         this.random = random;
+
+        // (Gets a wyvern or dragon ready to draw, its shaders compiled, before it's first shown:
+        // View.prepare)
+        this.prepare = prepare;
         this.object = new THREE.Group();
         this.object.name = "flyers";
         this.meshes = new Map(Object.keys(BIRDS).map((kind) => [kind, birdMesh(kind)]));
@@ -413,6 +421,14 @@ export class Flyers {
             node.castShadow = false;
         });
         this.object.add(beast.object);
+
+        // (Shown once it's ready to draw)
+        if (this.prepare) {
+            const shown = () => (beast.object.visible = true);
+
+            beast.object.visible = false;
+            this.prepare(beast.object).then(shown, shown);
+        }
 
         return beast;
     }

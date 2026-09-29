@@ -59,7 +59,7 @@ import { Effects, LOOKS } from "../world/effects.js";
 import { SpellFx } from "../world/spellfx.js";
 import { Squares } from "../world/squares.js";
 import { KINDS, Wounds } from "../world/wounds.js";
-import { Chunks, DECK, REACH } from "../world/chunks3d.js";
+import { Chunks, DECK, LOAD_BUDGET, REACH } from "../world/chunks3d.js";
 import { buildGround } from "../world/ground.js";
 import { buildTown } from "../world/town3d.js";
 import { prepareAtlas } from "../world/art/engine/atlas.js";
@@ -590,7 +590,7 @@ export class Game {
             this.chunks = new Chunks(world, { undergrowth: view.quality.undergrowth });
             view.scene.add(this.chunks.object);
             await time("chunks", async () => {
-                while (this.chunks.update(x + 0.5, y + 0.5) || this.chunks.busy) {
+                while (this.chunks.update(x + 0.5, y + 0.5, { budget: LOAD_BUDGET }) || this.chunks.busy) {
                     onProgress({ label: `Laying the land (${this.chunks.drawn.size} of ${chunks})`, done: ++done, total: steps });
                     await new Promise((resolve) => setTimeout(resolve, 0));
                 }
@@ -643,7 +643,7 @@ export class Game {
         const overworld = world.maps?.town;
 
         if (overworld?.biomeAt) {
-            this.flyers = new Flyers({ landAt: (x, z) => overworld.biomeAt(x, z), lairs: () => this.#lairsAloft() });
+            this.flyers = new Flyers({ landAt: (x, z) => overworld.biomeAt(x, z), lairs: () => this.#lairsAloft(), prepare: (object) => view.prepare(object) });
             view.scene.add(this.flyers.object);
         }
         step(`Dressing ${this.hero.name}`);
@@ -890,6 +890,13 @@ export class Game {
         if (wounds) {
             this.wounds.set(id, new Wounds(character, { seed: this.avatars.size * 17 + 3 }));
         }
+
+        // (Its shaders compiled before it's first drawn, hidden till then (#update), so that a
+        // kind of creature, or garment, not drawn before doesn't stall a frame compiling them)
+        const ready = () => (avatar.compiling = false);
+
+        avatar.compiling = true;
+        this.view.prepare(character.object).then(ready, ready);
 
         return avatar;
     }
@@ -1185,7 +1192,9 @@ export class Game {
         }
 
         // (Fallen behind the host: caught up, a little at a time)
-        for (let extra = 0; this.remote && this.remote.behind > PACE.behind && extra < PACE.catchUp; extra++) {
+        const catching = performance.now();
+
+        for (let extra = 0; this.remote && this.remote.behind > PACE.behind && extra < PACE.catchUp && performance.now() - catching < PACE.catchUpMs; extra++) {
             const events = this.remote.step();
 
             if (!events) {
@@ -1238,6 +1247,11 @@ export class Game {
             avatar.update(dt, ox + x, oz + z, actor.facing, !actor.attack);
             this.#updateBody(actor, avatar, dt, this.#standsAt(actor.map, x, z));
             hud.setStamina(actor.id, actor.stamina, actor.maxStamina);
+
+            // (Not shown till its shaders are ready: #register)
+            if (avatar.compiling) {
+                avatar.object.visible = false;
+            }
         }
 
         // Projectiles, between their last two steps, rising and falling on the way

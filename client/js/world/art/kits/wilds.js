@@ -24,6 +24,7 @@
 import * as THREE from "three";
 import { hashOf, fractal } from "../../../core/noise.js";
 import { GROUND } from "../../../core/setpieces/pieces.js";
+import { allAtOnce } from "../../../core/steps.js";
 import { neglect, rockiness } from "../../../core/wilds.js";
 import { LAYERS, atlasMaterial, wildsMaterial } from "../engine/atlas.js";
 import { MATERIALS } from "../engine/painters.js";
@@ -1902,9 +1903,10 @@ export const VARIANTS = 8;
 
 // Each look, made the first time it's wanted, by kind, land and number
 const looks = new Map();
+const lookKey = (kind, land, index) => `${kind}:${land}:${index}`;
 
 function lookOf(kind, land, index) {
-    const key = `${kind}:${land}:${index}`;
+    const key = lookKey(kind, land, index);
 
     if (!looks.has(key)) {
         const random = randomOf(hashOf(index + 1, kind.length * 131 + [...kind].reduce((sum, c) => sum * 31 + c.charCodeAt(0), 7), [...land].reduce((sum, c) => sum * 31 + c.charCodeAt(0), 11)) * 4294967296);
@@ -1913,6 +1915,30 @@ function lookOf(kind, land, index) {
     }
 
     return looks.get(key);
+}
+
+// Make the looks wanted ([kind, land, index]) that aren't made yet, one a step (each a yield)
+function* makeLooks(wanted) {
+    for (const [kind, land, index] of wanted) {
+        if (!looks.has(lookKey(kind, land, index))) {
+            lookOf(kind, land, index);
+            yield;
+        }
+    }
+}
+
+/**
+ * Make the looks some features want (featureMesh's) that aren't made yet, one a step (each a
+ * yield). A look is made the first time it's wanted, which can take a few milliseconds (tens for
+ * the craggier ones), so the chunks make theirs ahead, within each frame's budget.
+ */
+export function* featureLooks(features, landAt) {
+    yield* makeLooks(features.map((feature) => featureLook(feature, landAt)));
+}
+
+/** Make the looks some undergrowth wants (undergrowthOf's) that aren't made yet, one a step (as featureLooks). */
+export function* undergrowthLooks(items) {
+    yield* makeLooks(items.map(({ kind, land, look }) => [kind, land, look]));
 }
 
 // Draw one look of a kind for a land
@@ -2104,9 +2130,7 @@ export function featureMesh(features, landAt, [x0, y0]) {
     const boxes = [];
 
     for (const feature of features) {
-        const land = landAt(Math.floor(feature.x), Math.floor(feature.y));
-        const index = Math.floor(feature.variant * VARIANTS) % VARIANTS;
-        const part = lookOf(feature.kind, land, index);
+        const part = lookOf(...featureLook(feature, landAt));
         const { scale, turn } = fit(feature, part);
         const tint = tintOf(hashOf(Math.floor(feature.x * 10), Math.floor(feature.y * 10), 17));
 
@@ -2127,6 +2151,11 @@ export function featureMesh(features, landAt, [x0, y0]) {
     mesh.updateMatrix();
 
     return { mesh, boxes };
+}
+
+// Which look a feature has: [kind, land, index]
+function featureLook({ kind, x, y, variant }, landAt) {
+    return [kind, landAt(Math.floor(x), Math.floor(y)), Math.floor(variant * VARIANTS) % VARIANTS];
 }
 
 // How a feature's look is stretched and turned to its size (its looks are about a metre)
@@ -2171,7 +2200,18 @@ const WET_REACH = 3;
  * the water's edge; thinner in settlements. The same every time for the same chunk. `density`
  * thins it all (for slower devices).
  */
-export function undergrowthOf(overworld, chunk, { density = 1 } = {}) {
+export function undergrowthOf(overworld, chunk, options) {
+    return allAtOnce(sowing(overworld, chunk, options));
+}
+
+// How many rows of a chunk's squares sowing looks over a step
+const SOWN_ROWS = 8;
+
+/**
+ * Where a chunk's undergrowth grows (undergrowthOf), found a step at a time (each a yield: the
+ * fields, then a few rows of squares), returning it.
+ */
+export function* sowing(overworld, chunk, { density = 1 } = {}) {
     const { x0, y0 } = chunk;
     const size = Math.sqrt(chunk.ground.length);
     const seed = overworld.plan.seed;
@@ -2217,7 +2257,13 @@ export function undergrowthOf(overworld, chunk, { density = 1 } = {}) {
     };
     const items = [];
 
+    yield;
+
     for (let j = 0; j < size; j++) {
+        if (j > 0 && j % SOWN_ROWS === 0) {
+            yield;
+        }
+
         for (let i = 0; i < size; i++) {
             const k = j * size + i;
             const [x, y] = [x0 + i, y0 + j];
@@ -2365,7 +2411,16 @@ export class Growth {
 
     /** A mesh for each tile with anything in it (`userData.tile`: [x0, y0], its corner). */
     meshes() {
-        return [...this.tiles.values()].filter(({ mesher }) => mesher.count).map(({ at, mesher }) => {
+        return [...this.meshing()];
+    }
+
+    /** The same, made one at a time (each yielded). */
+    *meshing() {
+        for (const { at, mesher } of this.tiles.values()) {
+            if (!mesher.count) {
+                continue;
+            }
+
             const mesh = new THREE.Mesh(mesher.geometry(true), wildsMaterial(TREE_WIND.time));
 
             mesh.name = "undergrowth";
@@ -2375,8 +2430,8 @@ export class Growth {
             mesh.updateMatrix();
             mesh.userData.tile = at;
 
-            return mesh;
-        });
+            yield mesh;
+        }
     }
 }
 

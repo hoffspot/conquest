@@ -345,7 +345,8 @@ whoever holds the town, and whom they fight is as their peoples stand.
   - each goes after an enemy within 14 metres of its post (its **leash**), and comes back to it.
 - **Patrols.** Patrols of two walk a round of six points just outside the town's edge, each round
   the other way from the last (as many as the town has: `HOLDINGS` patrols), while its garrison's
-  at least half full.
+  at least half full. Each of a patrol walks its own round, a step beside the other's, so neither
+  waits at a point for the other to move off it.
 - **Each soldier stands for a share of the garrison.** One who falls takes that share off it in
   the war (`war.loss`), and is taken away 10 seconds after. A soldier never comes back to life:
   the town musters again from what's left of its garrison the next time a player comes.
@@ -647,6 +648,7 @@ against it isn't reckoned in the war but **played out** there: the war sends it 
 | **A raid** | raiders (a third of the camp, up to 6) | 40 m out from the town's edge on the camp's side, to its fields just outside it | they're all down; or 30 s after reaching the fields (within 10 m) | reached: the town's taxes stopped, a grudge (`raided`); else driven off (`repulsed`) |
 | **An assault** | attackers (the whole camp, up to 16) | the same, into the town | they're all down; or the town's defenders are | none of its defenders left: the town's **taken**, its new holders' soldiers out at once; else thrown back |
 
+- Each raider or attacker makes for a square of their own by the mark, not all for the one.
 - Each raider or attacker stands for a share of those the camp sent. Their losses and the town's
   are the war's as they fall. Those still standing when it's over go back to their camp.
 - A sortie goes on 2.5 minutes at most. If every player leaves the town first, the rest of it is
@@ -697,7 +699,8 @@ world while anyone else is in it (rule 6, M0).
   recorded. They play it again on their own copy of the world, step for step, and it comes out the
   same (the engine's made so: seeded random numbers, and nothing hanging on what any game's drawn).
 - **Pace.** A copy plays steps as they come, and catches up when it falls more than 6 behind
-  (`PACE`).
+  (`PACE`): up to 40 more steps a frame, for no more than 8 ms of it, so that on a slow phone
+  catching up doesn't make the frame so long that it falls further behind.
 - **Commands.** A joined player's own commands go to the host, and come back among the rest. What
   came of them (a request offered, gold paid, a door gone through) is what came of them on
   their copy, a moment later: the talk says it again as it now is (`Conversation.retell`).

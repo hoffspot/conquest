@@ -61,6 +61,9 @@ export class Settlements {
         /** Each place laid out so far, by id: { place, town (its layout), at, size }. */
         this.laid = new Map();
 
+        // Places laid out elsewhere ahead of being wanted (give), by id: { spec, town }
+        this.given = new Map();
+
         // The places whose squares (grown by NEAR) reach into each chunk
         this.byChunk = new Map();
 
@@ -88,13 +91,21 @@ export class Settlements {
         return this.byChunk.get(cy * CHUNKS + cx) ?? [];
     }
 
-    /** A place laid out (now, if it wasn't): { place, town, at, size }. */
+    /**
+     * A place laid out (now, if it wasn't: or as it was laid out elsewhere, if it was given): {
+     * place, town, at, size }.
+     */
     of(place) {
         let settlement = this.laid.get(place.id);
 
         if (!settlement) {
-            const town = layoutTown({ seed: place.seed, kind: place.kind, exits: waysOut(this.plan, place), people: place.race ?? "human" });
+            const spec = this.specOf(place);
+            const given = this.given.get(place.id);
+            // (Laid out elsewhere from what it is here, or here: the same either way)
+            const town = given && JSON.stringify(given.spec) === JSON.stringify(spec) ? given.town : layoutTown(spec);
             const { at, size } = squareOf(place);
+
+            this.given.delete(place.id);
 
             // (The way up to the doors of its buildings that can be gone into, cleared)
             openEntrances(town.pieces, town.blocked, town.opaque);
@@ -105,6 +116,21 @@ export class Settlements {
         }
 
         return settlement;
+    }
+
+    /** What laying a place out takes (layoutTown's options), for laying it out elsewhere. */
+    specOf(place) {
+        return { seed: place.seed, kind: place.kind, exits: waysOut(this.plan, place), people: place.race ?? "human" };
+    }
+
+    /**
+     * A place laid out elsewhere (off the page's thread: world/layouts.js) from its specOf, to be
+     * taken as it is when it's first wanted rather than laid out then.
+     */
+    give(place, spec, town) {
+        if (!this.laid.has(place.id)) {
+            this.given.set(place.id, { spec, town });
+        }
     }
 
     /** Lay out every place near a chunk (before making it). */
