@@ -2622,9 +2622,13 @@ test("a building gone into is marked on the minimap; holding the minimap opens t
     await expect(page.locator("#worldmap")).not.toBeVisible();
     expect(await page.evaluate(() => window.pellagos.game.running)).toBe(true);
 
-    // M opens it too, and closes it again
+    // (Closed, what's quickly painted again let go: its canvas's pixels, its fog's layer)
+    expect(await page.evaluate(() => ({ width: window.pellagos.worldMap.canvas.width, layer: window.pellagos.worldMap.layer }))).toEqual({ width: 1, layer: null });
+
+    // M opens it too, painted afresh, and closes it again
     await page.keyboard.press("m");
     await expect(page.locator("#worldmap")).toBeVisible();
+    await page.waitForFunction(() => window.pellagos.worldMap.canvas.width > 1 && window.pellagos.worldMap.layer);
     await page.keyboard.press("m");
     await expect(page.locator("#worldmap")).not.toBeVisible();
     expect(await page.evaluate(() => window.pellagos.game.running)).toBe(true);

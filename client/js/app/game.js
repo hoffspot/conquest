@@ -882,6 +882,11 @@ export class Game {
         for (const each of [this.avatars, this.previous, this.flash, this.lastAttack, this.variety, this.landing, this.wounds, this.pools]) {
             each.delete(id);
         }
+
+        // (And when what lingers on them next shows: the wild's creatures come and go all game)
+        for (const kind in AILING) {
+            this.ailingAt.delete(`${id}:${kind}`);
+        }
     }
 
     // One of the folk, looking as they do (Wenches and Ale's as they always have; anyone else as

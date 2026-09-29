@@ -30,6 +30,10 @@ const DETAIL = 2;
 const DETAIL_BUDGET = 6;
 const DETAIL_KEEP = 240;
 
+// Closed, it keeps this many of them (the latest drawn): the rest, and its other pictures, are
+// painted again in a frame or two when it's opened
+const DETAIL_RESTING = 48;
+
 // The settlements' names from this near (metres to a pixel, at most), and the icons over the
 // buildings gone into from this near, this big (pixels)
 const NAMES_FROM = 20;
@@ -455,6 +459,24 @@ export class WorldMap {
         }
 
         this.drawn = { chunks, fogged: CHUNKS * CHUNKS - this.explored.chunksVisited, names, icons, marks: (this.marks ?? []).length, scale: view.scale };
+    }
+
+    /**
+     * Closed: let go of what's quickly painted again, rather than keep it the whole game (25 to 30
+     * MB of pictures): its fog's layer, all but the latest chunks painted in detail, and its own
+     * pixels (the canvas's made the screen's size again when it's next drawn).
+     */
+    rest() {
+        cancelAnimationFrame(this.frame);
+        clearTimeout(this.fallback);
+        this.frame = 0;
+        this.layer = null;
+
+        for (const key of [...this.details.keys()].slice(0, Math.max(0, this.details.size - DETAIL_RESTING))) {
+            this.details.delete(key);
+        }
+
+        this.canvas.width = this.canvas.height = 1;
     }
 
     /** Stop listening, and let go of what it painted. */

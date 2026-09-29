@@ -460,6 +460,7 @@ function closeWorldMap() {
 
     if (state.worldMap) {
         state.worldMap.onPick = null;
+        state.worldMap.rest();
     }
 
     $("#worldmappick").hidden = true;
