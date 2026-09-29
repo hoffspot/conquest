@@ -12,6 +12,7 @@
 
 import { aboveHairline, beardAmount, faceFrame, nearEar } from "./face.js";
 import { cells, fbm, gaussian, hash3, smoothstep, valueNoise } from "./noise.js";
+import { allAtOnce } from "../core/steps.js";
 
 /** Skin tones, light to dark (sRGB), and a few that aren't human. */
 export const SKIN_TONES = Object.freeze({
@@ -476,6 +477,14 @@ export function rgb(hex) {
  * `bump` (one byte a texel).
  */
 export function paintSkin(atlas, settings = {}) {
+    return allAtOnce(paintingSkin(atlas, settings));
+}
+
+// How many texels paintingSkin paints a step
+const SKIN_STEP = 16384;
+
+/** The same (paintSkin), painted a step at a time (each a yield: a few rows of texels), returning it. */
+export function* paintingSkin(atlas, settings = {}) {
     const look = { ...SKIN_DEFAULTS, ...settings };
 
     // (Fur, stripes and scales: the fields for them made, the first time)
@@ -497,13 +506,22 @@ export function paintSkin(atlas, settings = {}) {
     const stripeColour = look.stripeColour ? rgb(look.stripeColour) : tone.map((c) => c * 0.45);
     const image = look.image;
     const colour = [0, 0, 0];
-    const mix = (target, amount) => {
-        for (let k = 0; k < 3; k++) {
-            colour[k] += (target[k] - colour[k]) * amount;
-        }
+    // (Towards a colour, r g b: not an array, as this is done a few dozen times a texel)
+    const mix = (r, g, b, amount) => {
+        colour[0] += (r - colour[0]) * amount;
+        colour[1] += (g - colour[1]) * amount;
+        colour[2] += (b - colour[2]) * amount;
     };
+    const mixTo = (target, amount) => mix(target[0], target[1], target[2], amount);
+    // (The painted hair's colours, a little darker than the hair's: the same for every texel)
+    const stubbleColour = hair.map((c) => c * 0.78);
+    const scalpColour = hair.map((c) => c * 0.75);
 
     for (let i = 0; i < count; i++) {
+        if (i % SKIN_STEP === 0) {
+            yield;
+        }
+
         if (!atlas.covered[i]) {
             continue;
         }
@@ -528,55 +546,78 @@ export function paintSkin(atlas, settings = {}) {
             colour[2] = tone[2] * shade;
 
             // Patches a little redder or yellower
-            mix([colour[0] * 1.04, colour[1] * 0.92, colour[2] * 0.9], Math.max(0, coarse) * 0.4 * look.variation);
+            mix(colour[0] * 1.04, colour[1] * 0.92, colour[2] * 0.9, Math.max(0, coarse) * 0.4 * look.variation);
+
+            // (Each of what follows only where its field has any: most have none on most of the
+            // skin, and mixing none in changes nothing)
 
             // Redness, stronger on lighter skin
-            const red = (f.red[i] / 255) * look.blush * (0.35 + 0.5 * luminance);
+            if (f.red[i]) {
+                mix(colour[0] * 1.08, colour[1] * 0.8, colour[2] * 0.8, (f.red[i] / 255) * look.blush * (0.35 + 0.5 * luminance));
+            }
 
-            mix([colour[0] * 1.08, colour[1] * 0.8, colour[2] * 0.8], red);
-
-            const dark = (f.dark[i] / 255) * 0.25;
-
-            mix([colour[0] * 0.7, colour[1] * 0.62, colour[2] * 0.66], dark);
+            if (f.dark[i]) {
+                mix(colour[0] * 0.7, colour[1] * 0.62, colour[2] * 0.66, (f.dark[i] / 255) * 0.25);
+            }
 
             // Palms and soles: lighter, more so on darker skin
-            const light = (f.light[i] / 255) * (0.25 + 0.55 * (1 - luminance));
+            if (f.light[i]) {
+                mix(Math.min(1, tone[0] * 1.15 + 0.12), Math.min(1, tone[1] * 1.1 + 0.08), Math.min(1, tone[2] * 1.1 + 0.07), (f.light[i] / 255) * (0.25 + 0.55 * (1 - luminance)));
+            }
 
-            mix([Math.min(1, tone[0] * 1.15 + 0.12), Math.min(1, tone[1] * 1.1 + 0.08), Math.min(1, tone[2] * 1.1 + 0.07)], light);
+            if (f.lips[i]) {
+                mixTo(lip, (f.lips[i] / 255) * 0.7);
+            }
 
-            mix(lip, (f.lips[i] / 255) * 0.7);
-            mix([colour[0] * 0.72, colour[1] * 0.55, colour[2] * 0.52], (f.areolae[i] / 255) * 0.8);
-            mix([Math.min(1, tone[0] * 0.5 + 0.48), Math.min(1, tone[1] * 0.45 + 0.4), Math.min(1, tone[2] * 0.45 + 0.4)], (f.nails[i] / 255) * 0.75);
-            mix([colour[0] * 0.8, colour[1] * 0.7, colour[2] * 0.75], (f.eyelids[i] / 255) * 0.35);
-            mix([tone[0] * 0.78, tone[1] * 0.6, tone[2] * 0.48], (f.freckles[i] / 255) * look.freckles);
-            mix([colour[0] * 0.62, colour[1] * 0.66, colour[2] * 0.72], (f.veins[i] / 255) * look.veins * 0.6);
-            mix([colour[0] * 0.75, colour[1] * 0.72, colour[2] * 0.6], (f.warts[i] / 255) * look.warts);
+            if (f.areolae[i]) {
+                mix(colour[0] * 0.72, colour[1] * 0.55, colour[2] * 0.52, (f.areolae[i] / 255) * 0.8);
+            }
 
-            if (paint) {
-                mix(paint, (f.paint[i] / 255) * (0.8 + 0.2 * fine));
+            if (f.nails[i]) {
+                mix(Math.min(1, tone[0] * 0.5 + 0.48), Math.min(1, tone[1] * 0.45 + 0.4), Math.min(1, tone[2] * 0.45 + 0.4), (f.nails[i] / 255) * 0.75);
+            }
+
+            if (f.eyelids[i]) {
+                mix(colour[0] * 0.8, colour[1] * 0.7, colour[2] * 0.75, (f.eyelids[i] / 255) * 0.35);
+            }
+
+            if (f.freckles[i]) {
+                mix(tone[0] * 0.78, tone[1] * 0.6, tone[2] * 0.48, (f.freckles[i] / 255) * look.freckles);
+            }
+
+            if (f.veins[i]) {
+                mix(colour[0] * 0.62, colour[1] * 0.66, colour[2] * 0.72, (f.veins[i] / 255) * look.veins * 0.6);
+            }
+
+            if (f.warts[i]) {
+                mix(colour[0] * 0.75, colour[1] * 0.72, colour[2] * 0.6, (f.warts[i] / 255) * look.warts);
+            }
+
+            if (paint && f.paint[i]) {
+                mixTo(paint, (f.paint[i] / 255) * (0.8 + 0.2 * fine));
             }
 
             // Fur: its strands lighter and darker; stripes; the belly paler
             if (look.fur) {
                 const strand = f.fur[i] / 255 - 0.5;
 
-                mix([colour[0] * (1 + strand * 0.5), colour[1] * (1 + strand * 0.5), colour[2] * (1 + strand * 0.45)], look.fur);
+                mix(colour[0] * (1 + strand * 0.5), colour[1] * (1 + strand * 0.5), colour[2] * (1 + strand * 0.45), look.fur);
             }
 
-            if (look.stripes) {
-                mix(stripeColour, (f.stripes[i] / 255) * look.stripes * (0.8 + 0.2 * (f.fur[i] / 255)));
+            if (look.stripes && f.stripes[i]) {
+                mixTo(stripeColour, (f.stripes[i] / 255) * look.stripes * (0.8 + 0.2 * (f.fur[i] / 255)));
             }
 
-            if (look.fur || look.scales) {
-                mix([Math.min(1, tone[0] * 1.25 + 0.12), Math.min(1, tone[1] * 1.22 + 0.1), Math.min(1, tone[2] * 1.15 + 0.08)], (f.belly[i] / 255) * 0.55 * Math.max(look.fur, look.scales));
+            if ((look.fur || look.scales) && f.belly[i]) {
+                mix(Math.min(1, tone[0] * 1.25 + 0.12), Math.min(1, tone[1] * 1.22 + 0.1), Math.min(1, tone[2] * 1.15 + 0.08), (f.belly[i] / 255) * 0.55 * Math.max(look.fur, look.scales));
             }
 
             // Scales: each its own shade, the cracks between them dark
             if (look.scales) {
                 const tint = f.scaleTint[i] / 255 - 0.5;
 
-                mix([colour[0] * (1 + tint * 0.3), colour[1] * (1 + tint * 0.25), colour[2] * (1 + tint * 0.2)], look.scales);
-                mix([colour[0] * 0.45, colour[1] * 0.48, colour[2] * 0.42], (f.scales[i] / 255) * look.scales * 0.8);
+                mix(colour[0] * (1 + tint * 0.3), colour[1] * (1 + tint * 0.25), colour[2] * (1 + tint * 0.2), look.scales);
+                mix(colour[0] * 0.45, colour[1] * 0.48, colour[2] * 0.42, (f.scales[i] / 255) * look.scales * 0.8);
             }
         }
 
@@ -584,9 +625,9 @@ export function paintSkin(atlas, settings = {}) {
         const hollow = f.cavity[i] / 255 - 0.5;
 
         if (hollow > 0) {
-            mix([colour[0] * 0.7, colour[1] * 0.58, colour[2] * 0.58], Math.min(0.3, hollow));
+            mix(colour[0] * 0.7, colour[1] * 0.58, colour[2] * 0.58, Math.min(0.3, hollow));
         } else {
-            mix([Math.min(1, colour[0] * 1.08), Math.min(1, colour[1] * 1.08), Math.min(1, colour[2] * 1.06)], Math.min(0.4, -hollow));
+            mix(Math.min(1, colour[0] * 1.08), Math.min(1, colour[1] * 1.08), Math.min(1, colour[2] * 1.06), Math.min(0.4, -hollow));
         }
 
         // Hair painted on: stubble, scalp, brows
@@ -595,16 +636,18 @@ export function paintSkin(atlas, settings = {}) {
         const stubble = beard * (0.35 + 0.65 * grain) + Math.max(0, beard - 0.6) * 1.5;
 
         // (Painted hair is a little darker than the colour, like hair cards on average)
-        mix(hair.map((c) => c * 0.78), Math.min(0.95, stubble));
+        if (stubble) {
+            mixTo(stubbleColour, Math.min(0.95, stubble));
+        }
 
-        const scalp = (f.scalp[i] / 255) * look.scalp * (0.75 + 0.25 * grain);
-
-        mix(hair.map((c) => c * 0.75), Math.min(1, scalp));
+        if (f.scalp[i]) {
+            mixTo(scalpColour, Math.min(1, (f.scalp[i] / 255) * look.scalp * (0.75 + 0.25 * grain)));
+        }
 
         const browEdge = 0.62 * look.brows;
         const browAlpha = (1 - smoothstep(browEdge - 0.08, browEdge + 0.03, f.brow[i] / 255)) * (0.45 + 0.55 * (f.browHair[i] / 255)) * Math.min(1, look.brows * 4);
 
-        mix(brow, browAlpha * 0.95);
+        mixTo(brow, browAlpha * 0.95);
 
         data[i * 4] = colour[0] * 255;
         data[i * 4 + 1] = colour[1] * 255;

@@ -19,6 +19,7 @@
 import * as THREE from "three";
 import { aboveHairline, beardAmount, EAR, faceFrame, HEAD_CENTRE_Z, nearEar } from "./face.js";
 import { random, smoothstep, valueNoise } from "./noise.js";
+import { allAtOnce } from "../core/steps.js";
 
 /**
  * Hairstyles: how many strands, how long (metres, at most), how they leave the scalp (`flow`, and
@@ -472,7 +473,15 @@ function thinned(style, detail) {
  * hat or helmet, `below` keeps only the hair growing below that height (face coordinates).
  * `detail` (0 to 1) thins the hair out for characters seen from afar.
  */
-export function buildHair(character, style = "short", beard = "none", { seed = 1, below = Infinity, detail = 1 } = {}) {
+export function buildHair(character, style, beard, options) {
+    return allAtOnce(growingHair(character, style, beard, options));
+}
+
+// How many strands growingHair grows a step
+const STRANDS_A_STEP = 24;
+
+/** The same (buildHair), grown a step at a time (each a yield: a few dozen strands), returning it. */
+export function* growingHair(character, style = "short", beard = "none", { seed = 1, below = Infinity, detail = 1 } = {}) {
     const human = character.human;
     const positions = character.positions;
     const rig = character.rig;
@@ -572,7 +581,11 @@ export function buildHair(character, style = "short", beard = "none", { seed = 1
             }
         }
 
-        for (const { point, normal } of roots) {
+        for (const [n, { point, normal }] of roots.entries()) {
+            if (n % STRANDS_A_STEP === 0) {
+                yield;
+            }
+
             const outward = point.clone().sub(head.centre).normalize();
             const along = (direction) => direction.addScaledVector(outward, -direction.dot(outward)).normalize();
             const [x, y, z] = face.toFace(point.x, point.y, point.z);
@@ -681,7 +694,11 @@ export function buildHair(character, style = "short", beard = "none", { seed = 1
             return !onLips && beardAmount(x, y, z) > 0.6;
         }).slice(0, whiskers.strands);
 
-        for (const { point, normal } of roots) {
+        for (const [n, { point, normal }] of roots.entries()) {
+            if (n % STRANDS_A_STEP === 0) {
+                yield;
+            }
+
             const down = new THREE.Vector3(0, -1, 0.1);
             const direction = down.addScaledVector(normal, -down.dot(normal)).normalize().addScaledVector(normal, whiskers.lift);
 
@@ -709,6 +726,8 @@ export function buildHair(character, style = "short", beard = "none", { seed = 1
             builder.strand(points, whiskers.width, () => surface, layer);
         }
     }
+
+    yield;
 
     return builder.build();
 }

@@ -116,7 +116,10 @@ skin. That covers the lab's "Load skin…" and the skins made in MakeHuman or pa
   - regions measured from the eyes: cheeks, brows, beard line, hairline
 - **Painting.** Painting a skin then only mixes colours per texel: tone, blotches, redness,
   darker creases, lighter palms, lips, nails, freckles, veins, warts, war paint, and hair painted
-  on (brows, stubble, a buzz cut or the scalp under longer hair). It also makes a bump map.
+  on (brows, stubble, a buzz cut or the scalp under longer hair). It also makes a bump map. Each
+  of those is mixed in only where its field has any (most have none over most of the skin, and
+  mixing in none changes nothing), and with no arrays made for each texel: a 1024 skin takes
+  about 175 ms, where it took 440, the picture byte for byte the same.
 - **Fur, stripes and scales** (for cat folk and lizard folk): fur is fine streaks along the body
   with a paler belly, throat and inner arms; stripes are bands across the body and limbs, broken
   up by noise, in a darker shade; scales are Worley cells (`noise.js` `cells`), each a little
@@ -124,7 +127,9 @@ skin. That covers the lab's "Load skin…" and the skins made in MakeHuman or pa
   first time a skin wants them (`SkinAtlas.furAndScales`), so no one else pays for them.
 
 **Eyes.** Eyes are painted too (iris fibres, limbal ring, pupil or slit, sclera). They are drawn
-on MakeHuman's eye helper mesh with a glossy clear coat.
+on MakeHuman's eye helper mesh with a glossy clear coat. Each look of eye is painted once and its
+picture shared by everyone with it (irises come from each people's few colours), kept a while
+after the last with it has gone.
 
 **Hair.** Hair is thousands of thin strips (hair cards) with a strand texture, grown from roots
 spread over the outside of the head above the style's hairline (never inside the mouth), and
@@ -236,7 +241,11 @@ slots, sockets and hidden skin.
    the chest to the waist (under the fullest bust) to just above the armpits, so it covers any
    bust.
 2. **Cut.** The body's triangles are cut exactly along the region's edge, so hems are straight,
-   not jagged along the mesh.
+   not jagged along the mesh. The cut (which triangles, which points are one, what's beside
+   what, the edge and hem, texture coordinates and skin weights) doesn't depend on the body's
+   shape, only on its measures, so it's kept for everyone measured alike (`cutOf`: everyone
+   drawn all at once is fitted to the same measures), compactly (typed arrays, about 70 kB a
+   garment, the 40 most recently wanted): fitting a garment again takes about 7 ms, not 23.
 3. **Shell.** The region is pushed out along the normals by the garment's thickness and
    looseness, and smoothed. A breastplate is smoothed more than a shirt.
    - **Toe boxes.** The body's toes are separate tubes that no smoothing can join. So footwear
@@ -273,6 +282,41 @@ slots, sockets and hidden skin.
    build. The picture is made once per outfit (about 50 ms) and let go when no one's worn it for a
    while (the eight most recent kept); lace and drapes are drawn as before. Battle damage tells
    metal from cloth by the metalness picture.
+
+**Built a step at a time.** Building someone takes a few hundred milliseconds on a desktop (their
+skin painted, hair grown, each garment fitted, their outfit's picture painted the first time it's
+worn), more on a phone: too long for one frame. So `Character.building(kit, options)` builds the
+same character a step at a time (a generator: each yield a place to stop for the frame), and the
+game builds everyone who comes into view that way, a few milliseconds a frame (`#dressing`): the
+skin a few rows a step (`paintingSkin`), the hair a few dozen strands a step (`growingHair`), each
+garment's shell and toe caps (`fittingGarment`), a garment's picture a few rows a step the first
+time (`paintingGarment`) and an outfit's (`compositingGarments`), then each thing carried. With
+everything once made kept, the longest step is 10 to 20 ms on a desktop, where a soldier or one of
+the folk was one piece of 300 to 800 ms. `new Character(...)`, `setLook` and `setEquipment` take
+every step at once, as before (the character maker, the paperdoll). Its hair is grown once: under a
+helmet or hat, only what's below its rim, when it's dressed (it was grown whole first, and grown
+again for anyone carrying anything). Tests build soldiers, folk and a hero both ways and check
+they're the same, and each piece the same step by step as at once.
+
+**Skins painted elsewhere.** Painting a skin is about half of building someone (a couple of hundred
+milliseconds at 1024, a phone's at 512 as long). The game gives the kit a painter (`skins.js`
+`Skins`, made with the kit in `app/session.js`) that paints them in a worker (`skin-worker.js`),
+sent a copy of the skin atlas's fields once (and the fields for fur and scales when first wanted).
+A character built a step at a time asks for its skin first (`ask`), so it's painted while the rest
+of it is built, and puts it on last (`painting`): if it isn't back yet, that step yields `WAITING`
+(`core/steps.js`), and whatever's taking the steps comes back to it next frame (`Steps`), or, if
+it can't wait (all at once, or the game played on at once in a test), passes it `NOW`, and it's
+painted here. The picture is the same wherever it's painted. Where there are no workers (or one
+fails), or for a whole skin picture loaded in the character lab, it's painted here as ever. In
+headless Chromium on "high", this took a town's six guards from 10 s of frames to 4, and a
+tavern's eight folk from 9 to 3, at 6 ms a frame.
+
+**Pictures kept as data.** A character's skin and height pictures, and each garment's, are kept as
+the painted bytes (`DataTexture`s), not put on a canvas: no canvas's worth of memory kept beside
+each, no reading a garment's picture back off its canvas to draw an outfit (`#compositing` takes
+the bytes), and the heights one byte a texel (a red texture: a bump map reads its red), not grey
+RGBA, a quarter of the size to keep and send to the GPU. The character lab's *Save skin* puts the
+picture on a canvas when it's asked for (`skinCanvas`).
 
 **Drapes** (`drapes.js`) are clothes that hang from the body rather than wrapping it: skirts,
 gowns and aprons. A garment can't hang between the legs, so a drape is built instead, as rings of

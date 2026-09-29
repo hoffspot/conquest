@@ -9,6 +9,7 @@
 
 import * as THREE from "three";
 import { Character } from "../characters/character.js";
+import { allAtOnce } from "../core/steps.js";
 import { Avatar } from "../world/avatar.js";
 import { arachnid } from "./arachnid.js";
 import { biped } from "./biped.js";
@@ -426,13 +427,21 @@ export class BeastAvatar {
  * a people-shaped one, a character's Avatar, sized as its kind is, holding its weapon
  * (`equipment`: EQUIPMENT ids) and fighting as it does (`guard`: actions.js GUARDS).
  */
-export function dressCreature(kit, id, { seed = 1, equipment = [], guard = null, hairDetail = 1 } = {}) {
+export function dressCreature(kit, id, options) {
+    return allAtOnce(dressingCreature(kit, id, options));
+}
+
+/**
+ * The same (dressCreature), a step at a time (each a yield: a people-shaped one's character is
+ * built in steps, Character.building's; a beast is built at once), returning it.
+ */
+export function* dressingCreature(kit, id, { seed = 1, equipment = [], guard = null, hairDetail = 1 } = {}) {
     if (LOOKS[id].body !== "humanoid") {
         return new BeastAvatar(id, { seed });
     }
 
     const look = humanoidLook(id, seed);
-    const character = new Character(kit, { shape: look.shape, look: look.look, equipment: [...look.equipment, ...equipment], hairDetail, merge: true });
+    const character = yield* Character.building(kit, { shape: look.shape, look: look.look, equipment: [...look.equipment, ...equipment], hairDetail, merge: true });
     const scale = sizeOf(id, seed);
 
     character.object.scale.setScalar(scale);

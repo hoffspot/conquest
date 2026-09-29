@@ -4,6 +4,7 @@
 
 import { Sound } from "../audio/sound.js";
 import { loadCharacterKit } from "../characters/kit.js";
+import { Skins } from "../characters/skins.js";
 import { Host } from "../core/host.js";
 import { buildWorld } from "../core/overworld.js";
 import { View } from "../world/view.js";
@@ -25,6 +26,9 @@ export async function createSession({ canvas, quality, sound = true, volumes, fe
     onProgress("Unpacking the body and mapping its skin");
 
     const kit = await loadCharacterKit({ textureSize: view.quality.skin, fetch });
+
+    // (The skins of those built a step at a time painted off the page's thread: characters/skins.js)
+    kit.skins = new Skins(kit.atlas);
 
     const audio = new Sound({ enabled: sound, volumes });
 
