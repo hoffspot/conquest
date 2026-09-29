@@ -706,7 +706,9 @@ it is: one already flying about, if there is one, or from far up behind (`BeastA
 gliding lower all the way, then flaring, nose up and beating hard, and touching down facing the
 way it will fight. It's where its battle's creature is all along; it's only drawn coming down.
 Nothing in the air can be fought. Each player's game draws its own fliers, from its own random
-numbers.
+numbers. A wyvern or the dragon is built a little each frame (2 ms) before it comes (`hatching`),
+so the first of each of its looks, a tenth of a second or more to sculpt, stalls no frame; the
+labs' and tests' `send` puts one up at once.
 
 ### Inside and out (app/game.js)
 
@@ -1624,8 +1626,9 @@ drawn the nearest the player first (`#nextEnlistee`): one begun further off is p
 nearer, and taken up again after, and one waiting on its skin lets the next nearest be built
 meanwhile, so an enemy by the player isn't left undrawn while guards across the town are built.
 Someone still being built when the player comes onto their map is put where they are when
-they're drawn. A beast's body is still built at once
-the first time each of its kind's three looks is seen (100 to 280 ms on a desktop), then kept. On phones the quality level draws
+they're drawn. A beast's body is sculpted and its pieces folded a step at a time too, the first
+time each of its kind's three looks is wanted (WILDS.md, *Built a step at a time*): about 70 ms
+(up to 310) in one piece before, now steps of half a millisecond (a few, at most 15), then kept. On phones the quality level draws
 fewer pixels and thinner hair and uses smaller textures, and debug mode shows what each costs.
 With the world round the town, in the browser tests' views a frame makes 80 to 150 draw calls
 and draws 180,000 to 260,000 triangles, in the town or out of it, shadows included (the world's
@@ -1726,6 +1729,11 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
 - `test/characters.test.js` (with CHARACTERS.md's): the tavern's folk's bodies and clothes,
   skirts, gowns and aprons (hanging from the waist, flaring to the hem, skinned to the thighs and
   shins), sitting on a bench (thighs level, shins upright), and raising a tankard in a toast.
+- `test/beast-building.test.js` (with WILDS.md's): a creature's body sculpted and its pieces
+  folded over many small steps, the same as all at once (a wolf; a skeleton, all pieces; a magma
+  slime, made molten after); a look shared once made (another of it built at once), and one
+  wanted meanwhile taking up the sculpting where the first had got to; a beast dressed in steps
+  through its sculpting; any other error let through, and what's wanted made at once after.
 - `test/character-building.test.js`: characters built a step at a time the same as all at once
   (soldiers, folk and a hero); the skin, hair, a boot, a garment's picture and an outfit's the
   same step by step; the hair grown once (none hidden by a tankard; under a helmet only below its
@@ -1752,7 +1760,7 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
 - `test/sky.test.js`: the sky's dome round the camera, drawn behind everything, its horizon the
   haze's colour; birds for every land, a dozen triangles or so each; flocks of the land's birds
   now and then, never too many, at their heights, gone once far off; a wyvern over the lands they
-  hunt in and none over a meadow; the dragon circling within sight on its lair's side of the
+  hunt in, built over several frames before it comes, and none over a meadow; the dragon circling within sight on its lair's side of the
   player, handed over to land and gone from the air, and flying off when its lair's no longer
   near; none of it indoors; a wyvern coming down out of the sky to where its actor is, lower all
   the way, landing facing its way; a dragon soaring where it's put; nothing without wings coming
