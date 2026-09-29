@@ -501,8 +501,9 @@ function primer() {
 // --- Water ---
 
 // The water's material, shared by every chunk but for its mask: the water drawn where the mask
-// says (softly at its edges, paler in the shallows), stirred by the wind
-function waterMaterial(mask, x0, y0) {
+// says (softly at its edges, paler in the shallows), stirred by the wind. The mask covers the
+// squares from (x0, y0), `width` by `height`, and one more all round
+function waterMaterial(mask, x0, y0, [width, height] = [CHUNK, CHUNK]) {
     const water = new THREE.MeshStandardMaterial({ color: WATER.colour, roughness: 0.12, metalness: 0, transparent: true, depthWrite: false });
 
     water.name = "water";
@@ -511,7 +512,7 @@ function waterMaterial(mask, x0, y0) {
     water.onBeforeCompile = (shader) => {
         Object.assign(shader.uniforms, {
             waterMask: { value: mask },
-            waterArea: { value: new THREE.Vector4(x0 - 1, y0 - 1, CHUNK + 2, CHUNK + 2) },
+            waterArea: { value: new THREE.Vector4(x0 - 1, y0 - 1, width + 2, height + 2) },
             waterTime: TREE_WIND.time,
             shallows: { value: new THREE.Color(WATER.shallows) },
         });
@@ -579,15 +580,22 @@ function waterOf(overworld, chunk) {
         return null;
     }
 
-    const mask = new THREE.DataTexture(data, size, size, THREE.RedFormat);
+    return waterSheet(data, [x0, y0, CHUNK, CHUNK]);
+}
+
+// A sheet of water over the squares from (x0, y0), `width` by `height`, drawn where its mask
+// (bytes, one a square and one more all round: 255 for water) says
+function waterSheet(data, [x0, y0, width, height]) {
+    const mask = new THREE.DataTexture(data, width + 2, height + 2, THREE.RedFormat);
 
     mask.magFilter = THREE.LinearFilter;
     mask.minFilter = THREE.LinearFilter;
     mask.flipY = false;
+    mask.unpackAlignment = 1;
     mask.needsUpdate = true;
 
-    const plane = new THREE.PlaneGeometry(CHUNK, CHUNK).rotateX(-Math.PI / 2).translate(CHUNK / 2, WATER.level, CHUNK / 2);
-    const mesh = new THREE.Mesh(plane, waterMaterial(mask, x0, y0));
+    const plane = new THREE.PlaneGeometry(width, height).rotateX(-Math.PI / 2).translate(width / 2, WATER.level, height / 2);
+    const mesh = new THREE.Mesh(plane, waterMaterial(mask, x0, y0, [width, height]));
 
     mesh.name = "water";
     mesh.position.set(x0, 0, y0);
@@ -597,6 +605,38 @@ function waterOf(overworld, chunk) {
     mesh.updateMatrix();
 
     return mesh;
+}
+
+/**
+ * A settlement's own water (the lizard folk's lagoon) and the plank walks over it, as the world's
+ * water and bridges are drawn: `water` rows of squares (1 for water), `walks` layoutTown's, the
+ * settlement's corner at `origin` ([x, z], metres). A Group, or null if it has no water.
+ */
+export function lagoonOf(water, walks, [ox, oz] = [0, 0]) {
+    if (!water?.length) {
+        return null;
+    }
+
+    const [height, width] = [water.length, water[0].length];
+    const data = new Uint8Array((width + 2) * (height + 2));
+
+    for (let j = 0; j < height; j++) {
+        for (let i = 0; i < width; i++) {
+            data[(j + 1) * (width + 2) + i + 1] = water[j][i] ? 255 : 0;
+        }
+    }
+
+    const group = new THREE.Group();
+    const decks = bridgesOf({ bridges: walks.map(({ a, b, half }) => ({ a: [ox + a[0], oz + a[1]], b: [ox + b[0], oz + b[1]], half })) }, { rails: false });
+
+    group.name = "lagoon";
+    group.add(waterSheet(data, [ox, oz, width, height]));
+
+    if (decks) {
+        group.add(decks);
+    }
+
+    return group;
 }
 
 // --- Bridges ---
@@ -624,8 +664,8 @@ function box(x0, y0, z0, x1, y1, z1, metres = 2.8) {
 
 // A chunk's bridges (those whose middles are in it): each a straight deck of boards laid across
 // it, from bank to bank along the road, a dark beam along each edge, and a rail on posts along
-// each side; or null
-function bridgesOf(chunk) {
+// each side (or, without `rails`, a plank walk: stilts under its edges instead); or null
+function bridgesOf(chunk, { rails = true } = {}) {
     const parts = { planks: [], "planks-dark": [], timber: [] };
     const { top, depth } = DECK;
     const { height, thick, post, every } = RAIL;
@@ -643,13 +683,16 @@ function bridgesOf(chunk) {
             const [inner, outer] = side > 0 ? [half - thick, half + 0.02] : [-half - 0.02, -half + thick];
 
             own["planks-dark"].push(box(0, top - 0.4, inner, length, top + 0.03, outer, 1.4));
-            own.timber.push(box(0, top + height - thick, inner, length, top + height, outer, 1));
-            own.timber.push(box(0, top + height * 0.5 - thick * 0.6, inner, length, top + height * 0.5, outer, 1));
+
+            if (rails) {
+                own.timber.push(box(0, top + height - thick, inner, length, top + height, outer, 1));
+                own.timber.push(box(0, top + height * 0.5 - thick * 0.6, inner, length, top + height * 0.5, outer, 1));
+            }
 
             for (let k = 0; k < posts; k++) {
                 const x = 0.1 + ((length - 0.2 - post) * k) / (posts - 1);
 
-                own.timber.push(box(x, top - 0.4, side > 0 ? half - post : -half, x + post, top + height + 0.06, side > 0 ? half : -half + post, 1));
+                own.timber.push(box(x, rails ? top - 0.4 : -0.6, side > 0 ? half - post : -half, x + post, rails ? top + height + 0.06 : top - depth, side > 0 ? half : -half + post, 1));
             }
         }
 

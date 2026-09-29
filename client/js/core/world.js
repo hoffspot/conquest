@@ -59,7 +59,8 @@ export const SEE_OVER = /^prop-/;
 
 /**
  * Generate the world for a seed, a settlement of a kind (setpieces/town.js SETTLEMENT_KINDS) whose
- * main streets leave the ways `exits` says (angles: 0 east, π/2 south): { seed, width, height
+ * main streets leave the ways `exits` says (angles: 0 east, π/2 south), laid out and built as
+ * `people` builds (town.js PEOPLE_TOWNS): { seed, width, height
  * (squares, 1 m each), plot, origin (where the town's layout starts, in metres: 0, its layout
  * being the whole map), town (its layout: town.js), blocked[y][x] (1 where characters can't go),
  * opaque[y][x] (1 where nothing behind can be seen: see SEE_OVER), ground[y][x] (GROUND kinds),
@@ -70,9 +71,9 @@ export const SEE_OVER = /^prop-/;
  * facing }, ...] }]: the tavern's door and stairs), folk (the tavern's: interiors.js tavernFolk,
  * each named: names.js; none without a tavern) }.
  */
-export function generateWorld({ seed = 1, kind = "town", exits = null } = {}) {
+export function generateWorld({ seed = 1, kind = "town", exits = null, people = "human" } = {}) {
     const random = createRandom(seed);
-    const laid = layoutTown({ seed: random.seed(), kind, exits });
+    const laid = layoutTown({ seed: random.seed(), kind, exits, people });
 
     // (The town's first tavern is Wenches and Ale, whatever else the layout would call it)
     const first = laid.pieces.find(({ key }) => key === landmarkKey("tavern"));

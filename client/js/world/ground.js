@@ -382,12 +382,28 @@ function noSplat() {
 }
 
 /**
- * The ground mesh for a world on its own (generateWorld's: in metres, x east and z south, the
- * map's corner at the origin), carrying on past its edges.
+ * One land's colour over all the ground (a land's id, LAND_COLOURS'), as landColours' texture is
+ * for the whole world: for a settlement shown on its own in its people's land.
  */
-export function buildGround(world) {
+export function landColour(id) {
+    const [colour, amount] = LAND_COLOURS[id] ?? ["#000000", 0];
+    const texture = new THREE.DataTexture(Uint8Array.from([1, 3, 5].map((at) => parseInt(colour.slice(at, at + 2), 16)).concat(Math.round(amount * 255))), 1, 1, THREE.RGBAFormat);
+
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.needsUpdate = true;
+    texture.userData.size = WORLD_SIZE;
+
+    return texture;
+}
+
+/**
+ * The ground mesh for a world on its own (generateWorld's: in metres, x east and z south, the
+ * map's corner at the origin), carrying on past its edges; tinted by `land` (landColour's, or
+ * none).
+ */
+export function buildGround(world, { land = null } = {}) {
     const splat = splatTexture(splatData(world));
-    const material = groundMaterial({ splat, area: [0, 0, world.width, world.height] });
+    const material = groundMaterial({ splat, area: [0, 0, world.width, world.height], land });
 
     // The ground carries on past the map's edge into the distance (the splat's edge, and so the
     // roads leaving the map, carrying on with it)

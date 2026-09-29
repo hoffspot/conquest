@@ -368,7 +368,8 @@ export function reedHouse(solid, x0, z0, x1, z1, { arches = 4, platform = m(0.45
 
 /**
  * A lizard folk's house on its lot: its `type` if asked (marsh, deck, saddle, reed), or one to
- * suit the lot; standing over water if its piece says so (a pool under its stilts).
+ * suit the lot; standing higher over water if its piece says so (the settlement's lagoon, drawn
+ * with its water).
  */
 export function house(piece) {
     const random = randomFor(piece);
@@ -380,10 +381,6 @@ export function house(piece) {
     const floor = wet ? m(2.8) : m(random.range(1.4, 2));
 
     toned(solid, random, [floor + m(2.2)]);
-
-    if (wet) {
-        solid.facing([[0, m(0.06), 0], [0, m(0.06), D], [W, m(0.06), D], [W, m(0.06), 0]], [0, 1, 0], material("water-green"));
-    }
 
     if (type === "marsh") {
         const width = Math.min(m(4), D - m(2.6));

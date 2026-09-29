@@ -363,7 +363,7 @@ describe("town layouts (town.js)", () => {
                     }
 
                     // Everything built its people's, each house one of its kinds
-                    for (const piece of town.pieces.filter(({ kind: k }) => k !== "tree" && k !== "prop")) {
+                    for (const piece of town.pieces.filter(({ kind: k }) => k !== "tree")) {
                         assert.equal(piece.people, people, `${where}: ${piece.key} is ${people}`);
                     }
 
@@ -384,10 +384,11 @@ describe("town layouts (town.js)", () => {
                     // (The lizard folk's houses over water, which no one walks on but by the plank walks)
                     if (people === "lizard") {
                         assert.ok(town.water.some((row) => row.includes(1)), `${where}: water`);
+                        assert.ok(town.walks.length > 0, `${where}: plank walks`);
 
                         for (let y = 0; y < town.height; y++) {
                             for (let x = 0; x < town.width; x++) {
-                                if (town.ground[y][x] === GROUND.water) {
+                                if (town.water[y][x] && town.ground[y][x] !== GROUND.planks) {
                                     assert.equal(town.blocked[y][x], 1, `${where}: water at ${x}, ${y}`);
                                 }
                             }
@@ -398,6 +399,7 @@ describe("town layouts (town.js)", () => {
                         }
                     } else {
                         assert.equal(town.water, null);
+                        assert.deepEqual(town.walks, []);
                     }
                 }
             }

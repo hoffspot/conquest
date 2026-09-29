@@ -5,7 +5,8 @@
 // world, drawn in its chunks as the game draws it. Draw calls and triangles are counted as the
 // game's debug mode counts them.
 //
-// ?seed=N&show=street|landmarks|town|village|hamlet|farmstead|city|capital choose, or
+// ?seed=N&people=human|elf|darkElf|cat|lizard|orc&show=street|landmarks|structures|town|village|
+// hamlet|farmstead|city|capital choose (another people's settlements laid out on their own), or
 // show=wilds-meadow (or any land: wilds-woods, wilds-badlands...) for the land itself, well away
 // from any settlement or road (&undergrowth=0.5 to thin it, 0 for none); window.buildingLab is
 // there for tests.
@@ -18,10 +19,10 @@ import { LANDMARKS } from "../core/setpieces/pieces.js";
 import { buildWorld } from "../core/overworld.js";
 import { BIOMES, CELL, CELLS } from "../core/worldplan/plan.js";
 import { generateWorld } from "../core/world.js";
-import { Chunks } from "../world/chunks3d.js";
+import { Chunks, lagoonOf } from "../world/chunks3d.js";
 import { prepareAtlas } from "../world/art/engine/atlas.js";
 import { STYLES, TRADES } from "../world/art/kits/house.js";
-import { buildGround } from "../world/ground.js";
+import { buildGround, landColour } from "../world/ground.js";
 import { PEOPLE_KITS } from "../world/art/peoples/index.js";
 import { buildTown } from "../world/town3d.js";
 import { View } from "../world/view.js";
@@ -30,6 +31,9 @@ const $ = (selector) => document.querySelector(selector);
 
 const params = new URLSearchParams(location.search);
 const PEOPLES = ["human", "elf", "darkElf", "cat", "lizard", "orc"];
+
+// The land each people's settlements are shown in (its colour over the grass)
+const HOMELANDS = { human: "meadow", elf: "elfwood", darkElf: "darkwood", cat: "savannah", lizard: "marsh", orc: "badlands" };
 const state = {
     seed: Number(params.get("seed")) || 7,
     people: PEOPLES.includes(params.get("people")) ? params.get("people") : "human",
@@ -88,8 +92,8 @@ function peopleStreetOf(seed, people) {
     return { width: Math.ceil(width + 4), height: Math.ceil(y + 4), pieces };
 }
 
-// A people's own places: each of their special structures and their castle, and a stretch of
-// their town wall with a gate and a tower in it
+// A people's own places: each of their special structures and their castle, a stretch of their
+// town wall with a gate and a tower in it, and their well and stalls
 function structuresOf(seed, people) {
     const sizes = PEOPLE_KITS[people]?.GALLERY?.structures ?? {};
     const pieces = [];
@@ -109,7 +113,12 @@ function structuresOf(seed, people) {
         wx += w * 4;
     }
 
-    return { width: Math.ceil(Math.max(x, wx) + 4), height: Math.ceil(wallY + 14), pieces };
+    // (And what's on their market: their well, and a stall or two)
+    for (const [k, name] of ["well", "tent", "tent"].entries()) {
+        pieces.push({ kind: "prop", people, name, key: `prop-${people}-${name}-${k}`, w: 2, h: 2, x: wx + 8 + k * 10, y: wallY + 4, facing: 0, seed: seed * 10 + k });
+    }
+
+    return { width: Math.ceil(Math.max(x, wx + 36) + 4), height: Math.ceil(wallY + 14), pieces };
 }
 
 // A row of every special building: taverns of every sort (their names and signs from the seed),
@@ -212,8 +221,11 @@ async function build() {
     }
 
     // A settlement out in the world, as the game draws it: the nearest of its kind to where a
-    // player starts, in the chunks round it
-    if (!["street", "landmarks", "structures", "town"].includes(state.show)) {
+    // player starts, in the chunks round it (another people's: laid out and built as theirs, on
+    // its own)
+    const own = state.people !== "human";
+
+    if (!["street", "landmarks", "structures", "town"].includes(state.show) && !own) {
         const world = buildWorld({ seed: state.seed });
         const place = world.plan.places.filter(({ kind }) => kind === state.show).sort((a, b) => Math.hypot(a.at[0] - world.start.at[0], a.at[1] - world.start.at[1]) - Math.hypot(b.at[0] - world.start.at[0], b.at[1] - world.start.at[1]))[0];
         const chunks = new Chunks(world);
@@ -235,24 +247,25 @@ async function build() {
         return;
     }
 
-    const world = generateWorld({ seed: state.seed });
+    const settlement = !["street", "landmarks", "structures"].includes(state.show);
+    const world = generateWorld({ seed: state.seed, ...(settlement ? { kind: state.show, people: state.people } : {}) });
 
-    if (state.show !== "town") {
-        const own = state.people !== "human";
+    if (!settlement) {
         const street = state.show === "street" ? (own ? peopleStreetOf(state.seed, state.people) : streetOf(state.seed)) : state.show === "structures" ? structuresOf(state.seed, state.people) : landmarksOf(state.seed, state.people);
 
         Object.assign(world, { town: { ...world.town, pieces: street.pieces }, trees: [], width: street.width, height: street.height, stamp: null, origin: 0 });
     }
 
     const group = new THREE.Group();
-    const ground = buildGround(state.show !== "town" ? { ...world, ground: Array.from({ length: world.height }, () => new Uint8Array(world.width)) } : world);
+    const ground = buildGround(settlement ? world : { ...world, ground: Array.from({ length: world.height }, () => new Uint8Array(world.width)) }, { land: landColour(HOMELANDS[state.people]) });
     const town = await buildTown(world);
+    const lagoon = lagoonOf(world.town.water, world.town.walks);
 
-    group.add(ground, town.object);
+    group.add(ground, town.object, ...(lagoon ? [lagoon] : []));
     view.scene.add(group);
     state.built = group;
-    orbit.focus.set(world.width / 2, 2, world.height / 2);
-    orbit.distance = state.show === "town" ? 70 : Math.max(42, Math.min(90, Math.max(world.width, world.height) * 0.6));
+    orbit.focus.set(settlement ? world.town.centre[0] : world.width / 2, 2, settlement ? world.town.centre[1] : world.height / 2);
+    orbit.distance = settlement ? { capital: 170, city: 130, town: 70, village: 60, hamlet: 45, farmstead: 40 }[state.show] : Math.max(42, Math.min(90, Math.max(world.width, world.height) * 0.6));
 
     finish(world.town.pieces.length);
 }

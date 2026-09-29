@@ -108,13 +108,16 @@ const ATTEMPTS = 20;
 /**
  * A settlement of a kind (SETTLEMENT_KINDS) from a seed, its main streets leaving the ways given
  * (`exits`: angles in radians, 0 east and π/2 south; or, if none are given, three or four ways
- * round). Returns { kind, seed, width, height (metres: the town and the fields round it),
- * centre ([x, y]), radius, market ({ corners, centre }), streets ([{ points, width, main }]),
+ * round), laid out as `people` lays out its settlements (PEOPLE_TOWNS; its pieces then carry
+ * `people`, and its houses their `type`). Returns { kind, seed, people, width, height (metres:
+ * the town and the fields round it), centre ([x, y]), radius, market ({ corners, centre }),
+ * streets ([{ points, width, main }]),
  * exits ([x, y]: where the main streets reach the edge), pieces ([{ key, kind, name, style,
  * variant, x, y (its middle, metres), w, h (its size across and deep, in plots, as the art kits
  * build it), facing (the way its front faces: radians, 0 south, π/2 east, as characters face) }]),
  * ground, blocked, opaque (rows of squares: GROUND kinds, 1 where no one can go, 1 where nothing
- * behind can be seen) }.
+ * behind can be seen), water (rows of squares, 1 for water, or null for none), walks (the plank
+ * walks over it: [{ a, b ([x, y]: its ends), half (half its width) }]) }.
  */
 export function layoutTown({ seed = 1, kind = "town", exits = null, people = "human" } = {}) {
     const spec = SETTLEMENT_KINDS[kind];
@@ -324,9 +327,10 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
         }
     }
 
-    // The lizard folk's lagoon: a band of water round the middle, ragged, the streets crossing it
-    // on plank walks
+    // The lizard folk's lagoon: a band of water round the middle, ragged, over a bed of mud (as
+    // the world's lakes lie), the streets crossing it on plank walks
     const water = look.water ? Array.from({ length: height }, () => new Uint8Array(width)) : null;
+    const walks = [];
 
     if (water) {
         const [from, to] = look.water;
@@ -340,10 +344,33 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
                 if (r > from + wobble && r < to + wobble) {
                     water[j][i] = 1;
 
-                    if (use[j * width + i] === USE.street) {
-                        ground[j][i] = GROUND.planks;
-                    } else {
-                        ground[j][i] = GROUND.water;
+                    ground[j][i] = use[j * width + i] === USE.street ? GROUND.planks : GROUND.soil;
+                }
+            }
+        }
+
+        // (The walks: each street's straight runs over the water, a metre onto the bank at each
+        // end, as wide as the street)
+        for (const { points, width: across } of streets) {
+            for (let k = 1; k < points.length; k++) {
+                const [a, b] = [points[k - 1], points[k]];
+                const steps = Math.max(1, Math.ceil(length(b[0] - a[0], b[1] - a[1])));
+                const at = (t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+                let run = null;
+
+                for (let s = 0; s <= steps; s++) {
+                    const [x, y] = at(s / steps);
+                    const wet = water[Math.floor(y)]?.[Math.floor(x)] === 1;
+
+                    if (wet) {
+                        run = [run?.[0] ?? s / steps, s / steps];
+                    }
+
+                    if (run && (!wet || s === steps)) {
+                        const extra = 1 / steps;
+
+                        walks.push({ a: at(Math.max(0, run[0] - extra)), b: at(Math.min(1, run[1] + extra)), half: across / 2 });
+                        run = null;
                     }
                 }
             }
@@ -361,7 +388,7 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
 
     // What's placed, as a piece: its size in plots, as the art kits build it
     const place = (rect, fields) => {
-        const piece = { ...fields, ...(other && fields.kind !== "tree" && fields.kind !== "prop" ? { people } : {}), x: rect.x, y: rect.y, w: rect.w / PLOT, h: rect.d / PLOT, facing: rect.facing };
+        const piece = { ...fields, ...(other && fields.kind !== "tree" ? { people } : {}), x: rect.x, y: rect.y, w: rect.w / PLOT, h: rect.d / PLOT, facing: rect.facing };
 
         pieces.push(piece);
 
@@ -817,6 +844,7 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
         blocked,
         opaque,
         water,
+        walks,
     };
 }
 
