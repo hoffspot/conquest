@@ -274,6 +274,54 @@ describe("characters built a step at a time (Character.building)", () => {
         }
     });
 
+    it("works out the skin atlas in the worker (the title needn't wait for it): the page's the same as one worked out here, and skins painted there the same", async () => {
+        globalThis.Worker = Worker;
+
+        try {
+            const skins = new Skins();
+            const worker = Worker.last;
+            const told = [];
+            const post = worker.postMessage.bind(worker);
+
+            worker.postMessage = (data) => told.push(Object.keys(data)[0]) && post(data);
+
+            const files = { manifest, data: unpacked.buffer.slice(unpacked.byteOffset, unpacked.byteOffset + unpacked.byteLength) };
+            const ready = skins.analyse(files, human, {}, 128);
+
+            await worker.deliver();
+
+            const made = await ready;
+            const worked = new SkinAtlas(human, {}, 128);
+
+            assert.equal(skins.atlas, made);
+            assert.deepEqual(made.covered, worked.covered);
+            assert.deepEqual(made.gutter, worked.gutter);
+            assert.deepEqual(made.normals, worked.normals);
+            assert.deepEqual(Object.keys(made.fields).sort(), Object.keys(worked.fields).sort());
+
+            for (const name of Object.keys(worked.fields)) {
+                assert.deepEqual(made.fields[name], worked.fields[name], name);
+            }
+
+            // (A skin painted there, from the worker's own atlas, nothing of it sent back over)
+            const kit = { human, atlas: made, skins };
+            const steps = new Steps(Character.building(kit, options(soldier)));
+
+            assert.equal(steps.take(Infinity, { wait: true }), false);
+            await worker.deliver();
+            assert.equal(steps.take(Infinity, { wait: true }), true);
+            assert.equal(hashOf(steps.value), hashOf(new Character(kitOf(), options(soldier))));
+            assert.deepEqual(told, ["analyse", "id"]);
+        } finally {
+            delete globalThis.Worker;
+        }
+
+        // (No workers: worked out here, the page shown first)
+        const here = await new Skins().analyse(null, human, {}, 128);
+
+        assert.deepEqual(here.fields.cavity, atlas.fields.cavity);
+    });
+
     it("shares a look of eye's picture between those with it, kept a while once none are", () => {
         const kit = kitOf();
         const [one, two] = [new Character(kit, options(wench)), new Character(kit, options(wench))];

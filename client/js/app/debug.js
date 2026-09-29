@@ -96,7 +96,7 @@ export class Debug {
 
         if (view !== undefined) {
             this.view = view;
-            this.gpu = view ? gpuName(view.renderer) : "";
+            this.gpu = null;
             view?.timeGpu(!this.root.hidden);
         }
 
@@ -136,6 +136,10 @@ export class Debug {
                 `Geometries ${memory.geometries}  textures ${memory.textures}  programs ${programs?.length ?? 0}`,
                 `Quality ${view.qualityName}  pixels ×${view.renderer.getPixelRatio().toFixed(2)}${view.adaptiveScale < 1 ? ` (${Math.round(view.adaptiveScale * 100)}%: drawing couldn't keep up)` : ""}  ${canvas.width}×${canvas.height}`,
             );
+
+            // (The GPU's name asked for only once it's shown: asking waits for everything the
+            // GPU's been given to do, over a second at the start, with the environment baking)
+            this.gpu ??= gpuName(view.renderer);
 
             if (this.gpu) {
                 lines.push(`GPU ${this.gpu}`);

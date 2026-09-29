@@ -1617,8 +1617,12 @@ game plays on while it's open; a second finger (a pinch) closes it.
    and each group of files has its own row and bar: the 3D engine, the game's code, the body and
    its shapes, its skin details, and the props. The data is kept in memory and handed
    to the character kit and the model loader from there; the code is imported from the browser's
-   cache. Then the last part of the bar is starting the 3D view and unpacking the body. Nothing
-   before the loader imports Three.js, so the engine's download is counted too.
+   cache. Then the last part of the bar is starting the 3D view and unpacking the body; the skin
+   atlas is worked out in a worker meanwhile, and the title doesn't wait for it (making a
+   character or playing does: CHARACTERS.md, *The skin atlas worked out elsewhere*). Nothing
+   before the loader imports Three.js, so the engine's download is counted too. Debug mode asks the
+   GPU's name only once it's shown: asking waits for everything the GPU's been given (over a second
+   of the start in software rendering).
    The service worker (`sw.js`) checks every file with the server once for each page load: the
    page's imports straight after the loader (13 levels of the code, a round trip each) come from
    the copies it's just checked, rather than asking again. A reload checks everything afresh, so

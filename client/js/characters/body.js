@@ -17,12 +17,22 @@ export const HUMAN_URL = new URL("../../characters/", import.meta.url);
 
 /** Download and unpack the body (human.json and human.bin from `base`, with `fetch`). */
 export async function loadHumanData(base = HUMAN_URL, fetch = globalThis.fetch.bind(globalThis)) {
+    const { manifest, data } = await loadHumanFiles(base, fetch);
+
+    return new HumanData(manifest, data);
+}
+
+/**
+ * The body's files as they are, unpacked: { manifest (human.json), data (human.bin) }, for a
+ * HumanData to be made from here or elsewhere (a worker: skins.js).
+ */
+export async function loadHumanFiles(base = HUMAN_URL, fetch = globalThis.fetch.bind(globalThis)) {
     const [manifest, packed] = await Promise.all([
         fetch(new URL("human.json", base).href).then((response) => checked(response).json()),
         fetch(new URL("human.bin", base).href).then((response) => checked(response).arrayBuffer()),
     ]);
 
-    return new HumanData(manifest, await gunzip(packed));
+    return { manifest, data: await gunzip(packed) };
 }
 
 function checked(response) {

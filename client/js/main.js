@@ -226,6 +226,9 @@ async function create() {
     const { view, kit } = state.session;
 
     show("create");
+
+    // (Its skin atlas, worked out while the title was up: characters/kit.js)
+    await kit.ready;
     state.creator = new Creator({ view, kit });
 
     const hero = await state.creator.run();
@@ -316,6 +319,7 @@ async function playing(save) {
     $("#loadlist").replaceChildren();
     setProgress(0, "Building the world");
     await painted();
+    await kit.ready;
 
     const game = createGame({
         view,
@@ -680,6 +684,7 @@ async function playingJoined(save, welcome, joining) {
     $("#loadlist").replaceChildren();
     setProgress(0, "Building the world you've joined");
     await painted();
+    await kit.ready;
 
     const game = createJoinedGame({
         view,
