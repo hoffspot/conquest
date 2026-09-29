@@ -158,3 +158,39 @@ test("fits a phone screen", async ({ browser }) => {
     expect(panel.width).toBeGreaterThan(380);
     await page.close();
 });
+
+test("dresses each people's soldiers and officials, their garments drawn all at once as in the game", async ({ page }) => {
+    const figures = async () =>
+        page.evaluate(() =>
+            window.lab.figures.map(({ label, character }) => ({
+                label,
+                garments: character.garments.map((mesh) => mesh.name),
+                merged: character.garments.find((mesh) => mesh.name === "garments")?.userData.merged ?? [],
+                material: character.garments.find((mesh) => mesh.name === "garments")?.material.uuid ?? null,
+            })),
+        );
+
+    await openLab(page, "/uniform-lab.html?people=orc");
+
+    const merged = await figures();
+    const [captain, soldier, reeve] = merged;
+
+    // (One mesh for a soldier's garments, but for their cloak and a robe: drapes, hanging free)
+    expect(merged.map(({ label }) => label)).toEqual(["Captain", "Soldier", "Reeve", "Ruler"]);
+    expect(soldier.garments).toEqual(["garments"]);
+    expect(soldier.merged).toEqual(expect.arrayContaining(["breastplate.orc", "trousers.orc", "sabatons.orc", "belt.orc"]));
+    expect(captain.garments).toEqual(["garments", "cloak.orc"]);
+    expect(reeve.merged).toEqual(expect.arrayContaining(["livery.orc", "chain"]));
+
+    // (Everyone in the same outfit drawn with one picture of it)
+    if (captain.merged.join() === soldier.merged.join()) {
+        expect(captain.material).toBe(soldier.material);
+    }
+
+    await openLab(page, "/uniform-lab.html?people=orc&show=soldiers&drawn=apart");
+
+    const apart = await figures();
+
+    expect(apart[1].garments).toEqual(expect.arrayContaining(soldier.merged));
+    expect(apart[1].garments).not.toContain("garments");
+});

@@ -291,8 +291,23 @@ describe("the peoples' soldiers' looks (characters/soldiers.js)", () => {
         assert.ok(lizard.equipment.includes("lizardTail") && lizard.look.skin.scales > 0);
         assert.ok(elves.every(({ shape }) => shape.details.earLength >= 0.8));
         assert.equal(new Set(elves.map((look) => JSON.stringify(look.shape))).size, 3, "each their own");
-        assert.ok(soldierLook({ people: "orc", weapon: "cleaver", sex: "f", seed: 4 }).equipment.includes("tunic"));
         assert.equal(soldierLook({ people: "orc", weapon: "cleaver", seed: 4 }).walk, "orc");
+    });
+
+    it("dresses each people's soldiers in their uniform, in their colours: a shield with a one-handed weapon, a quiver with a bow, a captain's cloak", () => {
+        for (const [people, arms] of Object.entries(ARMS)) {
+            for (const weapon of new Set(arms)) {
+                const { equipment } = soldierLook({ people, weapon, seed: 5 });
+                const captain = soldierLook({ people, weapon, seed: 5, captain: true }).equipment;
+
+                assert.ok(equipment.includes(`helm.${people}`), `${people} ${weapon}: a helm`);
+                assert.ok(equipment.includes(people === "orc" ? "breastplate.orc" : `surcoat.${people}`), `${people}: their colours on their chest`);
+                assert.ok([`vambraces.${people}`, `greaves.${people}`, `sabatons.${people}`, `belt.${people}`].every((id) => equipment.includes(id)), `${people}: armoured`);
+                assert.equal(equipment.includes(`shield.${people}`), ["sword", "cleaver"].includes(weapon), `${people} ${weapon}: a shield or not`);
+                assert.equal(equipment.includes("quiver"), weapon === "bow");
+                assert.ok(!equipment.includes(`cloak.${people}`) && captain.includes(`cloak.${people}`), `${people}: a captain's cloak`);
+            }
+        }
     });
 });
 

@@ -263,6 +263,14 @@ describe("battle damage (wounds.js)", () => {
         wounds.update(0.016);
         assert.equal(character.garments[2].material, character.garments[1].material);
 
+        // Garments drawn all at once (character.js merge): metal or cloth by their metalness map
+        const outfit = new THREE.MeshStandardMaterial({ metalness: 1 });
+
+        outfit.userData.mixed = true;
+        character.garments.push(new THREE.Mesh(new THREE.BufferGeometry(), outfit));
+        wounds.update(0.016);
+        assert.equal(character.garments[3].material.customProgramCacheKey(), "wounded-mixed");
+
         // The skin under torn clothes: the character's own tone
         assert.equal(wounds.uniforms.skinTone.value.getHexString(), new THREE.Color("#c28560").getHexString());
     });

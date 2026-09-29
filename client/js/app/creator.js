@@ -15,6 +15,7 @@ import { BEARDS, HAIRSTYLES } from "../characters/hair.js";
 import { HAIR_COLOURS } from "../characters/skin.js";
 import { armsOf, STARTING_WEAPONS, WEAPONS } from "../core/weapons.js";
 import { Avatar } from "../world/avatar.js";
+import { Progress } from "../core/progress.js";
 import { guardOf, heroEquipment } from "./game.js";
 import { cleanName, defaultHero, HERO_PEOPLES, heroOfPeople, IRIS_COLOURS, randomHero, suggestName, tonesOf } from "./heroes.js";
 
@@ -180,7 +181,7 @@ export class Creator {
         this.avatar?.object.removeFromParent();
         this.avatar?.character.dispose();
 
-        const character = new Character(this.kit, { shape: hero.shape, look: hero.look, equipment: heroEquipment(hero.weapon, hero.boots, [], hero.parts ?? []) });
+        const character = new Character(this.kit, { shape: hero.shape, look: hero.look, equipment: heroEquipment(hero.weapon, new Progress({}, hero).worn(), hero.parts ?? []) });
 
         this.avatar = new Avatar(character, { guard: guardOf(hero.weapon) });
         this.avatar.place(0, 0, 0);
@@ -212,7 +213,7 @@ export class Creator {
         }
 
         if (pending.has("weapon")) {
-            character.setEquipment(heroEquipment(hero.weapon, hero.boots, [], hero.parts ?? []));
+            character.setEquipment(heroEquipment(hero.weapon, new Progress({}, hero).worn(), hero.parts ?? []));
             avatar.actions.setWeapon(guardOf(hero.weapon));
             avatar.actions.setGuard(this.step !== "look");
             this.#showDraw();
@@ -484,7 +485,7 @@ export class Creator {
     #refreshName() {
         const name = cleanName(this.hero.name);
         const weapon = WEAPONS[this.hero.weapon].label.toLowerCase();
-        const kit = heroEquipment(this.hero.weapon, this.hero.boots).map((id) => EQUIPMENT[id].label.toLowerCase());
+        const kit = heroEquipment(this.hero.weapon, new Progress({}, this.hero).worn()).map((id) => EQUIPMENT[id].label.toLowerCase());
         const armed = this.hero.weapon === "boots" ? "spiked boots" : this.hero.boots ? `a ${weapon} and spiked boots` : `a ${weapon}`;
 
         this.root.querySelector("#namesummary").textContent = name ? `${name}, with ${armed}. You'll wake in the market square of Pellagos in a ${kit.slice(0, -1).join(", ")} and ${kit.at(-1)}.` : "Every hero needs a name.";

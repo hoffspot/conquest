@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+        <meta name="theme-color" content="#101418">
+        <meta name="description" content="Uniform lab: each people's soldiers in their uniforms and their officials in their livery, side by side">
+
+        <title>Uniform Lab</title>
+
+        <link rel="icon" href="images/icons/icon-192.png" type="image/png">
+        <link rel="stylesheet" href="world-map.css">
+        <script type="importmap">
+            {
+                "imports": {
+                    "three": "./vendor/three-r186/three.module.min.js",
+                    "three/addons/": "./vendor/three-r186/addons/"
+                }
+            }
+        </script>
+        <script type="module" src="js/lab/uniform-lab.js"></script>
+    </head>
+    <body>
+        <main id="atlas">
+            <section id="viewport" aria-label="The peoples' uniforms">
+                <canvas id="map"></canvas>
+                <div id="status" role="status">Dressing…</div>
+            </section>
+
+            <aside id="panel" aria-label="Uniform settings">
+                <h1>Uniforms</h1>
+
+                <div class="row">
+                    <label for="people">People</label>
+                    <select id="people">
+                        <option value="all">Every people</option>
+                        <option value="human">Humans</option>
+                        <option value="elf">Elves</option>
+                        <option value="darkElf">Dark elves</option>
+                        <option value="cat">Cat folk</option>
+                        <option value="lizard">Lizard folk</option>
+                        <option value="orc">Orcs</option>
+                    </select>
+                </div>
+
+                <div class="row">
+                    <label for="show">Show</label>
+                    <select id="show">
+                        <option value="all">Soldiers and officials</option>
+                        <option value="soldiers">Soldiers</option>
+                        <option value="officials">Officials</option>
+                    </select>
+                </div>
+
+                <div class="row">
+                    <label for="facing">Facing</label>
+                    <select id="facing">
+                        <option value="front">The front</option>
+                        <option value="side">The side</option>
+                        <option value="back">The back</option>
+                    </select>
+                </div>
+
+                <div class="row">
+                    <label for="drawn">Garments</label>
+                    <select id="drawn">
+                        <option value="merged">All at once, as in the game</option>
+                        <option value="apart">Each on its own</option>
+                    </select>
+                </div>
+
+                <p id="about" class="about"></p>
+                <p id="stats" class="about"></p>
+            </aside>
+        </main>
+        <noscript>The uniform lab needs JavaScript.</noscript>
+    </body>
+</html>

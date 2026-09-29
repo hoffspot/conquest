@@ -422,7 +422,7 @@ export function dressCreature(kit, id, { seed = 1, equipment = [], guard = null,
     }
 
     const look = humanoidLook(id, seed);
-    const character = new Character(kit, { shape: look.shape, look: look.look, equipment: [...look.equipment, ...equipment], hairDetail });
+    const character = new Character(kit, { shape: look.shape, look: look.look, equipment: [...look.equipment, ...equipment], hairDetail, merge: true });
     const scale = sizeOf(id, seed);
 
     character.object.scale.setScalar(scale);

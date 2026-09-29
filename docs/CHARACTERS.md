@@ -185,6 +185,43 @@ What's made of their skin (the item material named `skin`) is drawn in their own
 (`tinted` items: `Character.materials.tint`). Cat folk wear no helmet or hat over their ears (a
 crown sits between them).
 
+### Uniforms and livery
+
+Each people's soldiers wear a uniform, and their officials a livery, in the people's own colours,
+chosen to set off their skin or fur, with their emblem on surcoats, tunics, shields and cloaks
+(`liveries.js` `LIVERIES`), so whose they are shows at a glance:
+
+| People | Cloth and trim | Metal | Emblem |
+| --- | --- | --- | --- |
+| Humans (of every colour) | Royal blue and gold | Bright steel | A crown |
+| Elves (pale) | Forest green and silver | Silvered steel | A leaf |
+| Dark elves (ashen violet) | Deep violet, black and silver | Black steel | A spider |
+| Cat folk (tawny, gold, grey) | Indigo and saffron | Bronze | A sun |
+| Lizard folk (green) | Crimson and turquoise | Bronze | A serpent |
+| Orcs (green) | Blood red and black | Blackened iron | Claws |
+
+- **A soldier** (`soldierKit`) wears their people's helm (each people's own shape, `items.js`:
+  the humans' with a nasal and a plume, the elves' with a silver leaf along the crown, the dark
+  elves' crested with spikes, the cat folk's opening round their ears, the lizard folk's with a
+  fan of feathers, the orcs' horned), a surcoat with the emblem over mail (the lizard folk over a
+  quilted gambeson; the orcs a lacquered red breastplate with black claws, over bare arms),
+  vambraces, gauntlets, a war belt, trousers under greaves, and plate boots. With a one-handed
+  weapon they carry their people's shield (the humans' a kite, the dark elves' longer and
+  sharper, the elves' leaf-shaped, the cat folk's a tall oval of hide, the lizard folk's and the
+  orcs' round), with a bow a quiver; a captain wears their people's cloak, edged in the trim.
+- **An official** (`liveryKit`) wears a tunic of livery with the emblem, smaller, and by their
+  part: a chain of office in gold (a steward, reeve, councillor, envoy or ruler), trousers and a
+  belt or a long robe (a woman's always a robe), a cloak (an envoy or ruler) and a crown (a ruler).
+- **Made from what's there.** Most of a people's pieces (`${id}.${people}`: `mail.elf`,
+  `trousers.orc`) are the garment they're made from in another colour (`base`), drawn with its
+  picture, tinted; the surcoat, the livery and the orcs' breastplate are painted with the emblem.
+- **Worn by players** (`core/gear.js`: a hauberk of a people's is its mail and surcoat), a
+  uniform's pieces are drawn as that people's (`dress`, `lookOf`).
+
+The uniform lab (`uniform-lab.html`: `?people=`, `show=` soldiers or officials, `facing=` front,
+side or back, `drawn=` merged or apart) shows a captain, a soldier, a reeve and a ruler of each
+people side by side, walking on the spot.
+
 ### Equipment
 
 Equipment follows the systems games have shipped (see research, below): one skinned body, with
@@ -224,6 +261,18 @@ slots, sockets and hidden skin.
    body's texture layout (cloth, leather, quilting, mail, plate, embroidered trim).
 6. **Hiding.** Skin under a garment isn't drawn, and neither is a garment under another one.
    Layers go underwear, clothing, mid layer, armour, belts and straps.
+7. **Drawn all at once** (`merge`: everyone but a player). A soldier in uniform wears nine or
+   ten garments, each a draw call. As every garment is painted on the whole body in the body's
+   texture layout, one picture can show them all (`compositeGarments`): at each texel, the
+   outermost garment whose region takes it in (each texel knows which body triangle it's in and
+   where, so each garment's region is worked out there exactly as its edge is cut), tinted as its
+   make is, with a second picture of its heights, roughness and metalness (a bump, roughness and
+   metalness map). Their meshes are then one mesh, one draw call. So that one picture fits
+   everyone in the outfit, the garments are fitted as they'd fit a body of the usual shape
+   (`referenceMeasures`), their hems falling in the same place on the body's surface whatever its
+   build. The picture is made once per outfit (about 50 ms) and let go when no one's worn it for a
+   while (the eight most recent kept); lace and drapes are drawn as before. Battle damage tells
+   metal from cloth by the metalness picture.
 
 **Drapes** (`drapes.js`) are clothes that hang from the body rather than wrapping it: skirts,
 gowns and aprons. A garment can't hang between the legs, so a drape is built instead, as rings of
@@ -718,10 +767,11 @@ similar.
 
 **One character with a full outfit:**
 
-- 22–38 draw calls (plus shadows)
+- 22–38 draw calls (plus shadows), drawn one by one; drawn all at once, as everyone but a player
+  is, its garments are one (a soldier in uniform 12 to 17 in all, about 21 to 26 before)
 - about 80–100 thousand triangles
 - a 1024 × 1024 skin texture with a bump map, and 512 × 512 textures for each garment (shared by
-  everyone wearing it)
+  everyone wearing it), or two for each outfit drawn all at once
 
 **Load:**
 
@@ -745,7 +795,7 @@ style's 48,000 hair triangles become about 14,000 at high quality.
 
 For many enemies on screen, the next steps are:
 
-- merging a character's parts into one mesh
+- merging the rest of a character's parts into one mesh (its garments already are, but a player's)
 - a lower-detail body: MakeHuman's proxy meshes use the same rig
 
 ## Research

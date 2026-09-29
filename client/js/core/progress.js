@@ -17,6 +17,7 @@
 // the character (app/save.js), and the host's to change (core/host.js). Pure JavaScript, no DOM.
 
 import { CURES } from "./afflictions.js";
+import { disguiseOf, GEAR, GEAR_SLOTS, gearName, offHandFits, rollGear, sameGear, setBonuses, SLOT_IDS, STATS, statsOf, UNIFORM, UNIFORM_PEOPLES } from "./gear.js";
 import { growthAt, SCHOOLS, SPELLS, TOME_RARITY, TOMES, tierAt, tomeOf } from "./spells.js";
 import { PARTS } from "./spoils.js";
 import { WEAPONS } from "./weapons.js";
@@ -69,24 +70,12 @@ export const QUALITIES = Object.freeze({
 });
 
 /**
- * Everything that can be carried: weapons (any of the WEAPONS a hero can start with, in the
- * weapon slot), armour (body and shield slots: `armor`, the share of each blow it takes off, and
- * what it looks like: `equipment`), and things to use (heal hit points, fill stamina). `price` is
+ * Everything that can be carried: gear (core/gear.js GEAR: weapons, armour, cloaks and
+ * jewellery, each in its slot), and things to use (heal hit points, fill stamina). `price` is
  * what a common one costs (gold).
  */
 export const ITEMS = Object.freeze({
-    sword: { label: "Sword", slot: "weapon", price: 30 },
-    staff: { label: "Staff", slot: "weapon", price: 20 },
-    wand: { label: "Wand", slot: "weapon", price: 40, magic: true },
-    grimoire: { label: "Grimoire", slot: "weapon", price: 45, magic: true },
-    hammer: { label: "War hammer", slot: "weapon", price: 35 },
-    bow: { label: "Bow", slot: "weapon", price: 35 },
-    gauntlets: { label: "Spiked gauntlets", slot: "weapon", price: 25 },
-    boots: { label: "Spiked boots", slot: "weapon", price: 25 },
-    gambeson: { label: "Gambeson", slot: "body", armor: 0.08, price: 25, equipment: ["gambeson"], might: 0.5 },
-    mail: { label: "Mail shirt", slot: "body", armor: 0.16, price: 80, equipment: ["mail"], might: 1 },
-    roundShield: { label: "Round shield", slot: "shield", armor: 0.06, price: 20, equipment: ["roundShield"], might: 0.25 },
-    kiteShield: { label: "Kite shield", slot: "shield", armor: 0.1, price: 45, equipment: ["kiteShield"], might: 0.5 },
+    ...GEAR,
     potion: { label: "Healing draught", use: { heal: 25 }, price: 15 },
     meal: { label: "Hot meal", use: { heal: 15 }, price: 5 },
     ale: { label: "Tankard of ale", use: { stamina: 1000 }, price: 2 },
@@ -100,31 +89,39 @@ export const ITEMS = Object.freeze({
     ...Object.fromEntries(Object.entries(PARTS).map(([id, { label, worth, use, icon }]) => [id, { label, price: worth, part: true, ...(use ? { use } : {}), ...(icon === "meat" ? { food: true } : {}) }])),
 });
 
-/** The weapons a shield can be carried with (one-handed, up close). */
-export const WITH_SHIELD = Object.freeze(["sword", "hammer"]);
-
-/** What each shop sells: the things it keeps, and the best make it has of each. */
+/**
+ * What each shop sells: the things it keeps, and the best make it has of each. A smith sells its
+ * own people's uniform too (core/gear.js UNIFORM).
+ */
 export const SHOPS = Object.freeze({
-    smith: { items: ["sword", "hammer", "staff", "bow", "gauntlets", "boots", "gambeson", "mail", "roundShield", "kiteShield"], best: "masterwork" },
+    smith: { items: ["sword", "hammer", "staff", "bow", "gauntlets", "quiver", "roundShield", "kiteShield", "cap", "nasalHelm", "jerkin", "gambeson", "mail", "plate", "bracers", "gloves", "platedGloves", "belt", "trousers", "breeches", "greaves", "leatherBoots", "sabatons", "boots", "travelCloak", ...UNIFORM], best: "masterwork" },
     tavern: { items: ["ale", "meal"], best: "common" },
     temple: { items: ["potion"], best: "common" },
-    guild: { items: ["wand", "grimoire", "potion", ...Object.keys(CURES)], best: "fine" },
+    guild: { items: ["wand", "grimoire", "wizardHat", "amulet", "ring", "potion", ...Object.keys(CURES)], best: "fine" },
 });
 
 /** What sells for what (a share of its price), before haggling. */
 export const SELL_SHARE = 0.4;
 
-/** What each kind of foe has on them when they fall: gold ([least, most]), and things (each with its chance). */
+/**
+ * What each kind of foe has on them when they fall: gold ([least, most]), and things (each with
+ * its chance): a piece of their people's uniform (`uniform`, core/gear.js), as well made as it
+ * happens to be (MAKES).
+ */
 export const LOOT = Object.freeze({
-    orc: { gold: [5, 15], items: [{ id: "potion", chance: 0.3 }, { id: "gambeson", chance: 0.08 }, { id: "sword", quality: "fine", chance: 0.06 }] },
-    soldier: { gold: [2, 8], items: [{ id: "potion", chance: 0.15 }, { id: "roundShield", chance: 0.05 }, { id: "mail", chance: 0.03 }, { id: "bow", quality: "fine", chance: 0.03 }] },
+    orc: { gold: [5, 15], items: [{ id: "potion", chance: 0.3 }, { uniform: true, chance: 0.12 }, { id: "sword", quality: "fine", chance: 0.06 }] },
+    soldier: { gold: [2, 8], items: [{ id: "potion", chance: 0.15 }, { uniform: true, chance: 0.15 }, { id: "bow", quality: "fine", chance: 0.03 }] },
 });
 
+/** How likely a piece of gear found on a foe is to be of each make. */
+export const MAKES = Object.freeze({ common: 0.7, fine: 0.22, masterwork: 0.07, legendary: 0.01 });
+
 /**
- * How many slots a pack has. Each holds a stack of things alike (as many as there are: the same
- * kind, as well made), or nothing.
+ * How many slots a pack has, and how many are shown at a time (a page's). Each holds a stack of
+ * things alike (as many as there are: the same kind, as well made), or nothing.
  */
-export const PACK_SIZE = 20;
+export const PACK_SIZE = 40;
+export const PACK_PAGE = 20;
 
 /**
  * How much stronger a wand or grimoire makes spells (a share: 0.1 to 1), rolled when one's made:
@@ -156,11 +153,37 @@ export function rollBoost(random) {
 /** How rare a boost is (BOOSTS: "common" to "very rare"). */
 export const rarityOf = (boost) => (BOOSTS.find(({ band }) => boost < band[1]) ?? BOOSTS.at(-1)).rarity;
 
-/** Whether two things are alike (the same kind, as well made, and as strong a boost): they go on one stack. */
-export const alike = (a, b) => Boolean(a && b) && a.id === b.id && (a.quality ?? "common") === (b.quality ?? "common") && (a.boost ?? null) === (b.boost ?? null);
+/**
+ * Whether two things are alike (the same kind, as well made, as strong a boost; gear, of the same
+ * people's make, with the same bonuses): they go on one stack.
+ */
+export const alike = (a, b) => Boolean(a && b) && a.id === b.id && (a.quality ?? "common") === (b.quality ?? "common") && (a.boost ?? null) === (b.boost ?? null) && sameGear(a, b);
 
-// A thing as it's kept: its kind, its make, and (a wand or grimoire) its boost
-const thingOf = (item) => ({ id: item.id, quality: QUALITIES[item.quality] ? item.quality : "common", ...(ITEMS[item.id]?.magic ? { boost: boostOf(item) } : {}) });
+// A thing as it's kept: its kind, its make, (a wand or grimoire) its boost, and (gear) whose make
+// it is, what was rolled on it and its own name
+function thingOf(item) {
+    const def = ITEMS[item.id];
+    const thing = { id: item.id, quality: QUALITIES[item.quality] ? item.quality : "common", ...(def?.magic ? { boost: boostOf(item) } : {}) };
+
+    if (def?.uniform) {
+        thing.people = UNIFORM_PEOPLES.includes(item.people) ? item.people : "human";
+    }
+
+    if (def?.slot && item.bonuses && typeof item.bonuses === "object") {
+        const bonuses = Object.entries(item.bonuses).filter(([stat, value]) => STATS[stat] && Number.isFinite(value));
+
+        if (bonuses.length) {
+            thing.bonuses = Object.fromEntries(bonuses);
+            thing.affixes = Array.isArray(item.affixes) ? item.affixes.filter((key) => typeof key === "string") : [];
+        }
+    }
+
+    if (def?.slot && typeof item.name === "string" && item.name) {
+        thing.name = item.name.slice(0, 40);
+    }
+
+    return thing;
+}
 
 // A wand's or grimoire's boost: as it is, or (one made before they had them) a common one
 const boostOf = (item) => (Number.isFinite(item.boost) ? Math.max(0.1, Math.min(1, item.boost)) : STARTING_BOOST);
@@ -203,11 +226,18 @@ function packOf(kept) {
     return pack;
 }
 
-/** A piece of gear's name: "Fine sword"; a wand or grimoire with its boost: "Wand (+34% spells)". */
-export function itemLabel({ id, quality = "common", boost = null }) {
-    const { label, magic } = ITEMS[id] ?? { label: id };
+/**
+ * A thing's name: gear's by its make and what was rolled on it ("Keen sword of the Bear", an
+ * orcish helm; one made before bonuses were, its make's word: "Fine sword"); a wand or grimoire
+ * with its boost: "Wand (+34% spells)".
+ */
+export function itemLabel(item) {
+    const { id, quality = "common", boost = null } = item;
+    const { label, magic, slot } = ITEMS[id] ?? { label: id };
     const made = QUALITIES[quality]?.label;
-    const name = made ? `${made} ${label.toLowerCase()}` : label;
+    const plain = !item.affixes?.length && !item.name;
+    const named = slot ? gearName(item) : label;
+    const name = made && plain ? `${made} ${named.charAt(0).toLowerCase()}${named.slice(1)}` : named;
 
     return magic && boost ? `${name} (+${Math.round(boost * 100)}% spells)` : name;
 }
@@ -223,16 +253,31 @@ export function priceOf({ id, quality = "common", boost = null }, { haggle = 0, 
     return Math.max(1, Math.round(selling ? base * share * (1 + haggle) : base * (1 - haggle)));
 }
 
-/** What a shop has for sale ([{ id, quality }]): each thing it keeps, common, and better made as far as it goes. */
-export function wares(shop) {
+/**
+ * What a shop has for sale ([{ id, quality, people }]): each thing it keeps, common, and better
+ * made as far as it goes; a uniform's pieces, its own people's (`people`: whose shop it is).
+ * (What's rolled on a better made one is rolled as it's bought, as a wand's boost is.)
+ */
+export function wares(shop, people = "human") {
     const { items, best } = SHOPS[shop] ?? { items: [], best: "common" };
     const makes = Object.keys(QUALITIES).slice(0, Object.keys(QUALITIES).indexOf(best) + 1);
+    const maker = UNIFORM_PEOPLES.includes(people) ? people : "human";
 
-    return items.flatMap((id) => (ITEMS[id].slot ? makes.map((quality) => ({ id, quality })) : [{ id, quality: "common" }]));
+    return items.flatMap((id) => (ITEMS[id].slot ? makes.map((quality) => ({ id, quality, ...(ITEMS[id].uniform ? { people: maker } : {}) })) : [{ id, quality: "common" }]));
 }
 
-/** What a fallen foe of a kind has on them (random.js random): { gold, items }. */
-export function rollLoot(kind, random) {
+/** A make, as likely as MAKES has it (random.js random). */
+export function rollMake(random) {
+    let pick = random.next();
+
+    return Object.keys(MAKES).find((quality) => (pick -= MAKES[quality]) < 0) ?? "common";
+}
+
+/**
+ * What a fallen foe of a kind has on them (random.js random; `people`: theirs, for their
+ * uniform's pieces): { gold, items }. Gear comes with its bonuses rolled.
+ */
+export function rollLoot(kind, random, { people = kind === "orc" ? "orc" : "human" } = {}) {
     const table = LOOT[kind];
 
     if (!table) {
@@ -241,17 +286,96 @@ export function rollLoot(kind, random) {
 
     return {
         gold: random.int(...table.gold),
-        items: table.items.filter(({ chance }) => random.chance(chance)).map(({ id, quality = "common" }) => ({ id, quality })),
+        items: table.items.filter(({ chance }) => random.chance(chance)).map(({ id, quality, uniform }) => {
+            const kindOf = uniform ? UNIFORM[Math.floor(random.next() * UNIFORM.length) % UNIFORM.length] : id;
+
+            return ITEMS[kindOf].slot ? rollGear(kindOf, quality ?? (uniform ? rollMake(random) : "common"), random, { people }) : { id: kindOf, quality: quality ?? "common" };
+        }),
     };
+}
+
+/** The most of each blow armour takes off, all of it together. */
+export const ARMOR_CAP = 0.6;
+
+/** The most might gear gives (with a fighting rank's: might()). */
+export const GEAR_MIGHT = 4;
+
+// The ring slots
+const RINGS = ["ring1", "ring2"];
+
+// How mighty a piece of gear makes its wearer: a weapon by its make; armour by how much it takes
+// off each blow (as well made as it is); and a quarter for each bonus rolled on it
+function mightOf(piece, slot) {
+    if (!piece) {
+        return 0;
+    }
+
+    const made = slot === "mainHand" ? (QUALITIES[piece.quality]?.might ?? 0) : (ITEMS[piece.id]?.armor ?? 0) * 7 * (QUALITIES[piece.quality]?.power ?? 1);
+
+    return made + 0.25 * Object.keys(piece.bonuses ?? {}).length;
+}
+
+/**
+ * What a new character starts with on: their weapon (none, if they fight in spiked boots alone:
+ * the `boots` weapon), leather bracers and breeches, and boots (spiked, if they chose them).
+ */
+export function startingGear({ weapon = "sword", boots = false } = {}) {
+    const gear = Object.fromEntries(SLOT_IDS.map((slot) => [slot, null]));
+
+    gear.mainHand = weapon !== "boots" && ITEMS[weapon]?.slot === "mainHand" ? thingOf({ id: weapon }) : null;
+    gear.bracers = { id: "bracers", quality: "common" };
+    gear.legs = { id: "breeches", quality: "common" };
+    gear.boots = { id: boots || weapon === "boots" ? "boots" : "leatherBoots", quality: "common" };
+
+    return gear;
+}
+
+// Gear as kept: each slot's piece (checked: that it goes there, and with the weapon in hand); or
+// as kept before there was a slot for everything ({ weapon, body, shield }), those in theirs with
+// what a new character starts with on. { worn, off: what can't be worn, for the pack }
+function gearOf(kept, hero) {
+    if (!kept || typeof kept !== "object") {
+        return { worn: startingGear(hero), off: [] };
+    }
+
+    const old = !("mainHand" in kept);
+    const from = old ? { ...startingGear({ weapon: kept.weapon?.id ?? hero.weapon, boots: hero.boots }), chest: kept.body ?? null, offHand: kept.shield ?? null } : kept;
+
+    if (old && ITEMS[kept.weapon?.id]?.slot === "mainHand") {
+        from.mainHand = kept.weapon;
+    }
+
+    const worn = Object.fromEntries(SLOT_IDS.map((slot) => [slot, null]));
+    const off = [];
+
+    for (const { id: slot, takes } of GEAR_SLOTS) {
+        const piece = from[slot];
+
+        if (piece && ITEMS[piece.id]?.slot === takes) {
+            worn[slot] = thingOf(piece);
+        }
+    }
+
+    // (Nothing to fight with: their weapon, or spiked boots)
+    if (!worn.mainHand && !ITEMS[worn.boots?.id]?.kicks) {
+        worn.mainHand = thingOf({ id: ITEMS[hero.weapon]?.slot === "mainHand" ? hero.weapon : "sword" });
+    }
+
+    if (worn.offHand && offHandFits(worn.mainHand?.id ?? null, worn.offHand.id)) {
+        off.push(worn.offHand);
+        worn.offHand = null;
+    }
+
+    return { worn, off };
 }
 
 /** A player's skills, gold, pack and gear. */
 export class Progress {
     /**
-     * @param {object} [kept] - As toJSON gave it: { skills: { tree: xp }, gold, pack: [stacks], gear: { weapon, body, shield } }.
-     * @param {object} [hero] - Their hero (for the weapon they started with).
+     * @param {object} [kept] - As toJSON gave it: { skills: { tree: xp }, gold, pack: [stacks], gear: { slot: piece } }.
+     * @param {object} [hero] - Their hero (for the weapon they started with, and their spiked boots).
      */
-    constructor({ skills = {}, schools = null, spells = [], spellXp = {}, gold = 20, pack = [], gear = null } = {}, { weapon = "sword" } = {}) {
+    constructor({ skills = {}, schools = null, spells = [], spellXp = {}, gold = 20, pack = [], gear = null } = {}, { weapon = "sword", boots = false } = {}) {
         this.skills = Object.fromEntries(Object.keys(TREES).map((tree) => [tree, Math.max(0, Number(skills[tree]) || 0)]));
 
         /**
@@ -271,7 +395,18 @@ export class Progress {
 
         /** The pack's slots: each a stack of things alike ({ id, quality, count, and a wand's boost }), or null. */
         this.pack = packOf(pack);
-        this.gear = { weapon: thingOf(gear?.weapon && ITEMS[gear.weapon.id] ? gear.weapon : { id: weapon }), body: gear?.body ?? null, shield: gear?.shield ?? null };
+
+        /**
+         * What they wear and wield: each slot's piece (core/gear.js GEAR_SLOTS), or null. (What
+         * was kept that can't be worn as it was goes in the pack)
+         */
+        const { worn, off } = gearOf(gear, { weapon, boots });
+
+        this.gear = worn;
+
+        for (const piece of off) {
+            this.stow(piece);
+        }
     }
 
     /** A school of magic's tier (1 to its last: 5 for Healing, 7 for the elements). */
@@ -392,24 +527,41 @@ export class Progress {
             }
         }
 
-        // The gear's: a weapon's make, armour
-        const made = QUALITIES[this.gear.weapon?.quality]?.power ?? 1;
+        // The gear's: a weapon's make, in the blows it makes (up close, from afar)
+        const weapon = this.gear.mainHand;
+        const made = QUALITIES[weapon?.quality]?.power ?? 1;
+        const kinds = new Set((WEAPONS[weapon?.id]?.attacks ?? []).map(({ kind }) => kind));
 
-        totals.melee = (1 + totals.melee) * made - 1;
-        totals.ranged = (1 + totals.ranged) * made - 1;
-
-        // (A wand or a grimoire in hand: spells as much stronger as its boost)
-        if (ITEMS[this.gear.weapon?.id]?.magic) {
-            totals.spell += boostOf(this.gear.weapon);
+        if (kinds.has("melee")) {
+            totals.melee = (1 + totals.melee) * made - 1;
         }
 
-        for (const piece of [this.gear.body, this.gear.shield]) {
+        if (kinds.has("ranged")) {
+            totals.ranged = (1 + totals.ranged) * made - 1;
+        }
+
+        // (A wand or a grimoire in hand: spells as much stronger as its boost)
+        if (ITEMS[weapon?.id]?.magic) {
+            totals.spell += boostOf(weapon);
+        }
+
+        // Everything worn: its armour and bonuses (as well made as it is), and what it was rolled
+        // with; and the sets' (each people's uniform worn together)
+        for (const slot of SLOT_IDS) {
+            const piece = this.gear[slot];
+
             if (piece) {
-                totals.armor += (ITEMS[piece.id].armor ?? 0) * (QUALITIES[piece.quality]?.power ?? 1);
+                for (const [stat, value] of Object.entries(statsOf(piece, slot === "mainHand" ? 1 : (QUALITIES[piece.quality]?.power ?? 1)))) {
+                    totals[stat] += value;
+                }
             }
         }
 
-        totals.armor = Math.min(0.6, totals.armor);
+        for (const [stat, value] of Object.entries(setBonuses(this.gear))) {
+            totals[stat] += value;
+        }
+
+        totals.armor = Math.min(ARMOR_CAP, totals.armor);
 
         return totals;
     }
@@ -427,14 +579,31 @@ export class Progress {
         const casting = ["fire", "earth", "air", "water"].map((school) => Math.floor(((this.tierOf(school) - 1) * 5) / 6));
         const fighting = Math.max(...Object.entries(TREES).filter(([, { fighting }]) => fighting).map(([tree]) => this.rank(tree)), ...casting);
         const command = this.rank("command");
-        const gear = (QUALITIES[this.gear.weapon?.quality]?.might ?? 0) + [this.gear.body, this.gear.shield].reduce((sum, piece) => sum + (piece ? (ITEMS[piece.id].might ?? 0) * (QUALITIES[piece.quality]?.power ?? 1) : 0), 0);
+        const gear = SLOT_IDS.reduce((sum, slot) => sum + mightOf(this.gear[slot], slot), 0);
 
-        return Math.min(8, Math.floor(Math.max(fighting, command) + gear));
+        return Math.min(8, Math.floor(Math.max(fighting, command) + Math.min(GEAR_MIGHT, gear)));
     }
 
-    /** What they wear and carry that shows (their body armour, their shield: equipment ids). */
+    /**
+     * What they wear that shows: each piece but the weapon in their hand ([{ id, people }]:
+     * characters/liveries.js dresses a character in them).
+     */
     worn() {
-        return [this.gear.body, this.gear.shield].filter(Boolean).flatMap(({ id }) => ITEMS[id].equipment ?? []);
+        return SLOT_IDS.filter((slot) => slot !== "mainHand" && this.gear[slot]).map((slot) => {
+            const { id, people } = this.gear[slot];
+
+            return people ? { id, people } : { id };
+        });
+    }
+
+    /** Whether they kick (in spiked boots). */
+    kicks() {
+        return Boolean(ITEMS[this.gear.boots?.id]?.kicks);
+    }
+
+    /** The people they pass for (core/gear.js disguiseOf), or null. */
+    disguise() {
+        return disguiseOf(this.gear);
     }
 
     /** How many of a thing (an ITEMS id, of any make) are in the pack. */
@@ -573,30 +742,49 @@ export class Progress {
     }
 
     /**
-     * Put on (or take up) one of the pieces of gear in a slot of the pack: what it replaces goes
-     * into the pack. Returns the reason it can't be, or null. (A shield only with a weapon it
-     * goes with; no weapon ever given up for nothing; nothing put on without room for what comes
-     * off.)
+     * Put on (or take up) one of the pieces of gear in a slot of the pack, in its slot (a ring, on
+     * the hand asked for: `to`, ring1 or ring2; else a bare one, else the first): what it replaces
+     * goes into the pack, where it was if it can. Returns the reason it can't be, or null:
+     * "item" (nothing to wear there), "slot" (it doesn't go there), "twoHanded" (the weapon takes
+     * both hands), "bow" (a bow's other hand takes only a quiver), "quiver" (a quiver only with a
+     * bow), "unarmed" (spiked boots off with nothing else to fight with), "full".
      */
-    equip(index) {
+    equip(index, to = null) {
         const stack = isSlot(index) ? this.pack[index] : null;
-        const slot = stack && ITEMS[stack.id].slot;
+        const kind = stack && ITEMS[stack.id].slot;
 
-        if (!slot) {
+        if (!kind) {
             return "item";
         }
 
-        if (slot === "shield" && !WITH_SHIELD.includes(this.gear.weapon.id)) {
-            return "shield";
+        const slot = kind === "ring" ? (RINGS.includes(to) ? to : (RINGS.find((ring) => !this.gear[ring]) ?? RINGS[0])) : kind;
+
+        if (to !== null && to !== slot) {
+            return "slot";
         }
 
-        // (A weapon that can't be carried with a shield: the shield's put away too)
-        const shieldOff = slot === "weapon" && this.gear.shield && !WITH_SHIELD.includes(stack.id);
+        const weapon = slot === "mainHand" ? stack.id : this.gear.mainHand?.id ?? null;
+        const offHand = slot === "offHand" ? stack.id : this.gear.offHand?.id ?? null;
+
+        if (slot === "offHand") {
+            const why = offHandFits(weapon, offHand);
+
+            if (why) {
+                return why;
+            }
+        }
+
+        if (slot === "boots" && !this.gear.mainHand && !ITEMS[stack.id].kicks) {
+            return "unarmed";
+        }
+
+        // (A weapon the other hand's piece doesn't go with: that comes off too)
+        const offToo = slot === "mainHand" && offHand && offHandFits(weapon, offHand) !== null;
         const before = this.pack.map((each) => each && { ...each });
         const item = this.take(index, 1);
-        const off = [this.gear[slot], shieldOff ? this.gear.shield : null].filter(Boolean);
+        const off = [this.gear[slot], offToo ? this.gear.offHand : null].filter(Boolean);
 
-        if (!off.every((piece) => this.stow(piece))) {
+        if (!off.every((piece, k) => (k === 0 && !this.pack[index] && !this.pack.some((each) => alike(each, piece)) ? Boolean((this.pack[index] = { ...thingOf(piece), count: 1 })) : this.stow(piece)))) {
             this.pack = before;
 
             return "full";
@@ -604,24 +792,95 @@ export class Progress {
 
         this.gear[slot] = thingOf(item);
 
-        if (shieldOff) {
-            this.gear.shield = null;
+        if (offToo) {
+            this.gear.offHand = null;
         }
 
         return null;
     }
 
-    /** Take off armour (a slot: body or shield), into the pack. Returns the reason it can't be, or null. */
-    unequip(slot) {
-        if (!["body", "shield"].includes(slot) || !this.gear[slot]) {
+    /**
+     * Take off a piece (a slot: core/gear.js GEAR_SLOTS), into the pack (a slot of it, `to`: empty,
+     * or with things alike; else wherever it goes). Returns the reason it can't be, or null:
+     * "item" (nothing there), "unarmed" (the weapon only off with spiked boots on to kick with,
+     * and those only with a weapon in hand), "full".
+     */
+    unequip(slot, to = null) {
+        const piece = SLOT_IDS.includes(slot) ? this.gear[slot] : null;
+
+        if (!piece) {
             return "item";
         }
 
-        if (!this.stow(this.gear[slot])) {
+        if ((slot === "mainHand" && !this.kicks()) || (slot === "boots" && ITEMS[piece.id].kicks && !this.gear.mainHand)) {
+            return "unarmed";
+        }
+
+        if (to !== null && (!isSlot(to) || (this.pack[to] && !alike(this.pack[to], piece)))) {
+            return isSlot(to) ? "full" : "item";
+        }
+
+        // (The weapon off: a quiver with it)
+        const quiver = slot === "mainHand" && this.gear.offHand && offHandFits(null, this.gear.offHand.id) !== null ? this.gear.offHand : null;
+        const before = this.pack.map((each) => each && { ...each });
+
+        if (to !== null) {
+            this.pack[to] = { ...thingOf(piece), count: (this.pack[to]?.count ?? 0) + 1 };
+        } else if (!this.stow(piece)) {
+            return "full";
+        }
+
+        if (quiver && !this.stow(quiver)) {
+            this.pack = before;
+
             return "full";
         }
 
         this.gear[slot] = null;
+
+        if (quiver) {
+            this.gear.offHand = null;
+        }
+
+        return null;
+    }
+
+    /**
+     * What putting on a piece from the pack would change (as equip, `to`): { reason (why it can't
+     * be, or null), before and after (bonuses()), off (what would come off: pieces), weapon (the
+     * one they'd fight with) }. Nothing's changed.
+     */
+    trying(index, to = null) {
+        const trial = new Progress(this.toJSON());
+        const before = this.bonuses();
+        const was = { ...trial.gear };
+        const reason = trial.equip(index, to);
+        const off = reason ? [] : SLOT_IDS.filter((slot) => was[slot] && trial.gear[slot] !== was[slot] && !alike(trial.gear[slot], was[slot])).map((slot) => was[slot]);
+
+        return { reason, before, after: reason ? before : trial.bonuses(), off, weapon: weaponOf(trial) };
+    }
+
+    /**
+     * Put the pack in order: gear first (by where it's worn, the best made first), then things to
+     * use, then tomes, then creatures' parts; things alike put together.
+     */
+    sort() {
+        const order = (stack) => {
+            const def = ITEMS[stack.id];
+            const group = def.slot ? 0 : def.use && !def.tome && !def.part ? 1 : def.tome ? 2 : 3;
+            const slot = def.slot ? GEAR_SLOTS.findIndex(({ takes }) => takes === def.slot) : 0;
+
+            return [group, slot, -Object.keys(QUALITIES).indexOf(stack.quality ?? "common"), def.label];
+        };
+        const stacks = packOf(this.pack.filter(Boolean)).filter(Boolean);
+
+        stacks.sort((a, b) => {
+            const [x, y] = [order(a), order(b)];
+
+            return x.findIndex((value, k) => value !== y[k]) === -1 ? 0 : x.map((value, k) => (value < y[k] ? -1 : value > y[k] ? 1 : 0)).find((sign) => sign !== 0);
+        });
+
+        this.pack = [...stacks, ...Array(PACK_SIZE - stacks.length).fill(null)];
 
         return null;
     }
@@ -632,5 +891,5 @@ export class Progress {
     }
 }
 
-/** The weapon a player fights with (a WEAPONS key), from their gear. */
-export const weaponOf = (progress) => (WEAPONS[progress.gear.weapon?.id] ? progress.gear.weapon.id : "sword");
+/** The weapon a player fights with (a WEAPONS key), from their gear: kicking, in spiked boots with nothing in hand. */
+export const weaponOf = (progress) => (WEAPONS[progress.gear.mainHand?.id] ? progress.gear.mainHand.id : progress.gear.boots && ITEMS[progress.gear.boots.id]?.kicks ? "boots" : "sword");

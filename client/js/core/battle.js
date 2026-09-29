@@ -113,6 +113,9 @@ export const hostile = (a, b) => a.team !== b.team && !a.neutral && !b.neutral;
 /** How long (ms) someone struck, and those of its own who saw, hold it against the striker. */
 export const FOE_MS = 60000;
 
+/** How long someone who passed for one of a people's is known for what they are, seen through (ms). */
+export const UNMASKED_MS = 120000;
+
 /**
  * What lies on the ground a while, hurting whoever of the other side stands in it (not one who's
  * levitating): fire (Flamefill, Hellfire), acid (Acidify), rot (Putrify), a magma slime's lava and
@@ -498,7 +501,25 @@ export class Battle {
             return false;
         }
 
+        // (Passing for one of them in their uniform: core/gear.js, till seen through)
+        if (this.passes(a, b) || this.passes(b, a)) {
+            return false;
+        }
+
         return this.relations ? this.relations(a, b) : true;
+    }
+
+    /**
+     * Whether one passes for one of another's people (`guise`: wearing their uniform, the host
+     * says), not seen through (`unmasked`: till when they're known for what they are).
+     */
+    passes(one, other) {
+        return Boolean(one.guise) && one.guise === other.team && !((one.unmasked ?? -Infinity) > this.time);
+    }
+
+    /** Someone known for what they are by the people they passed for, for a while (`ms`). */
+    unmask(actor, ms = UNMASKED_MS) {
+        actor.unmasked = Math.max(actor.unmasked ?? -Infinity, this.time + ms);
     }
 
     /**
@@ -2590,6 +2611,11 @@ export class Battle {
 
         if (target.spared?.[attacker.id]) {
             delete target.spared[attacker.id];
+        }
+
+        // (Striking one of those they pass for: seen through by them all, a while)
+        if (attacker.guise && attacker.guise === target.team) {
+            this.unmask(attacker);
         }
 
         if (attacker.team !== target.team) {

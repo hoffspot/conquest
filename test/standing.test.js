@@ -52,13 +52,13 @@ describe("standing (standing.js)", () => {
         assert.ok(COUNSEL.slice(OPENS.march).every((weight, k, all) => weight > 0 && (k === 0 || weight > all[k - 1])));
     });
 
-    it("gives the armoury's gift for each rank from a retainer up: mail, then a masterwork of the player's own weapon, a shield if they can carry one, then a legend", () => {
-        assert.equal(armouryGift(1, "bow", false), null);
-        assert.deepEqual(armouryGift(2, "bow", false), { id: "mail", quality: "fine" });
-        assert.deepEqual(armouryGift(3, "bow", false), { id: "bow", quality: "masterwork" });
-        assert.deepEqual(armouryGift(4, "sword", true), { id: "kiteShield", quality: "masterwork" });
-        assert.deepEqual(armouryGift(4, "bow", false), { id: "mail", quality: "masterwork" });
-        assert.deepEqual(armouryGift(5, "hammer", true), { id: "hammer", quality: "legendary" });
+    it("gives the armoury's gift for each rank from a retainer up: their people's hauberk, then a masterwork of the player's own weapon, their people's shield if they can carry one (a helm if not), then a legend", () => {
+        assert.equal(armouryGift(1, "bow", false, "elf"), null);
+        assert.deepEqual(armouryGift(2, "bow", false, "elf"), { id: "hauberk", quality: "fine", people: "elf" });
+        assert.deepEqual(armouryGift(3, "bow", false, "elf"), { id: "bow", quality: "masterwork" });
+        assert.deepEqual(armouryGift(4, "sword", true, "orc"), { id: "shield", quality: "masterwork", people: "orc" });
+        assert.deepEqual(armouryGift(4, "bow", false, "cat"), { id: "helm", quality: "masterwork", people: "cat" });
+        assert.deepEqual(armouryGift(5, "hammer", false), { id: "hammer", quality: "legendary" });
     });
 
     it("asks a commoner to carry letters to their people's other towns, to clear the wild off the roads, or (the treasury thin) for a tithe: never to scout or hold a town", () => {

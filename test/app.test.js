@@ -8,7 +8,7 @@ import { ICONS, ITEM_ICONS } from "../client/js/app/icons.js";
 import { buildingsOf, interiorColours, mapColours, treesOf } from "../client/js/app/minimap.js";
 import { ACTIONS, actionOf, assignable, DIRECTIONS, directionOf, drawWheel, FLIP, iconOf, PLACES, readWheels, sectorPath, WHEELS } from "../client/js/app/wheel.js";
 import { SPELLS } from "../client/js/core/spells.js";
-import { ABILITIES, ITEMS } from "../client/js/core/progress.js";
+import { ABILITIES, ITEMS, Progress } from "../client/js/core/progress.js";
 import { isHero, loadExplored, loadSave, loadSettings, loadStanding, loadTalks, loadWheels, loadWorld, newSeed, SAVE_VERSION, saveExplored, saveSettings, saveStanding, saveTalks, saveWheels, saveWorld, SETTINGS_DEFAULTS, writeSave, clearSave } from "../client/js/app/save.js";
 import { Standing } from "../client/js/core/standing.js";
 import { Explored } from "../client/js/core/explored.js";
@@ -293,11 +293,12 @@ describe("heroes (heroes.js)", () => {
 
 describe("a hero's kit (game.js, creator.js)", () => {
     it("wears leather boots, or spiked boots with any weapon or on their own", () => {
-        assert.deepEqual(heroEquipment("sword"), ["tunic", "bracers", "breeches", "boots", "sword"]);
-        assert.deepEqual(heroEquipment("bow", true), ["tunic", "bracers", "breeches", "bow", "quiver", "spikedBoots"]);
-        assert.deepEqual(heroEquipment("boots"), ["tunic", "bracers", "breeches", "spikedBoots"]);
-        assert.deepEqual(heroEquipment("boots", true), heroEquipment("boots"));
-        assert.deepEqual(heroEquipment("sword", false, [], ["catEars", "catTail"]), ["tunic", "bracers", "breeches", "boots", "sword", "catEars", "catTail"]);
+        // (Under their gear, a tunic and trousers; on it, what a new character starts with: leather
+        // bracers, breeches and boots, spiked if they chose them)
+        assert.deepEqual(heroEquipment("sword"), ["tunic", "trousers", "sword", "bracers", "breeches", "boots"]);
+        assert.deepEqual(heroEquipment("bow", new Progress({}, { weapon: "bow", boots: true }).worn()), ["tunic", "trousers", "bow", "quiver", "bracers", "breeches", "spikedBoots"]);
+        assert.deepEqual(heroEquipment("boots"), ["tunic", "trousers", "spikedBoots", "bracers", "breeches"]);
+        assert.deepEqual(heroEquipment("sword", [{ id: "helm", people: "elf" }, { id: "hauberk", people: "elf" }, { id: "ring" }], ["catEars"]), ["tunic", "trousers", "sword", "helm.elf", "mail.elf", "surcoat.elf", "catEars"]);
         assert.equal(guardOf("boots"), "kick");
         assert.equal(guardOf("gauntlets"), "punch");
     });

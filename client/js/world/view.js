@@ -43,6 +43,10 @@ const LOOK_UP = 0.8;
 // there's no more of the room to draw than there is; outdoors it can look up into the sky, this
 // far above the horizon (degrees)
 const BELOW_HORIZON = 6;
+
+// The layer the player's drawn on for the pack's paperdoll, and what's behind them there
+const PREVIEW = 3;
+const PREVIEW_BACKGROUND = new THREE.Color(0x221c16);
 const ABOVE_HORIZON = 45;
 
 // Looking up, the camera comes down behind the player no lower than this over the ground
@@ -133,6 +137,11 @@ export class View {
         this.scene.add(this.sky.object);
 
         this.camera = new THREE.PerspectiveCamera(36, 1, 0.3, 150);
+
+        // (The camera that draws the player alone on the pack's paperdoll: renderPreview)
+        this.previewCamera = new THREE.PerspectiveCamera(24, 1, 0.1, 60);
+        this.previewCamera.layers.set(PREVIEW);
+        this.frozen = null;
         this.focus = new THREE.Vector3();
         this.distance = DISTANCE.start;
 
@@ -432,7 +441,105 @@ export class View {
         return { x: rect.left + ((projected.x + 1) / 2) * rect.width, y: rect.top + ((1 - projected.y) / 2) * rect.height };
     }
 
+    /**
+     * Draw the player on the pack's paperdoll (app/pack.js dollView): the world as it was when
+     * the pack opened behind it, still and dimmed (drawn once, into a picture: the world isn't drawn
+     * while the pack's open), and the player alone, live, in the paperdoll's box, facing out, turned
+     * by `turn` (radians).
+     */
+    renderPreview(element, subject, { height = 1.7, turn = 0, clip = null } = {}) {
+        const renderer = this.renderer;
+        const size = renderer.getDrawingBufferSize(_size);
+
+        if (!this.frozen || this.frozen.width !== size.x || this.frozen.height !== size.y) {
+            this.#freeze(size);
+        }
+
+        renderer.info.reset();
+        renderer.setRenderTarget(null);
+        renderer.render(this.frozen.scene, this.frozen.camera);
+
+        const canvas = renderer.domElement.getBoundingClientRect();
+        const onCanvas = (rect) => [rect.left - canvas.left, canvas.bottom - rect.bottom, rect.width, rect.height];
+
+        // The paperdoll's box, on the canvas (as much of it as isn't scrolled out of sight)
+        const box = element.getBoundingClientRect();
+        const seen = clip?.getBoundingClientRect() ?? box;
+        const top = Math.max(box.top, seen.top);
+        const bottom = Math.min(box.bottom, seen.bottom);
+        const [x, y, w, h] = onCanvas({ left: box.left, bottom, width: box.width, height: bottom - top });
+
+        if (w < 4 || h < 4) {
+            return;
+        }
+
+        // Just the player (and the lights), from in front of them
+        subject.traverse((node) => node.layers.enable(PREVIEW));
+
+        for (const light of this.frozen.lights) {
+            light.layers.enable(PREVIEW);
+        }
+
+        const camera = this.previewCamera;
+        const middle = subject.getWorldPosition(_point).add(_up.set(0, height * 0.52, 0));
+        const facing = subject.rotation.y + turn;
+        const back = (height * 0.62) / Math.tan((camera.fov * Math.PI) / 360);
+
+        // (Framed on the whole box, even if some of it's scrolled away)
+        camera.aspect = box.width / box.height;
+        camera.updateProjectionMatrix();
+        camera.setViewOffset(box.width, box.height, 0, top - box.top, w, h);
+        camera.position.set(middle.x + Math.sin(facing) * back, middle.y + height * 0.05, middle.z + Math.cos(facing) * back);
+        camera.lookAt(middle);
+
+        const background = this.scene.background;
+        const shadows = renderer.shadowMap.autoUpdate;
+
+        this.scene.background = PREVIEW_BACKGROUND;
+        renderer.shadowMap.autoUpdate = false;
+        renderer.setScissorTest(true);
+        renderer.setScissor(x, y, w, h);
+        renderer.setViewport(x, y, w, h);
+        renderer.render(this.scene, camera);
+        renderer.setScissorTest(false);
+        camera.clearViewOffset();
+        renderer.setViewport(0, 0, canvas.width, canvas.height);
+        renderer.shadowMap.autoUpdate = shadows;
+        this.scene.background = background;
+    }
+
+    // The world drawn once into a picture (half as sharp), to show behind the pack, still and dimmed
+    #freeze(size) {
+        this.#thaw();
+
+        const target = new THREE.WebGLRenderTarget(Math.max(1, Math.round(size.x / 2)), Math.max(1, Math.round(size.y / 2)), { type: THREE.HalfFloatType });
+        const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.MeshBasicMaterial({ map: target.texture, color: 0x6a6a6a, depthTest: false, depthWrite: false }));
+        const scene = new THREE.Scene();
+        const lights = [];
+
+        this.#cutAway(0);
+        this.sky.update(this.camera, performance.now() / 1000);
+        this.renderer.setRenderTarget(target);
+        this.renderer.render(this.scene, this.camera);
+        this.renderer.setRenderTarget(null);
+        scene.add(quad);
+        this.scene.traverse((node) => node.isLight && lights.push(node));
+        this.frozen = { target, scene, camera: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), width: size.x, height: size.y, lights };
+    }
+
+    // The picture of the world let go (the pack closed)
+    #thaw() {
+        if (this.frozen) {
+            this.frozen.target.dispose();
+            this.frozen.scene.children[0].geometry.dispose();
+            this.frozen.scene.children[0].material.dispose();
+            this.frozen = null;
+        }
+    }
+
     render(scene = this.scene, camera = this.camera) {
+        this.#thaw();
+
         const now = performance.now();
         const dt = Math.min(0.1, (now - this.lastRender) / 1000);
 

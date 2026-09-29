@@ -8,6 +8,7 @@
 // keep their own looks (presets.js FOLK). Pure data, no DOM.
 
 import { createRandom } from "../core/random.js";
+import { LIVERY_PARTS, liveryKit, soldierKit } from "./liveries.js";
 import { LOOKS, peopleLook } from "./peoples.js";
 import { HAIR_COLOURS, SKIN_TONES } from "./skin.js";
 
@@ -126,8 +127,8 @@ const BRIGHT = Object.freeze({ irises: ["#3fa6e8", "#56c48a", "#9a6ae0", "#e0a03
 // Grey with age (the greybeard), or now and then
 const GREY = ["grey", "white"];
 
-// What won't go on over a cat's ears (a crown sits between them)
-const OVER_EARS = new Set(["nasalHelm", "orcHelm", "wizardHat"]);
+// What won't go on over a cat's ears (a crown sits between them; a helm opens round them: items.js)
+const OVER_EARS = new Set(["wizardHat"]);
 
 /**
  * A look for one of the folk: { shape, look, equipment, walk, sheathed } (as presets.js FOLK's),
@@ -203,6 +204,14 @@ export function folkLook({ role, local = role, look: calling = null, sex = "m", 
         }
     } else {
         equipment = spec.wear.map((choices) => random.pick(choices)).filter(Boolean);
+    }
+
+    // (Their people's officials in its livery, a keep's sentries in its uniform: liveries.js; a
+    // ruler in mail with their sword keeps them)
+    if (LIVERY_PARTS.includes(part)) {
+        equipment = [...liveryKit(people, part, sex), ...equipment.filter((id) => id === "sword")];
+    } else if (part === "sentry") {
+        equipment = soldierKit(people, "sword");
     }
 
     // (Drinking at a table: a tankard in the hand their weapon would be in)

@@ -27,6 +27,8 @@ lying about, and their war camps, in 3D from a seed to go round and look at, is 
 
 The creature lab, showing every creature of the wilds walking, running, attacking, resting,
 struck, knocked down and dying (and the wyvern and the dragon flying and coming down to land), is at <https://hoffspot.github.io/conquest/creature-lab.html>.
+The uniform lab, showing each people's soldiers in their uniforms and their officials in their
+livery side by side, is at <https://hoffspot.github.io/conquest/uniform-lab.html>.
 
 The war between the six peoples, played out on a world's map turn by turn (who holds which town,
 the forces out, the rulers and how they stand with each other, and the news), is at
@@ -257,13 +259,28 @@ with **Resist all summons** in Game options you'll always say no), Zombify, Fear
 more. The **spellbook** (its button, or B) shows it all, and puts a spell on a wheel. See
 [docs/MAGIC.md](docs/MAGIC.md).
 
-**The pack** (its button, or I) holds 20 slots, each a stack of things alike with its icon and
-how many. Tap a stack to see what it is; hold it (or right-click) and a wheel of what to do with
-it opens: drink or eat it, wield or wear it, put it on an action wheel, split the stack (choosing
-how many), sell it when trading, throw it away (with a moment to undo), or drop it. Drag a stack
-onto one alike to put them together, or elsewhere to move it. What's dropped lies on the ground
-for a while, a bundle with its icon over it, for you or anyone playing with you to tap and pick
-up.
+**Gear.** You've a slot for each part of you: head, amulet, cloak, chest, bracers, gloves, belt,
+legs, boots, two rings, and both hands. A two-handed weapon leaves nothing for the other hand (a
+bow takes a quiver there); a one-handed one leaves it for a shield. The better made a piece is,
+the more bonuses are rolled on it (a *Keen sword of the Bear*), and a legendary one has a name of
+its own. Each people's soldiers wear a uniform in their own colours, with their emblem (the
+humans in royal blue and gold, the elves in forest green and silver, the dark elves in violet and
+black, the cat folk in indigo and saffron, the lizard folk in crimson and turquoise, the orcs in
+blood red and black), and their officials a livery; you'll know whose they are at a glance.
+Soldiers sometimes drop a piece of theirs, and the smiths sell their own people's. Wear three or
+six of a people's pieces for their set's bonuses, and their helm, chest and cloak together to
+pass for one of their soldiers (till one sees through it, or you strike one of them).
+
+**The pack** (its button, or I) shows you in the middle of your gear, live, each slot round you
+(the other hand greyed out behind a two-handed weapon), with the totals of all you wear, and 40
+slots for what you carry, two pages of 20, each a stack of things alike with its icon and how
+many; "Sort" puts them in order. Tap anything to see what it does (a piece in the pack compared
+with what you're wearing); hold a piece of gear to put it on, or, worn, to take it off; hold
+anything else (or right-click) and a wheel of what to do with it opens: drink or eat it, put it
+on an action wheel, split the stack (choosing how many), sell it when trading, throw it away
+(with a moment to undo), or drop it. Drag a stack onto one alike to put them together, or
+elsewhere to move it; drag gear onto yourself to wear it. What's dropped lies on the ground for a
+while, a bundle with its icon over it, for you or anyone playing with you to tap and pick up.
 
 **Sound**, in three kinds, each with its own volume:
 
@@ -409,6 +426,7 @@ client/                 The game (static files served to the browser)
   war.html              The war between the peoples (with world-map.css and war.css)
   building-lab.html     The building lab (with world-map.css)
   creature-lab.html     The creature lab: every creature of the wilds, doing everything it does
+  uniform-lab.html      The uniform lab: each people's soldiers and officials (with world-map.css)
   vendor/three-r186/    Three.js (minified by scripts/vendor-three.js; loaded through an import map)
   js/main.js            The screens, from loading to playing (no Three.js: it loads first)
   js/app/               The game on the page
@@ -426,8 +444,9 @@ client/                 The game (static files served to the browser)
     worldmap.js         The world map: the whole world, under a fog where the player hasn't been
     debug.js            Debug mode's overlay
     talk.js             The talk: who's talking, what they say, and the replies to choose from
-    pack.js             The pack: gold, a grid of stacks (dragged, held for their wheel,
-                        split, dropped, thrown away), what's worn, the skills; a shop's wares
+    pack.js             The pack: the player live on a paperdoll, a slot for each part of them;
+                        two pages of stacks (dragged, held, split, dropped, thrown away,
+                        sorted); the skills; a shop's wares. gearinfo.js says what gear does
     journal.js          The journal: the player's rank, their requests, their people, their
                         company
     spellbook.js        The spellbook: the schools, how far they've grown, every spell known
@@ -471,6 +490,8 @@ client/                 The game (static files served to the browser)
     afflictions.js      What lingers after some of their blows (poison, a web...) and the cures
     progress.js         Growing stronger: skills and their trees, abilities, gear and its make,
                         shops, loot, gold and the pack; and from them, might
+    gear.js             Gear: a slot for each part of a player, what goes in each (two-handed
+                        weapons), bonuses rolled on it, each people's uniform, sets, disguise
     standing.js         Standing in a people: its ranks, the requests the rulers make, the
                         armoury's gifts and counsel's weight
     spells.js           Magic: the schools and their tiers, the hexes, and the tomes' spells
@@ -551,7 +572,10 @@ client/                 The game (static files served to the browser)
     folk.js             Everyone else's looks, made up from their part, sex, seed and people
     peoples.js          The other peoples' bodies, skins, ears and tails (elves, cat folk...)
     soldiers.js         The peoples' soldiers' looks, of their people, carrying what they fight with
+    liveries.js         Each people's colours and emblem: their soldiers' uniforms, their
+                        officials' livery, and how a player's gear is drawn
   js/lab/character-lab.js  The character lab
+  js/lab/uniform-lab.js The uniform lab: each people's soldiers and officials side by side
   js/lab/world-map.js   The world map
   js/lab/town-map.js    The town map
   js/lab/war.js         The war

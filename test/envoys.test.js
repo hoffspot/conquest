@@ -87,11 +87,11 @@ describe("envoys on the roads, grudges and favours (host.js, war.js)", () => {
         assert.ok(!host.envoys.has(envoy.id) && met.ids.every((id) => !host.battle.actor(id)));
     });
 
-    it("dresses an envoy in robes, with a staff", () => {
+    it("dresses an envoy in their people's livery and robes, with a staff", () => {
         const look = soldierLook({ people: "elf", weapon: "staff", seed: 3, part: "envoy" });
 
-        assert.ok(look.equipment.includes("mageRobe") && look.equipment.includes("staff"));
-        assert.ok(soldierLook({ people: "orc", weapon: "staff", seed: 3, part: "envoy" }).equipment.includes("tunic"));
+        assert.ok(["livery.elf", "robe.elf", "cloak.elf", "chain", "staff"].every((id) => look.equipment.includes(id)), look.equipment.join());
+        assert.ok(soldierLook({ people: "orc", weapon: "staff", seed: 3, part: "envoy" }).equipment.includes("livery.orc"));
     });
 
     it("counts an envoy struck down as waylaid, by whoever did it, and their people bear a grudge", () => {

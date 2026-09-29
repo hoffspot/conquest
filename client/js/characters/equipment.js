@@ -16,6 +16,7 @@ import * as THREE from "three";
 import { faceFrame } from "./face.js";
 import { DRAPES } from "./drapes.js";
 import { GARMENTS } from "./garments.js";
+import { LIVERIES } from "./liveries.js";
 
 /** The slots, in the order to show them. */
 export const SLOTS = Object.freeze([
@@ -26,6 +27,7 @@ export const SLOTS = Object.freeze([
     { id: "shirt", label: "Shirt" },
     { id: "chest", label: "Chest" },
     { id: "armour", label: "Armour" },
+    { id: "surcoat", label: "Surcoat" },
     { id: "forearms", label: "Forearms" },
     { id: "hands", label: "Hands" },
     { id: "waist", label: "Waist" },
@@ -34,6 +36,7 @@ export const SLOTS = Object.freeze([
     { id: "apron", label: "Apron" },
     { id: "shins", label: "Shins" },
     { id: "feet", label: "Feet" },
+    { id: "cloak", label: "Cloak" },
     { id: "back", label: "Back" },
     { id: "ears", label: "Ears" },
     { id: "tail", label: "Tail" },
@@ -124,6 +127,12 @@ export const ITEMS = Object.freeze({
     orcHelm: { label: "Horned helm", slot: "head", model: "orcHelm", socket: "head", hides: ["hair"] },
     wizardHat: { label: "Wizard's hat", slot: "head", model: "wizardHat", socket: "head", hides: ["hair"] },
     crown: { label: "Crown", slot: "head", model: "crown", socket: "head" },
+    leatherCap: { label: "Leather cap", slot: "head", model: "leatherCap", socket: "head", hides: ["hair"] },
+    // Each people's helm and shield, in their colours (liveries.js: their soldiers' uniform)
+    ...Object.fromEntries(Object.keys(LIVERIES).flatMap((people) => [
+        [`helm.${people}`, { label: "Helm", slot: "head", model: `helm.${people}`, socket: "head", hides: ["hair"] }],
+        [`shield.${people}`, { label: "Shield", slot: "offHand", model: `shield.${people}`, socket: "leftForearm", hold: HOLDS.shield, grips: true }],
+    ])),
     backpack: { label: "Backpack", slot: "back", model: "backpack", socket: "back", garment: "straps" },
     quiver: { label: "Quiver", slot: "back", model: "quiver", socket: "back", turn: [0.25, 0, 0.5], offset: [0, 0.02, -0.04] },
     musket: { label: "Musket (slung)", slot: "back", model: "musket", socket: "back", turn: [0, 0, 2.5], offset: [0, 0, -0.03] },

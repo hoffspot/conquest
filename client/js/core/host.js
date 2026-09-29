@@ -17,7 +17,8 @@
 import { Battle, FOE_MS, KINDS, TALK_REACH } from "./battle.js";
 import { Explored } from "./explored.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
-import { ABILITIES, alike, ITEMS, priceOf, Progress, QUALITIES, rollBoost, rollLoot, wares, weaponOf, WITH_SHIELD } from "./progress.js";
+import { offHandFree, rollGear } from "./gear.js";
+import { ABILITIES, alike, ARMOR_CAP, ITEMS, priceOf, Progress, QUALITIES, rollBoost, rollLoot, wares, weaponOf } from "./progress.js";
 import { SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { createRandom } from "./random.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
@@ -146,6 +147,12 @@ export const PICK_REACH = 1.6;
  * apart they can get before it's off; how long (ms) asking to trade waits for an answer.
  */
 export const TRADE = Object.freeze({ reach: 4, apart: 7, asking: 30000 });
+
+/**
+ * How closely a people's soldiers look at someone passing for one of them: those this near
+ * (squares) who can see them, each second a chance to see through it (twice that right beside them).
+ */
+export const SCRUTINY = Object.freeze({ reach: 3, chance: 0.02 });
 
 /** How long something thrown away can be taken back (ms). */
 export const UNDO_MS = 8000;
@@ -463,7 +470,9 @@ export class Host {
         const at = taken.size ? nearestFree(squaresOf(this.world.maps?.[map] ?? this.world), square, { taken }) : square;
 
         this.players.set(id, player);
-        this.battle.add({ id, kind: "player", name: hero.name, weapon: hero.weapon, boots: Boolean(hero.boots), team: player.realm, square: at, map });
+        player.hero.weapon = weaponOf(player.progress);
+        player.hero.boots = player.progress.kicks();
+        this.battle.add({ id, kind: "player", name: hero.name, weapon: player.hero.weapon, boots: player.hero.boots, team: player.realm, square: at, map });
         this.#outfit(player);
 
         // (Their followers, with them)
@@ -539,8 +548,9 @@ export class Host {
      *  - { type: "buy", item, from }: buy something ({ id, quality }) from a shopkeeper near them
      *    (an id); { type: "sell", index, to, count }: sell things (one, with no count) from the
      *    stack at `index` in their pack to one;
-     *  - { type: "equip", index }, { type: "unequip", slot }: put on (or take up) gear from their
-     *    pack, or take armour off; { type: "use", index }: use something in their pack (or
+     *  - { type: "equip", index, to }, { type: "unequip", slot, to }: put on (or take up) gear from
+     *    their pack (in a slot, `to`: a ring's hand), or take it off (into a slot of the pack,
+     *    `to`); { type: "sort" }: put the pack in order; { type: "use", index }: use something in their pack (or
      *    { type: "use", item }: the first of a kind of thing in it, by its id);
      *  - { type: "arrange", from, to }: move what's in one slot of their pack to another (put
      *    together with things alike, or swapped); { type: "split", index, count, to }: split
@@ -675,13 +685,15 @@ export class Host {
             case "sell":
                 return this.#sell(player, actor, command);
             case "equip":
-                return this.#gear(player, player.progress.equip(command.index));
+                return this.#gear(player, player.progress.equip(command.index, command.to ?? null));
             case "unequip":
-                return this.#gear(player, player.progress.unequip(command.slot));
+                return this.#gear(player, player.progress.unequip(command.slot, Number.isInteger(command.to) ? command.to : null));
             case "use":
                 return this.#use(player, actor, Number.isInteger(command.index) ? command.index : player.progress.slotOf(command.item));
             case "arrange":
                 return this.#packed(player.progress.move(command.from, command.to));
+            case "sort":
+                return this.#packed(player.progress.sort());
             case "split":
                 return this.#packed(player.progress.split(command.index, command.count, Number.isInteger(command.to) ? command.to : undefined));
             case "discard":
@@ -779,6 +791,8 @@ export class Host {
                 this.#endTrade(trade, "unanswered");
             }
         }
+
+        this.#scrutiny(ms);
 
         // Boons worn off
         for (const player of this.players.values()) {
@@ -1209,7 +1223,7 @@ export class Host {
 
     // What a player finds on a foe they've felled: gold, and things (into their pack, while there's room)
     #loot(player, fallen) {
-        const { gold, items } = rollLoot(fallen.kind, this.random);
+        const { gold, items } = rollLoot(fallen.kind, this.random, fallen.kind === "soldier" ? { people: fallen.team } : {});
         const kept = items.filter((item) => player.progress.stow(item));
 
         if (!gold && !kept.length) {
@@ -1239,14 +1253,25 @@ export class Host {
         }
 
         const weapon = weaponOf(player.progress);
+        const kicks = player.progress.kicks();
 
-        if (actor.weapon !== weapon) {
-            this.battle.rearm(actor.id, weapon, Boolean(player.hero.boots) && weapon !== "boots");
+        if (actor.weapon !== weapon || actor.boots !== (kicks || weapon === "boots")) {
+            this.battle.rearm(actor.id, weapon, kicks && weapon !== "boots");
             player.hero.weapon = weapon;
+            player.hero.boots = kicks;
+        }
+
+        // (In a people's uniform, passing for one of their soldiers: not their own)
+        const guise = player.progress.disguise();
+        const passing = guise && guise !== player.realm ? guise : null;
+
+        if ((actor.guise ?? null) !== passing) {
+            actor.guise = passing;
+            this.#event("disguise", { id: player.id, people: passing, change: passing ? "on" : "off" });
         }
 
         actor.power = { melee: 1 + bonus.melee, ranged: 1 + bonus.ranged, heal: 1 + bonus.heal, stun: 1 + bonus.stun, spell: 1 + bonus.spell };
-        actor.armor = Math.min(0.6, bonus.armor);
+        actor.armor = Math.min(ARMOR_CAP, bonus.armor);
 
         const [hp, stamina] = [KINDS.player.hp + bonus.hp, KINDS.player.hp + bonus.stamina];
 
@@ -1272,7 +1297,41 @@ export class Host {
             return null;
         }
 
-        return { keeper, shop };
+        return { keeper, shop, people: this.folk.get(keeper.id)?.people ?? "human" };
+    }
+
+    // Players passing for one of a people's soldiers, looked at by those near them: now and then
+    // one sees through it (the nearer, the likelier), and they're all told
+    #scrutiny(ms) {
+        for (const player of this.players.values()) {
+            const actor = this.battle.actor(player.id);
+
+            // (Seen through by striking one of them: told once)
+            if (actor?.guise && (actor.unmasked ?? -Infinity) > this.battle.time && player.seenThrough !== actor.unmasked) {
+                player.seenThrough = actor.unmasked;
+                this.#event("disguise", { id: player.id, people: actor.guise, change: "known" });
+            }
+
+            if (!actor?.guise || actor.dead || !this.battle.passes(actor, { team: actor.guise })) {
+                continue;
+            }
+
+            const watcher = this.battle.actors.find((other) => other.kind === "soldier" && other.team === actor.guise && !other.dead && other.map === actor.map && distanceBetween(other.square, actor.square) <= SCRUTINY.reach && this.battle.canSee(other, actor));
+
+            if (watcher && this.random.chance(SCRUTINY.chance * (ms / 1000) * (distanceBetween(watcher.square, actor.square) <= 1.5 ? 2 : 1))) {
+                this.battle.unmask(actor);
+                player.seenThrough = actor.unmasked;
+                this.#event("disguise", { id: player.id, people: actor.guise, change: "seen", by: watcher.id });
+            }
+        }
+    }
+
+    // A piece of gear as it's made for a player (bought, given): with what's rolled on it (core/
+    // gear.js), and a wand's or grimoire's boost
+    #made({ id, quality = "common", people = null }) {
+        const made = ITEMS[id]?.slot ? rollGear(id, quality, this.random, { people }) : { id, quality };
+
+        return ITEMS[id]?.magic ? { ...made, boost: rollBoost(this.random) } : made;
     }
 
     #buy(player, actor, { item, from }) {
@@ -1282,7 +1341,9 @@ export class Host {
             return refuse("far");
         }
 
-        if (!item || !wares(trading.shop).some(({ id, quality }) => id === item.id && quality === (item.quality ?? "common"))) {
+        const ware = item && wares(trading.shop, trading.people).find(({ id, quality }) => id === item.id && quality === (item.quality ?? "common"));
+
+        if (!ware) {
             return refuse("shop");
         }
 
@@ -1292,8 +1353,9 @@ export class Host {
             return refuse("gold");
         }
 
-        // (A wand or a grimoire: how much it boosts spells is rolled as it's bought, rarely high)
-        const bought = { id: item.id, quality: item.quality ?? "common", ...(ITEMS[item.id].magic ? { boost: rollBoost(this.random) } : {}) };
+        // (What's rolled on it is rolled as it's bought: a wand's or grimoire's boost, rarely high;
+        // better made gear's bonuses)
+        const bought = this.#made(ware);
 
         if (!player.progress.stow(bought)) {
             return refuse("full");
@@ -1987,7 +2049,10 @@ export class Host {
         const sex = seed % 4 === 0 ? "f" : "m";
         const adjective = ADJECTIVES[people] ?? people;
 
-        this.soldiers.set(id, { ...record, people, weapon, sex, seed });
+        // (The first of each post, patrol, camp's sentries, raid, and an envoy's escort: its captain)
+        const captain = /-0$|escort-1$/.test(id);
+
+        this.soldiers.set(id, { ...record, people, weapon, sex, seed, captain });
         this.battle.add({ id, kind: "soldier", name: `${adjective[0].toUpperCase()}${adjective.slice(1)} ${name}`, weapon, team: people, square, ai: "patrol", role: "guard", ...orders });
     }
 
@@ -3325,7 +3390,9 @@ export class Host {
             }
 
             const weapon = weaponOf(player.progress);
-            const gift = armouryGift(due, ITEMS[weapon]?.slot === "weapon" ? weapon : "sword", WITH_SHIELD.includes(weapon));
+            const held = ITEMS[weapon]?.slot === "mainHand" ? weapon : "sword";
+            const given = armouryGift(due, held, offHandFree(held), player.realm);
+            const gift = this.#made(given);
 
             if (!player.progress.stow(gift)) {
                 return refuse("full");

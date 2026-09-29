@@ -13,7 +13,7 @@ import { STARTING_WEAPONS, WEAPONS } from "../client/js/core/weapons.js";
 import { aboveHairline, beardAmount, faceFrame } from "../client/js/characters/face.js";
 import { buildHair, HAIRSTYLES } from "../client/js/characters/hair.js";
 import { amplitude, cadence, CURVES, curveAt, NATURAL_SPEED, phaseName, RUN_CURVES, RUN_STANCE, runCadence, runStrideLength, STANCE, strideLength, walkToRunSpeed } from "../client/js/characters/gait.js";
-import { buildGarment, DESIGNS, designSolid, GARMENTS, measureBody, paintGarment, texelMap } from "../client/js/characters/garments.js";
+import { buildGarment, COMPOSITE_BUMP, compositeGarments, DESIGNS, designSolid, GARMENTS, insideOf, measureBody, paintGarment, texelMap } from "../client/js/characters/garments.js";
 import { Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
 import { allBustTargetNames, allMacroTargetNames, bustTargets, components, MACRO_DEFAULTS, macroTargets } from "../client/js/characters/macro.js";
 import { buildDrape, DRAPES } from "../client/js/characters/drapes.js";
@@ -881,6 +881,101 @@ describe("clothing and armour (garments.js)", () => {
         assert.ok(end > 0.8 && end < 1.02, `the sleeve ends near the elbow (${end})`);
     });
 
+    it("draws a soldier's garments all at once: one picture, of the outermost garment wherever it's seen", () => {
+        // (Each garment a plain colour of its own, to tell which is where: under ones first)
+        const outfit = ["livery.human", "trousers.human", "mail.human", "gauntlets.human", "sabatons.human", "vambraces.human", "greaves.human", "surcoat.human", "belt.human"];
+        const map = texelMap(human, 256);
+        const count = map.size * map.size;
+        const colourOf = (k) => [20 + k * 25, 230 - k * 20, 90];
+        const layers = outfit.map((id, k) => ({
+            data: Uint8ClampedArray.from({ length: count * 4 }, (_, i) => (i % 4 === 3 ? 255 : colourOf(k)[i % 4])),
+            bump: new Uint8ClampedArray(count).fill(128 + k),
+            tint: null,
+            bumpScale: COMPOSITE_BUMP,
+            roughness: GARMENTS[id].roughness,
+            metalness: GARMENTS[id].metalness ?? 0,
+            inside: insideOf(human, GARMENTS[id], measures, { toes: true }),
+        }));
+        const { data, surface } = compositeGarments(map, layers);
+        const layerAt = (u, v) => {
+            const i = Math.min(map.size - 1, Math.floor((1 - v) * map.size)) * map.size + Math.min(map.size - 1, Math.floor(u * map.size));
+
+            return map.covered[i] ? (data[i * 4] - 20) / 25 : null;
+        };
+        const built = outfit.map((id) => buildGarment(f, id, measures));
+
+        // Where only one garment is (no other has any of the body there), its own picture; where
+        // an outer one's edge crosses an inner one, the outer one's, on its side of the edge
+        built.forEach(({ geometry, sources }, k) => {
+            const others = new Set(built.filter((_, j) => j !== k).flatMap((other) => [...other.sources]));
+            const outer = new Set(built.filter((_, j) => j > k).flatMap((other) => [...other.sources]));
+            const uv = geometry.attributes.uv;
+            const index = geometry.index.array;
+            let alone = 0;
+            let alike = 0;
+            let edged = 0;
+            let over = 0;
+
+            for (let t = 0; t < sources.length; t++) {
+                const [a, b, c] = [index[t * 3], index[t * 3 + 1], index[t * 3 + 2]];
+                const area = (uv.getX(b) - uv.getX(a)) * (uv.getY(c) - uv.getY(a)) - (uv.getX(c) - uv.getX(a)) * (uv.getY(b) - uv.getY(a));
+
+                // (Not a hem, folded back along the edge: it has no area on the texture)
+                if (Math.abs(area) < 1e-10) {
+                    continue;
+                }
+
+                const layer = layerAt((uv.getX(a) + uv.getX(b) + uv.getX(c)) / 3, (uv.getY(a) + uv.getY(b) + uv.getY(c)) / 3);
+
+                if (layer === null) {
+                    continue;
+                }
+
+                if (!others.has(sources[t])) {
+                    alone++;
+                    alike += layer === k ? 1 : 0;
+                } else if (!outer.has(sources[t]) && built.some((other, j) => j < k && other.sources.includes(sources[t]))) {
+                    edged++;
+                    over += layer === k ? 1 : 0;
+                }
+            }
+
+            assert.ok(alone === 0 || alike / alone > 0.97, `${outfit[k]} shows its own picture where it's alone: ${alike} of ${alone}`);
+            assert.ok(edged === 0 || over / edged > 0.85, `${outfit[k]} shows its own picture over what's under it: ${over} of ${edged}`);
+        });
+
+        // The surcoat on the chest; mail at the shoulders under it; the livery's sleeves below the
+        // mail's; a boot's toes; each one's roughness and metalness, and heights, with its picture
+        const at = (region, test) => {
+            const v = measures.vertices.findIndex((vertex, n) => human.partOf[n] === 0 && vertex.region === region && test(vertex));
+            const r = human.renderSource.indexOf(v);
+
+            return layerAt(human.uvs[r * 2], human.uvs[r * 2 + 1]);
+        };
+
+        assert.equal(outfit[at("torso", (v) => v.z > 0.1 && Math.abs(v.x) < 0.03 && Math.abs(v.y - measures.landmarks.chest) < 0.03)], "surcoat.human");
+        assert.equal(outfit[at("arm", (v) => v.arm > 0.14 && v.arm < 0.3)], "mail.human");
+        assert.equal(outfit[at("arm", (v) => v.arm > 0.45 && v.arm < 0.55)], "livery.human");
+        assert.equal(outfit[at("foot", (v) => v.foot > 1.05)], "sabatons.human");
+
+        for (let i = 0; i < count; i++) {
+            if (map.covered[i]) {
+                const k = (data[i * 4] - 20) / 25;
+
+                assert.equal(surface[i * 4], 128 + k);
+                assert.equal(surface[i * 4 + 2], Math.round((GARMENTS[outfit[k]].metalness ?? 0) * 255));
+            }
+        }
+
+        // Tinted (in linear light), and spread past the edges of what's painted
+        const tinted = compositeGarments(map, [{ ...layers[0], data: new Uint8ClampedArray(count * 4).fill(188), tint: [0.5, 1, 1] }]);
+        const covered = map.covered.indexOf(1);
+        const edge = map.covered.findIndex((value, i) => !value && map.covered[i + 1]);
+
+        assert.deepEqual([...tinted.data.slice(covered * 4, covered * 4 + 4)], [137, 188, 188, 255]);
+        assert.equal(tinted.data[edge * 4 + 3], 255);
+    });
+
     it("makes footwear the size of the foot, with one toe box", () => {
         const ankle = f.rig.heads[f.rig.index.get("LeftFoot")].y;
         const size = (points) => {
@@ -1055,7 +1150,7 @@ describe("skirts, gowns and aprons (drapes.js)", () => {
     };
 
     it("hangs every drape from the waist, fitted round the body, flaring to its hem", () => {
-        for (const id of Object.keys(DRAPES)) {
+        for (const id of Object.keys(DRAPES).filter((each) => !DRAPES[each].cape)) {
             const { geometry } = buildDrape(f, id, measures);
             const points = vertices(geometry);
             const top = Math.max(...points.map(({ y }) => y));
@@ -1080,6 +1175,33 @@ describe("skirts, gowns and aprons (drapes.js)", () => {
 
         assert.ok(Math.min(...apron.map(({ y }) => y)) > l.ankle + 0.25);
         assert.ok(apron.every(({ z }) => z > middle - 0.12), "the apron's at the front");
+    });
+
+    it("hangs a cloak from the shoulders down the back, behind the arms, edged in its trim, swinging with the legs below the hips", () => {
+        for (const id of Object.keys(DRAPES).filter((each) => DRAPES[each].cape)) {
+            const { geometry } = buildDrape(f, id, measures);
+            const points = vertices(geometry);
+            const top = Math.max(...points.map(({ y }) => y));
+            const hem = Math.min(...points.map(({ y }) => y));
+            const colours = geometry.attributes.color;
+            const trim = new THREE.Color(DRAPES[id].trim);
+            const indices = geometry.attributes.skinIndex;
+            const legs = new Set(["LeftUpLeg", "RightUpLeg"].map((name) => f.rig.index.get(name)));
+
+            assert.ok(points.every(({ x, y, z }) => [x, y, z].every(Number.isFinite)), `${id}: no broken vertices`);
+            assert.ok(points.every(({ weight }) => Math.abs(weight - 1) < 1e-5), `${id}: skin weights sum to one`);
+            assert.ok(top > l.armpit && top < l.neck, `${id}: from the shoulders`);
+            assert.ok(hem < l.crotch - 0.2 && hem > l.ankle, `${id}: down past the knees`);
+
+            // (Behind: every point below the shoulders further back than the body's middle)
+            assert.ok(points.filter(({ y }) => y < l.armpit).every(({ z }) => z < 0.06), `${id}: down the back`);
+
+            // (Its hem in its trim, and swinging with the thighs)
+            const last = colours.count - 1;
+
+            assert.ok(Math.abs(colours.getX(last) / trim.r - colours.getY(last) / trim.g) < 0.05, `${id}: trimmed`);
+            assert.ok(Array.from({ length: indices.count }, (_, i) => i).some((i) => points[i].y < l.crotch && [0, 1, 2, 3].some((k) => legs.has(indices.getComponent(i, k)))), `${id}: moves with the legs`);
+        }
     });
 
     it("swings with the thighs and shins below the hips, each side with its own", () => {

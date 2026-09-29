@@ -1971,6 +1971,65 @@ test("tapping someone walks the player up to talk: their name and what they are,
     expect(await page.evaluate(() => ({ talking: window.pellagos.game.battle.actor("barkeep").talkingTo, remembered: window.pellagos.game.memory.barkeep.talks }))).toEqual({ talking: null, remembered: 1 });
 });
 
+test("the pack's paperdoll: the player drawn among their gear; tapped, a piece says what it does; held, it goes on or comes off; a two-handed weapon greys out the other hand", async ({ page }) => {
+    // A saved game whose hero carries a sword, a fine kite shield and an orc's helm, their staff in hand
+    await page.addInitScript((save) => {
+        localStorage.setItem("pellagos.save", JSON.stringify(save));
+
+        if (!localStorage.getItem("pellagos.progress")) {
+            const pack = [{ id: "kiteShield", quality: "fine", affixes: ["sturdy"], bonuses: { armor: 0.02 } }, { id: "sword" }, { id: "helm", people: "orc" }];
+
+            localStorage.setItem("pellagos.progress", JSON.stringify({ created: save.created, seed: save.seed, skills: {}, gold: 10, pack, gear: null }));
+        }
+    }, { ...SAVE, seed: 1 });
+    await title(page);
+    await page.locator("#continuebutton").click();
+    await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
+    await page.keyboard.press("i");
+
+    const pack = page.locator(".pack");
+    const slot = (id) => pack.locator(`.doll-slot[data-slot="${id}"]`);
+    const cell = (item) => pack.locator(`.carried .pack-cell[data-item="${item}"]`);
+    const hold = async (locator) => {
+        const box = await locator.boundingBox();
+
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        await page.mouse.down();
+        await page.waitForTimeout(700);
+        await page.mouse.up();
+    };
+    const worn = () => page.evaluate(() => [...window.pellagos.game.avatars.get(window.pellagos.game.me).character.equipment.values()]);
+
+    // The staff in both hands, the other greyed out behind it; the player among their gear; two pages
+    await expect(pack.locator(".doll .doll-view")).toBeVisible();
+    await expect(slot("mainHand")).toHaveText(/^Weapon\s*Staff$/);
+    await expect(slot("offHand")).toHaveClass(/locked/);
+    await expect(pack.locator(".pack-page")).toHaveCount(2);
+
+    // Tapped, the shield says what it is and does, and that it can't go on with the staff
+    await cell("kiteShield").click();
+    await expect(pack.locator(".pack-about .pack-name")).toHaveText("Sturdy kite shield");
+    await expect(pack.locator(".pack-about .pack-compare")).toContainText("The weapon in hand takes both hands.");
+
+    // Held, the sword goes on (the staff into the pack), and the other hand's free for the shield
+    await hold(cell("sword"));
+    await expect(slot("mainHand")).toHaveText(/^Weapon\s*Sword$/);
+    await expect(slot("offHand")).not.toHaveClass(/locked/);
+    await expect(cell("staff")).toHaveCount(1);
+    await hold(cell("kiteShield"));
+    await expect(slot("offHand")).toHaveAttribute("aria-label", "Off hand: Sturdy kite shield");
+    await expect.poll(worn).toEqual(expect.arrayContaining(["sword", "kiteShield"]));
+
+    // An orc's helm on, counting towards their set; held again, off, back into the pack
+    await hold(cell("helm"));
+    await expect(slot("head")).toHaveAttribute("aria-label", "Head: Orcish helm");
+    await expect(pack.locator(".doll-set")).toContainText("Horde Ironhide: 1 worn");
+    await expect.poll(worn).toContain("helm.orc");
+    await hold(slot("head"));
+    await expect(slot("head")).toHaveClass(/empty/);
+    await expect(cell("helm")).toHaveCount(1);
+});
+
 test("the pack shows what's grown and carried; a skill ranks up with use; trading with the barkeep, the gold changes hands; all kept for the next time", async ({ page }) => {
     // (A long walk through: more than the usual time, with others running beside it)
     test.setTimeout(180000);
@@ -1987,7 +2046,7 @@ test("the pack shows what's grown and carried; a skill ranks up with use; tradin
     await page.locator("#continuebutton").click();
     await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
 
-    // I opens the pack: the gold, the draught to use, the staff in hand, each skill untried
+    // I opens the pack: the gold, the draught to use, the staff in hand, each skill untried (its tab)
     const pack = page.locator(".pack");
 
     await expect(page.locator("#playerplate .coins")).toHaveText("30 gold");
@@ -1996,7 +2055,8 @@ test("the pack shows what's grown and carried; a skill ranks up with use; tradin
     await expect(pack.locator(".pack-gold")).toHaveText("30 gold");
     await expect(pack.locator(".carried .pack-cell[data-item]")).toHaveAttribute("aria-label", "Healing draught");
     await expect(pack.locator(".carried .pack-cell")).toHaveCount(20);
-    await expect(pack.locator(".gear .pack-worn").first()).toHaveText(/^Weapon\s*Staff$/);
+    await expect(pack.locator('.gear .pack-worn[data-slot="mainHand"]')).toHaveText(/^Weapon\s*Staff$/);
+    await pack.getByRole("tab", { name: "Skills" }).click();
     await expect(pack.locator('.pack-skill[data-tree="blade"] .pack-skill-rank')).toHaveText("Untried (0)");
     await page.keyboard.press("Escape");
     await expect(pack).toBeHidden();
@@ -2040,10 +2100,15 @@ test("the pack shows what's grown and carried; a skill ranks up with use; tradin
         game.battle.command("player", { type: "move", to: [7, 6] });
         game.advance(5);
 
-        const spot = session.view.toScreen(game.avatars.get("barkeep").point(0.6));
+        // (Tapped again as he goes about the room, till the player's up to him: where he is
+        // depends on how long the game ran before it was stopped)
+        for (let tap = 0; tap < 12 && game.battle.actor("barkeep").talkingTo !== "player"; tap++) {
+            const spot = session.view.toScreen(game.avatars.get("barkeep").point(0.6));
 
-        game.tap(spot.x, spot.y, { time: performance.now() + 9000 });
-        game.advance(8);
+            game.tap(spot.x, spot.y, { time: performance.now() + 9000 * (tap + 1) });
+            game.advance(4);
+        }
+
         game.start();
     });
 

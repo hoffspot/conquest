@@ -4,6 +4,8 @@
 // `DEFS` holds the gradients, glows and patterns they share: put in the page once (`useDefs`),
 // where every icon drawn anywhere in it finds them.
 
+import { LIVERIES } from "../characters/liveries.js";
+import { GEAR } from "../core/gear.js";
 import { SPELLS, TOMES, tomeOf } from "../core/spells.js";
 import { PARTS } from "../core/spoils.js";
 import { SPELL_DEFS, SPELL_ICONS } from "./spellicons.js";
@@ -519,7 +521,160 @@ function tomeIcon(spell) {
         </g>`;
 }
 
+
+// --- Gear (core/gear.js): each people's uniform in its colours (characters/liveries.js) ---
+
+/** Each people's emblem, drawn round 0, 0 about 32 across in a colour (and what it's on, `ground`). */
+export const EMBLEMS = Object.freeze({
+    crown: (c) => `<path d="M-14,9 L-14,-6 L-7,2 L0,-11 L7,2 L14,-6 L14,9 Z" fill="${c}"/><circle cx="0" cy="-12" r="2.4" fill="${c}"/>`,
+    leaf: (c, ground) => `<path d="M0,-16 C13,-6 13,6 0,16 C-13,6 -13,-6 0,-16 Z" fill="${c}"/><path d="M0,-12 L0,13 M0,-3 L6,-8 M0,4 L-6,-1" stroke="${ground}" stroke-width="1.6" fill="none"/>`,
+    spider: (c) => `<g fill="${c}" stroke="${c}" stroke-width="2.2" stroke-linecap="round"><circle cy="-6" r="4.5"/><ellipse cy="5" rx="5.5" ry="7.5"/><path d="M-4,-3 L-12,-10 L-15,-3 M4,-3 L12,-10 L15,-3 M-4,1 L-13,0 L-16,7 M4,1 L13,0 L16,7 M-4,5 L-11,9 L-13,16 M4,5 L11,9 L13,16 M-3,9 L-7,14 L-7,19 M3,9 L7,14 L7,19" fill="none"/></g>`,
+    sun: (c) => `<path d="${star(0, 0, 16, 9, 12)}" fill="${c}"/><circle r="7.5" fill="${c}"/>`,
+    serpent: (c) => `<path d="M-9,-13 C9,-15 10,-2 0,0 C-10,2 -9,15 10,13" fill="none" stroke="${c}" stroke-width="5" stroke-linecap="round"/><circle cx="-10" cy="-13" r="4" fill="${c}"/>`,
+    claws: (c) => `<path d="M-11,-14 L-5,14 M-1,-16 L5,12 M8,-14 L13,10" stroke="${c}" stroke-width="4.5" stroke-linecap="round" fill="none"/>`,
+});
+
+const emblemOf = (livery, colour = livery.trim, ground = livery.main) => EMBLEMS[livery.emblem](colour, ground);
+
+// A boot's outline (without spikes)
+const BOOT = "M-9,-20 L4,-20 L4,-1 C11,0 17,4 18,10 L18,14 L-10,14 Z";
+
+// A glove's outline, the fingers up
+const GLOVE = "M-10,20 L-10,4 C-14,0 -16,-6 -14,-10 L-12,-10 L-9,-3 L-9,-16 C-9,-19 -5,-19 -5,-16 L-5,-6 L-4,-19 C-4,-22 0,-22 0,-19 L0,-6 L1,-18 C1,-21 5,-21 5,-18 L5,-5 L6,-14 C6,-17 10,-17 10,-14 L10,6 C10,12 8,16 8,20 Z";
+
+// A pair of legs' outline (trousers)
+const LEGS = "M-12,-18 L12,-18 L14,20 L4,20 L0,-4 L-4,20 L-14,20 Z";
+
+// A cape's outline
+const CAPE = "M-8,-20 L8,-20 C12,-10 18,8 20,20 L-20,20 C-18,8 -12,-10 -8,-20 Z";
+
+// A heater shield's outline
+const HEATER = "M-15,-19 L15,-19 C15,-1 9,12 0,21 C-9,12 -15,-1 -15,-19 Z";
+
+// Two bracers, crossed
+const bracersIcon = (fill, stroke, band) => [-1, 1].map((side) => `<g transform="rotate(${side * 18})"><rect x="${side < 0 ? -16 : 2}" y="-10" width="14" height="24" rx="4" fill="${fill}" stroke="${stroke}" stroke-width="1.2"/><path d="M${side < 0 ? -15 : 3},-3 h12 M${side < 0 ? -15 : 3},5 h12" stroke="${band}" stroke-width="1.3"/></g>`).join("");
+
+/** Each people's make of each uniform piece's icon (core/gear.js UNIFORM), in their colours. */
+export function uniformIcon(id, people = "human") {
+    const livery = LIVERIES[people] ?? LIVERIES.human;
+    const { main, trim, dark, metal } = livery;
+    const edge = "#1a1614";
+
+    switch (id) {
+        case "helm":
+            return `
+                <path d="M-2,-12 C4,-25 15,-23 19,-14 C11,-18 5,-15 3,-10 Z" fill="${main}" stroke="${edge}" stroke-width="1"/>
+                <path d="M-16,5 C-16,-15 16,-15 16,5 L16,15 L8,15 L6,6 L-6,6 L-8,15 L-16,15 Z" fill="${metal}" stroke="${edge}" stroke-width="1.3"/>
+                <rect x="-16" y="1.5" width="32" height="4" fill="${trim}" stroke="${edge}" stroke-width="0.8"/>
+                <path d="M-9,-8 C-5,-11 1,-11 5,-9" fill="none" stroke="#ffffff" stroke-width="1" opacity="0.5"/>`;
+        case "hauberk":
+            return `
+                <path d="${TUNIC}" fill="${people === "orc" ? metal : "url(#icon-mail)"}" stroke="${edge}" stroke-width="1.3"/>
+                <path d="M-11,-15 L11,-15 L12,20 L-12,20 Z" fill="${main}" stroke="${trim}" stroke-width="1.6"/>
+                <g transform="translate(0 2) scale(0.5)">${emblemOf(livery)}</g>`;
+        case "vambraces":
+            return bracersIcon(metal, edge, trim);
+        case "warGloves":
+            return `<path d="${GLOVE}" fill="${metal}" stroke="${edge}" stroke-width="1.2"/><rect x="-11" y="12" width="20" height="5" fill="${trim}" stroke="${edge}" stroke-width="0.8"/>`;
+        case "girdle":
+            return `
+                <path d="M-21,-4 C-7,-8 7,-8 21,-4 L21,4 C7,0 -7,0 -21,4 Z" fill="${main}" stroke="${edge}" stroke-width="1.2"/>
+                <path d="M-21,-2 C-7,-6 7,-6 21,-2" fill="none" stroke="${trim}" stroke-width="1"/>
+                <rect x="-6" y="-8" width="12" height="11" rx="1.5" fill="none" stroke="${metal}" stroke-width="2.6"/>`;
+        case "legguards":
+            return `<path d="${LEGS}" fill="${dark}" stroke="${edge}" stroke-width="1.3"/><path d="M-13,3 L-5,3 L-4.5,19 L-13.5,19 Z M5,3 L13,3 L13.5,19 L4.5,19 Z" fill="${metal}" stroke="${edge}" stroke-width="1"/><path d="M-12,-14 L12,-14" stroke="${trim}" stroke-width="1.6"/>`;
+        case "warBoots":
+            return `<path d="${BOOT}" fill="${metal}" stroke="${edge}" stroke-width="1.3"/><path d="M-10,-21 L5,-21 L5,-16 L-10,-16 Z" fill="${trim}" stroke="${edge}" stroke-width="1"/><path d="M-11,14 L19,14 L19,17.5 L-11,17.5 Z" fill="${edge}"/><path d="M4,3 C9,4 13,7 15,11" fill="none" stroke="${edge}" stroke-width="0.9"/>`;
+        case "cloak":
+            return `
+                <path d="${CAPE}" fill="${main}" stroke="${edge}" stroke-width="1.3"/>
+                <path d="${CAPE}" fill="none" stroke="${trim}" stroke-width="1.4" transform="scale(0.9) translate(0 1)"/>
+                <g transform="translate(0 5) scale(0.42)">${emblemOf(livery)}</g>
+                <circle cy="-17" r="2.6" fill="${metal}" stroke="${edge}" stroke-width="0.8"/>`;
+        case "shield":
+            return `
+                <path d="${HEATER}" fill="${main}" stroke="${edge}" stroke-width="1.4"/>
+                <path d="${HEATER}" fill="none" stroke="${metal}" stroke-width="1.8" transform="scale(0.88) translate(0 -1)"/>
+                <g transform="translate(0 -1) scale(0.55)">${emblemOf(livery)}</g>`;
+        default:
+            return "";
+    }
+}
+
+// The rest of the gear's icons
+const GEAR_ICONS = {
+    // A quiver of red-fletched arrows
+    quiver: `
+        <g transform="rotate(20)">
+            <path d="M-4,-12 L-6,-22 M0,-12 L0,-23 M4,-12 L6,-22" stroke="#6b4a22" stroke-width="1.4"/>
+            <path d="M-8.5,-24 L-6,-19 L-3.5,-24 Z M-2.5,-25 L0,-20 L2.5,-25 Z M3.5,-24 L6,-19 L8.5,-24 Z" fill="#c83a2a"/>
+            <rect x="-7" y="-13" width="14" height="33" rx="3" fill="url(#icon-leather)" stroke="#2b1a0d" stroke-width="1.2"/>
+            <path d="M-7,-5 h14 M-7,11 h14" stroke="#efdfb4" stroke-width="1"/>
+        </g>`,
+    // A leather cap, stitched down the middle
+    cap: `
+        <path d="M-17,6 C-17,-13 17,-13 17,6 Z" fill="url(#icon-leather)" stroke="#2b1a0d" stroke-width="1.3"/>
+        <path d="M-19,5 L19,5 L19,10 L-19,10 Z" fill="#8a5a30" stroke="#2b1a0d" stroke-width="1.1"/>
+        <path d="M0,-8 L0,5" stroke="#efdfb4" stroke-width="1" stroke-dasharray="2 1.4"/>`,
+    // A steel helm, banded in brass, its nasal down the front
+    nasalHelm: `
+        <path d="M-16,4 C-16,-16 16,-16 16,4 Z" fill="url(#icon-steel)" stroke="#2f363d" stroke-width="1.3"/>
+        <rect x="-17" y="2" width="34" height="5" rx="1" fill="#c49a46" stroke="#5a4010" stroke-width="1"/>
+        <path d="M-2,7 L2,7 L1.5,19 L-1.5,19 Z" fill="url(#icon-steel)" stroke="#2f363d" stroke-width="1"/>
+        <path d="M-8,-9 C-4,-12 2,-12 6,-10" fill="none" stroke="#ffffff" stroke-width="1" opacity="0.6"/>`,
+    // A wizard's pointed hat, a star on it
+    wizardHat: `
+        <path d="M-4,-21 C2,-14 8,-2 12,8 L-12,8 C-9,-2 -6,-12 -4,-21 Z" fill="#2e3f78" stroke="#141c3a" stroke-width="1.3"/>
+        <ellipse cy="9" rx="21" ry="5" fill="#2e3f78" stroke="#141c3a" stroke-width="1.3"/>
+        <path d="M-11,4 L11,4 L12,8 L-12,8 Z" fill="#c49a46"/>
+        <path d="${star(1, -5, 4, 1.6)}" fill="#e6c35c"/>`,
+    // A leather jerkin, laced up the front
+    jerkin: `
+        <path d="${TUNIC}" fill="url(#icon-leather)" stroke="#2b1a0d" stroke-width="1.3"/>
+        <path d="M0,-14 L0,20 M-3,-8 L3,-6 M-3,-2 L3,0 M-3,4 L3,6" stroke="#efdfb4" stroke-width="1"/>`,
+    // Plate armour: a steel breastplate over mail, its skirt of lames
+    plate: `
+        <path d="${TUNIC}" fill="url(#icon-mail)" stroke="#2f363d" stroke-width="1.3"/>
+        <path d="${TUNIC}" fill="url(#icon-rings)" opacity="0.8"/>
+        <path d="M-13,-13 C-6,-16 6,-16 13,-13 L13,9 C6,13 -6,13 -13,9 Z" fill="url(#icon-steel)" stroke="#2f363d" stroke-width="1.2"/>
+        <path d="M0,-14 L0,11" stroke="#ffffff" stroke-width="0.9" opacity="0.6"/>
+        <path d="M-13,14 L13,14 M-13,18 L13,18" stroke="#8d949b" stroke-width="2.4"/>`,
+    bracers: bracersIcon("url(#icon-leather)", "#2b1a0d", "#efdfb4"),
+    gloves: `<path d="${GLOVE}" fill="url(#icon-leather)" stroke="#2b1a0d" stroke-width="1.2"/><path d="M-10,14 L8,14" stroke="#efdfb4" stroke-width="1"/>`,
+    platedGloves: `<path d="${GLOVE}" fill="url(#icon-steel)" stroke="#2f363d" stroke-width="1.2"/><path d="M-10,14 L8,14 M-9,-3 L10,-3" stroke="#5f6973" stroke-width="1"/>`,
+    // A leather belt, its brass buckle
+    belt: `
+        <path d="M-21,-4 C-7,-8 7,-8 21,-4 L21,4 C7,0 -7,0 -21,4 Z" fill="url(#icon-leather)" stroke="#2b1a0d" stroke-width="1.2"/>
+        <rect x="-6" y="-8" width="12" height="11" rx="1.5" fill="none" stroke="#c49a46" stroke-width="2.4"/>
+        <path d="M0,-6 L0,1" stroke="#c49a46" stroke-width="1.6"/>`,
+    trousers: `<path d="${LEGS}" fill="#4a3f35" stroke="#1f1a14" stroke-width="1.3"/><path d="M-12,-14 L12,-14" stroke="#1f1a14" stroke-width="1.2"/>`,
+    breeches: `<path d="${LEGS}" fill="url(#icon-leather)" stroke="#2b1a0d" stroke-width="1.3"/><path d="M-12,-14 L12,-14" stroke="#2b1a0d" stroke-width="1.2"/>`,
+    greaves: `<path d="${LEGS}" fill="url(#icon-leather)" stroke="#2b1a0d" stroke-width="1.3"/><path d="M-13,3 L-5,3 L-4.5,19 L-13.5,19 Z M5,3 L13,3 L13.5,19 L4.5,19 Z" fill="url(#icon-steel)" stroke="#2f363d" stroke-width="1"/>`,
+    leatherBoots: `<path d="${BOOT}" fill="url(#icon-leather)" stroke="#2b1a0d" stroke-width="1.3"/><path d="M-10,-21 L5,-21 L5,-16 L-10,-16 Z" fill="#b07a42" stroke="#2b1a0d" stroke-width="1"/><path d="M-11,14 L19,14 L19,17.5 L-11,17.5 Z" fill="#2b1a0d"/>`,
+    sabatons: `<path d="${BOOT}" fill="url(#icon-steel)" stroke="#2f363d" stroke-width="1.3"/><path d="M-9,-12 L4,-12 M-9,-5 L4,-5 M4,3 C9,4 13,7 15,11" fill="none" stroke="#5f6973" stroke-width="1"/><path d="M-11,14 L19,14 L19,17.5 L-11,17.5 Z" fill="#2f363d"/>`,
+    travelCloak: `
+        <path d="${CAPE}" fill="#6a5a44" stroke="#2a2018" stroke-width="1.3"/>
+        <path d="M-6,-10 C-8,2 -10,12 -12,20 M6,-10 C8,2 10,12 12,20" stroke="#4a3e2e" stroke-width="1"/>
+        <path d="M-8,-20 C-4,-16 4,-16 8,-20" fill="none" stroke="#2a2018" stroke-width="1.2"/>
+        <circle cy="-17" r="2.5" fill="#c49a46"/>`,
+    // A gold amulet, a blue stone in it, on its chain
+    amulet: `
+        <path d="M-12,-20 C-14,-6 -6,1 0,3 C6,1 14,-6 12,-20" fill="none" stroke="#e0b44a" stroke-width="1.6"/>
+        <circle cy="10" r="8.5" fill="#e0b44a" stroke="#7a5a10" stroke-width="1.2"/>
+        <circle cy="10" r="4.8" fill="#3fb8e0" stroke="#1a5a7a" stroke-width="1"/>
+        <circle cx="-1.5" cy="8.5" r="1.3" fill="#ffffff" opacity="0.8"/>`,
+    // A gold ring, a red stone set in it
+    ring: `
+        <ellipse cy="5" rx="13" ry="13" fill="none" stroke="#7a5a10" stroke-width="5.6"/>
+        <ellipse cy="5" rx="13" ry="13" fill="none" stroke="#e0b44a" stroke-width="3.6"/>
+        <path d="M-7,-9 L7,-9 L4,-17 L-4,-17 Z" fill="#c83a5a" stroke="#5a1020" stroke-width="1"/>
+        <path d="M-2,-15 L1,-11" stroke="#ffffff" stroke-width="1" opacity="0.7"/>`,
+};
+
 export const ITEM_ICONS = Object.freeze({
+    // (Gear: each piece of a people's uniform in the humans' colours, unless it says whose)
+    ...GEAR_ICONS,
+    ...Object.fromEntries(Object.keys(GEAR).filter((id) => GEAR[id].uniform).map((id) => [id, uniformIcon(id)])),
     // (The creatures' parts, each in its colour; gold; the spells' tomes)
     ...Object.fromEntries(Object.entries(PARTS).map(([id, part]) => [id, partIcon(part)])),
     ...Object.fromEntries(TOMES.map((spell) => [tomeOf(spell), tomeIcon(spell)])),
@@ -666,6 +821,9 @@ export const ITEM_ICONS = Object.freeze({
         <path d="M-16,-8 C-18,-14 -12,-18 -8,-15 C-6,-21 3,-21 5,-15 C9,-17 13,-13 10,-8 Z" fill="#fff8e6" stroke="#b8a680" stroke-width="1"/>
         <path d="M-13,-8 C-14,-4 -12,-2 -11,-1" fill="none" stroke="#fff8e6" stroke-width="2" stroke-linecap="round"/>`,
 });
+
+/** A thing's icon (a uniform's piece in its people's colours). */
+export const iconOf = ({ id, people = null }) => (people && GEAR[id]?.uniform ? uniformIcon(id, people) : (ITEM_ICONS[id] ?? ""));
 
 /**
  * A thing's icon as an SVG document of its own (its gradients in it), on a dark round ground: to
