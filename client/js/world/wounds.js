@@ -27,6 +27,14 @@ export const stageOf = (hp, maxHp) => THRESHOLDS.filter((share) => hp < share * 
 // The damage texture's size (texels a side): the same map the clothes are painted from
 const SIZE = 512;
 
+// Until its first blow, a character's drawn with this: no damage anywhere, one texel shared by
+// everyone, rather than a picture of its own (1.3 MB of GPU memory and 1 MB of the page's, and
+// most are never struck). Its own is made at the first blow, and let go once it's all healed.
+const UNHURT = new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat);
+
+UNHURT.colorSpace = THREE.NoColorSpace;
+UNHURT.needsUpdate = true;
+
 // Texels are looked up round a point in cells this big (metres)
 const CELL = 0.02;
 
@@ -229,20 +237,17 @@ export class Wounds {
     constructor(character, { seed = 1 } = {}) {
         this.character = character;
         this.map = woundMap(character.kit);
-        this.data = new Uint8Array(SIZE * SIZE * 4);
-        this.texture = new THREE.DataTexture(this.data, SIZE, SIZE, THREE.RGBAFormat);
-        this.texture.colorSpace = THREE.NoColorSpace;
-        this.texture.magFilter = THREE.LinearFilter;
-        this.texture.minFilter = THREE.LinearMipmapLinearFilter;
-        this.texture.generateMipmaps = true;
-        this.texture.needsUpdate = true;
+
+        /** Its damage painted (RGBA: blood, bruising, char, cut), and the picture of it; null, unhurt (UNHURT). */
+        this.data = null;
+        this.texture = null;
 
         /** The wounds and marks it has: [{ kind, stage, mark, vertex, centre, normal, turn, seed, arrow }]. */
         this.list = [];
         this.seed = seed;
         this.count = 0;
         this.uniforms = {
-            damageMap: { value: this.texture },
+            damageMap: { value: UNHURT },
             skinTone: { value: new THREE.Color(character.look?.skin?.tone ?? "#c89a7a") },
             fireGlow: { value: 0 },
             arcaneGlow: { value: 0 },
@@ -275,6 +280,7 @@ export class Wounds {
         let landed = null;
 
         this.#patch();
+        this.#picture();
 
         // A mark, or a wound for every threshold it crossed (the first where it landed)
         const mark = crossed <= 0;
@@ -408,7 +414,7 @@ export class Wounds {
     }
 
     dispose() {
-        this.texture.dispose();
+        this.texture?.dispose();
 
         for (const copy of this.copies.values()) {
             copy.dispose();
@@ -503,7 +509,31 @@ export class Wounds {
         }
     }
 
+    // Its own picture of its damage, made at its first blow
+    #picture() {
+        if (this.texture) {
+            return;
+        }
+
+        this.data = new Uint8Array(SIZE * SIZE * 4);
+        this.texture = new THREE.DataTexture(this.data, SIZE, SIZE, THREE.RGBAFormat);
+        this.texture.colorSpace = THREE.NoColorSpace;
+        this.texture.magFilter = THREE.LinearFilter;
+        this.texture.minFilter = THREE.LinearMipmapLinearFilter;
+        this.texture.generateMipmaps = true;
+        this.uniforms.damageMap.value = this.texture;
+    }
+
     #repaint() {
+        // (All healed: drawn unhurt again, its own picture let go)
+        if (!this.list.length) {
+            this.texture?.dispose();
+            this.data = this.texture = null;
+            this.uniforms.damageMap.value = UNHURT;
+
+            return;
+        }
+
         this.data.fill(0);
 
         for (const wound of this.list) {

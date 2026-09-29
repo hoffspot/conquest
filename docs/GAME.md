@@ -1296,7 +1296,11 @@ threshold, that stage's wounds and marks go (and the arrows in them); at full he
 them; coming back to life, all of them.
 
 A character's damage is one 512-texel texture over the body's UV map, which its clothes share:
-red for blood, green for bruising, blue for charring, alpha for cuts. Each wound is painted in 3D:
+red for blood, green for bruising, blue for charring, alpha for cuts. It's made at the first blow
+and let go once they're all healed (or back to life): till then they're drawn with one texel of no
+damage, shared by everyone, rather than 1.3 MB of GPU memory and 1 MB of the page's each, most
+never struck (the starting town's 8 who can be wounded: 67 textures drawn with, now 60). Each
+wound is painted in 3D:
 every texel knows where on the body it is (garments.js `texelMap`), so a wound is shaped round its
 point across the body's surface (sideways, up it, and turned), wherever the UV map's seams fall,
 and blood runs straight down. The body's material and a copy of each garment's (the originals
@@ -1384,7 +1388,9 @@ zoom out. A key in the corner shows the four icons and the fog.
   the minimap paints it, every square of it: the ground, water and bridges, the town and the
   settlements' buildings, props, trees and the land's features, at two pixels to the metre.
   They're painted as they come into view, six a frame (the rest next frame), and the last 240
-  kept.
+  kept while it's open. Closed, it lets go of what's painted again in a frame or two (`rest`):
+  all but the last 48 of them, the fog's layer and its own pixels, 25 to 30 MB it used to keep
+  the whole game.
 - **The fog** lies over every chunk the player hasn't set foot in: opaque, cloudy (a tiling
   tile of soft noise in the fog's colours, moving with the map as it's dragged), with the chunks'
   square edges. Nothing of the land shows through it; it lifts off a chunk the moment the player

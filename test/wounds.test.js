@@ -47,11 +47,12 @@ function figure() {
     };
 }
 
-// How much of each channel (blood, bruising, char, cut) a character's damage has
+// How much of each channel (blood, bruising, char, cut) a character's damage has (none, with no
+// picture of its own)
 function channels(wounds) {
     const sums = [0, 0, 0, 0];
 
-    for (let i = 0; i < wounds.data.length; i++) {
+    for (let i = 0; i < (wounds.data?.length ?? 0); i++) {
         sums[i % 4] += wounds.data[i];
     }
 
@@ -203,7 +204,26 @@ describe("battle damage (wounds.js)", () => {
         wounds.clear();
         assert.equal(wounds.list.length, 0);
         assert.equal(wounds.smouldering.length, 0);
-        assert.equal(wounds.data.some((value) => value > 0), false);
+        assert.equal(wounds.data, null, "its own picture let go");
+        assert.equal(wounds.uniforms.damageMap.value.image.width, 1, "drawn unhurt again");
+    });
+
+    it("has no picture of its own till it's struck, and gives it up once it's all healed", () => {
+        const wounds = new Wounds(figure());
+        const unhurt = wounds.uniforms.damageMap.value;
+
+        assert.equal(wounds.data, null);
+        assert.equal(unhurt.image.width, 1);
+        assert.equal(new Wounds(figure()).uniforms.damageMap.value, unhurt, "the picture of none shared by everyone");
+
+        beat(wounds, "slash", [30]);
+        assert.equal(wounds.uniforms.damageMap.value, wounds.texture);
+        assert.equal(wounds.texture.image.width, 512);
+        assert.ok(channels(wounds).blood > 0);
+
+        wounds.heal(50, 50);
+        assert.equal(wounds.uniforms.damageMap.value, unhurt);
+        assert.equal(wounds.texture, null);
     });
 
     it("burns smoulder and arcane veins glow a few seconds, then fade", () => {
