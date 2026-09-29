@@ -8,11 +8,13 @@
 // runs; holding it opens the world map (app/worldmap.js).
 //
 // What's shown is painted into an image four pixels to the metre: each floor inside once, the
-// world round the player a patch at a time (painted again when they've gone far enough that the
-// patch's edge would show). Each frame draws that, scaled to fit, and the markers over it.
+// world round the player a patch at a time (the next painted a step at a time, ahead of them,
+// while they're still well inside this one). Each frame draws that, scaled to fit, and the
+// markers over it.
 
 import { PLAN_KEY } from "../core/interiors.js";
 import { CHUNK, WET } from "../core/overworld.js";
+import { allAtOnce, Steps } from "../core/steps.js";
 import { GROUND, HOUSE_STYLES, PLOT } from "../core/setpieces/pieces.js";
 import { footprint } from "../core/setpieces/town.js";
 import { LAND_COLOURS } from "../world/ground.js";
@@ -74,6 +76,12 @@ const SCALE = 4;
 // again: metres)
 const SPAN = 128;
 const PAINTED = 192;
+
+// The next patch is begun once the view's middle is this far (metres) from this one's, centred as
+// far ahead of it again, and painted a step at a time (at most PAINTING ms a drawing), so it's
+// ready before the view would go past this one's edge
+const AHEAD = 16;
+const PAINTING = 2;
 
 // Water, and bridges over it (RGB)
 export const WATER_COLOURS = { [WET.still]: [58, 104, 130], [WET.river]: [70, 120, 146] };
@@ -245,8 +253,11 @@ export class Minimap {
         this.icons = [];
 
         // Out in the world: the patch painted round the player ({ x, z (its corner, metres),
-        // image }), and where they were last drawn
+        // image }), the next being painted ({ x, z, steps }), the town's own picture (painted
+        // once), and where the player was last drawn
         this.patch = null;
+        this.painting = null;
+        this.town = null;
         this.middle = null;
         this.setMap(world.maps?.town ?? { id: "town", width: world.width, height: world.height });
 
@@ -490,24 +501,59 @@ export class Minimap {
         }
     }
 
-    // Out in the world: paint the patch round the player afresh if what's shown would go past
-    // its edge
+    // Out in the world: the next patch round the player painted a step at a time while they're
+    // still well inside this one, ahead of where they're going, and shown once it's painted; or
+    // painted at once, if what's shown would otherwise go past this one's edge (the first, or a
+    // leap across the world)
     #repaint() {
         const [x0, z0, across] = this.shown();
-        const patch = this.patch;
+        const middle = [x0 + across / 2, z0 + across / 2];
+        const within = (patch) => patch && x0 >= patch.x && z0 >= patch.z && x0 + across <= patch.x + PAINTED && z0 + across <= patch.z + PAINTED;
 
-        if (patch && x0 >= patch.x && z0 >= patch.z && x0 + across <= patch.x + PAINTED && z0 + across <= patch.z + PAINTED) {
-            return;
+        if (!this.painting && within(this.patch)) {
+            const away = [middle[0] - (this.patch.x + PAINTED / 2), middle[1] - (this.patch.z + PAINTED / 2)];
+
+            if (Math.max(...away.map(Math.abs)) >= AHEAD) {
+                this.painting = this.#painting(middle[0] + away[0], middle[1] + away[1]);
+            }
         }
 
-        // (Snapped to whole chunks' quarters, so it's the same wherever it's come to from)
-        const snap = CHUNK / 4;
-        const x = Math.round((x0 + across / 2 - PAINTED / 2) / snap) * snap;
-        const z = Math.round((z0 + across / 2 - PAINTED / 2) / snap) * snap;
+        // (Finished at once if what's shown would go past this one's edge; let go if it wouldn't
+        // hold what's shown either)
+        const painting = this.painting;
 
-        this.patch = { x, z, image: paintPatch(this.world, x, z, PAINTED, this.patch?.town) };
-        this.patch.town = this.patch.image.town;
-        this.base = this.patch.image;
+        if (painting && !within(this.patch) && !within(painting)) {
+            this.painting = null;
+        } else if (painting?.steps.take(within(this.patch) ? performance.now() + PAINTING : Infinity)) {
+            this.painting = null;
+
+            if (within(painting)) {
+                this.#show(painting);
+            }
+        }
+
+        if (!within(this.patch)) {
+            const now = this.#painting(...middle);
+
+            now.steps.take();
+            this.#show(now);
+        }
+    }
+
+    // The patch round a point (metres), snapped to whole chunks' quarters (so it's the same
+    // wherever it's come to from), to paint a step at a time
+    #painting(x, z) {
+        const snap = CHUNK / 4;
+        const [px, pz] = [x, z].map((v) => Math.round((v - PAINTED / 2) / snap) * snap);
+
+        return { x: px, z: pz, steps: new Steps(paintingPatch(this.world, px, pz, PAINTED, this.town)) };
+    }
+
+    // A patch painted, shown
+    #show({ x, z, steps }) {
+        this.patch = { x, z, image: steps.value };
+        this.town = steps.value.town;
+        this.base = steps.value;
     }
 
     /** Stop listening for taps. */
@@ -650,6 +696,14 @@ export function grassOf(biome) {
  * pixels to the metre), with the town's picture as its `town`.
  */
 export function paintPatch(world, x0, z0, size, town = null) {
+    return allAtOnce(paintingPatch(world, x0, z0, size, town));
+}
+
+/**
+ * The same (paintPatch), a step at a time (each a yield): each chunk's squares, the town, each
+ * settlement near, and each chunk's trees a step of their own.
+ */
+export function* paintingPatch(world, x0, z0, size, town = null) {
     const overworld = world.maps.town;
     const data = new Uint8ClampedArray(size * size * 4);
 
@@ -690,10 +744,16 @@ export function paintPatch(world, x0, z0, size, town = null) {
                     }
 
                     const shade = 1 + 0.05 * jitter(chunk.x0 + i, chunk.y0 + j);
+                    const at = (y * size + x) * 4;
 
-                    data.set([colour[0] * shade, colour[1] * shade, colour[2] * shade, 255], (y * size + x) * 4);
+                    data[at] = colour[0] * shade;
+                    data[at + 1] = colour[1] * shade;
+                    data[at + 2] = colour[2] * shade;
+                    data[at + 3] = 255;
                 }
             }
+
+            yield;
         }
     }
 
@@ -712,6 +772,7 @@ export function paintPatch(world, x0, z0, size, town = null) {
 
     image.town = town ?? paint(home);
     context.drawImage(image.town, (stamp.at[0] - x0) * SCALE, (stamp.at[1] - z0) * SCALE);
+    yield;
 
     // The other settlements laid out near (their ground's in the chunks'): their buildings'
     // roofs, edges and ridges, and their props
@@ -723,6 +784,7 @@ export function paintPatch(world, x0, z0, size, town = null) {
 
         if (at[0] < x0 + size && at[1] < z0 + size && at[0] + across > x0 && at[1] + across > z0) {
             paintSettlement(context, layout, at);
+            yield;
         }
     }
 
@@ -741,6 +803,8 @@ export function paintPatch(world, x0, z0, size, town = null) {
             for (const feature of overworld.chunk(cx, cy).features ?? []) {
                 mark(context, feature);
             }
+
+            yield;
         }
     }
 

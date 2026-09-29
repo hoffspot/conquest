@@ -1059,6 +1059,14 @@ mortar low between the bricks, a slate's lower edge over the next, the grain of 
 one Three.js material: every texture is a layer of one texture array (256 pixels square, 26
 layers), painted in workers while the land is laid; each vertex says which layer it's drawn
 from, and its colour (a plain material's colour, times its weathering) multiplies the layer's.
+The kits still ask for their materials by name (engine/materials.js `material`), and a textured
+one's own picture is painted only when it's first wanted (drawn, or asked for: `paintPicture`):
+out in the world it's drawn with the atlas instead, so it never is. They were painted as the kits
+first asked for each: the start town's while loading (28 pictures, 352 ms in headless Chromium;
+now 14, 181 ms: the ground's and the tavern's insides), the rest in the middle of building a
+chunk as the player first reached another people's lands (57 in all: 1.1 s in Node, up to 118 ms
+for one). Insides, which are drawn with them, paint theirs a step each as they're built, and a
+bridge's planks as it's made.
 Its heights are lit as relief (bump mapping, three reads of the texture a pixel), so walls and
 roofs have depth close up at no cost in triangles. Everything that doesn't move is merged a
 block of the town (32 metres square) at a time, so each block is a draw call or two, and only
@@ -1274,8 +1282,12 @@ a little variation from square to square; the buildings get a dark edge and a li
 the trees round crowns, and the land's features marks of their own (boulders grey, fallen trees
 and walls lines, bushes dark green). That's painted four pixels to the metre: the town once, and the world a
 patch 192 metres square at a time round the player, the town's picture laid in it and the other
-settlements' buildings and props painted over their ground the same way, painted again
-when they've gone far enough that what's shown would reach the patch's edge. Each frame (at most 30 times a second)
+settlements' buildings and props painted over their ground the same way. Once the player's 16
+metres from the patch's middle, the next is begun, as far ahead of them again, and painted a step
+at a time (a chunk's squares, the town, a settlement, a chunk's trees: at most 2 ms a drawing),
+then shown in its place, well before what's shown would reach this one's edge (only a leap across
+the world paints one at once). Painting a whole patch in one frame was 6 to 13 ms on a desktop,
+several times that on a phone, every 32 metres or so. Each frame (at most 30 times a second)
 draws it scaled to fit, then what the camera sees (the ground under the screen's corners), where
 the player is going, the enemies (red dots, the target ringed), an icon over each building the
 player has gone into, and the player (an arrowhead pointing the way they face). A tap on it walks
@@ -1786,7 +1798,9 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   (and what's been said in talks, and what's been found of the world, for the saved character
   only),
   heroes (and forgetting volumes saved on the old scale), the minimap's colours (in the town and
-  inside), the action wheels (which of eight slices a flick is in, its shapes, its
+  inside) and its patches of the world (painted the same a step at a time as at once; the next
+  painted ahead of the player while they're well inside this one, and shown before its edge would
+  show), the action wheels (which of eight slices a flick is in, its shapes, its
   actions and icons, every item's icon, what goes on each wheel, and reading them back), the
   loader's byte counting, the ground's blending, the town's
   builders, the loading list and the service worker.
@@ -1812,7 +1826,8 @@ and a small texture (a megabyte) each, uploaded again only when a blow lands or 
   weathered; barns boarded; a wall's openings leaving holes and a gable its outline; every
   landmark of six towns and cities built within its lot, each tavern with its own name board and
   sign, the guild's, each temple's patron's; every emblem painted, one or several; every prop
-  built; the atlas's layers (the same every time, with relief) and a house drawn from it as one
+  built; a textured material's picture painted only when it's wanted, once for it and its copies
+  (none for a house merged into the atlas); the atlas's layers (the same every time, with relief) and a house drawn from it as one
   mesh; a solid's faces kept as the 32-bit floats they're drawn with, however many there are.
 - `test/wilds.test.js`: the noise (smooth, seeded, tiling when asked); the ground's patches (a
   tiling texture with dry, lush and bare in it); the land's features (placed across every land,

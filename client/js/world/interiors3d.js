@@ -21,7 +21,7 @@
 import * as THREE from "three";
 import { shrinesOf } from "../core/insides.js";
 import { GOD_IDS, GODS } from "../core/lore/gods.js";
-import { material as artMaterial } from "./art/engine/materials.js";
+import { material as artMaterial, paintPicture } from "./art/engine/materials.js";
 import { Solid } from "./art/engine/solid.js";
 import { joined, partsOf } from "./town3d.js";
 import { allAtOnce } from "../core/steps.js";
@@ -2045,6 +2045,22 @@ export function* buildingInterior(map) {
             node.castShadow = false;
             node.receiveShadow = false;
         });
+    }
+
+    // (Its materials' pictures painted, a step each, rather than all in the frame it's first drawn
+    // in: materials.js paintPicture)
+    const drawnWith = new Set();
+
+    object.traverse((node) => {
+        if (node.isMesh) {
+            [node.material].flat().forEach((each) => drawnWith.add(each));
+        }
+    });
+
+    for (const material of drawnWith) {
+        if (paintPicture(material)) {
+            yield;
+        }
     }
 
     return {

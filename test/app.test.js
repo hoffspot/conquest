@@ -1,11 +1,11 @@
 // The game's page-side modules that need no screen: saving, heroes, the loader
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { after, before, describe, it } from "node:test";
 import { cleanName, defaultHero, HERO_PEOPLES, heroOfPeople, HUMAN_TONES, randomHero, suggestName, tonesOf } from "../client/js/app/heroes.js";
 import { LOOKS } from "../client/js/characters/peoples.js";
 import { formatBytes, Loader } from "../client/js/app/loader.js";
 import { ICONS, ITEM_ICONS } from "../client/js/app/icons.js";
-import { buildingsOf, interiorColours, mapColours, treesOf } from "../client/js/app/minimap.js";
+import { buildingsOf, interiorColours, mapColours, Minimap, paintPatch, paintingPatch, treesOf } from "../client/js/app/minimap.js";
 import { ACTIONS, actionOf, assignable, DIRECTIONS, directionOf, drawWheel, FLIP, iconOf, PLACES, readWheels, sectorPath, WHEELS } from "../client/js/app/wheel.js";
 import { SPELLS } from "../client/js/core/spells.js";
 import { ABILITIES, ITEMS, Progress } from "../client/js/core/progress.js";
@@ -391,6 +391,90 @@ describe("the minimap (minimap.js)", () => {
                 assert.ok(differs(at([piece.x, piece.y]), floor), `${map.id}'s ${piece.kind} stands out from the floor`);
             }
         }
+    });
+
+    describe("out in the world", () => {
+        // Canvases that keep what's drawn on them, in order: every call and setting (a canvas drawn
+        // from, by what was drawn on it; an image's pixels as they are)
+        function recording(width = 0, height = 0) {
+            const calls = [];
+            const what = (value) => (value?.calls ? { canvas: [value.width, value.height, value.calls] } : value instanceof ImageData ? { pixels: [...value.data] } : value);
+            const canvas = { width, height, calls, style: {}, hidden: false, clientWidth: 160, clientHeight: 160, addEventListener: () => {}, removeEventListener: () => {} };
+            const context = new Proxy(
+                {},
+                {
+                    get: (target, key) => (...args) => calls.push([key, ...args.map(what)]),
+                    set: (target, key, value) => calls.push([`${key}=`, value]) > 0,
+                },
+            );
+
+            canvas.getContext = () => context;
+
+            return canvas;
+        }
+
+        class ImageData {
+            constructor(data, width, height) {
+                Object.assign(this, { data, width, height });
+            }
+        }
+
+        const world = buildWorld({ seed: 2 });
+        const [x, z] = world.spawns.player;
+
+        before(() => {
+            globalThis.ImageData = ImageData;
+            globalThis.OffscreenCanvas = class {
+                constructor(width, height) {
+                    return recording(width, height);
+                }
+            };
+        });
+
+        after(() => {
+            delete globalThis.ImageData;
+            delete globalThis.OffscreenCanvas;
+        });
+
+        it("paints a patch round the player the same a step at a time as at once", () => {
+            const steps = paintingPatch(world, x - 96, z - 96, 192);
+            let count = 0;
+            let step = steps.next();
+
+            while (!step.done) {
+                count++;
+                step = steps.next();
+            }
+
+            assert.ok(count > 10, `${count} steps`);
+            assert.deepEqual(step.value.calls, paintPatch(world, x - 96, z - 96, 192, step.value.town).calls);
+        });
+
+        it("paints the next patch a step at a time while the player's still well inside this one, ahead of them, and shows it before its edge would show", () => {
+            const minimap = new Minimap(recording(), world);
+            const first = (minimap.draw({ player: { x, z, facing: 0 } }), minimap.patch);
+            const patches = [first];
+            let steps = 0;
+
+            // (Walking east, a metre a drawing)
+            for (let k = 1; k <= 120; k++) {
+                const [x0, , across] = [x + k - 64, z - 64, 128];
+                const shown = minimap.patch;
+
+                minimap.draw({ player: { x: x + k, z, facing: 0 } });
+                steps += minimap.painting ? 1 : 0;
+
+                if (minimap.patch !== shown) {
+                    // (Shown while what's shown was still inside the last one: not painted at once)
+                    assert.ok(x0 + across <= shown.x + 192, `at ${k} m`);
+                    patches.push(minimap.patch);
+                }
+            }
+
+            assert.ok(patches.length >= 3, `${patches.length} patches`);
+            assert.ok(patches.every((patch, k) => !k || patch.x > patches[k - 1].x + 16), "each ahead of the last");
+            assert.ok(steps > patches.length, `${steps} drawings painting`);
+        });
     });
 });
 
