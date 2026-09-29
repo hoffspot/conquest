@@ -7,7 +7,10 @@ The world is built from it in chunks as the player comes near (*The world in chu
 Built again, the same seed gives the same chunk.
 
 The plan is pure data: typed arrays and plain objects, with no DOM or Three.js. So it runs in
-Node for the tests, and later in a worker. Laying one out takes about half a second to a second.
+Node for the tests, and later in a worker. Laying one out takes about a second, so it's laid out
+once for a seed (`planWorld`): the few most recently asked for are kept and shared, frozen so
+nothing can change one for everyone else (`layOutWorld` lays one out afresh). Going back into a
+world, or a test building it again, it's there at once.
 
 See it at <https://hoffspot.github.io/conquest/world-map.html> (or `npm start` and open
 <http://localhost:8080/world-map.html>). Try `?seed=12&race=orc` to choose the world and the start.

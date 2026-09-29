@@ -425,29 +425,6 @@ test("blows leave wounds of their weapon's kind, worse below each threshold, wit
     expect(end.pools).toBe(0);
 });
 
-test("tapping the ground walks the player there", async ({ page }) => {
-    await playing(page, "/?play&seed=1");
-
-    const walked = await page.evaluate(() => {
-        const { game, session } = window.pellagos;
-        const player = game.battle.actor("player");
-        const start = [player.x, player.y];
-
-        game.stop();
-
-        // A spot a few metres north of the player, on the screen
-        const avatar = game.avatars.get("player");
-        const spot = session.view.toScreen(avatar.object.position.clone().setZ(avatar.object.position.z - 3));
-
-        game.tap(spot.x, spot.y);
-        game.advance(4);
-
-        return { start, end: [player.x, player.y] };
-    });
-
-    expect(walked.end[1]).toBeLessThan(walked.start[1] - 2);
-});
-
 test("swiping up from the player sends them straight ahead, running, as far as the way is clear", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
@@ -857,7 +834,7 @@ test("once a tap lets it make sound, the music plays on recordings of real instr
     expect((await going()).index).toBeGreaterThanOrEqual(before);
 });
 
-test("double-clicking the ground runs there, using stamina, shown by an orange bar until it's back", async ({ page }) => {
+test("tapping the ground walks the player there; double-clicking it runs there, using stamina, shown by an orange bar until it's back", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     const bar = page.locator("#playerplate .bar.stamina");
@@ -905,6 +882,23 @@ test("double-clicking the ground runs there, using stamina, shown by an orange b
     // Rested, it's full again, and the bar goes
     await page.evaluate(() => window.pellagos.game.advance(20));
     await expect(bar).toBeHidden();
+
+    // A spot a few metres north of the player tapped: they walk there
+    const walked = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const player = game.battle.actor("player");
+        const start = [player.x, player.y];
+        const avatar = game.avatars.get("player");
+        const spot = session.view.toScreen(avatar.object.position.clone().setZ(avatar.object.position.z - 3));
+
+        game.stop();
+        game.tap(spot.x, spot.y, { time: performance.now() + 9000 });
+        game.advance(4);
+
+        return { start, end: [player.x, player.y] };
+    });
+
+    expect(walked.end[1]).toBeLessThan(walked.start[1] - 2);
 });
 
 test("tapping an enemy rings it as the player's target, until they're told to walk away", async ({ page }) => {
@@ -1662,57 +1656,6 @@ test("an envoy on the road near the player goes by with their escort; struck dow
     await page.keyboard.press("Escape");
 });
 
-test("the barkeep tells the war's news as it's heard in the town", async ({ page }) => {
-    await playing(page, "/?play&seed=1");
-
-    // News of a raid on the town, and a war declared far off
-    const barkeep = await page.evaluate(() => {
-        const { game, session } = window.pellagos;
-        const war = game.host.war;
-        const home = war.town(game.world.start.id);
-
-        game.stop();
-        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
-        war.log.push({ type: "raid", turn: war.turn, realm: "orc", town: home.id, owner: home.owner, killed: 2, lost: 1 });
-        war.log.push({ type: "declared", turn: war.turn, by: "orc", on: "elf" });
-
-        // Into the taproom, and the barkeep tapped
-        game.battle.command("player", { type: "enter", link: "tavern-door" });
-        game.advance(30);
-        game.battle.command("player", { type: "move", to: [7, 6] });
-        game.advance(5);
-
-        const spot = session.view.toScreen(game.avatars.get("barkeep").point(0.6));
-
-        game.tap(spot.x, spot.y, { time: performance.now() + 9000 });
-        game.advance(8);
-
-        return { name: game.world.folk.find(({ id }) => id === "barkeep").name };
-    });
-    const talk = page.locator(".talk");
-
-    await expect(talk).toBeVisible();
-    await expect(talk.locator(".talk-name")).toHaveText(barkeep.name);
-    // The news, or what's said of a ruler: and asked again, something else, until the news is told
-    const line = talk.locator(".talk-line");
-    const news = /Raiders of the Orcs struck at .+'s fields|The Orcs have declared war on the Elves/;
-
-    await talk.getByRole("button", { name: "What's the word on the war?" }).click();
-    await expect(line).toContainText(/Orcs|They say/);
-
-    const heard = [await line.textContent()];
-
-    for (let k = 0; k < 6 && !heard.some((each) => news.test(each)); k++) {
-        await talk.getByRole("button", { name: "What else is being said?" }).click();
-        await expect(line).not.toHaveText(heard.at(-1));
-        await expect(line).toContainText(/Orcs|They say/);
-        heard.push(await line.textContent());
-    }
-
-    expect(heard.some((each) => news.test(each)), heard.join(" / ")).toBe(true);
-    await page.keyboard.press("Escape");
-});
-
 test("an adventurer at the guild, hired for gold, follows the player out and keeps up; the journal shows their company, and they're with them the next time", async ({ page }) => {
     // (Played twice: more than the usual time)
     test.setTimeout(180000);
@@ -1918,7 +1861,7 @@ test("the player's people brought under another: told, and served; stirred to ri
     expect(kept).toBe("human");
 });
 
-test("tapping someone walks the player up to talk: their name and what they are, what they say, replies that lead on, Escape to stop", async ({ page }) => {
+test("tapping someone walks the player up to talk: their name and what they are, what they say, replies that lead on, Escape to stop; the barkeep tells the war's news as it's heard in the town", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     // Into the taproom, the orc out of the way, then tap the barkeep
@@ -1969,6 +1912,42 @@ test("tapping someone walks the player up to talk: their name and what they are,
     await expect(talk).toBeHidden();
     await expect(page.locator("#menu")).not.toHaveAttribute("open", "");
     expect(await page.evaluate(() => ({ talking: window.pellagos.game.battle.actor("barkeep").talkingTo, remembered: window.pellagos.game.memory.barkeep.talks }))).toEqual({ talking: null, remembered: 1 });
+
+    // News of a raid on the town, and a war declared far off; the barkeep tapped again
+    await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const war = game.host.war;
+        const home = war.town(game.world.start.id);
+
+        game.stop();
+        war.log.push({ type: "raid", turn: war.turn, realm: "orc", town: home.id, owner: home.owner, killed: 2, lost: 1 });
+        war.log.push({ type: "declared", turn: war.turn, by: "orc", on: "elf" });
+
+        const spot = session.view.toScreen(game.avatars.get("barkeep").point(0.6));
+
+        game.tap(spot.x, spot.y, { time: performance.now() + 18000 });
+        game.advance(8);
+    });
+    await expect(talk).toBeVisible();
+
+    // The news, or what's said of a ruler: and asked again, something else, until the news is told
+    const line = talk.locator(".talk-line");
+    const warNews = /Raiders of the Orcs struck at .+'s fields|The Orcs have declared war on the Elves/;
+
+    await talk.getByRole("button", { name: "What's the word on the war?" }).click();
+    await expect(line).toContainText(/Orcs|They say/);
+
+    const heard = [await line.textContent()];
+
+    for (let k = 0; k < 6 && !heard.some((each) => warNews.test(each)); k++) {
+        await talk.getByRole("button", { name: "What else is being said?" }).click();
+        await expect(line).not.toHaveText(heard.at(-1));
+        await expect(line).toContainText(/Orcs|They say/);
+        heard.push(await line.textContent());
+    }
+
+    expect(heard.some((each) => warNews.test(each)), heard.join(" / ")).toBe(true);
+    await page.keyboard.press("Escape");
 });
 
 test("the pack's paperdoll: the player drawn among their gear; tapped, a piece says what it does; held, it goes on or comes off; a two-handed weapon greys out the other hand", async ({ page }) => {
@@ -2477,6 +2456,8 @@ test("a building gone into is marked on the minimap; holding the minimap opens t
 });
 
 test("the minimap walks the player where it's tapped, and Game options turn it and the sound off, remembered", async ({ page }) => {
+    // (The game started twice: more than the usual time)
+    test.setTimeout(180000);
     await playing(page, "/?play&seed=1");
 
     const minimap = page.locator("#minimap");
@@ -2817,7 +2798,7 @@ test("magic: the spellbook shows every school and the tomes; a tome read teaches
 test.describe("on a phone", () => {
     test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
-    test("fits the screen: the title, making a character and the game's buttons", async ({ page }) => {
+    test("fits the screen: the title, making a character and the game's buttons; runs where the ground is double-tapped", async ({ page }) => {
         await title(page);
 
         const card = await page.locator(".title").boundingBox();
@@ -2860,11 +2841,8 @@ test.describe("on a phone", () => {
         expect(plate.y + plate.height).toBeLessThanOrEqual(844);
         expect(plate.x + plate.width).toBeLessThanOrEqual(zoom.x);
         expect(hint.y + hint.height).toBeLessThanOrEqual(plate.y - 20);
-    });
 
-    test("runs where the ground is double-tapped", async ({ page }) => {
-        await playing(page, "/?play&seed=1");
-
+        // The ground double-tapped: the player runs there
         await doubleTap(page, await spotNorth(page, 4), { touch: true });
 
         expect(await page.evaluate(() => window.pellagos.game.battle.actor("player").order?.run)).toBe(true);
