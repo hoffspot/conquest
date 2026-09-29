@@ -890,7 +890,17 @@ function applyViewSettings() {
     }
 
     const quality = settings.quality === "auto" ? state.modules.detectQuality() : settings.quality;
+    // (Fewer pixels drawn if the device can't keep up, with the quality and render scale left to
+    // the game: app/governor.js; all of them again once they're chosen. Not under automation: a
+    // test's frames, drawn in software, are always late, and what it measures mustn't change size)
+    const adaptive = settings.quality === "auto" && settings.renderScale === 1 && !navigator.webdriver;
 
+    if (!adaptive) {
+        view.adaptiveScale = 1;
+        state.game?.governor.reset();
+    }
+
+    view.adaptive = adaptive;
     view.renderScale = settings.renderScale;
     view.setQuality(quality);
     view.setShadows(settings.shadows);

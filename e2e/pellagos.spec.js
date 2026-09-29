@@ -137,6 +137,43 @@ test("debug mode shows how the game runs, and is remembered", async ({ page }) =
     await expect(page.locator("#debug")).toBeHidden();
 });
 
+test("draws fewer pixels once its drawing can't keep up, says so in debug mode, and all of them again once a quality's chosen", async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("pellagos.settings", JSON.stringify({ debug: true, sound: false })));
+    await playing(page, "/?play&seed=2");
+
+    const stepped = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const view = session.view;
+        const before = view.renderer.getPixelRatio();
+        let told = false;
+
+        // (Under automation the governor's off, and how it judges is app/governor.js's tests': here
+        // it says the drawing couldn't keep up, once, as it would on a slow phone)
+        view.adaptive = true;
+        game.governor.observe = () => (told ? null : ((told = true), 0.85));
+
+        await new Promise((resolve) => {
+            const wait = () => (view.adaptiveScale < 1 ? resolve() : requestAnimationFrame(wait));
+
+            wait();
+        });
+
+        return { before, after: view.renderer.getPixelRatio(), scale: view.adaptiveScale };
+    });
+
+    expect(stepped.scale).toBe(0.85);
+    expect(stepped.after).toBeCloseTo(stepped.before * 0.85, 5);
+    await expect(page.locator("#debugstats")).toContainText("85%: drawing couldn't keep up");
+
+    // (A quality chosen: every pixel again, and the governor left off)
+    await page.locator("#debugcontrols select").selectOption("low");
+
+    const chosen = await page.evaluate(() => ({ ratio: window.pellagos.session.view.renderer.getPixelRatio(), scale: window.pellagos.session.view.adaptiveScale, adaptive: window.pellagos.session.view.adaptive, step: window.pellagos.game.governor.step }));
+
+    expect(chosen).toEqual({ ratio: 1, scale: 1, adaptive: false, step: 0 });
+    await expect(page.locator("#debugstats")).not.toContainText("couldn't keep up");
+});
+
 test("makes a character: a random look, a weapon and a name, then plays them in the town square", async ({ page }) => {
     // Every step draws the character, which takes a while without a GPU
     test.setTimeout(180000);

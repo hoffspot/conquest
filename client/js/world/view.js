@@ -9,6 +9,7 @@
 
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { GpuTimer } from "./gputimer.js";
 import { Sky, SKY_COLOURS } from "./sky.js";
 import { CUTAWAY } from "./town3d.js";
 
@@ -115,6 +116,17 @@ export class View {
         this.renderer.shadowMap.type = THREE.PCFShadowMap;
         this.renderer.info.autoReset = false;
 
+        /**
+         * Drawing fewer pixels when the device can't keep up (app/governor.js), with the quality
+         * level left to the game (`adaptive`): the share of them drawn (`adapt`).
+         */
+        this.adaptive = false;
+        this.adaptiveScale = 1;
+
+        /** How long the GPU takes to draw the world, while it's asked (timeGpu: debug mode). */
+        this.gpuTimer = new GpuTimer(this.renderer.getContext());
+        this.timingGpu = false;
+
         this.scene = new THREE.Scene();
 
         // (Only what's shown has its place in the world worked out before it's drawn (#updateShown),
@@ -219,6 +231,7 @@ export class View {
     // drawn, but what was drawn into (the light, the shadows, the picture behind the pack) is
     // made again here, and the canvas sized afresh
     #restore() {
+        this.gpuTimer.clear();
         this.#light();
         this.sun.shadow.map?.dispose();
         this.sun.shadow.map = null;
@@ -237,9 +250,25 @@ export class View {
     }
 
     /** Draw fewer pixels than the quality level says (0.5 to 1), to see what it saves. */
+    /** Draw this share of the pixels the quality level and render scale would (app/governor.js). */
+    adapt(scale) {
+        this.adaptiveScale = scale;
+        this.#pixelRatio();
+        this.resize();
+    }
+
     setRenderScale(scale) {
         this.renderScale = scale;
         this.setQuality(this.qualityName);
+    }
+
+    /** Time the GPU's drawing of the world or not (`gpuTimer.ms`, where the browser can say). */
+    timeGpu(on) {
+        this.timingGpu = on;
+
+        if (!on) {
+            this.gpuTimer.clear();
+        }
     }
 
     /** Draw shadows or not. */
@@ -251,11 +280,17 @@ export class View {
     setQuality(name) {
         this.qualityName = name;
         this.quality = QUALITY[name];
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.quality.pixelRatio) * (this.renderScale ?? 1));
+        this.#pixelRatio();
         this.sun.shadow.mapSize.set(this.quality.shadows, this.quality.shadows);
         this.sun.shadow.map?.dispose();
         this.sun.shadow.map = null;
         this.resize();
+    }
+
+    // As many pixels as the screen has, as far as the quality level goes, times the render scale
+    // (debug mode) and the share the device can keep up with (adapt)
+    #pixelRatio() {
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.quality.pixelRatio) * (this.renderScale ?? 1) * this.adaptiveScale);
     }
 
     /** Fit the drawing to the canvas's size on the page (if it has changed). */
@@ -624,8 +659,19 @@ export class View {
             this.#updateShown();
         }
 
+        const timing = this.timingGpu && scene === this.scene;
+
         this.renderer.info.reset();
+
+        if (timing) {
+            this.gpuTimer.begin();
+        }
+
         this.renderer.render(scene, camera);
+
+        if (timing) {
+            this.gpuTimer.end();
+        }
 
         if (scene === this.scene && camera === this.camera) {
             this.frustum ??= new THREE.Frustum();
