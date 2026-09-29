@@ -26,7 +26,7 @@ const { findPath } = await import("../client/js/core/pathfinding.js");
 const { ROLES } = await import("../client/js/core/roles.js");
 const { PLOT } = await import("../client/js/core/setpieces/pieces.js");
 const { squareOf } = await import("../client/js/core/settlements.js");
-const { buildInterior } = await import("../client/js/world/interiors3d.js");
+const { buildInterior, buildingInterior } = await import("../client/js/world/interiors3d.js");
 
 const reachable = (map, from, to) => findPath(map.blocked, from, to).length > 0;
 const same = (a, b) => a[0] === b[0] && a[1] === b[1];
@@ -536,6 +536,35 @@ describe("the buildings (insides.js Interiors)", () => {
                 interior.dispose();
             }
         }
+    });
+
+    it("builds a floor a step at a time (as a building's got ready while playing), the same as at once", () => {
+        const one = [...interiors.buildings.values()].find((each) => each.kind === "tavern" && each.key !== "home:tavern");
+
+        interiors.make(one.key);
+
+        const map = world.maps[one.maps[0]];
+        const meshes = (interior) => {
+            const found = [];
+
+            interior.object.updateMatrixWorld(true);
+            interior.object.traverse((node) => node.isMesh && found.push([node.material.type, node.matrixWorld.elements.join(), ...Object.values(node.geometry.attributes).map(({ array }) => [...array].join())].join("|")));
+
+            return found;
+        };
+        const whole = buildInterior(map);
+        const steps = buildingInterior(map);
+        let [step, count] = [steps.next(), 1];
+
+        while (!step.done) {
+            [step, count] = [steps.next(), count + 1];
+        }
+
+        assert.ok(count >= 4, `${count} steps`);
+        assert.deepEqual(meshes(step.value), meshes(whole));
+        assert.deepEqual(step.value.lights, whole.lights);
+        whole.dispose();
+        step.value.dispose();
     });
 });
 

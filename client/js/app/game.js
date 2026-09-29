@@ -64,7 +64,7 @@ import { allAtOnce, Steps } from "../core/steps.js";
 import { buildGround } from "../world/ground.js";
 import { buildTown } from "../world/town3d.js";
 import { prepareAtlas } from "../world/art/engine/atlas.js";
-import { buildInterior, cutFor } from "../world/interiors3d.js";
+import { buildInterior, buildingInterior, cutFor } from "../world/interiors3d.js";
 import { TREE_WIND } from "../world/art/kits/trees.js";
 import { Minimap, treesOf } from "./minimap.js";
 import { CameraFollow } from "./camera.js";
@@ -3016,7 +3016,7 @@ export class Game {
     #prepare(building) {
         const visit = { key: building.key, queue: [], maps: [], folk: [] };
 
-        visit.queue.push(...building.maps.map((id) => () => this.#furnish(visit, id)));
+        visit.queue.push(...building.maps.map((id) => () => this.#furnishing(visit, id)));
         visit.queue.push(...(this.host.open.get(building.key) ?? []).map((id) => () => this.#people(visit, id)));
         visit.queue.push(() => this.doors?.sync());
         this.visits.set(building.key, visit);
@@ -3055,9 +3055,9 @@ export class Game {
         }
     }
 
-    // One of a building's floors, built and put away until the player goes in
-    #furnish(visit, mapId) {
-        const interior = buildInterior(this.world.maps[mapId]);
+    // One of a building's floors, built a step at a time and put away until the player goes in
+    *#furnishing(visit, mapId) {
+        const interior = yield* buildingInterior(this.world.maps[mapId]);
 
         interior.object.visible = this.mapId === mapId;
         this.view.scene.add(interior.object);

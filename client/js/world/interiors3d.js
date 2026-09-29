@@ -23,7 +23,8 @@ import { shrinesOf } from "../core/insides.js";
 import { GOD_IDS, GODS } from "../core/lore/gods.js";
 import { material as artMaterial } from "./art/engine/materials.js";
 import { Solid } from "./art/engine/solid.js";
-import { merge } from "./town3d.js";
+import { joined, partsOf } from "./town3d.js";
+import { allAtOnce } from "../core/steps.js";
 
 /** How high a floor's walls are, and how far above it the next floor is (metres). */
 export const STOREY = 3;
@@ -1965,6 +1966,15 @@ function accents(solid, map, people) {
  * moves the flames), drive(name, time, seconds) (turns a named part a while), dispose() }.
  */
 export function buildInterior(map) {
+    return allAtOnce(buildingInterior(map));
+}
+
+/**
+ * The same (buildInterior), a step at a time (each a yield, so that getting a building ready is
+ * spread over frames: its rooms and furniture laid out, made into meshes, made ready to merge,
+ * merged), returning it.
+ */
+export function* buildingInterior(map) {
     const people = PALETTES[map.people] ? map.people : null;
     let built;
 
@@ -1983,6 +1993,8 @@ export function buildInterior(map) {
         framed = true;
     }
 
+    yield;
+
     const art = new THREE.Group();
     const [ox, oz] = map.origin;
 
@@ -1994,9 +2006,14 @@ export function buildInterior(map) {
 
     statics.add(art);
     statics.updateMatrixWorld(true);
+    yield;
 
     // Everything that doesn't move merged by material; the spit and flames apart
-    const merged = merge(statics);
+    const parts = partsOf(statics);
+
+    yield;
+
+    const merged = joined(parts);
 
     object.add(merged);
 
