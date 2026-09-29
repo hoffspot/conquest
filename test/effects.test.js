@@ -133,6 +133,30 @@ describe("spell light (effects.js)", () => {
         assert.ok(burst(roaring).length > burst(comet).length);
     });
 
+    it("uploads and draws its particles only as far as the highest alive, and none at all with none alive", () => {
+        const glow = effects.glow;
+        const alive = () => glow.geometry.attributes.alpha.updateRanges;
+
+        glow.live.length = 0;
+        glow.free = Array.from({ length: 3000 }, (_, i) => 2999 - i);
+        effects.impact("fire", new THREE.Vector3(0, 1, 0), null, 0);
+        glow.update(0.01, 600);
+
+        const highest = Math.max(...glow.live.map(({ i }) => i)) + 1;
+
+        assert.ok(highest > 10 && highest < 200, `${highest}`);
+        assert.equal(glow.geometry.drawRange.count, highest);
+        assert.ok(glow.points.visible);
+        assert.deepEqual(alive(), [{ start: 0, count: highest }]);
+        assert.deepEqual(glow.geometry.attributes.position.updateRanges, [{ start: 0, count: highest * 3 }]);
+
+        // (All burnt out: nothing drawn)
+        glow.update(10, 600);
+        assert.equal(glow.live.length, 0);
+        assert.equal(glow.geometry.drawRange.count, 0);
+        assert.equal(glow.points.visible, false);
+    });
+
     it("heals in rings on the ground, a second following the first for some looks; stuns with their stars", () => {
         LOOKS.heal.forEach((style, look) => {
             effects.pulses.forEach((pulse) => pulse.ring.removeFromParent());

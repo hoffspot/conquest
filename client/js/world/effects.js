@@ -237,6 +237,8 @@ class Particles {
     }
 
     update(dt, pixels, onGround = null) {
+        let highest = 0;
+
         this.material.uniforms.scale.value = pixels;
         this.live = this.live.filter((particle) => {
             const { i, velocity } = particle;
@@ -250,6 +252,8 @@ class Particles {
 
                 return false;
             }
+
+            highest = Math.max(highest, i + 1);
 
             const t = particle.age / particle.life;
 
@@ -284,8 +288,19 @@ class Particles {
             return true;
         });
 
-        for (const name of ["position", "size", "alpha", "tint"]) {
-            this.geometry.attributes[name].needsUpdate = true;
+        // Drawn and uploaded only as far as the highest one alive (they're given out lowest
+        // first); nothing at all with none alive
+        this.geometry.setDrawRange(0, highest);
+        this.points.visible = highest > 0;
+
+        if (highest > 0) {
+            for (const name of ["position", "size", "alpha", "tint"]) {
+                const attribute = this.geometry.attributes[name];
+
+                attribute.clearUpdateRanges();
+                attribute.addUpdateRange(0, highest * attribute.itemSize);
+                attribute.needsUpdate = true;
+            }
         }
     }
 }

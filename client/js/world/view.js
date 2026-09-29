@@ -106,6 +106,11 @@ export class View {
         this.renderer.info.autoReset = false;
 
         this.scene = new THREE.Scene();
+
+        // (Only what's shown has its place in the world worked out before it's drawn (#updateShown),
+        // not the floors and folk of the buildings got ready near the player, hidden till they're
+        // gone into: over half the scene's nodes, in a town)
+        this.scene.matrixWorldAutoUpdate = false;
         this.scene.background = new THREE.Color(SKY);
         this.scene.fog = new THREE.Fog(SKY, 55, 130);
         this.#light();
@@ -241,6 +246,8 @@ export class View {
 
     /** Fit the drawing to the canvas's size on the page (if it has changed). */
     resize() {
+        this.rect = null;
+
         const width = this.canvas.clientWidth || 1;
         const height = this.canvas.clientHeight || 1;
         const ratio = this.renderer.getPixelRatio();
@@ -482,7 +489,11 @@ export class View {
             return null;
         }
 
-        const rect = this.canvas.getBoundingClientRect();
+        // (Where the canvas is on the page, kept till it's resized: reading it after the page's
+        // been written to, as a bar's been moved, makes the browser lay the page out again)
+        this.rect ??= this.canvas.getBoundingClientRect();
+
+        const rect = this.rect;
 
         return { x: rect.left + ((projected.x + 1) / 2) * rect.width, y: rect.top + ((1 - projected.y) / 2) * rect.height };
     }
@@ -546,6 +557,7 @@ export class View {
         renderer.setScissorTest(true);
         renderer.setScissor(x, y, w, h);
         renderer.setViewport(x, y, w, h);
+        this.#updateShown();
         renderer.render(this.scene, camera);
         renderer.setScissorTest(false);
         camera.clearViewOffset();
@@ -566,6 +578,7 @@ export class View {
         this.#cutAway(0);
         this.sky.update(this.camera, performance.now() / 1000);
         this.renderer.setRenderTarget(target);
+        this.#updateShown();
         this.renderer.render(this.scene, this.camera);
         this.renderer.setRenderTarget(null);
         scene.add(quad);
@@ -594,10 +607,20 @@ export class View {
         if (scene === this.scene) {
             this.#cutAway(dt);
             this.sky.update(camera, now / 1000);
+            this.#updateShown();
         }
 
         this.renderer.info.reset();
         this.renderer.render(scene, camera);
+    }
+
+    // The place in the world of everything shown worked out, as drawing would of everything
+    #updateShown() {
+        for (const child of this.scene.children) {
+            if (child.visible) {
+                child.updateMatrixWorld();
+            }
+        }
     }
 
     /** Is anything on the height map between the camera and a point? */
