@@ -311,6 +311,18 @@ fails), or for a whole skin picture loaded in the character lab, it's painted he
 headless Chromium on "high", this took a town's six guards from 10 s of frames to 4, and a
 tavern's eight folk from 9 to 3, at 6 ms a frame.
 
+**The skin atlas worked out elsewhere.** Where every texel of the body's texture is on the body
+(`SkinAtlas`) takes about a second to work out at 1024 (more on a phone), and the game used to
+work it out before showing the title. Now the kit (`kit.js`, `elsewhere`) sends the body's files
+and masks to the skins worker, which works it out there, keeps it for painting, and sends back what
+it found (`parts`); the page's own atlas is made from those, not worked out again, and the fields
+aren't sent back over. The kit comes back without its atlas and `ready` resolves once it has it:
+the title shows meanwhile, and making a character, playing and joining a world wait for it (by
+then it's usually there). Where there are no workers (or one fails), it's worked out here, after
+the title's shown. The same atlas either way (`test/character-building.test.js`). The labs work it
+out here, as ever. In headless Chromium on "high", to the title: 4.8 s before (with the next
+change), 2.2 now.
+
 **Pictures kept as data.** A character's skin and height pictures, and each garment's, are kept as
 the painted bytes (`DataTexture`s), not put on a canvas: no canvas's worth of memory kept beside
 each, no reading a garment's picture back off its canvas to draw an outfit (`#compositing` takes

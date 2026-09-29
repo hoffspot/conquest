@@ -113,9 +113,18 @@ export class SkinAtlas {
      * @param {import("./body.js").HumanData} human
      * @param {object} masks - loadMasks()'s result (or {} to paint without them).
      * @param {number} [size] - Texture size in texels (square).
+     * @param {object} [analysed] - What another atlas of the body at this size found (its `parts`:
+     *   worked out elsewhere, in a worker), taken as it is rather than worked out again.
      */
-    constructor(human, masks = {}, size = 1024) {
+    constructor(human, masks = {}, size = 1024, analysed = null) {
         this.size = size;
+        this.human = human;
+
+        if (analysed) {
+            Object.assign(this, { covered: analysed.covered, gutter: analysed.gutter, fields: analysed.fields, normals: analysed.normals });
+
+            return;
+        }
 
         const count = size * size;
 
@@ -129,9 +138,15 @@ export class SkinAtlas {
         }
 
         this.fields.brow.fill(255);
-        this.human = human;
 
         this.#analyse(human, masks);
+    }
+
+    /** What it found, for another atlas to take (a copy, when sent from a worker). */
+    get parts() {
+        const { size, covered, gutter, fields, normals } = this;
+
+        return { size, covered, gutter, fields, normals };
     }
 
     /**

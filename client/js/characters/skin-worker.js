@@ -1,10 +1,13 @@
 // Paints skins off the page's thread (skins.js): sent the skin atlas's fields once (and any made
 // later), then a skin's settings, it sends back its picture (skin.js paintSkin), one at a time, in
-// the order asked, leaving out any no longer wanted.
+// the order asked, leaving out any no longer wanted. Or sent the body's files and masks, it works
+// the atlas out itself (a second or more on a phone, off the page's thread while the title's up)
+// and sends back what it found for the page's own.
 
-import { paintSkin } from "./skin.js";
+import { HumanData } from "./body.js";
+import { paintSkin, SkinAtlas } from "./skin.js";
 
-const atlas = { fields: {}, furAndScales() {} };
+let atlas = { fields: {}, furAndScales() {} };
 const queue = [];
 let busy = false;
 
@@ -32,7 +35,12 @@ function later() {
 }
 
 self.onmessage = ({ data }) => {
-    if (data.atlas) {
+    if (data.analyse) {
+        const { manifest, body, masks, size } = data.analyse;
+
+        atlas = new SkinAtlas(new HumanData(manifest, body), masks, size);
+        self.postMessage({ analysed: atlas.parts });
+    } else if (data.atlas) {
         const { fields, ...rest } = data.atlas;
 
         Object.assign(atlas, rest);
