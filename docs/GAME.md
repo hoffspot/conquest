@@ -562,6 +562,20 @@ than the rate allows is followed by the next at once. The screen's refresh is th
 between the browser's askings over the last 30 (so it follows a screen changing its rate). The
 battle keeps its own time, whatever the frame rate (a step each twentieth of a second).
 
+**Fewer pixels when the drawing can't keep up** (`app/governor.js`). The quality level is a guess
+from what the browser says of the device, and some say little: Safari tells nothing of a phone's
+memory, so every iPhone with more than four cores is taken for a medium one, however old. Played,
+a device shows what it can do. After 5 seconds of play (things being got ready make it slower at
+first), judged over 3 seconds: if its frames come more than 1.25 times the rate's time apart (the
+median: a hitch now and then doesn't count), while the page's own work each frame is under 0.6 of
+that time (so it's the drawing that's slow, and fewer pixels will help), it draws 85% of the pixels
+across and down, and 70% if it still can't keep up after another 3 seconds; no further, and it
+doesn't step back up (a device at the edge would go up and down). The drawing buffer changes size
+at most twice a game (a few milliseconds each). It stays so for the rest of the page's life. Only
+with the quality and the render scale left to the game ("auto", 1); choosing either draws every
+pixel again. Not under automation (`navigator.webdriver`): a test's frames, drawn in software, are
+always late, and what it measures mustn't change size. Debug mode shows it on the quality line.
+
 **Clear of buildings.** In the town, a building can stand between the camera and the player,
 from whichever side it looks. The view marches out along its line from where it looks over the
 height of what's built on each square (`buildings`: houses, landmarks, walls, towers,
@@ -1655,7 +1669,11 @@ switched off (in the game, under the minimap). It folds away to just the frame r
   how long each frame's update and drawing take on the CPU;
 - what was drawn: draw calls, triangles, points; geometries, textures and shader programs in
   memory; the quality level, pixel ratio and drawing buffer size;
-- the GPU (where the browser says), the JavaScript heap (Chrome), the screen, cores and memory;
+- the GPU (where the browser says) and how long it takes to draw a frame (`world/gputimer.js`: the
+  browser's timer queries, `EXT_disjoint_timer_query_webgl2`, where it has them, most desktop
+  browsers and few phones yet; each read a frame or more later, once the GPU's done, never waited
+  for, and only while the overlay's shown), the JavaScript heap (Chrome), the screen, cores and
+  memory;
 - the battle: its time, how many steps each frame ran, projectiles in flight, and each character's
   place, hit points, stamina and what it's doing (with its speed, running);
 - how much was downloaded and how long each group took, and how long each part of the world took
@@ -1817,6 +1835,14 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   landing facing the blow at its kind's height (not on the hands or head), healing a stage at a
   time (their arrows with them), gone on coming back to life, glows fading, eight arrows at most,
   and the body's and garments' materials mixing it in.
+- `test/gputimer.test.js`: the GPU's time for a frame read once it's done (never waited for) and
+  smoothed, a time the GPU's clock was disturbed for thrown away, no more than four waiting, and
+  nothing where the browser has no timer.
+- `test/governor.test.js`: fewer pixels only for a device whose frames come late while its own work
+  is well within the time; after it's played a while, over a whole window, twice at most; 30 a
+  second keeping up on low; a slow start and a hitch now and then forgiven; carrying on from a game
+  before, and starting again when reset. E2E: stepped down, the drawing buffer's smaller and debug
+  mode says so; a quality chosen, every pixel again.
 - `test/pacing.test.js`: how often the world's drawn: every other frame of a 120 Hz screen at 60,
   evenly; a 144 Hz one at 72 and a 90 Hz one at 90; 30 on low; every frame with no rate, or when
   drawing takes longer than the rate allows; following the screen changing its rate.

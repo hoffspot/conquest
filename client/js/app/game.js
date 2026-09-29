@@ -74,6 +74,7 @@ import { itemPicture } from "./icons.js";
 import { JournalPanel, bearing, regardOf } from "./journal.js";
 import { SpellbookPanel } from "./spellbook.js";
 import { PackPanel } from "./pack.js";
+import { Governor, GOVERNOR } from "./governor.js";
 import { Pacing } from "./pacing.js";
 import { describe, totals } from "./gearinfo.js";
 import { TalkPanel } from "./talk.js";
@@ -413,6 +414,9 @@ export class Game {
 
         /** When to draw the world: no oftener than the quality level does (app/pacing.js). */
         this.pacing = new Pacing();
+
+        /** Drawing fewer pixels if the device can't keep up (app/governor.js: as a game before left it). */
+        this.governor = new Governor(GOVERNOR.steps.indexOf(view.adaptiveScale));
 
         /** Timings for the debug overlay (milliseconds, smoothed), and the last frames' times. */
         this.stats = { frame: 0, update: 0, render: 0, steps: 0, fps: 0 };
@@ -1170,6 +1174,15 @@ export class Game {
         }
 
         const rendered = performance.now();
+
+        // (Fewer pixels if it's the drawing that can't keep up, with the quality level left to the game)
+        if (this.view.adaptive) {
+            const scale = this.governor.observe(now, dt * 1000, rendered - frameStart, this.view.quality.frameRate);
+
+            if (scale !== null) {
+                this.view.adapt(scale);
+            }
+        }
 
         // Timings for the debug overlay
         const smooth = (key, value) => (this.stats[key] += (value - this.stats[key]) * 0.1);

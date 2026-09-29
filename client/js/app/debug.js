@@ -2,7 +2,8 @@
 // on, on every screen, until switched off):
 //  - frame rate, a graph of recent frame times, and how long updating and drawing take
 //  - what's drawn: draw calls, triangles, geometries, textures, shader programs
-//  - memory (where the browser tells), the screen, the drawing buffer, the GPU and device
+//  - memory (where the browser tells), the screen, the drawing buffer, the GPU (and its time for a
+//    frame, where the browser can say: world/gputimer.js) and device
 //  - the battle: its time, characters, orders and projectiles
 //  - how long each group of files took to download, and each part of the world to build
 // and controls to see what things cost: quality, render scale, shadows, and the squares
@@ -78,6 +79,7 @@ export class Debug {
     /** Show or hide the overlay. */
     show(on) {
         this.root.hidden = !on;
+        this.view?.timeGpu(on);
         clearInterval(this.timer);
 
         if (on) {
@@ -95,6 +97,7 @@ export class Debug {
         if (view !== undefined) {
             this.view = view;
             this.gpu = view ? gpuName(view.renderer) : "";
+            view?.timeGpu(!this.root.hidden);
         }
 
         if (game !== undefined) {
@@ -131,12 +134,17 @@ export class Debug {
             lines.push(
                 `Draws ${render.calls}  triangles ${thousands(render.triangles)}  points ${thousands(render.points)}`,
                 `Geometries ${memory.geometries}  textures ${memory.textures}  programs ${programs?.length ?? 0}`,
-                `Quality ${view.qualityName}  pixels ×${view.renderer.getPixelRatio().toFixed(2)}  ${canvas.width}×${canvas.height}`,
+                `Quality ${view.qualityName}  pixels ×${view.renderer.getPixelRatio().toFixed(2)}${view.adaptiveScale < 1 ? ` (${Math.round(view.adaptiveScale * 100)}%: drawing couldn't keep up)` : ""}  ${canvas.width}×${canvas.height}`,
             );
 
             if (this.gpu) {
                 lines.push(`GPU ${this.gpu}`);
             }
+
+            // (How long the GPU takes to draw a frame, where the browser can say)
+            const timer = view.gpuTimer;
+
+            lines.push(`GPU draw ${!timer.available ? "not told by this browser" : timer.ms === null ? "…" : ms(timer.ms)}`);
         }
 
         const heap = performance.memory;
