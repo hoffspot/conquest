@@ -329,6 +329,8 @@ const _lean = new THREE.Vector3();
 const _hearth = new THREE.Vector3();
 
 export class Game {
+    #begin = null;
+
     /**
      * @param {object} options
      * @param {import("../world/view.js").View} options.view
@@ -427,6 +429,9 @@ export class Game {
         this.frameIndex = 0;
         this.frames = 0;
         this.fpsTime = 0;
+
+        /** Resolves once it's started and under way: its world stepped and drawn (a frame's). */
+        this.underway = new Promise((resolve) => (this.#begin = resolve));
 
         /** When each character last attacked (battle time), to stand on guard for a while after. */
         this.lastAttack = new Map();
@@ -1198,6 +1203,12 @@ export class Game {
         smooth("update", updated - frameStart);
         smooth("render", rendered - updated);
         this.stats.steps = steps;
+
+        if (steps) {
+            this.#begin?.();
+            this.#begin = null;
+        }
+
         this.frameTimes[this.frameIndex] = dt * 1000;
         this.frameIndex = (this.frameIndex + 1) % this.frameTimes.length;
         this.frames++;
