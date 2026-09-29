@@ -54,6 +54,9 @@ export function swarm(look, random) {
         materials: { body: fur },
         attacks: ["dive", "swirl"],
         rests: ["settle", "scatter"],
+        // (Where its bats fly, round its middle: as far out as 0.7 m, twice that and more scattered,
+        // and more again startled; drawn if any of that's in view, beast.js BOUNDS)
+        spread: { centre: [0, 1.4, 0], radius: 3 },
 
         pose({ t, speed, attack, react, dead, rest }) {
             const style = attack?.style ?? "dive";

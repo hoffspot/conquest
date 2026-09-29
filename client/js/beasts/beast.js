@@ -35,6 +35,16 @@ const REACT_TIME = 0.4;
 const DIE_TIME = 1.1;
 const RUN_SPEED = 1.9;
 
+/**
+ * How far round it a creature's drawn, for leaving it undrawn out of view (culled): its body's
+ * shape at rest, the sphere round it made `margin` times as big for how it moves (none moves further
+ * than 1.75 times, measured over every kind's walk, run, attacks, rests, flinch, fall and flight),
+ * or where its body says it goes (a swarm: `spread`); and, attacking, further by as far as it
+ * reaches or `reach` (in its own measures), for a tongue shot out at what it's attacking, a swarm
+ * swirling round it, a slime engulfing.
+ */
+export const BOUNDS = Object.freeze({ margin: 2, reach: 2 });
+
 const wrapAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
 const smoothstep = (u) => u * u * (3 - 2 * u);
 
@@ -76,6 +86,10 @@ export class BeastAvatar {
         this.plan.object.scale.setScalar(this.scale);
         this.object = new THREE.Group();
         this.object.add(this.plan.object);
+        this.#bound();
+
+        /** Is it in view? The game says so each frame: a creature out of view doesn't move what's only for looking at (a cape blown about). */
+        this.seen = true;
         this.facing = 0;
         this.last = new THREE.Vector3();
         this.follow = { x: 0, z: 0, vx: 0, vz: 0 };
@@ -163,6 +177,44 @@ export class BeastAvatar {
             stopResting: noop,
             rest: noop,
         };
+    }
+
+    // One sphere round the whole of it for its skinned meshes and its cape to be culled by
+    // (BOUNDS): three.js would otherwise work one out from the pose they were first drawn in,
+    // which goes stale as it moves, so they were drawn wherever the camera looked
+    #bound() {
+        const skinned = [];
+        const box = new THREE.Box3();
+
+        this.plan.object.traverse((node) => {
+            if (node.isSkinnedMesh && node.parent === this.plan.object) {
+                node.geometry.boundingBox ?? node.geometry.computeBoundingBox();
+                box.union(node.geometry.boundingBox);
+                skinned.push(node);
+            }
+        });
+
+        if (!skinned.length) {
+            return;
+        }
+
+        const spread = this.plan.spread;
+
+        // (Where it goes: the sphere round its body at rest, made bigger for how it moves, or
+        // where its body says; the radius without reaching out to attack)
+        this.bounds = spread ? new THREE.Sphere(new THREE.Vector3(...spread.centre), spread.radius) : box.getBoundingSphere(new THREE.Sphere());
+        this.reachless = spread ? spread.radius : this.bounds.radius * BOUNDS.margin;
+        this.bounds.radius = this.reachless;
+
+        for (const mesh of skinned) {
+            mesh.boundingSphere = this.bounds;
+            mesh.frustumCulled = true;
+        }
+
+        if (this.plan.cloth) {
+            this.plan.cloth.geometry.boundingSphere = this.bounds;
+            this.plan.cloth.frustumCulled = true;
+        }
     }
 
     // How it attacks: a special attack (its breath, its spit...) as it's named; otherwise one of
@@ -368,7 +420,13 @@ export class BeastAvatar {
             dead: doing.dead ? { u: Math.min(1, doing.dead.u ?? 0), side: doing.dead.side } : null,
             onStep: (foot, pace) => this.walker.onStep?.(foot, pace * this.scale),
             fly: this.flight,
+            seen: this.seen,
         });
+
+        // (Attacking, it may reach further than its body: BOUNDS)
+        if (this.bounds) {
+            this.bounds.radius = this.reachless + (doing.attack ? Math.max(doing.attack.reach ?? 0, BOUNDS.reach) : 0);
+        }
 
         // (Flying only while it's told to: soar and arrive say so each moment)
         if (!this.arrival) {
