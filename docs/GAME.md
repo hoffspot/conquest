@@ -1963,7 +1963,9 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   shins), sitting on a bench (thighs level, shins upright), and raising a tankard in a toast; and
   every item's opaque parts in one mesh, each part its material's colour, metalness and roughness,
   a two-sided part's faces turned over too, its shader's lines put in three.js's, and copied with
-  its folds.
+  its folds; skin's roughness painted in its picture's alpha (oilier down the T-zone, fur matte,
+  scales glossy, the seams too), lit wrapped round (red furthest) and hair in bands along its
+  strands, each in place of three.js's lines, and still skin or hair copied.
 - `test/beast-building.test.js` (with WILDS.md's): a creature's body sculpted and its pieces
   folded over many small steps, the same as all at once (a wolf; a skeleton, all pieces; a magma
   slime, made molten after); a look shared once made (another of it built at once), and one
@@ -1983,7 +1985,8 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   way (cuts bleed, blunt blows bruise, fire chars and never bleeds, arcane light leaves veins),
   landing facing the blow at its kind's height (not on the hands or head), healing a stage at a
   time (their arrows with them), gone on coming back to life, glows fading, eight arrows at most,
-  and the body's and garments' materials mixing it in.
+  and the body's and garments' materials mixing it in (skin's own lines kept, its roughness under
+  the blood's wetness).
 - `test/gputimer.test.js`: the GPU's time for a frame read once it's done (never waited for) and
   smoothed, a time the GPU's clock was disturbed for thrown away, no more than four waiting, and
   nothing where the browser has no timer.

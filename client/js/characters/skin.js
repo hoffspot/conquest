@@ -133,7 +133,7 @@ export class SkinAtlas {
 
         const field = (name) => (this.fields[name] = new Uint8Array(count));
 
-        for (const name of ["fine", "coarse", "grain", "cavity", "red", "dark", "light", "lips", "nails", "areolae", "eyelids", "brow", "browHair", "beard", "scalp", "freckles", "warts", "paint", "veins", "ears"]) {
+        for (const name of ["fine", "coarse", "grain", "cavity", "red", "dark", "light", "lips", "nails", "areolae", "eyelids", "brow", "browHair", "beard", "scalp", "freckles", "warts", "paint", "veins", "ears", "oily"]) {
             field(name);
         }
 
@@ -337,6 +337,15 @@ export class SkinAtlas {
         set("red", red);
         set("ears", mask("ears"));
 
+        // The T-zone, where skin is oilier and shines more: the middle of the forehead, and down
+        // the nose to its tip
+        if (onHead && fz > 0) {
+            const nose = Math.max(0, Math.min(1, -fy / 0.036));
+            const bridge = gaussian(fx * fx + (fy + 0.036 * nose) ** 2 * (fy > 0 || fy < -0.036 ? 1 : 0) + (fz - 0.03 - 0.014 * nose) ** 2 * 0.3, 0.011);
+
+            set("oily", Math.max(0.8 * gaussian(fx * fx * 0.45 + (fy - 0.052) ** 2, 0.028), 0.9 * bridge));
+        }
+
         // Shading: under the eyes, eyelids, armpits, crotch
         let dark = 0.6 * mask("crotch");
 
@@ -488,8 +497,59 @@ export function rgb(hex) {
 }
 
 /**
- * Paint the skin: returns { width, height, data } (RGBA bytes), and the bump map's heights in
- * `bump` (one byte a texel).
+ * How rough the skin is at each texel, from 0 (a mirror) to 1: what's painted in its picture's
+ * alpha, which the body's shader (character.js SkinMaterial) reads as its roughness. Skin's a
+ * little glossy (SKIN_ROUGHNESS.skin), oilier down the forehead and nose, matte in its creases
+ * and where hair's painted on; lips are moist and nails glossy; fur is matte, and scales glossy
+ * with rough cracks between them.
+ */
+export const SKIN_ROUGHNESS = Object.freeze({ skin: 0.56, oily: 0.4, crease: 0.72, lips: 0.32, nails: 0.28, hair: 0.8, paint: 0.5, fur: 0.84, scales: 0.38, cracks: 0.75 });
+
+// (A texel's: `hollow` how far into a crease, -0.5 to 0.5; the painted hair's amounts)
+function roughness(f, i, look, { fine, hollow, stubble, browAlpha }) {
+    const R = SKIN_ROUGHNESS;
+    let rough = R.skin + 0.05 * fine;
+
+    if (f.oily[i]) {
+        rough += (R.oily - R.skin) * (f.oily[i] / 255);
+    }
+
+    if (hollow > 0) {
+        rough += (R.crease - R.skin) * Math.min(1, hollow * 3);
+    }
+
+    if (f.lips[i]) {
+        rough += (R.lips - rough) * (f.lips[i] / 255) * 0.9;
+    }
+
+    if (f.nails[i]) {
+        rough += (R.nails - rough) * (f.nails[i] / 255);
+    }
+
+    if (look.warpaint && f.paint[i]) {
+        rough += (R.paint - rough) * (f.paint[i] / 255);
+    }
+
+    const hair = Math.min(1, Math.max(stubble, browAlpha, (f.scalp[i] / 255) * look.scalp));
+
+    if (hair) {
+        rough += (R.hair - rough) * hair;
+    }
+
+    if (look.fur) {
+        rough += (R.fur - rough) * look.fur;
+    }
+
+    if (look.scales) {
+        rough += (R.scales + (R.cracks - R.scales) * (f.scales[i] / 255) - rough) * look.scales;
+    }
+
+    return Math.min(1, Math.max(0.05, rough));
+}
+
+/**
+ * Paint the skin: returns { width, height, data } (RGBA bytes: its colour, and its roughness in
+ * alpha), and the bump map's heights in `bump` (one byte a texel).
  */
 export function paintSkin(atlas, settings = {}) {
     return allAtOnce(paintingSkin(atlas, settings));
@@ -667,7 +727,7 @@ export function* paintingSkin(atlas, settings = {}) {
         data[i * 4] = colour[0] * 255;
         data[i * 4 + 1] = colour[1] * 255;
         data[i * 4 + 2] = colour[2] * 255;
-        data[i * 4 + 3] = 255;
+        data[i * 4 + 3] = roughness(f, i, look, { fine, hollow, stubble, browAlpha }) * 255;
 
         bump[i] = 128 + 40 * fine + 14 * (grain - 0.5) + 40 * (f.warts[i] / 255) * look.warts + 25 * browAlpha + 12 * stubble - 30 * (f.lips[i] / 255) * fine + (look.fur ? 30 * look.fur * (f.fur[i] / 255 - 0.5) : 0) - (look.scales ? 55 * look.scales * (f.scales[i] / 255) : 0);
     }
@@ -682,7 +742,7 @@ export function* paintingSkin(atlas, settings = {}) {
         data[to] = data[from];
         data[to + 1] = data[from + 1];
         data[to + 2] = data[from + 2];
-        data[to + 3] = 255;
+        data[to + 3] = data[from + 3];
         bump[gutter[g]] = bump[gutter[g + 1]];
     }
 
