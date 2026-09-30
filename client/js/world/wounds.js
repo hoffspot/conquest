@@ -474,7 +474,12 @@ export class Wounds {
             const metal = cloth && !mixed && material.metalness > 0.3;
             const kind = mixed ? "MIXED" : metal ? "METAL" : "CLOTH";
 
-            own.onBeforeCompile = (shader) => {
+            // (What the material does to its shader already, as skin's does, done after: its lines go
+            // straight after three.js's, so ahead of these, which build on them)
+            const before = own.onBeforeCompile;
+            const key = before === THREE.Material.prototype.onBeforeCompile ? "" : `|${own.customProgramCacheKey()}`;
+
+            own.onBeforeCompile = (shader, renderer) => {
                 Object.assign(shader.uniforms, this.uniforms);
                 shader.fragmentShader = shader.fragmentShader
                     .replace("void main() {", "uniform sampler2D damageMap;\nuniform vec3 skinTone;\nuniform float fireGlow;\nuniform float arcaneGlow;\nvoid main() {")
@@ -485,8 +490,10 @@ export class Wounds {
                 if (cloth) {
                     shader.fragmentShader = `#define WOUNDED_${kind}\n${shader.fragmentShader}`;
                 }
+
+                before.call(own, shader, renderer);
             };
-            own.customProgramCacheKey = () => (cloth ? `wounded-${kind.toLowerCase()}` : "wounded-skin");
+            own.customProgramCacheKey = () => `${cloth ? `wounded-${kind.toLowerCase()}` : "wounded-skin"}${key}`;
             own.needsUpdate = true;
             this.patched.add(own);
 

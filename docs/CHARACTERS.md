@@ -128,6 +128,17 @@ skin. That covers the lab's "Load skin…" and the skins made in MakeHuman or pa
   up by noise, in a darker shade; scales are Worley cells (`noise.js` `cells`), each a little
   different in shade, darker at the edges, and raised in the bump map. Their fields are made the
   first time a skin wants them (`SkinAtlas.furAndScales`), so no one else pays for them.
+- **How rough it is** (`SKIN_ROUGHNESS`): painted in the picture's alpha, which skin had no use
+  for, so it costs nothing to keep. Skin is a little glossy (0.56), oilier down the middle of the
+  forehead and the nose (the T-zone, a field of its own), matte in its creases and where hair's
+  painted on; lips are moist and nails glossy; fur is matte, and scales glossy with rough cracks
+  between them. The body's material (`surfaces.js` `SkinMaterial`) reads it as its roughness.
+- **In the light** (`SkinMaterial`): light reaches a little way round past where skin turns from
+  the sun or a lamp, red furthest (`SKIN_WRAP`: 0.3 of the way round a quarter turn for red, 0.13
+  green, 0.08 blue), as light scattered under the skin does, so a shadow's edge on a face is soft
+  and warm, not a grey line; its highlights are the sharper for being wet or oily where it is. A
+  handful of operations a pixel, no more memory; with three people close in the taproom, no
+  difference to the time a frame takes that could be measured.
 
 **Eyes.** Eyes are painted too (iris fibres, limbal ring, pupil or slit, sclera). They are drawn
 on MakeHuman's eye helper mesh with a glossy clear coat. Each look of eye is painted once and its
@@ -171,6 +182,14 @@ cut hair ends at its hem, parted hair starts at its parting, the back of the hea
 thickly down the middle as anywhere, and a ponytail is round, not flat. Growing a character's hair
 takes about a tenth of a second for the tavern's folk (at their level of detail), a quarter of a
 second at the most detailed.
+
+**In the light** (`surfaces.js` `HairMaterial`): a head of hair's highlights are bands across the
+strands, not round spots. Two are lit (Kajiya and Kay's model of a strand, with the lobes shifted
+along it as Scheuermann did, `HAIR_SHINE`): a narrow white one from light off the strands'
+surface, and a wider one a little nearer the roots in the hair's own colour, light that's been
+through a strand and back. Which way the strands run is found where they're drawn, from how the
+texture runs along each card (down it, root to tip), so nothing more is stored; about twenty
+operations a pixel of hair.
 
 Hair near the head is skinned to the head; long hair hands over to the neck and upper back.
 Beards grow from the jaw the same way, lying along the face. Under a helmet or hat, only hair from

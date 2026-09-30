@@ -8,6 +8,7 @@ import * as THREE from "three";
 import { REACTIONS } from "../client/js/characters/actions.js";
 import { HumanData } from "../client/js/characters/body.js";
 import { Rig } from "../client/js/characters/rig.js";
+import { SkinMaterial } from "../client/js/characters/surfaces.js";
 import { KINDS, stageOf, THRESHOLDS, Wounds } from "../client/js/world/wounds.js";
 
 const manifest = JSON.parse(readFileSync(new URL("../client/characters/human.json", import.meta.url), "utf8"));
@@ -293,5 +294,24 @@ describe("battle damage (wounds.js)", () => {
 
         // The skin under torn clothes: the character's own tone
         assert.equal(wounds.uniforms.skinTone.value.getHexString(), new THREE.Color("#c28560").getHexString());
+    });
+
+    it("keeps what skin does to its shader, under the damage's (its roughness first, the blood's wetness over it)", () => {
+        const character = figure();
+        const body = new SkinMaterial();
+
+        character.materials.body = body;
+        character.mesh.material[0] = body;
+        new Wounds(character);
+
+        const shader = { uniforms: {}, vertexShader: THREE.ShaderLib.standard.vertexShader, fragmentShader: THREE.ShaderLib.standard.fragmentShader };
+
+        body.onBeforeCompile(shader);
+        assert.equal(body.customProgramCacheKey(), "wounded-skin|skin");
+        assert.ok(shader.uniforms.damageMap && shader.fragmentShader.includes("SKIN_WRAP"), "both");
+
+        const [skin, blood] = ["roughnessFactor *= skinRoughness", "roughnessFactor = mix( roughnessFactor, 0.3"].map((line) => shader.fragmentShader.indexOf(line));
+
+        assert.ok(skin > 0 && blood > skin, `skin's roughness at ${skin}, the blood's at ${blood}`);
     });
 });

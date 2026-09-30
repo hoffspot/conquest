@@ -22,7 +22,8 @@ import { buildItem, itemMaterial } from "../client/js/characters/items.js";
 import { LOOKS, PEOPLES, peopleLook } from "../client/js/characters/peoples.js";
 import { FOLK, PRESETS } from "../client/js/characters/presets.js";
 import { JOINTS, jointOf, jointRotation, limitRotation, Rig } from "../client/js/characters/rig.js";
-import { paintEye, paintSkin, SkinAtlas } from "../client/js/characters/skin.js";
+import { paintEye, paintSkin, SKIN_ROUGHNESS, SkinAtlas } from "../client/js/characters/skin.js";
+import { HAIR_SHINE, HairMaterial, SKIN_WRAP, SkinMaterial } from "../client/js/characters/surfaces.js";
 
 // The real body data the build script makes (client/characters)
 const manifest = JSON.parse(readFileSync(new URL("../client/characters/human.json", import.meta.url), "utf8"));
@@ -1335,6 +1336,61 @@ describe("faces and skin (face.js, skin.js)", () => {
 
         assert.ok(covered > 0.4, `${covered} of the texture is body`);
         assert.ok(Math.abs(red / count - 0x8a) < 25, `average red ${red / count}`);
+    });
+
+    it("paints how rough the skin is in its picture's alpha: oilier down the forehead and nose, fur matte, scales glossy", () => {
+        const atlas = new SkinAtlas(human, {}, 128);
+        const rough = (data, where) => {
+            let [sum, count] = [0, 0];
+
+            for (let i = 0; i < atlas.covered.length; i++) {
+                if (atlas.covered[i] && where(i)) {
+                    sum += data[i * 4 + 3] / 255;
+                    count++;
+                }
+            }
+
+            return sum / count;
+        };
+        const skin = paintSkin(atlas, { tone: "#8a5a3c", brows: 0, stubble: 0, scalp: 0 }).data;
+        const oily = (i) => atlas.fields.oily[i] > 180;
+        const plain = (i) => atlas.fields.oily[i] === 0 && atlas.fields.cavity[i] < 128;
+
+        assert.ok(atlas.fields.oily.some((value) => value > 180), "a T-zone");
+        assert.ok(Math.abs(rough(skin, plain) - SKIN_ROUGHNESS.skin) < 0.03, `skin ${rough(skin, plain)}`);
+        assert.ok(rough(skin, oily) < rough(skin, plain) - 0.08, `the T-zone ${rough(skin, oily)}`);
+        assert.ok(Math.abs(rough(paintSkin(atlas, { tone: "#8a5a3c", fur: 1 }).data, plain) - SKIN_ROUGHNESS.fur) < 0.03, "fur");
+        assert.ok(rough(paintSkin(atlas, { tone: "#8a5a3c", scales: 1 }).data, plain) < SKIN_ROUGHNESS.skin, "scales");
+
+        // (The seams' texels as rough as those they're copied from)
+        for (let g = 0; g < atlas.gutter.length; g += 2) {
+            assert.equal(skin[atlas.gutter[g] * 4 + 3], skin[atlas.gutter[g + 1] * 4 + 3]);
+        }
+    });
+
+    it("lights skin from its picture's roughness, wrapping round, red furthest; and hair in bands along its strands", () => {
+        const compiled = (material) => {
+            const shader = { uniforms: {}, vertexShader: THREE.ShaderLib.standard.vertexShader, fragmentShader: THREE.ShaderLib.standard.fragmentShader };
+
+            material.onBeforeCompile(shader);
+
+            return shader.fragmentShader;
+        };
+        const skin = compiled(new SkinMaterial());
+        const hair = compiled(new HairMaterial());
+
+        assert.ok(skin.includes("float skinRoughness = sampledDiffuseColor.a;") && skin.includes("diffuseColor.a = opacity;"), "rough, not see-through");
+        assert.ok(skin.includes("vec3 skinLit = saturate( ( dot( geometryNormal, directLight.direction ) + SKIN_WRAP )"), "wrapped");
+        assert.ok(SKIN_WRAP[0] > SKIN_WRAP[1] && SKIN_WRAP[1] > SKIN_WRAP[2] && SKIN_WRAP[0] < 0.5, "red furthest, and not far");
+        assert.ok(!skin.includes("reflectedLight.directDiffuse += irradiance * BRDF_Lambert"), "in place of three.js's");
+        assert.ok(hair.includes("hairBand( hairStrand, geometryNormal, hairHalfway") && hair.includes("hairStrand = hairAlongLength > 1e-8"), "banded");
+        assert.ok(!hair.includes("reflectedLight.directSpecular += irradiance * specularBRDF"), "in place of three.js's");
+        assert.ok(HAIR_SHINE.sharp > HAIR_SHINE.tintSharp, "the white band narrower than the tinted one");
+
+        // Copied (someone unseen), still skin and hair
+        assert.equal(new SkinMaterial().clone().customProgramCacheKey(), "skin");
+        assert.equal(new HairMaterial().clone().customProgramCacheKey(), "hair");
+        assert.equal(new SkinMaterial().roughness, 1, "the picture's roughness as it is");
     });
 
     it("paints eyes with a dark pupil in the middle", () => {

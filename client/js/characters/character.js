@@ -14,6 +14,7 @@ import { buildDrape, drapeMaterial, DRAPES } from "./drapes.js";
 import { COMPOSITE_BUMP, compositingGarments, fittingGarment, GARMENTS, insideOf, measureBody, paintGarment, paintingGarment, texelMap } from "./garments.js";
 import { BEARDS, growingHair, hairTexture, HAIRSTYLES } from "./hair.js";
 import { buildItem } from "./items.js";
+import { HairMaterial, SkinMaterial } from "./surfaces.js";
 import { EYE_DEFAULTS, HAIR_COLOURS, paintEye, paintingSkin, SKIN_DEFAULTS } from "./skin.js";
 import { allAtOnce } from "../core/steps.js";
 
@@ -224,12 +225,14 @@ export class Character {
         this.object.add(this.rig.root);
 
         this.materials = {
-            body: materials.body ?? new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.62 }),
+            // (Skin's roughness is painted with it, and light wraps a little round it: surfaces.js)
+            body: materials.body ?? new SkinMaterial(),
             eyes: materials.eyes ?? new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.25, clearcoat: 1, clearcoatRoughness: 0.05 }),
             // (Both sides in one pass: three.js draws a transparent two-sided material's back and
             // front apart unless told not to, and a lash is too thin for its order to show)
             lashes: materials.lashes ?? new THREE.MeshStandardMaterial({ color: 0x1a1210, roughness: 0.9, transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false, forceSinglePass: true }),
-            hair: materials.hair ?? new THREE.MeshStandardMaterial({ map: hairTexture(), alphaTest: 0.4, alphaToCoverage: true, side: THREE.DoubleSide, roughness: 0.65, envMapIntensity: 0.5, vertexColors: true }),
+            // (Its highlights bands across the strands: surfaces.js)
+            hair: materials.hair ?? new HairMaterial({ map: hairTexture(), alphaTest: 0.4, alphaToCoverage: true, side: THREE.DoubleSide, roughness: 0.65, envMapIntensity: 0.5, vertexColors: true }),
             // (Parts of their own in their skin's or fur's colour: a cat's ears and tail)
             tint: materials.tint ?? new THREE.MeshStandardMaterial({ color: 0xc8a080, roughness: 0.8 }),
         };
@@ -1133,9 +1136,16 @@ export class Character {
 
         const canvas = document.createElement("canvas");
 
+        // (Its colours: the alpha is how rough it is, skin.js, not how see-through)
+        const colours = new Uint8ClampedArray(image.data);
+
+        for (let i = 3; i < colours.length; i += 4) {
+            colours[i] = 255;
+        }
+
         canvas.width = image.width;
         canvas.height = image.height;
-        canvas.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(image.data.buffer, image.data.byteOffset, image.data.length), image.width, image.height), 0, 0);
+        canvas.getContext("2d").putImageData(new ImageData(colours, image.width, image.height), 0, 0);
 
         return canvas;
     }
