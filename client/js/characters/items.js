@@ -686,15 +686,17 @@ function catEar(scale, side) {
 // A cat's tail, from the base of the spine: down behind the legs, curling up at its end
 function catTail(scale) {
     const s = scale;
-    const points = [[0, 0, 0], [0, -0.05, -0.1], [0, -0.2, -0.22], [0, -0.38, -0.3], [0.02, -0.5, -0.38], [0.04, -0.48, -0.52], [0.05, -0.4, -0.6]].map(([x, y, z]) => [x * s, y * s, z * s]);
+    // (Out behind in a loose S, clear of the heels as they swing up behind in a run)
+    const points = [[0, 0, 0], [0, -0.04, -0.12], [0, -0.14, -0.27], [0, -0.26, -0.41], [0.02, -0.33, -0.55], [0.04, -0.3, -0.69], [0.05, -0.2, -0.79]].map(([x, y, z]) => [x * s, y * s, z * s]);
 
     return assemble(taperedTube(points, 0.034 * s, 0.022 * s).map((geometry) => [geometry, "skin"]), "tail");
 }
 
-// A lizard's tail: thick at its root, down and out behind to a point near the ground
+// A lizard's tail: thick at its root, held out behind and down to a point near the ground (clear
+// of the heels as they swing up behind in a run)
 function lizardTail(scale) {
     const s = scale;
-    const points = [[0, 0, 0], [0, -0.1, -0.12], [0, -0.35, -0.3], [0, -0.62, -0.5], [0, -0.78, -0.78], [0, -0.82, -1.05]].map(([x, y, z]) => [x * s, y * s, z * s]);
+    const points = [[0, 0, 0], [0, -0.04, -0.16], [0, -0.2, -0.38], [0, -0.4, -0.63], [0, -0.56, -0.9], [0, -0.64, -1.17]].map(([x, y, z]) => [x * s, y * s, z * s]);
 
     return assemble(taperedTube(points, 0.085 * s, 0.012 * s, { segments: 22 }).map((geometry) => [geometry, "skin"]), "tail");
 }
@@ -896,6 +898,9 @@ function emblemGeometry(emblem, size) {
  * middle. `open`: on a cat's head, its ears through it (a brow band and a crest over the top from
  * front to back, not a dome).
  */
+// How tall each people's helm's dome is (the elves' tallest, the lizard folk's lowest)
+const HELM_TALL = Object.freeze({ elf: 1.18, darkElf: 1.12, lizard: 0.9 });
+
 function peopleHelm(people, radius, open = false) {
     const livery = LIVERIES[people] ?? LIVERIES.human;
     const r = radius * 1.08;
@@ -925,7 +930,7 @@ function peopleHelm(people, radius, open = false) {
     }
 
     // A dome, banded in their colour
-    const tall = people === "elf" ? 1.18 : people === "darkElf" ? 1.12 : people === "lizard" ? 0.9 : 1;
+    const tall = HELM_TALL[people] ?? 1;
     const dome = new THREE.SphereGeometry(r, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.55);
 
     dome.scale(0.86, 0.98 * tall, 1.02);
@@ -1128,7 +1133,95 @@ function leatherCap(radius, open = false) {
     ], "helmet");
 }
 
-/** Build an item's model. `fit` says how big the body is: { headRadius, scale, ears (a cat's: a helm opens round them) }. */
+// How much room head-wear leaves over the skull (metres): its lining, and the hair pressed under it
+const LINING = 0.006;
+
+/**
+ * Head-wear fitted to the skull under it (`skull`: equipment.js skullOf): its back half drawn out
+ * behind, its crown raised and, a band's, its front half drawn forward, as far as the skull needs
+ * with a lining's room to spare; a dome's front, where the face shows, as it was made. `shell` is
+ * the shape of its own: the half-axes of its dome (`across`, `up`, `back`: metres, from the head's
+ * middle) and how far below the middle its rim comes (`rim`), or a band round the head (`band`:
+ * [from, to] heights, and `back`: how far it reaches behind and before the middle).
+ */
+function fitted(group, skull, { across = null, up = null, back, rim = 0, band = null }) {
+    // (The shell as it's fitted, kept with it: what's within it, the horns' and crests' roots, is out of sight)
+    group.userData.shell = up ? { across, up, back, front: back, rim } : band && across ? { across, band, back, front: back } : null;
+
+    if (!skull) {
+        return group;
+    }
+
+    // How far its back must be drawn out for a crown raised so far (a band's back, and front, the
+    // same all round): the most any height it covers needs, but where the dome's so near its
+    // crown that the skull there is better cleared by raising it
+    const drawn = (top, side) => {
+        let most = 1;
+
+        for (const [y, ...reach] of skull.at) {
+            const inside = band ? y >= band[0] && y <= band[1] : y >= -rim && y <= top;
+            const own = band || y <= 0 ? back : back * Math.sqrt(Math.max(0, 1 - (y / top) ** 2));
+
+            if (inside && reach[side] > 0) {
+                most = own > 0 ? Math.max(most, (reach[side] + LINING) / own) : Infinity;
+            }
+        }
+
+        return most;
+    };
+    let [raise, draw] = [1, drawn(Infinity, 0)];
+
+    if (up) {
+        const least = Math.max(1, (skull.top + LINING) / up);
+
+        [raise, draw] = [0, 0.05, 0.1, 0.15, 0.2, 0.3]
+            .map((more) => [least * (1 + more), drawn(up * least * (1 + more), 0)])
+            .reduce((best, each) => (each[0] + each[1] < best[0] + best[1] ? each : best));
+    }
+
+    const ahead = band ? drawn(Infinity, 1) : 1;
+
+    if (group.userData.shell) {
+        Object.assign(group.userData.shell, up ? { up: up * raise, back: back * draw } : { back: back * draw, front: back * ahead });
+    }
+
+    if (draw === 1 && raise === 1 && ahead === 1) {
+        return group;
+    }
+
+    group.traverse((mesh) => {
+        if (!mesh.isMesh) {
+            return;
+        }
+
+        const { position, normal } = mesh.geometry.attributes;
+
+        for (let i = 0; i < position.count; i++) {
+            const [sy, sz] = [position.getY(i) > 0 ? raise : 1, position.getZ(i) < 0 ? draw : ahead];
+
+            position.setXYZ(i, position.getX(i), position.getY(i) * sy, position.getZ(i) * sz);
+
+            if (normal) {
+                const [nx, ny, nz] = [normal.getX(i), normal.getY(i) / sy, normal.getZ(i) / sz];
+                const length = Math.hypot(nx, ny, nz) || 1;
+
+                normal.setXYZ(i, nx / length, ny / length, nz / length);
+            }
+        }
+
+        position.needsUpdate = true;
+        mesh.geometry.computeBoundingSphere();
+    });
+
+    return group;
+}
+
+// A helm's dome over a head of `radius` (helmet, peopleHelm: a dome 1.08 times its radius, scaled
+// 0.98 up and 1.02 back, a band round it 1.03 back, the dome's rim a little below the middle), `tall`
+// as a people's is
+const helmShell = (radius, tall = 1) => ({ across: radius * 1.08 * 0.86, up: radius * 1.08 * 0.98 * tall, back: radius * 1.08 * 1.02, rim: radius * 0.17 });
+
+/** Build an item's model. `fit` says how big the body is: { headRadius, scale, ears (a cat's: a helm opens round them), skull (under head-wear) }. */
 export function buildItem(model, fit = {}) {
     const headRadius = fit.headRadius ?? 0.1;
 
@@ -1136,7 +1229,9 @@ export function buildItem(model, fit = {}) {
     const [kind, people] = model.split(".");
 
     if (people && kind === "helm") {
-        return peopleHelm(people, headRadius, Boolean(fit.ears));
+        const open = Boolean(fit.ears) || people === "cat";
+
+        return fitted(peopleHelm(people, headRadius, Boolean(fit.ears)), fit.skull, open ? { across: headRadius * 1.08 * 0.86, band: [-headRadius * 0.16, headRadius * 0.12], back: headRadius * 1.08 * 1.03 } : helmShell(headRadius, HELM_TALL[people] ?? 1));
     }
 
     if (people && kind === "shield") {
@@ -1179,15 +1274,18 @@ export function buildItem(model, fit = {}) {
         case "kiteShield":
             return kiteShield();
         case "nasalHelm":
-            return fit.ears ? peopleHelm("human", headRadius, true) : helmet(headRadius, "nasal");
-        case "orcHelm":
-            return fit.ears ? peopleHelm("orc", headRadius, true) : helmet(headRadius, "orc");
+        case "orcHelm": {
+            const style = model === "orcHelm" ? "orc" : "nasal";
+
+            return fit.ears ? fitted(peopleHelm(style === "orc" ? "orc" : "human", headRadius, true), fit.skull, { across: headRadius * 1.08 * 0.86, band: [-headRadius * 0.16, headRadius * 0.12], back: headRadius * 1.08 * 1.03 }) : fitted(helmet(headRadius, style), fit.skull, helmShell(headRadius));
+        }
         case "leatherCap":
-            return leatherCap(headRadius, Boolean(fit.ears));
+            return fitted(leatherCap(headRadius, Boolean(fit.ears)), fit.skull, fit.ears ? { band: [-headRadius * 0.1, headRadius * 0.9], back: headRadius * 1.05 * 1.04 } : { across: headRadius * 1.05 * 0.88, up: headRadius * 1.05 * 0.95, back: headRadius * 1.05 * 1.03, rim: headRadius * 0.12 });
         case "wizardHat":
-            return wizardHat(headRadius);
+            // (Its band, from the brim up: the brim's middle within the head)
+            return fitted(wizardHat(headRadius), fit.skull, { across: headRadius * 1.08 * 0.97, band: [headRadius * 1.08 * 0.28 - 0.02, headRadius * 0.5], back: headRadius * 1.08 * 0.97 });
         case "crown":
-            return crown(headRadius);
+            return fitted(crown(headRadius), fit.skull, { across: headRadius * 1.04 * 0.92, band: [headRadius * 0.25, headRadius * 0.5], back: headRadius * 1.04 * 0.92 });
         case "catEar":
             return catEar(fit.scale ?? 1, fit.side ?? 1);
         case "catTail":

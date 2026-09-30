@@ -451,9 +451,23 @@ became 48, for about 10% more vertices (the doubled faces). Their pictures are t
 
 An item can bring a garment: a backpack brings its straps, spiked gauntlets their plate
 gauntlets. It can hide things: a helmet hides the hair above its rim. It can also set how its arm
-is carried when walking: a shield across the body, a staff or war hammer upright, a sword or
-wand lowered, a grimoire open on the palm, fists clenched, with less arm swing and a gripping
-fist.
+is carried when walking: a shield at the side, its face out, a staff or war hammer upright, a
+sword or wand lowered, a grimoire open on the palm, fists clenched, with less arm swing and a
+gripping fist. An arm swinging free is held 10° further out when something hangs at its hip (a
+scabbard, a wand in the belt) or its hand wears spiked knuckles, so it swings past them, not
+through them (`Character.clearing`).
+
+**Fitted clear of the body.** Head-wear is fitted to the skull under it (`fitted`, from
+`skullOf`: how far the head reaches behind and before its middle at each height, and how high):
+its back drawn out and its crown raised as far as the skull needs, with 6 mm to spare for a
+lining, so a longer or taller head never comes through a helm, a hat or a crown; a band (a crown,
+the cat folk's open helm) is drawn out both ways. A shield stands off the forearm by its straps
+and pad, as far as the upper arm is thick and 4.5 cm more, so the upper arm bent up behind it
+clears it; the lizard folk's and the orcs' round shields are held by a grip behind the boss,
+their middle over the fist, and the others strapped along the forearm. A quiver stands 8.5 cm off
+the back, a little right of the middle, clear of the shoulder blades as they roll and of an
+arm reaching behind. Tails are held out behind, clear of the
+heels swinging up in a run.
 
 The game's weapons are items too: a sword, a mage's staff, a crystal-tipped wand, an open
 grimoire (in the left hand, the right hand free to cast), a two-handed war hammer, a longbow with
@@ -476,10 +490,10 @@ own dark, calf-high leather (`spikedBootLeather`), in the feet slot.
 
 | Weapon | Put away |
 | --- | --- |
-| Sword | In a leather scabbard with brass fittings at the left hip, the hilt forward and up, the blade down and back |
-| Wand | Tucked in the belt at the right hip, the tip down |
+| Sword | In a leather scabbard with brass fittings at the left hip, hung from its frog at the belt, the hilt forward and up, the blade down and back |
+| Wand | Tucked in the belt at the right hip, the tip down and a little back, clear of the thigh |
 | Grimoire | Closed, hanging flat at the left hip, its spine down |
-| Staff, war hammer, orc cleaver | On the back, the grip behind the right shoulder where the hand reaches over for it, the head (the staff's crystal) down across the back to the left hip |
+| Staff, war hammer, orc cleaver | On the back, the grip behind the right shoulder where the hand reaches over for it, the head (the staff's crystal) down across the back to the left hip; the war hammer's head side-on; the staff and the war hammer angled a little off the back, clear of the buttocks as the back arches |
 | Bow | On the back across the quiver, the grip behind the left shoulder for the left hand (a bow looks the same either way up) |
 | Spiked gauntlets | Worn: the hands just open |
 
@@ -630,8 +644,11 @@ battle knowing.
 | Spiked gauntlets | A straight punch at head height from a boxer's guard (left and right in turn, whichever way) | a hook, an uppercut, a body blow, an overhand |
 | Orc cleaver | An overhead hack: raised high behind the head; hacked down | a backhand, a flat chop, a gut rip, a stab and rip |
 
-**Spells** are cast the same way, with the free left hand (the right keeps hold of the weapon),
-key 1 being when the spell takes effect:
+**Spells** are cast the same way, with the free hand, key 1 being when the spell takes effect:
+the left, the right keeping hold of the weapon; or, if the left holds something (a bow) and the
+right's free, the right, the whole cast mirrored. A staff or war hammer is held upright out at the
+right side in the one hand while the other casts, its foot clear of the legs, rather than across
+the body where the turning body would swing it into them.
 
 | Spell | The first way | And four more |
 | --- | --- | --- |
@@ -681,8 +698,34 @@ anatomically, whatever the body's size:
   limbs pass beside the legs and hips, not through them. A tankard's rim meets the lower lip when
   drinking, rather than the tankard sitting at the chest. The two-handed keys were fitted over
   their whole motion, on the hero's build and the default one, to keep them clear while staying
-  as near the original choreography as they could. The war hammer's haft ends 26 cm below the
-  right hand, with the rear hand at its end, as a two-handed hammer is held.
+  as near the original choreography as they could; the staff's blows, the war hammer's leaping
+  slam, and the draws and put-aways that passed through the body, were fitted again against every
+  point along what's held (not only its ends), on the builds of those who use them, within the
+  joints' ranges the tests hold them to. The staff's overhead strike, sweep and spinning strike
+  now end with the rear hand at the left hip, as a quarterstaff's is held, so the butt goes back
+  past the hip rather than between the thighs, and the sweep is swung at the waist. A hook isn't
+  carried so far across that the forearm comes down on the lead fist. The war hammer's haft ends
+  26 cm below the right hand, with the rear hand at its end, as a two-handed hammer is held.
+- **Kept out as it's posed.** Keys can't foresee every body, so what's held in one hand is kept
+  out of the body as it's posed too, while something's being done (a blow, a cast, a draw or
+  put-away, a rest). Once the arm's reached, each point of what's held (2.5 cm apart along its
+  edges, looked at 8 cm of its length at a time) is set against the nearest of 700 points of the
+  skin (not the hand holding it or its forearm), each placed only where it's needed: roughly by
+  its heaviest bone, then exactly, once a frame. A point behind the skin nearest it, and not off
+  to one side of where that skin faces, is in. The deepest one well away from the grip turns what's
+  held about the grip (0.6 radians at most), one near the grip moves the hand (8 cm at most), and
+  the arm's reached again from there; if a turn left it in (the wrist as far as it goes), the hand
+  moves out instead. That's three times at most, less and less as the hand nears where the weapon's
+  put away, so it still goes home. What's held in both hands (a staff, a war hammer) is moved out
+  whole instead, never turned, the other hand following it along the haft. A shield is kept clear
+  its own way (below). It's done only for characters posed at least every other frame
+  (`POSING.clear`: near enough for it to show), and only as the arm's reached the last time that
+  frame (the arm drawn, not the guard's under an action's), for about 0.07 ms a character a frame
+  more than before, measured on desktop Node.
+- **The shield** is held up before the chest, further out as the free hand would reach out, and
+  swung aside to the left as the sword hand comes across the body, out of the sword arm's way. As
+  it's posed, if the body (not the shield arm) has come behind its face, it's moved out along its
+  face, 8 cm at most.
 
 The tests go through every attack, cast, rest, guard, draw and put-away, holding what each is
 done with, a tenth of the way at a time and at each key, and check that:
@@ -695,6 +738,15 @@ done with, a tenth of the way at a time and at each key, and check that:
   shoulder may go as far as mid-swing);
 - the thumb closes over the fingers round a grip, and both fists close round a two-handed shaft;
 - nothing held sinks into the body.
+
+And (`test/clipping.test.js`) nothing worn or carried sinks more than 1.2 cm into the body (what
+a sleeve or surcoat over it would hide), on every people's soldiers, the folk and the heroes:
+carried standing, walking and running; a shield on guard, through every blow, cast and flinch
+and a sentry's rests; every weapon's blows and casts, and running on guard with it; every draw
+and put-away; and the folk's and heroes' rests, each stepped a frame at a time at 30 frames a
+second, as in the game. Every point along what's held is looked at (2 cm apart along its edges,
+not only its corners), against the nearest of the body's vertices (not the hand holding it or
+that hand's forearm), and it's in only if it's behind that skin, not off to one side of it.
 
 **Reactions** to being hit are functions of time and of where the blow came from (which side,
 front or back), added to whatever pose the character is in, so a flinch during an attack still
@@ -821,7 +873,7 @@ as the barkeep does, at the counter.
 | Smith | wiping the brow | the back of the wrist across the forehead (the serving wench's) |
 | | looking over the work | the tongs held up before the face, the work turned this way and that |
 | | rolling the shoulders | (the adventurer's) |
-| | stretching the back | (the serving wench's) |
+| | stretching the back | the back arched, the shoulders drawn back, the head back, the tools kept at the sides (a hand to the small of the back would press them into it) |
 | | shifting the weight | (the adventurer's) |
 | Apprentice | wiping the brow | (the serving wench's) |
 | | looking about, rolling the shoulders, a yawn, stretching | (the adventurer's) |
@@ -829,7 +881,7 @@ as the barkeep does, at the counter.
 | | arms raised in praise | both arms up high and wide, palms up, the face lifted |
 | | a bow of the head | hands folded at the waist, a slow bow |
 | | the sign of the Hearth | fingertips to the brow, then the heart, then out palm up |
-| | hands clasped behind | at the small of the back, looking over the pews one way and the other |
+| | hands clasped behind | at the small of the back (held there throughout), looking over the pews one way and the other |
 | Acolyte | (the priest's prayer, bow and sign; the adventurer's looking about and yawn) | |
 | Worshipper (seated) | praying | hands together, the head bowed over them |
 | | head bowed | bowed low, the hands folded in the lap |
@@ -841,11 +893,11 @@ as the barkeep does, at the counter.
 | | a little bow | hands together at the waist, a quick bow |
 | | tidying the papers | (the barkeep's wiping the bar) |
 | | tucking back her hair | (the serving wench's) |
-| Adventurer | stretching | both arms up high, the back arched |
+| Adventurer | stretching | both arms up high and apart, clear of a hat's brim, the back arched |
 | | looking about | a hand shading the eyes, one way then the other |
 | | rolling the shoulders | the shoulders rolled up and back, the neck stretched each way |
 | | a yawn | a hand to the mouth, the head back, the shoulders up |
-| | shifting the weight | from one foot to the other, a thumb in the belt |
+| | shifting the weight | from one foot to the other, a thumb in the belt (the hand brought to it from the front, over a sword's hilt) |
 
 The lab's Motion tab has them (Resting: a class, the way from Fighting's Way, Rest), and
 `?action=rest&rest=barkeep&way=2&at=1` shows one frozen.

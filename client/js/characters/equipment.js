@@ -49,7 +49,9 @@ export const SLOTS = Object.freeze([
 // fingers, degrees at each joint; a fist closes tighter, a wand is pinched) and how the thumb
 // closes (`thumb`: its three joints, rig.js JOINTS.thumb; else over the fingers)
 const HOLDS = {
-    shield: { Arm: { flex: 20, abduct: 14, rotate: 50 }, ForeArm: { flex: 85, pronate: 10 }, Hand: { flex: 10 }, swing: 0.15 },
+    // (Carried at the side: the upper arm down and a little out, the forearm forward, thumb up, so
+    // the shield hangs beside the body, its face out)
+    shield: { Arm: { flex: 12, abduct: 20, rotate: 10 }, ForeArm: { flex: 80, pronate: 0 }, Hand: { flex: 10 }, swing: 0.15 },
     staff: { Arm: { flex: 12, abduct: 10, rotate: 10 }, ForeArm: { flex: 78, pronate: 0 }, Hand: { flex: -5, deviate: 10 }, swing: 0.25 },
     bow: { Arm: { flex: 5, abduct: 8 }, ForeArm: { flex: 20, pronate: 0 }, Hand: { flex: 0 }, swing: 0.5 },
     pistol: { Arm: { flex: 0, abduct: 8 }, ForeArm: { flex: 25, pronate: 10 }, Hand: { flex: 0, deviate: -10 }, swing: 0.6 },
@@ -71,23 +73,28 @@ const HOLDS = {
  * Worn weapons (`worn`: spiked gauntlets) stay on, the hands just open.
  */
 const SHEATHS = {
-    // (At the left hip, the hilt forward and up, the blade down and back behind the thigh)
-    sword: { socket: "leftHip", at: [0.035, 0.06, 0.04], point: [0.12, -0.85, -0.5], edge: [0, -0.5, 0.85], holder: "scabbard", garment: "belt" },
+    // (At the left hip, hung from its frog a little off it, the hilt forward and up, the blade
+    // down and back behind the thigh)
+    sword: { socket: "leftHip", at: [0.04, -0.06, 0.0], point: [0.12, -0.85, -0.5], edge: [0, -0.5, 0.85], holder: "scabbard", garment: "belt" },
     // (Tucked in the belt at the right hip, the tip down)
-    wand: { socket: "rightHip", at: [-0.03, 0.05, 0.03], point: [-0.06, -1, 0.22], edge: [0, 0.22, 1], garment: "belt" },
+    wand: { socket: "rightHip", at: [-0.03, 0.05, 0.03], point: [-0.06, -1, -0.12], edge: [0, -0.12, 1], garment: "belt" },
     // (Closed, hanging flat at the left hip, its spine down)
     grimoire: { socket: "leftHip", at: [0.045, -0.07, -0.07], point: [0, 0, 1], edge: [0, -1, 0], model: "grimoireClosed", garment: "belt" },
     // (On the back, slung from the right shoulder: the grip behind it, where the hand reaches
     // over for it, the staff's crystal, the hammer's and the cleaver's heads down across the back
-    // to the left hip)
-    staff: { socket: "back", at: [-0.12, 0.15, -0.04], point: [0.3, -0.95, 0], edge: [0, 0, 1], garment: "baldric" },
-    hammer: { socket: "back", at: [-0.12, 0.15, -0.05], point: [0.3, -0.95, 0], edge: [0, 0, -1], garment: "baldric" },
+    // to the left hip; the staff and the hammer angled a little off the back, clear of the
+    // buttocks as the back arches)
+    staff: { socket: "back", at: [-0.12, 0.15, -0.04], point: [0.3, -0.94, -0.15], edge: [0, 0, 1], garment: "baldric" },
+    hammer: { socket: "back", at: [-0.12, 0.15, -0.05], point: [0.3, -0.94, -0.16], edge: [0.95, 0.3, 0], garment: "baldric" },
     cleaver: { socket: "back", at: [-0.12, 0.15, -0.035], point: [0.45, -0.89, 0], edge: [-0.89, -0.45, 0], garment: "baldric" },
     // (On the back across the quiver, the grip behind the left shoulder for the left hand, a
     // limb up past it, the other down to the right hip)
     bow: { socket: "back", at: [0.12, 0.15, -0.1], point: [-0.3, -0.95, 0], edge: [0, 0, 1], garment: "baldric" },
     worn: { worn: true },
 };
+
+// The peoples whose shields are round, held by a grip behind the boss (items.js)
+const ROUND_SHIELDS = new Set(["orc", "lizard"]);
 
 /**
  * Items: slot, model (items.js), socket, an extra turn in the socket (Euler angles, radians: a
@@ -121,7 +128,7 @@ export const ITEMS = Object.freeze({
     grimoire: { label: "Grimoire", slot: "offHand", model: "grimoire", socket: "leftHand", hold: HOLDS.book, sheath: SHEATHS.grimoire },
     pistol: { label: "Flintlock pistol", slot: "mainHand", model: "pistol", socket: "rightHand", grips: true, hold: HOLDS.pistol },
     bow: { label: "Longbow", slot: "offHand", model: "bow", socket: "leftHand", turn: [0.4, 0, 0], grips: true, hold: HOLDS.bow, sheath: SHEATHS.bow },
-    roundShield: { label: "Round shield", slot: "offHand", model: "roundShield", socket: "leftForearm", hold: HOLDS.shield, grips: true },
+    roundShield: { label: "Round shield", slot: "offHand", model: "roundShield", socket: "leftFist", hold: HOLDS.shield, grips: true },
     kiteShield: { label: "Kite shield", slot: "offHand", model: "kiteShield", socket: "leftForearm", hold: HOLDS.shield, grips: true },
     nasalHelm: { label: "Nasal helm", slot: "head", model: "nasalHelm", socket: "head", hides: ["hair"] },
     orcHelm: { label: "Horned helm", slot: "head", model: "orcHelm", socket: "head", hides: ["hair"] },
@@ -131,10 +138,10 @@ export const ITEMS = Object.freeze({
     // Each people's helm and shield, in their colours (liveries.js: their soldiers' uniform)
     ...Object.fromEntries(Object.keys(LIVERIES).flatMap((people) => [
         [`helm.${people}`, { label: "Helm", slot: "head", model: `helm.${people}`, socket: "head", hides: ["hair"] }],
-        [`shield.${people}`, { label: "Shield", slot: "offHand", model: `shield.${people}`, socket: "leftForearm", hold: HOLDS.shield, grips: true }],
+        [`shield.${people}`, { label: "Shield", slot: "offHand", model: `shield.${people}`, socket: ROUND_SHIELDS.has(people) ? "leftFist" : "leftForearm", hold: HOLDS.shield, grips: true }],
     ])),
     backpack: { label: "Backpack", slot: "back", model: "backpack", socket: "back", garment: "straps" },
-    quiver: { label: "Quiver", slot: "back", model: "quiver", socket: "back", turn: [0.25, 0, 0.5], offset: [0, 0.02, -0.04] },
+    quiver: { label: "Quiver", slot: "back", model: "quiver", socket: "back", turn: [0.25, 0, 0.35], offset: [-0.03, 0.02, -0.085] },
     musket: { label: "Musket (slung)", slot: "back", model: "musket", socket: "back", turn: [0, 0, 2.5], offset: [0, 0, -0.03] },
     tusks: { label: "Tusks", slot: "face", model: "tusks", socket: "mouth" },
     // The other peoples' own (characters/peoples.js), in the colour of their skin or fur
@@ -182,11 +189,16 @@ export function socketOn(character, socket) {
 
             return { bone, position, quaternion, fit };
         }
-        case "leftForearm": {
-            // Strapped to the outside of the forearm, facing out
+        case "leftForearm":
+        case "leftFist": {
+            // Strapped to the outside of the forearm, facing out, standing off it by its straps and
+            // the pad the arm rests on: as far as the upper arm is thick and a hand's breadth more
+            // (the upper arm, bent up behind it that far off, clears it). A round shield's held by
+            // its grip behind the boss, its middle over the fist; a kite's by straps along the forearm
             const bone = "LeftForeArm";
             const length = head("LeftHand").distanceTo(head(bone));
-            const position = new THREE.Vector3(0.05 * face.scale, -length * 0.55, 0).applyQuaternion(frame(bone));
+            const along = socket === "leftFist" ? 1.05 : 0.55;
+            const position = new THREE.Vector3(limbThickness(character, "LeftArm", "LeftForeArm") + 0.045 * face.scale, -length * along, 0).applyQuaternion(frame(bone));
             const quaternion = frame(bone).clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2));
 
             return { bone, position, quaternion, fit };
@@ -252,8 +264,9 @@ export function socketOn(character, socket) {
         }
         case "head": {
             const middle = new THREE.Vector3(...face.fromFace(0, 0.035, -0.068));
+            const skull = skullOf(character, middle, fit.headRadius);
 
-            return { bone: "Head", position: middle.sub(head("Head")), quaternion: new THREE.Quaternion(), fit };
+            return { bone: "Head", position: middle.sub(head("Head")), quaternion: new THREE.Quaternion(), fit: { ...fit, skull } };
         }
         case "mouth": {
             // Just inside the lower lip, wherever the jaw has moved it: the most forward point of
@@ -356,6 +369,76 @@ function boneExtent(character, boneNames, score = null) {
     const middle = { x: sum[0] / count, y: sum[1] / count, z: sum[2] / count };
 
     return best ? { ...best, x: middle.x } : middle;
+}
+
+/**
+ * How thick a limb is along a bone (`bone` to `end`, the next bone down it: metres from the bone
+ * to its skin, as far as it goes round most of its middle half, the joints aside): a strong arm's,
+ * or an orc's, more than a slight one's.
+ */
+function limbThickness(character, name, endName) {
+    const { human, positions, rig } = character;
+    const bone = rig.index.get(name);
+    const [from, to] = [rig.heads[bone], rig.heads[rig.index.get(endName)]];
+    const along = to.clone().sub(from);
+    const length = along.length();
+    const point = new THREE.Vector3();
+    const reach = [];
+
+    along.normalize();
+
+    for (let v = 0; v < human.vertexCount; v++) {
+        if (human.partOf[v] !== 0 || human.skinIndices[v * 4] !== bone) {
+            continue;
+        }
+
+        point.fromArray(positions, v * 3).sub(from);
+
+        const t = point.dot(along);
+
+        if (t > length * 0.25 && t < length * 0.75) {
+            reach.push(point.addScaledVector(along, -t).length());
+        }
+    }
+
+    reach.sort((a, b) => a - b);
+
+    return reach.length ? reach[Math.floor(reach.length * 0.9)] : 0.05;
+}
+
+/**
+ * How far a head reaches behind its middle (`middle`, where head-wear sits) and before it at each
+ * height, near the line down the middle of it (not the ears), and how high it reaches: { at: [[y,
+ * back, front]...] (metres from the middle, every 5 mm from a little below it), top }, for
+ * head-wear to clear it (items.js).
+ */
+function skullOf(character, middle, radius) {
+    const { human, positions } = character;
+    const STEP = 0.005;
+    const from = -0.3 * radius;
+    const back = [];
+    const front = [];
+    let top = 0;
+
+    // (The body's skin up there, whichever bones move it: the head's, and the neck's under the rim)
+    for (let v = 0; v < human.vertexCount; v++) {
+        if (human.partOf[v] !== 0 || positions[v * 3 + 1] - middle.y < from) {
+            continue;
+        }
+
+        const [x, y, z] = [positions[v * 3] - middle.x, positions[v * 3 + 1] - middle.y, positions[v * 3 + 2] - middle.z];
+
+        top = Math.max(top, y);
+
+        if (Math.abs(x) < 0.35 * radius) {
+            const k = Math.floor((y - from) / STEP);
+
+            back[k] = Math.max(back[k] ?? 0, -z);
+            front[k] = Math.max(front[k] ?? 0, z);
+        }
+    }
+
+    return { at: Array.from({ length: Math.max(back.length, front.length) }, (_, k) => [from + (k + 0.5) * STEP, back[k] ?? 0, front[k] ?? 0]), top };
 }
 
 /** The head's radius round its upper half (for fitting helmets). */
