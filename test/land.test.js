@@ -1,7 +1,8 @@
 // The land's fields, worked out when a piece of the world is drawn: how far water is from its
 // shore (client/js/world/water.js), and how much of the sky's hidden near what stands on the
 // ground (client/js/world/ground.js), from the distances and blurs they're made of
-// (client/js/world/fields.js)
+// (client/js/world/fields.js); and the ground darkened under everyone standing on it
+// (client/js/world/contacts.js)
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -11,6 +12,8 @@ globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContex
 const { blurred, distancesFrom } = await import("../client/js/world/fields.js");
 const { SHORE, shoreBytes, shoreDistances } = await import("../client/js/world/water.js");
 const { contactOf } = await import("../client/js/world/ground.js");
+const { CONTACT, ContactShadows } = await import("../client/js/world/contacts.js");
+const THREE = await import("three");
 
 // A grid from rows of text: "#" for a marked square
 function grid(rows) {
@@ -91,5 +94,55 @@ describe("the ground where something stands on it (ground.js)", () => {
         const [x0, y0, across] = area;
 
         assert.ok(texture.image.data[(8 - y0) * across + (9 - x0)] < 10);
+    });
+});
+
+describe("the ground under someone standing on it (contacts.js)", () => {
+    it("is one instanced mesh of those listed this frame, as wide as they're tall, at their feet", () => {
+        const contacts = new ContactShadows();
+        const { mesh } = contacts;
+        const matrix = new THREE.Matrix4();
+        const [at, turn, size] = [new THREE.Vector3(), new THREE.Quaternion(), new THREE.Vector3()];
+
+        contacts.begin();
+        contacts.add(3, 0.5, -2, 1.8);
+        contacts.add(5, 0, 5, 1.2, 0.5);
+        // (Hardly there at all: not drawn)
+        contacts.add(9, 0, 9, 1.8, 0.005);
+        contacts.end();
+
+        assert.ok(mesh.count === 2 && mesh.visible);
+        assert.deepEqual([...mesh.geometry.attributes.contact.array.slice(0, 2)], [1, 0.5]);
+        mesh.getMatrixAt(0, matrix);
+        matrix.decompose(at, turn, size);
+        assert.deepEqual(at.toArray(), [3, 0.5, -2]);
+        assert.ok(Math.abs(size.x - 1.8 * CONTACT.across) < 1e-6 && Math.abs(size.z - size.x) < 1e-6 && size.y === 1);
+        assert.deepEqual(mesh.instanceMatrix.updateRanges, [{ start: 0, count: 32 }], "only those listed sent");
+
+        // (Next frame, nobody: nothing drawn)
+        contacts.begin();
+        contacts.end();
+        assert.ok(mesh.count === 0 && !mesh.visible);
+
+        // (No more than it has room for)
+        contacts.begin();
+
+        for (let k = 0; k < CONTACT.most + 5; k++) {
+            contacts.add(k, 0, 0, 1.7);
+        }
+
+        contacts.end();
+        assert.equal(mesh.count, CONTACT.most);
+        contacts.dispose();
+    });
+
+    it("darkens as a soft round shadow, faded where it's thinner", () => {
+        const { mesh } = new ContactShadows();
+        const shader = { uniforms: {}, vertexShader: THREE.ShaderLib.basic.vertexShader, fragmentShader: THREE.ShaderLib.basic.fragmentShader };
+
+        mesh.material.onBeforeCompile(shader);
+        assert.ok(shader.vertexShader.includes("vContact = contact;") && shader.fragmentShader.includes("diffuseColor.a *= contactStrength * vContact"), "its shader's lines replace three.js's");
+        assert.equal(shader.uniforms.contactStrength.value, CONTACT.strength);
+        assert.ok(mesh.material.transparent && !mesh.material.depthWrite && mesh.material.polygonOffset, "over the ground without fighting it");
     });
 });

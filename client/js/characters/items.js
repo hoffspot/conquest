@@ -66,7 +66,106 @@ function dyed(name) {
     }
 }
 
-/** Merge geometries by material into one group of meshes (one draw call per material). */
+// The most materials one item's parts are folded together from
+const FOLDS = 8;
+
+/**
+ * An item's parts of several materials in one mesh (one draw call where there'd be one for each
+ * material): each vertex says which of them it's of (`fold`: 0 to FOLDS - 1), and takes that one's
+ * colour, metalness and roughness. One shader for every item; each item's materials its own.
+ */
+class FoldedMaterial extends THREE.MeshStandardMaterial {
+    /** @param {string[]} [names] - Each fold's material (itemMaterial's names). */
+    constructor(names = []) {
+        super({ metalness: 1, roughness: 1 });
+        this.name = names.join("+");
+        this.colours = new Float32Array(FOLDS * 3);
+        this.surfaces = new Float32Array(FOLDS * 2);
+
+        names.forEach((name, fold) => {
+            const { color, metalness, roughness } = itemMaterial(name);
+
+            color.toArray(this.colours, fold * 3);
+            this.surfaces[fold * 2] = metalness;
+            this.surfaces[fold * 2 + 1] = roughness;
+        });
+    }
+
+    onBeforeCompile(shader) {
+        shader.uniforms.foldColours = { value: this.colours };
+        shader.uniforms.foldSurfaces = { value: this.surfaces };
+        shader.vertexShader = shader.vertexShader
+            .replace("#include <common>", `#include <common>\nattribute float fold;\nuniform vec3 foldColours[${FOLDS}];\nuniform vec2 foldSurfaces[${FOLDS}];\nvarying vec3 vFoldColour;\nvarying vec2 vFoldSurface;`)
+            .replace("#include <begin_vertex>", "#include <begin_vertex>\nvFoldColour = foldColours[int(fold)];\nvFoldSurface = foldSurfaces[int(fold)];");
+        shader.fragmentShader = shader.fragmentShader
+            .replace("#include <common>", "#include <common>\nvarying vec3 vFoldColour;\nvarying vec2 vFoldSurface;")
+            .replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.rgb *= vFoldColour;")
+            .replace("#include <metalnessmap_fragment>", "#include <metalnessmap_fragment>\nmetalnessFactor *= vFoldSurface.x;\nroughnessFactor *= vFoldSurface.y;");
+    }
+
+    customProgramCacheKey() {
+        return "item-folded";
+    }
+
+    // (Copied with its folds: someone unseen has their materials copied, game.js)
+    copy(source) {
+        super.copy(source);
+        this.colours = source.colours.slice();
+        this.surfaces = source.surfaces.slice();
+
+        return this;
+    }
+}
+
+const folded = new Map();
+
+// The folded material of these materials, shared by every item of them
+function foldedMaterial(names) {
+    const key = names.join("+");
+
+    if (!folded.has(key)) {
+        folded.set(key, new FoldedMaterial(names));
+    }
+
+    return folded.get(key);
+}
+
+// Whether a material's parts can be folded in with others': opaque, not glowing, and not what a
+// character colours as their own (character.js: "skin")
+const foldable = (material) => material.name !== "skin" && !material.transparent && material.emissive.getHex() === 0;
+
+// A thin part's other side (a plume, a pennant, fletching), as faces of its own lit from that side,
+// as a two-sided material draws it, so it can be in a one-sided mesh
+function bothSides(geometry) {
+    const position = geometry.attributes.position.array;
+    const normal = geometry.attributes.normal.array;
+    const [positions, normals] = [new Float32Array(position.length * 2), new Float32Array(normal.length * 2)];
+
+    positions.set(position);
+    normals.set(normal);
+
+    // (Each face turned over: its corners the other way round, facing the other way)
+    for (let face = 0; face < position.length; face += 9) {
+        for (const [to, from] of [[0, 0], [1, 2], [2, 1]]) {
+            for (let axis = 0; axis < 3; axis++) {
+                positions[position.length + face + to * 3 + axis] = position[face + from * 3 + axis];
+                normals[position.length + face + to * 3 + axis] = -normal[face + from * 3 + axis];
+            }
+        }
+    }
+
+    const both = new THREE.BufferGeometry();
+
+    both.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    both.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
+
+    return both;
+}
+
+/**
+ * Merge geometries into one group of meshes: the parts of all the materials that can be (opaque,
+ * not glowing, not skin) in one mesh, and the rest one mesh for each material.
+ */
 function assemble(parts, name) {
     const byMaterial = new Map();
 
@@ -79,18 +178,47 @@ function assemble(parts, name) {
     }
 
     const group = new THREE.Group();
-
-    group.name = name;
-
-    for (const [material, list] of byMaterial) {
-        for (const geometry of list) {
-            geometry.deleteAttribute("uv");
-        }
-
-        const mesh = new THREE.Mesh(mergeGeometries(list), itemMaterial(material));
+    const add = (geometry, material) => {
+        const mesh = new THREE.Mesh(geometry, material);
 
         mesh.castShadow = true;
         group.add(mesh);
+    };
+
+    group.name = name;
+
+    for (const list of byMaterial.values()) {
+        for (const geometry of list) {
+            geometry.deleteAttribute("uv");
+        }
+    }
+
+    const folds = [...byMaterial.keys()].filter((material) => foldable(itemMaterial(material))).slice(0, FOLDS);
+
+    // (Folded only where that saves a draw call)
+    if (folds.length > 1) {
+        const merged = folds.flatMap((material, fold) =>
+            byMaterial.get(material).map((geometry) => {
+                const { position, normal } = (itemMaterial(material).side === THREE.DoubleSide ? bothSides(geometry) : geometry).attributes;
+                const part = new THREE.BufferGeometry();
+
+                part.setAttribute("position", position);
+                part.setAttribute("normal", normal);
+                part.setAttribute("fold", new THREE.BufferAttribute(new Uint8Array(position.count).fill(fold), 1));
+
+                return part;
+            }),
+        );
+
+        add(mergeGeometries(merged), foldedMaterial(folds));
+
+        for (const material of folds) {
+            byMaterial.delete(material);
+        }
+    }
+
+    for (const [material, list] of byMaterial) {
+        add(mergeGeometries(list), itemMaterial(material));
     }
 
     return group;

@@ -226,7 +226,9 @@ export class Character {
         this.materials = {
             body: materials.body ?? new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.62 }),
             eyes: materials.eyes ?? new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.25, clearcoat: 1, clearcoatRoughness: 0.05 }),
-            lashes: materials.lashes ?? new THREE.MeshStandardMaterial({ color: 0x1a1210, roughness: 0.9, transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false }),
+            // (Both sides in one pass: three.js draws a transparent two-sided material's back and
+            // front apart unless told not to, and a lash is too thin for its order to show)
+            lashes: materials.lashes ?? new THREE.MeshStandardMaterial({ color: 0x1a1210, roughness: 0.9, transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false, forceSinglePass: true }),
             hair: materials.hair ?? new THREE.MeshStandardMaterial({ map: hairTexture(), alphaTest: 0.4, alphaToCoverage: true, side: THREE.DoubleSide, roughness: 0.65, envMapIntensity: 0.5, vertexColors: true }),
             // (Parts of their own in their skin's or fur's colour: a cat's ears and tail)
             tint: materials.tint ?? new THREE.MeshStandardMaterial({ color: 0xc8a080, roughness: 0.8 }),
