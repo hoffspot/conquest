@@ -691,6 +691,26 @@ can leave, and the world goes on. When the host closes the world to others (or l
 still in it go back to their title screen and are told. Menus and the world map don't pause the
 world while anyone else is in it (rule 6, M0).
 
+**When the link falters** (`app/together.js` `RelayLink`, `LINK_TIMING`). A phone moving from Wi-Fi
+to its mobile network, or losing its signal a moment, needn't end the game:
+- **Noticed.** Each game asks the relay every 4 seconds whether its link's still there. An ask left
+  unanswered 10 seconds means the link's died without closing (as one often does after a network
+  change), and it's given up on. (A page that's been asleep, hidden on a phone, gets a fresh ask
+  first; a relay that's never answered one is never judged by them.)
+- **Made again.** On a new link, after half a second, then twice as long each try up to 8 seconds,
+  each a little more or less so that everyone dropped at once doesn't come back at once. The relay
+  keeps the place of one whose link dropped for 30 seconds (below); the game gives up after 45, or
+  as soon as the relay says the place is gone, and only then is its player sent back to the title.
+- **Set right.** Whatever was sent meanwhile was lost, so the world's sent again: a joined game back
+  asks for it (`Joining.resync`); a host back sends it to everyone (`Hosting.resync`, one snapshot
+  for all), and takes out of the world anyone who left meanwhile (`Hosting.still`, from the relay's
+  word of who's still here).
+- **Shown.** While it isn't as it should be, the HUD says so, top left (`Game #together`): "Your
+  connection dropped. Reconnecting…" (or, for a host, "Your world's link to the others dropped");
+  "The host's connection dropped. Waiting for them…"; "The host has paused the game." (the host's
+  page hidden: its world can't move on, so it says so, `Hosting.pause`); or, with none of those
+  but no step from the host for 2 seconds, "Waiting for the host…".
+
 **How it's kept the same** (`core/netplay.js`):
 - **One authority.** The host's game is the world's one authority. Everything done to its world
   it records as it's done (`host.recorder`), and sends every tenth of a second: each step it's
@@ -718,6 +738,14 @@ Pages) name the relay to use: `?relay=wss://...`. What it takes is bounded (`REL
 message no longer than 4 MB (a world's state is about 100 KB after a good while's play), read in
 the pieces it comes in and joined once it's all there; and one who's too slow to take what's sent
 them (8 MB waiting) is let go rather than piling it up.
+- **Places kept.** The host and each who joins are given a token with their place. A link that
+  drops without a word keeps its place 30 seconds (`grace`): the host isn't told a joiner's gone,
+  and those in a room whose host's link dropped are told it's `away` (and `back`); no one new joins
+  meanwhile. A new link takes the place back with the token (`rehost`, `rejoin`), and the old link,
+  if the relay still had it, is let go. A link closed saying goodbye has left at once; closed
+  saying it's only reconnecting (code 4000, `RECONNECTING`), it hasn't. The relay says back the
+  code it was closed with.
+- **Still there?** Either can ask (`ping`), and the relay answers (`pong`).
 
 ### The war's end (M10)
 

@@ -185,6 +185,18 @@ const VISITS = Object.freeze({ every: 0.5, budget: 6 });
 // How often a hosted world's goings-on are sent to those who've joined it (seconds: docs/WAR.md M11)
 const FLUSH_EVERY = 0.1;
 
+// How long a joined game goes without a step from the host before its player's told it's waiting (ms)
+const WAITING_AFTER = 2000;
+
+// What's shown while playing together isn't going as it should (Game #together)
+const TOGETHER = Object.freeze({
+    lost: "Your connection dropped. Reconnecting…",
+    hosting: "Your world's link to the others dropped. Reconnecting…",
+    away: "The host's connection dropped. Waiting for them…",
+    paused: "The host has paused the game.",
+    waiting: "Waiting for the host…",
+});
+
 // How far away (metres, either way) anyone's drawn out in the world: another player far off, and
 // whoever's near them, aren't (docs/WAR.md M11)
 const DRAW_REACH = 160;
@@ -390,6 +402,15 @@ export class Game {
         this.remote = remote;
         this.hosting = null;
         this.flushedAt = 0;
+
+        /**
+         * How the link to the others is (app/together.js onLink): null, all's well; "lost", this
+         * game's dropped and coming back; "away", the host's. With when a joined game last played a
+         * step of the host's, and what the HUD says of it all (#together).
+         */
+        this.link = null;
+        this.steppedAt = 0;
+        this.together = null;
 
         if (!remote) {
             this.host.join({ id: me, hero, talks, explored, progress, standing, followers });
@@ -1028,6 +1049,7 @@ export class Game {
 
         this.running = true;
         this.lastFrame = performance.now();
+        this.steppedAt = this.lastFrame;
         this.view.renderer.setAnimationLoop((now) => this.#frame(now));
         this.sound?.setAmbient(this.mapId === "town");
         this.sound?.setPlace(this.#soundOf(this.mapId));
@@ -1212,6 +1234,10 @@ export class Game {
             this.#fault(error);
         }
 
+        if (this.remote || this.hosting || this.together) {
+            this.#together(steps ? (this.steppedAt = now) : now);
+        }
+
         const updated = performance.now();
         const mine = this.avatars.get(this.me);
 
@@ -1357,6 +1383,29 @@ export class Game {
         this.#update(dt, this.accumulator / STEP_MS);
 
         return steps;
+    }
+
+    // Why nothing's happening, while playing together: this game's link dropped (it's coming back),
+    // or the host's, the host's paused, or no step's come from it for a while (a joined game);
+    // shown on the HUD while it lasts (written only when it changes)
+    #together(now) {
+        const remote = this.remote;
+        let status = null;
+
+        if (this.link === "lost") {
+            status = remote ? TOGETHER.lost : TOGETHER.hosting;
+        } else if (remote && this.link === "away") {
+            status = TOGETHER.away;
+        } else if (remote?.paused) {
+            status = TOGETHER.paused;
+        } else if (remote && now - this.steppedAt > WAITING_AFTER) {
+            status = TOGETHER.waiting;
+        }
+
+        if (status !== this.together) {
+            this.together = status;
+            this.hud.status(status);
+        }
     }
 
     #update(dt, alpha) {

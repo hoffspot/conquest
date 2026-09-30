@@ -9,17 +9,29 @@
 //
 // Each message is a line saying what it is, then what's carried, as it was sent:
 //
-//   host -> relay:   "host"                    open a room      -> "hosting CODE"
+//   host -> relay:   "host"                    open a room      -> "hosting CODE TOKEN"
+//                    "rehost CODE TOKEN"       back on a new link (below) -> "hosting CODE TOKEN",
+//                                              then "here PEER PEER..." (or "error gone")
 //                    "to PEER\n..."            to one who's joined
 //                    "all\n..."                to all who've joined
-//                    "kick PEER"               put them out
-//   peer -> relay:   "join CODE"               join a room      -> "joined PEER" (or "error no-room")
+//                    "kick PEER"               put them out  -> "gone PEER"
+//   peer -> relay:   "join CODE"               join a room      -> "joined PEER TOKEN" (or "error
+//                                              no-room", "error full", "error away")
+//                    "rejoin CODE PEER TOKEN"  back on a new link -> "joined PEER TOKEN" (or "error gone")
 //                    "data\n..."               to the host
+//   either:          "ping"                    still there?  -> "pong"
 //   relay -> host:   "peer PEER"               someone's joined
 //                    "from PEER\n..."          what they said
 //                    "gone PEER"               they've left
 //   relay -> peer:   "data\n..."               what the host said
+//                    "away"                    the host's link has dropped (it has a while to come back)
+//                    "back"                    it's back
 //                    "closed"                  the host's gone (and so's the room)
+//
+// A link that drops (a phone moving from Wi-Fi to its mobile network, or losing its signal a
+// moment) isn't a leaving: its place is kept for a while (RELAY_LIMITS.grace), and the host or
+// peer can take it back on a new link with the token it was given. One that closes its link
+// saying so has left (unless it says it's only reconnecting: RECONNECTING).
 
 import crypto from "node:crypto";
 
@@ -30,10 +42,13 @@ export const RELAY_PATH = "/relay";
  * How much the relay carries: the longest message (bytes: a world's state is the biggest, about
  * 100 KB after a good while's play, so this is plenty), how much can wait to go to one who's slow
  * to take it before they're let go (bytes), how many rooms at once, how many in each besides its
- * host; how often it checks each is still there, and how long before one that doesn't answer is
- * let go (ms).
+ * host; how often it checks each is still there, how long before one that doesn't answer is let
+ * go, and how long the place of one whose link has dropped is kept for them (ms).
  */
-export const RELAY_LIMITS = Object.freeze({ message: 4 * 1024 * 1024, backlog: 8 * 1024 * 1024, rooms: 500, peers: 15, ping: 20000, timeout: 60000 });
+export const RELAY_LIMITS = Object.freeze({ message: 4 * 1024 * 1024, backlog: 8 * 1024 * 1024, rooms: 500, peers: 15, ping: 20000, timeout: 60000, grace: 30000 });
+
+/** The close code of a link given up on to come back on another: its place kept (not a leaving). */
+export const RECONNECTING = 4000;
 
 /** The letters a room's code is made of (no I or O, which look like 1 and 0). */
 export const CODE_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -73,6 +88,9 @@ export class Socket {
         this.partsLength = 0;
         this.open = true;
         this.heardAt = Date.now();
+
+        /** Whether the far end closed it, saying it's leaving (not only reconnecting). */
+        this.left = false;
 
         /** Hears each message (text), and when it's closed. */
         this.onMessage = () => {};
@@ -261,14 +279,33 @@ export class Socket {
                 break;
             case OPCODES.pong:
                 break;
-            case OPCODES.close:
-                this.close(1000);
+            case OPCODES.close: {
+                // (Closed saying why: left, unless it's only coming back on another link; the code
+                // said back, as RFC 6455 section 5.5.1 has it, where it's one that can be)
+                const code = payload.length >= 2 ? payload.readUInt16BE(0) : 1005;
+
+                this.left = code !== RECONNECTING;
+                this.close(code === 1000 || code === 1001 || (code >= 3000 && code <= 4999) ? code : 1000);
                 break;
+            }
             default:
                 // (Binary: not spoken here)
                 this.close(1003);
         }
     }
+}
+
+/** A new place's token, for taking it back on a new link: 72 random bits. */
+function token() {
+    return crypto.randomBytes(9).toString("base64url");
+}
+
+// Whether a token given is the one kept (in the same time, whatever's given)
+function same(given, kept) {
+    const a = Buffer.from(String(given ?? ""));
+    const b = Buffer.from(kept);
+
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 /** A new room's code: CODE_LENGTH letters, none of the codes in `taken`. */
@@ -283,18 +320,22 @@ export function roomCode(taken, random = (n) => crypto.randomInt(n)) {
 }
 
 /**
- * Put the relay on an HTTP server (at `path`). Returns { rooms (by code: { host, peers (by id),
- * next }), close() }.
+ * Put the relay on an HTTP server (at `path`). Returns { rooms (by code: { code, host (its socket),
+ * token, away (while its link's dropped), peers (by name: { socket, token, away }), next }),
+ * close() }.
  */
 export function attachRelay(httpServer, { path = RELAY_PATH, limits = RELAY_LIMITS } = {}) {
     const rooms = new Map();
     const sockets = new Set();
+    const grace = limits.grace ?? RELAY_LIMITS.grace;
 
-    // Someone new: what they say first says who they are (a host, or joining a room)
+    // Someone new: what they say first says who they are (a host, or joining a room; or either,
+    // back on a new link)
     const welcome = (socket) => {
         socket.onMessage = (text) => {
             const [line] = split(text);
-            const [what, code] = line.split(" ");
+            const [what, code, ...rest] = line.split(" ");
+            const room = rooms.get(String(code ?? "").toUpperCase());
 
             if (what === "host") {
                 if (rooms.size >= limits.rooms) {
@@ -304,41 +345,89 @@ export function attachRelay(httpServer, { path = RELAY_PATH, limits = RELAY_LIMI
                     return;
                 }
 
-                const room = { code: roomCode(new Set(rooms.keys())), host: socket, peers: new Map(), next: 1 };
+                const made = { code: roomCode(new Set(rooms.keys())), host: socket, token: token(), away: null, peers: new Map(), next: 1 };
 
-                rooms.set(room.code, room);
-                hosting(room);
-                socket.send(`hosting ${room.code}`);
-            } else if (what === "join") {
-                const room = rooms.get(String(code ?? "").toUpperCase());
-
-                if (!room) {
-                    socket.send("error no-room");
+                rooms.set(made.code, made);
+                hosting(made);
+                socket.send(`hosting ${made.code} ${made.token}`);
+            } else if (what === "rehost") {
+                if (!room || !same(rest[0], room.token)) {
+                    socket.send("error gone");
                     socket.close();
 
                     return;
                 }
 
-                if (room.peers.size >= limits.peers) {
-                    socket.send("error full");
+                rehosting(room, socket);
+            } else if (what === "join") {
+                const refusal = !room ? "no-room" : room.peers.size >= limits.peers ? "full" : room.away ? "away" : null;
+
+                if (refusal) {
+                    socket.send(`error ${refusal}`);
                     socket.close();
 
                     return;
                 }
 
                 const peer = `p${room.next++}`;
+                const place = { socket, token: token(), away: null };
 
-                room.peers.set(peer, socket);
-                joined(room, peer, socket);
-                socket.send(`joined ${peer}`);
+                room.peers.set(peer, place);
+                joined(room, peer, place);
+                socket.send(`joined ${peer} ${place.token}`);
                 room.host.send(`peer ${peer}`);
+            } else if (what === "rejoin") {
+                const [peer, given] = rest;
+                const place = room?.peers.get(peer);
+
+                if (!place || !same(given, place.token)) {
+                    socket.send("error gone");
+                    socket.close();
+
+                    return;
+                }
+
+                rejoined(room, peer, place, socket);
             } else {
                 socket.close(1008);
             }
         };
     };
 
-    // A room's host: what they say goes to one who's joined, or all of them; gone, so's the room
+    // A socket given up on for another: let go, and not heard of again
+    const replaced = (socket) => {
+        socket.onMessage = () => {};
+        socket.onClose = () => sockets.delete(socket);
+        socket.close(RECONNECTING);
+    };
+
+    // A room gone (its host left, or didn't come back in time): everyone in it told
+    const closeRoom = (room) => {
+        clearTimeout(room.away);
+        rooms.delete(room.code);
+
+        for (const place of room.peers.values()) {
+            clearTimeout(place.away);
+            place.socket.send("closed");
+            place.socket.close();
+        }
+
+        room.peers.clear();
+    };
+
+    // One who's joined out of the room: the host's told
+    const leave = (room, peer) => {
+        const place = room.peers.get(peer);
+
+        if (place) {
+            clearTimeout(place.away);
+            room.peers.delete(peer);
+            room.host.send(`gone ${peer}`);
+        }
+    };
+
+    // A room's host: what they say goes to one who's joined, or all of them; left, so's the room;
+    // their link dropped, it's kept a while for them to come back to
     const hosting = (room) => {
         const { host } = room;
 
@@ -347,45 +436,113 @@ export function attachRelay(httpServer, { path = RELAY_PATH, limits = RELAY_LIMI
             const [what, peer] = line.split(" ");
 
             if (what === "to") {
-                room.peers.get(peer)?.send(`data\n${rest}`);
+                room.peers.get(peer)?.socket.send(`data\n${rest}`);
             } else if (what === "all") {
-                for (const socket of room.peers.values()) {
+                for (const { socket } of room.peers.values()) {
                     socket.send(`data\n${rest}`);
                 }
             } else if (what === "kick") {
-                room.peers.get(peer)?.close();
+                const place = room.peers.get(peer);
+
+                leave(room, peer);
+                place?.socket.close();
+            } else if (what === "ping") {
+                host.send("pong");
             }
         };
         host.onClose = () => {
             sockets.delete(host);
-            rooms.delete(room.code);
 
-            for (const socket of room.peers.values()) {
-                socket.send("closed");
-                socket.close();
+            if (room.host !== host || rooms.get(room.code) !== room) {
+                return;
             }
 
-            room.peers.clear();
+            if (host.left) {
+                closeRoom(room);
+
+                return;
+            }
+
+            room.away = setTimeout(() => closeRoom(room), grace);
+            room.away.unref?.();
+
+            for (const { socket } of room.peers.values()) {
+                socket.send("away");
+            }
         };
     };
 
-    // One who's joined a room: what they say goes to its host; gone, the host's told
-    const joined = (room, peer, socket) => {
+    // A host back on a new link: the room theirs again, told who's still in it; those in it told
+    const rehosting = (room, socket) => {
+        const old = room.host;
+
+        clearTimeout(room.away);
+        room.away = null;
+        room.host = socket;
+
+        if (old !== socket) {
+            replaced(old);
+        }
+
+        hosting(room);
+        socket.send(`hosting ${room.code} ${room.token}`);
+        socket.send(["here", ...room.peers.keys()].join(" "));
+
+        for (const place of room.peers.values()) {
+            place.socket.send("back");
+        }
+    };
+
+    // One who's joined a room: what they say goes to its host; left, the host's told; their link
+    // dropped, their place is kept a while for them to come back to
+    const joined = (room, peer, place) => {
+        const { socket } = place;
+
         socket.onMessage = (text) => {
             const [line, rest] = split(text);
 
             if (line === "data") {
                 room.host.send(`from ${peer}\n${rest}`);
+            } else if (line === "ping") {
+                socket.send("pong");
             }
         };
         socket.onClose = () => {
             sockets.delete(socket);
 
-            if (room.peers.get(peer) === socket) {
-                room.peers.delete(peer);
-                room.host.send(`gone ${peer}`);
+            if (room.peers.get(peer) !== place || place.socket !== socket) {
+                return;
             }
+
+            if (socket.left) {
+                leave(room, peer);
+
+                return;
+            }
+
+            place.away = setTimeout(() => leave(room, peer), grace);
+            place.away.unref?.();
         };
+    };
+
+    // One who'd joined, back on a new link: their place theirs again (and told if the host's away)
+    const rejoined = (room, peer, place, socket) => {
+        const old = place.socket;
+
+        clearTimeout(place.away);
+        place.away = null;
+        place.socket = socket;
+
+        if (old !== socket) {
+            replaced(old);
+        }
+
+        joined(room, peer, place);
+        socket.send(`joined ${peer} ${place.token}`);
+
+        if (room.away) {
+            socket.send("away");
+        }
     };
 
     const upgrade = (request, socket, head) => {
@@ -430,6 +587,14 @@ export function attachRelay(httpServer, { path = RELAY_PATH, limits = RELAY_LIMI
         close() {
             clearInterval(pinging);
             httpServer.off("upgrade", upgrade);
+
+            for (const room of rooms.values()) {
+                clearTimeout(room.away);
+
+                for (const place of room.peers.values()) {
+                    clearTimeout(place.away);
+                }
+            }
 
             for (const socket of sockets) {
                 socket.close(1001);

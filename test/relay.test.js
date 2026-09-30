@@ -1,29 +1,49 @@
 // The relay (server/relay.js: docs/WAR.md M11), on the real server, talked to by real WebSockets
 // (Node's own): a host opens a room and is given its code; others join it by the code; what each
 // says reaches the other untouched, big or small; one who leaves is told of; the host gone, so's
-// the room; no room, no joining
+// the room; no room, no joining. A link that drops keeps its place a while, for a new link to take
+// back with its token; one closed saying goodbye has left.
 import assert from "node:assert/strict";
 import { once } from "node:events";
+import http from "node:http";
 import { after, before, describe, it } from "node:test";
 import { EventEmitter } from "node:events";
-import { CODE_LENGTH, CODE_LETTERS, RELAY_PATH, roomCode, Socket } from "../server/relay.js";
+import { attachRelay, CODE_LENGTH, CODE_LETTERS, RECONNECTING, RELAY_LIMITS, RELAY_PATH, roomCode, Socket } from "../server/relay.js";
 import { createServer } from "../server/index.js";
 
 let server;
 let relayUrl;
+
+// (And a relay of its own that keeps a dropped link's place only a moment)
+const GRACE = 300;
+let quick;
+let quickUrl;
 
 before(async () => {
     server = createServer();
     server.httpServer.listen(0);
     await once(server.httpServer, "listening");
     relayUrl = `ws://localhost:${server.httpServer.address().port}${RELAY_PATH}`;
+
+    const httpServer = http.createServer();
+
+    quick = { httpServer, relay: attachRelay(httpServer, { limits: { ...RELAY_LIMITS, grace: GRACE } }) };
+    httpServer.listen(0);
+    await once(httpServer, "listening");
+    quickUrl = `ws://localhost:${httpServer.address().port}${RELAY_PATH}`;
 });
 
-after(() => server.close());
+after(() => {
+    server.close();
+    quick.relay.close();
+    quick.httpServer.close();
+});
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // A WebSocket to the relay, its messages queued to be waited for in turn
-async function connect() {
-    const socket = new WebSocket(relayUrl);
+async function connect(url = relayUrl) {
+    const socket = new WebSocket(url);
     const heard = [];
     const waiting = [];
 
@@ -48,17 +68,35 @@ async function connect() {
     return socket;
 }
 
-// A host with a room, and its code
-async function hosting() {
-    const host = await connect();
+// A host with a room: its code, and its token
+async function hosting(url = relayUrl) {
+    const host = await connect(url);
 
     host.send("host");
 
-    const [what, code] = (await host.next()).split(" ");
+    const [what, code, token] = (await host.next()).split(" ");
 
     assert.equal(what, "hosting");
 
-    return { host, code };
+    return { host, code, token };
+}
+
+// One who's joined a room: their name in it, and their token
+async function joining(code, url = relayUrl) {
+    const socket = await connect(url);
+
+    socket.send(`join ${code}`);
+
+    const [what, peer, token] = (await socket.next()).split(" ");
+
+    assert.equal(what, "joined");
+
+    return { socket, peer, token };
+}
+
+// A link dropped without a word (the relay's end of it cut, as a lost signal leaves it)
+function cut(socket) {
+    socket.socket.destroy();
 }
 
 describe("the relay (server/relay.js)", () => {
@@ -81,23 +119,35 @@ describe("the relay (server/relay.js)", () => {
     });
 
     it("opens a room for a host, lets others join it by its code, and passes what each says to the other, untouched", async () => {
-        const { host, code } = await hosting();
+        const { host, code, token } = await hosting();
 
         assert.match(code, new RegExp(`^[${CODE_LETTERS}]{${CODE_LENGTH}}$`));
+        assert.match(token, /^[\w-]{12}$/);
         assert.ok(server.relay.rooms.has(code));
 
-        // Two join (the code in any case)
+        // Two join (the code in any case), each given a token of their own
         const ann = await connect();
 
         ann.send(`join ${code.toLowerCase()}`);
-        assert.equal(await ann.next(), "joined p1");
+
+        const [joined, first, annToken] = (await ann.next()).split(" ");
+
+        assert.deepEqual([joined, first], ["joined", "p1"]);
+        assert.match(annToken, /^[\w-]{12}$/);
+        assert.notEqual(annToken, token);
         assert.equal(await host.next(), "peer p1");
 
         const bo = await connect();
 
         bo.send(`join ${code}`);
-        assert.equal(await bo.next(), "joined p2");
+        assert.match(await bo.next(), /^joined p2 /);
         assert.equal(await host.next(), "peer p2");
+
+        // Still there? (Either can ask)
+        ann.send("ping");
+        assert.equal(await ann.next(), "pong");
+        host.send("ping");
+        assert.equal(await host.next(), "pong");
 
         // To the host, from each; from the host to one, and to all
         ann.send("data\nhello from ann\nwith a second line");
@@ -129,7 +179,7 @@ describe("the relay (server/relay.js)", () => {
         const one = await connect();
 
         one.send(`join ${code}`);
-        assert.equal(await one.next(), "joined p1");
+        assert.match(await one.next(), /^joined p1 /);
         assert.equal(await host.next(), "peer p1");
 
         host.close();
@@ -145,6 +195,116 @@ describe("the relay (server/relay.js)", () => {
         late.send(`join ${code}`);
         assert.equal(await late.next(), "error no-room");
         await late.closed;
+    });
+
+    it("keeps the place of one whose link dropped: back on a new link with their token, the host never told they'd gone; not back in time, gone", async () => {
+        const { host, code } = await hosting(quickUrl);
+        const ann = await joining(code, quickUrl);
+
+        assert.equal(await host.next(), "peer p1");
+
+        // Dropped: nothing said to the host, and what it sends meanwhile goes nowhere
+        cut(quick.relay.rooms.get(code).peers.get("p1").socket);
+        await ann.socket.closed;
+        host.send("to p1\nlost");
+
+        // Back on a new link, with a wrong token: turned away; with theirs, theirs again
+        const wrong = await connect(quickUrl);
+
+        wrong.send(`rejoin ${code} p1 ${ann.token.replace(/./, (c) => (c === "A" ? "B" : "A"))}`);
+        assert.equal(await wrong.next(), "error gone");
+
+        const back = await connect(quickUrl);
+
+        back.send(`rejoin ${code} p1 ${ann.token}`);
+        assert.equal(await back.next(), `joined p1 ${ann.token}`);
+        back.send("data\nback again");
+        assert.equal(await host.next(), "from p1\nback again", "(and never a word of their going)");
+        host.send("to p1\nwelcome back");
+        assert.equal(await back.next(), "data\nwelcome back");
+
+        // Dropped again, and not back in time: gone, and their place with them
+        cut(quick.relay.rooms.get(code).peers.get("p1").socket);
+        assert.equal(await host.next(), "gone p1");
+
+        const late = await connect(quickUrl);
+
+        late.send(`rejoin ${code} p1 ${ann.token}`);
+        assert.equal(await late.next(), "error gone");
+        host.close();
+    });
+
+    it("keeps a room whose host's link dropped: those in it told it's away, and back; the host told who's still here; not back in time, closed", async () => {
+        const { host, code, token } = await hosting(quickUrl);
+        const ann = await joining(code, quickUrl);
+        const bo = await joining(code, quickUrl);
+
+        assert.equal(await host.next(), "peer p1");
+        assert.equal(await host.next(), "peer p2");
+
+        cut(quick.relay.rooms.get(code).host);
+        assert.equal(await ann.socket.next(), "away");
+        assert.equal(await bo.socket.next(), "away");
+
+        // (Nobody new while the host's away; and Bo leaves meanwhile)
+        const newcomer = await connect(quickUrl);
+
+        newcomer.send(`join ${code}`);
+        assert.equal(await newcomer.next(), "error away");
+        bo.socket.close();
+        await bo.socket.closed;
+
+        // The host back: its room again, told who's still here; those in it told it's back
+        const again = await connect(quickUrl);
+
+        again.send(`rehost ${code} ${token}`);
+        assert.equal(await again.next(), `hosting ${code} ${token}`);
+        assert.equal(await again.next(), "here p1");
+        assert.equal(await ann.socket.next(), "back");
+        again.send("to p1\nstill here?");
+        assert.equal(await ann.socket.next(), "data\nstill here?");
+
+        // Dropped again, and not back in time: the room's closed, and those in it told
+        cut(quick.relay.rooms.get(code).host);
+        assert.equal(await ann.socket.next(), "away");
+        assert.equal(await ann.socket.next(), "closed");
+        await wait(20);
+        assert.ok(!quick.relay.rooms.has(code));
+
+        const late = await connect(quickUrl);
+
+        late.send(`rehost ${code} ${token}`);
+        assert.equal(await late.next(), "error gone");
+    });
+
+    it("keeps the place of a link closed saying it's only reconnecting; one closed saying goodbye has left", async () => {
+        const { host, code } = await hosting(quickUrl);
+        const ann = await joining(code, quickUrl);
+
+        assert.equal(await host.next(), "peer p1");
+
+        // (Given up on for another: its place kept, and taken back)
+        ann.socket.close(RECONNECTING);
+        await ann.socket.closed;
+
+        const back = await connect(quickUrl);
+
+        back.send(`rejoin ${code} p1 ${ann.token}`);
+        assert.match(await back.next(), /^joined p1 /);
+
+        // (A new link taking the place of one the relay still thinks is there: the old one let go)
+        const again = await connect(quickUrl);
+
+        again.send(`rejoin ${code} p1 ${ann.token}`);
+        assert.match(await again.next(), /^joined p1 /);
+        await back.closed;
+        again.send("data\nhere");
+        assert.equal(await host.next(), "from p1\nhere");
+
+        // Goodbye: gone at once
+        again.close();
+        assert.equal(await host.next(), "gone p1");
+        host.close();
     });
 
     it("reads a big message come in many small pieces whole, and lets go of one too slow to take what's sent it", () => {

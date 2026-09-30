@@ -564,9 +564,21 @@ async function invite() {
                     state.game?.start();
                 }
             },
+            // (Its link dropped: shown on the HUD while it comes back; lost for good, the world's
+            // its own again)
+            onLink: (link) => {
+                if (state.game === game) {
+                    game.link = link;
+                }
+            },
             onDrop: () => {
                 state.together = null;
                 showInvite(RELAY_ERRORS.unreachable);
+
+                if (state.game === game) {
+                    game.link = null;
+                    state.hud.message("Your world's link to the others was lost: it's yours alone again.", 5);
+                }
             },
         });
         showInvite();
@@ -651,6 +663,11 @@ async function join(event) {
             code,
             character: { hero: save.hero, talks: loadTalks(save), progress: loadProgress(save), standing: loadStanding(save), followers: loadFollowers(save) },
             onClosed: () => leftWorld("The world's host has closed it to others."),
+            onLink: (link) => {
+                if (state.game?.remote) {
+                    state.game.link = link;
+                }
+            },
             onDrop: () => leftWorld("The link to the world was lost."),
         });
     } catch (error) {
@@ -860,9 +877,11 @@ for (const type of ["pageshow", "focus"]) {
     window.addEventListener(type, () => state.session?.sound.wake());
 }
 
-// Pause when the page is hidden (switching apps on a phone), and silence it
+// Pause when the page is hidden (switching apps on a phone), and silence it; a world open to
+// others can't move on while it's hidden, and those in it are told so
 document.addEventListener("visibilitychange", () => {
     state.session?.sound.setHidden(document.hidden);
+    state.together?.hosting?.pause(document.hidden);
 
     if (document.hidden) {
         pause();

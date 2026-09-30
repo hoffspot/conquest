@@ -9,7 +9,11 @@
 //
 // Now and then the host says how the world should stand (Host.checksum). A copy that doesn't
 // (a browser whose sums come out a hair different from the host's) asks for the world again, and
-// carries on from it (Host.adopt).
+// carries on from it (Host.adopt). So does one whose link to the host dropped a moment and came
+// back (what was sent meanwhile lost): the host's own link back, it sends everyone the world again.
+//
+// When the host can't move its world on (its page hidden: a phone's gone to another app), it says
+// so, and those who've joined are shown why nothing's happening.
 //
 // What's said, as text (core/wire.js), whichever way it goes (app/relay.js carries it):
 //
@@ -19,6 +23,7 @@
 //   host -> joiner   { kind: "welcome", version, id, seed, race, snapshot }
 //                    { kind: "ops", ops }                      (what's been done, in order)
 //                    { kind: "state", snapshot }               (the world again)
+//                    { kind: "paused", paused }                (the host's world stopped, or going again)
 //                    { kind: "refused", reason }
 //
 // Pure: no DOM, no network. Hosting and Joining are given how to send, and told what's heard.
@@ -114,6 +119,9 @@ export class Hosting {
         this.checkDue = false;
         this.seq = null;
         this.nextGuest = 1;
+
+        /** Whether the host's world is stopped (its page hidden), as those who've joined have been told. */
+        this.paused = false;
 
         /** Told when a player comes (id, peer) or goes (id, peer, their character as it's to be kept). */
         this.onJoin = () => {};
@@ -224,6 +232,11 @@ export class Hosting {
         this.flush();
         this.players.set(peer, id);
         this.send(peer, encode({ kind: "welcome", version: NET_VERSION, id, seed: world.seed, race: world.start?.race ?? "human", snapshot: this.host.snapshot() }));
+
+        if (this.paused) {
+            this.send(peer, encode({ kind: "paused", paused: true }));
+        }
+
         this.onJoin(id, peer);
     }
 
@@ -252,6 +265,57 @@ export class Hosting {
 
         this.flush();
         this.send(peer, encode({ kind: "state", snapshot: this.host.snapshot() }));
+    }
+
+    /**
+     * The host's world stopped (`paused`: its page hidden, so it can't move on) or going again:
+     * everyone who's joined told, and anyone who joins meanwhile.
+     */
+    pause(paused) {
+        if (paused === this.paused) {
+            return;
+        }
+
+        this.paused = paused;
+
+        const text = encode({ kind: "paused", paused });
+
+        for (const peer of this.players.keys()) {
+            this.send(peer, text);
+        }
+    }
+
+    /**
+     * The host's link back after it dropped (what was sent meanwhile lost): everyone who's joined
+     * sent the world as it now is (one snapshot for them all).
+     */
+    resync() {
+        this.flush();
+
+        if (!this.players.size) {
+            return;
+        }
+
+        const text = encode({ kind: "state", snapshot: this.host.snapshot() });
+
+        for (const peer of this.players.keys()) {
+            this.send(peer, text);
+
+            if (this.paused) {
+                this.send(peer, encode({ kind: "paused", paused: true }));
+            }
+        }
+    }
+
+    /** Who's still here (the relay's word, the host's link back): anyone else who'd joined, gone. */
+    still(peers) {
+        const here = new Set(peers);
+
+        for (const peer of [...this.players.keys()]) {
+            if (!here.has(peer)) {
+                this.gone(peer);
+            }
+        }
     }
 
     /** One who'd joined has gone: out of the world. */
@@ -304,6 +368,9 @@ export class Joining {
         this.astray = false;
         this.resyncs = 0;
 
+        /** Whether the host's world is stopped (its page hidden), as the host's said. */
+        this.paused = false;
+
         /** Told when the world's come (the welcome), come again (the state), or they're turned away (a reason). */
         this.onWelcome = () => {};
         this.onState = () => {};
@@ -351,12 +418,24 @@ export class Joining {
                 this.pending.clear();
                 this.onState(message);
                 break;
+            case "paused":
+                this.paused = message.paused === true;
+                break;
             case "refused":
                 this.onRefused(message.reason);
                 break;
             default:
                 break;
         }
+    }
+
+    /**
+     * Ask for the world again: its link to the host dropped a moment, and what was sent meanwhile
+     * was lost. (Asked even if it's asked already: that ask may have been lost too.)
+     */
+    resync() {
+        this.astray = true;
+        this.send(encode({ kind: "again" }));
     }
 
     /** Its copy of the world, made from the welcome (Host.restore). */

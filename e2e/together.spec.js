@@ -3,8 +3,9 @@ import { expect, test } from "@playwright/test";
 // Playing together (docs/WAR.md M11), in two browsers at once: one player opens their world to
 // others from the menu, and is given a code; another, an elf, joins it by the code from the title,
 // and comes into the world by their own people's town, as the host has it; what the one who's
-// joined does is done in the host's world; they leave, and are gone from it; the host closes the
-// world to others, and anyone still in it is told.
+// joined does is done in the host's world; told when the host's paused; their link dropped, back on
+// a new one; they leave, and are gone from it; the host closes the world to others, and anyone
+// still in it is told.
 
 // (Two worlds drawn at once, without a GPU: more than the usual time; and these tests one after
 // the other, never side by side: four worlds drawn at once slow each to a crawl)
@@ -120,6 +121,46 @@ test("a world opened to others: an elf joins it by its code, is brought in by th
 
     // (Their copy's kept as the host's: never sent again)
     expect(await guest.evaluate(() => window.pellagos.game.remote.resyncs)).toBe(0);
+
+    // The host's page hidden (their phone gone to another app): the guest's told the host's paused
+    // the game; shown again, on it goes
+    const hide = (hidden) => {
+        Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
+        document.dispatchEvent(new Event("visibilitychange"));
+    };
+
+    await host.evaluate(hide, true);
+    await expect(guest.locator("#netstatus")).toHaveText("The host has paused the game.", { timeout: 30000 });
+    await host.evaluate(hide, false);
+    await expect(guest.locator("#netstatus")).toBeHidden({ timeout: 30000 });
+    await host.locator("#resumebutton").click();
+
+    // Nothing from the host for a while (its world stopped, without a word): the guest's told
+    // they're waiting for it
+    await host.evaluate(() => window.pellagos.game.stop());
+    await expect(guest.locator("#netstatus")).toHaveText("Waiting for the host…", { timeout: 30000 });
+    await host.evaluate(() => window.pellagos.game.start());
+    await expect(guest.locator("#netstatus")).toBeHidden({ timeout: 30000 });
+
+    // The guest's link drops (given up on, as when it goes quiet): back on a new link before long,
+    // sent the world again, and walking on in both worlds alike
+    await guest.evaluate(() => window.pellagos.together.link.socket.close(4000));
+    await expect.poll(() => guest.evaluate(() => window.pellagos.game.remote.resyncs), { timeout: 30000 }).toBe(1);
+    await expect(guest.locator("#netstatus")).toBeHidden({ timeout: 30000 });
+
+    const onward = await guest.evaluate(() => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor(game.me);
+        const to = [me.square[0], me.square[1] + 3];
+
+        game.remote.command({ type: "move", to });
+
+        return to;
+    });
+
+    await expect.poll(() => host.evaluate(() => window.pellagos.game.battle.actor("guest-1").square), { timeout: 60000 }).toEqual(onward);
+    await expect.poll(() => guest.evaluate(() => window.pellagos.game.battle.actor("guest-1").square), { timeout: 60000 }).toEqual(onward);
+    expect(await host.evaluate(() => [...window.pellagos.game.host.players.keys()].sort())).toEqual(["guest-1", "player"]);
 
     // The guest goes back to the title: gone from the host's world
     await guest.locator("#menubutton").click();
