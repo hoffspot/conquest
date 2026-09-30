@@ -1,0 +1,398 @@
+// How high the ground stands at any point of the world (metres), from the world plan alone: the
+// same wherever and whenever it's asked, in every browser (nothing but + - * /, floor and square
+// roots), so that the rules, the drawn ground and the navigation mesh all stand on the same land,
+// and every player's does too.
+//
+// It's built up in layers:
+//
+// - The lie of the land: the plan's heights (a 32-metre cell each), read between cells with a
+//   cubic B-spline (smooth, never overshooting), then into metres along a curve (curve.js): the
+//   plains nearly flat, the hills rolling, the mountains steep and the peaks high.
+// - Its roughness, as each kind of land has it: gentle swells on the plains, more in the hills;
+//   in the mountains, ridges (ridged multifractal noise, its lines bent by a warp) steep enough
+//   that only the valleys and passes can be walked; mesas stepped in terraces in the badlands;
+//   the volcano's crater. Each kind of land's roughness is itself read between cells with the same
+//   B-spline, so one blends into the next over a hundred metres or so.
+// - The water: the land carved down under lakes and the sea (to meet the shore as the overworld
+//   has it: waters.js), and a channel for each river, its surface only ever running down, with
+//   banks just above it.
+//
+// Heights are rounded to 1/1024 m, so a Float32Array holds them exactly: the rules, the mesh and
+// the navigation mesh then see the same numbers.
+
+import { metresOf } from "./curve.js";
+import { simplex } from "./simplex.js";
+import { watersOf } from "./waters.js";
+import { BIOME, BIOMES } from "../worldplan/races.js";
+import { CELL, CELLS, MOUNTAIN, WATER, WORLD_SIZE } from "../worldplan/terrain.js";
+
+/** Bumped whenever the ground a seed makes changes (players playing together must agree on it). */
+export const TERRAIN_VERSION = 1;
+
+/** Heights are whole multiples of this (metres). */
+export const HEIGHT_STEP = 1 / 1024;
+
+/**
+ * How steep a square can be (the tangent of its slope): walked on freely below `steep` (30°),
+ * slowly below `cliff` (38°), not at all above.
+ */
+export const SLOPE = Object.freeze({ steep: 0.5773502691896258, cliff: 0.7812856265067174 });
+
+/** A square's kind by its slope. */
+export const SLOPE_CLASS = Object.freeze({ open: 0, steep: 1, cliff: 2 });
+
+/**
+ * Each kind of land's roughness: `rough` (metres: rolling swells, either way), `ridge` (metres:
+ * ridges, on top of the mountains the plan has), `mesa` (0 to 1: stepped into terraces).
+ */
+export const ROUGHNESS = Object.freeze({
+    sea: { rough: 1 },
+    lake: { rough: 0.5 },
+    farmland: { rough: 1.2 },
+    meadow: { rough: 1.8 },
+    woods: { rough: 2.5 },
+    heath: { rough: 3 },
+    marsh: { rough: 0.5 },
+    elfwood: { rough: 3 },
+    darkwood: { rough: 4 },
+    savannah: { rough: 1.6 },
+    jungle: { rough: 3 },
+    badlands: { rough: 3, mesa: 1 },
+    volcanic: { rough: 5, mesa: 0.3 },
+    tundra: { rough: 2.5 },
+    snow: { rough: 10 },
+    mountain: { rough: 9 },
+    beach: { rough: 0.4 },
+});
+
+// How much rougher the hills are (metres, more the higher up to the mountains), and how high the
+// ridges stand in the mountains (metres, from where they start to where they're highest)
+const HILLS = { rough: 10, from: 0.45, to: MOUNTAIN };
+const RIDGES = { height: 110, from: 0.66, to: 0.9 };
+
+// The swells: wavelength (metres), octaves, and how much steeper ground smooths them (the steeper
+// the octaves below, the less each above adds: Iñigo Quílez's "eroded" fBm)
+const SWELLS = { wavelength: 220, octaves: 4, smoothing: 0.35 };
+
+// The ridges: wavelength (metres), octaves, and the warp that bends their lines (wavelength and
+// how far, metres)
+const RIDGE = { wavelength: 520, octaves: 4, warp: 900, bend: 90 };
+
+// Terraces on mesas: each step this high (metres)
+const TERRACE = 7;
+
+// The volcano's crater: how wide (metres) and deep (metres)
+const CRATER = { radius: 90, depth: 60 };
+
+// The sea and lakes: how deep the bottom goes below the surface (metres, at most, and in the
+// shallows)
+const DEEP = { sea: 12, lake: 4 };
+
+// How ragged shores are: the wavelength of their wiggles (metres), and how much they move them
+// (in wetness)
+const RAGGED = { wavelength: 40, by: 0.12 };
+
+// Still water stands only where the plan's this wet (and the ground's below its surface)
+const WET_FROM = 0.2;
+
+// Rivers: how deep their beds (metres: at least, and more for each metre of half-width), and how
+// far their banks reach (metres: at least, and more for each metre of half-width) from the water,
+// easing from just above the water to the land round them
+const BED = { least: 0.6, perHalf: 0.3 };
+const BANKS = { least: 5, perHalf: 2.5 };
+const BANK_TOP = 0.35;
+
+// Detail seeds, apart from each other
+const SEEDS = { swells: 1301, ridges: 1709, warpX: 2203, warpY: 2207, ragged: 2503 };
+
+// Each plan's layers, made once for it
+const MADE = new WeakMap();
+
+// The plan's layers: its heights in metres, and each cell's roughness (a Float32Array a cell each)
+function layersOf(plan) {
+    if (!MADE.has(plan)) {
+        const count = CELLS * CELLS;
+        const [ground, rough, ridge, mesa, calm, wet] = [0, 0, 0, 0, 0, 0].map(() => new Float32Array(count));
+
+        for (let k = 0; k < count; k++) {
+            const h = plan.height[k];
+            const biome = BIOMES[plan.biome[k]].id;
+            const own = ROUGHNESS[biome] ?? { rough: 2 };
+
+            ground[k] = metresOf(h);
+            rough[k] = own.rough + HILLS.rough * smoothstep(HILLS.from, HILLS.to, h);
+            ridge[k] = RIDGES.height * smoothstep(RIDGES.from, RIDGES.to, h) * (plan.biome[k] === BIOME.volcanic ? 0.5 : 1);
+            mesa[k] = own.mesa ?? 0;
+            calm[k] = plan.water[k] === WATER.none ? (biome === "marsh" || biome === "beach" ? 0.7 : 0) : 1;
+            wet[k] = plan.water[k] === WATER.sea || plan.water[k] === WATER.lake ? 1 : 0;
+        }
+
+        const [vx, vy] = plan.volcano ?? [-1, -1];
+
+        MADE.set(plan, { ground, rough, ridge, mesa, calm, wet, volcano: [(vx + 0.5) * CELL, (vy + 0.5) * CELL], waters: watersOf(plan), seed: plan.seed | 0 });
+    }
+
+    return MADE.get(plan);
+}
+
+function smoothstep(from, to, value) {
+    const t = Math.min(1, Math.max(0, (value - from) / (to - from)));
+
+    return t * t * (3 - 2 * t);
+}
+
+// The B-spline's weights for a point, and which cells they're for (reused: nothing else runs
+// between filling and reading them)
+const TAPS = new Int32Array(16);
+const WEIGHTS = new Float64Array(16);
+
+function weigh(x, y) {
+    const [u, v] = [x / CELL - 0.5, y / CELL - 0.5];
+    const [i, j] = [Math.floor(u), Math.floor(v)];
+    const [s, t] = [u - i, v - j];
+    const bu = basis(s);
+    const bv = basis(t);
+
+    for (let b = 0; b < 4; b++) {
+        const row = Math.min(CELLS - 1, Math.max(0, j - 1 + b)) * CELLS;
+
+        for (let a = 0; a < 4; a++) {
+            TAPS[b * 4 + a] = row + Math.min(CELLS - 1, Math.max(0, i - 1 + a));
+            WEIGHTS[b * 4 + a] = bu[a] * bv[b];
+        }
+    }
+}
+
+// The uniform cubic B-spline's four weights at t (0 to 1)
+function basis(t) {
+    const t2 = t * t;
+    const t3 = t2 * t;
+    const u = 1 - t;
+
+    return [(u * u * u) / 6, (3 * t3 - 6 * t2 + 4) / 6, (-3 * t3 + 3 * t2 + 3 * t + 1) / 6, t3 / 6];
+}
+
+function spline(layer) {
+    let sum = 0;
+
+    for (let k = 0; k < 16; k++) {
+        sum += layer[TAPS[k]] * WEIGHTS[k];
+    }
+
+    return sum;
+}
+
+const NOISE = [0, 0, 0];
+
+// Rolling swells (about -1 to 1), smoother where the ground's already steep
+function swells(x, y, seed) {
+    let [sum, amplitude, total, frequency, gx, gy] = [0, 1, 0, 1 / SWELLS.wavelength, 0, 0];
+
+    for (let octave = 0; octave < SWELLS.octaves; octave++) {
+        const [n, dx, dy] = simplex(x * frequency, y * frequency, seed + octave * 31, NOISE);
+
+        gx += dx * amplitude;
+        gy += dy * amplitude;
+        sum += (amplitude * n) / (1 + SWELLS.smoothing * (gx * gx + gy * gy));
+        total += amplitude;
+        amplitude /= 2;
+        frequency *= 2;
+    }
+
+    return sum / total;
+}
+
+// Ridges (0 to about 1, a third on average: only ever up, so they never sink the land round a
+// mountain lake below its water): sharp crests, each octave strongest where the ones
+// below stand highest (Musgrave's ridged multifractal), along lines bent by a warp
+function ridges(x, y, seed) {
+    const bx = simplex(x / RIDGE.warp, y / RIDGE.warp, seed + SEEDS.warpX, NOISE)[0] * RIDGE.bend;
+    const by = simplex(x / RIDGE.warp, y / RIDGE.warp, seed + SEEDS.warpY, NOISE)[0] * RIDGE.bend;
+    let [sum, amplitude, total, frequency, weight] = [0, 1, 0, 1 / RIDGE.wavelength, 1];
+
+    for (let octave = 0; octave < RIDGE.octaves; octave++) {
+        const n = simplex((x + bx) * frequency, (y + by) * frequency, seed + SEEDS.ridges + octave * 37, NOISE)[0];
+        let signal = 1 - Math.abs(n);
+
+        signal *= signal * weight;
+        weight = Math.min(1, Math.max(0, signal * 2));
+        sum += signal * amplitude;
+        total += amplitude;
+        amplitude /= 2;
+        frequency *= 2;
+    }
+
+    return sum / total;
+}
+
+/**
+ * The still water (a lake or the sea) at a point (metres), as the ground's carved for it, or null
+ * where there's none near: { wetness (0 to 1: the plan's wet cells, read smoothly between them
+ * and a little ragged; water deepens past a half), level (its surface's height, metres), deep
+ * (how deep it gets, metres) }. Water stands wherever the ground's below its level here.
+ */
+export function stillOf(plan, x, y) {
+    const layers = layersOf(plan);
+
+    weigh(x, y);
+
+    let wetness = spline(layers.wet);
+
+    if (wetness <= 0.001) {
+        return null;
+    }
+
+    // The level of the wet cell weighing most here
+    let [best, most] = [-1, 0];
+
+    for (let k = 0; k < 16; k++) {
+        if (layers.wet[TAPS[k]] && WEIGHTS[k] > most) {
+            [best, most] = [TAPS[k], WEIGHTS[k]];
+        }
+    }
+
+    wetness += simplex(x / RAGGED.wavelength, y / RAGGED.wavelength, layers.seed + SEEDS.ragged, NOISE)[0] * RAGGED.by * Math.min(1, wetness * 4);
+
+    const sea = plan.water[best] === WATER.sea;
+
+    return { wetness, level: sea ? 0 : layers.waters.surfaces[best], deep: sea ? DEEP.sea : DEEP.lake };
+}
+
+/**
+ * The lie of the land and its roughness at a point (metres), before any water's carved into it
+ * (metres, not rounded).
+ */
+export function landHeight(plan, x, y) {
+    const layers = layersOf(plan);
+
+    weigh(x, y);
+
+    const base = spline(layers.ground);
+    const calm = 1 - Math.min(1, spline(layers.calm));
+    const rough = spline(layers.rough) * calm;
+    const ridge = spline(layers.ridge) * calm;
+    const mesa = spline(layers.mesa);
+    let height = base;
+
+    if (rough > 0.01) {
+        height += rough * swells(x, y, layers.seed + SEEDS.swells);
+    }
+
+    if (ridge > 0.5) {
+        height += ridge * ridges(x, y, layers.seed);
+    }
+
+    if (mesa > 0.01) {
+        const f = height / TERRACE;
+        const step = Math.floor(f);
+        const stepped = (step + smoothstep(0.3, 0.7, f - step)) * TERRACE;
+
+        height += (stepped - height) * mesa;
+    }
+
+    // The volcano's crater
+    const [dx, dy] = [x - layers.volcano[0], y - layers.volcano[1]];
+    const d2 = (dx * dx + dy * dy) / (CRATER.radius * CRATER.radius);
+
+    if (d2 < 1) {
+        height -= CRATER.depth * (1 - d2) * (1 - d2);
+    }
+
+    return height;
+}
+
+/**
+ * The ground's height at a point (metres, from the world's north-west corner: x east, y south),
+ * with lakes, the sea and rivers carved into it: rounded to HEIGHT_STEP.
+ */
+export function heightAt(plan, x, y) {
+    const { waters } = layersOf(plan);
+    let height = landHeight(plan, x, y);
+
+    // Lakes and the sea: the land sinks under the water where the plan has it wet, and meets
+    // its surface wherever its own lie brings it there, so shores follow the land's contours
+    const still = stillOf(plan, x, y);
+
+    if (still) {
+        const { wetness, level, deep } = still;
+
+        if (wetness > 0.5) {
+            height = Math.min(height, level - 0.3 - Math.min(1, (wetness - 0.5) * 2.5) * deep);
+        } else if (wetness > 0.05 && wetness < WET_FROM && height < level + 0.3) {
+            // (Out past where water can stand, land low enough to flood is held up to its surface)
+            height = Math.max(height, level + 0.3 * ((WET_FROM - wetness) / (WET_FROM - 0.05)));
+        }
+    }
+
+    // Rivers: the bed below the surface, the banks just above it, easing out to the land
+    const river = waters.river(x, y, BANKS.least + BANKS.perHalf * 5);
+
+    if (river) {
+        const { gap, half, surface } = river;
+
+        if (gap <= 0) {
+            const across = Math.min(1, (half + gap) / half);
+            const depth = BED.least + BED.perHalf * half;
+
+            height = surface - 0.15 - depth * (1 - (1 - across) * (1 - across));
+        } else {
+            const banks = BANKS.least + BANKS.perHalf * half;
+
+            if (gap < banks) {
+                const ease = smoothstep(0, banks, gap);
+
+                height = surface + BANK_TOP + (height - surface - BANK_TOP) * ease;
+            }
+        }
+    }
+
+    return Math.round(height / HEIGHT_STEP) * HEIGHT_STEP;
+}
+
+/**
+ * The water's surface at a point (metres), given the ground's height there (heightAt), or null
+ * where it's dry: a river's in its channel, a lake's or the sea's where the plan has it wet enough
+ * and the ground's below it.
+ */
+export function waterAt(plan, x, y, height = heightAt(plan, x, y)) {
+    const { waters } = layersOf(plan);
+    const river = waters.river(x, y, 0);
+
+    if (river && river.gap <= 0) {
+        return river.surface;
+    }
+
+    const still = stillOf(plan, x, y);
+
+    return still && still.wetness > WET_FROM && height < still.level ? still.level : null;
+}
+
+/**
+ * The heights on a grid (metres, rounded): `count` × `count` points, `step` metres apart, from
+ * (x0, y0), row by row (north to south, each west to east), into `out` (a Float32Array; made if
+ * not given).
+ */
+export function heightsOf(plan, x0, y0, count, step, out = new Float32Array(count * count)) {
+    for (let j = 0; j < count; j++) {
+        for (let i = 0; i < count; i++) {
+            out[j * count + i] = heightAt(plan, x0 + i * step, y0 + j * step);
+        }
+    }
+
+    return out;
+}
+
+/**
+ * A square's slope class (SLOPE_CLASS), from the heights at its four corners (metres, a metre
+ * apart): north-west, north-east, south-west, south-east.
+ */
+export function slopeClass(nw, ne, sw, se) {
+    const gx = (ne - nw + se - sw) / 2;
+    const gy = (sw - nw + se - ne) / 2;
+    const tan2 = gx * gx + gy * gy;
+
+    return tan2 >= SLOPE.cliff * SLOPE.cliff ? SLOPE_CLASS.cliff : tan2 >= SLOPE.steep * SLOPE.steep ? SLOPE_CLASS.steep : SLOPE_CLASS.open;
+}
+
+/** How big the world is (metres a side). */
+export { WORLD_SIZE };

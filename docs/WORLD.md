@@ -26,6 +26,8 @@ See it at <https://hoffspot.github.io/conquest/world-map.html> (or `npm start` a
 **Layers** (one value per cell):
 
 - `height`, `temperature` and `moisture`: 0 to 1;
+- `level`: the height water would stand at, the land's hollows filled to where they'd spill (a
+  lake's or a river's surface);
 - `water`: none, sea, lake or river;
 - `biome`: the kind of land;
 - `territory`: which people's lands, if any;
@@ -234,7 +236,8 @@ at the far side of the world.
 ## The world map (`world-map.html`, `js/lab/world-map.js`)
 
 - **Draws** the plan for a seed:
-  - the lands, shaded as if lit from the north-west, with the rivers;
+  - the lands, shaded as if lit from the north-west by the ground's own heights (see *The
+    ground's height* below), rock too steep to walk grey, with the rivers;
   - each people's lands, tinted and edged in their colour;
   - roads (trade roads widest, tracks dashed);
   - settlements (capitals ringed; guild towns edged heavier), with their names as you zoom in;
@@ -243,7 +246,7 @@ at the far side of the world.
   - optionally, patrol ranges and guild districts.
 - **Controls:**
   - wheel or pinch to zoom, drag to move about;
-  - point at anything to see what it is;
+  - point at anything to see what it is, and how high the ground is there;
   - choose the seed, or another at random;
   - choose which people to start as.
 - **Its address** remembers the seed and the people.
@@ -347,8 +350,45 @@ player comes near with its roads built to it, each people's own buildings, castl
 places built their way, and each people's homeland its own ground, trees and things lying about.
 Next: **sites to go into**, the ruins, caves, shrines and castles as places of their own.
 
-Height on the ground (each cell's `height` shaping the land) is paused. Free terrain with a
-navigation mesh isn't planned.
+The ground is being given height, and the squares a navigation mesh, step by step
+(`generated/terrain_navmesh_overhaul_plan.md`). The first step, the ground's height, is below; it
+isn't in play yet.
+
+## The ground's height (`core/terrain/`)
+
+`heightAt(plan, x, y)` (`height.js`) is how high the ground stands at any point, in metres: the
+same wherever and whenever it's asked, and in every browser (nothing but `+ - * /`, floor and
+square roots), so the rules, the drawn ground and a navigation mesh can all stand on the same land,
+and so can every player's. Heights are whole 1/1024ths of a metre, so a `Float32Array` holds them
+exactly. It's built up in layers:
+
+- **The lie of the land.**
+  - The plan's cell heights, read between cells with a cubic B-spline: smooth, and never
+    overshooting.
+  - Then into metres along a rising curve (`curve.js`): the sea at 0; the plains up to 25 m,
+    rising 1 to 3 in 100; the hills to about 95 m; the mountains to 220 m; the peaks to 320.
+- **Roughness, by kind of land** (`ROUGHNESS`). Each kind's is read between cells the same way,
+  so one blends into the next over a hundred metres or so.
+  - Gentle swells of about a metre on the plains, more in the hills. These are simplex noise
+    (`simplex.js`, with its slope), smoother where the ground's already steep.
+  - Up in the mountains, ridges of up to 110 m (ridged multifractal noise, bent by a warp), so
+    steep that only the valleys and passes can be walked.
+  - Terraced mesas in the badlands.
+  - The volcano's crater.
+- **Water.**
+  - Lakes and the sea sink the land under them where the plan has it wet (read smoothly between
+    cells and a little ragged). Their shores fall wherever the land meets their surface, so they
+    follow its contours.
+  - Each river gets a channel, its surface only ever running down (`waters.js`: the plan's water
+    level, `level`, lowered to anything upstream of it), with banks easing from just above the
+    water out to the land.
+  - `waterAt` says where water stands, and how high.
+- **How steep.** `slopeClass` sorts a square by slope: walked freely below 30°, slowly to 38°, not
+  at all past that. On seed 1, about nine in ten squares of the plains are open, and fewer than
+  one in three in the mountains.
+
+A chunk's heights take about 6 ms to work out (65 by 65 points). `waters.js` also keeps the
+rivers and still water the overworld's squares are wet by, as they were.
 
 ## Tests
 
@@ -366,6 +406,15 @@ checks the settlements laid out ahead: asked for nearest first and once each, th
 in another thread, and taken only when laid out from what they'd be laid out from here. Each people's own trees grow
 in its homeland, most of the trees there, and nowhere else. `test/wilds.test.js` checks the
 land's features (GAME.md, *Testing*), each people's own in its homeland and only there.
+
+`test/terrain.test.js` checks the ground's height:
+- simplex noise between -1 and 1, with the slope it says;
+- the curve rising all the way, with the sea at 0;
+- heights the same in any order, in whole 1/1024ths of a metre, with a chunk's edge its
+  neighbour's;
+- the plains open and the mountains not;
+- lakes and rivers carved under their water, rivers running down;
+- a chunk's heights made quickly.
 
 `test/world-plan.test.js` checks, for three seeds:
 

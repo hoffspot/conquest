@@ -29,9 +29,10 @@ import { Sites } from "./sites.js";
 import { Interiors } from "./insides.js";
 import { WENCHES } from "./lore/taverns.js";
 import { featuresOf } from "./wilds.js";
+import { watersOf } from "./terrain/waters.js";
 import { GROUND, HOME_TREES, TREE_KINDS } from "./setpieces/pieces.js";
 import { generateWorld } from "./world.js";
-import { BIOME, BIOMES, CELL, CELLS, CHUNK, CHUNKS, planWorld, RACES, startFor, WATER, WORLD_SIZE } from "./worldplan/plan.js";
+import { BIOME, BIOMES, CELL, CELLS, CHUNK, CHUNKS, planWorld, RACES, startFor, WORLD_SIZE } from "./worldplan/plan.js";
 import { hypot } from "./exact.js";
 
 export { CHUNK, CHUNKS, WORLD_SIZE };
@@ -71,11 +72,6 @@ const HOME_TREE_SHARE = 0.7;
 
 // Roads' half-widths (metres), by kind
 const ROAD_HALF = Object.freeze({ trade: 2.2, road: 1.8, track: 1.1 });
-
-// Rivers: their half-widths (metres: the least and most, wider the more rain runs in them), and
-// how far they wander from a straight line between cells (metres)
-const RIVER_HALF = [1.5, 5];
-const WANDER = 7;
 
 /**
  * Bridges: how far past the road's edge the deck reaches each side (metres), and how far onto
@@ -150,7 +146,7 @@ export class Overworld {
         this.stamp = stamp;
         this.start = start;
         this.chunks = new Map();
-        this.rivers = new Map();
+        this.waters = watersOf(plan);
         this.last = null;
 
         // The places trees keep clear of: the settlements (but the town, which is set in), the
@@ -444,8 +440,8 @@ export class Overworld {
         const [px, py] = [x + 0.5, y + 0.5];
         const cell = cellAt(py) * CELLS + cellAt(px);
         const road = this.#roadAt(px, py);
-        const river = this.#riverAt(px, py);
-        const still = !river && this.#stillAt(px, py);
+        const river = this.waters.riverAt(px, py);
+        const still = !river && this.waters.stillAt(px, py);
         const water = river ? WET.river : still ? WET.still : WET.none;
 
         // Under a bridge (over the river, or its ends on the banks)
@@ -466,107 +462,6 @@ export class Overworld {
         const fields = plan.biome[cell] === BIOME.farmland && noise(x, y, plan.seed + 31, 14, 2) > 0.46;
 
         return { ground: fields ? GROUND.soil : GROUND.grass, water, bridge: false, road: null };
-    }
-
-    // Is a point in a lake or the sea: still water, blended across cells' middles, a little ragged?
-    #stillAt(px, py) {
-        const { plan } = this;
-        const [fx, fy] = [px / CELL - 0.5, py / CELL - 0.5];
-        const [i, j] = [Math.floor(fx), Math.floor(fy)];
-        const [tx, ty] = [fx - i, fy - j];
-        const wet = (ci, cj) => {
-            if (ci < 0 || cj < 0 || ci >= CELLS || cj >= CELLS) {
-                return 1;
-            }
-
-            const w = plan.water[cj * CELLS + ci];
-
-            return w === WATER.sea || w === WATER.lake ? 1 : 0;
-        };
-        const top = wet(i, j) + (wet(i + 1, j) - wet(i, j)) * tx;
-        const bottom = wet(i, j + 1) + (wet(i + 1, j + 1) - wet(i, j + 1)) * tx;
-        const blend = top + (bottom - top) * ty;
-
-        return blend > 0 && blend + (noise(px, py, plan.seed + 41, 9, 2) - 0.5) * 0.3 > 0.5;
-    }
-
-    // Is a point in a river (the lines from river cells to where they run, wandering)?
-    #riverAt(px, py) {
-        const segments = this.#riversNear(Math.floor(px / CHUNK), Math.floor(py / CHUNK));
-
-        if (!segments.length) {
-            return false;
-        }
-
-        const seed = this.plan.seed;
-        const [wx, wy] = [px + (noise(px, py, seed + 51, 40, 2) - 0.5) * 2 * WANDER, py + (noise(px, py, seed + 61, 40, 2) - 0.5) * 2 * WANDER];
-
-        return segments.some((segment) => fromSegment(wx, wy, segment) <= segment[4]);
-    }
-
-    // The river lines near a chunk: [ax, ay, bx, by, half-width] (metres)
-    #riversNear(cx, cy) {
-        const key = cy * CHUNKS + cx;
-
-        if (!this.rivers.has(key)) {
-            const { plan } = this;
-            const segments = [];
-            const reach = Math.ceil((WANDER + RIVER_HALF[1]) / CELL) + 1;
-            const [c0, c1] = [Math.floor((cx * CHUNK) / CELL) - reach, Math.floor(((cx + 1) * CHUNK) / CELL) + reach];
-            const [r0, r1] = [Math.floor((cy * CHUNK) / CELL) - reach, Math.floor(((cy + 1) * CHUNK) / CELL) + reach];
-
-            for (let j = Math.max(0, r0); j <= Math.min(CELLS - 1, r1); j++) {
-                for (let i = Math.max(0, c0); i <= Math.min(CELLS - 1, c1); i++) {
-                    const k = j * CELLS + i;
-
-                    if (plan.water[k] !== WATER.river) {
-                        continue;
-                    }
-
-                    const into = this.#downstream(i, j);
-
-                    if (into) {
-                        const half = Math.min(RIVER_HALF[1], Math.max(RIVER_HALF[0], 0.9 + Math.sqrt(plan.flow[k]) * 0.09));
-
-                        segments.push([(i + 0.5) * CELL, (j + 0.5) * CELL, (into[0] + 0.5) * CELL, (into[1] + 0.5) * CELL, half]);
-                    }
-                }
-            }
-
-            this.rivers.set(key, segments);
-        }
-
-        return this.rivers.get(key);
-    }
-
-    // The cell a river cell runs into: a lake or the sea beside it, or the river cell beside it
-    // that more water runs through
-    #downstream(i, j) {
-        const { plan } = this;
-        const here = plan.flow[j * CELLS + i];
-        let best = null;
-        let most = here;
-
-        for (const [di, dj] of [[0, -1], [1, 0], [0, 1], [-1, 0], [1, -1], [1, 1], [-1, 1], [-1, -1]]) {
-            const [ni, nj] = [i + di, j + dj];
-
-            if (ni < 0 || nj < 0 || ni >= CELLS || nj >= CELLS) {
-                continue;
-            }
-
-            const w = plan.water[nj * CELLS + ni];
-
-            if (w === WATER.sea || w === WATER.lake) {
-                return [ni, nj];
-            }
-
-            if (w === WATER.river && plan.flow[nj * CELLS + ni] > most) {
-                most = plan.flow[nj * CELLS + ni];
-                best = [ni, nj];
-            }
-        }
-
-        return best;
     }
 
     // Is a point under a bridge's deck?
@@ -625,7 +520,7 @@ export class Overworld {
                 for (let j = k ? 1 : 0; j <= steps; j++) {
                     const [x, y] = [ax + ((bx - ax) * j) / steps, ay + ((by - ay) * j) / steps];
 
-                    along.push({ at: [x, y], wet: this.#riverAt(x, y) });
+                    along.push({ at: [x, y], wet: this.waters.riverAt(x, y) });
                 }
             }
 
