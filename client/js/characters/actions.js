@@ -104,6 +104,48 @@ const fist = (side, lead = side < 0) => ({ at: [side * (lead ? 0.24 : 0.28), lea
 // swung back to the hip (a lunge)
 const FREE = { at: [-0.22, -0.58, 0.5], pronate: 40, wrist: { flex: 8, deviate: -5 }, shape: "relaxed" };
 const REACH_OUT = { at: [-0.15, -0.35, 0.75], pronate: 20, wrist: { flex: -5, deviate: 0 }, shape: "relaxed" };
+
+// The shield arm (a shield strapped to the left forearm: equipment.js), whatever the free hand
+// was to do in a fight: the forearm level across the chest, the thumb up and the elbow out, so the
+// shield stands upright before the body, its face to the enemy; drawn in and up before the chest
+// as the free hand would be drawn in (DRAW_IN), out and lower as it would reach out (REACH_OUT),
+// and between, as far as it would reach (`at` z); and drawn in, swung aside to the left
+// (`aside`) as the sword hand comes across the body (its `at` x, `across`), out of its way
+const SHIELD = { in: [-0.38, -0.05, 0.52], out: [-0.36, -0.15, 0.6], aside: [-0.05, 0, 0.5], across: [0.1, 0.5], elbow: [0.9, -0.45, -0.1], pronate: -55, wrist: { flex: 0, deviate: 0 } };
+
+// A staff or war hammer held upright out at the right side in the one hand while the other casts
+// a spell, its foot clear of the legs
+const UPRIGHT = { at: [-0.1, -0.5, 0.45], point: [0.05, 1, 0.1], pronate: 10 };
+const LEFT_ARM = /^Left(Shoulder|Arm|ForeArm|Hand)/;
+const SHIELD_SOCKETS = new Set(["leftForearm", "leftFist"]);
+
+// What a shield held up keeps behind it (the body, but for the arm that bears it: a few hundred
+// points of its skin, HELD_POINTS), by how much (metres: what's worn over it), and how far at
+// most it's moved out of the way at a time
+const SHIELD_CLEAR = 0.025;
+const SHIELD_NUDGE = 0.08;
+const SHIELD_CROUCH = 1.5;
+
+// What's held kept out of the body through an action (a blow, a draw, a rest): a few hundred points
+// of its skin, but for the arms that hold it (HELD_POINTS), each with which way it faces; how near
+// the skin what's held comes (metres), how near the grip a part of it is moved with the hand rather
+// than turned about the grip (metres), how far it's turned (radians) or the hand moved (metres) at
+// most, how many times the arm's reached again; how far apart the points kept of what's held are,
+// how long the clusters they're looked at in are, how far from one the skin nearest it is looked
+// for, and how far the skin placed by its heaviest bone may be from where it is (metres)
+const HELD_POINTS = 700;
+const HELD_CLEAR = 0.006;
+const HELD_LEVER = 0.1;
+const HELD_TURN = 0.6;
+const HELD_MOVE = 0.08;
+const HELD_TRIES = 3;
+const HELD_GRID = 0.025;
+const HELD_CLUSTER = 0.08;
+const HELD_NEAR = 0.08;
+const HELD_ROUGH = 0.03;
+// How far off to one side of the nearest skin of its sample a point behind that skin can be (the
+// sample's a few centimetres apart; further, and it's beside the skin, not in it)
+const HELD_SPREAD = 0.05;
 const DRAW_IN = { at: [-0.08, -0.62, 0.32], pronate: 30, shape: "relaxed" };
 const SWUNG_BACK = { at: [0.05, -0.85, -0.2], pronate: 10, shape: "relaxed" };
 
@@ -112,12 +154,13 @@ export const GUARDS = Object.freeze({
     // (A sword before the right hip, the forearm level and the elbow at the side, the point at the enemy's face)
     sword: { right: { at: [0.1, -0.55, 0.72], point: [0.2, 0.6, 0.78], edge: [-0.35, -0.7, 0.63] }, left: FREE },
     // (Two-handed: the left hand's place too, the shaft lying along the line from it through the right)
-    staff: { right: { at: [0.31, -0.57, 0.7] }, left: { on: 0, at: [-0.26, -0.86, 0.41] } },
+    staff: { right: { at: [0.31, -0.57, 0.7] }, left: { on: 0, at: [-0.2, -0.74, 0.65] } },
     wand: { right: { at: [0.1, -0.55, 0.72], point: [0.1, 0.45, 0.9] }, left: FREE },
     grimoire: { left: book, right: { at: [0.22, -0.58, 0.5], pronate: 40, wrist: { flex: 8, deviate: -5 }, shape: "relaxed" } },
     hammer: { right: { at: [0.18, -0.42, 0.65], edge: [0.1, -0.3, 0.95] }, left: { on: 0, at: [-0.35, -0.89, 0.31] } },
-    // (The bow low before the body, its back to the enemy, the drawing hand near the string)
-    bow: { left: { at: [-0.15, -0.7, 0.55], point: [-0.2, 0.85, 0.5], edge: [0, -0.5, 0.85] }, right: { at: [0.3, -0.6, 0.5], pronate: 40, shape: "relaxed" } },
+    // (The bow low before the body, its back to the enemy, the drawing hand near the string; its
+    // lower limb forward, clear of the thigh swinging up running)
+    bow: { left: { at: [-0.15, -0.6, 0.62], point: [-0.3, 0.9, 0.2], edge: [0, -0.5, 0.85] }, right: { at: [0.3, -0.6, 0.5], pronate: 40, shape: "relaxed" } },
     punch: { right: fist(1), left: fist(-1), ...spine({ flex: 6 }) },
     // (Kicking: a looser guard, the fists lower, the body upright; the fists kept before the
     // chest as it turns)
@@ -219,30 +262,34 @@ export const ATTACKS = Object.freeze({
         // (Both hands on it: the head beyond the right, the shaft from the left through it)
         variants: [
             variant("overhead strike", STAFF,
-                // Raised over the right shoulder, the head back, then brought down on the enemy
+                // Raised over the right shoulder, the head back, then brought down on the enemy,
+                // the rear hand drawn back to the left hip (the butt past it, clear of the thighs)
                 [0.6, { right: { at: [0.03, 0.41, 0.21] }, left: { on: 0, at: [-0.45, 0.17, 0.32] }, ...spine({ flex: -6, turn: -18 }), offset: [0, 0.01, -0.04] }],
                 [1, { right: { at: [0.56, -0.56, 0.61] }, left: { on: 0, at: [-0.08, -0.74, 0.44] }, ...spine({ flex: 16, turn: 12 }), offset: [0, -0.05, 0.08] }],
-                [1.3, { right: { at: [0.26, -0.87, 0.58] }, left: { on: 0, at: [-0.4, -1.11, 0.13] }, ...spine({ flex: 18, turn: 14 }), offset: [0, -0.06, 0.07] }]),
+                [1.3, { right: { at: [0.26, -0.87, 0.58] }, left: { on: 0, at: [0.05, -1.0, 0.1] }, ...spine({ flex: 18, turn: 14 }), offset: [0, -0.06, 0.07] }]),
             variant("sweep", STAFF,
-                // Swung back round to the right, then swept flat across to the left
+                // Swung back round to the right, then swept flat across to the left, the rear hand
+                // at the left hip and the butt behind it
                 [0.6, { right: { at: [-0.5, -0.26, 0.3] }, left: { on: 0, at: [-0.14, -0.46, 0.37] }, ...spine({ turn: -32 }), Hips: { turn: 12 }, offset: [0, -0.02, -0.03] }],
-                [1, { right: { at: [0.22, -0.66, 0.4] }, left: { on: 0, at: [-0.56, -0.83, 0.44] }, ...spine({ flex: 6, turn: 22 }), Hips: { turn: -12 }, offset: [0, -0.05, 0.08] }],
-                [1.35, { right: { at: [0.8, -0.5, 0.06] }, left: { on: 0, at: [0.17, -0.69, 0.43] }, ...spine({ flex: 8, turn: 30 }), Hips: { turn: -15 }, offset: [0, -0.05, 0.06] }]),
+                [1, { right: { at: [0.3, -0.5, 0.75] }, left: { on: 0, at: [0.1, -0.75, 0.2] }, ...spine({ flex: 6, turn: 22 }), Hips: { turn: -12 }, offset: [0, -0.05, 0.08] }],
+                [1.35, { right: { at: [0.6, -0.5, 0.55] }, left: { on: 0, at: [0.12, -0.75, 0.15] }, ...spine({ flex: 8, turn: 30 }), Hips: { turn: -15 }, offset: [0, -0.05, 0.06] }]),
             variant("thrust", STAFF,
-                // Drawn back low, then driven head first at the enemy
-                [0.6, { right: { at: [0.2, -0.62, 0.2] }, left: { on: 0, at: [-0.43, -0.7, -0.23] }, ...spine({ turn: -14 }), offset: [0, -0.02, -0.07] }],
-                [1, { right: { at: [0.33, -0.64, 0.77] }, left: { on: 0, at: [-0.28, -0.87, 0.5] }, ...spine({ flex: 10, turn: 12 }), offset: [0, -0.07, 0.16] }],
-                [1.3, { right: { at: [0.46, -0.76, 0.57] }, left: { on: 0, at: [-0.23, -0.89, 0.36] }, ...spine({ flex: 10, turn: 10 }), offset: [0, -0.07, 0.14] }]),
+                // Drawn back low, the rear hand at the left hip and the butt past it, then driven
+                // head first at the enemy
+                [0.6, { right: { at: [0.29, -0.67, 0.57] }, left: { on: 0, at: [0.04, -0.75, -0.03] }, ...spine({ turn: -14 }), offset: [0, -0.02, -0.07] }],
+                [1, { right: { at: [0.33, -0.64, 0.77] }, left: { on: 0, at: [0.05, -0.8, 0.35] }, ...spine({ flex: 10, turn: 12 }), offset: [0, -0.07, 0.16] }],
+                [1.3, { right: { at: [0.42, -0.76, 0.53] }, left: { on: 0, at: [0.05, -0.8, 0.3] }, ...spine({ flex: 10, turn: 10 }), offset: [0, -0.07, 0.14] }]),
             variant("rising strike", STAFF,
                 // The head low behind on the right, then swung up under the enemy's guard
-                [0.6, { right: { at: [-0.28, -0.9, 0.17] }, left: { on: 0, at: [-0.08, -0.62, 0.57] }, ...spine({ flex: 14, turn: -18 }), offset: [0, -0.06, -0.02] }],
-                [1, { right: { at: [0.28, -0.52, 0.63] }, left: { on: 0, at: [-0.35, -0.79, 0.42] }, ...spine({ flex: 4, turn: 10 }), offset: [0, -0.03, 0.08] }],
-                [1.35, { right: { at: [0.18, -0.26, 0.5] }, left: { on: 0, at: [-0.55, -0.48, 0.57] }, ...spine({ flex: -4, turn: 12 }), offset: [0, -0.01, 0.06] }]),
+                [0.6, { right: { at: [-0.28, -0.96, 0.17] }, left: { on: 0, at: [-0.02, -0.62, 0.63] }, ...spine({ flex: 14, turn: -18 }), offset: [0, -0.06, -0.02] }],
+                [1, { right: { at: [0.34, -0.36, 0.49] }, left: { on: 0, at: [-0.23, -0.97, 0.52] }, ...spine({ flex: 4, turn: 10 }), offset: [0, -0.03, 0.08] }],
+                [1.35, { right: { at: [0.18, -0.2, 0.5] }, left: { on: 0, at: [-0.55, -0.54, 0.63] }, ...spine({ flex: -4, turn: 12 }), offset: [0, -0.01, 0.06] }]),
             variant("spinning strike", STAFF,
-                // Wound far round to the right, then the whole body turns into the blow
-                [0.5, { right: { at: [-0.44, -0.08, -0.06] }, left: { on: 0, at: [0.06, -0.55, -0.07] }, ...spine({ turn: -45, flex: -4 }), Hips: { turn: 25 }, offset: [0, 0, -0.04] }],
-                [1, { right: { at: [0.25, -0.66, 0.47] }, left: { on: 0, at: [-0.36, -0.9, 0.53] }, ...spine({ flex: 8, turn: 30 }), Hips: { turn: -25 }, offset: [0, -0.05, 0.1] }],
-                [1.35, { right: { at: [0.8, -0.77, -0.26] }, left: { on: 0, at: [0.06, -0.99, 0.2] }, ...spine({ flex: 8, turn: 40 }), Hips: { turn: -30 }, offset: [0, -0.05, 0.07] }]),
+                // Wound far round to the right, the staff raised back over the right shoulder, then
+                // the whole body turns into the blow, the rear hand coming to the left hip
+                [0.5, { right: { at: [-0.54, 0.13, 0.03] }, left: { on: 0, at: [-0.4, -0.1, 0.45] }, ...spine({ turn: -45, flex: -4 }), Hips: { turn: 25 }, offset: [0, 0, -0.04] }],
+                [1, { right: { at: [0.3, -0.45, 0.75] }, left: { on: 0, at: [0.1, -0.75, 0.2] }, ...spine({ flex: 8, turn: 30 }), Hips: { turn: -25 }, offset: [0, -0.05, 0.1] }],
+                [1.35, { right: { at: [0.7, -0.5, 0.45] }, left: { on: 0, at: [0.15, -0.75, 0.15] }, ...spine({ flex: 8, turn: 40 }), Hips: { turn: -30 }, offset: [0, -0.05, 0.07] }]),
         ],
     },
     wand: {
@@ -341,8 +388,8 @@ export const ATTACKS = Object.freeze({
             variant("leaping slam", HAMMER,
                 // Rising up on the toes with it high overhead, then slammed down, crouching into it
                 [0.55, { right: { at: [0.08, 0.84, 0.14] }, left: { on: 0, at: [-0.62, 0.6, 0.53] }, ...spine({ flex: -16 }), offset: [0, 0.05, -0.06] }],
-                [1, { right: { at: [0.25, -0.67, 0.78] }, left: { on: 0, at: [-0.43, -0.85, 0.3] }, ...spine({ flex: 26 }), offset: [0, -0.16, 0.14] }],
-                [1.4, { right: { at: [0.67, -0.76, 0.02] }, left: { on: 0, at: [-0.03, -0.73, -0.23] }, ...spine({ flex: 32 }), offset: [0, -0.18, 0.12] }],
+                [1, { right: { at: [0.25, -0.67, 0.78] }, left: { on: 0, at: [-0.31, -0.79, 0.3] }, ...spine({ flex: 26 }), offset: [0, -0.16, 0.14] }],
+                [1.4, { right: { at: [0.67, -0.76, 0.02] }, left: { on: 0, at: [0.03, -0.61, -0.23] }, ...spine({ flex: 32 }), offset: [0, -0.18, 0.12] }],
                 // (Lifted out in front on the way back, clear of the legs)
                 [1.7, { right: { at: [0.2, -0.37, 0.7] }, left: { on: 0, at: [-0.32, -0.87, 0.35] }, ...spine({ flex: 14 }), offset: [0, -0.08, 0.06] }]),
         ],
@@ -401,7 +448,8 @@ export const ATTACKS = Object.freeze({
                 // Out wide, then round into the side of the head, the elbow up level with the fist
                 [0.5, { right: { at: [-0.1, 0.1, 0.3], palm: [0.6, -0.6, 0.4], towards: [0.3, 0.4, 0.85], elbow: [-0.6, -0.8, 0] }, left: fist(-1), ...spine({ flex: 6, turn: -18 }), Hips: { turn: 8 }, offset: [0, -0.01, -0.02] }],
                 [1, { right: { at: [0.45, 0.12, 0.72], palm: [0, -1, 0], towards: [1, 0, 0.25], elbow: [-1, 0.05, -0.1] }, left: fist(-1), ...spine({ flex: 6, turn: 28 }), Hips: { turn: -14 }, offset: [0, -0.03, 0.05] }],
-                [1.4, { right: { at: [0.6, 0.1, 0.5], palm: [0, -1, -0.2], towards: [1, 0, -0.1], elbow: [-1, 0, -0.2] }, left: fist(-1), ...spine({ flex: 6, turn: 30 }), Hips: { turn: -15 }, offset: [0, -0.03, 0.04] }]),
+                // (Not carried so far across that the forearm comes down on the lead fist)
+                [1.4, { right: { at: [0.5, 0.12, 0.6], palm: [0, -1, -0.2], towards: [1, 0, -0.1], elbow: [-1, 0, -0.2] }, left: fist(-1), ...spine({ flex: 6, turn: 30 }), Hips: { turn: -15 }, offset: [0, -0.03, 0.04] }]),
             variant("uppercut", PUNCH,
                 // Dipping low, then driven up under the chin, the palm to the body
                 [0.5, { right: { at: [0.1, -0.45, 0.4], palm: [0.9, 0, -0.4], towards: [0, 0.4, 0.9] }, left: fist(-1), ...spine({ flex: 12, turn: -10 }), Hips: { turn: 6 }, offset: [0, -0.06, 0] }],
@@ -507,9 +555,11 @@ export const ATTACKS = Object.freeze({
         ],
     },
 
-    // Spells, cast with the free (left) hand, key 1 when the spell takes effect
+    // Spells, cast with the free hand (the left; the right, if the left holds a bow), key 1 when
+    // the spell takes effect
     castHeal: {
         // (The light gathered in the cupped hand, then lifted up in the open palm, the fingers up)
+        cast: true,
         variants: [
             variant("lifted up", CAST,
                 // The hand gathers the light before the chest, then lifts it up and open
@@ -544,6 +594,7 @@ export const ATTACKS = Object.freeze({
     },
     castStun: {
         // (Thrust at the enemy with the open palm, the fingers up, as if to stop it; or pointed)
+        cast: true,
         variants: [
             variant("palm thrust", CAST,
                 // Drawn back by the left shoulder, then thrust open-palmed at the enemy
@@ -742,6 +793,14 @@ const FOLDED = { right: { at: [0.74, -0.36, 0.24], point: [0, 1, 0], edge: [1, 0
 // A rest another role has too, under its own name
 const renamed = (rest, name) => ({ ...rest, name });
 
+// The smith, both hands full, easing a stiff back: arching it, the shoulders drawn back, the
+// head back, the tools kept hanging at the sides (a hand pressed to the small of the back would
+// press them into it)
+const EASING_THE_BACK = variant("stretching the back", { ...spine({}), Head: { flex: 0 }, LeftShoulder: { protract: 0 }, RightShoulder: { protract: 0 }, offset: [0, 0, 0] },
+    [0.5, { ...spine({ flex: -7 }), Head: { flex: -8 }, LeftShoulder: { protract: -12 }, RightShoulder: { protract: -12 } }],
+    [1, { ...spine({ flex: -13 }), Head: { flex: -14 }, LeftShoulder: { protract: -18 }, RightShoulder: { protract: -18 }, offset: [0, 0, 0.03] }],
+    [1.5, { ...spine({ flex: -8 }), Head: { flex: -6 }, LeftShoulder: { protract: -8 }, RightShoulder: { protract: -8 }, offset: [0, 0, 0.01] }]);
+
 // The smith holding up the work in the tongs to look it over, turning it this way and that
 const LOOKING_OVER = variant("looking over the work", { ...spine({}), Head: { flex: 0, turn: 0 } },
     [0.5, { left: { at: [0.02, -0.1, 0.6], point: [0, 0.89, 0.45], edge: [0, -0.45, 0.89] }, Head: { flex: 12, turn: 4 } }],
@@ -749,13 +808,16 @@ const LOOKING_OVER = variant("looking over the work", { ...spine({}), Head: { fl
     [1.4, { left: { at: [0.02, -0.1, 0.6], point: [0, 0.89, 0.45], edge: [-0.71, -0.32, 0.63] }, Head: { flex: 12, turn: 2 } }],
     [1.75, { ...spine({}), Head: { flex: 2, turn: 0 } }]);
 
+// A hand behind the back, clasping the other (side 1: the right)
+const clasped = (side) => ({ at: [side * 0.12, -0.82, -0.16], palm: [0, 0, -1], towards: [side * 0.3, -0.9, 0], shape: "relaxed" });
+
 // A serving wench's rests (some of them the smith's and the apprentice's too)
 const BARMAID_RESTS = [
     variant("wiping her brow", { ...spine({}), Head: { flex: 0 } },
         // The back of the wrist across the forehead, then a sigh
         [0.5, { left: { at: [-0.52, 0.42, 0.26], palm: [0, 0.2, 1], towards: [-1, 0.1, 0], elbow: [0.8, 0.3, 0.3], shape: "relaxed" }, Head: { flex: -6 } }],
         [1, { left: { at: [-0.12, 0.44, 0.24], palm: [0, 0.2, 1], towards: [-1, 0.1, 0], elbow: [0.8, 0.3, 0.3], shape: "relaxed" }, Head: { flex: -8 } }],
-        [1.4, { left: { at: [0.02, -0.2, 0.2] }, ...spine({ flex: 6 }), Head: { flex: 10 } }]),
+        [1.4, { left: { at: [0.02, -0.2, 0.3] }, ...spine({ flex: 6 }), Head: { flex: 10 } }]),
     variant("hand on her hip", { ...spine({}), Head: { bend: 0 }, Hips: { obliquity: 0, turn: 0 }, offset: [0, 0, 0] },
         // A hand on the hip, the hip cocked, the head tilted
         [0.5, { left: akimbo(-1), Hips: { obliquity: 5, turn: -6 }, ...spine({ bend: -6 }), Head: { bend: 10 }, offset: [0.03, -0.01, 0] }],
@@ -779,10 +841,10 @@ const BARMAID_RESTS = [
 // The player's rests (some of them the smith's and the apprentice's too)
 const ADVENTURER_RESTS = [
     variant("stretching", { ...spine({}), Head: { flex: 0 } },
-        // Both arms up high, the back arched, then down
-        [0.55, { right: { at: [0.12, 0.7, 0.2], palm: [0.67, 0.07, 0.74], towards: [-0.04, 1, -0.05], shape: "open" }, left: { at: [-0.12, 0.7, 0.2], palm: [-0.67, 0.07, 0.74], towards: [0.04, 1, -0.05], shape: "open" }, ...spine({ flex: -6 }), Head: { flex: -8 } }],
-        [1, { right: { at: [0.1, 0.96, 0.08], palm: [0.5, 0.5, 0.7], towards: [0, 1, -0.3], shape: "open" }, left: { at: [-0.1, 0.96, 0.08], palm: [-0.5, 0.5, 0.7], towards: [0, 1, -0.3], shape: "open" }, ...spine({ flex: -12 }), Head: { flex: -16 } }],
-        [1.35, { right: { at: [0.1, 0.94, 0.06], palm: [0.5, 0.5, 0.7], towards: [0, 1, -0.3], shape: "open" }, left: { at: [-0.1, 0.94, 0.06], palm: [-0.5, 0.5, 0.7], towards: [0, 1, -0.3], shape: "open" }, ...spine({ flex: -13 }), Head: { flex: -16 } }],
+        // Both arms up high and apart (clear of a hat's brim), the back arched, then down
+        [0.55, { right: { at: [-0.08, 0.7, 0.2], palm: [0.67, 0.07, 0.74], towards: [-0.2, 1, -0.05], shape: "open" }, left: { at: [0.08, 0.7, 0.2], palm: [-0.67, 0.07, 0.74], towards: [0.2, 1, -0.05], shape: "open" }, ...spine({ flex: -6 }), Head: { flex: -8 } }],
+        [1, { right: { at: [-0.12, 0.95, 0.08], palm: [0.6, 0.4, 0.7], towards: [-0.3, 0.95, -0.25], shape: "open" }, left: { at: [0.12, 0.95, 0.08], palm: [-0.6, 0.4, 0.7], towards: [0.3, 0.95, -0.25], shape: "open" }, ...spine({ flex: -12 }), Head: { flex: -16 } }],
+        [1.35, { right: { at: [-0.12, 0.93, 0.06], palm: [0.6, 0.4, 0.7], towards: [-0.3, 0.95, -0.25], shape: "open" }, left: { at: [0.12, 0.93, 0.06], palm: [-0.6, 0.4, 0.7], towards: [0.3, 0.95, -0.25], shape: "open" }, ...spine({ flex: -13 }), Head: { flex: -16 } }],
         [1.7, { right: { at: [-0.1, 0.2, 0.2] }, left: { at: [0.1, 0.2, 0.2] }, ...spine({ flex: 0 }), Head: { flex: 0 } }]),
     variant("looking about", { ...spine({}), Head: { turn: 0, flex: 0 } },
         // A hand shading the eyes, looking into the distance one way, then the other
@@ -803,10 +865,14 @@ const ADVENTURER_RESTS = [
         [1, { left: { at: [-0.34, 0.24, 0.32], palm: [0, 0, -1], towards: [-0.5, 0.85, 0], shape: "relaxed" }, ...spine({ flex: -8 }), Head: { flex: -20 }, LeftShoulder: { elevate: 18 }, RightShoulder: { elevate: 18 } }],
         [1.5, { left: { at: [-0.1, -0.3, 0.2] }, ...spine({ flex: 2 }), Head: { flex: 4 }, LeftShoulder: { elevate: 0 }, RightShoulder: { elevate: 0 } }]),
     variant("shifting the weight", { ...spine({}), Hips: { obliquity: 0 }, offset: [0, 0, 0] },
-        // From one foot to the other, a thumb in the belt
+        // From one foot to the other, a thumb in the belt (the hand brought to it from the front,
+        // over a sword's hilt there)
+        [0.25, { left: { at: [-0.12, -0.72, 0.36], pronate: 30, shape: "relaxed" } }],
         [0.5, { left: { at: [-0.26, -0.62, 0.22], palm: [0, -0.2, -0.98], towards: [-0.2, -0.96, 0.19], shape: "relaxed" }, Hips: { obliquity: -6 }, ...spine({ bend: 5 }), offset: [-0.04, -0.01, 0] }],
         [1, { left: { at: [-0.26, -0.62, 0.22], palm: [0, -0.2, -0.98], towards: [-0.2, -0.96, 0.19], shape: "relaxed" }, Hips: { obliquity: 6 }, ...spine({ bend: -5 }), offset: [0.04, -0.01, 0] }],
-        [1.5, { left: { at: [-0.26, -0.62, 0.22], palm: [0, -0.2, -0.98], towards: [-0.2, -0.96, 0.19], shape: "relaxed" }, Hips: { obliquity: -3 }, ...spine({ bend: 3 }), offset: [-0.02, 0, 0] }]),
+        [1.5, { left: { at: [-0.26, -0.62, 0.22], palm: [0, -0.2, -0.98], towards: [-0.2, -0.96, 0.19], shape: "relaxed" }, Hips: { obliquity: -3 }, ...spine({ bend: 3 }), offset: [-0.02, 0, 0] }],
+        // (And out of it forward again before it's let fall)
+        [1.75, { left: { at: [-0.12, -0.72, 0.36], pronate: 30, shape: "relaxed" }, Hips: { obliquity: 0 }, ...spine({}), offset: [0, 0, 0] }]),
 ];
 
 // The priest's rests (some of them the acolyte's too)
@@ -831,11 +897,12 @@ const PRIEST_RESTS = [
         [1, { right: { at: [0.3, -0.32, 0.24], palm: [0, -0.45, -0.89], towards: [1, 0, 0], shape: "open" }, Head: { flex: 10 } }],
         [1.4, { right: { at: [0, -0.3, 0.62], palm: [0, 1, 0.2], towards: [0, 0, 1], shape: "open" }, Head: { flex: 0 } }]),
     variant("hands clasped behind", { ...spine({}), Head: { flex: 0, turn: 0 } },
-        // Hands clasped at the small of the back, looking over the pews one way and the other
-        [0.5, { right: { at: [0.12, -0.82, -0.16], palm: [0, 0, -1], towards: [0.3, -0.9, 0], shape: "relaxed" }, left: { at: [-0.12, -0.82, -0.16], palm: [0, 0, -1], towards: [-0.3, -0.9, 0], shape: "relaxed" }, ...spine({ flex: -3 }) }],
-        [1, { Head: { turn: 20 } }],
-        [1.5, { Head: { turn: -20 } }],
-        [1.75, { Head: { turn: 0 } }]),
+        // Hands clasped at the small of the back (held there in every key), looking over the
+        // pews one way and the other
+        [0.5, { right: clasped(1), left: clasped(-1), ...spine({ flex: -3 }) }],
+        [1, { right: clasped(1), left: clasped(-1), Head: { turn: 20 } }],
+        [1.5, { right: clasped(1), left: clasped(-1), Head: { turn: -20 } }],
+        [1.75, { right: clasped(1), left: clasped(-1), Head: { turn: 0 } }]),
 ];
 
 /**
@@ -890,8 +957,8 @@ const BASE_RESTS = {
             // The tankard's rim to the lips and tipped right back; taken off them forward, then the
             // mouth wiped on a sleeve
             [0.55, { right: { at: [0.2, 0.3, 0.42], point: [0.2, 0.75, -0.6] }, Head: { flex: -8 } }],
-            [1, { right: { at: [0.22, 0.45, 0.32], point: [0.3, 0.3, -0.9] }, ...spine({ flex: -6 }), Head: { flex: -24 } }],
-            [1.4, { right: { at: [0.18, 0.38, 0.24], point: [0.3, 0.15, -0.95] }, ...spine({ flex: -8 }), Head: { flex: -28 } }],
+            [1, { right: { at: [0.22, 0.45, 0.35], point: [0.3, 0.3, -0.9] }, ...spine({ flex: -6 }), Head: { flex: -24 } }],
+            [1.4, { right: { at: [0.18, 0.38, 0.28], point: [0.3, 0.15, -0.95] }, ...spine({ flex: -8 }), Head: { flex: -28 } }],
             [1.52, { right: { at: [0.22, 0.22, 0.45], point: [0.2, 0.8, -0.4] }, Head: { flex: -10 } }],
             [1.65, { right: tankard, left: { at: [-0.5, 0.22, 0.3], palm: [0, 0, 1], towards: [-1, 0, 0], shape: "relaxed" }, ...spine({ flex: 2 }), Head: { flex: 4 } }],
             [1.85, { right: tankard, left: { at: [-0.18, 0.2, 0.3], palm: [0, 0, 1], towards: [-1, 0, 0], shape: "relaxed" }, ...spine({ flex: 2 }), Head: { flex: 2 } }]),
@@ -994,7 +1061,7 @@ const BASE_RESTS = {
         renamed(BARMAID_RESTS[0], "wiping the brow"),
         LOOKING_OVER,
         ADVENTURER_RESTS[2],
-        renamed(BARMAID_RESTS[4], "stretching the back"),
+        EASING_THE_BACK,
         ADVENTURER_RESTS[4],
     ],
     apprentice: [renamed(BARMAID_RESTS[0], "wiping the brow"), ADVENTURER_RESTS[1], ADVENTURER_RESTS[2], ADVENTURER_RESTS[3], ADVENTURER_RESTS[0]],
@@ -1101,7 +1168,7 @@ export const DRAWS = Object.freeze({
                 [0.55, { right: { at: [0.3, -0.6, 0.35], sheath: 0.6 }, ...spine({ turn: 10 }) }],
                 [1, { right: { at: [0.4, -0.7, 0.2], sheath: 1 }, left: FREE, ...spine({ turn: 24, flex: 6 }), Hips: { turn: 8 } }],
                 // ...drawn up and out across the body in one sweep...
-                [1.14, { right: { at: [-0.05, 0.25, 0.6], point: [0.5, 0.45, 0.74], edge: [-0.3, 0.9, -0.3] }, left: REACH_OUT, ...spine({ turn: -12 }), Hips: { turn: -4 } }],
+                [1.14, { right: { at: [0.01, 0.25, 0.6], point: [0.5, 0.45, 0.74], edge: [-0.3, 0.9, -0.3] }, left: REACH_OUT, ...spine({ turn: -12 }), Hips: { turn: -4 } }],
                 // ...raised in a salute before the face, then twirled round at the wrist, the
                 // point sweeping down and back past the right side and up again...
                 [1.3, { right: { at: [0.15, 0.05, 0.4], point: [0, 1, 0.12], edge: [0.1, -0.12, 0.99], elbow: [-0.33, -0.91, -0.26] }, left: FREE, ...spine({}), Hips: { turn: 0 } }],
@@ -1120,9 +1187,11 @@ export const DRAWS = Object.freeze({
                 [0, guard("sword")],
                 // A salute, a twirl forward...
                 [0.3, { right: { at: [0.15, 0.05, 0.4], point: [0, 1, 0.12], edge: [0.1, -0.12, 0.99], elbow: [-0.33, -0.91, -0.26] }, left: FREE }],
-                [0.55, { right: { at: [0.05, -0.15, 0.62], point: [0.2, -0.3, 0.93], edge: [-0.3, -0.9, -0.1] } }],
-                // ...then the point round to the scabbard's mouth, and slid home
-                [0.8, { right: { at: [0.35, -0.45, 0.35], point: [0.15, -0.8, -0.55], edge: [0, -0.55, 0.8], sheath: 0.6 }, ...spine({ turn: 10 }) }],
+                [0.55, { right: { at: [0, -0.13, 0.63], point: [0.2, -0.3, 0.93], edge: [-0.3, -0.9, -0.1] } }],
+                // ...then the point round to the scabbard's mouth, the hilt kept out clear of the
+                // waist, and slid home
+                [0.8, { right: { at: [0.48, -0.43, 0.71], point: [0.2, -0.8, -0.42], edge: [0, -0.55, 0.8], sheath: 0.5 }, ...spine({ turn: 10 }) }],
+                [0.9, { right: { at: [0.52, -0.62, 0.48], sheath: 0.75 }, ...spine({ turn: 14, flex: 2 }), Hips: { turn: 3 } }],
                 [1, { right: { at: [0.4, -0.7, 0.2], sheath: 1 }, ...spine({ turn: 16, flex: 4 }), Hips: { turn: 5 } }],
                 // (The hand let go, falling to the side)
                 [1.35, { right: { at: [0.1, -0.8, 0.12], pronate: 40, shape: "relaxed" }, left: FREE, ...spine({}), Hips: { turn: 0 } }],
@@ -1275,9 +1344,9 @@ export const DRAWS = Object.freeze({
                 [0.3, { right: { at: [-0.25, -0.2, 0.3], pronate: 40, shape: "relaxed", elbow: [-0.9, -0.1, -0.3] } }],
                 [0.6, { right: { at: [-0.05, 0.25, 0.05], sheath: 0.6, elbow: [-0.5, 0.85, 0] } }],
                 [1, { right: { at: [0, 0.2, -0.1], sheath: 1, elbow: [-0.5, 0.85, 0] }, left: FREE }],
-                [1.2, { right: { at: [0.05, 0.55, 0.2], point: [0.2, 0.9, -0.3] }, ...spine({ flex: -8 }) }],
+                [1.2, { right: { at: [-0.11, 0.55, 0.2], point: [0.18, 1.03, -0.3] }, ...spine({ flex: -8 }) }],
                 // ...wheeled round out to the right and back up, and brandished with a snarl
-                [1.4, { right: { at: [-0.35, 0.1, 0.5], point: [-0.6, 0.5, 0.6] }, ...spine({ turn: -12 }) }],
+                [1.4, { right: { at: [-0.41, 0.1, 0.5], point: [-0.6, 0.5, 0.58] }, ...spine({ turn: -12 }) }],
                 [1.6, { right: { at: [-0.2, -0.5, 0.5], point: [-0.2, -0.5, 0.85] } }],
                 [1.8, { right: { at: [0.1, 0.12, 0.6], point: [0.2, 0.8, 0.5] }, left: REACH_OUT, ...spine({ flex: 6 }), Neck: { flex: -8 }, Head: { flex: -8 } }],
                 [2, guard("cleaver")],
@@ -1290,8 +1359,8 @@ export const DRAWS = Object.freeze({
             keys: [
                 [0, guard("cleaver")],
                 // Raised and put back over the shoulder
-                [0.4, { right: { at: [0.05, 0.55, 0.2], point: [0.2, 0.9, -0.3] }, left: FREE }],
-                [0.75, { right: { at: [0, 0.3, -0.05], sheath: 0.6, elbow: [-0.5, 0.85, 0] } }],
+                [0.4, { right: { at: [-0.16, 0.62, 0.39], point: [0.12, 0.92, -0.38] }, left: FREE }],
+                [0.75, { right: { at: [-0.03, 0.33, -0.05], sheath: 0.6, elbow: [-0.5, 0.85, 0] } }],
                 [1, { right: { at: [0, 0.2, -0.1], sheath: 1, elbow: [-0.5, 0.85, 0] } }],
                 [1.12, { right: { at: [-0.15, 0.15, 0.15], pronate: 40, shape: "relaxed", elbow: [-0.7, 0.2, -0.6] } }],
                 [1.35, { right: { at: [-0.1, -0.85, 0.08], pronate: 40, shape: "relaxed" } }],
@@ -1306,13 +1375,15 @@ export const DRAWS = Object.freeze({
             settle: 0.3,
             keys: [
                 [0, EASY],
-                // Up over the left shoulder to the bow, pulled up over it and swung down in
-                // front, spinning...
+                // Up over the left shoulder to the bow, lifted up out of its sling along its length
+                // (so its lower limb comes up clear of the back), then over the shoulder and swung
+                // down in front, spinning...
                 [0.3, { left: { at: [0.15, -0.1, 0.35], pronate: 40, shape: "relaxed", elbow: [0.9, 0, -0.3] } }],
                 [0.6, { left: { at: [0.05, 0.25, 0.05], sheath: 0.6, elbow: [0.5, 0.85, 0] } }],
                 [1, { left: { at: [0, 0.2, -0.1], sheath: 1, elbow: [0.5, 0.85, 0] } }],
+                [1.1, { left: { at: [0.1, 0.5, -0.3], point: [-0.2, -0.95, -0.2], elbow: [0.5, 0.85, 0] } }],
                 [1.22, { left: { at: [-0.1, 0.55, 0.3], point: [-0.72, 0.27, 0.64], edge: [0.02, 0.99, -0.11], elbow: [0.88, -0.2, 0.43] } }],
-                [1.42, { left: { at: [-0.2, -0.2, 0.7], point: [0.02, 0.73, 0.68], edge: [-0.13, -0.65, 0.75], elbow: [0.95, -0.23, 0.23] } }],
+                [1.42, { left: { at: [-0.2, -0.2, 0.7], point: [-0.4, 0.85, 0.35], edge: [-0.13, -0.35, 0.93], elbow: [0.95, -0.23, 0.23] } }],
                 // ...held upright, its string plucked to try it, then on guard
                 [1.62, { left: { at: [-0.15, -0.4, 0.62], point: [0, 1, 0.1], edge: [-0.21, -0.1, 0.97], elbow: [0.56, -0.61, -0.57] }, right: { at: [-0.05, -0.38, 0.45], palm: [-0.9, 0, 0.3], shape: "hook" } }],
                 [1.78, { right: { at: [0.02, -0.4, 0.38], palm: [-0.9, 0, 0.3], shape: "hook" } }],
@@ -1325,11 +1396,12 @@ export const DRAWS = Object.freeze({
             settle: 0.3,
             keys: [
                 [0, guard("bow")],
-                // Raised and slung back over the left shoulder
-                [0.4, { left: { at: [-0.1, 0.55, 0.3], point: [-0.72, 0.27, 0.64], edge: [0.02, 0.99, -0.11], elbow: [0.88, -0.2, 0.43] }, right: { at: [0.2, -0.7, 0.2], pronate: 40, shape: "relaxed" } }],
-                [0.75, { left: { at: [0, 0.3, -0.05], sheath: 0.6, elbow: [0.5, 0.85, 0] } }],
-                [1, { left: { at: [0, 0.2, -0.1], sheath: 1, elbow: [0.5, 0.85, 0] } }],
-                [1.12, { left: { at: [0.15, 0.15, 0.15], pronate: 40, shape: "relaxed", elbow: [0.7, 0.2, -0.6] } }],
+                // Raised and slung back over the left shoulder, brought above its sling and slid
+                // down into it along its length
+                [0.4, { left: { at: [-0.2, 0.45, 0.45], point: [-0.77, 0.32, 0.59], edge: [0.02, 0.99, -0.11], elbow: [0.88, -0.2, 0.43] }, right: { at: [0.2, -0.7, 0.2], pronate: 40, shape: "relaxed" } }],
+                [0.75, { left: { at: [0.05, 0.45, -0.3], point: [-0.25, -0.95, -0.1], elbow: [0.5, 0.85, 0] } }],
+                [1, { left: { at: [-0.15, 0.15, -0.25], sheath: 1, elbow: [0.65, 0.75, 0] } }],
+                [1.12, { left: { at: [0.3, 0.2, 0.35], pronate: 40, shape: "relaxed", elbow: [0.7, 0.2, -0.6] } }],
                 [1.35, { left: { at: [0.1, -0.85, 0.08], pronate: 40, shape: "relaxed" } }],
                 [2, EASY],
             ],
@@ -1771,6 +1843,26 @@ const _chest = new THREE.Quaternion();
 const _now = new THREE.Quaternion();
 const _edge = new THREE.Vector3();
 const _yaw = new THREE.Quaternion();
+const _shieldInverse = new THREE.Matrix4();
+const _local = new THREE.Vector3();
+const _lunge = new THREE.Vector3();
+const _nudge = new THREE.Vector3();
+const _turnBy = new THREE.Quaternion();
+const _slice = new THREE.Vector3();
+const _lever = new THREE.Vector3();
+const _push = new THREE.Vector3();
+const _near = [];
+const _boneAt = new THREE.Vector3();
+const _turned = new THREE.Vector3();
+const _moved = new THREE.Vector3();
+const _grip = new THREE.Vector3();
+const _handTurn = new THREE.Quaternion();
+const _heldOut = { turn: new THREE.Vector3(), move: new THREE.Vector3(), push: new THREE.Vector3() };
+const _skinning = Array.from({ length: 64 }, () => new THREE.Matrix4());
+
+// Which of SECTORS ways round a shield's face (in its own frame: its face out along x) a point is
+const SECTORS = 16;
+const sectorOf = ({ y, z }) => Math.floor(((Math.atan2(y, z) / (Math.PI * 2) + 1) % 1) * SECTORS) % SECTORS;
 
 /**
  * An empty hand's anatomical frame (world) with its palm facing `palm` and its fingers pointing
@@ -1801,6 +1893,8 @@ export class Actions {
         this.character = character;
         this.rig = character.rig;
         this.time = 0;
+        /** Whether what's held is kept out of the body (not for those seen too small for it to show). */
+        this.keepClear = true;
 
         /** The attack under way, if any. */
         this.attack = null;
@@ -1869,7 +1963,14 @@ export class Actions {
         this.#swapped();
         this.variety.last.set(name, way);
         this.attacks++;
-        this.attack = { name, variant: way, tracks: COMPILED.get(name)[way], start: this.time, hitAt, duration, mirror: Boolean(attack.alternate && this.attacks % 2 === 0), arms };
+        // (A spell cast with the right hand, if the left grips something and the right's free)
+        const holds = this.character.holds ?? {};
+        const righted = Boolean(attack.cast && holds.Left?.grips && !holds.Right);
+
+        // (One cast with a staff or war hammer in the right hand: held upright out of the way)
+        const upright = Boolean(attack.cast && holds.Right && ITEMS[this.character.equipment?.get("mainHand")]?.haft);
+
+        this.attack = { name, variant: way, tracks: COMPILED.get(name)[way], start: this.time, hitAt, duration, mirror: Boolean(attack.alternate && this.attacks % 2 === 0) || righted, arms, upright };
 
         return way;
     }
@@ -2027,7 +2128,7 @@ export class Actions {
         }
 
         if (this.attack) {
-            const { tracks, start, hitAt, duration, mirror, stopping = null, arms = true } = this.attack;
+            const { tracks, start, hitAt, duration, mirror, stopping = null, arms = true, rest = false, upright = false } = this.attack;
             const elapsed = this.time - start;
             const easing = stopping ? 1 - smooth(0, stopping.length, this.time - stopping.start) : 1;
 
@@ -2038,7 +2139,7 @@ export class Actions {
                 const key = this.attack.held ? 1 : elapsed < hitAt ? elapsed / hitAt : 1 + (elapsed - hitAt) / Math.max(1e-3, duration - hitAt);
                 const weight = this.attack.held ? 1 : smooth(0, 0.3, key) * (1 - smooth(tracks.settle, 2, key)) * easing;
 
-                this.#blend(tracks, key, weight, mirror, arms);
+                this.#blend(tracks, key, weight, mirror, arms, rest, upright);
             }
         }
 
@@ -2092,8 +2193,11 @@ export class Actions {
     /** Reach the hands to where the actions want them (once the body is posed and the feet planted). */
     place() {
         const reached = new Set();
+        // (What's held is kept out of the body as the arm's reached the last time this frame:
+        // the arm drawn, not those blended under it)
+        const last = Object.fromEntries(HANDS.map((side) => [side, this.reaching.findLastIndex(({ hands }) => hands[side] && (hands[side].reach ?? 1) > 0.001)]));
 
-        for (const { hands, weight } of this.reaching) {
+        for (const [layer, { hands, weight }] of this.reaching.entries()) {
             // A hand holding the other's weapon goes second; given its own place, the weapon lies
             // along the line through both hands' places
             const order = HANDS.filter((side) => hands[side] && (hands[side].reach ?? 1) > 0.001).sort((a, b) => Number("on" in hands[a]) - Number("on" in hands[b]));
@@ -2103,7 +2207,7 @@ export class Actions {
                 const other = side === "right" ? "left" : "right";
                 const second = hands[other] && "on" in hands[other] && hands[other].at ? this.#place(other, hands[other].at, this.#frame(hands[other], new THREE.Quaternion())) : null;
 
-                grips[side] = this.#reach(side, hands[side], weight * (hands[side].reach ?? 1), grips[other], second);
+                grips[side] = this.#reach(side, hands[side], weight * (hands[side].reach ?? 1), grips[other], second, layer === last[side]);
                 reached.add(side);
             }
         }
@@ -2119,9 +2223,14 @@ export class Actions {
 
     // Blend the joints towards an action's pose at a key time, by `weight`; hands' places are
     // kept for place()
-    #blend({ times, tracks }, key, weight, mirror, arms = true) {
+    #blend({ times, tracks }, key, weight, mirror, arms = true, rest = false, upright = false) {
         const rig = this.rig;
         const hands = {};
+        // (A shield on the left forearm: held up in a fight; resting, carried as it is, the left
+        // arm left out of the rest)
+        const shielded = SHIELD_SOCKETS.has(ITEMS[this.character.equipment?.get("offHand")]?.socket);
+        const carried = shielded && rest;
+        let shieldHand = null;
 
         for (const { joint, names, values } of tracks) {
             // (The hands and fingers left as they are)
@@ -2180,7 +2289,17 @@ export class Actions {
                     delete hand.on;
                 }
 
+                if (shielded && name === "left") {
+                    shieldHand = carried ? null : hand;
+                    continue;
+                }
+
                 hands[name] = hand;
+                continue;
+            }
+
+            // (The shield arm, carrying it, left as it is)
+            if (carried && LEFT_ARM.test(name)) {
                 continue;
             }
 
@@ -2199,6 +2318,20 @@ export class Actions {
 
             jointRotation(kind, side, angles, _rotation);
             blendRotation(kind, side, rig.rotations[index], _rotation, weight, rig.rotations[index]);
+        }
+
+        // (The shield held up before the chest, further out as the free hand would reach, and
+        // aside to the left as the sword arm comes across the body, out of its way)
+        if (shieldHand) {
+            const out = smooth(DRAW_IN.at[2], REACH_OUT.at[2], shieldHand.at?.[2] ?? FREE.at[2]);
+            const aside = smooth(SHIELD.across[0], SHIELD.across[1], hands.right?.at?.[0] ?? 0);
+            const { elbow, pronate, wrist } = SHIELD;
+
+            hands.left = { at: SHIELD.in.map((near, k) => near + (SHIELD.out[k] - near) * out + (SHIELD.aside[k] - near) * aside * (1 - out)), elbow, pronate, wrist, reach: shieldHand.reach, shield: true };
+        }
+
+        if (upright && !hands.right) {
+            hands.right = UPRIGHT;
         }
 
         if (Object.keys(hands).length && weight > 0.001) {
@@ -2244,10 +2377,323 @@ export class Actions {
                 shoulders: { right: head("RightArm").clone().sub(chest), left: head("LeftArm").clone().sub(chest) },
                 arm: head("RightForeArm").distanceTo(head("RightArm")) + head("RightHand").distanceTo(head("RightForeArm")),
                 sockets: { right: socketOn(character, "rightHand"), left: socketOn(character, "leftHand") },
+                skin: null,
             };
         }
 
         return this.body;
+    }
+
+    // The shield strapped to the left forearm, if there's one; and, found once, its shape (in its
+    // own frame: its face out along x): how far out its rim is each way round (`rim`: SECTORS of
+    // it), how far back its back is, in the middle and at the rim (it's dished), and its face in
+    // the middle (`front`: its boss's, if it has one)
+    #shield() {
+        const model = this.character.items.find((item) => item.userData.home?.bone === "LeftForeArm");
+
+        if (model && !model.userData.shape) {
+            const rim = new Array(SECTORS).fill(null);
+            const point = new THREE.Vector3();
+            let [middle, front] = [0, 0];
+
+            model.updateMatrixWorld(true);
+
+            const inverse = model.matrixWorld.clone().invert();
+
+            model.traverse((mesh) => {
+                const position = mesh.isMesh ? mesh.geometry.attributes.position : null;
+
+                for (let i = 0; position && i < position.count; i++) {
+                    point.fromBufferAttribute(position, i).applyMatrix4(mesh.matrixWorld).applyMatrix4(inverse);
+
+                    const k = sectorOf(point);
+                    const out = Math.hypot(point.y, point.z);
+
+                    if (!rim[k] || out > rim[k].out) {
+                        rim[k] = { out, back: point.x };
+                    }
+
+                    if (out < 0.08) {
+                        [middle, front] = [Math.min(middle, point.x), Math.max(front, point.x)];
+                    }
+                }
+            });
+
+            model.userData.shape = { rim: rim.map((each) => each ?? { out: 0, back: 0 }), middle, front };
+        }
+
+        return model ?? null;
+    }
+
+    // How far out from its middle a shield reaches (world metres)
+    #shieldReach(shield) {
+        const { rim, middle, front } = shield.userData.shape;
+
+        return Math.hypot(Math.max(...rim.map(({ out }) => out)), Math.max(Math.abs(middle), Math.abs(front))) * this.#size();
+    }
+
+    // How far to move a shield held up (world metres) to keep the body behind it: the skin that's
+    // come into it from behind (within its rim, from SHIELD_CLEAR behind its back to halfway
+    // through it) put back behind it, the shield moved out along its face (SHIELD_NUDGE at most);
+    // or null, if it's clear. (What's before it, the other arm striking, is left before it)
+    #clearOf(shield, skin) {
+        const { rim, middle, front } = shield.userData.shape;
+        const inverse = _shieldInverse.copy(shield.matrixWorld).invert();
+        const size = this.#size();
+        const clear = SHIELD_CLEAR / size;
+        let need = 0;
+
+        for (const at of skin) {
+            const q = _local.copy(at).applyMatrix4(inverse);
+            const { out, back } = rim[sectorOf(q)];
+            const from = Math.hypot(q.y, q.z);
+
+            if (from < out) {
+                // (Its back, dished between its middle and its rim)
+                const behind = middle + (back - middle) * (from / out) ** 2;
+                const into = q.x - (behind - clear);
+
+                if (into > 0 && q.x < (behind + front) / 2) {
+                    need = Math.max(need, into);
+                }
+            }
+        }
+
+        return need * size > 0.002 ? _nudge.setFromMatrixColumn(shield.matrixWorld, 0).normalize().multiplyScalar(Math.min(SHIELD_NUDGE, need * size)) : null;
+    }
+
+    // Whether the other hand holds on to what this one does (a staff's or a hammer's haft)
+    #bothHands(side) {
+        const other = side === "right" ? "left" : "right";
+
+        return this.reaching.some(({ hands }) => hands[other] && "on" in hands[other]);
+    }
+
+    // Some of the body's skin but what holds something (`holding`: a hand and its forearm,
+    // "right" or "left", and the other hand and forearm too on a two-handed haft, "right+" or
+    // "left+"; or the shield arm, "shield"): every so many of its vertices, by their heaviest
+    // bones (with how far from each bone its vertices go), placed as they're needed
+    #heldSkin(holding) {
+        const body = this.#measure();
+        const { human, positions } = this.character;
+        const rig = this.rig;
+
+        body.held ??= {};
+
+        if (!body.held[holding]) {
+            const [Side, Other] = holding.startsWith("right") ? ["Right", "Left"] : ["Left", "Right"];
+            const arms = new RegExp(holding === "shield" ? "^Left(Shoulder|Arm|ForeArm|Hand)" : `^${Side}(ForeArm|Hand)${holding.endsWith("+") ? `|^${Other}(ForeArm|Hand)` : ""}`);
+            const vertices = [];
+
+            for (let v = 0; v < human.vertexCount; v++) {
+                if (human.partOf[v] === 0 && !arms.test(human.bones[human.skinIndices[v * 4]].name)) {
+                    vertices.push(v);
+                }
+            }
+
+            const every = Math.max(1, Math.floor(vertices.length / HELD_POINTS));
+            const kept = vertices.filter((_, k) => k % every === 0);
+            const heaviest = kept.map((v) => {
+                const weights = [0, 1, 2, 3].map((j) => human.skinWeights[v * 4 + j]);
+
+                return human.skinIndices[v * 4 + weights.indexOf(Math.max(...weights))];
+            });
+            const bones = new Map();
+
+            kept.forEach((v, k) => {
+                const bone = heaviest[k];
+                const apart = _local.fromArray(positions, v * 3).distanceTo(rig.heads[bone]);
+
+                if (!bones.has(bone)) {
+                    bones.set(bone, { bone, reach: 0, kept: [] });
+                }
+
+                bones.get(bone).kept.push(k);
+                bones.get(bone).reach = Math.max(bones.get(bone).reach, apart);
+            });
+
+            body.held[holding] = { vertices: kept, heaviest, bones: [...bones.values()], rough: kept.map(() => new THREE.Vector3()), placed: new Float64Array(kept.length).fill(-1), exact: kept.map(() => new THREE.Vector3()), facing: kept.map(() => new THREE.Vector3()), done: new Float64Array(kept.length).fill(-1) };
+        }
+
+        // (The bones as they're drawn, once a frame)
+        if (body.skinned !== this.time) {
+            rig.root.updateMatrixWorld(true);
+            rig.bones.forEach((bone, i) => _skinning[i].multiplyMatrices(bone.matrixWorld, rig.skeleton.boneInverses[i]));
+            body.skinned = this.time;
+        }
+
+        return body.held[holding];
+    }
+
+    // Which of the skin's vertices (their numbers in `skin`) are within `reach` of `at` (in the
+    // world), roughly (of the bones near enough), put where they are exactly (into `into`)
+    #nearby(skin, at, reach, into) {
+        const { positions } = this.character;
+
+        into.length = 0;
+
+        for (const { bone, reach: out, kept } of skin.bones) {
+            if (_boneAt.setFromMatrixPosition(this.rig.bones[bone].matrixWorld).distanceTo(at) > reach + HELD_ROUGH + out) {
+                continue;
+            }
+
+            const within = (reach + HELD_ROUGH) ** 2;
+
+            for (const k of kept) {
+                if (skin.placed[k] !== this.time) {
+                    skin.rough[k].fromArray(positions, skin.vertices[k] * 3).applyMatrix4(_skinning[bone]);
+                    skin.placed[k] = this.time;
+                }
+
+                if (skin.rough[k].distanceToSquared(at) < within) {
+                    into.push(k);
+                    this.#exactly(skin, k);
+                }
+            }
+        }
+
+        return into;
+    }
+
+    // Where one of the skin's vertices (`k` of `skin`'s) is now and which way it faces there, moved
+    // by all its bones (once a frame)
+    #exactly(skin, k) {
+        if (skin.done[k] !== this.time) {
+            const { human, positions, normals } = this.character;
+            const v = skin.vertices[k];
+            const [at, facing] = [skin.exact[k].set(0, 0, 0), skin.facing[k].set(0, 0, 0)];
+
+            for (let j = 0; j < 4; j++) {
+                const weight = human.skinWeights[v * 4 + j] / 255;
+
+                if (weight) {
+                    const matrix = _skinning[human.skinIndices[v * 4 + j]];
+
+                    at.addScaledVector(_local.fromArray(positions, v * 3).applyMatrix4(matrix), weight);
+                    facing.addScaledVector(_local.fromArray(normals, v * 3).transformDirection(matrix), weight);
+                }
+            }
+
+            facing.normalize();
+            skin.done[k] = this.time;
+        }
+
+        return skin.exact[k];
+    }
+
+    // What's held's shape (found once): points over it no nearer each other than HELD_GRID (its
+    // corners, and along its longer edges: a long haft's corners are only at its ends), in its
+    // own frame, in clusters HELD_CLUSTER long along it (each with its middle and how far out its
+    // points go from it); and how far from its grip it reaches
+    #heldShape(model) {
+        if (!model.userData.held) {
+            const kept = new Map();
+            const inverse = new THREE.Matrix4().copy(model.matrixWorld).invert();
+            const relative = new THREE.Matrix4();
+
+            model.traverse((mesh) => {
+                const geometry = mesh.isMesh && mesh.visible ? mesh.geometry : null;
+                const position = geometry?.attributes.position;
+                const count = geometry ? geometry.index?.count ?? position.count : 0;
+                const corner = (i) => new THREE.Vector3().fromBufferAttribute(position, geometry.index ? geometry.index.getX(i) : i).applyMatrix4(relative);
+
+                relative.multiplyMatrices(inverse, mesh.matrixWorld);
+
+                for (let t = 0; t + 2 < count; t += 3) {
+                    for (let k = 0; k < 3; k++) {
+                        const [a, b] = [corner(t + k), corner(t + ((k + 1) % 3))];
+                        const steps = Math.max(1, Math.ceil(a.distanceTo(b) / HELD_GRID));
+
+                        for (let n = 0; n < steps; n++) {
+                            const point = a.clone().lerp(b, n / steps);
+
+                            kept.set(point.toArray().map((c) => Math.round(c / HELD_GRID)).join(" "), point);
+                        }
+                    }
+                }
+            });
+
+            const clusters = new Map();
+
+            for (const point of kept.values()) {
+                const k = Math.floor(point.y / HELD_CLUSTER);
+
+                clusters.set(k, [...(clusters.get(k) ?? []), point]);
+            }
+
+            model.userData.held = {
+                clusters: [...clusters.values()].map((points) => {
+                    const at = points.reduce((sum, point) => sum.add(point), new THREE.Vector3()).divideScalar(points.length);
+
+                    return { at, radius: points.reduce((most, point) => Math.max(most, point.distanceTo(at)), 0), points };
+                }),
+                reach: [...kept.values()].reduce((most, point) => Math.max(most, point.length()), 0),
+            };
+        }
+
+        return model.userData.held;
+    }
+
+    // How far what's held has come into the body: each point of it against the nearest skin to it
+    // (as deep as it is behind that skin, facing out), and what'd take it out again: the turn about
+    // the grip (world axis × radians) of the point deepest in away from the grip, the move of the
+    // hand of the one deepest in near it, and that point's push; or null (it's clear)
+    #heldOut(model, grip, skin) {
+        const { clusters } = this.#heldShape(model);
+        let [turnDeep, moveDeep] = [0, 0];
+        const out = _heldOut;
+
+        out.turn.set(0, 0, 0);
+        out.move.set(0, 0, 0);
+
+        for (const cluster of clusters) {
+            // (The skin near it at all, roughly; that, exactly)
+            const middle = _slice.copy(cluster.at).applyMatrix4(model.matrixWorld);
+
+            this.#nearby(skin, middle, cluster.radius + HELD_NEAR, _near);
+
+            for (let p = 0; _near.length && p < cluster.points.length; p++) {
+                const at = _slice.copy(cluster.points[p]).applyMatrix4(model.matrixWorld);
+                let nearest = -1;
+                let best = HELD_NEAR * HELD_NEAR;
+
+                for (const k of _near) {
+                    const apart = skin.exact[k].distanceToSquared(at);
+
+                    if (apart < best) {
+                        best = apart;
+                        nearest = k;
+                    }
+                }
+
+                if (nearest < 0) {
+                    continue;
+                }
+
+                const into = HELD_CLEAR - _lever.copy(at).sub(skin.exact[nearest]).dot(skin.facing[nearest]);
+
+                if (into <= 0.002 || best - (into - HELD_CLEAR) ** 2 > HELD_SPREAD ** 2) {
+                    continue;
+                }
+
+                _push.copy(skin.facing[nearest]).multiplyScalar(into);
+                _lever.copy(at).sub(grip);
+
+                if (_lever.length() > HELD_LEVER) {
+                    if (into > turnDeep) {
+                        turnDeep = into;
+                        // (lever × push / |lever|²: the point moved by the push, across the lever)
+                        out.turn.crossVectors(_lever, _push).divideScalar(_lever.lengthSq());
+                        out.push.copy(_push);
+                    }
+                } else if (into > moveDeep) {
+                    moveDeep = into;
+                    out.move.copy(_push);
+                }
+            }
+        }
+
+        return turnDeep > 0 || moveDeep > 0 ? out : null;
     }
 
     // Where a hand's place (`at`: arm lengths from its shoulder, in the character's frame) is in the world
@@ -2283,9 +2729,9 @@ export class Actions {
     // Reach one hand to its place as a real arm would (Rig.reachArm: every joint within its
     // range), blending from where the walk and joint angles put it by `weight`. The hand turns so
     // what it holds points the way the pose says (`point`, `edge`), or, empty, so its palm faces
-    // `palm` with the fingers `towards` (else relaxed). Returns its grip: { position, point, edge, haft }
-    // in the world
-    #reach(side, hand, weight, other, second = null) {
+    // `palm` with the fingers `towards` (else relaxed); the arm's `last` reach this frame keeps
+    // what it holds out of the body. Returns its grip: { position, point, edge, haft } in the world
+    #reach(side, hand, weight, other, second = null, last = true) {
         const rig = this.rig;
         const Side = side === "right" ? "Right" : "Left";
         const body = this.#measure();
@@ -2319,6 +2765,14 @@ export class Actions {
             point = other.point.clone();
         } else {
             position = this.#place(side, hand.at, _frame);
+
+            // (A shield held up, crouching or lunging: kept up and out over the thighs as they come up)
+            if (hand.shield) {
+                const { y, z } = this.rig.offset;
+                const size = this.#size();
+
+                position.add(_lunge.set(0, Math.max(0, -y) * SHIELD_CROUCH, Math.max(0, z)).applyQuaternion(_frame).multiplyScalar(size));
+            }
 
             if (second) {
                 // Held in both hands: along the line from the other hand's place through this one's
@@ -2388,10 +2842,31 @@ export class Actions {
         const offset = itemPosition.clone().applyQuaternion(_item.copy(handFrame).invert());
         const bend = hand.elbow && (hand.bent ?? 1) > 0.001 ? new THREE.Vector3().fromArray(hand.elbow).normalize().applyQuaternion(_frame) : null;
         const held = second || "on" in hand ? 1 : hand.held ?? 1;
-        const solved = rig.reachArm(Side, { grip: position, offset, hand: wanted, aim, hold: held, pronate: hand.pronate ?? 25, wrist: hand.wrist ?? null, bend, bent: hand.bent ?? 1, swivel: this.swivel[side] });
+        const reach = (swivel) => rig.reachArm(Side, { grip: position, offset, hand: wanted, aim, hold: held, pronate: hand.pronate ?? 25, wrist: hand.wrist ?? null, bend, bent: hand.bent ?? 1, swivel });
+        let solved = reach(this.swivel[side]);
 
-        this.swivel[side] = solved.swivel;
-        this.strain[side] = solved.strain;
+        // (A shield held up: out of the way of the body, if it's come against it, and the arm
+        // reached again, SHIELD_NUDGE at most)
+        const shield = side === "left" && hand.shield && this.keepClear && last ? this.#shield() : null;
+        let nudged = 0;
+
+        for (let k = 0; shield && k < 2 && nudged < SHIELD_NUDGE; k++) {
+            rig.bone("LeftArm").updateMatrixWorld(true);
+
+            // (The skin near enough to come against it: all but the shield arm's)
+            const skin = this.#heldSkin("shield");
+            const near = this.#nearby(skin, shield.getWorldPosition(_wrist), this.#shieldReach(shield), _near);
+            const nudge = near.length ? this.#clearOf(shield, near.map((k) => skin.exact[k])) : null;
+
+            if (!nudge) {
+                break;
+            }
+
+            nudge.clampLength(0, SHIELD_NUDGE - nudged);
+            nudged += nudge.length();
+            position.add(nudge);
+            solved = reach(solved.swivel);
+        }
 
         // (How the hand was turned in the end, for easing from next frame)
         this.turned[side] = handBone.getWorldQuaternion(this.turned[side] ?? new THREE.Quaternion());
@@ -2401,6 +2876,58 @@ export class Actions {
             [`${Side}Arm`, `${Side}ForeArm`, `${Side}Hand`].forEach((name, i) => rig.blendBone(name, saved[i], weight));
             rig.bone(`${Side}Arm`).updateMatrixWorld(true);
         }
+
+        // (What's held through an action: out of the body as it's drawn, if it's come into it:
+        // turned about the grip, or the hand moved, less as it nears where it's put away, and the
+        // arm reached again from there. Held in both hands, it's moved out whole, not turned, the
+        // other hand following it along the haft)
+        const both = this.#bothHands(side);
+        const clearing = this.keepClear && last && !hand.shield && this.attack && item?.parent === handBone ? 1 - smooth(0.7, 1, hand.sheath ?? 0) : 0;
+
+        if (clearing > 0.001) {
+            const holding = both ? `${side}+` : side;
+            const [turned, moved] = [_turned.set(0, 0, 0), _moved.set(0, 0, 0)];
+
+            for (let k = 0; k < HELD_TRIES; k++) {
+                handBone.getWorldPosition(_wrist);
+
+                const out = this.#heldOut(item, _wrist, this.#heldSkin(holding));
+
+                if (!out) {
+                    break;
+                }
+
+                // (From how the hand is now: where it grips, and how it's turned)
+                const grip = item.getWorldPosition(_grip);
+                const turn = handBone.getWorldQuaternion(_handTurn).multiply(handFrame);
+
+                // (A turn about the grip, if there's one to make; if it's still in after that
+                // (the wrist turned as far as it goes), the hand moved out as far instead; and for
+                // one near the grip, the hand moved. Both hands on it: the deepest point out)
+                if (both) {
+                    out.move.copy(out.push.lengthSq() > out.move.lengthSq() ? out.push : out.move);
+                } else if (out.turn.lengthSq() > 0 && k > 0) {
+                    out.move.add(out.push);
+                } else if (out.turn.lengthSq() > 0) {
+                    const angle = Math.min(out.turn.length() * clearing, HELD_TURN - turned.length());
+
+                    if (angle > 1e-4) {
+                        _turnBy.setFromAxisAngle(_axis.copy(out.turn).normalize(), angle);
+                        turned.addScaledVector(_axis, angle);
+                        turn.premultiply(_turnBy);
+                    }
+                }
+
+                const step = out.move.multiplyScalar(clearing).clampLength(0, Math.max(0, HELD_MOVE - moved.length()));
+
+                moved.add(step);
+                grip.add(step);
+                solved = rig.reachArm(Side, { grip, offset, hand: turn, hold: held, pronate: hand.pronate ?? 25, wrist: hand.wrist ?? null, bend, bent: hand.bent ?? 1, swivel: solved.swivel });
+            }
+        }
+
+        this.swivel[side] = solved.swivel;
+        this.strain[side] = solved.strain;
 
         // Where the grip ended up (for a second hand on the same weapon)
         handBone.getWorldQuaternion(_hand);

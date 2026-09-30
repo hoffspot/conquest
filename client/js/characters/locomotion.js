@@ -426,7 +426,7 @@ export class Walker {
             } else {
                 rig.setAngles(`${side}Arm`, {
                     flex: mix(swing + s * style.armForward + breathe * 0.5, pump),
-                    abduct: mix(style.armSpread + s * 2, 10),
+                    abduct: mix(style.armSpread + s * 2, 10) + (this.character.clearing?.[side] ?? 0),
                     rotate: mix(5, 15),
                 });
                 rig.setAngles(`${side}ForeArm`, { flex: mix(10 + style.elbow + elbowSwing, bend), pronate: mix(25, 45) });

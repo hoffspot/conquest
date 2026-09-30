@@ -648,6 +648,19 @@ export class Character {
                 this.holds[/left|Left/.test(item.socket) ? "Left" : "Right"] = { grips: true };
             }
         }
+
+        // (An arm swinging free held a little out, clear of what hangs at that hip: a scabbard, a
+        // wand in the belt; or with what's worn on its hand, spiked knuckles, clear of the thigh)
+        this.clearing = { Left: 0, Right: 0 };
+
+        for (const id of this.equipment.values()) {
+            const item = EQUIPMENT[id]?.kind === "item" ? EQUIPMENT[id] : null;
+            const socket = item?.sheath?.worn ? item.socket : item?.sheath?.socket;
+
+            if (socket === "leftHip" || socket === "rightHip" || socket === "leftHand" || socket === "rightHand") {
+                this.clearing[socket.startsWith("left") ? "Left" : "Right"] = HIP_CLEARING;
+            }
+        }
     }
 
     /** Move weapons settling into a hand or sheath on by `dt` seconds (Character.sheathe). */
@@ -1311,4 +1324,7 @@ function known(id) {
 
 const _sway = new THREE.Quaternion();
 const _swayAngles = new THREE.Euler();
+
+// How far out (degrees) an arm swinging free is held to clear what hangs at its hip
+const HIP_CLEARING = 10;
 

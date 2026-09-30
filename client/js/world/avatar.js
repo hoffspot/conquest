@@ -31,7 +31,9 @@ const HEADING_SPEED = 0.5;
  * when it's smaller; unless it's moving so fast that the quickest of it would be seen to be out
  * by more than `slide` pixels between poses (a foot on the ground sliding along with the body,
  * or a hand in a blow, which goes about `swing` metres a second). `unseen`: every so many frames
- * when it's out of view (it's posed straight away when it comes back into it).
+ * when it's out of view (it's posed straight away when it comes back into it). `clear`: what it
+ * holds is kept out of its body (Actions.keepClear) only when it's posed at least this often:
+ * seen big enough that a few centimetres of it in the body would show.
  */
 export const POSING = Object.freeze({
     sizes: [
@@ -43,6 +45,7 @@ export const POSING = Object.freeze({
     slide: 1.5,
     swing: 4,
     unseen: 8,
+    clear: 2,
 });
 
 /**
@@ -144,6 +147,7 @@ export class Avatar {
         unposed.moved += moved;
 
         if (unposed.frames >= this.every) {
+            this.actions.keepClear = this.every <= POSING.clear;
             this.walker.update(unposed.dt, { moved: unposed.moved });
             Object.assign(unposed, { frames: 0, dt: 0, moved: 0 });
         }
