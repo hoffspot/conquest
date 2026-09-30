@@ -90,7 +90,7 @@ export const MANIFEST = Object.freeze([
             ["js/characters/skin.js", 33356],
             ["js/characters/skins.js", 5617],
             ["js/characters/soldiers.js", 2347],
-            ["js/characters/surfaces.js", 6400],
+            ["js/characters/surfaces.js", 7002],
             ["js/core/afflictions.js", 3195],
             ["js/core/battle.js", 113710],
             ["js/core/creatures.js", 15016],

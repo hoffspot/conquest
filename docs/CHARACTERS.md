@@ -187,9 +187,11 @@ second at the most detailed.
 strands, not round spots. Two are lit (Kajiya and Kay's model of a strand, with the lobes shifted
 along it as Scheuermann did, `HAIR_SHINE`): a narrow white one from light off the strands'
 surface, and a wider one a little nearer the roots in the hair's own colour, light that's been
-through a strand and back. Which way the strands run is found where they're drawn, from how the
-texture runs along each card (down it, root to tip), so nothing more is stored; about twenty
-operations a pixel of hair.
+through a strand and back. Each strand's bands sit a little along from its neighbours', by how
+light that strand is in the texture (Scheuermann's shift texture, without a texture of its own), so
+they break into streaks along the strands rather than lighting a card at a time. Which way the
+strands run is found where they're drawn, from how the texture runs along each card (down it, root
+to tip), so nothing more is stored; about twenty operations a pixel of hair.
 
 Hair near the head is skinned to the head; long hair hands over to the neck and upper back.
 Beards grow from the jaw the same way, lying along the face. Under a helmet or hat, only hair from

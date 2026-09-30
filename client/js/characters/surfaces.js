@@ -24,9 +24,10 @@ export const SKIN_WRAP = Object.freeze([0.3, 0.13, 0.08]);
 
 /**
  * Hair's highlights: how far each is shifted along the strands (towards the tips, or the
- * roots), how tight it is (a higher `sharp` is a narrower band), and how bright.
+ * roots), how tight it is (a higher `sharp` is a narrower band), and how bright; and how far
+ * a strand's are shifted from its neighbours' (`jitter`, by how light it is in the texture).
  */
-export const HAIR_SHINE = Object.freeze({ shift: 0.08, sharp: 260, strength: 0.07, tintShift: -0.1, tintSharp: 60, tintStrength: 0.12 });
+export const HAIR_SHINE = Object.freeze({ shift: 0.08, sharp: 260, strength: 0.07, tintShift: -0.1, tintSharp: 60, tintStrength: 0.12, jitter: 1.5 });
 
 const DIFFUSE_LINE = "reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseContribution ) * ( 1.0 - F );";
 const SPECULAR_LINE = "reflectedLight.directSpecular += irradiance * specularBRDF * material.multiScatteringCompensation;";
@@ -74,14 +75,16 @@ export class SkinMaterial extends THREE.MeshStandardMaterial {
  */
 export class HairMaterial extends THREE.MeshStandardMaterial {
     onBeforeCompile(shader) {
-        const { shift, sharp, strength, tintShift, tintSharp, tintStrength } = HAIR_SHINE;
+        const { shift, sharp, strength, tintShift, tintSharp, tintStrength, jitter } = HAIR_SHINE;
 
         shader.fragmentShader = shader.fragmentShader
             .replace(
                 "#include <common>",
                 `#include <common>
 
+const float HAIR_JITTER = ${jitter.toFixed(3)};
 vec3 hairStrand;
+float hairShift;
 
 // A band of light along strands running \`strand\` (Kajiya-Kay), its strands' direction shifted
 // towards the surface's normal (so the band moves along them)
@@ -92,6 +95,9 @@ float hairBand( const in vec3 strand, const in vec3 normal, const in vec3 halfwa
 	return smoothstep( - 1.0, 0.0, along ) * pow( sqrt( max( 0.0, 1.0 - along * along ) ), sharp );
 }`,
             )
+            // (Each strand's bands a little along from its neighbours', by how light its strand is in
+            // the texture, so they break into streaks rather than lighting a card at a time)
+            .replace("#include <map_fragment>", "#include <map_fragment>\n#ifdef USE_MAP\n\thairShift = ( sampledDiffuseColor.g - 0.85 ) * HAIR_JITTER;\n#else\n\thairShift = 0.0;\n#endif")
             // (Which way the strands run here: the way the texture's v runs, from how it and the
             // surface change across the pixel, as three.js finds a normal map's frame)
             .replace(
@@ -115,7 +121,7 @@ float hairBand( const in vec3 strand, const in vec3 normal, const in vec3 halfwa
                     SPECULAR_LINE,
                     `vec3 hairHalfway = normalize( directLight.direction + geometryViewDir );
 	float hairFacing = saturate( dot( geometryNormal, directLight.direction ) * 0.5 + 0.5 );
-	reflectedLight.directSpecular += directLight.color * hairFacing * ( ${strength.toFixed(3)} * hairBand( hairStrand, geometryNormal, hairHalfway, ${shift.toFixed(3)}, ${sharp.toFixed(1)} ) + ${tintStrength.toFixed(3)} * material.diffuseColor * hairBand( hairStrand, geometryNormal, hairHalfway, ${tintShift.toFixed(3)}, ${tintSharp.toFixed(1)} ) );`,
+	reflectedLight.directSpecular += directLight.color * hairFacing * ( ${strength.toFixed(3)} * hairBand( hairStrand, geometryNormal, hairHalfway, ${shift.toFixed(3)} + hairShift, ${sharp.toFixed(1)} ) + ${tintStrength.toFixed(3)} * material.diffuseColor * hairBand( hairStrand, geometryNormal, hairHalfway, ${tintShift.toFixed(3)} + hairShift, ${tintSharp.toFixed(1)} ) );`,
                 ),
             );
     }

@@ -1384,6 +1384,7 @@ describe("faces and skin (face.js, skin.js)", () => {
         assert.ok(SKIN_WRAP[0] > SKIN_WRAP[1] && SKIN_WRAP[1] > SKIN_WRAP[2] && SKIN_WRAP[0] < 0.5, "red furthest, and not far");
         assert.ok(!skin.includes("reflectedLight.directDiffuse += irradiance * BRDF_Lambert"), "in place of three.js's");
         assert.ok(hair.includes("hairBand( hairStrand, geometryNormal, hairHalfway") && hair.includes("hairStrand = hairAlongLength > 1e-8"), "banded");
+        assert.ok(hair.includes("hairShift = ( sampledDiffuseColor.g - 0.85 ) * HAIR_JITTER;") && hair.includes("+ hairShift"), "each strand's bands its own");
         assert.ok(!hair.includes("reflectedLight.directSpecular += irradiance * specularBRDF"), "in place of three.js's");
         assert.ok(HAIR_SHINE.sharp > HAIR_SHINE.tintSharp, "the white band narrower than the tinted one");
 
