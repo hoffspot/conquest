@@ -1236,6 +1236,9 @@ export function treeMaterials() {
             map: drawn ? texture(atlas(256, 256, foliagePicture), false) : null,
             vertexColors: true,
             alphaTest: 0.45,
+            // (Soft-edged where the picture's drawn multisampled, as the hair is; a plain cut-out
+            // at the same edge where it isn't)
+            alphaToCoverage: true,
             side: THREE.DoubleSide,
         });
 

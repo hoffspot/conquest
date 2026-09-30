@@ -16,6 +16,7 @@ import { BIOMES, CELLS, WORLD_SIZE } from "../core/worldplan/plan.js";
 import { RACES } from "../core/worldplan/races.js";
 import { paintLayer, SIZE } from "./art/engine/painters.js";
 import { textureCanvas } from "./art/engine/materials.js";
+import { blurred } from "./fields.js";
 
 // Splat texels per metre (edges are shaped at this resolution)
 const SPLAT_RESOLUTION = 4;
@@ -41,6 +42,16 @@ const BEYOND = 110;
 // A much larger copy of the grass texture shades everything a little lighter or darker, so the
 // repeats don't show from afar
 const VARIATION_METRES = 37;
+
+// Near what stands on the ground (a house, a wall, a rock, a trunk: the squares that can't be
+// seen through), less of the sky reaches it, so the ground's darker there, the more so the more
+// stands round: at a wall's foot about half the sky's hidden, and still a third a couple of
+// metres out, where a lone trunk hides next to none. So everything standing sits on the ground,
+// in the shade and past the sun's shadows (view.js). How far round what stands is felt (squares:
+// a blur's reach across and along, twice over), and how much of the sky's light is lost where
+// it's all round; and the squares round a chunk looked at with it
+const CONTACT = Object.freeze({ reach: 3, loss: 0.9 });
+const CONTACT_MARGIN = 7;
 
 /**
  * Each land's colour over the grass (sRGB, lit as the grass's picture is), and how much of it (0
@@ -302,12 +313,14 @@ function patchTexture() {
     return patches;
 }
 
-// A splat texture (splatOf's) for the GPU
+// A splat texture (splatOf's) for the GPU, mipmapped (a road's or a field's ragged edge, far off,
+// is many texels to a pixel: read from the full-size texture alone, it crawls as the camera moves)
 function splatTexture({ data, width, height }) {
     const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
 
     texture.magFilter = THREE.LinearFilter;
-    texture.minFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.generateMipmaps = true;
     texture.flipY = false;
     texture.needsUpdate = true;
 
@@ -404,7 +417,7 @@ function homeTexture() {
  * other kinds of ground by `splat` (a texture: splatOf's), which covers `area` [x, z, width, depth]
  * (metres). Every ground material shares one shader.
  */
-export function groundMaterial({ splat = null, area = [0, 0, 1, 1], land = null } = {}) {
+export function groundMaterial({ splat = null, area = [0, 0, 1, 1], land = null, contact = null } = {}) {
     const { grass, brightness, layers } = groundTiles();
     const material = new THREE.MeshLambertMaterial({ color: 0xffffff });
 
@@ -422,10 +435,13 @@ export function groundMaterial({ splat = null, area = [0, 0, 1, 1], land = null 
 
     material.name = "ground";
     material.userData.splat = splat;
+    material.userData.contact = contact?.texture ?? null;
     material.onBeforeCompile = (shader) => {
         Object.assign(shader.uniforms, {
             splatMap: { value: splat ?? noSplat() },
             splatArea: { value: new THREE.Vector4(...area) },
+            contactMap: { value: contact?.texture ?? noContact() },
+            contactArea: { value: new THREE.Vector4(...(contact?.area ?? [0, 0, 1, 1])) },
             landMap: { value: landMap },
             landSize: { value: landMap.userData.size ?? 1 },
             homeMap: { value: home?.[0] ?? noHome },
@@ -444,6 +460,9 @@ export function groundMaterial({ splat = null, area = [0, 0, 1, 1], land = null 
 varying vec2 vGround;
 uniform sampler2D splatMap;
 uniform vec4 splatArea;
+uniform sampler2D contactMap;
+uniform vec4 contactArea;
+float groundContact;
 uniform sampler2D landMap;
 uniform float landSize;
 uniform sampler2D homeMap;
@@ -455,6 +474,7 @@ uniform sampler2D patchMap;
 ${layers.map((_, k) => `uniform sampler2D layer${k}Map;\nuniform float layer${k}Size;`).join("\n")}`)
             .replace("#include <map_fragment>", `
 vec4 splat = texture2D(splatMap, (vGround - splatArea.xy) / splatArea.zw);
+groundContact = texture2D(contactMap, (vGround - contactArea.xy) / contactArea.zw).r;
 float variation = texture2D(grassMap, vGround / ${VARIATION_METRES.toFixed(1)}).g;
 vec3 grass = texture2D(grassMap, vGround / grassSize).rgb;
 
@@ -497,7 +517,9 @@ grass = mix(grass, earth, bare * ${PATCHES.bare[2].toFixed(2)} * strength);
 vec3 ground = grass * max(0.0, 1.0 - splat.r - splat.g - splat.b - splat.a);
 ${layers.map((_, k) => `ground += texture2D(layer${k}Map, vGround / layer${k}Size).rgb * splat.${"rgba"[k]};`).join("\n")}
 ground *= 0.82 + 0.45 * variation;
-diffuseColor.rgb *= ground;`);
+diffuseColor.rgb *= ground;`)
+            .replace("#include <aomap_fragment>", `#include <aomap_fragment>
+reflectedLight.indirectDiffuse *= 1.0 - ${CONTACT.loss.toFixed(2)} * groundContact;`);
     };
     material.customProgramCacheKey = () => "ground";
 
@@ -514,6 +536,56 @@ function noSplat() {
     empty ??= splatTexture({ data: new Uint8Array(4), width: 1, height: 1 });
 
     return empty;
+}
+
+// Nothing standing anywhere near
+let nowhere = null;
+
+function noContact() {
+    nowhere ??= Object.assign(new THREE.DataTexture(new Uint8Array([0]), 1, 1, THREE.RedFormat), { needsUpdate: true });
+
+    return nowhere;
+}
+
+/**
+ * How much of the sky's hidden near what stands on the ground (the squares `opaque(x, y)` says
+ * can't be seen through), round the squares from (x0, y0), `size` a side: a blur of where it
+ * stands, a byte a square, as a texture, and the squares it covers ({ texture, area }); or null
+ * if nothing stands there.
+ */
+export function contactOf(opaque, [x0, y0, size]) {
+    const across = size + 2 * CONTACT_MARGIN;
+    const standing = new Uint8Array(across * across);
+    let any = false;
+
+    for (let j = 0; j < across; j++) {
+        for (let i = 0; i < across; i++) {
+            if (opaque(x0 - CONTACT_MARGIN + i, y0 - CONTACT_MARGIN + j)) {
+                standing[j * across + i] = 1;
+                any = true;
+            }
+        }
+    }
+
+    if (!any) {
+        return null;
+    }
+
+    const round = blurred(standing, across, across, CONTACT.reach);
+    const data = new Uint8Array(across * across);
+
+    for (let k = 0; k < data.length; k++) {
+        data[k] = Math.round(Math.min(1, round[k]) * 255);
+    }
+
+    const texture = new THREE.DataTexture(data, across, across, THREE.RedFormat);
+
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearFilter;
+    texture.unpackAlignment = 1;
+    texture.needsUpdate = true;
+
+    return { texture, area: [x0 - CONTACT_MARGIN, y0 - CONTACT_MARGIN, across, across] };
 }
 
 /**
@@ -574,6 +646,20 @@ export function chunkGround(overworld, chunk, land) {
 }
 
 /** The same (chunkGround), made a step at a time (each a yield: its splat's), returning it. */
+// A square's ground as it's drawn: under a lake or a river, packed earth (the land sets soil
+// there, which is drawn ploughed, in furrows, and shows through the shallows)
+function bedOf(overworld, x, y) {
+    const kind = overworld.squares.ground(x, y);
+
+    if (kind !== GROUND.soil) {
+        return kind;
+    }
+
+    const chunk = overworld.chunkAt(x, y);
+
+    return chunk.water[(y - chunk.y0) * CHUNK + (x - chunk.x0)] ? GROUND.courtyard : kind;
+}
+
 export function* layingGround(overworld, chunk, land) {
     const { x0, y0 } = chunk;
     const size = CHUNK;
@@ -582,11 +668,15 @@ export function* layingGround(overworld, chunk, land) {
 
     // (One square further round than the chunk, so the kinds of ground blend across its edges
     // as they would were there no edge)
-    const splat = yield* splatting((x, y) => overworld.squares.ground(x, y), [x0 - 1, y0 - 1, size + 2, size + 2]);
+    const splat = yield* splatting((x, y) => bedOf(overworld, x, y), [x0 - 1, y0 - 1, size + 2, size + 2]);
+    const contact = contactOf(overworld.squares.opaque, [x0, y0, size]);
     let material;
 
-    if (splat.any) {
-        material = groundMaterial({ splat: splatTexture(splat), area: [x0 - 1, y0 - 1, size + 2, size + 2], land });
+    yield;
+
+    if (splat.any || contact) {
+        material = groundMaterial({ splat: splat.any ? splatTexture(splat) : null, area: [x0 - 1, y0 - 1, size + 2, size + 2], land, contact });
+        material.userData.own = true;
     } else {
         grassOnly.set(land, grassOnly.get(land) ?? groundMaterial({ land }));
         material = grassOnly.get(land);
@@ -616,8 +706,9 @@ export function disposeGrass(land) {
 export function disposeChunkGround(mesh) {
     const { material } = mesh;
 
-    if (material.userData.splat) {
-        material.userData.splat.dispose();
+    if (material.userData.own) {
+        material.userData.splat?.dispose();
+        material.userData.contact?.dispose();
         material.dispose();
     }
 

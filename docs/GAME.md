@@ -633,7 +633,8 @@ A flat mesh under each chunk of the world (a town on its own has one under it al
 110 metres past its edges into the fog). A small "splat" texture, four texels to a metre made
 from the chunk's squares (and one more round it, so the edges blend across chunks as if there
 were none), says how much road, cobbles, soil and courtyard earth is at each point, with soft,
-ragged edges, the same wherever the world's cut; the shader blends tiling textures by it over
+ragged edges, the same wherever the world's cut (mipmapped, so a far road's ragged edge, many
+texels to a pixel, doesn't crawl as the camera moves); the shader blends tiling textures by it over
 grass, each at its real size (cobbles about 16 cm across), and shades everything by a much larger
 copy of the grass so the repeats don't show from afar. The grass takes its land's colour
 (`LAND_COLOURS`: a little yellower in farmland, darker in the woods, dark in the darkwood, pale
@@ -641,6 +642,15 @@ gold on the savannah, rust in the badlands, ash grey on volcanic land, grey on m
 with snow, sand on beaches), from one texture of the whole world a texel to the plan's cell,
 blended between cells, with the edges wandering 26 metres or so so the cells don't show. Every
 chunk's ground shares one shader; chunks of grass alone share a material too.
+
+**Where something stands on it** (a house, a wall, a rock, a trunk: the squares that can't be
+seen through), less of the sky reaches the ground, so less of the light from all round (view.js)
+does there. A chunk's field of it is worked out when it's drawn, from seven squares round it:
+where things stand, blurred three squares across and along, twice over, a byte a square. At a
+great building's foot it's about half (as a tall wall hides half the sky), a third a couple of
+metres out, next to none round a lone trunk; the ground loses that share of its light from all
+round, not of the sun's, so sunlit ground stays bright while its shade darkens towards the walls,
+and buildings past the sun's shadows still sit on the ground.
 
 **Each people's homeland** (the world plan's territories, as first claimed) has its own ground
 over the grass (`HOMES`, painted as the materials `home-cat` and so on: painters.js): the cat
@@ -677,9 +687,17 @@ little further off (within five chunks) are laid out ahead in a worker (world/la
 WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk has:
 
 - **Its ground** (above).
-- **Water**: a sheet over the lakes, the sea and rivers, drawn where a mask (a texel a square)
-  says, soft and paler at its edges, rippling in the breeze and catching the sky, over a bed of
-  soil. Water can't be walked into, but can be seen over.
+- **Water** (world/water.js): a sheet over the lakes, the sea and rivers. It's drawn where a
+  field says, worked out when the chunk's drawn: how far each square is into the water from the
+  nearest dry one (or out of it, on land), from nine squares round the chunk, so it meets its
+  neighbours', softened, and sampled between squares, so the shore runs in curves rather than
+  stepping square by square. The bed shows through the shallows and fades with depth, red
+  first, so the shallows are green and the deep water blue; the edge fades out, with a thin
+  broken line of foam; the surface ripples, two reads of a small picture of waves (whole waves
+  to it, running ten ways, so it tiles without the lines a noise lattice leaves) drifting their
+  own ways, gentler further off, catching the sky. The bed's drawn as packed earth (the land sets
+  soil there, drawn ploughed, whose furrows showed through). Water can't be walked into, but can
+  be seen over.
 - **Bridges**, where roads cross rivers: each a straight deck of boards laid across it, from a
   little way onto one bank to a little way onto the other, along the road, with a dark beam along
   each edge and a rail on posts along each side. Anyone on one stands on its boards, 16 cm up
@@ -1093,7 +1111,8 @@ facing south; each is turned about its middle to face the way the layout says:
   spray or tuft of needles) round the branches' ends, turned every which way (a spruce's lying
   level along its boughs), lit as if the crown were one rounded mass (their normals point out
   from its middle, and they're lit the same from either side), darker deep inside it, and each a
-  little warmer or cooler.
+  little warmer or cooler. Their edges are soft where the picture's drawn multisampled
+  (alpha-to-coverage, as the hair's and the banners' are), a plain cut-out where it isn't.
 
   **Rooted.** The trunk's foot (`rootedFoot`) swells out towards the ground, all round and more
   in a buttress over each root (2 or 3 for a birch, 5 or 6 for a beech, as the kind's `foot`

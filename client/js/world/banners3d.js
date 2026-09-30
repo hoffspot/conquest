@@ -200,7 +200,7 @@ export class Banners {
             const texture = new THREE.CanvasTexture(paintCloth(people));
 
             texture.colorSpace = THREE.SRGBColorSpace;
-            this.cloths.set(people, new THREE.MeshStandardMaterial({ map: texture, side: THREE.DoubleSide, roughness: 0.85, alphaTest: 0.5, transparent: false }));
+            this.cloths.set(people, new THREE.MeshStandardMaterial({ map: texture, side: THREE.DoubleSide, roughness: 0.85, alphaTest: 0.5, alphaToCoverage: true, transparent: false }));
         }
 
         return this.cloths.get(people);
