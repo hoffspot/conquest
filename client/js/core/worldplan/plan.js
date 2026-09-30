@@ -41,6 +41,8 @@ function freeze(value) {
  * Lay out a world from a seed (once: laid out again, the same plan, frozen): {
  *   seed, size (metres a side), cell (metres), cells (a side),
  *   height, temperature, moisture (Float32Array, 0 to 1, a cell each), water (Uint8Array: WATER),
+ *   level (Float32Array: the height water would stand at in each cell, the land's hollows
+ *   filled up to where they'd spill over: a lake's or a river's surface),
  *   flow (Float32Array: how much rain drains through each cell: the wider a river),
  *   biome (Uint8Array: BIOMES index), territory (Uint8Array: 0 none, else RACES index + 1),
  *   road (Uint8Array: ROAD),
@@ -77,6 +79,7 @@ export function layOutWorld(seed) {
         cell: CELL,
         cells: CELLS,
         height: land.height,
+        level: land.level,
         temperature: land.temperature,
         moisture: land.moisture,
         water: land.water,

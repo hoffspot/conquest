@@ -8,6 +8,7 @@
 
 import { BIOMES, campTier, CELL, CELLS, FACTIONS, guildFor, guilds, landAt, planWorld, RACES, ROAD, SETTLEMENTS, startFor, WORLD_SIZE } from "../core/worldplan/plan.js";
 import { hex, paintLand, PEOPLE_COLOURS, picture, PIXELS, RIVER } from "./land.js";
+import { heightAt } from "../core/terrain/height.js";
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -344,7 +345,7 @@ function describe(sx, sy) {
 
     const water = ["", "the sea", "a lake", "a river"][land.water];
 
-    lines.push(`${water || land.biome}${land.road ? `, ${land.road === ROAD.road ? "a road" : "a track"}` : ""}${land.race ? ` in the ${race(land.race)} lands` : ", wild"} (${(x / 1000).toFixed(2)}, ${(y / 1000).toFixed(2)} km)`);
+    lines.push(`${water || land.biome}${land.road ? `, ${land.road === ROAD.road ? "a road" : "a track"}` : ""}${land.race ? ` in the ${race(land.race)} lands` : ", wild"} (${(x / 1000).toFixed(2)}, ${(y / 1000).toFixed(2)} km, ${Math.round(heightAt(plan, x, y))} m up)`);
 
     return lines.join("\n");
 }
@@ -505,7 +506,7 @@ function layOut(seed) {
 
                 state.plan = planWorld(seed);
                 state.took = performance.now() - started;
-                state.land = paintLand(state.plan);
+                state.land = paintLand(state.plan, { relief: true });
                 state.territories = paintTerritories(state.plan);
                 state.districts = state.layers.districts ? paintDistricts(state.plan) : null;
                 chooseStart();

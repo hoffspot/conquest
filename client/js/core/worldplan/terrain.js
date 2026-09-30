@@ -227,7 +227,7 @@ export function shapeLand(seed) {
         }
     }
 
-    const { water, flow } = drain(height, moisture, heartlands);
+    const { water, flow, filled } = drain(height, moisture, heartlands);
     const { territory, cost } = claim(heartlands, height, water);
     const biome = lands(seed, { height, temperature, moisture, water, territory, heartlands });
 
@@ -243,7 +243,7 @@ export function shapeLand(seed) {
         }
     }
 
-    return { heartlands, wilds, volcano, height, temperature, moisture, water, flow, territory, cost, biome };
+    return { heartlands, wilds, volcano, height, level: filled, temperature, moisture, water, flow, territory, cost, biome };
 }
 
 // A number from 0 to 1 for a cell, the same every time
@@ -375,7 +375,7 @@ function drain(height, moisture, heartlands) {
         }
     }
 
-    return { water, flow, into };
+    return { water, flow, into, filled };
 }
 
 // The peoples' territories: spreading from each heartland over land (not water), further on the
