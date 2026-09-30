@@ -192,6 +192,14 @@ export class Banners {
 
         /** Each town's banners, by its id: { people, objects }. */
         this.towns = new Map();
+
+        /** The ground's height at a point ((x, z) => metres: set with setGround). */
+        this.groundAt = () => 0;
+    }
+
+    /** Put banners up on this ground (its height at a point, (x, z) => metres; null: flat at 0). */
+    setGround(at) {
+        this.groundAt = at ?? (() => 0);
     }
 
     // A people's cloth, painted the first time it's wanted
@@ -208,12 +216,13 @@ export class Banners {
 
     /**
      * Put up a town's banners: `people` (whose they are: its holders), at each spot ({ x, z (world
-     * metres), y (the ground), facing (radians, as the battle has it) }). Any it had come down.
+     * metres), y (the ground: or where the ground is there), facing (radians, as the battle has
+     * it) }). Any it had come down.
      */
     raise(townId, people, spots) {
         this.lower(townId);
 
-        const objects = spots.map(({ x, y = 0, z, facing }) => {
+        const objects = spots.map(({ x, z, y = this.groundAt(x, z), facing }) => {
             const banner = new THREE.Group();
             const pole = new THREE.Mesh(this.pole, this.wood);
             const bar = new THREE.Mesh(this.bar, this.wood);

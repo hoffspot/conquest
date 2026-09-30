@@ -208,12 +208,16 @@ diffuseColor.a = max(diffuseColor.a, foam * 0.6 * smoothstep(0.0, 0.08, waterSho
     return water;
 }
 
+// With the water's surface given, the sheet's corners are this many metres apart
+const SURFACE_STEP = 2;
+
 /**
  * A sheet of water over the squares from (x0, y0), `width` by `height`, drawn where `wet` (bytes,
  * one a square, non-zero for water, with `margin` more squares all round, so its shore meets the
- * sheets beside it) says.
+ * sheets beside it) says: flat, or at `surfaceAt(x, z)` (metres: a river running down its
+ * valley, a lake at its level) at each of its corners.
  */
-export function waterSheet(wet, [x0, y0, width, height], margin = 1) {
+export function waterSheet(wet, [x0, y0, width, height], margin = 1, surfaceAt = null) {
     const [across, down] = [width + 2 * margin, height + 2 * margin];
     const field = new THREE.DataTexture(shoreBytes(shoreDistances(wet, across, down)), across, down, THREE.RedFormat);
 
@@ -223,7 +227,22 @@ export function waterSheet(wet, [x0, y0, width, height], margin = 1) {
     field.unpackAlignment = 1;
     field.needsUpdate = true;
 
-    const plane = new THREE.PlaneGeometry(width, height).rotateX(-Math.PI / 2).translate(width / 2, WATER.level, height / 2);
+    const plane = surfaceAt ? new THREE.PlaneGeometry(width, height, width / SURFACE_STEP, height / SURFACE_STEP) : new THREE.PlaneGeometry(width, height);
+
+    plane.rotateX(-Math.PI / 2).translate(width / 2, WATER.level, height / 2);
+
+    if (surfaceAt) {
+        const { position } = plane.attributes;
+
+        for (let k = 0; k < position.count; k++) {
+            position.setY(k, WATER.level + surfaceAt(x0 + position.getX(k), y0 + position.getZ(k)));
+        }
+
+        plane.computeVertexNormals();
+        plane.computeBoundingSphere();
+        plane.computeBoundingBox();
+    }
+
     const mesh = new THREE.Mesh(plane, waterMaterial(field, x0 - margin, y0 - margin, [across, down]));
 
     mesh.name = "water";

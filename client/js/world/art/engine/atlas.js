@@ -268,14 +268,14 @@ export function wildsMaterial(time) {
     material.onBeforeCompile = (shader) => {
         fromAtlas(shader, uniforms);
         shader.vertexShader = shader.vertexShader
-            .replace("#include <common>", "#include <common>\nattribute float sway;\nuniform float wildsTime;\nuniform vec2 wildsFocus;\nuniform vec2 wildsFade;\nuniform float wildsSway;")
+            .replace("#include <common>", "#include <common>\nattribute float sway;\nattribute float foot;\nuniform float wildsTime;\nuniform vec2 wildsFocus;\nuniform vec2 wildsFade;\nuniform float wildsSway;")
             .replace("#include <begin_vertex>", `#include <begin_vertex>
 vec3 wildAt = (modelMatrix * vec4(transformed, 1.0)).xyz;
 float wildPhase = wildAt.x * 0.61 + wildAt.z * 0.47;
 float wildHow = wildsSway * sway;
 transformed.x += wildHow * (sin(wildsTime * 2.3 + wildPhase) + 0.35 * sin(wildsTime * 5.1 + wildPhase * 1.7));
 transformed.z += wildHow * 0.6 * cos(wildsTime * 1.9 + wildPhase * 1.3);
-transformed.y = mix(transformed.y, -0.06, smoothstep(wildsFade.x, wildsFade.y, distance(wildAt.xz, wildsFocus)));`);
+transformed.y = mix(transformed.y, foot - 0.06, smoothstep(wildsFade.x, wildsFade.y, distance(wildAt.xz, wildsFocus)));`);
         // (Both sides lit alike: a blade's back as its front)
         shader.fragmentShader = shader.fragmentShader.replace("#include <normal_fragment_begin>", "#include <normal_fragment_begin>\nnormal *= faceDirection;");
     };

@@ -25,6 +25,7 @@ import * as THREE from "three";
 import { hashOf, fractal } from "../../../core/noise.js";
 import { GROUND } from "../../../core/setpieces/pieces.js";
 import { allAtOnce } from "../../../core/steps.js";
+import { between } from "../../../core/terrain/ground.js";
 import { neglect, rockiness } from "../../../core/wilds.js";
 import { LAYERS, atlasMaterial, wildsMaterial } from "../engine/atlas.js";
 import { MATERIALS } from "../engine/painters.js";
@@ -61,7 +62,7 @@ class Mesher {
         const old = this.arrays;
 
         this.capacity = capacity;
-        this.arrays = { position: new Float32Array(capacity * 3), normal: new Float32Array(capacity * 3), color: new Float32Array(capacity * 3), uv: new Float32Array(capacity * 2), layer: new Float32Array(capacity), sway: new Float32Array(capacity) };
+        this.arrays = { position: new Float32Array(capacity * 3), normal: new Float32Array(capacity * 3), color: new Float32Array(capacity * 3), uv: new Float32Array(capacity * 2), layer: new Float32Array(capacity), sway: new Float32Array(capacity), foot: new Float32Array(capacity) };
 
         if (old) {
             for (const [name, array] of Object.entries(old)) {
@@ -81,8 +82,10 @@ class Mesher {
     vertex(p, n, c, uv, layer, sway) {
         this.reserve(1);
 
-        const { position, normal, color, uv: uvs, layer: layers, sway: sways } = this.arrays;
+        const { position, normal, color, uv: uvs, layer: layers, sway: sways, foot } = this.arrays;
         const i = this.count++;
+
+        foot[i] = 0;
 
         position.set(p, i * 3);
         normal.set(n, i * 3);
@@ -137,10 +140,13 @@ class Mesher {
         return { count: n, top, position: position.slice(0, n * 3), normal: normal.slice(0, n * 3), color: color.slice(0, n * 3), uv: uv.slice(0, n * 2), layer: layer.slice(0, n), sway: sway.slice(0, n) };
     }
 
-    /** A Three.js geometry of what's been made (with `sway` if `swaying`). */
+    /**
+     * A Three.js geometry of what's been made (with `sway` if `swaying`, and `foot`: the height
+     * of the ground under whatever each vertex is part of, which undergrowth sinks to far off).
+     */
     geometry(swaying = false) {
         const n = this.count;
-        const { position, normal, color, uv, layer, sway } = this.arrays;
+        const { position, normal, color, uv, layer, sway, foot } = this.arrays;
         const geometry = new THREE.BufferGeometry();
 
         geometry.setAttribute("position", new THREE.BufferAttribute(position.slice(0, n * 3), 3));
@@ -151,6 +157,7 @@ class Mesher {
 
         if (swaying) {
             geometry.setAttribute("sway", new THREE.BufferAttribute(sway.slice(0, n), 1));
+            geometry.setAttribute("foot", new THREE.BufferAttribute(foot.slice(0, n), 1));
         }
 
         geometry.computeBoundingSphere();
@@ -194,7 +201,7 @@ function place(mesher, part, { at, turn = 0, tilt = [0, 0], scale = [1, 1, 1], t
 
     mesher.reserve(n);
 
-    const { position, normal, color, uv, layer, sway } = mesher.arrays;
+    const { position, normal, color, uv, layer, sway, foot } = mesher.arrays;
     const [sx, sy, sz] = scale;
     const [ix, iy, iz] = [1 / sx, 1 / sy, 1 / sz];
     const base = mesher.count;
@@ -230,6 +237,7 @@ function place(mesher, part, { at, turn = 0, tilt = [0, 0], scale = [1, 1, 1], t
         uv[(base + i) * 2 + 1] = U[i * 2 + 1] + u1;
         layer[base + i] = L[i];
         sway[base + i] = S[i];
+        foot[base + i] = ay;
     }
 
     mesher.count += n;
@@ -2125,7 +2133,7 @@ function tintOf(h) {
  * casting shadows), boxes ({ min: [x, z], max: [x, z], top }: each one's, in the world, for how
  * tall things stand on each square) }. `landAt(x, y)` is each point's land.
  */
-export function featureMesh(features, landAt, [x0, y0]) {
+export function featureMesh(features, landAt, [x0, y0], groundAt = () => 0) {
     const mesher = new Mesher(Math.max(64, features.length * 400));
     const boxes = [];
 
@@ -2133,12 +2141,13 @@ export function featureMesh(features, landAt, [x0, y0]) {
         const part = lookOf(...featureLook(feature, landAt));
         const { scale, turn } = fit(feature, part);
         const tint = tintOf(hashOf(Math.floor(feature.x * 10), Math.floor(feature.y * 10), 17));
-
-        place(mesher, part, { at: [feature.x - x0, 0, feature.y - y0], turn, scale, tint, shift: [feature.variant * 7.3, feature.variant * 3.1] });
-
         const reach = Math.max(scale[0], scale[2]) * 0.7;
+        // (Set down on the lowest of the ground under it, a little into it, so on a slope none of
+        // it's left hanging over the ground)
+        const base = Math.min(...[[0, 0], [-reach, 0], [reach, 0], [0, -reach], [0, reach]].map(([dx, dy]) => groundAt(feature.x + dx * 0.7, feature.y + dy * 0.7))) - 0.05;
 
-        boxes.push({ min: [feature.x - reach, feature.y - reach], max: [feature.x + reach, feature.y + reach], top: part.top * scale[1] });
+        place(mesher, part, { at: [feature.x - x0, base, feature.y - y0], turn, scale, tint, shift: [feature.variant * 7.3, feature.variant * 3.1] });
+        boxes.push({ min: [feature.x - reach, feature.y - reach], max: [feature.x + reach, feature.y + reach], top: base + part.top * scale[1] });
     }
 
     const mesh = new THREE.Mesh(mesher.geometry(), atlasMaterial());
@@ -2336,12 +2345,16 @@ export function* sowing(overworld, chunk, { density = 1 } = {}) {
                 continue;
             }
 
+            const [ix, iy] = [x + 0.15 + hashOf(x, y, seed + 4) * 0.7, y + 0.15 + hashOf(x, y, seed + 5) * 0.7];
+
             items.push({
                 kind,
                 land,
                 look: Math.floor(hashOf(x, y, seed + 3) * VARIANTS),
-                x: x + 0.15 + hashOf(x, y, seed + 4) * 0.7,
-                y: y + 0.15 + hashOf(x, y, seed + 5) * 0.7,
+                x: ix,
+                y: iy,
+                // (The ground's height under it: core/terrain/ground.js)
+                ground: chunk.heights ? between(chunk.heights, ix - x0, iy - y0) : 0,
                 turn: hashOf(x, y, seed + 6) * TAU,
                 size: 0.8 + hashOf(x, y, seed + 7) * 0.45,
                 tint: tintOf(hashOf(x, y, seed + 8)),
@@ -2393,7 +2406,7 @@ export class Growth {
                 return false;
             }
 
-            const { kind, land, look, x, y, turn, size, tint } = this.items[this.index++];
+            const { kind, land, look, x, y, turn, size, tint, ground = 0 } = this.items[this.index++];
             const [tx, ty] = [Math.floor((x - this.origin[0]) / TILE), Math.floor((y - this.origin[1]) / TILE)];
             const key = `${tx},${ty}`;
 
@@ -2403,7 +2416,7 @@ export class Growth {
 
             const { at, mesher } = this.tiles.get(key);
 
-            place(mesher, lookOf(kind, land, look), { at: [x - at[0], 0, y - at[1]], turn, scale: [size, size, size], tint, shift: [x * 0.37, y * 0.29] });
+            place(mesher, lookOf(kind, land, look), { at: [x - at[0], ground, y - at[1]], turn, scale: [size, size, size], tint, shift: [x * 0.37, y * 0.29] });
         }
 
         return true;

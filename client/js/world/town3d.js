@@ -72,7 +72,7 @@ export function heightMap([x0, z0, width, height]) {
  * `at`, its width and height) or the world's own. `onProgress(done, total)` hears as each piece
  * is built.
  */
-export async function buildTown(world, { onProgress = () => {} } = {}) {
+export async function buildTown(world, { onProgress = () => {}, groundAt = () => 0 } = {}) {
     const art = new THREE.Group();
     const [ox, oz] = Array.isArray(world.origin) ? world.origin : [world.origin, world.origin];
     const total = world.town.pieces.length + world.trees.length;
@@ -143,7 +143,7 @@ export async function buildTown(world, { onProgress = () => {} } = {}) {
         built.position.set(-piece.w * 10, 0, -piece.h * 10);
         object.add(built);
         object.rotation.y = piece.facing;
-        object.position.set((ox + piece.x) / PIXEL, 0, (oz + piece.y) / PIXEL);
+        object.position.set((ox + piece.x) / PIXEL, groundAt(ox + piece.x, oz + piece.y) / PIXEL, (oz + piece.y) / PIXEL);
         object.userData.built = BUILT.has(spec.kind);
         object.userData.piece = piece;
         art.add(object);
@@ -159,7 +159,7 @@ export async function buildTown(world, { onProgress = () => {} } = {}) {
 
     await breathe();
 
-    const trees = plantTrees(planted);
+    const trees = plantTrees(planted, { groundAt });
 
     art.updateMatrixWorld(true);
 
@@ -239,16 +239,16 @@ export async function buildTown(world, { onProgress = () => {} } = {}) {
 
 /**
  * A piece built by the art kits (facing south, in world pixels), turned to face the way it does
- * about its middle and put where it stands (metres: its layout's place plus `origin`), in a
- * group scaled to world pixels.
+ * about its middle and put where it stands (metres: its layout's place plus `origin`, on ground
+ * `y` metres high), in a group scaled to world pixels.
  */
-export function placed(built, piece, [ox, oz] = [0, 0]) {
+export function placed(built, piece, [ox, oz] = [0, 0], y = 0) {
     const object = new THREE.Group();
 
     built.position.set(-piece.w * 10, 0, -piece.h * 10);
     object.add(built);
     object.rotation.y = piece.facing;
-    object.position.set((ox + piece.x) / PIXEL, 0, (oz + piece.y) / PIXEL);
+    object.position.set((ox + piece.x) / PIXEL, y / PIXEL, (oz + piece.y) / PIXEL);
     object.userData.built = BUILT.has(piece.kind);
     object.userData.piece = piece;
 

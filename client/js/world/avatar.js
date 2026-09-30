@@ -176,7 +176,7 @@ export class Avatar {
 
     /** A point on the character in the world: its chest (height 0.72 of it), head (0.93)... */
     point(share = 0.72, target = new THREE.Vector3()) {
-        return target.set(this.object.position.x, this.character.height * share, this.object.position.z);
+        return target.set(this.object.position.x, this.object.position.y + this.character.height * share, this.object.position.z);
     }
 
     /** Where a hand is in the world ("Right" or "Left"): where spells leave and bows are drawn. */

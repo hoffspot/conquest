@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { HOME_TREES, homeTree, TREE_KINDS, TREE_VARIANTS } from "../client/js/core/setpieces/pieces.js";
-import { growTree, KINDS, plantTrees, SPECIES, treeMaterials, VARIANTS, Woodland } from "../client/js/world/art/kits/trees.js";
+import { growTree, KINDS, PATCH_SIDE, plantTrees, SPECIES, treeMaterials, VARIANTS, Woodland } from "../client/js/world/art/kits/trees.js";
 
 // The corners of a grown part: [x, y, z] for each vertex
 const points = ({ position }) => Array.from({ length: position.length / 3 }, (_, k) => position.slice(k * 3, k * 3 + 3));
@@ -182,7 +182,7 @@ describe("the trees (trees.js)", () => {
 
         const litter = object.children.find(({ name }) => name === "litter");
 
-        assert.equal(litter.geometry.index.count / 3, 6, "a patch round each foot");
+        assert.equal(litter.geometry.index.count / 3, 3 * PATCH_SIDE * PATCH_SIDE * 2, "a patch round each foot");
         assert.equal(litter.userData.onGround, true, "on the ground: not cut away in front of the player");
         assert.equal(litter.castShadow, false);
 

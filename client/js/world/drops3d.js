@@ -28,6 +28,9 @@ export class Drops {
         this.group.name = "drops";
         scene.add(this.group);
 
+        /** The ground's height at a point ((x, z) => metres: set with setGround). */
+        this.groundAt = () => 0;
+
         /** What's drawn, by the id of the thing dropped: { object, icon, x, z, seed }. */
         this.drawn = new Map();
 
@@ -39,6 +42,11 @@ export class Drops {
         this.cloth = new THREE.MeshStandardMaterial({ color: 0x8a6a44, roughness: 0.95 });
         this.leather = new THREE.MeshStandardMaterial({ color: 0x5e3a1e, roughness: 0.8 });
         this.tie = new THREE.MeshStandardMaterial({ color: 0x5a3f22, roughness: 0.9 });
+    }
+
+    /** Lay what's dropped on this ground (its height at a point, (x, z) => metres; null: flat at 0). */
+    setGround(at) {
+        this.groundAt = at ?? (() => 0);
     }
 
     /**
@@ -141,7 +149,7 @@ export class Drops {
         icon.scale.set(ICON.size, ICON.size, 1);
         icon.position.y = BUNDLE.radius + ICON.above;
         object.add(bundle, knot, icon);
-        object.position.set(x, 0, z);
+        object.position.set(x, this.groundAt(x, z), z);
         object.rotation.y = seed;
         object.name = dropped.id;
         this.group.add(object);

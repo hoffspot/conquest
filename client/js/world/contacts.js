@@ -15,6 +15,11 @@ import * as THREE from "three";
 export const CONTACT = Object.freeze({ most: 128, strength: 0.5, across: 0.46 });
 
 const _matrix = new THREE.Matrix4();
+const _at = new THREE.Vector3();
+const _up = new THREE.Vector3();
+const _size = new THREE.Vector3();
+const _lying = new THREE.Quaternion();
+const UP = new THREE.Vector3(0, 1, 0);
 
 export class ContactShadows {
     constructor() {
@@ -54,6 +59,9 @@ export class ContactShadows {
         this.mesh.renderOrder = 1;
         this.mesh.count = 0;
         this.count = 0;
+
+        /** The ground's height at a point ((x, z) => metres), to lie along; null: flat. */
+        this.groundAt = null;
     }
 
     /** Start the list of those shadowed this frame. */
@@ -72,8 +80,19 @@ export class ContactShadows {
         }
 
         const across = tall * CONTACT.across;
+        const ground = this.groundAt;
 
-        _matrix.makeScale(across, 1, across).setPosition(x, y, z);
+        // (Lying along the ground where it slopes: not on a deck over it)
+        if (ground && Math.abs(ground(x, z) - y) < 0.05) {
+            const reach = across / 2;
+
+            _up.set(ground(x - reach, z) - ground(x + reach, z), 2 * reach, ground(x, z - reach) - ground(x, z + reach)).normalize();
+            _lying.setFromUnitVectors(UP, _up);
+        } else {
+            _lying.identity();
+        }
+
+        _matrix.compose(_at.set(x, y, z), _lying, _size.set(across, 1, across));
         this.mesh.setMatrixAt(this.count, _matrix);
         this.strengths[this.count] = Math.min(1, strength);
         this.count++;

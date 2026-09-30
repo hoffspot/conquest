@@ -22,12 +22,12 @@
 
 import { metresOf } from "./curve.js";
 import { simplex } from "./simplex.js";
-import { watersOf } from "./waters.js";
+import { setLandOf, watersOf } from "./waters.js";
 import { BIOME, BIOMES } from "../worldplan/races.js";
 import { CELL, CELLS, MOUNTAIN, WATER, WORLD_SIZE } from "../worldplan/terrain.js";
 
 /** Bumped whenever the ground a seed makes changes (players playing together must agree on it). */
-export const TERRAIN_VERSION = 1;
+export const TERRAIN_VERSION = 2;
 
 /** Heights are whole multiples of this (metres). */
 export const HEIGHT_STEP = 1 / 1024;
@@ -414,3 +414,6 @@ export function slopeClass(nw, ne, sw, se) {
 
 /** How big the world is (metres a side). */
 export { WORLD_SIZE };
+
+// (Rivers' surfaces keep under the land's own height: waters.js)
+setLandOf(landHeight);

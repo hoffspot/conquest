@@ -108,6 +108,12 @@ const DRAW_SOUNDS = { sword: ["unsheathe", "sheathe"], punch: ["knuckles", null]
 const LIE_STILL = 4;
 const SINK = 1.5;
 
+// Following the ground: a change in its height smaller than this (metres, from one frame to the
+// next) is followed at once, a bigger one (a step up onto a bridge) eased over; and how quickly
+// the camera's height follows the player's (per second)
+const STEP_EASE = 0.12;
+const FOCUS_EASE = 6;
+
 // How long the shadow under someone takes to fade once they've fallen (s): they lie flat
 const CONTACT_FADES = 0.6;
 
@@ -602,6 +608,40 @@ export class Game {
     }
 
     /**
+     * The ground's height on a map at a point in the world (metres), as a function (x, z), or null
+     * where it's flat at 0 (indoors, or a town on its own).
+     */
+    groundOf(mapId) {
+        this.groundsOf ??= new Map();
+
+        if (!this.groundsOf.has(mapId)) {
+            const map = this.world.maps?.[mapId];
+            const [ox, oz] = this.originOf(mapId);
+            const most = map?.width - 0.01;
+
+            this.groundsOf.set(mapId, map?.heightAt ? (x, z) => map.heightAt(Math.min(most, Math.max(0, x - ox)), Math.min(most, Math.max(0, z - oz))) : null);
+        }
+
+        return this.groundsOf.get(mapId);
+    }
+
+    // How high the ground is on a map at a point in the world (metres: 0 where it's flat)
+    #groundOn(mapId, x, z) {
+        return this.groundOf(mapId)?.(x, z) ?? 0;
+    }
+
+    // What's drawn on the map the player's on stands on its ground (null: flat at 0)
+    #setGround(at) {
+        this.view.setGround(at);
+        this.effects?.setGround(at);
+        this.drops?.setGround(at);
+
+        if (this.contacts) {
+            this.contacts.groundAt = at;
+        }
+    }
+
+    /**
      * Build everything there is to see: the world round the player (or the ground), the town,
      * the player and the orc, and the shaders to draw them. `onProgress({ label, done, total })`
      * hears how far it's got.
@@ -642,6 +682,7 @@ export class Game {
             const [x, y] = world.spawns.player;
 
             this.chunks = new Chunks(world, { undergrowth: view.quality.undergrowth });
+            this.chunks.setSpacing(view.quality.ground);
             view.scene.add(this.chunks.object);
             await time("chunks", async () => {
                 while (this.chunks.update(x + 0.5, y + 0.5, { budget: LOAD_BUDGET }) || this.chunks.busy) {
@@ -661,6 +702,7 @@ export class Game {
         const built = done;
 
         this.town = await time("town", () => buildTown(world, {
+            groundAt: this.groundOf("town") ?? undefined,
             onProgress: (count) => {
                 done = built + count;
                 onProgress({ label: count < world.town.pieces.length ? `Building the town (${count} of ${world.town.pieces.length})` : `Planting trees (${count - world.town.pieces.length} of ${world.trees.length})`, done, total: steps });
@@ -675,6 +717,7 @@ export class Game {
             buildings: this.town.buildings,
         };
         view.setOccluders(this.occluders);
+        view.setGround(this.groundOf("town"));
 
         // Inside the tavern, each floor put away until the player goes in; and its doors and stairs
         for (const map of floors) {
@@ -692,12 +735,16 @@ export class Game {
         this.camps = new Camps(view.scene);
         this.drops = new Drops(view.scene, { picture: (id) => this.#itemPicture(id) });
 
+        // (Banners and camps only ever outside, on the world's ground)
+        this.banners.setGround(this.groundOf("town"));
+        this.camps.setGround(this.groundOf("town"));
+
         // What flies over the world outside: birds of each land, and the wyverns and the dragon
         // near their lairs (flyers3d.js)
         const overworld = world.maps?.town;
 
         if (overworld?.biomeAt) {
-            this.flyers = new Flyers({ landAt: (x, z) => overworld.biomeAt(x, z), lairs: () => this.#lairsAloft(), prepare: (object) => view.prepare(object) });
+            this.flyers = new Flyers({ landAt: (x, z) => overworld.biomeAt(x, z), groundAt: this.groundOf("town"), lairs: () => this.#lairsAloft(), prepare: (object) => view.prepare(object) });
             view.scene.add(this.flyers.object);
         }
         step(`Dressing ${this.hero.name}`);
@@ -747,6 +794,7 @@ export class Game {
         this.spellFx.onShake = (amount) => (this.shaking = Math.max(this.shaking, amount));
         this.spellFx.onScreen = (colour, strength, seconds) => this.#wash(colour, strength, seconds);
         this.spellFx.warm();
+        this.#setGround(this.groundOf(this.battle.actor(this.me).map));
 
         for (const actor of this.battle.actors.filter(({ id }) => this.avatars.has(id))) {
             this.#place(actor);
@@ -1440,7 +1488,8 @@ export class Game {
             avatar.actions.setGuard(!actor.dead && actor.armed && this.#fighting(actor));
             avatar.every = this.#posing(actor, avatar, dt, pixels);
             avatar.update(dt, ox + x, oz + z, actor.facing, !actor.attack);
-            this.#updateBody(actor, avatar, dt, this.#standsAt(actor.map, x, z));
+            // (Where they're drawn, which trails where they are a little)
+            this.#updateBody(actor, avatar, dt, this.#standsAt(actor.map, avatar.object.position.x - ox, avatar.object.position.z - oz));
             hud.setStamina(actor.id, actor.stamina, actor.maxStamina);
 
             // (Not shown till its shaders are ready: #register)
@@ -1465,7 +1514,12 @@ export class Game {
                 const target = this.avatars.get(projectile.target);
                 const left = target ? Math.hypot(target.object.position.x - x, target.object.position.z - z) : flight.distance;
                 const along = flight.distance > 0 ? Math.min(1, Math.max(0, 1 - left / flight.distance)) : 1;
-                const height = flight.ground || !target ? flight.height : flight.height + (target.character.height * 0.72 - flight.height) * along;
+                // (Along the ground: following its rise and fall)
+                const height = flight.ground
+                    ? this.#groundOn(projectile.map, x, z) + flight.height
+                    : !target
+                      ? flight.height
+                      : flight.height + (target.object.position.y + target.character.height * 0.72 - flight.height) * along;
 
                 this.effects.fly(projectile.id, new THREE.Vector3(x, height + Math.sin(Math.PI * along) * flight.arc, z));
             }
@@ -1522,8 +1576,10 @@ export class Game {
         if (this.chunks && this.mapId === "town") {
             const { x, z } = this.avatars.get(this.me).object.position;
 
-            // (The undergrowth as thick as the quality asks, grown again if that's changed)
+            // (The undergrowth as thick as the quality asks, grown again if that's changed; the
+            // ground as finely drawn)
             this.chunks.setUndergrowth(this.view.quality.undergrowth);
+            this.chunks.setSpacing(this.view.quality.ground);
 
             if (this.chunks.update(x, z)) {
                 this.#hearTrees();
@@ -1618,11 +1674,19 @@ export class Game {
         return this.battle.actors.some((other) => !other.dead && other.map === actor.map && Math.hypot(other.x - actor.x, other.y - actor.y) <= reach && this.battle.hostile(other, actor) && this.battle.canSee(actor, other));
     }
 
-    // How high the ground is where someone stands on a map (metres): a bridge's deck, or the ground
+    // How high the ground is where someone stands on a map (metres): a bridge's deck (over its
+    // beams), or the ground (the world's: core/terrain/ground.js; flat at 0 indoors)
     #standsAt(mapId, x, y) {
         const map = this.world.maps?.[mapId];
 
-        return map?.chunk && squaresOf(map).ground(Math.floor(x), Math.floor(y)) === GROUND.planks ? DECK.top : 0;
+        if (!map?.chunk) {
+            return 0;
+        }
+
+        const [px, py] = [Math.min(map.width - 0.01, Math.max(0, x)), Math.min(map.height - 0.01, Math.max(0, y))];
+        const ground = map.heightAt?.(px, py) ?? 0;
+
+        return squaresOf(map).ground(Math.floor(px), Math.floor(py)) === GROUND.planks ? ground + DECK.top : ground;
     }
 
     // How often a character's body is posed (Avatar.every): the player's every frame, anyone
@@ -1663,7 +1727,7 @@ export class Game {
         const dying = actor.dead ? Math.max(0, 1 - (avatar.deadFor ?? 0) / CONTACT_FADES) : 1;
         const seen = this.battle.buffOf(actor, "invisibility") ? 0.22 : 1;
 
-        this.contacts.add(x, actor.dead ? 0 : (avatar.standing ?? 0), z, tall, risen * dying * seen);
+        this.contacts.add(x, actor.dead ? (avatar.ground ?? 0) : (avatar.standing ?? 0), z, tall, risen * dying * seen);
     }
 
     // Standing on the ground (stepping up onto a bridge's deck, and down off it); or, dead, lying
@@ -1671,11 +1735,24 @@ export class Game {
     #updateBody(actor, avatar, dt, ground = 0) {
         const object = avatar.object;
 
+        // (A winged one coming down out of the sky, drawn gliding down to the ground: arrive)
+        if (avatar.arriving) {
+            avatar.ground = ground;
+            avatar.standing = ground;
+
+            return;
+        }
+
         if (!actor.dead) {
             const lift = this.battle.buffOf(actor, "levitate") ? LIFT.height + Math.sin(this.clock * LIFT.bob) * LIFT.swing : 0;
 
             object.visible = true;
-            avatar.standing = (avatar.standing ?? ground) + (ground - (avatar.standing ?? ground)) * Math.min(1, dt * 12);
+            // (Following the ground as it rises and falls; easing up and down a step, onto a
+            // bridge's deck and off it)
+            const step = ground - (avatar.standing ?? ground);
+
+            avatar.standing = Math.abs(step) < STEP_EASE ? ground : avatar.standing + step * Math.min(1, dt * 12);
+            avatar.ground = ground;
             avatar.lift = (avatar.lift ?? 0) + (lift - (avatar.lift ?? 0)) * Math.min(1, dt * 4);
             object.position.y = avatar.standing + avatar.lift;
 
@@ -1686,7 +1763,8 @@ export class Game {
 
         const sinking = Math.max(0, avatar.deadFor - LIE_STILL) / SINK;
 
-        object.position.y = -0.5 * Math.min(1, sinking);
+        avatar.ground = ground;
+        object.position.y = ground - 0.5 * Math.min(1, sinking);
         object.visible = sinking < 1;
     }
 
@@ -1718,7 +1796,11 @@ export class Game {
             lowest: this.view.lowestPitch(),
         });
 
-        this.view.look(_focus.set(focus.x, 0, focus.z), yaw, pitch, dt || Infinity);
+        // (Level with the ground the player stands on, eased so steps and bumps don't jolt it)
+        const ground = player.standing ?? 0;
+
+        this.focusHeight = dt && this.focusHeight !== undefined ? this.focusHeight + (ground - this.focusHeight) * Math.min(1, dt * FOCUS_EASE) : ground;
+        this.view.look(_focus.set(focus.x, this.focusHeight, focus.z), yaw, pitch, dt || Infinity);
         this.view.setFocus(chest);
 
         // (Shaken by the greater spells, dying away)
@@ -1760,7 +1842,7 @@ export class Game {
         const [ox, oz] = this.originOf(this.mapId);
         const rect = view.canvas.getBoundingClientRect();
         const corners = [[rect.left, rect.top], [rect.right, rect.top], [rect.right, rect.bottom], [rect.left, rect.bottom]].map(([x, y]) => {
-            const ground = view.groundAt(x, y);
+            const ground = view.pickGround(x, y);
 
             return ground ? [ground.x - ox, ground.z - oz] : null;
         });
@@ -2347,7 +2429,7 @@ export class Game {
                 const { x, z } = avatar.object.position;
                 const [ahead, height] = [how.ahead, how.height];
 
-                this.#after(delay, () => this.effects.burst(how.burst, new THREE.Vector3(x + Math.sin(actor.facing) * ahead, height, z + Math.cos(actor.facing) * ahead)));
+                this.#after(delay, () => this.effects.burst(how.burst, new THREE.Vector3(x + Math.sin(actor.facing) * ahead, avatar.object.position.y + height, z + Math.cos(actor.facing) * ahead)));
             }
 
             if (how.flare) {
@@ -2374,7 +2456,16 @@ export class Game {
     #place(actor) {
         const [ox, oz] = this.originOf(actor.map);
 
-        this.avatars.get(actor.id).place(ox + actor.x, oz + actor.y, actor.facing);
+        const avatar = this.avatars.get(actor.id);
+
+        avatar.place(ox + actor.x, oz + actor.y, actor.facing);
+        // (Stood straight on the ground there, not eased to it from wherever they were)
+        avatar.standing = undefined;
+
+        if (actor.id === this.me) {
+            this.focusHeight = undefined;
+        }
+
         this.previous.set(actor.id, { x: actor.x, y: actor.y });
     }
 
@@ -2499,7 +2590,7 @@ export class Game {
                     const near = mine && me.map === actor.map && !this.interiors.get(actor.map) && Math.hypot(x - mine.x, z - mine.z) < ARRIVE_WITHIN;
 
                     if (avatar.winged && near && !actor.dead) {
-                        avatar.arrive({ from: this.flyers?.takeAloft(avatar.id, [x, z]) ?? null });
+                        avatar.arrive({ from: this.flyers?.takeAloft(avatar.id, [x, z]) ?? null, ground: this.#groundOn(actor.map, x, z) });
                     }
                 }
             }
@@ -3332,6 +3423,7 @@ export class Game {
 
         this.view.setIndoors(interior);
         this.view.setOccluders(interior ? null : this.occluders);
+        this.#setGround(interior ? null : this.groundOf(mapId));
         this.minimap?.setMap(this.world.maps[mapId]);
 
         // The tavern's music inside, heard through the floor upstairs; the town's out; and the
@@ -3478,7 +3570,7 @@ export class Game {
 
                     const shape = FLIGHT[event.kind] ?? { arc: 0.05 };
 
-                    effects.launch(event.projectile, event.kind, shape.ground ? from.clone().setY(0.08) : from, look);
+                    effects.launch(event.projectile, event.kind, shape.ground ? from.clone().setY(this.#groundOn(battle.actor(event.id).map, from.x, from.z) + 0.08) : from, look);
                     this.sound?.launch(event.kind, from, { rate: LOOKS[event.kind]?.[look].pitch ?? 1 });
                     this.flights.set(event.projectile, {
                         previous: new THREE.Vector2(event.x, event.y),
@@ -3892,7 +3984,9 @@ export class Game {
                 if (event.map === this.mapId) {
                     const [ox, oz] = this.originOf(event.map);
 
-                    this.spellFx.appear(new THREE.Vector3(ox + event.square[0] + 0.5, 0, oz + event.square[1] + 0.5), event.why);
+                    const [x, z] = [ox + event.square[0] + 0.5, oz + event.square[1] + 0.5];
+
+                    this.spellFx.appear(new THREE.Vector3(x, this.#groundOn(event.map, x, z), z), event.why);
                 }
 
                 if (event.id === this.me) {
@@ -3918,7 +4012,7 @@ export class Game {
             case "attracted": {
                 // (Out of a puff of smoke)
                 const [ox, oz] = this.originOf("town");
-                const at = new THREE.Vector3(ox + event.x, 0.6, oz + event.y);
+                const at = new THREE.Vector3(ox + event.x, this.#groundOn("town", ox + event.x, oz + event.y) + 0.6, oz + event.y);
 
                 this.effects.burst("smoke", at);
                 this.effects.burst("dust", at);
@@ -4164,7 +4258,7 @@ export class Game {
         const one = this.battle.actor(companion);
         const avatar = this.avatars.get(companion);
         const [ox, oz] = this.originOf(this.mapId);
-        const at = avatar?.object.visible ? avatar.object.position.clone() : one?.map === this.mapId ? new THREE.Vector3(ox + one.x, 0, oz + one.y) : null;
+        const at = avatar?.object.visible ? avatar.object.position.clone() : one?.map === this.mapId ? new THREE.Vector3(ox + one.x, this.#groundOn(one.map, ox + one.x, oz + one.y), oz + one.y) : null;
 
         if (at && ["risen", "called", "over", "lost"].includes(change)) {
             this.spellFx.appear(at, change);
@@ -4226,7 +4320,9 @@ export class Game {
                 const angle = Math.random() * Math.PI * 2;
                 const reach = Math.sqrt(Math.random()) * ground.radius;
 
-                this.effects.burst(burst, point.set(ox + ground.x + Math.cos(angle) * reach, 0.05, oz + ground.y + Math.sin(angle) * reach));
+                const [x, z] = [ox + ground.x + Math.cos(angle) * reach, oz + ground.y + Math.sin(angle) * reach];
+
+                this.effects.burst(burst, point.set(x, this.#groundOn(ground.map, x, z) + 0.05, z));
             }
         }
 
@@ -4631,7 +4727,7 @@ export class Game {
 
         const enemy = who;
         const door = enemy ? null : this.doors?.at(this.view.rayAt(clientX, clientY), this.mapId) ?? null;
-        const ground = enemy || door ? null : this.view.groundAt(clientX, clientY);
+        const ground = enemy || door ? null : this.view.pickGround(clientX, clientY);
         const [ox, oz] = this.originOf(this.mapId);
 
         this.#order({ enemy, door, ground: ground && [ground.x - ox, ground.z - oz] }, { clientX, clientY, run, time, from: "view" });

@@ -2,7 +2,8 @@
 // of the tavern): a grid over the ground, the blocked squares tinted (red where they hide what's
 // behind them too, amber where they can be seen over), and the path ahead of each character there
 // as a line (the player's gold, the others' red). Out in the world, only the squares round the
-// player (WINDOW), shown afresh when they've gone far enough.
+// player (WINDOW), shown afresh when they've gone far enough, laid over the ground as it rises and
+// falls.
 
 import * as THREE from "three";
 import { squaresOf } from "../core/grid.js";
@@ -68,7 +69,22 @@ export class Squares {
 
         texture.needsUpdate = true;
 
-        const geometry = new THREE.PlaneGeometry(width, height).rotateX(-Math.PI / 2).translate(width / 2, 0.03, height / 2);
+        // (Over the ground, a corner a metre where it rises and falls)
+        const heightAt = map.heightAt ? (x, y) => map.heightAt(Math.min(squares.width - 0.01, x), Math.min(squares.height - 0.01, y)) : null;
+        const geometry = heightAt ? new THREE.PlaneGeometry(width, height, width, height) : new THREE.PlaneGeometry(width, height);
+
+        geometry.rotateX(-Math.PI / 2).translate(width / 2, 0.03, height / 2);
+
+        if (heightAt) {
+            const corners = geometry.attributes.position;
+
+            for (let k = 0; k < corners.count; k++) {
+                corners.setY(k, heightAt(x0 + corners.getX(k), y0 + corners.getZ(k)) + 0.08);
+            }
+
+            geometry.computeBoundingSphere();
+        }
+
         const grid = new THREE.Mesh(geometry, new THREE.ShaderMaterial({
             vertexShader: VERTEX,
             fragmentShader: FRAGMENT,
@@ -98,6 +114,7 @@ export class Squares {
 
         /** Which map it's of. */
         this.mapId = id;
+        this.heightAt = heightAt ?? (() => 0);
     }
 
     /**
@@ -129,7 +146,7 @@ export class Squares {
 
             for (let i = 0; i < points.length - 1 && count < PATH_POINTS * 2; i++) {
                 for (const [x, y] of [points[i], points[i + 1]]) {
-                    positions.set([x, 0.06, y], count * 3);
+                    positions.set([x, this.heightAt(x, y) + 0.12, y], count * 3);
                     colours.set(colour, count * 3);
                     count++;
                 }

@@ -14,6 +14,7 @@
 
 import * as THREE from "three";
 import { SPELLS } from "../core/spells.js";
+import { FLAT, lieOn } from "./effects.js";
 
 // --- What's drawn with ---
 
@@ -232,6 +233,8 @@ export class SpellFx {
      */
     constructor(effects, scene, { lights = null } = {}) {
         this.effects = effects;
+        this.lying = new THREE.Quaternion();
+        this.turning = new THREE.Quaternion();
         this.group = new THREE.Group();
         this.group.name = "spells";
         scene.add(this.group);
@@ -311,6 +314,21 @@ export class SpellFx {
         return new THREE.MeshBasicMaterial({ color: colour, map, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
     }
 
+    /** The ground's height at a point ((x, z) => metres: the effects'). */
+    get groundAt() {
+        return this.effects.groundAt ?? FLAT;
+    }
+
+    /** A point `lift` metres above the ground at (x, z). */
+    onGround(x, z, lift = 0) {
+        return new THREE.Vector3(x, this.groundAt(x, z) + lift, z);
+    }
+
+    // Lay something on the ground round a point (as it lies across `reach` metres), `lift` above it
+    #lay(object, centre, reach, lift) {
+        object.position.set(centre.x, lieOn(this.groundAt, centre.x, centre.z, Math.min(reach, 3), object.quaternion) + lift, centre.z);
+    }
+
     /** Do something in a moment (seconds). */
     after(seconds, run) {
         this.later.push({ left: seconds, run });
@@ -328,7 +346,7 @@ export class SpellFx {
                 const angle = Math.random() * Math.PI * 2;
                 const reach = Math.sqrt(Math.random()) * radius;
 
-                this.spray(settings, new THREE.Vector3(centre.x + Math.cos(angle) * reach, y, centre.z + Math.sin(angle) * reach), direction);
+                this.spray(settings, this.onGround(centre.x + Math.cos(angle) * reach, centre.z + Math.sin(angle) * reach, y), direction);
             };
 
             if (seconds) {
@@ -343,7 +361,7 @@ export class SpellFx {
     ring(centre, { colour, from = 0.3, to = 2, life = 0.6, y = 0.06, opacity = 1 }) {
         const mesh = new THREE.Mesh(this.geometries.ring, this.#additive(colour, { opacity }));
 
-        mesh.position.set(centre.x, y, centre.z);
+        this.#lay(mesh, centre, (from + to) / 2, y);
         mesh.renderOrder = ORDER.ring;
         this.#show(mesh, life, (t) => {
             const radius = from + (to - from) * (1 - (1 - t) ** 2);
@@ -362,15 +380,20 @@ export class SpellFx {
             ? new THREE.MeshBasicMaterial({ map: this.#texture(texture), color: colour, transparent: true, opacity, depthWrite: false, toneMapped: false })
             : this.#additive(colour, { map: this.#texture(texture), opacity });
         const mesh = new THREE.Mesh(this.geometries.disc, material);
+        let turn = Math.random() * Math.PI * 2;
 
-        mesh.position.set(centre.x, y, centre.z);
+        // (Lying on the ground, and turning about its up)
+        this.#lay(mesh, centre, radius / 2, y);
+
+        const lying = mesh.quaternion.clone();
+
         mesh.renderOrder = dark ? ORDER.mark : ORDER.glow;
-        mesh.rotation.y = Math.random() * Math.PI * 2;
         this.#show(mesh, life, (t, dt) => {
             const size = radius * (grow ? Math.min(1, t / grow) : 1);
 
             mesh.scale.set(size, 1, size);
-            mesh.rotation.y += spin * dt;
+            turn += spin * dt;
+            mesh.quaternion.setFromAxisAngle(UP, turn).premultiply(lying);
             mesh.material.opacity = opacity * Math.min(1, t * 12) * (t > 1 - fade ? (1 - t) / fade : 1);
         });
 
@@ -388,7 +411,7 @@ export class SpellFx {
 
         streaks.scale.set(0.92, 1, 0.92);
         group.add(glow, streaks);
-        group.position.set(centre.x, y, centre.z);
+        group.position.copy(this.onGround(centre.x, centre.z, y));
         this.#show(group, life, (t, dt) => {
             const fade = t < 0.6 ? 1 : (1 - t) / 0.4;
 
@@ -607,8 +630,10 @@ export class SpellFx {
                 velocity.y -= 9.8 * dt;
                 piece.position.addScaledVector(velocity, dt);
 
-                if (piece.position.y < 0.05) {
-                    piece.position.y = 0.05;
+                const floor = velocity.y < 0 ? this.groundAt(piece.position.x, piece.position.z) + 0.05 : -Infinity;
+
+                if (piece.position.y < floor) {
+                    piece.position.y = floor;
                     velocity.multiplyScalar(0.4);
                     velocity.y = Math.abs(velocity.y) * 0.3;
                 }
@@ -632,7 +657,7 @@ export class SpellFx {
         const group = new THREE.Group();
         const spikes = [];
 
-        group.position.set(centre.x, 0, centre.z);
+        group.position.copy(this.onGround(centre.x, centre.z));
 
         for (let k = 0; k < count; k++) {
             const angle = scatter ? Math.random() * Math.PI * 2 : (k / count) * Math.PI * 2;
@@ -640,7 +665,10 @@ export class SpellFx {
             const spike = new THREE.Mesh(this.geometries.spike, material);
             const tall = height * (0.6 + Math.random() * 0.6);
 
-            spike.position.set(Math.cos(angle) * reach, 0, Math.sin(angle) * reach);
+            const [x, z] = [Math.cos(angle) * reach, Math.sin(angle) * reach];
+
+            // (Each from the ground where it is, a little into it)
+            spike.position.set(x, this.groundAt(centre.x + x, centre.z + z) - group.position.y - 0.1, z);
             spike.rotation.set(Math.sin(angle) * -lean, 0, Math.cos(angle) * lean);
             group.add(spike);
             spikes.push({ spike, tall, delay: stagger * (reach / Math.max(radius, 0.01)) });
@@ -663,7 +691,7 @@ export class SpellFx {
         const group = new THREE.Group();
 
         group.add(outer, inner);
-        group.position.set(centre.x, 0, centre.z);
+        group.position.copy(this.onGround(centre.x, centre.z));
         this.#show(group, life, (t, dt) => {
             const grow = Math.min(1, t * 5) * (t > 0.85 ? (1 - t) / 0.15 : 1);
 
@@ -693,7 +721,7 @@ export class SpellFx {
             const at = centre();
 
             if (at) {
-                group.position.set(at.x, 0, at.z);
+                group.position.set(at.x, at.y ?? this.groundAt(at.x, at.z), at.z);
             }
 
             const swell = Math.min(1, t * 6);
@@ -1062,8 +1090,10 @@ function jagged(a, b, jag) {
     return points;
 }
 
+const UP = new THREE.Vector3(0, 1, 0);
+
 // A point above another
-const above = (at, height) => new THREE.Vector3(at.x, height, at.z);
+const above = (at, height) => new THREE.Vector3(at.x, (at.y ?? 0) + height, at.z);
 
 // Those carried by magic, and creatures brought, as they appear: the colour of it
 const APPEARING = {
@@ -1177,7 +1207,7 @@ const RECIPES = {
             for (let k = 0; k < 10; k++) {
                 const angle = (k / 10) * Math.PI * 2;
 
-                fx.after(0.05, () => fx.spray({ ...FLAMES, count: 6, speed: [1, 2.4] }, new THREE.Vector3(at.x + Math.cos(angle) * 1.4, 0.3, at.z + Math.sin(angle) * 1.4), new THREE.Vector3(Math.cos(angle), 1.5, Math.sin(angle))));
+                fx.after(0.05, () => fx.spray({ ...FLAMES, count: 6, speed: [1, 2.4] }, fx.onGround(at.x + Math.cos(angle) * 1.4, at.z + Math.sin(angle) * 1.4, 0.3), new THREE.Vector3(Math.cos(angle), 1.5, Math.sin(angle))));
             }
 
             fx.decal(at, { texture: "scorch", colour: 0xffffff, radius: 1.6, life: 4, dark: true });
@@ -1243,8 +1273,8 @@ const RECIPES = {
             for (let k = 0; k < 16; k++) {
                 const angle = Math.random() * Math.PI * 2;
                 const reach = Math.sqrt(Math.random()) * 10;
-                const spot = new THREE.Vector3(at.x + Math.cos(angle) * reach, 0.2, at.z + Math.sin(angle) * reach);
-                const sky = fx.beyond(spot, 7 + Math.random() * 4).setY(13 + Math.random() * 4);
+                const spot = fx.onGround(at.x + Math.cos(angle) * reach, at.z + Math.sin(angle) * reach, 0.2);
+                const sky = fx.beyond(spot, 7 + Math.random() * 4).setY(spot.y + 13 + Math.random() * 4);
 
                 fx.after(k * 0.09, () =>
                     fx.throw(`meteor-${Math.random()}`, () => sky, () => spot, {
@@ -1466,7 +1496,7 @@ const RECIPES = {
                 fx.after(k * 0.06, () => {
                     const angle = Math.random() * Math.PI * 2;
                     const reach = Math.sqrt(Math.random()) * 12;
-                    const spot = new THREE.Vector3(at.x + Math.cos(angle) * reach, 0.1, at.z + Math.sin(angle) * reach);
+                    const spot = fx.onGround(at.x + Math.cos(angle) * reach, at.z + Math.sin(angle) * reach, 0.1);
 
                     fx.lightning(above(spot, 18), spot, { colour: k % 2 ? 0xc080ff : AIR.deep, width: 0.09, life: 0.3, jag: 1.2, branches: 2 });
                     fx.spray({ ...SPARKS, count: 12 }, above(spot, 0.3));
@@ -1475,7 +1505,7 @@ const RECIPES = {
 
             for (let k = 0; k < 8; k++) {
                 fx.after(0.1 + k * 0.1, () => {
-                    const a = new THREE.Vector3(at.x + (Math.random() - 0.5) * 12, 1 + Math.random() * 5, at.z + (Math.random() - 0.5) * 12);
+                    const a = new THREE.Vector3(at.x + (Math.random() - 0.5) * 12, at.y + 1 + Math.random() * 5, at.z + (Math.random() - 0.5) * 12);
 
                     fx.lightning(point.clone(), a, { colour: 0x9ad8ff, width: 0.05, life: 0.25, jag: 0.8 });
                 });

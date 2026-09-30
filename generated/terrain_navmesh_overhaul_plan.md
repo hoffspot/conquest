@@ -824,3 +824,24 @@ converted data is to be measured in M8 against today's hm08 data.
     - `waterAt` is the single test of where water stands, for M1b's squares.
   - The overworld reads rivers and still water from `waters.js`, unchanged: its tests are the
     same.
+- **2026-09-30, M1b built** (terrain in play; the squares are still walked as before).
+  - **Core** (`core/terrain/ground.js`, overworld): pads for the town, settlements, castles,
+    places and camps, eased in over 24 m; roads on profiles smoothed 12 m each way, under 0.3 m a
+    metre off bridges; cliffs past 38° blocked but for roads, bridges and what's built; bridge
+    decks arched at least 1 m over their river; `surfaceAt` for the water's surface.
+  - **Change from the plan:** a river's surface is kept at least 0.4 m under the land at its
+    cell's middle and never above anything upstream. The plan's filled `level` stood some rivers
+    on walls above the land round them; now they cut gorges through rims instead
+    (`TERRAIN_VERSION` 2).
+  - **Drawing:** chunk meshes from the corner heights, a metre apart near and two further off
+    (four on low), with 2 m skirts; rock on slopes past about 33°; water sheets following the
+    surface; bridges arched on piers; buildings, trees, rocks, undergrowth, props, camps,
+    banners, drops, doors, effects, decals, spells, projectiles, birds and landing beasts all
+    on the ground; contact shadows along the slope; the camera kept over the ground and taps
+    found by ray-marching it; debug squares laid over it.
+  - **Deferred to M2b/M8:** each foot on its own ground on slopes (locomotion foot IK with a
+    pelvis drop). It changes the tuned gait, so it goes with the motion check of §10.1. Until
+    then a character stands at the ground under its middle, which is within a few centimetres
+    of each foot on the open slopes (under 30°) that can be walked.
+  - **Fixed on the way:** a winged beast's landing glide was overwritten by the standing height
+    each frame; now it glides down to the ground.

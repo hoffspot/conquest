@@ -351,8 +351,8 @@ places built their way, and each people's homeland its own ground, trees and thi
 Next: **sites to go into**, the ruins, caves, shrines and castles as places of their own.
 
 The ground is being given height, and the squares a navigation mesh, step by step
-(`generated/terrain_navmesh_overhaul_plan.md`). The first step, the ground's height, is below; it
-isn't in play yet.
+(`generated/terrain_navmesh_overhaul_plan.md`). The ground's height, and the world standing on it,
+are below; the squares are still squares, walked as before, with the steepest blocked.
 
 ## The ground's height (`core/terrain/`)
 
@@ -388,7 +388,53 @@ exactly. It's built up in layers:
   one in three in the mountains.
 
 A chunk's heights take about 6 ms to work out (65 by 65 points). `waters.js` also keeps the
-rivers and still water the overworld's squares are wet by, as they were.
+rivers and still water the overworld's squares are wet by, as they were. A river's surface is never
+higher than the land at its cell's middle less 0.4 m, and never higher than anywhere upstream, so
+a river crossing a wide hollow runs along its floor and cuts a gorge through its rim to leave it.
+
+## The ground in play (`core/terrain/ground.js`)
+
+The world is played on the land's height with what's built levelled into it (`Ground`):
+
+- **Pads.** The start town, every settlement's squares, each people's castle and places (settled
+  with the chunks round them), and camps (10 m round) stand on flat pads at the land's average
+  height under them, eased into the land round them over 24 m.
+- **Roads** follow the land's lie smoothed 12 m each way along them (sampled every 2 m), with
+  3 m shoulders easing out to the land; over water they keep to their banks' height, 0.6 m above
+  it, for their bridges. So they rise and fall gently, less than 3 in 10 anywhere off a bridge.
+- **Water keeps its channel and lakes**: nothing levels ground under water.
+- Heights are kept a chunk at a time at each metre's corner (65 by 65), read between corners over
+  each square's two triangles, split from north-west to south-east, exactly as the ground's drawn,
+  so whatever stands on the ground stands on what's seen. They're the same whatever order chunks
+  are made in (a road's or pad's height is worked out from the land's own, never from kept
+  chunks). The land's own heights for chunks ahead of the player are worked out off the page's
+  thread (`world/terrains.js`, `terrain-worker.js`).
+- **The overworld** (`overworld.js`) gives each chunk its corner heights and each square's slope
+  class: squares steeper than 38° are blocked, but for roads, bridges and what's built. Lakes and
+  the sea are wet where the ground's below their water. `heightAt(x, y)` is the ground, or a
+  bridge's deck, arched from bank to bank at least a metre over its river (`deckOf`), and
+  `surfaceAt(x, y)` the water's surface: a river's (sloping down along it), a lake's or the sea's.
+
+**What stands on it** (the drawing, world/):
+- Every chunk's ground mesh (GAME.md, *The ground*), its water sheet following the surface (a
+  corner every 2 m), and its bridges' decks arched as the overworld has them, on piers down to the
+  riverbed.
+- Buildings at their piece's ground (on its pad); trees on the lowest ground round their trunk,
+  a little into it, with the litter round their feet laid over the ground; rocks, logs and ruins
+  on the lowest of five points under them; grass and flowers each at the ground where it grows
+  (and sinking into it far off from there).
+- Everyone standing at the ground under where they're drawn: snapped to it as it rises and
+  falls, easing only up and down steps (onto a bridge's deck); the fallen sinking into it; a
+  wyvern or dragon gliding down to it to land.
+- Birds, wyverns and the dragon flying at their height over the ground, rising over what's ahead
+  and sinking slowly after, nose up and down as they go.
+- What lies on the ground lies along its slope: the ring where the player's walking to, the
+  target's ring, heals' rings, blood, scorches and runes, spells' rings; particles falling to the
+  ground where they are; spikes each from the ground where it bursts up; dropped bundles, camps'
+  tents and fires, and banners at the ground there; doors' targets at their building's floor;
+  debug mode's squares laid over it.
+- The camera never goes under the ground between it and the player (raised to look down more);
+  a tap finds the ground by marching along the line from the camera until it passes under.
 
 ## Tests
 
@@ -406,6 +452,9 @@ checks the settlements laid out ahead: asked for nearest first and once each, th
 in another thread, and taken only when laid out from what they'd be laid out from here. Each people's own trees grow
 in its homeland, most of the trees there, and nowhere else. `test/wilds.test.js` checks the
 land's features (GAME.md, *Testing*), each people's own in its homeland and only there.
+
+`test/ground.test.js` checks the ground in play: reading between corners as it's drawn; pads
+level; roads gentle but where they cross rivers; cliffs blocked; bridges over the water.
 
 `test/terrain.test.js` checks the ground's height:
 - simplex noise between -1 and 1, with the slope it says;

@@ -30,7 +30,7 @@ import { Interiors } from "./insides.js";
 import { WENCHES } from "./lore/taverns.js";
 import { featuresOf } from "./wilds.js";
 import { Ground, PAD_EASE } from "./terrain/ground.js";
-import { SLOPE_CLASS, stillWaterAt } from "./terrain/height.js";
+import { SLOPE_CLASS, stillOf, stillWaterAt } from "./terrain/height.js";
 import { watersOf } from "./terrain/waters.js";
 import { GROUND, HOME_TREES, TREE_KINDS } from "./setpieces/pieces.js";
 import { generateWorld } from "./world.js";
@@ -314,7 +314,9 @@ export class Overworld {
     heightAt(x, y) {
         const [px, py] = [Math.floor(x), Math.floor(y)];
 
-        if (inside(px, py) && this.chunkAt(px, py).bridge[(py - this.chunkAt(px, py).y0) * CHUNK + (px - this.chunkAt(px, py).x0)]) {
+        const chunk = inside(px, py) ? this.chunkAt(px, py) : null;
+
+        if (chunk?.bridge[(py - chunk.y0) * CHUNK + (px - chunk.x0)]) {
             const deck = this.#deckAt(x, y);
 
             if (deck !== null) {
@@ -325,26 +327,51 @@ export class Overworld {
         return this.ground.heightAt(x, y);
     }
 
-    // A bridge's deck's height at a point on it: from the ground at one end to the other's,
-    // arched to at least a metre over the river under its middle
+    // A bridge's deck's height at a point on it, or null if the point's on none
     #deckAt(x, y) {
-        for (const { a, b, half } of this.#bridgesNear(Math.floor(x / CHUNK), Math.floor(y / CHUNK))) {
+        for (const bridge of this.#bridgesNear(Math.floor(x / CHUNK), Math.floor(y / CHUNK))) {
+            const { a, b, half } = bridge;
             const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
             const length = hypot(dx, dy);
             const along = ((x - a[0]) * dx + (y - a[1]) * dy) / length;
 
             if (along >= -0.5 && along <= length + 0.5 && Math.abs((x - a[0]) * dy - (y - a[1]) * dx) / length <= half + 0.5) {
-                const [ha, hb] = [this.ground.heightAt(...a), this.ground.heightAt(...b)];
-                const river = this.waters.river((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, 20);
-                const least = river ? river.surface + 1 : -Infinity;
-                const t = Math.min(1, Math.max(0, along / length));
-                const lift = Math.max(0, least - (ha + hb) / 2) * 4 * t * (1 - t);
-
-                return ha + (hb - ha) * t + lift;
+                return this.deckOf(bridge, along / length);
             }
         }
 
         return null;
+    }
+
+    /**
+     * A bridge's deck's height (metres) a way `t` along it (0 at its end `a`, 1 at `b`): from the
+     * ground at one end to the other's, arched to at least a metre over the river under its
+     * middle.
+     */
+    deckOf({ a, b }, t) {
+        const [ha, hb] = [this.ground.heightAt(...a), this.ground.heightAt(...b)];
+        const river = this.waters.river((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, 20);
+        const least = river ? river.surface + 1 : -Infinity;
+        const along = Math.min(1, Math.max(0, t));
+        const lift = Math.max(0, least - (ha + hb) / 2) * 4 * along * (1 - along);
+
+        return ha + (hb - ha) * along + lift;
+    }
+
+    /**
+     * The height of the water's surface at a point (metres): the river's nearest it, else the lake's
+     * or the sea's, else (none near) the ground's (where water's drawn, it's drawn at this).
+     */
+    surfaceAt(x, y) {
+        const river = this.waters.river(x, y, 24);
+
+        if (river) {
+            return river.surface;
+        }
+
+        const still = stillOf(this.plan, x, y);
+
+        return still ? still.level : this.ground.heightAt(Math.min(WORLD_SIZE - 0.01, Math.max(0, x)), Math.min(WORLD_SIZE - 0.01, Math.max(0, y)));
     }
 
     // The pads (terrain/ground.js) reaching into a chunk: the town, the settlements' squares, the

@@ -119,6 +119,11 @@ export class Ground {
         return made;
     }
 
+    /** A chunk's ground if it's kept (chunk's), else null: nothing's worked out. */
+    peek(cx, cy) {
+        return this.chunks.get(cy * 1024 + cx) ?? null;
+    }
+
     #make(cx, cy) {
         const [x0, y0] = [cx * CHUNK, cy * CHUNK];
         const heights = Float32Array.from(this.#natural(cx, cy));
@@ -293,8 +298,15 @@ export class Ground {
      */
     heightAt(x, y) {
         const [cx, cy] = [Math.floor(x / CHUNK), Math.floor(y / CHUNK)];
+        const key = cy * 1024 + cx;
 
-        return between(this.chunk(cx, cy).heights, x - cx * CHUNK, y - cy * CHUNK);
+        // (The chunk last read kept to hand: most reads are in the same one as the last)
+        if (key !== this.lastKey) {
+            this.last = this.chunk(cx, cy);
+            this.lastKey = key;
+        }
+
+        return between(this.last.heights, x - cx * CHUNK, y - cy * CHUNK);
     }
 
     /** A square's slope class (height.js SLOPE_CLASS). */
