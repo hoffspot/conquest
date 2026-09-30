@@ -155,7 +155,7 @@ export function gatehouse({ facing }, { stone = "stone" } = {}) {
         // A banner over the way in, on the outside (only seen when the outside faces south)
         if (facing === "s") {
             solid.box(34, bridge + 2, 50, 46, height - 8, 50.8, material("banner"));
-            solid.box(38, bridge + 10, 50.8, 42, bridge + 16, 51.2, material("gold"));
+            solid.box(38, bridge + 10, 50.8, 42, bridge + 16, 51.2, material("cloth-gold"));
         }
     } else {
         // 60 x 80: blocks at the north and south ends, the passage between z = 20 and 60

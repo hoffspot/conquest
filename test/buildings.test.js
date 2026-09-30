@@ -23,8 +23,8 @@ const THREE = await import("three");
 const { layoutTown } = await import("../client/js/core/setpieces/town.js");
 const { GODS } = await import("../client/js/core/lore/gods.js");
 const { TRADES } = await import("../client/js/core/setpieces/pieces.js");
-const { LAYERS, layerOf, paintLayers, toAtlas, toGlow } = await import("../client/js/world/art/engine/atlas.js");
-const { material, MATERIALS, paintPicture } = await import("../client/js/world/art/engine/materials.js");
+const { atlasMaterial, LAYERS, layerOf, paintLayers, SHINE_STEP, SHINES, shineOf, toAtlas, toGlow, wildsMaterial } = await import("../client/js/world/art/engine/atlas.js");
+const { COLOURS, material, MATERIALS, paintPicture, TINTS } = await import("../client/js/world/art/engine/materials.js");
 const { paintLayer } = await import("../client/js/world/art/engine/painters.js");
 const { ARCHES, inset, openingOutline, Solid } = await import("../client/js/world/art/engine/solid.js");
 const { buildHouse, house, planHouse, STYLES } = await import("../client/js/world/art/kits/house.js");
@@ -844,6 +844,60 @@ describe("the atlas (engine/atlas.js)", () => {
 
         assert.deepEqual(merged.children.map(({ material: { name } }) => name).sort(), ["atlas", "glow"]);
         assert.ok(toGlow(geometry, material("glow-violet")).attributes.color.array[2] > 0.9);
+    });
+
+    it("gives glass, metal and slate their shine with their layer, and a tinted material the shine of the one it's tinted from", () => {
+        for (const name of Object.keys(SHINES)) {
+            assert.ok(COLOURS[name] || MATERIALS[name], name);
+        }
+
+        assert.ok(SHINE_STEP > LAYERS.length, "a layer and its shine told apart");
+
+        const geometry = new THREE.BufferGeometry();
+
+        geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
+        geometry.setAttribute("uv", new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1], 2));
+
+        const layer = (name) => toAtlas(geometry, material(name)).attributes.layer.array[0];
+
+        assert.equal(TINTS["slate-violet"].from, "slate-grey");
+        assert.deepEqual(
+            ["glass", "leaded", "iron", "gold", "slate", "slate-violet", "brick", "cloth-gold"].map(layer),
+            [
+                LAYERS.indexOf("plain") + SHINE_STEP,
+                LAYERS.indexOf("leaded") + SHINE_STEP,
+                LAYERS.indexOf("plain") + 2 * SHINE_STEP,
+                LAYERS.indexOf("plain") + 3 * SHINE_STEP,
+                LAYERS.indexOf("slate") + 4 * SHINE_STEP,
+                LAYERS.indexOf("slate-grey") + 4 * SHINE_STEP,
+                LAYERS.indexOf("brick"),
+                LAYERS.indexOf("plain"),
+            ],
+        );
+        assert.equal(shineOf(material("plaster-red")), 0);
+        assert.deepEqual(["paint-gold", "cloth-saffron", "cloth-silver"].map((name) => shineOf(material(name))), [0, 0, 0], "gold and silver painted, dyed or woven");
+    });
+
+    it("lights what shines with a highlight from each light and the sky reflected, in the buildings' shader (not the wilds')", () => {
+        // (Each change made to three.js's own Lambert shader: one that no longer finds what it
+        // replaces would leave everything dull, and say nothing)
+        const compiled = (made) => {
+            const shader = { uniforms: {}, vertexShader: THREE.ShaderLib.lambert.vertexShader, fragmentShader: THREE.ShaderLib.lambert.fragmentShader };
+
+            made.onBeforeCompile(shader);
+
+            return shader;
+        };
+        const atlas = compiled(atlasMaterial());
+        const wilds = compiled(wildsMaterial({ value: 0 }));
+
+        assert.match(atlas.vertexShader, /vShine = floor\(layer \/ 256\.0\)/);
+        assert.match(atlas.fragmentShader, /#define RE_Direct RE_Direct_Atlas/);
+        assert.match(atlas.fragmentShader, /atlasShine\(diffuseColor\);\n#include <lights_lambert_fragment>/);
+        assert.match(atlas.fragmentShader, /#include <lights_fragment_end>\n[^]*getIBLRadiance\(geometryViewDir, geometryNormal, atlasRoughness\)/);
+        assert.match(atlas.fragmentShader, /outgoingLight = [^;]*reflectedLight\.directSpecular \+ reflectedLight\.indirectSpecular/);
+        assert.doesNotMatch(wilds.fragmentShader, /atlasShine|RE_Direct_Atlas/);
+        assert.match(wilds.vertexShader, /vLayer = mod\(layer/);
     });
 });
 

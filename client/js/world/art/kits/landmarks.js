@@ -231,7 +231,7 @@ export async function guild(piece) {
 
         solid.facing(cloth, [0, 0, 1], material("paint-blue"));
         solid.facing(cloth, [0, 0, -1], material("paint-blue"));
-        solid.facing([at(-m(0.1), m(3.1)), at(m(0.1), m(3.1)), at(m(0.1), m(2.3)), at(-m(0.1), m(2.3))].map(([x, y, z]) => [x, y, z + 0.1]), [0, 0, 1], material("gold"));
+        solid.facing([at(-m(0.1), m(3.1)), at(m(0.1), m(3.1)), at(m(0.1), m(2.3)), at(-m(0.1), m(2.3))].map(([x, y, z]) => [x, y, z + 0.1]), [0, 0, 1], material("cloth-gold"));
     }
 
     // A board of notices on two posts beside the door, papers pinned to it
@@ -662,7 +662,7 @@ export async function keep(piece) {
         const x = mid + side * m(3.2);
 
         solid.box(x - m(0.55), m(3.4), z1, x + m(0.55), height * 0.72, z1 + m(0.12), material("banner"));
-        solid.box(x - m(0.2), height * 0.6, z1 + m(0.12), x + m(0.2), height * 0.66, z1 + m(0.16), material("gold"));
+        solid.box(x - m(0.2), height * 0.6, z1 + m(0.12), x + m(0.2), height * 0.66, z1 + m(0.16), material("cloth-gold"));
     }
 
     const face = { origin: [x0, 0, z1 + m(0.25)], across: [1, 0, 0], out: [0, 0, 1], length: x1 - x0 };
