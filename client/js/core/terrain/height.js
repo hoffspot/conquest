@@ -27,7 +27,7 @@ import { BIOME, BIOMES } from "../worldplan/races.js";
 import { CELL, CELLS, MOUNTAIN, WATER, WORLD_SIZE } from "../worldplan/terrain.js";
 
 /** Bumped whenever the ground a seed makes changes (players playing together must agree on it). */
-export const TERRAIN_VERSION = 2;
+export const TERRAIN_VERSION = 3;
 
 /** Heights are whole multiples of this (metres). */
 export const HEIGHT_STEP = 1 / 1024;
@@ -101,6 +101,13 @@ const WET_FROM = 0.2;
 const BED = { least: 0.6, perHalf: 0.3 };
 const BANKS = { least: 5, perHalf: 2.5 };
 const BANK_TOP = 0.35;
+
+// How far (metres) a river's bank takes to rise from its bed's edge to its top: never a step
+const BANK_RISE = 1.5;
+
+// Lakes and the sea sink the land under them from where water can stand (WET_FROM) to this
+// wet, a little more the wetter, so shores slope down into the water rather than dropping
+const SUNK_BY = 0.55;
 
 // Detail seeds, apart from each other
 const SEEDS = { swells: 1301, ridges: 1709, warpX: 2203, warpY: 2207, ragged: 2503 };
@@ -322,8 +329,10 @@ export function heightAt(plan, x, y) {
     if (still) {
         const { wetness, level, deep } = still;
 
-        if (wetness > 0.5) {
-            height = Math.min(height, level - 0.3 - Math.min(1, (wetness - 0.5) * 2.5) * deep);
+        if (wetness > WET_FROM) {
+            const sunk = Math.min(height, level - 0.3 - Math.min(1, Math.max(0, wetness - 0.5) * 2.5) * deep);
+
+            height += (sunk - height) * smoothstep(WET_FROM, SUNK_BY, wetness);
         } else if (wetness > 0.05 && wetness < WET_FROM && height < level + 0.3) {
             // (Out past where water can stand, land low enough to flood is held up to its surface)
             height = Math.max(height, level + 0.3 * ((WET_FROM - wetness) / (WET_FROM - 0.05)));
@@ -345,9 +354,11 @@ export function heightAt(plan, x, y) {
             const banks = BANKS.least + BANKS.perHalf * half;
 
             if (gap < banks) {
-                const ease = smoothstep(0, banks, gap);
+                // (Rising from the bed's edge, just under the water, to the bank's top, then
+                // easing out to the land)
+                const bank = surface - 0.15 + (BANK_TOP + 0.15) * smoothstep(0, BANK_RISE, gap);
 
-                height = surface + BANK_TOP + (height - surface - BANK_TOP) * ease;
+                height = bank + (height - bank) * smoothstep(0, banks, gap);
             }
         }
     }

@@ -901,7 +901,11 @@ converted data is to be measured in M8 against today's hm08 data.
   - **Change from the plan:** a river's surface is kept at least 0.4 m under the land at its
     cell's middle and never above anything upstream. The plan's filled `level` stood some rivers
     on walls above the land round them; now they cut gorges through rims instead
-    (`TERRAIN_VERSION` 2).
+    (`TERRAIN_VERSION` 2). Then river banks rise from the bed's edge over 1.5 m, where they had
+    stepped 0.5 m at once (a staircase of rock along diagonal banks on the 1 m grid), and lakes
+    and the sea sink the land in from where water can stand rather than at a fixed wetness, so
+    their shores slope rather than drop (`TERRAIN_VERSION` 3). Carved water runs 2 m under the
+    banks, so the ground, not the squares, draws its edge.
   - **Drawing:** chunk meshes from the corner heights, ring by ring from the player's chunk
     (high 1/1/2 m, medium and low 1/2/4 m: a 4 m mesh strays 0.3–0.5 m from the ground at the
     95th percentile on pads, roads and banks, so only in the fogged outer ring; 2 m strays
