@@ -206,7 +206,7 @@ const PROPS = {
 
         prism(solid, [cx, m(1.1), cz - m(0.14)], [cx, m(1.1), front], m(0.55), "thatch", "thatch", 12);
 
-        for (const [r, colour] of [[0.45, "paint-cream"], [0.32, "paint-red"], [0.19, "paint-cream"], [0.09, "gold"]]) {
+        for (const [r, colour] of [[0.45, "paint-cream"], [0.32, "paint-red"], [0.19, "paint-cream"], [0.09, "paint-gold"]]) {
             const ring = Array.from({ length: 12 }, (_, k) => [cx + Math.cos((k / 12) * Math.PI * 2) * m(r), m(1.1) + Math.sin((k / 12) * Math.PI * 2) * m(r), front + m(0.01) + m(0.005) * (0.45 - r)]);
 
             solid.facing(ring, [0, 0, 1], material(colour));

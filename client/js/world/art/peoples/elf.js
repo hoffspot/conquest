@@ -614,7 +614,7 @@ export function market(piece) {
             return [[x - ox * m(1.5) + ox * m(3) * t - oz * half, m(2.9) - m(0.3) * Math.sin(Math.PI * t), z - oz * m(1.5) + oz * m(3) * t + ox * half], [x - ox * m(1.5) + ox * m(3) * t + oz * half, m(2.9) - m(0.3) * Math.sin(Math.PI * t), z - oz * m(1.5) + oz * m(3) * t - ox * half]];
         });
 
-        solid.loft(leaf, material(random.pick(["cloth-green", "silk", "sun-gold"])), { closed: false, out: [0, 1, 0] });
+        solid.loft(leaf, material(random.pick(["cloth-green", "silk", "cloth-saffron"])), { closed: false, out: [0, 1, 0] });
         solid.loft(leaf, material("cloth-green"), { closed: false, out: [0, -1, 0] });
 
         // (A curved counter of stone, goods on it)

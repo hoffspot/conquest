@@ -11,6 +11,11 @@
 // lights that as relief (bump mapping, from how the height changes across the screen), so mortar
 // sits back between bricks and the grain of the timbers shows.
 //
+// Glass, metal and slate shine (SHINES): a highlight where the sun or a lamp catches them, and
+// the sky (or, indoors, the room) reflected in them, more at a glancing look (Fresnel). Which
+// shine a vertex has rides on its layer (SHINE_STEP times it, added), so nothing more is kept for
+// it; the Lambert light is otherwise as it was, and what doesn't shine costs nothing more.
+//
 // Meshes built of other materials (the tavern's painted signs, KayKit's props, the forge's
 // glowing coals) keep their own: `toAtlas` says which can be drawn with the atlas.
 
@@ -28,6 +33,39 @@ export const LAYERS = Object.freeze([...Object.keys(MATERIALS).filter((name) => 
 
 const index = new Map(LAYERS.map((name, k) => [name, k]));
 const PLAIN = index.get("plain");
+
+/**
+ * What shines, and how (by material name; a tinted material shines as the one it's tinted
+ * from): 1 glass (leaded windows too, and water, obsidian): a sharp highlight, the sky mirrored
+ * at a glancing look; 2 iron (its black scale, magnetite, reflecting a sixth straight on): a
+ * broad dull sheen; 3 bright metal (gold, silver): its own colour's reflection, its paint half as
+ * bright; 4 slate: a soft sheen, mostly at a glancing look.
+ */
+export const SHINES = Object.freeze({
+    glass: 1,
+    "glass-lit": 1,
+    "glass-green": 1,
+    "glass-violet": 1,
+    leaded: 1,
+    water: 1,
+    "water-green": 1,
+    obsidian: 1,
+    iron: 2,
+    "iron-black": 2,
+    gold: 3,
+    silver: 3,
+    "sun-gold": 3,
+    slate: 4,
+    "slate-grey": 4,
+});
+
+/** How far apart the shines are in a vertex's `layer` (its layer, plus this times its shine). */
+export const SHINE_STEP = 256;
+
+/** How a material shines (SHINES: 0 for not at all). */
+export function shineOf(material) {
+    return SHINES[material.name] ?? SHINES[TINTS[material.name]?.from] ?? 0;
+}
 
 let shared = null;
 
@@ -166,7 +204,7 @@ export function atlasMaterial() {
     material.shadowSide = THREE.DoubleSide;
     material.userData.atlas = uniforms.atlasMap.value;
     material.userData.uniforms = uniforms;
-    material.onBeforeCompile = (shader) => fromAtlas(shader, uniforms);
+    material.onBeforeCompile = (shader) => fromAtlas(shader, uniforms, { shine: true });
     material.customProgramCacheKey = () => "atlas";
     shared = material;
 
@@ -254,13 +292,81 @@ function atlasTexture() {
     return texture;
 }
 
+// How each shine (SHINES) shines: its reflectance straight on (a bright metal's its own colour),
+// how rough (the sky's reflection blurred as much), and the sun's highlight as sharp as that
+// (Blinn-Phong: 2 / roughness^4 - 2), but for glass's, which is spread as wide as the sun looks and
+// old glass is uneven
+const SHINE_GLSL = `
+flat varying float vShine;
+vec3 atlasF0;
+float atlasRoughness;
+float atlasGloss;
+
+void atlasShine(inout vec4 diffuseColor) {
+    atlasGloss = 0.0;
+
+    if (vShine < 0.5) return;
+
+    int shine = int(vShine + 0.5);
+
+    if (shine == 1) {
+        atlasF0 = vec3(0.04); atlasRoughness = 0.08; atlasGloss = 600.0;
+    } else if (shine == 2) {
+        atlasF0 = vec3(0.17); atlasRoughness = 0.6; atlasGloss = 13.0;
+    } else if (shine == 3) {
+        atlasF0 = diffuseColor.rgb; atlasRoughness = 0.3; atlasGloss = 240.0;
+        diffuseColor.rgb *= 0.5;
+    } else {
+        atlasF0 = vec3(0.04); atlasRoughness = 0.65; atlasGloss = 9.0;
+    }
+}
+
+// How much of the sky (or the room) is reflected, looking at it from this way: Fresnel, less of
+// it at a glancing look the rougher the surface (Karis's fit for phones, as three.js's
+// MeshStandardMaterial had before it took the table it has now)
+vec3 atlasReflectance(const in vec3 normal, const in vec3 viewDir) {
+    float dotNV = saturate(dot(normal, viewDir));
+    vec4 r = atlasRoughness * vec4(-1.0, -0.0275, -0.572, 0.022) + vec4(1.0, 0.0425, 1.04, -0.04);
+    float a004 = min(r.x * r.x, exp2(-9.28 * dotNV)) * r.x + r.y;
+    vec2 fab = vec2(-1.04, 1.04) * a004 + r.zw;
+
+    return atlasF0 * fab.x + fab.y;
+}`;
+
+// (Each light, the sun's with its shadow, as Lambert has it, and a highlight where it shines)
+const SHINE_DIRECT_GLSL = `
+void RE_Direct_Atlas(const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in LambertMaterial material, inout ReflectedLight reflectedLight) {
+    RE_Direct_Lambert(directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight);
+
+    if (atlasGloss > 0.0) {
+        float dotNL = saturate(dot(geometryNormal, directLight.direction));
+
+        reflectedLight.directSpecular += dotNL * directLight.color * BRDF_BlinnPhong(directLight.direction, geometryViewDir, geometryNormal, atlasF0, atlasGloss);
+    }
+}
+
+#undef RE_Direct
+#define RE_Direct RE_Direct_Atlas`;
+
+// (The sky, or the room, reflected, and that much less of their light taken in and given back
+// from under the surface)
+const SHINE_REFLECTED_GLSL = `
+#if defined(USE_ENVMAP) && defined(ENVMAP_TYPE_CUBE_UV)
+if (atlasGloss > 0.0) {
+    vec3 atlasReflected = atlasReflectance(geometryNormal, geometryViewDir);
+
+    reflectedLight.indirectDiffuse *= 1.0 - atlasReflected;
+    reflectedLight.indirectSpecular += atlasReflected * getIBLRadiance(geometryViewDir, geometryNormal, atlasRoughness);
+}
+#endif`;
+
 // A material's shader drawn from the atlas: each vertex's layer, its texture coordinates, and the
-// layer's heights lit as relief
-function fromAtlas(shader, uniforms) {
+// layer's heights lit as relief; and, with `shine`, glass, metal and slate shining (SHINES)
+function fromAtlas(shader, uniforms, { shine = false } = {}) {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
-        .replace("#include <common>", "#include <common>\nattribute float layer;\nflat varying float vLayer;\nvarying vec2 vAtlasUv;")
-        .replace("#include <uv_vertex>", "#include <uv_vertex>\nvLayer = layer;\nvAtlasUv = uv;");
+        .replace("#include <common>", "#include <common>\nattribute float layer;\nflat varying float vLayer;\nflat varying float vShine;\nvarying vec2 vAtlasUv;")
+        .replace("#include <uv_vertex>", `#include <uv_vertex>\nvLayer = mod(layer, ${SHINE_STEP.toFixed(1)});\nvShine = floor(layer / ${SHINE_STEP.toFixed(1)});\nvAtlasUv = uv;`);
     shader.fragmentShader = shader.fragmentShader
         .replace("#include <common>", `#include <common>\nuniform highp sampler2DArray atlasMap;\nuniform float atlasRelief;\nflat varying float vLayer;\nvarying vec2 vAtlasUv;\n${RELIEF_GLSL}`)
         .replace("#include <map_fragment>", "vec4 atlasTexel = texture(atlasMap, vec3(vAtlasUv, vLayer));\ndiffuseColor.rgb *= atlasTexel.rgb;")
@@ -273,6 +379,15 @@ if (atlasRelief > 0.0) {
 
     normal = reliefNormal(-vViewPosition, normal, slope, faceDirection);
 }`);
+
+    if (shine) {
+        shader.fragmentShader = shader.fragmentShader
+            .replace("#include <common>", `#include <common>\n${SHINE_GLSL}`)
+            .replace("#include <lights_lambert_pars_fragment>", `#include <lights_lambert_pars_fragment>\n${SHINE_DIRECT_GLSL}`)
+            .replace("#include <lights_lambert_fragment>", "atlasShine(diffuseColor);\n#include <lights_lambert_fragment>")
+            .replace("#include <lights_fragment_end>", `#include <lights_fragment_end>\n${SHINE_REFLECTED_GLSL}`)
+            .replace("vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;", "vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + reflectedLight.directSpecular + reflectedLight.indirectSpecular + totalEmissiveRadiance;");
+    }
 }
 
 const _colour = new THREE.Color();
@@ -328,8 +443,9 @@ export function toGlow(geometry, material) {
 
 /**
  * A (non-indexed) geometry drawn in `material` made ready to be drawn with the atlas instead: its
- * texture coordinates scaled to the material's, a `layer` for each vertex, and its colours (white
- * if it had none) times the material's own if it's a plain colour. Null if it can't be.
+ * texture coordinates scaled to the material's, a `layer` for each vertex (and its shine), and
+ * its colours (white if it had none) times the material's own if it's a plain colour. Null if it
+ * can't be.
  */
 export function toAtlas(geometry, material) {
     const layer = layerOf(material);
@@ -374,7 +490,7 @@ export function toAtlas(geometry, material) {
 
     result.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
     result.setAttribute("color", new THREE.BufferAttribute(colours, 3));
-    result.setAttribute("layer", new THREE.BufferAttribute(new Float32Array(count).fill(layer), 1));
+    result.setAttribute("layer", new THREE.BufferAttribute(new Float32Array(count).fill(layer + SHINE_STEP * shineOf(material)), 1));
 
     return result;
 }

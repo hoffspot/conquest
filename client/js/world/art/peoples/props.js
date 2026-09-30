@@ -210,7 +210,7 @@ const LIZARD = {
                 for (let n = 0; n < 3; n++) {
                     const [ex, ez] = [x + random.range(-1, 1) * m(0.06), cz + m(0.5) + random.range(-1, 1) * m(0.06)];
 
-                    solid.lathe(ex, ez, [[m(0.07), m(0.92)], [m(0.06), m(1)], [0, m(1.04)]], material(kind === "eggs" ? "egg" : random.pick(["apples", "squash", "sun-gold"])), { segments: 5 });
+                    solid.lathe(ex, ez, [[m(0.07), m(0.92)], [m(0.06), m(1)], [0, m(1.04)]], material(kind === "eggs" ? "egg" : random.pick(["apples", "squash", "quinces"])), { segments: 5 });
                 }
             }
         }
@@ -273,7 +273,7 @@ const ELF = {
                 solid.lathe(x, z, [[m(0.1), m(0.82)], [m(0.12), m(0.98)], [0, m(0.98)]], material("clay"), { segments: 6 });
                 solid.lathe(x, z, [[m(0.14), m(0.98)], [m(0.1), m(1.12)], [0, m(1.16)]], material(random.pick(["flowers", "flowers-gold", "leaves"])), { segments: 6 });
             } else {
-                bolt(solid, x, m(0.82), z, m(0.35), random.pick(["cloth-green", "silver", "paint-cream"]));
+                bolt(solid, x, m(0.82), z, m(0.35), random.pick(["cloth-green", "cloth-silver", "paint-cream"]));
             }
         }
 

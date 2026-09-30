@@ -1182,7 +1182,17 @@ chunk as the player first reached another people's lands (57 in all: 1.1 s in No
 for one). Insides, which are drawn with them, paint theirs a step each as they're built, and a
 bridge's planks as it's made.
 Its heights are lit as relief (bump mapping, three reads of the texture a pixel), so walls and
-roofs have depth close up at no cost in triangles. Everything that doesn't move is merged a
+roofs have depth close up at no cost in triangles. Glass (windows, leaded ones too; water in a
+well or a pool; obsidian), iron, gold and silver, and slate shine (`SHINES`): a highlight where
+the sun or a lamp catches them, and the sky reflected in them, more of it at a glancing look
+(Fresnel, less so the rougher the surface: Karis's fit for phones), and that much less of the
+sky's light taken in beneath. Glass mirrors the sky sharply; iron has a broad dull sheen; gold
+and silver reflect in their own colour, their own paint half as bright; slate has a soft sheen,
+mostly at a glancing look. What's painted, dyed or woven in gold or silver has a colour of its
+own that doesn't shine (`paint-gold`, `cloth-gold`, `cloth-saffron`, `cloth-silver`; golden
+fruit are `quinces`). A vertex's shine rides on its layer (256 times it, added: no more
+kept for it), so everything's still one material; only what shines does any more work.
+Everything that doesn't move is merged a
 block of the town (32 metres square) at a time, so each block is a draw call or two, and only
 the blocks in view (and in the sun's shadows) are drawn: a town of 23,000 to 39,000 triangles
 of buildings and props. What's only worth drawing near (a timber's sides and ends, a band's or a
@@ -2040,7 +2050,10 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   turn across), and houses' walls drawn within a few percent of their weathering (they were a
   tenth darker); round things shaded round (a drum's corners straight out from its axis, a
   pyramid left in facets, an edge kept where a hut's wall meets its roof, a dome, a rod and a
-  vault shaded through, a spike's normals tipped towards its point).
+  vault shaded through, a spike's normals tipped towards its point); glass, metal and slate's
+  shine given with their layer (a tinted material's as the one it's tinted from's), and lit in
+  the buildings' shader (each change to three.js's Lambert shader found: a highlight from each
+  light, the sky reflected), not the wilds'.
 - `test/wilds.test.js`: the noise (smooth, seeded, tiling when asked); the ground's patches (a
   tiling texture with dry, lush and bare in it); the land's features (placed across every land,
   many kinds, a few a chunk; the same every time; taking their squares, hiding what's behind the

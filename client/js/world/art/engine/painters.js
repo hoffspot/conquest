@@ -953,6 +953,13 @@ export const COLOURS = {
     bread: 0xc89a5a,
     rope: 0x9c8a62,
     "canvas-sack": 0xb9a67e,
+    quinces: 0xe0a526,
+    // (Gold and silver shine as metal (atlas.js SHINES): painted, dyed and woven in their colours,
+    // these don't)
+    "paint-gold": 0xc9a13b,
+    "cloth-gold": 0xc9a13b,
+    "cloth-saffron": 0xe0a526,
+    "cloth-silver": 0xc3c9cb,
     // The other peoples' trims, paints and cloths
     bone: 0xe8dcc0,
     silver: 0xc3c9cb,
