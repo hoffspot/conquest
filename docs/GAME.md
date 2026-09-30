@@ -1652,9 +1652,10 @@ game plays on while it's open; a second finger (a pinch) closes it.
    and Load afresh.) The world's planned while the skin atlas may still be being worked out in the
    skins worker, and waited for only once the characters are built; the buildings' atlas is
    painted in workers while the land is laid, and not painted again on the page (the ground's
-   undergrowth asks for it first); and everyone's built a step at a time, as they are in play, so
-   that each one's skin is painted in the skins worker while the rest of them is built
-   (CHARACTERS.md, *Skins painted elsewhere*). In headless Chromium on "high", from opening
+   undergrowth asks for it first); and everyone built at load (the player, anyone else playing,
+   the orc; the tavern's folk are built once it's started: below) is built a step at a time, as
+   they are in play, so that each one's skin is painted in the skins worker while the rest of them
+   is built (CHARACTERS.md, *Skins painted elsewhere*). In headless Chromium on "high", from opening
    `?play` to playing: the page's own work 11.7 to 13.5 s before, 9.7 to 10.4 s now; building the
    world (`Game.build`) 7.4 s of it before, 4.2 to 4.7 s now. A tap walks; a press and hold on the player or an enemy opens the action wheel (flicking down turns it to its other side); a second tap within 350 ms and 60 pixels of the first (going by when
    the taps happened, so a slow frame between them doesn't matter) turns it into a run, as does
@@ -1717,8 +1718,14 @@ A frame draws the town (the blocks of it in view: a draw call or two each), the 
 call) and two characters (a body, garments and hair each, about 35,000 to 45,000 triangles at
 the game's hair detail), and again from the sun for shadows. In the taproom there are nine
 characters (the folk casting no shadows): about 220 draw calls and 630,000 triangles; only the
-characters on the player's map are drawn or animated. Building the eight folk adds about three
-seconds to loading on a desktop computer. Anyone who comes into view while playing (soldiers,
+characters on the player's map are drawn or animated. The tavern's folk aren't built before
+the game starts (they were about three seconds of loading on a desktop computer): only seen
+inside, they're built as any other building's folk are, a step at a time from the start
+(`tavernFolk`), with whatever time's left after any building the player's coming near and only
+while none is (so that its folk's skins aren't kept waiting behind theirs in the skins worker),
+and whatever of them isn't built yet is built at once if the player walks in first. In headless
+Chromium on "high", from opening `?play` to playing: 14.0 to 18.2 s before, 10.9 to 14.3 now.
+Anyone who comes into view while playing (soldiers,
 the folk of a building near, the wild's people-shaped creatures) is built a step at a time
 within the frames' budget (CHARACTERS.md, *Built a step at a time*): the longest step 10 to 40
 ms on a desktop, where each was one piece of 300 to 800 ms. Their skins are painted meanwhile in a
