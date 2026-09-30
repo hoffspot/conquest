@@ -495,6 +495,9 @@ export class Game {
         this.visits = new Map();
         this.visitClock = 0;
 
+        /** Wenches and Ale's folk being dressed from the start, the same way (build), or null. */
+        this.tavernFolk = null;
+
         /** The soldiers the host's brought out, still to be drawn (a few a frame: #visit). */
         this.enlisting = [];
 
@@ -593,7 +596,11 @@ export class Game {
         const folk = world.folk ?? [];
         const outside = Boolean(world.maps?.town?.chunk);
         const chunks = outside ? (2 * REACH.drawn + 1) ** 2 : 0;
-        const steps = world.town.pieces.length + world.trees.length + chunks + 6 + floors.length + folk.length;
+
+        // (Wenches and Ale's folk, seen only inside it, dressed from the start as other buildings'
+        // are as the player comes near, where there are other buildings: a little each frame)
+        const later = Boolean(world.interiors) && floors.length > 0;
+        const steps = world.town.pieces.length + world.trees.length + chunks + 6 + floors.length + (later ? 0 : folk.length);
         let done = 0;
         const step = (label) => onProgress({ label, done: ++done, total: steps });
 
@@ -673,10 +680,25 @@ export class Game {
         // Everyone in the world as the host has them: the player (and anyone else playing), the
         // orc, and the tavern's folk going about their business (no one fights them). Each built a
         // step at a time, as they are in play, so that their skin's painted by the skins worker
-        // (characters/skins.js) while the rest of them is built here, rather than here after it
+        // (characters/skins.js) while the rest of them is built here, rather than here after it.
+        // The tavern's folk, where there are other buildings, are dressed as theirs are, a little
+        // each frame from the start (#visit), and all at once if the player goes straight in
+        // (#ready): only seen inside, they needn't keep the player waiting to start
         let filled = 0;
+        const tavern = later ? world.interiors.of(floors[0].id)?.key : null;
+
+        if (tavern) {
+            const visit = { key: tavern, queue: [], maps: [], folk: [] };
+
+            visit.queue.push(...this.battle.actors.filter(({ kind }) => kind === "folk").map(({ id }) => () => this.#people(visit, id)));
+            this.tavernFolk = visit;
+        }
 
         for (const actor of [...this.battle.actors]) {
+            if (actor.kind === "folk" && tavern) {
+                continue;
+            }
+
             if (actor.kind === "folk") {
                 step(`Filling the tavern (${++filled} of ${folk.length})`);
             } else if (actor.id !== this.me) {
@@ -685,6 +707,9 @@ export class Game {
 
             await time(actor.id === this.me ? "hero" : actor.id, () => allWaiting(this.#dressing(actor)));
         }
+
+        // (Starting in the tavern: its folk there to see from the first)
+        this.#ready(world.interiors?.of(this.battle.actor(this.me).map)?.key);
 
         step("Getting ready to draw");
 
@@ -696,7 +721,7 @@ export class Game {
         this.spellFx.onScreen = (colour, strength, seconds) => this.#wash(colour, strength, seconds);
         this.spellFx.warm();
 
-        for (const actor of this.battle.actors) {
+        for (const actor of this.battle.actors.filter(({ id }) => this.avatars.has(id))) {
             this.#place(actor);
         }
 
@@ -2332,9 +2357,18 @@ export class Game {
         }
 
         const until = performance.now() + VISITS.budget;
+        let busy = false;
 
         for (const visit of this.visits.values()) {
             this.#work(visit, until);
+            busy ||= Boolean(visit.steps || visit.queue.length);
+        }
+
+        // (Then Wenches and Ale's folk, needed only once the player goes in: with any time left,
+        // while no other building's being got ready, so that its folk's skins aren't kept waiting
+        // behind theirs in the skins worker)
+        if (this.tavernFolk && !busy) {
+            this.#work(this.tavernFolk, until);
         }
 
         // The soldiers brought out and the wild's creatures put out, each drawn a step at a time,
@@ -3092,8 +3126,12 @@ export class Game {
     #ready(key) {
         const building = key ? this.world.interiors?.buildings.get(key) : null;
 
-        // (Wenches and Ale's built with the town)
+        // (Wenches and Ale's floors built with the town: any of its folk not dressed yet, now)
         if (!building?.entrance) {
+            if (key && this.tavernFolk?.key === key) {
+                this.#work(this.tavernFolk);
+            }
+
             return;
         }
 
