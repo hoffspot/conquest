@@ -24,10 +24,11 @@ import { allAtOnce } from "../core/steps.js";
 import { material, paintPicture } from "./art/engine/materials.js";
 import { WILDS } from "./art/engine/atlas.js";
 import { holdSign, isSign, letGoSign, releaseSign } from "./art/kits/signs.js";
-import { TREE_WIND, Woodland } from "./art/kits/trees.js";
+import { Woodland } from "./art/kits/trees.js";
 import { featureLooks, featureMesh, Growth, sowing, TILE, undergrowthLooks, undergrowthMesh } from "./art/kits/wilds.js";
 import { disposeChunkGround, disposeGrass, landColours, layingGround } from "./ground.js";
 import { Layouts } from "./layouts.js";
+import { MARGIN, primingWater, waterSheet } from "./water.js";
 import { builderFor } from "./art/peoples/index.js";
 import { BUILDERS, cutAway, joined, partsOf, PIXEL, placed, standOn } from "./town3d.js";
 
@@ -54,10 +55,6 @@ const PLACING = 1;
  * go once it's more than `drop` (past where it's all sunk into the ground: WILDS.fade).
  */
 export const UNDERGROWTH = Object.freeze({ grow: 64, drop: 84 });
-
-// Water: how high over the ground it lies (metres), its colour and how much it shows (the rest
-// the bed under it), and its mask's texels per metre
-const WATER = Object.freeze({ level: 0.03, colour: 0x2d5a6e, shallows: 0x5f8a86, opacity: 0.86, resolution: 1 });
 
 /** Bridges' decks: how high their tops are over the ground (metres: those on them stand there), and how thick. */
 export const DECK = Object.freeze({ top: 0.16, depth: 0.14 });
@@ -665,12 +662,10 @@ export class Chunks {
 // time a river, a bridge or the undergrowth comes into view
 function primer() {
     const group = new THREE.Group();
-    const mask = new THREE.DataTexture(new Uint8Array([255]), 1, 1, THREE.RedFormat);
 
-    mask.needsUpdate = true;
     group.name = "primer";
     group.position.y = -1000;
-    group.add(new THREE.Mesh(new THREE.PlaneGeometry(1, 1), waterMaterial(mask, 0, 0)));
+    group.add(new THREE.Mesh(new THREE.PlaneGeometry(1, 1), primingWater()));
 
     for (const look of ["planks", "planks-dark", "timber"]) {
         group.add(new THREE.Mesh(box(0, 0, 0, 1, 0.1, 1), bridgeMaterial(look)));
@@ -698,67 +693,18 @@ function grownRound(object, piece) {
 
 // --- Water ---
 
-// The water's material, shared by every chunk but for its mask: the water drawn where the mask
-// says (softly at its edges, paler in the shallows), stirred by the wind. The mask covers the
-// squares from (x0, y0), `width` by `height`, and one more all round
-function waterMaterial(mask, x0, y0, [width, height] = [CHUNK, CHUNK]) {
-    const water = new THREE.MeshStandardMaterial({ color: WATER.colour, roughness: 0.12, metalness: 0, transparent: true, depthWrite: false });
-
-    water.name = "water";
-    water.userData.mask = mask;
-    water.userData.own = true;
-    water.onBeforeCompile = (shader) => {
-        Object.assign(shader.uniforms, {
-            waterMask: { value: mask },
-            waterArea: { value: new THREE.Vector4(x0 - 1, y0 - 1, width + 2, height + 2) },
-            waterTime: TREE_WIND.time,
-            shallows: { value: new THREE.Color(WATER.shallows) },
-        });
-        shader.vertexShader = shader.vertexShader
-            .replace("#include <common>", "#include <common>\nvarying vec2 vWater;")
-            .replace("#include <worldpos_vertex>", "#include <worldpos_vertex>\nvWater = (modelMatrix * vec4(transformed, 1.0)).xz;");
-        shader.fragmentShader = shader.fragmentShader
-            .replace("#include <common>", `#include <common>
-varying vec2 vWater;
-uniform sampler2D waterMask;
-uniform vec4 waterArea;
-uniform float waterTime;
-uniform vec3 shallows;`)
-            .replace("#include <map_fragment>", `
-float wet = texture2D(waterMask, (vWater - waterArea.xy) / waterArea.zw).r;
-float deep = smoothstep(0.5, 0.95, wet);
-
-if (wet < 0.45) discard;
-
-diffuseColor.rgb = mix(shallows, diffuseColor.rgb, deep);
-diffuseColor.a = ${WATER.opacity.toFixed(2)} * mix(0.55, 1.0, deep) * smoothstep(0.45, 0.55, wet);`)
-            .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
-{
-    vec2 ripple = vec2(
-        sin(vWater.x * 1.7 + waterTime * 1.3) + 0.6 * sin(vWater.y * 2.9 - waterTime * 1.9 + vWater.x * 0.7),
-        cos(vWater.y * 1.9 + waterTime * 1.1) + 0.6 * cos(vWater.x * 3.1 + waterTime * 1.7 - vWater.y * 0.5)
-    ) * 0.035;
-
-    normal = normalize(normal + (viewMatrix * vec4(ripple.x, 0.0, ripple.y, 0.0)).xyz);
-}`);
-    };
-    water.customProgramCacheKey = () => "water";
-
-    return water;
-}
-
 // A chunk's water: a sheet over it, drawn where there's water (under bridges too), or null
 function waterOf(overworld, chunk) {
     const { x0, y0 } = chunk;
-    const size = CHUNK + 2;
+    const size = CHUNK + 2 * MARGIN;
     const data = new Uint8Array(size * size);
     let any = false;
 
-    // (One square further round, so the edges match the chunks beside it)
+    // (Some squares further round, so its shore meets the chunks' beside it)
     for (let j = 0; j < size; j++) {
         for (let i = 0; i < size; i++) {
-            const [x, y] = [x0 + i - 1, y0 + j - 1];
-            const inside = i > 0 && j > 0 && i <= CHUNK && j <= CHUNK;
+            const [x, y] = [x0 + i - MARGIN, y0 + j - MARGIN];
+            const inside = i >= MARGIN && j >= MARGIN && i < MARGIN + CHUNK && j < MARGIN + CHUNK;
 
             if (x < 0 || y < 0 || x >= CHUNKS * CHUNK || y >= CHUNKS * CHUNK) {
                 continue;
@@ -768,7 +714,7 @@ function waterOf(overworld, chunk) {
             const k = (y - there.y0) * CHUNK + (x - there.x0);
 
             if (there.water[k] !== WET.none) {
-                data[j * size + i] = 255;
+                data[j * size + i] = 1;
                 any ||= inside;
             }
         }
@@ -778,31 +724,7 @@ function waterOf(overworld, chunk) {
         return null;
     }
 
-    return waterSheet(data, [x0, y0, CHUNK, CHUNK]);
-}
-
-// A sheet of water over the squares from (x0, y0), `width` by `height`, drawn where its mask
-// (bytes, one a square and one more all round: 255 for water) says
-function waterSheet(data, [x0, y0, width, height]) {
-    const mask = new THREE.DataTexture(data, width + 2, height + 2, THREE.RedFormat);
-
-    mask.magFilter = THREE.LinearFilter;
-    mask.minFilter = THREE.LinearFilter;
-    mask.flipY = false;
-    mask.unpackAlignment = 1;
-    mask.needsUpdate = true;
-
-    const plane = new THREE.PlaneGeometry(width, height).rotateX(-Math.PI / 2).translate(width / 2, WATER.level, height / 2);
-    const mesh = new THREE.Mesh(plane, waterMaterial(mask, x0, y0, [width, height]));
-
-    mesh.name = "water";
-    mesh.position.set(x0, 0, y0);
-    mesh.receiveShadow = true;
-    mesh.renderOrder = 1;
-    mesh.matrixAutoUpdate = false;
-    mesh.updateMatrix();
-
-    return mesh;
+    return waterSheet(data, [x0, y0, CHUNK, CHUNK], MARGIN);
 }
 
 /**
@@ -820,7 +742,7 @@ export function lagoonOf(water, walks, [ox, oz] = [0, 0]) {
 
     for (let j = 0; j < height; j++) {
         for (let i = 0; i < width; i++) {
-            data[(j + 1) * (width + 2) + i + 1] = water[j][i] ? 255 : 0;
+            data[(j + 1) * (width + 2) + i + 1] = water[j][i] ? 1 : 0;
         }
     }
 
