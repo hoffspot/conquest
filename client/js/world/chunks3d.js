@@ -30,7 +30,7 @@ import { disposeChunkGround, disposeGrass, landColours, layingGround } from "./g
 import { Layouts } from "./layouts.js";
 import { MARGIN, primingWater, waterSheet } from "./water.js";
 import { builderFor } from "./art/peoples/index.js";
-import { BUILDERS, cutAway, joined, partsOf, PIXEL, placed, standOn } from "./town3d.js";
+import { BUILDERS, cutAway, drawFar, joined, partsOf, PIXEL, placed, standOn } from "./town3d.js";
 
 /** How many chunks round the player's are drawn (each way), and how far off they're let go. */
 export const REACH = Object.freeze({ drawn: 2, kept: 3 });
@@ -55,6 +55,13 @@ const PLACING = 1;
  * go once it's more than `drop` (past where it's all sunk into the ground: WILDS.fade).
  */
 export const UNDERGROWTH = Object.freeze({ grow: 64, drop: 84 });
+
+/**
+ * A chunk's buildings are drawn whole while its nearest edge is within this many metres of the
+ * player, and without what's only worth drawing near further off (a timber's sides, a few
+ * centimetres deep: less than a pixel from there, even on a phone).
+ */
+export const DETAIL_NEAR = 40;
 
 /** Bridges' decks: how high their tops are over the ground (metres: those on them stand there), and how thick. */
 export const DECK = Object.freeze({ top: 0.16, depth: 0.14 });
@@ -90,8 +97,10 @@ export class Chunks {
 
         // The chunks drawn, by key: { cx, cy, object, lot (its trees), heights, drawing (while
         // it's still being drawn, hidden), job (its buildings, while they're being built: {
-        // pieces, index, group, waiting, trees, built, parts }), growth (its undergrowth while it's being grown: its
-        // steps), undergrowth (its meshes) }; the steps of the one being drawn; those whose
+        // pieces, index, group, waiting, trees, built, parts }), buildings (once they're built,
+        // merged) and far (whether they're drawn as from far off: #detail), growth (its
+        // undergrowth while it's being grown: its steps), undergrowth (its meshes) }; the steps
+        // of the one being drawn; those whose
         // buildings are being built, in turn; and those whose undergrowth is being grown
         this.drawn = new Map();
         this.drawing = null;
@@ -121,6 +130,7 @@ export class Chunks {
         }
 
         this.#tend(x, z);
+        this.#detail(x, z);
     }
 
     /**
@@ -138,6 +148,8 @@ export class Chunks {
 
         const built = this.#build(until);
         const grown = this.#grow(until);
+
+        this.#detail(x, z);
 
         return built || grown || drew || changed;
     }
@@ -194,6 +206,23 @@ export class Chunks {
 
         // (The nearest first)
         this.growing.sort((a, b) => Math.hypot(a.cx * CHUNK + CHUNK / 2 - x, a.cy * CHUNK + CHUNK / 2 - z) - Math.hypot(b.cx * CHUNK + CHUNK / 2 - x, b.cy * CHUNK + CHUNK / 2 - z));
+    }
+
+    // Each chunk's buildings drawn whole only while it's near the player (DETAIL_NEAR)
+    #detail(x, z) {
+        for (const drawn of this.drawn.values()) {
+            if (!drawn.buildings) {
+                continue;
+            }
+
+            const [x0, z0] = [drawn.cx * CHUNK, drawn.cy * CHUNK];
+            const far = Math.hypot(Math.max(x0 - x, 0, x - (x0 + CHUNK)), Math.max(z0 - z, 0, z - (z0 + CHUNK))) > DETAIL_NEAR;
+
+            if (far !== drawn.far) {
+                drawFar(drawn.buildings, far);
+                drawn.far = far;
+            }
+        }
     }
 
     // Grow what undergrowth can be grown before `until` (performance.now()'s), a step at a time;
@@ -371,6 +400,8 @@ export class Chunks {
         const merged = joined(job.parts);
 
         merged.name = "buildings";
+        drawn.buildings = merged;
+        drawn.far = false;
         drawn.signs = [];
 
         for (const mesh of merged.children) {

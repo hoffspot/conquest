@@ -37,7 +37,7 @@ export function shard(solid, base, way, length, r, { sides = 5, name = "obsidian
     const d = way.map((v) => v / Math.hypot(...way));
     const points = [base, base.map((v, i) => v + d[i] * length * 0.7), base.map((v, i) => v + d[i] * length)];
 
-    solid.tube(points, [r, r * 0.8, 0], material(name), { sides, caps: true });
+    solid.tube(points, [r, r * 0.8, 0], material(name), { sides, caps: true, smooth: false });
 
     if (seam) {
         solid.tube([base.map((v, i) => v + d[i] * length * 0.05), base.map((v, i) => v + d[i] * length * 0.72)].map((p) => [p[0] + r * 0.85, p[1], p[2]]), m(0.03), material(seam), { sides: 3 });
@@ -282,7 +282,7 @@ export function pod(solid, cx, cz, { r = m(2.3), random }) {
     const faces = solid.walls(outline, m(0.3), m(2.8), { 0: [{ u0: side / 2 - m(0.45), u1: side / 2 + m(0.45), v0: 0, v1: m(2.1), depth: m(0.35), back: material("planks-char"), arch: "lancet" }], 3: [{ u0: side / 2 - m(0.1), u1: side / 2 + m(0.1), v0: m(1.4), v1: m(2.3), depth: m(0.3), back: material("glow-violet") }] }, material("stone-black"));
 
     solid.extrude(inset(outline, -m(0.2)), 0, m(0.3), material("stone-black"));
-    solid.lathe(cx, cz, [[r + m(0.45), m(3.1)], [r * 0.4, m(3.1) + r * 2.2], [0, m(3.1) + r * 3.2]], material("slate-violet"), { segments: 6, from: southSide(6), to: southSide(6) + Math.PI * 2 });
+    solid.lathe(cx, cz, [[r + m(0.45), m(3.1)], [r * 0.4, m(3.1) + r * 2.2], [0, m(3.1) + r * 3.2]], material("slate-violet"), { segments: 6, from: southSide(6), to: southSide(6) + Math.PI * 2, smooth: false });
     spike(solid, [cx, m(3.1) + r * 3.15, cz], [0, 1, 0], m(0.8), m(0.06), "iron-black");
     budLamp(solid, wallPoint(faces[0])(side / 2 + m(0.7), m(2.3), m(0.05)), [faces[0].out[0], faces[0].out[2]], { light: random.pick(LIGHTS), crook: "iron-black", sharp: true, reach: m(0.4) });
 }

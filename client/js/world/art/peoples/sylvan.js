@@ -190,7 +190,7 @@ export function spiralStair(solid, cx, cz, r, y0, y1, { from = Math.PI / 2, widt
  * gablets (the dark elves' tent roofs), a finial (a thorn, or a crescent) at its tip.
  */
 export function needleSpire(solid, cx, cz, y, r, height, name, { sides = 8, gablets = true, trim = "iron-black", tip = "spike", glow = null } = {}) {
-    solid.lathe(cx, cz, [[r, y], [r * 0.55, y + height * 0.35], [r * 0.18, y + height * 0.8], [0, y + height]], material(name), { segments: sides, from: Math.PI / sides, to: Math.PI / sides + Math.PI * 2 });
+    solid.lathe(cx, cz, [[r, y], [r * 0.55, y + height * 0.35], [r * 0.18, y + height * 0.8], [0, y + height]], material(name), { segments: sides, from: Math.PI / sides, to: Math.PI / sides + Math.PI * 2, smooth: false });
 
     if (gablets) {
         for (let k = 0; k < sides; k++) {

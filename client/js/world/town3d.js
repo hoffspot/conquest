@@ -338,8 +338,9 @@ export function merge(root, { atlas = false } = {}) {
 /**
  * The meshes under `root` (their world matrices up to date), each baked to its place and made
  * ready to be merged: a part for each material group, drawn into the art's one material if it can
- * be, with `atlas`. [{ key, material, geometry }], for `joined` (merge's first half, so that the
- * parts of what's built a piece at a time can be made a piece at a time: chunks3d.js).
+ * be, with `atlas`. [{ key, material, geometry, near (only worth drawing near: Solid's) }], for
+ * `joined` (merge's first half, so that the parts of what's built a piece at a time can be made a
+ * piece at a time: chunks3d.js).
  */
 export function partsOf(root, { atlas = false } = {}) {
     const parts = [];
@@ -377,38 +378,50 @@ export function partsOf(root, { atlas = false } = {}) {
                 geometry.setAttribute("uv", new THREE.Float32BufferAttribute(new Float32Array(geometry.attributes.position.count * 2), 2));
             }
 
-            parts.push({ key, material, geometry });
+            parts.push({ key, material, geometry, near: Boolean(node.userData.near) });
         }
     });
 
     return parts;
 }
 
-/** Parts (partsOf's, in order) merged: one mesh per material (merge's second half). */
+/**
+ * Parts (partsOf's, in order) merged: one mesh per material (merge's second half). What's only
+ * worth drawing near comes last in each, after as many corners as its userData.far says: draw
+ * only that many from further off (drawFar).
+ */
 export function joined(parts) {
     const groups = new Map();
 
-    for (const { key, material, geometry } of parts) {
+    for (const { key, material, geometry, near } of parts) {
         if (!groups.has(key)) {
-            groups.set(key, { material, geometries: [] });
+            groups.set(key, { material, geometries: [], near: [] });
         }
 
-        groups.get(key).geometries.push(geometry);
+        groups.get(key)[near ? "near" : "geometries"].push(geometry);
     }
 
     const result = new THREE.Group();
 
-    for (const { material, geometries } of groups.values()) {
-        const mesh = new THREE.Mesh(mergeGeometries(geometries), material);
+    for (const { material, geometries, near } of groups.values()) {
+        const mesh = new THREE.Mesh(mergeGeometries([...geometries, ...near]), material);
 
         mesh.name = material.name || "part";
         mesh.castShadow = true;
         mesh.receiveShadow = true;
         mesh.matrixAutoUpdate = false;
+        mesh.userData.far = geometries.reduce((count, geometry) => count + geometry.attributes.position.count, 0);
         result.add(mesh);
     }
 
     return result;
+}
+
+/** Draw a merge's meshes (joined's) whole, or (`far`) without what's only worth drawing near. */
+export function drawFar(merged, far) {
+    for (const mesh of merged.children) {
+        mesh.geometry.setDrawRange(0, far ? mesh.userData.far : Infinity);
+    }
 }
 
 // The triangles of one material group of a (non-indexed copy of a) geometry. Groups count

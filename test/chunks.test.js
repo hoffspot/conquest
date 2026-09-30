@@ -24,7 +24,7 @@ const context = () =>
 globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContext: context }) };
 
 const { buildWorld, CHUNK } = await import("../client/js/core/overworld.js");
-const { Chunks, REACH } = await import("../client/js/world/chunks3d.js");
+const { Chunks, DETAIL_NEAR, REACH } = await import("../client/js/world/chunks3d.js");
 const { BUILDERS, merge, PIXEL, placed } = await import("../client/js/world/town3d.js");
 const { builderFor } = await import("../client/js/world/art/peoples/index.js");
 const THREE = await import("three");
@@ -148,6 +148,21 @@ describe("the world outside, drawn round the player (chunks3d.js)", () => {
         const arrays = (meshes) => meshes.map(({ material, geometry }) => [material.name, ...Object.entries(geometry.attributes).map(([name, { array }]) => `${name}:${[...array].join()}`)].join("|"));
 
         assert.deepEqual(arrays(drawn.object.getObjectByName("buildings").children), arrays(merge(group, { atlas: true }).children));
+
+        // Drawn whole while the player's near, and from further off without what's only worth
+        // drawing near (a timber's sides): those corners last, left undrawn (DETAIL_NEAR)
+        const atlas = drawn.object.getObjectByName("buildings").children.find(({ material }) => material.name === "atlas");
+        const corners = atlas.geometry.attributes.position.count;
+        const drawing = () => Math.min(atlas.geometry.drawRange.count, corners);
+
+        assert.equal(drawing(), corners);
+        assert.ok(atlas.userData.far > corners * 0.4 && atlas.userData.far < corners * 0.9, `${atlas.userData.far} of ${corners}`);
+
+        chunks.update(x + DETAIL_NEAR + CHUNK, z, { budget: 0 });
+        assert.equal(drawing(), atlas.userData.far);
+
+        chunks.update(x, z, { budget: 0 });
+        assert.equal(drawing(), corners);
         chunks.dispose();
     });
 

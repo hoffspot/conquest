@@ -133,7 +133,8 @@ export function spaced(outline, every, { open = false, margin = 0, offset = 0.5 
 
 /**
  * A pole or a log from `from` to `to` ([x, y, z]), `r` thick at its foot (and `top` at its
- * head), `sides` sided: posts, stilts, poles, rafters, stakes.
+ * head), `sides` sided: posts, stilts, poles, rafters, stakes. Capped at both ends, or as
+ * `caps` says (Solid.tube's).
  */
 export function pole(solid, from, to, r, name, { top = r, sides = 6, caps = true } = {}) {
     solid.tube([from, to], [r, top], material(name), { sides, caps });
@@ -141,9 +142,12 @@ export function pole(solid, from, to, r, name, { top = r, sides = 6, caps = true
     return solid;
 }
 
-/** An upright post standing on (x, y, z), `height` tall, leaning `lean` ([dx, dz] at its top). */
+/**
+ * An upright post standing on (x, y, z), `height` tall, leaning `lean` ([dx, dz] at its top). (Its
+ * top capped, not its foot: that's on what it stands on.)
+ */
 export function post(solid, x, y, z, height, r, name, { lean = [0, 0], sides = 6, top = r } = {}) {
-    return pole(solid, [x, y, z], [x + lean[0], y + height, z + lean[1]], r, name, { sides, top });
+    return pole(solid, [x, y, z], [x + lean[0], y + height, z + lean[1]], r, name, { sides, top, caps: "end" });
 }
 
 /** A spike (or a tusk, a horn, a thorn) from `at` pointing `way` ([x, y, z]), `length` long. */
@@ -443,7 +447,7 @@ export function band(solid, points, y0, y1, thickness, name, { closed = true, le
 export function pinnacle(solid, x, y, z, width, height, name, { sides = 4, phase = Math.PI / 4, tip = 0 } = {}) {
     const r = width / 2 / (sides === 4 ? Math.SQRT1_2 : 1);
 
-    solid.lathe(x, z, [[r, y], [tip, y + height]], material(name), { segments: sides, from: phase, to: phase + Math.PI * 2 });
+    solid.lathe(x, z, [[r, y], [tip, y + height]], material(name), { segments: sides, from: phase, to: phase + Math.PI * 2, smooth: false });
 
     return solid;
 }
@@ -462,15 +466,24 @@ export function weathering({ seed, eaves = [], washes = [], tint = [1, 1, 1], di
 
         return t * t * (3 - 2 * t);
     };
+    // (Where it turns up a wall, for walls to be cut there: Solid's tone bands. The shade under
+    // the eaves stops just over them, so a gable's foot isn't shaded all the way up the gable)
+    const bands = [m(1.2), ...eaves.flatMap((level) => [level - m(0.9), level + m(0.02)])];
 
-    return (point, normal, own) => {
+    return Object.assign((point, normal, own) => {
         if (own.userData?.glow !== undefined) {
             return null;
         }
 
-        const [x, y, z] = point;
+        // (Worked out for every corner of everything built: numbers, not lists taken apart)
+        const x = point[0];
+        const y = point[1];
+        const z = point[2];
         const upward = normal[1];
-        let [r, g, b] = washed.has(own.name) ? tint : [1, 1, 1];
+        const washes = washed.has(own.name);
+        let r = washes ? tint[0] : 1;
+        let g = washes ? tint[1] : 1;
+        let b = washes ? tint[2] : 1;
         let k = 1;
 
         if (Math.abs(upward) < 0.45) {
@@ -488,12 +501,14 @@ export function weathering({ seed, eaves = [], washes = [], tint = [1, 1, 1], di
         } else if (mottled.has(own.name)) {
             const spots = noise(x, z, seed + 7, m(2), 2);
 
-            [r, g, b] = [r * (1 - spots * 0.12), g * (1 - spots * 0.06), b * (1 - spots * 0.16)];
+            r *= 1 - spots * 0.12;
+            g *= 1 - spots * 0.06;
+            b *= 1 - spots * 0.16;
             k *= 0.9 + 0.12 * noise(x, z, seed + 3, m(1.2), 2);
         }
 
         return [r * k, g * k, b * k];
-    };
+    }, { bands });
 }
 
 /** A wall's face as Solid.wall takes it, for a side of a box x0..x1 by z0..z1 standing on y. */

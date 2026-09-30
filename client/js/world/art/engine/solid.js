@@ -16,7 +16,9 @@ import * as THREE from "three";
 // and z, faces facing north or south use x and y, faces facing east or west use z and y. Each
 // corner's, for a face's corners
 function boxUVs(points, normal) {
-    const [nx, ny, nz] = [Math.abs(normal[0]), Math.abs(normal[1]), Math.abs(normal[2])];
+    const nx = Math.abs(normal[0]);
+    const ny = Math.abs(normal[1]);
+    const nz = Math.abs(normal[2]);
 
     if (ny >= nx && ny >= nz) {
         return points.map((point) => [point[0], -point[2]]);
@@ -64,6 +66,113 @@ function lay(group, point, normal, uv, colour) {
 }
 
 const WHITE = Object.freeze([1, 1, 1]);
+
+// The heights a tone's colour turns at (its `bands`, where it gives them: where the dirt splashed
+// up a wall fades out, where the shade under the eaves begins) across a face (its corners'),
+// lowest first, or null for none. An upright face is cut level there (Solid.face): its colour
+// is worked out only at its corners and blended between them, so a face from the foot of a wall
+// to its eaves would blend the dirt and the shade into one grey
+function turnsAcross(tone, points) {
+    const bands = typeof tone === "function" ? tone.bands : null;
+
+    if (!bands) {
+        return null;
+    }
+
+    let low = Infinity;
+    let high = -Infinity;
+
+    for (const point of points) {
+        low = point[1] < low ? point[1] : low;
+        high = point[1] > high ? point[1] : high;
+    }
+
+    // (Most faces have none: nothing made for them unless they do)
+    let turns = null;
+
+    for (const y of bands) {
+        if (y > low + 1e-6 && y < high - 1e-6) {
+            (turns ??= []).push(y);
+        }
+    }
+
+    return turns && turns.sort((a, b) => a - b);
+}
+
+// A convex face (its corners in order, each { point, uv, normal }) cut by the level plane at
+// height y: the part below and the part above, each in order (a corner on the plane in both)
+function cutAt(corners, y) {
+    const [below, above] = [[], []];
+
+    corners.forEach((a, k) => {
+        const b = corners[(k + 1) % corners.length];
+        const ya = a.point[1];
+        const yb = b.point[1];
+
+        if (Math.abs(ya - y) < 1e-6) {
+            below.push(a);
+            above.push(a);
+        } else {
+            (ya < y ? below : above).push(a);
+        }
+
+        if ((ya < y - 1e-6 && yb > y + 1e-6) || (ya > y + 1e-6 && yb < y - 1e-6)) {
+            const t = (y - ya) / (yb - ya);
+            const between = (p, q) => p.map((value, i) => value + (q[i] - value) * t);
+            const crossing = { point: between(a.point, b.point), uv: between(a.uv, b.uv), normal: a.normal && unit(between(a.normal, b.normal)) };
+
+            below.push(crossing);
+            above.push(crossing);
+        }
+    });
+
+    return [below, above];
+}
+
+// How wide an upright face (facing `normal`) is, level across it
+function widthOf(points, normal) {
+    const long = Math.hypot(normal[0], normal[2]) || 1;
+    let low = Infinity;
+    let high = -Infinity;
+
+    for (const point of points) {
+        const span = (point[0] * normal[2] - point[2] * normal[0]) / long;
+
+        low = span < low ? span : low;
+        high = span > high ? span : high;
+    }
+
+    return high - low;
+}
+
+// Upright faces narrower than this (world pixels: half a metre) aren't cut where their tone's
+// colour turns: a timber, a quoin, a sill. They're narrow and mostly dark, so the blend of their
+// colour hardly shows, and there are many of them
+const CUT_WIDER = 2.5;
+
+// How far proud of its surface a timber, a band or a strap may stand (world pixels: 10 cm) and its
+// sides and ends still be drawn only near (Solid.member)
+const NEAR_DEPTH = 0.5;
+
+// Where something round is shaded smoothly across its faces (Solid's lathe, tube and loft), how
+// sharply two faces may meet and still be shaded as one surface (40°): sharper is an edge (a
+// hut's eaves, a dome's foot on its drum)
+const CREASE = Math.cos((40 * Math.PI) / 180);
+
+// The way between two directions that meet at less than the crease, or `own` if they don't
+function softened(own, other) {
+    return other && dot(own, other) > CREASE ? unit(add3(own, other)) : own;
+}
+
+// Whether a face's corners (in order, facing `normal`) turn the same way at every corner
+function convex(points, normal) {
+    return points.every((point, k) => {
+        const next = points[(k + 1) % points.length];
+        const after = points[(k + 2) % points.length];
+
+        return dot(cross(sub(next, point), sub(after, next)), normal) > -1e-6;
+    });
+}
 
 // The height of an outline ([[u, v]...], along a wall) over a point along it
 function outlineAt(line, u) {
@@ -195,17 +304,26 @@ export function inset(outline, distance) {
 
 // (Worked out with numbers, not arrays: it's done for every face)
 function normalOf(a, b, c) {
-    const [ux, uy, uz] = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
-    const [vx, vy, vz] = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-    const [nx, ny, nz] = [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx];
+    const ux = b[0] - a[0];
+    const uy = b[1] - a[1];
+    const uz = b[2] - a[2];
+    const vx = c[0] - a[0];
+    const vy = c[1] - a[1];
+    const vz = c[2] - a[2];
+    const nx = uy * vz - uz * vy;
+    const ny = uz * vx - ux * vz;
+    const nz = ux * vy - uy * vx;
     const length = Math.hypot(nx, ny, nz) || 1;
 
     return [nx / length, ny / length, nz / length];
 }
 
 export class Solid {
-    // Triangles for each material: { positions, normals, uvs, colours }
+    // Triangles for each material: { positions, normals, uvs, colours }; and those only worth
+    // drawing near (a timber's sides, a few centimetres deep: toObject's meshes marked `near`)
     #groups = new Map();
+    #nearGroups = new Map();
+    #nearOnly = false;
     // Ready-made meshes added whole (cylinders and cones)
     #meshes = [];
 
@@ -216,18 +334,29 @@ export class Solid {
     tone = null;
 
     #group(material) {
-        if (!this.#groups.has(material)) {
-            this.#groups.set(material, { positions: new Floats(), normals: new Floats(), uvs: new Floats(), colours: new Floats() });
+        const groups = this.#nearOnly ? this.#nearGroups : this.#groups;
+
+        if (!groups.has(material)) {
+            groups.set(material, { positions: new Floats(), normals: new Floats(), uvs: new Floats(), colours: new Floats() });
         }
 
-        return this.#groups.get(material);
+        return groups.get(material);
+    }
+
+    // The faces `build` lays kept apart as only worth drawing near, if `when`
+    #near(when, build) {
+        const was = this.#nearOnly;
+
+        this.#nearOnly = this.#nearOnly || when;
+        build();
+        this.#nearOnly = was;
     }
 
     /** How many triangles there are so far. */
     get triangles() {
         let count = 0;
 
-        for (const { positions } of this.#groups.values()) {
+        for (const { positions } of [...this.#groups.values(), ...this.#nearGroups.values()]) {
             count += positions.length / 9;
         }
 
@@ -251,37 +380,75 @@ export class Solid {
     /**
      * A flat face with 3 or more corners, listed anticlockwise as seen from outside. `uvs` gives
      * each corner's texture position (in world pixels) instead of the default mapping; `tone` a
-     * colour for all its corners (or a function, as the solid's), instead of the solid's.
+     * colour for all its corners (or a function, as the solid's), instead of the solid's;
+     * `normals` each corner's own normal (a part of something round, shaded smoothly across its
+     * faces), instead of the face's.
      */
-    face(points, material, uvs, tone = this.tone) {
+    face(points, material, uvs, tone = this.tone, normals = null) {
         const normal = normalOf(points[0], points[1], points[2]);
-        const group = this.#group(material);
-        // (Each corner's texture position and colour worked out once, for all its triangles)
         const across = uvs ?? boxUVs(points, normal);
-        const colours = typeof tone === "function" ? points.map((point) => tone(point, normal, material) ?? WHITE) : null;
-        const colour = (index) => colours?.[index] ?? tone ?? WHITE;
+        const turns = Math.abs(normal[1]) < 0.45 ? turnsAcross(tone, points) : null;
 
-        for (let i = 1; i < points.length - 1; i++) {
-            lay(group, points[0], normal, across[0], colour(0));
-            lay(group, points[i], normal, across[i], colour(i));
-            lay(group, points[i + 1], normal, across[i + 1], colour(i + 1));
+        if (!turns || widthOf(points, normal) < CUT_WIDER) {
+            this.#lay(points, across, normal, material, tone, normals);
+
+            return this;
+        }
+
+        // An upright face its tone's colour turns across: cut level at each turn, each piece
+        // coloured at its own corners (a face that isn't convex cut a triangle at a time)
+        const corners = points.map((point, k) => ({ point, uv: across[k], normal: normals?.[k] }));
+        const pieces = convex(points, normal) ? [corners] : corners.slice(1, -1).map((corner, k) => [corners[0], corner, corners[k + 2]]);
+        const lay = (piece) => this.#lay(piece.map(({ point }) => point), piece.map(({ uv }) => uv), normal, material, tone, normals && piece.map(({ normal: own }) => own));
+
+        for (let rest of pieces) {
+            for (const y of turns) {
+                const [below, above] = cutAt(rest, y);
+
+                if (below.length >= 3) {
+                    lay(below);
+                }
+
+                rest = above;
+            }
+
+            if (rest.length >= 3) {
+                lay(rest);
+            }
         }
 
         return this;
     }
 
+    // A flat face's triangles onto its material's lists: a fan from its first corner, each corner
+    // with its own normal (if given: the face's otherwise) and coloured by the tone there
+    #lay(points, across, normal, material, tone, normals) {
+        const group = this.#group(material);
+        const normalAt = (index) => normals?.[index] ?? normal;
+        // (Each corner's colour worked out once, for all its triangles)
+        const colours = typeof tone === "function" ? points.map((point, k) => tone(point, normalAt(k), material) ?? WHITE) : null;
+        const colour = (index) => colours?.[index] ?? tone ?? WHITE;
+
+        for (let i = 1; i < points.length - 1; i++) {
+            lay(group, points[0], normalAt(0), across[0], colour(0));
+            lay(group, points[i], normalAt(i), across[i], colour(i));
+            lay(group, points[i + 1], normalAt(i + 1), across[i + 1], colour(i + 1));
+        }
+    }
+
     /**
      * A flat face whose corners may be listed either way round: turned to face `out` (a
-     * direction). For faces worked out from directions rather than laid out by hand.
+     * direction). For faces worked out from directions rather than laid out by hand. (`normals`,
+     * if given, as the face's corners are listed.)
      */
-    facing(points, out, material, uvs, tone = this.tone) {
+    facing(points, out, material, uvs, tone = this.tone, normals = null) {
         const normal = normalOf(points[0], points[1], points[2]);
 
         if (dot(normal, out) < 0) {
-            return this.face([...points].reverse(), material, uvs && [...uvs].reverse(), tone);
+            return this.face([...points].reverse(), material, uvs && [...uvs].reverse(), tone, normals && [...normals].reverse());
         }
 
-        return this.face(points, material, uvs, tone);
+        return this.face(points, material, uvs, tone, normals);
     }
 
     /**
@@ -306,13 +473,18 @@ export class Solid {
         const uvs = (w) => [[0, 0], [length, 0], [length, w], [0, w]];
 
         this.facing([a0o, b0o, b1o, a1o], out, material, uvs(width), tone);
-        this.facing([a0, b0, b0o, a0o], times(side, -1), material, uvs(depth), tone);
-        this.facing([a1, b1, b1o, a1o], side, material, uvs(depth), tone);
 
-        if (ends) {
-            this.facing([a0, a1, a1o, a0o], times(d, -1), material, [[0, 0], [width, 0], [width, depth], [0, depth]], tone);
-            this.facing([b0, b1, b1o, b0o], d, material, [[0, 0], [width, 0], [width, depth], [0, depth]], tone);
-        }
+        // (Its sides and ends only worth drawing near, if it stands only a little proud: from
+        // further off they're too thin to see, and the surface is behind them)
+        this.#near(depth <= NEAR_DEPTH, () => {
+            this.facing([a0, b0, b0o, a0o], times(side, -1), material, uvs(depth), tone);
+            this.facing([a1, b1, b1o, a1o], side, material, uvs(depth), tone);
+
+            if (ends) {
+                this.facing([a0, a1, a1o, a0o], times(d, -1), material, [[0, 0], [width, 0], [width, depth], [0, depth]], tone);
+                this.facing([b0, b1, b1o, b0o], d, material, [[0, 0], [width, 0], [width, depth], [0, depth]], tone);
+            }
+        });
 
         return this;
     }
@@ -606,10 +778,37 @@ export class Solid {
      * in `segments` steps. Domes, beehive huts, thatch that swells and curls in at its crown,
      * granaries, onion and pointed domes, a leaf's curve; a radius of 0 closes it to a point.
      * Its texture runs round it (world pixels, at each ring's own radius) and up the outline.
+     * It's shaded smoothly round and up it (where its outline doesn't turn sharply), as the round
+     * thing it is, unless `smooth` is false: a pyramid, a spire of so many sides.
      */
-    lathe(cx, cz, profile, material, { segments = 16, from = 0, to = Math.PI * 2, tone = this.tone } = {}) {
+    lathe(cx, cz, profile, material, { segments = 16, from = 0, to = Math.PI * 2, tone = this.tone, smooth = true } = {}) {
         const step = (to - from) / segments;
-        const point = ([r, y], a) => [cx + r * Math.cos(a), y, cz + r * Math.sin(a)];
+        // (Each step round's way out, [cos, sin], and each halfway between; each point of the
+        // outline's ring of corners, worked out once for all the faces they're corners of)
+        const round = Array.from({ length: segments + 1 }, (_, i) => [Math.cos(from + i * step), Math.sin(from + i * step)]);
+        const halfway = Array.from({ length: segments }, (_, i) => [Math.cos(from + (i + 0.5) * step), Math.sin(from + (i + 0.5) * step)]);
+        const rings = profile.map(([r, y]) => round.map(([c, s]) => [cx + r * c, y, cz + r * s]));
+        // (Each line of the outline's own way out, [across from the axis, up, 0]; and at each end
+        // of it, unless the outline turns sharply there, the way between it and the next line's)
+        const lines = profile.slice(0, -1).map(([r, y], k) => {
+            const [dr, dy] = [profile[k + 1][0] - r, profile[k + 1][1] - y];
+
+            return Math.hypot(dr, dy) < 1e-6 ? null : unit([dy, -dr, 0]);
+        });
+        const beside = (k, way) => lines.slice(way < 0 ? 0 : k + 1, way < 0 ? k : undefined).filter(Boolean).at(way < 0 ? -1 : 0);
+        const around = ([across, up], [c, s]) => [c * across, up, s * across];
+        // (Smooth: each line's corners' normals round its lower end and its upper, and at each
+        // halfway for a ring closed to a point, shaded as the middle of each face that comes to it)
+        const shading = smooth && lines.map((own, k) => {
+            if (!own) {
+                return null;
+            }
+
+            const [lower, upper] = [softened(own, beside(k, -1)), softened(own, beside(k, 1))];
+            const [low, high] = [profile[k][0] < 1e-6 ? halfway : round, profile[k + 1][0] < 1e-6 ? halfway : round];
+
+            return [low.map((way) => around(lower, way)), high.map((way) => around(upper, way))];
+        });
         let up = 0;
 
         for (let k = 0; k < profile.length - 1; k++) {
@@ -621,17 +820,21 @@ export class Solid {
                 continue;
             }
 
+            // (A ring closed to a point, at the foot or the top, makes each face a triangle)
+            const keep = lower[0] < 1e-6 ? [0, 2, 3] : upper[0] < 1e-6 ? [0, 1, 2] : [0, 1, 2, 3];
+
             for (let i = 0; i < segments; i++) {
                 const [a0, a1] = [from + i * step, from + (i + 1) * step];
-                const middle = (a0 + a1) / 2;
                 // (Outwards from the axis as far as the outline leans out, up as far as it leans in)
-                const out = [Math.cos(middle) * dy, -dr, Math.sin(middle) * dy];
-                const corners = [point(lower, a0), point(lower, a1), point(upper, a1), point(upper, a0)];
+                const out = [halfway[i][0] * dy, -dr, halfway[i][1] * dy];
+                const corners = [rings[k][i], rings[k][i + 1], rings[k + 1][i + 1], rings[k + 1][i]];
                 const uvs = [[lower[0] * a0, up], [lower[0] * a1, up], [upper[0] * a1, up + slope], [upper[0] * a0, up + slope]];
-                // (A ring closed to a point, at the foot or the top, is a triangle)
-                const keep = lower[0] < 1e-6 ? [0, 2, 3] : upper[0] < 1e-6 ? [0, 1, 2] : [0, 1, 2, 3];
+                // (Each corner's normal; where a ring closes to a point, the one corner kept there
+                // shaded as the middle of the face)
+                const [below, above] = shading ? shading[k] : [];
+                const normals = shading && [below[i], below[i + 1], above[upper[0] < 1e-6 ? i : i + 1], above[i]];
 
-                this.facing(keep.map((j) => corners[j]), out, material, keep.map((j) => uvs[j]), tone);
+                this.facing(keep.map((j) => corners[j]), out, material, keep.map((j) => uvs[j]), tone, normals && keep.map((j) => normals[j]));
             }
 
             up += slope;
@@ -688,9 +891,10 @@ export class Solid {
      * or a saddle, a hide hall's hull, a petal, a spire that twists. `closed` joins each ring's
      * last point to its first; each face faces away from the middle of the two rings it joins
      * (or `out`: a direction, or a function of a face's middle giving one). Its texture runs
-     * round the rings and from each ring to the next.
+     * round the rings and from each ring to the next. It's shaded smoothly where its faces meet
+     * at less than a sharp angle, unless `smooth` is false.
      */
-    loft(rings, material, { closed = true, out = null, tone = this.tone } = {}) {
+    loft(rings, material, { closed = true, out = null, tone = this.tone, smooth = true } = {}) {
         const count = rings[0].length;
         const middleOf = (points) => times(points.reduce(add3, [0, 0, 0]), 1 / points.length);
         const around = rings.map((ring) => ring.map((_, i) => (i === 0 ? 0 : null)));
@@ -710,11 +914,13 @@ export class Solid {
             }
         }
 
-        for (let k = 0; k < rings.length - 1; k++) {
-            const [a, b] = [rings[k], rings[k + 1]];
+        // Each face: its corners (a triangle where a ring closes to a point), their texture
+        // positions, the way it faces, and its normal that way; null where there's none
+        const faces = rings.slice(0, -1).map((a, k) => {
+            const b = rings[k + 1];
             const centre = middleOf([...a, ...b]);
 
-            for (let i = 0; i < (closed ? count : count - 1); i++) {
+            return Array.from({ length: closed ? count : count - 1 }, (_, i) => {
                 const j = (i + 1) % count;
                 const [aj, bj] = [j === 0 ? around[k][count - 1] + Math.hypot(...sub(a[0], a[count - 1])) : around[k][j], j === 0 ? around[k + 1][count - 1] + Math.hypot(...sub(b[0], b[count - 1])) : around[k + 1][j]];
                 const corners = [a[i], a[j], b[j], b[i]];
@@ -723,13 +929,32 @@ export class Solid {
                 const keep = [0, 1, 2, 3].filter((n, m, all) => Math.hypot(...sub(corners[n], corners[all[(m + 1) % 4]])) > 1e-6);
 
                 if (keep.length < 3) {
-                    continue;
+                    return null;
                 }
 
                 const middle = middleOf(keep.map((n) => corners[n]));
                 const way = typeof out === "function" ? out(middle) : out ?? sub(middle, centre);
+                const normal = normalOf(...keep.slice(0, 3).map((n) => corners[n]));
 
-                this.facing(keep.map((n) => corners[n]), way, material, keep.map((n) => uvs[n]), tone);
+                return { keep, corners, uvs, way, normal: dot(normal, way) < 0 ? times(normal, -1) : normal };
+            });
+        });
+        // (Shaded smoothly: at the corner where ring k meets point i, the way between the faces
+        // round it that meet `own` at less than the crease)
+        const faceAt = (k, i) => faces[k]?.[closed ? (i + count) % count : i] ?? null;
+        const cornerNormal = (k, i, own) => unit([faceAt(k - 1, i - 1), faceAt(k - 1, i), faceAt(k, i - 1), faceAt(k, i)].reduce((sum, face) => (face && dot(face.normal, own) > CREASE ? add3(sum, face.normal) : sum), [0, 0, 0]));
+
+        for (const [k, row] of faces.entries()) {
+            for (const [i, face] of row.entries()) {
+                if (!face) {
+                    continue;
+                }
+
+                const { keep, corners, uvs, way, normal } = face;
+                const at = [[k, i], [k, i + 1], [k + 1, i + 1], [k + 1, i]];
+                const normals = smooth ? keep.map((n) => cornerNormal(at[n][0], at[n][1], normal)) : null;
+
+                this.facing(keep.map((n) => corners[n]), way, material, keep.map((n) => uvs[n]), tone, normals);
             }
         }
 
@@ -740,12 +965,19 @@ export class Solid {
      * A round rod along a path (`points`: [x, y, z]...), `radius` thick (a number, or one for
      * each point: 0 for a point), `sides` sided: a curving rib, a root, a tusk or a horn, a
      * spike, a rope, a reed bundle bent into an arch. Its rings turn as little as they can as it
-     * bends. Its ends are left open unless `caps`.
+     * bends. Its ends are left open unless `caps` (true, or "end" for its last end only: its first
+     * let into something). It's shaded smoothly round, as the round thing it is, unless `smooth`
+     * is false: a shard, a crystal, a prism.
      */
-    tube(points, radius, material, { sides = 6, caps = false, tone = this.tone } = {}) {
+    tube(points, radius, material, { sides = 6, caps = false, tone = this.tone, smooth = true } = {}) {
         const radii = points.map((_, i) => (Array.isArray(radius) ? radius[i] : radius));
-        const tangents = points.map((p, i) => unit(sub(points[Math.min(points.length - 1, i + 1)], points[Math.max(0, i - 1)])));
+        const last = points.length - 1;
+        const tangents = points.map((p, i) => unit(sub(points[Math.min(last, i + 1)], points[Math.max(0, i - 1)])));
         let normal = unit(cross(tangents[0], Math.abs(tangents[0][1]) > 0.9 ? [1, 0, 0] : [0, 1, 0]));
+        // (Each step round's [cos, sin], and each halfway to the next)
+        const round = Array.from({ length: 2 * sides }, (_, h) => [Math.cos((h * Math.PI) / sides), Math.sin((h * Math.PI) / sides)]);
+        // (Each ring's way out from the path at no angle round it, and at a quarter turn round)
+        const frames = [];
         const rings = points.map((p, i) => {
             // (Carried along the path: turned only as far as the path turns)
             if (i > 0) {
@@ -753,11 +985,35 @@ export class Solid {
             }
 
             const binormal = cross(tangents[i], normal);
+            const r = radii[i];
+
+            frames.push([normal, binormal]);
 
             return Array.from({ length: sides }, (_, k) => {
-                const angle = (k * Math.PI * 2) / sides;
+                const way = round[2 * k];
 
-                return add3(p, add3(times(normal, Math.cos(angle) * radii[i]), times(binormal, Math.sin(angle) * radii[i])));
+                return [p[0] + (normal[0] * way[0] + binormal[0] * way[1]) * r, p[1] + (normal[1] * way[0] + binormal[1] * way[1]) * r, p[2] + (normal[2] * way[0] + binormal[2] * way[1]) * r];
+            });
+        });
+        // (Shaded smoothly: straight out from the path at each corner of each ring, tipped along
+        // the path as far as the rod narrows there; half a side further round, too, for a ring
+        // closed to a point, shaded as the middle of each face that comes to it)
+        const outs = smooth && rings.map((_, i) => {
+            const [before, after] = [Math.max(0, i - 1), Math.min(last, i + 1)];
+            const along = Math.hypot(...sub(points[after], points[before]));
+            const narrowing = along > 1e-9 ? (radii[after] - radii[before]) / along : 0;
+            const [ahead, aside] = frames[i];
+            const back = times(tangents[i], narrowing);
+            const shift = radii[i] > 1e-6 ? 0 : 1;
+
+            return Array.from({ length: sides + 1 }, (__, k) => {
+                const way = round[(2 * k + shift) % (2 * sides)];
+                const x = ahead[0] * way[0] + aside[0] * way[1] - back[0];
+                const y = ahead[1] * way[0] + aside[1] * way[1] - back[1];
+                const z = ahead[2] * way[0] + aside[2] * way[1] - back[2];
+                const length = Math.hypot(x, y, z) || 1;
+
+                return [x / length, y / length, z / length];
             });
         });
 
@@ -772,14 +1028,17 @@ export class Solid {
                 if (keep.length >= 3) {
                     const middle = times(keep.map((n) => corners[n]).reduce(add3, [0, 0, 0]), 1 / keep.length);
                     const centre = times(add3(...axis), 0.5);
+                    // (A ring closed to a point: the corner kept there shaded as this face's middle)
+                    const at = (ring, own) => outs[ring][radii[ring] > 1e-6 ? own : i];
+                    const normals = smooth && [at(k, i), at(k, i + 1), at(k + 1, i + 1), at(k + 1, i)];
 
-                    this.facing(keep.map((n) => corners[n]), sub(middle, centre), material, undefined, tone);
+                    this.facing(keep.map((n) => corners[n]), sub(middle, centre), material, undefined, tone, normals && keep.map((n) => normals[n]));
                 }
             }
         }
 
         if (caps) {
-            for (const [k, sign] of [[0, -1], [rings.length - 1, 1]]) {
+            for (const [k, sign] of caps === "end" ? [[rings.length - 1, 1]] : [[0, -1], [rings.length - 1, 1]]) {
                 if (radii[k] > 1e-6) {
                     this.facing(rings[k], times(tangents[k], sign), material, undefined, tone);
                 }
@@ -834,18 +1093,25 @@ export class Solid {
         return this;
     }
 
-    /** The shape as a Three.js group of meshes (materials are Three.js materials). */
+    /**
+     * The shape as a Three.js group of meshes (materials are Three.js materials), those only
+     * worth drawing near marked so (userData.near: merged last, town3d.js joined).
+     */
     toObject() {
         const group = new THREE.Group();
 
-        for (const [material, { positions, normals, uvs, colours }] of this.#groups) {
-            const geometry = new THREE.BufferGeometry();
+        for (const [groups, near] of [[this.#groups, false], [this.#nearGroups, true]]) {
+            for (const [material, { positions, normals, uvs, colours }] of groups) {
+                const geometry = new THREE.BufferGeometry();
+                const mesh = new THREE.Mesh(geometry, material);
 
-            geometry.setAttribute("position", new THREE.BufferAttribute(positions.numbers, 3));
-            geometry.setAttribute("normal", new THREE.BufferAttribute(normals.numbers, 3));
-            geometry.setAttribute("uv", new THREE.BufferAttribute(uvs.numbers, 2));
-            geometry.setAttribute("color", new THREE.BufferAttribute(colours.numbers, 3));
-            group.add(new THREE.Mesh(geometry, material));
+                geometry.setAttribute("position", new THREE.BufferAttribute(positions.numbers, 3));
+                geometry.setAttribute("normal", new THREE.BufferAttribute(normals.numbers, 3));
+                geometry.setAttribute("uv", new THREE.BufferAttribute(uvs.numbers, 2));
+                geometry.setAttribute("color", new THREE.BufferAttribute(colours.numbers, 3));
+                mesh.userData.near = near;
+                group.add(mesh);
+            }
         }
 
         for (const { geometry, material, object } of this.#meshes) {

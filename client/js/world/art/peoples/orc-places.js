@@ -757,7 +757,7 @@ export function gatehouse(piece) {
         }
 
         solid.box(x - m(1.7), m(6.2), D / 2 - m(1.7), x + m(1.7), m(6.4), D / 2 + m(1.7), material("planks-dark"));
-        solid.lathe(x, D / 2, [[m(2.3), m(7.4)], [0, m(9.2)]], material("hide"), { segments: 4, from: Math.PI / 4, to: Math.PI / 4 + Math.PI * 2 });
+        solid.lathe(x, D / 2, [[m(2.3), m(7.4)], [0, m(9.2)]], material("hide"), { segments: 4, from: Math.PI / 4, to: Math.PI / 4 + Math.PI * 2, smooth: false });
         spike(solid, [x, m(9.1), D / 2], [0, 1, 0], m(1), m(0.1), "iron");
     }
 
@@ -794,7 +794,7 @@ export function lookout(piece) {
 
     solid.box(cx - m(1.6), deck, cz - m(1.6), cx + m(1.6), deck + m(0.2), cz + m(1.6), material("planks-dark"));
     band(solid, [[cx - m(1.6), cz - m(1.6)], [cx + m(1.6), cz - m(1.6)], [cx + m(1.6), cz + m(1.6)], [cx - m(1.6), cz + m(1.6)]], deck + m(0.2), deck + m(1.1), m(0.12), "planks-dark");
-    solid.lathe(cx, cz, [[m(2.2), deck + m(2.2)], [0, deck + m(3.6)]], material("hide"), { segments: 4, from: Math.PI / 4, to: Math.PI / 4 + Math.PI * 2 });
+    solid.lathe(cx, cz, [[m(2.2), deck + m(2.2)], [0, deck + m(3.6)]], material("hide"), { segments: 4, from: Math.PI / 4, to: Math.PI / 4 + Math.PI * 2, smooth: false });
 
     for (let k = 1; k < 16; k++) {
         const y = (k * deck) / 16;
