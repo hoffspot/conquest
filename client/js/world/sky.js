@@ -6,7 +6,9 @@
 // One dome round the camera, drawn first and behind everything (it writes no depth): a
 // gradient, the sun and two reads of a small tiling texture of noise for the clouds, so it costs
 // little even when the sky fills the screen. Its colours are worked in the picture's own
-// (sRGB) colours, untouched by the tone mapping, as the fog's and the background's are.
+// (sRGB) colours, untouched by the tone mapping, as the fog's and the background's are; drawn
+// into a texture, it's put out in light's (linear), as everything drawn into one is. The world's
+// light from all round is drawn from it (environment.js).
 
 import * as THREE from "three";
 import { tiling } from "../core/noise.js";
@@ -108,7 +110,11 @@ void main() {
     }
 
     colour = mix(colour, sunColour, smoothstep(0.99955, 0.99975, toSun));
-    gl_FragColor = vec4(colour, 1.0);
+
+    // (Taken back to light's colours, which three.js puts out in the picture's again on the
+    // screen and leaves so in a texture: the light from all round, the world behind the pack)
+    gl_FragColor = sRGBTransferEOTF(vec4(colour, 1.0));
+    #include <colorspace_fragment>
 }`;
 
 /**

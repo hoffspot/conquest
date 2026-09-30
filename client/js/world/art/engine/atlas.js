@@ -281,11 +281,12 @@ let glowing = null;
 
 /**
  * The one material every light is drawn with (GLOWS: lamps, faerie fire, lava): unlit, each
- * vertex its own colour.
+ * vertex its own colour, shown as it is (untouched by the tone mapping, which would dull and
+ * pale a light to a lit surface's colours, as the flames indoors are: interiors3d.js).
  */
 export function glowMaterial() {
     if (!glowing) {
-        glowing = new THREE.MeshBasicMaterial({ vertexColors: true });
+        glowing = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
         glowing.name = "glow";
         glowing.shadowSide = THREE.DoubleSide;
     }

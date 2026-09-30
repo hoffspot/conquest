@@ -15,6 +15,7 @@ import { BEARDS, HAIRSTYLES } from "../characters/hair.js";
 import { HAIR_COLOURS } from "../characters/skin.js";
 import { armsOf, STARTING_WEAPONS, WEAPONS } from "../core/weapons.js";
 import { Avatar } from "../world/avatar.js";
+import { bakeStudio } from "../world/environment.js";
 import { Progress } from "../core/progress.js";
 import { guardOf, heroEquipment } from "./game.js";
 import { cleanName, defaultHero, HERO_PEOPLES, heroOfPeople, IRIS_COLOURS, randomHero, suggestName, tonesOf } from "./heroes.js";
@@ -129,6 +130,7 @@ export class Creator {
         this.avatar?.object.removeFromParent();
         this.avatar?.character.dispose();
         this.avatar = null;
+        this.studio.dispose();
         this.root.hidden = true;
         this.finish(result);
     }
@@ -140,7 +142,9 @@ export class Creator {
 
         scene.background = new THREE.Color(0x17130f);
         scene.fog = new THREE.Fog(0x17130f, 6, 14);
-        scene.environment = this.view.scene.environment;
+        // (A studio's light, grey and white, so the colours chosen are seen as they are)
+        this.studio = bakeStudio(this.view.renderer);
+        scene.environment = this.studio.texture;
         scene.environmentIntensity = 0.55;
 
         const key = new THREE.DirectionalLight(0xfff0dc, 2.4);

@@ -499,10 +499,9 @@ with a fair few hit points to spare.
 
 ### The view (world/view.js)
 
-A WebGL renderer with ACES tone mapping, a sky and fog, a studio environment map for the
-characters' materials, a hemisphere light and a sun whose shadow map follows the player (a
-little ahead of them, where more of the ground is in view, the further out the more: up to 12
-of its 24 metres; snapped to whole shadow texels, so shadows don't shimmer). The camera looks
+A WebGL renderer with ACES tone mapping, a sky and fog, light from all round (below) and a sun
+whose shadow map follows the player (a little ahead of them, where more of the ground is in view,
+the further out the more: up to 12 of its 24 metres). The camera looks
 down from 35 degrees above the horizon to start with (low enough to see well ahead of the
 player, high enough to see a little of the sky over the rooftops: `pitch`), zooming between 5 and
 32 metres away, from any side (`yaw`: from the south, looking north, to start with), at the
@@ -515,7 +514,44 @@ white where the sun's on them and grey-blue underneath, thinning towards the hor
 dome round the camera, drawn first and behind everything (it writes no depth), in the picture's
 own colours (untouched by the tone mapping, as the fog and the background are): a gradient, the
 sun, and two reads of a small tiling texture of noise (128 texels) for the clouds, drifting at
-their own speeds, so it costs little even when it fills the screen. Indoors there's none.
+their own speeds, so it costs little even when it fills the screen. Worked out in the picture's
+colours, it's put out in light's when it's drawn into a texture rather than onto the screen (the
+light from all round is drawn from it, and so is the world behind the open pack, where the sky
+was once pale grey, turned into the picture's colours twice). Indoors there's none.
+
+**The light from all round** (world/environment.js). Every lit material (in three.js r186 the
+buildings' and the ground's as well as the characters') takes the light on its shaded side, and
+anything shiny its reflection, from one environment map. Outdoors it's the game's own sky above
+(the dome, clouds and all) and the sunlit ground below (a warm grey); indoors, a dim room of
+warm plaster and dark boards, lit low on one side by a fire and from above by lamps. Each is
+drawn once, when the view's made, into a map 128 pixels a face (3 MB for the two), both the same
+size, so going in or out changes only which is read, never a shader. They replace a
+photographer's studio room (6 MB, twice as long to make) and a hemisphere light, under which a
+white wall in the shade got twice as much light as the sun gave it in the open, so nothing had a
+sunny side and a shaded one, and steel mirrored grey walls. Now, outdoors, a wall in the sun gets
+about three times the light of one in the shade, which is sky-blue (the sun a little stronger,
+3.5, to make up the sunny side's share); steel mirrors the sky and the ground; indoors the light
+is warm. The character maker keeps a studio's light of its own (made when it opens, let go when
+it closes), so colours are chosen as they are.
+
+**Glows** (lamps, faerie fire, lava: world/art/engine/atlas.js glowMaterial) are shown in their
+own colours, untouched by the tone mapping, as the flames indoors are, not dulled and paled to a
+lit surface's.
+
+**Steady shadows** (world/shadows.js). The sun's shadow map moves in whole texels across the
+sun's own view as it follows the player, so its texels stay put on the ground and shadows' edges
+stand still as the player walks. (Whole texels along the world's own axes, as it once moved,
+aren't whole texels to a sun looking down at a slant: edges crawled.) Shadows fade out over the
+outer fifth of the map rather than stopping along a straight line, which shows when the camera's
+drawn back or looks towards the horizon. Their soft edge (about 5 cm on medium and high) is
+about the sun's own: the half-degree sun blurs a 2 m figure's shadow by 2 cm, a house's eaves' by
+7 cm.
+
+**Left as they are.** The fog is plain distance fog: the ground is level and the sun high (about
+50 degrees up), so haze thickening near the ground, or glowing warm towards the sun, would change
+almost nothing seen, for a change to every material's shader. The tone mapping stays ACES: AgX
+(tried, pictures with the change) greyed the lamplit taproom and dulled the painted colours, and
+Khronos Neutral turned the taproom orange.
 
 **Following the player** (app/camera.js). From the player's first step, the camera keeps up
 with them and turns round to look from behind them, the way they're going, at the same height
