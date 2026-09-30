@@ -6,11 +6,13 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { EQUIPMENT } from "../client/js/characters/equipment.js";
 import { ARMS, soldierLook } from "../client/js/characters/soldiers.js";
-import { Battle, FOE_MS, STEP_MS } from "../client/js/core/battle.js";
-import { HOST_PLAYER, Host, LEASH, MUSTER, RELEVANCE } from "../client/js/core/host.js";
+import { Battle, FOE_MS, KINDS, SIGHT, STEP_MS } from "../client/js/core/battle.js";
+import { HOST_PLAYER, Host, LEASH, MUSTER, ORC_ROUTED_MS, RELEVANCE, RELIEF_MS } from "../client/js/core/host.js";
+import { squareKey, squaresOf } from "../client/js/core/grid.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { POSTED } from "../client/js/core/war/muster.js";
 import { HOLDINGS } from "../client/js/core/war/war.js";
+import { distanceBetween } from "../client/js/core/weapons.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { generateWorld } from "../client/js/core/world.js";
 
@@ -39,6 +41,26 @@ function hosted(seed = 2) {
 const soldiersOf = (host, town) => host.battle.actors.filter(({ id }) => id.startsWith(`${town}/`));
 const put = (actor, [x, y]) => Object.assign(actor, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [], order: null, target: null });
 
+// A free square `reach` squares or so from someone that they can see (the nearest such)
+function inSight(host, actor, reach) {
+    const squares = squaresOf(host.world.maps.town);
+    const taken = new Set(host.battle.actors.map(({ square: [x, y] }) => squareKey(x, y)));
+
+    for (let r = reach; r >= 2; r--) {
+        for (let dx = -r; dx <= r; dx++) {
+            for (const square of [[actor.square[0] + dx, actor.square[1] - r], [actor.square[0] + dx, actor.square[1] + r]]) {
+                const there = { map: actor.map, square };
+
+                if (!squares.blocked(...square) && !taken.has(squareKey(...square)) && host.battle.canSee(actor, there) && host.battle.canSee(there, actor)) {
+                    return square;
+                }
+            }
+        }
+    }
+
+    throw new Error(`nowhere in ${actor.id}'s sight`);
+}
+
 describe("the war come to life (host.js, muster.js)", () => {
     it("brings the player's town's guards and patrols out as they play, of its people, at their posts", () => {
         const host = hosted();
@@ -58,7 +80,7 @@ describe("the war come to life (host.js, muster.js)", () => {
             assert.equal(soldier.team, "human");
             assert.equal(soldier.ai, "patrol");
             assert.ok(!host.battle.hostile(soldier, host.battle.actor(HOST_PLAYER)), "(the player's own people)");
-            assert.ok(!host.battle.hostile(soldier, host.battle.actor("orc")), "(the wild's no concern of theirs)");
+            assert.ok(host.battle.hostile(soldier, host.battle.actor("orc")), "(the orc, no people's, is theirs too)");
             assert.deepEqual(host.soldiers.get(soldier.id).people, "human");
         }
 
@@ -143,6 +165,114 @@ describe("the war come to life (host.js, muster.js)", () => {
         assert.ok(!host.battle.hostile(fellow, player) || host.battle.time - 0 < FOE_MS + 40000);
     });
 
+    it("sets the town's guards and patrols on the orc when they see it, whoever's people the player is; felled by them, it keeps away a good while", () => {
+        for (const race of ["human", "elf"]) {
+            const host = new Host(buildWorld({ seed: 2 }), { populate: false });
+
+            host.join({ id: HOST_PLAYER, hero: { ...HERO, race } });
+            host.populate();
+            run(host, STEP_MS);
+
+            const home = host.world.start.id;
+            const orc = host.battle.actor("orc");
+            const guard = soldiersOf(host, home).find(({ id }) => id.endsWith("/guard-0"));
+            const patrol = soldiersOf(host, home).find(({ id }) => id.includes("/patrol-"));
+
+            // At its post: the orc in its sight
+            put(orc, inSight(host, guard, 8));
+            run(host, 1000);
+            assert.equal(guard.target, "orc", `${race}: the guard's after the orc`);
+
+            // A patrol on the far side of its round (further than its leash from where it began):
+            // the orc in its sight there
+            put(orc, orc.patrol[0]);
+            put(guard, guard.patrol[0]);
+            put(patrol, patrol.patrol[3]);
+            patrol.patrolIndex = 4;
+            assert.ok(distanceBetween(patrol.patrol[0], patrol.square) > patrol.leash);
+            put(orc, inSight(host, patrol, 8));
+            run(host, 1000);
+            assert.equal(patrol.target, "orc", `${race}: the patrol's after the orc`);
+
+            // Felled by them: back only a good while after (by a player, as ever: battle.js KINDS)
+            orc.hp = 1;
+            run(host, 20000);
+            assert.ok(orc.dead, `${race}: felled`);
+            assert.ok(orc.respawnAt >= host.battle.time + ORC_ROUTED_MS - 20000 - STEP_MS);
+        }
+
+        // Felled by the player: back as soon as ever
+        const host = hosted();
+        const orc = host.battle.actor("orc");
+        const player = host.battle.actor(HOST_PLAYER);
+
+        run(host, STEP_MS);
+        put(orc, [player.square[0] + 1, player.square[1]]);
+        orc.hp = 1;
+        host.command(HOST_PLAYER, { type: "engage", target: "orc" });
+
+        const events = run(host, 5000);
+
+        assert.ok(events.some(({ type, id, by }) => type === "death" && id === "orc" && by === HOST_PLAYER));
+        assert.ok(orc.respawnAt <= host.battle.time + KINDS.orc.respawn);
+    });
+
+    it("relieves a town's fallen soldiers a while after they're taken away, as many as its garrison has, out of the players' sight", () => {
+        const host = hosted();
+        const home = host.war.town(host.world.start.id);
+
+        run(host, STEP_MS);
+
+        const soldiers = soldiersOf(host, home.id);
+        const guard = soldiers.find(({ id }) => id.endsWith("/guard-0"));
+        const post = [...guard.patrol[0]];
+        const player = host.battle.actor(HOST_PLAYER);
+        const orc = host.battle.actor("orc");
+
+        // Felled (by the orc, then gone from the world), and taken away
+        Object.assign(orc, { hp: 5000, maxHp: 5000 });
+        guard.hp = 1;
+        put(orc, inSight(host, guard, 2));
+
+        for (let t = 0; t < 10000 && !guard.dead; t += STEP_MS) {
+            host.advance(STEP_MS);
+        }
+
+        assert.ok(guard.dead);
+        host.battle.remove("orc");
+        run(host, 11000);
+        assert.equal(host.battle.actor(guard.id), null);
+        assert.ok(!host.mustered.get(home.id).ids.includes(guard.id));
+
+        // Not at once; nor with none to spare (asked again a while after)
+        run(host, RELIEF_MS - 12000);
+        assert.equal(host.battle.actor(guard.id), null, "(not at once)");
+
+        const garrison = home.garrison;
+
+        home.garrison = 1;
+        run(host, 8000);
+        assert.equal(host.battle.actor(guard.id), null, "(none to spare)");
+        home.garrison = garrison;
+
+        // Nor where a player's watching
+        put(player, inSight(host, { ...guard, square: post, map: "town" }, 4));
+        run(host, RELIEF_MS);
+        assert.equal(host.battle.actor(guard.id), null, "(not while it's watched)");
+
+        // Out of their sight: another in its place
+        put(player, host.world.spawns.player);
+
+        const relieved = run(host, RELEVANCE.every);
+        const again = host.battle.actor(guard.id);
+
+        assert.ok(relieved.some(({ type, town, ids }) => type === "relieved" && town === home.id && ids.includes(guard.id)));
+        assert.ok(again && !again.dead && again.team === home.owner && again.leash === LEASH && again.patrol.length === 1);
+        assert.ok(host.mustered.get(home.id).ids.includes(guard.id));
+        assert.equal(soldiersOf(host, home.id).filter(({ dead }) => !dead).length, soldiers.length);
+        assert.equal(host.mustered.get(home.id).relief, null);
+    });
+
     it("keeps its soldiers with the world, and carries on from them exactly", () => {
         const host = hosted();
 
@@ -206,6 +336,55 @@ describe("guards, patrols and grudges (battle.js)", () => {
         }
 
         assert.ok(battle.actor("g").square[1] > 12);
+    });
+
+    it("keeps a patrol within its leash of the round it walks, wherever on it it is", () => {
+        const battle = new Battle(open(80));
+
+        battle.add({ id: "p", kind: "soldier", weapon: "sword", team: "a", square: [70, 40], ai: "patrol", patrol: [[5, 5], [70, 5], [70, 70], [5, 70]], leash: 8 });
+        battle.add({ id: "far", kind: "player", weapon: "sword", team: "b", square: [59, 40] });
+        battle.actor("p").patrolIndex = 2;
+
+        // (Eleven squares off its round, and further from where it began: let be)
+        for (let t = 0; t < 1000; t += STEP_MS) {
+            battle.advance(STEP_MS);
+        }
+
+        assert.equal(battle.actor("p").target, null);
+
+        // Seven off it: after them, though they're far from where it began
+        battle.add({ id: "near", kind: "player", weapon: "sword", team: "b", square: [63, battle.actor("p").square[1]] });
+
+        for (let t = 0; t < 1000; t += STEP_MS) {
+            battle.advance(STEP_MS);
+        }
+
+        assert.equal(battle.actor("p").target, "near");
+    });
+
+    it("comes to the help of one of its own it can see fighting, though the enemy's further off than it can see, within its leash", () => {
+        // (Everyone's enemy "b"'s; "a" and "c" at peace)
+        const battle = new Battle(open(60), { relations: (one, other) => one.team === "b" || other.team === "b" });
+        const post = (id, square, leash, team = "a") => battle.add({ id, kind: "soldier", weapon: "sword", team, square, ai: "patrol", patrol: [square], leash });
+
+        post("g", [10, 10], 20);
+        post("partner", [10, 16], 20);
+        post("tied", [6, 10], 5);
+        post("stranger", [13, 10], 20, "c");
+        battle.add({ id: "e", kind: "player", weapon: "sword", team: "b", square: [10, 26] });
+        Object.assign(battle.actor("e"), { hp: 5000, maxHp: 5000 });
+
+        for (let t = 0; t < 600; t += STEP_MS) {
+            battle.advance(STEP_MS);
+        }
+
+        const [g, partner, tied, stranger] = ["g", "partner", "tied", "stranger"].map((id) => battle.actor(id));
+
+        assert.ok(distanceBetween(g.patrol[0], [10, 26]) > SIGHT && battle.canSee(g, partner));
+        assert.equal(partner.target, "e", "(it sees them)");
+        assert.equal(g.target, "e", "(the alarm raised: to its help)");
+        assert.equal(tied.target, null, "(beyond its leash: it keeps its post)");
+        assert.equal(stranger.target, null, "(not one of its own)");
     });
 
     it("asks the host whether two teams are enemies; grudges between two count whatever their teams, until they're forgotten", () => {

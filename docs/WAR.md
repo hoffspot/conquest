@@ -342,14 +342,22 @@ whoever holds the town, and whom they fight is as their peoples stand.
 - **Guards.** Guards stand in pairs either side of each road out of the town, just past its edge,
   facing out, then round the edge if it has fewer roads than guards. How many:
   - as many as its garrison has, up to its posts: a capital 8, a city 6, a town 4, a village 2;
-  - each goes after an enemy within 14 metres of its post (its **leash**), and comes back to it.
+  - each goes after an enemy it sees within 14 metres of its post (its **leash**), and comes back
+    to it.
 - **Patrols.** Patrols of two walk a round of six points just outside the town's edge, each round
   the other way from the last (as many as the town has: `HOLDINGS` patrols), while its garrison's
   at least half full. Each of a patrol walks its own round, a step beside the other's, so neither
-  waits at a point for the other to move off it.
+  waits at a point for the other to move off it. A patrol's leash is 28 metres from its round,
+  wherever on it it is (not from where it began: the round of a town is about 350 metres long).
+- **The alarm.** A soldier who sees one of its own fighting goes to their help, though the enemy's
+  further off than it can see (12 metres) or out of its sight, if the enemy's within its leash.
 - **Each soldier stands for a share of the garrison.** One who falls takes that share off it in
-  the war (`war.loss`), and is taken away 10 seconds after. A soldier never comes back to life:
-  the town musters again from what's left of its garrison the next time a player comes.
+  the war (`war.loss`), and is taken away 10 seconds after. A soldier never comes back to life.
+- **Relief.** A minute after one of a town's soldiers is taken away, another of its garrison takes
+  their place, at their post or on their round, as many as the garrison has then (with none to
+  spare, it's asked again a minute later), each coming out where no player can see; none while a
+  camp's sortie is out against the town. The town musters afresh from its garrison the next time a
+  player comes.
 - **Banners.** A banner stands beside each road out with guards at it, 3 metres further out than
   them: its people's colour, a trim, and their emblem (`world/banners3d.js`):
 
@@ -385,9 +393,13 @@ whoever holds the town, and whom they fight is as their peoples stand.
 - Two of the same people: never, otherwise.
 - Two peoples' soldiers, or players: as their peoples stand in the war. At war, they fight on
   sight.
-- The wild (the orc, and later the camps' foes, which are no people's) is set against the players,
-  but not against the peoples' soldiers. A player's own soldiers who see the player struck fight
-  for them.
+- Anyone of no people's (the orc in the town the players start in) is set against everyone: the
+  players and the peoples' soldiers. Felled by soldiers, rather than by a player or anyone at their
+  side, the orc keeps away 10 minutes (`ORC_ROUTED_MS`) before it's back on its rounds; felled by
+  a player, it's back in 30 seconds, as ever.
+- The wild's creatures (`WILDS.md`) are every player's enemies, and the soldiers' when they're a
+  menace (any but those that leave everyone be) or fighting.
+- A player's own soldiers who see the player struck fight for them.
 
 **A neutral people's guards** can be talked to, or fought:
 - Holding on one opens a wheel with **Fight** (crossed swords): picking a fight with them.

@@ -324,7 +324,7 @@ const LIFT = Object.freeze({ height: 0.35, swing: 0.06, bob: 2.2 });
 const SHAKE_DIES = 4;
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -3734,6 +3734,10 @@ export class Game {
                 break;
             case "muster":
                 this.#muster(event);
+                break;
+            case "relieved":
+                // (A town's fallen soldiers' places taken: those who took them drawn)
+                this.enlisting.push(...event.ids);
                 break;
             case "camp":
                 this.#pitch(event);

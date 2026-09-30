@@ -9,9 +9,11 @@
 //  - The player goes where they're told (a "move" order) and, whenever they're standing still,
 //    attacks any enemy within reach of their weapon. Told to "engage" an enemy, they walk until
 //    it's within reach, then attack it.
-//  - An enemy patrols between its two patrol points. When it sees the player (within SIGHT
-//    squares, with nothing in the way) it chases them and attacks whenever they're within reach,
-//    giving up and going back to its patrol if it loses sight of them for GIVE_UP_MS.
+//  - An enemy patrols between its patrol points (or keeps its post). When it sees an enemy of
+//    its (within SIGHT squares, with nothing in the way, and within its leash of its post or its
+//    round), or one of its own it can see is fighting one, it chases them and attacks whenever
+//    they're within reach, giving up and going back to its patrol if it loses sight of them for
+//    GIVE_UP_MS.
 //
 // Told to run (an order with run: true), a character sprints: SPRINT times as fast as it walks,
 // speeding up and slowing down as runners do (ACCELERATION, BRAKING), and slowing to a walk in
@@ -205,6 +207,24 @@ const REST_AFTER_ACT_MS = 3500;
 const REST_WHEN_SEEN_MS = [800, 3000];
 
 const same = (a, b) => a !== null && b !== null && a[0] === b[0] && a[1] === b[1];
+
+// How far a square is from a patrol's round (metres): from the nearest point of the way between
+// its points, each to the next and the last back to the first (a post's: from the post)
+function offRound(patrol, [x, y]) {
+    let nearest = distanceBetween(patrol[0], [x, y]);
+
+    for (let k = 0; patrol.length > 1 && k < patrol.length; k++) {
+        const [ax, ay] = patrol[k];
+        const [bx, by] = patrol[(k + 1) % patrol.length];
+        const [dx, dy] = [bx - ax, by - ay];
+        const length = dx * dx + dy * dy;
+        const along = length ? Math.min(1, Math.max(0, ((x - ax) * dx + (y - ay) * dy) / length)) : 0;
+
+        nearest = Math.min(nearest, distanceBetween([ax + dx * along, ay + dy * along], [x, y]));
+    }
+
+    return nearest;
+}
 
 // Walking a path, a character heads straight for the furthest square of it that it can see (at
 // most this many squares on), with this much room either side of it (metres: its body, so it
@@ -1523,10 +1543,11 @@ export class Battle {
         }
     }
 
-    // An enemy: patrol, chase what it sees (through doors and up stairs, if they went through
-    // just after it saw them), attack what it catches
+    // An enemy: patrol, chase what it sees, or what one of its own it can see is fighting (the
+    // alarm raised: #alarmed), through doors and up stairs if they went through just after it saw
+    // them; attack what it catches
     #patrol(actor) {
-        const seen = this.#nearestSeen(actor, (enemy) => this.#leashed(actor, enemy));
+        const seen = this.#nearestSeen(actor, (enemy) => this.#leashed(actor, enemy)) ?? this.#alarmed(actor);
         const chased = actor.target === null ? null : this.actor(actor.target);
         const trail = chased?.crossed;
         const following = chased && !chased.dead && chased.map !== actor.map && trail && trail.from === actor.map && trail.time - actor.lastSeen <= GIVE_UP_MS;
@@ -1748,9 +1769,10 @@ export class Battle {
         return attack !== null && (attack.kind === "melee" || this.canSee(actor, target));
     }
 
-    // Is someone within a guard's leash of its post (always, for those with none)?
+    // Is someone within a guard's leash of its post, or of the round it walks (always, for those
+    // with none)?
     #leashed(actor, other) {
-        return !actor.leash || !other || (other.map === actor.spawnMap && distanceBetween(actor.patrol[0], other.square) <= actor.leash);
+        return !actor.leash || !other || (other.map === actor.spawnMap && offRound(actor.patrol, other.square) <= actor.leash);
     }
 
     // The nearest enemy on its map that it's noticed (not unseen: Invisibility), within `within`
@@ -1779,6 +1801,31 @@ export class Battle {
     // The nearest enemy it can see that passes `test` (none further than it can see)
     #nearestSeen(actor, test = () => true) {
         return this.#nearestEnemy(actor, (enemy) => this.canSee(actor, enemy) && test(enemy), SIGHT);
+    }
+
+    // The enemy the nearest of its own it can see (on its rounds or at its post, too) is fighting,
+    // if it's an enemy of its as well, noticed, and within its leash: the alarm raised, it comes to
+    // their help though the enemy's further off than it can see (or hidden from it)
+    #alarmed(actor) {
+        let best = null;
+        let bestDistance = Infinity;
+
+        // (The cheap checks first, and sight last)
+        for (const other of this.actors) {
+            if (other === actor || other.dead || other.target === null || other.ai !== "patrol" || other.team !== actor.team || other.map !== actor.map || !this.#near(actor, other, SIGHT)) {
+                continue;
+            }
+
+            const foe = this.actor(other.target);
+            const distance = distanceBetween(actor.square, other.square);
+
+            if (distance < bestDistance && foe && !foe.dead && foe.map === actor.map && this.hostile(foe, actor) && this.#noticed(actor, foe) && this.#leashed(actor, foe) && this.canSee(actor, other)) {
+                best = foe;
+                bestDistance = distance;
+            }
+        }
+
+        return best;
     }
 
     // Could two characters be within `reach` of each other: no more than that many squares apart
