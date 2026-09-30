@@ -38,8 +38,8 @@ const PLAIN = index.get("plain");
  * What shines, and how (by material name; a tinted material shines as the one it's tinted
  * from): 1 glass (leaded windows too, and water, obsidian): a sharp highlight, the sky mirrored
  * at a glancing look; 2 iron (its black scale, magnetite, reflecting a sixth straight on): a
- * broad dull sheen; 3 bright metal (gold, silver): its own colour's reflection, its paint half as
- * bright; 4 slate: a soft sheen, mostly at a glancing look.
+ * broad dull sheen; 3 bright metal (gold, silver, brass, pewter): its own colour's reflection, its
+ * paint half as bright; 4 slate: a soft sheen, mostly at a glancing look.
  */
 export const SHINES = Object.freeze({
     glass: 1,
@@ -55,6 +55,8 @@ export const SHINES = Object.freeze({
     gold: 3,
     silver: 3,
     "sun-gold": 3,
+    brass: 3,
+    pewter: 3,
     slate: 4,
     "slate-grey": 4,
 });
@@ -69,7 +71,11 @@ export function shineOf(material) {
 
 let shared = null;
 
-/** Which layer a material's drawn from (-1 if it can't be drawn with the atlas). */
+/**
+ * Which layer a material's drawn from (-1 if it can't be drawn with the atlas): a plain colour's
+ * the plain layer, whether it's one of COLOURS or (`userData.plain`) one worked out as it's built,
+ * such as a god's.
+ */
 export function layerOf(material) {
     if (!material?.isMeshLambertMaterial || material.emissiveMap || (material.emissiveIntensity > 0 && material.emissive?.getHex())) {
         return -1;
@@ -83,7 +89,7 @@ export function layerOf(material) {
         return index.get(TINTS[material.name].from);
     }
 
-    return COLOURS[material.name] !== undefined ? PLAIN : -1;
+    return COLOURS[material.name] !== undefined || (material.userData.plain && !material.map) ? PLAIN : -1;
 }
 
 const PLAIN_LAYER = (size) => {
@@ -207,6 +213,28 @@ export function atlasMaterial() {
     material.onBeforeCompile = (shader) => fromAtlas(shader, uniforms, { shine: true });
     material.customProgramCacheKey = () => "atlas";
     shared = material;
+
+    return material;
+}
+
+/**
+ * A material of its own drawn as the shared one is (atlasMaterial: from its layers, lit as relief,
+ * what shines shining), its shader then changed by `extend` (as onBeforeCompile is given it), its
+ * programs known by `name`: the insides', cut away in front of the player (interiors3d.js).
+ */
+export function atlasVariant(name, extend) {
+    const { uniforms } = atlasMaterial().userData;
+    const material = new THREE.MeshLambertMaterial({ vertexColors: true });
+
+    material.name = name;
+    material.shadowSide = THREE.DoubleSide;
+    material.userData.atlas = uniforms.atlasMap.value;
+    material.userData.uniforms = uniforms;
+    material.onBeforeCompile = (shader) => {
+        fromAtlas(shader, uniforms, { shine: true });
+        extend(shader);
+    };
+    material.customProgramCacheKey = () => name;
 
     return material;
 }
@@ -372,10 +400,9 @@ function fromAtlas(shader, uniforms, { shine = false } = {}) {
         .replace("#include <map_fragment>", "vec4 atlasTexel = texture(atlasMap, vec3(vAtlasUv, vLayer));\ndiffuseColor.rgb *= atlasTexel.rgb;")
         .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
 if (atlasRelief > 0.0) {
-    vec2 dx = dFdx(vAtlasUv);
-    vec2 dy = dFdy(vAtlasUv);
-    float here = texture(atlasMap, vec3(vAtlasUv, vLayer)).a;
-    vec2 slope = vec2(texture(atlasMap, vec3(vAtlasUv + dx, vLayer)).a - here, texture(atlasMap, vec3(vAtlasUv + dy, vLayer)).a - here) * atlasRelief;
+    // (How the height changes to the next pixel across and up, from the one read of it: as much as
+    // reading the heights there again would say, for nothing more read)
+    vec2 slope = vec2(dFdx(atlasTexel.a), dFdy(atlasTexel.a)) * atlasRelief;
 
     normal = reliefNormal(-vViewPosition, normal, slope, faceDirection);
 }`);
@@ -444,8 +471,8 @@ export function toGlow(geometry, material) {
 /**
  * A (non-indexed) geometry drawn in `material` made ready to be drawn with the atlas instead: its
  * texture coordinates scaled to the material's, a `layer` for each vertex (and its shine), and
- * its colours (white if it had none) times the material's own if it's a plain colour. Null if it
- * can't be.
+ * its colours (white if it had none) times the material's own if it's a plain colour (or its tint's
+ * if it's tinted). Null if it can't be.
  */
 export function toAtlas(geometry, material) {
     const layer = layerOf(material);
@@ -464,7 +491,7 @@ export function toAtlas(geometry, material) {
     }
 
     if (layer === PLAIN) {
-        _colour.setHex(COLOURS[material.name]);
+        _colour.copy(material.color);
 
         for (let i = 0; i < count; i++) {
             colours[i * 3] *= _colour.r;

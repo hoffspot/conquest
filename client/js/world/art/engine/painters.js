@@ -924,6 +924,8 @@ export const TINTS = {
     "slate-violet": { from: "slate-grey", tint: [0.42, 0.36, 0.46] },
     "planks-char": { from: "planks-dark", tint: [0.24, 0.22, 0.27] },
     "thatch-palm": { from: "thatch", tint: [0.92, 0.9, 0.78] },
+    // (A smithy's floor: beaten earth, black with soot)
+    "earth-sooty": { from: "mud", tint: [0.103, 0.095, 0.091] },
 };
 
 // Plain colours (no texture): trims, doors, glass, metal
@@ -960,6 +962,27 @@ export const COLOURS = {
     "cloth-gold": 0xc9a13b,
     "cloth-saffron": 0xe0a526,
     "cloth-silver": 0xc3c9cb,
+    // Insides (interiors3d.js): cloth, wax and candles, pewter and brass, books and parchment
+    velvet: 0x7a1826,
+    "velvet-purple": 0x4a1f45,
+    linen: 0xe9e2cf,
+    pewter: 0x8d9194,
+    brass: 0xb58f3e,
+    candle: 0xf1e7c8,
+    soot: 0x151211,
+    ale: 0x6b4214,
+    rug: 0x8e2a22,
+    "rug-border": 0x2e3d5c,
+    ledger: 0x3d2a1a,
+    wine: 0x5a0f1c,
+    "wool-green": 0x46603c,
+    "wool-blue": 0x3a4b6e,
+    "wool-ochre": 0x9a7434,
+    leather: 0x4f3220,
+    parchment: 0xe6d6ac,
+    "wax-red": 0x9a1c1c,
+    "guild-blue": 0x23365e,
+    "guild-gold": 0xd6b35a,
     // The other peoples' trims, paints and cloths
     bone: 0xe8dcc0,
     silver: 0xc3c9cb,
