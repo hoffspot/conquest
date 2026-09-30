@@ -833,8 +833,10 @@ converted data is to be measured in M8 against today's hm08 data.
     cell's middle and never above anything upstream. The plan's filled `level` stood some rivers
     on walls above the land round them; now they cut gorges through rims instead
     (`TERRAIN_VERSION` 2).
-  - **Drawing:** chunk meshes from the corner heights, a metre apart near and two further off
-    (four on low), with 2 m skirts; rock on slopes past about 33°; water sheets following the
+  - **Drawing:** chunk meshes from the corner heights, ring by ring from the player's chunk
+    (high 1/1/2 m, medium and low 1/2/4 m: a 4 m mesh strays 0.3–0.5 m from the ground at the
+    95th percentile on pads, roads and banks, so only in the fogged outer ring; 2 m strays
+    4–11 cm), with 2 m skirts; rock on slopes past about 33°; water sheets following the
     surface; bridges arched on piers; buildings, trees, rocks, undergrowth, props, camps,
     banners, drops, doors, effects, decals, spells, projectiles, birds and landing beasts all
     on the ground; contact shadows along the slope; the camera kept over the ground and taps

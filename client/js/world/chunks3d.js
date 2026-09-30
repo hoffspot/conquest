@@ -65,10 +65,11 @@ export const UNDERGROWTH = Object.freeze({ grow: 64, drop: 84 });
 export const DETAIL_NEAR = 40;
 
 /**
- * How far apart the ground's corners are drawn (metres): in the chunks round the player's (within
- * `reach` chunks of it), `near`; further off, `far` (the quality level's: view.js).
+ * How far apart the ground's corners are drawn (metres), by how many chunks from the player's a
+ * chunk is: in the player's own, then the ring round it, and so on, the last for all further off
+ * (the quality level's: view.js).
  */
-export const SPACING = Object.freeze({ reach: 1, near: 1, far: 2 });
+export const SPACING = Object.freeze([1, 1, 2]);
 
 /** Bridges' decks: how high their tops are over the ground (metres: those on them stand there), and how thick. */
 export const DECK = Object.freeze({ top: 0.16, depth: 0.14 });
@@ -98,8 +99,8 @@ export class Chunks {
         this.layouts = this.overworld.settlements ? new Layouts(this.overworld.settlements) : null;
         this.terrains = this.overworld.ground ? new Terrains(world.plan, this.overworld.ground) : null;
 
-        /** How far apart the ground's corners are drawn (SPACING's; setSpacing). */
-        this.spacing = { ...SPACING };
+        /** How far apart the ground's corners are drawn (as SPACING; setSpacing). */
+        this.spacing = SPACING;
 
         /** The ground's height at a point (metres): the overworld's (core/terrain/ground.js). */
         this.groundAt = (x, z) => this.overworld.heightAt?.(x, z) ?? 0;
@@ -182,12 +183,10 @@ export class Chunks {
         }
     }
 
-    /** Draw the ground's corners this far apart (as SPACING: { reach, near, far }) from now on. */
+    /** Draw the ground's corners this far apart (as SPACING, ring by ring) from now on. */
     setSpacing(spacing) {
-        const next = { ...this.spacing, ...spacing };
-
-        if (next.reach !== this.spacing.reach || next.near !== this.spacing.near || next.far !== this.spacing.far) {
-            this.spacing = next;
+        if (spacing.length !== this.spacing.length || spacing.some((step, k) => step !== this.spacing[k])) {
+            this.spacing = spacing;
             this.#respace();
         }
     }
@@ -196,7 +195,7 @@ export class Chunks {
     #spacingOf(cx, cy) {
         const off = this.centre ? Math.max(Math.abs(cx - this.centre[0]), Math.abs(cy - this.centre[1])) : 0;
 
-        return off <= this.spacing.reach ? this.spacing.near : this.spacing.far;
+        return this.spacing[Math.min(off, this.spacing.length - 1)];
     }
 
     // Each chunk's ground drawn as finely as it now should be, the player having moved

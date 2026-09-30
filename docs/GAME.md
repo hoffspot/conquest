@@ -630,9 +630,10 @@ shaders; the shadows they cast stay whole).
 ### The ground (world/ground.js)
 
 A mesh under each chunk of the world, rising and falling with the ground (WORLD.md, *The ground
-in play*): its corners a metre apart in the chunk the player's in (on high, the chunks round it
-too) and two metres apart further off (four on low: `QUALITY.ground`, view.js), redrawn finer or
-coarser as the player moves, lit by its slope worked out from the corners round each (across
+in play*): its corners a metre apart in the chunk the player's in, and further apart further off
+(`QUALITY.ground`, view.js: on high, a metre in the ring of chunks round it too and two metres
+beyond; on medium and low, two metres in that ring and four beyond, deep in the fog), redrawn
+finer or coarser as the player moves, lit by its slope worked out from the corners round each (across
 into the chunks beside it). A skirt hangs two metres down round each chunk's edge, so where
 chunks drawn at different spacings meet no gap shows between them. Where the ground's steeper
 than about 33°, rock shows through the grass, all rock by about 45°: a rock texture seven metres
