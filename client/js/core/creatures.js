@@ -20,6 +20,7 @@
 // people's lands (`people`: the uniques). Pure data and arithmetic, no DOM.
 
 import { landAt, SETTLEMENTS } from "./worldplan/plan.js";
+import { hypot, pow } from "./exact.js";
 
 /** The team the wild's creatures are all on. */
 export const WILD = "beasts";
@@ -117,7 +118,7 @@ export const LAIRS = Object.freeze({
 });
 
 /** How many hit points, and how much harder its blows are, a creature of a tier has (than the first tier's). */
-export const tierPower = (tier) => TIER_GROWTH ** (Math.max(1, tier) - 1);
+export const tierPower = (tier) => pow(TIER_GROWTH, Math.max(1, tier) - 1);
 
 /** Is a creature a menace (the people's soldiers go after it): one that comes for others. */
 export const menaces = (creature) => CREATURES[creature]?.temper !== "defensive";
@@ -135,7 +136,7 @@ export function packOf(id, tier) {
  * TIER_LAND.open out in the open, up to TIERS in the high and burning lands far out.
  */
 export function tierAt([x, y], homes, biome = null) {
-    const nearest = Math.min(...homes.map(([hx, hy]) => Math.hypot(x - hx, y - hy)));
+    const nearest = Math.min(...homes.map(([hx, hy]) => hypot(x - hx, y - hy)));
     const open = Math.min(TIER_LAND.open, 1 + Math.floor(Math.max(0, nearest - TIER_LAND.from) / TIER_LAND.every));
 
     return open >= TIER_LAND.perilousFrom && TIER_LAND.perilous.includes(biome) ? Math.min(TIERS, open + 2) : open;
@@ -193,5 +194,5 @@ export function campFolk(faction, tier) {
 
 /** Is a place clear of every settlement (metres beyond each's edge)? */
 export function clearOfSettlements(plan, [x, y], beyond) {
-    return plan.places.every((place) => Math.hypot(x - place.at[0], y - place.at[1]) > (SETTLEMENTS[place.kind]?.radius ?? 40) + beyond);
+    return plan.places.every((place) => hypot(x - place.at[0], y - place.at[1]) > (SETTLEMENTS[place.kind]?.radius ?? 40) + beyond);
 }

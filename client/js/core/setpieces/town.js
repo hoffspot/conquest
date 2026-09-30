@@ -20,7 +20,7 @@
 // gives the same town in every browser.
 
 import { createRandom, noise } from "../random.js";
-import { atan2, cos, length, PI, sin, sqrt, TAU } from "./exact.js";
+import { atan2, cos, length, PI, sin, sqrt, TAU } from "../exact.js";
 import { patronOf } from "../lore/gods.js";
 import { nameTavern } from "../lore/taverns.js";
 import { ENTERED, GROUND, homeTree, HOUSE_STYLES, HOUSE_VARIANTS, houseKey, LANDMARKS, landmarkKey, OUTBUILDINGS, PEOPLE_PLACES, PLOT, PROPS, propKey, TRADES, treeKey, TREE_VARIANTS } from "./pieces.js";
@@ -311,7 +311,7 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
                 for (let i = Math.floor(Math.min(ax, bx) - across); i <= Math.ceil(Math.max(ax, bx) + across); i++) {
                     if (inside(i, j) && fromSegment2(i + 0.5, j + 0.5, ax, ay, bx, by) <= half2) {
                         const [dx, dy] = [i + 0.5 - centre[0], j + 0.5 - centre[1]];
-                        const cobbled = main && !spec.small && dx * dx + dy * dy < (radius * COBBLED) ** 2;
+                        const cobbled = main && !spec.small && dx * dx + dy * dy < radius * COBBLED * (radius * COBBLED);
 
                         use[j * width + i] = USE.street;
                         ground[j][i] = cobbled || ground[j][i] === paving ? paving : GROUND.road;
@@ -990,7 +990,7 @@ function mainStreet(centre, angle, width, height, random, seed, bend = BEND) {
 
 // Where a street first reaches a distance from the middle ([x, y]), or null if it never does
 function atDistance(points, centre, r) {
-    const out = ([x, y]) => (x - centre[0]) ** 2 + (y - centre[1]) ** 2 >= r * r;
+    const out = ([x, y]) => (x - centre[0]) * (x - centre[0]) + (y - centre[1]) * (y - centre[1]) >= r * r;
 
     for (let k = 1; k < points.length; k++) {
         const [a, b] = [points[k - 1], points[k]];
@@ -1019,7 +1019,7 @@ function atDistance(points, centre, r) {
 // facing], or null if it never does
 function crossingAt(points, centre, r) {
     const at = atDistance(points, centre, r);
-    const k = at && points.findIndex(([x, y]) => (x - centre[0]) ** 2 + (y - centre[1]) ** 2 >= r * r);
+    const k = at && points.findIndex(([x, y]) => (x - centre[0]) * (x - centre[0]) + (y - centre[1]) * (y - centre[1]) >= r * r);
 
     return at ? [...at, facingOf(points[k][0] - points[k - 1][0], points[k][1] - points[k - 1][1])] : null;
 }

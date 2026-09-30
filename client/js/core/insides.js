@@ -25,6 +25,7 @@ import { GOD_IDS, GODS } from "./lore/gods.js";
 import { namePeople } from "./names.js";
 import { createRandom } from "./random.js";
 import { ENTERED, GROUND, PLOT } from "./setpieces/pieces.js";
+import { cos, hypot, sin } from "./exact.js";
 
 /**
  * Where each kind of building's front door is, as the art builds it: how far in from the front of
@@ -61,14 +62,14 @@ export function entranceOf(piece, origin = 0) {
     const [width, depth] = [piece.w * PLOT, piece.h * PLOT];
     const { facing } = piece;
     const [cx, cy] = [ox + piece.x, oy + piece.y];
-    const [cos, sin] = [Math.cos(facing), Math.sin(facing)];
+    const [c, s] = [cos(facing), sin(facing)];
 
     // A point in the lot's own frame (facing south, metres from its north-west corner) turned to
     // face the way it does, about its middle, in the world
     const turn = (u, v) => {
         const [du, dv] = [u - width / 2, v - depth / 2];
 
-        return [cx + du * cos + dv * sin, cy - du * sin + dv * cos];
+        return [cx + du * c + dv * s, cy - du * s + dv * c];
     };
     const squareAt = (u, v) => turn(u, v).map(Math.floor);
     const [u, v] = [width / 2 + spec.offset, depth - spec.depth];
@@ -77,13 +78,13 @@ export function entranceOf(piece, origin = 0) {
     const outside = squareAt(u, depth + 0.6);
     const across = Math.max(WAY_IN.across, spec.width / 2 + 0.3);
     const clear = [];
-    const reach = Math.hypot(width, depth) / 2 + 2;
+    const reach = hypot(width, depth) / 2 + 2;
 
     for (let y = Math.floor(cy - reach); y <= Math.ceil(cy + reach); y++) {
         for (let x = Math.floor(cx - reach); x <= Math.ceil(cx + reach); x++) {
             const [px, py] = [x + 0.5 - cx, y + 0.5 - cy];
-            const pu = width / 2 + px * cos - py * sin;
-            const pv = depth / 2 + px * sin + py * cos;
+            const pu = width / 2 + px * c - py * s;
+            const pv = depth / 2 + px * s + py * c;
 
             if (Math.abs(pu - u) <= across && pv >= v - WAY_IN.behind && pv <= depth + WAY_IN.out) {
                 clear.push([x, y]);

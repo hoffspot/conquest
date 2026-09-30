@@ -13,6 +13,7 @@
 import { createRandom, noise } from "../random.js";
 import { Queue } from "./queue.js";
 import { BIOME, RACES } from "./races.js";
+import { atan2, cos, hypot, pow, sin } from "../exact.js";
 
 /** How big the world is (metres a side), and its plan's cells (metres; cells a side). */
 export const WORLD_SIZE = 8192;
@@ -81,7 +82,7 @@ function placeHeartlands(random) {
         for (let tries = 0; spots.length < RACES.length && tries < 400; tries++) {
             const spot = [random.int(HEARTLAND_MARGIN, CELLS - 1 - HEARTLAND_MARGIN), random.int(HEARTLAND_MARGIN, CELLS - 1 - HEARTLAND_MARGIN)];
 
-            if (spots.every(([x, y]) => Math.hypot(x - spot[0], y - spot[1]) >= apart)) {
+            if (spots.every(([x, y]) => hypot(x - spot[0], y - spot[1]) >= apart)) {
                 spots.push(spot);
             }
         }
@@ -107,7 +108,7 @@ function furthest(from, count, random) {
 
         for (let tries = 0; tries < 300; tries++) {
             const spot = [random.int(12, CELLS - 13), random.int(12, CELLS - 13)];
-            const distance = Math.min(...[...from, ...chosen].map(([x, y]) => Math.hypot(x - spot[0], y - spot[1])));
+            const distance = Math.min(...[...from, ...chosen].map(([x, y]) => hypot(x - spot[0], y - spot[1])));
 
             if (distance > bestDistance) {
                 best = spot;
@@ -136,13 +137,17 @@ export function shapeLand(seed) {
 
     // A volcano beyond the orcs' heartland, towards the middle of the world
     const [ox, oy] = heartlands[RACES.findIndex(({ id }) => id === "orc")];
-    const inward = Math.atan2(CELLS / 2 - oy, CELLS / 2 - ox) + random.range(-1, 1);
+    const inward = atan2(CELLS / 2 - oy, CELLS / 2 - ox) + random.range(-1, 1);
     const out = random.range(...VOLCANO_FROM);
-    const volcano = [Math.round(ox + Math.cos(inward) * out), Math.round(oy + Math.sin(inward) * out)];
+    const volcano = [Math.round(ox + cos(inward) * out), Math.round(oy + sin(inward) * out)];
     const anchors = [
         ...heartlands.map(([x, y], k) => ({ x, y, ...RACES[k].climate, weight: 2 })),
         ...wilds.map(([x, y], k) => ({ x, y, ...WILD_CLIMATES[k], weight: 1 })),
     ];
+
+    // (How far off each anchor's climate reaches: 1 / (d² + 100)^1.6, d² whole cells squared, each
+    // worked out once, as the rest, the same in every browser: exact.js pow)
+    const reach = new Float64Array(2 * CELLS * CELLS);
 
     const height = new Float32Array(count);
     const temperature = new Float32Array(count);
@@ -156,8 +161,8 @@ export function shapeLand(seed) {
             let [warm, wet, total] = [0, 0, 0];
 
             for (const anchor of anchors) {
-                const d2 = (anchor.x - x) ** 2 + (anchor.y - y) ** 2;
-                const weight = anchor.weight / (d2 + 100) ** 1.6;
+                const d2 = (anchor.x - x) * (anchor.x - x) + (anchor.y - y) * (anchor.y - y);
+                const weight = anchor.weight / (reach[d2] || (reach[d2] = pow(d2 + 100, 1.6)));
 
                 warm += anchor.temperature * weight;
                 wet += anchor.moisture * weight;
@@ -168,30 +173,30 @@ export function shapeLand(seed) {
             let nearest = Infinity;
 
             for (const [hx, hy] of heartlands) {
-                nearest = Math.min(nearest, Math.hypot(hx - x, hy - y));
+                nearest = Math.min(nearest, hypot(hx - x, hy - y));
             }
 
             const rolling = noise(x, y, seed + 101, 48, 4);
             const ridge = 1 - Math.abs(2 * noise(x, y, seed + 202, 56, 3) - 1);
             const away = Math.min(1, Math.max(0, (nearest - 32) / 26));
             const cold = Math.max(0, 0.35 - warm / total);
-            let land = 0.2 + 0.32 * rolling + 0.62 * ridge ** 4 * away + cold * 0.5 * ridge;
+            let land = 0.2 + 0.32 * rolling + 0.62 * (ridge * ridge) * (ridge * ridge) * away + cold * 0.5 * ridge;
 
             // The sea round it all, its coast ragged
             const edge = Math.min(x, y, CELLS - 1 - x, CELLS - 1 - y) / CELLS;
             const coast = edge * 7 + (noise(x, y, seed + 303, 20, 3) - 0.5) * 0.5;
 
             if (coast < 0.22) {
-                land = Math.min(land, SEA_LEVEL * (coast / 0.22) ** 2);
+                land = Math.min(land, SEA_LEVEL * ((coast / 0.22) * (coast / 0.22)));
             } else if (coast < 0.32) {
                 land = SEA_LEVEL + (land - SEA_LEVEL) * ((coast - 0.22) / 0.1);
             }
 
             // The volcano's cone
-            const fromVolcano = Math.hypot(volcano[0] - x, volcano[1] - y);
+            const fromVolcano = hypot(volcano[0] - x, volcano[1] - y);
 
             if (fromVolcano < VOLCANO_SLOPES) {
-                land = Math.max(land, 0.95 - 0.45 * (fromVolcano / VOLCANO_SLOPES) ** 0.8);
+                land = Math.max(land, 0.95 - 0.45 * pow(fromVolcano / VOLCANO_SLOPES, 0.8));
             }
 
             height[k] = Math.min(1, land);
@@ -206,10 +211,10 @@ export function shapeLand(seed) {
         for (let y = hy - 16; y <= hy + 16; y++) {
             for (let x = hx - 16; x <= hx + 16; x++) {
                 const k = cellIndex(x, y);
-                const d = Math.hypot(x - hx, y - hy) / 16;
+                const d = hypot(x - hx, y - hy) / 16;
 
                 if (k >= 0 && d < 1) {
-                    height[k] = Math.min(height[k], 0.3 + 0.12 * (1 - d) + 0.2 * d ** 3 + 0.06 * noise(x, y, seed + 606, 8, 2));
+                    height[k] = Math.min(height[k], 0.3 + 0.12 * (1 - d) + 0.2 * (d * d * d) + 0.06 * noise(x, y, seed + 606, 8, 2));
                 }
             }
         }
@@ -230,7 +235,7 @@ export function shapeLand(seed) {
     for (let y = volcano[1] - ASH_FIELDS; y <= volcano[1] + ASH_FIELDS; y++) {
         for (let x = volcano[0] - ASH_FIELDS; x <= volcano[0] + ASH_FIELDS; x++) {
             const k = cellIndex(x, y);
-            const d = Math.hypot(x - volcano[0], y - volcano[1]) / ASH_FIELDS;
+            const d = hypot(x - volcano[0], y - volcano[1]) / ASH_FIELDS;
 
             if (k >= 0 && !water[k] && d < 1 && noise(x, y, seed + 808, 6, 2) > d * 0.8) {
                 biome[k] = BIOME.volcanic;

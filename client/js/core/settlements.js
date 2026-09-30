@@ -10,6 +10,7 @@ import { CELL, CHUNK, CHUNKS } from "./worldplan/plan.js";
 import { GROUND } from "./setpieces/pieces.js";
 import { openEntrances } from "./insides.js";
 import { layoutTown, SETTLEMENT_KINDS } from "./setpieces/town.js";
+import { atan2, hypot } from "./exact.js";
 
 /** How far past its own square the world round a settlement has to be for it to be laid out (metres). */
 export const NEAR = CHUNK;
@@ -22,9 +23,9 @@ const ROAD_SIGHT = 100;
 export function waysOut(plan, place) {
     return plan.roads.filter(({ from, to }) => from === place.id || to === place.id).flatMap((road) => {
         const cells = road.to === place.id ? [...road.cells].reverse() : road.cells;
-        const far = cells.map(([x, y]) => [(x + 0.5) * CELL, (y + 0.5) * CELL]).find(([x, y]) => Math.hypot(x - place.at[0], y - place.at[1]) >= ROAD_SIGHT);
+        const far = cells.map(([x, y]) => [(x + 0.5) * CELL, (y + 0.5) * CELL]).find(([x, y]) => hypot(x - place.at[0], y - place.at[1]) >= ROAD_SIGHT);
 
-        return far ? [Math.atan2(far[1] - place.at[1], far[0] - place.at[0])] : [];
+        return far ? [atan2(far[1] - place.at[1], far[0] - place.at[0])] : [];
     });
 }
 
@@ -222,5 +223,5 @@ export class Settlements {
 // Is a point (in a layout's own metres) inside its settlement's edge (its radius: the town, not
 // its fields)?
 function inside(town, x, y) {
-    return Math.hypot(x - town.centre[0], y - town.centre[1]) < town.radius;
+    return hypot(x - town.centre[0], y - town.centre[1]) < town.radius;
 }

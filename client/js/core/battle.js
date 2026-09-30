@@ -62,6 +62,7 @@ import { BECKON, REST_EVERY, ROLES } from "./roles.js";
 import { rollHeal, rollSpell, SPELL_COOLDOWN, SPELLS, WARD } from "./spells.js";
 import { Variety } from "./variety.js";
 import { armsOf, chooseAttack, distanceBetween, longestReach, MELEE_REACH, ringsApart, rollDamage, WEAPONS } from "./weapons.js";
+import { atan2, cos, hypot, pow, sin } from "./exact.js";
 
 /**
  * How near (squares) two people have to be to talk, seeing each other: next to each other, or
@@ -777,7 +778,7 @@ export class Battle {
         }
 
         if (target !== actor) {
-            actor.facing = Math.atan2(target.x - actor.x, target.y - actor.y);
+            actor.facing = atan2(target.x - actor.x, target.y - actor.y);
         }
 
         // (Healing someone at full health, with nothing for it to cure: nothing to do; a cure with
@@ -1231,14 +1232,14 @@ export class Battle {
             // (A soldier on its rounds stops to talk, while there's no enemy about)
             if (!actor.to) {
                 actor.path = [];
-                actor.facing = Math.atan2(partner.x - actor.x, partner.y - actor.y);
+                actor.facing = atan2(partner.x - actor.x, partner.y - actor.y);
             }
 
             return;
         }
 
         if (partner && !partner.dead && partner.map === actor.map && actor.ai !== "patrol") {
-            const face = () => (actor.facing = Math.atan2(partner.x - actor.x, partner.y - actor.y));
+            const face = () => (actor.facing = atan2(partner.x - actor.x, partner.y - actor.y));
 
             // The folk stop going about their business; the player just turns to them, standing
             if (actor.ai === "routine") {
@@ -1381,7 +1382,7 @@ export class Battle {
 
             if (idle && !actor.beckoned && this.time >= actor.restingUntil) {
                 actor.beckoned = true;
-                actor.facing = Math.atan2(player.x - actor.x, player.y - actor.y);
+                actor.facing = atan2(player.x - actor.x, player.y - actor.y);
                 actor.restingUntil = actor.beckoningUntil = this.time + BECKON.duration * 1000;
                 actor.restAt = actor.restingUntil + REST_EVERY[0] + actor.chance.next() * (REST_EVERY[1] - REST_EVERY[0]);
                 this.#emit("act", { id: actor.id, act: "beckon", target: player.id });
@@ -1464,7 +1465,7 @@ export class Battle {
                 // There: stop, facing them
                 actor.order = null;
                 actor.path = [];
-                actor.facing = Math.atan2(target.x - actor.x, target.y - actor.y);
+                actor.facing = atan2(target.x - actor.x, target.y - actor.y);
                 this.#emit("arrived", { id: actor.id, target: target.id });
 
                 return;
@@ -1663,7 +1664,7 @@ export class Battle {
             const angle = actor.chance.next() * Math.PI * 2;
             const reach = away ? 0 : actor.chance.next() * wild.roam;
 
-            goal = [Math.floor(home[0] + Math.cos(angle) * reach), Math.floor(home[1] + Math.sin(angle) * reach)];
+            goal = [Math.floor(home[0] + cos(angle) * reach), Math.floor(home[1] + sin(angle) * reach)];
             actor.waitUntil = this.time + WILD_REST[0] + actor.chance.next() * (WILD_REST[1] - WILD_REST[0]);
         }
 
@@ -1918,7 +1919,7 @@ export class Battle {
         let [x, y] = [actor.x, actor.y];
 
         for (const [sx, sy] of actor.to ? [actor.to, ...actor.path] : actor.path) {
-            left += Math.hypot(sx + 0.5 - x, sy + 0.5 - y);
+            left += hypot(sx + 0.5 - x, sy + 0.5 - y);
             [x, y] = [sx + 0.5, sy + 0.5];
         }
 
@@ -1967,7 +1968,7 @@ export class Battle {
 
                 actor.x += (dx / distance) * step;
                 actor.y += (dy / distance) * step;
-                actor.facing = Math.atan2(dx, dy);
+                actor.facing = atan2(dx, dy);
                 budget -= step;
 
                 if (step === distance) {
@@ -2051,7 +2052,7 @@ export class Battle {
     #lineTo(actor, squares, [gx, gy]) {
         const [x0, y0] = [actor.x, actor.y];
         const [x1, y1] = [gx + 0.5, gy + 0.5];
-        const length = Math.hypot(x1 - x0, y1 - y0);
+        const length = hypot(x1 - x0, y1 - y0);
         const line = [];
 
         if (length < 1e-9) {
@@ -2118,7 +2119,7 @@ export class Battle {
         actor.blockedSince = null;
         actor.path.shift();
         actor.to = next;
-        actor.facing = Math.atan2(next[0] - actor.square[0], next[1] - actor.square[1]);
+        actor.facing = atan2(next[0] - actor.square[0], next[1] - actor.square[1]);
 
         return true;
     }
@@ -2126,7 +2127,7 @@ export class Battle {
     // --- Fighting ---
 
     #attack(actor, target) {
-        actor.facing = Math.atan2(target.x - actor.x, target.y - actor.y);
+        actor.facing = atan2(target.x - actor.x, target.y - actor.y);
 
         // (Its weapon drawn first)
         if (!actor.armed) {
@@ -2171,7 +2172,7 @@ export class Battle {
             current.struck = true;
 
             if (target && !target.dead) {
-                actor.facing = Math.atan2(target.x - actor.x, target.y - actor.y);
+                actor.facing = atan2(target.x - actor.x, target.y - actor.y);
             }
 
             if (attack.kind === "ranged") {
@@ -2357,7 +2358,7 @@ export class Battle {
                 for (const actor of this.actors) {
                     const theirs = by ? this.hostile(by, actor) : actor.team !== hazard.team && !actor.neutral;
 
-                    if (!actor.dead && actor.map === hazard.map && theirs && Math.hypot(actor.x - hazard.x, actor.y - hazard.y) <= hazard.radius && !this.buffOf(actor, "levitate")) {
+                    if (!actor.dead && actor.map === hazard.map && theirs && hypot(actor.x - hazard.x, actor.y - hazard.y) <= hazard.radius && !this.buffOf(actor, "levitate")) {
                         this.#hit(by, actor, { id: hazard.kind, kind: "hazard", reaction, stagger: 0, afflict, element }, null, { damage: hazard.damage, spell: hazard.spell, ground: true });
                     }
                 }
@@ -2376,7 +2377,7 @@ export class Battle {
     #smite(caster, target, id, spell) {
         // (Each struck, and how many leaps it is from the target: 0 for those round it)
         const struck = [{ one: target, leap: 0 }];
-        const near = (from, reach) => this.actors.filter((other) => !other.dead && other.map === from.map && !struck.some(({ one }) => one === other) && this.hostile(caster, other) && Math.hypot(other.x - from.x, other.y - from.y) <= reach);
+        const near = (from, reach) => this.actors.filter((other) => !other.dead && other.map === from.map && !struck.some(({ one }) => one === other) && this.hostile(caster, other) && hypot(other.x - from.x, other.y - from.y) <= reach);
 
         if (spell.area) {
             struck.push(...near(target, spell.area).map((one) => ({ one, leap: 0 })));
@@ -2386,7 +2387,7 @@ export class Battle {
         let from = target;
 
         for (let leap = 1; leap <= (spell.chain ?? 0); leap++) {
-            const next = near(from, 3).sort((a, b) => Math.hypot(a.x - from.x, a.y - from.y) - Math.hypot(b.x - from.x, b.y - from.y))[0];
+            const next = near(from, 3).sort((a, b) => hypot(a.x - from.x, a.y - from.y) - hypot(b.x - from.x, b.y - from.y))[0];
 
             if (!next) {
                 break;
@@ -2397,7 +2398,7 @@ export class Battle {
         }
 
         for (const { one, leap } of struck) {
-            const damage = Math.max(1, Math.round(rollSpell(spell, this.random) * (caster.power?.spell ?? 1) * (spell.falls ?? 0.7) ** leap));
+            const damage = Math.max(1, Math.round(rollSpell(spell, this.random) * (caster.power?.spell ?? 1) * pow(spell.falls ?? 0.7, leap)));
 
             this.#hit(caster, one, { id, kind: "spell", reaction: spell.reaction ?? "arcane", stagger: spell.stagger ?? 200, knockdown: spell.knockdown ?? 0, afflict: spell.effect ?? null }, null, { damage, spell: id });
 
@@ -2549,7 +2550,7 @@ export class Battle {
 
         for (const other of this.actors) {
             const mighty = (other.wild?.tier ?? 0) >= SEE_THROUGH.tier || Boolean(other.wild?.unique);
-            const near = mighty && !other.dead && other.map === actor.map && this.hostile(other, actor) && Math.hypot(other.x - actor.x, other.y - actor.y) <= SEE_THROUGH.near && this.canSee(other, actor);
+            const near = mighty && !other.dead && other.map === actor.map && this.hostile(other, actor) && hypot(other.x - actor.x, other.y - actor.y) <= SEE_THROUGH.near && this.canSee(other, actor);
 
             const seeing = near ? (other.seeing ??= {}) : null;
 
@@ -2584,9 +2585,9 @@ export class Battle {
             return;
         }
 
-        const away = from && from.map === actor.map ? Math.atan2(actor.y - from.y, actor.x - from.x) : this.random.next() * Math.PI * 2;
+        const away = from && from.map === actor.map ? atan2(actor.y - from.y, actor.x - from.x) : this.random.next() * Math.PI * 2;
         const angle = away + (this.random.next() - 0.5) * 1.6;
-        const goal = [Math.floor(actor.x + Math.cos(angle) * 6), Math.floor(actor.y + Math.sin(angle) * 6)];
+        const goal = [Math.floor(actor.x + cos(angle) * 6), Math.floor(actor.y + sin(angle) * 6)];
 
         try {
             this.#pathTo(actor, nearestFree(this.#squares(actor.map), goal, { within: 3 }));

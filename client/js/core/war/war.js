@@ -20,6 +20,7 @@ import { createRandom } from "../random.js";
 import { RACES } from "../worldplan/races.js";
 import { REALMS, rollLeader } from "./peoples.js";
 import { Roads } from "./roads.js";
+import { hypot } from "../exact.js";
 
 /** A turn every so much play (ms). */
 export const TURN_MS = 60000;
@@ -102,7 +103,7 @@ const KEEP_LOG = 300;
 // The kinds of place fought over
 const FOUGHT_OVER = Object.keys(HOLDINGS);
 
-const apart = ([ax, ay], [bx, by]) => Math.hypot(ax - bx, ay - by);
+const apart = ([ax, ay], [bx, by]) => hypot(ax - bx, ay - by);
 const pair = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
 

@@ -11,6 +11,7 @@
 // orthogonal tiles are free, so they never cut the corner of an obstacle.
 
 import { squareKey, squaresOf } from "./grid.js";
+import { cos, sin } from "./exact.js";
 
 class MinHeap {
     #items = [];
@@ -329,8 +330,8 @@ function walledIn(free, [endX, endY], [startX, startY], most) {
  */
 export function lineAhead(grid, [x, y], facing, most = 400) {
     const squares = squaresOf(grid);
-    const dx = Math.sin(facing);
-    const dy = Math.cos(facing);
+    const dx = sin(facing);
+    const dy = cos(facing);
     const line = [];
     let [sx, sy] = [Math.floor(x), Math.floor(y)];
 

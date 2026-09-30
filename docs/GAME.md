@@ -149,9 +149,9 @@ ember, the Hearth. Lonely, it broke into six sparks, and each woke as a god:
 A seventh spark would not wake: the Hollow One, which only wanted, and fed on the others' light.
 The Six drove it into the dark under the world, but its hunger seeps out still, and the orcs are
 what it made of the first hunters it caught. Each god has a story, a festival and sayings; every
-temple is to all six, under one of them as its patron. All the arithmetic is exact (`exact.js`: sines,
-cosines, arctangents and square roots with + - * / alone), so the same seed gives the same town
-in every browser. Laying out a town takes about 20 to 80 ms.
+temple is to all six, under one of them as its patron. All the arithmetic is exact (`core/exact.js`:
+sines, cosines, arctangents and square roots with + - * / alone), so the same seed gives the same
+town in every browser. Laying out a town takes about 20 to 80 ms.
 
 ### Maps and links (core/interiors.js)
 

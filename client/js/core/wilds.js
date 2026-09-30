@@ -16,6 +16,7 @@
 // drawing's alone (world/art/kits/wilds.js): they're in no one's way. Pure data, no DOM.
 
 import { fractal } from "./noise.js";
+import { cos, hypot, sin } from "./exact.js";
 
 /** Features are tried every this many metres (a random way in). */
 export const FEATURE_GRID = 8;
@@ -251,7 +252,7 @@ function squaresOf({ x, y, size, turn }, { long, take }) {
     add(Math.floor(x), Math.floor(y));
 
     if (long) {
-        const [ax, ay] = [Math.cos(turn), Math.sin(turn)];
+        const [ax, ay] = [cos(turn), sin(turn)];
         const half = (size / 2) * take + 0.5;
 
         for (let t = -half; t <= half; t += 0.5) {
@@ -262,7 +263,7 @@ function squaresOf({ x, y, size, turn }, { long, take }) {
 
         for (let sy = Math.floor(y - reach); sy <= Math.floor(y + reach); sy++) {
             for (let sx = Math.floor(x - reach); sx <= Math.floor(x + reach); sx++) {
-                if (Math.hypot(sx + 0.5 - x, sy + 0.5 - y) <= reach) {
+                if (hypot(sx + 0.5 - x, sy + 0.5 - y) <= reach) {
                     add(sx, sy);
                 }
             }
