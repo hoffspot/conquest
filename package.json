@@ -16,6 +16,7 @@
     "lint": "eslint .",
     "check": "npm run lint && npm test",
     "vendor:three": "node scripts/vendor-three.js",
+    "vendor:meshopt": "node scripts/vendor-meshopt.js",
     "build:manifest": "node scripts/build-manifest.js",
     "build:characters": "node scripts/build-characters.js",
     "build:music": "node scripts/build-music.js"
@@ -28,6 +29,7 @@
     "esbuild": "0.28.2",
     "eslint": "^9.39.1",
     "globals": "^16.5.0",
+    "meshoptimizer": "^1.3.0",
     "three": "0.186.0"
   }
 }

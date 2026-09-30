@@ -1325,6 +1325,12 @@ never taken to be out of view. Creatures are posed every frame: they cost 10 to 
 drawn only in view, and the wight lord's cape is blown about only in view (WILDS.md, *Drawn
 only in view*).
 
+**Fewer triangles from afar.** By the same measure, anyone but a player is drawn with a quarter of
+its body's and outfit's triangles under 140 pixels tall, and in full again over 170
+(`Character.fitDetail`, characters/lod.js, described in [CHARACTERS.md](CHARACTERS.md#performance)):
+the same vertices, pictures and bones, a second list of triangles made once for everyone in a
+worker.
+
 Attacks, flinches and falls (characters/actions.js, described in
 [CHARACTERS.md](CHARACTERS.md#fighting-actionsjs)) are started by the battle's events: an
 `attack` event starts the weapon's attack (in any of its five ways but the one it last used),
