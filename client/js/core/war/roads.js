@@ -5,6 +5,7 @@
 // Worked out from the plan (the same every time for a seed): nothing here is kept.
 
 import { CELL } from "../worldplan/plan.js";
+import { hypot } from "../exact.js";
 
 /** How much longer going across country takes than by road (a metre of it counts as this many). */
 export const ACROSS_COUNTRY = 1.8;
@@ -16,7 +17,7 @@ const ACROSS_TO = 4;
 const WAYPOINT_EVERY = 3;
 
 const centre = ([x, y]) => [(x + 0.5) * CELL, (y + 0.5) * CELL];
-const apart = ([ax, ay], [bx, by]) => Math.hypot(ax - bx, ay - by);
+const apart = ([ax, ay], [bx, by]) => hypot(ax - bx, ay - by);
 
 export class Roads {
     /** @param {object} plan - The world plan (worldplan/plan.js planWorld). */

@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { layoutCastle } from "../client/js/core/setpieces/castle.js";
-import { atan2, cos, sin, sqrt } from "../client/js/core/setpieces/exact.js";
+import { atan2, cos, exp, hypot, log, pow, sin, sqrt } from "../client/js/core/exact.js";
 import { GROUND, pieceCatalog, PLOT } from "../client/js/core/setpieces/pieces.js";
 import { Plan } from "../client/js/core/setpieces/plan.js";
 import { footprint, layoutTown, PEOPLE_TOWNS, SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
@@ -439,12 +439,72 @@ describe("exact arithmetic (exact.js)", () => {
 
         assert.deepEqual([sqrt(0), sqrt(-1), atan2(0, 0)], [0, 0, 0]);
     });
+
+    it("works out lengths as V8's Math.hypot does, to the last digit, either way round", () => {
+        let seed = 7;
+        const next = () => ((seed = (seed * 16807) % 2147483647) / 2147483647 - 0.5) * 10 ** ((seed % 7) - 1);
+
+        for (let k = 0; k < 20000; k++) {
+            const [x, y] = [next(), next()];
+
+            assert.ok(Object.is(hypot(x, y), Math.hypot(x, y)) && hypot(x, y) === hypot(y, x), `${x}, ${y}`);
+        }
+
+        for (let x = -40; x <= 40; x++) {
+            for (let y = -40; y <= 40; y++) {
+                assert.ok(Object.is(hypot(x, y), Math.hypot(x, y)), `${x}, ${y}`);
+            }
+        }
+
+        assert.deepEqual([hypot(3, 4), hypot(0, -0), hypot(Infinity, NaN), hypot(NaN, 1)], [5, 0, Infinity, NaN]);
+    });
+
+    it("works out logarithms, powers of e and powers as Math does, near enough", () => {
+        for (let value = 1e-6; value < 1e9; value *= 1.37) {
+            assert.ok(Math.abs(log(value) - Math.log(value)) <= 1e-15 * Math.max(1, Math.abs(Math.log(value))), `${value}`);
+        }
+
+        for (let power = -40; power < 40; power += 0.173) {
+            assert.ok(Math.abs(exp(power) - Math.exp(power)) <= 1e-14 * Math.exp(power), `${power}`);
+        }
+
+        for (let value = 0.001; value < 2e5; value *= 1.29) {
+            for (const power of [1.6, -1.6, 0.37, 5, 1 / 1.2]) {
+                assert.ok(Math.abs(pow(value, power) - Math.pow(value, power)) <= 1e-13 * Math.pow(value, power), `${value} ** ${power}`);
+            }
+        }
+
+        assert.deepEqual([log(1), exp(0), pow(0, 2), pow(0, 0), pow(5, 0), log(0)], [0, 1, 0, 1, 1, -Infinity]);
+    });
+});
+
+describe("the rules", () => {
+    // (What works out what happens, and the world laid out from a seed: every game playing one
+    // world together must work it out alike, whatever browser it's in. variety.js is only for
+    // looks: how animations vary)
+    it("only use arithmetic that every browser does the same way (exact.js for the rest)", () => {
+        const core = new URL("../client/js/core/", import.meta.url);
+        const files = readdirSync(core, { recursive: true }).filter((file) => file.endsWith(".js"));
+
+        assert.ok(files.length > 40);
+
+        for (const file of files) {
+            const source = readFileSync(new URL(file, core), "utf8").replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
+
+            assert.doesNotMatch(source, /Math\.(sin|cos|tan|asin|acos|atan|atan2|sinh|cosh|tanh|asinh|acosh|atanh|exp|expm1|log|log1p|log2|log10|pow|hypot|cbrt)\b/, file);
+            assert.doesNotMatch(source.replace(/\b2 \*\* \d+\b/g, ""), /\*\*/, `${file}: ** (but for whole powers of two)`);
+
+            if (!file.endsWith("variety.js")) {
+                assert.doesNotMatch(source, /Math\.random\b/, file);
+            }
+        }
+    });
 });
 
 describe("set piece art", () => {
     it("only uses arithmetic that every browser does the same way (so layouts can be made in multiplayer games)", () => {
-        for (const file of ["castle.js", "town.js", "plan.js", "pieces.js", "exact.js"]) {
-            const source = readFileSync(new URL(`../client/js/core/setpieces/${file}`, import.meta.url), "utf8").replace(/\/\/.*$/gm, "");
+        for (const file of ["setpieces/castle.js", "setpieces/town.js", "setpieces/plan.js", "setpieces/pieces.js"]) {
+            const source = readFileSync(new URL(`../client/js/core/${file}`, import.meta.url), "utf8").replace(/\/\/.*$/gm, "");
 
             assert.doesNotMatch(source, /Math\.(random|sin|cos|tan|exp|log|pow|atan|hypot|cbrt|sqrt)\b/, file);
         }

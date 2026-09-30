@@ -16,6 +16,7 @@ import { CREATURES } from "./creatures.js";
 import { PARTS, SPOILS } from "./spoils.js";
 import { rollTome, SPELLS } from "./spells.js";
 import { ADJECTIVES } from "./war/peoples.js";
+import { hypot } from "./exact.js";
 
 /** The ranks: each one's title, the standing it takes, and what it opens. */
 export const STANDINGS = Object.freeze([
@@ -105,7 +106,7 @@ export function armouryGift(rank, weapon, withShield, people = "human") {
     }
 }
 
-const apart = ([ax, ay], [bx, by]) => Math.hypot(ax - bx, ay - by);
+const apart = ([ax, ay], [bx, by]) => hypot(ax - bx, ay - by);
 
 // The words for a people's soldiers ("orcish soldiers")
 const soldiersOf = (realm) => `${ADJECTIVES[realm] ?? realm} soldiers`;

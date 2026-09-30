@@ -30,6 +30,7 @@ import { bannersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, roundsOf, sortie
 import { ADJECTIVES } from "./war/peoples.js";
 import { HOLDINGS, RISING, War } from "./war/war.js";
 import { distanceBetween, WEAPONS } from "./weapons.js";
+import { cos, hypot, sin } from "./exact.js";
 
 /** The id of the player whose game the world runs in (the only one, playing alone). */
 export const HOST_PLAYER = "player";
@@ -1489,7 +1490,7 @@ export class Host {
             return refuse("dead");
         }
 
-        if (dropped.map !== actor.map || Math.hypot(actor.x - dropped.square[0] - 0.5, actor.y - dropped.square[1] - 0.5) > PICK_REACH) {
+        if (dropped.map !== actor.map || hypot(actor.x - dropped.square[0] - 0.5, actor.y - dropped.square[1] - 0.5) > PICK_REACH) {
             return refuse("far");
         }
 
@@ -1530,7 +1531,7 @@ export class Host {
 
     // Two in the battle within `reach` of each other, on the same map
     static #near(a, b, reach) {
-        return a.map === b.map && Math.hypot(a.x - b.x, a.y - b.y) <= reach;
+        return a.map === b.map && hypot(a.x - b.x, a.y - b.y) <= reach;
     }
 
     // The trade a player's in (said yes to by both), if any
@@ -1755,7 +1756,7 @@ export class Host {
         for (const player of this.players.values()) {
             const actor = this.battle.actor(player.id);
 
-            if (!actor || actor.dead || actor.map !== fallen.map || Math.hypot(actor.x - fallen.x, actor.y - fallen.y) > SPOILS_REACH) {
+            if (!actor || actor.dead || actor.map !== fallen.map || hypot(actor.x - fallen.x, actor.y - fallen.y) > SPOILS_REACH) {
                 continue;
             }
 
@@ -1939,7 +1940,7 @@ export class Host {
             const place = this.#placeOf(town.id);
             const middle = this.#middleOf(place);
             const edge = SETTLEMENT_KINDS[place.kind].radius;
-            const distances = places.map(([x, y]) => Math.hypot(x - middle[0], y - middle[1]) - edge);
+            const distances = places.map(([x, y]) => hypot(x - middle[0], y - middle[1]) - edge);
             const mustered = this.mustered.get(town.id);
 
             if (mustered && (mustered.people !== town.owner || distances.every((distance) => distance > MUSTER.far))) {
@@ -1952,7 +1953,7 @@ export class Host {
         }
 
         // The camps near a player pitched, and those far from every player (or gone) struck
-        const near = (camp, within) => places.some(([x, y]) => Math.hypot(x - camp.at[0], y - camp.at[1]) < within);
+        const near = (camp, within) => places.some(([x, y]) => hypot(x - camp.at[0], y - camp.at[1]) < within);
 
         for (const id of [...this.camps.keys()]) {
             const camp = war.force(id);
@@ -2141,7 +2142,7 @@ export class Host {
         }
 
         const places = this.#whereabouts();
-        const distanceTo = (actor) => Math.min(...places.map(([x, y]) => Math.hypot(actor.x - x, actor.y - y)));
+        const distanceTo = (actor) => Math.min(...places.map(([x, y]) => hypot(actor.x - x, actor.y - y)));
         const homes = [...this.players.values()].map((player) => ({ at: this.#whereIs(player), home: this.#homeOf(player) })).filter(({ at }) => at);
 
         for (const [id, one] of [...this.wild]) {
@@ -2167,7 +2168,7 @@ export class Host {
             const about = [...this.wild].filter(([id, one]) => {
                 const beast = !one.camp && !one.lair ? this.battle.actor(id) : null;
 
-                return beast && !beast.dead && Math.hypot(beast.x - actor.x, beast.y - actor.y) < WILDS.about;
+                return beast && !beast.dead && hypot(beast.x - actor.x, beast.y - actor.y) < WILDS.about;
             }).length;
 
             if (about < WILDS.count) {
@@ -2192,7 +2193,7 @@ export class Host {
         for (let tries = 0; tries < 6; tries++) {
             const angle = this.random.next() * Math.PI * 2;
             const reach = WILDS.from + this.random.next() * (WILDS.to - WILDS.from);
-            const at = [x + Math.cos(angle) * reach, y + Math.sin(angle) * reach];
+            const at = [x + cos(angle) * reach, y + sin(angle) * reach];
 
             if (!clearOfSettlements(plan, at, WILDS.clear) || landAt(plan, ...at).water) {
                 continue;
@@ -2284,7 +2285,7 @@ export class Host {
     // patrols, as strong as its tier (from the home of the player nearest it: few, near home);
     // let go once every player's far
     #wildCamps(homes) {
-        const near = (at, within) => homes.some(({ at: [x, y] }) => Math.hypot(x - at[0], y - at[1]) < within);
+        const near = (at, within) => homes.some(({ at: [x, y] }) => hypot(x - at[0], y - at[1]) < within);
 
         for (const [id, held] of [...this.wildCamps]) {
             const camp = this.world.plan.camps.find((each) => each.id === id);
@@ -2305,7 +2306,7 @@ export class Host {
                 continue;
             }
 
-            const nearest = homes.reduce((best, each) => (Math.hypot(each.at[0] - camp.at[0], each.at[1] - camp.at[1]) < Math.hypot(best.at[0] - camp.at[0], best.at[1] - camp.at[1]) ? each : best));
+            const nearest = homes.reduce((best, each) => (hypot(each.at[0] - camp.at[0], each.at[1] - camp.at[1]) < hypot(best.at[0] - camp.at[0], best.at[1] - camp.at[1]) ? each : best));
             const tier = campTier(camp, nearest.home);
             const creature = campFolk(camp.faction, tier);
             const patrols = Math.min(camp.patrols, 1 + Math.floor(tier / 3));
@@ -2316,7 +2317,7 @@ export class Host {
                 const angle = ((k + 0.5) / patrols) * Math.PI * 2;
                 const out = camp.roam * 0.5;
 
-                ids.push(...this.#pack({ creature, tier, count: Math.max(1, packOf(creature, tier) - (tier <= 2 ? 1 : 0)) }, [camp.at[0] + Math.cos(angle) * out, camp.at[1] + Math.sin(angle) * out], { camp: camp.id, roam: camp.roam * 0.4 }));
+                ids.push(...this.#pack({ creature, tier, count: Math.max(1, packOf(creature, tier) - (tier <= 2 ? 1 : 0)) }, [camp.at[0] + cos(angle) * out, camp.at[1] + sin(angle) * out], { camp: camp.id, roam: camp.roam * 0.4 }));
             }
 
             this.wildCamps.set(camp.id, { ids });
@@ -2326,7 +2327,7 @@ export class Host {
     // The perilous sites (a dragon's lair, the ruined castles) near a player: their master (unless
     // slain lately) and its guards there; let go once every player's far
     #lairs(places) {
-        const near = (at, within) => places.some(([x, y]) => Math.hypot(x - at[0], y - at[1]) < within);
+        const near = (at, within) => places.some(([x, y]) => hypot(x - at[0], y - at[1]) < within);
 
         for (const [id, held] of [...this.lairs]) {
             const site = this.#siteOf(id);
@@ -2359,7 +2360,7 @@ export class Host {
             lair.guards.forEach(([creature, count, guardTier], k) => {
                 const angle = (k / lair.guards.length) * Math.PI * 2;
 
-                ids.push(...this.#pack({ creature, tier: guardTier, count }, [site.at[0] + Math.cos(angle) * 6, site.at[1] + Math.sin(angle) * 6], { lair: site.id, roam: 6 }));
+                ids.push(...this.#pack({ creature, tier: guardTier, count }, [site.at[0] + cos(angle) * 6, site.at[1] + sin(angle) * 6], { lair: site.id, roam: 6 }));
             });
 
             this.lairs.set(site.id, { ids });
@@ -2509,7 +2510,7 @@ export class Host {
 
         for (let k = leg + 1; k < envoy.path.length && left > 0; k++) {
             const [nx, ny] = envoy.path[k];
-            const distance = Math.hypot(nx - x, ny - y);
+            const distance = hypot(nx - x, ny - y);
 
             if (distance <= left) {
                 [x, y, left] = [nx, ny, left - distance];
@@ -2536,7 +2537,7 @@ export class Host {
 
             let leg = met.leg;
 
-            while (leg < envoy.path.length - 1 && Math.hypot(envoy.path[leg + 1][0] - leader.x, envoy.path[leg + 1][1] - leader.y) <= ENVOY.past) {
+            while (leg < envoy.path.length - 1 && hypot(envoy.path[leg + 1][0] - leader.x, envoy.path[leg + 1][1] - leader.y) <= ENVOY.past) {
                 leg++;
             }
 
@@ -2785,7 +2786,7 @@ export class Host {
 
     // One of the wild's creatures fallen near someone lately, still lying there (the one named, or the nearest): or null
     #corpseNear(actor, reach, named = null) {
-        const lies = (one) => Boolean(one?.dead && one.map === actor.map && this.wild.has(one.id) && Math.hypot(one.x - actor.x, one.y - actor.y) <= reach);
+        const lies = (one) => Boolean(one?.dead && one.map === actor.map && this.wild.has(one.id) && hypot(one.x - actor.x, one.y - actor.y) <= reach);
 
         if (named !== null) {
             const one = this.battle.actor(named);
@@ -2793,7 +2794,7 @@ export class Host {
             return lies(one) ? one : null;
         }
 
-        return this.battle.actors.filter(lies).sort((a, b) => Math.hypot(a.x - actor.x, a.y - actor.y) - Math.hypot(b.x - actor.x, b.y - actor.y))[0] ?? null;
+        return this.battle.actors.filter(lies).sort((a, b) => hypot(a.x - actor.x, a.y - actor.y) - hypot(b.x - actor.x, b.y - actor.y))[0] ?? null;
     }
 
     // A spell landed that the host works the wonder of (a player's): raising the dead, calling a
@@ -2907,7 +2908,7 @@ export class Host {
                 continue;
             }
 
-            if (!actor.dead && !leader.dead && (actor.map !== leader.map || Math.hypot(actor.x - leader.x, actor.y - leader.y) > COMPANION.far)) {
+            if (!actor.dead && !leader.dead && (actor.map !== leader.map || hypot(actor.x - leader.x, actor.y - leader.y) > COMPANION.far)) {
                 const square = this.#behind(leader);
 
                 if (square) {
@@ -2930,7 +2931,7 @@ export class Host {
 
     // A free square behind someone (the way they're facing: behind them), near them: or null
     #behind(actor) {
-        const [dx, dy] = [Math.sin(actor.facing), Math.cos(actor.facing)];
+        const [dx, dy] = [sin(actor.facing), cos(actor.facing)];
         const goal = [Math.floor(actor.x - dx * COMPANION.behind), Math.floor(actor.y - dy * COMPANION.behind)];
         const taken = new Set(this.battle.actors.filter((each) => each.map === actor.map && each !== actor).map(({ square: [x, y] }) => squareKey(x, y)));
 
@@ -2966,7 +2967,7 @@ export class Host {
     #attract(player) {
         const actor = this.battle.actor(player.id);
         const { creature, tier } = this.#local(player);
-        const [dx, dy] = [Math.sin(actor.facing), Math.cos(actor.facing)];
+        const [dx, dy] = [sin(actor.facing), cos(actor.facing)];
         const ids = actor.map === "town" ? this.#pack({ creature, tier, count: 1 }, [actor.x + dx * 3, actor.y + dy * 3]) : [];
 
         if (ids.length) {
@@ -3032,7 +3033,7 @@ export class Host {
             return null;
         }
 
-        const apart = (at) => Math.hypot(at[0] - x, at[1] - y);
+        const apart = (at) => hypot(at[0] - x, at[1] - y);
         const home = [...buildings.values()].find(({ kind, place }) => kind === "church" && place === "home");
         const places = (this.world.plan?.places ?? []).filter(({ id, kind }) => TEMPLED.has(kind) && id !== this.world.start?.id).sort((a, b) => apart(a.at) - apart(b.at));
         const doorOf = (building) => building?.door?.ends?.[0] ?? null;
@@ -3625,7 +3626,7 @@ export class Host {
         }
 
         // (How near a place a player is: from a town's middle, less its reach)
-        const near = (point, reach) => Boolean(at && point) && Math.hypot(at[0] - point[0], at[1] - point[1]) <= reach;
+        const near = (point, reach) => Boolean(at && point) && hypot(at[0] - point[0], at[1] - point[1]) <= reach;
         const townAt = (town) => {
             const place = this.#placeOf(town.id);
 
@@ -3792,8 +3793,8 @@ export class Host {
             }
 
             const { x, z } = building.entrance.door;
-            const near = wanted.has(building.key) || places.some((place) => place?.out && Math.hypot(x - place.x, z - place.y) < RELEVANCE.near);
-            const far = !wanted.has(building.key) && places.every((place) => place && Math.hypot(x - place.x, z - place.y) > RELEVANCE.far);
+            const near = wanted.has(building.key) || places.some((place) => place?.out && hypot(x - place.x, z - place.y) < RELEVANCE.near);
+            const far = !wanted.has(building.key) && places.every((place) => place && hypot(x - place.x, z - place.y) > RELEVANCE.far);
 
             if (!this.open.has(building.key) && near) {
                 this.#openBuilding(building.key);

@@ -4,6 +4,7 @@
 import { RACES } from "../worldplan/races.js";
 import { describeLeader } from "./peoples.js";
 import { STAGES } from "./war.js";
+import { hypot } from "../exact.js";
 
 const MISSIONS = Object.freeze({ truce: "a truce", alliance: "an alliance", break: "an end to their alliance" });
 
@@ -110,7 +111,7 @@ export function rumoursAt(war, at, { count = 3, reach = 5000 } = {}) {
     const near = (id) => {
         const town = war.town(id);
 
-        return Boolean(town) && Math.hypot(town.at[0] - at[0], town.at[1] - at[1]) <= reach;
+        return Boolean(town) && hypot(town.at[0] - at[0], town.at[1] - at[1]) <= reach;
     };
 
     for (let k = war.log.length - 1; k >= 0 && heard.length < count; k--) {

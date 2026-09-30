@@ -9,6 +9,7 @@
 import { BIOMES, RACE, RACES } from "./races.js";
 import { campTier, ROAD, SETTLEMENTS, settleLand, startTown } from "./settle.js";
 import { CELL, CELLS, cellIndex, shapeLand, WATER, WORLD_SIZE } from "./terrain.js";
+import { hypot } from "../exact.js";
 
 export { BIOME, BIOMES, FACTIONS, RACE, RACES, SITES } from "./races.js";
 export { campTier, ROAD, SETTLEMENTS } from "./settle.js";
@@ -139,7 +140,7 @@ export function guilds(plan) {
 export function guildFor(plan, x, z) {
     const branches = guilds(plan);
 
-    return branches.reduce((best, place) => (Math.hypot(place.at[0] - x, place.at[1] - z) < Math.hypot(best.at[0] - x, best.at[1] - z) ? place : best), branches[0]);
+    return branches.reduce((best, place) => (hypot(place.at[0] - x, place.at[1] - z) < hypot(best.at[0] - x, best.at[1] - z) ? place : best), branches[0]);
 }
 
 /**
@@ -156,7 +157,7 @@ export function openGround(plan, branch, seed, count) {
         return state / 4294967296;
     };
     const found = [];
-    const clear = (cell, list, within) => list.every((item) => Math.hypot(item.cell[0] - cell[0], item.cell[1] - cell[1]) >= within);
+    const clear = (cell, list, within) => list.every((item) => hypot(item.cell[0] - cell[0], item.cell[1] - cell[1]) >= within);
 
     for (let tries = 0; found.length < count && tries < count * 400; tries++) {
         const at = [branch.at[0] + (next() - 0.5) * 3200, branch.at[1] + (next() - 0.5) * 3200];
@@ -172,7 +173,7 @@ export function openGround(plan, branch, seed, count) {
             continue;
         }
 
-        if (!plan.places.every((place) => Math.hypot(place.at[0] - at[0], place.at[1] - at[1]) >= place.radius + 150)) {
+        if (!plan.places.every((place) => hypot(place.at[0] - at[0], place.at[1] - at[1]) >= place.radius + 150)) {
             continue;
         }
 

@@ -718,6 +718,18 @@ to its mobile network, or losing its signal a moment, needn't end the game:
 - **Copies.** One who joins is sent the world as it is (a snapshot, `Host.restore`), then all that's
   recorded. They play it again on their own copy of the world, step for step, and it comes out the
   same (the engine's made so: seeded random numbers, and nothing hanging on what any game's drawn).
+- **Exact maths** (`core/exact.js`). The world a joined game lays out again from the seed, and
+  everything its copy works out, must come out the same in any browser. JavaScript leaves how near
+  sines, cosines, arctangents, powers and `Math.hypot` come to the truth to each browser, and they
+  needn't agree in the last digit, which is enough to put a road or a town elsewhere. So the rules
+  never use them (a test holds every file in `core/` to it): sines, cosines and arctangents are
+  worked out from + - * / alone; powers from a logarithm and a power of e worked out the same
+  way; whole powers as products; and lengths (`hypot`) as V8 works out `Math.hypot`, step for
+  step, so every world is laid out as Chrome always has laid it out, now in every browser (40 seeds'
+  plans, start towns and surroundings, and 432 town layouts, checked the same to the last digit).
+  Only `Math.sqrt` is left to the browser: each has the processor work it out, and IEEE 754 has
+  that give the nearest number to the truth. A world's plan is also about 15% quicker to lay out:
+  how far each climate reaches is worked out once for each distance.
 - **Pace.** A copy plays steps as they come, and catches up when it falls more than 6 behind
   (`PACE`): up to 40 more steps a frame, for no more than 8 ms of it, so that on a slow phone
   catching up doesn't make the frame so long that it falls further behind.

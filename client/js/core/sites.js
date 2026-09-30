@@ -13,6 +13,7 @@ import { layoutCastle } from "./setpieces/castle.js";
 import { footprint } from "./setpieces/town.js";
 import { LANDMARKS, PEOPLE_PLACES, PLOT, pieceCatalog, towerKey } from "./setpieces/pieces.js";
 import { CELLS, CHUNK, CHUNKS, WORLD_SIZE } from "./worldplan/plan.js";
+import { atan2, cos, hypot, sin } from "./exact.js";
 
 // The humans' own (plots across and deep): their castle, laid out by castle.js, and the rest as
 // their landmarks are built
@@ -75,7 +76,7 @@ export class Sites {
             }
 
             // (Near every chunk it could reach, moved as far as it may be)
-            const reach = SHIFT + Math.hypot(...size) * (PLOT / 2) + SITE_MARGIN;
+            const reach = SHIFT + hypot(size[0], size[1]) * (PLOT / 2) + SITE_MARGIN;
 
             for (let cy = Math.floor((site.at[1] - reach) / CHUNK); cy <= Math.floor((site.at[1] + reach) / CHUNK); cy++) {
                 for (let cx = Math.floor((site.at[0] - reach) / CHUNK); cx <= Math.floor((site.at[0] + reach) / CHUNK); cx++) {
@@ -161,7 +162,7 @@ export class Sites {
 
             for (let k = 0; k < tries; k++) {
                 const a = (k / tries) * TAU;
-                const [x, y] = [Math.round(site.at[0] + Math.cos(a) * r), Math.round(site.at[1] + Math.sin(a) * r)];
+                const [x, y] = [Math.round(site.at[0] + cos(a) * r), Math.round(site.at[1] + sin(a) * r)];
                 const corners = footprint({ x, y, w, h, facing });
 
                 if (unclear.some(([i, j]) => within(corners, i + 0.5, j + 0.5))) {
@@ -186,7 +187,7 @@ export class Sites {
                     h,
                     pieces: this.#pieces(site, x, y, facing, [w, h]),
                     squares: new Set(squares.map(([i, j]) => j * size + i)),
-                    radius: Math.hypot(w, h) * (PLOT / 2),
+                    radius: hypot(w, h) * (PLOT / 2),
                 };
             }
         }
@@ -210,7 +211,7 @@ export class Sites {
             }
         }
 
-        return best ? Math.atan2(best.dx, best.dy) : 0;
+        return best ? atan2(best.dx, best.dy) : 0;
     }
 
     // What's built at a site: one piece of its people's (a special place, a castle, a watchtower),
@@ -234,7 +235,7 @@ export class Sites {
 
         // (The humans' castle: laid out facing south, its gate to the road, then turned)
         const castle = layoutCastle({ width: w, height: h, gate: "s", seed: site.seed });
-        const [c, s] = [Math.cos(facing), Math.sin(facing)];
+        const [c, s] = [cos(facing), sin(facing)];
 
         return castle.pieces.map((piece) => {
             const spec = catalog.get(piece.key);

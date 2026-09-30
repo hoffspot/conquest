@@ -10,6 +10,7 @@ import { createRandom } from "../random.js";
 import { Queue } from "./queue.js";
 import { BIOME, BIOMES, FACTIONS, RACES, SITES } from "./races.js";
 import { CELL, CELLS, cellIndex, WATER } from "./terrain.js";
+import { cos, hypot, pow, sin } from "../exact.js";
 
 /**
  * The kinds of settlement: how many each people has, how far (cells) they keep from others (two
@@ -77,7 +78,7 @@ const NEIGHBOURS = [
 ];
 
 const centre = (x, y) => [(x + 0.5) * CELL, (y + 0.5) * CELL];
-const apart = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+const apart = (a, b) => hypot(a[0] - b[0], a[1] - b[1]);
 
 // A name in a people's tongue, not yet used, and easy to say (no part said twice running, like
 // "Ingingwick", nor three vowels together)
@@ -186,7 +187,7 @@ function settle(land, random, used) {
         };
 
         // The capital: the best land near the heartland's middle (clear of water, if there's any)
-        const close = cells.filter(({ x, y }) => Math.hypot(x - hx, y - hy) < 12);
+        const close = cells.filter(({ x, y }) => hypot(x - hx, y - hy) < 12);
         const near = close.some((cell) => cell.dry) ? close.filter((cell) => cell.dry) : close;
 
         add("capital", near.reduce((best, cell) => (cell.score > best.score ? cell : best), near[0] ?? { x: hx, y: hy, score: 0 }));
@@ -195,7 +196,7 @@ function settle(land, random, used) {
         // often first)
         for (const kind of ["city", "town", "village"]) {
             const want = random.int(...SETTLEMENTS[kind].count);
-            const order = cells.filter((cell) => kind === "village" || cell.dry).map((cell) => ({ cell, key: random.next() ** (1 / (0.2 + cell.score)) })).sort((a, b) => b.key - a.key);
+            const order = cells.filter((cell) => kind === "village" || cell.dry).map((cell) => ({ cell, key: pow(random.next(), 1 / (0.2 + cell.score)) })).sort((a, b) => b.key - a.key);
 
             for (const { cell } of order) {
                 if (mine.filter((p) => p.kind === kind).length >= want) {
@@ -230,7 +231,7 @@ function router(land) {
         const queue = new Queue();
         const start = cellIndex(...from);
         const goal = cellIndex(...to);
-        const guess = (k) => Math.hypot((k % CELLS) - to[0], Math.floor(k / CELLS) - to[1]) * REUSE;
+        const guess = (k) => hypot((k % CELLS) - to[0], Math.floor(k / CELLS) - to[1]) * REUSE;
 
         cost[start] = 0;
         touched.push(start);
@@ -547,7 +548,7 @@ function encamp(land, road, places, sites, random) {
         for (let placed = 0, tries = 0; placed < HOME_CAMPS && tries < 1500; tries++) {
             const angle = random.next() * Math.PI * 2;
             const out = random.range(900, NEAR_HOME);
-            const cell = [Math.floor((sx + Math.cos(angle) * out) / CELL), Math.floor((sy + Math.sin(angle) * out) / CELL)];
+            const cell = [Math.floor((sx + cos(angle) * out) / CELL), Math.floor((sy + sin(angle) * out) / CELL)];
 
             placed += pitch(cell, true) ? 1 : 0;
         }

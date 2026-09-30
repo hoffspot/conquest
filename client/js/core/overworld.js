@@ -32,6 +32,7 @@ import { featuresOf } from "./wilds.js";
 import { GROUND, HOME_TREES, TREE_KINDS } from "./setpieces/pieces.js";
 import { generateWorld } from "./world.js";
 import { BIOME, BIOMES, CELL, CELLS, CHUNK, CHUNKS, planWorld, RACES, startFor, WATER, WORLD_SIZE } from "./worldplan/plan.js";
+import { hypot } from "./exact.js";
 
 export { CHUNK, CHUNKS, WORLD_SIZE };
 
@@ -104,7 +105,7 @@ function fromSegment(px, py, [ax, ay, bx, by]) {
     const [dx, dy] = [bx - ax, by - ay];
     const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1)));
 
-    return Math.hypot(px - (ax + dx * t), py - (ay + dy * t));
+    return hypot(px - (ax + dx * t), py - (ay + dy * t));
 }
 
 // A line through cells' middles, rounded at its corners (twice cut in, keeping its ends)
@@ -281,7 +282,7 @@ export class Overworld {
     settled(x, y) {
         const { middle, radius } = this.stamp;
 
-        if (middle && this.inTown(x, y) && Math.hypot(x + 0.5 - middle[0], y + 0.5 - middle[1]) < radius) {
+        if (middle && this.inTown(x, y) && hypot(x + 0.5 - middle[0], y + 0.5 - middle[1]) < radius) {
             return true;
         }
 
@@ -399,7 +400,7 @@ export class Overworld {
                 continue;
             }
 
-            const exit = exits.reduce((best, e) => (Math.hypot(e[0] - from[0], e[1] - from[1]) < Math.hypot(best[0] - from[0], best[1] - from[1]) ? e : best));
+            const exit = exits.reduce((best, e) => (hypot(e[0] - from[0], e[1] - from[1]) < hypot(best[0] - from[0], best[1] - from[1]) ? e : best));
 
             if (end === "start") {
                 line.points.unshift(exit);
@@ -572,7 +573,7 @@ export class Overworld {
     #bridgeAt(px, py) {
         return this.#bridgesNear(Math.floor(px / CHUNK), Math.floor(py / CHUNK)).some(({ a, b, half }) => {
             const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
-            const length = Math.hypot(dx, dy);
+            const length = hypot(dx, dy);
             const along = ((px - a[0]) * dx + (py - a[1]) * dy) / length;
 
             return along >= 0 && along <= length && Math.abs((px - a[0]) * dy - (py - a[1]) * dx) / length <= half;
@@ -599,7 +600,7 @@ export class Overworld {
             for (const bridge of near.sort(order)) {
                 const [mx, my] = middle(bridge);
 
-                if (!kept.some((other) => Math.hypot(middle(other)[0] - mx, middle(other)[1] - my) < 2 * other.half)) {
+                if (!kept.some((other) => hypot(middle(other)[0] - mx, middle(other)[1] - my) < 2 * other.half)) {
                     kept.push(bridge);
                 }
             }
@@ -619,7 +620,7 @@ export class Overworld {
 
             for (let k = 0; k < points.length - 1; k++) {
                 const [[ax, ay], [bx, by]] = [points[k], points[k + 1]];
-                const steps = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / BRIDGE.step));
+                const steps = Math.max(1, Math.ceil(hypot(bx - ax, by - ay) / BRIDGE.step));
 
                 for (let j = k ? 1 : 0; j <= steps; j++) {
                     const [x, y] = [ax + ((bx - ax) * j) / steps, ay + ((by - ay) * j) / steps];
@@ -725,7 +726,7 @@ export class Overworld {
                     continue;
                 }
 
-                const exit = exits.reduce((best, e) => (Math.hypot(e[0] - points[out][0], e[1] - points[out][1]) < Math.hypot(best[0] - points[out][0], best[1] - points[out][1]) ? e : best));
+                const exit = exits.reduce((best, e) => (hypot(e[0] - points[out][0], e[1] - points[out][1]) < hypot(best[0] - points[out][0], best[1] - points[out][1]) ? e : best));
 
                 points = [exit, ...points.slice(out)];
             }
@@ -833,7 +834,7 @@ export class Overworld {
                     continue;
                 }
 
-                if ((x >= tx0 && y >= ty0 && x < tx1 && y < ty1) || clearings.some(({ at, radius }) => Math.hypot(at[0] - x, at[1] - y) < radius) || !clear(x, y)) {
+                if ((x >= tx0 && y >= ty0 && x < tx1 && y < ty1) || clearings.some(({ at, radius }) => hypot(at[0] - x, at[1] - y) < radius) || !clear(x, y)) {
                     continue;
                 }
 
@@ -877,7 +878,7 @@ export class Overworld {
 
             const settlement = this.settlements.at(x, y);
 
-            return !(settlement && this.settlements.squareAt(settlement, x, y)) && !clearings.some(({ at, radius }) => Math.hypot(at[0] - x, at[1] - y) < radius);
+            return !(settlement && this.settlements.squareAt(settlement, x, y)) && !clearings.some(({ at, radius }) => hypot(at[0] - x, at[1] - y) < radius);
         };
         const features = featuresOf({ x0, y0, size: CHUNK, seed: plan.seed, random, landAt: (x, y) => this.biomeAt(x, y), homeAt: (x, y) => this.homeAt(x, y), free });
 
