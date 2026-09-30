@@ -15,10 +15,10 @@ import { Sky, SKY_COLOURS } from "./sky.js";
 import { CUTAWAY } from "./town3d.js";
 
 /**
- * How much each quality level draws (`undergrowth`: how thick the grass and flowers grow; `ground`:
- * how far apart the ground's corners are drawn, in the chunk the player's in and those `reach`
- * chunks round it, and further off: chunks3d.js SPACING), and how often (`frameRate`: at most, a second, app/pacing.js; 0, as often as the
- * screen refreshes).
+ * How much each quality level draws (`undergrowth`: how thick the grass and flowers grow;
+ * `ground`: how far apart the ground's corners are drawn, in the chunk the player's in and those
+ * `reach` chunks round it, and further off: chunks3d.js SPACING), and how often (`frameRate`: at
+ * most, a second, app/pacing.js; 0, as often as the screen refreshes).
  */
 export const QUALITY = Object.freeze({
     low: { label: "Low", pixelRatio: 1, shadows: 1024, antialias: false, hair: 0.2, skin: 512, undergrowth: 0.5, ground: { reach: 0, near: 1, far: 4 }, frameRate: 30 },
