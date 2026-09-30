@@ -313,6 +313,77 @@ describe("faces (Solid.face)", () => {
     });
 });
 
+describe("faces a tone's colour turns across (Solid.face, the tone's bands)", () => {
+    // (Darker below 10 world pixels up, turning there)
+    const banded = Object.assign((point) => (point[1] < 10 ? [0.5, 0.5, 0.5] : [1, 1, 1]), { bands: [10] });
+    const heightsOf = (solid) => new Set([...solid.toObject().children[0].geometry.attributes.position.array].filter((_, i) => i % 3 === 1));
+
+    it("are cut level where it turns, each piece coloured at its own corners", () => {
+        const solid = new Solid();
+
+        solid.face([[0, 0, 0], [20, 0, 0], [20, 30, 0], [0, 30, 0]], material("plaster"), undefined, banded);
+
+        assert.equal(solid.triangles, 4);
+        assert.deepEqual([...heightsOf(solid)].sort((a, b) => a - b), [0, 10, 30]);
+    });
+
+    it("are left whole where they're narrow (a timber), level, or nothing turns across them", () => {
+        for (const [points, tone] of [
+            [[[0, 0, 0], [2, 0, 0], [2, 30, 0], [0, 30, 0]], banded],
+            [[[0, 5, 0], [0, 5, -20], [20, 15, -20], [20, 15, 0]], banded],
+            [[[0, 0, 0], [20, 0, 0], [20, 30, 0], [0, 30, 0]], (point) => banded(point)],
+        ]) {
+            const solid = new Solid();
+
+            solid.face(points, material("plaster"), undefined, tone);
+            assert.equal(solid.triangles, 2);
+        }
+    });
+
+    it("draw houses' walls as they're weathered, not a tenth darker (the dirt at their foot blended up to the shade under the eaves)", () => {
+        const luminance = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        let [drawn, meant, area, off] = [0, 0, 0, 0];
+
+        for (const piece of houses.filter((_, k) => k % 9 === 0)) {
+            const solid = buildHouse(planHouse(piece));
+
+            solid.toObject().traverse((node) => {
+                if (!node.isMesh) {
+                    return;
+                }
+
+                const { position, color, normal } = node.geometry.attributes;
+
+                for (let t = 0; t < position.count; t += 3) {
+                    const up = normal.getY(t);
+                    const corners = [0, 1, 2].map((i) => new THREE.Vector3().fromBufferAttribute(position, t + i));
+                    const size = corners[1].clone().sub(corners[0]).cross(corners[2].clone().sub(corners[0])).length() / 2;
+
+                    if (Math.abs(up) >= 0.45 || size < 1e-6) {
+                        continue;
+                    }
+
+                    // (Sampled across the triangle: its corners' colours blended, and the weathering there)
+                    for (const [a, b] of [[1 / 6, 1 / 6], [2 / 3, 1 / 6], [1 / 6, 2 / 3], [1 / 3, 1 / 3]]) {
+                        const weights = [1 - a - b, a, b];
+                        const point = corners.reduce((sum, corner, i) => sum.addScaledVector(corner, weights[i]), new THREE.Vector3());
+                        const blend = luminance([0, 1, 2].map((c) => weights.reduce((sum, w, i) => sum + w * color.array[(t + i) * 3 + c], 0)));
+                        const weathered = luminance(solid.tone(point.toArray(), [normal.getX(t), up, normal.getZ(t)], node.material) ?? [1, 1, 1]);
+
+                        drawn += blend * size;
+                        meant += weathered * size;
+                        area += size;
+                        off += Math.abs(blend - weathered) > 0.08 ? size : 0;
+                    }
+                }
+            });
+        }
+
+        assert.ok(Math.abs(drawn / meant - 1) < 0.025, `drawn ${(drawn / area).toFixed(3)} against ${(meant / area).toFixed(3)}`);
+        assert.ok(off / area < 0.08, `${((off / area) * 100).toFixed(1)}% of the walls' area more than 0.08 out`);
+    });
+});
+
 describe("walls with openings (Solid.wall)", () => {
     // The area of a solid's faces facing `out`
     const areaFacing = (solid, out) => {
@@ -531,6 +602,92 @@ describe("shapes turned about an axis (Solid.lathe), lofted, swept and stood up"
         // (Four lengths of five quads, and the last closing to its tip in triangles)
         assert.equal(triangles, 4 * 5 * 2 + 5);
         assert.equal(outward, triangles);
+    });
+
+    // Each corner's position and normal, of every triangle
+    const cornersOf = (solid) => {
+        const corners = [];
+
+        solid.toObject().traverse((node) => {
+            if (node.isMesh) {
+                const { position, normal } = node.geometry.attributes;
+
+                for (let i = 0; i < position.count; i++) {
+                    corners.push({ at: new THREE.Vector3().fromBufferAttribute(position, i), normal: new THREE.Vector3().fromBufferAttribute(normal, i), triangle: Math.floor(i / 3) });
+                }
+            }
+        });
+
+        return corners;
+    };
+
+    it("shades round things round: a drum's every corner facing straight out from its axis, a four-sided pyramid (smooth: false) left in facets", () => {
+        const drum = new Solid();
+
+        drum.lathe(40, 40, [[20, 0], [20, 30]], material("plaster"), { segments: 8 });
+
+        for (const { at, normal } of cornersOf(drum)) {
+            assert.ok(normal.distanceTo(new THREE.Vector3(at.x - 40, 0, at.z - 40).normalize()) < 1e-5);
+        }
+
+        const pyramid = new Solid();
+
+        pyramid.lathe(0, 0, [[20, 0], [0, 30]], material("plaster"), { segments: 4, smooth: false });
+
+        const corners = cornersOf(pyramid);
+
+        assert.ok(corners.every(({ normal, triangle }) => normal.distanceTo(corners[triangle * 3].normal) < 1e-6));
+    });
+
+    it("keeps an edge where the outline turns sharply (a hut's wall meeting its roof), and shades through where it turns gently (a dome)", () => {
+        const hut = new Solid();
+
+        hut.lathe(0, 0, [[20, 0], [20, 20], [0, 40]], material("plaster"), { segments: 12 });
+
+        const eaves = cornersOf(hut).filter(({ at }) => Math.abs(at.y - 20) < 1e-6);
+
+        assert.ok(eaves.some(({ normal }) => Math.abs(normal.y) < 1e-6) && eaves.some(({ normal }) => normal.y > 0.6));
+
+        const dome = new Solid();
+
+        dome.lathe(0, 0, Array.from({ length: 7 }, (_, k) => [20 * Math.cos((k * Math.PI) / 12), 20 * Math.sin((k * Math.PI) / 12)]), material("plaster"), { segments: 12 });
+
+        // (Straight out from its middle, but at its foot and crown, where the outline ends, as
+        // the line of it they end: half a step, 7.5°, off)
+        for (const { at, normal } of cornersOf(dome)) {
+            const within = at.y > 1e-6 && at.y < 20 - 1e-6 ? 0.02 : 0.14;
+
+            assert.ok(normal.distanceTo(at.clone().normalize()) < within, `${at.toArray()}: ${normal.toArray()}`);
+        }
+    });
+
+    it("shades a rod round from its path, tipped towards its point as it narrows (Solid.tube)", () => {
+        const rod = new Solid();
+
+        rod.tube([[0, 0, 0], [30, 0, 0]], 5, material("timber"), { sides: 4 });
+
+        for (const { at, normal } of cornersOf(rod)) {
+            assert.ok(normal.distanceTo(new THREE.Vector3(0, at.y, at.z).normalize()) < 1e-5);
+        }
+
+        const spike = new Solid();
+
+        spike.tube([[0, 0, 0], [30, 0, 0]], [5, 0], material("iron"), { sides: 4 });
+        assert.ok(cornersOf(spike).every(({ normal }) => normal.x > 0.1 && normal.x < 0.3));
+    });
+
+    it("shades a lofted surface through where it bends gently (Solid.loft)", () => {
+        const vault = new Solid();
+        const ring = (x) => Array.from({ length: 9 }, (_, k) => [x, 20 * Math.sin((k * Math.PI) / 8), 20 * Math.cos((k * Math.PI) / 8)]);
+
+        vault.loft([ring(0), ring(30)], material("plaster"), { closed: false, out: (middle) => [0, middle[1], middle[2]] });
+
+        // (Straight out from its axis, but along its edges as the faces there: half a step off)
+        for (const { at, normal } of cornersOf(vault)) {
+            const within = Math.abs(at.y) > 1e-3 ? 0.03 : 0.2;
+
+            assert.ok(normal.distanceTo(new THREE.Vector3(0, at.y, at.z).normalize()) < within, `${at.toArray()}: ${normal.toArray()}`);
+        }
     });
 
     it("stands a plan up, its sides leaning in as far as asked and its top the plan moved in (Solid.extrude)", () => {

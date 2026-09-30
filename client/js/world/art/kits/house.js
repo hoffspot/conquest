@@ -810,11 +810,20 @@ function weathering(plan) {
     const roofs = new Set([plan.roof, "thatch-grey"]);
     const [cos, sin] = [Math.cos(plan.facing), Math.sin(plan.facing)];
     const seed = plan.seed;
+    // (Where it turns up a wall, for walls to be cut there: Solid's tone bands. The shade under
+    // the eaves stops just over them, so a gable's foot isn't shaded all the way up the gable)
+    const bands = [m(1.25), ...underEaves.flatMap((level) => [level - m(0.9), level + m(0.02)])];
 
-    return (point, normal, material) => {
-        const [x, y, z] = point;
+    return Object.assign((point, normal, material) => {
+        // (Worked out for every corner of every house: numbers, not lists taken apart)
+        const x = point[0];
+        const y = point[1];
+        const z = point[2];
         const upward = normal[1];
-        let [r, g, b] = limewash.has(material.name) ? plan.tint : [1, 1, 1];
+        const washed = limewash.has(material.name);
+        let r = washed ? plan.tint[0] : 1;
+        let g = washed ? plan.tint[1] : 1;
+        let b = washed ? plan.tint[2] : 1;
         let k = 1;
 
         if (Math.abs(upward) < 0.45) {
@@ -836,10 +845,12 @@ function weathering(plan) {
             const moss = noise(x, z, seed + 7, m(2.5), 2);
             const amount = Math.max(0, north) * 0.55 * moss + 0.1 * moss;
 
-            [r, g, b] = [r * (1 - amount * 0.35), g * (1 - amount * 0.12), b * (1 - amount * 0.5)];
+            r *= 1 - amount * 0.35;
+            g *= 1 - amount * 0.12;
+            b *= 1 - amount * 0.5;
             k *= 0.9 + 0.12 * noise(x, z, seed + 3, m(1.2), 2);
         }
 
         return [r * k, g * k, b * k];
-    };
+    }, { bands });
 }

@@ -1050,8 +1050,22 @@ facing south; each is turned about its middle to face the way the layout says:
 
   Its weathering is painted on its corners: dirt splashed up the foot of the walls, shade under
   the eaves and jetties and in the reveals, streaks, moss on the roof where it faces north (as
-  the house stands), and each house's limewash a little its own colour. A house is about 300 to
-  2,000 triangles (a two-storey timber house with a jettied front about 1,700).
+  the house stands), and each house's limewash a little its own colour. A colour worked out at
+  corners is blended between them, so a plain stretch of wall drawn as one face from its foot to
+  its eaves would blend the dirt into the shade: one grey, a tenth darker than it's meant to be
+  over the walls of 391 houses, and more than a little wrong over nearly half their area. So the
+  weathering says where it turns (its `bands`: where the dirt fades out at 1.25 m, where the shade
+  under the eaves begins 0.9 m below them, and just over the eaves, where it stops, so a gable
+  isn't shaded all the way up), and every upright face half a metre wide or more is cut level
+  there (Solid.face). The walls are then drawn within 2% of their weathering, 5% of their area
+  more than a little out (the rest mostly timbers, too narrow and dark to be worth cutting), for
+  15% more triangles; each people's weathering says where it turns too (their walls from 18 to
+  51% of their area out to 7 to 18%, for 4 to 7% more). In the start town a frame draws 5 to 6%
+  more triangles for it (the same draw calls), and building a piece takes about as much longer
+  as it has more (the slowest, a cat folk's castle, about 20 ms rather than 16 on a desktop: the
+  weathering, worked out for every corner, now reads its numbers without taking lists apart,
+  which V8 didn't do for free). Most houses are 300 to 2,000 triangles (a two-storey timber
+  house with a jettied front about 2,400).
 - **Special buildings** (kits/landmarks.js), each from its piece of the layout:
   - **Taverns**, built as the houses are (timber-framed, stone or brick, as the tavern's seed
     says), one storey or two, with a wide door in the middle of the front. The tavern's name is
@@ -1171,7 +1185,13 @@ Its heights are lit as relief (bump mapping, three reads of the texture a pixel)
 roofs have depth close up at no cost in triangles. Everything that doesn't move is merged a
 block of the town (32 metres square) at a time, so each block is a draw call or two, and only
 the blocks in view (and in the sun's shadows) are drawn: a town of 23,000 to 39,000 triangles
-of buildings and props. While it's built, `buildTown` also records how tall whatever stands on
+of buildings and props. What's only worth drawing near (a timber's sides and ends, a band's or a
+strap's: anything standing no more than 10 cm proud of its wall, whose front is drawn anyway)
+is kept apart as it's built (Solid's near faces) and merged last (town3d.js `joined`: the mesh's
+userData.far says where it begins), and a chunk more than 40 metres from the player draws only
+what comes before it (chunks3d.js `DETAIL_NEAR`, `drawFar`): a third fewer triangles in the
+humans' buildings from there, and nothing to see missing, those sides being thinner than a
+pixel at that distance even on a phone. While it's built, `buildTown` also records how tall whatever stands on
 each of the town's squares is (a
 `heightMap`, read anywhere with `at(x, z)`; a building over the squares under it and its eaves,
 as it's turned, not its turned box), for the cutaway.
@@ -1182,7 +1202,14 @@ Every people builds with the same engine as the humans (engine/solid.js: walls w
 openings, lathes, lofts, tubes, the one atlas material and its weathering) and the same pieces
 of a layout (a house of a type and size, a landmark, a structure, a wall, a tower, a gatehouse,
 a prop), each people's kit (`PEOPLE_KITS`, `builderFor`) building them its own way; the humans'
-are the kits above. Each builds from its seed, never the same twice, within a budget of
+are the kits above. What's turned on a lathe, run along a tube or lofted is shaded as the round
+thing it is: each corner has its own normal (straight out from a rod's path, tipped along it as
+far as it narrows; round and up a lathe's outline), so huts, domes, thatch cones, pots, rods,
+spikes and ribs look round rather than cut in facets, at no cost. Where an outline turns sharply
+(over 40°: a hut's wall meeting its roof) it keeps its edge, and what's meant to be faceted says
+so (`smooth: false`: pinnacles, needle spires, the dark elves' pyramid roofs and obsidian
+shards, the orcs' hide pyramids). A spike let into a wall, a spout, a post on what it stands on
+has only its outer end capped. Each builds from its seed, never the same twice, within a budget of
 triangles (a house under 6,000, a landmark 9,000, a special place 14,000). A solid's faces work
 out each corner's texture position and colour once, however many triangles it's in, and keep
 their corners as they're drawn, 32-bit floats in room that grows (`Floats`), not lists of
@@ -1860,7 +1887,8 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   and all near drawn at once when asked; the undergrowth grown over several frames, the same as
   all at once; the splat and the undergrowth's places the same a step at a time; a settlement's
   buildings built a piece at a time, each made ready to merge in a step of its own, merged the
-  same as all at once); and the
+  same as all at once, drawn whole while the player's near and without the timbers' sides from
+  further off); and the
   settlements ahead laid out off the page's thread (asked for nearest first and once each, and
   taken as they were laid out; the same laid out in another thread, and one laid out from
   anything else not taken).
@@ -2007,7 +2035,12 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   sign, the guild's, each temple's patron's; every emblem painted, one or several; every prop
   built; a textured material's picture painted only when it's wanted, once for it and its copies
   (none for a house merged into the atlas); the atlas's layers (the same every time, with relief) and a house drawn from it as one
-  mesh; a solid's faces kept as the 32-bit floats they're drawn with, however many there are.
+  mesh; a solid's faces kept as the 32-bit floats they're drawn with, however many there are;
+  upright faces cut where their tone turns (not narrow ones, level ones, or those it doesn't
+  turn across), and houses' walls drawn within a few percent of their weathering (they were a
+  tenth darker); round things shaded round (a drum's corners straight out from its axis, a
+  pyramid left in facets, an edge kept where a hut's wall meets its roof, a dome, a rod and a
+  vault shaded through, a spike's normals tipped towards its point).
 - `test/wilds.test.js`: the noise (smooth, seeded, tiling when asked); the ground's patches (a
   tiling texture with dry, lush and bare in it); the land's features (placed across every land,
   many kinds, a few a chunk; the same every time; taking their squares, hiding what's behind the

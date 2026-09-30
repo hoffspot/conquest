@@ -113,7 +113,7 @@ function toron(solid, face, lean, ends, rows, every, random, { clear = [], margi
             const [from, to] = [at(u, v, -m(0.05)), at(u, v - long * random.range(0.02, 0.1), long)];
 
             // (Three-sided, and only its outer end capped: there are hundreds of them)
-            solid.tube([from, to], m(0.05), material(name), { sides: 3, caps: true });
+            solid.tube([from, to], m(0.05), material(name), { sides: 3, caps: "end" });
         }
     }
 }
@@ -181,7 +181,7 @@ function studded(solid, face, [u0, u1, v1], depth) {
 
 // A clay spout throwing the rain off a flat roof, out through a parapet's foot
 function spout(solid, [x, y, z], [ox, oz], reach = m(0.75)) {
-    solid.tube([[x - ox * m(0.2), y, z - oz * m(0.2)], [x + ox * reach, y + m(0.05), z + oz * reach]], m(0.1), material("clay"), { sides: 4, caps: true });
+    solid.tube([[x - ox * m(0.2), y, z - oz * m(0.2)], [x + ox * reach, y + m(0.05), z + oz * reach]], m(0.1), material("clay"), { sides: 4, caps: "end" });
 }
 
 // A little clay pot turned upside down on a peak, or a sun disc, or an egg on a stick
