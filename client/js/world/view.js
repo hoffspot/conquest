@@ -434,16 +434,20 @@ export class View {
         const { focus, camera, yaw } = this;
         const distance = Math.max(Math.min(this.distance, PULL.least), this.distance - this.pulled);
         const looking = (Math.min(PULL.highest, this.pitch + this.lifted) * Math.PI) / 180;
-        // (Looking up, the camera comes down behind the player to just over the ground, then
-        // tilts up from there; and it's kept over the ground behind the player all the way out,
-        // rising over a hillside rather than going into it)
-        let pitch = Math.max(looking, Math.asin(Math.max(-1, Math.min(0, (CAMERA_FLOOR - focus.y - LOOK_UP) / distance))));
+        // (Looking up, the camera comes down behind the player to just over the ground where they
+        // stand, then tilts up from there)
+        const floor = this.ground ? this.ground(focus.x, focus.z) : 0;
+        const tilted = Math.max(looking, Math.asin(Math.max(-1, Math.min(0, (floor + CAMERA_FLOOR - focus.y - LOOK_UP) / distance))));
+        let pitch = tilted;
 
+        // (And it's kept over the ground behind the player all the way out, rising over a
+        // hillside rather than going into it, still looking at the player; from a couple of
+        // metres back, where the ground can be higher than where the player stands)
         if (this.ground) {
             let least = -1;
 
-            for (let along = 1; along <= distance + 0.01; along += Math.max(1, distance / 8)) {
-                const across = Math.cos(pitch) * along;
+            for (let along = 2; along <= distance + 0.01; along += Math.max(1, distance / 8)) {
+                const across = Math.cos(tilted) * along;
                 const ground = this.ground(focus.x + Math.sin(yaw) * across, focus.z + Math.cos(yaw) * across);
 
                 least = Math.max(least, (ground + CAMERA_FLOOR - focus.y - LOOK_UP) / along);
@@ -457,8 +461,8 @@ export class View {
         camera.position.set(focus.x + Math.sin(yaw) * across, focus.y + LOOK_UP + Math.sin(pitch) * distance, focus.z + Math.cos(yaw) * across);
         camera.lookAt(focus.x, focus.y + LOOK_UP, focus.z);
 
-        if (pitch > looking) {
-            camera.rotateX(pitch - looking);
+        if (pitch === tilted && tilted > looking) {
+            camera.rotateX(tilted - looking);
         }
 
         // The sun's shadows follow the player, a little ahead of them where more of the ground is

@@ -658,11 +658,77 @@ For M8, the checks come first and the motion comes from real people:
    hand by IK to a second grip frame. Sheaths are sockets placed clear of the arm's sweep, which
    the check measures.
 
-**Mixamo.** The user offered browser access. Its terms allow use in finished games but forbid
-giving away the raw files, and this repository and its web page are public. So the default is the
-CC0 and CC-BY sources above. Mixamo is used only if the motion check shows gaps they can't fill,
-and only after the user decides how Mixamo-derived data may be kept (for example, outside the
-public repository). Nothing that costs money is done without approval.
+**Mixamo.** Its terms allow use in finished games but forbid giving away the raw files, and this
+repository and its web page are public. The user has since offered to arrange a licence; §10.2 is
+the pipeline for it. Until the user settles where Mixamo-derived data may be kept, the sources
+above are the default. Nothing that costs money is done without approval.
+
+### 10.2 Option: a licensed Mixamo library, baked to glTF
+
+The user offered to arrange a Mixamo licence, and asked for a pipeline that turns CharMorph
+Vitruvian + Mixamo clips into a good format for the engine. A prototype of it was built and
+checked (outside the repository, on synthetic Mixamo-style FBX files; no Mixamo data was
+downloaded). **It works end to end.** One real 30 fps "without skin" download must be tried
+before relying on it.
+
+**Why it fits.** Vitruvian's Mixamo rig (`weights/mixamo.npz`, `joints/Mixamo.npz`,
+`rigs.blend`'s `mixamo_vitruvian`) uses exactly Mixamo's bone names: 52 bones (Mixamo's 65 less
+its 13 end joints), 22 without fingers. Our `rig.js` uses the same names. Mixamo retargets every
+clip to an uploaded character's proportions and rest pose, so uploading Vitruvian once makes every
+clip fit it.
+
+**The pipeline** (build time, re-runnable, deterministic output):
+
+1. **Upload once.** Export Vitruvian in its A-pose bind pose, Mixamo rig, as FBX, and upload it.
+   The same `rigs.blend` is used for the upload and the bake.
+2. **Download** each clip as FBX binary, *without skin*, 30 fps, "in place" for cycles. This is
+   the one manual step, done in the licensee's account one clip at a time as the site offers; no
+   scripted bulk downloading. A manifest (`animation/clips.json`) lists each clip: its Mixamo
+   name, our id, bank, loop, root motion, and tags (people, weapon, stance).
+3. **Convert** with Blender as a Python module (`bpy` from PyPI, no Blender install):
+   - strip `mixamorig:` (and `mixamorig1:`, `mixamorig2:`...), work in world matrices so Mixamo's
+     centimetres and 0.01 armature scale drop out;
+   - retarget onto the canonical rig by *delta* (source rotation × source rest⁻¹ × our rest):
+     independent of bone roll and joint axes; files whose bone lengths or rest pose differ are
+     refused with the reason (an `absolute` mode recovers a changed rest when axes match);
+   - resample to 30 fps, keep quaternions in one hemisphere, take root motion out of cycles
+     (stored as `extras.rootMotion` with its speed), close loop seams, one glTF animation per
+     clip. FBX2glTF was tried as a Blender-free converter and rejected: unfixed, nothing binds
+     (prefixes, an unapplied Z-up wrapper), it cuts 24 fps clips short and silently drops
+     channels.
+4. **Check** each clip with the motion check of §10.1 on every people's body extremes (joint
+   limits, foot sliding, feet under the ground, items and limbs in the body, loop seams).
+5. **Fix offline:** feet locked while planted, seams cross-blended, the moment a blow lands and
+   each footfall found and stored, playback rate matched to the rules' speeds, left-handed
+   mirrors, additive hit reactions. Nothing is tuned by hand.
+6. **Bank and compress** with glTF-Transform (MIT): drop scale tracks and translations but the
+   hips', key reduction, then meshopt (our decoder is already vendored). Banks by use
+   (locomotion, sword, bow, magic, folk life, hits and deaths), loaded when first needed.
+7. **In the game:** three.js `AnimationMixer` on the Vitruvian skeleton, crossfades, upper-body
+   masks (casting while walking); then our procedural layers: foot IK to the terrain, hand IK
+   to grips, look-at, joint limits.
+
+**Measured on the prototype** (three r186, the game's vendored loader):
+- Every clip binds with no unbound tracks; error against the source ≤ 0.01 mm at 30 fps, +0.1 mm
+  from meshopt.
+- **Size for 300 clips averaging 2.5 s, gzipped:** 1.6–2.8 MB with fingers, 0.8–2.0 MB without
+  (smooth to mocap-like data); 9–16 MB uncompressed floats. Banks beat one file per clip (27 KB
+  vs 48 KB for four clips). The JSON is about two-thirds of a bank, so the host must gzip `.glb`.
+- gltfpack is 25–30 % smaller but drops the clips' extras (loop, root motion) and costs about
+  1 mm; glTF-Transform is the default.
+- Dropping finger tracks saves 1.4–1.9×; grips then come from a hand pose per weapon, which our
+  items already declare.
+
+**Decisions for the user** (the licence and the public repository):
+- Where the downloaded FBX files live: a private store the build fetches from (recommended),
+  not this public repository.
+- Whether the baked, compressed banks may be served with the game from its public host (the
+  normal use of Mixamo in a web game), and whether they may sit in this repository or are built
+  in CI from the private store and deployed only.
+
+**When.** The converter, check and banking can be built with CC0 clips (Quaternius, 100STYLE)
+before the licence is settled; Mixamo clips drop in when it is. It belongs to M8, and could start
+earlier on today's body, whose rig has the same bone names.
 
 ---
 
@@ -824,6 +890,9 @@ converted data is to be measured in M8 against today's hm08 data.
     - `waterAt` is the single test of where water stands, for M1b's squares.
   - The overworld reads rivers and still water from `waters.js`, unchanged: its tests are the
     same.
+- **2026-09-30.** The user offered a Mixamo licence and asked for a Vitruvian + Mixamo → glTF
+  pipeline. §10.2 added from a working prototype (bpy retarget, glTF-Transform meshopt banks,
+  checked in three r186).
 - **2026-09-30, M1b built** (terrain in play; the squares are still walked as before).
   - **Core** (`core/terrain/ground.js`, overworld): pads for the town, settlements, castles,
     places and camps, eased in over 24 m; roads on profiles smoothed 12 m each way, under 0.3 m a
@@ -845,5 +914,15 @@ converted data is to be measured in M8 against today's hm08 data.
     pelvis drop). It changes the tuned gait, so it goes with the motion check of §10.1. Until
     then a character stands at the ground under its middle, which is within a few centimetres
     of each foot on the open slopes (under 30°) that can be walked.
+  - **Measured** (phone profile, town, medium; Chromium's software renderer, which pays for
+    each triangle far more than a phone's GPU does): draw calls equal (88); triangles 247k
+    against 222k (budget 500k); the ground's own 37k (budget 105k); script time per frame equal;
+    render time +18 %, all of it the ground's triangles (the rest of the scene measured no
+    dearer), most of it the 1 m chunk under the player, kept so feet meet the drawn ground. On a
+    phone GPU 37k triangles at 60 frames a second is about 2 million a second, a small share of
+    even a low-end GPU's rate. Far rings coarser still come with M6's clipmaps.
+  - **Fixed on the way:** the camera's eased height lagged under the ground climbing (and at
+    load, from 0), and the new clamp then swung it overhead; it now never lags more than 0.2 m,
+    the clamp starts 2 m back and looks at the player.
   - **Fixed on the way:** a winged beast's landing glide was overwritten by the standing height
     each frame; now it glides down to the ground.

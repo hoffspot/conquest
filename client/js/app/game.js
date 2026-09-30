@@ -114,6 +114,9 @@ const SINK = 1.5;
 const STEP_EASE = 0.12;
 const FOCUS_EASE = 6;
 
+// How far the camera's eased height may lag under the ground the player's climbing (metres)
+const FOCUS_LAG = 0.2;
+
 // How long the shadow under someone takes to fade once they've fallen (s): they lie flat
 const CONTACT_FADES = 0.6;
 
@@ -1796,10 +1799,12 @@ export class Game {
             lowest: this.view.lowestPitch(),
         });
 
-        // (Level with the ground the player stands on, eased so steps and bumps don't jolt it)
-        const ground = player.standing ?? 0;
+        // (Level with the ground the player stands on, eased so steps and bumps don't jolt it, but
+        // never lagging far under it, climbing)
+        const ground = player.standing ?? this.#groundOn(this.battle.actor(this.me)?.map, position.x, position.z);
+        const eased = dt && this.focusHeight !== undefined ? this.focusHeight + (ground - this.focusHeight) * Math.min(1, dt * FOCUS_EASE) : ground;
 
-        this.focusHeight = dt && this.focusHeight !== undefined ? this.focusHeight + (ground - this.focusHeight) * Math.min(1, dt * FOCUS_EASE) : ground;
+        this.focusHeight = Math.max(eased, ground - FOCUS_LAG);
         this.view.look(_focus.set(focus.x, this.focusHeight, focus.z), yaw, pitch, dt || Infinity);
         this.view.setFocus(chest);
 
