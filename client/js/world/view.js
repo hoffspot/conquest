@@ -8,8 +8,9 @@
 // camera). Debug mode can change the quality while playing, to see what each costs.
 
 import * as THREE from "three";
-import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { bakeEnvironments } from "./environment.js";
 import { GpuTimer } from "./gputimer.js";
+import { fadeShadowEdges, snapToTexels } from "./shadows.js";
 import { Sky, SKY_COLOURS } from "./sky.js";
 import { CUTAWAY } from "./town3d.js";
 
@@ -68,11 +69,12 @@ const PULL = Object.freeze({ least: 2.6, margin: 0.6, highest: 85, lift: 0.15, i
 // The haze at the horizon: the fog's colour and the background's, which the sky pales to
 const SKY = SKY_COLOURS.horizon;
 
-// Indoors: no sky, a dim warm room lit from above, and lamps (the hearth's fire, candles) that
-// flicker; outdoors the lamps are out. (The lamps are always there, so that going in and out
-// never makes Three.js rebuild every lit material's shaders.)
-const OUTDOORS = Object.freeze({ background: SKY, fog: [55, 130], sky: [0xcfe0ff, 0x5a4a32, 1.1], sun: [0xfff0d8, 2.3], sunFrom: [-0.55, 1, 0.65], environment: 0.55 });
-const INDOORS = Object.freeze({ background: 0x140e0a, fog: [16, 38], sky: [0xffdcb4, 0x3a2716, 0.75], sun: [0xffe2b8, 0.9], sunFrom: [0.25, 1, 0.35], environment: 0.3 });
+// Outdoors: the sun, and the sky and the ground lighting everything from all round, at their
+// own brightness (environment.js); indoors, no sky, a dim warm room lit from above, and lamps
+// (the hearth's fire, candles) that flicker; outdoors the lamps are out. (The lamps are always
+// there, so that going in and out never makes Three.js rebuild every lit material's shaders.)
+const OUTDOORS = Object.freeze({ background: SKY, fog: [55, 130], sun: [0xfff0d8, 3.5], sunFrom: [-0.55, 1, 0.65], environment: 1 });
+const INDOORS = Object.freeze({ background: 0x140e0a, fog: [16, 38], sun: [0xffe2b8, 0.9], sunFrom: [0.25, 1, 0.35], environment: 1 });
 
 // A lamp that flares up (a forge's fire, the bellows pumped) dies down over this long (s)
 const FLARE = 1;
@@ -98,6 +100,7 @@ const _toCamera = new THREE.Vector3();
 const _size = new THREE.Vector2();
 const _viewProjection = new THREE.Matrix4();
 const _sphere = new THREE.Sphere();
+const _centre = new THREE.Vector3();
 
 export class View {
     /**
@@ -114,6 +117,7 @@ export class View {
         this.renderer.toneMappingExposure = 1.05;
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFShadowMap;
+        fadeShadowEdges();
         this.renderer.info.autoReset = false;
 
         /**
@@ -135,8 +139,9 @@ export class View {
         this.scene.matrixWorldAutoUpdate = false;
         this.scene.background = new THREE.Color(SKY);
         this.scene.fog = new THREE.Fog(SKY, 55, 130);
+        this.indoors = false;
         this.#light();
-        this.scene.environmentIntensity = 0.55;
+        this.scene.environmentIntensity = OUTDOORS.environment;
 
         /**
          * Told when the drawing is lost (as a phone does when short of memory, or switching apps:
@@ -150,10 +155,7 @@ export class View {
             this.onRestored?.();
         });
 
-        this.hemisphere = new THREE.HemisphereLight(0xcfe0ff, 0x5a4a32, 1.1);
-        this.scene.add(this.hemisphere);
-
-        this.sun = new THREE.DirectionalLight(0xfff0d8, 2.3);
+        this.sun = new THREE.DirectionalLight(...OUTDOORS.sun);
         this.sun.castShadow = true;
         this.sun.shadow.bias = -0.0005;
         this.sun.shadow.normalBias = 0.03;
@@ -169,7 +171,6 @@ export class View {
             return { light, intensity: 0, flicker: 0, seed: k * 17.3 };
         });
         this.sunDirection = SUN_DIRECTION.clone();
-        this.indoors = false;
 
         // The sky outdoors, its sun where the shadows come from (sky.js)
         this.sky = new Sky(this.sunDirection);
@@ -214,17 +215,13 @@ export class View {
         this.setQuality(quality);
     }
 
-    // The light the scene's materials reflect: made once (again if the drawing's lost), the
-    // generator and the room it's made from let go once it's made (they hold a few megabytes of
-    // render targets and shaders)
+    // The light the scene's materials take from all round, outdoors and in (environment.js):
+    // made once (again if the drawing's lost)
     #light() {
-        const pmrem = new THREE.PMREMGenerator(this.renderer);
-        const room = new RoomEnvironment();
-
-        this.scene.environment?.dispose();
-        this.scene.environment = pmrem.fromScene(room, 0.04).texture;
-        pmrem.dispose();
-        room.dispose();
+        this.environments?.outdoors.dispose();
+        this.environments?.indoors.dispose();
+        this.environments = bakeEnvironments(this.renderer, SUN_DIRECTION);
+        this.scene.environment = this.environments[this.indoors ? "indoors" : "outdoors"].texture;
     }
 
     // The drawing given back: Three.js uploads the geometries and textures again as they're
@@ -437,14 +434,12 @@ export class View {
         }
 
         // The sun's shadows follow the player, a little ahead of them where more of the ground is
-        // in view (the further out, the more), snapped to whole shadow texels so they don't shimmer
-        const texel = (SHADOW_REACH * 2) / this.quality.shadows;
+        // in view (the further out, the more), moved in whole shadow texels so they don't shimmer
         const ahead = Math.min(SHADOW_REACH / 2, distance * 0.35);
-        const x = Math.round((focus.x - Math.sin(yaw) * ahead) / texel) * texel;
-        const z = Math.round((focus.z - Math.cos(yaw) * ahead) / texel) * texel;
 
-        this.sun.target.position.set(x, 0, z);
-        this.sun.position.set(x, 0, z).addScaledVector(this.sunDirection, 60);
+        snapToTexels(_centre.set(focus.x - Math.sin(yaw) * ahead, 0, focus.z - Math.cos(yaw) * ahead), this.sunDirection, (SHADOW_REACH * 2) / this.quality.shadows);
+        this.sun.target.position.copy(_centre);
+        this.sun.position.copy(_centre).addScaledVector(this.sunDirection, 60);
     }
 
     /**
@@ -458,12 +453,10 @@ export class View {
         this.scene.background.set(look.background);
         this.scene.fog.color.set(look.background);
         [this.scene.fog.near, this.scene.fog.far] = look.fog;
-        this.hemisphere.color.set(look.sky[0]);
-        this.hemisphere.groundColor.set(look.sky[1]);
-        this.hemisphere.intensity = look.sky[2];
         this.sun.color.set(look.sun[0]);
         this.sun.intensity = look.sun[1];
         this.sunDirection.set(...look.sunFrom).normalize();
+        this.scene.environment = this.environments[interior ? "indoors" : "outdoors"].texture;
         this.scene.environmentIntensity = look.environment;
         this.sky.object.visible = !interior;
         this.sky.setSun(this.sunDirection);
