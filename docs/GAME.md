@@ -436,7 +436,7 @@ draws anything.
   hasn't landed; walking off doesn't stop a spell once it's begun.
 - **Dying and coming back.** At no hit points a character falls; the player gets up in the
   market square 5 seconds later, with full health, and the orc back in its corner 30 seconds
-  later (whichever map they fell on).
+  later (whichever map they fell on; 10 minutes, if the town's soldiers felled it: docs/WAR.md).
 - **The folk** (`neutral`: the tavern's; `hostile(a, b)` says who fights whom) are on a team of
   their own, and no one fights them: nobody sets on them, casts at them or attacks them, and they
   fight no one. They go about their business (`ai: "routine"`): seated, or going from stop to

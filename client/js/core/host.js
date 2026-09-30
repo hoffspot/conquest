@@ -46,13 +46,25 @@ export const RELEVANCE = Object.freeze({ every: 500, near: 22, far: 90 });
 export const ORC_WEAPON = "cleaver";
 
 /**
+ * How long the orc keeps away (battle ms) once the town's soldiers have felled it, rather than a
+ * player or anyone at their side (it's back sooner for them: battle.js KINDS).
+ */
+export const ORC_ROUTED_MS = 600000;
+
+/**
  * When a town's soldiers come to life (docs/WAR.md M2): once a player's this near its edge
  * (metres, out in the world); let go once every player's this far.
  */
 export const MUSTER = Object.freeze({ near: 120, far: 250 });
 
-/** How far from its post a guard goes after an enemy (metres). */
+/** How far from its post (or a patrol from its round) a guard goes after an enemy (metres). */
 export const LEASH = 14;
+
+/**
+ * How long after one of a town's soldiers is taken away another of its garrison takes their
+ * place (battle ms), if it still has them: out where no player sees them come.
+ */
+export const RELIEF_MS = 60000;
 
 /**
  * When a camp comes to life (docs/WAR.md M6): once a player's this near it (metres, out in the
@@ -815,9 +827,16 @@ export class Host {
         }
 
         // The fallen soldiers: their garrison the fewer; taken away a while after (and the wild's
-        // creatures, a perilous site's master gone a long while)
+        // creatures, a perilous site's master gone a long while; the orc, felled by no one of the
+        // players', a good while)
         for (const event of events) {
             const beast = event.type === "death" ? this.wild.get(event.id) : null;
+
+            if (event.type === "death" && event.id === "orc" && !this.players.has(event.by) && !this.followers.has(event.by) && !this.companions.has(event.by)) {
+                const orc = this.battle.actor("orc");
+
+                orc.respawnAt = Math.max(orc.respawnAt, this.battle.time + ORC_ROUTED_MS);
+            }
 
             if (beast) {
                 this.#fall(event.id, CORPSE_MS);
@@ -1876,10 +1895,10 @@ export class Host {
     // --- Who fights whom ---
 
     // Two characters on different teams (battle.js hostile asks, the folk and foes aside): as their
-    // peoples stand in the war; the wild (the orc, the camps' foes: no people's) set against the
-    // players, and not the peoples' soldiers; anyone, without a war. The wild's creatures
-    // (creatures.js) are every player's enemies, and the soldiers' and followers' when they're a
-    // menace or fighting; no one else's (the orc's)
+    // peoples stand in the war; anyone of no people's (the orc) against everyone, the peoples'
+    // soldiers too; anyone, without a war. The wild's creatures (creatures.js) are every player's
+    // enemies, and the soldiers' and followers' when they're a menace or fighting; no one else's
+    // (the orc's)
     #against(a, b) {
         if (a.team === WILD || b.team === WILD) {
             const [beast, other] = a.team === WILD ? [a, b] : [b, a];
@@ -1894,15 +1913,7 @@ export class Host {
         const war = this.war;
         const [ra, rb] = [war?.realm(a.team), war?.realm(b.team)];
 
-        if (ra && rb) {
-            return war.hostile(a.team, b.team);
-        }
-
-        if (ra || rb) {
-            return a.kind === "player" || b.kind === "player" || a.kind === "follower" || b.kind === "follower" || Boolean(a.leader || b.leader);
-        }
-
-        return true;
+        return ra && rb ? war.hostile(a.team, b.team) : true;
     }
 
     // --- The war come to life ---
@@ -1949,6 +1960,8 @@ export class Host {
 
             if (!this.mustered.has(town.id) && distances.some((distance) => distance < MUSTER.near)) {
                 this.#raise(town, place, middle);
+            } else if (this.mustered.has(town.id)) {
+                this.#relieve(town, place, middle);
             }
         }
 
@@ -2000,42 +2013,45 @@ export class Host {
         return place.id === this.world.start?.id && this.world.stamp?.middle ? this.world.stamp.middle : place.at;
     }
 
-    // A town's soldiers out: its guards at their posts, as many as its garrison has (up to its
-    // posts), and its patrols on their rounds (as many as it has, while its garrison's half full)
+    // A town's soldiers out: its guards at their posts, and its patrols on their rounds (#stations)
     #raise(town, place, middle) {
-        const map = this.world.maps.town;
-        const squares = squaresOf(map);
-        const full = HOLDINGS[town.kind].garrison;
-        const posts = postsOf(this.world.plan, place, { middle });
-        const guards = Math.min(posts.length, Math.ceil((town.garrison / full) * POSTED[town.kind]));
-        const rounds = roundsOf(this.world.plan, place, { middle }).slice(0, town.garrison * 2 >= full ? undefined : 0);
-        const shown = guards + rounds.length * PATROL_SIZE;
-        const [guardArms, patrolArms] = SOLDIERS_ARMS[town.owner] ?? SOLDIERS_ARMS.human;
-        const taken = new Set(this.battle.actors.filter((actor) => actor.map === "town").map(({ square: [x, y] }) => squareKey(x, y)));
-        const free = ([x, y]) => {
-            const square = nearestFree(squares, [Math.floor(x), Math.floor(y)], { taken, within: 24 });
-
-            taken.add(squareKey(...square));
-
-            return square;
-        };
+        const { guards, stations } = this.#stations(town, place, middle);
+        const free = this.#spots();
         const ids = [];
-        const enlist = (id, weapon, square, orders) => {
-            this.#enlist(id, { people: town.owner, weapon, square, name: `${orders.patrol.length > 1 ? "patrol" : "guard"}`, record: { town: town.id }, ...orders });
-            ids.push(id);
-        };
 
-        if (!shown) {
+        if (!stations.length) {
             return;
         }
 
         try {
-            for (const [k, post] of posts.slice(0, guards).entries()) {
-                const square = free(post.at);
-
-                enlist(`${town.id}/guard-${k}`, guardArms, square, { patrol: [square], leash: LEASH, facing: post.facing });
+            for (const station of stations) {
+                this.#station(town, station, free(station.at));
+                ids.push(station.id);
             }
+        } catch {
+            // (No free ground there: those found are out, and no more)
+        }
 
+        const banners = bannersOf(this.world.plan, place, { middle }).slice(0, Math.ceil(guards / 2));
+
+        this.mustered.set(town.id, { people: town.owner, ids, share: town.garrison / Math.max(1, ids.length), banners, relief: null });
+        this.#event("muster", { town: town.id, people: town.owner, ids, banners });
+    }
+
+    // Where a town's soldiers stand and walk, as many as its garrison has: its guards at its posts
+    // (up to its posts), and its patrols on their rounds (as many as it has, while its garrison's
+    // half full). { guards (how many posted), stations: [{ id, weapon, at (where they come out:
+    // [x, y] metres), orders ({ round (a patrol's), leash, facing (a guard's) }) }] }
+    #stations(town, place, middle) {
+        const squares = squaresOf(this.world.maps.town);
+        const full = HOLDINGS[town.kind].garrison;
+        const posts = postsOf(this.world.plan, place, { middle });
+        const guards = Math.min(posts.length, Math.ceil((town.garrison / full) * POSTED[town.kind]));
+        const rounds = roundsOf(this.world.plan, place, { middle }).slice(0, town.garrison * 2 >= full ? undefined : 0);
+        const [guardArms, patrolArms] = SOLDIERS_ARMS[town.owner] ?? SOLDIERS_ARMS.human;
+        const stations = posts.slice(0, guards).map((post, k) => ({ id: `${town.id}/guard-${k}`, weapon: guardArms, at: post.at, orders: { leash: LEASH, facing: post.facing } }));
+
+        try {
             for (const [k, round] of rounds.entries()) {
                 const points = round.map((point) => nearestFree(squares, [Math.floor(point[0]), Math.floor(point[1])], { within: 24 }));
                 // (Each of a patrol walks its own round, a step beside the one before's, so that
@@ -2046,17 +2062,73 @@ export class Host {
                     const own = points.map((point) => nearestFree(squares, point, { within: 24, taken: beside }));
 
                     own.forEach(([x, y]) => beside.add(squareKey(x, y)));
-                    enlist(`${town.id}/patrol-${k}-${m}`, m % 2 ? patrolArms : guardArms, free(own[0]), { patrol: own, leash: LEASH * 2 });
+                    stations.push({ id: `${town.id}/patrol-${k}-${m}`, weapon: m % 2 ? patrolArms : guardArms, at: own[0], orders: { round: own, leash: LEASH * 2 } });
                 }
             }
         } catch {
-            // (No free ground there: those found are out, and no more)
+            // (No free ground on a round: the patrols found walk, and no more)
         }
 
-        const banners = bannersOf(this.world.plan, place, { middle }).slice(0, Math.ceil(guards / 2));
+        return { guards, stations };
+    }
 
-        this.mustered.set(town.id, { people: town.owner, ids, share: town.garrison / Math.max(1, ids.length), banners });
-        this.#event("muster", { town: town.id, people: town.owner, ids, banners });
+    // One of a town's soldiers out at their station, on `square` (free, near where they come out)
+    #station(town, { id, weapon, orders: { round, leash, facing } }, square) {
+        const orders = round ? { patrol: round, leash } : { patrol: [square], leash, facing };
+
+        this.#enlist(id, { people: town.owner, weapon, square, name: round ? "patrol" : "guard", record: { town: town.id }, ...orders });
+    }
+
+    // A town's fallen soldiers relieved (RELIEF_MS after the last was taken away): others of its
+    // garrison out at the stations they've left, as many as it has now (with none to spare, asked
+    // again a while after), each once no player can see where they'd come out; none while a camp's
+    // sortie is out against it (those left standing are all it has, till it's over)
+    #relieve(town, place, middle) {
+        const mustered = this.mustered.get(town.id);
+
+        if ((mustered.relief ?? null) === null || this.battle.time < mustered.relief || [...this.sorties.values()].some((sortie) => sortie.town === town.id)) {
+            return;
+        }
+
+        const players = [...this.players.keys()].map((id) => this.battle.actor(id)).filter((actor) => actor && !actor.dead);
+        const { stations } = this.#stations(town, place, middle);
+        const free = this.#spots();
+        const ids = [];
+        let [waiting, later] = [false, false];
+
+        try {
+            for (const station of stations) {
+                if (mustered.ids.includes(station.id) || this.battle.actor(station.id)) {
+                    continue;
+                }
+
+                // (No more out than it has: those still standing count)
+                if (mustered.ids.length + ids.length >= stations.length) {
+                    later = true;
+                    break;
+                }
+
+                const square = free(station.at);
+
+                if (players.some((actor) => this.battle.canSee(actor, { map: "town", square }))) {
+                    waiting = true;
+                    continue;
+                }
+
+                this.#station(town, station, square);
+                ids.push(station.id);
+            }
+        } catch {
+            // (No free ground there: another time)
+            waiting = true;
+        }
+
+        mustered.ids.push(...ids);
+        mustered.relief = later ? this.battle.time + RELIEF_MS : waiting ? mustered.relief : null;
+
+        if (ids.length) {
+            this.#event("relieved", { town: town.id, people: town.owner, ids });
+        }
     }
 
     // One of a people's soldiers, out in the world: how they look (from their id, the same every
@@ -2769,6 +2841,11 @@ export class Host {
 
         if (mustered) {
             mustered.ids = mustered.ids.filter((each) => each !== id);
+
+            // (One of a town's: relieved a while after, if it has soldiers left)
+            if (!soldier.camp) {
+                mustered.relief = this.battle.time + RELIEF_MS;
+            }
         }
 
         this.#event("gone", { id });
