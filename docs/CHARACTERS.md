@@ -66,7 +66,10 @@ The body is MakeHuman's base mesh (`hm08`), taken from its Blender add-on
 `npm run build:characters -- --mpfb2=../mpfb2` prepares it.
 
 - **Parts.** The build keeps the body (13,380 vertices), and the eyes and eyelashes (which
-  MakeHuman keeps as "helper" meshes).
+  MakeHuman keeps as "helper" meshes). The lashes are see-through and two-sided, drawn both
+  sides at once (`forceSinglePass`: three.js would otherwise draw a see-through two-sided
+  material's back, then its front, a draw call each, and a lash is too thin for the order to
+  show).
 - **Bones.** It keeps the 52-bone Mixamo rig and its skin weights (the four strongest per vertex).
 - **Body shape.** The build also keeps 60 shapes ("targets") behind the gender, muscle, weight,
   height and heritage sliders. They are stored as their principal components: 29 of them
@@ -413,6 +416,17 @@ shape:
 - the outside of each hip, on the belt, for what hangs from it
 - over the tips of the toes, round the back of each heel, and down the front of each shin (on
   the skin, placed from the foot's and shin's own vertices), for spiked boots' iron
+
+**Drawn in few meshes.** An item's parts of all its materials that can be (opaque, not glowing,
+not skin) are one mesh, a draw call, rather than a mesh for each material: each vertex says which
+of the item's materials it's of (a byte), and one shader for every item gives it that material's
+colour, metalness and roughness (`FoldedMaterial`: each item's materials its own, shared by every
+item of the same ones). A two-sided part (a plume, a pennant, fletching) is folded in with its
+faces doubled, each lit from its side, as a two-sided material draws it. What's left apart is a
+mesh for each material: a crystal (see-through, glowing), hot iron, a ruby, and what's of the
+character's own skin or fur (a cat's ears and tail, which they colour). A soldier's helm, shield,
+sword and scabbard were eleven draw calls and are four; across every item's models, 119 meshes
+became 48, for about 10% more vertices (the doubled faces). Their pictures are the same.
 
 An item can bring a garment: a backpack brings its straps, spiked gauntlets their plate
 gauntlets. It can hide things: a helmet hides the hair above its rim. It can also set how its arm

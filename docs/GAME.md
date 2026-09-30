@@ -652,6 +652,15 @@ metres out, next to none round a lone trunk; the ground loses that share of its 
 round, not of the sun's, so sunlit ground stays bright while its shade darkens towards the walls,
 and buildings past the sun's shadows still sit on the ground.
 
+**Under everyone standing on it** (world/contacts.js): townsfolk and soldiers cast no shadow of
+the sun (there are too many of them), and would look set down on the street rather than standing
+on it. Under each is a soft round shadow of the light from all round that their body keeps off
+the ground at their feet: half as dark in the middle (`CONTACT.strength`), fading out over about
+half their height. It fades as they rise off the ground (Levitate), over half a second as they
+fall dead, and to a fifth for someone unseen (Invisibility). Everyone's is one instanced mesh, a
+single draw call, the list made again each frame from those drawn (only those listed sent to the
+GPU); a creature casts its own shadow and has none.
+
 **Each people's homeland** (the world plan's territories, as first claimed) has its own ground
 over the grass (`HOMES`, painted as the materials `home-cat` and so on: painters.js): the cat
 folk's gold grass on red earth, the orcs' red clay baked hard and cracked into plates with black
@@ -1951,7 +1960,10 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   doorways found in the walls.
 - `test/characters.test.js` (with CHARACTERS.md's): the tavern's folk's bodies and clothes,
   skirts, gowns and aprons (hanging from the waist, flaring to the hem, skinned to the thighs and
-  shins), sitting on a bench (thighs level, shins upright), and raising a tankard in a toast.
+  shins), sitting on a bench (thighs level, shins upright), and raising a tankard in a toast; and
+  every item's opaque parts in one mesh, each part its material's colour, metalness and roughness,
+  a two-sided part's faces turned over too, its shader's lines put in three.js's, and copied with
+  its folds.
 - `test/beast-building.test.js` (with WILDS.md's): a creature's body sculpted and its pieces
   folded over many small steps, the same as all at once (a wolf; a skeleton, all pieces; a magma
   slime, made molten after); a look shared once made (another of it built at once), and one
@@ -1964,7 +1976,8 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   waiting on work done elsewhere told to do it now when the steps can't wait, and come back to
   when they can; and skins painted in the worker (run in the test), cat folk's fur and lizard
   folk's scales too, waited for and put on last: the same characters, painted here instead when
-  the steps can't wait or the worker fails.
+  the steps can't wait or the worker fails; and a soldier's things in few meshes (each item one,
+  the lashes both sides at once).
 - `test/wounds.test.js`: battle damage on the real body: the thresholds, a kind for every
   reaction, a mark every blow and a wound for each threshold crossed, each kind painted its own
   way (cuts bleed, blunt blows bruise, fire chars and never bleeds, arcane light leaves veins),

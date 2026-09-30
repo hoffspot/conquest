@@ -52,6 +52,7 @@ import { distanceBetween, longestReach, weaponOf, WEAPONS } from "../core/weapon
 import { Avatar, posingEvery } from "../world/avatar.js";
 import { Banners } from "../world/banners3d.js";
 import { Camps } from "../world/camps3d.js";
+import { ContactShadows } from "../world/contacts.js";
 import { Flyers } from "../world/flyers3d.js";
 import { Drops } from "../world/drops3d.js";
 import { Ailments3D } from "../world/ailments3d.js";
@@ -106,6 +107,9 @@ const DRAW_SOUNDS = { sword: ["unsheathe", "sheathe"], punch: ["knuckles", null]
 // How long the dead lie before sinking out of sight (s), and how long they take to sink
 const LIE_STILL = 4;
 const SINK = 1.5;
+
+// How long the shadow under someone takes to fade once they've fallen (s): they lie flat
+const CONTACT_FADES = 0.6;
 
 // A tap that moves less than this (pixels) is a tap, not a drag
 const TAP_SLOP = 12;
@@ -714,6 +718,8 @@ export class Game {
         step("Getting ready to draw");
 
         this.effects = new Effects(view.scene);
+        this.contacts = new ContactShadows();
+        view.scene.add(this.contacts.mesh);
         this.ailments = new Ailments3D(this.effects.group);
         this.spellFx = new SpellFx(this.effects, view.scene, { lights: view.lamps.map((lamp) => lamp.light) });
         this.spellFx.camera = view.camera;
@@ -1090,6 +1096,7 @@ export class Game {
         this.ground?.material.dispose();
         this.chunks?.dispose();
         this.effects?.dispose();
+        this.contacts?.dispose();
 
         // The interiors' merged meshes (their materials are shared by every game)
         for (const interior of this.interiors.values()) {
@@ -1354,6 +1361,7 @@ export class Game {
 
         this.clock += dt;
         TREE_WIND.time.value = this.clock;
+        this.contacts?.begin();
 
         for (const actor of battle.actors) {
             const avatar = this.avatars.get(actor.id);
@@ -1385,7 +1393,11 @@ export class Game {
             if (avatar.compiling) {
                 avatar.object.visible = false;
             }
+
+            this.#grounded(actor, avatar);
         }
+
+        this.contacts?.end();
 
         // Projectiles, between their last two steps, rising and falling on the way
         for (const projectile of battle.projectiles) {
@@ -1578,6 +1590,22 @@ export class Game {
         const tall = this.view.heightOnScreen(position, height, pixels, { anywhere: mesh.castShadow });
 
         return posingEvery(tall, (avatar.motion * dt * tall) / height);
+    }
+
+    // Someone drawn, the ground darkened under them (contacts.js), less as they rise off it (by
+    // magic), die, or are hardly seen; not a creature, which casts its own shadow
+    #grounded(actor, avatar) {
+        if (!(avatar instanceof Avatar) || !avatar.object.visible) {
+            return;
+        }
+
+        const { x, z } = avatar.object.position;
+        const tall = avatar.character.height;
+        const risen = Math.exp(-(avatar.lift ?? 0) / (tall * 0.4));
+        const dying = actor.dead ? Math.max(0, 1 - (avatar.deadFor ?? 0) / CONTACT_FADES) : 1;
+        const seen = this.battle.buffOf(actor, "invisibility") ? 0.22 : 1;
+
+        this.contacts.add(x, actor.dead ? 0 : (avatar.standing ?? 0), z, tall, risen * dying * seen);
     }
 
     // Standing on the ground (stepping up onto a bridge's deck, and down off it); or, dead, lying

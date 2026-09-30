@@ -18,7 +18,7 @@ import { Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
 import { allBustTargetNames, allMacroTargetNames, bustTargets, components, MACRO_DEFAULTS, macroTargets } from "../client/js/characters/macro.js";
 import { buildDrape, DRAPES } from "../client/js/characters/drapes.js";
 import { decodeSection, encodeSection, Packer } from "../client/js/characters/pack.js";
-import { buildItem } from "../client/js/characters/items.js";
+import { buildItem, itemMaterial } from "../client/js/characters/items.js";
 import { LOOKS, PEOPLES, peopleLook } from "../client/js/characters/peoples.js";
 import { FOLK, PRESETS } from "../client/js/characters/presets.js";
 import { JOINTS, jointOf, jointRotation, limitRotation, Rig } from "../client/js/characters/rig.js";
@@ -1519,3 +1519,100 @@ describe("the other peoples (peoples.js, equipment.js, skin.js)", () => {
     });
 });
 
+
+describe("items (items.js)", () => {
+    // Every item's every model: held, put away, and what it hangs in
+    const models = [...new Set(Object.values(ITEMS).flatMap((item) => [...(item.parts ?? [item]).map(({ model }) => model), item.sheath?.model, item.sheath?.holder]).filter(Boolean))];
+    const folded = (mesh) => Boolean(mesh.geometry.attributes.fold);
+    // (Whether a material's parts could be folded in with others': opaque, not glowing, not skin)
+    const foldable = ({ name, transparent, emissive }) => name !== "skin" && !transparent && emissive.getHex() === 0;
+
+    it("draws each item's opaque parts in one mesh, each part as its own material, and the rest a mesh for each", () => {
+        let [before, after] = [0, 0];
+
+        for (const model of models) {
+            for (const ears of [false, true]) {
+                const meshes = [];
+
+                buildItem(model, { headRadius: 0.1, scale: 1, ears }).traverse((node) => node.isMesh && meshes.push(node));
+
+                const one = meshes.filter(folded);
+                const apart = meshes.filter((mesh) => !folded(mesh));
+
+                assert.ok(one.length <= 1, `${model}: one folded mesh at most`);
+                assert.ok(apart.filter((mesh) => foldable(mesh.material)).length <= (one.length ? 0 : 1), `${model}: nothing left apart that could be folded in`);
+                assert.ok(apart.every((mesh) => mesh.material === itemMaterial(mesh.material.name)), `${model}: those apart in the shared materials`);
+
+                if (one.length) {
+                    const [{ geometry, material }] = one;
+                    const names = material.name.split("+");
+                    const folds = geometry.attributes.fold.array;
+
+                    assert.ok(names.length > 1 && names.every((name) => foldable(itemMaterial(name))), `${model}: ${material.name}`);
+                    assert.ok(names.every((_, fold) => folds.includes(fold)) && folds.every((fold) => fold < names.length), `${model}: every vertex of one of them`);
+
+                    // (Each fold its material's colour, metalness and roughness)
+                    names.forEach((name, fold) => {
+                        const { color, metalness, roughness } = itemMaterial(name);
+
+                        assert.deepEqual([...material.colours.slice(fold * 3, fold * 3 + 3)], color.toArray().map(Math.fround), `${model}: ${name}`);
+                        assert.deepEqual([...material.surfaces.slice(fold * 2, fold * 2 + 2)], [metalness, roughness].map(Math.fround), `${model}: ${name}`);
+                    });
+                }
+
+                before += new Set([...one.flatMap(({ material }) => material.name.split("+")), ...apart.map(({ material }) => material.name)]).size;
+                after += meshes.length;
+            }
+        }
+
+        assert.ok(after < before * 0.6, `${after} meshes where there'd be ${before}`);
+    });
+
+    it("gives a thin part folded in its other side: each face turned over, facing the other way", () => {
+        const meshes = [];
+
+        buildItem("quiver").traverse((node) => node.isMesh && meshes.push(node));
+
+        const [{ geometry, material }] = meshes.filter(folded);
+        const feather = material.name.split("+").indexOf("feather");
+        const { position, normal, fold } = geometry.attributes;
+        const faces = new Set();
+        const key = (v, sign) => [position.getX(v), position.getY(v), position.getZ(v), sign * normal.getX(v), sign * normal.getY(v), sign * normal.getZ(v)].map((n) => n.toFixed(5)).join();
+
+        assert.equal(itemMaterial("feather").side, THREE.DoubleSide);
+
+        for (let v = 0; v < position.count; v++) {
+            if (fold.getX(v) === feather) {
+                faces.add(key(v, 1));
+            }
+        }
+
+        assert.ok(faces.size > 0);
+
+        for (let v = 0; v < position.count; v++) {
+            if (fold.getX(v) === feather) {
+                assert.ok(faces.has(key(v, -1)), "turned over");
+            }
+        }
+    });
+
+    it("draws the folds in one shader, its lines put in three.js's; copied with its folds", () => {
+        const meshes = [];
+
+        buildItem("sword").traverse((node) => node.isMesh && meshes.push(node));
+
+        const { material } = meshes.find(folded);
+        const shader = { uniforms: {}, vertexShader: THREE.ShaderLib.standard.vertexShader, fragmentShader: THREE.ShaderLib.standard.fragmentShader };
+
+        material.onBeforeCompile(shader);
+        assert.ok(shader.vertexShader.includes("vFoldColour = foldColours[int(fold)];"));
+        assert.ok(shader.fragmentShader.includes("diffuseColor.rgb *= vFoldColour;") && shader.fragmentShader.includes("roughnessFactor *= vFoldSurface.y;"));
+        assert.equal(shader.uniforms.foldColours.value, material.colours);
+
+        const copy = material.clone();
+
+        assert.deepEqual(copy.colours, material.colours);
+        assert.ok(copy.colours !== material.colours, "its own");
+        assert.equal(copy.customProgramCacheKey(), material.customProgramCacheKey());
+    });
+});

@@ -44,6 +44,7 @@ const { paintingSkin, paintSkin, SkinAtlas } = await import("../client/js/charac
 const { soldierLook } = await import("../client/js/characters/soldiers.js");
 const { allAtOnce, allWaiting, NOW, Steps, WAITING } = await import("../client/js/core/steps.js");
 const { Skins } = await import("../client/js/characters/skins.js");
+const THREE = await import("three");
 
 // The skin worker (skin-worker.js), run here: what's sent to it copied to it, and what it sends
 // back kept till it's delivered
@@ -177,6 +178,20 @@ describe("characters built a step at a time (Character.building)", () => {
 
         assert.deepEqual(count(compositingGarments(map, layers))[1].data, compositeGarments(map, layers).data);
         assert.deepEqual(allAtOnce(compositingGarments(map, layers)).surface, compositeGarments(map, layers).surface);
+    });
+
+    it("draws a soldier's things in few meshes: each item's opaque parts in one, the lashes both sides at once", () => {
+        const character = new Character(kitOf(), options(soldier));
+
+        for (const item of character.items) {
+            const meshes = [];
+
+            item.traverse((node) => node.isMesh && meshes.push(node));
+            assert.equal(meshes.length, 1, `${item.name}: ${meshes.map(({ material }) => material.name)}`);
+        }
+
+        assert.ok(character.items.length >= 3, character.items.map(({ name }) => name).join());
+        assert.ok(character.materials.lashes.forceSinglePass && character.materials.lashes.side === THREE.DoubleSide);
     });
 
     it("grows the hair once: none grown again for what's carried, and under a helmet only what's below its rim", () => {
