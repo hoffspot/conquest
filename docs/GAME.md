@@ -971,8 +971,14 @@ bell, a candle and a vase of flowers, a chaise longue and side table, the stairw
 rail, and four bedrooms with canopied beds (their drapes red or purple), washstands and chests,
 lit by red-shaded sconces; at an inn, whitewashed walls, beds hung in green, blue and ochre wool
 and linen, and plain glass in the sconces. Each floor is built by its style (`map.style`), each
-taproom with its own walls (`map.finish`). Everything that doesn't move is merged by material (about 100 draw
-calls in all with the characters); the spit and the flames apart.
+taproom with its own walls (`map.finish`). Everything that doesn't move is drawn from the atlas, as
+the buildings outside are (atlas.js `atlasVariant`: their textures lit as relief, what shines
+shining, cut away in front of the player as below): a mesh for the walls and one for the rest, only
+the daylight in the windows, the candle flames, the roast and the lights apart. That's 4 to 11
+meshes a floor, where each material was a mesh of its own (23 to 43), and nothing painted for
+them (the taproom drew with 79 draw calls in all, with the characters and the sun's shadows; now
+42). The spit turns as one mesh, and each fire is one. What's painted, dyed or woven in gold or
+silver inside is cloth (`cloth-gold`...: banners' devices, a rug's border), not metal.
 
 A smithy has bare stone walls and beaten earth dark with soot; the forge, waist-high stone with a
 bed of glowing coals, two flames and a hood narrowing to the chimney, tongs and pokers hanging
@@ -1177,12 +1183,14 @@ The kits still ask for their materials by name (engine/materials.js `material`),
 one's own picture is painted only when it's first wanted (drawn, or asked for: `paintPicture`):
 out in the world it's drawn with the atlas instead, so it never is. They were painted as the kits
 first asked for each: the start town's while loading (28 pictures, 352 ms in headless Chromium;
-now 14, 181 ms: the ground's and the tavern's insides), the rest in the middle of building a
-chunk as the player first reached another people's lands (57 in all: 1.1 s in Node, up to 118 ms
-for one). Insides, which are drawn with them, paint theirs a step each as they're built, and a
-bridge's planks as it's made.
-Its heights are lit as relief (bump mapping, three reads of the texture a pixel), so walls and
-roofs have depth close up at no cost in triangles. Glass (windows, leaded ones too; water in a
+then 14, 181 ms: the ground's and the tavern's insides; now 8, the ground's alone, the insides
+drawn from the atlas too), the rest in the middle of building a chunk as the player first reached
+another people's lands (57 in all: 1.1 s in Node, up to 118 ms for one). A bridge's planks are
+painted as it's made.
+Its heights are lit as relief (bump mapping: how the height the one read of the texture gives
+changes to the next pixel, across and up), so walls and roofs have depth close up at no cost in
+triangles. (It read the heights at the next pixels again: a frame of the start town took a tenth
+longer in software rendering, for the same picture.) Glass (windows, leaded ones too; water in a
 well or a pool; obsidian), iron, gold and silver, and slate shine (`SHINES`): a highlight where
 the sun or a lamp catches them, and the sky reflected in them, more of it at a glancing look
 (Fresnel, less so the rougher the surface: Karis's fit for phones), and that much less of the
@@ -2053,7 +2061,11 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   vault shaded through, a spike's normals tipped towards its point); glass, metal and slate's
   shine given with their layer (a tinted material's as the one it's tinted from's), and lit in
   the buildings' shader (each change to three.js's Lambert shader found: a highlight from each
-  light, the sky reflected), not the wilds'.
+  light, the sky reflected), not the wilds'; each people's insides of its own stuff (the atlas's
+  layers they're drawn from), each inside drawn from the atlas, a mesh for its walls and one for
+  the rest (a floor in a dozen meshes at most, nothing painted of its own, only its daylight,
+  flames, roast and lights apart), a god's colour from the plain layer, and the atlas as the
+  insides draw it: the one atlas, cut after its own changes.
 - `test/wilds.test.js`: the noise (smooth, seeded, tiling when asked); the ground's patches (a
   tiling texture with dry, lush and bare in it); the land's features (placed across every land,
   many kinds, a few a chunk; the same every time; taking their squares, hiding what's behind the

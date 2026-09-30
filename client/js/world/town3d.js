@@ -338,9 +338,11 @@ export function merge(root, { atlas = false } = {}) {
 /**
  * The meshes under `root` (their world matrices up to date), each baked to its place and made
  * ready to be merged: a part for each material group, drawn into the art's one material if it can
- * be, with `atlas`. [{ key, material, geometry, near (only worth drawing near: Solid's) }], for
- * `joined` (merge's first half, so that the parts of what's built a piece at a time can be made a
- * piece at a time: chunks3d.js).
+ * be, with `atlas` (and every light into the one glowing material); or, `atlas` a function of what
+ * a part was made in, into the material it gives, drawn from the atlas as that one is (the
+ * insides': interiors3d.js), lights left as they are. [{ key, material, geometry, near (only worth
+ * drawing near: Solid's) }], for `joined` (merge's first half, so that the parts of what's built a
+ * piece at a time can be made a piece at a time: chunks3d.js).
  */
 export function partsOf(root, { atlas = false } = {}) {
     const parts = [];
@@ -363,9 +365,9 @@ export function partsOf(root, { atlas = false } = {}) {
         for (const [part, own] of split) {
             const drawn = atlas ? toAtlas(part, own) : null;
             // (Every light in one mesh of its own, each face in its own colour)
-            const lit = atlas && !drawn ? toGlow(part, own) : null;
-            const [geometry, material] = drawn ? [drawn, atlasMaterial()] : lit ? [lit, glowMaterial()] : [part, own];
-            const key = drawn ? "atlas" : lit ? "glow" : materialKey(material);
+            const lit = atlas === true && !drawn ? toGlow(part, own) : null;
+            const [geometry, material] = drawn ? [drawn, atlas === true ? atlasMaterial() : atlas(own)] : lit ? [lit, glowMaterial()] : [part, own];
+            const key = drawn && atlas === true ? "atlas" : lit ? "glow" : materialKey(material);
             const keep = drawn ? ["position", "normal", "uv", "color", "layer"] : ["position", "normal", "uv", ...(material.vertexColors ? ["color"] : [])];
 
             for (const name of Object.keys(geometry.attributes)) {

@@ -979,24 +979,29 @@ describe("each people's buildings (peoples/)", () => {
 
             return buildInterior(map);
         };
+        // (What each is drawn from: the atlas's layers, "wall|stone", walls apart)
         const namesOf = (inside) => {
             const names = new Set();
 
-            inside.object.traverse((node) => node.isMesh && names.add(node.material.name));
+            inside.object.traverse((node) => {
+                for (const layer of (node.isMesh && node.geometry.attributes.layer?.array) || []) {
+                    names.add(`${node.material.name === "atlas-inside-wall" ? "wall|" : ""}${LAYERS[layer % SHINE_STEP]}`);
+                }
+            });
 
             return names;
         };
         const human = taproom("human");
         const lampOf = (inside) => inside.lights.find(({ kind }) => kind === "lamp").colour;
 
-        assert.ok(namesOf(human).has("stone-inside") && namesOf(human).has("timber-inside-wall"));
+        assert.ok(namesOf(human).has("stone") && namesOf(human).has("wall|timber"));
 
-        for (const [people, own] of [["cat", "mud-pale-inside"], ["orc", "basalt-inside"], ["lizard", "stone-lime-inside"], ["elf", "marble-inside"], ["darkElf", "stone-black-inside"]]) {
+        for (const [people, own] of [["cat", "mud"], ["orc", "basalt"], ["lizard", "stone-lime"], ["elf", "marble"], ["darkElf", "stone-black"]]) {
             const inside = taproom(people);
             const names = namesOf(inside);
 
             assert.ok(names.has(own), `${people}: ${[...names].join(", ")}`);
-            assert.ok(!names.has("stone-inside") && !names.has("timber-inside"), `${people}: no flagstones nor oak`);
+            assert.ok(!names.has("stone") && !names.has("timber"), `${people}: no flagstones nor oak`);
 
             inside.dispose();
         }
@@ -1004,6 +1009,63 @@ describe("each people's buildings (peoples/)", () => {
         assert.notEqual(lampOf(taproom("darkElf")), lampOf(human));
         assert.notEqual(lampOf(taproom("elf")), lampOf(human));
         // (A human's inside afterwards is the humans' again)
-        assert.ok(namesOf(taproom("human")).has("stone-inside"));
+        assert.ok(namesOf(taproom("human")).has("stone"));
+    });
+
+    it("draws each inside from the atlas, a mesh for its walls and one for the rest, only its daylight, flames, roast and lights apart", async () => {
+        const { readPlan } = await import("../client/js/core/interiors.js");
+        const { tavernRooms, templeRooms } = await import("../client/js/core/insides.js");
+        const { buildInterior } = await import("../client/js/world/interiors3d.js");
+        const inside = (rooms, name, extra = {}) => {
+            const [floor] = rooms({ seed: 5, name: "Inside", people: "human", tavern: { storeys: 1 }, ...extra });
+            const map = readPlan(name, floor.name, floor.rows, { ground: floor.ground });
+
+            Object.assign(map, { origin: [0, 0], style: floor.style, finish: floor.finish, layout: floor.layout, people: "human", ...floor, ...extra });
+
+            return buildInterior(map);
+        };
+        const apart = /^(window|candle-flame|sconce|sconce-warm|roast|embers|glow-[a-z]+)-inside(-wall)?$/;
+
+        for (const built of [inside(tavernRooms, "taproom-inside"), inside(templeRooms, "temple-inside", { patron: "aurelia" })]) {
+            const meshes = [];
+
+            built.object.traverse((node) => node.isMesh && meshes.push(node));
+
+            const atlas = meshes.filter(({ material }) => material.name.startsWith("atlas-inside"));
+
+            assert.ok(meshes.length <= 12, `${meshes.length} meshes`);
+            assert.ok(atlas.length >= 2 && atlas.every(({ geometry }) => geometry.attributes.layer));
+            assert.ok(meshes.every(({ material }) => !material.map), "nothing painted of its own");
+            assert.ok(meshes.every(({ material }) => material.name.startsWith("atlas-inside") || apart.test(material.name) || material.type === "ShaderMaterial"), meshes.map(({ material }) => material.name).join());
+            built.dispose();
+        }
+
+        // (A god's colour, worked out as it's built, drawn from the plain layer in that colour)
+        const god = new THREE.MeshLambertMaterial({ color: 0x5c2e91 });
+        const geometry = new THREE.BufferGeometry();
+
+        god.userData.plain = true;
+        geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
+
+        const drawn = toAtlas(geometry, god);
+
+        assert.equal(drawn.attributes.layer.array[0], LAYERS.indexOf("plain"));
+        assert.deepEqual([...drawn.attributes.color.array.slice(0, 3)].map((c) => c.toFixed(5)), god.color.toArray().map((c) => c.toFixed(5)));
+        assert.equal(layerOf(new THREE.MeshLambertMaterial({ color: 0x5c2e91 })), -1, "not unless it says it's plain");
+    });
+
+    it("cuts the insides away in front of the player as it draws them from the atlas: textures, relief and shine", async () => {
+        const { atlasVariant } = await import("../client/js/world/art/engine/atlas.js");
+        const shader = { uniforms: {}, vertexShader: THREE.ShaderLib.lambert.vertexShader, fragmentShader: THREE.ShaderLib.lambert.fragmentShader };
+        const extended = [];
+        const variant = atlasVariant("atlas-test", (given) => extended.push(given));
+
+        variant.onBeforeCompile(shader);
+
+        assert.deepEqual(extended, [shader], "changed after the atlas's own");
+        assert.match(shader.fragmentShader, /atlasShine\(diffuseColor\)/);
+        assert.match(shader.fragmentShader, /reliefNormal/);
+        assert.equal(variant.userData.uniforms, atlasMaterial().userData.uniforms, "the one atlas");
+        assert.notEqual(variant, atlasMaterial());
     });
 });

@@ -10,18 +10,21 @@
 // grindstone that turns while it's cranked, racks of tools and of finished work, a workbench with
 // its vice, and a heap of charcoal.
 //
-// Built with the art kits' Solid (five art pixels to a metre) and their materials, each map in
-// its own group at its place in the world (its `origin`). There are no ceilings, and what stands
-// in front of the player (INTERIOR_CUT, set each frame by the game: a strip from them towards the
-// camera) is cut away: walls down to their stone footing, a whole square's length at a time, and
-// anything else above head height, so the player is always in view whichever way the camera
-// looks, and every other wall stands full height; where a cut shows the inside of something, it's
-// dark wood, as if solid.
+// Built with the art kits' Solid (five art pixels to a metre) and their materials, and drawn as
+// the buildings outside are, from the atlas (atlas.js: its textures, lit as relief, what shines
+// shining), each map in its own group at its place in the world (its `origin`). There are no
+// ceilings, and what stands in front of the player (INTERIOR_CUT, set each frame by the game: a
+// strip from them towards the camera) is cut away: walls down to their stone footing, a whole
+// square's length at a time, and anything else above head height, so the player is always in
+// view whichever way the camera looks, and every other wall stands full height; where a cut shows
+// the inside of something, it's dark wood, as if solid.
 
 import * as THREE from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { shrinesOf } from "../core/insides.js";
 import { GOD_IDS, GODS } from "../core/lore/gods.js";
-import { material as artMaterial, paintPicture } from "./art/engine/materials.js";
+import { atlasVariant, layerOf } from "./art/engine/atlas.js";
+import { material as artMaterial } from "./art/engine/materials.js";
 import { Solid } from "./art/engine/solid.js";
 import { joined, partsOf } from "./town3d.js";
 import { allAtOnce } from "../core/steps.js";
@@ -80,39 +83,10 @@ const m = (metres) => metres * M;
 // What's part of a wall (cut away from the floor up, a square at a time: INTERIOR_CUT)
 const WALL = Object.freeze({ wall: true });
 
-// Colours the art kits don't have
-const COLOURS = {
-    velvet: 0x7a1826,
-    "velvet-purple": 0x4a1f45,
-    linen: 0xe9e2cf,
-    pewter: 0x8d9194,
-    brass: 0xb58f3e,
-    candle: 0xf1e7c8,
-    soot: 0x151211,
-    ale: 0x6b4214,
-    rug: 0x8e2a22,
-    "rug-border": 0x2e3d5c,
-    ledger: 0x3d2a1a,
-    wine: 0x5a0f1c,
-    flowers: 0xc24a6e,
-    leaves: 0x3f6b35,
-    apple: 0xb3261d,
-    "wool-green": 0x46603c,
-    "wool-blue": 0x3a4b6e,
-    "wool-ochre": 0x9a7434,
-    leather: 0x4f3220,
-    parchment: 0xe6d6ac,
-    "wax-red": 0x9a1c1c,
-    "guild-blue": 0x23365e,
-    "guild-gold": 0xd6b35a,
-    bone: 0xe4d8bc,
-};
-
-// The art's materials darkened (a textured material under a colour): beaten earth black with soot
-const TINTED = { "earth-sooty": ["road", 0x6a5e54] };
-
-// Each interior's own copies of the materials (the town's are shared, and cut differently), and
-// the same again for walls (`wall`: cut lower)
+// What each thing inside is drawn as (by name, the art's: engine/materials.js), and the same
+// again for walls (`wall`: cut lower). What the atlas can draw only says what it's drawn from
+// (atlasInside draws it); the rest (daylight in the windows, candle flames, the roast, lights and
+// embers) are each their own copy, cut away as the atlas is
 const materials = new Map();
 
 // The people whose inside is being built: its materials (PALETTES) in place of the humans', and
@@ -127,10 +101,11 @@ function material(asked, { wall = false } = {}) {
     if (!materials.has(key)) {
         let result;
 
-        if (COLOURS[name] !== undefined || name.startsWith("god-")) {
+        if (name.startsWith("god-")) {
             // (A god's own colour: "god-aurelia"...)
-            result = new THREE.MeshLambertMaterial({ color: COLOURS[name] ?? GODS[name.slice(4)]?.colours[0] ?? 0xffffff });
+            result = new THREE.MeshLambertMaterial({ color: GODS[name.slice(4)]?.colours[0] ?? 0xffffff });
             result.name = name;
+            result.userData.plain = true;
         } else if (name === "window") {
             // Daylight in the panes
             result = new THREE.MeshBasicMaterial({ color: 0xd9e8f5 });
@@ -141,26 +116,38 @@ function material(asked, { wall = false } = {}) {
         } else if (name === "roast") {
             result = new THREE.MeshStandardMaterial({ color: 0x9c5424, roughness: 0.45, metalness: 0 });
             result.name = name;
-        } else if (TINTED[name]) {
-            result = artMaterial(TINTED[name][0]).clone();
-            result.color.setHex(TINTED[name][1]);
-            result.name = `${name}-inside`;
         } else {
             result = artMaterial(name).clone();
-            result.name = `${name}-inside`;
         }
 
-        if (wall) {
-            result = result.clone();
-            result.name = `${result.name}-wall`;
+        if (layerOf(result) >= 0) {
+            result.userData.wall = wall;
+        } else {
+            result.name = `${name}-inside${wall ? "-wall" : ""}`;
+            result.shadowSide = THREE.DoubleSide;
+            cutAway(result, wall);
         }
 
-        result.shadowSide = THREE.DoubleSide;
-        cutAway(result, wall);
         materials.set(key, result);
     }
 
     return materials.get(key);
+}
+
+// The atlas as the insides draw it: cut away in front of the player, walls' and everything else's
+// (a copy each: their cuts differ)
+const insides = new Map();
+
+function atlasInside(wall) {
+    if (!insides.has(wall)) {
+        const result = atlasVariant(wall ? "atlas-inside-wall" : "atlas-inside", (shader) => cutShader(shader, wall));
+
+        result.side = THREE.DoubleSide;
+        result.customProgramCacheKey = () => "atlas-inside";
+        insides.set(wall, result);
+    }
+
+    return insides.get(wall);
 }
 
 // Cut away what stands in front of the player (INTERIOR_CUT, as cutsAway): a wall's squares whole
@@ -168,23 +155,29 @@ function material(asked, { wall = false } = {}) {
 // showing as solid (the cap colour)
 function cutAway(target, wall) {
     target.side = THREE.DoubleSide;
-    target.onBeforeCompile = (shader) => {
-        Object.assign(shader.uniforms, {
-            cutPlayer: INTERIOR_CUT.player,
-            cutToCamera: INTERIOR_CUT.toCamera,
-            cutHeight: wall ? { value: 0 } : INTERIOR_CUT.height,
-            cutSquares: { value: wall ? 1 : 0 },
-            cutMargin: INTERIOR_CUT.margin,
-            cutWidth: INTERIOR_CUT.width,
-            cutBounds: INTERIOR_CUT.bounds,
-            cutCap: INTERIOR_CUT.cap,
-        });
-        shader.vertexShader = shader.vertexShader
-            .replace("#include <common>", "#include <common>\nvarying vec3 vCutWorld;")
-            .replace("#include <project_vertex>", "#include <project_vertex>\nvCutWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;");
-        shader.fragmentShader = shader.fragmentShader
-            .replace("#include <common>", "#include <common>\nvarying vec3 vCutWorld;\nuniform vec3 cutPlayer;\nuniform vec2 cutToCamera;\nuniform float cutHeight;\nuniform float cutSquares;\nuniform float cutMargin;\nuniform float cutWidth;\nuniform vec4 cutBounds;\nuniform vec3 cutCap;")
-            .replace("#include <clipping_planes_fragment>", `#include <clipping_planes_fragment>
+    target.onBeforeCompile = (shader) => cutShader(shader, wall);
+    target.customProgramCacheKey = () => `interior-cut-${target.type}`;
+    target.needsUpdate = true;
+}
+
+// (The cut, in three.js's own shader for a material, as onBeforeCompile is given it)
+function cutShader(shader, wall) {
+    Object.assign(shader.uniforms, {
+        cutPlayer: INTERIOR_CUT.player,
+        cutToCamera: INTERIOR_CUT.toCamera,
+        cutHeight: wall ? { value: 0 } : INTERIOR_CUT.height,
+        cutSquares: { value: wall ? 1 : 0 },
+        cutMargin: INTERIOR_CUT.margin,
+        cutWidth: INTERIOR_CUT.width,
+        cutBounds: INTERIOR_CUT.bounds,
+        cutCap: INTERIOR_CUT.cap,
+    });
+    shader.vertexShader = shader.vertexShader
+        .replace("#include <common>", "#include <common>\nvarying vec3 vCutWorld;")
+        .replace("#include <project_vertex>", "#include <project_vertex>\nvCutWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;");
+    shader.fragmentShader = shader.fragmentShader
+        .replace("#include <common>", "#include <common>\nvarying vec3 vCutWorld;\nuniform vec3 cutPlayer;\nuniform vec2 cutToCamera;\nuniform float cutHeight;\nuniform float cutSquares;\nuniform float cutMargin;\nuniform float cutWidth;\nuniform vec4 cutBounds;\nuniform vec3 cutCap;")
+        .replace("#include <clipping_planes_fragment>", `#include <clipping_planes_fragment>
 {
     vec2 cutAt = (cutSquares > 0.5 ? floor(clamp(vCutWorld.xz, cutBounds.xy + 0.001, cutBounds.zw - 0.001)) + 0.5 : vCutWorld.xz) - cutPlayer.xz;
     float cutAlong = dot(cutAt, cutToCamera);
@@ -192,10 +185,7 @@ function cutAway(target, wall) {
 
     if (vCutWorld.y - cutPlayer.y > cutHeight && cutAlong > cutMargin && cutAcross < cutWidth) discard;
 }`)
-            .replace("#include <dithering_fragment>", "#include <dithering_fragment>\nif (!gl_FrontFacing) gl_FragColor = vec4(cutCap, 1.0);");
-    };
-    target.customProgramCacheKey = () => `interior-cut-${target.type}`;
-    target.needsUpdate = true;
+        .replace("#include <dithering_fragment>", "#include <dithering_fragment>\nif (!gl_FrontFacing) gl_FragColor = vec4(cutCap, 1.0);");
 }
 
 // --- Flames ---
@@ -267,14 +257,11 @@ export function flame(width, height, seed) {
         toneMapped: false,
     });
     const group = new THREE.Group();
+    const quads = [0, Math.PI / 3, (2 * Math.PI) / 3].map((angle) => new THREE.PlaneGeometry(width, height).translate(0, height / 2, 0).rotateY(angle));
 
-    for (const angle of [0, Math.PI / 3, (2 * Math.PI) / 3]) {
-        const quad = new THREE.Mesh(new THREE.PlaneGeometry(width, height).translate(0, height / 2, 0), shader);
-
-        quad.rotation.y = angle;
-        group.add(quad);
-    }
-
+    // (One mesh of the three: its quads are added together, so drawn in any order)
+    group.add(new THREE.Mesh(mergeGeometries(quads), shader));
+    quads.forEach((quad) => quad.dispose());
     group.userData.flame = shader;
 
     return group;
@@ -670,7 +657,7 @@ function taproom(map) {
         logs.add(log);
     }
 
-    logs.add(new THREE.Mesh(new THREE.BoxGeometry(m(1.1), 0.4, m(1.6)).translate(m(0.85), m(0.1), m(hz)), artMaterial("embers")));
+    logs.add(new THREE.Mesh(new THREE.BoxGeometry(m(1.1), 0.4, m(1.6)).translate(m(0.85), m(0.1), m(hz)), material("embers")));
     solid.add(objectSolid(logs));
 
     // The spit: iron stands either side, a rod through the boar, a crank
@@ -826,7 +813,7 @@ function boar() {
     head.position.set(0, m(0.02), m(0.62));
     group.add(head);
     group.add(new THREE.Mesh(new THREE.CylinderGeometry(m(0.09), m(0.12), m(0.2), 10).rotateX(Math.PI / 2).translate(0, -m(0.02), m(0.86)), roast));
-    group.add(new THREE.Mesh(new THREE.SphereGeometry(m(0.085), 10, 8).translate(0, -m(0.03), m(0.99)), material("apple")));
+    group.add(new THREE.Mesh(new THREE.SphereGeometry(m(0.085), 10, 8).translate(0, -m(0.03), m(0.99)), material("apples")));
 
     for (const side of [-1, 1]) {
         group.add(new THREE.Mesh(new THREE.ConeGeometry(m(0.07), m(0.14), 6).rotateZ(side * 0.5).translate(side * m(0.12), m(0.2), m(0.58)), roast));
@@ -996,7 +983,7 @@ function smithy(map) {
     const fx = (fx0 + fx1) / 2;
 
     solid.box(fx0, 0, fz0, fx1, m(0.85), fz1 - m(0.2), material("stone-dark"));
-    solid.box(fx0 + m(0.4), m(0.85), fz0 + m(0.4), fx1 - m(0.4), m(0.9), fz1 - m(0.6), artMaterial("embers"));
+    solid.box(fx0 + m(0.4), m(0.85), fz0 + m(0.4), fx1 - m(0.4), m(0.9), fz1 - m(0.6), material("embers"));
     solid.box(fx0 - m(0.1), m(0.85), fz0 + m(0.2), fx0 + m(0.3), m(1.15), fz1 - m(0.2), material("stone-dark"));
     solid.box(fx1 - m(0.3), m(0.85), fz0 + m(0.2), fx1 + m(0.1), m(1.15), fz1 - m(0.2), material("stone-dark"));
     solid.face([[fx0 - m(0.2), m(1.8), fz1], [fx1 + m(0.2), m(1.8), fz1], [fx1 - m(0.9), m(STOREY), fz0 + m(0.4)], [fx0 + m(0.9), m(STOREY), fz0 + m(0.4)]], material("stone-dark", WALL));
@@ -1427,7 +1414,7 @@ function guild(map) {
     solid.box(w - m(0.15), 0, hz0, w + m(0.1), m(1.5), hz1, material("soot", WALL));
     solid.box(w - m(1.05), m(1.45), hz0 - m(0.1), w, m(1.65), hz1 + m(0.1), material("timber", WALL));
     solid.box(w - m(1.8), 0, hz0 - m(0.2), w, m(0.06), hz1 + m(0.2), material("stone-dark"));
-    solid.box(w - m(0.8), m(0.05), hz - m(0.4), w - m(0.2), m(0.2), hz + m(0.4), artMaterial("embers"));
+    solid.box(w - m(0.8), m(0.05), hz - m(0.4), w - m(0.2), m(0.2), hz + m(0.4), material("embers"));
 
     const fire = flame(m(0.9), m(0.7), 4.2);
 
@@ -1486,7 +1473,7 @@ function sideHearth(solid, map, hearth) {
     solid.box(...(([a, b]) => [a, 0, z0, b, m(1.5), z1])(span(-m(0.1), m(0.15))), material("soot", WALL));
     solid.box(...(([a, b]) => [a, m(1.45), z0 - m(0.1), b, m(1.65), z1 + m(0.1)])(span(0, m(1.05))), material("timber", WALL));
     solid.box(...(([a, b]) => [a, 0, z0 - m(0.2), b, m(0.06), z1 + m(0.2)])(span(0, m(1.8))), material("stone-dark"));
-    solid.box(...(([a, b]) => [a, m(0.05), z - m(0.4), b, m(0.2), z + m(0.4)])(span(m(0.2), m(0.8))), artMaterial("embers"));
+    solid.box(...(([a, b]) => [a, m(0.05), z - m(0.4), b, m(0.2), z + m(0.4)])(span(m(0.2), m(0.8))), material("embers"));
 
     const fire = flame(m(0.9), m(0.7), 4.2 + hearth.y);
 
@@ -1592,8 +1579,8 @@ function hall(map) {
         windowIn(solid, "z", 0, m(z), -1);
     }
 
-    wallBanner(solid, m(8.5), 0.3, "z", "velvet", "brass");
-    wallBanner(solid, m(10.5), 0.3, "z", "velvet", "brass");
+    wallBanner(solid, m(8.5), 0.3, "z", "velvet", "cloth-gold");
+    wallBanner(solid, m(10.5), 0.3, "z", "velvet", "cloth-gold");
 
     for (const shelf of at("shelves")) {
         rollShelves(solid, shelf, "wool-green");
@@ -1758,12 +1745,12 @@ function keep(map) {
 
     // Long banners either side of the dais, and down the side walls
     for (const x of [7.5, 14.5]) {
-        wallBanner(solid, m(x), 0.3, "z", "velvet", "gold", { low: 0.9, high: 3 });
+        wallBanner(solid, m(x), 0.3, "z", "velvet", "cloth-gold", { low: 0.9, high: 3 });
     }
 
     for (const z of [9.5, 13.5]) {
-        wallBanner(solid, 0.3, m(z), "x", "velvet", "gold", { low: 0.9, high: 3 });
-        wallBanner(solid, w - 0.3, m(z), "x", "velvet", "gold", { low: 0.9, high: 3 });
+        wallBanner(solid, 0.3, m(z), "x", "velvet", "cloth-gold", { low: 0.9, high: 3 });
+        wallBanner(solid, w - 0.3, m(z), "x", "velvet", "cloth-gold", { low: 0.9, high: 3 });
     }
 
     const fires = at("hearth").map((hearth) => sideHearth(solid, map, hearth));
@@ -1795,11 +1782,11 @@ const BUILDERS = { taproom, upstairs, smithy, temple, guild, hall, keep };
 // bamboo, jade and Maya blue; the elves' marble and moonstone, heartwood and silver; the dark
 // elves' black stone and charred planks, violet cloth and silk
 const PALETTES = Object.freeze({
-    cat: { stone: "mud-pale", "stone-warm": "mud-red", "stone-dark": "mud-dark", plaster: "mud", "plaster-ochre": "mud-red", timber: "timber-light", planks: "planks-pale", "planks-dark": "timber-light", velvet: "laterite", "velvet-purple": "indigo", rug: "indigo", "rug-border": "ochre", pewter: "clay", brass: "sun-gold", "guild-blue": "indigo", "guild-gold": "sun-gold", leather: "hide", "wool-blue": "indigo", "wool-green": "ochre" },
-    orc: { stone: "basalt", "stone-warm": "rock-dark", "stone-dark": "basalt", plaster: "planks-dark", "plaster-white": "hide", "plaster-ochre": "hide-dark", timber: "deadwood", "timber-light": "deadwood", planks: "planks-dark", "planks-dark": "timber-char", velvet: "war-red", "velvet-purple": "war-red", rug: "fur", "rug-border": "fur-grey", pewter: "iron-black", brass: "rust", "guild-blue": "war-red", "guild-gold": "bone", linen: "fur-grey", leather: "hide-dark", "wool-blue": "fur", "wool-green": "fur-grey" },
-    lizard: { stone: "stone-lime", "stone-warm": "stone-lime", "stone-dark": "jade-dark", plaster: "reeds", "plaster-ochre": "plaster-red", timber: "bamboo", "timber-light": "bamboo", planks: "planks-pale", "planks-dark": "bamboo", velvet: "jade", "velvet-purple": "maya-blue", rug: "maya-blue", "rug-border": "plaster-red", pewter: "calabash", brass: "jade", "guild-blue": "maya-blue", "guild-gold": "jade", leather: "reeds", "wool-blue": "maya-blue", "wool-green": "jade" },
-    elf: { stone: "marble", "stone-warm": "stone-moon", "stone-dark": "stone-moon", plaster: "stone-moon", "plaster-white": "marble", "plaster-ochre": "heartwood", timber: "heartwood", "timber-light": "bark-silver", planks: "planks-pale", "planks-dark": "heartwood", velvet: "cloth-green", "velvet-purple": "cloth-green", rug: "cloth-green", "rug-border": "silver", pewter: "silver", brass: "verdigris", "guild-blue": "cloth-green", "guild-gold": "silver", "wool-blue": "cloth-green" },
-    darkElf: { stone: "stone-black", "stone-warm": "stone-black", "stone-dark": "obsidian", plaster: "stone-black", "plaster-white": "planks-char", "plaster-ochre": "slate-violet", timber: "timber-char", "timber-light": "timber-char", planks: "planks-char", "planks-dark": "timber-char", velvet: "cloth-violet", "velvet-purple": "cloth-violet", rug: "cloth-violet", "rug-border": "black", pewter: "iron-black", brass: "silver", "guild-blue": "cloth-violet", "guild-gold": "silver", linen: "silk", "wool-blue": "cloth-violet", "wool-green": "black" },
+    cat: { stone: "mud-pale", "stone-warm": "mud-red", "stone-dark": "mud-dark", plaster: "mud", "plaster-ochre": "mud-red", timber: "timber-light", planks: "planks-pale", "planks-dark": "timber-light", velvet: "laterite", "velvet-purple": "indigo", rug: "indigo", "rug-border": "ochre", pewter: "clay", brass: "sun-gold", "guild-blue": "indigo", "guild-gold": "cloth-saffron", "cloth-gold": "cloth-saffron", leather: "hide", "wool-blue": "indigo", "wool-green": "ochre" },
+    orc: { stone: "basalt", "stone-warm": "rock-dark", "stone-dark": "basalt", plaster: "planks-dark", "plaster-white": "hide", "plaster-ochre": "hide-dark", timber: "deadwood", "timber-light": "deadwood", planks: "planks-dark", "planks-dark": "timber-char", velvet: "war-red", "velvet-purple": "war-red", rug: "fur", "rug-border": "fur-grey", pewter: "iron-black", brass: "rust", "guild-blue": "war-red", "guild-gold": "bone", "cloth-gold": "rust", linen: "fur-grey", leather: "hide-dark", "wool-blue": "fur", "wool-green": "fur-grey" },
+    lizard: { stone: "stone-lime", "stone-warm": "stone-lime", "stone-dark": "jade-dark", plaster: "reeds", "plaster-ochre": "plaster-red", timber: "bamboo", "timber-light": "bamboo", planks: "planks-pale", "planks-dark": "bamboo", velvet: "jade", "velvet-purple": "maya-blue", rug: "maya-blue", "rug-border": "plaster-red", pewter: "calabash", brass: "jade", "guild-blue": "maya-blue", "guild-gold": "jade", "cloth-gold": "jade", leather: "reeds", "wool-blue": "maya-blue", "wool-green": "jade" },
+    elf: { stone: "marble", "stone-warm": "stone-moon", "stone-dark": "stone-moon", plaster: "stone-moon", "plaster-white": "marble", "plaster-ochre": "heartwood", timber: "heartwood", "timber-light": "bark-silver", planks: "planks-pale", "planks-dark": "heartwood", velvet: "cloth-green", "velvet-purple": "cloth-green", rug: "cloth-green", "rug-border": "cloth-silver", pewter: "silver", brass: "verdigris", "guild-blue": "cloth-green", "guild-gold": "cloth-silver", "cloth-gold": "verdigris", "wool-blue": "cloth-green" },
+    darkElf: { stone: "stone-black", "stone-warm": "stone-black", "stone-dark": "obsidian", plaster: "stone-black", "plaster-white": "planks-char", "plaster-ochre": "slate-violet", timber: "timber-char", "timber-light": "timber-char", planks: "planks-char", "planks-dark": "timber-char", velvet: "cloth-violet", "velvet-purple": "cloth-violet", rug: "cloth-violet", "rug-border": "black", pewter: "iron-black", brass: "silver", "guild-blue": "cloth-violet", "guild-gold": "cloth-silver", "cloth-gold": "cloth-silver", linen: "silk", "wool-blue": "cloth-violet", "wool-green": "black" },
 });
 
 // The peoples whose walls inside are framed with posts and a beam, as the humans' are (the orcs'
@@ -1969,6 +1956,24 @@ export function buildInterior(map) {
     return allAtOnce(buildingInterior(map));
 }
 
+// A moving part's meshes merged as the rest are (drawn from the atlas where they can be), about the
+// part's own origin: it turns as one
+function mergeInPlace(part) {
+    const [position, rotation] = [part.position.clone(), part.rotation.clone()];
+
+    part.position.set(0, 0, 0);
+    part.rotation.set(0, 0, 0);
+    part.updateMatrixWorld(true);
+
+    const merged = joined(partsOf(part, { atlas: (own) => atlasInside(own.userData.wall) }));
+
+    part.traverse((node) => node.geometry?.dispose());
+    part.clear();
+    part.add(...merged.children);
+    part.position.copy(position);
+    part.rotation.copy(rotation);
+}
+
 /**
  * The same (buildInterior), a step at a time (each a yield, so that getting a building ready is
  * spread over frames: its rooms and furniture laid out, made into meshes, made ready to merge,
@@ -2008,8 +2013,9 @@ export function* buildingInterior(map) {
     statics.updateMatrixWorld(true);
     yield;
 
-    // Everything that doesn't move merged by material; the spit and flames apart
-    const parts = partsOf(statics);
+    // Everything that doesn't move merged: what the atlas draws into a mesh for the walls and one
+    // for the rest, anything else by its material; the spit and flames apart
+    const parts = partsOf(statics, { atlas: (own) => atlasInside(own.userData.wall) });
 
     yield;
 
@@ -2022,6 +2028,7 @@ export function* buildingInterior(map) {
     animated.scale.setScalar(1 / M);
 
     for (const { object: part } of built.moving) {
+        mergeInPlace(part);
         animated.add(part);
     }
 
@@ -2045,22 +2052,6 @@ export function* buildingInterior(map) {
             node.castShadow = false;
             node.receiveShadow = false;
         });
-    }
-
-    // (Its materials' pictures painted, a step each, rather than all in the frame it's first drawn
-    // in: materials.js paintPicture)
-    const drawnWith = new Set();
-
-    object.traverse((node) => {
-        if (node.isMesh) {
-            [node.material].flat().forEach((each) => drawnWith.add(each));
-        }
-    });
-
-    for (const material of drawnWith) {
-        if (paintPicture(material)) {
-            yield;
-        }
     }
 
     return {
