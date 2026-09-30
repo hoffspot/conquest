@@ -2,7 +2,8 @@
 // to others; one who joins sent it as it is, then everything done in it, which they do again on
 // their own copy, step for step, and come out the same; their commands done by the host, and
 // what came of them heard; players of another people brought in by their own people's town;
-// those who leave gone from every copy; a copy gone astray set right; those who can't join told why
+// those who leave gone from every copy; a copy gone astray set right, and every copy after a link
+// drops; told when the host's stopped; those who can't join told why
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
@@ -242,6 +243,83 @@ describe("playing together (netplay.js)", () => {
         catchUp(joining);
         assert.deepEqual(events, ["state"]);
         assert.equal(joining.host.checksum(), host.checksum());
+    });
+
+    it("sends everyone the world again when the host's link comes back after a drop, what was sent meanwhile lost; one whose own came back asks for it", () => {
+        const { host, hosting, join, play, catchUp, post, deliver } = opened();
+        const bryn = join(guest("Bryn"));
+        const cai = join(guest("Cai"));
+        const states = [];
+
+        bryn.joining.onState = () => states.push("bryn");
+        cai.joining.onState = () => states.push("cai");
+        catchUp(bryn.joining);
+        catchUp(cai.joining);
+
+        // The host's link drops: what it sends meanwhile never comes
+        for (let k = 0; k < 30; k++) {
+            host.advance(STEP_MS);
+        }
+
+        hosting.flush();
+        post.length = 0;
+
+        // Back: everyone sent the world as it now is, and on they play
+        hosting.resync();
+        deliver();
+        assert.deepEqual(states.sort(), ["bryn", "cai"]);
+        play(20);
+        catchUp(bryn.joining);
+        catchUp(cai.joining);
+        assert.equal(bryn.joining.host.checksum(), host.checksum());
+        assert.equal(cai.joining.host.checksum(), host.checksum());
+
+        // Bryn's own link drops (and an ask for the world, already made, lost with it): asked again
+        host.advance(STEP_MS);
+        hosting.flush();
+        post.length = 0;
+        bryn.joining.astray = true;
+        bryn.joining.resync();
+        deliver();
+        assert.deepEqual(states.sort(), ["bryn", "bryn", "cai"]);
+        catchUp(bryn.joining);
+        assert.equal(bryn.joining.host.checksum(), host.checksum());
+    });
+
+    it("tells everyone who's joined when the host's world is stopped and going again, and whoever joins meanwhile", () => {
+        const { hosting, join, post, deliver } = opened();
+        const bryn = join(guest("Bryn"));
+
+        hosting.pause(true);
+        deliver();
+        assert.equal(bryn.joining.paused, true);
+
+        // (Said once: saying it again sends nothing)
+        hosting.pause(true);
+        assert.equal(post.length, 0);
+
+        const cai = join(guest("Cai"));
+
+        assert.equal(cai.joining.paused, true);
+        hosting.pause(false);
+        deliver();
+        assert.equal(bryn.joining.paused, false);
+        assert.equal(cai.joining.paused, false);
+    });
+
+    it("takes out of the world anyone who left while the host's link was down (the relay's word of who's still here)", () => {
+        const { host, hosting, join, deliver } = opened();
+        const bryn = join(guest("Bryn"));
+        const left = [];
+
+        join(guest("Cai"));
+        hosting.onLeave = (id) => left.push(id);
+        hosting.still([bryn.peer]);
+        deliver();
+        assert.deepEqual(left, ["guest-2"]);
+        assert.ok(host.players.has("guest-1"));
+        assert.ok(!host.players.has("guest-2"));
+        assert.deepEqual([...hosting.players.keys()], [bryn.peer]);
     });
 
     it("turns away a game of another version, a character that isn't one, and anyone when the world's full", () => {

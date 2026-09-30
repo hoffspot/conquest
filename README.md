@@ -329,8 +329,10 @@ make one first). Each comes as one of their own people, by one of their people's
 isn't yours, so they're at peace or at war with you as your peoples are. Come and go as you
 like: the world goes on, and its menu no longer pauses it while anyone else is in it. The world is
 yours, the one who opened it: what others do is done in it, and when you close it to others (or
-leave), they're told, and go back to their title screen. What their characters grow into,
-carry and earn goes with them. Games play together through the relay on the game's server
+leave), they're told, and go back to their title screen. A link that drops a moment (a phone
+moving from Wi-Fi to its mobile network) comes back by itself, and everyone's shown what's
+happening meanwhile: reconnecting, the host paused, or waiting for the host. What their
+characters grow into, carry and earn goes with them. Games play together through the relay on the game's server
 (`npm start` serves both); from GitHub Pages, add `?relay=wss://your.server/relay` to use one.
 See [docs/WAR.md](docs/WAR.md#playing-together-m11).
 

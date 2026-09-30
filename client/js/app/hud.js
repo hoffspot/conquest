@@ -16,6 +16,7 @@ export class Hud {
         this.plate = root.querySelector("#playerplate");
         this.floaters = root.querySelector("#floaters");
         this.banner = root.querySelector("#banner");
+        this.netStatus = root.querySelector("#netstatus");
 
         /** The minimap's canvas (app/minimap.js draws it). */
         this.map = root.querySelector("#minimap");
@@ -195,6 +196,12 @@ export class Hud {
         if (text && seconds) {
             this.bannerTimer = setTimeout(() => (this.banner.hidden = true), seconds * 1000);
         }
+    }
+
+    /** How playing together's going, while it isn't as it should (text), or nothing (null). */
+    status(text) {
+        this.netStatus.textContent = text ?? "";
+        this.netStatus.hidden = !text;
     }
 
     /**
