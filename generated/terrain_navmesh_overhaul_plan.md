@@ -463,40 +463,88 @@ flats), and pushed into the Elden Ring direction of [§9](#9-environment-art-dir
 
 ## 9. Environment art direction: a lower-fidelity Elden Ring
 
-Added at the user's request during planning. **The generator choices here are provisional** until
-the environment research (running now) comes back; this section will be rewritten from it.
+Added at the user's request, and chosen from the environment research (`research/eldenring.md` in
+the session: Elden Ring's world structure from its asset and map names, FromSoftware's talks,
+and open-source generators, licences checked).
 
-Starting recipe:
+**What makes the look, and what we keep.**
+- **Silhouettes at distance.** Castles, towers, churches, ruins and a giant tree read as shapes
+  against fogged sky 1–4 km away.
+- **One world landmark** visible from nearly everywhere (the Erdtree role): a warm glowing rim
+  and light-shaft meshes.
+- **Value layering by fog.** Near dark, mid lighter, far pale, in four tuned bands. Height fog
+  keeps valleys hazy and peaks crisp.
+- **A palette per region**, blended as the player walks: sky, fog, sun and grade.
+  - farmland and meadow: green and gold;
+  - marsh, lake and elfwood: blue fog;
+  - volcanic land and the orcs: red;
+  - savannah: gold;
+  - snow and mountain: white-blue;
+  - darkwood: violet.
+- **Scale contrast.** Human-scale doors and steps against walls 12–20 m high, towers of
+  25–40 m, spires to 60 m. Today castle walls are 6.4 m and towers 12 m.
+- **Ruins everywhere**: roofless churches, broken towers, collapsed arcades, rubble, graves.
+- **Rock relief**: cliffs with strata, boulders at their feet, a few arches and overhangs,
+  meadows between.
+- **Guidance**: torches at cave mouths, lit destinations, roads that frame landmarks.
+- **Density.** Elden Ring has about 20 named places per km²; Pellagos about 6. We add about one
+  small point of interest per 256 m cell.
 
-- **Landmark-first composition.**
-  - Every region has a few huge silhouettes visible from kilometres away: castles on crags, great
-    trees, towers, ruined cathedrals, each people's grand landmark.
-  - They are drawn far off as simplified proxies or impostors. Roads and sight lines lead the eye
-    to them.
-  - There is a point of interest every few hundred metres: ruins, a church, a shack, a camp, a cave
-    or catacomb mouth, a lone tower.
-- **Dramatic ground.**
-  - Cliffs with strata and boulder fields at their feet.
-  - Rock arches and overhangs as meshes placed on the heightfield.
-  - Ravines, cliff paths, rolling meadows, lakes and swamps.
-- **Stone architecture with weight.**
-  - Human castles, churches and towers move toward Romanesque and Gothic: massive walls,
-    buttresses, arches, ramparts, towers with spires.
-  - The houses keep their medieval English timber, set on heavier stone bases.
-  - Each people keeps its own identity with the same weight and weathering.
-- **Ruins everywhere.** A decay pass over the existing building kits gives broken walls, collapsed
-  roofs, missing floors, rubble and overgrowth. Weathering, moss on up-facing surfaces (in the
-  shader) and ivy.
-- **Foliage.**
-  - Dense meadow grass, instanced with wind, and flowers.
-  - Gnarled trees with golden and autumn tones.
-  - Ground cover thins on paths.
-- **Atmosphere.**
-  - Golden low sun, strong height fog and aerial perspective.
-  - Colour grading per region: green and gold, blue fog, red rot, snow.
-- **Lower fidelity.**
-  - Fewer, bigger shapes; normal maps only near; no ray-traced or volumetric effects on phones.
-  - Impostors far off; the grass radius and density set by tier.
+**What we drop for phones.**
+- Normal-mapped PBR everywhere (only on rock, if at all).
+- Volumetric fog; SSAO and GI (we bake AO into vertex colour, as the kits already do).
+- Grass past 40–60 m, shadows past 24–40 m, and full-detail distant buildings (we use proxies).
+- Physics foliage (vertex sway already exists).
+
+**Chosen generators, by element** (triangles and draws per frame on a mid-range phone):
+
+| # | Element | Technique | Code to write or port (licence) | Budget | Plugs into |
+|---|---|---|---|---|---|
+| 1 | Atmosphere | Height fog in 4 value bands; region look table blended by position; grade in `CustomToneMapping` (no extra pass); light-shaft cards | Own code | +0 passes; 2–4 draws; < 2k triangles | `view.js`, `sky.js`, `environment.js`, new `world/look.js` |
+| 2 | Far silhouettes | Every layout emits a few boxes, prisms and cones for its biggest masses. Everything within 4 km merges into one far mesh, plus the world landmark | Own code; three `mergeGeometries` (MIT) | 1–3 draws; 8–25k triangles | `sites.js`, `settlements.js`, `setpieces/*`; the far pass (M6) |
+| 3 | Landmark composition | Tiers (large, medium, small); plan-grid viewshed so medium landmarks sit on visible high ground; viewpoints; roads that approach landmarks head-on; ~1 small point of interest per 256 m cell | Own code in `core/worldplan/landmarks.js`, exact maths | Plan-time CPU only | `settle.js`, road refinement, `wilds.js` |
+| 4 | Neutral sites (110 exist in the plan but are never built) | Church or chapel ruins, ruined castles, catacomb portals with torches, stone circles, shrines, a lair | Grammar and kit (rows 6–7) | 2–14k triangles each, merged per chunk | `sites.js siteSize()`, `pieces.js` |
+| 5 | Rocks and cliffs | Cliff panels on steep bands, strata stacks, boulders at cliff feet, 1–3 arches per region, moss and snow masks | Port SeedRock `cliff.js` / `erosion.js` (MIT); extend `wilds.js rock()` | 20–45k triangles; 1–3 draws | Chunk building, fed by `heightAt` |
+| 6 | Ruins | A decay pass over existing kits: roofs removed, broken tops stepped to masonry courses, breaches, rubble, weeds, a tree inside | Own code (ideas from open repos) | Fewer triangles than the intact building | `house.js`, `castle.js`, the peoples' kits via a `decay` option; rubble that blocks, in core |
+| 7 | Churches, citadels, bridges | Romanesque and Gothic church grammar; hill citadels 2–3× today's scale on stepped pads; stone arch bridges; broken aqueducts; grand stairs | Port gremlin-church arch, spire and pinnacle maths (MIT); own `core/setpieces/citadel.js` | Church 6–14k; citadel 30–80k near (3–8 draws), proxy far | `landmarks.js`, `castle.js`, bridges |
+| 8 | Trees | Canopy palette per region; gnarled great lone trees; cheap far trees without shadows | Extend `trees.js`; far LOD instanced | Far 1–2 draws, 40–90k triangles (off beyond 600 m on low) | `Woodland`, far pass |
+| 9 | Grass and flowers | Denser inner ring; ground colour matched to grass tips; wind gusts; drifts per region | Extend `wilds.js UNDERGROWTH` | 60–120k triangles; 4–6 draws (about today's) | `chunks3d.js`, `ground.js` |
+| 10 | Weathering | Moss on up- and north-facing surfaces, rain streaks, ivy leaf quads merged into buildings | Extend `weathering()` in `peoples/kit.js` and `house.js` | +5–10 % triangles on ivied walls; no extra draws | Every kit |
+
+**Pushing each people toward the Elden Ring feel without losing identity.**
+- **For everyone:**
+  - heavier stone bases (0.6–1.2 m plinths that follow the real ground);
+  - retaining walls on pads;
+  - ruined versions of every building kind;
+  - one grand landmark per people, 30–60 m tall, with a far proxy.
+- **Humans:** more stone in the marches; Romanesque and Gothic parish churches and abbeys;
+  ruined villages; hill citadels; broken aqueducts. Landmark: a cathedral with a 40–60 m spire,
+  or a keep with needle towers.
+- **Elves:** pale ruined rotundas and colonnades swallowed by roots; crystal clusters; a
+  blue-silver palette with valley fog. Landmark: a tall domed starwatch, or a colossal tree.
+- **Dark elves:** the most Gothic people, with flying buttresses, pinnacles and broken spires;
+  dwellings cut into basalt cliffs; a violet and teal palette. Landmark: the 60 m obsidian spire.
+- **Cat folk:** eroded mud ruins with melted wall tops; dry-stone enclosures; a gold palette.
+  Landmark: the sun temple's twin towers and disc.
+- **Lizard folk:** overgrown stepped pyramids; causeways and broken bridges over marsh; low mist.
+  Landmark: a 25–40 m ziggurat rising from the mist.
+- **Orcs:** basalt forts on volcanic slopes; columnar basalt; ash fields; a red-orange sky near
+  the volcano. Landmark: a basalt citadel with a smoke plume.
+
+**Budget.** Looking at the horizon outdoors on a mid-range phone, all of this totals about
+110–230 draws and 430–790k triangles before tiering. Tiering brings it within 250 draws and 500k
+triangles:
+- **Mid-range:** far trees only to 600 m; a 20 m dense grass ring; buildings simplified from
+  30 m.
+- **Low-end (120 draws, 250k):** near terrain 3×3 at 2 m; no far trees, only a forest tint; no
+  dense grass ring; no shadows past 16 m.
+
+**Rules and determinism.** Anything that changes blocked squares, walkable surfaces or the
+navigation mesh is core code with exact maths: site and citadel layouts, rubble ramps, stairs,
+bridges, point-of-interest positions and viewshed placement. Purely visual things may use `Math`:
+cliff panels on already-blocked slopes, ivy, moss, rubble chips, proxies and light shafts.
+BatchedMesh falls back to one draw per instance without `WEBGL_multi_draw` (about 3.5 % of
+Android), so anything with many instances is also merged per chunk.
 
 ---
 
@@ -691,8 +739,8 @@ pictures for anything that changes the look.
 | **M3** | Water | River graph; carved beds; flow-mapped shader; waterfalls; fords | Pictures; water cost within budget |
 | **M4** | Structures and roads | Tiers and retaining walls; castles on crags; switchback roads and passes; bridges over valleys; peoples' places on real ground; cliffs and rocks | Pictures; walk every road end to end in a test |
 | **M5** | Multiplayer motion | `motion` stream; early desync checks; hero prediction; tick sync; debug RTT; NET_VERSION 8 | Two-browser e2e with no drift; bandwidth measured |
-| **M6** | Horizon and atmosphere | Far clipmap rings; height fog; tree impostors; landmark proxies; `SunLight` cascades on medium and high; terrain material | Pictures; budgets per tier met |
-| **M7** | Elden Ring environment pass | Ruins and decay, stone architecture push, grass and flowers, rock formations, per-region grading (from §9's research) | Pictures; budgets met |
+| **M6** | Horizon and atmosphere | Far clipmap rings; height fog in value bands; per-region look table and grade (§9 row 1); far silhouettes and the world landmark (§9 row 2); far trees; `SunLight` cascades on medium and high; terrain material | Pictures; budgets per tier met |
+| **M7** | Elden Ring environment pass | In §9's order: the landmark pass in the plan; neutral sites built, with the decay pass; cliffs and rocks; churches, citadels, stone bridges; foliage palette, grass ring, weathering | Pictures after each part; budgets met |
 | **M8** | Characters on Vitruvian | §10, as several PRs (conversion, body, garments, skin, face, LODs, clips) | Pictures; clipping tests green; budgets met |
 
 Each milestone follows the same steps:
@@ -759,6 +807,8 @@ converted data is to be measured in M8 against today's hm08 data.
     work took, and offered Mixamo access. §10.1 was added: automated checks first, captured
     motion as the source, fixes solved offline, garments and items clear by construction. Mixamo
     is held back because of its raw-file terms.
+- **2026-09-30.** The environment research came back. §9 was rewritten with the chosen generators,
+  budgets, per-people directions and order of work, and M6/M7 now follow it.
 - **2026-09-30, M1a built.** `core/terrain/`:
   - **Files:** `simplex.js`, `curve.js`, `waters.js` and `height.js`.
   - **Speed and range:** simplex with its slope takes about 50 ns in V8. A 65×65 chunk of heights

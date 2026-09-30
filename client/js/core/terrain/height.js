@@ -146,30 +146,37 @@ function smoothstep(from, to, value) {
 const TAPS = new Int32Array(16);
 const WEIGHTS = new Float64Array(16);
 
+const [BU, BV] = [new Float64Array(4), new Float64Array(4)];
+
 function weigh(x, y) {
-    const [u, v] = [x / CELL - 0.5, y / CELL - 0.5];
-    const [i, j] = [Math.floor(u), Math.floor(v)];
-    const [s, t] = [u - i, v - j];
-    const bu = basis(s);
-    const bv = basis(t);
+    const u = x / CELL - 0.5;
+    const v = y / CELL - 0.5;
+    const i = Math.floor(u);
+    const j = Math.floor(v);
+
+    basis(u - i, BU);
+    basis(v - j, BV);
 
     for (let b = 0; b < 4; b++) {
         const row = Math.min(CELLS - 1, Math.max(0, j - 1 + b)) * CELLS;
 
         for (let a = 0; a < 4; a++) {
             TAPS[b * 4 + a] = row + Math.min(CELLS - 1, Math.max(0, i - 1 + a));
-            WEIGHTS[b * 4 + a] = bu[a] * bv[b];
+            WEIGHTS[b * 4 + a] = BU[a] * BV[b];
         }
     }
 }
 
-// The uniform cubic B-spline's four weights at t (0 to 1)
-function basis(t) {
+// The uniform cubic B-spline's four weights at t (0 to 1), into `out`
+function basis(t, out) {
     const t2 = t * t;
     const t3 = t2 * t;
     const u = 1 - t;
 
-    return [(u * u * u) / 6, (3 * t3 - 6 * t2 + 4) / 6, (-3 * t3 + 3 * t2 + 3 * t + 1) / 6, t3 / 6];
+    out[0] = (u * u * u) / 6;
+    out[1] = (3 * t3 - 6 * t2 + 4) / 6;
+    out[2] = (-3 * t3 + 3 * t2 + 3 * t + 1) / 6;
+    out[3] = t3 / 6;
 }
 
 function spline(layer) {
@@ -189,11 +196,10 @@ function swells(x, y, seed) {
     let [sum, amplitude, total, frequency, gx, gy] = [0, 1, 0, 1 / SWELLS.wavelength, 0, 0];
 
     for (let octave = 0; octave < SWELLS.octaves; octave++) {
-        const [n, dx, dy] = simplex(x * frequency, y * frequency, seed + octave * 31, NOISE);
-
-        gx += dx * amplitude;
-        gy += dy * amplitude;
-        sum += (amplitude * n) / (1 + SWELLS.smoothing * (gx * gx + gy * gy));
+        simplex(x * frequency, y * frequency, seed + octave * 31, NOISE);
+        gx += NOISE[1] * amplitude;
+        gy += NOISE[2] * amplitude;
+        sum += (amplitude * NOISE[0]) / (1 + SWELLS.smoothing * (gx * gx + gy * gy));
         total += amplitude;
         amplitude /= 2;
         frequency *= 2;
@@ -354,7 +360,7 @@ export function heightAt(plan, x, y) {
  * where it's dry: a river's in its channel, a lake's or the sea's where the plan has it wet enough
  * and the ground's below it.
  */
-export function waterAt(plan, x, y, height = heightAt(plan, x, y)) {
+export function waterAt(plan, x, y, height) {
     const { waters } = layersOf(plan);
     const river = waters.river(x, y, 0);
 
@@ -362,9 +368,21 @@ export function waterAt(plan, x, y, height = heightAt(plan, x, y)) {
         return river.surface;
     }
 
+    return stillWaterAt(plan, x, y, height);
+}
+
+/**
+ * A lake's or the sea's surface at a point (metres), given the ground's height there (heightAt;
+ * worked out if not given, and only where there's still water near), or null where there's none.
+ */
+export function stillWaterAt(plan, x, y, height) {
     const still = stillOf(plan, x, y);
 
-    return still && still.wetness > WET_FROM && height < still.level ? still.level : null;
+    if (!still || still.wetness <= WET_FROM) {
+        return null;
+    }
+
+    return (height ?? heightAt(plan, x, y)) < still.level ? still.level : null;
 }
 
 /**

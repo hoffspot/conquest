@@ -67,7 +67,7 @@ describe("the world outside (overworld.js)", () => {
         for (const chunk of [...around].reverse().slice(0, 12)) {
             const other = again.chunk(chunk.cx, chunk.cy);
 
-            for (const layer of ["blocked", "opaque", "ground", "water", "bridge"]) {
+            for (const layer of ["blocked", "opaque", "ground", "water", "bridge", "heights", "slopes"]) {
                 assert.deepEqual(other[layer], chunk[layer], `${chunk.cx}, ${chunk.cy}: ${layer}`);
             }
 
@@ -113,7 +113,7 @@ describe("the world outside (overworld.js)", () => {
         const [first, reversed] = [madeIn(order), madeIn([...order].reverse())];
 
         for (const [key, chunk] of first) {
-            for (const layer of ["blocked", "opaque", "ground", "water", "bridge"]) {
+            for (const layer of ["blocked", "opaque", "ground", "water", "bridge", "heights", "slopes"]) {
                 assert.deepEqual(reversed.get(key)[layer], chunk[layer], `${key}: ${layer}`);
             }
 
