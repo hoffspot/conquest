@@ -3,6 +3,7 @@
 
 import { HumanData, HUMAN_URL, loadHumanFiles } from "./body.js";
 import { loadMasks, SkinAtlas } from "./skin.js";
+import { Lods } from "./lod.js";
 import { Skins } from "./skins.js";
 
 /**
@@ -12,7 +13,8 @@ import { Skins } from "./skins.js";
  *
  * `elsewhere`: the skin atlas worked out off the page's thread (a second or more on a phone), and
  * skins painted there too (`skins`: skins.js): the kit comes back without its atlas, which it has
- * once `ready` resolves; nothing that paints a skin is to be made before then.
+ * once `ready` resolves; nothing that paints a skin is to be made before then. Characters seen from
+ * afar are drawn with fewer triangles, made there too (`lods`: lod.js).
  */
 export async function loadCharacterKit({ base = HUMAN_URL, textureSize = 1024, fetch = globalThis.fetch.bind(globalThis), elsewhere = false } = {}) {
     const files = await loadHumanFiles(base, fetch);
@@ -25,7 +27,7 @@ export async function loadCharacterKit({ base = HUMAN_URL, textureSize = 1024, f
         return { human, atlas, ready: Promise.resolve(atlas) };
     }
 
-    const kit = { human, atlas: null, skins: new Skins() };
+    const kit = { human, atlas: null, skins: new Skins(), lods: new Lods() };
 
     kit.ready = kit.skins.analyse(files, human, masks, textureSize).then((atlas) => (kit.atlas = atlas));
 

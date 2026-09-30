@@ -885,6 +885,11 @@ export class Game {
             return null;
         }
 
+        // (Anyone but a player drawn with fewer triangles when small on the screen: #posing)
+        if (options.merge && this.kit.lods) {
+            character.lowerDetail(this.kit.lods);
+        }
+
         return character;
     }
 
@@ -1573,7 +1578,8 @@ export class Game {
 
     // How often a character's body is posed (Avatar.every): the player's every frame, anyone
     // else's as often as how big it is on the screen and how fast it's moving need
-    // (posingEvery). One out of view is posed seldom, unless its shadow may be seen (a player's).
+    // (posingEvery), and how many of its triangles are drawn (lod.js). One out of view is posed
+    // seldom, unless its shadow may be seen (a player's).
     // (A creature's posed every frame, but what's only for looking at, a cape blown about, only
     // in view: BeastAvatar.seen)
     #posing(actor, avatar, dt, pixels) {
@@ -1588,6 +1594,9 @@ export class Game {
         const { position } = avatar.object;
         const { height, mesh } = avatar.character;
         const tall = this.view.heightOnScreen(position, height, pixels, { anywhere: mesh.castShadow });
+
+        // (And drawn with fewer triangles if it's small: Character.fitDetail)
+        avatar.character.fitDetail(tall);
 
         return posingEvery(tall, (avatar.motion * dt * tall) / height);
     }

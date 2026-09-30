@@ -45,6 +45,7 @@ const { soldierLook } = await import("../client/js/characters/soldiers.js");
 const { allAtOnce, allWaiting, NOW, Steps, WAITING } = await import("../client/js/core/steps.js");
 const { Skins } = await import("../client/js/characters/skins.js");
 const THREE = await import("three");
+const { LOD, Lods, lowerDetail } = await import("../client/js/characters/lod.js");
 
 // The skin worker (skin-worker.js), run here: what's sent to it copied to it, and what it sends
 // back kept till it's delivered
@@ -192,6 +193,67 @@ describe("characters built a step at a time (Character.building)", () => {
 
         assert.ok(character.items.length >= 3, character.items.map(({ name }) => name).join());
         assert.ok(character.materials.lashes.forceSinglePass && character.materials.lashes.side === THREE.DoubleSide);
+    });
+
+    it("draws a character small on the screen with a quarter of its body's and outfit's triangles, over the same vertices, made once for everyone", async () => {
+        const lods = new Lods();
+        const character = new Character(kitOf(), options(soldier));
+        const other = new Character(kitOf(), options(soldier));
+        let asked = 0;
+        const counted = lods.of.bind(lods);
+
+        lods.of = (key, mesh) => counted(key, () => (asked++, mesh()));
+        character.lowerDetail(lods);
+        other.lowerDetail(lods);
+        await Promise.all(lods.made.values());
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // (Made once each, the body's and the outfit's, for both of them)
+        assert.equal(asked, 2);
+
+        const { geometry } = character;
+        const outfit = character.garments.find(({ userData }) => userData.merged);
+        const vertices = geometry.attributes.position.count;
+        const [full, low] = [character.detail.full, character.detail.low];
+
+        assert.ok(character.lowBody.length / 3 < human.renderIndices("body").length / 3 / 3, `${character.lowBody.length / 3} body triangles from afar`);
+        assert.ok(low[0].count > 0 && low[0].count < full[0].count, "fewer of the body's shown");
+        assert.equal(low.length, 2, "the body and eyes: no lashes");
+        assert.ok(outfit.userData.detail.low < outfit.userData.detail.full / 3, "fewer of the outfit's");
+        assert.ok(Array.from(geometry.index.array).every((v) => v < vertices), "the same vertices");
+
+        // (A body triangle from afar has a corner out from under the clothes)
+        const index = geometry.index.array;
+        const shown = new Set(Array.from(index.subarray(full[0].start, full[0].start + full[0].count)));
+
+        for (let k = low[0].start; k < low[0].start + low[0].count; k += 3) {
+            assert.ok(shown.has(index[k]) || shown.has(index[k + 1]) || shown.has(index[k + 2]));
+        }
+
+        // Switched by how tall it is on the screen, not flicking at the edge
+        assert.equal(geometry.groups, full);
+        character.fitDetail(LOD.far - 1);
+        assert.ok(character.low && geometry.groups === low && outfit.geometry.drawRange.start === outfit.userData.detail.full);
+        character.fitDetail((LOD.far + LOD.near) / 2);
+        assert.ok(character.low, "between the two, as it was");
+        character.fitDetail(0);
+        assert.ok(character.low, "out of view, as it was");
+        character.fitDetail(LOD.near + 1);
+        assert.ok(!character.low && geometry.groups === full && outfit.geometry.drawRange.start === 0);
+    });
+
+    it("simplifies a mesh to about a quarter of its triangles, keeping its vertices", async () => {
+        const indices = human.renderIndices("body");
+        const { positions } = human.shape({});
+        const at = new Float32Array(human.renderSource.length * 3);
+
+        human.renderSource.forEach((v, r) => at.set(positions.subarray(v * 3, v * 3 + 3), r * 3));
+
+        const lower = await lowerDetail(indices, at, human.uvs);
+        const share = lower.length / indices.length;
+
+        assert.ok(share > 0.2 && share <= LOD.share + 0.01, `${share}`);
+        assert.ok(lower.every((v) => v < human.renderSource.length));
     });
 
     it("grows the hair once: none grown again for what's carried, and under a helmet only what's below its rim", () => {

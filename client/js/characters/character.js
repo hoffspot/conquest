@@ -15,6 +15,7 @@ import { COMPOSITE_BUMP, compositingGarments, fittingGarment, GARMENTS, insideOf
 import { BEARDS, growingHair, hairTexture, HAIRSTYLES } from "./hair.js";
 import { buildItem } from "./items.js";
 import { HairMaterial, SkinMaterial } from "./surfaces.js";
+import { LOD } from "./lod.js";
 import { EYE_DEFAULTS, HAIR_COLOURS, paintEye, paintingSkin, SKIN_DEFAULTS } from "./skin.js";
 import { allAtOnce } from "../core/steps.js";
 
@@ -252,6 +253,11 @@ export class Character {
         this.sheathed = false;
         this.hairHidden = false;
 
+        // (Drawn in full till it's asked to draw fewer triangles from afar: lowerDetail, fitDetail)
+        this.low = false;
+        this.lowBody = null;
+        this.lods = null;
+
         this.geometry = this.#createGeometry();
         this.mesh = new THREE.SkinnedMesh(this.geometry, DRAWN.map((part) => this.materials[part]));
         this.mesh.name = "body";
@@ -469,6 +475,11 @@ export class Character {
             mesh.boundingSphere = this.mesh.boundingSphere;
             this.object.add(mesh);
             this.garments.push(mesh);
+
+            // (Dressed again: its new outfit's lower detail too)
+            if (this.lods) {
+                this.#lowerOutfit(mesh);
+            }
         }
 
         for (const { id, geometry, garment } of merged.length > 1 ? parts.filter((part) => !merged.includes(part)) : parts) {
@@ -1099,26 +1110,128 @@ export class Character {
         const human = this.human;
         const body = human.renderIndices("body");
         const kept = [];
+        // (The corners of the triangles shown: one of the lower-detail body's triangles is drawn
+        // unless all its corners are under clothes)
+        const shown = this.lowBody ? new Uint8Array(human.renderSource.length) : null;
 
         for (let t = 0; t < body.length / 3; t++) {
             if (!this.hidden.has(t)) {
                 kept.push(body[t * 3], body[t * 3 + 1], body[t * 3 + 2]);
+
+                if (shown) {
+                    shown[body[t * 3]] = shown[body[t * 3 + 1]] = shown[body[t * 3 + 2]] = 1;
+                }
+            }
+        }
+
+        const low = [];
+
+        for (let k = 0; shown && k < this.lowBody.length; k += 3) {
+            const [a, b, c] = [this.lowBody[k], this.lowBody[k + 1], this.lowBody[k + 2]];
+
+            if (shown[a] || shown[b] || shown[c]) {
+                low.push(a, b, c);
             }
         }
 
         const eyes = human.renderIndices("eyes");
         const lashes = human.renderIndices("lashes");
-        const index = new Uint16Array(kept.length + eyes.length + lashes.length);
+        const index = new Uint16Array(kept.length + eyes.length + lashes.length + low.length);
+        const lowAt = kept.length + eyes.length + lashes.length;
 
         index.set(kept, 0);
         index.set(eyes, kept.length);
         index.set(lashes, kept.length + eyes.length);
+        index.set(low, lowAt);
 
         this.geometry.setIndex(new THREE.BufferAttribute(index, 1));
-        this.geometry.clearGroups();
-        this.geometry.addGroup(0, kept.length, 0);
-        this.geometry.addGroup(kept.length, eyes.length, 1);
-        this.geometry.addGroup(kept.length + eyes.length, lashes.length, 2);
+
+        // Its groups drawn in full, and from afar: the lower-detail body and the eyes (not lashes)
+        const full = [
+            { start: 0, count: kept.length, materialIndex: 0 },
+            { start: kept.length, count: eyes.length, materialIndex: 1 },
+            { start: kept.length + eyes.length, count: lashes.length, materialIndex: 2 },
+        ];
+
+        this.detail = { full, low: this.lowBody ? [{ start: lowAt, count: low.length, materialIndex: 0 }, full[1]] : full };
+        this.geometry.groups = this.low ? this.detail.low : this.detail.full;
+    }
+
+    /**
+     * Get ready to be drawn with fewer triangles when it's small on the screen (`fitDetail`): its
+     * body's and its outfit's (garments drawn all at once) lower-detail triangles asked for from
+     * `lods` (the kit's: lod.js), each made once for everyone, elsewhere, and put in when they come.
+     * Its outfit's asked for again when it's dressed again.
+     */
+    lowerDetail(lods) {
+        this.lods = lods;
+
+        const human = this.human;
+
+        lods.of("body", () => ({ indices: human.renderIndices("body"), positions: this.geometry.attributes.position.array, uvs: human.uvs })).then(
+            (low) => {
+                if (!this.disposed && !this.lowBody) {
+                    this.lowBody = low;
+                    this.#updateIndex();
+                }
+            },
+            () => {},
+        );
+
+        for (const mesh of this.garments.filter(({ userData }) => userData.merged)) {
+            this.#lowerOutfit(mesh);
+        }
+    }
+
+    // An outfit's lower-detail triangles put after its own, drawn instead of them from afar
+    #lowerOutfit(mesh) {
+        const { index, attributes } = mesh.geometry;
+        const key = `outfit:${mesh.userData.merged.join("+")}`;
+
+        this.lods.of(key, () => ({ indices: index.array, positions: attributes.position.array, uvs: attributes.uv.array })).then(
+            (low) => {
+                if (this.disposed || !this.garments.includes(mesh) || mesh.userData.detail) {
+                    return;
+                }
+
+                const full = mesh.geometry.index.array;
+                const both = new (full instanceof Uint16Array ? Uint16Array : Uint32Array)(full.length + low.length);
+
+                both.set(full);
+                both.set(low, full.length);
+                mesh.geometry.setIndex(new THREE.BufferAttribute(both, 1));
+                mesh.userData.detail = { full: full.length, low: low.length };
+                this.setDetail(this.low);
+            },
+            () => {},
+        );
+    }
+
+    /** Drawn with its lower-detail triangles (`low`), as far as it has them (lowerDetail), or in full. */
+    setDetail(low) {
+        this.low = low;
+
+        if (this.detail) {
+            this.geometry.groups = low ? this.detail.low : this.detail.full;
+        }
+
+        for (const { geometry, userData } of this.garments) {
+            const detail = userData.detail;
+
+            if (detail) {
+                geometry.setDrawRange(low ? detail.full : 0, low ? detail.low : detail.full);
+            }
+        }
+    }
+
+    /**
+     * Drawn with fewer triangles when it's under LOD.far pixels tall on the screen (`tall`,
+     * drawing buffer pixels), and in full again over LOD.near; out of view (0), left as it is.
+     */
+    fitDetail(tall) {
+        if (tall > 0 && (this.low ? tall > LOD.near : tall < LOD.far)) {
+            this.setDetail(!this.low);
+        }
     }
 
     /** Pose the skeleton from its joint rotations (after changing them). */
@@ -1151,6 +1264,7 @@ export class Character {
     }
 
     dispose() {
+        this.disposed = true;
         this.geometry.dispose();
 
         // (The skeleton's bone texture, made when it was first drawn)

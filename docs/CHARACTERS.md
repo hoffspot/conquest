@@ -874,6 +874,25 @@ similar.
 - a 1024 × 1024 skin texture with a bump map, and 512 × 512 textures for each garment (shared by
   everyone wearing it), or two for each outfit drawn all at once
 
+**From afar** (`lod.js`): anyone drawn all at once (everyone but a player) is drawn with a quarter
+of the triangles when they're under 140 pixels tall on the screen, and in full again over 170, so
+one at the edge doesn't flick between them. It's a second list of triangles over the same vertices
+(meshoptimizer's simplifier, `LOD`: about a quarter of them, none more than 2% of the mesh's size
+out of place, the texture's layout kept so its seams stay put), so the skin weights, pictures and
+bones are the same, and nothing more is posed. The body's is made once for everyone (26,756
+triangles to 6,688); a body triangle of it is drawn unless all its corners are under clothes; the
+eyes are drawn, the lashes not. An outfit's is made once for everyone wearing it, as they all have
+the same triangles (a human soldier's about 25,400 to 6,300). They're made in a worker
+(`lod-worker.js`), 20 to 30 milliseconds each on a desktop, and until one's there the character is
+drawn in full. Hair and what's carried are drawn as they are (folk's hair is grown thinned
+already). Twenty-four of the uniform lab's figures from afar, their hair as in the game: 1.85
+million triangles a frame (with the sun's shadows) to 0.61 million, and in software rendering 2.1
+seconds a frame to 0.9. At the size they switch, 0.17% of the picture's pixels change by more than
+48 levels of 255, on trim, emblems and garments' edges. The simplifier is vendored
+(`client/vendor/meshoptimizer-1.3.0`, MIT, `npm run vendor:meshopt`): 54 KB, 19 KB compressed,
+downloaded with the game and started only in the worker (`lowerDetail` imports it when it's first
+used).
+
 **Load:**
 
 - The body data is 1.4 MB, downloaded once. The masks are 160 KB.
@@ -1106,7 +1125,7 @@ sources.
 - **More two-handed items.** Guns and two-handed swords, with the second hand as the staff's and
   hammer's; a bowstring that bends as it's drawn.
 - **Loose clothing.** Robes, skirts and cloaks need their own hanging meshes.
-- **Crowds.** Merged meshes and lower-detail bodies for groups of enemies.
+- **Crowds.** Instancing for groups of enemies dressed alike.
 - **Multiplayer.** The host's game is authoritative and other players sync to it, except for loot,
   which stays local. A character's state is small: its preset or slider values, its equipment ids,
   and its position, heading, speed and action. Every client builds the same character from it.
