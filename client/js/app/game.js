@@ -63,6 +63,11 @@ import { SpellFx } from "../world/spellfx.js";
 import { Squares } from "../world/squares.js";
 import { KINDS, Wounds } from "../world/wounds.js";
 import { Chunks, DECK, LOAD_BUDGET, REACH } from "../world/chunks3d.js";
+import { FarLand } from "../world/far/far.js";
+import { farReach } from "../world/far/levels.js";
+import { Silhouettes } from "../world/far/silhouettes.js";
+import { Volcano } from "../world/far/volcano.js";
+import { Look } from "../world/look.js";
 import { allAtOnce, allWaiting, Steps } from "../core/steps.js";
 import { buildGround } from "../world/ground.js";
 import { buildTown } from "../world/town3d.js";
@@ -631,6 +636,45 @@ export class Game {
     }
 
     /** Where a map is drawn in the world ([x, z] metres). */
+    // The far land round the player at (x, z) (metres), out to the horizon (world/far/far.js): as
+    // many levels of it as the quality level has (made again if that's changed)
+    #farLand(x, z) {
+        if (this.far?.levels.length !== this.view.quality.far) {
+            this.far?.dispose();
+            this.far = new FarLand(this.world.plan, { land: this.chunks.land, levels: this.view.quality.far });
+            this.view.setFar(this.far.object);
+
+            // (What's built, as far as the far land reaches)
+            if (this.silhouettes) {
+                this.view.setHorizon(this.silhouettes, false);
+                this.silhouettes.dispose();
+            }
+
+            const land = this.world.maps.town;
+            const start = land?.start && land.stamp ? { id: land.start.id, pieces: this.world.town.pieces, origin: land.stamp.at } : null;
+
+            this.silhouettes = new Silhouettes(this.world.plan, { reach: farReach(this.view.quality.far), start });
+            this.view.setHorizon(this.silhouettes);
+        }
+
+        // (The world's landmark: the volcano, its fire and smoke)
+        if (!this.volcano) {
+            this.volcano = new Volcano(this.world.plan);
+            this.view.setHorizon(this.volcano);
+        }
+
+        this.far.update(x, z);
+        this.silhouettes.update(x, z, this.world.maps.town?.sites?.set);
+        this.volcano.update(this.clock);
+    }
+
+    // How the world looks round the player at (x, z) (metres), `dt` seconds on (world/look.js: the
+    // sky's colours, the sun's, the mist and the grade, as the lands round them have them)
+    #landLook(x, z, dt) {
+        this.landLook ??= new Look(this.world.plan);
+        this.view.setLook(this.landLook.update(x, z, dt));
+    }
+
     originOf(mapId) {
         return this.world.maps?.[mapId]?.origin ?? [0, 0];
     }
@@ -712,6 +756,8 @@ export class Game {
             this.chunks = new Chunks(world, { undergrowth: view.quality.undergrowth });
             this.chunks.setSpacing(view.quality.ground);
             view.scene.add(this.chunks.object);
+            this.#farLand(x + 0.5, y + 0.5);
+            this.#landLook(x + 0.5, y + 0.5, 0);
             await time("chunks", async () => {
                 while (this.chunks.update(x + 0.5, y + 0.5, { budget: LOAD_BUDGET }) || this.chunks.busy) {
                     onProgress({ label: `Laying the land (${this.chunks.drawn.size} of ${chunks})`, done: ++done, total: steps });
@@ -1198,6 +1244,17 @@ export class Game {
         this.ground?.geometry.dispose();
         this.ground?.material.dispose();
         this.chunks?.dispose();
+        this.far?.dispose();
+        this.view.setFar(null);
+
+        for (const thing of [this.volcano, this.silhouettes]) {
+            if (thing) {
+                this.view.setHorizon(thing, false);
+                thing.dispose();
+            }
+        }
+
+        this.view.setLook(null);
         this.effects?.dispose();
         this.contacts?.dispose();
         this.navBaker?.dispose();
@@ -1723,6 +1780,9 @@ export class Game {
             if (this.chunks.update(x, z)) {
                 this.#hearTrees();
             }
+
+            this.#farLand(x, z);
+            this.#landLook(x, z, dt);
         }
 
         this.#visit(dt);

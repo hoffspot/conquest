@@ -444,7 +444,11 @@ exactly. It's built up in layers:
   - Up in the mountains, ridges of up to 110 m (ridged multifractal noise, bent by a warp), so
     steep that only the valleys and passes can be walked.
   - Terraced mesas in the badlands.
-  - The volcano's crater.
+  - The volcano's crater (`CRATER`): 60 m across its rim's radius, cut 45 m down from the cone's
+    average height round it, so however steep the cone, its top is a bowl. Its floor is flat
+    across the middle (where the lava lies: world/far/volcano.js), and at its edge it meets the
+    cone exactly, so its rim rises and falls as the cone does (on seed 1, 205 to 241 m; the
+    floor 178 m). `craterOf(plan)` gives its middle, rim and floor.
 - **Water.**
   - Lakes and the sea sink the land under them where the plan has it wet (read smoothly between
     cells and a little ragged). Their shores fall wherever the land meets their surface, so they
@@ -528,6 +532,10 @@ The world is played on the land's height with what's built levelled into it (`Gr
   wyvern or dragon gliding down to it to land.
 - Birds, wyverns and the dragon flying at their height over the ground, rising over what's ahead
   and sinking slowly after, nose up and down as they go.
+- **The far land** past the chunks (GAME.md, *The far land and the haze*): the land as it's seen
+  from afar (`distantHeights`: the lie of the land with lakes and the sea carved in, but not
+  rivers, too narrow to see from far off; the still water's surface where it stands over it),
+  worked out on lattices 8 to 128 m apart. Only drawn: nothing in the world stands on it.
 - What lies on the ground lies along its slope: the ring where the player's walking to, the
   target's ring, heals' rings, blood, scorches and runes, spells' rings; particles falling to the
   ground where they are; spikes each from the ground where it bursts up; dropped bundles, camps'

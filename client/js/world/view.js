@@ -6,9 +6,17 @@
 // Phones get less: fewer pixels, a smaller shadow map, thinner hair and smaller skin textures
 // (QUALITY: hair is how much of a character's full head of hair to grow, seen from the game's
 // camera). Debug mode can change the quality while playing, to see what each costs.
+//
+// Outdoors the world's drawn twice over: first what's far (the sky, and the far land out to the
+// horizon: far/far.js), with a camera of its own that sees from FAR.from metres to the far land's
+// edge; then, its depths forgotten, everything near, with the camera that sees to FAR.nearFar
+// metres. What's near fades out before that (fog.js), but the ground, which goes on into the far
+// land; and the haze thickens the further off, to all but gone at the far land's edge.
 
 import * as THREE from "three";
 import { bakeEnvironments } from "./environment.js";
+import { FAR, FAR_LEVELS, farReach } from "./far/levels.js";
+import { farHaze, GRADE, MIST } from "./fog.js";
 import { GpuTimer } from "./gputimer.js";
 import { fadeShadowEdges, snapToTexels } from "./shadows.js";
 import { Sky, SKY_COLOURS } from "./sky.js";
@@ -19,13 +27,14 @@ import { WATER_DETAIL } from "./water.js";
  * How much each quality level draws (`undergrowth`: how thick the grass and flowers grow;
  * `ground`: how far apart the ground's corners are drawn, metres, in the chunk the player's in,
  * the ring round it, and further off: chunks3d.js SPACING; `water`: 1 for the water's finer
- * ripples, water.js WATER_DETAIL), and how often (`frameRate`: at most, a second, app/pacing.js;
- * 0, as often as the screen refreshes).
+ * ripples, water.js WATER_DETAIL; `far`: how many levels the far land has, far/levels.js, so how
+ * far off it reaches: 1, 2 or 4 km), and how often (`frameRate`: at most, a second,
+ * app/pacing.js; 0, as often as the screen refreshes).
  */
 export const QUALITY = Object.freeze({
-    low: { label: "Low", pixelRatio: 1, shadows: 1024, antialias: false, hair: 0.2, skin: 512, undergrowth: 0.5, ground: [1, 2, 4], water: 0, frameRate: 30 },
-    medium: { label: "Medium", pixelRatio: 1.5, shadows: 2048, antialias: true, hair: 0.3, skin: 512, undergrowth: 0.75, ground: [1, 2, 4], water: 1, frameRate: 60 },
-    high: { label: "High", pixelRatio: 2, shadows: 2048, antialias: true, hair: 0.45, skin: 1024, undergrowth: 1, ground: [1, 1, 2], water: 1, frameRate: 0 },
+    low: { label: "Low", pixelRatio: 1, shadows: 1024, antialias: false, hair: 0.2, skin: 512, undergrowth: 0.5, ground: [1, 2, 4], water: 0, far: FAR_LEVELS.low, frameRate: 30 },
+    medium: { label: "Medium", pixelRatio: 1.5, shadows: 2048, antialias: true, hair: 0.3, skin: 512, undergrowth: 0.75, ground: [1, 2, 4], water: 1, far: FAR_LEVELS.medium, frameRate: 60 },
+    high: { label: "High", pixelRatio: 2, shadows: 2048, antialias: true, hair: 0.45, skin: 1024, undergrowth: 1, ground: [1, 1, 2], water: 1, far: FAR_LEVELS.high, frameRate: 0 },
 });
 
 /** A quality level for this device: low for small or older phones, medium for phones, high otherwise. */
@@ -76,10 +85,15 @@ const PULL = Object.freeze({ least: 2.6, margin: 0.6, highest: 85, lift: 0.15, i
 const SKY = SKY_COLOURS.horizon;
 
 // Outdoors: the sun, and the sky and the ground lighting everything from all round, at their
-// own brightness (environment.js); indoors, no sky, a dim warm room lit from above, and lamps
-// (the hearth's fire, candles) that flicker; outdoors the lamps are out. (The lamps are always
-// there, so that going in and out never makes Three.js rebuild every lit material's shaders.)
-const OUTDOORS = Object.freeze({ background: SKY, fog: [55, 130], sun: [0xfff0d8, 3.5], sunFrom: [-0.55, 1, 0.65], environment: 1 });
+// own brightness (environment.js), the fog from `fog` to `fog` metres (with the far land, the
+// haze from `haze` metres to its edge: fog.js); indoors, no sky, a dim warm room lit from above,
+// and lamps (the hearth's fire, candles) that flicker; outdoors the lamps are out. (The lamps are
+// always there, so that going in and out never makes Three.js rebuild every lit material's
+// shaders.)
+const OUTDOORS = Object.freeze({ background: SKY, fog: [55, 130], haze: 20, sun: [0xfff0d8, 3.5], sunFrom: [-0.55, 1, 0.65], environment: 1 });
+// (Outdoors as it is with no land's look: look.js Look's form, sRGB colours 0 to 1)
+const srgbOf = (hex) => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255].map((byte) => byte / 255);
+const PLAIN = Object.freeze({ zenith: srgbOf(SKY_COLOURS.zenith), horizon: srgbOf(SKY), sun: srgbOf(OUTDOORS.sun[0]), strength: OUTDOORS.sun[1], mist: [0, 0, 20], grade: [0, 0, 0, 0] });
 const INDOORS = Object.freeze({ background: 0x140e0a, fog: [16, 38], sun: [0xffe2b8, 0.9], sunFrom: [0.25, 1, 0.35], environment: 1 });
 
 // A lamp that flares up (a forge's fire, the bellows pumped) dies down over this long (s)
@@ -113,17 +127,22 @@ export class View {
      * @param {HTMLCanvasElement} canvas
      * @param {object} [options]
      * @param {string} [options.quality] - A QUALITY key.
+     * @param {boolean} [options.far] - Whether the world's seen far off (the far land: setFar, and
+     *     the haze out to it); else the fog closes in at 130 m, as the labs have it.
      */
-    constructor(canvas, { quality = detectQuality() } = {}) {
+    constructor(canvas, { quality = detectQuality(), far = false } = {}) {
         this.canvas = canvas;
+        this.seesFar = far;
         this.qualityName = quality;
         this.quality = QUALITY[quality];
         this.renderer = new THREE.WebGLRenderer({ canvas, antialias: this.quality.antialias, powerPreference: "high-performance" });
-        this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        // (Seeing far, graded as the land the player's in has it: ACES, then the grade, fog.js)
+        this.renderer.toneMapping = far ? THREE.CustomToneMapping : THREE.ACESFilmicToneMapping;
         this.renderer.toneMappingExposure = 1.05;
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFShadowMap;
         fadeShadowEdges();
+        farHaze();
         this.renderer.info.autoReset = false;
 
         /**
@@ -144,8 +163,24 @@ export class View {
         // gone into: over half the scene's nodes, in a town)
         this.scene.matrixWorldAutoUpdate = false;
         this.scene.background = new THREE.Color(SKY);
-        this.scene.fog = new THREE.Fog(SKY, 55, 130);
+        this.scene.fog = new THREE.Fog(SKY, ...OUTDOORS.fog);
         this.indoors = false;
+
+        // What's far, drawn first with its own camera (the sky, the far land: setFar), lit as the
+        // near world is but for the sun's shadows, in the same haze
+        this.far = { scene: new THREE.Scene(), camera: new THREE.PerspectiveCamera(36, 1, FAR.from, 2000), land: null };
+        this.far.scene.background = new THREE.Color(SKY);
+        this.far.scene.fog = this.scene.fog;
+        this.far.sun = new THREE.DirectionalLight(...OUTDOORS.sun);
+        this.far.scene.add(this.far.sun, this.far.sun.target);
+
+        // What stands on the horizon (setHorizon): drawn with the far land, and its near copy with
+        // the near world (only outdoors)
+        this.horizon = { far: new THREE.Group(), near: new THREE.Group() };
+        this.horizon.far.name = "horizon";
+        this.horizon.near.name = "horizon (near)";
+        this.far.scene.add(this.horizon.far);
+        this.scene.add(this.horizon.near);
         this.#light();
         this.scene.environmentIntensity = OUTDOORS.environment;
 
@@ -178,11 +213,12 @@ export class View {
         });
         this.sunDirection = SUN_DIRECTION.clone();
 
-        // The sky outdoors, its sun where the shadows come from (sky.js)
+        // The sky outdoors, its sun where the shadows come from (sky.js), drawn behind what's far
         this.sky = new Sky(this.sunDirection);
-        this.scene.add(this.sky.object);
+        this.far.scene.add(this.sky.object);
+        this.far.sun.position.copy(this.sunDirection);
 
-        this.camera = new THREE.PerspectiveCamera(36, 1, 0.3, 150);
+        this.camera = new THREE.PerspectiveCamera(36, 1, 0.3, FAR.nearFar);
 
         // (The camera that draws the player alone on the pack's paperdoll: renderPreview)
         this.previewCamera = new THREE.PerspectiveCamera(24, 1, 0.1, 60);
@@ -228,6 +264,7 @@ export class View {
         this.environments?.indoors.dispose();
         this.environments = bakeEnvironments(this.renderer, SUN_DIRECTION);
         this.scene.environment = this.environments[this.indoors ? "indoors" : "outdoors"].texture;
+        this.far.scene.environment = this.environments.outdoors.texture;
     }
 
     // The drawing given back: Three.js uploads the geometries and textures again as they're
@@ -279,11 +316,89 @@ export class View {
         this.sun.castShadow = on;
     }
 
+    /**
+     * How the world looks outdoors where the player is (look.js Look's: the sky's colours, the haze's
+     * the horizon's, the sun's colour and strength, the mist and the grade; sRGB colours 0 to 1).
+     * Indoors, the look's kept for when they come out. None (null): outdoors as it is with none.
+     */
+    setLook(look) {
+        this.landLook = look;
+
+        if (this.indoors) {
+            return;
+        }
+
+        look ??= PLAIN;
+
+        const { zenith, horizon, sun, mist, grade } = look;
+
+        this.scene.fog.color.setRGB(horizon[0], horizon[1], horizon[2], THREE.SRGBColorSpace);
+        this.scene.background.copy(this.scene.fog.color);
+        this.far.scene.background.copy(this.scene.fog.color);
+        this.sky.uniforms.zenith.value.set(zenith[0], zenith[1], zenith[2]);
+        this.sky.uniforms.horizon.value.set(horizon[0], horizon[1], horizon[2]);
+        this.sun.color.setRGB(sun[0], sun[1], sun[2], THREE.SRGBColorSpace);
+        this.sun.intensity = look.strength;
+        this.far.sun.color.copy(this.sun.color);
+        this.far.sun.intensity = look.strength;
+        MIST.value.x = mist[0];
+        MIST.value.y = mist[1];
+        MIST.value.z = mist[2];
+        GRADE.value.x = grade[0];
+        GRADE.value.y = grade[1];
+        GRADE.value.z = grade[2];
+        GRADE.value.w = grade[3];
+    }
+
+    /**
+     * The far land (far/far.js's object) to draw behind everything near, outdoors (or none: null).
+     */
+    setFar(object) {
+        if (this.far.land) {
+            this.far.scene.remove(this.far.land);
+        }
+
+        this.far.land = object;
+
+        if (object) {
+            this.far.scene.add(object);
+        }
+    }
+
+    /**
+     * Something standing on the horizon (`far`: drawn with the far land; `near`: its copy for the
+     * near world, leaving out what the far one draws) added, or taken away (`on` false).
+     */
+    setHorizon({ far, near }, on = true) {
+        for (const [group, object] of [
+            [this.horizon.far, far],
+            [this.horizon.near, near],
+        ]) {
+            if (object && on) {
+                group.add(object);
+            } else if (object) {
+                group.remove(object);
+            }
+        }
+    }
+
+    // How far the haze reaches outdoors (metres): to the far land's edge at this quality level (or
+    // the fog's, not seeing far)
+    #haze() {
+        if (!this.indoors) {
+            [this.scene.fog.near, this.scene.fog.far] = this.seesFar ? [OUTDOORS.haze, farReach(this.quality.far)] : OUTDOORS.fog;
+        }
+
+        this.far.camera.far = farReach(this.quality.far) * 1.5;
+        this.far.camera.updateProjectionMatrix();
+    }
+
     /** Draw at another quality level (a QUALITY key). */
     setQuality(name) {
         this.qualityName = name;
         this.quality = QUALITY[name];
         WATER_DETAIL.value = this.quality.water;
+        this.#haze();
         this.#pixelRatio();
         this.sun.shadow.mapSize.set(this.quality.shadows, this.quality.shadows);
         this.sun.shadow.map?.dispose();
@@ -487,14 +602,30 @@ export class View {
         this.indoors = Boolean(interior);
         this.scene.background.set(look.background);
         this.scene.fog.color.set(look.background);
-        [this.scene.fog.near, this.scene.fog.far] = look.fog;
+
+        if (interior) {
+            [this.scene.fog.near, this.scene.fog.far] = look.fog;
+        } else {
+            this.#haze();
+        }
+
         this.sun.color.set(look.sun[0]);
         this.sun.intensity = look.sun[1];
         this.sunDirection.set(...look.sunFrom).normalize();
+        this.far.sun.position.copy(this.sunDirection);
         this.scene.environment = this.environments[interior ? "indoors" : "outdoors"].texture;
         this.scene.environmentIntensity = look.environment;
         this.sky.object.visible = !interior;
+        this.horizon.near.visible = !interior;
         this.sky.setSun(this.sunDirection);
+
+        // (Indoors no mist, no grade; out again, the land's look)
+        if (interior) {
+            MIST.value.x = 0;
+            [GRADE.value.x, GRADE.value.y, GRADE.value.z, GRADE.value.w] = [0, 0, 0, 0];
+        } else {
+            this.setLook(this.landLook);
+        }
 
         this.lamps.forEach((lamp, k) => {
             const spec = interior?.lights[k];
@@ -686,7 +817,7 @@ export class View {
         this.sky.update(this.camera, performance.now() / 1000);
         this.renderer.setRenderTarget(target);
         this.#updateShown();
-        this.renderer.render(this.scene, this.camera);
+        this.#draw(this.camera);
         this.renderer.setRenderTarget(null);
         scene.add(quad);
         this.scene.traverse((node) => node.isLight && lights.push(node));
@@ -725,7 +856,11 @@ export class View {
             this.gpuTimer.begin();
         }
 
-        this.renderer.render(scene, camera);
+        if (scene === this.scene) {
+            this.#draw(camera);
+        } else {
+            this.renderer.render(scene, camera);
+        }
 
         if (timing) {
             this.gpuTimer.end();
@@ -735,6 +870,42 @@ export class View {
             this.frustum ??= new THREE.Frustum();
             this.frustum.setFromProjectionMatrix(_viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse), camera.coordinateSystem);
         }
+    }
+
+    // The world drawn as `camera` sees it: outdoors what's far first (with a camera of its own,
+    // where `camera` is), then, its depths forgotten, what's near over it
+    #draw(camera) {
+        const renderer = this.renderer;
+
+        if (this.indoors) {
+            renderer.render(this.scene, camera);
+
+            return;
+        }
+
+        const far = this.far.camera;
+
+        far.position.copy(camera.position);
+        far.quaternion.copy(camera.quaternion);
+
+        if (far.fov !== camera.fov || far.aspect !== camera.aspect) {
+            far.fov = camera.fov;
+            far.aspect = camera.aspect;
+            far.updateProjectionMatrix();
+        }
+
+        far.updateMatrixWorld();
+        renderer.render(this.far.scene, far);
+
+        // (A scene's colour behind it clears what's drawn, however it's asked: none for the near)
+        const background = this.scene.background;
+
+        this.scene.background = null;
+        renderer.autoClear = false;
+        renderer.clearDepth();
+        renderer.render(this.scene, camera);
+        renderer.autoClear = true;
+        this.scene.background = background;
     }
 
     /**

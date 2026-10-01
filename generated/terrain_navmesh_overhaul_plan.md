@@ -219,6 +219,37 @@ TerrainChunk {
   - Splat layers chosen by slope, height and ridge; biplanar rock only on cliffs.
   - Height-blended layers on medium and up; a detail normal map within 30 m.
 
+**As built in M6a** (the far rings; see the change log):
+- **Levels, not a height texture** (`world/far/`): each level is a square of 64 by 64 cells (8 m to
+  128 m between corners, 512 m to 8 km across), its heights worked out in a worker
+  (`far-worker.js`, the newest ask per level only) from `distantHeights` and set into the mesh's
+  vertices, the mesh moved to the level's middle. No vertex texture fetch and no whole-world
+  texture: a level is about 4,200 samples (about 10 ms on a desktop), and only the finest moves
+  often (every 16 m). Three levels on low (1 km), four on medium (2 km), five on high (4 km).
+- **Nesting:** each level's middle on the lattice twice its spacing, so its edges lie on the next
+  level's lines; every other corner along its edges is put halfway between its neighbours (as
+  CDLOD morphs), so they meet without cracks. Rather than rings with holes, each level is whole
+  and lifted 1,000 m inside the next level in (a vertex-shader test against that level's square),
+  and all of them within 112 m of the player: lifted, so it and the walls left round it face away
+  from the camera and are culled (sunk, they faced it and were all shaded, then drawn over).
+- **Two passes:** the far scene (the sky's dome and the far land, its own sun and the same
+  environment and haze) drawn with a camera from 40 m to 1.5 times the far land's reach; then the
+  near scene over it, depth cleared, with the near camera at 160 m (not 300: past 160 m the near
+  world's trees and buildings would cost too much). Its background colour is lifted for that pass:
+  three.js clears for a scene's background colour whatever `autoClear` says.
+- **The seam:** what stands up near the player fades out (dithered: interleaved gradient noise)
+  from 128 to 154 m in front of the camera, in three.js's fog chunk (`world/fog.js`), all but the
+  ground (`NO_NEAR_FADE`); the chunks' ground turns from 100 to 150 m to `farGround`, the same
+  colour function the far land uses (each tiling texture its average colour: a 5 m grass tile
+  seen a kilometre off was a regular pattern), so no seam shows between them.
+- **The haze:** three.js's linear fog, when it reaches past 400 m, is exponential instead
+  (1 − e^(−3(d − near)/(far − near)): 95 % at its far distance), from 20 m to the far land's
+  edge; nearer fogs (indoors, the labs) are as they were. Indoors and out keep the same fog type,
+  so going in and out compiles nothing.
+- **Not yet:** far rivers (the far land has the lakes and the sea; rivers end where the near
+  world's drawn), far trees, silhouettes, height fog in bands, the region look and grade, cascaded
+  shadows: M6b and M6c.
+
 ### 3.6 Serialisation and the network
 
 - Terrain never travels. The `welcome` carries:
@@ -636,6 +667,55 @@ and open-source generators, licences checked).
 | 9 | Grass and flowers | Denser inner ring; ground colour matched to grass tips; wind gusts; drifts per region | Extend `wilds.js UNDERGROWTH` | 60–120k triangles; 4–6 draws (about today's) | `chunks3d.js`, `ground.js` |
 | 10 | Weathering | Moss on up- and north-facing surfaces, rain streaks, ivy leaf quads merged into buildings | Extend `weathering()` in `peoples/kit.js` and `house.js` | +5–10 % triangles on ivied walls; no extra draws | Every kit |
 
+**As built in M6b** (row 1, the atmosphere; see the change log):
+- **The region look** (`world/look.js` `LOOKS`): for each of the plan's 17 lands, the sky
+  overhead and at the horizon (the haze's colour), the sun's colour and strength, the mist and
+  the grade. Blended over the lands within 80 m of the player (a tent each way over the plan's
+  cells, so it's continuous as they walk) and eased over 1.5 s; set into the view each frame
+  outdoors (`View.setLook`), without allocating.
+- **Height fog, not bands:** rather than four fixed value bands, two layers that together give
+  them: the exponential distance haze of M6a (near dark, far pale), and an exponential height
+  mist (`fog.js` `MIST`: thickness at its floor, the floor a few metres over the mean ground
+  within 80 m (so valleys fill wherever the land lies), scale height) whose amount along each line
+  of sight is the analytic integral from the eye's height to the point's (Quílez's height fog),
+  so valleys are hazy and peaks crisp. One extra varying (the point's height above the eye) and a
+  few sums a pixel; no extra pass.
+- **The grade** in `CustomToneMapping`: ACES, then a tint and saturation (`fog.js` `GRADE`). No
+  extra pass. three.js mixes the fog after tone mapping, so the far land and the sky (the look's
+  own colours) aren't graded twice, and the horizon still meets the sky without a seam.
+- **Shared uniforms:** the mist's and the grade's values are plain objects put into every
+  `ShaderLib` entry (and `UniformsLib.fog`) before anything compiles; three.js's uniform cloning
+  keeps a plain object's value by reference, so one write reaches every material. Indoors both
+  are zeroed; the e2e's "going in and out compiles nothing" still holds.
+- **The terrain material** (`ground.js` `ALPINE`): rock creeping onto gentler slopes from 130 to
+  220 m, snow on what isn't steep from 205 to 245 m (both lines wandering 30 m with the patches),
+  never on ash; the far land's `farGround` has the same, so snowy peaks read kilometres off.
+- **Cascaded shadows: not built.** With the sun about 50° up, the near shadow map (±24 m) covers
+  what the camera looks at, and far relief reads from the far land's slope shading and snow.
+  Each cascade draws every shadow caster in it again, on phones already near their draw-call
+  budget. Left for M7's lighting pass, to be measured there.
+
+**As built in M6c** (row 2 and the landmark; see the change log):
+- **The landmark is the volcano.** It needed a crater: the old one (60 m subtracted at the
+  middle) was shallower than the cone's own slope, so seed 1's volcano was a peak. Now
+  (`height.js` `CRATER`, `craterOf`) the crater is cut 45 m down from the cone's average height
+  round a 60 m radius, flat across its middle, meeting the cone exactly at its edge.
+  `TERRAIN_VERSION` 9, `NET_VERSION` 13.
+- **Its fire and smoke** (`world/far/volcano.js`): a lava lake and lit walls in one mesh, a glow
+  and 28 smoke puffs as camera-facing quads moved in the vertex shader (no per-frame uploads)
+  in another; drawn twice (far scene, and near scene for what's nearer than 158 m), sharing
+  geometry; under 1,000 triangles.
+- **Silhouettes** (`shapes.js`, `gather.js`, `silhouettes.js`, `silhouette-worker.js`): not proxy
+  boxes per layout from the layout code, as first planned, but the real layouts
+  (`layoutTown`, the same as the near world builds), each piece a box with its people's roof, a
+  column and cone, or a long box; the peoples' great places as their few masses. One merged mesh,
+  worked out in a worker nearest first (layouts kept), sent every half second while it works.
+  How far each kind's seen and when only the big buildings are: `SILHOUETTES`.
+- **The hand-over:** drawn in both scenes with the same material; `FAR_FADE_IN` in the fog chunk
+  discards exactly the pixels the near world's fade keeps, so the real building and its
+  silhouette cross-fade from 128 to 154 m.
+- **Not in M6c (moved to M6d):** far trees and far rivers.
+
 **Pushing each people toward the Elden Ring feel without losing identity.**
 - **For everyone:**
   - heavier stone bases (0.6–1.2 m plinths that follow the real ground);
@@ -995,8 +1075,11 @@ pictures for anything that changes the look.
 | **M4b** | Places on the ground | Camps on flats; castles and high places on rises, on mounds; pools in hollows | Pictures; every camp's pad near its land in a test |
 | **M4c** | Settlements on slopes | Settlements lying with the land (tilted pads); foundations under what's built on a slope; roads over pads' eased land | Pictures; pads on their planes in a test |
 | **M5** | Multiplayer motion | `motion` stream; early desync checks; hero prediction; tick sync; debug RTT; NET_VERSION 12 | Two-browser e2e with no drift; bandwidth measured |
-| **M6** | Horizon and atmosphere | Far clipmap rings; height fog in value bands; per-region look table and grade (§9 row 1); far silhouettes and the world landmark (§9 row 2); far trees; `SunLight` cascades on medium and high; terrain material | Pictures; budgets per tier met |
-| **M7** | Elden Ring environment pass | In §9's order: the landmark pass in the plan; neutral sites built, with the decay pass; cliffs and rocks; churches, citadels, stone bridges; foliage palette, grass ring, weathering | Pictures after each part; budgets met |
+| **M6a** | The far land | Far clipmap levels in a worker; two passes; exponential haze to the horizon; near objects faded before the near camera's end; the near ground turning to the far land's look | Pictures; budgets per tier met |
+| **M6b** | Atmosphere | Height fog (an exponential height mist under the distance haze); per-region look table and grade (§9 row 1); terrain material (rock and snow by height); cascades deferred to M7 | Pictures; budgets per tier met |
+| **M6c** | Things on the horizon | Far silhouettes and the world landmark (§9 row 2): the volcano's crater, fire and smoke | Pictures; budgets per tier met |
+| **M6d** | Far trees and rivers | Far trees (impostors fading in where the near trees fade out); far rivers on the far land | Pictures; budgets per tier met |
+| **M7** | Elden Ring environment pass | In §9's order: the landmark pass in the plan; neutral sites built, with the decay pass; cliffs and rocks; churches, citadels, stone bridges; foliage palette, grass ring, weathering; cascaded shadows, measured, if they fit the budget | Pictures after each part; budgets met |
 | **M8** | Characters on Vitruvian | §10, as several PRs (conversion, body, garments, skin, face, LODs, clips) | Pictures; clipping tests green; budgets met |
 
 Each milestone follows the same steps:
@@ -1395,3 +1478,62 @@ converted data is to be measured in M8 against today's hm08 data.
     pacing simulation; `test/predict.test.js`; RTT and motion over the real relay in
     `test/together.test.js`; and a two-browser e2e of a minute's walking about with no drift, the
     copy ending just as the host's (time, checksum, everyone's place to the millimetre).
+- **2026-10-01, M6a built** (the far land; M6 split into M6a, M6b and M6c):
+  - **Seen:** from the start town the volcano 800 m off now stands over the fields, and the
+    plains reach to a hazy horizon, where before the fog was all there was by 130 m (pictures
+    from the same cameras, before and after).
+  - **Costs** (medium, software renderer, same views): 68 → 76, 57 → 61 and 67 → 71 draw
+    calls; 203k → 257k, 197k → 233k and 135k → 162k triangles (the far land's 32,768, and more
+    of the near world through the thinner haze). Within the 250 draws and 500k triangles of §13.
+  - **Found while drawing:** the near scene's background colour cleared the far pass (three.js
+    clears for a background colour even with `autoClear` off); the far land's tiling textures
+    made a regular pattern a kilometre off; the near ground ended in a seam where the far land
+    began. Each fixed (above).
+  - **Tests:** `test/far.test.js`: the levels' lattices nest; the land as seen from afar (still
+    water at its level and marked, the edges eased, the sea past the world's edge); a level's
+    cost; the triangle budget per tier, the levels moved as the player walks and sunk inside each
+    other; the haze's shape. The e2e sky check now looks for the dome in the far scene.
+- **2026-10-01, M6b built** (the look of the lands):
+  - **Seen:** the darkwood under a violet sky, the savannah's horizon dusty gold, the marshes
+    hazier and greyer, the volcano's land red-brown; snow on the peaks over 205 m, rock up the
+    mountains' gentler slopes (pictures from the same cameras, before and after).
+  - **Found while drawing:** the view's `look` field (the land's look) hid its `look()` method
+    (the camera's): the game wouldn't start. Renamed `landLook`. The mist's floor at a fixed
+    height missed the marshes, which lie anywhere from 8 to 75 m up on seed 1: it's now a few
+    metres over the ground round about.
+  - **Tests:** `test/look.test.js`: a look for every land; a land's own deep inside it, never a
+    jump walking across lands; easing; the mist as the line of sight's integral, thicker along a
+    valley than from the heights; the mist and the grade in every material's uniforms, shared.
+- **2026-10-01, M6c built** (the volcano and what's built, seen from afar; far trees and rivers
+  moved to M6d):
+  - **Seen:** from the start town the volcano 815 m off with its smoke column lit orange at its
+    foot; from above, its lava lake glowing in the crater; a capital, a castle, the obsidian
+    spire and a dark elves' town as silhouettes 400 to 500 m off, in their people's colours.
+  - **Costs** (medium, the browser tests' software renderer, the same views before and after
+    M6a to M6c together): 7 to 13 more draw calls and 40,000 to 90,000 more triangles a frame
+    outdoors. Two forest views were over the 500,000-triangle budget before M6 already (the
+    darkwood 484k and the elves' woods 506k; 574k and 569k after).
+  - **Found while drawing:** the far land's coarse ground hid the lava lake from afar; the fire's
+    now drawn a little towards the eye, the more the further off.
+  - **Versions:** `TERRAIN_VERSION` 9, `NET_VERSION` 13 (the crater).
+  - **Tests:** `test/landmark.test.js` (the crater a bowl, flat in the middle, no step at its
+    edge, over the land round it; the fire on the floor and the walls, the smoke's puffs, cheap,
+    the two copies); `test/silhouettes.test.js` (every face facing out, each people's shapes, every
+    settlement in reach laid out, within budget per quality, a site moved to where it's set down,
+    one mesh re-asked only as the player goes, the fade-in in the fog chunk).
+- **2026-10-01, M6 made cheaper** (found by the browser tests: four long tests ran out of time
+  and the two-browser test fell short of its checks, every frame much slower in the software
+  renderer than M5's):
+  - **Measured** (the start town, the software renderer, a frame's median): low at half the
+    pixels 259 ms in M5, 466 ms with M6a to M6c; medium 404 ms and 773 ms. Leaving things out
+    one at a time, the far land was nearly all of it: hidden, low fell to 269 ms; the horizon's
+    things, the sky's dome and the mist each cost a few per cent.
+  - **The far land's colour per corner:** it worked out the ground as seen from afar for every
+    pixel it covered (a dozen texture reads, over half the picture); now in the vertex shader, at
+    its corners (8 to 32 m apart), blended between: the same colours, the grass's patches a
+    little softer a few hundred metres off.
+  - **Lifted, not sunk:** each level sunk 1,000 m inside the next level in (and round the player)
+    left walls facing the camera that covered the lower half of the picture, all shaded and then
+    drawn over by the near ground. Lifted, they and the ground lifted face away and are culled.
+  - **After:** low 306 ms, medium about 490 ms; on the browser tests' own settings (high, every
+    pixel, shadows) 1,252 ms against M5's 1,171.
