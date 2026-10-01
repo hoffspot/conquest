@@ -468,9 +468,17 @@ a river crossing a wide hollow runs along its floor and cuts a gorge through its
 The world is played on the land's height with what's built levelled into it (`Ground`):
 
 - **Pads.** The start town, every settlement's squares, each people's castle and places (settled
-  with the chunks round them), and camps (10 m round) stand on flat pads at the land's average
-  height under them (raised or sunk, for the castles and places that lie high or low: above),
-  eased into the land round them over 24 m.
+  with the chunks round them), and camps (10 m round) stand on pads at the land's average height
+  under them (raised or sunk, for the castles and places that lie high or low: above), eased into
+  the land round them over 24 m. The town's and the settlements' lie with the land: on the plane
+  that best fits it under them (the least squares' over the 5 by 5 points their level's from), no
+  steeper than 8 % (`PAD_TILT`); half of seed 1's settlements tilt 1.5 % or less, and nine are held
+  to 8 %. The lizard folk's stay level, round their lagoons' water. Where the ground under what's
+  built rises or falls 0.3 m or more across it, it stands at its highest corner on a stone
+  foundation down past its lowest (`world/town3d.js grounded`).
+- **Pads and roads:** on a pad, its own height; off them, the roads are levelled into the land as
+  the pads have eased it (a road's own height is its profile's, which has the settlements' pads
+  in it already), so no road's surface is eased twice.
 - **Camps** are pitched on the flattest ground within 96 m of their cell's middle
   (`terrain/flats.js flatSpot`, `Overworld.campAt`): of the points of a lattice 8 m apart, the
   one whose land varies least over the 5 by 5 points round it (16 m each way), none of the

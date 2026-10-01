@@ -338,7 +338,7 @@ nav.walkable(mapId, x, y)            → boolean
 
 ## 6. Multiplayer: packets
 
-NET_VERSION goes to 7 with M2b, to 8 with M3b, to 9 with M4a and to 10 with M4b (the ground changed each time), and to 11 with M5. The relay is unchanged: text frames. Motion packets
+NET_VERSION goes to 7 with M2b, to 8 with M3b, to 9 with M4a, to 10 with M4b and to 11 with M4c (the ground changed each time), and to 12 with M5. The relay is unchanged: text frames. Motion packets
 carry a base64 packed buffer, so the relay stays neutral about binary frames.
 
 **`welcome`.** Adds the `world` block from [§3.6](#36-serialisation-and-the-network).
@@ -509,7 +509,7 @@ river surfaces that follow the terrain.
 - **Bridges** carry the road on dry land at both ends (a road stopping at a settlement goes on to
   the bank); piers stand on the levelled ground.
 - **Not yet:** mountain passes as the only way over the massifs (the plan's roads already go
-  round them); castles' switchback approaches (M4c).
+  round them); castles' switchback approaches and the lizard folk's lagoons at a real depth (M7).
 
 **As built in M4b** (see the change log):
 - **Camps on flats** (`terrain/flats.js flatSpot`, `Overworld.campAt`): the flattest point of an
@@ -524,6 +524,22 @@ river surfaces that follow the terrain.
 - **Not yet:** castles on real crags (the plan sets castles on lowland cells near roads, where
   the best rise within 64 m is 2 m or so; the mound makes the rest); cliffs and rock meshes
   (with §9's rocks in M7).
+
+**As built in M4c** (see the change log):
+- **Settlements lying with the land** (`terrain/ground.js`): the town's and every settlement's
+  pad (`tilt`) is the least-squares plane over the land on the 5 by 5 grid its level is from, no
+  steeper than `PAD_TILT` (8 %); the lizard folk's stay level for their lagoons. Its ease ring
+  eases from the plane's height at the nearest point of the pad.
+- **Pads and roads:** on a pad, its own height; off them, the roads over the land as the pads
+  have eased it (a road's surface is its graded profile, which already has the settlements'
+  pads in it, so it isn't eased a second time).
+- **Foundations** (`world/town3d.js grounded`): what's built where the ground rises or falls
+  0.3 m or more across it stands at its highest corner on a foundation of its people's stone
+  (the cat folk's mud brick) down 0.3 m past its lowest, under all of it but its eaves; built
+  into the piece before it's placed, so merged into the atlas with it.
+- **Not tiers:** half the settlements tilt 1.5 % or less and only nine are held to 8 %, so
+  terraces and retaining walls with stairs aren't needed at these grades (and a step over the
+  navigation mesh's 0.5 m climb would want its own stairs).
 
 **The peoples' places.**
 - Lizard folk stilt houses stand over real water depths.
@@ -945,8 +961,8 @@ pictures for anything that changes the look.
 | **M3b** | Falls and the bed | Waterfall sheets and mist at lips; mountain streams; underwater ground (absorption, caustics); wet banks | Pictures; water cost within budget |
 | **M4a** | Roads and paths | Roads graded with balanced cut and fill on padded ground; hairpins where a road meets a step too steep to grade; mountain foot paths with switchbacks up to the caves, ruins and shrines in the hills (found ahead in the terrain worker); bridges that carry the whole road; piers on the ground | Pictures; walk every road and path end to end in a test |
 | **M4b** | Places on the ground | Camps on flats; castles and high places on rises, on mounds; pools in hollows | Pictures; every camp's pad near its land in a test |
-| **M4c** | Settlements on slopes | Tiers and retaining walls with stairs; plinths and stepped foundations; the lizard folk's lagoon at a real depth | Pictures |
-| **M5** | Multiplayer motion | `motion` stream; early desync checks; hero prediction; tick sync; debug RTT; NET_VERSION 11 | Two-browser e2e with no drift; bandwidth measured |
+| **M4c** | Settlements on slopes | Settlements lying with the land (tilted pads); foundations under what's built on a slope; roads over pads' eased land | Pictures; pads on their planes in a test |
+| **M5** | Multiplayer motion | `motion` stream; early desync checks; hero prediction; tick sync; debug RTT; NET_VERSION 12 | Two-browser e2e with no drift; bandwidth measured |
 | **M6** | Horizon and atmosphere | Far clipmap rings; height fog in value bands; per-region look table and grade (§9 row 1); far silhouettes and the world landmark (§9 row 2); far trees; `SunLight` cascades on medium and high; terrain material | Pictures; budgets per tier met |
 | **M7** | Elden Ring environment pass | In §9's order: the landmark pass in the plan; neutral sites built, with the decay pass; cliffs and rocks; churches, citadels, stone bridges; foliage palette, grass ring, weathering | Pictures after each part; budgets met |
 | **M8** | Characters on Vitruvian | §10, as several PRs (conversion, body, garments, skin, face, LODs, clips) | Pictures; clipping tests green; budgets met |
@@ -1306,3 +1322,19 @@ converted data is to be measured in M8 against today's hm08 data.
   - **Left for M4c:** the 77 squares within 14 m of the roads near the town that are cliffs where
     the land had none are unchanged: 52 are at settlements' pads' edges (41 at one village, 8 at
     the town, 3 at a farmstead), which tiers and retaining walls are for.
+- **2026-10-01, M4c built** (settlements on slopes; the plan's tiers and retaining walls dropped
+  for tilted pads, as seed 1's settlements tilt gently):
+  - **Tilted pads:** pads 6 m or more from their land at their edge fall from 11 to 1, and 4 m
+    or more from 29 to 7; the median tilt is 1.5 %, and nine settlements are held to 8 %.
+  - **Cliffs beside the roads near the town** where the land had none: 77 to 37 (one village's
+    41 to 8, the town's 8 to 1). Most of the rest (25) are bridge approaches, a road's raised
+    bank meeting the river channel, which is never levelled: read as abutments.
+  - **Found in testing, and fixed:** pads were eased in after the roads, so a road's surface was
+    eased twice where it passed a settlement (its profile has the pads in already): a track came
+    out at 17.6 % against its 15 %. Roads now go over the pads' eased land, and a pad's own
+    ground is the pad's.
+  - **Pictures:** an elves' and a cat folk's village on 8 % slopes, the rock cliffs that edged
+    their flat pads gone, their buildings on foundations of their own (pale stone, mud brick).
+  - **Versions:** `TERRAIN_VERSION` 8, `NET_VERSION` 11.
+  - **Tests:** the town and the settlements near it lie on their planes, no steeper than 8 %
+    (where it was "the town is level").

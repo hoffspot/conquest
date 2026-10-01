@@ -33,7 +33,7 @@ import { Terrains } from "./terrains.js";
 import { MARGIN, primingWater, shoreDistances, UNDER_BANKS, waterSheet } from "./water.js";
 import { fallsOf, lipsIn } from "./falls.js";
 import { builderFor } from "./art/peoples/index.js";
-import { BUILDERS, cutAway, drawFar, joined, partsOf, PIXEL, placed, standOn } from "./town3d.js";
+import { BUILDERS, cutAway, drawFar, grounded, joined, partsOf, PIXEL, placed, standOn } from "./town3d.js";
 
 /** How many chunks round the player's are drawn (each way), and how far off they're let go. */
 export const REACH = Object.freeze({ drawn: 2, kept: 3 });
@@ -378,7 +378,7 @@ export class Chunks {
             }
 
             const add = (object) => {
-                job.built = placed(object, piece, [0, 0], this.groundAt(piece.x, piece.y));
+                job.built = placed(object, piece, [0, 0], grounded(object, piece, this.groundAt));
                 job.group.add(job.built);
                 job.built.updateMatrixWorld(true);
                 job.trees.push(...grownRound(object, piece));

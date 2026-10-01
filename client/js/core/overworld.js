@@ -551,14 +551,15 @@ export class Overworld {
         const { at, width, height } = this.stamp;
 
         if (meets(at[0], at[1], at[0] + width, at[1] + height)) {
-            pads.push({ id: "town", x0: at[0], y0: at[1], x1: at[0] + width, y1: at[1] + height });
+            pads.push({ id: "town", x0: at[0], y0: at[1], x1: at[0] + width, y1: at[1] + height, tilt: this.start?.race !== "lizard" });
         }
 
         for (const place of this.settlements.places) {
             const { at: [sx, sy], size } = squareOf(place);
 
             if (meets(sx, sy, sx + size, sy + size)) {
-                pads.push({ id: `place ${place.id}`, x0: sx, y0: sy, x1: sx + size, y1: sy + size });
+                // (Lying with the land, but for the lizard folk's, round their lagoons' level water)
+                pads.push({ id: `place ${place.id}`, x0: sx, y0: sy, x1: sx + size, y1: sy + size, tilt: place.race !== "lizard" });
             }
         }
 
