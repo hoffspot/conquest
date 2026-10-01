@@ -3,13 +3,14 @@
 // link cut, or gone quiet, and made again, a little later each try, the world sent again and
 // played on the same; the host's link dropped and back, everyone told and sent the world again;
 // lost for good once the relay's let the place go; a relay that doesn't answer pings never taken
-// for gone because of them
+// for gone because of them; the link to the host timed, and where the host's folk stand compared
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import http from "node:http";
 import { after, before, describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
+import { MOTION } from "../client/js/core/motion.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { joinWorld, LINK_TIMING, openWorld } from "../client/js/app/together.js";
 import { attachRelay, RELAY_LIMITS, RELAY_PATH } from "../server/relay.js";
@@ -101,6 +102,30 @@ describe("playing together over the relay (together.js)", () => {
         assert.equal(joined.joining.host.checksum(), host.checksum());
         assert.deepEqual(heard.host, [], "(the host's link was never the one lost)");
         assert.equal(heard.drops, 0);
+        close();
+    });
+
+    it("times a word to the host and back over the relay, and has the joined copy compare where the host's folk stand: none astray", async () => {
+        const { joined, play, close } = await together();
+
+        joined.joining.ping();
+        await until(() => joined.joining.rtt !== null);
+        assert.ok(joined.joining.rtt >= 0 && joined.joining.rtt < 1000, `${joined.joining.rtt} ms`);
+
+        for (let k = 0; k < 5; k++) {
+            await play(MOTION.every);
+        }
+
+        // (The last of the host's motion compared once it's come)
+        await until(() => {
+            while (joined.joining.step()) {
+                // (Played)
+            }
+
+            return joined.joining.motionChecks === 5;
+        });
+        assert.equal(joined.joining.desyncs, 0);
+        assert.equal(joined.joining.hostStep, joined.joining.host.battle.time / STEP_MS);
         close();
     });
 

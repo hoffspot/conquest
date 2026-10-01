@@ -5,40 +5,8 @@
 // Kept with the saved game (app/save.js): the buildings as their keys, the chunks as one bit each
 // (the world's 128 by 128 chunks in 2 KB), written as base64.
 
+import { fromBase64, toBase64 } from "./wire.js";
 import { CHUNK, CHUNKS } from "./worldplan/plan.js";
-
-// Base64, by hand (the same in Node and the browser, without Buffer or btoa)
-const DIGITS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-function toBase64(bytes) {
-    let text = "";
-
-    for (let k = 0; k < bytes.length; k += 3) {
-        const [a, b = 0, c = 0] = [bytes[k], bytes[k + 1], bytes[k + 2]];
-        const n = (a << 16) | (b << 8) | c;
-
-        text += DIGITS[(n >> 18) & 63] + DIGITS[(n >> 12) & 63] + (k + 1 < bytes.length ? DIGITS[(n >> 6) & 63] : "=") + (k + 2 < bytes.length ? DIGITS[n & 63] : "=");
-    }
-
-    return text;
-}
-
-function fromBase64(text, length) {
-    const bytes = new Uint8Array(length);
-    let at = 0;
-
-    for (let k = 0; k + 3 < text.length + 1 && at < length; k += 4) {
-        const n = [0, 1, 2, 3].reduce((sum, j) => (sum << 6) | Math.max(0, DIGITS.indexOf(text[k + j] ?? "A")), 0);
-
-        for (const byte of [(n >> 16) & 255, (n >> 8) & 255, n & 255]) {
-            if (at < length) {
-                bytes[at++] = byte;
-            }
-        }
-    }
-
-    return bytes;
-}
 
 export class Explored {
     /**

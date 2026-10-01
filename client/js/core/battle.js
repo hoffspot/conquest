@@ -178,7 +178,7 @@ export const STAMINA_RECOVERY = 1;
 
 // How quickly a runner speeds up and slows down (metres a second, each second): about a second
 // from a walk to a sprint, and a few strides to slow from one
-const ACCELERATION = 6;
+export const ACCELERATION = 6;
 const BRAKING = 7;
 
 // An enemy that hasn't seen its target for this long goes back to its patrol (ms)

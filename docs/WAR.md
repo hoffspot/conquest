@@ -750,9 +750,22 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   Only `Math.sqrt` is left to the browser: each has the processor work it out, and IEEE 754 has
   that give the nearest number to the truth. A world's plan is also about 15% quicker to lay out:
   how far each climate reaches is worked out once for each distance.
-- **Pace.** A copy plays steps as they come, and catches up when it falls more than 6 behind
-  (`PACE`): up to 40 more steps a frame, for no more than 8 ms of it, so that on a slow phone
-  catching up doesn't make the frame so long that it falls further behind.
+- **Pace** (`Joining.pace`, `PLAYOUT`). Each of the host's sendings carries its step. A copy keeps
+  a few of the host's steps in hand, so that it doesn't stop and start when one sending comes a
+  little late:
+  - **How many:** 2 when the sendings come evenly (the host sends every other step or so), more
+    the less evenly they come, up to 6: twice their unevenness, as RFC 3550 reckons it, over. A
+    pause of the host's or a resync isn't counted as unevenness, and nor is any sending later than
+    a second (the link dropping a moment).
+  - **How they're kept:** playing a little slower while there are fewer in hand than that (lately,
+    over the last second), a little faster while there are more: up to a tenth either way.
+  - **What it does:** in a simulation of sendings up to 150 ms late, the copy stopped for want of a
+    step in 0.1% of frames playing them as they came, and never kept in hand; up to 300 ms late,
+    2% against 0.01%. It costs about 50–100 ms more behind the host, which the player's own hero
+    doesn't show (below).
+  - **Catching up:** when a copy falls more than 6 behind what it means to keep (`PACE`), it plays
+    up to 40 more steps a frame, for no more than 8 ms of it, so that on a slow phone catching up
+    doesn't make the frame so long that it falls further behind.
 - **Commands.** A joined player's own commands go to the host, and come back among the rest. What
   came of them (a request offered, gold paid, a door gone through) is what came of them on
   their copy, a moment later: the talk says it again as it now is (`Conversation.retell`).
@@ -760,6 +773,37 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   in it, where and how they are, and the war's turn and clock). A copy that doesn't match (a
   browser whose sums come out a hair different) asks for the world again and carries on from it
   (`Host.adopt`, `game.rehost`).
+- **The motion stream** (`core/motion.js`, `MOTION`). Every 4 steps (five times a second) the host
+  also sends where its characters near the players stand, and how they're going:
+  - **Which:** those within 160 m of any player, on that player's map; the nearest 64 at most.
+  - **Each, in 16 bytes:** its place among the battle's characters (the same in every copy); where
+    it is and how fast it's going, to the centimetre; which way it faces; whether it's moving,
+    running, fighting or dead; and how many corners are left on its way. All of it is sent as
+    base64 (`core/wire.js`), since the relay carries text.
+  - **Compared:** the copy compares just where the host packed it, once what came before has been
+    played. Anyone more than a centimetre from where the host had them (or missing) means it's
+    gone astray: it asks for the world again at once. That's within a fifth of a second, where
+    the checksum would have taken up to five seconds.
+  - **What it costs:** in seed 2's start town, about 1.2 KB a second to each who's joined, beside
+    about 0.5 KB a second of what's done.
+  - Games before it (`NET_VERSION` 11) can't join.
+- **Your hero, drawn ahead** (`app/predict.js`). A joined player's command goes to the host and
+  comes back done: a round trip and the steps kept in hand, a fifth of a second or more. So a
+  tap's drawn at once:
+  - **Before it's done:** the hero's drawn setting off straight for where they were sent (or
+    straight ahead, swiped), at a walk, speeding up to a sprint as a runner does if they're to run.
+  - **Once it's done:** drawn as far ahead along their way as that took, the copy catching up as
+    they arrive.
+  - **Set right:** whenever what's drawn and where they'd be drawn part (the host had them go
+    another way, or not at all), the gap closes over 150 ms. Gone far (through a door, or by
+    magic), they're drawn where they are at once.
+  - Only what's drawn changes: the copy of the world is never touched, so the rules never guess.
+- **Timing the link.** Once a second, a joined game asks the host how long a word takes to it and
+  back (`ping`, `pong`: the host answers at once, not at its next sending).
+- **Debug.** The debug overlay's `Net` line shows, joined, that round trip, the steps in hand
+  against those it means to keep (and the unevenness), the checks made and found astray, the
+  resyncs, and what it's hearing a second; hosting, how many have joined and what's sent them a
+  second (and of that, the motion stream).
 - **What's drawn.** Each game draws what's round its own player: others far off, and whoever's near
   them, aren't drawn (`DRAW_REACH`).
 

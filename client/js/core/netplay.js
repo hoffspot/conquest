@@ -15,6 +15,13 @@
 // When the host can't move its world on (its page hidden: a phone's gone to another app), it says
 // so, and those who've joined are shown why nothing's happening.
 //
+// Every few steps the host also sends where its characters near the players stand (core/motion.js):
+// a copy plays the same steps and compares, and one that's gone astray knows it at once. Each of
+// the host's sendings carries its step: a joined game keeps a few steps in hand behind it (more,
+// the less evenly they come), playing a little slower or faster to keep them, so that it doesn't
+// stop and start (Joining.pace). And it times how long a word takes to go to the host and back
+// (ping, pong), for the debug overlay.
+//
 // The ways its characters find over the navigation meshes (core/battle.js) are recorded too, as
 // the host found them, and taken by a joined copy rather than found again: what each copy has of
 // the meshes (made as each has needed them) doesn't matter.
@@ -24,21 +31,26 @@
 //   joiner -> host   { kind: "hello", version, character }   (character: as Host.join takes it)
 //                    { kind: "command", seq, command }
 //                    { kind: "again" }                         (gone astray: the world again)
+//                    { kind: "ping", t }                       (t: the joiner's clock, ms)
 //   host -> joiner   { kind: "welcome", version, id, seed, race, snapshot }
-//                    { kind: "ops", ops }                      (what's been done, in order)
+//                    { kind: "ops", step, ops }                (what's been done, in order, up to step)
+//                    { kind: "motion", step, units }           (base64: core/motion.js)
+//                    { kind: "pong", t, step }
 //                    { kind: "state", snapshot }               (the world again)
 //                    { kind: "paused", paused }                (the host's world stopped, or going again)
 //                    { kind: "refused", reason }
 //
 // Pure: no DOM, no network. Hosting and Joining are given how to send, and told what's heard.
 
+import { STEP_MS } from "./battle.js";
 import { HIRES } from "./host.js";
+import { compareMotion, MOTION, packMotion, unpackMotion } from "./motion.js";
 import { STARTING_WEAPONS } from "./weapons.js";
-import { decode, encode } from "./wire.js";
+import { decode, encode, fromBase64, toBase64 } from "./wire.js";
 import { RACE, startFor } from "./worldplan/plan.js";
 
 /** Bumped whenever what's said changes: a game of another version can't join. */
-export const NET_VERSION = 11;
+export const NET_VERSION = 12;
 
 /** How many steps the host plays between telling how the world should stand. */
 export const CHECK_EVERY = 100;
@@ -53,6 +65,16 @@ export const MOST_PLAYERS = 8;
  * doesn't make the frame so long it falls further behind).
  */
 export const PACE = Object.freeze({ behind: 6, catchUp: 40, catchUpMs: 8 });
+
+/**
+ * How many of the host's steps a joined game keeps in hand (the delay): at least `least` (the host
+ * sends every other step or so), more as the host's sendings come less evenly, `most` at most,
+ * twice their unevenness (ms, as RFC 3550 reckons it, over the last `jitter` or so; any one late
+ * by `late` ms at most: the link dropped a moment) over. And how it keeps them: playing up to
+ * `rate` slower or faster, `gain` for each step too few or too many, as it's had them in hand
+ * over the last `settle` ms.
+ */
+export const PLAYOUT = Object.freeze({ least: 2, most: 6, jitter: 16, late: 1000, rate: 0.1, gain: 0.05, settle: 1000 });
 
 /** Why a game can't join: shown to its player. */
 export const NET_REFUSALS = Object.freeze({
@@ -121,8 +143,12 @@ export class Hosting {
         this.ops = [];
         this.steps = 0;
         this.checkDue = false;
+        this.motionDue = false;
         this.seq = null;
         this.nextGuest = 1;
+
+        /** What's been sent (characters of text, to everyone together), by kind. */
+        this.sent = {};
 
         /** Whether the host's world is stopped (its page hidden), as those who've joined have been told. */
         this.paused = false;
@@ -148,28 +174,54 @@ export class Hosting {
             this.ops.push(op);
         }
 
-        if (op[0] === "a" && ++this.steps % CHECK_EVERY === 0) {
-            this.checkDue = true;
+        if (op[0] === "a") {
+            this.steps++;
+            this.checkDue ||= this.steps % CHECK_EVERY === 0;
+            this.motionDue ||= this.steps % MOTION.every === 0;
         }
     }
 
-    /** Send what's been done to everyone who's joined (and, now and then, how the world should stand). */
+    // The host's step, as its sendings carry it
+    #step() {
+        return Math.floor(this.host.battle.time / STEP_MS);
+    }
+
+    #send(peer, kind, text) {
+        this.sent[kind] = (this.sent[kind] ?? 0) + text.length;
+        this.send(peer, text);
+    }
+
+    #sendAll(kind, text) {
+        for (const peer of this.players.keys()) {
+            this.#send(peer, kind, text);
+        }
+    }
+
+    /**
+     * Send what's been done to everyone who's joined; and, now and then, how the world should
+     * stand, and where those near the players are (after what's been done: compared there).
+     */
     flush() {
         if (this.checkDue) {
             this.ops.push(["k", this.host.checksum()]);
             this.checkDue = false;
         }
 
-        if (!this.ops.length) {
-            return;
+        const step = this.#step();
+
+        if (this.ops.length) {
+            const text = encode({ kind: "ops", step, ops: this.ops });
+
+            this.ops = [];
+            this.#sendAll("ops", text);
         }
 
-        const text = encode({ kind: "ops", ops: this.ops });
+        if (this.motionDue) {
+            this.motionDue = false;
 
-        this.ops = [];
-
-        for (const peer of this.players.keys()) {
-            this.send(peer, text);
+            if (this.players.size) {
+                this.#sendAll("motion", encode({ kind: "motion", step, units: toBase64(packMotion(this.host)) }));
+            }
         }
     }
 
@@ -193,6 +245,13 @@ export class Hosting {
             case "again":
                 this.#again(peer);
                 break;
+            case "ping":
+                // (At once: how long a word takes to come and go, not how long till the next flush)
+                if (this.players.has(peer) && Number.isFinite(message.t)) {
+                    this.#send(peer, "pong", encode({ kind: "pong", t: message.t, step: this.#step() }));
+                }
+
+                break;
             default:
                 break;
         }
@@ -205,7 +264,7 @@ export class Hosting {
             return;
         }
 
-        const refuse = (reason) => this.send(peer, encode({ kind: "refused", reason }));
+        const refuse = (reason) => this.#send(peer, "refused", encode({ kind: "refused", reason }));
 
         if (version !== NET_VERSION) {
             refuse("version");
@@ -235,10 +294,10 @@ export class Hosting {
         this.host.join({ id, ...brought, ...spawnFor(world, brought.hero.race) });
         this.flush();
         this.players.set(peer, id);
-        this.send(peer, encode({ kind: "welcome", version: NET_VERSION, id, seed: world.seed, race: world.start?.race ?? "human", snapshot: this.host.snapshot() }));
+        this.#send(peer, "welcome", encode({ kind: "welcome", version: NET_VERSION, id, seed: world.seed, race: world.start?.race ?? "human", snapshot: this.host.snapshot() }));
 
         if (this.paused) {
-            this.send(peer, encode({ kind: "paused", paused: true }));
+            this.#send(peer, "paused", encode({ kind: "paused", paused: true }));
         }
 
         this.onJoin(id, peer);
@@ -268,7 +327,7 @@ export class Hosting {
         }
 
         this.flush();
-        this.send(peer, encode({ kind: "state", snapshot: this.host.snapshot() }));
+        this.#send(peer, "state", encode({ kind: "state", snapshot: this.host.snapshot() }));
     }
 
     /**
@@ -281,12 +340,7 @@ export class Hosting {
         }
 
         this.paused = paused;
-
-        const text = encode({ kind: "paused", paused });
-
-        for (const peer of this.players.keys()) {
-            this.send(peer, text);
-        }
+        this.#sendAll("paused", encode({ kind: "paused", paused }));
     }
 
     /**
@@ -303,10 +357,10 @@ export class Hosting {
         const text = encode({ kind: "state", snapshot: this.host.snapshot() });
 
         for (const peer of this.players.keys()) {
-            this.send(peer, text);
+            this.#send(peer, "state", text);
 
             if (this.paused) {
-                this.send(peer, encode({ kind: "paused", paused: true }));
+                this.#send(peer, "paused", encode({ kind: "paused", paused: true }));
             }
         }
     }
@@ -351,11 +405,15 @@ export class Hosting {
 /**
  * A game joining a world someone else hosts: says who's coming (`hello`), hears the world
  * (`onWelcome`, to make its copy and `attach` it), then plays it on as the host did (`step`),
- * its player's commands going to the host (`command`). What's to be sent goes by `send(text)`.
+ * its player's commands going to the host (`command`). What's to be sent goes by `send(text)`;
+ * `clock` tells the time (ms: only to time the link, never in the world).
  */
 export class Joining {
-    constructor({ send }) {
+    #last = null;
+
+    constructor({ send, clock = () => 0 }) {
         this.send = send;
+        this.clock = clock;
 
         /** Its copy of the world (a Host, as the host's was), once it's made; its player's id in it. */
         this.host = null;
@@ -371,6 +429,29 @@ export class Joining {
         /** Whether it's gone astray from the host's, and asked for the world again. */
         this.astray = false;
         this.resyncs = 0;
+
+        /**
+         * How often it's compared where the host's characters stood with its own (the motion
+         * stream), and the world with how the host said it should stand (the checksum); and how
+         * often it found it had gone astray, either way.
+         */
+        this.motionChecks = 0;
+        this.checks = 0;
+        this.desyncs = 0;
+
+        /**
+         * The host's latest step heard; how unevenly its sendings come (ms); how many of its
+         * steps to keep in hand (PLAYOUT), and how many it's had in hand lately; and how long a
+         * word takes to the host and back (ms: null till it's known).
+         */
+        this.hostStep = null;
+        this.jitter = 0;
+        this.delay = PLAYOUT.least;
+        this.held = 0;
+        this.rtt = null;
+
+        /** What's been heard (characters of text), by kind. */
+        this.received = {};
 
         /** Whether the host's world is stopped (its page hidden), as the host's said. */
         this.paused = false;
@@ -396,21 +477,43 @@ export class Joining {
             return;
         }
 
+        if (typeof message?.kind === "string") {
+            this.received[message.kind] = (this.received[message.kind] ?? 0) + text.length;
+        }
+
         switch (message?.kind) {
             case "welcome":
                 this.me = message.id;
                 this.queue = [];
+                this.#last = null;
                 this.onWelcome(message);
                 break;
             case "ops":
                 if (Array.isArray(message.ops)) {
                     this.queue.push(...message.ops);
+                    this.#arrived(message.step);
+                }
+
+                break;
+            case "motion":
+                // (Compared once what came before it's been played: just where the host packed it)
+                if (typeof message.units === "string" && Number.isInteger(message.step)) {
+                    this.queue.push(["m", message.step, message.units]);
+                }
+
+                break;
+            case "pong":
+                if (Number.isFinite(message.t)) {
+                    const took = Math.max(0, this.clock() - message.t);
+
+                    this.rtt = this.rtt === null ? took : this.rtt + (took - this.rtt) / 8;
                 }
 
                 break;
             case "state":
                 // (Everything waiting was done before it: in it already)
                 this.queue = [];
+                this.#last = null;
                 this.host?.adopt(message.snapshot);
                 this.astray = false;
                 this.resyncs++;
@@ -423,7 +526,9 @@ export class Joining {
                 this.onState(message);
                 break;
             case "paused":
+                // (Its steps stopped coming for a reason: no measure of how evenly they come)
                 this.paused = message.paused === true;
+                this.#last = null;
                 break;
             case "refused":
                 this.onRefused(message.reason);
@@ -451,6 +556,43 @@ export class Joining {
     /** How many of the host's steps are waiting to be played. */
     get behind() {
         return this.queue.reduce((sum, op) => sum + (op[0] === "a" ? (op[2] ?? 1) : 0), 0);
+    }
+
+    /** Ask the host how long a word takes to it and back (rtt, once its pong comes). */
+    ping() {
+        this.send(encode({ kind: "ping", t: this.clock() }));
+    }
+
+    // The host's sending of what's been done up to `step` heard: how unevenly they come, as RFC
+    // 3550 reckons it (each one's lateness against the last, by the steps between them), and so
+    // how many steps to keep in hand
+    #arrived(step) {
+        if (!Number.isInteger(step)) {
+            return;
+        }
+
+        const at = this.clock();
+
+        if (this.#last && step > this.#last.step) {
+            const late = Math.min(PLAYOUT.late, Math.abs(at - this.#last.at - (step - this.#last.step) * STEP_MS));
+
+            this.jitter += (late - this.jitter) / PLAYOUT.jitter;
+            this.delay = Math.max(PLAYOUT.least, Math.min(PLAYOUT.most, PLAYOUT.least + Math.round((2 * this.jitter) / STEP_MS)));
+        }
+
+        this.#last = { step, at };
+        this.hostStep = step;
+    }
+
+    /**
+     * How fast to play the host's steps for the next `ms` of the game's time (1: as they were
+     * played): a little slower while there are fewer than `delay` in hand (lately), so that
+     * there are; a little faster while there are more, so that they're played sooner.
+     */
+    pace(ms) {
+        this.held += (this.behind - this.held) * Math.min(1, ms / PLAYOUT.settle);
+
+        return 1 + Math.max(-PLAYOUT.rate, Math.min(PLAYOUT.rate, (this.held - this.delay) * PLAYOUT.gain));
     }
 
     /**
@@ -509,9 +651,26 @@ export class Joining {
                 case "k": {
                     const [, sum] = this.queue.shift();
 
-                    if (!this.astray && this.host.checksum() !== sum) {
-                        this.astray = true;
-                        this.send(encode({ kind: "again" }));
+                    if (!this.astray) {
+                        this.checks++;
+
+                        if (this.host.checksum() !== sum) {
+                            this.#astray();
+                        }
+                    }
+
+                    break;
+                }
+                case "m": {
+                    const [, step, units] = this.queue.shift();
+
+                    // (At another step than the host packed it at: its world's not the host's)
+                    if (!this.astray) {
+                        this.motionChecks++;
+
+                        if (Math.floor(this.host.battle.time / STEP_MS) !== step || compareMotion(this.host.battle, unpackMotion(fromBase64(units))).length) {
+                            this.#astray();
+                        }
                     }
 
                     break;
@@ -522,6 +681,13 @@ export class Joining {
         }
 
         return null;
+    }
+
+    // Gone astray from the host's world: the world again
+    #astray() {
+        this.astray = true;
+        this.desyncs++;
+        this.send(encode({ kind: "again" }));
     }
 
     /**

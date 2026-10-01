@@ -5,7 +5,8 @@ import { expect, test } from "@playwright/test";
 // and comes into the world by their own people's town, as the host has it; what the one who's
 // joined does is done in the host's world; told when the host's paused; their link dropped, back on
 // a new one; they leave, and are gone from it; the host closes the world to others, and anyone
-// still in it is told.
+// still in it is told. Two players walking about a while: the joined copy compared with the host's
+// every fifth of a second and never astray, and what's sent measured.
 
 // (Two worlds drawn at once, without a GPU: more than the usual time; and these tests one after
 // the other, never side by side: four worlds drawn at once slow each to a crawl)
@@ -289,6 +290,121 @@ test("two players side by side trade face to face: one asks, the other says yes,
     }
 
     expect(await guest.evaluate(() => window.pellagos.game.remote.resyncs)).toBe(0);
+
+    await hostContext.close();
+    await guestContext.close();
+});
+
+test("two players walk about a while: the joined copy's checked against the host's every fifth of a second and never drifts; the guest's hero drawn going at once; what's sent measured", async ({ browser }) => {
+    const hostContext = await browser.newContext();
+    const guestContext = await browser.newContext();
+    const host = await hostContext.newPage();
+    const guest = await guestContext.newPage();
+
+    await cheaply(host, guest);
+    // (The guest's debug overlay shown: how the link's going)
+    await guest.addInitScript(() => localStorage.setItem("pellagos.settings", JSON.stringify({ quality: "low", renderScale: 0.5, shadows: false, debug: true })));
+
+    for (const page of [host, guest]) {
+        page.on("pageerror", (error) => {
+            throw error;
+        });
+    }
+
+    await guest.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), BRYN);
+    await host.goto("/?play&seed=2");
+    await playing(host);
+    await host.locator("#menubutton").click();
+    await host.locator("#invitebutton").click();
+
+    const invite = host.locator("#invite");
+
+    await expect(invite.locator("#invitecode")).toHaveText(/^[A-Z]{4}$/, { timeout: 15000 });
+
+    const code = await invite.locator("#invitecode").textContent();
+
+    await invite.getByRole("button", { name: "Back to the game" }).click();
+    await guest.goto(`/?join=${code}`);
+    await expect(guest.locator("#join")).toBeVisible({ timeout: 60000 });
+    await guest.locator("#join").getByRole("button", { name: "Join" }).click();
+    await playing(guest);
+    await expect(host.locator("#banner")).toContainText("Bryn has come into the world", { timeout: 30000 });
+
+    const sentAtFirst = await host.evaluate(() => ({ at: performance.now(), ...window.pellagos.game.hosting.sent }));
+
+    // Both walk about for a while, here and there round where they are: the host's player as the
+    // host's game has them; the guest by tapping the ground, as a player would
+    for (let round = 0; round < 12; round++) {
+        await host.evaluate((round) => {
+            const { game } = window.pellagos;
+            const me = game.battle.actor(game.me);
+
+            game.host.command(game.me, { type: "move", to: [me.square[0] + (round % 2 ? -6 : 6), me.square[1] + (round % 3) - 1], run: round % 4 === 0 });
+        }, round);
+
+        const drawn = await guest.evaluate((round) => {
+            const { game } = window.pellagos;
+            const me = game.battle.actor(game.me);
+
+            game.mapTap({ x: me.x + (round % 2 ? 5 : -5), z: me.y + (round % 3) - 1, reach: 0, run: round % 3 === 0 });
+
+            // (Sent, not yet done here: drawn setting off all the same)
+            return game.predict.pending !== null;
+        }, round);
+
+        expect(drawn).toBe(true);
+        await guest.waitForTimeout(3000);
+
+        const net = await guest.evaluate(() => {
+            const { remote, predict } = window.pellagos.game;
+
+            return { desyncs: remote.desyncs, resyncs: remote.resyncs, checks: remote.motionChecks, pending: predict.pending, lag: predict.lag };
+        });
+
+        expect(net).toMatchObject({ desyncs: 0, resyncs: 0, pending: null });
+        expect(net.checks).toBeGreaterThan(round * 5);
+        expect(net.lag).toBeLessThan(600);
+    }
+
+    // What the host sent the guest a second, all told, and of that its motion
+    const sent = await host.evaluate((first) => {
+        const { sent } = window.pellagos.game.hosting;
+        const seconds = (performance.now() - first.at) / 1000;
+        const per = (kind) => ((sent[kind] ?? 0) - (first[kind] ?? 0)) / seconds;
+
+        return { all: Object.keys(sent).reduce((sum, kind) => sum + per(kind), 0), motion: per("motion"), ops: per("ops") };
+    }, sentAtFirst);
+
+    test.info().annotations.push({ type: "bandwidth", description: `host to one joined: ${(sent.all / 1000).toFixed(2)} KB/s (motion ${(sent.motion / 1000).toFixed(2)}, ops ${(sent.ops / 1000).toFixed(2)})` });
+    expect(sent.motion).toBeGreaterThan(0);
+    expect(sent.all).toBeLessThan(10000);
+
+    // The guest's overlay says how the link's going
+    await expect(guest.locator("#debugstats")).toContainText(/Net joined: RTT \d+ ms/, { timeout: 10000 });
+
+    // The host's world stopped, all it did sent: the guest's copy comes to just the same
+    await host.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+        game.hosting.flush();
+    });
+
+    const hostWorld = await host.evaluate(() => {
+        const { game } = window.pellagos;
+
+        return { time: game.battle.time, sum: game.host.checksum(), at: game.battle.actors.map(({ id, x, y }) => `${id} ${x.toFixed(3)} ${y.toFixed(3)}`) };
+    });
+
+    await expect.poll(() => guest.evaluate(() => window.pellagos.game.battle.time), { timeout: 30000 }).toBe(hostWorld.time);
+
+    const guestWorld = await guest.evaluate(() => {
+        const { game } = window.pellagos;
+
+        return { time: game.battle.time, sum: game.host.checksum(), at: game.battle.actors.map(({ id, x, y }) => `${id} ${x.toFixed(3)} ${y.toFixed(3)}`), desyncs: game.remote.desyncs, resyncs: game.remote.resyncs };
+    });
+
+    expect(guestWorld).toEqual({ ...hostWorld, desyncs: 0, resyncs: 0 });
 
     await hostContext.close();
     await guestContext.close();

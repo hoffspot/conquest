@@ -36,6 +36,29 @@ const element = (tag, attributes = {}, ...children) => {
 
 const ms = (value) => `${value.toFixed(1)} ms`;
 const thousands = (value) => (value >= 10000 ? `${Math.round(value / 1000)}k` : value >= 1000 ? `${(value / 1000).toFixed(1)}k` : String(value));
+const total = (counts) => Object.values(counts).reduce((sum, count) => sum + count, 0);
+const rate = (bytes) => `${(bytes / 1000).toFixed(1)} KB/s`;
+
+/**
+ * Playing together, how it's going (core/netplay.js): joined, how long a word takes to the host and
+ * back, the steps in hand (and how many it means to keep, by how unevenly the host's come), how
+ * often it's checked against the host's world and found it astray, and what it's hearing a
+ * second; hosting, how many have joined, and what's sent them a second (and of that, the motion
+ * stream). `per` is how much each kind's come or gone a second (as Debug works it out).
+ */
+export function netLine({ remote, hosting }, per) {
+    if (remote) {
+        const rtt = remote.rtt === null ? "…" : `${Math.round(remote.rtt)} ms`;
+
+        return `Net joined: RTT ${rtt}  in hand ${remote.behind}/${remote.delay} steps (jitter ${Math.round(remote.jitter)} ms)  checks ${remote.motionChecks} motion, ${remote.checks} sums, astray ${remote.desyncs}  resyncs ${remote.resyncs}  in ${rate(total(per))}`;
+    }
+
+    if (hosting) {
+        return `Net hosting ${hosting.players.size} joined  out ${rate(total(per))} (motion ${rate(per.motion ?? 0)})`;
+    }
+
+    return null;
+}
 
 export class Debug {
     /**
@@ -53,6 +76,7 @@ export class Debug {
         this.view = null;
         this.game = null;
         this.builds = {};
+        this.counted = null;
         this.graph = element("canvas", { class: "graph", width: 240, height: 40, "aria-hidden": "true" });
         this.text.after(this.graph);
         this.summary = root.querySelector("#debugsummary");
@@ -168,7 +192,9 @@ export class Debug {
                 return `${actor.id} (${actor.x.toFixed(1)}, ${actor.y.toFixed(1)}) hp ${actor.hp}/${actor.maxHp} stamina ${Math.floor(actor.stamina)}/${actor.maxStamina} ${doing}${moving}`;
             };
 
-            lines.push(`Battle ${(battle.time / 1000).toFixed(1)} s  steps/frame ${game.stats.steps}  projectiles ${battle.projectiles.length}`, ...battle.actors.map(describe));
+            const net = netLine(game, this.#perSecond(game.remote?.received ?? game.hosting?.sent));
+
+            lines.push(`Battle ${(battle.time / 1000).toFixed(1)} s  steps/frame ${game.stats.steps}  projectiles ${battle.projectiles.length}`, ...(net ? [net] : []), ...battle.actors.map(describe));
         }
 
         if (loader) {
@@ -188,6 +214,24 @@ export class Debug {
         this.text.textContent = lines.join("\n");
         this.summary.textContent = game ? `Debug · ${game.stats.fps.toFixed(0)} fps` : "Debug";
         this.#drawGraph();
+    }
+
+    // How much of each kind's come or gone a second, since it was last asked (of counts that only go up)
+    #perSecond(counts) {
+        if (!counts) {
+            this.counted = null;
+
+            return {};
+        }
+
+        const now = performance.now();
+        const last = this.counted?.counts === counts ? this.counted : null;
+        const seconds = last ? (now - last.at) / 1000 : 0;
+        const per = Object.fromEntries(Object.entries(counts).map(([kind, count]) => [kind, seconds > 0 ? (count - (last.was[kind] ?? 0)) / seconds : 0]));
+
+        this.counted = { counts, was: { ...counts }, at: now };
+
+        return per;
     }
 
     // Recent frame times, a bar each (green under 1/60 s, amber under 1/30 s, red over)
