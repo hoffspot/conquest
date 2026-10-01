@@ -65,6 +65,7 @@ import { QUALITY } from "../world/view.js";
 import { KINDS, Wounds } from "../world/wounds.js";
 import { Chunks, DECK, LOAD_BUDGET, REACH } from "../world/chunks3d.js";
 import { TallGrass } from "../world/grass.js";
+import { Motes } from "../world/motes.js";
 import { FarLand } from "../world/far/far.js";
 import { farReach } from "../world/far/levels.js";
 import { Silhouettes } from "../world/far/silhouettes.js";
@@ -768,6 +769,10 @@ export class Game {
             this.grass = new TallGrass(this.chunks.overworld, { ready: (cx, cy) => this.chunks.isDrawn(cx, cy) });
             this.grass.setQuality(view.quality.grass);
             this.chunks.object.add(this.grass.object);
+            // (And the land's motes drifting in the air round them)
+            this.motes = new Motes();
+            this.motes.setQuality(view.quality.motes);
+            this.chunks.object.add(this.motes.object);
             this.#farLand(x + 0.5, y + 0.5);
             this.#landLook(x + 0.5, y + 0.5, 0);
             await time("chunks", async () => {
@@ -1256,6 +1261,7 @@ export class Game {
         this.ground?.geometry.dispose();
         this.ground?.material.dispose();
         this.grass?.dispose();
+        this.motes?.dispose();
         this.chunks?.dispose();
         this.far?.dispose();
         this.view.setFar(null);
@@ -1814,6 +1820,14 @@ export class Game {
             // way the camera looks)
             this.grass?.setQuality(this.view.quality.grass);
             this.grass?.update(x, z, 2, this.#lookAlong());
+
+            // (The land's motes round them, as many as the quality has)
+            if (this.motes) {
+                const { camera, renderer } = this.view;
+
+                this.motes.setQuality(this.view.quality.motes);
+                this.motes.update(x, this.avatars.get(this.me).object.position.y, z, dt, this.chunks.overworld.biomeAt(Math.floor(x), Math.floor(z)), renderer.domElement.height / (2 * Math.tan((camera.fov * Math.PI) / 360)));
+            }
 
             this.#farLand(x, z);
             this.#landLook(x, z, dt);

@@ -1736,3 +1736,30 @@ converted data is to be measured in M8 against today's hm08 data.
     crops, ploughed the most, a fifth of blocks pasture; laid into the chunks as soil and grass;
     no trees in the strips, only haystacks and scarecrows; the crops standing in the grass map;
     the ground told each square's crop and its strip's way).
+- **2026-10-01, M7b-2a built** (the ground ordered round what's there: the research report's
+  steps 2, 7 and 8, in part):
+  - **Why:** the report's finding that what reads as nature is correlation, not noise: grass
+    thickest at a rock's foot, worn along a path and lush at its verge, flowers carpeting the
+    sunny side of a hill; and the user's reference shots (the dusk flower meadow with its motes).
+  - **Built:**
+    - the grass map ordered round what's there (`grassmap.js`): a ring of thicker, taller grass
+      round what stands (`GRASS_RINGS`), trodden short and yellowed beside the ways and thick at
+      their verges (`GRASS_PATHS`), drier on the sunny side of a hill and greener on the shaded
+      (`GRASS_SUN`, from `sun.js`'s `facingSun`), the distances worked out over the chunk and
+      6 m round it (an eight-way chamfer), so a chunk's grass waits for the eight round it;
+    - flower carpets in the undergrowth (`kits/wilds.js CARPETS`): slow noise, most on sunny
+      slopes, most of one kind;
+    - motes (`world/motes.js`): one draw of soft glowing dots in a box round the player, each
+      land's kind (pollen, dust, fireflies, wisps, embers, snow), 300 on medium and 600 on high,
+      none on low (`QUALITY.motes`).
+  - **Cost:** the grass map about 10% slower to work out (still spread over frames); one draw for
+    the motes.
+  - **Next (M7b-2b):** boulder clusters with a regional strike and flat slabs (in the core:
+    they block), bushes at patch edges and along the verges (hedgerows), worn dirt in the
+    ground's own shader, the ground carrying the grass's look past where it's drawn.
+  - **Tests:** `test/grass.test.js` (gathered round what stands, trodden beside the ways and
+    thick at their verges; drier on a sunny slope than a shaded one, two made-up tilted
+    meadows; the nine chunks mapped once they and the chunks round them are drawn),
+    `test/wilds.test.js` (flowers on the sunny side half as many again, most of one kind),
+    `test/motes.test.js` (each land's kind; none on low; the same places at any quality; fading
+    from kind to kind; never drifting out of their box; none indoors).

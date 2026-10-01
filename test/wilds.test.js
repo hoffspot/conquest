@@ -14,6 +14,7 @@ const { GROUND } = await import("../client/js/core/setpieces/pieces.js");
 const { FEATURES, HOMELANDS, LANDS } = await import("../client/js/core/wilds.js");
 const { patchNoise } = await import("../client/js/world/ground.js");
 const { featureMesh, Growth, HOME_UNDERGROWTH, KINDS, LOOKS, lookGeometry, TILE, undergrowthOf, UNDERGROWTH } = await import("../client/js/world/art/kits/wilds.js");
+const { SUN_FROM } = await import("../client/js/world/sun.js");
 
 let world;
 let overworld;
@@ -244,6 +245,40 @@ describe("the land's things drawn (world/art/kits/wilds.js)", () => {
                 assert.ok(!["campfire", "burrow", "molehill", "fern", "reeds", "ring"].includes(kind), kind);
             }
         }
+    });
+
+    it("carpets the sunny side of a hill with flowers, most of them of one kind, and not the shaded side", () => {
+        // (The same meadow in eight places, tilted towards the sun and away from it)
+        const across = Math.hypot(SUN_FROM[0], SUN_FROM[2]);
+        const meadow = { plan: { seed: 1 }, biomeAt: () => "meadow", settled: () => false, homeAt: () => null };
+        const tilted = (cx, cy, fall) => ({
+            cx,
+            cy,
+            x0: cx * CHUNK,
+            y0: cy * CHUNK,
+            trees: [],
+            heights: Float32Array.from({ length: (CHUNK + 1) ** 2 }, (_, k) => 20 - (fall * ((k % (CHUNK + 1)) * SUN_FROM[0] + Math.floor(k / (CHUNK + 1)) * SUN_FROM[2])) / across),
+            ...Object.fromEntries(["ground", "blocked", "water", "bridge"].map((name) => [name, new Uint8Array(CHUNK * CHUNK)])),
+        });
+        const flowers = (fall) => {
+            const kinds = new Map();
+
+            for (let c = 0; c < 8; c++) {
+                for (const { kind } of undergrowthOf(meadow, tilted(40 + c * 3, 70 + c * 2, fall))) {
+                    if (!["tuft", "tall", "pebbles", "stones", "molehill", "burrow", "sticks", "campfire"].includes(kind)) {
+                        kinds.set(kind, (kinds.get(kind) ?? 0) + 1);
+                    }
+                }
+            }
+
+            const all = [...kinds.values()].reduce((sum, count) => sum + count, 0);
+
+            return { all, most: Math.max(...kinds.values()) / all };
+        };
+        const [sunny, shaded] = [flowers(0.15), flowers(-0.15)];
+
+        assert.ok(sunny.all > shaded.all * 1.5, `${sunny.all} flowers sunny, ${shaded.all} shaded`);
+        assert.ok(sunny.most > shaded.most, `the commonest ${sunny.most} of them sunny, ${shaded.most} shaded`);
     });
 
     it("draws undergrowth a few things at a time, in tiles, within budget", () => {

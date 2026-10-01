@@ -2,8 +2,12 @@
 // each chunk, a texel to its square metre, worked out from what the world already says of it, so
 // the grass is the same every time and in every browser.
 // - Only on grass (not road, cobbles, soil or a yard), and not where anything stands, on water or
-//   on a bridge; thinner beside a road, on steep ground, up towards the rock and snow, and in a
-//   settlement (kept short there: it's lived in).
+//   on a bridge; thinner on steep ground, up towards the rock and snow, and in a settlement (kept
+//   short there: it's lived in).
+// - Gathered round what stands (GRASS_RINGS: thicker and taller in a ring round a rock's, a tree's
+//   or a wall's foot, where the scythe and the sheep don't reach); trodden short and yellowed beside
+//   a road or a path, thicker and taller a little further off (GRASS_PATHS); drier and golden on
+//   the side of a hill that faces the sun, lusher on the shaded side (sun.js).
 // - As thick and as tall as its land grows it (GRASS_LANDS): a meadow's thick and knee to waist
 //   high, a savannah's tall and golden, the woods' thin and short, none on snow; its lands blended
 //   across their cells' edges so no line shows where one meets another.
@@ -21,12 +25,13 @@
 
 import { ALONG, CROP } from "../core/fields.js";
 import { fractal } from "../core/noise.js";
-import { CHUNK, WET } from "../core/overworld.js";
+import { CHUNK, CHUNKS, WET } from "../core/overworld.js";
 import { GROUND } from "../core/setpieces/pieces.js";
 import { SLOPE_CLASS } from "../core/terrain/height.js";
 import { CELL } from "../core/worldplan/plan.js";
 import { LOOKS } from "./art/kits/wilds.js";
 import { ALPINE, CROP_COLOURS, PATCHES, patchNoise } from "./ground.js";
+import { facingSun } from "./sun.js";
 
 /**
  * How each land grows its tall grass: how thick at its thickest (0 to 1), how tall (metres: its
@@ -65,11 +70,57 @@ export const CROP_STANDS = Object.freeze({
 });
 
 /**
- * How the grass thins: beside a road (by this much), on steep ground (this much of it left; none
- * on a cliff), in a settlement (this much of it, and this much as tall); and how slow its clumps'
- * and its tall and short stretches' noise is (metres).
+ * How the grass thins: on steep ground (this much of it left; none on a cliff), in a settlement
+ * (this much of it, and this much as tall); and how slow its clumps' and its tall and short
+ * stretches' noise is (metres).
  */
-export const GRASS_THINS = Object.freeze({ road: 0.45, steep: 0.35, settled: [0.25, 0.45], clumps: 13, stretches: 70 });
+export const GRASS_THINS = Object.freeze({ steep: 0.35, settled: [0.25, 0.45], clumps: 13, stretches: 70 });
+
+/**
+ * Round what stands on the land (a rock, a tree, a wall: what can't be seen through, or is built),
+ * out to `reach` metres from its squares (full to `full`): as much thicker and taller.
+ */
+export const GRASS_RINGS = Object.freeze({ full: 0.9, reach: 2.2, thicker: 0.8, taller: 0.3 });
+
+/**
+ * Beside a road or a path (metres from its squares): trodden (to `trodden[1]`, all of it to
+ * `trodden[0]`) as much shorter, thinner and drier; then up to `edge` metres off, as much thicker
+ * and taller (the verge nobody walks or mows).
+ */
+export const GRASS_PATHS = Object.freeze({ trodden: [0.9, 2.1], shorter: 0.65, thinner: 0.35, drier: 0.35, edge: [1.6, 2.6, 4, 5.5], thicker: 0.45, taller: 0.25 });
+
+/** How much drier (and thinner) on the sunny side of a slope, and lusher on the shaded side, for its fall towards the sun (sun.js). */
+export const GRASS_SUN = Object.freeze({ by: 3, most: 0.35 });
+
+// How far round a chunk distances are worked out (squares): further than any rule reaches
+const MARGIN = 6;
+const DIAGONAL = Math.SQRT2;
+
+// The distance (metres) from each square of a window to the nearest of those marked in `from`
+// (bytes), up to MARGIN (two passes of an eight-way chamfer: near enough a true distance at this
+// reach)
+function distances(side, from) {
+    const far = MARGIN + 1;
+    const d = new Float32Array(side * side).map((_, k) => (from[k] ? 0 : far));
+    const at = (i, j) => (i < 0 || j < 0 || i >= side || j >= side ? far : d[j * side + i]);
+
+    for (let j = 0; j < side; j++) {
+        for (let i = 0; i < side; i++) {
+            d[j * side + i] = Math.min(d[j * side + i], at(i - 1, j) + 1, at(i, j - 1) + 1, at(i - 1, j - 1) + DIAGONAL, at(i + 1, j - 1) + DIAGONAL);
+        }
+    }
+
+    for (let j = side - 1; j >= 0; j--) {
+        for (let i = side - 1; i >= 0; i--) {
+            d[j * side + i] = Math.min(d[j * side + i], at(i + 1, j) + 1, at(i, j + 1) + 1, at(i + 1, j + 1) + DIAGONAL, at(i - 1, j + 1) + DIAGONAL);
+        }
+    }
+
+    return d;
+}
+
+// The ground a road or a path is (a street's cobbles, a bridge's planks)
+const WAYS = new Set([GROUND.road, GROUND.cobbles, GROUND.planks]);
 
 const smoothstep = (a, b, x) => {
     const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -146,6 +197,39 @@ export function* grassMapping(overworld, chunk, rows = CHUNK) {
 
         return a.map((value, k) => value * (1 - s) * (1 - t) + b[k] * s * (1 - t) + c[k] * (1 - s) * t + d[k] * s * t);
     };
+    // (How far each square is from a road or a path, and from what stands: worked out over the
+    // chunk and MARGIN round it, from its neighbours as they've been made, so the rings and bands
+    // carry on across its edges)
+    const side = CHUNK + 2 * MARGIN;
+    const way = new Uint8Array(side * side);
+    const standing = new Uint8Array(side * side);
+
+    for (let wj = 0; wj < side; wj++) {
+        const y = y0 + wj - MARGIN;
+        let there = null;
+        let [cx, cy] = [NaN, NaN];
+
+        for (let wi = 0; wi < side; wi++) {
+            const x = x0 + wi - MARGIN;
+
+            if (Math.floor(x / CHUNK) !== cx || Math.floor(y / CHUNK) !== cy) {
+                [cx, cy] = [Math.floor(x / CHUNK), Math.floor(y / CHUNK)];
+                there = cx === chunk.cx && cy === chunk.cy ? chunk : (overworld.chunks?.get(cy * CHUNKS + cx) ?? null);
+            }
+
+            if (there) {
+                const at = (y - there.y0) * CHUNK + (x - there.x0);
+
+                way[wj * side + wi] = WAYS.has(there.ground[at]) ? 1 : 0;
+                standing[wj * side + wi] = there.opaque[at] || there.solid?.[at] ? 1 : 0;
+            }
+        }
+    }
+
+    const toWay = distances(side, way);
+    const toStanding = distances(side, standing);
+
+    yield;
 
     for (let j = 0; j < CHUNK; j++) {
         if (j > 0 && j % rows === 0) {
@@ -197,20 +281,27 @@ export function* grassMapping(overworld, chunk, rows = CHUNK) {
             // (Its clumps, and its tall and short stretches)
             const clumps = smoothstep(0.3, 0.62, fractal(x, y, GRASS_THINS.clumps, seed * 37 + 11, 2));
             const stretch = fractal(x, y, GRASS_THINS.stretches, seed * 37 + 12, 2);
-            // (Thinner beside a road or a yard, on steep ground and up towards the rock and snow)
-            const besideRoad = [k - 1, k + 1, k - CHUNK, k + CHUNK].some((n, side) => (side === 0 ? i > 0 : side === 1 ? i < CHUNK - 1 : side === 2 ? j > 0 : j < CHUNK - 1) && chunk.ground[n] !== GROUND.grass && chunk.ground[n] !== GROUND.soil);
+            // (Thinner on steep ground and up towards the rock and snow)
             const slope = chunk.slopes[k];
             const alpine = smoothstep(ALPINE.rock[0], ALPINE.rock[1], height + (coarse[2] - 0.5) * 2 * ALPINE.wander);
             const settled = overworld.settled(x, y);
             let density = thick * (0.35 + 0.65 * clumps) * (1 - 0.95 * bare) * (1 + 0.25 * lush) * (1 - alpine);
 
-            density *= besideRoad ? GRASS_THINS.road : 1;
             density *= slope === SLOPE_CLASS.cliff ? 0 : slope === SLOPE_CLASS.steep ? GRASS_THINS.steep : 1;
             density *= settled ? GRASS_THINS.settled[0] : 1;
 
+            // (Gathered round what stands; trodden beside a way, thick at its verge; drier facing the sun)
+            const w = (j + MARGIN) * side + i + MARGIN;
+            const ring = 1 - smoothstep(GRASS_RINGS.full, GRASS_RINGS.reach, toStanding[w]);
+            const trodden = 1 - smoothstep(GRASS_PATHS.trodden[0], GRASS_PATHS.trodden[1], toWay[w]);
+            const edge = smoothstep(GRASS_PATHS.edge[0], GRASS_PATHS.edge[1], toWay[w]) * (1 - smoothstep(GRASS_PATHS.edge[2], GRASS_PATHS.edge[3], toWay[w]));
+            const sunny = Math.min(1, Math.max(-1, facingSun(chunk.heights, i, j) * GRASS_SUN.by)) * GRASS_SUN.most;
+
+            density *= (1 + GRASS_RINGS.thicker * ring) * (1 - GRASS_PATHS.thinner * trodden) * (1 + GRASS_PATHS.thicker * edge) * (1 - 0.5 * Math.max(0, sunny));
+
             const tallness = Math.min(1, Math.max(0, stretch * 1.25 - 0.1 + 0.2 * lush - 0.15 * dry));
-            const metres = (short + (tall - short) * tallness) * (settled ? GRASS_THINS.settled[1] : 1);
-            const dried = Math.min(1, Math.max(0, dryness + 0.65 * dry - 0.35 * lush));
+            const metres = (short + (tall - short) * tallness) * (settled ? GRASS_THINS.settled[1] : 1) * (1 + GRASS_RINGS.taller * ring) * (1 - GRASS_PATHS.shorter * trodden) * (1 + GRASS_PATHS.taller * edge);
+            const dried = Math.min(1, Math.max(0, dryness + 0.65 * dry - 0.35 * lush + GRASS_PATHS.drier * trodden + sunny));
 
             map[k * 4] = Math.round(Math.min(1, density) * 255);
             // (Up to 2 m tall)

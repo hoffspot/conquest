@@ -160,8 +160,8 @@ export class TallGrass {
     /**
      * @param {object} overworld - The overworld (core/overworld.js), its chunks read for the map.
      * @param {object} [options]
-     * @param {Function} [options.ready] - Whether a chunk (cx, cy) is drawn yet (its grass then
-     *     worked out; until then, none there).
+     * @param {Function} [options.ready] - Whether a chunk (cx, cy) is drawn yet (its grass worked
+     *     out once it and the eight round it are; until then, none there).
      */
     constructor(overworld, { ready = () => true } = {}) {
         this.overworld = overworld;
@@ -314,7 +314,9 @@ export class TallGrass {
         }
     }
 
-    // The nearest of the nine chunks round (pcx, pcy) that's drawn but not in its block yet
+    // The nearest of the nine chunks round (pcx, pcy) that's drawn, with the eight round it (the
+    // grass at its edges gathers round what stands across them, and along the ways), but not in its
+    // block yet
     #wanted(pcx, pcy) {
         let best = null;
 
@@ -323,13 +325,26 @@ export class TallGrass {
                 const [cx, cy] = [pcx + dx, pcy + dy];
                 const slot = (((cy % BLOCKS) + BLOCKS) % BLOCKS) * BLOCKS + (((cx % BLOCKS) + BLOCKS) % BLOCKS);
 
-                if (this.blocks[slot] !== `${cx},${cy}` && this.ready(cx, cy) && (!best || dx * dx + dy * dy < best.far)) {
+                if (this.blocks[slot] !== `${cx},${cy}` && this.#readyRound(cx, cy) && (!best || dx * dx + dy * dy < best.far)) {
                     best = { cx, cy, slot, far: dx * dx + dy * dy };
                 }
             }
         }
 
         return best;
+    }
+
+    // Whether a chunk and the eight round it are drawn
+    #readyRound(cx, cy) {
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                if (!this.ready(cx + dx, cy + dy)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     // Put a chunk's map in its block: none there while it's worked out, then it all at once
