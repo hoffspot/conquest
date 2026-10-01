@@ -23,9 +23,10 @@ import { createRandom } from "../core/random.js";
 import { pieceCatalog } from "../core/setpieces/pieces.js";
 import { footprint } from "../core/setpieces/town.js";
 import { PLOT } from "../core/world.js";
-import { gatehouse, keep, tower, wall } from "./art/kits/castle.js";
+import { gatehouse, keep, RUINED, tower, wall } from "./art/kits/castle.js";
 import { house } from "./art/kits/house.js";
 import { landmark } from "./art/kits/landmarks.js";
+import { neutral } from "./art/kits/neutral.js";
 import { builderFor } from "./art/peoples/index.js";
 import { prop } from "./art/kits/props.js";
 import { tree } from "./art/kits/town.js";
@@ -35,9 +36,17 @@ import { plantTrees } from "./art/kits/trees.js";
 export const PIXEL = PLOT / 20;
 
 // What builds each kind of piece (castle pieces too, for towns with walls one day)
-export const BUILDERS = { house, landmark, prop, tree, wall, tower, gatehouse, keep };
+export const BUILDERS = { house, landmark, prop, tree, wall, tower, gatehouse, keep, neutral };
 
 const catalog = new Map(pieceCatalog().map((piece) => [piece.key, piece]));
+
+/**
+ * What builds a piece: its people's kit if it's theirs (peoples/index.js), the castle's pieces
+ * left to ruin if it's a ruined castle's (kits/castle.js RUINED), or the builder for its kind.
+ */
+export function builderOf(piece) {
+    return builderFor(piece) ?? (piece.ruined ? RUINED[piece.kind] : null) ?? BUILDERS[piece.kind];
+}
 
 /**
  * The hole the town's materials cut round the player: its middle on the screen (drawing buffer
@@ -53,7 +62,7 @@ export const TILE = 32;
 
 // What the camera pulls in closer than, rather than looking through (view.js): what's built,
 // not the props (carts, wells, stalls) or the trees
-const BUILT = new Set(["house", "landmark", "structure", "wall", "tower", "gatehouse", "keep"]);
+const BUILT = new Set(["house", "landmark", "structure", "wall", "tower", "gatehouse", "keep", "neutral"]);
 
 /**
  * Foundations: how far the ground under what's built may rise or fall across it (metres) before
@@ -120,9 +129,9 @@ export async function buildTown(world, { onProgress = () => {}, groundAt = () =>
             continue;
         }
 
-        // Everything else is built facing south (by its people's kit, if it's theirs), and turned
-        // to face its street (or the market) about its middle
-        const build = builderFor(spec) ?? BUILDERS[spec.kind];
+        // Everything else is built facing south (by its people's kit, if it's theirs; left to ruin,
+        // if it's a ruined castle's), and turned to face its street (or the market) about its middle
+        const build = builderOf(spec);
 
         if (!build) {
             onProgress(++done, total);
@@ -278,7 +287,8 @@ export function placed(built, piece, [ox, oz] = [0, 0], y = 0) {
 export function grounded(built, piece, groundAt, [ox, oz] = [0, 0]) {
     const middle = groundAt(ox + piece.x, oz + piece.y);
 
-    if (!BUILT.has(piece.kind)) {
+    // (A neutral site's parts reach down into the ground themselves: art/kits/neutral.js)
+    if (!BUILT.has(piece.kind) || piece.kind === "neutral") {
         return middle;
     }
 

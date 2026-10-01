@@ -41,6 +41,44 @@ back to the same world:
   villages, hamlets and farmsteads), laid out by `layoutTown` from its own seed the first time
   the world within a chunk of it is made, and set into the chunks it's in as the town is, the
   plan's roads carried on to its streets' ends.
+- **The sites no people keeps** (`core/setpieces/neutral.js`, built by `art/kits/neutral.js` and
+  the castle kit's `RUINED`): the ruins of old halls, caves, shrines, rings of standing stones,
+  ruined castles, the dragon's lair and the broken watchtowers no one mans. Old and weathered,
+  as the Elden Ring's are; the peoples' own towns, castles and farms are kept up and lived in.
+  - **Laid out** from the site's seed, the same everywhere: its parts, what of it stands in the
+    way (only that blocks; the rest is open ground) and its heart, open ground in its middle,
+    where a lair's master stands (`Sites.heartOf`).
+  - **Standing stones:** 7 to 11 whole stones of the land's rock round a flat altar stone, some
+    leaning, some fallen. **Shrine:** a stepped plinth with a weathered figure (robed, an obelisk
+    or a pair of hands), braziers burning either side, a curved wall behind. **Cave:** cut into a
+    hillside where there's one near (`sites.js` `HILLSIDE`: the land rising 6 to 14 m across it),
+    facing down the hill: a floor dug level into the hill in front of a face of rock, the hill
+    going on over the face's broken brow and the rock under it; in the face, a dolmen doorway
+    (two rough stones leaning in, one laid across) round the black of the way in; torches either
+    side. Where the land's flat, a pit sunk 3.2 m into the ground instead, lined with old stone
+    crumbling at its rim, steps down its front to a dark doorway. **Ruins:** an old hall's walls
+    broken off along their tops, a door and a breach, column stumps, some fallen, heaps of fallen
+    stone. **Ruined castle:** the humans' castle as it's laid out, left to ruin: its walls and
+    towers crumbled (below), its keep open to the sky with joists still across it, its gatehouse's
+    bridge fallen, its houses heaps of stone and charred timbers; old barrels, crates and a cart
+    left by its walls. **Dragon's lair:** a hollow dug into a mountainside, a great dark doorway
+    in the face at its back, ridges of dark rock coming down either side, bones. **Broken
+    watchtower:** its walls broken off at different heights round its top.
+  - **Crumbled, not cut** (`art/kits/decay.js`): built as it stood, then only what's left made.
+    A wall's broken top is jagged at the size of a stone: sloping where stones fell one by one,
+    stepping a course where a row held, dropping in a V where a breach fell, lowest where slow
+    noise along it says most went. A tower's rim crumbles the same way round. What fell lies in
+    lumpy heaps against the foot, about a third as high as what fell, blocks tumbled down them;
+    a loose stone or two left perched on top.
+  - **Left behind** (`art/kits/leftovers.js`): grey, weathered and charred beams, snapped off or
+    fallen, posts standing where halls stood; barrels whole, tipped over or burst (their staves
+    splayed, a hoop in the grass); crates, some broken open; a cart left on one wheel.
+  - **Lying with the land:** each part stands where it is and reaches 1.4 m into the ground, so
+    nothing floats where the land falls away; on the flattest ground within 48 m of the plan's
+    spot (a cave or the lair on the hillside nearest the slope it wants). Levelled only where it
+    must be: a ruined castle's courtyard, a cave's dug floor or pit. Moss on what faces up, dark
+    at the foot.
+  - **Its trail comes to its front** (WORLD.md, *Trails*).
 
 `generateWorld({ seed, kind, exits })` makes the town:
 
@@ -665,8 +703,11 @@ plan's M6c). What stands up from the land is seen from as far as the far land re
   dark elves' black tower and its spire; the elves' towers and great tree; the lizard folk's
   stepped temple-fortress; the cat folk's mud-brick towers; the orcs' broch), the obsidian spire,
   the starwatch, the ziggurat, the sun temple, the war totem, the tree hall, the abbey, the
-  windmill, the manor, pride rock, watchtowers and ruined castles. Where a place has been set down
-  (its chunk made), there; until then, in the middle of its cell.
+  windmill, the manor, pride rock and the watchtowers. And the sites no people keeps as they're
+  laid out near to: the ruins' walls, the lair's ridges, the broken watchtowers,
+  the ruined castles' pieces at their broken heights (shrines and stones are too low to be seen
+  far off, and a cave's face is cut into its hill). Where a place has been set down (its chunk made), there; until then, in the middle
+  of its cell.
 - **Turning into the real thing.** The silhouettes are drawn twice (with the far land, and with
   the near world), and from 128 to 154 m in front of the camera they fade in, a few pixels at a
   time, in just the pixels the near world's buildings leave as they fade out (fog.js
@@ -2315,6 +2356,13 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   features as one mesh; the undergrowth only on open grass, the same every time, thinner when
   asked and in the towns (but not their fields), built a few things at a time in tiles within
   budget.
+- `test/neutral.test.js`: the sites no people keeps laid out the same for the same seed, within
+  their plots, their hearts open; a ruined castle's pieces left to ruin and its gate's way open;
+  every one on seed 1 set down, blocking only what stands, its heart open, lying with the land
+  but for the ruined castles; those with trails facing them, each trail ending before its front
+  on open ground; every part built within its budget; the castle's ruined pieces lower than they
+  stood, each its own way where it stands, the same again; and seen from afar where they stand,
+  shrines and stones not at all.
 - `e2e/building-lab.spec.js`: the building lab's street of houses (twenty, in fewer than thirty
   draw calls) and its town; the taverns, guild, temples and smithy with their boards and signs; a
   village drawn in its chunks; and a meadow with its features and undergrowth, in fewer than 70

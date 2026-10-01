@@ -374,6 +374,19 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   then in the terrain worker (`world/terrains.js`: those within five chunks of the player) and
   handed over: the same way either way, so every player's world agrees. It's walked as a road
   and drawn as one, and levelled into the ground as roads are (below).
+  - **To the site's front:** the site's turned to face the way its trail comes, and the trail
+    ends 2 m before its front, where its way in is (a cave's mouth, a ruin's door, a ruined
+    castle's gate); trails branching from it start there too. A cave or lair cut into a
+    hillside faces down the hill instead, and its trail ends past the banks of the floor dug in
+    front of it, where that floor's level with the hill (`sites.js` `cutOf`).
+  - **Not yet:** a trail too short for its climb is cut into the land to its grade, and so may
+    end in a deep cutting below its site (on seed 1, the trails to cave-79 and ruins-32 end 33
+    and 43 m below the hill, as cave-79's did on main): to be routed longer, with more hairpins.
+  - **Round the sites, over rivers at fords:** a trail goes round the footprint of every site no
+    people keeps near it (2 m clear: its own but for its front), crosses a river only at a ford
+    (where it can be waded), and keeps out of a lake's shallows (where the ground dips under the
+    water though the land's lie doesn't). On seed 1 one trail, to a shrine beyond a lake, is no
+    longer found.
 - **The ground**: grass (drawn in each land's colours, and in each people's homeland, the
   plan's territory as first claimed, its own ground: GAME.md, *The ground*), soil in fields in
   farmland, road, planks on bridges.
@@ -417,7 +430,10 @@ The world's first phase is done: the plan, the chunks, the town builder (`core/s
 town.js`: see GAME.md, *Towns*), every settlement laid out by it and set into the chunks as the
 player comes near with its roads built to it, each people's own buildings, castles and special
 places built their way, and each people's homeland its own ground, trees and things lying about.
-Next: **sites to go into**, the ruins, caves, shrines and castles as places of their own.
+The sites no people keeps are built (terrain plan M7a): the ruins, caves, shrines, standing
+stones, ruined castles, the dragon's lair and the broken watchtowers, each where it rests, open
+where it's entered (GAME.md, *The sites no people keeps*). Next: going into them (the caves'
+and catacombs' insides).
 
 The ground is being given height, and the squares a navigation mesh, step by step
 (`generated/terrain_navmesh_overhaul_plan.md`). The ground's height, the world standing on it, and
@@ -482,7 +498,17 @@ The world is played on the land's height with what's built levelled into it (`Gr
   foundation down past its lowest (`world/town3d.js grounded`).
 - **Pads and roads:** on a pad, its own height; off them, the roads are levelled into the land as
   the pads have eased it (a road's own height is its profile's, which has the settlements' pads
-  in it already), so no road's surface is eased twice.
+  in it already), so no road's surface is eased twice. The sites no people keeps lie with the
+  land, on the flattest ground within 48 m of where the plan puts them (`sites.js restingOf`),
+  with three kinds of pad: a ruined castle's courtyard; a cave's floor dug into its hillside (a
+  disc touching the face's line, far enough out that it's as deep at the face as the face is
+  high and level with the hill at its front edge, its banks eased over 2.5 m), or, where there's
+  no hillside near, its pit sunk 3.2 m into the ground (eased over 2.2 m); and the lair's floor,
+  dug the same way. Each pad says how far its edge is eased (`ease`, 24 m if it doesn't say).
+- **Ways that meet** (a trail leaving a road, two roads crossing, a hairpin's two legs side by
+  side): the ground eases between their heights by how near each one's middle is, so it has no
+  step between them, and on a way's middle is all but its own height (taken in the same order
+  however they were laid, so it's the same whichever chunks are made first).
 - **Camps** are pitched on the flattest ground within 96 m of their cell's middle
   (`terrain/flats.js flatSpot`, `Overworld.campAt`): of the points of a lattice 8 m apart, the
   one whose land varies least over the 5 by 5 points round it (16 m each way), none of the
@@ -498,10 +524,9 @@ The world is played on the land's height with what's built levelled into it (`Gr
   rise as much as it's built up over the dip below it, rather than filling the whole valley
   ahead, its ends held at the land's own height. Its banks ease out to the land 2.5 times as far
   as it's cut or built there (`ROAD.batter`), at least 3 m and at most 12, so a cutting's or an
-  embankment's side is no steeper than 1 in 2.5 on average. On a road, the road it's furthest
-  onto is followed; beside roads, the one whose bank it's furthest up; and of two alike, the one
-  listed first by its name (`road 0042`, `trail cave-79`), so it's the same whichever chunks are
-  made first. Each road is listed in every chunk its banks reach (and each trail found before
+  embankment's side is no steeper than 1 in 2.5 on average. Where ways meet, their heights are
+  eased together by how near each one's middle is (above), summed in the order of their names
+  (`road 0042`, `trail cave-79`), so it's the same whichever chunks are made first. Each road is listed in every chunk its banks reach (and each trail found before
   any of them is made), so neighbouring chunks agree on the corners they share. Within 640 m
   of the town no road or trail is steeper than its grade but by a little where it meets
   another; within 900 m a road is cut 5.6 m into the land at most, and built 3.6 m over it.

@@ -32,8 +32,7 @@ import { Layouts } from "./layouts.js";
 import { Terrains } from "./terrains.js";
 import { MARGIN, primingWater, shoreDistances, UNDER_BANKS, waterSheet } from "./water.js";
 import { fallsOf, lipsIn } from "./falls.js";
-import { builderFor } from "./art/peoples/index.js";
-import { BUILDERS, cutAway, drawFar, grounded, joined, partsOf, PIXEL, placed, standOn } from "./town3d.js";
+import { builderOf, cutAway, drawFar, grounded, joined, partsOf, PIXEL, placed, standOn } from "./town3d.js";
 
 /** How many chunks round the player's are drawn (each way), and how far off they're let go. */
 export const REACH = Object.freeze({ drawn: 2, kept: 3 });
@@ -369,8 +368,8 @@ export class Chunks {
             }
 
             const piece = job.pieces[job.index];
-            // (Built by its people's kit, if it's theirs: peoples/index.js)
-            const build = builderFor(piece) ?? BUILDERS[piece.kind];
+            // (Built by its people's kit, if it's theirs: town3d.js builderOf)
+            const build = builderOf(piece);
 
             if (!build) {
                 job.index++;

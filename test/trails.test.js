@@ -7,7 +7,8 @@ import { buildWorld, CHUNK } from "../client/js/core/overworld.js";
 import { CELL } from "../client/js/core/worldplan/plan.js";
 import { GRADE, graded } from "../client/js/core/terrain/ground.js";
 import { landHeight, stillWaterAt } from "../client/js/core/terrain/height.js";
-import { rounded, wayOver } from "../client/js/core/terrain/ways.js";
+import { rounded } from "../client/js/core/terrain/ways.js";
+import { routeTrail } from "../client/js/core/trails.js";
 
 const length = (points) => points.slice(1).reduce((sum, [x, y], k) => sum + Math.hypot(x - points[k][0], y - points[k][1]), 0);
 
@@ -112,9 +113,47 @@ describe("roads and trails on the land (terrain/ways.js, core/trails.js)", () =>
     });
 
     it("finds the same way wherever it's found", () => {
-        const again = wayOver(overworld.plan, trail.from, trail.to, { grade: GRADE.path, box: trail.box, avoid: (x, y) => overworld.trails.keepOut.some(([x0, y0, x1, y1]) => x >= x0 && y >= y0 && x < x1 && y < y1) });
+        // (As the terrain worker's given it: terrains.js)
+        const { from, to, box, avoid } = structuredClone(trail);
+        const again = routeTrail(overworld.plan, { from, to, box, avoid }, overworld.trails.keepOut);
 
-        assert.deepEqual(rounded(again), overworld.trails.find(trail));
+        assert.deepEqual(again, overworld.trails.find(trail));
+        assert.ok(avoid.length > 0, "going round the sites near it");
+    });
+
+    it("eases the ground between ways that meet (a hairpin's two legs side by side) with no step, and a number everywhere", () => {
+        const points = overworld.trails.find(trail);
+        // (Its tightest turn: where one leg comes nearest another, further along it)
+        let turn = null;
+
+        points.forEach(([x, y], k) => {
+            points.slice(k + 6).forEach(([qx, qy]) => {
+                const gap = Math.hypot(qx - x, qy - y);
+
+                if (!turn || gap < turn.gap) {
+                    turn = { at: [x, y], gap };
+                }
+            });
+        });
+
+        assert.ok(turn.gap < 4, `legs ${turn.gap.toFixed(1)} m apart`);
+
+        let steepest = 0;
+
+        for (let j = -16; j <= 16; j++) {
+            for (let i = -16; i <= 16; i++) {
+                const [x, y] = [turn.at[0] + i * 0.25, turn.at[1] + j * 0.25];
+                const [h, east, south] = [overworld.heightAt(x, y), overworld.heightAt(x + 0.25, y), overworld.heightAt(x, y + 0.25)];
+
+                assert.ok(Number.isFinite(h), `${x}, ${y}`);
+                steepest = Math.max(steepest, Math.abs(east - h) / 0.25, Math.abs(south - h) / 0.25);
+            }
+        }
+
+        // (Between legs a metre or two apart and as much apart in height, the ground climbs as
+        // steeply as that needs, but never in a step: where the nearer way's height was taken
+        // alone, it stepped as much as 10 in 1 between a hairpin's legs)
+        assert.ok(steepest < 3.2, `steepest ${steepest.toFixed(2)} between the legs`);
     });
 
     it("lays a trail into the world the same whichever of its chunks are made first, and it can be walked from end to end", () => {
@@ -143,11 +182,16 @@ describe("roads and trails on the land (terrain/ways.js, core/trails.js)", () =>
 
         // (Every square along it walkable, and its ground a path's: what's beside it may be cut
         // too steep to climb)
-        let [squares, steepest, last] = [0, 0, null];
+        // (Its grade over the way walked, two metres at a time: round a hairpin's turn, further
+        // than straight across it)
+        let [squares, steepest, last, walked, previous] = [0, 0, null, 0, null];
 
         for (const [x, y] of along(points)) {
             const chunk = overworld.chunkAt(Math.floor(x), Math.floor(y));
             const k = (Math.floor(y) - chunk.y0) * CHUNK + (Math.floor(x) - chunk.x0);
+
+            walked += previous ? Math.hypot(x - previous[0], y - previous[1]) : 0;
+            previous = [x, y];
 
             if (overworld.settled(Math.floor(x), Math.floor(y))) {
                 continue;
@@ -158,11 +202,11 @@ describe("roads and trails on the land (terrain/ways.js, core/trails.js)", () =>
             if (!chunk.bridge[k]) {
                 const h = overworld.heightAt(x, y);
 
-                if (last && Math.hypot(x - last[0], y - last[1]) >= 2) {
-                    steepest = Math.max(steepest, Math.abs(h - last[2]) / Math.hypot(x - last[0], y - last[1]));
-                    last = [x, y, h];
+                if (last && walked - last[1] >= 2) {
+                    steepest = Math.max(steepest, Math.abs(h - last[0]) / (walked - last[1]));
+                    last = [h, walked];
                 } else if (!last) {
-                    last = [x, y, h];
+                    last = [h, walked];
                 }
             } else {
                 last = null;
@@ -172,8 +216,10 @@ describe("roads and trails on the land (terrain/ways.js, core/trails.js)", () =>
         }
 
         // (Its own grade along it, cut and built to; steeper only for a step or two where a
-        // hairpin's legs come together: 45 in 100 at the very worst, two metres at a time)
+        // hairpin's legs come together: half as steep as it's long at the very worst, two metres
+        // at a time; its way's ended past the floor dug in front of its cave since M7a, which
+        // turns it differently near the top)
         assert.ok(squares > 300, `${squares} squares`);
-        assert.ok(steepest <= 0.45, `steepest ${steepest.toFixed(2)}`);
+        assert.ok(steepest <= 0.5, `steepest ${steepest.toFixed(3)}`);
     });
 });

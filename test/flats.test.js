@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { buildWorld, CHUNK } from "../client/js/core/overworld.js";
-import { LIE } from "../client/js/core/sites.js";
+import { isNeutral, LIE } from "../client/js/core/sites.js";
 import { FLATS, flatSpot } from "../client/js/core/terrain/flats.js";
 import { heightAt } from "../client/js/core/terrain/height.js";
 
@@ -62,7 +62,8 @@ describe("level ground for what stands on it (terrain/flats.js, sites.js)", () =
         const { plan } = overworld;
         let [high, low] = [0, 0];
 
-        for (const site of plan.sites.filter(({ kind }) => LIE[kind])) {
+        // (Those on pads: not the watchtowers no one keeps, broken and lying with the land)
+        for (const site of plan.sites.filter((each) => LIE[each.kind] && !isNeutral(each))) {
             overworld.sites.settle(Math.floor(site.at[0] / CHUNK), Math.floor(site.at[1] / CHUNK));
 
             const set = overworld.sites.set.get(site.id);

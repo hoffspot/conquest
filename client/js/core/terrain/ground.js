@@ -62,7 +62,8 @@ const round = (height) => Math.round(height / HEIGHT_STEP) * HEIGHT_STEP;
 /**
  * A pad: somewhere built on, levelled to one height. `{ id, x0, y0, x1, y1 }` (a rectangle,
  * metres) or `{ id, at: [x, y], radius }` (a disc), either raised `raise` metres above the land
- * under it on average (or sunk below it, if less than nothing). A rectangle that may lie with the
+ * under it on average (or sunk below it, if less than nothing), and eased into the land round it
+ * over `ease` metres (PAD_EASE if not said: a cave's pit is eased in steeply). A rectangle that may lie with the
  * land (`tilt`) is laid on the plane that best fits the land under it, no steeper than PAD_TILT,
  * rather than level.
  */
@@ -258,11 +259,11 @@ export class Ground {
         return heightAt(this.plan, x, y);
     }
 
-    // A point's height with the roads near it levelled in: on a road, the one it's furthest onto;
-    // beside them, the one whose shoulder it's furthest up (its distance off the road against
-    // the shoulder's width there)
+    // A point's height with the roads near it levelled in: on a road, its height; beside it, eased
+    // out to the land's over its shoulder (as wide as the cut or fill there needs); where ways
+    // meet, their heights eased together by how near each one's middle is
     #onRoads(roads, x, y, height) {
-        let best = null;
+        const near = [];
 
         for (const road of roads) {
             const [ax, ay] = road.line.planned[road.k];
@@ -283,15 +284,41 @@ export class Ground {
             const s = Math.min(heights.length - 1, Math.floor(along));
             const surface = heights[s] + (heights[Math.min(heights.length - 1, s + 1)] - heights[s]) * (along - s);
             const width = Math.min(ROAD.most, Math.max(ROAD.shoulder, Math.abs(height - surface) * ROAD.batter));
-            const up = off <= 0 ? off : off / width;
 
-            // (Of two as near, the one first by id: the same whichever was laid first)
-            if (up < 1 && (!best || up < best.up || (up === best.up && (road.line.id ?? "") < (best.road.line.id ?? "")))) {
-                best = { road, up, off, surface, width };
+            if (off < width) {
+                // (How far onto it: 1 on the way itself, easing to nothing at its shoulder's edge)
+                near.push({ id: road.line.id ?? "", k: road.k, centre: hypot(ex, ey), surface, reach: 1 - smoothstep(0, width, off) });
             }
         }
 
-        return best ? best.surface + (height - best.surface) * smoothstep(0, best.width, best.off) : height;
+        if (near.length === 0) {
+            return height;
+        }
+
+        // Where ways meet (a trail leaving a road, two roads crossing, a hairpin's two legs side by
+        // side), each way's height by how near its middle is, easing from one to the next, so the
+        // ground has no step between them; on a way's middle, all but its own. (Taken in the same
+        // order however they were laid, so the sum's the same.)
+        near.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : a.k - b.k));
+
+        let [sum, weight, reach] = [0, 0, 0];
+
+        for (const each of near) {
+            const share = each.reach / (0.25 + each.centre * each.centre);
+
+            sum += share * each.surface;
+            weight += share;
+            reach = Math.max(reach, each.reach);
+        }
+
+        // (None reaching it after all: at the very edge of their shoulders)
+        if (weight === 0) {
+            return height;
+        }
+
+        const surface = sum / weight;
+
+        return surface + (height - surface) * (1 - reach);
     }
 
     // A pad's height: the land's under it, on average (sampled on a grid across it), and as far
@@ -377,10 +404,10 @@ export class Ground {
         for (const pad of pads) {
             const off = pad.at ? hypot(x - pad.at[0], y - pad.at[1]) - pad.radius : hypot(Math.max(pad.x0 - x, 0, x - pad.x1), Math.max(pad.y0 - y, 0, y - pad.y1));
 
-            if (off < PAD_EASE) {
+            if (off < (pad.ease ?? PAD_EASE)) {
                 const level = pad.at ? this.#level(pad) : this.#padAt(pad, Math.min(pad.x1, Math.max(pad.x0, x)), Math.min(pad.y1, Math.max(pad.y0, y)));
 
-                height = level + (height - level) * smoothstep(0, PAD_EASE, off);
+                height = level + (height - level) * smoothstep(0, pad.ease ?? PAD_EASE, off);
             }
         }
 

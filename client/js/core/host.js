@@ -2454,15 +2454,18 @@ export class Host {
 
             const ids = [];
             const [master, tier] = lair.master;
+            // (Where it's held: the open ground in its middle, a ruined castle's courtyard or the
+            // dragon's hollow, as it's built: sites.js)
+            const at = this.world.maps.town?.sites?.heartOf(site) ?? site.at;
 
             if ((this.slain[site.id] ?? -Infinity) <= this.battle.time) {
-                ids.push(...this.#pack({ creature: master, tier, count: 1 }, site.at, { lair: site.id, master: true, roam: 3 }));
+                ids.push(...this.#pack({ creature: master, tier, count: 1 }, at, { lair: site.id, master: true, roam: 3 }));
             }
 
             lair.guards.forEach(([creature, count, guardTier], k) => {
                 const angle = (k / lair.guards.length) * Math.PI * 2;
 
-                ids.push(...this.#pack({ creature, tier: guardTier, count }, [site.at[0] + cos(angle) * 6, site.at[1] + sin(angle) * 6], { lair: site.id, roam: 6 }));
+                ids.push(...this.#pack({ creature, tier: guardTier, count }, [at[0] + cos(angle) * 6, at[1] + sin(angle) * 6], { lair: site.id, roam: 6 }));
             });
 
             this.lairs.set(site.id, { ids });

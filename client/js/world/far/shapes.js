@@ -5,6 +5,8 @@
 // Each piece in its people's colours; flat-shaded; a few dozen triangles. Pure: worked out in a
 // worker (silhouette-worker.js), into arrays a mesh is made from (silhouettes.js).
 
+import { createRandom } from "../../core/random.js";
+import { layoutNeutral } from "../../core/setpieces/neutral.js";
 import { PLOT } from "../../core/setpieces/pieces.js";
 
 /**
@@ -268,15 +270,109 @@ export function settlementShapes(shapes, { pieces, people, origin, heightOf, big
     }
 }
 
+// The sites no people keeps that are seen from afar (the rest too low to be: a cave's in its
+// hillside, or down in the ground)
+const NEUTRAL_KINDS = new Set(["ruins", "ruined castle", "dragon's lair", "watchtower"]);
+
+// The rock crags are of (art/kits/neutral.js: rock, and the dragon's dark rock)
+const ROCK = Object.freeze({ light: 0x86827b, dark: 0x3f3d3c });
+
+/**
+ * A site no people keeps (core/setpieces/neutral.js lays it out, as near to), as seen from afar:
+ * what of it stands high enough: an old hall's broken walls, crags, a broken watchtower, a ruined
+ * castle's walls broken down and its towers and keep stumps. `place` turns a spot in its layout
+ * (metres from its north-west corner, facing south) into the world's.
+ */
+function neutralShapes(shapes, { kind, people, seed, form, facing, place, heightOf, builders }) {
+    const laid = layoutNeutral({ kind, seed: seed ?? 1, form });
+    const random = createRandom(((seed ?? 1) ^ 0xfa2) >>> 0);
+    const stone = builders.stone;
+    const groundAt = (u, v) => {
+        const [x, z] = place(u, v);
+
+        return [x, z, heightOf(x, z) - SUNK];
+    };
+
+    for (const part of laid?.parts ?? []) {
+        if (part.part === "wall") {
+            const [x, z, y] = groundAt((part.x0 + part.x1) / 2, (part.y0 + part.y1) / 2);
+
+            shapes.box(x, z, y, part.x1 - part.x0, part.y1 - part.y0, part.h * 0.8 + SUNK, facing, stone);
+        } else if (part.part === "spur") {
+            // (Not a face cut into the hill: that's only seen near to)
+            const [x, z, y] = groundAt((part.x0 + part.x1) / 2, (part.y0 + part.y1) / 2);
+
+            shapes.cone(x, z, y, Math.max(part.x1 - part.x0, part.y1 - part.y0) * 0.5, part.h * 1.25 + SUNK, kind === "dragon's lair" || people === "orc" ? ROCK.dark : ROCK.light, 6);
+        } else if (part.part === "brokenTower") {
+            const [x, z, y] = groundAt(part.x, part.y);
+
+            shapes.column(x, z, y, part.r, part.h * 0.8 + SUNK, stone, 8);
+        }
+    }
+
+    // (A ruined castle's pieces: each as it's left, a little lower or higher than the next)
+    for (const piece of laid?.castle ?? []) {
+        const [kindOf, form] = piece.key.split("-");
+        const [pw, pd] = [piece.w * PLOT, piece.h * PLOT];
+        const [x, z, y] = groundAt(piece.x * PLOT + pw / 2, piece.y * PLOT + pd / 2);
+        const left = random.range(0.45, 0.8);
+
+        if (kindOf === "wall") {
+            // (In two lengths broken off at their own heights)
+            const along = form === "h";
+
+            for (const side of [-1, 1]) {
+                const [u, v] = along ? [piece.x * PLOT + pw * (0.5 + side * 0.25), piece.y * PLOT + pd / 2] : [piece.x * PLOT + pw / 2, piece.y * PLOT + pd * (0.5 + side * 0.25)];
+                const [wx, wz, wy] = groundAt(u, v);
+
+                shapes.box(wx, wz, wy, along ? pw / 2 : 2.8, along ? 2.8 : pd / 2, 6.4 * random.range(0.4, 0.9) + SUNK, facing, stone);
+            }
+        } else if (kindOf === "tower") {
+            if (form === "round") {
+                shapes.column(x, z, y, 5, 12 * left + SUNK, stone, 8);
+            } else {
+                shapes.box(x, z, y, 9.6, 9.6, 12 * left + SUNK, facing, stone);
+            }
+        } else if (kindOf === "gatehouse") {
+            // (Its two blocks, the way through between)
+            const across = form === "n" || form === "s";
+
+            for (const side of [-1, 1]) {
+                const [u, v] = across ? [piece.x * PLOT + pw / 2 + side * pw * 0.36, piece.y * PLOT + pd / 2] : [piece.x * PLOT + pw / 2, piece.y * PLOT + pd / 2 + side * pd * 0.36];
+                const [gx, gz, gy] = groundAt(u, v);
+
+                shapes.box(gx, gz, gy, across ? pw * 0.28 : pw, across ? pd : pd * 0.28, 12.8 * random.range(0.45, 0.85) + SUNK, facing, stone);
+            }
+        } else if (kindOf === "keep") {
+            shapes.box(x, z, y, pw - 2.8, pd - 2.8, (14 + Math.min(piece.w, piece.h) * 0.8) * left + SUNK, facing, stone);
+        }
+    }
+}
+
 /**
  * A people's great place (a plan's site: its kind, its people) at (x, z), `facing`, its size
  * (w, h: plots), as seen from afar; or nothing for what's too low to be seen far off (wells,
- * pools, pits, shrines, stones, caves).
+ * pools, pits, shrines, stones, caves). The sites no people keeps (ruins, ruined castles, the
+ * dragon's lair, broken watchtowers) as they're laid out near to, by their `seed` and `form`.
  */
-export function siteShapes(shapes, { kind, people, x, z, facing = 0, w, h, heightOf }) {
+export function siteShapes(shapes, { kind, people, seed, form = null, x, z, facing = 0, w, h, heightOf }) {
     const builders = buildersOf(people ?? "human");
     const [width, depth] = [w * PLOT, h * PLOT];
     const ground = heightOf(x, z);
+
+    // (Where a spot in its layout is: metres from its north-west corner, facing south, turned)
+    const place = (u, v) => {
+        const [s, c] = [Math.sin(facing), Math.cos(facing)];
+        const [du, dv] = [u - width / 2, v - depth / 2];
+
+        return [x + c * du + s * dv, z - s * du + c * dv];
+    };
+
+    if (NEUTRAL_KINDS.has(kind) && !(kind === "watchtower" && people)) {
+        neutralShapes(shapes, { kind, people, seed, form, facing, place, heightOf, builders });
+
+        return;
+    }
     const corners = (inset) => [
         [-1, -1],
         [1, -1],
@@ -334,10 +430,6 @@ export function siteShapes(shapes, { kind, people, x, z, facing = 0, w, h, heigh
                     building(shapes, { x, z, ground, width: Math.min(width, depth) * 0.3, depth: Math.min(width, depth) * 0.3, facing, storeys: people === "cat" ? 5 : 5.5, people: people ?? "human" });
                 }
             }
-
-            return;
-        case "ruined castle":
-            ringed(3.5, 8, 2.4);
 
             return;
         case "watchtower":

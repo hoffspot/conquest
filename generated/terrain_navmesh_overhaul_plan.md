@@ -639,7 +639,9 @@ and open-source generators, licences checked).
   - darkwood: violet.
 - **Scale contrast.** Human-scale doors and steps against walls 12–20 m high, towers of
   25–40 m, spires to 60 m. Today castle walls are 6.4 m and towers 12 m.
-- **Ruins everywhere**: roofless churches, broken towers, collapsed arcades, rubble, graves.
+- **Ruins where no one lives**: roofless churches, broken towers, collapsed arcades, rubble,
+  graves. Unlike the Lands Between, Pellagos is lived in: the peoples' cities and the lands
+  round them are kept up and lively (see "Where the ruins are" below).
 - **Rock relief**: cliffs with strata, boulders at their feet, a few arches and overhangs,
   meadows between.
 - **Guidance**: torches at cave mouths, lit destinations, roads that frame landmarks.
@@ -727,11 +729,93 @@ and open-source generators, licences checked).
   widened to 4 m at least; one draw. Streams left out.
 - **Handing over:** both use `FAR_FADE_IN`, as the silhouettes do; drawn a little towards the eye.
 
+**Where the ruins are** (the user's direction, 2026-10-01). The ruin and decay of the Elden Ring
+look belong to the sites no people keeps and the points of interest in the wild: the ruins of old
+halls, ruined castles, caves and catacombs, shrines, standing stones, the dragon's lair, broken
+watchtowers. The six peoples' cities, castles, villages and farmsteads, and the land round them,
+are lived in by thriving peoples: kept in good repair, and lively. A city may have a dilapidated,
+dangerous part (a run-down quarter, later), but the world isn't a ruin.
+
+**As built in M7a** (row 4, the neutral sites, and row 6's decay pass for them; see the change
+log):
+- **Laid out in core** (`core/setpieces/neutral.js` `layoutNeutral`, exact maths): each kind's
+  parts, the rectangles of it that stand in the way (only those block: the rest of a site is open
+  ground), and its heart (open ground in its middle, where a lair's master stands: `Sites.heartOf`,
+  used by `host.js`). Sizes (`NEUTRAL`): standing stones 24 m, a shrine 12 m, a cave 20 by 16, a
+  hall's ruins 24 by 20, a ruined castle as big as the humans' own (72 by 64), the dragon's lair
+  40 by 36, a broken watchtower 12 m.
+  - **Standing stones:** a ring of 7 to 11 whole stones round a flat altar stone, some leaning,
+    some fallen.
+  - **Shrine:** a stepped plinth, a robed figure, an obelisk or a pair of hands, braziers, a
+    curved wall behind.
+  - **Cave** (the user: "caves should go down into the ground or into the side of much larger
+    hills or mountains"): on a hillside where the land rises 6 to 14 m across it (`HILLSIDE`),
+    facing down it, a face of rock with a dolmen doorway (two rough stones leaning in, one across)
+    round the black of the way in, a floor dug level in front of it; else a pit sunk 3.2 m into
+    the ground, stone-lined, crumbling at its rim, steps down to a doorway (9 of 28 on seed 1).
+  - **Ruins:** an old hall's walls broken off along their tops, a door and a breach, column
+    stumps (some fallen), heaps of fallen stone.
+  - **Ruined castle:** the humans' castle layout (`castle.js`), left to ruin: its houses heaps of
+    stone and charred timbers, stores (barrels, crates) and a broken cart by its walls, its
+    gate's way through clear.
+  - **Dragon's lair:** a hollow dug into a mountainside (the land rising 8 to 26 m across it), a
+    great dark doorway in the face at its back, ridges of dark rock coming down either side,
+    bones.
+  - **Broken watchtower** (one no people keeps): its walls broken off round its top.
+- **Lying with the land:** each part a piece of its own, stood where it is and reaching 1.4 m into
+  the ground (`art/kits/neutral.js`). They rest (`sites.js` `restingOf`, plan heights only, so
+  `trails.js` finds the same) on the flattest ground within 48 m of their plan spot, or a cave or
+  the lair on the hillside whose slope is nearest the one it wants (0.55 and 0.4), and mind the
+  roads and water but not the foot paths. Levelled only where they must be: a ruined castle's
+  courtyard; a cave's or the lair's floor, a disc dug into the hill touching the face's line,
+  `cutOf` metres across (as deep at the face as the face is high, level with the hill at its
+  front edge), its banks eased over 2.5 m; a pit, sunk 3.2 m, eased over 2.2 m. Each pad says how
+  far it's eased (`ease`). The rock of a face cut into a hill is shaped to the hill's heights
+  behind it (`part.lie`, taken in core to the centimetre) and goes back under the hill: none
+  stands out above it.
+- **Reached by their trails at their fronts:** a site a trail goes up to is turned to face the way
+  it comes, and the trail ends 2 m before its front (its way in); trails branching from it start
+  there. A site cut into a hillside faces down it, its trail ending past its dug floor's banks.
+  Trails go round every site's footprint (`avoid`), cross rivers only at fords, and keep out of a
+  lake's shallows.
+- **The decay pass** (`art/kits/castle.js` `RUINED`, `art/kits/decay.js`; the user: the first
+  version "looks really blocky; ruins would seem more crumbled"): the castle's walls, towers,
+  gatehouse and keep built as they stood, then only what's left of them made. Broken tops jagged
+  at a stone's size (sloping where stones fell one by one, a course's step where a row held, a V
+  where a breach fell, lowest where slow noise along the wall says most went); towers' rims the
+  same round; the battlements and roofs gone; lumpy heaps of fallen stone at their feet about a
+  third as high as what fell, blocks tumbled down them, a stone or two perched on top. Moss on
+  what faces up, dark at the foot (`weathered`).
+- **What's left of the timber and the stores** (`art/kits/leftovers.js`; the user: "wood beams
+  here and there ... broken, weathered wood beams where full roofs used to be or fallen ones, some
+  old storage barrels, broken and weathered or otherwise"): joists still across the keep and
+  towers, some snapped, a beam fallen; charred posts and fallen beams where the houses stood;
+  barrels whole, tipped or burst; crates, some broken open; a cart left on one wheel. Grey,
+  weathered or charred.
+- **From afar** (`far/shapes.js`): the ruins' walls, the lair's ridges as cones, the broken tower,
+  a ruined castle's pieces at their broken heights, laid out as near to; shrines, stones and the
+  caves (cut into their hills) not.
+- **Ways that meet** (`terrain/ground.js`): where ways' cores or banks overlap (a trail leaving a
+  road, two trails, a hairpin's legs), the ground eases between their heights by how near each
+  one's middle is, rather than taking the nearest's alone: no more steps (on seed 1, trail
+  junctions of 6.3 and 3.7 in 1 before). On seed 1 the worst 2 m of any trail climbs 1.19 in 1
+  (where two trails meet below the lair), against 6.34 on main.
+- **Not yet:** trails too short for their climb are cut to their grade and may end in a deep
+  cutting below their site (seed 1: cave-79's 33 m, ruins-32's 43 m; cave-79's was 28 m on main).
+  To be routed longer.
+- **Budgets** (seed 1, near): a hall's ruins 2.6–3.4k triangles, a ruined castle 12–14k, a cave
+  on a hillside about 300 and a cave's pit about 500, a shrine 400–550, standing stones 220–360,
+  the lair about 1.8k, the broken watchtower about 430; merged into their chunk's meshes, no
+  draws of their own. Far: up to 360 triangles (a ruined castle).
+
 **Pushing each people toward the Elden Ring feel without losing identity.**
 - **For everyone:**
   - heavier stone bases (0.6–1.2 m plinths that follow the real ground);
   - retaining walls on pads;
-  - ruined versions of every building kind;
+  - signs of life rather than decay: chimney smoke, market awnings, banners, lit windows at
+    dusk, gardens, washing lines;
+  - ruined versions of the building kinds only for the places no one keeps (and, later, a
+    run-down quarter in some great cities);
   - one grand landmark per people, 30–60 m tall, with a far proxy.
 - **Humans:** more stone in the marches; Romanesque and Gothic parish churches and abbeys;
   ruined villages; hill citadels; broken aqueducts. Landmark: a cathedral with a 40–60 m spire,
@@ -1560,3 +1644,40 @@ converted data is to be measured in M8 against today's hm08 data.
   - **Tests:** `test/nature.test.js` (every planted tree among the far ones, each as tall as its
     kind; none in the start town or nearer than 100 m; a river's ribbon along its course on its
     surface; the counts and time per quality; one mesh each, fading in).
+- **2026-10-01, M7a built** (the sites no people keeps, and the decay pass for them):
+  - **Direction from the user:** ruins only where no one lives; the peoples' cities and their
+    lands kept up and lively, with perhaps a run-down quarter in some great cities later. §9
+    updated.
+  - **Built:** 111 sites on seed 1 (36 ruins, 28 caves, 26 shrines, 14 rings of standing stones, 5
+    ruined castles, the dragon's lair, a broken watchtower), each set down where it rests, every
+    part built, the hearts open. The lair's dragon and the castles' wight lords stand at their
+    hearts.
+  - **Ground:** neutral sites lie with the land but for the ruined castles' courtyards and the
+    caves' and lair's dug floors and pits (each pad its own ease); ways that meet eased together
+    (no steps).
+  - **The user's looks, round two:** ruins crumbled rather than blocky (`decay.js`); caves into
+    hillsides or down into the ground, not a crag on the ground; old timber, barrels, crates and a
+    cart left in the ruined castles (`leftovers.js`).
+  - **Trails:** to the sites' fronts (a hillside site's past its dug floor), round the sites, over
+    rivers at fords, out of lakes' shallows; on seed 1 one (to a shrine across a lake) is no
+    longer found. Found pre-existing: two end in deep cuttings (above, *Not yet*).
+  - **Versions:** `TERRAIN_VERSION` 10, `NET_VERSION` 14.
+  - **Next (M7b), from the user's reference shots:** "the interesting ground and environment ...
+    that kind of variability" matters most: dense tall grass in clumps of varied height and
+    colour (golden, green), bushes and undergrowth, flat rock slabs and dark boulders breaking the
+    surface, bare dirt and worn paths, flower carpets, puddles, scaled by Visual quality (as the
+    Elden Ring's own grass setting goes from dirt patches at Medium to waist-high grass at
+    Maximum); then mossy, greener, uneven stone with string courses, pointed arched openings and
+    ivy; warm low sun, haze, motes. Researched first (free textures and models, ground cover,
+    procedural Gothic ruins).
+  - **Tests:** `test/neutral.test.js` (layouts the same each time, within their plots, hearts open;
+    the ruined castle's pieces and open gate; every site set down, blocking only what stands, its
+    heart open, lying with the land; trail sites facing their trails, the trail ending before the
+    front on open ground; the caves and the lair cut into hillsides facing down them, their floors
+    dug, or sunk as pits; a face's rock no higher than a metre over the hill behind it; every part
+    built within budget; the ruined pieces lower than they stood, each its own way, the same
+    again; broken tops within their heights, heaps only where much fell; the leftovers each their
+    own, the same again, few triangles; far shapes where the layout puts them);
+    `test/trails.test.js` (the trail's grade over the way walked, at most 0.5 since its way
+    changed near the top; the ground between a hairpin's legs eased, never a step; the way the
+    worker finds, round the sites); `test/setpieces.test.js` (exact maths in `neutral.js`).

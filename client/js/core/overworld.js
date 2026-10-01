@@ -25,7 +25,7 @@
 import { MAP_ORIGINS } from "./interiors.js";
 import { createRandom, noise } from "./random.js";
 import { Settlements, squareOf, waysOut } from "./settlements.js";
-import { LIE, Sites } from "./sites.js";
+import { Sites } from "./sites.js";
 import { Trails, TRAILS } from "./trails.js";
 import { Interiors } from "./insides.js";
 import { WENCHES } from "./lore/taverns.js";
@@ -240,7 +240,9 @@ export class Overworld {
         // sites and the camps
         // (Each people's castle and special places, set down as the world near them is made:
         // their clearings growing to their size, where they're set)
-        this.sites = new Sites(plan, { landAt: (x, y) => this.landAt(x, y), clearing: CLEAR_OF_PLACES });
+        // (Those a trail goes up to facing the way it comes: the trails are made below, before any
+        // site is set down)
+        this.sites = new Sites(plan, { landAt: (x, y) => this.landAt(x, y), clearing: CLEAR_OF_PLACES, facingOf: (site) => this.trails.facingOf(site) });
         this.clearings = [
             ...plan.places.filter((place) => place !== start).map(({ at, radius }) => ({ at, radius: radius + CLEAR_OF_PLACES })),
             ...plan.sites.map(({ id }) => this.sites.clearings.get(id)),
@@ -577,8 +579,11 @@ export class Overworld {
         }
 
         for (const set of this.sites.set.values()) {
-            if (set && meets(set.x - set.radius, set.y - set.radius, set.x + set.radius, set.y + set.radius)) {
-                pads.push({ id: `site ${set.site.id}`, at: [set.x, set.y], radius: set.radius, raise: LIE[set.site.kind]?.raise ?? 0 });
+            // (Those levelled into the land: not most of those no people keeps, which lie with it)
+            const pad = set?.pad;
+
+            if (pad && meets(pad.at[0] - pad.radius, pad.at[1] - pad.radius, pad.at[0] + pad.radius, pad.at[1] + pad.radius)) {
+                pads.push({ id: `site ${set.site.id}`, ...pad });
             }
         }
 

@@ -360,6 +360,7 @@ describe("the world outside (overworld.js)", () => {
     it("sets each people's castle and places down clear of roads and water, moved off them where it must be, each square's land looked at once", () => {
         const looked = new Map();
         const sites = new Sites(world.plan, {
+            facingOf: (site) => overworld.trails.facingOf(site),
             landAt: (x, y) => {
                 looked.set(y * WORLD_SIZE + x, (looked.get(y * WORLD_SIZE + x) ?? 0) + 1);
 

@@ -1,13 +1,19 @@
 // Castle pieces: walls, towers, gatehouses and keeps, built from simple shapes in the spirit of
 // Castle Builder (github.com/JonRubashkin/Castle-Builder): stone masses, battlements (merlons
-// spaced along every top edge), cone and pyramid roofs.
+// spaced along every top edge), cone and pyramid roofs. And the same left to ruin (RUINED):
+// crumbled as kits/decay.js crumbles masonry, their battlements and roofs gone, their fallen stone
+// lying against their feet.
 //
 // Sizes are world pixels (a grid square is 20). Walls stand in the middle of their row of
 // squares and reach a little way under the towers at each end, so that they meet round towers
 // without a gap; towers and gatehouses are drawn after (in front of) the walls they join.
 
+import { createRandom } from "../../../core/random.js";
 import { Solid } from "../engine/solid.js";
 import { material } from "../engine/materials.js";
+import { brokenRim, brokenTop, crumbledRing, crumbledWall, perched, talus, tumbled } from "./decay.js";
+import { oldBeam } from "./leftovers.js";
+import { rubbleOf, weathered } from "./neutral.js";
 
 const CELL = 20;
 const WALL_HEIGHT = 32;
@@ -225,3 +231,254 @@ export function keep({ w, h, door }, { stone = "stone", roof = "slate" } = {}) {
 
     return solid.toObject();
 }
+
+// --- Ruins ---------------------------------------------------------------------------------------
+
+// World pixels in a metre
+const m = (metres) => metres * 5;
+
+// What's needed to build a ruined piece: a solid weathered as old stone is, the piece's own random
+// numbers (by its site and where it stands in it), its stone
+function ruin(piece, stone) {
+    const random = createRandom(((piece.seed ?? 1) ^ Math.round((piece.x ?? 0) * 977 + (piece.y ?? 0) * 131)) >>> 0);
+    const solid = new Solid();
+
+    solid.tone = weathered(random.int(1, 1e6), { moss: 0.6 });
+
+    return { solid, random, s: material(stone) };
+}
+
+// Where a point of a wall laid along x (u along x, v along z) or along z (u along z, v along x) is
+const along = (axis) => (axis === "x" ? (u, y, v) => [u, y, v] : (u, y, v) => [v, y, u]);
+
+// How high a broken top stands `u` along it
+function topAt(top, u) {
+    const k = Math.max(0, top.findIndex((_, i) => i < top.length - 1 && top[i + 1][0] >= u));
+    const [[ua, ha], [ub, hb]] = [top[k], top[k + 1] ?? top[k]];
+
+    return ub > ua ? ha + ((hb - ha) * (Math.min(ub, Math.max(ua, u)) - ua)) / (ub - ua) : hb;
+}
+
+/**
+ * A crumbled stretch of wall along `axis` from u0 to u1, v0 to v1 across, on `base`, its top
+ * broken between `low` and `high`: its fallen stone against its foot on the sides asked for
+ * (`sides`: +1, -1), a loose stone or two on top. Its broken top (brokenTop's).
+ */
+function crumbledRun(solid, random, axis, [u0, u1], [v0, v1], base, [low, high], s, { sides = [-1, 1], ground = 0, full = high, ends } = {}) {
+    const at = along(axis);
+    const top = brokenTop(random, u1 - u0, low, high);
+
+    crumbledWall(solid, at, top, u0, [v0, v1], base, s, { ends });
+
+    for (const side of sides) {
+        talus(solid, random, at, top, u0, side > 0 ? v1 : v0, side, full, ground, rubbleOf("human"));
+    }
+
+    perched(solid, random, at, top, u0, [v0, v1], high - 3, s);
+
+    return top;
+}
+
+/** A stretch of castle wall left to ruin: crumbled down, its merlons gone. */
+function ruinedWall(piece, { stone = "stone" } = {}) {
+    const { solid, random, s } = ruin(piece, stone);
+    const axis = piece.axis === "h" ? "x" : "z";
+    const inner = (CELL - WALL_THICKNESS) / 2;
+    const ends = [-WALL_OVERLAP, piece.length * CELL + WALL_OVERLAP];
+    const at = along(axis);
+
+    // (Its plinth, then the wall on it)
+    crumbledWall(solid, at, [[0, 5], [ends[1] - ends[0], 5]], ends[0], [inner - 1, CELL - inner + 1], 0, s);
+    crumbledRun(solid, random, axis, ends, [inner, CELL - inner], 5, [WALL_HEIGHT * 0.3, WALL_HEIGHT * 0.95], s, { full: WALL_HEIGHT });
+
+    return solid.toObject();
+}
+
+/** A tower left to ruin: its roof or battlements gone, its walls crumbled round its top. */
+function ruinedTower(piece, { stone = "stone" } = {}) {
+    const { solid, random, s } = ruin(piece, stone);
+    const c = CELL * 1.5;
+    const range = [TOWER_HEIGHT * 0.35, TOWER_HEIGHT * 0.85];
+
+    if (piece.shape === "round") {
+        const radius = 25;
+
+        solid.cylinder(c, c, 0, 10, radius + 2.5, radius, s, { segments: 24 });
+        solid.cylinder(c, c, 9, 10.5, radius - 4, radius - 4, material("cobbles"), { segments: 12 });
+        const rim = brokenRim(random, 28, 2 * Math.PI * radius, ...range);
+
+        crumbledRing(solid, c, c, [radius - 4, radius], 10, rim, s);
+        slit(solid, c, 24, c + radius - 0.4);
+
+        // (What's left of its floors: joists snapped off where they came out of the wall, one
+        // fallen across the heap inside)
+        for (const level of [26, 42]) {
+            for (let k = random.int(1, 3); k > 0; k--) {
+                const a = random.next() * Math.PI * 2;
+
+                if (rim[Math.floor((a / (Math.PI * 2)) * rim.length) % rim.length] > level + 4) {
+                    oldBeam(solid, random, [c + Math.cos(a) * (radius - 3), level, c + Math.sin(a) * (radius - 3)], [c - Math.cos(a) * (radius - 3), level, c - Math.sin(a) * (radius - 3)], m(0.3), { broken: true });
+                }
+            }
+        }
+
+        oldBeam(solid, random, [c - 14, 11, c + random.range(-6, 6)], [c + 12, 11 + random.range(4, 14), c + random.range(-6, 6)], m(0.3));
+
+        // (What fell in, and out round its foot)
+        for (let k = random.int(3, 5); k > 0; k--) {
+            tumbled(solid, random, [c + random.range(-12, 12), 12, c + random.range(-12, 12)], random.range(3, 5), s);
+        }
+
+        for (let k = random.int(3, 6); k > 0; k--) {
+            const a = random.next() * Math.PI * 2;
+            const r = radius + random.range(3, 9);
+
+            tumbled(solid, random, [c + Math.cos(a) * r, 1, c + Math.sin(a) * r], random.range(2.5, 4.5), s);
+        }
+    } else {
+        solid.box(4, 0, 4, 56, 8, 56, s);
+        solid.box(10, 8, 10, 50, 9, 50, material("cobbles"));
+
+        for (const [axis, u, v, side] of [["x", [6, 54], [6, 10], -1], ["x", [6, 54], [50, 54], 1], ["z", [10, 50], [6, 10], -1], ["z", [10, 50], [50, 54], 1]]) {
+            crumbledRun(solid, random, axis, u, v, 8, range, s, { sides: [side], ground: 0, full: TOWER_HEIGHT });
+        }
+
+        slit(solid, c, 24, 54);
+    }
+
+    return solid.toObject();
+}
+
+/**
+ * A gatehouse left to ruin: its two blocks crumbled to shells, the bridge over the way through
+ * fallen (just where it sprang from left), its portcullis gone; the way through clear.
+ */
+function ruinedGatehouse(piece, { stone = "stone" } = {}) {
+    const { solid, random, s } = ruin(piece, stone);
+    const height = TOWER_HEIGHT + 4;
+    const bridge = 36;
+    // (Built in (u, v): u across the way through, v along it; u is x when it faces north or south)
+    const axis = piece.facing === "n" || piece.facing === "s" ? "x" : "z";
+    const at = along(axis);
+    const other = axis === "x" ? "z" : "x";
+    const range = [height * 0.35, height * 0.85];
+
+    for (const [u0, u1, inside] of [[0, 22, 22], [58, 80, 58]]) {
+        const box = (a0, y0, b0, a1, y1, b1) => {
+            const [p, q] = [at(a0, y0, b0), at(a1, y1, b1)];
+
+            solid.box(Math.min(p[0], q[0]), y0, Math.min(p[2], q[2]), Math.max(p[0], q[0]), y1, Math.max(p[2], q[2]), s);
+        };
+
+        box(u0 - 1, 0, 0, u1 + 1, 8, 60);
+        box(u0 + 4, 8, 5, u1 - 4, 9, 55);
+
+        // (Its four walls, a shell, crumbled each its own way: the one on the way through
+        // standing higher, holding what's left of the arch)
+        crumbledRun(solid, random, axis, [u0, u1], [1, 5], 8, range, s, { sides: [-1], full: height });
+        crumbledRun(solid, random, axis, [u0, u1], [55, 59], 8, range, s, { sides: [1], full: height });
+
+        const toPassage = inside === 22 ? 1 : -1;
+        const passage = inside === 22 ? [u1 - 4, u1] : [u0, u0 + 4];
+        const outside = inside === 22 ? [u0, u0 + 4] : [u1 - 4, u1];
+
+        // (The side walls run along v: laid along the other axis)
+        crumbledRun(solid, random, other, [5, 55], passage, 8, [bridge + 4, height * 0.9], s, { sides: [toPassage], full: height });
+        crumbledRun(solid, random, other, [5, 55], outside, 8, range, s, { sides: [-toPassage], full: height });
+
+        // (Where the bridge sprang from)
+        box(Math.min(inside, inside + toPassage * 4), bridge - 2, 12, Math.max(inside, inside + toPassage * 4), bridge + 5, 48);
+
+        // (And the timbers of the floor over the way through, snapped off where they came out of
+        // the wall)
+        for (let v = 16; v < 46; v += 9) {
+            if (random.chance(0.6)) {
+                oldBeam(solid, random, at(inside, bridge + 6, v), at(inside + toPassage * 36, bridge + 6, v), m(0.3), { broken: true });
+            }
+        }
+
+        // (Fallen arch stones in the way's edges)
+        for (let k = random.int(2, 3); k > 0; k--) {
+            tumbled(solid, random, at(inside + toPassage * random.range(1, 4), 1, random.range(10, 50)), random.range(2.5, 4), s);
+        }
+    }
+
+    return solid.toObject();
+}
+
+/**
+ * A keep left to ruin: open to the sky, its roof and floors fallen in and lying inside its
+ * crumbled walls, its corner turrets broken stumps; where its door was, a breach.
+ */
+function ruinedKeep(piece, { stone = "stone" } = {}) {
+    const { solid, random, s } = ruin(piece, stone);
+    const [x0, z0, x1, z1] = [7, 7, piece.w * CELL - 7, piece.h * CELL - 7];
+    const height = 70 + Math.min(piece.w, piece.h) * 4;
+    const range = [height * 0.3, height * 0.85];
+    const thick = 6;
+    const mid = (x0 + x1) / 2;
+
+    solid.box(x0 - 3, 0, z0 - 3, x1 + 3, 10, z1 + 3, s);
+    solid.box(x0 + thick, 10, z0 + thick, x1 - thick, 11, z1 - thick, material("cobbles"));
+
+    crumbledRun(solid, random, "x", [x0, x1], [z0, z0 + thick], 10, range, s, { ground: 0, full: height });
+
+    const west = crumbledRun(solid, random, "z", [z0 + thick, z1 - thick], [x0, x0 + thick], 10, range, s, { ground: 0, full: height, ends: [false, false] });
+    const east = crumbledRun(solid, random, "z", [z0 + thick, z1 - thick], [x1 - thick, x1], 10, range, s, { ground: 0, full: height, ends: [false, false] });
+
+    // (The joists of its hall's floor, across it from wall to wall: whole where both walls still
+    // stand high enough to hold them, snapped off where one side fell, fallen in where both did)
+    const floor = height * 0.42;
+    const joist = m(0.3);
+
+    for (let z = z0 + thick + 8; z < z1 - thick - 4; z += 10 + random.range(-2, 2)) {
+        const [w, e] = [topAt(west, z - z0 - thick) > floor + 4, topAt(east, z - z0 - thick) > floor + 4];
+        const [a, b] = [[x0 + thick - 2, floor, z], [x1 - thick + 2, floor, z]];
+
+        if (w && e && random.chance(0.75)) {
+            oldBeam(solid, random, a, b, joist);
+        } else if (w || e) {
+            oldBeam(solid, random, w ? a : b, w ? b : a, joist, { broken: true });
+        } else if (random.chance(0.6)) {
+            const lean = random.range(0.2, 0.6);
+
+            oldBeam(solid, random, [a[0] + random.range(0, 10), 11, z + random.range(-6, 6)], [b[0] - random.range(0, 10), 11 + floor * lean, z + random.range(-6, 6)], joist);
+        }
+    }
+
+    // (The south wall in two, its door a breach between them)
+    const door = piece.door ? [mid - 8, mid + 8] : null;
+    const south = door ? [[x0, door[0]], [door[1], x1]] : [[x0, x1]];
+    const tops = south.map((run) => ({ run, top: crumbledRun(solid, random, "x", run, [z1 - thick, z1], 10, range, s, { ground: 0, full: height }) }));
+
+    // (Its windows, where enough of the south wall's left round them)
+    for (let x = x0 + 18; x < x1 - 14; x += 16) {
+        for (const y of [height * 0.45, height * 0.72]) {
+            const own = tops.find(({ run }) => x > run[0] + 4 && x < run[1] - 4);
+            const left = own && own.top.filter(([u]) => Math.abs(own.run[0] + u - x) < 6).every(([, h]) => h > y + 12);
+
+            if (left) {
+                solid.box(x - 2, y, z1, x + 2, y + 8, z1 + 0.6, material("shadow"));
+            }
+        }
+    }
+
+    // (Its corner turrets: broken stumps, open)
+    for (const [x, z] of [[x0, z0], [x1, z0], [x0, z1], [x1, z1]]) {
+        crumbledRing(solid, x, z, [5, 8], 10, brokenRim(random, 12, 2 * Math.PI * 8, height * 0.3, height * 0.95), s);
+    }
+
+    // (Its floors and roof, fallen in)
+    for (let k = random.int(6, 10); k > 0; k--) {
+        tumbled(solid, random, [random.range(x0 + 10, x1 - 10), 13, random.range(z0 + 10, z1 - 10)], random.range(3, 6), s);
+    }
+
+    if (piece.door) {
+        solid.box(mid - 10, 0, z1, mid + 10, 4, z1 + 6, s);
+    }
+
+    return solid.toObject();
+}
+
+/** The castle's pieces left to ruin (a ruined castle's, sites.js: piece.ruined), by kind. */
+export const RUINED = Object.freeze({ wall: ruinedWall, tower: ruinedTower, gatehouse: ruinedGatehouse, keep: ruinedKeep });
