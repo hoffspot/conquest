@@ -1492,3 +1492,31 @@ converted data is to be measured in M8 against today's hm08 data.
     water at its level and marked, the edges eased, the sea past the world's edge); a level's
     cost; the triangle budget per tier, the levels moved as the player walks and sunk inside each
     other; the haze's shape. The e2e sky check now looks for the dome in the far scene.
+- **2026-10-01, M6b built** (the look of the lands):
+  - **Seen:** the darkwood under a violet sky, the savannah's horizon dusty gold, the marshes
+    hazier and greyer, the volcano's land red-brown; snow on the peaks over 205 m, rock up the
+    mountains' gentler slopes (pictures from the same cameras, before and after).
+  - **Found while drawing:** the view's `look` field (the land's look) hid its `look()` method
+    (the camera's): the game wouldn't start. Renamed `landLook`. The mist's floor at a fixed
+    height missed the marshes, which lie anywhere from 8 to 75 m up on seed 1: it's now a few
+    metres over the ground round about.
+  - **Tests:** `test/look.test.js`: a look for every land; a land's own deep inside it, never a
+    jump walking across lands; easing; the mist as the line of sight's integral, thicker along a
+    valley than from the heights; the mist and the grade in every material's uniforms, shared.
+- **2026-10-01, M6c built** (the volcano and what's built, seen from afar; far trees and rivers
+  moved to M6d):
+  - **Seen:** from the start town the volcano 815 m off with its smoke column lit orange at its
+    foot; from above, its lava lake glowing in the crater; a capital, a castle, the obsidian
+    spire and a dark elves' town as silhouettes 400 to 500 m off, in their people's colours.
+  - **Costs** (medium, the browser tests' software renderer, the same views before and after
+    M6a to M6c together): 7 to 13 more draw calls and 40,000 to 90,000 more triangles a frame
+    outdoors. Two forest views were over the 500,000-triangle budget before M6 already (the
+    darkwood 484k and the elves' woods 506k; 574k and 569k after).
+  - **Found while drawing:** the far land's coarse ground hid the lava lake from afar; the fire's
+    now drawn a little towards the eye, the more the further off.
+  - **Versions:** `TERRAIN_VERSION` 9, `NET_VERSION` 13 (the crater).
+  - **Tests:** `test/landmark.test.js` (the crater a bowl, flat in the middle, no step at its
+    edge, over the land round it; the fire on the floor and the walls, the smoke's puffs, cheap,
+    the two copies); `test/silhouettes.test.js` (every face facing out, each people's shapes, every
+    settlement in reach laid out, within budget per quality, a site moved to where it's set down,
+    one mesh re-asked only as the player goes, the fade-in in the fog chunk).
