@@ -32,9 +32,9 @@ import { WATER_DETAIL } from "./water.js";
  * app/pacing.js; 0, as often as the screen refreshes).
  */
 export const QUALITY = Object.freeze({
-    low: { label: "Low", pixelRatio: 1, shadows: 1024, antialias: false, hair: 0.2, skin: 512, undergrowth: 0.5, ground: [1, 2, 4], water: 0, far: FAR_LEVELS.low, frameRate: 30 },
-    medium: { label: "Medium", pixelRatio: 1.5, shadows: 2048, antialias: true, hair: 0.3, skin: 512, undergrowth: 0.75, ground: [1, 2, 4], water: 1, far: FAR_LEVELS.medium, frameRate: 60 },
-    high: { label: "High", pixelRatio: 2, shadows: 2048, antialias: true, hair: 0.45, skin: 1024, undergrowth: 1, ground: [1, 1, 2], water: 1, far: FAR_LEVELS.high, frameRate: 0 },
+    low: { label: "Low", pixelRatio: 1, shadows: 1024, antialias: false, hair: 0.2, skin: 512, undergrowth: 0.5, ground: [1, 2, 4], water: 0, far: FAR_LEVELS.low, farTrees: 0, frameRate: 30 },
+    medium: { label: "Medium", pixelRatio: 1.5, shadows: 2048, antialias: true, hair: 0.3, skin: 512, undergrowth: 0.75, ground: [1, 2, 4], water: 1, far: FAR_LEVELS.medium, farTrees: 700, frameRate: 60 },
+    high: { label: "High", pixelRatio: 2, shadows: 2048, antialias: true, hair: 0.45, skin: 1024, undergrowth: 1, ground: [1, 1, 2], water: 1, far: FAR_LEVELS.high, farTrees: 1200, frameRate: 0 },
 });
 
 /** A quality level for this device: low for small or older phones, medium for phones, high otherwise. */

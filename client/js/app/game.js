@@ -651,9 +651,9 @@ export class Game {
             }
 
             const land = this.world.maps.town;
-            const start = land?.start && land.stamp ? { id: land.start.id, pieces: this.world.town.pieces, origin: land.stamp.at } : null;
+            const start = land?.start && land.stamp ? { id: land.start.id, pieces: this.world.town.pieces, origin: land.stamp.at, width: land.stamp.width, height: land.stamp.height } : null;
 
-            this.silhouettes = new Silhouettes(this.world.plan, { reach: farReach(this.view.quality.far), start });
+            this.silhouettes = new Silhouettes(this.world.plan, { reach: farReach(this.view.quality.far), trees: this.view.quality.farTrees ?? 0, start, sun: this.view.sunDirection });
             this.view.setHorizon(this.silhouettes);
         }
 
