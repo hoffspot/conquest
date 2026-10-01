@@ -705,17 +705,45 @@ little further off (within five chunks) are laid out ahead in a worker (world/la
 WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk has:
 
 - **Its ground** (above).
-- **Water** (world/water.js): a sheet over the lakes, the sea and rivers. It's drawn where a
-  field says, worked out when the chunk's drawn: how far each square is into the water from the
-  nearest dry one (or out of it, on land), from nine squares round the chunk, so it meets its
-  neighbours', softened, and sampled between squares, so the shore runs in curves rather than
-  stepping square by square. The bed shows through the shallows and fades with depth, red
-  first, so the shallows are green and the deep water blue; the edge fades out, with a thin
-  broken line of foam; the surface ripples, two reads of a small picture of waves (whole waves
-  to it, running ten ways, so it tiles without the lines a noise lattice leaves) drifting their
-  own ways, gentler further off, catching the sky. The bed's drawn as packed earth (the land sets
-  soil there, drawn ploughed, whose furrows showed through). Water can't be walked into, but can
-  be seen over.
+- **Water** (world/water.js): a sheet over the lakes, the sea and rivers, its corners at the
+  water's surface every 2 m (a river runs down its valley, and steps down over a lip). It's drawn
+  where a field says, worked out when the chunk's drawn, four bytes a square, from nine squares
+  round the chunk so it meets its neighbours'. It's worked out a few rows a step, about 3.5 ms a
+  water chunk in all on a desktop.
+  - **How far each square is into the water** from the nearest dry one (or out of it, on land),
+    softened and sampled between squares, so the shore runs in curves rather than stepping
+    square by square.
+  - **How the water runs** (metres a second, east and south): a river's current, the way its
+    course goes through the wandering, still in lakes and the sea.
+  - **How deep it is**: its surface less the ground under it.
+
+  It's drawn like this:
+  - **Ripples.** A small tiling picture of slopes (whole waves running ten ways, so it tiles
+    without the lines a noise lattice leaves) is read twice, half a cycle (1.6 s) apart. Each
+    read is carried along by the current from where it last started over, and faded out as it
+    starts again, so neither's restart shows (flow maps, after Valve's Portal 2 water). The
+    cycles are set off from place to place so they don't pulse together, and a lake's ripples
+    drift with the wind.
+    - On medium quality and up, a finer picture is laid over it the same way (`QUALITY.water`).
+    - Water ripples harder the faster it runs, and gentler further off.
+    - That's three texture reads a pixel on low and five on medium and high. There's no depth
+      pass, reflection pass or refraction pass.
+  - **Foam:** a broken line along the shore, and streaks where water runs faster than about
+    2 m/s (rapids, lips), more the faster.
+  - **Colour.** The bed's light comes up through the water, each colour less the further it has to
+    come (Beer and Lambert: 0.85, 0.4 and 0.5 of red, green and blue taken out a metre, red
+    first, so the shallows are green and the deep blue-green).
+    - One share of the bed behind can't be kept more of one colour than another. So the bed is
+      kept as much as its red comes through, and the rest of its green and blue are added as
+      the bed would look under the light falling on the water there.
+    - Shadows on the water darken what's under them too.
+    - The water's own colour is what it takes out. The sky and sun are reflected off it, more
+      the more glancing the look (Fresnel, after Schlick, 0.02 square on).
+  - **The bed** is drawn as packed earth (the land sets soil there, drawn ploughed, whose furrows
+    showed through).
+
+  Water can't be walked into, but can be seen over, except where it's shallow and slow enough to
+  wade (fords, and lakes' shallows: WORLD.md).
 - **Bridges**, where roads cross rivers: each a straight deck of boards laid across it, from a
   little way onto one bank to a little way onto the other, along the road, with a dark beam along
   each edge and a rail on posts along each side. Anyone on one stands on its boards, 16 cm up

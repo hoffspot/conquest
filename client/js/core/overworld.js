@@ -29,9 +29,9 @@ import { Sites } from "./sites.js";
 import { Interiors } from "./insides.js";
 import { WENCHES } from "./lore/taverns.js";
 import { featuresOf } from "./wilds.js";
-import { Ground, PAD_EASE } from "./terrain/ground.js";
+import { CORNERS, Ground, PAD_EASE } from "./terrain/ground.js";
 import { SLOPE_CLASS, stillOf, stillWaterAt } from "./terrain/height.js";
-import { watersOf } from "./terrain/waters.js";
+import { wadeable, watersOf } from "./terrain/waters.js";
 import { GROUND, HOME_TREES, TREE_KINDS } from "./setpieces/pieces.js";
 import { generateWorld } from "./world.js";
 import { BIOME, BIOMES, CELL, CELLS, CHUNK, CHUNKS, planWorld, RACES, startFor, WORLD_SIZE } from "./worldplan/plan.js";
@@ -374,6 +374,16 @@ export class Overworld {
     }
 
     /**
+     * Whether water this deep (metres) at a point (metres) can be waded: shallow enough, and
+     * (in a river) slow enough (waters.js wadeable).
+     */
+    wades(x, y, depth) {
+        const river = this.waters.river(x, y, 0);
+
+        return wadeable(depth, river && river.gap <= 0 ? river.speed : 0);
+    }
+
+    /**
      * The height of the water's surface at a point (metres): the river's nearest it, else the lake's
      * or the sea's, else (none near) the ground's (where water's drawn, it's drawn at this).
      */
@@ -505,6 +515,14 @@ export class Overworld {
         for (let k = 0; k < SQUARES; k++) {
             if (slopes[k] === SLOPE_CLASS.cliff && !built[k] && !bridge[k] && ground[k] !== GROUND.road) {
                 blocked[k] = 1;
+            } else if (water[k] && !built[k] && !bridge[k]) {
+                // (Water shallow and slow enough to wade: a ford, or a lake's or the sea's
+                // shallows, walked through)
+                const [i, j] = [k % CHUNK, Math.floor(k / CHUNK)];
+                const c = j * CORNERS + i;
+                const depth = this.surfaceAt(x0 + i + 0.5, y0 + j + 0.5) - Math.min(heights[c], heights[c + 1], heights[c + CORNERS], heights[c + CORNERS + 1]);
+
+                blocked[k] = this.wades(x0 + i + 0.5, y0 + j + 0.5, depth) ? 0 : 1;
             }
         }
 

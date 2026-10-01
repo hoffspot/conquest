@@ -6,8 +6,9 @@
 //
 //  - The ground: the terrain's heights at every metre (terrain/ground.js), two triangles a square.
 //    Each triangle's area says how it's walked: open ground, a road, steep ground (over 30°), a
-//    ford (water no deeper than FORD); none at all for deeper water, or for ground too steep to
-//    climb (over 38°, a cliff), which Recast leaves out.
+//    ford (water that can be waded: no deeper than FORD, and slow enough, overworld.js wades);
+//    none at all for deeper or faster water, or for ground too steep to climb (over 38°, a
+//    cliff), which Recast leaves out.
 //  - What stands on it: the overworld's solid squares (the town's, the settlements' and the
 //    places' buildings and walls, and the wild's features), merged into rectangles, each a box
 //    OBSTACLE high; trees as their trunks. Their faces are areas of none, so nothing can be stood
@@ -85,7 +86,7 @@ export function tileInput(world, tx, ty) {
             if (chunk.water[k] !== WET.none && !chunk.solid[k]) {
                 const depth = world.surfaceAt(sx + 0.5, sy + 0.5) - Math.min(heights[a], heights[b], heights[c], heights[d]);
 
-                kind = depth > FORD ? 0 : AREA.ford;
+                kind = (world.wades ? world.wades(sx + 0.5, sy + 0.5, depth) : depth <= FORD) ? AREA.ford : 0;
             }
 
             triangle(a, c, b, kind && slopeArea(positions, a, c, b, kind));

@@ -8,10 +8,12 @@ import { buildWorld } from "../client/js/core/overworld.js";
 import { CHUNK } from "../client/js/core/worldplan/plan.js";
 import { parseGrid } from "./helpers.js";
 
-// The world of seed 1: its start town, a lake's deep water near it, and the road's bridge over the
-// river to the town's south-east (found by looking, and checked below)
-const DEEP = [2967.5, 5161.5];
+// The world of seed 1: its start town, the middle of the river to its south (2 m deep), and the
+// road's bridge over the river to the town's south-east (found by looking, and checked below)
+const DEEP = [2931.5, 5192.5];
 const BRIDGE = { a: [3001.0675675675675, 5146.108108108108], b: [3011.304347826087, 5155.304347826087], half: 2.2 };
+// (And a ford over a small river 730 m to the town's north-east)
+const FORD = [3112.5, 4374.5];
 
 const length = (path) => path.slice(1).reduce((sum, [x, y], i) => sum + Math.hypot(x - path[i][0], y - path[i][1]), 0);
 const same = (a, b) => a.length === b.length && a.every((value, i) => value === b[i]);
@@ -106,6 +108,40 @@ describe("navigation meshes (navigation.js)", () => {
 
         assert.ok(Math.abs(length(across) - (Math.hypot(b[0] - a[0], b[1] - a[1]) + 8)) < 0.5, `straight over (${length(across).toFixed(1)} m)`);
         assert.ok(Math.abs(across[1][2] - town.deckOf(BRIDGE, 0.5)) < 0.6, "up on the deck");
+    });
+
+    it("wades across a ford, straight over, but never into the river's deep water beside it", () => {
+        const navigation = new Navigation(recast, town);
+        const ford = town.waters.river(...FORD, 0);
+        const chunk = town.chunkAt(Math.floor(FORD[0]), Math.floor(FORD[1]));
+
+        assert.equal(ford.ford, 1, "a ford");
+        assert.equal(chunk.blocked[(Math.floor(FORD[1]) - chunk.y0) * CHUNK + (Math.floor(FORD[0]) - chunk.x0)], 0, "its squares open");
+
+        // From one bank to the other, across the way the water runs
+        const [vx, vy] = town.waters.current(...FORD);
+        const [ax, ay] = [-vy / Math.hypot(vx, vy), vx / Math.hypot(vx, vy)];
+        const [from, to] = [[FORD[0] - ax * 9, FORD[1] - ay * 9], [FORD[0] + ax * 9, FORD[1] + ay * 9]];
+        const across = navigation.path(from, to);
+
+        assert.ok(navigation.walkable(...FORD), "walked");
+        assert.ok(Math.hypot(across.at(-1)[0] - to[0], across.at(-1)[1] - to[1]) < 0.5 && length(across) < 18 * 1.2, `straight over (${length(across).toFixed(1)} m)`);
+
+        // (Up or down the river, where it runs deep, it isn't)
+        let deep = null;
+
+        for (let r = 20; r < 60 && !deep; r += 2) {
+            for (let k = 0; k < 32 && !deep; k++) {
+                const [x, y] = [FORD[0] + Math.cos((k / 32) * 2 * Math.PI) * r, FORD[1] + Math.sin((k / 32) * 2 * Math.PI) * r];
+                const river = town.waters.river(x, y, 0);
+
+                if (river && river.ford === 0 && river.gap < -river.half * 0.5 && town.surfaceAt(x, y) - town.heightAt(x, y) > 1) {
+                    deep = [x, y];
+                }
+            }
+        }
+
+        assert.ok(deep && !navigation.walkable(...deep), `not beside it (${deep})`);
     });
 
     it("finds the same ways whichever order its tiles came in", () => {
