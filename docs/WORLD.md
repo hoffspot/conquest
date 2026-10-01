@@ -334,8 +334,15 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
     the sea is at its level from where it reaches it (a pool spilling over a lip at its shore,
     not out in it), and its bed there never rises off the lake's or the sea's floor.
 - **Roads**, along the plan's roads, smoothed from cell to cell (rounded twice at each corner):
-  trade roads 4.4 metres wide, roads 3.6, tracks 2.2. The roads from the town start from where
-  its streets leave it. A road to another settlement stops 2 metres short of its square and
+  trade roads 4.4 metres wide, roads 3.6, tracks 2.2. Where the plan's cells rise or fall six
+  times a road's grade or more from one of its points to the next, that stretch (from three
+  points before to two after) is found its own way over the land (`terrain/ways.js`): over a
+  lattice of points 4 m apart, sixteen ways out of each, a step steeper than the road's grade
+  costing dearly and one three times steeper not taken at all, nor any into a lake or the sea,
+  and turning costing a little, so it climbs across the slope in long straight legs and
+  hairpins, rounded at its turns. The roads from the town start from where
+  its streets leave it. A road to another settlement stops 2 metres short of its square (on
+  dry land: never in a river, so its bridge over it is its own) and
   waits: when the settlement's laid out, it's carried on to the end of the main street nearest
   where it comes in. Roads go round lakes, and cross rivers only on bridges: where a road runs
   over a river (looked for every half metre along it), a straight deck from 1.5 metres onto one
@@ -344,6 +351,17 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   (of those as wide, the westernmost). Bridges are found on the roads as planned, never on the
   bit carried on to a settlement's street, so a chunk is the same whichever chunks were made
   first (a test makes the chunks between the town and a neighbour in both orders).
+- **Trails** (`core/trails.js`), foot paths 1.4 metres wide up to each cave, ruin, shrine, ring
+  of standing stones, ruined castle and lair in the hills and mountains (the plan's height half
+  and up) within 700 m of a road: found their own way over the land as steep roads are, at a
+  walker's grade (25 %), within 96 m of the straight way, keeping out of the town and the
+  settlements. So a trail up a mountainside zigzags up it in hairpins. The sites nearest a road
+  are reached first, and each from its road or from a site reached already, whichever's nearer,
+  so trails branch from one another rather than running side by side (27 on seed 1). Each is
+  found the first time anything's wanted of a chunk its room reaches (`#roadsIn`), or ahead of
+  then in the terrain worker (`world/terrains.js`: those within five chunks of the player) and
+  handed over: the same way either way, so every player's world agrees. It's walked as a road
+  and drawn as one, and levelled into the ground as roads are (below).
 - **The ground**: grass (drawn in each land's colours, and in each people's homeland, the
   plan's territory as first claimed, its own ground: GAME.md, *The ground*), soil in fields in
   farmland, road, planks on bridges.
@@ -440,9 +458,21 @@ The world is played on the land's height with what's built levelled into it (`Gr
 - **Pads.** The start town, every settlement's squares, each people's castle and places (settled
   with the chunks round them), and camps (10 m round) stand on flat pads at the land's average
   height under them, eased into the land round them over 24 m.
-- **Roads** follow the land's lie smoothed 12 m each way along them (sampled every 2 m), with
-  3 m shoulders easing out to the land; over water they keep to their banks' height, 0.6 m above
-  it, for their bridges. So they rise and fall gently, less than 3 in 10 anywhere off a bridge.
+- **Roads and trails** are graded (`graded`): the land's lie along them (sampled every 2 m, on
+  the town's and the settlements' pads where they cross them, and over water at their banks'
+  height, 0.6 m above it, for their bridges) smoothed 12 m each way, then kept to their kind's
+  grade (`GRADE`: trade roads 10 %, roads 12 %, tracks 15 %, trails 25 %) by easing each
+  step that's too steep from both its ends at once, a little at a time, so a road is cut into a
+  rise as much as it's built up over the dip below it, rather than filling the whole valley
+  ahead, its ends held at the land's own height. Its banks ease out to the land 2.5 times as far
+  as it's cut or built there (`ROAD.batter`), at least 3 m and at most 12, so a cutting's or an
+  embankment's side is no steeper than 1 in 2.5 on average. On a road, the road it's furthest
+  onto is followed; beside roads, the one whose bank it's furthest up; and of two alike, the one
+  listed first by its name (`road 0042`, `trail cave-79`), so it's the same whichever chunks are
+  made first. Each road is listed in every chunk its banks reach (and each trail found before
+  any of them is made), so neighbouring chunks agree on the corners they share. Within 640 m
+  of the town no road or trail is steeper than its grade but by a little where it meets
+  another; within 900 m a road is cut 5.6 m into the land at most, and built 3.6 m over it.
 - **Water keeps its channel and lakes**: nothing levels ground under water.
 - Heights are kept a chunk at a time at each metre's corner (65 by 65), read between corners over
   each square's two triangles, split from north-west to south-east, exactly as the ground's drawn,
@@ -459,7 +489,8 @@ The world is played on the land's height with what's built levelled into it (`Gr
 **What stands on it** (the drawing, world/):
 - Every chunk's ground mesh (GAME.md, *The ground*), its water sheet following the surface (a
   corner every 2 m), and its bridges' decks arched as the overworld has them, on piers down to the
-  riverbed.
+  riverbed (the ground as it's levelled, not the land's own, so a pier on a graded bank stands
+  on it).
 - Buildings at their piece's ground (on its pad); trees on the lowest ground round their trunk,
   a little into it, with the litter round their feet laid over the ground; rocks, logs and ruins
   on the lowest of five points under them; grass and flowers each at the ground where it grows

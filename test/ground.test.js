@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { buildWorld, CHUNK } from "../client/js/core/overworld.js";
 import { squareOf } from "../client/js/core/settlements.js";
-import { between, CORNERS } from "../client/js/core/terrain/ground.js";
+import { between, CORNERS, GRADE } from "../client/js/core/terrain/ground.js";
 import { heightAt, SLOPE_CLASS } from "../client/js/core/terrain/height.js";
 import { GROUND } from "../client/js/core/setpieces/pieces.js";
 
@@ -59,47 +59,90 @@ describe("the ground (terrain/ground.js)", () => {
         }
     });
 
-    it("keeps the roads out of town gentle, rising and falling smoothly with the land", () => {
-        let [samples, steepest] = [0, 0];
+    it("keeps every road and trail near the town to its grade, from end to end, and every square along it walkable", () => {
+        const [mx, my] = world.stamp.middle;
+        const lines = new Set([...overworld.roads.values()].flatMap((segments) => segments.filter((segment) => !segment[6]).map((segment) => segment[5])));
+        const steepest = {};
+        let samples = 0;
 
-        for (const segments of overworld.roads.values()) {
-            for (const [ax, ay, bx, by, , , joined] of segments.slice(0, 20)) {
-                if (joined || overworld.settled(Math.floor(ax), Math.floor(ay))) {
-                    continue;
-                }
+        for (const line of lines) {
+            let last = null;
 
-                const length = Math.hypot(bx - ax, by - ay);
+            for (let k = 1; k < line.planned.length; k++) {
+                const [[ax, ay], [bx, by]] = [line.planned[k - 1], line.planned[k]];
+                const run = Math.hypot(bx - ax, by - ay);
 
-                for (let d = 0; d + 1 <= length; d += 1) {
-                    const [x0, y0] = [ax + ((bx - ax) * d) / length, ay + ((by - ay) * d) / length];
-                    const [x1, y1] = [ax + ((bx - ax) * (d + 1)) / length, ay + ((by - ay) * (d + 1)) / length];
-                    // (Bridges' decks arch over their rivers: their own test's below)
-                    const onBridge = ([x, y]) => {
-                        const chunk = overworld.chunkAt(Math.floor(x), Math.floor(y));
+                for (let d = 0; d < run; d += 1) {
+                    const [x, y] = [ax + ((bx - ax) * d) / run, ay + ((by - ay) * d) / run];
+                    const chunk = overworld.chunkAt(Math.floor(x), Math.floor(y));
+                    const square = (Math.floor(y) - chunk.y0) * CHUNK + (Math.floor(x) - chunk.x0);
 
-                        return chunk.bridge[(Math.floor(y) - chunk.y0) * CHUNK + (Math.floor(x) - chunk.x0)];
-                    };
-
-                    if (onBridge([x0, y0]) || onBridge([x1, y1])) {
+                    // (Within 640 m of the town; its own streets and the settlements' aside)
+                    if (Math.hypot(x - mx, y - my) > 640 || overworld.settled(Math.floor(x), Math.floor(y))) {
+                        last = null;
                         continue;
                     }
 
-                    const [h0, h1] = [overworld.heightAt(x0, y0), overworld.heightAt(x1, y1)];
-
-                    steepest = Math.max(steepest, Math.abs(h1 - h0));
+                    assert.equal(chunk.blocked[square], 0, `walkable at ${Math.floor(x)}, ${Math.floor(y)}`);
                     samples++;
-                }
-            }
 
-            if (samples > 3000) {
-                break;
+                    // (Bridges' decks arch over their rivers: their own test's below)
+                    if (chunk.bridge[square]) {
+                        last = null;
+                        continue;
+                    }
+
+                    const h = overworld.heightAt(x, y);
+
+                    if (last && Math.hypot(x - last[0], y - last[1]) >= 2) {
+                        steepest[line.kind] = Math.max(steepest[line.kind] ?? 0, Math.abs(h - last[2]) / Math.hypot(x - last[0], y - last[1]));
+                        last = [x, y, h];
+                    } else if (!last) {
+                        last = [x, y, h];
+                    }
+                }
             }
         }
 
-        assert.ok(samples > 500, `${samples} samples`);
-        // (A rise of 3 in 10 at the very most, a metre at a time, along the roads as planned; the
-        // mountain roads are graded and zig-zagged later)
-        assert.ok(steepest < 0.3, `steepest ${steepest}`);
+        assert.ok(samples > 2000, `${samples} samples`);
+
+        // (Each kind of road no steeper than its grade, but for a little between the ground's
+        // corners; a trail up into the hills a little steeper for a step or two where a
+        // hairpin's legs come together: trails.test.js)
+        for (const [kind, grade] of Object.entries(steepest)) {
+            assert.ok(grade <= (kind === "path" ? 0.45 : GRADE[kind] + 0.02), `${kind}: ${grade.toFixed(3)}`);
+        }
+    });
+
+    it("has neighbouring chunks agree on the corners they share, all over the trails near the town and their roads' banks", () => {
+        const [mx, my] = world.stamp.middle;
+        const chunks = new Set();
+
+        // (The chunks under the trails up to the sites within a kilometre of the town)
+        for (const { box } of overworld.trails.all.filter(({ to: [x, y] }) => Math.hypot(x - mx, y - my) < 1000)) {
+            for (let cy = Math.floor(box[1] / CHUNK); cy <= Math.floor(box[3] / CHUNK); cy++) {
+                for (let cx = Math.floor(box[0] / CHUNK); cx <= Math.floor(box[2] / CHUNK); cx++) {
+                    chunks.add(`${cx},${cy}`);
+                }
+            }
+        }
+
+        assert.ok(chunks.size > 40, `${chunks.size} chunks`);
+        let shared = 0;
+
+        for (const key of chunks) {
+            const [cx, cy] = key.split(",").map(Number);
+            const heights = overworld.ground.chunk(cx, cy).heights;
+            const [east, south] = [overworld.ground.chunk(cx + 1, cy).heights, overworld.ground.chunk(cx, cy + 1).heights];
+
+            for (let k = 0; k < CORNERS; k++) {
+                assert.equal(heights[k * CORNERS + CHUNK], east[k * CORNERS], `at ${(cx + 1) * CHUNK}, ${cy * CHUNK + k}`);
+                assert.equal(heights[CHUNK * CORNERS + k], south[k], `at ${cx * CHUNK + k}, ${(cy + 1) * CHUNK}`);
+                shared += 2;
+            }
+        }
+
+        assert.ok(shared > 5000, `${shared} corners`);
     });
 
     it("blocks ground too steep to climb, but never the roads or what's built", () => {

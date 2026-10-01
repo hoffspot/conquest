@@ -736,7 +736,7 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   has made of the meshes (as each has needed them) doesn't matter: a copy finds none at all. (A
   way a copy finds missing, having strayed, it finds itself, and its next check sets it right.)
   Games before these (`NET_VERSION` 6) can't join, nor games whose ground is made otherwise
-  (before mountain streams: 7), since where anyone can walk must be the same in every copy.
+  (before mountain streams: 7; before graded roads and mountain paths: 8), since where anyone can walk must be the same in every copy.
 - **Exact maths** (`core/exact.js`). The world a joined game lays out again from the seed, and
   everything its copy works out, must come out the same in any browser. JavaScript leaves how near
   sines, cosines, arctangents, powers and `Math.hypot` come to the truth to each browser, and they

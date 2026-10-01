@@ -338,7 +338,7 @@ nav.walkable(mapId, x, y)            → boolean
 
 ## 6. Multiplayer: packets
 
-NET_VERSION goes to 7 with M2b, to 8 with M3b (the ground changed) and to 9 with M5. The relay is unchanged: text frames. Motion packets
+NET_VERSION goes to 7 with M2b, to 8 with M3b and to 9 with M4a (the ground changed both times), and to 10 with M5. The relay is unchanged: text frames. Motion packets
 carry a base64 packed buffer, so the relay stays neutral about binary frames.
 
 **`welcome`.** Adds the `world` block from [§3.6](#36-serialisation-and-the-network).
@@ -490,6 +490,26 @@ river surfaces that follow the terrain.
 **Bridges.**
 - Span the carved valleys, with piers down to the bed and the deck at road height.
 - Fords where rivers are shallow.
+
+**As built in M4a** (see the change log):
+- **Grading** (`terrain/ground.js graded`): each road's profile (the land every 2 m, on the
+  settlements' pads, smoothed 12 m each way) is kept to its kind's `GRADE` (trade 10 %, road
+  12 %, track 15 %, path 25 %) by symmetric relaxation: each step too steep is eased from both
+  ends at once, so cut and fill balance, with the ends pinned to the land. Banks ease out over
+  `ROAD.batter` (2.5) times the cut or fill, 3 to 12 m.
+- **Hairpins** (`terrain/ways.js wayOver`): A* over a 4 m lattice, 16 directions, a step over
+  the grade costing 12 times its excess, none over 3 times the grade, a little for turning, none
+  into still water. Roads use it where a plan cell steps 6 times the grade or more
+  (`overworld.js climbing`); Chaikin-rounded twice.
+- **Mountain paths** (`core/trails.js`): from the roads to each cave, ruin, shrine, ring of
+  standing stones, ruined castle and lair at plan height 0.5 and up, within 700 m of a road;
+  chained (each from its road or a site reached already, nearest first); found within 96 m of the
+  straight way, keeping out of the town and settlements. Found when a chunk their room reaches
+  is first wanted, or ahead in the terrain worker and handed over.
+- **Bridges** carry the road on dry land at both ends (a road stopping at a settlement goes on to
+  the bank); piers stand on the levelled ground.
+- **Not yet:** mountain passes as the only way over the massifs (the plan's roads already go
+  round them); castles' switchback approaches (M4b).
 
 **The peoples' places.**
 - Lizard folk stilt houses stand over real water depths.
@@ -909,8 +929,9 @@ pictures for anything that changes the look.
 | **M2b** | Continuous movement | The rules on float positions: circles, steering, raycast sight; orders with Vector3 targets and host `via`; NET_VERSION 7; interiors on solo meshes; the grid APIs retired; test migration | All tests green; e2e green; multiplayer e2e green |
 | **M3a** | Rivers and the water shader | River courses as curves; calm, rapids and step-pool reaches; Manning speeds; fords and wading; the water field (shore, flow, depth); flow-mapped, Beer–Lambert, Fresnel shader | Pictures; water cost within budget |
 | **M3b** | Falls and the bed | Waterfall sheets and mist at lips; mountain streams; underwater ground (absorption, caustics); wet banks | Pictures; water cost within budget |
-| **M4** | Structures and roads | Tiers and retaining walls; castles on crags; switchback roads and passes; bridges over valleys; peoples' places on real ground; cliffs and rocks | Pictures; walk every road end to end in a test |
-| **M5** | Multiplayer motion | `motion` stream; early desync checks; hero prediction; tick sync; debug RTT; NET_VERSION 9 | Two-browser e2e with no drift; bandwidth measured |
+| **M4a** | Roads and paths | Roads graded with balanced cut and fill on padded ground; hairpins where a road meets a step too steep to grade; mountain foot paths with switchbacks up to the caves, ruins and shrines in the hills (found ahead in the terrain worker); bridges that carry the whole road; piers on the ground | Pictures; walk every road and path end to end in a test |
+| **M4b** | Structures on the ground | Tiers and retaining walls; plinths; camps on flats; castles on crags; peoples' places on real ground; cliffs and rocks | Pictures |
+| **M5** | Multiplayer motion | `motion` stream; early desync checks; hero prediction; tick sync; debug RTT; NET_VERSION 10 | Two-browser e2e with no drift; bandwidth measured |
 | **M6** | Horizon and atmosphere | Far clipmap rings; height fog in value bands; per-region look table and grade (§9 row 1); far silhouettes and the world landmark (§9 row 2); far trees; `SunLight` cascades on medium and high; terrain material | Pictures; budgets per tier met |
 | **M7** | Elden Ring environment pass | In §9's order: the landmark pass in the plan; neutral sites built, with the decay pass; cliffs and rocks; churches, citadels, stone bridges; foliage palette, grass ring, weathering | Pictures after each part; budgets met |
 | **M8** | Characters on Vitruvian | §10, as several PRs (conversion, body, garments, skin, face, LODs, clips) | Pictures; clipping tests green; budgets met |

@@ -31,6 +31,10 @@ back to the same world:
 - **The world outside** (`Overworld`, the `town` map): all of it, on 1-metre squares, made a
   chunk 64 metres square at a time from the plan as it's needed, the town's squares in the chunks
   it's in, and its streets carrying on as the plan's roads (see WORLD.md, *The world in chunks*).
+  The roads keep to an easy grade, cut into the land and built up over it, climbing what's too
+  steep for them in hairpins; and foot paths lead off them up into the hills and mountains, to
+  the caves, ruins, shrines, standing stones, ruined castles and lairs there, zigzagging up the
+  steepest slopes (`core/trails.js`).
 - **Every other settlement** (`core/settlements.js`: the plan's capitals, cities, towns,
   villages, hamlets and farmsteads), laid out by `layoutTown` from its own seed the first time
   the world within a chunk of it is made, and set into the chunks it's in as the town is, the

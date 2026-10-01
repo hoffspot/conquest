@@ -26,12 +26,15 @@ import { MAP_ORIGINS } from "./interiors.js";
 import { createRandom, noise } from "./random.js";
 import { Settlements, squareOf, waysOut } from "./settlements.js";
 import { Sites } from "./sites.js";
+import { Trails, TRAILS } from "./trails.js";
 import { Interiors } from "./insides.js";
 import { WENCHES } from "./lore/taverns.js";
 import { featuresOf } from "./wilds.js";
-import { CORNERS, Ground, PAD_EASE } from "./terrain/ground.js";
+import { CORNERS, GRADE, Ground, PAD_EASE, ROAD } from "./terrain/ground.js";
 import { SLOPE_CLASS, stillLevelAt, stillOf, stillWaterAt } from "./terrain/height.js";
 import { WADE, wadeable, watersOf } from "./terrain/waters.js";
+import { rounded, wayOver } from "./terrain/ways.js";
+import { metresOf } from "./terrain/curve.js";
 import { GROUND, HOME_TREES, TREE_KINDS } from "./setpieces/pieces.js";
 import { generateWorld } from "./world.js";
 import { BIOME, BIOMES, CELL, CELLS, CHUNK, CHUNKS, planWorld, RACES, startFor, WORLD_SIZE } from "./worldplan/plan.js";
@@ -73,7 +76,7 @@ export const FLORA = Object.freeze({
 const HOME_TREE_SHARE = 0.7;
 
 // Roads' half-widths (metres), by kind
-const ROAD_HALF = Object.freeze({ trade: 2.2, road: 1.8, track: 1.1 });
+const ROAD_HALF = Object.freeze({ trade: 2.2, road: 1.8, track: 1.1, path: TRAILS.half });
 
 /**
  * Bridges: how far past the road's edge the deck reaches each side (metres), and how far onto
@@ -109,6 +112,54 @@ function fromSegment(px, py, [ax, ay, bx, by]) {
     return hypot(px - (ax + dx * t), py - (ay + dy * t));
 }
 
+// Roads over the land's steepest steps: a road is found its own way over a stretch where the
+// plan's cells it runs through rise or fall `steep` times its grade or more from one of its points
+// to the next (terrain/ways.js: in hairpins up the slope, from `before` points before it to
+// `after` after it, within `room` metres of them)
+const CLIMBS = Object.freeze({ steep: 6, before: 3, after: 2, room: 128 });
+
+// A road's line (`points`, through its cells' middles, rounded) with any stretch too steep for its
+// kind (GRADE) found its own way over (CLIMBS)
+function climbing(plan, points, kind) {
+    const grade = GRADE[kind];
+    const rise = ([x, y]) => metresOf(plan.height[cellAt(y) * CELLS + cellAt(x)]);
+    const stretches = [];
+
+    for (let k = 1; k < points.length; k++) {
+        const run = hypot(points[k][0] - points[k - 1][0], points[k][1] - points[k - 1][1]) || 1;
+
+        if (Math.abs(rise(points[k]) - rise(points[k - 1])) / run >= grade * CLIMBS.steep) {
+            const [a, b] = [Math.max(0, k - CLIMBS.before), Math.min(points.length - 1, k + CLIMBS.after)];
+
+            if (stretches.length && a <= stretches.at(-1)[1]) {
+                stretches.at(-1)[1] = b;
+            } else {
+                stretches.push([a, b]);
+            }
+        }
+    }
+
+    // (From the last, so the earlier stretches' points stay where they were)
+    let line = points;
+
+    for (const [a, b] of stretches.reverse()) {
+        const among = line.slice(a, b + 1);
+        const box = [
+            Math.max(0, Math.min(...among.map(([x]) => x)) - CLIMBS.room),
+            Math.max(0, Math.min(...among.map(([, y]) => y)) - CLIMBS.room),
+            Math.min(WORLD_SIZE - 1, Math.max(...among.map(([x]) => x)) + CLIMBS.room),
+            Math.min(WORLD_SIZE - 1, Math.max(...among.map(([, y]) => y)) + CLIMBS.room),
+        ];
+        const way = wayOver(plan, line[a], line[b], { grade, box });
+
+        if (way) {
+            line = [...line.slice(0, a), ...rounded(way), ...line.slice(b + 1)];
+        }
+    }
+
+    return line;
+}
+
 // A line through cells' middles, rounded at its corners (twice cut in, keeping its ends)
 function smooth(points) {
     let line = points;
@@ -127,6 +178,32 @@ function smooth(points) {
     }
 
     return line;
+}
+
+// A road's line ({ points, kind, ... }) listed by the chunks its segments come near, as far as
+// its shoulders can reach ([ax, ay, bx, by, kind, line, joined, which of its planned segments it
+// is: the ground follows the road along them])
+function lay(byChunk, line) {
+    const { points, kind } = line;
+
+    for (let k = 0; k < points.length - 1; k++) {
+        const segment = [...points[k], ...points[k + 1], kind, line, false, k];
+        const pad = ROAD_HALF[kind] + ROAD.most + 1;
+        const [cx0, cx1] = [Math.floor((Math.min(segment[0], segment[2]) - pad) / CHUNK), Math.floor((Math.max(segment[0], segment[2]) + pad) / CHUNK)];
+        const [cy0, cy1] = [Math.floor((Math.min(segment[1], segment[3]) - pad) / CHUNK), Math.floor((Math.max(segment[1], segment[3]) + pad) / CHUNK)];
+
+        for (let cy = cy0; cy <= cy1; cy++) {
+            for (let cx = cx0; cx <= cx1; cx++) {
+                const key = cy * CHUNKS + cx;
+
+                if (!byChunk.has(key)) {
+                    byChunk.set(key, []);
+                }
+
+                byChunk.get(key).push(segment);
+            }
+        }
+    }
 }
 
 /**
@@ -177,12 +254,28 @@ export class Overworld {
         this.roads = this.#layRoads();
         this.bridges = new Map();
 
+        // The trails up into the hills, from the roads as planned, keeping out of the town and
+        // the settlements (found as the land near each is first wanted: #roadsIn)
+        const lines = new Set([...this.roads.values()].flatMap((segments) => segments.map((segment) => segment[5])));
+        const keepOut = [
+            [this.stamp.at[0] - 10, this.stamp.at[1] - 10, this.stamp.at[0] + this.stamp.width + 10, this.stamp.at[1] + this.stamp.height + 10],
+            ...this.settlements.places.map((place) => {
+                const { at: [sx, sy], size } = squareOf(place);
+
+                return [sx - 2, sy - 2, sx + size + 2, sy + size + 2];
+            }),
+        ];
+
+        this.trails = new Trails(plan, [...lines], keepOut);
+        this.trailed = new Set();
+
         // The ground: the land's height, with the settlements, castles, places and camps on pads
         // and the roads levelled in (as planned: never the bits joined to a settlement's streets,
         // which wait on it being laid out, so it's the same whichever chunks are made first)
         this.ground = new Ground(plan, {
             padsNear: (cx, cy) => this.#padsNear(cx, cy),
-            roadsNear: (cx, cy) => (this.roads.get(cy * CHUNKS + cx) ?? []).filter((segment) => !segment[6]).map((segment) => ({ line: segment[5], k: segment[7], half: ROAD_HALF[segment[4]] })),
+            roadsNear: (cx, cy) => this.#roadsIn(cx, cy).filter((segment) => !segment[6]).map((segment) => ({ line: segment[5], k: segment[7], half: ROAD_HALF[segment[4]] })),
+            settledNear: (cx, cy) => this.#padsNear(cx, cy, { settled: true }),
         });
 
         const read = (layer, off) => (x, y) => {
@@ -412,8 +505,9 @@ export class Overworld {
 
     // The pads (terrain/ground.js) reaching into a chunk: the town, the settlements' squares, the
     // sites set down (those near this chunk and its neighbours set down first, so a site's pad is
-    // the same whenever it's asked for), and the camps
-    #padsNear(cx, cy) {
+    // the same whenever it's asked for), and the camps; or (`settled`) only the town's and the
+    // settlements', setting nothing down
+    #padsNear(cx, cy, { settled = false } = {}) {
         const [x0, y0, x1, y1] = [cx * CHUNK - PAD_EASE, cy * CHUNK - PAD_EASE, (cx + 1) * CHUNK + PAD_EASE, (cy + 1) * CHUNK + PAD_EASE];
         const meets = (ax0, ay0, ax1, ay1) => ax1 > x0 && ax0 < x1 && ay1 > y0 && ay0 < y1;
         const pads = [];
@@ -429,6 +523,11 @@ export class Overworld {
             if (meets(sx, sy, sx + size, sy + size)) {
                 pads.push({ id: `place ${place.id}`, x0: sx, y0: sy, x1: sx + size, y1: sy + size });
             }
+        }
+
+        // (Only the town's and the settlements', if that's all that's asked: nothing settled)
+        if (settled) {
+            return pads;
         }
 
         for (let dy = -1; dy <= 1; dy++) {
@@ -693,7 +792,7 @@ export class Overworld {
             const [x0, y0] = [cx * CHUNK, cy * CHUNK];
             // (The roads through it as planned: not those only joined in since, which depends on
             // which settlements have been laid out)
-            const lines = new Set((this.roads.get(key) ?? []).filter((segment) => !segment[6]).map((segment) => segment[5]));
+            const lines = new Set(this.#roadsIn(cx, cy).filter((segment) => !segment[6]).map((segment) => segment[5]));
             const near = [...lines].flatMap((line) => this.#bridgesOf(line)).filter(({ a, b, half }) => Math.max(a[0], b[0]) + half >= x0 && Math.min(a[0], b[0]) - half < x0 + CHUNK && Math.max(a[1], b[1]) + half >= y0 && Math.min(a[1], b[1]) - half < y0 + CHUNK);
             const middle = ({ a, b }) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
             const kept = [];
@@ -763,11 +862,18 @@ export class Overworld {
         return line.bridges;
     }
 
-    // The kind of road at a point, or null
+    // The kind of road at a point (the widest, where roads and paths meet: the same whichever
+    // were listed first), or null
     #roadAt(px, py) {
-        const near = this.roads.get(Math.floor(py / CHUNK) * CHUNKS + Math.floor(px / CHUNK));
+        let kind = null;
 
-        return near?.find((segment) => fromSegment(px, py, segment) <= ROAD_HALF[segment[4]])?.[4] ?? null;
+        for (const segment of this.#roadsIn(Math.floor(px / CHUNK), Math.floor(py / CHUNK))) {
+            if ((kind === null || ROAD_HALF[segment[4]] > ROAD_HALF[kind]) && fromSegment(px, py, segment) <= ROAD_HALF[segment[4]]) {
+                kind = segment[4];
+            }
+        }
+
+        return kind;
     }
 
     // The roads, as lines ([ax, ay, bx, by, kind, the road they're part of]) listed by the chunks
@@ -781,8 +887,8 @@ export class Overworld {
 
         const places = new Map(plan.places.map((place) => [place.id, place]));
 
-        for (const road of plan.roads) {
-            let points = smooth(road.cells.map(([x, y]) => [(x + 0.5) * CELL, (y + 0.5) * CELL]));
+        for (const [index, road] of plan.roads.entries()) {
+            let points = climbing(plan, smooth(road.cells.map(([x, y]) => [(x + 0.5) * CELL, (y + 0.5) * CELL])), road.kind);
             const ends = {};
 
             // At another settlement, the road stops where it comes to the settlement's square,
@@ -797,11 +903,17 @@ export class Overworld {
                 const { at, size } = squareOf(place);
                 const outside = ([x, y]) => x < at[0] - 2 || y < at[1] - 2 || x >= at[0] + size + 2 || y >= at[1] + size + 2;
                 const order = end === "start" ? points : [...points].reverse();
-                const out = order.findIndex(outside);
+                let out = order.findIndex(outside);
 
                 if (out < 0) {
                     points = [];
                     break;
+                }
+
+                // (Never out in a river: on to dry land, so the bridge over it is the road's own,
+                // not left to the bit joined to the settlement's streets, which has none)
+                while (out > 0 && this.waters.riverAt(...order[out])) {
+                    out--;
                 }
 
                 const kept = order.slice(out);
@@ -839,7 +951,7 @@ export class Overworld {
             // (Its bridges are found when a chunk it goes through is first made, on the road as
             // planned: `planned`, never the bit joined to a settlement's street when it's laid
             // out, so that they're the same whichever chunks are made first)
-            const line = { points, planned: [...points], kind: road.kind, bridges: null, ends: {} };
+            const line = { id: `road ${String(index).padStart(4, "0")}`, points, planned: [...points], kind: road.kind, bridges: null, ends: {} };
 
             for (const [id, [end]] of Object.entries(ends)) {
                 line.ends[id] = end;
@@ -851,28 +963,34 @@ export class Overworld {
                 this.waiting.get(id).push(line);
             }
 
-            for (let k = 0; k < points.length - 1; k++) {
-                // (Which of its planned segments it is: the ground follows the road along them)
-                const segment = [...points[k], ...points[k + 1], road.kind, line, false, k];
-                const pad = ROAD_HALF[road.kind] + 1;
-                const [cx0, cx1] = [Math.floor((Math.min(segment[0], segment[2]) - pad) / CHUNK), Math.floor((Math.max(segment[0], segment[2]) + pad) / CHUNK)];
-                const [cy0, cy1] = [Math.floor((Math.min(segment[1], segment[3]) - pad) / CHUNK), Math.floor((Math.max(segment[1], segment[3]) + pad) / CHUNK)];
+            lay(byChunk, line);
+        }
 
-                for (let cy = cy0; cy <= cy1; cy++) {
-                    for (let cx = cx0; cx <= cx1; cx++) {
-                        const key = cy * CHUNKS + cx;
+        return byChunk;
+    }
 
-                        if (!byChunk.has(key)) {
-                            byChunk.set(key, []);
-                        }
+    // The roads through a chunk (#layRoads' segments), and the trails up into the hills near it,
+    // found the first time anything about the chunk's wanted (so before anything's made of it)
+    #roadsIn(cx, cy) {
+        const key = cy * CHUNKS + cx;
 
-                        byChunk.get(key).push(segment);
+        if (!this.trailed.has(key)) {
+            this.trailed.add(key);
+
+            for (const trail of this.trails.near(cx, cy, CHUNK)) {
+                if (!trail.laid) {
+                    const points = this.trails.find(trail);
+
+                    trail.laid = true;
+
+                    if (points) {
+                        lay(this.roads, { id: trail.id, points, planned: [...points], kind: "path", bridges: null, ends: {} });
                     }
                 }
             }
         }
 
-        return byChunk;
+        return this.roads.get(key) ?? [];
     }
 
     // Where the town's streets leave it (metres: the middle of each at its edge)
