@@ -25,7 +25,7 @@
 import { MAP_ORIGINS } from "./interiors.js";
 import { createRandom, noise } from "./random.js";
 import { Settlements, squareOf, waysOut } from "./settlements.js";
-import { Sites } from "./sites.js";
+import { LIE, Sites } from "./sites.js";
 import { Trails, TRAILS } from "./trails.js";
 import { Interiors } from "./insides.js";
 import { WENCHES } from "./lore/taverns.js";
@@ -34,6 +34,7 @@ import { CORNERS, GRADE, Ground, PAD_EASE, ROAD } from "./terrain/ground.js";
 import { SLOPE_CLASS, stillLevelAt, stillOf, stillWaterAt } from "./terrain/height.js";
 import { WADE, wadeable, watersOf } from "./terrain/waters.js";
 import { rounded, wayOver } from "./terrain/ways.js";
+import { FLATS, flatSpot } from "./terrain/flats.js";
 import { metresOf } from "./terrain/curve.js";
 import { GROUND, HOME_TREES, TREE_KINDS } from "./setpieces/pieces.js";
 import { generateWorld } from "./world.js";
@@ -96,7 +97,8 @@ const CLEAR_OF_PLACES = 12;
 // How many chunks to keep once made (the rest are made again when they're needed)
 const KEEP = 256;
 
-// A camp's pad (metres from its middle), levelled into the ground
+// A camp's pad (metres from its middle), levelled into the ground: pitched on the flattest ground
+// within FLATS.reach of its cell's middle (terrain/flats.js)
 const CAMP_PAD = 10;
 
 const VARIANTS_OF = Object.fromEntries([...new Set(TREE_KINDS.map(([kind]) => kind))].map((kind) => [kind, TREE_KINDS.flatMap(([k], variant) => (k === kind ? [variant] : []))]));
@@ -242,8 +244,9 @@ export class Overworld {
         this.clearings = [
             ...plan.places.filter((place) => place !== start).map(({ at, radius }) => ({ at, radius: radius + CLEAR_OF_PLACES })),
             ...plan.sites.map(({ id }) => this.sites.clearings.get(id)),
-            ...plan.camps.map(({ at }) => ({ at, radius: CLEAR_OF_PLACES })),
         ];
+        // (The camps' own, where each is pitched: found as the world near it is made, campsNear)
+        this.campSpots = new Map();
         // The other settlements, laid out as the world near them is made (their roads then joined
         // to their streets' ends: roads to them wait for that, `waiting`, by place)
         this.waiting = new Map();
@@ -506,6 +509,37 @@ export class Overworld {
         return stillOf(this.plan, x, y)?.level ?? this.ground.heightAt(Math.min(WORLD_SIZE - 0.01, Math.max(0, x)), Math.min(WORLD_SIZE - 0.01, Math.max(0, y)));
     }
 
+    /**
+     * Where a camp of the plan's is pitched ([x, y], metres): on the flattest ground within
+     * FLATS.reach of its cell's middle, clear of the plan's roads (terrain/flats.js), the same
+     * whenever it's asked for.
+     */
+    campAt(camp) {
+        if (!this.campSpots.has(camp.id)) {
+            const road = (x, y) => this.plan.road[cellAt(y) * CELLS + cellAt(x)] > 0;
+
+            this.campSpots.set(camp.id, flatSpot(this.plan, camp.at, { avoid: road, size: WORLD_SIZE }));
+        }
+
+        return this.campSpots.get(camp.id);
+    }
+
+    // The camps that could be pitched within `margin` of a box (metres), wherever they're pitched
+    #campsNear(x0, y0, x1, y1, margin) {
+        const reach = FLATS.reach + margin;
+
+        return this.plan.camps.filter(({ at: [x, y] }) => x > x0 - reach && x < x1 + reach && y > y0 - reach && y < y1 + reach);
+    }
+
+    // The places near a chunk that trees and the land's features keep clear of: the settlements
+    // still to be built, the sites and the camps, where each is
+    #clearingsNear(x0, y0) {
+        const near = ({ at, radius }) => at[0] > x0 - radius && at[0] < x0 + CHUNK + radius && at[1] > y0 - radius && at[1] < y0 + CHUNK + radius;
+        const camps = this.#campsNear(x0, y0, x0 + CHUNK, y0 + CHUNK, CLEAR_OF_PLACES).map((camp) => ({ at: this.campAt(camp), radius: CLEAR_OF_PLACES }));
+
+        return [...this.clearings, ...camps].filter(near);
+    }
+
     // The pads (terrain/ground.js) reaching into a chunk: the town, the settlements' squares, the
     // sites set down (those near this chunk and its neighbours set down first, so a site's pad is
     // the same whenever it's asked for), and the camps; or (`settled`) only the town's and the
@@ -543,13 +577,15 @@ export class Overworld {
 
         for (const set of this.sites.set.values()) {
             if (set && meets(set.x - set.radius, set.y - set.radius, set.x + set.radius, set.y + set.radius)) {
-                pads.push({ id: `site ${set.site.id}`, at: [set.x, set.y], radius: set.radius });
+                pads.push({ id: `site ${set.site.id}`, at: [set.x, set.y], radius: set.radius, raise: LIE[set.site.kind]?.raise ?? 0 });
             }
         }
 
-        for (const camp of this.plan.camps) {
-            if (meets(camp.at[0] - CAMP_PAD, camp.at[1] - CAMP_PAD, camp.at[0] + CAMP_PAD, camp.at[1] + CAMP_PAD)) {
-                pads.push({ id: `camp ${camp.id}`, at: camp.at, radius: CAMP_PAD });
+        for (const camp of this.#campsNear(x0, y0, x1, y1, CAMP_PAD)) {
+            const at = this.campAt(camp);
+
+            if (meets(at[0] - CAMP_PAD, at[1] - CAMP_PAD, at[0] + CAMP_PAD, at[1] + CAMP_PAD)) {
+                pads.push({ id: `camp ${camp.id}`, at, radius: CAMP_PAD });
             }
         }
 
@@ -1035,7 +1071,7 @@ export class Overworld {
         const { plan, stamp } = this;
         const { x0, y0, blocked, opaque } = chunk;
         const random = createRandom((Math.imul(chunk.cx + 1, 73856093) ^ Math.imul(chunk.cy + 1, 19349663) ^ Math.imul(plan.seed, 83492791)) >>> 0);
-        const clearings = this.clearings.filter(({ at, radius }) => at[0] > x0 - radius && at[0] < x0 + CHUNK + radius && at[1] > y0 - radius && at[1] < y0 + CHUNK + radius);
+        const clearings = this.#clearingsNear(x0, y0);
         const [tx0, ty0] = [stamp.at[0] - CLEAR_OF_TOWN, stamp.at[1] - CLEAR_OF_TOWN];
         const [tx1, ty1] = [stamp.at[0] + stamp.width + CLEAR_OF_TOWN, stamp.at[1] + stamp.height + CLEAR_OF_TOWN];
         const clear = (x, y) => {
@@ -1095,7 +1131,7 @@ export class Overworld {
         const { plan, stamp } = this;
         const { x0, y0, blocked, opaque } = chunk;
         const random = createRandom((Math.imul(chunk.cx + 7, 2654435761) ^ Math.imul(chunk.cy + 11, 40503) ^ Math.imul(plan.seed + 3, 97531)) >>> 0);
-        const clearings = this.clearings.filter(({ at, radius }) => at[0] > x0 - radius && at[0] < x0 + CHUNK + radius && at[1] > y0 - radius && at[1] < y0 + CHUNK + radius);
+        const clearings = this.#clearingsNear(x0, y0);
         const [tx0, ty0] = [stamp.at[0] - CLEAR_OF_TOWN, stamp.at[1] - CLEAR_OF_TOWN];
         const [tx1, ty1] = [stamp.at[0] + stamp.width + CLEAR_OF_TOWN, stamp.at[1] + stamp.height + CLEAR_OF_TOWN];
         const free = (x, y, fields) => {

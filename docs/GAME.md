@@ -34,7 +34,9 @@ back to the same world:
   The roads keep to an easy grade, cut into the land and built up over it, climbing what's too
   steep for them in hairpins; and foot paths lead off them up into the hills and mountains, to
   the caves, ruins, shrines, standing stones, ruined castles and lairs there, zigzagging up the
-  steepest slopes (`core/trails.js`).
+  steepest slopes (`core/trails.js`). Each people's castle and high places stand on a rise, on a
+  mound; their pools lie in hollows; and the enemies' camps are pitched on level ground, not on
+  a mountain's side (`core/terrain/flats.js`).
 - **Every other settlement** (`core/settlements.js`: the plan's capitals, cities, towns,
   villages, hamlets and farmsteads), laid out by `layoutTown` from its own seed the first time
   the world within a chunk of it is made, and set into the chunks it's in as the town is, the

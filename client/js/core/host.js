@@ -2410,14 +2410,16 @@ export class Host {
             const tier = campTier(camp, nearest.home);
             const creature = campFolk(camp.faction, tier);
             const patrols = Math.min(camp.patrols, 1 + Math.floor(tier / 3));
-            const ids = this.#pack({ creature, tier, count: Math.min(5, 1 + Math.floor(tier / 2)) }, camp.at, { camp: camp.id, roam: 4, temper: "territorial" });
+            // (Round where it's pitched, on the flattest ground near its cell's middle: overworld.js)
+            const at = this.world.maps?.town?.campAt?.(camp) ?? camp.at;
+            const ids = this.#pack({ creature, tier, count: Math.min(5, 1 + Math.floor(tier / 2)) }, at, { camp: camp.id, roam: 4, temper: "territorial" });
 
             // (Its patrols, roaming out from it: as many as it has, fewer near home)
             for (let k = 0; k < patrols; k++) {
                 const angle = ((k + 0.5) / patrols) * Math.PI * 2;
                 const out = camp.roam * 0.5;
 
-                ids.push(...this.#pack({ creature, tier, count: Math.max(1, packOf(creature, tier) - (tier <= 2 ? 1 : 0)) }, [camp.at[0] + cos(angle) * out, camp.at[1] + sin(angle) * out], { camp: camp.id, roam: camp.roam * 0.4 }));
+                ids.push(...this.#pack({ creature, tier, count: Math.max(1, packOf(creature, tier) - (tier <= 2 ? 1 : 0)) }, [at[0] + cos(angle) * out, at[1] + sin(angle) * out], { camp: camp.id, roam: camp.roam * 0.4 }));
             }
 
             this.wildCamps.set(camp.id, { ids });

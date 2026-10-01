@@ -14,6 +14,7 @@ import { footprint } from "./setpieces/town.js";
 import { LANDMARKS, PEOPLE_PLACES, PLOT, pieceCatalog, towerKey } from "./setpieces/pieces.js";
 import { CELLS, CHUNK, CHUNKS, WORLD_SIZE } from "./worldplan/plan.js";
 import { atan2, cos, hypot, sin } from "./exact.js";
+import { heightAt } from "./terrain/height.js";
 
 // The humans' own (plots across and deep): their castle, laid out by castle.js, and the rest as
 // their landmarks are built
@@ -30,6 +31,33 @@ const SHIFT_STEP = 4;
 
 // How far round a site trees and the land's features keep clear of it (metres)
 export const SITE_MARGIN = 6;
+
+/**
+ * Where some sites would rather stand, of the spots they may: on the highest ground round about
+ * (each people's castle, watching over its lands; the dark elves' spire and the elves' starwatch;
+ * the cat folk's pride rock; the watchtowers) or the lowest (the cat folk's watering hole, the
+ * lizard folk's serpent pool, the elves' moonwell), the land's own height looked at (height.js);
+ * and how far their ground's raised on a mound above the land's (or sunk into it), metres.
+ */
+export const LIE = Object.freeze({
+    castle: { lie: "high", raise: 4 },
+    "obsidian spire": { lie: "high", raise: 5 },
+    starwatch: { lie: "high", raise: 3 },
+    "pride rock": { lie: "high", raise: 4 },
+    watchtower: { lie: "high", raise: 2 },
+    "watering hole": { lie: "low", raise: -1.5 },
+    "serpent pool": { lie: "low", raise: -1.2 },
+    moonwell: { lie: "low", raise: -0.8 },
+});
+
+/**
+ * Lie: how far a site that would rather lie high or low may be moved off its cell's middle to
+ * (metres); how far apart the spots tried are, and the land's looked at on a lattice how far
+ * apart (metres); how far round a spot its land's looked at to see how it lies (metres past its
+ * own reach); and how far its land may rise or fall across it (metres), at most, for it to stand
+ * there (or its pad would stand out of the land, or into it).
+ */
+const LYING = Object.freeze({ shift: 64, step: 16, lattice: 8, round: 24, across: 6 });
 
 const TAU = Math.PI * 2;
 const catalog = new Map(pieceCatalog().map((piece) => [piece.key, piece]));
@@ -76,7 +104,7 @@ export class Sites {
             }
 
             // (Near every chunk it could reach, moved as far as it may be)
-            const reach = SHIFT + hypot(size[0], size[1]) * (PLOT / 2) + SITE_MARGIN;
+            const reach = (LIE[site.kind] ? LYING.shift : SHIFT) + hypot(size[0], size[1]) * (PLOT / 2) + SITE_MARGIN;
 
             for (let cy = Math.floor((site.at[1] - reach) / CHUNK); cy <= Math.floor((site.at[1] + reach) / CHUNK); cy++) {
                 for (let cx = Math.floor((site.at[0] - reach) / CHUNK); cx <= Math.floor((site.at[0] + reach) / CHUNK); cx++) {
@@ -127,8 +155,9 @@ export class Sites {
     }
 
     // Where a site is built: its cell's middle, or near it, clear of roads and water, facing the
-    // nearest road; or null if there's nowhere
-    #setDown(site, [w, h]) {
+    // nearest road (the spot that lies best first, for those that would rather stand high or
+    // low: LIE); or null if there's nowhere
+    #setDown(site, [w, h], lie = LIE[site.kind]?.lie) {
         const facing = this.#facing(site);
         const size = WORLD_SIZE;
         // (Its land looked at every other square: no road or stream is narrower; each square
@@ -156,43 +185,87 @@ export class Sites {
         // (The squares that weren't clear under earlier tries: most tries overlap the last, so
         // one of these is under most of those that fail, and looked for first)
         const unclear = [];
+        const tries = lie ? this.#lying(site, [w, h], lie) : rings(site.at);
 
-        for (let r = 0; r <= SHIFT; r += SHIFT_STEP) {
-            const tries = r === 0 ? 1 : Math.round((TAU * r) / SHIFT_STEP);
+        for (const [x, y] of tries) {
+            const corners = footprint({ x, y, w, h, facing });
 
-            for (let k = 0; k < tries; k++) {
-                const a = (k / tries) * TAU;
-                const [x, y] = [Math.round(site.at[0] + cos(a) * r), Math.round(site.at[1] + sin(a) * r)];
-                const corners = footprint({ x, y, w, h, facing });
+            if (unclear.some(([i, j]) => within(corners, i + 0.5, j + 0.5))) {
+                continue;
+            }
 
-                if (unclear.some(([i, j]) => within(corners, i + 0.5, j + 0.5))) {
+            const found = firstInside(corners, (i, j) => !clear(i, j));
+
+            if (found) {
+                unclear.push(found);
+                continue;
+            }
+
+            const squares = inside(corners);
+
+            return {
+                site,
+                x,
+                y,
+                facing,
+                w,
+                h,
+                pieces: this.#pieces(site, x, y, facing, [w, h]),
+                squares: new Set(squares.map(([i, j]) => j * size + i)),
+                radius: hypot(w, h) * (PLOT / 2),
+            };
+        }
+
+        // (None that lies well clear: wherever's clear, as for any other)
+        return lie ? this.#setDown(site, [w, h], null) : null;
+    }
+
+    // The spots a site that would rather lie high or low may stand (LIE), best first: LYING.step
+    // apart within LYING.shift of its cell's middle, each as high (or low) as it stands over the
+    // land LYING.round past its reach, and none whose land rises or falls more than LYING.across
+    // over its own reach (then the nearest its cell's middle, then the first). The land's looked
+    // at on a lattice LYING.lattice apart, each point once.
+    #lying(site, [w, h], lie) {
+        const reach = hypot(w, h) * (PLOT / 2);
+        const heights = new Map();
+        const { lattice } = LYING;
+        const land = (x, y) => {
+            const [i, j] = [Math.round(x / lattice), Math.round(y / lattice)];
+            const key = j * 4096 + i;
+
+            if (!heights.has(key)) {
+                heights.set(key, heightAt(this.plan, Math.min(WORLD_SIZE - 1, Math.max(0, i * lattice)), Math.min(WORLD_SIZE - 1, Math.max(0, j * lattice))));
+            }
+
+            return heights.get(key);
+        };
+        // (Eight ways round, as far out as asked)
+        const round = (x, y, far) => [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]].map(([dx, dy]) => land(x + (dx && dy ? dx * far * 0.7071 : dx * far), y + (dx && dy ? dy * far * 0.7071 : dy * far)));
+        const spots = [];
+        const n = Math.floor(LYING.shift / LYING.step);
+
+        for (let j = -n; j <= n; j++) {
+            for (let i = -n; i <= n; i++) {
+                if (i * i + j * j > n * n) {
                     continue;
                 }
 
-                const found = firstInside(corners, (i, j) => !clear(i, j));
+                const [x, y] = [Math.round(site.at[0] + i * LYING.step), Math.round(site.at[1] + j * LYING.step)];
+                const middle = land(x, y);
+                const across = round(x, y, reach);
 
-                if (found) {
-                    unclear.push(found);
+                if (across.some((height) => Math.abs(height - middle) > LYING.across)) {
                     continue;
                 }
 
-                const squares = inside(corners);
+                const out = round(x, y, reach + LYING.round);
+                const above = middle - out.reduce((sum, height) => sum + height, 0) / out.length;
 
-                return {
-                    site,
-                    x,
-                    y,
-                    facing,
-                    w,
-                    h,
-                    pieces: this.#pieces(site, x, y, facing, [w, h]),
-                    squares: new Set(squares.map(([i, j]) => j * size + i)),
-                    radius: hypot(w, h) * (PLOT / 2),
-                };
+                spots.push({ at: [x, y], score: lie === "high" ? above : -above, far: i * i + j * j, k: spots.length });
             }
         }
 
-        return null;
+        return spots.sort((a, b) => b.score - a.score || a.far - b.far || a.k - b.k).map(({ at }) => at);
     }
 
     // Which way a site faces: towards the nearest road within a few cells (radians, as
@@ -243,6 +316,20 @@ export class Sites {
 
             return { ...spec, ...piece, ...own, x: x + u * c + v * s, y: y - u * s + v * c };
         });
+    }
+}
+
+// The spots a site may be moved to, nearest its cell's middle first: on rings SHIFT_STEP apart,
+// out to SHIFT
+function* rings(at) {
+    for (let r = 0; r <= SHIFT; r += SHIFT_STEP) {
+        const tries = r === 0 ? 1 : Math.round((TAU * r) / SHIFT_STEP);
+
+        for (let k = 0; k < tries; k++) {
+            const a = (k / tries) * TAU;
+
+            yield [Math.round(at[0] + cos(a) * r), Math.round(at[1] + sin(a) * r)];
+        }
     }
 }
 
