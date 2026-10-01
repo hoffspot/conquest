@@ -716,6 +716,17 @@ and open-source generators, licences checked).
   silhouette cross-fade from 128 to 154 m.
 - **Not in M6c (moved to M6d):** far trees and far rivers.
 
+**As built in M6d** (row 8's far trees, and the rivers; see the change log):
+- **Far trees** (`world/far/trees.js`): where the overworld would plant them (its `#plant` replayed:
+  the same per-chunk random numbers, the same kinds and homeland trees), from 100 m out to 700 m
+  on medium and 1.2 km on high, none on low (`QUALITY.farTrees`). Each a camera-facing card, its
+  crown's outline drawn in the fragment shader by its kind's form; one draw of one plain mesh
+  (not instanced: the software renderer draws instances almost one at a time); two triangles a
+  tree. A test checks every tree the overworld plants in sample chunks is among them.
+- **Far rivers** (`world/far/rivers.js`): each river's course pieces as ribbons on its surface,
+  widened to 4 m at least; one draw. Streams left out.
+- **Handing over:** both use `FAR_FADE_IN`, as the silhouettes do; drawn a little towards the eye.
+
 **Pushing each people toward the Elden Ring feel without losing identity.**
 - **For everyone:**
   - heavier stone bases (0.6–1.2 m plinths that follow the real ground);
@@ -1537,3 +1548,15 @@ converted data is to be measured in M8 against today's hm08 data.
     drawn over by the near ground. Lifted, they and the ground lifted face away and are culled.
   - **After:** low 306 ms, medium about 490 ms; on the browser tests' own settings (high, every
     pixel, shadows) 1,252 ms against M5's 1,171.
+- **2026-10-01, M6d built** (far trees and rivers):
+  - **Trees:** every tree the land grows past the chunks' own, as a card where the overworld will
+    plant it: about 6,000 round the start town on medium (12,000 triangles), 15,000 in the woods;
+    worked out in the worker in a fifth to half a second.
+  - **Rivers:** about 2,500 triangles to 1 km and 5,300 to 2 km.
+  - **Frame time** (the start town, the software renderer, a frame's median): first built as one
+    card drawn instanced, the trees took medium from 510 to 647 ms and the browser tests' own
+    settings (high) from 1,263 to 1,791 ms; leaving them out, or drawing the same cards as one
+    plain mesh, took it back. As one mesh: medium 491 ms, high 1,311 ms (none on low).
+  - **Tests:** `test/nature.test.js` (every planted tree among the far ones, each as tall as its
+    kind; none in the start town or nearer than 100 m; a river's ribbon along its course on its
+    surface; the counts and time per quality; one mesh each, fading in).

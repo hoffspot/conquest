@@ -676,6 +676,29 @@ plan's M6c). What stands up from the land is seen from as far as the far land re
   second), so what's ready is sent every half second, nearest first, and the layouts are kept.
 - **Costs** (start town, seed 1): about 10,500 triangles on low, 17,000 on medium and 30,000 on
   high, in one draw for each copy.
+- **The trees from afar** (world/far/trees.js; the terrain plan's M6d): past where the chunks'
+  own trees are drawn, out to 700 m on medium and 1.2 km on high (none on low), every tree the
+  land would grow there as one card turned to face the camera:
+  - **Where:** the overworld's own way of planting them, replayed (the same random numbers, chunk
+    by chunk), so each card stands where its tree will when the player comes near. Only what the
+    chunk itself would keep a tree off (its roads, its rivers' banks, what's built) isn't known from
+    afar; the places still to be built, the start town and the lakes and the sea are.
+  - **What:** its kind's height and crown (round for oaks and beeches, oval for birches, poplars
+    and silverbarks, conical for spruces and nightspires, a ball on a bare trunk for pines, flat
+    for acacias), its edge ragged, lit from above and from the sun's side, in its kind's colour.
+  - **Handing over:** they fade in from 128 to 154 m in just the pixels the near trees fade out of
+    (`FAR_FADE_IN`).
+  - **Costs:** two triangles a tree, all in one draw: about 6,000 trees round the start town on
+    medium, 15,000 in the woods. One plain mesh of cards, four corners a tree, made in the worker,
+    not one card drawn instanced: the browser tests' software renderer draws instances almost one
+    at a time (12,000 trees cost a quarter of a frame instanced, next to nothing as one mesh).
+- **The rivers from afar** (world/far/rivers.js): the far land's corners are too far apart for a
+  river's channel, so each river's course (core/terrain/waters.js) is drawn on the far land as a
+  ribbon of deep water on its surface, as wide as the river (4 m at least, so it isn't lost a long
+  way off), the sky in it a little; fading in where the near world's water fades out. About 5,000
+  triangles to 2 km.
+- **Both** are drawn a little towards the eye, the more the further off, so the far land's coarse
+  ground doesn't hide them; and worked out with what's built, in the same worker.
 
 **Left as they are.** The tone mapping stays ACES (graded, above): AgX (tried, pictures with the
 change) greyed the lamplit taproom and dulled the painted colours, and Khronos Neutral turned the
