@@ -5,7 +5,8 @@
 // badlands. Each kind of land has its own (LANDS: how many to a chunk, and of which kinds), and
 // they gather as they would: boulders where the land is rocky, fallen wood where it's been let go
 // (smooth noise fields across the world, the same for every chunk, so they carry on across the
-// chunks' edges).
+// chunks' edges). A boulder lies among a few smaller stones (CLUSTER), strung out along the way
+// the rock runs there (its strike: slow noise, so a stretch's stones all lie one way).
 //
 // A chunk's features are tried on a grid (FEATURE_GRID metres, a random way in), from the chunk's
 // own random numbers, the same every time it's made. Each takes the squares under it (`squares`),
@@ -16,7 +17,8 @@
 // drawing's alone (world/art/kits/wilds.js): they're in no one's way. Pure data, no DOM.
 
 import { fractal } from "./noise.js";
-import { cos, hypot, sin } from "./exact.js";
+import { cos, hypot, sin, TAU } from "./exact.js";
+import { createRandom } from "./random.js";
 
 /** Features are tried every this many metres (a random way in). */
 export const FEATURE_GRID = 8;
@@ -29,6 +31,15 @@ const CLEAR = 2;
 
 /** Taller than this (metres), a feature hides what's behind it. */
 const EYES = 1.65;
+
+/**
+ * A boulder's cluster (the research report behind M7b: one dominant stone, the rest smaller):
+ * how many smaller stones round it (as rocky as the land is, more), how big (to the boulder's
+ * size), how far from it beyond its own size (metres), how far they stray across its strike (to
+ * how far along it), how far the boulders and stones turn from the strike (radians, either way),
+ * and how slow the strike's noise is (metres).
+ */
+export const CLUSTER = Object.freeze({ stones: [1, 5], size: [0.25, 0.55], reach: [1.2, 4.5], across: 0.35, turn: 0.25, strike: 400 });
 
 /**
  * Each land's features: about how many to a chunk (64 metres square: before those that can't be
@@ -82,6 +93,8 @@ export const DEAD = Object.freeze(["log", "stump", "snag", "logpile"]);
  */
 export const FEATURES = Object.freeze({
     boulder: { size: [0.7, 1.5], height: [0.8, 1.4], take: 0.8 },
+    // (A boulder's smaller stones: CLUSTER's share of a boulder's size)
+    stone: { size: [0.7 * CLUSTER.size[0], 1.5 * CLUSTER.size[1]], height: [0.6, 1.1], take: 0.7 },
     outcrop: { size: [1.8, 3.2], height: [0.5, 0.9], take: 0.7 },
     log: { size: [5, 9], height: [0.1, 0.13], long: true, take: 0.5 },
     stump: { size: [0.45, 0.8], height: [0.8, 1.3], take: 0.9 },
@@ -158,6 +171,11 @@ export function neglect(x, y, seed) {
     return ease(0.4, 0.7, fractal(x, y, 140, seed * 31 + 2));
 }
 
+/** Which way the rock runs at a point (its strike: radians, a smooth field across the world). */
+export function strikeAt(x, y, seed) {
+    return fractal(x, y, CLUSTER.strike, seed * 31 + 4, 2) * TAU;
+}
+
 /**
  * A chunk's features: [{ kind, x, y (its middle, metres), size, height, turn (radians), variant
  * (0 to 1: which of its looks), squares ([x, y]: those it takes), opaque }]. `random` is the
@@ -203,26 +221,78 @@ export function featuresOf({ x0, y0, size, seed, random, landAt, homeAt = () => 
                 variant,
             };
 
+            // (A boulder lies along the way the rock runs there, give or take)
+            if (kind === "boulder") {
+                feature.turn = strikeAt(x, y, seed) + (turn - 0.5) * 2 * CLUSTER.turn;
+            }
+
             feature.height = feature.size * (spec.height[0] + (spec.height[1] - spec.height[0]) * tall);
             feature.squares = squaresOf(feature, spec);
             feature.opaque = feature.height > EYES && !SEE_THROUGH.has(kind);
 
-            if (feature.squares.every(([sx, sy]) => sx >= x0 + EDGE && sy >= y0 + EDGE && sx < x0 + size - EDGE && sy < y0 + size - EDGE && !taken.has(`${sx},${sy}`)) && clear(feature.squares, (cx, cy) => free(cx, cy, spec.fields))) {
-                for (const [sx, sy] of feature.squares) {
-                    // (Kept a square apart from each other)
-                    for (let dy = -1; dy <= 1; dy++) {
-                        for (let dx = -1; dx <= 1; dx++) {
-                            taken.add(`${sx + dx},${sy + dy}`);
-                        }
-                    }
-                }
-
+            if (fits(feature, spec)) {
                 features.push(feature);
+
+                if (kind === "boulder") {
+                    features.push(...clusterOf(feature, rocky, seed).filter((stone) => fits(stone, FEATURES.stone)));
+                }
             }
         }
     }
 
     return features;
+
+    // Whether a feature fits where it is (inside the chunk, clear of the rest and of what's not
+    // free), taking its squares (and a square round them) if it does
+    function fits(feature, spec) {
+        if (!feature.squares.every(([sx, sy]) => sx >= x0 + EDGE && sy >= y0 + EDGE && sx < x0 + size - EDGE && sy < y0 + size - EDGE && !taken.has(`${sx},${sy}`)) || !clear(feature.squares, (cx, cy) => free(cx, cy, spec.fields))) {
+            return false;
+        }
+
+        for (const [sx, sy] of feature.squares) {
+            // (Kept a square apart from each other)
+            for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    taken.add(`${sx + dx},${sy + dy}`);
+                }
+            }
+        }
+
+        return true;
+    }
+}
+
+/**
+ * The smaller stones round a boulder (CLUSTER): strung out along its strike, either side of it,
+ * from its own random numbers (from where it lies: so the chunk's other features stay as they
+ * were), as many more as the land is rocky.
+ */
+export function clusterOf(boulder, rocky, seed) {
+    const random = createRandom((Math.imul(Math.floor(boulder.x * 16), 73856093) ^ Math.imul(Math.floor(boulder.y * 16), 19349663) ^ Math.imul(seed + 5, 83492791)) >>> 0);
+    const count = CLUSTER.stones[0] + Math.floor(random.next() * (CLUSTER.stones[1] - CLUSTER.stones[0] + 1) * (0.4 + 0.6 * rocky));
+    const [ax, ay] = [cos(boulder.turn), sin(boulder.turn)];
+    const stones = [];
+
+    for (let k = 0; k < count; k++) {
+        const [side, far, off, grow, tall, turn, variant] = Array.from({ length: 7 }, () => random.next());
+        const along = (side < 0.5 ? -1 : 1) * (boulder.size + CLUSTER.reach[0] + (CLUSTER.reach[1] - CLUSTER.reach[0]) * far);
+        const across = (off - 0.5) * 2 * CLUSTER.across * along;
+        const stone = {
+            kind: "stone",
+            x: boulder.x + ax * along - ay * across,
+            y: boulder.y + ay * along + ax * across,
+            size: boulder.size * (CLUSTER.size[0] + (CLUSTER.size[1] - CLUSTER.size[0]) * grow),
+            turn: boulder.turn + (turn - 0.5) * 2 * CLUSTER.turn,
+            variant,
+        };
+
+        stone.height = stone.size * (FEATURES.stone.height[0] + (FEATURES.stone.height[1] - FEATURES.stone.height[0]) * tall);
+        stone.squares = squaresOf(stone, FEATURES.stone);
+        stone.opaque = false;
+        stones.push(stone);
+    }
+
+    return stones;
 }
 
 // Which kind, of a land's (their weights, the rocky kinds more likely where it's rocky and the

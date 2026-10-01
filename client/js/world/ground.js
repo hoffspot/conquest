@@ -29,6 +29,10 @@ const SPLAT_RESOLUTION = 4;
 // How many rows of texels splatting makes a step
 const SPLAT_ROWS = 32;
 
+// The grass beside a road worn to the road's dirt: up to this much of it in the eight squares
+// round it, half as much a square further off (raggedly: as the edges' noise has it)
+const WORN = 0.55;
+
 // The kinds of ground blended over the grass, in the splat's red, green, blue and alpha, and
 // how many metres one copy of each texture covers (cobbles about 16 cm across, a road's pebbles a
 // few centimetres, furrows half a metre apart)
@@ -222,15 +226,17 @@ export function* splatting(kindAt, [x0, y0, width, height], resolution = SPLAT_R
 
     LAYERS.forEach(([kind], layer) => (layerOf[kind] = layer));
 
-    // Each square's layer (-1 for none), one square further round, for the blend at the edges
-    const kinds = new Int8Array((width + 2) * (height + 2));
+    // Each square's layer (-1 for none), three squares further round, for the blend at the edges
+    // (and how worn the squares one further round are)
+    const across = width + 6;
+    const kinds = new Int8Array(across * (height + 6));
     let any = false;
 
-    for (let j = 0; j < height + 2; j++) {
-        for (let i = 0; i < width + 2; i++) {
-            const layer = layerOf[kindAt(x0 + i - 1, y0 + j - 1) ?? GROUND.grass];
+    for (let j = 0; j < height + 6; j++) {
+        for (let i = 0; i < across; i++) {
+            const layer = layerOf[kindAt(x0 + i - 3, y0 + j - 3) ?? GROUND.grass];
 
-            kinds[j * (width + 2) + i] = layer;
+            kinds[j * across + i] = layer;
             any ||= layer >= 0;
         }
     }
@@ -239,7 +245,30 @@ export function* splatting(kindAt, [x0, y0, width, height], resolution = SPLAT_R
         return { data, width: w, height: h, any };
     }
 
-    const layerAt = (i, j) => kinds[(j + 1) * (width + 2) + i + 1];
+    const layerAt = (i, j) => kinds[(j + 3) * across + i + 3];
+    // (How worn each square of grass is: 2 right beside a road, 1 a square further off, else 0;
+    // the same wherever the map's cut)
+    const worn = new Uint8Array(across * (height + 6));
+
+    for (let j = 2; j < height + 4; j++) {
+        for (let i = 2; i < across - 2; i++) {
+            const k = j * across + i;
+
+            if (kinds[k] >= 0) {
+                continue;
+            }
+
+            for (let dy = -2; dy <= 2 && worn[k] < 2; dy++) {
+                for (let dx = -2; dx <= 2; dx++) {
+                    if (kinds[k + dy * across + dx] === 0) {
+                        worn[k] = Math.max(worn[k], Math.abs(dx) <= 1 && Math.abs(dy) <= 1 ? 2 : 1);
+                    }
+                }
+            }
+        }
+    }
+
+    const wornAt = (i, j) => worn[(j + 3) * across + i + 3] / 2;
 
     for (let j = 0; j < h; j++) {
         if (j % SPLAT_ROWS === 0) {
@@ -262,7 +291,10 @@ export function* splatting(kindAt, [x0, y0, width, height], resolution = SPLAT_R
             const c2 = layerAt(x, y + 1);
             const c3 = layerAt(x + 1, y + 1);
 
-            if (c0 < 0 && c1 < 0 && c2 < 0 && c3 < 0) {
+            // (Worn to dirt beside a road)
+            const wear = WORN * ((1 - tx) * (1 - ty) * wornAt(x, y) + tx * (1 - ty) * wornAt(x + 1, y) + (1 - tx) * ty * wornAt(x, y + 1) + tx * ty * wornAt(x + 1, y + 1));
+
+            if (c0 < 0 && c1 < 0 && c2 < 0 && c3 < 0 && wear === 0) {
                 continue;
             }
 
@@ -293,6 +325,10 @@ export function* splatting(kindAt, [x0, y0, width, height], resolution = SPLAT_R
 
                     data[(j * w + i) * 4 + layer] = Math.round(t * t * (3 - 2 * t) * 255);
                 }
+            }
+
+            if (wear > 0) {
+                data[(j * w + i) * 4] = Math.max(data[(j * w + i) * 4], Math.round(Math.max(0, Math.min(1, wear * (0.6 + noise * 1.2))) * 255));
             }
         }
     }

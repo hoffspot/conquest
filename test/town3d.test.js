@@ -59,7 +59,10 @@ describe("the ground (ground.js)", () => {
                 const values = [0, 1, 2, 3].map((layer) => at(x + 0.5, y + 0.5, layer));
 
                 if (kind === GROUND.grass) {
-                    assert.deepEqual(values, [0, 0, 0, 0], `grass at ${x}, ${y}`);
+                    // (But the grass beside a road, worn to its dirt)
+                    const worn = [-3, -2, -1, 0, 1, 2, 3].some((dy) => [-3, -2, -1, 0, 1, 2, 3].some((dx) => world.ground[y + dy]?.[x + dx] === GROUND.road));
+
+                    assert.deepEqual(worn ? values.slice(1) : values, worn ? [0, 0, 0] : [0, 0, 0, 0], `grass at ${x}, ${y}`);
                 } else {
                     assert.equal(values[layers[kind]], 255, `ground ${kind} at ${x}, ${y}`);
                     found.add(kind);
@@ -89,6 +92,30 @@ describe("the ground (ground.js)", () => {
 
         assert.equal(compared, 120 * 16 * 4);
         assert.equal(splatOf(() => GROUND.grass, [0, 0, 8, 8]).any, false, "grass alone");
+    });
+
+    it("wears the grass beside a road to its dirt, raggedly, most right beside it, and none further off or beside other ground", () => {
+        // (A road four metres wide down x 20 to 23, a cobbled square's edge down x 36 to 39)
+        const kindAt = (x) => (x >= 20 && x < 24 ? GROUND.road : x >= 36 && x < 40 ? GROUND.cobbles : GROUND.grass);
+        const { data } = splatOf(kindAt, [0, 0, 48, 16], 4);
+        const road = (x) => Array.from({ length: 16 * 4 }, (_, j) => [0, 1, 2, 3].map((i) => data[(j * 192 + x * 4 + i) * 4])).flat();
+
+        for (const x of [0, 10, 16, 27, 30, 33, 34, 42, 47]) {
+            assert.ok(road(x).every((value) => value === 0), `no wear at ${x}`);
+        }
+
+        // (Beside it: some of its dirt, never all, as ragged as the edges' noise; less a square
+        // further off)
+        const mean = (x) => road(x).reduce((sum, value) => sum + value, 0) / road(x).length;
+
+        for (const x of [19, 24]) {
+            const values = road(x);
+
+            assert.ok(mean(x) > 40 && mean(x) < 160, `${mean(x)} at ${x}`);
+            assert.ok(Math.max(...values) - Math.min(...values) > 40, `ragged at ${x}`);
+        }
+
+        assert.ok(mean(18) > 10 && mean(18) < mean(19) && mean(25) > 10 && mean(25) < mean(24), `${mean(18)}, ${mean(25)} a square further off`);
     });
 
     it("gives every land a colour over the grass, or none", () => {

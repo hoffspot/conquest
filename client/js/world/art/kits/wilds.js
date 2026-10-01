@@ -1962,6 +1962,8 @@ function draw(mesher, random, kind, land) {
     switch (kind) {
         case "boulder":
             return rock(mesher, random, { detail: 1, rough: random.range(0.2, 0.35), cuts: random.int(2, 6), squash: random.range(0.55, 0.9), ...stone });
+        case "stone":
+            return rock(mesher, random, { detail: 0, rough: random.range(0.25, 0.4), cuts: random.int(1, 4), squash: random.range(0.5, 0.85), ...stone });
         case "outcrop":
             return land === "volcanic" && random.chance(0.6) ? columns(mesher, random) : outcrop(mesher, random, stone);
         case "log":
@@ -1971,6 +1973,7 @@ function draw(mesher, random, kind, land) {
         case "snag":
             return snag(mesher, random);
         case "bush":
+        case "shrub":
             return bush(mesher, random, bushLook(random, land));
         case "cairn":
             return cairn(mesher, random, look.stone);
@@ -2147,8 +2150,10 @@ export function featureMesh(features, landAt, [x0, y0], groundAt = () => 0) {
         const tint = tintOf(hashOf(Math.floor(feature.x * 10), Math.floor(feature.y * 10), 17));
         const reach = Math.max(scale[0], scale[2]) * 0.7;
         // (Set down on the lowest of the ground under it, a little into it, so on a slope none of
-        // it's left hanging over the ground)
-        const base = Math.min(...[[0, 0], [-reach, 0], [reach, 0], [0, -reach], [0, reach]].map(([dx, dy]) => groundAt(feature.x + dx * 0.7, feature.y + dy * 0.7))) - 0.05;
+        // it's left hanging over the ground; a boulder or a stone well into it, as the earth's
+        // built up round it over the years)
+        const sunk = feature.kind === "boulder" || feature.kind === "stone" ? SUNK * feature.height : 0;
+        const base = Math.min(...[[0, 0], [-reach, 0], [reach, 0], [0, -reach], [0, reach]].map(([dx, dy]) => groundAt(feature.x + dx * 0.7, feature.y + dy * 0.7))) - 0.05 - sunk;
 
         place(mesher, part, { at: [feature.x - x0, base, feature.y - y0], turn, scale, tint, shift: [feature.variant * 7.3, feature.variant * 3.1] });
         boxes.push({ min: [feature.x - reach, feature.y - reach], max: [feature.x + reach, feature.y + reach], top: base + part.top * scale[1] });
@@ -2171,11 +2176,22 @@ function featureLook({ kind, x, y, variant }, landAt) {
     return [kind, landAt(Math.floor(x), Math.floor(y)), Math.floor(variant * VARIANTS) % VARIANTS];
 }
 
+// How far into the ground a boulder or a stone is sunk (of its height)
+const SUNK = 0.22;
+
+// How much longer than broad a boulder or a stone is, lying along the way the rock runs (its turn:
+// core/wilds.js strikeAt)
+const LONG = [1.25, 0.82];
+
 // How a feature's look is stretched and turned to its size (its looks are about a metre)
 function fit({ kind, size, height, turn }, part) {
     const tall = height / Math.max(0.01, part.top);
 
     switch (kind) {
+        case "boulder":
+        case "stone":
+            // (Lying along the strike: core's turn is from east towards south, ours about the upright)
+            return { scale: [size * 2 * LONG[0], tall * (1 + SUNK), size * 2 * LONG[1]], turn: -turn };
         case "log":
         case "logpile":
         case "ruin":
@@ -2202,6 +2218,16 @@ function fit({ kind, size, height, turn }, part) {
 
 // The fields' grid (metres), and how far (squares) trees' shade and water's wet reach
 const FIELD_STEP = 4;
+const SHADE_REACH = 4;
+const WET_REACH = 3;
+
+/**
+ * Hedgerows along the edges of farmed blocks of fields (core/overworld.js hedgeAt): a shrub on as
+ * many of their squares as `thick` (the rest gaps; fewer as the undergrowth's density is), as big
+ * as `size` (of a bush's look, about a metre across: so each meets the next, a gap only where two
+ * or more are missing); the drawing's alone, in no one's way.
+ */
+export const HEDGES = Object.freeze({ thick: 0.7, size: [1.2, 1.8] });
 
 /**
  * Flower carpets (the research report behind M7b: the dusk hillside): where slow noise (`size`
@@ -2211,8 +2237,6 @@ const FIELD_STEP = 4;
  * the grass among them as much the fewer.
  */
 export const CARPETS = Object.freeze({ size: 70, from: 0.5, to: 0.66, flat: 0.4, sunny: 6, more: 3, one: 14, others: 1.5, kinds: 160, fewer: 0.6 });
-const SHADE_REACH = 4;
-const WET_REACH = 3;
 
 /**
  * Where a chunk's undergrowth grows, and what: [{ kind, look (which of its looks), x, y (metres, in
@@ -2304,6 +2328,29 @@ export function* sowing(overworld, chunk, { density = 1 } = {}) {
             }
 
             const tended = overworld.settled(x, y);
+
+            // (A hedgerow along the edge of a farmed block of fields, gaps in it here and there: more
+            // of them on slower devices)
+            if (!tended && overworld.hedgeAt?.(x, y)) {
+                if (hashOf(x, y, seed + 9) < HEDGES.thick * density) {
+                    const [ix, iy] = [x + 0.3 + hashOf(x, y, seed + 4) * 0.4, y + 0.3 + hashOf(x, y, seed + 5) * 0.4];
+
+                    items.push({
+                        kind: "shrub",
+                        land,
+                        look: Math.floor(hashOf(x, y, seed + 3) * VARIANTS),
+                        x: ix,
+                        y: iy,
+                        ground: chunk.heights ? between(chunk.heights, ix - x0, iy - y0) : 0,
+                        turn: hashOf(x, y, seed + 6) * TAU,
+                        size: HEDGES.size[0] + hashOf(x, y, seed + 7) * (HEDGES.size[1] - HEDGES.size[0]),
+                        tint: tintOf(hashOf(x, y, seed + 8)),
+                    });
+                }
+
+                continue;
+            }
+
             const bloom = BLOOMS.has(land) ? field("bloom", i, j) : 0;
             // (A carpet of flowers, most of one kind: on the sunny side of a hill, a little on the flat)
             const carpet = BLOOMS.has(land) && !tended ? field("carpet", i, j) * Math.min(1, Math.max(0, CARPETS.flat + facingSun(chunk.heights, i, j) * CARPETS.sunny)) : 0;
@@ -2484,7 +2531,7 @@ export function undergrowthMesh(items, origin) {
 const HOME_FEATURES = ["termites", "kopje", "skullpole", "stakes", "wrack", "mangrove", "stela", "moonstone", "leaflamp", "webstump", "cocoon", "crystals"];
 
 /** Every kind drawn here (the features' and the undergrowth's), for tests and the lab. */
-export const KINDS = Object.freeze([...new Set(["boulder", "outcrop", "log", "stump", "snag", "bush", "cairn", "menhir", "mound", "haystack", "scarecrow", "logpile", "ruin", "ribs", ...HOME_FEATURES, ...Object.values(UNDERGROWTH).flatMap(({ kinds }) => Object.keys(kinds)), ...Object.values(HOME_UNDERGROWTH).flatMap((kinds) => Object.keys(kinds))])]);
+export const KINDS = Object.freeze([...new Set(["boulder", "stone", "shrub", "outcrop", "log", "stump", "snag", "bush", "cairn", "menhir", "mound", "haystack", "scarecrow", "logpile", "ruin", "ribs", ...HOME_FEATURES, ...Object.values(UNDERGROWTH).flatMap(({ kinds }) => Object.keys(kinds)), ...Object.values(HOME_UNDERGROWTH).flatMap((kinds) => Object.keys(kinds))])]);
 
 /** One look of a kind for a land, as a geometry on its own (for tests and the lab). */
 export function lookGeometry(kind, land = "meadow", index = 0) {

@@ -837,9 +837,12 @@ than about 33°, rock shows through the grass, all rock by about 45°: a rock te
 across laid from the side and from above, as the slope faces, at two sizes turned against each
 other so it doesn't repeat. (A town on its own, in the labs, has one flat mesh under it all,
 carrying on 110 metres past its edges into the fog.) A small "splat" texture, four texels to a metre made
-from the chunk's squares (and one more round it, so the edges blend across chunks as if there
+from the chunk's squares (and three more round it, so the edges blend across chunks as if there
 were none), says how much road, cobbles, soil and courtyard earth is at each point, with soft,
-ragged edges, the same wherever the world's cut (mipmapped, so a far road's ragged edge, many
+ragged edges, the same wherever the world's cut; the grass beside a road is worn to the road's dirt,
+about a third of it right beside it (the eight squares round it) and half that a square further
+off, as raggedly as the edges' noise has it (terrain plan M7b: `WORN`), so a road frays into the
+grass rather than stopping at a line (mipmapped, so a far road's ragged edge, many
 texels to a pixel, doesn't crawl as the camera moves); the shader blends tiling textures by it over
 grass, each at its real size (cobbles about 16 cm across), and shades everything by a much larger
 copy of the grass so the repeats don't show from afar. The grass takes its land's colour
@@ -867,7 +870,10 @@ byte each, its crop and which way its strip runs), from the world's seed and the
 metres by integer hashing alone, the same in every browser; the ground reads them from a small
 texture a texel a square (`fieldsOf`), its chunks with fields only. Trees aren't planted in the
 strips (on the verges, as hedgerow trees), and of the land's own things only haystacks and
-scarecrows stand in them.
+scarecrows stand in them. A hedgerow runs along each farmed block's edges (its first row and
+column: `hedgeAt`; kits/wilds.js `HEDGES`): a shrub on seven of its squares in ten, a metre and
+a half or so across, so each meets the next and a gap shows only where two or more are missing (more of them at a lower quality, as the undergrowth's thinner), and
+nothing else of the undergrowth there; the drawing's alone, in no one's way.
 
 **Where something stands on it** (a house, a wall, a rock, a trunk: the squares that can't be
 seen through), less of the sky reaches the ground, so less of the light from all round (view.js)
@@ -1007,7 +1013,10 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
 - **The land's own features** (core/wilds.js places them: see WORLD.md, *The world in chunks*;
   kits/wilds.js draws them), one mesh a chunk with the atlas, casting shadows:
   - boulders (granite, pale limestone, red sandstone, black basalt; mossy in the woods and
-    marsh, snow on their tops in the snow and the mountains, flecked with lichen), rocky
+    marsh, snow on their tops in the snow and the mountains, flecked with lichen), each longer
+    than it's broad, lying along the way the rock runs there, sunk a fifth of its height into
+    the ground as the earth's built up round it over the years, among a few smaller stones
+    strung out along the same way (terrain plan M7b: core/wilds.js `CLUSTER`), rocky
     outcrops, basalt columns in the volcanic lands, cairns and standing stones;
   - trees long fallen and gone silver (their trunks bending and tapering, broken branches, the
     root plate torn up with earth still in it), old stumps (sawn or broken, roots flaring,

@@ -4,11 +4,12 @@
 // the tall grass (world/grassmap.js) and drawn on the ground (world/ground.js)
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
-import { ALONG, blockAlong, CROP, fieldAt, FIELDS, sown } from "../client/js/core/fields.js";
+import { ALONG, blockAlong, CROP, fieldAt, FIELDS, hedgeLine, sown } from "../client/js/core/fields.js";
 import { buildWorld, CHUNK } from "../client/js/core/overworld.js";
 import { GROUND } from "../client/js/core/setpieces/pieces.js";
 import { fieldsOf } from "../client/js/world/ground.js";
 import { CROP_STANDS, grassMap } from "../client/js/world/grassmap.js";
+import { HEDGES, undergrowthOf } from "../client/js/world/art/kits/wilds.js";
 
 const SEED = 1;
 
@@ -238,6 +239,47 @@ describe("the fields in the world (overworld.js, grassmap.js, ground.js)", () =>
         }
 
         assert.ok(stood > 1000, `${stood} squares of crops`);
+    });
+
+    it("grows hedgerows along the farmed blocks' edges, gaps in them, and nothing else there; fewer on slower devices", () => {
+        let [hedge, shrubs, thinner] = [0, 0, 0];
+
+        for (const chunk of chunks) {
+            const items = undergrowthOf(overworld, chunk);
+            const on = new Map();
+
+            for (const item of items) {
+                const k = `${Math.floor(item.x)},${Math.floor(item.y)}`;
+
+                on.set(k, [...(on.get(k) ?? []), item.kind]);
+            }
+
+            for (let k = 0; k < CHUNK * CHUNK; k++) {
+                const [x, y] = [chunk.x0 + (k % CHUNK), chunk.y0 + Math.floor(k / CHUNK)];
+                const here = on.get(`${x},${y}`) ?? [];
+
+                if (!overworld.hedgeAt(x, y)) {
+                    assert.ok(!here.includes("shrub"), `a shrub off the hedges at ${x}, ${y}`);
+                    continue;
+                }
+
+                // (Along the first row or column of a block of fields, in no one's way)
+                assert.ok(hedgeLine(SEED, x, y) && !chunk.crops[k]);
+
+                if (chunk.ground[k] === GROUND.grass && !chunk.blocked[k] && !chunk.water[k] && !chunk.bridge[k] && !overworld.settled(x, y)) {
+                    // (A shrub or a gap, nothing else)
+                    assert.ok(here.every((kind) => kind === "shrub") && here.length <= 1, `${here.join(", ")} at ${x}, ${y}`);
+                    hedge++;
+                    shrubs += here.length;
+                }
+            }
+
+            thinner += undergrowthOf(overworld, chunk, { density: 0.5 }).filter(({ kind }) => kind === "shrub").length;
+        }
+
+        assert.ok(hedge > 150, `${hedge} squares of hedges`);
+        assert.ok(Math.abs(shrubs / hedge - HEDGES.thick) < 0.1, `${shrubs} shrubs on ${hedge} squares`);
+        assert.ok(Math.abs(thinner / shrubs - 0.5) < 0.12, `${thinner} of ${shrubs} at half density`);
     });
 
     it("tells the ground each square's crop and which way its strip runs, and nothing where there are no fields", () => {
