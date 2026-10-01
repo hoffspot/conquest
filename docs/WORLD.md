@@ -340,7 +340,8 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   lattice of points 4 m apart, sixteen ways out of each, a step steeper than the road's grade
   costing dearly and one three times steeper not taken at all, nor any into a lake or the sea,
   and turning costing a little, so it climbs across the slope in long straight legs and
-  hairpins, rounded at its turns. The roads from the town start from where
+  hairpins, rounded at its turns (each stretch found from its northern end, so two roads sharing
+  it, one going up and one down, share its way). The roads from the town start from where
   its streets leave it. A road to another settlement stops 2 metres short of its square (on
   dry land: never in a river, so its bridge over it is its own) and
   waits: when the settlement's laid out, it's carried on to the end of the main street nearest

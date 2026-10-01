@@ -150,7 +150,10 @@ function climbing(plan, points, kind) {
             Math.min(WORLD_SIZE - 1, Math.max(...among.map(([x]) => x)) + CLIMBS.room),
             Math.min(WORLD_SIZE - 1, Math.max(...among.map(([, y]) => y)) + CLIMBS.room),
         ];
-        const way = wayOver(plan, line[a], line[b], { grade, box });
+        // (Found from its northern end, or western if they're level, whichever way the road runs:
+        // roads sharing a stretch, one up it and one down, share its way too)
+        const [from, to] = [line[a], line[b]];
+        const way = from[1] < to[1] || (from[1] === to[1] && from[0] <= to[0]) ? wayOver(plan, from, to, { grade, box }) : wayOver(plan, to, from, { grade, box })?.reverse();
 
         if (way) {
             line = [...line.slice(0, a), ...rounded(way), ...line.slice(b + 1)];

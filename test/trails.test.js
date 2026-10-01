@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { buildWorld, CHUNK } from "../client/js/core/overworld.js";
+import { CELL } from "../client/js/core/worldplan/plan.js";
 import { GRADE, graded } from "../client/js/core/terrain/ground.js";
 import { landHeight, stillWaterAt } from "../client/js/core/terrain/height.js";
 import { rounded, wayOver } from "../client/js/core/terrain/ways.js";
@@ -81,6 +82,24 @@ describe("roads and trails on the land (terrain/ways.js, core/trails.js)", () =>
             assert.ok(x >= trail.box[0] && y >= trail.box[1] && x <= trail.box[2] && y <= trail.box[3], "within its room");
             assert.equal(stillWaterAt(overworld.plan, x, y, landHeight(overworld.plan, x, y)), null, "never into a lake or the sea");
         }
+    });
+
+    it("takes a road too steep to grade up in hairpins, and two roads sharing the slope, one up and one down, share them", () => {
+        // (Seed 2's tracks up from the coast north-east of its start town: one runs up the
+        // slope, the other down it)
+        const other = buildWorld({ seed: 2 }).maps.town;
+        const lines = new Map([...other.roads.values()].flat().map((segment) => [segment[5].id, segment[5]]));
+        // (The stretch found its own way: from the first of its points much closer together than
+        // the plan's cells' to the last)
+        const climb = ({ planned }) => {
+            const close = planned.map((point, k) => (k > 0 && Math.hypot(point[0] - planned[k - 1][0], point[1] - planned[k - 1][1]) < CELL / 6 ? k : 0)).filter((k) => k > 0);
+
+            return planned.slice(close[0] - 1, close.at(-1) + 1);
+        };
+        const [up, down] = [climb(lines.get("road 0040")), climb(lines.get("road 0148"))];
+
+        assert.ok(up.length > 20, `${up.length} points`);
+        assert.deepEqual([...down].reverse(), up);
     });
 
     it("rounds a way's turns, keeping its ends", () => {
