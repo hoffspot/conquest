@@ -60,7 +60,11 @@ function shapeOf(world, link, end) {
         const out = [Math.sin(door.facing), Math.cos(door.facing)];
         const across = [Math.cos(door.facing), -Math.sin(door.facing)];
         const half = door.width / 2 + 0.08;
-        const [bottom, top] = [door.floor - 0.06, door.floor + door.height + 0.1];
+
+        // (Its floor over the ground its building stands on: the ground at its middle)
+        const middle = world.interiors?.buildings?.get(link.building)?.at ?? [door.x - out[0], door.z - out[1]];
+        const base = map.heightAt?.(middle[0], middle[1]) ?? 0;
+        const [bottom, top] = [base + door.floor - 0.06, base + door.floor + door.height + 0.1];
         const at = (a, y, o = 0.3) => [door.x + across[0] * a + out[0] * o, y, door.z + across[1] * a + out[1] * o];
         const corners = [at(-half, bottom), at(half, bottom), at(half, top), at(-half, top)];
         const xs = corners.map(([x]) => x);

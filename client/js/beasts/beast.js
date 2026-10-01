@@ -256,17 +256,20 @@ export class BeastAvatar {
     /**
      * Come down out of the sky to land where it's put (a winged one's: a wyvern's, a dragon's):
      * from `from` ([x, y, z], metres; or from far up behind it), gliding down and beating its
-     * wings as it flares to land, over `duration` seconds. It's where its actor is all along;
-     * it's only drawn coming down.
+     * wings as it flares to land on the ground (`ground` metres up there, as it's kept after:
+     * `ground`), over `duration` seconds. It's where its actor is all along; it's only drawn
+     * coming down.
      */
-    arrive({ from = null, duration = 5 } = {}) {
+    arrive({ from = null, duration = 5, ground = this.ground ?? 0 } = {}) {
         if (!this.winged) {
             return;
         }
 
         const { x, z } = this.object.position;
         const away = this.random() * Math.PI * 2;
-        const start = from ? new THREE.Vector3(...from) : new THREE.Vector3(x + Math.sin(away) * 55, 34 + this.random() * 10, z + Math.cos(away) * 55);
+        const start = from ? new THREE.Vector3(...from) : new THREE.Vector3(x + Math.sin(away) * 55, ground + 34 + this.random() * 10, z + Math.cos(away) * 55);
+
+        this.ground = ground;
 
         this.arrival = { t: 0, duration, from: start };
     }
@@ -345,7 +348,8 @@ export class BeastAvatar {
         const { from } = arrival;
         const heading = Math.atan2(x - from.x, z - from.z);
         const flare = smoothstep(Math.max(0, (u - 0.72) / 0.28));
-        const height = from.y * (1 - u) ** 1.7;
+        const ground = this.ground ?? 0;
+        const height = ground + (from.y - ground) * (1 - u) ** 1.7;
 
         this.object.position.set(from.x + (x - from.x) * glide, height, from.z + (z - from.z) * glide);
         this.facing = wrapAngle(heading + wrapAngle(facing - heading) * flare);
@@ -357,7 +361,7 @@ export class BeastAvatar {
         if (u >= 1) {
             this.arrival = null;
             this.flight = null;
-            this.object.position.y = 0;
+            this.object.position.y = ground;
             this.object.rotation.set(0, this.facing, 0);
         }
     }

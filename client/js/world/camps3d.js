@@ -53,6 +53,9 @@ export class Camps {
         this.group.name = "camps";
         parent.add(this.group);
 
+        /** The ground's height at a point ((x, z) => metres: set with setGround). */
+        this.groundAt = () => 0;
+
         this.tent = tentGeometry();
         this.door = doorGeometry();
         this.pole = new THREE.CylinderGeometry(0.03, 0.03, TENT.height + 0.25, 5).translate(0, (TENT.height + 0.25) / 2, 0);
@@ -96,6 +99,11 @@ export class Camps {
         return this.tents.get(people);
     }
 
+    /** Pitch camps on this ground (its height at a point, (x, z) => metres; null: flat at 0). */
+    setGround(at) {
+        this.groundAt = at ?? (() => 0);
+    }
+
     /**
      * Pitch a camp: `people` (whose it is), its fire ([x, z] world metres) and tents ([{ at: [x,
      * z], facing }]: each facing the fire, as the battle has facings). Any it had come down first.
@@ -114,7 +122,7 @@ export class Camps {
                 const tent = new THREE.Group();
 
                 tent.add(own.clone());
-                tent.position.set(x, 0, z);
+                tent.position.set(x, this.groundAt(x, z) - 0.03, z);
                 tent.rotation.y = facing;
                 object.add(tent);
                 continue;
@@ -133,7 +141,7 @@ export class Camps {
                 tent.add(pole);
             }
 
-            tent.position.set(x, 0, z);
+            tent.position.set(x, this.groundAt(x, z) - 0.03, z);
             tent.rotation.y = facing;
             object.add(tent);
         }
@@ -169,7 +177,7 @@ export class Camps {
 
         flames.position.y = 0.05;
         hearth.add(flames);
-        hearth.position.set(fx, 0, fz);
+        hearth.position.set(fx, this.groundAt(fx, fz), fz);
         object.add(hearth);
 
         object.traverse((node) => {

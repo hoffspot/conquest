@@ -36,6 +36,11 @@ const LAYERS = [
 
 const GRASS_METRES = 5;
 
+// Rock, where the ground's too steep for grass to hold: how many metres one copy of its texture
+// covers, and how steep (the up of the ground's slope: 1 flat, 0 sheer) it starts and is all rock
+const ROCK_METRES = 7;
+const ROCK_FROM = Object.freeze({ start: 0.84, all: 0.7 });
+
 // How far the ground carries on past the map's edges (metres): into the fog
 const BEYOND = 110;
 
@@ -271,7 +276,7 @@ function groundTiles() {
             sum += 0.2126 * linear(pixels[k]) + 0.7152 * linear(pixels[k + 1]) + 0.0722 * linear(pixels[k + 2]);
         }
 
-        tiles = { grass, brightness: sum / (pixels.length / 4), layers: LAYERS.map(([, name, size]) => tileTexture(name, size)) };
+        tiles = { grass, brightness: sum / (pixels.length / 4), layers: LAYERS.map(([, name, size]) => tileTexture(name, size)), rock: tileTexture("rock", ROCK_METRES) };
     }
 
     return tiles;
@@ -418,7 +423,7 @@ function homeTexture() {
  * (metres). Every ground material shares one shader.
  */
 export function groundMaterial({ splat = null, area = [0, 0, 1, 1], land = null, contact = null } = {}) {
-    const { grass, brightness, layers } = groundTiles();
+    const { grass, brightness, layers, rock } = groundTiles();
     const material = new THREE.MeshLambertMaterial({ color: 0xffffff });
 
     if (!land) {
@@ -450,14 +455,18 @@ export function groundMaterial({ splat = null, area = [0, 0, 1, 1], land = null,
             grassMap: { value: grass.texture },
             grassSize: { value: grass.size },
             patchMap: { value: patchTexture() },
+            rockMap: { value: rock.texture },
             ...Object.fromEntries(layers.flatMap(({ texture, size }, k) => [[`layer${k}Map`, { value: texture }], [`layer${k}Size`, { value: size }]])),
         });
         shader.vertexShader = shader.vertexShader
-            .replace("#include <common>", "#include <common>\nvarying vec2 vGround;")
-            .replace("#include <worldpos_vertex>", "#include <worldpos_vertex>\nvGround = (modelMatrix * vec4(transformed, 1.0)).xz;");
+            .replace("#include <common>", "#include <common>\nvarying vec2 vGround;\nvarying vec3 vUp;\nvarying float vHeight;")
+            .replace("#include <worldpos_vertex>", "#include <worldpos_vertex>\nvGround = (modelMatrix * vec4(transformed, 1.0)).xz;\nvHeight = (modelMatrix * vec4(transformed, 1.0)).y;\nvUp = normalize(mat3(modelMatrix) * objectNormal);");
         shader.fragmentShader = shader.fragmentShader
             .replace("#include <common>", `#include <common>
 varying vec2 vGround;
+varying vec3 vUp;
+varying float vHeight;
+uniform sampler2D rockMap;
 uniform sampler2D splatMap;
 uniform vec4 splatArea;
 uniform sampler2D contactMap;
@@ -517,6 +526,20 @@ grass = mix(grass, earth, bare * ${PATCHES.bare[2].toFixed(2)} * strength);
 vec3 ground = grass * max(0.0, 1.0 - splat.r - splat.g - splat.b - splat.a);
 ${layers.map((_, k) => `ground += texture2D(layer${k}Map, vGround / layer${k}Size).rgb * splat.${"rgba"[k]};`).join("\n")}
 ground *= 0.82 + 0.45 * variation;
+
+// Rock where it's too steep for grass: read from above on gentler slopes, from the side (whichever
+// way it faces most) on cliffs, tinted a little by the land's own colour
+float steep = 1.0 - smoothstep(${ROCK_FROM.all.toFixed(2)}, ${ROCK_FROM.start.toFixed(2)}, vUp.y);
+if (steep > 0.0) {
+    vec2 across = abs(vUp.x) > abs(vUp.z) ? vec2(vGround.y, vHeight) : vec2(vGround.x, vHeight);
+    // (Each read at two scales, the larger turned, so the texture's repeats don't show)
+    mat2 turned = mat2(0.8, -0.6, 0.6, 0.8);
+    vec3 fromAbove = mix(texture2D(rockMap, vGround / ${ROCK_METRES.toFixed(1)}).rgb, texture2D(rockMap, turned * vGround / ${(ROCK_METRES * 3.1).toFixed(1)}).rgb, 0.45);
+    vec3 fromSide = mix(texture2D(rockMap, across / ${ROCK_METRES.toFixed(1)}).rgb, texture2D(rockMap, turned * across / ${(ROCK_METRES * 3.1).toFixed(1)}).rgb, 0.45);
+    vec3 rock = mix(fromAbove, fromSide, smoothstep(0.75, 0.5, vUp.y));
+    rock = mix(rock, rock * land.rgb / max(0.2, dot(land.rgb, vec3(0.3333))), land.a * 0.35);
+    ground = mix(ground, rock * (0.85 + 0.3 * variation), steep);
+}
 diffuseColor.rgb *= ground;`)
             .replace("#include <aomap_fragment>", `#include <aomap_fragment>
 reflectedLight.indirectDiffuse *= 1.0 - ${CONTACT.loss.toFixed(2)} * groundContact;`);
@@ -634,18 +657,14 @@ export function buildGround(world, { land = null } = {}) {
     return mesh;
 }
 
-// A square of ground CHUNK metres across, its corner at the origin, for every chunk
-let chunkPlane = null;
-
 /**
  * The ground of one chunk of the world outside (overworld.js's), tinted by `land` (landColours'):
  * a mesh at its place. Chunks of grass alone share a material; the rest have their own splat.
  */
-export function chunkGround(overworld, chunk, land) {
-    return allAtOnce(layingGround(overworld, chunk, land));
+export function chunkGround(overworld, chunk, land, step = 1) {
+    return allAtOnce(layingGround(overworld, chunk, land, step));
 }
 
-/** The same (chunkGround), made a step at a time (each a yield: its splat's), returning it. */
 // A square's ground as it's drawn: under a lake or a river, packed earth (the land sets soil
 // there, which is drawn ploughed, in furrows, and shows through the shallows)
 function bedOf(overworld, x, y) {
@@ -660,11 +679,140 @@ function bedOf(overworld, x, y) {
     return chunk.water[(y - chunk.y0) * CHUNK + (x - chunk.x0)] ? GROUND.courtyard : kind;
 }
 
-export function* layingGround(overworld, chunk, land) {
+// How far each chunk's ground hangs down round its edges (metres): where it meets a chunk drawn
+// with its corners further apart, the gap between them is hidden behind it
+const SKIRT = 2;
+
+// Each spacing's triangles, shared by every chunk's ground drawn at it: each square's two split
+// from its north-west corner to its south-east (as core/terrain/ground.js reads heights between
+// corners), and the skirt round its edges
+const INDICES = new Map();
+
+// The corners round a chunk's edge, in order (clockwise from its north-west corner, as seen from
+// above), for `count` squares a side
+function rim(count) {
+    const corners = [];
+
+    for (let i = 0; i < count; i++) {
+        corners.push([i, 0]);
+    }
+
+    for (let j = 0; j < count; j++) {
+        corners.push([count, j]);
+    }
+
+    for (let i = count; i > 0; i--) {
+        corners.push([i, count]);
+    }
+
+    for (let j = count; j > 0; j--) {
+        corners.push([0, j]);
+    }
+
+    return corners;
+}
+
+function indicesOf(count) {
+    if (!INDICES.has(count)) {
+        const side = count + 1;
+        const around = rim(count);
+        const indices = [];
+
+        for (let j = 0; j < count; j++) {
+            for (let i = 0; i < count; i++) {
+                const [nw, ne, sw, se] = [j * side + i, j * side + i + 1, (j + 1) * side + i, (j + 1) * side + i + 1];
+
+                indices.push(nw, sw, se, nw, se, ne);
+            }
+        }
+
+        // (The skirt: each edge's corner joined to its copy hanging below it, facing out)
+        around.forEach(([i, j], k) => {
+            const [a, b] = [j * side + i, around[(k + 1) % around.length][1] * side + around[(k + 1) % around.length][0]];
+            const [a2, b2] = [side * side + k, side * side + ((k + 1) % around.length)];
+
+            indices.push(a, b, b2, a, b2, a2);
+        });
+
+        INDICES.set(count, new THREE.BufferAttribute(new Uint32Array(indices), 1));
+    }
+
+    return INDICES.get(count);
+}
+
+/**
+ * A chunk's ground as a mesh's geometry (its corner at the origin): its heights
+ * (core/terrain/ground.js: CHUNK + 1 corners a side, a metre apart) every `step` metres, lit by
+ * the slope round each corner (read into the chunks beside it where their heights are to hand:
+ * `heightOf(x, y)`, metres into this chunk, or null), with a skirt round its edges.
+ */
+export function groundGeometry(heights, step = 1, heightOf = () => null) {
+    const count = CHUNK / step;
+    const side = count + 1;
+    const around = rim(count);
+    const positions = new Float32Array((side * side + around.length) * 3);
+    const normals = new Float32Array(positions.length);
+    const corners = CHUNK + 1;
+    const at = (i, j) => (i >= 0 && j >= 0 && i <= CHUNK && j <= CHUNK ? heights[j * corners + i] : heightOf(i, j));
+
+    for (let j = 0; j < side; j++) {
+        for (let i = 0; i < side; i++) {
+            const [u, v] = [i * step, j * step];
+            const k = (j * side + i) * 3;
+            const here = heights[v * corners + u];
+            // (The slope from the corners a spacing each way: where there's none to hand, this one)
+            const [west, east] = [at(u - step, v) ?? here, at(u + step, v) ?? here];
+            const [north, south] = [at(u, v - step) ?? here, at(u, v + step) ?? here];
+            const [dx, dz] = [(east - west) / ((at(u + step, v) === null ? 0 : step) + (at(u - step, v) === null ? 0 : step) || 1), (south - north) / ((at(u, v + step) === null ? 0 : step) + (at(u, v - step) === null ? 0 : step) || 1)];
+            const length = Math.hypot(dx, 1, dz);
+
+            positions[k] = u;
+            positions[k + 1] = here;
+            positions[k + 2] = v;
+            normals[k] = -dx / length;
+            normals[k + 1] = 1 / length;
+            normals[k + 2] = -dz / length;
+        }
+    }
+
+    // (The skirt's corners: copies of the edge's, SKIRT below them, lit as they are)
+    around.forEach(([i, j], n) => {
+        const [from, to] = [(j * side + i) * 3, (side * side + n) * 3];
+
+        positions[to] = positions[from];
+        positions[to + 1] = positions[from + 1] - SKIRT;
+        positions[to + 2] = positions[from + 2];
+        normals.copyWithin(to, from, from + 3);
+    });
+
+    const geometry = new THREE.BufferGeometry();
+
+    geometry.setIndex(indicesOf(count));
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
+    geometry.computeBoundingSphere();
+    geometry.computeBoundingBox();
+
+    return geometry;
+}
+
+// A chunk's ground's geometry, lit into its neighbours where their heights are kept
+function chunkGeometry(overworld, chunk, step) {
+    const { cx, cy } = chunk;
+    const heightOf = (i, j) => {
+        const [nx, ny] = [cx + Math.floor(i / CHUNK), cy + Math.floor(j / CHUNK)];
+        const other = overworld.ground?.peek?.(nx, ny);
+
+        return other ? other.heights[(j - (ny - cy) * CHUNK) * (CHUNK + 1) + (i - (nx - cx) * CHUNK)] : null;
+    };
+
+    return groundGeometry(chunk.heights, step, heightOf);
+}
+
+/** The same (chunkGround), made a step at a time (each a yield: its splat's), returning it. */
+export function* layingGround(overworld, chunk, land, step = 1) {
     const { x0, y0 } = chunk;
     const size = CHUNK;
-
-    chunkPlane ??= new THREE.PlaneGeometry(size, size).rotateX(-Math.PI / 2).translate(size / 2, 0, size / 2);
 
     // (One square further round than the chunk, so the kinds of ground blend across its edges
     // as they would were there no edge)
@@ -682,15 +830,25 @@ export function* layingGround(overworld, chunk, land) {
         material = grassOnly.get(land);
     }
 
-    const mesh = new THREE.Mesh(chunkPlane, material);
+    const mesh = new THREE.Mesh(chunkGeometry(overworld, chunk, step), material);
 
     mesh.name = "ground";
+    mesh.userData.step = step;
     mesh.position.set(x0, 0, y0);
     mesh.receiveShadow = true;
     mesh.matrixAutoUpdate = false;
     mesh.updateMatrix();
 
     return mesh;
+}
+
+/** Draw a chunk's ground (layingGround's) with its corners `step` metres apart instead. */
+export function respaceGround(overworld, chunk, mesh, step) {
+    if (mesh.userData.step !== step) {
+        mesh.geometry.dispose();
+        mesh.geometry = chunkGeometry(overworld, chunk, step);
+        mesh.userData.step = step;
+    }
 }
 
 // The material for chunks of grass alone, for each land's colours
@@ -705,6 +863,8 @@ export function disposeGrass(land) {
 /** Throw away a chunk's ground (chunkGround's): its own splat and material, if it has them. */
 export function disposeChunkGround(mesh) {
     const { material } = mesh;
+
+    mesh.geometry.dispose();
 
     if (material.userData.own) {
         material.userData.splat?.dispose();

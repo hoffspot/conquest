@@ -15,14 +15,15 @@ import { Sky, SKY_COLOURS } from "./sky.js";
 import { CUTAWAY } from "./town3d.js";
 
 /**
- * How much each quality level draws (`undergrowth`: how thick the grass and flowers grow,
- * chunks3d.js), and how often (`frameRate`: at most, a second, app/pacing.js; 0, as often as the
- * screen refreshes).
+ * How much each quality level draws (`undergrowth`: how thick the grass and flowers grow;
+ * `ground`: how far apart the ground's corners are drawn, metres, in the chunk the player's in,
+ * the ring round it, and further off: chunks3d.js SPACING), and how often (`frameRate`: at most,
+ * a second, app/pacing.js; 0, as often as the screen refreshes).
  */
 export const QUALITY = Object.freeze({
-    low: { label: "Low", pixelRatio: 1, shadows: 1024, antialias: false, hair: 0.2, skin: 512, undergrowth: 0.5, frameRate: 30 },
-    medium: { label: "Medium", pixelRatio: 1.5, shadows: 2048, antialias: true, hair: 0.3, skin: 512, undergrowth: 0.75, frameRate: 60 },
-    high: { label: "High", pixelRatio: 2, shadows: 2048, antialias: true, hair: 0.45, skin: 1024, undergrowth: 1, frameRate: 0 },
+    low: { label: "Low", pixelRatio: 1, shadows: 1024, antialias: false, hair: 0.2, skin: 512, undergrowth: 0.5, ground: [1, 2, 4], frameRate: 30 },
+    medium: { label: "Medium", pixelRatio: 1.5, shadows: 2048, antialias: true, hair: 0.3, skin: 512, undergrowth: 0.75, ground: [1, 2, 4], frameRate: 60 },
+    high: { label: "High", pixelRatio: 2, shadows: 2048, antialias: true, hair: 0.45, skin: 1024, undergrowth: 1, ground: [1, 1, 2], frameRate: 0 },
 });
 
 /** A quality level for this device: low for small or older phones, medium for phones, high otherwise. */
@@ -58,6 +59,9 @@ const ABOVE_HORIZON = 45;
 // Looking up, the camera comes down behind the player no lower than this over the ground
 // (metres), and past that tilts up from where it is, the player sinking down the picture
 const CAMERA_FLOOR = 0.45;
+
+// How far out the screen's pointed at the ground is looked for (metres)
+const PICK_REACH = 250;
 
 // Clear of a building in the way (the town's `buildings` heights): coming in closer than it,
 // staying `margin` metres clear of it (along the camera's line), or rising over it (up to
@@ -347,6 +351,15 @@ export class View {
     }
 
     /**
+     * The ground's height at any point of the map in view (`at(x, z)`, metres: the world's
+     * ground, core/terrain/ground.js), or null where it's flat at 0 (indoors): what the camera
+     * keeps above, and what the screen's pointed at.
+     */
+    setGround(at) {
+        this.ground = at ?? null;
+    }
+
+    /**
      * How far the camera can be from where it looks, along its line looking `pitch` degrees
      * down, before a building's in the way (metres: Infinity if none is, out to `distance`).
      */
@@ -421,23 +434,42 @@ export class View {
         const { focus, camera, yaw } = this;
         const distance = Math.max(Math.min(this.distance, PULL.least), this.distance - this.pulled);
         const looking = (Math.min(PULL.highest, this.pitch + this.lifted) * Math.PI) / 180;
-        // (Looking up, the camera comes down behind the player to just over the ground, then
-        // tilts up from there)
-        const pitch = Math.max(looking, Math.asin(Math.max(-1, Math.min(0, (CAMERA_FLOOR - focus.y - LOOK_UP) / distance))));
+        // (Looking up, the camera comes down behind the player to just over the ground where they
+        // stand, then tilts up from there)
+        const floor = this.ground ? this.ground(focus.x, focus.z) : 0;
+        const tilted = Math.max(looking, Math.asin(Math.max(-1, Math.min(0, (floor + CAMERA_FLOOR - focus.y - LOOK_UP) / distance))));
+        let pitch = tilted;
+
+        // (And it's kept over the ground behind the player all the way out, rising over a
+        // hillside rather than going into it, still looking at the player; from a couple of
+        // metres back, where the ground can be higher than where the player stands)
+        if (this.ground) {
+            let least = -1;
+
+            for (let along = 2; along <= distance + 0.01; along += Math.max(1, distance / 8)) {
+                const across = Math.cos(tilted) * along;
+                const ground = this.ground(focus.x + Math.sin(yaw) * across, focus.z + Math.cos(yaw) * across);
+
+                least = Math.max(least, (ground + CAMERA_FLOOR - focus.y - LOOK_UP) / along);
+            }
+
+            pitch = Math.max(pitch, Math.asin(Math.max(-1, Math.min(1, least))));
+        }
+
         const across = Math.cos(pitch) * distance;
 
         camera.position.set(focus.x + Math.sin(yaw) * across, focus.y + LOOK_UP + Math.sin(pitch) * distance, focus.z + Math.cos(yaw) * across);
         camera.lookAt(focus.x, focus.y + LOOK_UP, focus.z);
 
-        if (pitch > looking) {
-            camera.rotateX(pitch - looking);
+        if (pitch === tilted && tilted > looking) {
+            camera.rotateX(tilted - looking);
         }
 
         // The sun's shadows follow the player, a little ahead of them where more of the ground is
         // in view (the further out, the more), moved in whole shadow texels so they don't shimmer
         const ahead = Math.min(SHADOW_REACH / 2, distance * 0.35);
 
-        snapToTexels(_centre.set(focus.x - Math.sin(yaw) * ahead, 0, focus.z - Math.cos(yaw) * ahead), this.sunDirection, (SHADOW_REACH * 2) / this.quality.shadows);
+        snapToTexels(_centre.set(focus.x - Math.sin(yaw) * ahead, focus.y, focus.z - Math.cos(yaw) * ahead), this.sunDirection, (SHADOW_REACH * 2) / this.quality.shadows);
         this.sun.target.position.copy(_centre);
         this.sun.position.copy(_centre).addScaledVector(this.sunDirection, 60);
     }
@@ -508,9 +540,39 @@ export class View {
         return ray.ray;
     }
 
-    /** The point on the ground under a point on the screen (client pixels), or null. */
-    groundAt(clientX, clientY) {
-        return this.rayAt(clientX, clientY).intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3());
+    /**
+     * The point on the ground under a point on the screen (client pixels), or null: where the ray
+     * through it first meets the ground (setGround's; else the flat floor at 0).
+     */
+    pickGround(clientX, clientY) {
+        const ray = this.rayAt(clientX, clientY);
+
+        if (!this.ground) {
+            return ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3());
+        }
+
+        // (Stepping along the ray until it's under the ground, finer near the camera, then
+        // halving the step between the last point over it and the first under it)
+        const { origin, direction } = ray;
+        const below = (t) => origin.y + direction.y * t < this.ground(origin.x + direction.x * t, origin.z + direction.z * t);
+        let [over, t] = [0, 0.5];
+
+        while (t < PICK_REACH && !below(t)) {
+            over = t;
+            t += Math.max(0.5, t * 0.05);
+        }
+
+        if (t >= PICK_REACH) {
+            return null;
+        }
+
+        for (let k = 0; k < 12; k++) {
+            const middle = (over + t) / 2;
+
+            [over, t] = below(middle) ? [over, middle] : [middle, t];
+        }
+
+        return new THREE.Vector3().copy(origin).addScaledVector(direction, t);
     }
 
     /**
@@ -711,7 +773,7 @@ export class View {
         for (let distance = 0.5; distance < 40; distance += 0.3) {
             _point.copy(point).addScaledVector(_toCamera, distance);
 
-            if (_point.y > 25) {
+            if (_point.y > point.y + 25) {
                 break;
             }
 
@@ -728,7 +790,8 @@ export class View {
     // Open a hole through whatever hides the player (or close it when nothing does)
     #cutAway(dt) {
         const subject = this.subject;
-        const hidden = subject !== null && (this.hidden(subject) || this.hidden(_up.copy(subject).setY(subject.y * 1.6)));
+        const ground = subject && this.ground ? this.ground(subject.x, subject.z) : 0;
+        const hidden = subject !== null && (this.hidden(subject) || this.hidden(_up.copy(subject).setY(ground + (subject.y - ground) * 1.6)));
 
         this.cut += Math.sign((hidden ? 1 : 0) - this.cut) * Math.min(Math.abs((hidden ? 1 : 0) - this.cut), dt * CUT_SPEED);
 

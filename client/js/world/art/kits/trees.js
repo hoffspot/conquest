@@ -1379,25 +1379,39 @@ function grownGeometry(variant) {
 
 // The patches of earth and fallen leaves round trees' feet ([{ x, z, turn, radius, kind }],
 // metres), a little over the ground, each a square of its kind's picture
-function patches(placed) {
+/** Each patch round a tree's foot: a grid of this many squares a side, laid over the ground's lie. */
+export const PATCH_SIDE = 3;
+
+function patches(placed, groundAt = () => 0) {
     const position = [];
     const normal = [];
     const uv = [];
     const index = [];
+    const side = PATCH_SIDE + 1;
 
     for (const { x, z, turn, radius, kind } of placed) {
         const first = position.length / 3;
         const cell = KINDS.indexOf(kind);
 
-        for (const [u, v] of [[0, 0], [1, 0], [1, 1], [0, 1]]) {
-            const [a, b] = [(u - 0.5) * 2 * radius, (v - 0.5) * 2 * radius];
+        for (let j = 0; j < side; j++) {
+            for (let i = 0; i < side; i++) {
+                const [u, v] = [i / PATCH_SIDE, j / PATCH_SIDE];
+                const [a, b] = [(u - 0.5) * 2 * radius, (v - 0.5) * 2 * radius];
+                const [px, pz] = [x + a * Math.cos(turn) + b * Math.sin(turn), z - a * Math.sin(turn) + b * Math.cos(turn)];
 
-            position.push(x + a * Math.cos(turn) + b * Math.sin(turn), 0.01, z - a * Math.sin(turn) + b * Math.cos(turn));
-            normal.push(0, 1, 0);
-            uv.push((cell + u) / KINDS.length, v);
+                position.push(px, groundAt(px, pz) + 0.02, pz);
+                normal.push(0, 1, 0);
+                uv.push((cell + u) / KINDS.length, v);
+            }
         }
 
-        index.push(first, first + 2, first + 1, first, first + 3, first + 2);
+        for (let j = 0; j < PATCH_SIDE; j++) {
+            for (let i = 0; i < PATCH_SIDE; i++) {
+                const k = first + j * side + i;
+
+                index.push(k, k + side + 1, k + 1, k, k + side, k + side + 1);
+            }
+        }
     }
 
     const geometry = new THREE.BufferGeometry();
@@ -1457,7 +1471,7 @@ export function treeObject(variant) {
  * all together: { object (a Group of the meshes), boxes (each tree's Box3 above the ground, in
  * order) }.
  */
-export function plantTrees(placements, { tile = 24 } = {}) {
+export function plantTrees(placements, { tile = 24, groundAt = () => 0 } = {}) {
     const tiles = new Map();
     const boxes = [];
     const matrix = new THREE.Matrix4();
@@ -1467,11 +1481,11 @@ export function plantTrees(placements, { tile = 24 } = {}) {
     const shells = [];
     const grounds = [];
 
-    for (const { x, z, variant, size = 1, turn = 0 } of placements) {
+    for (const { x, z, variant, size = 1, turn = 0, y = groundAt(x, z) } of placements) {
         const { kind, wood, leaves, shell, patch } = grownGeometry(variant);
         const key = `${Math.floor(x / tile)},${Math.floor(z / tile)}`;
 
-        matrix.compose(at.set(x, 0, z), turned.setFromAxisAngle(UP, turn), scale.setScalar(size));
+        matrix.compose(at.set(x, y, z), turned.setFromAxisAngle(UP, turn), scale.setScalar(size));
 
         const parts = [wood.clone().applyMatrix4(matrix), leaves.clone().applyMatrix4(matrix)];
         const box = new THREE.Box3();
@@ -1481,7 +1495,7 @@ export function plantTrees(placements, { tile = 24 } = {}) {
             box.union(part.boundingBox);
         }
 
-        box.min.y = Math.max(0, box.min.y);
+        box.min.y = Math.max(y, box.min.y);
         boxes.push(box);
 
         if (!tiles.has(key)) {
@@ -1520,7 +1534,7 @@ export function plantTrees(placements, { tile = 24 } = {}) {
         shadowOnly(cast);
         object.add(cast);
 
-        const floor = new THREE.Mesh(patches(grounds), litter);
+        const floor = new THREE.Mesh(patches(grounds, groundAt), litter);
 
         floor.name = litter.name;
         floor.matrixAutoUpdate = false;
@@ -1580,7 +1594,7 @@ export class Woodland {
      * the lot: { object (a Group of their shells and the patches round their feet, to add to the
      * scene), boxes (each tree's Box3 above the ground, in order), ids }.
      */
-    plant(placements) {
+    plant(placements, groundAt = () => 0) {
         const shells = [];
         const grounds = [];
         const boxes = [];
@@ -1588,11 +1602,11 @@ export class Woodland {
 
         this.#room(placements.length);
 
-        for (const { x, z, variant, size = 1, turn = 0 } of placements) {
+        for (const { x, z, variant, size = 1, turn = 0, y = groundAt(x, z) } of placements) {
             const { wood, leaves, box } = this.#variant(variant);
             const { kind, shell, patch } = grownGeometry(variant);
 
-            _matrix.compose(_at.set(x, 0, z), _turned.setFromAxisAngle(UP, turn), _scale.setScalar(size));
+            _matrix.compose(_at.set(x, y, z), _turned.setFromAxisAngle(UP, turn), _scale.setScalar(size));
 
             const pair = [this.wood.addInstance(wood), this.leaves.addInstance(leaves)];
 
@@ -1602,7 +1616,7 @@ export class Woodland {
 
             const placed = box.clone().applyMatrix4(_matrix);
 
-            placed.min.y = Math.max(0, placed.min.y);
+            placed.min.y = Math.max(y, placed.min.y);
             boxes.push(placed);
             shells.push(shell.clone().applyMatrix4(_matrix));
             grounds.push({ x, z, turn, radius: patch * size, kind });
@@ -1622,7 +1636,7 @@ export class Woodland {
             cast.matrixAutoUpdate = false;
             shadowOnly(cast);
 
-            const floor = new THREE.Mesh(patches(grounds), litter);
+            const floor = new THREE.Mesh(patches(grounds, groundAt), litter);
 
             floor.name = litter.name;
             floor.matrixAutoUpdate = false;

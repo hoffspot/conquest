@@ -463,40 +463,88 @@ flats), and pushed into the Elden Ring direction of [§9](#9-environment-art-dir
 
 ## 9. Environment art direction: a lower-fidelity Elden Ring
 
-Added at the user's request during planning. **The generator choices here are provisional** until
-the environment research (running now) comes back; this section will be rewritten from it.
+Added at the user's request, and chosen from the environment research (`research/eldenring.md` in
+the session: Elden Ring's world structure from its asset and map names, FromSoftware's talks,
+and open-source generators, licences checked).
 
-Starting recipe:
+**What makes the look, and what we keep.**
+- **Silhouettes at distance.** Castles, towers, churches, ruins and a giant tree read as shapes
+  against fogged sky 1–4 km away.
+- **One world landmark** visible from nearly everywhere (the Erdtree role): a warm glowing rim
+  and light-shaft meshes.
+- **Value layering by fog.** Near dark, mid lighter, far pale, in four tuned bands. Height fog
+  keeps valleys hazy and peaks crisp.
+- **A palette per region**, blended as the player walks: sky, fog, sun and grade.
+  - farmland and meadow: green and gold;
+  - marsh, lake and elfwood: blue fog;
+  - volcanic land and the orcs: red;
+  - savannah: gold;
+  - snow and mountain: white-blue;
+  - darkwood: violet.
+- **Scale contrast.** Human-scale doors and steps against walls 12–20 m high, towers of
+  25–40 m, spires to 60 m. Today castle walls are 6.4 m and towers 12 m.
+- **Ruins everywhere**: roofless churches, broken towers, collapsed arcades, rubble, graves.
+- **Rock relief**: cliffs with strata, boulders at their feet, a few arches and overhangs,
+  meadows between.
+- **Guidance**: torches at cave mouths, lit destinations, roads that frame landmarks.
+- **Density.** Elden Ring has about 20 named places per km²; Pellagos about 6. We add about one
+  small point of interest per 256 m cell.
 
-- **Landmark-first composition.**
-  - Every region has a few huge silhouettes visible from kilometres away: castles on crags, great
-    trees, towers, ruined cathedrals, each people's grand landmark.
-  - They are drawn far off as simplified proxies or impostors. Roads and sight lines lead the eye
-    to them.
-  - There is a point of interest every few hundred metres: ruins, a church, a shack, a camp, a cave
-    or catacomb mouth, a lone tower.
-- **Dramatic ground.**
-  - Cliffs with strata and boulder fields at their feet.
-  - Rock arches and overhangs as meshes placed on the heightfield.
-  - Ravines, cliff paths, rolling meadows, lakes and swamps.
-- **Stone architecture with weight.**
-  - Human castles, churches and towers move toward Romanesque and Gothic: massive walls,
-    buttresses, arches, ramparts, towers with spires.
-  - The houses keep their medieval English timber, set on heavier stone bases.
-  - Each people keeps its own identity with the same weight and weathering.
-- **Ruins everywhere.** A decay pass over the existing building kits gives broken walls, collapsed
-  roofs, missing floors, rubble and overgrowth. Weathering, moss on up-facing surfaces (in the
-  shader) and ivy.
-- **Foliage.**
-  - Dense meadow grass, instanced with wind, and flowers.
-  - Gnarled trees with golden and autumn tones.
-  - Ground cover thins on paths.
-- **Atmosphere.**
-  - Golden low sun, strong height fog and aerial perspective.
-  - Colour grading per region: green and gold, blue fog, red rot, snow.
-- **Lower fidelity.**
-  - Fewer, bigger shapes; normal maps only near; no ray-traced or volumetric effects on phones.
-  - Impostors far off; the grass radius and density set by tier.
+**What we drop for phones.**
+- Normal-mapped PBR everywhere (only on rock, if at all).
+- Volumetric fog; SSAO and GI (we bake AO into vertex colour, as the kits already do).
+- Grass past 40–60 m, shadows past 24–40 m, and full-detail distant buildings (we use proxies).
+- Physics foliage (vertex sway already exists).
+
+**Chosen generators, by element** (triangles and draws per frame on a mid-range phone):
+
+| # | Element | Technique | Code to write or port (licence) | Budget | Plugs into |
+|---|---|---|---|---|---|
+| 1 | Atmosphere | Height fog in 4 value bands; region look table blended by position; grade in `CustomToneMapping` (no extra pass); light-shaft cards | Own code | +0 passes; 2–4 draws; < 2k triangles | `view.js`, `sky.js`, `environment.js`, new `world/look.js` |
+| 2 | Far silhouettes | Every layout emits a few boxes, prisms and cones for its biggest masses. Everything within 4 km merges into one far mesh, plus the world landmark | Own code; three `mergeGeometries` (MIT) | 1–3 draws; 8–25k triangles | `sites.js`, `settlements.js`, `setpieces/*`; the far pass (M6) |
+| 3 | Landmark composition | Tiers (large, medium, small); plan-grid viewshed so medium landmarks sit on visible high ground; viewpoints; roads that approach landmarks head-on; ~1 small point of interest per 256 m cell | Own code in `core/worldplan/landmarks.js`, exact maths | Plan-time CPU only | `settle.js`, road refinement, `wilds.js` |
+| 4 | Neutral sites (110 exist in the plan but are never built) | Church or chapel ruins, ruined castles, catacomb portals with torches, stone circles, shrines, a lair | Grammar and kit (rows 6–7) | 2–14k triangles each, merged per chunk | `sites.js siteSize()`, `pieces.js` |
+| 5 | Rocks and cliffs | Cliff panels on steep bands, strata stacks, boulders at cliff feet, 1–3 arches per region, moss and snow masks | Port SeedRock `cliff.js` / `erosion.js` (MIT); extend `wilds.js rock()` | 20–45k triangles; 1–3 draws | Chunk building, fed by `heightAt` |
+| 6 | Ruins | A decay pass over existing kits: roofs removed, broken tops stepped to masonry courses, breaches, rubble, weeds, a tree inside | Own code (ideas from open repos) | Fewer triangles than the intact building | `house.js`, `castle.js`, the peoples' kits via a `decay` option; rubble that blocks, in core |
+| 7 | Churches, citadels, bridges | Romanesque and Gothic church grammar; hill citadels 2–3× today's scale on stepped pads; stone arch bridges; broken aqueducts; grand stairs | Port gremlin-church arch, spire and pinnacle maths (MIT); own `core/setpieces/citadel.js` | Church 6–14k; citadel 30–80k near (3–8 draws), proxy far | `landmarks.js`, `castle.js`, bridges |
+| 8 | Trees | Canopy palette per region; gnarled great lone trees; cheap far trees without shadows | Extend `trees.js`; far LOD instanced | Far 1–2 draws, 40–90k triangles (off beyond 600 m on low) | `Woodland`, far pass |
+| 9 | Grass and flowers | Denser inner ring; ground colour matched to grass tips; wind gusts; drifts per region | Extend `wilds.js UNDERGROWTH` | 60–120k triangles; 4–6 draws (about today's) | `chunks3d.js`, `ground.js` |
+| 10 | Weathering | Moss on up- and north-facing surfaces, rain streaks, ivy leaf quads merged into buildings | Extend `weathering()` in `peoples/kit.js` and `house.js` | +5–10 % triangles on ivied walls; no extra draws | Every kit |
+
+**Pushing each people toward the Elden Ring feel without losing identity.**
+- **For everyone:**
+  - heavier stone bases (0.6–1.2 m plinths that follow the real ground);
+  - retaining walls on pads;
+  - ruined versions of every building kind;
+  - one grand landmark per people, 30–60 m tall, with a far proxy.
+- **Humans:** more stone in the marches; Romanesque and Gothic parish churches and abbeys;
+  ruined villages; hill citadels; broken aqueducts. Landmark: a cathedral with a 40–60 m spire,
+  or a keep with needle towers.
+- **Elves:** pale ruined rotundas and colonnades swallowed by roots; crystal clusters; a
+  blue-silver palette with valley fog. Landmark: a tall domed starwatch, or a colossal tree.
+- **Dark elves:** the most Gothic people, with flying buttresses, pinnacles and broken spires;
+  dwellings cut into basalt cliffs; a violet and teal palette. Landmark: the 60 m obsidian spire.
+- **Cat folk:** eroded mud ruins with melted wall tops; dry-stone enclosures; a gold palette.
+  Landmark: the sun temple's twin towers and disc.
+- **Lizard folk:** overgrown stepped pyramids; causeways and broken bridges over marsh; low mist.
+  Landmark: a 25–40 m ziggurat rising from the mist.
+- **Orcs:** basalt forts on volcanic slopes; columnar basalt; ash fields; a red-orange sky near
+  the volcano. Landmark: a basalt citadel with a smoke plume.
+
+**Budget.** Looking at the horizon outdoors on a mid-range phone, all of this totals about
+110–230 draws and 430–790k triangles before tiering. Tiering brings it within 250 draws and 500k
+triangles:
+- **Mid-range:** far trees only to 600 m; a 20 m dense grass ring; buildings simplified from
+  30 m.
+- **Low-end (120 draws, 250k):** near terrain 3×3 at 2 m; no far trees, only a forest tint; no
+  dense grass ring; no shadows past 16 m.
+
+**Rules and determinism.** Anything that changes blocked squares, walkable surfaces or the
+navigation mesh is core code with exact maths: site and citadel layouts, rubble ramps, stairs,
+bridges, point-of-interest positions and viewshed placement. Purely visual things may use `Math`:
+cliff panels on already-blocked slopes, ivy, moss, rubble chips, proxies and light shafts.
+BatchedMesh falls back to one draw per instance without `WEBGL_multi_draw` (about 3.5 % of
+Android), so anything with many instances is also merged per chunk.
 
 ---
 
@@ -610,11 +658,77 @@ For M8, the checks come first and the motion comes from real people:
    hand by IK to a second grip frame. Sheaths are sockets placed clear of the arm's sweep, which
    the check measures.
 
-**Mixamo.** The user offered browser access. Its terms allow use in finished games but forbid
-giving away the raw files, and this repository and its web page are public. So the default is the
-CC0 and CC-BY sources above. Mixamo is used only if the motion check shows gaps they can't fill,
-and only after the user decides how Mixamo-derived data may be kept (for example, outside the
-public repository). Nothing that costs money is done without approval.
+**Mixamo.** Its terms allow use in finished games but forbid giving away the raw files, and this
+repository and its web page are public. The user has since offered to arrange a licence; §10.2 is
+the pipeline for it. Until the user settles where Mixamo-derived data may be kept, the sources
+above are the default. Nothing that costs money is done without approval.
+
+### 10.2 Option: a licensed Mixamo library, baked to glTF
+
+The user offered to arrange a Mixamo licence, and asked for a pipeline that turns CharMorph
+Vitruvian + Mixamo clips into a good format for the engine. A prototype of it was built and
+checked (outside the repository, on synthetic Mixamo-style FBX files; no Mixamo data was
+downloaded). **It works end to end.** One real 30 fps "without skin" download must be tried
+before relying on it.
+
+**Why it fits.** Vitruvian's Mixamo rig (`weights/mixamo.npz`, `joints/Mixamo.npz`,
+`rigs.blend`'s `mixamo_vitruvian`) uses exactly Mixamo's bone names: 52 bones (Mixamo's 65 less
+its 13 end joints), 22 without fingers. Our `rig.js` uses the same names. Mixamo retargets every
+clip to an uploaded character's proportions and rest pose, so uploading Vitruvian once makes every
+clip fit it.
+
+**The pipeline** (build time, re-runnable, deterministic output):
+
+1. **Upload once.** Export Vitruvian in its A-pose bind pose, Mixamo rig, as FBX, and upload it.
+   The same `rigs.blend` is used for the upload and the bake.
+2. **Download** each clip as FBX binary, *without skin*, 30 fps, "in place" for cycles. This is
+   the one manual step, done in the licensee's account one clip at a time as the site offers; no
+   scripted bulk downloading. A manifest (`animation/clips.json`) lists each clip: its Mixamo
+   name, our id, bank, loop, root motion, and tags (people, weapon, stance).
+3. **Convert** with Blender as a Python module (`bpy` from PyPI, no Blender install):
+   - strip `mixamorig:` (and `mixamorig1:`, `mixamorig2:`...), work in world matrices so Mixamo's
+     centimetres and 0.01 armature scale drop out;
+   - retarget onto the canonical rig by *delta* (source rotation × source rest⁻¹ × our rest):
+     independent of bone roll and joint axes; files whose bone lengths or rest pose differ are
+     refused with the reason (an `absolute` mode recovers a changed rest when axes match);
+   - resample to 30 fps, keep quaternions in one hemisphere, take root motion out of cycles
+     (stored as `extras.rootMotion` with its speed), close loop seams, one glTF animation per
+     clip. FBX2glTF was tried as a Blender-free converter and rejected: unfixed, nothing binds
+     (prefixes, an unapplied Z-up wrapper), it cuts 24 fps clips short and silently drops
+     channels.
+4. **Check** each clip with the motion check of §10.1 on every people's body extremes (joint
+   limits, foot sliding, feet under the ground, items and limbs in the body, loop seams).
+5. **Fix offline:** feet locked while planted, seams cross-blended, the moment a blow lands and
+   each footfall found and stored, playback rate matched to the rules' speeds, left-handed
+   mirrors, additive hit reactions. Nothing is tuned by hand.
+6. **Bank and compress** with glTF-Transform (MIT): drop scale tracks and translations but the
+   hips', key reduction, then meshopt (our decoder is already vendored). Banks by use
+   (locomotion, sword, bow, magic, folk life, hits and deaths), loaded when first needed.
+7. **In the game:** three.js `AnimationMixer` on the Vitruvian skeleton, crossfades, upper-body
+   masks (casting while walking); then our procedural layers: foot IK to the terrain, hand IK
+   to grips, look-at, joint limits.
+
+**Measured on the prototype** (three r186, the game's vendored loader):
+- Every clip binds with no unbound tracks; error against the source ≤ 0.01 mm at 30 fps, +0.1 mm
+  from meshopt.
+- **Size for 300 clips averaging 2.5 s, gzipped:** 1.6–2.8 MB with fingers, 0.8–2.0 MB without
+  (smooth to mocap-like data); 9–16 MB uncompressed floats. Banks beat one file per clip (27 KB
+  vs 48 KB for four clips). The JSON is about two-thirds of a bank, so the host must gzip `.glb`.
+- gltfpack is 25–30 % smaller but drops the clips' extras (loop, root motion) and costs about
+  1 mm; glTF-Transform is the default.
+- Dropping finger tracks saves 1.4–1.9×; grips then come from a hand pose per weapon, which our
+  items already declare.
+
+**Decisions for the user** (the licence and the public repository):
+- Where the downloaded FBX files live: a private store the build fetches from (recommended),
+  not this public repository.
+- Whether the baked, compressed banks may be served with the game from its public host (the
+  normal use of Mixamo in a web game), and whether they may sit in this repository or are built
+  in CI from the private store and deployed only.
+
+**When.** The converter, check and banking can be built with CC0 clips (Quaternius, 100STYLE)
+before the licence is settled; Mixamo clips drop in when it is. It belongs to M8, and could start
+earlier on today's body, whose rig has the same bone names.
 
 ---
 
@@ -691,8 +805,8 @@ pictures for anything that changes the look.
 | **M3** | Water | River graph; carved beds; flow-mapped shader; waterfalls; fords | Pictures; water cost within budget |
 | **M4** | Structures and roads | Tiers and retaining walls; castles on crags; switchback roads and passes; bridges over valleys; peoples' places on real ground; cliffs and rocks | Pictures; walk every road end to end in a test |
 | **M5** | Multiplayer motion | `motion` stream; early desync checks; hero prediction; tick sync; debug RTT; NET_VERSION 8 | Two-browser e2e with no drift; bandwidth measured |
-| **M6** | Horizon and atmosphere | Far clipmap rings; height fog; tree impostors; landmark proxies; `SunLight` cascades on medium and high; terrain material | Pictures; budgets per tier met |
-| **M7** | Elden Ring environment pass | Ruins and decay, stone architecture push, grass and flowers, rock formations, per-region grading (from §9's research) | Pictures; budgets met |
+| **M6** | Horizon and atmosphere | Far clipmap rings; height fog in value bands; per-region look table and grade (§9 row 1); far silhouettes and the world landmark (§9 row 2); far trees; `SunLight` cascades on medium and high; terrain material | Pictures; budgets per tier met |
+| **M7** | Elden Ring environment pass | In §9's order: the landmark pass in the plan; neutral sites built, with the decay pass; cliffs and rocks; churches, citadels, stone bridges; foliage palette, grass ring, weathering | Pictures after each part; budgets met |
 | **M8** | Characters on Vitruvian | §10, as several PRs (conversion, body, garments, skin, face, LODs, clips) | Pictures; clipping tests green; budgets met |
 
 Each milestone follows the same steps:
@@ -759,6 +873,8 @@ converted data is to be measured in M8 against today's hm08 data.
     work took, and offered Mixamo access. §10.1 was added: automated checks first, captured
     motion as the source, fixes solved offline, garments and items clear by construction. Mixamo
     is held back because of its raw-file terms.
+- **2026-09-30.** The environment research came back. §9 was rewritten with the chosen generators,
+  budgets, per-people directions and order of work, and M6/M7 now follow it.
 - **2026-09-30, M1a built.** `core/terrain/`:
   - **Files:** `simplex.js`, `curve.js`, `waters.js` and `height.js`.
   - **Speed and range:** simplex with its slope takes about 50 ns in V8. A 65×65 chunk of heights
@@ -774,3 +890,43 @@ converted data is to be measured in M8 against today's hm08 data.
     - `waterAt` is the single test of where water stands, for M1b's squares.
   - The overworld reads rivers and still water from `waters.js`, unchanged: its tests are the
     same.
+- **2026-09-30.** The user offered a Mixamo licence and asked for a Vitruvian + Mixamo → glTF
+  pipeline. §10.2 added from a working prototype (bpy retarget, glTF-Transform meshopt banks,
+  checked in three r186).
+- **2026-09-30, M1b built** (terrain in play; the squares are still walked as before).
+  - **Core** (`core/terrain/ground.js`, overworld): pads for the town, settlements, castles,
+    places and camps, eased in over 24 m; roads on profiles smoothed 12 m each way, under 0.3 m a
+    metre off bridges; cliffs past 38° blocked but for roads, bridges and what's built; bridge
+    decks arched at least 1 m over their river; `surfaceAt` for the water's surface.
+  - **Change from the plan:** a river's surface is kept at least 0.4 m under the land at its
+    cell's middle and never above anything upstream. The plan's filled `level` stood some rivers
+    on walls above the land round them; now they cut gorges through rims instead
+    (`TERRAIN_VERSION` 2). Then river banks rise from the bed's edge over 1.5 m, where they had
+    stepped 0.5 m at once (a staircase of rock along diagonal banks on the 1 m grid), and lakes
+    and the sea sink the land in from where water can stand rather than at a fixed wetness, so
+    their shores slope rather than drop (`TERRAIN_VERSION` 3). Carved water runs 2 m under the
+    banks, so the ground, not the squares, draws its edge.
+  - **Drawing:** chunk meshes from the corner heights, ring by ring from the player's chunk
+    (high 1/1/2 m, medium and low 1/2/4 m: a 4 m mesh strays 0.3–0.5 m from the ground at the
+    95th percentile on pads, roads and banks, so only in the fogged outer ring; 2 m strays
+    4–11 cm), with 2 m skirts; rock on slopes past about 33°; water sheets following the
+    surface; bridges arched on piers; buildings, trees, rocks, undergrowth, props, camps,
+    banners, drops, doors, effects, decals, spells, projectiles, birds and landing beasts all
+    on the ground; contact shadows along the slope; the camera kept over the ground and taps
+    found by ray-marching it; debug squares laid over it.
+  - **Deferred to M2b/M8:** each foot on its own ground on slopes (locomotion foot IK with a
+    pelvis drop). It changes the tuned gait, so it goes with the motion check of §10.1. Until
+    then a character stands at the ground under its middle, which is within a few centimetres
+    of each foot on the open slopes (under 30°) that can be walked.
+  - **Measured** (phone profile, town, medium; Chromium's software renderer, which pays for
+    each triangle far more than a phone's GPU does): draw calls equal (88); triangles 247k
+    against 222k (budget 500k); the ground's own 37k (budget 105k); script time per frame equal;
+    render time +18 %, all of it the ground's triangles (the rest of the scene measured no
+    dearer), most of it the 1 m chunk under the player, kept so feet meet the drawn ground. On a
+    phone GPU 37k triangles at 60 frames a second is about 2 million a second, a small share of
+    even a low-end GPU's rate. Far rings coarser still come with M6's clipmaps.
+  - **Fixed on the way:** the camera's eased height lagged under the ground climbing (and at
+    load, from 0), and the new clamp then swung it overhead; it now never lags more than 0.2 m,
+    the clamp starts 2 m back and looks at the player.
+  - **Fixed on the way:** a winged beast's landing glide was overwritten by the standing height
+    each frame; now it glides down to the ground.

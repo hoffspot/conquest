@@ -30,6 +30,11 @@ export const SHORE = Object.freeze({ reach: 7, steps: 16 });
 // (as far as the field reaches, and a square more to soften it and one to sample between)
 export const MARGIN = SHORE.reach + 2;
 
+// Water whose bed is carved into the ground (a surface given) carries on this far (metres) past
+// the wet squares, under the banks: the ground hides it, so its edge is where the bank rises out
+// of it, not where the squares say
+const UNDER_BANKS = 2;
+
 // The ripples' picture (texels a side, tiling), and how steep they are
 const RIPPLE_TEXELS = 128;
 const RIPPLE_SLOPE = 0.16;
@@ -147,9 +152,10 @@ function rippleTexture() {
 
 /**
  * The water's material, its shore field (a texture: shoreBytes) covering the squares from (x0,
- * y0), `width` by `height`. Owns the field (userData.mask: dispose it with the material).
+ * y0), `width` by `height`, drawn `under` metres out past the shore (under the banks). Owns the
+ * field (userData.mask: dispose it with the material).
  */
-export function waterMaterial(field, x0, y0, [width, height]) {
+export function waterMaterial(field, x0, y0, [width, height], under = 0) {
     const water = new THREE.MeshStandardMaterial({ color: WATER.deep, roughness: 0.12, metalness: 0, transparent: true, depthWrite: false });
 
     water.name = "water";
@@ -162,6 +168,7 @@ export function waterMaterial(field, x0, y0, [width, height]) {
             waterRipples: { value: rippleTexture() },
             waterTime: TREE_WIND.time,
             shallows: { value: new THREE.Color(WATER.shallows) },
+            waterUnder: { value: under },
         });
         shader.vertexShader = shader.vertexShader
             .replace("#include <common>", "#include <common>\nvarying vec2 vWater;")
@@ -174,13 +181,18 @@ uniform sampler2D waterRipples;
 uniform vec4 waterArea;
 uniform float waterTime;
 uniform vec3 shallows;
+uniform float waterUnder;
 float waterShore;
+float waterEdge;
 vec4 waterRipple;`)
             .replace("#include <map_fragment>", `
 // How far in from the shore (metres), and the ripples here: two reads drifting their own ways
 waterShore = (texture2D(waterField, (vWater - waterArea.xy) / waterArea.zw).r * 255.0 - 128.0) / ${SHORE.steps.toFixed(1)};
+waterEdge = waterShore + waterUnder;
 
-if (waterShore < 0.0) discard;
+if (waterEdge < 0.0) discard;
+
+waterShore = max(waterShore, 0.0);
 
 waterRipple = texture2D(waterRipples, vWater * 0.19 + vec2(0.021, 0.013) * waterTime) + texture2D(waterRipples, vWater * 0.43 + vec2(-0.017, 0.024) * waterTime);
 
@@ -190,11 +202,11 @@ vec3 through = exp(-waterShore * vec3(0.8, 0.36, 0.26));
 diffuseColor.rgb = mix(diffuseColor.rgb, shallows, through);
 
 // A thin line of foam along the shore, broken up by the ripples
-float foam = (1.0 - smoothstep(0.0, 0.22, waterShore)) * smoothstep(0.95, 1.2, waterRipple.b);
+float foam = (1.0 - smoothstep(0.0, 0.22, waterEdge)) * smoothstep(0.95, 1.2, waterRipple.b);
 
 diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.86, 0.88, 0.86), foam * 0.55);
-diffuseColor.a = ${WATER.opacity.toFixed(2)} * mix(0.4, 1.0, 1.0 - exp(-waterShore * 1.1)) * smoothstep(0.0, 0.15, waterShore);
-diffuseColor.a = max(diffuseColor.a, foam * 0.6 * smoothstep(0.0, 0.08, waterShore));`)
+diffuseColor.a = ${WATER.opacity.toFixed(2)} * mix(0.4, 1.0, 1.0 - exp(-waterEdge * 1.1)) * smoothstep(0.0, 0.15, waterEdge);
+diffuseColor.a = max(diffuseColor.a, foam * 0.6 * smoothstep(0.0, 0.08, waterEdge));`)
             .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
 {
     // (Gentler further off, where many ripples fall in a pixel and would glitter)
@@ -208,12 +220,16 @@ diffuseColor.a = max(diffuseColor.a, foam * 0.6 * smoothstep(0.0, 0.08, waterSho
     return water;
 }
 
+// With the water's surface given, the sheet's corners are this many metres apart
+const SURFACE_STEP = 2;
+
 /**
  * A sheet of water over the squares from (x0, y0), `width` by `height`, drawn where `wet` (bytes,
  * one a square, non-zero for water, with `margin` more squares all round, so its shore meets the
- * sheets beside it) says.
+ * sheets beside it) says: flat, or at `surfaceAt(x, z)` (metres: a river running down its
+ * valley, a lake at its level) at each of its corners.
  */
-export function waterSheet(wet, [x0, y0, width, height], margin = 1) {
+export function waterSheet(wet, [x0, y0, width, height], margin = 1, surfaceAt = null) {
     const [across, down] = [width + 2 * margin, height + 2 * margin];
     const field = new THREE.DataTexture(shoreBytes(shoreDistances(wet, across, down)), across, down, THREE.RedFormat);
 
@@ -223,8 +239,23 @@ export function waterSheet(wet, [x0, y0, width, height], margin = 1) {
     field.unpackAlignment = 1;
     field.needsUpdate = true;
 
-    const plane = new THREE.PlaneGeometry(width, height).rotateX(-Math.PI / 2).translate(width / 2, WATER.level, height / 2);
-    const mesh = new THREE.Mesh(plane, waterMaterial(field, x0 - margin, y0 - margin, [across, down]));
+    const plane = surfaceAt ? new THREE.PlaneGeometry(width, height, width / SURFACE_STEP, height / SURFACE_STEP) : new THREE.PlaneGeometry(width, height);
+
+    plane.rotateX(-Math.PI / 2).translate(width / 2, WATER.level, height / 2);
+
+    if (surfaceAt) {
+        const { position } = plane.attributes;
+
+        for (let k = 0; k < position.count; k++) {
+            position.setY(k, WATER.level + surfaceAt(x0 + position.getX(k), y0 + position.getZ(k)));
+        }
+
+        plane.computeVertexNormals();
+        plane.computeBoundingSphere();
+        plane.computeBoundingBox();
+    }
+
+    const mesh = new THREE.Mesh(plane, waterMaterial(field, x0 - margin, y0 - margin, [across, down], surfaceAt ? UNDER_BANKS : 0));
 
     mesh.name = "water";
     mesh.position.set(x0, 0, y0);

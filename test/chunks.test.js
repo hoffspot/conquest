@@ -105,7 +105,7 @@ describe("the world outside, drawn round the player (chunks3d.js)", () => {
         chunks.dispose();
     });
 
-    it("builds a settlement's buildings a piece at a time, each made ready to merge in a step of its own, merged the same as all at once", async () => {
+    it("builds a settlement's buildings a piece at a time, each made ready to merge in a step of its own, on the ground, merged the same as all at once", async () => {
         const chunks = new Chunks(world, { undergrowth: 0 });
         const place = world.maps.town.settlements.places.find(({ kind, id }) => kind === "village" && id !== world.start.id);
         const [x, z] = place.at;
@@ -139,7 +139,7 @@ describe("the world outside, drawn round the player (chunks3d.js)", () => {
             const build = builderFor(piece) ?? BUILDERS[piece.kind];
 
             if (build) {
-                group.add(placed(await build(piece), piece));
+                group.add(placed(await build(piece), piece, [0, 0], chunks.groundAt(piece.x, piece.y)));
             }
         }
 

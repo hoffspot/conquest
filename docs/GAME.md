@@ -629,8 +629,17 @@ shaders; the shadows they cast stay whole).
 
 ### The ground (world/ground.js)
 
-A flat mesh under each chunk of the world (a town on its own has one under it all, carrying on
-110 metres past its edges into the fog). A small "splat" texture, four texels to a metre made
+A mesh under each chunk of the world, rising and falling with the ground (WORLD.md, *The ground
+in play*): its corners a metre apart in the chunk the player's in, and further apart further off
+(`QUALITY.ground`, view.js: on high, a metre in the ring of chunks round it too and two metres
+beyond; on medium and low, two metres in that ring and four beyond, deep in the fog), redrawn
+finer or coarser as the player moves, lit by its slope worked out from the corners round each (across
+into the chunks beside it). A skirt hangs two metres down round each chunk's edge, so where
+chunks drawn at different spacings meet no gap shows between them. Where the ground's steeper
+than about 33°, rock shows through the grass, all rock by about 45°: a rock texture seven metres
+across laid from the side and from above, as the slope faces, at two sizes turned against each
+other so it doesn't repeat. (A town on its own, in the labs, has one flat mesh under it all,
+carrying on 110 metres past its edges into the fog.) A small "splat" texture, four texels to a metre made
 from the chunk's squares (and one more round it, so the edges blend across chunks as if there
 were none), says how much road, cobbles, soil and courtyard earth is at each point, with soft,
 ragged edges, the same wherever the world's cut (mipmapped, so a far road's ragged edge, many
@@ -655,8 +664,8 @@ and buildings past the sun's shadows still sit on the ground.
 **Under everyone standing on it** (world/contacts.js): townsfolk and soldiers cast no shadow of
 the sun (there are too many of them), and would look set down on the street rather than standing
 on it. Under each is a soft round shadow of the light from all round that their body keeps off
-the ground at their feet: half as dark in the middle (`CONTACT.strength`), fading out over about
-half their height. It fades as they rise off the ground (Levitate), over half a second as they
+the ground at their feet, lying along the ground's slope (flat on a bridge's deck): half as dark
+in the middle (`CONTACT.strength`), fading out over about half their height. It fades as they rise off the ground (Levitate), over half a second as they
 fall dead, and to a fifth for someone unseen (Invisibility). Everyone's is one instanced mesh, a
 single draw call, the list made again each frame from those drawn (only those listed sent to the
 GPU); a creature casts its own shadow and has none.

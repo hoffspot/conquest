@@ -29,6 +29,8 @@ import { Sites } from "./sites.js";
 import { Interiors } from "./insides.js";
 import { WENCHES } from "./lore/taverns.js";
 import { featuresOf } from "./wilds.js";
+import { Ground, PAD_EASE } from "./terrain/ground.js";
+import { SLOPE_CLASS, stillOf, stillWaterAt } from "./terrain/height.js";
 import { watersOf } from "./terrain/waters.js";
 import { GROUND, HOME_TREES, TREE_KINDS } from "./setpieces/pieces.js";
 import { generateWorld } from "./world.js";
@@ -90,6 +92,9 @@ const CLEAR_OF_PLACES = 12;
 
 // How many chunks to keep once made (the rest are made again when they're needed)
 const KEEP = 256;
+
+// A camp's pad (metres from its middle), levelled into the ground
+const CAMP_PAD = 10;
 
 const VARIANTS_OF = Object.fromEntries([...new Set(TREE_KINDS.map(([kind]) => kind))].map((kind) => [kind, TREE_KINDS.flatMap(([k], variant) => (k === kind ? [variant] : []))]));
 
@@ -171,6 +176,14 @@ export class Overworld {
         });
         this.roads = this.#layRoads();
         this.bridges = new Map();
+
+        // The ground: the land's height, with the settlements, castles, places and camps on pads
+        // and the roads levelled in (as planned: never the bits joined to a settlement's streets,
+        // which wait on it being laid out, so it's the same whichever chunks are made first)
+        this.ground = new Ground(plan, {
+            padsNear: (cx, cy) => this.#padsNear(cx, cy),
+            roadsNear: (cx, cy) => (this.roads.get(cy * CHUNKS + cx) ?? []).filter((segment) => !segment[6]).map((segment) => ({ line: segment[5], k: segment[7], half: ROAD_HALF[segment[4]] })),
+        });
 
         const read = (layer, off) => (x, y) => {
             if (!inside(x, y)) {
@@ -294,6 +307,117 @@ export class Overworld {
         return x >= at[0] && y >= at[1] && x < at[0] + width && y < at[1] + height;
     }
 
+    /**
+     * How high the ground stands at a point (metres): levelled where it's built on and along the
+     * roads; on a bridge, its deck (terrain/ground.js).
+     */
+    heightAt(x, y) {
+        const [px, py] = [Math.floor(x), Math.floor(y)];
+
+        const chunk = inside(px, py) ? this.chunkAt(px, py) : null;
+
+        if (chunk?.bridge[(py - chunk.y0) * CHUNK + (px - chunk.x0)]) {
+            const deck = this.#deckAt(x, y);
+
+            if (deck !== null) {
+                return deck;
+            }
+        }
+
+        return this.ground.heightAt(x, y);
+    }
+
+    // A bridge's deck's height at a point on it, or null if the point's on none
+    #deckAt(x, y) {
+        for (const bridge of this.#bridgesNear(Math.floor(x / CHUNK), Math.floor(y / CHUNK))) {
+            const { a, b, half } = bridge;
+            const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
+            const length = hypot(dx, dy);
+            const along = ((x - a[0]) * dx + (y - a[1]) * dy) / length;
+
+            if (along >= -0.5 && along <= length + 0.5 && Math.abs((x - a[0]) * dy - (y - a[1]) * dx) / length <= half + 0.5) {
+                return this.deckOf(bridge, along / length);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * A bridge's deck's height (metres) a way `t` along it (0 at its end `a`, 1 at `b`): from the
+     * ground at one end to the other's, arched to at least a metre over the river under its
+     * middle.
+     */
+    deckOf({ a, b }, t) {
+        const [ha, hb] = [this.ground.heightAt(...a), this.ground.heightAt(...b)];
+        const river = this.waters.river((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, 20);
+        const least = river ? river.surface + 1 : -Infinity;
+        const along = Math.min(1, Math.max(0, t));
+        const lift = Math.max(0, least - (ha + hb) / 2) * 4 * along * (1 - along);
+
+        return ha + (hb - ha) * along + lift;
+    }
+
+    /**
+     * The height of the water's surface at a point (metres): the river's nearest it, else the lake's
+     * or the sea's, else (none near) the ground's (where water's drawn, it's drawn at this).
+     */
+    surfaceAt(x, y) {
+        const river = this.waters.river(x, y, 24);
+
+        if (river) {
+            return river.surface;
+        }
+
+        const still = stillOf(this.plan, x, y);
+
+        return still ? still.level : this.ground.heightAt(Math.min(WORLD_SIZE - 0.01, Math.max(0, x)), Math.min(WORLD_SIZE - 0.01, Math.max(0, y)));
+    }
+
+    // The pads (terrain/ground.js) reaching into a chunk: the town, the settlements' squares, the
+    // sites set down (those near this chunk and its neighbours set down first, so a site's pad is
+    // the same whenever it's asked for), and the camps
+    #padsNear(cx, cy) {
+        const [x0, y0, x1, y1] = [cx * CHUNK - PAD_EASE, cy * CHUNK - PAD_EASE, (cx + 1) * CHUNK + PAD_EASE, (cy + 1) * CHUNK + PAD_EASE];
+        const meets = (ax0, ay0, ax1, ay1) => ax1 > x0 && ax0 < x1 && ay1 > y0 && ay0 < y1;
+        const pads = [];
+        const { at, width, height } = this.stamp;
+
+        if (meets(at[0], at[1], at[0] + width, at[1] + height)) {
+            pads.push({ id: "town", x0: at[0], y0: at[1], x1: at[0] + width, y1: at[1] + height });
+        }
+
+        for (const place of this.settlements.places) {
+            const { at: [sx, sy], size } = squareOf(place);
+
+            if (meets(sx, sy, sx + size, sy + size)) {
+                pads.push({ id: `place ${place.id}`, x0: sx, y0: sy, x1: sx + size, y1: sy + size });
+            }
+        }
+
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                if (cx + dx >= 0 && cy + dy >= 0 && cx + dx < CHUNKS && cy + dy < CHUNKS) {
+                    this.sites.settle(cx + dx, cy + dy);
+                }
+            }
+        }
+
+        for (const set of this.sites.set.values()) {
+            if (set && meets(set.x - set.radius, set.y - set.radius, set.x + set.radius, set.y + set.radius)) {
+                pads.push({ id: `site ${set.site.id}`, at: [set.x, set.y], radius: set.radius });
+            }
+        }
+
+        for (const camp of this.plan.camps) {
+            if (meets(camp.at[0] - CAMP_PAD, camp.at[1] - CAMP_PAD, camp.at[0] + CAMP_PAD, camp.at[1] + CAMP_PAD)) {
+                pads.push({ id: `camp ${camp.id}`, at: camp.at, radius: CAMP_PAD });
+            }
+        }
+
+        return pads;
+    }
+
     // --- Making a chunk ---
 
     #make(cx, cy) {
@@ -303,6 +427,7 @@ export class Overworld {
         const ground = new Uint8Array(SQUARES);
         const water = new Uint8Array(SQUARES);
         const bridge = new Uint8Array(SQUARES);
+        const built = new Uint8Array(SQUARES);
         const { stamp } = this;
         const settled = this.settlements.settle(cx, cy);
         let town = false;
@@ -321,6 +446,7 @@ export class Overworld {
                     opaque[k] = stamp.opaque[ty][tx];
                     ground[k] = stamp.ground[ty][tx];
                     water[k] = stamp.water?.[ty]?.[tx] ? WET.still : WET.none;
+                    built[k] = 1;
                     town = true;
                     continue;
                 }
@@ -333,6 +459,7 @@ export class Overworld {
                     opaque[k] = own.opaque;
                     ground[k] = own.ground;
                     water[k] = own.water ? WET.still : WET.none;
+                    built[k] = 1;
                     continue;
                 }
 
@@ -347,7 +474,18 @@ export class Overworld {
                 if (this.sites.squareAt(x, y)) {
                     blocked[k] = 1;
                     opaque[k] = 1;
+                    built[k] = 1;
                 }
+            }
+        }
+
+        // The ground: too steep to climb is blocked, but for roads, bridges and what's built on
+        // (levelled into it)
+        const { heights, slopes } = this.ground.chunk(cx, cy);
+
+        for (let k = 0; k < SQUARES; k++) {
+            if (slopes[k] === SLOPE_CLASS.cliff && !built[k] && !bridge[k] && ground[k] !== GROUND.road) {
+                blocked[k] = 1;
             }
         }
 
@@ -355,7 +493,7 @@ export class Overworld {
         const bridges = this.#bridgesNear(cx, cy).filter(inChunk);
         // (And the plank walks over a lagoon, the lizard folk's: the town's, and each settlement's)
         const walks = [...(stamp?.walks ?? []).filter(inChunk), ...this.settlements.walksIn(cx, cy)];
-        const chunk = { cx, cy, x0, y0, blocked, opaque, ground, water, bridge, trees: [], bridges, walks, town };
+        const chunk = { cx, cy, x0, y0, blocked, opaque, ground, water, bridge, heights, slopes, trees: [], bridges, walks, town };
 
         this.#plant(chunk);
         chunk.features = this.#features(chunk);
@@ -441,7 +579,7 @@ export class Overworld {
         const cell = cellAt(py) * CELLS + cellAt(px);
         const road = this.#roadAt(px, py);
         const river = this.waters.riverAt(px, py);
-        const still = !river && this.waters.stillAt(px, py);
+        const still = !river && stillWaterAt(plan, px, py) !== null;
         const water = river ? WET.river : still ? WET.still : WET.none;
 
         // Under a bridge (over the river, or its ends on the banks)
@@ -642,7 +780,8 @@ export class Overworld {
             }
 
             for (let k = 0; k < points.length - 1; k++) {
-                const segment = [...points[k], ...points[k + 1], road.kind, line];
+                // (Which of its planned segments it is: the ground follows the road along them)
+                const segment = [...points[k], ...points[k + 1], road.kind, line, false, k];
                 const pad = ROAD_HALF[road.kind] + 1;
                 const [cx0, cx1] = [Math.floor((Math.min(segment[0], segment[2]) - pad) / CHUNK), Math.floor((Math.max(segment[0], segment[2]) + pad) / CHUNK)];
                 const [cy0, cy1] = [Math.floor((Math.min(segment[1], segment[3]) - pad) / CHUNK), Math.floor((Math.max(segment[1], segment[3]) + pad) / CHUNK)];

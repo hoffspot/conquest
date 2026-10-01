@@ -20,7 +20,7 @@ import { Steps } from "../core/steps.js";
 
 /**
  * The birds: how big (metres across the wings), their colours (one of them each: sRGB), how many
- * in a flock, how fast they fly (m/s), how high (metres), how fast their wings beat (a second),
+ * in a flock, how fast they fly (m/s), how high (metres over the ground), how fast their wings beat (a second),
  * how much of the time they glide, their shape (wings short, long and narrow, broad; or a heron's
  * neck and legs), and whether they circle (soaring on the air) or fly in a V.
  */
@@ -65,11 +65,17 @@ export const WYVERN_LANDS = Object.freeze(["mountain", "badlands", "volcanic", "
  */
 export const FLYING = Object.freeze({ every: [5, 14], chance: 0.7, flocks: 3, wyvern: [40, 110], wyvernChance: 0.5, from: 95, gone: 115, lair: 420 });
 
-/** How high the wyverns and the dragon fly (metres). */
+/** How high the wyverns and the dragon fly (metres over the ground). */
 export const ALOFT = Object.freeze({ wyvern: [18, 30], dragon: [28, 40] });
 
 // How long (ms) a frame gives to building a wyvern or dragon that's to come
 const HATCHING = 2;
+
+// How far ahead a flier looks at the ground it's coming to (metres), and how quickly it rises
+// over it and sinks again after (a second)
+const LOOK_AHEAD = 16;
+const RISE = 1.2;
+const SINK = 0.3;
 
 const TAU = Math.PI * 2;
 const MOST = 32;
@@ -167,12 +173,14 @@ const between = (random, [least, most]) => least + random() * (most - least);
  * The fliers over the world outside: add `object` to the scene; each frame `update(dt, time, {
  * x, z }, { outdoors })` with where the player is (metres). `landAt(x, z)`: the land (a BIOMES id)
  * at a point; `lairs()`: the dragons' lairs to show a dragon circling over ([{ at: [x, z] }]:
- * those whose dragon's alive and not on the ground near the player); `random`: the random
- * numbers to use (Math.random).
+ * those whose dragon's alive and not on the ground near the player); `groundAt(x, z)`: the
+ * ground's height at a point (metres: they fly over it); `random`: the random numbers to use
+ * (Math.random).
  */
 export class Flyers {
-    constructor({ landAt, lairs = () => [], random = Math.random, prepare = null }) {
+    constructor({ landAt, lairs = () => [], groundAt = null, random = Math.random, prepare = null }) {
         this.landAt = landAt;
+        this.groundAt = groundAt ?? (() => 0);
         this.lairs = lairs;
         this.random = random;
 
@@ -318,7 +326,10 @@ export class Flyers {
     // circling over a point near them a while
     #course(player, { speed, height, circles = false, radius = [20, 30] }) {
         const from = this.random() * TAU;
-        const y = between(this.random, height);
+        const lift = between(this.random, height);
+        const [fx, fz] = [player.x + Math.sin(from) * FLYING.from, player.z + Math.cos(from) * FLYING.from];
+        const floor = this.groundAt(fx, fz);
+        const y = floor + lift;
 
         if (circles) {
             const near = this.random() * 45;
@@ -331,9 +342,11 @@ export class Flyers {
                 angle: from,
                 turn: this.random() < 0.5 ? 1 : -1,
                 left: 40 + this.random() * 50,
-                x: player.x + Math.sin(from) * FLYING.from,
-                z: player.z + Math.cos(from) * FLYING.from,
+                x: fx,
+                z: fz,
                 y,
+                lift,
+                floor,
                 speed,
                 heading: from + Math.PI,
                 beat: 0.5,
@@ -344,10 +357,9 @@ export class Flyers {
 
         // (Across: aimed at a point off to one side of the player, so it passes by, not over)
         const past = (this.random() - 0.5) * 60;
-        const [x, z] = [player.x + Math.sin(from) * FLYING.from, player.z + Math.cos(from) * FLYING.from];
         const [tx, tz] = [player.x + Math.cos(from) * past, player.z - Math.sin(from) * past];
 
-        return { mode: "across", x, z, y, speed, heading: Math.atan2(tx - x, tz - z), beat: 0.5, bank: 0, climb: 0, age: 0 };
+        return { mode: "across", x: fx, z: fz, y, lift, floor, speed, heading: Math.atan2(tx - fx, tz - fz), beat: 0.5, bank: 0, climb: 0, age: 0 };
     }
 
     // Fly on: across, or round and round, then away; gone once it's far off
@@ -381,6 +393,21 @@ export class Flyers {
 
         flier.x += Math.sin(flier.heading) * flier.speed * dt;
         flier.z += Math.cos(flier.heading) * flier.speed * dt;
+
+        // (Its height over the ground, the higher of under it and ahead: rising over what's
+        // coming, sinking again slowly after; nose up as it climbs, down as it sinks)
+        const ahead = this.groundAt(flier.x + Math.sin(flier.heading) * LOOK_AHEAD, flier.z + Math.cos(flier.heading) * LOOK_AHEAD);
+        const under = Math.max(this.groundAt(flier.x, flier.z), ahead);
+        const was = flier.y;
+
+        flier.floor += (under - flier.floor) * Math.min(1, dt * (under > flier.floor ? RISE : SINK));
+        flier.y = flier.floor + flier.lift;
+
+        if (dt > 0) {
+            const climb = Math.max(-0.35, Math.min(0.35, (flier.y - was) / dt / flier.speed));
+
+            flier.climb += (climb - flier.climb) * Math.min(1, dt * 2);
+        }
 
         // (Beating its wings, and gliding a while now and then: as much of the time as its kind
         // glides; a wyvern or a dragon gliding round its circle, beating to go on its way)

@@ -15,6 +15,9 @@ export const RIVER_HALF = Object.freeze([1.5, 5]);
 /** How far rivers wander from a straight line between cells (metres). */
 export const WANDER = 7;
 
+// How far below the land's own height at a river cell's middle its surface is at least (metres)
+const SUNK = 0.4;
+
 // The chunks rivers are listed by (metres a side: the world plan's CHUNK, which this can't import:
 // plan.js is built on this)
 const CHUNK = 64;
@@ -22,6 +25,14 @@ const CHUNKS = (CELLS * CELL) / CHUNK;
 
 // A plan's waters, made once for it
 const MADE = new WeakMap();
+
+// The land's own height at a point (height.js landHeight, which is built on this: so given by it)
+let landOf = null;
+
+/** Give the land's own height ((plan, x, y) => metres), for rivers' surfaces to keep under. */
+export function setLandOf(land) {
+    landOf = land;
+}
 
 /** The waters of a world plan (made once for it). */
 export function watersOf(plan) {
@@ -37,12 +48,22 @@ export class Waters {
     constructor(plan) {
         this.plan = plan;
         this.near = new Map();
-        this.surfaces = this.#surfaces();
+        this.made = null;
     }
 
-    // The height of each river cell's surface (metres): the level the plan fills it to, never
-    // higher than any cell upstream of it, so rivers only ever run down (a lake's, its level; the
-    // sea's, 0)
+    /**
+     * The height of each cell's water's surface (metres, a Float32Array a cell each): a lake's,
+     * its level; the sea's, 0; a river's, the level the plan fills it to or the land's own height
+     * at its middle, whichever's lower (so a river crossing a wide hollow runs along its floor, and
+     * cuts through its rim to leave it), and never higher than any cell upstream of it, so rivers
+     * only ever run down.
+     */
+    get surfaces() {
+        this.made ??= this.#surfaces();
+
+        return this.made;
+    }
+
     #surfaces() {
         const { plan } = this;
         const surface = new Float32Array(CELLS * CELLS);
@@ -53,6 +74,10 @@ export class Waters {
 
             if (plan.water[k] === WATER.river) {
                 rivers.push(k);
+
+                if (landOf) {
+                    surface[k] = Math.min(surface[k], landOf(plan, ((k % CELLS) + 0.5) * CELL, (Math.floor(k / CELLS) + 0.5) * CELL) - SUNK);
+                }
             }
         }
 

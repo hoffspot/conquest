@@ -84,6 +84,31 @@ const SPLAT_FADES = 8;
 const POOL_SPREADS = 5;
 const POOL_DRAINS = 2;
 
+/** Flat ground (where there's no terrain: the ground's height at a point, metres). */
+export const FLAT = () => 0;
+
+const UP = new THREE.Vector3(0, 1, 0);
+const _slope = new THREE.Vector3();
+
+/**
+ * Turn `quaternion` to lie on the ground at (x, z) (metres): its up along the ground's, across
+ * `reach` metres round the point. Returns the ground's height there.
+ */
+export function lieOn(groundAt, x, z, reach, quaternion) {
+    const height = groundAt(x, z);
+
+    if (groundAt === FLAT) {
+        quaternion.identity();
+
+        return height;
+    }
+
+    _slope.set(groundAt(x - reach, z) - groundAt(x + reach, z), 2 * reach, groundAt(x, z - reach) - groundAt(x, z + reach)).normalize();
+    quaternion.setFromUnitVectors(UP, _slope);
+
+    return height;
+}
+
 /**
  * Each kind of spell light's five looks (the game chooses: variety.js). Fireballs and bolts: the
  * core's colour and size (m), the particles trailing it (as BURSTS), how it wobbles (`flicker`, a
@@ -236,7 +261,7 @@ class Particles {
         }
     }
 
-    update(dt, pixels, onGround = null) {
+    update(dt, pixels, onGround = null, groundAt = FLAT) {
         let highest = 0;
 
         this.material.uniforms.scale.value = pixels;
@@ -269,12 +294,16 @@ class Particles {
             }
 
             this.positions[i * 3] += velocity.x * dt;
-            this.positions[i * 3 + 1] = Math.max(0.02, this.positions[i * 3 + 1] + velocity.y * dt);
             this.positions[i * 3 + 2] += velocity.z * dt;
+
+            // (Only what's falling can reach the ground)
+            const floor = velocity.y < 0 ? groundAt(this.positions[i * 3], this.positions[i * 3 + 2]) + 0.02 : -Infinity;
+
+            this.positions[i * 3 + 1] = Math.max(floor, this.positions[i * 3 + 1] + velocity.y * dt);
             velocity.multiplyScalar(1 - Math.min(1, dt * particle.drag));
 
             // Blood reaching the ground leaves a spot, and is gone
-            if (particle.splash && this.positions[i * 3 + 1] <= 0.02) {
+            if (particle.splash && this.positions[i * 3 + 1] <= floor) {
                 onGround?.(this.positions[i * 3], this.positions[i * 3 + 2], particle.size);
                 particle.age = particle.life;
             }
@@ -307,7 +336,7 @@ class Particles {
 
 // --- Blood on the ground ---
 
-// Spots of blood, splashes and pools, flat on the ground: one instanced mesh (a single draw
+// Spots of blood, splashes and pools, lying on the ground: one instanced mesh (a single draw
 // call), wet and glossy, each instance a picture from an atlas of four (three splashes and a
 // pool), fading once it's been there a while
 class Splats {
@@ -347,11 +376,16 @@ class Splats {
         this.mesh.frustumCulled = false;
         this.mesh.renderOrder = 1;
 
-        // Each instance: { k (its index), x, z, size, pool, angle, variant, age, spreads, stays,
-        // fades }, or null (unused)
+        // Each instance: { k (its index), x, y (the ground's height), z, size, pool, turn (how
+        // it lies: on the ground, turned), variant, age, spreads, stays, fades }, or null (unused)
         this.list = Array.from({ length: SPLATS }, () => null);
         this.matrix = new THREE.Matrix4();
         this.hide = new THREE.Matrix4().makeScale(0, 0, 0);
+        this.at = new THREE.Vector3();
+        this.size = new THREE.Vector3();
+
+        /** The ground's height at a point ((x, z) => metres: the effects' groundAt). */
+        this.groundAt = FLAT;
 
         for (let k = 0; k < SPLATS; k++) {
             this.mesh.setMatrixAt(k, this.hide);
@@ -379,7 +413,12 @@ class Splats {
             });
         }
 
-        const spot = { k, x, z, size, pool, angle: Math.random() * Math.PI * 2, variant: pool ? 3 : Math.floor(Math.random() * 3), age: 0, spreads, stays: SPLAT_STAYS * (0.8 + Math.random() * 0.4), fades: SPLAT_FADES };
+        const turn = new THREE.Quaternion();
+        const y = lieOn(this.groundAt, x, z, Math.max(0.25, size / 2), turn);
+
+        turn.multiply(new THREE.Quaternion().setFromAxisAngle(UP, Math.random() * Math.PI * 2));
+
+        const spot = { k, x, y, z, size, pool, turn, variant: pool ? 3 : Math.floor(Math.random() * 3), age: 0, spreads, stays: SPLAT_STAYS * (0.8 + Math.random() * 0.4), fades: SPLAT_FADES };
 
         this.list[k] = spot;
         this.shown[k * 2] = spot.variant;
@@ -441,7 +480,7 @@ class Splats {
         const spread = spot.pool ? 1 - (1 - t) ** 2 : 0.4 + 0.6 * Math.sqrt(t);
         const size = spot.size * Math.max(0.05, spread);
 
-        this.matrix.makeRotationY(spot.angle).scale(new THREE.Vector3(size, 1, size)).setPosition(spot.x, spot.pool ? 0.012 : 0.014, spot.z);
+        this.matrix.compose(this.at.set(spot.x, spot.y + (spot.pool ? 0.012 : 0.014), spot.z), spot.turn, this.size.set(size, 1, size));
         this.mesh.setMatrixAt(spot.k, this.matrix);
         this.shown[spot.k * 2 + 1] = spot.age > spot.stays ? Math.max(0, 1 - (spot.age - spot.stays) / spot.fades) : 1;
         this.mesh.instanceMatrix.needsUpdate = true;
@@ -596,6 +635,9 @@ export class Effects {
         this.group.add(this.glow.points, this.dust.points, this.splats.mesh);
         scene.add(this.group);
 
+        /** The ground's height at a point ((x, z) => metres: set with setGround). */
+        this.groundAt = FLAT;
+
         /** Projectiles in flight, by the battle's projectile id. */
         this.flying = new Map();
 
@@ -638,6 +680,15 @@ export class Effects {
 
         // The bloodied end of an arrow that's gone in, just outside the wound
         this.bloodied = new THREE.Mesh(new THREE.CylinderGeometry(0.0062, 0.0062, 0.1, 5).rotateX(Math.PI / 2).translate(0, 0, 0.25), new THREE.MeshStandardMaterial({ color: 0x4a0604, roughness: 0.25 }));
+    }
+
+    /**
+     * Stand what's put on the ground on this ground: `at` gives its height at a point ((x, z) =>
+     * metres), or null for flat ground at 0.
+     */
+    setGround(at) {
+        this.groundAt = at ?? FLAT;
+        this.splats.groundAt = this.groundAt;
     }
 
     /**
@@ -711,7 +762,7 @@ export class Effects {
                 break;
             case "impact":
                 this.burst("impact", at, direction);
-                this.burst("dust", at.clone().setY(0.3), null);
+                this.burst("dust", at.clone().setY(this.groundAt(at.x, at.z) + 0.3), null);
                 break;
             case "dust":
                 this.burst("dust", at, direction);
@@ -724,8 +775,7 @@ export class Effects {
 
     /** Show the ring where the player is walking to (metres). */
     markTarget(x, z) {
-        this.marker.position.x = x;
-        this.marker.position.z = z;
+        this.marker.position.set(x, lieOn(this.groundAt, x, z, 0.36, this.marker.quaternion) + 0.03, z);
         this.markerAge = 0;
     }
 
@@ -771,14 +821,14 @@ export class Effects {
             new THREE.MeshBasicMaterial({ color: colour, transparent: true, depthWrite: false, toneMapped: false }),
         );
 
-        ring.position.set(x, 0.04, z);
+        ring.position.set(x, lieOn(this.groundAt, x, z, 1, ring.quaternion) + 0.04, z);
         ring.renderOrder = 1;
         this.group.add(ring);
         this.pulses.push({ ring, age: 0 });
     }
 
     /**
-     * Stars circling a character's head (at `height` metres) for `seconds`: dazed. Again while
+     * Stars circling a character's head (`height` metres above where it stands) for `seconds`: dazed. Again while
      * dazed, it lasts the longer of the two.
      */
     daze(object, height, seconds, look = 0) {
@@ -814,7 +864,7 @@ export class Effects {
 
     /**
      * A stun lands on a character: a flash at `at` (its head), and stars circling its head (at
-     * `height` metres) for `seconds`, in one of LOOKS.stun.
+     * `height` metres above where it stands) for `seconds`, in one of LOOKS.stun.
      */
     stun(at, object, height, seconds, look = 0) {
         const style = LOOKS.stun[look] ?? LOOKS.stun[0];
@@ -824,13 +874,13 @@ export class Effects {
     }
 
     /**
-     * A heal lands on a character standing at `ground` ({ x, z }) and `height` tall: light rising
+     * A heal lands on a character standing at `ground` ({ x, y, z }) and `height` tall: light rising
      * (or falling, or fountaining) round them, and a ring (or two) spreading on the ground, in one
      * of LOOKS.heal.
      */
     heal(ground, height, look = 0) {
         const style = LOOKS.heal[look] ?? LOOKS.heal[0];
-        const at = new THREE.Vector3(ground.x, height * style.from, ground.z);
+        const at = new THREE.Vector3(ground.x, (ground.y ?? 0) + height * style.from, ground.z);
 
         this.glow.emit({ ...BURSTS.heal, ...style.burst }, at, style.up ? new THREE.Vector3(0, 2.5, 0) : null);
 
@@ -1089,7 +1139,7 @@ export class Effects {
         });
 
         this.glow.update(dt, pixels);
-        this.dust.update(dt, pixels, (x, z, size) => this.splats.add(x, z, size * (2.5 + Math.random() * 2)));
+        this.dust.update(dt, pixels, (x, z, size) => this.splats.add(x, z, size * (2.5 + Math.random() * 2)), this.groundAt);
         this.splats.update(dt);
 
         this.stuck = this.stuck.filter((arrow) => {
@@ -1155,7 +1205,7 @@ export class Effects {
                 // (A tilted circle, its tilt turning slowly: a wobbling halo)
                 const lift = Math.sin(angle - daze.age * 1.3) * tilt * radius;
 
-                star.position.set(position.x + Math.cos(angle) * radius, daze.height + 0.03 * Math.sin(angle * 2) + lift, position.z + Math.sin(angle) * radius);
+                star.position.set(position.x + Math.cos(angle) * radius, position.y + daze.height + 0.03 * Math.sin(angle * 2) + lift, position.z + Math.sin(angle) * radius);
                 star.scale.setScalar(size * daze.style.size);
 
                 if (this.camera) {
@@ -1172,7 +1222,11 @@ export class Effects {
         const target = this.target;
         const ring = this.targetRing;
 
-        ring.visible = Boolean(target?.object.visible) && target.object.position.y > -0.2;
+        const { x, y, z } = target?.object.position ?? {};
+        const ground = target ? lieOn(this.groundAt, x, z, target.radius, ring.quaternion) : 0;
+
+        // (Not while it's sunk into the ground: fallen)
+        ring.visible = Boolean(target?.object.visible) && y > ground - 0.2;
 
         if (ring.visible) {
             target.age += dt;
@@ -1181,10 +1235,9 @@ export class Effects {
             const closing = 1 + 0.9 * (1 - lock) ** 2;
             const pulse = 1 + 0.04 * Math.sin(target.age * 2 * Math.PI * 1.2);
 
-            ring.position.x = target.object.position.x;
-            ring.position.z = target.object.position.z;
+            ring.position.set(x, ground + 0.035, z);
             ring.scale.setScalar(target.radius * closing * pulse);
-            ring.rotation.y = -target.age * 0.7;
+            ring.rotateY(-target.age * 0.7);
             ring.material.opacity = lock;
         }
     }

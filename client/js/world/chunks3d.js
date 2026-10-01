@@ -26,8 +26,9 @@ import { WILDS } from "./art/engine/atlas.js";
 import { holdSign, isSign, letGoSign, releaseSign } from "./art/kits/signs.js";
 import { Woodland } from "./art/kits/trees.js";
 import { featureLooks, featureMesh, Growth, sowing, TILE, undergrowthLooks, undergrowthMesh } from "./art/kits/wilds.js";
-import { disposeChunkGround, disposeGrass, landColours, layingGround } from "./ground.js";
+import { disposeChunkGround, disposeGrass, landColours, layingGround, respaceGround } from "./ground.js";
 import { Layouts } from "./layouts.js";
+import { Terrains } from "./terrains.js";
 import { MARGIN, primingWater, waterSheet } from "./water.js";
 import { builderFor } from "./art/peoples/index.js";
 import { BUILDERS, cutAway, drawFar, joined, partsOf, PIXEL, placed, standOn } from "./town3d.js";
@@ -63,6 +64,13 @@ export const UNDERGROWTH = Object.freeze({ grow: 64, drop: 84 });
  */
 export const DETAIL_NEAR = 40;
 
+/**
+ * How far apart the ground's corners are drawn (metres), by how many chunks from the player's a
+ * chunk is: in the player's own, then the ring round it, and so on, the last for all further off
+ * (the quality level's: view.js).
+ */
+export const SPACING = Object.freeze([1, 1, 2]);
+
 /** Bridges' decks: how high their tops are over the ground (metres: those on them stand there), and how thick. */
 export const DECK = Object.freeze({ top: 0.16, depth: 0.14 });
 
@@ -86,8 +94,16 @@ export class Chunks {
         this.land = landColours(world.plan);
         this.woodland = new Woodland();
 
-        // (The settlements a little further off laid out ahead, off the page's thread)
+        // (The settlements a little further off laid out ahead, off the page's thread; and the
+        // land's heights)
         this.layouts = this.overworld.settlements ? new Layouts(this.overworld.settlements) : null;
+        this.terrains = this.overworld.ground ? new Terrains(world.plan, this.overworld.ground) : null;
+
+        /** How far apart the ground's corners are drawn (as SPACING; setSpacing). */
+        this.spacing = SPACING;
+
+        /** The ground's height at a point (metres): the overworld's (core/terrain/ground.js). */
+        this.groundAt = (x, z) => this.overworld.heightAt?.(x, z) ?? 0;
 
         /** Everything drawn: add it to the scene. */
         this.object = new THREE.Group();
@@ -164,6 +180,32 @@ export class Chunks {
 
         for (const drawn of this.drawn.values()) {
             this.#uproot(drawn);
+        }
+    }
+
+    /** Draw the ground's corners this far apart (as SPACING, ring by ring) from now on. */
+    setSpacing(spacing) {
+        if (spacing.length !== this.spacing.length || spacing.some((step, k) => step !== this.spacing[k])) {
+            this.spacing = spacing;
+            this.#respace();
+        }
+    }
+
+    // How far apart a chunk's ground's corners are drawn, by how far it is from the player's
+    #spacingOf(cx, cy) {
+        const off = this.centre ? Math.max(Math.abs(cx - this.centre[0]), Math.abs(cy - this.centre[1])) : 0;
+
+        return this.spacing[Math.min(off, this.spacing.length - 1)];
+    }
+
+    // Each chunk's ground drawn as finely as it now should be, the player having moved
+    #respace() {
+        for (const drawn of this.drawn.values()) {
+            const ground = drawn.object.children.find(({ name }) => name === "ground");
+
+            if (ground) {
+                respaceGround(this.overworld, this.overworld.chunk(drawn.cx, drawn.cy), ground, this.#spacingOf(drawn.cx, drawn.cy));
+            }
         }
     }
 
@@ -334,7 +376,7 @@ export class Chunks {
             }
 
             const add = (object) => {
-                job.built = placed(object, piece);
+                job.built = placed(object, piece, [0, 0], this.groundAt(piece.x, piece.y));
                 job.group.add(job.built);
                 job.built.updateMatrixWorld(true);
                 job.trees.push(...grownRound(object, piece));
@@ -418,7 +460,7 @@ export class Chunks {
 
         // (And the great trees they're built round, the elves', planted with the rest)
         if (job.trees.length) {
-            drawn.grown = this.woodland.plant(job.trees);
+            drawn.grown = this.woodland.plant(job.trees, this.groundAt);
             drawn.object.add(drawn.grown.object);
 
             for (const box of drawn.grown.boxes) {
@@ -469,6 +511,7 @@ export class Chunks {
         });
         this.woodland.dispose();
         this.layouts?.dispose();
+        this.terrains?.dispose();
         disposeGrass(this.land);
         this.land.userData.home?.forEach((home) => home.dispose());
         this.land.dispose();
@@ -487,6 +530,8 @@ export class Chunks {
         this.centre = [cx, cy];
         this.wanted = [];
         this.layouts?.ahead(cx, cy);
+        this.terrains?.ahead(cx, cy);
+        this.#respace();
 
         for (let dy = -REACH.drawn; dy <= REACH.drawn; dy++) {
             for (let dx = -REACH.drawn; dx <= REACH.drawn; dx++) {
@@ -556,13 +601,13 @@ export class Chunks {
         this.drawn.set(key(cx, cy), drawn);
         yield;
 
-        object.add(yield* layingGround(this.overworld, chunk, this.land));
+        object.add(yield* layingGround(this.overworld, chunk, this.land, this.#spacingOf(cx, cy)));
         yield;
 
         const water = waterOf(this.overworld, chunk);
-        const bridges = bridgesOf(chunk);
+        const bridges = bridgesOf(chunk, { deck: (bridge, t) => this.overworld.deckOf?.(bridge, t) ?? 0, groundAt: this.groundAt });
         // (The plank walks over a settlement's lagoon: decks on stilts, no rails)
-        const walks = chunk.walks?.length ? bridgesOf({ bridges: chunk.walks }, { rails: false }) : null;
+        const walks = chunk.walks?.length ? bridgesOf({ bridges: chunk.walks }, { rails: false, deck: (walk, t) => this.groundAt(walk.a[0] + (walk.b[0] - walk.a[0]) * t, walk.a[1] + (walk.b[1] - walk.a[1]) * t), groundAt: this.groundAt }) : null;
 
         for (const part of [water, bridges, walks]) {
             if (part) {
@@ -576,7 +621,7 @@ export class Chunks {
 
             yield* featureLooks(chunk.features, landAt);
 
-            const wild = featureMesh(chunk.features, landAt, [chunk.x0, chunk.y0]);
+            const wild = featureMesh(chunk.features, landAt, [chunk.x0, chunk.y0], this.groundAt);
 
             object.add(wild.mesh);
 
@@ -594,7 +639,13 @@ export class Chunks {
         yield;
 
         // The trees, and how high they stand on each square
-        const lot = this.woodland.plant(chunk.trees.map(({ x, y, variant, size, turn }) => ({ x, z: y, variant, size, turn })));
+        // (Each trunk set down on the lowest of the ground round it, so on a slope none of it's left
+        // hanging over the ground)
+        const trunkAt = (x, z) => Math.min(this.groundAt(x - 0.4, z - 0.4), this.groundAt(x + 0.4, z - 0.4), this.groundAt(x - 0.4, z + 0.4), this.groundAt(x + 0.4, z + 0.4)) - 0.05;
+        const lot = this.woodland.plant(
+            chunk.trees.map(({ x, y, variant, size, turn }) => ({ x, z: y, variant, size, turn, y: trunkAt(x, y) })),
+            this.groundAt,
+        );
 
         drawn.lot = lot;
 
@@ -755,7 +806,7 @@ function waterOf(overworld, chunk) {
         return null;
     }
 
-    return waterSheet(data, [x0, y0, CHUNK, CHUNK], MARGIN);
+    return waterSheet(data, [x0, y0, CHUNK, CHUNK], MARGIN, overworld.surfaceAt ? (x, z) => overworld.surfaceAt(x, z) : null);
 }
 
 /**
@@ -794,8 +845,8 @@ export function lagoonOf(water, walks, [ox, oz] = [0, 0]) {
 
 // A box (metres) from (x0, y0, z0) to (x1, y1, z1), its texture laid flat on each face at its real
 // size (`metres` to a repeat): on top, running along x (so a deck's boards lie across it)
-function box(x0, y0, z0, x1, y1, z1, metres = 2.8) {
-    const geometry = new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0).translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+function box(x0, y0, z0, x1, y1, z1, metres = 2.8, segments = 1) {
+    const geometry = new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0, segments).translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
     const { position, normal, uv } = geometry.attributes;
 
     for (let k = 0; k < uv.count; k++) {
@@ -813,37 +864,71 @@ function box(x0, y0, z0, x1, y1, z1, metres = 2.8) {
     return geometry;
 }
 
-// A chunk's bridges (those whose middles are in it): each a straight deck of boards laid across
-// it, from bank to bank along the road, a dark beam along each edge, and a rail on posts along
-// each side (or, without `rails`, a plank walk: stilts under its edges instead); or null
-function bridgesOf(chunk, { rails = true } = {}) {
+// A chunk's bridges (those whose middles are in it): each a deck of boards laid across it, from
+// bank to bank along the road, rising and falling as `deck(bridge, t)` has it (its height, metres,
+// `t` of the way from its end `a` to `b`), a dark beam along each edge, a rail on posts along each
+// side and piers down to the ground under it (`groundAt`); or, without `rails`, a plank walk:
+// stilts under its edges instead; or null
+function bridgesOf(chunk, { rails = true, deck = () => 0, groundAt = () => 0 } = {}) {
     const parts = { planks: [], "planks-dark": [], timber: [] };
     const { top, depth } = DECK;
     const { height, thick, post, every } = RAIL;
     const matrix = new THREE.Matrix4();
 
-    for (const { a, b, half } of chunk.bridges) {
+    for (const bridge of chunk.bridges) {
+        const { a, b, half } = bridge;
         const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
         const posts = Math.max(2, Math.round(length / every) + 1);
         const own = { planks: [], "planks-dark": [], timber: [] };
+        const segments = Math.max(1, Math.ceil(length));
 
-        // (Built along x from 0, across z, then turned to lie along the road)
-        own.planks.push(box(0, top - depth, -half, length, top, half));
+        // (Built along x from 0, across z, level; then each point raised to the deck's height
+        // there, and turned to lie along the road)
+        own.planks.push(box(0, top - depth, -half, length, top, half, 2.8, segments));
 
         for (const side of [-1, 1]) {
             const [inner, outer] = side > 0 ? [half - thick, half + 0.02] : [-half - 0.02, -half + thick];
 
-            own["planks-dark"].push(box(0, top - 0.4, inner, length, top + 0.03, outer, 1.4));
+            own["planks-dark"].push(box(0, top - 0.4, inner, length, top + 0.03, outer, 1.4, segments));
 
             if (rails) {
-                own.timber.push(box(0, top + height - thick, inner, length, top + height, outer, 1));
-                own.timber.push(box(0, top + height * 0.5 - thick * 0.6, inner, length, top + height * 0.5, outer, 1));
+                own.timber.push(box(0, top + height - thick, inner, length, top + height, outer, 1, segments));
+                own.timber.push(box(0, top + height * 0.5 - thick * 0.6, inner, length, top + height * 0.5, outer, 1, segments));
             }
 
             for (let k = 0; k < posts; k++) {
                 const x = 0.1 + ((length - 0.2 - post) * k) / (posts - 1);
 
                 own.timber.push(box(x, rails ? top - 0.4 : -0.6, side > 0 ? half - post : -half, x + post, rails ? top + height + 0.06 : top - depth, side > 0 ? half : -half + post, 1));
+            }
+        }
+
+        for (const geometries of Object.values(own)) {
+            for (const geometry of geometries) {
+                const { position } = geometry.attributes;
+
+                for (let k = 0; k < position.count; k++) {
+                    position.setY(k, position.getY(k) + deck(bridge, position.getX(k) / length));
+                }
+
+                geometry.computeVertexNormals();
+            }
+        }
+
+        // (Piers: under each edge a third and two thirds of the way over, from the deck's beams
+        // down into the ground under them)
+        const [dx, dz] = [(b[0] - a[0]) / length, (b[1] - a[1]) / length];
+
+        for (const t of rails && length > 4 ? [1 / 3, 2 / 3] : []) {
+            for (const side of [-1, 1]) {
+                const z = side * (half - post);
+                const x = t * length;
+                const bed = groundAt(a[0] + dx * x - dz * z, a[1] + dz * x + dx * z) - 0.4;
+                const under = deck(bridge, t) + top - 0.4;
+
+                if (under - bed > 0.3) {
+                    own.timber.push(box(x - post, bed, z - post, x + post, under, z + post, 1));
+                }
             }
         }
 
