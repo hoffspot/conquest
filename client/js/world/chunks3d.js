@@ -99,7 +99,7 @@ export class Chunks {
         // (The settlements a little further off laid out ahead, off the page's thread; and the
         // land's heights)
         this.layouts = this.overworld.settlements ? new Layouts(this.overworld.settlements) : null;
-        this.terrains = this.overworld.ground ? new Terrains(world.plan, this.overworld.ground) : null;
+        this.terrains = this.overworld.ground ? new Terrains(world.plan, this.overworld.ground, this.overworld.trails) : null;
 
         /** How far apart the ground's corners are drawn (as SPACING; setSpacing). */
         this.spacing = SPACING;
@@ -610,7 +610,8 @@ export class Chunks {
         yield;
 
         const falls = water && this.overworld.waters ? fallsOf(lipsIn(this.overworld.waters, cx, cy, CHUNK)) : null;
-        const bridges = bridgesOf(chunk, { deck: (bridge, t) => this.overworld.deckOf?.(bridge, t) ?? 0, groundAt: this.groundAt });
+        // (Its piers stand on the ground under the deck: not on the deck, as anyone standing there does)
+        const bridges = bridgesOf(chunk, { deck: (bridge, t) => this.overworld.deckOf?.(bridge, t) ?? 0, groundAt: (x, z) => this.overworld.ground?.heightAt(x, z) ?? this.groundAt(x, z) });
         // (The plank walks over a settlement's lagoon: decks on stilts, no rails)
         const walks = chunk.walks?.length ? bridgesOf({ bridges: chunk.walks }, { rails: false, deck: (walk, t) => this.groundAt(walk.a[0] + (walk.b[0] - walk.a[0]) * t, walk.a[1] + (walk.b[1] - walk.a[1]) * t), groundAt: this.groundAt }) : null;
 

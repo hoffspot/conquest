@@ -21,8 +21,23 @@ export const CORNERS = CHUNK + 1;
 /** How far a pad eases into the land round it (metres). */
 export const PAD_EASE = 24;
 
-/** Roads: how far their shoulders ease out to the land (metres), and how far along they're smoothed (metres, each way). */
-export const ROAD = Object.freeze({ shoulder: 3, smoothing: 12, step: 2 });
+/**
+ * Roads: how far their shoulders ease out to the land (metres): `batter` times as far as the road's
+ * cut into it or built up over it there, at least `shoulder` and at most `most` (so a bank's no
+ * steeper than 1 in `batter` on average, and 1.5 in `batter` at its steepest); and how far along
+ * they're smoothed (metres, each way).
+ */
+export const ROAD = Object.freeze({ shoulder: 3, batter: 2.5, most: 12, smoothing: 12, step: 2 });
+
+// Grading a road's heights (graded): how many times over, at most, and how near its grade is near enough (metres)
+const GRADING = Object.freeze({ passes: 400, near: 0.001 });
+
+/**
+ * The steepest each kind of road climbs (rise over run): a trade road for laden carts, a road, a
+ * track, a foot path (core/trails.js). Where the land's steeper, a road's cut into it and built up
+ * over it, as much of each.
+ */
+export const GRADE = Object.freeze({ trade: 0.1, road: 0.12, track: 0.15, path: 0.25 });
 
 // How many chunks' heights to keep
 const KEEP = 256;
@@ -50,12 +65,16 @@ export class Ground {
      *     and all: the same whenever asked.
      * @param {Function} [options.roadsNear] - The roads through a chunk (cx, cy): [{ line, k
      *     (which of its segments), half (half-width, metres) }], each line { planned: [[x, y],
-     *     ...] }: the same whenever asked.
+     *     ...], kind (GRADE's) }: the same whenever asked.
+     * @param {Function} [options.settledNear] - The pads of the settlements reaching into a chunk
+     *     (cx, cy), padsNear's: those the roads come to, which they climb to gently. Asking must
+     *     settle nothing else, nor change anything.
      */
-    constructor(plan, { padsNear = () => [], roadsNear = () => [] } = {}) {
+    constructor(plan, { padsNear = () => [], roadsNear = () => [], settledNear = () => [] } = {}) {
         this.plan = plan;
         this.padsNear = padsNear;
         this.roadsNear = roadsNear;
+        this.settledNear = settledNear;
         this.natural = new Map();
         this.chunks = new Map();
         this.levels = new Map();
@@ -159,9 +178,9 @@ export class Ground {
         return { heights, slopes };
     }
 
-    // A road's height along it: the land's, smoothed ROAD.smoothing metres each way, every
-    // ROAD.step metres from its start ({ at (each sample's distance along it), heights, starts
-    // (each segment's distance along it at its start) })
+    // A road's height along it, every ROAD.step metres from its start: the land's (with the
+    // settlements it comes to levelled in), smoothed ROAD.smoothing metres each way, then kept to
+    // its GRADE (graded) ({ heights, starts (each segment's distance along it at its start) })
     #profile(line) {
         if (!this.profiles.has(line)) {
             const points = line.planned;
@@ -189,7 +208,7 @@ export class Ground {
 
                 // (Over water, the road's on a bridge: it keeps to its banks' height)
                 const [x, y] = [ax + (bx - ax) * t, ay + (by - ay) * t];
-                const land = this.#landAt(x, y);
+                const land = this.#onPads(this.settledNear(Math.floor(x / CHUNK), Math.floor(y / CHUNK)), x, y, this.#landAt(x, y));
                 const water = waterAt(this.plan, x, y, land);
 
                 raw.push(water === null ? land : Math.max(land, water + BANK));
@@ -209,7 +228,11 @@ export class Ground {
                 return sum / n;
             });
 
-            this.profiles.set(line, { heights, starts });
+            // (Its ends at the land's own height there, so roads and trails meeting end to end
+            // meet at one height)
+            heights[0] = raw[0];
+            heights[heights.length - 1] = raw.at(-1);
+            this.profiles.set(line, { heights: graded(heights, (GRADE[line.kind] ?? GRADE.track) * ROAD.step, { pinned: true }), starts });
         }
 
         return this.profiles.get(line);
@@ -221,7 +244,9 @@ export class Ground {
         return heightAt(this.plan, x, y);
     }
 
-    // A point's height with the roads near it levelled in
+    // A point's height with the roads near it levelled in: on a road, the one it's furthest onto;
+    // beside them, the one whose shoulder it's furthest up (its distance off the road against
+    // the shoulder's width there)
     #onRoads(roads, x, y, height) {
         let best = null;
 
@@ -230,23 +255,29 @@ export class Ground {
             const [bx, by] = road.line.planned[road.k + 1];
             const [dx, dy] = [bx - ax, by - ay];
             const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy || 1)));
-            const off = hypot(x - (ax + dx * t), y - (ay + dy * t)) - road.half;
+            const [ex, ey] = [x - (ax + dx * t), y - (ay + dy * t)];
 
-            if (off < ROAD.shoulder && (!best || off < best.off)) {
-                best = { road, t, off, length: hypot(dx, dy) };
+            // (Too far off for its banks to reach, by the square of the distance: no need of more)
+            if (ex * ex + ey * ey >= (road.half + ROAD.most) * (road.half + ROAD.most)) {
+                continue;
+            }
+
+            const off = hypot(ex, ey) - road.half;
+
+            const { heights, starts } = this.#profile(road.line);
+            const along = (starts[road.k] + t * hypot(dx, dy)) / ROAD.step;
+            const s = Math.min(heights.length - 1, Math.floor(along));
+            const surface = heights[s] + (heights[Math.min(heights.length - 1, s + 1)] - heights[s]) * (along - s);
+            const width = Math.min(ROAD.most, Math.max(ROAD.shoulder, Math.abs(height - surface) * ROAD.batter));
+            const up = off <= 0 ? off : off / width;
+
+            // (Of two as near, the one first by id: the same whichever was laid first)
+            if (up < 1 && (!best || up < best.up || (up === best.up && (road.line.id ?? "") < (best.road.line.id ?? "")))) {
+                best = { road, up, off, surface, width };
             }
         }
 
-        if (!best) {
-            return height;
-        }
-
-        const { heights, starts } = this.#profile(best.road.line);
-        const along = (starts[best.road.k] + best.t * best.length) / ROAD.step;
-        const s = Math.min(heights.length - 1, Math.floor(along));
-        const surface = heights[s] + (heights[Math.min(heights.length - 1, s + 1)] - heights[s]) * (along - s);
-
-        return surface + (height - surface) * smoothstep(0, ROAD.shoulder, best.off);
+        return best ? best.surface + (height - best.surface) * smoothstep(0, best.width, best.off) : height;
     }
 
     // A pad's height: the land's under it, on average (sampled on a grid across it)
@@ -315,6 +346,58 @@ export class Ground {
 
         return this.chunk(cx, cy).slopes[(y - cy * CHUNK) * CHUNK + (x - cx * CHUNK)] ?? SLOPE_CLASS.open;
     }
+}
+
+/**
+ * Heights along a line (metres, evenly spaced) kept to rising or falling no more than `most`
+ * metres from each to the next, near the heights as they were: wherever two side by side are
+ * too far apart, each is moved half the excess towards the other (the higher cut down as much as
+ * the lower's built up), over and over, forwards and back, till none are (or GRADING.passes have gone by:
+ * then whatever's left is cut down to fit). With its ends `pinned`, they're kept as they are.
+ */
+export function graded(heights, most, { pinned = false } = {}) {
+    const kept = heights.slice();
+    const n = kept.length;
+    // (Ends pinned stay as they are: the other side moves all the way)
+    const share = (k) => (pinned && (k === 0 || k === n - 1) ? 0 : 1);
+
+    for (let pass = 0; pass < GRADING.passes; pass++) {
+        let worst = 0;
+        const meet = (a, b) => {
+            const rise = kept[b] - kept[a];
+            const over = Math.abs(rise) - most;
+
+            if (over > 0 && share(a) + share(b) > 0) {
+                const step = (rise > 0 ? over : -over) / (share(a) + share(b));
+
+                kept[a] += step * share(a);
+                kept[b] -= step * share(b);
+                worst = Math.max(worst, over);
+            }
+        };
+
+        for (let k = 1; k < n; k++) {
+            meet(k - 1, k);
+        }
+
+        for (let k = n - 1; k > 0; k--) {
+            meet(k - 1, k);
+        }
+
+        if (worst <= GRADING.near) {
+            break;
+        }
+    }
+
+    for (let k = 1; k < n; k++) {
+        kept[k] = Math.min(kept[k], kept[k - 1] + most);
+    }
+
+    for (let k = n - 2; k >= 0; k--) {
+        kept[k] = Math.min(kept[k], kept[k + 1] + most);
+    }
+
+    return kept;
 }
 
 /**

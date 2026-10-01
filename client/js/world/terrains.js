@@ -5,19 +5,24 @@
 // heights are the same either way, so wherever they were worked out, everyone's world agrees.
 // Where there are no workers (or one fails), they're worked out when they're wanted, as ever.
 
-import { CHUNKS } from "../core/overworld.js";
+import { CHUNK, CHUNKS } from "../core/overworld.js";
 
-/** How far ahead (chunks, each way round the player's) heights are worked out. */
+/** How far ahead (chunks, each way round the player's) heights are worked out, and trails found. */
 export const AHEAD = 3;
+const TRAILS_AHEAD = 5;
 
 export class Terrains {
     /**
      * @param {object} plan - The world plan.
      * @param {object} ground - The world's ground (core/terrain/ground.js Ground).
+     * @param {object} [trails] - The world's trails up into the hills (core/trails.js Trails),
+     *     whose ways are found ahead too.
      */
-    constructor(plan, ground) {
+    constructor(plan, ground, trails = null) {
         this.ground = ground;
+        this.trails = trails;
         this.asked = new Set();
+        this.routing = new Set();
         this.worker = null;
 
         if (typeof Worker === "undefined") {
@@ -30,10 +35,16 @@ export class Terrains {
             return;
         }
 
-        this.worker.onmessage = ({ data: { cx, cy, heights } }) => this.ground.give(cx, cy, heights);
+        this.worker.onmessage = ({ data: { cx, cy, heights, trail, points } }) => {
+            if (trail) {
+                this.trails?.give(trail, points);
+            } else {
+                this.ground.give(cx, cy, heights);
+            }
+        };
         // (Worked out when they're wanted, then)
         this.worker.onerror = () => this.dispose();
-        this.worker.postMessage({ plan: { ...plan } });
+        this.worker.postMessage({ plan: { ...plan }, keepOut: trails?.keepOut ?? [] });
     }
 
     /** Work out the heights of the chunks within AHEAD of a chunk that aren't yet (nearest first). */
@@ -66,6 +77,18 @@ export class Terrains {
 
         for (const [, x, y] of wanted.sort(([a], [b]) => a - b)) {
             this.worker.postMessage({ cx: x, cy: y });
+        }
+
+        // (And the trails whose room comes within TRAILS_AHEAD, each asked for once)
+        for (let dy = -TRAILS_AHEAD; dy <= TRAILS_AHEAD && this.trails; dy++) {
+            for (let dx = -TRAILS_AHEAD; dx <= TRAILS_AHEAD; dx++) {
+                for (const trail of this.trails.near(cx + dx, cy + dy, CHUNK)) {
+                    if (trail.points === null && !this.routing.has(trail.id)) {
+                        this.routing.add(trail.id);
+                        this.worker.postMessage({ trail: { id: trail.id, from: trail.from, to: trail.to, box: trail.box } });
+                    }
+                }
+            }
         }
     }
 
