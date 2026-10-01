@@ -503,7 +503,7 @@ describe("the rules", () => {
 
 describe("set piece art", () => {
     it("only uses arithmetic that every browser does the same way (so layouts can be made in multiplayer games)", () => {
-        for (const file of ["setpieces/castle.js", "setpieces/town.js", "setpieces/plan.js", "setpieces/pieces.js"]) {
+        for (const file of ["setpieces/castle.js", "setpieces/town.js", "setpieces/plan.js", "setpieces/pieces.js", "setpieces/neutral.js"]) {
             const source = readFileSync(new URL(`../client/js/core/${file}`, import.meta.url), "utf8").replace(/\/\/.*$/gm, "");
 
             assert.doesNotMatch(source, /Math\.(random|sin|cos|tan|exp|log|pow|atan|hypot|cbrt|sqrt)\b/, file);

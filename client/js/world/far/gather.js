@@ -5,7 +5,7 @@
 
 import { layoutTown } from "../../core/setpieces/town.js";
 import { squareOf, waysOut } from "../../core/settlements.js";
-import { siteSize } from "../../core/sites.js";
+import { restingOf, siteSize } from "../../core/sites.js";
 import { heightAt } from "../../core/terrain/height.js";
 import { settlementShapes, Shapes, siteShapes } from "./shapes.js";
 
@@ -63,7 +63,7 @@ export function gatherSilhouettes(plan, { x, z, reach, settled = new Map(), layo
             continue;
         }
 
-        siteShapes(shapes, { kind: site.kind, people: site.race, x: spot.x, z: spot.y, facing: spot.facing, w: size[0] ?? size.w, h: size[1] ?? size.h, heightOf });
+        siteShapes(shapes, { kind: site.kind, people: site.race, seed: site.seed, form: restingOf(plan, site).form, x: spot.x, z: spot.y, facing: spot.facing, w: size[0] ?? size.w, h: size[1] ?? size.h, heightOf });
     }
 
     return { shapes, done };

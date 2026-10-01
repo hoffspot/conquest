@@ -85,7 +85,7 @@ export class Terrains {
                 for (const trail of this.trails.near(cx + dx, cy + dy, CHUNK)) {
                     if (trail.points === null && !this.routing.has(trail.id)) {
                         this.routing.add(trail.id);
-                        this.worker.postMessage({ trail: { id: trail.id, from: trail.from, to: trail.to, box: trail.box } });
+                        this.worker.postMessage({ trail: { id: trail.id, from: trail.from, to: trail.to, box: trail.box, avoid: trail.avoid } });
                     }
                 }
             }
