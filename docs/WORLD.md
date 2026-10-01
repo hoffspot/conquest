@@ -303,9 +303,11 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   - Each cell's stretch falls one of three ways:
     - **calm**: under 2 in 100. Its surface slopes steadily down.
     - **rapids**: under 8 in 100.
-    - **steps**: steeper, or falling 2.5 m or more over a cell. Pools are held level, and each
-      spills over a lip into the next where the land under it drops at least 0.6 m. A high
-      drop is a waterfall.
+    - **steps**: steeper, or falling 2.5 m or more over a cell. Pools are held level, each
+      under the land all along its stretch (looked at five times along it, where it lies in the
+      world), and each spills over a lip into the next where the land under it drops at least
+      0.6 m. A cell can drop at its very start, the cell above it ending with a lip down onto it.
+      A high drop is a waterfall.
   - How fast a river runs comes from Manning's equation, from its depth and the fall of its
     surface. A pool's fall counts as 2 in 1,000, and the river bed is rougher the steeper it falls.
     - That gives about 0.7 m/s on a calm river, up to 4.5 m/s down rapids.
@@ -317,10 +319,20 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
     gravel, so slow and shallow enough to wade.
   - **Wading:** water up to 0.5 m deep, where its depth times its speed is under 0.6 (the
     flood-safety limit for an adult), can be waded: fords, and the shallows of lakes and the
-    sea. Its squares are open, and the navigation mesh walks it as a ford.
+    sea. Its squares are open, and the navigation mesh walks it as a ford. A river is waded only
+    where it can be waded across (a ford), not along the shallows at a deep one's banks.
+  - **Mountain streams:** every dry cell of the hills and mountains (half the plan's height and
+    up) that 20 cells' rain or more runs through starts a stream. It runs on the way its water
+    goes (to the cell beside it more runs through) until it meets a river, a lake or the sea: a
+    thousand cells of them. Streams run as rivers do, in the same courses, reaches and steps, but
+    are 1.2 to 2.8 metres wide and 0.3 m deep and 0.12 m more for each metre of half-width, with
+    no fords. Being so narrow, a stream can be stepped across wherever it's shallow enough to
+    wade, however fast it runs.
   - Every river's surface is no higher than the land at its cell's middle less 0.4 m, never
     below the sea's, and never higher than anywhere upstream. Each lake stands at one level:
-    its lowest cell's, as low as the rivers running into it.
+    its lowest cell's, as low as the rivers running into it. A river running out into a lake or
+    the sea is at its level from where it reaches it (a pool spilling over a lip at its shore,
+    not out in it), and its bed there never rises off the lake's or the sea's floor.
 - **Roads**, along the plan's roads, smoothed from cell to cell (rounded twice at each corner):
   trade roads 4.4 metres wide, roads 3.6, tracks 2.2. The roads from the town start from where
   its streets leave it. A road to another settlement stops 2 metres short of its square and
@@ -567,10 +579,13 @@ It also checks the rivers:
   next;
 - running fastest in their middles and slowest by their banks, faster down rapids, downstream;
 - fords on small calm rivers, wider, shallow and slow enough to wade;
-- banks never raised up out of the lake a river runs into.
+- banks never raised up out of the lake a river runs into;
+- mountain streams: hundreds of cells of them, each on dry land, running on into a stream, a
+  river, a lake or the sea, narrow, shallow, with no fords, often in steps over lips a metre high
+  and more.
 
 `test/navigation.test.js` wades across a ford, straight over, and keeps out of the river's deep
-water beside it.
+water beside it, and steps across a mountain stream running too fast to wade.
 
 `test/world-plan.test.js` checks, for three seeds:
 

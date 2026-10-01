@@ -30,8 +30,8 @@ import { Interiors } from "./insides.js";
 import { WENCHES } from "./lore/taverns.js";
 import { featuresOf } from "./wilds.js";
 import { CORNERS, Ground, PAD_EASE } from "./terrain/ground.js";
-import { SLOPE_CLASS, stillOf, stillWaterAt } from "./terrain/height.js";
-import { wadeable, watersOf } from "./terrain/waters.js";
+import { SLOPE_CLASS, stillLevelAt, stillOf, stillWaterAt } from "./terrain/height.js";
+import { WADE, wadeable, watersOf } from "./terrain/waters.js";
 import { GROUND, HOME_TREES, TREE_KINDS } from "./setpieces/pieces.js";
 import { generateWorld } from "./world.js";
 import { BIOME, BIOMES, CELL, CELLS, CHUNK, CHUNKS, planWorld, RACES, startFor, WORLD_SIZE } from "./worldplan/plan.js";
@@ -375,28 +375,39 @@ export class Overworld {
 
     /**
      * Whether water this deep (metres) at a point (metres) can be waded: shallow enough, and
-     * (in a river) slow enough (waters.js wadeable).
+     * (in a river) slow enough (waters.js wadeable). A river is waded only where it can be waded
+     * across (a ford: not its shallows along a deep one's banks); a mountain stream is narrow
+     * enough to step across wherever it's shallow enough, however fast it runs.
      */
     wades(x, y, depth) {
         const river = this.waters.river(x, y, 0);
 
-        return wadeable(depth, river && river.gap <= 0 ? river.speed : 0);
+        if (!river || river.gap > 0) {
+            return wadeable(depth, 0);
+        }
+
+        return river.stream ? depth <= WADE.deepest : wadeable(Math.max(depth, river.depth), river.speed);
     }
 
     /**
-     * The height of the water's surface at a point (metres): the river's nearest it, else the lake's
-     * or the sea's, else (none near) the ground's (where water's drawn, it's drawn at this).
+     * The height of the water's surface at a point (metres): a river's in its channel; out of it, a
+     * lake's or the sea's wherever it's wet enough for that to stand, else the nearest river's
+     * (within 24 m: `river`, if it's been looked for already), else the lake's or the sea's near,
+     * else the ground's (where water's drawn, it's drawn at this). So a lake or the sea beside a
+     * river higher up is never drawn at the river's height.
      */
-    surfaceAt(x, y) {
-        const river = this.waters.river(x, y, 24);
-
-        if (river) {
+    surfaceAt(x, y, river = this.waters.river(x, y, 24)) {
+        if (river && river.gap <= 0) {
             return river.surface;
         }
 
-        const still = stillOf(this.plan, x, y);
+        const stands = stillLevelAt(this.plan, x, y);
 
-        return still ? still.level : this.ground.heightAt(Math.min(WORLD_SIZE - 0.01, Math.max(0, x)), Math.min(WORLD_SIZE - 0.01, Math.max(0, y)));
+        if (stands !== null || river) {
+            return stands ?? river.surface;
+        }
+
+        return stillOf(this.plan, x, y)?.level ?? this.ground.heightAt(Math.min(WORLD_SIZE - 0.01, Math.max(0, x)), Math.min(WORLD_SIZE - 0.01, Math.max(0, y)));
     }
 
     // The pads (terrain/ground.js) reaching into a chunk: the town, the settlements' squares, the

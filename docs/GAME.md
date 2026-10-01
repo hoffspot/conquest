@@ -705,8 +705,11 @@ little further off (within five chunks) are laid out ahead in a worker (world/la
 WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk has:
 
 - **Its ground** (above).
-- **Water** (world/water.js): a sheet over the lakes, the sea and rivers, its corners at the
-  water's surface every 2 m (a river runs down its valley, and steps down over a lip). It's drawn
+- **Water** (world/water.js): a sheet over the lakes, the sea, rivers and mountain streams, its
+  corners at the water's surface every 2 m (a river runs down its valley; out of a river's
+  channel, a lake's or the sea's level wherever that can stand, so still water beside a river
+  higher up is never drawn at the river's height). Where the surface drops 0.6 m or more over a
+  lip, the sheet leaves it out, and the fall's own sheet is drawn. It's drawn
   where a field says, worked out when the chunk's drawn, four bytes a square, from nine squares
   round the chunk so it meets its neighbours'. It's worked out a few rows a step, about 3.5 ms a
   water chunk in all on a desktop.
@@ -740,10 +743,30 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     - The water's own colour is what it takes out. The sky and sun are reflected off it, more
       the more glancing the look (Fresnel, after Schlick, 0.02 square on).
   - **The bed** is drawn as packed earth (the land sets soil there, drawn ploughed, whose furrows
-    showed through).
+    showed through). The ground reads the water's field too (world/ground.js):
+    - It's wet, so darker, under the water and a metre and more up its banks.
+    - There's no rock at the water's edge or under it: the bed's own ground, not a channel's cut
+      edge drawn square by square as cliff. Where it's all but sheer, as the rock a fall drops
+      down, it's rock all the same.
+    - On medium quality and up, light gathers under the water where the ripples bend it
+      (caustics): a small tiling picture of a cell pattern's edges, read twice, drifting its own
+      ways, wobbled by each other, the dimmer of the two kept, fading the deeper it is.
 
   Water can't be walked into, but can be seen over, except where it's shallow and slow enough to
-  wade (fords, and lakes' shallows: WORLD.md).
+  wade (fords, lakes' shallows, and mountain streams, stepped across: WORLD.md).
+- **Waterfalls** (world/falls.js), wherever a river or stream spills over a lip 0.6 m high or
+  more:
+  - **A sheet** falls from the lip across the river's width. Thrown forward as fast as the water
+    comes over (faster the higher the lip) and pulled down as anything falls, it arcs out and
+    spreads a tenth wider to its foot, 0.3 m under the pool below. Its foam-white streaks run down
+    it fast over green-blue water, fading at its sides and breaking up at its foot. Where a
+    stream runs into a river, its fall is where its water meets the river's, at the bank, not at
+    the river's middle, where its course ends.
+  - **Mist** rises off the pool below a lip 1.5 m high or more (on medium quality and up): eight
+    puffs a fall, each a soft round square turned to face the eye, rising and spreading over 4.5
+    seconds as it fades in and out, all of a chunk's in one draw.
+  - Each chunk draws the falls whose lips are in it, its sheets in one draw and its mist in
+    another.
 - **Bridges**, where roads cross rivers: each a straight deck of boards laid across it, from a
   little way onto one bank to a little way onto the other, along the road, with a dark beam along
   each edge and a rail on posts along each side. Anyone on one stands on its boards, 16 cm up

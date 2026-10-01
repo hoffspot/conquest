@@ -338,7 +338,7 @@ nav.walkable(mapId, x, y)            → boolean
 
 ## 6. Multiplayer: packets
 
-NET_VERSION goes to 7 with M2b and to 8 with M5. The relay is unchanged: text frames. Motion packets
+NET_VERSION goes to 7 with M2b, to 8 with M3b (the ground changed) and to 9 with M5. The relay is unchanged: text frames. Motion packets
 carry a base64 packed buffer, so the relay stays neutral about binary frames.
 
 **`welcome`.** Adds the `world` block from [§3.6](#36-serialisation-and-the-network).
@@ -439,6 +439,30 @@ river surfaces that follow the terrain.
 - Not yet: waterfall sheets and mist, mountain streams (the plan's rivers start at 150 cells of
   rain, so few run in the mountains), and the bed's own underwater look and wet banks. Those are
   M3b.
+
+**As built in M3b** (see the change log):
+- Mountain streams: every dry cell at half the plan's height or more with 20 cells of rain starts
+  one, running on the way its water goes until it meets a river, a lake or the sea (about 1,100
+  cells). Streams share the rivers' courses, reaches and steps. They're 0.6–1.4 m in half-width
+  and 0.3 m + 0.12 m a metre of half-width deep, with no fords, and are stepped across wherever
+  they're shallow enough, however fast they run. A river is waded only where it can be waded
+  across, not along the shallows at a deep one's banks. Falls (lips of 0.6 m or more) go from
+  325 to about 2,190: 338 on rivers, 1,850 on streams.
+- Steps sit in the land: each pool is held under the land all along its piece (not just at its
+  start), a cell can drop at its very start (over a lip the cell above it ends with), and a river
+  running into a lake or the sea comes down to its level at the shore. Pools standing a metre
+  or more above the land beside them fall from 13% of step samples to under 1%.
+- Waterfalls: a ballistic sheet (7 × 8 points) from each lip of 0.6 m or more, with streaks
+  running down it. It's placed through the wandering's inverse (`placeOf`), and a tributary's
+  lip is moved back to the bank it falls over. Below lips of 1.5 m or more, eight billboard mist
+  puffs (medium and up). The water's own mesh leaves out its sheer steps (`SHEER`).
+- The water's surface out of a river's channel is a lake's or the sea's wherever that can
+  stand, so still water beside a river higher up is never drawn at the river's height.
+- The bed: banks eased cubically; ground wet and darker under the water and up its banks; no
+  rock at the water but where it's all but sheer; caustics (a Voronoi-edge texture read twice, the
+  minimum kept, wobbled) on medium and up.
+- Cost: frame times with a fall in view match M3a's within noise (up to 12 more draw calls where
+  falls are in view); chunk making is unchanged (11.4 ms median against 12.2).
 
 ---
 
@@ -886,7 +910,7 @@ pictures for anything that changes the look.
 | **M3a** | Rivers and the water shader | River courses as curves; calm, rapids and step-pool reaches; Manning speeds; fords and wading; the water field (shore, flow, depth); flow-mapped, Beer–Lambert, Fresnel shader | Pictures; water cost within budget |
 | **M3b** | Falls and the bed | Waterfall sheets and mist at lips; mountain streams; underwater ground (absorption, caustics); wet banks | Pictures; water cost within budget |
 | **M4** | Structures and roads | Tiers and retaining walls; castles on crags; switchback roads and passes; bridges over valleys; peoples' places on real ground; cliffs and rocks | Pictures; walk every road end to end in a test |
-| **M5** | Multiplayer motion | `motion` stream; early desync checks; hero prediction; tick sync; debug RTT; NET_VERSION 8 | Two-browser e2e with no drift; bandwidth measured |
+| **M5** | Multiplayer motion | `motion` stream; early desync checks; hero prediction; tick sync; debug RTT; NET_VERSION 9 | Two-browser e2e with no drift; bandwidth measured |
 | **M6** | Horizon and atmosphere | Far clipmap rings; height fog in value bands; per-region look table and grade (§9 row 1); far silhouettes and the world landmark (§9 row 2); far trees; `SunLight` cascades on medium and high; terrain material | Pictures; budgets per tier met |
 | **M7** | Elden Ring environment pass | In §9's order: the landmark pass in the plan; neutral sites built, with the decay pass; cliffs and rocks; churches, citadels, stone bridges; foliage palette, grass ring, weathering | Pictures after each part; budgets met |
 | **M8** | Characters on Vitruvian | §10, as several PRs (conversion, body, garments, skin, face, LODs, clips) | Pictures; clipping tests green; budgets met |
@@ -1142,3 +1166,51 @@ converted data is to be measured in M8 against today's hm08 data.
     and lips; speeds; fords wadeable; no banks raised out of lakes; the field's bytes; wading a
     ford with the navigation mesh, but not the deep water beside it. The navigation test's
     hard-coded deep point moved with the river.
+- **2026-10-01, M3b built** (falls and the bed):
+  - **Mountain streams** (`terrain/waters.js` `running`, `STREAMS`): each dry cell at half the
+    plan's height or more with 20 cells of rain starts one, followed downhill (to the
+    neighbour more rain runs through) to a river, lake or sea: about 1,100 cells. They share the
+    rivers' courses, reaches and steps, and are 0.6–1.4 m in half-width and about 0.4 m deep,
+    with no fords. Falls (lips of 0.6 m or more) go from 325 to about 2,190, most of them on
+    streams in the mountains; 1,050 of them 1.5 m or more.
+  - **Wading** (`overworld.js` `wades`): a stream is stepped across wherever it's shallow
+    enough, however fast it runs. A river is waded only where its middle can be waded too (a
+    ford). Without that, the gentler cubic banks made the shallows along every deep river's
+    edges open (thousands of squares round the town).
+  - **Falls** (`world/falls.js`): a ballistic sheet from each lip of 0.6 m or more, and billboard
+    mist below lips of 1.5 m or more (medium and up). Lips are placed through the inverse of the
+    wandering (`placeOf`, by fixed-point iteration). A tributary's course ends in the middle of
+    the river it joins, so its lip is moved back, by halving, to where its own water ends at
+    that river's bank. The water mesh leaves out triangles that step 0.6 m or more
+    (`water.js SHEER`), so no teal wall shows beside a sheet.
+  - **Found in testing, and fixed:**
+    - **Pools stood out over the land.** A step pool was held under the land at its piece's start
+      only, so on a steep slope it ran on as a raised channel up to 6 m above the land beside it,
+      water floating over grass. Pools are now held under the lowest land along their piece
+      (sampled five times, where it lies in the world), and a cell can drop at its very start:
+      its first level (`#first`) is worked out from its shape alone (`#shape`, made once), and
+      the cell above ends with a lip down onto it. 543 such drops; perched samples fall from
+      1,141 to 47 on streams.
+    - **Falls out at sea.** A course running into a lake or the sea goes on to its cell's middle,
+      so its last lip could stand out in the water. Its corners in still water (`setLandOf`'s
+      new `still`, from the land with lakes and the sea carved but no river) come down to its
+      level, and a pool's lip is at the last corner before it: 49 lips out in still water fall to
+      2, both at the shore.
+    - **Lakes and the sea drawn at a river's height.** `surfaceAt` took the nearest river's surface
+      within 24 m before any still water's (the light-blue patch seen in M3a). Out of a river's
+      channel it's now the still water's wherever that can stand (`stillLevelAt`).
+    - **Ridges under still water.** A river's bed was carved at its own depth even out in a lake
+      or the sea, leaving a raised, pale ridge across its floor. In still water a bed only lowers
+      the ground, as its banks already did.
+  - **The bed** (`world/ground.js`, reading the water's field): banks eased cubically (no grey
+    sawtooth of rock at banks); wet ground darker under the water and 1.2 m up its banks; no
+    rock at the water but where it's all but sheer (the rock behind a fall); caustics on medium
+    and up.
+  - **Cost:** frame times with a fall in view are within noise of M3a's at every quality (2.9 to
+    5.1 ms against 3.2 to 5.5 in software rendering), with up to 12 more draw calls there; chunk
+    making is unchanged (11.4 ms median against 12.2).
+  - **Versions:** `TERRAIN_VERSION` 5, `NET_VERSION` 8 (where anyone can walk has changed).
+  - **Tests:** streams (counts, on dry land, running on, narrow, shallow, no fords, steps and
+    lips); stepping across a fast stream with the navigation mesh. The height test allows
+    streams' narrower half-widths; the steps test allows a lip at the end of any reach, where
+    the next cell starts with a drop, and checks it lands on that start and plunges as far.

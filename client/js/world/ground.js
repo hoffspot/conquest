@@ -17,6 +17,8 @@ import { RACES } from "../core/worldplan/races.js";
 import { paintLayer, SIZE } from "./art/engine/painters.js";
 import { textureCanvas } from "./art/engine/materials.js";
 import { blurred } from "./fields.js";
+import { causticTexture, FIELD, SHORE, WATER_DETAIL } from "./water.js";
+import { TREE_WIND } from "./art/kits/trees.js";
 
 // Splat texels per metre (edges are shaped at this resolution)
 const SPLAT_RESOLUTION = 4;
@@ -38,8 +40,9 @@ const GRASS_METRES = 5;
 
 // Rock, where the ground's too steep for grass to hold: how many metres one copy of its texture
 // covers, and how steep (the up of the ground's slope: 1 flat, 0 sheer) it starts and is all rock
+// (and, at the water, where it's rock all the same: steeper than a bank)
 const ROCK_METRES = 7;
-const ROCK_FROM = Object.freeze({ start: 0.84, all: 0.7 });
+const ROCK_FROM = Object.freeze({ start: 0.84, all: 0.7, sheer: 0.45 });
 
 // How far the ground carries on past the map's edges (metres): into the fog
 const BEYOND = 110;
@@ -84,6 +87,14 @@ export const LAND_COLOURS = Object.freeze({
 
 // How far the edges between lands wander (metres), so the plan's cells don't show
 const LAND_WANDER = 26;
+
+// Ground by water: how much darker wet ground is, and how far up from the water's edge it's wet
+// (metres)
+const WET = { darker: 0.38, up: 1.2 };
+
+// Caustics on a riverbed or a lake's: how big their cells are (a picture to 1/scale metres), how
+// bright, and how fast they fade with depth (a metre)
+const CAUSTICS = { scale: 0.4, bright: 0.85, fade: 0.8 };
 
 /**
  * The peoples whose homelands (the world plan's territories) have ground of their own, painted
@@ -422,9 +433,14 @@ function homeTexture() {
  * other kinds of ground by `splat` (a texture: splatOf's), which covers `area` [x, z, width, depth]
  * (metres). Every ground material shares one shader.
  */
-export function groundMaterial({ splat = null, area = [0, 0, 1, 1], land = null, contact = null } = {}) {
+export function groundMaterial({ splat = null, area = [0, 0, 1, 1], land = null, contact = null, water = null } = {}) {
     const { grass, brightness, layers, rock } = groundTiles();
     const material = new THREE.MeshLambertMaterial({ color: 0xffffff });
+
+    // (Ground with water on it: wet up its banks, and light gathering on its bed under the water)
+    if (water) {
+        material.defines = { GROUND_WATER: "" };
+    }
 
     if (!land) {
         noLand ??= new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat);
@@ -456,6 +472,7 @@ export function groundMaterial({ splat = null, area = [0, 0, 1, 1], land = null,
             grassSize: { value: grass.size },
             patchMap: { value: patchTexture() },
             rockMap: { value: rock.texture },
+            ...(water ? { groundWater: { value: water.texture }, groundWaterArea: { value: new THREE.Vector4(...water.area) }, causticMap: { value: causticTexture() }, groundTime: TREE_WIND.time, groundDetail: WATER_DETAIL } : {}),
             ...Object.fromEntries(layers.flatMap(({ texture, size }, k) => [[`layer${k}Map`, { value: texture }], [`layer${k}Size`, { value: size }]])),
         });
         shader.vertexShader = shader.vertexShader
@@ -468,6 +485,13 @@ varying vec3 vUp;
 varying float vHeight;
 uniform sampler2D rockMap;
 uniform sampler2D splatMap;
+#ifdef GROUND_WATER
+uniform sampler2D groundWater;
+uniform vec4 groundWaterArea;
+uniform sampler2D causticMap;
+uniform float groundTime;
+uniform float groundDetail;
+#endif
 uniform vec4 splatArea;
 uniform sampler2D contactMap;
 uniform vec4 contactArea;
@@ -530,6 +554,16 @@ ground *= 0.82 + 0.45 * variation;
 // Rock where it's too steep for grass: read from above on gentler slopes, from the side (whichever
 // way it faces most) on cliffs, tinted a little by the land's own colour
 float steep = 1.0 - smoothstep(${ROCK_FROM.all.toFixed(2)}, ${ROCK_FROM.start.toFixed(2)}, vUp.y);
+#ifdef GROUND_WATER
+// The water here (water.js's field): how far into it (metres, less than 0 on land) and how deep;
+// no rock at the water's edge or under it (the bed's own ground there, not a channel's cut edge
+// drawn as cliffs), but where it's all but sheer (the rock a fall drops down)
+vec4 waterHere = texture2D(groundWater, (vGround - groundWaterArea.xy) / groundWaterArea.zw);
+float waterIn = (waterHere.r * 255.0 - 128.0) / ${SHORE.steps.toFixed(1)};
+float waterDepth = waterHere.a * 255.0 / ${FIELD.depth.toFixed(1)};
+
+steep *= max(smoothstep(-0.3, 0.6, -waterIn), smoothstep(${ROCK_FROM.sheer.toFixed(2)}, ${(ROCK_FROM.sheer - 0.15).toFixed(2)}, vUp.y));
+#endif
 if (steep > 0.0) {
     vec2 across = abs(vUp.x) > abs(vUp.z) ? vec2(vGround.y, vHeight) : vec2(vGround.x, vHeight);
     // (Each read at two scales, the larger turned, so the texture's repeats don't show)
@@ -540,6 +574,23 @@ if (steep > 0.0) {
     rock = mix(rock, rock * land.rgb / max(0.2, dot(land.rgb, vec3(0.3333))), land.a * 0.35);
     ground = mix(ground, rock * (0.85 + 0.3 * variation), steep);
 }
+#ifdef GROUND_WATER
+{
+    // Wet, so darker, under the water and a metre and more up its banks; and under it, light
+    // gathering where the ripples bend it (caustics: two reads drifting their own ways, the
+    // dimmer of them, fading with depth; on medium quality and up)
+    ground *= 1.0 - ${WET.darker.toFixed(2)} * (1.0 - smoothstep(0.0, ${WET.up.toFixed(1)}, -waterIn));
+
+    if (groundDetail > 0.5 && waterDepth > 0.02) {
+        vec2 causticAt = vGround * ${CAUSTICS.scale.toFixed(3)};
+        // (Each read wobbled by the other's drift, so the lines bend and shimmer, not slide)
+        vec2 wobble = vec2(sin(vGround.y * 1.7 + groundTime * 1.3), cos(vGround.x * 1.9 + groundTime * 1.1)) * 0.04;
+        float caustic = min(texture2D(causticMap, causticAt + wobble + vec2(0.021, 0.013) * groundTime).r, texture2D(causticMap, causticAt * 1.37 - wobble + vec2(-0.016, 0.022) * groundTime).r);
+
+        ground *= 1.0 + ${CAUSTICS.bright.toFixed(2)} * caustic * smoothstep(0.02, 0.25, waterDepth) * exp(-waterDepth * ${CAUSTICS.fade.toFixed(2)});
+    }
+}
+#endif
 diffuseColor.rgb *= ground;`)
             .replace("#include <aomap_fragment>", `#include <aomap_fragment>
 reflectedLight.indirectDiffuse *= 1.0 - ${CONTACT.loss.toFixed(2)} * groundContact;`);
@@ -809,8 +860,11 @@ function chunkGeometry(overworld, chunk, step) {
     return groundGeometry(chunk.heights, step, heightOf);
 }
 
-/** The same (chunkGround), made a step at a time (each a yield: its splat's), returning it. */
-export function* layingGround(overworld, chunk, land, step = 1) {
+/**
+ * The same (chunkGround), made a step at a time (each a yield: its splat's), returning it; with
+ * the chunk's water's field (`water`: { texture, area }, water.js waterSheet's), wet by it.
+ */
+export function* layingGround(overworld, chunk, land, step = 1, water = null) {
     const { x0, y0 } = chunk;
     const size = CHUNK;
 
@@ -822,8 +876,8 @@ export function* layingGround(overworld, chunk, land, step = 1) {
 
     yield;
 
-    if (splat.any || contact) {
-        material = groundMaterial({ splat: splat.any ? splatTexture(splat) : null, area: [x0 - 1, y0 - 1, size + 2, size + 2], land, contact });
+    if (splat.any || contact || water) {
+        material = groundMaterial({ splat: splat.any ? splatTexture(splat) : null, area: [x0 - 1, y0 - 1, size + 2, size + 2], land, contact, water });
         material.userData.own = true;
     } else {
         grassOnly.set(land, grassOnly.get(land) ?? groundMaterial({ land }));
