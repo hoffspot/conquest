@@ -729,39 +729,43 @@ A drag that starts on the player and sets off mostly upwards is a swipe (straigh
 turn; two fingers are a pinch (zoom). Tilting costs nothing: the town is a few merged meshes,
 drawn whole whichever way the camera looks (about 90 draw calls and 170,000 triangles either way).
 
-**Quality levels** trade looks for speed, chosen for the device (debug mode can change them):
+**Quality levels** trade looks for speed. Game options' **Visual quality** slider chooses one, Low
+to High (suggested for the device until it's moved: older phones low, phones medium, computers
+high); debug mode can change it too. The game aims at 60 frames a second at every level:
 
-| Level | Pixels | Shadow map | Antialiasing | Hair | Skin textures | Undergrowth | Frames a second, at most |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Low (older phones) | 1× | 1024 | no | a fifth of the strands | 512 | half | 30 |
-| Medium (phones) | up to 1.5× | 2048 | yes | 30% | 512 | three-quarters | 60 |
-| High (computers) | up to 2× | 2048 | yes | 45% | 1024 | all of it | as the screen refreshes |
+| Level | Pixels | Shadow map | Antialiasing | Hair | Skin textures | Undergrowth | Far land | Far trees |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Low (older phones) | 1× | 1024 | no | a fifth of the strands | 512 | half | 1 km | none |
+| Medium (phones) | up to 1.5× | 2048 | yes | 30% | 512 | three-quarters | 2 km | to 700 m |
+| High (computers) | up to 2× | 2048 | yes | 45% | 1024 | all of it | 4 km | to 1.2 km |
 
 **How often it's drawn** (`app/pacing.js`). The browser asks for a frame each time the screen
 refreshes: 60 times a second on most screens, 90, 120 or 144 on many phones and monitors. Drawn
 every time, a phone with a 120 Hz screen did twice the work of 60 for a picture no one can tell
-from it, grew hot, and slowed itself down to cool. A quality level draws no oftener than its
-rate (`frameRate`): a frame's drawn when the browser asks within 0.6 of the screen's refresh of
-when one's due, so the frames keep to the screen's beat. At 60: every other frame at 120 Hz, every
-other at 144 (72 a second), every frame at 90 (which has no even 60; never fewer frames than the
-rate asks for, rather than uneven ones). Low draws a steady 30. A frame that takes longer to draw
+from it, grew hot, and slowed itself down to cool. Every quality level draws no oftener than
+60 a second (`frameRate`, the game's target): a frame's drawn when the browser asks within 0.6 of
+the screen's refresh of when one's due, so the frames keep to the screen's beat. At 60: every
+other frame at 120 Hz, every other at 144 (72 a second), every frame at 90 (which has no even 60;
+never fewer frames than the rate asks for, rather than uneven ones). A frame that takes longer to draw
 than the rate allows is followed by the next at once. The screen's refresh is the shortest time
 between the browser's askings over the last 30 (so it follows a screen changing its rate). The
 battle keeps its own time, whatever the frame rate (a step each twentieth of a second).
 
-**Fewer pixels when the drawing can't keep up** (`app/governor.js`). The quality level is a guess
-from what the browser says of the device, and some say little: Safari tells nothing of a phone's
-memory, so every iPhone with more than four cores is taken for a medium one, however old. Played,
-a device shows what it can do. After 5 seconds of play (things being got ready make it slower at
-first), judged over 3 seconds: if its frames come more than 1.25 times the rate's time apart (the
-median: a hitch now and then doesn't count), while the page's own work each frame is under 0.6 of
-that time (so it's the drawing that's slow, and fewer pixels will help), it draws 85% of the pixels
-across and down, and 70% if it still can't keep up after another 3 seconds; no further, and it
-doesn't step back up (a device at the edge would go up and down). The drawing buffer changes size
-at most twice a game (a few milliseconds each). It stays so for the rest of the page's life. Only
-with the quality and the render scale left to the game ("auto", 1); choosing either draws every
-pixel again. Not under automation (`navigator.webdriver`): a test's frames, drawn in software, are
-always late, and what it measures mustn't change size. Debug mode shows it on the quality line.
+**Keeping up** (Game options: **Adaptive**, on to start with; `app/governor.js`). The game aims at
+60 frames a second, and mustn't stay below 30. With Adaptive on, after 5 seconds of play (things
+being got ready make it slower at first), judged over 3 seconds (the median frame: a hitch now and
+then doesn't count): below 30 a second, it draws less, a step at a time, settling 4 seconds at each
+before it's judged again. Fewer pixels first (85%, then 70% across and down: only the drawing
+buffer's size changes), then the quality level below at every pixel (the far land and the
+undergrowth drawn again, less of them), and so on to the lowest level at 60% and 50%. Once it's
+been near 60 (54 or more) for 15 seconds it tries the step above again, up to the quality chosen
+and no further; a step that let it fall below 30 is tried again only after a minute, then two,
+four..., so a device at the edge doesn't see-saw. A game stopped a while (a gap of over a second,
+the page in the background) is judged afresh. Choosing a quality starts again from it, at every
+pixel. Game options says what it's drawing while it keeps up ("Keeping up: drawing medium, 85% of
+the pixels"), and debug mode shows it on the quality line. Not under automation
+(`navigator.webdriver`): a test's frames, drawn in software, are always slow, and what it measures
+mustn't change.
 
 **Clear of buildings.** In the town, a building can stand between the camera and the player,
 from whichever side it looks. The view marches out along its line from where it looks over the
@@ -1997,7 +2001,8 @@ game plays on while it's open; a second finger (a pinch) closes it.
    the damage each blow does.
 5. **The menu** (the menu button, or Escape) pauses the game (unless others are playing in the
    world too): Resume, Invite others (the world opened to others: a code, and who's come),
-   Game options, or back to the title. **Game options** has a switch for the minimap, a switch that turns all the sound
+   Game options, or back to the title. **Game options** has the Visual quality slider (Low,
+   Medium, High) and the Adaptive switch (Keeping up, above), a switch for the minimap, a switch that turns all the sound
    on or off, and a slider (0 to 100%) for each bus: sound effects, environment and music (a
    sound plays as the first two are moved, to hear how loud). Back (or Escape) returns to the
    menu.
@@ -2207,13 +2212,16 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
 - `test/gputimer.test.js`: the GPU's time for a frame read once it's done (never waited for) and
   smoothed, a time the GPU's clock was disturbed for thrown away, no more than four waiting, and
   nothing where the browser has no timer.
-- `test/governor.test.js`: fewer pixels only for a device whose frames come late while its own work
-  is well within the time; after it's played a while, over a whole window, twice at most; 30 a
-  second keeping up on low; a slow start and a hitch now and then forgiven; carrying on from a game
-  before, and starting again when reset. E2E: stepped down, the drawing buffer's smaller and debug
-  mode says so; a quality chosen, every pixel again.
+- `test/governor.test.js`: the steps down from the quality chosen (fewer pixels, then the level
+  below, to the lowest at half the pixels); a game at 60, or between 30 and 60, left as it is;
+  below 30, a step at a time, not before it's played a while, settled at each; back near 60 a
+  while, up again to the quality chosen and no further; a step that let it fall tried again only
+  later, longer each time; a hitch now and then and a game stopped a while forgiven; carrying on
+  from a game before, and back to the quality chosen when it's chosen again. E2E: told it can't
+  keep up, fewer pixels then the level below, and debug mode and Game options say so; Visual
+  quality chosen in Game options, drawn at it, every pixel, remembered; Adaptive off, remembered.
 - `test/pacing.test.js`: how often the world's drawn: every other frame of a 120 Hz screen at 60,
-  evenly; a 144 Hz one at 72 and a 90 Hz one at 90; 30 on low; every frame with no rate, or when
+  evenly; a 144 Hz one at 72 and a 90 Hz one at 90; 30 when asked; every frame with no rate, or when
   drawing takes longer than the rate allows; following the screen changing its rate.
 - `test/camera.test.js`: the camera following from the player's first step, catching up and
   turning behind them (walked away from, it doesn't turn; walked towards, it turns all the way

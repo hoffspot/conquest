@@ -216,6 +216,7 @@ $("#newbutton").addEventListener("click", (event) => {
 $("#debugswitch").checked = settings.debug;
 $("#minimapswitch").checked = settings.minimap;
 $("#resistswitch").checked = settings.resistSummons;
+$("#adaptiveswitch").checked = settings.adaptive;
 $("#soundswitch").checked = settings.sound;
 $("#debugswitch").addEventListener("change", (event) => applySetting("debug", event.target.checked));
 
@@ -366,6 +367,7 @@ async function playing(save) {
     game.showNavigation(settings.navigation);
     showMinimap(settings.minimap);
     game.resistSummons = settings.resistSummons;
+    game.onAdapt = showAdapted;
     debug.watch({ game });
     show("hud");
     game.start();
@@ -742,6 +744,7 @@ async function playingJoined(save, welcome, joining) {
     game.showNavigation(settings.navigation);
     showMinimap(settings.minimap);
     game.resistSummons = settings.resistSummons;
+    game.onAdapt = showAdapted;
     debug.watch({ game });
     show("hud");
     game.start();
@@ -791,6 +794,24 @@ $("#wheelsbutton").addEventListener("click", openWheels);
 $("#wheelsback").addEventListener("click", () => menuPage("options"));
 $("#minimapswitch").addEventListener("change", (event) => applySetting("minimap", event.target.checked));
 $("#resistswitch").addEventListener("change", (event) => applySetting("resistSummons", event.target.checked));
+
+// Visual quality, Low to High (world/view.js QUALITY): the level named as the slider moves, chosen
+// when it's let go; and Adaptive (app/governor.js)
+const qualityLevels = () => Object.keys(state.modules?.QUALITY ?? {});
+
+$("#qualityslider").addEventListener("input", (event) => {
+    const level = qualityLevels()[Number(event.target.value)];
+
+    $("#qualityname").textContent = state.modules?.QUALITY[level]?.label ?? "";
+});
+$("#qualityslider").addEventListener("change", (event) => {
+    const level = qualityLevels()[Number(event.target.value)];
+
+    if (level) {
+        applySetting("quality", level);
+    }
+});
+$("#adaptiveswitch").addEventListener("change", (event) => applySetting("adaptive", event.target.checked));
 $("#soundswitch").addEventListener("change", (event) => applySetting("sound", event.target.checked));
 
 // How loud each kind of sound is: as the slider moves, and remembered when let go. Moving the
@@ -931,21 +952,61 @@ function applyViewSettings() {
         return;
     }
 
-    const quality = settings.quality === "auto" ? state.modules.detectQuality() : settings.quality;
-    // (Fewer pixels drawn if the device can't keep up, with the quality and render scale left to
-    // the game: app/governor.js; all of them again once they're chosen. Not under automation: a
-    // test's frames, drawn in software, are always late, and what it measures mustn't change size)
-    const adaptive = settings.quality === "auto" && settings.renderScale === 1 && !navigator.webdriver;
+    const chosen = settings.quality === "auto" ? state.modules.detectQuality() : settings.quality;
+    // (Less drawn while the game can't keep up, if that's left to it (Adaptive: app/governor.js),
+    // from the quality chosen down; back to it when the quality's chosen again. Not under
+    // automation: a test's frames, drawn in software, are always slow, and what it measures
+    // mustn't change)
+    const adaptive = settings.adaptive && !navigator.webdriver;
+    const governor = state.game?.governor;
+
+    governor?.setCeiling(chosen);
 
     if (!adaptive) {
-        view.adaptiveScale = 1;
-        state.game?.governor.reset();
+        governor?.reset();
     }
 
+    const { quality, scale } = adaptive && governor ? governor.rung : { quality: chosen, scale: 1 };
+
     view.adaptive = adaptive;
+    view.chosenQuality = chosen;
+    view.adaptiveScale = scale;
     view.renderScale = settings.renderScale;
     view.setQuality(quality);
     view.setShadows(settings.shadows);
+    showQuality();
+}
+
+// Game options: the visual quality chosen (or suggested, left to the game), whether it's
+// adaptive, and what it's drawing while it keeps up
+function showQuality() {
+    const levels = qualityLevels();
+
+    if (!levels.length) {
+        return;
+    }
+
+    const chosen = settings.quality === "auto" ? state.modules.detectQuality() : settings.quality;
+    const slider = $("#qualityslider");
+
+    slider.max = String(levels.length - 1);
+    slider.value = String(Math.max(0, levels.indexOf(chosen)));
+    $("#qualityname").textContent = `${state.modules.QUALITY[chosen].label}${settings.quality === "auto" ? " (suggested)" : ""}`;
+    $("#adaptiveswitch").checked = settings.adaptive;
+    showAdapted();
+}
+
+function showAdapted() {
+    const view = state.session?.view;
+    const lowered = Boolean(view?.adaptive && (view.qualityName !== view.chosenQuality || view.adaptiveScale < 1));
+
+    $("#adapted").hidden = !lowered;
+
+    if (lowered) {
+        const level = state.modules.QUALITY[view.qualityName].label.toLowerCase();
+
+        $("#adapted").textContent = `Keeping up: drawing ${level}${view.adaptiveScale < 1 ? `, ${Math.round(view.adaptiveScale * 100)}% of the pixels` : ""}`;
+    }
 }
 
 // --- Off we go ---

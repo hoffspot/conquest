@@ -29,12 +29,14 @@ import { WATER_DETAIL } from "./water.js";
  * the ring round it, and further off: chunks3d.js SPACING; `water`: 1 for the water's finer
  * ripples, water.js WATER_DETAIL; `far`: how many levels the far land has, far/levels.js, so how
  * far off it reaches: 1, 2 or 4 km), and how often (`frameRate`: at most, a second,
- * app/pacing.js; 0, as often as the screen refreshes).
+ * app/pacing.js: 60 at every level, the game's target, however fast the screen; 0 would be as
+ * often as it refreshes). Game options' Visual quality chooses among them, lowest first; Adaptive
+ * (app/governor.js) draws a level or two lower, or fewer pixels, while a device can't keep up.
  */
 export const QUALITY = Object.freeze({
-    low: { label: "Low", pixelRatio: 1, shadows: 1024, antialias: false, hair: 0.2, skin: 512, undergrowth: 0.5, ground: [1, 2, 4], water: 0, far: FAR_LEVELS.low, farTrees: 0, frameRate: 30 },
+    low: { label: "Low", pixelRatio: 1, shadows: 1024, antialias: false, hair: 0.2, skin: 512, undergrowth: 0.5, ground: [1, 2, 4], water: 0, far: FAR_LEVELS.low, farTrees: 0, frameRate: 60 },
     medium: { label: "Medium", pixelRatio: 1.5, shadows: 2048, antialias: true, hair: 0.3, skin: 512, undergrowth: 0.75, ground: [1, 2, 4], water: 1, far: FAR_LEVELS.medium, farTrees: 700, frameRate: 60 },
-    high: { label: "High", pixelRatio: 2, shadows: 2048, antialias: true, hair: 0.45, skin: 1024, undergrowth: 1, ground: [1, 1, 2], water: 1, far: FAR_LEVELS.high, farTrees: 1200, frameRate: 0 },
+    high: { label: "High", pixelRatio: 2, shadows: 2048, antialias: true, hair: 0.45, skin: 1024, undergrowth: 1, ground: [1, 1, 2], water: 1, far: FAR_LEVELS.high, farTrees: 1200, frameRate: 60 },
 });
 
 /** A quality level for this device: low for small or older phones, medium for phones, high otherwise. */
@@ -146,11 +148,13 @@ export class View {
         this.renderer.info.autoReset = false;
 
         /**
-         * Drawing fewer pixels when the device can't keep up (app/governor.js), with the quality
-         * level left to the game (`adaptive`): the share of them drawn (`adapt`).
+         * Keeping up (Game options: Adaptive, app/governor.js): whether it's on (`adaptive`); the
+         * quality chosen (`chosenQuality`: the most it draws, qualityName the level it draws now);
+         * and the share of the pixels drawn (`adapt`).
          */
         this.adaptive = false;
         this.adaptiveScale = 1;
+        this.chosenQuality = quality;
 
         /** How long the GPU takes to draw the world, while it's asked (timeGpu: debug mode). */
         this.gpuTimer = new GpuTimer(this.renderer.getContext());

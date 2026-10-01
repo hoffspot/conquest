@@ -138,41 +138,75 @@ test("debug mode shows how the game runs, and is remembered", async ({ page }) =
     await expect(page.locator("#debug")).toBeHidden();
 });
 
-test("draws fewer pixels once its drawing can't keep up, says so in debug mode, and all of them again once a quality's chosen", async ({ page }) => {
-    await page.addInitScript(() => localStorage.setItem("pellagos.settings", JSON.stringify({ debug: true, sound: false })));
+test("keeps up: draws fewer pixels, then a level lower, while it can't, says so in Game options and debug mode; Visual quality and Adaptive in Game options", async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("pellagos.settings", JSON.stringify({ debug: true, sound: false, quality: "high" })));
     await playing(page, "/?play&seed=2");
 
+    // (Under automation Adaptive's off, and how it judges is app/governor.js's tests': here it's
+    // told it can't keep up, twice, as it would on a slow phone)
     const stepped = await page.evaluate(async () => {
         const { game, session } = window.pellagos;
         const view = session.view;
         const before = view.renderer.getPixelRatio();
-        let told = false;
+        const told = [
+            { quality: "high", scale: 0.85 },
+            { quality: "medium", scale: 1 },
+        ];
+        const seen = [];
 
-        // (Under automation the governor's off, and how it judges is app/governor.js's tests': here
-        // it says the drawing couldn't keep up, once, as it would on a slow phone)
         view.adaptive = true;
-        game.governor.observe = () => (told ? null : ((told = true), 0.85));
+        game.governor.observe = () => told.shift() ?? null;
 
         await new Promise((resolve) => {
-            const wait = () => (view.adaptiveScale < 1 ? resolve() : requestAnimationFrame(wait));
+            const wait = () => {
+                seen.push([view.qualityName, view.adaptiveScale, view.renderer.getPixelRatio()]);
+
+                if (view.qualityName === "medium") {
+                    resolve();
+                } else {
+                    requestAnimationFrame(wait);
+                }
+            };
 
             wait();
         });
 
-        return { before, after: view.renderer.getPixelRatio(), scale: view.adaptiveScale };
+        return { before, fewer: seen.find(([, scale]) => scale === 0.85), now: [view.qualityName, view.adaptiveScale, view.chosenQuality] };
     });
 
-    expect(stepped.scale).toBe(0.85);
-    expect(stepped.after).toBeCloseTo(stepped.before * 0.85, 5);
-    await expect(page.locator("#debugstats")).toContainText("85%: drawing couldn't keep up");
+    expect(stepped.fewer[2]).toBeCloseTo(stepped.before * 0.85, 5);
+    expect(stepped.now).toEqual(["medium", 1, "high"]);
+    await expect(page.locator("#debugstats")).toContainText("Quality medium (high chosen: keeping up)");
 
-    // (A quality chosen: every pixel again, and the governor left off)
-    await page.locator("#debugcontrols select").selectOption("low");
+    // Game options: the quality chosen, Adaptive, and what it's drawing to keep up
+    await page.locator("#menubutton").click();
+    await page.locator("#optionsbutton").click();
+    await expect(page.locator("#qualityname")).toHaveText("High");
+    await expect(page.locator("#adaptiveswitch")).toBeChecked();
+    await page.evaluate(() => window.pellagos.game.onAdapt({ quality: "medium", scale: 1 }));
+    await expect(page.locator("#adapted")).toHaveText("Keeping up: drawing medium");
 
-    const chosen = await page.evaluate(() => ({ ratio: window.pellagos.session.view.renderer.getPixelRatio(), scale: window.pellagos.session.view.adaptiveScale, adaptive: window.pellagos.session.view.adaptive, step: window.pellagos.game.governor.step }));
+    // (A quality chosen: drawn at it, every pixel, starting again from there)
+    await page.locator("#qualityslider").evaluate((slider) => {
+        slider.value = "0";
+        slider.dispatchEvent(new Event("input", { bubbles: true }));
+        slider.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await expect(page.locator("#qualityname")).toHaveText("Low");
 
-    expect(chosen).toEqual({ ratio: 1, scale: 1, adaptive: false, step: 0 });
-    await expect(page.locator("#debugstats")).not.toContainText("couldn't keep up");
+    const chosen = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+
+        return { quality: session.view.qualityName, chosen: session.view.chosenQuality, scale: session.view.adaptiveScale, ratio: session.view.renderer.getPixelRatio(), step: game.governor.step, saved: JSON.parse(localStorage.getItem("pellagos.settings")).quality };
+    });
+
+    expect(chosen).toEqual({ quality: "low", chosen: "low", scale: 1, ratio: 1, step: 0, saved: "low" });
+    await expect(page.locator("#adapted")).toBeHidden();
+
+    // (Adaptive off: remembered, and the game left at the quality chosen)
+    await page.locator("label:has(#adaptiveswitch)").click();
+    await expect(page.locator("#adaptiveswitch")).not.toBeChecked();
+    expect(await page.evaluate(() => [window.pellagos.session.view.adaptive, JSON.parse(localStorage.getItem("pellagos.settings")).adaptive])).toEqual([false, false]);
 });
 
 test("makes a character: a random look, a weapon and a name, then plays them in the town square", async ({ page }) => {

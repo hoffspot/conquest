@@ -2740,7 +2740,8 @@ dialog#menu .options {
     border-bottom: 1px solid var(--field-border);
 }
 
-.volume {
+.volume,
+.level {
     display: grid;
     grid-template-columns: 1fr auto;
     align-items: center;
@@ -2750,23 +2751,27 @@ dialog#menu .options {
     color: var(--ink);
 }
 
-.volume .text {
+.volume .text,
+.level .text {
     display: grid;
     gap: 1px;
 }
 
-.volume small {
+.volume small,
+.level small {
     font-size: 11px;
     color: var(--muted);
 }
 
-.volume input {
+.volume input,
+.level input {
     grid-column: 1 / -1;
     width: 100%;
     margin: 4px 0 0;
 }
 
-.volume output {
+.volume output,
+.level output {
     grid-row: 1;
     grid-column: 2;
     font-size: 13px;
@@ -2776,6 +2781,20 @@ dialog#menu .options {
 
 .volumes.off {
     opacity: 0.45;
+}
+
+/* Visual quality: below its slider, what Adaptive draws while the game can't keep up */
+.level {
+    border-bottom: 1px solid var(--field-border);
+    padding-bottom: 10px;
+}
+
+.adapted {
+    margin: 0;
+    padding: 2px 12px 8px;
+    font-size: 12px;
+    color: var(--gold-bright);
+    border-bottom: 1px solid var(--field-border);
 }
 
 /* Action wheels: whose wheel and which side, the wheel drawn as it opens, and what can go in
