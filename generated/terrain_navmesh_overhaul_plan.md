@@ -730,6 +730,68 @@ clip fit it.
 before the licence is settled; Mixamo clips drop in when it is. It belongs to M8, and could start
 earlier on today's body, whose rig has the same bone names.
 
+### 10.3 Main source: Mesh2Motion; supplements: ActorCore, Mixamo
+
+**Decided (2026-10-01).** Mesh2Motion's CC0 clips are the main source. Raw files from any
+licensed source stay out of this public repository (ignored, or in a private store); what the
+game loads is baked glTF.
+
+**Pilot, done in the character lab** (`scripts/build-clips.js`, `client/characters/animations/
+mesh2motion.glb`, `bvh.js`'s glTF path). Five clips (idle, walk, run, sword attack, death) play
+on today's MakeHuman body, retargeted at load time:
+- The file is 206 KB (102 KB gzipped) for 12.4 s of motion with fingers, in floats, before any
+  key reduction or meshopt.
+- What retargeting needed:
+  - Mesh2Motion's rest is a T-pose and ours has the arms down, but the skeletons also differ in
+    how they're built (collarbones pointing back, feet pitched, straight fingers). Lining every
+    bone up posed those differences: the collarbones shrugged 45° and the limits clamped them.
+  - Now only the upper arms and forearms are lined up. The upper arm is also lined up by the
+    elbow's hinge, which both rests show as a slight bend. Every other bone turns with its
+    parent.
+  - In the walk, the limits now take off at most a few degrees from the legs, back and arms. The
+    run's forearms still lose up to about 60° in some frames: the source twists the forearm
+    while it bends. A limb IK step (keep the wrist where it is, the elbow on its side, and the
+    twist in the forearm) fixes that properly; it belongs to the bake (§10.2 step 5).
+  - Choosing the continuing child (the neck, not a collarbone) for the chest's direction also
+    straightened MakeHuman's own walk, which had been hunched.
+- One-shot clips sample to their last frame: three's mixer loops by default, so its last frame
+  was the first again.
+- Mesh2Motion's walk and run, side by side with ours, have more forward lean and arm drive than
+  the procedural gait.
+- Gaps, as expected: no two-handed staff or hammer, cleaver, sheathing, or town life beyond a
+  few clips.
+
+**ActorCore as a secondary source** (Reallusion; answered for the user, not bought). Checked
+through search: the store's own pages are blocked from the build container, so this needs
+confirming on the site.
+- **What it sells:** about 4,500 motion-capture clips, sold singly (about $1.50 to $12) or in
+  packs (up to about $200). There are some free ones, and the store is a web page, so it works
+  from a Mac's browser.
+- **Download:** FBX or BVH, at 24, 30 or 60 fps, with presets for Blender, Unity, Unreal, Maya,
+  3ds Max, Cinema 4D, MotionBuilder and iClone. That is the same input as the Mixamo path in
+  §10.2: an FBX, converted with `bpy` and retargeted by a bone-name map like
+  `MESH2MOTION_NAMES`.
+- **Desktop tools:**
+  - AccuRIG (the free auto-rigger, which since version 2 also browses, previews, retargets and
+    exports ActorCore motions) is Windows only, by its FAQ.
+  - iClone and Character Creator are Windows only.
+  - None of them is needed: we retarget ourselves.
+- **Licence:** the content EULA (updated 2025-08-01) is royalty-free, non-exclusive and
+  worldwide, and allows use in commercial games and interactive services. It forbids
+  redistributing the content, or anything derived from it, as content (stock libraries, 3D
+  markets) and sharing or sub-licensing it.
+  - Raw FBX files therefore can't go in this public repository.
+  - Baked banks served inside the game are the normal use. Baked banks committed to a public
+    repository, where anyone can download them as files, are a grey area: build them in CI
+    from the private store and deploy them without committing them, or get Reallusion's answer
+    in writing.
+- **The pipeline on a Mac:**
+  1. Buy and download in the browser.
+  2. Put the FBX files in the private store.
+  3. The bake runs in CI or in a session like this one.
+  - `bpy` has macOS wheels, so it can run on the Mac too, but it doesn't have to.
+- **Before buying:** run one free ActorCore motion through the pipeline end to end.
+
 ---
 
 ## 11. Test migration
@@ -930,3 +992,8 @@ converted data is to be measured in M8 against today's hm08 data.
     the clamp starts 2 m back and looks at the player.
   - **Fixed on the way:** a winged beast's landing glide was overwritten by the standing height
     each frame; now it glides down to the ground.
+- **2026-10-01.** The user made Mesh2Motion the main animation source, and asked whether
+  ActorCore could be a secondary one bought for a Mac. §10.3 was added: the Mesh2Motion pilot in
+  the character lab (five clips; the retargeting now lines up only the arms, and the upper arm
+  by its elbow hinge, with the measured results) and ActorCore's formats, tools, licence and
+  pipeline.

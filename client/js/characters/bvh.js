@@ -1,13 +1,15 @@
-// Motion capture: reading BVH files and playing them on our skeleton ("retargeting").
+// Motion capture: reading BVH files and glTF clips and playing them on our skeleton
+// ("retargeting").
 //
 // A BVH file is a skeleton (joints, their offsets from their parents, in its own rest pose, often
-// a T-pose) and frames of joint rotations. Its skeleton isn't ours: different names, proportions
-// and rest pose. Retargeting works bone by bone, in the world:
+// a T-pose) and frames of joint rotations; a glTF clip is keyframes for a skeleton's joints. Their
+// skeleton isn't ours: different names, proportions and rest pose. Retargeting works bone by bone,
+// in the world:
 //
-//  1. Pose the BVH skeleton for a frame and take each joint's rotation in the world, turned into
-//     our axes (y up, z forward).
-//  2. Our bone points where its BVH bone points: first the turn that lines our bone up with the
-//     BVH bone at rest ("rest alignment"), then the BVH bone's rotation in the world.
+//  1. Pose the clip's skeleton for a frame and take each joint's turn from its rest pose in the
+//     world, in our axes (y up, z forward).
+//  2. Our bone points where its clip bone points: first the turn that lines our bone up with the
+//     clip's bone at rest ("rest alignment"), then the clip bone's turn in the world.
 //  3. Each bone's rotation relative to its parent becomes an anatomical joint rotation, which is
 //     kept within the joint's range of motion (rig.js), like every other pose.
 //
@@ -42,6 +44,38 @@ export const MAKEHUMAN_NAMES = Object.freeze({
     RightFoot: "Foot_R",
     RightToeBase: "Toe_R",
 });
+
+/**
+ * Our bones for the joints of Mesh2Motion's human skeleton (the Unreal mannequin's names, as in
+ * Quaternius's Universal Animation Library): client/characters/animations/mesh2motion.glb.
+ */
+export const MESH2MOTION_NAMES = Object.freeze({
+    Hips: "pelvis",
+    Spine: "spine_01",
+    Spine1: "spine_02",
+    Spine2: "spine_03",
+    Neck: "neck_01",
+    Head: "head",
+    ...Object.fromEntries(
+        [["Left", "l"], ["Right", "r"]].flatMap(([side, s]) => [
+            [`${side}Shoulder`, `clavicle_${s}`],
+            [`${side}Arm`, `upperarm_${s}`],
+            [`${side}ForeArm`, `lowerarm_${s}`],
+            [`${side}Hand`, `hand_${s}`],
+            ...["Thumb", "Index", "Middle", "Ring", "Pinky"].flatMap((finger) => [1, 2, 3].map((k) => [`${side}Hand${finger}${k}`, `${finger.toLowerCase()}_0${k}_${s}`])),
+            [`${side}UpLeg`, `thigh_${s}`],
+            [`${side}Leg`, `calf_${s}`],
+            [`${side}Foot`, `foot_${s}`],
+            [`${side}ToeBase`, `ball_${s}`],
+        ]),
+    ),
+});
+
+/**
+ * The bones lined up with Mesh2Motion's at rest: its rest pose is a T-pose, ours has the arms
+ * down, and the rest is just built differently (retarget's `match`).
+ */
+export const MESH2MOTION_MATCH = Object.freeze(["LeftArm", "LeftForeArm", "RightArm", "RightForeArm"]);
 
 /** Parse a BVH file: { joints: [{ name, parent, offset, channels, end }], frames, frameTime }. */
 export function parseBVH(text) {
@@ -143,56 +177,187 @@ function poseFrame(bvh, frame) {
     return { rotations, positions };
 }
 
+/** The rotation from the axes to a frame along `direction`, with `hinge` (made square to it) as y. */
+function basis(direction, hinge) {
+    const x = direction.clone().normalize();
+    const y = hinge.clone().addScaledVector(x, -hinge.dot(x)).normalize();
+
+    return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, x.clone().cross(y)));
+}
+
 /**
- * Retarget a parsed BVH clip to a rig: { frames: [{ rotations (anatomical, per bone), height }],
- * frameTime, duration }. `names` maps our bones to the BVH's joints; bones it leaves out (the
- * fingers) keep the rig's current rotation.
+ * A parsed BVH clip as poses (see gltfPoses): MakeHuman's are z up, facing -y, and every joint's
+ * rest rotation is none, so a joint's rotation in the world is its turn from rest.
  */
-export function retarget(bvh, rig, { names = MAKEHUMAN_NAMES, limit = true } = {}) {
-    const index = new Map(bvh.joints.map((joint, j) => [joint.name, j]));
-    const rest = poseFrame(bvh, new Float32Array(bvh.frames[0].length));
+function bvhPoses(bvh) {
     const toOurs = (vector) => vector.clone().applyQuaternion(Z_UP);
+    const ours = (pose) => ({
+        rotations: pose.rotations.map((rotation) => Z_UP.clone().multiply(rotation).multiply(Z_UP.clone().invert())),
+        positions: pose.positions.map(toOurs),
+    });
+
+    return {
+        names: bvh.joints.map(({ name }) => name),
+        parents: bvh.joints.map(({ parent }) => parent),
+        ends: bvh.joints.map(({ end }) => (end ? toOurs(new THREE.Vector3(...end)) : null)),
+        rest: ours(poseFrame(bvh, new Float32Array(bvh.frames[0].length))),
+        poses: bvh.frames.map((frame) => ours(poseFrame(bvh, frame))),
+        frameTime: bvh.frameTime,
+        loop: true,
+    };
+}
+
+/**
+ * A glTF clip on its skeleton (`root`, from GLTFLoader, y up and facing +z as ours), sampled
+ * `fps` times a second: { names, parents, rest: { positions }, poses: [{ rotations, positions }],
+ * frameTime, loop }, each joint's turn from its rest pose and its place in the world. A looping
+ * clip's last frame is its first, so it's left out; a clip played once keeps it.
+ */
+export function gltfPoses(root, clip, { fps = 30, loop = true } = {}) {
+    const joints = [];
+
+    root.traverse((node) => node !== root && joints.push(node));
+
+    const index = new Map(joints.map((joint, j) => [joint, j]));
+    const sample = () => {
+        root.updateMatrixWorld(true);
+
+        return joints.map((joint) => {
+            const position = new THREE.Vector3();
+            const rotation = new THREE.Quaternion();
+
+            joint.matrixWorld.decompose(position, rotation, new THREE.Vector3());
+
+            return { position, rotation };
+        });
+    };
+    const rest = sample();
+    const mixer = new THREE.AnimationMixer(root);
+
+    // (Played once and held at its end, so its last frame isn't its first again)
+    const action = mixer.clipAction(clip).setLoop(THREE.LoopOnce, 1);
+
+    action.clampWhenFinished = true;
+    action.play();
+    const count = Math.max(1, Math.round(clip.duration * fps));
+    const poses = [];
+
+    for (let f = 0; f < count + (loop ? 0 : 1); f++) {
+        mixer.setTime(Math.min(clip.duration, f / fps));
+
+        const pose = sample();
+
+        poses.push({
+            rotations: pose.map(({ rotation }, j) => rotation.multiply(rest[j].rotation.clone().invert())),
+            positions: pose.map(({ position }) => position),
+        });
+    }
+
+    action.stop();
+    mixer.uncacheRoot(root);
+    root.updateMatrixWorld(true);
+
+    return {
+        names: joints.map(({ name }) => name),
+        parents: joints.map((joint) => index.get(joint.parent) ?? -1),
+        ends: joints.map(() => null),
+        rest: { positions: rest.map(({ position }) => position) },
+        poses,
+        frameTime: 1 / fps,
+        loop,
+    };
+}
+
+/**
+ * Retarget a clip to a rig: a parsed BVH file, or poses (gltfPoses). Gives { frames: [{ rotations
+ * (anatomical, per bone), height, forward, side }], frameTime, duration, loop, scale }: the
+ * pelvis's height, and how far forward and to the side it is, from where it rests, scaled to our
+ * legs. `names` maps our bones to the clip's joints; bones it leaves out keep the rig's current
+ * rotation. `match`: the bones to line up with the clip's at rest (all of them, if not given).
+ */
+export function retarget(clip, rig, { names = MAKEHUMAN_NAMES, limit = true, match = null } = {}) {
+    const source = clip.poses ? clip : bvhPoses(clip);
+    const index = new Map(source.names.map((name, j) => [name, j]));
+    const rest = source.rest.positions;
 
     // How much bigger our body is (by the height of the hips)
     const hips = index.get(names.Hips);
-    const bvhFoot = index.get(names.LeftFoot);
-    const bvhLeg = toOurs(rest.positions[hips]).y - toOurs(rest.positions[bvhFoot]).y;
+    const theirLeg = rest[hips].y - rest[index.get(names.LeftFoot)].y;
     const ourLeg = rig.heads[0].y - rig.heads[rig.index.get("LeftFoot")].y;
-    const scale = ourLeg / bvhLeg;
+    const scale = ourLeg / theirLeg;
 
-    // Rest alignment: the turn from our bone's rest direction to its BVH bone's
+    // Rest alignment: the turn that lines our bone up with its clip bone at rest. A bone in
+    // `match` (all, by default) is turned to point where the clip's does (where the rest poses
+    // differ: a T-pose's arms out, ours down); any other turns with its parent, keeping our rest
+    // pose's shape (where the skeletons are built differently: collarbones, a foot's pitch, a
+    // relaxed hand)
     const children = new Map();
 
-    bvh.joints.forEach((joint, j) => {
-        if (joint.parent >= 0 && !children.has(joint.parent)) {
-            children.set(joint.parent, j);
+    source.parents.forEach((parent, j) => {
+        if (parent >= 0 && !children.has(parent)) {
+            children.set(parent, j);
         }
     });
 
-    const align = rig.definition.map(({ name }, b) => {
+    // Our bone's child that carries on from its tail (the neck from the chest, not a collarbone)
+    const continuing = (b) => {
+        let child = -1;
+
+        rig.definition.forEach((bone, c) => {
+            if (bone.parent === b && (child < 0 || rig.heads[c].distanceToSquared(rig.tails[b]) < rig.heads[child].distanceToSquared(rig.tails[b]))) {
+                child = c;
+            }
+        });
+
+        return child;
+    };
+    const ourDirectionOf = (b) => rig.tails[b].clone().sub(rig.heads[b]).normalize();
+
+    // The clip bone's direction at rest: to the joint our bone's next maps to, or its first child
+    const theirDirectionOf = (b) => {
+        const j = index.get(names[rig.definition[b].name]);
+        const next = continuing(b);
+        const target = (next >= 0 ? index.get(names[rig.definition[next].name]) : undefined) ?? children.get(j);
+        const direction = target !== undefined ? rest[target].clone().sub(rest[j]) : source.ends[j]?.clone();
+
+        return direction && direction.lengthSq() > 1e-10 ? direction.normalize() : null;
+    };
+
+    const align = [];
+
+    rig.definition.forEach(({ name, parent }, b) => {
+        const inherited = parent >= 0 ? align[parent] : new THREE.Quaternion();
         const j = index.get(names[name]);
 
-        if (j === undefined || name === "Hips") {
-            return new THREE.Quaternion();
+        align[b] = inherited.clone();
+
+        if (j === undefined || name === "Hips" || (match && !match.includes(name))) {
+            return;
         }
 
-        // The BVH bone's direction: to the joint our bone's tail maps to, or its first child
-        const ourChild = rig.definition.findIndex(({ parent }) => parent === b);
-        const mappedChild = ourChild >= 0 ? index.get(names[rig.definition[ourChild].name]) : undefined;
-        const target = mappedChild ?? children.get(j);
-        const bvhDirection = target !== undefined ? toOurs(rest.positions[target].clone().sub(rest.positions[j])) : bvh.joints[j].end ? toOurs(new THREE.Vector3(...bvh.joints[j].end)) : null;
-        const ourDirection = rig.tails[b].clone().sub(rig.heads[b]);
+        const theirs = theirDirectionOf(b);
 
-        if (!bvhDirection || bvhDirection.lengthSq() < 1e-10) {
-            return new THREE.Quaternion();
+        if (!theirs) {
+            return;
         }
 
-        return new THREE.Quaternion().setFromUnitVectors(ourDirection.normalize(), bvhDirection.normalize());
+        // The upper bone of a limb whose middle joint (an elbow) is lined up too is also turned
+        // about itself so the joint bends about the same axis in both (bent at rest, however
+        // little, both show it); the lower bone then only swings in that plane
+        const next = continuing(b);
+        const ours = ourDirectionOf(b).applyQuaternion(inherited);
+        const theirNext = next >= 0 && match?.includes(rig.definition[next].name) ? theirDirectionOf(next) : null;
+        const theirHinge = theirNext ? theirs.clone().cross(theirNext) : null;
+        const ourHinge = theirHinge ? ours.clone().cross(ourDirectionOf(next).applyQuaternion(inherited)) : null;
+
+        if (theirHinge && theirHinge.lengthSq() > 1e-4 && ourHinge.lengthSq() > 1e-4) {
+            align[b].premultiply(basis(theirs, theirHinge).multiply(basis(ours, ourHinge).invert()));
+        } else {
+            align[b].premultiply(new THREE.Quaternion().setFromUnitVectors(ours, theirs));
+        }
     });
 
-    const restHeight = toOurs(rest.positions[hips]).y;
-    const frames = bvh.frames.map((frame) => {
-        const pose = poseFrame(bvh, frame);
+    const frames = source.poses.map((pose) => {
         const world = [];
         const rotations = rig.definition.map(({ name, parent }, b) => {
             const j = index.get(names[name]);
@@ -200,13 +365,11 @@ export function retarget(bvh, rig, { names = MAKEHUMAN_NAMES, limit = true } = {
             // Our bone's rotation in the world (from its rest orientation)
             if (j === undefined) {
                 world[b] = parent >= 0 ? world[parent].clone() : new THREE.Quaternion();
-            } else {
-                world[b] = Z_UP.clone().multiply(pose.rotations[j]).multiply(Z_UP.clone().invert()).multiply(align[b]);
-            }
 
-            if (j === undefined) {
                 return null;
             }
+
+            world[b] = pose.rotations[j].clone().multiply(align[b]);
 
             // Relative to the parent, then into the anatomical frame, within the joint's range
             const local = parent >= 0 ? world[parent].clone().invert().multiply(world[b]) : world[b].clone();
@@ -215,32 +378,60 @@ export function retarget(bvh, rig, { names = MAKEHUMAN_NAMES, limit = true } = {
 
             return limit ? limitRotation(kind, side, anatomical) : anatomical;
         });
-        const root = toOurs(pose.positions[hips]);
+        const moved = pose.positions[hips].clone().sub(rest[hips]).multiplyScalar(scale);
 
-        return { rotations, height: (root.y - restHeight) * scale, forward: root.z * scale };
+        return { rotations, height: moved.y, forward: moved.z, side: moved.x };
     });
 
-    return { frames, frameTime: bvh.frameTime, duration: frames.length * bvh.frameTime, scale };
+    return { frames, frameTime: source.frameTime, duration: (frames.length - (source.loop ? 0 : 1)) * source.frameTime, loop: source.loop, scale };
 }
 
-/** Plays a retargeted clip on a character, looping, moving it along as its feet push. */
+// A clip played once holds its last pose this long before it starts again
+const HOLD = 1;
+
+/**
+ * Plays a retargeted clip on a character, looping (or once, then again after a pause). Given
+ * `moves`, it's moved along as the clip's feet push; otherwise it stays where it is, its pelvis
+ * going where the clip's does (swaying, stepping or falling down).
+ */
 export class ClipPlayer {
-    constructor(character, clip, walker) {
+    constructor(character, clip, walker, { moves = true } = {}) {
         this.character = character;
         this.clip = clip;
         this.walker = walker;
+        this.moves = moves;
         this.time = 0;
-        this.speed = null;
+        this.speed = moves ? null : 0;
+        this.ground = null;
     }
 
-    /** Pose the character at the clip's time `t` (seconds, looping). */
+    /** Pose the character at the clip's time `t` (seconds). */
     poseAt(t) {
-        const { frames, frameTime } = this.clip;
+        const { frameTime, duration, loop } = this.clip;
         const rig = this.character.rig;
-        const position = (((t / frameTime) % frames.length) + frames.length) % frames.length;
-        const a = Math.floor(position);
-        const b = (a + 1) % frames.length;
-        const blend = position - a;
+        const cycle = duration + HOLD;
+
+        // Sit the lower foot on the ground: every frame of a clip that loops; one played once
+        // (falling down, say) as it was in its first frame, so it can leave the ground
+        if (!loop) {
+            this.ground ??= this.#lowestFootAt(0);
+        }
+
+        this.#pose(loop ? t / frameTime : Math.min(((t % cycle) + cycle) % cycle, duration) / frameTime);
+        rig.offset.y -= loop ? this.#lowestFoot() : this.ground;
+        rig.apply();
+        this.character.object.updateMatrixWorld(true);
+    }
+
+    // Pose the joints and pelvis at a frame (a fraction between two blends them)
+    #pose(position) {
+        const { frames, loop } = this.clip;
+        const rig = this.character.rig;
+        const at = loop ? ((position % frames.length) + frames.length) % frames.length : Math.min(position, frames.length - 1);
+        const a = Math.floor(at);
+        const b = loop ? (a + 1) % frames.length : Math.min(a + 1, frames.length - 1);
+        const blend = at - a;
+        const mix = (key) => frames[a][key] * (1 - blend) + frames[b][key] * blend;
 
         frames[a].rotations.forEach((rotation, i) => {
             if (rotation) {
@@ -248,14 +439,19 @@ export class ClipPlayer {
             }
         });
 
-        rig.offset.set(0, frames[a].height * (1 - blend) + frames[b].height * blend, 0);
+        rig.offset.set(this.moves ? 0 : mix("side"), mix("height"), this.moves ? 0 : mix("forward"));
         rig.apply();
         this.character.object.updateMatrixWorld(true);
+    }
 
-        // Sit the lower foot on the ground
-        rig.offset.y -= Math.min(this.walker.footHeight(0), this.walker.footHeight(1));
-        rig.apply();
-        this.character.object.updateMatrixWorld(true);
+    #lowestFoot() {
+        return Math.min(this.walker.footHeight(0), this.walker.footHeight(1));
+    }
+
+    #lowestFootAt(position) {
+        this.#pose(position);
+
+        return this.#lowestFoot();
     }
 
     /** How fast the clip's planted foot pushes back (so how fast to move to keep it planted). */

@@ -23,8 +23,9 @@ The lab lets you:
 - **Watch them walk and run.** Walking is made from gait-lab data, running from sprinting
   studies. You can change the speed (up to a sprint of 8.5 m/s) and the walk style, walk in a
   circle, see the joint angles through the stride, and show the skeleton.
-- **Play motion capture.** Two of MakeHuman's clips, a walk and a zombie walk, are retargeted to
-  whatever body you've made.
+- **Play motion capture.** Two of MakeHuman's clips, a walk and a zombie walk, and five of
+  Mesh2Motion's (an idle, walk, run, sword attack and death), are retargeted to whatever body
+  you've made.
 - **Fight.** Arm them with any of the game's weapons, stand on guard, attack (once or over and
   over, in slow motion if you like), be hit by each kind of blow, fall and get up (Motion tab,
   Fighting), any of each weapon's five ways or any but the last, as in the game.
@@ -51,7 +52,8 @@ to them.
 | `equipment.js` | Slots, sockets and the equipment catalogue |
 | `gait.js` | Walking and running data: joint angle curves, cadence and stride by speed |
 | `locomotion.js` | The walker: poses the skeleton from the gait data as the character walks and runs |
-| `bvh.js` | Motion capture: reading BVH files and retargeting them to our skeleton |
+| `bvh.js` | Motion capture: reading BVH files and glTF clips and retargeting them to our skeleton |
+| `scripts/build-clips.js` | Takes the clips the lab tries out from Mesh2Motion's (CC0) into `client/characters/animations/mesh2motion.glb` (206 KB, 102 KB gzipped) |
 | `presets.js` | The human, heroine and orc |
 | `peoples.js` | The other peoples' bodies, skins and parts: elves, dark elves, cat folk, lizard folk and orcs (docs/WAR.md M5) |
 | `folk.js`, `soldiers.js` | Townsfolk and soldiers made up from a part, a sex, a seed and a people |
@@ -904,14 +906,44 @@ The lab's Motion tab has them (Resting: a class, the way from Fighting's Way, Re
 
 **Motion capture** (`bvh.js`) is retargeted bone by bone in the world:
 
-1. Pose the BVH skeleton and take each joint's world rotation, in our axes.
-2. Line our bone up with its BVH bone at rest, then apply that rotation.
+1. Pose the clip's skeleton and take each joint's turn from its rest pose in the world, in our
+   axes.
+2. Line our bone up with the clip's at rest, then apply that turn.
 3. Turn each bone's rotation relative to its parent into an anatomical joint rotation, within its
    range.
 
-The clip's hip height is scaled by leg length. The character moves at the speed the clip's feet
-push back. The lab has two of MakeHuman's clips (CC0); other clips need a bone name map like
-`MAKEHUMAN_NAMES`, for example for CMU's.
+Lining up (step 2) only turns the bones whose rest poses really differ. Mesh2Motion's skeleton
+rests in a T-pose and ours with the arms down, so the upper arms and forearms are turned to point
+where its do (the upper arm also turned about itself so both elbows bend about the same axis:
+each skeleton's rest pose bends them a little, which shows it). Every other bone turns with its
+parent, keeping our rest shape: the skeletons are just built differently there (Mesh2Motion's
+collarbones point back from the breastbone, its feet are pitched down at rest, its fingers
+straight), and lining those up too would pose those differences (shoulders shrugged back and
+held there by their limits). MakeHuman's own clips line up every bone, as their skeleton is ours.
+
+The clip's hip height is scaled by leg length. A clip that moves the character along (a walk or a
+run) moves it at the speed the clip's feet push back; one that doesn't (standing, attacking,
+dying) keeps it where it is, the pelvis going where the clip's goes. A clip played once (an
+attack, a death) keeps its first frame's feet on the ground, so it can leave it (falling to the
+knees), and starts again a second after it ends. Other clips need a bone name map like
+`MAKEHUMAN_NAMES` or `MESH2MOTION_NAMES`, for example for CMU's.
+
+**Mesh2Motion's clips** (`npm run build:clips -- --from=<mesh2motion-app/static/animations>`):
+Mesh2Motion (<https://github.com/Mesh2Motion/mesh2motion-app>) packs Quaternius's Universal
+Animation Library as three glTF files on one 66-joint skeleton (the Unreal mannequin's names,
+with fingers): 178 clips, CC0. The build takes five into one file, the skeleton without the
+mannequin's mesh, keeping only what moves (rotations, and where the pelvis is):
+
+| In the lab | Mesh2Motion's | Length | Plays |
+|---|---|---|---|
+| Idle | `Idle_A` | 3.1 s | Loops, standing (a ready stance, feet apart) |
+| Walk | `Walk` | 1.7 s | Loops, moving along |
+| Run | `Jog` | 1.2 s | Loops, moving along |
+| Sword attack | `Sword_Attack` | 1.9 s | Once (a turning slash with a lunge) |
+| Death | `Death_A` (add-on file) | 4.5 s | Once (staggers, falls to the knees, then on its face) |
+
+They're the lab's only, for now: a try-out of the plan's animation pipeline
+(generated/terrain_navmesh_overhaul_plan.md §10.2).
 
 ### Performance
 
@@ -1167,6 +1199,7 @@ sources.
 | Bandai Namco motion dataset (walks and fights in many styles) | [GitHub](https://github.com/BandaiNamcoResearchInc/Bandai-Namco-Research-Motiondataset) | CC BY-NC 4.0 |
 | Ubisoft LAFAN1 | [GitHub](https://github.com/ubisoft/ubisoft-laforge-animation-dataset) | CC BY-NC-ND 4.0 |
 | Quaternius Universal Animation Library, modular outfits | quaternius.com, itch.io | CC0 (stylised) |
+| Mesh2Motion's human animations (the Universal Animation Library as glTF) and creature rigs | [mesh2motion-app](https://github.com/Mesh2Motion/mesh2motion-app) `static/animations` | CC0 (five clips used in the lab); its `CarnegieMellonAnimations` folder is CMU's terms |
 | KayKit Adventurers (characters, weapons, shields) | [GitHub](https://github.com/KayKit-Game-Assets) | CC0 (low-poly) |
 | Mixamo characters and animations | mixamo.com (Adobe login) | Free in games; raw files can't be redistributed |
 
