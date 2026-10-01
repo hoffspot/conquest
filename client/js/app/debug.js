@@ -228,17 +228,20 @@ export class Debug {
         const scale = element("input", { type: "range", min: 0.5, max: 1, step: 0.05, oninput: () => change("renderScale", Number(scale.value)) });
         const shadows = element("input", { type: "checkbox", onchange: () => change("shadows", shadows.checked) });
         const squares = element("input", { type: "checkbox", onchange: () => change("squares", squares.checked) });
+        const navigation = element("input", { type: "checkbox", onchange: () => change("navigation", navigation.checked) });
 
         quality.value = settings.quality;
         scale.value = settings.renderScale;
         shadows.checked = settings.shadows;
         squares.checked = settings.squares;
+        navigation.checked = settings.navigation;
 
         this.root.querySelector("#debugcontrols").replaceChildren(
             element("label", {}, "Quality", quality),
             element("label", {}, "Render scale", scale),
             element("label", { class: "check" }, shadows, "Shadows"),
             element("label", { class: "check" }, squares, "Squares and paths"),
+            element("label", { class: "check" }, navigation, "Navigation mesh"),
         );
     }
 }

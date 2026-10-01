@@ -436,6 +436,8 @@ client/                 The game (static files served to the browser)
   creature-lab.html     The creature lab: every creature of the wilds, doing everything it does
   uniform-lab.html      The uniform lab: each people's soldiers and officials (with world-map.css)
   vendor/three-r186/    Three.js (minified by scripts/vendor-three.js; loaded through an import map)
+  vendor/recast-navigation-0.43.1/  Recast and Detour as WebAssembly (scripts/vendor-recast.js): the
+                        navigation meshes (core/navigation.js)
   js/main.js            The screens, from loading to playing (no Three.js: it loads first)
   js/app/               The game on the page
     loader.js           Downloads everything, counting every byte; manifest.js lists it
@@ -598,7 +600,7 @@ server/                 A static file server for playing locally (npm start), an
 test/                   Unit tests
 e2e/                    Playwright browser tests, and how long each took (durations.json)
 scripts/                vendor-three.js, build-characters.js, build-manifest.js, build-music.js,
-                        build-clips.js (the lab's Mesh2Motion clips),
+                        build-clips.js (the lab's Mesh2Motion clips), vendor-recast.js,
                         e2e-shard.js and e2e-durations.js (CI's split of the browser tests)
 .github/workflows/      CI (ci.yml) and publishing to GitHub Pages (pages.yml)
 docs/GAME.md            How the game works
@@ -635,6 +637,10 @@ docs/MODERNIZATION.md   The history: the book's Last Colony, modernized, before 
   Font License 1.1
   (`client/fonts/UnifrakturMaguntia-OFL.txt`).
 - 3D engine: [Three.js](https://threejs.org) (MIT license, in `client/vendor/three-r186/LICENSE`).
+- Navigation meshes: [Recast and Detour](https://github.com/recastnavigation/recastnavigation) by
+  Mikko Mononen (zlib license) as built by
+  [recast-navigation-js](https://github.com/isaac-mason/recast-navigation-js) by Isaac Mason (MIT
+  license), in `client/vendor/recast-navigation-0.43.1/` with both licences.
 
 This repository began as a modernization of Last Colony, the real-time strategy game from
 [*Pro HTML5 Games*](https://www.apress.com/9781484229095) by Aditya Ravi Shankar. Pellagos has

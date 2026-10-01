@@ -854,6 +854,30 @@ test("walks out of the town into the world, drawn round the player as they go, w
     expect(trip.kinds).toBe(true);
 });
 
+test("debug mode draws the navigation meshes round the player, baked in a worker", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const shown = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+
+        game.showNavigation(true);
+        await game.navigationLoading;
+
+        const view = game.navigationView;
+
+        for (let k = 0; k < 600 && view.stats.tiles < 9; k++) {
+            await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+
+        return { ...view.stats, worker: Boolean(view.baker.worker), visible: view.object.visible };
+    });
+
+    expect(shown.worker).toBe(true);
+    expect(shown.visible).toBe(true);
+    expect(shown.tiles).toBeGreaterThan(8);
+    expect(shown.triangles).toBeGreaterThan(100);
+});
+
 test("once a tap lets it make sound, the music plays on recordings of real instruments", async ({ page }) => {
     const recordings = [];
 

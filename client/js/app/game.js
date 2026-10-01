@@ -1175,6 +1175,9 @@ export class Game {
         this.chunks?.dispose();
         this.effects?.dispose();
         this.contacts?.dispose();
+        this.navigationView?.baker.dispose();
+        this.navigationView?.dispose();
+        this.navigationView?.object.removeFromParent();
 
         // The interiors' merged meshes (their materials are shared by every game)
         for (const interior of this.interiors.values()) {
@@ -1236,6 +1239,49 @@ export class Game {
 
         if (this.squares) {
             this.squares.object.visible = on;
+        }
+    }
+
+    /**
+     * Show the navigation meshes round the player or not (debug mode: core/navigation.js, drawn
+     * by world/navview.js, tiles baked in a worker). Out in the world only; loaded the first time
+     * it's shown.
+     */
+    showNavigation(on) {
+        this.navigationShown = on;
+
+        if (on && !this.navigationView && !this.navigationLoading) {
+            this.navigationLoading = Promise.all([import("../core/navigation/recast.js"), import("../core/navigation.js"), import("../world/navbaker.js"), import("../world/navview.js")])
+                .then(async ([{ loadRecast }, { Navigation }, { NavBaker }, { NavView }]) => {
+                    const navigation = new Navigation(await loadRecast(), this.world.maps.town);
+
+                    this.navigationView = new NavView(navigation, new NavBaker(navigation));
+                    this.view.scene.add(this.navigationView.object);
+                    this.navigationAt = null;
+                    this.#drawNavigation();
+                })
+                .catch((error) => console.warn("The navigation meshes couldn't be shown:", error));
+        }
+
+        this.#drawNavigation();
+    }
+
+    // The navigation meshes round the player, if they're shown (afresh when they've gone a tile)
+    #drawNavigation() {
+        const view = this.navigationView;
+
+        if (!view) {
+            return;
+        }
+
+        const player = this.battle.actor(this.me);
+        const on = Boolean(this.navigationShown && player && this.mapId === "town");
+
+        view.object.visible = on;
+
+        if (on && (!this.navigationAt || Math.abs(player.x - this.navigationAt[0]) > 8 || Math.abs(player.y - this.navigationAt[1]) > 8)) {
+            this.navigationAt = [player.x, player.y];
+            view.around(player.x, player.y);
         }
     }
 
@@ -1573,6 +1619,10 @@ export class Game {
         if (this.squares?.object.visible) {
             this.showSquares(true);
             this.squares.update(battle);
+        }
+
+        if (this.navigationShown) {
+            this.#drawNavigation();
         }
 
         // The world round the player, drawn as they go (a chunk a frame at most)
