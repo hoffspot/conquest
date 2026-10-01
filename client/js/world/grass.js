@@ -1,7 +1,8 @@
 // Tall grass (terrain plan M7b), thick in clumps and stretches over the open land round the player,
 // knee to waist high, green or golden as the land and its patches are (grassmap.js says where, how
-// tall and how dry), stirring in the breeze: drawn on the GPU, so there can be tens of thousands of
-// blades for a few draws and next to no work each frame.
+// tall and how dry), stirring in the breeze; and the crops in the fields, upright and all of a
+// height: drawn on the GPU, so there can be tens of thousands of blades for a few draws and next to
+// no work each frame.
 // - Each band (near, and far) is one mesh: one clump of blades, drawn once for each cell of a
 //   lattice round the player. A clump's cell is its own spot on the land, the lattice wrapping round
 //   as the player goes (a clump that falls behind comes round in front, at a new spot), so nothing
@@ -122,17 +123,18 @@ float shrink = grassShape.z > 0.5 ? fadeOut : 1.0;
 bool grows = grassHash(cell, 2) < grass.r * 1.3 && grassHash(cell, 3) < present;
 
 // (Each blade: somewhere in its clump, facing its own way, its own height, leaning out from the
-// clump's middle and with the breeze)
+// clump's middle and with the breeze; a crop's, sown, all much of a height and upright)
+float sown = step(0.5, grass.a);
 int blade = int(position.z);
 float angle = grassHash(cell, 7 + blade * 4) * 6.2832;
 vec2 foot = centre + vec2(cos(angle), sin(angle)) * sqrt(grassHash(cell, 8 + blade * 4)) * grassLattice.z * 0.6;
-float tall = grass.g * 2.0 * shrink * (0.6 + 0.75 * grassHash(cell, 9 + blade * 4));
+float tall = grass.g * 2.0 * shrink * mix(0.6 + 0.75 * grassHash(cell, 9 + blade * 4), 0.9 + 0.2 * grassHash(cell, 9 + blade * 4), sown);
 float facing = grassHash(cell, 10 + blade * 4) * 6.2832;
 vec2 across = vec2(cos(facing), sin(facing));
 vec2 outward = foot - centre;
 outward = dot(outward, outward) > 1e-6 ? normalize(outward) : across.yx;
 float gust = 0.55 * sin(grassTime * 1.3 + dot(foot, vec2(0.071, 0.043))) + 0.45 * sin(grassTime * 2.9 + dot(foot, vec2(-0.21, 0.17)));
-vec2 lean = (outward * 0.3 + vec2(0.8, 0.45) * (0.12 + 0.16 * gust)) * tall;
+vec2 lean = (outward * mix(0.3, 0.06, sown) + vec2(0.8, 0.45) * (0.12 + 0.16 * gust)) * tall;
 float up = position.y;
 float width = grassShape.x * (1.0 - 0.8 * up) * (0.7 + 0.6 * grassHash(cell, 11));
 vec2 at = foot + across * position.x * width * 0.5 + lean * up * up;
@@ -145,7 +147,7 @@ vec3 transformed = grows && tall > 0.02
 vec3 tip = texelFetch(grassTint, ivec2(floor(centre)) & ${TEXELS - 1}, 0).rgb;
 tip = pow(tip, vec3(2.2));
 float turn = grassHash(cell, 12) - 0.5;
-tip = mix(tip, turn > 0.0 ? vec3(0.62, 0.45, 0.12) : tip * vec3(0.7, 0.95, 0.6), abs(turn) * 0.5);
+tip = mix(tip, turn > 0.0 ? vec3(0.62, 0.45, 0.12) : tip * vec3(0.7, 0.95, 0.6), abs(turn) * mix(0.5, 0.12, sown));
 vGrassColour = mix(tip * vec3(0.32, 0.36, 0.26), tip, smoothstep(0.0, 1.0, up)) * (0.8 + 0.4 * grassHash(cell, 13 + blade * 4));
 `;
 

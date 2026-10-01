@@ -4,10 +4,11 @@
 // none on low
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
+import { ALONG } from "../client/js/core/fields.js";
 import { buildWorld, CHUNK, WET } from "../client/js/core/overworld.js";
 import { GROUND } from "../client/js/core/setpieces/pieces.js";
 import { GRASS_BANDS, TallGrass } from "../client/js/world/grass.js";
-import { GRASS_LANDS, grassMap } from "../client/js/world/grassmap.js";
+import { CROP_STANDS, GRASS_LANDS, grassMap } from "../client/js/world/grassmap.js";
 import { QUALITY } from "../client/js/world/view.js";
 
 describe("where the tall grass grows (world/grassmap.js)", () => {
@@ -37,14 +38,15 @@ describe("where the tall grass grows (world/grassmap.js)", () => {
         }
     });
 
-    it("grows it only on open grass: none on roads, fields or yards, where anything stands, on water or a bridge", () => {
+    it("grows it only on open grass (and the crops in the fields' strips): none on roads, ploughed strips or yards, where anything stands, on water or a bridge", () => {
         let open = 0;
 
         for (const chunk of chunks) {
             const { map } = grassMap(overworld, chunk);
 
             for (let k = 0; k < CHUNK * CHUNK; k++) {
-                const closed = chunk.ground[k] !== GROUND.grass || chunk.blocked[k] || chunk.water[k] !== WET.none || chunk.bridge[k];
+                const sown = chunk.ground[k] === GROUND.soil && CROP_STANDS[chunk.crops[k] % ALONG];
+                const closed = (chunk.ground[k] !== GROUND.grass && !sown) || chunk.blocked[k] || chunk.water[k] !== WET.none || chunk.bridge[k];
 
                 if (closed) {
                     assert.equal(map[k * 4], 0, `square ${k}`);

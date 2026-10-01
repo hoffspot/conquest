@@ -1706,3 +1706,33 @@ converted data is to be measured in M8 against today's hm08 data.
     ground; grass only on open grass; thick and thin, tall and short, green and golden; none on
     low, two bands on medium and high; the nine chunks round the player mapped as they're drawn,
     none that aren't).
+- **2026-10-01, M7b-1b built** (farmland in fields):
+  - **Why:** the user, on M7b-1's pictures: "Farmland shouldn't be just patches of plowed ground.
+    Plowed ground is organized into fields". Farmland was soil wherever slow noise was high: blobs
+    of furrows, all running east to west, grass round them.
+  - **Built:** `core/fields.js`: the land cut into blocks of about 72 m, their edges wandering by
+    up to 18 m; a grass verge 2 m wide inside each block's edges; one block in five pasture; the
+    rest in parallel strips 8–20 m wide (all of a block's one way, east to west or north to south),
+    a metre's baulk between them, each its own crop (ploughed, wheat, barley, greens, fallow).
+    Integer hashing of whole metres and the seed alone, so the same in every browser (the core's
+    exact-arithmetic test covers it). A block's farmed if the land at its middle is farmland, so
+    the fields' outline follows the blocks', not the plan's 32 m cells. The overworld keeps each
+    chunk's squares' strips (`chunk.crops`); ploughed and sown strips are soil, verges, baulks
+    and fallow grass. Trees keep to the verges (hedgerow trees), and only haystacks and
+    scarecrows stand in the strips.
+  - **Drawn:** the soil's furrows run along each strip (its texture turned for strips running
+    north to south), and a sown strip's ground is its crop's colour, its furrows showing through
+    (`ground.js CROP_COLOURS`, read from a texture a texel a square, `fieldsOf`, for the chunks
+    with fields only), so the strips show far off and on low; wheat, barley and greens stand in
+    their strips as the tall grass, thick, upright and all of a height (`grassmap.js
+    CROP_STANDS`; the grass map's alpha now says a square's sown).
+  - **Versions:** `NET_VERSION` 15 (trees and the land's things stand elsewhere in farmland;
+    `TERRAIN_VERSION` unchanged: the ground's heights are the same).
+  - **Not yet:** the strips go where the ground's drawn as seen from afar (past 100–150 m, and
+    the far land): there farmland is still its land's colour alone. Hedgerows along the verges
+    with M7b-2's bushes.
+  - **Tests:** `test/fields.test.js` (blocks, their edges wandering, every metre in one; each
+    block's strips one way, each its crop all along it, its width, baulks and verges; a mix of
+    crops, ploughed the most, a fifth of blocks pasture; laid into the chunks as soil and grass;
+    no trees in the strips, only haystacks and scarecrows; the crops standing in the grass map;
+    the ground told each square's crop and its strip's way).
