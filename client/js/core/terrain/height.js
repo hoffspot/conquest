@@ -27,7 +27,7 @@ import { BIOME, BIOMES } from "../worldplan/races.js";
 import { CELL, CELLS, MOUNTAIN, WATER, WORLD_SIZE } from "../worldplan/terrain.js";
 
 /** Bumped whenever the ground a seed makes changes (players playing together must agree on it). */
-export const TERRAIN_VERSION = 4;
+export const TERRAIN_VERSION = 5;
 
 /** Heights are whole multiples of this (metres). */
 export const HEIGHT_STEP = 1 / 1024;
@@ -313,17 +313,11 @@ export function landHeight(plan, x, y) {
     return height;
 }
 
-/**
- * The ground's height at a point (metres, from the world's north-west corner: x east, y south),
- * with lakes, the sea and rivers carved into it: rounded to HEIGHT_STEP.
- */
-export function heightAt(plan, x, y) {
-    const { waters } = layersOf(plan);
+// The land's height at a point (metres, not rounded) with lakes and the sea carved into it, but
+// not rivers: the land sinks under the water where the plan has it wet, and meets its surface
+// wherever its own lie brings it there, so shores follow the land's contours
+function stillHeight(plan, x, y, still = stillOf(plan, x, y)) {
     let height = landHeight(plan, x, y);
-
-    // Lakes and the sea: the land sinks under the water where the plan has it wet, and meets
-    // its surface wherever its own lie brings it there, so shores follow the land's contours
-    const still = stillOf(plan, x, y);
 
     if (still) {
         const { wetness, level, deep } = still;
@@ -338,8 +332,21 @@ export function heightAt(plan, x, y) {
         }
     }
 
+    return height;
+}
+
+/**
+ * The ground's height at a point (metres, from the world's north-west corner: x east, y south),
+ * with lakes, the sea and rivers carved into it: rounded to HEIGHT_STEP.
+ */
+export function heightAt(plan, x, y) {
+    const { waters } = layersOf(plan);
+    const still = stillOf(plan, x, y);
+    let height = stillHeight(plan, x, y, still);
+
     // Rivers: the bed below the surface, deepest in the middle (as deep as the river is there),
-    // rising across to 0.15 m under it at its edges; the banks just above it, easing out to the land
+    // rising across to 0.15 m under it at its edges, levelling out as it meets them (so the bank
+    // at the water's edge is gentle, not a step); the banks just above it, easing out to the land
     const river = waters.river(x, y, BANKS.least + BANKS.perHalf * 5);
 
     if (river) {
@@ -347,8 +354,11 @@ export function heightAt(plan, x, y) {
 
         if (gap <= 0) {
             const out = Math.min(1, (half + gap) / half);
+            const across = 1 - out * out;
+            const bed = surface - 0.15 - (depth - 0.15) * across * across * across;
 
-            height = surface - 0.15 - (depth - 0.15) * (1 - out * out);
+            // (But never raised up off the floor of a lake or the sea it runs out into)
+            height = still && still.wetness > WET_FROM ? Math.min(height, bed) : bed;
         } else {
             const banks = BANKS.least + BANKS.perHalf * half;
 
@@ -387,13 +397,23 @@ export function waterAt(plan, x, y, height) {
  * worked out if not given, and only where there's still water near), or null where there's none.
  */
 export function stillWaterAt(plan, x, y, height) {
-    const still = stillOf(plan, x, y);
+    const level = stillLevelAt(plan, x, y);
 
-    if (!still || still.wetness <= WET_FROM) {
+    if (level === null) {
         return null;
     }
 
-    return (height ?? heightAt(plan, x, y)) < still.level ? still.level : null;
+    return (height ?? heightAt(plan, x, y)) < level ? level : null;
+}
+
+/**
+ * A lake's or the sea's level at a point (metres) where it's wet enough for it to stand, whatever
+ * the ground there, or null where it isn't.
+ */
+export function stillLevelAt(plan, x, y) {
+    const still = stillOf(plan, x, y);
+
+    return still && still.wetness > WET_FROM ? still.level : null;
 }
 
 /**
@@ -426,5 +446,6 @@ export function slopeClass(nw, ne, sw, se) {
 /** How big the world is (metres a side). */
 export { WORLD_SIZE };
 
-// (Rivers' surfaces keep under the land's own height: waters.js)
-setLandOf(landHeight);
+// (Rivers' surfaces keep under the land's own height, and come down to a lake's or the sea's where
+// it stands, as it stands before any river's carved: waters.js)
+setLandOf(landHeight, (plan, x, y) => stillWaterAt(plan, x, y, stillHeight(plan, x, y)) !== null);

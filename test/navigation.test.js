@@ -5,6 +5,7 @@ import { bakeTile } from "../client/js/core/navigation/bake.js";
 import { loadRecast } from "../client/js/core/navigation/recast.js";
 import { tileInput } from "../client/js/core/navigation/tiles.js";
 import { buildWorld } from "../client/js/core/overworld.js";
+import { WADE } from "../client/js/core/terrain/waters.js";
 import { CHUNK } from "../client/js/core/worldplan/plan.js";
 import { parseGrid } from "./helpers.js";
 
@@ -12,8 +13,10 @@ import { parseGrid } from "./helpers.js";
 // road's bridge over the river to the town's south-east (found by looking, and checked below)
 const DEEP = [2931.5, 5192.5];
 const BRIDGE = { a: [3001.0675675675675, 5146.108108108108], b: [3011.304347826087, 5155.304347826087], half: 2.2 };
-// (And a ford over a small river 730 m to the town's north-east)
+// (And a ford over a small river 730 m to the town's north-east, and a mountain stream 1.7 km
+// to its west, running fast)
 const FORD = [3112.5, 4374.5];
+const STREAM = [1526.5, 4051.5];
 
 const length = (path) => path.slice(1).reduce((sum, [x, y], i) => sum + Math.hypot(x - path[i][0], y - path[i][1]), 0);
 const same = (a, b) => a.length === b.length && a.every((value, i) => value === b[i]);
@@ -142,6 +145,24 @@ describe("navigation meshes (navigation.js)", () => {
         }
 
         assert.ok(deep && !navigation.walkable(...deep), `not beside it (${deep})`);
+    });
+
+    it("steps across a mountain stream, however fast it runs", () => {
+        const navigation = new Navigation(recast, town);
+        const stream = town.waters.river(...STREAM, 0);
+        const chunk = town.chunkAt(Math.floor(STREAM[0]), Math.floor(STREAM[1]));
+        const square = (Math.floor(STREAM[1]) - chunk.y0) * CHUNK + (Math.floor(STREAM[0]) - chunk.x0);
+
+        assert.ok(stream.stream && stream.gap <= 0, "a stream");
+        assert.ok(stream.depth * stream.speed > WADE.sweep, "too fast to wade, were it a river");
+        assert.ok(chunk.water[square] && !chunk.blocked[square], "its squares open");
+
+        const [vx, vy] = town.waters.current(...STREAM);
+        const [ax, ay] = [-vy / Math.hypot(vx, vy), vx / Math.hypot(vx, vy)];
+        const [from, to] = [[STREAM[0] - ax * 6, STREAM[1] - ay * 6], [STREAM[0] + ax * 6, STREAM[1] + ay * 6]];
+        const across = navigation.path(from, to);
+
+        assert.ok(Math.hypot(across.at(-1)[0] - to[0], across.at(-1)[1] - to[1]) < 0.5 && length(across) < 12 * 1.1, `straight over (${length(across).toFixed(1)} m)`);
     });
 
     it("finds the same ways whichever order its tiles came in", () => {

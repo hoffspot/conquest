@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { metresOf } from "../client/js/core/terrain/curve.js";
 import { HEIGHT_STEP, heightAt, heightsOf, SLOPE_CLASS, slopeClass, stillOf, waterAt } from "../client/js/core/terrain/height.js";
 import { simplex } from "../client/js/core/terrain/simplex.js";
-import { FORDS, REACH, RIVER_HALF, wadeable, watersOf } from "../client/js/core/terrain/waters.js";
+import { FORDS, REACH, RIVER_HALF, RUNNING, STREAMS, wadeable, watersOf } from "../client/js/core/terrain/waters.js";
 import { BIOMES, CELL, CELLS, CHUNK, planWorld, WATER } from "../client/js/core/worldplan/plan.js";
 import { MOUNTAIN, SEA_LEVEL } from "../client/js/core/worldplan/terrain.js";
 
@@ -127,9 +127,9 @@ describe("the ground's height (terrain/height.js)", () => {
 
         for (let cy = 0; cy < 128; cy += 3) {
             for (let cx = 0; cx < 128; cx += 3) {
-                for (const { ax, ay, bx, by, half, surface } of waters.riversNear(cx, cy)) {
+                for (const { ax, ay, bx, by, half, surface, stream } of waters.riversNear(cx, cy)) {
                     assert.ok(surface[1] <= surface[0], "rivers run down");
-                    assert.ok(Math.min(...half) >= 1.5);
+                    assert.ok(Math.min(...half) >= (stream ? STREAMS.half[0] : RIVER_HALF[0]));
 
                     // (In the channel, wherever it wanders to: its bed below the surface)
                     for (let t = 0.1; t < 1; t += 0.2) {
@@ -241,7 +241,18 @@ describe("the rivers (terrain/waters.js)", () => {
                     lips += piece.lip > 0 ? 1 : 0;
                 });
             } else {
-                assert.ok(pieces.every(({ lip }) => lip === 0));
+                // (No lips, but at its end where the cell it carries on into starts with a drop)
+                assert.ok(pieces.slice(0, -1).every(({ lip }) => lip === 0));
+            }
+
+            // (Spilling at its end down onto where the next cell starts, which plunges as far)
+            const [end, next] = [pieces.at(-1), into(k)];
+
+            if (end.lip > 0 && plan.water[next] === WATER.river && Math.abs(waters.course(next).pieces[0].ax - end.bx) < 1e-9 && Math.abs(waters.course(next).pieces[0].ay - end.by) < 1e-9) {
+                const start = waters.course(next).pieces[0];
+
+                assert.ok(Math.abs(end.surface[1] - end.lip - start.surface[0]) < 1e-9, "down onto the next");
+                assert.ok(start.plunge >= end.lip, "plunging into it");
             }
         }
 
@@ -346,5 +357,45 @@ describe("the rivers (terrain/waters.js)", () => {
         }
 
         assert.ok(points > 20, `${points} points`);
+    });
+
+    test("run down from the hills and mountains as streams, narrow and shallow, falling in steps, on into a river, a lake or the sea", () => {
+        const { running } = waters;
+        let [streams, steps, lips, ends] = [0, 0, 0, 0];
+
+        for (let k = 0; k < CELLS * CELLS; k++) {
+            if (running[k] !== RUNNING.stream) {
+                continue;
+            }
+
+            streams++;
+            assert.equal(plan.water[k], WATER.none, "on dry land");
+
+            const next = waters.downstream(k % CELLS, Math.floor(k / CELLS));
+
+            assert.ok(next, "running on");
+
+            const on = next[1] * CELLS + next[0];
+
+            assert.ok(running[on] || plan.water[on] === WATER.lake || plan.water[on] === WATER.sea, "into a stream, a river, a lake or the sea");
+            ends += running[on] === RUNNING.stream ? 0 : 1;
+
+            const { reach, pieces } = waters.course(k);
+
+            steps += reach === REACH.steps ? 1 : 0;
+
+            // (Widening a little where they run out into a lake or the sea)
+            for (const piece of pieces) {
+                assert.ok(piece.stream && piece.surface[1] <= piece.surface[0], "down");
+                assert.ok(Math.min(...piece.half) >= STREAMS.half[0] && Math.max(...piece.half) <= STREAMS.half[1] * 1.6, `${piece.half} wide`);
+                assert.ok(piece.depth.every((depth) => depth <= 0.5), "shallow");
+                assert.deepEqual(piece.ford, [0, 0], "no fords");
+                lips += piece.lip >= 1 ? 1 : 0;
+            }
+        }
+
+        // (Hundreds of cells of them, falling in steps more often than rivers do: over lips a metre
+        // high and more)
+        assert.ok(streams > 300 && ends > 20 && steps > streams / 10 && lips > 50, `${streams} cells, ${ends} ends, ${steps} in steps, ${lips} lips`);
     });
 });

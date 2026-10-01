@@ -134,10 +134,12 @@ let ripples = null;
 // first's), and where each starts (radians)
 const WAVES = [[3, 1, 1, 0.3], [-2, 3, 0.85, 2.1], [4, -3, 0.6, 4.4], [1, 5, 0.55, 1.2], [-5, -2, 0.45, 5.5], [6, 4, 0.3, 3.3], [-3, 7, 0.28, 0.8], [8, -1, 0.22, 2.6], [-7, -6, 0.18, 4.9], [2, -9, 0.15, 1.7]];
 
-// The ripples' picture: the slopes (across and along, 128 flat) of a few waves running different
-// ways, whole waves to the picture so it tiles, and how high they stand (for the foam), made the
-// first time water is drawn. (Waves rather than noise: noise's lattice would show as lines.)
-function rippleTexture() {
+/**
+ * The ripples' picture: the slopes (across and along, 128 flat) of a few waves running different
+ * ways, whole waves to the picture so it tiles, and how high they stand (for the foam), made the
+ * first time water is drawn. (Waves rather than noise: noise's lattice would show as lines.)
+ */
+export function rippleTexture() {
     if (!ripples) {
         const n = RIPPLE_TEXELS;
         const data = new Uint8Array(n * n * 4);
@@ -175,6 +177,59 @@ function rippleTexture() {
     }
 
     return ripples;
+}
+
+let caustics = null;
+
+// The caustics' picture: cells' edges (Voronoi's), where light bent by the ripples gathers, the
+// brightest on the thinnest edges; tiling, made the first time a riverbed's drawn
+const CAUSTIC_TEXELS = 128;
+const CAUSTIC_CELLS = 6;
+
+/** The caustics' picture (a texture, red: how much light gathers there), shared. */
+export function causticTexture() {
+    if (!caustics) {
+        const n = CAUSTIC_TEXELS;
+        const data = new Uint8Array(n * n);
+        let seed = 20261001;
+        const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+        const points = Array.from({ length: CAUSTIC_CELLS * CAUSTIC_CELLS }, (_, k) => [((k % CAUSTIC_CELLS) + random()) / CAUSTIC_CELLS, (Math.floor(k / CAUSTIC_CELLS) + random()) / CAUSTIC_CELLS]);
+
+        for (let y = 0; y < n; y++) {
+            for (let x = 0; x < n; x++) {
+                const [u, v] = [(x + 0.5) / n, (y + 0.5) / n];
+                let [first, second] = [Infinity, Infinity];
+
+                // (The nearest two points, the picture wrapping round)
+                for (const [px, py] of points) {
+                    for (const [ox, oy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+                        const d = Math.hypot(px + ox - u, py + oy - v);
+
+                        if (d < first) {
+                            [first, second] = [d, first];
+                        } else if (d < second) {
+                            second = d;
+                        }
+                    }
+                }
+
+                const edge = Math.max(0, 1 - (second - first) / 0.12);
+
+                data[y * n + x] = Math.round(255 * edge * edge);
+            }
+        }
+
+        caustics = new THREE.DataTexture(data, n, n, THREE.RedFormat);
+        caustics.wrapS = THREE.RepeatWrapping;
+        caustics.wrapT = THREE.RepeatWrapping;
+        caustics.magFilter = THREE.LinearFilter;
+        caustics.minFilter = THREE.LinearMipmapLinearFilter;
+        caustics.generateMipmaps = true;
+        caustics.unpackAlignment = 1;
+        caustics.needsUpdate = true;
+    }
+
+    return caustics;
 }
 
 /**
@@ -328,6 +383,12 @@ export function fieldTexture(shore, across, down, { flow = null, depth = null } 
 const SURFACE_STEP = 2;
 
 /**
+ * A step in the water's surface this high (metres) or more, over a lip, is drawn by its fall's
+ * sheet (falls.js), not the water's own sheet: left out of that.
+ */
+export const SHEER = 0.6;
+
+/**
  * A sheet of water over the squares from (x0, y0), `width` by `height`, drawn where `wet` (bytes,
  * one a square, non-zero for water, with `margin` more squares all round, so its shore meets the
  * sheets beside it) says: flat, or at `surfaceAt(x, z)` (metres: a river running down its
@@ -349,6 +410,22 @@ export function waterSheet(wet, [x0, y0, width, height], margin = 1, surfaceAt =
             position.setY(k, WATER.level + surfaceAt(x0 + position.getX(k), y0 + position.getZ(k)));
         }
 
+        // (Leaving out where the surface drops sheer, over a lip: SHEER)
+        const corners = plane.index.array;
+        const kept = [];
+
+        for (let t = 0; t < corners.length; t += 3) {
+            const [a, b, c] = [position.getY(corners[t]), position.getY(corners[t + 1]), position.getY(corners[t + 2])];
+
+            if (Math.max(a, b, c) - Math.min(a, b, c) < SHEER) {
+                kept.push(corners[t], corners[t + 1], corners[t + 2]);
+            }
+        }
+
+        if (kept.length < corners.length) {
+            plane.setIndex(kept);
+        }
+
         plane.computeVertexNormals();
         plane.computeBoundingSphere();
         plane.computeBoundingBox();
@@ -357,6 +434,8 @@ export function waterSheet(wet, [x0, y0, width, height], margin = 1, surfaceAt =
     const mesh = new THREE.Mesh(plane, waterMaterial(field, x0 - margin, y0 - margin, [across, down], surfaceAt ? UNDER_BANKS : 0));
 
     mesh.name = "water";
+    // (Its field, for the ground under it: ground.js)
+    mesh.userData.field = { texture: field, area: [x0 - margin, y0 - margin, across, down] };
     mesh.position.set(x0, 0, y0);
     mesh.receiveShadow = true;
     mesh.renderOrder = 1;

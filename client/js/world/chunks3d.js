@@ -27,10 +27,11 @@ import { WILDS } from "./art/engine/atlas.js";
 import { holdSign, isSign, letGoSign, releaseSign } from "./art/kits/signs.js";
 import { Woodland } from "./art/kits/trees.js";
 import { featureLooks, featureMesh, Growth, sowing, TILE, undergrowthLooks, undergrowthMesh } from "./art/kits/wilds.js";
-import { disposeChunkGround, disposeGrass, landColours, layingGround, respaceGround } from "./ground.js";
+import { disposeChunkGround, disposeGrass, groundMaterial, landColours, layingGround, respaceGround } from "./ground.js";
 import { Layouts } from "./layouts.js";
 import { Terrains } from "./terrains.js";
 import { MARGIN, primingWater, shoreDistances, UNDER_BANKS, waterSheet } from "./water.js";
+import { fallsOf, lipsIn } from "./falls.js";
 import { builderFor } from "./art/peoples/index.js";
 import { BUILDERS, cutAway, drawFar, joined, partsOf, PIXEL, placed, standOn } from "./town3d.js";
 
@@ -602,15 +603,18 @@ export class Chunks {
         this.drawn.set(key(cx, cy), drawn);
         yield;
 
-        object.add(yield* layingGround(this.overworld, chunk, this.land, this.#spacingOf(cx, cy)));
+        // (The water first, so the ground under it and up its banks can be wet by its field)
+        const water = yield* waterOf(this.overworld, chunk);
+
+        object.add(yield* layingGround(this.overworld, chunk, this.land, this.#spacingOf(cx, cy), water?.userData.field));
         yield;
 
-        const water = yield* waterOf(this.overworld, chunk);
+        const falls = water && this.overworld.waters ? fallsOf(lipsIn(this.overworld.waters, cx, cy, CHUNK)) : null;
         const bridges = bridgesOf(chunk, { deck: (bridge, t) => this.overworld.deckOf?.(bridge, t) ?? 0, groundAt: this.groundAt });
         // (The plank walks over a settlement's lagoon: decks on stilts, no rails)
         const walks = chunk.walks?.length ? bridgesOf({ bridges: chunk.walks }, { rails: false, deck: (walk, t) => this.groundAt(walk.a[0] + (walk.b[0] - walk.a[0]) * t, walk.a[1] + (walk.b[1] - walk.a[1]) * t), groundAt: this.groundAt }) : null;
 
-        for (const part of [water, bridges, walks]) {
+        for (const part of [water, falls, bridges, walks]) {
             if (part) {
                 object.add(part);
             }
@@ -740,15 +744,21 @@ export class Chunks {
     }
 }
 
-// Water, a bridge and a tuft of grass, far under the ground where they're never seen, so that
-// their shaders are made while the game loads (with the rest: Game.build) rather than the first
-// time a river, a bridge or the undergrowth comes into view
+// Water, a waterfall and its mist, ground wet by water, a bridge and a tuft of grass, far under
+// the ground where they're never seen, so that their shaders are made while the game loads (with
+// the rest: Game.build) rather than the first time a river, a fall, a bridge or the undergrowth
+// comes into view
 function primer() {
     const group = new THREE.Group();
+    const water = primingWater();
+    const wet = groundMaterial({ water: { texture: water.userData.mask, area: [0, 0, 1, 1] } });
 
     group.name = "primer";
     group.position.y = -1000;
-    group.add(new THREE.Mesh(new THREE.PlaneGeometry(1, 1), primingWater()));
+    group.add(new THREE.Mesh(new THREE.PlaneGeometry(1, 1), water));
+    group.add(new THREE.Mesh(new THREE.PlaneGeometry(1, 1), wet));
+    group.add(fallsOf([{ top: Array.from({ length: 7 }, (_, k) => [k * 0.5, 0]), way: [0, 1], level: 0, drop: 2 }]));
+    wet.userData.own = true;
 
     for (const look of ["planks", "planks-dark", "timber"]) {
         group.add(new THREE.Mesh(box(0, 0, 0, 1, 0.1, 1), bridgeMaterial(look)));
@@ -834,7 +844,7 @@ function* waterOf(overworld, chunk) {
             }
 
             const river = overworld.waters?.flowing(x + 0.5, y + 0.5, 24);
-            const surface = river ? river.surface : overworld.surfaceAt(x + 0.5, y + 0.5);
+            const surface = overworld.surfaceAt(x + 0.5, y + 0.5, river);
             const there = overworld.chunkAt(x, y);
             const c = (y - there.y0) * CORNERS + (x - there.x0);
             const { heights } = there;

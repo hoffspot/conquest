@@ -31,6 +31,16 @@ export const WANDER = 7;
  */
 export const RIVER_DEPTH = Object.freeze({ least: 0.75, perHalf: 0.3 });
 
+/**
+ * Streams: where at least `flow` cells' rain runs in the hills and mountains (the plan's height
+ * `height` and up) but not enough for a river, a stream runs, on down to the river, lake or sea it
+ * finds: narrower than a river (half-widths `half`, metres), and shallow (`depth`: as RIVER_DEPTH).
+ */
+export const STREAMS = Object.freeze({ flow: 20, height: 0.5, half: [0.6, 1.4], depth: { least: 0.3, perHalf: 0.12 } });
+
+/** What runs in each cell (Waters.running): nothing, a river, a stream. */
+export const RUNNING = Object.freeze({ none: 0, river: 1, stream: 2 });
+
 /** What each cell's stretch of a river is like. */
 export const REACH = Object.freeze({ calm: 0, rapids: 1, steps: 2 });
 
@@ -82,6 +92,12 @@ const LIP_RUN = 4;
 // Where a river runs into a lake or the sea, it widens this much as it goes in
 const MOUTH = 1.6;
 
+// How many steps placeOf takes back through the wandering
+const PLACING = 8;
+
+// Where along a pool's piece the land under it is looked at (0 its start, 1 its end)
+const ALONG = [0, 0.25, 0.5, 0.75, 1];
+
 // The chunks rivers are listed by (metres a side: the world plan's CHUNK, which this can't import:
 // plan.js is built on this)
 const CHUNK = 64;
@@ -90,12 +106,19 @@ const CHUNKS = (CELLS * CELL) / CHUNK;
 // A plan's waters, made once for it
 const MADE = new WeakMap();
 
-// The land's own height at a point (height.js landHeight, which is built on this: so given by it)
+// The land's own height at a point (height.js landHeight, which is built on this: so given by it),
+// and whether a lake or the sea stands there
 let landOf = null;
+let stillAt = null;
 
-/** Give the land's own height ((plan, x, y) => metres), for rivers' surfaces to keep under. */
-export function setLandOf(land) {
+/**
+ * Give the land's own height ((plan, x, y) => metres), for rivers' surfaces to keep under, and
+ * whether a lake or the sea stands at a point ((plan, x, y) => boolean: never asking the rivers),
+ * for those running out into it.
+ */
+export function setLandOf(land, still = null) {
     landOf = land;
+    stillAt = still;
 }
 
 /** The waters of a world plan (made once for it). */
@@ -114,8 +137,59 @@ export class Waters {
         this.near = new Map();
         this.courses = new Map();
         this.bare = new Map();
+        this.shapes = new Map();
         this.made = null;
         this.links = null;
+        this.runs = null;
+    }
+
+    /**
+     * What runs in each cell (RUNNING, a Uint8Array a cell each): the plan's rivers, and the
+     * streams: each cell of the hills and mountains enough rain runs through, and on from each
+     * the way its water goes (to the cell beside it more runs through) until it meets a river, a
+     * lake or the sea.
+     */
+    get running() {
+        if (!this.runs) {
+            const { plan } = this;
+            const runs = new Uint8Array(CELLS * CELLS);
+
+            for (let k = 0; k < CELLS * CELLS; k++) {
+                runs[k] = plan.water[k] === WATER.river ? RUNNING.river : RUNNING.none;
+            }
+
+            for (let k = 0; k < CELLS * CELLS; k++) {
+                if (plan.water[k] !== WATER.none || plan.flow[k] < STREAMS.flow || plan.height[k] < STREAMS.height) {
+                    continue;
+                }
+
+                for (let at = k; at >= 0 && runs[at] === RUNNING.none && plan.water[at] === WATER.none; at = this.#below(at)) {
+                    runs[at] = RUNNING.stream;
+                }
+            }
+
+            this.runs = runs;
+        }
+
+        return this.runs;
+    }
+
+    // The cell a cell's water goes on to: the one beside it more runs through than any other (and
+    // more than through it), or -1
+    #below(k) {
+        const { plan } = this;
+        const [i, j] = [k % CELLS, Math.floor(k / CELLS)];
+        let [best, most] = [-1, plan.flow[k]];
+
+        for (const [di, dj] of [[0, -1], [1, 0], [0, 1], [-1, 0], [1, -1], [1, 1], [-1, 1], [-1, -1]]) {
+            const [ni, nj] = [i + di, j + dj];
+
+            if (ni >= 0 && nj >= 0 && ni < CELLS && nj < CELLS && plan.flow[nj * CELLS + ni] > most) {
+                [best, most] = [nj * CELLS + ni, plan.flow[nj * CELLS + ni]];
+            }
+        }
+
+        return best;
     }
 
     /**
@@ -140,7 +214,7 @@ export class Waters {
         for (let k = 0; k < CELLS * CELLS; k++) {
             surface[k] = plan.water[k] === WATER.sea ? 0 : metresOf(plan.level?.[k] ?? plan.height[k]);
 
-            if (plan.water[k] === WATER.river) {
+            if (this.running[k]) {
                 rivers.push(k);
 
                 if (landOf) {
@@ -222,7 +296,7 @@ export class Waters {
                 return [ni, nj];
             }
 
-            if (w === WATER.river && plan.flow[nj * CELLS + ni] > most) {
+            if (this.running[nj * CELLS + ni] && plan.flow[nj * CELLS + ni] > most) {
                 most = plan.flow[nj * CELLS + ni];
                 best = [ni, nj];
             }
@@ -241,7 +315,7 @@ export class Waters {
             const main = new Int32Array(CELLS * CELLS).fill(-1);
 
             for (let k = 0; k < CELLS * CELLS; k++) {
-                if (plan.water[k] === WATER.river) {
+                if (this.running[k]) {
                     const next = this.downstream(k % CELLS, Math.floor(k / CELLS));
 
                     into[k] = next ? next[1] * CELLS + next[0] : -1;
@@ -251,7 +325,7 @@ export class Waters {
             for (let k = 0; k < CELLS * CELLS; k++) {
                 const next = into[k];
 
-                if (next >= 0 && plan.water[next] === WATER.river && (main[next] < 0 || plan.flow[k] > plan.flow[main[next]])) {
+                if (next >= 0 && this.running[next] && (main[next] < 0 || plan.flow[k] > plan.flow[main[next]])) {
                     main[next] = k;
                 }
             }
@@ -262,20 +336,22 @@ export class Waters {
         return this.links;
     }
 
-    // A river cell's half-width (metres), wider the more rain runs in it
+    // A river cell's half-width (metres), wider the more rain runs in it (a stream's narrower)
     #half(k) {
-        return Math.min(RIVER_HALF[1], Math.max(RIVER_HALF[0], 0.9 + Math.sqrt(this.plan.flow[k]) * 0.09));
+        const flow = Math.sqrt(this.plan.flow[k]);
+
+        return this.running[k] === RUNNING.stream ? Math.min(STREAMS.half[1], Math.max(STREAMS.half[0], 0.3 + flow * 0.1)) : Math.min(RIVER_HALF[1], Math.max(RIVER_HALF[0], 0.9 + flow * 0.09));
     }
 
     // Where a river cell's curve starts and ends, and the surface's height and the river's
     // half-width at each end and at its middle: { start, end, s: [start, middle, end], h: [...] }
     #ends(k) {
-        const { plan, surfaces } = this;
+        const { surfaces } = this;
         const { into, main } = this.#linked();
         const middle = middleOf(k);
         const [up, next] = [main[k], into[k]];
         const half = this.#half(k);
-        const ends = { start: middle, end: middle, s: [surfaces[k], surfaces[k], surfaces[k]], h: [Math.max(RIVER_HALF[0], half * 0.8), half, half] };
+        const ends = { start: middle, end: middle, s: [surfaces[k], surfaces[k], surfaces[k]], h: [Math.max(this.running[k] === RUNNING.stream ? STREAMS.half[0] : RIVER_HALF[0], half * 0.8), half, half] };
 
         if (up >= 0) {
             ends.start = halfway(middleOf(up), middle);
@@ -289,7 +365,7 @@ export class Waters {
 
         const lower = Math.min(surfaces[k], surfaces[next]);
 
-        if (plan.water[next] !== WATER.river) {
+        if (!this.running[next]) {
             // (Into a lake or the sea: all the way to its cell's middle, widening as it goes)
             ends.end = middleOf(next);
             ends.s[2] = lower;
@@ -315,8 +391,9 @@ export class Waters {
      * (the way it runs, unwandered: a unit vector), half: [at a, at b], surface: [at a, at b], depth:
      * [at a, at b] (metres under the surface in the river's middle), speed (metres a second, in its
      * middle, away from any lip), lip (how far its surface drops at its end, metres), plunge (how
-     * far it dropped at its start), ford (how much a ford it is at each end: 0 to 1), box ([x0, y0,
-     * x1, y1], round its line and its width) }, and what kind of reach it is (REACH). Made once.
+     * far it dropped at its start), ford (how much a ford it is at each end: 0 to 1), stream
+     * (whether it's a mountain stream's), box ([x0, y0, x1, y1], round its line and its width) },
+     * and what kind of reach it is (REACH). Made once.
      */
     course(k) {
         if (!this.courses.has(k)) {
@@ -343,51 +420,105 @@ export class Waters {
         return this.bare.get(k);
     }
 
-    #course(k) {
-        const { plan } = this;
-        const ends = this.#ends(k);
-        const control = middleOf(k);
+    // A cell's course's shape (made once): its curve's corners (`points`), the surface at each
+    // (`surface`), its half-width at each (`half`), its pieces' lengths, what kind of reach it is,
+    // whether it runs out into a lake or the sea (`mouth`) and which corners are in it (`still`)
+    #shape(k) {
+        if (!this.shapes.has(k)) {
+            const { plan } = this;
+            const ends = this.#ends(k);
+            const control = middleOf(k);
 
-        // The curve's corners: from its start round its cell's middle to its end
-        const points = [];
+            // The curve's corners: from its start round its cell's middle to its end
+            const points = [];
 
-        for (let p = 0; p <= PIECES; p++) {
-            const t = p / PIECES;
-            const [a, b, c] = [(1 - t) * (1 - t), 2 * (1 - t) * t, t * t];
+            for (let p = 0; p <= PIECES; p++) {
+                const t = p / PIECES;
+                const [a, b, c] = [(1 - t) * (1 - t), 2 * (1 - t) * t, t * t];
 
-            points.push([a * ends.start[0] + b * control[0] + c * ends.end[0], a * ends.start[1] + b * control[1] + c * ends.end[1]]);
+                points.push([a * ends.start[0] + b * control[0] + c * ends.end[0], a * ends.start[1] + b * control[1] + c * ends.end[1]]);
+            }
+
+            // At each corner: its surface (falling steadily from the start to the middle, then to
+            // the end) and half-width
+            const along = (values, t) => (t <= 0.5 ? values[0] + (values[1] - values[0]) * t * 2 : values[1] + (values[2] - values[1]) * (t - 0.5) * 2);
+            const surface = points.map((_, p) => along(ends.s, p / PIECES));
+            const half = points.map((_, p) => along(ends.h, p / PIECES));
+            const lengths = points.slice(1).map(([x, y], p) => hypot(x - points[p][0], y - points[p][1]));
+            const length = lengths.reduce((sum, l) => sum + l, 0);
+            const drop = surface[0] - surface[PIECES];
+            const fall = length > 0 ? drop / length : 0;
+            const reach = fall >= STEPS || drop >= STEP_DROP ? REACH.steps : fall >= RAPIDS ? REACH.rapids : REACH.calm;
+            const { into } = this.#linked();
+            const mouth = into[k] >= 0 && !this.running[into[k]];
+
+            // Running out into a lake or the sea: at its level from the first corner in it, so none
+            // of the river stands out over it (in steps, from the last corner before it: a pool
+            // spills over a lip at its shore, not out in it)
+            const still = surface.map((_, p) => mouth && stillAt !== null && p > 0 && stillAt(plan, ...points[p]));
+
+            still.forEach((wet, p) => {
+                surface[p] = wet ? surface[PIECES] : surface[p];
+            });
+
+            this.shapes.set(k, { ends, points, surface, half, lengths, reach, mouth, still });
         }
 
-        // At each corner: its surface (falling steadily from the start to the middle, then to the
-        // end) and half-width
-        const along = (values, t) => (t <= 0.5 ? values[0] + (values[1] - values[0]) * t * 2 : values[1] + (values[2] - values[1]) * (t - 0.5) * 2);
-        const surface = points.map((_, p) => along(ends.s, p / PIECES));
-        const half = points.map((_, p) => along(ends.h, p / PIECES));
-        const lengths = points.slice(1).map(([x, y], p) => hypot(x - points[p][0], y - points[p][1]));
-        const length = lengths.reduce((sum, l) => sum + l, 0);
-        const drop = surface[0] - surface[PIECES];
-        const fall = length > 0 ? drop / length : 0;
-        const reach = fall >= STEPS || drop >= STEP_DROP ? REACH.steps : fall >= RAPIDS ? REACH.rapids : REACH.calm;
+        return this.shapes.get(k);
+    }
+
+    // The lowest the land lies under one of a course's pieces (`p`, of its corners `points`),
+    // where it lies in the world, less SUNK (metres)
+    #lowest(points, p) {
+        const [[ax, ay], [bx, by]] = [points[p], points[p + 1]];
+
+        return Math.min(...ALONG.map((t) => landOf(this.plan, ...this.placeOf(ax + (bx - ax) * t, ay + (by - ay) * t)))) - SUNK;
+    }
+
+    // The level a cell's first pool is held at, in steps: the surface at its start, but where the
+    // land under its first piece lies lower (by STEP_LEAST or more), there, so it drops at its
+    // very start (over the lip the cell above it ends with); its start's surface in any other reach
+    #first(k) {
+        const { surface, points, reach, still } = this.#shape(k);
+
+        if (reach !== REACH.steps || !landOf) {
+            return surface[0];
+        }
+
+        const target = still[1] ? surface[PIECES] : Math.max(surface[PIECES], Math.min(surface[0], this.#lowest(points, 0)));
+
+        return still[1] || surface[0] - target >= STEP_LEAST ? target : surface[0];
+    }
+
+    #course(k) {
+        const { plan } = this;
+        const { ends, points, surface, half, lengths, reach, mouth, still } = this.#shape(k);
 
         // A ford: the middle half of a calm, small river's cell (easing in and out round it), about
         // one in FORDS.every of them, not where it starts, ends, or joins another
         const { into, main } = this.#linked();
-        const mouth = into[k] >= 0 && plan.water[into[k]] !== WATER.river;
-        const fordable = reach === REACH.calm && ends.h[1] <= FORDS.half && main[k] >= 0 && into[k] >= 0 && plan.water[into[k]] === WATER.river && main[into[k]] === k;
+        const stream = this.running[k] === RUNNING.stream;
+        const fordable = !stream && reach === REACH.calm && ends.h[1] <= FORDS.half && main[k] >= 0 && into[k] >= 0 && this.running[into[k]] && main[into[k]] === k;
         const ford = fordable && pick(k, plan.seed) % FORDS.every === 0 ? [0, 1, 1, 1, 0] : [0, 0, 0, 0, 0];
 
+        // Where it ends: the surface there, but lower if the cell it carries on into starts with a
+        // drop (#first), which it spills over
+        const next = into[k];
+        const end = next >= 0 && this.running[next] && main[next] === k ? Math.min(surface[PIECES], this.#first(next)) : surface[PIECES];
+
         // In steps: each pool held level, dropping where the land under the river does, by at
-        // least STEP_LEAST (and at the cell's end, to meet the next)
+        // least STEP_LEAST (and at the cell's end, to meet the next): under the land all along its
+        // piece, where it lies in the world, so it never stands out over the land below it
         const level = surface.slice();
 
         if (reach === REACH.steps) {
-            let low = surface[0];
+            let low = (level[0] = this.#first(k));
 
             for (let p = 1; p < PIECES; p++) {
-                const land = landOf ? landOf(plan, ...points[p]) - SUNK : surface[p];
-                const target = Math.max(surface[PIECES], Math.min(low, land));
+                const land = landOf ? this.#lowest(points, p) : surface[p];
+                const target = still[p + 1] ? surface[PIECES] : Math.max(surface[PIECES], Math.min(low, land));
 
-                level[p] = level[p - 1] - target >= STEP_LEAST ? target : level[p - 1];
+                level[p] = still[p + 1] || level[p - 1] - target >= STEP_LEAST ? target : level[p - 1];
                 low = Math.min(low, target);
             }
         }
@@ -399,13 +530,14 @@ export class Waters {
             const l = lengths[p] || 1;
             const halves = [half[p] * (1 + (FORDS.widen - 1) * ford[p]), half[p + 1] * (1 + (FORDS.widen - 1) * ford[p + 1])];
             const depth = halves.map((h, e) => {
-                const own = RIVER_DEPTH.least + RIVER_DEPTH.perHalf * Math.min(h, RIVER_HALF[1]);
+                const own = stream ? STREAMS.depth.least + STREAMS.depth.perHalf * Math.min(h, STREAMS.half[1]) : RIVER_DEPTH.least + RIVER_DEPTH.perHalf * Math.min(h, RIVER_HALF[1]);
 
                 return own + (FORDS.depth - own) * ford[p + e];
             });
             const steps = reach === REACH.steps;
             const levels = steps ? [level[p], level[p]] : [surface[p], surface[p + 1]];
-            const lip = steps ? level[p] - (p + 1 < PIECES ? level[p + 1] : surface[PIECES]) : 0;
+            // (How far it drops at its end: to the next pool, or at the cell's end to where it ends)
+            const lip = levels[1] - (p + 1 === PIECES ? end : steps ? level[p + 1] : levels[1]);
             const plunge = steps && p > 0 ? level[p - 1] - level[p] : 0;
             const slope = steps ? POOL_FALL : Math.max(LEAST_FALL, (levels[0] - levels[1]) / l);
             const rough = ford[p] + ford[p + 1] > 0 ? ROUGH.ford : ROUGH.bed + ROUGH.steeper * slope;
@@ -429,6 +561,7 @@ export class Waters {
                 lip: Math.max(0, lip),
                 plunge: Math.max(0, plunge),
                 ford: [ford[p], ford[p + 1]],
+                stream,
                 box: [Math.min(ax, bx) - wide, Math.min(ay, by) - wide, Math.max(ax, bx) + wide, Math.max(ay, by) + wide],
             });
         }
@@ -441,7 +574,6 @@ export class Waters {
         const key = cy * CHUNKS + cx;
 
         if (!this.near.has(key)) {
-            const { plan } = this;
             const pieces = [];
             const reach = Math.ceil((WANDER + RIVER_HALF[1] * MOUTH) / CELL) + 1;
             const [c0, c1] = [Math.floor((cx * CHUNK) / CELL) - reach, Math.floor(((cx + 1) * CHUNK) / CELL) + reach];
@@ -451,7 +583,7 @@ export class Waters {
                 for (let i = Math.max(0, c0); i <= Math.min(CELLS - 1, c1); i++) {
                     const k = j * CELLS + i;
 
-                    if (plan.water[k] === WATER.river && this.#linked().into[k] >= 0) {
+                    if (this.running[k] && this.#linked().into[k] >= 0) {
                         pieces.push(...this.course(k).pieces);
                     }
                 }
@@ -470,6 +602,23 @@ export class Waters {
         return [px + (noise(px, py, seed + 51, 40, 2) - 0.5) * 2 * WANDER, py + (noise(px, py, seed + 61, 40, 2) - 0.5) * 2 * WANDER];
     }
 
+    /**
+     * Where in the world a point of a river's course (unwandered, metres: course()'s) lies: the
+     * point that wanders to it ([x, y], metres), found by stepping back by how far each guess
+     * wanders off it (the wandering bends slowly, so a few steps do).
+     */
+    placeOf(wx, wy) {
+        let [px, py] = [wx, wy];
+
+        for (let k = 0; k < PLACING; k++) {
+            const [ax, ay] = this.#wandered(px, py);
+
+            [px, py] = [px + wx - ax, py + wy - ay];
+        }
+
+        return [px, py];
+    }
+
     /** Is a point (metres) in a river? */
     riverAt(px, py) {
         const river = this.river(px, py, 0);
@@ -483,8 +632,8 @@ export class Waters {
      * surface's height there, metres), depth (how deep it is in its middle there, metres), speed
      * (how fast it runs there, metres a second: fastest in its middle, still at its banks), along
      * (the way it runs, unwandered: a unit vector), ford (how much a ford it is there: 1 in a ford,
-     * easing to 0 round it) }, or null if
-     * there's none within `within` metres of its bank.
+     * easing to 0 round it), stream (whether it's a mountain stream) }, or null if there's none
+     * within `within` metres of its bank.
      */
     river(px, py, within) {
         const pieces = this.riversNear(Math.floor(px / CHUNK), Math.floor(py / CHUNK));
@@ -539,6 +688,7 @@ export class Waters {
             speed: Math.min(SPEED.most, speed) * (1 - out * out),
             along: [best.dx, best.dy],
             ford: lerp(best.ford),
+            stream: best.stream,
         };
     }
 
