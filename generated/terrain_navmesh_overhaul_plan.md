@@ -694,6 +694,27 @@ and open-source generators, licences checked).
   Each cascade draws every shadow caster in it again, on phones already near their draw-call
   budget. Left for M7's lighting pass, to be measured there.
 
+**As built in M6c** (row 2 and the landmark; see the change log):
+- **The landmark is the volcano.** It needed a crater: the old one (60 m subtracted at the
+  middle) was shallower than the cone's own slope, so seed 1's volcano was a peak. Now
+  (`height.js` `CRATER`, `craterOf`) the crater is cut 45 m down from the cone's average height
+  round a 60 m radius, flat across its middle, meeting the cone exactly at its edge.
+  `TERRAIN_VERSION` 9, `NET_VERSION` 13.
+- **Its fire and smoke** (`world/far/volcano.js`): a lava lake and lit walls in one mesh, a glow
+  and 28 smoke puffs as camera-facing quads moved in the vertex shader (no per-frame uploads)
+  in another; drawn twice (far scene, and near scene for what's nearer than 158 m), sharing
+  geometry; under 1,000 triangles.
+- **Silhouettes** (`shapes.js`, `gather.js`, `silhouettes.js`, `silhouette-worker.js`): not proxy
+  boxes per layout from the layout code, as first planned, but the real layouts
+  (`layoutTown`, the same as the near world builds), each piece a box with its people's roof, a
+  column and cone, or a long box; the peoples' great places as their few masses. One merged mesh,
+  worked out in a worker nearest first (layouts kept), sent every half second while it works.
+  How far each kind's seen and when only the big buildings are: `SILHOUETTES`.
+- **The hand-over:** drawn in both scenes with the same material; `FAR_FADE_IN` in the fog chunk
+  discards exactly the pixels the near world's fade keeps, so the real building and its
+  silhouette cross-fade from 128 to 154 m.
+- **Not in M6c (moved to M6d):** far trees and far rivers.
+
 **Pushing each people toward the Elden Ring feel without losing identity.**
 - **For everyone:**
   - heavier stone bases (0.6–1.2 m plinths that follow the real ground);
@@ -1055,7 +1076,8 @@ pictures for anything that changes the look.
 | **M5** | Multiplayer motion | `motion` stream; early desync checks; hero prediction; tick sync; debug RTT; NET_VERSION 12 | Two-browser e2e with no drift; bandwidth measured |
 | **M6a** | The far land | Far clipmap levels in a worker; two passes; exponential haze to the horizon; near objects faded before the near camera's end; the near ground turning to the far land's look | Pictures; budgets per tier met |
 | **M6b** | Atmosphere | Height fog (an exponential height mist under the distance haze); per-region look table and grade (§9 row 1); terrain material (rock and snow by height); cascades deferred to M7 | Pictures; budgets per tier met |
-| **M6c** | Things on the horizon | Far silhouettes and the world landmark (§9 row 2); far trees; far rivers | Pictures; budgets per tier met |
+| **M6c** | Things on the horizon | Far silhouettes and the world landmark (§9 row 2): the volcano's crater, fire and smoke | Pictures; budgets per tier met |
+| **M6d** | Far trees and rivers | Far trees (impostors fading in where the near trees fade out); far rivers on the far land | Pictures; budgets per tier met |
 | **M7** | Elden Ring environment pass | In §9's order: the landmark pass in the plan; neutral sites built, with the decay pass; cliffs and rocks; churches, citadels, stone bridges; foliage palette, grass ring, weathering; cascaded shadows, measured, if they fit the budget | Pictures after each part; budgets met |
 | **M8** | Characters on Vitruvian | §10, as several PRs (conversion, body, garments, skin, face, LODs, clips) | Pictures; clipping tests green; budgets met |
 

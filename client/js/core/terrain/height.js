@@ -20,6 +20,7 @@
 // Heights are rounded to 1/1024 m, so a Float32Array holds them exactly: the rules, the mesh and
 // the navigation mesh then see the same numbers.
 
+import { cos, sin, TAU } from "../exact.js";
 import { metresOf } from "./curve.js";
 import { simplex } from "./simplex.js";
 import { setLandOf, watersOf } from "./waters.js";
@@ -27,7 +28,7 @@ import { BIOME, BIOMES } from "../worldplan/races.js";
 import { CELL, CELLS, MOUNTAIN, WATER, WORLD_SIZE } from "../worldplan/terrain.js";
 
 /** Bumped whenever the ground a seed makes changes (players playing together must agree on it). */
-export const TERRAIN_VERSION = 8;
+export const TERRAIN_VERSION = 9;
 
 /** Heights are whole multiples of this (metres). */
 export const HEIGHT_STEP = 1 / 1024;
@@ -81,8 +82,13 @@ const RIDGE = { wavelength: 520, octaves: 4, warp: 900, bend: 90 };
 // Terraces on mesas: each step this high (metres)
 const TERRACE = 7;
 
-// The volcano's crater: how wide (metres) and deep (metres)
-const CRATER = { radius: 90, depth: 60 };
+/**
+ * The volcano's crater: how wide (its radius, metres) and how deep under its rim (metres). It's
+ * cut down from the rim, the cone's height round it on average (sampled at `round` points), so
+ * however steep the cone, its top is a bowl; flat across its middle (`flat` of its radius), where
+ * the lava lies.
+ */
+export const CRATER = Object.freeze({ radius: 60, depth: 45, round: 16, flat: 0.35 });
 
 // The sea and lakes: how deep the bottom goes below the surface (metres, at most, and in the
 // shallows)
@@ -272,11 +278,55 @@ export function stillOf(plan, x, y) {
 
 /**
  * The lie of the land and its roughness at a point (metres), before any water's carved into it
- * (metres, not rounded).
+ * (metres, not rounded); the volcano's crater cut into it.
  */
 export function landHeight(plan, x, y) {
     const layers = layersOf(plan);
+    const [dx, dy] = [x - layers.volcano[0], y - layers.volcano[1]];
+    const d2 = (dx * dx + dy * dy) / (CRATER.radius * CRATER.radius);
 
+    if (d2 < 1) {
+        // (A bowl under the rim, wherever the cone stands higher: at its edge the cone's own
+        // height, so the rim rises and falls as the cone round it does)
+        layers.rim ??= rimOf(plan, layers);
+
+        const cone = lieOf(plan, x, y, layers);
+        const bowl = layers.rim + (cone - layers.rim) * d2 * d2 - CRATER.depth * (1 - smoothstep(CRATER.flat, 1, Math.sqrt(d2)));
+
+        return Math.min(cone, bowl);
+    }
+
+    return lieOf(plan, x, y, layers);
+}
+
+/** The volcano's crater: its middle ([x, y] metres; none: null) and its rim's height (metres). */
+export function craterOf(plan) {
+    const layers = layersOf(plan);
+
+    if (!plan.volcano) {
+        return null;
+    }
+
+    layers.rim ??= rimOf(plan, layers);
+
+    return { at: layers.volcano, rim: layers.rim, floor: layers.rim - CRATER.depth, radius: CRATER.radius };
+}
+
+// The volcano's rim: the cone's height round the crater, on average
+function rimOf(plan, layers) {
+    let sum = 0;
+
+    for (let k = 0; k < CRATER.round; k++) {
+        const angle = (TAU * k) / CRATER.round;
+
+        sum += lieOf(plan, layers.volcano[0] + cos(angle) * CRATER.radius, layers.volcano[1] + sin(angle) * CRATER.radius, layers);
+    }
+
+    return sum / CRATER.round;
+}
+
+// The lie of the land and its roughness at a point (metres), as the plan has it, with no crater
+function lieOf(plan, x, y, layers) {
     weigh(x, y);
 
     const base = spline(layers.ground);
@@ -300,14 +350,6 @@ export function landHeight(plan, x, y) {
         const stepped = (step + smoothstep(0.3, 0.7, f - step)) * TERRACE;
 
         height += (stepped - height) * mesa;
-    }
-
-    // The volcano's crater
-    const [dx, dy] = [x - layers.volcano[0], y - layers.volcano[1]];
-    const d2 = (dx * dx + dy * dy) / (CRATER.radius * CRATER.radius);
-
-    if (d2 < 1) {
-        height -= CRATER.depth * (1 - d2) * (1 - d2);
     }
 
     return height;

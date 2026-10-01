@@ -64,6 +64,9 @@ import { Squares } from "../world/squares.js";
 import { KINDS, Wounds } from "../world/wounds.js";
 import { Chunks, DECK, LOAD_BUDGET, REACH } from "../world/chunks3d.js";
 import { FarLand } from "../world/far/far.js";
+import { farReach } from "../world/far/levels.js";
+import { Silhouettes } from "../world/far/silhouettes.js";
+import { Volcano } from "../world/far/volcano.js";
 import { Look } from "../world/look.js";
 import { allAtOnce, allWaiting, Steps } from "../core/steps.js";
 import { buildGround } from "../world/ground.js";
@@ -640,9 +643,29 @@ export class Game {
             this.far?.dispose();
             this.far = new FarLand(this.world.plan, { land: this.chunks.land, levels: this.view.quality.far });
             this.view.setFar(this.far.object);
+
+            // (What's built, as far as the far land reaches)
+            if (this.silhouettes) {
+                this.view.setHorizon(this.silhouettes, false);
+                this.silhouettes.dispose();
+            }
+
+            const land = this.world.maps.town;
+            const start = land?.start && land.stamp ? { id: land.start.id, pieces: this.world.town.pieces, origin: land.stamp.at } : null;
+
+            this.silhouettes = new Silhouettes(this.world.plan, { reach: farReach(this.view.quality.far), start });
+            this.view.setHorizon(this.silhouettes);
+        }
+
+        // (The world's landmark: the volcano, its fire and smoke)
+        if (!this.volcano) {
+            this.volcano = new Volcano(this.world.plan);
+            this.view.setHorizon(this.volcano);
         }
 
         this.far.update(x, z);
+        this.silhouettes.update(x, z, this.world.maps.town?.sites?.set);
+        this.volcano.update(this.clock);
     }
 
     // How the world looks round the player at (x, z) (metres), `dt` seconds on (world/look.js: the
@@ -1223,6 +1246,14 @@ export class Game {
         this.chunks?.dispose();
         this.far?.dispose();
         this.view.setFar(null);
+
+        for (const thing of [this.volcano, this.silhouettes]) {
+            if (thing) {
+                this.view.setHorizon(thing, false);
+                thing.dispose();
+            }
+        }
+
         this.view.setLook(null);
         this.effects?.dispose();
         this.contacts?.dispose();

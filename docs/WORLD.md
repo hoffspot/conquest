@@ -444,7 +444,11 @@ exactly. It's built up in layers:
   - Up in the mountains, ridges of up to 110 m (ridged multifractal noise, bent by a warp), so
     steep that only the valleys and passes can be walked.
   - Terraced mesas in the badlands.
-  - The volcano's crater.
+  - The volcano's crater (`CRATER`): 60 m across its rim's radius, cut 45 m down from the cone's
+    average height round it, so however steep the cone, its top is a bowl. Its floor is flat
+    across the middle (where the lava lies: world/far/volcano.js), and at its edge it meets the
+    cone exactly, so its rim rises and falls as the cone does (on seed 1, 205 to 241 m; the
+    floor 178 m). `craterOf(plan)` gives its middle, rim and floor.
 - **Water.**
   - Lakes and the sea sink the land under them where the plan has it wet (read smoothly between
     cells and a little ragged). Their shores fall wherever the land meets their surface, so they

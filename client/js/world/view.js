@@ -173,6 +173,14 @@ export class View {
         this.far.scene.fog = this.scene.fog;
         this.far.sun = new THREE.DirectionalLight(...OUTDOORS.sun);
         this.far.scene.add(this.far.sun, this.far.sun.target);
+
+        // What stands on the horizon (setHorizon): drawn with the far land, and its near copy with
+        // the near world (only outdoors)
+        this.horizon = { far: new THREE.Group(), near: new THREE.Group() };
+        this.horizon.far.name = "horizon";
+        this.horizon.near.name = "horizon (near)";
+        this.far.scene.add(this.horizon.far);
+        this.scene.add(this.horizon.near);
         this.#light();
         this.scene.environmentIntensity = OUTDOORS.environment;
 
@@ -354,6 +362,23 @@ export class View {
 
         if (object) {
             this.far.scene.add(object);
+        }
+    }
+
+    /**
+     * Something standing on the horizon (`far`: drawn with the far land; `near`: its copy for the
+     * near world, leaving out what the far one draws) added, or taken away (`on` false).
+     */
+    setHorizon({ far, near }, on = true) {
+        for (const [group, object] of [
+            [this.horizon.far, far],
+            [this.horizon.near, near],
+        ]) {
+            if (object && on) {
+                group.add(object);
+            } else if (object) {
+                group.remove(object);
+            }
         }
     }
 
@@ -591,6 +616,7 @@ export class View {
         this.scene.environment = this.environments[interior ? "indoors" : "outdoors"].texture;
         this.scene.environmentIntensity = look.environment;
         this.sky.object.visible = !interior;
+        this.horizon.near.visible = !interior;
         this.sky.setSun(this.sunDirection);
 
         // (Indoors no mist, no grade; out again, the land's look)

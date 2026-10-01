@@ -632,6 +632,46 @@ a look of its own (`LOOKS`), which the world takes on round the player:
 - **Where it shows on seed 1:** mountains (their median 161 m, the highest 296 m), the snow lands
   (median 247 m), and the mountain lakes' rims.
 
+**On the horizon** (world/far/volcano.js, shapes.js, gather.js, silhouettes.js; the terrain
+plan's M6c). What stands up from the land is seen from as far as the far land reaches:
+- **The world's landmark, the volcano:**
+  - a lake of lava in its crater, glowing (brighter than white, so the tone mapping keeps it
+    bright), flickering slowly;
+  - its walls lit from below, the light fading two thirds of the way up;
+  - a glow over the crater, facing the camera, fading rather than greying through the haze;
+  - a column of smoke: 28 puffs rising 650 m over 110 s, leaning east-south-east on the wind,
+    billowing (a small noise texture drifting through each), lit orange at its foot by the
+    fire and grey above, in the sun.
+  - One draw for the fire and one for the smoke; under 1,000 triangles. Only for the eye: the
+    lava does nothing in the rules.
+- **What's built, as it's seen from afar** (silhouettes): each settlement laid out as it is when
+  the player comes to it (the same layout), its houses as boxes with their people's roofs, its
+  towers as columns and cones, its walls and gates as long boxes:
+  - humans gabled, the elves pointed, the dark elves spired, the cat folk flat, the lizard folk
+    steep and thatched on stilts, the orcs low longhouses (round huts as columns and cones);
+  - each people's colours (pale stone and green for the elves, black and violet for the dark
+    elves, mud brick for the cat folk, timber and thatch for the lizard folk, dark timber and
+    basalt for the orcs);
+  - churches with their towers and spires, keeps and halls three storeys high.
+  - How far each kind's seen: capitals and cities as far as the far land reaches, towns 2 km,
+    villages 1.2 km, hamlets 700 m, farmsteads 600 m; past 900 m only the bigger buildings (two
+    storeys or more, or wider than 8 m), towers and walls.
+- **The peoples' great places:** each people's castle (the humans' curtain walls and keep; the
+  dark elves' black tower and its spire; the elves' towers and great tree; the lizard folk's
+  stepped temple-fortress; the cat folk's mud-brick towers; the orcs' broch), the obsidian spire,
+  the starwatch, the ziggurat, the sun temple, the war totem, the tree hall, the abbey, the
+  windmill, the manor, pride rock, watchtowers and ruined castles. Where a place has been set down
+  (its chunk made), there; until then, in the middle of its cell.
+- **Turning into the real thing.** The silhouettes are drawn twice (with the far land, and with
+  the near world), and from 128 to 154 m in front of the camera they fade in, a few pixels at a
+  time, in just the pixels the near world's buildings leave as they fade out (fog.js
+  `FAR_FADE_IN`), so the one turns into the other.
+- **Worked out off the page's thread** (silhouette-worker.js), again every 160 m the player walks
+  or when a place is set down; laying settlements out takes the longest (a capital a fifth of a
+  second), so what's ready is sent every half second, nearest first, and the layouts are kept.
+- **Costs** (start town, seed 1): about 10,500 triangles on low, 17,000 on medium and 30,000 on
+  high, in one draw for each copy.
+
 **Left as they are.** The tone mapping stays ACES (graded, above): AgX (tried, pictures with the
 change) greyed the lamplit taproom and dulled the painted colours, and Khronos Neutral turned the
 taproom orange.

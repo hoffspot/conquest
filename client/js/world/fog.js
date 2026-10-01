@@ -14,7 +14,8 @@
 //   trees, rocks, folk) fades out, a few pixels at a time (dithered), from FADE.from to FADE.to
 //   metres in front of the camera, before the near camera stops (at world/far/levels.js
 //   FAR.nearFar) and would cut it through. The ground doesn't (NO_NEAR_FADE): it goes on into the
-//   far land.
+//   far land. What's seen from afar instead (FAR_FADE_IN: world/far/silhouettes.js) fades in
+//   there, in just the pixels the near world leaves.
 // - The grade (GRADE): with three.js's custom tone mapping, the picture's ACES as before, then tinted
 //   and its colour turned up or down, as the land the player's in has it (world/look.js). Nothing
 //   set, nothing changes.
@@ -59,7 +60,13 @@ const FOG = `#ifdef USE_FOG
 			float mistAlong = abs( vFogRise ) > 0.5 ? ( mistEye - mistPoint ) * fogMist.z / vFogRise : 0.5 * ( mistEye + mistPoint );
 			fogFactor = 1.0 - ( 1.0 - fogFactor ) * exp( - fogMist.x * vFogDepth * mistAlong );
 		}
-		#ifndef NO_NEAR_FADE
+		#if defined( FAR_FADE_IN )
+		// (What's seen from afar fading in where the near world fades out: the very pixels it leaves)
+		if ( fogFar > ${FAR_FOG.toFixed(1)} && vFogDepth < ${FADE.to.toFixed(1)} ) {
+			float fadeNoise = fract( 52.9829189 * fract( dot( gl_FragCoord.xy, vec2( 0.06711056, 0.00583715 ) ) ) );
+			if ( smoothstep( ${FADE.from.toFixed(1)}, ${FADE.to.toFixed(1)}, vFogDepth ) <= fadeNoise ) discard;
+		}
+		#elif !defined( NO_NEAR_FADE )
 		if ( fogFar > ${FAR_FOG.toFixed(1)} && vFogDepth > ${FADE.from.toFixed(1)} ) {
 			// (Interleaved gradient noise: Jimenez, 2014)
 			float fadeNoise = fract( 52.9829189 * fract( dot( gl_FragCoord.xy, vec2( 0.06711056, 0.00583715 ) ) ) );
