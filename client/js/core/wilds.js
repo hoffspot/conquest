@@ -164,8 +164,8 @@ export function neglect(x, y, seed) {
  * chunk's own (features' only: the same numbers every time), `landAt(x, y)` the land's id,
  * `homeAt(x, y)` whose homeland it is (a people's id, or null: HOMELANDS' mixed in), and
  * `free(x, y, fields)` whether a square (the chunk's or not) can have a feature on it and near it:
- * grass (or ploughed, if `fields`), not blocked, not a road, bridge or water, in no settlement or
- * clearing.
+ * grass (or ploughed, if `fields`), in no field's strips (but if `fields`), not blocked, not a road,
+ * bridge or water, in no settlement or clearing.
  */
 export function featuresOf({ x0, y0, size, seed, random, landAt, homeAt = () => null, free }) {
     const features = [];

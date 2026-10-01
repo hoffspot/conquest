@@ -11,17 +11,22 @@
 //   own patches are (ground.js PATCHES: the same noise, read the same way), drier golden where it's
 //   dry, greener where it's lush.
 //
+// - And in the fields (core/fields.js), the crops standing in their strips (CROP_STANDS): wheat
+//   and barley waist high and golden, greens low and leafy, as thick as they're sown, all of a
+//   height and upright.
+//
 // Each chunk's: `heights` (its corners' heights, metres, 64 a side: the 65th is the next chunk's
-// first), `map` (RGBA bytes, 64 a side: red how thick, green how tall, blue how dry, alpha how
-// kept) and `tint` (RGB bytes: the colour of the grass's tips there, sRGB).
+// first), `map` (RGBA bytes, 64 a side: red how thick, green how tall, blue how dry, alpha whether
+// it's sown: a crop's) and `tint` (RGB bytes: the colour of the grass's tips there, sRGB).
 
+import { ALONG, CROP } from "../core/fields.js";
 import { fractal } from "../core/noise.js";
 import { CHUNK, WET } from "../core/overworld.js";
 import { GROUND } from "../core/setpieces/pieces.js";
 import { SLOPE_CLASS } from "../core/terrain/height.js";
 import { CELL } from "../core/worldplan/plan.js";
 import { LOOKS } from "./art/kits/wilds.js";
-import { ALPINE, PATCHES, patchNoise } from "./ground.js";
+import { ALPINE, CROP_COLOURS, PATCHES, patchNoise } from "./ground.js";
 
 /**
  * How each land grows its tall grass: how thick at its thickest (0 to 1), how tall (metres: its
@@ -47,6 +52,17 @@ export const GRASS_LANDS = Object.freeze({
 
 // Dry grass's colour at its tips (sRGB): golden straw
 const STRAW = [0xd6, 0xb2, 0x58];
+
+/**
+ * The crops standing in the fields (core/fields.js CROP's; ploughed strips none): how tall
+ * (metres: its shortest stretches and its tallest) and how dry (as the grass's, 0 to 1); their
+ * colour the ground's under them (ground.js CROP_COLOURS).
+ */
+export const CROP_STANDS = Object.freeze({
+    [CROP.wheat]: { height: [0.85, 1.05], dry: 0.95 },
+    [CROP.barley]: { height: [0.65, 0.8], dry: 0.8 },
+    [CROP.greens]: { height: [0.3, 0.42], dry: 0 },
+});
 
 /**
  * How the grass thins: beside a road (by this much), on steep ground (this much of it left; none
@@ -143,7 +159,26 @@ export function* grassMapping(overworld, chunk, rows = CHUNK) {
 
             heights[k] = height;
 
-            if (chunk.ground[k] !== GROUND.grass || chunk.blocked[k] || chunk.water[k] !== WET.none || chunk.bridge[k]) {
+            if (chunk.blocked[k] || chunk.water[k] !== WET.none || chunk.bridge[k]) {
+                continue;
+            }
+
+            // (A crop, standing in its strip, as thick as it's sown and all of a height)
+            const stand = chunk.ground[k] === GROUND.soil ? CROP_STANDS[(chunk.crops?.[k] ?? 0) % ALONG] : null;
+
+            if (stand) {
+                const colour = CROP_COLOURS[chunk.crops[k] % ALONG];
+                const tall = stand.height[0] + (stand.height[1] - stand.height[0]) * fractal(x, y, GRASS_THINS.clumps, seed * 37 + 13, 2);
+
+                map[k * 4] = 255;
+                map[k * 4 + 1] = Math.round((tall / 2) * 255);
+                map[k * 4 + 2] = Math.round(stand.dry * 255);
+                map[k * 4 + 3] = 255;
+                tint.set([(colour >> 16) & 255, (colour >> 8) & 255, colour & 255, 255], k * 4);
+                continue;
+            }
+
+            if (chunk.ground[k] !== GROUND.grass) {
                 continue;
             }
 
@@ -162,8 +197,8 @@ export function* grassMapping(overworld, chunk, rows = CHUNK) {
             // (Its clumps, and its tall and short stretches)
             const clumps = smoothstep(0.3, 0.62, fractal(x, y, GRASS_THINS.clumps, seed * 37 + 11, 2));
             const stretch = fractal(x, y, GRASS_THINS.stretches, seed * 37 + 12, 2);
-            // (Thinner beside a road, on steep ground and up towards the rock and snow)
-            const besideRoad = [k - 1, k + 1, k - CHUNK, k + CHUNK].some((n, side) => (side === 0 ? i > 0 : side === 1 ? i < CHUNK - 1 : side === 2 ? j > 0 : j < CHUNK - 1) && chunk.ground[n] !== GROUND.grass);
+            // (Thinner beside a road or a yard, on steep ground and up towards the rock and snow)
+            const besideRoad = [k - 1, k + 1, k - CHUNK, k + CHUNK].some((n, side) => (side === 0 ? i > 0 : side === 1 ? i < CHUNK - 1 : side === 2 ? j > 0 : j < CHUNK - 1) && chunk.ground[n] !== GROUND.grass && chunk.ground[n] !== GROUND.soil);
             const slope = chunk.slopes[k];
             const alpine = smoothstep(ALPINE.rock[0], ALPINE.rock[1], height + (coarse[2] - 0.5) * 2 * ALPINE.wander);
             const settled = overworld.settled(x, y);
@@ -181,7 +216,6 @@ export function* grassMapping(overworld, chunk, rows = CHUNK) {
             // (Up to 2 m tall)
             map[k * 4 + 1] = Math.round(Math.min(1, metres / 2) * 255);
             map[k * 4 + 2] = Math.round(dried * 255);
-            map[k * 4 + 3] = settled ? 255 : 0;
             tint[k * 4] = Math.round(r + (STRAW[0] - r) * dried);
             tint[k * 4 + 1] = Math.round(g + (STRAW[1] - g) * dried);
             tint[k * 4 + 2] = Math.round(b + (STRAW[2] - b) * dried);

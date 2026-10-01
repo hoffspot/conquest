@@ -849,6 +849,26 @@ with snow, sand on beaches), from one texture of the whole world a texel to the 
 blended between cells, with the edges wandering 26 metres or so so the cells don't show. Every
 chunk's ground shares one shader; chunks of grass alone share a material too.
 
+**Fields** (`core/fields.js`, the user: "Plowed ground is organized into fields"): farmland is
+laid out as it's farmed, not ploughed in patches. The land's cut into blocks about 72 metres
+across (`FIELDS`), their edges wandering by as much as 18 metres so no two are the same size,
+each farmed if the land at its middle is farmland. A verge of grass 2 metres wide runs inside
+each block's edges (4 metres of it between two blocks: where hedgerow trees grow, the land's
+own things lie and the plough turned). About one block in five is left as pasture, grass all
+over; the rest are in parallel strips, all of a block's one way (east to west or north to
+south), 8 to 20 metres wide as its block has them, a metre's baulk of grass between each and the
+next, and grass where a block runs out with no room for another. Each strip's its own crop
+(`CROP`): ploughed (a third of them), wheat, barley, greens, or fallow (grass). Ploughed and sown
+strips are soil, their furrows running along them (the soil's texture turned for a block's strips
+running north to south); the ground under a sown strip is its crop's colour (`CROP_COLOURS`),
+its furrows showing through, so the strips show far off and on low quality, and the crop stands
+in it as tall grass (*Tall grass*, below). Each chunk keeps its squares' strips (`chunk.crops`: a
+byte each, its crop and which way its strip runs), from the world's seed and the squares' whole
+metres by integer hashing alone, the same in every browser; the ground reads them from a small
+texture a texel a square (`fieldsOf`), its chunks with fields only. Trees aren't planted in the
+strips (on the verges, as hedgerow trees), and of the land's own things only haystacks and
+scarecrows stand in them.
+
 **Where something stands on it** (a house, a wall, a rock, a trunk: the squares that can't be
 seen through), less of the sky reaches the ground, so less of the light from all round (view.js)
 does there. A chunk's field of it is worked out when it's drawn, from seven squares round it:
@@ -1044,13 +1064,16 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
   land round the player, knee to waist high: a field, as the Elden Ring's are, not tufts on a
   lawn.
   - **Where, how tall, how dry** (`grassMap`, a texel a square metre of each chunk, the same
-    every time): only on open grass (no road, field or yard, nothing standing, no water or
-    bridge); as thick and tall as its land grows it (`GRASS_LANDS`: a meadow's thick and knee to
+    every time): only on open grass (no road, ploughed strip or yard, nothing standing, no water
+    or bridge); as thick and tall as its land grows it (`GRASS_LANDS`: a meadow's thick and knee to
     waist high, a savannah's tall and golden, the woods' thin, none on snow), its lands blended
     across their cells' edges; in clumps and in tall and short stretches (slow noise); golden
     where the ground's own dry patches are, greener where they're lush, none where it's worn
     bare; thinner beside a road, on steep ground and up towards the rock, and short and thin in
-    a settlement. Its tips' colour is the land's grass's, turned to straw as it's dry.
+    a settlement. Its tips' colour is the land's grass's, turned to straw as it's dry. In the
+    fields' strips (*Fields*, below), their crops (`CROP_STANDS`): wheat waist high and golden,
+    barley a little shorter and paler, greens low and leafy, sown thick, all of a height and
+    upright (the map's alpha says it's sown; none on ploughed strips).
   - **Drawn on the GPU**, two draws: each band one clump of blades (ten, each bent in two, near;
     eight single wider blades, far) drawn once for each cell of a lattice round the player. A
     clump's cell is its own spot on the land, the lattice wrapping round as the player goes, so

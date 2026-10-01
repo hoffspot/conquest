@@ -388,22 +388,24 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
     water though the land's lie doesn't). On seed 1 one trail, to a shrine beyond a lake, is no
     longer found.
 - **The ground**: grass (drawn in each land's colours, and in each people's homeland, the
-  plan's territory as first claimed, its own ground: GAME.md, *The ground*), soil in fields in
-  farmland, road, planks on bridges.
+  plan's territory as first claimed, its own ground: GAME.md, *The ground*), soil in farmland's
+  fields (`core/fields.js`: blocks of parallel strips, each its own crop, grass verges and
+  baulks between, some blocks pasture: GAME.md, *Fields*), road, planks on bridges.
 - **Trees**, tried every 4 metres (a random way in): as many as the land has (`FLORA`, trees to
   100 square metres: a wood 0.9, the darkwood 1.1, jungle 1.2, a meadow 0.25, farmland 0.12, the
   badlands 0.04; beaches and water none), of its kinds (oak, beech, birch and apple in meadows;
   spruce and pine in the darkwood); in a people's homeland seven in ten are their own tree
   (`HOME_TREES`: the cat folk's acacias, the orcs' ironbarks, the lizard folk's willows, the
   elves' silverbarks, the dark elves' nightspires). Each keeps 2 squares from roads and water, 3 metres from the
-  town, and 12 metres from the settlements, sites and camps still to be built; its trunk blocks
+  town, and 12 metres from the settlements, sites and camps still to be built, and out of the
+  fields' strips (on their verges, as hedgerow trees); its trunk blocks
   the four squares round its point, and can't be seen through. A chunk's trees come from its
   own seed, the same random numbers used for every try, planted or not, so they're the same
   whatever's made round them.
 - **The land's own features** (`core/wilds.js`), tried every 8 metres (a random way in) from
   the chunk's own random numbers, after its trees: boulders, rocky outcrops, fallen trees,
   stumps, dead trees still standing, bushes, cairns, standing stones, termite mounds, haystacks
-  and scarecrows (in the fields too), log piles, ruined walls and a great beast's ribs. Each land
+  and scarecrows (the only ones in the fields' strips), log piles, ruined walls and a great beast's ribs. Each land
   has about so many a chunk (`LANDS`: none in water, 2 on beaches, 4 in meadows, 7 in the woods,
   9 in the mountains) of its own kinds, as likely as it says; they gather as they would, the
   rocky kinds where smooth noise across the world says it's rocky (and bigger there) and fallen

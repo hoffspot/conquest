@@ -2,12 +2,14 @@
 // textures (grass, road, cobbles, soil, courtyard earth) by a "splat" texture made from the
 // world's ground plan, square by square, with soft, ragged edges between them. The grass isn't the
 // same everywhere: patches of it are drier and straw-coloured, others lusher and darker, and here
-// and there it's worn to bare earth (from a small texture of noise, read at large scales).
+// and there it's worn to bare earth (from a small texture of noise, read at large scales). In the
+// fields (core/fields.js), each strip's furrows run along it, and its crop colours it.
 //
 // Blending tiling textures in the shader keeps the ground sharp close up for one draw call, where
 // one painted texture of the whole map would have to be huge (or blurry).
 
 import * as THREE from "three";
+import { ALONG, CROP, sown } from "../core/fields.js";
 import { tiling } from "../core/noise.js";
 import { CHUNK } from "../core/overworld.js";
 import { GROUND } from "../core/setpieces/pieces.js";
@@ -64,6 +66,13 @@ export const ALPINE = Object.freeze({ rock: [130, 220], by: 0.12, snow: [205, 24
 export const TALL_GRASS_TEXELS = 256;
 
 export const GRASS_UNDER = Object.freeze({ map: { value: null }, tint: { value: null }, focus: { value: new THREE.Vector2() }, reach: { value: 0 } });
+
+/**
+ * The crops' colours in the fields (core/fields.js CROP's; sRGB): the ground under a sown strip is
+ * its crop's colour, its furrows showing through (the crop standing in it is the tall grass's:
+ * grassmap.js; this is what's seen of it far off, and on low, where that isn't drawn).
+ */
+export const CROP_COLOURS = Object.freeze({ [CROP.wheat]: 0xc9a046, [CROP.barley]: 0xc8b882, [CROP.greens]: 0x4c7a32 });
 
 // How far the ground carries on past the map's edges (metres): into the fog
 const BEYOND = 110;
@@ -469,7 +478,7 @@ function homeTexture() {
  * `far.hole` (uniform: x, z, radius, metres) or `far.inner` (uniform: x0, z0, x1, z1: the level
  * inside it), where the ground nearer is (lifted out of the way).
  */
-export function groundMaterial({ splat = null, area = [0, 0, 1, 1], land = null, contact = null, water = null, far = null } = {}) {
+export function groundMaterial({ splat = null, area = [0, 0, 1, 1], land = null, contact = null, water = null, far = null, fields = null } = {}) {
     const { grass, brightness, variation: meanVariation, layers, rock } = groundTiles();
     const material = new THREE.MeshLambertMaterial({ color: 0xffffff });
 
@@ -492,6 +501,7 @@ export function groundMaterial({ splat = null, area = [0, 0, 1, 1], land = null,
     material.name = "ground";
     material.userData.splat = splat;
     material.userData.contact = contact?.texture ?? null;
+    material.userData.fields = fields?.texture ?? null;
     // The ground as it's seen from afar (and, up high, its rock and snow): in the fragment shader for
     // the chunks' ground (past FAR_GROUND.from), and in the vertex shader for the far land's (its
     // corners metres apart: worked out at each and blended between, as cheap as can be over the
@@ -545,12 +555,29 @@ vec3 farGround(vec2 at, vec3 up, float height, float rockShift) {
     return mix(ground, snowColour * ${(0.9 + 0.2 * meanVariation).toFixed(4)}, snowAt(height, coarse.b, up.y - rockShift, land));
 }`;
 
+    // The soil (layer k): in the fields, its furrows along each strip, and its crop's colour
+    // (fieldMap: a texel a square, red its crop, green whether its strip runs north to south)
+    const cropColour = (crop) => new THREE.Color(CROP_COLOURS[crop]).toArray().map((v) => v.toFixed(4)).join(", ");
+    const soilOf = (k) => `if (splat.${"rgba"[k]} > 0.0) {
+    vec4 field = texture2D(fieldMap, (vGround - fieldArea.xy) / fieldArea.zw);
+    vec3 soil = texture2D(layer${k}Map, (field.g > 0.5 ? vGround.yx : vGround) / layer${k}Size).rgb;
+    float crop = floor(field.r * 255.0 + 0.5);
+    if (crop > ${(CROP.ploughed + 0.5).toFixed(1)} && crop < ${(CROP.greens + 0.5).toFixed(1)}) {
+        float ridge = smoothstep(0.015, 0.09, dot(soil, vec3(0.2126, 0.7152, 0.0722)));
+        vec3 sown = crop < ${(CROP.wheat + 0.5).toFixed(1)} ? vec3(${cropColour(CROP.wheat)}) : crop < ${(CROP.barley + 0.5).toFixed(1)} ? vec3(${cropColour(CROP.barley)}) : vec3(${cropColour(CROP.greens)});
+        soil = mix(soil, sown * (0.65 + 0.5 * ridge), crop > ${(CROP.barley + 0.5).toFixed(1)} ? 0.35 + 0.5 * ridge : 0.85);
+    }
+    ground += soil * splat.${"rgba"[k]};
+}`;
+
     material.onBeforeCompile = (shader) => {
         Object.assign(shader.uniforms, {
             splatMap: { value: splat ?? noSplat() },
             splatArea: { value: new THREE.Vector4(...area) },
             contactMap: { value: contact?.texture ?? noContact() },
             contactArea: { value: new THREE.Vector4(...(contact?.area ?? [0, 0, 1, 1])) },
+            fieldMap: { value: fields?.texture ?? noFields() },
+            fieldArea: { value: new THREE.Vector4(...(fields?.area ?? [0, 0, 1, 1])) },
             landMap: { value: landMap },
             landSize: { value: landMap.userData.size ?? 1 },
             homeMap: { value: home?.[0] ?? noHome },
@@ -637,6 +664,8 @@ uniform vec4 splatArea;
 uniform sampler2D contactMap;
 uniform vec4 contactArea;
 float groundContact;
+uniform sampler2D fieldMap;
+uniform vec4 fieldArea;
 uniform sampler2D landMap;
 uniform float landSize;
 uniform sampler2D homeMap;
@@ -714,7 +743,7 @@ if (grassUnderReach > 0.0 && grassUnderAway < grassUnderReach) {
 }
 
 vec3 ground = grass * max(0.0, 1.0 - splat.r - splat.g - splat.b - splat.a);
-${layers.map((_, k) => `ground += texture2D(layer${k}Map, vGround / layer${k}Size).rgb * splat.${"rgba"[k]};`).join("\n")}
+${layers.map((_, k) => (LAYERS[k][0] === GROUND.soil ? soilOf(k) : `ground += texture2D(layer${k}Map, vGround / layer${k}Size).rgb * splat.${"rgba"[k]};`)).join("\n")}
 ground *= 0.82 + 0.45 * variation;
 
 // Rock where it's too steep for grass (and, up high, where it's gentler: ALPINE): read from above
@@ -788,6 +817,43 @@ function noSplat() {
     empty ??= splatTexture({ data: new Uint8Array(4), width: 1, height: 1 });
 
     return empty;
+}
+
+// No fields
+let fallow = null;
+
+function noFields() {
+    fallow ??= Object.assign(new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat), { needsUpdate: true });
+
+    return fallow;
+}
+
+/**
+ * A chunk's fields (core/overworld.js chunk.crops) as the ground reads them: a texel a square, red
+ * its crop, green 255 if its strip runs north to south; or null if none of its strips are sown.
+ */
+export function fieldsOf(chunk) {
+    const { crops } = chunk;
+
+    if (!crops?.some((crop) => sown(crop % ALONG))) {
+        return null;
+    }
+
+    const data = new Uint8Array(CHUNK * CHUNK * 4);
+
+    for (let k = 0; k < CHUNK * CHUNK; k++) {
+        data[k * 4] = crops[k] % ALONG;
+        data[k * 4 + 1] = crops[k] >= ALONG ? 255 : 0;
+    }
+
+    const texture = new THREE.DataTexture(data, CHUNK, CHUNK, THREE.RGBAFormat);
+
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.NearestFilter;
+    texture.flipY = false;
+    texture.needsUpdate = true;
+
+    return { texture, area: [chunk.x0, chunk.y0, CHUNK, CHUNK] };
 }
 
 // Nothing standing anywhere near
@@ -1055,7 +1121,7 @@ export function* layingGround(overworld, chunk, land, step = 1, water = null) {
     yield;
 
     if (splat.any || contact || water) {
-        material = groundMaterial({ splat: splat.any ? splatTexture(splat) : null, area: [x0 - 1, y0 - 1, size + 2, size + 2], land, contact, water });
+        material = groundMaterial({ splat: splat.any ? splatTexture(splat) : null, area: [x0 - 1, y0 - 1, size + 2, size + 2], land, contact, water, fields: splat.any ? fieldsOf(chunk) : null });
         material.userData.own = true;
     } else {
         grassOnly.set(land, grassOnly.get(land) ?? groundMaterial({ land }));
@@ -1101,6 +1167,7 @@ export function disposeChunkGround(mesh) {
     if (material.userData.own) {
         material.userData.splat?.dispose();
         material.userData.contact?.dispose();
+        material.userData.fields?.dispose();
         material.dispose();
     }
 

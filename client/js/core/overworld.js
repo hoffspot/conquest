@@ -14,16 +14,18 @@
 // - Roads: along the plan's roads (smoothed from cell to cell), a trade road widest, a track
 //   narrowest.
 // - The ground: grass (drawn in each land's colours: world/chunks3d.js), soil in the fields of
-//   farmland, road, and planks on bridges.
+//   farmland (fields.js: blocks of strips, each its own crop, grass verges and baulks between), road,
+//   and planks on bridges.
 // - Trees, as many as the land has (woods thick with them, meadows few, beaches none), of the
-//   kinds that grow there; clear of roads and water, and of the settlements, sites and camps
-//   still to be built.
+//   kinds that grow there; clear of roads and water, of the fields' strips (on their verges, as
+//   hedgerow trees), and of the settlements, sites and camps still to be built.
 //
 // Water can't be walked into; trees block their squares and can't be seen through. Nothing here
 // uses Three.js, so it runs in Node too.
 
+import { ALONG, CROP, fieldAt, sown } from "./fields.js";
 import { MAP_ORIGINS } from "./interiors.js";
-import { createRandom, noise } from "./random.js";
+import { createRandom } from "./random.js";
 import { Settlements, squareOf, waysOut } from "./settlements.js";
 import { Sites } from "./sites.js";
 import { Trails, TRAILS } from "./trails.js";
@@ -609,6 +611,7 @@ export class Overworld {
         const bridge = new Uint8Array(SQUARES);
         const built = new Uint8Array(SQUARES);
         const solid = new Uint8Array(SQUARES);
+        const crops = new Uint8Array(SQUARES);
         const { stamp } = this;
         const settled = this.settlements.settle(cx, cy);
         let town = false;
@@ -651,6 +654,7 @@ export class Overworld {
                 ground[k] = land.ground;
                 water[k] = land.water;
                 bridge[k] = land.bridge ? 1 : 0;
+                crops[k] = land.crop ?? 0;
                 blocked[k] = land.water && !land.bridge ? 1 : 0;
 
                 // (A castle's, or a people's own place's: what's built there stands on it)
@@ -685,7 +689,7 @@ export class Overworld {
         const bridges = this.#bridgesNear(cx, cy).filter(inChunk);
         // (And the plank walks over a lagoon, the lizard folk's: the town's, and each settlement's)
         const walks = [...(stamp?.walks ?? []).filter(inChunk), ...this.settlements.walksIn(cx, cy)];
-        const chunk = { cx, cy, x0, y0, blocked, opaque, ground, water, bridge, solid, heights, slopes, trees: [], bridges, walks, town };
+        const chunk = { cx, cy, x0, y0, blocked, opaque, ground, water, bridge, solid, crops, heights, slopes, trees: [], bridges, walks, town };
 
         this.#plant(chunk);
         chunk.features = this.#features(chunk);
@@ -763,12 +767,12 @@ export class Overworld {
 
     /**
      * What a square outside the town is, from the plan alone: { ground (GROUND), water (WET),
-     * bridge (under a bridge's deck), road (its kind, or null) }.
+     * bridge (under a bridge's deck), road (its kind, or null), crop (its field's, as chunk.crops
+     * keeps it: 0 if it's in none) }.
      */
     landAt(x, y) {
         const { plan } = this;
         const [px, py] = [x + 0.5, y + 0.5];
-        const cell = cellAt(py) * CELLS + cellAt(px);
         const road = this.#roadAt(px, py);
         const river = this.waters.riverAt(px, py);
         const still = !river && stillWaterAt(plan, px, py) !== null;
@@ -788,10 +792,13 @@ export class Overworld {
             return { ground: GROUND.road, water, bridge: false, road };
         }
 
-        // Fields in farmland: soil, with strips of grass between
-        const fields = plan.biome[cell] === BIOME.farmland && noise(x, y, plan.seed + 31, 14, 2) > 0.46;
+        // Fields in farmland (each block's farmed if the land at its middle is): soil where a strip's
+        // ploughed or sown, grass on its verges, baulks and fallow, and pasture
+        const field = fieldAt(plan.seed, x, y);
+        const [mx, my] = field.middle;
+        const farmed = field.crop !== CROP.none && plan.biome[cellAt(my) * CELLS + cellAt(mx)] === BIOME.farmland;
 
-        return { ground: fields ? GROUND.soil : GROUND.grass, water, bridge: false, road: null };
+        return { ground: farmed && sown(field.crop) ? GROUND.soil : GROUND.grass, water, bridge: false, road: null, crop: farmed ? field.crop + ALONG * field.along : 0 };
     }
 
     /** The bridges whose decks reach into a chunk: [{ a, b, half }] (see chunk). */
@@ -1114,6 +1121,11 @@ export class Overworld {
                     continue;
                 }
 
+                // (None in a field's strips: on its verges, as hedgerow trees, but not in its crops)
+                if (chunk.crops[(y - 1 - y0) * CHUNK + x - 1 - x0] || chunk.crops[(y - 1 - y0) * CHUNK + x - x0] || chunk.crops[(y - y0) * CHUNK + x - 1 - x0] || chunk.crops[(y - y0) * CHUNK + x - x0]) {
+                    continue;
+                }
+
                 // (In a people's homeland, most of the trees are their own)
                 const own = HOME_TREES[this.homeAt(x, y)];
                 const kinds = own && (pick * 7.31) % 1 < HOME_TREE_SHARE ? [own] : flora.kinds;
@@ -1144,7 +1156,8 @@ export class Overworld {
             const k = (y - y0) * CHUNK + (x - x0);
             const ground = chunk.ground[k];
 
-            if (x < x0 || y < y0 || x >= x0 + CHUNK || y >= y0 + CHUNK || blocked[k] || chunk.water[k] || chunk.bridge[k] || (ground !== GROUND.grass && !(fields && ground === GROUND.soil))) {
+            // (In a field's strips, only what's of the fields: haystacks, scarecrows)
+            if (x < x0 || y < y0 || x >= x0 + CHUNK || y >= y0 + CHUNK || blocked[k] || chunk.water[k] || chunk.bridge[k] || (ground !== GROUND.grass && !(fields && ground === GROUND.soil)) || (chunk.crops[k] && !fields)) {
                 return false;
             }
 
