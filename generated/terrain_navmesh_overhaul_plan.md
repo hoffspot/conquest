@@ -425,6 +425,21 @@ river surfaces that follow the terrain.
   - About 3 texture fetches a pixel on low and 5–6 on medium.
 - **Underwater look** in the terrain shader (medium and up): absorption, a wobble, caustics.
 
+**As built in M3a** (see the change log):
+- Rivers are curves through the cells' middles, drawn as four pieces a cell. Each cell's stretch
+  is calm, rapids, or steps (pools spilling over lips where the land drops). Speeds come from
+  Manning's equation. Fords sit on small calm rivers.
+- Wading: water up to 0.5 m deep where depth × speed < 0.6 (the flood-safety limit), for both
+  squares and navigation.
+- The field is RGBA8 at 1 texel/m: shore, flow east and south, depth. It's worked out on the
+  page, a few rows a step.
+- The shader: two-phase flow-mapped ripples (a finer pair on medium and up), Beer–Lambert by
+  analytic depth, and Schlick Fresnel. The bed is kept by its red light and the rest of its
+  colours added as it would look, so there's no extra pass.
+- Not yet: waterfall sheets and mist, mountain streams (the plan's rivers start at 150 cells of
+  rain, so few run in the mountains), and the bed's own underwater look and wet banks. Those are
+  M3b.
+
 ---
 
 ## 8. Structures and roads on real ground
@@ -868,7 +883,8 @@ pictures for anything that changes the look.
 | **M1b** | Terrain in play | Chunk meshes with levels of detail; everything placed on the ground (units, trees, buildings on basic pads, props, camps); roads eased onto the ground; water at river and lake levels; slope-blocked squares; camera clears the ground; fog tuned | Playable on real hills and mountains; frame time equal or better on the phone profile; pictures |
 | **M2a** | Navigation meshes | Vendored recast; nav worker; tile baking from terrain and obstacles; `core/navigation.js`; debug overlay drawing; tests | Tiles and paths deterministic; bake and query budgets met; no gameplay change |
 | **M2b** | Continuous movement | The rules on float positions: circles, steering, raycast sight; orders with Vector3 targets and host `via`; NET_VERSION 7; interiors on solo meshes; the grid APIs retired; test migration | All tests green; e2e green; multiplayer e2e green |
-| **M3** | Water | River graph; carved beds; flow-mapped shader; waterfalls; fords | Pictures; water cost within budget |
+| **M3a** | Rivers and the water shader | River courses as curves; calm, rapids and step-pool reaches; Manning speeds; fords and wading; the water field (shore, flow, depth); flow-mapped, Beer–Lambert, Fresnel shader | Pictures; water cost within budget |
+| **M3b** | Falls and the bed | Waterfall sheets and mist at lips; mountain streams; underwater ground (absorption, caustics); wet banks | Pictures; water cost within budget |
 | **M4** | Structures and roads | Tiers and retaining walls; castles on crags; switchback roads and passes; bridges over valleys; peoples' places on real ground; cliffs and rocks | Pictures; walk every road end to end in a test |
 | **M5** | Multiplayer motion | `motion` stream; early desync checks; hero prediction; tick sync; debug RTT; NET_VERSION 8 | Two-browser e2e with no drift; bandwidth measured |
 | **M6** | Horizon and atmosphere | Far clipmap rings; height fog in value bands; per-region look table and grade (§9 row 1); far silhouettes and the world landmark (§9 row 2); far trees; `SunLight` cascades on medium and high; terrain material | Pictures; budgets per tier met |
@@ -1081,3 +1097,48 @@ converted data is to be measured in M8 against today's hm08 data.
   - **Known limit:** a way depends, in principle, on which tiles round it a mesh has (Detour may
     look past the tiles made sure of). Every save-and-restore test carries on exactly, but that's
     measured, not guaranteed, for a world restored alone. Multiplayer never depends on it.
+- **2026-10-01, M3a built** (rivers and the water shader):
+  - **Rivers** (`terrain/waters.js`):
+    - **Courses.** Each river cell's course is a quadratic curve from halfway along the way in,
+      round its middle, to halfway along the way out, drawn as four pieces. A river carries on
+      from the cell above it that most water comes from; the others join it at the middle of
+      its curve.
+    - **Reaches.** Calm under 2% fall, rapids under 8%, steps above that or with 2.5 m or more of
+      drop over a cell. Steps are level pools that drop at least 0.6 m where the land under the
+      river drops (lips, with plunges below).
+    - **Speed** comes from Manning's equation, with n = 0.035 + 0.25 × slope (boulders on steep
+      beds) and 0.045 over a ford's gravel. Calm rivers run at about 0.7 m/s, rapids up to
+      4.5 m/s. Water speeds up over lips, churns below them, is still at the banks, and slows to
+      nothing into a lake or the sea.
+    - **Fords:** one in five calm cells of rivers up to 3 m half-width, over the middle half of
+      the cell: 1.4 times as wide, 0.35 m deep.
+    - **Wading** (`wadeable`): up to 0.5 m deep with depth × speed < 0.6. Wadeable squares are
+      open, and their tiles' triangles are fords.
+  - **Found in testing, and fixed** (all older than M3):
+    - **River beds were carved inside out.** `across` was the distance from the middle line, not
+      from the bank, so beds were deepest at their banks with a ridge down the middle. They're
+      now a parabola, deepest in the middle.
+    - **Rivers could run up.** Surfaces were lowered in order of height, so a cell lowered after
+      the one below it could end up under it. They're now lowered upstream first, in order of
+      how much water runs through each.
+    - **Lakes stood at two levels.** A river lowered only the lake cell it ran into, leaving a
+      0.9 m step in the water. Each lake now stands at one level, its lowest cell's. Rivers
+      never lower the sea, and never fall below it.
+    - **Banks rose out of lakes.** A river's banks were raised into ridges and land strips inside
+      the lake it ran into. Banks now only lower the ground where still water stands.
+  - **Drawing** (`world/water.js`, `chunks3d.js`):
+    - **The field:** the R8 shore field became RGBA8 with shore, flow east, flow south and depth.
+      It's worked out six rows a step (about 3.5 ms a water chunk on a desktop, 23 ms at most).
+    - **The shader:** two-phase flow-mapped ripples (cycle 1.6 s, phase set off by place), with a
+      finer pair on medium and up (`QUALITY.water`). Foam along the shore and above about
+      2.2 m/s. Absorption per metre (0.85, 0.4, 0.5) over the view's way through the water.
+      Schlick Fresnel. Premultiplied output: the bed behind is kept by how much red comes
+      through, and its green and blue are added from the light on the water.
+    - **Shadows on water** first looked lighter than the water round them: with one alpha, the
+      bed came through untinted and grey. The per-colour bed fixed it.
+    - **Cost:** frame times with a river filling the view are the same as main's at every
+      quality (2 to 4 ms in software rendering, within noise), with the same draw calls.
+  - **Tests:** river courses join on, turn gently and run down; all three reaches; level pools
+    and lips; speeds; fords wadeable; no banks raised out of lakes; the field's bytes; wading a
+    ford with the navigation mesh, but not the deep water beside it. The navigation test's
+    hard-coded deep point moved with the river.

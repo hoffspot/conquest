@@ -13,17 +13,19 @@ import { GpuTimer } from "./gputimer.js";
 import { fadeShadowEdges, snapToTexels } from "./shadows.js";
 import { Sky, SKY_COLOURS } from "./sky.js";
 import { CUTAWAY } from "./town3d.js";
+import { WATER_DETAIL } from "./water.js";
 
 /**
  * How much each quality level draws (`undergrowth`: how thick the grass and flowers grow;
  * `ground`: how far apart the ground's corners are drawn, metres, in the chunk the player's in,
- * the ring round it, and further off: chunks3d.js SPACING), and how often (`frameRate`: at most,
- * a second, app/pacing.js; 0, as often as the screen refreshes).
+ * the ring round it, and further off: chunks3d.js SPACING; `water`: 1 for the water's finer
+ * ripples, water.js WATER_DETAIL), and how often (`frameRate`: at most, a second, app/pacing.js;
+ * 0, as often as the screen refreshes).
  */
 export const QUALITY = Object.freeze({
-    low: { label: "Low", pixelRatio: 1, shadows: 1024, antialias: false, hair: 0.2, skin: 512, undergrowth: 0.5, ground: [1, 2, 4], frameRate: 30 },
-    medium: { label: "Medium", pixelRatio: 1.5, shadows: 2048, antialias: true, hair: 0.3, skin: 512, undergrowth: 0.75, ground: [1, 2, 4], frameRate: 60 },
-    high: { label: "High", pixelRatio: 2, shadows: 2048, antialias: true, hair: 0.45, skin: 1024, undergrowth: 1, ground: [1, 1, 2], frameRate: 0 },
+    low: { label: "Low", pixelRatio: 1, shadows: 1024, antialias: false, hair: 0.2, skin: 512, undergrowth: 0.5, ground: [1, 2, 4], water: 0, frameRate: 30 },
+    medium: { label: "Medium", pixelRatio: 1.5, shadows: 2048, antialias: true, hair: 0.3, skin: 512, undergrowth: 0.75, ground: [1, 2, 4], water: 1, frameRate: 60 },
+    high: { label: "High", pixelRatio: 2, shadows: 2048, antialias: true, hair: 0.45, skin: 1024, undergrowth: 1, ground: [1, 1, 2], water: 1, frameRate: 0 },
 });
 
 /** A quality level for this device: low for small or older phones, medium for phones, high otherwise. */
@@ -281,6 +283,7 @@ export class View {
     setQuality(name) {
         this.qualityName = name;
         this.quality = QUALITY[name];
+        WATER_DETAIL.value = this.quality.water;
         this.#pixelRatio();
         this.sun.shadow.mapSize.set(this.quality.shadows, this.quality.shadows);
         this.sun.shadow.map?.dispose();

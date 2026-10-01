@@ -27,7 +27,7 @@ import { BIOME, BIOMES } from "../worldplan/races.js";
 import { CELL, CELLS, MOUNTAIN, WATER, WORLD_SIZE } from "../worldplan/terrain.js";
 
 /** Bumped whenever the ground a seed makes changes (players playing together must agree on it). */
-export const TERRAIN_VERSION = 3;
+export const TERRAIN_VERSION = 4;
 
 /** Heights are whole multiples of this (metres). */
 export const HEIGHT_STEP = 1 / 1024;
@@ -95,10 +95,9 @@ const RAGGED = { wavelength: 40, by: 0.12 };
 // Still water stands only where the plan's this wet (and the ground's below its surface)
 const WET_FROM = 0.2;
 
-// Rivers: how deep their beds (metres: at least, and more for each metre of half-width), and how
-// far their banks reach (metres: at least, and more for each metre of half-width) from the water,
-// easing from just above the water to the land round them
-const BED = { least: 0.6, perHalf: 0.3 };
+// Rivers: how far their banks reach (metres: at least, and more for each metre of half-width) from
+// the water, easing from just above the water to the land round them (how deep their beds are is
+// the river's own: waters.js)
 const BANKS = { least: 5, perHalf: 2.5 };
 const BANK_TOP = 0.35;
 
@@ -339,26 +338,27 @@ export function heightAt(plan, x, y) {
         }
     }
 
-    // Rivers: the bed below the surface, the banks just above it, easing out to the land
+    // Rivers: the bed below the surface, deepest in the middle (as deep as the river is there),
+    // rising across to 0.15 m under it at its edges; the banks just above it, easing out to the land
     const river = waters.river(x, y, BANKS.least + BANKS.perHalf * 5);
 
     if (river) {
-        const { gap, half, surface } = river;
+        const { gap, half, surface, depth } = river;
 
         if (gap <= 0) {
-            const across = Math.min(1, (half + gap) / half);
-            const depth = BED.least + BED.perHalf * half;
+            const out = Math.min(1, (half + gap) / half);
 
-            height = surface - 0.15 - depth * (1 - (1 - across) * (1 - across));
+            height = surface - 0.15 - (depth - 0.15) * (1 - out * out);
         } else {
             const banks = BANKS.least + BANKS.perHalf * half;
 
             if (gap < banks) {
                 // (Rising from the bed's edge, just under the water, to the bank's top, then
-                // easing out to the land)
+                // easing out to the land; but never up out of a lake or the sea it runs into)
                 const bank = surface - 0.15 + (BANK_TOP + 0.15) * smoothstep(0, BANK_RISE, gap);
+                const eased = bank + (height - bank) * smoothstep(0, banks, gap);
 
-                height = bank + (height - bank) * smoothstep(0, banks, gap);
+                height = still && still.wetness > WET_FROM ? Math.min(height, eased) : eased;
             }
         }
     }

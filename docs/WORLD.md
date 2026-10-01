@@ -292,9 +292,35 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   6 metres clear of it. The same every time.
 - **Lakes and the sea**, their shores blended from cell to cell across the cells' middles, a
   little ragged.
-- **Rivers**: a line from each river cell to the cell it runs into (a lake or the sea beside it,
-  or the river cell beside it that more water runs through), wandering up to 7 metres from
-  straight, 3 to 10 metres wide, wider the more water runs in it.
+- **Rivers** (`terrain/waters.js`): each river cell runs into the cell beside it that more water
+  runs through (or a lake or the sea beside it). Its course is a curve through the cells' middles:
+  from halfway along the way in, bending round its own cell's middle, to halfway along the way out.
+  It carries on from the cell above it that most water comes from; the rest join it from the side.
+  - Each curve is drawn as four straight pieces, then wanders up to 7 metres more.
+  - Rivers are 3 to 10 metres wide, wider the more water runs in them. They widen half as much
+    again as they run out into a lake or the sea.
+  - A river is deepest in its middle: 0.75 m, and 0.3 m more for each metre of half-width.
+  - Each cell's stretch falls one of three ways:
+    - **calm**: under 2 in 100. Its surface slopes steadily down.
+    - **rapids**: under 8 in 100.
+    - **steps**: steeper, or falling 2.5 m or more over a cell. Pools are held level, and each
+      spills over a lip into the next where the land under it drops at least 0.6 m. A high
+      drop is a waterfall.
+  - How fast a river runs comes from Manning's equation, from its depth and the fall of its
+    surface. A pool's fall counts as 2 in 1,000, and the river bed is rougher the steeper it falls.
+    - That gives about 0.7 m/s on a calm river, up to 4.5 m/s down rapids.
+    - The water speeds up over a lip, and churns below it.
+    - It runs fastest in the middle and is still at the banks.
+    - It slows to a stop as it runs out into a lake or the sea.
+  - **Fords:** about one in five calm cells of a small river (half-width up to 3 m) is a ford.
+    Over the middle half of its stretch the river is 1.4 times as wide and 0.35 m deep over
+    gravel, so slow and shallow enough to wade.
+  - **Wading:** water up to 0.5 m deep, where its depth times its speed is under 0.6 (the
+    flood-safety limit for an adult), can be waded: fords, and the shallows of lakes and the
+    sea. Its squares are open, and the navigation mesh walks it as a ford.
+  - Every river's surface is no higher than the land at its cell's middle less 0.4 m, never
+    below the sea's, and never higher than anywhere upstream. Each lake stands at one level:
+    its lowest cell's, as low as the rivers running into it.
 - **Roads**, along the plan's roads, smoothed from cell to cell (rounded twice at each corner):
   trade roads 4.4 metres wide, roads 3.6, tracks 2.2. The roads from the town start from where
   its streets leave it. A road to another settlement stops 2 metres short of its square and
@@ -339,7 +365,8 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   average. The grass, flowers, pebbles and sticks between them are the drawing's alone
   (GAME.md, *The world outside*).
 
-Water can't be walked into, but can be seen over. A chunk takes about 3 to 5 ms to make in Node,
+Water can't be walked into, but can be seen over, except where it can be waded. A chunk takes
+about 3 to 5 ms to make in Node,
 its features about 1 ms more, and laying out a settlement 5 to 80 ms more (once).
 
 ## Next
@@ -381,8 +408,9 @@ exactly. It's built up in layers:
     cells and a little ragged). Their shores fall wherever the land meets their surface, so they
     follow its contours.
   - Each river gets a channel, its surface only ever running down (`waters.js`: the plan's water
-    level, `level`, lowered to anything upstream of it), with banks easing from just above the
-    water out to the land.
+    level, `level`, lowered to anything upstream of it). Its bed is a parabola: as deep as the
+    river is in the middle, 0.15 m under the surface at its edges. Its banks ease from just above
+    the water out to the land, but never rise up out of a lake or the sea the river runs into.
   - `waterAt` says where water stands, and how high.
 - **How steep.** `slopeClass` sorts a square by slope: walked freely below 30°, slowly to 38°, not
   at all past that. On seed 1, about nine in ten squares of the plains are open, and fewer than
@@ -450,8 +478,8 @@ WebAssembly by recast-navigation-js, vendored in `client/vendor/recast-navigatio
   the page, a worker or the tests (tested).
 - **What a tile's made from:**
   - the ground's height at every metre, two triangles a square, each walked as open ground, a road
-    (roads, streets, yards and planks), steep (over 30°), a ford (water up to 0.5 m deep), or not
-    at all (deeper water, or over 38°: a cliff);
+    (roads, streets, yards and planks), steep (over 30°), a ford (water that can be waded: up to
+    0.5 m deep and slow enough), or not at all (deeper or faster water, or over 38°: a cliff);
   - the overworld's *solid* squares (what's built or stands there: the town's, the settlements'
     and the places' buildings, walls and stalls, the wild's features; not water, cliffs or
     trees), merged into rectangles, each a box 3 m over the ground under it whose top is no
@@ -531,6 +559,18 @@ level; roads gentle but where they cross rivers; cliffs blocked; bridges over th
 - the plains open and the mountains not;
 - lakes and rivers carved under their water, rivers running down;
 - a chunk's heights made quickly.
+
+It also checks the rivers:
+- each a curve whose pieces join on and turn less than 60° from one to the next, into the next
+  cell's too, and only ever down;
+- calm, rapids and steps all found, the steps' pools level, each spilling over its lip into the
+  next;
+- running fastest in their middles and slowest by their banks, faster down rapids, downstream;
+- fords on small calm rivers, wider, shallow and slow enough to wade;
+- banks never raised up out of the lake a river runs into.
+
+`test/navigation.test.js` wades across a ford, straight over, and keeps out of the river's deep
+water beside it.
 
 `test/world-plan.test.js` checks, for three seeds:
 

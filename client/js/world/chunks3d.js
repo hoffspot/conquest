@@ -20,6 +20,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { CHUNK, CHUNKS, WET } from "../core/overworld.js";
+import { CORNERS } from "../core/terrain/ground.js";
 import { allAtOnce } from "../core/steps.js";
 import { material, paintPicture } from "./art/engine/materials.js";
 import { WILDS } from "./art/engine/atlas.js";
@@ -29,7 +30,7 @@ import { featureLooks, featureMesh, Growth, sowing, TILE, undergrowthLooks, unde
 import { disposeChunkGround, disposeGrass, landColours, layingGround, respaceGround } from "./ground.js";
 import { Layouts } from "./layouts.js";
 import { Terrains } from "./terrains.js";
-import { MARGIN, primingWater, waterSheet } from "./water.js";
+import { MARGIN, primingWater, shoreDistances, UNDER_BANKS, waterSheet } from "./water.js";
 import { builderFor } from "./art/peoples/index.js";
 import { BUILDERS, cutAway, drawFar, joined, partsOf, PIXEL, placed, standOn } from "./town3d.js";
 
@@ -604,7 +605,7 @@ export class Chunks {
         object.add(yield* layingGround(this.overworld, chunk, this.land, this.#spacingOf(cx, cy)));
         yield;
 
-        const water = waterOf(this.overworld, chunk);
+        const water = yield* waterOf(this.overworld, chunk);
         const bridges = bridgesOf(chunk, { deck: (bridge, t) => this.overworld.deckOf?.(bridge, t) ?? 0, groundAt: this.groundAt });
         // (The plank walks over a settlement's lagoon: decks on stilts, no rails)
         const walks = chunk.walks?.length ? bridgesOf({ bridges: chunk.walks }, { rails: false, deck: (walk, t) => this.groundAt(walk.a[0] + (walk.b[0] - walk.a[0]) * t, walk.a[1] + (walk.b[1] - walk.a[1]) * t), groundAt: this.groundAt }) : null;
@@ -775,8 +776,12 @@ function grownRound(object, piece) {
 
 // --- Water ---
 
-// A chunk's water: a sheet over it, drawn where there's water (under bridges too), or null
-function waterOf(overworld, chunk) {
+// How many rows of a chunk's water's squares have how it runs and how deep it is worked out a step
+const WATER_ROWS = 6;
+
+// A chunk's water: a sheet over it, drawn where there's water (under bridges too), or null; how
+// it runs and how deep it is worked out for each square near its shore, a few rows a step
+function* waterOf(overworld, chunk) {
     const { x0, y0 } = chunk;
     const size = CHUNK + 2 * MARGIN;
     const data = new Uint8Array(size * size);
@@ -806,7 +811,43 @@ function waterOf(overworld, chunk) {
         return null;
     }
 
-    return waterSheet(data, [x0, y0, CHUNK, CHUNK], MARGIN, overworld.surfaceAt ? (x, z) => overworld.surfaceAt(x, z) : null);
+    if (!overworld.surfaceAt) {
+        return waterSheet(data, [x0, y0, CHUNK, CHUNK], MARGIN);
+    }
+
+    // How the water runs and how deep it is, wherever it's drawn (out under the banks a little)
+    const shore = shoreDistances(data, size, size);
+    const flow = new Float32Array(size * size * 2);
+    const depth = new Float32Array(size * size);
+
+    for (let j = 0; j < size; j++) {
+        if (j % WATER_ROWS === WATER_ROWS - 1) {
+            yield;
+        }
+
+        for (let i = 0; i < size; i++) {
+            const k = j * size + i;
+            const [x, y] = [x0 + i - MARGIN, y0 + j - MARGIN];
+
+            if (shore[k] < -UNDER_BANKS - 1 || x < 0 || y < 0 || x >= CHUNKS * CHUNK || y >= CHUNKS * CHUNK) {
+                continue;
+            }
+
+            const river = overworld.waters?.flowing(x + 0.5, y + 0.5, 24);
+            const surface = river ? river.surface : overworld.surfaceAt(x + 0.5, y + 0.5);
+            const there = overworld.chunkAt(x, y);
+            const c = (y - there.y0) * CORNERS + (x - there.x0);
+            const { heights } = there;
+
+            depth[k] = Math.max(0, surface - (heights[c] + heights[c + 1] + heights[c + CORNERS] + heights[c + CORNERS + 1]) / 4);
+
+            if (river?.current) {
+                [flow[k * 2], flow[k * 2 + 1]] = river.current;
+            }
+        }
+    }
+
+    return waterSheet(data, [x0, y0, CHUNK, CHUNK], MARGIN, (x, z) => overworld.surfaceAt(x, z), { shore, flow, depth });
 }
 
 /**

@@ -37,5 +37,5 @@ export const ROOMS = Object.freeze({ tile: 32, cell: 0.1, cellHeight: 0.1, radiu
 export const AREA = Object.freeze({ ground: 1, road: 2, steep: 3, ford: 4, deck: 5 });
 export const COSTS = Object.freeze({ [AREA.ground]: 1, [AREA.road]: 0.75, [AREA.steep]: 2, [AREA.ford]: 3, [AREA.deck]: 0.75 });
 
-/** The deepest water walked through (metres): a ford. */
+/** The deepest water walked through (metres): a ford (and, where it runs, slow enough: waters.js WADE). */
 export const FORD = 0.5;

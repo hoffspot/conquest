@@ -10,7 +10,7 @@ import { describe, it } from "node:test";
 globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContext: () => ({ createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData: () => {} }) }) };
 
 const { blurred, distancesFrom } = await import("../client/js/world/fields.js");
-const { SHORE, shoreBytes, shoreDistances } = await import("../client/js/world/water.js");
+const { FIELD, fieldTexture, SHORE, shoreBytes, shoreDistances } = await import("../client/js/world/water.js");
 const { contactOf } = await import("../client/js/world/ground.js");
 const { CONTACT, ContactShadows } = await import("../client/js/world/contacts.js");
 const THREE = await import("three");
@@ -74,6 +74,17 @@ describe("the water's shore (water.js)", () => {
         const bytes = shoreBytes(Float32Array.from([0, 1, -1, 100, -100]));
 
         assert.deepEqual([...bytes], [128, 128 + SHORE.steps, 128 - SHORE.steps, 255, 0]);
+    });
+
+    it("keeps how the water runs and how deep it is beside it: a river's current, a lagoon's depth a way in from its shore", () => {
+        const shore = Float32Array.from([2, 0.5, -1]);
+        const river = fieldTexture(shore, 3, 1, { flow: Float32Array.from([1.5, -0.5, 0, 0, 9, 0]), depth: Float32Array.from([1.2, 0.2, 0]) }).image.data;
+        const lagoon = fieldTexture(shore, 3, 1).image.data;
+
+        assert.deepEqual([...river.slice(0, 4)], [128 + 2 * SHORE.steps, Math.round(128 + 1.5 * FIELD.flow), Math.round(128 - 0.5 * FIELD.flow), Math.round(1.2 * FIELD.depth)]);
+        assert.equal(river[9], 255, "the fastest kept");
+        assert.deepEqual([lagoon[1], lagoon[2]], [128, 128], "a lagoon's still");
+        assert.ok(lagoon[3] > lagoon[7] && lagoon[11] === 0, "deeper further in");
     });
 });
 
