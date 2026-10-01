@@ -158,7 +158,7 @@ export class Debug {
             lines.push(
                 `Draws ${render.calls}  triangles ${thousands(render.triangles)}  points ${thousands(render.points)}`,
                 `Geometries ${memory.geometries}  textures ${memory.textures}  programs ${programs?.length ?? 0}`,
-                `Quality ${view.qualityName}  pixels ×${view.renderer.getPixelRatio().toFixed(2)}${view.adaptiveScale < 1 ? ` (${Math.round(view.adaptiveScale * 100)}%: drawing couldn't keep up)` : ""}  ${canvas.width}×${canvas.height}`,
+                `Quality ${view.qualityName}${view.qualityName !== view.chosenQuality ? ` (${view.chosenQuality} chosen: keeping up)` : ""}  pixels ×${view.renderer.getPixelRatio().toFixed(2)}${view.adaptiveScale < 1 ? ` (${Math.round(view.adaptiveScale * 100)}%: keeping up)` : ""}  ${canvas.width}×${canvas.height}`,
             );
 
             // (The GPU's name asked for only once it's shown: asking waits for everything the

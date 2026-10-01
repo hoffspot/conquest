@@ -27,7 +27,11 @@ export const SAVE_VERSION = 1;
 export const SETTINGS_DEFAULTS = Object.freeze({
     debug: false,
     debugFolded: false,
+    // The visual quality chosen (Game options: a QUALITY level, world/view.js), or "auto" for the
+    // one this device seems to want; and whether less is drawn while the device can't keep up
+    // (Adaptive: app/governor.js)
     quality: "auto",
+    adaptive: true,
     renderScale: 1,
     shadows: true,
     squares: false,

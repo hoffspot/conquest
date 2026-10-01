@@ -10,7 +10,7 @@ import { View } from "../world/view.js";
 import { Game } from "./game.js";
 
 export { readModelsFrom } from "../world/art/engine/models.js";
-export { detectQuality } from "../world/view.js";
+export { detectQuality, QUALITY } from "../world/view.js";
 
 /**
  * Set up the view, the sound (on or off: `sound`, with `volumes` { effects, environment, music })

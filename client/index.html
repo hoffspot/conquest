@@ -232,6 +232,17 @@
                         <input type="checkbox" id="resistswitch" role="switch">
                         <span class="track" aria-hidden="true"></span>
                     </label>
+                    <label class="level" id="qualityoption">
+                        <span class="text">Visual quality<small>More of the world drawn, and finer, the higher it goes</small></span>
+                        <input type="range" id="qualityslider" min="0" max="2" step="1">
+                        <output for="qualityslider" id="qualityname"></output>
+                    </label>
+                    <label class="switch option">
+                        <span class="text">Adaptive<small>Draws less while the game falls below 30 frames a second, and more again once it's back near 60</small></span>
+                        <input type="checkbox" id="adaptiveswitch" role="switch">
+                        <span class="track" aria-hidden="true"></span>
+                    </label>
+                    <p class="adapted" id="adapted" hidden></p>
                     <label class="switch option">
                         <span class="text">Sound<small>Everything below, on or off</small></span>
                         <input type="checkbox" id="soundswitch" role="switch">

@@ -61,6 +61,7 @@ import { Ailments3D } from "../world/ailments3d.js";
 import { Effects, LOOKS } from "../world/effects.js";
 import { SpellFx } from "../world/spellfx.js";
 import { Squares } from "../world/squares.js";
+import { QUALITY } from "../world/view.js";
 import { KINDS, Wounds } from "../world/wounds.js";
 import { Chunks, DECK, LOAD_BUDGET, REACH } from "../world/chunks3d.js";
 import { FarLand } from "../world/far/far.js";
@@ -82,7 +83,7 @@ import { itemPicture } from "./icons.js";
 import { JournalPanel, bearing, regardOf } from "./journal.js";
 import { SpellbookPanel } from "./spellbook.js";
 import { PackPanel } from "./pack.js";
-import { Governor, GOVERNOR } from "./governor.js";
+import { Governor } from "./governor.js";
 import { Pacing } from "./pacing.js";
 import { Prediction } from "./predict.js";
 import { describe, totals } from "./gearinfo.js";
@@ -481,8 +482,14 @@ export class Game {
         /** When to draw the world: no oftener than the quality level does (app/pacing.js). */
         this.pacing = new Pacing();
 
-        /** Drawing fewer pixels if the device can't keep up (app/governor.js: as a game before left it). */
-        this.governor = new Governor(GOVERNOR.steps.indexOf(view.adaptiveScale));
+        /**
+         * Keeping up (Game options: Adaptive, app/governor.js): from the quality chosen down, as a
+         * game before left it.
+         */
+        this.governor = new Governor({ levels: Object.keys(QUALITY), ceiling: view.chosenQuality ?? view.qualityName, at: { quality: view.qualityName, scale: view.adaptiveScale } });
+
+        /** Heard when it draws a level, or a share of the pixels, it didn't (Adaptive): ({ quality, scale }). */
+        this.onAdapt = null;
 
         /** Timings for the debug overlay (milliseconds, smoothed), and the last frames' times. */
         this.stats = { frame: 0, update: 0, render: 0, steps: 0, fps: 0 };
@@ -1300,6 +1307,21 @@ export class Game {
         this.view.setIndoors(null);
     }
 
+    /**
+     * Draw at a quality level, and a share of its pixels (Adaptive: app/governor.js), and say so
+     * (onAdapt).
+     */
+    adapt({ quality, scale }) {
+        if (quality !== this.view.qualityName) {
+            this.view.adaptiveScale = scale;
+            this.view.setQuality(quality);
+        } else {
+            this.view.adapt(scale);
+        }
+
+        this.onAdapt?.({ quality, scale });
+    }
+
     /** Show the minimap or not. */
     showMinimap(on) {
         this.minimapShown = on;
@@ -1472,12 +1494,13 @@ export class Game {
 
         const rendered = performance.now();
 
-        // (Fewer pixels if it's the drawing that can't keep up, with the quality level left to the game)
+        // (Less drawn while it can't keep up, more again when it can, if that's left to it:
+        // Adaptive, app/governor.js)
         if (this.view.adaptive) {
-            const scale = this.governor.observe(now, dt * 1000, rendered - frameStart, this.view.quality.frameRate);
+            const rung = this.governor.observe(now, elapsed * 1000);
 
-            if (scale !== null) {
-                this.view.adapt(scale);
+            if (rung) {
+                this.adapt(rung);
             }
         }
 

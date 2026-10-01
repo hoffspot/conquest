@@ -1,7 +1,7 @@
 // How often the world's drawn. The browser asks for a frame each time the screen refreshes: 60
 // times a second on most, but 90, 120 or 144 on many phones and monitors. A quality level may draw
-// no oftener than its own rate (QUALITY.frameRate, world/view.js): a phone at 60 (or 30, on low),
-// however fast its screen, rather than twice the work, twice the heat and a phone that slows
+// no oftener than its own rate (QUALITY.frameRate, world/view.js): 60, the game's target, however
+// fast the screen, rather than twice the work, twice the heat and a phone that slows
 // itself down to cool. The frames drawn keep to the screen's beat: every other one at 120 for 60,
 // every one at 90 (which has no even 60: never fewer frames than the rate asks for, rather than
 // uneven ones), and every one whenever drawing takes longer than the rate allows.

@@ -35,7 +35,7 @@ describe("pacing (app/pacing.js)", () => {
         assert.ok(drawn(1000 / 90, 60).every(Boolean));
     });
 
-    it("draws a 60 Hz screen at 30 on low, and every frame at 60", () => {
+    it("draws a 60 Hz screen at 30 when asked, and every frame at 60", () => {
         assert.ok(Math.abs(perSecond(drawn(1000 / 60, 30).slice(10), 1000 / 60) - 30) < 1);
         assert.ok(drawn(1000 / 60, 60).every(Boolean));
         assert.ok(Math.abs(perSecond(drawn(1000 / 120, 30).slice(10), 1000 / 120) - 30) < 1);
