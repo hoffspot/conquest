@@ -35,7 +35,7 @@ function run(host, ms) {
     return events;
 }
 
-const put = (actor, [x, y]) => Object.assign(actor, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [], order: null, target: null, spawn: [x, y] });
+const put = (actor, [x, y]) => Object.assign(actor, { square: [x, y], x: x + 0.5, y: y + 0.5, path: [], order: null, target: null, spawn: [x, y] });
 
 // A world with its player in it (the orc gone), and where its start town's middle and edge are
 function hosted() {

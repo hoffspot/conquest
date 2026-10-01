@@ -22,13 +22,12 @@ const { GOD_IDS, GODS } = await import("../client/js/core/lore/gods.js");
 const { squaresOf } = await import("../client/js/core/grid.js");
 const { readPlan } = await import("../client/js/core/interiors.js");
 const { CHUNK, buildWorld } = await import("../client/js/core/overworld.js");
-const { findPath } = await import("../client/js/core/pathfinding.js");
 const { ROLES } = await import("../client/js/core/roles.js");
 const { PLOT } = await import("../client/js/core/setpieces/pieces.js");
 const { squareOf } = await import("../client/js/core/settlements.js");
 const { buildInterior, buildingInterior } = await import("../client/js/world/interiors3d.js");
 
-const reachable = (map, from, to) => findPath(map.blocked, from, to).length > 0;
+const { reachable } = await import("./helpers.js");
 const same = (a, b) => a[0] === b[0] && a[1] === b[1];
 
 // A tavern as a settlement has one: its piece, its name and what's upstairs

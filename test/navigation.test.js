@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
-import { AREA, KEEP_TILES, Navigation, TILE, tileOf } from "../client/js/core/navigation.js";
+import { AREA, KEEP_TILES, Navigation, navigatorOf, ROOMS, squaresNavigation, TILE, tileOf } from "../client/js/core/navigation.js";
 import { bakeTile } from "../client/js/core/navigation/bake.js";
 import { loadRecast } from "../client/js/core/navigation/recast.js";
 import { tileInput } from "../client/js/core/navigation/tiles.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { CHUNK } from "../client/js/core/worldplan/plan.js";
+import { parseGrid } from "./helpers.js";
 
 // The world of seed 1: its start town, a lake's deep water near it, and the road's bridge over the
 // river to the town's south-east (found by looking, and checked below)
@@ -145,7 +146,8 @@ describe("navigation meshes (navigation.js)", () => {
             bakes.push(performance.now() - start);
         }
 
-        navigation.around(...middle, TILE * 1.5);
+        // (Every tile a way below could ask for baked first: the ways' own work only)
+        navigation.around(...middle, 40 + TILE * 1.5);
 
         const times = [];
 
@@ -166,6 +168,47 @@ describe("navigation meshes (navigation.js)", () => {
         // (Generous for slow machines: about 4.5 ms a tile and 0.12 ms a way at the 95th centile here)
         assert.ok(bakes[2] < 25, `a tile in ${bakes[2].toFixed(1)} ms`);
         assert.ok(times.length > 50 && times[Math.floor(times.length * 0.95)] < 2, `a way in ${times[Math.floor(times.length * 0.95)]?.toFixed(2)} ms`);
+    });
+
+    it("gives a map of squares a mesh of its own: through a doorway a square wide, a body's width from walls", () => {
+        // Two rooms, a wall between them with a doorway a square wide, and a table in one
+        const rows = parseGrid([
+            "##########",
+            "#........#",
+            "#..##....#",
+            "#..##....#",
+            "#........#",
+            "####.#####",
+            "#........#",
+            "#........#",
+            "##########",
+        ]);
+        const map = { blocked: rows };
+        const navigation = navigatorOf(map);
+
+        assert.equal(navigation.measures, ROOMS);
+        assert.equal(navigatorOf(map), navigation, "kept for the map");
+
+        const way = navigation.path([2.5, 2.5], [7.5, 7.5]);
+        const end = way.at(-1);
+
+        assert.ok(end && Math.hypot(end[0] - 7.5, end[1] - 7.5) < 0.01, "all the way, through the doorway");
+        assert.ok(way.some(([x, y]) => x > 4 && x < 5 && y > 4.5 && y < 6.5), "by the doorway");
+
+        // Every half metre of the way at least the walkers' radius from every blocked square
+        const clearance = (x, y) => Math.min(...rows.flatMap((row, sy) => row.map((blocked, sx) => (blocked ? Math.hypot(x - Math.min(Math.max(x, sx), sx + 1), y - Math.min(Math.max(y, sy), sy + 1)) : Infinity))));
+
+        for (let i = 1; i < way.length; i++) {
+            for (let t = 0; t <= 1; t += 0.05) {
+                const [x, y] = [way[i - 1][0] + (way[i][0] - way[i - 1][0]) * t, way[i - 1][1] + (way[i][1] - way[i - 1][1]) * t];
+
+                assert.ok(clearance(x, y) >= ROOMS.radius - 0.05, `${x.toFixed(2)}, ${y.toFixed(2)} is ${clearance(x, y).toFixed(2)} m from a wall`);
+            }
+        }
+
+        // The same squares, the same mesh, the same way
+        assert.deepEqual(squaresNavigation({ blocked: rows.map((row) => [...row]) }).path([2.5, 2.5], [7.5, 7.5]), way);
+        assert.equal(navigation.walkable(3.5, 2.5), false, "not on the table");
     });
 
     it("lets go of the tiles longest unused", () => {

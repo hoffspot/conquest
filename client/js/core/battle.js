@@ -1,9 +1,18 @@
-// The battle: characters moving and fighting on the world's grid of 1-metre squares.
+// The battle: characters moving and fighting in the world.
 //
 // It advances in fixed steps of STEP_MS, so it runs the same on every device (and one player's
-// game can later be the authority for others'). Each character stands on one square and walks
-// from square middle to square middle along paths found with A* (pathfinding.js), never into a
-// square another character is on or about to step into.
+// game can later be the authority for others'). Each character is a circle BODY across the middle
+// on the ground, anywhere (x, y: metres), and walks straight from corner to corner of a way found
+// over its map's navigation mesh (navigation.js navigatorOf): round walls and furniture, over
+// bridges, keeping out of deep water and off cliffs. It never walks into another character: it
+// steps aside round them where there's room, and waits where there isn't. The world's 1-metre
+// squares are still what it stands on for everything else (the square under its middle: what it
+// can see, reach and talk to; where it's put; where it's going).
+//
+// The ways found are the battle's one dealing with the navigation meshes, and they're kept to the
+// centimetre: a host's battle tells whoever's listening each one it finds (onPath), and a battle
+// replaying a host's game (core/netplay.js) takes the host's (replay) rather than finding its
+// own, so the two never differ, whatever of the meshes each has made.
 //
 // Fighting is automatic:
 //  - The player goes where they're told (a "move" order) and, whenever they're standing still,
@@ -58,7 +67,7 @@
 import { AFFLICTIONS, shareOf } from "./afflictions.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { routeBetween } from "./interiors.js";
-import { findPath, lineAhead } from "./pathfinding.js";
+import { navigatorOf } from "./navigation.js";
 import { createRandom } from "./random.js";
 import { BECKON, REST_EVERY, ROLES } from "./roles.js";
 import { rollHeal, rollSpell, SPELL_COOLDOWN, SPELLS, WARD } from "./spells.js";
@@ -230,9 +239,40 @@ function offRound(patrol, [x, y]) {
 // most this many squares on), with this much room either side of it (metres: its body, so it
 // doesn't graze a corner), rather than from square to square; and moves at most this far at a
 // time (metres), so it notes every square it walks into
-const STEER_AHEAD = 64;
-const BODY = 0.3;
+/** A character's radius (metres): two are never nearer than twice it. */
+export const BODY = 0.3;
+
+// How far a character walks at a time, at most (metres), checking it's clear
 const STRIDE = 0.2;
+
+// How near (metres, middle to middle) a character closes on whoever it's after with a blow up
+// close before it stops to strike
+const MELEE_SPACING = 1.2;
+
+// How sharply it turns aside round someone in its way (radians: 30°, 60°, 90° and 120°, the last
+// two to slip past someone it's run up against face to face), first away from them, then the
+// other way; and how long it waits, blocked, before finding its way again
+const ASIDE = [Math.PI / 6, Math.PI / 3, Math.PI / 2, (2 * Math.PI) / 3].map((angle) => [cos(angle), sin(angle)]);
+const BLOCKED_REPATH_MS = 2000;
+
+// How near a corner of its way a character that's stepped aside needs to come to it (metres)
+const CORNER_SLACK = 0.6;
+
+// Getting no nearer where it's going (by PROGRESS metres) for STUCK_MS, jostling with others in
+// a narrow way, a character squeezes past them for SQUEEZE_MS, through anyone (not walls)
+const PROGRESS = 0.3;
+const STUCK_MS = 1500;
+const SQUEEZE_MS = 2000;
+
+// How long the straight way ahead (an "ahead" order) is looked along (metres), and how near
+// where it was told to go a character's way can end before it's found again from there (a way
+// too long to find at once), at most how many times
+const AHEAD = 400;
+const MOVE_ON = 1.5;
+const MOVE_LEGS = 8;
+
+// To the centimetre (the ways found, as a host sends them)
+const cm = (value) => Math.round(value * 100) / 100;
 
 // The eight squares round one, and how many squares at most are looked through for a place to
 // talk to someone from
@@ -269,6 +309,11 @@ export class Battle {
         // radius, until, next, damage, by, team, spell }
         this.hazards = [];
         this.nextHazard = 1;
+
+        // Told each way found, (id, way), if anyone's listening (a host's netplay); and, replaying
+        // a host's game, the ways it found to take instead ([time, id, way], in order), or null
+        this.onPath = null;
+        this.replay = null;
     }
 
     /**
@@ -327,13 +372,18 @@ export class Battle {
             chaseSpeed: type.chase ?? type.speed,
             respawnMs: type.respawn,
             spawn: [...square],
-            // Where it is (square middles are at + 0.5), the square it's on, and the square it's
-            // stepping into (null when standing still)
+            // Where it is (square middles are at + 0.5), the square it's on (under its middle), the
+            // corners of the way it's walking ([[x, y], ...], metres; none standing still), and
+            // whether it's stepped aside off that way (round someone)
             x: square[0] + 0.5,
             y: square[1] + 0.5,
             square: [...square],
-            to: null,
             path: [],
+            offPath: false,
+            // How near it's got to where it's going, and when ({ left, at }: null standing
+            // still), and until when it's squeezing past others
+            progress: null,
+            squeezeUntil: 0,
             // How fast it's going (m/s), how fast it goes walking just now (an enemy chasing
             // walks faster), and whether it's running
             pace: type.speed,
@@ -454,7 +504,7 @@ export class Battle {
 
         const from = actor.map;
 
-        Object.assign(actor, { map, square: there, x: there[0] + 0.5, y: there[1] + 0.5, to: null, path: [], pathGoal: null, facing: facing ?? actor.facing, pace: actor.walkPace, attack: null, casting: null, order: null, target: null, crossed: null });
+        Object.assign(actor, { map, square: there, x: there[0] + 0.5, y: there[1] + 0.5, path: [], offPath: false, pathGoal: null, facing: facing ?? actor.facing, pace: actor.walkPace, attack: null, casting: null, order: null, target: null, crossed: null });
 
         // (No one's after them where they were)
         for (const other of this.actors) {
@@ -563,12 +613,10 @@ export class Battle {
             lag: this.lag,
             random: this.random.state,
             nextProjectile: this.nextProjectile,
-            actors: this.actors.map(({ chance, restVariety, steering, ...actor }) => ({
+            actors: this.actors.map(({ chance, restVariety, ...actor }) => ({
                 ...structuredClone(actor),
                 chance: chance.state,
                 restVariety: restVariety.toJSON(),
-                // (Heading straight for a square of the path it's on: made again for any other)
-                steering: steering?.path === actor.path ? structuredClone({ ...steering, path: null }) : null,
             })),
             projectiles: structuredClone(this.projectiles),
             hazards: structuredClone(this.hazards),
@@ -582,13 +630,19 @@ export class Battle {
 
         Object.assign(battle, { time: snapshot.time, lag: snapshot.lag, nextProjectile: snapshot.nextProjectile, projectiles: structuredClone(snapshot.projectiles), hazards: structuredClone(snapshot.hazards ?? []), nextHazard: snapshot.nextHazard ?? 1 });
         battle.random.state = snapshot.random;
-        battle.actors = snapshot.actors.map(({ chance: state, restVariety, steering, ...kept }) => {
+        battle.actors = snapshot.actors.map(({ chance: state, restVariety, to, steering, ...kept }) => {
             const actor = structuredClone(kept);
             const chance = createRandom(0);
 
             chance.state = state;
 
-            return Object.assign(actor, { chance, restVariety: new Variety(() => chance.next(), restVariety), steering: steering ? { ...structuredClone(steering), path: actor.path } : null });
+            // (Kept before characters walked the navigation meshes, a way of squares: stood still,
+            // they find their way again)
+            if (to !== undefined || steering !== undefined) {
+                Object.assign(actor, { path: [], pathGoal: null, offPath: false, progress: null, squeezeUntil: 0 });
+            }
+
+            return Object.assign(actor, { chance, restVariety: new Variety(() => chance.next(), restVariety) });
         });
 
         return battle;
@@ -696,27 +750,40 @@ export class Battle {
                 break;
             }
             case "ahead": {
-                // From wherever it is (or is stepping to), square after square in a line
-                const from = actor.to ? [actor.to[0] + 0.5, actor.to[1] + 0.5] : [actor.x, actor.y];
-                const line = lineAhead(this.#squares(actor.map), from, order.facing);
+                // From wherever it is, straight on as far as the mesh goes that way
+                const way = this.#route(actor, () => {
+                    const [x, y] = [actor.x, actor.y];
+                    const ray = navigatorOf(this.maps[actor.map]).raycast([x, y], [x + sin(order.facing) * AHEAD, y + cos(order.facing) * AHEAD]);
 
-                if (!line.length) {
+                    return ray ? [ray.point] : [];
+                });
+                const end = way.at(-1);
+
+                if (!end || hypot(end[0] - actor.x, end[1] - actor.y) < STRIDE) {
                     actor.order = null;
                     actor.path = [];
                     break;
                 }
 
-                actor.order = { type: "move", to: line.at(-1), run: Boolean(order.run) };
-                actor.path = line;
-                actor.pathGoal = [...line.at(-1)];
-                actor.lastPathAt = this.time;
-                actor.blockedSince = null;
+                const goal = [Math.floor(end[0]), Math.floor(end[1])];
+
+                actor.order = { type: "move", to: goal, run: Boolean(order.run) };
+                Object.assign(actor, { path: way, pathGoal: goal, lastPathAt: this.time, blockedSince: null, offPath: false });
                 break;
             }
-            case "engage":
+            case "engage": {
+                // (Not at someone who isn't an enemy: refused at once)
+                const target = this.actor(order.target);
+
+                if (!target || target.dead || !this.hostile(actor, target)) {
+                    actor.order = null;
+                    break;
+                }
+
                 actor.order = { type: "engage", target: order.target, run: Boolean(order.run) };
                 actor.pathGoal = null;
                 break;
+            }
             case "approach":
                 actor.order = { type: "approach", target: order.target, run: Boolean(order.run) };
                 actor.pathGoal = null;
@@ -1101,14 +1168,14 @@ export class Battle {
     // or null (none it can get to)
     #talkSpot(actor, target) {
         const squares = this.#squares(actor.map);
-        const start = actor.to ?? actor.square;
+        const start = actor.square;
         const seen = new Set([start.join()]);
         const queue = [start];
 
         for (let k = 0; k < queue.length && k < TALK_SEARCH; k++) {
             const square = queue[k];
 
-            if (this.#talksFrom(actor.map, square, target.square) && (same(square, start) || !this.#taken(square, actor))) {
+            if (this.#talksFrom(actor.map, square, target.square) && (same(square, start) || !this.#occupied(actor.map, square, actor))) {
                 return square;
             }
 
@@ -1130,16 +1197,20 @@ export class Battle {
         return squaresOf(this.maps[mapId]);
     }
 
-    // The squares other characters on a map stand on (and, `stepping`, are stepping into), but
-    // `actor` and `through`: a Set of grid.js squareKey
-    #others(mapId, actor, { through = null, stepping = true } = {}) {
+    // The squares other characters on a map stand on (but `actor`'s): any their bodies are over
+    // the middle of, or are on. A Set of grid.js squareKey
+    #others(mapId, actor) {
         const taken = new Set();
 
         for (const other of this.actors) {
-            if (other !== actor && other !== through && !other.dead && other.map === mapId) {
-                for (const square of stepping ? [other.square, other.to] : [other.square]) {
-                    if (square) {
-                        taken.add(squareKey(...square));
+            if (other !== actor && !other.dead && other.map === mapId) {
+                taken.add(squareKey(...other.square));
+
+                for (let sy = Math.floor(other.y - BODY); sy <= Math.floor(other.y + BODY); sy++) {
+                    for (let sx = Math.floor(other.x - BODY); sx <= Math.floor(other.x + BODY); sx++) {
+                        if (hypot(sx + 0.5 - other.x, sy + 0.5 - other.y) < 2 * BODY) {
+                            taken.add(squareKey(sx, sy));
+                        }
                     }
                 }
             }
@@ -1250,10 +1321,8 @@ export class Battle {
 
         if (partner && !partner.dead && partner.map === actor.map && actor.kind === "soldier" && !this.#nearestSeen(actor)) {
             // (A soldier on its rounds stops to talk, while there's no enemy about)
-            if (!actor.to) {
-                actor.path = [];
-                actor.facing = atan2(partner.x - actor.x, partner.y - actor.y);
-            }
+            actor.path = [];
+            actor.facing = atan2(partner.x - actor.x, partner.y - actor.y);
 
             return;
         }
@@ -1263,18 +1332,16 @@ export class Battle {
 
             // The folk stop going about their business; the player just turns to them, standing
             if (actor.ai === "routine") {
-                if (!actor.to) {
-                    actor.path = [];
+                actor.path = [];
 
-                    if (!actor.routine.seated) {
-                        face();
-                    }
+                if (!actor.routine.seated) {
+                    face();
                 }
 
                 return;
             }
 
-            if (!actor.to && !actor.path.length && !actor.order) {
+            if (!actor.path.length && !actor.order) {
                 face();
             }
         }
@@ -1337,14 +1404,14 @@ export class Battle {
         }
 
         const stop = routine.stops[actor.stop];
-        const idle = !actor.path.length && !actor.to;
+        const idle = !actor.path.length;
 
         if (this.#beckon(actor, idle) || !idle) {
             return;
         }
 
         // There: on its square, or next to it with someone standing on it
-        const there = same(actor.square, stop.square) || (distanceBetween(actor.square, stop.square) <= 1 && this.#taken(stop.square, actor));
+        const there = this.#at(actor, stop.square) || (distanceBetween(actor.square, stop.square) <= 1 && this.#occupied(actor.map, stop.square, actor));
 
         if (there && !actor.arrived) {
             actor.arrived = true;
@@ -1469,8 +1536,21 @@ export class Battle {
         }
 
         if (order?.type === "move") {
-            if (actor.path.length || actor.to) {
+            if (actor.path.length) {
                 return;
+            }
+
+            // (A way found only part of the way, as far as could be looked at once: on from where
+            // it got to, a few times, as long as there's further to go from there)
+            const left = hypot(order.to[0] + 0.5 - actor.x, order.to[1] + 0.5 - actor.y);
+
+            if (left > MOVE_ON && (order.legs ?? 0) < MOVE_LEGS) {
+                order.legs = (order.legs ?? 0) + 1;
+                this.#pathTo(actor, order.to);
+
+                if (actor.path.length) {
+                    return;
+                }
             }
 
             actor.order = null;
@@ -1481,7 +1561,7 @@ export class Battle {
 
             if (!target || target.dead || target.map !== actor.map) {
                 actor.order = null;
-            } else if (this.canTalk(actor, target) && !actor.to) {
+            } else if (this.canTalk(actor, target)) {
                 // There: stop, facing them
                 actor.order = null;
                 actor.path = [];
@@ -1492,7 +1572,7 @@ export class Battle {
             } else {
                 // To the nearest place to talk to them from (again when they've moved, or now and
                 // then if stuck)
-                const idle = !actor.path.length && !actor.to;
+                const idle = !actor.path.length;
 
                 if (!same(order.from ?? null, target.square) || (idle && this.time - actor.lastPathAt >= REPATH_MS)) {
                     const spot = this.#talkSpot(actor, target);
@@ -1501,7 +1581,7 @@ export class Battle {
 
                     if (!spot) {
                         actor.order = null;
-                    } else if (!same(spot, actor.to ?? actor.square)) {
+                    } else if (!same(spot, actor.square)) {
                         this.#pathTo(actor, spot);
                     }
                 }
@@ -1533,7 +1613,7 @@ export class Battle {
         }
 
         // (Unseen, they strike only on purpose: told to engage it)
-        if (!actor.to && !actor.path.length && !this.buffOf(actor, "invisibility")) {
+        if (!actor.path.length && !this.buffOf(actor, "invisibility")) {
             // (Not a creature that's leaving everyone be: only on purpose, told to engage it)
             const target = this.#nearestEnemy(actor, (enemy) => this.#reachable(actor, enemy) && !(enemy.wild?.temper === "defensive" && enemy.target === null));
 
@@ -1603,7 +1683,7 @@ export class Battle {
 
         const goal = actor.patrol[actor.patrolIndex];
 
-        if (same(actor.square, goal) && !actor.to) {
+        if (this.#at(actor, goal) && !actor.path.length) {
             // (A guard at its post: facing out, as it was posted)
             if (actor.patrol.length === 1) {
                 actor.facing = actor.post;
@@ -1617,9 +1697,9 @@ export class Battle {
                 actor.waitUntil = 0;
                 actor.patrolIndex = (actor.patrolIndex + 1) % actor.patrol.length;
             }
-        } else if (!actor.path.length && !actor.to && !same(actor.pathGoal, goal)) {
+        } else if (!actor.path.length && !same(actor.pathGoal, goal)) {
             this.#pathTo(actor, goal);
-        } else if (!actor.path.length && !actor.to) {
+        } else if (!actor.path.length) {
             // Couldn't get there last time (someone in the way): try again in a while
             actor.pathGoal = this.time - actor.lastPathAt > REPATH_MS ? null : actor.pathGoal;
         }
@@ -1665,7 +1745,7 @@ export class Battle {
 
         actor.walkPace = actor.speed;
 
-        if (actor.to || actor.path.length || this.time < actor.waitUntil) {
+        if (actor.path.length || this.time < actor.waitUntil) {
             return;
         }
 
@@ -1691,7 +1771,7 @@ export class Battle {
 
         if (goal) {
             try {
-                this.#pathTo(actor, nearestFree(this.#squares(actor.map), goal, { within: 4 }), leader);
+                this.#pathTo(actor, nearestFree(this.#squares(actor.map), goal, { within: 4 }));
             } catch {
                 // (Nowhere to stand there: another time)
             }
@@ -1725,10 +1805,10 @@ export class Battle {
         actor.walkPace = Math.max(actor.speed, leader.walkPace ?? 0);
 
         if (distanceBetween(actor.square, leader.square) > FOLLOW.near) {
-            if (!actor.to && (!actor.path.length || (!same(actor.pathGoal, leader.square) && this.time - actor.lastPathAt >= REPATH_MS))) {
-                this.#pathTo(actor, leader.square, leader);
+            if (!actor.path.length || (!same(actor.pathGoal, leader.square) && this.time - actor.lastPathAt >= REPATH_MS)) {
+                this.#pathTo(actor, leader.square, [leader.x, leader.y]);
             }
-        } else if (!actor.to) {
+        } else {
             actor.path = [];
         }
     }
@@ -1738,11 +1818,9 @@ export class Battle {
     #pursue(actor, target) {
         const closing = actor.wild && this.time < actor.readyAt && ringsApart(actor.square, target.square) > MELEE_REACH && actor.arms.some((attack) => attack.kind === "melee");
 
-        if (!closing && this.#reachable(actor, target)) {
-            if (!actor.to) {
-                actor.path = [];
-                this.#attack(actor, target);
-            }
+        if (!closing && this.#reachable(actor, target) && (!actor.path.length || this.#stopsHere(actor, target))) {
+            actor.path = [];
+            this.#attack(actor, target);
 
             return;
         }
@@ -1750,11 +1828,11 @@ export class Battle {
         // A new path when the target has moved, or when there's none (at most every REPATH_MS,
         // in case there's no way to it)
         const moved = !same(actor.pathGoal, target.square);
-        const idle = !actor.path.length && !actor.to;
+        const idle = !actor.path.length;
         const due = this.time - actor.lastPathAt >= REPATH_MS;
 
         if ((idle && moved) || ((idle || moved) && due)) {
-            this.#pathTo(actor, target.square, target);
+            this.#pathTo(actor, target.square, [target.x, target.y]);
         }
     }
 
@@ -1836,21 +1914,78 @@ export class Battle {
 
     // --- Walking ---
 
-    /** Is a square on `except`'s map taken by another character (standing on it or stepping into it)? */
-    #taken([x, y], except) {
-        return this.actors.some((other) => other !== except && !other.dead && other.map === except.map && ((other.square[0] === x && other.square[1] === y) || (other.to && other.to[0] === x && other.to[1] === y)));
+    /**
+     * Is a character at a square it's been walking to: on it, or (there being no more of its way)
+     * next to it, as near as the mesh goes (a square by a wall can have its middle in the mesh's
+     * margin, and the way then ends at its edge)?
+     */
+    #at(actor, square) {
+        return same(actor.square, square) || (!actor.path.length && same(actor.pathGoal, square) && ringsApart(actor.square, square) <= 1);
     }
 
-    // Find a path to `goal`, round other characters (except `through`, whose square it may end on)
-    #pathTo(actor, goal, through = null) {
-        const start = actor.to ?? actor.square;
-        const path = findPath(this.#squares(actor.map), start, goal, { taken: this.#others(actor.map, actor, { through }) });
+    /**
+     * Is a square on a map taken by someone else than `except`: someone standing on it, or with
+     * their body over its middle?
+     */
+    #occupied(mapId, [x, y], except) {
+        return this.actors.some((other) => other !== except && !other.dead && other.map === mapId && ((other.square[0] === x && other.square[1] === y) || hypot(other.x - (x + 0.5), other.y - (y + 0.5)) < 2 * BODY));
+    }
 
-        // The path starts where the character is (or is stepping to)
-        actor.path = path.slice(1);
+    /**
+     * A way for a character, found by `find` (from where it is: [[x, y], ...], the corners to
+     * walk to), to the centimetre; or, replaying a host's game, the way the host found for it
+     * just now (#replayed). Whoever's listening is told it (onPath: a host's netplay, recording).
+     */
+    #route(actor, find) {
+        let way = this.replay ? this.#replayed(actor) : null;
+
+        if (!way) {
+            way = find().map(([x, y]) => [cm(x), cm(y)]);
+
+            // (The first corner is where it is, or as near to it as the mesh comes)
+            if (way.length && hypot(way[0][0] - actor.x, way[0][1] - actor.y) < 0.05) {
+                way.shift();
+            }
+        }
+
+        // (A copy: the way's walked off as it's walked)
+        this.onPath?.(actor.id, way.map(([x, y]) => [x, y]));
+
+        return way;
+    }
+
+    // The way the host found for a character just now (replay: [time, id, way], in the order it
+    // found them), if it's the next: else null (and this battle has strayed from the host's, which
+    // its checks will find)
+    #replayed(actor) {
+        while (this.replay.length && this.replay[0][0] < this.time) {
+            this.replay.shift();
+        }
+
+        const [time, id, way] = this.replay[0] ?? [];
+
+        if (time === this.time && id === actor.id) {
+            this.replay.shift();
+
+            return structuredClone(way);
+        }
+
+        return null;
+    }
+
+    // Find the way to a square (to `point` on it: its middle, unless said), over the map's
+    // navigation mesh
+    #pathTo(actor, goal, point = [goal[0] + 0.5, goal[1] + 0.5]) {
+        // (Somewhere else: how near it's got starts again)
+        if (!same(actor.pathGoal, goal)) {
+            actor.progress = null;
+        }
+
+        actor.path = this.#route(actor, () => navigatorOf(this.maps[actor.map]).path([actor.x, actor.y], point));
         actor.pathGoal = [...goal];
         actor.lastPathAt = this.time;
         actor.blockedSince = null;
+        actor.offPath = false;
     }
 
     /**
@@ -1864,11 +1999,10 @@ export class Battle {
             return false;
         }
 
-        const [x, y] = actor.square;
-        const on = here.squares.some(([sx, sy]) => sx === x && sy === y);
-        const near = here.squares.some((square) => distanceBetween(square, actor.square) <= LINK_REACH && this.#taken(square, actor));
+        const on = here.squares.some((square) => this.#at(actor, square));
+        const near = here.squares.some((square) => distanceBetween(square, actor.square) <= LINK_REACH && this.#occupied(actor.map, square, actor));
 
-        if (!actor.to && (on || (near && !actor.path.length))) {
+        if (on || (near && !actor.path.length)) {
             this.#cross(actor, link, here);
 
             return true;
@@ -1876,9 +2010,9 @@ export class Battle {
 
         // On the way: a path to it if it's heading anywhere else, or has none (at most every
         // REPATH_MS, in case there's no way there)
-        const goal = here.squares.find((square) => !this.#taken(square, actor)) ?? here.squares[0];
+        const goal = here.squares.find((square) => !this.#occupied(actor.map, square, actor)) ?? here.squares[0];
         const heading = actor.pathGoal !== null && here.squares.some((square) => same(square, actor.pathGoal));
-        const idle = !actor.path.length && !actor.to;
+        const idle = !actor.path.length;
 
         if (!heading || (idle && this.time - actor.lastPathAt >= REPATH_MS)) {
             this.#pathTo(actor, goal);
@@ -1905,8 +2039,8 @@ export class Battle {
             square,
             x: square[0] + 0.5,
             y: square[1] + 0.5,
-            to: null,
             path: [],
+            offPath: false,
             pathGoal: null,
             facing: there.facing,
             pace: actor.walkPace,
@@ -1942,8 +2076,22 @@ export class Battle {
 
         actor.pace = want > actor.pace ? Math.min(want, actor.pace + ACCELERATION * seconds) : Math.max(want, actor.pace - BRAKING * seconds);
 
-        const held = this.time < actor.staggeredUntil || this.time < actor.stunnedUntil || ((actor.attack || actor.casting) && !actor.to);
+        const held = this.time < actor.staggeredUntil || this.time < actor.stunnedUntil || actor.attack || actor.casting;
         const travelled = held ? 0 : this.#travel(actor, actor.pace * seconds * shareOf(actor, "speed"));
+
+        // Getting nowhere, jostling: squeezing past (#bumps)
+        if (!actor.path.length || held) {
+            actor.progress = null;
+        } else {
+            const left = this.#distanceLeft(actor, { reach: false });
+
+            if (!actor.progress || left < actor.progress.left - PROGRESS) {
+                actor.progress = { left, at: this.time };
+            } else if (this.time - actor.progress.at > STUCK_MS) {
+                actor.squeezeUntil = this.time + SQUEEZE_MS;
+                actor.progress = { left, at: this.time };
+            }
+        }
 
         // Standing still, it starts again from a walk
         if (travelled === 0) {
@@ -1960,17 +2108,17 @@ export class Battle {
     }
 
     // How far a character has to go along its path (to where the one it's after is within
-    // reach), in metres
-    #distanceLeft(actor) {
+    // reach, unless `reach` is false), in metres
+    #distanceLeft(actor, { reach = true } = {}) {
         let left = 0;
         let [x, y] = [actor.x, actor.y];
 
-        for (const [sx, sy] of actor.to ? [actor.to, ...actor.path] : actor.path) {
-            left += hypot(sx + 0.5 - x, sy + 0.5 - y);
-            [x, y] = [sx + 0.5, sy + 0.5];
+        for (const [px, py] of actor.path) {
+            left += hypot(px - x, py - y);
+            [x, y] = [px, py];
         }
 
-        if (actor.order?.type === "engage" || (actor.target !== null && actor.order?.type !== "enter")) {
+        if (reach && (actor.order?.type === "engage" || (actor.target !== null && actor.order?.type !== "enter"))) {
             left -= longestReach(actor.arms);
         }
 
@@ -1978,197 +2126,193 @@ export class Battle {
     }
 
     /**
-     * Walk `budget` metres along the path. Returns how far it went. It heads straight for the
-     * furthest square of the path it can see (#straighten), the squares on the way its path, so
-     * it crosses open ground in a straight line rather than zig-zagging from square to square;
-     * it's on each square as it walks into it, stepping into the next only if no one's there, and
-     * ends in the middle of the last.
+     * Walk `budget` metres along the path, STRIDE at most at a time: straight for its next corner,
+     * stepping aside round anyone in the way (#aside) and waiting where it can't. Returns how far
+     * it went. It stops as soon as whoever it's after is within reach from where it's got to (up
+     * close, near enough to strike: #stopsHere).
      */
     #travel(actor, budget) {
         const start = budget;
+        const target = this.#aim(actor);
 
-        while (budget > 1e-9) {
-            if (!actor.to) {
-                if (!actor.path.length) {
-                    return start - budget;
-                }
-
-                if (actor.steering?.path !== actor.path) {
-                    this.#straighten(actor);
-                }
-
-                if (!this.#stepInto(actor)) {
-                    return start - budget;
-                }
-            }
-
-            // Towards where it's heading (or, its path changed under it, the square it's stepping into)
-            const steering = actor.steering?.path === actor.path ? actor.steering : null;
-            const [tx, ty] = steering ? steering.point : [actor.to[0] + 0.5, actor.to[1] + 0.5];
-            const dx = tx - actor.x;
-            const dy = ty - actor.y;
+        while (budget > 1e-9 && actor.path.length) {
+            const [tx, ty] = actor.path[0];
+            const [dx, dy] = [tx - actor.x, ty - actor.y];
             const distance = Math.sqrt(dx * dx + dy * dy);
-            const last = !actor.path.length;
 
-            if (distance > 1e-9) {
-                const step = Math.min(budget, distance, STRIDE);
-
-                actor.x += (dx / distance) * step;
-                actor.y += (dy / distance) * step;
-                actor.facing = atan2(dx, dy);
-                budget -= step;
-
-                if (step === distance) {
-                    [actor.x, actor.y] = [tx, ty];
-                }
+            if (distance <= 1e-9) {
+                actor.path.shift();
+                actor.offPath = false;
+                continue;
             }
 
-            // On the square it was stepping into: the last one only in its middle; a square it
-            // walked past without setting foot on (a corner cut, as it heads straight) passed too
-            const [sx, sy] = [Math.floor(actor.x), Math.floor(actor.y)];
-            const onto = sx === actor.to[0] && sy === actor.to[1];
-            const past = !last && sx === actor.path[0][0] && sy === actor.path[0][1];
-            const there = Math.abs(actor.x - (actor.to[0] + 0.5)) < 1e-6 && Math.abs(actor.y - (actor.to[1] + 0.5)) < 1e-6;
+            // (Stepped aside near a corner of its way, someone else likely making for the same
+            // corner: on for the next, from here)
+            if (actor.offPath && actor.path.length > 1 && distance < CORNER_SLACK) {
+                actor.path.shift();
+                continue;
+            }
 
-            if ((last ? there : onto || past) || (distance <= 1e-9 && same([sx, sy], actor.to))) {
-                actor.square = [...actor.to];
+            const step = Math.min(budget, distance, STRIDE);
+            const [ux, uy] = [dx / distance, dy / distance];
+            let next = step === distance ? [tx, ty] : [actor.x + ux * step, actor.y + uy * step];
+            let heading = [ux, uy];
+            let along = true;
+            const blocker = this.#bumps(actor, next);
 
-                // Within reach of the target from here: on to the middle of this square, slowing
-                // as it comes, and stop there
-                if (!last && !there && this.#arrivedInReach(actor)) {
-                    actor.path = [];
-                    actor.steering = { path: actor.path, point: [actor.to[0] + 0.5, actor.to[1] + 0.5] };
+            // Someone in the way (or, off its way, a wall): round them, if there's room
+            if (blocker || (actor.offPath && !this.#clear(actor.map, next))) {
+                const aside = blocker ? this.#aside(actor, [ux, uy], step, blocker) : null;
 
-                    continue;
-                }
-
-                actor.to = null;
-
-                // Stop as soon as the target is within reach
-                if (this.#arrivedInReach(actor)) {
-                    actor.path = [];
+                if (!aside) {
+                    this.#blocked(actor, blocker);
 
                     return start - budget;
                 }
 
-                // On the square it was heading for: it looks ahead again from here
-                if (same(actor.square, actor.steering?.square ?? null)) {
-                    actor.steering = null;
-                }
-            } else if (distance <= 1e-9) {
-                // (Nowhere further to go this way: on to the square itself)
-                actor.steering = null;
+                [next, heading, along] = [aside, [(aside[0] - actor.x) / step, (aside[1] - actor.y) / step], false];
+            }
+
+            [actor.x, actor.y] = next;
+            actor.facing = atan2(heading[0], heading[1]);
+            actor.blockedSince = null;
+            budget -= step;
+
+            if (!along) {
+                actor.offPath = true;
+            } else if (step === distance) {
+                actor.path.shift();
+                actor.offPath = false;
+            }
+
+            const [sx, sy] = [Math.floor(actor.x), Math.floor(actor.y)];
+
+            if (sx !== actor.square[0] || sy !== actor.square[1]) {
+                actor.square = [sx, sy];
+            }
+
+            // Within reach of whoever it's after: stop
+            if (target && this.#stopsHere(actor, target)) {
+                actor.path = [];
+
+                return start - budget;
             }
         }
 
-        return start;
+        return start - budget;
     }
 
-    /**
-     * Head straight for the furthest square of the path (at most STEER_AHEAD on) that can be
-     * walked to in a straight line from where the character is, with room for its body either
-     * side, over no one: the squares on that line become the start of its path.
-     */
-    #straighten(actor) {
-        const route = actor.path;
-        const squares = this.#squares(actor.map);
-        let best = null;
-
-        for (let k = 0; k < Math.min(route.length, STEER_AHEAD); k++) {
-            const line = this.#lineTo(actor, squares, route[k]);
-
-            if (!line) {
-                break;
-            }
-
-            best = { k, line };
-        }
-
-        const [goal, k] = best ? [route[best.k], best.k] : [route[0], 0];
-
-        if (best) {
-            actor.path = [...best.line, ...route.slice(k + 1)];
-        }
-
-        actor.steering = { path: actor.path, square: [...goal], point: [goal[0] + 0.5, goal[1] + 0.5] };
-    }
-
-    // The squares a character walks into going in a straight line from where it is to the middle
-    // of `square` (ending on it), or null if the way isn't clear: a blocked square within BODY of
-    // the line, a corner cut, or someone standing on it
-    #lineTo(actor, squares, [gx, gy]) {
-        const [x0, y0] = [actor.x, actor.y];
-        const [x1, y1] = [gx + 0.5, gy + 0.5];
-        const length = hypot(x1 - x0, y1 - y0);
-        const line = [];
-
-        if (length < 1e-9) {
-            return null;
-        }
-
-        const [nx, ny] = [-(y1 - y0) / length, (x1 - x0) / length];
-        let [sx, sy] = [Math.floor(x0), Math.floor(y0)];
-
-        for (let travelled = 0.1; ; travelled = Math.min(length, travelled + 0.1)) {
-            const t = travelled / length;
-            const [px, py] = [x0 + (x1 - x0) * t, y0 + (y1 - y0) * t];
-
-            // Room for its body either side
-            for (const side of [-BODY, BODY]) {
-                if (squares.blocked(Math.floor(px + nx * side), Math.floor(py + ny * side))) {
-                    return null;
-                }
-            }
-
-            const [qx, qy] = [Math.floor(px), Math.floor(py)];
-
-            if (qx !== sx || qy !== sy) {
-                if (squares.blocked(qx, qy) || (qx !== sx && qy !== sy && (squares.blocked(qx, sy) || squares.blocked(sx, qy))) || this.#taken([qx, qy], actor)) {
-                    return null;
-                }
-
-                line.push([qx, qy]);
-                [sx, sy] = [qx, qy];
-            }
-
-            if (travelled >= length) {
-                break;
-            }
-        }
-
-        return line.length && same(line.at(-1), [gx, gy]) ? line : null;
-    }
-
-    #arrivedInReach(actor) {
+    // Whoever a character is walking to fight (told to engage, or after): null if no one
+    #aim(actor) {
         const id = actor.order?.type === "engage" ? actor.order.target : actor.target;
         const target = id === null || id === undefined ? null : this.actor(id);
 
-        return Boolean(target && !target.dead && this.#reachable(actor, target));
+        return target && !target.dead ? target : null;
     }
 
-    // Start stepping into the next square of the path, if no one's in the way
-    #stepInto(actor) {
-        const next = actor.path[0];
-
-        if (this.#taken(next, actor)) {
-            actor.blockedSince ??= this.time;
-
-            if (this.time - actor.blockedSince > BLOCKED_WAIT_MS) {
-                const goal = actor.path.at(-1);
-                const target = actor.target === null ? null : this.actor(actor.target);
-
-                this.#pathTo(actor, goal, target);
-            }
-
+    // Is whoever it's after within reach from where it is, and (with a blow up close) is it as
+    // near them as it closes before striking?
+    #stopsHere(actor, target) {
+        // (Cheap first: no further than its longest reach, before what it can see)
+        if (distanceBetween(actor.square, target.square) > longestReach(actor.arms) + 1.5 || !this.#reachable(actor, target)) {
             return false;
         }
 
-        actor.blockedSince = null;
-        actor.path.shift();
-        actor.to = next;
-        actor.facing = atan2(next[0] - actor.square[0], next[1] - actor.square[1]);
+        const attack = chooseAttack(actor.arms, actor.square, target.square);
+
+        return attack.kind !== "melee" || hypot(target.x - actor.x, target.y - actor.y) <= MELEE_SPACING;
+    }
+
+    // Who's in the way of a character stepping to a point: anyone else on its map whose body
+    // that would overlap, coming nearer them (the nearest; null if no one, or it's squeezing past)
+    #bumps(actor, [x, y]) {
+        if (this.time < actor.squeezeUntil) {
+            return null;
+        }
+
+        let nearest = null;
+        let best = Infinity;
+
+        for (const other of this.actors) {
+            if (other === actor || other.dead || other.map !== actor.map || Math.abs(other.x - x) >= 2 * BODY || Math.abs(other.y - y) >= 2 * BODY) {
+                continue;
+            }
+
+            const after = hypot(other.x - x, other.y - y);
+
+            if (after < 2 * BODY && after < hypot(other.x - actor.x, other.y - actor.y) && after < best) {
+                nearest = other;
+                best = after;
+            }
+        }
+
+        return nearest;
+    }
+
+    // Whether a character's body would be clear of every blocked square at a point
+    #clear(mapId, [x, y]) {
+        const squares = this.#squares(mapId);
+
+        for (let sy = Math.floor(y - BODY); sy <= Math.floor(y + BODY); sy++) {
+            for (let sx = Math.floor(x - BODY); sx <= Math.floor(x + BODY); sx++) {
+                if (squares.blocked(sx, sy)) {
+                    const [nx, ny] = [Math.min(Math.max(x, sx), sx + 1), Math.min(Math.max(y, sy), sy + 1)];
+
+                    if (hypot(nx - x, ny - y) < BODY) {
+                        return false;
+                    }
+                }
+            }
+        }
 
         return true;
+    }
+
+    // Where a character steps, turned aside (ASIDE) round someone in its way: away from them
+    // first, then the other way; somewhere no one else is and its body's clear of walls, still
+    // going on its way. Null if there's nowhere.
+    #aside(actor, [ux, uy], step, blocker) {
+        const away = ux * (blocker.y - actor.y) - uy * (blocker.x - actor.x) > 0 ? -1 : 1;
+
+        for (const side of [away, -away]) {
+            for (const [c, s] of ASIDE) {
+                const [vx, vy] = [ux * c - uy * s * side, uy * c + ux * s * side];
+                const next = [actor.x + vx * step, actor.y + vy * step];
+
+                if (!this.#bumps(actor, next) && this.#clear(actor.map, next)) {
+                    return next;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    // Blocked: waiting a moment; then, if whoever it's after is within reach, stopping to fight,
+    // and if it's all but there (someone standing where it was going), stopping there; else
+    // finding its way again (now and then), in case there's another
+    #blocked(actor, blocker) {
+        actor.blockedSince ??= this.time;
+
+        const waited = this.time - actor.blockedSince;
+        const target = this.#aim(actor);
+
+        if (target && this.#reachable(actor, target)) {
+            actor.path = [];
+
+            return;
+        }
+
+        const end = actor.path.at(-1);
+
+        if (waited > BLOCKED_WAIT_MS && blocker && !blocker.path.length && hypot(end[0] - blocker.x, end[1] - blocker.y) < 2 * BODY + 1) {
+            actor.path = [];
+        } else if ((waited > BLOCKED_WAIT_MS || !blocker) && actor.pathGoal && this.time - actor.lastPathAt >= (blocker ? BLOCKED_REPATH_MS : REPATH_MS)) {
+            const since = actor.blockedSince;
+
+            this.#pathTo(actor, actor.pathGoal, end);
+            actor.blockedSince = since;
+        }
     }
 
     // --- Fighting ---
@@ -2628,7 +2772,7 @@ export class Battle {
         actor.target = null;
         actor.walkPace = actor.chaseSpeed ?? actor.speed;
 
-        if (actor.to || actor.path.length) {
+        if (actor.path.length) {
             return;
         }
 
@@ -2768,14 +2912,6 @@ export class Battle {
         actor.path = [];
         actor.target = null;
 
-        // Finish stepping into a square, so it lies where it fell
-        if (actor.to) {
-            actor.square = [...actor.to];
-            actor.x = actor.to[0] + 0.5;
-            actor.y = actor.to[1] + 0.5;
-            actor.to = null;
-        }
-
         for (const other of this.actors) {
             if (other.target === actor.id) {
                 other.target = null;
@@ -2794,7 +2930,7 @@ export class Battle {
     }
 
     #respawn(actor) {
-        const square = nearestFree(this.#squares(actor.spawnMap), actor.spawn, { taken: this.#others(actor.spawnMap, actor, { stepping: false }) });
+        const square = nearestFree(this.#squares(actor.spawnMap), actor.spawn, { taken: this.#others(actor.spawnMap, actor) });
         const from = actor.map;
 
         Object.assign(actor, {
@@ -2809,8 +2945,8 @@ export class Battle {
             square,
             x: square[0] + 0.5,
             y: square[1] + 0.5,
-            to: null,
             path: [],
+            offPath: false,
             facing: 0,
             attack: null,
             readyAt: this.time,

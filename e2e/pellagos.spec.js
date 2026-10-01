@@ -100,8 +100,9 @@ test("loads everything, listing what it downloads, then shows the title", async 
     await page.goto("/");
 
     // Each group of files on the loading screen, with the manifest's sizes
-    await expect(page.locator("#loadlist li")).toHaveCount(5);
+    await expect(page.locator("#loadlist li")).toHaveCount(6);
     await expect(page.locator("#loadlist")).toContainText("3D engine");
+    await expect(page.locator("#loadlist")).toContainText("Ways over the world");
     await expect(page.locator("#loadlist")).toContainText("Lettering");
     await expect(page.locator("#title")).toBeVisible({ timeout: 60000 });
     await expect(page.locator("#titlename")).toHaveText("Pellagos");
@@ -111,7 +112,7 @@ test("loads everything, listing what it downloads, then shows the title", async 
 
     expect(loaded.loaded).toBe(loaded.total);
     expect(loaded.total).toBeGreaterThan(2_000_000);
-    expect(loaded.groups).toEqual([true, true, true, true, true]);
+    expect(loaded.groups).toEqual([true, true, true, true, true, true]);
 });
 
 test("debug mode shows how the game runs, and is remembered", async ({ page }) => {
@@ -501,13 +502,14 @@ test("swiping up from the player sends them straight ahead, running, as far as t
     // (Turned first the way that's clearest ahead of them, whatever's round the market where they
     // start: the well, stalls, a landmark)
     await page.evaluate(async () => {
-        const { lineAhead } = await import("/js/core/pathfinding.js");
+        const { navigatorOf } = await import("/js/core/navigation.js");
         const { game } = window.pellagos;
         const player = game.battle.actor("player");
         const avatar = game.avatars.get("player");
-        const from = [Math.floor(player.x), Math.floor(player.y)];
+        const navigation = navigatorOf(game.world.maps[player.map]);
         const ways = Array.from({ length: 8 }, (_, k) => (k * Math.PI) / 4 - Math.PI);
-        const clearest = ways.reduce((best, way) => (lineAhead(game.world.maps[player.map], from, way).length > lineAhead(game.world.maps[player.map], from, best).length ? way : best));
+        const ahead = (way) => navigation.raycast([player.x, player.y], [player.x + Math.sin(way) * 400, player.y + Math.cos(way) * 400])?.t ?? 0;
+        const clearest = ways.reduce((best, way) => (ahead(way) > ahead(best) ? way : best));
 
         player.facing = clearest;
         avatar.facing = clearest;

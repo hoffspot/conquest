@@ -340,33 +340,34 @@ Each step makes events (`attack`, `draw`, `projectile`, `hit`, `miss`, `death`, 
 of them since it was last called (so a spell cast between frames is shown too). Nothing in it
 draws anything.
 
-- **Moving.** Each character stands on one square and finds its way along A* paths (8
-  directions, no cutting corners past blocked squares). It doesn't walk them square by square
-  (which zig-zags: on open ground the shortest ways in 8 directions go straight, then diagonally,
-  or back and forth between the two): it heads in a straight line for the furthest square of its
-  path it can see (up to 64 on), with 0.3 metres of room either side of it for its body (so it
-  doesn't graze a corner), across no one; the squares on that line become its path. As it steps
-  onto that square it looks ahead again, so it turns only where it has to, at corners, and it
-  faces the way it's going. It's on each square as it walks into it, stepping into the next only
-  if no one's on it or stepping into it, and ends in the middle of the last; if someone is in the
-  way for 0.4 s it finds a way round. Sent to fight someone, once the square it's stepping onto
-  has them within reach, it slows to that square's middle and stops there. Every map's squares are read the same way (`core/grid.js`: `blocked`, `opaque` and
-  `ground` for any square, blocked off the map), whether kept in rows or in chunks. On a big map
-  (the world outside), A* looks only in a window round the start and the goal, 64 squares wider
-  each way, and gives up after 120,000 squares; the others in the way are a set of squares to
-  keep off, not written into a copy of the map. Its estimate of the way left is how far it is
-  moving straight and diagonally (never more than it is, so the path's still the shortest). A
-  goal that can't be stood on, or that's shut in on every side, is given up on at once; and with
-  others in the way it gives up sooner (after 4,000 squares and 100 more for each square across,
-  squared), so a goal they've shut in isn't searched for over the whole window again and again
-  while they stand there: 16 raiders setting out take 0.5 ms each on average, where they took 6
-  (the most 12 ms, where it was 150). A goal they've walled in a step or two away was still
-  searched for over those 4,000 squares, 6 ms each time, several times a step in a crowded fight.
-  So a search that's gone on for 256 squares looks out from the goal too (`walledIn`): if all it
-  can get to from there is a pocket of no more than 256 squares, the start not in it, there's no
-  way. That's the answer the search would have come to: 68 fighting outside the town spent 25 ms
-  a minute on searches that found no way, where they spent 350 (the most 1.2 ms, where it was
-  6.6). The player walks at 1.7 m/s; the orc patrols at 1.1 and chases at 1.8.
+- **Moving.** Each character is a circle 0.3 metres across the middle (`BODY`), anywhere on the
+  ground: its `x, y` are metres, and the square it's on is the one under its middle. It finds
+  its way over its map's navigation mesh (`core/navigation.js` `navigatorOf`, below, and
+  [WORLD.md](WORLD.md#navigation-meshes)): the corners of the shortest way round walls and
+  furniture, over bridges, along roads (which count for less), off cliffs and out of deep
+  water, kept to the centimetre. It walks straight from corner to corner, a fifth of a metre at
+  a time, facing the way it's going, so it turns only at corners. It never walks into anyone:
+  where someone's in the way it steps aside round them, turning 30°, 60°, 90° or 120° (away from
+  them first), wherever its body's clear of the blocked squares; having stepped aside near a
+  corner of its way, it heads on for the next. Where there's no room it waits; after 0.4 s, with
+  whoever it's after within reach it stops to fight, with someone standing where it was going
+  it stops there, and now and then it finds its way again. Getting no nearer where it's going
+  for 1.5 s (two jostling in a narrow way), it squeezes past whoever's there for 2 s. Sent to
+  fight someone, it stops as soon as they're within reach (with a blow up close, once it's
+  within 1.2 metres of them). Everything else is still the squares': where it's put, what it
+  can see and reach, where it's going (`core/grid.js`: `blocked`, `opaque` and `ground` for any
+  square, blocked off the map, whether kept in rows or in chunks). The player walks at 1.7 m/s;
+  the orc patrols at 1.1 and chases at 1.8.
+- **The navigation meshes.** The world outside has the overworld's tiled mesh, baked from the
+  terrain and what stands on it. A map of squares on its own (a building's floor, a town laid
+  out on its own, a test's rows) has a mesh of its own, baked from its squares a 32-metre tile
+  at a time as it's wanted (`navigation/squares.js`): flat, each square that isn't blocked two
+  triangles of floor, in voxels a tenth of a metre across, kept 0.3 metres from walls, so a
+  doorway or a passage a square wide is still walked. A tavern's floor takes about 25 ms to bake
+  the first time anyone walks it. The 16 maps of squares last walked keep their meshes. The
+  battle's ways are the only thing it asks of the meshes: what's in the way, and where someone
+  can be put, are still asked of the squares, so a copy of a world someone else hosts needs
+  nothing of the meshes at all (below).
 - **Running and stamina.** Told to run (a move or fight order with `run`), a character sprints
   at `SPRINT` times its walking speed, 6.5 / 1.4 (about 4.6): as much faster as people sprint
   (about 6.5 m/s) than walk (about 1.4 m/s). For the player that's 7.9 m/s. It speeds up at
@@ -377,10 +378,9 @@ draws anything.
   the way (the `exhausted` event). Coming back to life, a character is rested. The orc doesn't
   run.
 - **Straight ahead.** An `ahead` order (`{ type: "ahead", facing, run }`) sends a character in a
-  straight line the way it faces, as far as it can go: its path is the squares along that line
-  (pathfinding.js `lineAhead`, stepping along it a fifth of a metre at a time), up to the first
-  blocked square or the world's edge, never cutting a blocked corner. Running, it sprints while
-  its stamina lasts, then walks.
+  straight line the way it faces, as far as it can go: its way is one corner, where a line along
+  the mesh that way (up to 400 metres) meets the mesh's edge (a wall, less its body's width, or
+  the world's). Running, it sprints while its stamina lasts, then walks.
 - **Reach.** A melee attack reaches the eight squares touching the attacker's: N, NE, E, SE, S,
   SW, W and NW (Chebyshev distance 1). A ranged attack reaches any square whose middle is within
   its range and that the attacker can see: a line between the two squares' middles that crosses
@@ -1312,8 +1312,8 @@ every people's camp).
 An avatar is a character (characters/character.js) kept in step with its actor in the battle.
 The game shows everyone between where they were at the last two battle steps, so they move
 smoothly at any frame rate, and the avatar follows that on a spring (critically damped, of
-stiffness 12 a second). The spring rounds off the corners of the battle's square-by-square
-paths, so a sprint runs in smooth lines instead of zig-zagging from square to square; it trails
+stiffness 12 a second). The spring rounds off the corners of the battle's ways (and its steps
+aside round others), so a sprint runs in smooth lines; it trails
 by under a third of a metre walking and about a metre and a quarter sprinting, and catches up
 as the character slows to arrive. The walk's stride follows how far the avatar really moved, and
 it turns smoothly to face the way it's going (standing or attacking, the way its actor faces). Characters in the game grow only part
@@ -1934,10 +1934,8 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   settlements ahead laid out off the page's thread (asked for nearest first and once each, and
   taken as they were laid out; the same laid out in another thread, and one laid out from
   anything else not taken).
-  `test/pathfinding.test.js`: A* paths (a goal others have walled in given up on, and a way found
-  wherever there is one and none where there isn't, over 200 random maps with others about), and
-  the line of squares straight ahead (stopping at a wall or the world's edge, never cutting a
-  blocked corner).
+  `test/navigation.test.js` (with WORLD.md's): a map of squares' own mesh walked through a
+  doorway a square wide, kept a body's width from walls.
 - `test/insides.test.js`: every building's door where the art builds it, whichever way it faces,
   and the way up to it cleared; taprooms set out every way, everything reachable from the door;
   upstairs as the tavern's name has it, or none; the folk worked out from the plan (on the floor,

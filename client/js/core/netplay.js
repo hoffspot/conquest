@@ -15,6 +15,10 @@
 // When the host can't move its world on (its page hidden: a phone's gone to another app), it says
 // so, and those who've joined are shown why nothing's happening.
 //
+// The ways its characters find over the navigation meshes (core/battle.js) are recorded too, as
+// the host found them, and taken by a joined copy rather than found again: what each copy has of
+// the meshes (made as each has needed them) doesn't matter.
+//
 // What's said, as text (core/wire.js), whichever way it goes (app/relay.js carries it):
 //
 //   joiner -> host   { kind: "hello", version, character }   (character: as Host.join takes it)
@@ -34,7 +38,7 @@ import { decode, encode } from "./wire.js";
 import { RACE, startFor } from "./worldplan/plan.js";
 
 /** Bumped whenever what's said changes: a game of another version can't join. */
-export const NET_VERSION = 6;
+export const NET_VERSION = 7;
 
 /** How many steps the host plays between telling how the world should stand. */
 export const CHECK_EVERY = 100;
@@ -438,9 +442,10 @@ export class Joining {
         this.send(encode({ kind: "again" }));
     }
 
-    /** Its copy of the world, made from the welcome (Host.restore). */
+    /** Its copy of the world, made from the welcome (Host.restore): taking the host's ways. */
     attach(host) {
         this.host = host;
+        host.replaying();
     }
 
     /** How many of the host's steps are waiting to be played. */
@@ -459,6 +464,11 @@ export class Joining {
 
         while (this.queue.length) {
             const op = this.queue[0];
+
+            // (The ways the host found doing it come just after: ready for the battle first)
+            for (let k = 1; k < this.queue.length && this.queue[k][0] === "v"; ) {
+                this.host.replay?.push(this.queue.splice(k, 1)[0].slice(1));
+            }
 
             switch (op[0]) {
                 case "a": {
@@ -492,6 +502,9 @@ export class Joining {
                 case "p":
                     this.queue.shift();
                     this.host.populate();
+                    break;
+                case "v":
+                    this.host.replay?.push(this.queue.shift().slice(1));
                     break;
                 case "k": {
                     const [, sum] = this.queue.shift();

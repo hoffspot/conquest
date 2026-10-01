@@ -38,7 +38,7 @@ function hosted(seed = 2) {
     return host;
 }
 
-const put = (actor, [x, y]) => Object.assign(actor, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [], order: null, target: null });
+const put = (actor, [x, y]) => Object.assign(actor, { square: [x, y], x: x + 0.5, y: y + 0.5, path: [], order: null, target: null });
 
 // An orc camp outside the player's town, `out` metres past its edge, at war with the humans, as
 // far on as the war can be

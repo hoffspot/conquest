@@ -35,7 +35,7 @@ function run(host, ms) {
     return events;
 }
 
-const put = (actor, map, [x, y]) => Object.assign(actor, { map, square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [], order: null, target: null });
+const put = (actor, map, [x, y]) => Object.assign(actor, { map, square: [x, y], x: x + 0.5, y: y + 0.5, path: [], order: null, target: null });
 
 // The words for a war's events: each told, none left blank
 const told = (events, war) => events.map((event) => tell(event, war)).filter((words) => !/undefined|null/.test(words));

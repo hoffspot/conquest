@@ -6,7 +6,8 @@
 // The game's code is followed from its entry modules through their imports and the workers they
 // start (and the import map's "three" and "three/addons/" in index.html), leaving out what
 // main.js imports itself (it is already loaded when the loader starts). The character data and
-// masks, and the fonts, are listed too. test/manifest.test.js checks the list is up to date.
+// masks, the fonts, and the navigation meshes' WebAssembly (Recast's glue fetches it itself), are
+// listed too. test/manifest.test.js checks the list is up to date.
 
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -92,12 +93,23 @@ export async function manifestSource() {
     const map = await importMap();
     const loaded = await closure(["js/main.js"], map, { dynamic: false });
     const modules = [...(await closure(ENTRIES, map))].filter((file) => !loaded.has(file));
-    const engine = modules.filter((file) => file.startsWith("vendor/"));
+    const navigation = modules.filter((file) => file.startsWith("vendor/recast-navigation-"));
+    const engine = modules.filter((file) => file.startsWith("vendor/") && !navigation.includes(file));
     const code = modules.filter((file) => !file.startsWith("vendor/"));
+    const recast = navigation[0]?.match(/recast-navigation-([\d.]+)\//)?.[1];
+
+    // (And the WebAssembly the glue fetches itself)
+    if (recast) {
+        const folder = `vendor/recast-navigation-${recast}`;
+
+        navigation.push(...(await readdir(path.join(client, folder))).filter((name) => name.endsWith(".wasm")).map((name) => `${folder}/${name}`));
+    }
+
     const masks = (await readdir(path.join(client, "characters/masks"))).filter((name) => name.endsWith(".jpg")).map((name) => `characters/masks/${name}`);
     const three = engine.find((file) => /three-r\d+/.test(file))?.match(/three-r(\d+)/)[1];
     const groups = [
         { id: "engine", label: "3D engine", detail: `Three.js r${three}`, files: await sized(engine) },
+        { id: "navigation", label: "Ways over the world", detail: `Recast and Detour (recast-navigation-js ${recast})`, files: await sized(navigation) },
         { id: "code", label: "Game code", detail: "Pellagos", files: await sized(code) },
         { id: "body", label: "Body and shapes", detail: "MakeHuman base mesh, skeleton and sliders", files: await sized(["characters/human.json", "characters/human.bin"]) },
         { id: "skin", label: "Skin details", detail: "MakeHuman masks", files: await sized(masks) },

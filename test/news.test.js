@@ -150,7 +150,7 @@ describe("news and rumours, and the guild's board (news.js, standing.js, host.js
         const receptionist = host.battle.actor(guild.folk.find(({ role }) => role === "receptionist").id);
         const me = host.battle.actor(HOST_PLAYER);
 
-        Object.assign(me, { map: receptionist.map, square: [receptionist.square[0], receptionist.square[1] + 2], to: null, path: [], order: null });
+        Object.assign(me, { map: receptionist.map, square: [receptionist.square[0], receptionist.square[1] + 2], path: [], order: null });
         Object.assign(me, { x: me.square[0] + 0.5, y: me.square[1] + 0.5 });
         assert.equal(host.command(HOST_PLAYER, { type: "talk", with: receptionist.id }).ok, true);
 

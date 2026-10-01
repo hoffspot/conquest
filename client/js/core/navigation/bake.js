@@ -4,33 +4,44 @@
 // the same triangles on every machine (the WebAssembly is the same everywhere, and nothing in it
 // is left to chance), to add to a NavMesh or send from a worker.
 
-import { AGENT, BORDER, CELL, CELL_HEIGHT, TILE } from "./settings.js";
+import { OVERWORLD } from "./settings.js";
 
-/** Recast's settings, in voxels where it counts in them. */
-export const SETTINGS = Object.freeze({
-    walkableHeight: Math.ceil(AGENT.height / CELL_HEIGHT),
-    walkableClimb: Math.floor(AGENT.climb / CELL_HEIGHT),
-    walkableRadius: Math.ceil(AGENT.radius / CELL),
-    tileSize: TILE / CELL,
-    border: BORDER / CELL,
-    // (Islands smaller than this many voxels are dropped, and regions smaller than the next merged)
-    minRegionArea: 8 * 8,
-    mergeRegionArea: 20 * 20,
-    maxSimplificationError: 1.3,
-    maxEdgeLength: 12 / CELL,
-    maxVertsPerPoly: 6,
-    detailSampleDistance: 6 * CELL,
-    detailSampleMaxError: 1 * CELL_HEIGHT,
-});
+// (Measures in voxels, rounded: a tenth of a metre doesn't divide exactly)
+const voxels = (metres, size) => Math.round(metres / size);
+
+/** Recast's settings for a kind of mesh (settings.js OVERWORLD, ROOMS), in voxels where it counts in them. */
+export function settingsOf(measures) {
+    const { cell, cellHeight } = measures;
+
+    return {
+        walkableHeight: voxels(measures.height, cellHeight),
+        walkableClimb: voxels(measures.climb, cellHeight),
+        walkableRadius: voxels(measures.radius, cell),
+        tileSize: voxels(measures.tile, cell),
+        border: voxels(measures.border, cell),
+        // (Islands narrower than `island` are dropped, and regions narrower than `merge` merged)
+        minRegionArea: voxels(measures.island, cell) * voxels(measures.island, cell),
+        mergeRegionArea: voxels(measures.merge, cell) * voxels(measures.merge, cell),
+        maxSimplificationError: measures.simplify,
+        maxEdgeLength: voxels(12, cell),
+        maxVertsPerPoly: 6,
+        detailSampleDistance: 6 * cell,
+        detailSampleMaxError: 1 * cellHeight,
+    };
+}
+
+/** The overworld's settings. */
+export const SETTINGS = Object.freeze(settingsOf(OVERWORLD));
 
 /** Every polygon's flag (Detour's): walkable. */
 export const WALK = 1;
 
 /**
- * Bake a tile (`recast`: loadRecast's module; `input`: tileInput's) at tile (tx, ty): Detour's
- * tile data (a Uint8Array), or null if there's nothing to walk in it.
+ * Bake a tile (`recast`: loadRecast's module; `input`: tileInput's, or squaresInput's) at tile
+ * (tx, ty), for a kind of mesh (`measures`: settings.js): Detour's tile data (a Uint8Array), or
+ * null if there's nothing to walk in it.
  */
-export function bakeTile(recast, input, tx, ty) {
+export function bakeTile(recast, input, tx, ty, measures = OVERWORLD) {
     const { positions, indices, areas, bmin, bmax } = input;
     const {
         RecastBuildContext, VerticesArray, TrianglesArray, TriangleAreasArray, allocHeightfield, createHeightfield, rasterizeTriangles,
@@ -39,7 +50,8 @@ export function bakeTile(recast, input, tx, ty) {
         allocPolyMeshDetail, buildPolyMeshDetail, freeCompactHeightfield, freeContourSet, freePolyMesh, freePolyMeshDetail,
         NavMeshCreateParams, createNavMeshData, Recast,
     } = recast;
-    const s = SETTINGS;
+    const s = measures === OVERWORLD ? SETTINGS : settingsOf(measures);
+    const { cell, cellHeight } = measures;
     const width = s.tileSize + 2 * s.border;
     const context = new RecastBuildContext();
     const vertices = new VerticesArray();
@@ -57,7 +69,7 @@ export function bakeTile(recast, input, tx, ty) {
 
         freed.push(() => freeHeightfield(heightfield));
 
-        if (!createHeightfield(context, heightfield, width, width, bmin, bmax, CELL, CELL_HEIGHT)) {
+        if (!createHeightfield(context, heightfield, width, width, bmin, bmax, cell, cellHeight)) {
             throw new Error("Recast couldn't make the heightfield");
         }
 
@@ -117,11 +129,11 @@ export function bakeTile(recast, input, tx, ty) {
 
         params.setPolyMeshCreateParams(mesh);
         params.setPolyMeshDetailCreateParams(detail);
-        params.setWalkableHeight(s.walkableHeight * CELL_HEIGHT);
-        params.setWalkableRadius(s.walkableRadius * CELL);
-        params.setWalkableClimb(s.walkableClimb * CELL_HEIGHT);
-        params.setCellSize(CELL);
-        params.setCellHeight(CELL_HEIGHT);
+        params.setWalkableHeight(s.walkableHeight * cellHeight);
+        params.setWalkableRadius(s.walkableRadius * cell);
+        params.setWalkableClimb(s.walkableClimb * cellHeight);
+        params.setCellSize(cell);
+        params.setCellHeight(cellHeight);
         params.setBuildBvTree(true);
         params.setTileX(tx);
         params.setTileY(ty);
