@@ -13,6 +13,7 @@
 // Recast is loaded before anything here is used (this module waits for it), so the rules can find
 // ways without waiting.
 
+import { hypot } from "./exact.js";
 import { squaresOf } from "./grid.js";
 import { bakeTile, WALK } from "./navigation/bake.js";
 import { loadRecast } from "./navigation/recast.js";
@@ -210,16 +211,28 @@ export class Navigation {
             return;
         }
 
-        const side = this.measures.tile;
-
-        if (tx < 0 || ty < 0 || tx * side >= this.size[0] || ty * side >= this.size[1]) {
-            this.add(tx, ty, null);
-
+        // (Off the map's edge: nothing, and nothing kept)
+        if (!this.#inside(tx, ty)) {
             return;
         }
 
         this.baked++;
         this.add(tx, ty, bakeTile(this.recast, this.input(tx, ty), tx, ty, this.measures));
+    }
+
+    // Whether a tile is on the map
+    #inside(tx, ty) {
+        const side = this.measures.tile;
+
+        return tx >= 0 && ty >= 0 && tx * side < this.size[0] && ty * side < this.size[1];
+    }
+
+    // How many tiles of the map a box of the ground touches
+    #tilesIn(x0, y0, x1, y1) {
+        const [tx0, ty0] = this.tileOf(Math.max(0, x0), Math.max(0, y0));
+        const [tx1, ty1] = this.tileOf(Math.min(this.size[0] - 1, x1), Math.min(this.size[1] - 1, y1));
+
+        return Math.max(0, tx1 - tx0 + 1) * Math.max(0, ty1 - ty0 + 1);
     }
 
     /** The tile a ground point is in. */
@@ -278,28 +291,29 @@ export class Navigation {
         const [x0, y0, x1, y1] = [Math.min(from[0], to[0]), Math.min(from[1], to[1]), Math.max(from[0], to[0]), Math.max(from[1], to[1])];
         const [tx0, ty0] = this.tileOf(x0, y0);
         const [tx1, ty1] = this.tileOf(x1, y1);
+        const { tile } = this.measures;
 
         this.#cover(x0 - MARGIN, y0 - MARGIN, x1 + MARGIN, y1 + MARGIN);
 
         let way = this.#way(from, to);
 
         // (Short of it: the tiles further round too, a ring and then three, as long as that's
-        // not too many to make: a river's ford or a pass can be well off the straight way. A
-        // long way's widened across more than along)
+        // not too many to make, nor more than half what the mesh keeps: a river's ford or a pass
+        // can be well off the straight way. A long way's widened across more than along)
         const [across, along] = [tx1 - tx0 + 1, ty1 - ty0 + 1];
 
         for (const ring of WIDER) {
             const end = way.at(-1);
             const [rx, ry] = [across > 2 * along ? Math.min(ring, 1) : ring, along > 2 * across ? Math.min(ring, 1) : ring];
+            const box = [x0 - rx * tile, y0 - ry * tile, x1 + rx * tile, y1 + ry * tile];
 
-            if ((end && Math.hypot(end[0] - to[0], end[1] - to[1]) <= NEAR.across) || (across + 2 * rx) * (along + 2 * ry) > MOST_COVERED) {
+            if ((end && hypot(end[0] - to[0], end[1] - to[1]) <= NEAR.across) || this.#tilesIn(...box) > Math.min(MOST_COVERED, this.keep / 2)) {
                 break;
             }
 
             const before = this.added;
-            const { tile } = this.measures;
 
-            this.#cover(x0 - rx * tile, y0 - ry * tile, x1 + rx * tile, y1 + ry * tile);
+            this.#cover(...box);
 
             if (this.added !== before) {
                 way = this.#way(from, to);

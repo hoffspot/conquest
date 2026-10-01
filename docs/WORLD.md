@@ -476,7 +476,8 @@ WebAssembly by recast-navigation-js, vendored in `client/vendor/recast-navigatio
 - **Asking** (`Navigation`), in the rules' ground coordinates ([x, y], or [x, y, height]):
   - `path(from, to)`: the way's corners. The tiles between are made sure of first, and 4 m round
     them; if the way falls short, a ring of tiles round them and then three (across a long way,
-    one along it), up to 100 tiles: a river's crossing or a pass can be well off the straight
+    one along it), up to 100 tiles (and never more than half a mesh keeps, or it would let go
+    of the tiles it's searching): a river's crossing or a pass can be well off the straight
     way, and tiles far from anyone are dear to make (the world under them made first). A way
     to somewhere it still can't get to ends as near as it gets;
   - `nearest(point)`, `walkable(x, y)`;

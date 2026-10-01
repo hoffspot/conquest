@@ -1070,7 +1070,9 @@ converted data is to be measured in M8 against today's hm08 data.
     - Making sure of a ring of tiles round every way cost 3.5 s in a world's first second (29
       tiles, mostly making the world's chunks under them for soldiers' rounds 60 m long); main's
       grid A* took 1.3 s for the same. Tiles 4 m round the way first, then a ring, then three
-      (across a long way), up to 100 tiles, as a way falls short: 1.4 s, and a 250 m walk across
+      (across a long way), up to 100 tiles and half what a mesh keeps (a room's mesh keeps 64:
+      past that it let go of tiles it was searching and baked them again, without end), as a
+      way falls short: 1.4 s, and a 250 m walk across
       a river finds the same crossing A* did (208 s walking, A*'s 206 s). Move orders whose way
       was found only part of the way carry on from where it ended, up to 8 times.
     - Baking ahead: the game has tiles within 96 m of each player baked in the worker, a tile
