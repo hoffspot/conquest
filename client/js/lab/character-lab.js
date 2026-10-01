@@ -4,10 +4,11 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { Actions, ATTACKS, REACTIONS } from "../characters/actions.js";
 import { ROLES } from "../core/roles.js";
-import { ClipPlayer, parseBVH, retarget } from "../characters/bvh.js";
+import { ClipPlayer, gltfPoses, MESH2MOTION_MATCH, MESH2MOTION_NAMES, parseBVH, retarget } from "../characters/bvh.js";
 import { Character } from "../characters/character.js";
 import { DETAILS } from "../characters/details.js";
 import { EQUIPMENT, SLOTS } from "../characters/equipment.js";
@@ -207,9 +208,24 @@ function applyChanges() {
 
 const timer = new THREE.Timer();
 
-// Motion capture clips (MakeHuman's, CC0), retargeted to the body when chosen
+// Motion capture clips, retargeted to the body when chosen: MakeHuman's (CC0, BVH), and
+// Mesh2Motion's (CC0, glTF: Quaternius's Universal Animation Library), which say whether they
+// loop and whether they move the character along
 const CLIPS = { walk: "Walk (MakeHuman mocap)", "zombie-walk": "Zombie walk (MakeHuman mocap)" };
+const MESH2MOTION = {
+    idle: { label: "Idle (Mesh2Motion)", loop: true, moves: false },
+    walk: { label: "Walk (Mesh2Motion)", loop: true, moves: true },
+    run: { label: "Run (Mesh2Motion)", loop: true, moves: true },
+    sword: { label: "Sword attack (Mesh2Motion)", loop: false, moves: false },
+    death: { label: "Death (Mesh2Motion)", loop: false, moves: false },
+};
+
+for (const [name, { label }] of Object.entries(MESH2MOTION)) {
+    CLIPS[`m2m-${name}`] = label;
+}
+
 const clipFiles = new Map();
+let mesh2motion = null;
 let player = null;
 
 async function chooseClip(name) {
@@ -220,12 +236,24 @@ async function chooseClip(name) {
         return;
     }
 
-    if (!clipFiles.has(name)) {
+    const m2m = name.startsWith("m2m-") ? MESH2MOTION[name.slice(4)] : null;
+
+    if (m2m) {
+        mesh2motion ??= new GLTFLoader().loadAsync("characters/animations/mesh2motion.glb");
+
+        const { scene: skeleton, animations } = await mesh2motion;
+
+        if (!clipFiles.has(name)) {
+            clipFiles.set(name, gltfPoses(skeleton, animations.find((clip) => clip.name === name.slice(4)), { loop: m2m.loop }));
+        }
+    } else if (!clipFiles.has(name)) {
         clipFiles.set(name, parseBVH(await (await fetch(`characters/animations/${name}.bvh`)).text()));
     }
 
     if (state.motion.clip === name) {
-        player = new ClipPlayer(character, retarget(clipFiles.get(name), character.rig, { limit: state.motion.limits }), walker);
+        const options = m2m ? { names: MESH2MOTION_NAMES, match: MESH2MOTION_MATCH } : {};
+
+        player = new ClipPlayer(character, retarget(clipFiles.get(name), character.rig, { ...options, limit: state.motion.limits }), walker, { moves: m2m?.moves ?? true });
     }
 }
 
@@ -238,7 +266,8 @@ function step(dt) {
         object.rotation.y += ((player?.speed ?? speed) / 3) * dt;
     }
 
-    if (player && state.motion.moving) {
+    // (A clip that doesn't move the character along plays standing still)
+    if (player && (state.motion.moving || !player.moves)) {
         player.update(dt);
     } else {
         walker.update(dt, { speed });
@@ -808,7 +837,7 @@ function motionTab() {
             }),
             element("p", { class: "note", id: "gaitreadout" })),
         group("Motion capture",
-            element("p", { class: "note" }, "Instead of the walk made from gait data, play a recorded clip, retargeted to this body."),
+            element("p", { class: "note" }, "Instead of the walk made from gait data, play a recorded clip, retargeted to this body: MakeHuman's, or Mesh2Motion's (an idle, walk, run, sword attack and death; one played once starts again after a second)."),
             select("Clip", [["", "None: procedural walk"], ...Object.entries(CLIPS)], {
                 get: () => state.motion.clip,
                 set: (value) => {

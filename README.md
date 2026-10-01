@@ -598,6 +598,7 @@ server/                 A static file server for playing locally (npm start), an
 test/                   Unit tests
 e2e/                    Playwright browser tests, and how long each took (durations.json)
 scripts/                vendor-three.js, build-characters.js, build-manifest.js, build-music.js,
+                        build-clips.js (the lab's Mesh2Motion clips),
                         e2e-shard.js and e2e-durations.js (CI's split of the browser tests)
 .github/workflows/      CI (ci.yml) and publishing to GitHub Pages (pages.yml)
 docs/GAME.md            How the game works
@@ -619,6 +620,9 @@ docs/MODERNIZATION.md   The history: the book's Last Colony, modernized, before 
 - Characters: the body, its shapes, skeleton and skin weights, the texture masks and the walk and
   zombie walk motion capture clips are from MakeHuman (<https://github.com/makehumancommunity>),
   CC0. Gait data from the normal datasets bundled with pyCGM2 (<https://github.com/pyCGM2/pyCGM2>).
+  The character lab's idle, walk, run, sword attack and death clips are Quaternius's Universal
+  Animation Library as packed by Mesh2Motion (<https://github.com/Mesh2Motion/mesh2motion-app>),
+  CC0 (`client/characters/animations/mesh2motion.glb`, made by `npm run build:clips`).
 - Town layouts after Watabou's Medieval Fantasy City Generator
   (<https://github.com/watabou/TownGeneratorOS>); castle pieces after Castle Builder by Jon
   Rubashkin (<https://github.com/JonRubashkin/Castle-Builder>).

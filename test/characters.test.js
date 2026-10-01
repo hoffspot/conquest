@@ -5,7 +5,9 @@ import { gunzipSync } from "node:zlib";
 import * as THREE from "three";
 import { Actions, ATTACKS } from "../client/js/characters/actions.js";
 import { HumanData } from "../client/js/characters/body.js";
-import { parseBVH, retarget } from "../client/js/characters/bvh.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { gltfPoses, MESH2MOTION_MATCH, MESH2MOTION_NAMES, parseBVH, retarget } from "../client/js/characters/bvh.js";
+import { CLIPS } from "../scripts/build-clips.js";
 import { allDetailTargetNames, DETAILS, detailTargets } from "../client/js/characters/details.js";
 import { EQUIPMENT, ITEMS, SLOTS, socketOn } from "../client/js/characters/equipment.js";
 import { placed } from "../client/js/characters/character.js";
@@ -1438,6 +1440,81 @@ describe("motion capture (bvh.js)", () => {
         }
 
         assert.ok(bent > 30 * DEG, "the knee bends while walking");
+    });
+});
+
+describe("Mesh2Motion's clips (bvh.js, scripts/build-clips.js)", async () => {
+    const file = readFileSync(new URL("../client/characters/animations/mesh2motion.glb", import.meta.url));
+    const gltf = await new GLTFLoader().parseAsync(file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength), "");
+    const clip = (name) => gltf.animations.find((each) => each.name === name);
+    const once = new Set(["sword", "death"]);
+    const angle = (rotation) => 2 * Math.acos(Math.min(1, Math.abs(rotation.w)));
+
+    it("has the skeleton, without the mannequin, and each clip the build takes", () => {
+        let joints = 0;
+        let meshes = 0;
+
+        gltf.scene.traverse((node) => {
+            joints += node.name in Object.fromEntries(Object.values(MESH2MOTION_NAMES).map((name) => [name, true])) ? 1 : 0;
+            meshes += node.isMesh ? 1 : 0;
+        });
+
+        assert.equal(joints, Object.keys(MESH2MOTION_NAMES).length, "every joint we map is there");
+        assert.equal(meshes, 0);
+        assert.deepEqual(gltf.animations.map(({ name }) => name).sort(), CLIPS.map(({ name }) => name).sort());
+
+        for (const { name } of CLIPS) {
+            assert.ok(clip(name).duration > 0.5, name);
+            assert.ok(!clip(name).tracks.some((track) => track.name.endsWith(".scale")), `${name}: only rotations and the pelvis's place`);
+        }
+    });
+
+    it("samples a clip played once to its end, and one that loops without its end", () => {
+        const death = gltfPoses(gltf.scene, clip("death"), { loop: false });
+        const walk = gltfPoses(gltf.scene, clip("walk"));
+        const pelvis = death.names.indexOf("pelvis");
+
+        assert.equal(death.poses.length, Math.round(clip("death").duration * 30) + 1);
+        assert.equal(walk.poses.length, Math.round(clip("walk").duration * 30));
+        assert.ok(death.poses.at(-1).positions[pelvis].y < 0.3, "lying down at the end, not back at the start");
+        assert.ok(death.poses[0].positions[pelvis].y > 0.7);
+
+        // The skeleton's left as it was found
+        assert.ok(Math.abs(gltf.scene.getObjectByName("pelvis").getWorldPosition(new THREE.Vector3()).y - death.rest.positions[pelvis].y) < 1e-6);
+    });
+
+    it("retargets them to our skeleton: our legs and back as they rest, the arms down from its T-pose", () => {
+        const f = figure();
+        const options = { names: MESH2MOTION_NAMES, match: MESH2MOTION_MATCH };
+        const knee = f.rig.index.get("LeftLeg");
+
+        for (const { name } of CLIPS) {
+            const poses = gltfPoses(gltf.scene, clip(name), { loop: !once.has(name) });
+            const limited = retarget(poses, f.rig, options);
+            const free = retarget(poses, f.rig, { ...options, limit: false });
+
+            assert.ok(Math.abs(limited.scale - 1) < 0.15, `${name}: about as big as us (${limited.scale})`);
+            assert.equal(limited.loop, !once.has(name));
+
+            // Standing still in the clip, the legs, back and arms are within their ranges as they
+            // come: what the limits take off is small
+            if (name === "idle" || name === "walk") {
+                for (const bone of ["LeftUpLeg", "LeftFoot", "Spine", "Spine1", "Neck", "LeftShoulder", "RightShoulder", "LeftArm", "RightArm"]) {
+                    const b = f.rig.index.get(bone);
+                    const most = Math.max(...limited.frames.map((frame, k) => frame.rotations[b].angleTo(free.frames[k].rotations[b])));
+
+                    assert.ok(most < 6 * DEG, `${name}: ${bone} limited by ${(most / DEG).toFixed(1)} degrees`);
+                }
+            }
+
+            if (name === "walk" || name === "run") {
+                assert.ok(Math.max(...limited.frames.map((frame) => angle(frame.rotations[knee]))) > (name === "run" ? 80 : 40) * DEG, `${name}: the knee bends`);
+            }
+        }
+
+        const death = retarget(gltfPoses(gltf.scene, clip("death"), { loop: false }), f.rig, options);
+
+        assert.ok(death.frames.at(-1).height < -0.6, "the pelvis comes down to the ground");
     });
 });
 

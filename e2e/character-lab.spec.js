@@ -141,6 +141,11 @@ test("shows the other peoples: elves' ears, cat folk's ears, tail and fur, lizar
 test("plays a motion capture clip", async ({ page }) => {
     await openLab(page, "/character-lab.html?clip=zombie-walk&tab=motion");
     await page.waitForFunction(() => window.lab.player?.clip.frames.length > 10);
+
+    // And one of Mesh2Motion's (glTF), played once, standing where it is
+    await page.evaluate(() => window.lab.chooseClip("m2m-death"));
+    await page.waitForFunction(() => window.lab.player?.clip.loop === false);
+    expect(await page.evaluate(() => ({ frames: window.lab.player.clip.frames.length, moves: window.lab.player.moves }))).toEqual({ frames: 136, moves: false });
 });
 
 test("fits a phone screen", async ({ browser }) => {

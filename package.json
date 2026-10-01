@@ -19,11 +19,13 @@
     "vendor:meshopt": "node scripts/vendor-meshopt.js",
     "build:manifest": "node scripts/build-manifest.js",
     "build:characters": "node scripts/build-characters.js",
-    "build:music": "node scripts/build-music.js"
+    "build:music": "node scripts/build-music.js",
+    "build:clips": "node scripts/build-clips.js"
   },
   "devDependencies": {
     "@breezystack/lamejs": "^1.2.7",
     "@eslint/js": "^9.39.1",
+    "@gltf-transform/core": "^4.5.1",
     "@playwright/test": "^1.56.1",
     "@wasm-audio-decoders/flac": "^0.2.11",
     "esbuild": "0.28.2",
