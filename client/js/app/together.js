@@ -437,7 +437,7 @@ export async function joinWorld({ code, character, address = relayAddress(), onC
         throw error;
     }
 
-    const joining = new Joining({ send: (text) => link.data(text) });
+    const joining = new Joining({ send: (text) => link.data(text), clock: () => performance.now() });
 
     link.onData = (text) => joining.hear(text);
     link.onClosed = onClosed;

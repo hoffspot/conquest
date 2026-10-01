@@ -4,15 +4,18 @@
 // what came of them heard; players of another people brought in by their own people's town;
 // those who leave gone from every copy; a copy gone astray set right, and every copy after a link
 // drops; told when the host's stopped; those who can't join told why; the ways the host's
-// characters find over the navigation meshes taken by every copy, never found again
+// characters find over the navigation meshes taken by every copy, never found again; where the
+// host's characters stand compared every few steps (the motion stream), a copy gone astray found
+// at once; the link timed; and steps kept in hand, as many as the host's sendings' unevenness asks
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { Navigation } from "../client/js/core/navigation.js";
-import { characterFrom, CHECK_EVERY, Hosting, Joining, MOST_PLAYERS, NET_VERSION, spawnFor } from "../client/js/core/netplay.js";
+import { MOTION } from "../client/js/core/motion.js";
+import { characterFrom, CHECK_EVERY, Hosting, Joining, MOST_PLAYERS, NET_VERSION, PACE, PLAYOUT, spawnFor } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
-import { encode } from "../client/js/core/wire.js";
+import { decode, encode } from "../client/js/core/wire.js";
 import { startFor } from "../client/js/core/worldplan/plan.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
@@ -31,10 +34,11 @@ function opened({ seed = 2 } = {}) {
     const hosting = new Hosting(host, { send: (peer, text) => post.push({ to: peer, text }) });
     let next = 1;
 
-    // Someone joining, their game making its copy of the world when it's welcomed
-    const join = (character) => {
+    // Someone joining (with a clock, if it's to time the link), their game making its copy of
+    // the world when it's welcomed
+    const join = (character, { clock } = {}) => {
         const peer = `p${next++}`;
-        const joining = new Joining({ send: (text) => post.push({ from: peer, text }) });
+        const joining = new Joining({ send: (text) => post.push({ from: peer, text }), clock });
 
         joining.onWelcome = ({ seed: worldSeed, race, snapshot }) => {
             joining.attach(Host.restore(buildWorld({ seed: worldSeed, race }), snapshot));
@@ -409,6 +413,196 @@ describe("playing together (netplay.js)", () => {
         assert.deepEqual(safe.talks.knowledge, ["x"]);
         assert.equal(characterFrom({ hero: { name: "Ada", shape: {}, look: {}, weapon: "cleaver" } }), null, "(not a weapon a player starts with)");
         assert.equal(characterFrom(null), null);
+    });
+
+    it("has every copy compare where the host's characters stand, every few steps: none astray in a long play, one 2 cm off found at once", () => {
+        const { host, hosting, join, play, catchUp } = opened();
+        const { joining } = join(guest("Bryn"));
+        const me = () => host.battle.actor(HOST_PLAYER);
+        const kinds = [];
+
+        joining.onState = () => kinds.push("state");
+
+        // (Both players walking about, their commands and the folk's going on)
+        for (let round = 0; round < 60; round++) {
+            if (round % 10 === 0) {
+                host.command(HOST_PLAYER, { type: "move", to: [me().square[0] + (round % 20 ? -5 : 5), me().square[1] + 2], run: round % 30 === 0 });
+                joining.command({ type: "move", to: [Math.floor(me().x) + 3, Math.floor(me().y) - 2] });
+            }
+
+            play(MOTION.every);
+            catchUp(joining);
+        }
+
+        assert.equal(joining.motionChecks, 60);
+        assert.equal(joining.checks, Math.floor((60 * MOTION.every) / CHECK_EVERY));
+        assert.equal(joining.desyncs, 0);
+        assert.equal(joining.resyncs, 0);
+        assert.deepEqual(kinds, []);
+        assert.ok(hosting.sent.motion > 0 && hosting.sent.ops > 0);
+        assert.equal(joining.received.motion, hosting.sent.motion);
+
+        // (A hair's difference, never: half a centimetre off is within rounding)
+        const index = joining.host.battle.actors.findIndex(({ id }) => id === "guest-1");
+        const theirs = joining.host.battle.actors[index];
+
+        assert.equal(theirs.progress, null, "(standing: the copy's guest stays put, nudged)");
+        theirs.x += 0.004;
+        play(MOTION.every);
+        catchUp(joining);
+        assert.equal(joining.desyncs, 0);
+        theirs.x -= 0.004;
+
+        // (Two centimetres off: found the next time it's sent, well before the checksum, and set right)
+        const checks = joining.checks;
+
+        theirs.x += 0.02;
+        play(MOTION.every);
+        catchUp(joining);
+        assert.equal(joining.desyncs, 1);
+        assert.equal(joining.checks, checks, "(no checksum came meanwhile)");
+        assert.deepEqual(kinds, ["state"]);
+        assert.deepEqual(positions(joining.host), positions(host));
+
+        play(MOTION.every * 4);
+        catchUp(joining);
+        assert.equal(joining.desyncs, 1);
+        assert.equal(joining.host.checksum(), host.checksum());
+    });
+
+    it("stamps each sending with the host's step; times a word to the host and back by the joiner's clock", () => {
+        const { host, join, play, post, deliver } = opened();
+        let now = 1000;
+        const { joining } = join(guest("Bryn"), { clock: () => now });
+        const heard = [];
+        const hear = joining.hear.bind(joining);
+
+        joining.hear = (text) => {
+            heard.push(decode(text));
+            hear(text);
+        };
+
+        play(MOTION.every);
+        assert.deepEqual(heard.map(({ kind }) => kind), ["ops", "motion"]);
+        assert.ok(heard.every(({ step }) => step === host.battle.time / STEP_MS));
+        assert.equal(joining.hostStep, host.battle.time / STEP_MS);
+
+        assert.equal(joining.rtt, null);
+        joining.ping();
+        now += 80;
+        deliver();
+        assert.equal(joining.rtt, 80);
+
+        joining.ping();
+        now += 40;
+        deliver();
+        assert.equal(joining.rtt, 75, "(smoothed)");
+        assert.ok(post.length === 0);
+    });
+
+    it("keeps steps in hand as the host's sendings' unevenness asks: the fewest when they come evenly, more when not, none counted over a pause", () => {
+        let now = 0;
+        const joining = new Joining({ send: () => {}, clock: () => now });
+        let step = 0;
+        const arrive = (late = 0) => {
+            step += 2;
+            now = step * STEP_MS + 60 + late;
+            joining.hear(encode({ kind: "ops", step, ops: [["a", STEP_MS, 2]] }));
+        };
+
+        for (let k = 0; k < 100; k++) {
+            arrive();
+        }
+
+        assert.equal(joining.jitter, 0);
+        assert.equal(joining.delay, PLAYOUT.least);
+
+        // (Some come early, some late)
+        for (let k = 0; k < 100; k++) {
+            arrive(k % 2 ? 90 : 0);
+        }
+
+        assert.ok(joining.jitter > 60, `${joining.jitter} ms`);
+        assert.ok(joining.delay >= 4 && joining.delay <= PLAYOUT.most, `${joining.delay} steps`);
+
+        // (Steadily again: it comes down)
+        for (let k = 0; k < 200; k++) {
+            arrive();
+        }
+
+        assert.equal(joining.delay, PLAYOUT.least);
+
+        // (Over a pause, the host's steps stopped: not late)
+        joining.hear(encode({ kind: "paused", paused: true }));
+        now += 30000;
+        joining.hear(encode({ kind: "paused", paused: false }));
+        arrive(30000);
+        arrive(30000);
+        assert.equal(joining.delay, PLAYOUT.least);
+    });
+
+    it("plays the host's steps a little slower or faster to keep them in hand: seldom stopping when they come unevenly, never far behind", () => {
+        // (A copy that does nothing, as a stand-in: only the timing's tried here)
+        const stand = { advance: () => [], replay: [], replaying() {} };
+        // The host steps every 50 ms, sends what it's done every 100 ms or so (as its frames
+        // fall), each sending taking 60 ms and up to 150 more (in order: one never overtakes
+        // another); a joined game draws a frame every 1/60 s, playing steps as they're due
+        const simulate = (paced) => {
+            let now = 0;
+            let seed = 7;
+            const random = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+            const joining = new Joining({ send: () => {}, clock: () => now });
+            const coming = [];
+            let [sentStep, sentAt, last, accumulator, stalls, frames, most] = [0, 0, 0, 0, 0, 0, 0];
+
+            joining.attach(stand);
+
+            for (now = 0; now < 120000; now += 1000 / 60) {
+                // (The host's sendings, as they go and come)
+                if (now - sentAt >= 100) {
+                    const step = Math.floor(now / STEP_MS);
+
+                    last = Math.max(last, now + 60 + random() * 150);
+                    coming.push({ at: last, text: encode({ kind: "ops", step, ops: [["a", STEP_MS, step - sentStep]] }) });
+                    [sentStep, sentAt] = [step, now];
+                }
+
+                while (coming.length && coming[0].at <= now) {
+                    joining.hear(coming.shift().text);
+                }
+
+                // (The joined game's frame: as game.js #tick plays it)
+                const dt = 1000 / 60;
+
+                accumulator += dt * (paced ? joining.pace(dt) : 1);
+
+                while (accumulator >= STEP_MS) {
+                    if (!joining.step()) {
+                        accumulator = Math.min(accumulator, STEP_MS);
+                        stalls += now > 5000 ? 1 : 0;
+                        break;
+                    }
+
+                    accumulator -= STEP_MS;
+                }
+
+                for (let extra = 0; joining.behind > (paced ? joining.delay : 0) + PACE.behind && extra < PACE.catchUp; extra++) {
+                    joining.step();
+                }
+
+                frames++;
+                most = Math.max(most, now > 5000 ? sentStep - (joining.hostStep - joining.behind) : 0);
+            }
+
+            return { stalls: stalls / frames, most, delay: joining.delay };
+        };
+
+        const asTheyCome = simulate(false);
+        const paced = simulate(true);
+
+        assert.ok(paced.stalls < asTheyCome.stalls / 3, `${(paced.stalls * 100).toFixed(1)}% of frames stopped, against ${(asTheyCome.stalls * 100).toFixed(1)}%`);
+        assert.ok(paced.delay > PLAYOUT.least && paced.delay <= PLAYOUT.most, `${paced.delay} steps`);
+        assert.ok(paced.most <= PLAYOUT.most + PACE.behind + 6, `${paced.most} steps behind at most`);
     });
 
     it("keeps what it's told of when a world's adopted in place", () => {

@@ -398,6 +398,38 @@ carry a base64 packed buffer, so the relay stays neutral about binary frames.
   keep interpolation smooth.
 - The debug overlay shows RTT, delay and desyncs.
 
+**As built in M5** (see the change log):
+- **Motion** (`core/motion.js`): packed as planned, 16 bytes a character, those within 160 m of
+  any player on their map, the nearest 64. The flags byte holds moving, running, fighting and
+  dead, and the corners left on the way (0–15) where the plan had a "via index". Velocity is the
+  pace (times any slowing affliction) along the facing, by exact sines and cosines. Sent every 4
+  of the host's steps, after that sending's ops; base64 by hand (`core/wire.js`, moved there from
+  `explored.js`).
+- **Compared** where the host packed it: the joiner queues it as an `["m", step, units]` op behind
+  what came before, so its copy's at the same step when it's compared (and a different step is
+  itself astray). Rounded centimetres more than 1 apart, or a missing index, send `again` at once.
+  `Joining` counts `motionChecks`, `checks` and `desyncs`.
+- **Tick sync** (`Joining.pace`, `PLAYOUT`): ops carry `step` (the host's `battle.time / 50`). The
+  delay is 2 + round(2 × jitter / 50 ms), from 2 to 6, the jitter as RFC 3550 has it (sendings'
+  lateness against each other, by the steps between; a sending a second late counts as a second;
+  none counted over a pause or a resync). The game's accumulator runs at 0.9–1.1 times, by how
+  many steps it's had in hand over the last second against the delay; the catch-up starts 6 steps
+  past the delay. Ops still come every 0.1 s, so 2 is the floor.
+- **RTT:** a `ping {t}` from the joiner once a second, which the host answers at once with
+  `pong {t, step}`; smoothed by eighths. The joiner's clock is injected (`clock`), so core stays
+  pure.
+- **Prediction** (`app/predict.js`): a move tap (or a swipe straight ahead) is drawn setting off at
+  once, straight for the tapped square's middle (at a walk, or speeding up from one as the battle
+  has a runner do: `ACCELERATION`, now exported), until the command comes back
+  done; then drawn ahead along the copy's way by that lag (600 ms at most) until the hero stops.
+  Every switch, and any jump in a frame further than the hero could go, is closed over 150 ms; a
+  gap over 3 m is shown at once. The copy is never touched. No local path is found: a joined game
+  has no navigation meshes, and the straight line lasts only the lag.
+- **Bytes:** `Hosting.sent` and `Joining.received` count text by kind. In Node, seed 2's start
+  town sends one joiner about 1.2 KB/s of motion and 0.5 KB/s of ops.
+- **Not built:** smoothing others' movement with the stream while catching up after a pause (use
+  3): catching up takes at most 40 steps a frame, and others are drawn interpolated between steps.
+
 ---
 
 ## 7. Water
@@ -1338,3 +1370,28 @@ converted data is to be measured in M8 against today's hm08 data.
   - **Versions:** `TERRAIN_VERSION` 8, `NET_VERSION` 11.
   - **Tests:** the town and the settlements near it lie on their planes, no steeper than 8 %
     (where it was "the town is level").
+- **2026-10-01, M5 built** (multiplayer motion):
+  - **Early desync checks:** a copy two centimetres off the host is found at the next motion
+    packet (within 4 steps) and set right, where the checksum takes up to 100; half a centimetre
+    (within rounding) never sets one off. 60 rounds of both players walking and running in seed
+    2's town: 60 motion checks, none astray.
+  - **Tick sync:** simulated over two minutes of sendings 60 ms late plus up to 150 ms more, the
+    copy stopped for want of a step in 0.11 % of frames playing them as they came, and 0 % with
+    steps kept in hand (0.00 % against 1.29 % with no lateness at all, where frames fell just
+    before each sending); up to 300 ms more, 2.08 % against 0.01 %. It costs 50–100 ms more
+    behind the host.
+  - **Prediction:** a joined player's hero sets off the frame they tap, never moves more than a
+    frame's walk and a hair between frames, and arrives with the copy; when the host sends them
+    nowhere, the gap closes within 150 ms.
+  - **Bandwidth** (two-browser e2e): measured and annotated, held under 10 KB/s to one joiner.
+  - **Versions:** `NET_VERSION` 12 (`TERRAIN_VERSION` unchanged).
+  - **Found by the two-browser e2e:** a joined copy capped each frame's time at a tenth of a
+    second, as playing alone does, so at 2 frames a second it fell 0.4 s further behind the host
+    every second and its commands were answered seconds late. A joined copy now plays the real
+    time since its last frame (up to a second: `JOINED_FRAME` in app/game.js).
+  - **Tests:** `test/motion.test.js` (packing, the nearest first, the cap and reach, comparing,
+    base64 both ways); in `test/netplay.test.js` the long play with motion checks, the 2 cm and
+    0.4 cm nudges, steps and RTT on every sending, the delay by jitter and over a pause, and the
+    pacing simulation; `test/predict.test.js`; RTT and motion over the real relay in
+    `test/together.test.js`; and a two-browser e2e of a minute's walking about with no drift, the
+    copy ending just as the host's (time, checksum, everyone's place to the millimetre).

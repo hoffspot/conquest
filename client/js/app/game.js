@@ -79,6 +79,7 @@ import { SpellbookPanel } from "./spellbook.js";
 import { PackPanel } from "./pack.js";
 import { Governor, GOVERNOR } from "./governor.js";
 import { Pacing } from "./pacing.js";
+import { Prediction } from "./predict.js";
 import { describe, totals } from "./gearinfo.js";
 import { TalkPanel } from "./talk.js";
 import { ACTIONS, ActionWheel, actionOf, assignable, directionOf, forFriends, PLACES, readWheels, SIDES, WHEELS } from "./wheel.js";
@@ -200,6 +201,19 @@ const VISITS = Object.freeze({ every: 0.5, budget: 6 });
 
 // How often a hosted world's goings-on are sent to those who've joined it (seconds: docs/WAR.md M11)
 const FLUSH_EVERY = 0.1;
+
+// Joined to another's world, the most of its time played in a frame (s): frames coming slowly,
+// the time between them all the same (playing alone, a slow frame's a slower world instead)
+const JOINED_FRAME = 1;
+
+// How often a joined game times its link to the host (seconds); and how far ahead its hero's
+// drawn going when swiped straight ahead (m: app/predict.js stops it soon enough)
+const PING_EVERY = 1;
+const AHEAD = 50;
+
+// The commands that set the player's hero going otherwise than where they're sent, or stop them:
+// not drawn ahead of the copy (app/predict.js)
+const STEERING = new Set(["engage", "approach", "enter", "stop", "cancel", "summoned", "trade"]);
 
 // How long a joined game goes without a step from the host before its player's told it's waiting (ms)
 const WAITING_AFTER = 2000;
@@ -418,6 +432,10 @@ export class Game {
         this.remote = remote;
         this.hosting = null;
         this.flushedAt = 0;
+        this.pingedAt = 0;
+
+        /** A joined game's hero, drawn going where they're sent before the host's heard (app/predict.js). */
+        this.predict = remote ? new Prediction() : null;
 
         /**
          * How the link to the others is (app/together.js onLink): null, all's well; "lost", this
@@ -1366,7 +1384,8 @@ export class Game {
         }
 
         const frameStart = performance.now();
-        const dt = Math.min(0.1, Math.max(0, (now - this.lastFrame) / 1000));
+        const elapsed = Math.max(0, (now - this.lastFrame) / 1000);
+        const dt = Math.min(0.1, elapsed);
 
         this.lastFrame = now;
 
@@ -1375,7 +1394,7 @@ export class Game {
         let steps = 0;
 
         try {
-            steps = this.#tick(dt);
+            steps = this.#tick(dt, elapsed);
         } catch (error) {
             this.#fault(error);
         }
@@ -1452,8 +1471,13 @@ export class Game {
     }
 
     // Run the battle's steps for `dt` seconds, and move everyone to match. Returns the steps run
-    #tick(dt) {
-        this.accumulator += dt * 1000;
+    #tick(dt, elapsed = dt) {
+        // (Joined: the host's steps played a little slower or faster, to keep a few in hand; and
+        // as fast as time goes by, however slowly the frames come (a second's worth at most a
+        // frame), or the host would leave it behind)
+        const played = this.remote ? Math.min(JOINED_FRAME, elapsed) : dt;
+
+        this.accumulator += played * 1000 * (this.remote ? this.remote.pace(played * 1000) : 1);
 
         // (What was put off till now: a spark off the anvil at each blow)
         if (this.later.length && this.later[0].at <= this.clock) {
@@ -1509,7 +1533,7 @@ export class Game {
         // (Fallen behind the host: caught up, a little at a time)
         const catching = performance.now();
 
-        for (let extra = 0; this.remote && this.remote.behind > PACE.behind && extra < PACE.catchUp && performance.now() - catching < PACE.catchUpMs; extra++) {
+        for (let extra = 0; this.remote && this.remote.behind > this.remote.delay + PACE.behind && extra < PACE.catchUp && performance.now() - catching < PACE.catchUpMs; extra++) {
             const events = this.remote.step();
 
             if (!events) {
@@ -1524,6 +1548,12 @@ export class Game {
         if (this.hosting && this.clock - this.flushedAt >= FLUSH_EVERY) {
             this.flushedAt = this.clock;
             this.hosting.flush();
+        }
+
+        // (Joined: how long a word takes to the host and back, now and then)
+        if (this.remote && this.clock - this.pingedAt >= PING_EVERY) {
+            this.pingedAt = this.clock;
+            this.remote.ping();
         }
 
         this.#update(dt, this.accumulator / STEP_MS);
@@ -1580,8 +1610,13 @@ export class Game {
                 continue;
             }
 
-            const x = previous.x + (actor.x - previous.x) * alpha;
-            const z = previous.y + (actor.y - previous.y) * alpha;
+            let x = previous.x + (actor.x - previous.x) * alpha;
+            let z = previous.y + (actor.y - previous.y) * alpha;
+
+            // (Joined: their own hero drawn going where they're sent before the host's heard)
+            if (actor === mine && this.predict) {
+                [x, z] = this.predict.at(actor, x, z, this.clock * 1000);
+            }
 
             avatar.actions.setGuard(!actor.dead && actor.armed && this.#fighting(actor));
             avatar.every = this.#posing(actor, avatar, dt, pixels);
@@ -5224,13 +5259,40 @@ export class Game {
         this.effects.markTarget(ox + goal[0] + 0.5, oz + goal[1] + 0.5);
     }
 
+    // Joined, the player's hero sent somewhere (or straight ahead): drawn going at once, and
+    // caught up with once it's done (`then` hearing what came of it as before)
+    #predicting(command, then) {
+        const player = this.battle.actor(this.me);
+
+        if (!this.predict || !player) {
+            return then;
+        }
+
+        if (command.type !== "move" && command.type !== "ahead") {
+            if (STEERING.has(command.type)) {
+                this.predict.other();
+            }
+
+            return then;
+        }
+
+        const to = command.type === "move" ? [command.to[0] + 0.5, command.to[1] + 0.5] : [player.x + Math.sin(command.facing) * AHEAD, player.y + Math.cos(command.facing) * AHEAD];
+
+        this.predict.ordered(player, to, Boolean(command.run), this.clock * 1000);
+
+        return (result) => {
+            this.predict?.done(result, this.clock * 1000);
+            then?.(result);
+        };
+    }
+
     // What the player does, sent to the host (core/host.js command): { ok }, or { ok: false,
     // reason } if it can't be done
     // A command of the player's, to the host: `then` hears what came of it (at once, playing alone
     // or hosting; joined to another's world, once the host's done it and it's been done here too)
     #command(command, then = null) {
         if (this.remote) {
-            return this.remote.command(command, then);
+            return this.remote.command(command, this.#predicting(command, then));
         }
 
         const result = this.host.command(this.me, command);
