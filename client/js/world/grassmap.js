@@ -1,0 +1,193 @@
+// Where the tall grass grows, how tall and how dry (terrain plan M7b; drawn by grass.js): a map of
+// each chunk, a texel to its square metre, worked out from what the world already says of it, so
+// the grass is the same every time and in every browser.
+// - Only on grass (not road, cobbles, soil or a yard), and not where anything stands, on water or
+//   on a bridge; thinner beside a road, on steep ground, up towards the rock and snow, and in a
+//   settlement (kept short there: it's lived in).
+// - As thick and as tall as its land grows it (GRASS_LANDS): a meadow's thick and knee to waist
+//   high, a savannah's tall and golden, the woods' thin and short, none on snow; its lands blended
+//   across their cells' edges so no line shows where one meets another.
+// - In clumps and stretches (slow noise), lusher, drier or worn to bare earth where the ground's
+//   own patches are (ground.js PATCHES: the same noise, read the same way), drier golden where it's
+//   dry, greener where it's lush.
+//
+// Each chunk's: `heights` (its corners' heights, metres, 64 a side: the 65th is the next chunk's
+// first), `map` (RGBA bytes, 64 a side: red how thick, green how tall, blue how dry, alpha how
+// kept) and `tint` (RGB bytes: the colour of the grass's tips there, sRGB).
+
+import { fractal } from "../core/noise.js";
+import { CHUNK, WET } from "../core/overworld.js";
+import { GROUND } from "../core/setpieces/pieces.js";
+import { SLOPE_CLASS } from "../core/terrain/height.js";
+import { CELL } from "../core/worldplan/plan.js";
+import { LOOKS } from "./art/kits/wilds.js";
+import { ALPINE, PATCHES, patchNoise } from "./ground.js";
+
+/**
+ * How each land grows its tall grass: how thick at its thickest (0 to 1), how tall (metres: its
+ * shortest stretches and its tallest), and how dry (0 green to 1 golden straw, where its patches
+ * don't say otherwise). Lands not here grow none.
+ */
+export const GRASS_LANDS = Object.freeze({
+    meadow: { density: 0.9, height: [0.4, 1.05], dry: 0.3 },
+    farmland: { density: 0.65, height: [0.35, 0.9], dry: 0.35 },
+    woods: { density: 0.35, height: [0.3, 0.7], dry: 0.12 },
+    heath: { density: 0.75, height: [0.3, 0.75], dry: 0.6 },
+    marsh: { density: 0.8, height: [0.55, 1.3], dry: 0.18 },
+    elfwood: { density: 0.45, height: [0.35, 0.85], dry: 0.05 },
+    darkwood: { density: 0.25, height: [0.3, 0.6], dry: 0.2 },
+    savannah: { density: 0.95, height: [0.6, 1.4], dry: 0.85 },
+    jungle: { density: 0.6, height: [0.5, 1.1], dry: 0 },
+    badlands: { density: 0.25, height: [0.25, 0.6], dry: 0.9 },
+    volcanic: { density: 0.08, height: [0.2, 0.45], dry: 0.8 },
+    tundra: { density: 0.35, height: [0.2, 0.45], dry: 0.5 },
+    mountain: { density: 0.4, height: [0.25, 0.6], dry: 0.45 },
+    beach: { density: 0.2, height: [0.35, 0.8], dry: 0.6 },
+});
+
+// Dry grass's colour at its tips (sRGB): golden straw
+const STRAW = [0xd6, 0xb2, 0x58];
+
+/**
+ * How the grass thins: beside a road (by this much), on steep ground (this much of it left; none
+ * on a cliff), in a settlement (this much of it, and this much as tall); and how slow its clumps'
+ * and its tall and short stretches' noise is (metres).
+ */
+export const GRASS_THINS = Object.freeze({ road: 0.45, steep: 0.35, settled: [0.25, 0.45], clumps: 13, stretches: 70 });
+
+const smoothstep = (a, b, x) => {
+    const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+
+    return t * t * (3 - 2 * t);
+};
+
+// (The ground's patches' noise as ground.js draws it: read bilinearly, tiling)
+let patches = null;
+const PATCH_TEXELS = 128;
+
+function patchAt(x, y, metres, offset = [0, 0]) {
+    patches ??= patchNoise(PATCH_TEXELS);
+
+    const [u, v] = [(x / metres + offset[0]) * PATCH_TEXELS - 0.5, (y / metres + offset[1]) * PATCH_TEXELS - 0.5];
+    const [i, j] = [Math.floor(u), Math.floor(v)];
+    const [s, t] = [u - i, v - j];
+    const at = (a, b, channel) => patches[((((b % PATCH_TEXELS) + PATCH_TEXELS) % PATCH_TEXELS) * PATCH_TEXELS + (((a % PATCH_TEXELS) + PATCH_TEXELS) % PATCH_TEXELS)) * 4 + channel] / 255;
+
+    return [0, 1, 2, 3].map((c) => {
+        const top = at(i, j, c) + (at(i + 1, j, c) - at(i, j, c)) * s;
+        const bottom = at(i, j + 1, c) + (at(i + 1, j + 1, c) - at(i, j + 1, c)) * s;
+
+        return top + (bottom - top) * t;
+    });
+}
+
+// A land's grass where it's at its own (density, height, dryness, its tips' colour: sRGB 0 to 255)
+function landGrass(land) {
+    const grass = GRASS_LANDS[land];
+    const tip = (LOOKS[land] ?? LOOKS.meadow).grass[1];
+
+    return grass ? [grass.density, grass.height[0], grass.height[1], grass.dry, (tip >> 16) & 255, (tip >> 8) & 255, tip & 255] : [0, 0, 0, 0, 0, 0, 0];
+}
+
+/**
+ * A chunk's grass map (as above), from the overworld (core/overworld.js) and its chunk there
+ * (chunk.x0, chunk.y0 its corner).
+ */
+export function grassMap(overworld, chunk) {
+    const steps = grassMapping(overworld, chunk);
+    let step = steps.next();
+
+    while (!step.done) {
+        step = steps.next();
+    }
+
+    return step.value;
+}
+
+/** grassMap's, a step at a time: `rows` rows a step (each a yield), returning the map. */
+export function* grassMapping(overworld, chunk, rows = CHUNK) {
+    const { x0, y0 } = chunk;
+    const seed = overworld.plan.seed;
+    const heights = new Float32Array(CHUNK * CHUNK);
+    const map = new Uint8Array(CHUNK * CHUNK * 4);
+    const tint = new Uint8Array(CHUNK * CHUNK * 4);
+    // (Each land's grass at the cells' middles round the chunk, blended between them)
+    const lands = new Map();
+    const cellGrass = (i, j) => {
+        const key = j * 4096 + i;
+
+        if (!lands.has(key)) {
+            lands.set(key, landGrass(overworld.biomeAt(Math.min(8191, Math.max(0, i * CELL + CELL / 2)), Math.min(8191, Math.max(0, j * CELL + CELL / 2)))));
+        }
+
+        return lands.get(key);
+    };
+    const blended = (x, y) => {
+        const [u, v] = [x / CELL - 0.5, y / CELL - 0.5];
+        const [i, j] = [Math.floor(u), Math.floor(v)];
+        const [s, t] = [u - i, v - j];
+        const [a, b, c, d] = [cellGrass(i, j), cellGrass(i + 1, j), cellGrass(i, j + 1), cellGrass(i + 1, j + 1)];
+
+        return a.map((value, k) => value * (1 - s) * (1 - t) + b[k] * s * (1 - t) + c[k] * (1 - s) * t + d[k] * s * t);
+    };
+
+    for (let j = 0; j < CHUNK; j++) {
+        if (j > 0 && j % rows === 0) {
+            yield;
+        }
+
+        for (let i = 0; i < CHUNK; i++) {
+            const k = j * CHUNK + i;
+            const [x, y] = [x0 + i, y0 + j];
+            const height = chunk.heights[j * (CHUNK + 1) + i];
+
+            heights[k] = height;
+
+            if (chunk.ground[k] !== GROUND.grass || chunk.blocked[k] || chunk.water[k] !== WET.none || chunk.bridge[k]) {
+                continue;
+            }
+
+            const [thick, short, tall, dryness, r, g, b] = blended(x + 0.5, y + 0.5);
+
+            if (thick <= 0) {
+                continue;
+            }
+
+            // (The ground's own patches, read as ground.js reads them)
+            const coarse = patchAt(x + 0.5, y + 0.5, PATCHES.coarse);
+            const fine = patchAt(x + 0.5, y + 0.5, PATCHES.fine, [0.37, 0.71]);
+            const dry = smoothstep(PATCHES.dry[0], PATCHES.dry[1], coarse[0] * 0.75 + fine[3] * 0.25);
+            const lush = smoothstep(PATCHES.lush[0], PATCHES.lush[1], coarse[1] * 0.75 + fine[0] * 0.25) * (1 - dry);
+            const bare = smoothstep(PATCHES.bare[0], PATCHES.bare[1], fine[2] * 0.75 + coarse[2] * 0.25);
+            // (Its clumps, and its tall and short stretches)
+            const clumps = smoothstep(0.3, 0.62, fractal(x, y, GRASS_THINS.clumps, seed * 37 + 11, 2));
+            const stretch = fractal(x, y, GRASS_THINS.stretches, seed * 37 + 12, 2);
+            // (Thinner beside a road, on steep ground and up towards the rock and snow)
+            const besideRoad = [k - 1, k + 1, k - CHUNK, k + CHUNK].some((n, side) => (side === 0 ? i > 0 : side === 1 ? i < CHUNK - 1 : side === 2 ? j > 0 : j < CHUNK - 1) && chunk.ground[n] !== GROUND.grass);
+            const slope = chunk.slopes[k];
+            const alpine = smoothstep(ALPINE.rock[0], ALPINE.rock[1], height + (coarse[2] - 0.5) * 2 * ALPINE.wander);
+            const settled = overworld.settled(x, y);
+            let density = thick * (0.35 + 0.65 * clumps) * (1 - 0.95 * bare) * (1 + 0.25 * lush) * (1 - alpine);
+
+            density *= besideRoad ? GRASS_THINS.road : 1;
+            density *= slope === SLOPE_CLASS.cliff ? 0 : slope === SLOPE_CLASS.steep ? GRASS_THINS.steep : 1;
+            density *= settled ? GRASS_THINS.settled[0] : 1;
+
+            const tallness = Math.min(1, Math.max(0, stretch * 1.25 - 0.1 + 0.2 * lush - 0.15 * dry));
+            const metres = (short + (tall - short) * tallness) * (settled ? GRASS_THINS.settled[1] : 1);
+            const dried = Math.min(1, Math.max(0, dryness + 0.65 * dry - 0.35 * lush));
+
+            map[k * 4] = Math.round(Math.min(1, density) * 255);
+            // (Up to 2 m tall)
+            map[k * 4 + 1] = Math.round(Math.min(1, metres / 2) * 255);
+            map[k * 4 + 2] = Math.round(dried * 255);
+            map[k * 4 + 3] = settled ? 255 : 0;
+            tint[k * 4] = Math.round(r + (STRAW[0] - r) * dried);
+            tint[k * 4 + 1] = Math.round(g + (STRAW[1] - g) * dried);
+            tint[k * 4 + 2] = Math.round(b + (STRAW[2] - b) * dried);
+            tint[k * 4 + 3] = 255;
+        }
+    }
+
+    return { heights, map, tint };
+}
