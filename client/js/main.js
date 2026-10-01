@@ -363,6 +363,7 @@ async function playing(save) {
     await kit.ready;
     await game.build(({ label, done, total }) => setProgress(done / total, label, `${done} of ${total}`));
     game.showSquares(settings.squares);
+    game.showNavigation(settings.navigation);
     showMinimap(settings.minimap);
     game.resistSummons = settings.resistSummons;
     debug.watch({ game });
@@ -738,6 +739,7 @@ async function playingJoined(save, welcome, joining) {
     await kit.ready;
     await game.build(({ label, done, total }) => setProgress(done / total, label, `${done} of ${total}`));
     game.showSquares(settings.squares);
+    game.showNavigation(settings.navigation);
     showMinimap(settings.minimap);
     game.resistSummons = settings.resistSummons;
     debug.watch({ game });
@@ -901,6 +903,8 @@ function applySetting(key, value) {
         // Nothing more to do: the overlay folds itself
     } else if (key === "squares") {
         state.game?.showSquares(value);
+    } else if (key === "navigation") {
+        state.game?.showNavigation(value);
     } else if (key === "minimap") {
         showMinimap(value);
     } else if (key === "resistSummons") {

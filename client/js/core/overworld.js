@@ -215,7 +215,9 @@ export class Overworld {
     /**
      * A chunk (cx, cy: chunks from the world's north-west corner): { cx, cy, x0, y0 (its
      * north-west square), blocked, opaque, ground, water (WET), bridge (Uint8Array, a square
-     * each: under a bridge's deck), trees ([{ x, y (a trunk's point, where four squares meet),
+     * each: under a bridge's deck), solid (blocked by what's built or stands there: the town's,
+     * a settlement's or a place's buildings and walls, a feature; not water, a cliff or a tree,
+     * whose trunk stands at its point), trees ([{ x, y (a trunk's point, where four squares meet),
      * variant, size, turn }]), bridges (those whose middles are in it: [{ a, b ([x, y] metres:
      * its deck's ends, along the road), half (its deck's half-width) }]), walks (the plank walks
      * over a settlement's lagoon whose middles are in it, the same way), town (whether the town's
@@ -428,6 +430,7 @@ export class Overworld {
         const water = new Uint8Array(SQUARES);
         const bridge = new Uint8Array(SQUARES);
         const built = new Uint8Array(SQUARES);
+        const solid = new Uint8Array(SQUARES);
         const { stamp } = this;
         const settled = this.settlements.settle(cx, cy);
         let town = false;
@@ -447,6 +450,7 @@ export class Overworld {
                     ground[k] = stamp.ground[ty][tx];
                     water[k] = stamp.water?.[ty]?.[tx] ? WET.still : WET.none;
                     built[k] = 1;
+                    solid[k] = blocked[k];
                     town = true;
                     continue;
                 }
@@ -460,6 +464,7 @@ export class Overworld {
                     ground[k] = own.ground;
                     water[k] = own.water ? WET.still : WET.none;
                     built[k] = 1;
+                    solid[k] = blocked[k];
                     continue;
                 }
 
@@ -475,6 +480,7 @@ export class Overworld {
                     blocked[k] = 1;
                     opaque[k] = 1;
                     built[k] = 1;
+                    solid[k] = 1;
                 }
             }
         }
@@ -493,7 +499,7 @@ export class Overworld {
         const bridges = this.#bridgesNear(cx, cy).filter(inChunk);
         // (And the plank walks over a lagoon, the lizard folk's: the town's, and each settlement's)
         const walks = [...(stamp?.walks ?? []).filter(inChunk), ...this.settlements.walksIn(cx, cy)];
-        const chunk = { cx, cy, x0, y0, blocked, opaque, ground, water, bridge, heights, slopes, trees: [], bridges, walks, town };
+        const chunk = { cx, cy, x0, y0, blocked, opaque, ground, water, bridge, solid, heights, slopes, trees: [], bridges, walks, town };
 
         this.#plant(chunk);
         chunk.features = this.#features(chunk);
@@ -600,6 +606,30 @@ export class Overworld {
         const fields = plan.biome[cell] === BIOME.farmland && noise(x, y, plan.seed + 31, 14, 2) > 0.46;
 
         return { ground: fields ? GROUND.soil : GROUND.grass, water, bridge: false, road: null };
+    }
+
+    /** The bridges whose decks reach into a chunk: [{ a, b, half }] (see chunk). */
+    bridgesNear(cx, cy) {
+        return this.#bridgesNear(cx, cy);
+    }
+
+    /**
+     * The plank walks reaching into a box (metres): the town's and the settlements' near it,
+     * [{ a, b, half }] (see chunk).
+     */
+    walksNear(x0, y0, x1, y1) {
+        const meets = ({ a, b, half }) => Math.max(a[0], b[0]) + half >= x0 && Math.min(a[0], b[0]) - half <= x1 && Math.max(a[1], b[1]) + half >= y0 && Math.min(a[1], b[1]) - half <= y1;
+        const walks = (this.stamp?.walks ?? []).filter(meets);
+
+        for (let cy = Math.max(0, Math.floor(y0 / CHUNK) - 1); cy <= Math.min(CHUNKS - 1, Math.floor(y1 / CHUNK) + 1); cy++) {
+            for (let cx = Math.max(0, Math.floor(x0 / CHUNK) - 1); cx <= Math.min(CHUNKS - 1, Math.floor(x1 / CHUNK) + 1); cx++) {
+                // (Those near laid out first, so it's the same whichever chunks were made before)
+                this.settlements.settle(cx, cy);
+                walks.push(...this.settlements.walksIn(cx, cy).filter(meets));
+            }
+        }
+
+        return walks;
     }
 
     // Is a point under a bridge's deck?
@@ -921,6 +951,7 @@ export class Overworld {
                 const k = (y - y0) * CHUNK + (x - x0);
 
                 blocked[k] = 1;
+                chunk.solid[k] = 1;
                 opaque[k] = hides ? 1 : opaque[k];
             }
         }

@@ -351,8 +351,9 @@ places built their way, and each people's homeland its own ground, trees and thi
 Next: **sites to go into**, the ruins, caves, shrines and castles as places of their own.
 
 The ground is being given height, and the squares a navigation mesh, step by step
-(`generated/terrain_navmesh_overhaul_plan.md`). The ground's height, and the world standing on it,
-are below; the squares are still squares, walked as before, with the steepest blocked.
+(`generated/terrain_navmesh_overhaul_plan.md`). The ground's height, the world standing on it, and
+the navigation meshes are below; the squares are still squares, walked as before, with the
+steepest blocked, and the meshes only shown (debug mode), not yet walked.
 
 ## The ground's height (`core/terrain/`)
 
@@ -436,7 +437,57 @@ The world is played on the land's height with what's built levelled into it (`Gr
 - The camera never goes under the ground between it and the player (raised to look down more);
   a tap finds the ground by marching along the line from the camera until it passes under.
 
+## Navigation meshes (`core/navigation.js`, `core/navigation/`)
+
+Where the world can be walked, as polygons rather than squares: Recast and Detour (built to
+WebAssembly by recast-navigation-js, vendored in `client/vendor/recast-navigation-0.43.1/` by
+`npm run vendor:recast`; about 200 KB gzipped, loaded only when it's wanted). Not yet walked by
+the rules (that's the plan's M2b): debug mode draws them (*Navigation mesh*).
+
+- **Tiles.** The world is cut into 32 m tiles from its origin (256 a side). A tile is baked from
+  its square and a 2 m border round it (`tiles.js tileInput`), so it depends only on the world
+  (its seed and what's built), never on which tiles were made first, or by whom: the same bytes in
+  the page, a worker or the tests (tested).
+- **What a tile's made from:**
+  - the ground's height at every metre, two triangles a square, each walked as open ground, a road
+    (roads, streets, yards and planks), steep (over 30°), a ford (water up to 0.5 m deep), or not
+    at all (deeper water, or over 38°: a cliff);
+  - the overworld's *solid* squares (what's built or stands there: the town's, the settlements'
+    and the places' buildings, walls and stalls, the wild's features; not water, cliffs or
+    trees), merged into rectangles, each a box 3 m over the ground under it whose top is no
+    floor;
+  - trees as their trunks (0.4 m across at size 1);
+  - bridges' decks, a quad a metre along each, at the deck's height (`deckOf`).
+- **Recast's settings** (`settings.js`, `bake.js`): voxels 0.5 m across and 0.25 m high; a walker
+  0.5 m round and 2 m tall who steps up 0.5 m; polygons of up to six sides, each keeping its
+  ground's kind (`AREA`), which costs a way through it: roads and decks ¾ of a metre each, steep
+  ground 2, fords 3.
+- **Baking** (`navworker.js` with `navbaker.js`): the triangles are worked out on the page (only
+  it has the world), Recast's part done in a worker, and the tile added when it comes back; a
+  tile wanted before then is baked where it's wanted. At most 1,024 tiles are kept (a kilometre
+  square), the longest unused let go first.
+- **Asking** (`Navigation`), in the rules' ground coordinates ([x, y], or [x, y, height]):
+  - `path(from, to)`: the way's corners, the tiles between made sure of first;
+  - `nearest(point)`, `walkable(x, y)`;
+  - `raycast(from, to)`: how far straight towards a point before the mesh's edge;
+  - `polygons(tx, ty)`: a tile's detail triangles, to draw.
+
+  Detour's own polygon references never leave it: they depend on which tiles came in, in what
+  order. Ways are the same whatever order the tiles came in (tested).
+- **What it costs** (measured in Node on a desktop; tests allow far more for slow machines): a
+  tile's triangles about 3 ms once its chunks are made, Recast's part about 4.5 ms (the town's,
+  with many buildings; open country less), its data 6–8 KB. A way found takes 0.05 ms at the
+  median and 0.12 ms at the 95th centile; asking for one that can't be got to (into a building,
+  say) searches every tile kept before giving up, up to 0.5 ms.
+
 ## Tests
+
+`test/navigation.test.js` checks the navigation meshes: a tile's triangles and bytes the same
+whichever chunks were made first; the town's streets walked as roads, nothing on roofs; ways round
+buildings, not through, and straight over a bridge, high on its deck; deep water not walked; the
+same ways whatever order tiles came in; baking and finding ways within their budgets; and the
+longest unused tiles let go of. `e2e/pellagos.spec.js` checks debug mode draws them round the
+player, baked in a worker.
 
 `test/overworld.test.js` checks the world in chunks: blocked off its edges; the same chunks
 however they're come to; the town set in just as it was made, with everything in it moved; its

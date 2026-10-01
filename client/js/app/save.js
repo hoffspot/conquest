@@ -31,6 +31,7 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     renderScale: 1,
     shadows: true,
     squares: false,
+    navigation: false,
     minimap: true,
     // (Summoned by another player: said no to at once, not asked)
     resistSummons: false,

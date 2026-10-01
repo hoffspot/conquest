@@ -271,6 +271,10 @@ TerrainChunk {
 - **Area costs.** Steep ground, fords and roads get area types if the generator exposes per-triangle
   areas or convex volumes. Checking this is the first job of M2a; the fallback is costs applied
   after the path by our own funnel.
+  - *Checked in M2a: yes.* The stock tile generator doesn't take areas, but core's low-level calls
+    do (`rasterizeTriangles` takes an area per triangle, and `markConvexPolyArea`, `markBoxArea`
+    and `markCylinderArea` exist). So `navigation/bake.js` runs Recast's pipeline itself, with
+    our own areas per triangle, and `QueryFilter.setAreaCost` prices them.
 - **Interiors.** Each floor's rows become floor quads plus wall prisms, baked as a solo navigation
   mesh when the floor is first made. They are small and fast.
 
@@ -997,3 +1001,31 @@ converted data is to be measured in M8 against today's hm08 data.
   the character lab (five clips; the retargeting now lines up only the arms, and the upper arm
   by its elbow hinge, with the measured results) and ActorCore's formats, tools, licence and
   pipeline.
+- **2026-10-01, M2a built** (navigation meshes; nothing walks them yet):
+  - **Vendored:** `@recast-navigation/core` and `wasm` 0.43.1 (`npm run vendor:recast`). The
+    generators package isn't needed. The core is minified to 49 KB, and its import of the wasm
+    package points at the copy beside it. 203 KB gzipped in all (core 12, glue 60, wasm 131),
+    loaded only when wanted. It loads in Node too, given the wasm bytes (`navigation/recast.js`).
+    `server/static.js` serves `.wasm` and `.mjs`.
+  - **Tiles** (`navigation/tiles.js`, `bake.js`, `settings.js`): §4.1's settings. Area per triangle:
+    ground, road (roads, cobbles, yards, planks), steep (30–38°), ford (≤ 0.5 m of water), or
+    none.
+    - **Obstacles, a change from §4.1:** the overworld's new `solid` squares (built or standing:
+      the town's, settlements' and places' buildings, walls and stalls, the wild's features),
+      merged into rectangles and rasterised as 3 m boxes whose faces are area none, so roofs are
+      never floors. Trees are their trunks (0.4 m), bridges their decks.
+    - Building footprints as real polygons can replace the squares when M4 gives structures
+      their own geometry. Until then the mesh agrees with the squares about what's in the way,
+      which keeps M2b's migration honest.
+  - **Measured:**
+    - The same tile bytes whichever chunks were made first, and the same paths whichever order
+      tiles were added (tested).
+    - Tile input about 3 ms once its chunks exist (the first tiles also make chunks: about 23 ms
+      each round the town). Bake 4.4 ms median in the town, 6–8 KB a tile.
+    - Paths found: 0.05 ms median, 0.12 ms at p95, within budget. Unreachable targets search
+      every kept tile: up to 0.5 ms at p95.
+  - **Not done yet:** the tiles the rules see are not yet tied to game state (§4.2); nothing calls
+    `path` but the debug view and the tests. That belongs to M2b, along with interiors' solo
+    meshes.
+  - **Debug mode:** a *Navigation mesh* switch draws the tiles within 80 m of the player, baked in
+    `world/navworker.js`, tinted by area.
