@@ -22,7 +22,7 @@ function run(host, ms) {
     return events;
 }
 
-const put = (actor, map, [x, y]) => Object.assign(actor, { map, square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [], order: null, target: null });
+const put = (actor, map, [x, y]) => Object.assign(actor, { map, square: [x, y], x: x + 0.5, y: y + 0.5, path: [], order: null, target: null });
 
 describe("growing stronger in play (host.js, progress.js)", () => {
     let seed2;

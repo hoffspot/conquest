@@ -730,6 +730,12 @@ to its mobile network, or losing its signal a moment, needn't end the game:
 - **Copies.** One who joins is sent the world as it is (a snapshot, `Host.restore`), then all that's
   recorded. They play it again on their own copy of the world, step for step, and it comes out the
   same (the engine's made so: seeded random numbers, and nothing hanging on what any game's drawn).
+- **Ways found.** Each way the host's characters find over the navigation meshes (core/battle.js)
+  is recorded too, to the centimetre, just after what found it: `["v", time, id, way]`. A copy's
+  battle takes the host's way rather than finding its own (`Host.replaying`), so what each copy
+  has made of the meshes (as each has needed them) doesn't matter: a copy finds none at all. (A
+  way a copy finds missing, having strayed, it finds itself, and its next check sets it right.)
+  Games before these (`NET_VERSION` 6) can't join.
 - **Exact maths** (`core/exact.js`). The world a joined game lays out again from the seed, and
   everything its copy works out, must come out the same in any browser. JavaScript leaves how near
   sines, cosines, arctangents, powers and `Math.hypot` come to the truth to each browser, and they
@@ -1028,8 +1034,9 @@ on from it, in a world made again from the same seed:
 kept from.
 
 **Playing together** (M11): `host.recorder`, if set, is told of everything done to the world as
-it's done (`["a", ms]`, `["c", playerId, command]`, `["j", options]`, `["l", id]`, `["p"]`), for
-those who've joined to do again. `adopt(snapshot)` carries on from a snapshot in place. `checksum()`
+it's done (`["a", ms]`, `["c", playerId, command]`, `["j", options]`, `["l", id]`, `["p"]`, and
+the ways the battle found doing each, `["v", time, id, way]`), for those who've joined to do
+again; `replaying()` has a copy's battle take those ways rather than find its own. `adopt(snapshot)` carries on from a snapshot in place. `checksum()`
 tells two copies of a world apart. Buildings are looked over in the order of their keys, and the
 settlements round each player are laid out by the world itself, so what's got ready, and when,
 never hangs on what a game's drawn.

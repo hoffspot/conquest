@@ -127,7 +127,7 @@ export class Squares {
         return !this.whole && Math.abs(x - (x0 + width / 2)) > width / 4 || Math.abs(y - (y0 + height / 2)) > height / 4;
     }
 
-    /** Draw the path of each character on its map, from where it is through the squares ahead of it. */
+    /** Draw the way each character on its map is walking, from where it is through the corners ahead of it. */
     update(battle) {
         const geometry = this.paths.geometry;
         const positions = geometry.attributes.position.array;
@@ -141,7 +141,7 @@ export class Squares {
                 continue;
             }
 
-            const points = [[actor.x, actor.y], ...(actor.to ? [[actor.to[0] + 0.5, actor.to[1] + 0.5]] : []), ...actor.path.map(([x, y]) => [x + 0.5, y + 0.5])];
+            const points = [[actor.x, actor.y], ...actor.path];
             const colour = actor.id === "player" ? gold : red;
 
             for (let i = 0; i < points.length - 1 && count < PATH_POINTS * 2; i++) {

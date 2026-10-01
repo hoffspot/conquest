@@ -1029,3 +1029,53 @@ converted data is to be measured in M8 against today's hm08 data.
     meshes.
   - **Debug mode:** a *Navigation mesh* switch draws the tiles within 80 m of the player, baked in
     `world/navworker.js`, tinted by area.
+- **2026-10-01, M2b built** (everyone walks the navigation meshes):
+  - **One mesh per map** (`navigatorOf`): the overworld's tiles (M2a), and for each map of
+    squares on its own (a building's floors, a town laid out alone, a test's rows) a mesh baked
+    from its squares (`navigation/squares.js`, settings `ROOMS`: flat, 32 m tiles, 0.1 m voxels,
+    0.3 m radius). Coarser voxels were tried and closed doorways a square wide (0.2 m voxels with
+    a 0.4 m radius, and 0.125 m with 0.375 m); 0.1 m keeps them, at about 60 ms for a fully open
+    32 m tile, 25 ms for a tavern floor, once. The 16 maps of squares last walked keep their meshes
+    (their WebAssembly memory freed past that). Recast loads with the rules: `navigation.js` waits
+    for it at the top level, and the loader's manifest lists its files (a "navigation" group).
+  - **Movement** (§5): positions are floats; `path` is the corners of the way, to the centimetre.
+    Bodies are circles (`BODY` 0.3 m); square occupancy and `to` are gone. Steering, all in the
+    rules' exact maths: straight for the next corner; round anyone in the way by turning 30°,
+    60°, 90° or 120° (away first), where the body clears every blocked square; on for the next
+    corner from near a shared one; waiting, then stopping (in reach, or at a goal someone stands
+    on) or finding the way again; and, getting no nearer for 1.5 s, squeezing past others for 2 s.
+    That last one is the answer to two folk meeting in a passage a body and a half wide, which
+    deadlocked or circled without it. Melee closes to 1.2 m before striking.
+  - **Kept, a change from §5:** the squares stay the world's grid for everything but walking:
+    placing (`nearestFree`), sight and reach, talk, links, goals. Orders still name squares (the
+    way goes to the square's middle, or to the very spot of someone being chased or followed);
+    taps as floats can come with M5's motion packets, which carry centimetres anyway. Sight
+    against terrain (hills hiding things) is left to M3/M4 with the occluder index.
+  - **Multiplayer** (§6): `["v", time, id, way]` recorded just after the op that found it; a
+    joined copy takes the host's ways (`Host.replaying`) and finds none of its own (tested: the
+    navmesh's `path` isn't called by a copy at all). Nothing else in the rules asks the meshes
+    anything, so a copy needs none. NET_VERSION 7.
+  - **Saves:** the snapshot's actors carry their corners. A save from before (square paths, a
+    `to`) is read, its walkers stood still to find their ways again: no version bump.
+  - **Retired:** `pathfinding.js` (grid A* and `lineAhead`) and its test. "Ahead" is a raycast
+    along the mesh. The world-generation tests that checked reachability with A* now check it
+    on the meshes (`test/helpers.js reachable`): every interior's every square still reachable.
+  - **Found in testing, and fixed:**
+    - Doors whose square's middle lies in the overworld mesh's margin (0.5 m, and Recast's edge
+      simplification up to 0.65 m): the way ended a square short and the walker never went in.
+      A walker is now *at* a square once its way ends next to it (`#at`): doors, patrol points,
+      the folk's stops. Tested: from the start through every door near it.
+    - Two folk meeting in the taproom's passages deadlocked, then circled the same corner: the
+      wider turns, the corner slack and squeezing past, above.
+    - Making sure of a ring of tiles round every way cost 3.5 s in a world's first second (29
+      tiles, mostly making the world's chunks under them for soldiers' rounds 60 m long); main's
+      grid A* took 1.3 s for the same. Tiles 4 m round the way first, then a ring, then three
+      (across a long way), up to 100 tiles, as a way falls short: 1.4 s, and a 250 m walk across
+      a river finds the same crossing A* did (208 s walking, A*'s 206 s). Move orders whose way
+      was found only part of the way carry on from where it ended, up to 8 times.
+    - Baking ahead: the game has tiles within 96 m of each player baked in the worker, a tile
+      sent a frame, once the chunks under it are made, so ways near players don't wait.
+    - Detour's search raised to 8,192 nodes and 1,024 polygons a way.
+  - **Known limit:** a way depends, in principle, on which tiles round it a mesh has (Detour may
+    look past the tiles made sure of). Every save-and-restore test carries on exactly, but that's
+    measured, not guaranteed, for a world restored alone. Multiplayer never depends on it.

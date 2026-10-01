@@ -24,7 +24,7 @@ function run(host, ms) {
     return events;
 }
 
-const put = (actor, [x, y]) => Object.assign(actor, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [], order: null, target: null });
+const put = (actor, [x, y]) => Object.assign(actor, { square: [x, y], x: x + 0.5, y: y + 0.5, path: [], order: null, target: null });
 
 // Two players side by side in the town: Ada (with 40 gold and three draughts) and Bryn (with 10
 // gold and two wolf pelts)

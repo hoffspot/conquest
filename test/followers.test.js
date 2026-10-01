@@ -24,7 +24,7 @@ function run(host, ms) {
     return events;
 }
 
-const put = (actor, map, [x, y]) => Object.assign(actor, { map, square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [], order: null, target: null });
+const put = (actor, map, [x, y]) => Object.assign(actor, { map, square: [x, y], x: x + 0.5, y: y + 0.5, path: [], order: null, target: null });
 
 // A world with its player in it, before the home guild's adventurers, gold in hand
 function atTheGuild({ gold = 200 } = {}) {

@@ -3,11 +3,13 @@
 // their own copy, step for step, and come out the same; their commands done by the host, and
 // what came of them heard; players of another people brought in by their own people's town;
 // those who leave gone from every copy; a copy gone astray set right, and every copy after a link
-// drops; told when the host's stopped; those who can't join told why
+// drops; told when the host's stopped; those who can't join told why; the ways the host's
+// characters find over the navigation meshes taken by every copy, never found again
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
+import { Navigation } from "../client/js/core/navigation.js";
 import { characterFrom, CHECK_EVERY, Hosting, Joining, MOST_PLAYERS, NET_VERSION, spawnFor } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { encode } from "../client/js/core/wire.js";
@@ -110,6 +112,51 @@ describe("playing together (netplay.js)", () => {
 
         // (Nothing to play: it waits)
         assert.equal(joining.step(), null);
+    });
+
+    it("has a joined copy take the ways the host's characters found, finding none of its own", () => {
+        const { host, hosting, join, play, catchUp } = opened();
+        const { joining } = join(guest("Bryn"));
+        const ways = [];
+        const record = host.recorder;
+
+        host.recorder = (op) => {
+            if (op[0] === "v") {
+                ways.push(op);
+            }
+
+            record(op);
+        };
+
+        // The host's player and the guest walk off, and the world's people go about their business
+        const [x, y] = host.battle.actor(HOST_PLAYER).square;
+
+        host.command(HOST_PLAYER, { type: "move", to: [x + 9, y + 4] });
+        joining.command({ type: "move", to: [x - 6, y + 3] });
+        hosting.flush();
+
+        // (Counting the ways the copy finds itself)
+        const path = Navigation.prototype.path;
+        let found = 0;
+
+        try {
+            play(CHECK_EVERY * 2);
+            Navigation.prototype.path = function (...args) {
+                found++;
+
+                return path.apply(this, args);
+            };
+            catchUp(joining);
+        } finally {
+            Navigation.prototype.path = path;
+        }
+
+        assert.ok(ways.length >= 3, `the host found ${ways.length} ways`);
+        assert.ok(ways.every(([, time, id, way]) => Number.isFinite(time) && typeof id === "string" && way.every(([wx, wy]) => wx === Math.round(wx * 100) / 100 && wy === Math.round(wy * 100) / 100)), "each to the centimetre");
+        assert.equal(found, 0, "the copy found none of its own");
+        assert.deepEqual(joining.host.replay, [], "and took every one");
+        assert.deepEqual(positions(joining.host), positions(host));
+        assert.equal(joining.host.checksum(), host.checksum());
     });
 
     it("does a joined player's commands in the host's world, and they hear what came of them", () => {

@@ -247,11 +247,11 @@ describe("the tomes' spells in the battle (battle.js)", () => {
         const left = (id) => battle.actor(id).afflictions.find(({ kind }) => kind === "fear")?.until - battle.time;
 
         battle.cure("wolf", "fear");
-        Object.assign(wolf, { square: [8, 15], x: 8.5, y: 15.5, path: [], to: null });
+        Object.assign(wolf, { square: [8, 15], x: 8.5, y: 15.5, path: [] });
         cast(battle, "caster", "fear", "wolf");
         assert.ok(Math.abs(left("wolf") - SPELLS.fear.flee / 2) <= STEP_MS * 2);
         battle.cure("wolf", "fear");
-        Object.assign(wolf, { square: [8, 15], x: 8.5, y: 15.5, path: [], to: null });
+        Object.assign(wolf, { square: [8, 15], x: 8.5, y: 15.5, path: [] });
 
         const third = cast(battle, "caster", "fear", "wolf");
 
@@ -435,7 +435,7 @@ describe("the tomes' wonders (host.js)", () => {
         assert.ok(!host.battle.hostile(risen, me));
 
         // (Stuck far behind: brought to them)
-        Object.assign(risen, { square: [me.square[0] + 30, me.square[1]], x: me.square[0] + 30.5, path: [], to: null });
+        Object.assign(risen, { square: [me.square[0] + 30, me.square[1]], x: me.square[0] + 30.5, path: [] });
         steps(host, STEP_MS * 2);
         assert.ok(Math.hypot(risen.x - me.x, risen.y - me.y) < COMPANION.far);
 

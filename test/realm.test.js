@@ -24,7 +24,7 @@ function run(host, ms) {
     return events;
 }
 
-const put = (actor, map, [x, y]) => Object.assign(actor, { map, square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [], order: null, target: null });
+const put = (actor, map, [x, y]) => Object.assign(actor, { map, square: [x, y], x: x + 0.5, y: y + 0.5, path: [], order: null, target: null });
 
 // A request as the officials make them (standing.js offerRequest), for the tests to hand a player
 const request = (kind, fields) => ({ kind, title: kind, from: { id: "home:hall-1/reeve", name: "Reeve", title: "Reeve", town: null, townName: "Home", post: "hall" }, given: 0, state: "open", count: 0, until: 999, reward: { standing: 20, gold: 10 }, text: "", key: kind, ...fields });

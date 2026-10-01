@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { findPath } from "../client/js/core/pathfinding.js";
+import { navigatorOf } from "../client/js/core/navigation.js";
 import { GROUND } from "../client/js/core/setpieces/pieces.js";
 import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
 import { generateWorld, PLOT, SEE_OVER } from "../client/js/core/world.js";
+import { reachable } from "./helpers.js";
 
 describe("the world (world.js)", () => {
     const world = generateWorld({ seed: 7 });
@@ -50,21 +51,18 @@ describe("the world (world.js)", () => {
         assert.ok(Math.abs(ax - bx) <= 2, "the patrol runs north to south");
         assert.ok(Math.abs(by - ay - world.height / 2) <= 4, `from ${ay} to ${by} on a map ${world.height} tall`);
 
-        const path = findPath(world.blocked, [ax, ay], [bx, by]);
+        const path = navigatorOf(world.blocked).path([ax + 0.5, ay + 0.5], [bx + 0.5, by + 0.5]);
+        const length = path.slice(1).reduce((sum, [x, y], i) => sum + Math.hypot(x - path[i][0], y - path[i][1]), 0);
 
-        assert.deepEqual(path.at(-1), [bx, by]);
-        assert.ok(path.length < (by - ay) * 1.2, "a straight walk, not round obstacles");
+        assert.deepEqual(path.at(-1).slice(0, 2).map(Math.floor), [bx, by]);
+        assert.ok(length < (by - ay) * 1.2, "a straight walk, not round obstacles");
     });
 
     it("lets the player walk anywhere that matters: to the orc's patrol and out of every road", () => {
-        const path = findPath(world.blocked, world.spawns.player, world.spawns.orc);
-
-        assert.deepEqual(path.at(-1), world.spawns.orc);
+        assert.ok(reachable(world.blocked, world.spawns.player, world.spawns.orc));
 
         for (const [x, y] of [[world.width - 1, world.spawns.player[1]], [world.spawns.player[0], world.height - 1]]) {
-            const out = findPath(world.blocked, world.spawns.player, [x, y]);
-
-            assert.ok(out.length > 0);
+            assert.ok(reachable(world.blocked, world.spawns.player, [x, y]), `out to ${x}, ${y}`);
         }
     });
 

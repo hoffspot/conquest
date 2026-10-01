@@ -6,7 +6,7 @@ import { before, describe, it } from "node:test";
 import { Battle, STEP_MS } from "../client/js/core/battle.js";
 import { squaresOf } from "../client/js/core/grid.js";
 import { buildWorld, CHUNK, CHUNKS, FLORA, Overworld, WET, WORLD_SIZE } from "../client/js/core/overworld.js";
-import { findPath } from "../client/js/core/pathfinding.js";
+import { navigatorOf } from "../client/js/core/navigation.js";
 import { Settlements, squareOf, waysOut } from "../client/js/core/settlements.js";
 import { siteSize, Sites } from "../client/js/core/sites.js";
 import { ENTERED, GROUND, HOME_TREES, TREE_KINDS } from "../client/js/core/setpieces/pieces.js";
@@ -286,7 +286,7 @@ describe("the world outside (overworld.js)", () => {
         }
     });
 
-    it("finds a way out of the town along the roads, across many chunks", () => {
+    it("finds a way out of the town along the roads, across many chunks and navigation tiles", () => {
         const [cx, cy] = world.spawns.player;
         let goal = null;
 
@@ -302,18 +302,27 @@ describe("the world outside (overworld.js)", () => {
 
         assert.ok(goal, "a road leads away from the town");
 
+        // (The tiles baked as it goes: the most a way's ever asked of the mesh at once)
+        const navigation = navigatorOf(overworld);
         const start = performance.now();
-        const path = findPath(overworld, world.spawns.player, goal);
+        const path = navigation.path([world.spawns.player[0] + 0.5, world.spawns.player[1] + 0.5], [goal[0] + 0.5, goal[1] + 0.5]);
         const took = performance.now() - start;
+        const length = path.slice(1).reduce((sum, [x, y], i) => sum + Math.hypot(x - path[i][0], y - path[i][1]), 0);
 
-        assert.deepEqual(path.at(-1), goal);
-        assert.ok(path.length >= 240, `${path.length} steps`);
+        assert.deepEqual(path.at(-1).slice(0, 2).map(Math.floor), goal);
+        assert.ok(length >= 240, `${length.toFixed(0)} m`);
         assert.ok(took < 1500, `${took.toFixed(0)} ms`);
 
-        const squares = squaresOf(overworld);
+        // Every leg over the mesh, every half metre of it somewhere someone can stand
+        for (let i = 1; i < path.length; i++) {
+            const [[x0, y0], [x1, y1]] = [path[i - 1], path[i]];
+            const steps = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 0.5);
 
-        for (const [x, y] of path) {
-            assert.ok(!squares.blocked(x, y));
+            for (let k = 0; k <= steps; k++) {
+                const [x, y] = [x0 + ((x1 - x0) * k) / steps, y0 + ((y1 - y0) * k) / steps];
+
+                assert.ok(navigation.walkable(x, y), `${x}, ${y}`);
+            }
         }
     });
 

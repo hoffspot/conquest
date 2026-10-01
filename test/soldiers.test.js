@@ -39,7 +39,7 @@ function hosted(seed = 2) {
 }
 
 const soldiersOf = (host, town) => host.battle.actors.filter(({ id }) => id.startsWith(`${town}/`));
-const put = (actor, [x, y]) => Object.assign(actor, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [], order: null, target: null });
+const put = (actor, [x, y]) => Object.assign(actor, { square: [x, y], x: x + 0.5, y: y + 0.5, path: [], order: null, target: null });
 
 // A free square `reach` squares or so from someone that they can see (the nearest such)
 function inSight(host, actor, reach) {

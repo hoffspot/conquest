@@ -210,7 +210,7 @@ describe("the host (host.js)", () => {
         const host = hosted([HOST_PLAYER, "guest"]);
         const building = [...host.world.interiors.buildings.values()].find((each) => each.entrance && each.kind === "tavern");
         const [me, guest] = [host.battle.actor(HOST_PLAYER), host.battle.actor("guest")];
-        const put = (actor, [x, y]) => Object.assign(actor, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [], order: null });
+        const put = (actor, [x, y]) => Object.assign(actor, { square: [x, y], x: x + 0.5, y: y + 0.5, path: [], order: null });
         const [start] = [host.world.spawns.player];
 
         // Both far off: not ready
@@ -265,6 +265,29 @@ describe("the host (host.js)", () => {
         assert.equal(player.map, building.maps[0]);
         assert.deepEqual(events.filter(({ type, building: key }) => type === "explored" && key).map(({ id, building: key }) => [id, key]), [[HOST_PLAYER, building.key]]);
         assert.ok(host.players.get(HOST_PLAYER).explored.hasEntered(building.key));
+    });
+
+    it("walks a player from the start through every door near it, over the navigation mesh, even where a door's square is in the mesh's margin", () => {
+        const host = hosted();
+        const player = host.battle.actor(HOST_PLAYER);
+        const start = host.world.spawns.player;
+        const links = host.world.links.filter(({ ends }) => ends.some(({ map, squares: [[x, y]] }) => map === "town" && Math.hypot(x - start[0], y - start[1]) < 150));
+        const through = [];
+
+        assert.ok(links.length >= 4, `${links.length} doors`);
+
+        for (const link of links) {
+            Object.assign(player, { map: "town", square: [...start], x: start[0] + 0.5, y: start[1] + 0.5, path: [], order: null });
+            host.command(HOST_PLAYER, { type: "enter", link: link.id });
+
+            for (let t = 0; t < 40000 && player.map === "town"; t += STEP_MS) {
+                host.advance(STEP_MS);
+            }
+
+            through.push(player.map !== "town" && link.id);
+        }
+
+        assert.deepEqual(through, links.map(({ id }) => id));
     });
 
     it("keeps the whole world as plain data, and carries on from it exactly as it would have", () => {

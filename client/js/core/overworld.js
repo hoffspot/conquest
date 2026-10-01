@@ -207,6 +207,19 @@ export class Overworld {
         };
     }
 
+    /** Whether every chunk a box of squares touches has been made (and is kept). */
+    made(x0, y0, x1, y1) {
+        for (let cy = Math.max(0, Math.floor(y0 / CHUNK)); cy <= Math.min(CHUNKS - 1, Math.floor(y1 / CHUNK)); cy++) {
+            for (let cx = Math.max(0, Math.floor(x0 / CHUNK)); cx <= Math.min(CHUNKS - 1, Math.floor(x1 / CHUNK)); cx++) {
+                if (!this.chunks.has(cy * CHUNKS + cx)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
     /** The chunk a square is in (made if need be). */
     chunkAt(x, y) {
         return this.chunk(Math.floor(x / CHUNK), Math.floor(y / CHUNK));

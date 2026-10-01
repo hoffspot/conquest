@@ -296,9 +296,17 @@ export class Host {
          * Told of everything done to the world, as it's done (docs/WAR.md M11: a world opened to
          * others records it, for those who've joined to do again: core/netplay.js), or null:
          * ["a", ms] moved on, ["c", playerId, command], ["j", options] a player come, ["l", id]
-         * gone, ["p"] its own people put in.
+         * gone, ["p"] its own people put in; and, just after each of those, ["v", time, id, way]
+         * for each way the battle found doing it (battle.js #route: those who've joined take the
+         * host's ways rather than finding their own).
          */
         this.recorder = null;
+
+        /**
+         * In a copy of a world someone else hosts (core/netplay.js Joining), the ways the host's
+         * battle found, waiting for this one's to take ([time, id, way]); else null.
+         */
+        this.replay = null;
         this.#reset({ seed, war });
 
         if (populate) {
@@ -313,6 +321,7 @@ export class Host {
         /** The war between the peoples (war/war.js), in a world laid out from a plan. */
         this.war = world.plan ? Host.#war(world.plan, war) : null;
         this.battle = new Battle(world, { seed, relations: (a, b) => this.#against(a, b) });
+        this.#wire();
 
         /**
          * The towns whose soldiers are out, near a player (by the town's id): { people (who
@@ -1032,8 +1041,26 @@ export class Host {
      */
     adopt(snapshot) {
         Host.#readable(snapshot);
+
+        // (The host's ways waiting were found before it: in it already)
+        this.replay?.splice(0);
         this.#reset({ seed: snapshot.battle.seed, war: snapshot.war });
         this.#load(snapshot);
+    }
+
+    /**
+     * A copy of a world someone else hosts: its battle takes the ways the host's found (`replay`,
+     * as they come: core/netplay.js) rather than finding its own.
+     */
+    replaying() {
+        this.replay ??= [];
+        this.#wire();
+    }
+
+    // The battle telling the recorder each way it finds, and taking the host's, replaying
+    #wire() {
+        this.battle.onPath = (id, way) => this.recorder?.(["v", this.battle.time, id, way]);
+        this.battle.replay = this.replay;
     }
 
     static #readable(snapshot) {
@@ -1054,6 +1081,7 @@ export class Host {
         }
 
         host.battle = Battle.restore(world, snapshot.battle, { relations: (a, b) => host.#against(a, b) });
+        host.#wire();
         host.lookAt = snapshot.lookAt;
         host.mustered = new Map(structuredClone(snapshot.mustered ?? []));
         host.camps = new Map(structuredClone(snapshot.camps ?? []));
@@ -2777,7 +2805,7 @@ export class Host {
                 const square = nearestFree(squares, leader.square, { taken, within: 12 });
 
                 taken.add(squareKey(...square));
-                Object.assign(follower, { map: leader.map, spawnMap: leader.map, square, x: square[0] + 0.5, y: square[1] + 0.5, to: null, path: [], target: null });
+                Object.assign(follower, { map: leader.map, spawnMap: leader.map, square, x: square[0] + 0.5, y: square[1] + 0.5, path: [], offPath: false, target: null });
             } catch {
                 // (No room by them: they'll catch up another time)
             }
@@ -2989,7 +3017,7 @@ export class Host {
                 const square = this.#behind(leader);
 
                 if (square) {
-                    Object.assign(actor, { map: leader.map, spawnMap: leader.map, square, x: square[0] + 0.5, y: square[1] + 0.5, to: null, path: [], pathGoal: null, target: null });
+                    Object.assign(actor, { map: leader.map, spawnMap: leader.map, square, x: square[0] + 0.5, y: square[1] + 0.5, path: [], offPath: false, pathGoal: null, target: null });
                     this.#event("companion", { id: one.leader, companion: id, creature: one.creature, change: "caught up" });
                 }
             }

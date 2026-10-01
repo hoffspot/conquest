@@ -441,8 +441,8 @@ The world is played on the land's height with what's built levelled into it (`Gr
 
 Where the world can be walked, as polygons rather than squares: Recast and Detour (built to
 WebAssembly by recast-navigation-js, vendored in `client/vendor/recast-navigation-0.43.1/` by
-`npm run vendor:recast`; about 200 KB gzipped, loaded only when it's wanted). Not yet walked by
-the rules (that's the plan's M2b): debug mode draws them (*Navigation mesh*).
+`npm run vendor:recast`; about 200 KB gzipped, loaded with the rules). Everyone walks them
+(core/battle.js: GAME.md's *Moving*); debug mode draws them (*Navigation mesh*).
 
 - **Tiles.** The world is cut into 32 m tiles from its origin (256 a side). A tile is baked from
   its square and a 2 m border round it (`tiles.js tileInput`), so it depends only on the world
@@ -464,10 +464,21 @@ the rules (that's the plan's M2b): debug mode draws them (*Navigation mesh*).
   ground 2, fords 3.
 - **Baking** (`navworker.js` with `navbaker.js`): the triangles are worked out on the page (only
   it has the world), Recast's part done in a worker, and the tile added when it comes back; a
-  tile wanted before then is baked where it's wanted. At most 1,024 tiles are kept (a kilometre
-  square), the longest unused let go first.
+  tile wanted before then is baked where it's wanted. The game has the tiles within 96 m of each
+  player baked so, nearest first, a tile sent off a frame, and only once the world's chunks under
+  it have been made (as they're drawn: making them for a tile would take several frames' time).
+  At most 1,024 tiles are kept (a kilometre square), the longest unused let go first.
+- **Maps of squares** (a building's floors, a town laid out on its own, a test's rows) have
+  meshes of their own (`navigatorOf`, `squares.js`): flat, a square that isn't blocked two
+  triangles of floor, in voxels a tenth of a metre across, keeping walkers 0.3 m from walls, so
+  a doorway a square wide is still walked; 32 m tiles, baked as they're wanted (about 25 ms a
+  tavern floor). The 16 last walked keep theirs.
 - **Asking** (`Navigation`), in the rules' ground coordinates ([x, y], or [x, y, height]):
-  - `path(from, to)`: the way's corners, the tiles between made sure of first;
+  - `path(from, to)`: the way's corners. The tiles between are made sure of first, and 4 m round
+    them; if the way falls short, a ring of tiles round them and then three (across a long way,
+    one along it), up to 100 tiles: a river's crossing or a pass can be well off the straight
+    way, and tiles far from anyone are dear to make (the world under them made first). A way
+    to somewhere it still can't get to ends as near as it gets;
   - `nearest(point)`, `walkable(x, y)`;
   - `raycast(from, to)`: how far straight towards a point before the mesh's edge;
   - `polygons(tx, ty)`: a tile's detail triangles, to draw.
@@ -485,9 +496,13 @@ the rules (that's the plan's M2b): debug mode draws them (*Navigation mesh*).
 `test/navigation.test.js` checks the navigation meshes: a tile's triangles and bytes the same
 whichever chunks were made first; the town's streets walked as roads, nothing on roofs; ways round
 buildings, not through, and straight over a bridge, high on its deck; deep water not walked; the
-same ways whatever order tiles came in; baking and finding ways within their budgets; and the
-longest unused tiles let go of. `e2e/pellagos.spec.js` checks debug mode draws them round the
-player, baked in a worker.
+same ways whatever order tiles came in; baking and finding ways within their budgets; the
+longest unused tiles let go of; and a map of squares' own mesh, through a doorway a square wide,
+a body's width from walls. `test/overworld.test.js` walks a way out of the town along the roads,
+every half metre of it on the mesh; `test/host.test.js` walks the player from the start through
+every door near it; the world-generation tests check every interior's squares can be got to over
+the meshes (`test/helpers.js reachable`). `e2e/pellagos.spec.js` checks debug mode draws them
+round the player, baked in a worker.
 
 `test/overworld.test.js` checks the world in chunks: blocked off its edges; the same chunks
 however they're come to; the town set in just as it was made, with everything in it moved; its

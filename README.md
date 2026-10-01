@@ -479,6 +479,10 @@ client/                 The game (static files served to the browser)
     world.js            The town: on 1-metre squares, fields, trees, where everyone starts, the
                         tavern, and its maps and the links between them
     grid.js             Reading any map's squares (blocked, opaque, ground), in rows or chunks
+    navigation.js       Navigation meshes (Recast and Detour): the world's tiles and each map of
+                        squares' own, and the ways over them the battle walks
+    navigation/         settings.js their measures; tiles.js and squares.js what a tile's made
+                        from; bake.js baking one; recast.js loading Recast
     steps.js            Work done a step at a time (generators), or all at once
     interiors.js        Inside buildings: the tavern's floors, drawn as plans of their squares
     insides.js          Every building that can be gone into: its door, and its floors and folk
@@ -494,7 +498,8 @@ client/                 The game (static files served to the browser)
                         roads.js the ways their forces go; news.js the war told in words;
                         muster.js where a town's guards stand and its patrols go, how a camp is
                         laid out, and where its raids come from
-    battle.js           Moving, fighting, damage, dying and coming back; the orc's patrol
+    battle.js           Moving (over the navigation meshes, round each other), fighting,
+                        damage, dying and coming back; the orc's patrol
     weapons.js          The weapons and their attacks (and the wild's creatures' own)
     creatures.js        The wild's creatures: what each is, where and how strong (docs/WILDS.md)
     spoils.js           What they leave: their parts, and what the guild pays for them
@@ -510,7 +515,6 @@ client/                 The game (static files served to the browser)
     roles.js            Classes of people (barkeep, patron...): their titles and five rests each
     dialogue.js         Conversations: trees of what's said and the replies, conditions, effects
     names.js            People's names, drawn from the world's seed
-    pathfinding.js      A* paths on the squares (in a window round the way, on a big map)
     variety.js          Choosing one of a few ways of doing something, never the last one again
     random.js           Seeded random numbers
     lore/               The world's stories: gods.js the Six, taverns.js taverns' names and signs

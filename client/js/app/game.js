@@ -45,11 +45,13 @@ import { RISING, STAGES } from "../core/war/war.js";
 import { GODS } from "../core/lore/gods.js";
 import { BECKON, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js";
 import { squaresOf } from "../core/grid.js";
+import { navigatorOf, releaseNavigation } from "../core/navigation.js";
 import { GROUND } from "../core/setpieces/pieces.js";
 import { CAST_FAILURES, GROWTH_XP, lookOf, SCHOOLS, SPELLS, TOMES } from "../core/spells.js";
 import { Variety } from "../core/variety.js";
 import { distanceBetween, longestReach, weaponOf, WEAPONS } from "../core/weapons.js";
 import { Avatar, posingEvery } from "../world/avatar.js";
+import { NavBaker } from "../world/navbaker.js";
 import { Banners } from "../world/banners3d.js";
 import { Camps } from "../world/camps3d.js";
 import { ContactShadows } from "../world/contacts.js";
@@ -149,6 +151,11 @@ const DRAG_TILT = 60;
 
 // A wyvern or dragon put out this near the player (metres) is seen coming down out of the sky
 const ARRIVE_WITHIN = 140;
+
+// The navigation tiles baked ahead round each player out in the world (metres: three tiles each
+// way, the ways they and those near them find staying among baked tiles), asked for again once
+// they've gone this far
+const BAKE_AHEAD = Object.freeze({ reach: 96, again: 16 });
 
 // How far the camera leans from the player towards who they're fighting: a share of the way,
 // up to so many metres
@@ -1175,8 +1182,14 @@ export class Game {
         this.chunks?.dispose();
         this.effects?.dispose();
         this.contacts?.dispose();
-        this.navigationView?.baker.dispose();
+        this.navBaker?.dispose();
         this.navigationView?.dispose();
+
+        // (The navigation meshes of this world's maps, the WebAssembly's memory given back)
+        for (const map of Object.values(this.world.maps ?? {})) {
+            releaseNavigation(map);
+        }
+
         this.navigationView?.object.removeFromParent();
 
         // The interiors' merged meshes (their materials are shared by every game)
@@ -1251,11 +1264,11 @@ export class Game {
         this.navigationShown = on;
 
         if (on && !this.navigationView && !this.navigationLoading) {
-            this.navigationLoading = Promise.all([import("../core/navigation/recast.js"), import("../core/navigation.js"), import("../world/navbaker.js"), import("../world/navview.js")])
-                .then(async ([{ loadRecast }, { Navigation }, { NavBaker }, { NavView }]) => {
-                    const navigation = new Navigation(await loadRecast(), this.world.maps.town);
+            this.navigationLoading = import("../world/navview.js")
+                .then(({ NavView }) => {
+                    const baker = this.#navBaker();
 
-                    this.navigationView = new NavView(navigation, new NavBaker(navigation));
+                    this.navigationView = new NavView(baker.navigation, baker);
                     this.view.scene.add(this.navigationView.object);
                     this.navigationAt = null;
                     this.#drawNavigation();
@@ -1264,6 +1277,42 @@ export class Game {
         }
 
         this.#drawNavigation();
+    }
+
+    // The overworld's navigation mesh's baker (the battle's mesh: core/navigation.js navigatorOf)
+    #navBaker() {
+        this.navBaker ??= new NavBaker(navigatorOf(this.world.maps.town));
+
+        return this.navBaker;
+    }
+
+    // The navigation tiles round each player in the world outside baked ahead, off the page's
+    // thread (a tile sent off a frame), so the ways found near them (core/battle.js) don't wait
+    // on one being baked. (Not in a copy of someone else's world: its battle takes the host's
+    // ways, and finds none of its own.)
+    #bakeAhead() {
+        if (this.remote || !this.world.maps?.town?.chunkAt) {
+            return;
+        }
+
+        const baker = this.#navBaker();
+
+        this.bakedAround ??= new Map();
+
+        for (const actor of this.battle.actors) {
+            if (actor.kind !== "player" || actor.map !== "town" || actor.dead) {
+                continue;
+            }
+
+            const at = this.bakedAround.get(actor.id);
+
+            if (!at || Math.abs(actor.x - at[0]) > BAKE_AHEAD.again || Math.abs(actor.y - at[1]) > BAKE_AHEAD.again) {
+                this.bakedAround.set(actor.id, [actor.x, actor.y]);
+                baker.around(actor.x, actor.y, BAKE_AHEAD.reach);
+            }
+        }
+
+        baker.pump();
     }
 
     // The navigation meshes round the player, if they're shown (afresh when they've gone a tile)
@@ -1624,6 +1673,8 @@ export class Game {
         if (this.navigationShown) {
             this.#drawNavigation();
         }
+
+        this.#bakeAhead();
 
         // The world round the player, drawn as they go (a chunk a frame at most)
         if (this.chunks && this.mapId === "town") {
@@ -2006,7 +2057,7 @@ export class Game {
 
         this.#endTalk();
 
-        if (this.battle.canTalk(player, npc) && !player.to) {
+        if (this.battle.canTalk(player, npc)) {
             this.approaching = null;
             this.#command({ type: "stop" });
             this.#openTalk(npc);
@@ -2398,7 +2449,7 @@ export class Game {
             return;
         }
 
-        const still = !player.dead && !player.order && !player.attack && !player.casting && !player.to && !player.path.length && this.battle.time >= player.stunnedUntil;
+        const still = !player.dead && !player.order && !player.attack && !player.casting && !player.path.length && this.battle.time >= player.stunnedUntil;
         const quiet = still && this.clock - this.lastInput >= PLAYER_RESTS_AFTER / 1000 && !this.talking && !this.#threatened(player);
 
         if (!quiet) {

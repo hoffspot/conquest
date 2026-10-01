@@ -6,10 +6,10 @@ import * as THREE from "three";
 import { Doors } from "../client/js/app/doors.js";
 import { Battle, STEP_MS } from "../client/js/core/battle.js";
 import { FACING, linkAt, MAP_ORIGINS, readPlan, routeBetween, tavernFloors, tavernFolk } from "../client/js/core/interiors.js";
-import { findPath } from "../client/js/core/pathfinding.js";
 import { cutFor, cutsAway, doorways } from "../client/js/world/interiors3d.js";
 import { BECKON, REST_EVERY, ROLES } from "../client/js/core/roles.js";
 import { generateWorld, nearestFree } from "../client/js/core/world.js";
+import { reachable } from "./helpers.js";
 
 function run(battle, ms) {
     const events = [];
@@ -21,7 +21,6 @@ function run(battle, ms) {
     return events;
 }
 
-const reachable = (map, from, to) => findPath(map.blocked, from, to).length > 0;
 const same = (a, b) => a[0] === b[0] && a[1] === b[1];
 
 describe("inside buildings (interiors.js)", () => {
@@ -602,16 +601,17 @@ describe("the tavern's folk (interiors.js, battle.js)", () => {
         assert.ok(attacks.every(({ id, target }) => !battle.actor(id).neutral && !battle.actor(target).neutral));
         assert.ok(!events.some(({ type, id }) => (type === "hit" || type === "miss") && battle.actor(id)?.neutral));
 
-        // Told to fight one of the folk, the player won't; nor cast at one
+        // Told to fight one of the folk, the player won't
         battle.command("player", { type: "engage", target: "drinker" });
         run(battle, 200);
         assert.notEqual(player.order?.type, "engage");
-        assert.deepEqual(battle.cast("player", "stun", "wench"), { ok: false, reason: "friendly" });
 
-        // Standing right by one, nobody strikes anybody
+        // Standing right by one, nobody strikes anybody; nor can the player cast at one (not busy
+        // fighting the orc, as above)
         const calm = busy();
 
         calm.battle.add({ id: "player", kind: "player", weapon: "sword", team: "town", square: [2, 2], map: "taproom" });
+        assert.deepEqual(calm.battle.cast("player", "stun", "wench"), { ok: false, reason: "friendly" });
         assert.equal(run(calm.battle, 5000).filter(({ type }) => type === "attack").length, 0);
         assert.equal(FACING.s, 0);
     });
