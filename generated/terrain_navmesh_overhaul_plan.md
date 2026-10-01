@@ -338,7 +338,7 @@ nav.walkable(mapId, x, y)            → boolean
 
 ## 6. Multiplayer: packets
 
-NET_VERSION goes to 7 with M2b, to 8 with M3b and to 9 with M4a (the ground changed both times), and to 10 with M5. The relay is unchanged: text frames. Motion packets
+NET_VERSION goes to 7 with M2b, to 8 with M3b, to 9 with M4a and to 10 with M4b (the ground changed each time), and to 11 with M5. The relay is unchanged: text frames. Motion packets
 carry a base64 packed buffer, so the relay stays neutral about binary frames.
 
 **`welcome`.** Adds the `world` block from [§3.6](#36-serialisation-and-the-network).
@@ -509,7 +509,21 @@ river surfaces that follow the terrain.
 - **Bridges** carry the road on dry land at both ends (a road stopping at a settlement goes on to
   the bank); piers stand on the levelled ground.
 - **Not yet:** mountain passes as the only way over the massifs (the plan's roads already go
-  round them); castles' switchback approaches (M4b).
+  round them); castles' switchback approaches (M4c).
+
+**As built in M4b** (see the change log):
+- **Camps on flats** (`terrain/flats.js flatSpot`, `Overworld.campAt`): the flattest point of an
+  8 m lattice within 96 m of the camp's cell middle (least range of the land's own height over
+  the 5 by 5 points 16 m each way), dry, off the plan's road cells; nearest of those as flat.
+  Used for its pad, its clearing, and where its folk are out (host.js).
+- **Sites by their lie** (`sites.js LIE`): castles, the spire, the starwatch, pride rock and the
+  watchtowers on the highest ground within 64 m (spots 16 m apart scored by how far they stand
+  over the land 24 m past their reach, none whose land varies more than 6 m across them); the
+  watering hole, serpent pool and moonwell on the lowest. Their pads are raised (2 to 5 m) or
+  sunk (0.8 to 1.5 m) by `raise`, eased in as every pad is.
+- **Not yet:** castles on real crags (the plan sets castles on lowland cells near roads, where
+  the best rise within 64 m is 2 m or so; the mound makes the rest); cliffs and rock meshes
+  (with §9's rocks in M7).
 
 **The peoples' places.**
 - Lizard folk stilt houses stand over real water depths.
@@ -930,8 +944,9 @@ pictures for anything that changes the look.
 | **M3a** | Rivers and the water shader | River courses as curves; calm, rapids and step-pool reaches; Manning speeds; fords and wading; the water field (shore, flow, depth); flow-mapped, Beer–Lambert, Fresnel shader | Pictures; water cost within budget |
 | **M3b** | Falls and the bed | Waterfall sheets and mist at lips; mountain streams; underwater ground (absorption, caustics); wet banks | Pictures; water cost within budget |
 | **M4a** | Roads and paths | Roads graded with balanced cut and fill on padded ground; hairpins where a road meets a step too steep to grade; mountain foot paths with switchbacks up to the caves, ruins and shrines in the hills (found ahead in the terrain worker); bridges that carry the whole road; piers on the ground | Pictures; walk every road and path end to end in a test |
-| **M4b** | Structures on the ground | Tiers and retaining walls; plinths; camps on flats; castles on crags; peoples' places on real ground; cliffs and rocks | Pictures |
-| **M5** | Multiplayer motion | `motion` stream; early desync checks; hero prediction; tick sync; debug RTT; NET_VERSION 10 | Two-browser e2e with no drift; bandwidth measured |
+| **M4b** | Places on the ground | Camps on flats; castles and high places on rises, on mounds; pools in hollows | Pictures; every camp's pad near its land in a test |
+| **M4c** | Settlements on slopes | Tiers and retaining walls with stairs; plinths and stepped foundations; the lizard folk's lagoon at a real depth | Pictures |
+| **M5** | Multiplayer motion | `motion` stream; early desync checks; hero prediction; tick sync; debug RTT; NET_VERSION 11 | Two-browser e2e with no drift; bandwidth measured |
 | **M6** | Horizon and atmosphere | Far clipmap rings; height fog in value bands; per-region look table and grade (§9 row 1); far silhouettes and the world landmark (§9 row 2); far trees; `SunLight` cascades on medium and high; terrain material | Pictures; budgets per tier met |
 | **M7** | Elden Ring environment pass | In §9's order: the landmark pass in the plan; neutral sites built, with the decay pass; cliffs and rocks; churches, citadels, stone bridges; foliage palette, grass ring, weathering | Pictures after each part; budgets met |
 | **M8** | Characters on Vitruvian | §10, as several PRs (conversion, body, garments, skin, face, LODs, clips) | Pictures; clipping tests green; budgets met |
@@ -1272,3 +1287,22 @@ converted data is to be measured in M8 against today's hm08 data.
     neighbouring chunks' shared corners.
   - **Left for M4b:** about 70 squares within 14 m of the roads near the town are cliffs where the
     land had none, as on main (pads' edges, not the roads' banks).
+- **2026-10-01, M4b built** (places on the ground; the M4b row split into M4b and M4c):
+  - **Camps:** on seed 1 the worst camp pad stood 35.3 m out of the land at its edge (five over
+    20 m, seven over 12 m), where a camp's cell middle fell on a mountain's side. Pitched on the
+    flattest ground within 96 m (48 m left one at 12.3 m), the worst is 5.3 m and the median
+    0.8 m. A camp's spot is found once, when the world near it is first made (about 5 ms).
+  - **Sites:** within 48 m of their cells the best rise was 0 to 2.7 m; looking 128 m round gained
+    only 1 to 3.5 m and moved castles 100 m from their roads at about 30 ms a site, so the search
+    stays at 64 m and the mound does the rest. Setting down every site that cares how it lies
+    takes 323 ms in all on seed 1, against 384 before (high spots are clear sooner).
+  - **Pictures:** the camp gouged into a rock slope gone; a camp's folk on a flat ledge where
+    its pad's edge had stood as a spike; the orcs' castle on its mound above the road; the
+    dark elves' spire on its rise.
+  - **Versions:** `TERRAIN_VERSION` 7, `NET_VERSION` 10.
+  - **Tests** (`test/flats.test.js`): every camp's pad within 6 m of its land, the same spot
+    whenever asked; the flattest spot found on a slope, and a flat one kept; each high site's
+    ground raised (and each low one's sunk) as far as it asks, and what's built on it.
+  - **Left for M4c:** the 77 squares within 14 m of the roads near the town that are cliffs where
+    the land had none are unchanged: 52 are at settlements' pads' edges (41 at one village, 8 at
+    the town, 3 at a farmstead), which tiers and retaining walls are for.

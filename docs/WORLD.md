@@ -290,6 +290,17 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   milliseconds, where it took up to a second); it takes
   the squares under it (blocked, and not seen through), and trees and the land's features keep
   6 metres clear of it. The same every time.
+  - **Where they'd rather lie** (`LIE`): each people's castle, the dark elves' obsidian spire,
+    the elves' starwatch, the cat folk's pride rock and the watchtowers stand on the highest
+    ground they can within 64 m of their cell's middle (of spots 16 m apart, as high as they
+    stand over the land 24 m past their reach, none whose land rises or falls more than 6 m
+    across them); the cat folk's watering hole, the lizard folk's serpent pool and the elves'
+    moonwell in the lowest. The land's own height is looked at, on a lattice 8 m apart, each
+    point once. Then their ground is raised on a mound over the land's (a castle 4 m, the spire
+    5, the starwatch 3, pride rock 4, a watchtower 2) or sunk into it (the watering hole 1.5 m,
+    the serpent pool 1.2, the moonwell 0.8), its banks eased into the land as every pad's are.
+    Of the next best spots, the first clear of roads and water is taken; wherever's clear, as
+    for the rest, if none is.
 - **Lakes and the sea**, their shores blended from cell to cell across the cells' middles, a
   little ragged.
 - **Rivers** (`terrain/waters.js`): each river cell runs into the cell beside it that more water
@@ -458,7 +469,15 @@ The world is played on the land's height with what's built levelled into it (`Gr
 
 - **Pads.** The start town, every settlement's squares, each people's castle and places (settled
   with the chunks round them), and camps (10 m round) stand on flat pads at the land's average
-  height under them, eased into the land round them over 24 m.
+  height under them (raised or sunk, for the castles and places that lie high or low: above),
+  eased into the land round them over 24 m.
+- **Camps** are pitched on the flattest ground within 96 m of their cell's middle
+  (`terrain/flats.js flatSpot`, `Overworld.campAt`): of the points of a lattice 8 m apart, the
+  one whose land varies least over the 5 by 5 points round it (16 m each way), none of the
+  nearest under water and not in a cell the plan's roads run through; of those as flat, the
+  nearest. Found as the world near each is made, and where its folk are out round it in play
+  (host.js), the same whenever it's asked for. On seed 1 a camp's pad stands at most 5.3 m out
+  of the land at its edge or into it, where it was 35 m on a mountain's side.
 - **Roads and trails** are graded (`graded`): the land's lie along them (sampled every 2 m, on
   the town's and the settlements' pads where they cross them, and over water at their banks'
   height, 0.6 m above it, for their bridges) smoothed 12 m each way, then kept to their kind's

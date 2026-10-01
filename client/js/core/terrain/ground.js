@@ -55,7 +55,8 @@ const round = (height) => Math.round(height / HEIGHT_STEP) * HEIGHT_STEP;
 
 /**
  * A pad: somewhere built on, levelled to one height. `{ id, x0, y0, x1, y1 }` (a rectangle,
- * metres) or `{ id, at: [x, y], radius }` (a disc).
+ * metres) or `{ id, at: [x, y], radius }` (a disc), either raised `raise` metres above the land
+ * under it on average (or sunk below it, if less than nothing).
  */
 export class Ground {
     /**
@@ -280,7 +281,8 @@ export class Ground {
         return best ? best.surface + (height - best.surface) * smoothstep(0, best.width, best.off) : height;
     }
 
-    // A pad's height: the land's under it, on average (sampled on a grid across it)
+    // A pad's height: the land's under it, on average (sampled on a grid across it), and as far
+    // above or below that as it's raised (`raise`, metres)
     #level(pad) {
         if (!this.levels.has(pad.id)) {
             const [x0, y0, x1, y1] = pad.at ? [pad.at[0] - pad.radius, pad.at[1] - pad.radius, pad.at[0] + pad.radius, pad.at[1] + pad.radius] : [pad.x0, pad.y0, pad.x1, pad.y1];
@@ -297,7 +299,8 @@ export class Ground {
                 }
             }
 
-            this.levels.set(pad.id, round(sum / n));
+            // (Raised on a mound above the land's, or sunk into it, as far as it asks)
+            this.levels.set(pad.id, round(sum / n + (pad.raise ?? 0)));
         }
 
         return this.levels.get(pad.id);
