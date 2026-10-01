@@ -871,7 +871,14 @@ export class Overworld {
         let kind = null;
 
         for (const segment of this.#roadsIn(Math.floor(px / CHUNK), Math.floor(py / CHUNK))) {
-            if ((kind === null || ROAD_HALF[segment[4]] > ROAD_HALF[kind]) && fromSegment(px, py, segment) <= ROAD_HALF[segment[4]]) {
+            const half = ROAD_HALF[segment[4]];
+
+            // (Not looked at closer if it's further off than its half-width by its bounds)
+            if (px < Math.min(segment[0], segment[2]) - half || px > Math.max(segment[0], segment[2]) + half || py < Math.min(segment[1], segment[3]) - half || py > Math.max(segment[1], segment[3]) + half) {
+                continue;
+            }
+
+            if ((kind === null || half > ROAD_HALF[kind]) && fromSegment(px, py, segment) <= half) {
                 kind = segment[4];
             }
         }

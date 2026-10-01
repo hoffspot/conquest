@@ -1235,3 +1235,40 @@ converted data is to be measured in M8 against today's hm08 data.
     lips); stepping across a fast stream with the navigation mesh. The height test allows
     streams' narrower half-widths; the steps test allows a lip at the end of any reach, where
     the next cell starts with a drop, and checks it lands on that start and plunges as far.
+- **2026-10-01, M4a built** (roads and paths; the M4 row split into M4a and M4b):
+  - **Grading** (`terrain/ground.js graded`): profiles sampled on the settlements' pads, smoothed,
+    then relaxed symmetrically to `GRADE` with their ends pinned. An envelope-midpoint grade was
+    tried first and filled whole valleys ahead of a rise; relaxation cuts as much as it fills.
+    Seed 2's worst cut or fill along a road falls from 15.1 m to 4.1 m; within 900 m of seed 1's
+    town a road is cut 5.6 m into the land at most and built 3.6 m over it.
+  - **Banks** ease out `ROAD.batter` (2.5) times the cut or fill, 3 to 12 m: a 3.6 m embankment
+    on fixed 3 m shoulders had a 50° grey side. Where roads overlap, on a road the one it's
+    furthest onto wins, beside them the one whose bank it's furthest up, ties by line id.
+  - **Seams fixed:** roads were listed only in chunks within half + 1 m of them while their
+    shoulders reached half + 3 m, so 11 corners shared by neighbouring chunks disagreed (up to
+    0.13 m). Roads are now listed as far as their banks reach, and trails are found for every
+    chunk their banks reach (`MARGIN`); a test walks the corners shared over the trails near
+    the town.
+  - **Hairpins** (`terrain/ways.js`, `overworld.js climbing`): none needed on seeds 1 and 3; three
+    tracks on seed 2. Each stretch is found from its northern end whichever way the road runs,
+    after two tracks sharing one (one up, one down) were found braiding side by side.
+  - **Trails** (`core/trails.js`): 27 on seed 1, each found in 5 to 150 ms. Two trails running
+    side by side to neighbouring caves led to chaining (each from its road or a site reached
+    already). A trail's corners differed by 1.95 m depending on chunk order where it met a road
+    end to end, fixed by line ids and pinned profile ends. Trails average up to 1.3 times their
+    grade, and 45 % for a step or two where a hairpin's legs meet.
+  - **In the browser:** walking from the town to the trails south-west of it, all three trails
+    wanted were found in the terrain worker and handed over, none on the page.
+  - **Bridges:** a road stopping at a settlement's edge inside a river left its bridge to the
+    joined street, which has none (a blocked square at 3004, 4476); planned roads now stop on dry
+    land. Piers stand on the levelled ground.
+  - **Cost:** `buildWorld` 134 ms against 145 (the nearest road to each site compared by squared
+    distance within bounds: 100 ms otherwise); chunk making with trails found ahead, 12.0 ms
+    median against 11.2 to 12.2 on main.
+  - **Versions:** `TERRAIN_VERSION` 6, `NET_VERSION` 9.
+  - **Tests:** `graded`; a trail in hairpins within its room, out of still water; the same way
+    found again; a trail laid the same whichever chunks come first and walked end to end; two
+    roads sharing a climb; every road and trail within 640 m of the town walked at its grade;
+    neighbouring chunks' shared corners.
+  - **Left for M4b:** about 70 squares within 14 m of the roads near the town are cliffs where the
+    land had none, as on main (pads' edges, not the roads' banks).

@@ -255,11 +255,14 @@ export class Ground {
             const [bx, by] = road.line.planned[road.k + 1];
             const [dx, dy] = [bx - ax, by - ay];
             const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy || 1)));
-            const off = hypot(x - (ax + dx * t), y - (ay + dy * t)) - road.half;
+            const [ex, ey] = [x - (ax + dx * t), y - (ay + dy * t)];
 
-            if (off >= ROAD.most) {
+            // (Too far off for its banks to reach, by the square of the distance: no need of more)
+            if (ex * ex + ey * ey >= (road.half + ROAD.most) * (road.half + ROAD.most)) {
                 continue;
             }
+
+            const off = hypot(ex, ey) - road.half;
 
             const { heights, starts } = this.#profile(road.line);
             const along = (starts[road.k] + t * hypot(dx, dy)) / ROAD.step;

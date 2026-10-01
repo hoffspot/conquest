@@ -114,16 +114,24 @@ export function routeTrail(plan, { from, to, box }, keepOut = []) {
 }
 
 // The nearest point to `at` on any of the lines ([x, y], metres), or null if there are none
+// (compared by the square of the distance: no segment further off than the nearest yet, by its
+// bounds, is looked at closer)
 function nearestOn(lines, [px, py]) {
     let [best, gap] = [null, Infinity];
 
     for (const { planned } of lines) {
         for (let k = 0; k < planned.length - 1; k++) {
             const [[ax, ay], [bx, by]] = [planned[k], planned[k + 1]];
+            const [ox, oy] = [Math.max(0, Math.min(ax, bx) - px, px - Math.max(ax, bx)), Math.max(0, Math.min(ay, by) - py, py - Math.max(ay, by))];
+
+            if (ox * ox + oy * oy >= gap) {
+                continue;
+            }
+
             const [dx, dy] = [bx - ax, by - ay];
             const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1)));
             const [x, y] = [ax + dx * t, ay + dy * t];
-            const off = hypot(px - x, py - y);
+            const off = (px - x) * (px - x) + (py - y) * (py - y);
 
             if (off < gap) {
                 [best, gap] = [[x, y], off];
