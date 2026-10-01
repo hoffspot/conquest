@@ -1385,6 +1385,10 @@ converted data is to be measured in M8 against today's hm08 data.
     nowhere, the gap closes within 150 ms.
   - **Bandwidth** (two-browser e2e): measured and annotated, held under 10 KB/s to one joiner.
   - **Versions:** `NET_VERSION` 12 (`TERRAIN_VERSION` unchanged).
+  - **Found by the two-browser e2e:** a joined copy capped each frame's time at a tenth of a
+    second, as playing alone does, so at 2 frames a second it fell 0.4 s further behind the host
+    every second and its commands were answered seconds late. A joined copy now plays the real
+    time since its last frame (up to a second: `JOINED_FRAME` in app/game.js).
   - **Tests:** `test/motion.test.js` (packing, the nearest first, the cap and reach, comparing,
     base64 both ways); in `test/netplay.test.js` the long play with motion checks, the 2 cm and
     0.4 cm nudges, steps and RTT on every sending, the delay by jitter and over a pause, and the
