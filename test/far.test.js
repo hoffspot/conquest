@@ -159,7 +159,7 @@ describe("the haze (fog.js)", () => {
         assert.equal(farHaze(), true);
         assert.equal(farHaze(), true, "(once)");
         assert.match(THREE.ShaderChunk.fog_fragment, /exp\( - 3\.0/);
-        assert.match(THREE.ShaderChunk.fog_fragment, /#ifndef NO_NEAR_FADE/);
+        assert.match(THREE.ShaderChunk.fog_fragment, /#elif !defined\( NO_NEAR_FADE \)/);
 
         const far = farReach(FAR_LEVELS.medium);
 
