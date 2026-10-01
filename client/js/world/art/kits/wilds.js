@@ -29,6 +29,7 @@ import { between } from "../../../core/terrain/ground.js";
 import { neglect, rockiness } from "../../../core/wilds.js";
 import { LAYERS, atlasMaterial, wildsMaterial } from "../engine/atlas.js";
 import { MATERIALS } from "../engine/painters.js";
+import { facingSun } from "../../sun.js";
 import { TREE_WIND } from "./trees.js";
 
 const TAU = Math.PI * 2;
@@ -1903,6 +1904,9 @@ const WET = new Set(["reeds", "cotton"]);
 /** The lands whose flowers bloom in drifts. */
 const BLOOMS = new Set(Object.entries(UNDERGROWTH).filter(([, { kinds }]) => Object.keys(kinds).some((kind) => FLOWERS[kind] && !WET.has(kind))).map(([land]) => land));
 
+// Each such land's flowers (a carpet's mostly one of them)
+const FLOWERS_OF = Object.fromEntries(Object.entries(UNDERGROWTH).map(([land, { kinds }]) => [land, Object.keys(kinds).filter((kind) => FLOWERS[kind] && !WET.has(kind))]));
+
 /** Kinds that grow in settlements too (where they're thinner). */
 const TENDED = new Set(["tuft", "daisy", "dandelion", "clock", "buttercup", "pebbles", "stones", "sticks", "leaves", "dry"]);
 
@@ -2198,6 +2202,15 @@ function fit({ kind, size, height, turn }, part) {
 
 // The fields' grid (metres), and how far (squares) trees' shade and water's wet reach
 const FIELD_STEP = 4;
+
+/**
+ * Flower carpets (the research report behind M7b: the dusk hillside): where slow noise (`size`
+ * metres) is above `from` (all of it at `to`), most on the side of a hill that faces the sun (on
+ * the flat `flat` of it, none on the shaded side: sun.js), the flowers that grow there `more`
+ * times as many, most of them (`one`) of one kind, which changes every `kinds` metres or so; and
+ * the grass among them as much the fewer.
+ */
+export const CARPETS = Object.freeze({ size: 70, from: 0.5, to: 0.66, flat: 0.4, sunny: 6, more: 3, one: 14, others: 1.5, kinds: 160, fewer: 0.6 });
 const SHADE_REACH = 4;
 const WET_REACH = 3;
 
@@ -2225,7 +2238,7 @@ export function* sowing(overworld, chunk, { density = 1 } = {}) {
     const size = Math.sqrt(chunk.ground.length);
     const seed = overworld.plan.seed;
     const grid = size / FIELD_STEP + 1;
-    const fields = { rocky: new Float32Array(grid * grid), dead: new Float32Array(grid * grid), lush: new Float32Array(grid * grid), clump: new Float32Array(grid * grid), bloom: new Float32Array(grid * grid) };
+    const fields = { rocky: new Float32Array(grid * grid), dead: new Float32Array(grid * grid), lush: new Float32Array(grid * grid), clump: new Float32Array(grid * grid), bloom: new Float32Array(grid * grid), carpet: new Float32Array(grid * grid), kind: new Float32Array(grid * grid) };
 
     for (let j = 0; j < grid; j++) {
         for (let i = 0; i < grid; i++) {
@@ -2237,6 +2250,8 @@ export function* sowing(overworld, chunk, { density = 1 } = {}) {
             fields.lush[k] = 0.25 + 1.5 * fractal(x, y, 55, seed * 31 + 5, 2) ** 1.5;
             fields.clump[k] = fractal(x, y, 11, seed * 31 + 6, 2);
             fields.bloom[k] = Math.min(1, Math.max(0, (fractal(x, y, 38, seed * 31 + 7, 2) - 0.45) / 0.2));
+            fields.carpet[k] = Math.min(1, Math.max(0, (fractal(x, y, CARPETS.size, seed * 31 + 9, 2) - CARPETS.from) / (CARPETS.to - CARPETS.from)));
+            fields.kind[k] = fractal(x, y, CARPETS.kinds, seed * 31 + 10, 1);
         }
     }
 
@@ -2290,13 +2305,17 @@ export function* sowing(overworld, chunk, { density = 1 } = {}) {
 
             const tended = overworld.settled(x, y);
             const bloom = BLOOMS.has(land) ? field("bloom", i, j) : 0;
-            const odds = spec.density * field("lush", i, j) * (1 + 1.5 * bloom) * (tended ? 0.3 : 1) * density;
+            // (A carpet of flowers, most of one kind: on the sunny side of a hill, a little on the flat)
+            const carpet = BLOOMS.has(land) && !tended ? field("carpet", i, j) * Math.min(1, Math.max(0, CARPETS.flat + facingSun(chunk.heights, i, j) * CARPETS.sunny)) : 0;
+            const odds = spec.density * field("lush", i, j) * (1 + 1.5 * bloom) * (1 + CARPETS.more * carpet) * (tended ? 0.3 : 1) * density;
 
             if (hashOf(x, y, seed + 1) >= odds) {
                 continue;
             }
 
             const [rocky, dead, clump] = [field("rocky", i, j), field("dead", i, j), field("clump", i, j)];
+            const blooms = carpet > 0 ? FLOWERS_OF[land] : null;
+            const one = blooms ? blooms[Math.min(blooms.length - 1, Math.floor(field("kind", i, j) * blooms.length))] : null;
             const home = HOME_UNDERGROWTH[overworld.homeAt?.(x, y)];
             const weights = [];
             let total = 0;
@@ -2310,6 +2329,7 @@ export function* sowing(overworld, chunk, { density = 1 } = {}) {
 
                 if (FLOWERS[kind] && !WET.has(kind)) {
                     w *= 0.08 + (1 + 5 * bloom) * drift(kind, x, y);
+                    w *= 1 + (kind === one ? CARPETS.one : CARPETS.others) * carpet;
                 }
 
                 if (ROCKS.has(kind)) {
@@ -2329,7 +2349,7 @@ export function* sowing(overworld, chunk, { density = 1 } = {}) {
                 }
 
                 if (kind === "tuft" || kind === "tall" || kind === "dry" || kind === "marram") {
-                    w *= 0.4 + 1.4 * clump;
+                    w *= (0.4 + 1.4 * clump) * (1 - CARPETS.fewer * carpet);
                 }
 
                 if (w > 0) {

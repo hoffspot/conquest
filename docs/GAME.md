@@ -774,11 +774,11 @@ drawn whole whichever way the camera looks (about 90 draw calls and 170,000 tria
 to High (suggested for the device until it's moved: older phones low, phones medium, computers
 high); debug mode can change it too. The game aims at 60 frames a second at every level:
 
-| Level | Pixels | Shadow map | Antialiasing | Hair | Skin textures | Undergrowth | Tall grass | Far land | Far trees |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Low (older phones) | 1× | 1024 | no | a fifth of the strands | 512 | half | none | 1 km | none |
-| Medium (phones) | up to 1.5× | 2048 | yes | 30% | 512 | three-quarters | to 12 m, thinner to 28 m | 2 km | to 700 m |
-| High (computers) | up to 2× | 2048 | yes | 45% | 1024 | all of it | to 18 m, thinner to 40 m | 4 km | to 1.2 km |
+| Level | Pixels | Shadow map | Antialiasing | Hair | Skin textures | Undergrowth | Tall grass | Motes | Far land | Far trees |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Low (older phones) | 1× | 1024 | no | a fifth of the strands | 512 | half | none | none | 1 km | none |
+| Medium (phones) | up to 1.5× | 2048 | yes | 30% | 512 | three-quarters | to 12 m, thinner to 28 m | 300 | 2 km | to 700 m |
+| High (computers) | up to 2× | 2048 | yes | 45% | 1024 | all of it | to 18 m, thinner to 40 m | 600 | 4 km | to 1.2 km |
 
 **How often it's drawn** (`app/pacing.js`). The browser asks for a frame each time the screen
 refreshes: 60 times a second on most screens, 90, 120 or 144 on many phones and monitors. Drawn
@@ -1029,7 +1029,10 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     badlands, marram on beaches, sedge and reeds with bulrushes by water and in the marsh);
   - wildflowers in drifts of one kind: daisies, poppies, cornflowers, buttercups, dandelions
     and their clocks, foxgloves, cow parsley, yarrow, campion, thistles, heather, lavender,
-    bluebells in the woods, cotton grass in the marsh and tundra;
+    bluebells in the woods, cotton grass in the marsh and tundra; and carpets of them on the side
+    of a hill that faces the sun (`CARPETS`, terrain plan M7b: where slow noise 70 metres across
+    says, a little on the flat and none on the shaded side; as many again and more, most of one
+    kind, the kind changing every 160 metres or so, the grass among them fewer);
   - ferns and bracken, mushrooms (fly agaric, clusters of brown caps, puffballs, and now and then
     a fairy ring), pebbles and stones (scree in the mountains), sticks and fallen branches,
     fallen leaves, molehills, rabbit holes, bones and horned skulls, cacti and tumbleweed,
@@ -1069,8 +1072,15 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     waist high, a savannah's tall and golden, the woods' thin, none on snow), its lands blended
     across their cells' edges; in clumps and in tall and short stretches (slow noise); golden
     where the ground's own dry patches are, greener where they're lush, none where it's worn
-    bare; thinner beside a road, on steep ground and up towards the rock, and short and thin in
-    a settlement. Its tips' colour is the land's grass's, turned to straw as it's dry. In the
+    bare; thinner on steep ground and up towards the rock, and short and thin in a settlement.
+    Its tips' colour is the land's grass's, turned to straw as it's dry. Ordered round what's
+    there (the research report's "ordered layers"): thicker and taller in a ring two metres
+    round what stands (a rock, a tree, a wall's foot: `GRASS_RINGS`), where the scythe and the
+    sheep don't reach; trodden short, thin and yellowed within a metre or two of a road or a
+    path, then thicker and taller at its verge, two to five metres off (`GRASS_PATHS`); drier
+    and thinner on the side of a hill that faces the sun, greener on the shaded side
+    (`GRASS_SUN`, `sun.js`). (These read the chunks round it as well, so a chunk's grass is
+    worked out once the eight round it are drawn too, the same every time.) In the
     fields' strips (*Fields*, below), their crops (`CROP_STANDS`): wheat waist high and golden,
     barley a little shorter and paler, greens low and leafy, sown thick, all of a height and
     upright (the map's alpha says it's sown; none on ploughed strips).
@@ -1086,12 +1096,22 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     blades, so Apple's GPUs draw nothing behind them.
   - **The ground under it** is darker and the grass's own colour as thick as it grows, so the
     gaps between the blades read as more grass (`ground.js GRASS_UNDER`).
-  - **Its map** is worked out for the nine chunks round the player as they're drawn, a few rows
-    at a time in 2 ms a frame (a chunk's about 15–20 ms in all), into a texture four chunks a
-    side that wraps as the player goes.
+  - **Its map** is worked out for the nine chunks round the player as they and the chunks round
+    them are drawn, a few rows at a time in 2 ms a frame (a chunk's about 10–20 ms in all), into
+    a texture four chunks a side that wraps as the player goes.
   - **Cost** (the meadow by the river on seed 1, the software renderer, relative only): about
     100,000 triangles more on medium (330,000 to 430,000) and 210,000 on high, two draws; none on
     low.
+
+- **Motes** (terrain plan M7b; `world/motes.js`) drift in the air round the player, each land's
+  own (`MOTES_OF`): pollen over the meadows, fields and heath, dust over the dry lands, the woods
+  and the mountains, fireflies over the marsh and in the jungle, pale wisps in the elves' woods
+  and the darkwood, embers rising over the volcano's ash, snow falling on the snowfields. One
+  draw of a few hundred soft glowing dots (300 on medium, 600 on high, none on low), each where a
+  hash of its own puts it in a box 28 metres across round the player, drifting on its land's
+  breeze and wandering about it, wrapping round the box as the player goes and fading towards
+  its edges; fireflies and embers flicker. Crossing into another land, one kind fades out and the
+  next in; none indoors.
 
 The chunks also say how tall their trees, features and buildings are on each square, for the
 cutaway. The minimap is painted from the same chunks.
