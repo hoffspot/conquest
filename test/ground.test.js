@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { buildWorld, CHUNK } from "../client/js/core/overworld.js";
 import { squareOf } from "../client/js/core/settlements.js";
-import { between, CORNERS, GRADE } from "../client/js/core/terrain/ground.js";
+import { between, CORNERS, GRADE, PAD_TILT } from "../client/js/core/terrain/ground.js";
 import { heightAt, SLOPE_CLASS } from "../client/js/core/terrain/height.js";
 import { GROUND } from "../client/js/core/setpieces/pieces.js";
 
@@ -33,29 +33,38 @@ describe("the ground (terrain/ground.js)", () => {
         assert.equal(between(ridge, 0.9, 0.1), 0.9 * 0 + 1 - 0.9 + 0.1 * 1);
     });
 
-    it("sets the town, and every settlement, castle and camp near it, on a level pad", () => {
+    it("lays the town and every settlement near it on a plane lying with the land, no steeper than it may", () => {
         const { at, width, height } = world.stamp;
-        const town = new Set();
+        // (A pad's own heights: its middle's level, rising as it tilts)
+        const onPlane = (pad, x, y) => {
+            const [gx, gy] = overworld.ground.tiltOf(pad);
 
-        for (let y = at[1]; y <= at[1] + height; y += 4) {
-            for (let x = at[0]; x <= at[0] + width; x += 4) {
-                town.add(overworld.heightAt(x, y));
-            }
-        }
+            return overworld.ground.levelOf(pad) + gx * (x - (pad.x0 + pad.x1) / 2) + gy * (y - (pad.y0 + pad.y1) / 2);
+        };
+        const pads = [{ id: "town", x0: at[0], y0: at[1], x1: at[0] + width, y1: at[1] + height, tilt: true }];
 
-        assert.equal(town.size, 1, "the town is level");
-
-        // (The nearest few other settlements: flat across their squares)
-        const near = overworld.settlements.places
+        // (The nearest few other settlements)
+        for (const [, place] of overworld.settlements.places
             .map((place) => [Math.hypot(place.at[0] - at[0], place.at[1] - at[1]), place])
             .sort(([a], [b]) => a - b)
-            .slice(0, 3);
-
-        for (const [, place] of near) {
+            .slice(0, 3)) {
             const { at: [sx, sy], size } = squareOf(place);
-            const levels = new Set([0.1, 0.5, 0.9].flatMap((u) => [0.1, 0.5, 0.9].map((v) => overworld.heightAt(sx + u * size, sy + v * size))));
 
-            assert.equal(levels.size, 1, `${place.id} is level`);
+            pads.push({ id: `place ${place.id}`, x0: sx, y0: sy, x1: sx + size, y1: sy + size, tilt: place.race !== "lizard" });
+        }
+
+        for (const pad of pads) {
+            const [gx, gy] = overworld.ground.tiltOf(pad);
+
+            assert.ok(Math.hypot(gx, gy) <= PAD_TILT + 1e-9, `${pad.id} tilts ${Math.hypot(gx, gy).toFixed(3)}`);
+
+            for (const u of [0.1, 0.3, 0.5, 0.7, 0.9]) {
+                for (const v of [0.1, 0.3, 0.5, 0.7, 0.9]) {
+                    const [x, y] = [pad.x0 + u * (pad.x1 - pad.x0), pad.y0 + v * (pad.y1 - pad.y0)];
+
+                    assert.ok(Math.abs(overworld.heightAt(x, y) - onPlane(pad, x, y)) < 0.01, `${pad.id} at ${x.toFixed(0)}, ${y.toFixed(0)}`);
+                }
+            }
         }
     });
 

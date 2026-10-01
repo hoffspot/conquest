@@ -17,6 +17,8 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { atlasMaterial, glowMaterial, toAtlas, toGlow } from "./art/engine/atlas.js";
+import { material } from "./art/engine/materials.js";
+import { Solid } from "./art/engine/solid.js";
 import { createRandom } from "../core/random.js";
 import { pieceCatalog } from "../core/setpieces/pieces.js";
 import { footprint } from "../core/setpieces/town.js";
@@ -52,6 +54,15 @@ export const TILE = 32;
 // What the camera pulls in closer than, rather than looking through (view.js): what's built,
 // not the props (carts, wells, stalls) or the trees
 const BUILT = new Set(["house", "landmark", "structure", "wall", "tower", "gatehouse", "keep"]);
+
+/**
+ * Foundations: how far the ground under what's built may rise or fall across it (metres) before
+ * it's stood on a foundation, and how far into the ground below its lowest corner that goes.
+ */
+const FOUNDATION = Object.freeze({ from: 0.3, below: 0.3 });
+
+// What each people builds its foundations of (as they build the rest): the humans' plain stone
+const FOUNDED = Object.freeze({ cat: "mud-dark", elf: "stone-moon", darkElf: "stone-black", orc: "basalt", lizard: "stone-lime" });
 
 /**
  * How high whatever stands on each square of an area is (metres): { x0, z0 (its north-west
@@ -140,10 +151,12 @@ export async function buildTown(world, { onProgress = () => {}, groundAt = () =>
             plant(ox + piece.x + lx * c + lz * s, oz + piece.y - lx * s + lz * c, variant, size);
         }
 
+        const y = grounded(built, piece, groundAt, [ox, oz]);
+
         built.position.set(-piece.w * 10, 0, -piece.h * 10);
         object.add(built);
         object.rotation.y = piece.facing;
-        object.position.set((ox + piece.x) / PIXEL, groundAt(ox + piece.x, oz + piece.y) / PIXEL, (oz + piece.y) / PIXEL);
+        object.position.set((ox + piece.x) / PIXEL, y / PIXEL, (oz + piece.y) / PIXEL);
         object.userData.built = BUILT.has(spec.kind);
         object.userData.piece = piece;
         art.add(object);
@@ -253,6 +266,44 @@ export function placed(built, piece, [ox, oz] = [0, 0], y = 0) {
     object.userData.piece = piece;
 
     return object;
+}
+
+/**
+ * How high a piece stands (metres): the ground under its middle (`groundAt(x, y)`, metres, from
+ * `origin`); or, for what's built on ground that rises or falls more than FOUNDATION.from across
+ * it (a settlement lying with a slope), its highest corner's, a foundation added to it (as the
+ * art kits built it, before it's placed: of its people's stone, or the cat folk's mud brick) from
+ * there down past its lowest corner, under all of it but its eaves.
+ */
+export function grounded(built, piece, groundAt, [ox, oz] = [0, 0]) {
+    const middle = groundAt(ox + piece.x, oz + piece.y);
+
+    if (!BUILT.has(piece.kind)) {
+        return middle;
+    }
+
+    const heights = footprint(piece).map(([x, y]) => groundAt(ox + x, oz + y));
+    const [low, high] = [Math.min(middle, ...heights), Math.max(middle, ...heights)];
+
+    if (high - low < FOUNDATION.from) {
+        return middle;
+    }
+
+    // (Under what's built, as far as its plot: a little in from its widest, past which the eaves
+    // reach)
+    built.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(built);
+    const [x0, x1] = [Math.max(0, box.min.x) + 2, Math.min(piece.w * 20, box.max.x) - 2];
+    const [z0, z1] = [Math.max(0, box.min.z) + 2, Math.min(piece.h * 20, box.max.z) - 2];
+
+    if (x1 > x0 && z1 > z0) {
+        const solid = new Solid();
+
+        solid.box(x0, -(high - low + FOUNDATION.below) / PIXEL, z0, x1, 0.05 / PIXEL, z1, material(FOUNDED[piece.people] ?? "stone"));
+        built.add(solid.toObject());
+    }
+
+    return high;
 }
 
 /**

@@ -22,6 +22,12 @@ export const CORNERS = CHUNK + 1;
 export const PAD_EASE = 24;
 
 /**
+ * How steeply a pad that may lie with the land (`tilt`: the town and the settlements) may tilt,
+ * at most (rise over run): it's laid on the plane that best fits the land under it, no steeper.
+ */
+export const PAD_TILT = 0.08;
+
+/**
  * Roads: how far their shoulders ease out to the land (metres): `batter` times as far as the road's
  * cut into it or built up over it there, at least `shoulder` and at most `most` (so a bank's no
  * steeper than 1 in `batter` on average, and 1.5 in `batter` at its steepest); and how far along
@@ -56,7 +62,9 @@ const round = (height) => Math.round(height / HEIGHT_STEP) * HEIGHT_STEP;
 /**
  * A pad: somewhere built on, levelled to one height. `{ id, x0, y0, x1, y1 }` (a rectangle,
  * metres) or `{ id, at: [x, y], radius }` (a disc), either raised `raise` metres above the land
- * under it on average (or sunk below it, if less than nothing).
+ * under it on average (or sunk below it, if less than nothing). A rectangle that may lie with the
+ * land (`tilt`) is laid on the plane that best fits the land under it, no steeper than PAD_TILT,
+ * rather than level.
  */
 export class Ground {
     /**
@@ -79,6 +87,7 @@ export class Ground {
         this.natural = new Map();
         this.chunks = new Map();
         this.levels = new Map();
+        this.tilts = new Map();
         this.profiles = new Map();
     }
 
@@ -156,7 +165,11 @@ export class Ground {
                     const k = j * CORNERS + i;
                     const [x, y] = [x0 + i, y0 + j];
                     const land = heights[k];
-                    const height = round(this.#onPads(pads, x, y, this.#onRoads(roads, x, y, land)));
+                    // (On a pad, its own height; off them, the roads levelled into the land as
+                    // the pads have eased it: a road's own height is its profile's, which the
+                    // settlements' pads are in already)
+                    const padded = this.#onPads(pads, x, y, land);
+                    const height = round(this.#onAnyPad(pads, x, y) ? padded : this.#onRoads(roads, x, y, padded));
 
                     // (But water keeps its channel and its lakes: bridges cross it)
                     if (height !== land && waterAt(this.plan, x, y, land) === null) {
@@ -306,18 +319,66 @@ export class Ground {
         return this.levels.get(pad.id);
     }
 
-    /** The height a pad is levelled to (metres). */
+    /** The height a pad is levelled to (metres): at its middle, if it tilts. */
     levelOf(pad) {
         return this.#level(pad);
     }
 
-    // A point's height with the pads near it levelled in
+    /** How a pad tilts: [rise east, rise south] (metres a metre), [0, 0] if it's level. */
+    tiltOf(pad) {
+        return this.#tilt(pad);
+    }
+
+    // How a pad that may lie with the land tilts: the plane that best fits the land under it (on
+    // the grid its level is from: rise across it against how far across, the least squares'),
+    // no steeper than PAD_TILT; level for the rest
+    #tilt(pad) {
+        if (!pad.tilt || pad.at) {
+            return [0, 0];
+        }
+
+        if (!this.tilts.has(pad.id)) {
+            const level = this.#level(pad) - (pad.raise ?? 0);
+            let [across, east, down, south] = [0, 0, 0, 0];
+
+            for (let j = 0; j <= 4; j++) {
+                for (let i = 0; i <= 4; i++) {
+                    const [dx, dy] = [((pad.x1 - pad.x0) * (i - 2)) / 4, ((pad.y1 - pad.y0) * (j - 2)) / 4];
+                    const rise = this.#landAt(pad.x0 + ((pad.x1 - pad.x0) * i) / 4, pad.y0 + ((pad.y1 - pad.y0) * j) / 4) - level;
+
+                    [across, east, down, south] = [across + dx * dx, east + dx * rise, down + dy * dy, south + dy * rise];
+                }
+            }
+
+            const [gx, gy] = [across ? east / across : 0, down ? south / down : 0];
+            const steep = hypot(gx, gy);
+
+            this.tilts.set(pad.id, steep > PAD_TILT ? [(gx * PAD_TILT) / steep, (gy * PAD_TILT) / steep] : [gx, gy]);
+        }
+
+        return this.tilts.get(pad.id);
+    }
+
+    // A pad's height at a point of it (its middle's level, and as it tilts)
+    #padAt(pad, x, y) {
+        const [gx, gy] = this.#tilt(pad);
+
+        return gx || gy ? this.#level(pad) + gx * (x - (pad.x0 + pad.x1) / 2) + gy * (y - (pad.y0 + pad.y1) / 2) : this.#level(pad);
+    }
+
+    // Is a point on a pad (not just in the land eased round it)?
+    #onAnyPad(pads, x, y) {
+        return pads.some((pad) => (pad.at ? hypot(x - pad.at[0], y - pad.at[1]) <= pad.radius : x >= pad.x0 && x <= pad.x1 && y >= pad.y0 && y <= pad.y1));
+    }
+
+    // A point's height with the pads near it levelled in (eased from the pad's height at its
+    // nearest point)
     #onPads(pads, x, y, height) {
         for (const pad of pads) {
             const off = pad.at ? hypot(x - pad.at[0], y - pad.at[1]) - pad.radius : hypot(Math.max(pad.x0 - x, 0, x - pad.x1), Math.max(pad.y0 - y, 0, y - pad.y1));
 
             if (off < PAD_EASE) {
-                const level = this.#level(pad);
+                const level = pad.at ? this.#level(pad) : this.#padAt(pad, Math.min(pad.x1, Math.max(pad.x0, x)), Math.min(pad.y1, Math.max(pad.y0, y)));
 
                 height = level + (height - level) * smoothstep(0, PAD_EASE, off);
             }
