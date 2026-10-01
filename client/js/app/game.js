@@ -63,6 +63,7 @@ import { SpellFx } from "../world/spellfx.js";
 import { Squares } from "../world/squares.js";
 import { KINDS, Wounds } from "../world/wounds.js";
 import { Chunks, DECK, LOAD_BUDGET, REACH } from "../world/chunks3d.js";
+import { FarLand } from "../world/far/far.js";
 import { allAtOnce, allWaiting, Steps } from "../core/steps.js";
 import { buildGround } from "../world/ground.js";
 import { buildTown } from "../world/town3d.js";
@@ -631,6 +632,18 @@ export class Game {
     }
 
     /** Where a map is drawn in the world ([x, z] metres). */
+    // The far land round the player at (x, z) (metres), out to the horizon (world/far/far.js): as
+    // many levels of it as the quality level has (made again if that's changed)
+    #farLand(x, z) {
+        if (this.far?.levels.length !== this.view.quality.far) {
+            this.far?.dispose();
+            this.far = new FarLand(this.world.plan, { land: this.chunks.land, levels: this.view.quality.far });
+            this.view.setFar(this.far.object);
+        }
+
+        this.far.update(x, z);
+    }
+
     originOf(mapId) {
         return this.world.maps?.[mapId]?.origin ?? [0, 0];
     }
@@ -712,6 +725,7 @@ export class Game {
             this.chunks = new Chunks(world, { undergrowth: view.quality.undergrowth });
             this.chunks.setSpacing(view.quality.ground);
             view.scene.add(this.chunks.object);
+            this.#farLand(x + 0.5, y + 0.5);
             await time("chunks", async () => {
                 while (this.chunks.update(x + 0.5, y + 0.5, { budget: LOAD_BUDGET }) || this.chunks.busy) {
                     onProgress({ label: `Laying the land (${this.chunks.drawn.size} of ${chunks})`, done: ++done, total: steps });
@@ -1198,6 +1212,8 @@ export class Game {
         this.ground?.geometry.dispose();
         this.ground?.material.dispose();
         this.chunks?.dispose();
+        this.far?.dispose();
+        this.view.setFar(null);
         this.effects?.dispose();
         this.contacts?.dispose();
         this.navBaker?.dispose();
@@ -1723,6 +1739,8 @@ export class Game {
             if (this.chunks.update(x, z)) {
                 this.#hearTrees();
             }
+
+            this.#farLand(x, z);
         }
 
         this.#visit(dt);

@@ -688,7 +688,7 @@ test("dragged up, the camera looks up into the sky (clouds and the sun in it, bi
         game.advance(1);
 
         const looking = view.camera.getWorldDirection(view.camera.position.clone());
-        const up = { pitch: view.pitch, lowest: view.lowestPitch(), height: view.camera.position.y, looking: looking.y, sky: view.sky.object.visible && view.scene.children.includes(view.sky.object), birds: game.flyers.counts.birds, drawn: game.flyers.meshes.get("crow").count };
+        const up = { pitch: view.pitch, lowest: view.lowestPitch(), height: view.camera.position.y, looking: looking.y, sky: view.sky.object.visible && view.far.scene.children.includes(view.sky.object), birds: game.flyers.counts.birds, drawn: game.flyers.meshes.get("crow").count };
 
         // Walking again: looking down to see where they go
         game.battle.command("player", { type: "move", to: [player.square[0], player.square[1] - 6] });

@@ -553,11 +553,43 @@ drawn back or looks towards the horizon. Their soft edge (about 5 cm on medium a
 about the sun's own: the half-degree sun blurs a 2 m figure's shadow by 2 cm, a house's eaves' by
 7 cm.
 
-**Left as they are.** The fog is plain distance fog: the ground is level and the sun high (about
-50 degrees up), so haze thickening near the ground, or glowing warm towards the sun, would change
-almost nothing seen, for a change to every material's shader. The tone mapping stays ACES: AgX
-(tried, pictures with the change) greyed the lamplit taproom and dulled the painted colours, and
-Khronos Neutral turned the taproom orange.
+**The far land and the haze** (world/far/, world/fog.js; the terrain plan's M6a). Outdoors the
+world's drawn twice over each frame:
+- **What's far first,** with a camera of its own (from 40 m out to half as far again as the far
+  land reaches): the sky's dome, and the far land, ground out to the horizon round the player.
+- **Then everything near,** its depths forgotten, over it, with the camera that sees 160 m.
+- **The far land** is levels of ground, each a square of 64 by 64 cells round the player, the
+  finest 8 m between its corners and 512 m across, each level out twice as coarse and twice as
+  wide (a geometry clipmap: Losasso and Hoppe), three of them on low (out to 1 km), four on
+  medium (2 km), five on high (4 km); one draw call each, 8,192 triangles.
+  - **Its ground** is the land's as seen from afar (core/terrain/height.js `distantHeights`):
+    lakes and the sea carved in and lying flat at their level, coloured as deep water; no rivers.
+    Each level's edges are eased into the next one's (every other corner halfway between its
+    neighbours), so they meet without a crack.
+  - **Worked out off the page's thread** (far/far-worker.js), a level at a time, about 10 ms each
+    on a desktop; as the player walks, the finest moves every 16 m, the coarsest every 256 m.
+  - **Hidden where nearer ground's drawn:** each level is sunk out of sight inside the next one
+    in, and all of them within 112 m of the player, where the chunks' ground is.
+- **Its colour is the ground's as seen from afar** (ground.js `farGround`): the lands', the
+  homelands' and the grass's patches, rock where it's steep, each texture its average colour
+  (one tiling every few metres is a pattern, not a texture, from a kilometre off). The chunks'
+  ground turns to the same from 100 to 150 m in front of the camera, so where the far land takes
+  over no seam shows.
+- **The haze** thickens the further off, exponentially, from 20 m (none nearer) to all but gone
+  (95 %) at the far land's edge, as air does: so the near world is clearer than it was (15 % at
+  130 m, where the old fog was all there was), and hills, the volcano and the plains show
+  kilometres off, paling into the sky's own colour at the horizon. Fogs nearer than 400 m
+  (indoors; the labs, which don't see far: View's `far`) are linear as before.
+- **What stands up near the player** (buildings, trees, rocks, folk) fades out a few pixels at a
+  time from 128 to 154 m in front of the camera, before the near camera stops and would cut it
+  through. The ground doesn't: it goes on into the far land.
+- **Costs** (medium, the browser tests' software renderer): 4 to 8 more draw calls and about
+  50,000 more triangles a frame outdoors (the far land's 32,000, and more of the near world
+  showing through the thinner haze); indoors, none.
+
+**Left as they are.** The tone mapping stays ACES: AgX (tried, pictures with the change) greyed
+the lamplit taproom and dulled the painted colours, and Khronos Neutral turned the taproom
+orange.
 
 **Following the player** (app/camera.js). From the player's first step, the camera keeps up
 with them and turns round to look from behind them, the way they're going, at the same height
@@ -638,7 +670,8 @@ shaders; the shadows they cast stay whole).
 A mesh under each chunk of the world, rising and falling with the ground (WORLD.md, *The ground
 in play*): its corners a metre apart in the chunk the player's in, and further apart further off
 (`QUALITY.ground`, view.js: on high, a metre in the ring of chunks round it too and two metres
-beyond; on medium and low, two metres in that ring and four beyond, deep in the fog), redrawn
+beyond; on medium and low, two metres in that ring and four beyond, turning to the far land's
+look: the view, *The far land and the haze*), redrawn
 finer or coarser as the player moves, lit by its slope worked out from the corners round each (across
 into the chunks beside it). A skirt hangs two metres down round each chunk's edge, so where
 chunks drawn at different spacings meet no gap shows between them. Where the ground's steeper
@@ -1930,8 +1963,9 @@ phone's quality, a frame is 70 to 95 draw calls and 160,000 to 200,000 triangles
 and 240,000). The sky's dome is one draw call; the birds one a kind flying; a wyvern or the
 dragon in the air about 18,000 triangles in seven draw calls, casting no shadow. A chunk is
 drawn a step at a time within each frame's budget (the longest step a few milliseconds on a
-desktop): walking across the world, no frame's streaming takes over 8 ms there. The camera sees no further than
-150 metres (the fog's all there is by 130).
+desktop): walking across the world, no frame's streaming takes over 8 ms there. The near camera
+sees 160 metres; past that, the far land out to 1, 2 or 4 km (low, medium, high), in four to
+eight more draw calls and about 50,000 more triangles (the view, *The far land and the haze*).
 Everything that can be is built once: the town is merged, shaders are compiled while loading
 (and a character, creature, wyvern or dragon that comes later has its compiled before it's first
 drawn, hidden till then: `View.prepare`, in the background where the browser can, so a kind not

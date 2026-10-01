@@ -417,6 +417,28 @@ export function stillLevelAt(plan, x, y) {
 }
 
 /**
+ * The land as it's seen from afar (world/far.js), on a grid as heightsOf's: the lie of the land
+ * with lakes and the sea carved into it, but not rivers (too narrow to be seen far off), or the
+ * still water's surface where it stands over it; into `heights` (metres, not rounded) and `water`
+ * (1 where it's water, else 0).
+ */
+export function distantHeights(plan, x0, y0, count, step, heights = new Float32Array(count * count), water = new Uint8Array(count * count)) {
+    for (let j = 0; j < count; j++) {
+        for (let i = 0; i < count; i++) {
+            const [x, y] = [x0 + i * step, y0 + j * step];
+            const still = stillOf(plan, x, y);
+            const ground = stillHeight(plan, x, y, still);
+            const level = still && still.wetness > WET_FROM ? still.level : -Infinity;
+
+            heights[j * count + i] = Math.max(ground, level);
+            water[j * count + i] = level > ground ? 1 : 0;
+        }
+    }
+
+    return { heights, water };
+}
+
+/**
  * The heights on a grid (metres, rounded): `count` × `count` points, `step` metres apart, from
  * (x0, y0), row by row (north to south, each west to east), into `out` (a Float32Array; made if
  * not given).

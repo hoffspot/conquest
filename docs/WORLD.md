@@ -528,6 +528,10 @@ The world is played on the land's height with what's built levelled into it (`Gr
   wyvern or dragon gliding down to it to land.
 - Birds, wyverns and the dragon flying at their height over the ground, rising over what's ahead
   and sinking slowly after, nose up and down as they go.
+- **The far land** past the chunks (GAME.md, *The far land and the haze*): the land as it's seen
+  from afar (`distantHeights`: the lie of the land with lakes and the sea carved in, but not
+  rivers, too narrow to see from far off; the still water's surface where it stands over it),
+  worked out on lattices 8 to 128 m apart. Only drawn: nothing in the world stands on it.
 - What lies on the ground lies along its slope: the ring where the player's walking to, the
   target's ring, heals' rings, blood, scorches and runes, spells' rings; particles falling to the
   ground where they are; spikes each from the ground where it bursts up; dropped bundles, camps'

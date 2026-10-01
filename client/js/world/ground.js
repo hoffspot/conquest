@@ -17,6 +17,7 @@ import { RACES } from "../core/worldplan/races.js";
 import { paintLayer, SIZE } from "./art/engine/painters.js";
 import { textureCanvas } from "./art/engine/materials.js";
 import { blurred } from "./fields.js";
+import { FAR_FOG } from "./fog.js";
 import { causticTexture, FIELD, SHORE, WATER_DETAIL } from "./water.js";
 import { TREE_WIND } from "./art/kits/trees.js";
 
@@ -95,6 +96,16 @@ const WET = { darker: 0.38, up: 1.2 };
 // Caustics on a riverbed or a lake's: how big their cells are (a picture to 1/scale metres), how
 // bright, and how fast they fade with depth (a metre)
 const CAUSTICS = { scale: 0.4, bright: 0.85, fade: 0.8 };
+
+/**
+ * The ground as it's seen from afar (the far land, world/far/far.js): its textures, which tile every
+ * few metres, each its average colour (a pattern, not a texture, from afar), and only what's large
+ * (the lands, the homelands, the patches, rock) on them. The chunks' ground turns to it from
+ * `from` to `to` metres in front of the camera (under the far haze: fog.js), so where it meets the
+ * far land no seam shows. Still water afar (`water`: sRGB), deep under the haze; and how much less
+ * steep the far land's ground has to be to show rock (its corners metres apart smooth its slopes).
+ */
+export const FAR_GROUND = Object.freeze({ from: 100, to: 150, water: "#30505c", rock: 0.06 });
 
 /**
  * The peoples whose homelands (the world plan's territories) have ground of their own, painted
@@ -281,13 +292,15 @@ function groundTiles() {
         const grass = tileTexture("grass", GRASS_METRES);
         const pixels = grass.texture.image.getContext("2d").getImageData(0, 0, grass.texture.image.width, grass.texture.image.height).data;
         const linear = (value) => ((value / 255 + 0.055) / 1.055) ** 2.4;
-        let sum = 0;
+        let [sum, green] = [0, 0];
 
         for (let k = 0; k < pixels.length; k += 4) {
             sum += 0.2126 * linear(pixels[k]) + 0.7152 * linear(pixels[k + 1]) + 0.0722 * linear(pixels[k + 2]);
+            green += linear(pixels[k + 1]);
         }
 
-        tiles = { grass, brightness: sum / (pixels.length / 4), layers: LAYERS.map(([, name, size]) => tileTexture(name, size)), rock: tileTexture("rock", ROCK_METRES) };
+        // (And its green on average: how its larger copy shades the ground, on average)
+        tiles = { grass, brightness: sum / (pixels.length / 4), variation: green / (pixels.length / 4), layers: LAYERS.map(([, name, size]) => tileTexture(name, size)), rock: tileTexture("rock", ROCK_METRES) };
     }
 
     return tiles;
@@ -431,16 +444,18 @@ function homeTexture() {
 /**
  * A material for the ground: the grass, tinted by `land` (landColours', or none), blended with the
  * other kinds of ground by `splat` (a texture: splatOf's), which covers `area` [x, z, width, depth]
- * (metres). Every ground material shares one shader.
+ * (metres). Every ground material shares one shader. Or, `far`, for the far land's (world/far/
+ * far.js): the ground as it's seen from afar (FAR_GROUND), and still water; not drawn within
+ * `far.hole` (uniform: x, z, radius, metres) or `far.inner` (uniform: x0, z0, x1, z1: the level
+ * inside it), where the ground nearer is (sunk out of the way).
  */
-export function groundMaterial({ splat = null, area = [0, 0, 1, 1], land = null, contact = null, water = null } = {}) {
-    const { grass, brightness, layers, rock } = groundTiles();
+export function groundMaterial({ splat = null, area = [0, 0, 1, 1], land = null, contact = null, water = null, far = null } = {}) {
+    const { grass, brightness, variation: meanVariation, layers, rock } = groundTiles();
     const material = new THREE.MeshLambertMaterial({ color: 0xffffff });
 
-    // (Ground with water on it: wet up its banks, and light gathering on its bed under the water)
-    if (water) {
-        material.defines = { GROUND_WATER: "" };
-    }
+    // (The ground goes on into the far land past where nearer things fade: fog.js; with water on
+    // it, wet up its banks, and light gathering on its bed under the water)
+    material.defines = { NO_NEAR_FADE: "", ...(water ? { GROUND_WATER: "" } : {}), ...(far ? { FAR_LAND: "" } : {}) };
 
     if (!land) {
         noLand ??= new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat);
@@ -473,10 +488,21 @@ export function groundMaterial({ splat = null, area = [0, 0, 1, 1], land = null,
             patchMap: { value: patchTexture() },
             rockMap: { value: rock.texture },
             ...(water ? { groundWater: { value: water.texture }, groundWaterArea: { value: new THREE.Vector4(...water.area) }, causticMap: { value: causticTexture() }, groundTime: TREE_WIND.time, groundDetail: WATER_DETAIL } : {}),
+            ...(far ? { farHole: far.hole, farInner: far.inner, farWaterColour: { value: new THREE.Color(FAR_GROUND.water) } } : {}),
             ...Object.fromEntries(layers.flatMap(({ texture, size }, k) => [[`layer${k}Map`, { value: texture }], [`layer${k}Size`, { value: size }]])),
         });
         shader.vertexShader = shader.vertexShader
-            .replace("#include <common>", "#include <common>\nvarying vec2 vGround;\nvarying vec3 vUp;\nvarying float vHeight;")
+            .replace("#include <common>", "#include <common>\nvarying vec2 vGround;\nvarying vec3 vUp;\nvarying float vHeight;\n#ifdef FAR_LAND\nattribute float farWater;\nvarying float vFarWater;\nuniform vec3 farHole;\nuniform vec4 farInner;\n#endif")
+            .replace(
+                "#include <begin_vertex>",
+                `#include <begin_vertex>
+#ifdef FAR_LAND
+// (Sunk out of sight where the ground nearer's drawn: round the player, and inside the next level in)
+vFarWater = farWater;
+vec2 farAt = (modelMatrix * vec4(transformed, 1.0)).xz;
+if (distance(farAt, farHole.xy) < farHole.z || (farAt.x > farInner.x && farAt.x < farInner.z && farAt.y > farInner.y && farAt.y < farInner.w)) transformed.y -= 1000.0;
+#endif`,
+            )
             .replace("#include <worldpos_vertex>", "#include <worldpos_vertex>\nvGround = (modelMatrix * vec4(transformed, 1.0)).xz;\nvHeight = (modelMatrix * vec4(transformed, 1.0)).y;\nvUp = normalize(mat3(modelMatrix) * objectNormal);");
         shader.fragmentShader = shader.fragmentShader
             .replace("#include <common>", `#include <common>
@@ -504,8 +530,52 @@ uniform highp sampler2DArray homeLayers;
 uniform sampler2D grassMap;
 uniform float grassSize;
 uniform sampler2D patchMap;
-${layers.map((_, k) => `uniform sampler2D layer${k}Map;\nuniform float layer${k}Size;`).join("\n")}`)
+#ifdef FAR_LAND
+varying float vFarWater;
+uniform vec3 farWaterColour;
+#endif
+${layers.map((_, k) => `uniform sampler2D layer${k}Map;\nuniform float layer${k}Size;`).join("\n")}
+
+// The ground as it's seen from afar at a point (its up: up; rock that much less steep, as the far
+// land's corners smooth its slopes): each texture's average colour, and only what's large on them
+vec3 farGround(vec2 at, vec3 up, float rockShift) {
+    vec2 landAt = at / landSize;
+    vec2 blur = vec2(12.0, -12.0) / landSize;
+    vec4 land = 0.25 * (texture2D(landMap, landAt + blur.xx) + texture2D(landMap, landAt + blur.xy) + texture2D(landMap, landAt + blur.yx) + texture2D(landMap, landAt + blur.yy));
+    vec3 grass = textureLod(grassMap, vec2(0.5), 12.0).rgb;
+    grass = mix(grass, land.rgb * dot(grass, vec3(0.2126, 0.7152, 0.0722)) / ${brightness.toFixed(4)}, land.a);
+    vec4 homes = texture2D(homeMap, landAt);
+    float homeWeight = homes.r;
+    float homeLayer = 0.0;
+    if (homes.g > homeWeight) { homeWeight = homes.g; homeLayer = 1.0; }
+    if (homes.b > homeWeight) { homeWeight = homes.b; homeLayer = 2.0; }
+    if (homes.a > homeWeight) { homeWeight = homes.a; homeLayer = 3.0; }
+    float homes2 = texture2D(homeMap2, landAt).r;
+    if (homes2 > homeWeight) { homeWeight = homes2; homeLayer = 4.0; }
+    float home = smoothstep(0.2, 0.75, homeWeight) * ${HOME_AMOUNT.toFixed(2)};
+    if (home > 0.0) {
+        grass = mix(grass, textureLod(homeLayers, vec3(0.5, 0.5, homeLayer), 12.0).rgb, home);
+    }
+    vec4 coarse = texture2D(patchMap, at / ${PATCHES.coarse.toFixed(1)});
+    float strength = (1.0 - 0.6 * land.a) * (1.0 - 0.6 * home);
+    float dry = smoothstep(${PATCHES.dry[0].toFixed(3)}, ${PATCHES.dry[1].toFixed(3)}, coarse.r);
+    float lush = smoothstep(${PATCHES.lush[0].toFixed(3)}, ${PATCHES.lush[1].toFixed(3)}, coarse.g) * (1.0 - dry);
+    float bare = smoothstep(${PATCHES.bare[0].toFixed(3)}, ${PATCHES.bare[1].toFixed(3)}, coarse.b);
+    grass = mix(grass, grass * vec3(1.3, 1.12, 0.6), dry * ${PATCHES.dry[2].toFixed(2)} * strength);
+    grass = mix(grass, grass * vec3(0.72, 0.9, 0.68), lush * ${PATCHES.lush[2].toFixed(2)} * strength);
+    vec3 earth = mix(textureLod(layer0Map, vec2(0.5), 12.0).rgb * 0.92, grass * 0.8, land.a * 0.75);
+    grass = mix(grass, earth, bare * ${PATCHES.bare[2].toFixed(2)} * strength);
+    grass *= ${(0.82 + 0.45 * meanVariation).toFixed(4)};
+    float steep = 1.0 - smoothstep(${ROCK_FROM.all.toFixed(2)} + rockShift, ${ROCK_FROM.start.toFixed(2)} + rockShift, up.y);
+    vec3 rock = textureLod(rockMap, vec2(0.5), 12.0).rgb;
+    rock = mix(rock, rock * land.rgb / max(0.2, dot(land.rgb, vec3(0.3333))), land.a * 0.35);
+    return mix(grass, rock * ${(0.85 + 0.3 * meanVariation).toFixed(4)}, steep);
+}`)
             .replace("#include <map_fragment>", `
+#ifdef FAR_LAND
+groundContact = 0.0;
+vec3 ground = mix(farGround(vGround, vUp, ${FAR_GROUND.rock.toFixed(2)}), farWaterColour, vFarWater);
+#else
 vec4 splat = texture2D(splatMap, (vGround - splatArea.xy) / splatArea.zw);
 groundContact = texture2D(contactMap, (vGround - contactArea.xy) / contactArea.zw).r;
 float variation = texture2D(grassMap, vGround / ${VARIATION_METRES.toFixed(1)}).g;
@@ -574,6 +644,12 @@ if (steep > 0.0) {
     rock = mix(rock, rock * land.rgb / max(0.2, dot(land.rgb, vec3(0.3333))), land.a * 0.35);
     ground = mix(ground, rock * (0.85 + 0.3 * variation), steep);
 }
+#ifdef USE_FOG
+// (Under the far haze, turning to the ground as it's seen from afar where the far land takes over)
+if (fogFar > ${FAR_FOG.toFixed(1)} && vFogDepth > ${FAR_GROUND.from.toFixed(1)}) {
+    ground = mix(ground, farGround(vGround, vUp, 0.0), smoothstep(${FAR_GROUND.from.toFixed(1)}, ${FAR_GROUND.to.toFixed(1)}, vFogDepth));
+}
+#endif
 #ifdef GROUND_WATER
 {
     // Wet, so darker, under the water and a metre and more up its banks; and under it, light
@@ -590,6 +666,7 @@ if (steep > 0.0) {
         ground *= 1.0 + ${CAUSTICS.bright.toFixed(2)} * caustic * smoothstep(0.02, 0.25, waterDepth) * exp(-waterDepth * ${CAUSTICS.fade.toFixed(2)});
     }
 }
+#endif
 #endif
 diffuseColor.rgb *= ground;`)
             .replace("#include <aomap_fragment>", `#include <aomap_fragment>

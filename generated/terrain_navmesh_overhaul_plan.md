@@ -219,6 +219,36 @@ TerrainChunk {
   - Splat layers chosen by slope, height and ridge; biplanar rock only on cliffs.
   - Height-blended layers on medium and up; a detail normal map within 30 m.
 
+**As built in M6a** (the far rings; see the change log):
+- **Levels, not a height texture** (`world/far/`): each level is a square of 64 by 64 cells (8 m to
+  128 m between corners, 512 m to 8 km across), its heights worked out in a worker
+  (`far-worker.js`, the newest ask per level only) from `distantHeights` and set into the mesh's
+  vertices, the mesh moved to the level's middle. No vertex texture fetch and no whole-world
+  texture: a level is about 4,200 samples (about 10 ms on a desktop), and only the finest moves
+  often (every 16 m). Three levels on low (1 km), four on medium (2 km), five on high (4 km).
+- **Nesting:** each level's middle on the lattice twice its spacing, so its edges lie on the next
+  level's lines; every other corner along its edges is put halfway between its neighbours (as
+  CDLOD morphs), so they meet without cracks. Rather than rings with holes, each level is whole
+  and sunk 1,000 m inside the next level in (a vertex-shader test against that level's square),
+  and all of them within 112 m of the player.
+- **Two passes:** the far scene (the sky's dome and the far land, its own sun and the same
+  environment and haze) drawn with a camera from 40 m to 1.5 times the far land's reach; then the
+  near scene over it, depth cleared, with the near camera at 160 m (not 300: past 160 m the near
+  world's trees and buildings would cost too much). Its background colour is lifted for that pass:
+  three.js clears for a scene's background colour whatever `autoClear` says.
+- **The seam:** what stands up near the player fades out (dithered: interleaved gradient noise)
+  from 128 to 154 m in front of the camera, in three.js's fog chunk (`world/fog.js`), all but the
+  ground (`NO_NEAR_FADE`); the chunks' ground turns from 100 to 150 m to `farGround`, the same
+  colour function the far land uses (each tiling texture its average colour: a 5 m grass tile
+  seen a kilometre off was a regular pattern), so no seam shows between them.
+- **The haze:** three.js's linear fog, when it reaches past 400 m, is exponential instead
+  (1 − e^(−3(d − near)/(far − near)): 95 % at its far distance), from 20 m to the far land's
+  edge; nearer fogs (indoors, the labs) are as they were. Indoors and out keep the same fog type,
+  so going in and out compiles nothing.
+- **Not yet:** far rivers (the far land has the lakes and the sea; rivers end where the near
+  world's drawn), far trees, silhouettes, height fog in bands, the region look and grade, cascaded
+  shadows: M6b and M6c.
+
 ### 3.6 Serialisation and the network
 
 - Terrain never travels. The `welcome` carries:
@@ -995,7 +1025,9 @@ pictures for anything that changes the look.
 | **M4b** | Places on the ground | Camps on flats; castles and high places on rises, on mounds; pools in hollows | Pictures; every camp's pad near its land in a test |
 | **M4c** | Settlements on slopes | Settlements lying with the land (tilted pads); foundations under what's built on a slope; roads over pads' eased land | Pictures; pads on their planes in a test |
 | **M5** | Multiplayer motion | `motion` stream; early desync checks; hero prediction; tick sync; debug RTT; NET_VERSION 12 | Two-browser e2e with no drift; bandwidth measured |
-| **M6** | Horizon and atmosphere | Far clipmap rings; height fog in value bands; per-region look table and grade (§9 row 1); far silhouettes and the world landmark (§9 row 2); far trees; `SunLight` cascades on medium and high; terrain material | Pictures; budgets per tier met |
+| **M6a** | The far land | Far clipmap levels in a worker; two passes; exponential haze to the horizon; near objects faded before the near camera's end; the near ground turning to the far land's look | Pictures; budgets per tier met |
+| **M6b** | Atmosphere | Height fog in value bands; per-region look table and grade (§9 row 1); `SunLight` cascades on medium and high; terrain material | Pictures; budgets per tier met |
+| **M6c** | Things on the horizon | Far silhouettes and the world landmark (§9 row 2); far trees; far rivers | Pictures; budgets per tier met |
 | **M7** | Elden Ring environment pass | In §9's order: the landmark pass in the plan; neutral sites built, with the decay pass; cliffs and rocks; churches, citadels, stone bridges; foliage palette, grass ring, weathering | Pictures after each part; budgets met |
 | **M8** | Characters on Vitruvian | §10, as several PRs (conversion, body, garments, skin, face, LODs, clips) | Pictures; clipping tests green; budgets met |
 
@@ -1395,3 +1427,18 @@ converted data is to be measured in M8 against today's hm08 data.
     pacing simulation; `test/predict.test.js`; RTT and motion over the real relay in
     `test/together.test.js`; and a two-browser e2e of a minute's walking about with no drift, the
     copy ending just as the host's (time, checksum, everyone's place to the millimetre).
+- **2026-10-01, M6a built** (the far land; M6 split into M6a, M6b and M6c):
+  - **Seen:** from the start town the volcano 800 m off now stands over the fields, and the
+    plains reach to a hazy horizon, where before the fog was all there was by 130 m (pictures
+    from the same cameras, before and after).
+  - **Costs** (medium, software renderer, same views): 68 → 76, 57 → 61 and 67 → 71 draw
+    calls; 203k → 257k, 197k → 233k and 135k → 162k triangles (the far land's 32,768, and more
+    of the near world through the thinner haze). Within the 250 draws and 500k triangles of §13.
+  - **Found while drawing:** the near scene's background colour cleared the far pass (three.js
+    clears for a background colour even with `autoClear` off); the far land's tiling textures
+    made a regular pattern a kilometre off; the near ground ended in a seam where the far land
+    began. Each fixed (above).
+  - **Tests:** `test/far.test.js`: the levels' lattices nest; the land as seen from afar (still
+    water at its level and marked, the edges eased, the sea past the world's edge); a level's
+    cost; the triangle budget per tier, the levels moved as the player walks and sunk inside each
+    other; the haze's shape. The e2e sky check now looks for the dome in the far scene.

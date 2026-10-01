@@ -20,7 +20,7 @@ export { detectQuality } from "../world/view.js";
 export async function createSession({ canvas, quality, sound = true, volumes, fetch = globalThis.fetch.bind(globalThis), onProgress = () => {} }) {
     onProgress("Starting the 3D view");
 
-    const view = new View(canvas, { quality });
+    const view = new View(canvas, { quality, far: true });
 
     onProgress("Unpacking the body and mapping its skin");
 
