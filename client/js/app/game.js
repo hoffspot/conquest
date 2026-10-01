@@ -202,6 +202,10 @@ const VISITS = Object.freeze({ every: 0.5, budget: 6 });
 // How often a hosted world's goings-on are sent to those who've joined it (seconds: docs/WAR.md M11)
 const FLUSH_EVERY = 0.1;
 
+// Joined to another's world, the most of its time played in a frame (s): frames coming slowly,
+// the time between them all the same (playing alone, a slow frame's a slower world instead)
+const JOINED_FRAME = 1;
+
 // How often a joined game times its link to the host (seconds); and how far ahead its hero's
 // drawn going when swiped straight ahead (m: app/predict.js stops it soon enough)
 const PING_EVERY = 1;
@@ -1380,7 +1384,8 @@ export class Game {
         }
 
         const frameStart = performance.now();
-        const dt = Math.min(0.1, Math.max(0, (now - this.lastFrame) / 1000));
+        const elapsed = Math.max(0, (now - this.lastFrame) / 1000);
+        const dt = Math.min(0.1, elapsed);
 
         this.lastFrame = now;
 
@@ -1389,7 +1394,7 @@ export class Game {
         let steps = 0;
 
         try {
-            steps = this.#tick(dt);
+            steps = this.#tick(dt, elapsed);
         } catch (error) {
             this.#fault(error);
         }
@@ -1466,9 +1471,13 @@ export class Game {
     }
 
     // Run the battle's steps for `dt` seconds, and move everyone to match. Returns the steps run
-    #tick(dt) {
-        // (Joined: the host's steps played a little slower or faster, to keep a few in hand)
-        this.accumulator += dt * 1000 * (this.remote ? this.remote.pace(dt * 1000) : 1);
+    #tick(dt, elapsed = dt) {
+        // (Joined: the host's steps played a little slower or faster, to keep a few in hand; and
+        // as fast as time goes by, however slowly the frames come (a second's worth at most a
+        // frame), or the host would leave it behind)
+        const played = this.remote ? Math.min(JOINED_FRAME, elapsed) : dt;
+
+        this.accumulator += played * 1000 * (this.remote ? this.remote.pace(played * 1000) : 1);
 
         // (What was put off till now: a spark off the anvil at each blow)
         if (this.later.length && this.later[0].at <= this.clock) {

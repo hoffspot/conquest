@@ -766,6 +766,11 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   - **Catching up:** when a copy falls more than 6 behind what it means to keep (`PACE`), it plays
     up to 40 more steps a frame, for no more than 8 ms of it, so that on a slow phone catching up
     doesn't make the frame so long that it falls further behind.
+  - **Slow frames:** a joined copy plays as much of the host's time as has gone by since its last
+    frame (up to a second), however slowly its frames come. Playing alone, a frame counts for no
+    more than a tenth of a second, so a slow frame makes a slower world rather than a jump. A copy
+    can't do that: at 2 frames a second it fell 0.4 s further behind the host every second, and a
+    command's answer came back seconds late. Found by the two-browser test, on a busy machine.
 - **Commands.** A joined player's own commands go to the host, and come back among the rest. What
   came of them (a request offered, gold paid, a door gone through) is what came of them on
   their copy, a moment later: the talk says it again as it now is (`Conversation.retell`).
