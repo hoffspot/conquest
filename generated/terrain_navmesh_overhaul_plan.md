@@ -1681,3 +1681,28 @@ converted data is to be measured in M8 against today's hm08 data.
     `test/trails.test.js` (the trail's grade over the way walked, at most 0.5 since its way
     changed near the top; the ground between a hairpin's legs eased, never a step; the way the
     worker finds, round the sites); `test/setpieces.test.js` (exact maths in `neutral.js`).
+- **2026-10-01, M7b-1 built** (tall grass: steps 1 and 4 of the research report behind M7b,
+  "Elden Ring ground and ruins", shared in the session):
+  - **Why:** the user's reference shots (a golden grassland, Elden Ring's own grass settings) and
+    "more important is the interesting ground and environment ... that kind of variability". The
+    undergrowth was about a blade a square metre, 0.25–0.6 m tall; a field wants about thirty, up
+    to 1.5 m.
+  - **Built:** a grass map for each chunk near the player (`world/grassmap.js`: thickness,
+    height, dryness, colour, from the land, the ground's kind, its patches and slow noise, the
+    same every time); tall grass drawn on the GPU round the player in two bands
+    (`world/grass.js`: a clump of blades per cell of a lattice that wraps as the player goes,
+    each built in the vertex shader from a hash of its cell, standing on the ground's heights);
+    the ground darker and the grass's colour under it (`ground.js GRASS_UNDER`); each quality's
+    reach (`QUALITY.grass`: none on low, 12 and 28 m on medium, 18 and 40 m on high).
+  - **Cost:** two draws; about 100,000 triangles on medium and 210,000 on high (the meadow by the
+    river on seed 1), within the report's per-tier budgets; each blade's corners shared (a near
+    blade's five corners make its three triangles), so the vertex shader runs a third less. Its GPU time on a phone is to be
+    measured (the report's first open question).
+  - **Next (M7b-2):** the report's steps 2 and 3, and 7 and 8: ranked patterns and ordered layers
+    (trees, boulders, bushes, grass, flowers), boulder clusters, flat slabs, worn dirt along
+    paths and round camps, bushes at patch edges, flower carpets, motes and fireflies; the ground
+    carrying the grass's look past where it's drawn, and on low.
+  - **Tests:** `test/grass.test.js` (each chunk's map the same every time, standing on its
+    ground; grass only on open grass; thick and thin, tall and short, green and golden; none on
+    low, two bands on medium and high; the nine chunks round the player mapped as they're drawn,
+    none that aren't).

@@ -774,11 +774,11 @@ drawn whole whichever way the camera looks (about 90 draw calls and 170,000 tria
 to High (suggested for the device until it's moved: older phones low, phones medium, computers
 high); debug mode can change it too. The game aims at 60 frames a second at every level:
 
-| Level | Pixels | Shadow map | Antialiasing | Hair | Skin textures | Undergrowth | Far land | Far trees |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Low (older phones) | 1× | 1024 | no | a fifth of the strands | 512 | half | 1 km | none |
-| Medium (phones) | up to 1.5× | 2048 | yes | 30% | 512 | three-quarters | 2 km | to 700 m |
-| High (computers) | up to 2× | 2048 | yes | 45% | 1024 | all of it | 4 km | to 1.2 km |
+| Level | Pixels | Shadow map | Antialiasing | Hair | Skin textures | Undergrowth | Tall grass | Far land | Far trees |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Low (older phones) | 1× | 1024 | no | a fifth of the strands | 512 | half | none | 1 km | none |
+| Medium (phones) | up to 1.5× | 2048 | yes | 30% | 512 | three-quarters | to 12 m, thinner to 28 m | 2 km | to 700 m |
+| High (computers) | up to 2× | 2048 | yes | 45% | 1024 | all of it | to 18 m, thinner to 40 m | 4 km | to 1.2 km |
 
 **How often it's drawn** (`app/pacing.js`). The browser asks for a frame each time the screen
 refreshes: 60 times a second on most screens, 90, 120 or 144 on many phones and monitors. Drawn
@@ -1040,6 +1040,35 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
   the atlas's (`wildsMaterial`): both sides lit as the ground is, each blade's tip stirring in the
   breeze (a `sway` for each vertex), and past 40 metres from the player everything sinking into
   the ground, gone by 56, so nothing pops in or out. How thick it grows follows the quality level.
+- **Tall grass** (terrain plan M7b; `world/grassmap.js`, `world/grass.js`), thick over the open
+  land round the player, knee to waist high: a field, as the Elden Ring's are, not tufts on a
+  lawn.
+  - **Where, how tall, how dry** (`grassMap`, a texel a square metre of each chunk, the same
+    every time): only on open grass (no road, field or yard, nothing standing, no water or
+    bridge); as thick and tall as its land grows it (`GRASS_LANDS`: a meadow's thick and knee to
+    waist high, a savannah's tall and golden, the woods' thin, none on snow), its lands blended
+    across their cells' edges; in clumps and in tall and short stretches (slow noise); golden
+    where the ground's own dry patches are, greener where they're lush, none where it's worn
+    bare; thinner beside a road, on steep ground and up towards the rock, and short and thin in
+    a settlement. Its tips' colour is the land's grass's, turned to straw as it's dry.
+  - **Drawn on the GPU**, two draws: each band one clump of blades (ten, each bent in two, near;
+    eight single wider blades, far) drawn once for each cell of a lattice round the player. A
+    clump's cell is its own spot on the land, the lattice wrapping round as the player goes, so
+    nothing moves but at the bands' edges; where in its cell it grows, which way its blades lean,
+    how tall each is and how green, from a hash of its cell. The blades stand on the ground as
+    it's drawn (its heights round the player in a texture, read in the vertex shader), lean out
+    from their clump's middle and with the breeze, darker at their feet. The far band takes over
+    from the near over the near band's last fifth and sinks into the ground at its own edge. The
+    lattice is centred a little ahead of the player the way the camera looks. No alpha: opaque
+    blades, so Apple's GPUs draw nothing behind them.
+  - **The ground under it** is darker and the grass's own colour as thick as it grows, so the
+    gaps between the blades read as more grass (`ground.js GRASS_UNDER`).
+  - **Its map** is worked out for the nine chunks round the player as they're drawn, a few rows
+    at a time in 2 ms a frame (a chunk's about 15–20 ms in all), into a texture four chunks a
+    side that wraps as the player goes.
+  - **Cost** (the meadow by the river on seed 1, the software renderer, relative only): about
+    100,000 triangles more on medium (330,000 to 430,000) and 210,000 on high, two draws; none on
+    low.
 
 The chunks also say how tall their trees, features and buildings are on each square, for the
 cutaway. The minimap is painted from the same chunks.

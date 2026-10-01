@@ -210,6 +210,13 @@ export class Chunks {
         }
     }
 
+    /** Whether a chunk (cx, cy) is drawn, all of it (its ground in sight). */
+    isDrawn(cx, cy) {
+        const drawn = this.drawn.get(key(cx, cy));
+
+        return Boolean(drawn && !drawn.drawing);
+    }
+
     /** Whether any chunk near, any settlement's buildings, or any undergrowth near, are still to be drawn. */
     get busy() {
         return this.drawing !== null || this.building.length > 0 || this.growing.length > 0 || this.wanted.some(([cx, cy]) => !this.drawn.has(key(cx, cy)));

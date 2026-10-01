@@ -64,6 +64,7 @@ import { Squares } from "../world/squares.js";
 import { QUALITY } from "../world/view.js";
 import { KINDS, Wounds } from "../world/wounds.js";
 import { Chunks, DECK, LOAD_BUDGET, REACH } from "../world/chunks3d.js";
+import { TallGrass } from "../world/grass.js";
 import { FarLand } from "../world/far/far.js";
 import { farReach } from "../world/far/levels.js";
 import { Silhouettes } from "../world/far/silhouettes.js";
@@ -763,6 +764,10 @@ export class Game {
             this.chunks = new Chunks(world, { undergrowth: view.quality.undergrowth });
             this.chunks.setSpacing(view.quality.ground);
             view.scene.add(this.chunks.object);
+            // (The tall grass over the land round the player, as the chunks there are drawn)
+            this.grass = new TallGrass(this.chunks.overworld, { ready: (cx, cy) => this.chunks.isDrawn(cx, cy) });
+            this.grass.setQuality(view.quality.grass);
+            this.chunks.object.add(this.grass.object);
             this.#farLand(x + 0.5, y + 0.5);
             this.#landLook(x + 0.5, y + 0.5, 0);
             await time("chunks", async () => {
@@ -1250,6 +1255,7 @@ export class Game {
         this.town?.object.traverse((node) => node.geometry?.dispose());
         this.ground?.geometry.dispose();
         this.ground?.material.dispose();
+        this.grass?.dispose();
         this.chunks?.dispose();
         this.far?.dispose();
         this.view.setFar(null);
@@ -1804,6 +1810,11 @@ export class Game {
                 this.#hearTrees();
             }
 
+            // (The tall grass following them, as tall as the quality draws it, ahead of them the
+            // way the camera looks)
+            this.grass?.setQuality(this.view.quality.grass);
+            this.grass?.update(x, z, 2, this.#lookAlong());
+
             this.#farLand(x, z);
             this.#landLook(x, z, dt);
         }
@@ -1992,6 +2003,15 @@ export class Game {
 
     // The camera (camera.js): following the player from behind the way they're going, or where a
     // drag has turned it, leaning towards whoever they're fighting so both are in view
+    // Which way the camera looks over the ground ([x, z], a unit; [0, 0] straight down)
+    #lookAlong() {
+        const { elements } = this.view.camera.matrixWorld;
+        const [x, z] = [-elements[8], -elements[10]];
+        const length = Math.hypot(x, z);
+
+        return length > 1e-6 ? [x / length, z / length] : [0, 0];
+    }
+
     #follow(dt) {
         const player = this.avatars.get(this.me);
 

@@ -55,6 +55,16 @@ const ROCK_FROM = Object.freeze({ start: 0.84, all: 0.7, sheer: 0.45 });
  */
 export const ALPINE = Object.freeze({ rock: [130, 220], by: 0.12, snow: [205, 245], wander: 30, flat: [0.62, 0.8], ash: 0.1, colour: "#c8ccd2" });
 
+/**
+ * The tall grass round the player (grass.js), for the ground under it: its map and its tips'
+ * colours (textures 256 texels a side, a texel a metre, wrapping), where the player is (x, z
+ * metres), and how far from them it's drawn (metres: 0 while there's none). Under thick grass the
+ * ground's darker and the grass's own colour, so it's a field, not blades on a lawn.
+ */
+export const TALL_GRASS_TEXELS = 256;
+
+export const GRASS_UNDER = Object.freeze({ map: { value: null }, tint: { value: null }, focus: { value: new THREE.Vector2() }, reach: { value: 0 } });
+
 // How far the ground carries on past the map's edges (metres): into the fog
 const BEYOND = 110;
 
@@ -549,6 +559,10 @@ vec3 farGround(vec2 at, vec3 up, float height, float rockShift) {
             grassMap: { value: grass.texture },
             grassSize: { value: grass.size },
             patchMap: { value: patchTexture() },
+            grassUnderMap: GRASS_UNDER.map,
+            grassUnderTint: GRASS_UNDER.tint,
+            grassUnderFocus: GRASS_UNDER.focus,
+            grassUnderReach: GRASS_UNDER.reach,
             rockMap: { value: rock.texture },
             snowColour: { value: new THREE.Color(ALPINE.colour) },
             ...(water ? { groundWater: { value: water.texture }, groundWaterArea: { value: new THREE.Vector4(...water.area) }, causticMap: { value: causticTexture() }, groundTime: TREE_WIND.time, groundDetail: WATER_DETAIL } : {}),
@@ -631,6 +645,10 @@ uniform highp sampler2DArray homeLayers;
 uniform sampler2D grassMap;
 uniform float grassSize;
 uniform sampler2D patchMap;
+uniform sampler2D grassUnderMap;
+uniform sampler2D grassUnderTint;
+uniform vec2 grassUnderFocus;
+uniform float grassUnderReach;
 #ifdef FAR_LAND
 varying float vFarWater;
 varying vec3 vFarColour;
@@ -684,6 +702,16 @@ grass = mix(grass, grass * vec3(1.3, 1.12, 0.6), dry * ${PATCHES.dry[2].toFixed(
 grass = mix(grass, grass * vec3(0.72, 0.9, 0.68), lush * ${PATCHES.lush[2].toFixed(2)} * strength);
 vec3 earth = mix(texture2D(layer0Map, vGround / layer0Size).rgb * 0.92, grass * 0.8, land.a * 0.75);
 grass = mix(grass, earth, bare * ${PATCHES.bare[2].toFixed(2)} * strength);
+
+// Under the tall grass (grass.js), as thick as it grows, the ground darker and the grass's own
+// colour: a field, not blades on a lawn (fading out where it's no longer drawn)
+float grassUnderAway = distance(vGround, grassUnderFocus);
+if (grassUnderReach > 0.0 && grassUnderAway < grassUnderReach) {
+    vec2 grassUnderAt = (vGround + 0.5) / ${TALL_GRASS_TEXELS.toFixed(1)};
+    float grassThick = smoothstep(0.04, 0.5, texture2D(grassUnderMap, grassUnderAt).r) * (1.0 - smoothstep(grassUnderReach * 0.7, grassUnderReach, grassUnderAway));
+    vec3 grassOwn = pow(texture2D(grassUnderTint, grassUnderAt).rgb, vec3(2.2)) * 0.3;
+    grass = mix(grass, grassOwn, grassThick * 0.85);
+}
 
 vec3 ground = grass * max(0.0, 1.0 - splat.r - splat.g - splat.b - splat.a);
 ${layers.map((_, k) => `ground += texture2D(layer${k}Map, vGround / layer${k}Size).rgb * splat.${"rgba"[k]};`).join("\n")}
