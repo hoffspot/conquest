@@ -457,7 +457,7 @@ function homeTexture() {
  * (metres). Every ground material shares one shader. Or, `far`, for the far land's (world/far/
  * far.js): the ground as it's seen from afar (FAR_GROUND), and still water; not drawn within
  * `far.hole` (uniform: x, z, radius, metres) or `far.inner` (uniform: x0, z0, x1, z1: the level
- * inside it), where the ground nearer is (sunk out of the way).
+ * inside it), where the ground nearer is (lifted out of the way).
  */
 export function groundMaterial({ splat = null, area = [0, 0, 1, 1], land = null, contact = null, water = null, far = null } = {}) {
     const { grass, brightness, variation: meanVariation, layers, rock } = groundTiles();
@@ -482,73 +482,11 @@ export function groundMaterial({ splat = null, area = [0, 0, 1, 1], land = null,
     material.name = "ground";
     material.userData.splat = splat;
     material.userData.contact = contact?.texture ?? null;
-    material.onBeforeCompile = (shader) => {
-        Object.assign(shader.uniforms, {
-            splatMap: { value: splat ?? noSplat() },
-            splatArea: { value: new THREE.Vector4(...area) },
-            contactMap: { value: contact?.texture ?? noContact() },
-            contactArea: { value: new THREE.Vector4(...(contact?.area ?? [0, 0, 1, 1])) },
-            landMap: { value: landMap },
-            landSize: { value: landMap.userData.size ?? 1 },
-            homeMap: { value: home?.[0] ?? noHome },
-            homeMap2: { value: home?.[1] ?? noHome },
-            homeLayers: { value: home ? homeTexture() : null },
-            grassMap: { value: grass.texture },
-            grassSize: { value: grass.size },
-            patchMap: { value: patchTexture() },
-            rockMap: { value: rock.texture },
-            snowColour: { value: new THREE.Color(ALPINE.colour) },
-            ...(water ? { groundWater: { value: water.texture }, groundWaterArea: { value: new THREE.Vector4(...water.area) }, causticMap: { value: causticTexture() }, groundTime: TREE_WIND.time, groundDetail: WATER_DETAIL } : {}),
-            ...(far ? { farHole: far.hole, farInner: far.inner, farWaterColour: { value: new THREE.Color(FAR_GROUND.water) } } : {}),
-            ...Object.fromEntries(layers.flatMap(({ texture, size }, k) => [[`layer${k}Map`, { value: texture }], [`layer${k}Size`, { value: size }]])),
-        });
-        shader.vertexShader = shader.vertexShader
-            .replace("#include <common>", "#include <common>\nvarying vec2 vGround;\nvarying vec3 vUp;\nvarying float vHeight;\n#ifdef FAR_LAND\nattribute float farWater;\nvarying float vFarWater;\nuniform vec3 farHole;\nuniform vec4 farInner;\n#endif")
-            .replace(
-                "#include <begin_vertex>",
-                `#include <begin_vertex>
-#ifdef FAR_LAND
-// (Sunk out of sight where the ground nearer's drawn: round the player, and inside the next level in)
-vFarWater = farWater;
-vec2 farAt = (modelMatrix * vec4(transformed, 1.0)).xz;
-if (distance(farAt, farHole.xy) < farHole.z || (farAt.x > farInner.x && farAt.x < farInner.z && farAt.y > farInner.y && farAt.y < farInner.w)) transformed.y -= 1000.0;
-#endif`,
-            )
-            .replace("#include <worldpos_vertex>", "#include <worldpos_vertex>\nvGround = (modelMatrix * vec4(transformed, 1.0)).xz;\nvHeight = (modelMatrix * vec4(transformed, 1.0)).y;\nvUp = normalize(mat3(modelMatrix) * objectNormal);");
-        shader.fragmentShader = shader.fragmentShader
-            .replace("#include <common>", `#include <common>
-varying vec2 vGround;
-varying vec3 vUp;
-varying float vHeight;
-uniform sampler2D rockMap;
-uniform vec3 snowColour;
-uniform sampler2D splatMap;
-#ifdef GROUND_WATER
-uniform sampler2D groundWater;
-uniform vec4 groundWaterArea;
-uniform sampler2D causticMap;
-uniform float groundTime;
-uniform float groundDetail;
-#endif
-uniform vec4 splatArea;
-uniform sampler2D contactMap;
-uniform vec4 contactArea;
-float groundContact;
-uniform sampler2D landMap;
-uniform float landSize;
-uniform sampler2D homeMap;
-uniform sampler2D homeMap2;
-uniform highp sampler2DArray homeLayers;
-uniform sampler2D grassMap;
-uniform float grassSize;
-uniform sampler2D patchMap;
-#ifdef FAR_LAND
-varying float vFarWater;
-uniform vec3 farWaterColour;
-#endif
-${layers.map((_, k) => `uniform sampler2D layer${k}Map;\nuniform float layer${k}Size;`).join("\n")}
-
-// Up high (ALPINE): how far up into the rock a point so many metres up is (0 to 1), and how much
+    // The ground as it's seen from afar (and, up high, its rock and snow): in the fragment shader for
+    // the chunks' ground (past FAR_GROUND.from), and in the vertex shader for the far land's (its
+    // corners metres apart: worked out at each and blended between, as cheap as can be over the
+    // half of the picture it covers), the patches' noise read by `patch`
+    const farFunctions = (patch) => `// Up high (ALPINE): how far up into the rock a point so many metres up is (0 to 1), and how much
 // snow lies on it (the up of its slope, the land there), the lines wandering with a patch's noise
 // (0 to 1)
 float alpineAt(float height, float wander) {
@@ -579,7 +517,7 @@ vec3 farGround(vec2 at, vec3 up, float height, float rockShift) {
     if (home > 0.0) {
         grass = mix(grass, textureLod(homeLayers, vec3(0.5, 0.5, homeLayer), 12.0).rgb, home);
     }
-    vec4 coarse = texture2D(patchMap, at / ${PATCHES.coarse.toFixed(1)});
+    vec4 coarse = ${patch(`at / ${PATCHES.coarse.toFixed(1)}`)};
     float strength = (1.0 - 0.6 * land.a) * (1.0 - 0.6 * home);
     float dry = smoothstep(${PATCHES.dry[0].toFixed(3)}, ${PATCHES.dry[1].toFixed(3)}, coarse.r);
     float lush = smoothstep(${PATCHES.lush[0].toFixed(3)}, ${PATCHES.lush[1].toFixed(3)}, coarse.g) * (1.0 - dry);
@@ -595,11 +533,116 @@ vec3 farGround(vec2 at, vec3 up, float height, float rockShift) {
     rock = mix(rock, rock * land.rgb / max(0.2, dot(land.rgb, vec3(0.3333))), land.a * 0.35);
     vec3 ground = mix(grass, rock * ${(0.85 + 0.3 * meanVariation).toFixed(4)}, steep);
     return mix(ground, snowColour * ${(0.9 + 0.2 * meanVariation).toFixed(4)}, snowAt(height, coarse.b, up.y - rockShift, land));
-}`)
+}`;
+
+    material.onBeforeCompile = (shader) => {
+        Object.assign(shader.uniforms, {
+            splatMap: { value: splat ?? noSplat() },
+            splatArea: { value: new THREE.Vector4(...area) },
+            contactMap: { value: contact?.texture ?? noContact() },
+            contactArea: { value: new THREE.Vector4(...(contact?.area ?? [0, 0, 1, 1])) },
+            landMap: { value: landMap },
+            landSize: { value: landMap.userData.size ?? 1 },
+            homeMap: { value: home?.[0] ?? noHome },
+            homeMap2: { value: home?.[1] ?? noHome },
+            homeLayers: { value: home ? homeTexture() : null },
+            grassMap: { value: grass.texture },
+            grassSize: { value: grass.size },
+            patchMap: { value: patchTexture() },
+            rockMap: { value: rock.texture },
+            snowColour: { value: new THREE.Color(ALPINE.colour) },
+            ...(water ? { groundWater: { value: water.texture }, groundWaterArea: { value: new THREE.Vector4(...water.area) }, causticMap: { value: causticTexture() }, groundTime: TREE_WIND.time, groundDetail: WATER_DETAIL } : {}),
+            ...(far ? { farHole: far.hole, farInner: far.inner, farWaterColour: { value: new THREE.Color(FAR_GROUND.water) } } : {}),
+            ...Object.fromEntries(layers.flatMap(({ texture, size }, k) => [[`layer${k}Map`, { value: texture }], [`layer${k}Size`, { value: size }]])),
+        });
+        shader.vertexShader = shader.vertexShader
+            .replace(
+                "#include <common>",
+                `#include <common>
+varying vec2 vGround;
+varying vec3 vUp;
+varying float vHeight;
+#ifdef FAR_LAND
+attribute float farWater;
+varying float vFarWater;
+varying vec3 vFarColour;
+uniform vec3 farHole;
+uniform vec4 farInner;
+uniform sampler2D rockMap;
+uniform vec3 snowColour;
+uniform sampler2D landMap;
+uniform float landSize;
+uniform sampler2D homeMap;
+uniform sampler2D homeMap2;
+uniform highp sampler2DArray homeLayers;
+uniform sampler2D grassMap;
+uniform sampler2D patchMap;
+uniform sampler2D layer0Map;
+
+${farFunctions((at) => `textureLod(patchMap, ${at}, 0.0)`)}
+#endif`,
+            )
+            .replace(
+                "#include <begin_vertex>",
+                `#include <begin_vertex>
+#ifdef FAR_LAND
+// (Lifted out of sight where the ground nearer's drawn: round the player, and inside the next level
+// in. Lifted, not sunk: the ground lifted and the walls left round it all face away from a camera
+// inside, so they're never drawn, where sunk they'd face it and cover half the picture, unseen)
+vFarWater = farWater;
+vec2 farAt = (modelMatrix * vec4(transformed, 1.0)).xz;
+if (distance(farAt, farHole.xy) < farHole.z || (farAt.x > farInner.x && farAt.x < farInner.z && farAt.y > farInner.y && farAt.y < farInner.w)) transformed.y += 1000.0;
+#endif`,
+            )
+            .replace(
+                "#include <worldpos_vertex>",
+                `#include <worldpos_vertex>
+vGround = (modelMatrix * vec4(transformed, 1.0)).xz;
+vHeight = (modelMatrix * vec4(transformed, 1.0)).y;
+vUp = normalize(mat3(modelMatrix) * objectNormal);
+#ifdef FAR_LAND
+vFarColour = farGround(vGround, vUp, vHeight, ${FAR_GROUND.rock.toFixed(2)});
+#endif`,
+            );
+        shader.fragmentShader = shader.fragmentShader
+            .replace("#include <common>", `#include <common>
+varying vec2 vGround;
+varying vec3 vUp;
+varying float vHeight;
+uniform sampler2D rockMap;
+uniform vec3 snowColour;
+uniform sampler2D splatMap;
+#ifdef GROUND_WATER
+uniform sampler2D groundWater;
+uniform vec4 groundWaterArea;
+uniform sampler2D causticMap;
+uniform float groundTime;
+uniform float groundDetail;
+#endif
+uniform vec4 splatArea;
+uniform sampler2D contactMap;
+uniform vec4 contactArea;
+float groundContact;
+uniform sampler2D landMap;
+uniform float landSize;
+uniform sampler2D homeMap;
+uniform sampler2D homeMap2;
+uniform highp sampler2DArray homeLayers;
+uniform sampler2D grassMap;
+uniform float grassSize;
+uniform sampler2D patchMap;
+#ifdef FAR_LAND
+varying float vFarWater;
+varying vec3 vFarColour;
+uniform vec3 farWaterColour;
+#endif
+${layers.map((_, k) => `uniform sampler2D layer${k}Map;\nuniform float layer${k}Size;`).join("\n")}
+
+${farFunctions((at) => `texture2D(patchMap, ${at})`)}`)
             .replace("#include <map_fragment>", `
 #ifdef FAR_LAND
 groundContact = 0.0;
-vec3 ground = mix(farGround(vGround, vUp, vHeight, ${FAR_GROUND.rock.toFixed(2)}), farWaterColour, vFarWater);
+vec3 ground = mix(vFarColour, farWaterColour, vFarWater);
 #else
 vec4 splat = texture2D(splatMap, (vGround - splatArea.xy) / splatArea.zw);
 groundContact = texture2D(contactMap, (vGround - contactArea.xy) / contactArea.zw).r;

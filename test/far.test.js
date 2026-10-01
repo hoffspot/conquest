@@ -138,7 +138,7 @@ describe("the far land (world/far)", () => {
             assert.deepEqual(mesh.position.toArray(), [middle[0], 0, middle[1]]);
         }
 
-        // (Each level out sunk inside the one in, but at its edge; none round the player)
+        // (Each level out lifted out of sight inside the one in, but at its edge; none round the player)
         const [inner, outer] = land.levels;
 
         assert.deepEqual(outer.inner.value.toArray(), [inner.middle[0] - 256 + 8, inner.middle[1] - 256 + 8, inner.middle[0] + 256 - 8, inner.middle[1] + 256 - 8]);

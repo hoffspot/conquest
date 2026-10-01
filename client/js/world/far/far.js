@@ -3,8 +3,8 @@
 // near world over it). Levels of ground, each twice as coarse and twice as wide as the one inside
 // it (levels.js), each a square of 64 by 64 cells round the player, moved on as they walk, its
 // ground worked out afresh off the page's thread (far-worker.js; on the page where there are no
-// workers). Each is sunk out of sight where the one inside it is drawn, and all of them round the
-// player, where the chunks' ground is.
+// workers). Each is lifted out of sight where the one inside it is drawn, and all of them round the
+// player, where the chunks' ground is (ground.js).
 
 import * as THREE from "three";
 import { groundMaterial } from "../ground.js";
@@ -118,7 +118,7 @@ export class FarLand {
         }
     }
 
-    // A level's ground worked out: into its mesh, and the next level out sunk inside it
+    // A level's ground worked out: into its mesh, and the next level out lifted out of sight inside it
     #take({ level, middle, heights, water, normals }) {
         const each = this.levels[level];
 
@@ -152,7 +152,7 @@ export class FarLand {
         each.mesh.updateMatrixWorld();
         each.mesh.visible = true;
 
-        // (The next level out: sunk inside this one, all but its edge, where they meet)
+        // (The next level out: lifted out of sight inside this one, all but its edge, where they meet)
         const outer = this.levels[level + 1];
 
         if (outer) {

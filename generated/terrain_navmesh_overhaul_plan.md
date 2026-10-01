@@ -229,8 +229,9 @@ TerrainChunk {
 - **Nesting:** each level's middle on the lattice twice its spacing, so its edges lie on the next
   level's lines; every other corner along its edges is put halfway between its neighbours (as
   CDLOD morphs), so they meet without cracks. Rather than rings with holes, each level is whole
-  and sunk 1,000 m inside the next level in (a vertex-shader test against that level's square),
-  and all of them within 112 m of the player.
+  and lifted 1,000 m inside the next level in (a vertex-shader test against that level's square),
+  and all of them within 112 m of the player: lifted, so it and the walls left round it face away
+  from the camera and are culled (sunk, they faced it and were all shaded, then drawn over).
 - **Two passes:** the far scene (the sky's dome and the far land, its own sun and the same
   environment and haze) drawn with a camera from 40 m to 1.5 times the far land's reach; then the
   near scene over it, depth cleared, with the near camera at 160 m (not 300: past 160 m the near
@@ -1520,3 +1521,19 @@ converted data is to be measured in M8 against today's hm08 data.
     the two copies); `test/silhouettes.test.js` (every face facing out, each people's shapes, every
     settlement in reach laid out, within budget per quality, a site moved to where it's set down,
     one mesh re-asked only as the player goes, the fade-in in the fog chunk).
+- **2026-10-01, M6 made cheaper** (found by the browser tests: four long tests ran out of time
+  and the two-browser test fell short of its checks, every frame much slower in the software
+  renderer than M5's):
+  - **Measured** (the start town, the software renderer, a frame's median): low at half the
+    pixels 259 ms in M5, 466 ms with M6a to M6c; medium 404 ms and 773 ms. Leaving things out
+    one at a time, the far land was nearly all of it: hidden, low fell to 269 ms; the horizon's
+    things, the sky's dome and the mist each cost a few per cent.
+  - **The far land's colour per corner:** it worked out the ground as seen from afar for every
+    pixel it covered (a dozen texture reads, over half the picture); now in the vertex shader, at
+    its corners (8 to 32 m apart), blended between: the same colours, the grass's patches a
+    little softer a few hundred metres off.
+  - **Lifted, not sunk:** each level sunk 1,000 m inside the next level in (and round the player)
+    left walls facing the camera that covered the lower half of the picture, all shaded and then
+    drawn over by the near ground. Lifted, they and the ground lifted face away and are culled.
+  - **After:** low 306 ms, medium about 490 ms; on the browser tests' own settings (high, every
+    pixel, shadows) 1,252 ms against M5's 1,171.

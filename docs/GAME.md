@@ -568,13 +568,18 @@ world's drawn twice over each frame:
     neighbours), so they meet without a crack.
   - **Worked out off the page's thread** (far/far-worker.js), a level at a time, about 10 ms each
     on a desktop; as the player walks, the finest moves every 16 m, the coarsest every 256 m.
-  - **Hidden where nearer ground's drawn:** each level is sunk out of sight inside the next one
-    in, and all of them within 112 m of the player, where the chunks' ground is.
+  - **Hidden where nearer ground's drawn:** each level is lifted out of sight inside the next one
+    in, and all of them within 112 m of the player, where the chunks' ground is. Lifted, not
+    sunk: what's lifted, and the walls left round it, face away from the camera, so the GPU
+    drops them before drawing a pixel (sunk, they faced it and covered the lower half of the
+    picture, all drawn over again by the near ground: a sixth of a slow frame).
 - **Its colour is the ground's as seen from afar** (ground.js `farGround`): the lands', the
   homelands' and the grass's patches, rock where it's steep, each texture its average colour
-  (one tiling every few metres is a pattern, not a texture, from a kilometre off). The chunks'
-  ground turns to the same from 100 to 150 m in front of the camera, so where the far land takes
-  over no seam shows.
+  (one tiling every few metres is a pattern, not a texture, from a kilometre off). The far land
+  works it out at each corner (in the vertex shader: some 13,000 to 21,000 corners, not the half
+  of the picture's pixels it covers, a dozen texture reads each) and blends between them; the
+  chunks' ground turns to the same, a pixel at a time, from 100 to 150 m in front of the
+  camera, so where the far land takes over no seam shows.
 - **The haze** thickens the further off, exponentially, from 20 m (none nearer) to all but gone
   (95 %) at the far land's edge, as air does: so the near world is clearer than it was (15 % at
   130 m, where the old fog was all there was), and hills, the volcano and the plains show
