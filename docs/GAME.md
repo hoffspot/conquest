@@ -587,9 +587,54 @@ world's drawn twice over each frame:
   50,000 more triangles a frame outdoors (the far land's 32,000, and more of the near world
   showing through the thinner haze); indoors, none.
 
-**Left as they are.** The tone mapping stays ACES: AgX (tried, pictures with the change) greyed
-the lamplit taproom and dulled the painted colours, and Khronos Neutral turned the taproom
-orange.
+**The look of the lands** (world/look.js, world/fog.js; the terrain plan's M6b). Each land has
+a look of its own (`LOOKS`), which the world takes on round the player:
+- **What a look is:**
+  - the sky overhead and at the horizon (the haze's colour too, so the far land melts into it);
+  - the sun's colour and strength;
+  - the mist in the low ground: how thick it is at its floor, how high its floor lies over the
+    ground round about (the average within 80 m), and how quickly it thins going up;
+  - a grade over the picture: a tint, and colour turned up or down.
+- **Some of them:**
+  - the meadow is the day as it was;
+  - farmland and the savannah are warmer and golden (the savannah's horizon dusty gold);
+  - marshes lie under a thick, low mist, paler and greyer;
+  - the elves' woods are cool and bright, a blue mist among the trees;
+  - the darkwood's sky is violet, its sun weaker, its colours drained;
+  - the badlands and the volcano's ash are red, the ash's sky grey-brown;
+  - snow and the mountains are clear, white-blue, a little drained.
+- **Blended and eased.** The look is the lands' within 80 m of the player, the nearer the more
+  (so it changes smoothly as they walk), and it eases towards that over 1.5 s. Indoors there is no
+  mist and no grade; out again, the land's look comes back.
+- **The mist** is worked out exactly for each pixel: how much mist the line of sight passes
+  through, from the eye's height to the point's (the integral of an exponential), so a valley seen
+  along is hazy, the same valley seen from the heights is hazy only below, and the heights are
+  clear. It's only under the far haze (outdoors, in the game), and costs a few sums a pixel.
+- **The grade** follows the ACES tone mapping (three.js's custom tone mapping: ACES, then the
+  tint and the colour). It's applied before the haze, so the far land and the sky, which are the
+  look's own colours, aren't tinted twice. With no grade (the meadow, indoors, the labs) the
+  picture is as before.
+- **Shared values.** The mist's and the grade's values are put into every three.js material's
+  uniforms once, before anything's drawn, as the same objects, so setting them sets them
+  everywhere. Going in and out still makes no new shader programs.
+- **Not changed by the look:** the light from all round (environment.js) is still baked once,
+  from the plain day's sky; the sun's direction is the same everywhere.
+
+**Up high, rock and snow** (ground.js `ALPINE`). Grass gives way to rock with height:
+- **Rock:** from 130 m to 220 m, rock reaches onto gentler slopes (at the top, slopes 0.12 gentler
+  than lower down).
+- **Snow:** from 205 m to 245 m up, snow lies on anything that isn't too steep, so cliffs stay
+  rock and the peaks are capped white.
+- **Wandering lines:** both lines wander up and down by as much as 30 m with the ground's patches.
+- **No snow on ash:** the volcano's dark lands never get snow.
+- **Near and far:** the far land shows the same rock and snow, so snowy peaks stand out kilometres
+  off.
+- **Where it shows on seed 1:** mountains (their median 161 m, the highest 296 m), the snow lands
+  (median 247 m), and the mountain lakes' rims.
+
+**Left as they are.** The tone mapping stays ACES (graded, above): AgX (tried, pictures with the
+change) greyed the lamplit taproom and dulled the painted colours, and Khronos Neutral turned the
+taproom orange.
 
 **Following the player** (app/camera.js). From the player's first step, the camera keeps up
 with them and turns round to look from behind them, the way they're going, at the same height

@@ -64,6 +64,7 @@ import { Squares } from "../world/squares.js";
 import { KINDS, Wounds } from "../world/wounds.js";
 import { Chunks, DECK, LOAD_BUDGET, REACH } from "../world/chunks3d.js";
 import { FarLand } from "../world/far/far.js";
+import { Look } from "../world/look.js";
 import { allAtOnce, allWaiting, Steps } from "../core/steps.js";
 import { buildGround } from "../world/ground.js";
 import { buildTown } from "../world/town3d.js";
@@ -644,6 +645,13 @@ export class Game {
         this.far.update(x, z);
     }
 
+    // How the world looks round the player at (x, z) (metres), `dt` seconds on (world/look.js: the
+    // sky's colours, the sun's, the mist and the grade, as the lands round them have them)
+    #landLook(x, z, dt) {
+        this.landLook ??= new Look(this.world.plan);
+        this.view.setLook(this.landLook.update(x, z, dt));
+    }
+
     originOf(mapId) {
         return this.world.maps?.[mapId]?.origin ?? [0, 0];
     }
@@ -726,6 +734,7 @@ export class Game {
             this.chunks.setSpacing(view.quality.ground);
             view.scene.add(this.chunks.object);
             this.#farLand(x + 0.5, y + 0.5);
+            this.#landLook(x + 0.5, y + 0.5, 0);
             await time("chunks", async () => {
                 while (this.chunks.update(x + 0.5, y + 0.5, { budget: LOAD_BUDGET }) || this.chunks.busy) {
                     onProgress({ label: `Laying the land (${this.chunks.drawn.size} of ${chunks})`, done: ++done, total: steps });
@@ -1214,6 +1223,7 @@ export class Game {
         this.chunks?.dispose();
         this.far?.dispose();
         this.view.setFar(null);
+        this.view.setLook(null);
         this.effects?.dispose();
         this.contacts?.dispose();
         this.navBaker?.dispose();
@@ -1741,6 +1751,7 @@ export class Game {
             }
 
             this.#farLand(x, z);
+            this.#landLook(x, z, dt);
         }
 
         this.#visit(dt);

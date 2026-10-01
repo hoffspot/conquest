@@ -16,7 +16,7 @@
 import * as THREE from "three";
 import { bakeEnvironments } from "./environment.js";
 import { FAR, FAR_LEVELS, farReach } from "./far/levels.js";
-import { farHaze } from "./fog.js";
+import { farHaze, GRADE, MIST } from "./fog.js";
 import { GpuTimer } from "./gputimer.js";
 import { fadeShadowEdges, snapToTexels } from "./shadows.js";
 import { Sky, SKY_COLOURS } from "./sky.js";
@@ -91,6 +91,9 @@ const SKY = SKY_COLOURS.horizon;
 // always there, so that going in and out never makes Three.js rebuild every lit material's
 // shaders.)
 const OUTDOORS = Object.freeze({ background: SKY, fog: [55, 130], haze: 20, sun: [0xfff0d8, 3.5], sunFrom: [-0.55, 1, 0.65], environment: 1 });
+// (Outdoors as it is with no land's look: look.js Look's form, sRGB colours 0 to 1)
+const srgbOf = (hex) => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255].map((byte) => byte / 255);
+const PLAIN = Object.freeze({ zenith: srgbOf(SKY_COLOURS.zenith), horizon: srgbOf(SKY), sun: srgbOf(OUTDOORS.sun[0]), strength: OUTDOORS.sun[1], mist: [0, 0, 20], grade: [0, 0, 0, 0] });
 const INDOORS = Object.freeze({ background: 0x140e0a, fog: [16, 38], sun: [0xffe2b8, 0.9], sunFrom: [0.25, 1, 0.35], environment: 1 });
 
 // A lamp that flares up (a forge's fire, the bellows pumped) dies down over this long (s)
@@ -133,7 +136,8 @@ export class View {
         this.qualityName = quality;
         this.quality = QUALITY[quality];
         this.renderer = new THREE.WebGLRenderer({ canvas, antialias: this.quality.antialias, powerPreference: "high-performance" });
-        this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        // (Seeing far, graded as the land the player's in has it: ACES, then the grade, fog.js)
+        this.renderer.toneMapping = far ? THREE.CustomToneMapping : THREE.ACESFilmicToneMapping;
         this.renderer.toneMappingExposure = 1.05;
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -302,6 +306,40 @@ export class View {
     /** Draw shadows or not. */
     setShadows(on) {
         this.sun.castShadow = on;
+    }
+
+    /**
+     * How the world looks outdoors where the player is (look.js Look's: the sky's colours, the haze's
+     * the horizon's, the sun's colour and strength, the mist and the grade; sRGB colours 0 to 1).
+     * Indoors, the look's kept for when they come out. None (null): outdoors as it is with none.
+     */
+    setLook(look) {
+        this.landLook = look;
+
+        if (this.indoors) {
+            return;
+        }
+
+        look ??= PLAIN;
+
+        const { zenith, horizon, sun, mist, grade } = look;
+
+        this.scene.fog.color.setRGB(horizon[0], horizon[1], horizon[2], THREE.SRGBColorSpace);
+        this.scene.background.copy(this.scene.fog.color);
+        this.far.scene.background.copy(this.scene.fog.color);
+        this.sky.uniforms.zenith.value.set(zenith[0], zenith[1], zenith[2]);
+        this.sky.uniforms.horizon.value.set(horizon[0], horizon[1], horizon[2]);
+        this.sun.color.setRGB(sun[0], sun[1], sun[2], THREE.SRGBColorSpace);
+        this.sun.intensity = look.strength;
+        this.far.sun.color.copy(this.sun.color);
+        this.far.sun.intensity = look.strength;
+        MIST.value.x = mist[0];
+        MIST.value.y = mist[1];
+        MIST.value.z = mist[2];
+        GRADE.value.x = grade[0];
+        GRADE.value.y = grade[1];
+        GRADE.value.z = grade[2];
+        GRADE.value.w = grade[3];
     }
 
     /**
@@ -554,6 +592,14 @@ export class View {
         this.scene.environmentIntensity = look.environment;
         this.sky.object.visible = !interior;
         this.sky.setSun(this.sunDirection);
+
+        // (Indoors no mist, no grade; out again, the land's look)
+        if (interior) {
+            MIST.value.x = 0;
+            [GRADE.value.x, GRADE.value.y, GRADE.value.z, GRADE.value.w] = [0, 0, 0, 0];
+        } else {
+            this.setLook(this.landLook);
+        }
 
         this.lamps.forEach((lamp, k) => {
             const spec = interior?.lights[k];

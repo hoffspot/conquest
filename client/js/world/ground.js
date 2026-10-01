@@ -45,6 +45,16 @@ const GRASS_METRES = 5;
 const ROCK_METRES = 7;
 const ROCK_FROM = Object.freeze({ start: 0.84, all: 0.7, sheer: 0.45 });
 
+/**
+ * Up high, the grass gives way to rock, then snow: rock reaching onto gentler slopes from `rock[0]`
+ * to `rock[1]` metres up (its slopes `by` gentler, at the top), and snow lying on what isn't too
+ * steep (the up of its slope: `flat[0]` none, `flat[1]` all) from `snow[0]` to `snow[1]` metres
+ * up; both lines wandering up and down by as much as `wander` metres. Never snow on ash (the
+ * volcano's dark lands: their colour darker than `ash`, in light's terms). The snow's colour
+ * (sRGB, lit as the grass's picture is).
+ */
+export const ALPINE = Object.freeze({ rock: [130, 220], by: 0.12, snow: [205, 245], wander: 30, flat: [0.62, 0.8], ash: 0.1, colour: "#c8ccd2" });
+
 // How far the ground carries on past the map's edges (metres): into the fog
 const BEYOND = 110;
 
@@ -487,6 +497,7 @@ export function groundMaterial({ splat = null, area = [0, 0, 1, 1], land = null,
             grassSize: { value: grass.size },
             patchMap: { value: patchTexture() },
             rockMap: { value: rock.texture },
+            snowColour: { value: new THREE.Color(ALPINE.colour) },
             ...(water ? { groundWater: { value: water.texture }, groundWaterArea: { value: new THREE.Vector4(...water.area) }, causticMap: { value: causticTexture() }, groundTime: TREE_WIND.time, groundDetail: WATER_DETAIL } : {}),
             ...(far ? { farHole: far.hole, farInner: far.inner, farWaterColour: { value: new THREE.Color(FAR_GROUND.water) } } : {}),
             ...Object.fromEntries(layers.flatMap(({ texture, size }, k) => [[`layer${k}Map`, { value: texture }], [`layer${k}Size`, { value: size }]])),
@@ -510,6 +521,7 @@ varying vec2 vGround;
 varying vec3 vUp;
 varying float vHeight;
 uniform sampler2D rockMap;
+uniform vec3 snowColour;
 uniform sampler2D splatMap;
 #ifdef GROUND_WATER
 uniform sampler2D groundWater;
@@ -536,9 +548,20 @@ uniform vec3 farWaterColour;
 #endif
 ${layers.map((_, k) => `uniform sampler2D layer${k}Map;\nuniform float layer${k}Size;`).join("\n")}
 
+// Up high (ALPINE): how far up into the rock a point so many metres up is (0 to 1), and how much
+// snow lies on it (the up of its slope, the land there), the lines wandering with a patch's noise
+// (0 to 1)
+float alpineAt(float height, float wander) {
+    return smoothstep(${ALPINE.rock[0].toFixed(1)}, ${ALPINE.rock[1].toFixed(1)}, height + (wander - 0.5) * ${(2 * ALPINE.wander).toFixed(1)});
+}
+float snowAt(float height, float wander, float up, vec4 land) {
+    float ash = land.a * (1.0 - smoothstep(${(ALPINE.ash * 0.6).toFixed(3)}, ${ALPINE.ash.toFixed(3)}, dot(land.rgb, vec3(0.2126, 0.7152, 0.0722))));
+    return smoothstep(${ALPINE.snow[0].toFixed(1)}, ${ALPINE.snow[1].toFixed(1)}, height + (wander - 0.5) * ${(2 * ALPINE.wander).toFixed(1)}) * smoothstep(${ALPINE.flat[0].toFixed(2)}, ${ALPINE.flat[1].toFixed(2)}, up) * (1.0 - ash);
+}
+
 // The ground as it's seen from afar at a point (its up: up; rock that much less steep, as the far
 // land's corners smooth its slopes): each texture's average colour, and only what's large on them
-vec3 farGround(vec2 at, vec3 up, float rockShift) {
+vec3 farGround(vec2 at, vec3 up, float height, float rockShift) {
     vec2 landAt = at / landSize;
     vec2 blur = vec2(12.0, -12.0) / landSize;
     vec4 land = 0.25 * (texture2D(landMap, landAt + blur.xx) + texture2D(landMap, landAt + blur.xy) + texture2D(landMap, landAt + blur.yx) + texture2D(landMap, landAt + blur.yy));
@@ -566,15 +589,17 @@ vec3 farGround(vec2 at, vec3 up, float rockShift) {
     vec3 earth = mix(textureLod(layer0Map, vec2(0.5), 12.0).rgb * 0.92, grass * 0.8, land.a * 0.75);
     grass = mix(grass, earth, bare * ${PATCHES.bare[2].toFixed(2)} * strength);
     grass *= ${(0.82 + 0.45 * meanVariation).toFixed(4)};
-    float steep = 1.0 - smoothstep(${ROCK_FROM.all.toFixed(2)} + rockShift, ${ROCK_FROM.start.toFixed(2)} + rockShift, up.y);
+    float alpine = alpineAt(height, coarse.b);
+    float steep = 1.0 - smoothstep(${ROCK_FROM.all.toFixed(2)} + rockShift + ${ALPINE.by.toFixed(2)} * alpine, ${ROCK_FROM.start.toFixed(2)} + rockShift + ${ALPINE.by.toFixed(2)} * alpine, up.y);
     vec3 rock = textureLod(rockMap, vec2(0.5), 12.0).rgb;
     rock = mix(rock, rock * land.rgb / max(0.2, dot(land.rgb, vec3(0.3333))), land.a * 0.35);
-    return mix(grass, rock * ${(0.85 + 0.3 * meanVariation).toFixed(4)}, steep);
+    vec3 ground = mix(grass, rock * ${(0.85 + 0.3 * meanVariation).toFixed(4)}, steep);
+    return mix(ground, snowColour * ${(0.9 + 0.2 * meanVariation).toFixed(4)}, snowAt(height, coarse.b, up.y - rockShift, land));
 }`)
             .replace("#include <map_fragment>", `
 #ifdef FAR_LAND
 groundContact = 0.0;
-vec3 ground = mix(farGround(vGround, vUp, ${FAR_GROUND.rock.toFixed(2)}), farWaterColour, vFarWater);
+vec3 ground = mix(farGround(vGround, vUp, vHeight, ${FAR_GROUND.rock.toFixed(2)}), farWaterColour, vFarWater);
 #else
 vec4 splat = texture2D(splatMap, (vGround - splatArea.xy) / splatArea.zw);
 groundContact = texture2D(contactMap, (vGround - contactArea.xy) / contactArea.zw).r;
@@ -621,9 +646,11 @@ vec3 ground = grass * max(0.0, 1.0 - splat.r - splat.g - splat.b - splat.a);
 ${layers.map((_, k) => `ground += texture2D(layer${k}Map, vGround / layer${k}Size).rgb * splat.${"rgba"[k]};`).join("\n")}
 ground *= 0.82 + 0.45 * variation;
 
-// Rock where it's too steep for grass: read from above on gentler slopes, from the side (whichever
-// way it faces most) on cliffs, tinted a little by the land's own colour
-float steep = 1.0 - smoothstep(${ROCK_FROM.all.toFixed(2)}, ${ROCK_FROM.start.toFixed(2)}, vUp.y);
+// Rock where it's too steep for grass (and, up high, where it's gentler: ALPINE): read from above
+// on gentler slopes, from the side (whichever way it faces most) on cliffs, tinted a little by the
+// land's own colour
+float alpine = alpineAt(vHeight, coarse.b);
+float steep = 1.0 - smoothstep(${ROCK_FROM.all.toFixed(2)} + ${ALPINE.by.toFixed(2)} * alpine, ${ROCK_FROM.start.toFixed(2)} + ${ALPINE.by.toFixed(2)} * alpine, vUp.y);
 #ifdef GROUND_WATER
 // The water here (water.js's field): how far into it (metres, less than 0 on land) and how deep;
 // no rock at the water's edge or under it (the bed's own ground there, not a channel's cut edge
@@ -644,10 +671,13 @@ if (steep > 0.0) {
     rock = mix(rock, rock * land.rgb / max(0.2, dot(land.rgb, vec3(0.3333))), land.a * 0.35);
     ground = mix(ground, rock * (0.85 + 0.3 * variation), steep);
 }
+
+// Snow, up high, on what isn't too steep
+ground = mix(ground, snowColour * (0.9 + 0.2 * variation), snowAt(vHeight, coarse.b, vUp.y, land));
 #ifdef USE_FOG
 // (Under the far haze, turning to the ground as it's seen from afar where the far land takes over)
 if (fogFar > ${FAR_FOG.toFixed(1)} && vFogDepth > ${FAR_GROUND.from.toFixed(1)}) {
-    ground = mix(ground, farGround(vGround, vUp, 0.0), smoothstep(${FAR_GROUND.from.toFixed(1)}, ${FAR_GROUND.to.toFixed(1)}, vFogDepth));
+    ground = mix(ground, farGround(vGround, vUp, vHeight, 0.0), smoothstep(${FAR_GROUND.from.toFixed(1)}, ${FAR_GROUND.to.toFixed(1)}, vFogDepth));
 }
 #endif
 #ifdef GROUND_WATER

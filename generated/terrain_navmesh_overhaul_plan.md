@@ -666,6 +666,34 @@ and open-source generators, licences checked).
 | 9 | Grass and flowers | Denser inner ring; ground colour matched to grass tips; wind gusts; drifts per region | Extend `wilds.js UNDERGROWTH` | 60–120k triangles; 4–6 draws (about today's) | `chunks3d.js`, `ground.js` |
 | 10 | Weathering | Moss on up- and north-facing surfaces, rain streaks, ivy leaf quads merged into buildings | Extend `weathering()` in `peoples/kit.js` and `house.js` | +5–10 % triangles on ivied walls; no extra draws | Every kit |
 
+**As built in M6b** (row 1, the atmosphere; see the change log):
+- **The region look** (`world/look.js` `LOOKS`): for each of the plan's 17 lands, the sky
+  overhead and at the horizon (the haze's colour), the sun's colour and strength, the mist and
+  the grade. Blended over the lands within 80 m of the player (a tent each way over the plan's
+  cells, so it's continuous as they walk) and eased over 1.5 s; set into the view each frame
+  outdoors (`View.setLook`), without allocating.
+- **Height fog, not bands:** rather than four fixed value bands, two layers that together give
+  them: the exponential distance haze of M6a (near dark, far pale), and an exponential height
+  mist (`fog.js` `MIST`: thickness at its floor, the floor a few metres over the mean ground
+  within 80 m (so valleys fill wherever the land lies), scale height) whose amount along each line
+  of sight is the analytic integral from the eye's height to the point's (Quílez's height fog),
+  so valleys are hazy and peaks crisp. One extra varying (the point's height above the eye) and a
+  few sums a pixel; no extra pass.
+- **The grade** in `CustomToneMapping`: ACES, then a tint and saturation (`fog.js` `GRADE`). No
+  extra pass. three.js mixes the fog after tone mapping, so the far land and the sky (the look's
+  own colours) aren't graded twice, and the horizon still meets the sky without a seam.
+- **Shared uniforms:** the mist's and the grade's values are plain objects put into every
+  `ShaderLib` entry (and `UniformsLib.fog`) before anything compiles; three.js's uniform cloning
+  keeps a plain object's value by reference, so one write reaches every material. Indoors both
+  are zeroed; the e2e's "going in and out compiles nothing" still holds.
+- **The terrain material** (`ground.js` `ALPINE`): rock creeping onto gentler slopes from 130 to
+  220 m, snow on what isn't steep from 205 to 245 m (both lines wandering 30 m with the patches),
+  never on ash; the far land's `farGround` has the same, so snowy peaks read kilometres off.
+- **Cascaded shadows: not built.** With the sun about 50° up, the near shadow map (±24 m) covers
+  what the camera looks at, and far relief reads from the far land's slope shading and snow.
+  Each cascade draws every shadow caster in it again, on phones already near their draw-call
+  budget. Left for M7's lighting pass, to be measured there.
+
 **Pushing each people toward the Elden Ring feel without losing identity.**
 - **For everyone:**
   - heavier stone bases (0.6–1.2 m plinths that follow the real ground);
@@ -1026,9 +1054,9 @@ pictures for anything that changes the look.
 | **M4c** | Settlements on slopes | Settlements lying with the land (tilted pads); foundations under what's built on a slope; roads over pads' eased land | Pictures; pads on their planes in a test |
 | **M5** | Multiplayer motion | `motion` stream; early desync checks; hero prediction; tick sync; debug RTT; NET_VERSION 12 | Two-browser e2e with no drift; bandwidth measured |
 | **M6a** | The far land | Far clipmap levels in a worker; two passes; exponential haze to the horizon; near objects faded before the near camera's end; the near ground turning to the far land's look | Pictures; budgets per tier met |
-| **M6b** | Atmosphere | Height fog in value bands; per-region look table and grade (§9 row 1); `SunLight` cascades on medium and high; terrain material | Pictures; budgets per tier met |
+| **M6b** | Atmosphere | Height fog (an exponential height mist under the distance haze); per-region look table and grade (§9 row 1); terrain material (rock and snow by height); cascades deferred to M7 | Pictures; budgets per tier met |
 | **M6c** | Things on the horizon | Far silhouettes and the world landmark (§9 row 2); far trees; far rivers | Pictures; budgets per tier met |
-| **M7** | Elden Ring environment pass | In §9's order: the landmark pass in the plan; neutral sites built, with the decay pass; cliffs and rocks; churches, citadels, stone bridges; foliage palette, grass ring, weathering | Pictures after each part; budgets met |
+| **M7** | Elden Ring environment pass | In §9's order: the landmark pass in the plan; neutral sites built, with the decay pass; cliffs and rocks; churches, citadels, stone bridges; foliage palette, grass ring, weathering; cascaded shadows, measured, if they fit the budget | Pictures after each part; budgets met |
 | **M8** | Characters on Vitruvian | §10, as several PRs (conversion, body, garments, skin, face, LODs, clips) | Pictures; clipping tests green; budgets met |
 
 Each milestone follows the same steps:
