@@ -222,7 +222,7 @@ is drawn round you as you go, with no loading screens: only its far edge in the 
 being built. The hamlets, villages, towns and cities of the world plan are there, each with its
 own buildings; the ruins and the enemy camps are still to come.
 
-**The minimap**, along the top beside the spellbook, journal, pack and menu buttons, shows where you are from above: out in
+**The minimap**, in the top left corner (the spellbook, journal, pack and menu buttons are in the top right), shows where you are from above: out in
 the world, the 128 metres or so round you, its roads, rivers, roofs and trees; inside, the
 whole floor, its walls, furniture and stairs. On it are a pale wedge the way you're looking, you (an arrow pointing the way you face), where
 you're going, and the orc when it's where you are (red; ringed when it's your target). Every
