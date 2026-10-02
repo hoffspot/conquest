@@ -17,6 +17,10 @@
 
     /* How wide the minimap is */
     --minimap-size: clamp(116px, 30vw, 188px);
+
+    /* The gap between the buttons along the top, and how tall the quick actions are (in a fight) */
+    --hud-gap: 12px;
+    --quick-height: 60px;
     --background: #15120e;
 
     --font-display: "Palatino Linotype", Palatino, "Book Antiqua", "URW Palladio L", Georgia, serif;
@@ -700,6 +704,14 @@ input[type="range"] {
 #hud .hud-top {
     top: calc(var(--safe-top) + 12px);
     justify-content: flex-end;
+    gap: var(--hud-gap);
+}
+
+/* A narrow phone: the minimap and the four buttons along the top a little closer together */
+@media (max-width: 400px) {
+    :root {
+        --hud-gap: 8px;
+    }
 }
 
 /* The black the view dips to going through a door or up the stairs (under the rest of the HUD) */
@@ -725,6 +737,7 @@ input[type="range"] {
     position: absolute;
     left: calc(var(--safe-left) + 12px);
     bottom: calc(var(--safe-bottom) + 12px);
+    transition: bottom 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 #hud .hud-bottom {
@@ -734,6 +747,198 @@ input[type="range"] {
     align-items: flex-end;
     right: calc(var(--safe-right) + 12px);
     left: auto;
+    transition: bottom 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* In a fight the quick actions take the bottom row, and the name and zoom buttons go up over them */
+#hud.quick-up #playerplate,
+#hud.quick-up .hud-bottom {
+    bottom: calc(var(--safe-bottom) + 12px + var(--quick-height) + 10px);
+}
+
+/* The quick actions: four slots side by side along the bottom, risen in a fight */
+#hud .quickbar {
+    position: absolute;
+    left: calc(var(--safe-left) + 12px);
+    right: calc(var(--safe-right) + 12px);
+    bottom: calc(var(--safe-bottom) + 12px);
+    max-width: 560px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    transform: translateY(calc(100% + 16px + var(--safe-bottom)));
+    visibility: hidden;
+    transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s linear 0.28s;
+}
+
+#hud .quickbar.up {
+    transform: none;
+    visibility: visible;
+    transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.quick-slot {
+    pointer-events: auto;
+    position: relative;
+    min-width: 0;
+    height: var(--quick-height);
+    padding: 6px 4px 5px;
+    border-radius: 12px;
+    border: 1px solid var(--panel-border);
+    background: var(--panel);
+    color: var(--ink);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    overflow: hidden;
+    cursor: pointer;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+}
+
+/* (Who it's used on, a line along its foot: the foe in red, the player in green) */
+.quick-slot::after {
+    content: "";
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: 0;
+    height: 2px;
+    border-radius: 2px;
+    background: transparent;
+}
+
+.quick-slot.foe::after {
+    background: var(--hostile);
+}
+
+.quick-slot.own::after {
+    background: var(--health);
+}
+
+.quick-icon {
+    width: 28px;
+    height: 28px;
+    flex: none;
+    overflow: visible;
+}
+
+.quick-label {
+    max-width: 100%;
+    font: 700 11px/1.2 var(--font-ui);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.quick-count {
+    position: absolute;
+    top: 4px;
+    right: 7px;
+    font: 800 12px var(--font-ui);
+    font-variant-numeric: tabular-nums;
+    color: #fff8e6;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+/* (The key that taps it, where there's a keyboard) */
+.quick-key {
+    display: none;
+    position: absolute;
+    top: 4px;
+    left: 7px;
+    font: 700 10px var(--font-ui);
+    color: var(--faint);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .quickbar .quick-key {
+        display: block;
+    }
+}
+
+/* Cooling down: greyed over as much of it as is left, swept round from the top, as a wheel's slice is */
+.quick-cool {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: conic-gradient(rgba(38, 38, 38, 0.78) calc(var(--left, 0) * 1turn), transparent 0);
+    opacity: 0;
+}
+
+.quick-slot.cooling .quick-cool {
+    opacity: 1;
+}
+
+.quick-slot.cooling .quick-icon {
+    opacity: 0.55;
+}
+
+.quick-slot.empty {
+    background: rgba(24, 19, 14, 0.4);
+    border-style: dashed;
+    color: var(--muted);
+}
+
+.quick-slot.off .quick-icon,
+.quick-slot.off .quick-label {
+    opacity: 0.35;
+}
+
+.quick-slot.off {
+    background: rgba(24, 19, 14, 0.55);
+}
+
+.quick-slot.chosen {
+    animation: quick-chosen 0.32s ease-out;
+}
+
+.quick-slot.refused {
+    animation: quick-refused 0.32s ease-out;
+}
+
+@keyframes quick-chosen {
+    from {
+        background: rgba(236, 200, 130, 0.5);
+    }
+}
+
+@keyframes quick-refused {
+    from {
+        background: rgba(200, 50, 40, 0.55);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #hud .quickbar,
+    #hud .quickbar.up,
+    #playerplate,
+    #hud .hud-bottom {
+        transition: none;
+    }
+}
+
+/* A phone on its side: the quick actions shorter, the icon beside its name */
+@media (max-height: 500px) {
+    :root {
+        --quick-height: 44px;
+    }
+
+    .quick-slot {
+        flex-direction: row;
+        gap: 6px;
+        padding: 4px 8px;
+    }
+
+    .quick-icon {
+        width: 24px;
+        height: 24px;
+    }
 }
 
 .hud-button {
@@ -855,11 +1060,11 @@ input[type="range"] {
     height: 10px;
 }
 
-/* The minimap, under the menu button */
+/* The minimap, at the top beside the four buttons along it */
 #minimap {
     position: absolute;
-    top: calc(var(--safe-top) + 12px + 46px + 10px);
-    right: calc(var(--safe-right) + 12px);
+    top: calc(var(--safe-top) + 12px);
+    right: calc(var(--safe-right) + 12px + 4 * 46px + 4 * var(--hud-gap));
     width: var(--minimap-size);
     border-radius: 12px;
     border: 1px solid var(--panel-border);
@@ -876,7 +1081,7 @@ input[type="range"] {
 
 /* Debug mode's overlay moves down out of the minimap's way */
 body[data-screen="hud"][data-minimap="on"] #debug {
-    top: calc(var(--safe-top) + 12px + 46px + 10px + var(--minimap-size) + 10px);
+    top: calc(var(--safe-top) + 12px + var(--minimap-size) + 10px);
 }
 
 /* The enemy the player is set to fight */
@@ -2477,6 +2682,20 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     pointer-events: none;
 }
 
+/* (With the minimap up there too, and too little room beside it: under them on the left) */
+@media (max-width: 720px) {
+    body[data-minimap="on"] #netstatus {
+        top: calc(var(--safe-top) + 12px + var(--minimap-size) + 10px);
+        max-width: calc(100% - var(--safe-left) - var(--safe-right) - 24px);
+    }
+}
+
+@media (min-width: 721px) {
+    body[data-minimap="on"] #netstatus {
+        max-width: calc(100% - var(--safe-left) - var(--safe-right) - 268px - var(--minimap-size) - 12px);
+    }
+}
+
 /* (A slow pulse: waiting, not stuck) */
 #netstatus::before {
     content: "";
@@ -2508,6 +2727,7 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     left: 50%;
     /* Above the player's plate in the corner, clear of it however narrow the screen */
     bottom: calc(var(--safe-bottom) + 12px + 80px);
+    transition: bottom 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
     transform: translateX(-50%);
     margin: 0;
     padding: 8px 14px;
@@ -2520,6 +2740,10 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     /* Clear of the zoom buttons in the corner, on both sides as it's in the middle */
     max-width: calc(100% - 2 * (var(--safe-right) + 12px + 46px + 10px));
     animation: fade 1s ease-in 6s forwards;
+}
+
+#hud.quick-up .hint {
+    bottom: calc(var(--safe-bottom) + 12px + 80px + var(--quick-height) + 10px);
 }
 
 @keyframes fade {
@@ -2897,6 +3121,29 @@ dialog#menu.wide {
 
 .wheels-choice[aria-selected="true"] {
     border-color: var(--gold-bright);
+    background: rgba(236, 200, 130, 0.18);
+}
+
+/* (Who a quick action's used on, under its name) */
+.wheels-choice small {
+    display: block;
+    font-weight: 500;
+    font-size: 11px;
+    color: var(--muted);
+}
+
+/* The Quick actions options: the four slots, as they rise in a fight, one picked */
+.quick-row {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+    margin: 10px 0 4px;
+}
+
+.quick-row .quick-slot.picked {
+    border-color: var(--gold-bright);
+    border-style: solid;
+    box-shadow: 0 0 0 1px var(--gold-bright);
     background: rgba(236, 200, 130, 0.18);
 }
 

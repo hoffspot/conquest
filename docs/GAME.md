@@ -1980,8 +1980,10 @@ on a wobbling halo.
 
 ### The minimap (app/minimap.js)
 
-The map the player is on from above, north up, in the top right of the screen under the menu
-button (a canvas, a third of the screen's width on phones, up to 188 pixels): out in the world,
+The map the player is on from above, north up, along the top of the screen on the left of the
+spellbook, journal, pack and menu buttons, level with them (a canvas, a third of the screen's
+width on phones, up to 188 pixels; on a screen 400 pixels wide or less, the gaps between them 8
+pixels, not 12, so they all fit): out in the world,
 the 128 metres round the player; inside, the whole floor. Each square is coloured for its ground
 (grass in its land's colour, road, cobbles, soil, courtyard, water, bridges) or what stands on it
 (roofs over buildings, blue-grey for the tavern, church and other landmarks, props, trees), with
@@ -2244,6 +2246,42 @@ flicking it does. What's on the wheels is kept with the character (save.js `pell
 and read back safely (`readWheels`: only what goes on each wheel, in its seven slices). A skill
 ranking up with an ability says to put it on a wheel.
 
+### The quick actions (app/quickbar.js)
+
+In a fight, four slots rise from the bottom of the screen side by side (`QuickBar`), sliding up
+in 0.28 s, and the player's name and the zoom buttons go up with them, 10 pixels above (the
+HUD's `quick-up`). A fight is an enemy the player's set to fight (the one ringed), or anyone
+hostile on their map set to fight them or striking at them (`#underAttack`); the slots stay up
+3 s after the last of it (`QUICK_LINGER`), so they don't come and go between blows, and go down
+at once if the player falls.
+
+**What's in them.** Each holds anything a wheel's slice can (a spell, a blow, a thing to use;
+not Fight): Vigor, Stun, Burn and a healing draught to start with (`QUICK`), shown with its icon
+and name, a count for a thing to use, and a line along its foot saying who it's used on (red,
+the foe; green, the player). They're kept with the wheels (`pellagos.wheels`'s `quick`, read
+back safely by `readWheels`: four, each something that can be one, or empty).
+
+**Tapped** (or 1 to 4 on a keyboard), a slot's used at once, with no wheel to open:
+- an attack, a hex or a blow (`offensive`: what goes only on an enemy's wheel) on the enemy the
+  player's set to fight;
+- anything else (healing, a ward, a draught, a spell that finds its own mark) on the player.
+
+It's greyed while it can't be used as things are (`#quickRefusal`): not learnt (an element's
+spell before its tome's read), none left to use, a blow for another kind of weapon or a spell
+needing a wand or grimoire in hand, or an attack with no enemy set on (anyone can be after the
+player without one being set on: the slots are up, and their attacks greyed). While it cools
+down it's greyed over the share of its cooldown left, swept round from the top and back as it
+passes, as a wheel's slice is (one spell's cooldown is all the spells', `#cooldowns`). Tapped
+while it can't be used, it flashes red and says why ("Tap a foe first: that's used on them",
+"You've none left", "Not ready yet"); an empty slot tapped opens its choices.
+
+**Changed** by holding a slot (0.5 s, `QUICK_HOLD_MS`; sliding off it does neither): the game
+pauses (when no one else is playing in the world) at **Game options, Quick actions**
+(app/quicksetup.js) with that slot chosen, and Back to the game carries on. Quick actions in Game
+options shows the four slots as they rise; tap one, then what goes in it: "Nothing", or anything
+learnt and carried that can go on either wheel (`assignable("quick")`), each saying who it's
+used on ("On your foe", "On yourself").
+
 Each action (`ACTIONS`, or `item:` and a thing to use: `actionOf`) has an icon (app/icons.js:
 SVG, in colours that say what it does: a glowing green cross for Vigor, gold stars round a violet
 dazed head for Stun, every spell its own (app/spellicons.js); a red draught, a steaming bowl, a frothing tankard). The icons' gradients
@@ -2315,17 +2353,18 @@ game plays on while it's open; a second finger (a pinch) closes it.
    well as setting them off), with the ring where they'll stop; blocked straight away, it's
    refused with a sound (still turned that way). The heads-up display
    (app/hud.js) shows the player's name and health in the bottom left corner (the zoom buttons
-   in the bottom right), with an orange stamina bar under the health bar while stamina isn't
-   full, "Out of breath" when a run
-   ends for want of it, the minimap, bars over the other characters (the target's lit red), and
-   the damage each blow does.
+   in the bottom right; both go up over the quick actions in a fight, above), with an orange
+   stamina bar under the health bar while stamina isn't full, "Out of breath" when a run
+   ends for want of it, the minimap (along the top, left of the spellbook, journal, pack and menu
+   buttons), bars over the other characters (the target's lit red), and the damage each blow
+   does.
 5. **The menu** (the menu button, or Escape) pauses the game (unless others are playing in the
    world too): Resume, Invite others (the world opened to others: a code, and who's come),
    Game options, or back to the title. **Game options** has the Visual quality slider (Low,
    Medium, High) and the Adaptive switch (Keeping up, above), a switch for the minimap, a switch that turns all the sound
    on or off, and a slider (0 to 100%) for each bus: sound effects, environment and music (a
-   sound plays as the first two are moved, to hear how loud). Back (or Escape) returns to the
-   menu.
+   sound plays as the first two are moved, to hear how loud); and the Action wheels and Quick
+   actions pages. Back (or Escape) returns to the menu.
 
 If the browser takes the picture away (as phones do when short of memory, or switching apps), the
 game pauses and says so ("The picture was lost…"); when it's given back, what was drawn into (the
@@ -2680,6 +2719,10 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   those left behind thrown away, the minimap following), Game options and the volume sliders
   (remembered), the
   action wheel (stunning the orc, a flick refused while cooling down, then a heal), the action
-  wheels set in Game options (a draught put on wheel two, drunk by flicking down then NE), and a phone
-  screen. Drawing without a GPU is slow, so fights are played on with
+  wheels set in Game options (a draught put on wheel two, drunk by flicking down then NE), the
+  quick actions on a phone's screen (the minimap level with the buttons along the top, on their
+  left; up in a fight with the name and zoom buttons over them; Stun tapped on the orc and Vigor
+  on the player, each swept over while cooling and refused; attacks greyed with no foe set on;
+  put away 3 s after the fight; held, Quick actions opened at that slot, Rumble put in it), and a
+  phone screen. Drawing without a GPU is slow, so fights are played on with
   `game.advance(seconds)`, which runs the game without drawing each frame.

@@ -223,7 +223,7 @@
                 <h2 id="optionstitle">Game options</h2>
                 <div class="options">
                     <label class="switch option">
-                        <span class="text">Minimap<small>The map in the top right</small></span>
+                        <span class="text">Minimap<small>The map at the top</small></span>
                         <input type="checkbox" id="minimapswitch" role="switch">
                         <span class="track" aria-hidden="true"></span>
                     </label>
@@ -268,6 +268,7 @@
                 </div>
                 <div class="menu">
                     <button type="button" class="button" id="wheelsbutton">Action wheels</button>
+                    <button type="button" class="button" id="quickbutton">Quick actions</button>
                     <button type="button" class="button" id="optionsback">Back</button>
                 </div>
             </div>
@@ -277,6 +278,14 @@
                 <div id="wheelsetup"></div>
                 <div class="menu">
                     <button type="button" class="button" id="wheelsback">Back</button>
+                </div>
+            </div>
+            <div class="menupage" id="menuquick" hidden>
+                <h2 id="quicktitle">Quick actions</h2>
+                <p class="wheels-note">In a fight, these four rise from the bottom of the screen. Tap one to use it: attacks on the foe you're fighting, anything else on yourself. Hold one to change it. Tap a slot here to choose what's in it.</p>
+                <div id="quicksetup"></div>
+                <div class="menu">
+                    <button type="button" class="button" id="quickback">Back</button>
                 </div>
             </div>
         </dialog>

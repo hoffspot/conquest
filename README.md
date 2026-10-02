@@ -222,7 +222,7 @@ is drawn round you as you go, with no loading screens: only its far edge in the 
 being built. The hamlets, villages, towns and cities of the world plan are there, each with its
 own buildings; the ruins and the enemy camps are still to come.
 
-**The minimap**, in the top right under the menu button, shows where you are from above: out in
+**The minimap**, along the top beside the spellbook, journal, pack and menu buttons, shows where you are from above: out in
 the world, the 128 metres or so round you, its roads, rivers, roofs and trees; inside, the
 whole floor, its walls, furniture and stairs. On it are what the camera can see, you (an arrow pointing the way you face), where
 you're going, and the orc when it's where you are (red; ringed when it's your target). Every
@@ -250,6 +250,14 @@ waiting greyed on your enemy wheel until you've read them. Each spell has its ow
 cooldown: while it runs, its slice is greyed over, and the grey sweeps back as it passes. A flick
 at a greyed slice, or at an empty one, is refused, and a spell that can't be cast (out of reach,
 out of sight, already at full health) says why.
+
+**Quick actions.** In a fight (an enemy you've set on, or anyone after you), four slots rise from
+the bottom of the screen, your name and the zoom buttons lifted above them. Tap one to use what's
+in it at once: an attack, a hex or a blow on the enemy you're fighting, and anything else (Vigor,
+a ward, a draught) on yourself. Attacks are greyed while no enemy's set on, and each is greyed
+over while it cools down, as on the wheels. You start with Vigor, Stun, Burn and a healing
+draught; hold a slot (or go to **Game options, Quick actions**) to choose what's in it. On a
+keyboard, 1 to 4 tap them.
 
 **Magic.** Each school grows with its spells that land, bringing its next spell at each tier:
 Healing up to **Astral Heal** at the fifth, and each element up to its seventh (**Hellfire**,
@@ -322,6 +330,7 @@ remembered.
 | Zoom | Pinch, or the + and − buttons | Scroll, or the + and − buttons |
 | Walk or fight on the map | Tap the minimap (double-tap to run) | Click the minimap (double-click to run) |
 | Cast a spell | Hold on yourself or an enemy, then flick to a slice | Hold the button down on them, then flick the mouse |
+| Quick action (in a fight) | Tap one of the four along the bottom; hold one to change it | Click one, or press 1 to 4 |
 | Pause, Game options | The menu button | The menu button or Escape |
 
 **Playing together.** Anyone playing can open their world to others: in the menu, **Invite
@@ -451,6 +460,8 @@ client/                 The game (static files served to the browser)
     hud.js              Health, stamina, names, damage numbers and messages over the game
     wheel.js            The action wheels: hold, flick, two sides, cooldowns; icons.js draws
                         their icons, and every item's; wheelsetup.js sets what's on them
+    quickbar.js         The quick actions: four slots up from the bottom in a fight, tapped to
+                        use on the foe or the player; quicksetup.js sets what's in them
     minimap.js          The minimap: the map the player is on from above (out in the world, the
                         patch round them), with everyone on it; mapicons.js the buildings' icons
     worldmap.js         The world map: the whole world, under a fog where the player hasn't been
