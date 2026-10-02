@@ -511,10 +511,13 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
   - the smith and the apprentice: weapons, armour and shields, up to masterwork, and the pieces
     of their people's uniform;
   - the priest: healing draughts;
-  - the guild's receptionist: wands, grimoires and draughts, up to fine.
+  - the guild's receptionist ("I'd like to buy or sell something", or "What does the guild
+    buy?", which she answers: the spoils of the wild and tomes, which no one else takes, and gear):
+    wands, grimoires, wizards' hats, jewellery, draughts and cures, and the tomes that open the
+    elements' schools, up to fine.
 
-  What's carried sells for 40% of its price. The shop stays open while the player's within a few
-  steps of the keeper.
+  What's carried sells for 40% of its price (a creature's part for all it's worth, to the guild).
+  The shop stays open while the player's within a few steps of the keeper.
 - **Bought by talking.** A room, an ale or a meal bought in talk is had at once; a sharpening at
   the smithy or a blessing at the temple is a boon for ten minutes (sharper blows up close; a
   little more of everything).
@@ -553,8 +556,14 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     icon floating over it (world/drops3d.js), for 5 minutes (`GROUND_MS`), kept with the world
     and seen by everyone playing in it. Anyone tapping one walks up to it and picks it up
     (`pickUp`, from within 1.6 m: `PICK_REACH`), if there's room in their pack.
-  - **Trading** with a shopkeeper, it shows the shop's wares too, each to buy, and what's
-    carried can be sold. **With another player**, face to face (docs/WILDS.md), it shows what
+  - **Trading** with a shopkeeper, Buy and Sell tabs run across its top, and it opens on Buy:
+    the shop's wares under their kinds (weapons, shields and the off hand, clothes and armour,
+    jewellery, food, drink and draughts, tomes: core/progress.js `WARE_KINDS`), the commoner made
+    first, then by name, each with its price and a button to buy it (greyed past the gold to
+    hand). Sell lists what's carried, each with what it fetches (each, of a stack) and a button
+    to sell it (asked how many, of a stack); what that shop won't buy (`buys`: tomes and the
+    spoils of the wild, but at the guild) is greyed, saying so, and why. **With another
+    player**, face to face (docs/WILDS.md), it shows what
     each offers: tapped or held, a stack is offered (SE on its wheel); gold's offered, and it's
     agreed to or called off, below.
   - **The Skills tab** shows each skill's rank and how far to the next.

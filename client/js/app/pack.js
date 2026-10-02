@@ -5,10 +5,12 @@
 //   weapon; the totals of all they wear and have grown into, the sets they wear and who they pass
 //   for; and what they carry, two pages of slots, each a stack of things alike, sorted at a tap;
 // - Skills: each skill's rank and title, how far to the next, what makes it grow, what it's brought.
-// Trading with a shopkeeper (their talk's "Show me what you have"), it shows the shop's wares
-// too, each to buy, and what they carry can be sold. Trading with another player (face to face:
-// core/host.js), it shows what each offers: what they carry is offered (as many as they like),
-// or taken back, and gold; once both agree, it changes hands.
+// Trading with a shopkeeper (from their talk), it has two tabs across its top instead: Buy (as
+// it opens), the shop's wares under their kinds (weapons, what's worn, jewellery, draughts,
+// tomes...), the commoner made first, each to buy; and Sell, what the player carries, each with
+// what it fetches and a button to sell it (what that shop won't buy greyed, and why). Trading
+// with another player (face to face: core/host.js), it shows what each offers: what they carry is
+// offered (as many as they like), or taken back, and gold; once both agree, it changes hands.
 //
 // A thing is tapped to see what it is (app/gearinfo.js: its name in the colour of its make, what
 // it does, its set; gear in the pack compared with what's worn) with buttons for what can be done
@@ -84,8 +86,14 @@ export class PackPanel {
         this.close.addEventListener("click", () => this.onClose());
         header.append(this.title, this.tabs, this.gold, this.close);
 
+        // (Trading with a shopkeeper: Buy and Sell, across the top)
+        this.modes = element("div", "pack-modes");
+        this.modes.setAttribute("role", "tablist");
+        this.modes.setAttribute("aria-label", "Buy or sell");
+        this.modes.hidden = true;
+
         this.body = element("div", "pack-body");
-        this.panel.append(header, this.body);
+        this.panel.append(header, this.modes, this.body);
         root.append(this.panel);
 
         // Where the game draws the player on the paperdoll (dragged, they turn round)
@@ -114,6 +122,7 @@ export class PackPanel {
 
         this.view = null;
         this.tab = "gear";
+        this.trading = "buy";
         this.page = 0;
         this.selected = null;
         this.press = null;
@@ -155,13 +164,20 @@ export class PackPanel {
      * core/gear.js GEAR_SLOTS; what's in it, and gearinfo.js's description of it; `locked`: the
      * off hand behind a two-handed weapon; `only`: what alone it takes), totals (gearinfo.js
      * totals), pack: [a slot each: null, or { id, quality, count, label, about, use ("Drink",
-     * "Eat"), equip ("Wear", "Wield"), takes (the slot a piece goes in), price (each, sold), info }],
-     * shop: null or { name, wares: [{ item, label, price, affordable }] }, trade: null or (trading
+     * "Eat"), equip ("Wear", "Wield"), takes (the slot a piece goes in), price (each, sold),
+     * wanted (whether the shop being traded with buys it), info }], shop: null or { name, wares:
+     * [{ item, label, price, affordable, kind (what it's shown under) }] (in the order shown),
+     * unwanted (what it won't buy, said, or null) }, trade: null or (trading
      * with another player) { name, mine, theirs (what each offers: { gold, items: [{ id, quality,
      * count, label }] }), agreed: { mine, theirs } } }.
      */
     show(view) {
         const { gold, pack, shop, trade = null } = view;
+
+        // (Trading with a shopkeeper anew: buying first)
+        if (shop && this.view?.shop?.name !== shop.name) {
+            this.trading = "buy";
+        }
 
         useDefs();
         this.view = view;
@@ -211,10 +227,28 @@ export class PackPanel {
         this.wheel.element.remove();
     }
 
-    // The tabs: Gear and Skills (trading, just what's carried)
+    // The tabs: Gear and Skills; trading with a shopkeeper, Buy and Sell across the top instead
+    // (trading with another player, neither)
     #showTabs() {
         const trading = Boolean(this.view.shop || this.view.trade);
 
+        this.modes.hidden = !this.view.shop;
+        this.modes.replaceChildren(
+            ...(this.view.shop ? [["buy", "Buy"], ["sell", "Sell"]] : []).map(([id, label]) => {
+                const mode = button(label, () => {
+                    this.trading = id;
+                    this.#showTabs();
+                    this.#render();
+                    this.body.scrollTop = 0;
+                }, { className: "pack-mode" });
+
+                mode.setAttribute("role", "tab");
+                mode.setAttribute("aria-selected", String(this.trading === id));
+                mode.dataset.mode = id;
+
+                return mode;
+            }),
+        );
         this.tabs.hidden = trading;
         this.tabs.replaceChildren(
             ...[["gear", "Gear"], ["skills", "Skills"]].map(([id, label]) => {
@@ -261,21 +295,12 @@ export class PackPanel {
             return;
         }
 
+        // Trading with a shopkeeper: their wares under their kinds to buy, or what's carried to sell
         if (shop) {
-            const list = element("ul", "pack-list wares");
+            this.body.replaceChildren(...(this.trading === "sell" ? this.#selling() : this.#buying()));
+            this.#dolled(false);
 
-            list.append(
-                ...shop.wares.map(({ item, label, price, affordable }) => {
-                    const row = element("li", `pack-row rarity-${item.quality ?? "common"}`);
-                    const picture = element("span", "pack-icon");
-
-                    picture.innerHTML = icon(item, 28);
-                    row.append(picture, element("span", "pack-label", label), element("span", "pack-price", `${price} gold`), button("Buy", () => this.onCommand({ type: "buy", item }), { label: `Buy ${label} for ${price} gold`, disabled: !affordable }));
-
-                    return row;
-                }),
-            );
-            sections.push(this.#section("For sale", list));
+            return;
         }
 
         // Trading with another player: what they offer, and what the player does
@@ -296,6 +321,76 @@ export class PackPanel {
         this.body.replaceChildren(...sections);
         this.#dolled(this.dollView.isConnected);
         this.#listen(main);
+    }
+
+    // --- Trading with a shopkeeper ---
+
+    // The shop's wares, each kind under its heading (in the order the game gives them), to buy
+    #buying() {
+        const kinds = new Map();
+
+        for (const ware of this.view.shop.wares) {
+            kinds.set(ware.kind, [...(kinds.get(ware.kind) ?? []), ware]);
+        }
+
+        return [...kinds].map(([kind, wares]) => {
+            const list = element("ul", "pack-list wares");
+
+            list.append(
+                ...wares.map(({ item, label, price, affordable }) => {
+                    const row = element("li", `pack-row rarity-${item.quality ?? "common"}`);
+                    const picture = element("span", "pack-icon");
+
+                    picture.innerHTML = icon(item, 28);
+                    row.append(picture, element("span", "pack-label", label), element("span", "pack-price", `${price} gold`), button("Buy", () => this.onCommand({ type: "buy", item }), { label: `Buy ${label} for ${price} gold`, disabled: !affordable }));
+
+                    return row;
+                }),
+            );
+
+            return this.#section(kind, list);
+        });
+    }
+
+    // What the player carries, each with what it fetches (each, of a stack) and a button to sell
+    // it (asked how many, of a stack); what the shop won't buy greyed, and why
+    #selling() {
+        const { pack, shop } = this.view;
+        const carried = pack.map((stack, index) => stack && { stack, index }).filter(Boolean);
+        const list = element("ul", "pack-list selling");
+
+        list.append(
+            ...carried.map(({ stack, index }) => {
+                const row = element("li", `pack-row rarity-${stack.quality ?? "common"}${stack.wanted ? "" : " unwanted"}`);
+                const picture = element("span", "pack-icon");
+                const label = `${stack.label}${stack.count > 1 ? ` ×${stack.count}` : ""}`;
+
+                picture.innerHTML = icon(stack, 28);
+                row.dataset.item = stack.id;
+                row.append(
+                    picture,
+                    element("span", "pack-label", label),
+                    element("span", "pack-price", stack.wanted ? `${stack.price} gold${stack.count > 1 ? " each" : ""}` : "Not bought here"),
+                    button("Sell", () => this.#do("sell", index), { label: stack.wanted ? `Sell ${stack.label} for ${stack.price} gold${stack.count > 1 ? " each" : ""}` : `${shop.name} won't buy ${stack.label}`, disabled: !stack.wanted }),
+                );
+
+                return row;
+            }),
+        );
+
+        const notes = [];
+
+        if (!carried.length) {
+            notes.push(element("p", "pack-empty", "You've nothing to sell."));
+        } else if (shop.unwanted && carried.some(({ stack }) => !stack.wanted)) {
+            notes.push(element("p", "pack-hint", shop.unwanted));
+        }
+
+        if (this.view.gear.some(({ item }) => item)) {
+            notes.push(element("p", "pack-hint", "To sell what you're wearing, take it off first."));
+        }
+
+        return [this.#section("Your pack", ...(carried.length ? [list] : []), ...notes)];
     }
 
     // --- The paperdoll ---

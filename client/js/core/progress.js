@@ -105,6 +105,42 @@ export const SHOPS = Object.freeze({
     guild: { items: ["wand", "grimoire", "wizardHat", "amulet", "ring", "potion", ...Object.keys(CURES), ...ELEMENT_TOMES.map(tomeOf)], best: "fine" },
 });
 
+/**
+ * The kinds of thing a shop's wares are shown under, in turn (the pack's Buy tab: app/pack.js):
+ * weapons, what's held in the off hand, what's worn, jewellery, things to eat, drink and cure
+ * with, tomes, and the spoils of the wild.
+ */
+export const WARE_KINDS = Object.freeze({ weapon: "Weapons", offHand: "Shields and off hand", worn: "Clothes and armour", jewel: "Jewellery", supplies: "Food, drink and draughts", tome: "Tomes", spoils: "Spoils of the wild" });
+
+/** Which of WARE_KINDS a thing is (its id). */
+export function wareKind(id) {
+    const def = ITEMS[id];
+
+    return !def ? "supplies" : def.tome ? "tome" : def.part ? "spoils" : def.slot === "mainHand" ? "weapon" : def.slot === "offHand" ? "offHand" : def.jewel ? "jewel" : def.slot ? "worn" : "supplies";
+}
+
+/**
+ * The order a shop's wares are shown in ({ id, quality }, as wares has them): by kind
+ * (WARE_KINDS), then the commoner made first, then by name.
+ */
+export function shopOrder(a, b) {
+    const kinds = Object.keys(WARE_KINDS);
+    const makes = Object.keys(QUALITIES);
+
+    const [x, y] = [ITEMS[a.id]?.label ?? a.id, ITEMS[b.id]?.label ?? b.id];
+
+    // (Names compared code by code, not by the browser's language: the same everywhere)
+    return kinds.indexOf(wareKind(a.id)) - kinds.indexOf(wareKind(b.id)) || makes.indexOf(a.quality ?? "common") - makes.indexOf(b.quality ?? "common") || (x < y ? -1 : x > y ? 1 : 0);
+}
+
+/**
+ * Whether a shop buys a thing (its id): any shop buys gear and things to use; the creatures'
+ * parts and the tomes, only the adventurers' guild.
+ */
+export function buys(shop, id) {
+    return shop === "guild" || !(ITEMS[id]?.part || ITEMS[id]?.tome);
+}
+
 /** What sells for what (a share of its price), before haggling. */
 export const SELL_SHARE = 0.4;
 
