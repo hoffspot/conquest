@@ -2071,6 +2071,8 @@ test("an adventurer at the guild, hired for gold, follows the player out and kee
 });
 
 test("the player's people brought under another: told, and served; stirred to rising, they rise; and their victory, told and honoured", async ({ page }) => {
+    // (The war played on two minutes in all: more than the usual time)
+    test.setTimeout(180000);
     await playing(page, "/?play&seed=1");
 
     const fate = page.locator(".fate");
@@ -2996,6 +2998,8 @@ test("the action wheels: flicked down, the other side; what's on each chosen in 
 });
 
 test("magic: the spellbook shows every school and the tomes; an element opened by its tome; a tome read teaches its spell, put on a wheel from the book; the seventh tier floods the screen; summoned by another player, asked whether to go", async ({ page }) => {
+    // (Two tomes read, a fight and a summons: more than the usual time)
+    test.setTimeout(180000);
     await playing(page, "/?play&seed=1");
 
     const book = page.locator(".spellbook");
