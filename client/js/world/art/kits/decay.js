@@ -65,9 +65,10 @@ export function brokenTop(random, length, low, high, { stone = 4.5, course = 2, 
 
 /**
  * A crumbled wall: along u over its broken top's points (`top`: brokenTop's, moved to start at
- * `from`), from v0 to v1 across, standing on `base`, closed at the ends asked for.
+ * `from`), from v0 to v1 across, standing on `base`, closed at the ends asked for; its broken top
+ * and ends showing its `core` (the rubble its faces were filled with: its own stone if none).
  */
-export function crumbledWall(solid, at, top, from, [v0, v1], base, material, { ends = [true, true] } = {}) {
+export function crumbledWall(solid, at, top, from, [v0, v1], base, material, { ends = [true, true], core = material } = {}) {
     const o = at(0, 0, 0);
     const way = (du, dy, dv) => sub(at(du, dy, dv), o);
     const p = (u, y, v) => at(from + u, y, v);
@@ -83,13 +84,13 @@ export function crumbledWall(solid, at, top, from, [v0, v1], base, material, { e
 
         // (Its broken top: sloping, or a step's riser)
         if (ub > ua || ha !== hb) {
-            solid.facing([p(ua, ha, v0), p(ub, hb, v0), p(ub, hb, v1), p(ua, ha, v1)], way(-(hb - ha), ub - ua, 0), material);
+            solid.facing([p(ua, ha, v0), p(ub, hb, v0), p(ub, hb, v1), p(ua, ha, v1)], way(-(hb - ha), ub - ua, 0), core);
         }
     }
 
     for (const [end, [u, h], out] of [[ends[0], top[0], -1], [ends[1], top.at(-1), 1]]) {
         if (end) {
-            solid.facing([p(u, base, v0), p(u, base, v1), p(u, h, v1), p(u, h, v0)], way(out, 0, 0), material);
+            solid.facing([p(u, base, v0), p(u, base, v1), p(u, h, v1), p(u, h, v0)], way(out, 0, 0), core);
         }
     }
 }
@@ -97,9 +98,10 @@ export function crumbledWall(solid, at, top, from, [v0, v1], base, material, { e
 /**
  * A crumbled round wall (a tower's, a turret's, a pit's lining): round (cx, cz), from radius
  * `inner` to `outer`, standing on `base`, its rim broken: `heights` round it (the first at angle
- * 0, evenly round); left open where `open` says ([from, to] radians, the way through a gap).
+ * 0, evenly round); left open where `open` says ([from, to] radians, the way through a gap); its
+ * rim and the gap's ends showing its `core` (as crumbledWall's).
  */
-export function crumbledRing(solid, cx, cz, [inner, outer], base, heights, material, { open = null } = {}) {
+export function crumbledRing(solid, cx, cz, [inner, outer], base, heights, material, { open = null, core = material } = {}) {
     const n = heights.length;
     const angleOf = (k) => (k / n) * Math.PI * 2;
     const point = (r, k, y) => [cx + Math.cos(angleOf(k)) * r, y, cz + Math.sin(angleOf(k)) * r];
@@ -126,7 +128,7 @@ export function crumbledRing(solid, cx, cz, [inner, outer], base, heights, mater
 
         solid.facing([point(outer, k, base), point(outer, j, base), point(outer, j, hb), point(outer, k, ha)], out, material);
         solid.facing([point(inner, k, base), point(inner, j, base), point(inner, j, hb), point(inner, k, ha)], [-out[0], 0, -out[2]], material);
-        solid.facing([point(inner, k, ha), point(inner, j, hb), point(outer, j, hb), point(outer, k, ha)], [0, 1, 0], material);
+        solid.facing([point(inner, k, ha), point(inner, j, hb), point(outer, j, hb), point(outer, k, ha)], [0, 1, 0], core);
 
         // (Its ends either side of the gap, closed)
         for (const [at, h, next] of [[k, ha, (k - 1 + n) % n], [j, hb, j]]) {
@@ -134,7 +136,7 @@ export function crumbledRing(solid, cx, cz, [inner, outer], base, heights, mater
                 const tangent = [-Math.sin(angleOf(at)), 0, Math.cos(angleOf(at))];
                 const way = next === j ? tangent : tangent.map((v) => -v);
 
-                solid.facing([point(inner, at, base), point(outer, at, base), point(outer, at, h), point(inner, at, h)], way, material);
+                solid.facing([point(inner, at, base), point(outer, at, base), point(outer, at, h), point(inner, at, h)], way, core);
             }
         }
     }

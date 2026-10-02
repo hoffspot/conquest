@@ -28,11 +28,38 @@ export const LAYER_SIZE = 256;
 /** How strongly the layers' heights are lit as relief (0: flat). */
 export const RELIEF = 0.7;
 
-/** The layers, in order: every textured material built with, then the white of plain colours. */
-export const LAYERS = Object.freeze([...Object.keys(MATERIALS).filter((name) => !MATERIALS[name].ground), "plain"]);
+/**
+ * The layers, in order: every textured material built with, the old stone among them last (AGED),
+ * then the white of plain colours.
+ */
+export const LAYERS = Object.freeze([
+    ...Object.keys(MATERIALS).filter((name) => !MATERIALS[name].ground && !MATERIALS[name].old),
+    ...Object.keys(MATERIALS).filter((name) => MATERIALS[name].old),
+    "plain",
+]);
 
 const index = new Map(LAYERS.map((name, k) => [name, k]));
 const PLAIN = index.get("plain");
+
+/**
+ * Old stone (MATERIALS' `old`: the ruins', never the peoples' kept-up towns) weathered where it's
+ * drawn (the research report behind M7b: "Moss, streaks and ivy cost arithmetic, not draws"): the
+ * layers from `from` to `to`; moss on what faces up, in the joints between its blocks near to
+ * (out to `near`, metres, fading over the last half) and a little on what faces north, in patches
+ * (`patch`: their size, metres) and towards `moss` (sRGB), as much as `amount`; dark streaks
+ * down its faces (`runs` metres apart or so), as dark as `streak`.
+ */
+export const AGED = Object.freeze({
+    from: LAYERS.findIndex((name) => MATERIALS[name]?.old),
+    to: PLAIN,
+    moss: 0x3f4a2a,
+    amount: 0.85,
+    north: 0.3,
+    patch: 1.6,
+    near: 70,
+    runs: 0.45,
+    streak: 0.35,
+});
 
 /**
  * What shines, and how (by material name; a tinted material shines as the one it's tinted
@@ -388,15 +415,49 @@ if (atlasGloss > 0.0) {
 }
 #endif`;
 
+// Smooth noise in the shader (0 to 1, a lattice a unit apart), for old stone's moss and streaks
+const AGED_NOISE_GLSL = `
+float agedHash(vec2 p) {
+    p = fract(p * vec2(0.1031, 0.1030));
+    p += dot(p, p.yx + 33.33);
+    return fract((p.x + p.y) * p.x);
+}
+float agedNoise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(agedHash(i), agedHash(i + vec2(1.0, 0.0)), f.x), mix(agedHash(i + vec2(0.0, 1.0)), agedHash(i + vec2(1.0, 1.0)), f.x), f.y);
+}`;
+
+// Old stone weathered (AGED), once its normal's known: where it is in the world and which way it
+// faces from the view's (its relief left out), the moss and the streaks over its colour
+const AGED_GLSL = `
+if (vLayer > ${(AGED.from - 0.5).toFixed(1)} && vLayer < ${(AGED.to - 0.5).toFixed(1)}) {
+    vec3 agedAt = (vec4(-vViewPosition, 0.0) * viewMatrix).xyz + cameraPosition;
+    float agedUp = smoothstep(0.35, 0.85, dot(nonPerturbedNormal, (viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz));
+    float agedNorth = max(0.0, dot(nonPerturbedNormal, (viewMatrix * vec4(0.0, 0.0, -1.0, 0.0)).xyz));
+    float agedNear = 1.0 - smoothstep(${(AGED.near / 2).toFixed(1)}, ${AGED.near.toFixed(1)}, length(vViewPosition));
+    float agedPatch = agedNoise((agedAt.xz + agedAt.y * 0.6) / ${AGED.patch.toFixed(2)});
+    float agedFine = agedNoise((agedAt.xz + agedAt.yy) * 3.1);
+    float agedJoint = smoothstep(0.75, 0.95, 1.0 - atlasTexel.a);
+    float agedMoss = clamp(agedUp * (0.5 + 0.7 * agedPatch) + agedJoint * (0.25 + 0.6 * agedPatch) * agedNear + agedNorth * ${AGED.north.toFixed(2)} * agedPatch, 0.0, 1.0)
+        * smoothstep(0.2, 0.55, agedPatch + 0.3 * (agedFine - 0.5));
+    float agedStreak = smoothstep(0.55, 0.85, agedNoise(vec2((agedAt.x + agedAt.z) / ${AGED.runs.toFixed(2)}, agedAt.y * 0.2))) * (1.0 - agedUp) * agedNear;
+
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(${new THREE.Color(AGED.moss).toArray().map((v) => v.toFixed(4)).join(", ")}) * (0.75 + 0.5 * agedFine), agedMoss * ${AGED.amount.toFixed(2)});
+    diffuseColor.rgb *= 1.0 - ${AGED.streak.toFixed(2)} * agedStreak;
+}`;
+
 // A material's shader drawn from the atlas: each vertex's layer, its texture coordinates, and the
-// layer's heights lit as relief; and, with `shine`, glass, metal and slate shining (SHINES)
+// layer's heights lit as relief, old stone weathered (AGED); and, with `shine`, glass, metal and
+// slate shining (SHINES)
 function fromAtlas(shader, uniforms, { shine = false } = {}) {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
         .replace("#include <common>", "#include <common>\nattribute float layer;\nflat varying float vLayer;\nflat varying float vShine;\nvarying vec2 vAtlasUv;")
         .replace("#include <uv_vertex>", `#include <uv_vertex>\nvLayer = mod(layer, ${SHINE_STEP.toFixed(1)});\nvShine = floor(layer / ${SHINE_STEP.toFixed(1)});\nvAtlasUv = uv;`);
     shader.fragmentShader = shader.fragmentShader
-        .replace("#include <common>", `#include <common>\nuniform highp sampler2DArray atlasMap;\nuniform float atlasRelief;\nflat varying float vLayer;\nvarying vec2 vAtlasUv;\n${RELIEF_GLSL}`)
+        .replace("#include <common>", `#include <common>\nuniform highp sampler2DArray atlasMap;\nuniform float atlasRelief;\nflat varying float vLayer;\nvarying vec2 vAtlasUv;\n${RELIEF_GLSL}\n${AGED_NOISE_GLSL}`)
         .replace("#include <map_fragment>", "vec4 atlasTexel = texture(atlasMap, vec3(vAtlasUv, vLayer));\ndiffuseColor.rgb *= atlasTexel.rgb;")
         .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
 if (atlasRelief > 0.0) {
@@ -405,7 +466,8 @@ if (atlasRelief > 0.0) {
     vec2 slope = vec2(dFdx(atlasTexel.a), dFdy(atlasTexel.a)) * atlasRelief;
 
     normal = reliefNormal(-vViewPosition, normal, slope, faceDirection);
-}`);
+}
+${AGED_GLSL}`);
 
     if (shine) {
         shader.fragmentShader = shader.fragmentShader

@@ -71,6 +71,15 @@ function courses(seed, rows, lengths, block) {
     };
 }
 
+/**
+ * Old stone (the ruins', kits/neutral.js and kits/castle.js RUINED: MATERIALS' `old`), laid in
+ * random courses (the research report behind M7b: "Random courses and dark mortar fix most of the
+ * castle"): how many metres one copy covers (MATERIALS' `world` is five times it); each course
+ * one of `courses` high (metres); each block one to three times as long as its course is high;
+ * the joints `joint` metres wide.
+ */
+export const OLD_STONE = Object.freeze({ metres: 4.2, courses: [0.2, 0.28, 0.35, 0.45, 0.6], long: [1, 3], joint: 0.03 });
+
 export const PAINTERS = {
     // Castle stone: squared blocks in courses, with mortar joints and lit upper edges
     ashlar({ base, light, dark, mortar }, seed) {
@@ -96,6 +105,85 @@ export const PAINTERS = {
 
             return [...scale(mix(colour, base, 0.3), 0.93 + grain(u * 3 + row, v * 3) * 0.14), lift];
         });
+    },
+
+    // Old stone: random courses (OLD_STONE) of blocks each its own shade and hue, greener or
+    // browner, darker towards its foot, its upper edge catching the light, flecked with lichen,
+    // its corners chipped; the dark mortar between them wandering and sunk deep
+    coursed({ base, light, dark, mortar }, seed) {
+        const random = createRandom(seed);
+        const grain = periodicNoise(seed + 1, 16);
+        const fleck = periodicNoise(seed + 2, 64);
+        const px = SIZE / OLD_STONE.metres;
+        const joint = Math.max(1, OLD_STONE.joint * px);
+        const rows = [];
+
+        for (let top = 0; top < SIZE; ) {
+            let height = random.pick(OLD_STONE.courses) * px;
+
+            if (SIZE - top - height < OLD_STONE.courses[0] * px) {
+                height = SIZE - top;
+            }
+
+            const blocks = [];
+            const offset = random.next() * SIZE;
+
+            for (let start = 0; start < SIZE; ) {
+                let length = height * random.range(...OLD_STONE.long);
+
+                if (SIZE - start - length < height) {
+                    length = SIZE - start;
+                }
+
+                blocks.push({ start, length, shade: random.next(), hue: random.range(-1, 1), chip: random.next() });
+                start += length;
+            }
+
+            rows.push({ top, height, offset, blocks });
+            top += height;
+        }
+
+        const warm = mix(base, [0x6a, 0x63, 0x52], 0.6);
+        const green = mix(base, [0x52, 0x60, 0x48], 0.6);
+        const lichen = [0xa8, 0xa8, 0x86];
+
+        return (x, y) => {
+            const row = rows.find(({ top, height }) => y >= top && y < top + height) ?? rows.at(-1);
+            const along = (((x + row.offset) % SIZE) + SIZE) % SIZE;
+            const block = row.blocks.find(({ start, length }) => along >= start && along < start + length) ?? row.blocks.at(-1);
+            const [u, v, w, h] = [along - block.start, y - row.top, block.length, row.height];
+
+            // (The joints along its left and upper edges, wandering a little so they aren't ruled
+            // lines, and its corners chipped)
+            const across = joint * (0.75 + grain(x / 4, y / 4) * 0.5);
+            const chip = block.chip * joint * 1.3;
+            const off = (a, b) => Math.max(0, chip - Math.hypot(a, b));
+
+            if (u < across || v < across || Math.max(off(u, v), off(w - u, v), off(u, h - v), off(w - u, h - v)) > 0.5) {
+                return [...scale(mortar, 0.8 + grain(x / 3, y / 3) * 0.35), 0.03 + grain(x / 4, y / 4) * 0.05];
+            }
+
+            const edge = Math.min(u - across, w - u, v - across, h - v);
+            const n = grain((x / SIZE) * 16, (y / SIZE) * 16);
+            const mottle = fleck((x / SIZE) * 16 + block.start, (y / SIZE) * 16 + row.top);
+            let colour = mix(dark, light, Math.min(1, Math.max(0, 0.1 + block.shade * 0.6 + (n - 0.5) * 0.35 + (mottle - 0.5) * 0.25)));
+
+            colour = mix(colour, block.hue > 0 ? green : warm, Math.abs(block.hue) * 0.4);
+
+            if (v / h > 0.75) {
+                colour = scale(colour, 1 - (v / h - 0.75) * 0.8);
+            } else if (v < across + 1.2) {
+                colour = mix(colour, light, 0.2);
+            }
+
+            const flecked = fleck((x / SIZE) * 64, (y / SIZE) * 64);
+
+            if (flecked > 0.84) {
+                colour = mix(colour, lichen, Math.min(1, (flecked - 0.84) * 3.5));
+            }
+
+            return [...colour, 0.45 + Math.min(1, edge / 2) * 0.35 + n * 0.12 + (mottle - 0.5) * 0.1];
+        };
     },
 
     brick({ base, light, dark, mortar }, seed) {
@@ -841,6 +929,13 @@ export const MATERIALS = {
     stone: { painter: "ashlar", world: 14, base: 0x8f8c86, light: 0xb4b0a6, dark: 0x6c6964, mortar: 0x57544f },
     "stone-warm": { painter: "ashlar", world: 14, base: 0xa89878, light: 0xc8b996, dark: 0x847359, mortar: 0x645846 },
     "stone-dark": { painter: "ashlar", world: 14, base: 0x6f6e70, light: 0x8e8c8c, dark: 0x535257, mortar: 0x403f43 },
+    // (Old stone, the ruins': each people's own gone dark and green, and the rubble core broken
+    // walls show where they're broken; atlas.js AGED: moss and streaks over them)
+    "stone-old": { painter: "coursed", world: OLD_STONE.metres * 5, base: 0x5e625a, light: 0x7c8073, dark: 0x43463f, mortar: 0x24271f, old: true },
+    "stone-moon-old": { painter: "coursed", world: OLD_STONE.metres * 5, base: 0xa9aa9c, light: 0xc4c5b6, dark: 0x85877a, mortar: 0x3c3e36, old: true },
+    "stone-black-old": { painter: "coursed", world: OLD_STONE.metres * 5, base: 0x34343a, light: 0x4a4a50, dark: 0x25252b, mortar: 0x121314, old: true },
+    "stone-lime-old": { painter: "coursed", world: OLD_STONE.metres * 5, base: 0xa6a184, light: 0xc0bb9c, dark: 0x837f66, mortar: 0x3f3e30, old: true },
+    "rubble-old": { painter: "rubble", world: 20, base: 0x55584f, light: 0x6f7266, dark: 0x3c3e37, mortar: 0x1f211b, old: true },
     brick: { painter: "brick", world: 5, base: 0x9a4e38, light: 0xb4654a, dark: 0x733627, mortar: 0xb3a792 },
     "brick-brown": { painter: "brick", world: 5, base: 0x80533a, light: 0x9c6a4c, dark: 0x5f3b29, mortar: 0xa89d8a },
     plaster: { painter: "plaster", world: 30, base: 0xe4dac0, light: 0xf1eadb, dark: 0xcdbf9f },

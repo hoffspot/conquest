@@ -736,6 +736,26 @@ watchtowers. The six peoples' cities, castles, villages and farmsteads, and the 
 are lived in by thriving peoples: kept in good repair, and lively. A city may have a dilapidated,
 dangerous part (a run-down quarter, later), but the world isn't a ruin.
 
+**How the peoples' villages look** (the user's direction, 2026-10-02, from five reference pictures
+of "good looking medieval villages": "I'd aim for the stylized ones"). Stylised and painterly, not
+photoreal: warm saturated colour, chunky readable shapes, soft rounded forms. What the chosen
+pictures share, for M7c:
+- **Houses:** a stone ground storey (rubble or squared, grey-blue) with timber framing and pale or
+  tinted plaster above; jettied upper storeys, balconies and galleries, dormers; a round stone
+  tower here and there with a conical shingled cap and a weathervane.
+- **Roofs:** thick thatch with deep rounded eaves and ragged edges; steep shingle or tile roofs in
+  brown, red-brown and orange, slightly irregular, mossy; chimneys with smoke.
+- **Green among the houses:** trees between and over them, ivy up walls, gardens and flower beds
+  (pink and white), clipped hedges and topiary, kerbed planters round trees.
+- **Life and clutter:** barrels, crates and sacks; carts; wattle and post-and-rail fences;
+  wooden scaffolds and watchtowers; market stalls and awnings; a fountain or a well in the
+  square; folk about.
+- **Ground:** worn dirt paths running into cobbled squares, grass at their edges.
+- **Round a village:** a timber palisade, golden wheat fields and gardens outside it, woods
+  behind.
+The ruins and the wild keep the Elden Ring's darker, weathered look (M7b); the villages are where
+the warm, lived-in look is.
+
 **As built in M7a** (row 4, the neutral sites, and row 6's decay pass for them; see the change
 log):
 - **Laid out in core** (`core/setpieces/neutral.js` `layoutNeutral`, exact maths): each kind's
@@ -1841,3 +1861,38 @@ converted data is to be measured in M8 against today's hm08 data.
     core's; fields afar on medium and high only), `e2e/building-lab.spec.js` (the GPU's fields
     drawn a pixel a metre over 16,384 metres of farmland and round it, every one the same as
     `fieldAt`'s; changing one constant in the shader makes thousands differ).
+- **2026-10-02, M7b-3a built** (old stone: the research report's "Random courses and dark mortar
+  fix most of the castle" and "Moss, streaks and ivy cost arithmetic, not draws", the stone and
+  its weathering; the openings, string courses, buttresses and ivy are M7b-3b and M7b-3c):
+  - **Why:** the user's reference shot of a ruined castle: dark, mossy, green-grey stone in
+    uneven courses with deep mortar. The ruins were the peoples' clean grey ashlar (one 2.8 m
+    tile of eight equal 35 cm courses, mid-grey mortar), only toned by face.
+  - **Built:**
+    - a `coursed` painter (`painters.js OLD_STONE`): random courses 20, 28, 35, 45 or 60 cm
+      high filling a 4.2 m copy, blocks one to three times as long as their course is high, each
+      its own shade and a greener or browner hue, darker towards its foot, its upper edge lit,
+      lichen flecks, chipped corners; near-black mortar, wandering a little, sunk (height near
+      0) so the relief shadows it;
+    - old stones (`MATERIALS`' `old`): `stone-old` (the humans' and the wild's: dark green-grey),
+      `stone-moon-old`, `stone-black-old`, `stone-lime-old`, and `rubble-old` (the rubble
+      painter in the same dark green-grey) for the core broken walls show;
+    - the ruins built of them (`kits/neutral.js STONE`, `castle.js` RUINED's `ruin`), the broken
+      tops and breaches' ends of crumbled walls and rings showing the rubble core (`decay.js`
+      `core`), the humans' and the wild's fallen heaps of it (`rubbleOf`); the peoples' castles
+      and towns keep their own stone;
+    - weathering in the atlas's shader for the old layers alone (`atlas.js AGED`; the old
+      layers last of the atlas's but the plain colours, so one range test): where the pixel is
+      in the world and which way it faces from the view's matrix and the normal before relief;
+      moss towards #3f4a2a on what faces up, in patches about 1.6 m across, a little on what
+      faces north, and within 70 m in the mortar; dark streaks down the faces; the rising damp
+      at the foot stays the kits' own tone. No new program (the same atlas shader), draw,
+      triangle or vertex data.
+  - **Cost:** five more 256-pixel atlas layers (1.3 MB, 1.7 MB with their mipmaps); a branch on
+    the layer for every atlas pixel, and about forty operations a pixel of old stone.
+  - **Pictures:** before/after sheet sent in the session (a ruined castle from afar and close
+    by, a broken watchtower close by).
+  - **Versions:** none (the drawing's alone).
+  - **Tests:** `test/neutral.test.js` (the old stone's courses of several heights within
+    OLD_STONE's, its mortar dark, darker and greener than kept stone; the old layers last but
+    plain, the shader's weathering for them alone, after the normal's known; the ruined pieces
+    of old stone with their rubble core, the kept castle's of its own).
