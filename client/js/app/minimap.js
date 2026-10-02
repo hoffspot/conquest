@@ -71,6 +71,14 @@ const INSIDE = {
 // Pixels to the metre of the painted map
 const SCALE = 4;
 
+/**
+ * The wedge showing which way the player's looking: how far it reaches (a share of the minimap's
+ * width, so it's the same size inside and out, however the camera's tilted or zoomed), how wide
+ * it opens (radians), and how far out (a share of its reach) it starts to fade, to nothing at its
+ * tip.
+ */
+export const LOOK = Object.freeze({ reach: 0.3, spread: 1.1, fade: 0.35 });
+
 // Out in the world: how much of it the minimap shows round the player (metres across), and how
 // much is painted at a time (the player can go a quarter of the difference before it's painted
 // again: metres)
@@ -373,11 +381,11 @@ export class Minimap {
 
     /**
      * Draw it: `player` { x, z, facing } (metres, radians), `others` [{ x, z, hostile,
-     * targeted }], `destination` [x, z] or null, `view` the corners of what the camera sees
-     * ([[x, z] ×4], null where it sees no ground) or null, and `icons` over the buildings gone
-     * into ([{ kind, x, z }]).
+     * targeted }], `destination` [x, z] or null, `look` the way the player's looking over the
+     * ground (radians, as `facing`: 0 south, towards +z) or null, and `icons` over the buildings
+     * gone into ([{ kind, x, z }]).
      */
-    draw({ player, others = [], destination = null, view = null, icons = [] }, now = performance.now()) {
+    draw({ player, others = [], destination = null, look = null, icons = [] }, now = performance.now()) {
         const { canvas, context, map } = this;
 
         this.drawn = now;
@@ -423,16 +431,34 @@ export class Minimap {
             context.drawImage(this.base, 0, 0, width, height);
         }
 
-        // What the camera sees
-        if (view?.every(Boolean)) {
+        // Which way the player's looking: a wedge from them, always the same size, fading out
+        // towards its tip
+        this.looked = null;
+
+        if (player && look !== null) {
+            const [px, py] = at(player.x, player.z);
+            const reach = width * LOOK.reach;
+            const middle = Math.atan2(Math.cos(look), Math.sin(look));
+            const fade = (alpha) => {
+                const gradient = context.createRadialGradient(px, py, 0, px, py, reach);
+
+                gradient.addColorStop(0, `rgba(255, 248, 225, ${alpha})`);
+                gradient.addColorStop(LOOK.fade, `rgba(255, 248, 225, ${alpha})`);
+                gradient.addColorStop(1, "rgba(255, 248, 225, 0)");
+
+                return gradient;
+            };
+
             context.beginPath();
-            view.forEach(([x, z], k) => context[k ? "lineTo" : "moveTo"](...at(x, z)));
+            context.moveTo(px, py);
+            context.arc(px, py, reach, middle - LOOK.spread / 2, middle + LOOK.spread / 2);
             context.closePath();
-            context.fillStyle = "rgba(255, 248, 225, 0.12)";
+            context.fillStyle = fade(0.2);
             context.fill();
-            context.strokeStyle = "rgba(255, 248, 225, 0.6)";
+            context.strokeStyle = fade(0.65);
             context.lineWidth = 1;
             context.stroke();
+            this.looked = { look, reach };
         }
 
         // Where the player is going
