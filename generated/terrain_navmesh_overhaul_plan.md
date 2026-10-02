@@ -2228,3 +2228,17 @@ converted data is to be measured in M8 against today's hm08 data.
     (a chunk's yards built on the ground as it lies, merged as all at once; their beds' plants
     sown with the undergrowth, where `plantsOf` says); `test/wilds.test.js` (the plants within
     the undergrowth's budgets); `e2e/building-lab.spec.js` (a village's yards).
+- **2026-10-02, swiping up follows the camera** (the user: "command a player to continuously run
+  in the direction the camera is facing until they hit an obstacle. The player character should
+  turn to the direction the camera is facing and initiate a forward run until exhausted, and
+  then walk, until an obstacle is reached"):
+  - **Changed:** a swipe up from the player sends `ahead` with the way the camera looks over the
+    ground (`Game.forward`: the camera's direction, flattened; looking straight down, the way
+    they face), not the way they face; the battle's `ahead` order turns them that way as well as
+    setting them off (`actor.facing`), even when the way's blocked at once. Running while their
+    stamina lasts and then walking, as before.
+  - **Versions:** none (the order's the same shape; the host turns the hero and the turn reaches
+    everyone with the rest of the hero's state).
+  - **Tests:** `test/combat.test.js` (sent ahead, turned that way first, blocked or not);
+    `e2e/pellagos.spec.js` (the camera turned to look the clearest way with the player facing
+    off to the side: a swipe turns them the camera's way and sends them running along it).

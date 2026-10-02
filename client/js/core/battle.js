@@ -717,8 +717,8 @@ export class Battle {
 
     /**
      * Tell a character what to do: { type: "move", to: [x, y] } (walk there, on its map, or as
-     * near as can be), { type: "ahead", facing } (straight ahead the way `facing` points,
-     * radians, as far as the way is clear), { type: "engage", target: id } (go and fight it),
+     * near as can be), { type: "ahead", facing } (turned the way `facing` points, radians, and
+     * straight ahead that way as far as the way is clear), { type: "engage", target: id } (go and fight it),
      * { type: "enter", link: id } (walk to the link's end on its map and go through),
      * { type: "approach", target: id } (walk up to someone, to talk: "arrived" when there), or
      * { type: "stop" }. Moving, engaging, entering and approaching, run: true runs there (while
@@ -750,7 +750,9 @@ export class Battle {
                 break;
             }
             case "ahead": {
-                // From wherever it is, straight on as far as the mesh goes that way
+                // Turned that way, and from wherever it is, straight on as far as the mesh goes
+                actor.facing = order.facing;
+
                 const way = this.#route(actor, () => {
                     const [x, y] = [actor.x, actor.y];
                     const ray = navigatorOf(this.maps[actor.map]).raycast([x, y], [x + sin(order.facing) * AHEAD, y + cos(order.facing) * AHEAD]);

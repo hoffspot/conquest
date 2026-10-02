@@ -530,12 +530,12 @@ test("blows leave wounds of their weapon's kind, worse below each threshold, wit
     expect(end.pools).toBe(0);
 });
 
-test("swiping up from the player sends them straight ahead, running, as far as the way is clear", async ({ page }) => {
+test("swiping up from the player turns them the way the camera looks and sends them straight ahead, running, as far as the way is clear", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
-    // (Turned first the way that's clearest ahead of them, whatever's round the market where they
-    // start: the well, stalls, a landmark)
-    await page.evaluate(async () => {
+    // (The camera turned to look the way that's clearest ahead of them, whatever's round the
+    // market where they start: the well, stalls, a landmark; and the player facing off to the side)
+    const way = await page.evaluate(async () => {
         const { navigatorOf } = await import("/js/core/navigation.js");
         const { game } = window.pellagos;
         const player = game.battle.actor("player");
@@ -544,10 +544,18 @@ test("swiping up from the player sends them straight ahead, running, as far as t
         const ways = Array.from({ length: 8 }, (_, k) => (k * Math.PI) / 4 - Math.PI);
         const ahead = (way) => navigation.raycast([player.x, player.y], [player.x + Math.sin(way) * 400, player.y + Math.cos(way) * 400])?.t ?? 0;
         const clearest = ways.reduce((best, way) => (ahead(way) > ahead(best) ? way : best));
+        const aside = clearest + Math.PI / 2;
 
-        player.facing = clearest;
-        avatar.facing = clearest;
-        avatar.object.rotation.y = clearest;
+        player.facing = aside;
+        avatar.facing = aside;
+        avatar.object.rotation.y = aside;
+        game.cameraFollow.yaw = Math.atan2(-Math.sin(clearest), -Math.cos(clearest));
+        game.cameraFollow.turning = 0;
+
+        // (Drawn once like that, so the player's where they look on the screen)
+        await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+
+        return clearest;
     });
 
     // (The game playing on, taking taps and swipes)
@@ -557,6 +565,8 @@ test("swiping up from the player sends them straight ahead, running, as far as t
 
         return { at: session.view.toScreen(avatar.point(0.5)), facing: avatar.facing, x: avatar.object.position.x, z: avatar.object.position.z };
     });
+
+    expect(Math.abs(Math.sin(start.facing - way))).toBeGreaterThan(0.9);
 
     // A quick flick up from the player (said when it happened, as a device would)
     const cdp = await page.context().newCDPSession(page);
@@ -572,13 +582,14 @@ test("swiping up from the player sends them straight ahead, running, as far as t
         const player = game.battle.actor("player");
         const order = player.order;
         const pitch = session.view.pitch;
+        const facing = player.facing;
 
         game.stop();
         game.advance(1.5);
 
         const avatar = game.avatars.get("player");
 
-        return { order, pitch, running: player.running, pace: player.pace, x: avatar.object.position.x, z: avatar.object.position.z };
+        return { order, pitch, facing, running: player.running, pace: player.pace, x: avatar.object.position.x, z: avatar.object.position.z };
     });
 
     // (A swipe, not a drag: the camera's not tilted)
@@ -587,9 +598,11 @@ test("swiping up from the player sends them straight ahead, running, as far as t
     expect(moved.order.run).toBe(true);
     expect(moved.running).toBe(true);
 
-    // The way they faced
-    const along = (moved.x - start.x) * Math.sin(start.facing) + (moved.z - start.z) * Math.cos(start.facing);
-    const across = Math.abs((moved.x - start.x) * Math.cos(start.facing) - (moved.z - start.z) * Math.sin(start.facing));
+    // Turned the way the camera looks, and off that way
+    expect(Math.cos(moved.facing - way)).toBeGreaterThan(0.99);
+
+    const along = (moved.x - start.x) * Math.sin(way) + (moved.z - start.z) * Math.cos(way);
+    const across = Math.abs((moved.x - start.x) * Math.cos(way) - (moved.z - start.z) * Math.sin(way));
 
     expect(along).toBeGreaterThan(3);
     expect(across).toBeLessThan(1);

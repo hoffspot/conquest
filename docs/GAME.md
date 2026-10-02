@@ -804,8 +804,8 @@ room to draw than there is. While held, it doesn't turn itself; let go, it stays
 turned while the player stands, and once they walk again, it swings back round behind them,
 facing the way they go (keeping its tilt, unless it was looking up past 15 degrees down: then it
 eases back down to 35 to see where they're going).
-A drag that starts on the player and sets off mostly upwards is a swipe (straight ahead), not a
-turn; two fingers are a pinch (zoom). Tilting costs nothing: the town is a few merged meshes,
+A drag that starts on the player and sets off mostly upwards is a swipe (straight ahead the way
+the camera looks), not a turn; two fingers are a pinch (zoom). Tilting costs nothing: the town is a few merged meshes,
 drawn whole whichever way the camera looks (about 90 draw calls and 170,000 triangles either way).
 
 **Quality levels** trade looks for speed. Game options' **Visual quality** slider chooses one, Low
@@ -2305,8 +2305,10 @@ game plays on while it's open; a second finger (a pinch) closes it.
    the taps happened, so a slow frame between them doesn't matter) turns it into a run, as does
    a Shift-click. A drag turns the camera round the player (and tilts it). A swipe up that
    starts on the player (40 pixels up within 600 ms, mostly up)
-   sends them straight ahead the way they face, running (an `ahead` order), with the ring where
-   they'll stop; blocked straight away, it's refused with a sound. The heads-up display
+   turns them the way the camera looks (over the ground) and sends them straight ahead that way,
+   running while their stamina lasts and then walking (an `ahead` order, which turns them as
+   well as setting them off), with the ring where they'll stop; blocked straight away, it's
+   refused with a sound (still turned that way). The heads-up display
    (app/hud.js) shows the player's name and health in the bottom left corner (the zoom buttons
    in the bottom right), with an orange stamina bar under the health bar while stamina isn't
    full, "Out of breath" when a run

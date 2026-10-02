@@ -381,6 +381,7 @@ const WORN_OFF = Object.freeze({ invisibility: "You're seen again." });
 
 const _focus = new THREE.Vector3();
 const _lean = new THREE.Vector3();
+const _looking = new THREE.Vector3();
 const _hearth = new THREE.Vector3();
 
 export class Game {
@@ -4998,8 +4999,8 @@ export class Game {
     }
 
     /**
-     * Go straight ahead the way the player faces, square after square, as far as the way is
-     * clear: running while their stamina lasts, then walking (a swipe up from them).
+     * Turn the player the way the camera looks, and go straight ahead that way as far as the way
+     * is clear: running while their stamina lasts, then walking (a swipe up from them).
      */
     forward() {
         this.#wake();
@@ -5011,7 +5012,11 @@ export class Game {
             return;
         }
 
-        this.#command({ type: "ahead", facing: avatar.facing, run: true });
+        // (The way the camera looks over the ground; looking straight down, the way they face)
+        const looking = this.view.camera.getWorldDirection(_looking);
+        const facing = Math.hypot(looking.x, looking.z) > 1e-3 ? Math.atan2(looking.x, looking.z) : avatar.facing;
+
+        this.#command({ type: "ahead", facing, run: true });
 
         const goal = player.order?.to;
         const [ox, oz] = this.originOf(player.map);
