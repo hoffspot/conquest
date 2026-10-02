@@ -28,12 +28,13 @@ const { heightAt } = await import("../client/js/core/terrain/height.js");
 const { layoutNeutral, NEUTRAL } = await import("../client/js/core/setpieces/neutral.js");
 const { PLOT } = await import("../client/js/core/setpieces/pieces.js");
 const { WORLD_SIZE } = await import("../client/js/core/worldplan/plan.js");
-const { gatehouse, keep, RUINED, tower, wall } = await import("../client/js/world/art/kits/castle.js");
+const { gatehouse, keep, KEEP_RUIN, keepWindows, RUINED, tower, wall } = await import("../client/js/world/art/kits/castle.js");
 const { builderOf } = await import("../client/js/world/town3d.js");
 const { Shapes, siteShapes } = await import("../client/js/world/far/shapes.js");
 const { createRandom } = await import("../client/js/core/random.js");
 const { Solid } = await import("../client/js/world/art/engine/solid.js");
-const { brokenRim, brokenTop, talus } = await import("../client/js/world/art/kits/decay.js");
+const { archOf, brokenRim, brokenTop, buttress, crumbledWall, stringCourse, talus, topAt } = await import("../client/js/world/art/kits/decay.js");
+const { HALL, hallWindows } = await import("../client/js/world/art/kits/neutral.js");
 const { brokenCart, fallenTimbers, oldBarrel, oldBeam, oldCrate } = await import("../client/js/world/art/kits/leftovers.js");
 const { material } = await import("../client/js/world/art/engine/materials.js");
 const { MATERIALS, OLD_STONE, paintLayer, SIZE } = await import("../client/js/world/art/engine/painters.js");
@@ -205,7 +206,9 @@ describe("the sites no people keeps in the world (sites.js)", () => {
     });
 
     it("builds every part (the ruined castles' by the castle kit, left to ruin) within its budget", () => {
-        const budget = { ruins: 4000, "ruined castle": 15000, "dragon's lair": 3000 };
+        // (A hall's ruins with its windows through its walls, its courses and its buttresses, and
+        // a ruined keep with its rows of windows and its courses: M7b-3b, about 700 and 900 more)
+        const budget = { ruins: 4500, "ruined castle": 15000, "dragon's lair": 3000 };
         const most = new Map();
 
         for (const site of sites) {
@@ -410,6 +413,179 @@ describe("old stone (art/engine/painters.js OLD_STONE, atlas.js AGED)", () => {
 
             assert.ok(names.has("stone") && ![...names].some((name) => MATERIALS[name]?.old), `${piece.kind} kept: ${[...names]}`);
         }
+    });
+});
+
+describe("old walls as they were built: openings, courses and buttresses (art/kits/decay.js)", () => {
+    // (A wall along x, 0 to 60 across u, 6 thick, its top level at `height`)
+    const at = (u, y, v) => [u, y, v];
+    const level = (height) => [
+        [0, height],
+        [60, height],
+    ];
+    const hits = (object, from, direction) => {
+        object.updateMatrixWorld(true);
+
+        return new THREE.Raycaster(new THREE.Vector3(...from), new THREE.Vector3(...direction).normalize(), 0, 100).intersectObject(object, true).length;
+    };
+
+    it("heads each opening round or pointed, rising to its middle and down again", () => {
+        for (const [k, rise] of [
+            [0.5, 0.5],
+            [1, Math.sqrt(0.75)],
+        ]) {
+            const arch = archOf(10, k, 4);
+            const top = Math.max(...arch.map(([, r]) => r));
+
+            assert.deepEqual(arch[0], [0, 0]);
+            assert.ok(Math.abs(arch.at(-1)[0] - 10) < 1e-9 && Math.abs(arch.at(-1)[1]) < 1e-9);
+            assert.ok(Math.abs(top - rise * 10) < 1e-6, `k ${k}: ${top} high`);
+            assert.ok(arch.every(([u], i) => i === 0 || u > arch[i - 1][0]), "along it");
+            assert.ok(arch.every(([u, r]) => Math.abs(r - arch.find(([w]) => Math.abs(w - (10 - u)) < 1e-9)[1]) < 1e-9), "the same both sides");
+        }
+
+        // (A lancet's taller than a round arch over the same span)
+        assert.ok(Math.max(...archOf(10, 1.3).map(([, r]) => r)) > Math.max(...archOf(10, 1).map(([, r]) => r)));
+    });
+
+    it("cuts an opening right through a wall, its jambs, sill and head as deep as the wall", () => {
+        const opening = { u0: 25, u1: 31, sill: 10, spring: 20, k: 1 };
+        const [whole, cut] = [[], [opening]].map((openings) => {
+            const solid = new Solid();
+
+            crumbledWall(solid, at, level(40), 0, [-3, 3], 0, material("stone-old"), { openings });
+
+            return solid.toObject();
+        });
+
+        // (Through it: nothing in the way; beside it, below its sill and above its head, the
+        // wall's face, from either side: what faces the eye. The rays miss the faces' seams, where
+        // a ray meets both triangles of an edge)
+        for (const [z, way] of [
+            [20, -1],
+            [-20, 1],
+        ]) {
+            assert.equal(hits(cut, [27.3, 15.4, z], [0, 0, way]), 0);
+            assert.equal(hits(whole, [27.3, 15.4, z], [0, 0, way]), 1);
+            assert.equal(hits(cut, [20.3, 15.4, z], [0, 0, way]), 1);
+            assert.equal(hits(cut, [28.3, 5.3, z], [0, 0, way]), 1);
+            assert.equal(hits(cut, [28.3, 30.4, z], [0, 0, way]), 1);
+        }
+
+        // (Its jambs and sill inside it, and its head over it, the wall's whole thickness)
+        assert.ok(hits(cut, [28.3, 15.4, 2.5], [-1, 0, 0]) >= 1, "a jamb");
+        assert.ok(hits(cut, [28.3, 15.4, -2.5], [0, -1, 0]) >= 1, "the sill");
+        assert.ok(hits(cut, [28.3, 15.4, 2.5], [0, 1, 0]) >= 1, "the head");
+    });
+
+    it("runs a string course across a wall only where it still stands above it, and not over its openings", () => {
+        const solid = new Solid();
+        const top = [
+            [0, 40],
+            [30, 40],
+            [31, 8],
+            [60, 8],
+        ];
+
+        stringCourse(solid, at, top, 0, 3, 1, 12, material("stone-old"), { width: 2, depth: 1, openings: [{ u0: 10, u1: 16, sill: 10, spring: 20, k: 1 }] });
+
+        const object = solid.toObject();
+        const xs = [];
+
+        object.traverse((node) => node.isMesh && node.geometry.attributes.position.array.forEach((value, i) => i % 3 === 0 && xs.push(value)));
+        assert.ok(xs.length > 0);
+        assert.ok(xs.every((x) => x < 31), "none where the wall's lower than it");
+        assert.ok(xs.every((x) => x < 10 || x > 16), "none across the opening");
+        assert.equal(hits(object, [5, 12, 10], [0, 0, -1]), 1, "on its face");
+    });
+
+    it("stands a buttress out from the face it's against, in stages each less deep, no higher than asked", () => {
+        const solid = new Solid();
+
+        buttress(solid, at, 0, 30, 3, 1, 0, [10, 18, 24], [4, 2.5, 1.5], 3.5, material("stone-old"));
+
+        const box = new THREE.Box3().setFromObject(solid.toObject());
+
+        assert.ok(box.min.z >= 3 - 1e-6 && box.max.z <= 7 + 1e-6, "out from its face, as deep as its foot");
+        assert.ok(box.max.y <= 24 + 1e-6 && box.min.y >= 0, "no higher than its top");
+        assert.ok(Math.abs(box.max.x - box.min.x - 3.5) < 1e-6, "as wide as asked");
+        assert.equal(hits(solid.toObject(), [30, 22, 20], [0, 0, -1]), 1, "its top stage");
+        assert.ok(hits(solid.toObject(), [30, 5, 20], [0, 0, -1]) >= 1 && hits(solid.toObject(), [30, 5, 20], [0, 0, -1]) === hits(solid.toObject(), [30, 5, 7.5], [0, 0, -1]), "its foot, the deepest");
+    });
+
+    it("leaves an opening open above where the wall's top has fallen below its head, its jambs standing as high as the top beside them", () => {
+        // (The top falls from 40 to 16, below the springing, over the opening's middle)
+        const solid = new Solid();
+        const top = [
+            [0, 40],
+            [26, 40],
+            [27, 16],
+            [60, 16],
+        ];
+
+        crumbledWall(solid, at, top, 0, [-3, 3], 0, material("stone-old"), { openings: [{ u0: 25, u1: 31, sill: 10, spring: 20, k: 1 }] });
+
+        const wall = solid.toObject();
+
+        for (const [z, way] of [
+            [20, -1],
+            [-20, 1],
+        ]) {
+            assert.equal(hits(wall, [29.3, 13.4, z], [0, 0, way]), 0, "open through it");
+            assert.equal(hits(wall, [29.3, 5.3, z], [0, 0, way]), 1, "below its sill");
+            assert.equal(hits(wall, [25.6, 30.4, z], [0, 0, way]), 1, "what's left over its head");
+        }
+
+        assert.equal(hits(wall, [29.3, 12.4, 0.37], [0, 1, 0]), 0, "open to the sky");
+        assert.equal(hits(wall, [25.6, 15.4, 0.37], [0, 1, 0]), 1, "its head where the top's above it");
+        assert.equal(hits(wall, [28.3, 13.4, 0.37], [1, 0, 0]), 1, "its jamb, up to the top beside it");
+        assert.equal(hits(wall, [28.3, 18.4, 0.37], [1, 0, 0]), 0, "and no higher");
+        assert.equal(hits(wall, [28.3, 15.4, 0.37], [-1, 0, 0]), 1, "its other jamb");
+    });
+
+    it("puts an old hall's windows where its wall still stands above their sills, and a ruined keep's in rows", () => {
+        const { span, every, end, sill, standing, clear } = HALL.windows;
+        let placed = 0;
+
+        for (let seed = 1; seed <= 40; seed++) {
+            const random = createRandom(seed);
+            const length = random.range(40, 120);
+            const top = brokenTop(random, length, 4, 23, { stone: 4.5, course: 1.6 });
+            const windows = hallWindows(top, length, createRandom(seed + 100));
+
+            placed += windows.length;
+            assert.deepEqual(hallWindows(top, length, createRandom(seed + 100)), windows, "the same every time");
+
+            for (const [i, { u0, u1 }] of windows.entries()) {
+                assert.ok(Math.abs(u1 - u0 - span * 5) < 1e-9 && u0 >= end * 5 && u1 <= length - end * 5);
+                assert.ok([u0 - clear * 5, u1 + clear * 5, ...top.map(([u]) => u).filter((u) => u > u0 - clear * 5 && u < u1 + clear * 5)].every((u) => topAt(top, u) > (sill + standing) * 5 - 1e-9), `${seed}: standing above its sill`);
+                assert.ok(i === 0 || u0 - windows[i - 1].u0 >= every[0] * 5 - 1e-9, "apart");
+            }
+        }
+
+        assert.ok(placed > 10, `${placed} windows in 40 walls`);
+        assert.equal(hallWindows(level((sill + standing) * 5 - 1), 60, createRandom(1)).length, 0, "none in a low wall");
+
+        // (A keep's: in rows at its two heights, through its walls where they still stand)
+        const height = 90;
+        const tall = keepWindows(level(height), 80, height);
+        const rows = KEEP_RUIN.windows.sills.map((at) => tall.filter(({ sill }) => Math.abs(sill - height * at) < 1e-9));
+
+        assert.ok(rows.every((row) => row.length >= 2) && rows[0].length + rows[1].length === tall.length);
+        assert.deepEqual(
+            rows[0].map(({ u0 }) => u0),
+            rows[1].map(({ u0 }) => u0),
+            "one over another",
+        );
+        assert.equal(keepWindows(level(height * 0.3), 80, height).length, 0);
+        assert.equal(keepWindows(level(height * 0.5), 80, height).length, rows[0].length, "only the lower row in a wall half fallen");
+    });
+
+    it("leaves a ruined keep's flat window slits behind for windows through its walls", () => {
+        const names = new Set();
+
+        RUINED.keep({ kind: "keep", w: 5, h: 4, door: true, seed: 11, x: 40, y: 64, ruined: true }).traverse((node) => node.isMesh && [node.material].flat().forEach(({ name }) => names.add(name)));
+        assert.ok(!names.has("shadow"), [...names].join(", "));
     });
 });
 

@@ -10,6 +10,10 @@
 // - What fell lies in slopes against the foot, tumbled blocks lying every which way on them, and
 //   a loose stone or two is left perched on top.
 //
+// - Its openings go right through it (the research report behind M7b: "Deep openings ... pointed
+//   heads read as dark lancets at 100 m; today's near-flush slits read as texture"): round or
+//   pointed heads (`archOf`), their jambs, sill and arched soffit the wall's whole thickness deep.
+//
 // In world pixels as the kits are (5 to a metre). `at(u, y, v)` places a point of a wall laid
 // along u, v across it ([x, y, z]); it may turn and move it, but not stretch it.
 
@@ -26,6 +30,37 @@ export function slowNoise(random, length, step) {
 
         return values[i] * (1 - e) + values[i + 1] * e;
     };
+}
+
+/**
+ * An arch's head over an opening `span` wide (the research report's one family for every opening:
+ * `k`, its radius over its span; 0.5 a round arch, more a pointed one, two arcs meeting at the
+ * top, as steep as a lancet at 1.2 to 1.5): [[u, rise], ...] from its left springing (0, 0) over
+ * its top to its right ([span, 0]), `segments` a side.
+ */
+export function archOf(span, k = 1, segments = 4) {
+    const r = Math.max(0.5, k) * span;
+    const top = Math.acos(Math.min(1, (span / 2 - r) / r));
+    const side = [];
+
+    for (let i = 0; i <= segments; i++) {
+        const angle = Math.PI + ((top - Math.PI) * i) / segments;
+
+        side.push([r + Math.cos(angle) * r, Math.sin(angle) * r]);
+    }
+
+    side[0] = [0, 0];
+
+    return [...side, ...side.slice(0, -1).reverse().map(([u, rise]) => [span - u, rise])];
+}
+
+// How high an opening's head is `u` along it (its arch's points, from archOf, joined straight)
+function headAt({ u0, spring, arch }, u) {
+    const t = u - u0;
+    const k = Math.max(0, arch.findIndex((_, i) => i < arch.length - 1 && arch[i + 1][0] >= t));
+    const [[ua, ra], [ub, rb]] = [arch[k], arch[k + 1] ?? arch[k]];
+
+    return spring + (ub > ua ? ra + ((rb - ra) * (t - ua)) / (ub - ua) : ra);
 }
 
 /**
@@ -66,31 +101,121 @@ export function brokenTop(random, length, low, high, { stone = 4.5, course = 2, 
 /**
  * A crumbled wall: along u over its broken top's points (`top`: brokenTop's, moved to start at
  * `from`), from v0 to v1 across, standing on `base`, closed at the ends asked for; its broken top
- * and ends showing its `core` (the rubble its faces were filled with: its own stone if none).
+ * and ends showing its `core` (the rubble its faces were filled with: its own stone if none). Its
+ * `openings` ([{ u0, u1, sill, spring, k }], along it as the top's points are) go through it: from
+ * the sill to the springing straight up, then the head (archOf, `k`), each with its jambs, sill
+ * and soffit as deep as the wall. Where the top's fallen below an opening's head, it's open above:
+ * its jambs stand as high as the top beside them, what's left of its head where the top's above
+ * it. The top must stand above each one's sill all along it.
  */
-export function crumbledWall(solid, at, top, from, [v0, v1], base, material, { ends = [true, true], core = material } = {}) {
+export function crumbledWall(solid, at, top, from, [v0, v1], base, material, { ends = [true, true], core = material, openings = [] } = {}) {
     const o = at(0, 0, 0);
     const way = (du, dy, dv) => sub(at(du, dy, dv), o);
     const p = (u, y, v) => at(from + u, y, v);
+    const holes = openings.map((hole) => ({ ...hole, arch: archOf(hole.u1 - hole.u0, hole.k ?? 1, hole.segments ?? 4) }));
+    // (Where its faces must break: at each opening's sides and along its head)
+    const breaks = holes.flatMap(({ u0, arch }) => arch.map(([u]) => u0 + u));
+    const face = (quad) => {
+        solid.facing(quad.map(([u, y]) => p(u, y, v1)), way(0, 0, 1), material);
+        solid.facing(quad.map(([u, y]) => p(u, y, v0)), way(0, 0, -1), material);
+    };
+
+    const holeAt = (u) => holes.find(({ u0, u1 }) => u > u0 + 1e-9 && u < u1 - 1e-9);
+    const cap = (s, hs, e, he) => solid.facing([p(s, hs, v0), p(e, he, v0), p(e, he, v1), p(s, hs, v1)], way(-(he - hs), e - s, 0), core);
 
     for (let k = 0; k < top.length - 1; k++) {
         const [[ua, ha], [ub, hb]] = [top[k], top[k + 1]];
 
-        // (Its faces either side, where it runs on: none where it only steps)
-        if (ub > ua) {
-            solid.facing([p(ua, base, v1), p(ub, base, v1), p(ub, hb, v1), p(ua, ha, v1)], way(0, 0, 1), material);
-            solid.facing([p(ua, base, v0), p(ub, base, v0), p(ub, hb, v0), p(ua, ha, v0)], way(0, 0, -1), material);
+        // (A step's riser: over an opening, only what's above its head)
+        if (ub === ua) {
+            const hole = holeAt(ua);
+            const floor = hole ? Math.max(Math.min(ha, hb), headAt(hole, ua)) : Math.min(ha, hb);
+
+            if (Math.max(ha, hb) > floor) {
+                cap(ua, ha < hb ? floor : ha, ub, ha < hb ? hb : floor);
+            }
+
+            continue;
         }
 
-        // (Its broken top: sloping, or a step's riser)
-        if (ub > ua || ha !== hb) {
-            solid.facing([p(ua, ha, v0), p(ub, hb, v0), p(ub, hb, v1), p(ua, ha, v1)], way(-(hb - ha), ub - ua, 0), core);
+        // (Its faces either side and its broken top over them, broken round its openings: below
+        // each one's sill, and above its head where the top still is, up to where the top falls
+        // below it)
+        const cuts = [ua, ...breaks.filter((u) => u > ua && u < ub).sort((a, b) => a - b), ub];
+        const height = (u) => ha + ((hb - ha) * (u - ua)) / (ub - ua);
+
+        for (let i = 0; i < cuts.length - 1; i++) {
+            const [s, e] = [cuts[i], cuts[i + 1]];
+            const hole = holeAt((s + e) / 2);
+
+            if (!hole) {
+                face([[s, base], [e, base], [e, height(e)], [s, height(s)]]);
+                cap(s, height(s), e, height(e));
+                continue;
+            }
+
+            face([[s, base], [e, base], [e, hole.sill], [s, hole.sill]]);
+
+            const [ds, de] = [height(s) - headAt(hole, s), height(e) - headAt(hole, e)];
+
+            if (ds > 0 && de > 0) {
+                face([[s, headAt(hole, s)], [e, headAt(hole, e)], [e, height(e)], [s, height(s)]]);
+                cap(s, height(s), e, height(e));
+            } else if (ds > 0 || de > 0) {
+                // (The top falls below its head here: what's left above it, a wedge)
+                const c = s + ((e - s) * ds) / (ds - de);
+
+                if (ds > 0) {
+                    face([[s, headAt(hole, s)], [c, height(c)], [s, height(s)]]);
+                    cap(s, height(s), c, height(c));
+                } else {
+                    face([[c, height(c)], [e, headAt(hole, e)], [e, height(e)]]);
+                    cap(c, height(c), e, height(e));
+                }
+            }
         }
     }
 
     for (const [end, [u, h], out] of [[ends[0], top[0], -1], [ends[1], top.at(-1), 1]]) {
         if (end) {
             solid.facing([p(u, base, v0), p(u, base, v1), p(u, h, v1), p(u, h, v0)], way(out, 0, 0), core);
+        }
+    }
+
+    // (Each opening's jambs (as high as the top beside them, if that's lower than its springing),
+    // sill and soffit (where the top's above it), through the wall)
+    for (const hole of holes) {
+        const { u0, u1, sill, spring, arch } = hole;
+
+        for (const [u, out] of [
+            [u0, 1],
+            [u1, -1],
+        ]) {
+            const up = Math.min(spring, topAt(top, u));
+
+            solid.facing([p(u, sill, v0), p(u, sill, v1), p(u, up, v1), p(u, up, v0)], way(out, 0, 0), material);
+        }
+
+        solid.facing([p(u0, sill, v0), p(u1, sill, v0), p(u1, sill, v1), p(u0, sill, v1)], way(0, 1, 0), material);
+
+        for (let i = 0; i < arch.length - 1; i++) {
+            const [[ua, ra], [ub, rb]] = [arch[i], arch[i + 1]];
+            let [a, b] = [[u0 + ua, spring + ra], [u0 + ub, spring + rb]];
+            const [da, db] = [topAt(top, a[0]) - a[1], topAt(top, b[0]) - b[1]];
+
+            if (da <= 0 && db <= 0) {
+                continue;
+            }
+
+            // (Only the part of it the top's still above)
+            if (da <= 0 || db <= 0) {
+                const t = da / (da - db);
+                const c = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+
+                [a, b] = da > 0 ? [a, c] : [c, b];
+            }
+
+            solid.facing([p(a[0], a[1], v0), p(b[0], b[1], v0), p(b[0], b[1], v1), p(a[0], a[1], v1)], way(rb - ra, -(ub - ua), 0), material);
         }
     }
 }
@@ -250,5 +375,79 @@ export function perched(solid, random, at, top, from, [v0, v1], below, material)
 
             tumbled(solid, random, at(from + ua + (ub - ua) * t, ha + (hb - ha) * t + size * 0.25, (v0 + v1) / 2), size, material, { lean: 0.25 });
         }
+    }
+}
+
+/** How high a broken top stands `u` along it (its points joined straight). */
+export function topAt(top, u) {
+    const k = Math.max(0, top.findIndex((_, i) => i < top.length - 1 && top[i + 1][0] >= u));
+    const [[ua, ha], [ub, hb]] = [top[k], top[k + 1] ?? top[k]];
+
+    return ub > ua ? ha + ((hb - ha) * (Math.min(ub, Math.max(ua, u)) - ua)) / (ub - ua) : hb;
+}
+
+/**
+ * A string course (a projecting band of stone across a wall's face: the research report's
+ * cheapest strong cue, a lit top edge over a shadowed underside): along a crumbled wall (as
+ * crumbledWall's `at`, `top` and `from`) on its face at `v`, facing `side` (+1, -1), `height` up,
+ * `width` tall and standing `depth` proud; only where the wall still stands a band above it, and
+ * not across its openings (crumbledWall's).
+ */
+export function stringCourse(solid, at, top, from, v, side, height, material, { width = 1, depth = 0.6, openings = [] } = {}) {
+    const o = at(0, 0, 0);
+    const out = sub(at(0, 0, side), o);
+    const clear = (u) => topAt(top, u) > height + width * 1.5 && !openings.some(({ u0, u1, sill }) => u > u0 - 0.5 && u < u1 + 0.5 && height + width / 2 > sill);
+    const [first, last] = [top[0][0], top.at(-1)[0]];
+    const step = 1;
+    let start = null;
+
+    for (let u = first; u <= last + step / 2; u += step) {
+        const open = u <= last && clear(u);
+
+        if (open && start === null) {
+            start = u;
+        } else if (!open && start !== null) {
+            const end = Math.min(last, u - step);
+
+            if (end - start > width * 2) {
+                solid.member(at(from + start, height, v), at(from + end, height, v), out, width, depth, material);
+            }
+
+            start = null;
+        }
+    }
+}
+
+/**
+ * A buttress against a crumbled wall's face (as stringCourse's), `u` along it: `width` across,
+ * standing out `depths` (one a stage, from its foot, each less than the last) over `heights` (where
+ * each stage ends; the last its top, broken off rough), each set-off a slope shedding the rain to
+ * the next stage; its foot `base`.
+ */
+export function buttress(solid, at, from, u, v, side, base, heights, depths, width, material, core = material) {
+    const o = at(0, 0, 0);
+    const way = (du, dy, dv) => sub(at(du, dy, dv), o);
+    const p = (du, y, w) => at(from + u + du, y, v + side * w);
+    const half = width / 2;
+    let bottom = base;
+
+    for (let i = 0; i < depths.length; i++) {
+        const [d, next, top] = [depths[i], depths[i + 1] ?? 0, heights[i]];
+        // (Its set-off: sloping from its front back to the next stage's, or its broken top)
+        const rise = i < depths.length - 1 ? (d - next) * 1.2 : 0;
+
+        solid.facing([p(-half, bottom, d), p(half, bottom, d), p(half, top, d), p(-half, top, d)], way(0, 0, side), material);
+
+        for (const s of [-1, 1]) {
+            solid.facing([p(s * half, bottom, 0), p(s * half, bottom, d), p(s * half, top, d), p(s * half, top + rise, next), p(s * half, top + rise, 0)], way(s, 0, 0), material);
+        }
+
+        if (rise > 0) {
+            solid.facing([p(-half, top, d), p(half, top, d), p(half, top + rise, next), p(-half, top + rise, next)], way(0, d - next, side * rise), material);
+        } else {
+            solid.facing([p(-half, top, 0), p(half, top, 0), p(half, top, d), p(-half, top, d)], way(0, 1, 0), core);
+        }
+
+        bottom = top + rise;
     }
 }

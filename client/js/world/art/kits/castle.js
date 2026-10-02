@@ -12,7 +12,7 @@ import { createRandom } from "../../../core/random.js";
 import { Solid } from "../engine/solid.js";
 import { material } from "../engine/materials.js";
 import { MATERIALS } from "../engine/painters.js";
-import { brokenRim, brokenTop, crumbledRing, crumbledWall, perched, talus, tumbled } from "./decay.js";
+import { brokenRim, brokenTop, crumbledRing, crumbledWall, perched, stringCourse, talus, tumbled } from "./decay.js";
 import { oldBeam } from "./leftovers.js";
 import { rubbleOf, weathered } from "./neutral.js";
 
@@ -267,13 +267,20 @@ function topAt(top, u) {
 /**
  * A crumbled stretch of wall along `axis` from u0 to u1, v0 to v1 across, on `base`, its top
  * broken between `low` and `high`: its fallen stone against its foot on the sides asked for
- * (`sides`: +1, -1), a loose stone or two on top. Its broken top (brokenTop's).
+ * (`sides`: +1, -1), a loose stone or two on top. Its broken top (brokenTop's). Its `openings`
+ * (given its top: crumbledWall's, along it from u0) go through it, and its string `courses`
+ * ([{ height, side }]: decay.js stringCourse's) run across the face on that side.
  */
-function crumbledRun(solid, random, axis, [u0, u1], [v0, v1], base, [low, high], s, { sides = [-1, 1], ground = 0, full = high, ends } = {}) {
+function crumbledRun(solid, random, axis, [u0, u1], [v0, v1], base, [low, high], s, { sides = [-1, 1], ground = 0, full = high, ends, openings = () => [], courses = [] } = {}) {
     const at = along(axis);
     const top = brokenTop(random, u1 - u0, low, high);
+    const holes = openings(top);
 
-    crumbledWall(solid, at, top, u0, [v0, v1], base, s, { ends, core: core() });
+    crumbledWall(solid, at, top, u0, [v0, v1], base, s, { ends, core: core(), openings: holes });
+
+    for (const { height, side } of courses) {
+        stringCourse(solid, at, top, u0, side > 0 ? v1 : v0, side, height, s, { width: KEEP_RUIN.course[0], depth: KEEP_RUIN.course[1], openings: holes });
+    }
 
     for (const side of sides) {
         talus(solid, random, at, top, u0, side > 0 ? v1 : v0, side, full, ground, rubbleOf("human"));
@@ -412,6 +419,39 @@ function ruinedGatehouse(piece, { stone = "stone" } = {}) {
 }
 
 /**
+ * A keep left to ruin's openings and courses (world pixels, five to a metre): tall lancet windows
+ * through its walls in rows, as they were built (`windows`: `span` wide, their heads `k`, from
+ * each of `sills` (of its height) up, springing `spring` above, `every` apart from `first` in from
+ * each wall's ends), each where the wall still stands `standing` above its sill over it and
+ * `clear` either side, open above where its head fell; string courses across its outer faces
+ * under its rows of sills, at `courses` of its height, `course` [tall, proud].
+ */
+export const KEEP_RUIN = Object.freeze({
+    windows: { span: 7, k: 1.15, sills: [0.3, 0.62], spring: 14, every: 18, first: 12, standing: 6, clear: 3 },
+    courses: [0.28, 0.6],
+    course: [2.5, 1.5],
+});
+
+/** A ruined keep's wall's windows (KEEP_RUIN), given its broken top `length` long: crumbledWall's openings. */
+export function keepWindows(top, length, height) {
+    const { span, k, sills, spring, every, first, standing, clear } = KEEP_RUIN.windows;
+    const lowest = (a, b) => Math.min(topAt(top, a), topAt(top, b), ...top.filter(([u]) => u > a && u < b).map(([, h]) => h));
+    const holes = [];
+
+    for (let u = first; u + span <= length - first; u += every) {
+        for (const at of sills) {
+            const sill = height * at;
+
+            if (lowest(u - clear, u + span + clear) > sill + standing) {
+                holes.push({ u0: u, u1: u + span, sill, spring: sill + spring, k });
+            }
+        }
+    }
+
+    return holes;
+}
+
+/**
  * A keep left to ruin: open to the sky, its roof and floors fallen in and lying inside its
  * crumbled walls, its corner turrets broken stumps; where its door was, a breach.
  */
@@ -426,10 +466,12 @@ function ruinedKeep(piece, { stone = "stone" } = {}) {
     solid.box(x0 - 3, 0, z0 - 3, x1 + 3, 10, z1 + 3, s);
     solid.box(x0 + thick, 10, z0 + thick, x1 - thick, 11, z1 - thick, material("cobbles"));
 
-    crumbledRun(solid, random, "x", [x0, x1], [z0, z0 + thick], 10, range, s, { ground: 0, full: height });
+    const dressed = (side, length) => ({ openings: (top) => keepWindows(top, length, height), courses: KEEP_RUIN.courses.map((at) => ({ height: height * at, side })) });
 
-    const west = crumbledRun(solid, random, "z", [z0 + thick, z1 - thick], [x0, x0 + thick], 10, range, s, { ground: 0, full: height, ends: [false, false] });
-    const east = crumbledRun(solid, random, "z", [z0 + thick, z1 - thick], [x1 - thick, x1], 10, range, s, { ground: 0, full: height, ends: [false, false] });
+    crumbledRun(solid, random, "x", [x0, x1], [z0, z0 + thick], 10, range, s, { ground: 0, full: height, ...dressed(-1, x1 - x0) });
+
+    const west = crumbledRun(solid, random, "z", [z0 + thick, z1 - thick], [x0, x0 + thick], 10, range, s, { ground: 0, full: height, ends: [false, false], ...dressed(-1, z1 - z0 - 2 * thick) });
+    const east = crumbledRun(solid, random, "z", [z0 + thick, z1 - thick], [x1 - thick, x1], 10, range, s, { ground: 0, full: height, ends: [false, false], ...dressed(1, z1 - z0 - 2 * thick) });
 
     // (The joists of its hall's floor, across it from wall to wall: whole where both walls still
     // stand high enough to hold them, snapped off where one side fell, fallen in where both did)
@@ -454,18 +496,8 @@ function ruinedKeep(piece, { stone = "stone" } = {}) {
     // (The south wall in two, its door a breach between them)
     const door = piece.door ? [mid - 8, mid + 8] : null;
     const south = door ? [[x0, door[0]], [door[1], x1]] : [[x0, x1]];
-    const tops = south.map((run) => ({ run, top: crumbledRun(solid, random, "x", run, [z1 - thick, z1], 10, range, s, { ground: 0, full: height }) }));
-
-    // (Its windows, where enough of the south wall's left round them)
-    for (let x = x0 + 18; x < x1 - 14; x += 16) {
-        for (const y of [height * 0.45, height * 0.72]) {
-            const own = tops.find(({ run }) => x > run[0] + 4 && x < run[1] - 4);
-            const left = own && own.top.filter(([u]) => Math.abs(own.run[0] + u - x) < 6).every(([, h]) => h > y + 12);
-
-            if (left) {
-                solid.box(x - 2, y, z1, x + 2, y + 8, z1 + 0.6, material("shadow"));
-            }
-        }
+    for (const run of south) {
+        crumbledRun(solid, random, "x", run, [z1 - thick, z1], 10, range, s, { ground: 0, full: height, ...dressed(1, run[1] - run[0]) });
     }
 
     // (Its corner turrets: broken stumps, open)
