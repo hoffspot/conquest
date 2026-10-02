@@ -199,7 +199,7 @@ export const MANIFEST = Object.freeze([
             ["js/world/art/peoples/elf.js", 45224],
             ["js/world/art/peoples/index.js", 2572],
             ["js/world/art/peoples/kit.js", 25491],
-            ["js/world/art/peoples/lizard-places.js", 38977],
+            ["js/world/art/peoples/lizard-places.js", 38963],
             ["js/world/art/peoples/lizard.js", 19771],
             ["js/world/art/peoples/orc-places.js", 38621],
             ["js/world/art/peoples/orc.js", 22390],
