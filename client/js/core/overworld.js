@@ -815,6 +815,11 @@ export class Overworld {
         return this.plan.biome[cellAt(my) * CELLS + cellAt(mx)] === BIOME.farmland;
     }
 
+    /** The foot paths up into the hills (the trails' lines: { planned, kind }) that reach into a chunk. */
+    pathsNear(cx, cy) {
+        return [...new Set(this.#roadsIn(cx, cy).filter((segment) => !segment[6] && segment[4] === "path").map((segment) => segment[5]))];
+    }
+
     /** The bridges whose decks reach into a chunk: [{ a, b, half }] (see chunk). */
     bridgesNear(cx, cy) {
         return this.#bridgesNear(cx, cy);

@@ -53,7 +53,7 @@ const linear = (hex) => {
  * texture), texture coordinates (in copies of its layer's texture), layer, and how much it sways
  * (0 to 1). Grows as it's filled.
  */
-class Mesher {
+export class Mesher {
     constructor(capacity = 1024) {
         this.count = 0;
         this.#allocate(capacity);

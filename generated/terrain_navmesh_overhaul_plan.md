@@ -828,7 +828,8 @@ log):
   (where two trails meet below the lair), against 6.34 on main.
 - **Not yet:** trails too short for their climb are cut to their grade and may end in a deep
   cutting below their site (seed 1: cave-79's 33 m, ruins-32's 43 m; cave-79's was 28 m on main).
-  To be routed longer.
+  To be routed longer. (Done 2026-10-02: routed so they never need cutting, and in stone steps
+  up mountainsides; see the log.)
 - **Budgets** (seed 1, near): a hall's ruins 2.6–3.4k triangles, a ruined castle 12–14k, a cave
   on a hillside about 300 and a cave's pit about 500, a shrine 400–550, standing stones 220–360,
   the lair about 1.8k, the broken watchtower about 430; merged into their chunk's meshes, no
@@ -1983,4 +1984,47 @@ converted data is to be measured in M8 against today's hm08 data.
     wall clear of what's to be kept clear, none on a low wall; round a tower outside its face;
     one program with the hedges' sprigs, casting no shadow, a castle's ivy one mesh merged;
     none on a kept castle).
-
+- **2026-10-02, trails in stone steps built** (the deep cuttings below sites on mountainsides,
+  noted under M7a):
+  - **Why:** kept to a path's grade (25 %) on ways too short for their climb, four of seed 1's
+    trails were cut 28 to 50 m into the mountains below their sites (gorges); and walked on the
+    navigation mesh 40 m at a time, 51 of their 403 stretches couldn't be.
+  - **What was found:**
+    - Recast's ledge filter takes ground rising more than the climb (0.5 m) from one voxel to the
+      next but one for a ledge, so nothing steeper than about 27° was walkable at all: the 30° to
+      38° "steep" ground the plan (M2a) meant to be walked, slowly, never was, nor anything cut
+      steep along a trail;
+    - the way-finder kept the point after each turn instead of the turn itself, so a hairpin's
+      leg was cut short across its turn, straight up the slope;
+    - it also wove up a slope in knight's moves, each step within its grade but the corners,
+      rounded off, straight up it.
+  - **Built:**
+    - stone steps (`ground.js STAIRS`, `stairsOf`, `stepsOf`): where a trail's land rises more than
+      35 % within 10 m either way, its profile may climb at 45 % (`GRADE.steps`, 24°); the runs
+      steeper than a path's grade are its steps (`profileOf(line).steps`);
+    - finding a trail's way (`ways.js wayOver`): steps allowed where the land beside rises more
+      than 0.5 a metre, each metre of them counting for two; no step steeper than `hard`; a
+      turn's climb reckoned from the point before it; the points it turns at kept. A trail's way
+      (`trails.js routeTrail`) is first looked for climbing no faster than its steps, within
+      160 m of the straight way (96 before), and only if there's none, as before;
+    - the walker's climb 0.75 m (`navigation/settings.js AGENT`): walkable to about 37°, just short
+      of the 38° cliffs, as the plan has it; on seed 1, 15 % of the mountains' ground (36 % with
+      the gentler) can now be walked, 64 % still can't;
+    - the steps drawn (`art/kits/steps.js`): a stone every 18 cm of climb across the path, of old
+      stone the colour of the land's rock, weathered by the atlas (moss on the treads), one mesh a
+      chunk; `Overworld.pathsNear`.
+  - **Measured on seed 1:** no trail cut more than 9 m (a cave's dug floor); 3 of 403 stretches
+    not walkable (where a trail leaves its road, and two tight hairpins: a follow-up); about a
+    tenth of the trails' 14 km in steps; steps in 49 of the 247 chunks the trails cross, at most
+    2,472 triangles in one (557 on average), one draw a chunk with them.
+  - **Pictures:** before/after sheet sent in the session (the gorge below ruins-32 and the
+    mountainside whole; cave-84's slot up a cliff and its new stair; the steps from beside and
+    above).
+  - **Versions:** TERRAIN_VERSION 11 and NET_VERSION 17 (the trails' and steep roads' ways, the
+    ground, and the navigation meshes, change).
+  - **Tests:** `test/trails.test.js` (steps only where the land's too steep, cut far less; a way
+    never climbing faster than it's let between its turns, and none without steps; no trail cut
+    more than 10 m; the stones over the path at their backs, set into the ground, one mesh of old
+    stone); `test/navigation.test.js` (a ramp of 24° walked as ground, 35° as steep, 41° not at
+    all; three trails that couldn't be walked before walked end to end); `test/ground.test.js`
+    (trails no steeper than their steps' grade, near the town).

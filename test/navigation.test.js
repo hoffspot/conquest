@@ -165,6 +165,64 @@ describe("navigation meshes (navigation.js)", () => {
         assert.ok(Math.hypot(across.at(-1)[0] - to[0], across.at(-1)[1] - to[1]) < 0.5 && length(across) < 12 * 1.1, `straight over (${length(across).toFixed(1)} m)`);
     });
 
+    it("climbs ground as steep as 37 degrees, dearer from 30, but not a cliff", () => {
+        // (A world of one slope rising along x, nothing on it: Recast's ledge filter takes a
+        // climb's height to be the most the ground can rise from one voxel to the next but one, so
+        // with a climb of half a metre ground steeper than 27 degrees was never walked at all)
+        const chunk = { x0: 0, y0: 0, ground: new Uint8Array(CHUNK * CHUNK), water: new Uint8Array(CHUNK * CHUNK), solid: new Uint8Array(CHUNK * CHUNK), trees: [] };
+        const slope = (degrees) => {
+            const rise = Math.tan((degrees * Math.PI) / 180);
+
+            return { ground: { heightAt: (x) => rise * x }, heightAt: (x) => rise * x, chunkAt: (x, y) => ({ ...chunk, x0: Math.floor(x / CHUNK) * CHUNK, y0: Math.floor(y / CHUNK) * CHUNK }), chunk: () => chunk, bridgesNear: () => [] };
+        };
+        const [tx, ty] = [4, 4];
+        const [from, to] = [[tx * TILE + 6, ty * TILE + 16], [tx * TILE + 26, ty * TILE + 16]];
+
+        for (const [degrees, area] of [[24, AREA.ground], [35, AREA.steep]]) {
+            const navigation = new Navigation(recast, slope(degrees));
+            const end = navigation.path(from, to)?.at(-1);
+
+            assert.ok(end && Math.hypot(end[0] - to[0], end[1] - to[1]) < 0.5, `up ${degrees} degrees`);
+            assert.ok(navigation.polygons(tx, ty).areas.every((each) => each === area), `${degrees} degrees`);
+        }
+
+        assert.equal(bakeTile(recast, tileInput(slope(41), tx, ty), tx, ty), null, "a cliff");
+    });
+
+    it("walks the trails up the mountainsides from end to end", () => {
+        // (Three of seed 1's that couldn't be walked all the way before their stone steps: their
+        // ways cut ever deeper into the mountains below their sites, too narrow at the foot of the
+        // cutting to stand in, or too steep; walked forty metres at a time, as far as a way's found)
+        const navigation = new Navigation(recast, town);
+
+        for (const id of ["trail ruins-32", "trail cave-79", "trail ruins-45"]) {
+            const points = town.trails.find(town.trails.all.find((trail) => trail.id === id));
+            const stops = [points[0]];
+            let walked = 0;
+
+            for (let k = 1; k < points.length; k++) {
+                const [[ax, ay], [bx, by]] = [points[k - 1], points[k]];
+                const run = Math.hypot(bx - ax, by - ay);
+
+                for (let d = 0; d < run; d += 1) {
+                    if (++walked % 40 === 0) {
+                        stops.push([ax + ((bx - ax) * d) / run, ay + ((by - ay) * d) / run]);
+                    }
+                }
+            }
+
+            stops.push(points.at(-1));
+
+            for (let k = 1; k < stops.length; k++) {
+                const path = navigation.path(stops[k - 1], stops[k]);
+                const end = path?.at(-1);
+
+                assert.ok(end && Math.hypot(end[0] - stops[k][0], end[1] - stops[k][1]) < 1.5, `${id} to ${stops[k].map(Math.round)}`);
+                assert.ok(length(path) < 120, `${id} to ${stops[k].map(Math.round)}: ${length(path).toFixed(0)} m`);
+            }
+        }
+    });
+
     it("finds the same ways whichever order its tiles came in", () => {
         const [tx, ty] = tileOf(...middle);
         const tiles = [];

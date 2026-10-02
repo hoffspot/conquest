@@ -12,7 +12,7 @@
 // ahead of then off the page's thread (world/terrains.js) and given: either way the same, so every
 // player's world agrees.
 
-import { GRADE, ROAD } from "./terrain/ground.js";
+import { GRADE, ROAD, STAIRS } from "./terrain/ground.js";
 import { wayOver, rounded } from "./terrain/ways.js";
 import { wadeable, watersOf } from "./terrain/waters.js";
 import { heightAt, stillLevelAt } from "./terrain/height.js";
@@ -27,9 +27,9 @@ import { CELL, CELLS, WORLD_SIZE } from "./worldplan/plan.js";
  * a road it may be (metres), how much room a trail has round the straight way to it to find its
  * own (metres), its half-width (metres), how far before its site's front it ends (metres), and how
  * far clear of the sites no people keeps it goes round them (metres, past their plots). It climbs
- * no steeper than a path's GRADE.
+ * no steeper than a path's GRADE, but in stone steps up mountainsides (ground.js STAIRS).
  */
-export const TRAILS = Object.freeze({ height: 0.5, reach: 700, room: 96, half: 0.7, front: 2, clear: 2 });
+export const TRAILS = Object.freeze({ height: 0.5, reach: 700, room: 160, half: 0.7, front: 2, clear: 2 });
 
 /** The sites a trail goes up to. */
 export const TRAIL_SITES = Object.freeze(["cave", "ruins", "shrine", "standing stones", "ruined castle", "dragon's lair"]);
@@ -159,7 +159,9 @@ export class Trails {
 /**
  * A trail's way over the land ({ from, to, box, avoid }: Trails' own), keeping out of `keepOut`'s
  * rectangles and round the sites in `avoid`, over rivers only at their fords: its points, rounded
- * at its turns, or null if there's none.
+ * at its turns, or null if there's none. It never climbs faster than its steps if it can help it
+ * (so it's never cut deep into the land to keep to them): only if there's no such way in its room
+ * does it climb faster where it must, as dearly as ways.js has it.
  */
 export function routeTrail(plan, { from, to, box, avoid = [] }, keepOut = []) {
     const waters = watersOf(plan);
@@ -172,7 +174,13 @@ export function routeTrail(plan, { from, to, box, avoid = [] }, keepOut = []) {
 
         return (river !== null && !river.stream && river.ford < 0.5 && !wadeable(river.depth, river.speed)) || (level !== null && heightAt(plan, x, y) < level + 0.5);
     };
-    const way = wayOver(plan, from, to, { grade: GRADE.path, box, avoid: (x, y) => keepOut.some(([x0, y0, x1, y1]) => x >= x0 && y >= y0 && x < x1 && y < y1) || avoid.some((room) => inRoom(room, x, y)) || deep(x, y) });
+    const ways = {
+        grade: GRADE.path,
+        box,
+        avoid: (x, y) => keepOut.some(([x0, y0, x1, y1]) => x >= x0 && y >= y0 && x < x1 && y < y1) || avoid.some((room) => inRoom(room, x, y)) || deep(x, y),
+        steps: { grade: GRADE.steps, steep: STAIRS.rising, cost: STAIRS.cost },
+    };
+    const way = wayOver(plan, from, to, { ...ways, hard: GRADE.steps }) ?? wayOver(plan, from, to, ways);
 
     return way ? rounded(way) : null;
 }

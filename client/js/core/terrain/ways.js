@@ -33,9 +33,14 @@ const LENGTHS = STEPS.map(([i, j]) => Math.sqrt(i * i + j * j));
  * A way over the land from `from` to `to` ([x, y], metres), within `box` ([x0, y0, x1, y1],
  * metres), climbing no faster than `grade` (rise over run) wherever it can, and never through a
  * point `avoid` ((x, y) => boolean) says to keep out of but its ends: its points ([x, y], metres,
- * from `from` to `to`, at each turn), or null if there's none (or none found soon enough).
+ * from `from` to `to`, at each turn), or null if there's none (or none found soon enough). No step
+ * climbs faster than `hard` (WAYS.hard times the grade, unless it's given). With `steps` ({ grade,
+ * steep, cost }), where the land's steeper than `steep` (rising that much a metre to a point beside
+ * it) it may climb as fast as `steps.grade` in stone steps, each metre of them costing `cost`
+ * metres, rather than turn back on itself in hairpins too tight to lie; and as its turns are cut
+ * from the point before (rounded), turning, it climbs from there no faster than `hard` either.
  */
-export function wayOver(plan, from, to, { grade, box, avoid = null }) {
+export function wayOver(plan, from, to, { grade, box, avoid = null, steps = null, hard = grade * WAYS.hard }) {
     const { grid } = WAYS;
     const [x0, y0] = [box[0], box[1]];
     const across = Math.floor((box[2] - x0) / grid) + 1;
@@ -95,6 +100,20 @@ export function wayOver(plan, from, to, { grade, box, avoid = null }) {
 
         const [i, j] = [k % across, Math.floor(k / across)];
         const here = height(k);
+        // (Whether the land here's steep enough for steps: rising `steps.steep` a metre to a point
+        // beside it)
+        let rising = 0;
+
+        for (const [di, dj] of steps === null ? [] : [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const [si, sj] = [i + di, j + dj];
+            const beside = si >= 0 && sj >= 0 && si < across && sj < down ? height(sj * across + si) : -Infinity;
+
+            if (beside !== -Infinity) {
+                rising = Math.max(rising, Math.abs(beside - here) / grid);
+            }
+        }
+
+        const stairs = steps !== null && rising > steps.steep;
 
         for (let s = 0; s < STEPS.length; s++) {
             const [ni, nj] = [i + STEPS[s][0], j + STEPS[s][1]];
@@ -113,14 +132,28 @@ export function wayOver(plan, from, to, { grade, box, avoid = null }) {
             const length = LENGTHS[s] * grid;
             const climb = Math.abs(there - here) / length;
 
-            if (climb > grade * WAYS.hard) {
+            if (climb > hard) {
                 continue;
             }
 
             // (Turning: how far from straight on, 0 to 2, from the way it came)
             const last = heading[k];
+
+            // (A trail's turns are rounded off, cutting the corner from the point before: so
+            // turning, it climbs from there, which mustn't be too steep either)
+            if (steps !== null && last >= 0 && last !== s) {
+                const p = came[k];
+                const [pi, pj] = [p % across, Math.floor(p / across)];
+
+                if (Math.abs(there - height(p)) / (grid * Math.sqrt((ni - pi) * (ni - pi) + (nj - pj) * (nj - pj))) > hard) {
+                    continue;
+                }
+            }
             const turn = last < 0 ? 0 : 1 - (STEPS[s][0] * STEPS[last][0] + STEPS[s][1] * STEPS[last][1]) / (LENGTHS[s] * LENGTHS[last]);
-            const step = length * (1 + WAYS.steep * Math.max(0, climb - grade) / grade + WAYS.turn * turn);
+            // (In steps where the land's steep, at their grade: dearer a metre than a path, but
+            // dear only steeper than they climb)
+            const [most, dearer] = stairs && climb > grade ? [steps.grade, steps.cost] : [grade, 1];
+            const step = length * (dearer + WAYS.steep * Math.max(0, climb - most) / most + WAYS.turn * turn);
 
             if (cost[k] + step < cost[n]) {
                 cost[n] = cost[k] + step;
@@ -135,11 +168,12 @@ export function wayOver(plan, from, to, { grade, box, avoid = null }) {
         return null;
     }
 
-    // Back from its end to its start, keeping only the points it turns at
+    // Back from its end to its start, keeping only the points it turns at (where the way it goes
+    // on differs from the way it came)
     const points = [];
 
-    for (let k = goal; k >= 0; k = came[k]) {
-        if (k === goal || came[k] < 0 || heading[k] !== heading[came[k]]) {
+    for (let k = goal, next = -1; k >= 0; next = k, k = came[k]) {
+        if (next < 0 || came[k] < 0 || heading[k] !== heading[next]) {
             points.push(at(k));
         }
     }

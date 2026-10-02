@@ -34,7 +34,8 @@ back to the same world:
   The roads keep to an easy grade, cut into the land and built up over it, climbing what's too
   steep for them in hairpins; and foot paths lead off them up into the hills and mountains, to
   the caves, ruins, shrines, standing stones, ruined castles and lairs there, zigzagging up the
-  steepest slopes (`core/trails.js`). Each people's castle and high places stand on a rise, on a
+  steepest slopes and climbing the steepest of them in mossy old stone steps (`core/trails.js`,
+  `art/kits/steps.js`). Each people's castle and high places stand on a rise, on a
   mound; their pools lie in hollows; and the enemies' camps are pitched on level ground, not on
   a mountain's side (`core/terrain/flats.js`).
 - **Every other settlement** (`core/settlements.js`: the plan's capitals, cities, towns,
@@ -1052,6 +1053,19 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
   little way onto one bank to a little way onto the other, along the road, with a dark beam along
   each edge and a rail on posts along each side. Anyone on one stands on its boards, 16 cm up
   (stepping up onto it and down off it smoothly).
+- **Stone steps** (kits/steps.js), up the trails' steepest stretches (WORLD.md, *Trails*): a
+  stone across the path for every 18 cm of its climb, its tread 0.3 to 0.9 m deep (the gentler
+  the climb, the longer), reaching 15 cm past the path's edges; one stone or, as often as not on
+  a wide one, two side by side. Each tread stands just over the path at its back, so none of the
+  ground shows through it; past the path's edges a stone goes into the bank, or stands out over
+  the ground falling away, set 20 cm into it. The ground under them still rises smoothly (it's
+  what's walked, and what the navigation mesh is made from), so a walker's feet are at most a
+  step's height into a tread. Of old stone the colour of the land's rock (`STEP_STONE`: the
+  ruins' coursed stone, its moon, black and lime stones on pale, dark and red rock), so the
+  atlas weathers them as it does the ruins: moss on the treads, streaks down the risers. A
+  chunk's steps are one mesh, drawn with the atlas (one draw, and one more for shadows): on seed
+  1, 49 of the 247 chunks the trails cross have some, at most 206 stones (2,472 triangles), 557
+  triangles on average.
 - **Trees** (`Woodland`, kits/trees.js): every variant kept once and drawn wherever it's planted
   (Three.js's BatchedMesh), all the world's wood in one draw call and its leaves in another, only
   the trees in view (and, into the sun's shadows, only those in its); the crowns' shells and the

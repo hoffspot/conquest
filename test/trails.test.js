@@ -1,14 +1,33 @@
 // Roads kept to their grade, and the trails up into the hills (client/js/core/terrain/ways.js,
-// ground.js graded, core/trails.js): found their own way over the land at a walker's grade, laid
-// into the world the same whichever chunks are made first, and walked from end to end
+// ground.js graded, core/trails.js): found their own way over the land at a walker's grade, in
+// stone steps where it's too steep for a path (art/kits/steps.js draws them), laid into the world
+// the same whichever chunks are made first, and walked from end to end
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { buildWorld, CHUNK } from "../client/js/core/overworld.js";
 import { CELL } from "../client/js/core/worldplan/plan.js";
-import { GRADE, graded } from "../client/js/core/terrain/ground.js";
+import { GRADE, graded, ROAD, STAIRS, stairsOf, stepsOf } from "../client/js/core/terrain/ground.js";
 import { landHeight, stillWaterAt } from "../client/js/core/terrain/height.js";
-import { rounded } from "../client/js/core/terrain/ways.js";
-import { routeTrail } from "../client/js/core/trails.js";
+import { rounded, wayOver } from "../client/js/core/terrain/ways.js";
+import { routeTrail, TRAILS } from "../client/js/core/trails.js";
+import { atlasMaterial, LAYERS } from "../client/js/world/art/engine/atlas.js";
+import { STEP_STONE, stepsMesh, stonesOf } from "../client/js/world/art/kits/steps.js";
+
+// (The atlas's material paints a canvas: enough of one for it to in Node, every other drawing
+// call doing nothing)
+const noop = () => {};
+const context = () =>
+    new Proxy(
+        {
+            createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }),
+            createLinearGradient: () => ({ addColorStop: noop }),
+            createRadialGradient: () => ({ addColorStop: noop }),
+            measureText: (text) => ({ width: String(text).length * 10 }),
+        },
+        { get: (target, key) => (key in target ? target[key] : noop) },
+    );
+
+globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContext: context }) };
 
 const length = (points) => points.slice(1).reduce((sum, [x, y], k) => sum + Math.hypot(x - points[k][0], y - points[k][1]), 0);
 
@@ -101,6 +120,58 @@ describe("roads and trails on the land (terrain/ways.js, core/trails.js)", () =>
 
         assert.ok(up.length > 20, `${up.length} points`);
         assert.deepEqual([...down].reverse(), up);
+    });
+
+    it("climbs in stone steps where its land's too steep for a path, and nowhere else, cut far less into it", () => {
+        // (A path's land every ROAD.step metres: level, then up a mountainside rising 0.6 a metre,
+        // then level again)
+        const climb = 0.6 * ROAD.step;
+        const land = [...Array(20).fill(0), ...Array.from({ length: 30 }, (_, k) => (k + 1) * climb), ...Array(20).fill(30 * climb)];
+        const most = stairsOf(land);
+
+        assert.equal(most.length, land.length - 1);
+        assert.equal(most[0], GRADE.path * ROAD.step);
+        assert.equal(most[35], GRADE.steps * ROAD.step);
+        assert.equal(most.at(-1), GRADE.path * ROAD.step);
+
+        const kept = graded(land, most, { pinned: true });
+
+        kept.slice(1).forEach((h, k) => assert.ok(Math.abs(h - kept[k]) <= most[k] + 1e-9, `${k}`));
+
+        // (Its steps only up the mountainside, and a little either side where it eases in)
+        const reach = STAIRS.reach;
+        const runs = stepsOf(kept, GRADE.path * ROAD.step);
+
+        assert.ok(runs.length > 0);
+
+        for (const [from, to] of runs) {
+            assert.ok(from >= 20 * ROAD.step - reach && to <= 50 * ROAD.step + reach, `steps from ${from} to ${to} m`);
+        }
+
+        // (Kept to a path's grade all the way, it would be cut much deeper into the mountainside)
+        const cut = (heights) => Math.max(...land.map((h, k) => h - heights[k]));
+
+        assert.ok(cut(kept) < cut(graded(land, GRADE.path * ROAD.step, { pinned: true })) / 2, `${cut(kept).toFixed(1)} m`);
+    });
+
+    it("finds a way never climbing faster than it's let between the points it turns at", () => {
+        // (Its ends aside: they're where it's going from and to, not on the points it looks at)
+        const { from, to, box } = trail;
+        const steps = { grade: GRADE.steps, steep: STAIRS.rising, cost: STAIRS.cost };
+        const way = wayOver(overworld.plan, from, to, { grade: GRADE.path, box, steps, hard: GRADE.steps });
+
+        assert.ok(way && way.length > 10, "found");
+
+        for (let k = 2; k < way.length - 1; k++) {
+            const run = Math.hypot(way[k][0] - way[k - 1][0], way[k][1] - way[k - 1][1]);
+            const rise = Math.abs(landHeight(overworld.plan, ...way[k]) - landHeight(overworld.plan, ...way[k - 1]));
+
+            assert.ok(rise / run <= GRADE.steps + 1e-9, `${(rise / run).toFixed(3)} from ${way[k - 1]} to ${way[k]}`);
+        }
+
+        // (And without its steps, nor turning back on itself, it'd go no further than it's let: none
+        // the steeper, but none found up this mountainside so soon)
+        assert.equal(wayOver(overworld.plan, from, to, { grade: GRADE.path, box, hard: GRADE.path }), null);
     });
 
     it("rounds a way's turns, keeping its ends", () => {
@@ -223,3 +294,95 @@ describe("roads and trails on the land (terrain/ways.js, core/trails.js)", () =>
         assert.ok(steepest <= 0.5, `steepest ${steepest.toFixed(3)}`);
     });
 });
+
+describe("the trails up the mountainsides, and their stone steps (core/trails.js, art/kits/steps.js)", () => {
+    let world;
+    let overworld;
+
+    before(() => {
+        world = buildWorld({ seed: 1 });
+        overworld = world.maps.town;
+    });
+
+    // Every metre along a trail, with how deep it's cut into the land's own lie there (metres)
+    const cuts = (points) => {
+        const each = [];
+
+        for (const [x, y] of along(points)) {
+            overworld.chunk(Math.floor(x / CHUNK), Math.floor(y / CHUNK));
+            each.push({ x, y, cut: landHeight(overworld.plan, x, y) - overworld.heightAt(x, y) });
+        }
+
+        return each;
+    };
+
+    it("cuts no trail deep into a mountainside below its site: they go round, and up in steps", () => {
+        // (Kept to a path's grade on ways too short for their climb, four of seed 1's trails were cut
+        // 28 to 50 metres deep into the mountains below their sites; now none's more than the floor
+        // dug in front of a cave in a hillside, 9 metres at most)
+        let [deepest, trails] = [0, 0];
+
+        for (const trail of overworld.trails.all) {
+            const points = overworld.trails.find(trail);
+
+            if (points) {
+                trails++;
+                deepest = Math.max(deepest, ...cuts(points).map(({ cut }) => cut));
+            }
+        }
+
+        assert.ok(trails >= 20, `${trails} trails`);
+        assert.ok(deepest < 10, `cut ${deepest.toFixed(1)} m deep`);
+    });
+
+    it("lays a stone step across the path for every rise of its steps, its tread over the path, set into the ground", () => {
+        const trail = overworld.trails.all.find(({ id }) => id === "trail cave-79");
+        const points = overworld.trails.find(trail);
+        const chunks = [...new Set(points.map(([x, y]) => `${Math.floor(x / CHUNK)},${Math.floor(y / CHUNK)}`))].map((key) => key.split(",").map(Number));
+        const groundAt = (x, y) => overworld.heightAt(x, y);
+        const profileOf = (line) => overworld.ground.profileOf(line);
+
+        for (const [cx, cy] of chunks) {
+            overworld.chunk(cx, cy);
+        }
+
+        const line = overworld.pathsNear(...chunks[0]).find(({ id }) => id === trail.id);
+        const { heights, steps } = profileOf(line);
+        const own = stonesOf([line], profileOf, groundAt, [0, 0, Infinity, Infinity]);
+
+        assert.ok(steps.length > 0, "it climbs in steps");
+        // (Each chunk lays those whose middles are in it, so none twice and none missed)
+        assert.equal(chunks.reduce((sum, [cx, cy]) => sum + stonesOf([line], profileOf, groundAt, [cx * CHUNK, cy * CHUNK, (cx + 1) * CHUNK, (cy + 1) * CHUNK]).length, 0), own.length);
+        // (One for each rise of its steps' climb, give or take where their treads are kept long or short)
+        const climb = steps.reduce((sum, [from, to]) => sum + Math.abs(heights[to / ROAD.step] - heights[from / ROAD.step]), 0);
+
+        assert.ok(own.length > (climb / STAIRS.rise) * 0.6 && own.length < (climb / STAIRS.rise) * 1.6, `${own.length} stones climbing ${climb.toFixed(1)} m`);
+
+        for (const { x, y, along, deep, half, top, bottom } of own) {
+            assert.ok(Math.abs(Math.hypot(...along) - 1) < 1e-9);
+            assert.ok(deep > 0 && half > TRAILS.half);
+            // (Its tread over the path at its back, so none of the path shows through it; its foot
+            // in the ground under its front)
+            for (const across of [-1, 0, 1]) {
+                const v = TRAILS.half * across;
+
+                assert.ok(top >= groundAt(x + along[0] * (deep / 2) - along[1] * v, y + along[1] * (deep / 2) + along[0] * v), `tread at ${x}, ${y}`);
+            }
+
+            assert.ok(bottom < groundAt(x - along[0] * (deep / 2), y - along[1] * (deep / 2)), `foot at ${x}, ${y}`);
+        }
+
+        // (Drawn as one mesh with the atlas, of the old stones, casting shadows: a tread, a riser and
+        // two sides a stone, two triangles each)
+        const mesh = stepsMesh(own, (x, y) => overworld.biomeAt(x, y), [0, 0]);
+        const layers = new Set(mesh.geometry.attributes.layer.array);
+        const old = Object.values(STEP_STONE).map((name) => LAYERS.indexOf(name));
+
+        assert.equal(mesh.material, atlasMaterial());
+        assert.ok(mesh.castShadow);
+        assert.ok([...layers].every((layer) => old.includes(layer)), `layers ${[...layers]}`);
+        assert.ok(mesh.geometry.attributes.position.count >= own.length * 24 && mesh.geometry.attributes.position.count <= own.length * 48);
+        assert.equal(stepsMesh([], () => "meadow", [0, 0]), null);
+    });
+});
+
