@@ -35,7 +35,7 @@ import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
 import { HIRES, HOST_PLAYER, Host, PICK_REACH, REFUSALS, SHOP_REACH, SHOPKEEPERS, TRADE, UNDO_MS } from "../core/host.js";
 import { dress } from "../characters/liveries.js";
 import { GEAR, GEAR_SLOTS, offHandFree } from "../core/gear.js";
-import { ABILITIES, itemLabel, ITEMS, priceOf, Progress, QUALITIES, TREES, wares } from "../core/progress.js";
+import { ABILITIES, buys, itemLabel, ITEMS, priceOf, Progress, QUALITIES, shopOrder, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
 import { PACE } from "../core/netplay.js";
 import { COUNSEL, MOST_REQUESTS, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
 import { describeLeader } from "../core/war/peoples.js";
@@ -3382,17 +3382,21 @@ export class Game {
             const def = ITEMS[stack.id];
             const label = itemLabel(stack);
 
-            return { ...stack, label, about: aboutOf(stack), use: def.use ? (def.tome ? "Read" : stack.id === "meal" || def.food ? "Eat" : "Drink") : null, equip: def.slot ? (def.slot === "mainHand" ? "Wield" : "Wear") : null, takes: def.slot ?? null, price: priceOf(stack, { haggle, selling: true }), info: def.slot ? describe(stack, progress, { index, label, haggle }) : null };
+            return { ...stack, label, about: aboutOf(stack), use: def.use ? (def.tome ? "Read" : stack.id === "meal" || def.food ? "Eat" : "Drink") : null, equip: def.slot ? (def.slot === "mainHand" ? "Wield" : "Wear") : null, takes: def.slot ?? null, price: priceOf(stack, { haggle, selling: true }), wanted: !this.shopping || buys(this.shopping.shop, stack.id), info: def.slot ? describe(stack, progress, { index, label, haggle }) : null };
         });
         const me = this.battle.actor(this.me);
         const summed = totals(progress, { hp: me ? me.maxHp - progress.bonuses().hp : 50, stamina: me ? me.maxStamina - progress.bonuses().stamina : 50 });
+        // (A shop's wares by kind, the commoner made first; what it won't buy, said)
         const shop = this.shopping && {
             name: this.shopping.name,
-            wares: wares(this.shopping.shop, this.shopping.people).map((item) => {
-                const price = priceOf(item, { haggle });
+            wares: wares(this.shopping.shop, this.shopping.people)
+                .sort(shopOrder)
+                .map((item) => {
+                    const price = priceOf(item, { haggle });
 
-                return { item, label: itemLabel(item), price, affordable: price <= progress.gold };
-            }),
+                    return { item, label: itemLabel(item), price, affordable: price <= progress.gold, kind: WARE_KINDS[wareKind(item.id)] };
+                }),
+            unwanted: this.shopping.shop === "guild" ? null : "Only the adventurers' guild buys tomes and the spoils of the wild.",
         };
 
         const trade = this.#tradeNow();

@@ -2078,6 +2078,47 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     font-style: italic;
 }
 
+/* Trading with a shopkeeper: Buy and Sell, across the top under the title (Buy as it opens) */
+.pack-modes {
+    display: flex;
+    gap: 8px;
+    padding: 10px 16px 2px;
+}
+
+.pack-modes[hidden] {
+    display: none;
+}
+
+.pack-mode {
+    flex: 1;
+    min-height: 42px;
+    border-radius: 10px;
+    border: 1px solid var(--field-border);
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 16px;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+}
+
+.pack-mode[aria-selected="true"] {
+    background: var(--field);
+    color: var(--gold-bright);
+    border-color: var(--panel-border);
+}
+
+/* (What this shop won't buy: greyed, saying so) */
+.pack-row.unwanted .pack-label,
+.pack-row.unwanted .pack-icon {
+    opacity: 0.5;
+}
+
+.pack-row.unwanted .pack-price {
+    color: var(--muted);
+    font-style: italic;
+}
+
 /* The tabs (Gear, Skills), the pack's pages and putting it in order */
 .pack-tabs {
     display: flex;

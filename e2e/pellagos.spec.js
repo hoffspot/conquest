@@ -1673,10 +1673,19 @@ test("the adventurers' guild: the receptionist stamps notices behind her counter
         }
 
         const conversation = game.talking?.conversation;
+        // (What she offers: to trade, buying or selling, and what the guild buys)
+        const offers = conversation?.choices.map(({ text }) => text) ?? [];
 
+        conversation?.choose(conversation.choices.findIndex(({ text }) => text === "What does the guild buy?"));
+
+        const buys = conversation?.line ?? null;
+
+        conversation?.choose(conversation.choices.findIndex(({ text }) => text === "Good to know."));
         conversation?.choose(conversation.choices.findIndex(({ text }) => text.includes("register")));
 
         return {
+            offers,
+            buys,
             map: player.map,
             name: building.name,
             wearing: [...game.avatars.get(receptionist.id).character.equipment.values()],
@@ -1695,6 +1704,8 @@ test("the adventurers' guild: the receptionist stamps notices behind her counter
     expect(guild.roles.filter((role) => role === "patron").length).toBeGreaterThanOrEqual(2);
     expect(guild.sheathed).toEqual([true, true]);
     expect(guild.acts).toEqual(expect.arrayContaining(["receptionist:stamp", "adventurer:read"]));
+    expect(guild.offers).toEqual(expect.arrayContaining(["I'd like to buy or sell something.", "What does the guild buy?"]));
+    expect(guild.buys).toMatch(/^Anything you drag back from the wild! Pelts, fangs, scales/);
     expect(guild.registered).toMatch(/^Wonderful! Name: .+\. Rank: Copper\./);
     expect(guild.place).toBe("guild");
 });
@@ -2448,16 +2459,29 @@ test("the pack shows what's grown and carried; a skill ranks up with use; tradin
     await expect(talk).toBeHidden();
     await expect(pack).toBeVisible();
     await expect(pack.locator(".pack-title")).toContainText("Trading with");
-    await expect(pack.locator(".wares .pack-row")).toHaveText(["Tankard of ale2 goldBuy", "Hot meal5 goldBuy"]);
+
+    // Buy and Sell across the top, buying first: the wares under their kind, by name
+    const modes = pack.locator(".pack-modes");
+
+    await expect(modes.getByRole("tab")).toHaveText(["Buy", "Sell"]);
+    await expect(modes.getByRole("tab", { name: "Buy" })).toHaveAttribute("aria-selected", "true");
+    await expect(pack.locator(".pack-heading")).toHaveText(["Food, drink and draughts"]);
+    await expect(pack.locator(".wares .pack-row")).toHaveText(["Hot meal5 goldBuy", "Tankard of ale2 goldBuy"]);
     await pack.getByRole("button", { name: "Buy Tankard of ale for 2 gold" }).click();
     await expect(pack.locator(".pack-gold")).toHaveText("28 gold");
     await expect(page.locator("#playerplate .coins")).toHaveText("28 gold");
-    expect(await pack.locator(".carried .pack-cell[data-item]").evaluateAll((cells) => cells.map((cell) => cell.getAttribute("aria-label")))).toEqual(["Healing draught", "Tankard of ale"]);
 
-    // Sold back (for a gold piece), then bought again; the pack closed with its button
-    await pack.locator('.carried .pack-cell[data-item="ale"]').click();
-    await pack.getByRole("button", { name: /^Sell .*: Tankard of ale$/ }).click();
+    // What's carried, on its own tab: each with what it fetches, sold back (for a gold piece);
+    // then bought again; the pack closed with its button
+    await modes.getByRole("tab", { name: "Sell" }).click();
+    await expect(modes.getByRole("tab", { name: "Sell" })).toHaveAttribute("aria-selected", "true");
+    await expect(pack.locator(".wares")).toHaveCount(0);
+    expect(await pack.locator(".selling .pack-row").evaluateAll((rows) => rows.map((row) => row.dataset.item))).toEqual(["potion", "ale"]);
+    await expect(pack.locator('.selling .pack-row[data-item="ale"]')).toHaveText("Tankard of ale1 goldSell");
+    await pack.getByRole("button", { name: "Sell Tankard of ale for 1 gold" }).click();
     await expect(pack.locator(".pack-gold")).toHaveText("29 gold");
+    expect(await pack.locator(".selling .pack-row").evaluateAll((rows) => rows.map((row) => row.dataset.item))).toEqual(["potion"]);
+    await modes.getByRole("tab", { name: "Buy" }).click();
     await pack.getByRole("button", { name: "Buy Tankard of ale for 2 gold" }).click();
     await expect(pack.locator(".pack-gold")).toHaveText("27 gold");
     await page.locator("#packbutton").click();

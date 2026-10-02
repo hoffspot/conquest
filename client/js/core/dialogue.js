@@ -506,7 +506,8 @@ export const TREES = Object.freeze({
             more: {
                 say: ["Anything else?", "What else can I help with?", "Yes? I'm listening!"],
                 choices: [
-                    { say: "Does the guild sell supplies?", next: null, do: [{ shop: "guild" }] },
+                    { say: "I'd like to buy or sell something.", next: null, do: [{ shop: "guild" }] },
+                    { say: "What does the guild buy?", next: "buys" },
                     { if: { notFlag: "registered" }, say: "I'd like to register as an adventurer.", next: "register" },
                     { if: { due: true }, say: "I've finished a job from the board.", next: "reported", do: [{ report: true }] },
                     { if: { all: [{ flag: "registered" }, { room: true }] }, say: "Anything on the board for me?", next: "offer", do: [{ work: "ask" }] },
@@ -523,6 +524,13 @@ export const TREES = Object.freeze({
             board: {
                 say: "That's where the jobs go up! Beasts on the roads, camps outside the walls, bounties from whoever's paying. Register, ask me what's up, and bring me word when it's done. Gold on the counter, straight away!",
                 choices: "more",
+            },
+            buys: {
+                say: "Anything you drag back from the wild! Pelts, fangs, scales, stings, a beast's bits and pieces, and spell tomes too. Nobody else in town will take those, and we pay what they're worth. Gear too, of course. And we sell supplies: draughts, cures, wands, and the tomes that open the elements' schools.",
+                choices: [
+                    { say: "Let's trade, then.", next: null, do: [{ shop: "guild" }] },
+                    { say: "Good to know.", next: "more" },
+                ],
             },
             offer: {
                 say: [

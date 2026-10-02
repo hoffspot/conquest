@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { UNIFORM } from "../client/js/core/gear.js";
-import { ABILITIES, alike, ARMOR_CAP, itemLabel, ITEMS, LOOT, PACK_PAGE, PACK_SIZE, priceOf, Progress, QUALITIES, RANKS, rollLoot, SELL_SHARE, SHOPS, startingGear, TREES, wares, weaponOf } from "../client/js/core/progress.js";
+import { ABILITIES, alike, ARMOR_CAP, buys, itemLabel, ITEMS, LOOT, PACK_PAGE, PACK_SIZE, priceOf, Progress, QUALITIES, RANKS, rollLoot, SELL_SHARE, SHOPS, shopOrder, startingGear, TREES, WARE_KINDS, wareKind, wares, weaponOf } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
 import { SPELLS } from "../client/js/core/spells.js";
 import { STARTING_WEAPONS, WEAPONS } from "../client/js/core/weapons.js";
@@ -121,6 +121,42 @@ describe("growing stronger (progress.js)", () => {
         assert.equal(itemLabel({ id: "helm", quality: "fine", people: "orc", bonuses: { hp: 9 }, affixes: ["bear"] }), "Orcish helm of the Bear");
         assert.equal(itemLabel({ id: "ring", quality: "legendary", bonuses: { hp: 9 }, affixes: ["bear"], name: "Emberheart" }), "Emberheart");
         assert.equal(itemLabel({ id: "potion" }), "Healing draught");
+    });
+
+    it("shows a shop's wares by kind, the commoner made first, then by name; and only the guild buys spoils and tomes", () => {
+        const kinds = Object.keys(WARE_KINDS);
+        const makes = Object.keys(QUALITIES);
+
+        for (const shop of Object.keys(SHOPS)) {
+            const shown = wares(shop).sort(shopOrder);
+
+            for (let k = 1; k < shown.length; k++) {
+                const [a, b] = [shown[k - 1], shown[k]];
+                const [ka, kb] = [kinds.indexOf(wareKind(a.id)), kinds.indexOf(wareKind(b.id))];
+
+                assert.ok(ka < kb || (ka === kb && (makes.indexOf(a.quality) < makes.indexOf(b.quality) || (a.quality === b.quality && ITEMS[a.id].label <= ITEMS[b.id].label))), `${shop}: ${a.id} ${a.quality} before ${b.id} ${b.quality}`);
+            }
+        }
+
+        // (The guild's: its wands and grimoires, its hats, its jewellery, its draughts and cures,
+        // its tomes; the common of each kind before the fine)
+        assert.deepEqual(
+            [...new Set(wares("guild").sort(shopOrder).map(({ id }) => WARE_KINDS[wareKind(id)]))],
+            ["Weapons", "Clothes and armour", "Jewellery", "Food, drink and draughts", "Tomes"],
+        );
+        assert.deepEqual(
+            wares("guild").sort(shopOrder).filter(({ id }) => wareKind(id) === "weapon").map(({ id, quality }) => `${quality} ${id}`),
+            ["common grimoire", "common wand", "fine grimoire", "fine wand"],
+        );
+        assert.ok(wares("smith").sort(shopOrder).some(({ id }) => wareKind(id) === "offHand"));
+        assert.deepEqual(
+            wares("guild").sort(shopOrder).filter(({ id }) => wareKind(id) === "jewel").map(({ id, quality }) => `${quality} ${id}`),
+            ["common amulet", "common ring", "fine amulet", "fine ring"],
+        );
+
+        assert.ok(buys("guild", "wolfPelt") && buys("guild", "tomeBurn") && buys("guild", "sword"));
+        assert.ok(!buys("smith", "wolfPelt") && !buys("tavern", "tomeBurn"));
+        assert.ok(buys("smith", "sword") && buys("tavern", "ale") && buys("temple", "potion"));
     });
 
     it("stocks each shop with what it keeps, better made as far as it goes; a smith, its own people's uniform", () => {

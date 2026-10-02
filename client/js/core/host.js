@@ -18,7 +18,7 @@ import { Battle, FOE_MS, KINDS, TALK_REACH } from "./battle.js";
 import { Explored } from "./explored.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { offHandFree, rollGear } from "./gear.js";
-import { ABILITIES, alike, ARMOR_CAP, ITEMS, priceOf, Progress, QUALITIES, rollBoost, rollLoot, wares, weaponOf } from "./progress.js";
+import { ABILITIES, alike, ARMOR_CAP, buys, ITEMS, priceOf, Progress, QUALITIES, rollBoost, rollLoot, wares, weaponOf } from "./progress.js";
 import { SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { createRandom } from "./random.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
@@ -1440,7 +1440,7 @@ export class Host {
         }
 
         // (The creatures' parts, and tomes: only the adventurers' guild buys those)
-        if ((ITEMS[stack.id]?.part || ITEMS[stack.id]?.tome) && trading.shop !== "guild") {
+        if (!buys(trading.shop, stack.id)) {
             return refuse("wanted");
         }
 
