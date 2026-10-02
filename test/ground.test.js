@@ -116,10 +116,10 @@ describe("the ground (terrain/ground.js)", () => {
         assert.ok(samples > 2000, `${samples} samples`);
 
         // (Each kind of road no steeper than its grade, but for a little between the ground's
-        // corners; a trail up into the hills a little steeper for a step or two where a
-        // hairpin's legs come together: trails.test.js)
+        // corners; a trail up into the hills no steeper than its stone steps, but for a step or
+        // two where a hairpin's legs come together: trails.test.js)
         for (const [kind, grade] of Object.entries(steepest)) {
-            assert.ok(grade <= (kind === "path" ? 0.45 : GRADE[kind] + 0.02), `${kind}: ${grade.toFixed(3)}`);
+            assert.ok(grade <= (kind === "path" ? GRADE.steps + 0.1 : GRADE[kind] + 0.02), `${kind}: ${grade.toFixed(3)}`);
         }
     });
 

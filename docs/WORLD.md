@@ -351,7 +351,8 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   lattice of points 4 m apart, sixteen ways out of each, a step steeper than the road's grade
   costing dearly and one three times steeper not taken at all, nor any into a lake or the sea,
   and turning costing a little, so it climbs across the slope in long straight legs and
-  hairpins, rounded at its turns (each stretch found from its northern end, so two roads sharing
+  hairpins, rounded at its turns (the points it turns at kept, so a hairpin's leg runs all the
+  way to its turn; each stretch found from its northern end, so two roads sharing
   it, one going up and one down, share its way). The roads from the town start from where
   its streets leave it. A road to another settlement stops 2 metres short of its square (on
   dry land: never in a river, so its bridge over it is its own) and
@@ -366,8 +367,9 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
 - **Trails** (`core/trails.js`), foot paths 1.4 metres wide up to each cave, ruin, shrine, ring
   of standing stones, ruined castle and lair in the hills and mountains (the plan's height half
   and up) within 700 m of a road: found their own way over the land as steep roads are, at a
-  walker's grade (25 %), within 96 m of the straight way, keeping out of the town and the
-  settlements. So a trail up a mountainside zigzags up it in hairpins. The sites nearest a road
+  walker's grade (25 %), within 160 m of the straight way, keeping out of the town and the
+  settlements. So a trail up a mountainside zigzags up it in hairpins, and climbs the steepest of
+  it in stone steps (below). The sites nearest a road
   are reached first, and each from its road or from a site reached already, whichever's nearer,
   so trails branch from one another rather than running side by side (27 on seed 1). Each is
   found the first time anything's wanted of a chunk its room reaches (`#roadsIn`), or ahead of
@@ -379,9 +381,21 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
     castle's gate); trails branching from it start there too. A cave or lair cut into a
     hillside faces down the hill instead, and its trail ends past the banks of the floor dug in
     front of it, where that floor's level with the hill (`sites.js` `cutOf`).
-  - **Not yet:** a trail too short for its climb is cut into the land to its grade, and so may
-    end in a deep cutting below its site (on seed 1, the trails to cave-79 and ruins-32 end 33
-    and 43 m below the hill, as cave-79's did on main): to be routed longer, with more hairpins.
+  - **Stone steps** (`ground.js STAIRS`): where a trail's land rises more than 35 % within 10 m
+    either way, it may climb at 45 % (24°) instead of a path's 25 %, in stone steps 0.18 m high
+    (`art/kits/steps.js`: GAME.md, *Stone steps*); finding its way, where the land beside it
+    rises more than half a metre a metre it may go up in steps, each metre of them counting for
+    two of path. On seed 1 about a tenth of the trails' 14 km is in steps, in 64 runs.
+  - **Long enough for its climb:** a trail's way is found climbing no faster than its steps
+    between any two points it turns at (ways.js `hard`), nor rounding a turn up the slope faster
+    (each turn's cut from the point before it to the point after); only where there's no such
+    way within its room is one climbing faster found, as before. So it isn't cut deep into the
+    land to keep to its grade. Kept to a path's grade on ways too short for their climb, four of
+    seed 1's trails were cut 28 to 50 m into the mountains below their sites; now none's cut more
+    than the floor dug in front of a cave in a hillside (9 m), and the trail to cave-84, which
+    went up a cliff, goes round it, twice as long as the straight way. Walked on the navigation
+    mesh 40 m at a time, 3 of their 403 stretches can't be (51 before): where a trail leaves its
+    road, and at two tight hairpins.
   - **Round the sites, over rivers at fords:** a trail goes round the footprint of every site no
     people keeps near it (2 m clear: its own but for its front), crosses a river only at a ford
     (where it can be waded), and keeps out of a lake's shallows (where the ground dips under the
@@ -527,7 +541,8 @@ The world is played on the land's height with what's built levelled into it (`Gr
 - **Roads and trails** are graded (`graded`): the land's lie along them (sampled every 2 m, on
   the town's and the settlements' pads where they cross them, and over water at their banks'
   height, 0.6 m above it, for their bridges) smoothed 12 m each way, then kept to their kind's
-  grade (`GRADE`: trade roads 10 %, roads 12 %, tracks 15 %, trails 25 %) by easing each
+  grade (`GRADE`: trade roads 10 %, roads 12 %, tracks 15 %, trails 25 %, or 45 % where they
+  climb in steps) by easing each
   step that's too steep from both its ends at once, a little at a time, so a road is cut into a
   rise as much as it's built up over the dip below it, rather than filling the whole valley
   ahead, its ends held at the land's own height. Its banks ease out to the land 2.5 times as far
@@ -599,9 +614,12 @@ WebAssembly by recast-navigation-js, vendored in `client/vendor/recast-navigatio
   - trees as their trunks (0.4 m across at size 1);
   - bridges' decks, a quad a metre along each, at the deck's height (`deckOf`).
 - **Recast's settings** (`settings.js`, `bake.js`): voxels 0.5 m across and 0.25 m high; a walker
-  0.5 m round and 2 m tall who steps up 0.5 m; polygons of up to six sides, each keeping its
+  0.5 m round and 2 m tall who steps up 0.75 m; polygons of up to six sides, each keeping its
   ground's kind (`AREA`), which costs a way through it: roads and decks ¾ of a metre each, steep
-  ground 2, fords 3.
+  ground 2, fords 3. The step's also how steep the ground walked can be: Recast takes ground
+  rising more than it from one voxel to the next but one for a ledge, so a step of 0.75 m lets a
+  walker up 37°, just short of a cliff; with half a metre, nothing over 27° could be walked, so
+  steep ground (30° to 38°) never was, nor the steepest of the trails.
 - **Baking** (`navworker.js` with `navbaker.js`): the triangles are worked out on the page (only
   it has the world), Recast's part done in a worker, and the tile added when it comes back; a
   tile wanted before then is baked where it's wanted. The game has the tiles within 96 m of each

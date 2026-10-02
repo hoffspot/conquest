@@ -40,10 +40,22 @@ const GRADING = Object.freeze({ passes: 400, near: 0.001 });
 
 /**
  * The steepest each kind of road climbs (rise over run): a trade road for laden carts, a road, a
- * track, a foot path (core/trails.js). Where the land's steeper, a road's cut into it and built up
- * over it, as much of each.
+ * track, a foot path (core/trails.js), and a foot path's stone steps (STAIRS). Where the land's
+ * steeper, a road's cut into it and built up over it, as much of each.
  */
-export const GRADE = Object.freeze({ trade: 0.1, road: 0.12, track: 0.15, path: 0.25 });
+export const GRADE = Object.freeze({ trade: 0.1, road: 0.12, track: 0.15, path: 0.25, steps: 0.45 });
+
+/**
+ * Where a foot path's land is too steep for a path (a mountainside: rising more than `steep` a
+ * metre over `reach` metres either way along it), it climbs in stone steps instead, at
+ * GRADE.steps (24 degrees: a stair a walker takes easily, and well within what the navigation
+ * mesh climbs), each `rise` metres high (art/kits/steps.js lays them), rather than cut ever
+ * deeper below the land as it keeps to its own grade. Its way's found so (core/trails.js
+ * routeTrail, terrain/ways.js wayOver's `steps`): where the land beside it rises more than
+ * `rising` a metre, it may go up in steps, each metre of them costing `cost` metres of path, but
+ * never steeper than they climb.
+ */
+export const STAIRS = Object.freeze({ steep: 0.35, reach: 10, rise: 0.18, rising: 0.5, cost: 2 });
 
 // How many chunks' heights to keep
 const KEEP = 256;
@@ -247,10 +259,24 @@ export class Ground {
             // meet at one height)
             heights[0] = raw[0];
             heights[heights.length - 1] = raw.at(-1);
-            this.profiles.set(line, { heights: graded(heights, (GRADE[line.kind] ?? GRADE.track) * ROAD.step, { pinned: true }), starts });
+
+            // (A foot path in stone steps where its land's too steep for a path: STAIRS)
+            const most = line.kind === "path" ? stairsOf(raw) : (GRADE[line.kind] ?? GRADE.track) * ROAD.step;
+            const kept = graded(heights, most, { pinned: true });
+
+            this.profiles.set(line, { heights: kept, starts, steps: stepsOf(kept, GRADE.path * ROAD.step) });
         }
 
         return this.profiles.get(line);
+    }
+
+    /**
+     * A road's or trail's heights along it ({ heights (every ROAD.step metres from its start),
+     * starts (each segment's distance along it at its start), steps ([[from, to], ...]: where it
+     * climbs in stone steps, metres along it) }): the same whenever asked.
+     */
+    profileOf(line) {
+        return this.#profile(line);
     }
 
     // The land's own height at any point (worked out there, never read between kept corners: so
@@ -441,14 +467,16 @@ export class Ground {
 
 /**
  * Heights along a line (metres, evenly spaced) kept to rising or falling no more than `most`
- * metres from each to the next, near the heights as they were: wherever two side by side are
- * too far apart, each is moved half the excess towards the other (the higher cut down as much as
- * the lower's built up), over and over, forwards and back, till none are (or GRADING.passes have gone by:
- * then whatever's left is cut down to fit). With its ends `pinned`, they're kept as they are.
+ * metres from each to the next (or `most[k]` from the k-th to the next, if it's a list), near the
+ * heights as they were: wherever two side by side are too far apart, each is moved half the
+ * excess towards the other (the higher cut down as much as the lower's built up), over and over,
+ * forwards and back, till none are (or GRADING.passes have gone by: then whatever's left is cut
+ * down to fit). With its ends `pinned`, they're kept as they are.
  */
 export function graded(heights, most, { pinned = false } = {}) {
     const kept = heights.slice();
     const n = kept.length;
+    const limit = typeof most === "number" ? () => most : (k) => most[k];
     // (Ends pinned stay as they are: the other side moves all the way)
     const share = (k) => (pinned && (k === 0 || k === n - 1) ? 0 : 1);
 
@@ -456,7 +484,7 @@ export function graded(heights, most, { pinned = false } = {}) {
         let worst = 0;
         const meet = (a, b) => {
             const rise = kept[b] - kept[a];
-            const over = Math.abs(rise) - most;
+            const over = Math.abs(rise) - limit(a);
 
             if (over > 0 && share(a) + share(b) > 0) {
                 const step = (rise > 0 ? over : -over) / (share(a) + share(b));
@@ -481,14 +509,52 @@ export function graded(heights, most, { pinned = false } = {}) {
     }
 
     for (let k = 1; k < n; k++) {
-        kept[k] = Math.min(kept[k], kept[k - 1] + most);
+        kept[k] = Math.min(kept[k], kept[k - 1] + limit(k - 1));
     }
 
     for (let k = n - 2; k >= 0; k--) {
-        kept[k] = Math.min(kept[k], kept[k + 1] + most);
+        kept[k] = Math.min(kept[k], kept[k + 1] + limit(k));
     }
 
     return kept;
+}
+
+/**
+ * How much a foot path may rise or fall from each of its heights to the next (ROAD.step metres
+ * on), given its land's (`land`, every ROAD.step metres along it): a path's grade, or its steps'
+ * where its land's too steep for a path either side (STAIRS).
+ */
+export function stairsOf(land) {
+    const reach = Math.round(STAIRS.reach / ROAD.step);
+    const steep = land.map((_, k) => {
+        const [a, b] = [Math.max(0, k - reach), Math.min(land.length - 1, k + reach)];
+
+        return b > a && Math.abs(land[b] - land[a]) / ((b - a) * ROAD.step) > STAIRS.steep;
+    });
+
+    return land.slice(0, -1).map((_, k) => (steep[k] || steep[k + 1] ? GRADE.steps : GRADE.path) * ROAD.step);
+}
+
+/**
+ * Where heights along a line (every ROAD.step metres) rise or fall more than `most` from one to
+ * the next: [[from, to], ...], metres along it, each run of them as one.
+ */
+export function stepsOf(heights, most) {
+    const runs = [];
+
+    for (let k = 0; k < heights.length - 1; k++) {
+        if (Math.abs(heights[k + 1] - heights[k]) > most + 1e-6) {
+            const [from, to] = [k * ROAD.step, (k + 1) * ROAD.step];
+
+            if (runs.length && runs.at(-1)[1] === from) {
+                runs.at(-1)[1] = to;
+            } else {
+                runs.push([from, to]);
+            }
+        }
+    }
+
+    return runs;
 }
 
 /**

@@ -15,8 +15,13 @@ export const TILE = 32;
 export const CELL = 0.5;
 export const CELL_HEIGHT = 0.25;
 
-/** Who walks the meshes: their radius, height and the step they can climb (metres). */
-export const AGENT = Object.freeze({ radius: 0.5, height: 2, climb: 0.5 });
+/**
+ * Who walks the meshes: their radius, height and the step they can climb (metres). The climb's
+ * also how steep the ground they walk can be: Recast takes ground that rises more than it from one
+ * voxel to the next but one (a metre) for a ledge, so three quarters of a metre lets them up 37
+ * degrees, just short of the cliffs tiles.js leaves out (half a metre stopped them at 27).
+ */
+export const AGENT = Object.freeze({ radius: 0.5, height: 2, climb: 0.75 });
 
 /** How far round a tile it takes in (metres): Recast's border, the agent's radius and three voxels. */
 export const BORDER = (AGENT.radius / CELL + 3) * CELL;

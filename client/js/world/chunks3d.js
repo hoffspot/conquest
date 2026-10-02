@@ -28,6 +28,7 @@ import { holdSign, isSign, letGoSign, releaseSign } from "./art/kits/signs.js";
 import { Woodland } from "./art/kits/trees.js";
 import { featureLooks, featureMesh, Growth, sowing, TILE, undergrowthLooks, undergrowthMesh } from "./art/kits/wilds.js";
 import { hedgeBuilding, hedgeMesh, hedgeRuns } from "./art/kits/hedges.js";
+import { stepsMesh, stonesOf } from "./art/kits/steps.js";
 import { disposeChunkGround, disposeGrass, groundMaterial, landColours, layingGround, respaceGround } from "./ground.js";
 import { grassLooks } from "./grassmap.js";
 import { Layouts } from "./layouts.js";
@@ -663,6 +664,13 @@ export class Chunks {
 
             object.add(hedges.object);
             standing(hedges.boxes);
+        }
+
+        // The stone steps up its trails' steepest stretches (kits/steps.js)
+        const stones = this.overworld.ground ? stonesOf(this.overworld.pathsNear?.(cx, cy) ?? [], (line) => this.overworld.ground.profileOf(line), this.groundAt, [chunk.x0, chunk.y0, chunk.x0 + CHUNK, chunk.y0 + CHUNK]) : [];
+
+        if (stones.length) {
+            object.add(stepsMesh(stones, (x, y) => this.overworld.biomeAt(x, y), [chunk.x0, chunk.y0]));
         }
 
         yield;
