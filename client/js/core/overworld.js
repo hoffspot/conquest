@@ -222,7 +222,8 @@ export class Overworld {
      * @param {object} options
      * @param {object} options.plan - The world plan (worldplan/plan.js planWorld).
      * @param {object} options.stamp - The town set into it: { at: [x, y] (its north-west square),
-     *   width, height, blocked, opaque, ground (its rows) }.
+     *   width, height, blocked, opaque, ground (its rows), yards (layoutTown's, in the world's
+     *   metres) }.
      * @param {object} options.start - The plan's settlement the town stands for.
      */
     constructor({ plan, stamp, start }) {
@@ -256,6 +257,7 @@ export class Overworld {
         this.waiting = new Map();
         this.settlements = new Settlements(plan, {
             skip: start,
+            landAt: (x, y) => this.landAt(x, y),
             onLaid: (settlement) => {
                 this.#join(settlement);
                 this.#enter(settlement);
@@ -826,6 +828,18 @@ export class Overworld {
     }
 
     /**
+     * The yards behind the houses whose middles are in a chunk, in the world's metres: the town's
+     * and the settlements' (Settlements.yardsIn: those that are there), [{ ...yard, x, y }]
+     * (layoutTown's yards).
+     */
+    yardsIn(cx, cy) {
+        const [x0, y0] = [cx * CHUNK, cy * CHUNK];
+        const own = (this.stamp?.yards ?? []).filter(({ x, y }) => x >= x0 && y >= y0 && x < x0 + CHUNK && y < y0 + CHUNK);
+
+        return [...own, ...this.settlements.yardsIn(cx, cy)];
+    }
+
+    /**
      * The plank walks reaching into a box (metres): the town's and the settlements' near it,
      * [{ a, b, half }] (see chunk).
      */
@@ -1231,7 +1245,8 @@ export function buildWorld({ seed = 1, race = "human", plan = planWorld(seed) } 
     const town = generateWorld({ seed, exits: waysOut(plan, start), people: start.race });
     const at = [Math.round(start.at[0] - town.width / 2), Math.round(start.at[1] - town.height / 2)];
     const walks = town.town.walks.map(({ a, b, half }) => ({ a: [a[0] + at[0], a[1] + at[1]], b: [b[0] + at[0], b[1] + at[1]], half }));
-    const stamp = { at, width: town.width, height: town.height, blocked: town.blocked, opaque: town.opaque, ground: town.ground, water: town.town.water, walks, middle: [town.town.centre[0] + town.origin + at[0], town.town.centre[1] + town.origin + at[1]], radius: town.town.radius };
+    const yards = town.town.yards.map((yard) => ({ ...yard, x: yard.x + town.origin + at[0], y: yard.y + town.origin + at[1] }));
+    const stamp = { at, width: town.width, height: town.height, blocked: town.blocked, opaque: town.opaque, ground: town.ground, water: town.town.water, walks, yards, middle: [town.town.centre[0] + town.origin + at[0], town.town.centre[1] + town.origin + at[1]], radius: town.town.radius };
     const overworld = new Overworld({ plan, stamp, start });
     const move = ([x, y]) => [x + at[0], y + at[1]];
     const tavern = town.tavern && {

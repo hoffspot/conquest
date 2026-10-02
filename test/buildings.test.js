@@ -1347,37 +1347,121 @@ describe("the yards behind the houses (kits/yards.js)", () => {
 
             return low;
         };
-        const level = yard({ ...one, fence: [one.fence[0], [], one.fence[2]], bed: null, line: false, x: 0.4, y: 0.6 });
-        const sloped = yard({ ...one, fence: [one.fence[0], [], one.fence[2]], bed: null, line: false, x: 0.4, y: 0.6, lie: [0, 1, 0, 1] });
+        const level = yard({ ...one, fence: [one.fence[0], [], one.fence[2]], gate: null, bed: null, line: false, x: 0.4, y: 0.6 });
+        const sloped = yard({ ...one, fence: [one.fence[0], [], one.fence[2]], gate: null, bed: null, line: false, x: 0.4, y: 0.6, lie: [0, 1, 0, 1] });
 
         assert.ok(lowest(level, -1) < -M * 0.2 && Math.abs(lowest(level, 1) - lowest(level, -1)) < M * 0.05, "level");
         assert.ok(Math.abs(lowest(sloped, 1) - lowest(sloped, -1) - M) < M * 0.1, "sloped");
     });
 
-    it("digs a bed in rows of what its people grow, raised in their edging, or heaped", async () => {
-        const { yard, YARD_LOOKS } = await import("../client/js/world/art/kits/yards.js");
-        const CROPS = { cabbage: "cabbages", squash: "squash", herb: "jade-dark", flower: "flowers", "flower-white": "linen", "flower-gold": "flowers-gold" };
+    it("hangs a gate open in a yard's gateway, between posts or piers (a hedge just parted), in its people's way", async () => {
+        const { FENCES, yard, YARD_LOOKS } = await import("../client/js/world/art/kits/yards.js");
+        const { YARD_FENCE } = await import("../client/js/core/setpieces/town.js");
+        const count = (object) => {
+            let n = 0;
+
+            object.traverse((node) => (n += node.geometry?.attributes.position.count ?? 0));
+
+            return n;
+        };
+
+        for (const people of PEOPLES) {
+            const gated = yardsOf(people).filter(({ gate }) => gate);
+
+            assert.ok(gated.length > 0, `${people}: gateways`);
+
+            for (const one of gated) {
+                const [shut, open] = [yard({ ...one, gate: null, bed: null, line: false }), yard({ ...one, bed: null, line: false })];
+                const kind = YARD_LOOKS[people].fences.find((name) => FENCES[name]) ?? null;
+
+                // (Its fence stops either side: the gateway as wide as laid out)
+                const runs = one.fence[one.gate.side];
+
+                assert.ok(runs.some(([, to]) => Math.abs(to - (one.gate.at - YARD_FENCE.gate / 2)) < 1e-9) || runs.some(([from]) => Math.abs(from - (one.gate.at + YARD_FENCE.gate / 2)) < 1e-9));
+
+                // (Something drawn there but in a hedge, all numbers)
+                assert.ok(finite(open));
+                assert.equal(count(open) > count(shut), kind !== "hedge", `${people}: a gate drawn`);
+            }
+        }
+    });
+
+    it("digs a bed raised in its people's edging (or heaped), and grows their crops in it in rows, each standing on its soil", async () => {
+        const { PLANTING, plantsOf, yard, YARDS, YARD_LOOKS } = await import("../client/js/world/art/kits/yards.js");
+        const { GARDEN_KINDS } = await import("../client/js/world/art/kits/wilds.js");
+        const grown = new Set();
 
         for (const people of PEOPLES) {
             const bedded = yardsOf(people).filter(({ bed }) => bed);
-            const seen = new Set();
+            let plants = 0;
 
             for (const one of bedded) {
-                const names = namesOf(yard({ ...one, fence: [[], [], []], line: false }));
+                const names = namesOf(yard({ ...one, fence: [[], [], []], gate: null, line: false }));
+                const [w, d] = [one.w * 4, one.h * 4];
+                const [s, c] = [Math.sin(one.facing), Math.cos(one.facing)];
+                const [u0, v0, u1, v1] = one.bed;
 
                 assert.ok(names.has("soil"), `${people}: soil`);
                 assert.equal(names.has(YARD_LOOKS[people].edging), YARD_LOOKS[people].edging !== null, `${people}: edged`);
-                names.forEach((name) => seen.add(name));
-            }
 
-            // (Only what they grow)
-            for (const [crop, name] of Object.entries(CROPS)) {
-                if (!Object.entries(CROPS).some(([other, same]) => same === name && YARD_LOOKS[people].crops.includes(other))) {
-                    assert.ok(!seen.has(name), `${people} grow no ${crop}`);
+                // (Each plant one of their crops, in the bed, on its soil over level ground; each row
+                // one crop, its plants as far apart as that crop's planted)
+                const rows = new Map();
+
+                for (const { crop, x, y, height, seed } of plantsOf(one, () => 0)) {
+                    const [u, v] = [(x - one.x) * c - (y - one.y) * s + w / 2, (x - one.x) * s + (y - one.y) * c + d / 2];
+                    const across = u1 - u0 >= v1 - v0;
+                    const row = (across ? v : u).toFixed(3);
+
+                    assert.ok(YARD_LOOKS[people].crops.includes(crop), `${people} grow ${crop}`);
+                    assert.ok(u > u0 && u < u1 && v > v0 && v < v1, `${people}: a ${crop} in its bed`);
+                    assert.ok(Math.abs(height - (YARDS.bed - 0.02)) < 1e-9 && seed >= 0 && seed < 1);
+                    rows.set(row, [...(rows.get(row) ?? []), { crop, at: across ? u : v }]);
+                    grown.add(crop);
+                    plants++;
+                }
+
+                for (const row of rows.values()) {
+                    assert.equal(new Set(row.map(({ crop }) => crop)).size, 1, `${people}: a row of one crop`);
+
+                    for (let k = 1; k < row.length; k++) {
+                        assert.ok(Math.abs(row[k].at - row[k - 1].at - PLANTING[row[0].crop]) < 1e-9);
+                    }
                 }
             }
 
-            assert.ok(!bedded.length || YARD_LOOKS[people].crops.some((crop) => seen.has(CROPS[crop] ?? "leaves")), `${people}: something grown`);
+            assert.ok(!bedded.length || plants > bedded.length * 4, `${people}: ${plants} plants in ${bedded.length} beds`);
+            assert.ok(YARD_LOOKS[people].crops.every((crop) => GARDEN_KINDS.includes(crop) && PLANTING[crop] > 0));
+        }
+
+        // (Most of what can be grown is, somewhere)
+        assert.ok(grown.size >= GARDEN_KINDS.length * 0.7, `${grown.size} crops grown`);
+    });
+
+    it("draws what's grown as plants: leaves, stems, flowers and fruit, swaying in the breeze, each its own", async () => {
+        const { GARDEN_KINDS, lookGeometry } = await import("../client/js/world/art/kits/wilds.js");
+        const TALL = ["bean", "sunflower", "hollyhock"];
+        const LEAFY = ["cabbage", "lettuce", "leek", "kale", "carrot", "taro"];
+
+        for (const kind of GARDEN_KINDS) {
+            const looks = Array.from({ length: 4 }, (_, k) => lookGeometry(kind, "garden", k));
+
+            for (const geometry of looks) {
+                const { color, sway } = geometry.attributes;
+                let green = 0;
+
+                for (let i = 0; i < color.count; i++) {
+                    green += color.getY(i) > color.getX(i) && color.getY(i) > color.getZ(i) ? 1 : 0;
+                }
+
+                // (Green leaves and stems, the leafy crops nearly all leaf; moving most at their tips; as
+                // tall as it grows)
+                assert.ok(green / color.count > (LEAFY.includes(kind) ? 0.6 : 0.2), `${kind}: ${green} of ${color.count} green`);
+                assert.ok(sway.array.some((value) => value > 0.1), `${kind} sways`);
+                assert.equal(geometry.boundingBox.max.y > 1, TALL.includes(kind), `${kind}: ${geometry.boundingBox.max.y.toFixed(2)} tall`);
+            }
+
+            assert.equal(new Set(looks.map((geometry) => geometry.attributes.position.array.join())).size, looks.length, `${kind}: each look its own`);
         }
     });
 
@@ -1417,8 +1501,8 @@ describe("the yards behind the houses (kits/yards.js)", () => {
         assert.equal(mesh.geometry.attributes.hang.getZ(0), 0);
     });
 
-    it("is the same yard every time, and leaves a few unfenced", async () => {
-        const { yard, YARDS } = await import("../client/js/world/art/kits/yards.js");
+    it("is the same yard every time, nothing drawn round a yard left open", async () => {
+        const { yard } = await import("../client/js/world/art/kits/yards.js");
         const yards = PEOPLES.flatMap(yardsOf);
         const count = (object) => {
             let n = 0;
@@ -1427,11 +1511,11 @@ describe("the yards behind the houses (kits/yards.js)", () => {
 
             return n;
         };
-        const fenced = yards.filter((one) => one.fence.some((runs) => runs.length));
-        const open = fenced.filter((one) => count(yard({ ...one, bed: null, line: false })) === 0);
+        const open = yards.filter((one) => one.fence.every((runs) => !runs.length));
 
         assert.deepEqual(yard(yards[5]).userData, yard(yards[5]).userData);
         assert.equal(count(yard(yards[5])), count(yard(yards[5])));
-        assert.ok(open.length / fenced.length > YARDS.open * 0.4 && open.length / fenced.length < YARDS.open * 2, `${open.length} of ${fenced.length} open`);
+        assert.ok(open.length > 0 && open.every((one) => count(yard({ ...one, bed: null, line: false })) === 0), `${open.length} open`);
+        assert.ok(yards.filter((one) => !open.includes(one)).every((one) => count(yard({ ...one, bed: null, line: false })) > 0));
     });
 });

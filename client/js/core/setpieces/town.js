@@ -19,6 +19,7 @@
 // ground is road, cobbles, soil or grass. All the arithmetic is exact (exact.js), so the same seed
 // gives the same town in every browser.
 
+import { hashOf } from "../noise.js";
 import { createRandom, noise } from "../random.js";
 import { atan2, cos, length, PI, sin, sqrt, TAU } from "../exact.js";
 import { patronOf } from "../lore/gods.js";
@@ -89,11 +90,17 @@ const YARD_TREE = 0.45;
 const YARD_PROP = 0.35;
 const YARD_PROPS = ["barrels", "crates", "sacks", "cart"];
 
-// A yard's fences (drawn only: they're in no one's way), looked along a step at a time (metres),
-// how far in from its edge to look for something standing there, and how far out for another
-// yard against it; and how deep its bed must be (metres), once cut back clear of what's stood in
-// it, to be dug
-const YARD_FENCE = Object.freeze({ step: 0.5, inside: 0.2, apart: 0.6 });
+/**
+ * A yard's fences (metres), which no one walks through: looked along a step at a time, how far in
+ * from its edge to look for something standing there, and how far out for another yard against
+ * it; how many yards are left open (no fences at all); how wide a gateway is, how long a run of
+ * fence must be to have one, and how far along its side from its middle the way through is kept
+ * clear (its squares there left open: at least two, so the navigation meshes keep a way through);
+ * and how far in from a fenced side the squares it stands on are.
+ */
+export const YARD_FENCE = Object.freeze({ step: 0.5, inside: 0.2, apart: 0.6, open: 0.12, gate: 1.6, gated: 2.6, clearing: 1, band: 1 });
+
+// How deep a yard's bed must be (metres), once cut back clear of what's stood in it, to be dug
 const YARD_BED_LEAST = 0.9;
 
 /**
@@ -129,11 +136,13 @@ const ATTEMPTS = 20;
  * exits ([x, y]: where the main streets reach the edge), pieces ([{ key, kind, name, style,
  * variant, x, y (its middle, metres), w, h (its size across and deep, in plots, as the art kits
  * build it), facing (the way its front faces: radians, 0 south, π/2 east, as characters face) }]),
- * yards (behind the houses, drawn only: [{ kind: "yard", x, y, w, h, facing (as a piece's), people
- * (another people's), fence ([its left side, its back, its right side]: each the runs of it fenced,
- * [[from, to]] metres along it, from its back or its left), bed ([u0, v0, u1, v1]: its bed, metres
- * across from its left side and in from its back, or null), line (whether a washing line could be
- * strung across its back: YARD_LINE) }]),
+ * yards (behind the houses: [{ kind: "yard", x, y, w, h, facing (as a piece's), people (another
+ * people's), fence ([its left side, its back, its right side]: each the runs of it fenced,
+ * [[from, to]] metres along it, from its back or its left, its gateway left out), gate ({ side
+ * (0, 1, 2: as fence's), at (its middle, metres along that side) }, or null), squares ([[x, y]]:
+ * those its fences stand on, blocked), bed ([u0, v0, u1, v1]: its bed, metres across from its left
+ * side and in from its back, or null), line (whether a washing line could be strung across its
+ * back: YARD_LINE) }]),
  * ground, blocked, opaque (rows of squares: GROUND kinds, 1 where no one can go, 1 where nothing
  * behind can be seen), water (rows of squares, 1 for water, or null for none), walks (the plank
  * walks over it: [{ a, b ([x, y]: its ends), half (half its width) }]) }.
@@ -887,6 +896,15 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
         }
     }
 
+    // The yards as they're drawn; their fences stand on the squares along their sides
+    const yards = yardsOf(laidYards, { use, owners, water, width, height, seed, people: other ? people : null });
+
+    for (const { squares } of yards) {
+        for (const [i, j] of squares) {
+            blocked[j][i] = 1;
+        }
+    }
+
     return {
         width,
         height,
@@ -896,7 +914,7 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
         streets,
         exits: mains.map(({ points }) => points.at(-1)),
         pieces,
-        yards: yardsOf(laidYards, { use, owners, water, width, height, people: other ? people : null }),
+        yards,
         ground,
         blocked,
         opaque,
@@ -914,8 +932,11 @@ function inRect({ x, y, w, d, ax, az }, px, py) {
 
 // Each yard as it's drawn (layoutTown's yards), from the yards as they were laid (`laid`: { rect,
 // bed }) and what's on each square once the town's laid out: where its fences run along its sides,
-// and the part of its bed clear of anything stood in it. A yard over water has none.
-function yardsOf(laid, { use, owners, water, width, height, people }) {
+// its gateway, the squares they stand on, and the part of its bed clear of anything stood in it. A
+// yard over water has none. Nothing here is drawn from the town's random numbers (whether a yard's
+// left open, and where its gateway is, are from where it is: `seed`), so the rest of the town is
+// laid out the same whatever's decided.
+function yardsOf(laid, { use, owners, water, width, height, seed, people }) {
     const yards = [];
 
     laid.forEach(({ rect, bed }, index) => {
@@ -993,6 +1014,52 @@ function yardsOf(laid, { use, owners, water, width, height, people }) {
             return runs;
         });
 
+        // (Left open now and then; the rest with a gateway, in its back if a run of it's long
+        // enough, or else in its left or right side, somewhere along that run, the run cut there)
+        const [hx, hy] = [Math.floor(x * 8), Math.floor(y * 8)];
+        let gate = null;
+
+        if (hashOf(hx, hy, seed + 41) < YARD_FENCE.open) {
+            fence.forEach((runs) => runs.splice(0));
+        } else {
+            const longest = (k) => fence[k].reduce((best, run) => (!best || run[1] - run[0] > best[1] - best[0] + 1e-9 ? run : best), null);
+            const side = [1, 0, 2].find((k) => longest(k) && longest(k)[1] - longest(k)[0] >= YARD_FENCE.gated);
+
+            if (side !== undefined) {
+                const run = longest(side);
+                const room = run[1] - run[0] - YARD_FENCE.gate - 0.6;
+                const at = run[0] + 0.3 + YARD_FENCE.gate / 2 + room * hashOf(hx, hy, seed + 42);
+
+                gate = { side, at };
+                fence[side].splice(fence[side].indexOf(run), 1, [run[0], at - YARD_FENCE.gate / 2], [at + YARD_FENCE.gate / 2, run[1]]);
+                fence[side] = fence[side].filter(([from, to]) => to - from >= 0.25);
+            }
+        }
+
+        // (The squares its fences stand on: those of its own along its fenced sides, a square or
+        // so in, but for the way through its gateway; none already blocked)
+        const squares = [];
+        const own = (i, j) => i >= 0 && j >= 0 && i < width && j < height && owners[j * width + i] === index + 1;
+        const reach = Math.ceil(w + d);
+
+        for (let j = Math.floor(y) - reach; j <= Math.floor(y) + reach; j++) {
+            for (let i = Math.floor(x) - reach; i <= Math.floor(x) + reach; i++) {
+                if (!own(i, j) || use[j * width + i] !== USE.yard || (own(i - 1, j) && own(i + 1, j) && own(i, j - 1) && own(i, j + 1))) {
+                    continue;
+                }
+
+                const [px, py] = [i + 0.5 - x, j + 0.5 - y];
+                const [u, v] = [px * ax[0] + py * ax[1] + w / 2, px * az[0] + py * az[1] + d / 2];
+                const along = [[u, v], [v, u], [w - u, v]];
+                const fenced = along.some(([off, t], k) => off < YARD_FENCE.band && fence[k].some(([from, to]) => t >= from - 0.3 && t <= to + 0.3));
+                const through = gate && along[gate.side][0] < YARD_FENCE.band && Math.abs(along[gate.side][1] - gate.at) <= YARD_FENCE.clearing;
+
+                if (fenced && !through) {
+                    squares.push([i, j]);
+                }
+            }
+        }
+
         // (Its bed, if it has one, cut back from its back or its front to where nothing stands in
         // it: [u0, v0, u1, v1])
         let cleared = null;
@@ -1028,7 +1095,7 @@ function yardsOf(laid, { use, owners, water, width, height, people }) {
             line = !standing(u, YARD_LINE.back) && !standing(Math.min(u + YARD_FENCE.step, w - YARD_LINE.side), YARD_LINE.back);
         }
 
-        yards.push({ kind: "yard", x, y, w: w / PLOT, h: d / PLOT, facing, ...(people ? { people } : {}), fence, bed: cleared, line });
+        yards.push({ kind: "yard", x, y, w: w / PLOT, h: d / PLOT, facing, ...(people ? { people } : {}), fence, gate, squares, bed: cleared, line });
     });
 
     return yards;

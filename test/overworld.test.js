@@ -9,8 +9,8 @@ import { buildWorld, CHUNK, CHUNKS, FLORA, Overworld, WET, WORLD_SIZE } from "..
 import { navigatorOf } from "../client/js/core/navigation.js";
 import { Settlements, squareOf, waysOut } from "../client/js/core/settlements.js";
 import { siteSize, Sites } from "../client/js/core/sites.js";
-import { ENTERED, GROUND, HOME_TREES, TREE_KINDS } from "../client/js/core/setpieces/pieces.js";
-import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
+import { ENTERED, GROUND, HOME_TREES, PLOT, TREE_KINDS } from "../client/js/core/setpieces/pieces.js";
+import { layoutTown, SETTLEMENT_KINDS, YARD_FENCE } from "../client/js/core/setpieces/town.js";
 import { BIOMES, CELL, CELLS } from "../client/js/core/worldplan/plan.js";
 
 let world;
@@ -326,6 +326,69 @@ describe("the world outside (overworld.js)", () => {
         }
     });
 
+    it("walks round the town's yards' fences, in at their gateways", () => {
+        const navigation = navigatorOf(overworld);
+        let [onFence, stood, ways] = [0, 0, 0];
+
+        for (const yard of overworld.stamp.yards.filter(({ gate }) => gate)) {
+            const [w, d] = [yard.w * PLOT, yard.h * PLOT];
+            const [s, c] = [Math.sin(yard.facing), Math.cos(yard.facing)];
+            const at = (u, v) => [yard.x + (u - w / 2) * c + (v - d / 2) * s, yard.y - (u - w / 2) * s + (v - d / 2) * c];
+            const local = ([x, y]) => [(x - yard.x) * c - (y - yard.y) * s + w / 2, (x - yard.x) * s + (y - yard.y) * c + d / 2];
+            const gate = [[0, yard.gate.at], [yard.gate.at, 0], [w, yard.gate.at]][yard.gate.side];
+
+            // Nowhere to stand along its fences, but by its gateway
+            yard.fence.forEach((runs, k) => {
+                for (const [from, to] of runs) {
+                    for (let t = from + 0.2; t < to - 0.2; t += 0.25) {
+                        const [u, v] = [[0.15, t], [t, 0.15], [w - 0.15, t]][k];
+
+                        if (Math.hypot(u - gate[0], v - gate[1]) > 1.6) {
+                            onFence++;
+                            stood += navigation.walkable(...at(u, v)) ? 1 : 0;
+                        }
+                    }
+                }
+            });
+
+            // From behind it and beside it to its middle: in by its gateway, where it's fenced all round
+            const whole = yard.fence.every((runs, k) => runs.reduce((sum, [from, to]) => sum + to - from, 0) >= (k === 1 ? w : d) - YARD_FENCE.gate - 0.3);
+            const middle = at(w / 2, d * 0.55);
+
+            if (!whole || !navigation.walkable(...middle)) {
+                continue;
+            }
+
+            for (const from of [[-1.5, -1.5], [w + 1.5, -1.5], [-1.5, d / 2], [w + 1.5, d / 2], [w * 0.2, -1.5], [w * 0.8, -1.5]].map(([u, v]) => at(u, v))) {
+                const path = navigation.walkable(...from) ? navigation.path(from, middle) : null;
+
+                if (!path || Math.hypot(path.at(-1)[0] - middle[0], path.at(-1)[1] - middle[1]) > 0.8) {
+                    continue;
+                }
+
+                // (Its nearest to the gateway's middle, every 5 cm along it)
+                let near = Infinity;
+
+                for (let i = 1; i < path.length; i++) {
+                    const steps = Math.ceil(Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]) / 0.05);
+
+                    for (let k = 0; k <= steps; k++) {
+                        const [u, v] = local([path[i - 1][0] + ((path[i][0] - path[i - 1][0]) * k) / steps, path[i - 1][1] + ((path[i][1] - path[i - 1][1]) * k) / steps]);
+
+                        near = Math.min(near, Math.hypot(u - gate[0], v - gate[1]));
+                    }
+                }
+
+                // (Through it: as wide as it is, and the navigation mesh's half-metre squares either side)
+                assert.ok(near < YARD_FENCE.gate / 2 + 0.9, `into the yard at ${yard.x.toFixed(1)}, ${yard.y.toFixed(1)}: ${near.toFixed(2)} m from its gateway`);
+                ways++;
+            }
+        }
+
+        assert.ok(onFence > 100 && stood / onFence < 0.05, `${stood} of ${onFence} places on fences stood on`);
+        assert.ok(ways >= 3, `${ways} ways in`);
+    });
+
     it("lets the player walk out of the town into the world", () => {
         const battle = new Battle(world, { seed: 1 });
         const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: world.spawns.player });
@@ -456,7 +519,7 @@ describe("the settlements out in the world (settlements.js)", () => {
         assert.deepEqual(settlement.at, squareOf(village).at);
         assert.equal(overworld.settlements.of(village), settlement);
 
-        const again = new Settlements(world.plan, { skip: world.start }).of(village);
+        const again = new Settlements(world.plan, { skip: world.start, landAt: (x, y) => overworld.landAt(x, y) }).of(village);
 
         assert.equal(JSON.stringify(again.town), JSON.stringify(settlement.town));
         // (A main street out for each way its roads go: one for two going much the same way)
@@ -521,6 +584,49 @@ describe("the settlements out in the world (settlements.js)", () => {
         const grown = [...overworld.chunks.values()].flatMap((chunk) => chunk.trees).filter(({ x, y }) => x >= at[0] && y >= at[1] && x < at[0] + size && y < at[1] + size);
 
         assert.ok(grown.length >= trees, `${grown.length} trees of ${trees}`);
+    });
+
+    it("stand their yards' fences in everyone's way, but not a yard reaching out past their edge over the land's water, a bridge or a road", () => {
+        const squares = squaresOf(overworld);
+        const { at, town, yards } = settlement;
+        let stood = 0;
+
+        assert.ok(yards.length > 0 && yards.every((yard) => town.yards.includes(yard)));
+
+        for (const yard of yards) {
+            for (const [i, j] of yard.squares) {
+                const [x, y] = [i + at[0], j + at[1]];
+
+                if (!overworld.inTown(x, y) && overworld.settlements.at(x, y) === settlement) {
+                    assert.ok(squares.blocked(x, y) && !squares.opaque(x, y), `the fence at ${x}, ${y}`);
+                    stood++;
+                }
+            }
+        }
+
+        assert.ok(stood > 0);
+
+        // (Laid out again, its edge drawn in so its yards all reach past it, a river under one of
+        // them: that one isn't there, its fence in no one's way; those still there are fenced)
+        const [wet] = yards.filter(({ squares: own }) => own.length);
+        const under = new Set(wet.squares.map(([i, j]) => `${i + at[0]},${j + at[1]}`));
+        const others = new Settlements(world.plan, { skip: world.start, landAt: (x, y) => (under.has(`${x},${y}`) ? { ...overworld.landAt(x, y), water: WET.river } : overworld.landAt(x, y)) });
+        const spec = others.specOf(village);
+        const laid = layoutTown(spec);
+
+        others.give(village, spec, { ...laid, radius: 0 });
+
+        const again = others.of(village);
+        const index = town.yards.indexOf(wet);
+
+        assert.ok(!again.yards.includes(again.town.yards[index]), "the yard over the river isn't there");
+        assert.ok(again.town.yards[index].squares.every(([i, j]) => again.town.blocked[j][i] === 0));
+
+        for (const yard of again.yards) {
+            assert.ok(yard.squares.every(([i, j]) => again.town.blocked[j][i] === 1));
+        }
+
+        assert.equal(again.town.yards.length, town.yards.length);
     });
 
     it("carry the plan's roads on from their streets' ends", () => {

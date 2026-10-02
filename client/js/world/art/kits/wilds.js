@@ -31,6 +31,7 @@ import { LAYERS, atlasMaterial, wildsMaterial } from "../engine/atlas.js";
 import { MATERIALS } from "../engine/painters.js";
 import { facingSun } from "../../sun.js";
 import { TREE_WIND } from "./trees.js";
+import { plantsOf } from "./yards.js";
 
 const TAU = Math.PI * 2;
 
@@ -1833,6 +1834,574 @@ function blackthorn(mesher, random) {
     }
 }
 
+// --- The yards' gardens ---
+
+/**
+ * What's grown in the yards' beds (kits/yards.js plantsOf: each people's), drawn as the rest of
+ * the undergrowth is: leaves, stems, flowers and fruit as real geometry, near the player only,
+ * swaying in the breeze. Several looks of each, as every kind here has (VARIANTS).
+ */
+export const GARDEN_KINDS = Object.freeze(["cabbage", "lettuce", "leek", "onion", "carrot", "bean", "squash", "kale", "herb", "chives", "sunflower", "hollyhock", "marigold", "lavender", "lily", "pepper", "taro", "turnip"]);
+
+const GARDENS = new Set(GARDEN_KINDS);
+
+// A leaf from `at` ([x, y, z]) heading `dir` (out and up), `size` long and `width` across at its
+// widest (`shape`: how far along it that is, 0 to 1), its tip drooping by `droop`, folded up along
+// its midrib by `fold` (a share of its width), its edges frilled by `frill` metres; coloured from
+// `colour` at its foot (darker) to `tip`, its midrib `vein`; swaying more towards its tip, up to
+// `sway`
+function leaf(mesher, random, at, dir, { size, width, shape = 0.45, droop = 0.4, fold = 0.25, frill = 0, colour, tip = colour, vein = null, segments = 3, sway = 0.5 }) {
+    const d = unit(dir);
+    const side = Math.abs(d[1]) > 0.98 ? [1, 0, 0] : unit(cross(d, UP));
+    const step = size / segments;
+    const rows = [];
+    let p = at;
+
+    for (let i = 0; i <= segments; i++) {
+        const t = i / segments;
+        const heading = unit([d[0], d[1] - droop * t * 2, d[2]]);
+        const normal = unit(cross(side, heading));
+
+        if (i > 0) {
+            p = [p[0] + heading[0] * step, p[1] + heading[1] * step, p[2] + heading[2] * step];
+        }
+
+        // (Narrow at its foot (its stalk), widest `shape` along, to a point at its tip)
+        const w = width * (t < shape ? 0.12 + 0.88 * Math.sin((t / shape) * Math.PI * 0.5) : Math.cos(((t - shape) / (1 - shape)) * Math.PI * 0.5)) * 0.5;
+        const ruffle = frill && i > 0 && i < segments ? random.range(-frill, frill) : 0;
+        const lift = fold * w;
+        const edge = (sign) => [p[0] + side[0] * w * sign + normal[0] * (lift + ruffle), p[1] + side[1] * w * sign + normal[1] * (lift + ruffle), p[2] + side[2] * w * sign + normal[2] * (lift + ruffle)];
+        const shade = lerp(colour.map((v) => v * 0.62), tip, Math.min(1, t * 1.15));
+
+        rows.push({ left: edge(-1), middle: p, right: edge(1), normal: unit([normal[0], normal[1] + 0.6, normal[2]]), shade, rib: vein ? lerp(shade, vein, 0.55) : shade, sway: sway * t });
+    }
+
+    for (let i = 0; i < segments; i++) {
+        const [a, b] = [rows[i], rows[i + 1]];
+        const normals = [a.normal, a.normal, b.normal, b.normal];
+
+        mesher.quad(a.left, a.middle, b.middle, b.left, { normals, colours: [a.shade, a.rib, b.rib, b.shade], sways: [a.sway, a.sway, b.sway, b.sway] });
+        mesher.quad(a.middle, a.right, b.right, b.middle, { normals, colours: [a.rib, a.shade, b.shade, b.rib], sways: [a.sway, a.sway, b.sway, b.sway] });
+    }
+
+    return p;
+}
+
+// A round thing (a cabbage's heart, a bulb, a pod, a fruit): a ball `radius` across at `at`,
+// squashed by `squash`, `detail` times divided, lit round; coloured `colour`, or `top` over its
+// upper half (a turnip's shoulders)
+function ball(mesher, at, radius, colour, { squash = 1, detail = 0, sway = 0, top = null } = {}) {
+    for (const face of ballOf(detail)) {
+        const points = face.map(([x, y, z]) => [at[0] + x * radius, at[1] + y * radius * squash, at[2] + z * radius]);
+        const colours = top ? face.map(([, y]) => lerp(colour, top, Math.min(1, Math.max(0, y + 0.3)))) : colour;
+
+        mesher.tri(...points, { normals: face.map((n) => unit(n)), colours, sways: sway });
+    }
+}
+
+// A stalk from `a` to `b` (metres), `radius` thick at its foot, thinner at its top, `sides` round
+function stalk(mesher, a, b, radius, colour, { sides = 4, sway = [0, 1], bend = 0, random = null } = {}) {
+    const points = bend && random ? bent(random, a, b, 3, bend) : [a, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2], b];
+
+    tube(mesher, points, [radius, radius * 0.8, radius * 0.6], sides, { colours: [colour.map((v) => v * 0.75), colour, colour], sways: [sway[0], (sway[0] + sway[1]) / 2, sway[1]] });
+
+    return points.at(-1);
+}
+
+// Petals round a middle at `at`, the flower facing `facing`: `count` of them `length` long and
+// `width` wide, cupped towards its face by `cup` (of their length); its middle a little ball
+function blossom(mesher, at, facing, { count = 5, length: long, width, cup = 0.3, colour, centre, sway = 1, heart = 0.3 }) {
+    const f = unit(facing);
+    const [u, v] = frameOf(f);
+    const normal = unit([f[0], f[1] + 0.5, f[2]]);
+
+    for (let k = 0; k < count; k++) {
+        const angle = (k / count) * TAU;
+        const out = [u[0] * Math.cos(angle) + v[0] * Math.sin(angle), u[1] * Math.cos(angle) + v[1] * Math.sin(angle), u[2] * Math.cos(angle) + v[2] * Math.sin(angle)];
+        const across = cross(f, out);
+        const point = (reach, rise, wide) => [at[0] + out[0] * reach * long + f[0] * rise * long + across[0] * wide, at[1] + out[1] * reach * long + f[1] * rise * long + across[1] * wide, at[2] + out[2] * reach * long + f[2] * rise * long + across[2] * wide];
+        const [left, right, tip] = [point(0.5, cup * 0.4, width / 2), point(0.5, cup * 0.4, -width / 2), point(1, cup, 0)];
+
+        mesher.quad(at, right, tip, left, { normals: [normal, normal, normal, normal], colours: [centre ? lerp(colour, centre, heart) : colour, colour, colour.map((x) => x * 1.08), colour], sways: sway });
+    }
+
+    if (centre) {
+        bud(mesher, [at[0] + f[0] * 0.004, at[1] + f[1] * 0.004, at[2] + f[2] * 0.004], long * 0.22, centre, sway);
+    }
+}
+
+// Ways out round the upright, `count` of them, each turned a little its own way
+const around = (random, count, jitter = 0.35) => {
+    const start = random.range(0, TAU);
+
+    return Array.from({ length: count }, (_, k) => start + (k / count) * TAU + random.range(-jitter, jitter));
+};
+
+// The colours the gardens are drawn in (sRGB)
+const G = Object.freeze({
+    cabbage: [0x4a7f62, 0x3f7458, 0x58895e],
+    heart: 0xb7cf8e,
+    paleVein: 0xd2e2bc,
+    lettuce: [0x86bf52, 0x9acb5c, 0x7ab04a],
+    redLettuce: 0x8a3c36,
+    leek: 0x4d7b68,
+    leekTip: 0x7aa08e,
+    shank: 0xe6ead2,
+    onionLeaf: 0x5e9050,
+    bulbs: [0xc8a058, 0xb07a3e, 0x8a3a4c, 0xe8dcc0],
+    carrotLeaf: 0x4f9634,
+    carrot: 0xd8742a,
+    beanLeaf: 0x4b8034,
+    beanFlower: [0xd8361e, 0xe8e2d0, 0xc8341e],
+    pod: 0x6a9a3a,
+    cane: 0x8c7852,
+    squashLeaf: 0x467a30,
+    fruits: [0xd9782a, 0xe2b23a, 0xc8642a, 0x5f7d3a],
+    stem: 0x8a7a4a,
+    kale: [0x2f4a3c, 0x384e3a, 0x2c3f45],
+    herbs: [0x7d9378, 0x56704a, 0x3f5a46],
+    herbFlower: [0x9a7ac8, 0xe8e2f0, 0xc87aa8],
+    chives: 0x4e8a3e,
+    chiveFlower: 0xa87ac8,
+    sunLeaf: 0x4a7a2c,
+    sunPetal: 0xf2bf1c,
+    sunDisc: 0x3e2614,
+    hollyhock: [0xe17aa7, 0xf3efe6, 0x9a1e3c, 0xf0de8a, 0xf0a882],
+    hollyhockLeaf: 0x4e7a34,
+    marigold: [0xe8761a, 0xf2a81c, 0xd85a14],
+    marigoldLeaf: 0x3f6a2e,
+    lavenderLeaf: 0x8a9a82,
+    lily: 0xf6f3ea,
+    throat: 0xd8e0a0,
+    lilyLeaf: 0x4e7e3a,
+    pepperLeaf: 0x3f7a2c,
+    peppers: [0xc8261c, 0xe2651a, 0x4e8a2a, 0xb81e1e],
+    taro: 0x3e7a3a,
+    taroVein: 0x8ab874,
+    turnipLeaf: 0x4e7a3a,
+    turnipTop: 0x8e3e7e,
+    turnipFoot: 0xe6e0d4,
+});
+
+// Draw one look of something grown in a yard's bed, standing on its soil at the origin
+function garden(mesher, random, kind) {
+    const pick = (list) => linear(random.pick(list));
+
+    switch (kind) {
+        case "cabbage": {
+            // (Its heart, a tight ball of pale leaves; leaves wrapped round it; and the big outer
+            // leaves spread round, bluish, their midribs pale)
+            const outer = pick(G.cabbage);
+            const vein = linear(G.paleVein);
+
+            ball(mesher, [0, 0.1, 0], 0.11, lerp(linear(G.heart), outer, 0.15), { squash: 0.86, detail: 1 });
+
+            for (const a of around(random, 4)) {
+                leaf(mesher, random, [Math.cos(a) * 0.04, 0.03, Math.sin(a) * 0.04], [Math.cos(a) * 0.45, 1, Math.sin(a) * 0.45], { size: 0.15, width: 0.13, shape: 0.55, droop: -0.25, fold: 0.6, colour: lerp(linear(G.heart), outer, 0.45), tip: linear(G.heart), vein, segments: 2, sway: 0.05 });
+            }
+
+            for (const a of around(random, random.int(7, 8))) {
+                leaf(mesher, random, [Math.cos(a) * 0.05, 0.02, Math.sin(a) * 0.05], [Math.cos(a), random.range(0.45, 0.75), Math.sin(a)], { size: random.range(0.22, 0.29), width: random.range(0.17, 0.21), shape: 0.55, droop: 0.55, fold: 0.3, frill: 0.012, colour: outer, tip: lerp(outer, linear(0x9ab48a), 0.35), vein, sway: 0.12 });
+            }
+
+            return;
+        }
+        case "lettuce": {
+            const red = random.chance(0.3);
+            const colour = pick(G.lettuce);
+
+            for (const a of around(random, random.int(9, 12), 0.5)) {
+                const up = random.range(0.8, 1.6);
+
+                leaf(mesher, random, [Math.cos(a) * 0.02, 0.01, Math.sin(a) * 0.02], [Math.cos(a), up, Math.sin(a)], { size: random.range(0.15, 0.2) * (2.2 - up) * 0.8, width: random.range(0.13, 0.16), shape: 0.6, droop: 0.3, fold: 0.45, frill: 0.014, colour, tip: red ? linear(G.redLettuce) : lerp(colour, linear(0xd2ea92), 0.5), vein: linear(0xdcefb4), sway: 0.15 });
+            }
+
+            return;
+        }
+        case "leek": {
+            // (Its white shank, and its leaves fanned flat from it, folded and arching over)
+            const plane = random.range(0, Math.PI);
+            const height = random.range(0.13, 0.18);
+
+            stalk(mesher, [0, -0.02, 0], [0, height, 0], 0.02, linear(G.shank), { sides: 5, sway: [0, 0.1] });
+
+            for (let k = 0; k < random.int(5, 7); k++) {
+                const a = plane + (k % 2 ? Math.PI : 0) + random.range(-0.2, 0.2);
+                const up = 1 + k * 0.25;
+
+                leaf(mesher, random, [0, height - 0.02 + k * 0.02, 0], [Math.cos(a) * 0.4, up, Math.sin(a) * 0.4], { size: random.range(0.3, 0.42), width: 0.045, shape: 0.25, droop: 0.65, fold: 0.6, colour: linear(G.leek), tip: linear(G.leekTip), segments: 4, sway: 0.6 });
+            }
+
+            return;
+        }
+        case "onion": {
+            // (Its bulb half out of the soil, and its hollow leaves standing up from it)
+            ball(mesher, [0, 0.03, 0], 0.04, pick(G.bulbs), { squash: 0.85 });
+
+            for (const a of around(random, random.int(4, 6), 0.6)) {
+                const lean = random.range(0.12, 0.35);
+
+                leaf(mesher, random, [Math.cos(a) * 0.01, 0.06, Math.sin(a) * 0.01], [Math.cos(a) * lean, 1, Math.sin(a) * lean], { size: random.range(0.28, 0.42), width: 0.024, shape: 0.3, droop: 0.3, fold: 0.8, colour: linear(G.onionLeaf), tip: lerp(linear(G.onionLeaf), linear(0xa8c88a), 0.4), sway: 0.8 });
+            }
+
+            return;
+        }
+        case "carrot": {
+            // (Feathery fronds, each a stalk with leaflets in pairs up it; the root's orange top)
+            const green = linear(G.carrotLeaf);
+
+            bud(mesher, [0, 0.005, 0], 0.016, linear(G.carrot), 0, 0.7);
+
+            for (const a of around(random, random.int(4, 5))) {
+                const h = random.range(0.16, 0.24);
+                const top = [Math.cos(a) * h * 0.4, h, Math.sin(a) * h * 0.4];
+
+                stem(mesher, [0, 0, 0], top, green, 0.008);
+
+                for (let j = 1; j <= 3; j++) {
+                    const t = j / 3.4;
+                    const at = [top[0] * t, top[1] * t, top[2] * t];
+
+                    for (const sign of [-1, 1]) {
+                        const b = a + sign * 1.1;
+
+                        leaf(mesher, random, at, [Math.cos(b), 0.7, Math.sin(b)], { size: 0.05 * (1.3 - t * 0.6), width: 0.035, shape: 0.5, droop: 0.3, fold: 0.1, frill: 0.006, colour: green, tip: lerp(green, linear(0x8ad06a), 0.4), segments: 1, sway: 0.4 + t * 0.6 });
+                    }
+                }
+            }
+
+            return;
+        }
+        case "bean": {
+            // (Its cane, the vine twining up it in leaves (in threes, heart-shaped), its scarlet
+            // flowers and its pods hanging)
+            const [lx, lz] = [random.range(-0.08, 0.08), random.range(-0.08, 0.08)];
+            const height = random.range(1.55, 1.8);
+            const caneAt = (t) => [lx * t, -0.05 + (height + 0.05) * t, lz * t];
+            const green = linear(G.beanLeaf);
+            const flower = pick(G.beanFlower);
+            let turn = random.range(0, TAU);
+
+            stalk(mesher, caneAt(0), caneAt(1), 0.012, linear(G.cane), { sides: 4, sway: [0, 0.35] });
+
+            for (let k = 0; k < 12; k++) {
+                const t = 0.08 + (k / 12) * 0.88;
+                const at = caneAt(t);
+
+                turn += 2.4;
+
+                for (const spread of [-0.5, 0, 0.5]) {
+                    const a = turn + spread;
+
+                    leaf(mesher, random, [at[0] + Math.cos(turn) * 0.015, at[1], at[2] + Math.sin(turn) * 0.015], [Math.cos(a), spread ? 0.1 : 0.4, Math.sin(a)], { size: random.range(0.1, 0.13), width: 0.1, shape: 0.35, droop: 0.6, fold: 0.15, colour: green, tip: lerp(green, linear(0x7ab052), 0.35), segments: 2, sway: 0.2 + t * 0.6 });
+                }
+
+                if (k % 3 === 1) {
+                    blossom(mesher, [at[0] + Math.cos(turn + 1.5) * 0.06, at[1] - 0.02, at[2] + Math.sin(turn + 1.5) * 0.06], [Math.cos(turn + 1.5), 0.3, Math.sin(turn + 1.5)], { count: 4, length: 0.022, width: 0.016, cup: 0.5, colour: flower, centre: flower.map((v) => v * 0.7), sway: t });
+                } else if (k % 3 === 2 && k > 2) {
+                    // (A pod hanging)
+                    leaf(mesher, random, [at[0] + Math.cos(turn - 1.4) * 0.03, at[1], at[2] + Math.sin(turn - 1.4) * 0.03], [Math.cos(turn - 1.4) * 0.15, -1, Math.sin(turn - 1.4) * 0.15], { size: random.range(0.12, 0.17), width: 0.016, shape: 0.6, droop: 0, fold: 0.7, colour: linear(G.pod), segments: 2, sway: t });
+                }
+            }
+
+            return;
+        }
+        case "squash": {
+            // (Its vine along the soil, its broad leaves held up on their stalks, and a fruit or two
+            // lying among them, ribbed)
+            const green = linear(G.squashLeaf);
+            const fruit = pick(G.fruits);
+            const a0 = random.range(0, TAU);
+
+            stalk(mesher, [0, 0.01, 0], [Math.cos(a0) * 0.45, 0.02, Math.sin(a0) * 0.45], 0.012, green, { sides: 3, sway: [0, 0.05], bend: 0.08, random });
+
+            for (const a of around(random, random.int(4, 6), 0.5)) {
+                const reach = random.range(0.08, 0.2);
+                const high = random.range(0.14, 0.24);
+                const top = [Math.cos(a) * reach, high, Math.sin(a) * reach];
+
+                stem(mesher, [Math.cos(a) * 0.02, 0, Math.sin(a) * 0.02], top, green, 0.014);
+                leaf(mesher, random, top, [Math.cos(a), random.range(0.2, 0.5), Math.sin(a)], { size: random.range(0.2, 0.27), width: random.range(0.24, 0.3), shape: 0.42, droop: 0.35, fold: 0.18, frill: 0.018, colour: green, tip: lerp(green, linear(0x6a9a4a), 0.3), vein: linear(0x9ac87a), segments: 2, sway: 0.3 });
+            }
+
+            for (let k = 0; k < random.int(1, 2); k++) {
+                const a = a0 + random.range(-1.2, 1.2);
+                const r = random.range(0.09, 0.13);
+
+                gourd(mesher, [Math.cos(a) * random.range(0.12, 0.3), 0, Math.sin(a) * random.range(0.12, 0.3)], r, fruit, random);
+            }
+
+            return;
+        }
+        case "kale": {
+            // (A stout stem, leaves curling up and out from all along it, crinkled, dark)
+            const colour = pick(G.kale);
+            const height = random.range(0.22, 0.32);
+
+            stalk(mesher, [0, -0.02, 0], [0, height, 0], 0.02, linear(0x6a7a5a), { sides: 4, sway: [0, 0.15] });
+
+            for (const [k, a] of around(random, 9, 0.5).entries()) {
+                const t = 0.25 + (k / 9) * 0.75;
+
+                leaf(mesher, random, [0, height * t, 0], [Math.cos(a) * 0.7, 1.1, Math.sin(a) * 0.7], { size: random.range(0.22, 0.3), width: random.range(0.08, 0.1), shape: 0.55, droop: 0.65, fold: 0.35, frill: 0.026, colour, tip: lerp(colour, linear(0x6a8a7a), 0.35), vein: linear(0x9ab0a0), segments: 4, sway: 0.35 });
+            }
+
+            return;
+        }
+        case "herb": {
+            // (A low bush of sprigs (sage, thyme, rosemary), small leaves up each, a few flowers)
+            const colour = pick(G.herbs);
+            const flower = pick(G.herbFlower);
+
+            for (const a of around(random, random.int(9, 12), 0.5)) {
+                const lean = random.range(0.35, 0.9);
+                const top = [Math.cos(a) * 0.2 * lean, random.range(0.2, 0.32), Math.sin(a) * 0.2 * lean];
+
+                stem(mesher, [0, 0, 0], top, colour.map((v) => v * 0.8), 0.012);
+
+                for (let j = 1; j <= 4; j++) {
+                    const t = j / 4;
+                    const b = a + (j % 2 ? 1.2 : -1.2);
+
+                    leaf(mesher, random, [top[0] * t, top[1] * t, top[2] * t], [Math.cos(b), 0.9, Math.sin(b)], { size: 0.072, width: 0.038, shape: 0.5, droop: 0.2, fold: 0.15, colour, tip: lerp(colour, linear(0xd0dcc8), 0.25), segments: 1, sway: t * 0.6 });
+                }
+
+                if (random.chance(0.4)) {
+                    bud(mesher, [top[0], top[1] + 0.02, top[2]], 0.016, flower, 0.8, 1.6);
+                }
+            }
+
+            return;
+        }
+        case "chives": {
+            const green = linear(G.chives);
+
+            for (let k = 0; k < random.int(14, 20); k++) {
+                const a = random.range(0, TAU);
+                const out = random.range(0, 0.04);
+
+                blade(mesher, [Math.cos(a) * out, -0.01, Math.sin(a) * out], [Math.cos(a), Math.sin(a)], random.range(0.2, 0.3), random.range(0.02, 0.07), 0.01, green.map((v) => v * 0.75), lerp(green, linear(0x9ad08a), 0.35), 0.8);
+            }
+
+            for (const a of around(random, random.int(3, 5))) {
+                const top = [Math.cos(a) * 0.05, random.range(0.28, 0.34), Math.sin(a) * 0.05];
+
+                stem(mesher, [0, 0, 0], top, green, 0.008);
+                ball(mesher, top, 0.018, linear(G.chiveFlower), { detail: -1, sway: 1 });
+            }
+
+            return;
+        }
+        case "sunflower": {
+            // (A tall stem, big rough leaves up it drooping, and its head nodding: a dark disc in a
+            // ring of golden petals)
+            const height = random.range(1.45, 1.72);
+            const nod = random.range(0, TAU);
+            const top = stalk(mesher, [0, -0.03, 0], [Math.cos(nod) * 0.06, height, Math.sin(nod) * 0.06], 0.017, linear(0x5a7a3a), { sides: 5, sway: [0, 1], bend: 0.04, random });
+            const green = linear(G.sunLeaf);
+
+            for (const [k, a] of around(random, 7, 0.4).entries()) {
+                const t = 0.18 + (k / 7) * 0.7;
+
+                leaf(mesher, random, [top[0] * t, height * t, top[2] * t], [Math.cos(a), 0.35, Math.sin(a)], { size: random.range(0.17, 0.24) * (1.15 - t * 0.4), width: 0.15 * (1.15 - t * 0.4), shape: 0.35, droop: 0.8, fold: 0.12, frill: 0.008, colour: green, tip: lerp(green, linear(0x6a9a42), 0.3), vein: linear(0x8ab86a), sway: t });
+            }
+
+            const facing = [Math.cos(nod), -0.25, Math.sin(nod)];
+
+            blossom(mesher, top, facing, { count: 16, length: 0.16, width: 0.035, cup: 0.12, colour: linear(G.sunPetal), centre: null, sway: 1, heart: 0 });
+            disc(mesher, top.map((v, k) => v + unit(facing)[k] * 0.01), ...frameOf(unit(facing)), 0.075, 10, linear(G.sunDisc), linear(0x6a4418));
+
+            return;
+        }
+        case "hollyhock": {
+            // (A tall spike: broad leaves at its foot, open flowers up its top half, buds at its tip)
+            const colour = pick(G.hollyhock);
+            const green = linear(G.hollyhockLeaf);
+            const height = random.range(1.15, 1.65);
+            const top = stalk(mesher, [0, -0.03, 0], [random.range(-0.06, 0.06), height, random.range(-0.06, 0.06)], 0.013, linear(0x5a7a3a), { sides: 4, sway: [0, 1] });
+
+            for (const a of around(random, 5)) {
+                leaf(mesher, random, [0, 0.02, 0], [Math.cos(a), 0.6, Math.sin(a)], { size: random.range(0.12, 0.16), width: 0.15, shape: 0.5, droop: 0.4, fold: 0.15, frill: 0.012, colour: green, tip: lerp(green, linear(0x7aa056), 0.3), vein: linear(0x8ab86a), segments: 2, sway: 0.15 });
+            }
+
+            for (let k = 0; k < 8; k++) {
+                const t = 0.5 + (k / 8) * 0.42;
+                const a = k * 2.4 + random.range(-0.3, 0.3);
+                const at = [top[0] * t + Math.cos(a) * 0.025, height * t, top[2] * t + Math.sin(a) * 0.025];
+
+                blossom(mesher, at, [Math.cos(a), 0.25, Math.sin(a)], { count: 5, length: 0.05 * (1.1 - (k / 8) * 0.4), width: 0.05, cup: 0.4, colour, centre: lerp(colour, linear(0xf2e6a0), 0.6), sway: t });
+            }
+
+            for (let k = 0; k < 3; k++) {
+                bud(mesher, [top[0] + random.range(-0.015, 0.015), top[1] - k * 0.035, top[2] + random.range(-0.015, 0.015)], 0.014, lerp(green, colour, 0.3), 1, 1.4);
+            }
+
+            return;
+        }
+        case "marigold": {
+            // (A bushy clump of fine leaves, its flowers held over it, orange and gold)
+            const green = linear(G.marigoldLeaf);
+
+            for (const a of around(random, 7, 0.5)) {
+                leaf(mesher, random, [0, 0.01, 0], [Math.cos(a), 0.9, Math.sin(a)], { size: random.range(0.12, 0.17), width: 0.05, shape: 0.5, droop: 0.4, fold: 0.1, frill: 0.012, colour: green, tip: lerp(green, linear(0x6a9a4a), 0.3), segments: 2, sway: 0.3 });
+            }
+
+            for (const a of around(random, random.int(4, 7), 0.6)) {
+                const top = [Math.cos(a) * random.range(0.04, 0.1), random.range(0.18, 0.28), Math.sin(a) * random.range(0.04, 0.1)];
+                const colour = pick(G.marigold);
+
+                stem(mesher, [0, 0, 0], top, green, 0.008);
+                blossom(mesher, top, [0, 1, 0], { count: 9, length: 0.045, width: 0.03, cup: 0.25, colour, centre: colour.map((v) => v * 0.7), sway: 1 });
+            }
+
+            return;
+        }
+        case "lavender": {
+            for (let k = 0; k < 18; k++) {
+                const a = random.range(0, TAU);
+
+                blade(mesher, [Math.cos(a) * 0.06, 0, Math.sin(a) * 0.06], [Math.cos(a), Math.sin(a)], random.range(0.14, 0.22), random.range(0.06, 0.14), 0.02, linear(G.lavenderLeaf).map((v) => v * 0.8), linear(G.lavenderLeaf), 0.4);
+            }
+
+            return flowers(mesher, random, "lavender");
+        }
+        case "lily": {
+            // (A few stems, narrow leaves up each, and trumpets of white flowers, nodding)
+            const green = linear(G.lilyLeaf);
+
+            for (const a of around(random, 3, 0.6)) {
+                const height = random.range(0.55, 0.85);
+                const top = [Math.cos(a) * 0.08, height, Math.sin(a) * 0.08];
+
+                stem(mesher, [0, 0, 0], top, green, 0.012);
+
+                for (let j = 0; j < 4; j++) {
+                    const t = 0.2 + j * 0.17;
+                    const b = a + j * 1.9;
+
+                    leaf(mesher, random, [top[0] * t, height * t, top[2] * t], [Math.cos(b), 0.9, Math.sin(b)], { size: 0.12, width: 0.025, shape: 0.4, droop: 0.4, fold: 0.3, colour: green, segments: 2, sway: t });
+                }
+
+                for (let j = 0; j < 2; j++) {
+                    const b = a + j * 2.6;
+
+                    trumpet(mesher, [top[0], top[1] - j * 0.04, top[2]], [Math.cos(b), -0.2, Math.sin(b)], linear(G.lily), linear(G.throat));
+                }
+            }
+
+            return;
+        }
+        case "pepper": {
+            // (A little bush: stems branching, leaves, and its peppers hanging, red and orange)
+            const green = linear(G.pepperLeaf);
+
+            for (const a of around(random, 4, 0.5)) {
+                const top = [Math.cos(a) * 0.12, random.range(0.28, 0.42), Math.sin(a) * 0.12];
+
+                stem(mesher, [0, 0, 0], top, linear(0x5a7a3a), 0.012);
+
+                for (let j = 1; j <= 3; j++) {
+                    const t = j / 3;
+                    const b = a + (j % 2 ? 1 : -1) * 1.3;
+                    const at = [top[0] * t, top[1] * t, top[2] * t];
+
+                    leaf(mesher, random, at, [Math.cos(b), 0.5, Math.sin(b)], { size: random.range(0.06, 0.08), width: 0.035, shape: 0.4, droop: 0.4, fold: 0.2, colour: green, tip: lerp(green, linear(0x6aa04a), 0.3), segments: 2, sway: t });
+
+                    if (j > 1 && random.chance(0.7)) {
+                        pepper(mesher, at, pick(G.peppers), random);
+                    }
+                }
+            }
+
+            return;
+        }
+        case "taro": {
+            // (Great heart-shaped leaves held out on tall stalks, drooping at their tips)
+            const green = linear(G.taro);
+
+            for (const a of around(random, random.int(4, 5), 0.4)) {
+                const high = random.range(0.32, 0.55);
+                const top = [Math.cos(a) * high * 0.35, high, Math.sin(a) * high * 0.35];
+
+                stalk(mesher, [0, -0.02, 0], top, 0.012, lerp(green, linear(0x8a9a5a), 0.3), { sides: 3, sway: [0, 0.6] });
+                leaf(mesher, random, top, [Math.cos(a), 0.15, Math.sin(a)], { size: random.range(0.28, 0.4), width: random.range(0.24, 0.32), shape: 0.3, droop: 0.55, fold: 0.15, colour: green, tip: lerp(green, linear(0x5a9a4a), 0.3), vein: linear(G.taroVein), segments: 4, sway: 0.6 });
+            }
+
+            return;
+        }
+        case "turnip": {
+            // (Its shoulders out of the soil, purple over white, and rough leaves up from it)
+            ball(mesher, [0, 0.015, 0], 0.045, linear(G.turnipFoot), { squash: 0.8, top: linear(G.turnipTop) });
+
+            for (const a of around(random, random.int(5, 7), 0.5)) {
+                leaf(mesher, random, [0, 0.04, 0], [Math.cos(a) * 0.6, 1, Math.sin(a) * 0.6], { size: random.range(0.16, 0.24), width: 0.065, shape: 0.6, droop: 0.45, fold: 0.3, frill: 0.02, colour: linear(G.turnipLeaf), tip: lerp(linear(G.turnipLeaf), linear(0x7aa056), 0.35), vein: linear(0xb0c8a0), sway: 0.4 });
+            }
+
+            return;
+        }
+        default:
+            return undefined;
+    }
+}
+
+// A gourd (a pumpkin or a squash) lying at `at`, `radius` across: ribbed, a little squashed, its
+// stalk on top
+function gourd(mesher, at, radius, colour, random) {
+    const ribs = 6;
+    const sides = 12;
+    const squash = random.range(0.6, 0.85);
+    const profile = [[0.3, 0], [1, 0.4], [0.75, 0.88], [0, 1]];
+    const rings = profile.map(([r, h]) => Array.from({ length: sides }, (_, j) => {
+        const angle = (j / sides) * TAU;
+        const rib = 1 - 0.08 * (1 - Math.cos(angle * ribs)) * 0.5;
+
+        return { p: [at[0] + Math.cos(angle) * r * rib * radius, at[1] + h * radius * 2 * squash, at[2] + Math.sin(angle) * r * rib * radius], n: unit([Math.cos(angle) * r, (h - 0.5) * 1.5, Math.sin(angle) * r]) };
+    }));
+
+    for (let k = 0; k < rings.length - 1; k++) {
+        for (let j = 0; j < sides; j++) {
+            const [a, b, c, d] = [rings[k][j], rings[k][(j + 1) % sides], rings[k + 1][(j + 1) % sides], rings[k + 1][j]];
+            const deep = j % 2 ? 0.85 : 1;
+
+            if (k === rings.length - 2) {
+                mesher.tri(a.p, d.p, b.p, { normals: [a.n, d.n, b.n], colours: colour.map((v) => v * deep) });
+            } else {
+                mesher.quad(a.p, d.p, c.p, b.p, { normals: [a.n, d.n, c.n, b.n], colours: colour.map((v) => v * deep * (k === 0 ? 0.7 : 1)) });
+            }
+        }
+    }
+
+    stalk(mesher, [at[0], at[1] + radius * 2 * squash - 0.01, at[2]], [at[0] + 0.015, at[1] + radius * 2 * squash + 0.04, at[2]], 0.012, linear(G.stem), { sides: 4, sway: [0, 0] });
+}
+
+// A pepper hanging from `at`: a tapering pod, its stalk at the top
+function pepper(mesher, at, colour, random) {
+    const lean = random.range(0, TAU);
+    const long = random.range(0.05, 0.08);
+    const end = [at[0] + Math.cos(lean) * 0.02, at[1] - long, at[2] + Math.sin(lean) * 0.02];
+
+    tube(mesher, [at, [(at[0] * 2 + end[0]) / 3, at[1] - long * 0.3, (at[2] * 2 + end[2]) / 3], end], [0.013, 0.011, 0.002], 4, { colours: [colour.map((v) => v * 0.8), colour, colour.map((v) => v * 1.1)], sways: [0.6, 0.7, 0.8] });
+}
+
+// A trumpet of a flower (a lily's) from `at`, facing `facing`: six petals flaring from its throat,
+// their tips curled back
+function trumpet(mesher, at, facing, colour, throat) {
+    const f = unit(facing);
+    const [u, v] = frameOf(f);
+    const point = (angle, reach, out) => [0, 1, 2].map((k) => at[k] + f[k] * reach + (u[k] * Math.cos(angle) + v[k] * Math.sin(angle)) * out);
+
+    for (let k = 0; k < 6; k++) {
+        const angle = (k / 6) * TAU;
+        const [a, b] = [angle - 0.26, angle + 0.26];
+        const normal = unit([u[0] * Math.cos(angle) + v[0] * Math.sin(angle), u[1] * Math.cos(angle) + v[1] * Math.sin(angle) + 0.4, u[2] * Math.cos(angle) + v[2] * Math.sin(angle)]);
+        const normals = [normal, normal, normal, normal];
+
+        // (From its throat out to its mouth, then curled back to its tip)
+        mesher.quad(point(a, 0, 0.006), point(b, 0, 0.006), point(b + 0.08, 0.07, 0.03), point(a - 0.08, 0.07, 0.03), { normals, colours: [throat, throat, colour, colour], sways: 1 });
+        mesher.tri(point(a - 0.08, 0.07, 0.03), point(b + 0.08, 0.07, 0.03), point(angle, 0.085, 0.06), { normals: [normal, normal, normal], colours: [colour, colour, colour.map((x) => x * 1.05)], sways: 1 });
+    }
+}
+
 // --- Each land's look ---
 
 /**
@@ -1958,6 +2527,10 @@ function draw(mesher, random, kind, land) {
     const look = lookOfLand(land);
     const stone = { layer: look.stone, moss: look.moss, snow: look.snow ?? 0, lichen: look.moss ? 0.3 : 0.15 };
     const [base, tip] = look.grass.map(linear);
+
+    if (GARDENS.has(kind)) {
+        return garden(mesher, random, kind);
+    }
 
     switch (kind) {
         case "boulder":
@@ -2234,8 +2807,8 @@ export const CARPETS = Object.freeze({ size: 70, from: 0.5, to: 0.66, flat: 0.4,
  * the world), turn, size, tint }]. From each square of it (overworld.js's chunk): grass, not
  * blocked, no road, bridge or water; how much and what from its land, and from the fields (bare
  * stretches and lush ones, drifts of flowers, rocky ground, let-go ground), the trees' shade and
- * the water's edge; thinner in settlements. The same every time for the same chunk. `density`
- * thins it all (for slower devices).
+ * the water's edge; thinner in settlements; and what's grown in the yards' beds. The same every
+ * time for the same chunk. `density` thins it all (for slower devices), but for the beds.
  */
 export function undergrowthOf(overworld, chunk, options) {
     return allAtOnce(sowing(overworld, chunk, options));
@@ -2403,6 +2976,16 @@ export function* sowing(overworld, chunk, { density = 1 } = {}) {
         }
     }
 
+    // What's grown in the beds of the yards in it, row by row (kits/yards.js plantsOf), standing
+    // on their soil
+    yield;
+
+    for (const yard of overworld.yardsIn?.(Math.floor(x0 / size), Math.floor(y0 / size)) ?? []) {
+        for (const { crop, x, y, height, seed: own } of plantsOf(yard, (px, py) => overworld.heightAt?.(px, py) ?? 0)) {
+            items.push({ kind: crop, land: "garden", look: Math.floor(own * VARIANTS), x, y, ground: height, turn: hashOf(Math.floor(x * 64), Math.floor(y * 64), seed + 9) * TAU, size: 0.85 + own * 0.3, tint: tintOf(hashOf(Math.floor(x * 64), Math.floor(y * 64), seed + 10)) });
+        }
+    }
+
     return items;
 }
 
@@ -2505,7 +3088,7 @@ export function undergrowthMesh(items, origin) {
 const HOME_FEATURES = ["termites", "kopje", "skullpole", "stakes", "wrack", "mangrove", "stela", "moonstone", "leaflamp", "webstump", "cocoon", "crystals"];
 
 /** Every kind drawn here (the features' and the undergrowth's), for tests and the lab. */
-export const KINDS = Object.freeze([...new Set(["boulder", "stone", "outcrop", "log", "stump", "snag", "bush", "cairn", "menhir", "mound", "haystack", "scarecrow", "logpile", "ruin", "ribs", ...HOME_FEATURES, ...Object.values(UNDERGROWTH).flatMap(({ kinds }) => Object.keys(kinds)), ...Object.values(HOME_UNDERGROWTH).flatMap((kinds) => Object.keys(kinds))])]);
+export const KINDS = Object.freeze([...new Set(["boulder", "stone", "outcrop", "log", "stump", "snag", "bush", "cairn", "menhir", "mound", "haystack", "scarecrow", "logpile", "ruin", "ribs", ...HOME_FEATURES, ...Object.values(UNDERGROWTH).flatMap(({ kinds }) => Object.keys(kinds)), ...Object.values(HOME_UNDERGROWTH).flatMap((kinds) => Object.keys(kinds)), ...GARDEN_KINDS])]);
 
 /** One look of a kind for a land, as a geometry on its own (for tests and the lab). */
 export function lookGeometry(kind, land = "meadow", index = 0) {

@@ -5,7 +5,7 @@ import { layoutCastle } from "../client/js/core/setpieces/castle.js";
 import { atan2, cos, exp, hypot, log, pow, sin, sqrt } from "../client/js/core/exact.js";
 import { GROUND, pieceCatalog, PLOT } from "../client/js/core/setpieces/pieces.js";
 import { Plan } from "../client/js/core/setpieces/plan.js";
-import { footprint, layoutTown, PEOPLE_TOWNS, SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
+import { footprint, layoutTown, PEOPLE_TOWNS, SETTLEMENT_KINDS, YARD_FENCE } from "../client/js/core/setpieces/town.js";
 
 const SEEDS = Array.from({ length: 30 }, (_, index) => index * 7919 + 3);
 const KEYS = new Set(pieceCatalog().map((piece) => piece.key));
@@ -420,6 +420,7 @@ describe("town layouts (town.js)", () => {
             const trunks = town.pieces.filter(({ kind }) => kind === "tree");
             const props = town.pieces.filter(({ kind }) => kind === "prop");
             const fences = [];
+            const fenced = new Set(town.yards.flatMap(({ squares }) => squares.map(([i, j]) => `${i},${j}`)));
 
             for (const [n, yard] of town.yards.entries()) {
                 const [w, d] = [yard.w * PLOT, yard.h * PLOT];
@@ -446,6 +447,7 @@ describe("town layouts (town.js)", () => {
                 }
 
                 // Fenced along its sides and back (each run in order, along it), where nothing stands
+                // but the yards' fences
                 yard.fence.forEach((runs, side) => {
                     const long = side === 1 ? w : d;
                     const steps = Math.max(1, Math.round(long / 0.5));
@@ -464,7 +466,7 @@ describe("town layouts (town.js)", () => {
                         if (runs.some(([from, to]) => t > from && t < to)) {
                             const [px, py] = at(...[[0.2, t], [t, 0.2], [w - 0.2, t]][side]).map(Math.floor);
 
-                            assert.equal(town.blocked[py]?.[px] ?? 0, 0, `${where}: yard ${n}'s fence through something at ${px}, ${py}`);
+                            assert.ok(!(town.blocked[py]?.[px] ?? 0) || fenced.has(`${px},${py}`), `${where}: yard ${n}'s fence through something at ${px}, ${py}`);
                         }
                     }
                 });
@@ -511,8 +513,68 @@ describe("town layouts (town.js)", () => {
 
         // (Most of what could be fenced is; some yards have a bed, some room for a washing line)
         assert.ok(counts.yards > 150, `${counts.yards} yards`);
-        assert.ok(counts.fenced / counts.sides > 0.45, `${counts.fenced / counts.sides} fenced`);
+        assert.ok(counts.fenced / counts.sides > 0.4, `${counts.fenced / counts.sides} fenced`);
         assert.ok(counts.beds > counts.yards * 0.2 && counts.lines > counts.yards * 0.3, JSON.stringify(counts));
+    });
+
+    it("stands a yard's fences in everyone's way (but not their sight), on its own squares along its fenced sides, but for its gateway; a few yards left open", () => {
+        const towns = [...layouts.values(), ...["cat", "orc", "lizard", "elf", "darkElf"].flatMap((people) => ["village", "town"].map((kind) => layoutTown({ kind, seed: 5, people })))];
+        const counts = { yards: 0, open: 0, gated: 0, fenced: 0 };
+
+        for (const town of towns) {
+            const where = `${town.people} ${town.kind} ${town.seed}`;
+            const taken = new Set();
+
+            for (const [n, yard] of town.yards.entries()) {
+                const [w, d] = [yard.w * PLOT, yard.h * PLOT];
+                const [ax, az] = [[cos(yard.facing), -sin(yard.facing)], [sin(yard.facing), cos(yard.facing)]];
+                const local = ([px, py]) => [(px - yard.x) * ax[0] + (py - yard.y) * ax[1] + w / 2, (px - yard.x) * az[0] + (py - yard.y) * az[1] + d / 2];
+                const open = yard.fence.every((runs) => !runs.length);
+
+                counts.yards++;
+
+                if (open) {
+                    counts.open++;
+                    assert.ok(!yard.gate && !yard.squares.length, `${where}: yard ${n}, left open, has no fences`);
+                    continue;
+                }
+
+                counts.fenced++;
+
+                // Its squares: blocked, but seen through; in the yard, near a fenced side, never a
+                // street's, and never another yard's
+                for (const [i, j] of yard.squares) {
+                    const [u, v] = local([i + 0.5, j + 0.5]);
+                    const near = [[u, v], [v, u], [w - u, v]].some(([off, t], k) => off < YARD_FENCE.band && yard.fence[k].some(([from, to]) => t >= from - 0.31 && t <= to + 0.31));
+
+                    assert.equal(town.blocked[j][i], 1, `${where}: yard ${n}'s fence at ${i}, ${j} stands in the way`);
+                    assert.equal(town.opaque[j][i], 0, `${where}: yard ${n}'s fence at ${i}, ${j} is seen through`);
+                    assert.ok(u > -1e-9 && u < w + 1e-9 && v > -1e-9 && v < d + 1e-9 && near, `${where}: yard ${n}'s fence at ${i}, ${j} (${u.toFixed(2)}, ${v.toFixed(2)})`);
+                    assert.ok(town.ground[j][i] !== GROUND.road && town.ground[j][i] !== GROUND.cobbles, `${where}: yard ${n}'s fence on a street at ${i}, ${j}`);
+                    assert.ok(!taken.has(`${i},${j}`), `${where}: yard ${n}'s fence at ${i}, ${j} another's`);
+                    taken.add(`${i},${j}`);
+                }
+
+                // Its gateway: in a fenced side, the fence cut there, the way through it clear
+                if (yard.gate) {
+                    const { side, at } = yard.gate;
+
+                    counts.gated++;
+                    assert.ok(!yard.fence[side].some(([from, to]) => from < at + YARD_FENCE.gate / 2 - 1e-9 && to > at - YARD_FENCE.gate / 2 + 1e-9), `${where}: yard ${n}'s gateway fenced`);
+                    assert.ok(yard.fence[side].some(([from, to]) => Math.abs(to - (at - YARD_FENCE.gate / 2)) < 1e-9 || Math.abs(from - (at + YARD_FENCE.gate / 2)) < 1e-9), `${where}: yard ${n}'s gateway in its fence`);
+                    assert.ok(!yard.squares.some(([i, j]) => {
+                        const [u, v] = local([i + 0.5, j + 0.5]);
+                        const [off, t] = [[u, v], [v, u], [w - u, v]][side];
+
+                        return off < YARD_FENCE.band && Math.abs(t - at) <= YARD_FENCE.clearing;
+                    }), `${where}: yard ${n}'s gateway clear`);
+                }
+            }
+        }
+
+        // (About one in eight left open; nearly all the rest have a gateway)
+        assert.ok(counts.open > counts.yards * 0.05 && counts.open < counts.yards * 0.2, JSON.stringify(counts));
+        assert.ok(counts.gated > counts.fenced * 0.9, JSON.stringify(counts));
     });
 });
 

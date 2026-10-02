@@ -353,7 +353,7 @@ export class Solid {
     }
 
     /**
-     * Lay the faces `build` lays as only worth drawing near (small things: a garden's plants, a
+     * Lay the faces `build` lays as only worth drawing near (small things: a gate, a
      * fence's stakes), kept apart and left undrawn from further off (town3d.js joined).
      */
     near(build) {

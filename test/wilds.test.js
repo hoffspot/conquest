@@ -228,7 +228,7 @@ describe("the land's things drawn (world/art/kits/wilds.js)", () => {
                 const geometry = lookGeometry(kind, land, 3);
                 const triangles = geometry.attributes.position.count / 3;
 
-                assert.ok(triangles >= 4 && triangles <= (kind === "ring" || kind === "ribs" || kind === "bush" || kind === "campfire" || kind === "outcrop" || kind === "ruin" ? 400 : 260), `${kind} (${land}): ${triangles} triangles`);
+                assert.ok(triangles >= 4 && triangles <= (["ring", "ribs", "bush", "campfire", "outcrop", "ruin", "bean"].includes(kind) ? 400 : 260), `${kind} (${land}): ${triangles} triangles`);
 
                 for (const name of ["position", "normal", "color", "uv", "layer", "sway"]) {
                     assert.ok(geometry.attributes[name].array.every(Number.isFinite), `${kind} (${land}): ${name}`);

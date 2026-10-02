@@ -30,7 +30,8 @@ const { builderFor } = await import("../client/js/world/art/peoples/index.js");
 const THREE = await import("three");
 const { AHEAD, Layouts } = await import("../client/js/world/layouts.js");
 const { splatOf, splatting } = await import("../client/js/world/ground.js");
-const { sowing, undergrowthMesh, undergrowthOf } = await import("../client/js/world/art/kits/wilds.js");
+const { GARDEN_KINDS, sowing, undergrowthMesh, undergrowthOf } = await import("../client/js/world/art/kits/wilds.js");
+const { plantsOf } = await import("../client/js/world/art/kits/yards.js");
 
 let world;
 
@@ -166,46 +167,41 @@ describe("the world outside, drawn round the player (chunks3d.js)", () => {
         chunks.dispose();
     });
 
-    it("draws the yards behind a settlement's houses on the ground as it lies, but none reaching into a river or a lake", () => {
+    it("draws the yards behind a settlement's houses that are there (core/settlements.js) on the ground as it lies, what's grown in their beds sown with the undergrowth", () => {
         const overworld = world.maps.town;
-        const place = overworld.settlements.places.find(({ kind, id }) => kind === "village" && id !== world.start.id);
-        const [x, z] = place.at;
-        const yardsOf = () => {
+        const villages = overworld.settlements.places.filter(({ kind, id }) => kind === "village" && id !== world.start.id);
+        let found = null;
+
+        // (A village's chunk with a bed in a yard of it)
+        for (const place of villages.slice(0, 6)) {
             const chunks = new Chunks(world, { undergrowth: 0 });
 
-            chunks.fill(x, z, 0);
+            chunks.fill(...place.at, 0);
 
             const drawn = [...chunks.drawn.values()][0];
-            const found = { own: overworld.settlements.yardsIn(drawn.cx, drawn.cy), drawn: drawn.job?.pieces.filter(({ kind }) => kind === "yard") ?? [] };
+            const own = overworld.settlements.yardsIn(drawn.cx, drawn.cy);
+            const yards = drawn.job?.pieces.filter(({ kind }) => kind === "yard") ?? [];
 
             chunks.dispose();
+            assert.deepEqual(yards.map(({ x, y }) => [x, y]), own.map(({ x, y }) => [x, y]));
+            assert.ok(yards.every(({ lie }) => lie.length === 4 && lie.every(Number.isFinite)));
 
-            return found;
-        };
-        const { own, drawn } = yardsOf();
-
-        assert.ok(own.length > 0, "the village has yards");
-        assert.equal(drawn.length, own.length);
-        assert.ok(drawn.every(({ lie }) => lie.length === 4 && lie.every(Number.isFinite)));
-
-        // (The world's water under one of them: that one left out)
-        const chunkAt = overworld.chunkAt;
-        const [wet] = own;
-
-        overworld.chunkAt = (px, py) => {
-            const chunk = chunkAt.call(overworld, px, py);
-
-            return Math.abs(px - wet.x) < 1 && Math.abs(py - wet.y) < 1 ? { ...chunk, water: chunk.water.map(() => 2) } : chunk;
-        };
-
-        try {
-            const after = yardsOf();
-
-            assert.equal(after.drawn.length, own.length - 1);
-            assert.ok(!after.drawn.some(({ x: yx, y: yy }) => yx === wet.x && yy === wet.y));
-        } finally {
-            overworld.chunkAt = chunkAt;
+            if (own.some(({ bed }) => bed)) {
+                found = { drawn, own };
+                break;
+            }
         }
+
+        assert.ok(found, "a village's yard with a bed");
+
+        // (Each plant of the beds' rows, of its people's crops, standing on its bed's soil)
+        const chunk = overworld.chunk(found.drawn.cx, found.drawn.cy);
+        const sown = undergrowthOf(overworld, chunk).filter(({ land }) => land === "garden");
+        const planted = found.own.flatMap((yard) => plantsOf(yard, (x, y) => overworld.heightAt(x, y)));
+
+        assert.ok(planted.length > 0);
+        assert.deepEqual(sown.map(({ kind, x, y, ground }) => [kind, x, y, ground]), planted.map(({ crop, x, y, height }) => [crop, x, y, height]));
+        assert.ok(sown.every(({ kind, look }) => GARDEN_KINDS.includes(kind) && look >= 0 && look < 8));
     });
 
     it("grows the undergrowth over several frames, the same as all at once", () => {

@@ -38,7 +38,7 @@ import { fallsOf, lipsIn } from "./falls.js";
 import { builderOf, cutAway, drawFar, grounded, joined, partsOf, PIXEL, placed, standOn } from "./town3d.js";
 import { chimneysOf, smokeMesh } from "./smoke.js";
 import { clothMesh, clothOf } from "./cloth.js";
-import { lieOf, pointsOf } from "./art/kits/yards.js";
+import { lieOf } from "./art/kits/yards.js";
 
 /** How many chunks round the player's are drawn (each way), and how far off they're let go. */
 export const REACH = Object.freeze({ drawn: 2, kept: 3 });
@@ -720,15 +720,9 @@ export class Chunks {
 
         // The buildings and props of any settlement in it, to be built a few at a time
         // (And each people's castle and places, and their lookouts: sites.js; and the yards behind
-        // its houses, standing on the ground as it lies under each, but for any reaching past
-        // the settlement's edge into a river or a lake, or under a bridge: kits/yards.js)
-        const dry = (yard) => pointsOf(yard).every(([x, y]) => {
-            const under = x >= 0 && y >= 0 && x < CHUNK * CHUNKS && y < CHUNK * CHUNKS ? this.overworld.chunkAt?.(x, y) : null;
-            const k = under ? (Math.floor(y) - under.y0) * CHUNK + (Math.floor(x) - under.x0) : -1;
-
-            return !under || (under.water[k] === WET.none && !under.bridge[k]);
-        });
-        const yards = (this.overworld.settlements?.yardsIn?.(cx, cy) ?? []).filter(dry).map((yard) => ({ ...yard, lie: lieOf(yard, this.groundAt) }));
+        // its houses that are there (core/settlements.js), standing on the ground as it lies under
+        // each: kits/yards.js)
+        const yards = (this.overworld.settlements?.yardsIn?.(cx, cy) ?? []).map((yard) => ({ ...yard, lie: lieOf(yard, this.groundAt) }));
         const pieces = [...(this.overworld.settlements?.piecesIn(cx, cy).filter(({ kind }) => kind !== "tree") ?? []), ...yards, ...(this.overworld.sites?.piecesIn(cx, cy) ?? [])];
 
         if (pieces.length) {
