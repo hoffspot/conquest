@@ -1809,3 +1809,35 @@ converted data is to be measured in M8 against today's hm08 data.
     a metre, half and coarser on low),
     `test/town3d.test.js` (the grass beside a road worn, raggedly, less a square further off; none three squares off or
     beside cobbles).
+- **2026-10-02, M7b-2c built** (the grass's look and the fields carried to the horizon: the
+  last of M7b-1's "Next" and M7b-1b's "Not yet"):
+  - **Why:** past where the tall grass is drawn (28 m on medium, 40 m on high), and everywhere on
+    low where none is, the ground was a bright lawn, so a golden meadow ended in a line and low
+    looked like a park. The fields (M7b-1b) stopped where the chunks' ground gave way to the
+    ground as it's seen from afar (100–150 m), so the farmland past them was one flat colour.
+  - **Built:**
+    - the grass look afar (`ground.js GRASS_AFAR`, `grassAfar`; `grassmap.js grassLooks`;
+      `landColours`' `grass`, a texel a cell): each land's grass tips' colour, dried as the land
+      is, and how thick it grows, laid over the ground as dark as the drawn grass is in the mass
+      (`bright` 0.3 of its tips), in clumps, golden in dry patches, none where it's bare or up in
+      the rock, lighter and darker as the grass's picture is (to the power `detail`, 1.6) so it
+      isn't flat; faded in over the tall grass's last 30% as the blades fade out, everywhere on
+      low, and in the far land's colour too;
+    - the fields afar (`ground.js FIELDS_GLSL`, `farFields`, `FIELDS_AFAR`; `landColours`'
+      `farm` and `seed`): `fieldAt` written in GLSL (`uint` maths: the same hash, block edges,
+      verge, pasture, strips, baulks, narrowest strip and crops' odds, from `core/fields.js`'s
+      own exported numbers), drawn in the chunks' far band and in the far land: each strip its
+      crop's colour on soil, the baulks left out past 250 m, the verges and hedges a dark band
+      past 300 m; on medium and high (`QUALITY.fields`, `FAR_FIELDS`).
+  - **Cost:** no triangles or draws. The grass look afar is one texture read and a few dozen
+    operations a pixel of grass; the fields afar about eight integer hashes and one texel fetch
+    a pixel, only in the far band and the far land (none on low).
+  - **Pictures:** before/after sheet sent in the session (low from the follow camera and at eye
+    height, medium past the tall grass, the farmland from 45 m up).
+  - **Versions:** none (the drawing's alone).
+  - **Not yet:** flat slabs; bushes at grass patches' and woods' edges (made the hedges' way).
+  - **Tests:** `test/grass.test.js` (each land's look afar: its density, the savannah nearer
+    straw than the meadow; a texel a cell, with which are farmland; the shader's numbers the
+    core's; fields afar on medium and high only), `e2e/building-lab.spec.js` (the GPU's fields
+    drawn a pixel a metre over 16,384 metres of farmland and round it, every one the same as
+    `fieldAt`'s; changing one constant in the shader makes thousands differ).

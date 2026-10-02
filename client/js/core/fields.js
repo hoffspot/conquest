@@ -10,8 +10,8 @@
 //   too narrow to plough where a block runs out left as grass (a headland, with the verge).
 //
 // All of it from the square's own whole metres and the world's seed, by integer hashing alone: the
-// same in every browser (the ground's shader works out which way a block's furrows run the same
-// way: world/ground.js).
+// same in every browser, and on the GPU (world/ground.js FIELDS_GLSL works the fields out the same
+// way for the ground seen from afar).
 
 /**
  * The fields' layout: how wide a block is (metres) and how far its edges wander; the grass verge
@@ -32,17 +32,17 @@ export const sown = (crop) => crop >= CROP.ploughed && crop <= CROP.greens;
  */
 export const ALONG = 8;
 
-// The narrowest strip worth ploughing (metres): narrower, where its block runs out, it's grass
-const NARROWEST = 4;
+/** The narrowest strip worth ploughing (metres): narrower, where its block runs out, it's grass. */
+export const NARROWEST = 4;
 
-// How likely each crop is in a strip (in hundredths, in CROP's order from ploughed)
-const CROP_ODDS = [
+/** How likely each crop is in a strip (in hundredths, in CROP's order from ploughed). */
+export const CROP_ODDS = Object.freeze([
     [CROP.ploughed, 34],
     [CROP.wheat, 26],
     [CROP.barley, 12],
     [CROP.greens, 14],
     [CROP.fallow, 14],
-];
+]);
 
 /**
  * An integer hash of three whole numbers (0 to 2³² - 1), as world/ground.js's shader works it

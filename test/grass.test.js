@@ -1,14 +1,17 @@
 // The tall grass (world/grassmap.js says where it grows, how tall and how dry; world/grass.js draws
 // it round the player): the same every time, only on open grass, as thick and as tall as its land
 // grows it and varied across it, gathered round what stands, trodden beside the ways, drier on the
-// sunny side; drawn in two bands round the player as far as each quality asks, none on low
+// sunny side; drawn in two bands round the player as far as each quality asks, none on low; past
+// where it's drawn (and on low) the ground takes its look, and the fields are seen from afar
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
-import { ALONG } from "../client/js/core/fields.js";
+import { ALONG, CROP_ODDS, FIELDS, NARROWEST } from "../client/js/core/fields.js";
 import { buildWorld, CHUNK, WET } from "../client/js/core/overworld.js";
 import { GROUND } from "../client/js/core/setpieces/pieces.js";
+import { BIOMES, CELLS } from "../client/js/core/worldplan/plan.js";
 import { GRASS_BANDS, TallGrass } from "../client/js/world/grass.js";
-import { CROP_STANDS, GRASS_LANDS, GRASS_PATHS, GRASS_RINGS, grassMap } from "../client/js/world/grassmap.js";
+import { CROP_STANDS, GRASS_LANDS, GRASS_PATHS, GRASS_RINGS, grassLooks, grassMap } from "../client/js/world/grassmap.js";
+import { FIELDS_GLSL, landColours, STRAW } from "../client/js/world/ground.js";
 import { facingSun, SUN_FROM } from "../client/js/world/sun.js";
 import { QUALITY } from "../client/js/world/view.js";
 
@@ -168,6 +171,59 @@ describe("where the tall grass grows (world/grassmap.js)", () => {
         assert.ok(mean(sunny, 2) > mean(shaded, 2) + 40, `${mean(sunny, 2)} sunny, ${mean(shaded, 2)} shaded`);
         // (And thinner on the sunny side)
         assert.ok(mean(sunny, 0) < mean(shaded, 0), `${mean(sunny, 0)} sunny, ${mean(shaded, 0)} shaded`);
+    });
+});
+
+describe("the tall grass and the fields as they're seen from afar (world/ground.js)", () => {
+    it("gives the ground each land's grass where the tall grass isn't drawn: its tips' colour, dried as the land is, and as thick as it grows", () => {
+        const looks = grassLooks();
+
+        assert.equal(looks.length, BIOMES.length);
+
+        for (const [k, { id }] of BIOMES.entries()) {
+            const grass = GRASS_LANDS[id];
+
+            assert.equal(looks[k][3], Math.round((grass?.density ?? 0) * 255), id);
+        }
+
+        // (The savannah's dry and golden, nearer straw than the meadow's)
+        const [meadow, savannah] = ["meadow", "savannah"].map((id) => looks[BIOMES.findIndex((land) => land.id === id)]);
+        const toStraw = (look) => Math.hypot(...look.slice(0, 3).map((v, i) => v - STRAW[i]));
+
+        assert.ok(toStraw(savannah) < toStraw(meadow));
+        assert.ok(savannah[3] > 0 && meadow[3] > 0);
+
+        // (Laid a texel to each of the plan's cells, with which cells are farmland)
+        const world = buildWorld({ seed: 1 });
+        const land = landColours(world.plan, looks);
+        const farmland = BIOMES.findIndex(({ id }) => id === "farmland");
+        const [grass, farm] = [land.userData.grass.image.data, land.userData.farm.image.data];
+
+        assert.equal(land.userData.seed, world.plan.seed);
+
+        for (let k = 0; k < CELLS * CELLS; k += 97) {
+            assert.deepEqual([...grass.slice(k * 4, k * 4 + 4)], looks[world.plan.biome[k]]);
+            assert.equal(farm[k * 4], world.plan.biome[k] === farmland ? 255 : 0);
+        }
+    });
+
+    it("works the fields out on the GPU from the core's own numbers", () => {
+        // (core/fields.js fieldAt, written out in the shader's terms: its block, jitter, verge,
+        // pasture, strips, baulk, narrowest strip and crops' odds)
+        assert.ok(FIELDS_GLSL.includes(`k * ${FIELDS.block} +`) && FIELDS_GLSL.includes(`% ${2 * FIELDS.jitter + 1}u) - ${FIELDS.jitter}`));
+        assert.ok(FIELDS_GLSL.includes(`int[${FIELDS.strips.length}](${FIELDS.strips.join(", ")})`));
+        assert.ok(FIELDS_GLSL.includes(`< ${Math.ceil(FIELDS.pasture * 100)}) return 0`) && FIELDS_GLSL.includes(`width + ${FIELDS.baulk}`) && FIELDS_GLSL.includes(`< ${NARROWEST}) return 0`));
+        assert.ok(FIELDS_GLSL.includes("374761393u") && FIELDS_GLSL.includes("2246822519u") && FIELDS_GLSL.includes("fieldSeed + 73") && FIELDS_GLSL.includes("fieldSeed + 79"));
+
+        let total = 0;
+
+        for (const [crop, chance] of CROP_ODDS) {
+            total += chance;
+            assert.ok(FIELDS_GLSL.includes(`if (odds < ${total}) return ${crop};`));
+        }
+
+        // (Drawn on medium and high; e2e/building-lab.spec.js checks the GPU's against the core's)
+        assert.deepEqual([QUALITY.low.fields, QUALITY.medium.fields, QUALITY.high.fields], [0, 1, 1]);
     });
 });
 

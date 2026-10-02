@@ -774,11 +774,11 @@ drawn whole whichever way the camera looks (about 90 draw calls and 170,000 tria
 to High (suggested for the device until it's moved: older phones low, phones medium, computers
 high); debug mode can change it too. The game aims at 60 frames a second at every level:
 
-| Level | Pixels | Shadow map | Antialiasing | Hair | Skin textures | Undergrowth | Tall grass | Motes | Far land | Far trees |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Low (older phones) | 1× | 1024 | no | a fifth of the strands | 512 | half | none | none | 1 km | none |
-| Medium (phones) | up to 1.5× | 2048 | yes | 30% | 512 | three-quarters | to 12 m, thinner to 28 m | 300 | 2 km | to 700 m |
-| High (computers) | up to 2× | 2048 | yes | 45% | 1024 | all of it | to 18 m, thinner to 40 m | 600 | 4 km | to 1.2 km |
+| Level | Pixels | Shadow map | Antialiasing | Hair | Skin textures | Undergrowth | Tall grass | Motes | Far land | Far trees | Fields afar |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Low (older phones) | 1× | 1024 | no | a fifth of the strands | 512 | half | none (its look on the ground) | none | 1 km | none | no |
+| Medium (phones) | up to 1.5× | 2048 | yes | 30% | 512 | three-quarters | to 12 m, thinner to 28 m | 300 | 2 km | to 700 m | yes |
+| High (computers) | up to 2× | 2048 | yes | 45% | 1024 | all of it | to 18 m, thinner to 40 m | 600 | 4 km | to 1.2 km | yes |
 
 **How often it's drawn** (`app/pacing.js`). The browser asks for a frame each time the screen
 refreshes: 60 times a second on most screens, 90, 120 or 144 on many phones and monitors. Drawn
@@ -884,6 +884,18 @@ drawn with a tiling picture of leaves, lit as one soft mass, casting shadows. Sp
 cut out of their picture as the trees' leaves are, stand out of its top and sides, sixteen a
 metre (half on low), so its outline is leaves, not a line. Nothing else grows in it (no
 undergrowth, no tall grass); the drawing's alone, in no one's way.
+
+**The fields seen from afar** (terrain plan M7b-2c; `ground.js FIELDS_GLSL`, `FIELDS_AFAR`): past
+where the chunks' ground turns to the ground as it's seen from afar (100 to 150 metres), and in
+the far land to the horizon, the fields go on: the ground's shader works out each point's field
+and strip itself, in the same 32-bit integer hashing as `fieldAt` and from the same numbers, so
+it agrees with the rules metre for metre (a test draws the GPU's fields over farmland and checks
+every metre against the core's). It needs only the world's seed and which of the plan's cells are
+farmland (`landColours`' `farm`, a texel a cell). Each strip is its crop's colour on its soil
+(fallow and pasture its grass); past 250 metres the baulks between strips are left out (a metre
+of grass there is less than a pixel), and past 300 metres the verges and hedges along the blocks'
+edges are a dark band, where the hedges themselves are no longer drawn. On medium and high
+(`QUALITY.fields`); on low the far land stays the farmland's colour.
 
 **Where something stands on it** (a house, a wall, a rock, a trunk: the squares that can't be
 seen through), less of the sky reaches the ground, so less of the light from all round (view.js)
@@ -1115,6 +1127,14 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     blades, so Apple's GPUs draw nothing behind them.
   - **The ground under it** is darker and the grass's own colour as thick as it grows, so the
     gaps between the blades read as more grass (`ground.js GRASS_UNDER`).
+  - **Past where it's drawn, and on low** (terrain plan M7b-2c; `ground.js GRASS_AFAR`), where no
+    blades are, the ground takes the tall grass's look so the land doesn't turn to lawn: each
+    land's grass (`grassLooks`, a texel a cell of the plan: its tips' colour, dried as the land
+    is, and how thick it grows) as dark as the grass drawn is in the mass (its blades' bases and
+    the shadows among them), in clumps, golden in the dry patches, none where it's worn bare or
+    up in the rock, and lighter and darker as the grass's picture is, more so, so it isn't a flat
+    colour. It fades in over the far band's last stretch as the blades fade out, and the far land
+    carries it to the horizon. One more texture read a pixel.
   - **Its map** is worked out for the nine chunks round the player as they and the chunks round
     them are drawn, a few rows at a time in 2 ms a frame (a chunk's about 10–20 ms in all), into
     a texture four chunks a side that wraps as the player goes.

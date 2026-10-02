@@ -29,6 +29,7 @@ import { Woodland } from "./art/kits/trees.js";
 import { featureLooks, featureMesh, Growth, sowing, TILE, undergrowthLooks, undergrowthMesh } from "./art/kits/wilds.js";
 import { hedgeBuilding, hedgeMesh, hedgeRuns } from "./art/kits/hedges.js";
 import { disposeChunkGround, disposeGrass, groundMaterial, landColours, layingGround, respaceGround } from "./ground.js";
+import { grassLooks } from "./grassmap.js";
 import { Layouts } from "./layouts.js";
 import { Terrains } from "./terrains.js";
 import { MARGIN, primingWater, shoreDistances, UNDER_BANKS, waterSheet } from "./water.js";
@@ -93,7 +94,7 @@ export class Chunks {
         /** How thick the undergrowth grows (1 as the lands have it; less on slower devices, 0 none). */
         this.undergrowth = undergrowth;
         this.overworld = world.maps.town;
-        this.land = landColours(world.plan);
+        this.land = landColours(world.plan, grassLooks());
         this.woodland = new Woodland();
 
         // (The settlements a little further off laid out ahead, off the page's thread; and the
@@ -523,6 +524,8 @@ export class Chunks {
         this.terrains?.dispose();
         disposeGrass(this.land);
         this.land.userData.home?.forEach((home) => home.dispose());
+        this.land.userData.grass?.dispose();
+        this.land.userData.farm?.dispose();
         this.land.dispose();
         this.object.removeFromParent();
     }

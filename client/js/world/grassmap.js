@@ -28,9 +28,9 @@ import { fractal } from "../core/noise.js";
 import { CHUNK, CHUNKS, WET } from "../core/overworld.js";
 import { GROUND } from "../core/setpieces/pieces.js";
 import { SLOPE_CLASS } from "../core/terrain/height.js";
-import { CELL } from "../core/worldplan/plan.js";
+import { BIOMES, CELL } from "../core/worldplan/plan.js";
 import { LOOKS } from "./art/kits/wilds.js";
-import { ALPINE, CROP_COLOURS, PATCHES, patchNoise } from "./ground.js";
+import { ALPINE, CROP_COLOURS, PATCHES, patchNoise, STRAW } from "./ground.js";
 import { facingSun } from "./sun.js";
 
 /**
@@ -54,9 +54,6 @@ export const GRASS_LANDS = Object.freeze({
     mountain: { density: 0.4, height: [0.25, 0.6], dry: 0.45 },
     beach: { density: 0.2, height: [0.35, 0.8], dry: 0.6 },
 });
-
-// Dry grass's colour at its tips (sRGB): golden straw
-const STRAW = [0xd6, 0xb2, 0x58];
 
 /**
  * The crops standing in the fields (core/fields.js CROP's; ploughed strips none): how tall
@@ -145,6 +142,19 @@ function patchAt(x, y, metres, offset = [0, 0]) {
         const bottom = at(i, j + 1, c) + (at(i + 1, j + 1, c) - at(i, j + 1, c)) * s;
 
         return top + (bottom - top) * t;
+    });
+}
+
+/**
+ * Each land's grass as it's seen where the tall grass isn't drawn (ground.js landColours and
+ * GRASS_AFAR), in BIOMES' order: [its tips' colour dried towards straw as the land is (sRGB), how
+ * thick it grows (0 to 255)]; none for lands that grow none.
+ */
+export function grassLooks() {
+    return BIOMES.map(({ id }) => {
+        const [density, , , dry, r, g, b] = landGrass(id);
+
+        return [...[r, g, b].map((c, k) => Math.round(c + (STRAW[k] - c) * dry)), Math.round(density * 255)];
     });
 }
 

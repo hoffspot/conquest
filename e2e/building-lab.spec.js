@@ -111,6 +111,64 @@ test("draws the land itself: its features, and the undergrowth near, swaying, in
     expect(land.stats.calls).toBeLessThan(70);
 });
 
+test("works out the fields seen from afar on the GPU just as the rules do, metre by metre", async ({ page }) => {
+    await page.goto("/building-lab.html?seed=7&show=street");
+    await page.waitForFunction(() => window.buildingLab?.state.ready, null, { timeout: 120000 });
+
+    // (The ground's shader's cropAt, world/ground.js FIELDS_GLSL, drawn a pixel a metre over
+    // farmland and the land round it, against core/fields.js fieldAt)
+    const fields = await page.evaluate(async () => {
+        const THREE = await import("three");
+        const { FIELDS_GLSL, landColours } = await import("/js/world/ground.js");
+        const { fieldAt } = await import("/js/core/fields.js");
+        const { BIOMES, CELL, CELLS, planWorld } = await import("/js/core/worldplan/plan.js");
+        const plan = planWorld(1);
+        const land = landColours(plan);
+        const renderer = new THREE.WebGLRenderer();
+        const size = 64;
+        const target = new THREE.WebGLRenderTarget(size, size);
+        const material = new THREE.ShaderMaterial({
+            uniforms: { farmMap: { value: land.userData.farm }, fieldSeed: { value: land.userData.seed }, origin: { value: new THREE.Vector2() } },
+            vertexShader: "void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }",
+            fragmentShader: `uniform sampler2D farmMap;\nuniform int fieldSeed;\nuniform vec2 origin;\n${FIELDS_GLSL}\nvoid main() { gl_FragColor = vec4(float(cropAt(origin + floor(gl_FragCoord.xy) + 0.5, true, false) + 1) / 255.0, 0.0, 0.0, 1.0); }`,
+        });
+        const scene = new THREE.Scene().add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material));
+        const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+        const pixels = new Uint8Array(size * size * 4);
+        const farmland = BIOMES.findIndex(({ id }) => id === "farmland");
+        const cell = (v) => Math.min(CELLS - 1, Math.max(0, Math.floor(v / CELL)));
+        const found = { same: 0, differ: 0, sown: 0, crops: new Set() };
+
+        for (const [x0, y0] of [[2950, 5380], [3080, 5440], [3016, 5330], [1200, 2600]]) {
+            material.uniforms.origin.value.set(x0, y0);
+            renderer.setRenderTarget(target);
+            renderer.render(scene, camera);
+            renderer.readRenderTargetPixels(target, 0, 0, size, size, pixels);
+
+            for (let y = 0; y < size; y++) {
+                for (let x = 0; x < size; x++) {
+                    const field = fieldAt(plan.seed, x0 + x, y0 + y);
+                    const want = plan.biome[cell(field.middle[1]) * CELLS + cell(field.middle[0])] === farmland ? field.crop : 0;
+
+                    found[pixels[(y * size + x) * 4] - 1 === want ? "same" : "differ"]++;
+                    found.sown += want > 0 ? 1 : 0;
+                    found.crops.add(want);
+                }
+            }
+        }
+
+        renderer.setRenderTarget(null);
+        [target, material, renderer, land.userData.farm, land.userData.grass, ...land.userData.home, land].forEach((thing) => thing.dispose());
+
+        return { ...found, crops: found.crops.size };
+    });
+
+    expect(fields.differ).toBe(0);
+    expect(fields.same).toBe(4 * 64 * 64);
+    expect(fields.sown).toBeGreaterThan(2000);
+    expect(fields.crops).toBeGreaterThan(4);
+});
+
 test("draws a people's homeland: its own ground, its own trees, and its own things lying about", async ({ page }) => {
     await page.goto("/building-lab.html?seed=7&people=orc&show=home");
     await page.waitForFunction(() => window.buildingLab?.state.ready, null, { timeout: 120000 });
