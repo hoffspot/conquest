@@ -19,6 +19,7 @@ import { RACES } from "../core/worldplan/races.js";
 import { paintLayer, SIZE } from "./art/engine/painters.js";
 import { textureCanvas } from "./art/engine/materials.js";
 import { blurred } from "./fields.js";
+import { splitAlong } from "./far/levels.js";
 import { FAR_FOG } from "./fog.js";
 import { causticTexture, FIELD, SHORE, WATER_DETAIL } from "./water.js";
 import { TREE_WIND } from "./art/kits/trees.js";
@@ -50,6 +51,13 @@ const GRASS_METRES = 5;
 // (and, at the water, where it's rock all the same: steeper than a bank)
 const ROCK_METRES = 7;
 const ROCK_FROM = Object.freeze({ start: 0.84, all: 0.7, sheer: 0.45 });
+
+/**
+ * Rock close by: its picture again, `metres` a copy (four times finer than ROCK_METRES) and
+ * turned, its light and shade laid over the coarser copies (by as much as `strength`) where they'd
+ * blur, fully within `near` metres of the camera and fading out by `far`.
+ */
+export const ROCK_DETAIL = Object.freeze({ metres: 1.7, near: 8, far: 28, strength: 0.65 });
 
 /**
  * Up high, the grass gives way to rock, then snow: rock reaching onto gentler slopes from `rock[0]`
@@ -1043,6 +1051,18 @@ if (steep > 0.0) {
     vec3 fromAbove = mix(tileAt(${tile(TILE.rock)}, vGround / ${ROCK_METRES.toFixed(1)}).rgb, tileAt(${tile(TILE.rock)}, turned * vGround / ${(ROCK_METRES * 3.1).toFixed(1)}).rgb, 0.45);
     vec3 fromSide = mix(tileAt(${tile(TILE.rock)}, across / ${ROCK_METRES.toFixed(1)}).rgb, tileAt(${tile(TILE.rock)}, turned * across / ${(ROCK_METRES * 3.1).toFixed(1)}).rgb, 0.45);
     vec3 rock = mix(fromAbove, fromSide, smoothstep(0.75, 0.5, vUp.y));
+#ifdef USE_FOG
+    // (Close by, a finer copy's light and shade over them: ROCK_DETAIL)
+    float closeBy = 1.0 - smoothstep(${ROCK_DETAIL.near.toFixed(1)}, ${ROCK_DETAIL.far.toFixed(1)}, vFogDepth);
+
+    if (closeBy > 0.0) {
+        mat2 twisted = mat2(0.6, 0.8, -0.8, 0.6);
+        vec3 fine = mix(tileAt(${tile(TILE.rock)}, twisted * vGround / ${ROCK_DETAIL.metres.toFixed(2)}).rgb, tileAt(${tile(TILE.rock)}, twisted * across / ${ROCK_DETAIL.metres.toFixed(2)}).rgb, smoothstep(0.75, 0.5, vUp.y));
+        float shade = dot(fine, vec3(0.3333)) / max(0.05, dot(tileMean(${tile(TILE.rock)}), vec3(0.3333)));
+
+        rock *= mix(1.0, clamp(shade, 0.55, 1.45), closeBy * ${ROCK_DETAIL.strength.toFixed(2)});
+    }
+#endif
     rock = mix(rock, rock * land.rgb / max(0.2, dot(land.rgb, vec3(0.3333))), land.a * 0.35);
     ground = mix(ground, rock * (0.85 + 0.3 * variation), steep);
 }
@@ -1250,9 +1270,11 @@ function bedOf(overworld, x, y) {
 // with its corners further apart, the gap between them is hidden behind it
 const SKIRT = 2;
 
-// Each spacing's triangles, shared by every chunk's ground drawn at it: each square's two split
-// from its north-west corner to its south-east (as core/terrain/ground.js reads heights between
-// corners), and the skirt round its edges
+// The triangles of the chunks' ground drawn a metre apart, shared by them all: each square's two
+// split from its north-west corner to its south-east (as core/terrain/ground.js reads heights
+// between corners, so the ground's drawn just where everything stands on it), and the skirt round
+// its edges. Drawn coarser, each chunk's own: each square split along its more level diagonal
+// (far/levels.js splitAlong), so ridges seen from further off don't run in steps
 const INDICES = new Map();
 
 // The corners round a chunk's edge, in order (clockwise from its north-west corner, as seen from
@@ -1282,29 +1304,43 @@ function rim(count) {
 function indicesOf(count) {
     if (!INDICES.has(count)) {
         const side = count + 1;
-        const around = rim(count);
-        const indices = [];
+        const indices = new Uint32Array((count * count + rim(count).length) * 6);
 
         for (let j = 0; j < count; j++) {
             for (let i = 0; i < count; i++) {
                 const [nw, ne, sw, se] = [j * side + i, j * side + i + 1, (j + 1) * side + i, (j + 1) * side + i + 1];
 
-                indices.push(nw, sw, se, nw, se, ne);
+                indices.set([nw, sw, se, nw, se, ne], (j * count + i) * 6);
             }
         }
 
-        // (The skirt: each edge's corner joined to its copy hanging below it, facing out)
-        around.forEach(([i, j], k) => {
-            const [a, b] = [j * side + i, around[(k + 1) % around.length][1] * side + around[(k + 1) % around.length][0]];
-            const [a2, b2] = [side * side + k, side * side + ((k + 1) % around.length)];
-
-            indices.push(a, b, b2, a, b2, a2);
-        });
-
-        INDICES.set(count, new THREE.BufferAttribute(new Uint32Array(indices), 1));
+        INDICES.set(count, new THREE.BufferAttribute(skirted(count, indices), 1));
     }
 
     return INDICES.get(count);
+}
+
+// A coarser chunk's triangles, its corners' heights (`levels`, row by row) given
+function splitIndices(count, levels) {
+    return new THREE.BufferAttribute(skirted(count, splitAlong(levels, count, rim(count).length * 6)), 1);
+}
+
+// The skirt's triangles, after the ground's in `indices`: each edge's corner joined to its copy
+// hanging below it, facing out
+function skirted(count, indices) {
+    const side = count + 1;
+    const around = rim(count);
+    const from = count * count * 6;
+
+    around.forEach(([i, j], k) => {
+        const [i2, j2] = around[(k + 1) % around.length];
+        const [a, b] = [j * side + i, j2 * side + i2];
+        const [a2, b2] = [side * side + k, side * side + ((k + 1) % around.length)];
+
+        indices.set([a, b, b2, a, b2, a2], from + k * 6);
+    });
+
+    return indices;
 }
 
 /**
@@ -1321,6 +1357,7 @@ export function groundGeometry(heights, step = 1, heightOf = () => null) {
     const normals = new Float32Array(positions.length);
     const corners = CHUNK + 1;
     const at = (i, j) => (i >= 0 && j >= 0 && i <= CHUNK && j <= CHUNK ? heights[j * corners + i] : heightOf(i, j));
+    const levels = step > 1 ? new Float32Array(side * side) : null;
 
     for (let j = 0; j < side; j++) {
         for (let i = 0; i < side; i++) {
@@ -1339,6 +1376,10 @@ export function groundGeometry(heights, step = 1, heightOf = () => null) {
             normals[k] = -dx / length;
             normals[k + 1] = 1 / length;
             normals[k + 2] = -dz / length;
+
+            if (levels) {
+                levels[j * side + i] = here;
+            }
         }
     }
 
@@ -1354,7 +1395,7 @@ export function groundGeometry(heights, step = 1, heightOf = () => null) {
 
     const geometry = new THREE.BufferGeometry();
 
-    geometry.setIndex(indicesOf(count));
+    geometry.setIndex(levels ? splitIndices(count, levels) : indicesOf(count));
     geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
     geometry.computeBoundingSphere();

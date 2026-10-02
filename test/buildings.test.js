@@ -755,6 +755,44 @@ describe("the atlas (engine/atlas.js)", () => {
         assert.equal(layerOf(material("embers")), -1);
     });
 
+    it("paints natural rock as broken faces without a seam, with only a few deep cracks", () => {
+        const size = 128;
+        const rock = paintLayer("rock", size);
+        const shade = (x, y) => {
+            const i = (((y + size) % size) * size + ((x + size) % size)) * 4;
+
+            return rock[i] + rock[i + 1] + rock[i + 2];
+        };
+        let [within, across] = [0, 0];
+
+        // (Tiling: from its right edge round to its left no more of a step than between any two
+        // pixels side by side, nor from its foot round to its top)
+        for (let k = 0; k < size; k++) {
+            for (let n = 1; n < size; n++) {
+                within += Math.abs(shade(n, k) - shade(n - 1, k)) + Math.abs(shade(k, n) - shade(k, n - 1));
+            }
+
+            across += Math.abs(shade(0, k) - shade(size - 1, k)) + Math.abs(shade(k, 0) - shade(k, size - 1));
+        }
+
+        assert.ok(across / (2 * size) <= (within / (2 * size * (size - 1))) * 1.25, `${(across / (2 * size)).toFixed(1)} round the edges, ${(within / (2 * size * (size - 1))).toFixed(1)} within`);
+
+        // (Its relief: few of its pixels sunk deep below the rest, the cracks along some faces'
+        // edges, not wandering all over it)
+        const relief = [];
+
+        for (let i = 3; i < rock.length; i += 4) {
+            relief.push(rock[i]);
+        }
+
+        relief.sort((a, b) => a - b);
+
+        const middle = relief[relief.length >> 1];
+        const deep = relief.filter((height) => height < middle - 50).length / relief.length;
+
+        assert.ok(deep > 0.002 && deep < 0.03, `${(deep * 100).toFixed(1)}% sunk deep`);
+    });
+
     it("paints each layer the same every time, with relief (mortar lower than brick)", () => {
         const [a, b] = [paintLayer("brick", 64), paintLayer("brick", 64)];
 

@@ -2397,3 +2397,41 @@ converted data is to be measured in M8 against today's hm08 data.
     up); `test/buildings.test.js` (an inside's three atlas meshes); `e2e/pellagos.spec.js` (the
     tavern: the sun in at the windows, the lamps the room's flames, the camera dragged up under
     the ceiling).
+- **2026-10-02, M7d-1 built** (the land looking natural, §9: the first fixes from the tour):
+  - **The tour:** 19 spots on seed 1, one deep in each kind of land and a river, a lakeshore, a
+    coast, a mountain pass, the highest peak and the steepest slope, each from a walker's eye,
+    the follow camera's height and 70 m up, on medium. Its cameras are kept (the session's
+    tour script and spots) for the later parts of M7d to be checked against.
+  - **Found, the rock:** the rock's picture (cliffs, mountains, the volcano's slopes, boulders,
+    standing stones) had dark cracks wandering all over it in loops, worms from close by and a
+    pattern from afar; and from close by it was a blur, its texels each a hand across.
+    - **Fixed** (`art/engine/painters.js` `rock`): broad faces of broken stone, each a shade of
+      its own, their edges wavering; bedding layers across them; long cracks along only some of
+      the faces' edges, each its own depth and broken off along its length, finer ones fainter;
+      pale flecks off the cracks. The four rocks (grey, red, dark, pale) all painted so.
+    - **Fixed** (`world/ground.js` `ROCK_DETAIL`): within 8 m of the camera, fading out by
+      28 m, the light and shade of a copy four times finer (1.7 m across, turned) laid over the
+      rock. Two more texture reads, on rock alone and only that near.
+  - **Found, the ridges:** from high up, a ridge running north-east to south-west was a row of
+    teeth: every square of the far land and of the chunks drawn coarser split the same way, so
+    a ridge running across the split stepped from square to square.
+    - **Fixed** (`world/far/levels.js` `splitAlong`): each square split along whichever of its
+      diagonals is the more level, worked out with the heights (in the far land's worker, and
+      for each chunk drawn more than a metre apart). Chunks drawn a metre apart keep the split
+      the rules read heights by, so the ground's drawn just where everything stands on it.
+  - **Cost:** no more triangles or draws (each view of the six rocky spots drawn before and
+    after from the same camera: the same calls and triangles but for creatures passing). Each
+    far level and each coarser chunk has triangles of its own rather than shared: 49 KB a far
+    level (196 KB on medium, against 49 KB shared before) and 8 to 28 KB a coarser chunk. Two
+    texture reads more for rock within 28 m.
+  - **Pictures:** before/after sheets sent in the session (the peak, the steepest slope, a
+    mountainside, the volcano, the snow and the coast; eye, follow and high up each).
+  - **Versions:** none (the drawing's alone).
+  - **Tests:** `test/far.test.js` (a square split along its ridge either way, every triangle
+    facing up; every square of a far level split along its more level diagonal);
+    `test/land.test.js` (a chunk a metre apart split as the rules read it, the same triangles
+    for all; four metres apart, along its ridge and its more level diagonals, its own, its
+    skirt after); `test/buildings.test.js` (the rock's picture tiles without a seam, with only
+    a few deep cracks: the old picture fails it).
+  - **Next in M7d:** the other lands looked over in the tour's pictures (the plains and fields,
+    water's edges, marsh, sand and snow), and whatever gives them away fixed the same way.
