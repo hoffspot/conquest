@@ -44,6 +44,12 @@ async function playing(page, address) {
 
         throw new Error(`Not playing: ${JSON.stringify(where)}; errors: ${JSON.stringify(errors.slice(0, 5))}`, { cause: error });
     }
+
+    // (The loader counted its steps up to their total, never past it)
+    const loaded = await page.evaluate(() => window.pellagos.game.loaded);
+
+    expect(loaded.most, `counted to ${loaded.most} of ${loaded.total}`).toBeLessThanOrEqual(loaded.total);
+    expect(loaded.done).toBe(loaded.total);
 }
 
 // Play on (the game stopped) till `done` (a function run in the page) says so, or `seconds` of the

@@ -2293,7 +2293,10 @@ game plays on while it's open; a second finger (a pinch) closes it.
    seconds (in spiked boots too, a kick every other time). The hero's `boots` is saved with them.
 4. **Playing** (app/game.js): building the world, with a progress bar for each part (the ground,
    each piece of the town, the characters, compiling every shader before the first frame), then
-   the game. (The loading screen is drawn before the world starts to be built, so a tap on
+   the game. Its count ("120 of 202") is of steps known before it starts: each chunk round the
+   player (counted as it's drawn, however many goes it takes), each piece of the town and its
+   trees, each floor of the tavern, everyone dressed before the first frame (the orc, soldiers,
+   creatures, anyone else playing) and five more; it never passes its total, and ends on it. (The loading screen is drawn before the world starts to be built, so a tap on
    Continue shows at once; if getting the world ready fails, it says so, with Back to the title
    and Load afresh.) The world's planned while the skin atlas may still be being worked out in the
    skins worker, and waited for only once the characters are built; the buildings' atlas is
