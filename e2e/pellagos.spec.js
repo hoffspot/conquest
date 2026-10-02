@@ -2699,16 +2699,20 @@ test("a building gone into is marked on the minimap; holding the minimap opens t
             }
         }
 
-        for (let k = 0; k < 120; k++) {
+        // (A minute's walk, and on till they're there: they run out of breath and walk the last of
+        // it, so they're still going after a minute, and the minimap's held below with them stood
+        // still, any order it gives seen)
+        for (let k = 0; k < 240 && (k < 120 || player.order); k++) {
             game.advance(0.5, { render: false });
         }
 
-        return { before, marked, chunks: game.explored.chunksVisited, map: player.map };
+        return { before, marked, chunks: game.explored.chunksVisited, map: player.map, order: player.order?.type ?? null };
     });
 
     expect(found.before).toEqual({ icons: 0, chunks: 1 });
     expect(found.marked).toEqual({ icons: ["tavern"], minimap: ["tavern"], entered: ["home:tavern"] });
     expect(found.chunks).toBeGreaterThanOrEqual(3);
+    expect(found.order).toBeNull();
 
     // Held (not tapped): the world map, the game paused under it
     await page.evaluate(() => window.pellagos.game.start());
