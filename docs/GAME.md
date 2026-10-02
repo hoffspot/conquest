@@ -1129,10 +1129,34 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     each cloth a grid of 6 by 8 squares (a pennant's 8 by 3), every corner of it where its top is,
     where it hangs and which way it faces worked out in the vertex shader from the trees'
     breeze's time, lit as the buildings are, both sides of it. Cut out of its picture (alpha to
-    coverage); casting no shadow (its shadow would be where it hangs still). One draw a chunk
-    with any (and one for the start town's): 288 triangles on a human keep (two banners, two
-    pennants), 576 on a human castle, 384 on an orcs' keep, 192 on a cat folk's (measured, drawn
-    with them and without).
+    coverage). Its shadow falls where it is as it moves: its corners all lie at its top until
+    the vertex shader puts them in place, so it's drawn into the shadow map by a depth material
+    of its own running the same placing (`clothDepthMaterial`), cut out where the picture is. One
+    draw a chunk with any (and one for the start town's), and one more into the shadow map: 288
+    triangles on a human keep (two banners, two pennants), 576 on a human castle, 384 on an orcs'
+    keep, 192 on a cat folk's (measured, drawn with them and without).
+- **Awnings** (terrain plan M7c; `world/cloth.js` `awning`), over every market stall and a
+  better-off shop's counter, of canvas in the wind:
+  - **What hangs where:** a stall's awning (kits/props.js) runs from a rail 2.45 m up at its back
+    out past its front, falling 40 cm as it goes, a valance 24 cm deep sewn along its front; a
+    shop's (kits/house.js), on a house whose household is better off (`plan.wealth` over 0.4,
+    two shops in three), reaches 95 cm out from a rail over its counter, falling 35 cm, held
+    up by two iron rods, its valance 20 cm. A poorer shop keeps its upper shutter of boards
+    propped up as an awning, as before.
+  - **How they move:** pinned at its corners, an awning's middle lifts and settles on the
+    breeze (as much as 7 cm, gusting), the canvas shivering a little; its valance swings and
+    ripples as a banner does, a third as much.
+  - **How they're drawn:** four looks (`AWNINGS`), red, blue, green or gold stripes on a pale
+    ground (the gold on brown), each picked by the stall or shop, are painted beside the
+    banners in the cloths' picture: eight stripes from back to front, paler towards the back
+    where the sun's faded them, a seam where the valance is sewn on, the weave a little uneven,
+    and the valance's foot cut in scallops, one to a stripe. An awning is drawn from the upper
+    four fifths of its look's cell and its valance from the foot (`rows`), each a cloth of its
+    own (kinds `awning`, 8 by 4 squares, and `valance`, 8 by 2) in the chunk's one cloth mesh, so
+    they're no draws of their own. 96 triangles each, its shadow shading the counter under it;
+    the stall's boards painted as stripes before are gone (24 triangles fewer), a shop's
+    shutter swapped for a rail and two rods (about the same). The cloths' picture is four cells
+    wider (1,792 by 224 pixels, about 0.6 MB more with its mipmaps).
 - **Gardens, fences and washing lines** (terrain plan M7c; `art/kits/yards.js`), in the yards
   behind the peoples' houses (laid out with their towns: `layoutTown`'s `yards`, worked out once
   the town's laid out, from no draws of its own, so every town's laid out as it was):
@@ -1573,7 +1597,8 @@ facing south; each is turned about its middle to face the way the layout says:
   three, a city's mostly two or three; a cottage has rooms in its roof, lit by dormers) and
   which trade a house on the market or a main street keeps a shop for (baker, butcher,
   greengrocer, potter, weaver, chandler, cooper, cobbler, apothecary), its front open over a
-  counter of boards, its goods set out, the upper shutter propped up as an awning.
+  counter of boards, its goods set out: a striped awning over it if the household's better off
+  (moving in the breeze: *Awnings*), or else the upper shutter propped up as one.
 
   A house is laid out as a builder would (a facade grammar, after Wonka and Müller's split
   grammars; its sizes the carpenters', and BlendBuildingCreator's, studied not copied): its
@@ -1646,7 +1671,7 @@ facing south; each is turned about its middle to face the way the layout says:
   two posts, a windlass and bucket, a roof of shingles), barrels of staves bellying out under
   iron hoops, crates battened at their edges, sacks tied at the neck, a handcart, a stack of
   logs, a pile of stone, a rack of spears, an archery butt painted in rings, and market stalls
-  with striped awnings over counters of goods. (KayKit's models were the town's props before;
+  with striped canvas awnings (in the breeze: *Awnings*) over counters of goods. (KayKit's models were the town's props before;
   next to the houses they looked like toys.)
 - **Trees** (kits/trees.js) are grown for the game, nothing to download: seven kinds, each grown
   several ways (24 variants in all, each from its own seed, so the same every time), each tree

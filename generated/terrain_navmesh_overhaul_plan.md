@@ -787,6 +787,59 @@ environment"). Part of M7, as M7d, before the cliffs and rocks build on the land
   budgets (a fix that costs, such as triplanar rock, tiered by Visual quality); the tour's
   cameras kept so later work can be checked against them.
 
+**Day and night** (the user, 2026-10-02: "Do we need to plan for a day/night cycle, night sky
+features like moon and stars, and things like torches and a spell like "light" that creates a light
+globe following the player for 15 minutes or something"; then, chosen: a day of 60 minutes, nights
+dark enough to matter, Light from a tome at the guild, and time passed by renting a room at a
+tavern or by camping where no enemy's near). The world's sun has stood still at the same height
+since M6b, so "lit windows at dusk" above has no dusk to be lit in: they're part of this. M7e,
+after M7d (the land looked at by day first) and before the cliffs and rocks:
+- **The clock** (core, exact maths): one clock for the world, kept by whoever holds the world (the
+  host) and sent to everyone who joins and with every state they're sent, so every player sees the
+  same hour; a day 60 minutes of play (dawn about 4, day about 36, dusk about 6, night about 14),
+  starting a new world at mid-morning. Paused with the world. Kept in the save with the world.
+  `NET_VERSION` up (the clock's in the state).
+- **The sky:** the sun rising in the east, high at noon, setting in the west; the moon on the
+  other side of the sky, with a phase that turns over eight days of play; stars (a few hundred
+  points in one draw, twinkling a little, fading out at dawn); the sky's colours, the haze and the
+  height mist taking each land's look (M6b's `LOOKS`) through dawn's pinks, the day, dusk's golds
+  and reds and night's deep blue; the sun's light warm and low at dusk and dawn, the moon's cold
+  and faint at night, the hemisphere's ambient falling with them; the shadows from the sun by day
+  and the moon by night, fading through the turn between them.
+- **Lights** (cheap first, a few real ones):
+  - lit windows: an emissive term in the building atlas (`SHINES` 5, "lit from within": glass and
+    shop openings), warm and flickering a little window by window, coming on through dusk in some
+    windows first, a few going out late at night; inside the taverns, temples and guilds all night;
+  - torches in brackets by doors and gates, braziers at the guards' posts, lanterns on poles in
+    the bigger towns' squares, the guards on night watch carrying torches, camps' fires: each an
+    emissive flame (flickering in the vertex shader) and a soft additive glow round it, merged with
+    its chunk; their light on the ground round them from a small pool of real point lights (4 on
+    High, 2 on Medium, none on Low) given to the nearest to the camera, always in the scene so the
+    shaders never compile again as they're handed round;
+  - the Light spell's globe (below): one of the pool kept for it while it's lit.
+- **Night in play:**
+  - sight: everyone sees less far at night (the rules' sight range scaled by how much light's
+    about: the sky's, and within reach of a torch, a lit window, a fire or a Light globe, the
+    day's), so a hero with a torch or Light sees an ambush before it sees them; guards keep their
+    posts lit;
+  - the night's own creatures: some of the wild's (the undead, wolves, bats, the wight lord's
+    sort) out only after dark, or more of them; some shut in by day;
+  - **passing time:** a room at any tavern for a few gold (the barkeep), sleeping to the next dawn
+    or dusk; or camping: a fire built where no hostile is within 40 metres (and none comes while
+    the camp's made), slept by to dawn or dusk (a stamina and health rest too). In a world shared
+    with others, only the host passes the time (everyone's woken with them); a player who isn't
+    the host can still rest.
+- **The Light spell:** a tome on every adventurers' guild's shelves (about 10 gold); read, Light is
+  known: a globe of light rising from the caster's hand and following a little over their
+  shoulder for 15 minutes of play, lighting about 12 metres round them (their sight at night as by
+  day within it), shared cooldown, no school to grow; cast again to put it out.
+- **Budgets:** the sky's stars and moon 2 draws; the lights' glows merged with their chunks (no
+  draws of their own); the pool's point lights the cost (each lit fragment pays for each one in
+  range): measured on the phone profile, the pool cut on Medium and Low if it's over; nothing in
+  the rules costs more than a multiply.
+- **Pictures:** the same views at dawn, noon, dusk and midnight, before and after; a town at dusk
+  with its windows coming on and its torches lit; a road at night with Light.
+
 **As built in M7a** (row 4, the neutral sites, and row 6's decay pass for them; see the change
 log):
 - **Laid out in core** (`core/setpieces/neutral.js` `layoutNeutral`, exact maths): each kind's
@@ -865,7 +918,7 @@ log):
   - heavier stone bases (0.6–1.2 m plinths that follow the real ground);
   - retaining walls on pads;
   - signs of life rather than decay: chimney smoke, market awnings, banners, lit windows at
-    dusk, gardens, washing lines;
+    dusk (with the day and night, M7e, below), gardens, washing lines;
   - ruined versions of the building kinds only for the places no one keeps (and, later, a
     run-down quarter in some great cities);
   - one grand landmark per people, 30–60 m tall, with a far proxy.
@@ -1226,7 +1279,7 @@ pictures for anything that changes the look.
 | **M6b** | Atmosphere | Height fog (an exponential height mist under the distance haze); per-region look table and grade (§9 row 1); terrain material (rock and snow by height); cascades deferred to M7 | Pictures; budgets per tier met |
 | **M6c** | Things on the horizon | Far silhouettes and the world landmark (§9 row 2): the volcano's crater, fire and smoke | Pictures; budgets per tier met |
 | **M6d** | Far trees and rivers | Far trees (impostors fading in where the near trees fade out); far rivers on the far land | Pictures; budgets per tier met |
-| **M7** | Elden Ring environment pass | In §9's order: the landmark pass in the plan; neutral sites built, with the decay pass; a look round all the generated ground and high land so it looks natural, with no obvious polygons or out-of-place texturing (M7d, §9 *The land looking natural*); cliffs and rocks; churches, citadels, stone bridges; foliage palette, grass ring, weathering; cascaded shadows, measured, if they fit the budget | Pictures after each part; budgets met |
+| **M7** | Elden Ring environment pass | In §9's order: the landmark pass in the plan; neutral sites built, with the decay pass; a look round all the generated ground and high land so it looks natural, with no obvious polygons or out-of-place texturing (M7d, §9 *The land looking natural*); day and night, with the moon and stars, lit windows, torches, the Light spell, night in play and passing time (M7e, §9 *Day and night*); cliffs and rocks; churches, citadels, stone bridges; foliage palette, grass ring, weathering; cascaded shadows, measured, if they fit the budget | Pictures after each part; budgets met |
 | **M8** | Characters on Vitruvian | §10, as several PRs (conversion, body, garments, skin, face, LODs, clips) | Pictures; clipping tests green; budgets met |
 
 Each milestone follows the same steps:
@@ -2271,3 +2324,40 @@ converted data is to be measured in M8 against today's hm08 data.
   - **Tests:** `test/combat.test.js` (sent ahead, turned that way first, blocked or not);
     `e2e/pellagos.spec.js` (the camera turned to look the clearest way with the player facing
     off to the side: a swipe turns them the camera's way and sends them running along it).
+- **2026-10-02, plan:** the user asked whether to plan "for a day/night cycle, night sky features
+  like moon and stars, and things like torches and a spell like "light" that creates a light globe
+  following the player for 15 minutes or something", and chose a day of 60 minutes, nights dark
+  enough to matter (sight shorter, creatures of the night), Light from a tome at the guilds, and
+  passing time by renting a room at a tavern or camping where no enemy's near. Added to M7 as M7e
+  (§9 *Day and night*, and §12's M7 row), after M7d; M7c's lit windows moved into it, as they need
+  a dusk.
+- **2026-10-02, M7c-4 built** (market and shop awnings in the wind: §9's "signs of life", market
+  awnings; the chosen village pictures' striped stalls):
+  - **Why:** a stall's awning was boards painted in stripes, stiff as its counter, and every
+    shop's was its upper shutter propped up (in red cloth on a better-off house): nothing in a
+    market moved.
+  - **Built** (`world/cloth.js` `awning`, with the banners' cloth): an awning is a cloth of its
+    own kind, pinned along its back edge and reaching out and down to its front (`fall`), its
+    middle lifting and settling on the breeze (7 cm at most, gusting) and its canvas shivering;
+    along its front a valance, a short banner swinging a third as much. Four looks (`AWNINGS`:
+    red, blue, green and gold stripes, eight from back to front, sun-faded towards the back, a
+    seam, a scalloped foot), each a cell of the cloths' picture, the awning drawn from its upper
+    four fifths and its valance from its foot (`rows`).
+  - **Where:** over every market stall (kits/props.js: 2.45 m up at its back, 40 cm of fall, a
+    24 cm valance), and over a better-off shop's counter (kits/house.js: `plan.wealth` over
+    0.4, two shops in three; 95 cm out, 35 cm of fall, on a rail and two iron rods). A poorer
+    shop keeps its shutter of boards.
+  - **Shadows:** cloth now casts its shadow where it is as it moves (`clothDepthMaterial`: the
+    shadow map drawn with the same placing in the vertex shader), so an awning shades its
+    counter; the banners', flags' and washing's shadows move with them too (before, none).
+  - **Cost:** no draws of their own (in each chunk's one cloth mesh); 96 triangles an awning
+    and its valance; a stall's painted boards gone (24 triangles); the cloths' picture four cells
+    wider (1,792 by 224, about 0.6 MB more with mipmaps); one more draw into the shadow map for
+    each cloth mesh. In the start town's market, each view drawn before and after from the same
+    camera: one or two more draws and 1,450 to 1,590 more triangles (two stalls, two shops).
+  - **Pictures:** before/after sheet sent in the session (two stalls, two better-off shops).
+  - **Versions:** none (the drawing's alone).
+  - **Tests:** `test/buildings.test.js` (an awning stretched out and down from its back edge,
+    its valance along its front, in its look's rows; one over every stall, none painted on
+    boards; over the better-off shops' counters and not the poorer's; the cloth mesh casting its
+    shadow through its own depth material).

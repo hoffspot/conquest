@@ -22,6 +22,7 @@
 
 import { createRandom, noise } from "../../../core/random.js";
 import { TRADES } from "../../../core/setpieces/pieces.js";
+import { awning as awningCloth, AWNINGS } from "../../cloth.js";
 import { material } from "../engine/materials.js";
 import { Solid } from "../engine/solid.js";
 import { frameWall } from "./framing.js";
@@ -574,13 +575,30 @@ function dress(solid, plan, face, opening, wallName, random) {
             solid.beam(lift(at(face, u, v0 - m(0.45)), 0), lift(at(face, u, v0 - m(0.06)), reach * 0.8), m(0.07), m(0.07), oak, { up: out });
         }
 
+        // A better-off shop's: striped canvas from a rail over the opening, sloping out over the
+        // counter on two iron rods, its valance flapping (world/cloth.js); a poorer one's upper
+        // shutter propped up on two sticks
+        if (plan.wealth > 0.4) {
+            const [rise, out2, fall] = [m(0.3), m(0.95), m(0.35)];
+            const [left, right] = [at(face, u0 - m(0.12), v1 + rise), at(face, u1 + m(0.12), v1 + rise)];
+
+            solid.member(left, right, out, m(0.07), m(0.07), oak);
+            awningCloth(solid, lift(at(face, (u0 + u1) / 2, v1 + rise), m(0.04)), out, { width: width + m(0.24), depth: out2, fall, skirt: m(0.2), look: random.pick(Object.keys(AWNINGS)) });
+
+            for (const u of [u0 - m(0.08), u1 + m(0.08)]) {
+                solid.beam(at(face, u, v1 + rise - fall * 0.6), lift(at(face, u, v1 + rise - fall), out2), m(0.025), m(0.025), material("iron"));
+            }
+
+            return;
+        }
+
         const angle = random.range(0.45, 0.7);
         const [dy, dz] = [Math.sin(angle) * m(0.75), Math.cos(angle) * m(0.75)];
-        const awning = [at(face, u0 - m(0.05), v1), at(face, u1 + m(0.05), v1), lift(at(face, u1 + m(0.05), v1), dz, dy), lift(at(face, u0 - m(0.05), v1), dz, dy)];
-        const cloth = material(plan.wealth > 0.4 ? "awning" : "planks");
+        const shutter = [at(face, u0 - m(0.05), v1), at(face, u1 + m(0.05), v1), lift(at(face, u1 + m(0.05), v1), dz, dy), lift(at(face, u0 - m(0.05), v1), dz, dy)];
+        const boards = material("planks");
 
-        solid.face(awning, cloth);
-        solid.face([...awning].reverse(), cloth);
+        solid.face(shutter, boards);
+        solid.face([...shutter].reverse(), boards);
 
         for (const u of [u0 + m(0.1), u1 - m(0.1)]) {
             solid.beam(lift(at(face, u, v0), reach * 0.95), lift(at(face, u, v1), dz * 0.95, dy * 0.95), m(0.04), m(0.04), oak);

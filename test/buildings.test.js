@@ -1218,7 +1218,7 @@ describe("banners and flags in the wind (world/cloth.js)", () => {
     });
 
     it("draws them in one mesh of one material, each cloth a grid of corners from its own picture, moved by the trees' breeze", async () => {
-        const { BREEZE, CLOTH, clothMaterial, clothMesh, clothPicture, LOOKS } = await import("../client/js/world/cloth.js");
+        const { BREEZE, CLOTH, clothDepthMaterial, clothMaterial, clothMesh, clothPicture, LOOKS } = await import("../client/js/world/cloth.js");
         const { TREE_WIND } = await import("../client/js/world/art/kits/trees.js");
         const { SMOKE } = await import("../client/js/world/smoke.js");
         const pieces = [
@@ -1234,7 +1234,10 @@ describe("banners and flags in the wind (world/cloth.js)", () => {
         assert.equal(mesh.geometry.index.count / 3, 2 * (2 * ha * hd + fa * fd));
         assert.equal(mesh.material, clothMaterial());
         assert.equal(mesh.material.map, clothPicture());
-        assert.ok(mesh.material.side === THREE.DoubleSide && mesh.material.alphaTest > 0 && !mesh.castShadow);
+        assert.ok(mesh.material.side === THREE.DoubleSide && mesh.material.alphaTest > 0);
+        // (Its shadow where each cloth is as it moves: its corners all lie at its top till the
+        // vertex shader puts them in place)
+        assert.ok(mesh.castShadow && mesh.customDepthMaterial === clothDepthMaterial());
 
         // (Every corner of a cloth where its top is, how far across and down it it is, its kind,
         // and its own cell of the picture)
@@ -1270,6 +1273,94 @@ describe("banners and flags in the wind (world/cloth.js)", () => {
         assert.equal(shader.uniforms.clothTime, TREE_WIND.time);
         assert.ok(shader.vertexShader.includes("vec3 transformed = clothAt;") && shader.vertexShader.includes("vec3 objectNormal = normalize("));
         assert.ok(!shader.vertexShader.includes("#include <beginnormal_vertex>"));
+    });
+
+    it("stretches an awning out from its back edge, falling to its front, its scalloped valance hung along the front, each from its share of its look's picture; their shadows moving with them", async () => {
+        const { AWNINGS, awning, CLOTH, clothDepthMaterial, clothMesh, LOOKS, VALANCE } = await import("../client/js/world/cloth.js");
+        const solid = {};
+
+        awning(solid, [0, 30, -10], [0, 0, 2], { width: 27, depth: 21, fall: 4, skirt: 2.4, look: "awning-blue" });
+
+        const [canvas, valance] = solid.cloth;
+
+        assert.deepEqual([canvas.kind, valance.kind], ["awning", "valance"]);
+        assert.deepEqual(canvas.out, [0, 0, 1]);
+        assert.deepEqual([canvas.width, canvas.drop, canvas.fall], [27, 21, 4]);
+        // (The valance from the awning's front edge, out and down from its back)
+        assert.deepEqual(valance.at, [0, 26, 11]);
+        assert.deepEqual([valance.width, valance.drop], [27, 2.4]);
+        assert.deepEqual([canvas.rows, valance.rows], [[0, 1 - VALANCE], [1 - VALANCE, 1]]);
+
+        const mesh = clothMesh(solid.cloth.map(({ at, width, drop, fall = 0, ...rest }) => ({ ...rest, at: at.map((v) => v / 10), width: width / 10, drop: drop / 10, fall: fall / 10 })));
+        const { hang, uv, clothFall, sheet } = mesh.geometry.attributes;
+        const [across, down] = CLOTH.grid.awning;
+        const corners = (across + 1) * (down + 1);
+        const column = LOOKS.indexOf("awning-blue");
+
+        assert.equal(hang.count, corners + (CLOTH.grid.valance[0] + 1) * (CLOTH.grid.valance[1] + 1));
+
+        for (let k = 0; k < hang.count; k++) {
+            const [v0, v1] = k < corners ? [0, 1 - VALANCE] : [1 - VALANCE, 1];
+
+            assert.ok(Math.abs(hang.getZ(k) - (k < corners ? 3 : 0.25)) < 1e-6, `kind at ${k}`);
+            assert.ok(Math.abs(clothFall.getX(k) - (k < corners ? 0.4 : 0)) < 1e-6, `fall at ${k}`);
+            assert.ok(Math.abs(uv.getY(k) - (1 - (v0 + sheet.getY(k) * (v1 - v0)))) < 1e-6, `row at ${k}`);
+            assert.ok(uv.getX(k) >= column / LOOKS.length - 1e-6 && uv.getX(k) <= (column + 1) / LOOKS.length + 1e-6);
+        }
+
+        assert.ok(Object.keys(AWNINGS).every((look) => LOOKS.includes(look)));
+
+        // (Their shadows: the depth material's shader puts each corner where it is, as the
+        // cloth's own does)
+        const shader = { uniforms: {}, vertexShader: THREE.ShaderLib.depth.vertexShader, fragmentShader: THREE.ShaderLib.depth.fragmentShader };
+
+        assert.ok(mesh.castShadow && mesh.customDepthMaterial === clothDepthMaterial());
+        clothDepthMaterial().onBeforeCompile(shader);
+        assert.ok(shader.vertexShader.includes("vec3 transformed = clothAt;") && shader.vertexShader.includes("attribute float clothFall;"));
+        assert.ok(shader.uniforms.clothShort.value.x === CLOTH.billow && shader.uniforms.clothShort.value.y === CLOTH.valance);
+    });
+
+    it("hangs a striped awning over every market stall, and over a better-off shop's counter (a poorer one's shutter propped up)", async () => {
+        const { AWNINGS } = await import("../client/js/world/cloth.js");
+        const names = (object) => {
+            const found = new Set();
+
+            object.traverse((node) => node.isMesh && found.add(node.material.name));
+
+            return found;
+        };
+
+        for (const [x, y] of [[3, 4], [5, 9], [11, 2]]) {
+            const stall = prop({ name: "tent", w: 2, h: 2, x, y });
+            const cloth = stall.userData.cloth ?? [];
+
+            assert.deepEqual(cloth.map(({ kind }) => kind), ["awning", "valance"]);
+            assert.ok(AWNINGS[cloth[0].look] && cloth[1].look === cloth[0].look);
+            assert.ok(cloth[0].fall > 0 && cloth[0].drop > cloth[0].fall, "sloping out to its front");
+            assert.ok(!names(stall).has("awning"), "no boards painted for it");
+        }
+
+        let [rich, poor] = [0, 0];
+
+        for (const piece of houses.filter(({ use }) => TRADES.includes(use)).slice(0, 40)) {
+            const plan = planHouse(piece);
+
+            if (!plan.openings.front[0].some(({ kind }) => kind === "shop")) {
+                continue;
+            }
+
+            const awnings = (buildHouse(plan).cloth ?? []).filter(({ kind }) => kind === "awning");
+
+            if (plan.wealth > 0.4) {
+                rich += 1;
+                assert.ok(awnings.length >= 1 && awnings.every(({ look }) => AWNINGS[look]), piece.key);
+            } else {
+                poor += 1;
+                assert.equal(awnings.length, 0, piece.key);
+            }
+        }
+
+        assert.ok(rich > 0 && poor > 0, `${rich} better-off shops, ${poor} poorer`);
     });
 
     it("hangs each town's war banners in its holders' cloth, in one mesh, and takes them down", async () => {
