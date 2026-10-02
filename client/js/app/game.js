@@ -47,7 +47,7 @@ import { BECKON, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js"
 import { squaresOf } from "../core/grid.js";
 import { navigatorOf, releaseNavigation } from "../core/navigation.js";
 import { GROUND } from "../core/setpieces/pieces.js";
-import { CAST_FAILURES, GROWTH_XP, lookOf, SCHOOLS, SPELLS, TOMES } from "../core/spells.js";
+import { CAST_FAILURES, ELEMENT_TOME_PRICE, ELEMENT_TOMES, GROWTH_XP, lookOf, SCHOOLS, SPELLS, TOMES } from "../core/spells.js";
 import { Variety } from "../core/variety.js";
 import { distanceBetween, longestReach, weaponOf, WEAPONS } from "../core/weapons.js";
 import { Avatar, posingEvery } from "../world/avatar.js";
@@ -263,6 +263,12 @@ function aboutOf({ id, quality }) {
     const { use, slot, armor = 0, part = false, price, tome } = ITEMS[id];
     const power = QUALITIES[quality]?.power ?? 1;
     const worth = part ? ` The adventurers' guild pays ${price} gold for it.` : "";
+
+    if (tome && ITEMS[id].opens) {
+        const school = SCHOOLS[ITEMS[id].opens].label;
+
+        return `Read it to learn ${SPELLS[tome].label} at once, opening the school of ${school}: its other spells come as it grows. ${SPELLS[tome].about} (sold at any adventurers' guild)`;
+    }
 
     if (tome) {
         return `Read it to learn ${SPELLS[tome].label} at once: ${SPELLS[tome].about} (${SPELLS[tome].tome}; the adventurers' guild buys tomes)`;
@@ -727,7 +733,8 @@ export class Game {
     /**
      * Build everything there is to see: the world round the player (or the ground), the town,
      * the player and the orc, and the shaders to draw them. `onProgress({ label, done, total })`
-     * hears how far it's got.
+     * hears how far it's got: never past its total, and at it when ready (`loaded` keeps the last,
+     * and the most it came to).
      */
     async build(onProgress = () => {}) {
         const { view, world } = this;
@@ -748,9 +755,25 @@ export class Game {
         // (Wenches and Ale's folk, seen only inside it, dressed from the start as other buildings'
         // are as the player comes near, where there are other buildings: a little each frame)
         const later = Boolean(world.interiors) && floors.length > 0;
-        const steps = world.town.pieces.length + world.trees.length + chunks + 6 + floors.length + (later ? 0 : folk.length);
+        const tavern = later ? world.interiors.of(floors[0].id)?.key : null;
+        // (Everyone dressed before the first frame but the player: the orc, the soldiers and the
+        // wild's creatures about, anyone else playing, and the tavern's folk unless they're later)
+        const dressed = this.battle.actors.filter((actor) => actor.id !== this.me && !(actor.kind === "folk" && tavern)).length;
+        // (The steps: the land's chunks, the town's pieces and trees, each floor, each one dressed;
+        // and five more: the town begun, the player dressed, ready to draw, the map, ready)
+        const steps = chunks + world.town.pieces.length + world.trees.length + floors.length + dressed + 5;
         let done = 0;
-        const step = (label) => onProgress({ label, done: ++done, total: steps });
+        const report = (label) => {
+            done = Math.min(done, steps);
+            this.loaded = { done, total: steps, most: Math.max(this.loaded?.most ?? 0, done) };
+            onProgress({ label, done, total: steps });
+        };
+        const step = (label) => {
+            done += 1;
+            report(label);
+        };
+
+        this.loaded = null;
 
         // The buildings' textures, painted in workers while the land is laid
         const atlas = prepareAtlas();
@@ -758,7 +781,7 @@ export class Game {
         // The town's trees, for hearing their leaves (and the world's, as it's drawn)
         this.townTrees = treesOf(world).map(({ x, y }) => ({ x, z: y }));
         this.sound?.setTrees(this.townTrees);
-        onProgress({ label: "Laying the land", done, total: steps });
+        report("Laying the land");
 
         if (outside) {
             // The world round where the player starts, a chunk at a time (then more as they go)
@@ -779,12 +802,19 @@ export class Game {
             this.chunks.object.add(this.motes.object);
             this.#farLand(x + 0.5, y + 0.5);
             this.#landLook(x + 0.5, y + 0.5, 0);
+            // (Counted by the chunks drawn, however many goes each takes)
+            const landed = done;
+
             await time("chunks", async () => {
                 while (this.chunks.update(x + 0.5, y + 0.5, { budget: LOAD_BUDGET }) || this.chunks.busy) {
-                    onProgress({ label: `Laying the land (${this.chunks.drawn.size} of ${chunks})`, done: ++done, total: steps });
+                    const drawn = Math.min(this.chunks.drawn.size, chunks);
+
+                    done = landed + drawn;
+                    report(`Laying the land (${drawn} of ${chunks})`);
                     await new Promise((resolve) => setTimeout(resolve, 0));
                 }
             });
+            done = landed + chunks;
             this.#hearTrees();
         } else {
             this.ground = await time("ground", () => buildGround(world));
@@ -800,7 +830,7 @@ export class Game {
             groundAt: this.groundOf("town") ?? undefined,
             onProgress: (count) => {
                 done = built + count;
-                onProgress({ label: count < world.town.pieces.length ? `Building the town (${count} of ${world.town.pieces.length})` : `Planting trees (${count - world.town.pieces.length} of ${world.trees.length})`, done, total: steps });
+                report(count < world.town.pieces.length ? `Building the town (${count} of ${world.town.pieces.length})` : `Planting trees (${count - world.town.pieces.length} of ${world.trees.length})`);
             },
         }));
         view.scene.add(this.town.object);
@@ -852,7 +882,6 @@ export class Game {
         // each frame from the start (#visit), and all at once if the player goes straight in
         // (#ready): only seen inside, they needn't keep the player waiting to start
         let filled = 0;
-        const tavern = later ? world.interiors.of(floors[0].id)?.key : null;
 
         if (tavern) {
             const visit = { key: tavern, queue: [], maps: [], folk: [] };
@@ -939,7 +968,8 @@ export class Game {
 
         // Compile every shader now rather than when each thing first comes into view
         await time("shaders", () => view.renderer.compileAsync(view.scene, view.camera));
-        step("Ready");
+        done = steps;
+        report("Ready");
 
         this.timings = timings;
 
@@ -3031,8 +3061,11 @@ export class Game {
             schools: Object.entries(SCHOOLS).map(([id, { label, tiers, xp }]) => {
                 const { xp: has, from, to } = progress.toNextTier(id);
                 const tier = progress.tierOf(id);
+                // (An element not yet open: its first spell from its tome, bought at the guild)
+                const opened = progress.opened(id);
+                const tome = opened ? null : { label: `Tome of ${SPELLS[tiers[0]].label}`, price: ELEMENT_TOME_PRICE };
 
-                return { id, label, tier, last: tiers.length, xp: has, from, to, next: to === null ? null : SPELLS[tiers[tier]].label, spells: tiers.map((spell, k) => spellOf(spell, { at: `${xp[k]} ${label}` })) };
+                return { id, label, tier, last: tiers.length, xp: has, from, to, next: to === null ? null : SPELLS[tiers[tier]].label, opened, tome, spells: tiers.map((spell, k) => spellOf(spell, tome && k === 0 ? { from: `the ${tome.label}` } : { at: `${xp[k]} ${label}` })) };
             }),
             hexes: ["stun", "hold"].map((id) => spellOf(id, { at: "Hexes: Adept" })),
             tomes: progress.spells.filter((id) => SPELLS[id]?.tome).map((id) => {
@@ -5071,13 +5104,18 @@ export class Game {
         return this.#command(command, heard);
     }
 
-    // Why a spell can't be cast just now, before choosing where or on whom (or null): not known,
-    // cooling down, or not the right thing in hand
+    // Why a spell can't be cast just now, before choosing where or on whom (or null): not known
+    // (an element's first spell: not yet read, its tome at the guild), cooling down, or not the
+    // right thing in hand
     #unready(spell) {
         const actor = this.battle.actor(this.me);
         const needs = SPELLS[spell].needs;
 
-        return !this.progress.knows(spell) ? "unknown" : this.battle.cooldown(this.me, spell) > 0 ? "cooldown" : needs && actor?.weapon !== needs ? needs : null;
+        if (!this.progress.knows(spell)) {
+            return ELEMENT_TOMES.includes(spell) ? "unread" : "unknown";
+        }
+
+        return this.battle.cooldown(this.me, spell) > 0 ? "cooldown" : needs && actor?.weapon !== needs ? needs : null;
     }
 
     // Told why a spell wasn't cast (or nothing, if it was)

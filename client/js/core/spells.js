@@ -177,6 +177,16 @@ export const SPELLS = Object.freeze({
 /** The spells learnt from tomes, by their ids. */
 export const TOMES = Object.freeze(Object.keys(SPELLS).filter((id) => SPELLS[id].tome));
 
+/**
+ * The first spell of each element's school (Burn, Rumble, Hurt, Blister): not known to begin with,
+ * but learnt from its tome, sold at any adventurers' guild (progress.js SHOPS), which opens the
+ * school: its later spells come as it grows (progress.js known).
+ */
+export const ELEMENT_TOMES = Object.freeze(Object.keys(SCHOOLS).filter((school) => school !== "healing").map((school) => SCHOOLS[school].tiers[0]));
+
+/** What an element's tome costs at the adventurers' guild (gold). */
+export const ELEMENT_TOME_PRICE = 25;
+
 /** The thing (progress.js ITEMS id) that's a spell's tome: "tomeFear" for Fear. */
 export const tomeOf = (spell) => `tome${spell[0].toUpperCase()}${spell.slice(1)}`;
 
@@ -221,6 +231,7 @@ export const CAST_FAILURES = Object.freeze({
     grimoire: "Needs a grimoire in hand",
     corpse: "No one fallen near enough",
     hostile: "Not on an enemy",
+    unread: "Not learnt yet: its tome's sold at any adventurers' guild",
 });
 
 /** A spell that grows's level (1 to 5) for so much experience in it. */

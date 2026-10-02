@@ -10,9 +10,9 @@ import { Battle, STEP_MS } from "../client/js/core/battle.js";
 import { CREATURES, tierPower } from "../client/js/core/creatures.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
-import { BOOSTS, itemLabel, priceOf, Progress, rarityOf, rollBoost, STARTING_BOOST } from "../client/js/core/progress.js";
+import { BOOSTS, itemLabel, ITEMS, priceOf, Progress, rarityOf, rollBoost, STARTING_BOOST, wares } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
-import { SCHOOLS, SPELL_XP, SPELLS, tierAt } from "../client/js/core/spells.js";
+import { ELEMENT_TOMES, SCHOOLS, SPELL_XP, SPELLS, tierAt, TOMES, tomeOf } from "../client/js/core/spells.js";
 import { parseGrid } from "./helpers.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
@@ -76,10 +76,22 @@ describe("magic (spells.js)", () => {
         assert.deepEqual([tierAt("fire", 0), tierAt("fire", 149), tierAt("fire", 150), tierAt("fire", 1e6)], [1, 1, 2, 7]);
     });
 
-    it("gives a new character Vigor and each element's first spell, and each school's next as it grows", () => {
+    it("gives a new character Vigor; opens an element with its first spell's tome, sold at any adventurers' guild; each school's next as it grows", () => {
         const progress = new Progress();
 
-        assert.deepEqual(progress.known().sort(), ["blister", "burn", "hurt", "rumble", "stun", "vigor"]);
+        assert.deepEqual(progress.known().sort(), ["stun", "vigor"]);
+        assert.ok(progress.opened("healing") && !["fire", "earth", "air", "water"].some((school) => progress.opened(school)));
+
+        // The elements' tomes: one for each first spell, 25 gold at the guild, read to open it
+        assert.deepEqual(ELEMENT_TOMES, ["burn", "rumble", "hurt", "blister"]);
+        assert.deepEqual(wares("guild").filter(({ id }) => ITEMS[id].tome).map(({ id }) => id), ["tomeBurn", "tomeRumble", "tomeHurt", "tomeBlister"]);
+        assert.deepEqual(ELEMENT_TOMES.map((spell) => [ITEMS[tomeOf(spell)].price, ITEMS[tomeOf(spell)].opens, ITEMS[tomeOf(spell)].use.learn]), [[25, "fire", "burn"], [25, "earth", "rumble"], [25, "air", "hurt"], [25, "water", "blister"]]);
+        assert.ok(ELEMENT_TOMES.every((spell) => !TOMES.includes(spell)), "not among the tomes found in the wild");
+        assert.equal(progress.learn("burn"), true);
+        assert.ok(progress.opened("fire") && !progress.opened("earth"));
+        assert.deepEqual(progress.known().sort(), ["burn", "stun", "vigor"]);
+
+        // Fire grows
         assert.deepEqual(progress.growSchool("fire", 149), []);
         assert.deepEqual(progress.growSchool("fire", 1), ["fireball"]);
         assert.ok(progress.knows("fireball") && !progress.knows("burstflame"));
@@ -213,7 +225,7 @@ describe("magic (spells.js)", () => {
     it("grows a school by the spells of it that land, the more for a higher tier: its next spell told of", () => {
         const host = new Host(buildWorld({ seed: 2 }), { populate: false });
 
-        host.join({ id: HOST_PLAYER, hero: HERO, progress: { schools: { fire: 145 } } });
+        host.join({ id: HOST_PLAYER, hero: HERO, progress: { schools: { fire: 145 }, spells: ["burn"] } });
 
         const { progress } = host.players.get(HOST_PLAYER);
         const me = host.battle.actor(HOST_PLAYER);

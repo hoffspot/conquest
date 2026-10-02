@@ -6,7 +6,7 @@
 
 import { LIVERIES } from "../characters/liveries.js";
 import { GEAR } from "../core/gear.js";
-import { SPELLS, TOMES, tomeOf } from "../core/spells.js";
+import { ELEMENT_TOMES, SPELLS, TOMES, tomeOf } from "../core/spells.js";
 import { PARTS } from "../core/spoils.js";
 import { SPELL_DEFS, SPELL_ICONS } from "./spellicons.js";
 
@@ -677,7 +677,7 @@ export const ITEM_ICONS = Object.freeze({
     ...Object.fromEntries(Object.keys(GEAR).filter((id) => GEAR[id].uniform).map((id) => [id, uniformIcon(id)])),
     // (The creatures' parts, each in its colour; gold; the spells' tomes)
     ...Object.fromEntries(Object.entries(PARTS).map(([id, part]) => [id, partIcon(part)])),
-    ...Object.fromEntries(TOMES.map((spell) => [tomeOf(spell), tomeIcon(spell)])),
+    ...Object.fromEntries([...TOMES, ...ELEMENT_TOMES].map((spell) => [tomeOf(spell), tomeIcon(spell)])),
     gold: COINS,
 
     sword: `<g transform="rotate(45)">${SWORD}</g>`,

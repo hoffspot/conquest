@@ -1,8 +1,9 @@
 // The spellbook: a panel over the game (opened with its button, or B) showing the player's magic
 // (core/spells.js):
 // - the wand or grimoire in their hand, and how much it boosts their spells;
-// - each school, how far it's grown (its tier, and how much more to the next), and each of its
-//   spells: known (to put on an action wheel) or still to come, and at what experience;
+// - each school, how far it's grown (its tier, and how much more to the next; an element not yet
+//   learnt, the tome that opens it), and each of its spells: known (to put on an action wheel)
+//   or still to come, and at what experience (or from what tome);
 // - the hexes (Stun; Hold, once Hexes brings it);
 // - the spells learnt from tomes (how far each that grows with use has grown), and how many more
 //   there are to be found.
@@ -64,10 +65,12 @@ export class SpellbookPanel {
     /**
      * Show (or show again) the player's magic: { boost ({ label, share }, or null: nothing that
      * boosts spells in hand), schools: [{ id, label, tier, last, xp, from, to, next (the next
-     * spell's name, or null), spells: [SPELL] }], hexes: [SPELL], tomes: [SPELL], more (how many
-     * spells there are still to find in tomes) }, where SPELL is { id, label, about, tier, known,
-     * at (the experience it comes at, for a school's not known yet), cooldown, castTime, target,
-     * needs, level, growth ({ xp, from, to } for one that grows) }.
+     * spell's name, or null), opened (false: an element not learnt yet), tome ({ label, price }:
+     * the tome that opens it, if not), spells: [SPELL] }], hexes: [SPELL], tomes: [SPELL], more
+     * (how many spells there are still to find in tomes) }, where SPELL is { id, label, about,
+     * tier, known, at (the experience it comes at, for a school's not known yet), from (or what
+     * it's learnt from: a tome), cooldown, castTime, target, needs, level, growth ({ xp, from, to }
+     * for one that grows) }.
      */
     show({ boost, schools, hexes, tomes, more }) {
         this.boost.textContent = boost ? `${boost.label}: +${Math.round(boost.share * 100)}% to spells` : "No wand or grimoire in hand";
@@ -83,11 +86,20 @@ export class SpellbookPanel {
 
             fill.style.width = `${school.to === null ? 100 : Math.round(((school.xp - school.from) / (school.to - school.from)) * 100)}%`;
             bar.append(fill);
-            growth.append(
-                element("p", "journal-line", `Tier ${school.tier} of ${school.last}`),
-                bar,
-                element("p", "journal-note", school.to === null ? "Mastered: every spell of it's yours." : `${school.to - school.xp} more to ${school.next}: grown by its spells that land, the more for a higher tier.`),
-            );
+
+            if (school.opened === false) {
+                // (An element not yet open: how to open it)
+                growth.append(
+                    element("p", "journal-line", "Not yet learnt"),
+                    element("p", "journal-note", `Read the ${school.tome.label} to learn ${school.spells[0].label} and open ${school.label}: ${school.tome.price} gold at any adventurers' guild. Its other spells come as it grows.`),
+                );
+            } else {
+                growth.append(
+                    element("p", "journal-line", `Tier ${school.tier} of ${school.last}`),
+                    bar,
+                    element("p", "journal-note", school.to === null ? "Mastered: every spell of it's yours." : `${school.to - school.xp} more to ${school.next}: grown by its spells that land, the more for a higher tier.`),
+                );
+            }
 
             const list = element("ul", "journal-list spellbook-list");
 
@@ -118,7 +130,7 @@ export class SpellbookPanel {
 
     // A spell: its icon, name and what it does; its cooldown, how long it takes and whom it's cast
     // on; how far it's grown; and to put it on a wheel, or when it comes
-    #row({ id, label, about, tier, known, at, cooldown, castTime, target, needs, level, growth }) {
+    #row({ id, label, about, tier, known, at, from, cooldown, castTime, target, needs, level, growth }) {
         const row = element("li", `spellbook-spell${known ? "" : " unknown"}`);
         const icon = element("span", "spellbook-icon");
         const text = element("div", "spellbook-text");
@@ -147,7 +159,7 @@ export class SpellbookPanel {
             put.addEventListener("click", () => this.onWheel(id));
             row.append(put);
         } else {
-            row.append(element("span", "spellbook-at", `At ${at}`));
+            row.append(element("span", "spellbook-at", from ? `From ${from}` : `At ${at}`));
         }
 
         return row;

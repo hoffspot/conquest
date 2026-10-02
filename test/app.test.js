@@ -9,7 +9,7 @@ import { buildingsOf, interiorColours, mapColours, Minimap, paintPatch, painting
 import { ACTIONS, actionOf, assignable, DIRECTIONS, directionOf, drawWheel, FLIP, iconOf, PLACES, readWheels, sectorPath, WHEELS } from "../client/js/app/wheel.js";
 import { SPELLS } from "../client/js/core/spells.js";
 import { ABILITIES, ITEMS, Progress } from "../client/js/core/progress.js";
-import { isHero, loadExplored, loadSave, loadSettings, loadStanding, loadTalks, loadWheels, loadWorld, newSeed, SAVE_VERSION, saveExplored, saveSettings, saveStanding, saveTalks, saveWheels, saveWorld, SETTINGS_DEFAULTS, writeSave, clearSave } from "../client/js/app/save.js";
+import { isHero, loadExplored, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadWheels, loadWorld, newSeed, SAVE_VERSION, saveExplored, saveProgress, saveSettings, saveStanding, saveTalks, saveWheels, saveWorld, SETTINGS_DEFAULTS, writeSave, clearSave } from "../client/js/app/save.js";
 import { Standing } from "../client/js/core/standing.js";
 import { Explored } from "../client/js/core/explored.js";
 import { BEARDS, HAIRSTYLES } from "../client/js/characters/hair.js";
@@ -107,6 +107,32 @@ describe("saving (save.js)", () => {
         // Set again, they're remembered
         saveSettings({ effectsVolume: 0.3 });
         assert.equal(loadSettings().effectsVolume, 0.3);
+    });
+
+    it("keeps what a saved character's grown into: its schools, the spells it's learnt and how far they've grown; a save from before the elements' tomes knows every element's first spell", () => {
+        const items = useStorage();
+        const save = { seed: 12, created: "2026-10-02T10:00:00.000Z" };
+        const progress = new Progress({ schools: { fire: 160, healing: 40 }, spells: ["burn", "dodge"], spellXp: { dodge: 30 }, gold: 75 });
+
+        assert.equal(saveProgress(save, progress), true);
+
+        const again = new Progress(loadProgress(save));
+
+        assert.deepEqual([again.schools, again.spells, again.spellXp, again.gold], [progress.schools, progress.spells, progress.spellXp, 75]);
+        assert.ok(again.knows("fireball") && again.opened("fire") && !again.opened("earth"));
+
+        // (Kept before: no format, every element open as it was)
+        const before = JSON.parse(items.get("pellagos.progress"));
+
+        delete before.format;
+        items.set("pellagos.progress", JSON.stringify({ ...before, spells: ["dodge"] }));
+
+        const old = new Progress(loadProgress(save));
+
+        assert.ok(["burn", "rumble", "hurt", "blister", "fireball", "dodge"].every((spell) => old.knows(spell)));
+
+        // (Another game's: nothing)
+        assert.deepEqual(loadProgress({ seed: 13, created: save.created }), {});
     });
 
     it("remembers what the folk remember of a saved character, and what it's learnt; not for another", () => {
