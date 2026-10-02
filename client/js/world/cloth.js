@@ -1,5 +1,7 @@
 // Cloth in the wind (the terrain plan's M7c: the peoples' towns lived in): the banners hung on
-// their walls and from their poles, and the pennants flying from their towers. A kit records each
+// their walls and from their poles, the pennants flying from their towers, the washing on their
+// lines, and the striped awnings over their market stalls and shop counters, their scalloped
+// valances flapping. A kit records each
 // cloth as it builds (Solid's `cloth`: where its top is, which way it faces, how wide and long it
 // is, and its look); here they're drawn, all of a chunk's in one mesh. Where each corner of a cloth
 // is, as it swings and ripples (or, a flag, flaps out on the breeze), is worked out in the vertex
@@ -167,19 +169,46 @@ export function paintCloth(people, canvas = document.createElement("canvas")) {
  * How cloth moves (metres, and radians a second): how far a hanging cloth's foot swings to and
  * fro, and its ripples; how far the breeze carries its foot (a metre of drop's worth, at most);
  * how far a flag's fly flaps; how fast each goes (the swing, the ripples, the flapping); how much
- * of that a cloth hung against a wall has (standing out from it, never into it); and how many
- * squares each kind is drawn with (across, down).
+ * of that a cloth hung against a wall has (standing out from it, never into it); how far an
+ * awning's middle lifts in the breeze (pinned at its corners), and how much of a hanging cloth's
+ * swing a valance has (short, sewn along an awning's front); and how many squares each kind is
+ * drawn with (across, down).
  */
-export const CLOTH = Object.freeze({ swing: 0.12, ripple: 0.045, lean: 0.16, flap: 0.14, speed: [1.3, 3.1, 6.2], wall: 0.4, grid: { hang: [6, 8], wash: [4, 4], fly: [8, 3] } });
+export const CLOTH = Object.freeze({
+    swing: 0.12,
+    ripple: 0.045,
+    lean: 0.16,
+    flap: 0.14,
+    speed: [1.3, 3.1, 6.2],
+    wall: 0.4,
+    billow: 0.07,
+    valance: 0.35,
+    grid: { hang: [6, 8], wash: [4, 4], fly: [8, 3], awning: [8, 4], valance: [8, 2] },
+});
 
 /** The way the breeze blows (east and south, a unit: the way the chimneys' smoke leans). */
 export const BREEZE = Object.freeze(((x, z) => [x / Math.sqrt(x * x + z * z), z / Math.sqrt(x * x + z * z)])(...SMOKE.wind));
 
-/** The cloths drawn from the one picture, in order: each people's, then the plain ones. */
-export const LOOKS = Object.freeze(["human", "elf", "darkElf", "cat", "lizard", "orc", "plain", "square", "ragged", "pennant"]);
+/**
+ * The awnings' stripes: each look's two colours (sRGB), the canvas sun-faded a little; and the
+ * share of its picture's height its valance takes, at the foot.
+ */
+export const AWNINGS = Object.freeze({
+    "awning-red": ["#a8342a", "#e6dcc4"],
+    "awning-blue": ["#2f4d78", "#e2dccb"],
+    "awning-green": ["#3d6a3c", "#e4ddc6"],
+    "awning-gold": ["#c4892c", "#5a3a24"],
+});
 
-// (Washing on a line hangs as a banner from a bar does, drawn in fewer squares: it's small)
-const KINDS = { hang: 0, wash: 0, wall: 1, fly: 2 };
+/** The share of an awning's picture its valance takes, at its foot. */
+export const VALANCE = 0.2;
+
+/** The cloths drawn from the one picture, in order: each people's, then the plain ones, then the awnings. */
+export const LOOKS = Object.freeze(["human", "elf", "darkElf", "cat", "lizard", "orc", "plain", "square", "ragged", "pennant", ...Object.keys(AWNINGS)]);
+
+// (Washing on a line hangs as a banner from a bar does, drawn in fewer squares: it's small; a
+// valance too, swinging less, its kind a quarter so the shader tells it from a banner)
+const KINDS = { hang: 0, wash: 0, valance: 0.25, wall: 1, fly: 2, awning: 3 };
 
 // One of the plain cloths, white to be tinted, on a canvas `paint` in a cell PICTURE wide at x0:
 // a swallowtail, a square, a ragged war banner with a black hand on it, or a pennant tapering to
@@ -229,6 +258,56 @@ function paintPlain(look, paint, x0) {
     paint.restore();
 }
 
+// An awning's canvas, on a canvas `paint` in a cell PICTURE wide at x0: stripes of its two
+// colours running from its back to its front, paler towards the back where the sun's faded it,
+// a hem where the valance is sewn on, and the valance below it (VALANCE of the height), its foot
+// cut in scallops, one to a stripe
+function paintAwning(look, paint, x0) {
+    const { width, height } = PICTURE;
+    const [colour, ground] = AWNINGS[look];
+    const stripes = 8;
+    const hem = height * (1 - VALANCE);
+    const scallop = width / stripes / 2;
+
+    paint.save();
+    paint.beginPath();
+    paint.moveTo(x0, 0);
+    paint.lineTo(x0 + width, 0);
+    paint.lineTo(x0 + width, height - scallop);
+
+    for (let k = stripes; k > 0; k--) {
+        const middle = x0 + (k - 0.5) * (width / stripes);
+
+        paint.arc(middle, height - scallop, scallop, 0, Math.PI, false);
+    }
+
+    paint.closePath();
+    paint.clip();
+
+    for (let k = 0; k < stripes; k++) {
+        paint.fillStyle = k % 2 ? ground : colour;
+        paint.fillRect(x0 + (k * width) / stripes, 0, width / stripes + 1, height);
+    }
+
+    // (Faded towards the back, where it's had the most sun; a shadow where it's sewn)
+    const fade = paint.createLinearGradient(0, 0, 0, hem);
+
+    fade.addColorStop(0, "rgba(255, 250, 235, 0.22)");
+    fade.addColorStop(1, "rgba(255, 250, 235, 0)");
+    paint.fillStyle = fade;
+    paint.fillRect(x0, 0, width, hem);
+    paint.fillStyle = "rgba(0, 0, 0, 0.28)";
+    paint.fillRect(x0, hem - height * 0.012, width, height * 0.024);
+
+    // (The weave, a little uneven)
+    for (let y = 0; y < height; y += 3) {
+        paint.fillStyle = `rgba(0, 0, 0, ${(0.02 + 0.03 * ((y * 7919) % 13) / 13).toFixed(3)})`;
+        paint.fillRect(x0, y, width, 1);
+    }
+
+    paint.restore();
+}
+
 let picture = null;
 
 /** The cloths' picture: each of LOOKS in a cell of its own, side by side. */
@@ -243,6 +322,8 @@ export function clothPicture() {
         LOOKS.forEach((look, k) => {
             if (EMBLEMS[look]) {
                 paint.drawImage(paintCloth(look), k * PICTURE.width, 0);
+            } else if (AWNINGS[look]) {
+                paintAwning(look, paint, k * PICTURE.width);
             } else {
                 paintPlain(look, paint, k * PICTURE.width);
             }
@@ -261,12 +342,24 @@ uniform vec2 clothBreeze;
 uniform vec4 clothSway;
 uniform vec3 clothSpeed;
 uniform float clothWall;
+uniform vec2 clothShort;
 attribute vec4 sheet;
 attribute vec4 hang;
+attribute float clothFall;
 
-// How far a point of a cloth (u across it or out along it, a flag; v down it) stands out from
-// where it hangs at rest (metres)
+// How far a point of a cloth (u across it or out along it, a flag; v down it, or out over an
+// awning) stands out from where it hangs at rest (metres)
 float clothOut(float u, float v, float kind, float phase, float width, float drop) {
+    if (kind > 2.5) {
+        // (An awning, pinned at its corners: its middle lifted on the breeze and let fall, the
+        // canvas shivering a little)
+        float belly = sin(3.14159 * u) * sin(3.14159 * v);
+        float gust = 0.55 + 0.45 * sin(clothTime * clothSpeed.x * 1.3 + phase);
+        float shiver = sin(clothTime * clothSpeed.y + phase * 2.3 + u * width * 3.0 + v * drop * 2.0);
+
+        return belly * (clothShort.x * gust + clothSway.y * 0.35 * shiver);
+    }
+
     if (kind > 1.5) {
         // (A flag: waves running out from its pole, bigger the further out)
         float s = u * width;
@@ -286,7 +379,10 @@ float clothOut(float u, float v, float kind, float phase, float width, float dro
         return clothWall * free * (clothSway.x * (0.6 + 0.4 * swing) + clothSway.y * (0.5 + 0.5 * ripple)) + clothSway.y * (0.5 + 0.5 * fold);
     }
 
-    return free * (clothSway.x * swing + clothSway.y * ripple) + clothSway.y * fold;
+    // (A valance, short: swinging less)
+    float reach = kind > 0.1 ? clothShort.y : 1.0;
+
+    return reach * (free * (clothSway.x * swing + clothSway.y * ripple) + clothSway.y * fold);
 }`;
 
 const PLACE = `
@@ -295,11 +391,17 @@ float clothU = sheet.x;
 float clothV = sheet.y;
 float clothKind = hang.z;
 float clothPhase = hang.w;
-vec3 clothAlong = clothKind > 1.5 ? vec3(clothBreeze.x, 0.0, clothBreeze.y) : vec3(hang.x, 0.0, hang.y);
+bool clothFlies = clothKind > 1.5 && clothKind < 2.5;
+vec3 clothAlong = clothFlies ? vec3(clothBreeze.x, 0.0, clothBreeze.y) : vec3(hang.x, 0.0, hang.y);
 vec3 clothFront = vec3(-clothAlong.z, 0.0, clothAlong.x);
-vec3 clothRest = position + clothAlong * (clothKind > 1.5 ? clothU : clothU - 0.5) * sheet.z - vec3(0.0, clothV * sheet.w, 0.0);
+// (Down it: straight down, or an awning's way out over its slope, sheet.w out and clothFall down;
+// and the way it stands out from where it lies: its front, or above an awning)
+float clothLength = clothKind > 2.5 ? length(vec2(sheet.w, clothFall)) : sheet.w;
+vec3 clothDownway = clothKind > 2.5 ? (clothFront * sheet.w - vec3(0.0, clothFall, 0.0)) / clothLength : vec3(0.0, -1.0, 0.0);
+vec3 clothFace = clothKind > 2.5 ? cross(clothDownway, clothAlong) : clothFront;
+vec3 clothRest = position + clothAlong * (clothFlies ? clothU : clothU - 0.5) * sheet.z + clothDownway * clothV * clothLength;
 
-if (clothKind > 1.5) {
+if (clothFlies) {
     // (A flag droops a little towards its fly)
     clothRest.y -= clothU * clothU * 0.1 * sheet.z;
 } else if (clothKind < 0.5) {
@@ -311,14 +413,25 @@ if (clothKind > 1.5) {
 
 float clothNow = clothOut(clothU, clothV, clothKind, clothPhase, sheet.z, sheet.w);
 float clothAcross = (clothOut(clothU + 0.02, clothV, clothKind, clothPhase, sheet.z, sheet.w) - clothNow) / (0.02 * sheet.z);
-float clothDown = (clothOut(clothU, clothV + 0.02, clothKind, clothPhase, sheet.z, sheet.w) - clothNow) / (0.02 * sheet.w);
-vec3 clothAt = clothRest + clothFront * clothNow;
-vec3 objectNormal = normalize(cross(vec3(0.0, -1.0, 0.0) + clothFront * clothDown, clothAlong + clothFront * clothAcross));
+float clothDown = (clothOut(clothU, clothV + 0.02, clothKind, clothPhase, sheet.z, sheet.w) - clothNow) / (0.02 * clothLength);
+vec3 clothAt = clothRest + clothFace * clothNow;
+vec3 objectNormal = normalize(cross(clothDownway + clothFace * clothDown, clothAlong + clothFace * clothAcross));
 #ifdef USE_TANGENT
 vec3 objectTangent = clothAlong;
 #endif`;
 
 let shared = null;
+let depth = null;
+
+// The cloths' uniforms, shared by how they're drawn and how their shadows are
+const uniforms = () => ({
+    clothTime: TREE_WIND.time,
+    clothBreeze: { value: new THREE.Vector2(...BREEZE) },
+    clothSway: { value: new THREE.Vector4(CLOTH.swing, CLOTH.ripple, CLOTH.lean, CLOTH.flap) },
+    clothSpeed: { value: new THREE.Vector3(...CLOTH.speed) },
+    clothWall: { value: CLOTH.wall },
+    clothShort: { value: new THREE.Vector2(CLOTH.billow, CLOTH.valance) },
+});
 
 /** The cloths' material, one for them all: lit as the buildings are, both sides of it. */
 export function clothMaterial() {
@@ -326,13 +439,7 @@ export function clothMaterial() {
         shared = new THREE.MeshLambertMaterial({ map: clothPicture(), vertexColors: true, side: THREE.DoubleSide, alphaTest: 0.5, alphaToCoverage: true });
         shared.name = "cloth";
         shared.onBeforeCompile = (shader) => {
-            Object.assign(shader.uniforms, {
-                clothTime: TREE_WIND.time,
-                clothBreeze: { value: new THREE.Vector2(...BREEZE) },
-                clothSway: { value: new THREE.Vector4(CLOTH.swing, CLOTH.ripple, CLOTH.lean, CLOTH.flap) },
-                clothSpeed: { value: new THREE.Vector3(...CLOTH.speed) },
-                clothWall: { value: CLOTH.wall },
-            });
+            Object.assign(shader.uniforms, uniforms());
             shader.vertexShader = shader.vertexShader
                 .replace("#include <common>", `#include <common>\n${VERTEX}`)
                 .replace("#include <beginnormal_vertex>", PLACE)
@@ -344,6 +451,27 @@ export function clothMaterial() {
     return shared;
 }
 
+/**
+ * The cloths' shadows: each cloth where it is as it moves (the corners all lie at their cloth's
+ * top until the vertex shader puts them in place, so the usual shadow would be nothing), cut out
+ * where the cloth's picture is (a valance's scallops).
+ */
+export function clothDepthMaterial() {
+    if (!depth) {
+        depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: clothPicture(), alphaTest: 0.5, side: THREE.DoubleSide });
+        depth.name = "cloth-depth";
+        depth.onBeforeCompile = (shader) => {
+            Object.assign(shader.uniforms, uniforms());
+            shader.vertexShader = shader.vertexShader
+                .replace("#include <common>", `#include <common>\n${VERTEX}`)
+                .replace("#include <begin_vertex>", `${PLACE}\nvec3 transformed = clothAt;`);
+        };
+        depth.customProgramCacheKey = () => "cloth-depth";
+    }
+
+    return depth;
+}
+
 // (A number from 0 to 1 for a point, the same every time)
 const hash = (x, y, z) => {
     const s = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453;
@@ -353,10 +481,14 @@ const hash = (x, y, z) => {
 
 /**
  * The cloths (`pieces`: [{ at: [x, y, z] (metres, in the world: the middle of a hanging cloth's
- * top, or the top of a flag's pole), out: [x, y, z] (the way its front faces: away from the wall
- * it's hung on), width, drop (metres), kind ("hang" from a bar, against a "wall", "wash" on a line, or a "fly"ing
- * flag), look (one of LOOKS), colour (sRGB, to tint a plain one; none for a people's own) }]) drawn:
- * a mesh in the world's coordinates, or null if there are none.
+ * top, the top of a flag's pole, or the middle of an awning's back edge), out: [x, y, z] (the way
+ * its front faces: away from the wall it's hung on, or out over an awning), width, drop (metres:
+ * how far it hangs, or how far out an awning reaches), fall (metres: how far an awning falls from
+ * its back to its front), kind ("hang" from a bar, against a "wall", "wash" on a line, a "fly"ing
+ * flag, an "awning" or the "valance" along its front), look (one of LOOKS), rows ([v0, v1]: the
+ * share of its look's picture, top to foot, it's drawn from: an awning's and its valance's),
+ * colour (sRGB, to tint a plain one; none for a people's own) }]) drawn: a mesh in the world's
+ * coordinates, or null if there are none.
  */
 export function clothMesh(pieces) {
     if (!pieces.length) {
@@ -369,13 +501,14 @@ export function clothMesh(pieces) {
     const positions = new Float32Array(corners * 3);
     const sheets = new Float32Array(corners * 4);
     const hangs = new Float32Array(corners * 4);
+    const falls = new Float32Array(corners);
     const uvs = new Float32Array(corners * 2);
     const colours = new Float32Array(corners * 3);
     const indices = new Uint32Array(squares * 6);
     const colour = new THREE.Color();
     let [n, i, reach] = [0, 0, 0];
 
-    pieces.forEach(({ at, out = [0, 0, 1], width, drop, kind = "hang", look = "plain", colour: tint = null }, k) => {
+    pieces.forEach(({ at, out = [0, 0, 1], width, drop, fall = 0, kind = "hang", look = "plain", rows: [v0, v1] = [0, 1], colour: tint = null }, k) => {
         const [across, down] = counts[k];
         const length = Math.sqrt(out[0] * out[0] + out[2] * out[2]) || 1;
         // (Left to right as its front's seen: the front's to the right of the way across)
@@ -398,7 +531,8 @@ export function clothMesh(pieces) {
                 positions.set(at, n * 3);
                 sheets.set([u, v, width, drop], n * 4);
                 hangs.set([along[0], along[1], KINDS[kind] ?? 0, phase], n * 4);
-                uvs.set([(column + u) / LOOKS.length, 1 - v], n * 2);
+                falls[n] = fall;
+                uvs.set([(column + u) / LOOKS.length, 1 - (v0 + v * (v1 - v0))], n * 2);
                 colours.set([colour.r, colour.g, colour.b], n * 3);
             }
         }
@@ -411,7 +545,7 @@ export function clothMesh(pieces) {
             }
         }
 
-        reach = Math.max(reach, width + drop);
+        reach = Math.max(reach, width + drop + fall);
     });
 
     const geometry = new THREE.BufferGeometry();
@@ -419,19 +553,21 @@ export function clothMesh(pieces) {
     geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute("sheet", new THREE.BufferAttribute(sheets, 4));
     geometry.setAttribute("hang", new THREE.BufferAttribute(hangs, 4));
+    geometry.setAttribute("clothFall", new THREE.BufferAttribute(falls, 1));
     geometry.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
     geometry.setAttribute("color", new THREE.BufferAttribute(colours, 3));
     geometry.setIndex(new THREE.BufferAttribute(indices, 1));
     geometry.computeBoundingSphere();
-    // (Reaching as far as the furthest cloth hangs or flies, and swings)
-    geometry.boundingSphere.radius += reach + CLOTH.swing + CLOTH.flap;
+    // (Reaching as far as the furthest cloth hangs or flies, and swings or billows)
+    geometry.boundingSphere.radius += reach + CLOTH.swing + CLOTH.flap + CLOTH.billow;
 
     const mesh = new THREE.Mesh(geometry, clothMaterial());
 
     mesh.name = "cloth";
     mesh.matrixAutoUpdate = false;
-    // (Its shadow would be where it hangs at rest, not where it's blown: none)
-    mesh.castShadow = false;
+    // (Its shadow where it is as it moves: an awning shading the stall under it)
+    mesh.castShadow = true;
+    mesh.customDepthMaterial = clothDepthMaterial();
     mesh.receiveShadow = true;
 
     return mesh;
@@ -449,14 +585,33 @@ export function clothOf(object) {
     object.traverse((node) => {
         const scale = node.userData.cloth ? node.matrixWorld.getMaxScaleOnAxis() : 1;
 
-        for (const { at, out = [0, 0, 1], width, drop, ...rest } of node.userData.cloth ?? []) {
+        for (const { at, out = [0, 0, 1], width, drop, fall = 0, ...rest } of node.userData.cloth ?? []) {
             point.set(...at).applyMatrix4(node.matrixWorld);
             way.set(...out).transformDirection(node.matrixWorld);
-            pieces.push({ ...rest, at: point.toArray(), out: [way.x, 0, way.z], width: width * scale, drop: drop * scale });
+            pieces.push({ ...rest, at: point.toArray(), out: [way.x, 0, way.z], width: width * scale, drop: drop * scale, fall: fall * scale });
         }
     });
 
     return pieces;
+}
+
+/**
+ * A striped awning on a kit's `solid` (in its pixels), and its valance: its back edge's middle at
+ * `back` ([x, y, z]), reaching `depth` out the way `out` faces ([x, y, z], level) and falling
+ * `fall` as it goes, `width` across, a valance `skirt` deep hanging from its front edge; in the
+ * colours of `look` (one of AWNINGS). Pinned at its corners, it lifts and settles on the breeze,
+ * its valance flapping.
+ */
+export function awning(solid, back, out, { width, depth, fall, skirt, look }) {
+    const length = Math.hypot(out[0], out[2]) || 1;
+    const [ox, oz] = [out[0] / length, out[2] / length];
+    const front = [back[0] + ox * depth, back[1] - fall, back[2] + oz * depth];
+    const cloth = (solid.cloth ??= []);
+
+    cloth.push({ at: [...back], out: [ox, 0, oz], width, drop: depth, fall, kind: "awning", look, rows: [0, 1 - VALANCE] });
+    cloth.push({ at: front, out: [ox, 0, oz], width, drop: skirt, kind: "valance", look, rows: [1 - VALANCE, 1] });
+
+    return solid;
 }
 
 /**

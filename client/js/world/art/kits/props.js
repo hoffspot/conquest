@@ -6,6 +6,7 @@
 // stand in the middle half of it, all characters can't walk through (core/world.js).
 
 import { createRandom } from "../../../core/random.js";
+import { AWNINGS, awning } from "../../cloth.js";
 import { material } from "../engine/materials.js";
 import { Solid } from "../engine/solid.js";
 import { pitchedRoof } from "./roofs.js";
@@ -238,18 +239,9 @@ const PROPS = {
             solid.box(x - size / 2, m(0.86), cz + hd - m(0.3), x + size / 2, m(0.86) + size * 0.8, cz + hd - m(0.3) + size, material(goods[k % goods.length]));
         }
 
-        // The awning: strips of two colours, sloping to the front
-        const strips = 6;
-        const [back, front] = [[m(2.45), cz - hd - m(0.15)], [m(2.05), cz + hd + m(0.35)]];
-
-        for (let k = 0; k < strips; k++) {
-            const [x0, x1] = [cx - hw - m(0.15) + (k * (2 * hw + m(0.3))) / strips, cx - hw - m(0.15) + ((k + 1) * (2 * hw + m(0.3))) / strips];
-            const quad = [[x0, back[0], back[1]], [x1, back[0], back[1]], [x1, front[0], front[1]], [x0, front[0], front[1]]];
-            const cloth = material(k % 2 ? "paint-cream" : random.pick(["awning", "paint-blue", "paint-green"]));
-
-            solid.facing(quad, [0, 1, 0.2], cloth);
-            solid.facing(quad, [0, -1, -0.2], cloth);
-        }
+        // The awning: striped canvas sloping to the front, lifting on the breeze, its scalloped
+        // valance flapping (world/cloth.js)
+        awning(solid, [cx, m(2.45), cz - hd - m(0.15)], [0, 0, 1], { width: 2 * hw + m(0.3), depth: 2 * hd + m(0.5), fall: m(0.4), skirt: m(0.24), look: random.pick(Object.keys(AWNINGS)) });
     },
 };
 
