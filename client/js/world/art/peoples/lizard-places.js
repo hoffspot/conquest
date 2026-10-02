@@ -32,7 +32,8 @@ function board(solid, at, out, [u0, u1, v0, v1], texture, name, proud = m(0.2)) 
     const [l, r] = (b[0] - a[0]) * right[0] + (b[2] - a[2]) * right[2] >= 0 ? [u0, u1] : [u1, u0];
 
     solid.member(at((u0 + u1) / 2 - (u1 - u0) / 2 - m(0.12), (v0 + v1) / 2, proud - m(0.1)), at((u0 + u1) / 2 + (u1 - u0) / 2 + m(0.12), (v0 + v1) / 2, proud - m(0.1)), out, v1 - v0 + m(0.24), m(0.1), material("bamboo"));
-    solid.facing([at(l, v0, proud), at(r, v0, proud), at(r, v1, proud), at(l, v1, proud)], out, signMaterial(texture, name), [[0, 0], [1, 0], [1, 1], [0, 1]]);
+    // (A little in front of the frame's face, not in it: two faces in one place flicker)
+    solid.facing([at(l, v0, proud + m(0.02)), at(r, v0, proud + m(0.02)), at(r, v1, proud + m(0.02)), at(l, v1, proud + m(0.02))], out, signMaterial(texture, name), [[0, 0], [1, 0], [1, 1], [0, 1]]);
 }
 
 /**
@@ -254,7 +255,7 @@ export async function guild(piece) {
 
     solid.extrude(inset(body, -m(0.3)), 0, floor, material("stone-lime"));
 
-    const faces = solid.walls(body, floor, m(2.6), { 2: [{ u0: (x1 - x0) / 2 - m(1.1), u1: (x1 - x0) / 2 + m(1.1), v0: 0, v1: m(2.6), depth: m(0.3), back: material("planks-dark") }] }, material("planks-pale"));
+    solid.walls(body, floor, m(2.6), { 2: [{ u0: (x1 - x0) / 2 - m(1.1), u1: (x1 - x0) / 2 + m(1.1), v0: 0, v1: m(2.6), depth: m(0.3), back: material("planks-dark") }] }, material("planks-pale"));
 
     // The roof: a loft along z, its ridge high at the front and sloping down to the back, the
     // front gable leaning out over the street
@@ -293,7 +294,10 @@ export async function guild(piece) {
 
     serpent(solid, [peak[0], peak[1] - m(2), peak[2] + m(0.2)], 0, m(1.6), { name: "planks-pale", jaws: "plaster-red", eyes: "sun-gold" });
     post(solid, gx, 0, gz + m(1.6), peak[1] - m(0.8), m(0.2), "timber", { sides: 6 });
-    board(solid, wallPoint(faces[2]), faces[2].out, [(x1 - x0) / 2 - m(1.4), (x1 - x0) / 2 + m(1.4), m(2.75), m(2.75) + m(2.8) * (9 / 56)], nameBoardTexture({ name: "Adventurers' Guild", ground: "#264a3a", dark: "#10241a" }), "board guild", m(0.15));
+
+    // The name on the gable, low and to one side of the post (the door's wall is deep in the
+    // gable's shade, behind it)
+    board(solid, (u, v, w = 0) => [gx - m(2.9) + u, v, gz + w], [0, 0, 1], [0, m(2.4), gable[0][1] + m(0.45), gable[0][1] + m(0.45) + m(2.4) * (9 / 56)], nameBoardTexture({ name: "Adventurers' Guild", ground: "#264a3a", dark: "#10241a" }), "board guild", m(0.15));
 
     return solid.toObject();
 }

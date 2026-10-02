@@ -29,7 +29,8 @@ function board(solid, at, out, [u0, u1, v0, v1], texture, name, proud = m(0.2)) 
     const [l, r] = (b[0] - a[0]) * right[0] + (b[2] - a[2]) * right[2] >= 0 ? [u0, u1] : [u1, u0];
 
     solid.member(at((u0 + u1) / 2 - (u1 - u0) / 2 - m(0.12), (v0 + v1) / 2, proud - m(0.1)), at((u0 + u1) / 2 + (u1 - u0) / 2 + m(0.12), (v0 + v1) / 2, proud - m(0.1)), out, v1 - v0 + m(0.24), m(0.1), material("iron-black"));
-    solid.facing([at(l, v0, proud), at(r, v0, proud), at(r, v1, proud), at(l, v1, proud)], out, signMaterial(texture, name), [[0, 0], [1, 0], [1, 1], [0, 1]]);
+    // (A little in front of the frame's face, not in it: two faces in one place flicker)
+    solid.facing([at(l, v0, proud + m(0.02)), at(r, v0, proud + m(0.02)), at(r, v1, proud + m(0.02)), at(l, v1, proud + m(0.02))], out, signMaterial(texture, name), [[0, 0], [1, 0], [1, 1], [0, 1]]);
 }
 
 /** A shard of obsidian (or a crystal): a faceted needle from `base` along `way`, `length` long. */
@@ -226,9 +227,10 @@ function spiderStraps(solid, face, { u0, u1, v1, depth }) {
 
 /**
  * A thorn house: black stone below with slits in it, charred planks above lit by violet lancets,
- * a steep hip swept up at its corners over them, fins and fangs; x0..x1 by z0..z1.
+ * a steep hip swept up at its corners over them, fins and fangs; x0..x1 by z0..z1. With a name
+ * board over its door (`board`), the lamps either side of the door hang lower, clear of it.
  */
-export function thornHouse(solid, x0, z0, x1, z1, { random, wealth = 0.5, storeys = 2, door = { width: m(1.1), height: m(2.4) } }) {
+export function thornHouse(solid, x0, z0, x1, z1, { random, wealth = 0.5, storeys = 2, door = { width: m(1.1), height: m(2.4) }, board = false }) {
     const plinth = m(0.7);
     const outline = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
     const lengths = [x1 - x0, z1 - z0, x1 - x0, z1 - z0];
@@ -264,7 +266,7 @@ export function thornHouse(solid, x0, z0, x1, z1, { random, wealth = 0.5, storey
         const at = wallPoint(faces[2]);
 
         for (const side of [-1, 1]) {
-            budLamp(solid, at((door0.u0 + door0.u1) / 2 + side * m(1), door0.v1 + m(0.3), m(0.1)), [faces[2].out[0], faces[2].out[2]], { light: "glow-violet", crook: "iron-black", sharp: true, reach: m(0.55) });
+            budLamp(solid, at((door0.u0 + door0.u1) / 2 + side * m(1), door0.v1 + (board ? -m(0.5) : m(0.3)), m(0.1)), [faces[2].out[0], faces[2].out[2]], { light: "glow-violet", crook: "iron-black", sharp: true, reach: m(0.55) });
         }
 
         steps(solid, at((door0.u0 + door0.u1) / 2, 0, 0)[0], faces[2].origin[2] + m(1.4), 0, plinth, [0, -1], m(1.6), "stone-black", { tread: m(0.4), riser: plinth / 3 });
@@ -339,7 +341,7 @@ export async function tavern(piece) {
 
     toned(solid, random, [m(7)]);
 
-    const ridge = thornHouse(solid, x0, z0, x1, front, { random, wealth: 1, storeys: 2, door: { width: m(1.8), height: m(2.3) } });
+    const ridge = thornHouse(solid, x0, z0, x1, front, { random, wealth: 1, storeys: 2, door: { width: m(1.8), height: m(2.3) }, board: true });
 
     // (A second, smaller hip standing on the first's ridge)
     const [cx, cz] = [(x0 + x1) / 2, (z0 + front) / 2];
@@ -533,7 +535,7 @@ export async function hall(piece) {
     const front = D - m(ENTRY) + m(0.4);
 
     toned(solid, random, [m(7)]);
-    thornHouse(solid, m(0.6), m(0.6), W - m(3.4), front, { random, wealth: 1, storeys: 2, door: { width: m(2), height: m(2.5) } });
+    thornHouse(solid, m(0.6), m(0.6), W - m(3.4), front, { random, wealth: 1, storeys: 2, door: { width: m(2), height: m(2.5) }, board: true });
     octTower(solid, W - m(2), front - m(2.2), m(1.9), 0, m(12), random, { spire: 3.4 });
     columns(solid, m(1.4), front + m(0.5), 5, m(1), [m(1), m(2.4)], random, { name: "basalt" });
     columns(solid, W - m(4.4), front + m(0.5), 4, m(0.8), [m(0.8), m(2)], random, { name: "basalt" });

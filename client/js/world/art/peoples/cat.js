@@ -387,9 +387,11 @@ function block(solid, x0, z0, x1, z1, { wall, name, random, wealth, paint }) {
  * A Sahel town house of two storeys (x0..x1 by z0..z1): battered walls, buttresses up its front
  * rising into pinnacles past its parapet, rows of toron, a raised door bay with studded leaves,
  * small grilled windows upstairs and slits below, spouts off its flat roof, and on a better house
- * a stair-house on the roof and ears on every pinnacle.
+ * a stair-house on the roof and ears on every pinnacle. What's to go on its front (`keep`: given
+ * its door bay's top and its front's length, the places [u0, u1, v0, v1] of its name board, its
+ * sign) is kept clear of toron.
  */
-function townHouse(solid, x0, z0, x1, z1, { storeys = [m(3), m(2.8)], name, random, wealth, paint, trim = "mud-pale", doorway = { width: m(1.2), height: m(2.3) }, recess = m(0.35), plinth = m(0.25), parapet = m(0.85), roofHouse = wealth > 0.45 }) {
+function townHouse(solid, x0, z0, x1, z1, { storeys = [m(3), m(2.8)], name, random, wealth, paint, trim = "mud-pale", doorway = { width: m(1.2), height: m(2.3) }, recess = m(0.35), plinth = m(0.25), parapet = m(0.85), roofHouse = wealth > 0.45, keep = () => [] }) {
     const outline = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
     const lean = 0.045;
     const height = storeys.reduce((a, b) => a + b, 0);
@@ -514,7 +516,7 @@ function townHouse(solid, x0, z0, x1, z1, { storeys = [m(3), m(2.8)], name, rand
     // Rows of toron on every face: at each floor and under the parapet
     const rows = [m(1.35), ...(storeys.length > 1 ? [storeys[0] + m(0.3)] : []), height - m(0.35)];
 
-    faces.forEach((face, k) => toron(solid, face, lean, [lean, lean], rows, k === 2 ? m(0.85) : m(1.1), random, { clear: openings[k].map(({ u0, u1, v0, v1 }) => [u0, u1, v0, v1]).concat(k === 2 ? [[du0, du1, 0, bayTop]] : []) }));
+    faces.forEach((face, k) => toron(solid, face, lean, [lean, lean], rows, k === 2 ? m(0.85) : m(1.1), random, { clear: openings[k].map(({ u0, u1, v0, v1 }) => [u0, u1, v0, v1]).concat(k === 2 ? [[du0, du1, 0, bayTop], ...keep({ bayTop, length: face.length })] : []) }));
 
     // The roof and its parapet, spouts off it
     solid.extrude(inset(top, m(0.15)), eaves - m(0.3), eaves - m(0.05), material("mud-dark"), { top: material("mud-pale") });

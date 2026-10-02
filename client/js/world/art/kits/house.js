@@ -721,10 +721,11 @@ function roofOver(solid, plan, random) {
     }
 
     // The chimney: a stack up a gable end outside (brick, stone and cottages) or through the
-    // roof by the ridge, standing clear of it
+    // roof by the ridge, standing clear of it. Never up the front: across the door and the name
+    // board or sign over it (a gable at the front's stack goes up the one at the back)
     if (plan.chimney) {
         const outside = plan.style !== "timber" && plan.kind !== "hip" && random.chance(0.6);
-        const end = random.chance(0.5) ? -1 : 1;
+        const end = random.chance(0.5) || (outside && swap) ? -1 : 1;
         const [w, d] = [m(random.range(0.7, 0.9)), m(random.range(0.55, 0.7))];
         const height = roof.top + m(random.range(0.7, 1));
         const along = swap ? [z0, z1] : [x0, x1];

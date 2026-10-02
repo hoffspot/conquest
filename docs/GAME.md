@@ -1614,7 +1614,9 @@ facing south; each is turned about its middle to face the way the layout says:
   rich house; then the roof (kits/roofs.js: gabled, hipped or half-hipped, with thickness, the
   fascia and soffit at its eaves, the verges' bargeboards, ridge and hip tiles, an old ridge
   sagging), the gables carried up under it (framed on a timber house, with a little window),
-  the chimney stack (up a gable end outside, or through the roof) and dormers.
+  the chimney stack (up a gable end outside, or through the roof) and dormers. A stack outside
+  never goes up the front gable, across the door and the name board or sign over it: a house
+  with its gable to the street has it up the back one.
 
   Its weathering is painted on its corners: dirt splashed up the foot of the walls, shade under
   the eaves and jetties and in the reveals, streaks, moss on the roof where it faces north (as
@@ -1634,7 +1636,13 @@ facing south; each is turned about its middle to face the way the layout says:
   weathering, worked out for every corner, now reads its numbers without taking lists apart,
   which V8 didn't do for free). Most houses are 300 to 2,000 triangles (a two-storey timber
   house with a jettied front about 2,400).
-- **Special buildings** (kits/landmarks.js), each from its piece of the layout:
+- **Special buildings** (kits/landmarks.js), each from its piece of the layout. Every people's
+  name boards and hanging signs are clear to see from the street (`test/signs.test.js` looks at
+  each of them from in front, from below, from 30° either side and, a sign hanging out from a
+  wall, from 30° and 55° along the street): nothing of the building stands before them, its
+  lamps, braziers and beam ends beside or below them, a hanging sign's stay tied up to the wall
+  above its bracket (or propping it from below, short of the sign), never across it, and each
+  picture a little in front of its frame's face, never in it:
   - **Taverns**, built as the houses are (timber-framed, stone or brick, as the tavern's seed
     says), one storey or two, with a wide door in the middle of the front. The tavern's name is
     painted in gold blackletter (UnifrakturMaguntia, kits/signs.js, loaded as a web font) on a
