@@ -790,7 +790,8 @@ radians a second: a half turn (the player turning back towards it) is three-quar
 0.8 s and done in about 1.2 s. The way they're going is averaged over a third of a second, so a
 path's corners don't swing it about. Stood still, it stays where it's turned. Put somewhere else
 (coming back to life), it catches them up without turning. It leans towards whoever the player
-is fighting, so both stay in view. The minimap stays north up; what the camera sees turns on it.
+is fighting, so both stay in view. The minimap stays north up; the wedge showing which way the
+camera looks turns on it.
 
 **Turning it by hand.** A drag (a finger, or the mouse held down) turns the camera round the
 player: across the screen's width, half round, the view turning the way the drag goes (dragged
@@ -1997,8 +1998,10 @@ at a time (a chunk's squares, the town, a settlement, a chunk's trees: at most 2
 then shown in its place, well before what's shown would reach this one's edge (only a leap across
 the world paints one at once). Painting a whole patch in one frame was 6 to 13 ms on a desktop,
 several times that on a phone, every 32 metres or so. Each frame (at most 30 times a second)
-draws it scaled to fit, then what the camera sees (the ground under the screen's corners), where
-the player is going, the enemies (red dots, the target ringed), an icon over each building the
+draws it scaled to fit, then which way the camera looks (a wedge from the player the way it looks
+over the ground, or the way they face when it looks straight down: always the same size, 30% of
+the minimap across and 63 degrees wide, however the camera's tilted or zoomed, fading out over
+its far two-thirds: `LOOK`), where the player is going, the enemies (red dots, the target ringed), an icon over each building the
 player has gone into, and the player (an arrowhead pointing the way they face). A tap on it walks
 the player there, or fights an enemy within 12 pixels of the tap; a double tap runs; holding it
 (0.55 s, without moving) opens the world map. Inside, each floor is painted from its plan: the

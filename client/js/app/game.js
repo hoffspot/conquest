@@ -2150,12 +2150,9 @@ export class Game {
         const actor = battle.actor(this.me);
         const me = this.avatars.get(this.me);
         const [ox, oz] = this.originOf(this.mapId);
-        const rect = view.canvas.getBoundingClientRect();
-        const corners = [[rect.left, rect.top], [rect.right, rect.top], [rect.right, rect.bottom], [rect.left, rect.bottom]].map(([x, y]) => {
-            const ground = view.pickGround(x, y);
-
-            return ground ? [ground.x - ox, ground.z - oz] : null;
-        });
+        // (The way the camera looks over the ground; looking straight down, the way they face)
+        const looking = view.camera.getWorldDirection(_looking);
+        const look = Math.hypot(looking.x, looking.z) > 1e-3 ? Math.atan2(looking.x, looking.z) : me.facing;
 
         if (minimap.map.id !== this.mapId) {
             minimap.setMap(this.world.maps[this.mapId]);
@@ -2169,7 +2166,7 @@ export class Game {
                 return { x: position.x - ox, z: position.z - oz, hostile: this.battle.hostile(other, actor), targeted: other === target };
             }),
             destination: actor.order?.type === "move" ? [actor.order.to[0] + 0.5, actor.order.to[1] + 0.5] : null,
-            view: corners,
+            look: actor.dead ? null : look,
             icons: this.mapId === "town" ? this.icons() : [],
         });
     }

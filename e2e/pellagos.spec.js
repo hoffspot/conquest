@@ -2930,7 +2930,7 @@ test("holding on an enemy or the player opens the action wheel: flick left (W) t
     expect(hp).toBeLessThanOrEqual(32);
 });
 
-test("in a fight four quick actions rise from the bottom, lifting the name and zoom buttons: Stun tapped on the foe set on, Vigor on the player, swept over while cooling; attacks greyed with no foe set on; held, changed in Quick actions; the minimap up top beside the buttons", async ({ page }) => {
+test("in a fight four quick actions rise from the bottom, lifting the name and zoom buttons: Stun tapped on the foe set on, Vigor on the player, swept over while cooling; attacks greyed with no foe set on; held, changed in Quick actions; the minimap up top beside the buttons, its wedge the way the camera looks the same size however it's zoomed", async ({ page }) => {
     // (Played on between taps, and held once: more than the usual time, with others running beside it)
     test.setTimeout(180000);
     await page.setViewportSize({ width: 402, height: 874 });
@@ -2948,6 +2948,30 @@ test("in a fight four quick actions rise from the bottom, lifting the name and z
     expect(map.x).toBeGreaterThanOrEqual(0);
     expect(map.x + map.width).toBeLessThan(book.x);
     expect(menu.x + menu.width).toBeLessThanOrEqual(402);
+
+    // On it, a wedge from the player the way the camera looks over the ground, the same size
+    // however far the camera's zoomed out
+    const looked = () => page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const e = session.view.camera.matrixWorld.elements;
+
+        game.stop();
+        game.minimap.drawn = -Infinity;
+        game.advance(0.05);
+
+        return { ...game.minimap.looked, camera: Math.atan2(-e[8], -e[10]) };
+    });
+    const near = await looked();
+
+    await page.evaluate(() => window.pellagos.session.view.zoom(2));
+
+    const far = await looked();
+    const apart = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+
+    expect(near.reach).toBeGreaterThan(20);
+    expect(far.reach).toBe(near.reach);
+    expect(apart(near.look, near.camera)).toBeLessThan(0.01);
+    expect(apart(far.look, far.camera)).toBeLessThan(0.01);
 
     // No fight: put away, the player's name at the foot of the screen
     await expect(bar).not.toHaveClass(/up/);
