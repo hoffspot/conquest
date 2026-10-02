@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 import { pluck } from "../client/js/audio/dsp.js";
 import { sampleFiles } from "../client/js/audio/instruments.js";
-import { BUSES, gainOf, Sound, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
+import { BUSES, FOOTSTEPS, gainOf, Sound, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
 import { SCORE } from "../client/js/audio/score.js";
 import { loudness, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "../client/js/audio/synth.js";
 import { createRandom } from "../client/js/core/random.js";
@@ -279,6 +279,26 @@ describe("playing sounds (sound.js)", () => {
         assert.equal(sound.instruments.size, sampleFiles().length);
         assert.equal(sound.recordings.size, 0, "and they're let go once decoded");
         sound.close();
+    });
+
+    it("plays footsteps softly, everyone's alike, under the blows: walking about a ninth of a slash, running under a fifth", () => {
+        const sound = new Sound({ fetch: fromDisk, enabled: false });
+        const heard = [];
+
+        sound.play = (name, { volume }) => heard.push({ name, loud: volume * SOUNDS[name].volume });
+
+        // (Grass and a road walking; cobbles and planks running)
+        sound.step(0, null, 1.5);
+        sound.step(1, null, 1.5);
+        sound.step(2, null, 4.5);
+        sound.step(5, null, 4.5);
+
+        const slash = SOUNDS.slash.volume;
+
+        assert.deepEqual(heard.map(({ name }) => name), ["stepGrass", "stepDirt", "stepStone", "stepWood"]);
+        assert.ok(heard.slice(0, 2).every(({ loud }) => loud < slash / 8), "walking");
+        assert.ok(heard.slice(2).every(({ loud }) => loud < slash / 5), "running");
+        assert.ok(FOOTSTEPS.walk + FOOTSTEPS.pace * 1.5 <= (0.6 + 0.15 * 1.5) / 3 + 1e-9 && FOOTSTEPS.run <= 1.3 / 3, "a third of what they were");
     });
 
     it("plays no music without its recordings (offline, say), and doesn't mind", async () => {

@@ -1013,13 +1013,17 @@ input[type="range"] {
     font-variant-numeric: tabular-nums;
 }
 
+/* (Its own stacking: the bars ordered nearer over farther among themselves, app/hud.js place,
+   and all of them under the buttons, as before) */
 #floaters {
     position: absolute;
     inset: 0;
+    z-index: 0;
     overflow: hidden;
     pointer-events: none;
 }
 
+/* (Shrunk, by app/hud.js plateScale, about the point it stands on) */
 .floater {
     position: absolute;
     left: 0;
@@ -1027,6 +1031,7 @@ input[type="range"] {
     min-width: 110px;
     padding: 3px 7px 5px;
     gap: 2px;
+    transform-origin: 50% 100%;
     will-change: transform;
 }
 
@@ -1039,7 +1044,10 @@ input[type="range"] {
     color: #f0a08c;
 }
 
+/* (By the name, "Lv 3": not laid out as the options' volume rows are, .level below) */
 .floater .level {
+    display: inline;
+    padding: 0;
     margin-left: 6px;
     font-size: 11px;
     font-variant-numeric: tabular-nums;

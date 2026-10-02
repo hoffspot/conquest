@@ -2096,7 +2096,7 @@ compressed, and limited just under full scale, so a busy fight turned up can't c
 | Music | The town's score, or the tavern's jig | 35% |
 
 The defaults are set for a phone at about 40% volume (a player's own setting): blows and spells
-reach about −31 to −37 dBFS at their loudest, footsteps about −43, and the music averages about
+reach about −31 to −37 dBFS at their loudest, footsteps about −52, and the music averages about
 −42, a little under the blows. Each slider has 9 to 18 dB of room to turn up. Settings saved on
 the earlier, louder scale (`volumeScale` other than 2) have their volumes forgotten, for these.
 
@@ -2111,7 +2111,9 @@ about as loud as the others (by its loudest 30 ms), then played at its own volum
   casting Stun and the other spells (a fireball's whoosh for fire's) and a zap and warble as a
   stun lands.
 - **Footsteps**, as each foot lands (the walker says when), on stone, dirt, grass or wooden
-  boards (upstairs in the tavern), louder running.
+  boards (upstairs in the tavern), soft, under the blows and the world round them (`FOOTSTEPS`:
+  a walk's about a ninth of a slash, a run's under a fifth), a little louder running; everyone's
+  alike, the player's, the other players', the folk's and the creatures'.
 - **A door**: its latch lifting, its hinges creaking and it banging shut, when anyone goes through
   the tavern's door on the player's side of it (so the orc following them in is heard).
 - **Cues**: a target chosen, an enemy slain, falling, waking again, out of breath, the action
@@ -2384,8 +2386,12 @@ game plays on while it's open; a second finger (a pinch) closes it.
    in the bottom right; both go up over the quick actions in a fight, above), with an orange
    stamina bar under the health bar while stamina isn't full, "Out of breath" when a run
    ends for want of it, the minimap (in the top left corner; the spellbook, journal, pack and
-   menu buttons in the top right), bars over the other characters (the target's lit red), and the damage each blow
-   does.
+   menu buttons in the top right), bars over the other characters (the target's lit red, and
+   over the rest), and the damage each blow does. A bar's smaller the farther its character is
+   from the camera than the player is, a little more gently than the character itself looks
+   smaller (twice as far, three fifths the size; four times, a little over a third; never under
+   30%: `PLATE_SIZE`), so several the same way show which is nearer; the nearer bars are drawn
+   over the farther, and all of them under the buttons.
 5. **The menu** (the menu button, or Escape) pauses the game (unless others are playing in the
    world too): Resume, Invite others (the world opened to others: a code, and who's come),
    Game options, or back to the title. **Game options** has the Visual quality slider (Low,

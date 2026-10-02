@@ -5,6 +5,7 @@ import { cleanName, defaultHero, HERO_PEOPLES, heroOfPeople, HUMAN_TONES, random
 import { LOOKS } from "../client/js/characters/peoples.js";
 import { formatBytes, Loader } from "../client/js/app/loader.js";
 import { ICONS, ITEM_ICONS } from "../client/js/app/icons.js";
+import { PLATE_SIZE, plateScale } from "../client/js/app/hud.js";
 import { buildingsOf, interiorColours, mapColours, Minimap, paintPatch, paintingPatch, treesOf } from "../client/js/app/minimap.js";
 import { ACTIONS, actionOf, assignable, DIRECTIONS, directionOf, drawWheel, FLIP, iconOf, offensive, PLACES, QUICK, readWheels, sectorPath, WHEELS } from "../client/js/app/wheel.js";
 import { SPELLS } from "../client/js/core/spells.js";
@@ -634,6 +635,28 @@ describe("the action wheel (wheel.js, icons.js)", () => {
         assert.equal((svg.match(/class="slice empty"/g) ?? []).length, 5);
         assert.match(drawWheel({ slots: {}, side: 1, flip: true }), />Wheel 1</);
         assert.doesNotMatch(drawWheel({ slots: { n: "fight" } }), /flip/);
+    });
+});
+
+describe("the bars over the others (hud.js)", () => {
+    it("shrinks a bar the farther its character is from the camera than the player, a little more gently than the distance, never past its least", () => {
+        const near = (a, b) => Math.abs(a - b) < 1e-9;
+
+        // (The player 11 m from the camera, as the follow camera stands)
+        assert.equal(plateScale(6, 11), 1, "nearer than the player: full size");
+        assert.equal(plateScale(11, 11), 1);
+        assert.ok(near(plateScale(22, 11), 0.5 ** 0.75), "twice as far: three fifths the size");
+        assert.ok(plateScale(22, 11) > 0.55 && plateScale(22, 11) < 0.62);
+        assert.ok(near(plateScale(44, 11), 0.25 ** 0.75), "four times as far: a little over a third");
+        assert.ok(plateScale(14, 11) > 0.8, "a step or two past the player: still easily read");
+        assert.ok([16, 20, 24, 32, 40].every((d, k, all) => !k || plateScale(d, 11) < plateScale(all[k - 1], 11)), "each farther one smaller");
+        assert.equal(plateScale(200, 11), PLATE_SIZE.least, "never too small to be seen");
+
+        // (Zoomed right in, the camera a few metres off: as if it were `near`, so those beside
+        // the player aren't shrunk)
+        assert.equal(plateScale(PLATE_SIZE.near, 3), 1);
+        assert.ok(near(plateScale(PLATE_SIZE.near * 2, 3), 0.5 ** 0.75));
+        assert.ok(near(plateScale(10), (PLATE_SIZE.near / 10) ** 0.75), "no player: from `near`");
     });
 });
 

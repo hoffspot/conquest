@@ -1116,6 +1116,57 @@ test("tapping an enemy rings it as the player's target, until they're told to wa
     expect(target.after).toEqual({ visible: false, plate: null });
 });
 
+test("the bars over enemies the same way are smaller the farther off they are, the nearer over the farther and all under the buttons; a creature's level by its name", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // Three slimes in a line the way the camera looks, 4, 10 and 18 m ahead of the player
+    await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const me = game.battle.actor(game.me);
+        const looking = session.view.camera.getWorldDirection(session.view.camera.position.clone());
+        const length = Math.hypot(looking.x, looking.z);
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        [4, 10, 18].forEach((ahead, k) => {
+            const [x, y] = [me.x + (looking.x / length) * ahead, me.y + (looking.z / length) * ahead];
+
+            game.battle.add({ id: `slime${k}`, kind: "beast", name: "Green slime", weapon: "slime", team: "wild", square: [Math.floor(x), Math.floor(y)], ai: null, hp: 30, wild: { creature: "slime", tier: 1, temper: "defensive", guard: 0, roam: 0, leash: 12, pack: `slimes${k}`, leader: null, menace: false } });
+            Object.assign(game.battle.actor(`slime${k}`), { x, y });
+            game.enlisting.push(`slime${k}`);
+        });
+    });
+    expect(await playUntil(page, () => [0, 1, 2].every((k) => window.pellagos.game.avatars.has(`slime${k}`)))).toBe(true);
+
+    const plates = await page.evaluate(() => {
+        window.pellagos.game.advance(0.05);
+
+        return {
+            each: [0, 1, 2].map((k) => {
+                const plate = document.querySelector(`.floater[data-id="slime${k}"]`);
+                const { width, height } = plate.getBoundingClientRect();
+                const name = plate.querySelector(".name").getBoundingClientRect();
+                const level = plate.querySelector(".level");
+
+                return { width, height, layer: Number(plate.style.zIndex), level: getComputedStyle(level).display, levelLine: Math.abs(level.getBoundingClientRect().top - name.top) < name.height / 2 };
+            }),
+            stacking: getComputedStyle(document.querySelector("#floaters")).zIndex,
+        };
+    });
+    const [near, middle, far] = plates.each;
+
+    // Each farther one smaller (the nearest still easily read), and drawn under the nearer
+    expect(near.width).toBeGreaterThan(110 * 0.6);
+    expect(middle.width).toBeLessThan(near.width * 0.9);
+    expect(far.width).toBeLessThan(middle.width * 0.95);
+    expect(near.layer).toBeGreaterThan(middle.layer);
+    expect(middle.layer).toBeGreaterThan(far.layer);
+
+    // (All in their own stacking, under the buttons; "Lv 1" on the name's line)
+    expect(plates.stacking).toBe("0");
+    expect(plates.each.map(({ level, levelLine }) => [level, levelLine])).toEqual([["inline", true], ["inline", true], ["inline", true]]);
+});
+
 test("tapping the tavern's door lights its edge green, and the player walks in: a couple of steps inside, facing the door; up the stairs (where a courtesan beckons), down, and out; each time a tap round them is a step, not back through", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

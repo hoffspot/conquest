@@ -121,6 +121,14 @@ const LAUNCHES = { arrow: "arrow", bolt: "bolt", fireball: "fireball", venom: "b
 // courtyard, planks)
 const STEPS = ["stepGrass", "stepDirt", "stepStone", "stepDirt", "stepStone", "stepWood"];
 
+/**
+ * How loud a footstep is, everyone's alike (against its sound's own level: synth.js): walking,
+ * `walk` and `pace` more for each metre a second; running, `run`. Soft, under the blows and the
+ * world round them (a walk's about a ninth of a slash, a run's under a fifth): a third of what
+ * they were.
+ */
+export const FOOTSTEPS = Object.freeze({ walk: 0.2, pace: 0.05, run: 0.42 });
+
 // How long between the hearth's crackles (seconds, from and to)
 const CRACKLES = [0.2, 0.9];
 
@@ -688,7 +696,7 @@ export class Sound {
     step(ground, at, speed = 1.5) {
         const running = speed > 3;
 
-        return this.play(STEPS[ground] ?? "stepDirt", { at, volume: running ? 1.3 : 0.6 + 0.15 * speed, rate: running ? 1.08 : 1 });
+        return this.play(STEPS[ground] ?? "stepDirt", { at, volume: running ? FOOTSTEPS.run : FOOTSTEPS.walk + FOOTSTEPS.pace * speed, rate: running ? 1.08 : 1 });
     }
 
     // Keep a sound's samples, and give the browser a copy if it's started
