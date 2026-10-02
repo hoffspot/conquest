@@ -34,6 +34,45 @@ function periodicNoise(seed, period) {
     };
 }
 
+// Plates (a broken stone's faces): a jittered grid of `period` points a side, wrapping (so the
+// picture tiles), each the middle of a plate. For a point (in cells: 0 to `period` across the
+// picture), how far it is inside its plate's edge (the next plate's distance less its own: 0 on
+// the crack between them), its plate and the next (their indices, period * period of them).
+function periodicPlates(seed, period) {
+    const random = createRandom(seed);
+    const middles = Array.from({ length: period * period }, () => [0.15 + random.next() * 0.7, 0.15 + random.next() * 0.7]);
+    const wrap = (value) => ((value % period) + period) % period;
+
+    return (x, y) => {
+        const [cx, cy] = [Math.floor(x), Math.floor(y)];
+        let [near, next, plate, beside] = [Infinity, Infinity, 0, 0];
+
+        for (let j = -1; j <= 1; j++) {
+            for (let i = -1; i <= 1; i++) {
+                const k = wrap(cy + j) * period + wrap(cx + i);
+                const [mx, my] = middles[k];
+                const distance = Math.hypot(cx + i + mx - x, cy + j + my - y);
+
+                if (distance < near) {
+                    [next, beside] = [near, plate];
+                    [near, plate] = [distance, k];
+                } else if (distance < next) {
+                    [next, beside] = [distance, k];
+                }
+            }
+        }
+
+        return { edge: next - near, plate, beside };
+    };
+}
+
+// A number from 0 to 1 for a whole number (or two, either way round): the same each time
+const hashed = (a, b = 0) => {
+    const value = Math.sin(Math.min(a, b) * 127.1 + Math.max(a, b) * 311.7 + 74.7) * 43758.5453;
+
+    return value - Math.floor(value);
+};
+
 // Rows of blocks (stone courses, bricks, roof tiles): `rows` rows, each split into blocks of the
 // given lengths (in canvas pixels, adding up to SIZE), each row shifted by a random amount. Calls
 // block(u, v, row, index) with the pixel's position inside its block (0 to 1 across and down).
@@ -512,26 +551,42 @@ export const PAINTERS = {
         };
     },
 
-    // Natural rock: broad blotches and a fine grain, dark cracks wandering across it, and pale
-    // flecks (crystals, lichen) here and there
+    // Natural rock: broad faces, each a shade of its own, their edges wavering; bedding layers
+    // running across it (along the picture: up a cliff, the way it's laid), broad blotches and a
+    // fine grain; long cracks along some of the faces' edges (broken off here and there, some
+    // deep, some barely there), and pale flecks (crystals, lichen)
     rock({ base, light, dark }, seed) {
         const blotch = periodicNoise(seed, 4);
         const grain = periodicNoise(seed + 1, 48);
-        const veins = periodicNoise(seed + 2, 6);
+        const warp = periodicNoise(seed + 2, 6);
         const flecks = periodicNoise(seed + 3, 96);
+        const faces = periodicPlates(seed + 4, 3);
+        const chips = periodicPlates(seed + 5, 7);
 
         return (x, y) => {
             const [u, v] = [x / SIZE, y / SIZE];
-            const tone = blotch(u * 4, v * 4) * 0.55 + grain(u * 48, v * 48) * 0.45;
-            const crack = Math.abs(veins(u * 6, v * 6) - 0.5);
-            let colour = tone < 0.5 ? mix(dark, base, tone * 2) : mix(base, light, (tone - 0.5) * 2);
-            let lift = 0.45 + grain(u * 48, v * 48) * 0.3 + blotch(u * 4, v * 4) * 0.15;
+            const [wu, wv] = [warp(u * 6, v * 6) - 0.5, warp(u * 6 + 3, v * 6 + 3) - 0.5];
+            const face = faces(u * 3 + wu * 0.25, v * 3 + wv * 0.25);
+            const chip = chips(u * 7 + wv * 0.35, v * 7 + wu * 0.35);
+            const bedding = Math.sin((v * 9 + wu * 1.2) * Math.PI * 2) * 0.5 + Math.sin((v * 23 + wv * 2) * Math.PI * 2) * 0.25;
+            const fine = grain(u * 48, v * 48);
+            const tone = blotch(u * 4, v * 4) * 0.5 + fine * 0.3 + (hashed(face.plate) - 0.5) * 0.28 + bedding * 0.14 + 0.1;
+            let colour = tone < 0.5 ? mix(dark, base, Math.max(0, tone) * 2) : mix(base, light, Math.min(1, (tone - 0.5) * 2));
+            let lift = 0.45 + fine * 0.25 + blotch(u * 4, v * 4) * 0.15 + bedding * 0.05;
 
-            if (crack < 0.018) {
-                colour = scale(dark, 0.62);
-                lift = 0.1;
-            } else if (flecks(u * 96, v * 96) > 0.83) {
-                colour = mix(colour, light, 0.6);
+            // (Only some of the faces' edges cracked, each its own depth and broken off along its
+            // length; finer cracks fainter still)
+            const strength = hashed(face.plate, face.beside);
+            const along = warp(u * 18, v * 18);
+            const deep = strength > 0.45 && along > 0.32 ? Math.max(0, 1 - face.edge / (0.03 + 0.05 * strength)) * (strength - 0.3) * 1.3 : 0;
+            const fineStrength = hashed(chip.plate, chip.beside);
+            const split = fineStrength > 0.6 && along < 0.62 ? Math.max(0, 1 - chip.edge / 0.04) * 0.35 : 0;
+
+            colour = mix(colour, scale(dark, 0.6), Math.min(1, deep + split));
+            lift -= deep * 0.35 + split * 0.15;
+
+            if (deep + split < 0.05 && flecks(u * 96, v * 96) > 0.85) {
+                colour = mix(colour, light, 0.5);
                 lift += 0.08;
             }
 

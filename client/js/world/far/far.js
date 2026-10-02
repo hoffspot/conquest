@@ -10,29 +10,12 @@ import * as THREE from "three";
 import { groundMaterial } from "../ground.js";
 import { FAR, middleOf, reachOf, sampleLevel, spacingOf } from "./levels.js";
 
-// (The corners of a level's square, its triangles: the same for every level)
-let shape = null;
-
+// A level's square (its corners moved and its triangles split as its ground is worked out: #take)
 function levelGeometry() {
     const count = FAR.cells + 1;
-
-    if (!shape) {
-        const indices = [];
-
-        for (let j = 0; j < FAR.cells; j++) {
-            for (let i = 0; i < FAR.cells; i++) {
-                const [a, b, c, d] = [j * count + i, j * count + i + 1, (j + 1) * count + i, (j + 1) * count + i + 1];
-
-                indices.push(a, c, b, b, c, d);
-            }
-        }
-
-        shape = new THREE.BufferAttribute(new Uint16Array(indices), 1);
-    }
-
     const geometry = new THREE.BufferGeometry();
 
-    geometry.setIndex(shape);
+    geometry.setIndex(new THREE.BufferAttribute(new Uint16Array(FAR.cells * FAR.cells * 6), 1));
     geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(count * count * 3), 3));
     geometry.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(count * count * 3), 3));
     geometry.setAttribute("farWater", new THREE.BufferAttribute(new Float32Array(count * count), 1));
@@ -119,7 +102,7 @@ export class FarLand {
     }
 
     // A level's ground worked out: into its mesh, and the next level out lifted out of sight inside it
-    #take({ level, middle, heights, water, normals }) {
+    #take({ level, middle, heights, water, normals, indices }) {
         const each = this.levels[level];
 
         if (!each || each.asked?.[0] !== middle[0] || each.asked?.[1] !== middle[1]) {
@@ -141,6 +124,8 @@ export class FarLand {
 
         geometry.getAttribute("normal").array.set(normals);
         geometry.getAttribute("farWater").array.set(water);
+        geometry.index.array.set(indices);
+        geometry.index.needsUpdate = true;
 
         for (const name of ["position", "normal", "farWater"]) {
             geometry.getAttribute(name).needsUpdate = true;

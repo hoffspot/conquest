@@ -8,7 +8,7 @@ import * as THREE from "three";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { distantHeights, landHeight, stillLevelAt } from "../client/js/core/terrain/height.js";
 import { FarLand } from "../client/js/world/far/far.js";
-import { FAR, FAR_LEVELS, farReach, middleOf, reachOf, sampleLevel, spacingOf } from "../client/js/world/far/levels.js";
+import { FAR, FAR_LEVELS, farReach, middleOf, reachOf, sampleLevel, spacingOf, splitAlong } from "../client/js/world/far/levels.js";
 import { FADE, FAR_FOG, farHaze, hazeAt } from "../client/js/world/fog.js";
 import { QUALITY } from "../client/js/world/view.js";
 
@@ -104,6 +104,42 @@ describe("the far land (world/far)", () => {
 
         assert.deepEqual([...sea], [0, 0, 0, 0]);
         assert.deepEqual([...open], [1, 1, 1, 1]);
+    });
+
+    it("splits each square along its more level diagonal, so ridges run along the triangles' edges, not in steps across them", () => {
+        // (A square with a ridge across it, its north-east and south-west corners high; and one
+        // with a ridge the other way)
+        const facesUp = (indices) => {
+            for (let n = 0; n < indices.length; n += 3) {
+                const [[ax, az], [bx, bz], [cx, cz]] = [...indices.subarray(n, n + 3)].map((k) => [k % 2, Math.floor(k / 2)]);
+
+                // (Anticlockwise from above, x east and z south: (b - a) x (c - a) pointing up)
+                assert.ok((bz - az) * (cx - ax) - (bx - ax) * (cz - az) > 0, `triangle ${n / 3}`);
+            }
+        };
+        const northEast = splitAlong(new Float32Array([0, 9, 9, 2]), 1, 3);
+        const northWest = splitAlong(new Float32Array([9, 0, 2, 9]), 1);
+
+        assert.equal(northEast.length, 6 + 3, "with room left after them");
+        assert.deepEqual([...northEast.subarray(0, 6)], [0, 2, 1, 1, 2, 3], "split along the ridge, north-east to south-west");
+        assert.deepEqual([...northWest], [0, 2, 3, 0, 3, 1], "split along the ridge, north-west to south-east");
+        facesUp(northEast.subarray(0, 6));
+        facesUp(northWest);
+
+        // (A level's own: every square split along its more level diagonal)
+        const { heights: ground, indices: level } = sampleLevel(plan, 2, middleOf(2, 2160, 1808));
+        const count = FAR.cells + 1;
+
+        assert.equal(level.length, FAR.cells * FAR.cells * 6);
+
+        for (let j = 0; j < FAR.cells; j++) {
+            for (let i = 0; i < FAR.cells; i++) {
+                const [a, b, c, d] = [j * count + i, j * count + i + 1, (j + 1) * count + i, (j + 1) * count + i + 1];
+                const square = [...level.subarray((j * FAR.cells + i) * 6, (j * FAR.cells + i + 1) * 6)];
+
+                assert.deepEqual(square, Math.abs(ground[a] - ground[d]) < Math.abs(ground[b] - ground[c]) ? [a, c, d, a, d, b] : [a, c, b, b, c, d]);
+            }
+        }
     });
 
     it("works out a level quickly enough to be done off the page's thread as the player walks", () => {

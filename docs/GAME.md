@@ -638,7 +638,10 @@ world's drawn twice over each frame:
 - **The far land** is levels of ground, each a square of 64 by 64 cells round the player, the
   finest 8 m between its corners and 512 m across, each level out twice as coarse and twice as
   wide (a geometry clipmap: Losasso and Hoppe), three of them on low (out to 1 km), four on
-  medium (2 km), five on high (4 km); one draw call each, 8,192 triangles.
+  medium (2 km), five on high (4 km); one draw call each, 8,192 triangles. Each cell is split
+  along whichever of its diagonals is the more level (far/levels.js `splitAlong`, worked out
+  with its heights), so a ridge or a valley runs along the triangles' edges; split the same way
+  everywhere, any running the other way was drawn as a row of teeth from high up.
   - **Its ground** is the land's as seen from afar (core/terrain/height.js `distantHeights`):
     lakes and the sea carved in and lying flat at their level, coloured as deep water; no rivers.
     Each level's edges are eased into the next one's (every other corner halfway between its
@@ -874,11 +877,21 @@ in play*): its corners a metre apart in the chunk the player's in, and further a
 beyond; on medium and low, two metres in that ring and four beyond, turning to the far land's
 look: the view, *The far land and the haze*), redrawn
 finer or coarser as the player moves, lit by its slope worked out from the corners round each (across
-into the chunks beside it). A skirt hangs two metres down round each chunk's edge, so where
+into the chunks beside it). A metre apart, each square's split from its north-west corner to its
+south-east, as the rules read heights between corners, so it's drawn just where everything stands
+on it; further apart, each along its more level diagonal, as the far land is, so ridges seen from
+further off don't run in steps. A skirt hangs two metres down round each chunk's edge, so where
 chunks drawn at different spacings meet no gap shows between them. Where the ground's steeper
 than about 33°, rock shows through the grass, all rock by about 45°: a rock texture seven metres
 across laid from the side and from above, as the slope faces, at two sizes turned against each
-other so it doesn't repeat. (A town on its own, in the labs, has one flat mesh under it all,
+other so it doesn't repeat; and within 8 m of the camera, fading out by 28 m, the light and shade
+of a copy four times finer (1.7 m across, turned again) laid over them (`ROCK_DETAIL`), so rock
+close by isn't a blur: two more texture reads, on rock alone and only that near. The rock's
+picture (painters.js `rock`) is broad faces of broken stone, each a shade of its own, their edges
+wavering, with bedding layers running across them, broad blotches and a fine grain; long cracks
+along only some of the faces' edges, each its own depth and broken off here and there, finer ones
+fainter; and pale flecks of crystal and lichen. (It was blotches and grain with dark cracks
+wandering all over it, in loops, from close by like worms.) (A town on its own, in the labs, has one flat mesh under it all,
 carrying on 110 metres past its edges into the fog.) A small "splat" texture, four texels to a metre made
 from the chunk's squares (and three more round it, so the edges blend across chunks as if there
 were none), says how much road, cobbles, soil and courtyard earth is at each point, with soft,

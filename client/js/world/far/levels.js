@@ -43,7 +43,7 @@ export function middleOf(level, x, z) {
  * water) at its (cells + 1)² corners, row by row (north to south, each west to east), and the
  * ground's up at each ([x, y, z] in turn). Along its edges, every other corner is put halfway
  * between its neighbours, as the next level out has the ground there, so the two meet without a
- * crack.
+ * crack. And its triangles (splitAlong's).
  */
 export function sampleLevel(plan, level, [mx, mz]) {
     const step = spacingOf(level);
@@ -77,5 +77,34 @@ export function sampleLevel(plan, level, [mx, mz]) {
         }
     }
 
-    return { level, middle: [mx, mz], heights, water, normals };
+    return { level, middle: [mx, mz], heights, water, normals, indices: splitAlong(heights, FAR.cells) };
+}
+
+/**
+ * The triangles of a square of `cells` by `cells` cells, its (cells + 1)² corners' heights given
+ * row by row (`heights`): each cell split along whichever of its diagonals is the more level, so
+ * that ridges and valleys run along the triangles' edges rather than in steps across them (as a
+ * fixed split draws any running the other way). Each triangle faces up (anticlockwise from above).
+ * With `room` more indices left free after them (world/ground.js: a chunk's skirt).
+ */
+export function splitAlong(heights, cells, room = 0) {
+    const count = cells + 1;
+    const indices = new Uint16Array(cells * cells * 6 + room);
+    let n = 0;
+
+    for (let j = 0; j < cells; j++) {
+        for (let i = 0; i < cells; i++) {
+            const [a, b, c, d] = [j * count + i, j * count + i + 1, (j + 1) * count + i, (j + 1) * count + i + 1];
+
+            if (Math.abs(heights[a] - heights[d]) < Math.abs(heights[b] - heights[c])) {
+                indices.set([a, c, d, a, d, b], n);
+            } else {
+                indices.set([a, c, b, b, c, d], n);
+            }
+
+            n += 6;
+        }
+    }
+
+    return indices;
 }

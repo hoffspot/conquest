@@ -11,7 +11,8 @@ globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContex
 
 const { blurred, distancesFrom } = await import("../client/js/world/fields.js");
 const { FIELD, fieldTexture, SHORE, shoreBytes, shoreDistances } = await import("../client/js/world/water.js");
-const { contactOf, HOMES, landColour, landLayers } = await import("../client/js/world/ground.js");
+const { contactOf, groundGeometry, HOMES, landColour, landLayers } = await import("../client/js/world/ground.js");
+const { CHUNK } = await import("../client/js/core/overworld.js");
 const { CONTACT, ContactShadows } = await import("../client/js/world/contacts.js");
 const THREE = await import("three");
 
@@ -116,6 +117,44 @@ describe("the ground where something stands on it (ground.js)", () => {
         assert.deepEqual([...marks.image.data.subarray(0, 8)], [...land.userData.home[0].image.data, ...land.userData.home[1].image.data]);
         assert.equal(marks.image.data[4 + (home & 3)], 255, "the dark elves' in the second map");
         assert.deepEqual([...marks.image.data.subarray(8, 12)], [0, 0, 0, 0], "no farmland");
+    });
+
+    it("is drawn a metre apart as everything stands on it, and coarser along the land's own ridges", () => {
+        // (A ridge from the chunk's north-east corner to its south-west, falling away either side)
+        const corners = CHUNK + 1;
+        const heights = Float32Array.from({ length: corners * corners }, (_, k) => 20 - Math.abs((k % corners) + Math.floor(k / corners) - CHUNK) * 0.8);
+        const fine = groundGeometry(heights, 1);
+        const [nw, ne, sw, se] = [0, 1, corners, corners + 1];
+
+        // (A metre apart: each square split from its north-west corner to its south-east, as
+        // core/terrain/ground.js reads heights between corners, the same triangles for every chunk)
+        assert.deepEqual([...fine.index.array.subarray(0, 6)], [nw, sw, se, nw, se, ne]);
+        assert.equal(groundGeometry(heights, 1).index, fine.index);
+
+        // (Four metres apart: the squares on the ridge split along it, the rest along their more
+        // level diagonal, each chunk's own; and its skirt after them)
+        const step = 4;
+        const count = CHUNK / step;
+        const side = count + 1;
+        const coarse = groundGeometry(heights, step);
+        const at = (i, j) => heights[j * step * corners + i * step];
+
+        assert.notEqual(coarse.index, groundGeometry(heights, step).index);
+        assert.equal(coarse.index.count, (count * count + count * 4) * 6);
+
+        for (let j = 0; j < count; j++) {
+            for (let i = 0; i < count; i++) {
+                const [a, b, c, d] = [j * side + i, j * side + i + 1, (j + 1) * side + i, (j + 1) * side + i + 1];
+                const square = [...coarse.index.array.subarray((j * count + i) * 6, (j * count + i + 1) * 6)];
+                const along = Math.abs(at(i, j) - at(i + 1, j + 1)) < Math.abs(at(i + 1, j) - at(i, j + 1));
+
+                assert.deepEqual(square, along ? [a, c, d, a, d, b] : [a, c, b, b, c, d]);
+
+                if (i + j === count - 1) {
+                    assert.deepEqual(square, [a, c, b, b, c, d], "on the ridge, split along it");
+                }
+            }
+        }
     });
 
     it("barely darkens round a lone trunk", () => {
