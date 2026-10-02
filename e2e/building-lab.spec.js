@@ -57,6 +57,8 @@ test("builds the taverns with their names and signs, the guild, the churches, th
     expect(built.names).toContain("sign guild");
     expect(built.names).toContain("sign blacksmith");
     expect(built.names).toEqual(expect.arrayContaining(["board hall", "sign hall", "sign keep"]));
+    // (The keep's banners and flags, stirring in the breeze: world/cloth.js)
+    expect(built.names).toContain("cloth");
 });
 
 test("draws a village out in the world in its chunks, with its tavern, church, smithy and guild", async ({ page }) => {

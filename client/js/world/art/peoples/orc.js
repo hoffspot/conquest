@@ -12,6 +12,7 @@
 // live in hide tents. The richer the clan, the more iron: riveted plates on roofs, iron spikes.
 
 import { material } from "../engine/materials.js";
+import { COLOURS } from "../engine/painters.js";
 import { add3, inset, Solid, times } from "../engine/solid.js";
 import { band, bandedWalls, CELL, circle, lens, m, pole, post, randomFor, southSide, spike, stake, wallPoint, weathering } from "./kit.js";
 
@@ -87,19 +88,11 @@ export function warBanner(solid, x, y, z, height, { cloth = "war-red", facing = 
     post(solid, x, y, z, height + m(0.2), m(0.08), "timber", { sides: 5 });
     pole(solid, [x - ax * width * 0.6, head, z - az * width * 0.6], [x + ax * width * 0.6, head, z + az * width * 0.6], m(0.05), "timber", { sides: 4 });
 
-    const at = (u, v) => [x + ax * (u - 0.5) * width, head - v * drop, z + az * (u - 0.5) * width + m(0.06)];
-    // (Its foot torn in teeth)
-    const edge = [at(1, 0.88), at(0.85, 1), at(0.68, 0.9), at(0.5, 1.02), at(0.32, 0.9), at(0.15, 1), at(0, 0.86)];
-    const outline = [at(0, 0), at(1, 0), ...edge];
+    // (Its cloth, its foot torn in teeth, a black hand painted on it, swinging in the breeze:
+    // world/cloth.js)
+    const out = [Math.sin(facing), 0, Math.cos(facing)];
 
-    solid.face(outline, material(cloth), undefined, null);
-    solid.face([...outline].reverse(), material(cloth), undefined, null);
-
-    // A black hand (or eye) painted on it
-    const mark = [at(0.35, 0.3), at(0.65, 0.3), at(0.62, 0.55), at(0.5, 0.62), at(0.38, 0.55)].map(([px, py, pz]) => [px, py, pz + m(0.01)]);
-
-    solid.face(mark, material("black"), undefined, null);
-    solid.face([...mark].reverse().map(([px, py, pz]) => [px, py, pz - m(0.02)]), material("black"), undefined, null);
+    (solid.cloth ??= []).push({ at: [x + out[0] * m(0.06), head, z + out[2] * m(0.06)], out, width, drop, kind: "hang", look: "ragged", colour: COLOURS[cloth] });
     skull(solid, [x, head + m(0.45), z], facing, m(0.35), { horns: true });
 }
 

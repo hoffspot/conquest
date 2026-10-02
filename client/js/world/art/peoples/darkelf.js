@@ -573,6 +573,16 @@ export async function keep(piece) {
         spider(solid, cx + side * m(2.6), 0, doorFace + m(1), m(2.2), "jade-dark", { facing: side * 0.3 });
     }
 
+    // (Their spider on long banners hung on its front either side of the door, as far out as its
+    // face is wide, stirring in the breeze: world/cloth.js)
+    const reach = Math.min(m(2.1), r * Math.tan(Math.PI / 8) - m(0.5));
+
+    if (reach > m(1.7)) {
+        for (const side of [-1, 1]) {
+            (solid.cloth ??= []).push({ at: [cx + side * reach, m(10.5), cz + r + m(0.06)], out: [0, 0, 1], width: m(0.8), drop: m(5), kind: "wall", look: "darkElf" });
+        }
+    }
+
     return solid.toObject();
 }
 

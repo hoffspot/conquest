@@ -10,7 +10,9 @@
 // piece's lot: 0 to w * CELL across, 0 to h * CELL deep, its front at z = h * CELL.
 
 import { createRandom, noise } from "../../../core/random.js";
+import { LOOKS } from "../../cloth.js";
 import { material } from "../engine/materials.js";
+import { COLOURS } from "../engine/painters.js";
 import { add3, cross, inset, sub, times, unit } from "../engine/solid.js";
 
 /** World pixels to a metre, and to a plot (four metres). */
@@ -223,7 +225,8 @@ export function steps(solid, x, z, y0, y1, way, width, name, { tread = m(0.3), r
 
 /**
  * A banner hanging from a pole: the pole standing on (x, y, z), `height` tall, a cloth `width`
- * wide and `drop` long hanging from a crossbar at its head, facing `facing` (radians, 0 south),
+ * wide and `drop` long of `cloth` (a plain colour's name, or a people's own: world/cloth.js LOOKS)
+ * hanging from a crossbar at its head, swinging in the breeze, facing `facing` (radians, 0 south),
  * its foot cut in a swallowtail if `tail`.
  */
 export function banner(solid, x, y, z, height, cloth, { width = m(0.7), drop = m(1.6), facing = 0, poleName = "timber", tail = true, top = null } = {}) {
@@ -233,11 +236,10 @@ export function banner(solid, x, y, z, height, cloth, { width = m(0.7), drop = m
     post(solid, x, y, z, height + m(0.15), m(0.06), poleName, { sides: 5 });
     pole(solid, [x - ax * width * 0.6, head, z - az * width * 0.6], [x + ax * width * 0.6, head, z + az * width * 0.6], m(0.035), poleName, { sides: 4 });
 
-    const at = (u, v) => [x + ax * (u - 0.5) * width, head - v * drop, z + az * (u - 0.5) * width + m(0.04)];
-    const outline = tail ? [at(0, 0), at(1, 0), at(1, 1), at(0.5, 0.78), at(0, 1)] : [at(0, 0), at(1, 0), at(1, 1), at(0, 1)];
+    const out = [Math.sin(facing), 0, Math.cos(facing)];
+    const own = LOOKS.includes(cloth);
 
-    solid.face(outline, material(cloth));
-    solid.face([...outline].reverse(), material(cloth));
+    (solid.cloth ??= []).push({ at: [x + out[0] * m(0.04), head, z + out[2] * m(0.04)], out, width, drop, kind: "hang", look: own ? cloth : tail ? "plain" : "square", colour: own ? null : COLOURS[cloth] });
 
     if (top) {
         top(solid, [x, head + m(0.15), z]);

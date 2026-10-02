@@ -639,14 +639,10 @@ export async function keep(piece) {
 
     steps(solid, foot[0], foot[2] + m(0.3) * 4 + m(0.05), 0, floor, [0, -1], m(3.2), "mud-pale", { tread: m(0.3), riser: floor / 4 });
 
+    // (Their sun on them, stirring in the breeze: world/cloth.js; hung out from the wall's top
+    // as far as it leans in over their length, so they hang clear of it to their feet)
     for (const side of [-1, 1]) {
-        const u = middle + side * m(2.2);
-        const colour = side < 0 ? "indigo" : "awning";
-        const cloth = [at(u - m(0.5), m(9.5), m(0.12)), at(u + m(0.5), m(9.5), m(0.12)), at(u + m(0.5), m(4), m(0.12)), at(u, m(3.5), m(0.12)), at(u - m(0.5), m(4), m(0.12))];
-
-        solid.face(cloth, material(colour), undefined, null);
-        solid.face([...cloth].reverse(), material(colour), undefined, null);
-        solid.facing([at(u - m(0.3), m(7.6), m(0.13)), at(u + m(0.3), m(7.6), m(0.13)), at(u + m(0.3), m(8.2), m(0.13)), at(u - m(0.3), m(8.2), m(0.13))], faces[2].out, material("sun-gold"), undefined, null);
+        (solid.cloth ??= []).push({ at: at(middle + side * m(2.2), m(9.5), m(0.08) + lean * m(6)), out: [...faces[2].out], width: m(1), drop: m(6), kind: "wall", look: "cat" });
     }
 
     return solid.toObject();

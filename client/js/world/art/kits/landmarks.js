@@ -7,6 +7,7 @@
 
 import { GODS } from "../../../core/lore/gods.js";
 import { createRandom } from "../../../core/random.js";
+import { flagpole } from "../../cloth.js";
 import { material } from "../engine/materials.js";
 import { Solid } from "../engine/solid.js";
 import { buildHouse, planHouse, STYLES as HOUSE_STYLES } from "./house.js";
@@ -625,6 +626,11 @@ export async function keep(piece) {
         solid.cone(x, z, height + m(2.2), m(3.2), turret + m(0.35), material(roof), 14);
     }
 
+    // (The crown's flags flying from its two front turrets: world/cloth.js)
+    for (const x of [x0, x1]) {
+        flagpole(solid, [x, height + m(5), z1], m(2.8), "human", { radius: m(0.05), length: m(3), drop: m(1) });
+    }
+
     // Windows: arrow slits low down, taller lights above, on every face
     const slitsAlong = (face, from, to, fixed) => {
         for (let u = from + m(2); u < to - m(1.6); u += m(2.4)) {
@@ -659,12 +665,10 @@ export async function keep(piece) {
     solid.box(mid - dw / 2 - m(0.6), 0, z1, mid + dw / 2 + m(0.6), m(0.4), z1 + m(1.2), material(stone));
     solid.box(mid - dw / 2 - m(0.4), m(0.4), z1, mid + dw / 2 + m(0.4), floor, z1 + m(0.6), material(stone));
 
-    // Long banners either side of the door, and the crown's sign over it
+    // Long banners either side of the door (the crown's, stirring in the breeze: world/cloth.js),
+    // and the crown's sign over it
     for (const side of [-1, 1]) {
-        const x = mid + side * m(3.2);
-
-        solid.box(x - m(0.55), m(3.4), z1, x + m(0.55), height * 0.72, z1 + m(0.12), material("banner"));
-        solid.box(x - m(0.2), height * 0.6, z1 + m(0.12), x + m(0.2), height * 0.66, z1 + m(0.16), material("cloth-gold"));
+        (solid.cloth ??= []).push({ at: [mid + side * m(3.2), height * 0.72, z1 + m(0.06)], out: [0, 0, 1], width: m(1.1), drop: height * 0.72 - m(3.4), kind: "wall", look: "human" });
     }
 
     const face = { origin: [x0, 0, z1 + m(0.25)], across: [1, 0, 0], out: [0, 0, 1], length: x1 - x0 };

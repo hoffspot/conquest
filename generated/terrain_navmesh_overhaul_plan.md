@@ -2060,3 +2060,46 @@ converted data is to be measured in M8 against today's hm08 data.
     always, one mesh of one material, the same every time, timed by the trees' breeze, its share
     the quality's, puffs dropped evenly); `e2e/building-lab.spec.js` (a village draws its
     smoke).
+- **2026-10-02, M7c-2 built** (banners and flags in the wind: §9's "signs of life", banners):
+  - **Why:** the peoples' banners were flat boxes and faces, still as the walls they hung on;
+    the war's banners at the towns' ways out hung stiff, a wave baked into them; nothing flew
+    from the towers.
+  - **Built** (`world/cloth.js`):
+    - the kits record each cloth as they build (`solid.cloth`, kept in the built object's
+      `userData.cloth`; `clothOf` finds them in the world): where its top is, which way its front
+      faces, how wide and long it is, its kind (hanging from a bar, hung on a wall, or a flag
+      flying) and its look;
+    - one picture of every cloth (`clothPicture`): each people's (their colour darkened for its
+      field, or the crown's red and the cat folk's indigo, whose own are lost on their mud walls;
+      a trim, their emblem, a swallowtail; painted as the war's banners' were, `paintCloth`, now
+      here), a plain
+      swallowtail, a plain square, a ragged war banner with a black hand, and a pennant, the
+      plain ones white to be tinted;
+    - one mesh a chunk and one for the start town (`clothMesh`), one material (Lambert, both
+      sides, cut out of its picture), primed at load: each cloth a grid of corners (6 by 8, a
+      pennant's 8 by 3) all where its top is, where each hangs and which way it faces worked out
+      in the vertex shader from the trees' breeze's time: a hanging cloth swinging more towards its
+      foot, rippling and in standing folds, its foot carried downwind; one on a wall standing out
+      from it, never into it (hung out from a leaning wall's top as far as it leans); a pennant flying out on the breeze (the way the chimneys' smoke leans), waves
+      running out along it; its normal from the wave's slope, so its folds catch the light;
+    - the war's banners at the towns' ways out drawn the same way, a town's in one mesh
+      (`banners3d.js`);
+    - what hangs and flies (`flagpole` for flags): the crown's banners on a human keep, castle
+      gatehouse and keep (were red boxes), pennants on a human castle's roofed towers and keep and
+      a human keep's front turrets; the leaf's banners either side of an elven keep's door; the
+      spider's on a dark elven keep's front; the sun's on a cat folk's keep (were two faces); the
+      orcs' ragged war banners (were faces); flags on a lizard folk palace's roof.
+  - **Cost** (measured in the building lab, each view drawn with the cloth and without): one
+    draw a chunk with any cloth (and one for the start town's), no shadow draws; 288 triangles
+    on a human keep (two banners, two pennants), 576 on a human castle, 384 on an orcs' keep,
+    192 on a cat folk's; one more program, primed at load; one picture 1280 by 224.
+  - **Pictures:** before/after sheet and a moving picture sent in the session (a human keep close
+    and whole, a human castle, elven, dark elven, lizard folk, cat folk and orc keeps, the start
+    town's war banner).
+  - **Versions:** none (the drawing's alone).
+  - **Tests:** `test/buildings.test.js` (a keep's banners hung on its front and flags flying from
+    its turrets, turned and moved with it; the castle's towers', keep's and gatehouse's; an orcs'
+    war banner ragged and red, facing the way it's set; one mesh of one material, each cloth's
+    corners where its top is with its own cell of the picture, the breeze the smoke's, the
+    shader's hooks in Lambert's; a town's war banners in its holders' cloth, in one mesh, taken
+    down); `e2e/building-lab.spec.js` (the landmarks' cloth drawn).
