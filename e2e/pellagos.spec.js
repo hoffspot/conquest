@@ -2836,13 +2836,14 @@ test("holding on an enemy or the player opens the action wheel: flick left (W) t
     const up = wheel.locator('.slice[data-direction="n"]');
     const left = wheel.locator('.slice[data-direction="w"]');
 
-    // The orc standing a few squares from the player, who's hurt
+    // The orc standing a few squares from the player, who's hurt (to the right and a little ahead,
+    // clear of the minimap along the top)
     const orcAt = await page.evaluate(() => {
         const { game, session } = window.pellagos;
         const { battle } = game;
         const player = battle.actor("player");
         const orc = battle.actor("orc");
-        const square = [player.square[0] + 3, player.square[1] - 2];
+        const square = [player.square[0] + 3, player.square[1] - 1];
 
         Object.assign(orc, { square, x: square[0] + 0.5, y: square[1] + 0.5, to: null, path: [], ai: null });
         game.avatars.get("orc").place(orc.x, orc.y, Math.PI);
@@ -2927,6 +2928,185 @@ test("holding on an enemy or the player opens the action wheel: flick left (W) t
 
     expect(hp).toBeGreaterThanOrEqual(28);
     expect(hp).toBeLessThanOrEqual(32);
+});
+
+test("in a fight four quick actions rise from the bottom, lifting the name and zoom buttons: Stun tapped on the foe set on, Vigor on the player, swept over while cooling; attacks greyed with no foe set on; held, changed in Quick actions; the minimap up top beside the buttons", async ({ page }) => {
+    // (Played on between taps, and held once: more than the usual time, with others running beside it)
+    test.setTimeout(180000);
+    await page.setViewportSize({ width: 402, height: 874 });
+    await playing(page, "/?play&seed=1");
+
+    const bar = page.locator(".quickbar");
+    const slot = (n) => bar.locator(`.quick-slot[data-slot="${n}"]`);
+    const box = (selector) => page.locator(selector).boundingBox();
+    const play = (seconds) => page.evaluate((seconds) => window.pellagos.game.advance(seconds), seconds);
+
+    // The minimap along the top, level with the four buttons, on their left, all on the screen
+    const [map, book, menu] = await Promise.all([box("#minimap"), box("#spellbookbutton"), box("#menubutton")]);
+
+    expect(Math.abs(map.y - book.y)).toBeLessThan(1);
+    expect(map.x).toBeGreaterThanOrEqual(0);
+    expect(map.x + map.width).toBeLessThan(book.x);
+    expect(menu.x + menu.width).toBeLessThanOrEqual(402);
+
+    // No fight: put away, the player's name at the foot of the screen
+    await expect(bar).not.toHaveClass(/up/);
+
+    const calm = await box("#playerplate");
+
+    // The orc brought near the hurt player, and set on: up, the name and zoom buttons over it
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const { battle } = game;
+        const player = battle.actor("player");
+        const orc = battle.actor("orc");
+        const square = [player.square[0] + 3, player.square[1] - 2];
+
+        game.stop();
+        Object.assign(orc, { square, x: square[0] + 0.5, y: square[1] + 0.5, to: null, path: [], ai: null });
+        game.avatars.get("orc").place(orc.x, orc.y, Math.PI);
+        game.previous.set("orc", { x: orc.x, y: orc.y });
+        player.hp = 20;
+        battle.command("player", { type: "engage", target: "orc" });
+        game.advance(0.1);
+    });
+    await expect(bar).toHaveClass(/up/);
+    await expect(slot(0).locator(".quick-label")).toHaveText("Vigor");
+    await expect(slot(1).locator(".quick-label")).toHaveText("Stun");
+    await expect(slot(2).locator(".quick-label")).toHaveText("Burn");
+    await expect(slot(3).locator(".quick-label")).toHaveText("Draught");
+    await expect(slot(0)).toHaveClass(/own/);
+    await expect(slot(1)).toHaveClass(/foe/);
+    // (Burn's tome not read; no draughts carried)
+    await expect(slot(2)).toHaveClass(/off/);
+    await expect(slot(3)).toHaveClass(/off/);
+    await expect(slot(3).locator(".quick-count")).toHaveText("0");
+    await expect(slot(1)).not.toHaveClass(/off/);
+    await expect.poll(async () => (await box("#playerplate")).y + (await box("#playerplate")).height).toBeLessThanOrEqual((await box(".quickbar")).y);
+    expect((await box("#playerplate")).y).toBeLessThan(calm.y);
+    await expect.poll(async () => (await box("#zoomout")).y + (await box("#zoomout")).height).toBeLessThanOrEqual((await box(".quickbar")).y);
+
+    // Stun tapped: cast on the orc
+    await slot(1).click();
+    await play(0.6);
+
+    const stunned = await page.evaluate(() => {
+        const { battle } = window.pellagos.game;
+
+        return { stunned: battle.actor("orc").stunnedUntil > battle.time, cooldown: battle.cooldown("player", "stun") };
+    });
+
+    expect(stunned.stunned).toBe(true);
+    expect(stunned.cooldown).toBeGreaterThan(0.3);
+
+    // Cooling down, Vigor too (the spells' shared cooldown): swept over, and refused when tapped
+    await expect(slot(1)).toHaveClass(/cooling/);
+    await expect(slot(0)).toHaveClass(/cooling/);
+
+    const left = Number(await slot(0).evaluate((element) => element.style.getPropertyValue("--left")));
+
+    expect(left).toBeGreaterThan(0);
+    expect(left).toBeLessThanOrEqual(1);
+    await slot(0).click();
+    await expect(slot(0)).toHaveClass(/refused/);
+    await expect(page.locator("#banner")).toHaveText("Not ready yet");
+    await play(0.1);
+    expect(await page.evaluate(() => window.pellagos.game.battle.actor("player").casting)).toBeNull();
+
+    // Once it's over, Vigor tapped heals the player, by 8 to 12 (the orc kept stunned meanwhile)
+    const before = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const { battle } = game;
+
+        battle.actor("orc").stunnedUntil = battle.time + 60000;
+        game.advance(3);
+
+        return battle.actor("player").hp;
+    });
+
+    await expect(slot(0)).not.toHaveClass(/cooling/);
+    await slot(0).click();
+    await play(1);
+
+    const healed = (await page.evaluate(() => window.pellagos.game.battle.actor("player").hp)) - before;
+
+    expect(healed).toBeGreaterThanOrEqual(8);
+    expect(healed).toBeLessThanOrEqual(12);
+
+    // No foe set on, but the orc coming for the player: still up, Stun greyed and refused
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const { battle } = game;
+        const player = battle.actor("player");
+
+        player.order = null;
+        player.attack = null;
+        battle.actor("orc").target = "player";
+        battle.actor("orc").stunnedUntil = 0;
+        game.advance(0.1);
+    });
+    await expect(bar).toHaveClass(/up/);
+    await expect(slot(1)).toHaveClass(/off/);
+    await expect(slot(0)).not.toHaveClass(/off/);
+    await slot(1).click();
+    await expect(page.locator("#banner")).toHaveText("Tap a foe first: that's used on them");
+
+    // The fight over: up a moment more, then put away, the name back at the foot of the screen
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const orc = game.battle.actor("orc");
+
+        Object.assign(orc, { target: null, attack: null, dead: true, respawnAt: Infinity });
+        game.advance(1);
+    });
+    await expect(bar).toHaveClass(/up/);
+    await play(2.5);
+    await expect(bar).not.toHaveClass(/up/);
+    await expect.poll(async () => (await box("#playerplate")).y).toBeCloseTo(calm.y, 0);
+
+    // Held in a fight: paused at Quick actions, that slot chosen; Rumble (its tome read) put in
+    // it, and back to the game
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const orc = game.battle.actor("orc");
+
+        game.progress.learn("rumble");
+        Object.assign(orc, { dead: false, hp: orc.maxHp, target: "player" });
+        game.advance(0.1);
+        game.start();
+    });
+    await expect(bar).toHaveClass(/up/);
+
+    // (A draught, with none carried: refused, the 4 key tapping the fourth)
+    await page.keyboard.press("4");
+    await expect(page.locator("#banner")).toHaveText("You've none left");
+
+    const third = await slot(2).boundingBox();
+
+    await page.mouse.move(third.x + third.width / 2, third.y + third.height / 2);
+    await page.mouse.down();
+    await expect(page.locator("#menuquick")).toBeVisible();
+    await page.mouse.up();
+    expect(await page.evaluate(() => window.pellagos.game.running)).toBe(false);
+    await expect(page.locator("#quicksetup .wheels-heading")).toHaveText("Quick action 3");
+    await expect(page.locator('#quicksetup .quick-slot[data-slot="2"]')).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator('#quicksetup .wheels-choice[data-action="rumble"] small')).toHaveText("On your foe");
+    await expect(page.locator('#quicksetup .wheels-choice[data-action="vigor"] small')).toHaveText("On yourself");
+    await page.locator('#quicksetup .wheels-choice[data-action="rumble"]').click();
+    expect(await page.evaluate(() => window.pellagos.game.wheels.quick)).toEqual(["vigor", "stun", "rumble", "item:potion"]);
+    await expect(page.locator('#quicksetup .quick-slot[data-slot="2"] .quick-label')).toHaveText("Rumble");
+    await page.locator("#quickback").click();
+    await expect(page.locator("#menu")).not.toBeVisible();
+    expect(await page.evaluate(() => window.pellagos.game.running)).toBe(true);
+    await expect(slot(2).locator(".quick-label")).toHaveText("Rumble");
+
+    // And from Game options, Back going back there
+    await page.locator("#menubutton").click();
+    await page.locator("#optionsbutton").click();
+    await page.locator("#quickbutton").click();
+    await expect(page.locator("#quicksetup .wheels-heading")).toHaveText("Quick action 1");
+    await page.locator("#quickback").click();
+    await expect(page.locator("#menuoptions")).toBeVisible();
 });
 
 test("the action wheels: flicked down, the other side; what's on each chosen in Game options, from what's learnt and carried; a draught drunk from wheel two", async ({ page }) => {

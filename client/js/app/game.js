@@ -91,7 +91,8 @@ import { Pacing } from "./pacing.js";
 import { Prediction } from "./predict.js";
 import { describe, totals } from "./gearinfo.js";
 import { TalkPanel } from "./talk.js";
-import { ACTIONS, ActionWheel, actionOf, assignable, directionOf, forFriends, PLACES, readWheels, SIDES, WHEELS } from "./wheel.js";
+import { QuickBar, QUICK_LINGER, QUICK_REFUSALS } from "./quickbar.js";
+import { ACTIONS, ActionWheel, actionOf, assignable, directionOf, forFriends, offensive, PLACES, readWheels, SIDES, WHEELS } from "./wheel.js";
 
 /** What every character wears under their gear: a tunic, and trousers if nothing's on their legs. */
 export const BASE_OUTFIT = Object.freeze(["tunic", "trousers"]);
@@ -468,8 +469,17 @@ export class Game {
 
         this.onFollowers = onFollowers;
 
-        /** What's on the player's action wheels: their own and an enemy's, each two sides (app/wheel.js). */
+        /**
+         * What's on the player's action wheels: their own and an enemy's, each two sides; and their
+         * quick actions, four (app/wheel.js).
+         */
         this.wheels = readWheels(wheels);
+
+        /** Hears a quick action held on (its slot), to change what's in it (main.js: Quick actions). */
+        this.onChooseQuick = () => {};
+
+        /** Till when (the clock) the quick actions stay up: a moment after the last of a fight. */
+        this.fightUntil = -Infinity;
         this.onWheels = onWheels;
         this.onProgress = onProgress;
         this.onStanding = onStanding;
@@ -935,6 +945,9 @@ export class Game {
         this.minimap.show(this.minimapShown ?? true);
         this.wheel = new ActionWheel(this.hud.root);
         this.wheel.element.classList.add("action-wheel");
+        this.quickBar = new QuickBar(this.hud.root);
+        this.quickBar.onUse = (slot) => this.quick(slot);
+        this.quickBar.onChoose = (slot) => this.onChooseQuick(slot);
         this.talk = new TalkPanel(this.hud.root);
         this.pack = new PackPanel(this.hud.root);
         this.pack.onCommand = (command) => this.#packCommand(command);
@@ -1340,6 +1353,7 @@ export class Game {
 
         this.minimap?.dispose();
         this.wheel?.element.remove();
+        this.quickBar?.dispose();
         this.talk?.panel.remove();
         this.pack?.dispose();
         this.drops?.dispose();
@@ -1815,6 +1829,7 @@ export class Game {
 
         this.effects.setTarget(ringed?.object ?? null, ringed ? Math.max(0.5, ringed.character.height * 0.33) : 0.6);
         hud.setTarget(target?.id ?? null);
+        this.#quickActions(target);
         this.#bleed(dt);
         this.#ailing();
         this.#grounds();
@@ -4955,6 +4970,8 @@ export class Game {
                 this.toggleJournal();
             } else if ((event.key === "b" || event.key === "B") && plain) {
                 this.toggleSpellbook();
+            } else if (/^[1-4]$/.test(event.key) && plain && this.quickBar?.up && !(event.target instanceof HTMLInputElement)) {
+                this.quick(Number(event.key) - 1);
             }
         }, { capture: true });
 
@@ -5352,6 +5369,136 @@ export class Game {
         if (this.wheel?.open) {
             this.wheel.hide();
         }
+    }
+
+    // --- The quick actions (app/quickbar.js) ---
+
+    // Is anyone after the player: an enemy on their map set to fight them, or striking at them?
+    #underAttack(player) {
+        return this.battle.actors.some((other) => (other.target === player.id || other.attack?.target === player.id) && !other.dead && other.map === player.map && this.battle.hostile(other, player));
+    }
+
+    // The quick actions up in a fight (an enemy the player's set to fight, `target`, or anyone
+    // after them) and for a moment after it, each greyed while it can't be used and swept over
+    // while it cools down
+    #quickActions(target) {
+        const player = this.battle.actor(this.me);
+        const alive = Boolean(player) && !player.dead;
+
+        if (alive && (target || this.#underAttack(player))) {
+            this.fightUntil = this.clock + QUICK_LINGER;
+        }
+
+        this.quickBar.raise(alive && this.clock < this.fightUntil);
+
+        if (!this.quickBar.up) {
+            return;
+        }
+
+        const keys = this.wheels.quick;
+        const counts = {};
+        const off = [];
+
+        keys.forEach((key, slot) => {
+            const item = actionOf(key)?.item;
+
+            if (item) {
+                counts[item] = this.progress.count(item);
+            }
+
+            if (this.#quickRefusal(key, target)) {
+                off.push(slot);
+            }
+        });
+
+        this.quickBar.fill(keys, { counts, off });
+
+        const cooling = this.#cooldowns(Object.fromEntries(keys.map((key, slot) => [slot, key])));
+
+        this.quickBar.setCooldown(keys.map((_, slot) => cooling[slot] ?? 0));
+    }
+
+    // Why a quick action can't be used as things are, but for cooling down (or null): nothing in
+    // it ("empty"); not learnt (an element's first spell's tome not read); none of it left; a blow
+    // for another kind of weapon, or a spell needing a wand or grimoire in hand; or an attack, a
+    // hex or a blow with no enemy set on (`target`) to use it on
+    #quickRefusal(key, target) {
+        const action = actionOf(key);
+
+        if (!action) {
+            return "empty";
+        }
+
+        if (action.spell) {
+            const unready = this.#unready(action.spell);
+
+            if (unready && unready !== "cooldown") {
+                return unready;
+            }
+        }
+
+        if (action.ability && !this.progress.abilities().includes(action.ability)) {
+            return "unknown";
+        }
+
+        if (action.item && !this.progress.count(action.item)) {
+            return "none";
+        }
+
+        const blow = ABILITIES[action.ability]?.blow;
+        const weapon = WEAPONS[this.battle.actor(this.me)?.weapon];
+
+        if (blow && !weapon?.attacks.some(({ kind }) => (kind === "ranged" ? "ranged" : "melee") === blow)) {
+            return "weapon";
+        }
+
+        return offensive(key) && !target ? "untargeted" : null;
+    }
+
+    /**
+     * Use a quick action (its slot, 0 to 3, from the left): an attack, a hex or a blow on the enemy
+     * the player's set to fight, anything else on themselves; refused (and said why) if it can't
+     * be, as things are, or is cooling down. An empty slot's to be filled (onChooseQuick).
+     */
+    quick(slot) {
+        const key = this.wheels.quick[slot] ?? null;
+        const target = this.#target();
+        const why = this.#quickRefusal(key, target) ?? ((this.#cooldowns({ slot: key }).slot ?? 0) > 0 ? "cooldown" : null);
+
+        if (why === "empty") {
+            this.onChooseQuick(slot);
+
+            return { ok: false, reason: why };
+        }
+
+        if (why) {
+            this.quickBar?.mark(slot, "refused");
+            this.hud.message(QUICK_REFUSALS[why] ?? CAST_FAILURES[why] ?? REFUSALS[why], 1.4);
+            this.sound?.play("denied");
+
+            return { ok: false, reason: why };
+        }
+
+        this.quickBar?.mark(slot, "chosen");
+
+        return this.act(key, offensive(key) ? target.id : "self");
+    }
+
+    /**
+     * What's in the player's quick actions, what can be put in them (app/wheel.js assignable), and
+     * how many of each thing they carry: for the Quick actions options.
+     */
+    quickSetup() {
+        const learnt = [...this.progress.known(), ...this.progress.abilities()];
+        const counts = Object.fromEntries(Object.keys(ITEMS).map((id) => [id, this.progress.count(id)]));
+
+        return { quick: [...this.wheels.quick], choices: assignable("quick", { learnt, carries: this.progress.carried() }), counts };
+    }
+
+    /** Put things in the player's quick actions (as the Quick actions options have them), and keep them. */
+    setQuick(quick) {
+        this.wheels = readWheels({ ...this.wheels, quick });
+        this.onWheels(structuredClone(this.wheels));
     }
 
     /**

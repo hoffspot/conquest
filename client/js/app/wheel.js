@@ -14,6 +14,9 @@
 // While a slice's action is cooling down, the slice is greyed out over as much of it as the
 // cooldown has left, sweeping back as it passes. A thing to use shows how many there are.
 //
+// The quick actions (app/quickbar.js) are kept with the wheels: four slots, each holding what a
+// wheel's slice can (QUICK), rising from the bottom of the screen in a fight.
+//
 // The wheel is SVG over the game; the game (game.js) follows the finger and says what to do.
 
 import { ITEMS } from "../core/progress.js";
@@ -106,8 +109,24 @@ export const WHEELS = Object.freeze({
 export const SETTABLE = Object.freeze(["self", "enemy"]);
 
 /**
+ * The quick actions until the player changes them, left to right: Vigor and Stun (known from the
+ * start), Burn (once its tome's read) and a healing draught (once they carry one).
+ */
+export const QUICK = Object.freeze(["vigor", "stun", "burn", "item:potion"]);
+
+// Whether an action can be a quick action: anything a wheel's slice can hold but a fight picked
+const quickable = (action) => Boolean(action) && action.on !== "provoke";
+
+/**
+ * Whether a quick action (an ACTIONS key, or "item:" and a thing to use) is used on the enemy the
+ * player's set to fight (an attack, a hex, a blow), not on themselves (healing, a ward, a draught).
+ */
+export const offensive = (key) => actionOf(key)?.on === "enemy";
+
+/**
  * The player's wheels as kept (or nothing kept: the WHEELS they start with), made safe: each of
- * their own and an enemy's, two sides, each slice holding something that goes on that wheel.
+ * their own and an enemy's, two sides, each slice holding something that goes on that wheel; and
+ * their quick actions (`quick`: QUICK's four slots, each something that can be one, or null).
  */
 export function readWheels(kept) {
     const wheels = {};
@@ -122,16 +141,25 @@ export function readWheels(kept) {
         });
     }
 
+    const quick = Array.isArray(kept?.quick) ? kept.quick : QUICK;
+
+    wheels.quick = QUICK.map((_, slot) => (quickable(actionOf(quick[slot])) ? (RENAMED[quick[slot]] ?? quick[slot]) : null));
+
     return wheels;
 }
 
 /**
- * What can be put on a wheel ("self" or "enemy"), for a player who's `learnt` some spells and
- * abilities (core/progress.js Progress known, abilities) and `carries` some things (item ids): the
- * spells they know that go on it, the blows they've learnt, and (their own) each thing to use they
- * carry.
+ * What can be put on a wheel ("self" or "enemy"), or be a quick action ("quick": either's), for a
+ * player who's `learnt` some spells and abilities (core/progress.js Progress known, abilities)
+ * and `carries` some things (item ids): the spells they know that go on it, the blows they've
+ * learnt, and (their own) each thing to use they carry.
  */
 export function assignable(wheel, { learnt = [], carries = [] } = {}) {
+    // (A quick action: anything that can go on either wheel)
+    if (wheel === "quick") {
+        return [...new Set([...assignable("self", { learnt, carries }), ...assignable("enemy", { learnt, carries })])];
+    }
+
     const actions = Object.entries(ACTIONS)
         .filter(([, action]) => goesOn(action, wheel) && (!action.learnt || learnt.includes(action.learnt)))
         .map(([key]) => key);

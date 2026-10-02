@@ -368,6 +368,7 @@ async function playing(save) {
     showMinimap(settings.minimap);
     game.resistSummons = settings.resistSummons;
     game.onAdapt = showAdapted;
+    game.onChooseQuick = chooseQuick;
     debug.watch({ game });
     show("hud");
     game.start();
@@ -393,8 +394,8 @@ function resume() {
     state.game?.start();
 }
 
-// The menu's pages: the main one, Game options, and its Action wheels
-const MENU_PAGES = { main: ["#menumain", "menutitle", "#resumebutton"], options: ["#menuoptions", "optionstitle", "#minimapswitch"], wheels: ["#menuwheels", "wheelstitle", "#wheelsback"] };
+// The menu's pages: the main one, Game options, and its Action wheels and Quick actions
+const MENU_PAGES = { main: ["#menumain", "menutitle", "#resumebutton"], options: ["#menuoptions", "optionstitle", "#minimapswitch"], wheels: ["#menuwheels", "wheelstitle", "#wheelsback"], quick: ["#menuquick", "quicktitle", "#quickback"] };
 
 function menuPage(page) {
     for (const [each, [id]] of Object.entries(MENU_PAGES)) {
@@ -402,7 +403,7 @@ function menuPage(page) {
     }
 
     $("#menu").setAttribute("aria-labelledby", MENU_PAGES[page][1]);
-    $("#menu").classList.toggle("wide", page === "wheels");
+    $("#menu").classList.toggle("wide", page === "wheels" || page === "quick");
     $(MENU_PAGES[page][2]).focus();
 }
 
@@ -423,6 +424,47 @@ async function openWheels() {
     state.wheelSetup.onChange = (wheels) => state.game?.setWheels(wheels);
     state.wheelSetup.show(game.wheelSetup());
     menuPage("wheels");
+}
+
+// What's in the player's quick actions, to change (app/quicksetup.js: loaded the first time), with
+// the `slot`th chosen. Opened from Game options, Back goes back there; from a quick action held
+// on in a fight (`fromFight`), back to the game.
+async function openQuick(slot = 0, { fromFight = false } = {}) {
+    const game = state.game;
+
+    if (!game) {
+        return;
+    }
+
+    if (!state.quickSetup) {
+        const { QuickSetup } = await import("./app/quicksetup.js");
+
+        state.quickSetup = new QuickSetup($("#quicksetup"));
+    }
+
+    state.quickFromFight = fromFight;
+    $("#quickback").textContent = fromFight ? "Back to the game" : "Back";
+    state.quickSetup.onChange = (quick) => state.game?.setQuick(quick);
+    state.quickSetup.show(game.quickSetup(), slot);
+    menuPage("quick");
+}
+
+// A quick action held on in a fight (or an empty one tapped): paused, its slot chosen to change
+function chooseQuick(slot) {
+    pause();
+
+    if ($("#menu").open) {
+        openQuick(slot, { fromFight: true });
+    }
+}
+
+// Back from the Quick actions: to the game if they came from a fight, else to Game options
+function quickBack() {
+    if (state.quickFromFight) {
+        resume();
+    } else {
+        menuPage("options");
+    }
 }
 
 // --- The world map (the minimap held, or M) ---
@@ -745,6 +787,7 @@ async function playingJoined(save, welcome, joining) {
     showMinimap(settings.minimap);
     game.resistSummons = settings.resistSummons;
     game.onAdapt = showAdapted;
+    game.onChooseQuick = chooseQuick;
     debug.watch({ game });
     show("hud");
     game.start();
@@ -792,6 +835,8 @@ $("#optionsbutton").addEventListener("click", () => menuPage("options"));
 $("#optionsback").addEventListener("click", () => menuPage("main"));
 $("#wheelsbutton").addEventListener("click", openWheels);
 $("#wheelsback").addEventListener("click", () => menuPage("options"));
+$("#quickbutton").addEventListener("click", () => openQuick(0));
+$("#quickback").addEventListener("click", quickBack);
 $("#minimapswitch").addEventListener("change", (event) => applySetting("minimap", event.target.checked));
 $("#resistswitch").addEventListener("change", (event) => applySetting("resistSummons", event.target.checked));
 
@@ -854,13 +899,16 @@ function showVolumes(on) {
 
 showVolumes(settings.sound);
 
-// Escape goes back a page (from Action wheels to Game options, from there to the main page), and
-// closes the menu from the main page
+// Escape goes back a page (from Action wheels or Quick actions to Game options, or to the game if
+// they were opened in a fight; from Game options to the main page), and closes the menu from the
+// main page
 $("#menu").addEventListener("cancel", (event) => {
     event.preventDefault();
 
     if (!$("#menuwheels").hidden) {
         menuPage("options");
+    } else if (!$("#menuquick").hidden) {
+        quickBack();
     } else if ($("#menumain").hidden) {
         menuPage("main");
     } else {
