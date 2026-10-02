@@ -31,7 +31,8 @@ function board(solid, at, out, [u0, u1, v0, v1], texture, name, proud = m(0.2)) 
     const [l, r] = (b[0] - a[0]) * right[0] + (b[2] - a[2]) * right[2] >= 0 ? [u0, u1] : [u1, u0];
 
     solid.member(at((u0 + u1) / 2 - (u1 - u0) / 2 - m(0.12), (v0 + v1) / 2, proud - m(0.1)), at((u0 + u1) / 2 + (u1 - u0) / 2 + m(0.12), (v0 + v1) / 2, proud - m(0.1)), out, v1 - v0 + m(0.24), m(0.1), material("silver"));
-    solid.facing([at(l, v0, proud), at(r, v0, proud), at(r, v1, proud), at(l, v1, proud)], out, signMaterial(texture, name), [[0, 0], [1, 0], [1, 1], [0, 1]]);
+    // (A little in front of the frame's face, not in it: two faces in one place flicker)
+    solid.facing([at(l, v0, proud + m(0.02)), at(r, v0, proud + m(0.02)), at(r, v1, proud + m(0.02)), at(l, v1, proud + m(0.02))], out, signMaterial(texture, name), [[0, 0], [1, 0], [1, 1], [0, 1]]);
 }
 
 // The sides of a plan and how long each is, and which faces most nearly a way
@@ -357,10 +358,11 @@ export async function tavern(piece) {
 
     const at = wallPoint(faces[0]);
 
-    board(solid, at, faces[0].out, [faces[0].length / 2 + m(1.2), faces[0].length / 2 + m(1.2) + m(2.4), m(2.2), m(2.2) + m(2.4) * (9 / 56) * 2], nameBoardTexture({ name: own.name, ground: "#1f3a30", dark: "#0c1a14" }), `board ${own.name}`);
+    // Its name over the door, and a lamp either side of the door below the board's ends, clear of it
+    board(solid, at, faces[0].out, [faces[0].length / 2 - m(1), faces[0].length / 2 + m(1), m(2.65), m(2.65) + m(2) * (9 / 56) * 2], nameBoardTexture({ name: own.name, ground: "#1f3a30", dark: "#0c1a14" }), `board ${own.name}`);
 
     for (const side of [-1, 1]) {
-        budLamp(solid, at(faces[0].length / 2 + side * m(1.3), m(2.7), m(0.1)), [faces[0].out[0], faces[0].out[2]], { reach: m(0.7) });
+        budLamp(solid, at(faces[0].length / 2 + side * m(1.35), m(2.05), m(0.1)), [faces[0].out[0], faces[0].out[2]], { reach: m(0.7) });
     }
 
     const object = solid.toObject();
@@ -502,7 +504,8 @@ export async function guild(piece) {
         treeColumn(solid, cx + side * m(1.8), m(0.3), doorFace + m(1.2), m(3.4), m(0.14), "marble", { boughs: 2, spread: m(0.8), phase: 0 });
     }
 
-    board(solid, wallPoint(faces[0]), faces[0].out, [faces[0].length / 2 - m(1.4), faces[0].length / 2 + m(1.4), m(2.8), m(2.8) + m(2.8) * (9 / 56)], nameBoardTexture({ name: "Adventurers' Guild", ground: "#1f3a30", dark: "#0c1a14" }), "board guild", m(0.15));
+    // (Its name over the door, between the boughs of the columns before it)
+    board(solid, wallPoint(faces[0]), faces[0].out, [faces[0].length / 2 - m(1.15), faces[0].length / 2 + m(1.15), m(2.8), m(2.8) + m(2.3) * (9 / 56)], nameBoardTexture({ name: "Adventurers' Guild", ground: "#1f3a30", dark: "#0c1a14" }), "board guild", m(0.15));
 
     return solid.toObject();
 }

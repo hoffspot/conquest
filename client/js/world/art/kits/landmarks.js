@@ -63,17 +63,23 @@ const ENTRY = 1.8;
 const seedOf = (piece) => piece.seed ?? Math.round((piece.x ?? 0) * 31 + (piece.y ?? 0) * 17 + 7);
 
 // A sign painted on both sides, hanging from an iron bracket out from a wall's face (a face as
-// Solid.wall's), `u` along it, its top `top` up it: the bracket and its stay, two rings, the board
-function hangingSign(solid, face, u, top, texture, name, { width = 0.8, height = 0.96, reach = 1.35 } = {}) {
+// Solid.wall's), `u` along it, its top `top` up it: the bracket and its stay, two rings, the board.
+// The stay ties the bracket up to the wall above it (`above` metres, where there's that much wall),
+// or else props it from below short of the board, never across the board
+function hangingSign(solid, face, u, top, texture, name, { width = 0.8, height = 0.96, reach = 1.35, above = 0.5 } = {}) {
     const { out } = face;
     const along = (d, v) => [face.origin[0] + face.across[0] * u + out[0] * d, face.origin[1] + v, face.origin[2] + face.across[2] * u + out[2] * d];
     const iron = material("iron");
     const picture = signMaterial(texture, name);
+    const [near, far] = [m(reach) * 0.22, m(reach) * 0.22 + m(width)];
 
     solid.beam(along(0, top + m(0.1)), along(m(reach), top + m(0.1)), m(0.06), m(0.08), iron);
-    solid.beam(along(0, top - m(0.55)), along(m(reach * 0.7), top + m(0.08)), m(0.04), m(0.04), iron);
 
-    const [near, far] = [m(reach) * 0.22, m(reach) * 0.22 + m(width)];
+    if (above >= 0.3) {
+        solid.beam(along(0, top + m(above)), along(m(reach * 0.7), top + m(0.14)), m(0.04), m(0.04), iron);
+    } else {
+        solid.beam(along(0, top - m(0.45)), along(near - m(0.06), top + m(0.06)), m(0.04), m(0.04), iron);
+    }
 
     for (const d of [near + m(0.08), far - m(0.08)]) {
         solid.beam(along(d, top + m(0.08)), along(d, top - m(0.06)), m(0.03), m(0.03), iron);
@@ -159,7 +165,9 @@ export async function tavern(piece) {
     const aside = plan.levels.length > 1 ? m(1.9) : Math.min(board, m(4.4)) / 2 + m(0.55);
     const texture = wenches ? hangingSignTexture() : emblemSignTexture({ name: own.name, emblem: own.emblem, count: own.count, tint: seedOf(piece) % 6 });
 
-    hangingSign(solid, face, middle + aside, Math.min(m(3.2), ground.height - m(0.1)), texture, `sign ${own.name}`, { width: 1, height: 1.2 });
+    const top = Math.min(m(3.2), ground.height - m(0.1));
+
+    hangingSign(solid, face, middle + aside, top, texture, `sign ${own.name}`, { width: 1, height: 1.2, above: plan.levels.length > 1 ? 0.5 : (ground.height - top) / m(1) - 0.05 });
 
     const lantern = [face.origin[0] + middle - aside + m(0.45), m(2.2), face.origin[2] + m(0.22)];
 
@@ -379,7 +387,7 @@ export async function blacksmith(piece) {
     solid.roof(x0 - m(0.4), z0 - m(0.4), x1 + m(0.4), z1 + m(0.4), m(3.4), (z1 - z0) * 0.5, { ridge: "x", material: material("slate-grey"), gable: stone });
     door(solid, x0 + m(3.8), z1, { width: 1.3, height: 2.1, floor: 0.3 });
     window(solid, x0 + m(1.6), 1.2, z1, 1, 1, "timber");
-    hangingSign(solid, { origin: [x0, 0, z1], across: [1, 0, 0], out: [0, 0, 1], length: x1 - x0 }, m(5), m(3), emblemSignTexture({ name: "Blacksmith", emblem: "anvil", tint: seedOf(piece) % 6 }), "sign blacksmith");
+    hangingSign(solid, { origin: [x0, 0, z1], across: [1, 0, 0], out: [0, 0, 1], length: x1 - x0 }, m(5), m(3), emblemSignTexture({ name: "Blacksmith", emblem: "anvil", tint: seedOf(piece) % 6 }), "sign blacksmith", { above: 0.35 });
 
     // The open shed: a lean-to roof on posts, against the workshop's east wall
     const [sx1, sz0, sz1] = [m(11.3), z0 + m(0.4), z1 + m(0.6)];

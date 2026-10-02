@@ -22,14 +22,19 @@ import { emblemSignTexture, loadSignFont, nameBoardTexture, signMaterial } from 
 import { band, CELL, circle, ENTRY, lamp, m, pole, post, randomFor, southSide, spike, stake, steps, wallPoint } from "./kit.js";
 import { blockHouse, longhouse, rack, roundHut, skull, standard, tent, toned, tusk, warBanner } from "./orc.js";
 
-// A picture on a board (a sign's texture) in a face `at` (wallPoint's), the right way round
+// A picture on a board (a sign's texture) in a face `at` (wallPoint's), the right way round, in
+// front of its upright frame from top to bottom however far the wall leans back
 function board(solid, at, out, [u0, u1, v0, v1], texture, name, proud = m(0.3)) {
     const [a, b] = [at(u0, v0), at(u1, v0)];
     const right = [out[2], 0, -out[0]];
     const [l, r] = (b[0] - a[0]) * right[0] + (b[2] - a[2]) * right[2] >= 0 ? [u0, u1] : [u1, u0];
+    const head = at(u0, v1);
+    // (As far out again as the wall leans back over half its height, and a little more: in front
+    // of the frame's face, not in it, where two faces in one place flicker)
+    const ahead = Math.max(0, -((head[0] - a[0]) * out[0] + (head[2] - a[2]) * out[2])) / 2 + m(0.02);
 
     solid.member(at((u0 + u1) / 2 - (u1 - u0) / 2 - m(0.15), (v0 + v1) / 2, proud - m(0.12)), at((u0 + u1) / 2 + (u1 - u0) / 2 + m(0.15), (v0 + v1) / 2, proud - m(0.12)), out, v1 - v0 + m(0.3), m(0.12), material("timber"));
-    solid.facing([at(l, v0, proud), at(r, v0, proud), at(r, v1, proud), at(l, v1, proud)], out, signMaterial(texture, name), [[0, 0], [1, 0], [1, 1], [0, 1]]);
+    solid.facing([at(l, v0, proud + ahead), at(r, v0, proud + ahead), at(r, v1, proud + ahead), at(l, v1, proud + ahead)], out, signMaterial(texture, name), [[0, 0], [1, 0], [1, 1], [0, 1]]);
 }
 
 // A brazier: an iron bowl on three legs, coals glowing in it
@@ -193,8 +198,9 @@ export async function tavern(piece) {
         solid.lathe(bx, bz, [[m(0.35), 0], [m(0.4), m(0.5)], [m(0.35), m(1)], [0, m(1)]], material("planks"), { segments: 8 });
     }
 
-    brazier(solid, cx - m(2.5), D - m(1.1));
-    brazier(solid, cx + m(2.5), D - m(1.1));
+    // (Braziers either side, beyond the name board's end: never before it)
+    brazier(solid, cx - m(4), D - m(1.1));
+    brazier(solid, cx + m(4), D - m(1.1));
 
     return solid.toObject();
 }
@@ -327,7 +333,17 @@ export async function guild(piece) {
         }
     }
 
-    board(solid, (u, v, w = 0) => [W / 2 - m(1.3) + u, v, doorFace + m(0.3) + w], [0, 0, 1], [0, m(2.6), m(3.4), m(3.4) + m(2.6) * (9 / 56)], nameBoardTexture({ name: "Adventurers' Guild", ground: "#3a1a14", dark: "#1a0a08" }), "board guild", m(0.1));
+    // The name on a board hung from a beam between the nearest posts, before the door (the wall
+    // over the door is in the deep shade of the eaves, behind them)
+    const line = doorFace + m(0.6);
+
+    pole(solid, [W / 2 - m(3.2), m(3.55), line], [W / 2 + m(3.2), m(3.55), line], m(0.11), "timber", { sides: 5 });
+
+    for (const side of [-1, 1]) {
+        pole(solid, [W / 2 + side * m(1.1), m(3.5), line + m(0.08)], [W / 2 + side * m(1.1), m(3.3), line + m(0.08)], m(0.015), "rope", { sides: 3 });
+    }
+
+    board(solid, (u, v, w = 0) => [W / 2 - m(1.3) + u, v, line + w], [0, 0, 1], [0, m(2.6), m(2.88), m(2.88) + m(2.6) * (9 / 56)], nameBoardTexture({ name: "Adventurers' Guild", ground: "#3a1a14", dark: "#1a0a08" }), "board guild", m(0.15));
 
     return solid.toObject();
 }

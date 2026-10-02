@@ -93,9 +93,14 @@ function tower(solid, [x0, z0, x1, z1], y0, height, name, random, { lean = 0.05,
 }
 
 // A plaque painted with a picture (a sign's texture), on a wall's face `at`, u0..u1 by v0..v1,
-// standing `proud` out in a timber frame
+// standing `proud` out in a timber frame (the picture as far again out as the wall leans back
+// over half its height, so it's in front of the upright frame from top to bottom)
 function plaque(solid, at, out, [u0, u1, v0, v1], texture, name, { proud = m(0.4), frame = "timber" } = {}) {
+    const [foot, head] = [at(u0, v0), at(u0, v1)];
+    const lean = Math.max(0, -((head[0] - foot[0]) * out[0] + (head[2] - foot[2]) * out[2]));
+
     solid.member(at((u0 + u1) / 2 - (u1 - u0) / 2 - m(0.12), (v0 + v1) / 2, proud - m(0.1)), at((u0 + u1) / 2 + (u1 - u0) / 2 + m(0.12), (v0 + v1) / 2, proud - m(0.1)), out, v1 - v0 + m(0.24), m(0.1), material(frame));
+    proud += lean / 2;
 
     // (Its picture the right way round to someone facing the wall: left to right is the way
     // that's to their right, whichever way along the wall runs)
@@ -200,27 +205,46 @@ export async function tavern(piece) {
 
     toned(solid, random, [m(0.3) + storeys.reduce((a, b) => a + b, 0), m(3)]);
 
-    const house = townHouse(solid, x0, back, x1, front, { storeys, name, random, wealth: 0.85, paint: random.chance(0.6) ? random.pick(PAINTS) : null, doorway: { width: m(1.8), height: m(2.3) }, plinth: m(0.3), roofHouse: false });
+    // (Its name board over the door bay and its sign beyond the board's end, kept clear of toron)
+    const boardOf = (length) => Math.min(m(4.6), length - m(3.2));
+    const signU = (length) => length / 2 + boardOf(length) / 2 + m(0.75);
+    const house = townHouse(solid, x0, back, x1, front, {
+        storeys,
+        name,
+        random,
+        wealth: 0.85,
+        paint: random.chance(0.6) ? random.pick(PAINTS) : null,
+        doorway: { width: m(1.8), height: m(2.3) },
+        plinth: m(0.3),
+        roofHouse: false,
+        keep: ({ bayTop, length }) => [
+            [length / 2 - boardOf(length) / 2, length / 2 + boardOf(length) / 2, bayTop + m(0.15), bayTop + m(0.15) + (boardOf(length) * 9) / 56],
+            [signU(length) - m(0.3), signU(length) + m(0.3), m(1.8), m(3.7)],
+        ],
+    });
     const at = wallPoint(house.front, { lean: house.lean });
     const middle = house.front.length / 2;
-    const boardWidth = Math.min(m(4.6), house.front.length - m(3.2));
+    const boardWidth = boardOf(house.front.length);
     const boardHeight = (boardWidth * 9) / 56;
 
-    // Its name over the door bay, its sign hanging from a pole of toron by the door
+    // Its name over the door bay, its sign hanging from a pole of toron beyond the board's end
+    // (the pole's stay tied up above it, never across the sign)
     plaque(solid, at, house.front.out, [middle - boardWidth / 2, middle + boardWidth / 2, house.bayTop + m(0.15), house.bayTop + m(0.15) + boardHeight], nameBoardTexture({ name: own.name, ground: "#6b3a12", dark: "#2e1706" }), `board ${own.name}`, { proud: m(0.45) });
 
-    const signAt = at(middle + m(2.1), m(3.1), 0);
+    const signAt = at(signU(house.front.length), m(3.1), 0);
     const reach = [house.front.out[0] * m(1.3), 0, house.front.out[2] * m(1.3)];
 
     pole(solid, signAt, add3(signAt, reach), m(0.06), "timber-light", { sides: 5 });
-    pole(solid, add3(signAt, [0, -m(0.6), 0]), add3(add3(signAt, times(reach, 0.7)), [0, -m(0.02), 0]), m(0.04), "timber-light", { sides: 4 });
+    pole(solid, add3(signAt, [0, m(0.5), 0]), add3(add3(signAt, times(reach, 0.7)), [0, m(0.04), 0]), m(0.04), "timber-light", { sides: 4 });
 
     const texture = emblemSignTexture({ name: own.name, emblem: own.emblem ?? "tankard", count: own.count ?? 1, tint: random.int(0, 5) });
     const [s0, s1] = [add3(signAt, times(reach, 0.25)), add3(signAt, times(reach, 0.95))];
     const sign = [add3(s0, [0, -m(1.15), 0]), add3(s1, [0, -m(1.15), 0]), add3(s1, [0, -m(0.08), 0]), add3(s0, [0, -m(0.08), 0])];
 
-    solid.face(sign, signMaterial(texture, `sign ${own.name}`), [[0, 0], [1, 0], [1, 1], [0, 1]]);
-    solid.face([...sign].reverse(), signMaterial(texture, `sign ${own.name}`), [[0, 1], [1, 1], [1, 0], [0, 0]]);
+    const picture = signMaterial(texture, `sign ${own.name}`);
+
+    solid.face(sign, picture, [[0, 0], [1, 0], [1, 1], [0, 1]]);
+    solid.face([...sign].reverse(), picture, [[0, 1], [1, 1], [1, 0], [0, 0]]);
 
     // Benches of mud either side of the door, a lamp over each
     for (const side of [-1, 1]) {
@@ -348,7 +372,7 @@ export async function church(piece) {
     finial(solid, middle, centreTop + m(2.55), (centreHead[0][1] + centreHead[2][1]) / 2, "sun", random);
 
     for (const [k, face] of centreFaces.entries()) {
-        toron(solid, face, lean, [lean, lean], [m(1.2), m(3.4), m(6.6), m(8)], m(0.8), random, { clear: k === 2 ? [[door.u0, door.u1, 0, door.v1], [m(1.6), m(2), m(4.4), m(5.6)]] : [] });
+        toron(solid, face, lean, [lean, lean], [m(1.2), m(3.4), m(6.6), m(8)], m(0.8), random, { clear: k === 2 ? [[door.u0, door.u1, 0, door.v1], [m(1.6), m(2), m(4.4), m(5.6)], [m(1.8) - m(0.55), m(1.8) + m(0.55), m(2.95), m(4.05)]] : [] });
     }
 
     studded(solid, centreFaces[2], [door.u0, door.u1, door.v1], door.depth);
@@ -468,7 +492,7 @@ export async function guild(piece) {
 
     toned(solid, random, [m(5.5)]);
 
-    const house = townHouse(solid, m(0.4), m(0.5), W - m(0.4), front, { storeys, name, random, wealth: 0.9, paint: null, doorway: { width: m(2.2), height: m(2.6) }, plinth: m(0.3), roofHouse: false, parapet: m(1) });
+    const house = townHouse(solid, m(0.4), m(0.5), W - m(0.4), front, { storeys, name, random, wealth: 0.9, paint: null, doorway: { width: m(2.2), height: m(2.6) }, plinth: m(0.3), roofHouse: false, parapet: m(1), keep: ({ bayTop, length }) => [[length / 2 - m(0.6), length / 2 + m(0.6), bayTop + m(0.1), bayTop + m(1.3)]] });
     const at = wallPoint(house.front, { lean: house.lean });
     const middle = house.front.length / 2;
 
@@ -533,7 +557,8 @@ export async function hall(piece) {
 
     toned(solid, random, [m(6.7)]);
 
-    const house = townHouse(solid, m(0.5), m(0.5), W - m(0.5), front, { storeys, name, random, wealth: 1, paint: random.pick(PAINTS), doorway: { width: m(2), height: m(2.5) }, plinth: m(0.3), roofHouse: true });
+    const boardOf = (length) => Math.min(m(4.4), length - m(5.2));
+    const house = townHouse(solid, m(0.5), m(0.5), W - m(0.5), front, { storeys, name, random, wealth: 1, paint: random.pick(PAINTS), doorway: { width: m(2), height: m(2.5) }, plinth: m(0.3), roofHouse: true, keep: ({ bayTop, length }) => [[length / 2 - boardOf(length) / 2, length / 2 + boardOf(length) / 2, bayTop + m(0.1), bayTop + m(0.1) + (boardOf(length) * 9) / 56]] });
     const at = wallPoint(house.front, { lean: house.lean });
     const middle = house.front.length / 2;
 
@@ -541,7 +566,7 @@ export async function hall(piece) {
         tower(solid, [a, front - m(2.2), b, front + m(0.2)], 0, house.top + m(0.6), name, random, { lean: house.lean, cap: "ears" });
     }
 
-    const boardWidth = Math.min(m(4.4), house.front.length - m(5.2));
+    const boardWidth = boardOf(house.front.length);
 
     plaque(solid, at, house.front.out, [middle - boardWidth / 2, middle + boardWidth / 2, house.bayTop + m(0.1), house.bayTop + m(0.1) + (boardWidth * 9) / 56], nameBoardTexture({ name: "Town Hall", ground: "#5a2410", dark: "#2a1006" }), "board hall", { proud: m(0.45) });
 
