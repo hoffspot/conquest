@@ -73,23 +73,27 @@ export function roomLit(shader) {
             "#include <lights_fragment_end>",
             `#include <lights_fragment_end>
 {
+    // (Three.js's sums for a point light, from the distance squared (\`apart\`), so with no
+    // square root but the one: its edge, (1 - (d / reach)^4)^2; the light from all of them
+    // added up, and then reflected once)
     vec3 roomNormal = transformNormalByInverseViewMatrix(normal, viewMatrix);
-
-    reflectedLight.directDiffuse += roomFill * BRDF_Lambert(material.diffuseColor);
+    vec3 roomLight = roomFill;
 
     for (int i = 0; i < ${ROOM_LIGHTS}; i++) {
         if (i >= roomCount) break;
 
-        float reach = roomAt[i].w;
         vec3 toLight = roomAt[i].xyz - vCutWorld;
-        float away = length(toLight);
+        float apart = dot(toLight, toLight);
+        float far = roomAt[i].w * roomAt[i].w;
 
-        if (away >= reach) continue;
+        if (apart >= far) continue;
 
-        float falloff = pow2(saturate(1.0 - pow4(away / reach))) / max(away * away, 0.01);
+        float edge = saturate(1.0 - (apart * apart) / (far * far));
 
-        reflectedLight.directDiffuse += saturate(dot(roomNormal, toLight / away)) * falloff * roomColour[i] * BRDF_Lambert(material.diffuseColor);
+        roomLight += saturate(dot(roomNormal, toLight) * inversesqrt(max(apart, 1e-6))) * edge * edge / max(apart, 0.01) * roomColour[i];
     }
+
+    reflectedLight.directDiffuse += roomLight * BRDF_Lambert(material.diffuseColor);
 }`,
         );
 }

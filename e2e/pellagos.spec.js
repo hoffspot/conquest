@@ -2401,8 +2401,10 @@ test("the pack's paperdoll: the player drawn among their gear; tapped, a piece s
 });
 
 test("the pack shows what's grown and carried; a skill ranks up with use; trading with the barkeep, the gold changes hands; all kept for the next time", async ({ page }) => {
-    // (A long walk through: more than the usual time, with others running beside it)
-    test.setTimeout(180000);
+    // (A long walk through, and then a dozen clicks in the taproom, each waiting on a few frames
+    // drawn in software, over half a second each with the room lit by its flames: more than the
+    // usual time, with others running beside it)
+    test.setTimeout(240000);
 
     // A saved game whose hero is a blow from their next rank with the blade, with 30 gold and a draught
     await page.addInitScript((save) => {

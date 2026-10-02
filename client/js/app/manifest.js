@@ -240,7 +240,7 @@ export const MANIFEST = Object.freeze([
             ["js/world/navbaker.js", 4364],
             ["js/world/navview.js", 5258],
             ["js/world/navworker.js", 549],
-            ["js/world/roomlight.js", 8044],
+            ["js/world/roomlight.js", 8289],
             ["js/world/shadows.js", 2448],
             ["js/world/sky.js", 6856],
             ["js/world/smoke.js", 8191],
