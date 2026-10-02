@@ -2930,7 +2930,7 @@ test("holding on an enemy or the player opens the action wheel: flick left (W) t
     expect(hp).toBeLessThanOrEqual(32);
 });
 
-test("in a fight four quick actions rise from the bottom, lifting the name and zoom buttons: Stun tapped on the foe set on, Vigor on the player, swept over while cooling; attacks greyed with no foe set on; held, changed in Quick actions; the minimap up top beside the buttons, its wedge the way the camera looks the same size however it's zoomed", async ({ page }) => {
+test("in a fight four quick actions rise from the bottom, lifting the name and zoom buttons: Stun tapped on the foe set on, Vigor on the player, swept over while cooling; attacks greyed with no foe set on; held, changed in Quick actions; the minimap in the top left corner, the buttons top right, its wedge the way the camera looks the same size however it's zoomed", async ({ page }) => {
     // (Played on between taps, and held once: more than the usual time, with others running beside it)
     test.setTimeout(180000);
     await page.setViewportSize({ width: 402, height: 874 });
@@ -2941,13 +2941,14 @@ test("in a fight four quick actions rise from the bottom, lifting the name and z
     const box = (selector) => page.locator(selector).boundingBox();
     const play = (seconds) => page.evaluate((seconds) => window.pellagos.game.advance(seconds), seconds);
 
-    // The minimap along the top, level with the four buttons, on their left, all on the screen
+    // The minimap in the top left corner, level with the four buttons in the top right, any room
+    // between them
     const [map, book, menu] = await Promise.all([box("#minimap"), box("#spellbookbutton"), box("#menubutton")]);
 
     expect(Math.abs(map.y - book.y)).toBeLessThan(1);
-    expect(map.x).toBeGreaterThanOrEqual(0);
+    expect(Math.abs(map.x - 12)).toBeLessThan(1);
     expect(map.x + map.width).toBeLessThan(book.x);
-    expect(menu.x + menu.width).toBeLessThanOrEqual(402);
+    expect(Math.abs(menu.x + menu.width - 390)).toBeLessThan(1);
 
     // On it, a wedge from the player the way the camera looks over the ground, the same size
     // however far the camera's zoomed out

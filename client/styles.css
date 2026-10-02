@@ -1060,11 +1060,12 @@ input[type="range"] {
     height: 10px;
 }
 
-/* The minimap, at the top beside the four buttons along it */
+/* The minimap, in the top left corner (the four buttons in the top right: any room left along
+   the top between them) */
 #minimap {
     position: absolute;
     top: calc(var(--safe-top) + 12px);
-    right: calc(var(--safe-right) + 12px + 4 * 46px + 4 * var(--hud-gap));
+    left: calc(var(--safe-left) + 12px);
     width: var(--minimap-size);
     border-radius: 12px;
     border: 1px solid var(--panel-border);
@@ -2682,7 +2683,8 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     pointer-events: none;
 }
 
-/* (With the minimap up there too, and too little room beside it: under them on the left) */
+/* (With the minimap in the corner: beside it, between it and the buttons, where there's room;
+   else under it) */
 @media (max-width: 720px) {
     body[data-minimap="on"] #netstatus {
         top: calc(var(--safe-top) + 12px + var(--minimap-size) + 10px);
@@ -2692,6 +2694,7 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 
 @media (min-width: 721px) {
     body[data-minimap="on"] #netstatus {
+        left: calc(var(--safe-left) + 12px + var(--minimap-size) + 12px);
         max-width: calc(100% - var(--safe-left) - var(--safe-right) - 268px - var(--minimap-size) - 12px);
     }
 }

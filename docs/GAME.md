@@ -1981,10 +1981,10 @@ on a wobbling halo.
 
 ### The minimap (app/minimap.js)
 
-The map the player is on from above, north up, along the top of the screen on the left of the
-spellbook, journal, pack and menu buttons, level with them (a canvas, a third of the screen's
-width on phones, up to 188 pixels; on a screen 400 pixels wide or less, the gaps between them 8
-pixels, not 12, so they all fit): out in the world,
+The map the player is on from above, north up, in the top left corner of the screen, level with
+the spellbook, journal, pack and menu buttons in the top right, any room along the top left
+between them (a canvas, a third of the screen's width on phones, up to 188 pixels; on a screen
+400 pixels wide or less, the gaps between the buttons 8 pixels, not 12): out in the world,
 the 128 metres round the player; inside, the whole floor. Each square is coloured for its ground
 (grass in its land's colour, road, cobbles, soil, courtyard, water, bridges) or what stands on it
 (roofs over buildings, blue-grey for the tavern, church and other landmarks, props, trees), with
@@ -2358,8 +2358,8 @@ game plays on while it's open; a second finger (a pinch) closes it.
    (app/hud.js) shows the player's name and health in the bottom left corner (the zoom buttons
    in the bottom right; both go up over the quick actions in a fight, above), with an orange
    stamina bar under the health bar while stamina isn't full, "Out of breath" when a run
-   ends for want of it, the minimap (along the top, left of the spellbook, journal, pack and menu
-   buttons), bars over the other characters (the target's lit red), and the damage each blow
+   ends for want of it, the minimap (in the top left corner; the spellbook, journal, pack and
+   menu buttons in the top right), bars over the other characters (the target's lit red), and the damage each blow
    does.
 5. **The menu** (the menu button, or Escape) pauses the game (unless others are playing in the
    world too): Resume, Invite others (the world opened to others: a code, and who's come),
@@ -2723,8 +2723,8 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   (remembered), the
   action wheel (stunning the orc, a flick refused while cooling down, then a heal), the action
   wheels set in Game options (a draught put on wheel two, drunk by flicking down then NE), the
-  quick actions on a phone's screen (the minimap level with the buttons along the top, on their
-  left; up in a fight with the name and zoom buttons over them; Stun tapped on the orc and Vigor
+  quick actions on a phone's screen (the minimap in the top left corner, level with the buttons
+  in the top right; up in a fight with the name and zoom buttons over them; Stun tapped on the orc and Vigor
   on the player, each swept over while cooling and refused; attacks greyed with no foe set on;
   put away 3 s after the fight; held, Quick actions opened at that slot, Rumble put in it), and a
   phone screen. Drawing without a GPU is slow, so fights are played on with
