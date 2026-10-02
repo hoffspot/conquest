@@ -18,6 +18,7 @@ import { bakeEnvironments } from "./environment.js";
 import { FAR, FAR_LEVELS, farReach } from "./far/levels.js";
 import { farHaze, GRADE, MIST } from "./fog.js";
 import { GpuTimer } from "./gputimer.js";
+import { FAR_FIELDS } from "./ground.js";
 import { fadeShadowEdges, snapToTexels } from "./shadows.js";
 import { Sky, SKY_COLOURS } from "./sky.js";
 import { SUN_FROM } from "./sun.js";
@@ -29,16 +30,17 @@ import { WATER_DETAIL } from "./water.js";
  * how far the tall grass reaches, its near band and its far, metres, or null for none: grass.js;
  * `motes`: how many motes drift in the air round the player, motes.js; `ground`: how far apart the ground's corners are drawn, metres, in the chunk the player's in,
  * the ring round it, and further off: chunks3d.js SPACING; `water`: 1 for the water's finer
- * ripples, water.js WATER_DETAIL; `far`: how many levels the far land has, far/levels.js, so how
+ * ripples, water.js WATER_DETAIL; `fields`: 1 for the fields seen from afar, ground.js FAR_FIELDS;
+ * `far`: how many levels the far land has, far/levels.js, so how
  * far off it reaches: 1, 2 or 4 km), and how often (`frameRate`: at most, a second,
  * app/pacing.js: 60 at every level, the game's target, however fast the screen; 0 would be as
  * often as it refreshes). Game options' Visual quality chooses among them, lowest first; Adaptive
  * (app/governor.js) draws a level or two lower, or fewer pixels, while a device can't keep up.
  */
 export const QUALITY = Object.freeze({
-    low: { label: "Low", pixelRatio: 1, shadows: 1024, antialias: false, hair: 0.2, skin: 512, undergrowth: 0.5, grass: null, motes: 0, ground: [1, 2, 4], water: 0, far: FAR_LEVELS.low, farTrees: 0, frameRate: 60 },
-    medium: { label: "Medium", pixelRatio: 1.5, shadows: 2048, antialias: true, hair: 0.3, skin: 512, undergrowth: 0.75, grass: { near: 12, far: 28 }, motes: 300, ground: [1, 2, 4], water: 1, far: FAR_LEVELS.medium, farTrees: 700, frameRate: 60 },
-    high: { label: "High", pixelRatio: 2, shadows: 2048, antialias: true, hair: 0.45, skin: 1024, undergrowth: 1, grass: { near: 18, far: 40 }, motes: 600, ground: [1, 1, 2], water: 1, far: FAR_LEVELS.high, farTrees: 1200, frameRate: 60 },
+    low: { label: "Low", pixelRatio: 1, shadows: 1024, antialias: false, hair: 0.2, skin: 512, undergrowth: 0.5, grass: null, motes: 0, ground: [1, 2, 4], water: 0, fields: 0, far: FAR_LEVELS.low, farTrees: 0, frameRate: 60 },
+    medium: { label: "Medium", pixelRatio: 1.5, shadows: 2048, antialias: true, hair: 0.3, skin: 512, undergrowth: 0.75, grass: { near: 12, far: 28 }, motes: 300, ground: [1, 2, 4], water: 1, fields: 1, far: FAR_LEVELS.medium, farTrees: 700, frameRate: 60 },
+    high: { label: "High", pixelRatio: 2, shadows: 2048, antialias: true, hair: 0.45, skin: 1024, undergrowth: 1, grass: { near: 18, far: 40 }, motes: 600, ground: [1, 1, 2], water: 1, fields: 1, far: FAR_LEVELS.high, farTrees: 1200, frameRate: 60 },
 });
 
 /** A quality level for this device: low for small or older phones, medium for phones, high otherwise. */
@@ -404,6 +406,7 @@ export class View {
         this.qualityName = name;
         this.quality = QUALITY[name];
         WATER_DETAIL.value = this.quality.water;
+        FAR_FIELDS.value = this.quality.fields;
         this.#haze();
         this.#pixelRatio();
         this.sun.shadow.mapSize.set(this.quality.shadows, this.quality.shadows);

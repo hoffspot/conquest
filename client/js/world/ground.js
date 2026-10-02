@@ -9,12 +9,12 @@
 // one painted texture of the whole map would have to be huge (or blurry).
 
 import * as THREE from "three";
-import { ALONG, CROP, sown } from "../core/fields.js";
+import { ALONG, CROP, CROP_ODDS, FIELDS, NARROWEST, sown } from "../core/fields.js";
 import { tiling } from "../core/noise.js";
 import { CHUNK } from "../core/overworld.js";
 import { GROUND } from "../core/setpieces/pieces.js";
 import { allAtOnce } from "../core/steps.js";
-import { BIOMES, CELLS, WORLD_SIZE } from "../core/worldplan/plan.js";
+import { BIOMES, CELL, CELLS, WORLD_SIZE } from "../core/worldplan/plan.js";
 import { RACES } from "../core/worldplan/races.js";
 import { paintLayer, SIZE } from "./art/engine/painters.js";
 import { textureCanvas } from "./art/engine/materials.js";
@@ -77,6 +77,85 @@ export const GRASS_UNDER = Object.freeze({ map: { value: null }, tint: { value: 
  * grassmap.js; this is what's seen of it far off, and on low, where that isn't drawn).
  */
 export const CROP_COLOURS = Object.freeze({ [CROP.wheat]: 0xc9a046, [CROP.barley]: 0xc8b882, [CROP.greens]: 0x4c7a32 });
+
+/** Dry grass's colour at its tips (sRGB): golden straw (the tall grass's: grassmap.js). */
+export const STRAW = Object.freeze([0xd6, 0xb2, 0x58]);
+
+/**
+ * The tall grass as it's seen past where it's drawn, and on low quality where it isn't (terrain
+ * plan M7b): the ground takes its land's grass (landColours' `grass`: its tips' colour, dried as
+ * the land is, and how thick it grows), in clumps, none where it's worn bare or up in the rock; as
+ * much as `amount` where it's thick (`thick` times its thickness, at most 1), as bright as
+ * `bright` of its tips' colour (blades' bases and the shadows among them darken it: about as dark
+ * as the tall grass drawn is, so where one gives way to the other no edge shows), lighter and
+ * darker as the grass's picture is, `detail` times more so (a power), so it isn't a flat colour.
+ */
+export const GRASS_AFAR = Object.freeze({ amount: 0.95, bright: 0.3, thick: 2.2, detail: 1.6 });
+
+/**
+ * The fields as they're seen from afar (FIELDS_GLSL): where the chunks' ground turns to the
+ * ground as it's seen from afar, and in the far land, each strip its crop's colour, past
+ * `hedges` metres the hedges and verges along the blocks' edges a dark band (nearer, the hedges
+ * themselves are drawn: kits/hedges.js), the baulks between strips left out past `baulks` (a
+ * metre of grass there is less than a pixel). FAR_FIELDS: 1 to draw them (the quality's `fields`).
+ */
+export const FIELDS_AFAR = Object.freeze({ hedges: 300, baulks: 250, hedge: "#28401c" });
+export const FAR_FIELDS = { value: 1 };
+
+/**
+ * The fields worked out on the GPU just as core/fields.js fieldAt works them out (its integer
+ * hashing the same in 32-bit unsigned maths; its numbers, FIELDS and CROP_ODDS, written in):
+ * `int cropAt(vec2 at, bool baulks, bool hedges)`, a point's crop (CROP's; 0 none, -1 a hedge's
+ * band where `hedges`), from `fieldSeed` (the world's seed) and `farmMap` (whether each of the
+ * plan's cells is farmland: a block's farmed if its middle's cell is).
+ */
+export const FIELDS_GLSL = (() => {
+    const odds = [];
+    let total = 0;
+
+    for (const [crop, chance] of CROP_ODDS) {
+        total += chance;
+        odds.push(`if (odds < ${total}) return ${crop};`);
+    }
+
+    return `uint fieldHash(int a, int b, int c) {
+    uint h = uint(a) * 374761393u + uint(b) * 668265263u + uint(c) * 1274126177u;
+    h = (h ^ (h >> 13u)) * 1274126177u;
+    h = (h ^ (h >> 16u)) * 2246822519u;
+    return h ^ (h >> 15u);
+}
+int fieldEdge(int k, int axis) {
+    return k * ${FIELDS.block} + int(fieldHash(k, axis, fieldSeed + 71) % ${2 * FIELDS.jitter + 1}u) - ${FIELDS.jitter};
+}
+ivec3 fieldBlock(int v, int axis) {
+    int k = int(floor(float(v) / ${FIELDS.block.toFixed(1)}));
+    if (v < fieldEdge(k, axis)) { k -= 1; } else if (v >= fieldEdge(k + 1, axis)) { k += 1; }
+    return ivec3(k, fieldEdge(k, axis), fieldEdge(k + 1, axis));
+}
+const int FIELD_STRIPS[${FIELDS.strips.length}] = int[${FIELDS.strips.length}](${FIELDS.strips.join(", ")});
+int cropAt(vec2 at, bool baulks, bool hedges) {
+    ivec2 p = ivec2(floor(at));
+    ivec3 bx = fieldBlock(p.x, 0);
+    ivec3 by = fieldBlock(p.y, 1);
+    ivec2 middle = ivec2(floor(vec2(bx.y + bx.z, by.y + by.z) * 0.5));
+    ivec2 cell = clamp(ivec2(floor(vec2(middle) / ${CELL.toFixed(1)})), ivec2(0), textureSize(farmMap, 0) - 1);
+    if (texelFetch(farmMap, cell, 0).r < 0.5) return 0;
+    uint h = fieldHash(bx.x, by.x, fieldSeed + 73);
+    int along = int((h >> 7u) & 1u);
+    bool verge = p.x - bx.y < ${FIELDS.margin} || bx.z - 1 - p.x < ${FIELDS.margin} || p.y - by.y < ${FIELDS.margin} || by.z - 1 - p.y < ${FIELDS.margin};
+    if (verge) return hedges ? -1 : 0;
+    if (int(h % 100u) < ${Math.ceil(FIELDS.pasture * 100)}) return 0;
+    int width = FIELD_STRIPS[int((h >> 9u) % ${FIELDS.strips.length}u)];
+    int span = width + ${FIELDS.baulk};
+    int across = along == 0 ? p.y - by.y - ${FIELDS.margin} : p.x - bx.y - ${FIELDS.margin};
+    int room = (along == 0 ? by.z - by.y : bx.z - bx.y) - ${2 * FIELDS.margin};
+    int strip = across / span;
+    if ((baulks && across - strip * span >= width) || room - strip * span < ${NARROWEST}) return 0;
+    int odds = int(fieldHash(bx.x * 131 + strip, by.x, fieldSeed + 79) % 100u);
+    ${odds.join("\n    ")}
+    return ${CROP.fallow};
+}`;
+})();
 
 // How far the ground carries on past the map's edges (metres): into the fog
 const BEYOND = 110;
@@ -427,9 +506,12 @@ let noLand = null;
 /**
  * The colours of the lands (the world plan's biomes) over the grass, a texel for each of the
  * plan's cells: in red, green and blue the colour (sRGB), in alpha how much of it (0: the grass
- * as it is). One texture for the whole world, blended between cells.
+ * as it is). One texture for the whole world, blended between cells. With it (userData): each
+ * people's homeland (`home`); each land's grass as it's seen from afar (`grass`: from `grass`,
+ * grassmap.js grassLooks', in BIOMES' order: its tips' colour, sRGB, and how thick it grows);
+ * which cells are farmland (`farm`: 255 in red) and the world's `seed`, for the fields afar.
  */
-export function landColours(plan) {
+export function landColours(plan, grass = null) {
     const cells = CELLS;
     const data = new Uint8Array(cells * cells * 4);
     const colours = BIOMES.map(({ id }) => {
@@ -453,9 +535,23 @@ export function landColours(plan) {
     }
 
     const texture = cellTexture(data, cells, THREE.SRGBColorSpace);
+    const looks = new Uint8Array(cells * cells * 4);
+    const farm = new Uint8Array(cells * cells * 4);
+    const farmland = BIOMES.findIndex(({ id }) => id === "farmland");
+
+    for (let k = 0; k < cells * cells; k++) {
+        if (grass) {
+            looks.set(grass[plan.biome[k]], k * 4);
+        }
+
+        farm[k * 4] = plan.biome[k] === farmland ? 255 : 0;
+    }
 
     texture.userData.size = WORLD_SIZE;
     texture.userData.home = homes.map((home) => cellTexture(home, cells));
+    texture.userData.grass = cellTexture(looks, cells, THREE.SRGBColorSpace);
+    texture.userData.farm = cellTexture(farm, cells);
+    texture.userData.seed = plan.seed ?? 0;
 
     return texture;
 }
@@ -534,6 +630,9 @@ export function groundMaterial({ splat = null, area = [0, 0, 1, 1], land = null,
         noHome ??= cellTexture(new Uint8Array(4), 1);
     }
 
+    // (No land's grass afar, and no fields, with no land's colours)
+    noLook ??= cellTexture(new Uint8Array(4), 1);
+
     material.name = "ground";
     material.userData.splat = splat;
     material.userData.contact = contact?.texture ?? null;
@@ -551,6 +650,18 @@ float alpineAt(float height, float wander) {
 float snowAt(float height, float wander, float up, vec4 land) {
     float ash = land.a * (1.0 - smoothstep(${(ALPINE.ash * 0.6).toFixed(3)}, ${ALPINE.ash.toFixed(3)}, dot(land.rgb, vec3(0.2126, 0.7152, 0.0722))));
     return smoothstep(${ALPINE.snow[0].toFixed(1)}, ${ALPINE.snow[1].toFixed(1)}, height + (wander - 0.5) * ${(2 * ALPINE.wander).toFixed(1)}) * smoothstep(${ALPINE.flat[0].toFixed(2)}, ${ALPINE.flat[1].toFixed(2)}, up) * (1.0 - ash);
+}
+
+// Its land's grass as it's seen where the tall grass isn't drawn (GRASS_AFAR), over the ground at
+// a point (where it is on the lands' map): as thick as the land grows it, in clumps (0 to 1),
+// thinner where it's worn bare and up towards the rock, drier and more golden in the dry patches,
+// lighter and darker as the grass's picture is there (\`detail\`: 1 its average), more so
+vec3 grassAfar(vec3 grass, vec2 landAt, float clumps, float dry, float lush, float bare, float alpine, float detail) {
+    vec4 look = texture2D(grassLookMap, landAt);
+    float thick = look.a * (0.35 + 0.65 * smoothstep(0.3, 0.62, clumps)) * (1.0 - 0.95 * bare) * (1.0 + 0.25 * lush) * (1.0 - alpine);
+    vec3 tint = mix(look.rgb, vec3(${new THREE.Color().setRGB(...STRAW.map((v) => v / 255), THREE.SRGBColorSpace).toArray().map((v) => v.toFixed(4)).join(", ")}), min(1.0, 0.65 * dry)) * mix(vec3(1.0), vec3(0.85, 1.0, 0.85), lush);
+
+    return mix(grass, tint * ${GRASS_AFAR.bright.toFixed(2)} * pow(detail, ${GRASS_AFAR.detail.toFixed(2)}), min(1.0, thick * ${GRASS_AFAR.thick.toFixed(2)}) * ${GRASS_AFAR.amount.toFixed(2)});
 }
 
 // The ground as it's seen from afar at a point (its up: up; rock that much less steep, as the far
@@ -582,8 +693,9 @@ vec3 farGround(vec2 at, vec3 up, float height, float rockShift) {
     grass = mix(grass, grass * vec3(0.72, 0.9, 0.68), lush * ${PATCHES.lush[2].toFixed(2)} * strength);
     vec3 earth = mix(textureLod(layer0Map, vec2(0.5), 12.0).rgb * 0.92, grass * 0.8, land.a * 0.75);
     grass = mix(grass, earth, bare * ${PATCHES.bare[2].toFixed(2)} * strength);
-    grass *= ${(0.82 + 0.45 * meanVariation).toFixed(4)};
     float alpine = alpineAt(height, coarse.b);
+    grass = grassAfar(grass, landAt, 0.47, dry, lush, bare, alpine, 1.0);
+    grass *= ${(0.82 + 0.45 * meanVariation).toFixed(4)};
     float steep = 1.0 - smoothstep(${ROCK_FROM.all.toFixed(2)} + rockShift + ${ALPINE.by.toFixed(2)} * alpine, ${ROCK_FROM.start.toFixed(2)} + rockShift + ${ALPINE.by.toFixed(2)} * alpine, up.y);
     vec3 rock = textureLod(rockMap, vec2(0.5), 12.0).rgb;
     rock = mix(rock, rock * land.rgb / max(0.2, dot(land.rgb, vec3(0.3333))), land.a * 0.35);
@@ -626,6 +738,10 @@ vec3 farGround(vec2 at, vec3 up, float height, float rockShift) {
             grassUnderTint: GRASS_UNDER.tint,
             grassUnderFocus: GRASS_UNDER.focus,
             grassUnderReach: GRASS_UNDER.reach,
+            grassLookMap: { value: landMap.userData.grass ?? noLook },
+            farmMap: { value: landMap.userData.farm ?? noLook },
+            fieldSeed: { value: landMap.userData.seed ?? 0 },
+            farFieldsOn: FAR_FIELDS,
             rockMap: { value: rock.texture },
             snowColour: { value: new THREE.Color(ALPINE.colour) },
             ...(water ? { groundWater: { value: water.texture }, groundWaterArea: { value: new THREE.Vector4(...water.area) }, causticMap: { value: causticTexture() }, groundTime: TREE_WIND.time, groundDetail: WATER_DETAIL } : {}),
@@ -655,6 +771,7 @@ uniform highp sampler2DArray homeLayers;
 uniform sampler2D grassMap;
 uniform sampler2D patchMap;
 uniform sampler2D layer0Map;
+uniform sampler2D grassLookMap;
 
 ${farFunctions((at) => `textureLod(patchMap, ${at}, 0.0)`)}
 #endif`,
@@ -714,6 +831,10 @@ uniform sampler2D grassUnderMap;
 uniform sampler2D grassUnderTint;
 uniform vec2 grassUnderFocus;
 uniform float grassUnderReach;
+uniform sampler2D grassLookMap;
+uniform sampler2D farmMap;
+uniform int fieldSeed;
+uniform float farFieldsOn;
 #ifdef FAR_LAND
 varying float vFarWater;
 varying vec3 vFarColour;
@@ -721,16 +842,42 @@ uniform vec3 farWaterColour;
 #endif
 ${layers.map((_, k) => `uniform sampler2D layer${k}Map;\nuniform float layer${k}Size;`).join("\n")}
 
-${farFunctions((at) => `texture2D(patchMap, ${at})`)}`)
+${farFunctions((at) => `texture2D(patchMap, ${at})`)}
+
+${FIELDS_GLSL}
+
+// The fields as they're seen from afar (FIELDS_AFAR), over the ground as it's seen from afar, at a
+// point so many metres away: each strip its crop's colour, the hedges' bands dark past where
+// they're drawn
+vec3 farFields(vec3 ground, vec2 at, float away) {
+    if (farFieldsOn < 0.5) {
+        return ground;
+    }
+
+    int crop = cropAt(at, away < ${FIELDS_AFAR.baulks.toFixed(1)}, away > ${FIELDS_AFAR.hedges.toFixed(1)});
+
+    if (crop == -1) {
+        return mix(ground, vec3(${new THREE.Color(FIELDS_AFAR.hedge).toArray().map((v) => v.toFixed(4)).join(", ")}), 0.85);
+    }
+
+    if (crop == 0 || crop == ${CROP.fallow}) {
+        return ground;
+    }
+
+    vec3 soil = textureLod(layer${LAYERS.findIndex(([kind]) => kind === GROUND.soil)}Map, vec2(0.5), 12.0).rgb * ${(0.82 + 0.45 * meanVariation).toFixed(4)};
+
+    return crop == ${CROP.ploughed} ? soil : crop == ${CROP.wheat} ? mix(soil, vec3(${cropColour(CROP.wheat)}), 0.85) : crop == ${CROP.barley} ? mix(soil, vec3(${cropColour(CROP.barley)}), 0.85) : mix(soil, vec3(${cropColour(CROP.greens)}), 0.75);
+}`)
             .replace("#include <map_fragment>", `
 #ifdef FAR_LAND
 groundContact = 0.0;
-vec3 ground = mix(vFarColour, farWaterColour, vFarWater);
+vec3 ground = mix(farFields(vFarColour, vGround, distance(cameraPosition.xz, vGround)), farWaterColour, vFarWater);
 #else
 vec4 splat = texture2D(splatMap, (vGround - splatArea.xy) / splatArea.zw);
 groundContact = texture2D(contactMap, (vGround - contactArea.xy) / contactArea.zw).r;
 float variation = texture2D(grassMap, vGround / ${VARIATION_METRES.toFixed(1)}).g;
 vec3 grass = texture2D(grassMap, vGround / grassSize).rgb;
+float grassDetail = dot(grass, vec3(0.2126, 0.7152, 0.0722)) / ${brightness.toFixed(4)};
 
 // The land's colour, its edges wandering (the cells it's read from are ${LAND_WANDER} metres or so)
 vec2 landAt = (vGround + (vec2(variation, texture2D(grassMap, vGround / 53.0).r) - 0.5) * ${LAND_WANDER.toFixed(1)}) / landSize;
@@ -778,6 +925,13 @@ if (grassUnderReach > 0.0 && grassUnderAway < grassUnderReach) {
     grass = mix(grass, grassOwn, grassThick * 0.85);
 }
 
+// Past where the tall grass is drawn (and everywhere on low quality, where none is), the ground
+// takes its look (GRASS_AFAR), fading in as it fades out
+float grassAfarIn = grassUnderReach > 0.0 ? smoothstep(grassUnderReach * 0.7, grassUnderReach, grassUnderAway) : 1.0;
+if (grassAfarIn > 0.0) {
+    grass = mix(grass, grassAfar(grass, landAt, fine.g, dry, lush, bare, alpineAt(vHeight, coarse.b), grassDetail), grassAfarIn);
+}
+
 vec3 ground = grass * max(0.0, 1.0 - splat.r - splat.g - splat.b - splat.a);
 ${layers.map((_, k) => (LAYERS[k][0] === GROUND.soil ? soilOf(k) : `ground += texture2D(layer${k}Map, vGround / layer${k}Size).rgb * splat.${"rgba"[k]};`)).join("\n")}
 ground *= 0.82 + 0.45 * variation;
@@ -813,7 +967,7 @@ ground = mix(ground, snowColour * (0.9 + 0.2 * variation), snowAt(vHeight, coars
 #ifdef USE_FOG
 // (Under the far haze, turning to the ground as it's seen from afar where the far land takes over)
 if (fogFar > ${FAR_FOG.toFixed(1)} && vFogDepth > ${FAR_GROUND.from.toFixed(1)}) {
-    ground = mix(ground, farGround(vGround, vUp, vHeight, 0.0), smoothstep(${FAR_GROUND.from.toFixed(1)}, ${FAR_GROUND.to.toFixed(1)}, vFogDepth));
+    ground = mix(ground, farFields(farGround(vGround, vUp, vHeight, 0.0), vGround, vFogDepth), smoothstep(${FAR_GROUND.from.toFixed(1)}, ${FAR_GROUND.to.toFixed(1)}, vFogDepth));
 }
 #endif
 #ifdef GROUND_WATER
@@ -845,6 +999,9 @@ reflectedLight.indirectDiffuse *= 1.0 - ${CONTACT.loss.toFixed(2)} * groundConta
 
 // No homeland's
 let noHome = null;
+
+// No land's grass afar, and no farmland
+let noLook = null;
 
 // A splat with nothing on it
 let empty = null;
