@@ -2234,7 +2234,9 @@ A soldier of a people not friendly to the player's has a wheel of its own, with 
 (picking a fight with them), and no other side.
 
 A new character's wheels have Vigor at N on their own, and Burn (N), Hurt (NE), Rumble (NW),
-Blister (E) and Stun (W) on an enemy's (`WHEELS`); everything else starts empty, until the player puts something there in **Game
+Blister (E) and Stun (W) on an enemy's (`WHEELS`: the elements' greyed until their tomes are
+read, docs/MAGIC.md, and a flick at one says where the tome's sold); everything else starts
+empty, until the player puts something there in **Game
 options, Action wheels** (app/wheelsetup.js). There, tabs choose whose wheel and which side;
 the wheel's drawn as it opens in play, and tapping a slice lists what can go in it
 (`assignable`): "Nothing", and what's been learnt and is carried. Tapping S turns it over, as

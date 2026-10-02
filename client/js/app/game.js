@@ -47,7 +47,7 @@ import { BECKON, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js"
 import { squaresOf } from "../core/grid.js";
 import { navigatorOf, releaseNavigation } from "../core/navigation.js";
 import { GROUND } from "../core/setpieces/pieces.js";
-import { CAST_FAILURES, GROWTH_XP, lookOf, SCHOOLS, SPELLS, TOMES } from "../core/spells.js";
+import { CAST_FAILURES, ELEMENT_TOME_PRICE, ELEMENT_TOMES, GROWTH_XP, lookOf, SCHOOLS, SPELLS, TOMES } from "../core/spells.js";
 import { Variety } from "../core/variety.js";
 import { distanceBetween, longestReach, weaponOf, WEAPONS } from "../core/weapons.js";
 import { Avatar, posingEvery } from "../world/avatar.js";
@@ -263,6 +263,12 @@ function aboutOf({ id, quality }) {
     const { use, slot, armor = 0, part = false, price, tome } = ITEMS[id];
     const power = QUALITIES[quality]?.power ?? 1;
     const worth = part ? ` The adventurers' guild pays ${price} gold for it.` : "";
+
+    if (tome && ITEMS[id].opens) {
+        const school = SCHOOLS[ITEMS[id].opens].label;
+
+        return `Read it to learn ${SPELLS[tome].label} at once, opening the school of ${school}: its other spells come as it grows. ${SPELLS[tome].about} (sold at any adventurers' guild)`;
+    }
 
     if (tome) {
         return `Read it to learn ${SPELLS[tome].label} at once: ${SPELLS[tome].about} (${SPELLS[tome].tome}; the adventurers' guild buys tomes)`;
@@ -3031,8 +3037,11 @@ export class Game {
             schools: Object.entries(SCHOOLS).map(([id, { label, tiers, xp }]) => {
                 const { xp: has, from, to } = progress.toNextTier(id);
                 const tier = progress.tierOf(id);
+                // (An element not yet open: its first spell from its tome, bought at the guild)
+                const opened = progress.opened(id);
+                const tome = opened ? null : { label: `Tome of ${SPELLS[tiers[0]].label}`, price: ELEMENT_TOME_PRICE };
 
-                return { id, label, tier, last: tiers.length, xp: has, from, to, next: to === null ? null : SPELLS[tiers[tier]].label, spells: tiers.map((spell, k) => spellOf(spell, { at: `${xp[k]} ${label}` })) };
+                return { id, label, tier, last: tiers.length, xp: has, from, to, next: to === null ? null : SPELLS[tiers[tier]].label, opened, tome, spells: tiers.map((spell, k) => spellOf(spell, tome && k === 0 ? { from: `the ${tome.label}` } : { at: `${xp[k]} ${label}` })) };
             }),
             hexes: ["stun", "hold"].map((id) => spellOf(id, { at: "Hexes: Adept" })),
             tomes: progress.spells.filter((id) => SPELLS[id]?.tome).map((id) => {
@@ -5071,13 +5080,18 @@ export class Game {
         return this.#command(command, heard);
     }
 
-    // Why a spell can't be cast just now, before choosing where or on whom (or null): not known,
-    // cooling down, or not the right thing in hand
+    // Why a spell can't be cast just now, before choosing where or on whom (or null): not known
+    // (an element's first spell: not yet read, its tome at the guild), cooling down, or not the
+    // right thing in hand
     #unready(spell) {
         const actor = this.battle.actor(this.me);
         const needs = SPELLS[spell].needs;
 
-        return !this.progress.knows(spell) ? "unknown" : this.battle.cooldown(this.me, spell) > 0 ? "cooldown" : needs && actor?.weapon !== needs ? needs : null;
+        if (!this.progress.knows(spell)) {
+            return ELEMENT_TOMES.includes(spell) ? "unread" : "unknown";
+        }
+
+        return this.battle.cooldown(this.me, spell) > 0 ? "cooldown" : needs && actor?.weapon !== needs ? needs : null;
     }
 
     // Told why a spell wasn't cast (or nothing, if it was)

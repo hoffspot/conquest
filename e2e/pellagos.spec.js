@@ -2924,7 +2924,8 @@ test("the action wheels: flicked down, the other side; what's on each chosen in 
     const menu = page.locator("#menu");
     const setup = page.locator("#wheelsetup");
 
-    // Two draughts in the pack, and Healing's second spell come to; the player hurt
+    // Two draughts in the pack, Healing's second spell come to, and Fire learnt from its tome;
+    // the player hurt
     await page.evaluate(() => {
         const { game } = window.pellagos;
         const progress = game.host.players.get(game.me).progress;
@@ -2932,6 +2933,7 @@ test("the action wheels: flicked down, the other side; what's on each chosen in 
         progress.stow({ id: "potion" });
         progress.stow({ id: "potion" });
         progress.schools.healing = 300;
+        progress.learn("burn");
         game.battle.actor(game.me).hp = 20;
     });
 
@@ -2944,10 +2946,10 @@ test("the action wheels: flicked down, the other side; what's on each chosen in 
     await expect(setup.locator('.slice[data-direction="n"] .label')).toHaveText("Vigor");
 
     // What can go on it: nothing, the healing spells known, and the draughts carried; a foe's
-    // has those, the elements' spells and Stun, and no draughts
+    // has those, the elements' spells learnt (Fire's) and Stun, and no draughts
     await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Draught"]);
     await setup.getByRole("tab", { name: "A foe" }).click();
-    await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Burn", "Rumble", "Hurt", "Blister", "Stun"]);
+    await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Burn", "Stun"]);
     await setup.getByRole("tab", { name: "Yourself" }).click();
 
     // A draught at NE of wheel two (tapping S turns it over, as flicking it does)
@@ -2993,7 +2995,7 @@ test("the action wheels: flicked down, the other side; what's on each chosen in 
     expect(await page.evaluate(() => window.pellagos.game.progress.count("potion"))).toBe(1);
 });
 
-test("magic: the spellbook shows every school and the tomes; a tome read teaches its spell, put on a wheel from the book; the seventh tier floods the screen; summoned by another player, asked whether to go", async ({ page }) => {
+test("magic: the spellbook shows every school and the tomes; an element opened by its tome; a tome read teaches its spell, put on a wheel from the book; the seventh tier floods the screen; summoned by another player, asked whether to go", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     const book = page.locator(".spellbook");
@@ -3007,13 +3009,27 @@ test("magic: the spellbook shows every school and the tomes; a tome read teaches
         game.start();
     }, seconds);
 
-    // The spellbook, from its button: the five schools, the hexes and the tomes; each school's
-    // first spell known and Stun, the rest still to come
+    // The spellbook, from its button: the five schools, the hexes and the tomes; Vigor and Stun
+    // known, the rest still to come; each element not yet learnt, its tome at the guild
     await page.locator("#spellbookbutton").click();
     await expect(book).toBeVisible();
     await expect(book.locator(".journal-heading")).toHaveText(["Healing", "Fire", "Earth", "Air", "Water", "Hexes", "From tomes"]);
-    await expect(book.locator(".spellbook-spell:not(.unknown) .spellbook-name")).toHaveText(["Vigor", "Burn", "Rumble", "Hurt", "Blister", "Stun"]);
-    await expect(book.locator(".spellbook-spell.unknown")).toHaveCount(4 + 6 * 4 + 1);
+    await expect(book.locator(".spellbook-spell:not(.unknown) .spellbook-name")).toHaveText(["Vigor", "Stun"]);
+    await expect(book.locator(".spellbook-spell.unknown")).toHaveCount(4 + 7 * 4 + 1);
+    await expect(book.locator(".spellbook-growth .journal-line")).toHaveText(["Tier 1 of 5", "Not yet learnt", "Not yet learnt", "Not yet learnt", "Not yet learnt"]);
+    await expect(book.locator(".spellbook-growth .journal-note").nth(1)).toHaveText("Read the Tome of Burn to learn Burn and open Fire: 25 gold at any adventurers' guild. Its other spells come as it grows.");
+
+    // The Tome of Burn (bought at the guild) read: Burn known, and Fire open
+    expect(await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.progress.stow({ id: "tomeBurn", quality: "common" });
+
+        return game.host.command(game.me, { type: "use", item: "tomeBurn" });
+    })).toEqual({ ok: true });
+    await playOn(0.2);
+    await expect(book.locator(".spellbook-spell:not(.unknown) .spellbook-name")).toHaveText(["Vigor", "Burn", "Stun"]);
+    await expect(book.locator(".spellbook-growth .journal-line")).toHaveText(["Tier 1 of 5", "Tier 1 of 7", "Not yet learnt", "Not yet learnt", "Not yet learnt"]);
 
     // A tome of Levitate in the pack, read: the spell learnt (the book shows it), and put on the
     // player's own wheel from it

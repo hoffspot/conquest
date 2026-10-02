@@ -243,9 +243,10 @@ and flick towards a slice to do what's in it; let go in the middle to change you
 down (S) and the wheel turns over to its other side, wheel two, opened again under your finger.
 What's on your own wheel and an enemy's, both sides of each, you choose in **Game options,
 Action wheels**: the spells and blows you've learnt, and draughts, meals and ale from your pack
-(each showing how many you have). You start with the first spell of each school of magic, on
-your wheels: **Vigor** on yourself (a little healing), and **Burn**, **Rumble**, **Hurt** and
-**Blister** on an enemy (fire, earth, air and water), with **Stun** too. Each spell has its own
+(each showing how many you have). You start with **Vigor** on yourself (a little healing) and
+**Stun** on an enemy. Each element's school opens with its first spell's tome, 25 gold at any
+adventurers' guild: **Burn**, **Rumble**, **Hurt** and **Blister** (fire, earth, air and water),
+waiting greyed on your enemy wheel until you've read them. Each spell has its own
 cooldown: while it runs, its slice is greyed over, and the grey sweeps back as it passes. A flick
 at a greyed slice, or at an empty one, is refused, and a spell that can't be cast (out of reach,
 out of sight, already at full health) says why.

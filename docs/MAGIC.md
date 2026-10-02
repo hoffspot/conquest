@@ -17,7 +17,12 @@ play) and `world/spellfx.js` (how each looks).
 
 ## The schools
 
-Everyone can cast the first spell of each school. A school grows by its spells that land: each
+Everyone can cast Vigor, Healing's first spell, from the start. Each element's school opens with
+its first spell, learnt from its tome (the Tome of Burn, of Rumble, of Hurt, of Blister: spells.js
+`ELEMENT_TOMES`), sold at every adventurers' guild for 25 gold (`ELEMENT_TOME_PRICE`); until
+then none of its spells can be cast, and it doesn't grow. A character kept from before the
+elements' tomes has every element open, as it had (app/save.js `PROGRESS_FORMAT`). A school
+grows by its spells that land: each
 brings it `SPELL_XP` (8) experience for each tier of the spell (a tier 5 spell five times what a
 tier 1 does), and at each tier's experience the school's next spell comes (said, and put in the
 spellbook to be put on a wheel). Each tier's spell is stronger, slower to cast and slower to come
@@ -139,7 +144,8 @@ a grimoire.
 The spells that aren't a school's are learnt from tomes (a tome is a thing in the pack: used, its
 spell's learnt, and it's gone; a tome of a spell already known can be sold). Each is as rare as
 its spell is (`TOME_RARITY`): common ones found ten times as often as the rare, and worth 60,
-120 or 300 gold at the adventurers' guild, which buys them.
+120 or 300 gold at the adventurers' guild, which buys them. (The elements' first spells' tomes,
+above, are the guild's to sell, never found or given.)
 
 - **Found**: on those with hands (bandits, goblins, skeletons, cultists, trolls, ogres, boggarts,
   the wight lord, the frost troll: creatures.js `hands`) who've been about the wilds a while:
@@ -232,8 +238,9 @@ same for everyone playing (docs/GAME.md: hosting and joining):
 ## The spellbook (app/spellbook.js)
 
 The book button (top right) or B opens it: the wand or grimoire in hand and its boost; each school,
-its tier and how far to the next, and its spells, known (to put on a wheel: the enemy wheel for
-those cast at enemies, the self wheel for the rest) or still to come, and at what experience; the
+its tier and how far to the next (an element not yet learnt: which tome opens it, and where
+it's sold), and its spells, known (to put on a wheel: the enemy wheel for those cast at enemies,
+the self wheel for the rest) or still to come, and at what experience (or from what tome); the
 hexes; and the spells learnt from tomes, with how far each that grows has grown, and how many
 more there are to find. Each spell has its icon (app/spellicons.js: its school's colours, what it
 does drawn plainly), what it does, its cooldown, how long it takes to cast and whom it's cast on.

@@ -8,7 +8,9 @@
 // new ability: a power strike, an aimed shot, a hold.
 //
 // Magic's schools (core/spells.js SCHOOLS: Healing, Fire, Earth, Air, Water) grow by the spells
-// of each that land: each tier a school comes to, its next spell. And spells learnt from tomes.
+// of each that land: each tier a school comes to, its next spell. Healing's open from the start;
+// each element's once its first spell's learnt from its tome (bought at any adventurers' guild).
+// And spells learnt from tomes.
 // A wand or a grimoire makes spells stronger, each by its own share (rolled when it's made:
 // rollBoost).
 //
@@ -18,7 +20,7 @@
 
 import { CURES } from "./afflictions.js";
 import { disguiseOf, GEAR, GEAR_SLOTS, gearName, offHandFits, rollGear, sameGear, setBonuses, SLOT_IDS, STATS, statsOf, UNIFORM, UNIFORM_PEOPLES } from "./gear.js";
-import { growthAt, SCHOOLS, SPELLS, TOME_RARITY, TOMES, tierAt, tomeOf } from "./spells.js";
+import { ELEMENT_TOME_PRICE, ELEMENT_TOMES, growthAt, SCHOOLS, SPELLS, TOME_RARITY, TOMES, tierAt, tomeOf } from "./spells.js";
 import { PARTS } from "./spoils.js";
 import { WEAPONS } from "./weapons.js";
 
@@ -84,6 +86,9 @@ export const ITEMS = Object.freeze({
     // The spells' tomes (spells.js TOMES): each read to learn its spell at once; found on creatures
     // with hands, or given for a guild's contract; the rarer, the dearer
     ...Object.fromEntries(TOMES.map((spell) => [tomeOf(spell), { label: `Tome of ${SPELLS[spell].label}`, tome: spell, use: { learn: spell }, price: TOME_RARITY[SPELLS[spell].tome].price }])),
+    // The elements' first spells' tomes (spells.js ELEMENT_TOMES): each read to open its school,
+    // sold at any adventurers' guild
+    ...Object.fromEntries(ELEMENT_TOMES.map((spell) => [tomeOf(spell), { label: `Tome of ${SPELLS[spell].label}`, tome: spell, opens: SPELLS[spell].school, use: { learn: spell }, price: ELEMENT_TOME_PRICE }])),
     // The wild's creatures' parts (spoils.js): what the adventurers' guild pays for each; some to
     // eat or drink
     ...Object.fromEntries(Object.entries(PARTS).map(([id, { label, worth, use, icon }]) => [id, { label, price: worth, part: true, ...(use ? { use } : {}), ...(icon === "meat" ? { food: true } : {}) }])),
@@ -97,7 +102,7 @@ export const SHOPS = Object.freeze({
     smith: { items: ["sword", "hammer", "staff", "bow", "gauntlets", "quiver", "roundShield", "kiteShield", "cap", "nasalHelm", "jerkin", "gambeson", "mail", "plate", "bracers", "gloves", "platedGloves", "belt", "trousers", "breeches", "greaves", "leatherBoots", "sabatons", "boots", "travelCloak", ...UNIFORM], best: "masterwork" },
     tavern: { items: ["ale", "meal"], best: "common" },
     temple: { items: ["potion"], best: "common" },
-    guild: { items: ["wand", "grimoire", "wizardHat", "amulet", "ring", "potion", ...Object.keys(CURES)], best: "fine" },
+    guild: { items: ["wand", "grimoire", "wizardHat", "amulet", "ring", "potion", ...Object.keys(CURES), ...ELEMENT_TOMES.map(tomeOf)], best: "fine" },
 });
 
 /** What sells for what (a share of its price), before haggling. */
@@ -439,11 +444,19 @@ export class Progress {
     }
 
     /**
-     * The spells they can cast (spells.js ids): each school's up to its tier; Stun (anyone can)
-     * and Hold (once Hexes brings it); and those learnt from tomes.
+     * Whether a school of magic's open to them: Healing always; an element once its first spell's
+     * been learnt from its tome (spells.js ELEMENT_TOMES).
+     */
+    opened(school) {
+        return school === "healing" || this.spells.includes(SCHOOLS[school]?.tiers[0]);
+    }
+
+    /**
+     * The spells they can cast (spells.js ids): each open school's up to its tier; Stun (anyone
+     * can) and Hold (once Hexes brings it); and those learnt from tomes.
      */
     known() {
-        const schooled = Object.keys(SCHOOLS).flatMap((school) => SCHOOLS[school].tiers.slice(0, this.tierOf(school)));
+        const schooled = Object.keys(SCHOOLS).filter((school) => this.opened(school)).flatMap((school) => SCHOOLS[school].tiers.slice(0, this.tierOf(school)));
         const hexes = ["stun", ...(this.abilities().includes("hold") ? ["hold"] : [])];
 
         return [...new Set([...schooled, ...hexes, ...this.spells])];
