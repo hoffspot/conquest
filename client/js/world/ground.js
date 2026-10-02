@@ -106,8 +106,10 @@ export const FAR_FIELDS = { value: 1 };
  * The fields worked out on the GPU just as core/fields.js fieldAt works them out (its integer
  * hashing the same in 32-bit unsigned maths; its numbers, FIELDS and CROP_ODDS, written in):
  * `int cropAt(vec2 at, bool baulks, bool hedges)`, a point's crop (CROP's; 0 none, -1 a hedge's
- * band where `hedges`), from `fieldSeed` (the world's seed) and `farmMap` (whether each of the
- * plan's cells is farmland: a block's farmed if its middle's cell is).
+ * band where `hedges`), from `fieldSeed` (the world's seed) and the farmland (whether each of the
+ * plan's cells is: a block's farmed if its middle's cell is), read by the shader it's in through
+ * `ivec2 farmSize()` (how many cells across and down) and `float farmAt(ivec2 cell)` (over 0.5 for
+ * farmland).
  */
 export const FIELDS_GLSL = (() => {
     const odds = [];
@@ -138,8 +140,8 @@ int cropAt(vec2 at, bool baulks, bool hedges) {
     ivec3 bx = fieldBlock(p.x, 0);
     ivec3 by = fieldBlock(p.y, 1);
     ivec2 middle = ivec2(floor(vec2(bx.y + bx.z, by.y + by.z) * 0.5));
-    ivec2 cell = clamp(ivec2(floor(vec2(middle) / ${CELL.toFixed(1)})), ivec2(0), textureSize(farmMap, 0) - 1);
-    if (texelFetch(farmMap, cell, 0).r < 0.5) return 0;
+    ivec2 cell = clamp(ivec2(floor(vec2(middle) / ${CELL.toFixed(1)})), ivec2(0), farmSize() - 1);
+    if (farmAt(cell) < 0.5) return 0;
     uint h = fieldHash(bx.x, by.x, fieldSeed + 73);
     int along = int((h >> 7u) & 1u);
     bool verge = p.x - bx.y < ${FIELDS.margin} || bx.z - 1 - p.x < ${FIELDS.margin} || p.y - by.y < ${FIELDS.margin} || by.z - 1 - p.y < ${FIELDS.margin};
@@ -415,17 +417,47 @@ export function* splatting(kindAt, [x0, y0, width, height], resolution = SPLAT_R
     return { data, width: w, height: h, any };
 }
 
-// A tiling ground texture, and how many metres one copy covers
-function tileTexture(name, size) {
-    const { canvas } = textureCanvas(name);
-    const texture = new THREE.CanvasTexture(canvas);
+/**
+ * Where each of the ground's tiling textures is in the one texture array they're read from: the
+ * grass, the kinds of ground blended over it (LAYERS, in order), and the rock. One array, so the
+ * ground's shader reads them all through one sampler: a phone's GPU lets a shader read only so many
+ * textures (an iPhone's 16), and the ground reads many.
+ */
+export const TILE = Object.freeze({ grass: 0, layers: 1, rock: 1 + LAYERS.length });
 
+// A tiling ground texture's picture, and how many metres one copy covers
+function tileOf(name, size) {
+    return { canvas: textureCanvas(name).canvas, size };
+}
+
+// Pictures of a size as one texture array, tiling, mipmapped (each picture upside down, as a
+// canvas's is when it's sent to the GPU on its own: the ground as it was when each was a texture)
+function tileArray(canvases) {
+    const [width, height] = [canvases[0].width, canvases[0].height];
+    const data = new Uint8Array(width * height * 4 * canvases.length);
+
+    canvases.forEach((canvas, k) => {
+        const pixels = canvas.getContext("2d").getImageData(0, 0, width, height).data;
+
+        for (let j = 0; j < height; j++) {
+            data.set(pixels.subarray((height - 1 - j) * width * 4, (height - j) * width * 4), (k * height + j) * width * 4);
+        }
+    });
+
+    const texture = new THREE.DataArrayTexture(data, width, height, canvases.length);
+
+    texture.format = THREE.RGBAFormat;
+    texture.type = THREE.UnsignedByteType;
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.generateMipmaps = true;
     texture.anisotropy = 8;
+    texture.needsUpdate = true;
 
-    return { texture, size };
+    return texture;
 }
 
 // The ground's tiling textures, made once (and the grass's average brightness, in linear light)
@@ -433,8 +465,8 @@ let tiles = null;
 
 function groundTiles() {
     if (!tiles) {
-        const grass = tileTexture("grass", GRASS_METRES);
-        const pixels = grass.texture.image.getContext("2d").getImageData(0, 0, grass.texture.image.width, grass.texture.image.height).data;
+        const grass = tileOf("grass", GRASS_METRES);
+        const pixels = grass.canvas.getContext("2d").getImageData(0, 0, grass.canvas.width, grass.canvas.height).data;
         const linear = (value) => ((value / 255 + 0.055) / 1.055) ** 2.4;
         let [sum, green] = [0, 0];
 
@@ -444,7 +476,10 @@ function groundTiles() {
         }
 
         // (And its green on average: how its larger copy shades the ground, on average)
-        tiles = { grass, brightness: sum / (pixels.length / 4), variation: green / (pixels.length / 4), layers: LAYERS.map(([, name, size]) => tileTexture(name, size)), rock: tileTexture("rock", ROCK_METRES) };
+        const layers = LAYERS.map(([, name, size]) => tileOf(name, size));
+        const rock = tileOf("rock", ROCK_METRES);
+
+        tiles = { grass, brightness: sum / (pixels.length / 4), variation: green / (pixels.length / 4), layers, rock, array: tileArray([grass, ...layers, rock].map(({ canvas }) => canvas)) };
     }
 
     return tiles;
@@ -556,6 +591,45 @@ export function landColours(plan, grass = null) {
     return texture;
 }
 
+/**
+ * A land's maps (landColours' or landColour's texture, its userData's) as two texture arrays, read
+ * through two samplers rather than five (see TILE): `colours`, its colours and its grass afar
+ * (sRGB); `marks`, its homelands (two layers) and its farmland. Made once a land.
+ */
+export function landLayers(land) {
+    if (!land.userData.layers) {
+        const cells = land.image.width;
+        const of = (texture) => (texture?.image.width === cells ? texture.image.data : null);
+        const [home, home2] = land.userData.home ?? [];
+
+        land.userData.layers = {
+            colours: cellArray([land.image.data, of(land.userData.grass)], cells, THREE.SRGBColorSpace),
+            marks: cellArray([of(home), of(home2), of(land.userData.farm)], cells),
+        };
+    }
+
+    return land.userData.layers;
+}
+
+// Maps of the plan's cells (or one: RGBA bytes, null for none) as a texture array, blended between
+// cells
+function cellArray(maps, cells, colorSpace = THREE.NoColorSpace) {
+    const data = new Uint8Array(cells * cells * 4 * maps.length);
+
+    maps.forEach((map, k) => map && data.set(map, k * cells * cells * 4));
+
+    const texture = new THREE.DataArrayTexture(data, cells, cells, maps.length);
+
+    texture.format = THREE.RGBAFormat;
+    texture.type = THREE.UnsignedByteType;
+    texture.colorSpace = colorSpace;
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearFilter;
+    texture.needsUpdate = true;
+
+    return texture;
+}
+
 // A texture of the plan's cells (or one), blended between them
 function cellTexture(data, cells, colorSpace = THREE.NoColorSpace) {
     const texture = new THREE.DataTexture(data, cells, cells, THREE.RGBAFormat);
@@ -611,7 +685,7 @@ function homeTexture() {
  * inside it), where the ground nearer is (lifted out of the way).
  */
 export function groundMaterial({ splat = null, area = [0, 0, 1, 1], land = null, contact = null, water = null, far = null, fields = null } = {}) {
-    const { grass, brightness, variation: meanVariation, layers, rock } = groundTiles();
+    const { grass, brightness, variation: meanVariation, layers, array: tileMap } = groundTiles();
     const material = new THREE.MeshLambertMaterial({ color: 0xffffff });
 
     // (The ground goes on into the far land past where nearer things fade: fog.js; with water on
@@ -625,13 +699,7 @@ export function groundMaterial({ splat = null, area = [0, 0, 1, 1], land = null,
 
     const landMap = land ?? noLand;
     const home = landMap.userData.home ?? null;
-
-    if (!home) {
-        noHome ??= cellTexture(new Uint8Array(4), 1);
-    }
-
-    // (No land's grass afar, and no fields, with no land's colours)
-    noLook ??= cellTexture(new Uint8Array(4), 1);
+    const { colours: landMaps, marks: markMaps } = landLayers(landMap);
 
     material.name = "ground";
     material.userData.splat = splat;
@@ -641,6 +709,33 @@ export function groundMaterial({ splat = null, area = [0, 0, 1, 1], land = null,
     // the chunks' ground (past FAR_GROUND.from), and in the vertex shader for the far land's (its
     // corners metres apart: worked out at each and blended between, as cheap as can be over the
     // half of the picture it covers), the patches' noise read by `patch`
+    // (Reading the ground's tiles (TILE) and the land's maps (landLayers): each a texture array, so
+    // the ground's shader reads few enough textures for a phone)
+    const tile = (k) => `${k.toFixed(1)}`;
+    const reads = `vec4 tileAt(float tile, vec2 at) {
+    return texture(groundTiles, vec3(at, tile));
+}
+vec3 tileMean(float tile) {
+    return textureLod(groundTiles, vec3(0.5, 0.5, tile), 12.0).rgb;
+}
+vec4 landColourAt(vec2 at) {
+    return texture(landMaps, vec3(at, 0.0));
+}
+vec4 grassLookAt(vec2 at) {
+    return texture(landMaps, vec3(at, 1.0));
+}
+vec4 homesAt(vec2 at) {
+    return texture(markMaps, vec3(at, 0.0));
+}
+float homes2At(vec2 at) {
+    return texture(markMaps, vec3(at, 1.0)).r;
+}
+ivec2 farmSize() {
+    return textureSize(markMaps, 0).xy;
+}
+float farmAt(ivec2 cell) {
+    return texelFetch(markMaps, ivec3(cell, 2), 0).r;
+}`;
     const farFunctions = (patch) => `// Up high (ALPINE): how far up into the rock a point so many metres up is (0 to 1), and how much
 // snow lies on it (the up of its slope, the land there), the lines wandering with a patch's noise
 // (0 to 1)
@@ -657,7 +752,7 @@ float snowAt(float height, float wander, float up, vec4 land) {
 // thinner where it's worn bare and up towards the rock, drier and more golden in the dry patches,
 // lighter and darker as the grass's picture is there (\`detail\`: 1 its average), more so
 vec3 grassAfar(vec3 grass, vec2 landAt, float clumps, float dry, float lush, float bare, float alpine, float detail) {
-    vec4 look = texture2D(grassLookMap, landAt);
+    vec4 look = grassLookAt(landAt);
     float thick = look.a * (0.35 + 0.65 * smoothstep(0.3, 0.62, clumps)) * (1.0 - 0.95 * bare) * (1.0 + 0.25 * lush) * (1.0 - alpine);
     vec3 tint = mix(look.rgb, vec3(${new THREE.Color().setRGB(...STRAW.map((v) => v / 255), THREE.SRGBColorSpace).toArray().map((v) => v.toFixed(4)).join(", ")}), min(1.0, 0.65 * dry)) * mix(vec3(1.0), vec3(0.85, 1.0, 0.85), lush);
 
@@ -669,16 +764,16 @@ vec3 grassAfar(vec3 grass, vec2 landAt, float clumps, float dry, float lush, flo
 vec3 farGround(vec2 at, vec3 up, float height, float rockShift) {
     vec2 landAt = at / landSize;
     vec2 blur = vec2(12.0, -12.0) / landSize;
-    vec4 land = 0.25 * (texture2D(landMap, landAt + blur.xx) + texture2D(landMap, landAt + blur.xy) + texture2D(landMap, landAt + blur.yx) + texture2D(landMap, landAt + blur.yy));
-    vec3 grass = textureLod(grassMap, vec2(0.5), 12.0).rgb;
+    vec4 land = 0.25 * (landColourAt(landAt + blur.xx) + landColourAt(landAt + blur.xy) + landColourAt(landAt + blur.yx) + landColourAt(landAt + blur.yy));
+    vec3 grass = tileMean(${tile(TILE.grass)});
     grass = mix(grass, land.rgb * dot(grass, vec3(0.2126, 0.7152, 0.0722)) / ${brightness.toFixed(4)}, land.a);
-    vec4 homes = texture2D(homeMap, landAt);
+    vec4 homes = homesAt(landAt);
     float homeWeight = homes.r;
     float homeLayer = 0.0;
     if (homes.g > homeWeight) { homeWeight = homes.g; homeLayer = 1.0; }
     if (homes.b > homeWeight) { homeWeight = homes.b; homeLayer = 2.0; }
     if (homes.a > homeWeight) { homeWeight = homes.a; homeLayer = 3.0; }
-    float homes2 = texture2D(homeMap2, landAt).r;
+    float homes2 = homes2At(landAt);
     if (homes2 > homeWeight) { homeWeight = homes2; homeLayer = 4.0; }
     float home = smoothstep(0.2, 0.75, homeWeight) * ${HOME_AMOUNT.toFixed(2)};
     if (home > 0.0) {
@@ -691,13 +786,13 @@ vec3 farGround(vec2 at, vec3 up, float height, float rockShift) {
     float bare = smoothstep(${PATCHES.bare[0].toFixed(3)}, ${PATCHES.bare[1].toFixed(3)}, coarse.b);
     grass = mix(grass, grass * vec3(1.3, 1.12, 0.6), dry * ${PATCHES.dry[2].toFixed(2)} * strength);
     grass = mix(grass, grass * vec3(0.72, 0.9, 0.68), lush * ${PATCHES.lush[2].toFixed(2)} * strength);
-    vec3 earth = mix(textureLod(layer0Map, vec2(0.5), 12.0).rgb * 0.92, grass * 0.8, land.a * 0.75);
+    vec3 earth = mix(tileMean(${tile(TILE.layers)}) * 0.92, grass * 0.8, land.a * 0.75);
     grass = mix(grass, earth, bare * ${PATCHES.bare[2].toFixed(2)} * strength);
     float alpine = alpineAt(height, coarse.b);
     grass = grassAfar(grass, landAt, 0.47, dry, lush, bare, alpine, 1.0);
     grass *= ${(0.82 + 0.45 * meanVariation).toFixed(4)};
     float steep = 1.0 - smoothstep(${ROCK_FROM.all.toFixed(2)} + rockShift + ${ALPINE.by.toFixed(2)} * alpine, ${ROCK_FROM.start.toFixed(2)} + rockShift + ${ALPINE.by.toFixed(2)} * alpine, up.y);
-    vec3 rock = textureLod(rockMap, vec2(0.5), 12.0).rgb;
+    vec3 rock = tileMean(${tile(TILE.rock)});
     rock = mix(rock, rock * land.rgb / max(0.2, dot(land.rgb, vec3(0.3333))), land.a * 0.35);
     vec3 ground = mix(grass, rock * ${(0.85 + 0.3 * meanVariation).toFixed(4)}, steep);
     return mix(ground, snowColour * ${(0.9 + 0.2 * meanVariation).toFixed(4)}, snowAt(height, coarse.b, up.y - rockShift, land));
@@ -708,7 +803,7 @@ vec3 farGround(vec2 at, vec3 up, float height, float rockShift) {
     const cropColour = (crop) => new THREE.Color(CROP_COLOURS[crop]).toArray().map((v) => v.toFixed(4)).join(", ");
     const soilOf = (k) => `if (splat.${"rgba"[k]} > 0.0) {
     vec4 field = texture2D(fieldMap, (vGround - fieldArea.xy) / fieldArea.zw);
-    vec3 soil = texture2D(layer${k}Map, (field.g > 0.5 ? vGround.yx : vGround) / layer${k}Size).rgb;
+    vec3 soil = tileAt(${tile(TILE.layers + k)}, (field.g > 0.5 ? vGround.yx : vGround) / layer${k}Size).rgb;
     float crop = floor(field.r * 255.0 + 0.5);
     if (crop > ${(CROP.ploughed + 0.5).toFixed(1)} && crop < ${(CROP.greens + 0.5).toFixed(1)}) {
         float ridge = smoothstep(0.015, 0.09, dot(soil, vec3(0.2126, 0.7152, 0.0722)));
@@ -726,27 +821,23 @@ vec3 farGround(vec2 at, vec3 up, float height, float rockShift) {
             contactArea: { value: new THREE.Vector4(...(contact?.area ?? [0, 0, 1, 1])) },
             fieldMap: { value: fields?.texture ?? noFields() },
             fieldArea: { value: new THREE.Vector4(...(fields?.area ?? [0, 0, 1, 1])) },
-            landMap: { value: landMap },
+            landMaps: { value: landMaps },
+            markMaps: { value: markMaps },
             landSize: { value: landMap.userData.size ?? 1 },
-            homeMap: { value: home?.[0] ?? noHome },
-            homeMap2: { value: home?.[1] ?? noHome },
             homeLayers: { value: home ? homeTexture() : null },
-            grassMap: { value: grass.texture },
+            groundTiles: { value: tileMap },
             grassSize: { value: grass.size },
             patchMap: { value: patchTexture() },
             grassUnderMap: GRASS_UNDER.map,
             grassUnderTint: GRASS_UNDER.tint,
             grassUnderFocus: GRASS_UNDER.focus,
             grassUnderReach: GRASS_UNDER.reach,
-            grassLookMap: { value: landMap.userData.grass ?? noLook },
-            farmMap: { value: landMap.userData.farm ?? noLook },
             fieldSeed: { value: landMap.userData.seed ?? 0 },
             farFieldsOn: FAR_FIELDS,
-            rockMap: { value: rock.texture },
             snowColour: { value: new THREE.Color(ALPINE.colour) },
             ...(water ? { groundWater: { value: water.texture }, groundWaterArea: { value: new THREE.Vector4(...water.area) }, causticMap: { value: causticTexture() }, groundTime: TREE_WIND.time, groundDetail: WATER_DETAIL } : {}),
             ...(far ? { farHole: far.hole, farInner: far.inner, farWaterColour: { value: new THREE.Color(FAR_GROUND.water) } } : {}),
-            ...Object.fromEntries(layers.flatMap(({ texture, size }, k) => [[`layer${k}Map`, { value: texture }], [`layer${k}Size`, { value: size }]])),
+            ...Object.fromEntries(layers.map(({ size }, k) => [`layer${k}Size`, { value: size }])),
         });
         shader.vertexShader = shader.vertexShader
             .replace(
@@ -761,17 +852,14 @@ varying float vFarWater;
 varying vec3 vFarColour;
 uniform vec3 farHole;
 uniform vec4 farInner;
-uniform sampler2D rockMap;
+uniform highp sampler2DArray groundTiles;
 uniform vec3 snowColour;
-uniform sampler2D landMap;
+uniform highp sampler2DArray landMaps;
+uniform highp sampler2DArray markMaps;
 uniform float landSize;
-uniform sampler2D homeMap;
-uniform sampler2D homeMap2;
 uniform highp sampler2DArray homeLayers;
-uniform sampler2D grassMap;
 uniform sampler2D patchMap;
-uniform sampler2D layer0Map;
-uniform sampler2D grassLookMap;
+${reads}
 
 ${farFunctions((at) => `textureLod(patchMap, ${at}, 0.0)`)}
 #endif`,
@@ -803,7 +891,7 @@ vFarColour = farGround(vGround, vUp, vHeight, ${FAR_GROUND.rock.toFixed(2)});
 varying vec2 vGround;
 varying vec3 vUp;
 varying float vHeight;
-uniform sampler2D rockMap;
+uniform highp sampler2DArray groundTiles;
 uniform vec3 snowColour;
 uniform sampler2D splatMap;
 #ifdef GROUND_WATER
@@ -819,20 +907,16 @@ uniform vec4 contactArea;
 float groundContact;
 uniform sampler2D fieldMap;
 uniform vec4 fieldArea;
-uniform sampler2D landMap;
+uniform highp sampler2DArray landMaps;
+uniform highp sampler2DArray markMaps;
 uniform float landSize;
-uniform sampler2D homeMap;
-uniform sampler2D homeMap2;
 uniform highp sampler2DArray homeLayers;
-uniform sampler2D grassMap;
 uniform float grassSize;
 uniform sampler2D patchMap;
 uniform sampler2D grassUnderMap;
 uniform sampler2D grassUnderTint;
 uniform vec2 grassUnderFocus;
 uniform float grassUnderReach;
-uniform sampler2D grassLookMap;
-uniform sampler2D farmMap;
 uniform int fieldSeed;
 uniform float farFieldsOn;
 #ifdef FAR_LAND
@@ -840,7 +924,8 @@ varying float vFarWater;
 varying vec3 vFarColour;
 uniform vec3 farWaterColour;
 #endif
-${layers.map((_, k) => `uniform sampler2D layer${k}Map;\nuniform float layer${k}Size;`).join("\n")}
+${layers.map((_, k) => `uniform float layer${k}Size;`).join("\n")}
+${reads}
 
 ${farFunctions((at) => `texture2D(patchMap, ${at})`)}
 
@@ -864,7 +949,7 @@ vec3 farFields(vec3 ground, vec2 at, float away) {
         return ground;
     }
 
-    vec3 soil = textureLod(layer${LAYERS.findIndex(([kind]) => kind === GROUND.soil)}Map, vec2(0.5), 12.0).rgb * ${(0.82 + 0.45 * meanVariation).toFixed(4)};
+    vec3 soil = tileMean(${tile(TILE.layers + LAYERS.findIndex(([kind]) => kind === GROUND.soil))}) * ${(0.82 + 0.45 * meanVariation).toFixed(4)};
 
     return crop == ${CROP.ploughed} ? soil : crop == ${CROP.wheat} ? mix(soil, vec3(${cropColour(CROP.wheat)}), 0.85) : crop == ${CROP.barley} ? mix(soil, vec3(${cropColour(CROP.barley)}), 0.85) : mix(soil, vec3(${cropColour(CROP.greens)}), 0.75);
 }`)
@@ -875,24 +960,24 @@ vec3 ground = mix(farFields(vFarColour, vGround, distance(cameraPosition.xz, vGr
 #else
 vec4 splat = texture2D(splatMap, (vGround - splatArea.xy) / splatArea.zw);
 groundContact = texture2D(contactMap, (vGround - contactArea.xy) / contactArea.zw).r;
-float variation = texture2D(grassMap, vGround / ${VARIATION_METRES.toFixed(1)}).g;
-vec3 grass = texture2D(grassMap, vGround / grassSize).rgb;
+float variation = tileAt(${tile(TILE.grass)}, vGround / ${VARIATION_METRES.toFixed(1)}).g;
+vec3 grass = tileAt(${tile(TILE.grass)}, vGround / grassSize).rgb;
 float grassDetail = dot(grass, vec3(0.2126, 0.7152, 0.0722)) / ${brightness.toFixed(4)};
 
 // The land's colour, its edges wandering (the cells it's read from are ${LAND_WANDER} metres or so)
-vec2 landAt = (vGround + (vec2(variation, texture2D(grassMap, vGround / 53.0).r) - 0.5) * ${LAND_WANDER.toFixed(1)}) / landSize;
-vec4 land = texture2D(landMap, landAt);
+vec2 landAt = (vGround + (vec2(variation, tileAt(${tile(TILE.grass)}, vGround / 53.0).r) - 0.5) * ${LAND_WANDER.toFixed(1)}) / landSize;
+vec4 land = landColourAt(landAt);
 grass = mix(grass, land.rgb * dot(grass, vec3(0.2126, 0.7152, 0.0722)) / ${brightness.toFixed(4)}, land.a);
 
 // A people's homeland its own ground, the most of whichever's there (its edges wandering as the
 // land's do)
-vec4 homes = texture2D(homeMap, landAt);
+vec4 homes = homesAt(landAt);
 float homeWeight = homes.r;
 float homeLayer = 0.0;
 if (homes.g > homeWeight) { homeWeight = homes.g; homeLayer = 1.0; }
 if (homes.b > homeWeight) { homeWeight = homes.b; homeLayer = 2.0; }
 if (homes.a > homeWeight) { homeWeight = homes.a; homeLayer = 3.0; }
-float homes2 = texture2D(homeMap2, landAt).r;
+float homes2 = homes2At(landAt);
 if (homes2 > homeWeight) { homeWeight = homes2; homeLayer = 4.0; }
 float home = smoothstep(0.2, 0.75, homeWeight) * ${HOME_AMOUNT.toFixed(2)};
 if (home > 0.0) {
@@ -912,7 +997,7 @@ float lush = smoothstep(${PATCHES.lush[0].toFixed(3)}, ${PATCHES.lush[1].toFixed
 float bare = smoothstep(${PATCHES.bare[0].toFixed(3)}, ${PATCHES.bare[1].toFixed(3)}, fine.b * 0.75 + coarse.b * 0.25);
 grass = mix(grass, grass * vec3(1.3, 1.12, 0.6), dry * ${PATCHES.dry[2].toFixed(2)} * strength);
 grass = mix(grass, grass * vec3(0.72, 0.9, 0.68), lush * ${PATCHES.lush[2].toFixed(2)} * strength);
-vec3 earth = mix(texture2D(layer0Map, vGround / layer0Size).rgb * 0.92, grass * 0.8, land.a * 0.75);
+vec3 earth = mix(tileAt(${tile(TILE.layers)}, vGround / layer0Size).rgb * 0.92, grass * 0.8, land.a * 0.75);
 grass = mix(grass, earth, bare * ${PATCHES.bare[2].toFixed(2)} * strength);
 
 // Under the tall grass (grass.js), as thick as it grows, the ground darker and the grass's own
@@ -933,7 +1018,7 @@ if (grassAfarIn > 0.0) {
 }
 
 vec3 ground = grass * max(0.0, 1.0 - splat.r - splat.g - splat.b - splat.a);
-${layers.map((_, k) => (LAYERS[k][0] === GROUND.soil ? soilOf(k) : `ground += texture2D(layer${k}Map, vGround / layer${k}Size).rgb * splat.${"rgba"[k]};`)).join("\n")}
+${layers.map((_, k) => (LAYERS[k][0] === GROUND.soil ? soilOf(k) : `ground += tileAt(${tile(TILE.layers + k)}, vGround / layer${k}Size).rgb * splat.${"rgba"[k]};`)).join("\n")}
 ground *= 0.82 + 0.45 * variation;
 
 // Rock where it's too steep for grass (and, up high, where it's gentler: ALPINE): read from above
@@ -955,8 +1040,8 @@ if (steep > 0.0) {
     vec2 across = abs(vUp.x) > abs(vUp.z) ? vec2(vGround.y, vHeight) : vec2(vGround.x, vHeight);
     // (Each read at two scales, the larger turned, so the texture's repeats don't show)
     mat2 turned = mat2(0.8, -0.6, 0.6, 0.8);
-    vec3 fromAbove = mix(texture2D(rockMap, vGround / ${ROCK_METRES.toFixed(1)}).rgb, texture2D(rockMap, turned * vGround / ${(ROCK_METRES * 3.1).toFixed(1)}).rgb, 0.45);
-    vec3 fromSide = mix(texture2D(rockMap, across / ${ROCK_METRES.toFixed(1)}).rgb, texture2D(rockMap, turned * across / ${(ROCK_METRES * 3.1).toFixed(1)}).rgb, 0.45);
+    vec3 fromAbove = mix(tileAt(${tile(TILE.rock)}, vGround / ${ROCK_METRES.toFixed(1)}).rgb, tileAt(${tile(TILE.rock)}, turned * vGround / ${(ROCK_METRES * 3.1).toFixed(1)}).rgb, 0.45);
+    vec3 fromSide = mix(tileAt(${tile(TILE.rock)}, across / ${ROCK_METRES.toFixed(1)}).rgb, tileAt(${tile(TILE.rock)}, turned * across / ${(ROCK_METRES * 3.1).toFixed(1)}).rgb, 0.45);
     vec3 rock = mix(fromAbove, fromSide, smoothstep(0.75, 0.5, vUp.y));
     rock = mix(rock, rock * land.rgb / max(0.2, dot(land.rgb, vec3(0.3333))), land.a * 0.35);
     ground = mix(ground, rock * (0.85 + 0.3 * variation), steep);
@@ -996,12 +1081,6 @@ reflectedLight.indirectDiffuse *= 1.0 - ${CONTACT.loss.toFixed(2)} * groundConta
 
     return material;
 }
-
-// No homeland's
-let noHome = null;
-
-// No land's grass afar, and no farmland
-let noLook = null;
 
 // A splat with nothing on it
 let empty = null;

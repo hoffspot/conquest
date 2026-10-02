@@ -123,7 +123,7 @@ test("works out the fields seen from afar on the GPU just as the rules do, metre
     // farmland and the land round it, against core/fields.js fieldAt)
     const fields = await page.evaluate(async () => {
         const THREE = await import("three");
-        const { FIELDS_GLSL, landColours } = await import("/js/world/ground.js");
+        const { FIELDS_GLSL, landColours, landLayers } = await import("/js/world/ground.js");
         const { fieldAt } = await import("/js/core/fields.js");
         const { BIOMES, CELL, CELLS, planWorld } = await import("/js/core/worldplan/plan.js");
         const plan = planWorld(1);
@@ -132,9 +132,10 @@ test("works out the fields seen from afar on the GPU just as the rules do, metre
         const size = 64;
         const target = new THREE.WebGLRenderTarget(size, size);
         const material = new THREE.ShaderMaterial({
-            uniforms: { farmMap: { value: land.userData.farm }, fieldSeed: { value: land.userData.seed }, origin: { value: new THREE.Vector2() } },
+            uniforms: { markMaps: { value: landLayers(land).marks }, fieldSeed: { value: land.userData.seed }, origin: { value: new THREE.Vector2() } },
             vertexShader: "void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }",
-            fragmentShader: `uniform sampler2D farmMap;\nuniform int fieldSeed;\nuniform vec2 origin;\n${FIELDS_GLSL}\nvoid main() { gl_FragColor = vec4(float(cropAt(origin + floor(gl_FragCoord.xy) + 0.5, true, false) + 1) / 255.0, 0.0, 0.0, 1.0); }`,
+            // (The farmland read as the ground reads it: the third of the land's marks)
+            fragmentShader: `uniform highp sampler2DArray markMaps;\nuniform int fieldSeed;\nuniform vec2 origin;\nivec2 farmSize() { return textureSize(markMaps, 0).xy; }\nfloat farmAt(ivec2 cell) { return texelFetch(markMaps, ivec3(cell, 2), 0).r; }\n${FIELDS_GLSL}\nvoid main() { gl_FragColor = vec4(float(cropAt(origin + floor(gl_FragCoord.xy) + 0.5, true, false) + 1) / 255.0, 0.0, 0.0, 1.0); }`,
         });
         const scene = new THREE.Scene().add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material));
         const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);

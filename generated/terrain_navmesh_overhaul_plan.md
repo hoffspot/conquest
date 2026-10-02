@@ -2103,3 +2103,26 @@ converted data is to be measured in M8 against today's hm08 data.
     corners where its top is with its own cell of the picture, the breeze the smoke's, the
     shader's hooks in Lambert's; a town's war banners in its holders' cloth, in one mesh, taken
     down); `e2e/building-lab.spec.js` (the landmarks' cloth drawn).
+- **2026-10-02, fixed: the ground not drawn on an iPhone** (the user, from the published game: "the
+  published version ground doesn't render"):
+  - **Why:** an iPhone lets one shader read 16 textures; the ground's read 22 (20 without water),
+    so its shader didn't compile there and none of the ground was drawn. Chunks with water in
+    them were already at 17 before M7b; M7b-1's tall grass (two maps), M7b-1b's fields and
+    M7b-2c's grass afar and farmland took the rest over. This machine's browser allows 32, so
+    no test saw it.
+  - **Fixed** (`world/ground.js`): the grass, the four kinds of ground over it and the rock read
+    from one texture array (`TILE`; each picture as it was, upside down as a canvas is sent);
+    the land's maps from two (`landLayers`: its colour and grass afar, sRGB; its two homeland
+    maps and farmland), made once a land and let go with it. The fields' shader reads the
+    farmland through two hooks (`farmSize`, `farmAt`) that the shader including it defines.
+    14 textures now (12 without water). The same filtering, mipmaps and colour spaces, so the
+    ground looks the same.
+  - **Checked:** varyings (10 of 31) and uniforms (86 vectors) are well inside an iPhone's too.
+  - **Pictures:** before/after sheet sent in the session (the start town's square, fields, the
+    cat folk's tall grass, a mountainside, a lake): the ground the same pixel for pixel, only
+    what moves (grass, motes) and the random hero differing.
+  - **Versions:** none (the drawing's alone).
+  - **Tests:** `test/land.test.js` (a land's maps as two texture arrays, in order, in their colour
+    spaces, made once); `e2e/pellagos.spec.js` (walking out of the start town, no shader drawn
+    reads more than 16 textures); `e2e/building-lab.spec.js` (the fields on the GPU read from the
+    land's marks as the ground reads them).

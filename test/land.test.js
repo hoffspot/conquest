@@ -11,7 +11,7 @@ globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContex
 
 const { blurred, distancesFrom } = await import("../client/js/world/fields.js");
 const { FIELD, fieldTexture, SHORE, shoreBytes, shoreDistances } = await import("../client/js/world/water.js");
-const { contactOf } = await import("../client/js/world/ground.js");
+const { contactOf, HOMES, landColour, landLayers } = await import("../client/js/world/ground.js");
 const { CONTACT, ContactShadows } = await import("../client/js/world/contacts.js");
 const THREE = await import("three");
 
@@ -98,6 +98,24 @@ describe("the ground where something stands on it (ground.js)", () => {
         assert.ok(at(9) > 100 && at(9) < 160, `at the foot: ${at(9)}`);
         assert.ok(at(8) < at(9) && at(6) < at(8) && at(3) < 5, [3, 6, 8, 9].map(at).join(" "));
         assert.equal(contactOf(() => false, [0, 0, 16]), null);
+    });
+
+    it("reads a land's maps as two texture arrays: its colours (sRGB), and its homelands and farmland", () => {
+        // (A heath in the dark elves' homeland: its colour, and their mark in the second home
+        // map's first channel)
+        const land = landColour("heath", "darkElf");
+        const { colours, marks } = landLayers(land);
+        const home = HOMES.indexOf("darkElf");
+
+        assert.equal(landLayers(land), land.userData.layers, "made once a land");
+        assert.ok(colours.isDataArrayTexture && marks.isDataArrayTexture);
+        assert.deepEqual([colours.image.depth, marks.image.depth], [2, 3], "colour and grass afar; two home maps and the farmland");
+        assert.deepEqual([colours.colorSpace, marks.colorSpace], [THREE.SRGBColorSpace, THREE.NoColorSpace]);
+        assert.deepEqual([...colours.image.data.subarray(0, 4)], [...land.image.data], "its colour first");
+        assert.deepEqual([...colours.image.data.subarray(4, 8)], [0, 0, 0, 0], "no grass afar of its own");
+        assert.deepEqual([...marks.image.data.subarray(0, 8)], [...land.userData.home[0].image.data, ...land.userData.home[1].image.data]);
+        assert.equal(marks.image.data[4 + (home & 3)], 255, "the dark elves' in the second map");
+        assert.deepEqual([...marks.image.data.subarray(8, 12)], [0, 0, 0, 0], "no farmland");
     });
 
     it("barely darkens round a lone trunk", () => {
