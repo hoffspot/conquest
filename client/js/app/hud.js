@@ -9,6 +9,25 @@ import { ICONS } from "./icons.js";
 
 const element = (tag, className, text = "") => Object.assign(document.createElement(tag), { className, textContent: text });
 
+/**
+ * How the bars over the others shrink the farther off they are, so several the same way show
+ * which is nearer: full size as near the camera as the player is (or `near` metres, if that's
+ * farther), and beyond that a little more gently than the character itself looks smaller (as the
+ * distance to the power `falloff`: twice as far, three fifths the size; four times, a little over
+ * a third), so those near stay easily read; never less than `least` of it.
+ */
+export const PLATE_SIZE = Object.freeze({ near: 8, falloff: 0.75, least: 0.3 });
+
+/**
+ * How big a bar's drawn (a share of its full size) over a character `distance` metres from the
+ * camera, when the player's `reference` metres from it.
+ */
+export function plateScale(distance, reference = PLATE_SIZE.near) {
+    const full = Math.max(PLATE_SIZE.near, reference);
+
+    return Math.max(PLATE_SIZE.least, Math.min(1, (full / Math.max(distance, 1e-6)) ** PLATE_SIZE.falloff));
+}
+
 export class Hud {
     /** @param {HTMLElement} root - The #hud screen (index.html). */
     constructor(root) {
@@ -154,8 +173,12 @@ export class Hud {
         this.tracked.get(id)?.classList.add("targeted");
     }
 
-    /** Move a character's bar to a point on the screen (client pixels), or hide it (null). */
-    place(id, point) {
+    /**
+     * Move a character's bar to a point on the screen (client pixels), or hide it (null): drawn at
+     * `scale` of its size (plateScale), standing on the point; the nearer (`depth`: metres from
+     * the camera) over the farther, the one the player's set to fight over them all.
+     */
+    place(id, point, { scale = 1, depth = 0 } = {}) {
         const plate = this.tracked.get(id);
 
         if (!plate) {
@@ -165,7 +188,14 @@ export class Hud {
         plate.hidden = !point;
 
         if (point) {
-            plate.style.transform = `translate3d(${point.x.toFixed(1)}px, ${point.y.toFixed(1)}px, 0) translate(-50%, -100%)`;
+            plate.style.transform = `translate3d(${point.x.toFixed(1)}px, ${point.y.toFixed(1)}px, 0) translate(-50%, -100%) scale(${scale.toFixed(3)})`;
+
+            const layer = id === this.targeted ? 10000 : Math.max(1, 9999 - Math.round(depth));
+
+            if (plate.layer !== layer) {
+                plate.layer = layer;
+                plate.style.zIndex = String(layer);
+            }
         }
     }
 

@@ -82,6 +82,7 @@ import { Minimap, treesOf } from "./minimap.js";
 import { CameraFollow } from "./camera.js";
 import { Doors } from "./doors.js";
 import { FatePanel, fateWords } from "./fate.js";
+import { plateScale } from "./hud.js";
 import { itemPicture } from "./icons.js";
 import { JournalPanel, bearing, regardOf } from "./journal.js";
 import { SpellbookPanel } from "./spellbook.js";
@@ -389,6 +390,7 @@ const WORN_OFF = Object.freeze({ invisibility: "You're seen again." });
 const _focus = new THREE.Vector3();
 const _lean = new THREE.Vector3();
 const _looking = new THREE.Vector3();
+const _head = new THREE.Vector3();
 const _hearth = new THREE.Vector3();
 
 export class Game {
@@ -1907,14 +1909,20 @@ export class Game {
             }
         }
 
-        // Bars over the heads of the others on the player's map (those that have one)
+        // Bars over the heads of the others on the player's map (those that have one), smaller
+        // the farther they are from the camera than the player is, the nearer over the farther
+        const eye = view.camera.position;
+        const own = this.avatars.get(this.me);
+        const reference = own ? eye.distanceTo(own.point(1.08, _head)) : undefined;
+
         for (const actor of battle.actors) {
             const avatar = this.avatars.get(actor.id);
 
             if (actor.id !== this.me && avatar && hud.tracked.has(actor.id)) {
-                const head = avatar.point(1.08);
+                const head = avatar.point(1.08, _head);
+                const depth = eye.distanceTo(head);
 
-                hud.place(actor.id, actor.dead || actor.map !== this.mapId ? null : view.toScreen(head));
+                hud.place(actor.id, actor.dead || actor.map !== this.mapId ? null : view.toScreen(head), { scale: plateScale(depth, reference), depth });
             }
         }
 
