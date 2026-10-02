@@ -11,7 +11,7 @@ globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContex
 const { fractal, noise, tiling } = await import("../client/js/core/noise.js");
 const { buildWorld, CHUNK, Overworld } = await import("../client/js/core/overworld.js");
 const { GROUND } = await import("../client/js/core/setpieces/pieces.js");
-const { FEATURES, HOMELANDS, LANDS } = await import("../client/js/core/wilds.js");
+const { CLUSTER, FEATURES, HOMELANDS, LANDS, strikeAt } = await import("../client/js/core/wilds.js");
 const { patchNoise } = await import("../client/js/world/ground.js");
 const { featureMesh, Growth, HOME_UNDERGROWTH, KINDS, LOOKS, lookGeometry, TILE, undergrowthOf, UNDERGROWTH } = await import("../client/js/world/art/kits/wilds.js");
 const { SUN_FROM } = await import("../client/js/world/sun.js");
@@ -81,7 +81,12 @@ describe("the land's features (core/wilds.js)", () => {
         const lands = new Map();
 
         for (const chunk of chunks) {
-            assert.ok(chunk.features.length <= 16, `${chunk.features.length} in chunk ${chunk.cx}, ${chunk.cy}`);
+            // (A few a chunk, and as many smaller stones as their boulders have round them)
+            const stones = chunk.features.filter(({ kind }) => kind === "stone").length;
+            const boulders = chunk.features.filter(({ kind }) => kind === "boulder").length;
+
+            assert.ok(chunk.features.length - stones <= 16, `${chunk.features.length - stones} in chunk ${chunk.cx}, ${chunk.cy}`);
+            assert.ok(stones <= boulders * CLUSTER.stones[1], `${stones} stones by ${boulders} boulders`);
 
             for (const feature of chunk.features) {
                 const land = overworld.biomeAt(Math.floor(feature.x), Math.floor(feature.y));
@@ -90,6 +95,13 @@ describe("the land's features (core/wilds.js)", () => {
                 const home = HOMELANDS[overworld.homeAt(Math.floor(feature.x), Math.floor(feature.y))];
 
                 kinds.add(feature.kind);
+
+                // (A stone lies by a boulder: CLUSTER)
+                if (feature.kind === "stone") {
+                    assert.ok(chunk.features.some(({ kind, x, y }) => kind === "boulder" && Math.hypot(x - feature.x, y - feature.y) < feature.size * 4 + 7), `a stone at ${feature.x}, ${feature.y} by no boulder`);
+                    continue;
+                }
+
                 assert.ok(LANDS[land]?.kinds[feature.kind] !== undefined || home?.kinds[feature.kind] !== undefined, `${feature.kind} on ${land}`);
                 lands.set(land, (lands.get(land) ?? 0) + 1);
             }
@@ -100,6 +112,47 @@ describe("the land's features (core/wilds.js)", () => {
         assert.ok(total > chunks.length * 1.5, `${total} features in ${chunks.length} chunks`);
         assert.ok(kinds.size >= 10, [...kinds].join(", "));
         assert.ok(lands.size >= 8, [...lands.keys()].join(", "));
+    });
+
+    it("lays each boulder among smaller stones strung out along the way the rock runs, a stretch's all one way", () => {
+        let [clusters, stones] = [0, 0];
+        const angle = (a) => ((a % Math.PI) + Math.PI) % Math.PI;
+        const apart = (a, b) => Math.min(Math.abs(angle(a) - angle(b)), Math.PI - Math.abs(angle(a) - angle(b)));
+
+        for (const chunk of chunks) {
+            const boulders = chunk.features.filter(({ kind }) => kind === "boulder");
+
+            for (const boulder of boulders) {
+                // (Lying along the strike there, give or take)
+                assert.ok(apart(boulder.turn, strikeAt(boulder.x, boulder.y, world.seed)) <= CLUSTER.turn + 1e-9, `a boulder at ${boulder.x}, ${boulder.y}`);
+            }
+
+            for (const stone of chunk.features.filter(({ kind }) => kind === "stone")) {
+                // (Each by its boulder: along its strike, not far across it, a quarter to a half its size)
+                const boulder = boulders.find((b) => {
+                    const [dx, dy] = [stone.x - b.x, stone.y - b.y];
+                    const along = dx * Math.cos(b.turn) + dy * Math.sin(b.turn);
+                    const across = -dx * Math.sin(b.turn) + dy * Math.cos(b.turn);
+
+                    return Math.abs(along) >= b.size + CLUSTER.reach[0] - 1e-6 && Math.abs(along) <= b.size + CLUSTER.reach[1] + 1e-6 && Math.abs(across) <= CLUSTER.across * Math.abs(along) + 1e-6 && stone.size >= b.size * CLUSTER.size[0] - 1e-9 && stone.size <= b.size * CLUSTER.size[1] + 1e-9;
+                });
+
+                assert.ok(boulder, `a stone at ${stone.x}, ${stone.y}`);
+                assert.ok(!stone.opaque);
+                stones++;
+            }
+
+            clusters += boulders.length;
+        }
+
+        assert.ok(clusters > 20 && stones > clusters, `${stones} stones round ${clusters} boulders`);
+
+        // (The strike changes slowly: a stretch's stones all lie one way)
+        for (let k = 0; k < 50; k++) {
+            const [x, y] = [500 + k * 140, 7000 - k * 120];
+
+            assert.ok(apart(strikeAt(x, y, world.seed), strikeAt(x + 4, y + 4, world.seed)) < 0.25, `${x}, ${y}`);
+        }
     });
 
     it("has each people's own in its homeland, and only there", () => {

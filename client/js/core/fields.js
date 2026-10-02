@@ -117,3 +117,11 @@ export function fieldAt(seed, x, y) {
 
     return { ...field, crop: CROP.fallow };
 }
+
+/**
+ * Whether a square (whole metres) lies along the edge of its block where a hedgerow grows: the
+ * first row or column of it (its west and north edges; the next block's are its east and south).
+ */
+export function hedgeLine(seed, x, y) {
+    return blockAlong(x, 0, seed)[1] === x || blockAlong(y, 1, seed)[1] === y;
+}

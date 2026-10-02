@@ -889,8 +889,12 @@ const FOLIAGE = {
     nightspire: { greens: ["#221e2a", "#312a3e", "#473b5a"], needles: "spray" },
 };
 
-// One leaf, its stalk at (0, 0), pointing up the y axis (negative), `length` long
-function leaf(context, shape, length, fill, vein) {
+/**
+ * One leaf painted, its stalk at (0, 0), pointing up the y axis (negative), `length` long (pixels):
+ * `shape` lobed (an oak's), toothed (a birch's), heart (a poplar's), narrow (a willow's) or an
+ * oval; filled with `fill`, its middle vein `vein` (CSS colours). The hedges' pictures use it too.
+ */
+export function leaf(context, shape, length, fill, vein) {
     const w = length * (shape === "toothed" ? 0.62 : shape === "heart" ? 0.8 : shape === "lobed" ? 0.55 : shape === "narrow" ? 0.24 : 0.5);
 
     context.beginPath();

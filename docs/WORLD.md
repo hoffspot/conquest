@@ -409,8 +409,14 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   has about so many a chunk (`LANDS`: none in water, 2 on beaches, 4 in meadows, 7 in the woods,
   9 in the mountains) of its own kinds, as likely as it says; they gather as they would, the
   rocky kinds where smooth noise across the world says it's rocky (and bigger there) and fallen
-  wood where it's been let go. Each takes the squares under it (a boulder's disc, a fallen tree's
-  line), and hides what's behind it if it's taller than anyone's eyes (1.65 m), so paths go round
+  wood where it's been let go. A boulder lies along the way the rock runs there, give or take a
+  quarter of a right angle (its strike: `strikeAt`, slow noise 400 metres across, so a stretch's
+  boulders all lie one way), among one to five smaller stones (`CLUSTER`: more where it's
+  rockier; a quarter to a half its size, a metre or two to four and a half beyond it along the
+  strike, either side, straying across it no more than a third as far; from its own random
+  numbers, so the chunk's other features are where they'd be without them), each kept as the
+  features are (below), none hiding what's behind it. Each takes the squares under it (a
+  boulder's disc, a fallen tree's line), and hides what's behind it if it's taller than anyone's eyes (1.65 m), so paths go round
   them and they can be hidden behind; it keeps two squares from roads, bridges and water, clear of
   the trees, the town, the settlements' streets and buildings and the places still to come, a
   square from the next feature, and three squares inside its chunk (so it never meets the next

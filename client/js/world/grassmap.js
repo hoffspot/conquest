@@ -262,7 +262,8 @@ export function* grassMapping(overworld, chunk, rows = CHUNK) {
                 continue;
             }
 
-            if (chunk.ground[k] !== GROUND.grass) {
+            // (None through a hedgerow: kits/hedges.js)
+            if (chunk.ground[k] !== GROUND.grass || overworld.hedgeAt?.(x, y)) {
                 continue;
             }
 

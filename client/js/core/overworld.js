@@ -23,7 +23,7 @@
 // Water can't be walked into; trees block their squares and can't be seen through. Nothing here
 // uses Three.js, so it runs in Node too.
 
-import { ALONG, CROP, fieldAt, sown } from "./fields.js";
+import { ALONG, CROP, fieldAt, hedgeLine, sown } from "./fields.js";
 import { MAP_ORIGINS } from "./interiors.js";
 import { createRandom } from "./random.js";
 import { Settlements, squareOf, waysOut } from "./settlements.js";
@@ -799,6 +799,20 @@ export class Overworld {
         const farmed = field.crop !== CROP.none && plan.biome[cellAt(my) * CELLS + cellAt(mx)] === BIOME.farmland;
 
         return { ground: farmed && sown(field.crop) ? GROUND.soil : GROUND.grass, water, bridge: false, road: null, crop: farmed ? field.crop + ALONG * field.along : 0 };
+    }
+
+    /**
+     * Whether a hedgerow runs along a square: the edge of a farmed block of fields (fields.js), the
+     * drawing's alone (in no one's way).
+     */
+    hedgeAt(x, y) {
+        if (!hedgeLine(this.plan.seed, x, y)) {
+            return false;
+        }
+
+        const [mx, my] = fieldAt(this.plan.seed, x, y).middle;
+
+        return this.plan.biome[cellAt(my) * CELLS + cellAt(mx)] === BIOME.farmland;
     }
 
     /** The bridges whose decks reach into a chunk: [{ a, b, half }] (see chunk). */

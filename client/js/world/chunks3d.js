@@ -27,6 +27,7 @@ import { WILDS } from "./art/engine/atlas.js";
 import { holdSign, isSign, letGoSign, releaseSign } from "./art/kits/signs.js";
 import { Woodland } from "./art/kits/trees.js";
 import { featureLooks, featureMesh, Growth, sowing, TILE, undergrowthLooks, undergrowthMesh } from "./art/kits/wilds.js";
+import { hedgeBuilding, hedgeMesh, hedgeRuns } from "./art/kits/hedges.js";
 import { disposeChunkGround, disposeGrass, groundMaterial, landColours, layingGround, respaceGround } from "./ground.js";
 import { Layouts } from "./layouts.js";
 import { Terrains } from "./terrains.js";
@@ -602,6 +603,18 @@ export class Chunks {
         const object = new THREE.Group();
         const heights = new Float32Array(CHUNK * CHUNK);
         const drawn = { cx, cy, object, lot: null, heights, drawing: true, job: null, growth: null, undergrowth: null };
+        // (How high what stands on it does, over the squares it stands on: [{ min, max ([x, y]), top }])
+        const standing = (boxes) => {
+            for (const { min, max, top } of boxes) {
+                for (let y = Math.max(chunk.y0, Math.floor(min[1])); y < Math.min(chunk.y0 + CHUNK, Math.ceil(max[1])); y++) {
+                    for (let x = Math.max(chunk.x0, Math.floor(min[0])); x < Math.min(chunk.x0 + CHUNK, Math.ceil(max[0])); x++) {
+                        const at = (y - chunk.y0) * CHUNK + (x - chunk.x0);
+
+                        heights[at] = Math.max(heights[at], top);
+                    }
+                }
+            }
+        };
 
         object.name = `chunk ${cx}, ${cy}`;
         object.visible = false;
@@ -636,16 +649,17 @@ export class Chunks {
             const wild = featureMesh(chunk.features, landAt, [chunk.x0, chunk.y0], this.groundAt);
 
             object.add(wild.mesh);
+            standing(wild.boxes);
+        }
 
-            for (const { min, max, top } of wild.boxes) {
-                for (let y = Math.max(chunk.y0, Math.floor(min[1])); y < Math.min(chunk.y0 + CHUNK, Math.ceil(max[1])); y++) {
-                    for (let x = Math.max(chunk.x0, Math.floor(min[0])); x < Math.min(chunk.x0 + CHUNK, Math.ceil(max[0])); x++) {
-                        const at = (y - chunk.y0) * CHUNK + (x - chunk.x0);
+        // Its hedgerows, along its farmed blocks' edges (kits/hedges.js), and how high they stand
+        const runs = hedgeRuns(this.overworld, chunk);
 
-                        heights[at] = Math.max(heights[at], top);
-                    }
-                }
-            }
+        if (runs.length) {
+            const hedges = yield* hedgeBuilding(runs, [chunk.x0, chunk.y0], this.groundAt, { sprigs: this.undergrowth });
+
+            object.add(hedges.object);
+            standing(hedges.boxes);
         }
 
         yield;
@@ -771,8 +785,9 @@ function primer() {
         group.add(new THREE.Mesh(box(0, 0, 0, 1, 0.1, 1), bridgeMaterial(look)));
     }
 
-    // (And a tuft of grass, for the undergrowth's)
+    // (And a tuft of grass, for the undergrowth's; and a stretch of hedge)
     group.add(undergrowthMesh([{ kind: "tuft", land: "meadow", look: 0, x: 0, y: 0, turn: 0, size: 1, tint: [1, 1, 1] }], [0, 0]));
+    group.add(hedgeMesh([{ axis: 0, at: 0.5, from: 0, to: 2, ends: [true, true], seed: 1 }], [0, 0], () => 0).object);
 
     return group;
 }
