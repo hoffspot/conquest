@@ -871,9 +871,19 @@ metres by integer hashing alone, the same in every browser; the ground reads the
 texture a texel a square (`fieldsOf`), its chunks with fields only. Trees aren't planted in the
 strips (on the verges, as hedgerow trees), and of the land's own things only haystacks and
 scarecrows stand in them. A hedgerow runs along each farmed block's edges (its first row and
-column: `hedgeAt`; kits/wilds.js `HEDGES`): a shrub on seven of its squares in ten, a metre and
-a half or so across, so each meets the next and a gap shows only where two or more are missing (more of them at a lower quality, as the undergrowth's thinner), and
-nothing else of the undergrowth there; the drawing's alone, in no one's way.
+column: `hedgeAt`; kits/hedges.js), one continuous wall of small hawthorn leaves: here trimmed
+flat-topped and straight-sided, there rounded, there grown out tall and shaggy, from a metre and
+a third to nearly two and a half tall and a metre to a metre and two thirds thick, all of it
+changing slowly along its length (`HEDGES`); darker towards its foot and in the hollows between
+its lumps, lighter and yellower along its top, flecked with blossom. Half the blocks' edges have
+a gateway four metres wide in them, and a hedge breaks where a road, water or a settlement's
+ground meets it. Its body is a profile swept along each run of it a ring every half metre (a
+metre on low), its face pushed in and out by smooth noise from where it is in the world, so a
+run carries on into the next chunk without a seam; rounded off over a few rings where it ends;
+drawn with a tiling picture of leaves, lit as one soft mass, casting shadows. Sprigs of leaves,
+cut out of their picture as the trees' leaves are, stand out of its top and sides, sixteen a
+metre (half on low), so its outline is leaves, not a line. Nothing else grows in it (no
+undergrowth, no tall grass); the drawing's alone, in no one's way.
 
 **Where something stands on it** (a house, a wall, a rock, a trunk: the squares that can't be
 seen through), less of the sky reaches the ground, so less of the light from all round (view.js)

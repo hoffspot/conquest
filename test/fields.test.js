@@ -9,7 +9,8 @@ import { buildWorld, CHUNK } from "../client/js/core/overworld.js";
 import { GROUND } from "../client/js/core/setpieces/pieces.js";
 import { fieldsOf } from "../client/js/world/ground.js";
 import { CROP_STANDS, grassMap } from "../client/js/world/grassmap.js";
-import { HEDGES, undergrowthOf } from "../client/js/world/art/kits/wilds.js";
+import { HEDGES, hedgeMesh, hedgeRuns } from "../client/js/world/art/kits/hedges.js";
+import { undergrowthOf } from "../client/js/world/art/kits/wilds.js";
 
 const SEED = 1;
 
@@ -241,45 +242,77 @@ describe("the fields in the world (overworld.js, grassmap.js, ground.js)", () =>
         assert.ok(stood > 1000, `${stood} squares of crops`);
     });
 
-    it("grows hedgerows along the farmed blocks' edges, gaps in them, and nothing else there; fewer on slower devices", () => {
-        let [hedge, shrubs, thinner] = [0, 0, 0];
+    it("grows hedgerows along the farmed blocks' edges, broken only at gateways and where the ground isn't grass; nothing else growing in them", () => {
+        let [metres, carried] = [0, 0];
 
         for (const chunk of chunks) {
-            const items = undergrowthOf(overworld, chunk);
-            const on = new Map();
+            const runs = hedgeRuns(overworld, chunk);
+            const { map } = grassMap(overworld, chunk);
 
-            for (const item of items) {
-                const k = `${Math.floor(item.x)},${Math.floor(item.y)}`;
+            for (const { axis, at, from, to, ends } of runs) {
+                assert.ok(to > from);
 
-                on.set(k, [...(on.get(k) ?? []), item.kind]);
-            }
+                for (let along = from; along < to; along++) {
+                    const [x, y] = axis === 1 ? [at - 0.5, along] : [along, at - 0.5];
+                    const k = (y - chunk.y0) * CHUNK + (x - chunk.x0);
 
-            for (let k = 0; k < CHUNK * CHUNK; k++) {
-                const [x, y] = [chunk.x0 + (k % CHUNK), chunk.y0 + Math.floor(k / CHUNK)];
-                const here = on.get(`${x},${y}`) ?? [];
-
-                if (!overworld.hedgeAt(x, y)) {
-                    assert.ok(!here.includes("shrub"), `a shrub off the hedges at ${x}, ${y}`);
-                    continue;
+                    // (On its block's edge, the block farmed; no tall grass through it)
+                    assert.ok(overworld.hedgeAt(x, y) && hedgeLine(SEED, x, y), `${x}, ${y}`);
+                    assert.equal(blockAlong(axis === 1 ? x : y, axis === 1 ? 0 : 1, SEED)[1], axis === 1 ? x : y);
+                    assert.equal(chunk.ground[k], GROUND.grass);
+                    assert.equal(map[k * 4], 0, `tall grass in the hedge at ${x}, ${y}`);
+                    metres++;
                 }
 
-                // (Along the first row or column of a block of fields, in no one's way)
-                assert.ok(hedgeLine(SEED, x, y) && !chunk.crops[k]);
+                // (Open only where it carries on into the next chunk)
+                const [start, end] = axis === 1 ? [chunk.y0, chunk.y0 + CHUNK] : [chunk.x0, chunk.x0 + CHUNK];
 
-                if (chunk.ground[k] === GROUND.grass && !chunk.blocked[k] && !chunk.water[k] && !chunk.bridge[k] && !overworld.settled(x, y)) {
-                    // (A shrub or a gap, nothing else)
-                    assert.ok(here.every((kind) => kind === "shrub") && here.length <= 1, `${here.join(", ")} at ${x}, ${y}`);
-                    hedge++;
-                    shrubs += here.length;
-                }
+                assert.ok(ends[0] || from === start, "open at its start");
+                assert.ok(ends[1] || to === end, "open at its end");
+                carried += ends.filter((closed) => !closed).length;
             }
 
-            thinner += undergrowthOf(overworld, chunk, { density: 0.5 }).filter(({ kind }) => kind === "shrub").length;
+            // (Nothing of the undergrowth in it)
+            for (const { x, y } of undergrowthOf(overworld, chunk)) {
+                assert.ok(!overworld.hedgeAt(Math.floor(x), Math.floor(y)), `undergrowth in the hedge at ${x}, ${y}`);
+            }
         }
 
-        assert.ok(hedge > 150, `${hedge} squares of hedges`);
-        assert.ok(Math.abs(shrubs / hedge - HEDGES.thick) < 0.1, `${shrubs} shrubs on ${hedge} squares`);
-        assert.ok(Math.abs(thinner / shrubs - 0.5) < 0.12, `${thinner} of ${shrubs} at half density`);
+        assert.ok(metres > 150 && carried > 0, `${metres} m of hedges, ${carried} ends carried on`);
+    });
+
+    it("draws them as walls of leaves, as tall and thick as they grow there, rounded off where they end, sprigs standing out of them; the same every time; fewer sprigs and coarser on low", () => {
+        const groundAt = (x, z) => overworld.ground.heightAt(x, z);
+
+        for (const chunk of chunks) {
+            const runs = hedgeRuns(overworld, chunk);
+            const { object, boxes } = hedgeMesh(runs, [chunk.x0, chunk.y0], groundAt);
+            const [body, sprigs] = ["hedges", "hedge sprigs"].map((name) => object.getObjectByName(name));
+            const metres = runs.reduce((sum, { from, to }) => sum + to - from, 0);
+            const position = body.geometry.attributes.position;
+
+            // (Standing on the ground, no taller than a hedge grows, its lumps aside)
+            for (let k = 0; k < position.count; k++) {
+                const [x, y, z] = [position.getX(k) + chunk.x0, position.getY(k), position.getZ(k) + chunk.y0];
+                const up = y - groundAt(x, z);
+
+                assert.ok(up > -0.3 && up < HEDGES.height[1] + HEDGES.lumps[1] + 0.2, `${up} m up`);
+            }
+
+            assert.equal(boxes.length, runs.length);
+            assert.ok(boxes.every(({ top, min, max }) => top > groundAt(min[0], min[1]) + 0.8 && max[0] >= min[0] && max[1] >= min[1]));
+            assert.ok(Math.abs(sprigs.geometry.attributes.position.count / 4 - metres * HEDGES.sprigs) <= runs.length);
+            assert.ok(body.castShadow && !sprigs.castShadow);
+
+            // (The same every time)
+            assert.deepEqual([...hedgeMesh(runs, [chunk.x0, chunk.y0], groundAt).object.getObjectByName("hedges").geometry.attributes.position.array], [...position.array]);
+
+            // (On low, half the sprigs and half the rings)
+            const low = hedgeMesh(runs, [chunk.x0, chunk.y0], groundAt, { sprigs: 0.5 }).object;
+
+            assert.ok(Math.abs(low.getObjectByName("hedge sprigs").geometry.attributes.position.count / 4 - (metres * HEDGES.sprigs) / 2) <= runs.length);
+            assert.ok(low.getObjectByName("hedges").geometry.attributes.position.count < position.count * 0.65);
+        }
     });
 
     it("tells the ground each square's crop and which way its strip runs, and nothing where there are no fields", () => {

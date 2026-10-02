@@ -1767,7 +1767,10 @@ converted data is to be measured in M8 against today's hm08 data.
   and 7, in part):
   - **Why:** the report's ranked patterns: one dominant boulder with smaller stones round it, all
     lying the way the rock runs; hedgerows along the fields' edges (the user's fields, M7b-1b,
-    had only hedgerow trees); a road fraying into the grass rather than stopping at a line.
+    had only hedgerow trees); a road fraying into the grass rather than stopping at a line. The
+    hedges were first a shrub on each of their squares; the user: "Those hedgerows are way too
+    much like polygons", with photographs of real ones ("You can make them different shapes and
+    sizes but they are definitely foliage"), so they're now walls of leaves.
   - **Built:**
     - boulder clusters in the core (`core/wilds.js CLUSTER`, `strikeAt`, `clusterOf`): each
       boulder turned to the strike (slow noise 400 m across, give or take 0.25 rad), one to five
@@ -1776,25 +1779,33 @@ converted data is to be measured in M8 against today's hm08 data.
       put; each stone placed as the features are (in the chunk, clear, a square apart), none
       opaque. Drawn longer than broad along the strike and sunk a fifth of their height
       (`kits/wilds.js` `LONG`, `SUNK`; a new low-detail `stone` look);
-    - hedgerows (`core/fields.js hedgeLine`, `Overworld.hedgeAt`, `kits/wilds.js HEDGES`): a
-      shrub a metre and a half or so across on seven in ten squares of each farmed block's
-      first row and column (so they meet; a gap where two or more are missing), nothing else of the undergrowth there; thinned with the undergrowth's density on
-      lower qualities; the drawing's alone, in no one's way;
+    - hedgerows (`core/fields.js hedgeLine`, `Overworld.hedgeAt`, `kits/hedges.js`): along each
+      farmed block's first row and column, broken at gateways (half the edges, 4 m) and where a
+      road, water or a settlement meets them; a continuous body (a profile between rounded and
+      trimmed, as much as it's trimmed there, swept along each run a ring every half metre,
+      1.3–2.4 m tall and 1–1.65 m thick, all changing slowly along it, its face lumped by world
+      noise so runs meet across chunks without a seam, rounded off where they end), drawn with
+      a tiling picture of hawthorn leaves and blossom, darker at the foot and in its hollows, lit
+      as a soft mass, casting shadows; sixteen sprigs a metre (cut-out cards of leaves) out of
+      its top and sides; half the sprigs and half the rings on low; no undergrowth or tall grass
+      in it; built a few dozen rings a step with the chunk; the drawing's alone;
     - worn edges (`ground.js WORN`): the grass in the eight squares round a road gets some of
       the road's dirt in the splat (about a third), half that a square further off, as ragged
       as the edges' noise; the splat now reads three squares round its area (one for the blend,
       two for the wear), so chunks still meet without a seam.
-  - **Cost:** about one stone a chunk (13 at most), 20 triangles each; hedgerows about 40–85
-    shrubs a farmland chunk (120–216 triangles each: up to about 18,000 triangles a chunk of
-    fields on high, in the undergrowth's tiles near the player only); the worn edges nothing at
-    draw time.
+  - **Cost:** about one stone a chunk (13 at most), 20 triangles each; hedgerows 80–130 m in a
+    chunk of fields, about 4,000–7,000 triangles of body and 2,500–4,000 of sprigs (half on
+    low), two draws a chunk, built in steps of about 2–3 ms; the worn edges nothing at draw
+    time.
   - **Versions:** `NET_VERSION` 16 (the boulders' places and turns, and the stones, are the
     core's: where anyone can walk has changed). `TERRAIN_VERSION` unchanged.
   - **Not yet:** flat slabs; bushes at grass patch and wood edges; the ground carrying the
     grass's look past where it's drawn and on low; the fields seen from afar.
   - **Tests:** `test/wilds.test.js` (each boulder lies along the strike; each stone by its
     boulder, along it, not far across, a quarter to a half its size; more stones than clusters;
-    the strike changing slowly), `test/fields.test.js` (shrubs only on the hedges, a shrub or a
-    gap on each of their squares, about seven in ten; half as many at half density),
+    the strike changing slowly), `test/fields.test.js` (hedges only on the farmed blocks' edges,
+    on grass, open only where they carry on into the next chunk, nothing else growing in them;
+    drawn standing on the ground, no taller than they grow, the same every time, sixteen sprigs
+    a metre, half and coarser on low),
     `test/town3d.test.js` (the grass beside a road worn, raggedly, less a square further off; none three squares off or
     beside cobbles).

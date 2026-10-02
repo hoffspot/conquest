@@ -1973,7 +1973,6 @@ function draw(mesher, random, kind, land) {
         case "snag":
             return snag(mesher, random);
         case "bush":
-        case "shrub":
             return bush(mesher, random, bushLook(random, land));
         case "cairn":
             return cairn(mesher, random, look.stone);
@@ -2222,14 +2221,6 @@ const SHADE_REACH = 4;
 const WET_REACH = 3;
 
 /**
- * Hedgerows along the edges of farmed blocks of fields (core/overworld.js hedgeAt): a shrub on as
- * many of their squares as `thick` (the rest gaps; fewer as the undergrowth's density is), as big
- * as `size` (of a bush's look, about a metre across: so each meets the next, a gap only where two
- * or more are missing); the drawing's alone, in no one's way.
- */
-export const HEDGES = Object.freeze({ thick: 0.7, size: [1.2, 1.8] });
-
-/**
  * Flower carpets (the research report behind M7b: the dusk hillside): where slow noise (`size`
  * metres) is above `from` (all of it at `to`), most on the side of a hill that faces the sun (on
  * the flat `flat` of it, none on the shaded side: sun.js), the flowers that grow there `more`
@@ -2329,25 +2320,8 @@ export function* sowing(overworld, chunk, { density = 1 } = {}) {
 
             const tended = overworld.settled(x, y);
 
-            // (A hedgerow along the edge of a farmed block of fields, gaps in it here and there: more
-            // of them on slower devices)
+            // (Nothing under a hedgerow, along the edge of a farmed block of fields: kits/hedges.js)
             if (!tended && overworld.hedgeAt?.(x, y)) {
-                if (hashOf(x, y, seed + 9) < HEDGES.thick * density) {
-                    const [ix, iy] = [x + 0.3 + hashOf(x, y, seed + 4) * 0.4, y + 0.3 + hashOf(x, y, seed + 5) * 0.4];
-
-                    items.push({
-                        kind: "shrub",
-                        land,
-                        look: Math.floor(hashOf(x, y, seed + 3) * VARIANTS),
-                        x: ix,
-                        y: iy,
-                        ground: chunk.heights ? between(chunk.heights, ix - x0, iy - y0) : 0,
-                        turn: hashOf(x, y, seed + 6) * TAU,
-                        size: HEDGES.size[0] + hashOf(x, y, seed + 7) * (HEDGES.size[1] - HEDGES.size[0]),
-                        tint: tintOf(hashOf(x, y, seed + 8)),
-                    });
-                }
-
                 continue;
             }
 
@@ -2531,7 +2505,7 @@ export function undergrowthMesh(items, origin) {
 const HOME_FEATURES = ["termites", "kopje", "skullpole", "stakes", "wrack", "mangrove", "stela", "moonstone", "leaflamp", "webstump", "cocoon", "crystals"];
 
 /** Every kind drawn here (the features' and the undergrowth's), for tests and the lab. */
-export const KINDS = Object.freeze([...new Set(["boulder", "stone", "shrub", "outcrop", "log", "stump", "snag", "bush", "cairn", "menhir", "mound", "haystack", "scarecrow", "logpile", "ruin", "ribs", ...HOME_FEATURES, ...Object.values(UNDERGROWTH).flatMap(({ kinds }) => Object.keys(kinds)), ...Object.values(HOME_UNDERGROWTH).flatMap((kinds) => Object.keys(kinds))])]);
+export const KINDS = Object.freeze([...new Set(["boulder", "stone", "outcrop", "log", "stump", "snag", "bush", "cairn", "menhir", "mound", "haystack", "scarecrow", "logpile", "ruin", "ribs", ...HOME_FEATURES, ...Object.values(UNDERGROWTH).flatMap(({ kinds }) => Object.keys(kinds)), ...Object.values(HOME_UNDERGROWTH).flatMap((kinds) => Object.keys(kinds))])]);
 
 /** One look of a kind for a land, as a geometry on its own (for tests and the lab). */
 export function lookGeometry(kind, land = "meadow", index = 0) {
