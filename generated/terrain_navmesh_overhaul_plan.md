@@ -762,6 +762,31 @@ What the chosen pictures share, for M7c:
 The ruins and the wild keep the Elden Ring's darker, weathered look (M7b); the villages are where
 the warm, lived-in look is.
 
+**The land looking natural** (the user's direction, 2026-10-02: "a look around at all the
+environment generation to ensure the ground and elevated terrain generation looks natural and
+doesn't contain any obvious polygons or texturing that wouldn't look good in the intended
+environment"). Part of M7, as M7d, before the cliffs and rocks build on the land:
+- **Looked at, not assumed:** a tour of cameras over several seeds and every land (meadow and
+  farmland plains, hills, mountains and their passes, valleys, cliffs, coasts and lakeshores,
+  rivers and falls, marsh, savannah and badlands, the volcano's ash, tundra and snow), at a
+  walker's eye height, the follow camera's and from high up, at each Visual quality level and
+  at golden hour and noon; each picture looked over for what gives the land away as made.
+- **Polygons:** facets and straight creases on slopes and ridges (too few vertices for the
+  relief, or normals from the mesh rather than the height function); cracks, steps or popping
+  where levels of detail and the near and far land meet; spiky or knife-edged peaks; terracing
+  from rounding; pads, road cuttings and fills and retaining banks reading as flat planes and
+  ramps; anything lined up with the chunk or square grid.
+- **Texturing:** stretching down steep faces (cliffs wanting triplanar or slope-aligned
+  mapping); a picture's tiling seen from afar; hard, straight or blotchy edges between grass,
+  dirt, rock, sand and snow; the snow line and rock-by-height bands too even; colour banding;
+  ground that's too bright, too saturated or too uniform beside the Elden Ring's palette; seams
+  at chunk edges.
+- **Where things meet the land:** rocks, trees and buildings floating or sunk; water's edges,
+  banks and beds; paths and roads into the ground round them.
+- **Fixed where found,** each with a before/after picture from the same camera, within the
+  budgets (a fix that costs, such as triplanar rock, tiered by Visual quality); the tour's
+  cameras kept so later work can be checked against them.
+
 **As built in M7a** (row 4, the neutral sites, and row 6's decay pass for them; see the change
 log):
 - **Laid out in core** (`core/setpieces/neutral.js` `layoutNeutral`, exact maths): each kind's
@@ -1201,7 +1226,7 @@ pictures for anything that changes the look.
 | **M6b** | Atmosphere | Height fog (an exponential height mist under the distance haze); per-region look table and grade (§9 row 1); terrain material (rock and snow by height); cascades deferred to M7 | Pictures; budgets per tier met |
 | **M6c** | Things on the horizon | Far silhouettes and the world landmark (§9 row 2): the volcano's crater, fire and smoke | Pictures; budgets per tier met |
 | **M6d** | Far trees and rivers | Far trees (impostors fading in where the near trees fade out); far rivers on the far land | Pictures; budgets per tier met |
-| **M7** | Elden Ring environment pass | In §9's order: the landmark pass in the plan; neutral sites built, with the decay pass; cliffs and rocks; churches, citadels, stone bridges; foliage palette, grass ring, weathering; cascaded shadows, measured, if they fit the budget | Pictures after each part; budgets met |
+| **M7** | Elden Ring environment pass | In §9's order: the landmark pass in the plan; neutral sites built, with the decay pass; a look round all the generated ground and high land so it looks natural, with no obvious polygons or out-of-place texturing (M7d, §9 *The land looking natural*); cliffs and rocks; churches, citadels, stone bridges; foliage palette, grass ring, weathering; cascaded shadows, measured, if they fit the budget | Pictures after each part; budgets met |
 | **M8** | Characters on Vitruvian | §10, as several PRs (conversion, body, garments, skin, face, LODs, clips) | Pictures; clipping tests green; budgets met |
 
 Each milestone follows the same steps:
@@ -2228,6 +2253,10 @@ converted data is to be measured in M8 against today's hm08 data.
     (a chunk's yards built on the ground as it lies, merged as all at once; their beds' plants
     sown with the undergrowth, where `plantsOf` says); `test/wilds.test.js` (the plants within
     the undergrowth's budgets); `e2e/building-lab.spec.js` (a village's yards).
+- **2026-10-02, plan:** the user asked for "a look around at all the environment generation to
+  ensure the ground and elevated terrain generation looks natural and doesn't contain any obvious
+  polygons or texturing that wouldn't look good in the intended environment". Added to M7 as M7d
+  (§9 *The land looking natural*, and §12's M7 row), after M7c and before the cliffs and rocks.
 - **2026-10-02, swiping up follows the camera** (the user: "command a player to continuously run
   in the direction the camera is facing until they hit an obstacle. The player character should
   turn to the direction the camera is facing and initiate a forward run until exhausted, and
