@@ -18,6 +18,7 @@
 //   serpent wall and a stockade leaning out, gates of two stepped towers.
 
 import { PEOPLE_PLACES } from "../../../core/setpieces/pieces.js";
+import { flagpole } from "../../cloth.js";
 import { material } from "../engine/materials.js";
 import { inset, Solid } from "../engine/solid.js";
 import { emblemSignTexture, loadSignFont, nameBoardTexture, signMaterial } from "../kits/signs.js";
@@ -383,6 +384,11 @@ export async function keep(piece) {
     const [across, deep] = [Math.min(m(2), top.half - m(0.6)), Math.min(m(1.5), top.deep - m(0.6))];
 
     shrine(solid, [cx - across, cz - deep, cx + across, cz + deep], roof, { height: m(1.8), comb: m(2.4) });
+
+    // (Their flags flying from the palace roof's front corners: world/cloth.js)
+    for (const side of [-1, 1]) {
+        flagpole(solid, [cx + side * (top.half - m(0.7)), roof, cz + top.deep - m(0.7)], m(3), "lizard", { radius: m(0.05), length: m(2.6), drop: m(0.9), pole: "timber" });
+    }
 
     for (const side of [-1, 1]) {
         serpent(solid, [cx + side * m(2.6), m(0.9), doorFace + m(0.4)], 0, m(1.4), { name: "stone-lime" });

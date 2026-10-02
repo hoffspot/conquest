@@ -581,6 +581,15 @@ export async function keep(piece) {
     crescent(solid, cx, top, cz, m(1.4), "silver");
     steps(solid, cx, doorFace + m(1.5), 0, m(0.8), [0, -1], m(3), "stone-moon", { tread: m(0.35), riser: m(0.2) });
 
+    // (Their leaf on long banners hung either side of the door, stirring in the breeze:
+    // world/cloth.js)
+    for (const side of [-1, 1]) {
+        const a = side * Math.min(0.5, m(2.4) / r);
+        const out = [Math.sin(a), 0, Math.cos(a)];
+
+        (solid.cloth ??= []).push({ at: [cx + out[0] * (r + m(0.06)), m(4.6), cz + out[2] * (r + m(0.06))], out, width: m(0.9), drop: m(3.2), kind: "wall", look: "elf" });
+    }
+
     for (const side of [-1, 1]) {
         treeColumn(solid, cx + side * m(2.2), 0, doorFace + m(1), m(4.5), m(0.18), "marble", { boughs: 2, spread: m(0.9) });
         budLamp(solid, [cx + side * m(2.2), m(4.5), doorFace + m(1)], [side, 0.4]);

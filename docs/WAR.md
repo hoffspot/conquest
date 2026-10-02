@@ -359,7 +359,8 @@ whoever holds the town, and whom they fight is as their peoples stand.
   camp's sortie is out against the town. The town musters afresh from its garrison the next time a
   player comes.
 - **Banners.** A banner stands beside each road out with guards at it, 3 metres further out than
-  them: its people's colour, a trim, and their emblem (`world/banners3d.js`):
+  them: its people's colour (the crown's gold on red, the cat folk's sun on indigo), a trim, and
+  their emblem (`world/banners3d.js`, the cloths `world/cloth.js`'s):
 
   | People | Emblem |
   | --- | --- |
@@ -370,7 +371,9 @@ whoever holds the town, and whom they fight is as their peoples stand.
   | Lizard folk | a serpent |
   | Orcs | a skull |
 
-  When the town changes hands, its banners come down and the new holders' go up.
+  When the town changes hands, its banners come down and the new holders' go up. Their cloths
+  swing and ripple in the breeze, as the banners in the peoples' towns do (`world/cloth.js`:
+  GAME.md, *Banners and flags*), a town's in one mesh.
 - **What they carry** (`characters/soldiers.js`) is what they fight with. Guards carry the first
   of their people's weapons; patrols carry each of them in turn:
 

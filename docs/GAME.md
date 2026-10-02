@@ -1093,6 +1093,35 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
   material for all of it. Low quality draws half of each column's puffs and medium
   three-quarters, dropped evenly so a column thins rather than breaking up (`QUALITY.smoke`).
   In the start town: 11 columns, 99 puffs, one draw, about 200 triangles, casting no shadow.
+- **Banners and flags** (terrain plan M7c; `world/cloth.js`), moving in the breeze:
+  - **What hangs where:** the crown's long banners on a human keep's front either side of its
+    door and on a castle's gatehouse and keep; the leaf's either side of an elven keep's door, the
+    spider's on a dark elven keep's front, the sun's on a cat folk's keep; the orcs' ragged
+    war-red and black war banners (a black hand on them) on their poles; the peoples' banners at
+    their towns' ways out (WAR.md); and pennants, in the people's colour, flying from a human
+    castle's towers and keep, a human keep's front turrets and a lizard folk palace's roof.
+  - **How they move:** a banner hanging from a bar swings to and fro, more towards its foot (as
+    much as 12 cm), ripples (4.5 cm), hangs in standing folds (one and a half across it), and
+    its foot is carried a little downwind; one hung on a wall only stands out from it, a little,
+    never into it (on a wall that leans in, the cat folk's, hung out from its top as far as the
+    wall leans over its length). A pennant flies out from its pole on
+    the breeze (the way the chimneys' smoke leans), waves running out along it, flapping more
+    towards its fly, drooping a little at its end.
+  - **How they're drawn:** each people's cloth (its colour darkened for its field, or the crown's
+    red and the cat folk's indigo, whose own are lost on their walls; a trim of their colour,
+    their emblem, a swallowtail foot), a plain swallowtail, a plain square, a ragged war banner
+    and a pennant (white, tinted by the colour they're given) are painted side by side in one
+    picture (`clothPicture`). The
+    kits record each cloth as they build (`solid.cloth`, kept in the built object's
+    `userData.cloth`: where its top is, which way it faces, how wide and long it is, its kind and
+    look); a chunk's, and the start town's, are one mesh each (`clothMesh`), with one material:
+    each cloth a grid of 6 by 8 squares (a pennant's 8 by 3), every corner of it where its top is,
+    where it hangs and which way it faces worked out in the vertex shader from the trees'
+    breeze's time, lit as the buildings are, both sides of it. Cut out of its picture (alpha to
+    coverage); casting no shadow (its shadow would be where it hangs still). One draw a chunk
+    with any (and one for the start town's): 288 triangles on a human keep (two banners, two
+    pennants), 576 on a human castle, 384 on an orcs' keep, 192 on a cat folk's (measured, drawn
+    with them and without).
 - **Each people's castle, special places and watchtowers** (core/sites.js: WORLD.md), each
   whose middle is in the chunk, built by its people's kit as a settlement's pieces are (the
   humans' castle laid out by castle.js, their abbey, windmill and manor as their landmarks).
@@ -1532,7 +1561,9 @@ facing south; each is turned about its middle to face the way the layout says:
     dark red board over it, the sign of the town's keys by the door, and a lantern either side.
   - **The keep**: a great stone tower, battlemented, a round turret at each corner under a cone
     of slate, a hipped roof inside the battlements, arrow slits and taller lights on every face,
-    and a door of dressed stone up two steps between two long red banners, the crown's sign by it.
+    and a door of dressed stone up two steps between two long banners of the crown (stirring in
+    the breeze: *Banners and flags*), the crown's sign by it, and the crown's flags flying from
+    its two front turrets.
   - **The church**: a stone nave, buttressed, with tall windows, and a tower with a spire at the
     front, the Six's gilded sun of six rays on its top, and its patron's sign by the door (the
     patron's emblem: Aurelia's sun, Brannoc's stag, Ithriel's star, Morvaine's lantern,

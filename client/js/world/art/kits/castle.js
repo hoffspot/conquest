@@ -9,6 +9,7 @@
 // without a gap; towers and gatehouses are drawn after (in front of) the walls they join.
 
 import { createRandom } from "../../../core/random.js";
+import { flagpole } from "../../cloth.js";
 import { Solid } from "../engine/solid.js";
 import { material } from "../engine/materials.js";
 import { MATERIALS } from "../engine/painters.js";
@@ -105,7 +106,8 @@ export function tower({ shape, top }, { stone = "stone", roof = "slate" } = {}) 
             // A band of corbels under the eaves, then a cone roof
             solid.cylinder(c, c, TOWER_HEIGHT, TOWER_HEIGHT + 4, radius, radius + 2, s, { segments: 24 });
             solid.cone(c, c, TOWER_HEIGHT + 4, 58, radius + 4, material(roof), 24);
-            solid.cylinder(c, c, TOWER_HEIGHT + 60, TOWER_HEIGHT + 68, 0.8, 0.8, material("iron"), { segments: 6 });
+            // (Its flag flying from its point: world/cloth.js)
+            flagpole(solid, [c, TOWER_HEIGHT + 58, c], 20, "human", { radius: 0.8, length: 21, drop: 7 });
         } else {
             roundBattlements(solid, c, c, radius, TOWER_HEIGHT, s);
         }
@@ -119,6 +121,7 @@ export function tower({ shape, top }, { stone = "stone", roof = "slate" } = {}) 
         if (top === "roof") {
             solid.box(5, TOWER_HEIGHT, 5, 55, TOWER_HEIGHT + 3, 55, s);
             solid.pyramid(3, 3, 57, 57, TOWER_HEIGHT + 3, 52, material(roof));
+            flagpole(solid, [c, TOWER_HEIGHT + 52, c], 20, "human", { radius: 0.8, length: 21, drop: 7 });
         } else {
             rectBattlements(solid, 6, 6, 54, 54, TOWER_HEIGHT, s);
         }
@@ -160,10 +163,10 @@ export function gatehouse({ facing }, { stone = "stone" } = {}) {
 
         solid.box(22, bridge - 6, 29.4, 58, bridge - 4.8, 30.6, iron);
 
-        // A banner over the way in, on the outside (only seen when the outside faces south)
+        // A banner over the way in, on the outside (only seen when the outside faces south), stirring
+        // in the breeze (world/cloth.js)
         if (facing === "s") {
-            solid.box(34, bridge + 2, 50, 46, height - 8, 50.8, material("banner"));
-            solid.box(38, bridge + 10, 50.8, 42, bridge + 16, 51.2, material("cloth-gold"));
+            (solid.cloth ??= []).push({ at: [40, height - 8, 50.3], out: [0, 0, 1], width: 12, drop: height - 10 - bridge, kind: "wall", look: "human" });
         }
     } else {
         // 60 x 80: blocks at the north and south ends, the passage between z = 20 and 60
@@ -209,6 +212,11 @@ export function keep({ w, h, door }, { stone = "stone", roof = "slate" } = {}) {
         solid.cone(x, z, height + 14, 30, turret + 2.5, material(roof), 16);
     }
 
+    // (Flags flying from two of its turrets, corner to corner: world/cloth.js)
+    for (const [x, z] of [[x0, z1], [x1, z0]]) {
+        flagpole(solid, [x, height + 41, z], 18, "human", { radius: 0.7, length: 18, drop: 6 });
+    }
+
     // Windows in rows on the south face
     for (let x = x0 + 18; x < x1 - 14; x += 16) {
         for (const y of [height * 0.45, height * 0.72]) {
@@ -227,7 +235,7 @@ export function keep({ w, h, door }, { stone = "stone", roof = "slate" } = {}) {
         solid.box(mid - 10, 4, z1, mid + 10, 8, z1 + 3, s);
 
         for (const x of [mid - 20, mid + 20]) {
-            solid.box(x - 4, 30, z1, x + 4, 56, z1 + 0.8, material("banner"));
+            (solid.cloth ??= []).push({ at: [x, 56, z1 + 0.3], out: [0, 0, 1], width: 8, drop: 26, kind: "wall", look: "human" });
         }
     }
 

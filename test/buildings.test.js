@@ -1158,3 +1158,137 @@ describe("chimney smoke (world/smoke.js)", () => {
         assert.equal(shares.filter((share) => share <= 0.5).length, Math.round(SMOKE.puffs / 2), `${shares}`);
     });
 });
+
+describe("banners and flags in the wind (world/cloth.js)", () => {
+    it("records the banners and flags the kits hang, turned and moved with what they're on", async () => {
+        const { clothOf } = await import("../client/js/world/cloth.js");
+        const castle = await import("../client/js/world/art/kits/castle.js");
+        const { warBanner } = await import("../client/js/world/art/peoples/orc.js");
+        const { COLOURS: PAINTS } = await import("../client/js/world/art/engine/painters.js");
+        const { COLOURS: PEOPLES } = await import("../client/js/core/war/peoples.js");
+        const big = [...houses].sort((a, b) => b.w * b.h - a.w * a.h)[0];
+        const { keep } = await import("../client/js/world/art/kits/landmarks.js");
+
+        // (A capital's keep: the crown's long banners hung on its front, its flags on its front
+        // turrets, flying out on the breeze)
+        const built = await keep(big);
+
+        built.updateMatrixWorld(true);
+
+        const cloth = clothOf(built);
+        const box = new THREE.Box3().setFromObject(built);
+
+        assert.deepEqual(cloth.map(({ kind }) => kind).sort(), ["fly", "fly", "wall", "wall"]);
+        assert.ok(cloth.filter(({ kind }) => kind === "wall").every(({ look, out, at }) => look === "human" && out[2] === 1 && Math.abs(at[2] - box.max.z) < M * 2));
+        assert.ok(cloth.filter(({ kind }) => kind === "fly").every(({ look, colour, at }) => look === "pennant" && colour === PEOPLES.human && at[1] > box.max.y - M * 3));
+
+        // (Turned and moved as what it's part of is)
+        const group = new THREE.Group();
+
+        group.add(built);
+        group.scale.setScalar(0.2);
+        group.rotation.y = Math.PI / 2;
+        group.position.set(100, 10, 200);
+        group.updateMatrixWorld(true);
+
+        const [moved] = clothOf(group);
+        const [first] = cloth;
+
+        assert.ok(Math.abs(moved.at[0] - (100 + first.at[2] * 0.2)) < 1e-6 && Math.abs(moved.at[1] - (10 + first.at[1] * 0.2)) < 1e-6 && Math.abs(moved.at[2] - (200 - first.at[0] * 0.2)) < 1e-6);
+        assert.ok(Math.abs(moved.width - first.width * 0.2) < 1e-9 && Math.abs(moved.drop - first.drop * 0.2) < 1e-9);
+        assert.ok(Math.abs(moved.out[0] - first.out[2]) < 1e-9 && Math.abs(moved.out[2] + first.out[0]) < 1e-9);
+
+        // (The castle's: its round and square towers' flags, its keep's, the gatehouse's banner)
+        const tops = [castle.tower({ shape: "round", top: "roof" }), castle.tower({ shape: "square", top: "roof" }), castle.keep({ w: 6, h: 5, door: true }), castle.gatehouse({ facing: "s" })];
+
+        assert.deepEqual(tops.map((object) => clothOf(object).map(({ kind }) => kind).sort().join(" ")), ["fly", "fly", "fly fly wall wall", "wall"]);
+        assert.deepEqual(clothOf(castle.tower({ shape: "round", top: "battlements" })), []);
+
+        // (An orcs' war banner, ragged and red, hanging from its crossbar, facing the way it's set)
+        const solid = new Solid();
+
+        warBanner(solid, 0, 0, 0, M * 4, { facing: Math.PI / 2 });
+
+        const [war] = clothOf(solid.toObject());
+
+        assert.equal(war.kind, "hang");
+        assert.equal(war.look, "ragged");
+        assert.equal(war.colour, PAINTS["war-red"]);
+        assert.ok(Math.abs(war.out[0] - 1) < 1e-9 && Math.abs(war.out[2]) < 1e-9);
+    });
+
+    it("draws them in one mesh of one material, each cloth a grid of corners from its own picture, moved by the trees' breeze", async () => {
+        const { BREEZE, CLOTH, clothMaterial, clothMesh, clothPicture, LOOKS } = await import("../client/js/world/cloth.js");
+        const { TREE_WIND } = await import("../client/js/world/art/kits/trees.js");
+        const { SMOKE } = await import("../client/js/world/smoke.js");
+        const pieces = [
+            { at: [1, 10, 2], out: [0, 0, 1], width: 1, drop: 3, kind: "wall", look: "human" },
+            { at: [5, 12, 2], out: [1, 0, 0], width: 1.2, drop: 2, kind: "hang", look: "ragged", colour: 0x8e1b1b },
+            { at: [9, 20, 2], width: 2, drop: 0.7, kind: "fly", look: "pennant", colour: "#f0c96a" },
+        ];
+        const mesh = clothMesh(pieces);
+        const { position, sheet, hang, uv, color } = mesh.geometry.attributes;
+        const [[ha, hd], [fa, fd]] = [CLOTH.grid.hang, CLOTH.grid.fly];
+
+        assert.equal(position.count, 2 * (ha + 1) * (hd + 1) + (fa + 1) * (fd + 1));
+        assert.equal(mesh.geometry.index.count / 3, 2 * (2 * ha * hd + fa * fd));
+        assert.equal(mesh.material, clothMaterial());
+        assert.equal(mesh.material.map, clothPicture());
+        assert.ok(mesh.material.side === THREE.DoubleSide && mesh.material.alphaTest > 0 && !mesh.castShadow);
+
+        // (Every corner of a cloth where its top is, how far across and down it it is, its kind,
+        // and its own cell of the picture)
+        for (let k = 0; k < position.count; k++) {
+            const piece = pieces[k < (ha + 1) * (hd + 1) ? 0 : k < 2 * (ha + 1) * (hd + 1) ? 1 : 2];
+            const column = LOOKS.indexOf(piece.look);
+
+            assert.deepEqual([position.getX(k), position.getY(k), position.getZ(k)], piece.at);
+            assert.deepEqual([sheet.getZ(k), sheet.getW(k)].map((v) => +v.toFixed(5)), [piece.width, piece.drop]);
+            assert.equal(hang.getZ(k), { hang: 0, wall: 1, fly: 2 }[piece.kind]);
+            assert.ok(Math.abs(uv.getX(k) - (column + sheet.getX(k)) / LOOKS.length) < 1e-6 && Math.abs(uv.getY(k) - (1 - sheet.getY(k))) < 1e-6);
+        }
+
+        // (Across a cloth, left to right as its front's seen; a plain one tinted its colour)
+        assert.deepEqual([hang.getX(0), hang.getY(0)], [1, -0]);
+        assert.ok(Math.abs(hang.getX((ha + 1) * (hd + 1)) - 0) < 1e-9 && Math.abs(hang.getY((ha + 1) * (hd + 1)) + 1) < 1e-9);
+        assert.ok(color.getX((ha + 1) * (hd + 1)) > color.getY((ha + 1) * (hd + 1)) * 3, "red");
+        assert.ok(mesh.geometry.boundingSphere.radius > 5);
+        assert.equal(clothMesh([]), null);
+
+        // (The breeze blowing the way the chimneys' smoke leans)
+        assert.ok(Math.abs(BREEZE[0] * SMOKE.wind[1] - BREEZE[1] * SMOKE.wind[0]) < 1e-9 && Math.abs(Math.hypot(...BREEZE) - 1) < 1e-9);
+
+        // (Its shader: Lambert's, where each corner is and which way it faces worked out from the
+        // trees' breeze's time)
+        const shader = { uniforms: {}, vertexShader: THREE.ShaderLib.lambert.vertexShader, fragmentShader: THREE.ShaderLib.lambert.fragmentShader };
+
+        for (const include of ["#include <common>", "#include <beginnormal_vertex>", "#include <begin_vertex>"]) {
+            assert.ok(shader.vertexShader.includes(include), include);
+        }
+
+        mesh.material.onBeforeCompile(shader);
+        assert.equal(shader.uniforms.clothTime, TREE_WIND.time);
+        assert.ok(shader.vertexShader.includes("vec3 transformed = clothAt;") && shader.vertexShader.includes("vec3 objectNormal = normalize("));
+        assert.ok(!shader.vertexShader.includes("#include <beginnormal_vertex>"));
+    });
+
+    it("hangs each town's war banners in its holders' cloth, in one mesh, and takes them down", async () => {
+        const { Banners } = await import("../client/js/world/banners3d.js");
+        const { LOOKS } = await import("../client/js/world/cloth.js");
+        const scene = new THREE.Group();
+        const banners = new Banners(scene);
+
+        banners.raise("town-1", "elf", [{ x: 10, z: 20, y: 0, facing: 0 }, { x: 30, z: 20, y: 0, facing: Math.PI }]);
+
+        const cloth = banners.group.getObjectByName("cloth:town-1");
+        const { uv, hang } = cloth.geometry.attributes;
+        const column = LOOKS.indexOf("elf");
+
+        assert.ok([...Array(uv.count).keys()].every((k) => uv.getX(k) >= column / LOOKS.length - 1e-6 && uv.getX(k) <= (column + 1) / LOOKS.length + 1e-6));
+        assert.equal(hang.getZ(0), 0);
+        assert.equal(banners.group.children.filter(({ name }) => name === "banner:town-1").length, 2);
+        banners.lower("town-1");
+        assert.equal(banners.group.children.length, 0);
+        banners.dispose();
+    });
+});
