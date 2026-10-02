@@ -10,9 +10,11 @@
 // plots, facing south.
 
 import { createRandom } from "../../../core/random.js";
+import { NEUTRAL } from "../../../core/setpieces/neutral.js";
+import { PLOT } from "../../../core/setpieces/pieces.js";
 import { material } from "../engine/materials.js";
 import { Solid } from "../engine/solid.js";
-import { brokenRim, brokenTop, crumbledRing, crumbledWall, perched, talus, tumbled } from "./decay.js";
+import { brokenRim, brokenTop, buttress, crumbledRing, crumbledWall, perched, stringCourse, talus, topAt, tumbled } from "./decay.js";
 import { brokenCart, fallenTimbers, oldBarrel, oldCrate } from "./leftovers.js";
 
 // World pixels in a metre
@@ -33,8 +35,46 @@ const CORE = "rubble-old";
 // (Standing stones are whole stones, not built of courses: natural rock)
 const MEGALITH = Object.freeze({ human: "rock", elf: "rock-pale", darkElf: "obsidian", cat: "rock-red", lizard: "rock-pale", orc: "rock-dark" });
 
+/**
+ * An old hall's wall's windows (HALL.windows), along it as its broken top's points (`top`, world
+ * pixels, `length` long), from its own random numbers: crumbledWall's openings.
+ */
+export function hallWindows(top, length, random) {
+    const { span, k, sill, spring, every, end, standing, clear, chance } = HALL.windows;
+    const lowest = (a, b) => Math.min(topAt(top, a), topAt(top, b), ...top.filter(([u]) => u > a && u < b).map(([, h]) => h));
+    const openings = [];
+
+    for (let u = m(end) + random.range(0, m(every[0]) / 2); u + m(span) < length - m(end); u += m(random.range(...every))) {
+        if (lowest(u - m(clear), u + m(span + clear)) > m(sill + standing) && random.chance(chance)) {
+            openings.push({ u0: u, u1: u + m(span), sill: m(sill), spring: m(spring), k });
+        }
+    }
+
+    return openings;
+}
+
 // How far each part reaches into the ground below where it stands (metres)
 const FOOTING = 1.4;
+
+/**
+ * An old hall's walls as they were built (the research report behind M7b's "five features carry
+ * a keep at a hundred metres"), in metres: tall lancet windows through them (`windows`: `span`
+ * wide, their heads `k` (decay.js archOf), from `sill` up, springing at `spring`, `every` metres
+ * apart give or take, none within `end` of a wall's end, each where the wall still stands
+ * `standing` above its sill over it and `clear` either side, open above where its head fell,
+ * `chance` of them); a base course and a course under the
+ * sills (`courses`: [height, how tall, how far proud]); stepped buttresses on its outer face
+ * (`buttresses`: `width` across, standing out `depths`, ending at `stages` of its height, at most
+ * `tallest`), between its windows and near its ends.
+ */
+export const HALL = Object.freeze({
+    windows: { span: 0.6, k: 1.1, sill: 1.4, spring: 2.5, every: [2.6, 3.6], end: 1.2, standing: 0.7, clear: 0.4, chance: 0.8 },
+    courses: [
+        [0.35, 0.3, 0.12],
+        [1.3, 0.18, 0.1],
+    ],
+    buttresses: { width: 0.7, depths: [0.75, 0.5, 0.3], stages: [0.45, 0.75, 1], tallest: 4.2, end: 0.9, least: 1.8 },
+});
 
 /**
  * Weathering (Solid's tone): darker at the foot, moss where it faces up (and a little north),
@@ -422,8 +462,31 @@ const BUILD = {
         const at = alongX ? (u, y, v) => [cx + u, y, cz + v] : (u, y, v) => [cx + v, y, cz + u];
         const high = m(part.h);
         const top = brokenTop(random, length, m(0.8), high, { stone: m(0.9), course: m(0.32) });
+        // (As it was built, from its own random numbers so what fell from it stays as it was)
+        const own = createRandom(((part.seed ?? 1) ^ 0x2f1d) >>> 0);
+        const openings = hallWindows(top, length, own);
 
-        crumbledWall(solid, at, top, -length / 2, [-thick / 2, thick / 2], -m(FOOTING), stone, { core: material(CORE) });
+        crumbledWall(solid, at, top, -length / 2, [-thick / 2, thick / 2], -m(FOOTING), stone, { core: material(CORE), openings });
+
+        for (const [height, width, depth] of HALL.courses) {
+            for (const side of [-1, 1]) {
+                stringCourse(solid, at, top, -length / 2, (side * thick) / 2, side, m(height), stone, { width: m(width), depth: m(depth), openings });
+            }
+        }
+
+        // (Its buttresses on its outer face: which way that is from where it stands in its site)
+        const [w0, h0] = (NEUTRAL[piece.name] ?? [0, 0]).map((plots) => (plots * PLOT) / 2);
+        const outer = alongX ? Math.sign((part.y0 + part.y1) / 2 - h0) || 1 : Math.sign((part.x0 + part.x1) / 2 - w0) || 1;
+        const { width, depths, stages, tallest, least } = HALL.buttresses;
+        const spots = [m(HALL.buttresses.end), length - m(HALL.buttresses.end), ...openings.slice(1).map(({ u0 }, i) => (openings[i].u1 + u0) / 2)];
+
+        for (const u of length > m(3) ? spots : []) {
+            const tall = Math.min(topAt(top, u) - m(0.3), m(tallest));
+
+            if (tall > m(least) && !openings.some(({ u0, u1 }) => u > u0 - m(width) && u < u1 + m(width))) {
+                buttress(solid, at, -length / 2, u, (outer * thick) / 2, outer, -m(FOOTING), stages.map((t) => tall * t), depths.map(m), m(width), stone, material(CORE));
+            }
+        }
 
         for (const side of [-1, 1]) {
             talus(solid, random, at, top, -length / 2, (side * thick) / 2, side, high * 1.4, 0, rubbleOf(piece.people));

@@ -85,6 +85,18 @@ back to the same world:
     half across, a little on what faces north, and near to (within 70 m) in the joints between its
     blocks; dark streaks down its faces. No new draws, programs or triangles: a few dozen
     operations a pixel of old stone.
+  - **As they were built** (terrain plan M7b-3b; `decay.js` `crumbledWall`'s `openings`,
+    `archOf`, `stringCourse`, `buttress`): tall pointed windows through the walls, their jambs,
+    sills and heads the wall's whole depth; where the broken top has fallen below a window's
+    head it's open above, its jambs standing as high as the wall beside them, so a window the
+    wall broke through is a notch. Bands of stone (string courses) run proud of the faces, lit
+    along their tops, broken where a window crosses them and gone where the wall's fallen
+    below them; stepped buttresses stand out from the faces. An old hall's walls (`HALL`,
+    `hallWindows`) have lancets 0.6 m wide every 3 m or so where they still stand above their
+    sills, a base course and a course under the sills, and buttresses on their outer faces near
+    their ends and between their windows. A ruined keep (`castle.js KEEP_RUIN`, `keepWindows`)
+    has two rows of lancets 1.4 m wide, one over another, at 0.3 and 0.62 of its
+    height, where its walls still stand, and a course under each row on its outer faces.
   - **Left behind** (`art/kits/leftovers.js`): grey, weathered and charred beams, snapped off or
     fallen, posts standing where halls stood; barrels whole, tipped over or burst (their staves
     splayed, a hoop in the grass); crates, some broken open; a cart left on one wheel.

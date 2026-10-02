@@ -1896,3 +1896,46 @@ converted data is to be measured in M8 against today's hm08 data.
     OLD_STONE's, its mortar dark, darker and greener than kept stone; the old layers last but
     plain, the shader's weathering for them alone, after the normal's known; the ruined pieces
     of old stone with their rubble core, the kept castle's of its own).
+- **2026-10-02, M7b-3b built** (the old walls as they were built: the research report's "five
+  features carry a keep at a hundred metres", its deep pointed openings, string courses and
+  buttresses; the ivy is M7b-3c):
+  - **Why:** the user's reference shot of a ruined castle: tall pointed windows through thick
+    walls, bands of stone across the faces, stepped buttresses. The ruined keep had flat dark
+    boxes stuck on one wall for windows; the old halls' walls were plain slabs.
+  - **Built:**
+    - openings through a crumbled wall (`decay.js crumbledWall`'s `openings`, `archOf`): from
+      the sill straight up to the springing, then a round or pointed head (`k`, its radius in
+      spans: 0.5 round, more pointed), each with its jambs, sill and soffit the wall's whole
+      depth, the faces broken round them. Where the broken top has fallen below a head, the
+      opening's open above: its jambs stand only as high as the top beside them, what's left of
+      its head and the wall over it end in a wedge where the top crosses it, and no top's drawn
+      across the gap, so a window the wall broke through reads as a notch with its jambs;
+    - string courses (`stringCourse`): a band of stone proud of the face, lit along its top
+      and shadowed under, only where the wall still stands a band above it, broken where an
+      opening crosses it;
+    - stepped buttresses (`buttress`): up to three stages, each less deep, each set-off a slope
+      shedding the rain to the next, the last's top broken off rough (the rubble core);
+    - the old halls (`kits/neutral.js HALL`, `hallWindows`): lancets 0.6 m wide with heads
+      springing at 2.5 m, every 2.6 to 3.6 m along a wall from its own random numbers (so what
+      fell stays as it was), where the wall still stands 0.7 m above their sills; a base course
+      and a course under the sills on both faces; buttresses on the outer face near its ends
+      and between its windows;
+    - the ruined keep (`castle.js KEEP_RUIN`, `keepWindows`): two rows of lancets 1.4 m wide,
+      one over another every 3.6 m along each wall, at 0.3 and 0.62 of its height, where the
+      wall still stands 1.2 m above their sills (about two a wall; the rule that wanted the
+      wall whole over the head gave a quarter of one); string courses under each row of sills
+      on its outer faces. Its flat dark window boxes are gone.
+  - **Cost:** about 700 more triangles in a hall's ruins (median 3,100 to 3,800; most 4,395,
+    under its 4,500 budget) and about 900 in a ruined castle (median 13,700 to 14,600; most
+    14,828, under its 15,000); no new draws, programs or materials (all in the atlas's stone).
+    Measured in the game rendering each view twice, the draws were the same before and after.
+  - **Pictures:** before/after sheet sent in the session (the keep zoomed, the castle at eye
+    height and from behind, a hall's ruins close by).
+  - **Versions:** none (the drawing's alone).
+  - **Tests:** `test/neutral.test.js` (round and pointed heads rising to their middles; an
+    opening right through a wall with its jambs, sill and head the wall's depth, by rays; one
+    open above where the top fell below its head, its jambs only as high as the top; a string
+    course only where the wall stands above it and not across openings; a buttress standing
+    out in stages each less deep, no higher than asked; the halls' windows where their walls stand above their sills, the keep's in
+    rows one over another, only the lower row in a wall half fallen; the keep's flat window
+    boxes gone).
