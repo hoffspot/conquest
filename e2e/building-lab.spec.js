@@ -74,7 +74,7 @@ test("draws a village out in the world in its chunks, with its tavern, church, s
             }
         });
 
-        return { kind: window.buildingLab.state.place.kind, stats: window.buildingLab.state.stats, names: [...names] };
+        return { kind: window.buildingLab.state.place.kind, stats: window.buildingLab.state.stats, yards: window.buildingLab.state.yards, names: [...names] };
     });
 
     expect(village.kind).toBe("village");
@@ -85,6 +85,8 @@ test("draws a village out in the world in its chunks, with its tavern, church, s
     expect(village.names).toContain("sign blacksmith");
     // (Smoke rising from its chimneys and its forge: world/smoke.js)
     expect(village.names).toContain("chimney smoke");
+    // (Yards behind its houses: kits/yards.js)
+    expect(village.yards).toBeGreaterThan(3);
 });
 
 test("draws the land itself: its features, and the undergrowth near, swaying, in a few draw calls", async ({ page }) => {

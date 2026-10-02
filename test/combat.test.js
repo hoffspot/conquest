@@ -592,16 +592,18 @@ describe("the battle (battle.js)", () => {
         assert.equal(player.stamina, player.maxStamina);
     });
 
-    it("goes straight ahead the way it faces as far as the way is clear, running while its stamina lasts", () => {
+    it("turns the way it's sent and goes straight ahead that way as far as the way is clear, running while its stamina lasts", () => {
         const battle = new Battle(worldOf([
             "..........................#.",
             "............................",
             "............................",
         ]), { seed: 1 });
-        const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [1, 0] });
+        const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [1, 0], facing: Math.PI });
 
-        // Facing east: along the row, straight to its body's width from the wall
+        // Sent east (facing north): turned east, along the row, straight to its body's width from
+        // the wall
         battle.command("player", { type: "ahead", facing: Math.PI / 2, run: true });
+        assert.equal(player.facing, Math.PI / 2);
         assert.deepEqual(player.order, { type: "move", to: [25, 0], run: true });
         assert.equal(player.path.length, 1);
         assert.ok(player.path[0][0] > 25.5 && player.path[0][0] <= 25.7 && player.path[0][1] === 0.5, `to ${player.path[0]}`);
@@ -612,9 +614,12 @@ describe("the battle (battle.js)", () => {
         assert.deepEqual(player.square, [25, 0]);
         assert.ok(player.x > 25 && player.x < 26 && player.y === 0.5, "never left the row");
 
-        // Up against the wall, there's nowhere ahead to go
+        // Up against the wall, there's nowhere ahead to go; sent into it from facing back, it still
+        // turns to face it
+        player.facing = -Math.PI / 2;
         battle.command("player", { type: "ahead", facing: Math.PI / 2, run: true });
         assert.equal(player.order, null);
+        assert.equal(player.facing, Math.PI / 2);
 
         // Out of breath, it walks
         player.stamina = 0;

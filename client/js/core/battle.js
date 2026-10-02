@@ -717,8 +717,8 @@ export class Battle {
 
     /**
      * Tell a character what to do: { type: "move", to: [x, y] } (walk there, on its map, or as
-     * near as can be), { type: "ahead", facing } (straight ahead the way `facing` points,
-     * radians, as far as the way is clear), { type: "engage", target: id } (go and fight it),
+     * near as can be), { type: "ahead", facing } (turned the way `facing` points, radians, and
+     * straight ahead that way as far as the way is clear), { type: "engage", target: id } (go and fight it),
      * { type: "enter", link: id } (walk to the link's end on its map and go through),
      * { type: "approach", target: id } (walk up to someone, to talk: "arrived" when there), or
      * { type: "stop" }. Moving, engaging, entering and approaching, run: true runs there (while
@@ -750,7 +750,9 @@ export class Battle {
                 break;
             }
             case "ahead": {
-                // From wherever it is, straight on as far as the mesh goes that way
+                // Turned that way, and from wherever it is, straight on as far as the mesh goes
+                actor.facing = order.facing;
+
                 const way = this.#route(actor, () => {
                     const [x, y] = [actor.x, actor.y];
                     const ray = navigatorOf(this.maps[actor.map]).raycast([x, y], [x + sin(order.facing) * AHEAD, y + cos(order.facing) * AHEAD]);
@@ -2528,9 +2530,10 @@ export class Battle {
     }
 
     // Something left on the ground a while (HAZARDS), round [x, y] on a map, by whom (their side
-    // hurt by it, not their own), hurting so much each time; told as "hazard"
+    // hurt by it, not their own: what they are kept too, for once they're gone), hurting so much
+    // each time; told as "hazard"
     #lay(by, map, x, y, { kind, ms, radius }, damage, spell = null) {
-        const hazard = { id: this.nextHazard++, kind, map, x, y, radius, until: this.time + ms, next: this.time + HAZARDS[kind].every, damage: Math.max(1, Math.round(damage)), by: by?.id ?? null, team: by?.team ?? null, spell };
+        const hazard = { id: this.nextHazard++, kind, map, x, y, radius, until: this.time + ms, next: this.time + HAZARDS[kind].every, damage: Math.max(1, Math.round(damage)), by: by?.id ?? null, team: by?.team ?? null, caster: by?.kind ?? null, spell };
 
         this.hazards.push(hazard);
         this.#emit("hazard", { hazard: hazard.id, kind, map, x, y, radius, until: hazard.until, by: hazard.by, change: "on" });
@@ -2542,12 +2545,15 @@ export class Battle {
         for (const hazard of [...this.hazards]) {
             const { every, afflict, element, reaction } = HAZARDS[hazard.kind];
             const by = hazard.by === null ? null : this.actor(hazard.by);
+            // (Whose enemies it hurts: its caster's, or, gone (a player who's left), the enemies of
+            // the side they were on, so never their friends or allies)
+            const side = by ?? (hazard.by === null ? null : { id: hazard.by, team: hazard.team, kind: hazard.caster });
 
             if (this.time >= hazard.next) {
                 hazard.next += every;
 
                 for (const actor of this.actors) {
-                    const theirs = by ? this.hostile(by, actor) : actor.team !== hazard.team && !actor.neutral;
+                    const theirs = side ? this.hostile(side, actor) : actor.team !== hazard.team && !actor.neutral;
 
                     if (!actor.dead && actor.map === hazard.map && theirs && hypot(actor.x - hazard.x, actor.y - hazard.y) <= hazard.radius && !this.buffOf(actor, "levitate")) {
                         this.#hit(by, actor, { id: hazard.kind, kind: "hazard", reaction, stagger: 0, afflict, element }, null, { damage: hazard.damage, spell: hazard.spell, ground: true });

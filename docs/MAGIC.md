@@ -98,7 +98,15 @@ on to the next nearest enemy within 3 metres, so many times, each hit weaker.
 
 What they leave on the ground (battle.js `HAZARDS`) hurts every enemy of the caster's standing in
 it, now and then, a share of the spell's damage, and may set on them what it is (fire burning,
-acid poisoning, rot sickening). Creatures' spit leaves pools too: lava, venom.
+acid poisoning, rot sickening); still only the enemies of the side the caster was on once they've
+gone (a player who's left the game), never their friends or allies. Creatures' spit leaves pools
+too: lava, venom.
+
+Nothing round them, leaping on, or left on the ground ever touches the caster, their own people
+(soldiers, other players of their people, their followers, what they've called or raised), the
+folk, anyone they've calmed (Pacify), or a people allied to theirs or at peace with it: only
+enemies (battle.js `hostile`). Players of two peoples at war are enemies (WAR.md), so their spells
+strike each other's.
 
 ### Hexes
 

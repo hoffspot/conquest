@@ -7,10 +7,10 @@
 // carry on from the settlement's streets' ends. Nothing here uses Three.js, so it runs in Node too.
 
 import { CELL, CHUNK, CHUNKS } from "./worldplan/plan.js";
-import { GROUND } from "./setpieces/pieces.js";
+import { GROUND, PLOT } from "./setpieces/pieces.js";
 import { openEntrances } from "./insides.js";
 import { layoutTown, SETTLEMENT_KINDS } from "./setpieces/town.js";
-import { atan2, hypot } from "./exact.js";
+import { atan2, cos, hypot, sin } from "./exact.js";
 
 /** How far past its own square the world round a settlement has to be for it to be laid out (metres). */
 export const NEAR = CHUNK;
@@ -53,13 +53,19 @@ export class Settlements {
      * @param {object} [options.skip] - A place not to lay out (the start town, set in already).
      * @param {Function} [options.onLaid] - Hears each settlement as it's laid out (to join its
      *     roads to its streets).
+     * @param {Function} [options.landAt] - The land at a square of the world (the overworld's
+     *     landAt: its water, bridge and road), where a settlement's yards reach past its edge.
      */
-    constructor(plan, { skip = null, onLaid = () => {} } = {}) {
+    constructor(plan, { skip = null, onLaid = () => {}, landAt = null } = {}) {
         this.plan = plan;
         this.places = plan.places.filter((place) => place !== skip && SETTLEMENT_KINDS[place.kind]);
         this.onLaid = onLaid;
+        this.landAt = landAt;
 
-        /** Each place laid out so far, by id: { place, town (its layout), at, size }. */
+        /**
+         * Each place laid out so far, by id: { place, town (its layout), at, size, yards (its
+         * town's yards that are there: astray's aren't) }.
+         */
         this.laid = new Map();
 
         // Places laid out elsewhere ahead of being wanted (give), by id: { spec, town }
@@ -111,7 +117,21 @@ export class Settlements {
             // (The way up to the doors of its buildings that can be gone into, cleared)
             openEntrances(town.pieces, town.blocked, town.opaque);
 
-            settlement = { place, town, at, size };
+            // (Its yards, but for any reaching out past its edge over the world's water, a bridge
+            // or a road: not there, their fences not standing in anyone's way)
+            const yards = [];
+
+            for (const yard of town.yards) {
+                if (this.landAt && astray(yard, town, at, this.landAt)) {
+                    for (const [i, j] of yard.squares) {
+                        town.blocked[j][i] = 0;
+                    }
+                } else {
+                    yards.push(yard);
+                }
+            }
+
+            settlement = { place, town, at, size, yards };
             this.laid.set(place.id, settlement);
             this.onLaid(settlement);
         }
@@ -206,6 +226,30 @@ export class Settlements {
         return found;
     }
 
+    /**
+     * The yards behind the houses of the settlements laid out near a chunk whose middles are in
+     * it, in the world's metres: [{ ...yard, x, y (its middle, metres, in the world), place }]
+     * (layoutTown's yards, those that are there).
+     */
+    yardsIn(cx, cy) {
+        const [x0, y0] = [cx * CHUNK, cy * CHUNK];
+        const found = [];
+
+        for (const place of this.near(cx, cy)) {
+            const settlement = this.laid.get(place.id);
+
+            for (const yard of settlement?.yards ?? []) {
+                const [x, y] = [yard.x + settlement.at[0], yard.y + settlement.at[1]];
+
+                if (x >= x0 && y >= y0 && x < x0 + CHUNK && y < y0 + CHUNK) {
+                    found.push({ ...yard, x, y, place: place.id });
+                }
+            }
+        }
+
+        return found;
+    }
+
     /** The settlement (laid out) whose square a point (metres) is in, or null. */
     at(x, y) {
         for (const place of this.near(Math.floor(x / CHUNK), Math.floor(y / CHUNK))) {
@@ -218,6 +262,25 @@ export class Settlements {
 
         return null;
     }
+}
+
+// Whether a yard (layoutTown's, its settlement's layout `town` at `at` in the world) reaches out
+// past its settlement's edge over the land's water, a bridge or a road (`landAt`): points over it
+// a little in from its edges, and the squares its fences stand on
+function astray(yard, town, at, landAt) {
+    const [w, d] = [yard.w * PLOT, yard.h * PLOT];
+    const [s, c] = [sin(yard.facing), cos(yard.facing)];
+    const points = [0.4, w / 2, w - 0.4].flatMap((u) => [0.4, d / 2, d - 0.4].map((v) => [yard.x + (u - w / 2) * c + (v - d / 2) * s, yard.y - (u - w / 2) * s + (v - d / 2) * c]));
+
+    return [...points, ...yard.squares.map(([i, j]) => [i + 0.5, j + 0.5])].some(([x, y]) => {
+        if (inside(town, x, y)) {
+            return false;
+        }
+
+        const land = landAt(Math.floor(x) + at[0], Math.floor(y) + at[1]);
+
+        return Boolean(land.water || land.bridge || land.road);
+    });
 }
 
 // Is a point (in a layout's own metres) inside its settlement's edge (its radius: the town, not

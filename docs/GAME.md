@@ -170,7 +170,8 @@ a hamlet's middle is a green. Its houses have one storey, or two now and then.
   stand at every angle as the streets bend), 0.4 metres back from it (up to 2 metres more where
   the street bends towards its corners), wall to wall with their neighbours or nearly, a yard
   behind most (with a vegetable bed, a tree, or barrels, crates, sacks or a cart by the back
-  wall). Fewer lots are built on towards the edge, and none past it (the edge wanders).
+  wall; fenced, gone into by its gateway, its bed planted and washing hung out: below). Fewer
+  lots are built on towards the edge, and none past it (the edge wanders).
 - **Back buildings** (outhouses, workshops, barns: 4.5 to 7.5 metres) filling the blocks behind
   the houses, each lined up with the street nearest it and facing it, a narrow way between them.
 - **Landmarks**: the tavern, church, smithy and guild (and in a city, the market hall) facing
@@ -803,8 +804,8 @@ room to draw than there is. While held, it doesn't turn itself; let go, it stays
 turned while the player stands, and once they walk again, it swings back round behind them,
 facing the way they go (keeping its tilt, unless it was looking up past 15 degrees down: then it
 eases back down to 35 to see where they're going).
-A drag that starts on the player and sets off mostly upwards is a swipe (straight ahead), not a
-turn; two fingers are a pinch (zoom). Tilting costs nothing: the town is a few merged meshes,
+A drag that starts on the player and sets off mostly upwards is a swipe (straight ahead the way
+the camera looks), not a turn; two fingers are a pinch (zoom). Tilting costs nothing: the town is a few merged meshes,
 drawn whole whichever way the camera looks (about 90 draw calls and 170,000 triangles either way).
 
 **Quality levels** trade looks for speed. Game options' **Visual quality** slider chooses one, Low
@@ -1131,6 +1132,62 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     with any (and one for the start town's): 288 triangles on a human keep (two banners, two
     pennants), 576 on a human castle, 384 on an orcs' keep, 192 on a cat folk's (measured, drawn
     with them and without).
+- **Gardens, fences and washing lines** (terrain plan M7c; `art/kits/yards.js`), in the yards
+  behind the peoples' houses (laid out with their towns: `layoutTown`'s `yards`, worked out once
+  the town's laid out, from no draws of its own, so every town's laid out as it was):
+  - **Fences** along a yard's sides and back where nothing stands (a tree, a pile of barrels, a
+    building), and where two yards meet, only one: the humans' wattle hurdles between round
+    stakes or posts and rails, the elves' clipped hedges, the dark elves' black stone kerbs with
+    iron bars, the cat folk's mud walls, the lizard folk's reed screens, the orcs' sharpened
+    stakes, each its own height. They're in everyone's way, as a wall is (the squares along them
+    `blocked`, half a metre at a time, so the navigation meshes go round them), though not in
+    anyone's sight. A yard is gone into by its **gateway** (`YARD_FENCE`): 1.6 m across,
+    somewhere along the longest run of its back's fence if that's 2.6 m or more, or else of a
+    side's, its gate swung open into the yard between stout gateposts (the humans' a barred gate
+    braced across or a hurdle, the lizard folk's a panel of reeds framed in cane, the orcs'
+    lashed stakes), the dark elves' an iron gate between black stone piers, the cat folk's an
+    opening between two mud pillars, the elves' hedge just parted. About one yard in eight is
+    left open (no fence at all), and where something stands in a fence's line (a tree, barrels)
+    there's a way in round it too.
+  - **Beds** (a third of the yards): the layout's soil, cut back clear of anything stood in it,
+    raised in its people's edging (boards, pale or black stone, mud, cane; the orcs' heaped),
+    planted in rows along it of what its people grow (`plantsOf`, each row one crop, spaced as
+    it would be: `PLANTING`; a row in four bare): the humans' cabbages, leeks, runner beans up
+    their canes, carrots, lettuces, onions, herbs, hollyhocks and marigolds; the elves' lavender,
+    hollyhocks, lilies, herbs, chives, beans and lettuces; the dark elves' leeks, kale, lilies,
+    herbs, chives and onions; the cat folk's squashes, peppers, onions, sunflowers, marigolds and
+    herbs; the lizard folk's taro, squashes, peppers, herbs and leeks; the orcs' cabbages,
+    turnips, kale and onions. Each is a plant, drawn as the undergrowth is (below; land
+    "garden", eight looks of each from a seed): a cabbage's leaves cupped round its heart, a
+    leek's fan of blades on its white shaft, carrot and turnip tops (the turnip's purple
+    shoulders showing), beans climbing a wigwam of canes with their flowers and pods, a squash's
+    great leaves and a gourd or two, sunflowers and hollyhocks taller than a man, peppers red and
+    green, taro's elephant ears, lilies' trumpets, lavender's spikes, marigold and chive heads;
+    each leaf stirring in the breeze.
+  - **Washing lines:** across the back of nearly half the yards with room for one (none where a
+    tree stands in the way), on two posts, sagging, as many as seven pieces of washing pegged out
+    along it in their people's colours (linen, unbleached, faded blue and red; the dark elves'
+    violets, the cat folk's saffron and indigo), hanging and swinging in the breeze as the
+    banners do (`world/cloth.js`, a grid of 4 by 4 squares each); the orcs' a rack of hides.
+  - **Kept to the town:** a yard reaching past its settlement's edge into a river or a lake,
+    under a bridge or over a road isn't there at all (`Settlements` drops it as it lays the
+    settlement out in the world, its fence's squares unblocked: `settlement.yards`), so no fence
+    stands in water or across a road.
+  - **How they're drawn:** built by the kit as each yard's piece of the chunk (the start town's
+    with the rest of it), on the ground as it lies under the yard (`lieOf`: its corners'
+    heights), merged with the buildings into the atlas's material; their washing in the chunk's
+    cloth; the plants grown with the chunk's undergrowth (`Overworld.yardsIn`, sowing), so only
+    near the player, sinking away from 40 m, and every bed planted whatever the quality level
+    (only the wild undergrowth thins). An orc's stakes, a dark elf's iron bars and gate and a
+    washing line's rope are only worth drawing near (`Solid.near`), left undrawn past
+    `DETAIL_NEAR`: a yard's fences and gateway are 64 to 880 triangles close by (by people; the
+    orcs' stakes the most), 36 to 400 from further off; a plant 50 to 400 triangles (an onion
+    80, a cabbage 200, beans on their canes 390), a bed's 10 to 220 plants 1,800 to 27,000
+    triangles, and at most about 80,000 within 56 m of anywhere in the most planted human city
+    (seeds 1 to 3). No draws of their own (but a chunk's cloth, where it had none: its
+    washing); each piece of washing 32 triangles, casting no shadow; a new tint and two plain
+    colours, no new picture. Built in a few milliseconds a yard, a piece of the chunk's
+    buildings at a time.
 - **Each people's castle, special places and watchtowers** (core/sites.js: WORLD.md), each
   whose middle is in the chunk, built by its people's kit as a settlement's pieces are (the
   humans' castle laid out by castle.js, their abbey, windmill and manor as their landmarks).
@@ -2248,8 +2305,10 @@ game plays on while it's open; a second finger (a pinch) closes it.
    the taps happened, so a slow frame between them doesn't matter) turns it into a run, as does
    a Shift-click. A drag turns the camera round the player (and tilts it). A swipe up that
    starts on the player (40 pixels up within 600 ms, mostly up)
-   sends them straight ahead the way they face, running (an `ahead` order), with the ring where
-   they'll stop; blocked straight away, it's refused with a sound. The heads-up display
+   turns them the way the camera looks (over the ground) and sends them straight ahead that way,
+   running while their stamina lasts and then walking (an `ahead` order, which turns them as
+   well as setting them off), with the ring where they'll stop; blocked straight away, it's
+   refused with a sound (still turned that way). The heads-up display
    (app/hud.js) shows the player's name and health in the bottom left corner (the zoom buttons
    in the bottom right), with an orange stamina bar under the health bar while stamina isn't
    full, "Out of breath" when a run

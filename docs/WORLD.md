@@ -272,7 +272,11 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   way, so everyone playing together has the same world, and in the same order. Where it has
   something (its streets, its market or green, its buildings, yards and trees, and everything
   inside its edge), the world takes its squares; its fields are the land's own. Its buildings,
-  props and trees are drawn with the chunk their middles are in (`piecesIn`).
+  props and trees are drawn with the chunk their middles are in (`piecesIn`), and so are the
+  yards behind its houses, their fences in the way (their squares blocked) but for their
+  gateways, their beds' plants grown with the undergrowth (`yardsIn`: GAME.md); a yard reaching
+  past its edge into water, under a bridge or over a road is dropped, its fence's squares
+  unblocked (`settlement.yards`).
   Each people's settlements are laid out and built their own way (`layoutTown({ people })`:
   GAME.md, *Towns*), the start town too: a cat folk's start is a cat folk's town. A lizard
   folk's lagoon is the world's water, its plank walks drawn as bridges.

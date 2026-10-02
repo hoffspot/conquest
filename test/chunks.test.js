@@ -30,7 +30,8 @@ const { builderFor } = await import("../client/js/world/art/peoples/index.js");
 const THREE = await import("three");
 const { AHEAD, Layouts } = await import("../client/js/world/layouts.js");
 const { splatOf, splatting } = await import("../client/js/world/ground.js");
-const { sowing, undergrowthMesh, undergrowthOf } = await import("../client/js/world/art/kits/wilds.js");
+const { GARDEN_KINDS, sowing, undergrowthMesh, undergrowthOf } = await import("../client/js/world/art/kits/wilds.js");
+const { plantsOf } = await import("../client/js/world/art/kits/yards.js");
 
 let world;
 
@@ -164,6 +165,43 @@ describe("the world outside, drawn round the player (chunks3d.js)", () => {
         chunks.update(x, z, { budget: 0 });
         assert.equal(drawing(), corners);
         chunks.dispose();
+    });
+
+    it("draws the yards behind a settlement's houses that are there (core/settlements.js) on the ground as it lies, what's grown in their beds sown with the undergrowth", () => {
+        const overworld = world.maps.town;
+        const villages = overworld.settlements.places.filter(({ kind, id }) => kind === "village" && id !== world.start.id);
+        let found = null;
+
+        // (A village's chunk with a bed in a yard of it)
+        for (const place of villages.slice(0, 6)) {
+            const chunks = new Chunks(world, { undergrowth: 0 });
+
+            chunks.fill(...place.at, 0);
+
+            const drawn = [...chunks.drawn.values()][0];
+            const own = overworld.settlements.yardsIn(drawn.cx, drawn.cy);
+            const yards = drawn.job?.pieces.filter(({ kind }) => kind === "yard") ?? [];
+
+            chunks.dispose();
+            assert.deepEqual(yards.map(({ x, y }) => [x, y]), own.map(({ x, y }) => [x, y]));
+            assert.ok(yards.every(({ lie }) => lie.length === 4 && lie.every(Number.isFinite)));
+
+            if (own.some(({ bed }) => bed)) {
+                found = { drawn, own };
+                break;
+            }
+        }
+
+        assert.ok(found, "a village's yard with a bed");
+
+        // (Each plant of the beds' rows, of its people's crops, standing on its bed's soil)
+        const chunk = overworld.chunk(found.drawn.cx, found.drawn.cy);
+        const sown = undergrowthOf(overworld, chunk).filter(({ land }) => land === "garden");
+        const planted = found.own.flatMap((yard) => plantsOf(yard, (x, y) => overworld.heightAt(x, y)));
+
+        assert.ok(planted.length > 0);
+        assert.deepEqual(sown.map(({ kind, x, y, ground }) => [kind, x, y, ground]), planted.map(({ crop, x, y, height }) => [crop, x, y, height]));
+        assert.ok(sown.every(({ kind, look }) => GARDEN_KINDS.includes(kind) && look >= 0 && look < 8));
     });
 
     it("grows the undergrowth over several frames, the same as all at once", () => {

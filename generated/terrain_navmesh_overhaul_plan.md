@@ -762,6 +762,31 @@ What the chosen pictures share, for M7c:
 The ruins and the wild keep the Elden Ring's darker, weathered look (M7b); the villages are where
 the warm, lived-in look is.
 
+**The land looking natural** (the user's direction, 2026-10-02: "a look around at all the
+environment generation to ensure the ground and elevated terrain generation looks natural and
+doesn't contain any obvious polygons or texturing that wouldn't look good in the intended
+environment"). Part of M7, as M7d, before the cliffs and rocks build on the land:
+- **Looked at, not assumed:** a tour of cameras over several seeds and every land (meadow and
+  farmland plains, hills, mountains and their passes, valleys, cliffs, coasts and lakeshores,
+  rivers and falls, marsh, savannah and badlands, the volcano's ash, tundra and snow), at a
+  walker's eye height, the follow camera's and from high up, at each Visual quality level and
+  at golden hour and noon; each picture looked over for what gives the land away as made.
+- **Polygons:** facets and straight creases on slopes and ridges (too few vertices for the
+  relief, or normals from the mesh rather than the height function); cracks, steps or popping
+  where levels of detail and the near and far land meet; spiky or knife-edged peaks; terracing
+  from rounding; pads, road cuttings and fills and retaining banks reading as flat planes and
+  ramps; anything lined up with the chunk or square grid.
+- **Texturing:** stretching down steep faces (cliffs wanting triplanar or slope-aligned
+  mapping); a picture's tiling seen from afar; hard, straight or blotchy edges between grass,
+  dirt, rock, sand and snow; the snow line and rock-by-height bands too even; colour banding;
+  ground that's too bright, too saturated or too uniform beside the Elden Ring's palette; seams
+  at chunk edges.
+- **Where things meet the land:** rocks, trees and buildings floating or sunk; water's edges,
+  banks and beds; paths and roads into the ground round them.
+- **Fixed where found,** each with a before/after picture from the same camera, within the
+  budgets (a fix that costs, such as triplanar rock, tiered by Visual quality); the tour's
+  cameras kept so later work can be checked against them.
+
 **As built in M7a** (row 4, the neutral sites, and row 6's decay pass for them; see the change
 log):
 - **Laid out in core** (`core/setpieces/neutral.js` `layoutNeutral`, exact maths): each kind's
@@ -1201,7 +1226,7 @@ pictures for anything that changes the look.
 | **M6b** | Atmosphere | Height fog (an exponential height mist under the distance haze); per-region look table and grade (§9 row 1); terrain material (rock and snow by height); cascades deferred to M7 | Pictures; budgets per tier met |
 | **M6c** | Things on the horizon | Far silhouettes and the world landmark (§9 row 2): the volcano's crater, fire and smoke | Pictures; budgets per tier met |
 | **M6d** | Far trees and rivers | Far trees (impostors fading in where the near trees fade out); far rivers on the far land | Pictures; budgets per tier met |
-| **M7** | Elden Ring environment pass | In §9's order: the landmark pass in the plan; neutral sites built, with the decay pass; cliffs and rocks; churches, citadels, stone bridges; foliage palette, grass ring, weathering; cascaded shadows, measured, if they fit the budget | Pictures after each part; budgets met |
+| **M7** | Elden Ring environment pass | In §9's order: the landmark pass in the plan; neutral sites built, with the decay pass; a look round all the generated ground and high land so it looks natural, with no obvious polygons or out-of-place texturing (M7d, §9 *The land looking natural*); cliffs and rocks; churches, citadels, stone bridges; foliage palette, grass ring, weathering; cascaded shadows, measured, if they fit the budget | Pictures after each part; budgets met |
 | **M8** | Characters on Vitruvian | §10, as several PRs (conversion, body, garments, skin, face, LODs, clips) | Pictures; clipping tests green; budgets met |
 
 Each milestone follows the same steps:
@@ -2126,3 +2151,123 @@ converted data is to be measured in M8 against today's hm08 data.
     spaces, made once); `e2e/pellagos.spec.js` (walking out of the start town, no shader drawn
     reads more than 16 textures); `e2e/building-lab.spec.js` (the fields on the GPU read from the
     land's marks as the ground reads them).
+- **2026-10-02, M7c-3 built** (gardens, fences and washing lines: §9's "signs of life", gardens
+  and washing lines; the chosen village pictures' "wattle and post-and-rail fences" and gardens;
+  then reworked from the user's "Fences should block movement and ensure the gardens have a
+  variety of plants that actually look like plants"):
+  - **Why:** the yards behind the peoples' houses were open grass, a patch of soil where a bed
+    was; nothing told one people's yards from another's, and nothing hung out to dry. The first
+    fences were drawn only, walked through as the hedgerows are, and the first beds' crops were
+    a few boxes and blobs in rows: neither read as what they were.
+  - **Laid out** (`core/setpieces/town.js` `yards`, worked out once the town is laid out, from
+    no draws of its own, so every town is laid out as before: 108 layouts of every people and
+    size checked the same, piece for piece and square for square, but for the fences' squares,
+    and laid out in the same time): each yard's rectangle; the runs of its sides and back to
+    fence, a step of half a metre at a time where nothing stands (a tree, a pile of barrels, a
+    building), and where two yards meet only the one laid first; its bed, cut back from its
+    back or its front clear of anything stood in it (none under 0.9 m deep); and whether a
+    washing line could be strung across its back (`YARD_LINE`). None over the lizard folk's
+    water. About one yard in eight left open (`YARD_FENCE.open`); the rest with a gateway
+    1.6 m across along the longest run of the back's fence if that's 2.6 m or more, or else of
+    a side's (`YARD_FENCE`).
+  - **In the way:** a fence's squares (the yard's own squares at its edge within a metre of a
+    fenced run) are `blocked`, but not `opaque` (seen over), so the navigation meshes go round
+    them; its gateway's left clear a metre either side of its middle.
+    Walked from the street to the bottom of a yard and back across seeds 1 to 4, every way in
+    is a gateway or a gap the fence leaves round a tree or a pile of barrels (fewer than one
+    point in twenty of a fence's line ever stood on, the paths passing within a step of their
+    gateways' middles).
+  - **Kept to the town** (`core/settlements.js`): the layout knows nothing of the world's
+    water, bridges and roads, so `Settlements` (given the world's `landAt`) drops a yard that
+    reaches past the settlement's edge into a river or a lake, under a bridge or over a road,
+    and unblocks its fence's squares (`settlement.yards`; the start town's, set into the world
+    with its own land under it, all kept). `NET_VERSION` 18 (what's blocked changed).
+  - **Built** (`art/kits/yards.js`):
+    - each people's fences (`FENCES`): the humans' wattle hurdles between round stakes or posts
+      and rails, the elves' clipped hedges, the dark elves' black stone kerbs with iron bars,
+      the cat folk's mud walls, the lizard folk's reed screens, the orcs' sharpened stakes, each
+      its own height; and its gateway: stout gateposts with the gate swung open into the yard
+      (a barred gate braced across or a hurdle, a panel of reeds framed in cane, lashed stakes),
+      an iron gate between black stone piers (the dark elves'), two mud pillars (the cat
+      folk's), the elves' hedge just parted;
+    - its bed raised in its people's edging (boards, pale or black stone, mud, cane; the orcs'
+      heaped), its soil dark;
+    - a washing line across the back of nearly half the yards with room for one, as many as
+      seven pieces of washing in the people's colours hanging from it, swinging in the breeze
+      (`world/cloth.js`'s kind `wash`, a grid of 4 by 4); the orcs' a rack of hides;
+    - standing on the ground as it lies under the yard (`lieOf`: its corners' heights), posts
+      set 30 cm into it; built as a piece of the chunk (`Settlements.yardsIn`) or the start town,
+      merged with the buildings into the atlas's material; a new tint, `wattle`, of the matting,
+      stretched along each hurdle and squashed up it so it reads as rods woven along it.
+  - **Planted** (`kits/yards.js` `plantsOf`, `kits/wilds.js`): each bed in rows along it, a crop
+    to a row from its people's list (`YARD_LOOKS`: the humans' cabbages, leeks, beans, carrots,
+    lettuces, onions, herbs, hollyhocks and marigolds; the elves' lavender, hollyhocks, lilies,
+    herbs, chives, beans and lettuces; the dark elves' leeks, kale, lilies, herbs, chives and
+    onions; the cat folk's squashes, peppers, onions, sunflowers, marigolds and herbs; the
+    lizard folk's taro, squashes, peppers, herbs and leeks; the orcs' cabbages, turnips, kale and
+    onions), spaced as each would be (`PLANTING`), a row in four bare, each plant on the soil
+    where it lies. Eighteen kinds of plant (`GARDEN_KINDS`), each built from leaves, stalks,
+    balls and blossoms as the undergrowth's things are, eight looks of each from a seed (a
+    cabbage's leaves cupped round its heart, a leek's blades fanned from its white shaft,
+    carrot and turnip tops, beans up a wigwam of canes with flowers and pods, a squash's great
+    leaves and gourds, sunflowers and hollyhocks taller than a man, peppers red and green,
+    taro's elephant ears, lilies' trumpets, lavender's spikes, marigold and chive heads), green
+    where they should be, every leaf's tip stirring in the breeze. Grown with the chunk's
+    undergrowth (`Overworld.yardsIn`; sowing), so only near the player, sinking away from 40 m
+    to 56 m as the rest of it does; every bed planted at every quality level (only the wild
+    undergrowth thins).
+  - **Cost** (the kit's own count; each view drawn before and after from the same camera, the
+    undergrowth grown round where it looks both times):
+    - no draws of their own, merged with the buildings and the undergrowth; a chunk's cloth mesh
+      where it had none (its washing): one more draw;
+    - a yard's fences and gateway close by: humans 231 to 399 triangles, elves 64 to 106, dark
+      elves 472 to 624, cat folk 96 to 154, lizard folk 294 to 399, orcs 640 to 880 (their
+      stakes); from further than `DETAIL_NEAR` (40 m), stakes, iron bars, gates and rope left
+      undrawn (`Solid.near`): 36 to 400;
+    - a plant 50 to 400 triangles (chives 50, an onion 80, a cabbage 200, beans on their canes
+      390); a bed's 10 to 220 plants 1,800 to 27,000; within 56 m of anywhere in a town, at most
+      80,000 (a human city's, seeds 1 to 3), 15,000 to 57,000 in the other peoples';
+    - close views in the building lab (with the shadows; the undergrowth grown both times): a
+      human city's yards +27,700 triangles on 259,000 and +21,600 on 321,000 (one more draw), and
+      from above +27,700 on 248,000; a dark elves' gateway +1,100 on 278,000; a cat folk city's
+      walled garden +8,200 on 255,000; an orc city's staked yards +64,100 on 304,000 (two more
+      draws), the most, its beds the thickest planted: every view under 370,000, inside the
+      500,000 budget;
+    - each piece of washing 32 triangles (a grid of 4 by 4), no shadow; no new picture (a tint
+      and two plain colours).
+  - **Pictures:** before/after sheet sent in the session (a human city's yards close by and from
+    above, a dark elves' gateway, a cat folk's walled garden, an orcs' staked yard); and each
+    plant's eight looks, close by.
+  - **Versions:** `NET_VERSION` 18.
+  - **Tests:** `test/setpieces.test.js` (a yard behind each house, as wide as it and facing the
+    same way; fenced where nothing stands, never twice where two meet; its bed and washing
+    line clear; never over water; its fences' squares blocked but seen over, along its fenced
+    sides and nowhere else, but for its gateway; a few left open); `test/overworld.test.js`
+    (a settlement's yards reaching over the world's water, a bridge or a road dropped and their
+    squares unblocked; walking round the start town's yards' fences, in at their gateways);
+    `test/buildings.test.js` (each people's fences of their own stuff, on the ground as it lies;
+    a gate open in each gateway in their way; beds in their edging with their crops planted in
+    rows on the soil; each plant green where it should be, tall where it should be, swaying,
+    no two looks alike; washing on lines only where there's room, off the ground, in their
+    colours; the same every time, nothing drawn round a yard left open); `test/chunks.test.js`
+    (a chunk's yards built on the ground as it lies, merged as all at once; their beds' plants
+    sown with the undergrowth, where `plantsOf` says); `test/wilds.test.js` (the plants within
+    the undergrowth's budgets); `e2e/building-lab.spec.js` (a village's yards).
+- **2026-10-02, plan:** the user asked for "a look around at all the environment generation to
+  ensure the ground and elevated terrain generation looks natural and doesn't contain any obvious
+  polygons or texturing that wouldn't look good in the intended environment". Added to M7 as M7d
+  (§9 *The land looking natural*, and §12's M7 row), after M7c and before the cliffs and rocks.
+- **2026-10-02, swiping up follows the camera** (the user: "command a player to continuously run
+  in the direction the camera is facing until they hit an obstacle. The player character should
+  turn to the direction the camera is facing and initiate a forward run until exhausted, and
+  then walk, until an obstacle is reached"):
+  - **Changed:** a swipe up from the player sends `ahead` with the way the camera looks over the
+    ground (`Game.forward`: the camera's direction, flattened; looking straight down, the way
+    they face), not the way they face; the battle's `ahead` order turns them that way as well as
+    setting them off (`actor.facing`), even when the way's blocked at once. Running while their
+    stamina lasts and then walking, as before.
+  - **Versions:** none (the order's the same shape; the host turns the hero and the turn reaches
+    everyone with the rest of the hero's state).
+  - **Tests:** `test/combat.test.js` (sent ahead, turned that way first, blocked or not);
+    `e2e/pellagos.spec.js` (the camera turned to look the clearest way with the player facing
+    off to the side: a swipe turns them the camera's way and sends them running along it).

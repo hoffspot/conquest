@@ -30,6 +30,7 @@ import { neutral } from "./art/kits/neutral.js";
 import { builderFor } from "./art/peoples/index.js";
 import { prop } from "./art/kits/props.js";
 import { tree } from "./art/kits/town.js";
+import { lieOf, yard } from "./art/kits/yards.js";
 import { plantTrees } from "./art/kits/trees.js";
 import { chimneysOf, smokeMesh } from "./smoke.js";
 import { clothMesh, clothOf } from "./cloth.js";
@@ -38,7 +39,7 @@ import { clothMesh, clothOf } from "./cloth.js";
 export const PIXEL = PLOT / 20;
 
 // What builds each kind of piece (castle pieces too, for towns with walls one day)
-export const BUILDERS = { house, landmark, prop, tree, wall, tower, gatehouse, keep, neutral };
+export const BUILDERS = { house, landmark, prop, tree, wall, tower, gatehouse, keep, neutral, yard };
 
 const catalog = new Map(pieceCatalog().map((piece) => [piece.key, piece]));
 
@@ -97,7 +98,9 @@ export function heightMap([x0, z0, width, height]) {
 export async function buildTown(world, { onProgress = () => {}, groundAt = () => 0 } = {}) {
     const art = new THREE.Group();
     const [ox, oz] = Array.isArray(world.origin) ? world.origin : [world.origin, world.origin];
-    const total = world.town.pieces.length + world.trees.length;
+    // (The yards behind its houses too, standing on the ground as it lies under each: kits/yards.js)
+    const yards = (world.town.yards ?? []).map((one) => ({ ...one, lie: lieOf(one, groundAt, [ox, oz]) }));
+    const total = world.town.pieces.length + yards.length + world.trees.length;
     const area = world.stamp ? [...world.stamp.at, world.stamp.width, world.stamp.height] : [0, 0, world.width, world.height];
     const heights = heightMap(area);
     const buildings = heightMap(area);
@@ -120,7 +123,7 @@ export async function buildTown(world, { onProgress = () => {}, groundAt = () =>
     const random = createRandom(world.seed * 13 + 5);
     const plant = (x, z, variant, size) => planted.push({ x, z, variant, size: size * random.range(0.9, 1.1), turn: random.next() * Math.PI * 2 });
 
-    for (const piece of world.town.pieces) {
+    for (const piece of [...world.town.pieces, ...yards]) {
         // (A layout's piece says what it is; the art catalogue's pieces are its sizes)
         const spec = piece.kind ? piece : catalog.get(piece.key);
 
@@ -205,8 +208,8 @@ export async function buildTown(world, { onProgress = () => {}, groundAt = () =>
     };
 
     // (A building's height over the squares under it and its eaves, as it's turned: not its
-    // turned box's, which would be wider)
-    for (const object of art.children) {
+    // turned box's, which would be wider; a yard's fences and washing in no one's way)
+    for (const object of art.children.filter(({ userData }) => userData.piece.kind !== "yard")) {
         const top = new THREE.Box3().setFromObject(object).max.y;
         const corners = footprint(object.userData.piece, EAVES).map(([x, y]) => [ox + x, oz + y]);
         const xs = corners.map(([x]) => x);

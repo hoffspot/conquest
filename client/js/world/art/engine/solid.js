@@ -352,6 +352,16 @@ export class Solid {
         this.#nearOnly = was;
     }
 
+    /**
+     * Lay the faces `build` lays as only worth drawing near (small things: a gate, a
+     * fence's stakes), kept apart and left undrawn from further off (town3d.js joined).
+     */
+    near(build) {
+        this.#near(true, build);
+
+        return this;
+    }
+
     /** How many triangles there are so far. */
     get triangles() {
         let count = 0;

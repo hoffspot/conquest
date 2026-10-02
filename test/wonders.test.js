@@ -230,6 +230,26 @@ describe("the tomes' spells in the battle (battle.js)", () => {
         assert.deepEqual(Battle.restore(open(40, 30), again.battle.snapshot()).hazards, again.battle.hazards);
     });
 
+    it("keeps the side of whoever left fire on the ground once they've gone: their enemies burnt, never their allies", () => {
+        // (Humans and elves allied; the orcs everyone's enemy)
+        const battle = new Battle(open(40, 30), { seed: 5, relations: (a, b) => a.team === "orcs" || b.team === "orcs" });
+
+        battle.add({ id: "caster", kind: "player", weapon: "sword", team: "human", square: [5, 15], hp: 500 });
+        battle.add({ id: "elf", kind: "soldier", weapon: "sword", team: "elf", square: [12, 15], hp: 5000 });
+        battle.add({ id: "orc", kind: "orc", weapon: "cleaver", team: "orcs", square: [11, 15], hp: 5000 });
+
+        cast(battle, "caster", "flamefill", "orc");
+
+        // The caster gone (a player who's left the game), the fire burning on
+        battle.remove("caster");
+
+        const after = run(battle, SPELLS.flamefill.hazard.ms);
+        const burnt = (id) => after.filter(({ type, id: struck, ground }) => type === "hit" && struck === id && ground).length;
+
+        assert.ok(burnt("orc") >= 5, "the enemy standing in it");
+        assert.equal(burnt("elf"), 0, "an ally beside them");
+    });
+
     it("frightens an enemy off, running blindly away ten seconds: half as long a second time, not at all a third; the unique never", () => {
         const { battle } = field();
         const wolf = beast(battle, "wolf", [12, 15], { tier: 3 });

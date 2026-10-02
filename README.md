@@ -98,8 +98,9 @@ you attack whatever is within your weapon's reach on your own: melee weapons rea
 squares round yours; ranged ones anything in range that you can see. Every weapon attacks in five
 ways (a sword slashes, cuts backhand, chops overhead, thrusts and cuts upwards), never the same
 way twice in a row, and fireballs, bolts and spells each have five looks too. **Swipe up from yourself**
-(a quick flick upwards, starting on your character) to go straight ahead the way you're facing,
-as far as you can until something's in the way: sprinting while you have stamina, then walking.
+(a quick flick upwards, starting on your character) to turn the way the camera looks and go
+straight ahead that way, as far as you can until something's in the way: sprinting while you
+have stamina, then walking.
 
 **Weapons are put away** out of a fight, each in its place on the body:
 - the sword in a scabbard at the left hip;
