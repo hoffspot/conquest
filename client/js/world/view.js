@@ -19,6 +19,7 @@ import { FAR, FAR_LEVELS, farReach } from "./far/levels.js";
 import { farHaze, GRADE, MIST } from "./fog.js";
 import { GpuTimer } from "./gputimer.js";
 import { FAR_FIELDS } from "./ground.js";
+import { fillOf, pickLamps, ROOM_LIGHT, ROOM_LIGHTS, strengthOf } from "./roomlight.js";
 import { fadeShadowEdges, snapToTexels } from "./shadows.js";
 import { Sky, SKY_COLOURS } from "./sky.js";
 import { SUN_FROM } from "./sun.js";
@@ -64,10 +65,9 @@ export const PITCH = 35;
 export const DISTANCE = Object.freeze({ least: 5, start: 10.5, most: 32 });
 const LOOK_UP = 0.8;
 
-// Indoors, the camera's lowest: the top of the picture this far below the horizon (degrees), so
-// there's no more of the room to draw than there is; outdoors it can look up into the sky, this
-// far above the horizon (degrees)
-const BELOW_HORIZON = 6;
+// How far above the horizon the camera can look (degrees): outdoors, up into the sky; indoors,
+// up at the ceiling
+const INDOORS_UP = 40;
 
 // The layer the player's drawn on for the pack's paperdoll, and what's behind them there
 const PREVIEW = 3;
@@ -81,6 +81,11 @@ const CAMERA_FLOOR = 0.45;
 // How far out the screen's pointed at the ground is looked for (metres)
 const PICK_REACH = 250;
 
+// Indoors, the camera's anywhere over the ceiling (at least `over` metres over it), but under it,
+// inside the room, `margin` metres in from its walls at least, and no nearer than `least`
+// metres to the player (as close as that, rather than through a wall)
+const ROOM = Object.freeze({ over: 0.25, margin: 0.35, least: 1 });
+
 // Clear of a building in the way (the town's `buildings` heights): coming in closer than it,
 // staying `margin` metres clear of it (along the camera's line), or rising over it (up to
 // `highest` degrees), whichever leaves the camera furthest from the player, a degree higher
@@ -93,18 +98,17 @@ const SKY = SKY_COLOURS.horizon;
 
 // Outdoors: the sun, and the sky and the ground lighting everything from all round, at their
 // own brightness (environment.js), the fog from `fog` to `fog` metres (with the far land, the
-// haze from `haze` metres to its edge: fog.js); indoors, no sky, a dim warm room lit from above,
-// and lamps (the hearth's fire, candles) that flicker; outdoors the lamps are out. (The lamps are
-// always there, so that going in and out never makes Three.js rebuild every lit material's
-// shaders.)
+// haze from `haze` metres to its edge: fog.js); indoors, no sky, the sun shining in at the
+// windows (on the room's sunny side, interiors3d.js daylightOf: a room without windows has
+// none), the room lighting everything from all round only dimly, and its flames lighting it,
+// flickering (roomlight.js): the two that matter most where the player is the view's two lamps,
+// out of doors put out. (The lamps are always there, so that going in and out never makes
+// Three.js rebuild every lit material's shaders.)
 const OUTDOORS = Object.freeze({ background: SKY, fog: [55, 130], haze: 20, sun: [0xfff0d8, 3.5], sunFrom: SUN_FROM, environment: 1 });
 // (Outdoors as it is with no land's look: look.js Look's form, sRGB colours 0 to 1)
 const srgbOf = (hex) => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255].map((byte) => byte / 255);
 const PLAIN = Object.freeze({ zenith: srgbOf(SKY_COLOURS.zenith), horizon: srgbOf(SKY), sun: srgbOf(OUTDOORS.sun[0]), strength: OUTDOORS.sun[1], mist: [0, 0, 20], grade: [0, 0, 0, 0] });
-const INDOORS = Object.freeze({ background: 0x140e0a, fog: [16, 38], sun: [0xffe2b8, 0.9], sunFrom: [0.25, 1, 0.35], environment: 1 });
-
-// A lamp that flares up (a forge's fire, the bellows pumped) dies down over this long (s)
-const FLARE = 1;
+const INDOORS = Object.freeze({ background: 0x140e0a, fog: [16, 38], sun: [0xffecd0, 4], sunFrom: [0.25, 1, 0.35], environment: 0.55 });
 const LAMPS = 2;
 
 // The sun: where it shines from (towards the north-east, so shadows fall away from the camera),
@@ -212,14 +216,17 @@ export class View {
         Object.assign(this.sun.shadow.camera, { left: -SHADOW_REACH, right: SHADOW_REACH, top: SHADOW_REACH, bottom: -SHADOW_REACH, near: 1, far: 120 });
         this.scene.add(this.sun, this.sun.target);
 
-        // The lamps indoors, out until the player goes in: { light, intensity, flicker, seed }
-        this.lamps = Array.from({ length: LAMPS }, (_, k) => {
+        // The lamps, out until the player goes in: { light }; and the room they're in, null out of
+        // doors ({ x0, z0, x1, z1, ceiling: its walls and ceiling, world metres; lights, colours,
+        // flares: its flames, roomlight.js; lamps: which of them the lamps are })
+        this.lamps = Array.from({ length: LAMPS }, () => {
             const light = new THREE.PointLight(0xffffff, 0, 12, 2);
 
             this.scene.add(light);
 
-            return { light, intensity: 0, flicker: 0, seed: k * 17.3 };
+            return { light };
         });
+        this.room = null;
         this.sunDirection = SUN_DIRECTION.clone();
 
         // The sky outdoors, its sun where the shadows come from (sky.js), drawn behind what's far
@@ -460,10 +467,10 @@ export class View {
 
     /**
      * The lowest the camera may look from (degrees down from the horizon; up, less than 0):
-     * outdoors, well up into the sky; indoors, the top of the picture just below the horizon.
+     * outdoors, well up into the sky; indoors, up at the ceiling.
      */
     lowestPitch() {
-        return this.indoors ? this.camera.fov / 2 + BELOW_HORIZON : -ABOVE_HORIZON;
+        return this.indoors ? -INDOORS_UP : -ABOVE_HORIZON;
     }
 
     /**
@@ -514,14 +521,40 @@ export class View {
         return Infinity;
     }
 
+    /**
+     * Indoors, how far the camera can be from where it looks, looking `pitch` degrees down
+     * (metres, out to `distance`): as far as it likes if it's over the ceiling there; else no
+     * further than the room's walls (ROOM).
+     */
+    roomReach(pitch = this.pitch, distance = this.distance) {
+        const { x0, z0, x1, z1, ceiling } = this.room;
+        const tilt = (Math.max(0, pitch) * Math.PI) / 180;
+
+        if (pitch > 0 && this.focus.y + LOOK_UP + Math.sin(tilt) * distance >= ceiling + ROOM.over) {
+            return distance;
+        }
+
+        // (Out along the way the camera's looking from, to the first wall, as far as that goes
+        // along the camera's line)
+        const [dx, dz] = [Math.sin(this.yaw), Math.cos(this.yaw)];
+        const [px, pz] = [this.focus.x, this.focus.z];
+        const toward = (from, way, least, most) => (way > 1e-6 ? (most - ROOM.margin - from) / way : way < -1e-6 ? (least + ROOM.margin - from) / way : Infinity);
+        const out = Math.max(0, Math.min(toward(px, dx, x0, x1), toward(pz, dz, z0, z1)));
+
+        return Math.max(ROOM.least, Math.min(distance, out / Math.max(0.05, Math.cos(tilt))));
+    }
+
     // Come in closer than a building in the way, or rise over it, whichever leaves the camera
-    // further off; or go back out once it's not in the way: quickly in, slowly out
+    // further off (indoors, in closer than the walls, under the ceiling); or go back out once
+    // it's not in the way: quickly in, slowly out
     #clear(dt) {
         let pulled = 0;
         let lifted = 0;
 
-        // (Looking up, the camera's no lower than level with the player: see #place)
-        if (this.buildings && this.clearance(Math.max(0, this.pitch)) < this.distance) {
+        if (this.room) {
+            pulled = this.distance - this.roomReach();
+        } else if (this.buildings && this.clearance(Math.max(0, this.pitch)) < this.distance) {
+            // (Looking up, the camera's no lower than level with the player: see #place)
             let best = -Infinity;
 
             for (let lift = 0; Math.max(0, this.pitch) + lift <= PULL.highest; lift += 5) {
@@ -560,7 +593,7 @@ export class View {
 
     #place() {
         const { focus, camera, yaw } = this;
-        const distance = Math.max(Math.min(this.distance, PULL.least), this.distance - this.pulled);
+        const distance = Math.max(Math.min(this.distance, this.room ? ROOM.least : PULL.least), this.distance - this.pulled);
         const looking = (Math.min(PULL.highest, this.pitch + this.lifted) * Math.PI) / 180;
         // (Looking up, the camera comes down behind the player to just over the ground where they
         // stand, then tilts up from there)
@@ -603,8 +636,9 @@ export class View {
     }
 
     /**
-     * Light the scene for being indoors (`interior`: interiors3d.js's, with its lamps: { x, y, z,
-     * colour, intensity, distance, flicker }) or out (null).
+     * Light the scene for being indoors (`interior`: interiors3d.js's: its map's place and size,
+     * its ceiling's height, its flames as lights, the way towards the sun shining in at its
+     * windows) or out (null).
      */
     setIndoors(interior) {
         const look = interior ? INDOORS : OUTDOORS;
@@ -620,8 +654,8 @@ export class View {
         }
 
         this.sun.color.set(look.sun[0]);
-        this.sun.intensity = look.sun[1];
-        this.sunDirection.set(...look.sunFrom).normalize();
+        this.sun.intensity = interior && !interior.daylight ? 0 : look.sun[1];
+        this.sunDirection.set(...(interior?.daylight ?? look.sunFrom)).normalize();
         this.far.sun.position.copy(this.sunDirection);
         this.scene.environment = this.environments[interior ? "indoors" : "outdoors"].texture;
         this.scene.environmentIntensity = look.environment;
@@ -637,39 +671,77 @@ export class View {
             this.setLook(this.landLook);
         }
 
-        this.lamps.forEach((lamp, k) => {
-            const spec = interior?.lights[k];
+        // The room: its walls and ceiling for the camera, its flames lighting it (all out till
+        // they flicker)
+        if (interior) {
+            const { origin, width, height } = interior.map;
 
-            lamp.intensity = spec?.intensity ?? 0;
-            lamp.flicker = spec?.flicker ?? 0;
-            lamp.light.intensity = lamp.intensity;
+            this.room = { x0: origin[0], z0: origin[1], x1: origin[0] + width, z1: origin[1] + height, ceiling: interior.ceiling ?? 3, lights: interior.lights.slice(0, ROOM_LIGHTS), colours: interior.lights.slice(0, ROOM_LIGHTS).map(({ colour }) => new THREE.Color(colour)), strengths: [], flares: [], lamps: [] };
+        } else {
+            this.room = null;
+        }
 
-            if (spec) {
-                lamp.light.color.set(spec.colour);
-                lamp.light.distance = spec.distance;
-                lamp.light.position.set(spec.x, spec.y, spec.z);
-            }
-        });
+        ROOM_LIGHT.fill.value.setRGB(0, 0, 0);
 
+        for (const { light } of this.lamps) {
+            light.intensity = 0;
+        }
+
+        ROOM_LIGHT.count.value = 0;
+
+        this.pulled = 0;
+        this.lifted = 0;
         this.#place();
     }
 
-    /** Make the lamps flicker, as flames do (`time` in seconds). */
-    flicker(time) {
-        for (const lamp of this.lamps) {
-            if (lamp.intensity > 0) {
-                const wave = Math.sin(time * 9.1 + lamp.seed) * 0.5 + Math.sin(time * 23.7 + lamp.seed * 2) * 0.3 + Math.sin(time * 4.3) * 0.2;
-                const flaring = lamp.flare ? lamp.flare.amount * Math.max(0, 1 - (time - lamp.flare.at) / FLARE) : 0;
+    /**
+     * Make the room's flames flicker, as flames do (`time` in seconds): each lighting the room,
+     * the two lighting `near` most (the player: world metres) the view's lamps, lighting
+     * everything else there too.
+     */
+    flicker(time, near = this.focus) {
+        const room = this.room;
 
-                lamp.light.intensity = lamp.intensity * (1 + lamp.flicker * wave) * (1 + flaring);
-            }
+        if (!room) {
+            return;
         }
+
+        room.lights.forEach((light, k) => {
+            room.strengths[k] = strengthOf(light, time, room.flares[k]);
+        });
+        room.lamps = pickLamps(room.lights, room.strengths, near, LAMPS, room.lamps);
+        fillOf(room.colours, room.strengths, (room.x1 - room.x0) * (room.z1 - room.z0), ROOM_LIGHT.fill.value);
+
+        this.lamps.forEach(({ light }, k) => {
+            const index = room.lamps[k];
+            const flame = room.lights[index];
+
+            light.intensity = flame ? room.strengths[index] : 0;
+
+            if (flame) {
+                light.color.copy(room.colours[index]);
+                light.distance = flame.distance;
+                light.position.set(flame.x, flame.y, flame.z);
+            }
+        });
+
+        // The rest in the list, one after another (the lamps left out)
+        let count = 0;
+
+        room.lights.forEach((flame, k) => {
+            if (!room.lamps.includes(k)) {
+                ROOM_LIGHT.at.value[count].set(flame.x, flame.y, flame.z, flame.distance);
+                ROOM_LIGHT.colour.value[count].copy(room.colours[k]).multiplyScalar(room.strengths[k]);
+                count += 1;
+            }
+        });
+        ROOM_LIGHT.count.value = count;
     }
 
-    /** Make an indoor lamp (the `k`th: a forge's fire) flare up, `amount` brighter, dying down over a second from `time`. */
+    /** Make one of the room's flames (the `k`th: a forge's fire) flare up, `amount` brighter, dying down over a second from `time`. */
     flare(k, amount, time) {
-        if (this.lamps[k]) {
-            this.lamps[k].flare = { amount, at: time };
+        if (this.room?.lights[k]) {
+            this.room.flares[k] = { amount, at: time };
         }
     }
 

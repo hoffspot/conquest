@@ -659,9 +659,18 @@ export class Solid {
         return this;
     }
 
-    /** A box from (x0, y0, z0) to (x1, y1, z1), without a bottom (it stands on something). */
-    box(x0, y0, z0, x1, y1, z1, material, { top = material } = {}) {
+    /**
+     * A box from (x0, y0, z0) to (x1, y1, z1), without a bottom (it stands on something), unless
+     * it's given one (`under`: its material) to be seen from below.
+     */
+    box(x0, y0, z0, x1, y1, z1, material, { top = material, under = null } = {}) {
         this.face([[x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0]], top);
+
+        // (Its underside too, if it's to be seen from below: a ceiling's, a beam's overhead)
+        if (under) {
+            this.face([[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]], under);
+        }
+
         this.face([[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]], material);
         this.face([[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]], material);
         this.face([[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]], material);

@@ -1251,6 +1251,36 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
 
         return { warm, sky, made: view.renderer.info.programs.length - programs };
     })).toEqual({ warm: true, sky: true, made: 0 });
+
+    // Lit by the sun through the windows and by the room's flames, the two nearest the player the
+    // view's lamps; and dragged to look up, the camera stays inside, under the ceiling, looking up
+    // at it (its beams drawn over the player)
+    expect(await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const view = session.view;
+        const taproom = game.interiors.get("taproom");
+        const { origin, width, height } = taproom.map;
+
+        game.cameraFollow.grab();
+        game.cameraFollow.turn(0, -90, view.lowestPitch());
+        game.advance(1.5);
+
+        const at = view.camera.position;
+        const looking = view.camera.getWorldDirection(at.clone());
+        const ceiling = [];
+
+        taproom.object.traverse((node) => node.isMesh && node.material.name === "atlas-inside-ceiling" && ceiling.push(node));
+        game.cameraFollow.release();
+
+        return {
+            sun: view.sun.intensity > 0 && view.sunDirection.angleTo(new view.sunDirection.constructor(...taproom.daylight)) < 1e-6,
+            flames: taproom.lights.length >= 8 && view.room.lamps.length === 2,
+            lowest: view.lowestPitch(),
+            under: at.y < 3 && at.x > origin[0] && at.x < origin[0] + width && at.z > origin[1] && at.z < origin[1] + height,
+            up: looking.y > 0.3,
+            ceiling: ceiling.length,
+        };
+    })).toEqual({ sun: true, flames: true, lowest: -40, under: true, up: true, ceiling: 1 });
     expect(await tapsRound()).toEqual(["move", "move", "move", "move"]);
     expect(await page.evaluate(() => {
         const { game } = window.pellagos;
@@ -2371,8 +2401,10 @@ test("the pack's paperdoll: the player drawn among their gear; tapped, a piece s
 });
 
 test("the pack shows what's grown and carried; a skill ranks up with use; trading with the barkeep, the gold changes hands; all kept for the next time", async ({ page }) => {
-    // (A long walk through: more than the usual time, with others running beside it)
-    test.setTimeout(180000);
+    // (A long walk through, and then a dozen clicks in the taproom, each waiting on a few frames
+    // drawn in software, over half a second each with the room lit by its flames: more than the
+    // usual time, with others running beside it)
+    test.setTimeout(240000);
 
     // A saved game whose hero is a blow from their next rank with the blade, with 30 gold and a draught
     await page.addInitScript((save) => {

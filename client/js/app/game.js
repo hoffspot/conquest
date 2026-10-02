@@ -76,7 +76,7 @@ import { allAtOnce, allWaiting, Steps } from "../core/steps.js";
 import { buildGround } from "../world/ground.js";
 import { buildTown } from "../world/town3d.js";
 import { prepareAtlas } from "../world/art/engine/atlas.js";
-import { buildInterior, buildingInterior, cutFor } from "../world/interiors3d.js";
+import { buildInterior, buildingInterior, cutFor, INTERIOR_GLOW } from "../world/interiors3d.js";
 import { TREE_WIND } from "../world/art/kits/trees.js";
 import { Minimap, treesOf } from "./minimap.js";
 import { CameraFollow } from "./camera.js";
@@ -392,6 +392,7 @@ const _lean = new THREE.Vector3();
 const _looking = new THREE.Vector3();
 const _head = new THREE.Vector3();
 const _hearth = new THREE.Vector3();
+const _lit = new THREE.Vector3();
 
 export class Game {
     #begin = null;
@@ -3767,17 +3768,22 @@ export class Game {
         this.sound?.setTrees([...this.townTrees, ...(this.chunks?.trees() ?? [])]);
     }
 
-    // Indoors: the walls and anything tall in front of the player cut away, the fires and
-    // the spit turning, the lamps flickering, embers rising from the hearth; and, in or out, the
-    // glow round the doors and stairs the player's making for
+    // Indoors: the walls and anything tall in front of the player cut away (and the ceiling
+    // not drawn while the camera's over it), the fires and the spit turning, the flames flickering (the two lighting the player most the view's lamps,
+    // lighting them), embers rising from the hearth; and, in or out, the glow round the doors and
+    // stairs the player's making for
     #inside(dt) {
         const interior = this.interiors.get(this.mapId);
         const player = this.battle.actor(this.me);
 
         if (interior) {
-            cutFor(interior.map, this.avatars.get(this.me).object.position, this.view.camera.position);
+            const at = this.avatars.get(this.me).object.position;
+
+            cutFor(interior.map, at, this.view.camera.position);
+            interior.seenFrom(this.view.camera.position);
             interior.update(dt, this.clock);
-            this.view.flicker(this.clock);
+            INTERIOR_GLOW.scale.value = this.view.pixelsPerMetre();
+            this.view.flicker(this.clock, _lit.set(at.x, at.y + 1.2, at.z));
 
             if (interior.hearth && Math.random() < dt * EMBERS) {
                 const { x, y, z } = interior.hearth;

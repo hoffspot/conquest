@@ -247,7 +247,10 @@ function insidesOf(seed, people) {
 
             group.add(inside.object);
 
-            for (const light of inside.lights) {
+            // (Lit by its brightest few flames, as lamps: the game lights one room at a time from
+            // all of them, roomlight.js, and here there are a dozen rooms; its ceiling's open,
+            // seen from over it)
+            for (const light of [...inside.lights].sort((a, b) => b.intensity - a.intensity).slice(0, 3)) {
                 const lamp = new THREE.PointLight(light.colour, light.intensity, light.distance, 1.4);
 
                 lamp.position.set(light.x, light.y, light.z);

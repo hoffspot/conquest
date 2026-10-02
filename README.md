@@ -169,7 +169,10 @@ inside of the door to go out again. Each floor is a map of its own: going throug
 dips to black and comes up on the other side. Indoors, the walls just in front of you, between
 you and the camera, are taken down to their stone footing (and anything else higher than your
 head there), so you can always see yourself whichever way the camera looks, while the rest of
-the walls stand. If the orc is chasing you when you go in, it follows you through the door and up the
+the walls stand. Every room has a beamed ceiling, wheels of candles hanging from it on chains:
+drag the camera up to look up at it. The rooms are lit by what would light them: the sun through
+their leaded windows, in beams through the dusty air, and their hearths, candles, lanterns and
+sconces, each flickering. If the orc is chasing you when you go in, it follows you through the door and up the
 stairs, and the fight carries on; and if you're set to fight something that goes through a door,
 you go after it.
 

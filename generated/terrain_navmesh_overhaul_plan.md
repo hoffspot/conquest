@@ -2361,3 +2361,39 @@ converted data is to be measured in M8 against today's hm08 data.
     its valance along its front, in its look's rows; one over every stall, none painted on
     boards; over the better-off shops' counters and not the poorer's; the cloth mesh casting its
     shadow through its own depth material).
+- **2026-10-02, the insides looked up at and lit by what lights them** (the user: "In the tavern
+  one the first and second floor, you cannot look up. Relax that restriction and put some
+  chandeliers up there or rafters/boards like you would see in normal building construction.
+  Also on the building interiors, the light source is ambient. It should be coming from the
+  windows, fire, candles, lamps, and whatever other light sources would be used inside of
+  medieval buildings"):
+  - **Looking up** (`world/view.js`): indoors the camera tilts to 40 degrees above the horizon,
+    as outdoors; under the ceiling it's kept inside the room (0.35 m in from the walls, a metre
+    from the player at least), over it free (`roomReach`).
+  - **Ceilings** (`world/interiors3d.js` `CEILINGS`, `ceiling`): over every floor of every
+    inside, 3 m up, each people's own way (the humans' plaster between joists on great beams,
+    the orcs' planks on logs, and so on), open over the taproom's stairs; the wheels of candles
+    hang from them on chains. A ceiling lower than the camera isn't drawn (cut level with the
+    camera); while the camera's over all of it, it isn't drawn into the view at all
+    (`seenFrom`), only into the sun's shadows. Boxes can have undersides (`Solid.box`'s `under`).
+  - **Daylight:** windows are openings in the walls with leaded glass; the sun comes in at them
+    from the side with the most (`daylightOf`), the walls and ceiling shadowing the rest, with a
+    beam of dusty light through each (`shaftsOf`).
+  - **Flames** (`world/roomlight.js`): every candle, wheel of candles, sconce, lantern and fire
+    lights the room, flickering; the two lighting the player most are the view's two lamps, the
+    rest (up to 16 in all) light only the insides' own materials, in their shaders, as many as
+    the room has (`ROOM_LIGHT.count`); their light comes back off the walls (`fillOf`); each has
+    a glow. The even light from all round is turned down.
+  - **Cost:** the taproom going in 67 to 72 draws and 268,000 to 277,000 triangles; upstairs 38 to
+    43 draws and 115,000 to 142,000 triangles. A frame in the town hall's chamber drawn in
+    software (the browser tests' drawing): 0.56 s before, 1.15 s with the ceiling worked out and
+    thrown away and every pixel looping over all 16 lights, 0.61 s now.
+  - **Pictures:** before/after sheet and every people's ceilings looked up at, sent in the
+    session.
+  - **Versions:** none (the drawing's alone).
+  - **Tests:** `test/rooms.test.js` (new: ceilings, undersides, stairwell, chandeliers, the
+    ceiling cut and not drawn from over it, the sightline cut, daylight and beams, the lights,
+    glows, flicker, lamps, the list for the shaders, the light off the walls, the camera looking
+    up); `test/buildings.test.js` (an inside's three atlas meshes); `e2e/pellagos.spec.js` (the
+    tavern: the sun in at the windows, the lamps the room's flames, the camera dragged up under
+    the ceiling).
