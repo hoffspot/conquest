@@ -19,14 +19,17 @@ import { brokenCart, fallenTimbers, oldBarrel, oldCrate } from "./leftovers.js";
 const M = 5;
 const m = (metres) => metres * M;
 
-// What each people's fallen stone looks like, lying in heaps (loose stones, not dressed)
-const RUBBLE = Object.freeze({ darkElf: "basalt", orc: "basalt" });
+// What each people's fallen stone looks like, lying in heaps (loose stones, not dressed: the
+// humans' and the wild's the old stone's own rubble, dark and green as its walls)
+const RUBBLE = Object.freeze({ elf: "granite", cat: "granite", lizard: "granite", darkElf: "basalt", orc: "basalt" });
 
 /** A people's fallen stone, as it lies in heaps. */
-export const rubbleOf = (people) => material(RUBBLE[people] ?? "granite");
+export const rubbleOf = (people) => material(RUBBLE[people] ?? "rubble-old");
 
-// What each people's old stone is (the humans', and the wild's, plain weathered stone)
-const STONE = Object.freeze({ human: "stone", elf: "stone-moon", darkElf: "stone-black", cat: "mud-pale", lizard: "stone-lime", orc: "basalt" });
+// What each people's old stone is (the humans', and the wild's, plain stone gone dark and green:
+// painters.js MATERIALS' `old`), and what the breaks in it show (the rubble core it was filled with)
+const STONE = Object.freeze({ human: "stone-old", elf: "stone-moon-old", darkElf: "stone-black-old", cat: "mud-pale", lizard: "stone-lime-old", orc: "basalt" });
+const CORE = "rubble-old";
 // (Standing stones are whole stones, not built of courses: natural rock)
 const MEGALITH = Object.freeze({ human: "rock", elf: "rock-pale", darkElf: "obsidian", cat: "rock-red", lizard: "rock-pale", orc: "rock-dark" });
 
@@ -149,7 +152,7 @@ const BUILD = {
     // Three steps up to where the figure stands
     plinth(solid, piece, random, part) {
         const [cx, cz] = middleOf(piece);
-        const stone = material(STONE[piece.people] ?? "stone");
+        const stone = material(STONE[piece.people] ?? STONE.human);
         const step = part.h / 3;
 
         for (let k = 0; k < 3; k++) {
@@ -220,7 +223,7 @@ const BUILD = {
     // A curved wall behind the shrine, broken off unevenly
     backwall(solid, piece, random, part) {
         const [cx, cz] = middleOf(piece);
-        const stone = material(STONE[piece.people] ?? "stone");
+        const stone = material(STONE[piece.people] ?? STONE.human);
         const count = 9;
 
         for (let k = 0; k < count; k++) {
@@ -357,7 +360,7 @@ const BUILD = {
     // floor is where it stands.
     pit(solid, piece, random, part) {
         const [cx, cz] = middleOf(piece);
-        const stone = material(STONE[piece.people] ?? "stone");
+        const stone = material(STONE[piece.people] ?? STONE.human);
         const [r, ease, drop] = [m(part.radius), m(part.ease), m(part.drop)];
         // (Its lining as far out as the sunk land's three quarters up, so its earth rim shows round
         // it)
@@ -365,7 +368,7 @@ const BUILD = {
         const heights = brokenRim(random, 20, 2 * Math.PI * outer, drop * 0.86, drop * 1.02, { stone: m(0.6), course: m(0.25), breaches: 0.05 });
 
         // (Its lining, from its floor's edge out to the land round it, open where the steps are)
-        crumbledRing(solid, cx, cz, [r, outer], -m(0.4), heights, stone, { open: [Math.PI / 2 - 0.3, Math.PI / 2 + 0.3] });
+        crumbledRing(solid, cx, cz, [r, outer], -m(0.4), heights, stone, { open: [Math.PI / 2 - 0.3, Math.PI / 2 + 0.3], core: material(CORE) });
         solid.cylinder(cx, cz, -m(0.2), m(0.05), r, r, material("cobbles"), { segments: 12 });
 
         // (Steps down its front: each as high as the sunk land is there)
@@ -412,7 +415,7 @@ const BUILD = {
     // a breach here and there, its fallen stone against its foot either side
     wall(solid, piece, random, part) {
         const [cx, cz] = middleOf(piece);
-        const stone = material(STONE[piece.people] ?? "stone");
+        const stone = material(STONE[piece.people] ?? STONE.human);
         const [w, d] = [m(part.x1 - part.x0), m(part.y1 - part.y0)];
         const alongX = w >= d;
         const [length, thick] = alongX ? [w, d] : [d, w];
@@ -420,7 +423,7 @@ const BUILD = {
         const high = m(part.h);
         const top = brokenTop(random, length, m(0.8), high, { stone: m(0.9), course: m(0.32) });
 
-        crumbledWall(solid, at, top, -length / 2, [-thick / 2, thick / 2], -m(FOOTING), stone);
+        crumbledWall(solid, at, top, -length / 2, [-thick / 2, thick / 2], -m(FOOTING), stone, { core: material(CORE) });
 
         for (const side of [-1, 1]) {
             talus(solid, random, at, top, -length / 2, (side * thick) / 2, side, high * 1.4, 0, rubbleOf(piece.people));
@@ -432,7 +435,7 @@ const BUILD = {
     // A column's stump, its drums broken off; or fallen, its drums lying in a row
     column(solid, piece, random, part) {
         const [cx, cz] = middleOf(piece);
-        const stone = material(STONE[piece.people] ?? "stone");
+        const stone = material(STONE[piece.people] ?? STONE.human);
         const r = m(0.4);
 
         solid.box(cx - r * 1.3, -m(FOOTING), cz - r * 1.3, cx + r * 1.3, m(0.3), cz + r * 1.3, stone);
@@ -456,7 +459,7 @@ const BUILD = {
     // A heap of fallen stone: a low mound, blocks tumbled over it every which way
     rubble(solid, piece, random, part) {
         const [cx, cz] = middleOf(piece);
-        const stone = material(STONE[piece.people] ?? "stone");
+        const stone = material(STONE[piece.people] ?? STONE.human);
         const r = m(part.r);
 
         solid.cone(cx, cz, -m(0.3), r * 0.5 + m(0.3), r, rubbleOf(piece.people), 7);
@@ -496,11 +499,11 @@ const BUILD = {
     // its fallen stone in it and round its foot
     brokenTower(solid, piece, random, part) {
         const [cx, cz] = middleOf(piece);
-        const stone = material(STONE[piece.people] ?? "stone");
+        const stone = material(STONE[piece.people] ?? STONE.human);
         const r = m(part.r);
         const heights = brokenRim(random, 24, 2 * Math.PI * r, m(part.h * 0.4), m(part.h), { stone: m(0.7), course: m(0.32) });
 
-        crumbledRing(solid, cx, cz, [r * 0.8, r], -m(FOOTING), heights, stone);
+        crumbledRing(solid, cx, cz, [r * 0.8, r], -m(FOOTING), heights, stone, { core: material(CORE) });
         solid.cylinder(cx, cz, -m(FOOTING), m(0.1), r * 0.8, r * 0.8, material("cobbles"), { segments: 12 });
         solid.face([[cx - m(0.55), 0, cz + r + m(0.06)], [cx + m(0.55), 0, cz + r + m(0.06)], [cx + m(0.55), m(1.7), cz + r + m(0.06)], [cx, m(2.1), cz + r + m(0.06)], [cx - m(0.55), m(1.7), cz + r + m(0.06)]], material("shadow"));
 

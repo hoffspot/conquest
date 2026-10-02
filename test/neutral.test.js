@@ -36,6 +36,8 @@ const { Solid } = await import("../client/js/world/art/engine/solid.js");
 const { brokenRim, brokenTop, talus } = await import("../client/js/world/art/kits/decay.js");
 const { brokenCart, fallenTimbers, oldBarrel, oldBeam, oldCrate } = await import("../client/js/world/art/kits/leftovers.js");
 const { material } = await import("../client/js/world/art/engine/materials.js");
+const { MATERIALS, OLD_STONE, paintLayer, SIZE } = await import("../client/js/world/art/engine/painters.js");
+const { AGED, atlasMaterial, LAYERS, layerOf } = await import("../client/js/world/art/engine/atlas.js");
 
 function trianglesOf(object) {
     let count = 0;
@@ -322,6 +324,92 @@ describe("how old stone crumbles (art/kits/decay.js)", () => {
 
         assert.equal(heaped([[0, 29], [10, 28], [20, 30]]), 0, "none where it stands near as high as it stood");
         assert.ok(heaped([[0, 8], [10, 6], [20, 9]]) > 0, "a heap where it fell");
+    });
+});
+
+describe("old stone (art/engine/painters.js OLD_STONE, atlas.js AGED)", () => {
+    // (Every material a built thing is drawn with)
+    const namesOf = (object) => {
+        const names = new Set();
+
+        object.traverse((node) => node.isMesh && [node.material].flat().forEach(({ name }) => names.add(name)));
+
+        return names;
+    };
+
+    it("lays the ruins' stone in courses of many heights, dark mortar sunk deep between its blocks", () => {
+        const painted = paintLayer("stone-old", SIZE);
+        const mortar = (x, y) => painted[(y * SIZE + x) * 4 + 3] < 30;
+        const brightness = (i) => painted[i] + painted[i + 1] + painted[i + 2];
+        let [joints, faces, dark, light] = [0, 0, 0, 0];
+
+        for (let i = 0; i < painted.length; i += 4) {
+            if (painted[i + 3] < 30) {
+                [joints, dark] = [joints + 1, dark + brightness(i)];
+            } else {
+                [faces, light] = [faces + 1, light + brightness(i)];
+            }
+        }
+
+        assert.deepEqual(paintLayer("stone-old", SIZE), painted, "the same every time");
+        assert.ok(joints > painted.length / 4 / 20 && joints < painted.length / 4 / 3, `${joints} of ${painted.length / 4} in the joints`);
+        assert.ok(dark / joints < (light / faces) * 0.5, "the mortar dark");
+
+        // (The courses: where most of a row is a joint, each course's first; how far apart they are)
+        const rows = [...Array(SIZE).keys()].filter((y) => [...Array(SIZE).keys()].filter((x) => mortar(x, y)).length > SIZE * 0.5);
+        const heights = new Set(rows.slice(1).map((y, k) => y - rows[k]));
+        const px = SIZE / OLD_STONE.metres;
+
+        assert.ok(heights.size >= 3, `courses ${[...heights]} pixels high`);
+        assert.ok([...heights].every((h) => h >= OLD_STONE.courses[0] * px - 2 && h <= 2 * OLD_STONE.courses.at(-1) * px), `courses ${[...heights]} pixels high`);
+
+        // (Greener and darker than a kept castle's stone)
+        const [old, kept] = [MATERIALS["stone-old"].base, MATERIALS.stone.base].map((hex) => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255]);
+
+        assert.ok(old[1] >= old[0] && old[1] > old[2], "green-grey");
+        assert.ok(old[0] + old[1] + old[2] < (kept[0] + kept[1] + kept[2]) * 0.8, "darker");
+    });
+
+    it("weathers the old stone where it's drawn, last of the atlas's layers but the plain colours, and nothing else", () => {
+        const old = LAYERS.filter((name) => MATERIALS[name]?.old);
+
+        assert.ok(old.length >= 4);
+        assert.deepEqual(LAYERS.slice(AGED.from, AGED.to), old);
+        assert.equal(LAYERS[AGED.to], "plain");
+        assert.ok(LAYERS.slice(0, AGED.from).every((name) => !MATERIALS[name]?.old));
+        assert.ok(old.every((name) => layerOf(material(name)) >= AGED.from && layerOf(material(name)) < AGED.to), "drawn from their own layers");
+
+        // (Moss and streaks once the normal's known, for the old stone's layers alone)
+        const shader = { uniforms: {}, vertexShader: THREE.ShaderLib.lambert.vertexShader, fragmentShader: THREE.ShaderLib.lambert.fragmentShader };
+
+        atlasMaterial().onBeforeCompile(shader);
+        assert.match(shader.fragmentShader, /float agedNoise\(vec2 p\)/);
+        assert.match(shader.fragmentShader, new RegExp(`#include <normal_fragment_maps>[^]*if \\(vLayer > ${AGED.from - 0.5} && vLayer < ${AGED.to - 0.5}\\)[^]*agedMoss[^]*#include <emissivemap_fragment>`));
+    });
+
+    it("builds the ruins of old stone, their breaks showing its rubble core, and the peoples' castles of their own", () => {
+        const at = { seed: 11, x: 40, y: 64 };
+
+        for (const piece of [
+            { kind: "wall", axis: "h", length: 3 },
+            { kind: "tower", shape: "round", top: "roof" },
+            { kind: "gatehouse", facing: "s" },
+            { kind: "keep", w: 5, h: 4, door: true },
+        ]) {
+            const names = namesOf(RUINED[piece.kind]({ ...piece, ...at, ruined: true }));
+
+            assert.ok(names.has("stone-old") && names.has("rubble-old") && !names.has("stone"), `${piece.kind}: ${[...names]}`);
+        }
+
+        for (const [piece, build] of [
+            [{ kind: "wall", axis: "h", length: 3 }, wall],
+            [{ kind: "tower", shape: "round", top: "roof" }, tower],
+            [{ kind: "keep", w: 5, h: 4, door: true }, keep],
+        ]) {
+            const names = namesOf(build({ ...piece, ...at }));
+
+            assert.ok(names.has("stone") && ![...names].some((name) => MATERIALS[name]?.old), `${piece.kind} kept: ${[...names]}`);
+        }
     });
 });
 

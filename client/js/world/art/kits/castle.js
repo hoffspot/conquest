@@ -11,6 +11,7 @@
 import { createRandom } from "../../../core/random.js";
 import { Solid } from "../engine/solid.js";
 import { material } from "../engine/materials.js";
+import { MATERIALS } from "../engine/painters.js";
 import { brokenRim, brokenTop, crumbledRing, crumbledWall, perched, talus, tumbled } from "./decay.js";
 import { oldBeam } from "./leftovers.js";
 import { rubbleOf, weathered } from "./neutral.js";
@@ -238,15 +239,19 @@ export function keep({ w, h, door }, { stone = "stone", roof = "slate" } = {}) {
 const m = (metres) => metres * 5;
 
 // What's needed to build a ruined piece: a solid weathered as old stone is, the piece's own random
-// numbers (by its site and where it stands in it), its stone
+// numbers (by its site and where it stands in it), its stone gone old (painters.js MATERIALS'
+// `old`: a "-old" of it if there is one)
 function ruin(piece, stone) {
     const random = createRandom(((piece.seed ?? 1) ^ Math.round((piece.x ?? 0) * 977 + (piece.y ?? 0) * 131)) >>> 0);
     const solid = new Solid();
 
     solid.tone = weathered(random.int(1, 1e6), { moss: 0.6 });
 
-    return { solid, random, s: material(stone) };
+    return { solid, random, s: material(MATERIALS[`${stone}-old`]?.old ? `${stone}-old` : stone) };
 }
+
+// What a ruined piece's breaks and broken tops show: the rubble core its faces were filled with
+const core = () => material("rubble-old");
 
 // Where a point of a wall laid along x (u along x, v along z) or along z (u along z, v along x) is
 const along = (axis) => (axis === "x" ? (u, y, v) => [u, y, v] : (u, y, v) => [v, y, u]);
@@ -268,7 +273,7 @@ function crumbledRun(solid, random, axis, [u0, u1], [v0, v1], base, [low, high],
     const at = along(axis);
     const top = brokenTop(random, u1 - u0, low, high);
 
-    crumbledWall(solid, at, top, u0, [v0, v1], base, s, { ends });
+    crumbledWall(solid, at, top, u0, [v0, v1], base, s, { ends, core: core() });
 
     for (const side of sides) {
         talus(solid, random, at, top, u0, side > 0 ? v1 : v0, side, full, ground, rubbleOf("human"));
@@ -288,7 +293,7 @@ function ruinedWall(piece, { stone = "stone" } = {}) {
     const at = along(axis);
 
     // (Its plinth, then the wall on it)
-    crumbledWall(solid, at, [[0, 5], [ends[1] - ends[0], 5]], ends[0], [inner - 1, CELL - inner + 1], 0, s);
+    crumbledWall(solid, at, [[0, 5], [ends[1] - ends[0], 5]], ends[0], [inner - 1, CELL - inner + 1], 0, s, { core: core() });
     crumbledRun(solid, random, axis, ends, [inner, CELL - inner], 5, [WALL_HEIGHT * 0.3, WALL_HEIGHT * 0.95], s, { full: WALL_HEIGHT });
 
     return solid.toObject();
@@ -307,7 +312,7 @@ function ruinedTower(piece, { stone = "stone" } = {}) {
         solid.cylinder(c, c, 9, 10.5, radius - 4, radius - 4, material("cobbles"), { segments: 12 });
         const rim = brokenRim(random, 28, 2 * Math.PI * radius, ...range);
 
-        crumbledRing(solid, c, c, [radius - 4, radius], 10, rim, s);
+        crumbledRing(solid, c, c, [radius - 4, radius], 10, rim, s, { core: core() });
         slit(solid, c, 24, c + radius - 0.4);
 
         // (What's left of its floors: joists snapped off where they came out of the wall, one
@@ -465,7 +470,7 @@ function ruinedKeep(piece, { stone = "stone" } = {}) {
 
     // (Its corner turrets: broken stumps, open)
     for (const [x, z] of [[x0, z0], [x1, z0], [x0, z1], [x1, z1]]) {
-        crumbledRing(solid, x, z, [5, 8], 10, brokenRim(random, 12, 2 * Math.PI * 8, height * 0.3, height * 0.95), s);
+        crumbledRing(solid, x, z, [5, 8], 10, brokenRim(random, 12, 2 * Math.PI * 8, height * 0.3, height * 0.95), s, { core: core() });
     }
 
     // (Its floors and roof, fallen in)

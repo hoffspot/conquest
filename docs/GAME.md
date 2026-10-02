@@ -70,6 +70,21 @@ back to the same world:
     noise along it says most went. A tower's rim crumbles the same way round. What fell lies in
     lumpy heaps against the foot, about a third as high as what fell, blocks tumbled down them;
     a loose stone or two left perched on top.
+  - **Old stone** (terrain plan M7b-3a; `painters.js OLD_STONE`, the `coursed` painter, MATERIALS'
+    `old`; `atlas.js AGED`): the ruins' walls are built of their people's stone gone old (the
+    humans' and the wild's dark green-grey, the elves' pale, the dark elves' black, the lizard
+    folk's lime), laid in random courses 20 to 60 cm high, each block one to three times as long
+    as its course is high, its own shade, greener or browner, darker towards its foot, its upper
+    edge catching the light, flecked with lichen, its corners chipped; the mortar between is near
+    black and sunk deep, so the relief shadows it. A copy covers 4.2 m, so the courses don't
+    repeat along a wall's height. Where a wall's broken, along its broken top and at a breach's
+    ends, it shows the rubble core its faces were filled with (`rubble-old`; `decay.js`
+    `crumbledWall`'s and `crumbledRing`'s `core`), and what fell lies in heaps of the same. Where
+    it's drawn, the old stone weathers (the atlas's shader, for its layers alone, so the peoples'
+    kept-up towns and castles never do): moss on what faces up, in patches about a metre and a
+    half across, a little on what faces north, and near to (within 70 m) in the joints between its
+    blocks; dark streaks down its faces. No new draws, programs or triangles: a few dozen
+    operations a pixel of old stone.
   - **Left behind** (`art/kits/leftovers.js`): grey, weathered and charred beams, snapped off or
     fallen, posts standing where halls stood; barrels whole, tipped over or burst (their staves
     splayed, a hoop in the grass); crates, some broken open; a cart left on one wheel.
