@@ -36,6 +36,7 @@ import { Terrains } from "./terrains.js";
 import { MARGIN, primingWater, shoreDistances, UNDER_BANKS, waterSheet } from "./water.js";
 import { fallsOf, lipsIn } from "./falls.js";
 import { builderOf, cutAway, drawFar, grounded, joined, partsOf, PIXEL, placed, standOn } from "./town3d.js";
+import { chimneysOf, smokeMesh } from "./smoke.js";
 
 /** How many chunks round the player's are drawn (each way), and how far off they're let go. */
 export const REACH = Object.freeze({ drawn: 2, kept: 3 });
@@ -391,6 +392,7 @@ export class Chunks {
                 job.group.add(job.built);
                 job.built.updateMatrixWorld(true);
                 job.trees.push(...grownRound(object, piece));
+                job.smoke.push(...chimneysOf(object));
                 job.index++;
             };
             // (A piece that fails to build is left out, and the rest of its chunk built without
@@ -468,6 +470,13 @@ export class Chunks {
         }
 
         drawn.object.add(merged);
+
+        // (Smoke rising from their chimneys: smoke.js)
+        const smoke = smokeMesh(job.smoke);
+
+        if (smoke) {
+            drawn.object.add(smoke);
+        }
 
         // (And the great trees they're built round, the elves', planted with the rest)
         if (job.trees.length) {
@@ -710,7 +719,7 @@ export class Chunks {
 
             // (Each piece built, then its parts made ready to merge: `built` the one whose parts
             // aren't yet)
-            drawn.job = { pieces, index: 0, group, waiting: false, trees: [], built: null, parts: [] };
+            drawn.job = { pieces, index: 0, group, waiting: false, trees: [], smoke: [], built: null, parts: [] };
             this.building.push(drawn);
         }
 
@@ -776,10 +785,10 @@ export class Chunks {
     }
 }
 
-// Water, a waterfall and its mist, ground wet by water, a bridge and a tuft of grass, far under
-// the ground where they're never seen, so that their shaders are made while the game loads (with
-// the rest: Game.build) rather than the first time a river, a fall, a bridge or the undergrowth
-// comes into view
+// Water, a waterfall and its mist, ground wet by water, a bridge, chimney smoke and a tuft of
+// grass, far under the ground where they're never seen, so that their shaders are made while the
+// game loads (with the rest: Game.build) rather than the first time a river, a fall, a bridge,
+// smoke or the undergrowth comes into view
 function primer() {
     const group = new THREE.Group();
     const water = primingWater();
@@ -795,6 +804,9 @@ function primer() {
     for (const look of ["planks", "planks-dark", "timber"]) {
         group.add(new THREE.Mesh(box(0, 0, 0, 1, 0.1, 1), bridgeMaterial(look)));
     }
+
+    // (Chimney smoke)
+    group.add(smokeMesh([[0, 0, 0, 2]]));
 
     // (And a tuft of grass, for the undergrowth's; and a stretch of hedge)
     group.add(undergrowthMesh([{ kind: "tuft", land: "meadow", look: 0, x: 0, y: 0, turn: 0, size: 1, tint: [1, 1, 1] }], [0, 0]));

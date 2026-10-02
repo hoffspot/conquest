@@ -202,6 +202,8 @@ export function longhouse(solid, x0, x1, cz, { middle, ends = middle * 0.72, wal
     const [hx, hy, hz] = ridgeLine[Math.round(sections * 0.35)];
 
     solid.box(hx - m(0.6), hy, hz - m(0.5), hx + m(0.6), hy + m(0.6), hz + m(0.5), material("hide-dark"));
+    // (The hearth's smoke rising from under its hood: world/smoke.js)
+    (solid.smoke ??= []).push([hx, hy + m(0.65), hz, 1]);
 
     // Tusks crossed at both ends, and a skull
     for (const [s, sign] of [[0, -1], [1, 1]]) {

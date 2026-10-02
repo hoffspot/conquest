@@ -401,6 +401,8 @@ export async function blacksmith(piece) {
     solid.box(x1, 0, fz0, x1 + m(1.5), m(0.95), fz1, material("stone-dark"));
     solid.box(x1 + 1, m(0.95), fz0 + 1, x1 + m(1.5) - 1, m(1.02), fz1 - 1, material("embers"));
     solid.box(x1, m(0.95), fz0, x1 + m(1.2), m(7.2), fz0 + m(1.1), material("stone-dark"));
+    // (Its fire's always lit: its smoke thicker than a hearth's, smoke.js)
+    (solid.smoke ??= []).push([x1 + m(0.6), m(7.25), fz0 + m(0.55), 1.4]);
 
     // The anvil on its stump, the quenching trough, and a heap of charcoal
     const [ax, az] = [x1 + m(2.8), (z0 + z1) / 2 + m(0.3)];

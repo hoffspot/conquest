@@ -1095,7 +1095,8 @@ export class Solid {
 
     /**
      * The shape as a Three.js group of meshes (materials are Three.js materials), those only
-     * worth drawing near marked so (userData.near: merged last, town3d.js joined).
+     * worth drawing near marked so (userData.near: merged last, town3d.js joined); with its
+     * chimneys' tops (`smoke`: kits/roofs.js chimney) in its userData.smoke.
      */
     toObject() {
         const group = new THREE.Group();
@@ -1139,6 +1140,11 @@ export class Solid {
                 node.receiveShadow = true;
             }
         });
+
+        // (Its chimneys' tops, where smoke rises from: [x, y, z, strength], world pixels)
+        if (this.smoke?.length) {
+            group.userData.smoke = this.smoke.map((top) => [...top]);
+        }
 
         return group;
     }

@@ -811,11 +811,11 @@ drawn whole whichever way the camera looks (about 90 draw calls and 170,000 tria
 to High (suggested for the device until it's moved: older phones low, phones medium, computers
 high); debug mode can change it too. The game aims at 60 frames a second at every level:
 
-| Level | Pixels | Shadow map | Antialiasing | Hair | Skin textures | Undergrowth | Tall grass | Motes | Far land | Far trees | Fields afar |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Low (older phones) | 1× | 1024 | no | a fifth of the strands | 512 | half | none (its look on the ground) | none | 1 km | none | no |
-| Medium (phones) | up to 1.5× | 2048 | yes | 30% | 512 | three-quarters | to 12 m, thinner to 28 m | 300 | 2 km | to 700 m | yes |
-| High (computers) | up to 2× | 2048 | yes | 45% | 1024 | all of it | to 18 m, thinner to 40 m | 600 | 4 km | to 1.2 km | yes |
+| Level | Pixels | Shadow map | Antialiasing | Hair | Skin textures | Undergrowth | Tall grass | Motes | Chimney smoke | Far land | Far trees | Fields afar |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Low (older phones) | 1× | 1024 | no | a fifth of the strands | 512 | half | none (its look on the ground) | none | half its puffs | 1 km | none | no |
+| Medium (phones) | up to 1.5× | 2048 | yes | 30% | 512 | three-quarters | to 12 m, thinner to 28 m | 300 | three-quarters | 2 km | to 700 m | yes |
+| High (computers) | up to 2× | 2048 | yes | 45% | 1024 | all of it | to 18 m, thinner to 40 m | 600 | all of it | 4 km | to 1.2 km | yes |
 
 **How often it's drawn** (`app/pacing.js`). The browser asks for a frame each time the screen
 refreshes: 60 times a second on most screens, 90, 120 or 144 on many phones and monitors. Drawn
@@ -1079,6 +1079,20 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
   Each piece's meshes are made ready to merge (baked to their places, drawn into the atlas:
   town3d.js `partsOf`) in a step of their own after it's built, so the chunk's merge once they're
   all built is only joining them (`joined`): a capital's chunk's was one piece of 10 to 28 ms.
+- **Chimney smoke** (terrain plan M7c; `world/smoke.js`), in the settlements and the start town:
+  from the houses' chimneys and the orcs' longhouses' smoke hoods, seven hearths in ten (the same
+  ones every time), and always from a smithy's forge and an orc grog hall's crown, which smoke
+  higher and a little wider (`SMOKE`). A column of nine puffs, each rising 8 m over ten
+  seconds, spreading from 0.3 m to 1.7 m across as it goes, leaning on the breeze the higher it
+  rises and wandering a little from its line; coming in as it leaves the chimney and thinning
+  away at its top, billowing (noise drifting through each puff), lit from above and greyer as it
+  thins. Each puff's a square turned to face the eye, where it is in its rise worked out on the
+  graphics card from the trees' breeze's time, so nothing's sent each frame. The kits record
+  each chimney's top as they build it (`solid.smoke`, kept in the built object's
+  `userData.smoke`); a chunk's smoke, and the start town's, are one mesh each, with one
+  material for all of it. Low quality draws half of each column's puffs and medium
+  three-quarters, dropped evenly so a column thins rather than breaking up (`QUALITY.smoke`).
+  In the start town: 11 columns, 99 puffs, one draw, about 200 triangles, casting no shadow.
 - **Each people's castle, special places and watchtowers** (core/sites.js: WORLD.md), each
   whose middle is in the chunk, built by its people's kit as a settlement's pieces are (the
   humans' castle laid out by castle.js, their abbey, windmill and manor as their landmarks).

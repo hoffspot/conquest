@@ -198,7 +198,8 @@ export function pitchedRoof(solid, { x0, x1, z0, z1, eaves, pitch, overhang, ver
 
 /**
  * A chimney stack standing from `base` to `height` (world pixels) at (x, z) in plan, `w` by `d`,
- * of `name` (brick or stone), with a corbelled cap and, sometimes, pots.
+ * of `name` (brick or stone), with a corbelled cap and, sometimes, pots; its top listed in the
+ * solid's `smoke` (Solid.toObject).
  */
 export function chimney(solid, { x, z, w, d, base, height, name, pots = 0 }) {
     const stack = material(name);
@@ -211,4 +212,7 @@ export function chimney(solid, { x, z, w, d, base, height, name, pots = 0 }) {
 
         solid.cylinder(px, z, height, height + m(0.4), m(0.11), m(0.09), material("clay"), { segments: 6 });
     }
+
+    // (Its top, where its smoke rises from: smoke.js)
+    (solid.smoke ??= []).push([x, height + (pots ? m(0.4) : m(0.05)), z, 1]);
 }
