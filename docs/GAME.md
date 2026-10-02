@@ -613,7 +613,8 @@ white wall in the shade got twice as much light as the sun gave it in the open, 
 sunny side and a shaded one, and steel mirrored grey walls. Now, outdoors, a wall in the sun gets
 about three times the light of one in the shade, which is sky-blue (the sun a little stronger,
 3.5, to make up the sunny side's share); steel mirrors the sky and the ground; indoors the light
-is warm. The character maker keeps a studio's light of its own (made when it opens, let go when
+is warm, and dim (a little over half as strong): a room's own flames and the daylight through its
+windows light it (Inside the taverns, below). The character maker keeps a studio's light of its own (made when it opens, let go when
 it closes), so colours are chosen as they are.
 
 **Glows** (lamps, faerie fire, lava: world/art/engine/atlas.js glowMaterial) are shown in their
@@ -799,9 +800,12 @@ right, it looks further right); up or down its height, it tilts 60 degrees (drag
 further up, lower down). It tilts between 75 degrees (almost straight down) and, outdoors, 45
 degrees *above* the horizon: looking up into the sky, the camera comes down behind the player to
 just over the ground (0.45 metres) and then tilts up from there, the player sinking down the
-picture and, at the last, out of it. Indoors it stops with the top of the picture 6 degrees
-below the horizon (24 degrees down on a wide screen, 31 on a tall one), so there's no more of the
-room to draw than there is. While held, it doesn't turn itself; let go, it stays where it was
+picture and, at the last, out of it. Indoors it tilts up to 40 degrees above the horizon, to look
+up at the ceiling: anywhere over the ceiling the camera's free to be (looking down into the room,
+the ceiling's not drawn), but under it, it's kept inside the walls (0.35 metres in from them, and
+no nearer the player than a metre: view.js `roomReach`), coming in closer than a wall behind
+rather than going out through it, quickly in and slowly back out, as at a building outside.
+While held, it doesn't turn itself; let go, it stays where it was
 turned while the player stands, and once they walk again, it swings back round behind them,
 facing the way they go (keeping its tilt, unless it was looking up past 15 degrees down: then it
 eases back down to 35 to see where they're going).
@@ -1376,11 +1380,14 @@ that), so nothing of one (shadows, blood, sounds) is ever seen or heard on anoth
 character's place on its map is offset by its map's origin. Only the map the player is on is
 shown: the world outside and the town, or one floor inside. Going
 through, the screen dips to black and fades back in over 0.45 s, the camera behind the player
-the way they face. Indoors, the view (`setIndoors`) has a dark background and closer fog, a dim
-warm light from above and the room's two lamps (for the taproom the hearth's fire and a candle
-wheel; upstairs two red-shaded lamps), flickering. The two point lights are always in the
-scene, out (at no intensity) outdoors, so that going in and out never makes Three.js recompile
-every lit material's shaders.
+the way they face. Indoors, the view (`setIndoors`) has a dark background and closer fog, the
+light from all round dimmed, the sun shining in at the room's windows on its sunny side (none for
+a room without windows), and the room's flames flickering, each lighting it
+(world/roomlight.js): the two lighting the player most are the view's two point lights, lighting
+the folk and everything else too, and the rest light the room's walls, floor, ceiling and
+furniture from a list in their shaders. The two point lights are always in the scene, out (at no
+intensity) outdoors, so that going in and out never makes Three.js recompile every lit material's
+shaders.
 
 **Getting buildings ready.** Every half a second, outside, the game looks over the buildings
 that can be gone into: one whose door is within 22 metres of the player (or whose door they're
@@ -1521,12 +1528,14 @@ stranger, someone she's met, or someone she's danced with differently, and she o
 ### Inside the taverns (world/interiors3d.js)
 
 The rooms are built from their plans with the art kits' materials, five art pixels to the metre:
-walls of plaster on a stone footing between timber posts under a beam, with windows of daylight
-and curtained doorways; flagstones in the taproom and planks upstairs. In the taproom, the
+walls of plaster on a stone footing between timber posts under a beam, with leaded windows and
+curtained doorways; flagstones in the taproom and planks upstairs; and a beamed ceiling over
+every floor (below). In the taproom, the
 tables with candles, tankards and plates, and benches; the bar, with tankards along its top, and
 behind it two tiers of casks on a stillage, each with a brass tap, and shelves of tankards; the
 hearth, a stone chimney breast with a mantel, logs and embers, three flames and a boar on a spit
-turning slowly over them; a candle wheel; and the stairs, two metres wide, twelve steps and a
+turning slowly over them; two wheels of candles over the tables and a lantern over the bar;
+and the stairs, two metres wide, twelve steps and a
 handrail rising 3 metres along the north wall. Upstairs, rugs, the counter with a velvet runner, a ledger, a
 bell, a candle and a vase of flowers, a chaise longue and side table, the stairwell with its
 rail, and four bedrooms with canopied beds (their drapes red or purple), washstands and chests,
@@ -1534,9 +1543,10 @@ lit by red-shaded sconces; at an inn, whitewashed walls, beds hung in green, blu
 and linen, and plain glass in the sconces. Each floor is built by its style (`map.style`), each
 taproom with its own walls (`map.finish`). Everything that doesn't move is drawn from the atlas, as
 the buildings outside are (atlas.js `atlasVariant`: their textures lit as relief, what shines
-shining, cut away in front of the player as below): a mesh for the walls and one for the rest, only
-the daylight in the windows, the candle flames, the roast and the lights apart. That's 4 to 11
-meshes a floor, where each material was a mesh of its own (23 to 43), and nothing painted for
+shining, cut away in front of the player as below): a mesh for the walls, one for the ceiling and
+one for the rest, only the glass in the windows, the candle flames, the roast and the lights
+apart, and the flames' glows and the beams of daylight each one more. That's 6 to 15 meshes a
+floor, where each material was a mesh of its own (23 to 43), and nothing painted for
 them (the taproom drew with 79 draw calls in all, with the characters and the sun's shadows; now
 42). The spit turns as one mesh, and each fire is one. What's painted, dyed or woven in gold or
 silver inside is cloth (`cloth-gold`...: banners' devices, a rug's border), not metal.
@@ -1567,16 +1577,65 @@ framed board thick with notices, each pinned or sealed in red wax, some curling.
 tankards, a map, dice and candles; the hearth has a fire and a great horned skull over it; a ring
 of candles hangs over the tables. In the guild the tavern's jig plays as lively as in a taproom.
 
+**Ceilings.** Every floor has its ceiling, 3 metres up (`STOREY`), each people's own way
+(`CEILINGS`): the humans' of limewashed plaster between joists half a metre apart, carried on great
+beams across the room every 3 metres or so; the orcs' dark planks on round logs; the cat folk's
+reed mats over palm-trunk vigas; the lizard folk's reeds on bamboo poles over beams; the elves' a
+pale ceiling with slender ribs; the dark elves' black stone on heavy charred beams. Over the
+taproom's stairs it's open, trimmed with timbers, a dark well going up out of sight. The wheels
+of candles hang from it on three chains to a ring and a chain up to a hook, and a smithy's lantern
+hangs on its chain. What of the ceiling is lower than the camera isn't drawn (`cutsAway`'s
+`ceiling`): from under it, it's all there; from over it (the camera looking down into the room, as
+it starts), none of it, so the room's seen as before; and with the camera at its height, it's cut
+level with the camera, edge on, so it never pops in or out. While the camera's over all of it,
+it isn't drawn into the view at all (the interior's `seenFrom`: its geometry's to draw none but
+for the sun's shadows), rather than every pixel of it worked out and then thrown away, which cost
+software drawing nearly twice as long a frame; it still casts its shadow, so the sun comes in
+only at the windows. Boxes have no undersides unless
+they're to be seen from below (Solid `box`'s `under`): the ceiling's boards, joists and beams, the
+beams along the walls' tops, and the heads of windows and doors do.
+
+**Windows and daylight.** Windows are openings in the walls (`walledIn`: the wall built under
+their sills and over their heads, the posts either side standing clear of them), 1.2 metres wide,
+from 0.95 to 2.3 metres up, framed in timber through the wall's thickness, with a sill, a mullion
+and leaded glass: diamonds of glass in lead, each a little different, the sky's pale light in it,
+the sun's warmer on the sunny side. The glass casts no shadow. The sun shines in through the
+windows on the side with the most of them (the south's, east's, west's, north's first, if as
+many: `daylightOf`), 35 degrees up and 18 round to one side, the walls' and ceiling's shadows
+leaving only the windows' patches of it on the floor and the walls opposite, split by their
+mullions; and through each sunny window a beam of it shows in the dusty air (`shaftsOf`: the
+window swept along the sunlight to the floor), brightest at the window, fading to the floor and at
+its edges, motes drifting through it.
+
+**Flames.** Every flame lights the room (`lighting.flames`, as each is built: `lit`): each candle
+(on the tables, the bar, the counter, beside the beds, before the shrines), each wheel of candles
+(as bright as its candles), each sconce and lantern, and each hearth's or forge's fire, its own
+colour, flickering its own way (roomlight.js `strengthOf`; a forge's flaring as the bellows are
+pumped). A room with more than 16 has its nearest candles of a kind taken together, as bright
+(`gather`). The two lighting the player most, as a point light would, are the view's two lamps
+(`pickLamps`: one already lit kept unless another lights them half as much again), lighting the
+folk; the rest light the room's own materials, the same sums three.js does for a point light
+(`roomLit`, after its lights in their shaders: the two lamps' left out, so nothing's lit twice;
+the rest listed one after another, `ROOM_LIGHT.count` of them, so each pixel works out only the
+room's own, not all 16).
+And their light comes back off the walls, floor and ceiling (`fillOf`: their colours times their
+strengths, over the floor, `BOUNCE` times that), so a room's never black past their reach and the
+more flames, the brighter. Each flame has a soft glow round it, its colour, a little unsteady, no
+bigger on the screen than a phone draws a point, and none where its flame's cut away (one drawing
+a floor). The lamps each people lights (`LAMPLIGHT`) colour its wheels and candles.
+
 The flames are crossed quads with a shader of rising noise, drawn additively and flickering,
-and embers rise from the hearth. The room is open above, and what stands in front of the player
-is taken down, so they're always in view whichever way the camera looks: a strip 5 metres wide
+and embers rise from the hearth. What stands in front of the player is taken down, so they're
+always in view whichever way the camera looks: a strip 5 metres wide
 from them to the camera (`INTERIOR_CUT`: the player's position, the direction to the camera and
 the floor's bounds, set each frame by `cutFor`). In it, the walls (and what's on them: posts,
 beams, lintels, doorway curtains, windows, sconces, the chimney breast and the door) come down to
 their stone footing (built apart, and never cut), a whole square's length at a time, as each
 square's middle is in the strip or not (the walls round the edge counting as the square inside
-them), so a wall is never sliced along its length; and anything else, above head height (1.7
-metres: bed canopies, the shelves over the barrels). Every other wall stands full height, so the
+them), so a wall is never sliced along its length; and anything else above head height (1.7
+metres: bed canopies, the shelves over the barrels) that's no more than half a metre over the line
+from the camera to the player's head, so looking up from low down, a wheel of candles overhead
+stays. Every other wall stands full height, so the
 rooms keep their shape. Every interior material is drawn on both sides, and where a cut shows
 the inside of something (a wall's end, a post), it's dark wood (`cap`), as if solid. `cutsAway`
 does the same sums as the shaders, for tests. Wherever a wall has a gap of one or two squares,
@@ -2581,6 +2640,18 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   (a whole square at a time, the outer walls as the square inside them), those to the side,
   behind or level with them standing, anything else cut only above head height, and the
   doorways found in the walls.
+- `test/rooms.test.js`: the rooms' ceilings (over every floor of every kind, every people's, the
+  whole room, at the storey's height; seen from below, their undersides facing down; open over
+  the stairs, a dark well over them; the wheels of candles under them), drawn only where they're
+  higher than the camera (and not at all while it's over them, but for their shadows), and only what's in the way of seeing the player cut away (looking up
+  from low down, not what's overhead); the daylight from the side with the most windows, 35
+  degrees up, reaching the floor of every kind of room through its windows, the glass casting no
+  shadow, and its beams from the sunny windows down to the floor; every room lit by its flames
+  (its fires first, no more than 16, the nearest candles taken together if too many), each with
+  a glow; flames flickering and a forge's flaring; the two lighting the player most the view's
+  lamps, one kept unless another's half as bright again, the rest listed for the room's shaders;
+  the light coming back off the room; and
+  the camera looking up indoors, kept inside the walls under the ceiling and anywhere over it.
 - `test/characters.test.js` (with CHARACTERS.md's): the tavern's folk's bodies and clothes,
   skirts, gowns and aprons (hanging from the waist, flaring to the hem, skinned to the thighs and
   shins), sitting on a bench (thighs level, shins upright), and raising a tankard in a toast; and

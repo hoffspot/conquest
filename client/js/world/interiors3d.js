@@ -12,12 +12,20 @@
 //
 // Built with the art kits' Solid (five art pixels to a metre) and their materials, and drawn as
 // the buildings outside are, from the atlas (atlas.js: its textures, lit as relief, what shines
-// shining), each map in its own group at its place in the world (its `origin`). There are no
-// ceilings, and what stands in front of the player (INTERIOR_CUT, set each frame by the game: a
-// strip from them towards the camera) is cut away: walls down to their stone footing, a whole
-// square's length at a time, and anything else above head height, so the player is always in
-// view whichever way the camera looks, and every other wall stands full height; where a cut shows
-// the inside of something, it's dark wood, as if solid.
+// shining), each map in its own group at its place in the world (its `origin`). Every floor has
+// its ceiling, of beams and boards (each people's own way: ceiling()), with wheels of candles
+// hanging from it on chains; looking down from above it, the camera sees through it (what of it
+// is lower than the camera isn't drawn: so from under it, all of it, and from over it, none).
+// What stands in front of the player (INTERIOR_CUT, set each frame by the game: a strip from them
+// towards the camera) is cut away: walls down to their stone footing, a whole square's length at a
+// time, and anything else above head height that's in the way of seeing them, so the player is
+// always in view whichever way the camera looks, and every other wall stands full height; where a
+// cut shows the inside of something, it's dark wood, as if solid.
+//
+// The rooms are lit by what would light them: the daylight through their windows (open to it,
+// leaded panes in them, the view's sun shining in through the windows on the sunny side, beams
+// of it in the dusty air), and their flames (every hearth's fire, wheel of candles, candle and
+// sconce a light of its own: roomlight.js), each flame with a soft glow round it.
 
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
@@ -27,24 +35,31 @@ import { atlasVariant, layerOf } from "./art/engine/atlas.js";
 import { material as artMaterial } from "./art/engine/materials.js";
 import { Solid } from "./art/engine/solid.js";
 import { joined, partsOf } from "./town3d.js";
+import { gather, roomLit } from "./roomlight.js";
 import { allAtOnce } from "../core/steps.js";
 
 /** How high a floor's walls are, and how far above it the next floor is (metres). */
 export const STOREY = 3;
 
 /**
- * Where the player is and which way the camera looks from them (along the ground), shared by
- * every interior material: what's in front of them (more than `margin` metres nearer the camera
- * than they are, and less than `width` metres to either side of the line from them to it) is cut
- * away: walls (above their footing, which is built apart and never cut) altogether, a square at a
- * time (whether each square's middle is in front of them: the walls round the edge, the square
- * inside them, within `bounds`, the floor shown: x0, z0, x1, z1 in world metres), and everything
- * else above `height` metres; where the inside of something cut shows, it's `cap`.
+ * Where the player is and where the camera is, shared by every interior material: what's in front
+ * of them (more than `margin` metres nearer the camera than they are, and less than `width` metres
+ * to either side of the line from them to it) is cut away: walls (above their footing, which is
+ * built apart and never cut) altogether, a square at a time (whether each square's middle is in
+ * front of them: the walls round the edge, the square inside them, within `bounds`, the floor
+ * shown: x0, z0, x1, z1 in world metres), and everything else above `height` metres that's no
+ * higher than `over` metres above the line from the camera to the player's head (`head` metres
+ * up: what's higher than that is above the player as seen, and hides nothing of them); where the
+ * inside of something cut shows, it's `cap`. The ceilings aren't cut so, but where they're lower
+ * than the camera (seen from above) aren't drawn at all.
  */
 export const INTERIOR_CUT = Object.freeze({
     player: { value: new THREE.Vector3() },
+    camera: { value: new THREE.Vector3(0, 100, 0) },
     toCamera: { value: new THREE.Vector2(0, 1) },
     height: { value: 1.7 },
+    head: { value: 1.6 },
+    over: { value: 0.5 },
     margin: { value: 0.1 },
     width: { value: 2.5 },
     bounds: { value: new THREE.Vector4(0, 0, 1, 1) },
@@ -56,47 +71,68 @@ export function cutFor(map, player, camera) {
     const [ox, oz] = map.origin;
 
     INTERIOR_CUT.player.value.copy(player);
+    INTERIOR_CUT.camera.value.copy(camera);
     INTERIOR_CUT.toCamera.value.set(camera.x - player.x, camera.z - player.z).normalize();
     INTERIOR_CUT.bounds.value.set(ox, oz, ox + map.width, oz + map.height);
 }
 
 /**
  * Whether a point (world metres) is cut away, as the interior materials' shaders decide it:
- * `wall` for a wall's (a square at a time, from the floor up), else anything else's (above head
- * height). Pure maths on INTERIOR_CUT, for tests.
+ * `wall` for a wall's (a square at a time, from the floor up), `ceiling` for a ceiling's (lower
+ * than the camera), else anything else's (above head height, in the way of seeing the player).
+ * Pure maths on INTERIOR_CUT, for tests.
  */
-export function cutsAway([x, y, z], { wall = false } = {}) {
-    const { player, toCamera, height, margin, width, bounds } = INTERIOR_CUT;
+export function cutsAway([x, y, z], { wall = false, ceiling = false } = {}) {
+    const { player, camera, toCamera, height, head, over, margin, width, bounds } = INTERIOR_CUT;
+
+    if (ceiling) {
+        return y < camera.value.y;
+    }
+
     const inside = (value, least, most) => Math.min(most - 0.001, Math.max(least + 0.001, value));
     const [px, pz] = wall ? [Math.floor(inside(x, bounds.value.x, bounds.value.z)) + 0.5, Math.floor(inside(z, bounds.value.y, bounds.value.w)) + 0.5] : [x, z];
     const [dx, dz] = [px - player.value.x, pz - player.value.z];
     const [tx, tz] = [toCamera.value.x, toCamera.value.y];
     const along = dx * tx + dz * tz;
     const across = Math.abs(-dx * tz + dz * tx);
+    const [eye, top] = [player.value.y + head.value, camera.value.y];
+    const sight = eye + (top - eye) * Math.min(1, along / Math.max(0.01, Math.hypot(camera.value.x - player.value.x, camera.value.z - player.value.z)));
+    const low = wall || y < sight + over.value;
 
-    return y - player.value.y > (wall ? 0 : height.value) && along > margin.value && across < width.value;
+    return y - player.value.y > (wall ? 0 : height.value) && along > margin.value && across < width.value && low;
 }
 
 const M = 5;
 const m = (metres) => metres * M;
 
-// What's part of a wall (cut away from the floor up, a square at a time: INTERIOR_CUT)
+// What's part of a wall (cut away from the floor up, a square at a time: INTERIOR_CUT), or of a
+// ceiling (never cut, but not drawn lower than the camera)
 const WALL = Object.freeze({ wall: true });
+const CEILING = Object.freeze({ ceiling: true });
 
 // What each thing inside is drawn as (by name, the art's: engine/materials.js), and the same
-// again for walls (`wall`: cut lower). What the atlas can draw only says what it's drawn from
-// (atlasInside draws it); the rest (daylight in the windows, candle flames, the roast, lights and
-// embers) are each their own copy, cut away as the atlas is
+// again for walls (`wall`: cut lower) and ceilings (`ceiling`: drawn only over the camera). What
+// the atlas can draw only says what it's drawn from (atlasInside draws it); the rest (daylight in
+// the windows, candle flames, the roast, lights and embers) are each their own copy, cut away as
+// the atlas is
 const materials = new Map();
 
 // The people whose inside is being built: its materials (PALETTES) in place of the humans', and
-// whether its walls are framed with posts and a beam (FRAMED) as the humans' are
+// whether its walls are framed with posts and a beam (FRAMED) as the humans' are; and what lights
+// it, as it's built: its flames (each a light, and a glow round it: lit()), its windows and the
+// daylight through them (walledIn)
 let palette = null;
 let framed = true;
+let lighting = { flames: [], glows: [], panes: [], daylight: null };
 
-function material(asked, { wall = false } = {}) {
+// How each of a thing's cuts is known (its material's and its mesh's): a wall's, a ceiling's, or
+// anything else's
+const cutOf = ({ wall = false, ceiling = false } = {}) => (wall ? "wall" : ceiling ? "ceiling" : "");
+
+function material(asked, how = {}) {
     const name = palette?.[asked] ?? asked;
-    const key = wall ? `${name}|wall` : name;
+    const cut = cutOf(how);
+    const key = cut ? `${name}|${cut}` : name;
 
     if (!materials.has(key)) {
         let result;
@@ -106,10 +142,11 @@ function material(asked, { wall = false } = {}) {
             result = new THREE.MeshLambertMaterial({ color: GODS[name.slice(4)]?.colours[0] ?? 0xffffff });
             result.name = name;
             result.userData.plain = true;
-        } else if (name === "window") {
-            // Daylight in the panes
-            result = new THREE.MeshBasicMaterial({ color: 0xd9e8f5 });
+        } else if (name === "window" || name === "window-sun") {
+            // Daylight in the leaded panes: the sky's, or the sun's on the sunny side
+            result = new THREE.MeshBasicMaterial({ color: name === "window" ? 0xc9dcef : 0xfff0d2, toneMapped: name === "window" });
             result.name = name;
+            result.userData.leaded = true;
         } else if (name === "candle-flame" || name.startsWith("sconce")) {
             result = new THREE.MeshBasicMaterial({ color: { sconce: 0xff5a4a, "sconce-warm": 0xffb45a }[name] ?? 0xffd27a, toneMapped: false });
             result.name = name;
@@ -121,11 +158,11 @@ function material(asked, { wall = false } = {}) {
         }
 
         if (layerOf(result) >= 0) {
-            result.userData.wall = wall;
+            result.userData.cut = cut;
         } else {
-            result.name = `${name}-inside${wall ? "-wall" : ""}`;
+            result.name = `${name}-inside${cut ? `-${cut}` : ""}`;
             result.shadowSide = THREE.DoubleSide;
-            cutAway(result, wall);
+            cutAway(result, cut);
         }
 
         materials.set(key, result);
@@ -134,39 +171,50 @@ function material(asked, { wall = false } = {}) {
     return materials.get(key);
 }
 
-// The atlas as the insides draw it: cut away in front of the player, walls' and everything else's
-// (a copy each: their cuts differ)
+// The atlas as the insides draw it: cut away in front of the player, walls', ceilings' and
+// everything else's (a copy each: their cuts differ)
 const insides = new Map();
 
-function atlasInside(wall) {
-    if (!insides.has(wall)) {
-        const result = atlasVariant(wall ? "atlas-inside-wall" : "atlas-inside", (shader) => cutShader(shader, wall));
+function atlasInside(cut = "") {
+    if (!insides.has(cut)) {
+        const result = atlasVariant(`atlas-inside${cut ? `-${cut}` : ""}`, (shader) => cutShader(shader, cut));
 
         result.side = THREE.DoubleSide;
         result.customProgramCacheKey = () => "atlas-inside";
-        insides.set(wall, result);
+        insides.set(cut, result);
     }
 
-    return insides.get(wall);
+    return insides.get(cut);
 }
 
 // Cut away what stands in front of the player (INTERIOR_CUT, as cutsAway): a wall's squares whole
-// (`wall`), anything else above head height; drawn both sides, the inside of whatever's cut
-// showing as solid (the cap colour)
-function cutAway(target, wall) {
+// (`cut` "wall"), a ceiling under the camera ("ceiling"), anything else above head height; drawn
+// both sides, the inside of whatever's cut showing as solid (the cap colour)
+function cutAway(target, cut) {
     target.side = THREE.DoubleSide;
-    target.onBeforeCompile = (shader) => cutShader(shader, wall);
-    target.customProgramCacheKey = () => `interior-cut-${target.type}`;
+    target.onBeforeCompile = (shader) => {
+        cutShader(shader, cut);
+
+        if (target.userData.leaded) {
+            leadedShader(shader);
+        }
+    };
+    target.customProgramCacheKey = () => `interior-cut-${target.type}${target.userData.leaded ? "-leaded" : ""}`;
     target.needsUpdate = true;
 }
 
-// (The cut, in three.js's own shader for a material, as onBeforeCompile is given it)
-function cutShader(shader, wall) {
+// (The cut, in three.js's own shader for a material, as onBeforeCompile is given it; and the
+// room's flames lighting it, if it's lit: roomlight.js)
+function cutShader(shader, cut) {
     Object.assign(shader.uniforms, {
         cutPlayer: INTERIOR_CUT.player,
+        cutCamera: INTERIOR_CUT.camera,
         cutToCamera: INTERIOR_CUT.toCamera,
-        cutHeight: wall ? { value: 0 } : INTERIOR_CUT.height,
-        cutSquares: { value: wall ? 1 : 0 },
+        cutHeight: cut === "wall" ? { value: 0 } : INTERIOR_CUT.height,
+        cutHead: INTERIOR_CUT.head,
+        cutOver: cut === "wall" ? { value: 1000 } : INTERIOR_CUT.over,
+        cutSquares: { value: cut === "wall" ? 1 : 0 },
+        cutCeiling: { value: cut === "ceiling" ? 1 : 0 },
         cutMargin: INTERIOR_CUT.margin,
         cutWidth: INTERIOR_CUT.width,
         cutBounds: INTERIOR_CUT.bounds,
@@ -176,16 +224,44 @@ function cutShader(shader, wall) {
         .replace("#include <common>", "#include <common>\nvarying vec3 vCutWorld;")
         .replace("#include <project_vertex>", "#include <project_vertex>\nvCutWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;");
     shader.fragmentShader = shader.fragmentShader
-        .replace("#include <common>", "#include <common>\nvarying vec3 vCutWorld;\nuniform vec3 cutPlayer;\nuniform vec2 cutToCamera;\nuniform float cutHeight;\nuniform float cutSquares;\nuniform float cutMargin;\nuniform float cutWidth;\nuniform vec4 cutBounds;\nuniform vec3 cutCap;")
+        .replace("#include <common>", "#include <common>\nvarying vec3 vCutWorld;\nuniform vec3 cutPlayer;\nuniform vec3 cutCamera;\nuniform vec2 cutToCamera;\nuniform float cutHeight;\nuniform float cutHead;\nuniform float cutOver;\nuniform float cutSquares;\nuniform float cutCeiling;\nuniform float cutMargin;\nuniform float cutWidth;\nuniform vec4 cutBounds;\nuniform vec3 cutCap;")
         .replace("#include <clipping_planes_fragment>", `#include <clipping_planes_fragment>
-{
+if (cutCeiling > 0.5) {
+    if (vCutWorld.y < cutCamera.y) discard;
+} else {
     vec2 cutAt = (cutSquares > 0.5 ? floor(clamp(vCutWorld.xz, cutBounds.xy + 0.001, cutBounds.zw - 0.001)) + 0.5 : vCutWorld.xz) - cutPlayer.xz;
     float cutAlong = dot(cutAt, cutToCamera);
     float cutAcross = abs(dot(cutAt, vec2(-cutToCamera.y, cutToCamera.x)));
+    float cutEye = cutPlayer.y + cutHead;
+    float cutSight = cutEye + (cutCamera.y - cutEye) * min(1.0, cutAlong / max(0.01, distance(cutCamera.xz, cutPlayer.xz)));
 
-    if (vCutWorld.y - cutPlayer.y > cutHeight && cutAlong > cutMargin && cutAcross < cutWidth) discard;
+    if (vCutWorld.y - cutPlayer.y > cutHeight && cutAlong > cutMargin && cutAcross < cutWidth && vCutWorld.y < cutSight + cutOver) discard;
 }`)
         .replace("#include <dithering_fragment>", "#include <dithering_fragment>\nif (!gl_FrontFacing) gl_FragColor = vec4(cutCap, 1.0);");
+    roomLit(shader);
+}
+
+// A window's leaded panes: small diamonds of glass (each a little different, as old glass is),
+// in lead (texture coordinates are art pixels: five to a metre)
+function leadedShader(shader) {
+    shader.vertexShader = shader.vertexShader
+        .replace("#include <common>", "#include <common>\nvarying vec2 vLeaded;")
+        .replace("#include <uv_vertex>", "#include <uv_vertex>\nvLeaded = uv;");
+    shader.fragmentShader = shader.fragmentShader
+        .replace("#include <common>", "#include <common>\nvarying vec2 vLeaded;")
+        .replace(
+            "#include <color_fragment>",
+            `#include <color_fragment>
+{
+    vec2 diamond = vec2(vLeaded.x + vLeaded.y, vLeaded.x - vLeaded.y) * 1.6;
+    vec2 cell = floor(diamond);
+    vec2 within = abs(fract(diamond) - 0.5);
+    float lead = smoothstep(0.42, 0.47, max(within.x, within.y));
+    float tint = fract(sin(dot(cell, vec2(12.9898, 78.233))) * 43758.5453);
+
+    diffuseColor.rgb = mix(diffuseColor.rgb * (0.86 + 0.2 * tint), vec3(0.09, 0.08, 0.07), lead);
+}`,
+        );
 }
 
 // --- Flames ---
@@ -267,6 +343,134 @@ export function flame(width, height, seed) {
     return group;
 }
 
+// --- Glows and beams of daylight ---
+
+/**
+ * What the glows round the flames and the beams of daylight are drawn by, shared by every
+ * inside: the time (seconds: the game's, for their flicker and the dust drifting in the beams),
+ * how many pixels a metre is a metre from the camera (view.js pixelsPerMetre, for the glows'
+ * size), and how strong the daylight is (0 to 1).
+ */
+export const INTERIOR_GLOW = Object.freeze({ time: { value: 0 }, scale: { value: 800 }, daylight: { value: 1 } });
+
+// Each flame's glow: a soft round of its colour, as wide as it says, a little unsteady,
+// brightening what's behind it; never bigger on the screen than a phone's GPU draws a point;
+// none where its flame's cut away in front of the player (INTERIOR_CUT, as cutsAway: anything
+// but a wall)
+const GLOW_VERTEX = /* glsl */ `
+attribute float size;
+attribute vec3 tint;
+uniform float time;
+uniform float scale;
+uniform vec3 cutPlayer;
+uniform vec3 cutCamera;
+uniform vec2 cutToCamera;
+uniform float cutHeight;
+uniform float cutHead;
+uniform float cutOver;
+uniform float cutMargin;
+uniform float cutWidth;
+varying vec3 vTint;
+
+void main() {
+    vec4 seen = modelViewMatrix * vec4(position, 1.0);
+    vec3 world = (modelMatrix * vec4(position, 1.0)).xyz;
+    vec2 cutAt = world.xz - cutPlayer.xz;
+    float cutAlong = dot(cutAt, cutToCamera);
+    float cutAcross = abs(dot(cutAt, vec2(-cutToCamera.y, cutToCamera.x)));
+    float cutEye = cutPlayer.y + cutHead;
+    float cutSight = cutEye + (cutCamera.y - cutEye) * min(1.0, cutAlong / max(0.01, distance(cutCamera.xz, cutPlayer.xz)));
+    bool cut = world.y - cutPlayer.y > cutHeight && cutAlong > cutMargin && cutAcross < cutWidth && world.y < cutSight + cutOver;
+    float flicker = 0.88 + 0.12 * sin(time * 11.0 + position.x * 7.1 + position.z * 3.3);
+
+    gl_Position = cut ? vec4(2.0, 2.0, 2.0, 1.0) : projectionMatrix * seen;
+    gl_PointSize = cut ? 0.0 : min(480.0, size * flicker * scale / max(0.3, -seen.z));
+    vTint = tint;
+}`;
+
+const GLOW_FRAGMENT = /* glsl */ `
+varying vec3 vTint;
+
+void main() {
+    vec2 at = gl_PointCoord * 2.0 - 1.0;
+    float away = dot(at, at);
+
+    if (away > 1.0) discard;
+
+    gl_FragColor = vec4(vTint * pow(1.0 - away, 3.2) * 0.4, 1.0);
+}`;
+
+// A beam of daylight: brightest at the window, fading out towards the floor and at its edges,
+// motes of dust drifting through it
+const SHAFT_VERTEX = /* glsl */ `
+attribute float along;
+attribute float across;
+varying float vAlong;
+varying float vAcross;
+varying vec3 vWorld;
+
+void main() {
+    vAlong = along;
+    vAcross = across;
+    vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}`;
+
+const SHAFT_FRAGMENT = /* glsl */ `
+uniform float time;
+uniform float daylight;
+varying float vAlong;
+varying float vAcross;
+varying vec3 vWorld;
+
+void main() {
+    float edge = smoothstep(0.0, 0.3, vAcross) * smoothstep(1.0, 0.7, vAcross);
+    float fade = pow(1.0 - vAlong, 1.4);
+    float dust = 0.8 + 0.2 * sin(vWorld.x * 3.1 + vWorld.y * 4.7 + time * 0.6) * sin(vWorld.z * 2.3 - vWorld.y * 3.9 + time * 0.4);
+
+    gl_FragColor = vec4(vec3(1.0, 0.88, 0.66) * 0.07 * edge * fade * dust * daylight, 1.0);
+}`;
+
+// The glows of a room's flames (world metres about the map's corner) in one drawing
+function glowsOf(glows) {
+    const geometry = new THREE.BufferGeometry();
+    const colour = new THREE.Color();
+
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(glows.flatMap(({ x, y, z }) => [x, y, z]), 3));
+    geometry.setAttribute("size", new THREE.Float32BufferAttribute(glows.map(({ size }) => size), 1));
+    geometry.setAttribute("tint", new THREE.Float32BufferAttribute(glows.flatMap(({ colour: hex }) => colour.set(hex).toArray()), 3));
+
+    const { player, camera, toCamera, height, head, over, margin, width } = INTERIOR_CUT;
+    const uniforms = { time: INTERIOR_GLOW.time, scale: INTERIOR_GLOW.scale, cutPlayer: player, cutCamera: camera, cutToCamera: toCamera, cutHeight: height, cutHead: head, cutOver: over, cutMargin: margin, cutWidth: width };
+    const points = new THREE.Points(geometry, new THREE.ShaderMaterial({ uniforms, vertexShader: GLOW_VERTEX, fragmentShader: GLOW_FRAGMENT, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false }));
+
+    points.name = "glows";
+    points.frustumCulled = false;
+
+    return points;
+}
+
+// The beams of daylight through a room's sunny windows (shaftsOf), or null if none
+function beamsOf(map, panes, daylight) {
+    const { positions, along, across } = shaftsOf(map, panes, daylight);
+
+    if (!positions.length) {
+        return null;
+    }
+
+    const geometry = new THREE.BufferGeometry();
+
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute("along", new THREE.Float32BufferAttribute(along, 1));
+    geometry.setAttribute("across", new THREE.Float32BufferAttribute(across, 1));
+
+    const mesh = new THREE.Mesh(geometry, new THREE.ShaderMaterial({ uniforms: { time: INTERIOR_GLOW.time, daylight: INTERIOR_GLOW.daylight }, vertexShader: SHAFT_VERTEX, fragmentShader: SHAFT_FRAGMENT, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, side: THREE.DoubleSide }));
+
+    mesh.name = "daylight";
+
+    return mesh;
+}
+
 // --- Furniture (in art pixels, x east, y up, z south, from the map's north-west corner) ---
 
 function table(solid, x0, z0, x1, z1) {
@@ -299,11 +503,61 @@ function tankard(solid, x, z, y, wooden = false) {
     solid.box(x + m(0.05), y + m(0.04), z - 0.12, x + m(0.09), y + m(0.12), z + 0.12, material(wooden ? "timber" : "pewter"));
 }
 
+// How each kind of flame lights a room (roomlight.js): how bright (as a point light), how far
+// it reaches (metres), how much it flickers, its colour; and how wide the glow round it is
+// (metres). A wheel of candles is as bright as its candles (`each`, times how many)
+const FLAMES = Object.freeze({
+    candle: { intensity: 1.5, distance: 5, flicker: 0.12, colour: 0xffb260, glow: 0.32 },
+    lamp: { each: 1.3, distance: 15, flicker: 0.06, colour: 0xffc27a, glow: 0.24 },
+    sconce: { intensity: 1.8, distance: 6, flicker: 0.1, colour: 0xffa860, glow: 0.45 },
+    lantern: { intensity: 4, distance: 11, flicker: 0.08, colour: 0xffbb70, glow: 0.6 },
+});
+
+/**
+ * A flame lighting the room (art pixels): a light of its `kind` (FLAMES), and its glow (for each
+ * of `glows`, or where it is: [x, y, z] art pixels, each as wide as its kind's); `colour` its
+ * own, if not its kind's.
+ */
+function lit(kind, x, y, z, { count = 1, colour = FLAMES[kind].colour, glows = [[x, y, z]] } = {}) {
+    const flame = FLAMES[kind];
+
+    lighting.flames.push({ kind, x: x / M, y: y / M, z: z / M, colour, intensity: flame.intensity ?? flame.each * count, distance: flame.distance, flicker: flame.flicker });
+
+    for (const [gx, gy, gz] of glows) {
+        lighting.glows.push({ x: gx / M, y: gy / M, z: gz / M, size: flame.glow, colour });
+    }
+}
+
 // A candle in a holder, its flame lit
 function candle(solid, x, z, y) {
     solid.cylinder(x, z, y, y + 0.25, m(0.06), m(0.06), material("brass"), { segments: 8 });
     solid.cylinder(x, z, y + 0.25, y + m(0.2), m(0.022), m(0.022), material("candle"), { segments: 6 });
     solid.cylinder(x, z, y + m(0.2), y + m(0.24), m(0.012), 0, material("candle-flame"), { segments: 5 });
+    lit("candle", x, y + m(0.22), z);
+}
+
+// A sconce on a wall: a glass of its colour round a candle (`warm`: clear, at an inn; else red)
+function sconce(solid, x, z, warm) {
+    solid.box(x - 0.5, m(1.8), z - 0.5, x + 0.5, m(2.1), z + 0.5, material(warm ? "sconce-warm" : "sconce", WALL));
+    lit("sconce", x, m(1.95), z, { colour: warm ? 0xffa860 : 0xff6a5a });
+}
+
+// An iron lantern hanging on a chain from the ceiling over (x, z), `y` high (art pixels)
+function lantern(x, z, y) {
+    const group = new THREE.Group();
+
+    group.add(new THREE.Mesh(new THREE.BoxGeometry(m(0.22), m(0.03), m(0.22)).translate(x, y, z), material("iron")));
+    group.add(new THREE.Mesh(new THREE.ConeGeometry(m(0.17), m(0.14), 4).rotateY(Math.PI / 4).translate(x, y + m(0.36), z), material("iron")));
+
+    for (const [dx, dz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+        group.add(new THREE.Mesh(new THREE.BoxGeometry(m(0.025), m(0.3), m(0.025)).translate(x + dx * m(0.1), y + m(0.15), z + dz * m(0.1)), material("iron")));
+    }
+
+    group.add(new THREE.Mesh(new THREE.BoxGeometry(m(0.16), m(0.26), m(0.16)).translate(x, y + m(0.15), z), material("sconce-warm")));
+    group.add(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, m(STOREY) - y - m(0.43), 4).translate(x, (m(STOREY) + y + m(0.43)) / 2, z), material("iron")));
+    lit("lantern", x, y + m(0.15), z);
+
+    return group;
 }
 
 // A barrel lying on its side along x, its end at x0 facing west with a brass tap
@@ -392,7 +646,7 @@ function wall(solid, x0, z0, x1, z1, thick, finish) {
         return;
     }
 
-    solid.box(ax0, top - m(0.18), az0 - 0.2, ax1, top, az1 + 0.2, material("timber", WALL));
+    solid.box(ax0, top - m(0.18), az0 - 0.2, ax1, top, az1 + 0.2, material("timber", WALL), { under: material("timber", WALL) });
 
     const length = along === "x" ? x1 - x0 : z1 - z0;
     const posts = Math.max(1, Math.round(length / m(2)));
@@ -412,24 +666,117 @@ function wall(solid, x0, z0, x1, z1, thick, finish) {
     }
 }
 
-// A window in a wall along x (at z, facing `out`: 1 south, -1 north) or along z (at x): a daylit
-// pane in a timber frame
-function windowIn(solid, along, at, centre, out) {
-    const [low, high, half] = [m(1.1), m(2.2), m(0.45)];
+// --- Windows and daylight ---
 
-    if (along === "x") {
-        solid.box(centre - half - 0.5, low - 0.5, at - 0.9, centre + half + 0.5, high + 0.5, at + 0.9, material("timber", WALL));
-        solid.face(out > 0 ? [[centre - half, low, at - 1], [centre + half, low, at - 1], [centre + half, high, at - 1], [centre - half, high, at - 1]].reverse() : [[centre - half, low, at + 1], [centre + half, low, at + 1], [centre + half, high, at + 1], [centre - half, high, at + 1]], material("window", WALL));
-    } else {
-        solid.box(at - 0.9, low - 0.5, centre - half - 0.5, at + 0.9, high + 0.5, centre + half + 0.5, material("timber", WALL));
-        solid.face(out > 0 ? [[at - 1, low, centre - half], [at - 1, low, centre + half], [at - 1, high, centre + half], [at - 1, high, centre - half]] : [[at + 1, low, centre + half], [at + 1, low, centre - half], [at + 1, high, centre - half], [at + 1, high, centre + half]], material("window", WALL));
+// A window's opening (metres): its sill, its head, and half its width; and the outer walls'
+// thickness
+const PANE = Object.freeze({ sill: 0.95, head: 2.3, half: 0.6 });
+const THICK = 0.3;
+
+// Each side's way out of the room (x, z), and which come first for the daylight
+const OUT = Object.freeze({ s: [0, 1], e: [1, 0], w: [-1, 0], n: [0, -1] });
+
+// How high the sun stands over the windows it shines in at (degrees), and how far round to one
+// side of straight in (so it falls across the floor aslant)
+const DAYLIGHT = Object.freeze({ up: 35, round: 18 });
+
+/**
+ * Where the daylight comes in from, through a room's windows ({ side, at }: the wall they're in,
+ * n, s, e or w, and metres along it): the side with the most of them (the south, east, west then
+ * north first, if there are as many), the sun DAYLIGHT.up degrees over it and a little round to
+ * one side. A direction towards the sun ([x, y, z], unit length), or null for no windows.
+ */
+export function daylightOf(panes) {
+    const sides = Object.keys(OUT).filter((side) => panes.some((pane) => pane.side === side));
+
+    if (!sides.length) {
+        return null;
     }
+
+    const side = sides.reduce((best, each) => (panes.filter((pane) => pane.side === each).length > panes.filter((pane) => pane.side === best).length ? each : best));
+    const [ox, oz] = OUT[side];
+    const [up, round] = [(DAYLIGHT.up * Math.PI) / 180, (DAYLIGHT.round * Math.PI) / 180];
+    const [x, z] = [ox * Math.cos(round) - oz * Math.sin(round), ox * Math.sin(round) + oz * Math.cos(round)];
+
+    return [x * Math.cos(up), Math.sin(up), z * Math.cos(up)];
 }
 
-// The walls round a map's edge, with openings (gaps along a side: { side, from, to } in metres)
+// A point on one of a map's outer walls (art pixels): `u` along it (from its west or north end),
+// `y` up, `d` in from the inside of the wall towards the room (less than 0: into the wall)
+function onSide(map, side, u, y, d) {
+    const [w, h] = [m(map.width), m(map.height)];
+
+    return { n: [u, y, d], s: [u, y, h - d], w: [d, y, u], e: [w - d, y, u] }[side];
+}
+
+// A box between two such points (its underside too, `under`, if it's to be seen from below)
+function sideBox(solid, map, side, from, to, stuff, under = false) {
+    const [a, b] = [onSide(map, side, ...from), onSide(map, side, ...to)];
+
+    solid.box(Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.min(a[2], b[2]), Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.max(a[2], b[2]), stuff, { under: under ? stuff : null });
+}
+
+// A window in an outer wall (`pane`: { side, at }, the opening left in the wall by outerWalls): a
+// timber frame round it through the wall, a sill, a mullion, and leaded glass, the sun's in it
+// on the side it shines in at (`sunny`)
+function windowIn(solid, map, { side, at }, sunny) {
+    const [u0, u1, sill, head, wall] = [m(at - PANE.half), m(at + PANE.half), m(PANE.sill), m(PANE.head), m(THICK)];
+    const timber = material("timber", WALL);
+
+    sideBox(solid, map, side, [u0 - 0.6, sill, -wall], [u0, head, 0.15], timber);
+    sideBox(solid, map, side, [u1, sill, -wall], [u1 + 0.6, head, 0.15], timber);
+    sideBox(solid, map, side, [u0 - 0.6, head, -wall], [u1 + 0.6, head + 0.4, 0.15], timber, true);
+    sideBox(solid, map, side, [u0 - 0.8, sill - 0.3, -wall], [u1 + 0.8, sill, 0.6], timber);
+    sideBox(solid, map, side, [(u0 + u1) / 2 - 0.1, sill, -wall * 0.6], [(u0 + u1) / 2 + 0.1, head, -wall * 0.4], timber);
+
+    const glass = [[u0, sill], [u1, sill], [u1, head], [u0, head]].map(([u, y]) => onSide(map, side, u, y, -wall / 2));
+    const [ox, oz] = OUT[side];
+
+    solid.facing(glass, [-ox, 0, -oz], material(sunny ? "window-sun" : "window", WALL));
+}
+
+/**
+ * The beams of daylight through the windows on the sunny side, as they'd show in a room's dusty
+ * air: each window's opening swept in along the sunlight (`daylight`, towards the sun) down to
+ * the floor (world metres about the map's corner): positions, how far along each corner is from
+ * the window (0) to the floor (1), and how far across its face (0 to 1). For a mesh of its own
+ * (shaftsOf).
+ */
+export function shaftsOf(map, panes, daylight) {
+    const [positions, along, across] = [[], [], []];
+    const [dx, dy, dz] = daylight.map((v) => -v);
+
+    for (const { side, at } of panes) {
+        const [ox, oz] = OUT[side];
+
+        if (ox * daylight[0] + oz * daylight[2] <= 0.05) {
+            continue;
+        }
+
+        // The opening's corners on the inside of the wall, and where the sun through each meets the floor
+        const corner = (u, y) => onSide(map, side, m(u), m(y), 0).map((v) => v / M);
+        const [a, b, c, d] = [corner(at - PANE.half, PANE.sill), corner(at + PANE.half, PANE.sill), corner(at + PANE.half, PANE.head), corner(at - PANE.half, PANE.head)];
+        const floor = ([x, y, z]) => [x + (dx * y) / -dy, 0, z + (dz * y) / -dy];
+
+        for (const [p, q] of [[a, b], [b, c], [c, d], [d, a]]) {
+            const [fp, fq] = [floor(p), floor(q)];
+
+            for (const [point, t, s] of [[p, 0, 0], [q, 0, 1], [fq, 1, 1], [p, 0, 0], [fq, 1, 1], [fp, 1, 0]]) {
+                positions.push(...point);
+                along.push(t);
+                across.push(s);
+            }
+        }
+    }
+
+    return { positions, along, across };
+}
+
+// The walls round a map's edge, with openings (gaps along a side: { side, from, to } in metres:
+// a doorway, up to its `lintel`, or a window, from its `sill` to its `head`)
 function outerWalls(solid, map, finish, openings = []) {
     const [w, h] = [m(map.width), m(map.height)];
-    const thick = m(0.3);
+    const thick = m(THICK);
     const sides = { n: [0, 0, w, 0], s: [0, h, w, h], w: [0, 0, 0, h], e: [w, 0, w, h] };
 
     for (const [side, [x0, z0, x1, z1]] of Object.entries(sides)) {
@@ -450,20 +797,176 @@ function outerWalls(solid, map, finish, openings = []) {
                 }
             }
 
-            // A lintel over the opening
-            if (gap.to > gap.from && gap.lintel) {
+            // Wall over the opening (and under a window), its beam along the top carried over it
+            if (gap.to > gap.from && (gap.lintel || gap.sill)) {
                 const [a, b] = [m(gap.from), m(gap.to)];
+                const span = (y0, y1, stuff, proud = 0) => {
+                    if (along === "x") {
+                        solid.box(a - proud, y0, z0 + outward - thick / 2 - proud, b + proud, y1, z0 + outward + thick / 2 + proud, stuff, { under: y0 > 0 ? stuff : null });
+                    } else {
+                        solid.box(x0 + outward - thick / 2 - proud, y0, a - proud, x0 + outward + thick / 2 + proud, y1, b + proud, stuff, { under: y0 > 0 ? stuff : null });
+                    }
+                };
 
-                if (along === "x") {
-                    solid.box(a, m(gap.lintel), z0 + outward - thick / 2, b, m(STOREY), z0 + outward + thick / 2, material(finish, WALL));
-                    solid.box(a - 0.6, m(gap.lintel) - 0.8, z0 + outward - thick / 2 - 0.3, b + 0.6, m(gap.lintel), z0 + outward + thick / 2 + 0.3, material("timber", WALL));
-                } else {
-                    solid.box(x0 + outward - thick / 2, m(gap.lintel), a, x0 + outward + thick / 2, m(STOREY), b, material(finish, WALL));
+                if (gap.sill) {
+                    span(0, m(0.35), material("stone-warm"));
+                    span(m(0.35), m(gap.sill), material(finish, WALL));
+                }
+
+                span(m(gap.lintel ?? gap.head), m(STOREY), material(finish, WALL));
+
+                if (framed) {
+                    span(m(STOREY) - m(0.18), m(STOREY), material("timber", WALL), 0.2);
+                }
+
+                if (gap.lintel && along === "x") {
+                    solid.box(a - 0.6, m(gap.lintel) - 0.8, z0 + outward - thick / 2 - 0.3, b + 0.6, m(gap.lintel), z0 + outward + thick / 2 + 0.3, material("timber", WALL), { under: material("timber", WALL) });
                 }
             }
 
             start = m(gap.to);
         }
+    }
+}
+
+/**
+ * A map's outer walls with its doors (openings as outerWalls's) and windows (`panes`: { side, at
+ * }) in them: the windows framed and glazed, the sun shining in through those on the side with
+ * the most (daylightOf), its beams in the air. Notes the windows and the daylight for the inside
+ * being built.
+ */
+function walledIn(solid, map, finish, doors, panes) {
+    const daylight = daylightOf(panes);
+
+    // (The wall's posts either side of each stand clear of the glass)
+    outerWalls(solid, map, finish, [...doors, ...panes.map(({ side, at }) => ({ side, from: at - PANE.half - 0.12, to: at + PANE.half + 0.12, sill: PANE.sill, head: PANE.head }))]);
+
+    for (const pane of panes) {
+        const [ox, oz] = OUT[pane.side];
+
+        windowIn(solid, map, pane, daylight && ox * daylight[0] + oz * daylight[2] > 0.05);
+    }
+
+    lighting.panes = panes;
+    lighting.daylight = daylight;
+}
+
+// --- Ceilings ---
+
+// How each people's ceilings are made (by its materials' names, as PALETTES has them): the humans'
+// of limewashed plaster between joists, carried on great beams across the room; the orcs' and the cat folk's of
+// round logs (the cat folk's reeds over palm-trunk vigas); the lizard folk's of reeds on bamboo
+// poles, on beams; the elves' a pale vault-smooth ceiling, ribbed; the dark elves' black stone on
+// heavy charred beams. `beams`: [width, depth, apart] across the room's shorter way; `joists` the
+// same along its longer way; `logs`: [radius, apart] across its shorter way (metres)
+const CEILINGS = Object.freeze({
+    human: { boards: "plaster", beams: [0.24, 0.3, 3.2], joists: [0.1, 0.14, 0.5] },
+    orc: { boards: "planks-dark", logs: [0.15, 0.85] },
+    cat: { boards: "reeds", logs: [0.1, 0.7] },
+    lizard: { boards: "reeds", beams: [0.18, 0.2, 3.4], logs: [0.05, 0.32] },
+    elf: { boards: "stone-moon", beams: [0.1, 0.1, 1.6] },
+    darkElf: { boards: "stone-black", beams: [0.28, 0.32, 2.2] },
+});
+
+// The people whose ceiling's being built (buildingInterior's), for CEILINGS
+let people = null;
+
+/**
+ * A map's ceiling, STOREY metres over its floor: boards, and under them its people's beams,
+ * joists or logs (CEILINGS), left open over a stairwell (`hole`: x0, z0, x1, z1 in art pixels)
+ * with a dark well above it.
+ */
+function ceiling(solid, map, hole = null) {
+    const style = CEILINGS[people ?? "human"];
+    const [w, h] = [m(map.width), m(map.height)];
+    const top = m(STOREY);
+    const board = 0.3;
+    const across = w >= h ? "z" : "x";
+    const [long, short] = across === "z" ? [w, h] : [h, w];
+    const stuff = (name) => material(name, CEILING);
+    // (A box in the room's own terms: `a` along its longer way, `b` across it)
+    const lay = (a0, b0, a1, b1, y0, y1, name) => (across === "z" ? solid.box(a0, y0, b0, a1, y1, b1, stuff(name), { under: stuff(name) }) : solid.box(b0, y0, a0, b1, y1, a1, stuff(name), { under: stuff(name) }));
+    const open = hole && (across === "z" ? hole : [hole[1], hole[0], hole[3], hole[2]]);
+    // (Runs across the room's shorter way, `apart` metres apart, broken at the stairwell)
+    const crossing = (apart, each) => {
+        const count = Math.max(1, Math.round(long / m(apart)));
+
+        for (let k = 0; k < count; k++) {
+            each(((k + 0.5) / count) * long);
+        }
+    };
+
+    // The boards (round the stairwell)
+    if (open) {
+        lay(0, 0, long, open[1], top, top + board, style.boards);
+        lay(0, open[3], long, short, top, top + board, style.boards);
+        lay(0, open[1], open[0], open[3], top, top + board, style.boards);
+        lay(open[2], open[1], long, open[3], top, top + board, style.boards);
+    } else {
+        lay(0, 0, long, short, top, top + board, style.boards);
+    }
+
+    // Joists along the longer way, under the boards
+    if (style.joists) {
+        const [width, depth, apart] = style.joists.map(m);
+
+        for (let b = apart / 2; b < short; b += apart) {
+            const [b0, b1] = [b - width / 2, b + width / 2];
+
+            if (open && b1 > open[1] && b0 < open[3]) {
+                if (open[0] > 0) {
+                    lay(0, b0, open[0], b1, top - depth, top, "timber");
+                }
+
+                lay(open[2], b0, long, b1, top - depth, top, "timber");
+            } else {
+                lay(0, b0, long, b1, top - depth, top, "timber");
+            }
+        }
+    }
+
+    // Beams across the shorter way, deeper than the joists, carrying them
+    if (style.beams) {
+        const [width, depth] = style.beams.map(m);
+
+        crossing(style.beams[2], (a) => {
+            const crosses = open && a + width / 2 > open[0] && a - width / 2 < open[2];
+
+            if (crosses) {
+                if (open[1] > 0) {
+                    lay(a - width / 2, 0, a + width / 2, open[1], top - depth, top, "timber");
+                }
+
+                lay(a - width / 2, open[3], a + width / 2, short, top - depth, top, "timber");
+            } else {
+                lay(a - width / 2, 0, a + width / 2, short, top - depth, top, "timber");
+            }
+        });
+    }
+
+    // Round logs across the shorter way, half sunk into the boards
+    if (style.logs) {
+        const radius = m(style.logs[0]);
+
+        crossing(style.logs[1], (a) => {
+            if (open && a + radius > open[0] && a - radius < open[2]) {
+                return;
+            }
+
+            const log = new THREE.CylinderGeometry(radius, radius * 0.92, short, 8, 1).rotateX(Math.PI / 2).translate(0, 0, short / 2);
+            const mesh = new THREE.Mesh(across === "z" ? log.translate(a, top - radius * 0.4, 0) : log.rotateY(Math.PI / 2).translate(0, top - radius * 0.4, a), stuff("timber"));
+
+            solid.add(objectSolid(mesh));
+        });
+    }
+
+    // Round the stairwell: trimmers along its edges, and a dark well going up out of sight
+    if (hole) {
+        const [x0, z0, x1, z1] = hole;
+
+        solid.box(x0 - 0.6, top - m(0.3), z0 - 0.6, x1 + 0.6, top, z0, stuff("timber"), { under: stuff("timber") });
+        solid.box(x0 - 0.6, top - m(0.3), z1, x1 + 0.6, top, z1 + 0.6, stuff("timber"), { under: stuff("timber") });
+        solid.box(x0, top + board, z0, x1, top + m(1.6), z1, stuff("soot"));
     }
 }
 
@@ -596,11 +1099,15 @@ function taproom(map) {
     // Flagstones
     solid.box(-m(0.3), -0.5, -m(0.3), w + m(0.3), 0, h + m(0.3), material("stone"));
 
-    // The walls, the door in the middle of the south one (between its two door squares)
+    // The walls, the door in the middle of the south one (between its two door squares); windows
+    // in the north, south and west walls (and where the stairs would be, if there's no floor
+    // above)
     const doors = map.marks.D;
     const doorMiddle = (doors[0][0] + doors.at(-1)[0] + 1) / 2;
+    const stair = map.pieces.find((piece) => piece.kind === "stairs");
+    const panes = [9.5, 14, ...(stair ? [] : [3.5])].map((at) => ({ side: "n", at })).concat([3.5, 14].map((at) => ({ side: "s", at })), [3.5, 12].map((at) => ({ side: "w", at })));
 
-    outerWalls(solid, map, map.finish ?? "plaster", [{ side: "s", from: doorMiddle - 0.9, to: doorMiddle + 0.9, lintel: 2.35 }]);
+    walledIn(solid, map, map.finish ?? "plaster", [{ side: "s", from: doorMiddle - 0.9, to: doorMiddle + 0.9, lintel: 2.35 }], panes);
 
     // The door, shut, in its frame
     const [doorLeft, doorRight, wallZ] = [m(doorMiddle - 0.9), m(doorMiddle + 0.9), h];
@@ -610,28 +1117,13 @@ function taproom(map) {
     solid.box(doorRight, 0, wallZ - 0.6, doorRight + 0.8, m(2.45), wallZ + 0.6, material("timber", WALL));
     solid.box(m(doorMiddle - 0.35), m(1.05), wallZ - 0.5, m(doorMiddle - 0.2), m(1.15), wallZ - 0.2, material("iron", WALL));
 
-    // Windows: daylight on the north, south and west walls
-    for (const x of [9.5, 14]) {
-        windowIn(solid, "x", 0, m(x), -1);
-    }
-
-    for (const x of [3.5, 14]) {
-        windowIn(solid, "x", h, m(x), 1);
-    }
-
-    for (const z of [3.5, 12]) {
-        windowIn(solid, "z", 0, m(z), -1);
-    }
-
-    // The stairs up, along the north wall, rising east from their foot (if there's a floor above;
-    // else another window)
-    const stair = map.pieces.find((piece) => piece.kind === "stairs");
-
+    // The stairs up, along the north wall, rising east from their foot (if there's a floor
+    // above), through the ceiling
     if (stair) {
         stairs(solid, m(stair.x), m(stair.x + stair.w), m(stair.y), m(stair.y + stair.h), 0, m(STOREY), m(stair.y + stair.h));
-    } else {
-        windowIn(solid, "x", 0, m(3.5), -1);
     }
+
+    ceiling(solid, map, stair ? [m(stair.x), m(stair.y), m(stair.x + stair.w), m(stair.y + stair.h)] : null);
 
     // The hearth: a stone chimney breast on the west wall, a wide opening, a mantel beam, the
     // hearthstone before it; logs and fire; a boar turning on a spit over the flames
@@ -745,24 +1237,27 @@ function taproom(map) {
         }
     }
 
-    // A wheel of candles hanging over the tables
-    solid.add(objectSolid(candleWheel(m(7.5), m(8), m(2.55), m(0.7), 6)));
+    // Wheels of candles hanging over the tables, and a lantern over the bar
+    solid.add(objectSolid(candleWheel(m(7.5), m(5.5), m(2.45), m(0.7), 6)));
+    solid.add(objectSolid(candleWheel(m(7.5), m(10.5), m(2.45), m(0.7), 6)));
+    solid.add(objectSolid(lantern(m(bar.x + 1.5), m(bar.y + bar.h / 2), m(2.2))));
 
     return {
         solid,
         moving,
         flames: fires,
-        lights: [
-            { kind: "fire", x: 1.1, y: 1.0, z: hz, colour: 0xff8a3a, intensity: 9, distance: 14, flicker: 0.25 },
-            { kind: "lamp", x: 8, y: 2.3, z: 8, colour: 0xffc27a, intensity: 6, distance: 18, flicker: 0.05 },
-        ],
+        lights: [{ kind: "fire", x: 1.1, y: 1.0, z: hz, colour: 0xff8a3a, intensity: 9, distance: 14, flicker: 0.25 }],
         hearth: { x: 1.1, y: 0.8, z: hz },
     };
 }
 
-// A wheel of `count` candles hanging on a rod, its middle at x, z (art pixels), `y` high, `radius` across
+// A wheel of `count` candles hanging from the ceiling on three chains, its middle at x, z (art
+// pixels), `y` high, `radius` across
 function candleWheel(wheelX, wheelZ, wheelY, radius, count) {
     const wheel = new THREE.Group();
+    const top = m(STOREY);
+    const hook = Math.min(top - m(0.25), wheelY + m(0.55));
+    const flames = [];
 
     wheel.add(new THREE.Mesh(new THREE.TorusGeometry(radius, 0.35, 5, 18).rotateX(Math.PI / 2).translate(wheelX, wheelY, wheelZ), material("timber")));
 
@@ -772,11 +1267,37 @@ function candleWheel(wheelX, wheelZ, wheelY, radius, count) {
 
         wheel.add(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, m(0.18), 6).translate(x, wheelY + m(0.09), z), material("candle")));
         wheel.add(new THREE.Mesh(new THREE.ConeGeometry(0.12, m(0.06), 5).translate(x, wheelY + m(0.21), z), material("candle-flame")));
+        flames.push([x, wheelY + m(0.21), z]);
     }
 
-    wheel.add(new THREE.Mesh(new THREE.BoxGeometry(0.15, m(0.8), 0.15).translate(wheelX, wheelY + m(0.4), wheelZ), material("iron")));
+    // Three chains from the rim to a ring, and one from the ring up to the hook in the ceiling
+    for (let k = 0; k < 3; k++) {
+        const angle = (k / 3) * Math.PI * 2 + 0.5;
+
+        wheel.add(rod([wheelX + Math.cos(angle) * radius, wheelY, wheelZ + Math.sin(angle) * radius], [wheelX, hook, wheelZ], 0.08, material("iron")));
+    }
+
+    wheel.add(new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.1, 4, 10).rotateX(Math.PI / 2).translate(wheelX, hook, wheelZ), material("iron")));
+    wheel.add(rod([wheelX, hook, wheelZ], [wheelX, top, wheelZ], 0.1, material("iron")));
+    lit("lamp", wheelX, wheelY + m(0.25), wheelZ, { count, glows: flames });
 
     return wheel;
+}
+
+// A thin rod (a chain, seen from afar) from one point to another (art pixels)
+function rod(from, to, radius, stuff) {
+    const [a, b] = [new THREE.Vector3(...from), new THREE.Vector3(...to)];
+    const length = a.distanceTo(b);
+    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, length, 4), stuff);
+
+    mesh.position.copy(a).add(b).multiplyScalar(0.5);
+    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.sub(a).normalize());
+    mesh.updateMatrix();
+    mesh.geometry.applyMatrix4(mesh.matrix);
+    mesh.position.set(0, 0, 0);
+    mesh.quaternion.identity();
+
+    return mesh;
 }
 
 // Runs of seats along each row (benches, `b`, or pews, `p`: each square a seat)
@@ -854,17 +1375,9 @@ function upstairs(map) {
     const inn = map.look === "inn";
     const [finish, cloth] = inn ? ["plaster-white", "wool-green"] : ["plaster-rose", "velvet"];
 
-    outerWalls(solid, map, finish);
+    walledIn(solid, map, finish, [], [{ side: "w", at: 4 }, { side: "w", at: 11 }, ...[11, 15.5].flatMap((at) => [{ side: "n", at }, { side: "s", at }])]);
     innerWalls(solid, map, finish, cloth);
-
-    for (const z of [4, 11]) {
-        windowIn(solid, "z", 0, m(z), -1);
-    }
-
-    for (const x of [11, 15.5]) {
-        windowIn(solid, "x", 0, m(x), -1);
-        windowIn(solid, "x", h, m(x), 1);
-    }
+    ceiling(solid, map);
 
     // Rugs: a big one before the counter, a runner along the hallway
     rug(solid, m(0.6), m(6.2), m(7.4), m(12.8));
@@ -931,25 +1444,21 @@ function upstairs(map) {
         washstand(solid, m(piece.x + 0.5), m(piece.y + 0.5));
     }
 
+    // (A candle on each chest, to go to bed by)
     for (const piece of map.pieces.filter((each) => each.kind === "chest")) {
         chest(solid, m(piece.x + 0.5), m(piece.y + 0.5));
+        candle(solid, m(piece.x + 0.3), m(piece.y + 0.5), m(0.52));
     }
 
     // Sconces in the hallway and by the counter: red glass in a madam's house, clear at an inn
     for (const [x, z] of [[9, 5.62], [13.5, 5.62], [9, 9.38], [13.5, 9.38], [0.05, 8]]) {
-        solid.box(m(x) - 0.5, m(1.8), m(z) - 0.5, m(x) + 0.5, m(2.1), m(z) + 0.5, material(inn ? "sconce-warm" : "sconce", WALL));
+        sconce(solid, m(x), m(z), inn);
     }
 
-    return {
-        solid,
-        moving: [],
-        flames: [],
-        lights: [
-            { kind: "lamp", x: 4, y: 2.4, z: 7.5, colour: inn ? 0xffc27a : 0xff8a6a, intensity: 7, distance: 15, flicker: 0.06 },
-            { kind: "fire", x: 13, y: 2.2, z: 7.5, colour: inn ? 0xffa860 : 0xff5a5a, intensity: 5, distance: 14, flicker: 0.1 },
-        ],
-        hearth: null,
-    };
+    // A wheel of candles over the lounge
+    solid.add(objectSolid(candleWheel(m(4), m(8), m(2.45), m(0.7), 6)));
+
+    return { solid, moving: [], flames: [], lights: [], hearth: null };
 }
 
 // --- The smithy ---
@@ -966,15 +1475,9 @@ function smithy(map) {
     const doors = map.marks.D;
     const doorMiddle = (doors[0][0] + doors.at(-1)[0] + 1) / 2;
 
-    outerWalls(solid, map, "stone", [{ side: "s", from: doorMiddle - 0.7, to: doorMiddle + 0.7, lintel: 2.2 }]);
+    walledIn(solid, map, "stone", [{ side: "s", from: doorMiddle - 0.7, to: doorMiddle + 0.7, lintel: 2.2 }], [{ side: "e", at: 4 }, { side: "e", at: 9 }, { side: "s", at: 3.5 }, { side: "s", at: 12.5 }]);
     solid.box(m(doorMiddle - 0.7), 0, h - 0.2, m(doorMiddle + 0.7), m(2.2), h + 0.4, material("planks-dark", WALL));
-
-    for (const z of [4, 9]) {
-        windowIn(solid, "z", w, m(z), 1);
-    }
-
-    windowIn(solid, "x", h, m(3.5), 1);
-    windowIn(solid, "x", h, m(12.5), 1);
+    ceiling(solid, map);
 
     // The forge: a waist-high hearth of stone against the north wall, a bed of glowing coals on
     // it, a hood over it narrowing to the chimney, and a fire
@@ -1103,14 +1606,14 @@ function smithy(map) {
     solid.box(wx0 + m(0.2), m(0.78), wz0 + m(1.4), wx0 + m(0.4), m(0.82), wz0 + m(1.8), material("iron"));
     candle(solid, (wx0 + wx1) / 2, wz1 - m(0.4), m(0.78));
 
+    // A lantern hanging in the middle
+    solid.add(objectSolid(lantern(m(map.width / 2), m(map.height * 0.6), m(2.2))));
+
     return {
         solid,
         moving,
         flames: fires,
-        lights: [
-            { kind: "fire", x: forge.x + forge.w / 2, y: 1.2, z: forge.y + forge.h, colour: 0xff7a2a, intensity: 10, distance: 14, flicker: 0.3 },
-            { kind: "lamp", x: map.width / 2, y: 2.5, z: map.height * 0.6, colour: 0xffc27a, intensity: 4, distance: 16, flicker: 0.05 },
-        ],
+        lights: [{ kind: "fire", x: forge.x + forge.w / 2, y: 1.2, z: forge.y + forge.h, colour: 0xff7a2a, intensity: 10, distance: 14, flicker: 0.3 }],
         hearth: { x: forge.x + forge.w / 2, y: 0.95, z: forge.y + forge.h / 2 },
     };
 }
@@ -1161,18 +1664,13 @@ function temple(map) {
     const doors = map.marks.D;
     const doorMiddle = (doors[0][0] + doors.at(-1)[0] + 1) / 2;
 
-    outerWalls(solid, map, "plaster-white", [{ side: "s", from: doorMiddle - 0.8, to: doorMiddle + 0.8, lintel: 2.6 }]);
+    // Windows down both sides, one for each of the Six
+    const panes = GOD_IDS.map((id, k) => ({ side: k % 2 ? "e" : "w", at: 3 + k * 2.4 })).filter(({ at }) => at < map.height - 2);
+
+    walledIn(solid, map, "plaster-white", [{ side: "s", from: doorMiddle - 0.8, to: doorMiddle + 0.8, lintel: 2.6 }], panes);
     solid.box(m(doorMiddle - 0.8), 0, h - 0.2, m(doorMiddle + 0.8), m(2.6), h + 0.4, material("planks-dark", WALL));
     solid.box(m(doorMiddle - 0.5), m(0.02), m(3.4), m(doorMiddle + 0.5), m(0.04), h - m(0.6), material("rug"));
-
-    // Tall windows down both sides, glazed in the Six's colours, and a round one over the altar
-    GOD_IDS.forEach((id, k) => {
-        const z = m(3 + k * 2.4);
-
-        if (z < h - m(2)) {
-            windowIn(solid, "z", k % 2 ? w : 0, z, k % 2 ? 1 : -1);
-        }
-    });
+    ceiling(solid, map);
 
     // Pillars along the walls between the windows
     for (let z = m(2); z < h - m(1.5); z += m(2.4)) {
@@ -1263,19 +1761,9 @@ function temple(map) {
     // A great ring of candles hanging over the nave
     const [cx, cz] = [w / 2, h * 0.45];
 
-    solid.add(objectSolid(candleWheel(cx, cz, m(2.7), m(1.1), 10)));
+    solid.add(objectSolid(candleWheel(cx, cz, m(2.4), m(1.1), 10)));
 
-    return {
-        solid,
-        moving: [],
-        flames: [],
-        lights: [
-            { kind: "lamp", x: map.width / 2, y: 2.4, z: altar.y + 2, colour: 0xffe2b0, intensity: 8, distance: 16, flicker: 0.04 },
-            { kind: "lamp", x: map.width / 2, y: 2.6, z: map.height * 0.6, colour: 0xe8eeff, intensity: 5, distance: 18, flicker: 0.02 },
-        ],
-        hearth: null,
-        patron,
-    };
+    return { solid, moving: [], flames: [], lights: [], hearth: null, patron };
 }
 
 // --- The adventurers' guild ---
@@ -1292,16 +1780,9 @@ function guild(map) {
     const doors = map.marks.D;
     const doorMiddle = (doors[0][0] + doors.at(-1)[0] + 1) / 2;
 
-    outerWalls(solid, map, "plaster-ochre", [{ side: "s", from: doorMiddle - 1.1, to: doorMiddle + 1.1, lintel: 2.6 }]);
+    walledIn(solid, map, "plaster-ochre", [{ side: "s", from: doorMiddle - 1.1, to: doorMiddle + 1.1, lintel: 2.6 }], [{ side: "s", at: 4.5 }, { side: "s", at: 14.5 }, { side: "e", at: 3 }, { side: "e", at: 12 }]);
     solid.box(m(doorMiddle - 1.1), 0, h - 0.2, m(doorMiddle + 1.1), m(2.6), h + 0.4, material("planks-dark", WALL));
-
-    for (const x of [4.5, 14.5]) {
-        windowIn(solid, "x", h, m(x), 1);
-    }
-
-    for (const z of [3, 12]) {
-        windowIn(solid, "z", w, m(z), 1);
-    }
+    ceiling(solid, map);
 
     // The guild's banners, blue with a gold shield, either side of the counter and by the door
     const banner = (x, z, face) => {
@@ -1442,7 +1923,7 @@ function guild(map) {
     }
 
     // A ring of candles hanging over the tables
-    solid.add(objectSolid(candleWheel(m(10.5), m(8), m(2.6), m(0.8), 8)));
+    solid.add(objectSolid(candleWheel(m(10.5), m(8), m(2.45), m(0.8), 8)));
 
     return {
         solid,
@@ -1450,7 +1931,6 @@ function guild(map) {
         flames: [fire],
         lights: [
             { kind: "fire", x: map.width - 0.6, y: 1, z: hearth.y + hearth.h / 2, colour: 0xff8a3a, intensity: 7, distance: 14, flicker: 0.22 },
-            { kind: "lamp", x: map.width / 2, y: 2.5, z: map.height * 0.45, colour: 0xffd6a0, intensity: 7, distance: 20, flicker: 0.05 },
         ],
         hearth: { x: map.width - 0.5, y: 0.6, z: hearth.y + hearth.h / 2 },
     };
@@ -1568,16 +2048,9 @@ function hall(map) {
     const doors = map.marks.D;
     const doorMiddle = (doors[0][0] + doors.at(-1)[0] + 1) / 2;
 
-    outerWalls(solid, map, "plaster-white", [{ side: "s", from: doorMiddle - 1, to: doorMiddle + 1, lintel: 2.5 }]);
+    walledIn(solid, map, "plaster-white", [{ side: "s", from: doorMiddle - 1, to: doorMiddle + 1, lintel: 2.5 }], [{ side: "s", at: 3.5 }, { side: "s", at: 14.5 }, { side: "w", at: 3 }, { side: "w", at: 10 }]);
     solid.box(m(doorMiddle - 1), 0, h - 0.2, m(doorMiddle + 1), m(2.5), h + 0.4, material("planks-dark", WALL));
-
-    for (const x of [3.5, 14.5]) {
-        windowIn(solid, "x", h, m(x), 1);
-    }
-
-    for (const z of [3, 10]) {
-        windowIn(solid, "z", 0, m(z), -1);
-    }
+    ceiling(solid, map);
 
     wallBanner(solid, m(8.5), 0.3, "z", "velvet", "cloth-gold");
     wallBanner(solid, m(10.5), 0.3, "z", "velvet", "cloth-gold");
@@ -1618,13 +2091,13 @@ function hall(map) {
     const [hearth] = at("hearth");
     const fire = sideHearth(solid, map, hearth);
 
-    solid.add(objectSolid(candleWheel(m(8), m(6.5), m(2.6), m(0.8), 8)));
+    solid.add(objectSolid(candleWheel(m(8), m(6.5), m(2.45), m(0.8), 8)));
 
     return {
         solid,
         moving: [],
         flames: [fire.fire],
-        lights: [fire.light, { kind: "lamp", x: map.width / 2, y: 2.5, z: map.height * 0.45, colour: 0xffd6a0, intensity: 7, distance: 18, flicker: 0.05 }],
+        lights: [fire.light],
         hearth: fire.at,
     };
 }
@@ -1643,13 +2116,9 @@ function keep(map) {
     const doors = map.marks.D;
     const doorMiddle = (doors[0][0] + doors.at(-1)[0] + 1) / 2;
 
-    outerWalls(solid, map, "stone-warm", [{ side: "s", from: doorMiddle - 1.2, to: doorMiddle + 1.2, lintel: 3.1 }]);
-    solid.box(m(doorMiddle - 1.2), 0, h - 0.2, m(doorMiddle + 1.2), m(3.1), h + 0.4, material("planks-dark", WALL));
-
-    for (const z of [3, 11]) {
-        windowIn(solid, "z", 0, m(z), -1);
-        windowIn(solid, "z", w, m(z), 1);
-    }
+    walledIn(solid, map, "stone-warm", [{ side: "s", from: doorMiddle - 1.2, to: doorMiddle + 1.2, lintel: 2.8 }], [3, 11].flatMap((at) => [{ side: "w", at }, { side: "e", at }]));
+    solid.box(m(doorMiddle - 1.2), 0, h - 0.2, m(doorMiddle + 1.2), m(2.8), h + 0.4, material("planks-dark", WALL));
+    ceiling(solid, map);
 
     // The carpet, from the door to the dais
     for (const carpet of at("carpet")) {
@@ -1755,19 +2224,14 @@ function keep(map) {
 
     const fires = at("hearth").map((hearth) => sideHearth(solid, map, hearth));
 
-    solid.add(objectSolid(candleWheel(m(map.width / 2), m(5), m(3), m(1.1), 12)));
-    solid.add(objectSolid(candleWheel(m(map.width / 2), m(11), m(3), m(1.1), 12)));
+    solid.add(objectSolid(candleWheel(m(map.width / 2), m(5), m(2.5), m(1.1), 12)));
+    solid.add(objectSolid(candleWheel(m(map.width / 2), m(11), m(2.5), m(1.1), 12)));
 
     return {
         solid,
         moving: [],
         flames: fires.map(({ fire }) => fire),
-        lights: [
-            ...fires.map(({ light }) => light),
-            { kind: "lamp", x: map.width / 2, y: 2.8, z: 2.5, colour: 0xffd6a0, intensity: 9, distance: 16, flicker: 0.05 },
-            { kind: "lamp", x: map.width / 2, y: 2.8, z: 8, colour: 0xffd6a0, intensity: 9, distance: 18, flicker: 0.05 },
-            { kind: "lamp", x: map.width / 2, y: 2.8, z: 13, colour: 0xffd6a0, intensity: 8, distance: 16, flicker: 0.05 },
-        ],
+        lights: fires.map(({ light }) => light),
         hearth: fires[0]?.at ?? null,
     };
 }
@@ -1948,9 +2412,11 @@ function accents(solid, map, people) {
 
 /**
  * Build a map's inside: { map, object (a Group at the map's place in the world, in metres),
- * lights (point lights to place: { kind, x, y, z (world metres), colour, intensity, distance,
- * flicker }), hearth (world point of its fire, or null), update(dt, time) (turns the spit,
- * moves the flames), drive(name, time, seconds) (turns a named part a while), dispose() }.
+ * lights (its flames, as point lights: { kind, x, y, z (world metres), colour, intensity,
+ * distance, flicker, seed }, its fires first: roomlight.js), daylight (the way towards the sun
+ * shining in at its windows, [x, y, z], or null for none), ceiling (how high it is: STOREY),
+ * hearth (world point of its fire, or null), update(dt, time) (turns the spit, moves the flames), drive(name, time, seconds) (turns a
+ * named part a while), dispose() }.
  */
 export function buildInterior(map) {
     return allAtOnce(buildingInterior(map));
@@ -1965,7 +2431,7 @@ function mergeInPlace(part) {
     part.rotation.set(0, 0, 0);
     part.updateMatrixWorld(true);
 
-    const merged = joined(partsOf(part, { atlas: (own) => atlasInside(own.userData.wall) }));
+    const merged = joined(partsOf(part, { atlas: (stuff) => atlasInside(stuff.userData.cut) }));
 
     part.traverse((node) => node.geometry?.dispose());
     part.clear();
@@ -1980,22 +2446,29 @@ function mergeInPlace(part) {
  * merged), returning it.
  */
 export function* buildingInterior(map) {
-    const people = PALETTES[map.people] ? map.people : null;
+    const own = PALETTES[map.people] ? map.people : null;
     let built;
+    let lit;
 
-    // (Built of its people's materials, and dressed as they dress their walls)
-    palette = PALETTES[people] ?? null;
-    framed = !people || FRAMED.has(people);
+    // (Built of its people's materials, its ceiling made their way, and dressed as they dress
+    // their walls; its flames and windows noted as they're built)
+    palette = PALETTES[own] ?? null;
+    framed = !own || FRAMED.has(own);
+    people = own;
+    lighting = { flames: [], glows: [], panes: [], daylight: null };
 
     try {
         built = BUILDERS[map.style ?? map.id](map);
 
-        if (people) {
-            accents(built.solid, map, people);
+        if (own) {
+            accents(built.solid, map, own);
         }
     } finally {
+        lit = lighting;
         palette = null;
         framed = true;
+        people = null;
+        lighting = { flames: [], glows: [], panes: [], daylight: null };
     }
 
     yield;
@@ -2015,7 +2488,7 @@ export function* buildingInterior(map) {
 
     // Everything that doesn't move merged: what the atlas draws into a mesh for the walls and one
     // for the rest, anything else by its material; the spit and flames apart
-    const parts = partsOf(statics, { atlas: (own) => atlasInside(own.userData.wall) });
+    const parts = partsOf(statics, { atlas: (stuff) => atlasInside(stuff.userData.cut) });
 
     yield;
 
@@ -2037,12 +2510,26 @@ export function* buildingInterior(map) {
     }
 
     object.add(animated);
+
+    // The glows round the flames (the fires' as big as they are), and the beams of daylight
+    const fires = built.lights.filter(({ kind }) => kind === "fire").map(({ x, y, z, colour }) => ({ x, y: y - 0.3, z, size: 1.5, colour }));
+
+    object.add(glowsOf([...lit.glows, ...fires]));
+
+    const beams = lit.daylight && beamsOf(map, lit.panes, lit.daylight);
+
+    if (beams) {
+        object.add(beams);
+    }
+
     object.position.set(ox, 0, oz);
     object.name = map.id;
 
+    // (Everything casts shadows but the flames, their glows and the beams of light, and the glass
+    // the daylight comes in through)
     object.traverse((node) => {
         if (node.isMesh && !node.material.userData?.flame && node.material.type !== "ShaderMaterial") {
-            node.castShadow = true;
+            node.castShadow = !node.material.name.startsWith("window");
             node.receiveShadow = true;
         }
     });
@@ -2054,10 +2541,33 @@ export function* buildingInterior(map) {
         });
     }
 
+    // Its ceiling (each mesh of it, how high its top is, world metres, and whether the camera's
+    // over it all), drawn into the sun's shadows always (keeping the sun out but at the windows),
+    // and into the view only while the camera's under some of it (none of it drawn, as three.js
+    // has it, while its geometry's to draw none; its shadow drawn first)
+    const overhead = [];
+
+    object.updateMatrixWorld(true);
+    object.traverse((node) => {
+        if (node.isMesh && node.material.name.endsWith("-ceiling")) {
+            const each = { top: new THREE.Box3().setFromObject(node).max.y, over: false };
+
+            node.onBeforeShadow = () => {
+                node.geometry.drawRange.count = Infinity;
+            };
+            node.onBeforeRender = () => {
+                node.geometry.drawRange.count = each.over ? 0 : Infinity;
+            };
+            overhead.push(each);
+        }
+    });
+
     return {
         map,
         object,
-        lights: built.lights.map((light) => ({ ...light, colour: (light.kind === "lamp" && LAMPLIGHT[people]) || light.colour, x: ox + light.x, z: oz + light.z })),
+        lights: gather([...built.lights, ...lit.flames]).map((light, k) => ({ ...light, colour: ((light.kind === "lamp" || light.kind === "candle") && LAMPLIGHT[own]) || light.colour, x: ox + light.x, z: oz + light.z, seed: k * 17.3 })),
+        daylight: lit.daylight,
+        ceiling: STOREY,
         hearth: built.hearth ? { x: ox + built.hearth.x, y: built.hearth.y, z: oz + built.hearth.z } : null,
         update(dt, time) {
             for (const part of built.moving) {
@@ -2069,6 +2579,18 @@ export function* buildingInterior(map) {
 
             for (const fire of built.flames) {
                 fire.userData.flame.uniforms.time.value = time;
+            }
+
+            INTERIOR_GLOW.time.value = time;
+        },
+        /**
+         * Seen from the camera (world metres): its ceiling not drawn while it's all lower than the
+         * camera (the cut would throw away every pixel of it, each worked out first), but still
+         * casting its shadow, so the sun comes in only at the windows.
+         */
+        seenFrom(camera) {
+            for (const each of overhead) {
+                each.over = each.top < camera.y;
             }
         },
         /** Turn one of its named moving parts (the grindstone) for a while, from `time` (s). */

@@ -1012,7 +1012,7 @@ describe("each people's buildings (peoples/)", () => {
         assert.ok(namesOf(taproom("human")).has("stone"));
     });
 
-    it("draws each inside from the atlas, a mesh for its walls and one for the rest, only its daylight, flames, roast and lights apart", async () => {
+    it("draws each inside from the atlas, a mesh for its walls, one for its ceiling and one for the rest, only its daylight, flames, roast and lights apart", async () => {
         const { readPlan } = await import("../client/js/core/interiors.js");
         const { tavernRooms, templeRooms } = await import("../client/js/core/insides.js");
         const { buildInterior } = await import("../client/js/world/interiors3d.js");
@@ -1024,7 +1024,7 @@ describe("each people's buildings (peoples/)", () => {
 
             return buildInterior(map);
         };
-        const apart = /^(window|candle-flame|sconce|sconce-warm|roast|embers|glow-[a-z]+)-inside(-wall)?$/;
+        const apart = /^(window|window-sun|candle-flame|sconce|sconce-warm|roast|embers|glow-[a-z]+)-inside(-wall|-ceiling)?$/;
 
         for (const built of [inside(tavernRooms, "taproom-inside"), inside(templeRooms, "temple-inside", { patron: "aurelia" })]) {
             const meshes = [];
@@ -1033,8 +1033,9 @@ describe("each people's buildings (peoples/)", () => {
 
             const atlas = meshes.filter(({ material }) => material.name.startsWith("atlas-inside"));
 
-            assert.ok(meshes.length <= 12, `${meshes.length} meshes`);
-            assert.ok(atlas.length >= 2 && atlas.every(({ geometry }) => geometry.attributes.layer));
+            assert.ok(meshes.length <= 15, `${meshes.length} meshes: ${meshes.map(({ material }) => material.name).join()}`);
+            assert.ok(atlas.length >= 3 && atlas.every(({ geometry }) => geometry.attributes.layer));
+            assert.deepEqual(new Set(atlas.map(({ material }) => material.name)), new Set(["atlas-inside", "atlas-inside-wall", "atlas-inside-ceiling"]));
             assert.ok(meshes.every(({ material }) => !material.map), "nothing painted of its own");
             assert.ok(meshes.every(({ material }) => material.name.startsWith("atlas-inside") || apart.test(material.name) || material.type === "ShaderMaterial"), meshes.map(({ material }) => material.name).join());
             built.dispose();
