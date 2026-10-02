@@ -170,7 +170,8 @@ a hamlet's middle is a green. Its houses have one storey, or two now and then.
   stand at every angle as the streets bend), 0.4 metres back from it (up to 2 metres more where
   the street bends towards its corners), wall to wall with their neighbours or nearly, a yard
   behind most (with a vegetable bed, a tree, or barrels, crates, sacks or a cart by the back
-  wall). Fewer lots are built on towards the edge, and none past it (the edge wanders).
+  wall; fenced, its bed dug and washing hung out: below). Fewer lots are built on towards the
+  edge, and none past it (the edge wanders).
 - **Back buildings** (outhouses, workshops, barns: 4.5 to 7.5 metres) filling the blocks behind
   the houses, each lined up with the street nearest it and facing it, a narrow way between them.
 - **Landmarks**: the tavern, church, smithy and guild (and in a city, the market hall) facing
@@ -1131,6 +1132,35 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     with any (and one for the start town's): 288 triangles on a human keep (two banners, two
     pennants), 576 on a human castle, 384 on an orcs' keep, 192 on a cat folk's (measured, drawn
     with them and without).
+- **Gardens, fences and washing lines** (terrain plan M7c; `art/kits/yards.js`), in the yards
+  behind the peoples' houses (laid out with their towns: `layoutTown`'s `yards`, worked out once
+  the town's laid out, from no draws of its own, so every town's laid out as it was):
+  - **Fences** along a yard's sides and back where nothing stands (a tree, a pile of barrels, a
+    building), and where two yards meet, only one: the humans' wattle hurdles between round
+    stakes or posts and rails, the elves' clipped hedges, the dark elves' black stone kerbs with
+    iron bars, the cat folk's mud walls, the lizard folk's reed screens, the orcs' sharpened
+    stakes, each its own height. A gateway in a back over 3 m long; about one yard in eight left
+    open. Drawn only, in no one's way, as the hedgerows are.
+  - **Beds** (a third of the yards): the layout's soil, cut back clear of anything stood in it,
+    raised in its people's edging (boards, pale or black stone, mud, cane; the orcs' heaped),
+    in rows along it of what they grow: cabbages, leeks, beans up their canes, squashes, herbs,
+    and flowers pink, white and gold (the elves' mostly flowers); a row in four bare.
+  - **Washing lines:** across the back of nearly half the yards with room for one (none where a
+    tree stands in the way), on two posts, sagging, as many as seven pieces of washing pegged out
+    along it in their people's colours (linen, unbleached, faded blue and red; the dark elves'
+    violets, the cat folk's saffron and indigo), hanging and swinging in the breeze as the
+    banners do (`world/cloth.js`, a grid of 4 by 4 squares each); the orcs' a rack of hides.
+  - **How they're drawn:** built by the kit as each yard's piece of the chunk (the start town's
+    with the rest of it), on the ground as it lies under the yard (`lieOf`: its corners'
+    heights), merged with the buildings into the atlas's material; their washing in the chunk's
+    cloth. A yard reaching past its settlement's edge into a river or a lake, or under a bridge,
+    isn't drawn (`pointsOf`: the world's squares under it). The plants, an orc's stakes, a dark
+    elf's iron bars and a washing line's rope are only worth drawing near (`Solid.near`), left
+    undrawn past `DETAIL_NEAR`: a yard is 460 to 1,140 triangles close by (by people; an orc's
+    the most), 16 to 256 from further off. No draws of their own (but a chunk's cloth, where it
+    had none: its washing); each piece of washing 32 triangles, casting no shadow; a new tint and
+    two plain colours, no new picture. Built in a few milliseconds a yard, a piece of the
+    chunk's buildings at a time.
 - **Each people's castle, special places and watchtowers** (core/sites.js: WORLD.md), each
   whose middle is in the chunk, built by its people's kit as a settlement's pieces are (the
   humans' castle laid out by castle.js, their abbey, windmill and manor as their landmarks).

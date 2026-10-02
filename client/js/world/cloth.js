@@ -170,7 +170,7 @@ export function paintCloth(people, canvas = document.createElement("canvas")) {
  * of that a cloth hung against a wall has (standing out from it, never into it); and how many
  * squares each kind is drawn with (across, down).
  */
-export const CLOTH = Object.freeze({ swing: 0.12, ripple: 0.045, lean: 0.16, flap: 0.14, speed: [1.3, 3.1, 6.2], wall: 0.4, grid: { hang: [6, 8], fly: [8, 3] } });
+export const CLOTH = Object.freeze({ swing: 0.12, ripple: 0.045, lean: 0.16, flap: 0.14, speed: [1.3, 3.1, 6.2], wall: 0.4, grid: { hang: [6, 8], wash: [4, 4], fly: [8, 3] } });
 
 /** The way the breeze blows (east and south, a unit: the way the chimneys' smoke leans). */
 export const BREEZE = Object.freeze(((x, z) => [x / Math.sqrt(x * x + z * z), z / Math.sqrt(x * x + z * z)])(...SMOKE.wind));
@@ -178,7 +178,8 @@ export const BREEZE = Object.freeze(((x, z) => [x / Math.sqrt(x * x + z * z), z 
 /** The cloths drawn from the one picture, in order: each people's, then the plain ones. */
 export const LOOKS = Object.freeze(["human", "elf", "darkElf", "cat", "lizard", "orc", "plain", "square", "ragged", "pennant"]);
 
-const KINDS = { hang: 0, wall: 1, fly: 2 };
+// (Washing on a line hangs as a banner from a bar does, drawn in fewer squares: it's small)
+const KINDS = { hang: 0, wash: 0, wall: 1, fly: 2 };
 
 // One of the plain cloths, white to be tinted, on a canvas `paint` in a cell PICTURE wide at x0:
 // a swallowtail, a square, a ragged war banner with a black hand on it, or a pennant tapering to
@@ -353,7 +354,7 @@ const hash = (x, y, z) => {
 /**
  * The cloths (`pieces`: [{ at: [x, y, z] (metres, in the world: the middle of a hanging cloth's
  * top, or the top of a flag's pole), out: [x, y, z] (the way its front faces: away from the wall
- * it's hung on), width, drop (metres), kind ("hang" from a bar, against a "wall", or a "fly"ing
+ * it's hung on), width, drop (metres), kind ("hang" from a bar, against a "wall", "wash" on a line, or a "fly"ing
  * flag), look (one of LOOKS), colour (sRGB, to tint a plain one; none for a people's own) }]) drawn:
  * a mesh in the world's coordinates, or null if there are none.
  */
@@ -362,7 +363,7 @@ export function clothMesh(pieces) {
         return null;
     }
 
-    const counts = pieces.map(({ kind }) => CLOTH.grid[kind === "fly" ? "fly" : "hang"]);
+    const counts = pieces.map(({ kind }) => CLOTH.grid[kind] ?? CLOTH.grid.hang);
     const corners = counts.reduce((sum, [a, d]) => sum + (a + 1) * (d + 1), 0);
     const squares = counts.reduce((sum, [a, d]) => sum + a * d, 0);
     const positions = new Float32Array(corners * 3);

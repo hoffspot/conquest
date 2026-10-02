@@ -1292,3 +1292,146 @@ describe("banners and flags in the wind (world/cloth.js)", () => {
         banners.dispose();
     });
 });
+
+describe("the yards behind the houses (kits/yards.js)", () => {
+    const PEOPLES = ["human", "elf", "darkElf", "cat", "lizard", "orc"];
+    const yardsOf = (people) => ["village", "town", "city"].flatMap((kind) => layoutTown({ kind, seed: 3, people }).yards);
+    // (The materials of what's built, by name)
+    const namesOf = (object) => {
+        const names = new Set();
+
+        object.traverse((node) => node.isMesh && names.add(node.material.name));
+
+        return names;
+    };
+
+    it("fences each people's yards their own way, standing on the ground as it lies", async () => {
+        const { FENCES, yard, YARD_LOOKS } = await import("../client/js/world/art/kits/yards.js");
+        const STUFF = { wattle: ["wattle"], rails: ["timber-grey"], hedge: ["leafscale-sage"], railing: ["stone-black", "iron-black"], mud: ["mud"], reeds: ["reeds", "bamboo"], stakes: ["bark"] };
+
+        for (const people of PEOPLES) {
+            const yards = yardsOf(people);
+            const seen = new Set();
+
+            assert.ok(yards.length > 3, `${people}: ${yards.length} yards`);
+
+            for (const one of yards) {
+                assert.ok(finite(yard(one)), `${people}: a yard all numbers`);
+                namesOf(yard({ ...one, bed: null, line: false })).forEach((name) => seen.add(name));
+            }
+
+            // (Its fences of what its people make them of, and nothing of another people's)
+            for (const kind of Object.keys(FENCES)) {
+                assert.equal(STUFF[kind].every((name) => seen.has(name)), YARD_LOOKS[people].fences.includes(kind), `${people}: ${kind}`);
+            }
+        }
+
+        // (On ground rising a metre across it, the posts along its right side stand a metre higher
+        // than those along its left, and go into the ground there)
+        const one = yardsOf("human").find(({ fence }) => fence[0].length && fence[2].length);
+        const lowest = (object, side) => {
+            const box = new THREE.Box3().setFromObject(object);
+            let low = Infinity;
+
+            object.traverse((node) => {
+                const position = node.geometry?.attributes.position;
+
+                for (let i = 0; i < (position?.count ?? 0); i++) {
+                    const x = position.getX(i);
+
+                    if ((side < 0 && x < box.min.x + M * 0.3) || (side > 0 && x > box.max.x - M * 0.3)) {
+                        low = Math.min(low, position.getY(i));
+                    }
+                }
+            });
+
+            return low;
+        };
+        const level = yard({ ...one, fence: [one.fence[0], [], one.fence[2]], bed: null, line: false, x: 0.4, y: 0.6 });
+        const sloped = yard({ ...one, fence: [one.fence[0], [], one.fence[2]], bed: null, line: false, x: 0.4, y: 0.6, lie: [0, 1, 0, 1] });
+
+        assert.ok(lowest(level, -1) < -M * 0.2 && Math.abs(lowest(level, 1) - lowest(level, -1)) < M * 0.05, "level");
+        assert.ok(Math.abs(lowest(sloped, 1) - lowest(sloped, -1) - M) < M * 0.1, "sloped");
+    });
+
+    it("digs a bed in rows of what its people grow, raised in their edging, or heaped", async () => {
+        const { yard, YARD_LOOKS } = await import("../client/js/world/art/kits/yards.js");
+        const CROPS = { cabbage: "cabbages", squash: "squash", herb: "jade-dark", flower: "flowers", "flower-white": "linen", "flower-gold": "flowers-gold" };
+
+        for (const people of PEOPLES) {
+            const bedded = yardsOf(people).filter(({ bed }) => bed);
+            const seen = new Set();
+
+            for (const one of bedded) {
+                const names = namesOf(yard({ ...one, fence: [[], [], []], line: false }));
+
+                assert.ok(names.has("soil"), `${people}: soil`);
+                assert.equal(names.has(YARD_LOOKS[people].edging), YARD_LOOKS[people].edging !== null, `${people}: edged`);
+                names.forEach((name) => seen.add(name));
+            }
+
+            // (Only what they grow)
+            for (const [crop, name] of Object.entries(CROPS)) {
+                if (!Object.entries(CROPS).some(([other, same]) => same === name && YARD_LOOKS[people].crops.includes(other))) {
+                    assert.ok(!seen.has(name), `${people} grow no ${crop}`);
+                }
+            }
+
+            assert.ok(!bedded.length || YARD_LOOKS[people].crops.some((crop) => seen.has(CROPS[crop] ?? "leaves")), `${people}: something grown`);
+        }
+    });
+
+    it("hangs washing out on a line across a yard's back, in the breeze; the orcs' hides on a rack", async () => {
+        const { clothMesh, CLOTH } = await import("../client/js/world/cloth.js");
+        const { yard, YARDS, YARD_LOOKS } = await import("../client/js/world/art/kits/yards.js");
+        const { YARD_LINE } = await import("../client/js/core/setpieces/town.js");
+
+        for (const people of PEOPLES) {
+            const yards = yardsOf(people);
+            const strung = yards.filter(({ line }) => line).map((one) => ({ one, cloth: yard(one).userData.cloth ?? [] }));
+            const washed = strung.filter(({ cloth }) => cloth.length);
+
+            // (Only where there's room, and on some of those)
+            assert.ok(yards.filter(({ line }) => !line).every((one) => !yard(one).userData.cloth), `${people}: washing only where there's room`);
+            assert.ok(washed.length > 0 || strung.length < 3, `${people}: some washing out`);
+            assert.ok(washed.length <= strung.length * (YARDS.line + 0.35), `${people}: ${washed.length} of ${strung.length} washed`);
+
+            for (const { one, cloth } of washed) {
+                for (const { at, out, width, drop, kind, look, colour } of cloth) {
+                    assert.equal(kind, "wash");
+                    assert.equal(look, "square");
+                    assert.ok(YARD_LOOKS[people].washing.includes(colour), `${people}: washing ${colour}`);
+                    assert.deepEqual(out, [0, 0, 1]);
+                    // (Pegged out across its back, its foot well off the ground)
+                    assert.ok(Math.abs(at[2] - M * YARD_LINE.back) < 1e-9 && at[0] > M * YARD_LINE.side && at[0] < one.w * 20 - M * YARD_LINE.side);
+                    assert.ok(at[1] - drop > M * 0.4 && width > 0 && drop > 0, `${people}: washing off the ground`);
+                }
+            }
+        }
+
+        // (Drawn in fewer squares than a banner, swaying as one)
+        const mesh = clothMesh([{ at: [0, 2, 0], width: 0.6, drop: 0.8, kind: "wash", look: "square", colour: "#ece5d2" }]);
+        const [across, down] = CLOTH.grid.wash;
+
+        assert.equal(mesh.geometry.attributes.position.count, (across + 1) * (down + 1));
+        assert.equal(mesh.geometry.attributes.hang.getZ(0), 0);
+    });
+
+    it("is the same yard every time, and leaves a few unfenced", async () => {
+        const { yard, YARDS } = await import("../client/js/world/art/kits/yards.js");
+        const yards = PEOPLES.flatMap(yardsOf);
+        const count = (object) => {
+            let n = 0;
+
+            object.traverse((node) => (n += node.geometry?.attributes.position.count ?? 0));
+
+            return n;
+        };
+        const fenced = yards.filter((one) => one.fence.some((runs) => runs.length));
+        const open = fenced.filter((one) => count(yard({ ...one, bed: null, line: false })) === 0);
+
+        assert.deepEqual(yard(yards[5]).userData, yard(yards[5]).userData);
+        assert.equal(count(yard(yards[5])), count(yard(yards[5])));
+        assert.ok(open.length / fenced.length > YARDS.open * 0.4 && open.length / fenced.length < YARDS.open * 2, `${open.length} of ${fenced.length} open`);
+    });
+});

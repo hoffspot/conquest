@@ -48,6 +48,7 @@ const state = {
     built: null,
     frames: [],
     stats: null,
+    yards: 0,
     ready: false,
 };
 
@@ -359,6 +360,8 @@ async function build() {
         orbit.distance = sited ? Math.max(30, (set?.radius ?? 20) * 2.6) : { capital: 170, city: 130, town: 90, village: 60, hamlet: 45, farmstead: 40 }[state.show];
         state.place = place;
         state.frames = [{ label: state.show, x: fx, z: fz, w: orbit.distance, d: orbit.distance }];
+        // (And the yards behind its houses: kits/yards.js)
+        state.yards = sited ? 0 : overworld.settlements.laid.get(place.id).town.yards.length;
         finish(sited ? set?.pieces.length ?? 0 : overworld.settlements.laid.get(place.id).town.pieces.length);
 
         return;
@@ -384,7 +387,7 @@ async function build() {
     if (!settlement) {
         const street = state.show === "street" ? (state.people !== "human" ? peopleStreetOf(state.seed, state.people) : streetOf(state.seed)) : state.show === "structures" ? structuresOf(state.seed, state.people) : landmarksOf(state.seed, state.people);
 
-        Object.assign(world, { town: { ...world.town, pieces: street.pieces }, trees: [], width: street.width, height: street.height, stamp: null, origin: 0 });
+        Object.assign(world, { town: { ...world.town, pieces: street.pieces, yards: [] }, trees: [], width: street.width, height: street.height, stamp: null, origin: 0 });
     }
 
     const group = new THREE.Group();

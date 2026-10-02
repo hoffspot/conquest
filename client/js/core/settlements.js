@@ -206,6 +206,30 @@ export class Settlements {
         return found;
     }
 
+    /**
+     * The yards behind the houses of the settlements laid out near a chunk whose middles are in
+     * it, in the world's metres: [{ ...yard, x, y (its middle, metres, in the world), place }]
+     * (layoutTown's yards: drawn only).
+     */
+    yardsIn(cx, cy) {
+        const [x0, y0] = [cx * CHUNK, cy * CHUNK];
+        const found = [];
+
+        for (const place of this.near(cx, cy)) {
+            const settlement = this.laid.get(place.id);
+
+            for (const yard of settlement?.town.yards ?? []) {
+                const [x, y] = [yard.x + settlement.at[0], yard.y + settlement.at[1]];
+
+                if (x >= x0 && y >= y0 && x < x0 + CHUNK && y < y0 + CHUNK) {
+                    found.push({ ...yard, x, y, place: place.id });
+                }
+            }
+        }
+
+        return found;
+    }
+
     /** The settlement (laid out) whose square a point (metres) is in, or null. */
     at(x, y) {
         for (const place of this.near(Math.floor(x / CHUNK), Math.floor(y / CHUNK))) {

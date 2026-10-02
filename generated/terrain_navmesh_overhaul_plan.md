@@ -2126,3 +2126,56 @@ converted data is to be measured in M8 against today's hm08 data.
     spaces, made once); `e2e/pellagos.spec.js` (walking out of the start town, no shader drawn
     reads more than 16 textures); `e2e/building-lab.spec.js` (the fields on the GPU read from the
     land's marks as the ground reads them).
+- **2026-10-02, M7c-3 built** (gardens, fences and washing lines: §9's "signs of life", gardens
+  and washing lines; the chosen village pictures' "wattle and post-and-rail fences" and gardens):
+  - **Why:** the yards behind the peoples' houses were open grass, a patch of soil where a bed
+    was; nothing told one people's yards from another's, and nothing hung out to dry.
+  - **Laid out** (`core/setpieces/town.js` `yards`, worked out once the town is laid out, from
+    no draws of its own, so every town is laid out as before: 144 layouts of every people and
+    size checked the same, piece for piece and square for square): each yard's rectangle; the
+    runs of its sides and back to fence, a step of half a metre at a time where nothing stands
+    (a tree, a pile of barrels, a building), and where two yards meet only the one laid first;
+    its bed, cut back from its back or its front clear of anything stood in it (none under
+    0.9 m deep); and whether a washing line could be strung across its back (`YARD_LINE`). None
+    over the lizard folk's water. Drawn only: in no one's way, as the hedgerows are.
+  - **Built** (`art/kits/yards.js`):
+    - each people's fences (`FENCES`): the humans' wattle hurdles between round stakes or posts
+      and rails, the elves' clipped hedges, the dark elves' black stone kerbs with iron bars,
+      the cat folk's mud walls, the lizard folk's reed screens, the orcs' sharpened stakes, each
+      its own height; a gateway in a back over 3 m long; one yard in eight left open;
+    - its bed raised in its people's edging (boards, pale or black stone, mud, cane; the orcs'
+      heaped), in rows of what they grow (`YARD_LOOKS`, `CROPS`: cabbages, leeks, beans up
+      their canes, squashes, herbs, flowers pink, white and gold), a row in four bare;
+    - a washing line across the back of nearly half the yards with room for one, as many as
+      seven pieces of washing in the people's colours hanging from it, swinging in the breeze
+      (`world/cloth.js`'s kind `wash`, a grid of 4 by 4); the orcs' a rack of hides;
+    - standing on the ground as it lies under the yard (`lieOf`: its corners' heights), posts
+      set 30 cm into it; built as a piece of the chunk (`Settlements.yardsIn`) or the start town,
+      merged with the buildings into the atlas's material; a new tint, `wattle`, of the matting,
+      stretched along each hurdle and squashed up it so it reads as rods woven along it;
+    - none drawn reaching past the settlement's edge into a river or a lake, or under a bridge
+      (the layout knows nothing of the world's water; the first pictures found a yard half in a
+      river).
+  - **Cost** (in the building lab, each view drawn before and after, from the same camera; and the
+    kit's own count):
+    - no draws of their own, merged with the buildings; a chunk's cloth mesh where it had none
+      (its washing): one more draw;
+    - a yard's triangles on average, close by: humans 515, elves 561, dark elves 715, cat folk
+      457, lizard folk 534, orcs 1,136 (their stakes); from further than `DETAIL_NEAR` (40 m),
+      its plants, stakes, iron bars and rope left undrawn (`Solid.near`): 16 to 256;
+    - close views (with the shadows): a human city's yard +10,100 triangles on 268,000; a dark
+      elves' +860; a cat folk city's +1,900; an orc city's +37,000 on 281,000;
+    - each piece of washing 32 triangles (a grid of 4 by 4), no shadow; no new picture (a tint
+      and two plain colours).
+  - **Pictures:** before/after sheet sent in the session (a human city's yards close by and from
+    above, dark elves', cat folk's and orcs'; the elves' yards are under their great trees, and
+    the lizard folk's few: most of their houses stand over their lagoons).
+  - **Versions:** none (the drawing's alone; the layouts unchanged).
+  - **Tests:** `test/setpieces.test.js` (a yard behind each house, as wide as it and facing the
+    same way; fenced where nothing stands, never twice where two meet; its bed and washing
+    line clear; never over water); `test/buildings.test.js` (each people's fences of their own
+    stuff, on the ground as it lies; beds of their own crops in their edging; washing on lines
+    only where there's room, off the ground, in their colours, in the smaller grid; the same
+    every time, a few left open); `test/chunks.test.js` (a chunk's yards built on the ground as it
+    lies, merged as all at once, none over the world's water); `e2e/building-lab.spec.js` (a
+    village's yards).

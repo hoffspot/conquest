@@ -409,6 +409,111 @@ describe("town layouts (town.js)", () => {
             }
         }
     });
+
+    it("keeps a yard behind its houses, fenced where nothing stands and once where two meet, its bed and washing line clear", () => {
+        const towns = [...layouts.values(), ...["cat", "orc", "lizard", "elf", "darkElf"].flatMap((people) => ["village", "town", "city"].map((kind) => layoutTown({ kind, seed: 3, people })))];
+        const counts = { yards: 0, sides: 0, fenced: 0, beds: 0, lines: 0 };
+
+        for (const town of towns) {
+            const where = `${town.people} ${town.kind} ${town.seed}`;
+            const built = town.pieces.filter(({ kind }) => kind === "house" || kind === "landmark");
+            const trunks = town.pieces.filter(({ kind }) => kind === "tree");
+            const props = town.pieces.filter(({ kind }) => kind === "prop");
+            const fences = [];
+
+            for (const [n, yard] of town.yards.entries()) {
+                const [w, d] = [yard.w * PLOT, yard.h * PLOT];
+                const [ax, az] = [[cos(yard.facing), -sin(yard.facing)], [sin(yard.facing), cos(yard.facing)]];
+                // (A point of the yard, metres across it from its left side and in from its back)
+                const at = (u, v) => [yard.x + (u - w / 2) * ax[0] + (v - d / 2) * az[0], yard.y + (u - w / 2) * ax[1] + (v - d / 2) * az[1]];
+                const local = ([px, py]) => [(px - yard.x) * ax[0] + (py - yard.y) * ax[1] + w / 2, (px - yard.x) * az[0] + (py - yard.y) * az[1] + d / 2];
+
+                counts.yards++;
+
+                // Behind a house as wide as it, facing the way it does: its front against the house's back
+                const front = at(w / 2, d);
+
+                assert.ok(
+                    built.some((house) => Math.abs(house.facing - yard.facing) < 1e-9 && Math.abs(house.w * PLOT - w) < 1e-9 && hypot(house.x - house.h * PLOT * az[0] / 2 - front[0], house.y - house.h * PLOT * az[1] / 2 - front[1]) < 0.2),
+                    `${where}: yard ${n} behind a house`,
+                );
+
+                // Never over the lizard folk's water
+                for (const [u, v] of [[0, 0], [w, 0], [0, d], [w, d]]) {
+                    const [px, py] = at(u, v).map(Math.floor);
+
+                    assert.ok(!town.water?.[py]?.[px], `${where}: yard ${n} over water`);
+                }
+
+                // Fenced along its sides and back (each run in order, along it), where nothing stands
+                yard.fence.forEach((runs, side) => {
+                    const long = side === 1 ? w : d;
+                    const steps = Math.max(1, Math.round(long / 0.5));
+
+                    counts.sides += long;
+
+                    for (const [k, [from, to]] of runs.entries()) {
+                        assert.ok(from >= 0 && to <= long + 1e-9 && to > from && (k === 0 || from > runs[k - 1][1]), `${where}: yard ${n}'s runs of fence`);
+                        counts.fenced += to - from;
+                        fences.push({ n, a: at(...[[0, from], [from, 0], [w, from]][side]), b: at(...[[0, to], [to, 0], [w, to]][side]) });
+                    }
+
+                    for (let k = 0; k < steps; k++) {
+                        const t = ((k + 0.5) * long) / steps;
+
+                        if (runs.some(([from, to]) => t > from && t < to)) {
+                            const [px, py] = at(...[[0.2, t], [t, 0.2], [w - 0.2, t]][side]).map(Math.floor);
+
+                            assert.equal(town.blocked[py]?.[px] ?? 0, 0, `${where}: yard ${n}'s fence through something at ${px}, ${py}`);
+                        }
+                    }
+                });
+
+                // Its bed, in it, nothing stood in it
+                if (yard.bed) {
+                    const [u0, v0, u1, v1] = yard.bed;
+
+                    counts.beds++;
+                    assert.ok(u0 >= 0 && v0 >= 0 && u1 <= w + 1e-9 && v1 <= d + 1e-9 && u1 - u0 > 1 && v1 - v0 >= 0.9 - 1e-9, `${where}: yard ${n}'s bed`);
+
+                    for (const piece of [...trunks, ...props]) {
+                        const [u, v] = local([piece.x, piece.y]);
+
+                        assert.ok(!(u > u0 && u < u1 && v > v0 && v < v1), `${where}: a ${piece.kind} in yard ${n}'s bed`);
+                    }
+                }
+
+                // A washing line strung across its back only where no tree stands
+                if (yard.line) {
+                    counts.lines++;
+
+                    for (const trunk of trunks) {
+                        const [u, v] = local([trunk.x, trunk.y]);
+
+                        assert.ok(!(u > 0 && u < w && Math.abs(v - 0.55) < 0.5), `${where}: a tree in yard ${n}'s washing line`);
+                    }
+                }
+            }
+
+            // Where two yards meet, one fence between them, not two
+            for (const [k, one] of fences.entries()) {
+                for (const other of fences.slice(k + 1).filter(({ n }) => n !== one.n)) {
+                    const long = hypot(one.b[0] - one.a[0], one.b[1] - one.a[1]);
+                    const along = [(one.b[0] - one.a[0]) / long, (one.b[1] - one.a[1]) / long];
+                    const project = ([px, py]) => [(px - one.a[0]) * along[0] + (py - one.a[1]) * along[1], (px - one.a[0]) * -along[1] + (py - one.a[1]) * along[0]];
+                    const [[sa, da], [sb, db]] = [project(other.a), project(other.b)];
+                    const overlap = Math.min(long, Math.max(sa, sb)) - Math.max(0, Math.min(sa, sb));
+
+                    assert.ok(!(Math.abs(da) < 0.4 && Math.abs(db) < 0.4 && overlap > 0.6), `${where}: yards ${one.n} and ${other.n} fenced twice`);
+                }
+            }
+        }
+
+        // (Most of what could be fenced is; some yards have a bed, some room for a washing line)
+        assert.ok(counts.yards > 150, `${counts.yards} yards`);
+        assert.ok(counts.fenced / counts.sides > 0.45, `${counts.fenced / counts.sides} fenced`);
+        assert.ok(counts.beds > counts.yards * 0.2 && counts.lines > counts.yards * 0.3, JSON.stringify(counts));
+    });
 });
 
 // Is a point inside a polygon?

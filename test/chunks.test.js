@@ -166,6 +166,48 @@ describe("the world outside, drawn round the player (chunks3d.js)", () => {
         chunks.dispose();
     });
 
+    it("draws the yards behind a settlement's houses on the ground as it lies, but none reaching into a river or a lake", () => {
+        const overworld = world.maps.town;
+        const place = overworld.settlements.places.find(({ kind, id }) => kind === "village" && id !== world.start.id);
+        const [x, z] = place.at;
+        const yardsOf = () => {
+            const chunks = new Chunks(world, { undergrowth: 0 });
+
+            chunks.fill(x, z, 0);
+
+            const drawn = [...chunks.drawn.values()][0];
+            const found = { own: overworld.settlements.yardsIn(drawn.cx, drawn.cy), drawn: drawn.job?.pieces.filter(({ kind }) => kind === "yard") ?? [] };
+
+            chunks.dispose();
+
+            return found;
+        };
+        const { own, drawn } = yardsOf();
+
+        assert.ok(own.length > 0, "the village has yards");
+        assert.equal(drawn.length, own.length);
+        assert.ok(drawn.every(({ lie }) => lie.length === 4 && lie.every(Number.isFinite)));
+
+        // (The world's water under one of them: that one left out)
+        const chunkAt = overworld.chunkAt;
+        const [wet] = own;
+
+        overworld.chunkAt = (px, py) => {
+            const chunk = chunkAt.call(overworld, px, py);
+
+            return Math.abs(px - wet.x) < 1 && Math.abs(py - wet.y) < 1 ? { ...chunk, water: chunk.water.map(() => 2) } : chunk;
+        };
+
+        try {
+            const after = yardsOf();
+
+            assert.equal(after.drawn.length, own.length - 1);
+            assert.ok(!after.drawn.some(({ x: yx, y: yy }) => yx === wet.x && yy === wet.y));
+        } finally {
+            overworld.chunkAt = chunkAt;
+        }
+    });
+
     it("grows the undergrowth over several frames, the same as all at once", () => {
         const chunks = new Chunks(world, { undergrowth: 1 });
         const [x, z] = world.spawns.player.map((v) => v + 0.5);

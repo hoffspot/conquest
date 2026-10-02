@@ -89,6 +89,19 @@ const YARD_TREE = 0.45;
 const YARD_PROP = 0.35;
 const YARD_PROPS = ["barrels", "crates", "sacks", "cart"];
 
+// A yard's fences (drawn only: they're in no one's way), looked along a step at a time (metres),
+// how far in from its edge to look for something standing there, and how far out for another
+// yard against it; and how deep its bed must be (metres), once cut back clear of what's stood in
+// it, to be dug
+const YARD_FENCE = Object.freeze({ step: 0.5, inside: 0.2, apart: 0.6 });
+const YARD_BED_LEAST = 0.9;
+
+/**
+ * Where a washing line's strung across a yard (metres): its posts this far in from the yard's
+ * sides, this far in from its back; and how wide and deep a yard must be to have one.
+ */
+export const YARD_LINE = Object.freeze({ side: 0.35, back: 0.55, least: [3, 1.6] });
+
 // Trees on the open ground in town: one tried every this many square metres
 const TREE_EVERY = 110;
 
@@ -116,6 +129,11 @@ const ATTEMPTS = 20;
  * exits ([x, y]: where the main streets reach the edge), pieces ([{ key, kind, name, style,
  * variant, x, y (its middle, metres), w, h (its size across and deep, in plots, as the art kits
  * build it), facing (the way its front faces: radians, 0 south, π/2 east, as characters face) }]),
+ * yards (behind the houses, drawn only: [{ kind: "yard", x, y, w, h, facing (as a piece's), people
+ * (another people's), fence ([its left side, its back, its right side]: each the runs of it fenced,
+ * [[from, to]] metres along it, from its back or its left), bed ([u0, v0, u1, v1]: its bed, metres
+ * across from its left side and in from its back, or null), line (whether a washing line could be
+ * strung across its back: YARD_LINE) }]),
  * ground, blocked, opaque (rows of squares: GROUND kinds, 1 where no one can go, 1 where nothing
  * behind can be seen), water (rows of squares, 1 for water, or null for none), walks (the plank
  * walks over it: [{ a, b ([x, y]: its ends), half (half its width) }]) }.
@@ -250,6 +268,10 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
     const ground = Array.from({ length: height }, () => new Uint8Array(width));
     const inside = (i, j) => i >= 0 && j >= 0 && i < width && j < height;
     const pieces = [];
+    // (The yards behind the houses as they're laid: each { rect, bed }; and which yard each square
+    // is in, one more than its index, 0 for none)
+    const laidYards = [];
+    const owners = new Uint16Array(width * height);
 
     // The market place: a polygon of five to seven corners round the middle, each a little
     // nearer or further
@@ -654,9 +676,17 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
 
         mark(behind, 0, USE.yard);
 
+        const laid = { rect: behind, bed: null };
+
+        laidYards.push(laid);
+        eachSquare(behind, 0, (i, j) => {
+            owners[j * width + i] = laidYards.length;
+        });
+
         if (random.chance(YARD_BED)) {
             const bed = frame(behind.x, behind.y, behind.w * random.range(0.4, 0.7), deep * 0.6, rect.facing);
 
+            laid.bed = bed;
             eachSquare(bed, 0, (i, j) => {
                 ground[j][i] = GROUND.soil;
             });
@@ -866,12 +896,142 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
         streets,
         exits: mains.map(({ points }) => points.at(-1)),
         pieces,
+        yards: yardsOf(laidYards, { use, owners, water, width, height, people: other ? people : null }),
         ground,
         blocked,
         opaque,
         water,
         walks,
     };
+}
+
+// Is a point in a rectangle (frame's)?
+function inRect({ x, y, w, d, ax, az }, px, py) {
+    const [dx, dy] = [px - x, py - y];
+
+    return Math.abs(dx * ax[0] + dy * ax[1]) <= w / 2 && Math.abs(dx * az[0] + dy * az[1]) <= d / 2;
+}
+
+// Each yard as it's drawn (layoutTown's yards), from the yards as they were laid (`laid`: { rect,
+// bed }) and what's on each square once the town's laid out: where its fences run along its sides,
+// and the part of its bed clear of anything stood in it. A yard over water has none.
+function yardsOf(laid, { use, owners, water, width, height, people }) {
+    const yards = [];
+
+    laid.forEach(({ rect, bed }, index) => {
+        const { x, y, w, d, facing, ax, az } = rect;
+        // (What's on the square under a point of the yard: `u` metres across it from its left side,
+        // `v` from its back)
+        const squareAt = (u, v) => {
+            const [px, py] = [x + (u - w / 2) * ax[0] + (v - d / 2) * az[0], y + (u - w / 2) * ax[1] + (v - d / 2) * az[1]];
+            const [i, j] = [Math.floor(px), Math.floor(py)];
+
+            return i >= 0 && j >= 0 && i < width && j < height ? j * width + i : -1;
+        };
+        const standing = (u, v) => {
+            const at = squareAt(u, v);
+
+            return at < 0 || use[at] === USE.thing || use[at] === USE.building;
+        };
+        // (Whether a point of the yard's is in a yard laid before it: any of those on the squares
+        // round it whose rectangle it's in)
+        const earlier = (u, v) => {
+            const [px, py] = [x + (u - w / 2) * ax[0] + (v - d / 2) * az[0], y + (u - w / 2) * ax[1] + (v - d / 2) * az[1]];
+
+            for (let j = Math.floor(py) - 1; j <= Math.floor(py) + 1; j++) {
+                for (let i = Math.floor(px) - 1; i <= Math.floor(px) + 1; i++) {
+                    const other = i >= 0 && j >= 0 && i < width && j < height ? owners[j * width + i] - 1 : -1;
+
+                    if (other >= 0 && other < index && inRect(laid[other].rect, px, py)) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        };
+
+        const wet = (u, v) => {
+            const at = squareAt(u, v);
+
+            return at >= 0 && water[Math.floor(at / width)][at % width] === 1;
+        };
+
+        if (water && [[0, 0], [w, 0], [0, d], [w, d], [w / 2, d / 2]].some(([u, v]) => wet(u, v))) {
+            return;
+        }
+
+        // (Its fences: its left side, its back and its right side (the house is at its front), a
+        // step at a time, each step where nothing stands, and, where it's against another yard,
+        // only the one of them laid first)
+        const sides = [
+            [d, (t) => [0, t], (t) => [-YARD_FENCE.apart, t]],
+            [w, (t) => [t, 0], (t) => [t, -YARD_FENCE.apart]],
+            [d, (t) => [w, t], (t) => [w + YARD_FENCE.apart, t]],
+        ];
+        const fence = sides.map(([long, on, beyond]) => {
+            const runs = [];
+            const steps = Math.max(1, Math.round(long / YARD_FENCE.step));
+
+            for (let k = 0; k < steps; k++) {
+                const t = ((k + 0.5) * long) / steps;
+                const [u, v] = on(t);
+                const inward = [Math.min(Math.max(u, YARD_FENCE.inside), w - YARD_FENCE.inside), Math.min(Math.max(v, YARD_FENCE.inside), d - YARD_FENCE.inside)];
+                const clear = !standing(...inward) && !earlier(...beyond(t));
+
+                if (clear) {
+                    const [from, to] = [(k * long) / steps, ((k + 1) * long) / steps];
+
+                    if (runs.length && runs.at(-1)[1] === from) {
+                        runs.at(-1)[1] = to;
+                    } else {
+                        runs.push([from, to]);
+                    }
+                }
+            }
+
+            return runs;
+        });
+
+        // (Its bed, if it has one, cut back from its back or its front to where nothing stands in
+        // it: [u0, v0, u1, v1])
+        let cleared = null;
+
+        if (bed) {
+            const [u0, u1, v0] = [(w - bed.w) / 2, (w + bed.w) / 2, (d - bed.d) / 2];
+            const rows = Math.max(1, Math.round(bed.d / YARD_FENCE.step));
+            const clearRow = (k) => {
+                for (let u = u0; u <= u1 + 1e-9; u += Math.min(YARD_FENCE.step, bed.w)) {
+                    for (const v of [v0 + (k * bed.d) / rows, v0 + ((k + 1) * bed.d) / rows]) {
+                        if (standing(u, v)) {
+                            return false;
+                        }
+                    }
+                }
+
+                return true;
+            };
+            const clear = Array.from({ length: rows }, (_, k) => clearRow(k));
+            const back = clear.indexOf(false) < 0 ? rows : clear.indexOf(false);
+            const front = clear.lastIndexOf(false) < 0 ? rows : rows - 1 - clear.lastIndexOf(false);
+            const [from, to] = back >= front ? [0, back] : [rows - front, rows];
+
+            if (((to - from) * bed.d) / rows >= YARD_BED_LEAST) {
+                cleared = [u0, v0 + (from * bed.d) / rows, u1, v0 + (to * bed.d) / rows];
+            }
+        }
+
+        // (Whether a washing line could be strung across its back, clear of anything stood there)
+        let line = w >= YARD_LINE.least[0] && d >= YARD_LINE.least[1];
+
+        for (let u = YARD_LINE.side; line && u <= w - YARD_LINE.side + 1e-9; u += YARD_FENCE.step) {
+            line = !standing(u, YARD_LINE.back) && !standing(Math.min(u + YARD_FENCE.step, w - YARD_LINE.side), YARD_LINE.back);
+        }
+
+        yards.push({ kind: "yard", x, y, w: w / PLOT, h: d / PLOT, facing, ...(people ? { people } : {}), fence, bed: cleared, line });
+    });
+
+    return yards;
 }
 
 // What kind of house another people builds on a lot (their kits' types): by how far out it is

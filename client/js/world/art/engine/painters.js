@@ -1019,6 +1019,8 @@ export const TINTS = {
     "slate-violet": { from: "slate-grey", tint: [0.42, 0.36, 0.46] },
     "planks-char": { from: "planks-dark", tint: [0.24, 0.22, 0.27] },
     "thatch-palm": { from: "thatch", tint: [0.92, 0.9, 0.78] },
+    // (Hazel rods woven between stakes: the yards' hurdles)
+    wattle: { from: "matting", tint: [0.6, 0.6, 0.68] },
     // (A smithy's floor: beaten earth, black with soot)
     "earth-sooty": { from: "mud", tint: [0.103, 0.095, 0.091] },
 };
@@ -1046,6 +1048,9 @@ export const COLOURS = {
     awning: 0xa8342a,
     apples: 0xb8322a,
     cabbages: 0x6c9a3a,
+    // (The yards' beds: a cabbage's pale blue-green leaves, and a bean's or a squash's)
+    cabbage: 0x7f9f74,
+    greens: 0x5a8240,
     squash: 0xd9822b,
     bread: 0xc89a5a,
     rope: 0x9c8a62,
