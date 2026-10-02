@@ -97,6 +97,15 @@ back to the same world:
     their ends and between their windows. A ruined keep (`castle.js KEEP_RUIN`, `keepWindows`)
     has two rows of lancets 1.4 m wide, one over another, at 0.3 and 0.62 of its
     height, where its walls still stand, and a course under each row on its outer faces.
+  - **Ivy** (terrain plan M7b-3c; `art/kits/ivy.js`): hanging in curtains from the old walls'
+    broken tops, 1.5 to 4.5 m across, about one every 5 m along a face (fewer on a hall's inner
+    face), round the towers and the watchtower too: draped over the top's edge,
+    down the face in a mass of dark leaves standing a little proud of it (proud of the keep's
+    courses too), shorter at its sides, its foot ragged where its strands hang on, as far as
+    0.3 to 0.85 of the wall below it, never more than 7 m. Never over a window, a slit, a
+    doorway or a buttress, nor on a wall less than 1.2 m high. Cards of leaves cut out of their
+    picture, drawn as the hedges' sprigs are (the same program), all of a chunk's ivy one draw,
+    casting no shadow. The peoples' kept walls have none.
   - **Left behind** (`art/kits/leftovers.js`): grey, weathered and charred beams, snapped off or
     fallen, posts standing where halls stood; barrels whole, tipped over or burst (their staves
     splayed, a hoop in the grass); crates, some broken open; a cart left on one wheel.
