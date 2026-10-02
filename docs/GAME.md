@@ -889,6 +889,15 @@ with snow, sand on beaches), from one texture of the whole world a texel to the 
 blended between cells, with the edges wandering 26 metres or so so the cells don't show. Every
 chunk's ground shares one shader; chunks of grass alone share a material too.
 
+**Few enough textures for a phone.** A phone's GPU lets one shader read only so many textures (an
+iPhone's 16; this machine's browser allows 32), and a shader that reads more doesn't compile
+there, so nothing it draws is seen. The ground reads its tiling textures (the grass, the kinds of
+ground over it and the rock: `TILE`) from one texture array, and the land's maps from two
+(`landLayers`: its colour and its grass afar, in sRGB; its two homeland maps and its farmland),
+14 textures in all with its water, shadow and the sky's light (it read 22, and wasn't drawn on an
+iPhone). A browser test walks out of the start town and fails if any shader drawn on the way
+reads more than 16.
+
 **Fields** (`core/fields.js`, the user: "Plowed ground is organized into fields"): farmland is
 laid out as it's farmed, not ploughed in patches. The land's cut into blocks about 72 metres
 across (`FIELDS`), their edges wandering by as much as 18 metres so no two are the same size,

@@ -544,6 +544,8 @@ export class Chunks {
         this.land.userData.home?.forEach((home) => home.dispose());
         this.land.userData.grass?.dispose();
         this.land.userData.farm?.dispose();
+        this.land.userData.layers?.colours.dispose();
+        this.land.userData.layers?.marks.dispose();
         this.land.dispose();
         this.object.removeFromParent();
     }

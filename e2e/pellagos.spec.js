@@ -888,6 +888,30 @@ test("walks out of the town into the world, drawn round the player as they go, w
     expect(trip.beasts).toBeGreaterThan(0);
     expect(trip.drawn).toBe(trip.beasts);
     expect(trip.kinds).toBe(true);
+
+    // Every shader drawn so far (the town, the world round it and its far land, its water, grass,
+    // trees and creatures) reads no more textures than an iPhone lets one read (16; this browser
+    // allows more): past that, its shader won't compile there and nothing it draws is seen
+    const reading = await page.evaluate(() => {
+        const renderer = window.pellagos.session.view.renderer;
+        const gl = renderer.getContext();
+        const samplers = new Set([gl.SAMPLER_2D, gl.SAMPLER_3D, gl.SAMPLER_CUBE, gl.SAMPLER_2D_SHADOW, gl.SAMPLER_2D_ARRAY, gl.SAMPLER_2D_ARRAY_SHADOW, gl.SAMPLER_CUBE_SHADOW, gl.INT_SAMPLER_2D, gl.INT_SAMPLER_3D, gl.INT_SAMPLER_CUBE, gl.INT_SAMPLER_2D_ARRAY, gl.UNSIGNED_INT_SAMPLER_2D, gl.UNSIGNED_INT_SAMPLER_3D, gl.UNSIGNED_INT_SAMPLER_CUBE, gl.UNSIGNED_INT_SAMPLER_2D_ARRAY]);
+
+        return renderer.info.programs.map(({ name, program }) => {
+            let read = 0;
+
+            for (let k = 0; k < gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS); k++) {
+                const uniform = gl.getActiveUniform(program, k);
+
+                read += samplers.has(uniform.type) ? uniform.size : 0;
+            }
+
+            return { name, read };
+        });
+    });
+
+    expect(reading.map(({ name }) => name)).toContain("ground");
+    expect(reading.filter(({ read }) => read > 16)).toEqual([]);
 });
 
 test("debug mode draws the navigation meshes round the player, baked in a worker", async ({ page }) => {
