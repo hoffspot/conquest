@@ -21,6 +21,7 @@ import { fractal, hashOf } from "../../../core/noise.js";
 import { CHUNK } from "../../../core/overworld.js";
 import { GROUND } from "../../../core/setpieces/pieces.js";
 import { allAtOnce } from "../../../core/steps.js";
+import { leafCards, leafTexture } from "../engine/leafcards.js";
 import { leaf } from "./trees.js";
 
 /**
@@ -383,32 +384,9 @@ let materials = null;
 export function hedgeMaterials() {
     if (!materials) {
         const drawn = typeof document !== "undefined";
-        const texture = (canvas, repeat) => {
-            const result = new THREE.CanvasTexture(canvas);
+        const body = new THREE.MeshLambertMaterial({ name: "hedge", color: drawn ? 0xffffff : 0x3a5a26, map: drawn ? leafTexture(facePicture(), true) : null, vertexColors: true });
 
-            result.colorSpace = THREE.SRGBColorSpace;
-            result.anisotropy = 4;
-            result.wrapS = result.wrapT = repeat ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;
-
-            return result;
-        };
-        const body = new THREE.MeshLambertMaterial({ name: "hedge", color: drawn ? 0xffffff : 0x3a5a26, map: drawn ? texture(facePicture(), true) : null, vertexColors: true });
-        const sprigs = new THREE.MeshLambertMaterial({
-            name: "hedge sprigs",
-            color: drawn ? 0xffffff : 0x46682c,
-            map: drawn ? texture(sprigPicture(), false) : null,
-            vertexColors: true,
-            alphaTest: 0.45,
-            alphaToCoverage: true,
-            side: THREE.DoubleSide,
-        });
-
-        // (Seen from behind, a sprig's lit as from in front, as the hedge is)
-        sprigs.onBeforeCompile = (shader) => {
-            shader.fragmentShader = shader.fragmentShader.replace("#include <normal_fragment_begin>", THREE.ShaderChunk.normal_fragment_begin.replace("normal *= faceDirection;", ""));
-        };
-        sprigs.customProgramCacheKey = () => "hedge sprigs";
-        materials = { body, sprigs };
+        materials = { body, sprigs: leafCards("hedge sprigs", drawn ? sprigPicture() : null, 0x46682c) };
     }
 
     return materials;

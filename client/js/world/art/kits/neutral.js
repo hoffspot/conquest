@@ -15,6 +15,7 @@ import { PLOT } from "../../../core/setpieces/pieces.js";
 import { material } from "../engine/materials.js";
 import { Solid } from "../engine/solid.js";
 import { brokenRim, brokenTop, buttress, crumbledRing, crumbledWall, perched, stringCourse, talus, topAt, tumbled } from "./decay.js";
+import { IVY, ivyAlong, ringFace, wallFace } from "./ivy.js";
 import { brokenCart, fallenTimbers, oldBarrel, oldCrate } from "./leftovers.js";
 
 // World pixels in a metre
@@ -479,13 +480,25 @@ const BUILD = {
         const outer = alongX ? Math.sign((part.y0 + part.y1) / 2 - h0) || 1 : Math.sign((part.x0 + part.x1) / 2 - w0) || 1;
         const { width, depths, stages, tallest, least } = HALL.buttresses;
         const spots = [m(HALL.buttresses.end), length - m(HALL.buttresses.end), ...openings.slice(1).map(({ u0 }, i) => (openings[i].u1 + u0) / 2)];
+        const stood = [];
 
         for (const u of length > m(3) ? spots : []) {
             const tall = Math.min(topAt(top, u) - m(0.3), m(tallest));
 
             if (tall > m(least) && !openings.some(({ u0, u1 }) => u > u0 - m(width) && u < u1 + m(width))) {
                 buttress(solid, at, -length / 2, u, (outer * thick) / 2, outer, -m(FOOTING), stages.map((t) => tall * t), depths.map(m), m(width), stone, material(CORE));
+                stood.push([u - m(width) / 2, u + m(width) / 2]);
             }
+        }
+
+        // (Ivy hanging from its broken top, more on its outer face; clear of its windows and its
+        // buttresses: from numbers of its own, as its windows are)
+        const ivy = createRandom(((part.seed ?? 1) ^ 0x1c7) >>> 0);
+
+        for (const side of [-1, 1]) {
+            const clear = [...openings.map(({ u0, u1 }) => [u0, u1]), ...(side === outer ? stood : [])];
+
+            ivyAlong(solid, ivy, wallFace(at, top, -length / 2, (side * thick) / 2, side, 0), length, { clear, chance: side === outer ? IVY.chance : IVY.chance * 0.6 });
         }
 
         for (const side of [-1, 1]) {
@@ -568,6 +581,8 @@ const BUILD = {
 
         crumbledRing(solid, cx, cz, [r * 0.8, r], -m(FOOTING), heights, stone, { core: material(CORE) });
         solid.cylinder(cx, cz, -m(FOOTING), m(0.1), r * 0.8, r * 0.8, material("cobbles"), { segments: 12 });
+        // (Ivy round it, clear of its doorway, a quarter of the way round)
+        ivyAlong(solid, createRandom(((part.seed ?? 1) ^ 0x1c7) >>> 0), ringFace(cx, cz, r, 0, heights), 2 * Math.PI * r, { clear: [[(Math.PI / 2) * r - m(0.6), (Math.PI / 2) * r + m(0.6)]] });
         solid.face([[cx - m(0.55), 0, cz + r + m(0.06)], [cx + m(0.55), 0, cz + r + m(0.06)], [cx + m(0.55), m(1.7), cz + r + m(0.06)], [cx, m(2.1), cz + r + m(0.06)], [cx - m(0.55), m(1.7), cz + r + m(0.06)]], material("shadow"));
 
         for (let k = random.int(3, 5); k > 0; k--) {

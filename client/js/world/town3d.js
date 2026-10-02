@@ -470,7 +470,9 @@ export function joined(parts) {
         const mesh = new THREE.Mesh(mergeGeometries([...geometries, ...near]), material);
 
         mesh.name = material.name || "part";
-        mesh.castShadow = true;
+        // (All but what says it casts none: cards of leaves cut out of their pictures, whose
+        // shadows would be their whole rectangles)
+        mesh.castShadow = material.userData.shadow !== false;
         mesh.receiveShadow = true;
         mesh.matrixAutoUpdate = false;
         mesh.userData.far = geometries.reduce((count, geometry) => count + geometry.attributes.position.count, 0);

@@ -737,9 +737,15 @@ are lived in by thriving peoples: kept in good repair, and lively. A city may ha
 dangerous part (a run-down quarter, later), but the world isn't a ruin.
 
 **How the peoples' villages look** (the user's direction, 2026-10-02, from five reference pictures
-of "good looking medieval villages": "I'd aim for the stylized ones"). Stylised and painterly, not
-photoreal: warm saturated colour, chunky readable shapes, soft rounded forms. What the chosen
-pictures share, for M7c:
+of "good looking medieval villages": "I'd aim for the stylized ones", then, to be clear: "I meant
+slightly stylized leaning towards realistic"). Mostly realistic, a little stylised:
+- **Realistic:** real materials at their real sizes and proportions (stone, timber, plaster,
+  thatch, shingle and tile), lit, shadowed and weathered as the rest of the world is.
+- **A little stylised:** some of the chosen pictures' warmth: colour a touch richer than life,
+  features a touch emphasised (deep thatch eaves, sturdy chimneys, a lean or a sag here and
+  there), shapes clean enough to read from a distance.
+- **Not** cartoonish or toy-like: no oversized proportions, candy colours or rubbery forms.
+What the chosen pictures share, for M7c:
 - **Houses:** a stone ground storey (rubble or squared, grey-blue) with timber framing and pale or
   tinted plaster above; jettied upper storeys, balconies and galleries, dormers; a round stone
   tower here and there with a conical shingled cap and a weathervane.
@@ -1939,3 +1945,42 @@ converted data is to be measured in M8 against today's hm08 data.
     out in stages each less deep, no higher than asked; the halls' windows where their walls stand above their sills, the keep's in
     rows one over another, only the lower row in a wall half fallen; the keep's flat window
     boxes gone).
+- **2026-10-02, M7b-3c built** (ivy on the old walls: the research report's "Moss, streaks and ivy
+  cost arithmetic, not draws", its ivy curtains):
+  - **Why:** the user's reference shot of a ruined castle: dark ivy hanging in curtains from the
+    broken tops of its walls and towers. The ruins had none.
+  - **Built** (`art/kits/ivy.js`):
+    - a curtain (`ivyCurtain`) on a face given as where along it and how far proud (`wallFace`
+      for a crumbled wall, `ringFace` for a tower's round face): draped 0.35 m over the top's
+      edge, then down the face standing 0.16 m proud (proud of the keep's courses on its outer
+      faces), a strand every 0.45 m, each hanging 0.35 to 0.85 of the wall below it (at most
+      7 m) as a slow sway along the curtain and its own say, shorter at its sides; its corners
+      coloured darkest under the top, lighter to the new growth at its foot, each curtain its
+      own tint;
+    - its picture: a dense mat of broad five-lobed leaves over a dark inside, its lower edge
+      ragged in slow waves, strands below it thinning out to their tips, now and then an old
+      bronze leaf; tiling across, a copy every 1.6 m;
+    - curtains along a face (`ivyAlong`): 1.5 to 4.5 m across, about one every 5 m, 7 in 10 of
+      them, none within 0.3 m of an opening, slit, doorway or buttress, none where the wall's
+      less than 1.2 m high;
+    - hung on the old halls (both faces, fewer inside; from their own random numbers, as their
+      windows are), the ruined castle's walls, square and round towers, gatehouse, keep (inside
+      and out) and its corner turrets, and the broken watchtower; each piece's ivy from numbers
+      of its own (`ruin`'s `ivy`), so nothing already built moves;
+    - drawn as cards of leaves (`engine/leafcards.js leafCards`: the hedges' sprigs now made the
+      same way, so it's the same program), merged into one mesh a chunk (`town3d.js joined`),
+      casting no shadow (the material's `userData.shadow`, which `joined` now respects).
+  - **Cost:** about 170 more triangles in a hall's ruins (median 3,811 to 3,981; most 4,504)
+    and 2,400 in a ruined castle (median 14,616 to 17,046; most 17,700); the budgets raised to
+    5,000 and 18,000 for it. One more draw a chunk with ruins in it (measured: +1 by the castle,
+    +3 looking over three chunks of ruins), no shadow draws, no new program; one 256-pixel
+    picture.
+  - **Pictures:** before/after sheet sent in the session (the castle at eye height and from
+    behind, the keep from above its walls, a broken watchtower).
+  - **Versions:** none (the drawing's alone).
+  - **Tests:** `test/neutral.test.js` (a curtain from over the top's edge down the face, proud of
+    it, longer in its middle, a strand every IVY.strand, the same every time; curtains along a
+    wall clear of what's to be kept clear, none on a low wall; round a tower outside its face;
+    one program with the hedges' sprigs, casting no shadow, a castle's ivy one mesh merged;
+    none on a kept castle).
+

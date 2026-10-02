@@ -36,6 +36,9 @@ const { Solid } = await import("../client/js/world/art/engine/solid.js");
 const { archOf, brokenRim, brokenTop, buttress, crumbledWall, stringCourse, talus, topAt } = await import("../client/js/world/art/kits/decay.js");
 const { HALL, hallWindows } = await import("../client/js/world/art/kits/neutral.js");
 const { brokenCart, fallenTimbers, oldBarrel, oldBeam, oldCrate } = await import("../client/js/world/art/kits/leftovers.js");
+const { IVY, ivyAlong, ivyCurtain, ivyMaterial, ringFace, wallFace } = await import("../client/js/world/art/kits/ivy.js");
+const { hedgeMaterials } = await import("../client/js/world/art/kits/hedges.js");
+const { merge } = await import("../client/js/world/town3d.js");
 const { material } = await import("../client/js/world/art/engine/materials.js");
 const { MATERIALS, OLD_STONE, paintLayer, SIZE } = await import("../client/js/world/art/engine/painters.js");
 const { AGED, atlasMaterial, LAYERS, layerOf } = await import("../client/js/world/art/engine/atlas.js");
@@ -207,8 +210,9 @@ describe("the sites no people keeps in the world (sites.js)", () => {
 
     it("builds every part (the ruined castles' by the castle kit, left to ruin) within its budget", () => {
         // (A hall's ruins with its windows through its walls, its courses and its buttresses, and
-        // a ruined keep with its rows of windows and its courses: M7b-3b, about 700 and 900 more)
-        const budget = { ruins: 4500, "ruined castle": 15000, "dragon's lair": 3000 };
+        // a ruined keep with its rows of windows and its courses: M7b-3b, about 700 and 900 more;
+        // the ivy hanging from their tops, M7b-3c, about 200 and 2,400 more)
+        const budget = { ruins: 5000, "ruined castle": 18000, "dragon's lair": 3000 };
         const most = new Map();
 
         for (const site of sites) {
@@ -627,5 +631,116 @@ describe("what's left where people lived (art/kits/leftovers.js)", () => {
 
         assert.ok(whole.min.y > -0.01 && whole.max.y > m(0.75) && whole.max.y < m(1.05), `a barrel ${whole.min.y} to ${whole.max.y}`);
         assert.ok(box(made(3, makers["burst barrel"])).max.y < whole.max.y, "burst, lower");
+    });
+});
+
+describe("ivy hanging from the old walls (art/kits/ivy.js)", () => {
+    const level = (height) => [
+        [0, height],
+        [80, height],
+    ];
+    // (A wall along x, its face at z = 3 facing +z, standing on 0)
+    const face = (top) => wallFace((u, y, v) => [u, y, v], top, 0, 3, 1, 0);
+    const ivyOf = (object) => {
+        const found = [];
+
+        object.traverse((node) => node.isMesh && node.material === ivyMaterial() && found.push(node));
+
+        return found;
+    };
+    const pointsOf = (meshes) => meshes.flatMap(({ geometry }) => Array.from({ length: geometry.attributes.position.count }, (_, k) => [0, 1, 2].map((c) => geometry.attributes.position.getComponent(k, c))));
+
+    it("hangs a curtain from over the top's edge down the face, proud of it, shorter at its sides, its foot ragged", () => {
+        const solid = new Solid();
+        const top = level(40);
+
+        ivyCurtain(solid, createRandom(3), face(top), [20, 34]);
+
+        const meshes = ivyOf(solid.toObject());
+        const points = pointsOf(meshes);
+        const foot = (x) => Math.min(...points.filter(([px]) => Math.abs(px - x) < 1e-6).map(([, y]) => y));
+
+        assert.equal(meshes.length, 1);
+        assert.ok(points.every(([x]) => x >= 20 - 1e-9 && x <= 34 + 1e-9));
+        assert.ok(points.every(([, y]) => y <= 40 + 5 * 0.1 + 1e-9 && y >= 40 - IVY.longest * 5 - 1e-9), "from its top down no further than its longest");
+        assert.ok(points.some(([, , z]) => z < 3 - 5 * IVY.over + 1e-6), "draped over the top, inwards");
+        assert.ok(points.filter(([, y]) => y < 38).every(([, , z]) => z > 3 + 0.5), "hanging proud of the face");
+        const strands = [...new Set(points.map(([x]) => x))].sort((a, b) => a - b);
+        const middle = strands[strands.length >> 1];
+
+        assert.ok(foot(middle) < foot(strands[0]) && foot(middle) < foot(strands.at(-1)), "longer in its middle than at its sides");
+        assert.equal(new Set(points.filter(([, y]) => y < 38).map(([x]) => x)).size, Math.round(14 / (IVY.strand * 5)) + 1, "a strand every IVY.strand");
+        // (The same every time)
+        const again = new Solid();
+
+        ivyCurtain(again, createRandom(3), face(top), [20, 34]);
+        assert.deepEqual(pointsOf(ivyOf(again.toObject())), points);
+    });
+
+    it("hangs it along a wall now and then, clear of its openings and what stands out of it, none where it's low", () => {
+        let hung = 0;
+
+        for (let seed = 1; seed <= 30; seed++) {
+            const solid = new Solid();
+            const clear = [
+                [30, 36],
+                [50, 54],
+            ];
+            const curtains = ivyAlong(solid, createRandom(seed), face(level(40)), 80, { clear });
+
+            hung += curtains.length;
+
+            for (const [a, b] of curtains) {
+                assert.ok(a >= 0 && b <= 80 && b - a >= IVY.width[0] * 5 * 0.6 - 1e-9);
+                assert.ok(clear.every(([c0, c1]) => b <= c0 - IVY.clear * 5 + 1e-9 || a >= c1 + IVY.clear * 5 - 1e-9), `${seed}: clear`);
+            }
+
+            assert.equal(ivyAlong(new Solid(), createRandom(seed), face(level(IVY.least * 5 - 1)), 80).length, 0, "none on a low wall");
+        }
+
+        assert.ok(hung > 20, `${hung} curtains on 30 walls`);
+    });
+
+    it("hangs round a tower's face, standing out of it, as high as its rim", () => {
+        const solid = new Solid();
+        const heights = Array.from({ length: 24 }, (_, k) => 40 + (k % 3));
+
+        ivyAlong(solid, createRandom(5), ringFace(10, 20, 8, 0, heights), 2 * Math.PI * 8, { chance: 1 });
+
+        const points = pointsOf(ivyOf(solid.toObject()));
+
+        assert.ok(points.length > 0);
+        assert.ok(points.filter(([, y]) => y < 38).every(([x, , z]) => Math.hypot(x - 10, z - 20) > 8 + 0.4), "outside its face");
+        assert.ok(points.every(([, y]) => y <= 42 + 1));
+    });
+
+    it("is drawn as leaf cards are, one program with the hedges' sprigs, casting no shadow; merged, the ruins' ivy one mesh", () => {
+        const ivy = ivyMaterial();
+        const { sprigs } = hedgeMaterials();
+
+        assert.equal(ivy.customProgramCacheKey(), sprigs.customProgramCacheKey());
+        assert.deepEqual([ivy.alphaTest, ivy.alphaToCoverage, ivy.side, ivy.vertexColors], [sprigs.alphaTest, sprigs.alphaToCoverage, sprigs.side, sprigs.vertexColors]);
+        assert.equal(ivy.userData.shadow, false);
+
+        const castle = new THREE.Group();
+
+        for (const kind of ["keep", "wall", "tower"]) {
+            castle.add(RUINED[kind]({ kind, w: 5, h: 4, door: true, axis: "h", length: 4, shape: "round", seed: 7, x: 40, y: 64, ruined: true }));
+        }
+
+        castle.updateMatrixWorld(true);
+
+        const merged = merge(castle).children.filter(({ material }) => material === ivy);
+
+        assert.equal(merged.length, 1, "one mesh of ivy");
+        assert.equal(merged[0].castShadow, false);
+        assert.ok(merged[0].geometry.attributes.position.count > 100);
+    });
+
+    it("grows on the ruins only: a kept castle has none", () => {
+        const kept = new THREE.Group();
+
+        kept.add(keep({ w: 5, h: 4, door: true }), wall({ axis: "h", length: 4 }), tower({ shape: "round" }));
+        assert.equal(ivyOf(kept).length, 0);
     });
 });
