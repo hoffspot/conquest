@@ -1069,3 +1069,92 @@ describe("each people's buildings (peoples/)", () => {
         assert.notEqual(variant, atlasMaterial());
     });
 });
+
+describe("chimney smoke (world/smoke.js)", () => {
+    it("rises from the top of every house's chimney, where its stack stands over everything else", async () => {
+        const { chimneysOf } = await import("../client/js/world/smoke.js");
+        let chimneys = 0;
+
+        for (const piece of houses.slice(0, 80)) {
+            const object = house(piece);
+
+            object.updateMatrixWorld(true);
+
+            const tops = chimneysOf(object);
+
+            if (!planHouse(piece).chimney) {
+                assert.equal(tops.length, 0, piece.key);
+                continue;
+            }
+
+            chimneys++;
+
+            const box = new THREE.Box3().setFromObject(object);
+            const [[x, y, z, strength]] = tops;
+
+            assert.equal(tops.length, 1, piece.key);
+            assert.equal(strength, 1);
+            assert.ok(Math.abs(y - box.max.y) < M * 0.1, `${piece.key}: its top at ${y}, the house's ${box.max.y}`);
+            assert.ok(x >= box.min.x && x <= box.max.x && z >= box.min.z && z <= box.max.z, piece.key);
+        }
+
+        assert.ok(chimneys > 30, `${chimneys} chimneys`);
+
+        // (Turned and moved as what it's part of is)
+        const object = house(houses.find((piece) => planHouse(piece).chimney));
+        const group = new THREE.Group();
+
+        object.updateMatrixWorld(true);
+
+        const [[x, y, z]] = chimneysOf(object);
+
+        group.add(object);
+        group.scale.setScalar(0.2);
+        group.rotation.y = Math.PI / 2;
+        group.position.set(100, 10, 200);
+        group.updateMatrixWorld(true);
+
+        const [[gx, gy, gz]] = chimneysOf(group);
+
+        assert.ok(Math.abs(gx - (100 + z * 0.2)) < 1e-6 && Math.abs(gy - (10 + y * 0.2)) < 1e-6 && Math.abs(gz - (200 - x * 0.2)) < 1e-6, `${[gx, gy, gz]}`);
+
+        // (The smithy's forge has a thicker column)
+        const smithy = await landmark(["town", "city"].flatMap((kind) => [1, 2, 3].flatMap((seed) => layoutTown({ seed, kind }).pieces)).find(({ name }) => name === "blacksmith"));
+
+        smithy.updateMatrixWorld(true);
+        assert.ok(chimneysOf(smithy).some(([, , , strength]) => strength > 1), "the forge's");
+    });
+
+    it("draws the lit hearths' smoke (most of them; a forge's always) in one mesh of one material, as much as the quality asks", async () => {
+        const { SMOKE, SMOKE_SHARE, smokeMaterial, smokeMesh } = await import("../client/js/world/smoke.js");
+        const { TREE_WIND } = await import("../client/js/world/art/kits/trees.js");
+        const { QUALITY } = await import("../client/js/world/view.js");
+        const tops = Array.from({ length: 200 }, (_, k) => [k * 7.3, 12, k * 3.1, 1]);
+        const mesh = smokeMesh([...tops, [5, 30, 5, 1.4]]);
+        const puffs = mesh.geometry.attributes.position.count / 4;
+        const lit = puffs / SMOKE.puffs;
+
+        assert.equal(lit % 1, 0);
+        assert.ok(lit > 200 * (SMOKE.lit - 0.12) && lit < 200 * (SMOKE.lit + 0.12) + 1, `${lit} of 201 lit`);
+        assert.equal(mesh.geometry.index.count / 3, puffs * 2, "a square a puff");
+        assert.ok([...mesh.geometry.attributes.position.array].some((value, k) => k % 3 === 1 && value === 30), "the forge's lit");
+        assert.equal(smokeMesh([[5, 30, 5, 1.4]]).geometry.attributes.position.count / 4, SMOKE.puffs);
+        assert.equal(smokeMesh([]), null);
+        assert.deepEqual([...smokeMesh(tops).geometry.attributes.puff.array], [...smokeMesh(tops).geometry.attributes.puff.array], "the same every time");
+
+        // (One material for all of it, rising in time with the trees' breeze, its share the quality's;
+        // reaching as high as it rises)
+        assert.equal(mesh.material, smokeMaterial());
+        assert.ok(mesh.material.transparent && !mesh.material.depthWrite);
+        assert.equal(mesh.material.uniforms.time, TREE_WIND.time);
+        assert.equal(mesh.material.uniforms.share, SMOKE_SHARE);
+        assert.ok(mesh.geometry.boundingSphere.radius > SMOKE.rise);
+        assert.ok(QUALITY.low.smoke > 0 && QUALITY.low.smoke < QUALITY.medium.smoke && QUALITY.medium.smoke < QUALITY.high.smoke && QUALITY.high.smoke === 1);
+
+        // (Each puff's share of a column: dropped evenly, so a column thins rather than breaking up)
+        const shares = [...mesh.geometry.attributes.puff.array].filter((_, k) => k % 16 === 3).slice(0, SMOKE.puffs);
+
+        assert.ok(shares.every((share) => share > 0 && share < 1));
+        assert.equal(shares.filter((share) => share <= 0.5).length, Math.round(SMOKE.puffs / 2), `${shares}`);
+    });
+});

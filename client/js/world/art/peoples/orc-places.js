@@ -158,6 +158,9 @@ export async function tavern(piece) {
         post(solid, cx + Math.cos(a) * m(1.1), peak - m(0.1), cz + Math.sin(a) * m(1.1), m(0.9), m(0.07), "timber", { sides: 4 });
     }
 
+    // (The great hearth's smoke rising through its crown: world/smoke.js)
+    (solid.smoke ??= []).push([cx, peak + m(0.9), cz, 1.4]);
+
     solid.lathe(cx, cz, [[m(1.7), peak + m(0.75)], [m(0.4), peak + m(1.6)], [0, peak + m(1.7)]], material("hide-dark"), { segments: 10 });
 
     for (let k = 0; k < 12; k++) {

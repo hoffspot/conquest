@@ -43,7 +43,8 @@ const RINGS = 6;
 // (The smoke's noise, tiling: a small texture made once)
 let noise = null;
 
-function smokeTexture() {
+/** Smoke's noise (the volcano's and the chimneys': smoke.js), tiling: a small texture made once. */
+export function smokeNoise() {
     if (!noise) {
         const size = 64;
         const data = new Uint8Array(size * size * 4);
@@ -275,7 +276,7 @@ export class Volcano {
                 ...uniforms,
                 time: { value: 0 },
                 nearCut: { value: nearCut },
-                noiseMap: { value: smokeTexture() },
+                noiseMap: { value: smokeNoise() },
                 toneGrade: GRADE,
             },
             defines: { NO_NEAR_FADE: "" },

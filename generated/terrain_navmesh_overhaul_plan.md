@@ -2028,3 +2028,35 @@ converted data is to be measured in M8 against today's hm08 data.
     stone); `test/navigation.test.js` (a ramp of 24° walked as ground, 35° as steep, 41° not at
     all; three trails that couldn't be walked before walked end to end); `test/ground.test.js`
     (trails no steeper than their steps' grade, near the town).
+- **2026-10-02, M7c-1 built** (chimney smoke: the first of §9's "signs of life rather than
+  decay" for the peoples' settlements, and of the chosen village pictures' "chimneys with
+  smoke"):
+  - **Why:** the peoples' towns and villages are lived in, but nothing in them moved but their
+    folk; from afar they looked empty.
+  - **Built** (`world/smoke.js`):
+    - the kits record where smoke rises as they build: each chimney's top (`roofs.js chimney`),
+      an orc longhouse's smoke hood, an orc grog hall's crown and a smithy's forge
+      (`solid.smoke`, kept in the built object's `userData.smoke`; `chimneysOf` finds them in
+      the world);
+    - seven hearths in ten lit (the same ones every time); a forge and a grog hall always, their
+      smoke rising higher and a little wider (strength 1.4);
+    - a column of nine puffs, each rising 8 m over 10 s, from 0.3 m to 1.7 m across, leaning on
+      the breeze the higher it goes and wandering from its line, coming in at the chimney and
+      thinning away at its top, billowing with drifting noise (the volcano's smoke picture),
+      lit from above;
+    - each puff a square facing the eye, its rise worked out in the vertex shader from the
+      trees' breeze's time (nothing sent each frame); one mesh a chunk (`chunks3d.js`) and one
+      for the start town (`town3d.js`), one material for all of it, primed while loading;
+    - Visual quality's share of each column (`QUALITY.smoke`: low a half, medium three-quarters,
+      high all), dropped evenly so a column thins rather than breaking up.
+  - **Cost** (measured in the game, each view drawn with the smoke and without): one draw and
+    198 triangles over the start town (11 columns, 99 puffs); no shadow draws; one more
+    program, primed at load; no new picture.
+  - **Pictures:** before/after sheet sent in the session (the start town from above, its square,
+    and close by a forge).
+  - **Versions:** none (the drawing's alone).
+  - **Tests:** `test/buildings.test.js` (a house's chimney top where its chimney is, turned and
+    moved with it, none without a chimney, a smithy's forge stronger; seven in ten lit, a forge
+    always, one mesh of one material, the same every time, timed by the trees' breeze, its share
+    the quality's, puffs dropped evenly); `e2e/building-lab.spec.js` (a village draws its
+    smoke).

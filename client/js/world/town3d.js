@@ -31,6 +31,7 @@ import { builderFor } from "./art/peoples/index.js";
 import { prop } from "./art/kits/props.js";
 import { tree } from "./art/kits/town.js";
 import { plantTrees } from "./art/kits/trees.js";
+import { chimneysOf, smokeMesh } from "./smoke.js";
 
 /** Metres per art world pixel. */
 export const PIXEL = PLOT / 20;
@@ -185,6 +186,9 @@ export async function buildTown(world, { onProgress = () => {}, groundAt = () =>
 
     art.updateMatrixWorld(true);
 
+    // (Smoke rising from its chimneys: smoke.js)
+    const smoke = smokeMesh(chimneysOf(art));
+
     // How high everything stands on each square
     const stand = (box, built) => {
         for (const map of built ? [heights, buildings] : [heights]) {
@@ -255,6 +259,10 @@ export async function buildTown(world, { onProgress = () => {}, groundAt = () =>
     }
 
     object.add(trees.object);
+
+    if (smoke) {
+        object.add(smoke);
+    }
 
     return { object, heights, buildings };
 }

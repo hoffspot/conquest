@@ -81,6 +81,8 @@ test("draws a village out in the world in its chunks, with its tavern, church, s
     expect(village.names.some((name) => name.startsWith("board ") && name !== "board guild")).toBe(true);
     expect(village.names).toContain("sign guild");
     expect(village.names).toContain("sign blacksmith");
+    // (Smoke rising from its chimneys and its forge: world/smoke.js)
+    expect(village.names).toContain("chimney smoke");
 });
 
 test("draws the land itself: its features, and the undergrowth near, swaying, in a few draw calls", async ({ page }) => {
