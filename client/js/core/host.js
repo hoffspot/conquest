@@ -26,7 +26,7 @@ import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, encounterAt, LAIRS,
 import { rollSpoils } from "./spoils.js";
 import { campTier, CHUNK, landAt, RACE, startFor } from "./worldplan/plan.js";
 import { armouryGift, COUNSEL, FAILED, MOST_REQUESTS, offerContract, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
-import { bannersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, roundsOf, sortieOf } from "./war/muster.js";
+import { bannersOf, braziersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, roundsOf, sortieOf } from "./war/muster.js";
 import { ADJECTIVES } from "./war/peoples.js";
 import { HOLDINGS, RISING, War } from "./war/war.js";
 import { distanceBetween, WEAPONS } from "./weapons.js";
@@ -326,7 +326,7 @@ export class Host {
         /**
          * The towns whose soldiers are out, near a player (by the town's id): { people (who
          * holds it), ids (its soldiers'), share (how many of its garrison each stands for),
-         * banners ([{ at, facing }]) }; and each soldier (by id): { town, people, weapon, sex,
+         * banners ([{ at, facing }]), braziers ([{ at }]: one by each pair of guards) }; and each soldier (by id): { town, people, weapon, sex,
          * seed } (how they look), and the fallen, to be taken away ([{ id, at }]).
          */
         this.mustered = new Map();
@@ -2061,9 +2061,11 @@ export class Host {
         }
 
         const banners = bannersOf(this.world.plan, place, { middle }).slice(0, Math.ceil(guards / 2));
+        // (A brazier burning by each pair of guards: drawn, lit, nothing to the rules)
+        const braziers = braziersOf(this.world.plan, place, { middle }).slice(0, Math.ceil(guards / 2));
 
-        this.mustered.set(town.id, { people: town.owner, ids, share: town.garrison / Math.max(1, ids.length), banners, relief: null });
-        this.#event("muster", { town: town.id, people: town.owner, ids, banners });
+        this.mustered.set(town.id, { people: town.owner, ids, share: town.garrison / Math.max(1, ids.length), banners, braziers, relief: null });
+        this.#event("muster", { town: town.id, people: town.owner, ids, banners, braziers });
     }
 
     // Where a town's soldiers stand and walk, as many as its garrison has: its guards at its posts

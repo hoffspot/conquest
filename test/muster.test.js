@@ -3,7 +3,7 @@
 // walk (just outside its edge), the same every time for a place
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
-import { bannersOf, PATROL_SIZE, POSTED, postsOf, roundsOf } from "../client/js/core/war/muster.js";
+import { bannersOf, braziersOf, PATROL_SIZE, POSTED, postsOf, roundsOf } from "../client/js/core/war/muster.js";
 import { HOLDINGS } from "../client/js/core/war/war.js";
 import { waysOut } from "../client/js/core/settlements.js";
 import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
@@ -90,6 +90,23 @@ describe("mustering a town (muster.js)", () => {
                 assert.ok(Math.abs(apart(banner.at, place.at) - apart(middle, place.at) - 3) < 0.2, place.id);
                 assert.ok(apart(banner.at, a.at) < apart(banner.at, b.at));
                 assert.equal(banner.facing, a.facing);
+            }
+        }
+    });
+
+    it("burns a brazier by each pair of guards, on the other side of the road from their banner, a step out past them", () => {
+        for (const place of plan.places.filter(({ kind }) => kind in POSTED)) {
+            const posts = postsOf(plan, place);
+            const [banners, braziers] = [bannersOf(plan, place), braziersOf(plan, place)];
+
+            assert.equal(braziers.length, banners.length, place.id);
+
+            for (const [k, brazier] of braziers.entries()) {
+                const [a, b] = [posts[k * 2], posts[k * 2 + 1]];
+
+                assert.ok(apart(brazier.at, b.at) < apart(brazier.at, a.at), `${place.id}: by the other guard`);
+                assert.ok(apart(brazier.at, b.at) > 1 && apart(brazier.at, b.at) < 2.5, `${place.id}: a step or so from them`);
+                assert.ok(apart(brazier.at, banners[k].at) > 3, `${place.id}: across the road from the banner`);
             }
         }
     });

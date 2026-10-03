@@ -718,7 +718,7 @@ export class Game {
     #lightNear(x, z) {
         const lights = this.chunks.lightsNear(x, z, LIGHT_REACH, (this.nearLights ??= []));
 
-        lights.push(...(this.town?.lights ?? []), ...(this.camps?.lights() ?? []), ...(this.spellFx?.lightsNow() ?? []));
+        lights.push(...(this.town?.lights ?? []), ...(this.camps?.lights() ?? []), ...(this.banners?.lights() ?? []), ...(this.spellFx?.lightsNow() ?? []));
         GLOW_SCALE.value = this.view.pixelsPerMetre();
         EMBER_SCALE.value = GLOW_SCALE.value;
         this.view.lightNear(lights, _lit.set(x, this.avatars.get(this.me).object.position.y + 1.2, z));
@@ -3588,11 +3588,16 @@ export class Game {
     }
 
     // A town's soldiers out: to be drawn, and its banners up, in its holders' colours
-    #muster({ town, people, ids, banners }) {
+    #muster({ town, people, ids, banners, braziers = [] }) {
         const [ox, oz] = this.originOf("town");
 
         this.enlisting.push(...ids);
-        this.banners?.raise(town, people, banners.map(({ at: [x, y], facing }) => ({ x: ox + x, z: oz + y, facing })));
+        this.banners?.raise(
+            town,
+            people,
+            banners.map(({ at: [x, y], facing }) => ({ x: ox + x, z: oz + y, facing })),
+            braziers.map(({ at: [x, y] }) => ({ x: ox + x, z: oz + y })),
+        );
     }
 
     // A camp near the player pitched: its tents and fire, its banner by the fire, and its sentries

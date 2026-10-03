@@ -2799,3 +2799,26 @@ converted data is to be measured in M8 against today's hm08 data.
   answers: mixed by the war; retaken a few days after they're cleared; as strong as the place's
   size and its land's danger; castles and forts, watchtowers and camps, caves and the lair, ruins
   and holy places; friendlies' shops; guild missions for bandits' and the dead's.
+- **2026-10-03, M7e-2d built: lamps and braziers.**
+  - **Lamps on posts** round the market of a town or bigger (`kits/props.js` lamppost: an iron post
+    on a stone foot, an arm, a lantern hanging from it, lit at night as lanterns are): either side
+    of each main street where it comes into the market, and in its corners
+    (`core/setpieces/town.js`, placed without a draw of the town's random numbers, so the rest of
+    every town is laid out as before). About 2 in a town, 4 in a city, 6 in a capital; none in a
+    village or smaller.
+  - **Braziers by the guards:** one by each pair at a town's roads out, across the road from their
+    banner, a step out past them (`core/war/muster.js` `braziersOf`, in the host's muster event
+    and its record; drawn with the banners, `banners3d.js`: an iron bowl on three legs, its coals
+    and its fire, burning day and night, each its own light).
+  - **Guards carrying torches** waits for M7e-3 (night in play): most guards hold a shield in
+    their other hand, and the bowmen and two-handed fighters both hands, so a torch at night
+    means changing what they carry at dusk and dawn (the character built again), which belongs
+    with night's sight and the rest of night in play.
+  - **Pictures:** the start town's market lamp by the town hall and a guard post's brazier at
+    night, sent in the session.
+  - **Tests:** test/muster.test.js (a brazier by each pair of guards, by the other guard, across
+    the road from the banner); test/buildings.test.js (braziers drawn and lit with the banners,
+    their lights on their coals, gone with them; lamps round the markets of towns and bigger,
+    none in villages, the lantern 2.3 m up).
+  - **Next:** M7e-3, night in play (sight, night creatures, guards' torches, passing time at inns
+    or camping).

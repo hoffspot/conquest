@@ -10,6 +10,7 @@ import { AWNINGS, awning } from "../../cloth.js";
 import { material } from "../engine/materials.js";
 import { Solid } from "../engine/solid.js";
 import { pitchedRoof } from "./roofs.js";
+import { lanternLight } from "./torches.js";
 
 const M = 5;
 const m = (metres) => metres * M;
@@ -95,6 +96,22 @@ function sack(solid, x, z, height, lean) {
 }
 
 const PROPS = {
+    lamppost(solid, { cx, cz }) {
+        // An iron post on a stone foot, an arm out from its top, and a lantern hanging from it,
+        // lit at night (world/lights.js)
+        const iron = material("iron-black");
+
+        solid.cylinder(cx, cz, 0, m(0.35), m(0.22), m(0.18), material("stone"), { segments: 8 });
+        solid.cylinder(cx, cz, m(0.35), m(3.1), m(0.07), m(0.05), iron, { segments: 6 });
+        solid.beam([cx, m(3), cz], [cx, m(3), cz + m(0.6)], m(0.05), m(0.05), iron);
+        solid.beam([cx, m(2.7), cz], [cx, m(3), cz + m(0.3)], m(0.035), m(0.035), iron);
+        solid.cylinder(cx, cz + m(0.6), m(2.48), m(3), m(0.015), m(0.015), iron, { segments: 4 });
+        solid.box(cx - m(0.13), m(2.12), cz + m(0.47), cx + m(0.13), m(2.15), cz + m(0.73), iron);
+        solid.box(cx - m(0.1), m(2.15), cz + m(0.5), cx + m(0.1), m(2.42), cz + m(0.7), material("glass-lit"));
+        solid.cone(cx, cz + m(0.6), m(2.42), m(0.18), m(0.16), iron, 4);
+        lanternLight(solid, [cx, m(2.28), cz + m(0.6)]);
+    },
+
     well(solid, { cx, cz }) {
         // A ring of stone, water below, two posts and a windlass with its bucket, under a little
         // roof of shingles. (The ring turned whole, its outside, the lip of its rim, its top and

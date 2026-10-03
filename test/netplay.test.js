@@ -446,6 +446,12 @@ describe("playing together (netplay.js)", () => {
         const index = joining.host.battle.actors.findIndex(({ id }) => id === "guest-1");
         const theirs = joining.host.battle.actors[index];
 
+        // (Their last walk done, however the town's market lies in their way)
+        for (let more = 0; more < 20 && theirs.progress !== null; more++) {
+            play(MOTION.every);
+            catchUp(joining);
+        }
+
         assert.equal(theirs.progress, null, "(standing: the copy's guest stays put, nudged)");
         theirs.x += 0.004;
         play(MOTION.every);

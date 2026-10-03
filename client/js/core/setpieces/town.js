@@ -546,6 +546,26 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
         }
     }
 
+    // In a town or bigger, lamps on posts round the market, lit at night (kits/props.js
+    // lamppost): either side of each main street where it comes in, and in its corners
+    if (!spec.small && spec.radius >= 48) {
+        const lamp = (x, y, facing) => onMarket(frame(x, y, 2, 2, 0)) && thing(x, y, "lamppost", facing, [USE.street]);
+
+        for (const edge of edges.filter(({ crossed }) => crossed)) {
+            for (const side of [-1, 1]) {
+                const out = spec.main / 2 + 1.8;
+
+                lamp(edge.middle[0] + edge.along[0] * side * out + edge.inward[0] * 2, edge.middle[1] + edge.along[1] * side * out + edge.inward[1] * 2, facingOf(...edge.inward));
+            }
+        }
+
+        for (const corner of market) {
+            const [x, y] = [corner[0] + (centre[0] - corner[0]) * 0.35, corner[1] + (centre[1] - corner[1]) * 0.35];
+
+            lamp(x, y, facingOf(centre[0] - corner[0], centre[1] - corner[1]));
+        }
+    }
+
     // A people's wall round its town (the cat folk's mud, the orcs' stakes, the dark elves'
     // black stone...): lengths of wall round a circle past its houses, a gatehouse where each
     // main street goes through, a tower every few lengths

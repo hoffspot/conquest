@@ -108,6 +108,25 @@ export function bannersOf(plan, place, { middle = place.at } = {}) {
 }
 
 /**
+ * Where a town's braziers burn: one by each pair of guards at a road out, on the other side of the
+ * road from their banner, a step out past them: [{ at: [x, y] metres }].
+ */
+export function braziersOf(plan, place, { middle = place.at } = {}) {
+    const posts = postsOf(plan, place, { middle });
+    const braziers = [];
+
+    for (let k = 0; k + 1 < posts.length; k += 2) {
+        const [a, b] = [posts[k], posts[k + 1]];
+        const [out, side] = [[sin(a.facing), cos(a.facing)], [a.at[0] - b.at[0], a.at[1] - b.at[1]]];
+        const across = hypot(side[0], side[1]) || 1;
+
+        braziers.push({ at: [b.at[0] + out[0] * 1.5 - (side[0] / across) * 0.9, b.at[1] + out[1] * 1.5 - (side[1] / across) * 0.9] });
+    }
+
+    return braziers;
+}
+
+/**
  * A camp (docs/WAR.md M6): how many sentries it posts at most, and how far from its fire (metres);
  * how many tents it pitches round it, and how far out.
  */
