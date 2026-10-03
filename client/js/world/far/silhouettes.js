@@ -8,6 +8,7 @@
 // far land: the water nearer goes on to where it starts, looking as they do (water.js STILL_WATER).
 
 import * as THREE from "three";
+import { SKY_GLOW } from "../daytime.js";
 import { GRADE } from "../fog.js";
 import { STILL_WATER, WATER } from "../water.js";
 import { gatherSilhouettes } from "./gather.js";
@@ -62,6 +63,7 @@ varying vec2 vAt;
 varying float vForm;
 varying vec3 vTint;
 varying float vSun;
+uniform vec3 skyGlow;
 float ragged(vec2 p) {
     return fract(sin(dot(floor(p), vec2(12.9898, 78.233))) * 43758.5453);
 }
@@ -87,7 +89,8 @@ void main() {
         float lit = 0.72 + 0.18 * clamp(q.y, -1.0, 1.0) + 0.16 * vSun * clamp(q.x, -1.0, 1.0);
         colour = vTint * lit * 1.15;
     }
-    gl_FragColor = vec4(colour, 1.0);
+    // (As the sky's light is: dark at night)
+    gl_FragColor = vec4(colour * skyGlow, 1.0);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
     #include <fog_fragment>
@@ -122,7 +125,7 @@ function natureMaterial(name, vertexShader, fragmentShader, uniforms) {
         name,
         vertexShader,
         fragmentShader,
-        uniforms: { ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), ...uniforms, toneGrade: GRADE },
+        uniforms: { ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), ...uniforms, skyGlow: SKY_GLOW, toneGrade: GRADE },
         defines: { FAR_FADE_IN: "" },
         fog: true,
     });

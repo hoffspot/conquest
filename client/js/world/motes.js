@@ -11,19 +11,21 @@
 // - Each quality's (world/view.js QUALITY.motes): how many; none on low.
 
 import * as THREE from "three";
+import { SKY_GLOW } from "./daytime.js";
 
 /**
  * Each kind of mote: its colour (sRGB), how big (metres across), the breeze it drifts on (metres a
  * second: east, up, south), how far it wanders about that (metres), how brightly it glows (0 to 1),
- * how fast it flickers (0: not), and how many of the motes there are it uses (0 to 1).
+ * how fast it flickers (0: not), how many of the motes there are it uses (0 to 1), and whether
+ * it's lit by the sky (as its light is through the day: dark at night) or by its own light.
  */
 export const MOTES = Object.freeze({
-    pollen: { colour: 0xffeab0, size: 0.09, breeze: [0.22, 0.03, 0.12], wander: 0.6, glow: 0.65, flicker: 0, amount: 0.4 },
-    dust: { colour: 0xf0d8a8, size: 0.07, breeze: [0.12, 0.02, 0.08], wander: 0.4, glow: 0.45, flicker: 0, amount: 0.4 },
-    fireflies: { colour: 0xd6ff78, size: 0.13, breeze: [0.04, 0.01, 0.03], wander: 1.2, glow: 1, flicker: 1.7, amount: 0.45 },
-    wisps: { colour: 0xa9d6ff, size: 0.15, breeze: [0.03, 0.04, 0.02], wander: 1, glow: 0.9, flicker: 0.6, amount: 0.4 },
-    embers: { colour: 0xff8a33, size: 0.08, breeze: [0.3, 0.8, 0.2], wander: 0.5, glow: 1, flicker: 3, amount: 0.7 },
-    snow: { colour: 0xffffff, size: 0.07, breeze: [0.3, -0.6, 0.12], wander: 0.4, glow: 0.7, flicker: 0, amount: 0.9 },
+    pollen: { colour: 0xffeab0, size: 0.09, breeze: [0.22, 0.03, 0.12], wander: 0.6, glow: 0.65, flicker: 0, amount: 0.4, lit: true },
+    dust: { colour: 0xf0d8a8, size: 0.07, breeze: [0.12, 0.02, 0.08], wander: 0.4, glow: 0.45, flicker: 0, amount: 0.4, lit: true },
+    fireflies: { colour: 0xd6ff78, size: 0.13, breeze: [0.04, 0.01, 0.03], wander: 1.2, glow: 1, flicker: 1.7, amount: 0.45, lit: false },
+    wisps: { colour: 0xa9d6ff, size: 0.15, breeze: [0.03, 0.04, 0.02], wander: 1, glow: 0.9, flicker: 0.6, amount: 0.4, lit: false },
+    embers: { colour: 0xff8a33, size: 0.08, breeze: [0.3, 0.8, 0.2], wander: 0.5, glow: 1, flicker: 3, amount: 0.7, lit: false },
+    snow: { colour: 0xffffff, size: 0.07, breeze: [0.3, -0.6, 0.12], wander: 0.4, glow: 0.7, flicker: 0, amount: 0.9, lit: true },
 });
 
 /** Each land's motes (a MOTES kind); lands not here have none. */
@@ -96,6 +98,8 @@ const FRAGMENT = `
 #include <fog_pars_fragment>
 uniform vec3 moteColour;
 uniform float moteGlow;
+uniform float moteLit;
+uniform vec3 skyGlow;
 varying float vMote;
 
 void main() {
@@ -103,7 +107,7 @@ void main() {
 
     if (alpha < 0.01) discard;
 
-    gl_FragColor = vec4(moteColour, alpha);
+    gl_FragColor = vec4(moteColour * mix(vec3(1.0), skyGlow, moteLit), alpha);
 
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -131,6 +135,8 @@ export class Motes {
             moteAmount: { value: 0 },
             moteColour: { value: new THREE.Color() },
             moteGlow: { value: 0 },
+            moteLit: { value: 0 },
+            skyGlow: SKY_GLOW,
         };
         this.material = new THREE.ShaderMaterial({
             name: "motes",
@@ -223,6 +229,7 @@ export class Motes {
         uniforms.moteAmount.value = spec.amount * this.level;
         uniforms.moteColour.value.set(spec.colour);
         uniforms.moteGlow.value = spec.glow;
+        uniforms.moteLit.value = spec.lit ? 1 : 0;
     }
 
     dispose() {

@@ -7,9 +7,10 @@
 // from above and warm from the ground, as out of doors. Indoors it's a dim room of warm plaster
 // and dark boards, lit low on one side by a fire and from above by lamps.
 //
-// Each is drawn once into a small prefiltered map (a PMREM: three.js blurs it for each
-// roughness), both the same size, so that going in or out only changes which map is read,
-// never a shader.
+// Each is drawn into a small prefiltered map (a PMREM: three.js blurs it for each roughness), both
+// the same size, so that going in or out only changes which map is read, never a shader. The
+// room's once; the sky's again as the day turns (SkyLight), the ground under it as dark as the
+// light on it.
 
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
@@ -48,6 +49,7 @@ function outdoors(sunDirection) {
 
     land.position.y = -EYE;
     scene.add(sky.object, land);
+    scene.userData = { sky, ground: land };
 
     return scene;
 }
@@ -96,6 +98,41 @@ export function bakeEnvironments(renderer, sunDirection) {
     const [outside, inside] = bake(renderer, [outdoors(sunDirection), indoors()]);
 
     return { outdoors: outside, indoors: inside };
+}
+
+/**
+ * The light from the sky all round, drawn again as the day turns (`bake`), its sky and ground the
+ * time of day's: one generator and one scene kept for it, so each time costs only the drawing. Its
+ * `target` (a render target; its texture goes in scene.environment) is a new one each time: the
+ * one before it is let go.
+ */
+export class SkyLight {
+    constructor(renderer, sunDirection) {
+        this.pmrem = new THREE.PMREMGenerator(renderer);
+        this.scene = outdoors(sunDirection);
+        this.sky = this.scene.userData.sky;
+        this.ground = this.scene.userData.ground;
+        this.target = null;
+    }
+
+    /**
+     * Draw it again for a time of day (daytime.js skyAt's), the ground lit `light` times as much as
+     * by day. Returns the new target.
+     */
+    bake(sky, light) {
+        this.sky.setTime(sky);
+        this.ground.material.color.set(GROUND).multiplyScalar(light);
+        this.target?.dispose();
+        this.target = this.pmrem.fromScene(this.scene, 0, 0.1, 200, { size: SIZE });
+
+        return this.target;
+    }
+
+    dispose() {
+        this.target?.dispose();
+        this.pmrem.dispose();
+        dispose(this.scene);
+    }
 }
 
 /**

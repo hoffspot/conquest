@@ -1233,8 +1233,9 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
 
     expect(inside).toEqual({ order: "enter", glowing: true, map: "taproom", shown: "taproom", square: outside.inside, facing: 0, minimap: "taproom", heard: "taproom" });
 
-    // Lit from all round by a warm room's light, not the sky's; going out and back in only
-    // changes which is read (the two the same size), so no shader is made afresh
+    // Lit from all round by a warm room's light, not the sky's (out of doors, the sky's at the time
+    // of day); going out and back in only changes which is read (the two the same size), so no
+    // shader is made afresh
     expect(await page.evaluate(() => {
         const { game, session } = window.pellagos;
         const view = session.view;
@@ -1244,7 +1245,7 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
         view.setIndoors(null);
         view.render();
 
-        const sky = view.scene.environment === view.environments.outdoors.texture;
+        const sky = view.scene.environment === view.skyLight.target.texture && view.far.scene.environment === view.skyLight.target.texture;
 
         view.setIndoors(game.interiors.get("taproom"));
         view.render();

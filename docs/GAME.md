@@ -589,10 +589,14 @@ player, high enough to see a little of the sky over the rooftops: `pitch`), zoom
 32 metres away, from any side (`yaw`: from the south, looking north, to start with), at the
 player's middle (0.8 metres up).
 
-**The sky** (world/sky.js), outdoors, a fair day: deep blue overhead paling to the haze at the
-horizon (the fog's colour, so the world's far edge melts into it), the sun where the shadows come
-from (a bright disc in a warm glow), and clouds drifting slowly across on the wind, soft-edged,
-white where the sun's on them and grey-blue underneath, thinning towards the horizon. It's one
+**The sky** (world/sky.js), outdoors, at the time of day (Day and night, below): deep blue
+overhead paling to the haze at the horizon (the fog's colour, so the world's far edge melts into
+it), the sun where the shadows come from (a bright disc in a warm glow, gone once it's set), the
+moon on the other side of the sky (its disc lit as much as its phase has, its seas darker, a faint
+glow round it), the stars at night (one in some of the cells of a grid over the sky, twinkling;
+none where the grid's cells are smaller than a pixel), and clouds drifting slowly across on the
+wind, soft-edged, white where the sun's on them and grey-blue underneath, thinning towards the
+horizon, lit as the sky is (gold at dusk, grey-blue at night). It's one
 dome round the camera, drawn first and behind everything (it writes no depth), in the picture's
 own colours (untouched by the tone mapping, as the fog and the background are): a gradient, the
 sun, and two reads of a small tiling texture of noise (128 texels) for the clouds, drifting at
@@ -607,7 +611,8 @@ anything shiny its reflection, from one environment map. Outdoors it's the game'
 (the dome, clouds and all) and the sunlit ground below (a warm grey); indoors, a dim room of
 warm plaster and dark boards, lit low on one side by a fire and from above by lamps. Each is
 drawn once, when the view's made, into a map 128 pixels a face (3 MB for the two), both the same
-size, so going in or out changes only which is read, never a shader. They replace a
+size, so going in or out changes only which is read, never a shader. Out of doors in the world,
+the sky's is drawn again as the day turns (Day and night, below). They replace a
 photographer's studio room (6 MB, twice as long to make) and a hemisphere light, under which a
 white wall in the shade got twice as much light as the sun gave it in the open, so nothing had a
 sunny side and a shaded one, and steel mirrored grey walls. Now, outdoors, a wall in the sun gets
@@ -716,8 +721,41 @@ a look of its own (`LOOKS`), which the world takes on round the player:
 - **Shared values.** The mist's and the grade's values are put into every three.js material's
   uniforms once, before anything's drawn, as the same objects, so setting them sets them
   everywhere. Going in and out still makes no new shader programs.
-- **Not changed by the look:** the light from all round (environment.js) is still baked once,
-  from the plain day's sky; the sun's direction is the same everywhere.
+- **Through the day** (below), the look's sky, sun and grade are the day's: the look's by day,
+  dawn's and dusk's colours either side of the sun's rising and setting, the night's after. The
+  light from all round is drawn from the look's sky at the time of day.
+
+**Day and night** (core/daytime.js, world/daytime.js; the terrain plan's M7e):
+- **The clock.** A day is 60 minutes of play, kept by the war's own clock (a turn a minute, and
+  the time into the next), so it needs nothing kept of its own: whoever holds the world keeps it,
+  it's saved with the war, sent to whoever joins in the war's state and checked with it, so every
+  player has the same hour; it stops when the world's paused, as the war does. From midnight: the
+  night to minute 7, the dawn to 11 (the sun rising at 9), the day to 47, the dusk to 53 (the sun
+  setting at 50), the night again; a new world starts at mid-morning (minute 18). The moon turns
+  through its phases over eight days, a quarter full and waxing in a new world. `daylight(time)`
+  (1 by day, 0 by night, even through the dawn and the dusk) is what the rules will go by.
+- **The sun's way:** rising in the east, over the south (56 degrees up at noon), setting in the
+  west, evenly; under the north through the night, quicker, but as slowly as by day near the
+  horizon, so the dusk and the dawn come on as slowly as the sun sets and rises.
+- **The sky's colours:** the land's look by day; either side of the sun's rising and setting,
+  dawn's pinks or dusk's golds at the horizon (over about four minutes); a deep blue at night, a
+  little lighter under a full moon; the stars fading in and out with the night.
+- **The light:** the sun's, warm and low at either end of the day, coming on over a few minutes as
+  it rises; at night the moon's, cold and blue-white (full, a strength of 1 against the
+  sun's 3.5; new, 0.3, from the stars), its shadows paler than the sun's. The two are handed
+  over at the horizon, where neither gives any light. The light from all round falls with the sky
+  (its colours, and the ground under it lit as the day is), drawn again into its map (128 pixels a
+  face: 36 small draws) once the sun's moved (by 0.03 radians: about every 25 seconds by day) or
+  the sky's changed enough since it was last, at most every two seconds (at once after a big
+  change); every lit material takes it, the far land too, with no new shaders. At night the picture's exposure is half as much again (the eye used to the
+  dark), so a full moon's night is blue and readable, a new moon's dark.
+- **What's lit by the sky alone** (the chimneys' and the volcano's smoke, the falls' mist, the
+  sunlit motes (pollen, dust, snow), the clouds, the far trees) is as dark as the sky's light,
+  from one shared value; fireflies, wisps and embers glow on.
+- **Indoors** the daylight at the windows (the sun through them, the beams of light) falls with
+  the day, none at night; the exposure is the day's.
+- **Not by time:** the pack's paperdoll is lit as on a fair day whatever the hour. With no world
+  (the labs) the sun stands where it always did.
 
 **Up high, rock and snow** (ground.js `ALPINE`). Grass gives way to rock with height:
 - **Rock:** from 130 m to 220 m, rock reaches onto gentler slopes (at the top, slopes 0.12 gentler

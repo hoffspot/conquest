@@ -11,6 +11,7 @@
 import * as THREE from "three";
 import { craterOf, heightAt } from "../../core/terrain/height.js";
 import { tiling } from "../../core/noise.js";
+import { SKY_GLOW } from "../daytime.js";
 import { GRADE } from "../fog.js";
 import { FAR } from "./levels.js";
 
@@ -157,6 +158,7 @@ uniform vec3 sunColour;
 uniform vec3 fireColour;
 uniform vec3 glowColour;
 uniform float glowStrength;
+uniform vec3 skyGlow;
 uniform sampler2D noiseMap;
 varying vec2 vCorner;
 varying float vAge;
@@ -183,8 +185,9 @@ void main() {
     float billow = texture2D(noiseMap, vCorner * 0.45 + vec2(vSeed, vAge * 0.6 + vSeed * 0.37)).r;
     float thick = smoothstep(1.0, 0.25, r) * smoothstep(0.2, 0.6, billow + 0.3 * (1.0 - r));
     float alpha = thick * smoothstep(0.0, 0.06, vAge) * (1.0 - smoothstep(0.55, 1.0, vAge));
-    // (Lit from above by the sun, from below by the fire, the lower down the more)
-    vec3 colour = mix(shadeColour, sunColour, 0.5 + 0.5 * vCorner.y);
+    // (Lit from above by the sun (as the sky's light is: dark at night), from below by the fire,
+    // the lower down the more)
+    vec3 colour = mix(shadeColour, sunColour, 0.5 + 0.5 * vCorner.y) * skyGlow;
     colour = mix(colour, fireColour, (1.0 - smoothstep(0.0, 0.3, vAge)) * (0.65 - 0.35 * vCorner.y));
     gl_FragColor = vec4(colour, alpha * 0.9);
     #include <tonemapping_fragment>
@@ -277,6 +280,7 @@ export class Volcano {
                 time: { value: 0 },
                 nearCut: { value: nearCut },
                 noiseMap: { value: smokeNoise() },
+                skyGlow: SKY_GLOW,
                 toneGrade: GRADE,
             },
             defines: { NO_NEAR_FADE: "" },

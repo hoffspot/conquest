@@ -8,6 +8,7 @@
 
 import * as THREE from "three";
 import { TREE_WIND } from "./art/kits/trees.js";
+import { SKY_GLOW } from "./daytime.js";
 import { smokeNoise } from "./far/volcano.js";
 import { GRADE } from "./fog.js";
 
@@ -64,6 +65,7 @@ const FRAGMENT = `
 #include <fog_pars_fragment>
 uniform vec3 shadeColour;
 uniform vec3 sunColour;
+uniform vec3 skyGlow;
 uniform float thick;
 uniform sampler2D noiseMap;
 varying vec2 vCorner;
@@ -78,8 +80,8 @@ void main() {
     float body = smoothstep(1.0, 0.2, r) * smoothstep(0.2, 0.6, billow + 0.3 * (1.0 - r));
     float alpha = body * smoothstep(0.0, 0.06, vAge) * (1.0 - smoothstep(0.25, 1.0, vAge)) * thick;
     if (alpha < 0.01) discard;
-    // (Lit from above, in shade below; greyer as it thins)
-    vec3 colour = mix(shadeColour, sunColour, 0.45 + 0.4 * vCorner.y + 0.15 * vAge);
+    // (Lit from above, in shade below; greyer as it thins; as the sky's light is, dark at night)
+    vec3 colour = mix(shadeColour, sunColour, 0.45 + 0.4 * vCorner.y + 0.15 * vAge) * skyGlow;
     gl_FragColor = vec4(colour, alpha);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -105,6 +107,7 @@ export function smokeMaterial() {
                 shadeColour: { value: new THREE.Color(SMOKE.shade) },
                 sunColour: { value: new THREE.Color(SMOKE.sun) },
                 thick: { value: SMOKE.thick },
+                skyGlow: SKY_GLOW,
                 noiseMap: { value: smokeNoise() },
                 toneGrade: GRADE,
             },
