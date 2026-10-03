@@ -710,12 +710,17 @@ export class Overworld {
                 crops[k] = land.crop ?? 0;
                 blocked[k] = land.water && !land.bridge ? 1 : 0;
 
-                // (A citadel's moat: still water, too deep to wade, over a bed of mud)
+                // (A citadel's moat: still water, too deep to wade, over a bed of mud; the ground
+                // under its far side's wall and just behind it built on, seen over)
                 if (this.sites.moatAt(x, y)) {
                     water[k] = WET.still;
                     ground[k] = GROUND.soil;
                     crops[k] = 0;
                     blocked[k] = 1;
+                } else if (this.sites.rimAt(x, y)) {
+                    crops[k] = 0;
+                    blocked[k] = 1;
+                    solid[k] = 1;
                 }
 
                 // (A castle's, or a people's own place's: what's built there stands on it; a
@@ -749,7 +754,9 @@ export class Overworld {
                 const c = j * CORNERS + i;
                 const depth = this.surfaceAt(x0 + i + 0.5, y0 + j + 0.5) - Math.min(heights[c], heights[c + 1], heights[c + CORNERS], heights[c + CORNERS + 1]);
 
-                blocked[k] = this.wades(x0 + i + 0.5, y0 + j + 0.5, depth) ? 0 : 1;
+                // (Never a citadel's moat, even where its squares run on in under its far side's
+                // wall, the glacis over its water there)
+                blocked[k] = !this.sites.moatAt(x0 + i, y0 + j) && this.wades(x0 + i + 0.5, y0 + j + 0.5, depth) ? 0 : 1;
             }
         }
 

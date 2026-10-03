@@ -3312,6 +3312,21 @@ converted data is to be measured in M8 against today's hm08 data.
     shader too, `FIELDS_CLEAR`). The citadel's now set down as the world's made
     (`settleCitadels`, 100 to 200 ms), as its moat and cleared ground are wanted from afar. Seeds
     1, 2, 3, 7, 11 and 23 all find room. Pictures sent in the session.
+  - **The moat round** (the user, with the moat's pictures: "The moat shouldn't have angled edges
+    and there look like water is visible under the border"): the moat was the outer ward's
+    polygon grown out, its far bank eased up over 2.5 m with the coping part way up it, so the
+    water reached past the coping and showed under its edge (the coping had no back). Now round:
+    its far side a circle 10 m out past the outer towers' faces, a curved wall of stone 2.4 m
+    thick (16 stretches of a lathe, battered, a dark band at the water, a coping with a back going
+    down into the glacis), the bed dug out to its face and eased up to the glacis steeply inside
+    the wall (the ground's 1 m lattice spreads it a metre and a half, still inside the wall and
+    under the water at its face: the ground there 0.66 m or more under the water on seeds 1 to 3);
+    the moat's squares on in under the wall (never waded, though the glacis stands over the water
+    there), and 2 m behind it built ground (blocked, solid, seen over), so the cliffs' rock isn't
+    drawn on the steep ground under it (it had poked through the coping). The gate tower stands
+    0.6 m out into the water, the counterscarp's gap hidden in it; from afar the water a ring of
+    24 stretches. About 1,500 triangles more near (37,000), 120 more far (1,750). Before and after
+    pictures sent in the session.
   - **On the way:** a first build (v1: wards 56 to 64, 38 to 44 and 17 to 20 m, towers on the
     walls' corners, a keep in the middle with four needle towers, straight stairs) was looked at in
     pictures and redone with the research's measures: the keep moved to the close's back corner
@@ -3330,7 +3345,10 @@ converted data is to be measured in M8 against today's hm08 data.
   - **Tests:** test/citadel.test.js (laid out: wards, sides, sizes, rises, towers clear and
     spaced, gates a quarter round, the keep at the back, hall and chapel clear of it and in the
     close, stairs clear of their towers; parts; set down clear of roads and water on seeds 1, 2, 3
-    and 7; terraces levelled, the moat dug and the hill eased out; its squares (walls, towers, bridge, gate tower) blocked,
+    and 7; terraces levelled, the moat dug and the hill eased out, the glacis up to the far side's
+    coping all round; the moat round, its far side's stretches on one circle, 10 m at the least past
+    the outer towers; the moat's squares water on in under the far side's wall and built ground
+    behind it; its squares (walls, towers, bridge, gate tower) blocked,
     opaque and paved, its moat water too deep to wade at its own level, open outside, no fields
     or hedges on the ground it keeps clear; pieces by chunk; built in its budget with the keep's
     spires highest; from afar under 2,000 triangles); test/flats.test.js (the castle's middle on

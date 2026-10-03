@@ -1,8 +1,8 @@
 // The humans' hill citadels (client/js/core/setpieces/citadel.js, core/sites.js, the terrain plan's
 // M7i-4): three wards one above another up a hill, each walled round, its gate a quarter of the way
 // round from the last; the keep in the inner close's corner, the hall and the chapel round it; a
-// moat round the outer ward, a bridge and drawbridge over it to the outer gate, a gate tower on
-// its far bank; set down clear of the roads and the water, its wards' terraces levelled one above
+// round moat round the outer ward, a bridge and drawbridge over it to the outer gate, a gate tower
+// at its far side; set down clear of the roads and the water, its wards' terraces levelled one above
 // another, its moat dug into its hill and its hill eased out into the land; every square inside its
 // outer wall, under its towers, on its bridge and in its gate tower its own, its wards' courtyards,
 // its moat's water; no fields or hedges on the ground it keeps clear; its parts drawn by the
@@ -143,7 +143,7 @@ describe("a hill citadel laid out (core/setpieces/citadel.js)", () => {
         assert.notDeepEqual(layoutCitadel({ seed: 1 }), layoutCitadel({ seed: 2 }));
     });
 
-    it("is built of walls and towers round each ward, a stair up to each gate but the outer's, its moat's far bank, the bridge and gate tower, ranges of buildings, the hall, the chapel and the keep", () => {
+    it("is built of walls and towers round each ward, a stair up to each gate but the outer's, its round moat's far side, the bridge and gate tower, ranges of buildings, the hall, the chapel and the keep", () => {
         const citadel = layoutCitadel({ seed: 1 });
         const parts = citadelParts(citadel);
         const count = (part, ward) => parts.filter((each) => each.part === part && (ward === undefined || each.ward === ward)).length;
@@ -156,18 +156,28 @@ describe("a hill citadel laid out (core/setpieces/citadel.js)", () => {
         }
 
         assert.equal(count("keep"), 1);
-        assert.equal(count("counterscarp"), citadel.wards[0].sides);
+        assert.equal(count("counterscarp"), CITADEL.moat.arcs);
         assert.equal(count("bridge"), 1);
         assert.equal(count("gatetower"), 1);
 
-        // (The bridge from the outer wall's face to the far bank, the gate tower beyond it on the
-        // glacis; the moat's water between the wall and the far bank)
+        // (The moat round, CITADEL.moat.wide at the least past the outer towers' faces; its far side
+        // in stretches of the one circle, all round it but where the gate tower stands)
+        const face = moatReach(citadel, "face");
+        const arcs = parts.filter((each) => each.part === "counterscarp");
+        const missing = (2 * Math.PI - arcs.reduce((sum, { span }) => sum + span, 0)) * face;
+        const [outer] = citadel.wards;
+
+        assert.ok(towersOf(citadel, outer).every((at) => face - Math.hypot(...at) - outer.tower >= CITADEL.moat.wide - 1e-9));
+        assert.ok(arcs.every((arc) => arc.radius === face && Math.abs(Math.hypot(...arc.at) - face) < 1e-9));
+        assert.ok(missing > 0 && missing < CITADEL.gatetower.wide - 1, `${missing.toFixed(1)} m of the far side in the gate tower`);
+
+        // (The bridge from the outer wall's face to the gate tower; the gate tower standing out into
+        // the water from the far side, and back over the glacis)
         const bridge = parts.find((each) => each.part === "bridge");
         const tower = parts.find((each) => each.part === "gatetower");
 
-        assert.ok(Math.abs(bridge.at[1] + bridge.long - moatReach(citadel, "lip")) < 1e-9);
-        assert.ok(tower.at[1] - tower.deep / 2 >= moatReach(citadel, "lip") - 1e-9 && tower.at[1] + tower.deep / 2 <= moatReach(citadel, "glacis"));
-        assert.ok(moatReach(citadel, "water") > moatReach(citadel, "foot") && moatReach(citadel, "water") < moatReach(citadel, "lip"));
+        assert.ok(Math.abs(bridge.at[1] + bridge.long - (tower.at[1] - tower.deep / 2)) < 1e-9);
+        assert.ok(tower.at[1] - tower.deep / 2 < face && tower.at[1] + tower.deep / 2 > moatReach(citadel, "lip") && tower.at[1] + tower.deep / 2 <= moatReach(citadel, "glacis"));
         assert.equal(count("hall", citadel.wards.length - 1), 1);
         assert.equal(count("chapel", citadel.wards.length - 1), 1);
         assert.ok(count("range") >= 2, `${count("range")} ranges`);
@@ -209,7 +219,7 @@ describe("a hill citadel set down (core/sites.js)", () => {
         }
     });
 
-    it("levels its wards' terraces one above another, its moat dug into its hill, its hill eased out into the land round it", () => {
+    it("levels its wards' terraces one above another, its round moat dug into its hill, the glacis up to its far side's coping all round, its hill eased out into the land round it", () => {
         const { land, world, set } = one;
         const { citadel, x, y, facing } = set;
         const base = citadelLevel(world.plan, citadel, x, y, facing);
@@ -234,20 +244,48 @@ describe("a hill citadel set down (core/sites.js)", () => {
             assert.ok(Math.abs(land.ground.heightAt(...at(inside)) - set.pads[k + 2].level) < 0.05, `ward ${k}: ${land.ground.heightAt(...at(inside)).toFixed(2)} at ${set.pads[k + 2].level.toFixed(2)}`);
         }
 
-        // (Its moat: its bed from its outer wall's foot to its far bank, its water over it; the
-        // glacis past it at the outer ward's level; the hill eased out from its edge over
-        // CITADEL.hill.ease into the land)
+        // (Its moat: its bed from its outer wall's foot out to its far side's face (the ground's
+        // lattice rounding its edge), its water over it; the glacis past it at the outer ward's
+        // level, up to the back of its far side's coping all round (so there's nothing to see under
+        // the coping); the hill eased out from its edge over CITADEL.hill.ease into the land)
         const [outer] = citadel.wards;
         const turn = sideTurn(outer.sides, 2);
-        const out = (r) => place([Math.cos(turn) * r, Math.sin(turn) * r]);
+        const out = (r, way = turn) => place([Math.cos(way) * r, Math.sin(way) * r]);
+        const [face, lip] = [moatReach(citadel, "face"), moatReach(citadel, "lip")];
 
-        for (const r of [moatReach(citadel, "wall") + 1, (moatReach(citadel, "wall") + moatReach(citadel, "foot")) / 2, moatReach(citadel, "foot") - 0.5]) {
+        for (const r of [outer.apothem + 1, (outer.apothem + face) / 2, face - 1.5]) {
             assert.ok(Math.abs(land.ground.heightAt(...out(r)) - set.pads[1].level) < 0.05, `moat's bed ${r.toFixed(1)} m out`);
             assert.ok(Math.abs(land.surfaceAt(...out(r)) - set.water) < 1e-9);
         }
 
-        assert.ok(Math.abs(land.ground.heightAt(...out(moatReach(citadel, "lip") + 4)) - set.pads[0].level) < 0.05, "the glacis");
+        for (let k = 0; k < 64; k++) {
+            assert.ok(Math.abs(land.ground.heightAt(...out(lip, (k * Math.PI) / 32)) - set.pads[0].level) < 0.05, `the glacis at the coping's back, ${k}`);
+        }
+
+        assert.ok(Math.abs(land.ground.heightAt(...out(lip + 4)) - set.pads[0].level) < 0.05, "the glacis");
         assert.ok(Math.abs(land.ground.heightAt(...out(moatReach(citadel, "glacis") + CITADEL.hill.ease + 2)) - landHeight(world.plan, ...out(moatReach(citadel, "glacis") + CITADEL.hill.ease + 2))) < 1);
+
+        // (Its squares the moat's on in under its far side's wall, nearly to its back: water,
+        // blocked; and behind that, CITADEL.moat.kept past it, built ground, blocked but seen over:
+        // no cliff drawn on the steep ground under the wall; but where the gate tower stands)
+        for (let k = 0; k < 64; k++) {
+            for (const r of [face + 0.3, face + 1.2, lip - 0.6, lip + 0.2, lip + 1]) {
+                const [px, py] = out(r, (k * Math.PI) / 32);
+                const [i, j] = [Math.floor(px), Math.floor(py)];
+                const at = [(i + 0.5 - x) * Math.cos(facing) - (j + 0.5 - y) * Math.sin(facing), (i + 0.5 - x) * Math.sin(facing) + (j + 0.5 - y) * Math.cos(facing)];
+                const [chunk, square] = [land.chunkAt(i, j), (j % CHUNK) * CHUNK + (i % CHUNK)];
+
+                if (insideCitadel(citadel, at, 0.5)) {
+                    continue;
+                }
+
+                if (Math.hypot(...at) < lip - 0.5) {
+                    assert.ok(chunk.water[square] && land.squares.blocked(i, j), `${i}, ${j} under the far side's wall`);
+                } else if (Math.hypot(...at) < lip + CITADEL.moat.kept) {
+                    assert.ok(!chunk.water[square] && chunk.solid[square] && land.squares.blocked(i, j) && !land.squares.opaque(i, j), `${i}, ${j} behind the far side's wall`);
+                }
+            }
+        }
     });
 
     it("takes every square inside its outer wall, under its outer towers, on its bridge and in its gate tower (blocked, unseen through), its wards courtyards; its moat water, too deep to wade; the ground outside open, kept clear of fields and hedges", () => {
@@ -270,7 +308,7 @@ describe("a hill citadel set down (core/sites.js)", () => {
                     tower += inTower(at) ? 1 : 0;
                     assert.ok(land.squares.blocked(i, j) && land.squares.opaque(i, j), `${i}, ${j} blocked`);
                     assert.equal(land.squares.ground(i, j), GROUND.courtyard);
-                } else if (inMoat(citadel, at) && !insideCitadel(citadel, at, 1) && insideWard(citadel, { sides: outer.sides, apothem: moatReach(citadel, "foot") - 1 }, at)) {
+                } else if (inMoat(citadel, at) && !insideCitadel(citadel, at, 1) && Math.hypot(...at) < moatReach(citadel, "face") - 1.5) {
                     // (Water, too deep to wade, seen over)
                     moat++;
                     assert.ok(land.chunkAt(i, j).water[(j % CHUNK) * CHUNK + (i % CHUNK)] && land.squares.blocked(i, j) && !land.squares.opaque(i, j), `${i}, ${j} moat`);

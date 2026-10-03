@@ -1410,13 +1410,15 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     ward's flying pennants.
   - **The outer gate** between twin round towers 4.5 m round, crowned, its house deep between
     them, its passage under a round arch ringed with darker voussoirs, its portcullis half raised,
-    torches either side. **The moat** round the outer ward, the world's own still water (its
-    shader, its shores, its depth): the outer wall and its towers rise out of it on their battered
-    feet; its far bank faced with stone leaning back as it rises, a coping of dressed stone along
-    the glacis's edge. **The bridge** over it: from the gate the drawbridge let down, its leaf of
-    heavy planks bound with iron, its chains up to the gatehouse over the gate; then a pier, and
-    two stone spans on a pier between them to the far bank, parapets along them, cobbles on its
-    deck. **The gate tower** over its far end, on the glacis: square, battered at its foot, its
+    torches either side. **The moat** round the outer ward, round, the world's own still water
+    (its shader, its shores, its depth): the outer wall and its towers rise out of it on their
+    battered feet; its far side a curved wall of stone leaning back as it rises, darker where the
+    water laps it, a coping of dressed stone along the glacis's edge, its back going down into the
+    glacis (nothing to see under it), a short mown verge behind it. **The bridge** over it: from
+    the gate the drawbridge let down, its leaf of heavy planks bound with iron, its chains up to
+    the gatehouse over the gate; then a pier, and two stone spans on a pier between them to the
+    gate tower, parapets along them, cobbles on its deck. **The gate tower** over its far end,
+    standing out into the water from the far side and back over the glacis: square, battered at its foot, its
     passage under round arches with a portcullis, a crown of machicolations over its outer face,
     battlements round its other sides, a turret corbelled out at each outer corner under a cone, a
     steep slate roof, arrow slits, torches either side of its gate. **The inner gates** under
@@ -1435,13 +1437,13 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     flag at each point; on the other two a bartizan corbelled out under a little cone; its door in
     a forebuilding up a few steps, torches either side. **Lean-to ranges** along the lower wards'
     walls: stone under a slate roof sloping down from the wall, windows, a door, chimneys.
-  - **Cost:** about 35,000 triangles a citadel near (walls 17,000, towers 11,500, the keep
-    2,400, the gate tower and bridge 1,000), each chunk building its own parts a piece at a time as
+  - **Cost:** about 37,000 triangles a citadel near (walls 17,000, towers 11,500, the keep
+    2,400, the moat's far side 1,500, the gate tower and bridge 1,000), each chunk building its own parts a piece at a time as
     it's drawn (2 to 16 ms a part), merged with the buildings' atlas, casting shadows; its moat
     in its chunks' water. Its stone the atlas's (`stone`, `stone-dark`, `stone-warm`), its roofs
-    `slate`. From afar (far/shapes.js `citadelShapes`, about 1,600 triangles): its walls boxes, its
+    `slate`. From afar (far/shapes.js `citadelShapes`, about 1,750 triangles): its walls boxes, its
     towers columns under their cones, a dark band where each crown's parapet stands out, its moat's
-    water a side at a time, the bridge and the gate tower, the hall and chapel under their roofs,
+    water a ring of 24 flat stretches, the bridge and the gate tower, the hall and chapel under their roofs,
     the keep under its roof, its needles and bartizans.
   - **The ground round it** kept clear (WORLD.md *Hill citadels*): grass, no fields or hedges, no
     trees, near or seen from afar (the far fields' shader leaves them out inside `FIELDS_CLEAR`).

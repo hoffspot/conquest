@@ -1,8 +1,9 @@
 // Hill citadels (the terrain plan's M7i-4, §9 row 7: "hill citadels 2–3× today's scale on stepped
 // pads"; the humans' castle, sites.js): three wards one above another up a hill, each walled round,
 // a tower at every corner of its walls standing out from them. The outer ward on the hill's top,
-// its curtain wall rising out of a moat; over the moat at the front a bridge, its last span a
-// drawbridge let down to the outer gate, a gate tower over its far end; beyond the moat the glacis,
+// its curtain wall rising out of a round moat, the moat's far side a wall of stone; over the moat at
+// the front a bridge, its last span a drawbridge let down to the outer gate, a gate tower over its
+// far end, standing out into the water; beyond the moat the glacis,
 // clear ground, before the hill falls away (no fields, hedges or trees right up to it: sites.js
 // keeps them off). The middle ward a terrace higher, its wall standing on the battered retaining
 // wall that holds it up; the inner ward highest, its close ringed by the great hall and the
@@ -67,25 +68,28 @@ export const CITADEL = Object.freeze({
      */
     keep: Object.freeze({ size: Object.freeze([16, 19]), high: Object.freeze([34, 40]), needle: 2.5, over: 13, spire: 6.5, bartizan: 1.5, turret: 4, clear: 2.5 }),
     /**
-     * Its moat round the outer ward (metres; Bodiam's, Caerlaverock's): how wide from the outer
-     * wall's face to the foot of its far bank, how deep its bed lies under the outer ward, how far
-     * down its water stands, how far its banks are eased (the far bank faced with stone, the near
-     * the outer wall's battered foot); the glacis beyond it, flat and clear, before the hill falls
-     * away; and how far past the hill's foot the ground's kept clear (no fields, hedges or trees: a
-     * field of view, and of fire).
+     * Its moat round the outer ward (metres; Bodiam's, Caerlaverock's, Kirby Muxloe's): round, how
+     * wide its water at the least (out past the outer towers' faces); how deep its bed lies under
+     * the outer ward, how far down its water stands; its far side a wall of stone holding the
+     * glacis up, `rim` thick, its coping the glacis's edge, drawn round in `arcs` stretches, and
+     * the ground `kept` behind it built on (sites.js: no cliff of rock drawn on the steep ground
+     * under the wall, no one at its very edge); the glacis beyond it, flat and clear, before the
+     * hill falls away; and how far past the hill's foot the ground's kept clear (no fields, hedges
+     * or trees: a field of view, and of fire).
      */
-    moat: Object.freeze({ wide: 15, deep: 4, water: 1.4, bank: 2.5, glacis: 12, clear: 20 }),
+    moat: Object.freeze({ wide: 10, deep: 4, water: 1.4, rim: 2.4, kept: 2, arcs: 16, glacis: 12, clear: 20 }),
     /**
-     * The way over the moat to the outer gate (metres): `wide` across; from the far bank a stone
+     * The way over the moat to the outer gate (metres): `wide` across; from the gate tower a stone
      * span to a pier `pier` thick, and from there to the gate the drawbridge, let down (its leaf
      * `leaf` long, hinged at the gate).
      */
     bridge: Object.freeze({ wide: 4.4, pier: 2, leaf: 6 }),
     /**
-     * The gate tower on the moat's far bank, over the bridge's end (metres): how wide across the
-     * way in, how deep along it, how high its wall-walk; its turrets' radius at its outer corners.
+     * The gate tower on the moat's far side, over the bridge's end (metres): how wide across the
+     * way in, how deep along it, how far it stands out into the water past the far side's face,
+     * how high its wall-walk; its turrets' radius at its outer corners.
      */
-    gatetower: Object.freeze({ wide: 11, deep: 9, high: 14, turret: 1.6 }),
+    gatetower: Object.freeze({ wide: 11, deep: 9, forward: 0.6, high: 14, turret: 1.6 }),
     /** The great hall along one side of the inner close (how deep, how much of the side, how high its eaves). */
     hall: Object.freeze({ deep: 10, share: 0.8, eaves: 9 }),
     /** The chapel along the other, in front of the keep (how deep, how high its eaves, its flèche). */
@@ -268,45 +272,30 @@ export function gateTowersOf(citadel) {
 }
 
 /**
- * How far out from the middle its moat's sides reach (metres, as an apothem): `edge` "wall" (the
- * outer wall's face), "foot" (the foot of its far bank), "water" (where its water meets the far
- * bank), "lip" (the top of the far bank) or "glacis" (the glacis's outer edge, where the hill falls
- * away).
+ * How far out from the middle its round moat reaches (metres): `edge` "face" (its far side's face,
+ * where its water ends: CITADEL.moat.wide out past the outer towers' faces), "lip" (the far side's
+ * back, the glacis's edge) or "glacis" (the glacis's outer edge, where the hill falls away).
  */
 export function moatReach(citadel, edge) {
     const [outer] = citadel.wards;
-    const { wide, deep, water, bank, glacis } = CITADEL.moat;
-    // (Where the far bank, eased up from the bed as smoothstep is, comes up to the water: found by
-    // halving, exact maths only)
-    const up = 1 - water / deep;
-    let [lo, hi] = [0, 1];
+    const { wide, rim, glacis } = CITADEL.moat;
+    const face = (outer.apothem + CITADEL.project * outer.tower) / cos(PI / outer.sides) + outer.tower + wide;
 
-    for (let n = 0; n < 24; n++) {
-        const t = (lo + hi) / 2;
-
-        [lo, hi] = t * t * (3 - 2 * t) < up ? [t, hi] : [lo, t];
-    }
-
-    const t = (lo + hi) / 2;
-
-    return outer.apothem + { wall: 0, foot: wide, water: wide + bank * t, lip: wide + bank, glacis: wide + bank + glacis }[edge];
+    return face + { face: 0, lip: rim, glacis: rim + glacis }[edge];
 }
-
-// A ward-like polygon of the outer ward's sides, `apothem` from the middle (insideWard's)
-const outerRing = (citadel, apothem) => ({ sides: citadel.wards[0].sides, apothem });
 
 /**
  * The bridge's and the gate tower's rectangles ({ u0, v0, u1, v1 }, metres), out in front of the
- * outer gate: the bridge from the outer wall's face over the moat to the far bank's top, the gate
- * tower from there out over the glacis.
+ * outer gate: the bridge from the outer wall's face over the moat to the gate tower, the gate
+ * tower standing out into the water from the moat's far side and back over the glacis.
  */
 export function approachOf(citadel) {
-    const lip = moatReach(citadel, "lip");
     const { bridge, gatetower } = CITADEL;
+    const near = moatReach(citadel, "face") - gatetower.forward;
 
     return {
-        bridge: { u0: -bridge.wide / 2 - 0.6, v0: citadel.wards[0].apothem, u1: bridge.wide / 2 + 0.6, v1: lip },
-        gatetower: { u0: -gatetower.wide / 2, v0: lip, u1: gatetower.wide / 2, v1: lip + gatetower.deep },
+        bridge: { u0: -bridge.wide / 2 - 0.6, v0: citadel.wards[0].apothem, u1: bridge.wide / 2 + 0.6, v1: near },
+        gatetower: { u0: -gatetower.wide / 2, v0: near, u1: gatetower.wide / 2, v1: near + gatetower.deep },
     };
 }
 
@@ -330,22 +319,33 @@ export function insideCitadel(citadel, [u, v], out = 0) {
     );
 }
 
-/** Whether a point ([u, v], metres) is in a citadel's moat: out past its outer wall's face, short of where its water meets the far bank. */
+/**
+ * Whether a point ([u, v], metres) is in a citadel's moat: out past its outer wall's face, short
+ * of its far side's back (its squares the moat's on under the far side's wall: its water's drawn
+ * on into the wall, so it meets the face wherever the squares fall, and the wall's top's no one's
+ * to stand on, nor the steep ground under it a cliff's).
+ */
 export function inMoat(citadel, [u, v]) {
-    return !insideWard(citadel, citadel.wards[0], [u, v]) && insideWard(citadel, outerRing(citadel, moatReach(citadel, "water")), [u, v]);
+    return !insideWard(citadel, citadel.wards[0], [u, v]) && hypot(u, v) < moatReach(citadel, "lip") - 0.5;
 }
+
+// How many corners a citadel's round outline has
+const ROUND = 32;
 
 /**
  * A citadel's outline ([[u, v], ...], metres, going round): its glacis's edge, `out` metres past
- * it; all it stands on (its moat, its bridge and gate tower) inside it.
+ * it (a polygon of ROUND corners round it); all it stands on (its moat, its bridge and gate tower)
+ * inside it.
  */
 export function outlineOf(citadel, out = 0) {
-    return cornersOf(citadel, outerRing(citadel, moatReach(citadel, "glacis") + out));
+    const radius = (moatReach(citadel, "glacis") + out) / cos(PI / ROUND);
+
+    return Array.from({ length: ROUND }, (_, k) => [cos((k * TAU) / ROUND) * radius, sin((k * TAU) / ROUND) * radius]);
 }
 
-/** How far round its middle a citadel keeps the ground clear (metres): its glacis's corners, the hill falling away past them, and CITADEL.moat.clear more. */
+/** How far round its middle a citadel keeps the ground clear (metres): its glacis, the hill falling away past it, and CITADEL.moat.clear more. */
 export function clearingOf(citadel) {
-    return moatReach(citadel, "glacis") / cos(PI / citadel.wards[0].sides) + CITADEL.hill.ease + CITADEL.moat.clear;
+    return moatReach(citadel, "glacis") + CITADEL.hill.ease + CITADEL.moat.clear;
 }
 
 /**
@@ -362,10 +362,13 @@ export function clearingOf(citadel) {
  * - A stair up to each gate but the outer's, against the face of the wall it's in, on the terrace
  *   below (`climb` metres up), doubling back on itself (its first flight away from the gate the
  *   way the way in winds, `way`).
- * - The moat's far bank faced with stone along each of the outer ward's sides (`length`, `deep`,
- *   `bank`); the bridge from the far bank to the outer gate (`long` from the outer wall's face,
- *   `wide`; its pier and drawbridge's leaf, `gate` how far the gate's passage reaches out past the
- *   wall's face); the gate tower on the far bank over its end (`wide`, `deep`, `high`, `turret`).
+ * - The moat's far side, a wall of stone round it in stretches (each an arc of a circle `radius`
+ *   from the middle, its face's middle at `at`, `span` radians round; `rim` thick, its water
+ *   `water` below its top), round from the gate tower's one side to its other; the bridge from the
+ *   outer gate to the gate tower (`long` from the outer wall's face, `wide`; its pier and
+ *   drawbridge's leaf, `gate` how far the gate's passage reaches out past the wall's face); the
+ *   gate tower over its far end, out into the water (`wide`, `deep`, `high`, `turret`; its
+ *   passage `opening` wide, its arch springing at `spring`).
  * - A range of buildings along the inside of some walls (`length`, `deep`, `eaves`); the great
  *   hall and the chapel (its `apse`, `fleche`) in the inner close.
  * - The great keep in the inner ward.
@@ -402,21 +405,25 @@ export function citadelParts(citadel) {
         }
     }
 
-    // (The moat's far bank faced with stone, side by side; the bridge over it to the outer gate, and
-    // the gate tower over its far end)
+    // (The moat's far side, a stretch at a time round from the gate tower's one side to its other
+    // (the gap hidden in the tower); the bridge over the moat to the outer gate, and the gate tower
+    // over its far end)
     const [outer] = wards;
-    const { deep, bank } = CITADEL.moat;
-    const fore = moatReach(citadel, "foot");
+    const { deep, water, rim, arcs } = CITADEL.moat;
+    const face = moatReach(citadel, "face");
     const { gatetower, bridge } = CITADEL;
+    const gap = (gatetower.wide / 2 - 1) / face;
+    const span = (TAU - 2 * gap) / arcs;
+    const near = face - gatetower.forward;
 
-    for (let side = 0; side < outer.sides; side++) {
-        const turn = sideTurn(outer.sides, side);
+    for (let k = 0; k < arcs; k++) {
+        const turn = PI / 2 + gap + (k + 0.5) * span;
 
-        parts.push({ part: "counterscarp", ward: 0, side, at: [cos(turn) * fore, sin(turn) * fore], turn, rise: 0, drop: deep + foot, length: 2 * fore * (sin(PI / outer.sides) / cos(PI / outer.sides)), reach: fore, deep, bank });
+        parts.push({ part: "counterscarp", ward: 0, side: k, at: [cos(turn) * face, sin(turn) * face], turn, rise: 0, drop: deep + foot, radius: face, span, rim, water });
     }
 
-    parts.push({ part: "bridge", ward: 0, at: [0, outer.apothem], turn: PI / 2, rise: 0, drop: deep + foot, long: moatReach(citadel, "lip") - outer.apothem, wide: bridge.wide, pier: bridge.pier, leaf: bridge.leaf, gate: 2, deep, water: CITADEL.moat.water });
-    parts.push({ part: "gatetower", ward: 0, at: [0, moatReach(citadel, "lip") + gatetower.deep / 2], turn: PI / 2, rise: 0, drop: foot, wide: gatetower.wide, deep: gatetower.deep, high: gatetower.high, turret: gatetower.turret, opening: CITADEL.gate.wide, spring: CITADEL.gate.high, bank });
+    parts.push({ part: "bridge", ward: 0, at: [0, outer.apothem], turn: PI / 2, rise: 0, drop: deep + foot, long: near - outer.apothem, wide: bridge.wide, pier: bridge.pier, leaf: bridge.leaf, gate: 2, deep, water });
+    parts.push({ part: "gatetower", ward: 0, at: [0, near + gatetower.deep / 2], turn: PI / 2, rise: 0, drop: deep + foot, wide: gatetower.wide, deep: gatetower.deep, high: gatetower.high, turret: gatetower.turret, opening: CITADEL.gate.wide, spring: CITADEL.gate.high });
 
     for (const range of citadel.ranges) {
         const ward = wards[range.ward];

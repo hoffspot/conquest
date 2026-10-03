@@ -508,13 +508,15 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   ward's towers 2.5 m or more clear of the wall round it. Its gates a quarter of the way round
   each from the last, the same way round (the way in winds round the hill under the walls,
   turning at every gate: Krak des Chevaliers, Himeji); a stair against each inner ward's terrace
-  face up to its gate. Round the outer ward a moat (Bodiam's, Caerlaverock's): 15 m from the outer
-  wall's face to the foot of its far bank, its bed 4 m under the outer ward, its water 1.4 m down
-  (`moatReach`); the outer wall and its towers rise out of it, its far bank faced with stone; over
-  it at the front a bridge 4.4 m wide, from the outer gate the drawbridge (its leaf 6 m, let down
-  on a pier), then two stone spans to the far bank; there a gate tower, 11 m across and 9 m deep,
-  over the bridge's end (`approachOf`); beyond the moat the glacis, 12 m of flat ground at the
-  outer ward's level before the hill falls away. The inner
+  face up to its gate. Round the outer ward a round moat (Bodiam's, Caerlaverock's, Kirby
+  Muxloe's): its far side a circle 10 m out past the outer towers' faces (17 to 18 m from the
+  walls' middles), its bed 4 m under the outer ward, its water 1.4 m down (`moatReach`: "face",
+  "lip", "glacis"); the outer wall and its towers rise out of it, its far side a curved wall of
+  stone 2.4 m thick holding the glacis up, its coping the glacis's edge; over it at the front a
+  bridge 4.4 m wide, from the outer gate the drawbridge (its leaf 6 m, let down on a pier), then
+  two stone spans to a gate tower, 11 m across and 9 m deep, standing 0.6 m out into the water
+  from the far side over the bridge's end (`approachOf`); beyond the moat the glacis, 12 m of flat
+  ground at the outer ward's level before the hill falls away. The inner
   close (Stirling's, Edinburgh's Crown Square): the keep in its back corner away from its gate,
   16 to 19 m square and 34 to 40 m high, its door towards the gate; the great hall along the side
   away from it (10 m deep, four fifths of the side), the chapel along the other in front of it (8 m
@@ -522,26 +524,32 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   (7 m deep), on the sides away from the gates and stairs, clear of the next ward's walls and
   towers by 2 m (most citadels have a few; a few have none, as Spiš's lower ward is empty).
   Set down as a castle is, high (`LIE`), but on a footprint of its own (`outlineOf`: its glacis's
-  edge, a metre past it) up to 192 m from its spot, where its land rises or falls no more than
+  edge, a metre past it, as a polygon of 32 corners) up to 192 m from its spot, where its land rises or falls no more than
   14 m across it: seeds 1, 2, 3, 7, 11 and 23 all find one. It's set down as the world's made
   (`settleCitadels`, 100 to 200 ms; the one humans' castle a world), not when the player first
   comes near, as its moat and the ground it keeps clear are wanted from afar. Its outer ward and
   glacis on its hill, the land under it on average raised 7 m (`citadelLevel`, to the ground's
   step) and eased out into the land round it over 40 m from the glacis's edge; the moat's bed dug
-  into it, its far bank eased up over 2.5 m; each ward in a terrace higher (the outer above the
-  moat), eased up inside its wall's outer face over 2.5 m (under its retaining wall). Each of
-  these a pad (the glacis, the moat's bed, then each ward), a regular polygon (core/terrain/
-  ground.js: `sides`, `apothem`, `turn`, `level`), applied in that order. It takes every square
+  into it out to its far side's face, eased up to the glacis over 0.6 m inside the far side's wall
+  (the ground's 1 m lattice spreads that a metre and a half either way: still inside the wall,
+  and under the water at its face); each ward in a terrace higher (the outer above the moat),
+  eased up inside its wall's outer face over 2.5 m (under its retaining wall). Each of these a pad
+  (the glacis and the moat's bed discs, then each ward a regular polygon: core/terrain/ground.js
+  `sides`, `apothem`, `turn`, `level`), applied in that order. It takes every square
   inside its outer wall, under its outer towers and the outer gate's, on its bridge and in its
   gate tower (`insideCitadel`: blocked, not seen through, paved: `GROUND.courtyard`); none can be
   walked into yet (the plan's M7.5 opens the castles). Its moat's squares (`inMoat`: from the
-  outer wall's face to where its water meets the far bank) are still water at the moat's level
-  (`moatAt`, `moatLevelAt`; the overworld's `surfaceAt`), too deep to wade, drawn as the world's
-  water is and on the minimap. Round it, out to its glacis's corners, the hill's fall and 20 m
-  more (about 170 m from its middle: `clearingOf`), the ground's kept clear (`clearedAt`): no
+  outer wall's face on in under its far side's wall, nearly to its back, so the water meets the
+  face wherever the squares fall) are still water at the moat's level (`moatAt`, `moatLevelAt`;
+  the overworld's `surfaceAt`), too deep to wade (even where the glacis stands over the water
+  under the wall), drawn as the world's water is and on the minimap; the squares from there to
+  2 m behind the wall (`CITADEL.moat.kept`) built ground (`rimAt`: blocked and solid, but seen
+  over), so no cliff of rock is drawn on the steep ground under the wall and none stand at its
+  very edge. Round it, out to its glacis, the hill's fall and 20 m more (about 172 m from its
+  middle: `clearingOf`), the ground's kept clear (`clearedAt`): no
   fields or hedges (near, and seen from afar: world/ground.js `FIELDS_CLEAR`), no trees and none
   of the land's features (its clearing). Each of its parts (`citadelParts`: walls, towers, stairs,
-  the moat's far bank, the bridge, the gate tower, ranges, hall, chapel and keep) is a piece of
+  the moat's far side in 16 curved stretches, the bridge, the gate tower, ranges, hall, chapel and keep) is a piece of
   its own, drawn by the chunk it stands in (`piecesIn`), standing on its ward's terrace.
   `NET_VERSION` 29.
 

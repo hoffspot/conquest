@@ -387,32 +387,30 @@ function stairInto(solid, piece) {
     solid.box(-platform, climb, lane - m(0.5), platform, climb + top, lane, dark);
 }
 
-// The moat's far bank along one of the outer ward's sides (its foot at z = 0, the castle towards
-// -z): faced with stone from below the moat's bed up to the glacis, leaning back as it rises, a
-// coping along its top; its ends drawn in with the sides beside it (`reach`: how far its foot is
-// from the citadel's middle, so it meets them at the corners)
+// A stretch of the moat's far side (its face's middle at z = 0, the castle towards -z, the circle
+// it's an arc of round (0, -radius)): a wall of stone from below the moat's bed up to the glacis,
+// leaning back as it rises, darker where the water laps it; a coping along its top, out over its
+// face, its back going down into the glacis (so there's nothing to see under its edge)
 function counterscarpInto(solid, piece) {
-    const stone = material("stone");
-    const dark = material("stone-dark");
-    const along = piece.length / 2 / piece.reach;
-    const [z0, z1] = [-m(0.3), m(1.6)];
-    const ends = (z) => (m(piece.reach) + z) * along;
-    const [foot, top] = [-m(piece.drop), m(0.15)];
+    const radius = piece.radius;
+    const round = { segments: 8, from: Math.PI / 2 - piece.span / 2, to: Math.PI / 2 + piece.span / 2 };
+    const lathe = (profile, material) => solid.lathe(0, -m(radius), profile.map(([r, y]) => [m(radius + r), m(y)]), material, round);
+    const [foot, top] = [-piece.drop, 0.2];
+    // (How far in its face stands at a height: its batter)
+    const lean = 0.35;
+    const face = (y) => -lean * ((0.05 - y) / (0.05 - foot));
+    const lap = -piece.water + 0.35;
 
-    solid.facing([[ends(z0), foot, z0], [-ends(z0), foot, z0], [-ends(z1), top, z1], [ends(z1), top, z1]], [0, z1 - z0, -(top - foot)], stone);
-    solid.facing([[ends(z0), foot, z0 - m(0.05)], [-ends(z0), foot, z0 - m(0.05)], [-ends(z0 + m(0.4)), foot + m(1.6), z0 + m(0.15)], [ends(z0 + m(0.4)), foot + m(1.6), z0 + m(0.15)]], [0, z1 - z0, -(top - foot)], dark);
-
-    // (Its coping, a course of dressed stone along the glacis's edge)
-    const [c0, c1] = [z1 - m(0.3), z1 + m(0.9)];
-
-    solid.facing([[ends(c0), top + m(0.3), c0], [-ends(c0), top + m(0.3), c0], [-ends(c1), top + m(0.3), c1], [ends(c1), top + m(0.3), c1]], [0, 1, 0], material("stone-warm"));
-    solid.facing([[ends(c0), top - m(0.2), c0], [-ends(c0), top - m(0.2), c0], [-ends(c0), top + m(0.3), c0], [ends(c0), top + m(0.3), c0]], [0, 0, -1], material("stone-warm"));
+    // (Its profiles going down its face, or in over its top, so they face the moat and the sky)
+    lathe([[face(0.05), 0.05], [face(foot), foot]], material("stone"));
+    lathe([[face(lap) - 0.04, lap], [face(foot) - 0.04, foot]], material("stone-dark"));
+    lathe([[piece.rim, -1.2], [piece.rim, top], [-0.2, top], [-0.2, 0.05], [face(0.05), 0.05]], material("stone-warm"));
 }
 
 // The bridge over the moat to the outer gate (out along +z from the outer wall's face, its deck at
 // the outer ward's level): from the gate (`gate` out past the wall's face) the drawbridge, let
 // down, its leaf of heavy planks bound with iron, its chains up to the gatehouse over the gate;
-// then a pier, and two spans of stone on a pier between them to the far bank, parapets along them
+// then a pier, and two spans of stone on a pier between them to the gate tower, parapets along them
 function bridgeInto(solid, piece) {
     const stone = material("stone");
     const dark = material("stone-dark");
