@@ -364,7 +364,15 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   where it comes in. Roads go round lakes, and cross rivers only on bridges: where a road runs
   over a river (looked for every half metre along it), a straight deck from 1.5 metres onto one
   bank to 1.5 metres onto the other, 0.4 metres wider each side than the road. Every square under
-  it can be walked over. Where roads share their way over a river, the widest of their bridges
+  it can be walked over. The roads' and trade roads' bridges are of stone, and half the tracks'
+  (by where they cross: `BRIDGE.stone`; the terrain plan's M7i-2): reaching 8 m onto each bank,
+  their decks level over the river (4 m over its water on a track's packhorse bridge, humped over
+  one high arch; 2.8 m on a road's; 2.6 m on a trade road's, over a row of lower arches) and up a
+  straight ramp from each end, no steeper than about a grade of 0.4; a trade road's within 600 m
+  of a capital's or a city's edge has a gate tower on it (`tower`). Each knows its road's kind
+  (`kind`) and its ramps (`ramps`). A stone bridge's squares are cobbles (walked on as they're
+  drawn, with no planks' thickness), a timber one's planks. Where roads share their way over a
+  river, the widest of their bridges
   (of those as wide, the westernmost). Bridges are found on the roads as planned, never on the
   bit carried on to a settlement's street, so a chunk is the same whichever chunks were made
   first (a test makes the chunks between the town and a neighbour in both orders).
@@ -587,14 +595,15 @@ The world is played on the land's height with what's built levelled into it (`Gr
 - **The overworld** (`overworld.js`) gives each chunk its corner heights and each square's slope
   class: squares steeper than 38° are blocked, but for roads, bridges and what's built. Lakes and
   the sea are wet where the ground's below their water. `heightAt(x, y)` is the ground, or a
-  bridge's deck, arched from bank to bank at least a metre over its river (`deckOf`), and
+  bridge's deck, arched from bank to bank at least a metre over its river (a stone bridge's level
+  over it, up its ramps: `deckOf`), and
   `surfaceAt(x, y)` the water's surface: a river's (sloping down along it), a lake's or the sea's.
 
 **What stands on it** (the drawing, world/):
 - Every chunk's ground mesh (GAME.md, *The ground*), its water sheet following the surface (a
   corner every 2 m), and its bridges' decks arched as the overworld has them, on piers down to the
   riverbed (the ground as it's levelled, not the land's own, so a pier on a graded bank stands
-  on it).
+  on it); its stone bridges built of stone over their arches (GAME.md, *Stone bridges*).
 - Buildings at their piece's ground (on its pad); trees on the lowest ground round their trunk,
   a little into it, with the litter round their feet laid over the ground; rocks, logs and ruins
   on the lowest of five points under them; grass and flowers each at the ground where it grows

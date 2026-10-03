@@ -991,6 +991,11 @@ export const MATERIALS = {
     "stone-black-old": { painter: "coursed", world: OLD_STONE.metres * 5, base: 0x34343a, light: 0x4a4a50, dark: 0x25252b, mortar: 0x121314, old: true },
     "stone-lime-old": { painter: "coursed", world: OLD_STONE.metres * 5, base: 0xa6a184, light: 0xc0bb9c, dark: 0x837f66, mortar: 0x3f3e30, old: true },
     "rubble-old": { painter: "rubble", world: 20, base: 0x55584f, light: 0x6f7266, dark: 0x3c3e37, mortar: 0x1f211b, old: true },
+    // (The stone bridges': warm grey rubble walls, light grey coursed stone, and dressed stone
+    // with no joints of its own for their arches' stones and coping; old, weathered as the ruins')
+    "rubble-bridge-old": { painter: "rubble", world: 22, base: 0x978f82, light: 0xb4ac9e, dark: 0x736b61, mortar: 0x4a453d, old: true },
+    "stone-bridge-old": { painter: "coursed", world: OLD_STONE.metres * 5, base: 0x938f86, light: 0xb0aca1, dark: 0x706c64, mortar: 0x45423c, old: true },
+    "dressed-old": { painter: "rock", world: 12, base: 0x9d978b, light: 0xbcb5a8, dark: 0x766f65, old: true },
     brick: { painter: "brick", world: 5, base: 0x9a4e38, light: 0xb4654a, dark: 0x733627, mortar: 0xb3a792 },
     "brick-brown": { painter: "brick", world: 5, base: 0x80533a, light: 0x9c6a4c, dark: 0x5f3b29, mortar: 0xa89d8a },
     plaster: { painter: "plaster", world: 30, base: 0xe4dac0, light: 0xf1eadb, dark: 0xcdbf9f },

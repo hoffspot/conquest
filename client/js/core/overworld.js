@@ -25,6 +25,7 @@
 
 import { ALONG, CROP, fieldAt, hedgeLine, sown } from "./fields.js";
 import { MAP_ORIGINS } from "./interiors.js";
+import { hashOf } from "./noise.js";
 import { createRandom } from "./random.js";
 import { Settlements, squareOf, waysOut } from "./settlements.js";
 import { Sites } from "./sites.js";
@@ -88,9 +89,20 @@ const ROAD_HALF = Object.freeze({ trade: 2.2, road: 1.8, track: 1.1, path: TRAIL
 /**
  * Bridges: how far past the road's edge the deck reaches each side (metres), and how far onto
  * each bank; a road's crossings closer together than `join` metres are one bridge. Looked for
- * every `step` metres along the road.
+ * every `step` metres along the road. Stone bridges (`stone`): the roads that have them (`kinds`),
+ * and how many of a track's crossings do (`tracks`, by where it crosses); how far onto each bank
+ * they reach (metres: up a ramp from the road there); how high over the river their deck runs
+ * level, by the road's kind (metres over its surface: room for the arches under it, a track's
+ * packhorse bridge humped over one high arch, a trade road's level over a row of low ones); and
+ * how near a capital or a city (metres past its edge) a trade road's has a gate tower on it.
  */
-export const BRIDGE = Object.freeze({ wider: 0.4, banks: 1.5, join: 3, step: 0.5 });
+export const BRIDGE = Object.freeze({
+    wider: 0.4,
+    banks: 1.5,
+    join: 3,
+    step: 0.5,
+    stone: Object.freeze({ kinds: Object.freeze(["trade", "road"]), tracks: 0.5, banks: 8, over: Object.freeze({ track: 4, road: 2.8, trade: 2.6 }), tower: 600 }),
+});
 
 // Trees: tried every TREE_GRID metres (and a random way in); how far (squares) they keep from
 // roads and water; how far (metres) from the town, and from the edges of the settlements, sites
@@ -472,13 +484,25 @@ export class Overworld {
     /**
      * A bridge's deck's height (metres) a way `t` along it (0 at its end `a`, 1 at `b`): from the
      * ground at one end to the other's, arched to at least a metre over the river under its
-     * middle.
+     * middle; a stone bridge's level over the river, high enough for its arches, up a ramp from
+     * each end.
      */
-    deckOf({ a, b }, t) {
+    deckOf({ a, b, stone = false, kind = "road", ramps = null }, t) {
         const [ha, hb] = [this.ground.heightAt(...a), this.ground.heightAt(...b)];
         const river = this.waters.river((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, 20);
-        const least = river ? river.surface + 1 : -Infinity;
         const along = Math.min(1, Math.max(0, t));
+
+        // A stone bridge: level over the river (high enough for its arches, and no lower than
+        // halfway between its ends), up a straight ramp from each end to the river's edge
+        if (stone) {
+            const length = hypot(b[0] - a[0], b[1] - a[1]);
+            const top = Math.max(river ? river.surface + BRIDGE.stone.over[kind] : -Infinity, (ha + hb) / 2);
+            const [up, down] = [ramps[0] / length, 1 - ramps[1] / length];
+
+            return along < up ? ha + ((top - ha) * along) / up : along > down ? hb + ((top - hb) * (1 - along)) / (1 - down) : top;
+        }
+
+        const least = river ? river.surface + 1 : -Infinity;
         const lift = Math.max(0, least - (ha + hb) / 2) * 4 * along * (1 - along);
 
         return ha + (hb - ha) * along + lift;
@@ -786,9 +810,12 @@ export class Overworld {
         const still = !river && stillWaterAt(plan, px, py) !== null;
         const water = river ? WET.river : still ? WET.still : WET.none;
 
-        // Under a bridge (over the river, or its ends on the banks)
-        if (this.#bridgeAt(px, py)) {
-            return { ground: GROUND.planks, water, bridge: true, road: road ?? "bridge" };
+        // Under a bridge (over the river, or its ends on the banks): its planks, or a stone
+        // one's cobbles (walked on as they're drawn, with no planks' thickness over its deck)
+        const bridge = this.#bridgeAt(px, py);
+
+        if (bridge) {
+            return { ground: bridge.stone ? GROUND.cobbles : GROUND.planks, water, bridge: true, road: road ?? "bridge" };
         }
 
         // (Roads go round lakes, and cross rivers only on bridges)
@@ -864,9 +891,9 @@ export class Overworld {
         return walks;
     }
 
-    // Is a point under a bridge's deck?
+    // The bridge whose deck a point's under, if any
     #bridgeAt(px, py) {
-        return this.#bridgesNear(Math.floor(px / CHUNK), Math.floor(py / CHUNK)).some(({ a, b, half }) => {
+        return this.#bridgesNear(Math.floor(px / CHUNK), Math.floor(py / CHUNK)).find(({ a, b, half }) => {
             const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
             const length = hypot(dx, dy);
             const along = ((px - a[0]) * dx + (py - a[1]) * dy) / length;
@@ -941,13 +968,21 @@ export class Overworld {
                 }
             });
 
-            const banks = Math.round(BRIDGE.banks / BRIDGE.step);
+            line.bridges = runs.map(([from, to]) => {
+                // (Of stone on the bigger roads, and on some of the tracks' crossings, by where:
+                // reaching further onto the banks, up ramps to its level over the river)
+                const [mx, my] = along[Math.floor((from + to) / 2)].at;
+                const stone = BRIDGE.stone.kinds.includes(line.kind) || (line.kind === "track" && hashOf(Math.floor(mx), Math.floor(my), this.plan.seed * 31 + 1931) < BRIDGE.stone.tracks);
+                const banks = Math.round((stone ? BRIDGE.stone.banks : BRIDGE.banks) / BRIDGE.step);
+                const [start, end] = [Math.max(0, from - banks), Math.min(along.length - 1, to + banks)];
+                const bridge = { a: along[start].at, b: along[end].at, half: ROAD_HALF[line.kind] + BRIDGE.wider };
 
-            line.bridges = runs.map(([from, to]) => ({
-                a: along[Math.max(0, from - banks)].at,
-                b: along[Math.min(along.length - 1, to + banks)].at,
-                half: ROAD_HALF[line.kind] + BRIDGE.wider,
-            }));
+                // (A stone bridge's ramps: from each end to the river's edge, metres; its road's
+                // kind; and a trade road's near a capital or a city, a gate tower on it)
+                const tower = line.kind === "trade" && this.plan.places.some(({ kind, at, radius }) => (kind === "capital" || kind === "city") && hypot(at[0] - mx, at[1] - my) < radius + BRIDGE.stone.tower);
+
+                return stone ? { ...bridge, stone: true, kind: line.kind, ramps: [(from - start) * BRIDGE.step, (end - to) * BRIDGE.step], tower } : bridge;
+            });
         }
 
         return line.bridges;

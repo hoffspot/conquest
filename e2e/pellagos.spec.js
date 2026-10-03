@@ -1079,6 +1079,67 @@ test("up in the mountains, cliffs of rock where it's too steep to climb, and an 
     expect(reading.filter(({ read }) => read > 16)).toEqual([]);
 });
 
+test("by the start town the road crosses the river on a stone bridge: drawn of stone over its arches, walked over on its cobbles, up its ramp and down the other", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+    await page.evaluate(() => window.pellagos.game.stop());
+
+    const crossing = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const land = game.world.maps.town;
+        const bridge = land.chunkAt(3005, 5150).bridges.find(({ stone }) => stone);
+        const { a, b } = bridge;
+        const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        const [ux, uy] = [(b[0] - a[0]) / length, (b[1] - a[1]) / length];
+        const [sx, sy] = [a[0] - ux * 3, a[1] - uy * 3];
+        const me = game.battle.actor(game.me);
+        const avatar = game.avatars.get(game.me);
+
+        Object.assign(me, { x: sx, y: sy, path: [], order: null, progress: null });
+        avatar.object.position.set(sx, land.ground.heightAt(sx, sy), sy);
+
+        for (let n = 0; n < 4; n++) {
+            game.advance(0.25, { render: false });
+
+            for (let k = 0; k < 400 && (game.chunks.update(sx, sy, { budget: 200 }) || game.chunks.busy); k++) {
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        }
+
+        game.advance(0.05);
+
+        const drawn = [];
+
+        session.view.scene.traverse((node) => node.name === "stone bridges" && drawn.push(node));
+
+        // Over it to the far bank, as high as its deck at its middle on the way
+        const to = [Math.floor(b[0] + ux * 3), Math.floor(b[1] + uy * 3)];
+        let highest = -Infinity;
+
+        game.battle.command(game.me, { type: "move", to });
+
+        for (let k = 0; k < 80 && Math.hypot(me.x - to[0] - 0.5, me.y - to[1] - 0.5) > 1; k++) {
+            game.advance(0.25, { render: false });
+            highest = Math.max(highest, avatar.object.position.y);
+        }
+
+        const [mx, my] = [Math.floor((a[0] + b[0]) / 2), Math.floor((a[1] + b[1]) / 2)];
+
+        return {
+            kind: bridge.kind,
+            drawn: drawn.length,
+            over: Math.hypot(me.x - to[0] - 0.5, me.y - to[1] - 0.5) <= 1,
+            high: highest - land.deckOf(bridge, 0.5),
+            cobbles: land.squares.ground(mx, my),
+        };
+    });
+
+    expect(crossing.kind).toBe("road");
+    expect(crossing.drawn).toBeGreaterThanOrEqual(1);
+    expect(crossing.over).toBe(true);
+    expect(Math.abs(crossing.high)).toBeLessThan(0.2);
+    expect(crossing.cobbles).toBe(2);
+});
+
 test("debug mode draws the navigation meshes round the player, baked in a worker", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

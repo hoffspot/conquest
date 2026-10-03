@@ -3159,3 +3159,43 @@ converted data is to be measured in M8 against today's hm08 data.
     a dry, some up on the rock); test/chunks.test.js (the arch's rock drawn at every quality, its
     plants only with undergrowth); test/silhouettes.test.js (each far leg along its squares, up
     from its own ground most of the way to the band, for every arch).
+- **2026-10-03, M7i-2 built: stone arch bridges** (§9 row 7, "stone arch bridges"; the user, with
+  photos of Tower Bridge, a rubble bridge with a dressed ring round its arch, a three-arch rubble
+  bridge, a packhorse bridge of rubble with stones set on edge on its parapets, and a five-arch
+  bridge of coursed stone: "Here are some pictures of different sized stone bridges to consider.
+  Go for as much realism as the phone budget allows"; docs/WORLD.md *Roads*, GAME.md *Stone
+  bridges*).
+  - **Which** (core/overworld.js `BRIDGE.stone`): every road's and trade road's crossing, half the
+    tracks' (by where they cross); each reaching 8 m onto each bank, its deck level over the river
+    (4 m over the water on a track's, 2.8 on a road's, 2.6 on a trade road's) and up a ramp from
+    each end; knowing its road (`kind`); a trade road's within 600 m of a capital or a city with
+    a gate tower (`tower`). Seed 1 round the start: 10 stone, 6 timber; the trade road's by
+    Redemoor has its tower. Its squares are cobbles (walked on as drawn; a timber one's planks,
+    stood on 16 cm up), the ground under it drawn as under a timber one's. `NET_VERSION` 27.
+  - **Built** (world/art/kits/bridges.js), as grand as its road: a packhorse bridge of rubble humped
+    over one high arch, coped with stones set on edge; a road's of rubble with dressed rings round
+    one to three arches and rounded cutwaters, coped with slabs; a trade road's of coursed stone over
+    a row of lower arches, pointed cutwaters carried up to a string course, and, by a capital, a
+    gate tower over its middle pier (corbelled out at the road's level, the road through it under a
+    round arch, a slate roof and four turrets with spires). Arches springing 0.3 m over the water,
+    segments of circles (or half circles), each ringed with its own stones long and short in turn,
+    a deeper keystone; old stone (three new atlas pictures, weathered by the shader), damp at the
+    waterline and dark under the arches (vertex tone); its land's plants at its ends (in the chunk's
+    undergrowth: no more draws). 2,700 to 4,000 triangles, in four steps of 2 to 3 ms.
+  - **On the way:** the first gate tower stood 10 m high with tall spires and reached down into the
+    water on corbels (the trade roads' decks are only 2.6 m over it): made 7.5 m, set on the deck,
+    its spires smaller. Rounded cutwaters of rubble showed chevrons where the picture stretched
+    round them: made of dressed stone. A packhorse bridge's two small arches didn't read as one:
+    its deck raised to 4 m, so one arch spans the stream.
+  - **Pictures:** four of seed 1's bridges from afar and four from the water, close, before (main's
+    timber) and after; sent in the session.
+  - **Tests:** test/bridges.test.js (which roads' are stone, their kinds, ramps and towers; decks
+    level over the river as high as their kind has them, from the ground at their ends, never
+    steeper than 0.5; cobbles and planks; arches springing over the water, as wide as their grade
+    allows, from bank to bank between piers, the packhorse bridge in one arch; each a few thousand
+    triangles of its grade's stone in steps, a tower's slate and windows; cobbles at the deck's
+    height; what grows at their ends); test/navigation.test.js (straight over the road's stone
+    bridge, up on its deck); test/overworld.test.js (a bridge's squares planks or cobbles); e2e (by
+    the start town, the road's stone bridge drawn and walked over on its cobbles, as high as its
+    deck on the way).
+  - **Next:** M7i-3, broken aqueducts; then M7i-4, hill citadels.

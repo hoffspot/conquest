@@ -1244,6 +1244,39 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
   little way onto one bank to a little way onto the other, along the road, with a dark beam along
   each edge and a rail on posts along each side. Anyone on one stands on its boards, 16 cm up
   (stepping up onto it and down off it smoothly).
+- **Stone bridges** (kits/bridges.js; where they are, WORLD.md *Roads*; the terrain plan's
+  M7i-2, from the user's photos of a packhorse bridge, a rubble bridge with a ring of dressed
+  stones round its arch, a row of arches of coursed stone and Tower Bridge): as grand as their
+  road (`GRADE_OF`, `STONE_BRIDGE.grades`).
+  - **A track's packhorse bridge:** narrow, humped over one high arch (or two), of warm grey
+    rubble, its arch ringed with long thin stones, its low parapets topped with stones set on
+    edge, a tall one and a short one in turn; a few tufts growing out of them.
+  - **A road's:** one to three arches of rubble, each ringed with dressed stones, rounded
+    cutwaters of dressed stone on its piers, its parapets coped with slabs, a pillar at each end
+    of them.
+  - **A trade road's:** a row of lower arches of light grey coursed stone, pointed cutwaters
+    carried up to a string course at the road's level, coped with slabs; near a capital or a
+    city, a gate tower over its middle pier (or on the bank, over one arch): corbelled out a
+    little past its faces at the road's level, the road through it under a round arch ringed
+    with dressed stone, small pointed windows up it, a slate roof and a turret at each corner
+    under its own spire.
+  - **Its arches** (`archesOf`) spring 0.3 m over the water, from 0.6 m onto each bank and from
+    piers 1.4 m wide, their crowns under the deck; each a segment of a circle as wide as its
+    grade's arches span for how high they rise (three times on a packhorse bridge, 2.6 on a trade
+    road's), or a half circle springing higher if it's narrower. Round each, on each face, its
+    own stones (voussoirs): long and short in turn, each its own shade, standing a few centimetres
+    proud, a deeper keystone at its crown; under it, its vault.
+  - **Its stone** is old (atlas.js AGED: moss in its joints and on what faces up, streaks down
+    its faces), three new pictures in the atlas (`rubble-bridge-old`, `stone-bridge-old`,
+    `dressed-old`); dark and green-brown along the waterline (fully up to 0.3 m over it, fading
+    by 0.9 m), darker under its arches, greener on what faces up. The ground under a stone bridge
+    is drawn as it is under a timber one (its cobbles are the deck's).
+  - **What grows** at its ends (`bridgeGrowth`): its land's plants (no pebbles, bones or sticks)
+    along the foot of its walls on each bank, thicker by the water; none in the snow; grown with
+    the land's undergrowth (no more draws), as thick as that's drawn.
+  - **Cost:** 2,700 to 4,000 triangles a bridge, built in four steps as its chunk is drawn (2 to
+    3 ms each once the game's warmed up), merged with the buildings' atlas into a draw or two a
+    chunk, casting shadows.
 - **Stone steps** (kits/steps.js), up the trails' steepest stretches (WORLD.md, *Trails*): a
   stone across the path for every 18 cm of its climb, its tread 0.3 to 0.9 m deep (the gentler
   the climb, the longer), reaching 15 cm past the path's edges; one stone or, as often as not on

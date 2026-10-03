@@ -10,9 +10,10 @@ import { CHUNK } from "../client/js/core/worldplan/plan.js";
 import { parseGrid } from "./helpers.js";
 
 // The world of seed 1: its start town, the middle of the river to its south (2 m deep), and the
-// road's bridge over the river to the town's south-east (found by looking, and checked below)
+// road's stone bridge over the river to the town's south-east, up a ramp from each bank (found by
+// looking, and checked below)
 const DEEP = [2931.5, 5192.5];
-const BRIDGE = { a: [3001.0675675675675, 5146.108108108108], b: [3011.304347826087, 5155.304347826087], half: 2.2 };
+const BRIDGE = { a: [2995.6216216216217, 5142.594594594595], b: [3016.4, 5159.3], half: 2.2, stone: true, ramps: [8, 8] };
 // (And a ford over a small river 730 m to the town's north-east, and a mountain stream 1.7 km
 // to its west, running fast)
 const FORD = [3112.5, 4374.5];

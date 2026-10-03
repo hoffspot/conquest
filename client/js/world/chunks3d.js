@@ -27,9 +27,10 @@ import { material, paintPicture } from "./art/engine/materials.js";
 import { WILDS } from "./art/engine/atlas.js";
 import { holdSign, isSign, letGoSign, releaseSign } from "./art/kits/signs.js";
 import { Woodland } from "./art/kits/trees.js";
-import { featureLooks, featureMesh, Growth, Mesher, sowing, TILE, undergrowthLooks, undergrowthMesh } from "./art/kits/wilds.js";
+import { featureLooks, featureMesh, Growth, Mesher, sowing, TILE, UNDERGROWTH as LANDS_UNDERGROWTH, undergrowthLooks, undergrowthMesh } from "./art/kits/wilds.js";
 import { cliffMesh, cliffsInto } from "./art/kits/cliffs.js";
 import { archMaking } from "./art/kits/arches.js";
+import { bridgeGrowth, stoneBridgeMaking } from "./art/kits/bridges.js";
 import { ARCHES, legsOf } from "../core/arches.js";
 import { hedgeBuilding, hedgeMesh, hedgeRuns } from "./art/kits/hedges.js";
 import { stepsMesh, stonesOf } from "./art/kits/steps.js";
@@ -344,6 +345,21 @@ export class Chunks {
     *#growing(drawn) {
         const chunk = this.overworld.chunk(drawn.cx, drawn.cy);
         const items = yield* sowing(this.overworld, chunk, { density: this.undergrowth });
+
+        // (And what grows about its stone bridges: kits/bridges.js)
+        for (const bridge of (chunk.bridges ?? []).filter(({ stone }) => stone)) {
+            const [mx, my] = [(bridge.a[0] + bridge.b[0]) / 2, (bridge.a[1] + bridge.b[1]) / 2];
+            const ground = (x, y) => this.overworld.ground?.heightAt(x, y) ?? this.groundAt(x, y);
+
+            items.push(...bridgeGrowth(bridge, {
+                land: this.overworld.biomeAt(Math.floor(mx), Math.floor(my)),
+                undergrowth: LANDS_UNDERGROWTH,
+                groundAt: ground,
+                deckOf: (each, t) => this.overworld.deckOf(each, t),
+                surface: this.overworld.waters?.river(mx, my, 20)?.surface ?? -Infinity,
+                density: this.undergrowth,
+            }));
+        }
 
         yield* undergrowthLooks(items);
 
@@ -710,12 +726,20 @@ export class Chunks {
         yield;
 
         const falls = water && this.overworld.waters ? fallsOf(lipsIn(this.overworld.waters, cx, cy, CHUNK)) : null;
-        // (Its piers stand on the ground under the deck: not on the deck, as anyone standing there does)
-        const bridges = bridgesOf(chunk, { deck: (bridge, t) => this.overworld.deckOf?.(bridge, t) ?? 0, groundAt: (x, z) => this.overworld.ground?.heightAt(x, z) ?? this.groundAt(x, z) });
+        // (Its piers stand on the ground under the deck: not on the deck, as anyone standing there
+        // does. The stone ones built of stone, over arches: kits/bridges.js)
+        const deck = (bridge, t) => this.overworld.deckOf?.(bridge, t) ?? 0;
+        const under = (x, z) => this.overworld.ground?.heightAt(x, z) ?? this.groundAt(x, z);
+        const bridges = bridgesOf({ bridges: (chunk.bridges ?? []).filter(({ stone }) => !stone) }, { deck, groundAt: under });
+        const stone = yield* stoneBridgeMaking((chunk.bridges ?? []).filter(({ stone }) => stone), {
+            deckOf: deck,
+            groundAt: under,
+            surfaceOf: ({ a, b }) => this.overworld.waters?.river((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, 20)?.surface ?? Math.min(under(...a), under(...b)) - 1,
+        });
         // (The plank walks over a settlement's lagoon: decks on stilts, no rails)
         const walks = chunk.walks?.length ? bridgesOf({ bridges: chunk.walks }, { rails: false, deck: (walk, t) => this.groundAt(walk.a[0] + (walk.b[0] - walk.a[0]) * t, walk.a[1] + (walk.b[1] - walk.a[1]) * t), groundAt: this.groundAt }) : null;
 
-        for (const part of [water, falls, bridges, walks]) {
+        for (const part of [water, falls, bridges, stone, walks]) {
             if (part) {
                 object.add(part);
             }
