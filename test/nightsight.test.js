@@ -1,14 +1,18 @@
 // Seeing at night (client/js/core/light.js, the battle's canSee, the host's light each step): less
 // far in the dark, the moon's light helping; as by day round the settlements, the war camps' fires,
 // fires on the ground and the soldiers' torches; the light worked out alike by every copy of the
-// world from what they share
+// world from what they share. And the night's creatures (core/creatures.js, the host's wilds): the
+// night's own out only after dark, the night's hunters met more often then, more about the players
+// at night, those that see in the dark seeing as by day, and the night's own gone at daybreak
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Battle, SIGHT, STEP_MS } from "../client/js/core/battle.js";
+import { candidatesAt, CREATURES, NIGHT_WEIGHT, outByDay, WILD } from "../client/js/core/creatures.js";
 import { DAY, MOON_DAYS } from "../client/js/core/daytime.js";
-import { HOST_PLAYER, Host } from "../client/js/core/host.js";
+import { HOST_PLAYER, Host, WILDS } from "../client/js/core/host.js";
 import { carriesTorch, LIGHT_NEAR, LIGHT_REACH, lighting, NIGHT_SIGHT, sightAt, skyLight, torchesLit } from "../client/js/core/light.js";
 import { buildWorld } from "../client/js/core/overworld.js";
+import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
 import { SETTLEMENTS } from "../client/js/core/worldplan/plan.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
@@ -17,6 +21,9 @@ const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", 
 const at = (time, day = 1) => day * DAY.length + time - DAY.start;
 const MIDNIGHT = 0;
 const NOON = 29 * 60000;
+
+// The war's clock set to a time (how long the world's been going, ms: its turns a minute each)
+const clockTo = (host, elapsed) => Object.assign(host.war, { turn: Math.floor(elapsed / 60000), clock: elapsed % 60000 });
 
 describe("seeing at night (core/light.js)", () => {
     it("sees as far as ever by day, less far by night, a full moon's light helping", () => {
@@ -129,3 +136,102 @@ describe("seeing at night (core/light.js)", () => {
         assert.equal(sightAt(light, [px + 5000, py + 5000]), light.sky);
     });
 });
+
+describe("the night's creatures (core/creatures.js, the host's wilds)", () => {
+    const put = (actor, [x, y]) => Object.assign(actor, { square: [x, y], x: x + 0.5, y: y + 0.5, path: [], order: null, target: null, spawn: [x, y] });
+    const run = (host, ms) => {
+        for (let t = 0; t < ms; t += STEP_MS) {
+            host.advance(STEP_MS);
+        }
+    };
+
+    // A world with its player out in the wilds west of their town (the orc gone), sturdy enough
+    // to be left among what comes
+    const outside = () => {
+        const world = buildWorld({ seed: 2 });
+        const host = new Host(world, { populate: false });
+
+        host.join({ id: HOST_PLAYER, hero: HERO });
+        host.populate();
+        Object.assign(host.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        const me = host.battle.actor(HOST_PLAYER);
+        const [middle, radius] = [world.stamp.middle, SETTLEMENT_KINDS[world.start.kind].radius];
+
+        put(me, [Math.floor(middle[0] - radius - 80), Math.floor(middle[1] - 20)]);
+        Object.assign(me, { hp: 5000, maxHp: 5000 });
+
+        return { host, me };
+    };
+    const roaming = (host, me) => [...host.wild].filter(([, one]) => !one.camp && !one.lair).map(([id, one]) => ({ ...one, actor: host.battle.actor(id) })).filter(({ actor }) => actor && !actor.dead && Math.hypot(actor.x - me.x, actor.y - me.y) < WILDS.about);
+
+    it("has the night's own out only after dark, the night's hunters met more often then", () => {
+        const land = { biome: "heath", race: "human" };
+        const day = new Map(candidatesAt(land, 4).map(({ id, weight }) => [id, weight]));
+        const night = new Map(candidatesAt(land, 4, true).map(({ id, weight }) => [id, weight]));
+
+        for (const id of ["bats", "skeleton", "blackShuck"]) {
+            assert.equal(day.has(id), false, `no ${id} by day`);
+        }
+
+        assert.deepEqual([night.get("bats"), night.get("skeleton"), night.get("blackShuck")], [NIGHT_WEIGHT.only, NIGHT_WEIGHT.only, 2 * NIGHT_WEIGHT.only]);
+        assert.deepEqual([day.get("wolf"), night.get("wolf")], [1, NIGHT_WEIGHT.more]);
+        assert.deepEqual([day.get("boar"), night.get("boar")], [1, 1]);
+
+        // (Every night creature's habits make sense: the night's own see in the dark, and there's
+        // something about by day wherever there's anything at night)
+        for (const [id, creature] of Object.entries(CREATURES)) {
+            assert.ok([undefined, "only", "more"].includes(creature.night), id);
+            assert.ok(creature.night !== "only" || creature.darkSight, `${id} sees in the dark`);
+        }
+
+        assert.equal(outByDay("bats"), false);
+        assert.equal(outByDay("wolf"), true);
+    });
+
+    it("has those that see in the dark see as far as by day, out of the light", () => {
+        const rows = Array.from({ length: 12 }, () => ".".repeat(30));
+        const world = { blocked: rows.map((row) => Uint8Array.from([...row], () => 0)), opaque: rows.map((row) => Uint8Array.from([...row], () => 0)) };
+        const battle = new Battle(world, { seed: 3 });
+        const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [2, 5] });
+        const bats = battle.add({ id: "bats", kind: "beast", weapon: "bats", team: WILD, square: [12, 5], ai: "wild", wild: { creature: "bats", tier: 1, temper: "aggressive", guard: 0, roam: 10, leash: 20, pack: "p", leader: null, menace: true, unique: false, darkSight: true } });
+        const boar = battle.add({ id: "boar", kind: "beast", weapon: "boar", team: WILD, square: [2, 9], ai: "wild", wild: { creature: "boar", tier: 1, temper: "territorial", guard: 5, roam: 8, leash: 16, pack: "q", leader: null, menace: true, unique: false, darkSight: false } });
+
+        battle.light = { sky: 0.4, lit: [] };
+        assert.equal(battle.canSee(bats, player), true, "the bats, 10 m off in the dark");
+        assert.equal(battle.canSee(player, bats), false);
+        assert.equal(battle.canSee(boar, player), true, "the boar 4 m off");
+        put(boar, [2, 11]);
+        assert.equal(battle.canSee(boar, player), false, "the boar 6 m off in the dark");
+    });
+
+    it("keeps more about a player out in the wilds at night, the night's own among them, gone to ground at daybreak", () => {
+        const { host, me } = outside();
+
+        clockTo(host, at(MIDNIGHT, 2));
+        run(host, 30000);
+
+        const night = roaming(host, me);
+        const own = night.filter(({ creature }) => !outByDay(creature));
+
+        assert.ok(night.length > WILDS.count && night.length <= WILDS.count + WILDS.night, `${night.length} about at night`);
+        assert.ok(own.length > 0, `the night's own out: ${night.map(({ creature }) => creature)}`);
+        assert.ok(night.every(({ actor }) => actor.team === WILD));
+        assert.ok(own.every(({ actor }) => actor.wild.darkSight));
+
+        // (Daybreak: the night's own out of sight let go, none put out again; the player's walked
+        // off a little, out of their sight)
+        clockTo(host, at(NOON, 2));
+        put(me, [Math.floor(me.x + 70), Math.floor(me.y)]);
+        run(host, 6000);
+
+        const day = roaming(host, me);
+
+        const gone = own.filter(({ actor }) => !host.battle.actor(actor.id));
+
+        assert.ok(gone.length > 0 && own.every(({ actor }) => !host.battle.actor(actor.id) || host.battle.actor(actor.id).target !== null), `the night's own gone: ${gone.length} of ${own.length}`);
+        assert.ok(day.every(({ creature }) => outByDay(creature)), `by day: ${day.map(({ creature }) => creature)}`);
+        assert.ok(day.length <= WILDS.count, `${day.length} about by day`);
+    });
+});
+
