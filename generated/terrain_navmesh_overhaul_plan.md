@@ -870,7 +870,8 @@ after M7d (the land looked at by day first) and before the cliffs and rocks:
 - **The Light spell:** a tome on every adventurers' guild's shelves (about 10 gold); read, Light is
   known: a globe of light rising from the caster's hand and following a little over their
   shoulder for 15 minutes of play, lighting about 12 metres round them (their sight at night as by
-  day within it), shared cooldown, no school to grow; cast again to put it out.
+  day within it), shared cooldown, no school to grow; cast again to put it out. (As built,
+  M7e-4.)
 - **Budgets:** the sky's stars and moon 2 draws; the lights' glows merged with their chunks (no
   draws of their own); the pool's point lights the cost (each lit fragment pays for each one in
   range): measured on the phone profile, the pool cut on Medium and Low if it's over; nothing in
@@ -2908,3 +2909,25 @@ converted data is to be measured in M8 against today's hm08 data.
     camp on the wheels); e2e (made camp out in the world from the wheel: woken at sunset by the
     tent and fire, told).
   - **Next:** M7e-4, the Light spell's tome.
+- **2026-10-03, M7e-4 built: the Light spell** (§9 *The Light spell*; docs/MAGIC.md).
+  - **The spell** (spells.js `light`): a common tome's, on oneself, 500 ms to cast, 3 s to cool;
+    it lasts fifteen minutes (a lasting spell, battle.js `buff`), and cast again while it shines
+    it's put out (`unbuff`). Its tome is sold at every adventurers' guild for 10 gold
+    (`GUILD_TOMES`; its own `price`), and found as other common tomes are.
+  - **In the rules** (core/light.js `LIGHT_REACH.globe`, the host's light): at night everyone sees
+    as by day within 12 m of whoever has a globe over them, out in the world; so the caster sees
+    what's near them in the dark, and is seen.
+  - **The globe** (world/globes.js): a small bright ball with a soft glow rising from the hand and
+    drifting after the caster a little over their right shoulder, bobbing; its light cool white,
+    steady, 13 m, a light of its own among the world's (lights.js). A puff of white motes and a
+    flash as it's cast (spellfx.js); its icon a bright globe with rays in the dark.
+  - **Versions:** `NET_VERSION` 23 (a new spell, and the guild's wares).
+  - **Pictures:** midnight in the wilds before and after Light is cast, sent in the session.
+  - **Tests:** test/nightsight.test.js (learnt from its tome, sold at the guild for 10 gold;
+    cast, its globe lights the dark round the caster for fifteen minutes; cast again, put out);
+    test/magic.test.js (Light's tome among the guild's); test/tomes.test.js (a tome as dear as
+    it's rare, or its own price); test/spellfx.test.js and test/app.test.js (its look and icon,
+    as every spell's).
+  - **M7e done:** the day and night, the lit windows, the fires and their light, the lamps and
+    braziers, the guards' torches, sight at night, the night's creatures, passing the time and
+    the Light spell. **Next:** M7f, the light looked over.

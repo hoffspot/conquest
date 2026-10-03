@@ -82,9 +82,11 @@ describe("magic (spells.js)", () => {
         assert.deepEqual(progress.known().sort(), ["stun", "vigor"]);
         assert.ok(progress.opened("healing") && !["fire", "earth", "air", "water"].some((school) => progress.opened(school)));
 
-        // The elements' tomes: one for each first spell, 25 gold at the guild, read to open it
+        // The elements' tomes: one for each first spell, 25 gold at the guild, read to open it; and
+        // Light's, 10 gold, for the dark
         assert.deepEqual(ELEMENT_TOMES, ["burn", "rumble", "hurt", "blister"]);
-        assert.deepEqual(wares("guild").filter(({ id }) => ITEMS[id].tome).map(({ id }) => id), ["tomeBurn", "tomeRumble", "tomeHurt", "tomeBlister"]);
+        assert.deepEqual(wares("guild").filter(({ id }) => ITEMS[id].tome).map(({ id }) => id), ["tomeBurn", "tomeRumble", "tomeHurt", "tomeBlister", "tomeLight"]);
+        assert.deepEqual([ITEMS.tomeLight.price, ITEMS.tomeLight.use.learn], [10, "light"]);
         assert.deepEqual(ELEMENT_TOMES.map((spell) => [ITEMS[tomeOf(spell)].price, ITEMS[tomeOf(spell)].opens, ITEMS[tomeOf(spell)].use.learn]), [[25, "fire", "burn"], [25, "earth", "rumble"], [25, "air", "hurt"], [25, "water", "blister"]]);
         assert.ok(ELEMENT_TOMES.every((spell) => !TOMES.includes(spell)), "not among the tomes found in the wild");
         assert.equal(progress.learn("burn"), true);

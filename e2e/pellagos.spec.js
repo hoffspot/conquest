@@ -1929,6 +1929,20 @@ test("the town's guards stand at its ways out under its people's banner, and tal
 
         const dark = { torches: torches(), lights: game.carried.lights().length, sky: game.battle.light?.sky ?? 1 };
 
+        // (The Light spell, learnt and cast: its globe over the player's shoulder, lighting the
+        // dark round them for the rules too)
+        game.host.players.get(game.me).progress.learn("light");
+
+        const cast = game.act("light", "self");
+
+        for (let k = 0; k < 12; k++) {
+            game.advance(0.1, { render: false });
+        }
+
+        const me = game.battle.actor(game.me);
+
+        Object.assign(dark, { cast: cast.ok, globes: game.globes.lights().length, globe: game.battle.light.lit.some(([x, y, reach2]) => Math.abs(x - me.x) < 1 && Math.abs(y - me.y) < 1 && reach2 === 144) });
+
         Object.assign(war, { turn, clock });
         game.advance(0.05, { render: false });
 
@@ -1938,6 +1952,7 @@ test("the town's guards stand at its ways out under its people's banner, and tal
     expect(night.dark.torches).toBeGreaterThan(0);
     expect(night.dark.lights).toBeGreaterThan(0);
     expect(night.dark.sky).toBeLessThan(1);
+    expect([night.dark.cast, night.dark.globes, night.dark.globe]).toEqual([true, 1, true]);
     expect(night.day).toEqual({ torches: 0, lights: 0, light: null });
 
     // Taken by the orcs, at war with the humans: orcish soldiers now, under their banner, and they come for the player

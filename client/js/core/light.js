@@ -18,10 +18,11 @@ export const NIGHT_SIGHT = Object.freeze({ dark: 0.35, moon: 0.55 });
 
 /**
  * How far round it each light lets one see as by day (metres): a carried torch, a war camp's fire,
- * a fire on the ground (a spell's: as far again as it burns), and a settlement's streets, lit by
- * its windows and lamps and its guards' braziers, as far again past its edge.
+ * a fire on the ground (a spell's: as far again as it burns), a settlement's streets, lit by its
+ * windows and lamps and its guards' braziers, as far again past its edge, and the Light spell's
+ * globe.
  */
-export const LIGHT_REACH = Object.freeze({ torch: 9, camp: 14, fire: 6, settlement: 10 });
+export const LIGHT_REACH = Object.freeze({ torch: 9, camp: 14, fire: 6, settlement: 10, globe: 12 });
 
 /** The weapons that leave a soldier a hand free to carry a torch at night (a shield's by day). */
 export const TORCH_HANDS = new Set(["sword", "cleaver", "wand"]);
@@ -53,9 +54,10 @@ export function carriesTorch(actor, dark) {
  * What's lit for the battle's sight now ({ sky, lit }: the sky's light, a share of SIGHT, and the
  * circles round the lights near the players on the overworld, [x, y, reach²]): the world's
  * settlements, war camps' fires (`camps`: their middles, [x, y]), fires on the ground (`fires`:
- * { x, y, radius }), and those carrying torches (`torches`: [x, y]). By day, nothing's needed.
+ * { x, y, radius }), those carrying torches (`torches`: [x, y]) and those with the Light spell's
+ * globe over them (`globes`: [x, y]). By day, nothing's needed.
  */
-export function lighting({ elapsed, plan = null, players = [], camps = [], fires = [], torches = [] }) {
+export function lighting({ elapsed, plan = null, players = [], camps = [], fires = [], torches = [], globes = [] }) {
     const sky = skyLight(elapsed);
     const lit = [];
 
@@ -89,6 +91,12 @@ export function lighting({ elapsed, plan = null, players = [], camps = [], fires
     for (const at of torches) {
         if (near(at, LIGHT_REACH.torch)) {
             circle(at, LIGHT_REACH.torch);
+        }
+    }
+
+    for (const at of globes) {
+        if (near(at, LIGHT_REACH.globe)) {
+            circle(at, LIGHT_REACH.globe);
         }
     }
 

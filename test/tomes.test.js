@@ -53,7 +53,7 @@ describe("spell tomes (spells.js, progress.js, spoils.js, standing.js, host.js)"
             assert.ok(!schooled.has(spell) && SPELLS[spell].about, spell);
             assert.equal(tome.label, `Tome of ${SPELLS[spell].label}`);
             assert.deepEqual(tome.use, { learn: spell });
-            assert.equal(tome.price, TOME_RARITY[SPELLS[spell].tome].price);
+            assert.equal(tome.price, SPELLS[spell].price ?? TOME_RARITY[SPELLS[spell].tome].price, "as dear as it's rare (Light's its own: sold at every guild)");
         }
 
         assert.equal(tomeOf("wizardsWalk"), "tomeWizardsWalk");

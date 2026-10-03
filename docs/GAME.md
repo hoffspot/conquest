@@ -829,6 +829,9 @@ a look of its own (`LOOKS`), which the world takes on round the player:
   the dark before they see who's there. The host works it out each step (`Host#light`) from what
   every copy of the world has (the clock, the plan, the camps, the fires, who has a torch), only
   near the players, so every copy sees alike. Indoors, and talking, as ever.
+- **The Light spell** (docs/MAGIC.md; world/globes.js): its tome at every adventurers' guild for
+  10 gold; cast, a globe over the caster's shoulder lights the dark 12 m round them as by day for
+  fifteen minutes (cast again to put it out).
 - **Torches carried** (world/carried.js; Character `holdTorch`; items `handTorch`): when the
   windows come on (half through the dusk) until they go off (half through the dawn), every
   soldier with a hand free (sword, cleaver or wand) carries a torch in their shield's hand, the

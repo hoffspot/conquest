@@ -180,6 +180,7 @@ above, are the guild's to sell, never found or given.)
 | Vampirism | uncommon | an enemy | 700 ms | 6 s | draws their life into you: 6–10, growing to 24–34 |
 | Dodge | uncommon | oneself | 500 ms | 30 s | a chance to slip every blow and spell, five minutes: one in ten, growing to one in four |
 | Poison | common | an enemy | 500 ms | 5 s | poisons them: 2 a time, growing to 7 |
+| Light | common (10 gold at every adventurers' guild) | oneself | 500 ms | 3 s | a globe of light over their shoulder, fifteen minutes: the dark round them as bright as day; cast again to put it out |
 
 **Growing.** Vampirism, Dodge and Poison grow as they're used (their own experience, `SPELL_XP` a
 cast that lands): five levels, at 0, 60, 200, 500 and 1200 (`GROWTH_XP`), each stronger, and said
@@ -187,7 +188,7 @@ cast that lands): five levels, at 0, 60, 200, 500 and 1200 (`GROWTH_XP`), each s
 
 ### What lasts
 
-The wards, Swole, Reflect, Invisibility, Levitate, Inertial Barrier, Surge and Dodge last on
+The wards, Swole, Reflect, Invisibility, Levitate, Inertial Barrier, Surge, Dodge and Light last on
 whoever they're cast on (battle.js `buff`: their kind, till when, by whom, at what level), shown
 by their icon on their plate (and the player's), and said when they end ("Your fire ward fades").
 Cast again, one lasts from then. They end at death.
@@ -204,6 +205,12 @@ Cast again, one lasts from then. They end at death.
   (`SEE_THROUGH`), and then they set on them ("The wight lord sees through your invisibility!").
 - **Levitate**: nothing on the ground (fire, acid, rot, lava, venom) touches them; they float
   above it, bobbing.
+- **Light** (the terrain plan's M7e-4): a small bright globe rises from the hand and follows a
+  little over the caster's shoulder (world/globes.js), lighting what's round it in a cool white,
+  steady, a light of its own (13 m). In the rules (core/light.js) everyone sees as by day within
+  12 m of the caster at night, so they see an ambush before it sees them, and are seen too. It
+  lasts fifteen minutes; cast again while it shines, it's put out. Its tome is sold at every
+  adventurers' guild for 10 gold (spells.js `GUILD_TOMES`), and is found as other common tomes are.
 
 ### Bending wills
 

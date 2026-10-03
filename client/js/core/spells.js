@@ -171,6 +171,7 @@ export const SPELLS = Object.freeze({
     pacify: tome("Pacify", "uncommon", { about: "Calms an enemy: it's no longer hostile to you (till you strike it). The mighty may resist; the unique can't be calmed.", target: "enemy", castTime: 800, cooldown: 15000 }),
     vampirism: tome("Vampirism", "uncommon", { about: "Draws the life out of an enemy into you: the more you use it, the more it draws.", target: "enemy", castTime: 700, cooldown: 6000, grows: true, drain: [[6, 10], [9, 14], [13, 19], [18, 26], [24, 34]] }),
     dodge: tome("Dodge", "uncommon", { about: "Quick as a cat: a chance to slip every blow and spell, five minutes; from one in ten, as you use it, to one in four.", target: "self", castTime: 500, cooldown: 30000, lasts: LASTING, grows: true, dodge: [0.1, 0.14, 0.18, 0.22, 0.25] }),
+    light: tome("Light", "common", { about: "A globe of light over your shoulder, fifteen minutes: the dark round you as bright as day (12 m), to see by and be seen. Cast again to put it out.", target: "self", castTime: 500, cooldown: 3000, lasts: 15 * 60000, price: 10 }),
     poison: tome("Poison", "common", { about: "Poisons an enemy: it hurts them every moment or two, a while; the more you use it, the worse.", target: "enemy", castTime: 500, cooldown: 5000, grows: true, venom: [2, 3, 4, 5, 7] }),
 });
 
@@ -186,6 +187,12 @@ export const ELEMENT_TOMES = Object.freeze(Object.keys(SCHOOLS).filter((school) 
 
 /** What an element's tome costs at the adventurers' guild (gold). */
 export const ELEMENT_TOME_PRICE = 25;
+
+/**
+ * The tomes every adventurers' guild sells besides the elements' (progress.js SHOPS): Light's, for
+ * the dark (the terrain plan's M7e, §9 Day and night).
+ */
+export const GUILD_TOMES = Object.freeze(["light"]);
 
 /** The thing (progress.js ITEMS id) that's a spell's tome: "tomeFear" for Fear. */
 export const tomeOf = (spell) => `tome${spell[0].toUpperCase()}${spell.slice(1)}`;
