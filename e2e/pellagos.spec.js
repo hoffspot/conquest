@@ -760,7 +760,7 @@ test("dragged up, the camera looks up into the sky (clouds and the sun in it, bi
     expect(sky.walking).toBeGreaterThanOrEqual(15);
 });
 
-test("in the town, the camera comes in closer than a building in the way, or rises over it", async ({ page }) => {
+test("in the town, the camera comes in closer than a building in the way, or rises over it; a well in the way it sees round", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     const views = await page.evaluate(() => {
@@ -817,12 +817,20 @@ test("in the town, the camera comes in closer than a building in the way, or ris
             const camera = view.camera.position;
             const height = buildings.at(camera.x, camera.z);
 
-            return { pulled: view.pulled, lifted: view.lifted, clearOfIt: camera.y > height, hidden: view.hidden(game.avatars.get("player").point(0.55)) };
+            return { pulled: view.pulled, lifted: view.lifted, clearOfIt: camera.y > height, hidden: view.hidden(game.avatars.get("player").point(0.55)), cut: view.cut };
         };
 
-        return { walled: walled && look(walled), open: open && look(open) };
+        // (Behind the well in the square, its roof between the player and the camera: low enough
+        // to see them round, so it's never cut away, nor counted as in the way)
+        const [ox, oz] = Array.isArray(game.world.origin) ? game.world.origin : [game.world.origin, game.world.origin];
+        const well = game.world.town.pieces.find(({ name }) => name === "well");
+        const behind = well && [2, 2.5, 3, 3.5].map((d) => [Math.floor(ox + well.x), Math.floor(oz + well.y - d)]).find(([x, y]) => !squares.blocked(x, y));
+        const byWell = behind && { ...look(behind), height: game.town.heights.at(ox + well.x, oz + well.y) };
+
+        return { walled: walled && look(walled), open: open && look(open), byWell };
     });
 
+    expect(views.byWell).toMatchObject({ hidden: false, cut: 0, height: 0 });
     expect(views.walled).not.toBe(null);
     expect(views.walled.pulled + views.walled.lifted).toBeGreaterThan(1);
     expect(views.walled.clearOfIt).toBe(true);
@@ -1228,6 +1236,27 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
     });
 
     expect(outside.square).toEqual(outside.outside);
+
+    // At midnight the lantern by its door lights what's round it (world/lights.js: the view's
+    // lamps), drawn with the town's torches and lanterns; by day, out
+    expect(await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const war = game.host.war;
+        const [turn, clock] = [war.turn, war.clock];
+        const lit = () => session.view.lamps.some(({ light }) => light.intensity > 0);
+
+        war.turn = 41;
+        war.clock = 30000;
+        game.advance(0.05, { render: false });
+
+        const night = { lit: lit(), drawn: Boolean(game.town.object.getObjectByName("lights")) };
+
+        war.turn = turn;
+        war.clock = clock;
+        game.advance(0.05, { render: false });
+
+        return { night, day: lit() };
+    })).toEqual({ night: { lit: true, drawn: true }, day: false });
 
     const inside = await through("town", "door", 5);
 

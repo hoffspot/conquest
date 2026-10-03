@@ -12,6 +12,7 @@ import { material } from "../engine/materials.js";
 import { Solid } from "../engine/solid.js";
 import { buildHouse, planHouse, STYLES as HOUSE_STYLES } from "./house.js";
 import { emblemSignTexture, hangingSignTexture, loadSignFont, nameBoardTexture, signMaterial, TAVERN_NAME } from "./signs.js";
+import { lanternLight, torch } from "./torches.js";
 
 const M = 5;
 const m = (metres) => metres * M;
@@ -174,6 +175,7 @@ export async function tavern(piece) {
     solid.beam([lantern[0], lantern[1] + m(0.35), face.origin[2]], [lantern[0], lantern[1] + m(0.35), lantern[2]], m(0.04), m(0.04), material("iron"));
     solid.box(lantern[0] - m(0.12), lantern[1] - m(0.18), lantern[2] - m(0.12), lantern[0] + m(0.12), lantern[1] + m(0.18), lantern[2] + m(0.12), material("glass-lit"));
     solid.box(lantern[0] - m(0.15), lantern[1] + m(0.18), lantern[2] - m(0.15), lantern[0] + m(0.15), lantern[1] + m(0.26), lantern[2] + m(0.15), material("iron"));
+    lanternLight(solid, lantern);
 
     // Barrels at one side of the door, a bench at the other
     const street = face.origin[2] + m(0.45);
@@ -580,6 +582,7 @@ export async function hall(piece) {
         solid.beam([x, m(2.6), z], [x, m(2.6), z + m(0.45)], m(0.05), m(0.05), material("iron"));
         solid.box(x - m(0.14), m(2.15), z + m(0.3), x + m(0.14), m(2.55), z + m(0.58), material("iron"));
         solid.box(x - m(0.1), m(2.2), z + m(0.34), x + m(0.1), m(2.5), z + m(0.54), material("glass-lit"));
+        lanternLight(solid, [x, m(2.35), z + m(0.44)]);
     }
 
     return solid.toObject();
@@ -672,6 +675,11 @@ export async function keep(piece) {
     solid.box(mid - m(0.06), floor, z1 + m(0.35), mid + m(0.06), floor + dh, z1 + m(0.4), material("iron"));
     solid.box(mid - dw / 2 - m(0.6), 0, z1, mid + dw / 2 + m(0.6), m(0.4), z1 + m(1.2), material(stone));
     solid.box(mid - dw / 2 - m(0.4), m(0.4), z1, mid + dw / 2 + m(0.4), floor, z1 + m(0.6), material(stone));
+
+    // A torch either side of it, lit at night (kits/torches.js)
+    for (const side of [-1, 1]) {
+        torch(solid, [mid + side * (dw / 2 + m(1.1)), floor + m(2.1), z1], [0, 1]);
+    }
 
     // Long banners either side of the door (the crown's, stirring in the breeze: world/cloth.js),
     // and the crown's sign over it

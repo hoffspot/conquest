@@ -36,6 +36,7 @@ import { Terrains } from "./terrains.js";
 import { MARGIN, primingWater, shoreDistances, UNDER_BANKS, waterSheet } from "./water.js";
 import { fallsOf, lipsIn } from "./falls.js";
 import { builderOf, cutAway, drawFar, grounded, joined, partsOf, PIXEL, placed, standOn } from "./town3d.js";
+import { lightsMesh, lightsOf } from "./lights.js";
 import { chimneysOf, smokeMesh } from "./smoke.js";
 import { clothMesh, clothOf } from "./cloth.js";
 import { lieOf } from "./art/kits/yards.js";
@@ -395,6 +396,7 @@ export class Chunks {
                 job.built.updateMatrixWorld(true);
                 job.trees.push(...grownRound(object, piece));
                 job.smoke.push(...chimneysOf(object));
+                job.lights.push(...lightsOf(object));
                 job.cloth.push(...clothOf(object));
                 job.index++;
             };
@@ -475,9 +477,16 @@ export class Chunks {
         drawn.object.add(merged);
 
         // (Smoke rising from their chimneys: smoke.js; their banners and flags in the breeze:
-        // cloth.js)
+        // cloth.js; their torches and lanterns, lit at night: lights.js)
         const smoke = smokeMesh(job.smoke);
         const cloth = clothMesh(job.cloth);
+        const lit = lightsMesh(job.lights);
+
+        drawn.lights = job.lights;
+
+        if (lit) {
+            drawn.object.add(lit);
+        }
 
         if (cloth) {
             drawn.object.add(cloth);
@@ -515,6 +524,24 @@ export class Chunks {
         }
 
         return drawn.heights[(Math.floor(z) - drawn.cy * CHUNK) * CHUNK + (Math.floor(x) - drawn.cx * CHUNK)] ?? 0;
+    }
+
+    /**
+     * The lights (lights.js lightsOf's: torches, lanterns, world metres) of the chunks drawn
+     * within `reach` metres of (x, z), into `into`.
+     */
+    lightsNear(x, z, reach, into = []) {
+        into.length = 0;
+
+        for (const drawn of this.drawn.values()) {
+            for (const light of drawn.lights ?? []) {
+                if (Math.abs(light.x - x) < reach && Math.abs(light.z - z) < reach) {
+                    into.push(light);
+                }
+            }
+        }
+
+        return into;
     }
 
     /** The trees of the chunks drawn: [{ x, z }] (their trunks, metres). */
@@ -733,7 +760,7 @@ export class Chunks {
 
             // (Each piece built, then its parts made ready to merge: `built` the one whose parts
             // aren't yet)
-            drawn.job = { pieces, index: 0, group, waiting: false, trees: [], smoke: [], cloth: [], built: null, parts: [] };
+            drawn.job = { pieces, index: 0, group, waiting: false, trees: [], smoke: [], cloth: [], lights: [], built: null, parts: [] };
             this.building.push(drawn);
         }
 

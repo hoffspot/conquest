@@ -710,6 +710,54 @@ describe("props (kits/props.js)", () => {
             assert.ok(triangles > 10 && triangles < 900, `${name}: ${triangles}`);
         }
     });
+
+    it("builds a well's ring of stone whole, its far side's inside seen over the near side from every way round, and its top", () => {
+        const object = prop({ name: "well", w: 2, h: 2 });
+        // (Its middle and its ring's inside, world pixels: five to a metre)
+        const [cx, cz, inside, top, water] = [20, 20, 0.72 * 5, 0.95 * 5, 0.55 * 5];
+        const triangles = [];
+        const [a, b, c] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+
+        object.updateMatrixWorld(true);
+        object.traverse((node) => {
+            if (!node.isMesh) {
+                return;
+            }
+
+            const position = node.geometry.getAttribute("position");
+            const index = node.geometry.index;
+            const corner = (k) => (index ? index.getX(k) : k);
+
+            for (let k = 0; k < (index ? index.count : position.count); k += 3) {
+                a.fromBufferAttribute(position, corner(k)).applyMatrix4(node.matrixWorld);
+                b.fromBufferAttribute(position, corner(k + 1)).applyMatrix4(node.matrixWorld);
+                c.fromBufferAttribute(position, corner(k + 2)).applyMatrix4(node.matrixWorld);
+
+                const middle = a.clone().add(b).add(c).divideScalar(3);
+                const normal = b.clone().sub(a).cross(c.clone().sub(a));
+
+                triangles.push({ middle, normal: normal.clone().normalize(), area: normal.length() / 2 });
+            }
+        });
+
+        // (Looking down at it as the camera does, 35 degrees, from each of eight ways round)
+        for (let k = 0; k < 8; k++) {
+            const angle = (k * Math.PI) / 4;
+            const looking = new THREE.Vector3(Math.cos(angle) * Math.cos(0.61), -Math.sin(0.61), Math.sin(angle) * Math.cos(0.61));
+            const seen = triangles.filter(({ middle, normal }) => {
+                const out = Math.hypot(middle.x - cx, middle.z - cz);
+                const beyond = (middle.x - cx) * looking.x + (middle.z - cz) * looking.z;
+
+                return Math.abs(out - inside) < 0.3 && middle.y > water && middle.y < top && beyond > 1 && normal.dot(looking) < -0.1;
+            });
+
+            assert.ok(seen.length >= 4, `from ${k * 45} degrees round: ${seen.length} faces of the far side's inside`);
+        }
+
+        const rim = triangles.filter(({ middle, normal }) => Math.abs(middle.y - top) < 0.01 && normal.y > 0.99).reduce((sum, { area }) => sum + area, 0);
+
+        assert.ok(Math.abs(rim - 3 * (5 * 5 - inside * inside)) < 0.5, `its top: ${rim} square pixels`);
+    });
 });
 
 describe("materials (engine/materials.js)", () => {
@@ -1260,6 +1308,43 @@ describe("chimney smoke (world/smoke.js)", () => {
 
         assert.ok(shares.every((share) => share > 0 && share < 1));
         assert.equal(shares.filter((share) => share <= 0.5).length, Math.round(SMOKE.puffs / 2), `${shares}`);
+    });
+});
+
+describe("torches and lanterns on the buildings (kits/torches.js, world/lights.js)", () => {
+    it("puts a torch either side of a keep's door and a gatehouse's way through, and lights the taverns' and town halls' lanterns", async () => {
+        const { lightsOf } = await import("../client/js/world/lights.js");
+        const castle = await import("../client/js/world/art/kits/castle.js");
+        const { keep } = await import("../client/js/world/art/kits/landmarks.js");
+        const kinds = (object) => {
+            object.updateMatrixWorld(true);
+
+            return lightsOf(object).map(({ kind }) => kind);
+        };
+        const pieces = ["town", "city"].flatMap((kind) => [1, 2, 3].flatMap((seed) => layoutTown({ seed, kind }).pieces));
+        const big = [...houses].sort((a, b) => b.w * b.h - a.w * a.h)[0];
+
+        assert.deepEqual(kinds(castle.keep({ w: 4, h: 4, door: true })), ["torch", "torch"]);
+        assert.deepEqual(kinds(castle.keep({ w: 4, h: 4, door: false })), [], "no door, no torches");
+        assert.deepEqual(kinds(castle.gatehouse({ facing: "s" })), ["torch", "torch", "torch", "torch"], "inside and out");
+        assert.deepEqual(kinds(castle.gatehouse({ facing: "e" })), ["torch", "torch", "torch", "torch"]);
+        assert.deepEqual(kinds(await keep(big)), ["torch", "torch"], "a capital's keep");
+        assert.deepEqual(kinds(await landmark(pieces.find(({ name }) => name === "tavern"))), ["lantern"]);
+        assert.deepEqual(kinds(await landmark(pieces.find(({ name }) => name === "hall"))), ["lantern", "lantern"]);
+
+        // (Each torch's flame at its top, out from the wall on the side its door faces, and a
+        // couple of metres up; on a wall facing the way it's put, and as far from the door either
+        // side)
+        const built = castle.keep({ w: 4, h: 4, door: true });
+
+        built.updateMatrixWorld(true);
+
+        const [left, right] = lightsOf(built);
+        const box = new THREE.Box3().setFromObject(built);
+
+        assert.ok(Math.abs(left.y - right.y) < 1e-9 && left.y > M * 2 && left.y < M * 8, `${left.y}`);
+        assert.ok(Math.abs(left.z - right.z) < 1e-9 && left.z > box.max.z - M * 2, "on the front");
+        assert.ok(Math.abs((left.x + right.x) / 2 - (box.min.x + box.max.x) / 2) < M * 0.5, "either side of the door");
     });
 });
 
