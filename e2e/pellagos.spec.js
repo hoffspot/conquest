@@ -1201,7 +1201,7 @@ test("out in the human lands a broken aqueduct strides across a dip: drawn over 
     expect(under.nearest).toBeLessThan(3);
 });
 
-test("the humans' castle is a hill citadel: its wards on terraces up its hill, drawn part by part, the keep's spires over everything, its walls and barbican in the way", async ({ page }) => {
+test("the humans' castle is a hill citadel: its wards on terraces up its hill, drawn part by part, the keep's spires over everything, its walls, its moat and its gate tower in the way", async ({ page }) => {
     test.setTimeout(180000);
     await playing(page, "/?play&seed=1");
     await page.evaluate(() => window.pellagos.game.stop());
@@ -1217,8 +1217,8 @@ test("the humans' castle is a hill citadel: its wards on terraces up its hill, d
         const { x, y, facing, citadel } = set;
         const place = ([u, v]) => [x + u * Math.cos(facing) + v * Math.sin(facing), y - u * Math.sin(facing) + v * Math.cos(facing)];
         const [outer] = citadel.wards;
-        // (Out before its barbican, along its front)
-        const [sx, sy] = place([0, outer.apothem + 24 + 16]);
+        // (Out before its gate tower, past its glacis, along its front)
+        const [sx, sy] = place([0, outer.apothem + 40]);
         const me = game.battle.actor(game.me);
         const avatar = game.avatars.get(game.me);
 
@@ -1248,16 +1248,20 @@ test("the humans' castle is a hill citadel: its wards on terraces up its hill, d
             }
         });
 
-        const [bx, by] = place([0, outer.apothem + 12]);
+        const tower = set.pieces.find(({ part }) => part === "gatetower");
         const [gx, gy] = place([0, outer.apothem - 1]);
+        // (Its moat, round at its back)
+        const [mx, my] = place([0, -outer.apothem - 7]);
+        const moat = land.chunkAt(Math.floor(mx), Math.floor(my));
 
         return {
             built: Boolean(drawn?.buildings),
             top: top - (set.level + citadel.wards.at(-1).rise + keep.high),
             inner: land.ground.heightAt(keep.x, keep.y) - set.pads.at(-1).level,
             outer: land.ground.heightAt(...place([0, outer.apothem - 6])) - set.pads[0].level,
-            barbican: land.squares.blocked(Math.floor(bx), Math.floor(by)),
+            tower: land.squares.blocked(Math.floor(tower.x), Math.floor(tower.y)),
             gate: land.squares.blocked(Math.floor(gx), Math.floor(gy)),
+            moat: Boolean(moat.water[(Math.floor(my) - moat.y0) * 64 + (Math.floor(mx) - moat.x0)]) && land.squares.blocked(Math.floor(mx), Math.floor(my)),
             before: land.squares.blocked(Math.floor(sx), Math.floor(sy)),
         };
     });
@@ -1266,8 +1270,9 @@ test("the humans' castle is a hill citadel: its wards on terraces up its hill, d
     expect(seen.top).toBeGreaterThan(20);
     expect(Math.abs(seen.inner)).toBeLessThan(0.05);
     expect(Math.abs(seen.outer)).toBeLessThan(0.05);
-    expect(seen.barbican).toBe(true);
+    expect(seen.tower).toBe(true);
     expect(seen.gate).toBe(true);
+    expect(seen.moat).toBe(true);
     expect(seen.before).toBe(false);
 });
 

@@ -13,7 +13,7 @@
 // Pure data, no DOM; the same for the same plan.
 
 import { GOD_IDS } from "./lore/gods.js";
-import { CITADEL, citadelLevel, citadelParts, insideCitadel, layoutCitadel, outlineOf } from "./setpieces/citadel.js";
+import { CITADEL, citadelLevel, citadelParts, clearingOf, inMoat, insideCitadel, insideWard, layoutCitadel, moatReach, outlineOf } from "./setpieces/citadel.js";
 import { footprint } from "./setpieces/town.js";
 import { extentOf, layoutNeutral, NEUTRAL } from "./setpieces/neutral.js";
 import { LANDMARKS, PEOPLE_PLACES, PLOT, pieceCatalog, towerKey } from "./setpieces/pieces.js";
@@ -22,9 +22,8 @@ import { atan2, cos, hypot, PI, sin } from "./exact.js";
 import { heightAt, HEIGHT_STEP } from "./terrain/height.js";
 
 // The humans' own (plots across and deep): their castle, a hill citadel laid out by citadel.js
-// (as wide as its outer ward and its towers, at the most), and the rest as their landmarks are
-// built
-const HUMAN_PLACES = Object.freeze({ castle: [40, 40], abbey: LANDMARKS.church, windmill: LANDMARKS.windmill, manor: LANDMARKS.keep });
+// (as wide as its glacis round its moat, at the most), and the rest as their landmarks are built
+const HUMAN_PLACES = Object.freeze({ castle: [42, 42], abbey: LANDMARKS.church, windmill: LANDMARKS.windmill, manor: LANDMARKS.keep });
 
 // Is a site the humans' castle, built as a hill citadel (setpieces/citadel.js)?
 const isCitadel = (site) => site.race === "human" && site.kind === "castle";
@@ -230,6 +229,8 @@ export class Sites {
         this.parts = new Map();
         this.bySquare = new Set();
         this.paved = new Set();
+        this.moats = new Set();
+        this.cleared = [];
         this.clearings = new Map();
 
         for (const site of plan.sites) {
@@ -290,7 +291,24 @@ export class Sites {
 
                 this.parts.set(own, [...(this.parts.get(own) ?? []), piece]);
             }
-            Object.assign(this.clearings.get(site.id), { at: [set.x, set.y], radius: set.radius + SITE_MARGIN });
+
+            // (A citadel's moat, and the ground it keeps clear round it)
+            for (const square of set.moat ?? []) {
+                this.moats.add(square);
+            }
+
+            if (set.citadel) {
+                this.cleared.push(set);
+            }
+
+            Object.assign(this.clearings.get(site.id), { at: [set.x, set.y], radius: (set.clearing ?? set.radius) + SITE_MARGIN });
+        }
+    }
+
+    /** Set down the hill citadels (the humans' castles: one a world) at once, wherever the player is. */
+    settleCitadels() {
+        for (const site of this.plan.sites.filter(isCitadel)) {
+            this.settle(Math.floor(site.at[0] / CHUNK), Math.floor(site.at[1] / CHUNK));
         }
     }
 
@@ -314,6 +332,37 @@ export class Sites {
         const k = y * WORLD_SIZE + x;
 
         return this.bySquare.has(k) ? { blocked: 1, opaque: 1, paved: this.paved.has(k) } : null;
+    }
+
+    /** Whether a square's in a citadel's moat (water, too deep to wade). */
+    moatAt(x, y) {
+        return this.moats.has(y * WORLD_SIZE + x);
+    }
+
+    /**
+     * How high a citadel's moat's water stands at a point (metres), wherever it might be drawn: from
+     * under its outer wall out under its far bank; or null.
+     */
+    moatLevelAt(x, y) {
+        for (const set of this.cleared) {
+            const [c, s] = [cos(set.facing), sin(set.facing)];
+            const at = [(x - set.x) * c - (y - set.y) * s, (x - set.x) * s + (y - set.y) * c];
+            const [outer] = set.citadel.wards;
+
+            if (insideWard(set.citadel, { sides: outer.sides, apothem: moatReach(set.citadel, "lip") + 2 }, at) && !insideWard(set.citadel, outer, at, -4)) {
+                return set.water;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Whether a point's on the ground a citadel keeps clear round it (CITADEL.moat.clear: no fields,
+     * hedges, trees or the land's features).
+     */
+    clearedAt(x, y) {
+        return this.cleared.some((set) => hypot(x - set.x, y - set.y) < set.clearing);
     }
 
     /**
@@ -361,8 +410,7 @@ export class Sites {
         // one of these is under most of those that fail, and looked for first)
         const unclear = [];
         const rest = restingOf(this.plan, site);
-        // (A citadel: its outer ward, its towers and its barbican, which it may be moved farther to
-        // find room for)
+        // (A citadel: its glacis round its moat, which it may be moved farther to find room for)
         const citadel = isCitadel(site) ? layoutCitadel({ seed: site.seed }) : null;
         const outline = citadel && outlineOf(citadel, 1);
         const room = citadel ? CITADEL.room : LYING;
@@ -433,35 +481,42 @@ export class Sites {
     }
 
     // A hill citadel set down at (x, y), facing `facing` (setpieces/citadel.js): its outer ward on
-    // its hill, raised CITADEL.hill.raise over the land under it on average and eased out into the
-    // land round it; each ward inside it a terrace higher, eased up under its retaining wall (inside
-    // the wall's outer face); every square inside its outer wall, and under its outer towers, its
-    // own; its pieces each part of it, standing on its ward's terrace
+    // its hill, raised CITADEL.hill.raise over the land under it on average; round it its moat, dug
+    // into the hill's top, and its glacis, the hill eased out from its edge into the land round it;
+    // each ward inside it a terrace higher, eased up inside its wall's outer face (under its
+    // retaining wall; the outer ward's up out of its moat). Every square inside its outer wall,
+    // under its outer towers, on its bridge and in its gate tower its own; its moat's squares
+    // water; its pieces each part of it, standing on its ward's terrace
     #citadelAt(site, citadel, x, y, facing, [w, h]) {
         const [c, s] = [cos(facing), sin(facing)];
         const place = ([u, v]) => [x + u * c + v * s, y - u * s + v * c];
         const local = (px, py) => [(px - x) * c - (py - y) * s, (px - x) * s + (py - y) * c];
         const level = (height) => Math.round(height / HEIGHT_STEP) * HEIGHT_STEP;
         const base = citadelLevel(this.plan, citadel, x, y, facing);
-        const pads = citadel.wards.map((ward, k) => ({
-            at: [x, y],
-            radius: ward.apothem / cos(PI / ward.sides),
-            sides: ward.sides,
-            apothem: k ? ward.apothem - CITADEL.terrace.ease - 0.3 : ward.apothem,
-            turn: PI / 2 - facing,
-            level: level(base + ward.rise),
-            ease: k ? CITADEL.terrace.ease : CITADEL.hill.ease,
-        }));
-        // (Its squares: inside its outer wall's outer face, under one of its outer towers or the
-        // outer gate's, or in its barbican)
-        const radius = Math.max(...outlineOf(citadel).map(([u, v]) => hypot(u, v)));
+        const [outer] = citadel.wards;
+        const { deep, bank, water } = CITADEL.moat;
+        // (Each a regular polygon round its middle, the first side's middle to its front: the
+        // glacis, then the moat's bed, then each ward, outermost first)
+        const ring = (sides, apothem) => ({ at: [x, y], radius: apothem / cos(PI / sides), sides, apothem, turn: PI / 2 - facing });
+        const pads = [
+            { ...ring(outer.sides, moatReach(citadel, "glacis")), level: level(base), ease: CITADEL.hill.ease },
+            { ...ring(outer.sides, moatReach(citadel, "foot")), level: level(base - deep), ease: bank },
+            ...citadel.wards.map((ward) => ({ ...ring(ward.sides, ward.apothem - CITADEL.terrace.ease - 0.3), level: level(base + ward.rise), ease: CITADEL.terrace.ease })),
+        ];
+        // (Its squares, and its moat's: out to its glacis's corners)
+        const radius = moatReach(citadel, "glacis") / cos(PI / outer.sides);
         const reach = Math.ceil(radius + 1);
         const squares = new Set();
+        const moat = new Set();
 
         for (let j = Math.floor(y) - reach; j <= Math.floor(y) + reach; j++) {
             for (let i = Math.floor(x) - reach; i <= Math.floor(x) + reach; i++) {
-                if (insideCitadel(citadel, local(i + 0.5, j + 0.5), 0.25)) {
+                const at = local(i + 0.5, j + 0.5);
+
+                if (insideCitadel(citadel, at, 0.25)) {
                     squares.add(j * WORLD_SIZE + i);
+                } else if (inMoat(citadel, at)) {
+                    moat.add(j * WORLD_SIZE + i);
                 }
             }
         }
@@ -473,7 +528,7 @@ export class Sites {
             return { ...part, kind: "citadel", key: `citadel-${part.part}`, site: site.id, seed: site.seed, people: "human", x: px, y: py, w: 0, h: 0, facing: facing + PI / 2 - part.turn, base: level(base + part.rise) };
         });
 
-        return { site, x, y, facing, w, h, pieces, squares, radius, heart: [x, y], pads, citadel, level: base };
+        return { site, x, y, facing, w, h, pieces, squares, moat, water: level(base) - water, radius, clearing: clearingOf(citadel), heart: [x, y], pads, citadel, level: base };
     }
 
     // The spots a site that would rather lie high or low may stand (LIE), best first: LYING.step

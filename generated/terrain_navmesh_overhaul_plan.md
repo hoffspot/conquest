@@ -3276,7 +3276,7 @@ converted data is to be measured in M8 against today's hm08 data.
     10 m, 8 to 11 m higher; inner square, 24 to 27 m, 12 m, 8 to 11 m higher again), towers at
     every corner standing out a third of their radius (outer 4 m round under battlements, middle
     5 m and inner 6 m under crowns and slate cones), its gates a quarter of the way round each
-    from the last, a barbican before the outer gate, a stair up to each inner gate; the inner
+    from the last, a stair up to each inner gate (and round the outer ward a moat: below); the inner
     close with the keep in its back corner (16 to 19 m, 34 to 40 m high, needles 13 m over it
     under 16 m spires: the top 90 m or so over the land), the great hall and the chapel round it;
     lean-to ranges in the lower wards clear of the next ward's walls and towers.
@@ -3285,17 +3285,33 @@ converted data is to be measured in M8 against today's hm08 data.
     out over 40 m, a regular polygon pad a ward (ground.js: polygon pads, `sides`, `apothem`,
     `turn`, a `level` given), each inner ward's eased up inside its wall's face under its
     retaining wall; its squares (inside its outer wall, under its outer towers and the outer
-    gate's, its barbican) blocked, not seen through, paved; each part a piece drawn by the chunk
+    gate's, its bridge and gate tower) blocked, not seen through, paved; each part a piece drawn by the chunk
     it stands in. `NET_VERSION` 29.
   - **Built** (world/art/kits/citadel.js): retaining walls battered 1 in 6 all the way down with
     the curtain on them; merlons 1.4 by 1.8 m at a 2.1 m pitch on a 1.1 m parapet; crowns of
     machicolations (two courses of corbels under a parapet standing out 0.7 m, dark beneath) on the
     inner wards' walls and towers, the gatehouses and the keep; the outer gate between twin round
-    towers with a deep passage; gatehouses over the inner gates; switchback stairs; the barbican;
+    towers with a deep passage; gatehouses over the inner gates; switchback stairs;
     the great hall, the chapel with its apse and flèche, the keep with its two needle towers and
     two bartizans and its door in a forebuilding; lean-to ranges. About 35,000 triangles near, a
     part a step as its chunk's drawn; about 1,500 from afar (far/shapes.js `citadelShapes`, a dark
     band where each crown stands out).
+  - **The moat, the drawbridge and the gate tower** (the user, with the first pictures: "There
+    shouldn't be hedgerows and fields going right up against the Citadel, add a moat and
+    drawbridge with a gate tower on the near side of the drawbridge from the castle"): the
+    barbican gave way to a moat round the outer ward (15 m to its far bank's foot, its bed 4 m
+    under the outer ward, its water 1.4 m down), dug into the hill's top, a glacis of 12 m beyond
+    it at the outer ward's level before the hill falls away; the outer wall and its towers rise
+    out of it on battered feet, its far bank faced with stone. Over it at the front the drawbridge
+    let down from the outer gate on its chains, a pier, two stone spans, and on the far bank the
+    gate tower over the bridge's end (crowned, turrets at its outer corners, a slate roof). The
+    moat is the world's own water (its squares still water at its own level: sites.js `moatAt`,
+    `moatLevelAt`, the overworld's `surfaceAt`), so it's drawn with the rivers' and lakes' shader,
+    shores and depth, and on the minimap. Round the citadel, out to its glacis's corners, the hill's
+    fall and 20 m more (about 170 m), no fields, hedges or trees (`clearedAt`; the far fields'
+    shader too, `FIELDS_CLEAR`). The citadel's now set down as the world's made
+    (`settleCitadels`, 100 to 200 ms), as its moat and cleared ground are wanted from afar. Seeds
+    1, 2, 3, 7, 11 and 23 all find room. Pictures sent in the session.
   - **On the way:** a first build (v1: wards 56 to 64, 38 to 44 and 17 to 20 m, towers on the
     walls' corners, a keep in the middle with four needle towers, straight stairs) was looked at in
     pictures and redone with the research's measures: the keep moved to the close's back corner
@@ -3307,15 +3323,18 @@ converted data is to be measured in M8 against today's hm08 data.
     wrong way between the four quarters (laid with the angle's sign flipped): turned with the
     ring.
   - **Pictures:** seed 1's citadel before (main: the old castle 180 m off, small) and after, from
-    260 m, over the outer gate and barbican, over the inner close, from 230 m south; the middle gate
-    up its stair, the barbican's side, the middle ward's gatehouse, over the inner gate; sent in
-    the session.
+    260 m, over the outer gate, over the inner close, from 230 m south; the middle gate up its
+    stair, the middle ward's gatehouse, over the inner gate; then with its moat: through the gate
+    tower, the drawbridge from beside, the moat along its walls, over the moat to the gate tower,
+    from afar over the cleared ground; sent in the session.
   - **Tests:** test/citadel.test.js (laid out: wards, sides, sizes, rises, towers clear and
     spaced, gates a quarter round, the keep at the back, hall and chapel clear of it and in the
     close, stairs clear of their towers; parts; set down clear of roads and water on seeds 1, 2, 3
-    and 7; terraces levelled and the hill eased out; its squares (walls, towers, barbican) blocked,
-    opaque and paved, open outside; pieces by chunk; built in its budget with the keep's spires
-    highest; from afar under 2,000 triangles); test/flats.test.js (the castle's middle on its inner
-    ward's terrace, each ward higher); e2e (seed 1's citadel drawn, the keep's spires over it, its
-    terraces' heights, its barbican and gate blocked, the ground before it open).
+    and 7; terraces levelled, the moat dug and the hill eased out; its squares (walls, towers, bridge, gate tower) blocked,
+    opaque and paved, its moat water too deep to wade at its own level, open outside, no fields
+    or hedges on the ground it keeps clear; pieces by chunk; built in its budget with the keep's
+    spires highest; from afar under 2,000 triangles); test/flats.test.js (the castle's middle on
+    its inner ward's terrace, each ward higher, the moat's bed below the glacis); e2e (seed 1's
+    citadel drawn, the keep's spires over it, its terraces' heights, its gate, gate tower and moat
+    in the way, the ground before it open).
   - **Next:** the M7 summary report; then M7j, foliage palette, grass ring, weathering.

@@ -6,7 +6,7 @@
 // worker (silhouette-worker.js), into arrays a mesh is made from (silhouettes.js).
 
 import { AQUEDUCTS } from "../../core/aqueducts.js";
-import { citadelLevel, citadelParts, layoutCitadel } from "../../core/setpieces/citadel.js";
+import { CITADEL, citadelLevel, citadelParts, layoutCitadel, moatReach } from "../../core/setpieces/citadel.js";
 import { ARCHES, feetOf, legsOf } from "../../core/arches.js";
 import { createRandom } from "../../core/random.js";
 import { layoutNeutral } from "../../core/setpieces/neutral.js";
@@ -58,16 +58,16 @@ export function archShapes(shapes, arch, heightOf) {
     shapes.box(arch.x, arch.y, top, arch.span + thick, thick, band, facing, colour);
 }
 
-/** A citadel's stone and roofs from afar, and the shadow under its crowns (sRGB: its stone and slate as they look near, darker: a far shape's flat faces catch more light than the near walls' coursed stone). */
-export const CITADEL_FAR = Object.freeze({ stone: 0x6a6761, roof: 0x434d68, shade: 0x4a4844 });
+/** A citadel's stone and roofs from afar, the shadow under its crowns, and its moat's water (sRGB: its stone and slate as they look near, darker: a far shape's flat faces catch more light than the near walls' coursed stone). */
+export const CITADEL_FAR = Object.freeze({ stone: 0x6a6761, roof: 0x434d68, shade: 0x4a4844, water: 0x2e4852 });
 
 /**
  * The humans' hill citadel (core/setpieces/citadel.js) as seen from afar, set down at (x, z) and
  * turned to `facing` (sites.js): each ward's walls a box along each side, from its foot (the land,
  * for the outer ward: the far land has no hill; the terrace below, for the others) to its top;
  * its towers columns, coned as theirs are; round each machicolated wall's and tower's top its
- * parapet standing out, dark with its corbels' shadow; the barbican's walls out in front of the
- * outer gate; the hall, the chapel and the ranges boxes, the hall's and chapel's roofed; the
+ * parapet standing out, dark with its corbels' shadow; its moat's water a side at a time, the
+ * bridge over it and the gate tower on its far bank; the hall, the chapel and the ranges boxes, the hall's and chapel's roofed; the
  * keep a box under its roof, its needle towers columns under tall cones, its bartizans little
  * cones. About 1,500 triangles. `heightOf(x, z)` is the land's height.
  */
@@ -76,7 +76,7 @@ export function citadelShapes(shapes, { plan, seed, x, z, facing, heightOf }) {
     const base = citadelLevel(plan, citadel, x, z, facing);
     const [c, s] = [Math.cos(facing), Math.sin(facing)];
     const place = ([u, v]) => [x + u * c + v * s, z - u * s + v * c];
-    const { stone, roof, shade } = CITADEL_FAR;
+    const { stone, roof, shade, water } = CITADEL_FAR;
     // (A crown's parapet over a tower's top, and its cone's eaves out past it: kits/citadel.js)
     const [parapet, eaves] = [1.1, 1];
 
@@ -107,22 +107,20 @@ export function citadelShapes(shapes, { plan, seed, x, z, facing, heightOf }) {
             if (part.top === "cone") {
                 shapes.cone(px, pz, top + parapet, part.radius + eaves, (part.radius + eaves) * part.spire, roof, 8);
             }
-        } else if (part.part === "barbican") {
-            // (Its two sides and its far end, down the hill's side into the land)
-            const [ax, az] = [Math.cos(part.turn), Math.sin(part.turn)];
-            const side = part.wide / 2 + part.thick / 2;
+        } else if (part.part === "counterscarp") {
+            // (Its side of the moat's water, from the outer wall's face to the far bank)
+            const [near, far] = [moatReach(citadel, "wall"), moatReach(citadel, "water")];
+            const mid = (near + far) / 2;
+            const [wx, wz] = place([Math.cos(part.turn) * mid, Math.sin(part.turn) * mid]);
 
-            for (const [u, v, width, depth] of [[-az * side, ax * side, part.thick, part.long], [az * side, -ax * side, part.thick, part.long]]) {
-                const [bx, bz] = place([part.at[0] + u + ax * (part.long / 2), part.at[1] + v + az * (part.long / 2)]);
-                const low = Math.min(level, heightOf(bx, bz)) - SUNK - 4;
+            shapes.box(wx, wz, base - CITADEL.moat.water - 0.05, (part.length * mid) / part.reach, far - near, 0.05, turned, water);
+        } else if (part.part === "bridge") {
+            const [bx, bz] = place([part.at[0] + Math.cos(part.turn) * (part.long / 2), part.at[1] + Math.sin(part.turn) * (part.long / 2)]);
 
-                shapes.box(bx, bz, low, width, depth, level + part.high + parapet - low, turned, stone);
-            }
-
-            const [ex, ez] = place([part.at[0] + ax * (part.long - part.thick / 2), part.at[1] + az * (part.long - part.thick / 2)]);
-            const low = Math.min(level, heightOf(ex, ez)) - SUNK - 4;
-
-            shapes.box(ex, ez, low, part.wide + part.thick * 2, part.thick, level + part.high + parapet - low, turned, stone);
+            shapes.box(bx, bz, level - CITADEL.moat.water, part.wide + 1, part.long, CITADEL.moat.water + 1, turned, stone);
+        } else if (part.part === "gatetower") {
+            shapes.box(px, pz, level - part.drop, part.wide, part.deep, part.high + parapet + part.drop, turned, stone, false);
+            shapes.roof(px, pz, level + part.high + parapet, part.wide - 1, part.deep - 1, 5.5, turned, roof, true);
         } else if (part.part === "range" || part.part === "hall" || part.part === "chapel") {
             const roofed = part.part !== "range";
 

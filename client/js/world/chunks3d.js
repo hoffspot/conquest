@@ -35,7 +35,7 @@ import { bridgeGrowth, stoneBridgeMaking } from "./art/kits/bridges.js";
 import { ARCHES, legsOf } from "../core/arches.js";
 import { hedgeBuilding, hedgeMesh, hedgeRuns } from "./art/kits/hedges.js";
 import { stepsMesh, stonesOf } from "./art/kits/steps.js";
-import { disposeChunkGround, disposeGrass, groundMaterial, landColours, layingGround, respaceGround } from "./ground.js";
+import { disposeChunkGround, disposeGrass, FIELDS_CLEAR, groundMaterial, landColours, layingGround, respaceGround } from "./ground.js";
 import { grassLooks } from "./grassmap.js";
 import { Layouts } from "./layouts.js";
 import { Terrains } from "./terrains.js";
@@ -112,6 +112,12 @@ export class Chunks {
         this.cliffs = cliffs;
         this.overworld = world.maps.town;
         this.land = landColours(world.plan, grassLooks());
+
+        // (No fields seen from afar on the ground a citadel keeps clear round it, as there are none
+        // near: core/sites.js clearedAt)
+        const [citadel] = this.overworld.sites?.cleared ?? [];
+
+        FIELDS_CLEAR.value.set(citadel?.x ?? 0, citadel?.y ?? 0, citadel?.clearing ?? 0);
         this.woodland = new Woodland();
 
         // (The settlements a little further off laid out ahead, off the page's thread; and the

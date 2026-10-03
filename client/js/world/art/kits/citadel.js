@@ -51,7 +51,7 @@ export const CITADEL_LOOK = Object.freeze({
 /** A citadel's part (a piece: core/sites.js), built round its middle. */
 export function citadelPart(piece) {
     const solid = new Solid();
-    const build = { wall: wallInto, tower: towerInto, stair: stairInto, barbican: barbicanInto, range: rangeInto, hall: hallInto, chapel: chapelInto, keep: keepInto }[piece.part];
+    const build = { wall: wallInto, tower: towerInto, stair: stairInto, counterscarp: counterscarpInto, bridge: bridgeInto, gatetower: gatetowerInto, range: rangeInto, hall: hallInto, chapel: chapelInto, keep: keepInto }[piece.part];
 
     build?.(solid, piece);
 
@@ -259,10 +259,11 @@ function gateInto(solid, piece, house, stone) {
 }
 
 // A round arch's underside through a wall (half-width `r`, springing at `spring`, from z0 to z1),
-// its sides up to it, and its ring of dressed stones on the outer face; its portcullis behind it
+// its sides up to it, and its ring of voussoirs on the outer face, darker than the wall round it;
+// its portcullis behind it
 function archInto(solid, r, spring, z0, z1, stone) {
     const steps = 8;
-    const dressed = material("stone-warm");
+    const dressed = material("stone-dark");
     const at = (k) => [-Math.cos((k / steps) * Math.PI) * r, spring + Math.sin((k / steps) * Math.PI) * r];
 
     for (let k = 0; k < steps; k++) {
@@ -386,59 +387,131 @@ function stairInto(solid, piece) {
     solid.box(-platform, climb, lane - m(0.5), platform, climb + top, lane, dark);
 }
 
-// The barbican out in front of the outer gate (out along +z): a walled passage, its walls going
-// down the hill's side into the ground, battlements on them, a turret at each far corner; its
-// way in through its side near its far end (the way in's side, `way`), torches either side
-function barbicanInto(solid, piece) {
+// The moat's far bank along one of the outer ward's sides (its foot at z = 0, the castle towards
+// -z): faced with stone from below the moat's bed up to the glacis, leaning back as it rises, a
+// coping along its top; its ends drawn in with the sides beside it (`reach`: how far its foot is
+// from the citadel's middle, so it meets them at the corners)
+function counterscarpInto(solid, piece) {
     const stone = material("stone");
     const dark = material("stone-dark");
-    const [long, half, thick] = [m(piece.long), m(piece.wide / 2 + piece.thick), m(piece.thick)];
-    const [foot, top] = [-m(piece.drop), m(piece.high)];
-    const side = piece.way;
-    // (Its way in: in its side, about as high as the hill's side is there: eased down from the
-    // ward's level towards the land's, as the hill is, sites.js)
-    const [d0, d1] = [long - m(2 + 4.6), long - m(2)];
-    const t = Math.min(1, (d0 + d1) / 2 / m(40));
-    const sill = -m(7) * t * t * (3 - 2 * t) - m(0.5);
-    const head = sill + m(4.8);
+    const along = piece.length / 2 / piece.reach;
+    const [z0, z1] = [-m(0.3), m(1.6)];
+    const ends = (z) => (m(piece.reach) + z) * along;
+    const [foot, top] = [-m(piece.drop), m(0.15)];
 
-    // (Its two sides, the way in through one; its far end)
-    for (const s of [-1, 1]) {
-        const [x0, x1] = s < 0 ? [-half, -half + thick] : [half - thick, half];
-        const spans = s === side ? [[-m(0.5), d0], [d1, long]] : [[-m(0.5), long]];
+    solid.facing([[ends(z0), foot, z0], [-ends(z0), foot, z0], [-ends(z1), top, z1], [ends(z1), top, z1]], [0, z1 - z0, -(top - foot)], stone);
+    solid.facing([[ends(z0), foot, z0 - m(0.05)], [-ends(z0), foot, z0 - m(0.05)], [-ends(z0 + m(0.4)), foot + m(1.6), z0 + m(0.15)], [ends(z0 + m(0.4)), foot + m(1.6), z0 + m(0.15)]], [0, z1 - z0, -(top - foot)], dark);
 
-        for (const [z0, z1] of spans) {
-            solid.box(x0, foot, z0, x1, top, z1, stone);
+    // (Its coping, a course of dressed stone along the glacis's edge)
+    const [c0, c1] = [z1 - m(0.3), z1 + m(0.9)];
+
+    solid.facing([[ends(c0), top + m(0.3), c0], [-ends(c0), top + m(0.3), c0], [-ends(c1), top + m(0.3), c1], [ends(c1), top + m(0.3), c1]], [0, 1, 0], material("stone-warm"));
+    solid.facing([[ends(c0), top - m(0.2), c0], [-ends(c0), top - m(0.2), c0], [-ends(c0), top + m(0.3), c0], [ends(c0), top + m(0.3), c0]], [0, 0, -1], material("stone-warm"));
+}
+
+// The bridge over the moat to the outer gate (out along +z from the outer wall's face, its deck at
+// the outer ward's level): from the gate (`gate` out past the wall's face) the drawbridge, let
+// down, its leaf of heavy planks bound with iron, its chains up to the gatehouse over the gate;
+// then a pier, and two spans of stone on a pier between them to the far bank, parapets along them
+function bridgeInto(solid, piece) {
+    const stone = material("stone");
+    const dark = material("stone-dark");
+    const iron = material("iron");
+    const half = m(piece.wide / 2);
+    const foot = -m(piece.drop);
+    const [g, l] = [m(piece.gate), m(piece.gate + piece.leaf)];
+    const [p0, p1] = [l, l + m(piece.pier)];
+    const end = m(piece.long);
+    const middle = (p1 + end) / 2;
+
+    // (The drawbridge's leaf, its straps, the gap at its hinge, its chains)
+    solid.box(-half, -m(0.4), g, half, 0, l, material("planks-dark"), { under: material("planks-dark") });
+
+    for (let z = g + m(0.6); z < l; z += m(1.4)) {
+        solid.box(-half - m(0.02), -m(0.42), z, half + m(0.02), m(0.02), z + m(0.18), iron);
+    }
+
+    for (const side of [-1, 1]) {
+        solid.beam([side * (half - m(0.2)), m(0.15), l - m(0.3)], [side * (half - m(0.2)), m(8.5), g - m(0.1)], m(0.12), m(0.12), iron);
+    }
+
+    // (The pier the leaf comes down on, and the stone spans on from it)
+    solid.box(-half - m(0.6), foot, p0, half + m(0.6), 0, p1, stone);
+    solid.box(-half - m(0.8), foot, p0 - m(0.2), half + m(0.8), foot + m(2.2), p1 + m(0.2), dark);
+    solid.box(-half - m(0.5), -m(0.7), p1, half + m(0.5), 0, end + m(0.4), stone, { under: dark });
+    solid.box(-half - m(0.6), foot, middle - m(0.8), half + m(0.6), -m(0.7), middle + m(0.8), stone);
+    solid.box(-half - m(0.7), -m(0.85), p1, half + m(0.7), -m(0.7), end + m(0.4), material("stone-warm"));
+
+    for (const side of [-1, 1]) {
+        const [x0, x1] = side < 0 ? [-half - m(0.5), -half] : [half, half + m(0.5)];
+
+        solid.box(x0, 0, p1, x1, m(1), end + m(0.4), stone);
+        solid.box(x0 - m(0.05), m(1), p1, x1 + m(0.05), m(1.15), end + m(0.4), material("stone-warm"));
+    }
+
+    // (Its deck's stones where it's walked)
+    solid.box(-half, 0, p1, half, m(0.04), end + m(0.4), material("cobbles"));
+}
+
+// The gate tower over the bridge's far end, on the glacis (its way through along z, out towards
+// +z): a square tower, battered at its foot, its passage under round arches with a portcullis, a
+// crown of machicolations over its outer face, battlements round its other sides, a turret
+// corbelled out at each outer corner under a cone, a steep slate roof behind its parapets, arrow
+// slits, torches either side of its gate
+function gatetowerInto(solid, piece) {
+    const stone = material("stone");
+    const dark = material("stone-dark");
+    const slate = material("slate");
+    const [hx, hz] = [m(piece.wide / 2), m(piece.deep / 2)];
+    const top = m(piece.high);
+    const foot = -m(piece.drop);
+    const r = m(piece.opening / 2);
+    const spring = m(piece.spring);
+
+    // (Either side of its passage, battered at the foot on its outer sides)
+    for (const [x0, x1] of [[-hx, -r], [r, hx]]) {
+        const [b0, b1] = x0 < 0 ? [x0 - m(0.8), x1] : [x0, x1 + m(0.8)];
+
+        solid.box(x0, foot, -hz, x1, top, hz, stone);
+        solid.extrude([[b0, hz + m(0.8)], [b1, hz + m(0.8)], [b1, -hz - m(0.8)], [b0, -hz - m(0.8)]], foot, m(1.2), dark, { batter: m(0.8) });
+    }
+
+    solid.box(-r, spring + r, -hz, r, top, hz, stone);
+    archInto(solid, r, spring, -hz, hz, stone);
+    solid.box(-r - m(0.3), foot, -hz, r + m(0.3), 0, hz, dark);
+
+    // (A string course; its crown over the gate's face and battlements round the rest)
+    solid.box(-hx - m(0.2), m(6) - m(0.35), -hz - m(0.2), hx + m(0.2), m(6), hz + m(0.2), dark);
+    crownInto(solid, -hx, hx, hz, top, stone);
+    battlements(solid, [hx - m(0.35), -hz], [hx - m(0.35), hz], top, stone);
+    battlements(solid, [-hx + m(0.35), hz], [-hx + m(0.35), -hz], top, stone);
+    battlements(solid, [-hx, -hz + m(0.35)], [hx, -hz + m(0.35)], top, stone);
+    solid.pyramid(-hx + m(1), -hz + m(1), hx - m(1), hz - m(1), top, m(5.5), slate);
+
+    // (Its turrets at its outer corners)
+    const t = m(piece.turret);
+
+    for (const side of [-1, 1]) {
+        const [cx, cz] = [side * (hx + t * 0.3), hz + t * 0.3];
+
+        solid.cylinder(cx, cz, top - m(2.4), top, m(0.2), t, dark, { segments: 10, capped: false });
+        solid.cylinder(cx, cz, top, top + m(3.2), t, t, stone, { segments: 10 });
+        solid.cone(cx, cz, top + m(3.2), t * 4, t + m(0.3), slate, 10);
+    }
+
+    // (Its slits, and torches by its gate)
+    const shadow = material("shadow");
+
+    solid.near(() => {
+        for (const x of [-hx + m(2), hx - m(2)]) {
+            for (const y of [m(3), m(8.5)]) {
+                solid.box(x - m(CITADEL_LOOK.slit.wide / 2), y, hz, x + m(CITADEL_LOOK.slit.wide / 2), y + m(CITADEL_LOOK.slit.high), hz + m(0.05), shadow);
+            }
         }
+    });
 
-        battlements(solid, [s * (half - m(0.35)), -m(0.5)], [s * (half - m(0.35)), long], top, stone);
-    }
-
-    solid.box(-half, foot, long - thick, half, top, long, stone);
-    battlements(solid, [-half, long - m(0.35)], [half, long - m(0.35)], top, stone);
-
-    // (Over its way in, and under it; its sides)
-    const [x0, x1] = side < 0 ? [-half, -half + thick] : [half - thick, half];
-
-    solid.box(x0, head, d0, x1, top, d1, stone, { under: stone });
-    solid.box(x0, foot, d0, x1, sill, d1, dark);
-
-    for (const [z, out] of [[d0, 1], [d1, -1]]) {
-        solid.facing([[x0, sill, z], [x1, sill, z], [x1, head, z], [x0, head, z]], [0, 0, out], stone);
-    }
-
-    torch(solid, [side * (half + m(0.05)), sill + m(2.6), d0 - m(0.5)], [side, 0]);
-    torch(solid, [side * (half + m(0.05)), sill + m(2.6), d1 + m(0.5)], [side, 0]);
-
-    // (Its turrets at its far corners, battered at their feet)
-    const tr = m(piece.turret);
-    const high = top + m(3);
-
-    for (const s of [-1, 1]) {
-        solid.cylinder(s * half, long, foot, sill, tr + m(0.8), tr, dark, { segments: 12, capped: false });
-        solid.cylinder(s * half, long, sill, high, tr, tr, stone, { segments: 12 });
-        solid.cylinder(s * half, long, high - m(0.4), high + m(CITADEL_LOOK.merlon.parapet), tr + m(0.25), tr + m(0.25), stone, { segments: 12 });
-        roundBattlements(solid, s * half, long, tr + m(0.25), high + m(CITADEL_LOOK.merlon.parapet), stone);
+    for (const side of [-1, 1]) {
+        torch(solid, [side * (r + m(0.5)), m(2.6), hz + m(0.05)], [0, 1]);
     }
 }
 

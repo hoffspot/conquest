@@ -1,17 +1,19 @@
 // The humans' hill citadels (client/js/core/setpieces/citadel.js, core/sites.js, the terrain plan's
 // M7i-4): three wards one above another up a hill, each walled round, its gate a quarter of the way
-// round from the last; the keep in the inner close's corner, the hall and the chapel round it, a
-// barbican before the outer gate; set down clear of the roads and the water, its wards' terraces
-// levelled one above another and its hill eased out into the land; every square inside its outer
-// wall, under its towers and in its barbican its own, its wards' courtyards; its parts drawn by
-// the chunks they stand in, in its budget, the great keep over everything; and seen from afar
+// round from the last; the keep in the inner close's corner, the hall and the chapel round it; a
+// moat round the outer ward, a bridge and drawbridge over it to the outer gate, a gate tower on
+// its far bank; set down clear of the roads and the water, its wards' terraces levelled one above
+// another, its moat dug into its hill and its hill eased out into the land; every square inside its
+// outer wall, under its towers, on its bridge and in its gate tower its own, its wards' courtyards,
+// its moat's water; no fields or hedges on the ground it keeps clear; its parts drawn by the
+// chunks they stand in, in its budget, the great keep over everything; and seen from afar
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 
 // (Textured materials paint a canvas: enough of one for them to in Node)
 globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContext: () => new Proxy({ createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }) }, { get: (t, k) => (k in t ? t[k] : () => ({ addColorStop() {} })) }) }) };
 
-const { barbicanOf, CITADEL, citadelLevel, citadelParts, insideCitadel, insideWard, layoutCitadel, sideTurn, towersOf } = await import("../client/js/core/setpieces/citadel.js");
+const { approachOf, CITADEL, citadelLevel, citadelParts, inMoat, insideCitadel, insideWard, layoutCitadel, moatReach, sideTurn, towersOf } = await import("../client/js/core/setpieces/citadel.js");
 const { buildWorld, CHUNK } = await import("../client/js/core/overworld.js");
 const { GROUND } = await import("../client/js/core/setpieces/pieces.js");
 const { HEIGHT_STEP, landHeight } = await import("../client/js/core/terrain/height.js");
@@ -141,7 +143,7 @@ describe("a hill citadel laid out (core/setpieces/citadel.js)", () => {
         assert.notDeepEqual(layoutCitadel({ seed: 1 }), layoutCitadel({ seed: 2 }));
     });
 
-    it("is built of walls and towers round each ward, a stair up to each gate but the outer's, a barbican, ranges of buildings, the hall, the chapel and the keep", () => {
+    it("is built of walls and towers round each ward, a stair up to each gate but the outer's, its moat's far bank, the bridge and gate tower, ranges of buildings, the hall, the chapel and the keep", () => {
         const citadel = layoutCitadel({ seed: 1 });
         const parts = citadelParts(citadel);
         const count = (part, ward) => parts.filter((each) => each.part === part && (ward === undefined || each.ward === ward)).length;
@@ -154,7 +156,18 @@ describe("a hill citadel laid out (core/setpieces/citadel.js)", () => {
         }
 
         assert.equal(count("keep"), 1);
-        assert.equal(count("barbican"), 1);
+        assert.equal(count("counterscarp"), citadel.wards[0].sides);
+        assert.equal(count("bridge"), 1);
+        assert.equal(count("gatetower"), 1);
+
+        // (The bridge from the outer wall's face to the far bank, the gate tower beyond it on the
+        // glacis; the moat's water between the wall and the far bank)
+        const bridge = parts.find((each) => each.part === "bridge");
+        const tower = parts.find((each) => each.part === "gatetower");
+
+        assert.ok(Math.abs(bridge.at[1] + bridge.long - moatReach(citadel, "lip")) < 1e-9);
+        assert.ok(tower.at[1] - tower.deep / 2 >= moatReach(citadel, "lip") - 1e-9 && tower.at[1] + tower.deep / 2 <= moatReach(citadel, "glacis"));
+        assert.ok(moatReach(citadel, "water") > moatReach(citadel, "foot") && moatReach(citadel, "water") < moatReach(citadel, "lip"));
         assert.equal(count("hall", citadel.wards.length - 1), 1);
         assert.equal(count("chapel", citadel.wards.length - 1), 1);
         assert.ok(count("range") >= 2, `${count("range")} ranges`);
@@ -196,16 +209,18 @@ describe("a hill citadel set down (core/sites.js)", () => {
         }
     });
 
-    it("levels its wards' terraces one above another, its hill eased out into the land round it", () => {
+    it("levels its wards' terraces one above another, its moat dug into its hill, its hill eased out into the land round it", () => {
         const { land, world, set } = one;
         const { citadel, x, y, facing } = set;
         const base = citadelLevel(world.plan, citadel, x, y, facing);
         const place = ([u, v]) => [x + u * Math.cos(facing) + v * Math.sin(facing), y - u * Math.sin(facing) + v * Math.cos(facing)];
+        const step = (height) => Math.round(height / HEIGHT_STEP) * HEIGHT_STEP;
 
-        assert.equal(set.pads.length, 3);
+        // (Its glacis, its moat's bed, then each ward)
+        assert.equal(set.pads.length, 5);
         assert.deepEqual(
             set.pads.map(({ level }) => level),
-            citadel.wards.map(({ rise }) => Math.round((base + rise) / HEIGHT_STEP) * HEIGHT_STEP),
+            [step(base), step(base - CITADEL.moat.deep), ...citadel.wards.map(({ rise }) => step(base + rise))],
         );
 
         for (const [k, ward] of citadel.wards.entries()) {
@@ -216,46 +231,63 @@ describe("a hill citadel set down (core/sites.js)", () => {
             const at = (r) => place([Math.cos(turn) * r, Math.sin(turn) * r]);
             const inside = next ? (ward.apothem - ward.thick + next.apothem + CITADEL.terrace.ease) / 2 : 4;
 
-            assert.ok(Math.abs(land.ground.heightAt(...at(inside)) - set.pads[k].level) < 0.05, `ward ${k}: ${land.ground.heightAt(...at(inside)).toFixed(2)} at ${set.pads[k].level.toFixed(2)}`);
+            assert.ok(Math.abs(land.ground.heightAt(...at(inside)) - set.pads[k + 2].level) < 0.05, `ward ${k}: ${land.ground.heightAt(...at(inside)).toFixed(2)} at ${set.pads[k + 2].level.toFixed(2)}`);
         }
 
-        // (Its hill: from its outer ward's level at its wall's foot to the land's, eased out over
-        // CITADEL.hill.ease)
+        // (Its moat: its bed from its outer wall's foot to its far bank, its water over it; the
+        // glacis past it at the outer ward's level; the hill eased out from its edge over
+        // CITADEL.hill.ease into the land)
         const [outer] = citadel.wards;
         const turn = sideTurn(outer.sides, 2);
         const out = (r) => place([Math.cos(turn) * r, Math.sin(turn) * r]);
 
-        assert.ok(Math.abs(land.ground.heightAt(...out(outer.apothem + 0.5)) - set.pads[0].level) < 0.2);
-        assert.ok(Math.abs(land.ground.heightAt(...out(outer.apothem + CITADEL.hill.ease + 2)) - landHeight(world.plan, ...out(outer.apothem + CITADEL.hill.ease + 2))) < 1);
+        for (const r of [moatReach(citadel, "wall") + 1, (moatReach(citadel, "wall") + moatReach(citadel, "foot")) / 2, moatReach(citadel, "foot") - 0.5]) {
+            assert.ok(Math.abs(land.ground.heightAt(...out(r)) - set.pads[1].level) < 0.05, `moat's bed ${r.toFixed(1)} m out`);
+            assert.ok(Math.abs(land.surfaceAt(...out(r)) - set.water) < 1e-9);
+        }
+
+        assert.ok(Math.abs(land.ground.heightAt(...out(moatReach(citadel, "lip") + 4)) - set.pads[0].level) < 0.05, "the glacis");
+        assert.ok(Math.abs(land.ground.heightAt(...out(moatReach(citadel, "glacis") + CITADEL.hill.ease + 2)) - landHeight(world.plan, ...out(moatReach(citadel, "glacis") + CITADEL.hill.ease + 2))) < 1);
     });
 
-    it("takes every square inside its outer wall, under its outer towers and in its barbican (blocked, unseen through), its wards courtyards; the ground outside open", () => {
+    it("takes every square inside its outer wall, under its outer towers, on its bridge and in its gate tower (blocked, unseen through), its wards courtyards; its moat water, too deep to wade; the ground outside open, kept clear of fields and hedges", () => {
         const { land, set } = one;
         const { citadel, x, y, facing } = set;
         const [outer] = citadel.wards;
         const local = (px, py) => [(px - x) * Math.cos(facing) - (py - y) * Math.sin(facing), (px - x) * Math.sin(facing) + (py - y) * Math.cos(facing)];
         let [checked, outside] = [0, 0];
 
-        const [[u0, v0], , [u1, v1]] = barbicanOf(citadel);
-        let barbican = 0;
+        const { gatetower } = approachOf(citadel);
+        const inTower = ([u, v]) => u > gatetower.u0 + 0.5 && u < gatetower.u1 - 0.5 && v > gatetower.v0 + 0.5 && v < gatetower.v1 - 0.5;
+        let [tower, moat, fields] = [0, 0, 0];
 
-        for (let j = Math.floor(y) - 120; j < y + 120; j += 3) {
-            for (let i = Math.floor(x) - 120; i < x + 120; i += 3) {
+        for (let j = Math.floor(y) - 180; j < y + 180; j += 3) {
+            for (let i = Math.floor(x) - 180; i < x + 180; i += 3) {
                 const at = local(i + 0.5, j + 0.5);
-                const inBarbican = at[0] > u0 + 0.5 && at[0] < u1 - 0.5 && at[1] > v0 + 0.5 && at[1] < v1 - 0.5;
 
-                if (insideWard(citadel, outer, at, -0.5) || inBarbican) {
+                if (insideWard(citadel, outer, at, -0.5) || inTower(at)) {
                     checked++;
-                    barbican += inBarbican ? 1 : 0;
+                    tower += inTower(at) ? 1 : 0;
                     assert.ok(land.squares.blocked(i, j) && land.squares.opaque(i, j), `${i}, ${j} blocked`);
                     assert.equal(land.squares.ground(i, j), GROUND.courtyard);
-                } else if (!insideCitadel(citadel, at, 3) && !land.squares.blocked(i, j)) {
+                } else if (inMoat(citadel, at) && !insideCitadel(citadel, at, 1) && insideWard(citadel, { sides: outer.sides, apothem: moatReach(citadel, "foot") - 1 }, at)) {
+                    // (Water, too deep to wade, seen over)
+                    moat++;
+                    assert.ok(land.chunkAt(i, j).water[(j % CHUNK) * CHUNK + (i % CHUNK)] && land.squares.blocked(i, j) && !land.squares.opaque(i, j), `${i}, ${j} moat`);
+                    assert.ok(Math.abs(land.surfaceAt(i + 0.5, j + 0.5) - set.water) < 1e-9 && land.ground.heightAt(i + 0.5, j + 0.5) < set.water - 2);
+                } else if (!insideCitadel(citadel, at, 3) && !inMoat(citadel, at) && !land.squares.blocked(i, j)) {
                     outside++;
+                }
+
+                // (No fields nor hedges on the ground it keeps clear)
+                if (Math.hypot(i + 0.5 - x, j + 0.5 - y) < set.clearing - 1) {
+                    fields += land.landAt(i, j).crop || land.hedgeAt(i, j) ? 1 : 0;
                 }
             }
         }
 
-        assert.ok(checked > 2000 && barbican > 10 && outside > 200, `${checked} in (${barbican} in its barbican), ${outside} open outside`);
+        assert.ok(checked > 2000 && tower > 4 && moat > 300 && outside > 200, `${checked} in (${tower} in its gate tower), ${moat} of its moat, ${outside} open outside`);
+        assert.equal(fields, 0);
     });
 
     it("has its parts drawn by the chunks they stand in, each once", () => {
@@ -308,7 +340,7 @@ describe("a hill citadel drawn (world/art/kits/citadel.js, world/far/shapes.js)"
         assert.ok(tops.keep > tops.tower + 10, `the keep to ${tops.keep.toFixed(1)} m, the towers to ${tops.tower.toFixed(1)} m`);
     });
 
-    it("is seen from afar as its wards' walls and towers, its barbican, its hall and chapel and the keep, in under 2,000 triangles", () => {
+    it("is seen from afar as its wards' walls and towers, its moat, bridge and gate tower, its hall and chapel and the keep, in under 2,000 triangles", () => {
         const plan = planWorld(1);
         const shapes = new Shapes();
         const heightOf = (x, z) => landHeight(plan, x, z);

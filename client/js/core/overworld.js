@@ -335,6 +335,10 @@ export class Overworld {
             opaque: (x, y) => opaque(x, y) === 1,
             ground: read("ground", GROUND.grass),
         };
+
+        // (The humans' hill citadel set down at once, wherever the player is: its moat and the
+        // ground it keeps clear of fields are wanted from afar)
+        this.sites.settleCitadels();
     }
 
     /** Whether every chunk a box of squares touches has been made (and is kept). */
@@ -539,6 +543,13 @@ export class Overworld {
      * river higher up is never drawn at the river's height.
      */
     surfaceAt(x, y, river = this.waters.river(x, y, 24)) {
+        // (A citadel's moat, at its own level)
+        const moat = this.sites.moatLevelAt(x, y);
+
+        if (moat !== null) {
+            return moat;
+        }
+
         if (river && river.gap <= 0) {
             return river.surface;
         }
@@ -699,6 +710,14 @@ export class Overworld {
                 crops[k] = land.crop ?? 0;
                 blocked[k] = land.water && !land.bridge ? 1 : 0;
 
+                // (A citadel's moat: still water, too deep to wade, over a bed of mud)
+                if (this.sites.moatAt(x, y)) {
+                    water[k] = WET.still;
+                    ground[k] = GROUND.soil;
+                    crops[k] = 0;
+                    blocked[k] = 1;
+                }
+
                 // (A castle's, or a people's own place's: what's built there stands on it; a
                 // citadel's wards are courtyards)
                 const site = this.sites.squareAt(x, y);
@@ -845,10 +864,11 @@ export class Overworld {
         }
 
         // Fields in farmland (each block's farmed if the land at its middle is): soil where a strip's
-        // ploughed or sown, grass on its verges, baulks and fallow, and pasture
+        // ploughed or sown, grass on its verges, baulks and fallow, and pasture; none on the ground a
+        // citadel keeps clear round it
         const field = fieldAt(plan.seed, x, y);
         const [mx, my] = field.middle;
-        const farmed = field.crop !== CROP.none && plan.biome[cellAt(my) * CELLS + cellAt(mx)] === BIOME.farmland;
+        const farmed = field.crop !== CROP.none && plan.biome[cellAt(my) * CELLS + cellAt(mx)] === BIOME.farmland && !this.sites?.clearedAt(px, py);
 
         return { ground: farmed && sown(field.crop) ? GROUND.soil : GROUND.grass, water, bridge: false, road: null, crop: farmed ? field.crop + ALONG * field.along : 0 };
     }
@@ -858,7 +878,7 @@ export class Overworld {
      * drawing's alone (in no one's way).
      */
     hedgeAt(x, y) {
-        if (!hedgeLine(this.plan.seed, x, y)) {
+        if (!hedgeLine(this.plan.seed, x, y) || this.sites.clearedAt(x + 0.5, y + 0.5)) {
             return false;
         }
 
