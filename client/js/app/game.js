@@ -936,6 +936,7 @@ export class Game {
 
         this.town = await time("town", () => buildTown(world, {
             groundAt: this.groundOf("town") ?? undefined,
+            landAt: (x, z) => world.maps?.town?.biomeAt?.(x, z) ?? "meadow",
             onProgress: (count) => {
                 done = built + count;
                 report(count < world.town.pieces.length ? `Building the town (${count} of ${world.town.pieces.length})` : `Planting trees (${count - world.town.pieces.length} of ${world.trees.length})`);

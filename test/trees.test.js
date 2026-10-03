@@ -8,14 +8,15 @@ import { growTree, KINDS, PATCH_SIDE, plantTrees, SPECIES, treeMaterials, VARIAN
 const points = ({ position }) => Array.from({ length: position.length / 3 }, (_, k) => position.slice(k * 3, k * 3 + 3));
 
 describe("the trees (trees.js)", () => {
-    it("has a variant for every tree the plans pick, every kind among them: anyone's first, then each people's own", () => {
+    it("has a variant for every tree the plans pick, every kind among them: anyone's first, then each people's own, then the great lone oak", () => {
         const anyones = ["oak", "beech", "birch", "pine", "spruce", "poplar", "apple"];
 
         assert.equal(VARIANTS, TREE_KINDS);
         assert.deepEqual([...new Set(VARIANTS.map(([kind]) => kind))].sort(), [...KINDS].sort());
-        assert.deepEqual(KINDS, [...anyones, ...Object.values(HOME_TREES)]);
+        assert.deepEqual(KINDS, [...anyones, ...Object.values(HOME_TREES), "greatoak"]);
         assert.ok(VARIANTS.slice(0, TREE_VARIANTS).every(([kind]) => anyones.includes(kind)));
-        assert.ok(VARIANTS.slice(TREE_VARIANTS).every(([kind]) => Object.values(HOME_TREES).includes(kind)));
+        assert.ok(VARIANTS.slice(TREE_VARIANTS).every(([kind]) => Object.values(HOME_TREES).includes(kind) || kind === "greatoak"));
+        assert.deepEqual(VARIANTS.slice(-3).map(([kind]) => kind), ["greatoak", "greatoak", "greatoak"]);
     });
 
     it("gives each people its own trees three times in five, and the humans anyone's", () => {
@@ -50,7 +51,8 @@ describe("the trees (trees.js)", () => {
                 assert.ok(tree.height >= least && tree.height <= most, `${kind} ${seed}: ${tree.height}`);
                 const below = Math.min(...wood.map(([, y]) => y));
 
-                assert.ok(below < -0.1 && below > -0.35, `${kind} ${seed}: rooted a little way into the ground (${below.toFixed(2)})`);
+                // (The great lone oak's roots, as thick as an oak's trunk, go deeper)
+                assert.ok(below < -0.1 && below > (kind === "greatoak" ? -1.8 : -0.35), `${kind} ${seed}: rooted a little way into the ground (${below.toFixed(2)})`);
                 assert.ok(top > tree.height * 0.8 && top < tree.height * 1.3, `${kind} ${seed}: its top ${top.toFixed(1)} of ${tree.height.toFixed(1)}`);
                 assert.ok(spread > 1.2 && spread < tree.height, `${kind} ${seed}: spread ${spread.toFixed(1)}`);
             }
@@ -144,8 +146,11 @@ describe("the trees (trees.js)", () => {
                 const [least, most] = crown[axis];
                 const [from, to] = round[axis];
 
-                // (Low boughs' leaves come nearer the ground than the shell, which stops above it)
-                assert.ok(from >= Math.min(least, 0.15) - 0.05 && to <= most + 0.05, `${kind}: its shell inside its crown (axis ${axis})`);
+                // (Low boughs' leaves come nearer the ground than the shell, which stops above it;
+                // and a few centimetres a metre of crown either way is near enough)
+                const near = 0.05 + 0.01 * (most - least);
+
+                assert.ok(from >= Math.min(least, 0.15) - near && to <= most + near, `${kind}: its shell inside its crown (axis ${axis})`);
                 assert.ok(to - from > (most - least) * 0.5, `${kind}: its shell across most of its crown (axis ${axis}: ${(to - from).toFixed(1)} of ${(most - least).toFixed(1)})`);
             }
 

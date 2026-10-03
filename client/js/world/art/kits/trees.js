@@ -163,6 +163,19 @@ export const SPECIES = Object.freeze({
         foot: { flare: 0.6, roots: [4, 5], reach: [0.5, 0.8], tint: [0.5, 0.48, 0.55] },
         bark: "nightspire",
     },
+
+    // The great lone oak of the open land (core/lonetrees.js): an old field oak, twice the height
+    // of the trees round it, its short, massive trunk breaking low into great crooked limbs that
+    // reach out nearly level, the crown far wider than it's high
+    greatoak: {
+        height: [13, 16],
+        trunk: { radius: 0.78, reach: 0.55, taper: 0.5, lean: 0.06, crook: 0.3 },
+        boughs: { count: [8, 10], from: 0.3, to: 0.88, angle: [54, 82], length: [0.52, 0.64], shape: "spread", bend: 0.14, crook: 0.6, thickness: 0.6 },
+        branches: { count: [5, 7], from: 0.25, angle: [30, 60], length: [0.45, 0.62], bend: 0.12, crook: 0.5 },
+        leaves: { size: [1.9, 2.5], perBranch: 10, from: 0.3 },
+        foot: { flare: 1.3, roots: [6, 8], reach: [1.2, 1.9], tint: [0.62, 0.66, 0.52] },
+        bark: "greatoak",
+    },
 });
 
 /** The kinds, in the order of their pictures across the bark and the leaves' pictures. */
@@ -738,6 +751,8 @@ const BARKS = {
     willow: { base: "#5b5243", dark: "#2c261e", light: "#7a6f5c", pattern: "oak" },
     silverbark: { base: "#cfd2cb", dark: "#8c948f", light: "#eceee8", pattern: "beech" },
     nightspire: { base: "#2c2630", dark: "#110d14", light: "#4a4054", pattern: "spruce" },
+    // (The great lone oak's: an old oak's, darker and greyer, lichened)
+    greatoak: { base: "#7a7268", dark: "#3a322a", light: "#a49e88", pattern: "oak" },
 };
 
 // A kind's bark, 128 by 256 pixels, repeating up it
@@ -888,6 +903,7 @@ const FOLIAGE = {
     willow: { greens: ["#4c6420", "#6a8428", "#8ea43a"], shape: "narrow", length: [40, 56], count: 60 },
     silverbark: { greens: ["#6e8c46", "#a6bc6a", "#d8cf86"], shape: "oval", length: [38, 50], count: 34 },
     nightspire: { greens: ["#221e2a", "#312a3e", "#473b5a"], needles: "spray" },
+    greatoak: { greens: ["#2a4a18", "#3b6220", "#52782b"], shape: "lobed", length: [48, 64], count: 32 },
 };
 
 /**
@@ -1095,6 +1111,7 @@ const LITTER = {
     willow: { leaves: ["#7a7038", "#6a6232", "#8a7a3e"], size: 6 },
     silverbark: { leaves: ["#c8a848", "#b89a40", "#d8c070", "#a08a3c"], size: 7 },
     nightspire: { needles: ["#3a3044", "#2c2434", "#4a3c56"], cones: "#1e1822" },
+    greatoak: { leaves: ["#5a4630", "#6a5434", "#4a3a26", "#76603c"], size: 9 },
 };
 
 // The patch round a tree's foot, seen from above, fading out at its edge: bare earth, moss, and
@@ -1472,10 +1489,10 @@ export function treeObject(variant) {
 
 /**
  * Plant trees: [{ x, z (their trunks' feet, metres), variant, size (1: as grown), turn (radians
- * about the trunk) }], merged a `tile` metres square of the map at a time (the tiles out of view
- * aren't drawn), and the crowns' shells (casting their shadows) and the patches round their feet
- * all together: { object (a Group of the meshes), boxes (each tree's Box3 above the ground, in
- * order) }.
+ * about the trunk), tint ([r, g, b]: its leaves' colour, a multiplier: world/canopy.js) }], merged a
+ * `tile` metres square of the map at a time (the tiles out of view aren't drawn), and the crowns'
+ * shells (casting their shadows) and the patches round their feet all together: { object (a Group
+ * of the meshes), boxes (each tree's Box3 above the ground, in order) }.
  */
 export function plantTrees(placements, { tile = 24, groundAt = () => 0 } = {}) {
     const tiles = new Map();
@@ -1487,13 +1504,22 @@ export function plantTrees(placements, { tile = 24, groundAt = () => 0 } = {}) {
     const shells = [];
     const grounds = [];
 
-    for (const { x, z, variant, size = 1, turn = 0, y = groundAt(x, z) } of placements) {
+    for (const { x, z, variant, size = 1, turn = 0, y = groundAt(x, z), tint = null } of placements) {
         const { kind, wood, leaves, shell, patch } = grownGeometry(variant);
         const key = `${Math.floor(x / tile)},${Math.floor(z / tile)}`;
 
         matrix.compose(at.set(x, y, z), turned.setFromAxisAngle(UP, turn), scale.setScalar(size));
 
         const parts = [wood.clone().applyMatrix4(matrix), leaves.clone().applyMatrix4(matrix)];
+
+        // (Its leaves coloured as its land colours them)
+        if (tint) {
+            const colours = parts[1].attributes.color;
+
+            for (let k = 0; k < colours.count; k++) {
+                colours.setXYZ(k, colours.getX(k) * tint[0], colours.getY(k) * tint[1], colours.getZ(k) * tint[2]);
+            }
+        }
         const box = new THREE.Box3();
 
         for (const part of parts) {
@@ -1556,6 +1582,8 @@ export function plantTrees(placements, { tile = 24, groundAt = () => 0 } = {}) {
 const WOODLAND = Object.freeze({ trees: 2048, vertices: 48000, indices: 96000 });
 
 const _matrix = new THREE.Matrix4();
+const _tint = new THREE.Color();
+const WHITE = [1, 1, 1];
 const _turned = new THREE.Quaternion();
 const _scale = new THREE.Vector3();
 const _at = new THREE.Vector3();
@@ -1587,6 +1615,10 @@ export class Woodland {
 
         this.wood.castShadow = true;
 
+        // (Each tree's leaves coloured on their own, world/canopy.js: the batch's colours made now,
+        // so the leaves' shader's made at load with them, not the first time a tree's planted)
+        this.leaves._initColorsTexture();
+
         // Each variant's geometry in the batches ([wood, leaves] ids), and its box
         this.variants = new Map();
         this.planted = 0;
@@ -1596,9 +1628,10 @@ export class Woodland {
     }
 
     /**
-     * Plant a lot of trees: [{ x, z (their trunks' feet, metres), variant, size, turn }]. Returns
-     * the lot: { object (a Group of their shells and the patches round their feet, to add to the
-     * scene), boxes (each tree's Box3 above the ground, in order), ids }.
+     * Plant a lot of trees: [{ x, z (their trunks' feet, metres), variant, size, turn, tint (its
+     * leaves' colour: world/canopy.js) }]. Returns the lot: { object (a Group of their shells and
+     * the patches round their feet, to add to the scene), boxes (each tree's Box3 above the
+     * ground, in order), ids }.
      */
     plant(placements, groundAt = () => 0) {
         const shells = [];
@@ -1608,7 +1641,7 @@ export class Woodland {
 
         this.#room(placements.length);
 
-        for (const { x, z, variant, size = 1, turn = 0, y = groundAt(x, z) } of placements) {
+        for (const { x, z, variant, size = 1, turn = 0, y = groundAt(x, z), tint = WHITE } of placements) {
             const { wood, leaves, box } = this.#variant(variant);
             const { kind, shell, patch } = grownGeometry(variant);
 
@@ -1618,6 +1651,7 @@ export class Woodland {
 
             this.wood.setMatrixAt(pair[0], _matrix);
             this.leaves.setMatrixAt(pair[1], _matrix);
+            this.leaves.setColorAt(pair[1], _tint.setRGB(tint[0], tint[1], tint[2], THREE.LinearSRGBColorSpace));
             ids.push(pair);
 
             const placed = box.clone().applyMatrix4(_matrix);
