@@ -323,6 +323,15 @@ export class Navigation {
         return way;
     }
 
+    /**
+     * The way from one point to another over the tiles in already, none baked for it (path's
+     * corners, or [] if there's none over them): for what's only drawn (the way to the world
+     * map's pin), never stalling a frame to bake a tile.
+     */
+    wayIn(from, to) {
+        return this.#way(from, to);
+    }
+
     // The way over the tiles in already (path)
     #way(from, to) {
         const start = this.#nearestPoly(from);

@@ -2962,7 +2962,7 @@ test("a building gone into is marked on the minimap; holding the minimap opens t
     expect(map.drawn.icons).toEqual(["tavern"]);
     expect(map.drawn.names).toContain(map.town);
     await expect(page.getByRole("heading", { name: "The world" })).toBeVisible();
-    await expect(page.locator("#worldmapkey li")).toHaveCount(7);
+    await expect(page.locator("#worldmapkey li")).toHaveCount(8);
 
     // Zoomed right out, the whole world under its fog; Escape closes it and the game goes on
     await page.locator("#worldmapout").click();
@@ -2983,6 +2983,152 @@ test("a building gone into is marked on the minimap; holding the minimap opens t
     await page.keyboard.press("m");
     await expect(page.locator("#worldmap")).not.toBeVisible();
     expect(await page.evaluate(() => window.pellagos.game.running)).toBe(true);
+});
+
+test("on the world map a pin's dropped where it's held: a column of light where it stands and a line the way there, taken away held again; tapped twice, the player runs there, or is told there's no way", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // (The ground round the player found, a few chunks each way; the map opened on them)
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor("player");
+
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        for (let dx = -128; dx <= 128; dx += 32) {
+            for (let dy = -128; dy <= 128; dy += 32) {
+                game.explored.visit(me.x + dx, me.y + dy);
+            }
+        }
+    });
+    await page.keyboard.press("m");
+    await expect(page.locator("#worldmap")).toBeVisible();
+    await page.waitForFunction(() => window.pellagos.worldMap?.drawn, null, { polling: 100 });
+
+    // Where on the screen a point of the world is, the map as it's shown
+    const onScreen = ([x, z]) =>
+        page.evaluate(([x, z]) => {
+            const { worldMap } = window.pellagos;
+            const rect = worldMap.canvas.getBoundingClientRect();
+
+            return { x: rect.left + rect.width / 2 + (x - worldMap.view.x) / worldMap.view.scale, y: rect.top + rect.height / 2 + (z - worldMap.view.z) / worldMap.view.scale };
+        }, [x, z]);
+    const hold = async ({ x, y }) => {
+        await page.mouse.move(x, y);
+        await page.mouse.down();
+        await page.waitForTimeout(900);
+        await page.mouse.up();
+    };
+    const near = await page.evaluate(() => {
+        const me = window.pellagos.game.battle.actor("player");
+
+        return [me.x + 90, me.y - 60];
+    });
+
+    // Held still: a pin dropped there, the way there drawn on the map, and handed on to be kept
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        window.keptPins = [];
+        game.onPin = (pin) => window.keptPins.push(pin);
+    });
+    await hold(await onScreen(near));
+    await page.waitForFunction(() => window.pellagos.worldMap.drawn?.pin, null, { polling: 100 });
+
+    const dropped = await page.evaluate(() => {
+        const { game, worldMap } = window.pellagos;
+
+        return { pin: game.pin, kept: window.keptPins, way: worldMap.drawn.way, unpin: !document.querySelector("#worldmapunpin").hidden, note: document.querySelector("#worldmapnote").textContent };
+    });
+
+    expect(dropped.pin.map(Math.round)).toEqual(near.map(Math.round));
+    expect(dropped.kept).toEqual([dropped.pin]);
+    expect(dropped.way).toBeGreaterThan(1);
+    expect(dropped.unpin).toBe(true);
+    expect(dropped.note).toContain("Pinned");
+
+    // Closed: out in the world, its column where it stands, and a line along the ground to it
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#worldmap")).not.toBeVisible();
+
+    const world = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+        game.advance(0.5);
+
+        const marks = game.pinMarks;
+        const ground = game.groundOf("town");
+
+        return { column: marks.near.visible && marks.far.visible, foot: [marks.foot.value.x, marks.foot.value.z], ground: Math.abs(marks.foot.value.y - ground(game.pin[0], game.pin[1])) < 0.01, line: marks.line.visible, long: marks.lineLength.value, calls: game.view.renderer.info.render.calls };
+    });
+
+    expect(world.column).toBe(true);
+    expect(world.foot.map(Math.round)).toEqual(near.map(Math.round));
+    expect(world.ground).toBe(true);
+    expect(world.line).toBe(true);
+    expect(world.long).toBeGreaterThan(80);
+
+    // Held on the pin, it's taken away, its column and line with it
+    await page.evaluate(() => window.pellagos.game.start());
+    await page.keyboard.press("m");
+    await expect(page.locator("#worldmap")).toBeVisible();
+    await page.waitForFunction(() => window.pellagos.worldMap.drawn?.pin, null, { polling: 100 });
+
+    const head = await onScreen(near);
+
+    await hold({ x: head.x, y: head.y - 14 });
+    await page.waitForFunction(() => !window.pellagos.worldMap.drawn?.pin, null, { polling: 100 });
+    expect(await page.evaluate(() => ({ pin: window.pellagos.game.pin, kept: window.keptPins.at(-1), unpin: document.querySelector("#worldmapunpin").hidden }))).toEqual({ pin: null, kept: null, unpin: true });
+
+    // Tapped twice out at sea, where there's no way: told so, and nothing done
+    const sea = await page.evaluate(() => {
+        const { worldMap } = window.pellagos;
+
+        worldMap.view.x = 400;
+        worldMap.view.z = 400;
+        worldMap.draw();
+
+        return [120, 120];
+    });
+
+    await doubleTap(page, await onScreen(sea));
+    await expect(page.locator("#worldmapnote")).toHaveText("A path cannot be found");
+    await expect(page.locator("#worldmap")).toBeVisible();
+    expect(await page.evaluate(() => window.pellagos.game.journey)).toBeNull();
+
+    // Tapped twice near them: the map closes and they set off running there, a leg at a time
+    await page.locator("#worldmaphere").click();
+    await page.waitForTimeout(200);
+    await doubleTap(page, await onScreen(near));
+    await expect(page.locator("#worldmap")).not.toBeVisible();
+
+    const ran = await page.evaluate(([x, z]) => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor("player");
+        const before = Math.hypot(x - me.x, z - me.y);
+
+        game.stop();
+
+        const set = { journey: Boolean(game.journey), order: null, run: false };
+
+        for (let k = 0; k < 120 && game.journey; k++) {
+            game.advance(0.5, { render: false });
+
+            if (k === 1) {
+                Object.assign(set, { order: me.order?.type ?? null, run: Boolean(me.order?.run) });
+            }
+        }
+
+        return { ...set, before, after: Math.hypot(x - me.x, z - me.y), done: !game.journey };
+    }, near);
+
+    expect(ran.journey).toBe(true);
+    expect(ran.order).toBe("move");
+    expect(ran.run).toBe(true);
+    expect(ran.before).toBeGreaterThan(80);
+    expect(ran.after).toBeLessThan(6);
+    expect(ran.done).toBe(true);
 });
 
 test("the minimap walks the player where it's tapped, and Game options turn it and the sound off, remembered", async ({ page }) => {

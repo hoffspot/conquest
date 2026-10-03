@@ -2935,6 +2935,28 @@ dialog#worldmap::backdrop {
     display: none;
 }
 
+/* What's said of a pin dropped or taken away, or of a way there (none found) */
+.worldmap-note {
+    position: absolute;
+    left: 50%;
+    bottom: calc(var(--safe-bottom) + 24px);
+    transform: translateX(-50%);
+    margin: 0;
+    padding: 8px 14px;
+    max-width: calc(100vw - 32px);
+    border-radius: 12px;
+    border: 1px solid #64b4ff;
+    background: var(--panel);
+    color: var(--ink);
+    font-size: 14px;
+    text-align: center;
+    pointer-events: none;
+}
+
+.worldmap-note[hidden] {
+    display: none;
+}
+
 /* On a short screen (a phone on its side), the key keeps to one line */
 @media (max-height: 460px) {
     .worldmap-key {

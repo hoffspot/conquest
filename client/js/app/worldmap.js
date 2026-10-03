@@ -6,7 +6,9 @@
 // (painted a few at a time as they come into view, and kept); the settlements' names; icons over
 // the buildings they've gone into (app/mapicons.js); and where they are, pointing the way they
 // face. Drag to look about, pinch or scroll to zoom, and tap the buttons to zoom or come back to
-// where they are.
+// where they are. Hold a finger (or the mouse) down somewhere to drop a pin there (or on the pin,
+// to take it away), shown with the way there from where they are (the terrain plan's M7g); tap
+// twice somewhere to run there.
 
 import { WET } from "../core/overworld.js";
 import { BIOMES, CELL, CELLS, CHUNK, CHUNKS, WATER, WORLD_SIZE } from "../core/worldplan/plan.js";
@@ -42,6 +44,20 @@ const ICON_SIZE = 24;
 
 // Roads' colours and widths (metres; a pixel at least)
 const ROAD = { colour: "rgb(186, 160, 112)", width: 5 };
+
+/**
+ * Holding a finger down this long (ms) without moving it more than TAP_MOVE pixels drops a pin;
+ * tapping twice this soon (ms) within DOUBLE_REACH pixels is a double tap; and a hold this near the
+ * pin (pixels) takes it away.
+ */
+export const HOLD_MS = 550;
+const TAP_MOVE = 8;
+const DOUBLE_MS = 350;
+const DOUBLE_REACH = 18;
+const PIN_REACH = 22;
+
+// The pin and the way to it: their colours (the column's blue in the world)
+const PIN = { colour: "#64b4ff", glow: "rgba(100, 180, 255, 0.9)", way: "rgba(130, 196, 255, 0.85)" };
 
 // The fog: its colour (and how much its clouds vary from it), and how big a tile of its clouds is
 // (pixels of the screen)
@@ -201,6 +217,19 @@ export class WorldMap {
         this.onPick = null;
         this.pressed = null;
 
+        /** Heard with the point held ([x, z], metres) and whether it's on the pin (to drop it, or take it away). */
+        this.onHold = null;
+
+        /** Heard with the point tapped twice ([x, z], metres): to run there. */
+        this.onDoubleTap = null;
+
+        // The pin ({ x, z } metres, or null) and the way to it ([[x, z], ...] metres, or null);
+        // the hold under way (its timer), and the last tap (for a double tap)
+        this.pin = null;
+        this.way = null;
+        this.holding = 0;
+        this.lastTap = null;
+
         /** What was drawn last (for tests): { chunks (shown in detail), fogged, names, icons }. */
         this.drawn = null;
 
@@ -219,20 +248,47 @@ export class WorldMap {
 
     /**
      * Open it on where the player is (`player` { x, z, facing }: metres, radians), with icons
-     * over `icons` ([{ kind, x, z }]: the buildings they've gone into), and marks where their
-     * requests take them (`marks`: [{ x, z, label }]).
+     * over `icons` ([{ kind, x, z }]: the buildings they've gone into), marks where their
+     * requests take them (`marks`: [{ x, z, label }]), and their pin (`pin`: { x, z }, or null)
+     * and the way to it (`way`: [[x, z], ...], or null).
      */
-    open({ player, icons = [], marks = [] }) {
+    open({ player, icons = [], marks = [], pin = null, way = null }) {
         this.land ??= paintLand(this.world.plan);
         this.player = player;
         this.icons = icons;
         this.marks = marks;
+        this.pin = pin;
+        this.way = way;
+        this.lastTap = null;
 
         const [width, height] = this.#size();
 
         this.view = { scale: Math.max(NEAREST, OPENED / Math.max(1, Math.min(width, height))), x: player.x, z: player.z };
         this.#clamp();
         this.draw();
+    }
+
+    /**
+     * Show the pin somewhere else, or none (`pin`: { x, z }, or null), and the way to it (`way`:
+     * [[x, z], ...], or null); or no pin at all (null).
+     */
+    setPin(shown) {
+        this.pin = shown?.pin ?? null;
+        this.way = shown?.way ?? null;
+        this.redraw();
+    }
+
+    /** Whether a point on the canvas (pixels from its top left corner) is on the pin. */
+    onPin(sx, sy) {
+        if (!this.pin) {
+            return false;
+        }
+
+        const [width, height] = this.#size();
+        const [px, py] = [(this.pin.x - this.view.x) / this.view.scale + width / 2, (this.pin.z - this.view.z) / this.view.scale + height / 2];
+
+        // (The pin's head stands over its point)
+        return Math.hypot(sx - px, sy - (py - 14)) <= PIN_REACH;
     }
 
     /** The world's point (metres: [x, z]) at a point on the canvas (pixels from its top left corner). */
@@ -437,6 +493,11 @@ export class WorldMap {
             context.fill();
         }
 
+        // The way to the pin, and the pin: blue, glowing, fog or no
+        if (this.pin) {
+            this.#drawPin(at);
+        }
+
         // Where the player is, the way they face
         if (this.player) {
             const [x, y] = at(this.player.x, this.player.z);
@@ -458,7 +519,7 @@ export class WorldMap {
             context.restore();
         }
 
-        this.drawn = { chunks, fogged: CHUNKS * CHUNKS - this.explored.chunksVisited, names, icons, marks: (this.marks ?? []).length, scale: view.scale };
+        this.drawn = { chunks, fogged: CHUNKS * CHUNKS - this.explored.chunksVisited, names, icons, marks: (this.marks ?? []).length, pin: Boolean(this.pin), way: this.pin && this.way ? this.way.length : 0, scale: view.scale };
     }
 
     /**
@@ -469,6 +530,7 @@ export class WorldMap {
     rest() {
         cancelAnimationFrame(this.frame);
         clearTimeout(this.fallback);
+        clearTimeout(this.holding);
         this.frame = 0;
         this.layer = null;
 
@@ -485,6 +547,7 @@ export class WorldMap {
             this.canvas.removeEventListener(type, listener);
         }
 
+        clearTimeout(this.holding);
         cancelAnimationFrame(this.frame);
         clearTimeout(this.fallback);
         this.frame = 0;
@@ -521,6 +584,48 @@ export class WorldMap {
         context.setTransform(1, 0, 0, 1, 0, 0);
         context.drawImage(this.layer, 0, 0);
         context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    }
+
+    // The way to the pin (a glowing blue line, from where the player is), and the pin over its
+    // point: a blue head on a pin, glowing
+    #drawPin(at) {
+        const { context } = this;
+
+        context.save();
+        context.lineCap = context.lineJoin = "round";
+        context.shadowColor = PIN.glow;
+
+        if (this.way?.length > 1) {
+            context.shadowBlur = 8;
+            context.strokeStyle = PIN.way;
+            context.lineWidth = 3;
+            context.setLineDash([]);
+            context.beginPath();
+            this.way.forEach(([x, z], k) => context[k ? "lineTo" : "moveTo"](...at(x, z)));
+            context.stroke();
+        }
+
+        const [x, y] = at(this.pin.x, this.pin.z);
+
+        context.shadowBlur = 14;
+        context.strokeStyle = "rgba(20, 30, 50, 0.9)";
+        context.lineWidth = 2;
+        context.beginPath();
+        context.moveTo(x, y);
+        context.lineTo(x, y - 12);
+        context.stroke();
+        context.beginPath();
+        context.arc(x, y - 16, 7, 0, Math.PI * 2);
+        context.fillStyle = PIN.colour;
+        context.fill();
+        context.shadowBlur = 0;
+        context.lineWidth = 1.6;
+        context.stroke();
+        context.beginPath();
+        context.arc(x - 2, y - 18, 2.2, 0, Math.PI * 2);
+        context.fillStyle = "rgba(255, 255, 255, 0.8)";
+        context.fill();
+        context.restore();
     }
 
     // The roads between the settlements, as the plan has them (from cell middle to cell middle)
@@ -612,7 +717,27 @@ export class WorldMap {
     #down(event) {
         this.canvas.setPointerCapture?.(event.pointerId);
         this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-        this.pressed = this.pointers.size === 1 ? { x: event.clientX, y: event.clientY, moved: 0 } : null;
+        this.pressed = this.pointers.size === 1 ? { x: event.clientX, y: event.clientY, moved: 0, held: false } : null;
+
+        // (Held still long enough: a pin dropped, or taken away; not while picking somewhere)
+        clearTimeout(this.holding);
+
+        if (this.pressed && this.onHold && !this.onPick) {
+            const pressed = this.pressed;
+
+            this.holding = setTimeout(() => {
+                if (this.pressed !== pressed || pressed.moved >= TAP_MOVE) {
+                    return;
+                }
+
+                const rect = this.canvas.getBoundingClientRect();
+                const [sx, sy] = [pressed.x - rect.left, pressed.y - rect.top];
+
+                pressed.held = true;
+                this.lastTap = null;
+                this.onHold(this.pointAt(sx, sy), this.onPin(sx, sy));
+            }, HOLD_MS);
+        }
 
         if (this.pointers.size === 2) {
             const [a, b] = [...this.pointers.values()];
@@ -661,12 +786,26 @@ export class WorldMap {
 
     #up(event) {
         this.pointers.delete(event.pointerId);
+        clearTimeout(this.holding);
+
+        const tapped = this.pressed && this.pressed.moved < TAP_MOVE && !this.pressed.held && event.type === "pointerup";
+        const rect = this.canvas.getBoundingClientRect();
+        const [sx, sy] = [event.clientX - rect.left, event.clientY - rect.top];
 
         // (Picking somewhere: a tap, not a drag)
-        if (this.onPick && this.pressed && this.pressed.moved < 8 && event.type === "pointerup") {
-            const rect = this.canvas.getBoundingClientRect();
+        if (this.onPick && tapped) {
+            this.onPick(this.pointAt(sx, sy));
+        } else if (this.onDoubleTap && tapped) {
+            // (Twice, quickly, in the same place: run there)
+            const last = this.lastTap;
+            const now = event.timeStamp;
 
-            this.onPick(this.pointAt(event.clientX - rect.left, event.clientY - rect.top));
+            if (last && now - last.time <= DOUBLE_MS && Math.hypot(sx - last.x, sy - last.y) <= DOUBLE_REACH) {
+                this.lastTap = null;
+                this.onDoubleTap(this.pointAt(sx, sy));
+            } else {
+                this.lastTap = { time: now, x: sx, y: sy };
+            }
         }
 
         this.pressed = null;

@@ -243,6 +243,14 @@ minimap shows it, with the names of the places you've been and the icons of the 
 gone into. Drag to look about, pinch or scroll to zoom, and close it with the cross, Escape or M.
 What you've found is saved with your character.
 
+**Pins and running far.** On the world map, hold your finger (or the mouse) somewhere you've been
+to drop a pin there: out in the world a column of blue light rises from it high into the sky, seen
+from far off, and a thin glowing line runs along the ground from your feet the way you'd go; the
+map shows the way too. Hold on the pin (or tap the pin button) to take it away. Tap the map twice
+anywhere to run there: the map closes and you set off, along the roads where they help, round
+lakes and over bridges and fords; if there's no way there, the map says "A path cannot be found".
+Anything else you do stops you. Your pin's saved with your character.
+
 **Spells, and the action wheels.** Press and hold on yourself or on an enemy, and a see-through
 wheel opens round them, cut in eight like a compass: N, NE, E, SE, S, SW, W and NW. Keep holding
 and flick towards a slice to do what's in it; let go in the middle to change your mind. Flick

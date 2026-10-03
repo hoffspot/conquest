@@ -10,7 +10,7 @@ import { buildingsOf, interiorColours, mapColours, Minimap, paintPatch, painting
 import { ACTIONS, actionOf, assignable, DIRECTIONS, directionOf, drawWheel, FLIP, iconOf, offensive, PLACES, QUICK, readWheels, sectorPath, WHEELS } from "../client/js/app/wheel.js";
 import { SPELLS } from "../client/js/core/spells.js";
 import { ABILITIES, ITEMS, Progress } from "../client/js/core/progress.js";
-import { isHero, loadExplored, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadWheels, loadWorld, newSeed, SAVE_VERSION, saveExplored, saveProgress, saveSettings, saveStanding, saveTalks, saveWheels, saveWorld, SETTINGS_DEFAULTS, writeSave, clearSave } from "../client/js/app/save.js";
+import { isHero, loadExplored, loadPin, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadWheels, loadWorld, newSeed, SAVE_VERSION, saveExplored, savePin, saveProgress, saveSettings, saveStanding, saveTalks, saveWheels, saveWorld, SETTINGS_DEFAULTS, writeSave, clearSave } from "../client/js/app/save.js";
 import { Standing } from "../client/js/core/standing.js";
 import { Explored } from "../client/js/core/explored.js";
 import { BEARDS, HAIRSTYLES } from "../client/js/characters/hair.js";
@@ -217,6 +217,24 @@ describe("saving (save.js)", () => {
         assert.deepEqual(readWheels(loadWheels(save)), wheels);
         assert.equal(loadWheels({ ...save, created: "2026-09-27T10:00:00.000Z" }), null);
         assert.equal(saveWheels({ seed: 1 }, wheels), false);
+    });
+
+    it("keeps where a saved game's character has pinned on the world map, and that they've taken it away; not for another", () => {
+        useStorage();
+
+        const save = { seed: 12, created: "2026-10-03T10:00:00.000Z" };
+
+        assert.equal(loadPin(save), null);
+        assert.equal(savePin(save, [3190.5, 4892.5]), true);
+        assert.deepEqual(loadPin(save), [3190.5, 4892.5]);
+        assert.equal(loadPin({ ...save, seed: 13 }), null);
+        assert.equal(savePin(save, null), true);
+        assert.equal(loadPin(save), null);
+        assert.equal(savePin({ seed: 1 }, [1, 2]), false);
+
+        // (Anything else kept there isn't a pin)
+        globalThis.localStorage.setItem("pellagos.pin", JSON.stringify({ ...save, pin: ["a", 2] }));
+        assert.equal(loadPin(save), null);
     });
 
     it("still plays when the browser won't store anything", () => {

@@ -20,7 +20,7 @@ import { registerServiceWorker } from "./app/device.js";
 import { Debug } from "./app/debug.js";
 import { formatBytes, Loader } from "./app/loader.js";
 import { MANIFEST } from "./app/manifest.js";
-import { loadExplored, loadFollowers, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadWheels, loadWorld, newSeed, saveExplored, saveFollowers, saveProgress, saveSettings, saveStanding, saveTalks, saveWheels, saveWorld, writeSave } from "./app/save.js";
+import { loadExplored, loadFollowers, loadPin, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadWheels, loadWorld, newSeed, saveExplored, saveFollowers, savePin, saveProgress, saveSettings, saveStanding, saveTalks, saveWheels, saveWorld, writeSave } from "./app/save.js";
 import { WEAPONS } from "./core/weapons.js";
 
 const params = new URLSearchParams(location.search);
@@ -355,6 +355,8 @@ async function playing(save) {
         war: loadWorld(save),
         onWar: (war) => saveWorld(save, war.snapshot()),
         onWorldMap: openWorldMap,
+        pin: loadPin(save),
+        onPin: (pin) => savePin(save, pin),
     });
 
     state.worldMap?.dispose();
@@ -510,7 +512,50 @@ async function openWorldMap({ pick = null } = {}) {
               pick(point);
           }
         : null;
+
+    // (Held: a pin dropped where they've been, or the one there taken away; tapped twice: run
+    // there, if there's a way)
+    map.onHold = (point, onPin) => {
+        if (onPin) {
+            unpin();
+        } else if (!map.uncovered(point)) {
+            mapNote("You haven't been there: drop a pin somewhere you've been");
+        } else {
+            map.setPin(game.setPin(point));
+            $("#worldmapunpin").hidden = false;
+            mapNote(map.pin && !map.way ? "Pinned, but a path cannot be found there" : "Pinned: a column of light marks it, and a line the way there");
+        }
+    };
+    map.onDoubleTap = (point) => {
+        const result = game.journeyTo(point);
+
+        if (result.ok) {
+            closeWorldMap();
+        } else {
+            mapNote(result.reason === "indoors" ? "Step outside to set off" : "A path cannot be found");
+        }
+    };
+    $("#worldmapunpin").hidden = !game.pin;
+    $("#worldmapnote").hidden = true;
     map.open(game.worldMapView());
+}
+
+// The world map's pin taken away
+function unpin() {
+    state.game?.clearPin();
+    state.worldMap?.setPin(null);
+    $("#worldmapunpin").hidden = true;
+    mapNote("The pin's taken away");
+}
+
+// Something said on the world map for a moment
+function mapNote(text) {
+    const note = $("#worldmapnote");
+
+    note.textContent = text;
+    note.hidden = false;
+    clearTimeout(state.mapNoted);
+    state.mapNoted = setTimeout(() => (note.hidden = true), 2800);
 }
 
 function closeWorldMap() {
@@ -553,6 +598,25 @@ async function keyOf() {
 
     fog.append(Object.assign(document.createElement("span"), { className: "fog" }), "Not yet explored");
     list.append(fog);
+
+    // (The pin: held down to drop it; and tapping twice to run)
+    const pin = document.createElement("li");
+    const glyph = Object.assign(document.createElement("canvas"), { width: 44, height: 44 });
+    const context = glyph.getContext("2d");
+
+    context.strokeStyle = "rgba(20, 30, 50, 0.9)";
+    context.lineWidth = 3;
+    context.beginPath();
+    context.moveTo(22, 40);
+    context.lineTo(22, 22);
+    context.stroke();
+    context.beginPath();
+    context.arc(22, 15, 10, 0, Math.PI * 2);
+    context.fillStyle = "#64b4ff";
+    context.fill();
+    context.stroke();
+    pin.append(glyph, "Hold: drop a pin · tap twice: run there");
+    list.append(pin);
 }
 
 $("#worldmapclose").addEventListener("click", closeWorldMap);
@@ -560,6 +624,7 @@ $("#worldmapcancel").addEventListener("click", closeWorldMap);
 $("#worldmapin").addEventListener("click", () => state.worldMap?.zoom(0.6));
 $("#worldmapout").addEventListener("click", () => state.worldMap?.zoom(1 / 0.6));
 $("#worldmaphere").addEventListener("click", () => state.worldMap?.centre());
+$("#worldmapunpin").addEventListener("click", unpin);
 $("#worldmap").addEventListener("cancel", (event) => {
     event.preventDefault();
     closeWorldMap();

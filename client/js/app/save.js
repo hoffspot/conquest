@@ -20,6 +20,7 @@ const PROGRESS_KEY = "pellagos.progress";
 const STANDING_KEY = "pellagos.standing";
 const FOLLOWERS_KEY = "pellagos.followers";
 const WHEELS_KEY = "pellagos.wheels";
+const PIN_KEY = "pellagos.pin";
 
 /** The save format's version: a save from another version is set aside, not misread. */
 export const SAVE_VERSION = 1;
@@ -203,6 +204,19 @@ export function loadWheels(save) {
 /** Keep what the character's put on their action wheels, in a saved game. */
 export function saveWheels(save, wheels) {
     return save?.created ? write(WHEELS_KEY, { created: save.created, seed: save.seed, wheels }) : false;
+}
+
+/** Where the character's pinned on the world map, in a saved game ([x, z] metres), or null (none, or another game's). */
+export function loadPin(save) {
+    const kept = read(PIN_KEY);
+    const ours = kept && save?.created && kept.created === save.created && kept.seed === save.seed;
+
+    return ours && Array.isArray(kept.pin) && kept.pin.length === 2 && kept.pin.every(Number.isFinite) ? kept.pin : null;
+}
+
+/** Keep where the character's pinned on the world map (or that they've none: null), in a saved game. */
+export function savePin(save, pin) {
+    return save?.created ? write(PIN_KEY, { created: save.created, seed: save.seed, pin }) : false;
 }
 
 /**
