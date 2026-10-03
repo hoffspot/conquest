@@ -33,7 +33,21 @@ export function torch(solid, [x, y, z], [ox, oz]) {
     solid.beam([x, y - m(0.05), z], ring, m(0.035), m(0.035), iron);
     solid.beam(foot, top, m(0.07), m(0.07), material("timber"));
     solid.beam([ring[0] - px * m(0.06), ring[1], ring[2] - pz * m(0.06)], [ring[0] + px * m(0.06), ring[1], ring[2] + pz * m(0.06)], m(0.03), m(0.03), iron);
-    (solid.lights ??= []).push([top[0], top[1], top[2], "torch"]);
+    // (Its flame, and the way out from the wall it's on: nothing behind the wall's lit by it)
+    (solid.lights ??= []).push([top[0], top[1], top[2], "torch", ox, oz]);
+}
+
+/**
+ * A fire burning in the open, its foot at `at` ([x, y, z], world pixels): a brazier's, a forge's,
+ * a fire bowl's (world/lights.js LIGHTS' kinds), drawn and lighting what's round it as fires are.
+ */
+export function fireLight(solid, [x, y, z], kind = "brazier") {
+    (solid.lights ??= []).push([x, y, z, kind]);
+}
+
+/** A torch's flame on its own (a torch on a post, in a cage: no bracket), at its top ([x, y, z], world pixels). */
+export function lightTorch(solid, [x, y, z]) {
+    (solid.lights ??= []).push([x, y, z, "torch"]);
 }
 
 /** A lantern's light, at its middle ([x, y, z], world pixels): its glass is "glass-lit". */

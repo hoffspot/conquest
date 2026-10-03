@@ -98,4 +98,85 @@ describe("how spells look (spellfx.js)", () => {
             }
         }
     });
+
+    it("burns the fire spells as fire (world/fire.js), a lick of it at the least to a column reaching the clouds at the greatest, each lighting what's round it", () => {
+        const fire = Object.entries(SPELLS)
+            .filter(([, spell]) => spell.school === "fire")
+            .sort(([, a], [, b]) => a.tier - b.tier)
+            .map(([id]) => {
+                const effects = { glow: { emit: () => {} }, dust: { emit: () => {} } };
+                const fx = new SpellFx(effects, new THREE.Scene(), { lights: [] });
+                const at = (x, z, y = 0) => () => new THREE.Vector3(x, y, z);
+                const one = (x, z) => ({ feet: at(x, z), point: at(x, z, 1.1), hand: at(x + 0.3, z, 1.2) });
+                const seen = { tallest: 0, fires: 0, brightest: 0 };
+                const blaze = fx.blaze.bind(fx);
+
+                fx.blaze = (spot, settings) => {
+                    seen.tallest = Math.max(seen.tallest, settings.height ?? 1);
+                    seen.fires++;
+
+                    return blaze(spot, settings);
+                };
+                fx.land("caster", id, { caster: one(0, 0), target: one(0, -4) });
+
+                for (let time = 0; time < 1.5; time += 1 / 30) {
+                    fx.update(1 / 30);
+
+                    for (const light of fx.lightsNow()) {
+                        seen.brightest = Math.max(seen.brightest, light.strength * light.fade);
+                        assert.equal(light.priority, 1, `${id}: first of the lights near`);
+                    }
+                }
+
+                // (Its own flames growing and dying away: a copy of the fires' material each)
+                const flames = fx.group.children.filter((child) => child.name === "flames");
+
+                assert.ok(flames.every((mesh) => mesh.material.uniforms.fireSize.value <= 1), id);
+
+                for (let time = 0; time < 12; time += 1 / 30) {
+                    fx.update(1 / 30);
+                }
+
+                assert.equal(fx.lightsNow().length, 0, `${id}: its lights out once it's done`);
+                assert.equal(fx.group.children.filter((child) => child.name === "flames").length, 0, `${id}: its fire gone`);
+                fx.clear();
+
+                return { id, ...seen };
+            });
+
+        for (let k = 1; k < fire.length; k++) {
+            const [lesser, greater] = [fire[k - 1], fire[k]];
+
+            assert.ok(greater.tallest >= lesser.tallest || greater.fires > lesser.fires, `${greater.id} grander than ${lesser.id}`);
+            assert.ok(greater.brightest >= lesser.brightest, `${greater.id} (${greater.brightest}) lights more than ${lesser.id} (${lesser.brightest})`);
+        }
+
+        assert.ok(fire[0].tallest <= 0.6 && fire[0].fires === 1, "burn: a lick of flame");
+        assert.ok(fire.at(-1).tallest >= 20, "hellfire: a column reaching the clouds");
+        assert.ok(fire.every(({ brightest }) => brightest > 0), "every one lighting what's round it");
+    });
+
+    it("lights its flashes and fireballs in flight as lights of its own, not lending the view's lamps", () => {
+        const fx = new SpellFx({ glow: { emit: () => {} }, dust: { emit: () => {} } }, new THREE.Scene(), { lights: [] });
+        let [x, z] = [0, 0];
+
+        fx.flash(new THREE.Vector3(1, 1, 1), { colour: 0xffffff, intensity: 30, distance: 9, life: 0.4 });
+        assert.deepEqual(fx.lightsNow().map(({ strength, reach, fade, steady }) => [strength, reach, fade, steady]), [[28, 9, 1, 0]], "as bright as a flash may be, not flickering");
+        fx.update(0.2);
+        assert.ok(Math.abs(fx.lightsNow()[0].fade - 0.25) < 1e-9, "fading");
+        fx.update(0.3);
+        assert.equal(fx.lightsNow().length, 0);
+
+        fx.throw("ball", () => new THREE.Vector3(0, 1, 0), () => new THREE.Vector3(x, 1, z), { travel: 0.5, light: { strength: 6, reach: 7 } });
+        x = 4;
+        z = -4;
+        fx.update(0.25);
+
+        const [ball] = fx.lightsNow();
+
+        assert.ok(ball.x > 1 && ball.z < -1 && ball.strength === 6, "where the fireball is");
+        fx.update(0.3);
+        assert.equal(fx.lightsNow().length, 0, "out once it's landed");
+        assert.equal(fx.group.children.filter((child) => child.isLight).length, 0, "no lights of its own added");
+    });
 });

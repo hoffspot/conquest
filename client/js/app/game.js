@@ -67,6 +67,7 @@ import { KINDS, Wounds } from "../world/wounds.js";
 import { Chunks, DECK, LOAD_BUDGET, REACH } from "../world/chunks3d.js";
 import { TallGrass } from "../world/grass.js";
 import { Motes } from "../world/motes.js";
+import { EMBER_SCALE } from "../world/fire.js";
 import { GLOW_SCALE } from "../world/lights.js";
 import { SMOKE_SHARE } from "../world/smoke.js";
 import { FarLand } from "../world/far/far.js";
@@ -711,13 +712,15 @@ export class Game {
         this.view.setLook(this.landLook.update(x, z, dt));
     }
 
-    // The torches, lanterns and camp fires nearest the player at (x, z) (metres) lighting what's
-    // round them at night (world/lights.js: the view's lamps), the rest of them glowing
+    // The torches, lanterns, braziers and camp fires nearest the player at (x, z) (metres), and the
+    // spells' fire and flashes, each lighting what's round it (world/lights.js: the view's lamps
+    // and the world's list of lights; a spell's first)
     #lightNear(x, z) {
         const lights = this.chunks.lightsNear(x, z, LIGHT_REACH, (this.nearLights ??= []));
 
-        lights.push(...(this.town?.lights ?? []), ...(this.camps?.lights() ?? []));
+        lights.push(...(this.town?.lights ?? []), ...(this.camps?.lights() ?? []), ...(this.spellFx?.lightsNow() ?? []));
         GLOW_SCALE.value = this.view.pixelsPerMetre();
+        EMBER_SCALE.value = GLOW_SCALE.value;
         this.view.lightNear(lights, _lit.set(x, this.avatars.get(this.me).object.position.y + 1.2, z));
     }
 
@@ -953,7 +956,9 @@ export class Game {
         this.contacts = new ContactShadows();
         view.scene.add(this.contacts.mesh);
         this.ailments = new Ailments3D(this.effects.group);
-        this.spellFx = new SpellFx(this.effects, view.scene, { lights: view.lamps.map((lamp) => lamp.light) });
+        // (Its fire, flashes and fireballs lighting what's round them as the world's fires do, each
+        // a light of its own: lightsNow, #lightNear; not lent the view's lamps)
+        this.spellFx = new SpellFx(this.effects, view.scene, { lights: [] });
         this.spellFx.camera = view.camera;
         this.spellFx.onShake = (amount) => (this.shaking = Math.max(this.shaking, amount));
         this.spellFx.onScreen = (colour, strength, seconds) => this.#wash(colour, strength, seconds);
@@ -3828,7 +3833,6 @@ export class Game {
         }
 
         this.doors?.update(dt, this.clock, { map: this.mapId, heading: player?.order?.type === "enter" ? player.order.link : null });
-        this.camps?.update(this.clock);
 
         const me = this.avatars.get(this.me)?.object.position;
 

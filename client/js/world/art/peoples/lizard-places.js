@@ -22,6 +22,7 @@ import { flagpole } from "../../cloth.js";
 import { material } from "../engine/materials.js";
 import { inset, Solid } from "../engine/solid.js";
 import { emblemSignTexture, loadSignFont, nameBoardTexture, signMaterial } from "../kits/signs.js";
+import { fireLight } from "../kits/torches.js";
 import { band, CELL, circle, ENTRY, lamp, m, pole, post, randomFor, stake, steps, wallPoint } from "./kit.js";
 import { apsidal, deckHouse, egg, hipThatch, marshHut, rail, reedHouse, serpent, stilts, toned } from "./lizard.js";
 
@@ -224,6 +225,7 @@ export async function blacksmith(piece) {
 
     solid.extrude([[fx - m(0.8), fz - m(0.6)], [fx + m(0.8), fz - m(0.6)], [fx + m(0.8), fz + m(0.6)], [fx - m(0.8), fz + m(0.6)]], 0, m(0.9), material("mud-red"));
     solid.facing([[fx - m(0.5), m(0.91), fz - m(0.35)], [fx + m(0.5), m(0.91), fz - m(0.35)], [fx + m(0.5), m(0.91), fz + m(0.35)], [fx - m(0.5), m(0.91), fz + m(0.35)]], [0, 1, 0], material("glow-fire"));
+    fireLight(solid, [fx, m(0.91), fz], "brazier");
     solid.box(fx - m(0.3), 0, fz + m(1.2), fx + m(0.3), m(0.7), fz + m(1.5), material("iron-black"));
     solid.box(sx0 + m(0.3), 0, sz1 - m(1), sx0 + m(1.7), m(0.5), sz1 - m(0.4), material("stone-lime"));
     solid.box(sx0 + m(0.4), m(0.5), sz1 - m(0.9), sx0 + m(1.6), m(0.45), sz1 - m(0.5), material("water-green"));

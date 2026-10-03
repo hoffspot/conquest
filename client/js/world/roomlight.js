@@ -1,6 +1,7 @@
 // The flames lighting a room indoors (interiors3d.js: every hearth's fire, wheel of candles,
 // candle and sconce), each lighting the walls, floor, ceiling and furniture round it as a point
-// light does, falling off with distance out to its reach, flickering as flames do.
+// light does, falling off with distance out to its reach, flickering as flames do: a hearth's
+// fire or a candle as its flame drawn does (fire.js: the same signal, seed and clock).
 //
 // Three.js gives every lit material in the scene the same lights, so each one costs every
 // fragment drawn, out of doors too; a room has a dozen. So the insides' own materials (drawn
@@ -12,6 +13,7 @@
 // Pure maths on plain numbers but for the uniforms, so it's tested in Node.
 
 import * as THREE from "three";
+import { fireSignal, fireStrength } from "./fire.js";
 
 /** How many lights a room can have (a room with more has its nearest candles taken together). */
 export const ROOM_LIGHTS = 16;
@@ -101,14 +103,23 @@ export function roomLit(shader) {
 // How long a flaring light (a forge's fire, the bellows pumped) takes to die down (seconds)
 const FLARE = 1;
 
+const _signal = { puff: 0, gust: 0 };
+
 /**
  * How bright a light is at `time` (seconds): its `intensity`, flickering by its `flicker` (a
  * share of it: a fire's lively, a lamp's steadier), each its own way (`seed`), flared up by
- * `flare` ({ amount, at }: that much brighter at `at`, dying down over a second).
+ * `flare` ({ amount, at }: that much brighter at `at`, dying down over a second). A light with
+ * a flame drawn (its `rate`, a second, and `steady`: fire.js's) rises and falls as that flame
+ * does, by the drawing's clock (`fireTime`: WINDOW_LIGHT.z, as the flame has it).
  */
-export function strengthOf({ intensity, flicker = 0, seed = 0 }, time, flare = null) {
-    const wave = Math.sin(time * 9.1 + seed) * 0.5 + Math.sin(time * 23.7 + seed * 2) * 0.3 + Math.sin(time * 4.3 + seed * 0.5) * 0.2;
+export function strengthOf({ intensity, flicker = 0, seed = 0, rate = 0, steady = 1 }, time, flare = null, fireTime = time) {
     const flaring = flare ? flare.amount * Math.max(0, 1 - (time - flare.at) / FLARE) : 0;
+
+    if (rate > 0) {
+        return intensity * fireStrength(fireSignal(seed, rate, fireTime, _signal), steady) * (1 + flaring);
+    }
+
+    const wave = Math.sin(time * 9.1 + seed) * 0.5 + Math.sin(time * 23.7 + seed * 2) * 0.3 + Math.sin(time * 4.3 + seed * 0.5) * 0.2;
 
     return intensity * (1 + flicker * wave) * (1 + flaring);
 }

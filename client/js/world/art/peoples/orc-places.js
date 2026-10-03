@@ -19,6 +19,7 @@ import { PEOPLE_PLACES } from "../../../core/setpieces/pieces.js";
 import { material } from "../engine/materials.js";
 import { add3, inset, Solid } from "../engine/solid.js";
 import { emblemSignTexture, loadSignFont, nameBoardTexture, signMaterial } from "../kits/signs.js";
+import { fireLight } from "../kits/torches.js";
 import { band, CELL, circle, ENTRY, lamp, m, pole, post, randomFor, southSide, spike, stake, steps, wallPoint } from "./kit.js";
 import { blockHouse, longhouse, rack, roundHut, skull, standard, tent, toned, tusk, warBanner } from "./orc.js";
 
@@ -46,7 +47,9 @@ function brazier(solid, x, z, { y = 0 } = {}) {
     }
 
     solid.lathe(x, z, [[m(0.15), y + m(0.95)], [m(0.45), y + m(1.15)], [m(0.5), y + m(1.3)], [0, y + m(1.3)]], material("iron-black"), { segments: 8 });
-    solid.lathe(x, z, [[m(0.42), y + m(1.28)], [m(0.2), y + m(1.45)], [0, y + m(1.5)]], material("glow-fire"), { segments: 6 });
+    solid.lathe(x, z, [[m(0.42), y + m(1.28)], [0, y + m(1.32)]], material("embers"), { segments: 6 });
+    // (Its fire, burning day and night: world/fire.js)
+    fireLight(solid, [x, y + m(1.3), z], "brazier");
 }
 
 // A heap of offered or looted things: shields, blades, helmets, bones
@@ -275,9 +278,12 @@ export async function blacksmith(piece) {
 
     solid.extrude([[fx - m(1.3), fz - m(1)], [fx + m(1.3), fz - m(1)], [fx + m(1.3), fz + m(1)], [fx - m(1.3), fz + m(1)]], 0, m(1), material("basalt"));
     solid.facing([[fx - m(0.9), m(1.01), fz - m(0.6)], [fx + m(0.9), m(1.01), fz - m(0.6)], [fx + m(0.9), m(1.01), fz + m(0.6)], [fx - m(0.9), m(1.01), fz + m(0.6)]], [0, 1, 0], material("glow-fire"));
+    fireLight(solid, [fx, m(1.01), fz], "brazier");
     solid.extrude([[fx - m(0.8), fz - m(1)], [fx + m(0.8), fz - m(1)], [fx + m(0.6), fz - m(0.2)], [fx - m(0.6), fz - m(0.2)]], m(1), m(8), material("basalt"), { batter: m(0.3) });
     solid.lathe(fx, fz - m(0.6), [[m(0.7), m(8)], [m(0.9), m(8.3)], [m(0.5), m(8.9)], [0, m(9)]], material("plates"), { segments: 6 });
-    solid.lathe(fx, fz - m(0.6), [[m(0.45), m(8.9)], [0, m(9.15)]], material("glow-fire"), { segments: 6 });
+    solid.lathe(fx, fz - m(0.6), [[m(0.45), m(8.9)], [0, m(8.95)]], material("embers"), { segments: 6 });
+    // (Its chimney's top burning, a beacon: world/fire.js)
+    fireLight(solid, [fx, m(8.95), fz - m(0.6)], "brazier");
 
     const [ax, az] = [fx - m(1.5), fz + m(2.4)];
 

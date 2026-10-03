@@ -10,6 +10,7 @@
 // plots, facing south.
 
 import { createRandom } from "../../../core/random.js";
+import { fireLight, lightTorch } from "./torches.js";
 import { NEUTRAL } from "../../../core/setpieces/neutral.js";
 import { PLOT } from "../../../core/setpieces/pieces.js";
 import { material } from "../engine/materials.js";
@@ -258,7 +259,8 @@ const BUILD = {
 
         solid.lathe(cx, cz, [[m(0.08), m(0.8)], [m(0.34), m(0.95)], [m(0.36), m(1.05)]], iron, { segments: 10 });
         solid.cylinder(cx, cz, m(0.95), m(1.02), m(0.3), m(0.3), material("embers"), { segments: 10 });
-        solid.cone(cx, cz, m(1.0), m(0.55), m(0.22), material("glow-fire"), 6);
+        // (Its fire, burning day and night: world/fire.js)
+        fireLight(solid, [cx, m(1.02), cz], "brazier");
     },
 
     // A curved wall behind the shrine, broken off unevenly
@@ -449,7 +451,9 @@ const BUILD = {
 
         solid.cylinder(cx, cz, -m(0.6), m(1.9), m(0.07), m(0.06), material("timber-char"), { segments: 6 });
         solid.cylinder(cx, cz, m(1.9), m(2.15), m(0.14), m(0.17), material("iron-black"), { segments: 6, capped: false });
-        solid.cone(cx, cz, m(1.95), m(0.5), m(0.12), material("glow-fire"), 6);
+        solid.cylinder(cx, cz, m(1.92), m(1.98), m(0.1), m(0.1), material("embers"), { segments: 6 });
+        // (Its flame, at night: world/fire.js)
+        lightTorch(solid, [cx, m(1.98), cz]);
     },
 
     // A stretch of an old hall's wall, crumbled (kits/decay.js): its top broken a stone at a time,

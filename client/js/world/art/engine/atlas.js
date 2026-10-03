@@ -26,6 +26,7 @@
 
 import * as THREE from "three";
 import { COLOURS, GLOWS, MATERIALS, paintLayer, TINTS } from "./painters.js";
+import { fireLit } from "../../firelight.js";
 
 /** How many pixels square each layer is painted. */
 export const LAYER_SIZE = 256;
@@ -268,7 +269,10 @@ export function atlasMaterial() {
     material.shadowSide = THREE.DoubleSide;
     material.userData.atlas = uniforms.atlasMap.value;
     material.userData.uniforms = uniforms;
-    material.onBeforeCompile = (shader) => fromAtlas(shader, uniforms, { shine: true, windows: true });
+    material.onBeforeCompile = (shader) => {
+        fromAtlas(shader, uniforms, { shine: true, windows: true });
+        fireLit(shader);
+    };
     material.customProgramCacheKey = () => "atlas";
     shared = material;
 
@@ -336,6 +340,7 @@ transformed.z += wildHow * 0.6 * cos(wildsTime * 1.9 + wildPhase * 1.3);
 transformed.y = mix(transformed.y, foot - 0.06, smoothstep(wildsFade.x, wildsFade.y, distance(wildAt.xz, wildsFocus)));`);
         // (Both sides lit alike: a blade's back as its front)
         shader.fragmentShader = shader.fragmentShader.replace("#include <normal_fragment_begin>", "#include <normal_fragment_begin>\nnormal *= faceDirection;");
+        fireLit(shader);
     };
     material.customProgramCacheKey = () => "wilds";
     wilds = material;

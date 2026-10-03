@@ -762,28 +762,58 @@ a look of its own (`LOOKS`), which the world takes on round the player:
   three minutes before the dusk to the night's start, the town's windows come on one after
   another; all night they're lit (some going out after midnight), and through the dawn they go
   out.
-- **Torches, lanterns and camp fires** (world/lights.js, kits/torches.js), lit as the windows are
-  (by the evening's `WINDOW_LIGHT`), out by day:
+- **Fire** (world/fire.js, lights.js, firelight.js, kits/torches.js): every fire in the game is
+  drawn and lit the same way, from a candle to a fire spell. You asked for wavy, realistic fire
+  ("Real fire is kind of wavy"), each fire its own light ("Shouldn't the torches and the spells
+  be their own independent light sources?"), and the candles, chandeliers and spells to share it.
   - **Where:** torches in iron brackets either side of a keep's door (a capital's too) and of a
-    gatehouse's way through, inside and out; the lanterns already by taverns' and town halls'
-    doors; the war camps' fires. A kit marks each (a built piece's `userData.lights`, as its
-    chimneys' tops are its `userData.smoke`); `lightsOf` finds them in the world.
-  - **Drawn:** each torch's flame (a square turned to the camera, its fire worked out in the
-    shader) and every light's soft glow, all of a chunk's (or the town's) in one mesh of each:
-    two draws, whatever how many.
-  - **The flicker:** one fire's flicker (`fireFlicker`: smooth noise at three rates, a slow swell,
-    a quicker guttering and a fast flutter; each light its own from where it is) drives the flame,
-    its glow and the light it casts, the same sums in JavaScript and on the GPU (its hash taken
-    round 289, so 32-bit floats give the same, within half a percent, however long the game's
-    run). As it flares the flame stands taller and yellower, the glow swells, and the light's
-    stronger, yellower and a few centimetres higher; as it gutters, lower, redder and weaker. A
-    torch's light wanders by about 14% either side of its strength, a camp fire's 12%, a
-    lantern's behind its glass 4%.
-  - **Their light:** the two nearest the player within their reach light what's round them (the
-    view's two lamps, which the insides' flames use indoors: on every quality, and nothing new for
-    the shaders), fading out towards their reach's edge so one's handed to the next unseen; the
-    rest only glow. A torch's is 4 candela, reaching 11 m; a lantern's 3, 9 m; a camp fire's 8,
-    14 m. (They light through walls as every lamp does, for now: M7f.)
+    gatehouse's way through, inside and out; the lanterns by taverns' and town halls' doors;
+    braziers at the neutral sites' shrines and torches on posts at their camps; every people's
+    smithy's forge (and the orcs' braziers and their forge's burning chimney top, the cat folk's
+    kiln); the war camps' fires; indoors, every hearth, forge, candle and wheel of candles. A kit
+    marks each (a built piece's `userData.lights`: [x, y, z, kind], and for a torch on a wall the
+    way out from it), and `lightsOf` finds them in the world.
+  - **The flame** (`FIRES`: candle, lantern, torch, brazier, camp fire, hearth, forge, spell):
+    several tongues a fire (a torch's 3, a camp fire's 8), each a strip of six segments (twelve
+    for one taller than a man) turned to face the camera. Each rises from the fire's foot,
+    twisting round its middle as it goes and drawing in towards it, leaning downwind more the
+    higher it is, licking (a wave running up it) and growing and falling back on its own. In the
+    fragment shader noise rises through each tongue, warping it from side to side and eating it
+    away more the higher up, so its tip breaks off; it's hottest low in its middle and coloured as
+    a glowing body is (red, orange, a white-yellow heart), drawn premultiplied so its heart adds
+    light and its sooty edges hide a little of what's behind. Three reads of a small tiling noise
+    texture made in the game (128 pixels). Fewer tongues from 8 m off, none past 140 m (its glow
+    is left).
+  - **How it burns** (`fireSignal`): a fire puffs as buoyant flames do, about 1.6 / √(its width)
+    times a second (a torch 5.6, a camp fire 1.8): each puff grows slowly and collapses quickly,
+    its own size, the rate wandering a little; and a slow gust, mostly calm, sets how hard it
+    puffs and how far it leans in the breeze (`FIRE_WIND`: the flags' breeze, a gust sweeping
+    along a row of torches). The same sums run in JavaScript and on the GPU, whole numbers only
+    hashed, so 32-bit floats give the same within a fortieth of a puff.
+  - **Embers and smoke:** embers rise from torches, braziers and camp fires as their plume
+    carries them, cooling from yellow to red, a few pixels at most, none past 30 m; a thin wisp of
+    smoke over a torch, a fuller column over a camp fire, their undersides lit by the fire at
+    night (smoke.js `SMOKES`).
+  - **Its light rises and falls with it** (`lightNow`): far steadier than the flame (each puff at
+    most 5% either way, the gusts about 11%), a little higher as it stands taller, leaning with it,
+    about 2,000 K (a candle's warmer). A torch on a wall lights it from a quarter of a metre out.
+  - **Each its own light** (view.js `lightNear`): the two that matter most where the player is
+    (a spell's first, then the nearest) are the view's two real lamps, lighting the folk and
+    everything else and casting shadows; up to 16 more near the player each light the world's
+    buildings, ground, trees and folk on their own (`FIRE_LIGHT`, a point light's sums added to
+    every lit material's shader once, `fireLit`; read as a list, so no shader's made again
+    however many there are), nothing lit behind the wall a torch is on. Torch 4.5 candela,
+    reaching 11 m; lantern 3, 9 m; brazier 6, 12 m; camp fire 8, 14 m. Torches and lanterns are
+    lit at night; braziers, forges and camp fires day and night.
+  - **Lamp shadows** (QUALITY `lampShadows`): on High both lamps cast shadows, on Medium the
+    nearest, on Low none (256-pixel cube maps). Each is drawn again when its lamp lights another
+    fire, and then every few frames (one lamp every 2 frames on High, every 4 on Medium), so the
+    shadows of the folk and the stones round a camp fire dance with the flame without being drawn
+    every frame. Which lamps cast shadows follows the quality the player chose, not the level the
+    game drops to while keeping up, so no shader's made again while it's struggling.
+  - **The fire lab** (fire-lab.html): a torch either side of a door, a brazier, a camp fire,
+    candles on a table and the seven fire spells cast again and again, at midnight, dusk or noon,
+    in the breeze or still.
 - **Not by time:** the pack's paperdoll is lit as on a fair day whatever the hour. With no world
   (the labs) the sun stands where it always did.
 
@@ -1726,8 +1756,10 @@ more flames, the brighter. Each flame has a soft glow round it, its colour, a li
 bigger on the screen than a phone draws a point, and none where its flame's cut away (one drawing
 a floor). The lamps each people lights (`LAMPLIGHT`) colour its wheels and candles.
 
-The flames are crossed quads with a shader of rising noise, drawn additively and flickering,
-and embers rise from the hearth. What stands in front of the player is taken down, so they're
+The hearths' and forges' fires and every candle's flame (on the tables and in the wheels) are
+world/fire.js's, as out of doors, cut away as the rest of the room is; each fire's and candle's
+light rises and falls as its flame is drawn (`strengthOf` with its seed and rate: the same signal
+by the drawing's clock), and embers rise from the hearth. What stands in front of the player is taken down, so they're
 always in view whichever way the camera looks: a strip 5 metres wide
 from them to the camera (`INTERIOR_CUT`: the player's position, the direction to the camera and
 the floor's bounds, set each frame by `cutFor`). In it, the walls (and what's on them: posts,

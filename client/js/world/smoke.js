@@ -11,6 +11,7 @@ import { TREE_WIND } from "./art/kits/trees.js";
 import { SKY_GLOW } from "./daytime.js";
 import { smokeNoise } from "./far/volcano.js";
 import { GRADE } from "./fog.js";
+import { WINDOW_LIGHT } from "./art/engine/atlas.js";
 
 /**
  * The smoke: how many hearths are lit (of the houses'; a forge's always is), how many puffs a
@@ -20,6 +21,18 @@ import { GRADE } from "./fog.js";
  * shade and in the sun, and how thick it is at most.
  */
 export const SMOKE = Object.freeze({ lit: 0.7, puffs: 9, rise: 8, period: 10, from: 0.3, to: 1.7, wind: [0.5, 0.22], wander: 0.45, shade: 0x5e5a57, sun: 0xbdb7ae, thick: 0.7 });
+
+/**
+ * Smoke of each kind, as SMOKE has it (`lit`: a share of them drawn at all), and how a fire under
+ * it lights it from below (sRGB, as strong as it says; `night`: only as the windows are lit, at
+ * night, as a torch is): a chimney's (SMOKE); a torch's or a brazier's, a thin dark wisp; a camp
+ * fire's, a fuller, paler column.
+ */
+export const SMOKES = Object.freeze({
+    chimney: { ...SMOKE, glow: 0x000000, glowing: 0, night: false },
+    torch: { lit: 1, puffs: 5, rise: 1.6, period: 2.6, from: 0.07, to: 0.5, wind: [0.5, 0.22], wander: 0.08, shade: 0x2c2724, sun: 0x6a625c, thick: 0.4, glow: 0xff8a3a, glowing: 0.9, night: true },
+    fire: { lit: 1, puffs: 8, rise: 4.2, period: 5, from: 0.3, to: 1.6, wind: [0.5, 0.22], wander: 0.3, shade: 0x45403c, sun: 0x9a938a, thick: 0.45, glow: 0xff8436, glowing: 1.1, night: false },
+});
 
 /** How many of each column's puffs are drawn (0 to 1: QUALITY.smoke, set by the game). */
 export const SMOKE_SHARE = { value: 1 };
@@ -68,6 +81,9 @@ uniform vec3 sunColour;
 uniform vec3 skyGlow;
 uniform float thick;
 uniform sampler2D noiseMap;
+uniform vec3 fireGlow;
+uniform vec4 windowLight;
+uniform float glowNight;
 varying vec2 vCorner;
 varying float vAge;
 varying float vSeed;
@@ -82,43 +98,53 @@ void main() {
     if (alpha < 0.01) discard;
     // (Lit from above, in shade below; greyer as it thins; as the sky's light is, dark at night)
     vec3 colour = mix(shadeColour, sunColour, 0.45 + 0.4 * vCorner.y + 0.15 * vAge) * skyGlow;
+    // (A fire under it lighting it from below, most low down and on its underside)
+    colour += fireGlow * mix(1.0, windowLight.x, glowNight) * (1.0 - vAge) * (1.0 - vAge) * (0.6 - 0.4 * vCorner.y);
     gl_FragColor = vec4(colour, alpha);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
     #include <fog_fragment>
 }`;
 
-let material = null;
+const materials = new Map();
 
-/** The smoke's material, one for every chunk's. */
-export function smokeMaterial() {
-    if (!material) {
-        material = new THREE.ShaderMaterial({
-            name: "chimney smoke",
-            vertexShader: VERTEX,
-            fragmentShader: FRAGMENT,
-            uniforms: {
-                ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog),
-                time: TREE_WIND.time,
-                share: SMOKE_SHARE,
-                rising: { value: new THREE.Vector4(SMOKE.rise, SMOKE.period, SMOKE.from, SMOKE.to) },
-                wind: { value: new THREE.Vector2(...SMOKE.wind) },
-                wander: { value: SMOKE.wander },
-                shadeColour: { value: new THREE.Color(SMOKE.shade) },
-                sunColour: { value: new THREE.Color(SMOKE.sun) },
-                thick: { value: SMOKE.thick },
-                skyGlow: SKY_GLOW,
-                noiseMap: { value: smokeNoise() },
-                toneGrade: GRADE,
-            },
-            defines: { NO_NEAR_FADE: "" },
-            fog: true,
-            transparent: true,
-            depthWrite: false,
-        });
+/** The smoke's material, one of each kind (SMOKES) for every chunk's. */
+export function smokeMaterial(kind = "chimney") {
+    if (!materials.has(kind)) {
+        const smoke = SMOKES[kind];
+
+        materials.set(
+            kind,
+            new THREE.ShaderMaterial({
+                name: `${kind} smoke`,
+                vertexShader: VERTEX,
+                fragmentShader: FRAGMENT,
+                uniforms: {
+                    ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog),
+                    time: TREE_WIND.time,
+                    share: SMOKE_SHARE,
+                    rising: { value: new THREE.Vector4(smoke.rise, smoke.period, smoke.from, smoke.to) },
+                    wind: { value: new THREE.Vector2(...smoke.wind) },
+                    wander: { value: smoke.wander },
+                    shadeColour: { value: new THREE.Color(smoke.shade) },
+                    sunColour: { value: new THREE.Color(smoke.sun) },
+                    thick: { value: smoke.thick },
+                    skyGlow: SKY_GLOW,
+                    noiseMap: { value: smokeNoise() },
+                    toneGrade: GRADE,
+                    fireGlow: { value: new THREE.Color(smoke.glow).multiplyScalar(smoke.glowing) },
+                    windowLight: WINDOW_LIGHT,
+                    glowNight: { value: smoke.night ? 1 : 0 },
+                },
+                defines: { NO_NEAR_FADE: "" },
+                fog: true,
+                transparent: true,
+                depthWrite: false,
+            }),
+        );
     }
 
-    return material;
+    return materials.get(kind);
 }
 
 // (A number from 0 to 1 for a point, the same every time)
@@ -133,14 +159,15 @@ const hash = (x, y, z) => {
  * strength over 1 always lit, and as much higher, a little wider), those whose hearths are lit: a
  * mesh (in the world's coordinates), or null if none is.
  */
-export function smokeMesh(tops) {
-    const lit = tops.filter(([x, y, z, strength = 1]) => strength > 1 || hash(x, y, z) < SMOKE.lit);
+export function smokeMesh(tops, kind = "chimney") {
+    const smoke = SMOKES[kind];
+    const lit = tops.filter(([x, y, z, strength = 1]) => strength > 1 || hash(x, y, z) < smoke.lit);
 
     if (!lit.length) {
         return null;
     }
 
-    const count = lit.length * SMOKE.puffs;
+    const count = lit.length * smoke.puffs;
     const positions = new Float32Array(count * 12);
     const corners = new Float32Array(count * 8);
     const puffs = new Float32Array(count * 16);
@@ -150,10 +177,10 @@ export function smokeMesh(tops) {
     for (const [x, y, z, strength = 1] of lit) {
         const seed = hash(z, x, y);
 
-        for (let k = 0; k < SMOKE.puffs; k++, n++) {
+        for (let k = 0; k < smoke.puffs; k++, n++) {
             // (Evenly through the rise, each column starting its own way; the share drops every
             // other puff first, so a column thins rather than breaking up)
-            const puff = [(k + seed) / SMOKE.puffs, (k * 2.399963 + seed * 6.283) % 6.283, strength * (0.85 + 0.3 * hash(k, seed, x)), ((k * 0.618034) % 1) * 0.98 + 0.01];
+            const puff = [(k + seed) / smoke.puffs, (k * 2.399963 + seed * 6.283) % 6.283, strength * (0.85 + 0.3 * hash(k, seed, x)), ((k * 0.618034) % 1) * 0.98 + 0.01];
 
             for (let c = 0; c < 4; c++) {
                 positions.set([x, y, z], (n * 4 + c) * 3);
@@ -174,11 +201,11 @@ export function smokeMesh(tops) {
     geometry.computeBoundingSphere();
     // (Reaching as high as the strongest smoke rises (strength 1.4, and as much again as a puff's
     // own varies), and as far as it leans and spreads)
-    geometry.boundingSphere.radius += SMOKE.rise * 1.7 * (1 + Math.hypot(...SMOKE.wind)) + SMOKE.to * 1.3;
+    geometry.boundingSphere.radius += smoke.rise * 1.7 * (1 + Math.hypot(...smoke.wind)) + smoke.to * 1.3;
 
-    const mesh = new THREE.Mesh(geometry, smokeMaterial());
+    const mesh = new THREE.Mesh(geometry, smokeMaterial(kind));
 
-    mesh.name = "chimney smoke";
+    mesh.name = `${kind} smoke`;
     mesh.matrixAutoUpdate = false;
     mesh.renderOrder = 5;
 

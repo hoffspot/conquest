@@ -22,7 +22,7 @@ import { FAR, FAR_LEVELS, farReach } from "./far/levels.js";
 import { farHaze, GRADE, MIST } from "./fog.js";
 import { GpuTimer } from "./gputimer.js";
 import { FAR_FIELDS } from "./ground.js";
-import { fireColour, fireOf, LIGHTS, nearestLights, seedOf } from "./lights.js";
+import { FIRE_LIGHT, FIRE_LIGHTS, LIGHTS, lightNow } from "./lights.js";
 import { fillOf, pickLamps, ROOM_LIGHT, ROOM_LIGHTS, strengthOf } from "./roomlight.js";
 import { fadeShadowEdges, snapToTexels, stepShadows } from "./shadows.js";
 import { Sky, SKY_COLOURS } from "./sky.js";
@@ -44,9 +44,9 @@ import { WATER_DETAIL } from "./water.js";
  * (app/governor.js) draws a level or two lower, or fewer pixels, while a device can't keep up.
  */
 export const QUALITY = Object.freeze({
-    low: { label: "Low", pixelRatio: 1, shadows: 1024, antialias: false, hair: 0.2, skin: 512, undergrowth: 0.5, grass: null, motes: 0, smoke: 0.5, ground: [1, 2, 4], water: 0, fields: 0, far: FAR_LEVELS.low, farTrees: 0, frameRate: 60 },
-    medium: { label: "Medium", pixelRatio: 1.5, shadows: 2048, antialias: true, hair: 0.3, skin: 512, undergrowth: 0.75, grass: { near: 12, far: 28 }, motes: 300, smoke: 0.75, ground: [1, 2, 4], water: 1, fields: 1, far: FAR_LEVELS.medium, farTrees: 700, frameRate: 60 },
-    high: { label: "High", pixelRatio: 2, shadows: 2048, antialias: true, hair: 0.45, skin: 1024, undergrowth: 1, grass: { near: 18, far: 40 }, motes: 600, smoke: 1, ground: [1, 1, 2], water: 1, fields: 1, far: FAR_LEVELS.high, farTrees: 1200, frameRate: 60 },
+    low: { label: "Low", pixelRatio: 1, shadows: 1024, lampShadows: { lamps: 0, size: 0, every: 0 }, antialias: false, hair: 0.2, skin: 512, undergrowth: 0.5, grass: null, motes: 0, smoke: 0.5, ground: [1, 2, 4], water: 0, fields: 0, far: FAR_LEVELS.low, farTrees: 0, frameRate: 60 },
+    medium: { label: "Medium", pixelRatio: 1.5, shadows: 2048, lampShadows: { lamps: 1, size: 256, every: 4 }, antialias: true, hair: 0.3, skin: 512, undergrowth: 0.75, grass: { near: 12, far: 28 }, motes: 300, smoke: 0.75, ground: [1, 2, 4], water: 1, fields: 1, far: FAR_LEVELS.medium, farTrees: 700, frameRate: 60 },
+    high: { label: "High", pixelRatio: 2, shadows: 2048, lampShadows: { lamps: 2, size: 256, every: 2 }, antialias: true, hair: 0.45, skin: 1024, undergrowth: 1, grass: { near: 18, far: 40 }, motes: 600, smoke: 1, ground: [1, 1, 2], water: 1, fields: 1, far: FAR_LEVELS.high, farTrees: 1200, frameRate: 60 },
 });
 
 /** A quality level for this device: low for small or older phones, medium for phones, high otherwise. */
@@ -114,6 +114,34 @@ const srgbOf = (hex) => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255].map((by
 const PLAIN = Object.freeze({ zenith: srgbOf(SKY_COLOURS.zenith), horizon: srgbOf(SKY), sun: srgbOf(OUTDOORS.sun[0]), strength: OUTDOORS.sun[1], mist: [0, 0, 20], grade: [0, 0, 0, 0] });
 const INDOORS = Object.freeze({ background: 0x140e0a, fog: [16, 38], sun: [0xffecd0, 4], sunFrom: [0.25, 1, 0.35], environment: 0.55 });
 const LAMPS = 2;
+const _lampFrom = Array.from({ length: LAMPS }, () => null);
+
+// The lamps' shadows drawn again (a view's, its lamps lighting `_lampFrom`'s flames now): a
+// lamp's at once when it's lighting another flame than it was, and one lamp's every so often
+// (QUALITY lampShadows every: frames) so that shadows dance with the flame and follow what moves
+function lampShadows(view) {
+    const { every = 0 } = view.quality?.lampShadows ?? {};
+    let lamps = 0;
+
+    for (const { light } of view.lamps) {
+        lamps += light.castShadow ? 1 : 0;
+    }
+
+    view.lampFrame = (view.lampFrame ?? 0) + 1;
+
+    view.lamps.forEach((lamp, k) => {
+        if (!lamp.light.castShadow) {
+            return;
+        }
+
+        if (lamp.from !== _lampFrom[k]) {
+            lamp.from = _lampFrom[k];
+            lamp.light.shadow.needsUpdate = true;
+        } else if (every && lamp.light.intensity > 0 && view.lampFrame % every === Math.floor((k * every) / lamps)) {
+            lamp.light.shadow.needsUpdate = true;
+        }
+    });
+}
 
 // The sun with no time of day to go by: where it shines from (towards the north-east, so shadows
 // fall away from the camera); and how far round the player its shadows are drawn (metres)
@@ -237,10 +265,17 @@ export class View {
         this.lamps = Array.from({ length: LAMPS }, () => {
             const light = new THREE.PointLight(0xffffff, 0, 12, 2);
 
+            // (Its shadows: drawn only when it's handed to another flame and now and then as its
+            // flame dances (#lampShadows), not every frame; near, for a torch a hand off its wall)
+            light.shadow.autoUpdate = false;
+            light.shadow.camera.near = 0.1;
+            light.shadow.bias = -0.003;
+            light.shadow.normalBias = 0.02;
             this.scene.add(light);
 
-            return { light };
+            return { light, from: null };
         });
+        this.lampFrame = 0;
         this.room = null;
         this.sunDirection = SUN_DIRECTION.clone();
         // (Where the shadows are cast from: the sun's way, moved on in steps: shadows.js stepShadows)
@@ -356,9 +391,11 @@ export class View {
         }
     }
 
-    /** Draw shadows or not. */
+    /** Draw shadows or not (the sun's, and the lamps' the quality level has). */
     setShadows(on) {
         this.sun.castShadow = on;
+        this.shadowsOn = on;
+        this.#lampShadowing();
     }
 
     /**
@@ -512,8 +549,27 @@ export class View {
         this.sun.shadow.mapSize.set(this.quality.shadows, this.quality.shadows);
         this.sun.shadow.map?.dispose();
         this.sun.shadow.map = null;
+        this.#lampShadowing();
         this.resize();
     }
+
+    // Which of the lamps cast shadows (QUALITY lampShadows: how many, their maps' size, how often
+    // each's drawn again), shadows being drawn at all: as many as the quality chosen has, not the
+    // level it's dropped to keeping up (every lit shader's made again when it changes: never
+    // while it's struggling), their maps as big as the level now has
+    #lampShadowing() {
+        const { lamps } = (QUALITY[this.chosenQuality] ?? this.quality).lampShadows;
+        const size = this.quality.lampShadows.size || 128;
+
+        this.lamps.forEach(({ light }, k) => {
+            light.castShadow = (this.shadowsOn ?? true) && k < lamps;
+            light.shadow.mapSize.set(size, size);
+            light.shadow.map?.dispose();
+            light.shadow.map = null;
+            light.shadow.needsUpdate = true;
+        });
+    }
+
 
     // As many pixels as the screen has, as far as the quality level goes, times the render scale
     // (debug mode) and the share the device can keep up with (adapt)
@@ -792,40 +848,84 @@ export class View {
     }
 
     /**
-     * Light what's round the player out of doors at night by the lights nearest `near` (lights.js
-     * lightsOf's: torches, lanterns, camp fires, world metres): the two nearest within their reach
-     * are the view's lamps, as lit as the evening has them (WINDOW_LIGHT), fading out towards
-     * their reach's edge (so one's handed to another unseen). Each flickers as its flame and glow
-     * are drawn (lights.js fireOf: the same noise, seed and clock, `time` in seconds), stronger,
-     * yellower and a little higher as it flares, weaker and redder as it dies down. Indoors the
-     * room's flames have the lamps.
+     * Light what's round the player out of doors by the lights near `near` (lights.js lightsOf's:
+     * torches, lanterns, braziers, camp fires; and the spells' fire and flashes, `priority`d, first
+     * whatever: world metres), each its own light, as strong as its fire is now (lights.js
+     * lightNow: rising and falling with its flame, leaning with it, lit at night if it's lit only
+     * then): the two that matter most are the view's two lamps (lighting everything fully, casting
+     * shadows), each fading out towards its reach's edge so one's handed to another unseen; the
+     * next nearest, up to FIRE_LIGHTS of them, light the world's materials on their own
+     * (lights.js FIRE_LIGHT). `time` in seconds, the drawing's. Indoors the room's flames have the
+     * lamps, and nothing's in the list.
      */
     lightNear(lights, near, time = WINDOW_LIGHT.value.z) {
+        FIRE_LIGHT.count.value = 0;
+
         if (this.indoors) {
             return;
         }
 
         const lit = WINDOW_LIGHT.value.x;
-        const nearest = lit > 0 ? nearestLights(lights, near, LAMPS, (this.nearest ??= [])) : [];
+        const chosen = (this.chosen ??= []);
+        const pool = (this.lightPool ??= []);
+        let used = 0;
+
+        chosen.length = 0;
+
+        for (const light of lights) {
+            const reach = light.reach ?? LIGHTS[light.kind]?.reach ?? 10;
+            const distance = Math.hypot(light.x - near.x, light.y - near.y, light.z - near.z);
+
+            if (distance > reach * 1.5) {
+                continue;
+            }
+
+            const now = lightNow(light, time, lit, (pool[used] ??= { strength: 0, colour: new THREE.Color(), x: 0, y: 0, z: 0, reach: 0, wall: 0 }));
+
+            if (now.strength <= 0.01) {
+                continue;
+            }
+
+            used++;
+            chosen.push({ light, distance, now, rank: distance - (light.priority ?? 0) * 1000 });
+        }
+
+        chosen.sort((a, b) => a.rank - b.rank);
+        for (let k = 0; k < LAMPS; k++) {
+            _lampFrom[k] = chosen[k]?.light ?? null;
+        }
+
+        lampShadows(this);
 
         this.lamps.forEach(({ light }, k) => {
-            const chosen = nearest[k];
+            const pick = chosen[k];
 
-            if (!chosen) {
+            if (!pick) {
                 light.intensity = 0;
 
                 return;
             }
 
-            const { x, y, z, kind } = chosen.light;
-            const { strength, reach, flame } = LIGHTS[kind];
-            const fire = fireOf(kind, seedOf(chosen.light), time, lit, (this.fire ??= { flicker: 0, strength: 0 }));
+            const { now, distance } = pick;
 
-            light.position.set(x, y + (fire.flicker - 0.5) * (flame?.[1] ?? 0) * 0.25, z);
-            fireColour(kind, fire.flicker, light.color);
-            light.distance = reach;
-            light.intensity = strength * fire.strength * (1 - THREE.MathUtils.smoothstep(chosen.distance, reach * 0.9, reach * 1.5));
+            light.position.set(now.x, now.y, now.z);
+            light.color.copy(now.colour);
+            light.distance = now.reach;
+            light.intensity = now.strength * (1 - THREE.MathUtils.smoothstep(distance, now.reach * 0.9, now.reach * 1.5));
         });
+
+        // (The rest, nearest first, each on its own in the world's materials)
+        let count = 0;
+
+        for (let k = LAMPS; k < chosen.length && count < FIRE_LIGHTS; k++, count++) {
+            const { light, now } = chosen[k];
+
+            FIRE_LIGHT.at.value[count].set(now.x, now.y, now.z, now.reach);
+            FIRE_LIGHT.colour.value[count].copy(now.colour).multiplyScalar(now.strength);
+            FIRE_LIGHT.out.value[count].set(light.out?.[0] ?? 0, light.out?.[1] ?? 0, now.wall, light.out ? 1 : 0);
+        }
+
+        FIRE_LIGHT.count.value = count;
     }
 
     /**
@@ -841,9 +941,14 @@ export class View {
         }
 
         room.lights.forEach((light, k) => {
-            room.strengths[k] = strengthOf(light, time, room.flares[k]);
+            room.strengths[k] = strengthOf(light, time, room.flares[k], WINDOW_LIGHT.value.z);
         });
         room.lamps = pickLamps(room.lights, room.strengths, near, LAMPS, room.lamps);
+        for (let k = 0; k < LAMPS; k++) {
+            _lampFrom[k] = room.lights[room.lamps[k]] ?? null;
+        }
+
+        lampShadows(this);
         fillOf(room.colours, room.strengths, (room.x1 - room.x0) * (room.z1 - room.z0), ROOM_LIGHT.fill.value);
 
         this.lamps.forEach(({ light }, k) => {

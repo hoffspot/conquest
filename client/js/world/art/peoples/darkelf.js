@@ -13,6 +13,7 @@ import { PEOPLE_PLACES } from "../../../core/setpieces/pieces.js";
 import { material } from "../engine/materials.js";
 import { inset, Solid } from "../engine/solid.js";
 import { emblemSignTexture, loadSignFont, nameBoardTexture, signMaterial } from "../kits/signs.js";
+import { fireLight } from "../kits/torches.js";
 import { band, CELL, circle, ENTRY, m, pinnacle, pole, post, randomFor, southSide, spike, stake, steps, wallPoint, weathering, web } from "./kit.js";
 import { budLamp, needleSpire, spider, whiplash } from "./sylvan.js";
 
@@ -454,6 +455,7 @@ export async function blacksmith(piece) {
 
     solid.extrude([[fx - m(1), fz - m(0.8)], [fx + m(1), fz - m(0.8)], [fx + m(1), fz + m(0.8)], [fx - m(1), fz + m(0.8)]], 0, m(0.9), material("stone-black"));
     solid.facing([[fx - m(0.7), m(0.91), fz - m(0.5)], [fx + m(0.7), m(0.91), fz - m(0.5)], [fx + m(0.7), m(0.91), fz + m(0.5)], [fx - m(0.7), m(0.91), fz + m(0.5)]], [0, 1, 0], material("glow-fire"));
+    fireLight(solid, [fx, m(0.91), fz], "brazier");
     columns(solid, fx, fz - m(1.1), 6, m(0.9), [m(5), m(8)], random, { name: "basalt" });
     solid.box(fx - m(0.35), 0, fz + m(1.6), fx + m(0.35), m(0.8), fz + m(1.9), material("iron-black"));
     board(solid, wallPoint(faces[2]), faces[2].out, [m(3.8), m(4.7), m(1.3), m(2.2)], emblemSignTexture({ name: "Smithy", emblem: "anvil", tint: random.int(0, 5) }), "sign smithy", m(0.1));

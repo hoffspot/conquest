@@ -12,7 +12,7 @@ import { material } from "../engine/materials.js";
 import { Solid } from "../engine/solid.js";
 import { buildHouse, planHouse, STYLES as HOUSE_STYLES } from "./house.js";
 import { emblemSignTexture, hangingSignTexture, loadSignFont, nameBoardTexture, signMaterial, TAVERN_NAME } from "./signs.js";
-import { lanternLight, torch } from "./torches.js";
+import { fireLight, lanternLight, torch } from "./torches.js";
 
 const M = 5;
 const m = (metres) => metres * M;
@@ -411,6 +411,7 @@ export async function blacksmith(piece) {
 
     solid.box(x1, 0, fz0, x1 + m(1.5), m(0.95), fz1, material("stone-dark"));
     solid.box(x1 + 1, m(0.95), fz0 + 1, x1 + m(1.5) - 1, m(1.02), fz1 - 1, material("embers"));
+    fireLight(solid, [x1 + m(0.75), m(1.02), (fz0 + fz1) / 2], "brazier");
     solid.box(x1, m(0.95), fz0, x1 + m(1.2), m(7.2), fz0 + m(1.1), material("stone-dark"));
     // (Its fire's always lit: its smoke thicker than a hearth's, smoke.js)
     (solid.smoke ??= []).push([x1 + m(0.6), m(7.25), fz0 + m(0.55), 1.4]);

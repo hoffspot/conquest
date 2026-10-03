@@ -29,6 +29,9 @@ The creature lab, showing every creature of the wilds walking, running, attackin
 struck, knocked down and dying (and the wyvern and the dragon flying and coming down to land), is at <https://hoffspot.github.io/conquest/creature-lab.html>.
 The uniform lab, showing each people's soldiers in their uniforms and their officials in their
 livery side by side, is at <https://hoffspot.github.io/conquest/uniform-lab.html>.
+The fire lab, showing every kind of fire (torches, a brazier, a camp fire, candles) lighting what's
+round it at night and the seven fire spells cast again and again, is at
+<https://hoffspot.github.io/conquest/fire-lab.html>.
 
 The war between the six peoples, played out on a world's map turn by turn (who holds which town,
 the forces out, the rulers and how they stand with each other, and the news), is at
@@ -449,6 +452,7 @@ client/                 The game (static files served to the browser)
   building-lab.html     The building lab (with world-map.css)
   creature-lab.html     The creature lab: every creature of the wilds, doing everything it does
   uniform-lab.html      The uniform lab: each people's soldiers and officials (with world-map.css)
+  fire-lab.html         The fire lab: every kind of fire and the fire spells (with world-map.css)
   vendor/three-r186/    Three.js (minified by scripts/vendor-three.js; loaded through an import map)
   vendor/recast-navigation-0.43.1/  Recast and Detour as WebAssembly (scripts/vendor-recast.js): the
                         navigation meshes (core/navigation.js)
@@ -615,6 +619,7 @@ client/                 The game (static files served to the browser)
   js/lab/war.js         The war
   js/lab/land.js        The land of a world plan painted as a picture, for the maps
   js/lab/building-lab.js  The building lab
+  js/lab/fire-lab.js    The fire lab
 server/                 A static file server for playing locally (npm start), and the relay that
                         games playing together talk through (relay.js)
 test/                   Unit tests
