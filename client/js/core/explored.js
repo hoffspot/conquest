@@ -48,6 +48,11 @@ export class Explored {
         return (this.visited[k >> 3] & (1 << (k & 7))) !== 0;
     }
 
+    /** Has the player been in the chunk a point's in (x, y: metres, the world's)? */
+    visitedAt(x, y) {
+        return this.isVisited(Math.floor(x / CHUNK), Math.floor(y / CHUNK));
+    }
+
     /**
      * The player is at x, y (metres, the world's): the chunk they're in is visited. Returns
      * whether it's the first time.

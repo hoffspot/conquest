@@ -300,7 +300,7 @@ export class WorldMap {
 
     /** Whether somewhere's been uncovered (a point: metres). */
     uncovered([x, z]) {
-        return this.explored?.isVisited(Math.floor(x / CHUNK), Math.floor(z / CHUNK)) ?? false;
+        return this.explored?.visitedAt(x, z) ?? false;
     }
 
     /** Zoom in (`factor` below 1) or out, about the middle of the screen. */

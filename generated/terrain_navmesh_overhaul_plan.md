@@ -3103,3 +3103,21 @@ converted data is to be measured in M8 against today's hm08 data.
     windows; seen from afar as tall, a minster's two towers); the building lab e2e (a church of
     each grade and build).
   - **Next:** M7i-2, stone arch bridges.
+- **2026-10-03, pins looked over** (the user: "You should not be able to drop a pin in an area of
+  the map still covered by fog of war. The pathway line on the ground should not go through things
+  that a player cannot go through. It should be like a path finding like that follows a path that
+  is walkable."; docs/GAME.md *The pin*).
+  - **Under the fog:** the map already refused a held pin there; the game now does too (`setPin`
+  returns the pin as it was), so neither a script nor anything else drops one there.
+  - **The line on the ground:** only ever the navigation mesh's way, round what stands in it. It
+  was the mesh's way for its first 64 m, then the world plan's 32 m cells' (straight through
+  houses, trees and the windmill). Now it's the mesh's to the point on it nearest the way across
+  the world 160 m along (or 120, 88, 64, 40, 20: the furthest that can be got to over the tiles
+  there), nothing past that, and nothing at all until there's some (found again every 1.5 s while
+  it's short, as the tiles come in). A pin 110 m off across the start town: the line runs all the
+  way to it along the streets. `nearestIn`: the mesh's nearest point without baking a tile (as
+  `wayIn`).
+  - **Pictures:** three pins across the start town from above, before and after; sent in the
+    session.
+  - **Tests:** the pin e2e: held under the fog, told so and nothing dropped (nor set so); the line
+    along the ground, once its tiles are in, every point of it on the mesh.

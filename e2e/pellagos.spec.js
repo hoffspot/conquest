@@ -3128,6 +3128,18 @@ test("on the world map a pin's dropped where it's held: a column of light where 
         window.keptPins = [];
         game.onPin = (pin) => window.keptPins.push(pin);
     });
+
+    // (But not where the fog still lies: told so, and nothing dropped, held there or set so)
+    const fogged = await page.evaluate(() => {
+        const me = window.pellagos.game.battle.actor("player");
+
+        return [me.x + 420, me.y - 300];
+    });
+
+    await hold(await onScreen(fogged));
+    await expect(page.locator("#worldmapnote")).toContainText("You haven't been there");
+    expect(await page.evaluate((at) => ({ pin: window.pellagos.game.setPin(at).pin, kept: window.keptPins.length, drawn: window.pellagos.worldMap.drawn.pin }), fogged)).toEqual({ pin: null, kept: 0, drawn: false });
+
     await hold(await onScreen(near));
     await page.waitForFunction(() => window.pellagos.worldMap.drawn?.pin, null, { polling: 100 });
 
@@ -3143,20 +3155,46 @@ test("on the world map a pin's dropped where it's held: a column of light where 
     expect(dropped.unpin).toBe(true);
     expect(dropped.note).toContain("Pinned");
 
-    // Closed: out in the world, its column where it stands, and a line along the ground to it
+    // Closed: out in the world, its column where it stands, and a line along the ground to it, over
+    // the navigation mesh (once its tiles are in): every point of it somewhere that can be walked
     await page.keyboard.press("Escape");
     await expect(page.locator("#worldmap")).not.toBeVisible();
+    await page.evaluate(() => window.pellagos.game.stop());
+    await page.waitForFunction(
+        () => {
+            const { game } = window.pellagos;
 
-    const world = await page.evaluate(() => {
+            game.advance(0.25);
+
+            return game.pinMarks.line.visible && !game.pinShort;
+        },
+        null,
+        { polling: 250, timeout: 60000 },
+    );
+
+    const world = await page.evaluate(async () => {
         const { game } = window.pellagos;
-
-        game.stop();
-        game.advance(0.5);
-
+        const { navigatorOf } = await import("/js/core/navigation.js");
+        const navigation = navigatorOf(game.world.maps.town);
         const marks = game.pinMarks;
         const ground = game.groundOf("town");
+        const position = marks.line.geometry.attributes.position;
+        const points = [];
 
-        return { column: marks.near.visible && marks.far.visible, foot: [marks.foot.value.x, marks.foot.value.z], ground: Math.abs(marks.foot.value.y - ground(game.pin[0], game.pin[1])) < 0.01, line: marks.line.visible, long: marks.lineLength.value, calls: game.view.renderer.info.render.calls };
+        // (Two corners a point, across the line; six indices a piece of it between two points)
+        for (let k = 0; k <= marks.line.geometry.drawRange.count / 6; k++) {
+            points.push([(position.getX(k * 2) + position.getX(k * 2 + 1)) / 2, (position.getZ(k * 2) + position.getZ(k * 2 + 1)) / 2]);
+        }
+
+        return {
+            column: marks.near.visible && marks.far.visible,
+            foot: [marks.foot.value.x, marks.foot.value.z],
+            ground: Math.abs(marks.foot.value.y - ground(game.pin[0], game.pin[1])) < 0.01,
+            line: marks.line.visible,
+            long: marks.lineLength.value,
+            points: points.length,
+            astray: points.filter(([x, z]) => !navigation.nearestIn([x, z], 0.3)).map((point) => point.map(Math.round)),
+        };
     });
 
     expect(world.column).toBe(true);
@@ -3164,6 +3202,8 @@ test("on the world map a pin's dropped where it's held: a column of light where 
     expect(world.ground).toBe(true);
     expect(world.line).toBe(true);
     expect(world.long).toBeGreaterThan(80);
+    expect(world.points).toBeGreaterThan(40);
+    expect(world.astray).toEqual([]);
 
     // Held on the pin, it's taken away, its column and line with it
     await page.evaluate(() => window.pellagos.game.start());

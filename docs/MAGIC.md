@@ -41,9 +41,14 @@ round again; the experience needed grows about twice over each tier.
 **Casting.** A spell is cast on someone (`target`): an enemy in reach and sight (the elements, the
 hexes, Fear, Polymorph, Pacify, Vampirism, Poison), anyone (the heals and cures, friend or foe: a
 heal never starts a fight), oneself or a friend (the wards, Inertial Barrier), oneself, one fallen
-(Zombify), someone to summon, or a place (Wizard's Walk). Casting stands still and calls off a
-blow that hasn't landed; being stunned, knocked down or struck down calls off the spell. Each
-spell has its own cooldown, and after casting any, none can be cast for a second
+(Zombify), someone to summon, or a place (Wizard's Walk). A spell cast on someone reaches 16 m
+(`SPELL_REACH`: across a street or a clearing), an attack spell 2 m more from its third tier and
+2 m more again from its sixth, the hexes and Fear 18 m; twice what they did, at the player's
+asking ("The range of ranged spells like vigor and hurt seems too short"). That's further than
+most are seen from (`SIGHT`, 12 m), so its caster sees as far as it reaches, with nothing in
+the way (out in the world at night, only as far as the light lets them). Casting stands still
+and calls off a blow that hasn't landed; being stunned, knocked down or struck down calls off the
+spell. Each spell has its own cooldown, and after casting any, none can be cast for a second
 (`SPELL_COOLDOWN`). One that can't be cast says why (`CAST_FAILURES`: "Not ready yet", "Out of
 reach", "Needs a wand in hand", "Nothing there for it to cure"...), and nothing happens.
 
