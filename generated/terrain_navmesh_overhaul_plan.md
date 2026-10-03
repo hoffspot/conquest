@@ -617,6 +617,35 @@ flats), and pushed into the Elden Ring direction of [§9](#9-environment-art-dir
 
 ---
 
+
+### Places worth finding (M7.5)
+
+The user, wandering between two human towns: "I ran across a castle that I couldn't enter. It
+didn't show up on the minimap and looked like it was just there as a point of interest... rework
+these points of interest to make them actually interesting." It comes after M7 and before M8's
+characters. What the user decided (2026-10-03):
+
+- **On the minimap**, all of them: the peoples' castles, manors, abbeys and the rest of their own
+  places out in their lands (sites.js), watchtowers and camps, and the sites no people keeps
+  (ruins, ruined castles, caves, shrines, circles of standing stones, the dragon's lair).
+- **Entered and explored** if they're of any size: castles and forts (through the gate, a
+  courtyard, the keep's halls and rooms), manors and abbeys, watchtowers (a few floors to climb),
+  caves (passages and chambers) and the dragon's lair (its hoard).
+- **Who holds them: mixed by the war**, a world at a time: places outside the towns start held
+  by friendlies or by bandits; ruins by the dead.
+  - **Friendlies:** a people's castle has a weapons-and-armour shop, a potions-and-arcane shop
+    and a blacksmith; the other places a smaller shop fitting the place (an abbey's arcane goods,
+    a watchtower's weapons and armour, and so on).
+  - **Bandits:** a rogue band, as many and as strong as the place is big and its land dangerous
+    (as the wilds go: you can stumble on one too strong for you yet), and a leader stronger than
+    the rest guarding a chest of better loot in the heart of it.
+  - **The dead:** ghosts, wraiths and the restless dead of whoever lived in the ruins long ago, a
+    greater one guarding an old relic and a chest.
+  - **Missions:** each place held by bandits or the dead is a mission at the adventurers' guilds
+    (`core/spoils.js` contracts): clear the occupiers and kill their leader.
+- **After it's cleared:** empty a few days of the world's clock, then a new band moves in (or
+  the dead rise again), with a fresh chest: you can come back for more.
+
 ## 9. Environment art direction: a lower-fidelity Elden Ring
 
 Added at the user's request, and chosen from the environment research (`research/eldenring.md` in
@@ -1314,6 +1343,7 @@ pictures for anything that changes the look.
 | **M6c** | Things on the horizon | Far silhouettes and the world landmark (§9 row 2): the volcano's crater, fire and smoke | Pictures; budgets per tier met |
 | **M6d** | Far trees and rivers | Far trees (impostors fading in where the near trees fade out); far rivers on the far land | Pictures; budgets per tier met |
 | **M7** | Elden Ring environment pass | In §9's order: the landmark pass in the plan; neutral sites built, with the decay pass; a look round all the generated ground and high land so it looks natural, with no obvious polygons or out-of-place texturing (M7d, §9 *The land looking natural*); day and night, with the moon and stars, lit windows, torches, the Light spell, night in play and passing time (M7e, §9 *Day and night*); the light looked over, consistent with its sources (M7f, §9 *The light looked over*); pins on the world map, with a column of light and the way there (M7g, §9 *Pins on the world map*); cliffs and rocks; churches, citadels, stone bridges; foliage palette, grass ring, weathering; cascaded shadows, measured, if they fit the budget | Pictures after each part; budgets met |
+| **M7.5** | Places worth finding | §8 *Places worth finding*: every castle, fort, manor, abbey, watchtower, camp, cave, lair, ruin, shrine and circle of stones on the minimap; those of any size entered and explored; held by friendlies (their shops) or by bandits or the dead (a guild mission, a leader, a chest), retaken a few days after they're cleared | Pictures; walk into each kind in a test; a cleared place retaken in a test |
 | **M8** | Characters on Vitruvian | §10, as several PRs (conversion, body, garments, skin, face, LODs, clips) | Pictures; clipping tests green; budgets met |
 
 Each milestone follows the same steps:
@@ -2736,3 +2766,36 @@ converted data is to be measured in M8 against today's hm08 data.
     flames by the drawing's clock).
   - **Next:** M7e-2d, braziers at the guards' posts, lanterns on poles in the bigger towns'
     squares, guards on night watch carrying torches; then M7e-3, night in play.
+- **2026-10-03, the fire spells by day, each marked a spell** (the user: "Make sure the fire
+  spells look good in the day too. They should be pretty epic at tier 6 and totally epic at tier
+  7"; "make sure all the tiers look good and are identifiable as spells. The spell circle you had
+  on the ground was a good motif. Maybe one that is increased by tier"; "Tier 3 and Tier 5 look
+  similar. There should be a clear progression of power. Fix tier 5"):
+  - **A circle for every tier** (spellfx.js `sigil`, `sigilTexture`): drawn once a tier, turning
+    round the caster's feet as it's cast and where it lands, wider and richer tier by tier; each
+    line glowing over a darker one burnt into the ground, shown over what's behind it rather than
+    adding light, so it shows on bright ground by day.
+  - **By day:** a spell's flames a body of fire (fire.js `fireBody`, a uniform of the same shader:
+    nothing compiled again), hiding more of what's behind them the brighter the day, their
+    hearts kept orange; fireballs in flight their colour over the sky, trailing smoke.
+  - **Flamefill** (5) a firestorm (three rings of fire rolling out across its circle, a cone of
+    fire 5 m high, fire round its rim), between Immolate's column and Inferno's whirl (it was
+    thirteen small fires, too like Burstflame's ring of nine).
+  - **Inferno** (6): its circle spreading as it's cast, the sky darkening a little; a 16 m fire
+    whirl with a swirl at its foot, three rings of runes rising up it, fire running round the
+    rim, black smoke billowing over it.
+  - **Hellfire** (7): the sky darkening almost to black and reddening (view.js `setOmen`, from
+    spellfx.js `omen`/`darkness`), a 13 m circle on the ground and another turning 16 m up in
+    the sky, meteors falling out of it, glowing fissures, a 26 m column, five rings of runes, fire
+    round the great circle's rim, a crown of black smoke.
+  - **Pictures:** all seven by day before and after (cast, landing, burning), by night before
+    and after, Inferno and Hellfire again, Hellfire from low down (its circle in the sky).
+  - **Tests:** test/spellfx.test.js (each fire spell's own tier's circle round the caster's feet
+    and where it lands, wider tier by tier, under a metre to a dozen; every flame a body of fire;
+    the sky darkened a little for Inferno, almost black for Hellfire, as it was for the rest,
+    clear again after); test/lights.test.js (the spells' flames' body their own, the world's
+    fires' none).
+- **2026-10-03, M7.5 planned: places worth finding** (§8 *Places worth finding*), from the user's
+  answers: mixed by the war; retaken a few days after they're cleared; as strong as the place's
+  size and its land's danger; castles and forts, watchtowers and camps, caves and the lair, ruins
+  and holy places; friendlies' shops; guild missions for bandits' and the dead's.

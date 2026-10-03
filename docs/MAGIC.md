@@ -258,7 +258,8 @@ tumbling stones, spikes of earth and ice bursting up, a whirlwind's funnel, dome
   (a heal's or a stun's in the look it'll land in), more and bigger the higher the tier. From the
   fourth tier a circle of runes turns on the ground round them; the sixth's is wider; the
   seventh's is two circles turning against each other, a column of light standing up from them,
-  and a circle of runes growing where it's going. A spell with a missile throws it to arrive as
+  and a circle of runes growing where it's going. A fire spell's circle turns round the caster's
+  feet whatever its tier (its own tier's: below). A spell with a missile throws it to arrive as
   the spell lands: a flame for Burn, a fireball, a stone arcing for Stone Crush, a crescent of
   wind for Hurt, a blade of ice spinning for Iceblade, globs of scalding water and venom.
 - **Landing.** Each its own: Fireball bursts and scorches the ground; Immolate wraps them in a
@@ -267,9 +268,9 @@ tumbling stones, spikes of earth and ice bursting up, a whirlwind's funnel, dome
   in ice and frost. The heals rise in green light (and the heal's look: a swirl, a fountain...),
   the cures draw what they cure up out of them turning to gold, the wards close a dome of their
   colour over them.
-- **The seventh tier fills the screen.** Hellfire rains sixteen meteors out of the sky over 10
-  metres round them, streaking in from beyond, then the ground erupts in a column of fire 3
-  metres across reaching out of sight, shockwaves spreading 24 metres, fire and smoke everywhere,
+- **The seventh tier fills the screen.** Hellfire darkens the sky and rains sixteen meteors out
+  of a circle of runes turning in it over 10 metres round them, then the ground erupts in a
+  column of fire 6 metres across reaching out of sight, shockwaves spreading 24 metres, fire and smoke everywhere,
   the ground scorched. Disintegrate is a beam 2.6 metres wide running from the caster's hand
   through them and on 26 metres, the ground scoured and everything round ground to dust.
   Ionize is a crackling dome of lightning 8 metres round and 22 bolts from the sky over 12
@@ -279,16 +280,43 @@ tumbling stones, spikes of earth and ice bursting up, a whirlwind's funnel, dome
   The fifth and sixth tiers shake it a little.
 - **The fire spells burn as fire** (`blaze`: world/fire.js's flames, a spell's hotter and
   whirling round as no fire does, growing up, burning and dying away, hardly leaning in the
-  breeze), from a little to a great deal of it as you asked:
-  - **Burn** (1): a lick of flame half a metre high up them.
-  - **Fireball** (2): it bursts into a fire 1.3 m high round them, twisting up.
-  - **Burstflame** (3): a fire round them and a ring of nine fires bursting out 1.4 m from it.
-  - **Immolate** (4): a wreath of ten tongues spiralling up 3.2 m round them.
-  - **Flamefill** (5): thirteen fires catching one after another over 2.4 m round them.
-  - **Inferno** (6): a fire whirl twelve metres tall, a hotter column twisting faster in its
-    heart, and fires catching in a ring 3 m out.
-  - **Hellfire** (7): each meteor sets the ground alight where it strikes, then a whirling column
-    of fire 24 metres high, a hotter one inside it reaching 28.
+  breeze), from a little to a great deal of it as you asked. And each is a spell (you: "make sure
+  all the tiers look good and are identifiable as spells. The spell circle you had on the ground
+  was a good motif. Maybe one that is increased by tier"):
+  - **Its circle** (`sigil`, `sigilTexture`): every fire spell's own tier's, turning round the
+    caster's feet as it's cast (0.9 m round at the first tier to 4.2 at the seventh) and where it
+    lands (0.85 m to 13), the greater the spell the more there is to it: a ring and fire's
+    triangle at Burn; rings of runes, two triangles as a star, three, then stars of seven and
+    eight points, little circles at their points, flame teeth round the rim, spokes and a second
+    band of runes at Hellfire; a flame in the heart of each. Each line glows over a darker line
+    burnt wider into the ground, so the circles show on bright ground by day as well as at night.
+  - **By day as by night** (you: "Make sure the fire spells look good in the day too"): a spell's
+    flames are a body of fire (fire.js `fireBody`), hiding more of what's behind them the brighter
+    the day, their hearts deep orange-yellow rather than white, so they keep their colour against
+    bright ground and sky; their circles, rings of runes and fireballs in flight show their colour
+    over what's behind them rather than adding light to it, and the fireballs trail smoke.
+  - **Burn** (1): its circle flaring, and a lick of flame 0.75 m high curling up them.
+  - **Fireball** (2): it bursts into a fire 1.6 m high round them, twisting up.
+  - **Burstflame** (3): a fire round them, and a ring of nine fires bursting out round its
+    circle's rim, 1.65 m out.
+  - **Immolate** (4): a wreath of ten tongues spiralling up 3.4 m round them, a ring of runes
+    rising round it.
+  - **Flamefill** (5): a firestorm (you: "There should be a clear progression of power"): a wave
+    of fire rolling out across its circle, ring after ring, each taller than the last, a cone of
+    fire up to 5 m high drawing in over the middle, fire running round the rim 3.3 m out, a ring
+    of runes rising over it.
+  - **Inferno** (6): its circle, 5.5 m round, spreading where it's cast as it's cast, the sky
+    darkening a little; then a fire whirl 16 m tall from it, a wide swirl of fire at its foot and
+    a hotter column twisting faster in its heart, three rings of runes rising up it, fire running
+    all round the circle's rim, black smoke billowing out over it.
+  - **Hellfire** (7): as it's cast, the sky darkens almost to black and reddens (view.js
+    `setOmen`: the sky's colours, the haze and the clouds towards a burning dusk's, the sun and the
+    light from all round dimmed, so the fire blazes against it, day or night), its great circle
+    spreads 13 m round where it's cast and another turns in the sky 16 m over it; meteors fall out
+    of that circle, each setting the ground alight, the ground splitting in glowing fissures; then
+    a whirling column of fire 26 m high, a hotter one inside it reaching 30, a wide swirl of fire
+    at its foot, five rings of runes rising up it, fire running round the great circle's rim, a
+    crown of black smoke spreading over it.
 - **What lasts** shows on whoever it's on: motes of its colour now and then; Levitate lifts them
   0.35 metres off the ground, bobbing; Invisibility leaves a shimmer of them.
 - **What lies on the ground** glows there for as long as it lasts, leaving its mark.

@@ -1843,6 +1843,8 @@ export class Game {
         // Spells being cast and landing (light gathering in the casters' hands...), and those
         // lasting on anyone here showing on them now and then
         this.spellFx.update(dt);
+        // (The sky as dark as the greatest spells have made it)
+        this.view.setOmen(this.spellFx.darkness());
 
         for (const actor of battle.actors) {
             const avatar = this.avatars.get(actor.id);

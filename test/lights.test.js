@@ -131,13 +131,18 @@ describe("the fires (world/fire.js)", () => {
         assert.match(mesh.material.vertexShader, /cameraPosition/, "turned to the camera, its size in metres whatever the mesh is scaled to");
         assert.equal(flamesMesh([{ x: 0, y: 0, z: 0, kind: "lantern", tongues: 0 }]), null);
 
-        // (A spell's its own copy, its size its own, everything else the same)
-        const own = fireFlames(0.3);
+        // (A spell's its own copy, its size and its body its own (a body of flame that keeps its
+        // colour by day; the world's fires none, adding their light), everything else the same)
+        const own = fireFlames(0.3, 1);
 
         assert.equal(own.uniforms.fireSize.value, 0.3);
+        assert.equal(own.uniforms.fireBody.value, 1);
         assert.equal(own.uniforms.windowLight, WINDOW_LIGHT);
         assert.equal(fireMaterials().flames.uniforms.fireSize.value, 1);
+        assert.equal(fireMaterials().flames.uniforms.fireBody.value, 0, "the world's fires adding their light, as they did");
+        assert.equal(fireFlames(0.5).uniforms.fireBody.value, 0);
         assert.equal(own.vertexShader, fireMaterials().flames.vertexShader, "the same shader, so nothing's compiled again");
+        assert.equal(own.fragmentShader, fireMaterials().flames.fragmentShader);
     });
 });
 
