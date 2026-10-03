@@ -1870,6 +1870,32 @@ test("the town's guards stand at its ways out under its people's banner, and tal
     await page.keyboard.press("Escape");
     await expect(talk).toBeHidden();
 
+    // At midnight the guards with a hand free carry lit torches in place of their shields
+    // (world/carried.js), and everyone sees less far out of the light (core/light.js); by day the
+    // torches are put away
+    const night = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const war = game.host.war;
+        const [turn, clock] = [war.turn, war.clock];
+        const torches = () => game.battle.actors.filter(({ id, kind }) => kind === "soldier" && game.avatars.get(id)?.character.torch).length;
+
+        game.stop();
+        Object.assign(war, { turn: 41, clock: 30000 });
+        game.advance(0.05, { render: false });
+
+        const dark = { torches: torches(), lights: game.carried.lights().length, sky: game.battle.light?.sky ?? 1 };
+
+        Object.assign(war, { turn, clock });
+        game.advance(0.05, { render: false });
+
+        return { dark, day: { torches: torches(), lights: game.carried.lights().length, light: game.battle.light } };
+    });
+
+    expect(night.dark.torches).toBeGreaterThan(0);
+    expect(night.dark.lights).toBeGreaterThan(0);
+    expect(night.dark.sky).toBeLessThan(1);
+    expect(night.day).toEqual({ torches: 0, lights: 0, light: null });
+
     // Taken by the orcs, at war with the humans: orcish soldiers now, under their banner, and they come for the player
     const war = await page.evaluate(() => {
         const { game } = window.pellagos;

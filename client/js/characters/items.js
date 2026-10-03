@@ -323,6 +323,21 @@ function wand() {
     ], "wand");
 }
 
+// A torch carried at night (a guard's): an ash shaft gripped near its foot, iron bands, and a
+// head of pitch-soaked rags at its top, where its flame burns (HAND_TORCH_FLAME, above the grip)
+function handTorch() {
+    return assemble([
+        [at(new THREE.CylinderGeometry(0.016, 0.014, 0.56, 8), 0, 0.2, 0), "wood"],
+        [at(new THREE.CylinderGeometry(0.019, 0.019, 0.09, 8), 0, 0, 0), "leather"],
+        [at(new THREE.CylinderGeometry(0.034, 0.026, 0.12, 9), 0, 0.46, 0), "darkWood"],
+        [at(new THREE.CylinderGeometry(0.036, 0.036, 0.015, 9), 0, 0.41, 0), "iron"],
+        [at(new THREE.CylinderGeometry(0.036, 0.036, 0.015, 9), 0, 0.5, 0), "iron"],
+    ], "torch");
+}
+
+/** Where a carried torch's flame burns, in its model's frame (metres up its shaft from the grip). */
+export const HAND_TORCH_FLAME = [0, 0.53, 0];
+
 function warHammer() {
     // A long ash haft (gripped a quarter of the way up, the other hand at its end), a square
     // steel head with a spike behind it, and a point on top; the striking face looks forward (+z)
@@ -1249,6 +1264,8 @@ export function buildItem(model, fit = {}) {
             return wand();
         case "warHammer":
             return warHammer();
+        case "handTorch":
+            return handTorch();
         case "grimoire":
             return grimoire();
         case "grimoireClosed":

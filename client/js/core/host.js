@@ -15,9 +15,11 @@
 // Pure JavaScript, no DOM: it runs in the browser of the player who's hosting, or in Node.
 
 import { Battle, FOE_MS, KINDS, TALK_REACH } from "./battle.js";
+import { elapsedOf } from "./daytime.js";
 import { Explored } from "./explored.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { offHandFree, rollGear } from "./gear.js";
+import { carriesTorch, lighting, skyLight, torchesLit } from "./light.js";
 import { ABILITIES, alike, ARMOR_CAP, buys, ITEMS, priceOf, Progress, QUALITIES, rollBoost, rollLoot, wares, weaponOf } from "./progress.js";
 import { SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { createRandom } from "./random.js";
@@ -775,6 +777,30 @@ export class Host {
         return target.kind === "soldier" && target.team !== actor.team && !this.war?.friendly(actor.team, target.team);
     }
 
+    // The light to see by out in the world now (light.js lighting: the sky's by the war's clock,
+    // and round the settlements, the war camps' fires, fires on the ground and the soldiers
+    // carrying torches near the players), worked out from what every copy of the world has alike
+    #light() {
+        const elapsed = elapsedOf(this.war);
+
+        if (skyLight(elapsed) >= 1) {
+            return null;
+        }
+
+        const out = (actor) => actor && actor.map === "town" && !actor.dead;
+        const players = [...this.players.values()].map(({ id }) => this.battle.actor(id)).filter(out).map(({ x, y }) => [x, y]);
+        const dark = torchesLit(elapsed);
+
+        return lighting({
+            elapsed,
+            plan: this.world.plan,
+            players,
+            camps: [...this.camps.values()].map(({ fire }) => fire),
+            fires: this.battle.hazards.filter((hazard) => hazard.kind === "fire" && hazard.map === "town"),
+            torches: dark ? this.battle.actors.filter((actor) => out(actor) && carriesTorch(actor, dark)).map(({ x, y }) => [x, y]) : [],
+        });
+    }
+
     /**
      * Advance the world by `ms` (the battle's whole steps: battle.js advance; the war's turns).
      * Returns what happened: the battle's events, and the host's own ("join", "leave", "open",
@@ -783,6 +809,7 @@ export class Host {
      */
     advance(ms) {
         this.recorder?.(["a", ms]);
+        this.battle.light = this.#light();
 
         const events = this.battle.advance(ms);
 
