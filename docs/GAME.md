@@ -643,9 +643,18 @@ world's drawn twice over each frame:
   with its heights), so a ridge or a valley runs along the triangles' edges; split the same way
   everywhere, any running the other way was drawn as a row of teeth from high up.
   - **Its ground** is the land's as seen from afar (core/terrain/height.js `distantHeights`):
-    lakes and the sea carved in and lying flat at their level, coloured as deep water; no rivers.
-    Each level's edges are eased into the next one's (every other corner halfway between its
-    neighbours), so they meet without a crack.
+    lakes and the sea carved in and lying flat at their level; no rivers. Each level's edges are
+    eased into the next one's (every other corner halfway between its neighbours), so they meet
+    without a crack.
+  - **Its still water** (the terrain plan's M7d-2). Each corner has how deep the water is over the
+    land, and on land how far below it the nearest water's surface is (less than 0, both up to
+    4 m). Between corners that's 0 just where the shore is, so the shore is drawn there, sharp
+    across a pixel: it follows the land in curves, not the corners in 8 m steps. The water looks
+    as the water nearer does (water.js `STILL_WATER`): its own colour over its bed, the bed seen
+    through it where it's shallow (red taken out first, so the shallows are green); the sky from
+    the same blurred map, as much as the water nearer reflects at that roughness and that
+    glancing a look; and the sun's glint. So a lake or the sea far off reflects the sky and the
+    clouds and pales to the horizon, and meets the water nearer without a band.
   - **Worked out off the page's thread** (far/far-worker.js), a level at a time, about 10 ms each
     on a desktop; as the player walks, the finest moves every 16 m, the coarsest every 256 m.
   - **Hidden where nearer ground's drawn:** each level is lifted out of sight inside the next one
@@ -667,7 +676,12 @@ world's drawn twice over each frame:
   (indoors; the labs, which don't see far: View's `far`) are linear as before.
 - **What stands up near the player** (buildings, trees, rocks, folk) fades out a few pixels at a
   time from 128 to 154 m in front of the camera, before the near camera stops and would cut it
-  through. The ground doesn't: it goes on into the far land.
+  through. The ground doesn't: it goes on into the far land. Nor does the water: it goes on to
+  where the near camera stops, its ripples gone by 128 m, and the far land's water and the far
+  rivers, which look as it does there, take over. (It used to fade out too. Where it had gone,
+  the bed under it showed, or nothing at all: looking down on a lake from high up, the bed was
+  past where the near camera stops before the far land began, so the sky's colour showed
+  through in dots.)
 - **Costs** (medium, the browser tests' software renderer): 4 to 8 more draw calls and about
   50,000 more triangles a frame outdoors (the far land's 32,000, and more of the near world
   showing through the thinner haze); indoors, none.
@@ -777,9 +791,10 @@ plan's M6c). What stands up from the land is seen from as far as the far land re
     at a time (12,000 trees cost a quarter of a frame instanced, next to nothing as one mesh).
 - **The rivers from afar** (world/far/rivers.js): the far land's corners are too far apart for a
   river's channel, so each river's course (core/terrain/waters.js) is drawn on the far land as a
-  ribbon of deep water on its surface, as wide as the river (4 m at least, so it isn't lost a long
-  way off), the sky in it a little; fading in where the near world's water fades out. About 5,000
-  triangles to 2 km.
+  ribbon of water on its surface, as wide as the river (4 m at least, so it isn't lost a long way
+  off), as a lake far off looks (`STILL_WATER`: a metre and a half deep over a river's bed, the
+  sky and the sun in it). Drawn with the far land only: the water nearer goes on to where it
+  starts. About 5,000 triangles to 2 km.
 - **Both** are drawn a little towards the eye, the more the further off, so the far land's coarse
   ground doesn't hide them; and worked out with what's built, in the same worker.
 

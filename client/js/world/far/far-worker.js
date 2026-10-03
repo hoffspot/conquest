@@ -21,7 +21,7 @@ function work() {
 
     const ground = sampleLevel(plan, level, middle);
 
-    self.postMessage(ground, [ground.heights.buffer, ground.water.buffer, ground.normals.buffer, ground.indices.buffer]);
+    self.postMessage(ground, [ground.heights.buffer, ground.water.buffer, ground.depth.buffer, ground.normals.buffer, ground.indices.buffer]);
     later();
 }
 

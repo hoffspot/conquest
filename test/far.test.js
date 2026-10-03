@@ -10,6 +10,8 @@ import { distantHeights, landHeight, stillLevelAt } from "../client/js/core/terr
 import { FarLand } from "../client/js/world/far/far.js";
 import { FAR, FAR_LEVELS, farReach, middleOf, reachOf, sampleLevel, spacingOf, splitAlong } from "../client/js/world/far/levels.js";
 import { FADE, FAR_FOG, farHaze, hazeAt } from "../client/js/world/fog.js";
+import { groundMaterial } from "../client/js/world/ground.js";
+import { primingWater, STILL_WATER } from "../client/js/world/water.js";
 import { QUALITY } from "../client/js/world/view.js";
 
 // (The ground's textures paint a canvas: enough of one for them to in Node, every other drawing
@@ -104,6 +106,66 @@ describe("the far land (world/far)", () => {
 
         assert.deepEqual([...sea], [0, 0, 0, 0]);
         assert.deepEqual([...open], [1, 1, 1, 1]);
+    });
+
+    it("marks how deep its still water is, and how far below it the land is out of it, so its shore is where that's 0 between two corners", () => {
+        const middle = middleOf(1, 1950, 4478);
+        const { water, depth } = sampleLevel(plan, 1, middle);
+        const count = FAR.cells + 1;
+        let shores = 0;
+
+        for (let j = 1; j < count - 1; j++) {
+            for (let i = 1; i < count - 1; i++) {
+                const k = j * count + i;
+
+                assert.equal(depth[k] > 0, water[k] === 1, `corner ${i}, ${j}: ${depth[k]}`);
+                assert.ok(Math.abs(depth[k]) <= 4);
+
+                // (Between a wet corner and a dry one, the shore: where the depth between them is 0)
+                if (i < count - 2 && depth[k] > 0 !== depth[k + 1] > 0) {
+                    const along = depth[k] / (depth[k] - depth[k + 1]);
+
+                    assert.ok(along > 0 && along < 1);
+                    shores++;
+                }
+            }
+        }
+
+        assert.ok(shores > 10, `${shores} shores crossed`);
+
+        // (Along each edge, eased as the heights are)
+        for (let k = 1; k < count - 1; k += 2) {
+            assert.ok(Math.abs(depth[k] - (depth[k - 1] + depth[k + 1]) / 2) < 1e-6);
+            assert.ok(Math.abs(depth[k * count] - (depth[(k - 1) * count] + depth[(k + 1) * count]) / 2) < 1e-6);
+        }
+
+        // (Far from water, as far below as it's shown; the open sea, as deep as it's shown)
+        assert.deepEqual([...distantHeights(plan, 2928, 5072, 1, 1).depth], [-4]);
+        assert.deepEqual([...distantHeights(plan, -2000, -2000, 2, 64).depth], [4, 4, 4, 4]);
+    });
+
+    it("draws its still water as the water nearer looks where they meet, and the water nearer goes on to meet it", () => {
+        // (The far land's: still water's colour over its bed, then the sky and the sun reflected off it)
+        const material = groundMaterial({ far: { hole: { value: new THREE.Vector3() }, inner: { value: new THREE.Vector4() } } });
+        const shader = { uniforms: {}, vertexShader: THREE.ShaderLib.lambert.vertexShader, fragmentShader: THREE.ShaderLib.lambert.fragmentShader };
+
+        material.onBeforeCompile(shader);
+        assert.ok(shader.fragmentShader.includes(STILL_WATER.pars) && shader.fragmentShader.includes("stillWater(ground"));
+        assert.ok(shader.fragmentShader.indexOf(STILL_WATER.reflected) < shader.fragmentShader.indexOf("#include <opaque_fragment>"), "(reflected once it's lit)");
+        assert.match(STILL_WATER.reflected, /getIBLRadiance\(geometryViewDir, stillUp, 0\.12\)/, "(the sky as blurred as the water nearer has it)");
+        assert.match(STILL_WATER.reflected, /BRDF_BlinnPhong\(directionalLights\[0\]\.direction/, "(and the sun)");
+        material.dispose();
+
+        // (The water nearer: not faded out with what's near, but drawn to where the near world ends,
+        // its ripples gone by where it would have started to fade)
+        const water = primingWater();
+        const near = { uniforms: {}, vertexShader: THREE.ShaderLib.standard.vertexShader, fragmentShader: THREE.ShaderLib.standard.fragmentShader };
+
+        assert.ok("NO_NEAR_FADE" in water.defines);
+        water.onBeforeCompile(near);
+        assert.ok(near.fragmentShader.includes(`smoothstep(${(FADE.from - 28).toFixed(1)}, ${FADE.from.toFixed(1)}, away)`));
+        water.userData.mask.dispose();
+        water.dispose();
     });
 
     it("splits each square along its more level diagonal, so ridges run along the triangles' edges, not in steps across them", () => {

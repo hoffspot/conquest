@@ -2435,3 +2435,45 @@ converted data is to be measured in M8 against today's hm08 data.
     a few deep cracks: the old picture fails it).
   - **Next in M7d:** the other lands looked over in the tour's pictures (the plains and fields,
     water's edges, marsh, sand and snow), and whatever gives them away fixed the same way.
+- **2026-10-03, M7d-2 built** (the land looking natural, §9: water's edges):
+  - **Found, from the tour's lakeshore, coast and river:**
+    - The far land's lakes and sea had shores in 8 m steps: each corner wet or dry, the shore cut
+      between them square by square.
+    - The far land's still water was a flat colour. Seen across a lake or the sea, it was a dark
+      band where the water nearer, reflecting the sky, ended.
+    - Where the water nearer faded out (128 to 154 m), a dotted band: under it, the bed coloured
+      as the land seen from afar (snow by the lakeshore). Looking down on a lake from high up,
+      the bed there was past where the near camera stops before the far land began, so the sky's
+      colour showed through in dots.
+    - The far rivers were a flat grey-blue ribbon, the river's own colour lost where it met it.
+  - **Fixed** (`core/terrain/height.js` `distantHeights`, `world/far/levels.js`, far-worker.js,
+    far.js): each far corner has how deep the water is over the land, and on land how far below
+    it the nearest water's surface is (up to 4 m either way, eased along a level's edges as the
+    heights are). Between corners that's 0 just where the shore is: the shore is drawn there,
+    sharp across a pixel (`ground.js`).
+  - **Fixed** (`world/water.js` `STILL_WATER`, used by `ground.js` for the far land and by
+    `far/silhouettes.js` for the far rivers): water from afar looks as the water nearer does. It
+    has its own colour over its bed, the bed seen through it where shallow (the same absorption,
+    red first). It reflects the sky from the same blurred map, as much as three.js's standard
+    material reflects off the water nearer at that roughness and that glancing a look (Karis's
+    fit to its light), and the sun's glint at the same sharpness (Blinn-Phong, its highlight as
+    high).
+  - **Fixed** (`world/water.js`, `fog.js`): the water nearer isn't faded out with what's near.
+    It goes on to where the near camera stops, its ripples gone by 128 m, and the far land's
+    water and the far rivers take over there. The far rivers are drawn with the far land only
+    (not twice, fading in).
+  - **Cost:** one draw call fewer (the far rivers' near copy) and the same triangles; on the
+    far land's water, an exponential, two texture reads (the sky's map) and a glint, only where
+    it's water; the far rivers lit (a Lambert material, not a flat colour); the water nearer
+    drawn whole from 128 to 160 m, not dotted out.
+  - **Pictures:** before/after sheets sent in the session (the coast, a lakeshore and a river;
+    eye, follow and high up each).
+  - **Versions:** none (the drawing's alone).
+  - **Tests:** `test/far.test.js` (each corner's depth: over 0 just where it's water, at most
+    4 m either way, a shore between a wet corner and a dry one, eased along the edges; the far
+    land's shader has the still water and reflects it once lit; the water nearer isn't faded,
+    its ripples gone by 128 m); `test/nature.test.js` (the far rivers lit, as still water from
+    afar, drawn with the far land only).
+  - **Next in M7d:** the marsh (its streams falling in steps across flat ground), sand and snow;
+    trees seen floating from high over the coast; the far land's gaps after a long jump (each
+    level drawn once worked out: keep the old until the new is in).

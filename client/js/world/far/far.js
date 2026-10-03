@@ -102,7 +102,7 @@ export class FarLand {
     }
 
     // A level's ground worked out: into its mesh, and the next level out lifted out of sight inside it
-    #take({ level, middle, heights, water, normals, indices }) {
+    #take({ level, middle, heights, depth, normals, indices }) {
         const each = this.levels[level];
 
         if (!each || each.asked?.[0] !== middle[0] || each.asked?.[1] !== middle[1]) {
@@ -123,7 +123,7 @@ export class FarLand {
         }
 
         geometry.getAttribute("normal").array.set(normals);
-        geometry.getAttribute("farWater").array.set(water);
+        geometry.getAttribute("farWater").array.set(depth);
         geometry.index.array.set(indices);
         geometry.index.needsUpdate = true;
 

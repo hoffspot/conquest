@@ -34,6 +34,12 @@ export const FAR_FOG = 400;
 export const FADE = Object.freeze({ from: FAR.nearFar - 32, to: FAR.nearFar - 6 });
 
 /**
+ * Which of the pixels go first as what's near fades out (GLSL, 0 to 1: interleaved gradient noise,
+ * Jimenez, 2014): the same pixels that what's seen from afar fades in in.
+ */
+export const FADE_NOISE = "fract( 52.9829189 * fract( dot( gl_FragCoord.xy, vec2( 0.06711056, 0.00583715 ) ) ) )";
+
+/**
  * The mist in the low ground: x, how thick (a metre, at its floor); y, its floor's height (metres);
  * z, how far up it thins by e (metres). None to start with.
  */
@@ -63,14 +69,11 @@ const FOG = `#ifdef USE_FOG
 		#if defined( FAR_FADE_IN )
 		// (What's seen from afar fading in where the near world fades out: the very pixels it leaves)
 		if ( fogFar > ${FAR_FOG.toFixed(1)} && vFogDepth < ${FADE.to.toFixed(1)} ) {
-			float fadeNoise = fract( 52.9829189 * fract( dot( gl_FragCoord.xy, vec2( 0.06711056, 0.00583715 ) ) ) );
-			if ( smoothstep( ${FADE.from.toFixed(1)}, ${FADE.to.toFixed(1)}, vFogDepth ) <= fadeNoise ) discard;
+			if ( smoothstep( ${FADE.from.toFixed(1)}, ${FADE.to.toFixed(1)}, vFogDepth ) <= ${FADE_NOISE} ) discard;
 		}
 		#elif !defined( NO_NEAR_FADE )
 		if ( fogFar > ${FAR_FOG.toFixed(1)} && vFogDepth > ${FADE.from.toFixed(1)} ) {
-			// (Interleaved gradient noise: Jimenez, 2014)
-			float fadeNoise = fract( 52.9829189 * fract( dot( gl_FragCoord.xy, vec2( 0.06711056, 0.00583715 ) ) ) );
-			if ( smoothstep( ${FADE.from.toFixed(1)}, ${FADE.to.toFixed(1)}, vFogDepth ) > fadeNoise ) discard;
+			if ( smoothstep( ${FADE.from.toFixed(1)}, ${FADE.to.toFixed(1)}, vFogDepth ) > ${FADE_NOISE} ) discard;
 		}
 		#endif
 	#endif

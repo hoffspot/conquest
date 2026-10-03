@@ -6,8 +6,12 @@
 import { RUNNING, watersOf } from "../../core/terrain/waters.js";
 import { CELL, CELLS } from "../../core/worldplan/plan.js";
 
-/** How wide a river's ribbon is drawn at least (metres), and how far over its surface (metres). */
-export const FAR_RIVERS = Object.freeze({ narrowest: 4, over: 0.4 });
+/**
+ * How wide a river's ribbon is drawn at least (metres), and how far over its surface (metres); and
+ * how it looks (world/water.js STILL_WATER): so deep (metres), over a bed this much as light as
+ * dry (wet).
+ */
+export const FAR_RIVERS = Object.freeze({ narrowest: 4, over: 0.4, depth: 1.5, wet: 0.62 });
 
 /** How many numbers each corner takes: x, y (up), z. */
 export const RIVER_FLOATS = 3;

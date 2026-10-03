@@ -21,7 +21,7 @@ import { textureCanvas } from "./art/engine/materials.js";
 import { blurred } from "./fields.js";
 import { splitAlong } from "./far/levels.js";
 import { FAR_FOG } from "./fog.js";
-import { causticTexture, FIELD, SHORE, WATER_DETAIL } from "./water.js";
+import { causticTexture, FIELD, SHORE, STILL_WATER, WATER_DETAIL } from "./water.js";
 import { TREE_WIND } from "./art/kits/trees.js";
 
 // Splat texels per metre (edges are shaped at this resolution)
@@ -224,10 +224,11 @@ const CAUSTICS = { scale: 0.4, bright: 0.85, fade: 0.8 };
  * few metres, each its average colour (a pattern, not a texture, from afar), and only what's large
  * (the lands, the homelands, the patches, rock) on them. The chunks' ground turns to it from
  * `from` to `to` metres in front of the camera (under the far haze: fog.js), so where it meets the
- * far land no seam shows. Still water afar (`water`: sRGB), deep under the haze; and how much less
- * steep the far land's ground has to be to show rock (its corners metres apart smooth its slopes).
+ * far land no seam shows; and how much less steep the far land's ground has to be to show rock (its
+ * corners metres apart smooth its slopes). Still water afar is the water's own (water.js), seen
+ * without its ripples: stillWater's.
  */
-export const FAR_GROUND = Object.freeze({ from: 100, to: 150, water: "#30505c", rock: 0.06 });
+export const FAR_GROUND = Object.freeze({ from: 100, to: 150, rock: 0.06 });
 
 /**
  * The peoples whose homelands (the world plan's territories) have ground of their own, painted
@@ -844,7 +845,7 @@ vec3 farGround(vec2 at, vec3 up, float height, float rockShift) {
             farFieldsOn: FAR_FIELDS,
             snowColour: { value: new THREE.Color(ALPINE.colour) },
             ...(water ? { groundWater: { value: water.texture }, groundWaterArea: { value: new THREE.Vector4(...water.area) }, causticMap: { value: causticTexture() }, groundTime: TREE_WIND.time, groundDetail: WATER_DETAIL } : {}),
-            ...(far ? { farHole: far.hole, farInner: far.inner, farWaterColour: { value: new THREE.Color(FAR_GROUND.water) } } : {}),
+            ...(far ? { farHole: far.hole, farInner: far.inner } : {}),
             ...Object.fromEntries(layers.map(({ size }, k) => [`layer${k}Size`, { value: size }])),
         });
         shader.vertexShader = shader.vertexShader
@@ -930,7 +931,7 @@ uniform float farFieldsOn;
 #ifdef FAR_LAND
 varying float vFarWater;
 varying vec3 vFarColour;
-uniform vec3 farWaterColour;
+${STILL_WATER.pars}
 #endif
 ${layers.map((_, k) => `uniform float layer${k}Size;`).join("\n")}
 ${reads}
@@ -964,7 +965,12 @@ vec3 farFields(vec3 ground, vec2 at, float away) {
             .replace("#include <map_fragment>", `
 #ifdef FAR_LAND
 groundContact = 0.0;
-vec3 ground = mix(farFields(vFarColour, vGround, distance(cameraPosition.xz, vGround)), farWaterColour, vFarWater);
+// (Still water (water.js STILL_WATER) where its depth over the land's more than 0 (distantHeights'),
+// its shore where that's 0 between the corners: following the land, not the corners, drawn sharp
+// across a pixel; its bed the land there, wet)
+stillWet = clamp(vFarWater / max(fwidth(vFarWater), 1e-4) + 0.5, 0.0, 1.0);
+vec3 ground = farFields(vFarColour, vGround, distance(cameraPosition.xz, vGround));
+ground = mix(ground, stillWater(ground * ${(1 - WET.darker).toFixed(2)}, vFarWater, ${STILL_WATER.up}), stillWet);
 #else
 vec4 splat = texture2D(splatMap, (vGround - splatArea.xy) / splatArea.zw);
 groundContact = texture2D(contactMap, (vGround - contactArea.xy) / contactArea.zw).r;
@@ -1095,7 +1101,11 @@ if (fogFar > ${FAR_FOG.toFixed(1)} && vFogDepth > ${FAR_GROUND.from.toFixed(1)})
 #endif
 diffuseColor.rgb *= ground;`)
             .replace("#include <aomap_fragment>", `#include <aomap_fragment>
-reflectedLight.indirectDiffuse *= 1.0 - ${CONTACT.loss.toFixed(2)} * groundContact;`);
+reflectedLight.indirectDiffuse *= 1.0 - ${CONTACT.loss.toFixed(2)} * groundContact;`)
+            .replace("#include <opaque_fragment>", `#ifdef FAR_LAND
+${STILL_WATER.reflected}
+#endif
+#include <opaque_fragment>`);
     };
     material.customProgramCacheKey = () => "ground";
 
