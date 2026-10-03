@@ -32,6 +32,7 @@ import { Trails, TRAILS } from "./trails.js";
 import { Interiors } from "./insides.js";
 import { WENCHES } from "./lore/taverns.js";
 import { featuresOf } from "./wilds.js";
+import { ARCHES, archesOf, archSquares } from "./arches.js";
 import { CORNERS, GRADE, Ground, PAD_EASE, ROAD } from "./terrain/ground.js";
 import { SLOPE_CLASS, stillLevelAt, stillOf, stillWaterAt } from "./terrain/height.js";
 import { WADE, wadeable, watersOf } from "./terrain/waters.js";
@@ -44,6 +45,9 @@ import { BIOME, BIOMES, CELL, CELLS, CHUNK, CHUNKS, planWorld, RACES, startFor, 
 import { hypot } from "./exact.js";
 
 export { CHUNK, CHUNKS, WORLD_SIZE };
+
+// How much room is kept round an arch of rock past its legs (metres: no tree or feature in it)
+const ARCH_ROOM = 4;
 
 /** A chunk's squares, and each square's index in them: (y - y0) * CHUNK + (x - x0). */
 export const SQUARES = CHUNK * CHUNK;
@@ -240,15 +244,17 @@ export class Overworld {
         this.last = null;
 
         // The places trees keep clear of: the settlements (but the town, which is set in), the
-        // sites and the camps
+        // sites, the camps and the arches of rock (arches.js: their own room round them)
         // (Each people's castle and special places, set down as the world near them is made:
         // their clearings growing to their size, where they're set)
         // (Those a trail goes up to facing the way it comes: the trails are made below, before any
         // site is set down)
         this.sites = new Sites(plan, { landAt: (x, y) => this.landAt(x, y), clearing: CLEAR_OF_PLACES, facingOf: (site) => this.trails.facingOf(site) });
+        this.arches = archesOf(plan);
         this.clearings = [
             ...plan.places.filter((place) => place !== start).map(({ at, radius }) => ({ at, radius: radius + CLEAR_OF_PLACES })),
             ...plan.sites.map(({ id }) => this.sites.clearings.get(id)),
+            ...this.arches.map(({ x, y, span }) => ({ at: [x, y], radius: span / 2 + ARCHES.leg + ARCH_ROOM })),
         ];
         // (The camps' own, where each is pitched: found as the world near it is made, campsNear)
         this.campSpots = new Map();
@@ -1203,6 +1209,25 @@ export class Overworld {
             return !(settlement && this.settlements.squareAt(settlement, x, y)) && !clearings.some(({ at, radius }) => hypot(at[0] - x, at[1] - y) < radius);
         };
         const features = featuresOf({ x0, y0, size: CHUNK, seed: plan.seed, random, landAt: (x, y) => this.biomeAt(x, y), homeAt: (x, y) => this.homeAt(x, y), free });
+
+        // (An arch of rock standing in it, its legs on its squares: unless any of them is a road's,
+        // water, a bridge or built on, when it isn't there at all)
+        for (const arch of this.arches) {
+            if (Math.floor(arch.x / CHUNK) !== chunk.cx || Math.floor(arch.y / CHUNK) !== chunk.cy) {
+                continue;
+            }
+
+            const squares = archSquares(arch);
+            const stands = squares.every(([x, y]) => {
+                const k = (y - y0) * CHUNK + (x - x0);
+
+                return x >= x0 && y >= y0 && x < x0 + CHUNK && y < y0 + CHUNK && !chunk.water[k] && !chunk.bridge[k] && !chunk.solid[k] && chunk.ground[k] !== GROUND.road;
+            });
+
+            if (stands) {
+                features.push({ kind: "arch", x: arch.x, y: arch.y, size: arch.span / 2, height: arch.rise, turn: arch.turn, variant: arch.variant, squares, opaque: true, arch });
+            }
+        }
 
         for (const { squares, opaque: hides } of features) {
             for (const [x, y] of squares) {

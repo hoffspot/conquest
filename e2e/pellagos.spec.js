@@ -997,6 +997,44 @@ test("walks out of the town into the world, drawn round the player as they go, w
     expect(cliffs.material).toEqual(["cliffs"]);
     expect(cliffs.compiled).toBe(true);
 
+    // At an arch of rock (core/arches.js): drawn over its legs, which can't be walked into, the
+    // ground under its span open
+    const arch = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const land = game.world.maps.town;
+        const [{ x, y, turn, span }] = land.arches;
+        const [sx, sy] = [x - Math.sin(turn) * 20, y + Math.cos(turn) * 20];
+
+        Object.assign(game.battle.actor(game.me), { x: sx, y: sy, path: [], order: null, progress: null });
+        game.avatars.get(game.me).object.position.set(sx, land.ground.heightAt(sx, sy), sy);
+
+        for (let n = 0; n < 4; n++) {
+            game.advance(0.25, { render: false });
+
+            for (let k = 0; k < 400 && (game.chunks.update(sx, sy, { budget: 200 }) || game.chunks.busy); k++) {
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        }
+
+        game.advance(0.05);
+
+        const meshes = [];
+
+        session.view.scene.traverse((node) => node.name === "arches" && meshes.push(node));
+
+        const foot = [x - (Math.cos(turn) * span) / 2, y - (Math.sin(turn) * span) / 2];
+
+        return {
+            drawn: meshes.length,
+            leg: land.squares.blocked(Math.floor(foot[0]), Math.floor(foot[1])),
+            under: land.squares.blocked(Math.floor(x), Math.floor(y)),
+        };
+    });
+
+    expect(arch.drawn).toBe(1);
+    expect(arch.leg).toBe(true);
+    expect(arch.under).toBe(false);
+
     // Every shader drawn so far (the town, the world round it and its far land, its water, grass,
     // trees, cliffs and creatures) reads no more textures than an iPhone lets one read (16; this
     // browser allows more): past that, its shader won't compile there and nothing it draws is seen

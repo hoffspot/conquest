@@ -1287,6 +1287,22 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     triangles; 24,000 to 77,000 in the mountains round the player on seed 1. None on low quality
     (the rock's still painted on the ground there): lowered to low while playing, those drawn are
     hidden, and shown again when it's raised; a chunk drawn on low has none till it's drawn again.
+- **Arches of rock** (kits/arches.js; placed by core/arches.js, WORLD.md *Arches of rock*): a
+  band of rock swept along a curve from one foot, up over the open ground, and down to the other;
+  its legs steep and its top flattish, a little lopsided, each its own.
+  - **Its shape:** 34 rings of 14 points along its length (spaced evenly along it, so the steep
+    legs aren't coarse), each a squared section (a slab worn round at its corners) 4.2 m through
+    and 3.8 m deep at its feet, 3 and 2.6 over its top (each arch a little more or less), flaring
+    a little at its foot, which goes 0.8 m into the ground. Broken by knobs of rock (4.5 m and
+    smaller), and the cliffs' bedding's ledges standing out across it.
+  - **Its colour and picture** are the cliffs': each point's layer of the bedding a shade of its
+    own, moss and snow on what faces up, the land's rock (red in the savannah and badlands, pale
+    on the heath) laid on from three sides (`cliffMaterial`). Chips of it lie round its feet.
+  - **Drawn at every quality** (its legs are in the way whether it's drawn or not), a mesh of its
+    own in its chunk (one draw and its shadows', about 1,000 triangles), casting shadows; from
+    afar, out to 2 km, its two legs and the band over them as three boxes in its rock's colour
+    with the other far shapes (far/shapes.js `archShapes`); on the minimap, its legs and a line
+    between them.
 - **Trees** (`Woodland`, kits/trees.js): every variant kept once and drawn wherever it's planted
   (Three.js's BatchedMesh), all the world's wood in one draw call and its leaves in another, only
   the trees in view (and, into the sun's shadows, only those in its); the crowns' shells and the

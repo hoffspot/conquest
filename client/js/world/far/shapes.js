@@ -5,6 +5,7 @@
 // Each piece in its people's colours; flat-shaded; a few dozen triangles. Pure: worked out in a
 // worker (silhouette-worker.js), into arrays a mesh is made from (silhouettes.js).
 
+import { feetOf } from "../../core/arches.js";
 import { createRandom } from "../../core/random.js";
 import { layoutNeutral } from "../../core/setpieces/neutral.js";
 import { PLOT } from "../../core/setpieces/pieces.js";
@@ -22,6 +23,31 @@ export const BUILDERS = Object.freeze({
     lizard: { walls: 0x8c7c58, roof: 0x9c8c50, stone: 0xa49c84, wood: 0x6a5a3c, storey: 2.8, roofs: "gable", rise: 0.85, wall: 5, tower: 10, stilts: 1.6 },
     orc: { walls: 0x5c4838, roof: 0x4a3c30, stone: 0x3e3a38, wood: 0x4a3a2c, storey: 2.8, roofs: "gable", rise: 0.42, wall: 5, tower: 10 },
 });
+
+/**
+ * The arches of rock's colours from afar (sRGB: the rock of their lands, engine/painters.js
+ * MATERIALS' rock, rock-red, rock-dark and rock-pale), the grey's for any land not listed.
+ */
+export const ARCH_ROCK = Object.freeze({ savannah: 0x9c6448, badlands: 0x9c6448, volcanic: 0x3f3d3c, heath: 0xb3ad9c, beach: 0xb3ad9c, rock: 0x86827b });
+
+/**
+ * An arch of rock (core/arches.js's) as seen from afar: its two legs and the band over them, three
+ * boxes in its land's rock. `heightOf(x, z)` is the ground's height.
+ */
+export function archShapes(shapes, arch, heightOf) {
+    const colour = ARCH_ROCK[arch.land] ?? ARCH_ROCK.rock;
+    const [[ax, ay], [bx, by]] = feetOf(arch);
+    const [ha, hb] = [heightOf(ax, ay), heightOf(bx, by)];
+    // (Its legs and band about as thick as they're drawn near: kits/arches.js ARCH_LOOK)
+    const [thick, band] = [3.6, 2.8];
+    const top = (ha + hb) / 2 + arch.rise;
+    // (A box's width runs along (cos f, -sin f): the band along the way from foot to foot)
+    const facing = -arch.turn;
+
+    shapes.box(ax, ay, ha - SUNK, thick, thick, top + band - ha + SUNK, facing, colour);
+    shapes.box(bx, by, hb - SUNK, thick, thick, top + band - hb + SUNK, facing, colour);
+    shapes.box(arch.x, arch.y, top, arch.span + thick, thick, band, facing, colour);
+}
 
 // (A people's builders, the humans' for any not listed: the plan writes the dark elves both ways)
 export const buildersOf = (people) => BUILDERS[people] ?? BUILDERS[people === "darkelf" ? "darkElf" : "human"];

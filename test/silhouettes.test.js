@@ -9,7 +9,9 @@ import { squareOf } from "../client/js/core/settlements.js";
 import { planWorld } from "../client/js/core/worldplan/plan.js";
 import { FAR_LEVELS, farReach } from "../client/js/world/far/levels.js";
 import { gatherSilhouettes, SILHOUETTES } from "../client/js/world/far/gather.js";
-import { building, Shapes, siteShapes } from "../client/js/world/far/shapes.js";
+import { archesOf, feetOf } from "../client/js/core/arches.js";
+import { heightAt } from "../client/js/core/terrain/height.js";
+import { ARCH_ROCK, archShapes, building, Shapes, siteShapes } from "../client/js/world/far/shapes.js";
 import { RESHAPE, Silhouettes } from "../client/js/world/far/silhouettes.js";
 import { farHaze } from "../client/js/world/fog.js";
 
@@ -107,6 +109,50 @@ describe("what's built seen from afar (far/shapes.js, gather.js, silhouettes.js)
         }
 
         assert.ok(inside > 50, `(${inside} corners in ${place.name})`);
+    });
+
+    it("sees an arch of rock from afar: its two legs and the band over them, in its land's rock, facing out", () => {
+        const arch = archesOf(plan).find(({ land }) => land === "savannah" || land === "badlands") ?? archesOf(plan)[0];
+        const heightOf = (x, z) => heightAt(plan, x, z);
+        const shapes = new Shapes();
+
+        archShapes(shapes, arch, heightOf);
+        // (Three boxes, each its four sides and its top)
+        assert.equal(shapes.triangles, 3 * 10);
+
+        // (Each box faces out from its own middle: the legs' at their feet, the band's at its middle)
+        const [a, b] = feetOf(arch);
+        const top = (heightOf(...a) + heightOf(...b)) / 2 + arch.rise;
+
+        for (const [box, middle] of [[0, [a[0], top / 2, a[1]]], [1, [b[0], top / 2, b[1]]], [2, [arch.x, top + 1.4, arch.y]]]) {
+            const one = new Shapes();
+
+            one.positions = shapes.positions.slice(box * 90, (box + 1) * 90);
+            one.normals = shapes.normals.slice(box * 90, (box + 1) * 90);
+            assert.ok(facesOut(one, middle), `box ${box} faces out`);
+        }
+
+        // (The band from leg to leg, as high as the arch rises)
+        const ys = shapes.positions.filter((_, k) => k % 3 === 1);
+
+        assert.ok(Math.max(...ys) > top + 2);
+        assert.ok(ARCH_ROCK[arch.land]);
+
+        // (Gathered with what's built near, out to SILHOUETTES.arches)
+        const near = gatherSilhouettes(plan, { x: arch.x + 500, z: arch.y, reach: 1000, layouts: new Map() }).shapes;
+        const far = gatherSilhouettes(plan, { x: arch.x + SILHOUETTES.arches + 100, z: arch.y, reach: SILHOUETTES.arches + 50, layouts: new Map() }).shapes;
+        const touches = (each) => {
+            for (let k = 0; k < each.positions.length; k += 3) {
+                if (Math.hypot(each.positions[k] - arch.x, each.positions[k + 2] - arch.y) < arch.span) {
+                    return true;
+                }
+            }
+
+            return false;
+        };
+
+        assert.ok(touches(near), "seen from 500 m");
+        assert.ok(!touches(far), "not past its reach");
     });
 
     it("puts a great place where it's been set down, once it has", () => {

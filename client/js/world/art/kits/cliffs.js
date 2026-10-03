@@ -77,8 +77,8 @@ const smoothstep = (a, b, x) => {
     return t * t * (3 - 2 * t);
 };
 
-// 3D value noise from 0 to 1 at a point (lattice units)
-function noise3(x, y, z, seed) {
+/** 3D value noise from 0 to 1 at a point (lattice units; kits/arches.js's too). */
+export function noise3(x, y, z, seed) {
     const [x0, y0, z0] = [Math.floor(x), Math.floor(y), Math.floor(z)];
     const smooth = (t) => t * t * (3 - 2 * t);
     const [fx, fy, fz] = [smooth(x - x0), smooth(y - y0), smooth(z - z0)];
@@ -392,12 +392,12 @@ function open(chunk, ox, oy) {
     return true;
 }
 
-// The rock's colour at a point of the skin (each point's own, the same in every triangle it's a
+// The rock's colour at a point of the skin (kits/arches.js's too: each point's own, the same in every triangle it's a
 // corner of, so the colours blend across the rock, no face standing out): its layer's own shade,
 // darker up under the ledge above; where it's hardly a cliff (at its brow and its foot, where it
 // comes out of the ground), the ground's colour there (CLIFFS.edge), so where it meets the ground
 // no line of rock shows; moss on what faces up in a green land, snow high up or in the cold, patchy
-function rockColour(look, { layer, up, height, normal, x, y, cliff }, snowLine) {
+export function rockColour(look, { layer, up, height, normal, x, y, cliff }, snowLine) {
     const shade = 0.74 + 0.28 * hashOf(layer, 17, 401);
     const rock = [1, 0.985, 0.96].map((v) => v * shade * (1 - 0.28 * smoothstep(0.55, 1, up)));
     const tint = mix(groundTint(look), rock, smoothstep(CLIFFS.edge[0], CLIFFS.edge[1], cliff));
@@ -449,8 +449,8 @@ function scree(mesher, chunk, ground, points, corners, { layer, uvs, look }) {
     }
 }
 
-// A chip of rock (an octahedron, jittered and flattened), `r` metres across
-function chip(mesher, [x, y, z], r, seed, { layer, uvs, look }) {
+/** A chip of rock (an octahedron, jittered and flattened), `r` metres across, at a point ([x, up, y] about the mesher's corner). */
+export function chip(mesher, [x, y, z], r, seed, { layer, uvs, look }) {
     const turn = seed * Math.PI * 2;
     const [c, s] = [Math.cos(turn), Math.sin(turn)];
     const jitter = (k) => 0.7 + 0.6 * hashOf(Math.floor(seed * 1e6), k, 941);

@@ -3046,3 +3046,31 @@ converted data is to be measured in M8 against today's hm08 data.
     compiled, reading no more than 16 textures).
   - **Not yet:** the arches (row 5: one to three a region) and overhangs beyond the ledges.
   - **Next:** M7h-2, a few natural arches of rock; then M7i, churches, citadels and stone bridges.
+- **2026-10-03, M7h-2 built: arches of rock** (§9 *Rock relief*, table row 5's "1–3 arches per
+  region"; docs/WORLD.md and GAME.md *Arches of rock*).
+  - **Where** (core/arches.js `archesOf`): a region is the plan's cells of one rocky land joined
+    side to side; none in one under 600 cells, one more each 2,400 past that, three at most; on
+    gentle ground well inside its land, clear of roads, water, the settlements and the places,
+    640 m from any other, inside one chunk. Seed 1: 11 in five lands (snow, savannah, badlands,
+    mountain, heath); seeds 2, 3, 7: 8, 10 and 13. Worked out once a world in 20 to 70 ms.
+  - **In the rules:** a chunk's feature (`kind: "arch"`): its legs' squares blocked and hiding
+    what's behind them, open under its span, a clearing round it (no tree nor other feature);
+    not there at all if a leg would be on a road, water, a bridge or what's built.
+    `NET_VERSION` 24 (the world's squares changed).
+  - **Drawn** (world/art/kits/arches.js): a band of rock swept along a curve, squared sections,
+    thick at its feet, broken by knobs and the cliffs' bedding's ledges, coloured and laid with
+    the rock's picture as the cliffs are; about 1,000 triangles, one draw a chunk that has one, at
+    every quality. First drawn round (a bent tube, thin and smooth): it read as a pipe, not rock;
+    then made a slab, thicker, lopsided and ledged. From afar (out to 2 km) three boxes in the far
+    shapes; on the minimap its legs and span.
+  - **Pictures:** five of seed 1's arches from 34 m off, before (main) and after; sent in the
+    session.
+  - **Tests:** test/arches.test.js (one to three a region, far apart, the same every time; on
+    gentle ground well inside its land, clear of roads, water, the settlements and the places,
+    inside one chunk; its legs' squares blocked and hiding, open under its span, nothing grown in
+    its room; drawn from foot to foot, its feet in the ground, facing out, as high as it rises;
+    the cliffs' material, under 2,000 triangles); test/chunks.test.js (drawn at every quality,
+    not among the land's features); test/silhouettes.test.js (seen from afar, its legs and band,
+    out to its reach); e2e (drawn where it stands, its legs blocked, open under its span).
+  - **Not yet:** overhangs beyond the cliffs' ledges.
+  - **Next:** M7i, churches, citadels and stone bridges.
