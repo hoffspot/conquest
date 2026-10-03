@@ -2965,3 +2965,40 @@ converted data is to be measured in M8 against today's hm08 data.
     hour); test/buildings.test.js (the insides' windows: the day's sky in them, the night's as the
     daylight goes).
   - **Next:** M7g, pins on the world map.
+- **2026-10-03, M7g built: pins on the world map** (§9 *Pins on the world map*; docs/GAME.md
+  *The world map*; README).
+  - **The pin:** held on the world map somewhere the player's been, a pin's dropped there (one:
+    a new one moves it); held on it, or its button, it's taken away. Kept with the character
+    (save.js `loadPin`/`savePin`), not with the world, so each player's is their own; joined to
+    another's world, it's kept only while there.
+  - **In the world** (world/pin3d.js `PinMarks`): a round column of blue light 900 m high, a strip
+    turned to the camera in its shader, never thinner than about ten pixels, drawn in both passes,
+    each its own part (the near pass within the near camera's 160 m, the far pass the rest, brought
+    in to the far camera's reach and shrunk as much where it's further), so it's seen from
+    anywhere, through the haze a little fainter, day and night; a glow round its foot; and a thin
+    glowing line along the ground from the player's feet the way they'd walk, 180 m of it, its
+    buffers made once. Four draws, additive, no shadows, no textures.
+  - **The way there** (core/journey.js): found over the plan's cells, not the navigation meshes
+    (kilometres of their tiles would stall the game): the sea, lakes and rivers crossed only at
+    fords, streams and roads' bridges, nothing steeper than 37°, the roads cheaper (`crossingsOf`,
+    worked out once a world in about 0.1 s; `wayAcross`, A* in 3 to 40 ms across the world,
+    pulled straight where it can see). Near the player, its first 64 m over the navigation mesh's
+    tiles there already (`Navigation.wayIn`: none baked for it), so the line goes round what's in
+    the way. Found again as the player moves (every 0.3 s at most, once they've moved), and across
+    the world again once they're 40 m off it. Drawn on the map too.
+  - **Tapped twice** (app/journey.js `Journey`): the map closes and the player runs there a leg at
+    a time (72 m legs over the navigation mesh, the next sent as they near the end of one, walking
+    on when out of breath); found again if they stop getting nearer, given up on with a word after
+    two tries; anything else they do ends it. No way there: "A path cannot be found", nothing
+    done; indoors: "Step outside to set off".
+  - **Pictures:** the line on the ground from the follow camera; the column from 300 m and from
+    2 km, at noon and at midnight; the world map with the pin and the way; running there; sent in
+    the session.
+  - **Tests:** test/journey.test.js (each cell's ground; a way to every capital, never through the
+    sea, a lake or a river but where it's crossed, the same every time; none out to sea; nothing too
+    steep; measuring along a way; a journey's legs, not sent again every frame, found again when
+    stuck and given up on, over indoors; the column in both passes, the line along the ground in
+    buffers made once); test/app.test.js (the pin kept with the character, not another's);
+    e2e (dropped where it's held, the column and the line in the world, taken away held on it; out
+    at sea "A path cannot be found"; tapped twice, the player runs there and arrives).
+  - **Next:** the M7 summary report; then M7h, cliffs and rocks.

@@ -2326,6 +2326,39 @@ zoom out. A key in the corner shows the four icons and the fog.
 - **Over it**: the names of the settlements the player has been in (20 metres to a pixel or
   closer), the icons over the buildings they've gone into (6 metres to a pixel or closer), and
   the player, pointing the way they face (inside, at the building they're in).
+- **The pin** (the terrain plan's M7g): held still somewhere (550 ms, moving less than 8 pixels),
+  a pin's dropped there if the player's been there (one pin: a new one moves it), shown with the
+  way to it from where they are, a glowing blue line; held on the pin, or its button (a pin with
+  a cross, by the zoom buttons), it's taken away. It's kept with the character (save.js
+  `loadPin`), not the world: each player's is their own. Out in the world (world/pin3d.js
+  `PinMarks`) it's a round column of blue light rising 900 m from where it stands (a strip turned
+  to the camera, never thinner than about ten pixels, light rising slowly up it; additive, no
+  shadows), drawn in the near pass where it's within the near camera's reach and in the far pass
+  above that and out past the far land (brought in to the far camera's reach and shrunk as much,
+  a little fainter through the haze), so it's seen from anywhere, day or night; a glow on the
+  ground round its foot; and a thin, half-transparent, glowing blue line along the ground from the
+  player's feet the way they'd walk (a strip 0.3 m wide just over the grass's roots, light running
+  along it towards the pin), for 180 m (past that the column shows the way). Four draws.
+- **The way there** (core/journey.js `wayAcross`): found over the world plan's cells (32 m), not
+  the navigation meshes (whose tiles are baked only round the players: kilometres of them would
+  stall the game). Each cell's ground is worked out once a world, in about a tenth of a second
+  (`crossingsOf`: while loading, with a pin kept): the sea and lakes not crossed, nor a river but
+  at a ford or on a road's bridge (a mountain stream's waded anywhere), nor a step from one cell's
+  middle to the next climbing more than 37°; a metre along a road counts for 0.6, through a
+  stream 1.6, across a ford 2.5, and a climb for more (A*, eight ways from each cell, the same
+  every time). The way's then pulled straight wherever one cell can see another across ground of
+  its own kind. Across the world it takes 3 to 40 ms. Near the player its first 64 m are the
+  navigation mesh's way over the tiles there already (none baked for it: `wayIn`), so the line on
+  the ground goes round what stands in the way. It's found again as the player moves (at most
+  every 0.3 s, once they've moved a metre), and across the world again once they're 40 m off it.
+- **Tapped twice** (two taps within 350 ms and 18 pixels; not while picking somewhere for
+  Wizard's Walk): the place is the player's destination, run to as a double tap in the world would
+  (app/journey.js `Journey`): the map closes and they run (walking on once out of breath) a leg at
+  a time, each an order to a point on the way 72 m ahead, over the navigation mesh, the next sent
+  as they near its end. If they stop getting nearer for 5 s or stray 48 m off it, the way's found
+  again from where they are, twice at most; then they stop and are told the way's blocked. Anything
+  else the player does ends it. If there's no way there at all, the map says "A path cannot be
+  found" and nothing's done; from indoors, "Step outside to set off".
 
 A redraw waits for the next frame, or 50 ms if the browser has no frame coming (as when nothing
 else on the page is changing, with the game paused).

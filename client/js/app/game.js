@@ -47,6 +47,7 @@ import { RISING, STAGES } from "../core/war/war.js";
 import { GODS } from "../core/lore/gods.js";
 import { BECKON, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js";
 import { squaresOf } from "../core/grid.js";
+import { crossingsOf, nearestAlong, pointAlong, wayAcross, wayFrom } from "../core/journey.js";
 import { navigatorOf, releaseNavigation } from "../core/navigation.js";
 import { GROUND } from "../core/setpieces/pieces.js";
 import { CAST_FAILURES, ELEMENT_TOME_PRICE, ELEMENT_TOMES, GROWTH_XP, lookOf, SCHOOLS, SPELLS, TOMES } from "../core/spells.js";
@@ -72,6 +73,7 @@ import { EMBER_SCALE } from "../world/fire.js";
 import { GLOW_SCALE } from "../world/lights.js";
 import { CarriedTorches } from "../world/carried.js";
 import { LightGlobes } from "../world/globes.js";
+import { PinMarks, WAY_LINE } from "../world/pin3d.js";
 import { SMOKE_SHARE } from "../world/smoke.js";
 import { FarLand } from "../world/far/far.js";
 import { farReach } from "../world/far/levels.js";
@@ -91,6 +93,7 @@ import { FatePanel, fateWords } from "./fate.js";
 import { plateScale } from "./hud.js";
 import { itemPicture } from "./icons.js";
 import { JournalPanel, bearing, regardOf } from "./journal.js";
+import { Journey } from "./journey.js";
 import { SpellbookPanel } from "./spellbook.js";
 import { PackPanel } from "./pack.js";
 import { Governor } from "./governor.js";
@@ -174,6 +177,12 @@ const ARRIVE_WITHIN = 140;
 // way, the ways they and those near them find staying among baked tiles), asked for again once
 // they've gone this far
 const BAKE_AHEAD = Object.freeze({ reach: 96, again: 16 });
+
+// The way to the world map's pin: found again at most this often (seconds), once the player's
+// moved this far (metres); over the navigation mesh for this far along it (metres: the rest across
+// the world's cells, core/journey.js); found across the world again once they're this far off it
+// (metres), at most this often (seconds)
+const PIN_WAY = Object.freeze({ every: 0.3, moved: 1, near: 64, astray: 40, again: 2 });
 
 // How far round the player the chunks' lights are looked through for the nearest (metres: past
 // the furthest any reaches, lights.js LIGHTS)
@@ -441,8 +450,11 @@ export class Game {
      * @param {object} [options.wheels] - What the player's put on their action wheels, as kept
      *     (save.js loadWheels: app/wheel.js readWheels), or nothing (what they start with).
      * @param {Function} [options.onWheels] - Hears them whenever they're changed (to keep them).
+     * @param {Array} [options.pin] - Where the player's pinned on the world map ([x, z] metres, as
+     *     kept: save.js loadPin), or null.
+     * @param {Function} [options.onPin] - Hears it whenever it's dropped or taken away (to keep it).
      */
-    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {}, progress = {}, onProgress = () => {}, standing = {}, onStanding = () => {}, followers = [], onFollowers = () => {}, wheels = null, onWheels = () => {}, remote = null }) {
+    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {}, progress = {}, onProgress = () => {}, standing = {}, onStanding = () => {}, followers = [], onFollowers = () => {}, wheels = null, onWheels = () => {}, remote = null, pin = null, onPin = () => {} }) {
         this.view = view;
         this.kit = kit;
         this.sound = sound;
@@ -499,6 +511,14 @@ export class Game {
         this.onWheels = onWheels;
         this.onProgress = onProgress;
         this.onStanding = onStanding;
+
+        // Where the player's pinned on the world map ([x, z] metres, or null), the way there
+        // (core/journey.js: across the world, and along the ground near them), and running
+        // somewhere far, set off from the map (app/journey.js), or null
+        this.pin = Array.isArray(pin) && pin.length === 2 && pin.every(Number.isFinite) ? [...pin] : null;
+        this.onPin = onPin;
+        this.pinWay = null;
+        this.journey = null;
 
         /** Trading with a shopkeeper (from their talk): { shop, keeper (their id), name }, or null. */
         this.shopping = null;
@@ -946,6 +966,13 @@ export class Game {
         this.camps = new Camps(view.scene);
         this.carried = new CarriedTorches(view.scene);
         this.globes = new LightGlobes(view.scene);
+        this.pinMarks = new PinMarks(view.scene, view.far.scene);
+
+        // (A pin kept from before: the world's ground for finding the way to it worked out now,
+        // while it's loading, not in the first frames)
+        if (this.pin && world.plan) {
+            crossingsOf(world.plan);
+        }
         this.drops = new Drops(view.scene, { picture: (id) => this.#itemPicture(id) });
 
         // (Banners and camps only ever outside, on the world's ground)
@@ -1427,6 +1454,7 @@ export class Game {
         this.camps?.dispose();
         this.carried?.dispose();
         this.globes?.dispose();
+        this.pinMarks?.dispose();
         this.flyers?.dispose();
 
         this.spellFx?.dispose();
@@ -1947,6 +1975,9 @@ export class Game {
         // (The Light spell's globes over whoever has one, on the map the player's on)
         this.#lightGlobes(dt);
 
+        // (The world map's pin, the way there, and running there)
+        this.#pinned();
+
         if (this.chunks && this.mapId === "town") {
             const { x, z } = this.avatars.get(this.me).object.position;
 
@@ -2297,11 +2328,196 @@ export class Game {
      */
     worldMapView() {
         const actor = this.battle.actor(this.me);
-        const building = this.world.interiors?.of(actor.map);
-        const outside = actor.map === "town" ? [actor.x, actor.y] : (building?.at ?? building?.door?.ends[0].arrive ?? [actor.x, actor.y]);
+        const outside = this.#outside(actor);
         const facing = this.avatars.get(this.me)?.facing ?? actor.facing;
 
-        return { player: { x: outside[0], z: outside[1], facing }, icons: this.icons(), marks: this.requestMarks() };
+        return { player: { x: outside[0], z: outside[1], facing }, icons: this.icons(), marks: this.requestMarks(), ...this.pinView() };
+    }
+
+    // --- The world map's pin ---
+
+    /**
+     * Where the player's pinned on the world map, and the way there from where they are, across
+     * the world (for the map: { pin: { x, z } or null, way: [[x, z], ...] or null, none if there's
+     * none to be found }).
+     */
+    pinView() {
+        const player = this.battle.actor(this.me);
+
+        if (this.pin && !this.pinLine && player) {
+            this.#wayToPin(this.#outside(player));
+        }
+
+        return { pin: this.pin ? { x: this.pin[0], z: this.pin[1] } : null, way: this.pin ? this.pinLine : null };
+    }
+
+    /** Drop the pin at a point on the world map ([x, z] metres; one pin: it's moved), and keep it. */
+    setPin([x, z]) {
+        this.pin = [x, z];
+        this.pinWay = null;
+        this.pinLine = null;
+        this.pinFrom = null;
+        this.onPin([...this.pin]);
+
+        return this.pinView();
+    }
+
+    /** Take the pin away (the column and the ways go with it). */
+    clearPin() {
+        this.pin = null;
+        this.pinWay = null;
+        this.pinLine = null;
+        this.pinShown = null;
+        this.pinMarks?.setPin(null);
+        this.onPin(null);
+    }
+
+    /**
+     * Run to a point on the world map ([x, z] metres: a double tap on it), the way across the
+     * world, a leg at a time (app/journey.js): { ok }, or { ok: false, reason } ("indoors", or
+     * "nopath" if there's no way there) and nothing's done.
+     */
+    journeyTo([x, z]) {
+        const player = this.battle.actor(this.me);
+
+        if (!player || player.dead) {
+            return { ok: false, reason: "dead" };
+        }
+
+        if (player.map !== "town" || !this.world.plan) {
+            return { ok: false, reason: "indoors" };
+        }
+
+        const way = wayAcross(this.world.plan, [player.x, player.y], [x, z]);
+
+        if (!way) {
+            return { ok: false, reason: "nopath" };
+        }
+
+        this.#endTalk();
+        this.approaching = null;
+        this.journey = new Journey(this.world.plan, way);
+
+        return { ok: true };
+    }
+
+    // Where someone is on the world outside ([x, y] metres): inside, at the building's door
+    #outside(actor) {
+        const building = this.world.interiors?.of(actor.map);
+
+        return actor.map === "town" ? [actor.x, actor.y] : (building?.at ?? building?.door?.ends[0].arrive ?? [actor.x, actor.y]);
+    }
+
+    // The world map's pin: its column where it stands, and the way there along the ground, found
+    // again as the player moves (a few times a second at most, and only once they've moved); and
+    // running there a leg at a time, if they've set off, told if they're stopped short
+    #pinned() {
+        const player = this.battle.actor(this.me);
+
+        if (this.journey && player) {
+            const command = this.journey.step(player, this.clock);
+
+            if (command) {
+                this.journeying = true;
+
+                try {
+                    this.#command(command);
+                } finally {
+                    this.journeying = false;
+                }
+            } else if (this.journey.ended) {
+                if (this.journey.ended === "blocked") {
+                    this.hud.message("The way there's blocked: you stop.", 3);
+                }
+
+                this.journey = null;
+            }
+        }
+
+        if (!this.pinMarks) {
+            return;
+        }
+
+        this.pinMarks.update(this.clock, this.view.far.camera.far);
+
+        const shown = this.pin && player && this.mapId === "town" && this.world.plan ? this.pin : null;
+
+        if (shown !== this.pinShown) {
+            const ground = this.groundOf("town");
+
+            this.pinShown = shown;
+            this.pinMarks.setPin(shown && { x: shown[0], y: ground ? ground(shown[0], shown[1]) : 0, z: shown[1] });
+            this.pinFrom = null;
+        }
+
+        if (!shown) {
+            return;
+        }
+
+        const at = [player.x, player.y];
+        const moved = !this.pinFrom || Math.hypot(at[0] - this.pinFrom[0], at[1] - this.pinFrom[1]) >= PIN_WAY.moved;
+
+        if (moved && this.clock - (this.pinAt ?? -Infinity) >= PIN_WAY.every) {
+            this.#wayToPin(at, { drawn: true });
+        }
+    }
+
+    // The way to the pin from a point ([x, y] metres): across the world (found again once they've
+    // strayed from it), the near part of it over the navigation mesh's tiles there already (none
+    // baked for it), as a line for the world map and, `drawn`, along the ground
+    #wayToPin(at, { drawn = false } = {}) {
+        const plan = this.world.plan;
+
+        this.pinFrom = [...at];
+        this.pinAt = this.clock;
+
+        if (!plan) {
+            return;
+        }
+
+        if (!this.pinWay || (nearestAlong(this.pinWay, at).off > PIN_WAY.astray && this.clock - (this.pinWayAt ?? -Infinity) >= PIN_WAY.again)) {
+            this.pinWay = wayAcross(plan, at, this.pin) ?? false;
+            this.pinWayAt = this.clock;
+        }
+
+        if (!this.pinWay) {
+            this.pinLine = null;
+            this.pinMarks?.setLine(null);
+
+            return;
+        }
+
+        // (From where they are on: the near part over the mesh, if it can be found there)
+        const rest = wayFrom(this.pinWay, nearestAlong(this.pinWay, at).along);
+        const join = pointAlong(rest, PIN_WAY.near);
+        const near = this.world.maps?.town?.chunkAt ? navigatorOf(this.world.maps.town).wayIn(at, join) : [];
+        const reached = near.length > 1 && Math.hypot(near.at(-1)[0] - join[0], near.at(-1)[1] - join[1]) < 2;
+        const line = reached ? [[...at], ...near.slice(1).map(([x, y]) => [x, y]), ...wayFrom(rest, PIN_WAY.near).slice(1)] : [[...at], ...rest];
+
+        this.pinLine = line;
+
+        if (drawn) {
+            this.pinMarks?.setLine(this.#alongGround(line));
+        }
+    }
+
+    // A way's points ([x, y] metres) along the ground, every WAY_LINE.step metres for as far as
+    // WAY_LINE.reach: [x, height, z]
+    #alongGround(way) {
+        const ground = this.groundOf("town");
+        const points = [];
+
+        for (let d = 0; d <= WAY_LINE.reach; d += WAY_LINE.step) {
+            const [x, z] = pointAlong(way, d);
+
+            points.push([x, ground ? ground(x, z) : 0, z]);
+
+            if (Math.hypot(x - way.at(-1)[0], z - way.at(-1)[1]) < WAY_LINE.step / 2) {
+                break;
+            }
+        }
+
+        return points;
     }
 
     /** Where the requests the player carries take them (for the world map): [{ x, z, label }]. */
@@ -5770,6 +5986,12 @@ export class Game {
     // A command of the player's, to the host: `then` hears what came of it (at once, playing alone
     // or hosting; joined to another's world, once the host's done it and it's been done here too)
     #command(command, then = null) {
+        // (Anything the player does themselves ends running somewhere far: not resisting a
+        // summons, done for them)
+        if (!this.journeying && !(command.type === "summoned" && !command.come)) {
+            this.journey = null;
+        }
+
         if (this.remote) {
             return this.remote.command(command, this.#predicting(command, then));
         }

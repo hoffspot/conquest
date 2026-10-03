@@ -41,12 +41,13 @@ export async function createSession({ canvas, quality, sound = true, volumes, fe
  * A new game in the world of `seed` (the whole world, laid out from its plan, with the town set
  * in where one of the hero's people starts), for a hero: { name, shape, look, weapon, race } (and what's kept of it: its
  * talks and what it's found, and what it's grown into and carries, and who hears of them; the
- * world's war as it was kept, and who hears of it; and who opens the world map).
+ * world's war as it was kept, and who hears of it; who opens the world map; and where they've
+ * pinned on it, and who hears of that).
  */
-export function createGame({ view, kit, sound, hud, hero, seed, talks, onTalk, explored, onExplore, onWorldMap, war, onWar, progress, onProgress, standing, onStanding, followers, onFollowers, wheels, onWheels }) {
+export function createGame({ view, kit, sound, hud, hero, seed, talks, onTalk, explored, onExplore, onWorldMap, war, onWar, progress, onProgress, standing, onStanding, followers, onFollowers, wheels, onWheels, pin, onPin }) {
     const world = buildWorld({ seed, race: hero.race ?? "human" });
 
-    return new Game({ view, kit, sound, world, hero, hud, talks, onTalk, explored, onExplore, onWorldMap, war, onWar, progress, onProgress, standing, onStanding, followers, onFollowers, wheels, onWheels });
+    return new Game({ view, kit, sound, world, hero, hud, talks, onTalk, explored, onExplore, onWorldMap, war, onWar, progress, onProgress, standing, onStanding, followers, onFollowers, wheels, onWheels, pin, onPin });
 }
 
 /**
