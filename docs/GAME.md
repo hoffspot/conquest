@@ -642,6 +642,24 @@ drawn back or looks towards the horizon. Their soft edge (about 5 cm on medium a
 about the sun's own: the half-degree sun blurs a 2 m figure's shadow by 2 cm, a house's eaves' by
 7 cm.
 
+**Shadow maps drawn with only what they need** (world/shadowpasses.js; the terrain plan's M7k).
+three.js asks each mesh whether it's in a shadow camera's view, with that light's own frustum;
+the view answers for the sun and the lamps (`watchShadows`):
+- **A chunk's buildings** are merged into one mesh (town3d.js `joined`), which keeps where each
+  building's corners are in it (`runsOf`: a run for each building, things in no building in runs
+  no more than 16 m across). A lamp's shadows (six views from its flame, out to its reach) and
+  the sun's draw only the runs in their view, as a few draws of the mesh's parts (runs within
+  1,500 corners of each other drawn as one), or none. A lamp in an elven town drew a million
+  triangles each time its shadows were drawn again; it draws what's within its reach.
+- **Something small** (a character, a creature, what they carry: 6 m round or less) is drawn
+  into the sun's shadows only if its shadow may fall where the camera looks this frame
+  (`setShadowView`): round it and as far down the sun's light as its shadow can fall (up to
+  40 m, longer the lower the sun). A creature out of view behind the camera cost 40,000 to
+  80,000 triangles in the sun's shadows. The lamps' shadows, drawn only every few frames, keep
+  everyone in reach, so the shadows don't lag when the camera turns.
+- **What's seen is the same:** what's left out lies outside a shadow map's view, or casts where
+  the camera doesn't look.
+
 **The far land and the haze** (world/far/, world/fog.js; the terrain plan's M6a). Outdoors the
 world's drawn twice over each frame:
 - **What's far first,** with a camera of its own (from 40 m out to half as far again as the far

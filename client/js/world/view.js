@@ -24,6 +24,7 @@ import { GpuTimer } from "./gputimer.js";
 import { FAR_FIELDS } from "./ground.js";
 import { FIRE_LIGHT, FIRE_LIGHTS, LIGHTS, lightNow } from "./lights.js";
 import { fillOf, pickLamps, ROOM_LIGHT, ROOM_LIGHTS, strengthOf } from "./roomlight.js";
+import { setShadowView, watchShadows } from "./shadowpasses.js";
 import { fadeShadowEdges, snapToTexels, stepShadows } from "./shadows.js";
 import { Sky, SKY_COLOURS } from "./sky.js";
 import { SUN_FROM } from "./sun.js";
@@ -208,6 +209,7 @@ const _size = new THREE.Vector2();
 const _viewProjection = new THREE.Matrix4();
 const _sphere = new THREE.Sphere();
 const _centre = new THREE.Vector3();
+const _down = new THREE.Vector3();
 const _colour = new THREE.Color();
 
 export class View {
@@ -310,6 +312,8 @@ export class View {
             return { light, from: null, handed: false };
         });
         this.lampFrame = 0;
+        // (Their shadow maps, and the sun's, drawn with only what they need: shadowpasses.js)
+        watchShadows({ sun: this.sun, lamps: this.lamps.map(({ light }) => light) });
         this.room = null;
         // (How far the greatest spells have darkened the sky: setOmen)
         this.omen = 0;
@@ -1252,6 +1256,15 @@ export class View {
         }
 
         const timing = this.timingGpu && scene === this.scene;
+
+        // (Whose shadows may be seen: from where the camera looks this frame, the sun's light
+        // coming down as it does)
+        if (scene === this.scene) {
+            camera.updateMatrixWorld();
+            setShadowView(camera, _down.subVectors(this.sun.target.position, this.sun.position));
+        } else {
+            setShadowView(null);
+        }
 
         this.renderer.info.reset();
 

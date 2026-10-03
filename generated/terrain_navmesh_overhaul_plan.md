@@ -724,7 +724,10 @@ and open-source generators, licences checked).
 - **Cascaded shadows: not built.** With the sun about 50° up, the near shadow map (±24 m) covers
   what the camera looks at, and far relief reads from the far land's slope shading and snow.
   Each cascade draws every shadow caster in it again, on phones already near their draw-call
-  budget. Left for M7's lighting pass, to be measured there.
+  budget. Left for M7's lighting pass, to be measured there. **Measured in M7k (2026-10-03): it
+  doesn't fit.** A second cascade out to 60 m would draw 28 to 51 more draws and 76,000 to 443,000
+  more triangles a frame on Medium (22 spots on the phone's profile), with frames at 9 of the 22
+  spots already over 500,000 triangles; see the change log.
 
 **As built in M6c** (row 2 and the landmark; see the change log):
 - **The landmark is the volcano.** It needed a crater: the old one (60 m subtracted at the
@@ -3499,3 +3502,53 @@ converted data is to be measured in M8 against today's hm08 data.
     buildings.
   - **Next:** M7k, the whole frame measured on the phone's profile, and cascaded shadows only if
     they fit.
+- **2026-10-03, M7k: the whole frame measured on the phone's profile; no second shadow cascade;
+  the shadow maps drawn with only what they need** (§13 budgets; docs/GAME.md *Shadow maps drawn
+  with only what they need*).
+  - **How:** 22 spots on seed 1 (the ten lands and a village and a town of each people), the
+    game's own follow camera, Medium, 874 by 402 points at three times (1311 by 603 drawn, as
+    Medium's 1.5 has it), settled 6 frames, then the middle of 8 frames and the worst; every
+    draw counted by its pass (the near world, the far land, the sun's shadow map, the lamps' cube
+    maps), a batch's trees as it draws them; then the sun's map widened to 60 m and 100 m, as a
+    second cascade would draw.
+  - **Found, before:** a frame 86 to 140 draws (budget 250) and 385,000 to 708,000 triangles
+    (budget 500,000), over at 13 spots. The sun's map 22 to 61 draws and 66,000 to 281,000
+    triangles of it. A lamp's shadows, drawn again every 4th frame on Medium, up to 103 draws and
+    1,048,000 triangles (an elven town: its chunk's buildings, one merged mesh, drawn whole into
+    each of the cube's six maps), a frame then 222 draws and 1,757,000 triangles. A creature out
+    of view behind the camera drew 40,000 to 80,000 triangles into the sun's map.
+  - **A second cascade doesn't fit:** a map out to 60 m drew 36 to 91 draws and 77,000 to
+    555,000 triangles (100 m: 43 to 101 draws, 84,000 to 742,000); even drawn with only what it
+    needs (below), 28 to 51 draws and 76,000 to 443,000 (100 m: 33 to 60, 83,000 to 629,000), on
+    top of frames already over budget, and one more texture in every lit shader (the ground reads
+    14 of an iPhone's 16). Not built; far relief stays with the far land's slope shading.
+  - **Built instead: shadow maps drawn with only what they need** (world/shadowpasses.js): a
+    merged mesh keeps where each building is in it (town3d.js `joined`, `runsOf`), and a lamp's
+    maps and the sun's draw only the buildings in their view; something small is drawn into the
+    sun's map only if its shadow may fall where the camera looks. Both answered where three.js
+    asks a mesh whether it's in a shadow camera's view (`Mesh.intersectsFrustum`, with that
+    light's frustum: `watchShadows`), so nothing seen changes.
+  - **After:** a lamp's shadows drawn again 21,000 to 207,000 triangles (elven town 1,048,000 to
+    207,000; cat folk's town 360,000 to 92,000; orcs' town 359,000 to 76,000), the worst frame
+    of the elven town 1,757,000 to 873,000 triangles; the sun's map 52,000 to 186,000 (marsh
+    281,000 to 84,000, woods 204,000 to 129,000, tundra 151,000 to 79,000). A frame 83 to 141
+    draws, 368,000 to 665,000 triangles: still over 500,000 at 9 of the 22 spots (meadow 618,000,
+    elfwood 582,000, darkwood 598,000, jungle 616,000, an elven village 591,000 and town 665,000,
+    a dark elves' village 559,000, the lizard folk's village 508,000 and town 528,000), most of
+    it the near world's tall grass (129,000 on Medium) and undergrowth (up to 171,000 in the
+    meadow) and the trees' trunks in the sun's map (the darkwood's 86,000). Draws are well within
+    their budget everywhere.
+  - **Not done:** Medium's grass and undergrowth trimmed to the 500,000 (it would thin the look
+    the user chose), and the trees' trunks left out of the sun's map when their shadows can't be
+    seen (a batch culls its trees itself). A phone's own frame time (the debug overlay's GPU
+    timer) is what would say whether Medium's 500,000 is the right line.
+  - **Pictures:** before/after at the marsh, the woods and the darkwood by day and the elven,
+    orcs' and cat folk's towns at night, the shadows the same (sent in the session).
+  - **Tests:** test/shadowpasses.test.js (a run for each building, things in none together while
+    close, every corner in one; a chunk's merged buildings keep theirs; a lamp by one building
+    draws only its runs, as parts, and the mesh is as it was after; the camera's view and a lamp
+    by neither; something small into the sun's map only if its shadow may fall in view, out of
+    view to the side with its shadow falling in, never something big; a mesh of several
+    materials left as it is).
+  - **Next:** M7.5, places worth finding.
+

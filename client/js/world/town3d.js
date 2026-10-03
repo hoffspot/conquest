@@ -36,6 +36,7 @@ import { plantTrees, VARIANTS } from "./art/kits/trees.js";
 import { canopyTint } from "./canopy.js";
 import { lightsMesh, lightsOf } from "./lights.js";
 import { poolsMesh } from "./windowpools.js";
+import { castByRuns, runsOf } from "./shadowpasses.js";
 import { chimneysOf, smokeMesh } from "./smoke.js";
 import { clothMesh, clothOf } from "./cloth.js";
 
@@ -444,7 +445,9 @@ export function merge(root, { atlas = false } = {}) {
  * be, with `atlas` (and every light into the one glowing material); or, `atlas` a function of what
  * a part was made in, into the material it gives, drawn from the atlas as that one is (the
  * insides': interiors3d.js), lights left as they are. [{ key, material, geometry, near (only worth
- * drawing near: Solid's), panes (its upright windows: atlas.js windowSeeds', for windowpools.js) }],
+ * drawing near: Solid's), panes (its upright windows: atlas.js windowSeeds', for windowpools.js),
+ * building (which building it's part of, if any: for drawing only those near into the lamps'
+ * shadows, shadowpasses.js) }],
  * for `joined` (merge's first half, so that the parts of what's built a piece at a time can be
  * made a piece at a time: chunks3d.js).
  */
@@ -505,7 +508,7 @@ export function partsOf(root, { atlas = false } = {}) {
                 geometry.setAttribute("uv", new THREE.Float32BufferAttribute(new Float32Array(geometry.attributes.position.count * 2), 2));
             }
 
-            parts.push({ key, material, geometry, near: Boolean(node.userData.near), panes: drawn?.userData.panes ?? [] });
+            parts.push({ key, material, geometry, near: Boolean(node.userData.near), panes: drawn?.userData.panes ?? [], building: building?.id ?? null });
         }
     });
 
@@ -515,23 +518,26 @@ export function partsOf(root, { atlas = false } = {}) {
 /**
  * Parts (partsOf's, in order) merged: one mesh per material (merge's second half). What's only
  * worth drawing near comes last in each, after as many corners as its userData.far says: draw
- * only that many from further off (drawFar).
+ * only that many from further off (drawFar). Each building's corners in it kept, so a shadow map
+ * draws only those in its view (shadowpasses.js runsOf).
  */
 export function joined(parts) {
     const groups = new Map();
 
-    for (const { key, material, geometry, near } of parts) {
+    for (const { key, material, geometry, near, building = null } of parts) {
         if (!groups.has(key)) {
             groups.set(key, { material, geometries: [], near: [] });
         }
 
-        groups.get(key)[near ? "near" : "geometries"].push(geometry);
+        groups.get(key)[near ? "near" : "geometries"].push({ geometry, key: building });
     }
 
     const result = new THREE.Group();
 
-    for (const { material, geometries, near } of groups.values()) {
-        const mesh = new THREE.Mesh(mergeGeometries([...geometries, ...near]), material);
+    for (const { material, geometries: far, near } of groups.values()) {
+        const merged = [...far, ...near];
+        const geometries = far.map(({ geometry }) => geometry);
+        const mesh = castByRuns(new THREE.Mesh(mergeGeometries(merged.map(({ geometry }) => geometry)), material), runsOf(merged));
 
         mesh.name = material.name || "part";
         // (All but what says it casts none: cards of leaves cut out of their pictures, whose
