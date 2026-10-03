@@ -25,6 +25,7 @@
 
 import { ALONG, CROP, fieldAt, hedgeLine, sown } from "./fields.js";
 import { MAP_ORIGINS } from "./interiors.js";
+import { LONE_TREES, loneTreesNear, loneTreesOf, nearLone } from "./lonetrees.js";
 import { hashOf } from "./noise.js";
 import { createRandom } from "./random.js";
 import { Settlements, squareOf, waysOut } from "./settlements.js";
@@ -269,6 +270,8 @@ export class Overworld {
         this.sites = new Sites(plan, { landAt: (x, y) => this.landAt(x, y), clearing: CLEAR_OF_PLACES, facingOf: (site) => this.trails.facingOf(site) });
         this.arches = archesOf(plan);
         this.aqueducts = aqueductsOf(plan);
+        // (The great lone trees, worked out now as the world's made, not as the first chunk is)
+        this.loneTrees = loneTreesOf(plan);
         this.clearings = [
             ...plan.places.filter((place) => place !== start).map(({ at, radius }) => ({ at, radius: radius + CLEAR_OF_PLACES })),
             ...plan.sites.map(({ id }) => this.sites.clearings.get(id)),
@@ -1197,7 +1200,8 @@ export class Overworld {
 
     // Trees in a chunk: tried every TREE_GRID metres, as many as its land has, clear of roads,
     // water, the town and the places still to be built; each trunk where four squares meet, the
-    // four in the chunk, and filling them
+    // four in the chunk, and filling them. And the great lone trees standing in it (lonetrees.js),
+    // their trunks filling the sixteen squares round them, the others kept off them
     #plant(chunk) {
         const { plan, stamp } = this;
         const { x0, y0, blocked, opaque } = chunk;
@@ -1221,6 +1225,35 @@ export class Overworld {
             return true;
         };
         const steps = CHUNK / TREE_GRID;
+        const lone = loneTreesNear(plan, [x0, y0, x0 + CHUNK, y0 + CHUNK], LONE_TREES.clear);
+        const inTown = (x, y) => x >= tx0 && y >= ty0 && x < tx1 && y < ty1;
+
+        // (A lone tree: where its whole crown's ground is clear, as for any tree, and none of the
+        // sixteen squares its trunk fills is sown)
+        for (const { x, y, variant, size, turn } of lone) {
+            if (x < x0 + 2 || y < y0 + 2 || x > x0 + CHUNK - 2 || y > y0 + CHUNK - 2 || inTown(x, y) || clearings.some(({ at, radius }) => hypot(at[0] - x, at[1] - y) < radius)) {
+                continue;
+            }
+
+            const squares = [];
+
+            for (let by = y - 2; by < y + 2; by++) {
+                for (let bx = x - 2; bx < x + 2; bx++) {
+                    squares.push((by - y0) * CHUNK + (bx - x0));
+                }
+            }
+
+            if (!clear(x - 1, y - 1) || !clear(x + 1, y + 1) || !clear(x - 1, y + 1) || !clear(x + 1, y - 1) || squares.some((k) => chunk.crops[k])) {
+                continue;
+            }
+
+            for (const k of squares) {
+                blocked[k] = 1;
+                opaque[k] = 1;
+            }
+
+            chunk.trees.push({ x, y, variant, size, turn, lone: true });
+        }
 
         for (let gy = 0; gy < steps; gy++) {
             for (let gx = 0; gx < steps; gx++) {
@@ -1235,7 +1268,7 @@ export class Overworld {
                     continue;
                 }
 
-                if ((x >= tx0 && y >= ty0 && x < tx1 && y < ty1) || clearings.some(({ at, radius }) => hypot(at[0] - x, at[1] - y) < radius) || !clear(x, y)) {
+                if (inTown(x, y) || clearings.some(({ at, radius }) => hypot(at[0] - x, at[1] - y) < radius) || nearLone(lone, x, y) || !clear(x, y)) {
                     continue;
                 }
 

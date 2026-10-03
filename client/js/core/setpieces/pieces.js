@@ -115,7 +115,8 @@ export const HOME_TREES = Object.freeze({ cat: "acacia", orc: "ironbark", lizard
 /**
  * The trees there are ([kind, seed]): each kind grown several ways (world/art/kits/trees.js grows
  * them), the broadleaved ones more often than the rest, as in the fields round an old town; then
- * each people's own (HOME_TREES), three ways each.
+ * each people's own (HOME_TREES), three ways each; then the great lone oaks of the open land
+ * (lonetrees.js), three ways.
  */
 export const TREE_KINDS = Object.freeze([
     ["oak", 1], ["beech", 1], ["birch", 1], ["spruce", 1], ["pine", 1], ["oak", 2],
@@ -123,13 +124,14 @@ export const TREE_KINDS = Object.freeze([
     ["pine", 2], ["spruce", 3], ["birch", 3], ["beech", 3], ["oak", 4], ["spruce", 4],
     ["poplar", 2], ["apple", 2], ["birch", 4], ["pine", 3], ["beech", 4], ["oak", 5],
     ...Object.values(HOME_TREES).flatMap((kind) => [[kind, 1], [kind, 2], [kind, 3]]),
+    ["greatoak", 1], ["greatoak", 2], ["greatoak", 3],
 ]);
 
 /**
  * How many trees anyone's town and the land anywhere grow (each fills one square): the first of
- * TREE_KINDS. The rest are the peoples' own.
+ * TREE_KINDS. The rest are the peoples' own, and the great lone oaks.
  */
-export const TREE_VARIANTS = TREE_KINDS.length - Object.keys(HOME_TREES).length * 3;
+export const TREE_VARIANTS = TREE_KINDS.findIndex(([kind]) => Object.values(HOME_TREES).includes(kind));
 
 // Each people's own trees (TREE_KINDS indices)
 const HOME_VARIANTS = Object.fromEntries(Object.entries(HOME_TREES).map(([people, kind]) => [people, TREE_KINDS.flatMap(([own], k) => (own === kind ? [k] : []))]));

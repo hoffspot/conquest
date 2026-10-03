@@ -26,7 +26,8 @@ import { allAtOnce } from "../core/steps.js";
 import { material, paintPicture } from "./art/engine/materials.js";
 import { WILDS } from "./art/engine/atlas.js";
 import { holdSign, isSign, letGoSign, releaseSign } from "./art/kits/signs.js";
-import { Woodland } from "./art/kits/trees.js";
+import { VARIANTS, Woodland } from "./art/kits/trees.js";
+import { canopyTint } from "./canopy.js";
 import { featureLooks, featureMesh, Growth, Mesher, sowing, TILE, UNDERGROWTH as LANDS_UNDERGROWTH, undergrowthLooks, undergrowthMesh } from "./art/kits/wilds.js";
 import { cliffMesh, cliffsInto } from "./art/kits/cliffs.js";
 import { archMaking } from "./art/kits/arches.js";
@@ -235,6 +236,13 @@ export class Chunks {
             this.spacing = spacing;
             this.#respace();
         }
+    }
+
+    // The colour a tree's leaves take where it stands (canopy.js: by its land, as from afar)
+    #tintOf(variant, x, z) {
+        const land = this.overworld.biomeAt?.(x, z) ?? "meadow";
+
+        return canopyTint(land, VARIANTS[((variant % VARIANTS.length) + VARIANTS.length) % VARIANTS.length][0], x, z);
     }
 
     // How far apart a chunk's ground's corners are drawn, by how far it is from the player's
@@ -551,7 +559,10 @@ export class Chunks {
 
         // (And the great trees they're built round, the elves', planted with the rest)
         if (job.trees.length) {
-            drawn.grown = this.woodland.plant(job.trees, this.groundAt);
+            drawn.grown = this.woodland.plant(
+                job.trees.map((tree) => ({ ...tree, tint: this.#tintOf(tree.variant, tree.x, tree.z) })),
+                this.groundAt,
+            );
             drawn.object.add(drawn.grown.object);
 
             for (const box of drawn.grown.boxes) {
@@ -840,7 +851,7 @@ export class Chunks {
         // hanging over the ground)
         const trunkAt = (x, z) => Math.min(this.groundAt(x - 0.4, z - 0.4), this.groundAt(x + 0.4, z - 0.4), this.groundAt(x - 0.4, z + 0.4), this.groundAt(x + 0.4, z + 0.4)) - 0.05;
         const lot = this.woodland.plant(
-            chunk.trees.map(({ x, y, variant, size, turn }) => ({ x, z: y, variant, size, turn, y: trunkAt(x, y) })),
+            chunk.trees.map(({ x, y, variant, size, turn }) => ({ x, z: y, variant, size, turn, y: trunkAt(x, y), tint: this.#tintOf(variant, x, y) })),
             this.groundAt,
         );
 

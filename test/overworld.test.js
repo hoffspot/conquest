@@ -261,9 +261,9 @@ describe("the world outside (overworld.js)", () => {
             assert.ok(chunks.length >= 3, id);
             counts[id] = chunks.reduce((sum, chunk) => sum + chunk.trees.length, 0) / chunks.length;
 
-            // (Or, in a people's homeland, their own)
-            for (const { x, y, variant } of chunks.flatMap((chunk) => chunk.trees)) {
-                assert.ok(FLORA[overworld.biomeAt(x, y)].kinds.includes(kinds.get(variant)) || HOME_TREES[overworld.homeAt(x, y)] === kinds.get(variant), `${id}: a ${kinds.get(variant)}`);
+            // (Or, in a people's homeland, their own; or a great lone oak, lonetrees.js)
+            for (const { x, y, variant, lone } of chunks.flatMap((chunk) => chunk.trees)) {
+                assert.ok(FLORA[overworld.biomeAt(x, y)].kinds.includes(kinds.get(variant)) || HOME_TREES[overworld.homeAt(x, y)] === kinds.get(variant) || (lone && kinds.get(variant) === "greatoak"), `${id}: a ${kinds.get(variant)}`);
             }
         }
 

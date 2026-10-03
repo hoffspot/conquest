@@ -33,8 +33,9 @@ const CLIFF_COS = 0.788010753606722;
 /** How high a building, wall or feature is taken to stand over the ground under it (metres). */
 const OBSTACLE = 3;
 
-/** A tree's trunk: half its width (metres), at its size 1. */
+/** A tree's trunk: half its width (metres), at its size 1; a great lone oak's (lonetrees.js). */
 const TRUNK = 0.2;
+const LONE_TRUNK = 1.2;
 
 // (The world's edge: no ground beyond it)
 const inWorld = (x, y) => x >= 0 && y >= 0 && x < WORLD_SIZE && y < WORLD_SIZE;
@@ -133,7 +134,7 @@ export function tileInput(world, tx, ty) {
 
     // Trees: their trunks (those standing in the chunks the tile's in, and a metre round)
     for (const tree of treesNear(world, x0 - 1, y0 - 1, x0 + size + 1, y0 + size + 1)) {
-        const half = TRUNK * tree.size;
+        const half = (tree.lone ? LONE_TRUNK : TRUNK) * tree.size;
         const h = world.ground.heightAt(tree.x, tree.y);
 
         box(tree.x - half, tree.y - half, tree.x + half, tree.y + half, h - 0.5, h + OBSTACLE);

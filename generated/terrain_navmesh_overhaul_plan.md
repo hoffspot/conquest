@@ -3366,3 +3366,58 @@ converted data is to be measured in M8 against today's hm08 data.
     suite one test at a time here: 68 of 70 passed in 47 minutes, and the two others, since fixed,
     pass.
   - **Next:** the M7 summary report; then M7j, foliage palette, grass ring, weathering.
+- **2026-10-03, the M7 summary report** published (a page of each part's before and after
+  pictures, the extras along the way, what's left and the budgets; sent in the session). It says
+  plainly that none of M7's costs was measured on a phone: the cascaded-shadow step starts with
+  that measurement.
+- **2026-10-03, M7j-1 built: the trees' leaves coloured by their land, and great lone oaks** (§9
+  row 8: "canopy palette per region; gnarled great lone trees"; docs/WORLD.md *Trees*, *Great lone
+  trees*).
+  - **The canopy palette** (world/canopy.js `CANOPY`, `canopyTint`): each land two or three
+    colours, multipliers on the light the leaves' own pictures give (so each kind keeps its green
+    under it), weighted: the farmland's and meadows' own greens with warmer ones and here and there
+    a golden tree; the woods' deeper greens; the heath's bronze; the marsh's and the elfwood's
+    bluer greens (the elfwood's silver-gold too); the darkwood's violet-dark; the savannah's dry
+    olive; the jungle's saturated green; the badlands' dust; the volcanic land's ash and rust; the
+    tundra's cold greens and golden birches; the snow's and mountains' cool greens. Picked by a
+    hash of the trunk's spot, each tree a little (up to 8%) lighter or darker than its
+    neighbours; a golden or bronze colour only on broadleaved trees (never a pine or a spruce);
+    the peoples' own trees (`HOME_TREES`) keep their own colours, lighter or darker only. The
+    near trees take it in the woodland's batch (`BatchedMesh.setColorAt`, its colours made with
+    the batch so the leaves' shader's made at load with them), the start town's in their leaves'
+    vertex colours (`plantTrees`' `tint`, `buildTown`'s `landAt`), the far trees in their cards'
+    colour (far/trees.js), all from the same function, so one turns into the other unseen.
+  - **Great lone oaks** (core/lonetrees.js `loneTreesOf`, kits/trees.js `greatoak`): one tried in
+    every 128 m square, in its own spot two metres or more inside its chunk; kept in open land (a
+    meadow 0.55, farmland and heath 0.45, tundra 0.2) with no water, on ground rising no more than
+    1.6 m across its crown, 24 m from a settlement's edge and 64 from a place, and off the fields'
+    sown strips (`fieldAt`, as the overworld sows them): 251 on seed 1 (198, 247 and 240 on seeds
+    2, 3 and 7), worked out once as the world's made (80 to 170 ms). Each a great oak, three ways
+    grown: 13 to 16 m high, a short trunk more than twice as thick for its height as an oak's,
+    breaking low into eight to ten great crooked limbs reaching up and out, the crown wider than it's high, an
+    old oak's grey lichened bark, deep roots. Its trunk fills the sixteen squares round its point
+    (blocked, opaque) and the navigation meshes carve it 2.4 m across (`LONE_TRUNK`). The land's
+    other trees keep 16 m off every one (planted or not), near and from afar, so each stands alone.
+    From afar its own card (`FAR_TREES.greatoak`: 13.5 m, a round crown 1.3 times as wide as an
+    oak's share). `NET_VERSION` 30.
+  - **Looked at first** (a tree preview, each grown three ways beside an ordinary oak): the first
+    great oak's crown sagged to the ground round a hidden trunk, a big bush; its trunk was made
+    taller before it breaks, its limbs reaching up as well as out, its leaves only on their outer
+    parts; then its crown widened.
+  - **Cost:** a great oak's 2,400 to 2,600 triangles (wood and leaves), its shell's 180 into the
+    shadows; in the woodland's batch with every other tree, so no draw of its own. The leaves'
+    colours: one small float texture (4 numbers a tree) read once a vertex. The far trees' colours
+    cost nothing more.
+  - **Tests:** test/lonetrees.test.js (lone oaks: how many, the same every time, in open land on
+    gentle ground off water, places and sown strips, one a square, inside their chunk; planted
+    with their sixteen squares blocked, no other tree within 16 m near or far, their own card from
+    afar; the palette: every land's, its commonest near its leaves' own green, picked by the
+    spot, golden only on broadleaved trees, the peoples' own kept, the far trees' colours the near
+    ones'); test/trees.test.js (the great oak among the kinds, after the peoples' own; its roots
+    deeper); test/overworld.test.js (a lone oak allowed among a land's own kinds).
+  - **Measured** (Medium, the pictures' spots on seed 1, before and after): draw calls and
+    triangles the same within what differs run to run as the land streams in (meadow 88 and 87
+    calls, 530 thousand triangles both; woods 103 and 103; the most apart, jungle's 164 and 173,
+    no lone oak within 450 m of it); no new shader made as the player walks out of the town or
+    into the taproom (the e2e).
+  - **Next:** M7j-2, a denser grass ring round the player and gusts of wind through the grass.

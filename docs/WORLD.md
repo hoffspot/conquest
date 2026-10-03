@@ -428,7 +428,23 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   fields' strips (on their verges, as hedgerow trees); its trunk blocks
   the four squares round its point, and can't be seen through. A chunk's trees come from its
   own seed, the same random numbers used for every try, planted or not, so they're the same
-  whatever's made round them.
+  whatever's made round them. Each tree's leaves take a colour from its land's own few
+  (`world/canopy.js` `CANOPY`: the farmland's and meadows' greens with warm and golden ones among
+  them, the marshes' and the elfwood's bluer greens, the darkwood's violet-dark, the savannah's
+  dry olive, the tundra's cold greens and golden birches), picked by where it stands (a hash of
+  its trunk's spot) and a little lighter or darker than its neighbours; golden only on
+  broadleaved trees, never on a pine or a spruce; the peoples' own trees keep their own colours.
+  The trees seen from afar take the same colour, so one turns into the other unseen.
+- **Great lone trees** (`core/lonetrees.js`): one tried in every 128 metres square, in its own
+  spot two metres or more inside its chunk; kept if its land's open land (a meadow 0.55, farmland
+  and heath 0.45, tundra 0.2), there's no water, the land rises no more than 1.6 m across its
+  crown (6 m either way), it's 24 metres or more from a settlement's edge and 64 from a place,
+  and no square within three metres of it is in a field's sown strip: about two hundred and fifty
+  a world on seed 1. Each is a great oak (`greatoak`, three ways grown: 13 to 16 m high, a short
+  massive trunk breaking into great crooked limbs, its crown wider than it's high), its trunk
+  filling the sixteen squares round its point. The land's other trees keep 16 metres off every
+  one (planted or not), near and from afar, so each stands alone. Worked out from the plan alone
+  as the world's made (80 to 170 ms), so the overworld and the far trees find the same ones.
 - **The land's own features** (`core/wilds.js`), tried every 8 metres (a random way in) from
   the chunk's own random numbers, after its trees: boulders, rocky outcrops, fallen trees,
   stumps, dead trees still standing, bushes, cairns, standing stones, termite mounds, haystacks
@@ -724,7 +740,7 @@ WebAssembly by recast-navigation-js, vendored in `client/vendor/recast-navigatio
     and the places' buildings, walls and stalls, the wild's features; not water, cliffs or
     trees), merged into rectangles, each a box 3 m over the ground under it whose top is no
     floor;
-  - trees as their trunks (0.4 m across at size 1);
+  - trees as their trunks (0.4 m across at size 1; a great lone oak's 2.4 m);
   - bridges' decks, a quad a metre along each, at the deck's height (`deckOf`).
 - **Recast's settings** (`settings.js`, `bake.js`): voxels 0.5 m across and 0.25 m high; a walker
   0.5 m round and 2 m tall who steps up 0.75 m; polygons of up to six sides, each keeping its

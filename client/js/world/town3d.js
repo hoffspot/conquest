@@ -32,7 +32,8 @@ import { builderFor } from "./art/peoples/index.js";
 import { prop } from "./art/kits/props.js";
 import { tree } from "./art/kits/town.js";
 import { lieOf, yard } from "./art/kits/yards.js";
-import { plantTrees } from "./art/kits/trees.js";
+import { plantTrees, VARIANTS } from "./art/kits/trees.js";
+import { canopyTint } from "./canopy.js";
 import { lightsMesh, lightsOf } from "./lights.js";
 import { chimneysOf, smokeMesh } from "./smoke.js";
 import { clothMesh, clothOf } from "./cloth.js";
@@ -97,9 +98,10 @@ export function heightMap([x0, z0, width, height]) {
  * (BUILT) }. The town's corner is at `world.origin` ([x, z] or
  * a number for both), and its squares are `world.stamp`'s (where it's set in the world: [x, z]
  * `at`, its width and height) or the world's own. `onProgress(done, total)` hears as each piece
- * is built.
+ * is built; `landAt(x, z)` says what land (BIOMES id) a tree stands in, its leaves coloured as
+ * the land colours them (canopy.js).
  */
-export async function buildTown(world, { onProgress = () => {}, groundAt = () => 0 } = {}) {
+export async function buildTown(world, { onProgress = () => {}, groundAt = () => 0, landAt = () => "meadow" } = {}) {
     const art = new THREE.Group();
     const [ox, oz] = Array.isArray(world.origin) ? world.origin : [world.origin, world.origin];
     // (The yards behind its houses too, standing on the ground as it lies under each: kits/yards.js)
@@ -190,7 +192,10 @@ export async function buildTown(world, { onProgress = () => {}, groundAt = () =>
 
     await breathe();
 
-    const trees = plantTrees(planted, { groundAt });
+    const trees = plantTrees(
+        planted.map((tree) => ({ ...tree, tint: canopyTint(landAt(tree.x, tree.z), VARIANTS[tree.variant % VARIANTS.length][0], tree.x, tree.z) })),
+        { groundAt },
+    );
 
     art.updateMatrixWorld(true);
 
