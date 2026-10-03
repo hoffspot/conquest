@@ -20,7 +20,7 @@
 
 import { CURES } from "./afflictions.js";
 import { disguiseOf, GEAR, GEAR_SLOTS, gearName, offHandFits, rollGear, sameGear, setBonuses, SLOT_IDS, STATS, statsOf, UNIFORM, UNIFORM_PEOPLES } from "./gear.js";
-import { ELEMENT_TOME_PRICE, ELEMENT_TOMES, growthAt, SCHOOLS, SPELLS, TOME_RARITY, TOMES, tierAt, tomeOf } from "./spells.js";
+import { ELEMENT_TOME_PRICE, ELEMENT_TOMES, growthAt, GUILD_TOMES, SCHOOLS, SPELLS, TOME_RARITY, TOMES, tierAt, tomeOf } from "./spells.js";
 import { PARTS } from "./spoils.js";
 import { WEAPONS } from "./weapons.js";
 
@@ -85,7 +85,7 @@ export const ITEMS = Object.freeze({
     ...Object.fromEntries(Object.entries(CURES).map(([id, { label, cure, price }]) => [id, { label, use: { cure }, price }])),
     // The spells' tomes (spells.js TOMES): each read to learn its spell at once; found on creatures
     // with hands, or given for a guild's contract; the rarer, the dearer
-    ...Object.fromEntries(TOMES.map((spell) => [tomeOf(spell), { label: `Tome of ${SPELLS[spell].label}`, tome: spell, use: { learn: spell }, price: TOME_RARITY[SPELLS[spell].tome].price }])),
+    ...Object.fromEntries(TOMES.map((spell) => [tomeOf(spell), { label: `Tome of ${SPELLS[spell].label}`, tome: spell, use: { learn: spell }, price: SPELLS[spell].price ?? TOME_RARITY[SPELLS[spell].tome].price }])),
     // The elements' first spells' tomes (spells.js ELEMENT_TOMES): each read to open its school,
     // sold at any adventurers' guild
     ...Object.fromEntries(ELEMENT_TOMES.map((spell) => [tomeOf(spell), { label: `Tome of ${SPELLS[spell].label}`, tome: spell, opens: SPELLS[spell].school, use: { learn: spell }, price: ELEMENT_TOME_PRICE }])),
@@ -102,7 +102,7 @@ export const SHOPS = Object.freeze({
     smith: { items: ["sword", "hammer", "staff", "bow", "gauntlets", "quiver", "roundShield", "kiteShield", "cap", "nasalHelm", "jerkin", "gambeson", "mail", "plate", "bracers", "gloves", "platedGloves", "belt", "trousers", "breeches", "greaves", "leatherBoots", "sabatons", "boots", "travelCloak", ...UNIFORM], best: "masterwork" },
     tavern: { items: ["ale", "meal"], best: "common" },
     temple: { items: ["potion"], best: "common" },
-    guild: { items: ["wand", "grimoire", "wizardHat", "amulet", "ring", "potion", ...Object.keys(CURES), ...ELEMENT_TOMES.map(tomeOf)], best: "fine" },
+    guild: { items: ["wand", "grimoire", "wizardHat", "amulet", "ring", "potion", ...Object.keys(CURES), ...ELEMENT_TOMES.map(tomeOf), ...GUILD_TOMES.map(tomeOf)], best: "fine" },
 });
 
 /**

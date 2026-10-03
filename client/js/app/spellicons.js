@@ -679,6 +679,16 @@ export const SPELL_ICONS = Object.freeze({
         <circle cx="-2" cy="-12" r="1.1" fill="#ffe080"/><circle cx="2" cy="-12" r="1.1" fill="#ffe080"/>
         <g fill="#f0d8ff"><circle cx="-17" cy="10" r="1.2"/><circle cx="17" cy="10" r="1.2"/><circle cx="-9" cy="17" r="1.2"/><circle cx="9" cy="17" r="1.2"/><circle cy="18.5" r="1.2"/></g>`,
 
+    // A bright globe of light, rays round it, in the dark
+    light: `
+        <circle r="21" fill="#141a2e" opacity="0.7"/>
+        <g stroke="#dce8ff" stroke-width="1.6" stroke-linecap="round" opacity="0.85">
+            <path d="M0,-19 L0,-14 M0,14 L0,19 M-19,0 L-14,0 M14,0 L19,0 M-13.4,-13.4 L-10,-10 M13.4,13.4 L10,10 M-13.4,13.4 L-10,10 M13.4,-13.4 L10,-10"/>
+        </g>
+        <circle r="11" fill="#bcd2ff" opacity="0.35"/>
+        <circle r="7.5" fill="#f4f8ff" stroke="#9ab8ff" stroke-width="1.2"/>
+        <circle cx="-2.4" cy="-2.6" r="2.2" fill="#ffffff"/>`,
+
     // Feet raised off the ground, light between, the air stirred under them
     levitate: `
         <circle r="21" fill="url(#spell-air-glow)"/>

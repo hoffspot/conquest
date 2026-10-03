@@ -2437,6 +2437,9 @@ export class Battle {
         } else if (spell.stun) {
             this.#stun(actor, target, id, Math.round(spell.stun * (actor.power?.stun ?? 1)));
             landed += 1;
+        } else if (id === "light" && this.buffOf(target, "light")) {
+            // (Light, cast again while it shines: put out)
+            landed += this.unbuff(target.id, "light") ? 1 : 0;
         } else if (spell.lasts && (spell.target === "self" || spell.target === "friend")) {
             landed += this.buff(target.id, id, { ms: spell.lasts, by: actor.id, level }) ? 1 : 0;
         } else if (spell.flee) {

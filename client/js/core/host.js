@@ -821,6 +821,7 @@ export class Host {
             camps: [...[...this.camps.values()].map(({ fire }) => fire), ...this.campfires.map(({ fire }) => fire)],
             fires: this.battle.hazards.filter((hazard) => hazard.kind === "fire" && hazard.map === "town"),
             torches: dark ? this.battle.actors.filter((actor) => out(actor) && carriesTorch(actor, dark)).map(({ x, y }) => [x, y]) : [],
+            globes: this.battle.actors.filter((actor) => out(actor) && this.battle.buffOf(actor, "light")).map(({ x, y }) => [x, y]),
         });
     }
 

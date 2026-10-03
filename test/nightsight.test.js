@@ -3,7 +3,8 @@
 // fires on the ground and the soldiers' torches; the light worked out alike by every copy of the
 // world from what they share. And the night's creatures (core/creatures.js, the host's wilds): the
 // night's own out only after dark, the night's hunters met more often then, more about the players
-// at night, those that see in the dark seeing as by day, and the night's own gone at daybreak
+// at night, those that see in the dark seeing as by day, and the night's own gone at daybreak. And
+// the Light spell (core/spells.js light): a globe over its caster lighting the dark round them
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Battle, SIGHT, STEP_MS } from "../client/js/core/battle.js";
@@ -232,6 +233,52 @@ describe("the night's creatures (core/creatures.js, the host's wilds)", () => {
         assert.ok(gone.length > 0 && own.every(({ actor }) => !host.battle.actor(actor.id) || host.battle.actor(actor.id).target !== null), `the night's own gone: ${gone.length} of ${own.length}`);
         assert.ok(day.every(({ creature }) => outByDay(creature)), `by day: ${day.map(({ creature }) => creature)}`);
         assert.ok(day.length <= WILDS.count, `${day.length} about by day`);
+    });
+});
+
+describe("the Light spell (core/spells.js light)", () => {
+    it("is learnt from a tome every adventurers' guild sells for 10 gold; cast, lights the dark 12 m round its caster for fifteen minutes; cast again, put out", async () => {
+        const { ITEMS, wares } = await import("../client/js/core/progress.js");
+        const { SPELLS } = await import("../client/js/core/spells.js");
+        const host = new Host(buildWorld({ seed: 2 }), { populate: false });
+
+        host.join({ id: HOST_PLAYER, hero: HERO });
+        host.populate();
+        Object.assign(host.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        assert.ok(wares("guild").some(({ id }) => id === "tomeLight"));
+        assert.equal(ITEMS.tomeLight.price, 10);
+        assert.equal(SPELLS.light.lasts, 15 * 60000);
+
+        const me = host.battle.actor(HOST_PLAYER);
+        const cast = () => {
+            const result = host.command(HOST_PLAYER, { type: "cast", spell: "light", target: null });
+
+            for (let t = 0; t < SPELLS.light.castTime + 200; t += STEP_MS) {
+                host.advance(STEP_MS);
+            }
+
+            return result;
+        };
+
+        assert.equal(cast().ok, false, "not known yet");
+        host.players.get(HOST_PLAYER).progress.learn("light");
+        Object.assign(host.war, { turn: 41, clock: 30000 });
+
+        assert.equal(cast().ok, true);
+        assert.ok(host.battle.buffOf(me, "light"));
+        assert.equal(host.battle.buffOf(me, "light").until - host.battle.time > 14 * 60000, true);
+
+        host.advance(STEP_MS);
+        assert.ok(host.battle.light.lit.some(([x, y, reach2]) => Math.abs(x - me.x) < 1 && Math.abs(y - me.y) < 1 && reach2 === LIGHT_REACH.globe ** 2), "its globe lights round them");
+
+        // (Again, once it's cooled down: put out)
+        for (let t = 0; t < SPELLS.light.cooldown; t += STEP_MS) {
+            host.advance(STEP_MS);
+        }
+
+        assert.equal(cast().ok, true);
+        assert.equal(host.battle.buffOf(me, "light"), null, "put out");
     });
 });
 

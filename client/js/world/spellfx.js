@@ -2254,6 +2254,14 @@ const RECIPES = {
         palette: { glow: [0xf0d8ff, 0x6a2ab8], deep: 0x9a4aff, bright: 0xf0d8ff },
         land: (fx, { at }) => fx.decal(at, { texture: "runes", colour: 0x9a4aff, radius: 1.4, life: 1.2, spin: 1.5, grow: 0.3 }),
     },
+    // Light: a puff of white motes rising from the hand as the globe (world/globes.js) lifts off it
+    light: {
+        palette: { glow: [0xffffff, 0xbcd2ff], deep: 0x9ab8ff, bright: 0xffffff },
+        land: (fx, { at }) => {
+            fx.spray(p([0xffffff, 0xbcd2ff], { count: 24, size: [0.04, 0.09], speed: [0.6, 1.4], life: [0.5, 0.9], gravity: -0.8, spread: 1.2, swirl: 6 }), above(at, 1.2));
+            fx.flash(above(at, 1.6), { colour: 0xd6e4ff, intensity: 8, distance: 6, life: 0.5 });
+        },
+    },
     levitate: {
         palette: { glow: [0xf4fbff, 0x7ac8ff], deep: 0x9adcff, bright: 0xffffff },
         land: (fx, { at }) => {

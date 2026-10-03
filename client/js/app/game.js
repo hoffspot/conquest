@@ -71,6 +71,7 @@ import { Motes } from "../world/motes.js";
 import { EMBER_SCALE } from "../world/fire.js";
 import { GLOW_SCALE } from "../world/lights.js";
 import { CarriedTorches } from "../world/carried.js";
+import { LightGlobes } from "../world/globes.js";
 import { SMOKE_SHARE } from "../world/smoke.js";
 import { FarLand } from "../world/far/far.js";
 import { farReach } from "../world/far/levels.js";
@@ -723,7 +724,7 @@ export class Game {
     #lightNear(x, z) {
         const lights = this.chunks.lightsNear(x, z, LIGHT_REACH, (this.nearLights ??= []));
 
-        lights.push(...(this.town?.lights ?? []), ...(this.camps?.lights() ?? []), ...(this.banners?.lights() ?? []), ...(this.carried?.lights() ?? []), ...(this.spellFx?.lightsNow() ?? []));
+        lights.push(...(this.town?.lights ?? []), ...(this.camps?.lights() ?? []), ...(this.banners?.lights() ?? []), ...(this.carried?.lights() ?? []), ...(this.globes?.lights() ?? []), ...(this.spellFx?.lightsNow() ?? []));
         GLOW_SCALE.value = this.view.pixelsPerMetre();
         EMBER_SCALE.value = GLOW_SCALE.value;
         this.view.lightNear(lights, _lit.set(x, this.avatars.get(this.me).object.position.y + 1.2, z));
@@ -746,6 +747,24 @@ export class Game {
         }
 
         this.carried?.update(carriers);
+    }
+
+    // The Light spell's globes (world/globes.js): over everyone on the player's map with one shining
+    // (core/spells.js light, a lasting spell: battle.js buffOf), drifting after them
+    #lightGlobes(dt) {
+        const casters = (this.globeCasters ??= []);
+
+        casters.length = 0;
+
+        for (const actor of this.battle.actors) {
+            const avatar = actor.map === this.mapId && !actor.dead && this.battle.buffOf(actor, "light") ? this.avatars.get(actor.id) : null;
+
+            if (avatar?.object) {
+                casters.push({ id: actor.id, object: avatar.object, shown: avatar.object.visible });
+            }
+        }
+
+        this.globes?.update(casters, dt, this.battle.time / 1000);
     }
 
     // The time of day the world's clock has (core/daytime.js: the war's, the same for every
@@ -926,6 +945,7 @@ export class Game {
         this.banners = new Banners(view.scene);
         this.camps = new Camps(view.scene);
         this.carried = new CarriedTorches(view.scene);
+        this.globes = new LightGlobes(view.scene);
         this.drops = new Drops(view.scene, { picture: (id) => this.#itemPicture(id) });
 
         // (Banners and camps only ever outside, on the world's ground)
@@ -1406,6 +1426,7 @@ export class Game {
         this.banners?.dispose();
         this.camps?.dispose();
         this.carried?.dispose();
+        this.globes?.dispose();
         this.flyers?.dispose();
 
         this.spellFx?.dispose();
@@ -1923,6 +1944,9 @@ export class Game {
         }
 
         // The world round the player, drawn as they go (a chunk a frame at most)
+        // (The Light spell's globes over whoever has one, on the map the player's on)
+        this.#lightGlobes(dt);
+
         if (this.chunks && this.mapId === "town") {
             const { x, z } = this.avatars.get(this.me).object.position;
 
