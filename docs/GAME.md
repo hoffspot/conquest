@@ -978,11 +978,11 @@ drawn whole whichever way the camera looks (about 90 draw calls and 170,000 tria
 to High (suggested for the device until it's moved: older phones low, phones medium, computers
 high); debug mode can change it too. The game aims at 60 frames a second at every level:
 
-| Level | Pixels | Shadow map | Antialiasing | Hair | Skin textures | Undergrowth | Tall grass | Motes | Chimney smoke | Far land | Far trees | Fields afar |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Low (older phones) | 1× | 1024 | no | a fifth of the strands | 512 | half | none (its look on the ground) | none | half its puffs | 1 km | none | no |
-| Medium (phones) | up to 1.5× | 2048 | yes | 30% | 512 | three-quarters | to 12 m, thinner to 28 m | 300 | three-quarters | 2 km | to 700 m | yes |
-| High (computers) | up to 2× | 2048 | yes | 45% | 1024 | all of it | to 18 m, thinner to 40 m | 600 | all of it | 4 km | to 1.2 km | yes |
+| Level | Pixels | Shadow map | Antialiasing | Hair | Skin textures | Undergrowth | Tall grass | Motes | Chimney smoke | Far land | Far trees | Fields afar | Cliffs |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Low (older phones) | 1× | 1024 | no | a fifth of the strands | 512 | half | none (its look on the ground) | none | half its puffs | 1 km | none | no | none (painted on the ground) |
+| Medium (phones) | up to 1.5× | 2048 | yes | 30% | 512 | three-quarters | to 12 m, thinner to 28 m | 300 | three-quarters | 2 km | to 700 m | yes | yes |
+| High (computers) | up to 2× | 2048 | yes | 45% | 1024 | all of it | to 18 m, thinner to 40 m | 600 | all of it | 4 km | to 1.2 km | yes | yes |
 
 **How often it's drawn** (`app/pacing.js`). The browser asks for a frame each time the screen
 refreshes: 60 times a second on most screens, 90, 120 or 144 on many phones and monitors. Drawn
@@ -1254,6 +1254,39 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
   chunk's steps are one mesh, drawn with the atlas (one draw, and one more for shadows): on seed
   1, 49 of the 247 chunks the trails cross have some, at most 206 stones (2,472 triangles), 557
   triangles on average.
+- **Cliffs** (kits/cliffs.js; the terrain plan's M7h), where the ground's too steep to climb:
+  before, a smooth slope with rock painted on it; now a skin of rock standing out of it.
+  - **Its shape:** the ground's own, on a lattice 2 m apart, each point moved a little off it
+    its own way (so no grid shows) and pushed out along the ground's normal by how steep it is:
+    from 36° it begins to stand out, by 41° it's all out; gentler than that it sinks half a metre
+    under the ground, so it has no edge. Out by 0.35 m at the least, more in the rock's bedding
+    (a ledge jutting at the foot of each layer every 5.5 m of height, the layers tilted and
+    wandering across the land), and broken into buttresses 13 m across and crags 6.5 m (nothing
+    finer than the lattice draws, or it's spikes). A cell whose side climbs more than 2.5 m has
+    that side split (up to six pieces) and its triangles fanned from its middle, so a sheer
+    face isn't one long sliver; each side's split the same in the cells either side of it.
+  - **Its colour,** each point's own (so they blend, no face standing out): its layer's own
+    shade, darker up under the ledge above, moss on what faces up in a green land, snow on it
+    high up or in the cold; where it's hardly a cliff, at its brow and its foot, the ground's
+    colour beside it (its land's grass and a third painted rock), so where it comes out of the
+    ground no line of rock shows. Scree lies at the cliffs' feet: chips of the same rock where the
+    ground eases off below a cliff.
+  - **Its picture,** the land's rock (pale, red or dark where the land's is), three times the
+    size it is on a boulder, laid on from three sides by where each pixel is in the world, each
+    side's as much as the rock faces that way (`cliffMaterial`): a skin bent every way can't have
+    a picture laid flat on it without seams or smears. Each patch of rock (about 9 m) reads it
+    from a place of its own, two blended where patches meet (Inigo Quilez's "texture
+    repetition"), and the rock's lighter and darker in broad patches, so its copies don't line up
+    in rows. Most pixels read the picture four times, six at a corner.
+  - **The same either side of a chunk's edge** (worked out from the world, not the chunk: the
+    ground's heights read from the chunks round it, fetched first, one a step). Never on a road,
+    a bridge, water or what's built. Only what's drawn: it stands on ground no one walks (or sinks
+    under where they could), so the rules don't know of it.
+  - **Cost:** a chunk's cliffs are a mesh of their own (one draw, and its shadows), made a few
+    rows at a time (at most 4 or 5 ms a step, 20 to 30 ms a chunk all cliff), up to about 4,700
+    triangles; 24,000 to 77,000 in the mountains round the player on seed 1. None on low quality
+    (the rock's still painted on the ground there): lowered to low while playing, those drawn are
+    hidden, and shown again when it's raised; a chunk drawn on low has none till it's drawn again.
 - **Trees** (`Woodland`, kits/trees.js): every variant kept once and drawn wherever it's planted
   (Three.js's BatchedMesh), all the world's wood in one draw call and its leaves in another, only
   the trees in view (and, into the sun's shadows, only those in its); the crowns' shells and the

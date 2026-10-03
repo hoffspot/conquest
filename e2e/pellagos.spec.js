@@ -960,9 +960,46 @@ test("walks out of the town into the world, drawn round the player as they go, w
     expect(camped.lit).toBeGreaterThan(0);
     expect(camped.said.some((text) => /^You sleep by the fire till evening/.test(text)), JSON.stringify(camped.said)).toBe(true);
 
+    // Up in the mountains to the north east, where the ground's too steep to climb: cliffs of rock
+    // stand out of it, a mesh of their own a chunk, drawn with the rock's picture laid on from
+    // three sides
+    const cliffs = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const [x, y] = [5776, 528];
+
+        Object.assign(game.battle.actor(game.me), { x, y, path: [], order: null, progress: null });
+        game.avatars.get(game.me).object.position.set(x, game.world.maps.town.ground.heightAt(x, y), y);
+
+        for (let n = 0; n < 4; n++) {
+            game.advance(0.25, { render: false });
+
+            for (let k = 0; k < 400 && (game.chunks.update(x, y, { budget: 200 }) || game.chunks.busy); k++) {
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        }
+
+        game.advance(0.05);
+
+        const meshes = [];
+
+        session.view.scene.traverse((node) => node.name === "cliffs" && meshes.push(node));
+
+        return {
+            meshes: meshes.length,
+            triangles: meshes.reduce((sum, mesh) => sum + mesh.geometry.getAttribute("position").count / 3, 0),
+            material: [...new Set(meshes.map((mesh) => mesh.material.name))],
+            compiled: session.view.renderer.info.programs.some(({ name }) => name === "cliffs"),
+        };
+    });
+
+    expect(cliffs.meshes).toBeGreaterThan(2);
+    expect(cliffs.triangles).toBeGreaterThan(3000);
+    expect(cliffs.material).toEqual(["cliffs"]);
+    expect(cliffs.compiled).toBe(true);
+
     // Every shader drawn so far (the town, the world round it and its far land, its water, grass,
-    // trees and creatures) reads no more textures than an iPhone lets one read (16; this browser
-    // allows more): past that, its shader won't compile there and nothing it draws is seen
+    // trees, cliffs and creatures) reads no more textures than an iPhone lets one read (16; this
+    // browser allows more): past that, its shader won't compile there and nothing it draws is seen
     const reading = await page.evaluate(() => {
         const renderer = window.pellagos.session.view.renderer;
         const gl = renderer.getContext();
