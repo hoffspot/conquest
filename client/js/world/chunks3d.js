@@ -21,12 +21,14 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { CHUNK, CHUNKS, WET } from "../core/overworld.js";
 import { CORNERS } from "../core/terrain/ground.js";
+import { SLOPE_CLASS } from "../core/terrain/height.js";
 import { allAtOnce } from "../core/steps.js";
 import { material, paintPicture } from "./art/engine/materials.js";
 import { WILDS } from "./art/engine/atlas.js";
 import { holdSign, isSign, letGoSign, releaseSign } from "./art/kits/signs.js";
 import { Woodland } from "./art/kits/trees.js";
-import { featureLooks, featureMesh, Growth, sowing, TILE, undergrowthLooks, undergrowthMesh } from "./art/kits/wilds.js";
+import { featureLooks, featureMesh, Growth, Mesher, sowing, TILE, undergrowthLooks, undergrowthMesh } from "./art/kits/wilds.js";
+import { cliffMesh, cliffsInto } from "./art/kits/cliffs.js";
 import { hedgeBuilding, hedgeMesh, hedgeRuns } from "./art/kits/hedges.js";
 import { stepsMesh, stonesOf } from "./art/kits/steps.js";
 import { disposeChunkGround, disposeGrass, groundMaterial, landColours, layingGround, respaceGround } from "./ground.js";
@@ -40,6 +42,9 @@ import { lightsMesh, lightsOf } from "./lights.js";
 import { chimneysOf, smokeMesh } from "./smoke.js";
 import { clothMesh, clothOf } from "./cloth.js";
 import { lieOf } from "./art/kits/yards.js";
+
+// The eight chunks round one
+const NEIGHBOURS = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]];
 
 /** How many chunks round the player's are drawn (each way), and how far off they're let go. */
 export const REACH = Object.freeze({ drawn: 2, kept: 3 });
@@ -93,11 +98,14 @@ export class Chunks {
      * @param {object} world - From buildWorld (core/overworld.js): its `maps.town` the world
      *     outside, and its plan.
      */
-    constructor(world, { undergrowth = 1 } = {}) {
+    constructor(world, { undergrowth = 1, cliffs = 1 } = {}) {
         this.world = world;
 
         /** How thick the undergrowth grows (1 as the lands have it; less on slower devices, 0 none). */
         this.undergrowth = undergrowth;
+
+        /** Whether the cliffs are drawn (1; 0 none, on slower devices: kits/cliffs.js). */
+        this.cliffs = cliffs;
         this.overworld = world.maps.town;
         this.land = landColours(world.plan, grassLooks());
         this.woodland = new Woodland();
@@ -123,7 +131,8 @@ export class Chunks {
         // it's still being drawn, hidden), job (its buildings, while they're being built: {
         // pieces, index, group, waiting, trees, built, parts }), buildings (once they're built,
         // merged) and far (whether they're drawn as from far off: #detail), growth (its
-        // undergrowth while it's being grown: its steps), undergrowth (its meshes) }; the steps
+        // undergrowth while it's being grown: its steps), undergrowth (its meshes), cliffs (its
+        // cliffs' mesh, if it has any: setCliffs) }; the steps
         // of the one being drawn; those whose
         // buildings are being built, in turn; and those whose undergrowth is being grown
         this.drawn = new Map();
@@ -188,6 +197,24 @@ export class Chunks {
 
         for (const drawn of this.drawn.values()) {
             this.#uproot(drawn);
+        }
+    }
+
+    /**
+     * Draw the cliffs or not (as the constructor's `cliffs`) from now on: those drawn already
+     * shown or hidden; a chunk drawn while they weren't has none till it's drawn again.
+     */
+    setCliffs(cliffs) {
+        if (cliffs === this.cliffs) {
+            return;
+        }
+
+        this.cliffs = cliffs;
+
+        for (const drawn of this.drawn.values()) {
+            if (drawn.cliffs) {
+                drawn.cliffs.visible = Boolean(cliffs);
+            }
         }
     }
 
@@ -653,7 +680,7 @@ export class Chunks {
         const chunk = this.overworld.chunk(cx, cy);
         const object = new THREE.Group();
         const heights = new Float32Array(CHUNK * CHUNK);
-        const drawn = { cx, cy, object, lot: null, heights, drawing: true, job: null, growth: null, undergrowth: null };
+        const drawn = { cx, cy, object, lot: null, heights, drawing: true, job: null, growth: null, undergrowth: null, cliffs: null };
         // (How high what stands on it does, over the squares it stands on: [{ min, max ([x, y]), top }])
         const standing = (boxes) => {
             for (const { min, max, top } of boxes) {
@@ -691,10 +718,31 @@ export class Chunks {
             }
         }
 
+        // Its cliffs (kits/cliffs.js), where it has any and they're drawn
+        const landAt = (x, y) => this.overworld.biomeAt(x, y);
+
+        if (this.cliffs && this.overworld.ground && chunk.slopes?.includes(SLOPE_CLASS.cliff)) {
+            const cliffs = new Mesher(4096);
+            const ground = this.overworld.ground;
+
+            // (Its neighbours' ground worked out first, one a step: the skin's read across its edges)
+            for (const [dx, dy] of NEIGHBOURS) {
+                if (cx + dx >= 0 && cy + dy >= 0 && cx + dx < CHUNKS && cy + dy < CHUNKS && !ground.peek(cx + dx, cy + dy)) {
+                    ground.chunk(cx + dx, cy + dy);
+                    yield;
+                }
+            }
+
+            yield* cliffsInto(cliffs, chunk, (ncx, ncy) => ground.chunk(ncx, ncy).heights, landAt);
+
+            if (cliffs.count) {
+                drawn.cliffs = cliffMesh(cliffs, [chunk.x0, chunk.y0]);
+                object.add(drawn.cliffs);
+            }
+        }
+
         // The land's own features (their looks made first, a step each), and how high they stand
         if (chunk.features.length) {
-            const landAt = (x, y) => this.overworld.biomeAt(x, y);
-
             yield* featureLooks(chunk.features, landAt);
 
             const wild = featureMesh(chunk.features, landAt, [chunk.x0, chunk.y0], this.groundAt);

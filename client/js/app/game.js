@@ -892,7 +892,7 @@ export class Game {
             // The world round where the player starts, a chunk at a time (then more as they go)
             const [x, y] = world.spawns.player;
 
-            this.chunks = new Chunks(world, { undergrowth: view.quality.undergrowth });
+            this.chunks = new Chunks(world, { undergrowth: view.quality.undergrowth, cliffs: view.quality.cliffs });
             this.chunks.setSpacing(view.quality.ground);
             view.scene.add(this.chunks.object);
             // (The tall grass over the land round the player, as the chunks there are drawn)
@@ -1982,9 +1982,10 @@ export class Game {
             const { x, z } = this.avatars.get(this.me).object.position;
 
             // (The undergrowth as thick as the quality asks, grown again if that's changed; the
-            // ground as finely drawn)
+            // ground as finely drawn; the cliffs, if it draws them)
             this.chunks.setUndergrowth(this.view.quality.undergrowth);
             this.chunks.setSpacing(this.view.quality.ground);
+            this.chunks.setCliffs(this.view.quality.cliffs);
 
             if (this.chunks.update(x, z)) {
                 this.#hearTrees();

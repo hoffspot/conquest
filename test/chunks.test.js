@@ -32,6 +32,7 @@ const { AHEAD, Layouts } = await import("../client/js/world/layouts.js");
 const { splatOf, splatting } = await import("../client/js/world/ground.js");
 const { GARDEN_KINDS, sowing, undergrowthMesh, undergrowthOf } = await import("../client/js/world/art/kits/wilds.js");
 const { plantsOf } = await import("../client/js/world/art/kits/yards.js");
+const { QUALITY } = await import("../client/js/world/view.js");
 
 let world;
 
@@ -104,6 +105,37 @@ describe("the world outside, drawn round the player (chunks3d.js)", () => {
         assert.ok(near.every(({ drawing, object }) => !drawing && object.visible));
         assert.equal(chunks.drawing, null);
         chunks.dispose();
+    });
+
+    it("draws cliffs of rock where the ground's too steep to climb, unless the quality's too low for them: hidden then, and none drawn", () => {
+        // (Steep ground in the mountains to the north east: kits/cliffs.js, test/cliffs.test.js)
+        const [x, z] = [5776.5, 528.5];
+        const cliffsOf = (chunks) => [...chunks.drawn.values()].map(({ cliffs }) => cliffs).filter(Boolean);
+        const drawing = new Chunks(world, { undergrowth: 0 });
+
+        drawing.fill(x, z, 0);
+
+        const [cliffs] = cliffsOf(drawing);
+
+        assert.ok(cliffs && cliffs.visible && cliffs.material.name === "cliffs");
+        assert.equal(cliffs.parent, drawing.drawn.get([...drawing.drawn.keys()][0]).object);
+
+        // (The quality lowered: hidden; raised again, shown)
+        drawing.setCliffs(0);
+        assert.equal(cliffs.visible, false);
+        drawing.setCliffs(1);
+        assert.equal(cliffs.visible, true);
+        drawing.dispose();
+
+        // (Too low for them from the start: none made)
+        const none = new Chunks(world, { undergrowth: 0, cliffs: 0 });
+
+        none.fill(x, z, 0);
+        assert.equal(none.drawn.size, 1);
+        assert.deepEqual(cliffsOf(none), []);
+        assert.ok(![...none.drawn.values()][0].object.children.some(({ name }) => name === "cliffs"));
+        none.dispose();
+        assert.deepEqual([QUALITY.low.cliffs, QUALITY.medium.cliffs, QUALITY.high.cliffs], [0, 1, 1]);
     });
 
     it("builds a settlement's buildings a piece at a time, each made ready to merge in a step of its own, on the ground, merged the same as all at once", async () => {

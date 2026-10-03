@@ -3002,3 +3002,47 @@ converted data is to be measured in M8 against today's hm08 data.
     e2e (dropped where it's held, the column and the line in the world, taken away held on it; out
     at sea "A path cannot be found"; tapped twice, the player runs there and arrives).
   - **Next:** the M7 summary report; then M7h, cliffs and rocks.
+- **2026-10-03, M7h built: cliffs of rock** (§9 *Rock relief*, table row 5; docs/GAME.md
+  *Cliffs*).
+  - **Before:** where the ground was too steep to climb it was the same smooth slope as anywhere,
+    rock painted on it; from below, a grey sheet.
+  - **A skin of rock** (world/art/kits/cliffs.js `cliffsInto`): the ground's shape on a 2 m
+    lattice, each point moved off it a little its own way, pushed out along the ground's normal
+    by how steep it is (out from 36°, all out by 41°; under 36° sunk half a metre under the
+    ground, so it has no edge): 0.35 m at the least, more in the rock's bedding (a ledge at the
+    foot of each 5.5 m layer, a smooth swell, the layers tilted and wandering), broken into
+    buttresses and crags (13 m and 6.5 m; nothing finer, or the lattice draws spikes). A side
+    climbing more than 2.5 m is split, the cell fanned from its middle. Coloured a point at a time:
+    each layer its shade, darker under the ledge above, moss and snow on what faces up; at its brow
+    and foot, where it's hardly a cliff, the ground's colour beside it (at a coast's bluff its
+    edge showed as a pale sawtooth against the grass). Scree at the feet. Smooth normals: lit
+    flat, a face at a time, it read as spikes.
+  - **Its picture** (engine/atlas.js `cliffMaterial`, ROCK): laid on from three sides by where
+    each pixel is in the world, not texture coordinates. Tried first: each face's own plane (a
+    patchwork of seams), then each point's way along the slope (stripes, as a point's way turns
+    with its normal across a whole world's distance). Laid on from three sides, the rock's own
+    picture showed its copies in rows (a wallpaper of the same cracked plates every 7 m), so each
+    patch of rock reads it from a place of its own, two blended where patches meet (Inigo Quilez,
+    "texture repetition", technique 3), read with `textureGrad` so a side the rock barely faces
+    isn't read at all: four reads a pixel, six at a corner, and broad lighter and darker patches.
+  - **Seams:** worked out from the world, not the chunk (the ground's heights from the chunks
+    round it, fetched first one a step; its rises over 4 m kept three nodes past the chunk, since
+    the lattice a point outside it moves up to most of a step: with two, the edge's normals were
+    a little different either side, which the tests found).
+  - **Cost** (Chromium's software renderer, seed 1, medium, the follow camera): up to about 4,700
+    triangles a chunk all cliff; 24,000 to 77,000 round the player in the mountains (17 to 28
+    meshes, one draw each and their shadows'); +6 to +17 draw calls and +15,000 to +46,000
+    triangles a frame there, which draw 56 to 99 calls in all (fewer than a town). Over row 5's
+    20 to 45k, but where nothing else much is drawn; none on low quality (`QUALITY.cliffs`;
+    `Chunks.setCliffs`). Made a few rows a step: at most 4.5 ms, 17 to 28 ms a chunk all cliff.
+    Only 5 % of its triangles are wholly under the ground (not worth leaving out).
+  - **Pictures:** mountain, peak, steepest, snow, coast and badlands, from a walker's eye, the
+    follow camera and 70 m up, before and after; sent in the session.
+  - **Tests:** test/cliffs.test.js (standing out only where too steep; made a few rows a step,
+    within a chunk's share, none on flat land; the same points, normals and colours either side
+    of a chunk's edge; never on a road, a bridge, water or what's built; drawn with the picture
+    from three sides, lit by the fires); test/chunks.test.js (drawn, hidden and shown with the
+    quality; none made on low); e2e (in the mountains, the cliffs' meshes drawn and their shader
+    compiled, reading no more than 16 textures).
+  - **Not yet:** the arches (row 5: one to three a region) and overhangs beyond the ledges.
+  - **Next:** M7h-2, a few natural arches of rock; then M7i, churches, citadels and stone bridges.

@@ -348,6 +348,88 @@ transformed.y = mix(transformed.y, foot - 0.06, smoothstep(wildsFade.x, wildsFad
     return material;
 }
 
+let rock = null;
+
+/**
+ * How the cliffs' picture is laid on (cliffMaterial): how big the patches of rock are that each
+ * read it from a place of their own (metres, about), so its copies don't line up in rows; and how
+ * big the patches it's lighter and darker in are (metres: broad ones and smaller), and how much
+ * lighter or darker (of its colour).
+ */
+export const ROCK = Object.freeze({ shifts: 9, patches: [23, 7], mottle: 0.2 });
+
+/**
+ * The cliffs' material (kits/cliffs.js): drawn from the atlas as the shared one is, but its picture
+ * laid on from three sides by where each pixel is in the world, each side's as much as the rock
+ * faces that way, not by texture coordinates: a skin of rock bent every way can't have a picture
+ * laid flat on it without seams or smears. Each vertex's first texture coordinate is how many
+ * copies of the picture there are to a metre.
+ */
+export function cliffMaterial() {
+    if (rock) {
+        return rock;
+    }
+
+    const { uniforms } = atlasMaterial().userData;
+    const material = new THREE.MeshLambertMaterial({ vertexColors: true });
+
+    material.name = "cliffs";
+    material.shadowSide = THREE.DoubleSide;
+    material.userData.atlas = uniforms.atlasMap.value;
+    material.userData.uniforms = uniforms;
+    material.onBeforeCompile = (shader) => {
+        fromAtlas(shader, uniforms);
+        shader.vertexShader = shader.vertexShader
+            .replace("#include <common>", "#include <common>\nvarying vec3 vRockAt;\nvarying vec3 vRockFacing;\nvarying float vRockScale;")
+            .replace("#include <project_vertex>", "#include <project_vertex>\nvRockAt = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvRockFacing = objectNormal;\nvRockScale = uv.x;");
+        shader.fragmentShader = shader.fragmentShader
+            .replace("#include <common>", "#include <common>\nvarying vec3 vRockAt;\nvarying vec3 vRockFacing;\nvarying float vRockScale;")
+            .replace("void main() {", `${ROCK_READ_GLSL}\nvoid main() {`)
+            .replace("vec4 atlasTexel = texture(atlasMap, vec3(vAtlasUv, vLayer));", ROCK_GLSL);
+        fireLit(shader);
+    };
+    material.customProgramCacheKey = () => "cliffs";
+    rock = material;
+
+    return material;
+}
+
+// The rock's picture read at a place on it (cliffMaterial), as its patch of rock reads it: from
+// one of eight places (`which`: its whole part, and how far to the next, its fraction), the two
+// it's between blended where one patch gives way to the next (Inigo Quilez's "texture
+// repetition", technique 3), how fast it changes across the screen given (it's read in a branch)
+const ROCK_READ_GLSL = `
+vec4 rockRead(vec2 at, vec2 across, vec2 down, float which) {
+    float first = floor(which);
+    vec4 a = textureGrad(atlasMap, vec3(at + sin(vec2(3.0, 7.0) * first), vLayer), across, down);
+    vec4 b = textureGrad(atlasMap, vec3(at + sin(vec2(3.0, 7.0) * (first + 1.0)), vLayer), across, down);
+
+    return mix(a, b, smoothstep(0.2, 0.8, fract(which) - 0.1 * dot(a.rgb - b.rgb, vec3(1.0))));
+}`;
+
+// The rock's picture from three sides (cliffMaterial): seen from east and west, from above and
+// below, from north and south, the way the rock faces most counting most (its facing to the
+// fourth: little of a side's picture where the rock's turned from it, so they don't blur
+// together, and none read where there's next to none of it); each patch of the rock reading it
+// from a place of its own (rockRead); and the rock lighter and darker in broad patches
+// (ROCK.patches metres across, as much as ROCK.mottle), so no copy's like the next
+const ROCK_GLSL = `
+vec3 rockSides = abs(normalize(vRockFacing));
+rockSides *= rockSides;
+rockSides *= rockSides;
+rockSides /= rockSides.x + rockSides.y + rockSides.z;
+vec3 rockAt = vRockAt * vRockScale;
+vec3 rockAcross = dFdx(rockAt);
+vec3 rockDown = dFdy(rockAt);
+float rockWhich = agedNoise(vRockAt.xz / ${ROCK.shifts.toFixed(1)} + vRockAt.y / ${(ROCK.shifts * 1.3).toFixed(1)}) * 8.0;
+vec4 atlasTexel = vec4(0.0);
+if (rockSides.x > 0.01) atlasTexel += rockRead(rockAt.zy, rockAcross.zy, rockDown.zy, rockWhich) * rockSides.x;
+if (rockSides.y > 0.01) atlasTexel += rockRead(rockAt.xz, rockAcross.xz, rockDown.xz, rockWhich + 3.0) * rockSides.y;
+if (rockSides.z > 0.01) atlasTexel += rockRead(rockAt.xy, rockAcross.xy, rockDown.xy, rockWhich + 5.0) * rockSides.z;
+atlasTexel /= max(0.01, dot(rockSides, step(0.01, rockSides)));
+float rockPatch = agedNoise(vRockAt.xz / ${ROCK.patches[0].toFixed(1)} + vRockAt.y / ${(ROCK.patches[0] * 1.3).toFixed(1)}) * 0.6 + agedNoise(vRockAt.zx / ${ROCK.patches[1].toFixed(1)} + vRockAt.yy / ${(ROCK.patches[1] * 1.3).toFixed(1)} + 3.1) * 0.4;
+atlasTexel.rgb *= ${(1 - ROCK.mottle).toFixed(2)} + ${(ROCK.mottle * 2).toFixed(2)} * rockPatch;`;
+
 // The atlas's texture array, made once: its layers as painted (prepareAtlas's, or here and now).
 // Asked for while prepareAtlas's are still being painted (as the game gets the land ready), it
 // takes theirs once they are, rather than painting them all again here: until then it has none,
