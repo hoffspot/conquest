@@ -878,17 +878,35 @@ describe("the battle (battle.js)", () => {
         assert.ok(events.some((event) => event.type === "projectile" && event.id === "player" && event.target === "orc"));
     });
 
+    it("reaches across a street or a clearing (twice what it did): past where most are seen from, the caster seeing as far as it reaches", () => {
+        assert.deepEqual(["vigor", "hurt", "burn", "inferno", "stun", "fear"].map((id) => SPELLS[id].reach), [16, 16, 16, 20, 18, 18]);
+        assert.ok(SPELLS.hurt.reach > SIGHT);
+
+        const battle = new Battle(open(30, 5), { seed: 1 });
+        const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [2, 2] });
+
+        battle.add({ id: "orc", kind: "orc", weapon: "cleaver", team: "orcs", square: [2 + SIGHT + 3, 2] });
+        battle.add({ id: "friend", kind: "player", weapon: "sword", team: "hero", square: [2 + SIGHT + 3, 4] });
+        battle.actor("friend").hp -= 20;
+
+        // (Out of the player's sight, though in the open: but not out of the spells')
+        assert.equal(battle.canSee(player, battle.actor("orc")), false);
+        assert.deepEqual(battle.cast("player", "hurt", "orc"), { ok: true });
+        run(battle, SPELLS.hurt.castTime + SPELL_COOLDOWN + SPELLS.hurt.cooldown);
+        assert.deepEqual(battle.cast("player", "vigor", "friend"), { ok: true });
+    });
+
     it("says why a spell can't be cast: out of reach, out of sight, full health, not an enemy", () => {
         const battle = new Battle(worldOf([
-            "....................",
-            "..........#.........",
-            "..........#.........",
-            "..........#.........",
-            "....................",
+            "..............................",
+            "..........#...................",
+            "..........#...................",
+            "..........#...................",
+            "..............................",
         ]), { seed: 1 });
 
         battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [8, 2] });
-        battle.add({ id: "far", kind: "orc", weapon: "cleaver", team: "orcs", square: [19, 4] });
+        battle.add({ id: "far", kind: "orc", weapon: "cleaver", team: "orcs", square: [29, 4] });
         battle.add({ id: "hidden", kind: "orc", weapon: "cleaver", team: "orcs", square: [12, 2] });
         battle.add({ id: "friend", kind: "player", weapon: "sword", team: "hero", square: [6, 2] });
 

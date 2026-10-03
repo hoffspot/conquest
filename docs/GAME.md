@@ -569,9 +569,9 @@ would be one line in weapons.js):
 
 | Spell | On | Reach | Casts in | Does | Cooldown |
 | --- | --- | --- | --- | --- | --- |
-| Vigor | anyone | 8 m | 500 ms | 8–12 hit points back | 4000 ms |
-| Burn | an enemy | 8 m, in sight | 450 ms | 9–15, may set them burning | 2500 ms |
-| Stun | an enemy | 9 m, in sight | 400 ms | can't act for 3000 ms | 3000 ms |
+| Vigor | anyone | 16 m | 500 ms | 8–12 hit points back | 4000 ms |
+| Burn | an enemy | 16 m, in sight | 450 ms | 9–15, may set them burning | 2500 ms |
+| Stun | an enemy | 18 m, in sight | 400 ms | can't act for 3000 ms | 3000 ms |
 
 (The rest, each school's tiers and the tomes' spells, are in docs/MAGIC.md.)
 

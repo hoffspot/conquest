@@ -942,7 +942,7 @@ export class Battle {
             return { reason: "range" };
         }
 
-        if (!this.canSee(actor, target)) {
+        if (!this.canSee(actor, target, Math.max(SIGHT, spell.reach))) {
             return { reason: "sight" };
         }
 
@@ -1112,10 +1112,11 @@ export class Battle {
      * far as the light where `b` is lets them: light.js sightAt, `this.light`; as far as ever for
      * a creature that sees in the dark, creatures.js `darkSight`), with nothing that
      * blocks sight between their middles (the map's opaque squares: houses and trees, not barrels
-     * or a well, outdoors; walls, not tables, indoors)?
+     * or a well, outdoors; walls, not tables, indoors)? (`range`: as far as they look, if further
+     * than SIGHT: a spell's caster, as far as it reaches)
      */
-    canSee(a, b) {
-        return a.map === b.map && this.#sees(a.map, a.square, b.square, a.map === this.lightMap && !a.wild?.darkSight ? SIGHT * sightAt(this.light, b.square) : SIGHT);
+    canSee(a, b, range = SIGHT) {
+        return a.map === b.map && this.#sees(a.map, a.square, b.square, a.map === this.lightMap && !a.wild?.darkSight ? range * sightAt(this.light, b.square) : range);
     }
 
     // Can someone on a map at one square see another square: within `range` (SIGHT), nothing opaque

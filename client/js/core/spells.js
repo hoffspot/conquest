@@ -31,11 +31,19 @@ export const SCHOOLS = Object.freeze({
 /** A school's experience from a spell of it landing: this for each tier of the spell. */
 export const SPELL_XP = 8;
 
+/**
+ * How far a spell cast on someone reaches, unless it's said otherwise (squares): across a street
+ * or a clearing, past where most are seen from (battle.js SIGHT; a spell's caster sees as far as
+ * it reaches). Each third tier of an attack spell reaches `tiers` further; the Hexes and Fear,
+ * `hexes` further.
+ */
+export const SPELL_REACH = Object.freeze({ reach: 16, tiers: 2, hexes: 2 });
+
 // A spell of healing (castable on anyone: never taken as an attack)
-const healing = (tier, label, settings) => ({ label, school: "healing", tier, target: "any", reach: 8, ...settings });
+const healing = (tier, label, settings) => ({ label, school: "healing", tier, target: "any", reach: SPELL_REACH.reach, ...settings });
 
 // An attack spell of an element (on an enemy in sight and reach)
-const attack = (school, tier, label, settings) => ({ label, school, tier, target: "enemy", reach: 8 + Math.floor(tier / 3), ...settings });
+const attack = (school, tier, label, settings) => ({ label, school, tier, target: "enemy", reach: SPELL_REACH.reach + SPELL_REACH.tiers * Math.floor(tier / 3), ...settings });
 
 /** How long a spell that lasts lasts, unless it's said otherwise (ms): five minutes. */
 export const LASTING = 300000;
@@ -55,7 +63,7 @@ export const TOME_RARITY = Object.freeze({
 
 // A spell learnt from a tome (of no school: it doesn't come with a school's growing), as rare as
 // `rarity` is to find
-const tome = (label, rarity, settings) => ({ label, tome: rarity, reach: 8, castTime: 700, ...settings });
+const tome = (label, rarity, settings) => ({ label, tome: rarity, reach: SPELL_REACH.reach, castTime: 700, ...settings });
 
 // A ward (a tome's): on oneself or anyone not an enemy, 30% less from what it's against for five
 // minutes (as `ward` says: attack spells of those schools, `hits` of those natural attacks'
@@ -131,8 +139,8 @@ export const SPELLS = Object.freeze({
     absoluteZero: attack("water", 7, "Absolute Zero", { about: "Cold beyond cold: everyone near's frozen solid, then slowed.", castTime: 1200, cooldown: 16000, damage: [44, 62], area: 3, stun: 1500, stunChance: 1, effect: { kind: "slow", chance: 1, look: "frost" }, reaction: "arcane" }),
 
     // --- Hexes (the Hexes skill: core/progress.js) ---
-    stun: { label: "Stun", about: "Stuns an enemy a few moments.", target: "enemy", castTime: 400, reach: 9, cooldown: 3000, stun: 3000 },
-    hold: { label: "Hold", about: "Holds an enemy fast a good while.", target: "enemy", castTime: 600, reach: 9, cooldown: 6000, stun: 6000, like: "stun" },
+    stun: { label: "Stun", about: "Stuns an enemy a few moments.", target: "enemy", castTime: 400, reach: SPELL_REACH.reach + SPELL_REACH.hexes, cooldown: 3000, stun: 3000 },
+    hold: { label: "Hold", about: "Holds an enemy fast a good while.", target: "enemy", castTime: 600, reach: SPELL_REACH.reach + SPELL_REACH.hexes, cooldown: 6000, stun: 6000, like: "stun" },
 
     // --- Learnt from tomes (each once found or given: progress.js TOMES) ---
     // Wards: on oneself or a friend, five minutes
@@ -163,7 +171,7 @@ export const SPELLS = Object.freeze({
     wizardsWalk: tome("Wizard's Walk", "rare", { about: "Walk the world's paths in a step: to anywhere on the map you've uncovered. Those with you are left behind. Needs a wand in hand.", target: "place", needs: "wand", castTime: 1200, cooldown: 300000 }),
     summon: tome("Summon", "common", { about: "Calls a creature of these parts to your side to fight with you, five minutes; or calls another player (of a people not your enemy) to you, if they'll come.", target: "summon", castTime: 1500, cooldown: 60000, lasts: LASTING }),
     levitate: tome("Levitate", "common", { about: "Float a hand's breadth above the ground, five minutes: nothing on it (traps, pools, fire) touches you.", target: "self", castTime: 600, cooldown: 20000, lasts: LASTING }),
-    fear: tome("Fear", "uncommon", { about: "Terror: an enemy runs blindly away, ten seconds (half that cast on them again soon after; a third time, nothing). The mighty may shrug it off; the unique always do.", target: "enemy", castTime: 500, cooldown: 8000, reach: 9, flee: 10000 }),
+    fear: tome("Fear", "uncommon", { about: "Terror: an enemy runs blindly away, ten seconds (half that cast on them again soon after; a third time, nothing). The mighty may shrug it off; the unique always do.", target: "enemy", castTime: 500, cooldown: 8000, reach: SPELL_REACH.reach + SPELL_REACH.hexes, flee: 10000 }),
     polymorph: tome("Polymorph", "rare", { about: "Turns a creature into another of the world's creatures, any at all. The mighty may resist; the unique can't be changed.", target: "enemy", castTime: 900, cooldown: 20000 }),
     attraction: tome("Attraction", "uncommon", { about: "A puff of smoke, and out of it one of the creatures of these parts.", target: "self", castTime: 800, cooldown: 30000 }),
     inertialBarrier: tome("Inertial Barrier", "uncommon", { about: "A barrier against blows and arrows: a quarter less from them, five minutes. No help against spells.", target: "friend", castTime: 700, cooldown: 20000, lasts: LASTING, physical: 0.75 }),
