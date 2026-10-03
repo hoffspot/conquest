@@ -29,6 +29,7 @@ import { soldierLook } from "../characters/soldiers.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
 import { BeastAvatar, dressingCreature } from "../beasts/beast.js";
 import { AFFLICTIONS } from "../core/afflictions.js";
+import { daylight, elapsedOf, moonPhase, timeOfDay } from "../core/daytime.js";
 import { STEP_MS, TALK_REACH } from "../core/battle.js";
 import { CREATURES } from "../core/creatures.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
@@ -705,6 +706,16 @@ export class Game {
         this.view.setLook(this.landLook.update(x, z, dt));
     }
 
+    // The time of day the world's clock has (core/daytime.js: the war's, the same for every
+    // player), outdoors and in: the sky, the sun or the moon, the daylight at the windows
+    #daytime() {
+        const elapsed = elapsedOf(this.host.war);
+        const time = timeOfDay(elapsed);
+
+        this.view.setTimeOfDay(time, moonPhase(elapsed));
+        INTERIOR_GLOW.daylight.value = daylight(time);
+    }
+
     originOf(mapId) {
         return this.world.maps?.[mapId]?.origin ?? [0, 0];
     }
@@ -814,6 +825,7 @@ export class Game {
             SMOKE_SHARE.value = view.quality.smoke;
             this.chunks.object.add(this.motes.object);
             this.#farLand(x + 0.5, y + 0.5);
+            this.#daytime();
             this.#landLook(x + 0.5, y + 0.5, 0);
             // (Counted by the chunks drawn, however many goes each takes)
             const landed = done;
@@ -1323,7 +1335,9 @@ export class Game {
             }
         }
 
+        this.view.setTimeOfDay(null);
         this.view.setLook(null);
+        INTERIOR_GLOW.daylight.value = 1;
         this.effects?.dispose();
         this.contacts?.dispose();
         this.navBaker?.dispose();
@@ -1854,6 +1868,11 @@ export class Game {
         }
 
         this.#bakeAhead();
+
+        // The time of day, out in the world and indoors
+        if (this.chunks) {
+            this.#daytime();
+        }
 
         // The world round the player, drawn as they go (a chunk a frame at most)
         if (this.chunks && this.mapId === "town") {

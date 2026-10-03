@@ -12,6 +12,7 @@
 
 import * as THREE from "three";
 import { TREE_WIND } from "./art/kits/trees.js";
+import { SKY_GLOW } from "./daytime.js";
 import { rippleTexture, SHEER, WATER, WATER_DETAIL } from "./water.js";
 
 /**
@@ -269,7 +270,7 @@ function mistMaterial() {
             transparent: true,
             depthWrite: false,
             fog: true,
-            uniforms: { ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), mistTime: TREE_WIND.time, mistDetail: WATER_DETAIL, mistColour: { value: new THREE.Color(0xe6eef0) } },
+            uniforms: { ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), mistTime: TREE_WIND.time, mistDetail: WATER_DETAIL, mistColour: { value: new THREE.Color(0xe6eef0) }, skyGlow: SKY_GLOW },
             vertexShader: `
 #include <common>
 #include <fog_pars_vertex>
@@ -297,6 +298,7 @@ void main() {
 #include <common>
 #include <fog_pars_fragment>
 uniform vec3 mistColour;
+uniform vec3 skyGlow;
 varying vec2 vCorner;
 varying float vFade;
 
@@ -305,7 +307,7 @@ void main() {
 
     if (alpha <= 0.0) discard;
 
-    gl_FragColor = vec4(mistColour, alpha);
+    gl_FragColor = vec4(mistColour * skyGlow, alpha);
 
     #include <tonemapping_fragment>
     #include <colorspace_fragment>

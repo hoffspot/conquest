@@ -14,7 +14,9 @@
 // land; and the haze thickens the further off, to all but gone at the far land's edge.
 
 import * as THREE from "three";
-import { bakeEnvironments } from "./environment.js";
+import { daylight } from "../core/daytime.js";
+import { SKY_GLOW, skyAt } from "./daytime.js";
+import { bakeEnvironments, SkyLight } from "./environment.js";
 import { FAR, FAR_LEVELS, farReach } from "./far/levels.js";
 import { farHaze, GRADE, MIST } from "./fog.js";
 import { GpuTimer } from "./gputimer.js";
@@ -111,10 +113,20 @@ const PLAIN = Object.freeze({ zenith: srgbOf(SKY_COLOURS.zenith), horizon: srgbO
 const INDOORS = Object.freeze({ background: 0x140e0a, fog: [16, 38], sun: [0xffecd0, 4], sunFrom: [0.25, 1, 0.35], environment: 0.55 });
 const LAMPS = 2;
 
-// The sun: where it shines from (towards the north-east, so shadows fall away from the camera),
-// and how far round the player its shadows are drawn (metres)
+// The sun with no time of day to go by: where it shines from (towards the north-east, so shadows
+// fall away from the camera); and how far round the player its shadows are drawn (metres)
 const SUN_DIRECTION = new THREE.Vector3(...OUTDOORS.sunFrom).normalize();
 const SHADOW_REACH = 24;
+
+// The light from all round drawn again as the day turns (environment.js SkyLight) once it's
+// changed by `change` since it was last (the sun moved that many radians, or the light or a sky's
+// colour changed that much), at most every `every` ms; at once if it's changed by `sudden` (time
+// passed at an inn, a new land's sky)
+const REBAKE = Object.freeze({ change: 0.03, sudden: 0.3, every: 2000 });
+const WHITE = Object.freeze([1, 1, 1]);
+
+// The picture's exposure by day (the night's: daytime.js NIGHT_EYE)
+const EXPOSURE = 1.05;
 
 // The hole cut through buildings in front of the player: how big (times the player's height on
 // the screen) and how quickly it opens and closes (per second)
@@ -132,6 +144,7 @@ const _size = new THREE.Vector2();
 const _viewProjection = new THREE.Matrix4();
 const _sphere = new THREE.Sphere();
 const _centre = new THREE.Vector3();
+const _colour = new THREE.Color();
 
 export class View {
     /**
@@ -149,7 +162,7 @@ export class View {
         this.renderer = new THREE.WebGLRenderer({ canvas, antialias: this.quality.antialias, powerPreference: "high-performance" });
         // (Seeing far, graded as the land the player's in has it: ACES, then the grade, fog.js)
         this.renderer.toneMapping = far ? THREE.CustomToneMapping : THREE.ACESFilmicToneMapping;
-        this.renderer.toneMappingExposure = 1.05;
+        this.renderer.toneMappingExposure = EXPOSURE;
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFShadowMap;
         fadeShadowEdges();
@@ -229,6 +242,13 @@ export class View {
         this.room = null;
         this.sunDirection = SUN_DIRECTION.clone();
 
+        // The time of day (setTimeOfDay: { time, phase }; none, the fair day's sun, where it's
+        // fixed), the sky and its light then (daytime.js skyAt's), and whether the room the player's
+        // in has windows for the daylight to come in at
+        this.day = null;
+        this.daySky = null;
+        this.windowLight = false;
+
         // The sky outdoors, its sun where the shadows come from (sky.js), drawn behind what's far
         this.sky = new Sky(this.sunDirection);
         this.far.scene.add(this.sky.object);
@@ -274,11 +294,15 @@ export class View {
     }
 
     // The light the scene's materials take from all round, outdoors and in (environment.js):
-    // made once (again if the drawing's lost)
+    // made once (again if the drawing's lost); the sky's through the day made again as it turns
+    // (#rebake: first when it's first needed)
     #light() {
         this.environments?.outdoors.dispose();
         this.environments?.indoors.dispose();
         this.environments = bakeEnvironments(this.renderer, SUN_DIRECTION);
+        this.skyLight?.dispose();
+        this.skyLight = null;
+        this.baked = null;
         this.scene.environment = this.environments[this.indoors ? "indoors" : "outdoors"].texture;
         this.far.scene.environment = this.environments.outdoors.texture;
     }
@@ -289,6 +313,7 @@ export class View {
     #restore() {
         this.gpuTimer.clear();
         this.#light();
+        this.#outdoors();
         this.sun.shadow.map?.dispose();
         this.sun.shadow.map = null;
         this.#thaw();
@@ -334,29 +359,62 @@ export class View {
 
     /**
      * How the world looks outdoors where the player is (look.js Look's: the sky's colours, the haze's
-     * the horizon's, the sun's colour and strength, the mist and the grade; sRGB colours 0 to 1).
-     * Indoors, the look's kept for when they come out. None (null): outdoors as it is with none.
+     * the horizon's, the sun's colour and strength, the mist and the grade; sRGB colours 0 to 1), by
+     * day (as the time of day changes it: setTimeOfDay). Indoors, the look's kept for when they come
+     * out. None (null): outdoors as it is with none.
      */
     setLook(look) {
         this.landLook = look;
+        this.#outdoors();
+    }
 
+    /**
+     * The time of day to light the world for (ms from midnight: core/daytime.js) and the moon's phase
+     * (0 new, 0.5 full): the sun where it is then, or by night the moon, the sky's colours, the
+     * stars, the light from all round and on what the sky alone lights (daytime.js skyAt). None
+     * (null): the fair day's sun, fixed where it is with no world's clock to go by.
+     */
+    setTimeOfDay(time, phase = 0.5) {
+        this.day = time === null ? null : { time, phase };
+        this.#outdoors();
+    }
+
+    // Light the world outdoors for the land's look at the time of day (indoors, only the daylight
+    // coming in at the windows: none at night)
+    #outdoors() {
         if (this.indoors) {
+            this.sun.intensity = this.windowLight ? INDOORS.sun[1] * (this.day ? daylight(this.day.time) : 1) : 0;
+            this.renderer.toneMappingExposure = EXPOSURE;
+            this.sun.shadow.intensity = 1;
+
             return;
         }
 
-        look ??= PLAIN;
-
-        const { zenith, horizon, sun, mist, grade } = look;
+        const look = this.landLook ?? PLAIN;
+        const sky = this.day ? (this.daySky = skyAt(this.day.time, this.day.phase, look, this.daySky)) : null;
+        // (The day's sky, sun and light, or the fair day's: the land's own, the sun fixed)
+        const { zenith, horizon } = sky ?? look;
+        const [colour, strength] = sky ? [sky.keyColour, sky.keyStrength] : [look.sun, look.strength];
 
         this.scene.fog.color.setRGB(horizon[0], horizon[1], horizon[2], THREE.SRGBColorSpace);
         this.scene.background.copy(this.scene.fog.color);
         this.far.scene.background.copy(this.scene.fog.color);
+        this.sky.setTime(sky);
         this.sky.uniforms.zenith.value.set(zenith[0], zenith[1], zenith[2]);
         this.sky.uniforms.horizon.value.set(horizon[0], horizon[1], horizon[2]);
-        this.sun.color.setRGB(sun[0], sun[1], sun[2], THREE.SRGBColorSpace);
-        this.sun.intensity = look.strength;
+        this.sunDirection.copy(sky ? sky.key : SUN_DIRECTION);
+        this.sky.setSun(sky ? sky.sun : SUN_DIRECTION);
+        this.far.sun.position.copy(this.sunDirection);
+        this.sun.color.setRGB(colour[0], colour[1], colour[2], THREE.SRGBColorSpace);
+        this.sun.intensity = strength;
         this.far.sun.color.copy(this.sun.color);
-        this.far.sun.intensity = look.strength;
+        this.far.sun.intensity = strength;
+        SKY_GLOW.value.setRGB(...(sky?.glow ?? WHITE));
+        this.renderer.toneMappingExposure = EXPOSURE * (sky?.exposure ?? 1);
+        this.sun.shadow.intensity = sky?.shadows ?? 1;
+
+        const [mist, grade] = [look.mist, sky?.grade ?? look.grade];
+
         MIST.value.x = mist[0];
         MIST.value.y = mist[1];
         MIST.value.z = mist[2];
@@ -364,6 +422,35 @@ export class View {
         GRADE.value.y = grade[1];
         GRADE.value.z = grade[2];
         GRADE.value.w = grade[3];
+
+        const environment = sky ? this.#rebake(sky) : this.environments.outdoors.texture;
+
+        this.scene.environment = environment;
+        this.far.scene.environment = environment;
+    }
+
+    // The light from all round for the day's sky (skyAt's): drawn again when it's changed enough
+    // since it was last (REBAKE), else as it was. Its texture.
+    #rebake(sky) {
+        const now = performance.now();
+        const baked = this.baked;
+        let change = Infinity;
+
+        if (baked) {
+            change = Math.max(baked.sun.angleTo(sky.sun), Math.abs(baked.light - sky.light));
+
+            for (let c = 0; c < 3; c++) {
+                change = Math.max(change, Math.abs(baked.zenith[c] - sky.zenith[c]), Math.abs(baked.horizon[c] - sky.horizon[c]));
+            }
+        }
+
+        if (change >= REBAKE.sudden || (change >= REBAKE.change && now - baked.at >= REBAKE.every)) {
+            this.skyLight ??= new SkyLight(this.renderer, this.sunDirection);
+            this.skyLight.bake(sky, sky.light);
+            this.baked = { at: now, sun: sky.sun.clone(), light: sky.light, zenith: [...sky.zenith], horizon: [...sky.horizon] };
+        }
+
+        return this.skyLight.target.texture;
     }
 
     /**
@@ -654,7 +741,8 @@ export class View {
         }
 
         this.sun.color.set(look.sun[0]);
-        this.sun.intensity = interior && !interior.daylight ? 0 : look.sun[1];
+        this.sun.intensity = look.sun[1];
+        this.windowLight = Boolean(interior?.daylight);
         this.sunDirection.set(...(interior?.daylight ?? look.sunFrom)).normalize();
         this.far.sun.position.copy(this.sunDirection);
         this.scene.environment = this.environments[interior ? "indoors" : "outdoors"].texture;
@@ -663,13 +751,14 @@ export class View {
         this.horizon.near.visible = !interior;
         this.sky.setSun(this.sunDirection);
 
-        // (Indoors no mist, no grade; out again, the land's look)
+        // (Indoors no mist, no grade, the daylight at the windows as the time of day has it; out
+        // again, the land's look at the time of day)
         if (interior) {
             MIST.value.x = 0;
             [GRADE.value.x, GRADE.value.y, GRADE.value.z, GRADE.value.w] = [0, 0, 0, 0];
-        } else {
-            this.setLook(this.landLook);
         }
+
+        this.#outdoors();
 
         // The room: its walls and ceiling for the camera, its flames lighting it (all out till
         // they flicker)
@@ -871,7 +960,19 @@ export class View {
 
         const background = this.scene.background;
         const shadows = renderer.shadowMap.autoUpdate;
+        // (Lit as on a fair day, whatever the time of day: indoors, by the daylight at the windows if
+        // there are any)
+        const lit = { colour: _colour.copy(this.sun.color), strength: this.sun.intensity, environment: this.scene.environment, exposure: renderer.toneMappingExposure };
 
+        if (!this.indoors) {
+            this.sun.color.set(OUTDOORS.sun[0]);
+            this.sun.intensity = OUTDOORS.sun[1];
+            this.scene.environment = this.environments.outdoors.texture;
+        } else if (this.windowLight) {
+            this.sun.intensity = INDOORS.sun[1];
+        }
+
+        renderer.toneMappingExposure = EXPOSURE;
         this.scene.background = PREVIEW_BACKGROUND;
         renderer.shadowMap.autoUpdate = false;
         renderer.setScissorTest(true);
@@ -884,6 +985,10 @@ export class View {
         renderer.setViewport(0, 0, canvas.width, canvas.height);
         renderer.shadowMap.autoUpdate = shadows;
         this.scene.background = background;
+        this.sun.color.copy(lit.colour);
+        this.sun.intensity = lit.strength;
+        this.scene.environment = lit.environment;
+        renderer.toneMappingExposure = lit.exposure;
     }
 
     // The world drawn once into a picture (half as sharp), to show behind the pack, still and dimmed

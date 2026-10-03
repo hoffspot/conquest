@@ -798,7 +798,8 @@ after M7d (the land looked at by day first) and before the cliffs and rocks:
   host) and sent to everyone who joins and with every state they're sent, so every player sees the
   same hour; a day 60 minutes of play (dawn about 4, day about 36, dusk about 6, night about 14),
   starting a new world at mid-morning. Paused with the world. Kept in the save with the world.
-  `NET_VERSION` up (the clock's in the state).
+  (Built in M7e-1 on the war's own clock, which already does all of that: no new state, and no
+  `NET_VERSION` change.)
 - **The sky:** the sun rising in the east, high at noon, setting in the west; the moon on the
   other side of the sky, with a phase that turns over eight days of play; stars (a few hundred
   points in one draw, twinkling a little, fading out at dawn); the sky's colours, the haze and the
@@ -839,6 +840,35 @@ after M7d (the land looked at by day first) and before the cliffs and rocks:
   the rules costs more than a multiply.
 - **Pictures:** the same views at dawn, noon, dusk and midnight, before and after; a town at dusk
   with its windows coming on and its torches lit; a road at night with Light.
+
+**The light looked over** (the user, 2026-10-03: "a similar quality pass done to check the land
+for consistent shadows and lighting effects based on the location and strength of local light
+sources and light sources such as the sun and moon"). M7f, once M7e's done, as M7d was for the
+land's shapes: a tour of the land at the times of day (the start town, a village, a castle, the
+neutral sites, the woods, the mountains, the coast; dawn, noon, dusk, a full moon's night and a new
+moon's), looking for light and shadow that don't agree with where their lights are and how strong:
+shadows falling the wrong way or missing (things that cast none, or cast the sun's at night),
+what's lit by the sky alone left bright in the dark, glows with no light round them, light from a
+torch or window reaching too far or not at all, the far land and the near disagreeing at the
+hand-over, interiors' window light at night. Each fixed with a before/after picture from the same
+camera, within the budgets.
+
+**Pins on the world map** (the user, 2026-10-03). M7g, after M7f:
+- **A pin:** a long press on the world map anywhere the fog of war's lifted drops a pin there (one
+  pin: a new one moves it). It's shown on the world map, and in the world as a round column of blue
+  light rising very high into the sky, seen from far off (drawn with the far land too, through the
+  haze; additive, no shadows, cheap: one draw near and one far).
+- **The way there:** a thin, half-transparent, glowing blue line along the ground from the player
+  to the column's foot, along the way the player would walk (the navigation meshes': the best way,
+  found again as the player moves, a few times a second at most and only when they've moved), if
+  there is one; no line if none can be found. The same way drawn on the world map.
+- **Taking it away:** on the world map, a way to remove the pin (a button by it, or a long press on
+  it); the column and both lines go with it.
+- **A double tap on the world map** where no way can be found from the player to the place: the map
+  closes and the player runs there, as a double tap there in the world would have them do. (To
+  check with the user when it's built: whether this is meant for where no way's found, or anywhere.)
+- **Saved** with the player's own things (not the world's: each player's pin is their own, not
+  shared with the others in the world).
 
 **As built in M7a** (row 4, the neutral sites, and row 6's decay pass for them; see the change
 log):
@@ -1279,7 +1309,7 @@ pictures for anything that changes the look.
 | **M6b** | Atmosphere | Height fog (an exponential height mist under the distance haze); per-region look table and grade (§9 row 1); terrain material (rock and snow by height); cascades deferred to M7 | Pictures; budgets per tier met |
 | **M6c** | Things on the horizon | Far silhouettes and the world landmark (§9 row 2): the volcano's crater, fire and smoke | Pictures; budgets per tier met |
 | **M6d** | Far trees and rivers | Far trees (impostors fading in where the near trees fade out); far rivers on the far land | Pictures; budgets per tier met |
-| **M7** | Elden Ring environment pass | In §9's order: the landmark pass in the plan; neutral sites built, with the decay pass; a look round all the generated ground and high land so it looks natural, with no obvious polygons or out-of-place texturing (M7d, §9 *The land looking natural*); day and night, with the moon and stars, lit windows, torches, the Light spell, night in play and passing time (M7e, §9 *Day and night*); cliffs and rocks; churches, citadels, stone bridges; foliage palette, grass ring, weathering; cascaded shadows, measured, if they fit the budget | Pictures after each part; budgets met |
+| **M7** | Elden Ring environment pass | In §9's order: the landmark pass in the plan; neutral sites built, with the decay pass; a look round all the generated ground and high land so it looks natural, with no obvious polygons or out-of-place texturing (M7d, §9 *The land looking natural*); day and night, with the moon and stars, lit windows, torches, the Light spell, night in play and passing time (M7e, §9 *Day and night*); the light looked over, consistent with its sources (M7f, §9 *The light looked over*); pins on the world map, with a column of light and the way there (M7g, §9 *Pins on the world map*); cliffs and rocks; churches, citadels, stone bridges; foliage palette, grass ring, weathering; cascaded shadows, measured, if they fit the budget | Pictures after each part; budgets met |
 | **M8** | Characters on Vitruvian | §10, as several PRs (conversion, body, garments, skin, face, LODs, clips) | Pictures; clipping tests green; budgets met |
 
 Each milestone follows the same steps:
@@ -2504,3 +2534,57 @@ converted data is to be measured in M8 against today's hm08 data.
     after a teleport; the tour, taking its pictures a moment after each jump, shows none. Left
     as it is.
   - **Next:** M7e, day and night.
+- **2026-10-03, M7e-1 built** (day and night, §9: the clock and the sky through the day):
+  - **The clock** (`core/daytime.js`, exact maths): the time of day from the war's own clock (its
+    turns, a minute each, and the time into the next), so it's the host's, saved with the war,
+    sent in the war's state and checked with it, and stopped when the world's paused, with nothing
+    new kept and no version changed. A day of 60 minutes: night to 7, dawn to 11 (sunrise at 9),
+    day to 47, dusk to 53 (sunset at 50); a new world at minute 18, mid-morning; the moon's phases
+    over eight days, a quarter full and waxing at the start. `daylight(time)` for the rules later
+    (night sight, M7e-3).
+  - **The sky through the day** (`world/daytime.js` `skyAt`, `sky.js`): the sun from the east,
+    over the south (56 degrees at noon), to the west, eased through the night so that it's as slow
+    near the horizon as by day; the moon opposite it, its disc lit by its phase, its seas, a glow;
+    the stars (a grid over the sky, one star in a tenth of its cells, twinkling, none where the
+    cells are under a pixel); the land's look's colours by day, dawn's pinks and dusk's golds
+    either side of the sun's rising and setting, the night's deep blue; the clouds lit as the sky
+    is.
+  - **The light** (`view.js`): the sun's light warm and low at either end of the day; the moon's
+    by night (cold, 1 against the sun's 3.5 full, 0.3 new), shadows from whichever is up, paler by
+    night (`shadow.intensity` 0.55); the two handed over at the horizon where neither lights
+    anything. The light from all round drawn again from the day's sky (`environment.js` `SkyLight`:
+    one PMREM generator and scene kept, 36 draws a bake) when the sun's moved 0.03 radians or the
+    sky's changed as much, at most every 2 s, at once after a big change. A night exposure of 1.5
+    times the day's (the eye used to the dark: a full moon's night readable, a new moon's dark).
+  - **The first night was black** (the first tour's pictures): the moonlight at 0.42, the night
+    sky's light from all round nearly none. Raised (the moonlight, the night sky's colours a little
+    lighter, the night's exposure) until a full moon's night reads as Elden Ring's blue nights do.
+    **The dawn came on in a minute:** the sun went round under the north twice as fast as over the
+    south, so its height changed fastest just before it rose; eased to the day's pace at either end.
+  - **What's lit by the sky alone** (smoke, the falls' mist, the volcano's smoke, the far trees,
+    pollen, dust and snow motes) times one shared colour (`SKY_GLOW`), dark at night; fireflies,
+    wisps and embers glowing still.
+  - **Indoors:** the daylight at the windows and its beams (`INTERIOR_GLOW.daylight`) as the time
+    of day has it, none at night; the day's exposure. The pack's paperdoll lit as on a fair day.
+  - **Pictures:** before/after sheets sent in the session (the start town and a meadow: the old
+    fixed sun, then before sunrise, just risen, noon, sunset, dusk, a full moon's midnight and a
+    new moon's; the follow camera and looking at the sun or the moon).
+  - **Cost:** no more draws a frame; the sky's shader a little more (the stars at night, the moon's
+    disc where it is); a bake of the light from all round (36 small draws) about every 25 s by day
+    and every 2 s through the dawn and the dusk; a few more sums in the smoke's, the motes', the
+    mist's and the far trees' shaders.
+  - **Versions:** none (the clock is the war's).
+  - **Tests:** `test/daytime.test.js` (the day's parts in order, the clock the war's, round the
+    clock; daylight; the moon's phases; the sun's way; the day's light by the sun and the night's
+    by the moon; dawn's and dusk's colours; nothing jumping from one ten seconds to the next; the
+    sky shader's stars and moon; what the sky alone lights dark at night). `e2e/pellagos.spec.js`
+    (out of doors the light from all round is the day's sky's, in the near world and the far).
+  - **Next:** M7e-2, lights: lit windows, torches, braziers and lanterns, a small pool of real
+    lights.
+- **2026-10-03, plan:** the user asked, once day and night are done, for a pass over the land's
+  light like M7d's over its shapes (shadows and light consistent with where their sources are and
+  how strong: local lights, the sun and the moon), then pins on the world map (a long press where
+  the fog's lifted; a tall column of blue light in the world; a glowing blue line along the way
+  there, in the world and on the map, kept the best way as the player moves, none if there's no
+  way; a way to remove it; a double tap on the map where there's no way closes it and runs there).
+  Added as M7f and M7g (§9, and §12's M7 row), before the rest of M7.
