@@ -2836,8 +2836,8 @@ converted data is to be measured in M8 against today's hm08 data.
   - **Worked out by the host each step** (`Host#light`, before the battle's step) from what every
     copy has: the war's clock, the world's plan, the camps, the fires on the ground and who's
     carrying a torch, only those within 80 m of a player (and nothing by day). A joined copy steps
-    its own host, so it works out the same light: nothing new is sent, kept or saved, and no
-    version changes.
+    its own host, so it works out the same light: nothing new is sent, kept or saved.
+    `NET_VERSION` 20 (a game from before would see otherwise at night, and drift).
   - **The guards' torches** (`carriesTorch`; `world/carried.js`; Character `holdTorch`; items
     `handTorch`): from half through the dusk to half through the dawn (when the windows come on),
     every soldier with a hand free (a sword, a cleaver or a wand: their shield's hand) carries a
