@@ -55,6 +55,7 @@ export const ACTIONS = Object.freeze({
     powerStrike: { label: "Power strike", ability: "powerStrike", learnt: "powerStrike", on: "enemy" },
     aimedShot: { label: "Aimed shot", ability: "aimedShot", learnt: "aimedShot", on: "enemy" },
     fight: { label: "Fight", order: "engage", on: "provoke" },
+    camp: { label: "Make camp", order: "camp", on: "self" },
 });
 
 // Whether an action goes on a wheel
@@ -95,12 +96,12 @@ function lookOf(key) {
 
 /**
  * What's on each wheel until the player changes it: each side's slices (a direction and what's
- * in it). Vigor at the top of their own; the four elements' first spells and Stun on an enemy's;
- * everything else empty. (A soldier's of a people not friendly to theirs has one side: Fight, to
+ * in it). Vigor at the top of their own, and Make camp at the top of its other side; the four
+ * elements' first spells and Stun on an enemy's; everything else empty. (A soldier's of a people not friendly to theirs has one side: Fight, to
  * pick a fight with them.)
  */
 export const WHEELS = Object.freeze({
-    self: Object.freeze([Object.freeze({ n: "vigor" }), Object.freeze({})]),
+    self: Object.freeze([Object.freeze({ n: "vigor" }), Object.freeze({ n: "camp" })]),
     enemy: Object.freeze([Object.freeze({ n: "burn", ne: "hurt", nw: "rumble", e: "blister", w: "stun" }), Object.freeze({})]),
     provoke: Object.freeze([Object.freeze({ n: "fight" })]),
 });

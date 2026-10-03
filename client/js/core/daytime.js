@@ -38,6 +38,17 @@ export function elapsedOf(war) {
     return war ? war.turn * TURN + war.clock : 0;
 }
 
+/**
+ * How long (ms of play) a sleep lasts when the world's been going `elapsed` ms: to the next
+ * sunrise or sunset at least `least` ms off (a night's sleep to the morning, a day's to the
+ * evening).
+ */
+export function untilWaking(elapsed, least = 0) {
+    const time = timeOfDay(elapsed);
+
+    return [DAY.rises, DAY.sets, DAY.rises + DAY.length, DAY.sets + DAY.length].map((wake) => wake - time).find((wait) => wait >= least);
+}
+
 /** The time of day (ms from midnight) when the world's been going `elapsed` ms. */
 export function timeOfDay(elapsed) {
     return (((elapsed + DAY.start) % DAY.length) + DAY.length) % DAY.length;

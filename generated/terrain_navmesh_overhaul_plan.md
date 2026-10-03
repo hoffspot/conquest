@@ -864,7 +864,9 @@ after M7d (the land looked at by day first) and before the cliffs and rocks:
     or dusk; or camping: a fire built where no hostile is within 40 metres (and none comes while
     the camp's made), slept by to dawn or dusk (a stamina and health rest too). In a world shared
     with others, only the host passes the time (everyone's woken with them); a player who isn't
-    the host can still rest.
+    the host can still rest. (As built, M7e-3c: the innkeeper's or madam's room, or Make camp on
+    the player's wheel; woken at the next sunrise or sunset at least five minutes off; the camp's
+    tent and fire drawn, its fire lighting the dark three minutes after.)
 - **The Light spell:** a tome on every adventurers' guild's shelves (about 10 gold); read, Light is
   known: a globe of light rising from the caster's hand and following a little over their
   shoulder for 15 minutes of play, lighting about 12 metres round them (their sight at night as by
@@ -2877,3 +2879,32 @@ converted data is to be measured in M8 against today's hm08 data.
     every night creature's habits making sense; those that see in the dark seeing as by day; more
     about a player out in the wilds at midnight, the night's own among them, gone at daybreak).
   - **Next:** M7e-3c, passing time at inns or camping.
+- **2026-10-03, M7e-3c built: passing the time** (§9 *Night in play*; docs/GAME.md *Passing the
+  time*).
+  - **Sleeping** (`Host#sleep`, `daytime.js` `untilWaking`): a room taken at an inn (the
+    innkeeper's or the madam's `rent: "room"`), or a camp made, is slept in to the next sunrise or
+    sunset at least five minutes of play off (`REST.least`): a night's sleep to the morning, a
+    day's to the evening. Hurts are mended and stamina filled; the war's turns meanwhile are all
+    played as they would have been (`Host#warOn`, the war's part of `advance`, now its own), so
+    raids, sorties and news all come on as ever.
+  - **Camping** (`camp` command; `REST`): out in the world, not in a settlement ("find an inn"),
+    indoors, in a fight, or with anything hostile within 40 m. Their people's tent behind them,
+    a fire a step in front (`Host#campfires`, drawn by `camps3d.js` as a war camp is, kept in the
+    world's snapshot), burning three minutes after they wake and lighting the dark round it for
+    sight as a war camp's fire does (14 m).
+  - **Make camp** (wheel.js `ACTIONS.camp`, its icon a tent by a fire under a crescent moon): on
+    the player's own wheel's other side to start with; it can go on either side or the quick bar.
+  - **Playing together:** only the host's sleep passes the time (everyone's woken with them, told
+    who slept and how long); a guest who sleeps just rests. Every copy plays the host's sleep
+    alike, the war's turns and all. `NET_VERSION` 22.
+  - **Woken:** the screen comes up from black over a couple of seconds, and they're told how long
+    they slept.
+  - **Pictures:** a camp at sunset as the player wakes, and by night, its fire lighting the grass,
+    sent in the session.
+  - **Tests:** test/rest.test.js (to the next sunrise or sunset; the host's room at an inn to the
+    morning, mended, the war's turns played; a camp out in the wilds to the evening, its fire
+    lighting the dark, burnt out after, kept with the world; no camp in a settlement, indoors, in a
+    fight or with a hostile near; a guest only rests; every copy alike); test/app.test.js (Make
+    camp on the wheels); e2e (made camp out in the world from the wheel: woken at sunset by the
+    tent and fire, told).
+  - **Next:** M7e-4, the Light spell's tome.

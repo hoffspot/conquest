@@ -834,6 +834,17 @@ a look of its own (`LOOKS`), which the world takes on round the player:
   soldier with a hand free (sword, cleaver or wand) carries a torch in their shield's hand, the
   shield hidden; bowmen and two-handed fighters none. Its flame burns at its head as they go
   (fire.js, a torch's), and it's a light of its own among the world's fires.
+- **Passing the time** (core/host.js `REST`, `#camp`, `#sleep`; daytime.js `untilWaking`; the
+  terrain plan's M7e-3): a room taken at an inn (the innkeeper's, 8 gold, or the madam's, 10) is
+  slept in; or out in the world, **Make camp** (an action for a wheel, at the top of the player's
+  own wheel's other side to start with, or a quick action) pitches their people's tent behind
+  them and builds a fire a step in front, and they sleep by it. Not in a settlement ("find an
+  inn"), indoors, in a fight, or with anything hostile within 40 m. Either way they wake mended,
+  their stamina full, at the next sunrise or sunset at least five minutes off (the screen coming
+  up from black, told how long they slept), the war's turns meanwhile all played as they would
+  have been. The camp's fire burns on three minutes after, lighting the dark round it as a war
+  camp's does (seen as by day within 14 m). In a world shared with others only the host passes
+  the time, everyone woken with them; anyone else who sleeps just rests.
 - **Not by time:** the pack's paperdoll is lit as on a fair day whatever the hour. With no world
   (the labs) the sun stands where it always did.
 
