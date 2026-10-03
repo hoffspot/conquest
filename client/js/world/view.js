@@ -24,7 +24,7 @@ import { GpuTimer } from "./gputimer.js";
 import { FAR_FIELDS } from "./ground.js";
 import { fireColour, fireOf, LIGHTS, nearestLights, seedOf } from "./lights.js";
 import { fillOf, pickLamps, ROOM_LIGHT, ROOM_LIGHTS, strengthOf } from "./roomlight.js";
-import { fadeShadowEdges, snapToTexels } from "./shadows.js";
+import { fadeShadowEdges, snapToTexels, stepShadows } from "./shadows.js";
 import { Sky, SKY_COLOURS } from "./sky.js";
 import { SUN_FROM } from "./sun.js";
 import { CUTAWAY } from "./town3d.js";
@@ -243,6 +243,8 @@ export class View {
         });
         this.room = null;
         this.sunDirection = SUN_DIRECTION.clone();
+        // (Where the shadows are cast from: the sun's way, moved on in steps: shadows.js stepShadows)
+        this.shadowDirection = SUN_DIRECTION.clone();
 
         // The time of day (setTimeOfDay: { time, phase }; none, the fair day's sun, where it's
         // fixed), the sky and its light then (daytime.js skyAt's), and whether the room the player's
@@ -717,12 +719,15 @@ export class View {
         }
 
         // The sun's shadows follow the player, a little ahead of them where more of the ground is
-        // in view (the further out, the more), moved in whole shadow texels so they don't shimmer
+        // in view (the further out, the more), moved in whole shadow texels so they don't shimmer;
+        // cast from the sun's way only as it's moved on in steps, so its texels stay put between
+        // them (stepShadows)
         const ahead = Math.min(SHADOW_REACH / 2, distance * 0.35);
 
-        snapToTexels(_centre.set(focus.x - Math.sin(yaw) * ahead, focus.y, focus.z - Math.cos(yaw) * ahead), this.sunDirection, (SHADOW_REACH * 2) / this.quality.shadows);
+        stepShadows(this.shadowDirection, this.sunDirection);
+        snapToTexels(_centre.set(focus.x - Math.sin(yaw) * ahead, focus.y, focus.z - Math.cos(yaw) * ahead), this.shadowDirection, (SHADOW_REACH * 2) / this.quality.shadows);
         this.sun.target.position.copy(_centre);
-        this.sun.position.copy(_centre).addScaledVector(this.sunDirection, 60);
+        this.sun.position.copy(_centre).addScaledVector(this.shadowDirection, 60);
     }
 
     /**

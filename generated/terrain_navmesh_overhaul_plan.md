@@ -2671,3 +2671,16 @@ converted data is to be measured in M8 against today's hm08 data.
     player isn't cut out; at midnight the tavern's lantern lit and drawn, by day not).
   - **Next:** M7e-2c, braziers at the guards' posts, lanterns on poles in the bigger towns'
     squares, and guards on night watch carrying torches; then M7e-3, night in play.
+- **2026-10-03, fix: shadows shimmering** (the user: "in the current pages build, all the
+  shadows appear shimmering like they are affected by wind"). Since M7e-1 the sun goes round as
+  the day does, a little every frame, and the sun's shadow map turned with it: every frame each
+  shadow's edge was drawn a little differently (its texels across the ground no longer the same
+  texels), so every edge shimmered. Measured standing still at the start town by day, nothing
+  else moving, 2 s at 60 frames a second: before, all 120 frames changed, about 3,100 pixels each,
+  all of them along shadows' edges. Now the way the shadows are cast from follows the sun only
+  in steps of 0.002 radians (`shadows.js` `stepShadows`: about every 1.5 s by day, 0.7 s by the
+  faster moon; a jump, the moon taking over or going in or out, at once): 1 frame of the 120
+  changed, the step. A house's shadow's tip moves about 4 cm a step, under two texels on medium
+  and high. Test: `test/light.test.js` (through the day's middle half hour a frame at a time:
+  more than 100 steps, more than 98% of frames still, never more than a step behind the sun, a
+  jump taken at once).

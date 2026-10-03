@@ -629,7 +629,11 @@ lit surface's.
 **Steady shadows** (world/shadows.js). The sun's shadow map moves in whole texels across the
 sun's own view as it follows the player, so its texels stay put on the ground and shadows' edges
 stand still as the player walks. (Whole texels along the world's own axes, as it once moved,
-aren't whole texels to a sun looking down at a slant: edges crawled.) Shadows fade out over the
+aren't whole texels to a sun looking down at a slant: edges crawled.) As the day goes, the way
+the shadows are cast from follows the sun (or the moon) round only in small steps
+(`stepShadows`: a ninth of a degree, about every second and a half by day), so the map's texels
+stay put between them; a map turned a little every frame drew every shadow's edge a little
+differently each frame, and all of them shimmered as if in the wind. Shadows fade out over the
 outer fifth of the map rather than stopping along a straight line, which shows when the camera's
 drawn back or looks towards the horizon. Their soft edge (about 5 cm on medium and high) is
 about the sun's own: the half-degree sun blurs a 2 m figure's shadow by 2 cm, a house's eaves' by
