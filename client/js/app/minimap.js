@@ -12,7 +12,7 @@
 // while they're still well inside this one). Each frame draws that, scaled to fit, and the
 // markers over it.
 
-import { ARCHES } from "../core/arches.js";
+import { ARCHES, legsOf } from "../core/arches.js";
 import { PLAN_KEY } from "../core/interiors.js";
 import { CHUNK, WET } from "../core/overworld.js";
 import { allAtOnce, Steps } from "../core/steps.js";
@@ -883,10 +883,12 @@ const FEATURE_COLOURS = { stone: "rgb(128, 124, 116)", wood: "rgb(112, 88, 62)",
 const FEATURE_LOOKS = { boulder: "stone", outcrop: "stone", cairn: "stone", menhir: "stone", ruin: "stone", log: "wood", stump: "wood", snag: "wood", logpile: "wood", scarecrow: "wood", bush: "bush", haystack: "straw", mound: "earth", ribs: "bone" };
 
 // A feature (core/wilds.js) on the map: a line along a long one, a round mark for the rest
-function mark(context, { kind, x, y, size, turn }) {
+function mark(context, feature) {
+    const { kind, x, y, size, turn } = feature;
+
     context.fillStyle = context.strokeStyle = FEATURE_COLOURS[FEATURE_LOOKS[kind]] ?? FEATURE_COLOURS.stone;
 
-    // (An arch of rock: its two legs, and its span between them)
+    // (An arch of rock: its two legs, each out as far as its foot reaches, and its span between them)
     if (kind === "arch") {
         const [dx, dy] = [Math.cos(turn) * size, Math.sin(turn) * size];
 
@@ -895,12 +897,17 @@ function mark(context, { kind, x, y, size, turn }) {
         context.moveTo(x - dx, y - dy);
         context.lineTo(x + dx, y + dy);
         context.stroke();
+        context.lineWidth = ARCHES.leg * 2;
+        context.lineCap = "round";
 
-        for (const side of [-1, 1]) {
+        for (const [[fx, fy], [tx, ty]] of legsOf(feature.arch ?? { x, y, turn, span: size * 2 })) {
             context.beginPath();
-            context.arc(x + dx * side, y + dy * side, ARCHES.leg, 0, 2 * Math.PI);
-            context.fill();
+            context.moveTo(fx, fy);
+            context.lineTo(tx + (tx === fx && ty === fy ? 0.01 : 0), ty);
+            context.stroke();
         }
+
+        context.lineCap = "butt";
 
         return;
     }

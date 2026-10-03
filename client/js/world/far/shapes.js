@@ -5,7 +5,7 @@
 // Each piece in its people's colours; flat-shaded; a few dozen triangles. Pure: worked out in a
 // worker (silhouette-worker.js), into arrays a mesh is made from (silhouettes.js).
 
-import { feetOf } from "../../core/arches.js";
+import { ARCHES, feetOf, legsOf } from "../../core/arches.js";
 import { createRandom } from "../../core/random.js";
 import { layoutNeutral } from "../../core/setpieces/neutral.js";
 import { PLOT } from "../../core/setpieces/pieces.js";
@@ -38,14 +38,21 @@ export function archShapes(shapes, arch, heightOf) {
     const colour = ARCH_ROCK[arch.land] ?? ARCH_ROCK.rock;
     const [[ax, ay], [bx, by]] = feetOf(arch);
     const [ha, hb] = [heightOf(ax, ay), heightOf(bx, by)];
-    // (Its legs and band about as thick as they're drawn near: kits/arches.js ARCH_LOOK)
-    const [thick, band] = [3.6, 2.8];
+    // (Its legs and the rock over its opening about as thick as they're drawn near: kits/arches.js
+    // ARCH_LOOK; each leg as long as its squares, out to where its foot reaches, a little lower
+    // than the top, its rock sloping down there)
+    const [thick, band] = [3.6, 2.6];
     const top = (ha + hb) / 2 + arch.rise;
-    // (A box's width runs along (cos f, -sin f): the band along the way from foot to foot)
+    // (A box's width runs along (cos f, -sin f): along the way from foot to foot)
     const facing = -arch.turn;
 
-    shapes.box(ax, ay, ha - SUNK, thick, thick, top + band - ha + SUNK, facing, colour);
-    shapes.box(bx, by, hb - SUNK, thick, thick, top + band - hb + SUNK, facing, colour);
+    for (const [[fx, fy], [tx, ty]] of legsOf(arch)) {
+        const ground = heightOf(fx, fy);
+        const long = Math.hypot(tx - fx, ty - fy) + 2 * (ARCHES.leg - 0.3);
+
+        shapes.box((fx + tx) / 2, (fy + ty) / 2, ground - SUNK, long, thick, (top + band - ground) * 0.92 + SUNK, facing, colour);
+    }
+
     shapes.box(arch.x, arch.y, top, arch.span + thick, thick, band, facing, colour);
 }
 

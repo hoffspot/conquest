@@ -147,8 +147,13 @@ describe("the world outside, drawn round the player (chunks3d.js)", () => {
         const [drawn] = chunks.drawn.values();
 
         assert.ok(drawn.arches?.visible && drawn.arches.parent === drawn.object);
-        assert.equal(drawn.arches.material.name, "cliffs");
-        assert.ok(drawn.arches.geometry.getAttribute("position").count > 1000);
+
+        // (Its rock in the cliffs' material; nothing growing on it with no undergrowth drawn)
+        const rock = drawn.arches.children.find(({ name }) => name === "arch rock");
+
+        assert.equal(rock.material.name, "cliffs");
+        assert.ok(rock.geometry.getAttribute("position").count > 3000);
+        assert.ok(!drawn.arches.children.some(({ name }) => name === "undergrowth"));
         chunks.setCliffs(1);
         chunks.setCliffs(0);
         assert.ok(drawn.arches.visible, "not hidden with the cliffs");

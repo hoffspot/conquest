@@ -9,7 +9,7 @@ import { squareOf } from "../client/js/core/settlements.js";
 import { planWorld } from "../client/js/core/worldplan/plan.js";
 import { FAR_LEVELS, farReach } from "../client/js/world/far/levels.js";
 import { gatherSilhouettes, SILHOUETTES } from "../client/js/world/far/gather.js";
-import { archesOf, feetOf } from "../client/js/core/arches.js";
+import { archesOf, feetOf, legsOf } from "../client/js/core/arches.js";
 import { heightAt } from "../client/js/core/terrain/height.js";
 import { ARCH_ROCK, archShapes, building, Shapes, siteShapes } from "../client/js/world/far/shapes.js";
 import { RESHAPE, Silhouettes } from "../client/js/world/far/silhouettes.js";
@@ -120,16 +120,34 @@ describe("what's built seen from afar (far/shapes.js, gather.js, silhouettes.js)
         // (Three boxes, each its four sides and its top)
         assert.equal(shapes.triangles, 3 * 10);
 
-        // (Each box faces out from its own middle: the legs' at their feet, the band's at its middle)
+        // (Each box faces out from its own middle: each leg's along its squares, out to where its
+        // foot reaches; the band's at the arch's middle)
         const [a, b] = feetOf(arch);
         const top = (heightOf(...a) + heightOf(...b)) / 2 + arch.rise;
+        const [legA, legB] = legsOf(arch).map(([[fx, fy], [tx, ty]]) => [(fx + tx) / 2, (heightOf(fx, fy) + top) / 2, (fy + ty) / 2]);
 
-        for (const [box, middle] of [[0, [a[0], top / 2, a[1]]], [1, [b[0], top / 2, b[1]]], [2, [arch.x, top + 1.4, arch.y]]]) {
+        for (const [box, middle] of [[0, legA], [1, legB], [2, [arch.x, top + 1.3, arch.y]]]) {
             const one = new Shapes();
 
             one.positions = shapes.positions.slice(box * 90, (box + 1) * 90);
             one.normals = shapes.normals.slice(box * 90, (box + 1) * 90);
             assert.ok(facesOut(one, middle), `box ${box} faces out`);
+        }
+
+        // (Each leg from its ground most of the way up to the band, however high its land: the
+        // snow's up in the mountains)
+        for (const each of archesOf(plan)) {
+            const own = new Shapes();
+            const [fa, fb] = feetOf(each);
+            const high = (heightOf(...fa) + heightOf(...fb)) / 2 + each.rise;
+
+            archShapes(own, each, heightOf);
+            legsOf(each).forEach(([foot], box) => {
+                const ground = heightOf(...foot);
+                const up = Math.max(...own.positions.slice(box * 90, (box + 1) * 90).filter((_, k) => k % 3 === 1));
+
+                assert.ok(up > ground + 0.8 * (high - ground) && up < high + 3, `${each.id} (${each.land}) leg ${box}: up to ${up.toFixed(1)} m, from ${ground.toFixed(1)} to ${high.toFixed(1)}`);
+            });
         }
 
         // (The band from leg to leg, as high as the arch rises)

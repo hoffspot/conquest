@@ -29,8 +29,8 @@ import { holdSign, isSign, letGoSign, releaseSign } from "./art/kits/signs.js";
 import { Woodland } from "./art/kits/trees.js";
 import { featureLooks, featureMesh, Growth, Mesher, sowing, TILE, undergrowthLooks, undergrowthMesh } from "./art/kits/wilds.js";
 import { cliffMesh, cliffsInto } from "./art/kits/cliffs.js";
-import { archMesh } from "./art/kits/arches.js";
-import { ARCHES } from "../core/arches.js";
+import { archMaking } from "./art/kits/arches.js";
+import { ARCHES, legsOf } from "../core/arches.js";
 import { hedgeBuilding, hedgeMesh, hedgeRuns } from "./art/kits/hedges.js";
 import { stepsMesh, stonesOf } from "./art/kits/steps.js";
 import { disposeChunkGround, disposeGrass, groundMaterial, landColours, layingGround, respaceGround } from "./ground.js";
@@ -749,13 +749,9 @@ export class Chunks {
         const arches = chunk.features.filter(({ kind }) => kind === "arch");
 
         if (arches.length) {
-            drawn.arches = archMesh(arches.map(({ arch }) => arch), this.groundAt, [chunk.x0, chunk.y0]);
+            drawn.arches = yield* archMaking(arches.map(({ arch }) => arch), this.groundAt, [chunk.x0, chunk.y0], { plants: this.undergrowth > 0 });
             object.add(drawn.arches);
-            standing(arches.flatMap(({ x, y, size, height, turn }) => [-1, 1].map((side) => {
-                const [fx, fy] = [x + Math.cos(turn) * size * side, y + Math.sin(turn) * size * side];
-
-                return { min: [fx - ARCHES.leg, fy - ARCHES.leg], max: [fx + ARCHES.leg, fy + ARCHES.leg], top: this.groundAt(fx, fy) + height + 2 };
-            })));
+            standing(arches.flatMap(({ arch, height }) => legsOf(arch).map(([[fx, fy], [tx, ty]]) => ({ min: [Math.min(fx, tx) - ARCHES.leg, Math.min(fy, ty) - ARCHES.leg], max: [Math.max(fx, tx) + ARCHES.leg, Math.max(fy, ty) + ARCHES.leg], top: this.groundAt(fx, fy) + height + 4 }))));
             yield;
         }
 

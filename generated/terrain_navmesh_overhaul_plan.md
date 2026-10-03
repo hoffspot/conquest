@@ -3121,3 +3121,41 @@ converted data is to be measured in M8 against today's hm08 data.
     session.
   - **Tests:** the pin e2e: held under the fog, told so and nothing dropped (nor set so); the line
     along the ground, once its tiles are in, every point of it on the mesh.
+- **2026-10-03, the arches of rock rebuilt** (the user: "The stone arches look kind of weird and
+  blobby. ... Try to come up with a procedural way to achieve a look closer to real stone arches
+  with the idiosyncrasies, rubble, and where appropriate, vegetation.", with photos of a jagged
+  mountain arch, Arch Rock on Mackinac with its trees, a red sandstone arch over its talus, and
+  Delicate Arch; docs/WORLD.md and GAME.md *Arches of rock*).
+  - **What was wrong:** a band swept along a curve, the same section all the way: a bent tube of
+    even thickness, its knobs blobs on it, no rubble to speak of (chips under its legs, buried),
+    nothing growing on it.
+  - **Now a fin of rock with a hole worn through it** (world/art/kits/arches.js `rockField`,
+    meshed by surface nets on a 0.6 m lattice): the crest from the ground beyond each foot, up and
+    over, steep or rounded each end; the hole worn to the opening between its legs' squares,
+    springing low or high, a cap of rock over it, level or bowed; tapering up its legs and flaring
+    at their feet, wandering and leaning; beds standing out as ledges or worn back, harder ones
+    capping it, joints cutting it into blocks, knobs and pocks; two in five with a small window
+    beyond a leg. Shaded darker in its hollows (how open each point is). Rubble: five to eleven
+    blocks against its legs and 10 to 44 chips of scree, sat on the ground. Its land's undergrowth
+    on its ledges and top and round its feet, plenty in green lands, less in dry ones, none in the
+    snow. 4,000 to 6,000 triangles (was about 1,000), 35 to 100 ms in Node, made in about nine
+    pieces as its chunk is drawn, so no frame stalls.
+  - **In the rules:** each foot runs on outwards along the fin a way of its own (core/arches.js
+    `reach`, 1.5 to 6 m: `legsOf`), its legs' squares those within 2.4 m of that line (were round
+    footprints at its feet), its clearing out past its furthest reach (`roomOf`). The rock's kept
+    inside those squares below a person's head. `NET_VERSION` 26 (the world's squares changed; 25 the spells' doubled reach).
+    Placing's otherwise as it was: seed 1 still 11 in five lands, a few moved where a reach would
+    leave its chunk.
+  - **From afar:** each leg's box as long as its squares; a far leg's height worked out from its
+    own ground (it had been scaled with the height above the sea, so on high land a leg stood
+    lower than its ground: a snow arch's 2 m under it), now tested for every arch. On the minimap
+    its legs as thick strokes along the fin.
+  - **Pictures:** five of seed 1's arches (heath, savannah, badlands, mountain, snow), each from
+    the front and the side, before (main) and after; and a close look at two; sent in the session.
+  - **Tests:** test/arches.test.js (each foot reaching its own way; its squares out to the end of
+    each leg; the rock within its legs' squares below head height, whole over its opening with a
+    cap above it, its normals facing out; under 9,000 triangles with its rubble; drawn in a group
+    with its rock casting shadows; what grows by land: none in the snow, more in a green land than
+    a dry, some up on the rock); test/chunks.test.js (the arch's rock drawn at every quality, its
+    plants only with undergrowth); test/silhouettes.test.js (each far leg along its squares, up
+    from its own ground most of the way to the band, for every arch).

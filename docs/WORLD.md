@@ -445,8 +445,9 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   three quarters of both together, whichever's more. A world has about three a chunk on
   average. The grass, flowers, pebbles and sticks between them are the drawing's alone
   (GAME.md, *The world outside*).
-- **Arches of rock** (`core/arches.js`; the terrain plan's M7h-2): a band of rock standing over
-  open ground on two legs, one to three in each stretch of rocky land. A region is the plan's
+- **Arches of rock** (`core/arches.js`; the terrain plan's M7h-2, reworked): a fin of rock with a
+  hole worn through it, standing over open ground on two legs, one to three in each stretch of
+  rocky land. A region is the plan's
   cells of one land joined side to side (mountain, badlands, heath, savannah, volcanic, tundra,
   snow, beach), none in one under 600 cells (about 0.6 km²), one more for each 2,400 cells
   past that, three at most. Each region's cells are tried in an order of the world's own: an
@@ -454,13 +455,16 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   in them; 96 m or more from a settlement's edge or a place; at least 640 m from any other arch;
   with its whole footprint inside one chunk; and on gentle ground (its feet no more than 0.3 of
   its span apart in height, the ground under its middle within 2 m of the line between them).
-  Its own numbers give it its way round, its span (9 to 16 m between its legs' middles) and how
-  high its underside stands (6 to 11 m). Seed 1 has 11, in five lands; worked out once a world
-  (20 to 70 ms). Its legs take the squares within 2.4 m of their middles (blocked, and hiding
-  what's behind them); under its span the ground's open and walked through; nothing's grown or
-  placed within 4 m past its legs (a clearing, as round the places). If any of its legs' squares
-  is a road's, water, a bridge or built on, it isn't there at all. A chunk's arch is one of its
-  features (`kind: "arch"`, `arch`: arches.js's own). `NET_VERSION` 24.
+  Its own numbers give it its way round, its span (9 to 16 m between its legs' middles), how
+  high its underside stands (6 to 11 m) and how far on each foot runs outwards along the fin
+  (`reach`, 1.5 to 6 m each, the rock sloping down into the ground there: `legsOf`). Seed 1 has
+  11, in five lands; seeds 2, 3 and 7 have 8, 10 and 13; worked out once a world (20 to 70 ms).
+  Its legs take the squares within 2.4 m of the line from each foot out to where it reaches
+  (blocked, and hiding what's behind them); under its span the ground's open and walked through;
+  nothing's grown or placed within 4 m past its furthest reach (`roomOf`; a clearing, as round
+  the places). If any of its legs' squares is a road's, water, a bridge or built on, it isn't
+  there at all. A chunk's arch is one of its features (`kind: "arch"`, `arch`: arches.js's own).
+  `NET_VERSION` 26 (24 when its legs were round footprints at its feet).
 
 Water can't be walked into, but can be seen over, except where it can be waded. A chunk takes
 about 3 to 5 ms to make in Node,
