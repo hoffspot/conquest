@@ -3,13 +3,14 @@
 // outline its kind's (round, conical, columnar, flat-topped), in its kind's colour. Where the trees
 // stand is worked out as the overworld plants them (core/overworld.js #plant: the same random
 // numbers, chunk by chunk), so each card stands where its tree will when the player comes near;
-// only what the chunk itself would keep them off (its roads, its rivers' banks, what's built) isn't
-// known from afar. Pure: worked out in a worker (silhouette-worker.js), drawn by silhouettes.js.
+// and, as the chunk keeps its trees off ground too steep to climb, none where the land round it is
+// that steep. Only what else the chunk would keep them off (its roads, its rivers' banks, what's
+// built) isn't known from afar. Pure: worked out in a worker (silhouette-worker.js), drawn by silhouettes.js.
 
 import { FLORA } from "../../core/overworld.js";
 import { createRandom } from "../../core/random.js";
 import { HOME_TREES } from "../../core/setpieces/pieces.js";
-import { heightAt } from "../../core/terrain/height.js";
+import { heightAt, SLOPE } from "../../core/terrain/height.js";
 import { CELL, CELLS, CHUNK, WATER } from "../../core/worldplan/plan.js";
 import { BIOMES, RACES } from "../../core/worldplan/races.js";
 
@@ -107,6 +108,16 @@ export function gatherTrees(plan, { x, z, reach, from = 0, town = null }) {
                     }
 
                     if ((town && tx >= town[0] && ty >= town[1] && tx < town[2] && ty < town[3]) || clearings.some(({ at, radius }) => Math.hypot(at[0] - tx, at[1] - ty) < radius)) {
+                        continue;
+                    }
+
+                    // (Not where the land's too steep to climb: the overworld keeps the squares
+                    // round a tree clear of its cliffs, and the slope across the four metres round
+                    // it is never steeper than the steepest of them)
+                    const [nw, ne, sw, se] = [heightAt(plan, tx - 2, ty - 2), heightAt(plan, tx + 2, ty - 2), heightAt(plan, tx - 2, ty + 2), heightAt(plan, tx + 2, ty + 2)];
+                    const [east, south] = [(ne - nw + se - sw) / 8, (sw - nw + se - ne) / 8];
+
+                    if (east * east + south * south >= SLOPE.cliff * SLOPE.cliff) {
                         continue;
                     }
 

@@ -777,9 +777,13 @@ plan's M6c). What stands up from the land is seen from as far as the far land re
   own trees are drawn, out to 700 m on medium and 1.2 km on high (none on low), every tree the
   land would grow there as one card turned to face the camera:
   - **Where:** the overworld's own way of planting them, replayed (the same random numbers, chunk
-    by chunk), so each card stands where its tree will when the player comes near. Only what the
-    chunk itself would keep a tree off (its roads, its rivers' banks, what's built) isn't known from
-    afar; the places still to be built, the start town and the lakes and the sea are.
+    by chunk), so each card stands where its tree will when the player comes near. None where the
+    land across the four metres round it is too steep to climb (38°: the terrain plan's M7d-3), as
+    the chunk keeps its trees' squares clear of its cliffs; before, cards stood all over cliffs and
+    rock faces, as if floating in front of them, where no tree would be when the player came near.
+    Only what else the chunk would keep a tree off (its roads, its rivers' banks, what's built)
+    isn't known from afar; the places still to be built, the start town and the lakes and the sea
+    are.
   - **What:** its kind's height and crown (round for oaks and beeches, oval for birches, poplars
     and silverbarks, conical for spruces and nightspires, a ball on a bare trunk for pines, flat
     for acacias), its edge ragged, lit from above and from the sun's side, in its kind's colour.

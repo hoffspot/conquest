@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import * as THREE from "three";
 import { buildWorld } from "../client/js/core/overworld.js";
+import { heightAt, SLOPE } from "../client/js/core/terrain/height.js";
 import { RUNNING, watersOf } from "../client/js/core/terrain/waters.js";
 import { CELL, CELLS, CHUNK } from "../client/js/core/worldplan/plan.js";
 import { FAR_LEVELS, farReach } from "../client/js/world/far/levels.js";
@@ -71,6 +72,31 @@ describe("the trees and rivers seen from afar (far/trees.js, rivers.js)", () => 
             assert.ok(!(tx >= town[0] && tz >= town[1] && tx < town[2] && tz < town[3]));
             assert.ok(Math.hypot(tx - x, tz - z) >= 100);
         }
+    });
+
+    it("keeps off land too steep to climb, as the overworld keeps its trees off it (the cliffs over the coast)", () => {
+        // (How steep the land is across the four metres round a point: tan² of its slope)
+        const steepness = (x, z) => {
+            const [nw, ne, sw, se] = [heightAt(world.plan, x - 2, z - 2), heightAt(world.plan, x + 2, z - 2), heightAt(world.plan, x - 2, z + 2), heightAt(world.plan, x + 2, z + 2)];
+
+            return ((ne - nw + se - sw) / 8) ** 2 + ((sw - nw + se - ne) / 8) ** 2;
+        };
+        const [x, z] = [2096, 304];
+        const far = gatherTrees(world.plan, { x, z, reach: 600, from: 100 });
+        let cliffs = 0;
+
+        for (let k = 0; k < far.length; k += TREE_FLOATS) {
+            assert.ok(steepness(far[k], far[k + 2]) < SLOPE.cliff ** 2, `(${far[k]}, ${far[k + 2]})`);
+        }
+
+        // (And there are cliffs there to keep off)
+        for (let gz = z - 600; gz < z + 600; gz += 8) {
+            for (let gx = x - 600; gx < x + 600; gx += 8) {
+                cliffs += steepness(gx, gz) >= SLOPE.cliff ** 2 ? 1 : 0;
+            }
+        }
+
+        assert.ok(far.length / TREE_FLOATS > 500 && cliffs > 500, `${far.length / TREE_FLOATS} trees, ${cliffs} cliff points`);
     });
 
     it("lays each river's ribbon along its course, on its surface, as wide as it is (or wide enough to be seen)", () => {

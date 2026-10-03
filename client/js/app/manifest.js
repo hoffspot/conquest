@@ -223,7 +223,7 @@ export const MANIFEST = Object.freeze([
             ["js/world/far/shapes.js", 23013],
             ["js/world/far/silhouette-worker.js", 2323],
             ["js/world/far/silhouettes.js", 12342],
-            ["js/world/far/trees.js", 7972],
+            ["js/world/far/trees.js", 8767],
             ["js/world/far/volcano.js", 15536],
             ["js/world/fields.js", 2813],
             ["js/world/flyers3d.js", 24738],
