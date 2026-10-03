@@ -1,7 +1,7 @@
 // The sky over the world outside: deep blue overhead paling to the haze at the horizon (the fog's
 // colour, so the world's far edge melts into it), the sun (a bright disc in a glow, none once it's
 // set), the moon (its disc as much lit as its phase has, a faint glow round it) and, at night, the
-// stars, a few hundred, twinkling; and clouds drifting slowly across on the wind, soft-edged, lit
+// stars, about a thousand, twinkling; and clouds drifting slowly across on the wind, soft-edged, lit
 // as the sky is (white by day, gold at dusk, grey-blue at night), thinning out towards the
 // horizon. Its colours and where the sun and moon are come from the time of day (daytime.js).
 //
@@ -27,7 +27,7 @@ export const CLOUDS = Object.freeze({ from: 0.5, thick: 0.74, size: 1.6, wind: [
 
 /**
  * The stars: how many cells of the sky's grid go round it, and the share of them with a star (so
- * about a hundred to a quarter of the sky). The moon: its radius (radians: a little bigger than
+ * about a thousand over the sky). The moon: its radius (radians: a little bigger than
  * the real one's).
  */
 export const STARS = Object.freeze({ cells: 220, share: 0.1 });

@@ -244,7 +244,7 @@ export const MANIFEST = Object.freeze([
             ["js/world/navworker.js", 549],
             ["js/world/roomlight.js", 8289],
             ["js/world/shadows.js", 2448],
-            ["js/world/sky.js", 11405],
+            ["js/world/sky.js", 11398],
             ["js/world/smoke.js", 8337],
             ["js/world/spellfx.js", 85142],
             ["js/world/squares.js", 6596],
