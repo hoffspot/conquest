@@ -1314,6 +1314,8 @@ test("the bars over enemies the same way are smaller the farther off they are, t
 });
 
 test("tapping the tavern's door lights its edge green, and the player walks in: a couple of steps inside, facing the door; up the stairs (where a courtesan beckons), down, and out; each time a tap round them is a step, not back through", async ({ page }) => {
+    // (In and up and down and out, each map drawn as it's come to: a minute or more without a GPU)
+    test.setTimeout(180000);
     await playing(page, "/?play&seed=1");
 
     // Tap the door or stairs (a link's end on the map shown), and play on until through
