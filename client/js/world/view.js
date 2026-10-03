@@ -115,6 +115,16 @@ const PLAIN = Object.freeze({ zenith: srgbOf(SKY_COLOURS.zenith), horizon: srgbO
 const INDOORS = Object.freeze({ background: 0x140e0a, fog: [16, 38], sun: [0xffecd0, 4], sunFrom: [0.25, 1, 0.35], environment: 0.55 });
 const LAMPS = 2;
 
+/**
+ * Firelight out of doors against the dark (the terrain plan's M7f, the light looked over): by day
+ * a fire's light is what its kind has (lights.js LIGHTS), next to nothing beside the sun's; by
+ * night, against the moon's and the stars' (and the eye used to the dark), it stands out as fire
+ * does, `strength` times again as strong, and reaches `reach` again as far, its pool not cut short
+ * (a lamp on its post lighting the cobbles round it, a camp fire the camp). The spells' flashes
+ * (`priority`d) are as bright as they're made whatever the hour.
+ */
+export const NIGHT_FIRE = Object.freeze({ strength: 2, reach: 0.35 });
+
 // The sky as the greatest spells darken it (setOmen), at its darkest: its colours (sRGB 0 to 1),
 // the clouds' light (lit red from below), and how much of the sun and of the light from all round
 // is left
@@ -916,8 +926,13 @@ export class View {
 
         chosen.length = 0;
 
+        // (Firelight against the dark: stronger and further at night, NIGHT_FIRE)
+        const [stronger, further] = [1 + NIGHT_FIRE.strength * lit, 1 + NIGHT_FIRE.reach * lit];
+
         for (const light of lights) {
-            const reach = light.reach ?? LIGHTS[light.kind]?.reach ?? 10;
+            // (A spell's flash, `priority`d, as bright as it's made whatever the hour)
+            const [strong, far] = light.priority ? [1, 1] : [stronger, further];
+            const reach = (light.reach ?? LIGHTS[light.kind]?.reach ?? 10) * far;
             const distance = Math.hypot(light.x - near.x, light.y - near.y, light.z - near.z);
 
             if (distance > reach * 1.5) {
@@ -929,6 +944,9 @@ export class View {
             if (now.strength <= 0.01) {
                 continue;
             }
+
+            now.strength *= strong;
+            now.reach *= far;
 
             used++;
             chosen.push({ light, distance, now, rank: distance - (light.priority ?? 0) * 1000 });

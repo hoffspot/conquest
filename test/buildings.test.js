@@ -1103,7 +1103,7 @@ describe("each people's buildings (peoples/)", () => {
     it("draws each inside from the atlas, a mesh for its walls, one for its ceiling and one for the rest, only its daylight, flames, roast and lights apart", async () => {
         const { readPlan } = await import("../client/js/core/interiors.js");
         const { tavernRooms, templeRooms } = await import("../client/js/core/insides.js");
-        const { buildInterior } = await import("../client/js/world/interiors3d.js");
+        const { buildInterior, INTERIOR_GLOW, NIGHT_PANE } = await import("../client/js/world/interiors3d.js");
         const inside = (rooms, name, extra = {}) => {
             const [floor] = rooms({ seed: 5, name: "Inside", people: "human", tavern: { storeys: 1 }, ...extra });
             const map = readPlan(name, floor.name, floor.rows, { ground: floor.ground });
@@ -1126,6 +1126,20 @@ describe("each people's buildings (peoples/)", () => {
             assert.deepEqual(new Set(atlas.map(({ material }) => material.name)), new Set(["atlas-inside", "atlas-inside-wall", "atlas-inside-ceiling"]));
             assert.ok(meshes.every(({ material }) => !material.map), "nothing painted of its own");
             assert.ok(meshes.every(({ material }) => material.name.startsWith("atlas-inside") || apart.test(material.name) || material.type === "ShaderMaterial"), meshes.map(({ material }) => material.name).join());
+
+            // (Its windows: the day's sky in them, the night's as the daylight goes)
+            const windows = meshes.filter(({ material }) => /^window/.test(material.name));
+
+            assert.ok(windows.length > 0, "windows");
+
+            for (const { material } of windows) {
+                const shader = { uniforms: {}, vertexShader: THREE.ShaderLib.basic.vertexShader, fragmentShader: THREE.ShaderLib.basic.fragmentShader };
+
+                material.onBeforeCompile(shader);
+                assert.equal(shader.uniforms.paneDaylight, INTERIOR_GLOW.daylight);
+                assert.ok(shader.fragmentShader.includes(`mix(vec3(${NIGHT_PANE.map((v) => v.toFixed(3)).join(", ")}), diffuseColor.rgb, paneDaylight)`));
+            }
+
             built.dispose();
         }
 

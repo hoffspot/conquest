@@ -207,10 +207,11 @@ Cast again, one lasts from then. They end at death.
   above it, bobbing.
 - **Light** (the terrain plan's M7e-4): a small bright globe rises from the hand and follows a
   little over the caster's shoulder (world/globes.js), lighting what's round it in a cool white,
-  steady, a light of its own (13 m). In the rules (core/light.js) everyone sees as by day within
-  12 m of the caster at night, so they see an ambush before it sees them, and are seen too. It
-  lasts fifteen minutes; cast again while it shines, it's put out. Its tome is sold at every
-  adventurers' guild for 10 gold (spells.js `GUILD_TOMES`), and is found as other common tomes are.
+  steady, a light of its own (13.5 m by night, as firelight is: GAME.md *Against the dark*). In
+  the rules (core/light.js) everyone sees as by day within 12 m of the caster at night, so they
+  see an ambush before it sees them, and are seen too. It lasts fifteen minutes; cast again while
+  it shines, it's put out. Its tome is sold at every adventurers' guild for 10 gold (spells.js
+  `GUILD_TOMES`), and is found as other common tomes are.
 
 ### Bending wills
 

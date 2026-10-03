@@ -15,9 +15,10 @@ const OVER = Object.freeze({ side: 0.42, up: 2.05, back: -0.32 });
 const BOB = 0.06;
 const FOLLOW = 5;
 
-// Its light: cool white, steadier than any flame's, as strong as a brazier's and reaching a little
-// further than the rules' 12 m (so the edge of what's seen isn't the edge of what's lit)
-const LIGHT = Object.freeze({ colour: 0xd6e4ff, strength: 5.5, reach: 13, steady: 0.08 });
+// Its light: cool white, steadier than any flame's; by night (as all firelight out of doors: view.js
+// NIGHT_FIRE) three times this and reaching 13.5 m, a little further than the rules' 12 m (so the
+// edge of what's seen isn't the edge of what's lit)
+const LIGHT = Object.freeze({ colour: 0xd6e4ff, strength: 1.9, reach: 10, steady: 0.08 });
 
 const _over = new THREE.Vector3();
 
