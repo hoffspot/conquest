@@ -2477,3 +2477,30 @@ converted data is to be measured in M8 against today's hm08 data.
   - **Next in M7d:** the marsh (its streams falling in steps across flat ground), sand and snow;
     trees seen floating from high over the coast; the far land's gaps after a long jump (each
     level drawn once worked out: keep the old until the new is in).
+- **2026-10-03, M7d-3 built** (the land looking natural, §9: trees on cliffs):
+  - **Found, from the tour's coast and mountainside:** the trees seen from afar stood all over
+    cliffs and rock faces, cards seeming to float in front of the grey rock. The chunks never
+    plant a tree there (a tree's squares are kept clear of what's blocked, and ground too steep to
+    climb is), but the far trees, replaying the planting without the chunk, didn't know.
+  - **Fixed** (`world/far/trees.js` `gatherTrees`): no tree where the land across the four
+    metres round it is too steep to climb (`SLOPE.cliff`, 38°). That slope is never steeper than
+    the steepest of the squares the chunk keeps clear round a tree, so every tree a chunk plants
+    is still among the far ones (the test that checks it passes, and 536 trees on 60 hilly chunks
+    were checked the same way: none lost).
+  - **Also looked at:** the marsh's stream falling in steps. It runs down a slope of 1 in 6 (31 m
+    over 190 m) at the marsh's edge, so pools and falls are right there; its steps are even (8 m
+    apart, 1.2 m high), left for the rivers' own pass. Sand, snow, the savannah, the badlands, the
+    tundra, the jungle, the meadow and the farmland looked over again from the tour's cameras:
+    nothing more to fix.
+  - **Cost:** four more height reads a tree worked out, in the worker (a fifth more time: 0.38 s
+    for 2 km round the coast); a fifth fewer trees drawn at the coast (16,361 to 12,959).
+  - **Pictures:** before/after sheets sent in the session (the coast and a mountainside; eye,
+    follow and high up each).
+  - **Versions:** none (the rules' trees are as they were; only the far cards are fewer).
+  - **Tests:** `test/nature.test.js` (round the coast's cliffs, no far tree where the land's too
+    steep to climb, and there are cliffs there to keep off: fails on the old trees).
+  - **The far land after a long jump** (the gaps the first tour's pictures showed): only while
+    the worker works out the levels round the new spot, about 10 ms each, so for a few frames
+    after a teleport; the tour, taking its pictures a moment after each jump, shows none. Left
+    as it is.
+  - **Next:** M7e, day and night.
