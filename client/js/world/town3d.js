@@ -32,6 +32,7 @@ import { prop } from "./art/kits/props.js";
 import { tree } from "./art/kits/town.js";
 import { lieOf, yard } from "./art/kits/yards.js";
 import { plantTrees } from "./art/kits/trees.js";
+import { lightsMesh, lightsOf } from "./lights.js";
 import { chimneysOf, smokeMesh } from "./smoke.js";
 import { clothMesh, clothOf } from "./cloth.js";
 
@@ -89,8 +90,9 @@ export function heightMap([x0, z0, width, height]) {
 
 /**
  * Build the town and the trees in its fields: { object: a Group (in metres) of merged meshes,
- * heights: the height of whatever stands on each of its squares (heightMap's), and buildings:
- * the same for what's built alone (BUILT) }. The town's corner is at `world.origin` ([x, z] or
+ * heights: the height of whatever stands on each of its squares that could hide the player (what's
+ * built and the trees, not the props: heightMap's), and buildings: the same for what's built alone
+ * (BUILT) }. The town's corner is at `world.origin` ([x, z] or
  * a number for both), and its squares are `world.stamp`'s (where it's set in the world: [x, z]
  * `at`, its width and height) or the world's own. `onProgress(done, total)` hears as each piece
  * is built.
@@ -190,9 +192,12 @@ export async function buildTown(world, { onProgress = () => {}, groundAt = () =>
 
     art.updateMatrixWorld(true);
 
-    // (Smoke rising from its chimneys: smoke.js; its banners and flags in the breeze: cloth.js)
+    // (Smoke rising from its chimneys: smoke.js; its banners and flags in the breeze: cloth.js;
+    // its torches and lanterns, lit at night: lights.js)
     const smoke = smokeMesh(chimneysOf(art));
     const cloth = clothMesh(clothOf(art));
+    const lights = lightsOf(art);
+    const lit = lightsMesh(lights);
 
     // How high everything stands on each square
     const stand = (box, built) => {
@@ -208,8 +213,10 @@ export async function buildTown(world, { onProgress = () => {}, groundAt = () =>
     };
 
     // (A building's height over the squares under it and its eaves, as it's turned: not its
-    // turned box's, which would be wider; a yard's fences and washing in no one's way)
-    for (const object of art.children.filter(({ userData }) => userData.piece.kind !== "yard")) {
+    // turned box's, which would be wider; a yard's fences and washing in no one's way, nor the
+    // props, a well's roof, a cart, a stall, low enough to see the player round: as out in the
+    // world, chunks3d.js, the camera never cuts a hole through them for standing behind one)
+    for (const object of art.children.filter(({ userData }) => userData.piece.kind !== "yard" && userData.piece.kind !== "prop")) {
         const top = new THREE.Box3().setFromObject(object).max.y;
         const corners = footprint(object.userData.piece, EAVES).map(([x, y]) => [ox + x, oz + y]);
         const xs = corners.map(([x]) => x);
@@ -265,13 +272,13 @@ export async function buildTown(world, { onProgress = () => {}, groundAt = () =>
 
     object.add(trees.object);
 
-    for (const drawn of [smoke, cloth]) {
+    for (const drawn of [smoke, cloth, lit]) {
         if (drawn) {
             object.add(drawn);
         }
     }
 
-    return { object, heights, buildings };
+    return { object, heights, buildings, lights };
 }
 
 /**

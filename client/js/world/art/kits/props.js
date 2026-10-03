@@ -97,10 +97,11 @@ function sack(solid, x, z, height, lean) {
 const PROPS = {
     well(solid, { cx, cz }) {
         // A ring of stone, water below, two posts and a windlass with its bucket, under a little
-        // roof of shingles
-        solid.cylinder(cx, cz, 0, m(0.85), m(0.95), m(0.9), material("stone"), { segments: 12, capped: false });
-        solid.cylinder(cx, cz, m(0.85), m(0.95), m(1), m(1), material("stone-dark"), { segments: 12, capped: false });
-        solid.cylinder(cx, cz, m(0.2), m(0.9), m(0.72), m(0.72), material("stone-dark"), { segments: 12, capped: false });
+        // roof of shingles. (The ring turned whole, its outside, the lip of its rim, its top and
+        // its inside down to the water each facing the way it's seen from: so the far side's
+        // inside shows, looking in over the near side, and it's never cut in half)
+        solid.lathe(cx, cz, [[m(0.95), 0], [m(0.9), m(0.85)]], material("stone"), { segments: 12 });
+        solid.lathe(cx, cz, [[m(0.9), m(0.85)], [m(1), m(0.85)], [m(1), m(0.95)], [m(0.72), m(0.95)], [m(0.72), m(0.2)]], material("stone-dark"), { segments: 12 });
         solid.cylinder(cx, cz, m(0.2), m(0.55), m(0.72), m(0.72), material("water"), { segments: 12 });
 
         const oak = material("timber");

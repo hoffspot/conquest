@@ -67,6 +67,7 @@ import { KINDS, Wounds } from "../world/wounds.js";
 import { Chunks, DECK, LOAD_BUDGET, REACH } from "../world/chunks3d.js";
 import { TallGrass } from "../world/grass.js";
 import { Motes } from "../world/motes.js";
+import { GLOW_SCALE } from "../world/lights.js";
 import { SMOKE_SHARE } from "../world/smoke.js";
 import { FarLand } from "../world/far/far.js";
 import { farReach } from "../world/far/levels.js";
@@ -169,6 +170,10 @@ const ARRIVE_WITHIN = 140;
 // way, the ways they and those near them find staying among baked tiles), asked for again once
 // they've gone this far
 const BAKE_AHEAD = Object.freeze({ reach: 96, again: 16 });
+
+// How far round the player the chunks' lights are looked through for the nearest (metres: past
+// the furthest any reaches, lights.js LIGHTS)
+const LIGHT_REACH = 30;
 
 // How far the camera leans from the player towards who they're fighting: a share of the way,
 // up to so many metres
@@ -704,6 +709,16 @@ export class Game {
     #landLook(x, z, dt) {
         this.landLook ??= new Look(this.world.plan);
         this.view.setLook(this.landLook.update(x, z, dt));
+    }
+
+    // The torches, lanterns and camp fires nearest the player at (x, z) (metres) lighting what's
+    // round them at night (world/lights.js: the view's lamps), the rest of them glowing
+    #lightNear(x, z) {
+        const lights = this.chunks.lightsNear(x, z, LIGHT_REACH, (this.nearLights ??= []));
+
+        lights.push(...(this.town?.lights ?? []), ...(this.camps?.lights() ?? []));
+        GLOW_SCALE.value = this.view.pixelsPerMetre();
+        this.view.lightNear(lights, _lit.set(x, this.avatars.get(this.me).object.position.y + 1.2, z));
     }
 
     // The time of day the world's clock has (core/daytime.js: the war's, the same for every
@@ -1905,6 +1920,7 @@ export class Game {
 
             this.#farLand(x, z);
             this.#landLook(x, z, dt);
+            this.#lightNear(x, z);
         }
 
         this.#visit(dt);

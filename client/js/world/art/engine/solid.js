@@ -1115,8 +1115,10 @@ export class Solid {
     /**
      * The shape as a Three.js group of meshes (materials are Three.js materials), those only
      * worth drawing near marked so (userData.near: merged last, town3d.js joined); with its
-     * chimneys' tops (`smoke`: kits/roofs.js chimney) in its userData.smoke, and its banners and
-     * flags (`cloth`: world/cloth.js clothMesh's, in world pixels) in its userData.cloth.
+     * chimneys' tops (`smoke`: kits/roofs.js chimney) in its userData.smoke, its banners and
+     * flags (`cloth`: world/cloth.js clothMesh's, in world pixels) in its userData.cloth, and its
+     * lights (`lights`: [x, y, z, kind], world pixels; world/lights.js LIGHTS' kinds) in its
+     * userData.lights.
      */
     toObject() {
         const group = new THREE.Group();
@@ -1164,6 +1166,11 @@ export class Solid {
         // (Its chimneys' tops, where smoke rises from: [x, y, z, strength], world pixels)
         if (this.smoke?.length) {
             group.userData.smoke = this.smoke.map((top) => [...top]);
+        }
+
+        // (Its lights, lit at night: torches, lanterns: world/lights.js)
+        if (this.lights?.length) {
+            group.userData.lights = this.lights.map((light) => [...light]);
         }
 
         // (Its banners and flags, as world/cloth.js draws them, in world pixels)

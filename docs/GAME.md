@@ -758,6 +758,28 @@ a look of its own (`LOOKS`), which the world takes on round the player:
   three minutes before the dusk to the night's start, the town's windows come on one after
   another; all night they're lit (some going out after midnight), and through the dawn they go
   out.
+- **Torches, lanterns and camp fires** (world/lights.js, kits/torches.js), lit as the windows are
+  (by the evening's `WINDOW_LIGHT`), out by day:
+  - **Where:** torches in iron brackets either side of a keep's door (a capital's too) and of a
+    gatehouse's way through, inside and out; the lanterns already by taverns' and town halls'
+    doors; the war camps' fires. A kit marks each (a built piece's `userData.lights`, as its
+    chimneys' tops are its `userData.smoke`); `lightsOf` finds them in the world.
+  - **Drawn:** each torch's flame (a square turned to the camera, its fire worked out in the
+    shader) and every light's soft glow, all of a chunk's (or the town's) in one mesh of each:
+    two draws, whatever how many.
+  - **The flicker:** one fire's flicker (`fireFlicker`: smooth noise at three rates, a slow swell,
+    a quicker guttering and a fast flutter; each light its own from where it is) drives the flame,
+    its glow and the light it casts, the same sums in JavaScript and on the GPU (its hash taken
+    round 289, so 32-bit floats give the same, within half a percent, however long the game's
+    run). As it flares the flame stands taller and yellower, the glow swells, and the light's
+    stronger, yellower and a few centimetres higher; as it gutters, lower, redder and weaker. A
+    torch's light wanders by about 14% either side of its strength, a camp fire's 12%, a
+    lantern's behind its glass 4%.
+  - **Their light:** the two nearest the player within their reach light what's round them (the
+    view's two lamps, which the insides' flames use indoors: on every quality, and nothing new for
+    the shaders), fading out towards their reach's edge so one's handed to the next unseen; the
+    rest only glow. A torch's is 4 candela, reaching 11 m; a lantern's 3, 9 m; a camp fire's 8,
+    14 m. (They light through walls as every lamp does, for now: M7f.)
 - **Not by time:** the pack's paperdoll is lit as on a fair day whatever the hour. With no world
   (the labs) the sun stands where it always did.
 
@@ -925,8 +947,10 @@ than 2.6 metres: a building a little way behind brings it in, one right behind l
 It comes in (and rises) quickly, and goes back out slowly once the way is clear.
 
 **The cutaway.** Whatever still hides the player (a tree, or a building too close to come in
-front of), the view finds by marching along the line from the player to the camera over the
-town's height map (everything, trees and props too), and the town's materials cut a round,
+front of), the view finds by marching along the line from the player to the camera (as far as
+the camera, not past it: what's behind the camera hides nothing) over the town's height map (what's
+built and the trees; not the props, a well, a cart or a stall, which are low enough to see the
+player round, as out in the world), and the town's materials cut a round,
 dithered hole through whatever is nearer the camera than the player (a few lines added to their
 shaders; the shadows they cast stay whole).
 
@@ -1912,7 +1936,7 @@ seed of its own (1 to 15), worked out as its building's merged (its glass told a
 triangles that touch, the seed from where its middle is), riding on its layer too (2,048 times
 it): through the dusk the windows come on one after another by their seeds, by the night's start
 all of them; after midnight about a third go out, one after another; through the dawn the rest
-go out as they came on. A tavern's, a church's, a guild's and a keep's windows, and the lanterns,
+go out, the last to come on going out first. A tavern's, a church's, a guild's and a keep's windows, and the lanterns,
 are lit all night. The insides' windows aren't lit (they show the night outside).
 Everything that doesn't move is merged a
 block of the town (32 metres square) at a time, so each block is a draw call or two, and only

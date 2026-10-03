@@ -22,6 +22,7 @@ import { FAR, FAR_LEVELS, farReach } from "./far/levels.js";
 import { farHaze, GRADE, MIST } from "./fog.js";
 import { GpuTimer } from "./gputimer.js";
 import { FAR_FIELDS } from "./ground.js";
+import { fireColour, fireOf, LIGHTS, nearestLights, seedOf } from "./lights.js";
 import { fillOf, pickLamps, ROOM_LIGHT, ROOM_LIGHTS, strengthOf } from "./roomlight.js";
 import { fadeShadowEdges, snapToTexels } from "./shadows.js";
 import { Sky, SKY_COLOURS } from "./sky.js";
@@ -786,6 +787,43 @@ export class View {
     }
 
     /**
+     * Light what's round the player out of doors at night by the lights nearest `near` (lights.js
+     * lightsOf's: torches, lanterns, camp fires, world metres): the two nearest within their reach
+     * are the view's lamps, as lit as the evening has them (WINDOW_LIGHT), fading out towards
+     * their reach's edge (so one's handed to another unseen). Each flickers as its flame and glow
+     * are drawn (lights.js fireOf: the same noise, seed and clock, `time` in seconds), stronger,
+     * yellower and a little higher as it flares, weaker and redder as it dies down. Indoors the
+     * room's flames have the lamps.
+     */
+    lightNear(lights, near, time = WINDOW_LIGHT.value.z) {
+        if (this.indoors) {
+            return;
+        }
+
+        const lit = WINDOW_LIGHT.value.x;
+        const nearest = lit > 0 ? nearestLights(lights, near, LAMPS, (this.nearest ??= [])) : [];
+
+        this.lamps.forEach(({ light }, k) => {
+            const chosen = nearest[k];
+
+            if (!chosen) {
+                light.intensity = 0;
+
+                return;
+            }
+
+            const { x, y, z, kind } = chosen.light;
+            const { strength, reach, flame } = LIGHTS[kind];
+            const fire = fireOf(kind, seedOf(chosen.light), time, lit, (this.fire ??= { flicker: 0, strength: 0 }));
+
+            light.position.set(x, y + (fire.flicker - 0.5) * (flame?.[1] ?? 0) * 0.25, z);
+            fireColour(kind, fire.flicker, light.color);
+            light.distance = reach;
+            light.intensity = strength * fire.strength * (1 - THREE.MathUtils.smoothstep(chosen.distance, reach * 0.9, reach * 1.5));
+        });
+    }
+
+    /**
      * Make the room's flames flicker, as flames do (`time` in seconds): each lighting the room,
      * the two lighting `near` most (the player: world metres) the view's lamps, lighting
      * everything else there too.
@@ -1131,10 +1169,15 @@ export class View {
             return false;
         }
 
-        _toCamera.copy(this.camera.position).sub(point).normalize();
+        _toCamera.copy(this.camera.position).sub(point);
+
+        const away = Math.min(40, _toCamera.length());
+
+        _toCamera.normalize();
 
         // Step along the line towards the camera until it's above anything that could be in the way
-        for (let distance = 0.5; distance < 40; distance += 0.3) {
+        // (or at the camera: what's behind it hides nothing)
+        for (let distance = 0.5; distance < away; distance += 0.3) {
             _point.copy(point).addScaledVector(_toCamera, distance);
 
             if (_point.y > point.y + 25) {

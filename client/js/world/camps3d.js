@@ -188,7 +188,12 @@ export class Camps {
         });
 
         this.group.add(object);
-        this.camps.set(id, { object, flames });
+        this.camps.set(id, { object, flames, light: { x: fx, y: hearth.position.y + 0.5, z: fz, kind: "fire" } });
+    }
+
+    /** The camps' fires as lights (lights.js: world metres), lighting what's round them at night. */
+    lights() {
+        return [...this.camps.values()].map(({ light }) => light);
     }
 
     /** Strike a camp: its tents and fire gone. */

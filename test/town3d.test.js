@@ -8,7 +8,9 @@ import { HOMES, LAND_COLOURS, landColour, landColours, splatData, splatOf } from
 import { BIOMES, CELLS } from "../client/js/core/worldplan/plan.js";
 import { RACES } from "../client/js/core/worldplan/races.js";
 import { MATERIALS, paintLayer } from "../client/js/world/art/engine/painters.js";
+import * as THREE from "three";
 import { BUILDERS, heightMap, PIXEL } from "../client/js/world/town3d.js";
+import { View } from "../client/js/world/view.js";
 
 describe("the town in 3D (town3d.js)", () => {
     it("has something to build every kind of piece a town can have, and every special building", () => {
@@ -176,5 +178,30 @@ describe("the town's height maps (town3d.js heightMap)", () => {
         assert.equal(map.at(107, 221), 0);
         assert.equal(map.rows.length, 20);
         assert.equal(map.rows[0].length, 30);
+    });
+});
+
+describe("what hides the player from the camera (view.js hidden), for the cut-away", () => {
+    // (A camera 8 m south of the player and 6 m up, as it follows them looking north)
+    const hidden = (map) => View.prototype.hidden.call({ occluders: map, camera: { position: new THREE.Vector3(10.5, 7, 18.5) } }, new THREE.Vector3(10.5, 1, 10.5));
+
+    it("is what stands between them higher than the line from one to the other", () => {
+        const map = heightMap([0, 0, 40, 40]);
+
+        assert.equal(hidden(map), false, "nothing");
+        map.rows[13][10] = 4;
+        assert.equal(hidden(map), true, "a house's wall behind the player");
+        map.rows[13][10] = 2;
+        assert.equal(hidden(map), false, "something low, seen over");
+    });
+
+    it("isn't anything behind the camera, however high", () => {
+        const map = heightMap([0, 0, 40, 40]);
+
+        for (let z = 20; z < 30; z++) {
+            map.rows[z][10] = 25;
+        }
+
+        assert.equal(hidden(map), false);
     });
 });

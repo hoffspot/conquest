@@ -17,6 +17,7 @@ import { brokenRim, brokenTop, crumbledRing, crumbledWall, perched, stringCourse
 import { ivyAlong, ringFace, wallFace } from "./ivy.js";
 import { oldBeam } from "./leftovers.js";
 import { rubbleOf, weathered } from "./neutral.js";
+import { torch } from "./torches.js";
 
 const CELL = 20;
 const WALL_HEIGHT = 32;
@@ -163,6 +164,11 @@ export function gatehouse({ facing }, { stone = "stone" } = {}) {
 
         solid.box(22, bridge - 6, 29.4, 58, bridge - 4.8, 30.6, iron);
 
+        // A torch either side of the way through, inside and out, lit at night (kits/torches.js)
+        for (const [x, z, out] of [[19, 59, 1], [61, 59, 1], [19, 1, -1], [61, 1, -1]]) {
+            torch(solid, [x, 18, z], [0, out]);
+        }
+
         // A banner over the way in, on the outside (only seen when the outside faces south), stirring
         // in the breeze (world/cloth.js)
         if (facing === "s") {
@@ -182,6 +188,10 @@ export function gatehouse({ facing }, { stone = "stone" } = {}) {
 
         for (let z = 24; z < 57; z += 4) {
             solid.box(29, bridge - 6, z, 31, bridge, z + 1.2, iron);
+        }
+
+        for (const [x, z, out] of [[59, 19, 1], [59, 61, 1], [1, 19, -1], [1, 61, -1]]) {
+            torch(solid, [x, 18, z], [out, 0]);
         }
     }
 
@@ -233,6 +243,11 @@ export function keep({ w, h, door }, { stone = "stone", roof = "slate" } = {}) {
         solid.box(mid - 6, 10, z1 + 1.5, mid + 6, 28, z1 + 2, material("planks-dark"));
         solid.box(mid - 10, 0, z1, mid + 10, 4, z1 + 6, s);
         solid.box(mid - 10, 4, z1, mid + 10, 8, z1 + 3, s);
+
+        // A torch either side of it, lit at night (kits/torches.js)
+        for (const side of [-1, 1]) {
+            torch(solid, [mid + side * 13, 21, z1], [0, 1]);
+        }
 
         for (const x of [mid - 20, mid + 20]) {
             (solid.cloth ??= []).push({ at: [x, 56, z1 + 0.3], out: [0, 0, 1], width: 8, drop: 26, kind: "wall", look: "human" });

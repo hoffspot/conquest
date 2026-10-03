@@ -816,7 +816,8 @@ after M7d (the land looked at by day first) and before the cliffs and rocks:
     emissive flame (flickering in the vertex shader) and a soft additive glow round it, merged with
     its chunk; their light on the ground round them from a small pool of real point lights (4 on
     High, 2 on Medium, none on Low) given to the nearest to the camera, always in the scene so the
-    shaders never compile again as they're handed round;
+    shaders never compile again as they're handed round (as built, M7e-2b: the view's two lamps,
+    which the insides' flames already had, on every quality, given to the two nearest the player);
   - the Light spell's globe (below): one of the pool kept for it while it's lit.
 - **Night in play:**
   - sight: everyone sees less far at night (the rules' sight range scaled by how much light's
@@ -2603,7 +2604,8 @@ converted data is to be measured in M8 against today's hm08 data.
     layer (`WINDOW_STEP`, 2,048 times it), so it's still one material and one draw.
   - **Through the evening** (`world/daytime.js` `windowsAt`): from three minutes before the dusk
     to the night's start they come on one after another by their seeds; after midnight about a
-    third go out one after another; through the dawn the rest go out as they came on.
+    third go out one after another; through the dawn the rest go out, the last to come on going
+    out first.
   - **All night:** a tavern's, a church's, a guild's and a keep's windows (`LIT_ALL_NIGHT`, from
     the piece a building's merged from: `town3d.js` `partsOf`), and the lanterns' glass.
   - **Indoors** the windows aren't lit (the insides' material leaves it out): they show the night.
@@ -2617,3 +2619,55 @@ converted data is to be measured in M8 against today's hm08 data.
     house's each its own; the buildings' shader lights them and the insides' doesn't);
     `test/daytime.test.js` (`windowsAt` through the day and night).
   - **Next:** M7e-2b, torches, braziers, lanterns and camp fires, and a small pool of real lights.
+- **2026-10-03, M7e-2b built** (day and night, §9: torches, lanterns and camp fires):
+  - **Where:** torches in iron brackets (`kits/torches.js`) either side of a keep's door, a
+    capital's keep's too, and of a gatehouse's way through, inside and out; the lanterns already
+    by taverns' and town halls' doors, marked lit; the war camps' fires. A kit pushes each onto its
+    solid's `lights` ([x, y, z, kind]), kept on the built piece's `userData.lights`; `lightsOf`
+    finds them in the world (`chunks3d.js` keeps a chunk's, `lightsNear`; `town3d.js` the town's;
+    `camps3d.js` the camps' fires).
+  - **Drawn** (`world/lights.js`): each torch's flame and every light's glow, a mesh of each for a
+    chunk's (or the town's) lights, lit as the windows are (`WINDOW_LIGHT`), fading out far off.
+  - **The flicker** (the user: "Have the torches flicker with realistic fire and have that
+    flickering correspond to the light they emit in a realistic way"): one `fireFlicker` (value
+    noise at 1.9, 5.3 and 11.7 a second, weighted 0.45, 0.35 and 0.2; each light's seed from where
+    it is) drives the flame's height, width, colour and brightness, the glow's size and colour, and
+    the light's strength, colour and height, the same sums in JavaScript and GLSL. Its hash is
+    taken round 289, since 32-bit floats hashing the whole numbers of a long-running clock drifted
+    from JavaScript's by as much as 0.59 (uncorrelated); now within 0.005 over 1,000 seconds. A
+    torch's light wanders by about 14% either side of its strength (depth 0.9), a camp fire's 12%,
+    a lantern's behind glass 4%.
+  - **Their light** (`view.js` `lightNear`): the two nearest the player within their reach, as
+    the view's two lamps (the insides' flames' already: so on every quality, with no new shader
+    variants), fading out towards their reach's edge; the rest glow. Torch 4 cd, 11 m; lantern 3,
+    9 m; camp fire 8, 14 m.
+  - **Wells** (the user: "The back side of the wells in the center of towns lose their rendering
+    when you get close to them"): two causes, both fixed. The town's height map for the cut-away
+    counted the props (a well's roof over its whole square, above the line to the camera at its
+    near edge); now it's what's built and the trees, as out in the world. And the line was walked
+    40 m whatever the camera's distance, so a tall building behind the camera counted as in the
+    way; now it stops at the camera. Then the user pointed at the round stone ring itself, "like
+    the round part of the well is chopped in half": it was three open cylinders, each one-sided
+    and facing out, so from above the far side's inside (facing the camera only from within) was
+    never drawn and the cobbles showed through. It's turned whole now (`kits/props.js`, two
+    lathes: the outside, the lip under the rim, the rim, its top and the inside down to the water,
+    each facing the way it's seen from), so every well in every town and castle is whole.
+  - **Pictures:** before/after sheets sent in the session (the well with the player behind it,
+    from three ways round;
+    the keep at midnight; four frames of a torch's flicker, the light's strength with each).
+  - **Cost:** two draws a chunk (or town) with lights, a few dozen vertices each; the two lamps
+    were already in every lit shader. Each frame, the chunks' lights round the player looked
+    through for the nearest two.
+  - **Versions:** none.
+  - **Tests:** `test/lights.test.js` (lights found where they are in the world; one mesh of
+    flames and one of glows, lit as the windows; the flicker as deep as its kind's, smooth, each
+    light its own, none by day; the GPU's 32-bit sums the same as JavaScript's over 1,000 s; the
+    two nearest lighting the lamps, out by day, none indoors, fading at their reach's edge; the
+    lamp's strength, colour and height rising and falling with its flame). `test/buildings.test.js`
+    (torches by a keep's door and a gatehouse's way through, a capital's keep's; lanterns by a
+    tavern's and a hall's doors; a well's ring whole, its far side's inside seen from all eight
+    ways round, and its top). `test/town3d.test.js` (what hides the player is what's between
+    them and the camera, nothing behind it). `e2e/pellagos.spec.js` (behind the town's well the
+    player isn't cut out; at midnight the tavern's lantern lit and drawn, by day not).
+  - **Next:** M7e-2c, braziers at the guards' posts, lanterns on poles in the bigger towns'
+    squares, and guards on night watch carrying torches; then M7e-3, night in play.
