@@ -386,6 +386,14 @@ export class Navigation {
     nearest(point, across = NEAR.across) {
         this.#cover(point[0] - across, point[1] - across, point[0] + across, point[1] + across);
 
+        return this.nearestIn(point, across);
+    }
+
+    /**
+     * The point on the mesh nearest a point, over the tiles in already (none baked for it), or
+     * null: for what's only drawn, as wayIn.
+     */
+    nearestIn(point, across = NEAR.across) {
         const found = this.query.findClosestPoint(this.#point(point), { filter: this.filter, halfExtents: { x: across, y: NEAR.up, z: across } });
 
         return found.success && found.polyRef ? [found.point.x, found.point.z, found.point.y] : null;

@@ -2396,7 +2396,9 @@ zoom out. A key in the corner shows the four icons and the fog.
   closer), the icons over the buildings they've gone into (6 metres to a pixel or closer), and
   the player, pointing the way they face (inside, at the building they're in).
 - **The pin** (the terrain plan's M7g): held still somewhere (550 ms, moving less than 8 pixels),
-  a pin's dropped there if the player's been there (one pin: a new one moves it), shown with the
+  a pin's dropped there if the player's been there (one pin: a new one moves it; under the fog
+  the map says "You haven't been there: drop a pin somewhere you've been", and the game itself
+  won't take one there, `setPin`), shown with the
   way to it from where they are, a glowing blue line; held on the pin, or its button (a pin with
   a cross, by the zoom buttons), it's taken away. It's kept with the character (save.js
   `loadPin`), not the world: each player's is their own. Out in the world (world/pin3d.js
@@ -2407,7 +2409,8 @@ zoom out. A key in the corner shows the four icons and the fog.
   a little fainter through the haze), so it's seen from anywhere, day or night; a glow on the
   ground round its foot; and a thin, half-transparent, glowing blue line along the ground from the
   player's feet the way they'd walk (a strip 0.3 m wide just over the grass's roots, light running
-  along it towards the pin), for 180 m (past that the column shows the way). Four draws.
+  along it towards the pin), only along a way that can be walked (below), for up to 180 m (past
+  that the column shows the way). Four draws.
 - **The way there** (core/journey.js `wayAcross`): found over the world plan's cells (32 m), not
   the navigation meshes (whose tiles are baked only round the players: kilometres of them would
   stall the game). Each cell's ground is worked out once a world, in about a tenth of a second
@@ -2416,10 +2419,16 @@ zoom out. A key in the corner shows the four icons and the fog.
   middle to the next climbing more than 37°; a metre along a road counts for 0.6, through a
   stream 1.6, across a ford 2.5, and a climb for more (A*, eight ways from each cell, the same
   every time). The way's then pulled straight wherever one cell can see another across ground of
-  its own kind. Across the world it takes 3 to 40 ms. Near the player its first 64 m are the
-  navigation mesh's way over the tiles there already (none baked for it: `wayIn`), so the line on
-  the ground goes round what stands in the way. It's found again as the player moves (at most
-  every 0.3 s, once they've moved a metre), and across the world again once they're 40 m off it.
+  its own kind. Across the world it takes 3 to 40 ms; it's good enough for the map, but at 32 m
+  a cell it goes straight through buildings, trees and walls. So the line on the ground is only
+  ever the navigation mesh's way (over the tiles there already, none baked for it: `wayIn`,
+  `nearestIn`), round whatever stands in the way: from the player to the point on the mesh
+  (within 6 m) nearest the way across the world 160 m along it, or failing that 120, 88, 64, 40
+  or 20 m along (to the pin itself, nearer than that); none at all until some can be found. On
+  the map, that near part, then the rest of the way across the world. It's found again as the
+  player moves (at most every 0.3 s, once they've moved a metre), every 1.5 s while it falls
+  short (as the tiles round the player come in), and across the world again once they're 40 m
+  off it.
 - **Tapped twice** (two taps within 350 ms and 18 pixels; not while picking somewhere for
   Wizard's Walk): the place is the player's destination, run to as a double tap in the world would
   (app/journey.js `Journey`): the map closes and they run (walking on once out of breath) a leg at

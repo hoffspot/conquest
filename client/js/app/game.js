@@ -47,7 +47,7 @@ import { RISING, STAGES } from "../core/war/war.js";
 import { GODS } from "../core/lore/gods.js";
 import { BECKON, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js";
 import { squaresOf } from "../core/grid.js";
-import { crossingsOf, nearestAlong, pointAlong, wayAcross, wayFrom } from "../core/journey.js";
+import { crossingsOf, lengthOf, nearestAlong, pointAlong, wayAcross, wayFrom } from "../core/journey.js";
 import { navigatorOf, releaseNavigation } from "../core/navigation.js";
 import { GROUND } from "../core/setpieces/pieces.js";
 import { CAST_FAILURES, ELEMENT_TOME_PRICE, ELEMENT_TOMES, GROWTH_XP, lookOf, SCHOOLS, SPELLS, TOMES } from "../core/spells.js";
@@ -179,10 +179,12 @@ const ARRIVE_WITHIN = 140;
 const BAKE_AHEAD = Object.freeze({ reach: 96, again: 16 });
 
 // The way to the world map's pin: found again at most this often (seconds), once the player's
-// moved this far (metres); over the navigation mesh for this far along it (metres: the rest across
-// the world's cells, core/journey.js); found across the world again once they're this far off it
-// (metres), at most this often (seconds)
-const PIN_WAY = Object.freeze({ every: 0.3, moved: 1, near: 64, astray: 40, again: 2 });
+// moved this far (metres), or (while the way over the navigation mesh is short of where it's
+// wanted: its tiles still to come) this often anyway; over the mesh for as far along it as can
+// be (metres, the furthest first: the rest across the world's cells, core/journey.js), to the
+// point on the mesh within `snap` metres of there; found across the world again once they're
+// this far off it (metres), at most this often (seconds)
+const PIN_WAY = Object.freeze({ every: 0.3, moved: 1, short: 1.5, near: Object.freeze([160, 120, 88, 64, 40, 20]), snap: 6, astray: 40, again: 2 });
 
 // How far round the player the chunks' lights are looked through for the nearest (metres: past
 // the furthest any reaches, lights.js LIGHTS)
@@ -2352,8 +2354,15 @@ export class Game {
         return { pin: this.pin ? { x: this.pin[0], z: this.pin[1] } : null, way: this.pin ? this.pinLine : null };
     }
 
-    /** Drop the pin at a point on the world map ([x, z] metres; one pin: it's moved), and keep it. */
+    /**
+     * Drop the pin at a point on the world map ([x, z] metres; one pin: it's moved), and keep it:
+     * only somewhere the player's been (not under the map's fog: the pin's left as it was).
+     */
     setPin([x, z]) {
+        if (!this.explored?.visitedAt(x, z)) {
+            return this.pinView();
+        }
+
         this.pin = [x, z];
         this.pinWay = null;
         this.pinLine = null;
@@ -2457,15 +2466,18 @@ export class Game {
 
         const at = [player.x, player.y];
         const moved = !this.pinFrom || Math.hypot(at[0] - this.pinFrom[0], at[1] - this.pinFrom[1]) >= PIN_WAY.moved;
+        const since = this.clock - (this.pinAt ?? -Infinity);
 
-        if (moved && this.clock - (this.pinAt ?? -Infinity) >= PIN_WAY.every) {
+        if ((moved && since >= PIN_WAY.every) || (this.pinShort && since >= PIN_WAY.short)) {
             this.#wayToPin(at, { drawn: true });
         }
     }
 
     // The way to the pin from a point ([x, y] metres): across the world (found again once they've
     // strayed from it), the near part of it over the navigation mesh's tiles there already (none
-    // baked for it), as a line for the world map and, `drawn`, along the ground
+    // baked for it), as a line for the world map and, `drawn`, along the ground: only the part over
+    // the mesh, a way that can be walked, round whatever stands in it (the rest, across the world's
+    // cells, is only good enough for the map)
     #wayToPin(at, { drawn = false } = {}) {
         const plan = this.world.plan;
 
@@ -2488,17 +2500,28 @@ export class Game {
             return;
         }
 
-        // (From where they are on: the near part over the mesh, if it can be found there)
+        // (From where they are on: the near part over the mesh, as far along as it can be found
+        // there, to the point on the mesh nearest the way across the world there)
         const rest = wayFrom(this.pinWay, nearestAlong(this.pinWay, at).along);
-        const join = pointAlong(rest, PIN_WAY.near);
-        const near = this.world.maps?.town?.chunkAt ? navigatorOf(this.world.maps.town).wayIn(at, join) : [];
-        const reached = near.length > 1 && Math.hypot(near.at(-1)[0] - join[0], near.at(-1)[1] - join[1]) < 2;
-        const line = reached ? [[...at], ...near.slice(1).map(([x, y]) => [x, y]), ...wayFrom(rest, PIN_WAY.near).slice(1)] : [[...at], ...rest];
+        const navigation = this.world.maps?.town?.chunkAt ? navigatorOf(this.world.maps.town) : null;
+        let near = null;
 
-        this.pinLine = line;
+        for (const reach of navigation ? PIN_WAY.near : []) {
+            const join = navigation.nearestIn(pointAlong(rest, reach), PIN_WAY.snap);
+            const found = join ? navigation.wayIn(at, join) : [];
+
+            if (found.length > 1 && Math.hypot(found.at(-1)[0] - join[0], found.at(-1)[1] - join[1]) < 1) {
+                near = { way: [[...at], ...found.slice(1).map(([x, y]) => [x, y])], reach };
+                break;
+            }
+        }
+
+        // (Short of the furthest wanted, short of the pin: found again soon, as the tiles come in)
+        this.pinShort = !near || (near.reach < PIN_WAY.near[0] && lengthOf(rest) > near.reach + 1);
+        this.pinLine = near ? [...near.way, ...wayFrom(rest, near.reach).slice(1)] : [[...at], ...rest];
 
         if (drawn) {
-            this.pinMarks?.setLine(this.#alongGround(line));
+            this.pinMarks?.setLine(near ? this.#alongGround(near.way) : null);
         }
     }
 
