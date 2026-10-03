@@ -757,7 +757,8 @@ a look of its own (`LOOKS`), which the world takes on round the player:
   sunlit motes (pollen, dust, snow), the clouds, the far trees) is as dark as the sky's light,
   from one shared value; fireflies, wisps and embers glow on.
 - **Indoors** the daylight at the windows (the sun through them, the beams of light) falls with
-  the day, none at night; the exposure is the day's.
+  the day, none at night, and the glass shows the night's sky as it goes (dark blue, faintly
+  moonlit: interiors3d.js `NIGHT_PANE`); the exposure is the day's.
 - **Lit windows** (the buildings' atlas, below: `WINDOW_LIGHT`, `daytime.js` `windowsAt`): from
   three minutes before the dusk to the night's start, the town's windows come on one after
   another; all night they're lit (some going out after midnight), and through the dawn they go
@@ -809,6 +810,12 @@ a look of its own (`LOOKS`), which the world takes on round the player:
     however many there are), nothing lit behind the wall a torch is on. Torch 4.5 candela,
     reaching 11 m; lantern 3, 9 m; brazier 6, 12 m; camp fire 8, 14 m. Torches and lanterns are
     lit at night; braziers, forges and camp fires day and night.
+  - **Against the dark** (view.js `NIGHT_FIRE`): the eye opens up at night, so firelight that's
+    lost in the day stands out after dark. Out of doors every fire's light is three times as
+    strong at night as by day and reaches a third further (a torch 15 m, a camp fire 19 m),
+    coming on as the windows do through the dusk, so a lamp's pool of light shows on the street
+    under a full moon and a camp fire lights its tent. A spell's flash is as bright as it's made
+    whatever the hour; the Light spell's globe is lit as a fire is (13.5 m at night).
   - **Lamp shadows** (QUALITY `lampShadows`): on High and Medium the first lamp (a spell's, or
     the nearest fire) casts shadows, on Low none (a 256-pixel cube map; each shadowed lamp is 5
     taps of its map in every lit pixel, so only one, as the research found phones can afford).
@@ -1765,7 +1772,8 @@ beams along the walls' tops, and the heads of windows and doors do.
 their sills and over their heads, the posts either side standing clear of them), 1.2 metres wide,
 from 0.95 to 2.3 metres up, framed in timber through the wall's thickness, with a sill, a mullion
 and leaded glass: diamonds of glass in lead, each a little different, the sky's pale light in it,
-the sun's warmer on the sunny side. The glass casts no shadow. The sun shines in through the
+the sun's warmer on the sunny side, and by night the night's dark sky (`NIGHT_PANE`). The glass
+casts no shadow. The sun shines in through the
 windows on the side with the most of them (the south's, east's, west's, north's first, if as
 many: `daylightOf`), 35 degrees up and 18 round to one side, the walls' and ceiling's shadows
 leaving only the windows' patches of it on the floor and the walls opposite, split by their

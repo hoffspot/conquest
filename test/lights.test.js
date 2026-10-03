@@ -8,7 +8,7 @@ import * as THREE from "three";
 import { WINDOW_LIGHT } from "../client/js/world/art/engine/atlas.js";
 import { fireFlames, fireMaterials, fireOf, FIRES, fireSignal, fireStrength, flameHeight, flamesMesh } from "../client/js/world/fire.js";
 import { FIRE_LIGHT, FIRE_LIGHTS, fireLit, LIGHTS, lightNow, lightsMesh, lightsOf, nearestLights, seedOf } from "../client/js/world/lights.js";
-import { View } from "../client/js/world/view.js";
+import { NIGHT_FIRE, View } from "../client/js/world/view.js";
 
 describe("the fires (world/fire.js)", () => {
     it("puffs as a fire does: about as often as its kind's rate, growing slowly and collapsing quickly, each its own", () => {
@@ -257,11 +257,38 @@ describe("the fires lighting what's round them (view.js lightNear, firelight.js)
         assert.equal(view.lamps[0].light.intensity, 0.5);
         assert.equal(FIRE_LIGHT.count.value, 0);
 
-        // (Fading out towards its reach's edge, so it's handed on unseen)
+        // (Fading out towards its reach's edge, so it's handed on unseen: by night, NIGHT_FIRE's)
         const far = { indoors: false, lamps: lamps() };
+        const [stronger, further] = [1 + NIGHT_FIRE.strength, 1 + NIGHT_FIRE.reach];
 
-        light(far, [{ x: LIGHTS.torch.reach * 1.45, y: 1, z: 0, kind: "torch" }], { x: 0, y: 1, z: 0 });
-        assert.ok(far.lamps[0].light.intensity < LIGHTS.torch.strength * 0.05);
+        light(far, [{ x: LIGHTS.torch.reach * further * 1.45, y: 1, z: 0, kind: "torch" }], { x: 0, y: 1, z: 0 });
+        assert.ok(far.lamps[0].light.intensity < LIGHTS.torch.strength * stronger * 0.05);
+        WINDOW_LIGHT.value.x = 0;
+    });
+
+    it("lights the dark more strongly and further by night than at dusk, a spell's flash as it's made whatever the hour", () => {
+        const near = { x: 0, y: 1, z: 0 };
+        const torch = [{ x: 2, y: 2, z: 0, kind: "torch" }];
+        const flash = [{ x: 2, y: 2, z: 0, kind: "spell", strength: 4, reach: 8, priority: 1 }];
+        const lamp = (lit, lights) => {
+            const view = { indoors: false, lamps: lamps() };
+
+            WINDOW_LIGHT.value.x = lit;
+            light(view, lights, near);
+
+            return view.lamps[0].light;
+        };
+
+        const [dusk, night] = [lamp(0.5, torch), lamp(1, torch)];
+
+        assert.ok(night.intensity > dusk.intensity * 1.3, `${night.intensity} against ${dusk.intensity}`);
+        assert.ok(Math.abs(night.distance - LIGHTS.torch.reach * (1 + NIGHT_FIRE.reach)) < 1e-6);
+        assert.ok(night.distance > dusk.distance);
+
+        const [flashDusk, flashNight] = [lamp(0.5, flash), lamp(1, flash)];
+
+        assert.equal(flashNight.distance, flashDusk.distance);
+        assert.equal(flashNight.distance, 8);
         WINDOW_LIGHT.value.x = 0;
     });
 

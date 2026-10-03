@@ -242,13 +242,16 @@ if (cutCeiling > 0.5) {
 }
 
 // A window's leaded panes: small diamonds of glass (each a little different, as old glass is),
-// in lead (texture coordinates are art pixels: five to a metre)
+// in lead (texture coordinates are art pixels: five to a metre); the day's sky in them, or the
+// sun's on the sunny side, going over to the night's (NIGHT_PANE) as the daylight goes
+// (INTERIOR_GLOW.daylight)
 function leadedShader(shader) {
+    shader.uniforms.paneDaylight = INTERIOR_GLOW.daylight;
     shader.vertexShader = shader.vertexShader
         .replace("#include <common>", "#include <common>\nvarying vec2 vLeaded;")
         .replace("#include <uv_vertex>", "#include <uv_vertex>\nvLeaded = uv;");
     shader.fragmentShader = shader.fragmentShader
-        .replace("#include <common>", "#include <common>\nvarying vec2 vLeaded;")
+        .replace("#include <common>", "#include <common>\nvarying vec2 vLeaded;\nuniform float paneDaylight;")
         .replace(
             "#include <color_fragment>",
             `#include <color_fragment>
@@ -259,7 +262,10 @@ function leadedShader(shader) {
     float lead = smoothstep(0.42, 0.47, max(within.x, within.y));
     float tint = fract(sin(dot(cell, vec2(12.9898, 78.233))) * 43758.5453);
 
-    diffuseColor.rgb = mix(diffuseColor.rgb * (0.86 + 0.2 * tint), vec3(0.09, 0.08, 0.07), lead);
+    // (The night's sky in them as the daylight goes, faintly moonlit: NIGHT_PANE)
+    vec3 sky = mix(vec3(${NIGHT_PANE.map((v) => v.toFixed(3)).join(", ")}), diffuseColor.rgb, paneDaylight);
+
+    diffuseColor.rgb = mix(sky * (0.86 + 0.2 * tint), vec3(0.09, 0.08, 0.07), lead);
 }`,
         );
 }
@@ -359,6 +365,9 @@ function candleFlames(candles) {
 }
 
 // --- Glows and beams of daylight ---
+
+/** What's seen through a window from inside by night (linear colour): the dark sky, faintly moonlit. */
+export const NIGHT_PANE = Object.freeze([0.05, 0.07, 0.12]);
 
 /**
  * What the glows round the flames and the beams of daylight are drawn by, shared by every

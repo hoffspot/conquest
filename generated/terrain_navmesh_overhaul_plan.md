@@ -2931,3 +2931,37 @@ converted data is to be measured in M8 against today's hm08 data.
   - **M7e done:** the day and night, the lit windows, the fires and their light, the lamps and
     braziers, the guards' torches, sight at night, the night's creatures, passing the time and
     the Light spell. **Next:** M7f, the light looked over.
+- **2026-10-03, M7f built: the light looked over** (§9 *The light looked over*; docs/GAME.md
+  *Against the dark*).
+  - **The tour:** the start town, a village, a castle, the standing stones, a shrine, the ruined
+    castle, the woods, the mountains and the coast, each at sunrise, noon, dusk, a full moon's
+    night and a new moon's, from the follow camera; and the tavern's two floors at noon and
+    midnight.
+  - **Found and fixed: firelight lost in the dark.** Measured where a town's lamps and a
+    shrine's braziers stand (the ground's brightness a metre from the flame, with the lamp and
+    without): under a full moon the town's lamps added almost nothing to the moonlit street, the
+    braziers a faint smudge. Out of doors every fire's light is now three times as strong at
+    night and reaches a third further (view.js `NIGHT_FIRE`, by the windows' light, so it comes
+    on through the dusk), its fading towards its reach's edge going with it; a spell's flash is
+    as bright as it's made whatever the hour. The Light spell's globe retuned to match (1.9,
+    10 m by day; 5.7, 13.5 m by night). No more cost: the same lights, multiplied.
+  - **Found and fixed: daylight in the windows at midnight.** Inside, the leaded glass showed
+    the day's pale sky (and the sun's on the sunny side) all night. It goes over to the night's
+    sky as the daylight goes (interiors3d.js `NIGHT_PANE`, from the same `INTERIOR_GLOW.daylight`
+    as the beams).
+  - **Looked at and right:** the sun's and moon's shadows (a full moon at midnight stands where
+    the noon sun does, and casts as it does), none cast by the sky's light alone; the far land
+    and the near agreeing at the hand-over at every hour; the ruins dark at night but for the
+    moon; the coast's water taking the sky's colour.
+  - **Seen, left for later:** lit windows light no ground in front of them (each would be a
+    light: a cheap glow on the ground under each would do, in M7j's weathering pass or after);
+    the village tower's round window glows as a flat disc; the shrine's statue dithers as it
+    fades out of the way of the camera (the fade, not the light).
+  - **Pictures:** a town's street, a shrine and a guard post at dusk, under a full moon and a new
+    moon, before and after; a camp fire at night and Light at midnight, before and after; the
+    tavern's two floors at midnight, before and after; sent in the session.
+  - **Tests:** test/lights.test.js (a fire's light fading towards its reach's edge, by night's
+    reach; stronger and further by night than at dusk, a spell's flash the same whatever the
+    hour); test/buildings.test.js (the insides' windows: the day's sky in them, the night's as the
+    daylight goes).
+  - **Next:** M7g, pins on the world map.
