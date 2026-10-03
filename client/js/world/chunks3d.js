@@ -29,6 +29,8 @@ import { holdSign, isSign, letGoSign, releaseSign } from "./art/kits/signs.js";
 import { Woodland } from "./art/kits/trees.js";
 import { featureLooks, featureMesh, Growth, Mesher, sowing, TILE, undergrowthLooks, undergrowthMesh } from "./art/kits/wilds.js";
 import { cliffMesh, cliffsInto } from "./art/kits/cliffs.js";
+import { archMesh } from "./art/kits/arches.js";
+import { ARCHES } from "../core/arches.js";
 import { hedgeBuilding, hedgeMesh, hedgeRuns } from "./art/kits/hedges.js";
 import { stepsMesh, stonesOf } from "./art/kits/steps.js";
 import { disposeChunkGround, disposeGrass, groundMaterial, landColours, layingGround, respaceGround } from "./ground.js";
@@ -132,7 +134,8 @@ export class Chunks {
         // pieces, index, group, waiting, trees, built, parts }), buildings (once they're built,
         // merged) and far (whether they're drawn as from far off: #detail), growth (its
         // undergrowth while it's being grown: its steps), undergrowth (its meshes), cliffs (its
-        // cliffs' mesh, if it has any: setCliffs) }; the steps
+        // cliffs' mesh, if it has any: setCliffs), arches (its arches of rock's mesh, if it has
+        // any) }; the steps
         // of the one being drawn; those whose
         // buildings are being built, in turn; and those whose undergrowth is being grown
         this.drawn = new Map();
@@ -680,7 +683,7 @@ export class Chunks {
         const chunk = this.overworld.chunk(cx, cy);
         const object = new THREE.Group();
         const heights = new Float32Array(CHUNK * CHUNK);
-        const drawn = { cx, cy, object, lot: null, heights, drawing: true, job: null, growth: null, undergrowth: null, cliffs: null };
+        const drawn = { cx, cy, object, lot: null, heights, drawing: true, job: null, growth: null, undergrowth: null, cliffs: null, arches: null };
         // (How high what stands on it does, over the squares it stands on: [{ min, max ([x, y]), top }])
         const standing = (boxes) => {
             for (const { min, max, top } of boxes) {
@@ -741,11 +744,28 @@ export class Chunks {
             }
         }
 
-        // The land's own features (their looks made first, a step each), and how high they stand
-        if (chunk.features.length) {
-            yield* featureLooks(chunk.features, landAt);
+        // Its arches of rock (core/arches.js, kits/arches.js), at every quality: their legs are in
+        // the way whether they're drawn or not; and how high they stand over their legs' squares
+        const arches = chunk.features.filter(({ kind }) => kind === "arch");
 
-            const wild = featureMesh(chunk.features, landAt, [chunk.x0, chunk.y0], this.groundAt);
+        if (arches.length) {
+            drawn.arches = archMesh(arches.map(({ arch }) => arch), this.groundAt, [chunk.x0, chunk.y0]);
+            object.add(drawn.arches);
+            standing(arches.flatMap(({ x, y, size, height, turn }) => [-1, 1].map((side) => {
+                const [fx, fy] = [x + Math.cos(turn) * size * side, y + Math.sin(turn) * size * side];
+
+                return { min: [fx - ARCHES.leg, fy - ARCHES.leg], max: [fx + ARCHES.leg, fy + ARCHES.leg], top: this.groundAt(fx, fy) + height + 2 };
+            })));
+            yield;
+        }
+
+        // The land's own features (their looks made first, a step each), and how high they stand
+        const features = chunk.features.filter(({ kind }) => kind !== "arch");
+
+        if (features.length) {
+            yield* featureLooks(features, landAt);
+
+            const wild = featureMesh(features, landAt, [chunk.x0, chunk.y0], this.groundAt);
 
             object.add(wild.mesh);
             standing(wild.boxes);

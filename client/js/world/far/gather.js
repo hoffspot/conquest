@@ -7,15 +7,18 @@ import { layoutTown } from "../../core/setpieces/town.js";
 import { squareOf, waysOut } from "../../core/settlements.js";
 import { restingOf, siteSize } from "../../core/sites.js";
 import { heightAt } from "../../core/terrain/height.js";
-import { settlementShapes, Shapes, siteShapes } from "./shapes.js";
+import { archesOf } from "../../core/arches.js";
+import { archShapes, settlementShapes, Shapes, siteShapes } from "./shapes.js";
 
 /**
  * How far off each kind of settlement is seen (metres: its middle from the player; capitals and
- * cities as far as the far land reaches), and from how far only its bigger buildings are.
+ * cities as far as the far land reaches), from how far only its bigger buildings are, and how far
+ * off an arch of rock is seen.
  */
 export const SILHOUETTES = Object.freeze({
     reach: { capital: Infinity, city: Infinity, town: 2000, village: 1200, hamlet: 700, farmstead: 600 },
     big: 900,
+    arches: 2000,
 });
 
 /**
@@ -64,6 +67,13 @@ export function gatherSilhouettes(plan, { x, z, reach, settled = new Map(), layo
         }
 
         siteShapes(shapes, { kind: site.kind, people: site.race, seed: site.seed, form: restingOf(plan, site).form, x: spot.x, z: spot.y, facing: spot.facing, w: size[0] ?? size.w, h: size[1] ?? size.h, heightOf });
+    }
+
+    // (And the arches of rock: core/arches.js)
+    for (const arch of archesOf(plan)) {
+        if (Math.hypot(arch.x - x, arch.y - z) <= Math.min(reach, SILHOUETTES.arches)) {
+            archShapes(shapes, arch, heightOf);
+        }
     }
 
     return { shapes, done };

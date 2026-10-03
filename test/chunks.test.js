@@ -138,6 +138,28 @@ describe("the world outside, drawn round the player (chunks3d.js)", () => {
         assert.deepEqual([QUALITY.low.cliffs, QUALITY.medium.cliffs, QUALITY.high.cliffs], [0, 1, 1]);
     });
 
+    it("draws an arch of rock where one stands at every quality (its legs are in the way whether it's drawn or not), not among the land's features", () => {
+        const [arch] = world.maps.town.arches;
+        const chunks = new Chunks(world, { undergrowth: 0, cliffs: 0 });
+
+        chunks.fill(arch.x, arch.y, 0);
+
+        const [drawn] = chunks.drawn.values();
+
+        assert.ok(drawn.arches?.visible && drawn.arches.parent === drawn.object);
+        assert.equal(drawn.arches.material.name, "cliffs");
+        assert.ok(drawn.arches.geometry.getAttribute("position").count > 1000);
+        chunks.setCliffs(1);
+        chunks.setCliffs(0);
+        assert.ok(drawn.arches.visible, "not hidden with the cliffs");
+
+        // (The land's features drawn as before, without it)
+        const wilds = drawn.object.children.find(({ name }) => name === "wilds");
+
+        assert.ok(!wilds || wilds.geometry.getAttribute("position").count < 200000);
+        chunks.dispose();
+    });
+
     it("builds a settlement's buildings a piece at a time, each made ready to merge in a step of its own, on the ground, merged the same as all at once", async () => {
         const chunks = new Chunks(world, { undergrowth: 0 });
         const place = world.maps.town.settlements.places.find(({ kind, id }) => kind === "village" && id !== world.start.id);
