@@ -3199,3 +3199,57 @@ converted data is to be measured in M8 against today's hm08 data.
     the start town, the road's stone bridge drawn and walked over on its cobbles, as high as its
     deck on the way).
   - **Next:** M7i-3, broken aqueducts; then M7i-4, hill citadels.
+- **2026-10-03, M7i-3 built: broken aqueducts** (§9 row 7; §9's humans: "ruined villages; hill
+  citadels; broken aqueducts"; docs/WORLD.md *Broken aqueducts*, GAME.md *Broken aqueducts*).
+  - **Where** (core/aqueducts.js `aqueductsOf`): one to three in each stretch of the humans' land
+    (one for 1,000 cells, one more for each 3,000 past that), each a straight row of 9 to 15 piers
+    7.5 to 10 m apart across the deepest dip of six headings from a cell, every pier on the humans'
+    land, off roads and water, 80 m from the settlements, places and sites; 900 m apart, 80 m
+    from the arches of rock; its channel 8 to 14 m over the highest ground under it. Seed 1 has 2;
+    seeds 2, 3 and 7 have 1, 3 and 3 (30 to 100 ms a world).
+  - **Broken** (`fatesOf`): a stretch of 40 to 65% of its piers kept whole, never its ends, its
+    arches standing (bar one, three times in ten); beyond it piers fallen (likelier at its ends),
+    broken to stumps, or whole, an arch between two whole ones there one time in two; a pier
+    across a chunk's edge fallen. A standing pier takes its squares (blocked, opaque); under its
+    arches and over a fallen one's rubble is open. Each pier a chunk feature (`kind: "aqueduct"`,
+    `standing`). `NET_VERSION` 28.
+  - **Built** (world/art/kits/aqueducts.js): piers of old pale stone with imposts; half-circle
+    arches ringed with voussoirs, a keystone at each crown; the channel over them (floor, two
+    walls, cover slabs flush with their tops, some gone); where its piers stand over 14 m, a lower
+    row of arches, a string course and the lower row's deck; broken tops jagged with ivy hanging
+    from them; stubs of fallen arches; rubble where arches and piers fell. About 3,000 triangles
+    an aqueduct, a pier a step as its chunk's drawn, merged with the atlas (a draw or two a chunk,
+    one more for ivy). From afar a box a standing pier and an arch (far/shapes.js); on the minimap,
+    piers as blocks, the channel as a line, rubble as smudges.
+  - **On the way:** fates drawn pier by pier left some with no arch standing at all (seed 2's):
+    made a kept stretch, decay beyond it. The first fates came from `hashOf` with consecutive
+    inputs, which are correlated (every span fell): drawn from `createRandom` instead. The human
+    lowlands are flat, so piers were low: the channel set 8 to 14 m over the highest ground. The
+    channel's cover slabs stood up like battlements: laid flush. The lower row's deck, dressed
+    stone greened on top, read as water from above: the piers' stone, the string course two bands.
+    A fallen pier left nothing: now a feature of its own (no squares) with its heap of rubble.
+  - **The ground's repeats** (the user, with a photo by an aqueduct: "In this picture the ground
+    textures look really repetitive"): the grass's picture (a copy every 5 m) has a darker blob
+    and band, and past the tall grass, where the ground takes the grass's look with its light and
+    shade made stronger, they showed as a checkerboard of 5 m squares and stripes along the world's
+    lines. Now read without its repeats showing (world/ground.js `UNREPEATED`, after Inigo Quilez's
+    "texture repetition", technique 3): two copies, each shifted and every other turned on its
+    side as a broad noise has it, blended, `textureGrad` from where they're read so there's no
+    seam: one more texture read a ground pixel. The broad noise (the patches', 61 m a copy, turned
+    off the world's lines) also shades the ground (it was the grass's picture again, 37 m a copy,
+    hardly varying) and wanders the lands' edges (they hardly wandered). Pictures before and after
+    on medium and low, sent in the session.
+  - **Main's CI after M7i-2:** the e2e test that taps and double-clicks the ground timed out at
+    120 s on main twice (it passed on M7i-2's own run). Not hung: pinned to two cores it takes
+    two minutes (a minute loading, a minute of clicks while the game plays on, every frame drawn
+    in software), the stone bridges drawn round the start adding a little; given 180 s, as the
+    other tests that long are.
+  - **Pictures:** seed 1's two aqueducts from beside, close and along, sent in the session.
+  - **Tests:** test/aqueducts.test.js (placement, determinism, on the humans' land clear of roads,
+    water, places and arches; a kept stretch, broken and fallen piers, arches only between whole
+    piers; standing piers' squares blocked and opaque, open between piers and over rubble; drawn
+    up to the channel's walls in a few thousand triangles, two rows where tall, stubs and rubble,
+    ivy; from afar); test/far.test.js (the grass read without its repeats); test/wilds.test.js
+    (the land's own features checked without the aqueducts' piers, as without the arches); e2e
+    (seed 1's aqueduct drawn, its pier in the way, walked under through one of its arches).
+  - **Next:** M7i-4, hill citadels.

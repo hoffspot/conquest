@@ -171,9 +171,16 @@ int cropAt(vec2 at, bool baulks, bool hedges) {
 // How far the ground carries on past the map's edges (metres): into the fog
 const BEYOND = 110;
 
-// A much larger copy of the grass texture shades everything a little lighter or darker, so the
-// repeats don't show from afar
-const VARIATION_METRES = 37;
+/**
+ * The grass's picture tiles every few metres: read without its repeats showing (after Inigo
+ * Quilez's "texture repetition", technique 3) twice over, each copy shifted (every other one
+ * turned on its side) as a smooth noise has it, and blended between, so no two copies line up;
+ * the noise (the patches', turned off the world's lines) `metres` a copy, its value read across
+ * `copies` shifts. And that noise shades everything a little lighter or darker (`shade`: how much
+ * the ground's brightness wanders either way, as a share of the noise's), and wanders the lands'
+ * edges.
+ */
+export const UNREPEATED = Object.freeze({ metres: 61, copies: 8, shade: 0.5 });
 
 // Near what stands on the ground (a house, a wall, a rock, a trunk: the squares that can't be
 // seen through), less of the sky reaches it, so the ground's darker there, the more so the more
@@ -725,6 +732,24 @@ export function groundMaterial({ splat = null, area = [0, 0, 1, 1], land = null,
     const reads = `vec4 tileAt(float tile, vec2 at) {
     return texture(groundTiles, vec3(at, tile));
 }
+// (The grass's picture, the copy numbered \`copy\`: shifted, every other one turned on its side; its
+// mip level from where it's read, not the shift, so there's no seam where the shift changes)
+vec3 grassCopy(vec2 at, vec2 dx, vec2 dy, float copy) {
+    vec2 shift = sin(vec2(3.0, 7.0) * copy);
+    bool turned = mod(copy, 2.0) > 0.5;
+
+    return textureGrad(groundTiles, vec3((turned ? at.yx : at) + shift, ${tile(TILE.grass)}), turned ? dx.yx : dx, turned ? dy.yx : dy).rgb;
+}
+// The grass's picture without its repeats showing (UNREPEATED): two copies, as \`pick\` (a smooth
+// noise, 0 to 1) has them, blended (\`dx\`, \`dy\`: how \`at\` changes from pixel to pixel)
+vec3 grassUnrepeated(vec2 at, float pick, vec2 dx, vec2 dy) {
+    float l = pick * ${UNREPEATED.copies.toFixed(1)};
+    float copy = floor(l);
+    vec3 a = grassCopy(at, dx, dy, copy);
+    vec3 b = grassCopy(at, dx, dy, copy + 1.0);
+
+    return mix(a, b, smoothstep(0.2, 0.8, fract(l) - 0.1 * dot(a - b, vec3(1.0))));
+}
 vec3 tileMean(float tile) {
     return textureLod(groundTiles, vec3(0.5, 0.5, tile), 12.0).rgb;
 }
@@ -975,12 +1000,17 @@ ground = mix(ground, stillWater(ground * ${(1 - WET.darker).toFixed(2)}, vFarWat
 #else
 vec4 splat = texture2D(splatMap, (vGround - splatArea.xy) / splatArea.zw);
 groundContact = texture2D(contactMap, (vGround - contactArea.xy) / contactArea.zw).r;
-float variation = tileAt(${tile(TILE.grass)}, vGround / ${VARIATION_METRES.toFixed(1)}).g;
-vec3 grass = tileAt(${tile(TILE.grass)}, vGround / grassSize).rgb;
+// (A broad noise, turned off the world's lines (UNREPEATED): the ground lighter and darker with it
+// (about as light as the grass's picture on the whole), the grass's copies shifted by it, the
+// lands' edges wandering with it)
+vec4 broad = texture2D(patchMap, mat2(0.8, -0.6, 0.6, 0.8) * vGround / ${UNREPEATED.metres.toFixed(1)} + vec2(0.13, 0.57));
+float variation = ${meanVariation.toFixed(4)} + (broad.a - 0.5) * ${UNREPEATED.shade.toFixed(2)};
+vec2 grassAt = vGround / grassSize;
+vec3 grass = grassUnrepeated(grassAt, broad.g, dFdx(grassAt), dFdy(grassAt));
 float grassDetail = dot(grass, vec3(0.2126, 0.7152, 0.0722)) / ${brightness.toFixed(4)};
 
 // The land's colour, its edges wandering (the cells it's read from are ${LAND_WANDER} metres or so)
-vec2 landAt = (vGround + (vec2(variation, tileAt(${tile(TILE.grass)}, vGround / 53.0).r) - 0.5) * ${LAND_WANDER.toFixed(1)}) / landSize;
+vec2 landAt = (vGround + (broad.rb - 0.5) * ${LAND_WANDER.toFixed(1)}) / landSize;
 vec4 land = landColourAt(landAt);
 grass = mix(grass, land.rgb * dot(grass, vec3(0.2126, 0.7152, 0.0722)) / ${brightness.toFixed(4)}, land.a);
 

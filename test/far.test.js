@@ -10,7 +10,7 @@ import { distantHeights, landHeight, stillLevelAt } from "../client/js/core/terr
 import { FarLand } from "../client/js/world/far/far.js";
 import { FAR, FAR_LEVELS, farReach, middleOf, reachOf, sampleLevel, spacingOf, splitAlong } from "../client/js/world/far/levels.js";
 import { FADE, FAR_FOG, farHaze, hazeAt } from "../client/js/world/fog.js";
-import { groundMaterial } from "../client/js/world/ground.js";
+import { groundMaterial, UNREPEATED } from "../client/js/world/ground.js";
 import { primingWater, STILL_WATER } from "../client/js/world/water.js";
 import { QUALITY } from "../client/js/world/view.js";
 
@@ -142,6 +142,32 @@ describe("the far land (world/far)", () => {
         // (Far from water, as far below as it's shown; the open sea, as deep as it's shown)
         assert.deepEqual([...distantHeights(plan, 2928, 5072, 1, 1).depth], [-4]);
         assert.deepEqual([...distantHeights(plan, -2000, -2000, 2, 64).depth], [4, 4, 4, 4]);
+    });
+
+    it("reads the grass's picture near without its repeats showing: two copies shifted and turned by a broad noise, blended", () => {
+        const material = groundMaterial();
+        const shader = { uniforms: {}, vertexShader: THREE.ShaderLib.lambert.vertexShader, fragmentShader: THREE.ShaderLib.lambert.fragmentShader };
+
+        material.onBeforeCompile(shader);
+
+        // (Read through grassUnrepeated, its derivatives from where it's read (no seam where the
+        // shift changes), worked out in the fragment shader alone: there are none in the vertex's)
+        assert.ok(shader.fragmentShader.includes("grassUnrepeated(grassAt, broad.g, dFdx(grassAt), dFdy(grassAt))"));
+        assert.ok(shader.fragmentShader.includes("textureGrad(groundTiles"));
+        assert.ok(!shader.fragmentShader.includes("vGround / grassSize).rgb"), "(no plain read of it left)");
+        assert.ok(!/dF(dx|dy)\(/.test(shader.vertexShader));
+        // (The broad noise turned off the world's lines)
+        assert.ok(shader.fragmentShader.includes(`mat2(0.8, -0.6, 0.6, 0.8) * vGround / ${UNREPEATED.metres.toFixed(1)}`));
+        material.dispose();
+
+        // (Each copy shifted its own way: no two next to each other alike)
+        const shift = (copy) => [Math.sin(3 * copy), Math.sin(7 * copy)].map((v) => v - Math.floor(v));
+
+        for (let copy = 0; copy < UNREPEATED.copies; copy++) {
+            const [a, b] = [shift(copy), shift(copy + 1)];
+
+            assert.ok(Math.max(...a.map((v, k) => Math.min(Math.abs(v - b[k]), 1 - Math.abs(v - b[k])))) > 0.1, `copies ${copy} and ${copy + 1}`);
+        }
     });
 
     it("draws its still water as the water nearer looks where they meet, and the water nearer goes on to meet it", () => {

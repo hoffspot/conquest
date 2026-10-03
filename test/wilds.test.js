@@ -88,8 +88,9 @@ describe("the land's features (core/wilds.js)", () => {
             assert.ok(chunk.features.length - stones <= 16, `${chunk.features.length - stones} in chunk ${chunk.cx}, ${chunk.cy}`);
             assert.ok(stones <= boulders * CLUSTER.stones[1], `${stones} stones by ${boulders} boulders`);
 
-            // (Not the arches of rock: arches.js's, test/arches.test.js)
-            for (const feature of chunk.features.filter(({ kind }) => kind !== "arch")) {
+            // (Not the arches of rock nor the aqueducts' piers: arches.js's and aqueducts.js's,
+            // test/arches.test.js and test/aqueducts.test.js)
+            for (const feature of chunk.features.filter(({ kind }) => kind !== "arch" && kind !== "aqueduct")) {
                 const land = overworld.biomeAt(Math.floor(feature.x), Math.floor(feature.y));
 
                 // (A land's own kinds, or its people's where it's their homeland)
@@ -188,8 +189,9 @@ describe("the land's features (core/wilds.js)", () => {
 
     it("take their squares, hide what's behind them if tall, and keep clear of roads, water, the town and the settlements", () => {
         for (const chunk of chunks) {
-            // (Not the arches of rock: arches.js's, test/arches.test.js)
-            for (const feature of chunk.features.filter(({ kind }) => kind !== "arch")) {
+            // (Not the arches of rock nor the aqueducts' piers: arches.js's and aqueducts.js's,
+            // test/arches.test.js and test/aqueducts.test.js)
+            for (const feature of chunk.features.filter(({ kind }) => kind !== "arch" && kind !== "aqueduct")) {
                 const spec = FEATURES[feature.kind];
 
                 assert.ok(feature.size >= spec.size[0] - 1e-9 && feature.size <= spec.size[1] + 1e-9, feature.kind);

@@ -5,6 +5,7 @@
 // Each piece in its people's colours; flat-shaded; a few dozen triangles. Pure: worked out in a
 // worker (silhouette-worker.js), into arrays a mesh is made from (silhouettes.js).
 
+import { AQUEDUCTS } from "../../core/aqueducts.js";
 import { ARCHES, feetOf, legsOf } from "../../core/arches.js";
 import { createRandom } from "../../core/random.js";
 import { layoutNeutral } from "../../core/setpieces/neutral.js";
@@ -54,6 +55,34 @@ export function archShapes(shapes, arch, heightOf) {
     }
 
     shapes.box(arch.x, arch.y, top, arch.span + thick, thick, band, facing, colour);
+}
+
+/** An aqueduct's stone from afar (sRGB: engine/painters.js MATERIALS' stone-lime-old, a little lighter for the haze). */
+export const AQUEDUCT_STONE = 0xb0ab8e;
+
+/**
+ * An aqueduct (core/aqueducts.js's) as seen from afar: a box for each pier that stands (to its
+ * height), and for each arch that does, the masonry and channel over it (to its channel's walls'
+ * tops). `heightOf(x, z)` is the ground's height.
+ */
+export function aqueductShapes(shapes, aqueduct, heightOf) {
+    const [ux, uy] = [Math.cos(aqueduct.turn), Math.sin(aqueduct.turn)];
+    const facing = -aqueduct.turn;
+    const [along, across] = AQUEDUCTS.pier;
+
+    for (const [n, pier] of aqueduct.piers.entries()) {
+        if (pier.state !== "fallen") {
+            const ground = heightOf(pier.x, pier.y);
+
+            shapes.box(pier.x, pier.y, ground - SUNK, along, across, pier.ground + pier.height - ground + SUNK, facing, AQUEDUCT_STONE);
+        }
+
+        if (aqueduct.spans[n]) {
+            const [mx, my] = [pier.x + (ux * aqueduct.spacing) / 2, pier.y + (uy * aqueduct.spacing) / 2];
+
+            shapes.box(mx, my, aqueduct.top - 1.6, aqueduct.spacing - along, across, 2.5, facing, AQUEDUCT_STONE);
+        }
+    }
 }
 
 // (A people's builders, the humans' for any not listed: the plan writes the dark elves both ways)

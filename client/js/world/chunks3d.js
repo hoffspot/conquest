@@ -30,6 +30,7 @@ import { Woodland } from "./art/kits/trees.js";
 import { featureLooks, featureMesh, Growth, Mesher, sowing, TILE, UNDERGROWTH as LANDS_UNDERGROWTH, undergrowthLooks, undergrowthMesh } from "./art/kits/wilds.js";
 import { cliffMesh, cliffsInto } from "./art/kits/cliffs.js";
 import { archMaking } from "./art/kits/arches.js";
+import { aqueductMaking } from "./art/kits/aqueducts.js";
 import { bridgeGrowth, stoneBridgeMaking } from "./art/kits/bridges.js";
 import { ARCHES, legsOf } from "../core/arches.js";
 import { hedgeBuilding, hedgeMesh, hedgeRuns } from "./art/kits/hedges.js";
@@ -779,8 +780,26 @@ export class Chunks {
             yield;
         }
 
+        // Its aqueducts' piers and the arches from them (core/aqueducts.js, kits/aqueducts.js), at
+        // every quality, as the arches of rock; and how high they stand
+        const piers = chunk.features.filter(({ kind }) => kind === "aqueduct");
+
+        if (piers.length) {
+            // (Whether a pier stands: its chunk's feature has it so)
+            const stands = (aqueduct, n) => {
+                const { x, y } = aqueduct.piers[n];
+
+                return this.overworld.chunkAt(Math.floor(x), Math.floor(y))?.features.some((feature) => feature.aqueduct === aqueduct && feature.pier === n && feature.standing) ?? false;
+            };
+
+            drawn.aqueducts = yield* aqueductMaking(piers, { groundAt: this.groundAt, standing: stands });
+            object.add(drawn.aqueducts);
+            standing(piers.map(({ x, y, aqueduct, pier: n, standing: up }) => ({ min: [x - 3, y - 3], max: [x + 3, y + 3], top: up ? aqueduct.top + 1.2 : aqueduct.piers[n].ground + 1.5 })));
+            yield;
+        }
+
         // The land's own features (their looks made first, a step each), and how high they stand
-        const features = chunk.features.filter(({ kind }) => kind !== "arch");
+        const features = chunk.features.filter(({ kind }) => kind !== "arch" && kind !== "aqueduct");
 
         if (features.length) {
             yield* featureLooks(features, landAt);
