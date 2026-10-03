@@ -7,7 +7,7 @@ import { describe, it } from "node:test";
 import * as THREE from "three";
 import { DAY, dayOf, daylight, elapsedOf, MOON_DAYS, moonPhase, timeOfDay } from "../client/js/core/daytime.js";
 import { TURN_MS } from "../client/js/core/war/war.js";
-import { MOONLIGHT, moonLit, SKY_GLOW, SKY_TIMES, skyAt, SUN_PATH, sunTowards } from "../client/js/world/daytime.js";
+import { MOONLIGHT, moonLit, SKY_GLOW, SKY_TIMES, skyAt, SUN_PATH, sunTowards, windowsAt } from "../client/js/world/daytime.js";
 import { MOON, Sky, STARS } from "../client/js/world/sky.js";
 import { smokeMaterial } from "../client/js/world/smoke.js";
 import { MOTES, Motes } from "../client/js/world/motes.js";
@@ -177,6 +177,36 @@ describe("the day as it's seen (world/daytime.js)", () => {
             assert.ok(sky.horizon.every((each, c) => Math.abs(each - before.horizon[c]) < 0.12), `${time / MINUTE}`);
             before = sky;
         }
+    });
+});
+
+describe("the windows lit through the evening (world/daytime.js windowsAt)", () => {
+    it("lights them from a little before the dusk to the night's start, all night, and out through the dawn; and says how late it is", () => {
+        assert.deepEqual(windowsAt(30 * MINUTE), [0, 0], "noon");
+        assert.deepEqual(windowsAt(DAY.dusk - 4 * MINUTE), [0, 0]);
+        assert.deepEqual(windowsAt(DAY.night), [1, 0], "the night's start");
+        assert.deepEqual(windowsAt(DAY.dawn), [1, 1], "the night's end");
+        assert.deepEqual(windowsAt(DAY.day), [0, 0], "the day's start");
+
+        const [evening] = windowsAt(DAY.dusk);
+        const [morning, late] = windowsAt((DAY.dawn + DAY.day) / 2);
+
+        assert.ok(evening > 0.2 && evening < 0.5, "coming on through the dusk");
+        assert.deepEqual([morning, late], [0.5, 1], "going out through the dawn");
+
+        // (Through the night, later and later; round midnight, halfway or so)
+        let before = -1;
+
+        for (let time = DAY.night; time < DAY.length + DAY.dawn; time += MINUTE) {
+            const [lit, later] = windowsAt(time % DAY.length);
+
+            assert.equal(lit, 1);
+            assert.ok(later > before, `${time / MINUTE}`);
+            before = later;
+        }
+
+        assert.ok(Math.abs(windowsAt(0)[1] - 0.5) < 0.05);
+        assert.deepEqual(skyAt(0, 0.5, LAND).windows, windowsAt(0));
     });
 });
 

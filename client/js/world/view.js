@@ -16,6 +16,7 @@
 import * as THREE from "three";
 import { daylight } from "../core/daytime.js";
 import { SKY_GLOW, skyAt } from "./daytime.js";
+import { WINDOW_LIGHT } from "./art/engine/atlas.js";
 import { bakeEnvironments, SkyLight } from "./environment.js";
 import { FAR, FAR_LEVELS, farReach } from "./far/levels.js";
 import { farHaze, GRADE, MIST } from "./fog.js";
@@ -412,6 +413,7 @@ export class View {
         SKY_GLOW.value.setRGB(...(sky?.glow ?? WHITE));
         this.renderer.toneMappingExposure = EXPOSURE * (sky?.exposure ?? 1);
         this.sun.shadow.intensity = sky?.shadows ?? 1;
+        [WINDOW_LIGHT.value.x, WINDOW_LIGHT.value.y] = sky?.windows ?? [0, 0];
 
         const [mist, grade] = [look.mist, sky?.grade ?? look.grade];
 
@@ -1032,6 +1034,7 @@ export class View {
         if (scene === this.scene) {
             this.#cutAway(dt);
             this.sky.update(camera, now / 1000);
+            WINDOW_LIGHT.value.z = (now / 1000) % 1000;
             this.#updateShown();
         }
 

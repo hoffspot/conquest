@@ -754,6 +754,10 @@ a look of its own (`LOOKS`), which the world takes on round the player:
   from one shared value; fireflies, wisps and embers glow on.
 - **Indoors** the daylight at the windows (the sun through them, the beams of light) falls with
   the day, none at night; the exposure is the day's.
+- **Lit windows** (the buildings' atlas, below: `WINDOW_LIGHT`, `daytime.js` `windowsAt`): from
+  three minutes before the dusk to the night's start, the town's windows come on one after
+  another; all night they're lit (some going out after midnight), and through the dawn they go
+  out.
 - **Not by time:** the pack's paperdoll is lit as on a fair day whatever the hour. With no world
   (the labs) the sun stands where it always did.
 
@@ -1901,6 +1905,15 @@ mostly at a glancing look. What's painted, dyed or woven in gold or silver has a
 own that doesn't shine (`paint-gold`, `cloth-gold`, `cloth-saffron`, `cloth-silver`; golden
 fruit are `quinces`). A vertex's shine rides on its layer (256 times it, added: no more
 kept for it), so everything's still one material; only what shines does any more work.
+Windows are lit at night (`WINDOWS`: their glass, plain, leaded, green or violet, and the
+lanterns'; not water or obsidian): a warm glow from within, flickering a little as a hearth's or a
+candle's light would, on the glass and not its leading (Day and night, above). Each window has a
+seed of its own (1 to 15), worked out as its building's merged (its glass told apart as the
+triangles that touch, the seed from where its middle is), riding on its layer too (2,048 times
+it): through the dusk the windows come on one after another by their seeds, by the night's start
+all of them; after midnight about a third go out, one after another; through the dawn the rest
+go out as they came on. A tavern's, a church's, a guild's and a keep's windows, and the lanterns,
+are lit all night. The insides' windows aren't lit (they show the night outside).
 Everything that doesn't move is merged a
 block of the town (32 metres square) at a time, so each block is a draw call or two, and only
 the blocks in view (and in the sun's shadows) are drawn: a town of 23,000 to 39,000 triangles

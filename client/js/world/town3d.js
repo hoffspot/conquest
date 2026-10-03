@@ -16,7 +16,7 @@
 
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { atlasMaterial, glowMaterial, toAtlas, toGlow } from "./art/engine/atlas.js";
+import { atlasMaterial, glowMaterial, LIT_ALL_NIGHT, toAtlas, toGlow } from "./art/engine/atlas.js";
 import { material } from "./art/engine/materials.js";
 import { Solid } from "./art/engine/solid.js";
 import { createRandom } from "../core/random.js";
@@ -422,6 +422,18 @@ export function merge(root, { atlas = false } = {}) {
  */
 export function partsOf(root, { atlas = false } = {}) {
     const parts = [];
+    // (Whether a node's in a building whose windows are lit all night: atlas.js LIT_ALL_NIGHT)
+    const allNight = (node) => {
+        for (let at = node; at; at = at.parent) {
+            const piece = at.userData.piece;
+
+            if (piece) {
+                return LIT_ALL_NIGHT.landmarks.includes(piece.kind === "landmark" ? piece.name : piece.kind);
+            }
+        }
+
+        return false;
+    };
 
     root.traverse((node) => {
         if (!node.isMesh) {
@@ -438,8 +450,10 @@ export function partsOf(root, { atlas = false } = {}) {
             ? node.geometry.groups.map((group) => [extract(source, group.start, group.count), materials[group.materialIndex]])
             : [[source, materials[0]]];
 
+        const night = { allNight: allNight(node) };
+
         for (const [part, own] of split) {
-            const drawn = atlas ? toAtlas(part, own) : null;
+            const drawn = atlas ? toAtlas(part, own, night) : null;
             // (Every light in one mesh of its own, each face in its own colour)
             const lit = atlas === true && !drawn ? toGlow(part, own) : null;
             const [geometry, material] = drawn ? [drawn, atlas === true ? atlasMaterial() : atlas(own)] : lit ? [lit, glowMaterial()] : [part, own];

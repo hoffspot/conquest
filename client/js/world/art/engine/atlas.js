@@ -16,6 +16,11 @@
 // shine a vertex has rides on its layer (SHINE_STEP times it, added), so nothing more is kept for
 // it; the Lambert light is otherwise as it was, and what doesn't shine costs nothing more.
 //
+// Windows are lit at night (WINDOWS): a warm glow from within each window's glass, each window
+// its own (its seed rides on its layer too, WINDOW_STEP times it), coming on through the dusk one
+// after another, a few going out late in the night; a tavern's, a church's, a guild's, a keep's
+// and the lanterns lit all night (WINDOW_LIGHT says how far the evening's got: daytime.js).
+//
 // Meshes built of other materials (the tavern's painted signs, KayKit's props, the forge's
 // glowing coals) keep their own: `toAtlas` says which can be drawn with the atlas.
 
@@ -90,6 +95,32 @@ export const SHINES = Object.freeze({
 
 /** How far apart the shines are in a vertex's `layer` (its layer, plus this times its shine). */
 export const SHINE_STEP = 256;
+
+/**
+ * Windows, lit at night: their glass (by material name; a tinted one as the one it's tinted from).
+ * Each window's seed (1 to WINDOW_SEEDS: when it comes on and goes out; ALL_NIGHT: lit all night)
+ * rides on its layer, WINDOW_STEP times it (0: not a window).
+ */
+export const WINDOWS = Object.freeze(["glass", "glass-lit", "glass-green", "glass-violet", "leaded"]);
+export const WINDOW_STEP = SHINE_STEP * 8;
+export const WINDOW_SEEDS = 15;
+export const ALL_NIGHT = WINDOW_SEEDS + 1;
+
+/** The buildings (landmarks, by name) lit all night, and the lanterns (by material). */
+export const LIT_ALL_NIGHT = Object.freeze({ landmarks: ["tavern", "church", "guild", "keep"], materials: ["glass-lit"] });
+
+/**
+ * How a lit window glows: its light's colour (sRGB) and strength, and how much it flickers (a
+ * hearth's or a candle's light within).
+ */
+export const WINDOW_GLOW = Object.freeze({ colour: 0xff8c38, strength: 0.95, flicker: 0.12 });
+
+/**
+ * The windows' light, shared by every building's material: x how far the evening's lit them (0 by
+ * day, 1 all night: daytime.js windowsAt), y how late in the night it is (0 to 1), z the time
+ * (seconds) for their flicker.
+ */
+export const WINDOW_LIGHT = { value: new THREE.Vector4() };
 
 /** How a material shines (SHINES: 0 for not at all). */
 export function shineOf(material) {
@@ -231,13 +262,13 @@ export function atlasMaterial() {
     }
 
     const material = new THREE.MeshLambertMaterial({ vertexColors: true });
-    const uniforms = { atlasMap: { value: atlasTexture() }, atlasRelief: { value: RELIEF } };
+    const uniforms = { atlasMap: { value: atlasTexture() }, atlasRelief: { value: RELIEF }, windowLight: WINDOW_LIGHT };
 
     material.name = "atlas";
     material.shadowSide = THREE.DoubleSide;
     material.userData.atlas = uniforms.atlasMap.value;
     material.userData.uniforms = uniforms;
-    material.onBeforeCompile = (shader) => fromAtlas(shader, uniforms, { shine: true });
+    material.onBeforeCompile = (shader) => fromAtlas(shader, uniforms, { shine: true, windows: true });
     material.customProgramCacheKey = () => "atlas";
     shared = material;
 
@@ -448,14 +479,33 @@ if (vLayer > ${(AGED.from - 0.5).toFixed(1)} && vLayer < ${(AGED.to - 0.5).toFix
     diffuseColor.rgb *= 1.0 - ${AGED.streak.toFixed(2)} * agedStreak;
 }`;
 
+// A window's glow at night (WINDOWS): when it's lit (its seed against how far the evening's got,
+// and how late it is), flickering a little, where its glass is (not its leading); none by day
+const WINDOW_GLSL = `
+uniform vec4 windowLight;
+flat varying float vWindow;
+
+vec3 atlasWindowGlow(const in vec3 texel) {
+    if (vWindow < 0.5 || windowLight.x <= 0.0) return vec3(0.0);
+
+    float allNight = step(${(ALL_NIGHT - 0.5).toFixed(1)}, vWindow);
+    float seed = fract(vWindow * 0.618034);
+    float on = mix(smoothstep(0.1 + 0.75 * seed, 0.16 + 0.75 * seed, windowLight.x)
+        * (1.0 - step(0.65, fract(seed * 3.1)) * step(0.55 + 0.4 * fract(seed * 7.3), windowLight.y)), smoothstep(0.0, 0.1, windowLight.x), allNight);
+    float flicker = 1.0 - ${WINDOW_GLOW.flicker.toFixed(2)} * (0.5 + 0.5 * sin(windowLight.z * (1.7 + 2.3 * seed) + seed * 40.0) * sin(windowLight.z * (3.1 + 1.9 * seed)));
+    float glass = smoothstep(0.08, 0.3, dot(texel, vec3(0.3, 0.59, 0.11)));
+
+    return vec3(${new THREE.Color(WINDOW_GLOW.colour).toArray().map((v) => v.toFixed(4)).join(", ")}) * ${WINDOW_GLOW.strength.toFixed(2)} * on * flicker * glass;
+}`;
+
 // A material's shader drawn from the atlas: each vertex's layer, its texture coordinates, and the
-// layer's heights lit as relief, old stone weathered (AGED); and, with `shine`, glass, metal and
-// slate shining (SHINES)
-function fromAtlas(shader, uniforms, { shine = false } = {}) {
+// layer's heights lit as relief, old stone weathered (AGED); with `shine`, glass, metal and slate
+// shining (SHINES); with `windows`, windows lit at night (WINDOWS)
+function fromAtlas(shader, uniforms, { shine = false, windows = false } = {}) {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
-        .replace("#include <common>", "#include <common>\nattribute float layer;\nflat varying float vLayer;\nflat varying float vShine;\nvarying vec2 vAtlasUv;")
-        .replace("#include <uv_vertex>", `#include <uv_vertex>\nvLayer = mod(layer, ${SHINE_STEP.toFixed(1)});\nvShine = floor(layer / ${SHINE_STEP.toFixed(1)});\nvAtlasUv = uv;`);
+        .replace("#include <common>", "#include <common>\nattribute float layer;\nflat varying float vLayer;\nflat varying float vShine;\nflat varying float vWindow;\nvarying vec2 vAtlasUv;")
+        .replace("#include <uv_vertex>", `#include <uv_vertex>\nvLayer = mod(layer, ${SHINE_STEP.toFixed(1)});\nvShine = mod(floor(layer / ${SHINE_STEP.toFixed(1)}), 8.0);\nvWindow = floor(layer / ${WINDOW_STEP.toFixed(1)});\nvAtlasUv = uv;`);
     shader.fragmentShader = shader.fragmentShader
         .replace("#include <common>", `#include <common>\nuniform highp sampler2DArray atlasMap;\nuniform float atlasRelief;\nflat varying float vLayer;\nvarying vec2 vAtlasUv;\n${RELIEF_GLSL}\n${AGED_NOISE_GLSL}`)
         .replace("#include <map_fragment>", "vec4 atlasTexel = texture(atlasMap, vec3(vAtlasUv, vLayer));\ndiffuseColor.rgb *= atlasTexel.rgb;")
@@ -476,6 +526,12 @@ ${AGED_GLSL}`);
             .replace("#include <lights_lambert_fragment>", "atlasShine(diffuseColor);\n#include <lights_lambert_fragment>")
             .replace("#include <lights_fragment_end>", `#include <lights_fragment_end>\n${SHINE_REFLECTED_GLSL}`)
             .replace("vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;", "vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + reflectedLight.directSpecular + reflectedLight.indirectSpecular + totalEmissiveRadiance;");
+    }
+
+    if (windows) {
+        shader.fragmentShader = shader.fragmentShader
+            .replace("#include <common>", `#include <common>\n${WINDOW_GLSL}`)
+            .replace("#include <emissivemap_fragment>", "#include <emissivemap_fragment>\ntotalEmissiveRadiance += atlasWindowGlow(atlasTexel.rgb);");
     }
 }
 
@@ -530,13 +586,80 @@ export function toGlow(geometry, material) {
     return result;
 }
 
+// Each window's seed, for each corner of a (non-indexed) geometry of windows' glass: its windows
+// told apart as the triangles that touch (a pane, or the panes of a leaded window, or a lantern's
+// glass), each its own seed from where it is (1 to WINDOW_SEEDS); or all lit all night
+function windowSeeds(geometry, allNight) {
+    const count = geometry.attributes.position.count;
+    const seeds = new Float32Array(count);
+
+    if (allNight) {
+        return seeds.fill(ALL_NIGHT);
+    }
+
+    const at = geometry.attributes.position.array;
+    const triangles = Math.floor(count / 3);
+    const parent = Int32Array.from({ length: triangles }, (_, t) => t);
+    const root = (t) => {
+        while (parent[t] !== t) {
+            parent[t] = parent[parent[t]];
+            t = parent[t];
+        }
+
+        return t;
+    };
+    const corners = new Map();
+
+    for (let i = 0; i < triangles * 3; i++) {
+        const key = `${Math.round(at[i * 3] * 1000)},${Math.round(at[i * 3 + 1] * 1000)},${Math.round(at[i * 3 + 2] * 1000)}`;
+        const t = Math.floor(i / 3);
+        const other = corners.get(key);
+
+        if (other === undefined) {
+            corners.set(key, t);
+        } else {
+            parent[root(t)] = root(other);
+        }
+    }
+
+    // (Each window's middle, in centimetres, hashed)
+    const sums = new Map();
+
+    for (let i = 0; i < triangles * 3; i++) {
+        const pane = root(Math.floor(i / 3));
+        const sum = sums.get(pane) ?? [0, 0, 0, 0];
+
+        sum[0] += at[i * 3];
+        sum[1] += at[i * 3 + 1];
+        sum[2] += at[i * 3 + 2];
+        sum[3]++;
+        sums.set(pane, sum);
+    }
+
+    const seedOf = new Map();
+
+    for (const [pane, [x, y, z, n]] of sums) {
+        let hash = Math.imul(Math.round((x / n) * 100), 73856093) ^ Math.imul(Math.round((y / n) * 100), 19349663) ^ Math.imul(Math.round((z / n) * 100), 83492791);
+
+        hash = Math.imul(hash ^ (hash >>> 15), 2246822519) >>> 0;
+        seedOf.set(pane, 1 + (hash % WINDOW_SEEDS));
+    }
+
+    for (let i = 0; i < triangles * 3; i++) {
+        seeds[i] = seedOf.get(root(Math.floor(i / 3)));
+    }
+
+    return seeds;
+}
+
 /**
  * A (non-indexed) geometry drawn in `material` made ready to be drawn with the atlas instead: its
- * texture coordinates scaled to the material's, a `layer` for each vertex (and its shine), and
- * its colours (white if it had none) times the material's own if it's a plain colour (or its tint's
- * if it's tinted). Null if it can't be.
+ * texture coordinates scaled to the material's, a `layer` for each vertex (and its shine, and if
+ * it's a window's glass, its seed: lit all night if `allNight`), and its colours (white if it had
+ * none) times the material's own if it's a plain colour (or its tint's if it's tinted). Null if it
+ * can't be.
  */
-export function toAtlas(geometry, material) {
+export function toAtlas(geometry, material, { allNight = false } = {}) {
     const layer = layerOf(material);
 
     if (layer < 0) {
@@ -579,7 +702,16 @@ export function toAtlas(geometry, material) {
 
     result.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
     result.setAttribute("color", new THREE.BufferAttribute(colours, 3));
-    result.setAttribute("layer", new THREE.BufferAttribute(new Float32Array(count).fill(layer + SHINE_STEP * shineOf(material)), 1));
+    const layers = new Float32Array(count).fill(layer + SHINE_STEP * shineOf(material));
+    if (WINDOWS.includes(TINTS[material.name]?.from ?? material.name)) {
+        const seeds = windowSeeds(geometry, allNight || LIT_ALL_NIGHT.materials.includes(material.name));
+
+        for (let i = 0; i < count; i++) {
+            layers[i] += WINDOW_STEP * seeds[i];
+        }
+    }
+
+    result.setAttribute("layer", new THREE.BufferAttribute(layers, 1));
 
     return result;
 }

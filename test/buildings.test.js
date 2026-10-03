@@ -20,10 +20,11 @@ const context = () =>
 globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContext: context }) };
 
 const THREE = await import("three");
+const { mergeGeometries } = await import("three/addons/utils/BufferGeometryUtils.js");
 const { layoutTown } = await import("../client/js/core/setpieces/town.js");
 const { GODS } = await import("../client/js/core/lore/gods.js");
 const { TRADES } = await import("../client/js/core/setpieces/pieces.js");
-const { atlasMaterial, LAYERS, layerOf, paintLayers, SHINE_STEP, SHINES, shineOf, toAtlas, toGlow, wildsMaterial } = await import("../client/js/world/art/engine/atlas.js");
+const { ALL_NIGHT, atlasMaterial, LAYERS, layerOf, LIT_ALL_NIGHT, paintLayers, SHINE_STEP, SHINES, shineOf, toAtlas, toGlow, WINDOW_LIGHT, WINDOW_SEEDS, WINDOW_STEP, WINDOWS, wildsMaterial } = await import("../client/js/world/art/engine/atlas.js");
 const { COLOURS, material, MATERIALS, paintPicture, TINTS } = await import("../client/js/world/art/engine/materials.js");
 const { paintLayer } = await import("../client/js/world/art/engine/painters.js");
 const { ARCHES, inset, openingOutline, Solid } = await import("../client/js/world/art/engine/solid.js");
@@ -31,7 +32,7 @@ const { buildHouse, house, planHouse, STYLES } = await import("../client/js/worl
 const { EMBLEM_NAMES, paintEmblem } = await import("../client/js/world/art/kits/emblems.js");
 const { landmark, LANDMARK_BUILDERS } = await import("../client/js/world/art/kits/landmarks.js");
 const { prop, PROP_NAMES } = await import("../client/js/world/art/kits/props.js");
-const { merge } = await import("../client/js/world/town3d.js");
+const { merge, partsOf } = await import("../client/js/world/town3d.js");
 
 const M = 5;
 
@@ -896,7 +897,8 @@ describe("the atlas (engine/atlas.js)", () => {
         geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
         geometry.setAttribute("uv", new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1], 2));
 
-        const layer = (name) => toAtlas(geometry, material(name)).attributes.layer.array[0];
+        // (Its layer and shine: a window's seed left out, below)
+        const layer = (name) => toAtlas(geometry, material(name)).attributes.layer.array[0] % WINDOW_STEP;
 
         assert.equal(TINTS["slate-violet"].from, "slate-grey");
         assert.deepEqual(
@@ -929,7 +931,7 @@ describe("the atlas (engine/atlas.js)", () => {
         const atlas = compiled(atlasMaterial());
         const wilds = compiled(wildsMaterial({ value: 0 }));
 
-        assert.match(atlas.vertexShader, /vShine = floor\(layer \/ 256\.0\)/);
+        assert.match(atlas.vertexShader, /vShine = mod\(floor\(layer \/ 256\.0\), 8\.0\)/);
         assert.match(atlas.fragmentShader, /#define RE_Direct RE_Direct_Atlas/);
         assert.match(atlas.fragmentShader, /atlasShine\(diffuseColor\);\n#include <lights_lambert_fragment>/);
         assert.match(atlas.fragmentShader, /#include <lights_fragment_end>\n[^]*getIBLRadiance\(geometryViewDir, geometryNormal, atlasRoughness\)/);
@@ -1093,6 +1095,68 @@ describe("each people's buildings (peoples/)", () => {
         assert.equal(layerOf(new THREE.MeshLambertMaterial({ color: 0x5c2e91 })), -1, "not unless it says it's plain");
     });
 
+    it("lights windows at night, each its own: coming on through the dusk one after another, a few out late; a tavern's, a church's, a guild's, a keep's and the lanterns all night", () => {
+        for (const name of WINDOWS) {
+            assert.ok(COLOURS[name] || MATERIALS[name], name);
+            assert.equal(shineOf(material(name)), 1, `${name}: glass`);
+        }
+
+        assert.ok(WINDOW_STEP > SHINE_STEP * Math.max(...Object.values(SHINES)) + LAYERS.length, "a seed told apart from a layer and its shine");
+        assert.ok(WINDOW_STEP * (ALL_NIGHT + 1) < 2 ** 24, "kept exactly in a float");
+
+        // Two windows' glass in one geometry (as a building's is): two boxes apart
+        const box = (x) => new THREE.BoxGeometry(0.6, 0.9, 0.05).translate(x, 3, 0).toNonIndexed();
+        const panes = mergeGeometries([box(0), box(2.4)]);
+        const seeds = (name, options) => [...toAtlas(panes, material(name), options).attributes.layer.array].map((value) => Math.floor(value / WINDOW_STEP));
+        const glass = seeds("glass");
+        const corners = box(0).attributes.position.count;
+
+        assert.ok(glass.every((seed) => seed >= 1 && seed <= WINDOW_SEEDS));
+        assert.equal(new Set(glass.slice(0, corners)).size, 1, "a window lit as one");
+        assert.equal(new Set(glass.slice(corners)).size, 1);
+        assert.deepEqual(seeds("glass"), glass, "the same each time it's built");
+        assert.ok(seeds("brick").every((seed) => seed === 0), "nothing else");
+        assert.ok(seeds("water").every((seed) => seed === 0), "water shines as glass does, but isn't lit");
+        assert.ok(seeds("glass", { allNight: true }).every((seed) => seed === ALL_NIGHT));
+        assert.ok(seeds("glass-lit").every((seed) => seed === ALL_NIGHT), "a lantern");
+        assert.deepEqual(LIT_ALL_NIGHT.landmarks, ["tavern", "church", "guild", "keep"]);
+
+        // (Which buildings: as they're merged, a tavern's lit all night, a house's each its own)
+        const built = (piece) => {
+            const root = new THREE.Group();
+
+            root.userData.piece = piece;
+            root.add(new THREE.Mesh(panes, material("glass")));
+            root.updateMatrixWorld(true);
+
+            return partsOf(root, { atlas: true }).map(({ geometry }) => new Set([...geometry.attributes.layer.array].map((value) => Math.floor(value / WINDOW_STEP))));
+        };
+
+        assert.deepEqual(built({ kind: "landmark", name: "tavern" }), [new Set([ALL_NIGHT])]);
+        assert.deepEqual(built({ kind: "keep" }), [new Set([ALL_NIGHT])]);
+        assert.deepEqual(built({ kind: "house" }), [new Set(glass)]);
+
+        // (Over many windows, the seeds spread over all of them)
+        const many = mergeGeometries(Array.from({ length: 60 }, (_, k) => box(k * 1.7)));
+        const spread = new Set([...toAtlas(many, material("glass")).attributes.layer.array].map((value) => Math.floor(value / WINDOW_STEP)));
+
+        assert.ok(spread.size >= 12, `${spread.size} seeds`);
+
+        // In the buildings' shader, out of doors only (the insides' windows show the night)
+        const compiled = (made) => {
+            const shader = { uniforms: {}, vertexShader: THREE.ShaderLib.lambert.vertexShader, fragmentShader: THREE.ShaderLib.lambert.fragmentShader };
+
+            made.onBeforeCompile(shader);
+
+            return shader;
+        };
+        const atlas = compiled(atlasMaterial());
+
+        assert.match(atlas.vertexShader, /vWindow = floor\(layer \/ 2048\.0\)/);
+        assert.match(atlas.fragmentShader, /#include <emissivemap_fragment>\ntotalEmissiveRadiance \+= atlasWindowGlow\(atlasTexel\.rgb\);/);
+        assert.equal(atlas.uniforms.windowLight, WINDOW_LIGHT);
+    });
+
     it("cuts the insides away in front of the player as it draws them from the atlas: textures, relief and shine", async () => {
         const { atlasVariant } = await import("../client/js/world/art/engine/atlas.js");
         const shader = { uniforms: {}, vertexShader: THREE.ShaderLib.lambert.vertexShader, fragmentShader: THREE.ShaderLib.lambert.fragmentShader };
@@ -1104,6 +1168,7 @@ describe("each people's buildings (peoples/)", () => {
         assert.deepEqual(extended, [shader], "changed after the atlas's own");
         assert.match(shader.fragmentShader, /atlasShine\(diffuseColor\)/);
         assert.match(shader.fragmentShader, /reliefNormal/);
+        assert.doesNotMatch(shader.fragmentShader, /atlasWindowGlow/, "its windows show the night outside");
         assert.equal(variant.userData.uniforms, atlasMaterial().userData.uniforms, "the one atlas");
         assert.notEqual(variant, atlasMaterial());
     });
