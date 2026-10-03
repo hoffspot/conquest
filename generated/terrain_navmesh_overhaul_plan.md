@@ -3074,3 +3074,32 @@ converted data is to be measured in M8 against today's hm08 data.
     out to its reach); e2e (drawn where it stands, its legs blocked, open under its span).
   - **Not yet:** overhangs beyond the cliffs' ledges.
   - **Next:** M7i, churches, citadels and stone bridges.
+- **2026-10-03, M7i-1 built: churches to a grammar** (§9 row 7, "Romanesque and Gothic church
+  grammar"; docs/GAME.md *The church*). M7i ships as four playable PRs: churches, stone arch
+  bridges, broken aqueducts, hill citadels.
+  - **Grades** (core/setpieces/pieces.js `churchOf`, given every church a settlement lays out and
+    taking nothing from its random): a village's parish church, Romanesque; a town's church,
+    Romanesque or Gothic as its seed falls (even: Gothic); a city's or a capital's minster,
+    Gothic; an abbey's church a minster. Seed 1's human places: 7 parish churches, 6 town
+    churches (4 Gothic), 3 minsters (the other peoples' temples keep their own kits' looks).
+  - **Built** (world/art/kits/church.js `churchBody`, on the same 12 by 16 m lot, the door
+    where the temple inside is entered): the parish church's thick walls, small round-headed
+    windows, pilaster strips, corbel table, round apse and squat tower under a stone pyramid; the
+    town church's nave over aisles with a clerestory, buttressed, Romanesque or Gothic (pointed
+    arches, pinnacled buttresses, a many-sided apse, an eight-faced spire between four
+    pinnacles); the minster's twin-towered west front with spires, a rose window with tracery,
+    a gabled portal, flying buttresses from pinnacled piers, a many-sided apse and a spire on
+    the ridge. A portal of warm stone round the door, a socle under the walls. 1,300 to 2,400
+    triangles (the old church about the same as the parish church); no more draws (the
+    building atlas); the windows leaded, lit all night as before.
+  - **From afar** (world/far/shapes.js `FAR_CHURCHES`): each grade's tower as high as it's
+    built, a pyramid or a spire on it; a minster's two towers.
+  - **Pictures:** the building lab's four churches front and back; five of seed 1's churches
+    in play (a capital's and a city's minster, a town's Gothic and Romanesque church, a
+    village's parish church), before (main) and after; sent in the session.
+  - **Tests:** test/church.test.js (grades by place, given every church laid out; each built on
+    its lot, grander grade by grade, its tower and spire as high as its measures, in a few
+    thousand triangles; its door where the temple's entered, its patron's sign, the sun, leaded
+    windows; seen from afar as tall, a minster's two towers); the building lab e2e (a church of
+    each grade and build).
+  - **Next:** M7i-2, stone arch bridges.

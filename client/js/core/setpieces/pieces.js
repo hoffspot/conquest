@@ -64,6 +64,18 @@ export const LANDMARKS = Object.freeze({
 });
 
 /**
+ * How grand a church is, by how big its place is (a settlement's radius, metres: town.js
+ * SETTLEMENT_KINDS'), and how it's built (the art's kits/church.js builds each its own way): a
+ * village's parish church, Romanesque; a town's church, Romanesque or Gothic as its seed falls;
+ * a city's or a capital's minster, Gothic. { grade, gothic }
+ */
+export function churchOf(radius, seed) {
+    const grade = radius < 40 ? "parish" : radius < 80 ? "church" : "minster";
+
+    return { grade, gothic: grade === "minster" || (grade === "church" && seed % 2 === 0) };
+}
+
+/**
  * Each people's own places (plots across and deep, as their kits build them facing south): their
  * special structures, and their castle.
  */
