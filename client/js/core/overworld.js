@@ -335,6 +335,10 @@ export class Overworld {
             opaque: (x, y) => opaque(x, y) === 1,
             ground: read("ground", GROUND.grass),
         };
+
+        // (The humans' hill citadel set down at once, wherever the player is: its moat and the
+        // ground it keeps clear of fields are wanted from afar)
+        this.sites.settleCitadels();
     }
 
     /** Whether every chunk a box of squares touches has been made (and is kept). */
@@ -539,6 +543,13 @@ export class Overworld {
      * river higher up is never drawn at the river's height.
      */
     surfaceAt(x, y, river = this.waters.river(x, y, 24)) {
+        // (A citadel's moat, at its own level)
+        const moat = this.sites.moatLevelAt(x, y);
+
+        if (moat !== null) {
+            return moat;
+        }
+
         if (river && river.gap <= 0) {
             return river.surface;
         }
@@ -620,11 +631,14 @@ export class Overworld {
         }
 
         for (const set of this.sites.set.values()) {
-            // (Those levelled into the land: not most of those no people keeps, which lie with it)
-            const pad = set?.pad;
+            // (Those levelled into the land: not most of those no people keeps, which lie with it;
+            // a citadel's terraces one above another, the outermost first: sorted by their ids)
+            for (const [k, pad] of (set?.pads ?? (set?.pad ? [set.pad] : [])).entries()) {
+                const reach = pad.radius + Math.max(0, (pad.ease ?? PAD_EASE) - PAD_EASE);
 
-            if (pad && meets(pad.at[0] - pad.radius, pad.at[1] - pad.radius, pad.at[0] + pad.radius, pad.at[1] + pad.radius)) {
-                pads.push({ id: `site ${set.site.id}`, ...pad });
+                if (meets(pad.at[0] - reach, pad.at[1] - reach, pad.at[0] + reach, pad.at[1] + reach)) {
+                    pads.push({ id: set.pads ? `site ${set.site.id}/${k}` : `site ${set.site.id}`, ...pad });
+                }
             }
         }
 
@@ -696,12 +710,32 @@ export class Overworld {
                 crops[k] = land.crop ?? 0;
                 blocked[k] = land.water && !land.bridge ? 1 : 0;
 
-                // (A castle's, or a people's own place's: what's built there stands on it)
-                if (this.sites.squareAt(x, y)) {
+                // (A citadel's moat: still water, too deep to wade, over a bed of mud; the ground
+                // under its far side's wall and just behind it built on, seen over)
+                if (this.sites.moatAt(x, y)) {
+                    water[k] = WET.still;
+                    ground[k] = GROUND.soil;
+                    crops[k] = 0;
+                    blocked[k] = 1;
+                } else if (this.sites.rimAt(x, y)) {
+                    crops[k] = 0;
+                    blocked[k] = 1;
+                    solid[k] = 1;
+                }
+
+                // (A castle's, or a people's own place's: what's built there stands on it; a
+                // citadel's wards are courtyards)
+                const site = this.sites.squareAt(x, y);
+
+                if (site) {
                     blocked[k] = 1;
                     opaque[k] = 1;
                     built[k] = 1;
                     solid[k] = 1;
+
+                    if (site.paved) {
+                        ground[k] = GROUND.courtyard;
+                    }
                 }
             }
         }
@@ -720,7 +754,9 @@ export class Overworld {
                 const c = j * CORNERS + i;
                 const depth = this.surfaceAt(x0 + i + 0.5, y0 + j + 0.5) - Math.min(heights[c], heights[c + 1], heights[c + CORNERS], heights[c + CORNERS + 1]);
 
-                blocked[k] = this.wades(x0 + i + 0.5, y0 + j + 0.5, depth) ? 0 : 1;
+                // (Never a citadel's moat, even where its squares run on in under its far side's
+                // wall, the glacis over its water there)
+                blocked[k] = !this.sites.moatAt(x0 + i, y0 + j) && this.wades(x0 + i + 0.5, y0 + j + 0.5, depth) ? 0 : 1;
             }
         }
 
@@ -835,10 +871,11 @@ export class Overworld {
         }
 
         // Fields in farmland (each block's farmed if the land at its middle is): soil where a strip's
-        // ploughed or sown, grass on its verges, baulks and fallow, and pasture
+        // ploughed or sown, grass on its verges, baulks and fallow, and pasture; none on the ground a
+        // citadel keeps clear round it
         const field = fieldAt(plan.seed, x, y);
         const [mx, my] = field.middle;
-        const farmed = field.crop !== CROP.none && plan.biome[cellAt(my) * CELLS + cellAt(mx)] === BIOME.farmland;
+        const farmed = field.crop !== CROP.none && plan.biome[cellAt(my) * CELLS + cellAt(mx)] === BIOME.farmland && !this.sites?.clearedAt(px, py);
 
         return { ground: farmed && sown(field.crop) ? GROUND.soil : GROUND.grass, water, bridge: false, road: null, crop: farmed ? field.crop + ALONG * field.along : 0 };
     }
@@ -848,7 +885,7 @@ export class Overworld {
      * drawing's alone (in no one's way).
      */
     hedgeAt(x, y) {
-        if (!hedgeLine(this.plan.seed, x, y)) {
+        if (!hedgeLine(this.plan.seed, x, y) || this.sites.clearedAt(x + 0.5, y + 0.5)) {
             return false;
         }
 

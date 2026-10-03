@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.js";
 
 // The world map (world-map.html): the world plan for a seed, drawn. It exposes itself as
 // window.worldMap, which these tests use

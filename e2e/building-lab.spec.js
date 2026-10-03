@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.js";
 
 // The building lab (building-lab.html): a street of every style of house, or a whole town, built
 // in 3D from a seed. It exposes itself as window.buildingLab, which these tests use

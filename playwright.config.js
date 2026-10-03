@@ -8,8 +8,8 @@ export default defineConfig({
     testDir: "e2e",
     // Without a GPU, drawing is done in software, which is slow: give each test time, and on CI
     // run one at a time so they don't slow each other down (CI splits them between jobs run side
-    // by side instead: --shard). Every test has a page of its own, so any of them can run
-    // alongside any other, even those in the same file
+    // by side instead: --shard). Every test has a page of its own, in a browser of its own
+    // (e2e/fixtures.js), so any of them can run alongside any other, even those in the same file
     timeout: 120000,
     workers: process.env.CI ? 1 : undefined,
     fullyParallel: true,
@@ -18,6 +18,9 @@ export default defineConfig({
         ...devices["Desktop Chrome"],
         baseURL: `http://localhost:${port}`,
         viewport: { width: 1000, height: 600 },
+        // (Drawn at half the screen's pixels each way: in software, a frame's a fifth quicker or
+        // more, and the page laid out the same; a test of the pixels themselves sets its own)
+        deviceScaleFactor: 0.5,
         launchOptions: {
             // WebGL through software rendering on machines without a GPU, such as CI
             args: ["--enable-unsafe-swiftshader"],

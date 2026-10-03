@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.js";
 
 // Playing together (docs/WAR.md M11), in two browsers at once: one player opens their world to
 // others from the menu, and is given a code; another, an elf, joins it by the code from the title,
@@ -40,7 +40,7 @@ async function playing(page) {
     await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 120000, polling: 250 });
 }
 
-test("a world opened to others: an elf joins it by its code, is brought in by the elves' town, walks in the host's world, and leaves; closed, whoever's in it is told", async ({ browser }) => {
+test("a world opened to others: an elf joins it by its code, is brought in by the elves' town, walks in the host's world, and leaves; closed, whoever's in it is told", async ({ ownBrowser: browser }) => {
     const hostContext = await browser.newContext();
     const guestContext = await browser.newContext();
     const host = await hostContext.newPage();
@@ -209,7 +209,7 @@ const BRYN = {
     },
 };
 
-test("two players side by side trade face to face: one asks, the other says yes, each offers, both agree, and it changes hands in both worlds", async ({ browser }) => {
+test("two players side by side trade face to face: one asks, the other says yes, each offers, both agree, and it changes hands in both worlds", async ({ ownBrowser: browser }) => {
     const hostContext = await browser.newContext();
     const guestContext = await browser.newContext();
     const host = await hostContext.newPage();
@@ -295,7 +295,7 @@ test("two players side by side trade face to face: one asks, the other says yes,
     await guestContext.close();
 });
 
-test("two players walk about a while: the joined copy's checked against the host's every fifth of a second and never drifts; the guest's hero drawn going at once; what's sent measured", async ({ browser }) => {
+test("two players walk about a while: the joined copy's checked against the host's every fifth of a second and never drifts; the guest's hero drawn going at once; what's sent measured", async ({ ownBrowser: browser }) => {
     const hostContext = await browser.newContext();
     const guestContext = await browser.newContext();
     const host = await hostContext.newPage();

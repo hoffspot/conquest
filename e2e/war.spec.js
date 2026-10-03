@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.js";
 
 // The war (war.html): the war for the continent played out on a world's map. It exposes itself as
 // window.warViewer, which these tests use

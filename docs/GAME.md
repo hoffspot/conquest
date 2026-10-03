@@ -1392,6 +1392,61 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     afar, out to 2 km, a box for each pier standing and for each arch (far/shapes.js
     `aqueductShapes`); on the minimap, each standing pier a block, the channel a line on to the
     next where the arch to it stands, a fallen pier's rubble a smudge.
+- **Hill citadels** (kits/citadel.js; laid out by core/setpieces/citadel.js, WORLD.md *Hill
+  citadels*): the humans' castle, three walled wards one above another up its hill, each part
+  built on its own and drawn by the chunk it stands in.
+  - **Its walls** from tower to tower: where a wall holds up its ward's terrace, the retaining
+    wall's face battered all the way down (1 in 6) and the curtain on it, one face of 18 to 24 m
+    of masonry from below; the outer ward's battered at its foot. A string course where the
+    terrace is and another under the wall-walk; battlements on the outer edge (merlons 1.4 m wide
+    and 1.8 m high, 2.1 m apart, on a parapet 1.1 m high, a man's height and chest high: they were
+    1 m cubes), a low parapet on the inner; arrow slits along the face (drawn near only).
+  - **A crown of machicolations** on the inner wards' walls and towers, the gatehouses and the
+    keep: stone corbels at the merlons' pitch in two courses, standing out 0.35 and 0.7 m, under a
+    parapet standing out over them, its underside dark: the strong shadow line under every top.
+  - **Its towers**, round and battered at the foot (down the terrace's face, a talus, where they
+    stand at its edge); the outer ward's topped with battlements, the inner wards' with a crown
+    and a steep cone of slate 2.6 and 3 times as tall as it's wide round (Saumur's), the inner
+    ward's flying pennants.
+  - **The outer gate** between twin round towers 4.5 m round, crowned, its house deep between
+    them, its passage under a round arch ringed with darker voussoirs, its portcullis half raised,
+    torches either side. **The moat** round the outer ward, round, the world's own still water
+    (its shader, its shores, its depth): the outer wall and its towers rise out of it on their
+    battered feet; its far side a curved wall of stone leaning back as it rises, darker where the
+    water laps it, a coping of dressed stone along the glacis's edge, its back going down into the
+    glacis (nothing to see under it), a short mown verge behind it. **The bridge** over it: from
+    the gate the drawbridge let down, its leaf of heavy planks bound with iron, its chains up to
+    the gatehouse over the gate; then a pier, and two stone spans on a pier between them to the
+    gate tower, parapets along them, cobbles on its deck. **The gate tower** over its far end,
+    standing out into the water from the far side and back over the glacis: square, battered at its foot, its
+    passage under round arches with a portcullis, a crown of machicolations over its outer face,
+    battlements round its other sides, a turret corbelled out at each outer corner under a cone, a
+    steep slate roof, arrow slits, torches either side of its gate. **The inner gates** under
+    gatehouses rising 4 m over their walls, 10 m wide and reaching 3 m into their wards, crowned;
+    **a stair** up to each against its terrace's face, doubling back on itself: its first flight
+    along the outer lane from beside the gate away from it, a landing, its second back up the
+    lane against the wall to a landing before the gate (steps 0.18 m high and 0.36 m deep, 3.5 m
+    wide, each built down into the ground), parapets along its open sides.
+  - **The inner close**: the great hall (tall walls, buttresses down its front with tall pointed
+    windows between, a 55° slate roof between coped gables, a louvre on its ridge, its door under
+    a porch); the chapel (its nave under a 55° roof, buttresses and lancets, its apse round under a
+    half cone, a flèche on its ridge with a cross, its west door under a round window); and the
+    keep: a battered plinth, string courses at each floor, two tall windows a face a floor, a
+    crown of machicolations round its top and a steep slate roof behind; on two opposite corners a
+    needle tower 2.5 m round rising 13 m over it under a spire 6.5 times as tall as it's round, a
+    flag at each point; on the other two a bartizan corbelled out under a little cone; its door in
+    a forebuilding up a few steps, torches either side. **Lean-to ranges** along the lower wards'
+    walls: stone under a slate roof sloping down from the wall, windows, a door, chimneys.
+  - **Cost:** about 37,000 triangles a citadel near (walls 17,000, towers 11,500, the keep
+    2,400, the moat's far side 1,500, the gate tower and bridge 1,000), each chunk building its own parts a piece at a time as
+    it's drawn (2 to 16 ms a part), merged with the buildings' atlas, casting shadows; its moat
+    in its chunks' water. Its stone the atlas's (`stone`, `stone-dark`, `stone-warm`), its roofs
+    `slate`. From afar (far/shapes.js `citadelShapes`, about 1,750 triangles): its walls boxes, its
+    towers columns under their cones, a dark band where each crown's parapet stands out, its moat's
+    water a ring of 24 flat stretches, the bridge and the gate tower, the hall and chapel under their roofs,
+    the keep under its roof, its needles and bartizans.
+  - **The ground round it** kept clear (WORLD.md *Hill citadels*): grass, no fields or hedges, no
+    trees, near or seen from afar (the far fields' shader leaves them out inside `FIELDS_CLEAR`).
 - **Trees** (`Woodland`, kits/trees.js): every variant kept once and drawn wherever it's planted
   (Three.js's BatchedMesh), all the world's wood in one draw call and its leaves in another, only
   the trees in view (and, into the sun's shadows, only those in its); the crowns' shells and the
@@ -1530,7 +1585,8 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     buildings at a time.
 - **Each people's castle, special places and watchtowers** (core/sites.js: WORLD.md), each
   whose middle is in the chunk, built by its people's kit as a settlement's pieces are (the
-  humans' castle laid out by castle.js, their abbey, windmill and manor as their landmarks).
+  humans' castle a hill citadel, each part drawn by the chunk it stands in: *Hill citadels*; their
+  abbey, windmill and manor as their landmarks).
 - **The land's own features** (core/wilds.js places them: see WORLD.md, *The world in chunks*;
   kits/wilds.js draws them), one mesh a chunk with the atlas, casting shadows:
   - boulders (granite, pale limestone, red sandstone, black basalt; mossy in the woods and

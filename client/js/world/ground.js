@@ -112,13 +112,21 @@ export const FIELDS_AFAR = Object.freeze({ hedges: 300, baulks: 250, hedge: "#28
 export const FAR_FIELDS = { value: 1 };
 
 /**
+ * The ground a hill citadel keeps clear round it (core/sites.js clearedAt), as the fields seen from
+ * afar leave it: its middle (x, z, metres) and how far round (metres; none if not over 0). Set by
+ * chunks3d.js from the overworld's citadel.
+ */
+export const FIELDS_CLEAR = { value: new THREE.Vector3(0, 0, 0) };
+
+/**
  * The fields worked out on the GPU just as core/fields.js fieldAt works them out (its integer
  * hashing the same in 32-bit unsigned maths; its numbers, FIELDS and CROP_ODDS, written in):
  * `int cropAt(vec2 at, bool baulks, bool hedges)`, a point's crop (CROP's; 0 none, -1 a hedge's
  * band where `hedges`), from `fieldSeed` (the world's seed) and the farmland (whether each of the
  * plan's cells is: a block's farmed if its middle's cell is), read by the shader it's in through
  * `ivec2 farmSize()` (how many cells across and down) and `float farmAt(ivec2 cell)` (over 0.5 for
- * farmland).
+ * farmland); none on the ground a citadel keeps clear (its own uniform, `vec3 fieldsClear`:
+ * FIELDS_CLEAR; none where it's not set, as a shader that only works out the fields leaves it).
  */
 export const FIELDS_GLSL = (() => {
     const odds = [];
@@ -129,7 +137,8 @@ export const FIELDS_GLSL = (() => {
         odds.push(`if (odds < ${total}) return ${crop};`);
     }
 
-    return `uint fieldHash(int a, int b, int c) {
+    return `uniform vec3 fieldsClear;
+uint fieldHash(int a, int b, int c) {
     uint h = uint(a) * 374761393u + uint(b) * 668265263u + uint(c) * 1274126177u;
     h = (h ^ (h >> 13u)) * 1274126177u;
     h = (h ^ (h >> 16u)) * 2246822519u;
@@ -145,6 +154,7 @@ ivec3 fieldBlock(int v, int axis) {
 }
 const int FIELD_STRIPS[${FIELDS.strips.length}] = int[${FIELDS.strips.length}](${FIELDS.strips.join(", ")});
 int cropAt(vec2 at, bool baulks, bool hedges) {
+    if (fieldsClear.z > 0.0 && distance(at, fieldsClear.xy) < fieldsClear.z) return 0;
     ivec2 p = ivec2(floor(at));
     ivec3 bx = fieldBlock(p.x, 0);
     ivec3 by = fieldBlock(p.y, 1);
@@ -869,6 +879,7 @@ vec3 farGround(vec2 at, vec3 up, float height, float rockShift) {
             grassUnderReach: GRASS_UNDER.reach,
             fieldSeed: { value: landMap.userData.seed ?? 0 },
             farFieldsOn: FAR_FIELDS,
+            fieldsClear: FIELDS_CLEAR,
             snowColour: { value: new THREE.Color(ALPINE.colour) },
             ...(water ? { groundWater: { value: water.texture }, groundWaterArea: { value: new THREE.Vector4(...water.area) }, causticMap: { value: causticTexture() }, groundTime: TREE_WIND.time, groundDetail: WATER_DETAIL } : {}),
             ...(far ? { farHole: far.hole, farInner: far.inner } : {}),

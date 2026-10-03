@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.js";
 
 // The character lab (character-lab.html) exposes itself as window.lab, which these tests use
 

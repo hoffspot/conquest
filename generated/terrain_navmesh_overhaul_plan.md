@@ -3253,3 +3253,116 @@ converted data is to be measured in M8 against today's hm08 data.
     (the land's own features checked without the aqueducts' piers, as without the arches); e2e
     (seed 1's aqueduct drawn, its pier in the way, walked under through one of its arches).
   - **Next:** M7i-4, hill citadels.
+- **2026-10-03, M7i-4 built: hill citadels** (§9 row 7: "hill citadels 2–3× today's scale on
+  stepped pads"; docs/WORLD.md *Hill citadels*, GAME.md *Hill citadels*).
+  - **The research** (the user: "You can also do more extensive research and find new castle
+    parts and textures if the existing kit is inadequate to create large, interesting, castles and
+    citadels"): Edinburgh (Stormveil's model), Krak des Chevaliers, Beaumaris and Harlech, Spiš,
+    Stirling, Saumur, Segovia, Mont-Saint-Michel, Hohenzollern, spur castles and Japanese
+    yamajiro; the real measures of merlons, crenels, machicolations, bartizans, gatehouses,
+    barbicans, retaining walls' batter, stairs and switchbacks, keeps, needle towers, great halls
+    and chapels. What makes a citadel read from afar: a tiered mass rising to one spike
+    (retaining walls, curtains, the keep, its needles), the inner walls higher than the outer,
+    sheer battered retaining walls, machicolations' shadow lines, steep slate cones. The free kits
+    (Kenney's Castle Kit 2.0, Quaternius's Medieval Village MegaKit, both CC0) were looked at and
+    not taken: toy proportions and flat colours, more triangles a metre of wall than boxes and
+    merlons, another material and more draws; the citadel's parts are built in code with the
+    atlas instead. Of the textures (Poly Haven's `castle_wall_slates`, `castle_wall_varriation`,
+    `mossy_stone_wall`, CC0) none is needed yet: the atlas's coursed stone serves; a second,
+    sharper array texture for the gate passage and the keep's foot is left for M7j's weathering
+    if pictures show it's wanted.
+  - **Laid out** (core/setpieces/citadel.js `layoutCitadel`, exact maths): three wards up a hill
+    (outer 12 or 14 sided, 76 to 82 m to its walls' faces, 8 m walls; middle 8 sided, 53 to 57 m,
+    10 m, 8 to 11 m higher; inner square, 24 to 27 m, 12 m, 8 to 11 m higher again), towers at
+    every corner standing out a third of their radius (outer 4 m round under battlements, middle
+    5 m and inner 6 m under crowns and slate cones), its gates a quarter of the way round each
+    from the last, a stair up to each inner gate (and round the outer ward a moat: below); the inner
+    close with the keep in its back corner (16 to 19 m, 34 to 40 m high, needles 13 m over it
+    under 16 m spires: the top 90 m or so over the land), the great hall and the chapel round it;
+    lean-to ranges in the lower wards clear of the next ward's walls and towers.
+  - **Set down** (core/sites.js `#citadelAt`): on its own footprint (`outlineOf`) up to 192 m off
+    its spot, high and where its land's level enough (14 m across); its hill raised 7 m and eased
+    out over 40 m, a regular polygon pad a ward (ground.js: polygon pads, `sides`, `apothem`,
+    `turn`, a `level` given), each inner ward's eased up inside its wall's face under its
+    retaining wall; its squares (inside its outer wall, under its outer towers and the outer
+    gate's, its bridge and gate tower) blocked, not seen through, paved; each part a piece drawn by the chunk
+    it stands in. `NET_VERSION` 29.
+  - **Built** (world/art/kits/citadel.js): retaining walls battered 1 in 6 all the way down with
+    the curtain on them; merlons 1.4 by 1.8 m at a 2.1 m pitch on a 1.1 m parapet; crowns of
+    machicolations (two courses of corbels under a parapet standing out 0.7 m, dark beneath) on the
+    inner wards' walls and towers, the gatehouses and the keep; the outer gate between twin round
+    towers with a deep passage; gatehouses over the inner gates; switchback stairs;
+    the great hall, the chapel with its apse and flèche, the keep with its two needle towers and
+    two bartizans and its door in a forebuilding; lean-to ranges. About 35,000 triangles near, a
+    part a step as its chunk's drawn; about 1,500 from afar (far/shapes.js `citadelShapes`, a dark
+    band where each crown stands out).
+  - **The moat, the drawbridge and the gate tower** (the user, with the first pictures: "There
+    shouldn't be hedgerows and fields going right up against the Citadel, add a moat and
+    drawbridge with a gate tower on the near side of the drawbridge from the castle"): the
+    barbican gave way to a moat round the outer ward (15 m to its far bank's foot, its bed 4 m
+    under the outer ward, its water 1.4 m down), dug into the hill's top, a glacis of 12 m beyond
+    it at the outer ward's level before the hill falls away; the outer wall and its towers rise
+    out of it on battered feet, its far bank faced with stone. Over it at the front the drawbridge
+    let down from the outer gate on its chains, a pier, two stone spans, and on the far bank the
+    gate tower over the bridge's end (crowned, turrets at its outer corners, a slate roof). The
+    moat is the world's own water (its squares still water at its own level: sites.js `moatAt`,
+    `moatLevelAt`, the overworld's `surfaceAt`), so it's drawn with the rivers' and lakes' shader,
+    shores and depth, and on the minimap. Round the citadel, out to its glacis's corners, the hill's
+    fall and 20 m more (about 170 m), no fields, hedges or trees (`clearedAt`; the far fields'
+    shader too, `FIELDS_CLEAR`). The citadel's now set down as the world's made
+    (`settleCitadels`, 100 to 200 ms), as its moat and cleared ground are wanted from afar. Seeds
+    1, 2, 3, 7, 11 and 23 all find room. Pictures sent in the session.
+  - **The moat round** (the user, with the moat's pictures: "The moat shouldn't have angled edges
+    and there look like water is visible under the border"): the moat was the outer ward's
+    polygon grown out, its far bank eased up over 2.5 m with the coping part way up it, so the
+    water reached past the coping and showed under its edge (the coping had no back). Now round:
+    its far side a circle 10 m out past the outer towers' faces, a curved wall of stone 2.4 m
+    thick (16 stretches of a lathe, battered, a dark band at the water, a coping with a back going
+    down into the glacis), the bed dug out to its face and eased up to the glacis steeply inside
+    the wall (the ground's 1 m lattice spreads it a metre and a half, still inside the wall and
+    under the water at its face: the ground there 0.66 m or more under the water on seeds 1 to 3);
+    the moat's squares on in under the wall (never waded, though the glacis stands over the water
+    there), and 2 m behind it built ground (blocked, solid, seen over), so the cliffs' rock isn't
+    drawn on the steep ground under it (it had poked through the coping). The gate tower stands
+    0.6 m out into the water, the counterscarp's gap hidden in it; from afar the water a ring of
+    24 stretches. About 1,500 triangles more near (37,000), 120 more far (1,750). Before and after
+    pictures sent in the session.
+  - **On the way:** a first build (v1: wards 56 to 64, 38 to 44 and 17 to 20 m, towers on the
+    walls' corners, a keep in the middle with four needle towers, straight stairs) was looked at in
+    pictures and redone with the research's measures: the keep moved to the close's back corner
+    for the hall and chapel; towers stand out from the walls; stairs double back so they fit
+    between a gate and its ward's towers. The outer ward with 10 sides had towers 52 m apart: 12
+    or 14. A square footprint near a road found room for one castle in four: its own outline, and
+    192 m to look in. The open-topped towers' crowns showed a black disc (a capped shadow ring's
+    top): the shadow's now a ring facing down only. v1's merlons round a round top were turned the
+    wrong way between the four quarters (laid with the angle's sign flipped): turned with the
+    ring.
+  - **Pictures:** seed 1's citadel before (main: the old castle 180 m off, small) and after, from
+    260 m, over the outer gate, over the inner close, from 230 m south; the middle gate up its
+    stair, the middle ward's gatehouse, over the inner gate; then with its moat: through the gate
+    tower, the drawbridge from beside, the moat along its walls, over the moat to the gate tower,
+    from afar over the cleared ground; sent in the session.
+  - **Tests:** test/citadel.test.js (laid out: wards, sides, sizes, rises, towers clear and
+    spaced, gates a quarter round, the keep at the back, hall and chapel clear of it and in the
+    close, stairs clear of their towers; parts; set down clear of roads and water on seeds 1, 2, 3
+    and 7; terraces levelled, the moat dug and the hill eased out, the glacis up to the far side's
+    coping all round; the moat round, its far side's stretches on one circle, 10 m at the least past
+    the outer towers; the moat's squares water on in under the far side's wall and built ground
+    behind it; its squares (walls, towers, bridge, gate tower) blocked,
+    opaque and paved, its moat water too deep to wade at its own level, open outside, no fields
+    or hedges on the ground it keeps clear; pieces by chunk; built in its budget with the keep's
+    spires highest; from afar under 2,000 triangles); test/flats.test.js (the castle's middle on
+    its inner ward's terrace, each ward higher, the moat's bed below the glacis); e2e (seed 1's
+    citadel drawn, the keep's spires over it, its terraces' heights, its gate, gate tower and moat
+    in the way, the ground before it open).
+  - **End-to-end tests, steadier** (main's e2e shard 3 had gone red on time): in software the
+    GPU process, shared by every page in a browser, does a page's drawing in its own time, so a
+    test that asks for frames faster than they're drawn left a minute's backlog for the next. Each
+    test now has a browser of its own (`e2e/fixtures.js`); every test draws at half the screen's
+    pixels each way (a frame a fifth quicker or more), but for the two that check the pixels
+    themselves; the poison test steps the game itself rather than waiting on live frames. Seed
+    4242's citadel found no room within 192 m and the far silhouettes then met a null spot: the
+    citadel now looks again out to 320 m, and silhouettes skip a site with no spot. The whole
+    suite one test at a time here: 68 of 70 passed in 47 minutes, and the two others, since fixed,
+    pass.
+  - **Next:** the M7 summary report; then M7j, foliage palette, grass ring, weathering.
