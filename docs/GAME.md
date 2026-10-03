@@ -767,7 +767,11 @@ a look of its own (`LOOKS`), which the world takes on round the player:
   ("Real fire is kind of wavy"), each fire its own light ("Shouldn't the torches and the spells
   be their own independent light sources?"), and the candles, chandeliers and spells to share it.
   - **Where:** torches in iron brackets either side of a keep's door (a capital's too) and of a
-    gatehouse's way through, inside and out; the lanterns by taverns' and town halls' doors;
+    gatehouse's way through, inside and out; the lanterns by taverns' and town halls' doors, and
+    lamps on iron posts round the market of a town or bigger (`kits/props.js` lamppost: either side
+    of each main street where it comes in, and in the market's corners; about two in a town, six
+    in a capital); a brazier by each pair of guards at a town's roads out, across the road from
+    their banner (`core/war/muster.js` `braziersOf`, drawn with the banners: `banners3d.js`);
     braziers at the neutral sites' shrines and torches on posts at their camps; every people's
     smithy's forge (and the orcs' braziers and their forge's burning chimney top, the cat folk's
     kiln); the war camps' fires; indoors, every hearth, forge, candle and wheel of candles. A kit

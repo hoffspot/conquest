@@ -90,6 +90,7 @@ export const PROPS = Object.freeze({
     weaponrack: [1, 1],
     target: [1, 1],
     tent: [2, 2],
+    lamppost: [1, 1],
 });
 
 /**

@@ -1569,7 +1569,41 @@ describe("banners and flags in the wind (world/cloth.js)", () => {
         assert.equal(banners.group.children.filter(({ name }) => name === "banner:town-1").length, 2);
         banners.lower("town-1");
         assert.equal(banners.group.children.length, 0);
+
+        // (Braziers by the guards, burning as fires do, each a light)
+        banners.raise("town-2", "human", [{ x: 0, z: 0, y: 0, facing: 0 }], [{ x: 4, z: 1, y: 2 }, { x: -4, z: 1, y: 2 }]);
+        assert.equal(banners.group.children.filter(({ name }) => name === "brazier:town-2").length, 2);
+        assert.ok(banners.group.getObjectByName("fires:town-2").getObjectByName("flames"));
+        assert.deepEqual(banners.lights().map(({ x, z, kind }) => [x, z, kind]), [[4, 1, "brazier"], [-4, 1, "brazier"]]);
+        assert.ok(banners.lights().every(({ y }) => y > 2.9 && y < 3.1), "on its coals, its bowl's rim a metre up");
+        banners.lower("town-2");
+        assert.equal(banners.lights().length, 0);
         banners.dispose();
+    });
+
+    it("stands lamps on posts round a town's market, either side of its main streets and in its corners, lit at night", async () => {
+        const { lightsOf } = await import("../client/js/world/lights.js");
+
+        for (const kind of ["village", "town", "city", "capital"]) {
+            let lamps = 0;
+
+            for (const seed of [1, 2, 3, 4]) {
+                lamps += layoutTown({ kind, seed }).pieces.filter(({ name }) => name === "lamppost").length;
+            }
+
+            assert.ok(kind === "village" ? lamps === 0 : lamps >= 4, `${kind}: ${lamps} in four`);
+        }
+
+        // (A prop's in pixels, five to a metre, as a town scales it)
+        const post = prop({ name: "lamppost", w: 1, h: 1 });
+
+        post.scale.setScalar(1 / 5);
+        post.updateMatrixWorld(true);
+
+        const [lamp] = lightsOf(post);
+
+        assert.equal(lamp.kind, "lantern");
+        assert.ok(lamp.y > 2 && lamp.y < 2.6, `its lantern ${lamp.y} m up`);
     });
 });
 
