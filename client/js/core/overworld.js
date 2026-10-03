@@ -620,11 +620,14 @@ export class Overworld {
         }
 
         for (const set of this.sites.set.values()) {
-            // (Those levelled into the land: not most of those no people keeps, which lie with it)
-            const pad = set?.pad;
+            // (Those levelled into the land: not most of those no people keeps, which lie with it;
+            // a citadel's terraces one above another, the outermost first: sorted by their ids)
+            for (const [k, pad] of (set?.pads ?? (set?.pad ? [set.pad] : [])).entries()) {
+                const reach = pad.radius + Math.max(0, (pad.ease ?? PAD_EASE) - PAD_EASE);
 
-            if (pad && meets(pad.at[0] - pad.radius, pad.at[1] - pad.radius, pad.at[0] + pad.radius, pad.at[1] + pad.radius)) {
-                pads.push({ id: `site ${set.site.id}`, ...pad });
+                if (meets(pad.at[0] - reach, pad.at[1] - reach, pad.at[0] + reach, pad.at[1] + reach)) {
+                    pads.push({ id: set.pads ? `site ${set.site.id}/${k}` : `site ${set.site.id}`, ...pad });
+                }
             }
         }
 
@@ -696,12 +699,19 @@ export class Overworld {
                 crops[k] = land.crop ?? 0;
                 blocked[k] = land.water && !land.bridge ? 1 : 0;
 
-                // (A castle's, or a people's own place's: what's built there stands on it)
-                if (this.sites.squareAt(x, y)) {
+                // (A castle's, or a people's own place's: what's built there stands on it; a
+                // citadel's wards are courtyards)
+                const site = this.sites.squareAt(x, y);
+
+                if (site) {
                     blocked[k] = 1;
                     opaque[k] = 1;
                     built[k] = 1;
                     solid[k] = 1;
+
+                    if (site.paved) {
+                        ground[k] = GROUND.courtyard;
+                    }
                 }
             }
         }

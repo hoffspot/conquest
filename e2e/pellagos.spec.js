@@ -1201,6 +1201,76 @@ test("out in the human lands a broken aqueduct strides across a dip: drawn over 
     expect(under.nearest).toBeLessThan(3);
 });
 
+test("the humans' castle is a hill citadel: its wards on terraces up its hill, drawn part by part, the keep's spires over everything, its walls and barbican in the way", async ({ page }) => {
+    test.setTimeout(180000);
+    await playing(page, "/?play&seed=1");
+    await page.evaluate(() => window.pellagos.game.stop());
+
+    const seen = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const land = game.world.maps.town;
+        const site = game.world.plan.sites.find(({ race, kind }) => race === "human" && kind === "castle");
+
+        land.sites.settle(Math.floor(site.at[0] / 64), Math.floor(site.at[1] / 64));
+
+        const set = land.sites.set.get(site.id);
+        const { x, y, facing, citadel } = set;
+        const place = ([u, v]) => [x + u * Math.cos(facing) + v * Math.sin(facing), y - u * Math.sin(facing) + v * Math.cos(facing)];
+        const [outer] = citadel.wards;
+        // (Out before its barbican, along its front)
+        const [sx, sy] = place([0, outer.apothem + 24 + 16]);
+        const me = game.battle.actor(game.me);
+        const avatar = game.avatars.get(game.me);
+
+        Object.assign(me, { x: sx, y: sy, path: [], order: null, progress: null });
+        avatar.object.position.set(sx, land.ground.heightAt(sx, sy), sy);
+
+        for (let n = 0; n < 4; n++) {
+            game.advance(0.25, { render: false });
+
+            for (let k = 0; k < 800 && (game.chunks.update(sx, sy, { budget: 200 }) || game.chunks.busy); k++) {
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        }
+
+        game.advance(0.05);
+
+        // (The keep's chunk drawn, its highest point its spires')
+        const keep = set.pieces.find(({ part }) => part === "keep");
+        const drawn = [...game.chunks.drawn.values()].find(({ cx, cy }) => cx === Math.floor(keep.x / 64) && cy === Math.floor(keep.y / 64));
+        let top = -Infinity;
+
+        drawn?.buildings?.updateMatrixWorld(true);
+        drawn?.buildings?.traverse((node) => {
+            if (node.isMesh) {
+                node.geometry.computeBoundingBox();
+                top = Math.max(top, node.geometry.boundingBox.clone().applyMatrix4(node.matrixWorld).max.y);
+            }
+        });
+
+        const [bx, by] = place([0, outer.apothem + 12]);
+        const [gx, gy] = place([0, outer.apothem - 1]);
+
+        return {
+            built: Boolean(drawn?.buildings),
+            top: top - (set.level + citadel.wards.at(-1).rise + keep.high),
+            inner: land.ground.heightAt(keep.x, keep.y) - set.pads.at(-1).level,
+            outer: land.ground.heightAt(...place([0, outer.apothem - 6])) - set.pads[0].level,
+            barbican: land.squares.blocked(Math.floor(bx), Math.floor(by)),
+            gate: land.squares.blocked(Math.floor(gx), Math.floor(gy)),
+            before: land.squares.blocked(Math.floor(sx), Math.floor(sy)),
+        };
+    });
+
+    expect(seen.built).toBe(true);
+    expect(seen.top).toBeGreaterThan(20);
+    expect(Math.abs(seen.inner)).toBeLessThan(0.05);
+    expect(Math.abs(seen.outer)).toBeLessThan(0.05);
+    expect(seen.barbican).toBe(true);
+    expect(seen.gate).toBe(true);
+    expect(seen.before).toBe(false);
+});
+
 test("debug mode draws the navigation meshes round the player, baked in a worker", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

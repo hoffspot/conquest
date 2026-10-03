@@ -285,8 +285,9 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   pride rock and watering hole; the orcs' war totem, skull pit and fighting pit; the lizard
   folk's ziggurat, hatchery and serpent pool; the elves' moonwell, tree hall and starwatch; the
   dark elves' spider shrine, obsidian spire and shadow gate; the humans' abbey, windmill and
-  manor) and the watchtowers, built at their size (`siteSize`: a human castle 18 by 16 plots,
-  laid out by castle.js; a tower 2 by 2). Each is set down the first time a chunk near it is made
+  manor) and the watchtowers, built at their size (`siteSize`: the humans' castle a hill citadel,
+  *Hill citadels* below, 40 by 40 plots at the most; a tower 2 by 2). Each is set down the first
+  time a chunk near it is made
   (`settle`), at its cell's middle or as near as it can be (up to 48 metres off, in 4-metre
   steps round it) clear of roads and water, facing the nearest road within six cells (each
   square's land looked at once however many tries it's under, and the squares that ruled out
@@ -496,6 +497,36 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   chunk's features (`kind: "aqueduct"`, `aqueduct`, `pier`: its number, `standing`: false if it's
   fallen, or if any of its squares is a road's, water, a bridge or built on, when it has none).
   `NET_VERSION` 28.
+- **Hill citadels** (`core/setpieces/citadel.js`, `core/sites.js`; the terrain plan's M7i-4,
+  §9's humans: "hill citadels 2–3× today's scale on stepped pads"): the humans' castle, three
+  wards one above another up a hill, each walled round, a tower at each corner of its walls
+  standing out from them (a third of its radius past their face). Laid out from the site's seed
+  (`layoutCitadel`): the outer ward 12 or 14 sided, its walls' outer faces 76 to 82 m from its
+  middle, 8 m high; the middle ward 8 sided, 53 to 57 m, 10 m high, 8 to 11 m higher than the
+  outer; the inner ward square, 24 to 27 m, 12 m high, 8 to 11 m higher again: the inner walls
+  higher than the outer so both can shoot at once (Beaumaris), the towers 30 to 60 m apart, each
+  ward's towers 2.5 m or more clear of the wall round it. Its gates a quarter of the way round
+  each from the last, the same way round (the way in winds round the hill under the walls,
+  turning at every gate: Krak des Chevaliers, Himeji); a barbican 24 m out before the outer gate,
+  entered from its side; a stair against each inner ward's terrace face up to its gate. The inner
+  close (Stirling's, Edinburgh's Crown Square): the keep in its back corner away from its gate,
+  16 to 19 m square and 34 to 40 m high, its door towards the gate; the great hall along the side
+  away from it (10 m deep, four fifths of the side), the chapel along the other in front of it (8 m
+  deep, 10 to 19 m long, its apse towards the keep). Lean-to ranges along the lower wards' walls
+  (7 m deep), on the sides away from the gates and stairs, clear of the next ward's walls and
+  towers by 2 m (most citadels have a few; a few have none, as Spiš's lower ward is empty).
+  Set down as a castle is, high (`LIE`), but on a footprint of its own (`outlineOf`: round its
+  outer towers and its barbican, a metre past them) up to 192 m from its spot, where its land
+  rises or falls no more than 14 m across it: seeds 1, 2, 3 and 7 all find one. Its outer ward on
+  its hill, the land under it on average raised 7 m (`citadelLevel`, to the ground's step) and
+  eased out into the land round it over 40 m; each ward in a terrace higher, eased up inside its
+  wall's outer face over 2.5 m (under its retaining wall): a pad for each ward, a regular polygon
+  (core/terrain/ground.js: `sides`, `apothem`, `turn`, `level`), applied outermost first. It
+  takes every square inside its outer wall, under its outer towers and the outer gate's, and in
+  its barbican (`insideCitadel`: blocked, not seen through, its wards paved: `GROUND.courtyard`);
+  none can be walked into yet (the plan's M7.5 opens the castles). Each of its parts (`citadelParts`:
+  walls, towers, stairs, the barbican, ranges, hall, chapel and keep) is a piece of its own,
+  drawn by the chunk it stands in (`piecesIn`), standing on its ward's terrace. `NET_VERSION` 29.
 
 Water can't be walked into, but can be seen over, except where it can be waded. A chunk takes
 about 3 to 5 ms to make in Node,

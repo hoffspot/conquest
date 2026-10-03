@@ -12,7 +12,7 @@
 // out ahead, off the page's thread, and given (`give`); otherwise they're worked out when wanted.
 
 import { heightAt, heightsOf, HEIGHT_STEP, SLOPE_CLASS, slopeClass, waterAt } from "./height.js";
-import { hypot } from "../exact.js";
+import { cos, hypot, sin, TAU } from "../exact.js";
 
 /** A chunk's size (metres a side), and its corners a side. */
 export const CHUNK = 64;
@@ -77,7 +77,10 @@ const round = (height) => Math.round(height / HEIGHT_STEP) * HEIGHT_STEP;
  * under it on average (or sunk below it, if less than nothing), and eased into the land round it
  * over `ease` metres (PAD_EASE if not said: a cave's pit is eased in steeply). A rectangle that may lie with the
  * land (`tilt`) is laid on the plane that best fits the land under it, no steeper than PAD_TILT,
- * rather than level.
+ * rather than level. A disc may be a regular polygon instead (`sides`, its sides `apothem`
+ * metres from its middle, the first's middle `turn` radians round from east: a citadel's
+ * terraces, sites.js), eased out square to its sides; and any pad may be given its `level`
+ * (metres) rather than have it worked out (a terrace stands so high over the one below it).
  */
 export class Ground {
     /**
@@ -102,6 +105,7 @@ export class Ground {
         this.levels = new Map();
         this.tilts = new Map();
         this.profiles = new Map();
+        this.sides = new Map();
     }
 
     /** Whether a chunk's land heights are kept (given or worked out). */
@@ -350,6 +354,10 @@ export class Ground {
     // A pad's height: the land's under it, on average (sampled on a grid across it), and as far
     // above or below that as it's raised (`raise`, metres)
     #level(pad) {
+        if (pad.level !== undefined) {
+            return pad.level;
+        }
+
         if (!this.levels.has(pad.id)) {
             const [x0, y0, x1, y1] = pad.at ? [pad.at[0] - pad.radius, pad.at[1] - pad.radius, pad.at[0] + pad.radius, pad.at[1] + pad.radius] : [pad.x0, pad.y0, pad.x1, pad.y1];
             let [sum, n] = [0, 0];
@@ -421,14 +429,38 @@ export class Ground {
 
     // Is a point on a pad (not just in the land eased round it)?
     #onAnyPad(pads, x, y) {
-        return pads.some((pad) => (pad.at ? hypot(x - pad.at[0], y - pad.at[1]) <= pad.radius : x >= pad.x0 && x <= pad.x1 && y >= pad.y0 && y <= pad.y1));
+        return pads.some((pad) => (pad.sides ? this.#offPolygon(pad, x, y) <= 0 : pad.at ? hypot(x - pad.at[0], y - pad.at[1]) <= pad.radius : x >= pad.x0 && x <= pad.x1 && y >= pad.y0 && y <= pad.y1));
+    }
+
+    // How far a point is out past a polygon pad's sides (metres: the farthest it's out past any;
+    // less than nothing inside it), so its land's eased out square to each side
+    #offPolygon(pad, x, y) {
+        if (!this.sides.has(pad.id)) {
+            this.sides.set(
+                pad.id,
+                Array.from({ length: pad.sides }, (_, k) => [cos(pad.turn + (k * TAU) / pad.sides), sin(pad.turn + (k * TAU) / pad.sides)]),
+            );
+        }
+
+        const [dx, dy] = [x - pad.at[0], y - pad.at[1]];
+        let off = -Infinity;
+
+        for (const [nx, ny] of this.sides.get(pad.id)) {
+            off = Math.max(off, dx * nx + dy * ny);
+        }
+
+        return off - pad.apothem;
     }
 
     // A point's height with the pads near it levelled in (eased from the pad's height at its
     // nearest point)
     #onPads(pads, x, y, height) {
         for (const pad of pads) {
-            const off = pad.at ? hypot(x - pad.at[0], y - pad.at[1]) - pad.radius : hypot(Math.max(pad.x0 - x, 0, x - pad.x1), Math.max(pad.y0 - y, 0, y - pad.y1));
+            const off = pad.sides
+                ? this.#offPolygon(pad, x, y)
+                : pad.at
+                  ? hypot(x - pad.at[0], y - pad.at[1]) - pad.radius
+                  : hypot(Math.max(pad.x0 - x, 0, x - pad.x1), Math.max(pad.y0 - y, 0, y - pad.y1));
 
             if (off < (pad.ease ?? PAD_EASE)) {
                 const level = pad.at ? this.#level(pad) : this.#padAt(pad, Math.min(pad.x1, Math.max(pad.x0, x)), Math.min(pad.y1, Math.max(pad.y0, y)));

@@ -6,6 +6,7 @@
 // worker (silhouette-worker.js), into arrays a mesh is made from (silhouettes.js).
 
 import { AQUEDUCTS } from "../../core/aqueducts.js";
+import { citadelLevel, citadelParts, layoutCitadel } from "../../core/setpieces/citadel.js";
 import { ARCHES, feetOf, legsOf } from "../../core/arches.js";
 import { createRandom } from "../../core/random.js";
 import { layoutNeutral } from "../../core/setpieces/neutral.js";
@@ -55,6 +56,105 @@ export function archShapes(shapes, arch, heightOf) {
     }
 
     shapes.box(arch.x, arch.y, top, arch.span + thick, thick, band, facing, colour);
+}
+
+/** A citadel's stone and roofs from afar, and the shadow under its crowns (sRGB: its stone and slate as they look near, darker: a far shape's flat faces catch more light than the near walls' coursed stone). */
+export const CITADEL_FAR = Object.freeze({ stone: 0x6a6761, roof: 0x434d68, shade: 0x4a4844 });
+
+/**
+ * The humans' hill citadel (core/setpieces/citadel.js) as seen from afar, set down at (x, z) and
+ * turned to `facing` (sites.js): each ward's walls a box along each side, from its foot (the land,
+ * for the outer ward: the far land has no hill; the terrace below, for the others) to its top;
+ * its towers columns, coned as theirs are; round each machicolated wall's and tower's top its
+ * parapet standing out, dark with its corbels' shadow; the barbican's walls out in front of the
+ * outer gate; the hall, the chapel and the ranges boxes, the hall's and chapel's roofed; the
+ * keep a box under its roof, its needle towers columns under tall cones, its bartizans little
+ * cones. About 1,500 triangles. `heightOf(x, z)` is the land's height.
+ */
+export function citadelShapes(shapes, { plan, seed, x, z, facing, heightOf }) {
+    const citadel = layoutCitadel({ seed });
+    const base = citadelLevel(plan, citadel, x, z, facing);
+    const [c, s] = [Math.cos(facing), Math.sin(facing)];
+    const place = ([u, v]) => [x + u * c + v * s, z - u * s + v * c];
+    const { stone, roof, shade } = CITADEL_FAR;
+    // (A crown's parapet over a tower's top, and its cone's eaves out past it: kits/citadel.js)
+    const [parapet, eaves] = [1.1, 1];
+
+    for (const part of citadelParts(citadel)) {
+        const [px, pz] = place(part.at);
+        const level = base + part.rise;
+        const foot = part.ward ? level - part.drop : Math.min(level, heightOf(px, pz)) - SUNK;
+        const turned = facing - part.turn - Math.PI / 2;
+
+        if (part.part === "wall") {
+            const top = level + part.high;
+
+            shapes.box(px, pz, foot, part.length, part.thick, top + (part.crown ? 0 : parapet + 0.9) - foot, turned, stone);
+
+            // (Its parapet standing out over its crown's shadow)
+            if (part.crown) {
+                shapes.box(px, pz, top - 1.5, part.length, part.thick + 1.4, parapet + 2.4, turned, shade);
+            }
+        } else if (part.part === "tower") {
+            const top = level + part.high;
+
+            shapes.column(px, pz, foot, part.radius, top + (part.crown ? 0 : parapet + 0.9) - foot, stone, 8);
+
+            if (part.crown) {
+                shapes.column(px, pz, top - 1.5, part.radius + 0.7, parapet + 1.5, shade, 8);
+            }
+
+            if (part.top === "cone") {
+                shapes.cone(px, pz, top + parapet, part.radius + eaves, (part.radius + eaves) * part.spire, roof, 8);
+            }
+        } else if (part.part === "barbican") {
+            // (Its two sides and its far end, down the hill's side into the land)
+            const [ax, az] = [Math.cos(part.turn), Math.sin(part.turn)];
+            const side = part.wide / 2 + part.thick / 2;
+
+            for (const [u, v, width, depth] of [[-az * side, ax * side, part.thick, part.long], [az * side, -ax * side, part.thick, part.long]]) {
+                const [bx, bz] = place([part.at[0] + u + ax * (part.long / 2), part.at[1] + v + az * (part.long / 2)]);
+                const low = Math.min(level, heightOf(bx, bz)) - SUNK - 4;
+
+                shapes.box(bx, bz, low, width, depth, level + part.high + parapet - low, turned, stone);
+            }
+
+            const [ex, ez] = place([part.at[0] + ax * (part.long - part.thick / 2), part.at[1] + az * (part.long - part.thick / 2)]);
+            const low = Math.min(level, heightOf(ex, ez)) - SUNK - 4;
+
+            shapes.box(ex, ez, low, part.wide + part.thick * 2, part.thick, level + part.high + parapet - low, turned, stone);
+        } else if (part.part === "range" || part.part === "hall" || part.part === "chapel") {
+            const roofed = part.part !== "range";
+
+            shapes.box(px, pz, level - part.drop, part.length, part.deep, part.eaves + part.drop, turned, stone, !roofed);
+
+            if (roofed) {
+                shapes.roof(px, pz, level + part.eaves, part.length, part.deep, (part.deep / 2) * 1.43, turned, roof);
+            }
+        } else if (part.part === "keep") {
+            const top = level + part.high;
+            const half = part.size / 2;
+            // (Its corners, as the kit builds it: across its door's way, and out along it)
+            const corner = (sx, sz) => place([part.at[0] + (sx * Math.sin(part.turn) + sz * Math.cos(part.turn)) * half, part.at[1] + (-sx * Math.cos(part.turn) + sz * Math.sin(part.turn)) * half]);
+
+            shapes.box(px, pz, level - part.drop, part.size, part.size, top + parapet - level + part.drop, turned, stone, false);
+            shapes.roof(px, pz, top + parapet, part.size, part.size, half * 1.7, turned, roof, true);
+
+            for (const [sx, sz] of [[-1, -1], [1, 1]]) {
+                const [nx, nz] = corner(sx, sz);
+                const high = top + part.over + parapet;
+
+                shapes.column(nx, nz, level, part.needle, high - level, stone, 6);
+                shapes.cone(nx, nz, high, part.needle + eaves, (part.needle + eaves) * part.spire, roof, 6);
+            }
+
+            for (const [sx, sz] of [[1, -1], [-1, 1]]) {
+                const [nx, nz] = corner(sx, sz);
+
+                shapes.cone(nx, nz, top + part.turret, part.bartizan + 0.3, part.bartizan * 4, roof, 6);
+            }
+        }
+    }
 }
 
 /** An aqueduct's stone from afar (sRGB: engine/painters.js MATERIALS' stone-lime-old, a little lighter for the haze). */

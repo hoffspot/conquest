@@ -73,7 +73,20 @@ describe("level ground for what stands on it (terrain/flats.js, sites.js)", () =
             }
 
             const { raise } = LIE[site.kind];
-            const pad = { id: `site ${site.id}`, at: [set.x, set.y], radius: set.radius, raise };
+
+            // (The humans' castle a hill citadel: its middle on its inner ward's terrace, each ward
+            // a terrace higher than the one round it, the outer on its hill over the land)
+            if (set.citadel) {
+                assert.ok(Math.abs(overworld.heightAt(set.x, set.y) - set.pads.at(-1).level) < 0.01, `${site.id} on its inner ward`);
+                assert.ok(
+                    set.pads.every((pad, k) => !k || pad.level > set.pads[k - 1].level),
+                    site.id,
+                );
+                high++;
+                continue;
+            }
+
+            const pad ={ id: `site ${site.id}`, at: [set.x, set.y], radius: set.radius, raise };
             const level = overworld.ground.levelOf(pad);
             const under = overworld.ground.levelOf({ ...pad, id: `${pad.id} as it lay`, raise: 0 });
 

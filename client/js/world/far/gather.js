@@ -9,7 +9,7 @@ import { restingOf, siteSize } from "../../core/sites.js";
 import { heightAt } from "../../core/terrain/height.js";
 import { aqueductsOf } from "../../core/aqueducts.js";
 import { archesOf } from "../../core/arches.js";
-import { aqueductShapes, archShapes, settlementShapes, Shapes, siteShapes } from "./shapes.js";
+import { aqueductShapes, archShapes, citadelShapes, settlementShapes, Shapes, siteShapes } from "./shapes.js";
 
 /**
  * How far off each kind of settlement is seen (metres: its middle from the player; capitals and
@@ -67,7 +67,12 @@ export function gatherSilhouettes(plan, { x, z, reach, settled = new Map(), layo
             continue;
         }
 
-        siteShapes(shapes, { kind: site.kind, people: site.race, seed: site.seed, form: restingOf(plan, site).form, x: spot.x, z: spot.y, facing: spot.facing, w: size[0] ?? size.w, h: size[1] ?? size.h, heightOf });
+        // (The humans' castle a hill citadel: far/shapes.js citadelShapes)
+        if (site.race === "human" && site.kind === "castle") {
+            citadelShapes(shapes, { plan, seed: site.seed, x: spot.x, z: spot.y, facing: spot.facing, heightOf });
+        } else {
+            siteShapes(shapes, { kind: site.kind, people: site.race, seed: site.seed, form: restingOf(plan, site).form, x: spot.x, z: spot.y, facing: spot.facing, w: size[0] ?? size.w, h: size[1] ?? size.h, heightOf });
+        }
     }
 
     // (And the arches of rock, and the aqueducts: core/arches.js, core/aqueducts.js)

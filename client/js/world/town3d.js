@@ -24,6 +24,7 @@ import { pieceCatalog } from "../core/setpieces/pieces.js";
 import { footprint } from "../core/setpieces/town.js";
 import { PLOT } from "../core/world.js";
 import { gatehouse, keep, RUINED, tower, wall } from "./art/kits/castle.js";
+import { citadelPart } from "./art/kits/citadel.js";
 import { house } from "./art/kits/house.js";
 import { landmark } from "./art/kits/landmarks.js";
 import { neutral } from "./art/kits/neutral.js";
@@ -39,8 +40,9 @@ import { clothMesh, clothOf } from "./cloth.js";
 /** Metres per art world pixel. */
 export const PIXEL = PLOT / 20;
 
-// What builds each kind of piece (castle pieces too, for towns with walls one day)
-export const BUILDERS = { house, landmark, prop, tree, wall, tower, gatehouse, keep, neutral, yard };
+// What builds each kind of piece (castle pieces too, for towns with walls one day; and each part
+// of a hill citadel: kits/citadel.js)
+export const BUILDERS = { house, landmark, prop, tree, wall, tower, gatehouse, keep, neutral, yard, citadel: citadelPart };
 
 const catalog = new Map(pieceCatalog().map((piece) => [piece.key, piece]));
 
@@ -66,7 +68,7 @@ export const TILE = 32;
 
 // What the camera pulls in closer than, rather than looking through (view.js): what's built,
 // not the props (carts, wells, stalls) or the trees
-const BUILT = new Set(["house", "landmark", "structure", "wall", "tower", "gatehouse", "keep", "neutral"]);
+const BUILT = new Set(["house", "landmark", "structure", "wall", "tower", "gatehouse", "keep", "neutral", "citadel"]);
 
 /**
  * Foundations: how far the ground under what's built may rise or fall across it (metres) before
@@ -300,13 +302,19 @@ export function placed(built, piece, [ox, oz] = [0, 0], y = 0) {
 }
 
 /**
- * How high a piece stands (metres): the ground under its middle (`groundAt(x, y)`, metres, from
+ * How high a piece stands (metres): its own `base` if it has one (a citadel's part, on its ward's
+ * terrace); else the ground under its middle (`groundAt(x, y)`, metres, from
  * `origin`); or, for what's built on ground that rises or falls more than FOUNDATION.from across
  * it (a settlement lying with a slope), its highest corner's, a foundation added to it (as the
  * art kits built it, before it's placed: of its people's stone, or the cat folk's mud brick) from
  * there down past its lowest corner, under all of it but its eaves.
  */
 export function grounded(built, piece, groundAt, [ox, oz] = [0, 0]) {
+    // (A citadel's part stands on its ward's terrace, and reaches down its face itself)
+    if (piece.base !== undefined) {
+        return piece.base;
+    }
+
     const middle = groundAt(ox + piece.x, oz + piece.y);
 
     // (A neutral site's parts reach down into the ground themselves: art/kits/neutral.js)

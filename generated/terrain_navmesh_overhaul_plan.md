@@ -3253,3 +3253,69 @@ converted data is to be measured in M8 against today's hm08 data.
     (the land's own features checked without the aqueducts' piers, as without the arches); e2e
     (seed 1's aqueduct drawn, its pier in the way, walked under through one of its arches).
   - **Next:** M7i-4, hill citadels.
+- **2026-10-03, M7i-4 built: hill citadels** (§9 row 7: "hill citadels 2–3× today's scale on
+  stepped pads"; docs/WORLD.md *Hill citadels*, GAME.md *Hill citadels*).
+  - **The research** (the user: "You can also do more extensive research and find new castle
+    parts and textures if the existing kit is inadequate to create large, interesting, castles and
+    citadels"): Edinburgh (Stormveil's model), Krak des Chevaliers, Beaumaris and Harlech, Spiš,
+    Stirling, Saumur, Segovia, Mont-Saint-Michel, Hohenzollern, spur castles and Japanese
+    yamajiro; the real measures of merlons, crenels, machicolations, bartizans, gatehouses,
+    barbicans, retaining walls' batter, stairs and switchbacks, keeps, needle towers, great halls
+    and chapels. What makes a citadel read from afar: a tiered mass rising to one spike
+    (retaining walls, curtains, the keep, its needles), the inner walls higher than the outer,
+    sheer battered retaining walls, machicolations' shadow lines, steep slate cones. The free kits
+    (Kenney's Castle Kit 2.0, Quaternius's Medieval Village MegaKit, both CC0) were looked at and
+    not taken: toy proportions and flat colours, more triangles a metre of wall than boxes and
+    merlons, another material and more draws; the citadel's parts are built in code with the
+    atlas instead. Of the textures (Poly Haven's `castle_wall_slates`, `castle_wall_varriation`,
+    `mossy_stone_wall`, CC0) none is needed yet: the atlas's coursed stone serves; a second,
+    sharper array texture for the gate passage and the keep's foot is left for M7j's weathering
+    if pictures show it's wanted.
+  - **Laid out** (core/setpieces/citadel.js `layoutCitadel`, exact maths): three wards up a hill
+    (outer 12 or 14 sided, 76 to 82 m to its walls' faces, 8 m walls; middle 8 sided, 53 to 57 m,
+    10 m, 8 to 11 m higher; inner square, 24 to 27 m, 12 m, 8 to 11 m higher again), towers at
+    every corner standing out a third of their radius (outer 4 m round under battlements, middle
+    5 m and inner 6 m under crowns and slate cones), its gates a quarter of the way round each
+    from the last, a barbican before the outer gate, a stair up to each inner gate; the inner
+    close with the keep in its back corner (16 to 19 m, 34 to 40 m high, needles 13 m over it
+    under 16 m spires: the top 90 m or so over the land), the great hall and the chapel round it;
+    lean-to ranges in the lower wards clear of the next ward's walls and towers.
+  - **Set down** (core/sites.js `#citadelAt`): on its own footprint (`outlineOf`) up to 192 m off
+    its spot, high and where its land's level enough (14 m across); its hill raised 7 m and eased
+    out over 40 m, a regular polygon pad a ward (ground.js: polygon pads, `sides`, `apothem`,
+    `turn`, a `level` given), each inner ward's eased up inside its wall's face under its
+    retaining wall; its squares (inside its outer wall, under its outer towers and the outer
+    gate's, its barbican) blocked, not seen through, paved; each part a piece drawn by the chunk
+    it stands in. `NET_VERSION` 29.
+  - **Built** (world/art/kits/citadel.js): retaining walls battered 1 in 6 all the way down with
+    the curtain on them; merlons 1.4 by 1.8 m at a 2.1 m pitch on a 1.1 m parapet; crowns of
+    machicolations (two courses of corbels under a parapet standing out 0.7 m, dark beneath) on the
+    inner wards' walls and towers, the gatehouses and the keep; the outer gate between twin round
+    towers with a deep passage; gatehouses over the inner gates; switchback stairs; the barbican;
+    the great hall, the chapel with its apse and flèche, the keep with its two needle towers and
+    two bartizans and its door in a forebuilding; lean-to ranges. About 35,000 triangles near, a
+    part a step as its chunk's drawn; about 1,500 from afar (far/shapes.js `citadelShapes`, a dark
+    band where each crown stands out).
+  - **On the way:** a first build (v1: wards 56 to 64, 38 to 44 and 17 to 20 m, towers on the
+    walls' corners, a keep in the middle with four needle towers, straight stairs) was looked at in
+    pictures and redone with the research's measures: the keep moved to the close's back corner
+    for the hall and chapel; towers stand out from the walls; stairs double back so they fit
+    between a gate and its ward's towers. The outer ward with 10 sides had towers 52 m apart: 12
+    or 14. A square footprint near a road found room for one castle in four: its own outline, and
+    192 m to look in. The open-topped towers' crowns showed a black disc (a capped shadow ring's
+    top): the shadow's now a ring facing down only. v1's merlons round a round top were turned the
+    wrong way between the four quarters (laid with the angle's sign flipped): turned with the
+    ring.
+  - **Pictures:** seed 1's citadel before (main: the old castle 180 m off, small) and after, from
+    260 m, over the outer gate and barbican, over the inner close, from 230 m south; the middle gate
+    up its stair, the barbican's side, the middle ward's gatehouse, over the inner gate; sent in
+    the session.
+  - **Tests:** test/citadel.test.js (laid out: wards, sides, sizes, rises, towers clear and
+    spaced, gates a quarter round, the keep at the back, hall and chapel clear of it and in the
+    close, stairs clear of their towers; parts; set down clear of roads and water on seeds 1, 2, 3
+    and 7; terraces levelled and the hill eased out; its squares (walls, towers, barbican) blocked,
+    opaque and paved, open outside; pieces by chunk; built in its budget with the keep's spires
+    highest; from afar under 2,000 triangles); test/flats.test.js (the castle's middle on its inner
+    ward's terrace, each ward higher); e2e (seed 1's citadel drawn, the keep's spires over it, its
+    terraces' heights, its barbican and gate blocked, the ground before it open).
+  - **Next:** the M7 summary report; then M7j, foliage palette, grass ring, weathering.
