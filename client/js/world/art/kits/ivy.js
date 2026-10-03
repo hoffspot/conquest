@@ -1,6 +1,7 @@
 // Ivy on the old walls (terrain plan M7b-3c; the research report behind M7b: "Moss, streaks and
 // ivy cost arithmetic, not draws"; the user's reference shot of a ruined castle): hanging in
-// curtains from their broken tops, as it grows over a ruin left alone. Each curtain is draped over
+// curtains from their broken tops, as it grows over a ruin left alone; and, kept in hand, climbing
+// a lived-in house's bare wall here and there (M7j-3: ivyClimb). Each curtain is draped over
 // the top's edge and hangs down the face in a mass of dark leaves standing a little proud of it,
 // shorter at its sides, its foot ragged where its strands hang on down.
 // - Cards of leaves cut out of their picture (engine/leafcards.js: the same program as the
@@ -124,6 +125,58 @@ export function ivyCurtain(solid, random, face, [u0, u1], { proud = IVY.proud * 
             const facing = r === 0 ? [0, 1, 0] : mid;
 
             solid.facing([rows[0][r], rows[1][r], rows[1][r + 1], rows[0][r + 1]], facing, ivy, [[a.s, v[r]], [b.s, v[r]], [b.s, v[r + 1]], [a.s, v[r + 1]]], tone);
+        }
+    }
+}
+
+/**
+ * How ivy climbs a lived-in house's wall (metres; terrain plan M7j-3: kept, not let go, so a patch
+ * here and there, not curtains): a patch `width` across, rising `rise` of the wall's height at
+ * its middle (lower to its sides), on `chance` of the houses that have a wall bare enough for it
+ * (`bare` along it with no opening, kept IVY.clear from them).
+ */
+export const CLIMBING = Object.freeze({ width: [1.1, 2.4], rise: [0.55, 0.9], chance: 0.3, bare: 1.6 });
+
+/**
+ * A patch of ivy climbing a face (wallFace's, as ivyCurtain's) from its foot, u0 to u1 along it,
+ * up to `height` (world pixels) over its base at its middle, lower to its sides, standing `proud`
+ * of it: its leaves densest low down, its strands' tips reaching up (ivy's picture the other way
+ * up). Coloured as a curtain is: darkest where it's thickest, at its foot.
+ */
+export function ivyClimb(solid, random, face, [u0, u1], height, { proud = IVY.proud * M } = {}) {
+    const { place, out, base } = face;
+    const ivy = ivyMaterial();
+    const columns = Math.max(1, Math.round((u1 - u0) / (IVY.strand * M)));
+    const [phase, tint] = [random.next() * 10, [random.range(0.86, 1.08), random.range(0.94, 1.06), random.range(0.84, 1)]];
+    const colours = new Map();
+    const corner = (u, y, d, shade) => {
+        const point = place(u, y, d);
+
+        colours.set(point, tint.map((t) => t * shade));
+
+        return point;
+    };
+    const tone = (point) => colours.get(point) ?? [1, 1, 1];
+    const strands = [];
+
+    for (let k = 0; k <= columns; k++) {
+        const u = u0 + ((u1 - u0) * k) / columns;
+        // (Rounded over its top: lower to its sides, each strand its own)
+        const side = Math.sqrt(Math.max(0, 1 - ((2 * k) / columns - 1) ** 2));
+        const sway = 0.8 + 0.2 * Math.sin(phase + k * 0.9) + random.range(-0.1, 0.1);
+
+        strands.push({ u, reach: Math.max(M * 0.4, height * (0.25 + 0.75 * side) * sway), s: (u - u0) / (IVY.copy * M) });
+    }
+
+    for (let k = 0; k < columns; k++) {
+        const [a, b] = [strands[k], strands[k + 1]];
+        const mid = out((a.u + b.u) / 2);
+        // (Each strand from its foot, a little way up, to its tip)
+        const rows = [a, b].map(({ u, reach }) => [corner(u, base, proud * 0.8, 0.72), corner(u, base + reach * 0.55, proud, 0.85), corner(u, base + reach, proud * 0.6, 1)]);
+        const v = [0, 0.55, 1];
+
+        for (let r = 0; r < 2; r++) {
+            solid.facing([rows[0][r], rows[1][r], rows[1][r + 1], rows[0][r + 1]], mid, ivy, [[a.s, v[r]], [b.s, v[r]], [b.s, v[r + 1]], [a.s, v[r + 1]]], tone);
         }
     }
 }

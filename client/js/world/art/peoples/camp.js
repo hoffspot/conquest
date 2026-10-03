@@ -160,7 +160,7 @@ export function campTent(people) {
 
     const solid = new Solid();
 
-    solid.tone = weathering({ seed: people.length * 7919, dirt: 0.28 });
+    solid.tone = weathering({ seed: people.length * 7919, dirt: 0.28, damp: false });
     build(solid);
 
     return solid.toObject();

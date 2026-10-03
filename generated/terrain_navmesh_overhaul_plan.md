@@ -3456,3 +3456,46 @@ converted data is to be measured in M8 against today's hm08 data.
     no inner). e2e: walking out of town, the mountains, the bridge, the tavern (no new shader made),
     keeping up, the building lab.
   - **Next:** M7j-3, weathering on the peoples' buildings and a glow under lit windows.
+- **2026-10-03, M7j-2 opened as #163** (CI green; left for review: merging it myself was flagged
+  by the permission system, so from here the merges are the user's).
+- **2026-10-03, M7j-3 built: the peoples' buildings weathered as kept, ivy on some cottages, and
+  lit windows' light on the ground** (§9 row 10: "extend `weathering()` in `peoples/kit.js` and
+  `house.js` … ivy leaf quads"; the lit windows' entry above: "a cheap glow on the ground under
+  each would do"; docs/GAME.md *Houses*, *Lit windows*).
+  - **Weathering** (peoples/kit.js `WEATHERING`, `wallWeather`, shared by `weathering()` and
+    house.js's): damp rising up a wall's foot, darker and a little brown-green (from 0.15 m, gone
+    by 0.95 m), and on a wall facing north as the building stands (`weathering`'s `facing`: each
+    people's house passes its piece's) a little green in patches low down (to 0.4 m, gone by
+    1.8 m). Damp only rises from the ground: walls up on platforms and stilts (the elves', the
+    lizard folk's) start above it. None on the war camps' tents (`damp: false`). The heights are
+    tone bands, so walls are cut there and drawn as worked out. A wall's foot about a tenth
+    darker than before, over the grime it had: tidy, not ruined.
+  - **Ivy climbing** (kits/ivy.js `ivyClimb`, `CLIMBING`; house.js `climbingIvy`): on about three
+    of ten human houses (not the back buildings), a patch 1.1 to 2.4 m across climbing a bare
+    stretch of a side or back wall from its foot, up to 0.55 to 0.9 of the ground floor's
+    height, rounded over its top; never on the front, within 0.3 m of an opening, or across the
+    middle of a gable end with a chimney. Its own random numbers, so every house is otherwise as
+    it was. The castle's walls still have none (test/neutral.test.js).
+  - **The windows' light on the ground** (world/windowpools.js `poolsMesh`, `WINDOW_POOLS`;
+    atlas.js `windowSeeds`' `panes`, `PANES`, `WINDOW_ON_GLSL`): as a building's merged, its
+    windows' upright panes are found (each pane's middle, which way it lies from its corners'
+    spread on the ground, facing out from the building's middle; not a lantern's box or a
+    bottle), and each throws a pool of warm light on the ground in front of it (1.6 m out at the
+    wall's foot to 3.4 m from 4 m up, fainter the higher; none over 7 m), lit, going out and
+    flickering with its own window through the same GLSL function as the glow. One mesh a
+    chunk (and the start town), additive, lying 4 cm over the ground; hidden by day (no draw),
+    fading out from 35 to 80 m; its shader made at load in the chunks' primer.
+  - **Cost:** houses 2 to 16% more triangles for the bands and ivy (40 houses each: humans 2,245
+    to 2,447, elves 2,917 to 2,963, cat folk 860 to 995), no more draws by day; at night one
+    draw a settlement chunk for its pools, about 24 triangles a lit window.
+  - **Tests:** test/weathering.test.js (damp at the foot and none above; green only on walls
+    facing north as built and turned, in patches, none high up; none on tents, their walls not
+    cut; climbing ivy on about three houses in ten, low on a side or the back, never the front,
+    the same every time; a house's panes upright and facing out, each with its glass's seed; a
+    lantern's box none; the pools on the ground in front of their windows, none from too high,
+    further and fainter from higher, lit by WINDOW_LIGHT through windowOn, hidden by day,
+    facing up). e2e: the building lab (7), walking out of town, the mountains, the bridge, the
+    citadel, the tavern (no new shader made), keeping up, the hired adventurer, the minimap's
+    buildings.
+  - **Next:** M7k, the whole frame measured on the phone's profile, and cascaded shadows only if
+    they fit.

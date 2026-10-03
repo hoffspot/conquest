@@ -569,23 +569,40 @@ if (vLayer > ${(AGED.from - 0.5).toFixed(1)} && vLayer < ${(AGED.to - 0.5).toFix
     diffuseColor.rgb *= 1.0 - ${AGED.streak.toFixed(2)} * agedStreak;
 }`;
 
-// A window's glow at night (WINDOWS): when it's lit (its seed against how far the evening's got,
-// and how late it is), flickering a little, where its glass is (not its leading); none by day
-const WINDOW_GLSL = `
-uniform vec4 windowLight;
-flat varying float vWindow;
+/**
+ * How lit a window is now (GLSL: `windowOn(window, windowLight)`, 0 to 1, flickering a little): its
+ * seed (1 to WINDOW_SEEDS, or ALL_NIGHT) against how far the evening's got and how late it is
+ * (WINDOW_LIGHT's); none by day. The windows' glow and the light they throw on the ground
+ * (windowpools.js) come on and flicker together.
+ */
+export const WINDOW_ON_GLSL = `
+float windowOn(float window, vec4 windowLight) {
+    if (window < 0.5 || windowLight.x <= 0.0) return 0.0;
 
-vec3 atlasWindowGlow(const in vec3 texel) {
-    if (vWindow < 0.5 || windowLight.x <= 0.0) return vec3(0.0);
-
-    float allNight = step(${(ALL_NIGHT - 0.5).toFixed(1)}, vWindow);
-    float seed = fract(vWindow * 0.618034);
+    float allNight = step(${(ALL_NIGHT - 0.5).toFixed(1)}, window);
+    float seed = fract(window * 0.618034);
     float on = mix(smoothstep(0.1 + 0.75 * seed, 0.16 + 0.75 * seed, windowLight.x)
         * (1.0 - step(0.65, fract(seed * 3.1)) * step(0.55 + 0.4 * fract(seed * 7.3), windowLight.y)), smoothstep(0.0, 0.1, windowLight.x), allNight);
     float flicker = 1.0 - ${WINDOW_GLOW.flicker.toFixed(2)} * (0.5 + 0.5 * sin(windowLight.z * (1.7 + 2.3 * seed) + seed * 40.0) * sin(windowLight.z * (3.1 + 1.9 * seed)));
+
+    return on * flicker;
+}`;
+
+// A window's glow at night (WINDOWS): when it's lit (windowOn), where its glass is (not its
+// leading); none by day
+const WINDOW_GLSL = `
+uniform vec4 windowLight;
+flat varying float vWindow;
+${WINDOW_ON_GLSL}
+
+vec3 atlasWindowGlow(const in vec3 texel) {
+    float on = windowOn(vWindow, windowLight);
+
+    if (on <= 0.0) return vec3(0.0);
+
     float glass = smoothstep(0.08, 0.3, dot(texel, vec3(0.3, 0.59, 0.11)));
 
-    return vec3(${new THREE.Color(WINDOW_GLOW.colour).toArray().map((v) => v.toFixed(4)).join(", ")}) * ${WINDOW_GLOW.strength.toFixed(2)} * on * flicker * glass;
+    return vec3(${new THREE.Color(WINDOW_GLOW.colour).toArray().map((v) => v.toFixed(4)).join(", ")}) * ${WINDOW_GLOW.strength.toFixed(2)} * on * glass;
 }`;
 
 // A material's shader drawn from the atlas: each vertex's layer, its texture coordinates, and the
@@ -676,15 +693,25 @@ export function toGlow(geometry, material) {
     return result;
 }
 
+/**
+ * Which of a building's windows throw their light on the ground (windowpools.js): a pane upright,
+ * at least `low` high and `narrow` across (metres), no more than `wide` across and `thick` deep
+ * (so not a lantern's glass, nor a bottle's), facing out from its building's middle by `out`.
+ */
+export const PANES = Object.freeze({ low: 0.25, narrow: 0.2, wide: 3, thick: 0.25, out: 0.3 });
+
 // Each window's seed, for each corner of a (non-indexed) geometry of windows' glass: its windows
 // told apart as the triangles that touch (a pane, or the panes of a leaded window, or a lantern's
-// glass), each its own seed from where it is (1 to WINDOW_SEEDS); or all lit all night
-function windowSeeds(geometry, allNight) {
+// glass), each its own seed from where it is (1 to WINDOW_SEEDS); or all lit all night. With its
+// building's middle (`centre`, [x, z]), its upright panes too (PANES'), each { at: [x, y, z] (its
+// middle), out: [x, z] (the way it faces, a unit), low, high (its foot's and top's heights),
+// width, seed }: { seeds, panes }
+function windowSeeds(geometry, allNight, centre = null) {
     const count = geometry.attributes.position.count;
     const seeds = new Float32Array(count);
 
-    if (allNight) {
-        return seeds.fill(ALL_NIGHT);
+    if (allNight && !centre) {
+        return { seeds: seeds.fill(ALL_NIGHT), panes: [] };
     }
 
     const at = geometry.attributes.position.array;
@@ -732,14 +759,66 @@ function windowSeeds(geometry, allNight) {
         let hash = Math.imul(Math.round((x / n) * 100), 73856093) ^ Math.imul(Math.round((y / n) * 100), 19349663) ^ Math.imul(Math.round((z / n) * 100), 83492791);
 
         hash = Math.imul(hash ^ (hash >>> 15), 2246822519) >>> 0;
-        seedOf.set(pane, 1 + (hash % WINDOW_SEEDS));
+        seedOf.set(pane, allNight ? ALL_NIGHT : 1 + (hash % WINDOW_SEEDS));
     }
 
     for (let i = 0; i < triangles * 3; i++) {
         seeds[i] = seedOf.get(root(Math.floor(i / 3)));
     }
 
-    return seeds;
+    return { seeds, panes: centre ? uprightPanes(at, triangles, root, sums, seedOf, centre) : [] };
+}
+
+// The upright panes (PANES') among a geometry's windows (windowSeeds' panes, their corners' sums
+// and seeds): each one's spread across the ground (its corners' covariance) gives which way it
+// lies, and so which way it faces, out from its building's middle
+function uprightPanes(at, triangles, root, sums, seedOf, [cx, cz]) {
+    const spread = new Map();
+
+    for (let i = 0; i < triangles * 3; i++) {
+        const pane = root(Math.floor(i / 3));
+        const [sx, , sz, n] = sums.get(pane);
+        const [dx, dz] = [at[i * 3] - sx / n, at[i * 3 + 2] - sz / n];
+        const one = spread.get(pane) ?? { xx: 0, xz: 0, zz: 0, low: Infinity, high: -Infinity };
+
+        one.xx += dx * dx;
+        one.xz += dx * dz;
+        one.zz += dz * dz;
+        one.low = Math.min(one.low, at[i * 3 + 1]);
+        one.high = Math.max(one.high, at[i * 3 + 1]);
+        spread.set(pane, one);
+    }
+
+    // (Which way each lies, then how far it reaches along itself and across)
+    for (const [pane, one] of spread) {
+        const [sx, sy, sz, n] = sums.get(pane);
+        const turn = 0.5 * Math.atan2(2 * one.xz, one.xx - one.zz);
+
+        Object.assign(one, { middle: [sx / n, sy / n, sz / n], along: [Math.cos(turn), Math.sin(turn)], width: 0, thick: 0 });
+    }
+
+    for (let i = 0; i < triangles * 3; i++) {
+        const pane = spread.get(root(Math.floor(i / 3)));
+        const { middle, along } = pane;
+        const [dx, dz] = [at[i * 3] - middle[0], at[i * 3 + 2] - middle[2]];
+
+        pane.width = Math.max(pane.width, 2 * Math.abs(dx * along[0] + dz * along[1]));
+        pane.thick = Math.max(pane.thick, 2 * Math.abs(dz * along[0] - dx * along[1]));
+    }
+
+    const panes = [];
+
+    for (const [pane, { middle, along, width, thick, low, high }] of spread) {
+        const away = (middle[0] - cx) * -along[1] + (middle[2] - cz) * along[0];
+
+        if (high - low >= PANES.low && width >= PANES.narrow && width <= PANES.wide && thick <= PANES.thick && Math.abs(away) >= PANES.out) {
+            const sign = Math.sign(away);
+
+            panes.push({ at: middle, out: [-along[1] * sign, along[0] * sign], low, high, width, seed: seedOf.get(pane) });
+        }
+    }
+
+    return panes;
 }
 
 /**
@@ -749,7 +828,7 @@ function windowSeeds(geometry, allNight) {
  * none) times the material's own if it's a plain colour (or its tint's if it's tinted). Null if it
  * can't be.
  */
-export function toAtlas(geometry, material, { allNight = false } = {}) {
+export function toAtlas(geometry, material, { allNight = false, centre = null } = {}) {
     const layer = layerOf(material);
 
     if (layer < 0) {
@@ -794,11 +873,13 @@ export function toAtlas(geometry, material, { allNight = false } = {}) {
     result.setAttribute("color", new THREE.BufferAttribute(colours, 3));
     const layers = new Float32Array(count).fill(layer + SHINE_STEP * shineOf(material));
     if (WINDOWS.includes(TINTS[material.name]?.from ?? material.name)) {
-        const seeds = windowSeeds(geometry, allNight || LIT_ALL_NIGHT.materials.includes(material.name));
+        const { seeds, panes } = windowSeeds(geometry, allNight || LIT_ALL_NIGHT.materials.includes(material.name), centre);
 
         for (let i = 0; i < count; i++) {
             layers[i] += WINDOW_STEP * seeds[i];
         }
+
+        result.userData.panes = panes;
     }
 
     result.setAttribute("layer", new THREE.BufferAttribute(layers, 1));

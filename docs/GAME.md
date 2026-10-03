@@ -106,7 +106,8 @@ back to the same world:
     0.3 to 0.85 of the wall below it, never more than 7 m. Never over a window, a slit, a
     doorway or a buttress, nor on a wall less than 1.2 m high. Cards of leaves cut out of their
     picture, drawn as the hedges' sprigs are (the same program), all of a chunk's ivy one draw,
-    casting no shadow. The peoples' kept walls have none.
+    casting no shadow. The peoples' kept walls have no curtains: only, now and then, a patch
+    climbing a cottage's bare wall from its foot (*Houses*, below).
   - **Left behind** (`art/kits/leftovers.js`): grey, weathered and charred beams, snapped off or
     fallen, posts standing where halls stood; barrels whole, tipped over or burst (their staves
     splayed, a hoop in the grass); crates, some broken open; a cart left on one wheel.
@@ -765,6 +766,18 @@ a look of its own (`LOOKS`), which the world takes on round the player:
   three minutes before the dusk to the night's start, the town's windows come on one after
   another; all night they're lit (some going out after midnight), and through the dawn they go
   out.
+  - **Their light on the ground** (terrain plan M7j-3; `world/windowpools.js`): in front of each
+    lit window a pool of warm light lies on the ground, widest and brightest at the wall's foot,
+    fading out as it spreads (1.6 m out from a window at the foot of the wall, 3.4 m from one 4 m
+    up, fainter the higher it is; none from one over 7 m up), coming on, going out late and
+    flickering with its own window (`atlas.js windowOn`: the windows' glow and the pools share
+    it). The windows are the upright panes the atlas finds as a building's merged (`toAtlas`'s
+    `panes`: each pane's middle, the way it faces out from its building's middle, and its seed;
+    not a lantern's glass or a bottle's, `PANES`). A chunk's pools (and the start town's) are
+    one mesh lying on the ground and added onto it, a few corners a window; by day not drawn at
+    all, and fading out from 35 to 80 m off. Its shader's made at load (the chunks' primer). The
+    peoples whose windows are dark (the cat folk's, the orcs', the lizard folk's) or glow on
+    their own (the dark elves') have none.
 - **Fire** (world/fire.js, lights.js, firelight.js, kits/torches.js): every fire in the game is
   drawn and lit the same way, from a candle to a fire spell. You asked for wavy, realistic fire
   ("Real fire is kind of wavy"), each fire its own light ("Shouldn't the torches and the spells
@@ -2066,9 +2079,18 @@ facing south; each is turned about its middle to face the way the layout says:
   never goes up the front gable, across the door and the name board or sign over it: a house
   with its gable to the street has it up the back one.
 
-  Its weathering is painted on its corners: dirt splashed up the foot of the walls, shade under
-  the eaves and jetties and in the reveals, streaks, moss on the roof where it faces north (as
-  the house stands), and each house's limewash a little its own colour. A colour worked out at
+  Its weathering is painted on its corners: dirt splashed up the foot of the walls, damp rising
+  up them (darker and a little brown-green to 0.15 m, gone by 0.95 m) and, on a wall facing north
+  as the house stands, a little green in patches low down (to 0.4 m, gone by 1.8 m: terrain plan
+  M7j-3, `peoples/kit.js` `wallWeather`, the same on every people's houses: `weathering`'s
+  `facing`; none on a tent), shade under the eaves and jetties and in the reveals, streaks, moss
+  on the roof where it faces north, and each house's limewash a little its own colour. Kept,
+  not let go: the ruins' moss and ivy curtains are theirs alone. About three cottages in ten have
+  a patch of ivy climbing a bare stretch of a side or back wall from its foot (`ivy.js`
+  `ivyClimb`, `CLIMBING`: 1.1 to 2.4 m across, up to 0.55 to 0.9 of the ground floor's height,
+  lower to its sides; never on the front, nor within 0.3 m of an opening, nor across the middle
+  of a gable end where a chimney may stand), from its own random numbers so the rest of the house
+  is as it was: about 16 triangles a patch, drawn with the chunk's ivy. A colour worked out at
   corners is blended between them, so a plain stretch of wall drawn as one face from its foot to
   its eaves would blend the dirt into the shade: one grey, a tenth darker than it's meant to be
   over the walls of 391 houses, and more than a little wrong over nearly half their area. So the

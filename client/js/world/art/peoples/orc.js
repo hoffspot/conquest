@@ -20,8 +20,8 @@ const ORC = 1.25;
 
 const WASHES = ["hide", "hide-dark", "mud-red"];
 
-export function toned(solid, random, eaves = []) {
-    solid.tone = weathering({ seed: random.int(0, 1e6), eaves, washes: WASHES, tint: [random.range(0.94, 1.05), random.range(0.93, 1.03), random.range(0.92, 1.02)], dirt: 0.42, mottle: ["hide", "hide-dark", "thatch-grey", "plates"] });
+export function toned(solid, random, eaves = [], facing = 0) {
+    solid.tone = weathering({ seed: random.int(0, 1e6), eaves, facing, washes: WASHES, tint: [random.range(0.94, 1.05), random.range(0.93, 1.03), random.range(0.92, 1.02)], dirt: 0.42, mottle: ["hide", "hide-dark", "thatch-grey", "plates"] });
 }
 
 /**
@@ -396,7 +396,7 @@ export function house(piece) {
     const type = piece.type ?? (piece.back ? random.pick(["tent", "tent", "roundhut"]) : long > 1.7 ? "longhouse" : Math.min(W, D) > m(8) ? random.pick(["roundhut", "longhouse", "block"]) : random.pick(["roundhut", "block", "tent"]));
     const solid = new Solid();
 
-    toned(solid, random, [m(3.3)]);
+    toned(solid, random, [m(3.3)], piece.facing ?? 0);
 
     if (type === "longhouse") {
         // (Along the lot's longer side; turned if it's deeper than wide)

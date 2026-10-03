@@ -35,6 +35,7 @@ import { lieOf, yard } from "./art/kits/yards.js";
 import { plantTrees, VARIANTS } from "./art/kits/trees.js";
 import { canopyTint } from "./canopy.js";
 import { lightsMesh, lightsOf } from "./lights.js";
+import { poolsMesh } from "./windowpools.js";
 import { chimneysOf, smokeMesh } from "./smoke.js";
 import { clothMesh, clothOf } from "./cloth.js";
 
@@ -260,10 +261,15 @@ export async function buildTown(world, { onProgress = () => {}, groundAt = () =>
         blocks.get(key).add(child);
     }
 
+    const panes = [];
+
     for (const [key, block] of blocks) {
         block.updateMatrixWorld(true);
 
-        const merged = merge(block, { atlas: true });
+        const parts = partsOf(block, { atlas: true });
+        const merged = joined(parts);
+
+        panes.push(...parts.flatMap((part) => part.panes));
 
         for (const mesh of [...merged.children]) {
             mesh.name = `${mesh.name} ${key}`;
@@ -279,7 +285,8 @@ export async function buildTown(world, { onProgress = () => {}, groundAt = () =>
 
     object.add(trees.object);
 
-    for (const drawn of [smoke, cloth, lit]) {
+    // (And the light its lit windows throw on the ground at night: windowpools.js)
+    for (const drawn of [smoke, cloth, lit, poolsMesh(panes, groundAt)]) {
         if (drawn) {
             object.add(drawn);
         }
@@ -437,23 +444,29 @@ export function merge(root, { atlas = false } = {}) {
  * be, with `atlas` (and every light into the one glowing material); or, `atlas` a function of what
  * a part was made in, into the material it gives, drawn from the atlas as that one is (the
  * insides': interiors3d.js), lights left as they are. [{ key, material, geometry, near (only worth
- * drawing near: Solid's) }], for `joined` (merge's first half, so that the parts of what's built a
- * piece at a time can be made a piece at a time: chunks3d.js).
+ * drawing near: Solid's), panes (its upright windows: atlas.js windowSeeds', for windowpools.js) }],
+ * for `joined` (merge's first half, so that the parts of what's built a piece at a time can be
+ * made a piece at a time: chunks3d.js).
  */
 export function partsOf(root, { atlas = false } = {}) {
     const parts = [];
-    // (Whether a node's in a building whose windows are lit all night: atlas.js LIT_ALL_NIGHT)
-    const allNight = (node) => {
+    // (The building a node's in: the node standing for its piece, if it's in one)
+    const buildingOf = (node) => {
         for (let at = node; at; at = at.parent) {
-            const piece = at.userData.piece;
-
-            if (piece) {
-                return LIT_ALL_NIGHT.landmarks.includes(piece.kind === "landmark" ? piece.name : piece.kind);
+            if (at.userData.piece) {
+                return at;
             }
         }
 
-        return false;
+        return null;
     };
+    // (Whether a node's in a building whose windows are lit all night: atlas.js LIT_ALL_NIGHT)
+    const allNight = (building) => {
+        const piece = building?.userData.piece;
+
+        return Boolean(piece) && LIT_ALL_NIGHT.landmarks.includes(piece.kind === "landmark" ? piece.name : piece.kind);
+    };
+    const middle = new THREE.Vector3();
 
     root.traverse((node) => {
         if (!node.isMesh) {
@@ -470,7 +483,9 @@ export function partsOf(root, { atlas = false } = {}) {
             ? node.geometry.groups.map((group) => [extract(source, group.start, group.count), materials[group.materialIndex]])
             : [[source, materials[0]]];
 
-        const night = { allNight: allNight(node) };
+        // (Lit all night or not; and its building's middle, metres, for which way its windows face)
+        const building = buildingOf(node);
+        const night = { allNight: allNight(building), centre: building ? (middle.setFromMatrixPosition(building.matrixWorld), [middle.x, middle.z]) : null };
 
         for (const [part, own] of split) {
             const drawn = atlas ? toAtlas(part, own, night) : null;
@@ -490,7 +505,7 @@ export function partsOf(root, { atlas = false } = {}) {
                 geometry.setAttribute("uv", new THREE.Float32BufferAttribute(new Float32Array(geometry.attributes.position.count * 2), 2));
             }
 
-            parts.push({ key, material, geometry, near: Boolean(node.userData.near) });
+            parts.push({ key, material, geometry, near: Boolean(node.userData.near), panes: drawn?.userData.panes ?? [] });
         }
     });
 
