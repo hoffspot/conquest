@@ -2549,7 +2549,7 @@ draws it scaled to fit, then which way the camera looks (a wedge from the player
 over the ground, or the way they face when it looks straight down: always the same size, 30% of
 the minimap across and 63 degrees wide, however the camera's tilted or zoomed, fading out over
 its far two-thirds: `LOOK`), where the player is going, the enemies (red dots, the target ringed), an icon over each building the
-player has gone into, and the player (an arrowhead pointing the way they face). A tap on it walks
+player has gone into and each place worth finding round them (below), and the player (an arrowhead pointing the way they face). A tap on it walks
 the player there, or fights an enemy within 12 pixels of the tap; a double tap runs; holding it
 (0.55 s, without moving) opens the world map. Inside, each floor is painted from its plan: the
 floor, walls, furniture in its colours, the stairs' treads, round barrels, the hearth's fire and
@@ -2563,6 +2563,35 @@ anvil throwing a spark for a smithy (steel), a temple's columns under its pedime
 gold keys for a town hall (red), and a jewelled crown for a keep (violet). They're
 drawn on a canvas from paths on a 24-unit grid, the same on the minimap (22 pixels), the world
 map (24) and its key.
+
+**Places worth finding** (`core/places.js`; the terrain plan's M7.5) have icons too, wherever
+they are: every site the world plan puts out between the settlements and every wild camp.
+- **Their icons:** a castle (a tower under a flag), a manor, an abbey or temple (a church with its
+  tower, also a ziggurat, the sun temple and the spider shrine), a windmill, a watchtower (also the
+  starwatch and the obsidian spire), a people's great hall (the tree hall, the hatchery, the
+  shadow gate, the fighting pit), a holy spring (the moonwell, the watering hole, the serpent
+  pool), a great rock (pride rock), a totem (the war totem, the skull pit), ruins, a ruined
+  castle, a cave's mouth, the dragon's claw marks, a shrine's flame, standing stones and a camp's
+  tent.
+- **Their rim** is the colour of who holds the place now (`PLACE_RIMS`): its people's gold,
+  outlaws' red, the restless dead's pale green, a great beast's orange, grey once it's been
+  cleared; a shrine, the stones and a camp keep their own.
+- **Where they're shown:** on the minimap, those in its view, where each stands once it's been set
+  down (a site's heart, sites.js `placedAt`; a camp where it's pitched, overworld.js
+  `campPlacedAt`) and at its plan's spot till then. On the world map, only those within a chunk
+  of where the player's been.
+
+**Who holds them** is mixed by the war, a world at a time (`heldAtStart`):
+- Each people's castle is theirs.
+- Their other places (manors, abbeys, halls, temples, watchtowers and the like) are theirs, or
+  outlaws' in about a third of them (`PLACE_TIMES.taken`, by the world's seed and the place's).
+  Holy springs, pride rock and the war totem are theirs alone.
+- A watchtower out in the wild, and a cave, are outlaws'. The ruins and the ruined castles are the
+  restless dead's, the dragon's lair the dragon's, and the shrines and standing stones no one's.
+- **Cleared and retaken:** once a place's occupiers are put to the sword (`War.clearPlace`, kept
+  with the war: `places`, by the place's id, the turn it was cleared and how often), it stands
+  empty for 120 of the war's turns (two days of the world's clock: `PLACE_TIMES.retake`), then
+  it's held as it was at the start again (`holderOf`). A people's own hold isn't cleared.
 
 **What the player's found** (`core/explored.js` `Explored`): the buildings they've gone into (by
 key: marked the first time they cross into one of its floors) and the chunks of the world they've

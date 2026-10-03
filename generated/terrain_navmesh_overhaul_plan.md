@@ -3551,4 +3551,41 @@ converted data is to be measured in M8 against today's hm08 data.
     view to the side with its shadow falling in, never something big; a mesh of several
     materials left as it is).
   - **Next:** M7.5, places worth finding.
-
+- **2026-10-03, M7.5 broken into its steps** (§8 *Places worth finding*):
+  - **M7.5a-1:** every place on the maps, and who holds it (the war's record of what's been
+    cleared, retaken after a while).
+  - **M7.5a-2:** outlaws and the dead at their places (as many and as strong as the place is big
+    and its land dangerous), a leader stronger than the rest guarding a chest; clearing it.
+  - **M7.5a-3:** a guild mission for each place held by outlaws or the dead.
+  - **M7.5b:** the places of any size entered and explored (castles' courtyards and keeps, manors,
+    abbeys, watchtowers' floors, caves, the dragon's lair), their occupiers inside.
+  - **M7.5c:** the friendlies' shops; ghosts and wraiths at the ruins, a greater one with its relic.
+- **2026-10-03, M7.5a-1 built: every place worth finding on the maps, and who holds it** (§8;
+  docs/GAME.md *Places worth finding*, *Who holds them*). The user, on the castle between two
+  human towns: "It didn't show up on the minimap."
+  - **Places** (core/places.js `placesOf`, `PLACE_KINDS`): every site in the plan (each people's
+    castle and own places, the watchtowers, ruins, caves, shrines, stones, ruined castles and the
+    dragon's lair) and every wild camp, each with its size (small, medium, large: for how many
+    hold it, next), its icon and who may hold it.
+  - **Who holds each** (`heldAtStart`, `holderOf`): a people's castle theirs; their other places
+    theirs or outlaws' (about a third, `PLACE_TIMES.taken`, by the world's seed and the place's
+    id); a wild watchtower and a cave outlaws'; the ruins and ruined castles the dead's; the lair
+    the dragon's; shrines and stones no one's. Cleared (war.js `clearPlace`: `places`, kept with
+    the war, an old war's none), it's empty 120 turns (two days of the clock), then held again.
+  - **On the maps** (app/mapicons.js: 16 new icons, `PLACE_RIMS`; game.js `placeIcons`): on the
+    minimap every place in its view, where it stands once set down (sites.js `placedAt`; a camp
+    where it's pitched, overworld.js `campPlacedAt`), rimmed in who holds it; on the world map
+    those within a chunk of where the player's been.
+  - **Versions:** `NET_VERSION` 31 (the war's snapshot carries what's been cleared).
+  - **Seen, not fixed:** a wild camp on seed 1 is pitched inside the human citadel's cleared
+    ground (camps keep off roads, not off the sites: overworld.js `campAt`); for M7.5a-2, where
+    camps and places are put out together.
+  - **Pictures:** the minimap at a ruin, the citadel, a cave, a watchtower, a shrine and the
+    stones, before and after, and the world map (sent in the session).
+  - **Tests:** test/places.test.js (every site and camp a place with an icon that's drawn and who
+    may hold it; held at the start as the war has it, about a third of a people's places taken,
+    the same every time; cleared empty a while then held again, a people's own never; cleared as
+    the war keeps it, carried on from its snapshot, an old snapshot's none). e2e: the places near
+    on the minimap and on the world map once the player's been by, rimmed in who holds them, a
+    cleared one grey till it's held again; a building gone into still marked as it was.
+  - **Next:** M7.5a-2, outlaws and the dead at their places, a leader and a chest.

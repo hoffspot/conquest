@@ -581,6 +581,11 @@ export class Overworld {
         return this.campSpots.get(camp.id);
     }
 
+    /** Where a camp's pitched if that's been worked out (campAt), else its plan's spot. */
+    campPlacedAt(camp) {
+        return this.campSpots.get(camp.id) ?? camp.at;
+    }
+
     // The camps that could be pitched within `margin` of a box (metres), wherever they're pitched
     #campsNear(x0, y0, x1, y1, margin) {
         const reach = FLATS.reach + margin;

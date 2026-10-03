@@ -3229,7 +3229,9 @@ test("a building gone into is marked on the minimap; holding the minimap opens t
         game.minimap.drawn = -Infinity;
         game.advance(0.1);
 
-        const marked = { icons: game.icons().map(({ kind }) => kind), minimap: [...game.minimap.icons], entered: [...game.explored.entered] };
+        // (The buildings' icons: the places worth finding near have theirs too, their own test's)
+        const buildings = ["tavern", "blacksmith", "church", "guild", "hall", "keep"];
+        const marked = { icons: game.icons().map(({ kind }) => kind), minimap: game.minimap.icons.filter((kind) => buildings.includes(kind)), entered: [...game.explored.entered] };
 
         // (Somewhere 150 metres off that can be walked to)
         const squares = game.world.maps.town.squares;
@@ -3273,7 +3275,9 @@ test("a building gone into is marked on the minimap; holding the minimap opens t
     const map = await page.evaluate(() => {
         const { game, worldMap } = window.pellagos;
 
-        return { open: document.querySelector("#worldmap").open, running: game.running, order: game.battle.actor("player").order?.type ?? null, drawn: worldMap.drawn, chunks: game.explored.chunksVisited, town: game.world.plan.places.find(({ at }) => Math.hypot(at[0] - game.world.stamp.middle[0], at[1] - game.world.stamp.middle[1]) < 200)?.name };
+        const buildings = ["tavern", "blacksmith", "church", "guild", "hall", "keep"];
+
+        return { open: document.querySelector("#worldmap").open, running: game.running, order: game.battle.actor("player").order?.type ?? null, drawn: { ...worldMap.drawn, icons: worldMap.drawn.icons.filter((kind) => buildings.includes(kind)) }, chunks: game.explored.chunksVisited, town: game.world.plan.places.find(({ at }) => Math.hypot(at[0] - game.world.stamp.middle[0], at[1] - game.world.stamp.middle[1]) < 200)?.name };
     });
 
     expect(map.open).toBe(true);
@@ -3305,6 +3309,61 @@ test("a building gone into is marked on the minimap; holding the minimap opens t
     await page.keyboard.press("m");
     await expect(page.locator("#worldmap")).not.toBeVisible();
     expect(await page.evaluate(() => window.pellagos.game.running)).toBe(true);
+});
+
+test("the places worth finding are on the minimap near them and on the world map once the player's been by, rimmed in who holds them, a cleared one grey till it's held again", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const seen = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+        const war = game.host.war;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        // The ruins nearest the start town: not on the world map till the player's been by
+        const [ruins] = game.placeIcons()
+            .filter(({ kind }) => kind === "ruins")
+            .sort((a, b) => Math.hypot(a.x - player.x, a.z - player.y) - Math.hypot(b.x - player.x, b.z - player.y));
+        const before = game.worldMapView().icons.some(({ id }) => id === ruins.id);
+
+        Object.assign(player, { x: ruins.x + 20, y: ruins.z + 20, path: [], order: null, progress: null });
+
+        for (let k = 0; k < 20; k++) {
+            game.advance(0.25, { render: false });
+
+            while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        }
+
+        game.minimap.drawn = -Infinity;
+        game.advance(0.1);
+
+        const near = game.placeIcons().find(({ id }) => id === ruins.id);
+        const after = { minimap: game.minimap.icons.includes("ruins"), map: game.worldMapView().icons.some(({ id }) => id === ruins.id), holder: near.holder, rim: near.rim, moved: Math.hypot(near.x - ruins.x, near.z - ruins.z) };
+
+        // Cleared: grey till PLACE_TIMES.retake turns on, then held again
+        war.clearPlace(ruins.id);
+
+        const cleared = game.placeIcons().find(({ id }) => id === ruins.id).holder;
+
+        war.turn += 120;
+
+        const again = game.placeIcons().find(({ id }) => id === ruins.id).holder;
+        const castle = game.placeIcons().find(({ kind }) => kind === "castle");
+
+        return { before, after, cleared, again, castle: castle.holder, kinds: [...new Set(game.placeIcons().map(({ kind }) => kind))].length };
+    });
+
+    expect(seen.before).toBe(false);
+    expect(seen.after).toMatchObject({ minimap: true, map: true, holder: "dead", rim: "#7fe0b8" });
+    expect(seen.after.moved).toBeLessThan(80);
+    expect(seen.cleared).toBe("cleared");
+    expect(seen.again).toBe("dead");
+    expect(seen.castle).toBe("friendly");
+    expect(seen.kinds).toBeGreaterThan(10);
 });
 
 test("on the world map a pin's dropped where it's held: a column of light where it stands and a line the way there, taken away held again; tapped twice, the player runs there, or is told there's no way", async ({ page }) => {

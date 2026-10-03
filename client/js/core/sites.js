@@ -330,6 +330,11 @@ export class Sites {
         return this.set.get(site.id)?.heart ?? site.at;
     }
 
+    /** Where a site's heart is if it's been set down (metres; heartOf), else its plan's spot: nothing set down for it. */
+    placedAt(site) {
+        return this.set.get(site.id)?.heart ?? site.at;
+    }
+
     /**
      * What a site has on a square (metres): { blocked, opaque, paved (a citadel's: its wards'
      * courtyards, trodden earth and flags) }, or null.

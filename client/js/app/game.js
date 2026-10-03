@@ -33,6 +33,9 @@ import { DAY, daylight, elapsedOf, moonPhase, timeOfDay } from "../core/daytime.
 import { carriesTorch, torchesLit } from "../core/light.js";
 import { STEP_MS, TALK_REACH } from "../core/battle.js";
 import { CREATURES } from "../core/creatures.js";
+import { holderOf, placesOf } from "../core/places.js";
+import { CHUNK } from "../core/worldplan/plan.js";
+import { PLACE_RIMS } from "./mapicons.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
 import { HIRES, HOST_PLAYER, Host, PICK_REACH, REFUSALS, SHOP_REACH, SHOPKEEPERS, TRADE, UNDO_MS } from "../core/host.js";
 import { dress } from "../characters/liveries.js";
@@ -2305,7 +2308,7 @@ export class Game {
             }),
             destination: actor.order?.type === "move" ? [actor.order.to[0] + 0.5, actor.order.to[1] + 0.5] : null,
             look: actor.dead ? null : look,
-            icons: this.mapId === "town" ? this.icons() : [],
+            icons: this.mapId === "town" ? [...this.icons(), ...this.placeIcons()] : [],
         });
     }
 
@@ -2327,15 +2330,52 @@ export class Game {
     }
 
     /**
+     * The places worth finding out in the world (core/places.js; the terrain plan's M7.5), as icons
+     * for the maps: [{ id, kind (its icon: app/mapicons.js), x, z (metres: its heart once it's set
+     * down, sites.js, or where a camp's pitched; its plan's spot till then), holder (who holds it
+     * now), rim (its colour) }].
+     */
+    placeIcons() {
+        const plan = this.world.plan;
+        const war = this.host?.war;
+
+        if (!plan?.sites || !war) {
+            return [];
+        }
+
+        const overworld = this.world.maps.town;
+        const sites = overworld?.sites;
+        const key = `${war.turn}:${sites?.set.size ?? 0}:${overworld?.campSpots?.size ?? 0}:${JSON.stringify(war.places)}`;
+        const known = (this.placeMarks ??= { key: null, icons: [], sites: new Map(plan.sites.map((site) => [site.id, site])), camps: new Map(plan.camps.map((camp) => [camp.id, camp])) });
+
+        if (known.key !== key) {
+            known.icons = placesOf(plan).map((place) => {
+                const site = known.sites.get(place.id);
+                const camp = known.camps.get(place.id);
+                // (Where it stands once it's set down, or pitched; its plan's spot till then)
+                const [x, z] = site && sites ? sites.placedAt(site) : camp && overworld?.campPlacedAt ? overworld.campPlacedAt(camp) : place.at;
+                const holder = holderOf(plan, place, war.places[place.id], war.turn);
+
+                return { id: place.id, kind: place.icon, x, z, holder, rim: holder ? PLACE_RIMS[holder] : null };
+            });
+            known.key = key;
+        }
+
+        return known.icons;
+    }
+
+    /**
      * What the world map shows (app/worldmap.js): where the player is ({ x, z, facing }, metres
-     * and radians, on the world outside: inside, at the building's door) and the icons.
+     * and radians, on the world outside: inside, at the building's door) and the icons: the
+     * buildings gone into, and the places worth finding near where they've been (within a chunk).
      */
     worldMapView() {
         const actor = this.battle.actor(this.me);
         const outside = this.#outside(actor);
         const facing = this.avatars.get(this.me)?.facing ?? actor.facing;
+        const seen = ({ x, z }) => [-1, 0, 1].some((dz) => [-1, 0, 1].some((dx) => this.explored.visitedAt(x + dx * CHUNK, z + dz * CHUNK)));
 
-        return { player: { x: outside[0], z: outside[1], facing }, icons: this.icons(), marks: this.requestMarks(), ...this.pinView() };
+        return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.placeIcons().filter(seen)], marks: this.requestMarks(), ...this.pinView() };
     }
 
     // --- The world map's pin ---
