@@ -1277,6 +1277,9 @@ test("once a tap lets it make sound, the music plays on recordings of real instr
 });
 
 test("tapping the ground walks the player there; double-clicking it runs there, using stamina, shown by an orange bar until it's back", async ({ page }) => {
+    // (Clicked and tapped while the game plays on, every frame drawn between: about two minutes
+    // on a slow machine without a GPU, as CI's can be)
+    test.setTimeout(180000);
     await playing(page, "/?play&seed=1");
 
     const bar = page.locator("#playerplate .bar.stamina");

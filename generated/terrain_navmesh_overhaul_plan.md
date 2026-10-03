@@ -3239,6 +3239,11 @@ converted data is to be measured in M8 against today's hm08 data.
     off the world's lines) also shades the ground (it was the grass's picture again, 37 m a copy,
     hardly varying) and wanders the lands' edges (they hardly wandered). Pictures before and after
     on medium and low, sent in the session.
+  - **Main's CI after M7i-2:** the e2e test that taps and double-clicks the ground timed out at
+    120 s on main twice (it passed on M7i-2's own run). Not hung: pinned to two cores it takes
+    two minutes (a minute loading, a minute of clicks while the game plays on, every frame drawn
+    in software), the stone bridges drawn round the start adding a little; given 180 s, as the
+    other tests that long are.
   - **Pictures:** seed 1's two aqueducts from beside, close and along, sent in the session.
   - **Tests:** test/aqueducts.test.js (placement, determinism, on the humans' land clear of roads,
     water, places and arches; a kept stretch, broken and fallen piers, arches only between whole
