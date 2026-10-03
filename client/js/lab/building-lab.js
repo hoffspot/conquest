@@ -131,7 +131,7 @@ function structuresOf(seed, people) {
 }
 
 // A row of every special building: taverns of every sort (their names and signs from the seed),
-// the guild, churches to the Six, the smithy, the market hall, the windmill, a town hall and a keep
+// the guild, churches to the Six (one of each grade), the smithy, the market hall, the windmill, a town hall and a keep
 function landmarksOf(seed, people = "human") {
     const random = createRandom(seed);
     const pieces = [];
@@ -139,7 +139,8 @@ function landmarksOf(seed, people = "human") {
     const row = [
         ...(own ? [2, 1] : [2, 2, 1, 2]).map((storeys) => ({ name: "tavern", tavern: nameTavern(random, { storeys }) })),
         { name: "guild" },
-        ...GOD_IDS.slice(0, own ? 1 : 2).map((patron) => ({ name: "church", patron: GOD_IDS[(seed + GOD_IDS.indexOf(patron)) % GOD_IDS.length] })),
+        // (A church of each grade and build: a village's, a town's of each, a city's minster)
+        ...(own ? [{ grade: "parish" }] : [{ grade: "parish" }, { grade: "church", gothic: false }, { grade: "church", gothic: true }, { grade: "minster", gothic: true }]).map((grade, k) => ({ name: "church", ...grade, patron: GOD_IDS[(seed + k) % GOD_IDS.length] })),
         { name: "blacksmith" },
         { name: "market" },
         ...(own ? [] : [{ name: "windmill" }]),

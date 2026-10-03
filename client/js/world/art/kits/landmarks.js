@@ -1,7 +1,7 @@
 // A town's special buildings, built to the same measure as its houses and people (five world
 // pixels to a metre): taverns (each its own, from its name down: house.js builds them as it does
-// the houses, with their names and signs), the adventurers' guild's hall, a stone church with a
-// spired tower, a blacksmith's smithy with an open forge, a market hall on columns with stalls
+// the houses, with their names and signs), the adventurers' guild's hall, a stone church as big as
+// its place (church.js), a blacksmith's smithy with an open forge, a market hall on columns with stalls
 // beneath, a windmill, a town hall, and a capital's keep. Each is built facing south; the town
 // turns it to face its street.
 
@@ -10,6 +10,7 @@ import { createRandom } from "../../../core/random.js";
 import { flagpole } from "../../cloth.js";
 import { material } from "../engine/materials.js";
 import { Solid } from "../engine/solid.js";
+import { churchBody } from "./church.js";
 import { buildHouse, planHouse, STYLES as HOUSE_STYLES } from "./house.js";
 import { emblemSignTexture, hangingSignTexture, loadSignFont, nameBoardTexture, signMaterial, TAVERN_NAME } from "./signs.js";
 import { fireLight, lanternLight, torch } from "./torches.js";
@@ -269,8 +270,9 @@ export async function guild(piece) {
 const GOD_EMBLEMS = Object.freeze({ aurelia: "sun", brannoc: "stag", ithriel: "star", morvaine: "lantern", seliane: "rose", dunmar: "anvil" });
 
 /**
- * The church: a stone nave, buttressed, with tall windows, and a tower with a spire at the front,
- * the Six's sun of six rays on its top; its patron's (core/lore/gods.js) sign by the door.
+ * The church: built to its grade's grammar (church.js: a village's Romanesque parish church, a
+ * town's aisled church, Romanesque or Gothic, a city's Gothic minster), the Six's gilded sun of
+ * six rays on its spire; its door in its portal, and its patron's (core/lore/gods.js) sign by it.
  */
 export async function church(piece) {
     await loadSignFont();
@@ -279,57 +281,13 @@ export async function church(piece) {
     const patron = GODS[piece.patron] ?? GODS.aurelia;
     const solid = new Solid();
     const [width, depth] = [w * 20, h * 20];
-    const stone = material("stone");
-    const [x0, x1, z0, z1] = [m(3), width - m(3), m(1.5), depth - m(4.2)];
-    const eaves = m(6.5);
-
-    // The nave, its roof running north to south
-    solid.box(x0 - 0.8, 0, z0 - 0.8, x1 + 0.8, m(0.4), z1 + 0.8, material("stone-dark"));
-    solid.box(x0, m(0.4), z0, x1, eaves, z1, stone);
-    solid.roof(x0 - m(0.4), z0 - m(0.4), x1 + m(0.4), z1, eaves, (x1 - x0) * 0.75, { ridge: "z", material: material("slate"), gable: stone });
-
-    // Buttresses between tall windows along both sides
-    for (let z = z0 + m(1); z < z1 - m(1); z += m(2.8)) {
-        for (const [x, out] of [[x0, -1], [x1, 1]]) {
-            const [a, b] = out < 0 ? [x - m(0.7), x] : [x, x + m(0.7)];
-
-            solid.box(a, 0, z - m(0.3), b, m(4.5), z + m(0.3), material("stone-warm"));
-        }
-
-        if (z + m(1.4) < z1 - m(1)) {
-            for (const [x, out] of [[x0, -1], [x1, 1]]) {
-                const face = x + out * 0.2;
-                const [a, b] = out < 0 ? [face - 0.6, face] : [face, face + 0.6];
-
-                solid.box(a, m(2.2), z + m(1.1), b, m(5), z + m(1.7), material("glass"));
-            }
-        }
-    }
-
-    // The tower, square, rising over the front, with belfry openings and a spire
-    const [tx0, tx1] = [width / 2 - m(2.1), width / 2 + m(2.1)];
-    const [tz0, tz1] = [z1 - m(2.4), depth - m(1.2)];
-    const top = m(14.5);
-
-    solid.box(tx0 - 1, 0, tz0 - 1, tx1 + 1, m(0.6), tz1 + 1, material("stone-dark"));
-    solid.box(tx0, m(0.6), tz0, tx1, top, tz1, stone);
-    solid.box(tx0 - 0.8, m(7), tz0 - 0.8, tx1 + 0.8, m(7.3), tz1 + 0.8, material("stone-warm"));
-    solid.box(tx0 - 0.8, top - m(0.3), tz0 - 0.8, tx1 + 0.8, top, tz1 + 0.8, material("stone-warm"));
-
-    for (const x of [width / 2 - m(0.9), width / 2 + m(0.9)]) {
-        solid.box(x - m(0.35), m(11.2), tz1, x + m(0.35), m(13.2), tz1 + 0.6, material("shadow"));
-        solid.box(tx1, m(11.2), (tz0 + tz1) / 2 + (x - width / 2) - m(0.35), tx1 + 0.6, m(13.2), (tz0 + tz1) / 2 + (x - width / 2) + m(0.35), material("shadow"));
-        solid.box(tx0 - 0.6, m(11.2), (tz0 + tz1) / 2 + (x - width / 2) - m(0.35), tx0, m(13.2), (tz0 + tz1) / 2 + (x - width / 2) + m(0.35), material("shadow"));
-    }
-
-    solid.pyramid(tx0 - m(0.2), tz0 - m(0.2), tx1 + m(0.2), tz1 + m(0.2), top, m(7.5), material("slate-grey"));
+    const { door: way, sign, apex } = churchBody(solid, piece, width, depth);
 
     // The Six's gilded sun on the spire: six rays round a disc, on a rod
-    const apex = top + m(7.5);
-    const [sx, sy, sz] = [width / 2, apex + m(0.95), (tz0 + tz1) / 2];
+    const [sx, sy, sz] = [apex[0], apex[1] + m(0.95), apex[2]];
     const gilt = material("gold");
 
-    solid.beam([sx, apex - 1, sz], [sx, sy, sz], m(0.08), m(0.08), gilt);
+    solid.beam([sx, apex[1] - 1, sz], [sx, sy, sz], m(0.08), m(0.08), gilt);
 
     for (let k = 0; k < 6; k++) {
         const angle = (k / 6) * Math.PI * 2 + Math.PI / 2;
@@ -342,29 +300,12 @@ export async function church(piece) {
     solid.face(disc, gilt);
     solid.face([...disc].reverse().map(([x, y, z]) => [x, y, z - m(0.08)]), gilt);
 
-    // The door under a pointed arch, a round window over it, and steps up to it
-    const middle = width / 2;
+    // The door in its portal, and the patron's sign by it
+    door(solid, way.x, way.z + 0.4, { width: 1.6, height: 2.6, floor: way.floor, frame: "iron" });
 
-    solid.face([[middle - m(1), m(3.2), tz1 + 0.4], [middle + m(1), m(3.2), tz1 + 0.4], [middle, m(4.1), tz1 + 0.4]], material("stone-warm"));
-    solid.box(middle - m(1), m(0.6), tz1, middle + m(1), m(3.2), tz1 + 0.4, material("stone-warm"));
-    door(solid, middle, tz1 + 0.4, { width: 1.6, height: 2.6, floor: 0.6, frame: "iron" });
+    const front = { origin: [0, 0, way.z + 0.4], across: [1, 0, 0], out: [0, 0, 1], length: width };
 
-    const rose = [];
-
-    for (let k = 0; k < 10; k++) {
-        const angle = (k / 10) * Math.PI * 2;
-
-        rose.push([middle + Math.cos(angle) * m(0.7), m(5.4) + Math.sin(angle) * m(0.7), tz1 + 0.5]);
-    }
-
-    solid.face(rose, material("glass"));
-    solid.box(middle - m(1.3), 0, tz1, middle + m(1.3), m(0.3), tz1 + m(1.1), material("stone-warm"));
-    solid.box(middle - m(1.3), m(0.3), tz1, middle + m(1.3), m(0.6), tz1 + m(0.6), material("stone-warm"));
-
-    // The patron's sign by the door
-    const front = { origin: [0, 0, tz1 + 0.4], across: [1, 0, 0], out: [0, 0, 1], length: width };
-
-    hangingSign(solid, front, middle + m(1.9), m(3.3), emblemSignTexture({ name: `${patron.name} ${patron.title}`, emblem: GOD_EMBLEMS[piece.patron] ?? "sun", tint: 2 + Object.keys(GODS).indexOf(piece.patron) }), `sign ${patron.name}`);
+    hangingSign(solid, front, sign.u, sign.top, emblemSignTexture({ name: `${patron.name} ${patron.title}`, emblem: GOD_EMBLEMS[piece.patron] ?? "sun", tint: 2 + Object.keys(GODS).indexOf(piece.patron) }), `sign ${patron.name}`);
 
     return solid.toObject();
 }

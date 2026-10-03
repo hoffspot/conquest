@@ -185,7 +185,9 @@ a hamlet's middle is a green. Its houses have one storey, or two now and then.
   of two as big) is made over into it, keeping its style and storeys (two at least), so nothing
   else in the layout moves. It can be entered too (`ENTERED` has them all). A tavern has its name, sign and storeys, and what's
   upstairs (`core/lore/taverns.js`: below); a church its patron, one of the Six
-  (`core/lore/gods.js`: below).
+  (`core/lore/gods.js`: below), and its grade and build (`churchOf`: a village's parish church,
+  a town's church, Romanesque or Gothic by its seed, a city's minster; taking nothing from the
+  layout's random, so the layout's the same).
 - **Trees** dotted about the open ground left.
 
 **Each people's own** (`layoutTown({ ..., people })`, `PEOPLE_TOWNS`): the same builder, laid
@@ -890,7 +892,8 @@ plan's M6c). What stands up from the land is seen from as far as the far land re
   - each people's colours (pale stone and green for the elves, black and violet for the dark
     elves, mud brick for the cat folk, timber and thatch for the lizard folk, dark timber and
     basalt for the orcs);
-  - churches with their towers and spires, keeps and halls three storeys high.
+  - churches with their towers and spires as high as they're built (a minster's two), keeps and
+    halls three storeys high.
   - How far each kind's seen: capitals and cities as far as the far land reaches, towns 2 km,
     villages 1.2 km, hamlets 700 m, farmsteads 600 m; past 900 m only the bigger buildings (two
     storeys or more, or wider than 8 m), towers and walls.
@@ -1948,10 +1951,27 @@ facing south; each is turned about its middle to face the way the layout says:
     and a door of dressed stone up two steps between two long banners of the crown (stirring in
     the breeze: *Banners and flags*), the crown's sign by it, and the crown's flags flying from
     its two front turrets.
-  - **The church**: a stone nave, buttressed, with tall windows, and a tower with a spire at the
-    front, the Six's gilded sun of six rays on its top, and its patron's sign by the door (the
-    patron's emblem: Aurelia's sun, Brannoc's stag, Ithriel's star, Morvaine's lantern,
-    Seliane's rose, Dunmar's anvil).
+  - **The church**: built to a grammar of Romanesque and Gothic (`world/art/kits/church.js`), as
+    grand as its place (`core/setpieces/pieces.js` `churchOf`, from the settlement's size):
+    - a village's **parish church**, Romanesque: thick walls with small round-headed windows,
+      pilaster strips and a corbel table under the eaves, a buttress at each corner, a round
+      apse, and a squat tower over the door under a low stone pyramid;
+    - a town's **church**: a nave over lower aisles lit by a clerestory, buttressed between the
+      aisles' windows, an apse; Romanesque (round arches, a low pyramid on its tower) or Gothic
+      (pointed arches, stepped buttresses with pinnacles, a many-sided apse, a spire of eight
+      faces between four pinnacles), as its seed falls;
+    - a city's or a capital's **minster** (and an abbey's church), Gothic: a west front between
+      two towers and their spires, a rose window with stone tracery over a gabled portal, a tall
+      clerestory held up by flying buttresses from pinnacled piers over the aisles, a many-sided
+      apse, and a slender spire on its ridge.
+
+    All of them on the same 12 by 16 m lot with the door where the temple inside is entered (up
+    two steps in a portal of warm stone, round-arched or pointed under a steep gable), on a socle
+    of dark stone; the Six's gilded sun of six rays on the spire (a minster's on the spire over
+    its ridge), and the patron's sign by the door (the patron's emblem: Aurelia's sun, Brannoc's
+    stag, Ithriel's star, Morvaine's lantern, Seliane's rose, Dunmar's anvil). The building lab
+    shows one of each. From afar a church stands as tall as it's built, a minster with its two
+    towers (`world/far/shapes.js` `FAR_CHURCHES`).
   - **The smithy**: a stone workshop with an open shed over the forge, anvil and quenching
     trough, and its sign (an anvil and hammer) by the door.
   - A market hall on stone columns with stalls of produce beneath, and a windmill with a

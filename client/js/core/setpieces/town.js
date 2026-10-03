@@ -24,7 +24,7 @@ import { createRandom, noise } from "../random.js";
 import { atan2, cos, length, PI, sin, sqrt, TAU } from "../exact.js";
 import { patronOf } from "../lore/gods.js";
 import { nameTavern } from "../lore/taverns.js";
-import { ENTERED, GROUND, homeTree, HOUSE_STYLES, HOUSE_VARIANTS, houseKey, LANDMARKS, landmarkKey, OUTBUILDINGS, PEOPLE_PLACES, PLOT, PROPS, propKey, TRADES, treeKey, TREE_VARIANTS } from "./pieces.js";
+import { churchOf, ENTERED, GROUND, homeTree, HOUSE_STYLES, HOUSE_VARIANTS, houseKey, LANDMARKS, landmarkKey, OUTBUILDINGS, PEOPLE_PLACES, PLOT, PROPS, propKey, TRADES, treeKey, TREE_VARIANTS } from "./pieces.js";
 
 /**
  * The kinds of settlement, and how each is laid out: how far its houses reach from the middle
@@ -458,7 +458,8 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
     };
 
     // Each landmark's own (from a random of its own: the layout the same with or without them): a
-    // tavern's name, sign and storeys, and what's upstairs; a church's patron
+    // tavern's name, sign and storeys, and what's upstairs; a church's patron, and its grade (as big
+    // as the place) and build
     const kept = createRandom(seed * 17 + 5);
     const counts = {};
     const taken = new Set();
@@ -476,7 +477,7 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
             return { ...own, tavern: named };
         }
 
-        return name === "church" ? { ...own, patron: patronOf(kept) } : own;
+        return name === "church" ? { ...own, patron: patronOf(kept), ...churchOf(spec.radius, own.seed) } : own;
     };
     const wanted = [...spec.landmarks, ...(spec.extra ?? []).filter(([, chance]) => kept.chance(chance)).map(([name]) => name)];
 

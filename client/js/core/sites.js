@@ -511,7 +511,8 @@ export class Sites {
         if (site.kind !== "castle") {
             const name = HUMAN_LANDMARK[site.kind];
 
-            return [{ kind: "landmark", name, key: `landmark-${name}`, ...own, x, y, w, h, style: "stone", storeys: 2, patron: GOD_IDS[site.seed % GOD_IDS.length] }];
+            // (An abbey's church a minster's: Gothic, twin-towered)
+            return [{ kind: "landmark", name, key: `landmark-${name}`, ...own, x, y, w, h, style: "stone", storeys: 2, patron: GOD_IDS[site.seed % GOD_IDS.length], ...(name === "church" ? { grade: "minster", gothic: true } : {}) }];
         }
 
         // (The humans' castle: laid out facing south, its gate to the road, then turned)

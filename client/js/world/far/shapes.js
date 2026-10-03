@@ -255,6 +255,37 @@ export function tower(shapes, { x, z, ground, radius, height, people, spire = 0 
 }
 
 /**
+ * The humans' churches seen from afar, by grade and build (world/art/kits/church.js CHURCH's
+ * measures): how high the body stands (storeys), its tower's side and top (metres), what's on it
+ * (a low pyramid, or a spire, metres high), and whether there are two (a minster's west front).
+ */
+export const FAR_CHURCHES = Object.freeze({
+    parish: Object.freeze({ storeys: 2.2, side: 4.4, top: 13, cap: 4.2, towers: 1 }),
+    romanesque: Object.freeze({ storeys: 3, side: 4.6, top: 16.5, cap: 4.4, towers: 1 }),
+    gothic: Object.freeze({ storeys: 3, side: 4.6, top: 16.5, cap: 9.5, towers: 1 }),
+    minster: Object.freeze({ storeys: 3.8, side: 3.1, top: 19, cap: 10, towers: 2 }),
+});
+
+// Which of FAR_CHURCHES a church piece is (core/setpieces/pieces.js churchOf's grade and build)
+function churchLook({ grade, gothic }) {
+    return grade === "minster" ? "minster" : grade === "parish" ? "parish" : gothic ? "gothic" : "romanesque";
+}
+
+// A church's tower over its door (a minster's two, either side of its nave), at the front of its
+// lot (`depth` metres deep, its middle at x, z, facing `facing`), seen from afar
+function churchTowers(shapes, { x, z, depth, facing, heightOf, look }) {
+    const [s, c] = [Math.sin(facing), Math.cos(facing)];
+    const forward = depth / 2 - 1.2 - look.side / 2;
+    const across = look.towers === 2 ? [-(2.4 + look.side / 2), 2.4 + look.side / 2] : [0];
+
+    for (const u of across) {
+        const [tx, tz] = [x + c * u + s * forward, z - s * u + c * forward];
+
+        tower(shapes, { x: tx, z: tz, ground: heightOf(tx, tz), radius: look.side / 2, height: look.top, people: "human", spire: look.cap });
+    }
+}
+
+/**
  * The pieces of a settlement laid out (setpieces/town.js layoutTown's), at `origin` in the world
  * ([x, z] metres), as seen from afar: houses, landmarks, towers, walls and gatehouses (not props
  * or trees); and with `big` only, just the larger buildings (two storeys or more, or wider than
@@ -267,7 +298,7 @@ export function settlementShapes(shapes, { pieces, people, origin, heightOf, big
         const builders = buildersOf(piece.people ?? people);
 
         if (piece.kind === "house" || piece.kind === "landmark") {
-            const storeys = piece.name === "hall" || piece.name === "keep" ? 3 : piece.kind === "landmark" ? 2 : (piece.storeys ?? 1);
+            const storeys = piece.name === "hall" || piece.name === "keep" ? 3 : piece.name === "church" && (piece.people ?? people) === "human" ? FAR_CHURCHES[churchLook(piece)].storeys : piece.kind === "landmark" ? 2 : (piece.storeys ?? 1);
 
             if (big && storeys < 2 && Math.max(width, depth) < 8) {
                 continue;
@@ -277,8 +308,10 @@ export function settlementShapes(shapes, { pieces, people, origin, heightOf, big
 
             building(shapes, { x, z, ground, width, depth, facing: piece.facing ?? 0, storeys, people: piece.people ?? people, round: piece.type === "roundhut" });
 
-            // (A church's tower and spire; a keep's tower)
-            if (piece.name === "church" || piece.name === "keep") {
+            // (A church's tower or towers, as big as its place; a keep's tower)
+            if (piece.name === "church" && (piece.people ?? people) === "human") {
+                churchTowers(shapes, { x, z, depth, facing: piece.facing ?? 0, heightOf, look: FAR_CHURCHES[churchLook(piece)] });
+            } else if (piece.name === "church" || piece.name === "keep") {
                 const side = Math.min(width, depth) * 0.4;
                 const [s, c] = [Math.sin(piece.facing ?? 0), Math.cos(piece.facing ?? 0)];
                 const [tx, tz] = [x + s * (depth / 2 - side / 2), z + c * (depth / 2 - side / 2)];
@@ -515,8 +548,9 @@ export function siteShapes(shapes, { kind, people, seed, form = null, x, z, faci
 
             return;
         case "abbey":
-            building(shapes, { x, z, ground, width: width * 0.35, depth: depth * 0.7, facing, storeys: 3, people: "human" });
-            tower(shapes, { x: x + width * 0.25, z, ground, radius: 2.6, height: 16, people: "human", spire: 8 });
+            // (Its church a minster: core/sites.js)
+            building(shapes, { x, z, ground, width: width * 0.8, depth: depth * 0.85, facing, storeys: FAR_CHURCHES.minster.storeys, people: "human" });
+            churchTowers(shapes, { x, z, depth, facing, heightOf, look: FAR_CHURCHES.minster });
 
             return;
         case "windmill":

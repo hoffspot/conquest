@@ -839,7 +839,32 @@ test("in the town, the camera comes in closer than a building in the way, or ris
     expect(views.open.lifted).toBeLessThan(0.5);
 });
 
+// How many textures each shader drawn so far reads ([{ name, read }]): no more than an iPhone lets
+// one read (16; this browser allows more), or its shader won't compile there and nothing it draws
+// is seen
+function texturesRead(page) {
+    return page.evaluate(() => {
+        const renderer = window.pellagos.session.view.renderer;
+        const gl = renderer.getContext();
+        const samplers = new Set([gl.SAMPLER_2D, gl.SAMPLER_3D, gl.SAMPLER_CUBE, gl.SAMPLER_2D_SHADOW, gl.SAMPLER_2D_ARRAY, gl.SAMPLER_2D_ARRAY_SHADOW, gl.SAMPLER_CUBE_SHADOW, gl.INT_SAMPLER_2D, gl.INT_SAMPLER_3D, gl.INT_SAMPLER_CUBE, gl.INT_SAMPLER_2D_ARRAY, gl.UNSIGNED_INT_SAMPLER_2D, gl.UNSIGNED_INT_SAMPLER_3D, gl.UNSIGNED_INT_SAMPLER_CUBE, gl.UNSIGNED_INT_SAMPLER_2D_ARRAY]);
+
+        return renderer.info.programs.map(({ name, program }) => {
+            let read = 0;
+
+            for (let k = 0; k < gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS); k++) {
+                const uniform = gl.getActiveUniform(program, k);
+
+                read += samplers.has(uniform.type) ? uniform.size : 0;
+            }
+
+            return { name, read };
+        });
+    });
+}
+
 test("walks out of the town into the world, drawn round the player as they go, with no loading; the wild's creatures about them there", async ({ page }) => {
+    // (Three minutes' walk out of the town, played through, and a night's camp: longer than most)
+    test.setTimeout(180000);
     await playing(page, "/?play&seed=1");
 
     const trip = await page.evaluate(() => {
@@ -960,6 +985,18 @@ test("walks out of the town into the world, drawn round the player as they go, w
     expect(camped.lit).toBeGreaterThan(0);
     expect(camped.said.some((text) => /^You sleep by the fire till evening/.test(text)), JSON.stringify(camped.said)).toBe(true);
 
+    // Every shader drawn so far (the town, the world round it and its far land, its water, grass,
+    // trees and creatures) reads no more textures than an iPhone lets one read
+    const reading = await texturesRead(page);
+
+    expect(reading.map(({ name }) => name)).toContain("ground");
+    expect(reading.filter(({ read }) => read > 16)).toEqual([]);
+});
+
+test("up in the mountains, cliffs of rock where it's too steep to climb, and an arch of rock over open ground, its legs not walked into", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+    await page.evaluate(() => window.pellagos.game.stop());
+
     // Up in the mountains to the north east, where the ground's too steep to climb: cliffs of rock
     // stand out of it, a mesh of their own a chunk, drawn with the rock's picture laid on from
     // three sides
@@ -1035,28 +1072,10 @@ test("walks out of the town into the world, drawn round the player as they go, w
     expect(arch.leg).toBe(true);
     expect(arch.under).toBe(false);
 
-    // Every shader drawn so far (the town, the world round it and its far land, its water, grass,
-    // trees, cliffs and creatures) reads no more textures than an iPhone lets one read (16; this
-    // browser allows more): past that, its shader won't compile there and nothing it draws is seen
-    const reading = await page.evaluate(() => {
-        const renderer = window.pellagos.session.view.renderer;
-        const gl = renderer.getContext();
-        const samplers = new Set([gl.SAMPLER_2D, gl.SAMPLER_3D, gl.SAMPLER_CUBE, gl.SAMPLER_2D_SHADOW, gl.SAMPLER_2D_ARRAY, gl.SAMPLER_2D_ARRAY_SHADOW, gl.SAMPLER_CUBE_SHADOW, gl.INT_SAMPLER_2D, gl.INT_SAMPLER_3D, gl.INT_SAMPLER_CUBE, gl.INT_SAMPLER_2D_ARRAY, gl.UNSIGNED_INT_SAMPLER_2D, gl.UNSIGNED_INT_SAMPLER_3D, gl.UNSIGNED_INT_SAMPLER_CUBE, gl.UNSIGNED_INT_SAMPLER_2D_ARRAY]);
+    // Their shader, as every other drawn so far, reads no more textures than an iPhone lets one read
+    const reading = await texturesRead(page);
 
-        return renderer.info.programs.map(({ name, program }) => {
-            let read = 0;
-
-            for (let k = 0; k < gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS); k++) {
-                const uniform = gl.getActiveUniform(program, k);
-
-                read += samplers.has(uniform.type) ? uniform.size : 0;
-            }
-
-            return { name, read };
-        });
-    });
-
-    expect(reading.map(({ name }) => name)).toContain("ground");
+    expect(reading.map(({ name }) => name)).toContain("cliffs");
     expect(reading.filter(({ read }) => read > 16)).toEqual([]);
 });
 
@@ -1295,6 +1314,8 @@ test("the bars over enemies the same way are smaller the farther off they are, t
 });
 
 test("tapping the tavern's door lights its edge green, and the player walks in: a couple of steps inside, facing the door; up the stairs (where a courtesan beckons), down, and out; each time a tap round them is a step, not back through", async ({ page }) => {
+    // (In and up and down and out, each map drawn as it's come to: a minute or more without a GPU)
+    test.setTimeout(180000);
     await playing(page, "/?play&seed=1");
 
     // Tap the door or stairs (a link's end on the map shown), and play on until through
