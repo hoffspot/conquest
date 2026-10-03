@@ -67,6 +67,7 @@
 import { AFFLICTIONS, shareOf } from "./afflictions.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { routeBetween } from "./interiors.js";
+import { sightAt } from "./light.js";
 import { navigatorOf } from "./navigation.js";
 import { createRandom } from "./random.js";
 import { BECKON, REST_EVERY, ROLES } from "./roles.js";
@@ -309,6 +310,11 @@ export class Battle {
         // radius, until, next, damage, by, team, spell }
         this.hazards = [];
         this.nextHazard = 1;
+
+        // The light to see by out in the world (light.js lighting: the host's, worked out each
+        // step; none, as by day), and the map it's for
+        this.light = null;
+        this.lightMap = "town";
 
         // Told each way found, (id, way), if anyone's listening (a host's netplay); and, replaying
         // a host's game, the ways it found to take instead ([time, id, way], in order), or null
@@ -1102,20 +1108,21 @@ export class Battle {
     }
 
     /**
-     * Can `a` see `b`: on the same map, within SIGHT squares, with nothing that blocks sight
-     * between their middles (the map's opaque squares: houses and trees, not barrels or a well,
-     * outdoors; walls, not tables, indoors)?
+     * Can `a` see `b`: on the same map, within SIGHT squares (out in the world at night, only as
+     * far as the light where `b` is lets them: light.js sightAt, `this.light`), with nothing that
+     * blocks sight between their middles (the map's opaque squares: houses and trees, not barrels
+     * or a well, outdoors; walls, not tables, indoors)?
      */
     canSee(a, b) {
-        return a.map === b.map && this.#sees(a.map, a.square, b.square);
+        return a.map === b.map && this.#sees(a.map, a.square, b.square, a.map === this.lightMap ? SIGHT * sightAt(this.light, b.square) : SIGHT);
     }
 
-    // Can someone on a map at one square see another square: within SIGHT, nothing opaque between
-    // (along the line between their middles)?
-    #sees(mapId, from, to) {
+    // Can someone on a map at one square see another square: within `range` (SIGHT), nothing opaque
+    // between (along the line between their middles)?
+    #sees(mapId, from, to, range = SIGHT) {
         const distance = distanceBetween(from, to);
 
-        if (distance > SIGHT) {
+        if (distance > range) {
             return false;
         }
 

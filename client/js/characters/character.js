@@ -13,7 +13,7 @@ import { EQUIPMENT, socketOn } from "./equipment.js";
 import { buildDrape, drapeMaterial, DRAPES } from "./drapes.js";
 import { COMPOSITE_BUMP, compositingGarments, fittingGarment, GARMENTS, insideOf, measureBody, paintGarment, paintingGarment, texelMap } from "./garments.js";
 import { BEARDS, growingHair, hairTexture, HAIRSTYLES } from "./hair.js";
-import { buildItem } from "./items.js";
+import { buildItem, HAND_TORCH_FLAME } from "./items.js";
 import { HairMaterial, SkinMaterial } from "./surfaces.js";
 import { LOD } from "./lod.js";
 import { EYE_DEFAULTS, HAIR_COLOURS, paintEye, paintingSkin, SKIN_DEFAULTS } from "./skin.js";
@@ -246,6 +246,9 @@ export class Character {
         this.garments = [];
         this.items = [];
 
+        /** A torch carried in the left hand (holdTorch), or null. */
+        this.torch = null;
+
         /** Per side ("Left", "Right"): the arm pose for what that hand carries, if anything. */
         this.holds = {};
 
@@ -318,6 +321,47 @@ export class Character {
 
         this.equipment.set(EQUIPMENT[id].slot, id);
         this.#dress();
+    }
+
+    /**
+     * Carry a burning torch in the left hand (`on`: a guard at night), what's there by day (a
+     * shield) hidden while it's carried; or put it out and take that up again. Returns the torch
+     * (a group in the left hand, its flame at `userData.flame` in its own frame) or null.
+     */
+    holdTorch(on) {
+        if (Boolean(this.torch) === on) {
+            return this.torch;
+        }
+
+        if (on) {
+            const socket = socketOn(this, "leftHand");
+            const torch = new THREE.Group();
+
+            torch.name = "torch";
+            torch.add(buildItem("handTorch", socket.fit));
+            torch.position.copy(socket.position);
+            torch.quaternion.copy(socket.quaternion);
+            torch.userData.flame = new THREE.Vector3(...HAND_TORCH_FLAME);
+            this.rig.bone(socket.bone).add(torch);
+            this.torch = torch;
+        } else {
+            this.torch.removeFromParent();
+            this.torch.traverse((part) => part.geometry?.dispose());
+            this.torch = null;
+        }
+
+        this.#offHandShown();
+
+        return this.torch;
+    }
+
+    // What's carried in the left hand shown, unless a torch is carried instead
+    #offHandShown() {
+        for (const item of this.items) {
+            if (EQUIPMENT[item.name]?.slot === "offHand") {
+                item.visible = !this.torch;
+            }
+        }
     }
 
     /** Take off or put down what's in a slot. */
@@ -587,6 +631,9 @@ export class Character {
                 this.items.push(model);
             }
         }
+
+        // (A torch carried still in place of what's in the left hand)
+        this.#offHandShown();
 
         // Each weapon in hand or put away, as it was
         this.sheathe(this.sheathed);

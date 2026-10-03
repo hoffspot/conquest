@@ -118,6 +118,24 @@ describe("playing together (netplay.js)", () => {
         assert.equal(joining.step(), null);
     });
 
+    it("has a joined copy work out the same light at night as the host (core/light.js), seeing as far: the same, step for step", () => {
+        const { host, join, play, catchUp } = opened();
+
+        Object.assign(host.war, { turn: 41, clock: 30000 });
+        play(10);
+
+        const { joining } = join(guest("Bryn", "human", "sword"));
+
+        host.command(HOST_PLAYER, { type: "move", to: [host.battle.actor(HOST_PLAYER).square[0] + 8, host.battle.actor(HOST_PLAYER).square[1]] });
+        play(80);
+        catchUp(joining);
+
+        assert.ok(host.battle.light.sky < 1 && host.battle.light.lit.length > 0);
+        assert.deepEqual(joining.host.battle.light, host.battle.light);
+        assert.deepEqual(positions(joining.host), positions(host));
+        assert.equal(joining.host.checksum(), host.checksum());
+    });
+
     it("has a joined copy take the ways the host's characters found, finding none of its own", () => {
         const { host, hosting, join, play, catchUp } = opened();
         const { joining } = join(guest("Bryn"));

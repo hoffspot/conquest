@@ -30,6 +30,7 @@ import { FOLK, PRESETS } from "../characters/presets.js";
 import { BeastAvatar, dressingCreature } from "../beasts/beast.js";
 import { AFFLICTIONS } from "../core/afflictions.js";
 import { daylight, elapsedOf, moonPhase, timeOfDay } from "../core/daytime.js";
+import { carriesTorch, torchesLit } from "../core/light.js";
 import { STEP_MS, TALK_REACH } from "../core/battle.js";
 import { CREATURES } from "../core/creatures.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
@@ -69,6 +70,7 @@ import { TallGrass } from "../world/grass.js";
 import { Motes } from "../world/motes.js";
 import { EMBER_SCALE } from "../world/fire.js";
 import { GLOW_SCALE } from "../world/lights.js";
+import { CarriedTorches } from "../world/carried.js";
 import { SMOKE_SHARE } from "../world/smoke.js";
 import { FarLand } from "../world/far/far.js";
 import { farReach } from "../world/far/levels.js";
@@ -718,10 +720,29 @@ export class Game {
     #lightNear(x, z) {
         const lights = this.chunks.lightsNear(x, z, LIGHT_REACH, (this.nearLights ??= []));
 
-        lights.push(...(this.town?.lights ?? []), ...(this.camps?.lights() ?? []), ...(this.banners?.lights() ?? []), ...(this.spellFx?.lightsNow() ?? []));
+        lights.push(...(this.town?.lights ?? []), ...(this.camps?.lights() ?? []), ...(this.banners?.lights() ?? []), ...(this.carried?.lights() ?? []), ...(this.spellFx?.lightsNow() ?? []));
         GLOW_SCALE.value = this.view.pixelsPerMetre();
         EMBER_SCALE.value = GLOW_SCALE.value;
         this.view.lightNear(lights, _lit.set(x, this.avatars.get(this.me).object.position.y + 1.2, z));
+    }
+
+    // The torches carried at night (world/carried.js): by the soldiers with a hand free, out in
+    // the world, as the rules have it (core/light.js carriesTorch), each burning in their hand
+    #torchesCarried() {
+        const dark = torchesLit(elapsedOf(this.host.war));
+        const carriers = (this.carriers ??= []);
+
+        carriers.length = 0;
+
+        for (const actor of dark ? this.battle.actors : []) {
+            const avatar = carriesTorch(actor, dark) && actor.map === "town" ? this.avatars.get(actor.id) : null;
+
+            if (avatar?.character) {
+                carriers.push({ id: actor.id, character: avatar.character, shown: avatar.object.visible });
+            }
+        }
+
+        this.carried?.update(carriers);
     }
 
     // The time of day the world's clock has (core/daytime.js: the war's, the same for every
@@ -901,6 +922,7 @@ export class Game {
         this.doors = new Doors(world, view.scene);
         this.banners = new Banners(view.scene);
         this.camps = new Camps(view.scene);
+        this.carried = new CarriedTorches(view.scene);
         this.drops = new Drops(view.scene, { picture: (id) => this.#itemPicture(id) });
 
         // (Banners and camps only ever outside, on the world's ground)
@@ -1380,6 +1402,7 @@ export class Game {
         this.doors?.dispose();
         this.banners?.dispose();
         this.camps?.dispose();
+        this.carried?.dispose();
         this.flyers?.dispose();
 
         this.spellFx?.dispose();
@@ -1927,6 +1950,7 @@ export class Game {
 
             this.#farLand(x, z);
             this.#landLook(x, z, dt);
+            this.#torchesCarried();
             this.#lightNear(x, z);
         }
 

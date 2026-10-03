@@ -852,7 +852,9 @@ after M7d (the land looked at by day first) and before the cliffs and rocks:
   - sight: everyone sees less far at night (the rules' sight range scaled by how much light's
     about: the sky's, and within reach of a torch, a lit window, a fire or a Light globe, the
     day's), so a hero with a torch or Light sees an ambush before it sees them; guards keep their
-    posts lit;
+    posts lit (as built, M7e-3a: `core/light.js`, the host working out what's lit each step, a
+    settlement's streets lit as far as 10 m past its edge; the guards with a hand free carrying
+    torches at night in place of their shields);
   - the night's own creatures: some of the wild's (the undead, wolves, bats, the wight lord's
     sort) out only after dark, or more of them; some shut in by day;
   - **passing time:** a room at any tavern for a few gold (the barkeep), sleeping to the next dawn
@@ -2822,3 +2824,33 @@ converted data is to be measured in M8 against today's hm08 data.
     none in villages, the lantern 2.3 m up).
   - **Next:** M7e-3, night in play (sight, night creatures, guards' torches, passing time at inns
     or camping).
+- **2026-10-03, M7e-3a built: seeing at night, and the guards' torches** (§9 *Night in play*).
+  - **Seeing at night** (`core/light.js`, exact maths): out in the world everyone sees less far
+    when it's dark, the battle's sight (12 m) times the sky's light: by day all of it, by night
+    a moonless night's 0.35 (about 4 m) to a full moon's 0.55 (about 7 m), falling through the
+    dusk with the daylight. Where it's lit, as by day: round a settlement as far as 10 m past its
+    edge (its windows, lamps and guards' braziers), round a war camp's fire 14 m, a fire on the
+    ground (a spell's) 6 m past its edge, a carried torch 9 m. Seeing goes by the light where the
+    one seen is, so a torch-bearer is seen from out of the dark before they see who's there.
+    Indoors, as ever; talking (next to someone, or across a counter) as ever.
+  - **Worked out by the host each step** (`Host#light`, before the battle's step) from what every
+    copy has: the war's clock, the world's plan, the camps, the fires on the ground and who's
+    carrying a torch, only those within 80 m of a player (and nothing by day). A joined copy steps
+    its own host, so it works out the same light: nothing new is sent, kept or saved, and no
+    version changes.
+  - **The guards' torches** (`carriesTorch`; `world/carried.js`; Character `holdTorch`; items
+    `handTorch`): from half through the dusk to half through the dawn (when the windows come on),
+    every soldier with a hand free (a sword, a cleaver or a wand: their shield's hand) carries a
+    torch in it instead, its shield hidden, not built again; the bowmen and two-handed fighters
+    carry none. Its flame (a torch's, `fireFlames`) burns at its head wherever they go, and it's
+    a light of its own among the world's fires (`lightNear`), so a patrol's light moves along the
+    walls as they go round.
+  - **Pictures:** guards with their torches lit at a town's road out at midnight, sent in the
+    session.
+  - **Tests:** test/nightsight.test.js (the sky's light by day, night and the moon, falling
+    through the dusk; who carries a torch; what's lit near the players; sight in the battle by
+    night, lit and unlit, indoors and talking; the host's light at midnight in its town, every
+    torch near the player lighting round it); test/netplay.test.js (a joined copy works out the
+    same light at night and stays the same); e2e (the guards with lit torches at midnight, none
+    by day).
+  - **Next:** M7e-3b, the night's own creatures; then M7e-3c, passing time at inns or camping.

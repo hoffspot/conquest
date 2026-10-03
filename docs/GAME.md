@@ -820,6 +820,20 @@ a look of its own (`LOOKS`), which the world takes on round the player:
   - **The fire lab** (fire-lab.html): a torch either side of a door, a brazier, a camp fire,
     candles on a table and the seven fire spells cast again and again, at midnight, dusk or noon,
     in the breeze or still.
+- **Seeing at night** (core/light.js; battle.js canSee; the terrain plan's M7e-3): out in the
+  world everyone sees less far in the dark, the battle's sight (12 m) times the sky's light: all
+  of it by day, a moonless night's 0.35 (about 4 m) to a full moon's 0.55 (about 7 m), falling
+  through the dusk. Where it's lit they see as by day: in a settlement and 10 m past its edge
+  (its windows, lamps and braziers), 14 m round a war camp's fire, 6 m past a fire on the ground,
+  9 m round a carried torch. It goes by where the one seen stands, so a torch-bearer is seen from
+  the dark before they see who's there. The host works it out each step (`Host#light`) from what
+  every copy of the world has (the clock, the plan, the camps, the fires, who has a torch), only
+  near the players, so every copy sees alike. Indoors, and talking, as ever.
+- **Torches carried** (world/carried.js; Character `holdTorch`; items `handTorch`): when the
+  windows come on (half through the dusk) until they go off (half through the dawn), every
+  soldier with a hand free (sword, cleaver or wand) carries a torch in their shield's hand, the
+  shield hidden; bowmen and two-handed fighters none. Its flame burns at its head as they go
+  (fire.js, a torch's), and it's a light of its own among the world's fires.
 - **Not by time:** the pack's paperdoll is lit as on a fair day whatever the hour. With no world
   (the labs) the sun stands where it always did.
 
