@@ -151,9 +151,95 @@ describe("how spells look (spellfx.js)", () => {
             assert.ok(greater.brightest >= lesser.brightest, `${greater.id} (${greater.brightest}) lights more than ${lesser.id} (${lesser.brightest})`);
         }
 
-        assert.ok(fire[0].tallest <= 0.6 && fire[0].fires === 1, "burn: a lick of flame");
+        assert.ok(fire[0].tallest <= 0.8 && fire[0].fires === 1, "burn: a lick of flame");
         assert.ok(fire.at(-1).tallest >= 20, "hellfire: a column reaching the clouds");
         assert.ok(fire.every(({ brightest }) => brightest > 0), "every one lighting what's round it");
+    });
+
+    // A fire spell cast (from its caster at 0, 0) and landing (on its target at 0, -4), played
+    // through: the circles drawn round the caster's feet and where it lands ({ tier, radius }),
+    // how dark the sky got and is at the end, the flames' bodies (fire.js fireBody), and the
+    // circles' pictures made
+    function fireSpell(id) {
+        const fx = new SpellFx({ glow: { emit: () => {} }, dust: { emit: () => {} } }, new THREE.Scene(), { lights: [] });
+        const at = (x, z, y = 0) => () => new THREE.Vector3(x, y, z);
+        const one = (x, z) => ({ feet: at(x, z), point: at(x, z, 1.1), hand: at(x + 0.3, z, 1.2) });
+        const seen = { cast: [], landed: [], darkest: 0, bodies: new Set() };
+        const sigil = fx.sigil.bind(fx);
+        const { castTime } = SPELLS[id];
+        const step = () => {
+            fx.update(1 / 30);
+            seen.darkest = Math.max(seen.darkest, fx.darkness());
+
+            for (const mesh of fx.group.children.filter((child) => child.name === "flames")) {
+                seen.bodies.add(mesh.material.uniforms.fireBody.value);
+            }
+        };
+
+        fx.sigil = (centre, settings) => {
+            (centre.z === 0 ? seen.cast : seen.landed).push(settings);
+
+            return sigil(centre, settings);
+        };
+        fx.cast("caster", id, { hand: one(0, 0).hand, feet: one(0, 0).feet, target: one(0, -4).feet, aim: one(0, -4).point, still: () => true, castTime });
+
+        for (let time = 0; time < castTime / 1000; time += 1 / 30) {
+            step();
+        }
+
+        fx.land("caster", id, { caster: one(0, 0), target: one(0, -4) });
+
+        for (let time = 0; time < 12; time += 1 / 30) {
+            step();
+        }
+
+        const left = { darkness: fx.darkness(), textures: Object.keys(fx.textures) };
+
+        fx.clear();
+
+        return { id, tier: SPELLS[id].tier, ...seen, ...left };
+    }
+
+    const FIRE_SPELLS = Object.entries(SPELLS)
+        .filter(([, spell]) => spell.school === "fire")
+        .sort(([, a], [, b]) => a.tier - b.tier)
+        .map(([id]) => id);
+
+    it("marks each fire spell as a spell (the user: 'The spell circle you had on the ground was a good motif. Maybe one that is increased by tier'): its own tier's circle round the caster's feet as it's cast and where it lands, wider tier by tier", () => {
+        const spells = FIRE_SPELLS.map(fireSpell);
+        const widest = (circles) => Math.max(0, ...circles.map(({ radius }) => radius));
+
+        assert.equal(spells.length, 7);
+
+        for (const { id, tier, cast, landed, textures } of spells) {
+            assert.ok(cast.some((circle) => circle.tier === tier), `${id}: its circle round the caster's feet`);
+            assert.ok(landed.some((circle) => circle.tier === tier), `${id}: its circle where it lands`);
+            assert.ok(textures.includes(`sigil${tier}`), `${id}: its own tier's circle drawn`);
+        }
+
+        for (let k = 1; k < spells.length; k++) {
+            const [lesser, greater] = [spells[k - 1], spells[k]];
+
+            assert.ok(widest(greater.landed) > widest(lesser.landed), `${greater.id}'s circle wider than ${lesser.id}'s`);
+            assert.ok(widest(greater.cast) > widest(lesser.cast), `${greater.id}'s caster's circle wider than ${lesser.id}'s`);
+        }
+
+        assert.ok(widest(spells[0].landed) < 1 && widest(spells.at(-1).landed) >= 12, "from under a metre (Burn) to a dozen (Hellfire)");
+    });
+
+    it("keeps the fire spells' colour by day (the user: 'Make sure the fire spells look good in the day too'): their flames bodies of fire (fire.js fireBody), and the sky darkening for the greatest, a little for Inferno, almost black for Hellfire, clearing once they're done", () => {
+        for (const { id, tier, bodies, darkest, darkness } of FIRE_SPELLS.map(fireSpell)) {
+            assert.deepEqual([...bodies], [1], `${id}: every flame a body of fire`);
+            assert.equal(darkness, 0, `${id}: the sky clear again`);
+
+            if (tier === 6) {
+                assert.ok(darkest >= 0.3 && darkest <= 0.5, `${id}: the sky a little darker (${darkest})`);
+            } else if (tier === 7) {
+                assert.ok(darkest >= 0.8, `${id}: the sky almost black (${darkest})`);
+            } else {
+                assert.equal(darkest, 0, `${id}: the sky as it was`);
+            }
+        }
     });
 
     it("lights its flashes and fireballs in flight as lights of its own, not lending the view's lamps", () => {

@@ -114,6 +114,14 @@ const srgbOf = (hex) => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255].map((by
 const PLAIN = Object.freeze({ zenith: srgbOf(SKY_COLOURS.zenith), horizon: srgbOf(SKY), sun: srgbOf(OUTDOORS.sun[0]), strength: OUTDOORS.sun[1], mist: [0, 0, 20], grade: [0, 0, 0, 0] });
 const INDOORS = Object.freeze({ background: 0x140e0a, fog: [16, 38], sun: [0xffecd0, 4], sunFrom: [0.25, 1, 0.35], environment: 0.55 });
 const LAMPS = 2;
+
+// The sky as the greatest spells darken it (setOmen), at its darkest: its colours (sRGB 0 to 1),
+// the clouds' light (lit red from below), and how much of the sun and of the light from all round
+// is left
+const OMEN = Object.freeze({ zenith: [0.05, 0.01, 0.01], horizon: [0.4, 0.07, 0.02], clouds: [0.5, 0.14, 0.07], sun: 0.15, environment: 0.3 });
+const _zenith = [0, 0, 0];
+const _horizon = [0, 0, 0];
+const _clouds = new THREE.Vector3();
 const _lampFrom = Array.from({ length: LAMPS }, () => null);
 
 // The lamps handed to other flames (a view's, its lamps lighting `_lampFrom`'s flames now): their
@@ -291,6 +299,8 @@ export class View {
         });
         this.lampFrame = 0;
         this.room = null;
+        // (How far the greatest spells have darkened the sky: setOmen)
+        this.omen = 0;
         this.sunDirection = SUN_DIRECTION.clone();
         // (Where the shadows are cast from: the sun's way, moved on in steps: shadows.js stepShadows)
         this.shadowDirection = SUN_DIRECTION.clone();
@@ -424,6 +434,18 @@ export class View {
     }
 
     /**
+     * How far the greatest spells have darkened and reddened the sky (0, not at all, to 1:
+     * spellfx.js darkness): its colours, the haze and the clouds towards a burning dusk's, the sun
+     * and the light from all round dimmer, so their fire blazes against it by day.
+     */
+    setOmen(amount) {
+        if (amount !== this.omen) {
+            this.omen = amount;
+            this.#outdoors();
+        }
+    }
+
+    /**
      * The time of day to light the world for (ms from midnight: core/daytime.js) and the moon's phase
      * (0 new, 0.5 full): the sun where it is then, or by night the moon, the sky's colours, the
      * stars, the light from all round and on what the sky alone lights (daytime.js skyAt). None
@@ -447,9 +469,14 @@ export class View {
 
         const look = this.landLook ?? PLAIN;
         const sky = this.day ? (this.daySky = skyAt(this.day.time, this.day.phase, look, this.daySky)) : null;
-        // (The day's sky, sun and light, or the fair day's: the land's own, the sun fixed)
-        const { zenith, horizon } = sky ?? look;
-        const [colour, strength] = sky ? [sky.keyColour, sky.keyStrength] : [look.sun, look.strength];
+        // (The day's sky, sun and light, or the fair day's: the land's own, the sun fixed; as dark
+        // and red as a great spell has made it)
+        const omen = this.omen;
+        const toward = (from, to, into) => into.map((_, c) => from[c] + (to[c] - from[c]) * omen);
+        const zenith = omen ? toward((sky ?? look).zenith, OMEN.zenith, _zenith) : (sky ?? look).zenith;
+        const horizon = omen ? toward((sky ?? look).horizon, OMEN.horizon, _horizon) : (sky ?? look).horizon;
+        const [colour, keyStrength] = sky ? [sky.keyColour, sky.keyStrength] : [look.sun, look.strength];
+        const strength = keyStrength * (1 - (1 - OMEN.sun) * omen);
 
         this.scene.fog.color.setRGB(horizon[0], horizon[1], horizon[2], THREE.SRGBColorSpace);
         this.scene.background.copy(this.scene.fog.color);
@@ -464,6 +491,9 @@ export class View {
         this.sun.intensity = strength;
         this.far.sun.color.copy(this.sun.color);
         this.far.sun.intensity = strength;
+        this.scene.environmentIntensity = OUTDOORS.environment * (1 - (1 - OMEN.environment) * omen);
+        this.far.scene.environmentIntensity = this.scene.environmentIntensity;
+        this.sky.uniforms.cloudLight.value.lerp(_clouds.set(...OMEN.clouds), omen);
         SKY_GLOW.value.setRGB(...(sky?.glow ?? WHITE));
         this.renderer.toneMappingExposure = EXPOSURE * (sky?.exposure ?? 1);
         this.sun.shadow.intensity = sky?.shadows ?? 1;

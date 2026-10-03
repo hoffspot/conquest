@@ -206,6 +206,7 @@ function frame() {
     }
 
     spellFx.update(dt);
+    view.setOmen(spellFx.darkness());
     effects.update(dt, view.pixelsPerMetre());
     view.lightNear([...lights, ...spellFx.lightsNow()], CASTS.includes(state.look) ? target.point() : figure.position);
     view.renderer.info.reset();

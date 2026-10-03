@@ -41,11 +41,18 @@ const SMOKE = p([0x2e2824, 0x6a625a], { count: 4, size: [0.3, 0.5], speed: [0.3,
 const DUST = p([0xb8a78a, 0x8a7a62], { count: 10, size: [0.3, 0.6], speed: [0.6, 1.6], life: [0.6, 1.1], gravity: -0.3, spread: 1.6, glow: false, opacity: 0.55, grow: 2 });
 const EMBERS = p([0xffd070, 0xff3a00], { count: 6, size: [0.03, 0.06], speed: [1, 3], life: [0.8, 1.6], gravity: -1.5, spread: 2 });
 const STEAM = p([0xf2f2ee, 0xb8bcc0], { count: 8, size: [0.3, 0.5], speed: [0.6, 1.4], life: [0.8, 1.4], gravity: -1.5, spread: 1.2, glow: false, opacity: 0.45, grow: 2.2 });
+// A fire spell's missile's smoke behind it (so it shows against the sky by day), and the black
+// smoke billowing out over the greatest fires
+const FIRE_TRAIL = p([0x1e1612, 0x4a3e36], { count: 1, size: [0.22, 0.4], speed: [0, 0.3], life: [0.4, 0.8], gravity: -0.4, spread: 1, glow: false, opacity: 0.5, grow: 1.6 });
+const DARK_SMOKE = p([0x14100e, 0x3a2e28], { count: 2, size: [1.2, 2.2], speed: [0.4, 1.4], life: [1.6, 2.6], gravity: -0.7, spread: 1.4, glow: false, opacity: 0.6, grow: 2.4 });
 const SNOW = p([0xffffff, 0xbfeaff], { count: 8, size: [0.04, 0.08], speed: [0.2, 0.6], life: [1.2, 2], gravity: 0.8, spread: 2, glow: false, opacity: 0.95, late: true });
 
 // What's on the ground is drawn before anything else see-through (the particles over it and
 // the rest), so it doesn't cover them: marks first, then glows, then rings
 const ORDER = Object.freeze({ mark: -3, glow: -2, ring: -1 });
+
+// How wide a fire spell's circle round its caster's feet is, tier by tier (metres)
+const CAST_CIRCLE = [0.9, 1.1, 1.35, 1.7, 2.0, 2.6, 4.2];
 
 // The brightest a flash's light is (so those near it aren't burnt white)
 const BRIGHTEST = 28;
@@ -226,6 +233,246 @@ const TEXTURES = {
         }),
 };
 
+// The runes written round a fire spell's circle: each a few strokes, in a box -1 to 1 (x along
+// the circle, y out from its middle)
+const RUNE_STROKES = [
+    [[0, -1, 0, 1], [0, -0.3, 0.6, -0.8]],
+    [[-0.4, -1, -0.4, 1], [-0.4, -1, 0.5, -0.35], [0.5, -0.35, -0.4, 0.3]],
+    [[0, -1, 0, 1], [-0.6, -0.5, 0.6, 0.5]],
+    [[-0.55, -1, 0.55, 1], [0.55, -1, -0.55, 1]],
+    [[0, -1, 0, 1], [0, -1, 0.6, -0.4], [0, -0.1, 0.6, 0.5]],
+    [[-0.55, 1, 0, -1], [0, -1, 0.55, 1], [-0.3, 0.25, 0.3, 0.25]],
+    [[0, -1, 0, 1], [-0.6, -1, 0, -0.35], [0.6, -1, 0, -0.35]],
+    [[-0.5, -1, -0.5, 1], [0.5, -1, 0.5, 1], [-0.5, -0.3, 0.5, 0.4]],
+    [[-0.5, 1, 0.5, 1], [0, 1, 0, -1], [-0.5, -1, 0.5, -1]],
+    [[-0.5, -0.9, 0.5, -0.1], [0.5, -0.1, -0.5, 0.7], [0, -1, 0, 1]],
+];
+
+// Lines drawn on a canvas twice: burnt (dark, wider) under, then glowing (white, its spell's
+// colour given it by its material) over, so they show against bright ground by day as well as
+// in the dark. `lines`: [width, path] (width a share of `s`, path drawing on `g`)
+function burnAndGlow(g, s, lines, { dark = 0.7 } = {}) {
+    g.lineCap = g.lineJoin = "round";
+
+    for (const [colour, wider, blur] of [
+        [`rgba(26,7,2,${dark})`, 3.2, 0],
+        ["rgba(255,255,255,1)", 1, s * 0.012],
+    ]) {
+        g.strokeStyle = colour;
+        g.shadowColor = "rgba(255,255,255,0.85)";
+        g.shadowBlur = blur;
+
+        for (const [width, path] of lines) {
+            g.lineWidth = width * s * wider;
+            g.beginPath();
+            path();
+            g.stroke();
+        }
+    }
+}
+
+/**
+ * A fire spell's circle (`tier` 1 to 7; 0, only the band of runes, for the rings rising in the
+ * air): the greater the spell, the more there is to it. Rings, runes written round between two
+ * of them, fire's triangles (one; two, a star; three; then stars of seven and eight points),
+ * little circles at the stars' points, flame teeth round its rim, spokes, and a flame in its
+ * heart.
+ */
+function sigilTexture(tier) {
+    return canvasTexture(tier >= 5 || tier === 0 ? 512 : 256, (g, s) => {
+        const c = s / 2;
+        const lines = [];
+        const w = 0.007;
+        const at = (r, a) => [c + Math.cos(a) * r * c, c + Math.sin(a) * r * c];
+        const ring = (r, width = w) => lines.push([width, () => g.arc(c, c, r * c, 0, Math.PI * 2)]);
+        const polygon = (n, r, turn = -Math.PI / 2, step = 1) =>
+            lines.push([
+                w,
+                () => {
+                    for (let k = 0; k <= n; k++) {
+                        g[k ? "lineTo" : "moveTo"](...at(r, turn + (k * step * Math.PI * 2) / n));
+                    }
+                },
+            ]);
+        const nodes = (n, r, size, turn = -Math.PI / 2) => {
+            for (let k = 0; k < n; k++) {
+                const [x, y] = at(r, turn + (k * Math.PI * 2) / n);
+
+                lines.push([w * 0.8, () => g.arc(x, y, size * c, 0, Math.PI * 2)]);
+            }
+        };
+        const runes = (n, inner, outer, turn = 0) => {
+            const [r, h] = [((inner + outer) / 2) * c, (outer - inner) * c * 0.34];
+
+            for (let k = 0; k < n; k++) {
+                const a = turn + (k / n) * Math.PI * 2;
+                const strokes = RUNE_STROKES[(k * 7 + tier * 3) % RUNE_STROKES.length];
+                const [x, y] = [c + Math.cos(a) * r, c + Math.sin(a) * r];
+                // (x along the circle, y out from its middle)
+                const point = (u, v) => [x + (-Math.sin(a) * u * 0.6 + Math.cos(a) * v) * h, y + (Math.cos(a) * u * 0.6 + Math.sin(a) * v) * h];
+
+                lines.push([
+                    w * 0.75,
+                    () => {
+                        for (const [u0, v0, u1, v1] of strokes) {
+                            g.moveTo(...point(u0, v0));
+                            g.lineTo(...point(u1, v1));
+                        }
+                    },
+                ]);
+            }
+        };
+        const teeth = (n, inner, outer) =>
+            lines.push([
+                w * 0.8,
+                () => {
+                    for (let k = 0; k < n; k++) {
+                        const a = (k / n) * Math.PI * 2;
+                        const half = Math.PI / n;
+
+                        g.moveTo(...at(inner, a - half * 0.6));
+                        g.lineTo(...at(outer, a));
+                        g.lineTo(...at(inner, a + half * 0.6));
+                    }
+                },
+            ]);
+        const spokes = (n, from, to) =>
+            lines.push([
+                w * 0.7,
+                () => {
+                    for (let k = 0; k < n; k++) {
+                        const a = (k / n) * Math.PI * 2;
+
+                        g.moveTo(...at(from, a));
+                        g.lineTo(...at(to, a));
+                    }
+                },
+            ]);
+        // (A flame: a teardrop, its point up, a lick inside it)
+        const flame = (r) =>
+            lines.push([
+                w * 1.3,
+                () => {
+                    const [x, y, h] = [c, c + r * c * 0.15, r * c];
+
+                    g.moveTo(x, y - h);
+                    g.bezierCurveTo(x + h * 0.85, y - h * 0.1, x + h * 0.6, y + h * 0.75, x, y + h * 0.75);
+                    g.bezierCurveTo(x - h * 0.6, y + h * 0.75, x - h * 0.85, y - h * 0.1, x, y - h);
+                    g.moveTo(x - h * 0.05, y - h * 0.25);
+                    g.bezierCurveTo(x + h * 0.35, y + h * 0.1, x + h * 0.25, y + h * 0.5, x, y + h * 0.5);
+                },
+            ]);
+
+        if (tier === 0) {
+            ring(0.96);
+            ring(0.74);
+            ring(0.68, w * 0.6);
+            runes(24, 0.74, 0.96);
+            teeth(24, 0.68, 0.6);
+        } else if (tier === 1) {
+            ring(0.94, w * 1.4);
+            polygon(3, 0.84);
+            runes(3, 0.5, 0.86, Math.PI / 6);
+            flame(0.24);
+        } else if (tier <= 4) {
+            ring(0.96, w * 1.4);
+            ring(0.8);
+            runes(4 + tier * 4, 0.8, 0.96);
+            polygon(3, 0.8);
+
+            if (tier >= 3) {
+                polygon(3, 0.8, Math.PI / 2);
+            }
+
+            ring(tier >= 4 ? 0.52 : 0.4);
+
+            if (tier >= 4) {
+                ring(0.4);
+                nodes(6, 0.8, 0.055);
+            }
+
+            flame(tier >= 4 ? 0.22 : 0.26);
+        } else {
+            ring(0.9, w * 1.4);
+            ring(tier >= 7 ? 0.78 : 0.76);
+            teeth(tier >= 7 ? 32 : tier >= 6 ? 24 : 18, 0.9, 0.99);
+            runes(tier >= 7 ? 28 : tier >= 6 ? 24 : 20, tier >= 7 ? 0.78 : 0.76, 0.9);
+
+            if (tier === 5) {
+                for (let k = 0; k < 3; k++) {
+                    polygon(3, 0.76, -Math.PI / 2 + (k * Math.PI * 2) / 9);
+                }
+
+                nodes(9, 0.76, 0.035);
+                ring(0.38);
+                flame(0.2);
+            } else if (tier === 6) {
+                polygon(7, 0.76, -Math.PI / 2, 3);
+                nodes(7, 0.76, 0.04);
+                ring(0.5);
+                polygon(3, 0.5);
+                polygon(3, 0.5, Math.PI / 2);
+                ring(0.25);
+                flame(0.17);
+            } else {
+                polygon(8, 0.78, -Math.PI / 2, 3);
+                nodes(8, 0.78, 0.035);
+                ring(0.62);
+                ring(0.5);
+                runes(16, 0.5, 0.62, Math.PI / 16);
+                polygon(3, 0.5);
+                polygon(3, 0.5, Math.PI / 2);
+                spokes(16, 0.26, 0.5);
+                ring(0.26);
+                flame(0.17);
+            }
+        }
+
+        burnAndGlow(g, s, lines);
+    });
+}
+
+for (let tier = 1; tier <= 7; tier++) {
+    TEXTURES[`sigil${tier}`] = () => sigilTexture(tier);
+}
+
+// (The band of runes, for the rings rising in the air)
+TEXTURES.runeband = () => sigilTexture(0);
+
+// Fissures in the ground glowing (lava's), branching out from the middle
+TEXTURES.fissures = () =>
+    canvasTexture(512, (g, s) => {
+        const lines = [];
+
+        const crack = (x, y, angle, length, width, depth) => {
+            const points = [[x, y]];
+
+            for (let step = 0; step < length; step++) {
+                angle += (Math.random() - 0.5) * 0.7;
+                x += Math.cos(angle) * s * 0.035;
+                y += Math.sin(angle) * s * 0.035;
+                points.push([x, y]);
+
+                if (depth < 2 && Math.random() < 0.18) {
+                    crack(x, y, angle + (Math.random() < 0.5 ? -1 : 1) * (0.5 + Math.random() * 0.5), Math.floor(length * 0.5), width * 0.6, depth + 1);
+                }
+            }
+
+            lines.push([
+                width,
+                () => {
+                    points.forEach(([px, py], k) => g[k ? "lineTo" : "moveTo"](px, py));
+                },
+            ]);
+        };
+
+        for (let k = 0; k < 11; k++) {
+            crack(s / 2, s / 2, (k / 11) * Math.PI * 2 + Math.random() * 0.3, 11 + Math.floor(Math.random() * 3), 0.006, 0);
+        }
+
+        burnAndGlow(g, s, lines, { dark: 0.85 });
+    });
+
 // --- The effect itself ---
 
 export class SpellFx {
@@ -287,6 +534,9 @@ export class SpellFx {
         this.glowing = [];
         this.shining = [];
 
+        // The sky darkened by the greatest spells (omen: { strength, age, life, rise })
+        this.omens = [];
+
         /** Whether the lights can be lent now (not while they're lighting a room: the view's lamps indoors). */
         this.lit = true;
 
@@ -320,6 +570,13 @@ export class SpellFx {
     // A material that adds light (its own, to fade)
     #additive(colour, { map = null, opacity = 1 } = {}) {
         return new THREE.MeshBasicMaterial({ color: colour, map, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
+    }
+
+    // A material that shows its colour over what's behind it rather than adding to it, `boost`
+    // times brighter than its colour (brighter than white: so it glows), so it keeps its colour
+    // against bright ground or sky by day (its own, to fade)
+    #vivid(colour, { map = null, opacity = 1, boost = 2.4 } = {}) {
+        return new THREE.MeshBasicMaterial({ color: new THREE.Color(colour).multiplyScalar(boost), map, transparent: true, opacity, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
     }
 
     /** The ground's height at a point ((x, z) => metres: the effects'). */
@@ -382,11 +639,16 @@ export class SpellFx {
     /**
      * A mark on the ground round a point, `radius` m: scorched (darkening), a glow, a circle of
      * runes (turning: `spin`), cracks; coming in quickly, going over its last `fade` of its life.
+     * Returns it.
      */
-    decal(centre, { texture = "glow", colour = 0xffffff, radius = 1, life = 2, spin = 0, dark = false, opacity = 1, grow = 0, fade = 0.35, y = 0.045 }) {
+    decal(centre, { texture = "glow", colour = 0xffffff, radius = 1, life = 2, spin = 0, dark = false, vivid = 0, opacity = 1, grow = 0, fade = 0.35, y = 0.045 }) {
+        // (Dark: shading the ground; vivid: its colour shown over it, `vivid` times brighter; else adding light)
+        const map = this.#texture(texture);
         const material = dark
-            ? new THREE.MeshBasicMaterial({ map: this.#texture(texture), color: colour, transparent: true, opacity, depthWrite: false, toneMapped: false })
-            : this.#additive(colour, { map: this.#texture(texture), opacity });
+            ? new THREE.MeshBasicMaterial({ map, color: colour, transparent: true, opacity, depthWrite: false, toneMapped: false })
+            : vivid
+              ? this.#vivid(colour, { map, opacity, boost: vivid })
+              : this.#additive(colour, { map, opacity });
         const mesh = new THREE.Mesh(this.geometries.disc, material);
         let turn = Math.random() * Math.PI * 2;
 
@@ -406,6 +668,68 @@ export class SpellFx {
         });
 
         return mesh;
+    }
+
+    /**
+     * A fire spell's circle on the ground round a point (sigilTexture's for its `tier`: the
+     * greater the spell, the more there is to it), `radius` m, turning (`spin`), burnt into the
+     * ground and glowing over it (so it shows by day as by night), a soft glow round it (`glow`:
+     * how strong). Returns it.
+     */
+    sigil(centre, { tier = 1, radius = 1, colour = FIRE.deep, life = 1.5, spin = 1, grow = 0.25, fade = 0.3, opacity = 1, glow = 0.35, y = 0.05 }) {
+        const sigil = this.decal(centre, { texture: `sigil${Math.max(1, Math.min(7, tier))}`, colour, radius, life, spin, grow, fade, opacity, vivid: 2.4, y });
+
+        if (glow) {
+            this.decal(centre, { texture: "glow", colour, radius: radius * 1.3, life, grow, fade, opacity: glow, y: y - 0.008 });
+        }
+
+        return sigil;
+    }
+
+    /**
+     * A ring of runes lying level in the air over a point (a great spell's: the band of runes,
+     * or another circle's `texture`), `radius` m round, rising from `from` to `to` metres over the
+     * ground there through its life (easing as it goes), growing or shrinking to `shrink` times as
+     * wide, turning (`spin`), coming in quickly and going over its last quarter. Returns it.
+     */
+    halo(centre, { texture = "runeband", colour = FIRE.deep, radius = 2, from = 0.5, to = from, life = 1.5, spin = 1, shrink = 1, opacity = 1, boost = 2.2 }) {
+        const mesh = new THREE.Mesh(this.geometries.disc, this.#vivid(colour, { map: this.#texture(texture), opacity, boost }));
+        const ground = this.groundAt(centre.x, centre.z);
+        let turn = Math.random() * Math.PI * 2;
+
+        mesh.renderOrder = ORDER.ring;
+        this.#show(mesh, life, (t, dt) => {
+            const eased = 1 - (1 - t) ** 2;
+            const size = radius * (1 + (shrink - 1) * eased) * Math.min(1, 0.4 + t * 6);
+
+            turn += spin * dt;
+            mesh.position.set(centre.x, ground + from + (to - from) * eased, centre.z);
+            mesh.scale.set(size, 1, size);
+            mesh.rotation.y = turn;
+            mesh.material.opacity = opacity * Math.min(1, t * 8) * (t > 0.75 ? (1 - t) / 0.25 : 1);
+        });
+
+        return mesh;
+    }
+
+    /**
+     * Darken and redden the sky a while (the greatest spells': how much, 0 to 1, for `seconds`,
+     * coming on over its first `rise` seconds and going over its last `fall`): darkness() says how
+     * much it is now, for the view (view.js setOmen).
+     */
+    omen(strength, seconds, { rise = 0.5, fall = 1 } = {}) {
+        this.omens.push({ strength, age: 0, life: seconds, rise, fall });
+    }
+
+    /** How darkened the sky is now (0, not at all, to 1: the darkest of the spells' omens now). */
+    darkness() {
+        let most = 0;
+
+        for (const { strength, age, life, rise, fall } of this.omens) {
+            most = Math.max(most, strength * Math.min(1, age / rise, Math.max(0, life - age) / fall));
+        }
+
+        return most;
     }
 
     /**
@@ -535,14 +859,14 @@ export class SpellFx {
      * (`trail`); `onArrive` heard when it gets there. Kept by `key` (its caster), so it's called
      * off if they're stopped.
      */
-    throw(key, from, to, { travel = 0.3, arc = 0.3, colour = 0xffffff, size = 0.12, shape = null, glow = false, trail = null, spin = 0, light = null, onArrive = null }) {
+    throw(key, from, to, { travel = 0.3, arc = 0.3, colour = 0xffffff, size = 0.12, shape = null, glow = false, vivid = false, trail = null, spin = 0, light = null, onArrive = null }) {
         const start = from()?.clone();
 
         if (!start) {
             return;
         }
 
-        const object = shape ? this.#piece(shape, colour, size, glow) : this.#orb(colour, size);
+        const object = shape ? this.#piece(shape, colour, size, glow) : this.#orb(colour, size, vivid);
         const missile = { object, alive: true };
 
         // (A fireball lighting what it passes: { strength, reach }, its colour)
@@ -572,8 +896,9 @@ export class SpellFx {
                 object.lookAt(object.position.clone().add(object.position.clone().sub(last)));
             }
 
-            if (trail) {
-                this.spray(trail, object.position);
+            // (Its trail: one kind of particles, or several (fire and smoke))
+            for (const each of trail ? [trail].flat() : []) {
+                this.spray(each, object.position);
             }
 
             if (t >= 1 && missile.alive) {
@@ -618,10 +943,15 @@ export class SpellFx {
         return mesh;
     }
 
-    // A glowing orb: a bright core in a soft glow
-    #orb(colour, size) {
+    // A glowing orb: a bright core in a soft glow (`vivid`: the glow its colour over what's
+    // behind it rather than adding to it, so it keeps its colour against the sky by day)
+    #orb(colour, size, vivid = false) {
         const core = new THREE.Mesh(this.geometries.ball, this.#additive(0xffffff));
-        const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.#texture("glow"), color: colour, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+        const glow = new THREE.Sprite(
+            vivid
+                ? new THREE.SpriteMaterial({ map: this.#texture("glow"), color: new THREE.Color(colour).multiplyScalar(2.6), depthWrite: false, toneMapped: false })
+                : new THREE.SpriteMaterial({ map: this.#texture("glow"), color: colour, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }),
+        );
 
         core.scale.setScalar(size * 0.45);
         glow.scale.setScalar(size * 4);
@@ -823,14 +1153,15 @@ export class SpellFx {
      * of `tongues` tongues `spread` out round its middle, swirling round as it rises (`twist`: a
      * torch's 1); growing up in its first `rise` of its `life` (seconds), burning, and dying away
      * over its last `fall`; lighting what's round it (`light` candela, as far as `reach`), if it's
-     * to, from halfway up it.
+     * to, from halfway up it. A body of flame (`body`: fire.js fireFlames'), keeping its colour
+     * against the bright ground and sky by day.
      */
-    blaze(at, { width = 0.6, height = 1, tongues = 6, spread = 0.2, twist = 3, heat = 1.25, life = 1.2, rise = 0.15, fall = 0.4, light = 0, reach = 8, colour = 0xff7a2a, lift = 0.05 }) {
+    blaze(at, { width = 0.6, height = 1, tongues = 6, spread = 0.2, twist = 3, heat = 1.25, life = 1.2, rise = 0.15, fall = 0.4, light = 0, reach = 8, colour = 0xff7a2a, lift = 0.05, body = 1 }) {
         // (Hardly leaning in the breeze: it's magic's, not the wind's)
         const mesh = flamesMesh([{ x: 0, y: 0, z: 0, kind: "spell", width, height, tongues, spread, twist, heat, lean: 3, seed: Math.random() }]);
         const size = (t) => Math.min(1, t / rise) * (t > 1 - fall ? Math.max(0, (1 - t) / fall) ** 0.7 : 1);
 
-        mesh.material = fireFlames(0);
+        mesh.material = fireFlames(0, body);
         mesh.position.copy(this.onGround(at.x, at.z, lift));
         mesh.userData.dispose = () => mesh.geometry.dispose();
 
@@ -978,8 +1309,21 @@ export class SpellFx {
         const seconds = castTime / 1000;
         const circles = [];
 
-        // (The greater spells: runes round the caster's feet, the greatest at where it's cast too)
-        if (tier >= 4 && school !== "healing") {
+        // (A fire spell's circle round the caster's feet, whatever its tier, the greater the
+        // spell the greater the circle; the other schools' greater spells, runes round their
+        // feet, the greatest at where it's cast too)
+        if (school === "fire") {
+            const at = feet();
+
+            if (at) {
+                circles.push(this.sigil(at, { tier, radius: CAST_CIRCLE[tier - 1], colour: palette.deep, life: seconds + 0.4, spin: tier >= 7 ? 1.4 : 0.9, grow: 0.3, fade: 0.25, glow: 0.25 + tier * 0.05 }));
+
+                if (tier >= 7) {
+                    circles.push(this.sigil(at, { tier: 4, radius: 2.4, colour: palette.bright, life: seconds + 0.4, spin: -2.2, grow: 0.4, fade: 0.25, glow: 0 }));
+                    this.pillar(at, { colour: palette.deep, radius: 0.9, height: 9, life: seconds + 0.3, rise: 0.5, opacity: 0.6 });
+                }
+            }
+        } else if (tier >= 4 && school !== "healing") {
             const at = feet();
 
             if (at) {
@@ -990,10 +1334,10 @@ export class SpellFx {
                     this.pillar(at, { colour: palette.deep, radius: 0.9, height: 9, life: seconds + 0.3, rise: 0.5 });
                 }
             }
-        }
 
-        if (tier >= 7 && target?.()) {
-            this.decal(target(), { texture: "runes", colour: palette.deep, radius: 6, life: seconds + 0.5, spin: -1, grow: 0.8, opacity: 0.85, fade: 0.2 });
+            if (tier >= 7 && target?.()) {
+                this.decal(target(), { texture: "runes", colour: palette.deep, radius: 6, life: seconds + 0.5, spin: -1, grow: 0.8, opacity: 0.85, fade: 0.2 });
+            }
         }
 
         recipe.charging?.(this, { target, seconds });
@@ -1107,6 +1451,9 @@ export class SpellFx {
             lent.light.intensity = lent.age < lent.life ? lent.peak * (1 - lent.age / lent.life) ** 2 : 0;
         }
 
+        // (The sky's darkening, going once it's over)
+        this.omens = this.omens.filter((omen) => (omen.age += dt) < omen.life);
+
         // (The spells' own lights, fading as each does, gone when they're out)
         this.glowing = this.glowing.filter((light) => {
             light.age += dt;
@@ -1145,6 +1492,7 @@ export class SpellFx {
         this.running = [];
         this.later = [];
         this.glowing = [];
+        this.omens = [];
         this.shining.length = 0;
         this.casting.clear();
         this.missiles.clear();
@@ -1277,42 +1625,50 @@ const RECIPES = {
 
     // --- Fire --- (world/fire.js's fire, from a lick of it at the least to a burning column
     // reaching the clouds at the greatest, swirling round more the greater it is, each lighting
-    // what's round it: blaze)
+    // what's round it: blaze; each a body of flame by day as by night. And each a spell's, its
+    // circle burnt and glowing on the ground where it lands (sigil), the greater the spell the
+    // greater and richer the circle: rings of runes rising up the greatest, the sky darkening)
     burn: {
-        missile: { travel: 0.2, arc: 0.1, colour: FIRE.deep, size: 0.09, light: { strength: 2, reach: 4 }, trail: p(FIRE.glow, { count: 1, size: [0.08, 0.14], speed: [0, 0.3], life: [0.15, 0.3], gravity: -2 }) },
+        missile: { travel: 0.2, arc: 0.1, colour: FIRE.deep, size: 0.1, vivid: true, light: { strength: 2, reach: 4 }, trail: p(FIRE.glow, { count: 1, size: [0.08, 0.14], speed: [0, 0.3], life: [0.15, 0.3], gravity: -2 }) },
         land: (fx, { at, point }) => {
-            // (A lick of flame up them)
-            fx.blaze(at, { width: 0.3, height: 0.55, tongues: 3, spread: 0.06, twist: 1.2, life: 0.9, light: 4, reach: 5 });
+            // (Its circle flaring under them, and a lick of flame up them, curling round)
+            fx.sigil(at, { tier: 1, radius: 0.85, life: 1.3, spin: 1.6, grow: 0.12 });
+            fx.blaze(at, { width: 0.34, height: 0.75, tongues: 3, spread: 0.07, twist: 1.4, life: 1.1, light: 4, reach: 5 });
+            fx.spray(p(FIRE.glow, { count: 8, size: [0.06, 0.12], speed: [0.6, 1.4], life: [0.4, 0.7], gravity: -2.5, spread: 0.8, swirl: 9 }), above(at, 0.2));
             fx.spray({ ...FLAMES, count: 6 }, point);
             fx.spray({ ...SPARKS, count: 8 }, point);
         },
     },
     fireball: {
-        missile: { travel: 0.3, arc: 0.25, colour: FIRE.deep, size: 0.18, light: { strength: 6, reach: 7 }, trail: p(FIRE.glow, { count: 3, size: [0.14, 0.26], speed: [0.1, 0.6], life: [0.2, 0.4], gravity: -2, grow: 0.5 }) },
+        missile: { travel: 0.3, arc: 0.25, colour: FIRE.deep, size: 0.22, vivid: true, light: { strength: 6, reach: 7 }, trail: [p(FIRE.glow, { count: 3, size: [0.14, 0.26], speed: [0.1, 0.6], life: [0.2, 0.4], gravity: -2, grow: 0.5 }), FIRE_TRAIL] },
         land: (fx, { at, point }) => {
-            // (Bursting into a fire round them, twisting up)
-            fx.blaze(at, { width: 0.75, height: 1.3, tongues: 6, spread: 0.22, twist: 2, life: 1.3, light: 9, reach: 8 });
+            // (Bursting into a fire round them, twisting up, over its circle)
+            fx.sigil(at, { tier: 2, radius: 1.3, life: 1.6, spin: 1.3, grow: 0.12 });
+            fx.blaze(at, { width: 0.8, height: 1.6, tongues: 6, spread: 0.24, twist: 2, life: 1.4, light: 9, reach: 8 });
+            fx.ring(at, { colour: FIRE.deep, from: 0.3, to: 1.6, life: 0.4 });
             fx.spray({ ...FLAMES, count: 16 }, point);
             fx.spray(SPARKS, point);
             fx.spray(SMOKE, point);
-            fx.decal(at, { texture: "scorch", colour: 0xffffff, radius: 0.7, life: 4, dark: true });
+            fx.decal(at, { texture: "scorch", colour: 0xffffff, radius: 0.8, life: 4, dark: true });
             fx.flash(point, { colour: FIRE.bright, intensity: 12, distance: 6, life: 0.3 });
         },
     },
     burstflame: {
-        missile: { travel: 0.26, arc: 0.2, colour: FIRE.deep, size: 0.16, light: { strength: 5, reach: 6 }, trail: p(FIRE.glow, { count: 3, size: [0.12, 0.22], speed: [0.1, 0.5], life: [0.2, 0.35], gravity: -2 }) },
+        missile: { travel: 0.26, arc: 0.2, colour: FIRE.deep, size: 0.2, vivid: true, light: { strength: 5, reach: 6 }, trail: [p(FIRE.glow, { count: 3, size: [0.12, 0.22], speed: [0.1, 0.5], life: [0.2, 0.35], gravity: -2 }), FIRE_TRAIL] },
         land: (fx, { at, point }) => {
-            // (A fire round them, and a ring of fire bursting out from it)
-            fx.blaze(at, { width: 0.7, height: 1.2, tongues: 5, spread: 0.18, twist: 2.4, life: 1.2, light: 12, reach: 9 });
+            // (A fire round them, and a ring of fire bursting out from it along its circle's rim)
+            fx.sigil(at, { tier: 3, radius: 2, life: 1.8, spin: 1.1, grow: 0.15 });
+            fx.blaze(at, { width: 0.75, height: 1.4, tongues: 5, spread: 0.18, twist: 2.4, life: 1.3, light: 12, reach: 9 });
             fx.spray({ ...FLAMES, count: 20 }, point);
-            fx.ring(at, { colour: FIRE.deep, from: 0.3, to: 1.8, life: 0.45 });
+            fx.ring(at, { colour: FIRE.deep, from: 0.3, to: 2, life: 0.45 });
 
             for (let k = 0; k < 9; k++) {
                 const angle = (k / 9) * Math.PI * 2;
+                const spot = () => fx.onGround(at.x + Math.cos(angle) * 1.65, at.z + Math.sin(angle) * 1.65);
 
                 fx.after(0.04 + (k % 3) * 0.03, () => {
-                    fx.blaze(fx.onGround(at.x + Math.cos(angle) * 1.4, at.z + Math.sin(angle) * 1.4), { width: 0.38, height: 0.8, tongues: 3, spread: 0.08, twist: 2, life: 1 });
-                    fx.spray({ ...FLAMES, count: 4, speed: [1, 2.4] }, fx.onGround(at.x + Math.cos(angle) * 1.4, at.z + Math.sin(angle) * 1.4, 0.3), new THREE.Vector3(Math.cos(angle), 1.5, Math.sin(angle)));
+                    fx.blaze(spot(), { width: 0.4, height: 0.9, tongues: 3, spread: 0.08, twist: 2, life: 1.1 });
+                    fx.spray({ ...FLAMES, count: 4, speed: [1, 2.4] }, spot().setY(spot().y + 0.3), new THREE.Vector3(Math.cos(angle), 1.5, Math.sin(angle)));
                 });
             }
 
@@ -1322,8 +1678,11 @@ const RECIPES = {
     },
     immolate: {
         land: (fx, { at, point }) => {
-            // (A wreath of fire spiralling up round them, taller than they are)
-            fx.blaze(at, { width: 1.1, height: 3.2, tongues: 10, spread: 0.55, twist: 3.5, heat: 1.3, life: 1.8, rise: 0.2, light: 16, reach: 10 });
+            // (A wreath of fire spiralling up round them, taller than they are, from their circle;
+            // a ring of runes rising round it)
+            fx.sigil(at, { tier: 4, radius: 2.4, life: 2.2, spin: 1, grow: 0.12 });
+            fx.halo(at, { radius: 1.3, from: 0.3, to: 3.4, life: 1.5, spin: 2.2, shrink: 0.7 });
+            fx.blaze(at, { width: 1.15, height: 3.4, tongues: 10, spread: 0.55, twist: 3.5, heat: 1.3, life: 1.9, rise: 0.2, light: 16, reach: 10 });
             fx.pillar(at, { colour: FIRE.deep, radius: 0.7, height: 4.5, life: 1, rise: 0.15, opacity: 0.35 });
 
             for (let k = 0; k < 4; k++) {
@@ -1332,66 +1691,119 @@ const RECIPES = {
 
             fx.spray({ ...SPARKS, count: 30 }, point);
             fx.spray({ ...EMBERS, count: 30 }, point);
-            fx.ring(at, { colour: FIRE.deep, from: 0.3, to: 2, life: 0.5 });
-            fx.decal(at, { texture: "scorch", colour: 0xffffff, radius: 1.1, life: 5, dark: true });
+            fx.ring(at, { colour: FIRE.deep, from: 0.3, to: 2.4, life: 0.5 });
+            fx.decal(at, { texture: "scorch", colour: 0xffffff, radius: 1.2, life: 5, dark: true });
             fx.flash(point, { colour: FIRE.deep, intensity: 25, distance: 8, life: 0.5, size: 3 });
         },
     },
     flamefill: {
         land: (fx, { at, point }) => {
-            // (The ground all round them catching fire, a patch at a time, burning a while)
-            fx.ring(at, { colour: FIRE.deep, from: 0.3, to: 2.6, life: 0.5, opacity: 1 });
-            fx.glow(above(at, 0.8), { colour: FIRE.deep, strength: 18, reach: 12, life: 1.8, steady: 1.2, fade: (t) => Math.min(1, t * 6) * (t > 0.7 ? (1 - t) / 0.3 : 1) });
+            // A firestorm (the user: "There should be a clear progression of power"): a wave of
+            // fire rolling out across its circle, ring after ring, each taller than the last, a
+            // cone of fire 5 m high drawing in over the middle; fire running round the circle's
+            // rim; a ring of runes rising over it
+            fx.sigil(at, { tier: 5, radius: 3.6, life: 2.6, spin: 0.8, grow: 0.12 });
+            fx.halo(at, { radius: 2.8, from: 0.3, to: 5.5, life: 1.8, spin: 1.8, shrink: 0.6 });
+            fx.glow(above(at, 1.2), { colour: FIRE.deep, strength: 20, reach: 13, life: 2.1, steady: 1.2, fade: (t) => Math.min(1, t * 6) * (t > 0.7 ? (1 - t) / 0.3 : 1) });
 
-            for (let k = 0; k < 13; k++) {
-                const angle = k * 2.399963 + Math.random() * 0.4;
-                const reach = k === 0 ? 0 : 0.7 + Math.sqrt(k / 13) * 1.7;
-                const spot = fx.onGround(at.x + Math.cos(angle) * reach, at.z + Math.sin(angle) * reach);
-                const big = 0.8 + Math.random() * 0.5;
-
-                fx.after(k * 0.04, () => fx.blaze(spot, { width: 0.55 * big, height: 1.1 * big, tongues: 4, spread: 0.14, twist: 1.6, life: 1.5 + Math.random() * 0.3 }));
+            for (const [k, [spread, height, tongues]] of [
+                [1, 3, 9],
+                [1.9, 4, 13],
+                [2.7, 5, 17],
+            ].entries()) {
+                fx.after(k * 0.12, () => {
+                    fx.blaze(at, { width: 1.05, height, tongues, spread, twist: 0.2 - k * 0.04, heat: 1.2, life: 2 - k * 0.1, rise: 0.12 });
+                    fx.ring(at, { colour: k === 1 ? FIRE.bright : FIRE.deep, from: spread * 0.6, to: spread + 0.8, life: 0.4 });
+                });
             }
 
-            fx.scatter({ ...FLAMES, count: 4 }, at, 2.3, 12, { seconds: 0.6, y: 0.2 });
-            fx.flash(point, { colour: FIRE.deep, intensity: 30, distance: 10, life: 0.5, size: 4 });
-            fx.shake(0.06);
+            // (Fire running round the circle's rim)
+            for (let k = 0; k < 12; k++) {
+                const angle = (k / 12) * Math.PI * 2;
+
+                fx.after(0.25 + k * 0.04, () => fx.blaze(fx.onGround(at.x + Math.cos(angle) * 3.3, at.z + Math.sin(angle) * 3.3), { width: 0.6, height: 1.5, tongues: 3, spread: 0.12, twist: 2, life: 1.7 }));
+            }
+
+            for (let k = 0; k < 4; k++) {
+                fx.after(k * 0.1, () => fx.spray(p(FIRE.glow, { count: 12, size: [0.25, 0.5], speed: [1, 2.4], life: [0.5, 0.8], gravity: -4, spread: 2.4, swirl: 6, grow: 0.5 }), above(at, 0.3)));
+            }
+
+            fx.spray({ ...EMBERS, count: 40, speed: [2, 6] }, point);
+            fx.after(0.3, () => fx.scatter({ ...SMOKE, count: 4 }, at, 3, 8, { seconds: 1.2, y: 3 }));
+            fx.decal(at, { texture: "scorch", colour: 0xffffff, radius: 3.2, life: 6, dark: true });
+            fx.flash(point, { colour: FIRE.deep, intensity: 32, distance: 11, life: 0.55, size: 5 });
+            fx.screen(0xff6a1a, 0.08, 0.5);
+            fx.shake(0.1);
         },
     },
     inferno: {
+        // (Its circle spreading where it's cast as it's cast, the sky beginning to darken)
+        charging: (fx, { target, seconds }) => {
+            const at = target?.();
+
+            if (at) {
+                fx.sigil(at, { tier: 6, radius: 5.5, life: seconds + 3, spin: -0.7, grow: 0.25, fade: 0.2, glow: 0.45 });
+            }
+
+            fx.omen(0.4, seconds + 3, { rise: seconds, fall: 1 });
+        },
         land: (fx, { at, point }) => {
-            // A roaring vortex of fire, whirling up into a tall column, a hotter one in its heart,
-            // fires catching round it, embers thrown high
-            fx.blaze(at, { width: 1.9, height: 12, tongues: 12, spread: 1.5, twist: 3.5, heat: 1.1, life: 2.2, rise: 0.2, fall: 0.35, light: 24, reach: 16 });
-            fx.blaze(at, { width: 0.9, height: 14, tongues: 4, spread: 0.35, twist: 5, heat: 1.25, life: 1.8, rise: 0.25 });
+            // A roaring fire whirl rising from its circle: a wide swirl of fire at its foot, a
+            // tall column, a hotter one twisting faster in its heart; rings of runes rising up
+            // it, fire running round the circle's rim, black smoke billowing out over it, embers
+            // thrown high
+            fx.blaze(at, { width: 2.2, height: 3.5, tongues: 12, spread: 3.2, twist: 2.5, heat: 1.15, life: 2.4, rise: 0.15 });
+            fx.blaze(at, { width: 2.8, height: 16, tongues: 16, spread: 1.9, twist: 3.5, heat: 1.15, life: 2.6, rise: 0.2, fall: 0.35, light: 26, reach: 18 });
+            fx.blaze(at, { width: 1.3, height: 18, tongues: 6, spread: 0.45, twist: 5, heat: 1.4, life: 2.2, rise: 0.25 });
 
-            for (let k = 0; k < 8; k++) {
-                const angle = (k / 8) * Math.PI * 2 + Math.random() * 0.3;
+            for (let k = 0; k < 3; k++) {
+                fx.after(k * 0.25, () => fx.halo(at, { radius: 3.4 - k * 0.4, from: 0.6, to: 9 + k * 2.5, life: 1.7, spin: k % 2 ? -2 : 2, shrink: 0.6 }));
+            }
 
-                fx.after(0.15 + k * 0.05, () => fx.blaze(fx.onGround(at.x + Math.cos(angle) * 3, at.z + Math.sin(angle) * 3), { width: 0.6, height: 1.3, tongues: 4, spread: 0.15, twist: 2.5, life: 1.6 }));
+            for (let k = 0; k < 16; k++) {
+                const angle = (k / 16) * Math.PI * 2;
+
+                fx.after(0.1 + k * 0.05, () => fx.blaze(fx.onGround(at.x + Math.cos(angle) * 4.9, at.z + Math.sin(angle) * 4.9), { width: 0.7, height: 1.7, tongues: 4, spread: 0.15, twist: 2.5, life: 2 }));
             }
 
             for (let k = 0; k < 6; k++) {
                 fx.after(k * 0.1, () => fx.spray(p(FIRE.glow, { count: 14, size: [0.3, 0.6], speed: [1.5, 3], life: [0.5, 0.9], gravity: -4, spread: 2.4, swirl: 7, grow: 0.5 }), above(at, 0.3)));
             }
 
-            fx.ring(at, { colour: FIRE.deep, from: 0.5, to: 5, life: 0.7 });
-            fx.after(0.15, () => fx.ring(at, { colour: FIRE.bright, from: 0.5, to: 4, life: 0.6 }));
-            fx.spray({ ...EMBERS, count: 60, speed: [2, 6] }, point);
-            fx.decal(at, { texture: "scorch", colour: 0xffffff, radius: 3.5, life: 7, dark: true });
-            fx.flash(point, { colour: FIRE.deep, intensity: 45, distance: 14, life: 0.7, size: 6 });
-            fx.screen(0xff5a10, 0.15, 0.6);
-            fx.shake(0.15);
+            fx.after(0.4, () => fx.scatter(DARK_SMOKE, above(at, 0), 3, 14, { seconds: 1.6, y: 14 }));
+            fx.ring(at, { colour: FIRE.deep, from: 0.5, to: 6, life: 0.7 });
+            fx.after(0.15, () => fx.ring(at, { colour: FIRE.bright, from: 0.5, to: 5, life: 0.6 }));
+            fx.spray({ ...EMBERS, count: 70, speed: [2, 7] }, point);
+            fx.decal(at, { texture: "scorch", colour: 0xffffff, radius: 4, life: 7, dark: true });
+            fx.flash(point, { colour: FIRE.deep, intensity: 45, distance: 16, life: 0.7, size: 6 });
+            fx.screen(0xff5a10, 0.18, 0.7);
+            fx.shake(0.2);
         },
     },
     hellfire: {
+        // (As it's cast: the sky darkening and reddening, its great circle spreading over the
+        // ground where it's cast and another turning in the sky over it, the meteors to come)
+        charging: (fx, { target, seconds }) => {
+            const at = target?.();
+
+            fx.omen(0.85, seconds + 4.5, { rise: seconds * 0.8, fall: 1.5 });
+
+            if (at) {
+                fx.sigil(at, { tier: 7, radius: 13, life: seconds + 4, spin: -0.4, grow: 0.5, fade: 0.2, glow: 0.5 });
+                fx.sigil(at, { tier: 5, radius: 6, life: seconds + 3.5, spin: 0.9, grow: 0.6, fade: 0.2, glow: 0 });
+                fx.halo(at, { texture: "sigil7", radius: 10, from: 16, life: seconds + 2.2, spin: 0.5, opacity: 0.9, boost: 2.6 });
+            }
+        },
         land: (fx, { at, point }) => {
-            // Meteors raining out of a burning sky all round them, streaking in from beyond, each
-            // setting the ground alight where it strikes; the ground erupting in a whirling column
-            // of fire that reaches the clouds; shockwaves to the edge of sight; the screen red, the
-            // ground shaking
-            fx.screen(0xff2a0a, 0.55, 1.6);
+            // Meteors falling out of the circle in the burning sky all round them, each setting
+            // the ground alight where it strikes, the ground splitting into glowing fissures;
+            // then the ground erupting in a whirling column of fire that reaches the clouds, rings
+            // of runes rising up it, a crown of black smoke spreading over it, fire running round
+            // the great circle's rim; shockwaves to the edge of sight; the screen red, the ground
+            // shaking
+            fx.screen(0xff2a0a, 0.5, 1.6);
             fx.shake(0.5);
-            fx.decal(at, { texture: "runes", colour: 0xff3a0a, radius: 13, life: 3.4, spin: -0.5, grow: 0.25, opacity: 0.85 });
+            fx.decal(at, { texture: "fissures", colour: FIRE.deep, radius: 11, life: 7, vivid: 2.6, grow: 0.3, fade: 0.25 });
             fx.decal(at, { texture: "glow", colour: 0xff4a0a, radius: 14, life: 7, opacity: 0.5 });
             fx.decal(at, { texture: "scorch", colour: 0xffffff, radius: 12, life: 10, dark: true });
 
@@ -1399,18 +1811,20 @@ const RECIPES = {
                 const angle = Math.random() * Math.PI * 2;
                 const reach = Math.sqrt(Math.random()) * 10;
                 const spot = fx.onGround(at.x + Math.cos(angle) * reach, at.z + Math.sin(angle) * reach, 0.2);
-                const sky = fx.beyond(spot, 7 + Math.random() * 4).setY(spot.y + 13 + Math.random() * 4);
+                const out = Math.random() * 8;
+                const sky = fx.onGround(at.x + Math.cos(angle + 0.6) * out, at.z + Math.sin(angle + 0.6) * out).setY(fx.groundAt(at.x, at.z) + 16);
 
                 fx.after(k * 0.09, () =>
                     fx.throw(`meteor-${Math.random()}`, () => sky, () => spot, {
-                        travel: 0.45,
+                        travel: 0.5,
                         arc: 0,
                         colour: FIRE.deep,
-                        size: 0.7,
+                        size: 0.9,
+                        vivid: true,
                         light: { strength: 8, reach: 10 },
-                        trail: p(FIRE.glow, { count: 3, size: [0.4, 0.8], speed: [0.2, 1], life: [0.2, 0.4], gravity: -1, grow: 0.8 }),
+                        trail: [p(FIRE.glow, { count: 3, size: [0.4, 0.8], speed: [0.2, 1], life: [0.2, 0.4], gravity: -1, grow: 0.8 }), { ...FIRE_TRAIL, size: [0.5, 0.9] }],
                         onArrive: (hit) => {
-                            fx.blaze(hit, { width: 1.1, height: 1.9, tongues: 6, spread: 0.3, twist: 2.2, life: 2.4 + Math.random() * 0.6, light: k % 3 === 0 ? 8 : 0, reach: 8 });
+                            fx.blaze(hit, { width: 1.1, height: 2, tongues: 6, spread: 0.3, twist: 2.2, life: 2.4 + Math.random() * 0.6, light: k % 3 === 0 ? 8 : 0, reach: 8 });
                             fx.spray(p(FIRE.glow, { count: 16, size: [0.3, 0.7], speed: [2, 5], life: [0.4, 0.8], gravity: -2, spread: 2, grow: 0.6 }), hit);
                             fx.ring(hit, { colour: FIRE.deep, from: 0.4, to: 3.5, life: 0.5 });
                             fx.decal(hit, { texture: "scorch", colour: 0xffffff, radius: 1.8, life: 8, dark: true });
@@ -1421,11 +1835,22 @@ const RECIPES = {
             }
 
             fx.after(0.35, () => {
-                fx.blaze(at, { width: 5, height: 24, tongues: 16, spread: 2.2, twist: 3, heat: 1.4, life: 2.6, rise: 0.15, fall: 0.35, light: 30, reach: 28 });
-                fx.blaze(at, { width: 2, height: 28, tongues: 6, spread: 0.5, twist: 5, heat: 1.6, life: 2, rise: 0.2 });
-                fx.pillar(at, { colour: FIRE.bright, radius: 1.5, height: 30, life: 1.4, rise: 0.1, opacity: 0.4 });
+                fx.blaze(at, { width: 4, height: 5, tongues: 14, spread: 6, twist: 2.5, heat: 1.2, life: 2.8, rise: 0.15 });
+                fx.blaze(at, { width: 6, height: 26, tongues: 20, spread: 2.6, twist: 3, heat: 1.4, life: 2.8, rise: 0.15, fall: 0.35, light: 30, reach: 28 });
+                fx.blaze(at, { width: 2.4, height: 30, tongues: 8, spread: 0.6, twist: 5, heat: 1.6, life: 2.2, rise: 0.2 });
+                fx.pillar(at, { colour: FIRE.deep, radius: 1.4, height: 32, life: 1.2, rise: 0.1, opacity: 0.16 });
                 fx.flash(point, { colour: FIRE.deep, intensity: 90, distance: 30, life: 1.2, size: 18 });
                 fx.shake(0.6);
+
+                for (let k = 0; k < 5; k++) {
+                    fx.after(k * 0.2, () => fx.halo(at, { radius: 7 - k * 0.8, from: 1, to: 12 + k * 3.5, life: 2, spin: k % 2 ? -1.6 : 1.6, shrink: 0.55, boost: 2.6 }));
+                }
+
+                for (let k = 0; k < 20; k++) {
+                    const angle = (k / 20) * Math.PI * 2;
+
+                    fx.after(0.1 + k * 0.05, () => fx.blaze(fx.onGround(at.x + Math.cos(angle) * 12.4, at.z + Math.sin(angle) * 12.4), { width: 1, height: 2.4, tongues: 4, spread: 0.2, twist: 2.4, life: 2.2 }));
+                }
 
                 for (let k = 0; k < 3; k++) {
                     fx.after(k * 0.22, () => fx.ring(at, { colour: k === 1 ? FIRE.bright : FIRE.deep, from: 1, to: 24, life: 1.1, opacity: 1 }));
@@ -1434,6 +1859,7 @@ const RECIPES = {
                 fx.scatter(p(FIRE.glow, { count: 8, size: [0.4, 0.9], speed: [1.5, 4], life: [0.6, 1.1], gravity: -4, spread: 1.6, grow: 0.6 }), at, 12, 40, { seconds: 1.4, y: 0.3 });
                 fx.spray({ ...EMBERS, count: 160, speed: [4, 12], spread: 3 }, point);
                 fx.scatter({ ...SMOKE, count: 6 }, at, 10, 16, { seconds: 1.6, y: 1 });
+                fx.after(0.3, () => fx.scatter({ ...DARK_SMOKE, size: [2, 3.6], count: 3 }, above(at, 0), 6, 20, { seconds: 1.8, y: 26 }));
             });
         },
     },

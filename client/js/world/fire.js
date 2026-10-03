@@ -283,6 +283,7 @@ void main() {
 const FLAME_FRAGMENT = /* glsl */ `
 uniform vec4 windowLight;
 uniform sampler2D fireNoise;
+uniform float fireBody;
 varying vec2 vStrip;
 varying float vSeed;
 varying float vLit;
@@ -308,12 +309,18 @@ void main() {
     // (Heat to colour as a glowing body's: red at about 1,000 K, orange, white-yellow at its
     // hottest; its brightness rising far faster than its colour changes)
     vec3 colour = vec3(1.0, 0.11 + 0.42 * heat + 0.4 * heat * heat, 0.02 + 0.5 * pow(heat, 3.5)) * (0.2 + 4.2 * heat * heat * heat);
-    colour *= (0.82 + 0.18 * vDepth) * vLit;
+    // (A spell's fire (fireBody) is a body of flame, the more so by day: it hides more of what's
+    // behind it, so it keeps its colour against bright ground and sky rather than washing out to
+    // white, its heart a deep orange-yellow rather than white, its edges a sooty red)
+    float day = 1.0 - windowLight.x;
+    float solid = fireBody * (0.4 + 0.6 * day);
+    colour *= (0.82 + 0.18 * vDepth) * vLit * (1.0 - 0.45 * solid * day);
     // (Its own soft shoulder, not the scene's tone mapping (the overworld's grades and fogs too):
     // its heart rolls to white instead of clipping; then as the screen shows colour)
     colour = linearToOutputTexel(vec4(1.0 - exp(-colour), 1.0)).rgb;
     // (Premultiplied: its heart adds light; its cooler, sooty edges hide a little of what's behind)
-    gl_FragColor = vec4(colour * a, a * 0.12 * (1.0 - heat) * vLit);
+    float hide = mix(0.12 * (1.0 - heat), 0.8 - 0.35 * heat, solid);
+    gl_FragColor = vec4(colour * a, a * hide * vLit);
 }`;
 
 // Each ember: rising from its fire as a plume carries it (quickly, then slower), drifting on its
@@ -375,7 +382,7 @@ export function fireMaterials() {
     materials ??= {
         flames: new THREE.ShaderMaterial({
             name: "flames",
-            uniforms: { windowLight: WINDOW_LIGHT, fireWind: FIRE_WIND, fireNoise: { value: fireNoiseTexture() }, fireSize: { value: 1 } },
+            uniforms: { windowLight: WINDOW_LIGHT, fireWind: FIRE_WIND, fireNoise: { value: fireNoiseTexture() }, fireSize: { value: 1 }, fireBody: { value: 0 } },
             vertexShader: FLAME_VERTEX,
             fragmentShader: FLAME_FRAGMENT,
             transparent: true,
@@ -405,14 +412,15 @@ export function fireMaterials() {
 
 /**
  * A copy of the flames' material for a fire of its own size (`fireSize` uniform: 0, none, to 1,
- * all of it; a spell's, growing and dying away), the rest of its uniforms the shared ones: the
- * same shader, so nothing's compiled again.
+ * all of it; a spell's, growing and dying away) and body (`fireBody`: 0, a fire's, adding its
+ * light to what's behind it, to 1, a spell's, hiding much of it, more so by day), the rest of its
+ * uniforms the shared ones: the same shader, so nothing's compiled again.
  */
-export function fireFlames(size = 1) {
+export function fireFlames(size = 1, body = 0) {
     const { flames } = fireMaterials();
     const own = flames.clone();
 
-    own.uniforms = { ...flames.uniforms, fireSize: { value: size } };
+    own.uniforms = { ...flames.uniforms, fireSize: { value: size }, fireBody: { value: body } };
 
     return own;
 }
