@@ -916,6 +916,50 @@ test("walks out of the town into the world, drawn round the player as they go, w
     expect(trip.drawn).toBe(trip.beasts);
     expect(trip.kinds).toBe(true);
 
+    // Out here, the wild's creatures put off, the player makes camp (Make camp, at the top of their
+    // own wheel's other side): asleep to the evening, woken by their tent and its fire, and told
+    const camped = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const { elapsedOf, timeOfDay, DAY } = await import("/js/core/daytime.js");
+
+        game.stop();
+
+        for (const id of game.host.wild.keys()) {
+            Object.assign(game.battle.actor(id) ?? {}, { dead: true, respawnAt: Infinity });
+        }
+
+        const before = elapsedOf(game.host.war);
+        const said = [];
+        const message = game.hud.message;
+
+        game.hud.message = (text, seconds) => {
+            said.push(text);
+            message.call(game.hud, text, seconds);
+        };
+
+        const result = game.act(game.wheels.self[1].n, "self");
+
+        game.advance(0.2);
+        game.hud.message = message;
+
+        return {
+            result,
+            woken: timeOfDay(elapsedOf(game.host.war)) - DAY.sets,
+            passed: elapsedOf(game.host.war) > before,
+            drawn: game.camps.camps.has("rest-player"),
+            said,
+            lit: game.camps.lights().length,
+        };
+    });
+
+    expect(camped.result).toEqual({ ok: true });
+    expect(camped.passed).toBe(true);
+    expect(camped.woken).toBeGreaterThanOrEqual(0);
+    expect(camped.woken).toBeLessThan(1000);
+    expect(camped.drawn).toBe(true);
+    expect(camped.lit).toBeGreaterThan(0);
+    expect(camped.said.some((text) => /^You sleep by the fire till evening/.test(text)), JSON.stringify(camped.said)).toBe(true);
+
     // Every shader drawn so far (the town, the world round it and its far land, its water, grass,
     // trees and creatures) reads no more textures than an iPhone lets one read (16; this browser
     // allows more): past that, its shader won't compile there and nothing it draws is seen
@@ -3328,7 +3372,7 @@ test("the action wheels: flicked down, the other side; what's on each chosen in 
 
     // What can go on it: nothing, the healing spells known, and the draughts carried; a foe's
     // has those, the elements' spells learnt (Fire's) and Stun, and no draughts
-    await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Draught"]);
+    await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Make camp", "Draught"]);
     await setup.getByRole("tab", { name: "A foe" }).click();
     await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Burn", "Stun"]);
     await setup.getByRole("tab", { name: "Yourself" }).click();
@@ -3341,7 +3385,7 @@ test("the action wheels: flicked down, the other side; what's on each chosen in 
     await setup.locator('.wheels-choice[data-action="item:potion"]').click();
     await expect(setup.locator('.slice[data-direction="ne"] .label')).toHaveText("Draught");
     await expect(setup.locator('.slice[data-direction="ne"] .count')).toHaveText("2");
-    expect(await page.evaluate(() => window.pellagos.game.wheels.self)).toEqual([{ n: "vigor" }, { ne: "item:potion" }]);
+    expect(await page.evaluate(() => window.pellagos.game.wheels.self)).toEqual([{ n: "vigor" }, { n: "camp", ne: "item:potion" }]);
 
     // Escape goes back a page, and again; then the game
     await page.keyboard.press("Escape");

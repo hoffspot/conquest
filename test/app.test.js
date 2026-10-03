@@ -536,14 +536,14 @@ describe("the action wheel (wheel.js, icons.js)", () => {
         assert.ok(path.startsWith("M-67.88,-67.88"), path);
     });
 
-    it("starts with Vigor at the top of the player's own wheel, the elements' first spells and Stun on an enemy's, and Fight on a soldier's of a people not friendly to theirs, each with an icon", () => {
+    it("starts with Vigor at the top of the player's own wheel (Make camp on its other side), the elements' first spells and Stun on an enemy's, and Fight on a soldier's of a people not friendly to theirs, each with an icon", () => {
         const enemy = { n: "burn", ne: "hurt", nw: "rumble", e: "blister", w: "stun" };
 
-        assert.deepEqual(WHEELS, { self: [{ n: "vigor" }, {}], enemy: [enemy, {}], provoke: [{ n: "fight" }] });
-        assert.deepEqual(readWheels(null), { self: [{ n: "vigor" }, {}], enemy: [enemy, {}], quick: ["vigor", "stun", "burn", "item:potion"] });
+        assert.deepEqual(WHEELS, { self: [{ n: "vigor" }, { n: "camp" }], enemy: [enemy, {}], provoke: [{ n: "fight" }] });
+        assert.deepEqual(readWheels(null), { self: [{ n: "vigor" }, { n: "camp" }], enemy: [enemy, {}], quick: ["vigor", "stun", "burn", "item:potion"] });
 
         for (const [id, action] of Object.entries(ACTIONS)) {
-            assert.ok(SPELLS[action.spell] || ABILITIES[action.ability] || action.order === "engage", id);
+            assert.ok(SPELLS[action.spell] || ABILITIES[action.ability] || ["engage", "camp"].includes(action.order), id);
             assert.equal(typeof action.label, "string");
             assert.ok(["self", "any", "friend", "enemy", "provoke"].includes(action.on), id);
             assert.match(ICONS[id], /<(path|circle|ellipse)/, `${id} has an icon`);
@@ -577,10 +577,10 @@ describe("the action wheel (wheel.js, icons.js)", () => {
     it("offers each wheel what goes on it: the spells known (healing on either), the blows learnt, and the things to use carried", () => {
         const starting = ["vigor", "burn", "rumble", "hurt", "blister", "stun"];
 
-        assert.deepEqual(assignable("self"), [], "nothing not known");
-        assert.deepEqual(assignable("self", { learnt: starting }), ["vigor"]);
+        assert.deepEqual(assignable("self"), ["camp"], "nothing not known, but making camp");
+        assert.deepEqual(assignable("self", { learnt: starting }), ["vigor", "camp"]);
         assert.deepEqual(assignable("enemy", { learnt: starting }), ["vigor", "burn", "rumble", "hurt", "blister", "stun"]);
-        assert.deepEqual(assignable("self", { learnt: [...starting, "mendWounds", "powerStrike"], carries: ["potion", "sword", "potion", "ale"] }), ["vigor", "mendWounds", "item:potion", "item:ale"]);
+        assert.deepEqual(assignable("self", { learnt: [...starting, "mendWounds", "powerStrike"], carries: ["potion", "sword", "potion", "ale"] }), ["vigor", "mendWounds", "camp", "item:potion", "item:ale"]);
         assert.deepEqual(assignable("enemy", { learnt: ["mendWounds", "fireball", "hold", "powerStrike", "aimedShot"], carries: ["potion"] }), ["mendWounds", "fireball", "hold", "powerStrike", "aimedShot"]);
     });
 
@@ -621,8 +621,8 @@ describe("the action wheel (wheel.js, icons.js)", () => {
     it("offers the quick actions anything either wheel can hold, once each", () => {
         const learnt = ["vigor", "stun", "burn", "mendWounds", "powerStrike"];
 
-        assert.deepEqual(assignable("quick", { learnt, carries: ["potion", "sword", "potion"] }), ["vigor", "mendWounds", "item:potion", "burn", "stun", "powerStrike"]);
-        assert.deepEqual(assignable("quick"), []);
+        assert.deepEqual(assignable("quick", { learnt, carries: ["potion", "sword", "potion"] }), ["vigor", "mendWounds", "camp", "item:potion", "burn", "stun", "powerStrike"]);
+        assert.deepEqual(assignable("quick"), ["camp"]);
     });
 
     it("draws a side: its slices, what's in each with a count for things to use, and S to turn it over", () => {

@@ -15,7 +15,7 @@
 // Pure JavaScript, no DOM: it runs in the browser of the player who's hosting, or in Node.
 
 import { Battle, FOE_MS, KINDS, TALK_REACH } from "./battle.js";
-import { elapsedOf } from "./daytime.js";
+import { elapsedOf, untilWaking } from "./daytime.js";
 import { Explored } from "./explored.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { offHandFree, rollGear } from "./gear.js";
@@ -149,6 +149,15 @@ const TEMPLED = new Set(Object.keys(SETTLEMENT_KINDS).filter((kind) => SETTLEMEN
 export const WILDS = Object.freeze({ count: 8, night: 2, about: 60, from: 30, to: 44, clear: 25, far: 90, camp: 60, campFar: 140 });
 
 /**
+ * Passing the time (the terrain plan's M7e, §9 Night in play): sleeping in a room at an inn, or
+ * camping out in the world (no camp within a settlement, nor with anything hostile within `clear`
+ * metres), to the next sunrise or sunset at least `least` ms of play off; the camp's fire burning
+ * on `burns` ms of the battle's time after, lighting what's round it as a war camp's does. Only
+ * the world's host passes the time (everyone's woken with them); anyone else just rests.
+ */
+export const REST = Object.freeze({ clear: 40, least: 5 * 60000, burns: 3 * 60000 });
+
+/**
  * How near (m) a player has to be to a creature when it falls to find their own bundle on it (its
  * spoils: spoils.js).
  */
@@ -271,10 +280,14 @@ export const REFUSALS = Object.freeze({
     known: "You know that spell already.",
     unexplored: "You haven't been there.",
     unsummoned: "No one's calling you.",
+    outdoors: "There's nowhere to camp in here.",
+    settlement: "No camping in town: find an inn.",
+    hostiles: "Not with enemies about.",
+    fighting: "Not in the middle of a fight.",
 });
 
 // What can't be done while knocked off one's feet (battle.js: a knockdown)
-const DOWN_HELD = new Set(["move", "ahead", "engage", "approach", "enter", "cast", "ability", "use", "talk", "trade"]);
+const DOWN_HELD = new Set(["move", "ahead", "engage", "approach", "enter", "cast", "ability", "use", "talk", "trade", "camp"]);
 
 // A whole number, and a square [x, y] of whole numbers
 const whole = (value) => Number.isFinite(value) && Math.floor(value) === value;
@@ -384,6 +397,13 @@ export class Host {
          */
         this.ground = new Map();
         this.nextGround = 1;
+
+        /**
+         * The players' camps out in the world, burning a while after they've slept by them (one
+         * a player): { id, player (whose), people (their tent's), fire ([x, y]), tent ({ at,
+         * facing }), until (the battle's time it's out) }.
+         */
+        this.campfires = [];
 
         /**
          * The players' trades, face to face (by id): { id, from (the player who asked), to (who
@@ -748,6 +768,8 @@ export class Host {
                 return this.#talk(actor, command.with ?? null);
             case "effect":
                 return this.#effect(player, actor, command.effect);
+            case "camp":
+                return this.#camp(player, actor);
             case "trade":
                 return this.#trade(player, actor, command.with);
             case "offer":
@@ -796,7 +818,7 @@ export class Host {
             elapsed,
             plan: this.world.plan,
             players,
-            camps: [...this.camps.values()].map(({ fire }) => fire),
+            camps: [...[...this.camps.values()].map(({ fire }) => fire), ...this.campfires.map(({ fire }) => fire)],
             fires: this.battle.hazards.filter((hazard) => hazard.kind === "fire" && hazard.map === "town"),
             torches: dark ? this.battle.actors.filter((actor) => out(actor) && carriesTorch(actor, dark)).map(({ x, y }) => [x, y]) : [],
         });
@@ -941,31 +963,11 @@ export class Host {
             this.#gone(this.fallen.shift().id);
         }
 
-        if (this.war) {
-            const turn = this.war.turn;
+        this.#warOn(ms);
 
-            // (A fallen people restless enough rises where a player of theirs is)
-            for (const player of this.players.values()) {
-                const realm = this.war.realm(player.realm);
-
-                if (realm && !realm.alive && (realm.unrest ?? 0) >= RISING.ready) {
-                    this.war.rise(realm.id, { near: this.#whereIs(player) });
-                }
-            }
-
-            for (const event of this.war.advance(ms)) {
-                this.#event("war", { event });
-                this.#fate(event);
-
-                // (A camp's sortie against a town a player's near: out into the world)
-                if (event.type === "sortie") {
-                    this.#setOut(event);
-                }
-            }
-
-            if (this.war.turn !== turn) {
-                this.#event("turn", { turn: this.war.turn });
-            }
+        // (The players' camps' fires burnt out)
+        if (this.campfires.length && this.campfires.some(({ until }) => until <= this.battle.time)) {
+            this.campfires = this.campfires.filter(({ until }) => until > this.battle.time);
         }
 
         for (const event of events) {
@@ -1008,6 +1010,38 @@ export class Host {
         return own.length ? [...events, ...own] : events;
     }
 
+    // The war moved on `ms` (with the battle, or all at once while the host sleeps): a fallen
+    // people restless enough rising where a player of theirs is, what it did told and acted on
+    #warOn(ms) {
+        if (!this.war) {
+            return;
+        }
+
+        const turn = this.war.turn;
+
+        for (const player of this.players.values()) {
+            const realm = this.war.realm(player.realm);
+
+            if (realm && !realm.alive && (realm.unrest ?? 0) >= RISING.ready) {
+                this.war.rise(realm.id, { near: this.#whereIs(player) });
+            }
+        }
+
+        for (const event of this.war.advance(ms)) {
+            this.#event("war", { event });
+            this.#fate(event);
+
+            // (A camp's sortie against a town a player's near: out into the world)
+            if (event.type === "sortie") {
+                this.#setOut(event);
+            }
+        }
+
+        if (this.war.turn !== turn) {
+            this.#event("turn", { turn: this.war.turn });
+        }
+    }
+
     /**
      * Everything the world is just now, as plain data (core/wire.js carries it): to keep, or send
      * to a player joining, and carry on from (Host.restore). The world itself isn't in it: that's
@@ -1036,6 +1070,7 @@ export class Host {
             lairs: [...this.lairs.entries()],
             slain: { ...this.slain },
             ground: structuredClone([...this.ground.values()]),
+            campfires: structuredClone(this.campfires),
             nextGround: this.nextGround,
             trades: structuredClone([...this.trades.values()]),
             nextTrade: this.nextTrade,
@@ -1125,6 +1160,7 @@ export class Host {
         host.slain = { ...(snapshot.slain ?? {}) };
         host.ground = new Map((snapshot.ground ?? []).map((dropped) => [dropped.id, structuredClone(dropped)]));
         host.nextGround = snapshot.nextGround ?? 1;
+        host.campfires = structuredClone(snapshot.campfires ?? []);
         host.trades = new Map((snapshot.trades ?? []).map((trade) => [trade.id, structuredClone(trade)]));
         host.nextTrade = snapshot.nextTrade ?? 1;
         host.companions = new Map(structuredClone(snapshot.companions ?? []));
@@ -3394,6 +3430,11 @@ export class Host {
             this.battle.mend(actor.id, { hp: bought.hp ?? 0, stamina: bought.stamina ?? 0 });
         }
 
+        // (A room taken: slept in, to the next sunrise or sunset)
+        if (effect.rent === "room") {
+            this.#sleep(player, actor, "room");
+        }
+
         this.#gain(player, "talk", XP.effect);
 
         const done = { ...structuredClone(effect), by: actor.talkingTo, player: actor.id, at: this.battle.time };
@@ -3403,6 +3444,65 @@ export class Host {
         this.#event("effect", { id: actor.id, effect: done });
 
         return OK;
+    }
+
+    // --- Passing the time (the terrain plan's M7e, §9 Night in play) ---
+
+    // Camping out in the world: not in a settlement, a fight, or with anything hostile near
+    // (REST.clear); a fire built a step in front of them and their tent behind them, slept by
+    // (#sleep), burning a while after (REST.burns)
+    #camp(player, actor) {
+        if (actor.dead) {
+            return refuse("dead");
+        }
+
+        if (actor.map !== "town") {
+            return refuse("outdoors");
+        }
+
+        const plan = this.world.plan;
+
+        if (plan && !clearOfSettlements(plan, [actor.x, actor.y], 0)) {
+            return refuse("settlement");
+        }
+
+        if (actor.target !== null || actor.attack || this.battle.actors.some((other) => other.target === actor.id && !other.dead)) {
+            return refuse("fighting");
+        }
+
+        if (this.battle.actors.some((other) => !other.dead && other.map === actor.map && this.battle.hostile(other, actor) && hypot(other.x - actor.x, other.y - actor.y) < REST.clear)) {
+            return refuse("hostiles");
+        }
+
+        const [dx, dy] = [sin(actor.facing), cos(actor.facing)];
+        const camp = {
+            id: `rest-${actor.id}`,
+            player: actor.id,
+            people: player.realm,
+            fire: [actor.x + dx * 1.6, actor.y + dy * 1.6],
+            tent: { at: [actor.x - dx * 2.4, actor.y - dy * 2.4], facing: actor.facing },
+            until: this.battle.time + REST.burns,
+        };
+
+        this.campfires = [...this.campfires.filter(({ player: whose }) => whose !== actor.id), camp];
+        this.battle.mend(actor.id, { hp: actor.maxHp, stamina: actor.maxStamina });
+        this.#sleep(player, actor, "camp");
+
+        return OK;
+    }
+
+    // A player asleep (at an inn, or by their camp's fire): if they're the world's host, its time
+    // passed to the next sunrise or sunset at least REST.least off (the war's turns meanwhile all
+    // played, as they would have been), and everyone told (each woken); anyone else just rests
+    #sleep(player, actor, where) {
+        const host = player.id === HOST_PLAYER;
+        const passed = host && this.war ? untilWaking(elapsedOf(this.war), REST.least) : 0;
+
+        if (passed) {
+            this.#warOn(passed);
+        }
+
+        this.#event("slept", { id: actor.id, where, passed });
     }
 
     // --- Standing in their people (core/standing.js) ---

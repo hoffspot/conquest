@@ -187,6 +187,15 @@ export const ICONS = Object.freeze({
         <path d="M13,-21 L21,-21 L17,-17 Z M17,-13 L21,-21 L17,-17 Z" fill="#e8e1d2" stroke="#8a7d68" stroke-width="0.8"/>`,
 
     // Two swords crossed, over a red glow: picking a fight
+    // A tent by a little fire under a crescent moon: making camp, to sleep till sunrise or sunset
+    camp: `
+        <circle r="20" fill="#1c2340" opacity="0.6"/>
+        <path d="M9,-14 a7,7 0 1 0 6,10 a5.5,5.5 0 1 1 -6,-10 z" fill="#e8e2c4"/>
+        <path d="M-17,13 L-6,-6 L5,13 z" fill="#c9b48a" stroke="#5a4426" stroke-width="1.4" stroke-linejoin="round"/>
+        <path d="M-6,13 L-6,2 L-2,13 z" fill="#3a2a18"/>
+        <path d="M9,13 h11 M10,15 l9,-4 M10,11 l9,4" stroke="#6b4a2a" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M14.5,10 c-4,-4 -1,-8 0,-12 c1,4 5,6 0,12 z" fill="#ff9a2e"/>
+        <path d="M14.5,10 c-2,-2 -0.5,-5 0,-7 c0.5,2 2.5,4 0,7 z" fill="#ffe28a"/>`,
     fight: `
         <circle r="20" fill="#7a1a14" opacity="0.45"/>
         <g transform="rotate(40)">${SWORD}</g>

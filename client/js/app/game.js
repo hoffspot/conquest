@@ -29,7 +29,7 @@ import { soldierLook } from "../characters/soldiers.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
 import { BeastAvatar, dressingCreature } from "../beasts/beast.js";
 import { AFFLICTIONS } from "../core/afflictions.js";
-import { daylight, elapsedOf, moonPhase, timeOfDay } from "../core/daytime.js";
+import { DAY, daylight, elapsedOf, moonPhase, timeOfDay } from "../core/daytime.js";
 import { carriesTorch, torchesLit } from "../core/light.js";
 import { STEP_MS, TALK_REACH } from "../core/battle.js";
 import { CREATURES } from "../core/creatures.js";
@@ -211,6 +211,9 @@ const ACTS = {
 // Going through a door or up the stairs, the screen comes up from black this fast (s)
 const FADE_IN = 0.45;
 
+// How long the screen takes to come up from black after a sleep (s)
+const SLEEP_FADE = 2.4;
+
 // Embers rise from the hearth this often (a second)
 const EMBERS = 5;
 
@@ -380,7 +383,7 @@ const LIFT = Object.freeze({ height: 0.35, swing: 0.06, bob: 2.2 });
 const SHAKE_DIES = 4;
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -1951,6 +1954,7 @@ export class Game {
             this.#farLand(x, z);
             this.#landLook(x, z, dt);
             this.#torchesCarried();
+            this.#restCamps();
             this.#lightNear(x, z);
         }
 
@@ -2867,6 +2871,56 @@ export class Game {
             this.curtain.getBoundingClientRect();
             this.curtain.style.transition = `opacity ${FADE_IN}s ease-out`;
             this.curtain.style.opacity = "0";
+        }
+    }
+
+    // --- Passing the time (core/host.js REST) ---
+
+    // Someone's slept (at an inn, or by a camp's fire): if the world's time passed, everyone's
+    // woken with them, the screen up from black, told how long; if only they rested, just them
+    #slept({ id, where, passed }) {
+        const mine = id === this.me;
+
+        if (!passed && !mine) {
+            return;
+        }
+
+        if (passed && this.curtain) {
+            this.curtain.style.transition = "none";
+            this.curtain.style.opacity = "1";
+            this.curtain.getBoundingClientRect();
+            this.curtain.style.transition = `opacity ${SLEEP_FADE}s ease-in`;
+            this.curtain.style.opacity = "0";
+        }
+
+        // (Woken at sunrise or sunset: whichever the time's nearer)
+        const morning = timeOfDay(elapsedOf(this.host.war)) < (DAY.rises + DAY.sets) / 2;
+        const who = mine ? "You sleep" : `${this.battle.actor(id)?.name ?? "Your host"} sleeps`;
+        const how = where === "camp" ? " by the fire" : "";
+
+        this.hud.message(passed ? `${who}${how} till ${morning ? "the sun's up" : "evening"}, ${Math.round(passed / 60000)} minutes gone.` : `You rest${how}: the time's the host's to pass.`, 3.5);
+        this.onWar?.(this.host.war);
+    }
+
+    // The players' camps out in the world (core/host.js campfires), drawn while their fires burn:
+    // the sleeper's tent by its fire, pitched and struck as the host has them
+    #restCamps() {
+        const burning = this.host.campfires ?? [];
+        const drawn = (this.restDrawn ??= new Set());
+        const [ox, oz] = this.originOf("town");
+
+        for (const { id, people, fire, tent } of burning) {
+            if (!drawn.has(id)) {
+                this.camps?.pitch(id, people, { fire: [ox + fire[0], oz + fire[1]], tents: [{ at: [ox + tent.at[0], oz + tent.at[1]], facing: tent.facing }] });
+                drawn.add(id);
+            }
+        }
+
+        for (const id of [...drawn]) {
+            if (!burning.some((camp) => camp.id === id)) {
+                this.camps?.strike(id);
+                drawn.delete(id);
+            }
         }
     }
 
@@ -4288,6 +4342,9 @@ export class Game {
 
                 this.#mirror();
                 break;
+            case "slept":
+                this.#slept(event);
+                break;
             case "explored":
                 // (Marked on the maps, and kept)
                 if (event.id === this.me) {
@@ -5187,7 +5244,7 @@ export class Game {
 
         const heard = (result) => {
             // (Setting on someone: the lock heard, as a tap on an enemy)
-            if (order && result.ok) {
+            if (order === "engage" && result.ok) {
                 this.sound?.play("lock");
             }
 
