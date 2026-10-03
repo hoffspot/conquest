@@ -1,5 +1,6 @@
 // The war's camps (docs/WAR.md M6), drawn where they're pitched near a player: each people's
-// tents round a fire in a ring of stones, with logs crossed in it and flames flickering over them
+// tents round a fire in a ring of stones, with logs crossed in it and its flames licking up out of
+// them, embers rising and smoke over it (world/fire.js, lights.js), lighting the camp round it
 // (the humans' ridge tents of canvas in their colour; the other peoples' their own: art/peoples/
 // camp.js). Their banner is the banners' (banners3d.js), and their sentries are soldiers like any
 // others.
@@ -11,13 +12,14 @@ import * as THREE from "three";
 import { COLOURS } from "../core/war/peoples.js";
 import { campTent } from "./art/peoples/camp.js";
 import { M } from "./art/peoples/kit.js";
-import { flame } from "./interiors3d.js";
+import { lightsMesh } from "./lights.js";
 
 // A tent's size (metres): its width across, its length front to back, its ridge's height
 const TENT = Object.freeze({ width: 2.2, length: 2.8, height: 1.7 });
 
-// The fire: its ring of stones (how many, how far out), its logs, and its flames
-const FIRE = Object.freeze({ stones: 9, ring: 0.55, logs: 3, flame: [0.9, 1.1] });
+// The fire: its ring of stones (how many, how far out), its logs, and how high its flames stand
+// from (metres: on the logs)
+const FIRE = Object.freeze({ stones: 9, ring: 0.55, logs: 3, foot: 0.14 });
 
 // Canvas: undyed, with a little of the people's colour in it
 const CANVAS = new THREE.Color(0xd8ccae);
@@ -72,7 +74,7 @@ export class Camps {
         // Each people's own tent, built once (null for the humans, whose are drawn here)
         this.tents = new Map();
 
-        /** Each camp drawn, by its id: { object, flames }. */
+        /** Each camp drawn, by its id: { object, light }. */
         this.camps = new Map();
     }
 
@@ -173,10 +175,8 @@ export class Camps {
             hearth.add(log);
         }
 
-        const flames = flame(FIRE.flame[0], FIRE.flame[1], id.length * 1.7);
-
-        flames.position.y = 0.05;
-        hearth.add(flames);
+        // (Its flames, embers, smoke and glow, in the hearth's own metres)
+        hearth.add(lightsMesh([{ x: 0, y: FIRE.foot, z: 0, kind: "fire" }]));
         hearth.position.set(fx, this.groundAt(fx, fz), fz);
         object.add(hearth);
 
@@ -188,7 +188,7 @@ export class Camps {
         });
 
         this.group.add(object);
-        this.camps.set(id, { object, flames, light: { x: fx, y: hearth.position.y + 0.5, z: fz, kind: "fire" } });
+        this.camps.set(id, { object, light: { x: fx, y: hearth.position.y + FIRE.foot, z: fz, kind: "fire" } });
     }
 
     /** The camps' fires as lights (lights.js: world metres), lighting what's round them at night. */
@@ -208,14 +208,9 @@ export class Camps {
                     node.geometry.dispose();
                 }
             });
+            // (And its fire's: its flames, embers, smoke and glow)
+            camp.object.getObjectByName("lights")?.traverse((node) => node.geometry?.dispose());
             this.camps.delete(id);
-        }
-    }
-
-    /** The flames flickering (`time`: seconds). */
-    update(time) {
-        for (const { flames } of this.camps.values()) {
-            flames.userData.flame.uniforms.time.value = time;
         }
     }
 

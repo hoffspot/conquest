@@ -2684,3 +2684,55 @@ converted data is to be measured in M8 against today's hm08 data.
   and high. Test: `test/light.test.js` (through the day's middle half hour a frame at a time:
   more than 100 steps, more than 98% of frames still, never more than a step behind the sun, a
   jump taken at once).
+- **2026-10-03, M7e-2c built: fire** (the user: "Real fire is kind of wavy... improve the realism
+  of the fire emanating from fire sources and the corresponding light and shadows"; "Candles,
+  chandeliers, and fire spells are also fire sources"; "The fire spells themselves should range
+  from small amounts of fire at the lowest tier to big and impressively huge"; "Shouldn't the
+  torches and the spells be their own independent light sources?"; "Employ as many fire effects
+  as feasible on a phone based on the research results to each fire source in the game"). From
+  the research report (reports/Realistic fire and firelight on phones.md, kept out of the repo):
+  - **world/fire.js:** tongues on a twisting spine (strips turned to the camera, 6 segments, 12
+    for a fire taller than a man), noise warping and eating them away up their height, heat to a
+    glowing body's colour, premultiplied; the puffing signal (`fireSignal`: about 1.6 / √width a
+    second, slow growth and quick collapse, gusts); the breeze's lean (`fireTilt`); embers
+    (points, a plume's rise). The same signal in JavaScript and GLSL, whole numbers only hashed
+    (a fractional seed in the puff's size hash had the GPU's 32 bits disagree outright: found by
+    the test). `fireFlames`: a spell's own copy, its size its own (`fireSize`).
+  - **Every fire source:** torches, lanterns, braziers (neutral shrines and camps, orc braziers),
+    every people's forges and the orcs' chimney top, the cat folk's kiln; war camps' fires
+    (camps3d.js); indoors every hearth, forge, candle and wheel of candles (interiors3d.js, cut
+    away as the rooms are); the fire spells (spellfx.js `blaze`).
+  - **Each its own light** (firelight.js `FIRE_LIGHT`, 16 at once, `fireLit` in every lit
+    material's shader through `Material.prototype.onBeforeCompile` and the materials with their
+    own hooks; view.js `lightNear`: the two that matter most the real lamps, a spell's first; the
+    torch's wall's other side unlit). Indoors the room's fire and candle lights follow their
+    flames (roomlight.js `strengthOf` with the fire's seed and rate).
+  - **Lamp shadows:** the first lamp on High and Medium, none on Low; drawn again when the
+    lamp changes fire and every 2 (High) or 4 (Medium) frames drawn; set by the chosen quality,
+    so the governor's drops never remake shaders. (Both lamps on High at first made every lit
+    pixel indoors take 10 shadow taps, 13% more drawing in CI's software renderer, pushing the
+    tavern's long browser test past its time: one, as the research said.)
+  - **Spells:** seven tiers from a lick of flame to a 24 m whirling column; each fire, flash and
+    fireball in flight its own light (`lightsNow`). **Bug found:** the spells' flashes borrowed the
+    view's lamps, which the torches' lighting (after it each frame, since M7e-2b) took back, so out
+    of doors flashes lit nothing; now they're lights of their own in the same list.
+  - **The fire lab** (fire-lab.html) for comparing them.
+  - **Pictures:** sent in the session: the fire lab (torches, brazier, camp fire with its stones'
+    shadows, candles; the seven spells, each a moment after it lands); the keep's torch at night,
+    before and after.
+  - **Cost:** a torch's flame 42 vertices, a camp fire's 112; one mesh of flames and one of
+    embers per chunk (or town), a smoke mesh per kind; the list of 16 lights in every lit shader
+    (a loop over `count` of them, none by day); a lamp's shadow 6 faces of the near scene when
+    drawn again; a spell's fire one draw a fire while it burns.
+  - **Tests:** test/lights.test.js rewritten (puffing at its rate, slow up and quick down; the GPU's
+    sums within a fortieth of a puff over 1,000 s; flame against light steadiness; one mesh, a
+    strip a tongue, a material for all; lights found and turned with their piece; drawn with
+    embers, smoke and glows; lights rising and falling with their flames, leaning, off by day for
+    torches; the lamps and the list, a spell first, at most 16, none by day or indoors; `fireLit`
+    in each kind of material, once, nothing behind the wall). test/spellfx.test.js (the fire
+    spells grander and brighter tier by tier, Burn a lick, Hellfire a column over 20 m, their
+    lights out once they're done; flashes and fireballs lights of their own, none of three.js's).
+    test/rooms.test.js (hearths, forges and candles as fire.js's, cut away, their lights as their
+    flames by the drawing's clock).
+  - **Next:** M7e-2d, braziers at the guards' posts, lanterns on poles in the bigger towns'
+    squares, guards on night watch carrying torches; then M7e-3, night in play.

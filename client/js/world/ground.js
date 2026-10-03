@@ -9,6 +9,7 @@
 // one painted texture of the whole map would have to be huge (or blurry).
 
 import * as THREE from "three";
+import { fireLit } from "./firelight.js";
 import { ALONG, CROP, CROP_ODDS, FIELDS, NARROWEST, sown } from "../core/fields.js";
 import { tiling } from "../core/noise.js";
 import { CHUNK } from "../core/overworld.js";
@@ -1106,6 +1107,7 @@ reflectedLight.indirectDiffuse *= 1.0 - ${CONTACT.loss.toFixed(2)} * groundConta
 ${STILL_WATER.reflected}
 #endif
 #include <opaque_fragment>`);
+        fireLit(shader);
     };
     material.customProgramCacheKey = () => "ground";
 

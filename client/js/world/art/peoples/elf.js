@@ -15,6 +15,7 @@ import { PEOPLE_PLACES } from "../../../core/setpieces/pieces.js";
 import { material } from "../engine/materials.js";
 import { inset, Solid } from "../engine/solid.js";
 import { emblemSignTexture, loadSignFont, nameBoardTexture, signMaterial } from "../kits/signs.js";
+import { fireLight } from "../kits/torches.js";
 import { band, CELL, circle, ENTRY, ladder, lamp, m, oval, pole, post, randomFor, southSide, steps, wallPoint, weathering } from "./kit.js";
 import { budLamp, crescent, greatTree, petalRoof, ringDeck, spiralStair, treeColumn, whiplash } from "./sylvan.js";
 
@@ -454,7 +455,9 @@ export async function blacksmith(piece) {
 
     // (The forge and its twisted chimney up through the roof's crown)
     solid.extrude(circle(px, pz, m(0.9), 8), m(1.2), m(2), material("stone-moon"));
-    solid.facing(circle(px, pz, m(0.6), 8).map(([x, z]) => [x, m(2.01), z]).reverse(), [0, 1, 0], material("glow-fire"));
+    solid.facing(circle(px, pz, m(0.6), 8).map(([x, z]) => [x, m(2.01), z]).reverse(), [0, 1, 0], material("embers"));
+    // (Its fire, burning day and night: world/fire.js)
+    fireLight(solid, [px, m(2.01), pz], "brazier");
 
     const twist = Array.from({ length: 10 }, (_, k) => [px + Math.cos(k * 0.7) * m(0.25), m(2) + k * m(0.75), pz + Math.sin(k * 0.7) * m(0.25)]);
 

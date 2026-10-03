@@ -6,6 +6,7 @@
 // that frame goes on the body; `size` scales items that fit the body (helmets fit the head).
 
 import * as THREE from "three";
+import { fireLit } from "../world/firelight.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { LIVERIES } from "./liveries.js";
 
@@ -101,6 +102,7 @@ class FoldedMaterial extends THREE.MeshStandardMaterial {
             .replace("#include <common>", "#include <common>\nvarying vec3 vFoldColour;\nvarying vec2 vFoldSurface;")
             .replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.rgb *= vFoldColour;")
             .replace("#include <metalnessmap_fragment>", "#include <metalnessmap_fragment>\nmetalnessFactor *= vFoldSurface.x;\nroughnessFactor *= vFoldSurface.y;");
+        fireLit(shader);
     }
 
     customProgramCacheKey() {

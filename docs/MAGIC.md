@@ -262,7 +262,7 @@ tumbling stones, spikes of earth and ice bursting up, a whirlwind's funnel, dome
   the spell lands: a flame for Burn, a fireball, a stone arcing for Stone Crush, a crescent of
   wind for Hurt, a blade of ice spinning for Iceblade, globs of scalding water and venom.
 - **Landing.** Each its own: Fireball bursts and scorches the ground; Immolate wraps them in a
-  column of fire; Engulf's earth rises round them in spikes; Lightning falls from the sky and
+  wreath of fire; Engulf's earth rises round them in spikes; Lightning falls from the sky and
   leaps on to the others it struck; Tornado is a whirlwind of dust and debris; Iceblade shatters
   in ice and frost. The heals rise in green light (and the heal's look: a swirl, a fountain...),
   the cures draw what they cure up out of them turning to gold, the wards close a dome of their
@@ -277,6 +277,18 @@ tumbling stones, spikes of earth and ice bursting up, a whirlwind's funnel, dome
   metres, the ground cracks with frost, snow falls. Each washes the screen with its colour
   (strongest at the edges: `#wash`, a layer over the view) and shakes the camera, dying away.
   The fifth and sixth tiers shake it a little.
+- **The fire spells burn as fire** (`blaze`: world/fire.js's flames, a spell's hotter and
+  whirling round as no fire does, growing up, burning and dying away, hardly leaning in the
+  breeze), from a little to a great deal of it as you asked:
+  - **Burn** (1): a lick of flame half a metre high up them.
+  - **Fireball** (2): it bursts into a fire 1.3 m high round them, twisting up.
+  - **Burstflame** (3): a fire round them and a ring of nine fires bursting out 1.4 m from it.
+  - **Immolate** (4): a wreath of ten tongues spiralling up 3.2 m round them.
+  - **Flamefill** (5): thirteen fires catching one after another over 2.4 m round them.
+  - **Inferno** (6): a fire whirl twelve metres tall, a hotter column twisting faster in its
+    heart, and fires catching in a ring 3 m out.
+  - **Hellfire** (7): each meteor sets the ground alight where it strikes, then a whirling column
+    of fire 24 metres high, a hotter one inside it reaching 28.
 - **What lasts** shows on whoever it's on: motes of its colour now and then; Levitate lifts them
   0.35 metres off the ground, bobbing; Invisibility leaves a shimmer of them.
 - **What lies on the ground** glows there for as long as it lasts, leaving its mark.
@@ -285,9 +297,14 @@ tumbling stones, spikes of earth and ice bursting up, a whirlwind's funnel, dome
   risen dead in cracked earth) and goes in a puff.
 - **Reflect** flashes silver from whoever turned the blow to whoever it's turned on.
 
-Nothing it draws adds a light: its flashes borrow the view's lamps out of doors, where they're
-not lighting a room (adding a light would have every lit material's shaders made again), and its
-shaders are made with the rest before play (`warm`). Its meshes and materials are let go when
+Its fire, its flashes and its fireballs in flight each light what's round them, a light of their
+own (`lightsNow`: as strong as each is now, fading as it does, a fire's flickering as fire does,
+a flash's not), handed to the view with the world's fires (view.js `lightNear`), first of them all,
+so the nearest take the view's two lamps and cast shadows and the rest light the world's
+materials from their list; nothing it draws adds a light of three.js's (that would have every lit
+material's shaders made again), and its shaders are made with the rest before play (`warm`).
+(Before, its flashes borrowed the view's lamps, and the torches' lighting, after it each frame,
+took them back: out of doors its flashes lit nothing.) Its meshes and materials are let go when
 they're done (the shapes and textures kept for the next). The particle buffers hold 3000 of each
 kind, for the seventh tier's.
 

@@ -28,7 +28,6 @@
 // sconce a light of its own: roomlight.js), each flame with a soft glow round it.
 
 import * as THREE from "three";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { shrinesOf } from "../core/insides.js";
 import { GOD_IDS, GODS } from "../core/lore/gods.js";
 import { atlasVariant, layerOf } from "./art/engine/atlas.js";
@@ -36,6 +35,7 @@ import { material as artMaterial } from "./art/engine/materials.js";
 import { Solid } from "./art/engine/solid.js";
 import { joined, partsOf } from "./town3d.js";
 import { gather, roomLit } from "./roomlight.js";
+import { fireMaterials, FIRES, firesMesh } from "./fire.js";
 import { allAtOnce } from "../core/steps.js";
 
 /** How high a floor's walls are, and how far above it the next floor is (metres). */
@@ -123,7 +123,7 @@ const materials = new Map();
 // daylight through them (walledIn)
 let palette = null;
 let framed = true;
-let lighting = { flames: [], glows: [], panes: [], daylight: null };
+let lighting = { flames: [], glows: [], panes: [], daylight: null, candles: [] };
 
 // How each of a thing's cuts is known (its material's and its mesh's): a wall's, a ceiling's, or
 // anything else's
@@ -266,79 +266,94 @@ function leadedShader(shader) {
 
 // --- Flames ---
 
-const FLAME_VERTEX = /* glsl */ `
-varying vec2 vUv;
+// The fires indoors are fire.js's (their tongues licking and twisting up, hottest low in their
+// middles, each its own and puffing as fires do), but none where it's cut away in front of the
+// player (INTERIOR_CUT, as cutsAway: anything but a wall), as the glows round them aren't
+const CUT_GLSL = /* glsl */ `
+uniform vec3 cutPlayer;
+uniform vec3 cutCamera;
+uniform vec2 cutToCamera;
+uniform float cutHeight;
+uniform float cutHead;
+uniform float cutOver;
+uniform float cutMargin;
+uniform float cutWidth;
 
-void main() {
-    vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-}`;
+bool cutAt(vec3 world) {
+    vec2 at = world.xz - cutPlayer.xz;
+    float along = dot(at, cutToCamera);
+    float across = abs(dot(at, vec2(-cutToCamera.y, cutToCamera.x)));
+    float eye = cutPlayer.y + cutHead;
+    float sight = eye + (cutCamera.y - eye) * min(1.0, along / max(0.01, distance(cutCamera.xz, cutPlayer.xz)));
 
-const FLAME_FRAGMENT = /* glsl */ `
-varying vec2 vUv;
-uniform float time;
-uniform float seed;
+    return world.y - cutPlayer.y > cutHeight && along > cutMargin && across < cutWidth && world.y < sight + cutOver;
+}
+`;
 
-float hash(vec2 p) {
-    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+// The cut's uniforms, each the shared one (INTERIOR_CUT), as the shaders name them
+function cutUniforms() {
+    const { player, camera, toCamera, height, head, over, margin, width } = INTERIOR_CUT;
+
+    return { cutPlayer: player, cutCamera: camera, cutToCamera: toCamera, cutHeight: height, cutHead: head, cutOver: over, cutMargin: margin, cutWidth: width };
 }
 
-float noise(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
+let insideFlames = null;
 
-    f = f * f * (3.0 - 2.0 * f);
+// The fires' flames as the insides draw them: fire.js's, cut away as the rest is (its uniforms
+// the same shared ones)
+function insideFlamesMaterial() {
+    if (!insideFlames) {
+        const { flames } = fireMaterials();
 
-    return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
-}
-
-float fbm(vec2 p) {
-    float value = 0.0;
-    float amplitude = 0.5;
-
-    for (int k = 0; k < 4; k++) {
-        value += amplitude * noise(p);
-        p *= 2.03;
-        amplitude *= 0.5;
+        insideFlames = flames.clone();
+        insideFlames.name = "flames-inside";
+        insideFlames.uniforms = { ...flames.uniforms, ...cutUniforms() };
+        insideFlames.vertexShader = flames.vertexShader.replace("void main() {", `${CUT_GLSL}\nvoid main() {`).replace(/\}\s*$/, "    if (cutAt(foot)) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);\n}");
+        insideFlames.userData.shared = true;
     }
 
-    return value;
+    return insideFlames;
 }
 
-void main() {
-    vec2 uv = vUv;
-    float n = fbm(vec2(uv.x * 3.2 + seed, uv.y * 2.4 - time * 2.6));
-    float sway = (n - 0.5) * 0.45 * uv.y;
-    float width = 0.44 * (1.0 - uv.y) + 0.04;
-    float body = smoothstep(width, width * 0.25, abs(uv.x - 0.5 + sway));
-    float top = smoothstep(1.0, 0.2, uv.y + (n - 0.5) * 0.55);
-    float a = clamp(body * top * 1.3, 0.0, 1.0);
-    vec3 colour = mix(vec3(0.95, 0.22, 0.02), vec3(1.0, 0.86, 0.42), smoothstep(0.25, 0.95, a) * (1.0 - uv.y * 0.6));
+/**
+ * A fire (fire.js FIRES `kind`: a hearth's, a forge's), `width` and `height` (art pixels) across
+ * and high at its tallest, its own way (`seed`: any number), in a group to stand where it burns
+ * (art pixels): its flames, cut away as the insides are; and how it burns (`userData.fire`: its
+ * seed, rate and steadiness), for the light it gives the room to rise and fall with it
+ * (roomlight.js strengthOf).
+ */
+export function flame(width, height, seed, kind = "hearth") {
+    const own = FIRES[kind];
+    const fire = { x: 0, y: 0, z: 0, kind, width: width / M, height: height / M, spread: (own.spread * width) / M / own.width, seed: seed * 0.618034 - Math.floor(seed * 0.618034) };
+    const group = firesMesh([fire]);
 
-    if (a < 0.02) discard;
+    group.traverse((node) => {
+        // (Its size is in metres, so its bounds in the room's pixels are no use)
+        node.frustumCulled = false;
 
-    gl_FragColor = vec4(colour * 1.35, a);
-}`;
-
-/** A flame: crossed upright quads (width, height metres) with an animated flame on them. */
-export function flame(width, height, seed) {
-    const shader = new THREE.ShaderMaterial({
-        vertexShader: FLAME_VERTEX,
-        fragmentShader: FLAME_FRAGMENT,
-        uniforms: { time: { value: 0 }, seed: { value: seed } },
-        transparent: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        side: THREE.DoubleSide,
-        toneMapped: false,
+        if (node.isMesh) {
+            node.material = insideFlamesMaterial();
+        }
     });
-    const group = new THREE.Group();
-    const quads = [0, Math.PI / 3, (2 * Math.PI) / 3].map((angle) => new THREE.PlaneGeometry(width, height).translate(0, height / 2, 0).rotateY(angle));
+    group.userData.fire = { seed: fire.seed, rate: own.rate, steady: own.steady };
 
-    // (One mesh of the three: its quads are added together, so drawn in any order)
-    group.add(new THREE.Mesh(mergeGeometries(quads), shader));
-    quads.forEach((quad) => quad.dispose());
-    group.userData.flame = shader;
+    return group;
+}
+
+/**
+ * The flames of a room's candles (`candles`: [x, y, z, seed] art pixels), fire.js's, one mesh of
+ * them all, cut away as the insides are; or null if there are none.
+ */
+function candleFlames(candles) {
+    const group = firesMesh(candles.map(([x, y, z, seed]) => ({ x, y, z, kind: "candle", seed })));
+
+    group?.traverse((node) => {
+        node.frustumCulled = false;
+
+        if (node.isMesh) {
+            node.material = insideFlamesMaterial();
+        }
+    });
 
     return group;
 }
@@ -440,8 +455,7 @@ function glowsOf(glows) {
     geometry.setAttribute("size", new THREE.Float32BufferAttribute(glows.map(({ size }) => size), 1));
     geometry.setAttribute("tint", new THREE.Float32BufferAttribute(glows.flatMap(({ colour: hex }) => colour.set(hex).toArray()), 3));
 
-    const { player, camera, toCamera, height, head, over, margin, width } = INTERIOR_CUT;
-    const uniforms = { time: INTERIOR_GLOW.time, scale: INTERIOR_GLOW.scale, cutPlayer: player, cutCamera: camera, cutToCamera: toCamera, cutHeight: height, cutHead: head, cutOver: over, cutMargin: margin, cutWidth: width };
+    const uniforms = { time: INTERIOR_GLOW.time, scale: INTERIOR_GLOW.scale, ...cutUniforms() };
     const points = new THREE.Points(geometry, new THREE.ShaderMaterial({ uniforms, vertexShader: GLOW_VERTEX, fragmentShader: GLOW_FRAGMENT, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false }));
 
     points.name = "glows";
@@ -516,24 +530,36 @@ const FLAMES = Object.freeze({
 /**
  * A flame lighting the room (art pixels): a light of its `kind` (FLAMES), and its glow (for each
  * of `glows`, or where it is: [x, y, z] art pixels, each as wide as its kind's); `colour` its
- * own, if not its kind's.
+ * own, if not its kind's; and the flame drawn that it rises and falls with (`fire`: its seed,
+ * rate and steadiness, fire.js), if there is one.
  */
-function lit(kind, x, y, z, { count = 1, colour = FLAMES[kind].colour, glows = [[x, y, z]] } = {}) {
+function lit(kind, x, y, z, { count = 1, colour = FLAMES[kind].colour, glows = [[x, y, z]], fire = null } = {}) {
     const flame = FLAMES[kind];
 
-    lighting.flames.push({ kind, x: x / M, y: y / M, z: z / M, colour, intensity: flame.intensity ?? flame.each * count, distance: flame.distance, flicker: flame.flicker });
+    lighting.flames.push({ kind, x: x / M, y: y / M, z: z / M, colour, intensity: flame.intensity ?? flame.each * count, distance: flame.distance, flicker: flame.flicker, ...fire });
 
     for (const [gx, gy, gz] of glows) {
         lighting.glows.push({ x: gx / M, y: gy / M, z: gz / M, size: flame.glow, colour });
     }
 }
 
-// A candle in a holder, its flame lit
+// A candle in a holder, its flame lit (fire.js's, drawn with the room's others: candleFlames),
+// its light rising and falling with it
 function candle(solid, x, z, y) {
     solid.cylinder(x, z, y, y + 0.25, m(0.06), m(0.06), material("brass"), { segments: 8 });
     solid.cylinder(x, z, y + 0.25, y + m(0.2), m(0.022), m(0.022), material("candle"), { segments: 6 });
-    solid.cylinder(x, z, y + m(0.2), y + m(0.24), m(0.012), 0, material("candle-flame"), { segments: 5 });
-    lit("candle", x, y + m(0.22), z);
+
+    const seed = candleSeed(x, y, z);
+
+    lighting.candles.push([x, y + m(0.2), z, seed]);
+    lit("candle", x, y + m(0.22), z, { fire: { seed, rate: FIRES.candle.rate, steady: FIRES.candle.steady } });
+}
+
+// A candle's own seed (0 to 1: from where it is)
+function candleSeed(x, y, z) {
+    const s = Math.sin(x * 1.9898 + y * 7.233 + z * 3.719) * 43758.5453;
+
+    return s - Math.floor(s);
 }
 
 // A sconce on a wall: a glass of its colour round a candle (`warm`: clear, at an inn; else red)
@@ -1246,7 +1272,7 @@ function taproom(map) {
         solid,
         moving,
         flames: fires,
-        lights: [{ kind: "fire", x: 1.1, y: 1.0, z: hz, colour: 0xff8a3a, intensity: 9, distance: 14, flicker: 0.25 }],
+        lights: [{ kind: "fire", x: 1.1, y: 1.0, z: hz, colour: 0xff8a3a, intensity: 9, distance: 14, flicker: 0.25, ...fires[0].userData.fire }],
         hearth: { x: 1.1, y: 0.8, z: hz },
     };
 }
@@ -1266,7 +1292,8 @@ function candleWheel(wheelX, wheelZ, wheelY, radius, count) {
         const [x, z] = [wheelX + Math.cos(angle) * radius, wheelZ + Math.sin(angle) * radius];
 
         wheel.add(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, m(0.18), 6).translate(x, wheelY + m(0.09), z), material("candle")));
-        wheel.add(new THREE.Mesh(new THREE.ConeGeometry(0.12, m(0.06), 5).translate(x, wheelY + m(0.21), z), material("candle-flame")));
+        // (Its flame: fire.js's, drawn with the room's others)
+        lighting.candles.push([x, wheelY + m(0.18), z, candleSeed(x, wheelY, z)]);
         flames.push([x, wheelY + m(0.21), z]);
     }
 
@@ -1503,7 +1530,7 @@ function smithy(map) {
         solid.box(x - 0.15, m(1.05), fz1 - 0.1, x + 0.15, m(1.65), fz1 + 0.2, material("iron"));
     }
 
-    const fires = [flame(m(1.4), m(0.5), 2.3), flame(m(1), m(0.4), 5.9)];
+    const fires = [flame(m(1.4), m(0.5), 2.3, "forge"), flame(m(1), m(0.4), 5.9, "forge")];
 
     fires[0].position.set(fx, m(0.9), (fz0 + fz1) / 2 - m(0.2));
     fires[1].position.set(fx + m(0.5), m(0.9), (fz0 + fz1) / 2);
@@ -1613,7 +1640,7 @@ function smithy(map) {
         solid,
         moving,
         flames: fires,
-        lights: [{ kind: "fire", x: forge.x + forge.w / 2, y: 1.2, z: forge.y + forge.h, colour: 0xff7a2a, intensity: 10, distance: 14, flicker: 0.3 }],
+        lights: [{ kind: "fire", x: forge.x + forge.w / 2, y: 1.2, z: forge.y + forge.h, colour: 0xff7a2a, intensity: 10, distance: 14, flicker: 0.3, ...fires[0].userData.fire }],
         hearth: { x: forge.x + forge.w / 2, y: 0.95, z: forge.y + forge.h / 2 },
     };
 }
@@ -1930,7 +1957,7 @@ function guild(map) {
         moving,
         flames: [fire],
         lights: [
-            { kind: "fire", x: map.width - 0.6, y: 1, z: hearth.y + hearth.h / 2, colour: 0xff8a3a, intensity: 7, distance: 14, flicker: 0.22 },
+            { kind: "fire", x: map.width - 0.6, y: 1, z: hearth.y + hearth.h / 2, colour: 0xff8a3a, intensity: 7, distance: 14, flicker: 0.22, ...fire.userData.fire },
         ],
         hearth: { x: map.width - 0.5, y: 0.6, z: hearth.y + hearth.h / 2 },
     };
@@ -1959,7 +1986,7 @@ function sideHearth(solid, map, hearth) {
 
     fire.position.set(wall + into * m(0.5), m(0.12), z);
 
-    return { fire, light: { kind: "fire", x: west ? 0.6 : map.width - 0.6, y: 1, z: hearth.y + hearth.h / 2, colour: 0xff8a3a, intensity: 7, distance: 14, flicker: 0.22 }, at: { x: west ? 0.5 : map.width - 0.5, y: 0.6, z: hearth.y + hearth.h / 2 } };
+    return { fire, light: { kind: "fire", x: west ? 0.6 : map.width - 0.6, y: 1, z: hearth.y + hearth.h / 2, colour: 0xff8a3a, intensity: 7, distance: 14, flicker: 0.22, ...fire.userData.fire }, at: { x: west ? 0.5 : map.width - 0.5, y: 0.6, z: hearth.y + hearth.h / 2 } };
 }
 
 // Shelves against the north wall (a piece), laden with rolls, ledgers and boxes
@@ -2455,7 +2482,7 @@ export function* buildingInterior(map) {
     palette = PALETTES[own] ?? null;
     framed = !own || FRAMED.has(own);
     people = own;
-    lighting = { flames: [], glows: [], panes: [], daylight: null };
+    lighting = { flames: [], glows: [], panes: [], daylight: null, candles: [] };
 
     try {
         built = BUILDERS[map.style ?? map.id](map);
@@ -2468,7 +2495,7 @@ export function* buildingInterior(map) {
         palette = null;
         framed = true;
         people = null;
-        lighting = { flames: [], glows: [], panes: [], daylight: null };
+        lighting = { flames: [], glows: [], panes: [], daylight: null, candles: [] };
     }
 
     yield;
@@ -2509,6 +2536,13 @@ export function* buildingInterior(map) {
         animated.add(fire);
     }
 
+    const candles = candleFlames(lit.candles);
+
+    if (candles) {
+        candles.name = "candles";
+        animated.add(candles);
+    }
+
     object.add(animated);
 
     // The glows round the flames (the fires' as big as they are), and the beams of daylight
@@ -2528,7 +2562,7 @@ export function* buildingInterior(map) {
     // (Everything casts shadows but the flames, their glows and the beams of light, and the glass
     // the daylight comes in through)
     object.traverse((node) => {
-        if (node.isMesh && !node.material.userData?.flame && node.material.type !== "ShaderMaterial") {
+        if (node.isMesh && node.material.type !== "ShaderMaterial") {
             node.castShadow = !node.material.name.startsWith("window");
             node.receiveShadow = true;
         }
@@ -2565,7 +2599,7 @@ export function* buildingInterior(map) {
     return {
         map,
         object,
-        lights: gather([...built.lights, ...lit.flames]).map((light, k) => ({ ...light, colour: ((light.kind === "lamp" || light.kind === "candle") && LAMPLIGHT[own]) || light.colour, x: ox + light.x, z: oz + light.z, seed: k * 17.3 })),
+        lights: gather([...built.lights, ...lit.flames]).map((light, k) => ({ ...light, colour: ((light.kind === "lamp" || light.kind === "candle") && LAMPLIGHT[own]) || light.colour, x: ox + light.x, z: oz + light.z, seed: light.seed ?? k * 17.3 })),
         daylight: lit.daylight,
         ceiling: STOREY,
         hearth: built.hearth ? { x: ox + built.hearth.x, y: built.hearth.y, z: oz + built.hearth.z } : null,
@@ -2575,10 +2609,6 @@ export function* buildingInterior(map) {
                 if (!part.name || time < (part.until ?? 0)) {
                     part.object.rotation[part.axis ?? "z"] += part.turn * dt;
                 }
-            }
-
-            for (const fire of built.flames) {
-                fire.userData.flame.uniforms.time.value = time;
             }
 
             INTERIOR_GLOW.time.value = time;
@@ -2604,7 +2634,7 @@ export function* buildingInterior(map) {
             object.traverse((node) => {
                 node.geometry?.dispose();
 
-                if (node.material?.type === "ShaderMaterial") {
+                if (node.material?.type === "ShaderMaterial" && !node.material.userData.shared) {
                     node.material.dispose();
                 }
             });

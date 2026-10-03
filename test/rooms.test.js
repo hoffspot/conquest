@@ -264,6 +264,35 @@ describe("the flames lighting the rooms (roomlight.js, interiors3d.js)", () => {
         assert.equal(strengthOf({ intensity: 10 }, 4.5, { amount: 0.8, at: 3 }), 10);
     });
 
+    it("burns each hearth, forge and candle as fire.js's fire, its light rising and falling with the flame drawn", () => {
+        for (const kind of ["taproom", "smithy", "temple"]) {
+            const built = insideOf(kind);
+            const flames = [];
+
+            built.object.traverse((node) => node.name === "flames" && flames.push(node));
+            assert.ok(flames.length > 0, `${kind}: flames`);
+            assert.ok(flames.every((mesh) => mesh.material.name === "flames-inside" && /cutAt\(foot\)/.test(mesh.material.vertexShader)), `${kind}: cut away as the insides are`);
+            assert.ok(built.object.getObjectByName("candles"), `${kind}: its candles' flames`);
+
+            const fire = built.lights.find((light) => light.kind === "fire");
+            const candle = built.lights.find((light) => light.kind === "candle");
+
+            assert.ok(candle.rate > 0, `${kind}: a candle's light as its flame`);
+
+            if (fire) {
+                assert.ok(fire.rate > 0 && fire.seed >= 0 && fire.seed < 1, `${kind}: its fire's light as its flame`);
+
+                // (As its flame burns: fire.js's signal, by the drawing's clock)
+                const [a, b] = [strengthOf(fire, 1, null, 10), strengthOf(fire, 99, null, 10)];
+
+                assert.equal(a, b, "by the flame's clock, not the game's");
+                assert.ok(a > fire.intensity * 0.8 && a < fire.intensity * 1.2);
+            }
+
+            built.dispose();
+        }
+    });
+
     it("lights the player by the two flames lighting them most (the view's lamps), keeping one already lit unless another's half as bright again", () => {
         const lights = [
             { x: 0, y: 2, z: 0, distance: 10 },

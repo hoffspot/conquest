@@ -14,6 +14,7 @@
 // more is stored.
 
 import * as THREE from "three";
+import { fireLit } from "../world/firelight.js";
 import { SKIN_ROUGHNESS } from "./skin.js";
 
 /**
@@ -62,6 +63,7 @@ export class SkinMaterial extends THREE.MeshStandardMaterial {
             .replace("#include <roughnessmap_fragment>", "#include <roughnessmap_fragment>\n\troughnessFactor *= skinRoughness;")
             .replace("#include <lights_physical_pars_fragment>", lighting(DIFFUSE_LINE, `vec3 skinLit = saturate( ( dot( geometryNormal, directLight.direction ) + SKIN_WRAP ) / ( 1.0 + SKIN_WRAP ) );\n\treflectedLight.directDiffuse += skinLit * directLight.color * BRDF_Lambert( material.diffuseContribution ) * ( 1.0 - F );`))
             .replace("#include <common>", `#include <common>\nconst vec3 SKIN_WRAP = ${vec3(SKIN_WRAP)};`);
+        fireLit(shader);
     }
 
     customProgramCacheKey() {
@@ -124,6 +126,7 @@ float hairBand( const in vec3 strand, const in vec3 normal, const in vec3 halfwa
 	reflectedLight.directSpecular += directLight.color * hairFacing * ( ${strength.toFixed(3)} * hairBand( hairStrand, geometryNormal, hairHalfway, ${shift.toFixed(3)} + hairShift, ${sharp.toFixed(1)} ) + ${tintStrength.toFixed(3)} * material.diffuseColor * hairBand( hairStrand, geometryNormal, hairHalfway, ${tintShift.toFixed(3)} + hairShift, ${tintSharp.toFixed(1)} ) );`,
                 ),
             );
+        fireLit(shader);
     }
 
     customProgramCacheKey() {

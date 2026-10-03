@@ -13,6 +13,7 @@ import { add3, inset, Solid, times } from "../engine/solid.js";
 import { emblemSignTexture, loadSignFont, nameBoardTexture, signMaterial } from "../kits/signs.js";
 import { awning, ears, finial, hearth, jar, jars, MUDS, PAINTS, studded, toron, townHouse } from "./cat.js";
 import { band, CELL, circle, ENTRY, lamp, m, pinnacle, pole, post, randomFor, steps, wallPoint, weathering } from "./kit.js";
+import { fireLight } from "../kits/torches.js";
 
 // Each of the Six's emblem, for their temples' plaques
 const GOD_EMBLEMS = Object.freeze({ aurelia: "sun", brannoc: "stag", ithriel: "star", morvaine: "lantern", seliane: "rose", dunmar: "anvil" });
@@ -442,7 +443,8 @@ export async function blacksmith(piece) {
 
     solid.lathe(fx, fz, [[m(0.95), 0], [m(0.9), m(0.6)], [m(0.7), m(1.25)], [m(0.35), m(1.6)], [m(0.25), m(1.75)], [0, m(1.75)]], material("mud-dark"), { segments: 10 });
     solid.facing([[fx - m(0.3), m(0.15), fz + m(0.92)], [fx + m(0.3), m(0.15), fz + m(0.92)], [fx + m(0.22), m(0.6), fz + m(0.82)], [fx - m(0.22), m(0.6), fz + m(0.82)]], [0, 0.2, 1], material("glow-fire"));
-    lamp(solid, [fx, m(1.8), fz], "glow-fire", { size: m(0.3), frame: null, shape: "orb" });
+    // (Its fire burning out of the top: world/fire.js)
+    fireLight(solid, [fx, m(1.75), fz], "brazier");
 
     for (const side of [-1, 1]) {
         const [bx, bz] = [fx + side * m(0.55), fz - m(1.1)];

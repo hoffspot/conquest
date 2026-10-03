@@ -7,14 +7,18 @@
 // the world frozen solid), the screen flashing its colour and the ground shaking.
 //
 // Built on the game's particles (effects.js) and its own few meshes: orbs, bolts of lightning,
-// beams, columns of light, rings, marks on the ground, shards, spikes, a funnel, domes; lights
-// lent to its flashes (the view's lamps, out of doors, where they're not lighting a room: no light
-// added, so no shader's made again) and the camera shaken (`onShake`), the screen washed with
-// colour (`onScreen`).
+// beams, columns of light, rings, marks on the ground, shards, spikes, a funnel, domes; and fire,
+// world/fire.js's, its tongues licking and twisting up as a fire's do, but swirling round as no
+// fire does, a lick of it at the least of the fire spells to a whirling column reaching the
+// clouds at the greatest. Its fire, its flashes and its fireballs in flight each light what's
+// round them, a light of their own (lightsNow: the view's, lights.js, out of doors, first
+// whatever else is near), the camera shaken (`onShake`), the screen washed with colour
+// (`onScreen`).
 
 import * as THREE from "three";
 import { SPELLS } from "../core/spells.js";
 import { FLAT, lieOn } from "./effects.js";
+import { fireFlames, flamesMesh } from "./fire.js";
 
 // --- What's drawn with ---
 
@@ -279,6 +283,10 @@ export class SpellFx {
         this.lights = (lights ?? [own(), own()]).map((light) => ({ light, age: 1, life: 1, peak: 0 }));
         this.nextLight = 0;
 
+        // The lights of its fire, flashes and fireballs now (lightsNow's), and that list handed out
+        this.glowing = [];
+        this.shining = [];
+
         /** Whether the lights can be lent now (not while they're lighting a room: the view's lamps indoors). */
         this.lit = true;
 
@@ -527,7 +535,7 @@ export class SpellFx {
      * (`trail`); `onArrive` heard when it gets there. Kept by `key` (its caster), so it's called
      * off if they're stopped.
      */
-    throw(key, from, to, { travel = 0.3, arc = 0.3, colour = 0xffffff, size = 0.12, shape = null, glow = false, trail = null, spin = 0, onArrive = null }) {
+    throw(key, from, to, { travel = 0.3, arc = 0.3, colour = 0xffffff, size = 0.12, shape = null, glow = false, trail = null, spin = 0, light = null, onArrive = null }) {
         const start = from()?.clone();
 
         if (!start) {
@@ -536,6 +544,11 @@ export class SpellFx {
 
         const object = shape ? this.#piece(shape, colour, size, glow) : this.#orb(colour, size);
         const missile = { object, alive: true };
+
+        // (A fireball lighting what it passes: { strength, reach }, its colour)
+        if (light) {
+            missile.light = this.glow(object.position, { colour, strength: light.strength, reach: light.reach, life: travel, steady: 0.6, fade: () => 1 });
+        }
 
         object.position.copy(start);
         this.#drop(key);
@@ -566,6 +579,11 @@ export class SpellFx {
             if (t >= 1 && missile.alive) {
                 missile.alive = false;
 
+                if (missile.light) {
+                    missile.light.fade = 0;
+                    missile.light.age = missile.light.life;
+                }
+
                 if (this.missiles.get(key) === missile) {
                     this.missiles.delete(key);
                 }
@@ -583,6 +601,11 @@ export class SpellFx {
             missile.alive = false;
             missile.object.removeFromParent();
             this.missiles.delete(key);
+
+            if (missile.light) {
+                missile.light.age = missile.light.life;
+                missile.light.fade = 0;
+            }
         }
     }
 
@@ -737,8 +760,44 @@ export class SpellFx {
         });
     }
 
+    /**
+     * A light of a spell's (lightsNow's: its `colour`, how strong, candela, how far it `reach`es,
+     * metres, and how steadily it burns, fire.js's: 0, not flickering) at a point (`at`, kept:
+     * moved as what it's from moves), `life` seconds, fading as `fade` (of how far through its
+     * life it is, 0 to 1) has it. Returns it.
+     */
+    glow(at, { colour = 0xff7a2a, strength = 10, reach = 10, life = 1, steady = 0, fade = (t) => (1 - t) ** 2 }) {
+        const light = { x: at.x, y: at.y, z: at.z, at, kind: "spell", colour, strength, reach, steady, seed: Math.random(), fade: fade(0), priority: 1, out: null, age: 0, life, fading: fade };
+
+        this.glowing.push(light);
+
+        return light;
+    }
+
+    /**
+     * The spells' lights now ({ x, y, z, kind "spell", colour, strength, reach, steady, seed, fade,
+     * priority }: world metres; lights.js lightNow's, out of doors, before anything else's): the
+     * same list each time.
+     */
+    lightsNow() {
+        this.shining.length = 0;
+
+        for (const light of this.glowing) {
+            if (light.fade > 0.01) {
+                light.x = light.at.x;
+                light.y = light.at.y;
+                light.z = light.at.z;
+                this.shining.push(light);
+            }
+        }
+
+        return this.shining;
+    }
+
     /** A flash of light at a point: one of the lights lent to it (if they can be), and a glow there. */
     flash(at, { colour = 0xffffff, intensity = 30, distance = 10, life = 0.35, size = 2 }) {
+        this.glow(at.clone(), { colour, strength: Math.min(intensity, BRIGHTEST), reach: distance, life });
+
         if (this.lit && this.lights.length) {
             const lent = this.lights[this.nextLight];
 
@@ -756,6 +815,32 @@ export class SpellFx {
             glow.scale.setScalar(size * (0.6 + t));
             glow.material.opacity = 1 - t;
         });
+    }
+
+    /**
+     * Fire burning a while at a point on the ground (world/fire.js's: its tongues licking and
+     * twisting up, a spell's hotter than a fire's), `width` and `height` metres at its tallest,
+     * of `tongues` tongues `spread` out round its middle, swirling round as it rises (`twist`: a
+     * torch's 1); growing up in its first `rise` of its `life` (seconds), burning, and dying away
+     * over its last `fall`; lighting what's round it (`light` candela, as far as `reach`), if it's
+     * to, from halfway up it.
+     */
+    blaze(at, { width = 0.6, height = 1, tongues = 6, spread = 0.2, twist = 3, heat = 1.25, life = 1.2, rise = 0.15, fall = 0.4, light = 0, reach = 8, colour = 0xff7a2a, lift = 0.05 }) {
+        // (Hardly leaning in the breeze: it's magic's, not the wind's)
+        const mesh = flamesMesh([{ x: 0, y: 0, z: 0, kind: "spell", width, height, tongues, spread, twist, heat, lean: 3, seed: Math.random() }]);
+        const size = (t) => Math.min(1, t / rise) * (t > 1 - fall ? Math.max(0, (1 - t) / fall) ** 0.7 : 1);
+
+        mesh.material = fireFlames(0);
+        mesh.position.copy(this.onGround(at.x, at.z, lift));
+        mesh.userData.dispose = () => mesh.geometry.dispose();
+
+        const glowing = light > 0 ? this.glow(mesh.position.clone().setY(mesh.position.y + height * 0.4), { colour, strength: light, reach, life, steady: 1.2, fade: size }) : null;
+
+        this.#show(mesh, life, (t) => {
+            mesh.material.uniforms.fireSize.value = size(t);
+        });
+
+        return glowing;
     }
 
     /** Particles streaming from one point to another (each a function), a while: drawn along it. */
@@ -1021,6 +1106,14 @@ export class SpellFx {
             lent.age += dt;
             lent.light.intensity = lent.age < lent.life ? lent.peak * (1 - lent.age / lent.life) ** 2 : 0;
         }
+
+        // (The spells' own lights, fading as each does, gone when they're out)
+        this.glowing = this.glowing.filter((light) => {
+            light.age += dt;
+            light.fade = light.age < light.life ? light.fading(light.age / light.life) : 0;
+
+            return light.age < light.life;
+        });
     }
 
     // Something shown taken away, and what it was drawn with let go (not the shapes and
@@ -1051,6 +1144,8 @@ export class SpellFx {
 
         this.running = [];
         this.later = [];
+        this.glowing = [];
+        this.shining.length = 0;
         this.casting.clear();
         this.missiles.clear();
     }
@@ -1180,18 +1275,24 @@ const RECIPES = {
         },
     },
 
-    // --- Fire ---
+    // --- Fire --- (world/fire.js's fire, from a lick of it at the least to a burning column
+    // reaching the clouds at the greatest, swirling round more the greater it is, each lighting
+    // what's round it: blaze)
     burn: {
-        missile: { travel: 0.2, arc: 0.1, colour: FIRE.deep, size: 0.09, trail: p(FIRE.glow, { count: 1, size: [0.08, 0.14], speed: [0, 0.3], life: [0.15, 0.3], gravity: -2 }) },
-        land: (fx, { point }) => {
-            fx.spray({ ...FLAMES, count: 10 }, point);
+        missile: { travel: 0.2, arc: 0.1, colour: FIRE.deep, size: 0.09, light: { strength: 2, reach: 4 }, trail: p(FIRE.glow, { count: 1, size: [0.08, 0.14], speed: [0, 0.3], life: [0.15, 0.3], gravity: -2 }) },
+        land: (fx, { at, point }) => {
+            // (A lick of flame up them)
+            fx.blaze(at, { width: 0.3, height: 0.55, tongues: 3, spread: 0.06, twist: 1.2, life: 0.9, light: 4, reach: 5 });
+            fx.spray({ ...FLAMES, count: 6 }, point);
             fx.spray({ ...SPARKS, count: 8 }, point);
         },
     },
     fireball: {
-        missile: { travel: 0.3, arc: 0.25, colour: FIRE.deep, size: 0.18, trail: p(FIRE.glow, { count: 3, size: [0.14, 0.26], speed: [0.1, 0.6], life: [0.2, 0.4], gravity: -2, grow: 0.5 }) },
+        missile: { travel: 0.3, arc: 0.25, colour: FIRE.deep, size: 0.18, light: { strength: 6, reach: 7 }, trail: p(FIRE.glow, { count: 3, size: [0.14, 0.26], speed: [0.1, 0.6], life: [0.2, 0.4], gravity: -2, grow: 0.5 }) },
         land: (fx, { at, point }) => {
-            fx.spray({ ...FLAMES, count: 26 }, point);
+            // (Bursting into a fire round them, twisting up)
+            fx.blaze(at, { width: 0.75, height: 1.3, tongues: 6, spread: 0.22, twist: 2, life: 1.3, light: 9, reach: 8 });
+            fx.spray({ ...FLAMES, count: 16 }, point);
             fx.spray(SPARKS, point);
             fx.spray(SMOKE, point);
             fx.decal(at, { texture: "scorch", colour: 0xffffff, radius: 0.7, life: 4, dark: true });
@@ -1199,15 +1300,20 @@ const RECIPES = {
         },
     },
     burstflame: {
-        missile: { travel: 0.26, arc: 0.2, colour: FIRE.deep, size: 0.16, trail: p(FIRE.glow, { count: 3, size: [0.12, 0.22], speed: [0.1, 0.5], life: [0.2, 0.35], gravity: -2 }) },
+        missile: { travel: 0.26, arc: 0.2, colour: FIRE.deep, size: 0.16, light: { strength: 5, reach: 6 }, trail: p(FIRE.glow, { count: 3, size: [0.12, 0.22], speed: [0.1, 0.5], life: [0.2, 0.35], gravity: -2 }) },
         land: (fx, { at, point }) => {
-            fx.spray({ ...FLAMES, count: 30 }, point);
+            // (A fire round them, and a ring of fire bursting out from it)
+            fx.blaze(at, { width: 0.7, height: 1.2, tongues: 5, spread: 0.18, twist: 2.4, life: 1.2, light: 12, reach: 9 });
+            fx.spray({ ...FLAMES, count: 20 }, point);
             fx.ring(at, { colour: FIRE.deep, from: 0.3, to: 1.8, life: 0.45 });
 
-            for (let k = 0; k < 10; k++) {
-                const angle = (k / 10) * Math.PI * 2;
+            for (let k = 0; k < 9; k++) {
+                const angle = (k / 9) * Math.PI * 2;
 
-                fx.after(0.05, () => fx.spray({ ...FLAMES, count: 6, speed: [1, 2.4] }, fx.onGround(at.x + Math.cos(angle) * 1.4, at.z + Math.sin(angle) * 1.4, 0.3), new THREE.Vector3(Math.cos(angle), 1.5, Math.sin(angle))));
+                fx.after(0.04 + (k % 3) * 0.03, () => {
+                    fx.blaze(fx.onGround(at.x + Math.cos(angle) * 1.4, at.z + Math.sin(angle) * 1.4), { width: 0.38, height: 0.8, tongues: 3, spread: 0.08, twist: 2, life: 1 });
+                    fx.spray({ ...FLAMES, count: 4, speed: [1, 2.4] }, fx.onGround(at.x + Math.cos(angle) * 1.4, at.z + Math.sin(angle) * 1.4, 0.3), new THREE.Vector3(Math.cos(angle), 1.5, Math.sin(angle)));
+                });
             }
 
             fx.decal(at, { texture: "scorch", colour: 0xffffff, radius: 1.6, life: 4, dark: true });
@@ -1216,10 +1322,12 @@ const RECIPES = {
     },
     immolate: {
         land: (fx, { at, point }) => {
-            fx.pillar(at, { colour: FIRE.deep, radius: 0.7, height: 4.5, life: 1, rise: 0.15 });
+            // (A wreath of fire spiralling up round them, taller than they are)
+            fx.blaze(at, { width: 1.1, height: 3.2, tongues: 10, spread: 0.55, twist: 3.5, heat: 1.3, life: 1.8, rise: 0.2, light: 16, reach: 10 });
+            fx.pillar(at, { colour: FIRE.deep, radius: 0.7, height: 4.5, life: 1, rise: 0.15, opacity: 0.35 });
 
-            for (let k = 0; k < 5; k++) {
-                fx.after(k * 0.08, () => fx.spray(p(FIRE.glow, { count: 16, size: [0.2, 0.4], speed: [0.6, 1.6], life: [0.4, 0.8], gravity: -4, spread: 0.8, swirl: 8, grow: 0.4 }), above(at, 0.2)));
+            for (let k = 0; k < 4; k++) {
+                fx.after(k * 0.1, () => fx.spray(p(FIRE.glow, { count: 10, size: [0.2, 0.4], speed: [0.6, 1.6], life: [0.4, 0.8], gravity: -4, spread: 0.8, swirl: 8, grow: 0.4 }), above(at, 0.2)));
             }
 
             fx.spray({ ...SPARKS, count: 30 }, point);
@@ -1231,23 +1339,39 @@ const RECIPES = {
     },
     flamefill: {
         land: (fx, { at, point }) => {
+            // (The ground all round them catching fire, a patch at a time, burning a while)
             fx.ring(at, { colour: FIRE.deep, from: 0.3, to: 2.6, life: 0.5, opacity: 1 });
-            fx.scatter({ ...FLAMES, count: 8 }, at, 2.3, 30, { seconds: 0.6, y: 0.2 });
+            fx.glow(above(at, 0.8), { colour: FIRE.deep, strength: 18, reach: 12, life: 1.8, steady: 1.2, fade: (t) => Math.min(1, t * 6) * (t > 0.7 ? (1 - t) / 0.3 : 1) });
+
+            for (let k = 0; k < 13; k++) {
+                const angle = k * 2.399963 + Math.random() * 0.4;
+                const reach = k === 0 ? 0 : 0.7 + Math.sqrt(k / 13) * 1.7;
+                const spot = fx.onGround(at.x + Math.cos(angle) * reach, at.z + Math.sin(angle) * reach);
+                const big = 0.8 + Math.random() * 0.5;
+
+                fx.after(k * 0.04, () => fx.blaze(spot, { width: 0.55 * big, height: 1.1 * big, tongues: 4, spread: 0.14, twist: 1.6, life: 1.5 + Math.random() * 0.3 }));
+            }
+
+            fx.scatter({ ...FLAMES, count: 4 }, at, 2.3, 12, { seconds: 0.6, y: 0.2 });
             fx.flash(point, { colour: FIRE.deep, intensity: 30, distance: 10, life: 0.5, size: 4 });
             fx.shake(0.06);
         },
     },
     inferno: {
         land: (fx, { at, point }) => {
-            // A roaring vortex of fire, a tall column in it, embers thrown high
-            fx.pillar(at, { colour: FIRE.deep, radius: 1.6, height: 9, life: 1.4, rise: 0.2 });
-            fx.pillar(at, { colour: FIRE.bright, radius: 0.7, height: 11, life: 1, rise: 0.15 });
+            // A roaring vortex of fire, whirling up into a tall column, a hotter one in its heart,
+            // fires catching round it, embers thrown high
+            fx.blaze(at, { width: 1.9, height: 12, tongues: 12, spread: 1.5, twist: 3.5, heat: 1.1, life: 2.2, rise: 0.2, fall: 0.35, light: 24, reach: 16 });
+            fx.blaze(at, { width: 0.9, height: 14, tongues: 4, spread: 0.35, twist: 5, heat: 1.25, life: 1.8, rise: 0.25 });
 
-            for (let k = 0; k < 10; k++) {
-                fx.after(k * 0.08, () => {
-                    fx.spray(p(FIRE.glow, { count: 22, size: [0.3, 0.6], speed: [1.5, 3], life: [0.5, 0.9], gravity: -4, spread: 2.4, swirl: 7, grow: 0.5 }), above(at, 0.3));
-                    fx.scatter({ ...FLAMES, count: 6 }, at, 3, 3, { y: 0.2 });
-                });
+            for (let k = 0; k < 8; k++) {
+                const angle = (k / 8) * Math.PI * 2 + Math.random() * 0.3;
+
+                fx.after(0.15 + k * 0.05, () => fx.blaze(fx.onGround(at.x + Math.cos(angle) * 3, at.z + Math.sin(angle) * 3), { width: 0.6, height: 1.3, tongues: 4, spread: 0.15, twist: 2.5, life: 1.6 }));
+            }
+
+            for (let k = 0; k < 6; k++) {
+                fx.after(k * 0.1, () => fx.spray(p(FIRE.glow, { count: 14, size: [0.3, 0.6], speed: [1.5, 3], life: [0.5, 0.9], gravity: -4, spread: 2.4, swirl: 7, grow: 0.5 }), above(at, 0.3)));
             }
 
             fx.ring(at, { colour: FIRE.deep, from: 0.5, to: 5, life: 0.7 });
@@ -1261,9 +1385,10 @@ const RECIPES = {
     },
     hellfire: {
         land: (fx, { at, point }) => {
-            // Meteors raining out of a burning sky all round them, streaking in from beyond; the
-            // ground erupting in a column of fire that reaches the clouds; shockwaves to the edge
-            // of sight; the screen red, the ground shaking
+            // Meteors raining out of a burning sky all round them, streaking in from beyond, each
+            // setting the ground alight where it strikes; the ground erupting in a whirling column
+            // of fire that reaches the clouds; shockwaves to the edge of sight; the screen red, the
+            // ground shaking
             fx.screen(0xff2a0a, 0.55, 1.6);
             fx.shake(0.5);
             fx.decal(at, { texture: "runes", colour: 0xff3a0a, radius: 13, life: 3.4, spin: -0.5, grow: 0.25, opacity: 0.85 });
@@ -1282,9 +1407,11 @@ const RECIPES = {
                         arc: 0,
                         colour: FIRE.deep,
                         size: 0.7,
+                        light: { strength: 8, reach: 10 },
                         trail: p(FIRE.glow, { count: 3, size: [0.4, 0.8], speed: [0.2, 1], life: [0.2, 0.4], gravity: -1, grow: 0.8 }),
                         onArrive: (hit) => {
-                            fx.spray(p(FIRE.glow, { count: 24, size: [0.3, 0.7], speed: [2, 5], life: [0.4, 0.8], gravity: -2, spread: 2, grow: 0.6 }), hit);
+                            fx.blaze(hit, { width: 1.1, height: 1.9, tongues: 6, spread: 0.3, twist: 2.2, life: 2.4 + Math.random() * 0.6, light: k % 3 === 0 ? 8 : 0, reach: 8 });
+                            fx.spray(p(FIRE.glow, { count: 16, size: [0.3, 0.7], speed: [2, 5], life: [0.4, 0.8], gravity: -2, spread: 2, grow: 0.6 }), hit);
                             fx.ring(hit, { colour: FIRE.deep, from: 0.4, to: 3.5, life: 0.5 });
                             fx.decal(hit, { texture: "scorch", colour: 0xffffff, radius: 1.8, life: 8, dark: true });
                             fx.spray({ ...SMOKE, count: 6 }, hit);
@@ -1294,8 +1421,9 @@ const RECIPES = {
             }
 
             fx.after(0.35, () => {
-                fx.pillar(at, { colour: FIRE.deep, radius: 3.4, height: 26, life: 1.8, rise: 0.12 });
-                fx.pillar(at, { colour: FIRE.bright, radius: 1.5, height: 30, life: 1.4, rise: 0.1 });
+                fx.blaze(at, { width: 5, height: 24, tongues: 16, spread: 2.2, twist: 3, heat: 1.4, life: 2.6, rise: 0.15, fall: 0.35, light: 30, reach: 28 });
+                fx.blaze(at, { width: 2, height: 28, tongues: 6, spread: 0.5, twist: 5, heat: 1.6, life: 2, rise: 0.2 });
+                fx.pillar(at, { colour: FIRE.bright, radius: 1.5, height: 30, life: 1.4, rise: 0.1, opacity: 0.4 });
                 fx.flash(point, { colour: FIRE.deep, intensity: 90, distance: 30, life: 1.2, size: 18 });
                 fx.shake(0.6);
 
@@ -1303,7 +1431,7 @@ const RECIPES = {
                     fx.after(k * 0.22, () => fx.ring(at, { colour: k === 1 ? FIRE.bright : FIRE.deep, from: 1, to: 24, life: 1.1, opacity: 1 }));
                 }
 
-                fx.scatter(p(FIRE.glow, { count: 10, size: [0.4, 0.9], speed: [1.5, 4], life: [0.6, 1.1], gravity: -4, spread: 1.6, grow: 0.6 }), at, 12, 60, { seconds: 1.4, y: 0.3 });
+                fx.scatter(p(FIRE.glow, { count: 8, size: [0.4, 0.9], speed: [1.5, 4], life: [0.6, 1.1], gravity: -4, spread: 1.6, grow: 0.6 }), at, 12, 40, { seconds: 1.4, y: 0.3 });
                 fx.spray({ ...EMBERS, count: 160, speed: [4, 12], spread: 3 }, point);
                 fx.scatter({ ...SMOKE, count: 6 }, at, 10, 16, { seconds: 1.6, y: 1 });
             });

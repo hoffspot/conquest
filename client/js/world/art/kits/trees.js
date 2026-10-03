@@ -24,6 +24,7 @@
 // its leaves grow, drawn only into the shadows.
 
 import * as THREE from "three";
+import { fireLit } from "../../firelight.js";
 import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { createRandom } from "../../../core/random.js";
 import { TREE_KINDS } from "../../../core/setpieces/pieces.js";
@@ -1269,6 +1270,7 @@ export function treeMaterials() {
     transformed.y += windHow * 0.3 * sin(windTime * 3.1 + windPhase * 1.7);
 }`);
             shader.fragmentShader = shader.fragmentShader.replace("#include <normal_fragment_begin>", THREE.ShaderChunk.normal_fragment_begin.replace("normal *= faceDirection;", ""));
+            fireLit(shader);
         };
         leaves.customProgramCacheKey = () => "leaves";
 
