@@ -1,8 +1,10 @@
 // The trees and rivers seen from afar (world/far/trees.js, rivers.js): the trees where the
 // overworld plants them, each kind its own; the rivers along their courses on their surfaces; both
-// cheap enough for the far land's reach; and drawn in the one mesh each, fading in (silhouettes.js)
+// cheap enough for the far land's reach; and drawn in the one mesh each, the trees fading in, the
+// rivers as still water's seen from afar (silhouettes.js)
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
+import * as THREE from "three";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { RUNNING, watersOf } from "../client/js/core/terrain/waters.js";
 import { CELL, CELLS, CHUNK } from "../client/js/core/worldplan/plan.js";
@@ -11,6 +13,7 @@ import { FAR_RIVERS, gatherRivers, RIVER_FLOATS } from "../client/js/world/far/r
 import { Silhouettes } from "../client/js/world/far/silhouettes.js";
 import { CARD_FLOATS, FAR_TREES, FORMS, gatherTrees, treeCards, TREE_FLOATS } from "../client/js/world/far/trees.js";
 import { QUALITY } from "../client/js/world/view.js";
+import { STILL_WATER } from "../client/js/world/water.js";
 
 describe("the trees and rivers seen from afar (far/trees.js, rivers.js)", () => {
     let world;
@@ -132,7 +135,7 @@ describe("the trees and rivers seen from afar (far/trees.js, rivers.js)", () => 
         }
     });
 
-    it("draws the trees in one mesh, a card each, and the rivers in another; fading in as the near world fades out", () => {
+    it("draws the trees in one mesh, a card each, fading in as the near world fades out; and the rivers in another, as still water's seen from afar, with the far land only", () => {
         const silhouettes = new Silhouettes(world.plan, { reach: farReach(FAR_LEVELS.low), trees: 500 });
 
         silhouettes.update(2928, 5072);
@@ -145,10 +148,19 @@ describe("the trees and rivers seen from afar (far/trees.js, rivers.js)", () => 
         assert.equal(trees.geometry.getAttribute("position").count, silhouettes.treeCount * 4);
         assert.ok(rivers.geometry.getAttribute("position").count > 0);
         assert.equal(silhouettes.near.children[1].geometry, trees.geometry);
+        assert.ok("FAR_FADE_IN" in silhouettes.treeMaterial.defines && silhouettes.treeMaterial.fog);
 
-        for (const material of [silhouettes.treeMaterial, silhouettes.riverMaterial]) {
-            assert.ok("FAR_FADE_IN" in material.defines && material.fog);
-        }
+        // (The rivers: not with the near world, whose water goes on to where these start, looking
+        // as they do)
+        assert.ok(!silhouettes.near.children.some(({ name }) => name === "far rivers"));
+        assert.equal(rivers.material, silhouettes.riverMaterial);
+        assert.ok(silhouettes.riverMaterial.isMeshLambertMaterial && silhouettes.riverMaterial.fog);
+
+        const shader = { uniforms: {}, vertexShader: THREE.ShaderLib.lambert.vertexShader, fragmentShader: THREE.ShaderLib.lambert.fragmentShader };
+
+        silhouettes.riverMaterial.onBeforeCompile(shader);
+        assert.ok(shader.vertexShader.includes("mvPosition.xyz *= 1.0 - min(0.03"), "(drawn a little towards the eye)");
+        assert.ok(shader.fragmentShader.includes(`, ${FAR_RIVERS.depth.toFixed(1)}, `) && shader.fragmentShader.includes(STILL_WATER.reflected));
 
         silhouettes.dispose();
     });

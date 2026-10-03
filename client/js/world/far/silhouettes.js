@@ -3,13 +3,15 @@
 // colours (shapes.js), the trees as cards turned to the camera (trees.js), and the rivers as
 // ribbons of water (rivers.js); worked out off the page's thread (silhouette-worker.js) as the
 // player goes. Each drawn twice (view.js setHorizon): with the far land, and with the near world,
-// so where the near world's own buildings, trees and water fade out (fog.js FADE) these fade in,
-// a few pixels at a time the other way round, and the one turns into the other.
+// so where the near world's own buildings and trees fade out (fog.js FADE) these fade in, a few
+// pixels at a time the other way round, and the one turns into the other. The rivers only with the
+// far land: the water nearer goes on to where it starts, looking as they do (water.js STILL_WATER).
 
 import * as THREE from "three";
 import { GRADE } from "../fog.js";
+import { STILL_WATER, WATER } from "../water.js";
 import { gatherSilhouettes } from "./gather.js";
-import { gatherRivers } from "./rivers.js";
+import { FAR_RIVERS, gatherRivers } from "./rivers.js";
 import { CARD_FLOATS, gatherTrees, treeCards } from "./trees.js";
 
 /** How far the player walks (metres) before what's round them is worked out again. */
@@ -17,10 +19,9 @@ export const RESHAPE = 160;
 
 /**
  * From how near the trees and rivers are drawn (metres: a little short of where the near world's
- * fade out, since these fade in there), and the rivers' colour (sRGB, as the far land's still
- * water).
+ * fade out, since these fade in there).
  */
-export const FAR_NATURE = Object.freeze({ from: 100, water: 0x30505c });
+export const FAR_NATURE = Object.freeze({ from: 100 });
 
 // (Drawn a little towards the eye, the more the further off: the far land's coarser than the
 // ground these lie on, and would hide them)
@@ -92,31 +93,30 @@ void main() {
     #include <fog_fragment>
 }`;
 
-const RIVER_VERTEX = `
-#include <fog_pars_vertex>
-void main() {
-    vec4 mvPosition = viewMatrix * vec4(position, 1.0);
-    ${TOWARDS}
-    gl_Position = projectionMatrix * mvPosition;
-    #include <fog_vertex>
-}`;
+// The rivers' material: still water as it's seen from afar (water.js STILL_WATER), as deep as a
+// river (FAR_RIVERS), over a river's bed (wet), drawn a little towards the eye
+function riverMaterial() {
+    const material = new THREE.MeshLambertMaterial({ color: 0xffffff, name: "far rivers" });
+    const bed = new THREE.Color(WATER.bed).multiplyScalar(FAR_RIVERS.wet);
 
-// (Deep water, the sky in it a little)
-const RIVER_FRAGMENT = `
-#include <common>
-#include <fog_pars_fragment>
-uniform vec3 waterColour;
-void main() {
-    gl_FragColor = vec4(waterColour, 1.0);
-    #include <tonemapping_fragment>
-    #include <colorspace_fragment>
-    #ifdef USE_FOG
-    gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, 0.25);
-    #endif
-    #include <fog_fragment>
-}`;
+    material.onBeforeCompile = (shader) => {
+        shader.vertexShader = shader.vertexShader.replace("#include <project_vertex>", `#include <project_vertex>
+${TOWARDS}
+gl_Position = projectionMatrix * mvPosition;`);
+        shader.fragmentShader = shader.fragmentShader
+            .replace("#include <common>", `#include <common>
+${STILL_WATER.pars}`)
+            .replace("#include <map_fragment>", `stillWet = 1.0;
+diffuseColor.rgb = stillWater(vec3(${bed.toArray().map((v) => v.toFixed(4)).join(", ")}), ${FAR_RIVERS.depth.toFixed(1)}, ${STILL_WATER.up});`)
+            .replace("#include <opaque_fragment>", `${STILL_WATER.reflected}
+#include <opaque_fragment>`);
+    };
+    material.customProgramCacheKey = () => "far rivers";
 
-// A material of the trees' or the rivers', in the haze, fading in where the near world fades out
+    return material;
+}
+
+// A material of the trees', in the haze, fading in where the near world fades out
 function natureMaterial(name, vertexShader, fragmentShader, uniforms) {
     return new THREE.ShaderMaterial({
         name,
@@ -161,7 +161,7 @@ export class Silhouettes {
 
         // The rivers
         this.rivers = new THREE.BufferGeometry();
-        this.riverMaterial = natureMaterial("far rivers", RIVER_VERTEX, RIVER_FRAGMENT, { waterColour: { value: new THREE.Color(FAR_NATURE.water) } });
+        this.riverMaterial = riverMaterial();
 
         this.far = new THREE.Group();
         this.near = new THREE.Group();
@@ -169,8 +169,10 @@ export class Silhouettes {
         this.near.name = "seen from afar (near)";
 
         for (const group of [this.far, this.near]) {
-            group.add(this.#mesh("silhouettes", this.geometry, this.material), this.#mesh("far trees", this.trees, this.treeMaterial), this.#mesh("far rivers", this.rivers, this.riverMaterial));
+            group.add(this.#mesh("silhouettes", this.geometry, this.material), this.#mesh("far trees", this.trees, this.treeMaterial));
         }
+
+        this.far.add(this.#mesh("far rivers", this.rivers, this.riverMaterial));
 
         this.worker = null;
 
@@ -189,7 +191,7 @@ export class Silhouettes {
         }
     }
 
-    /** How many triangles it draws (each copy): what's built, the trees, the rivers. */
+    /** How many triangles it draws (the far copy): what's built, the trees, the rivers. */
     get triangles() {
         return (this.geometry.getAttribute("position")?.count ?? 0) / 3 + this.treeCount * 2 + (this.rivers.getAttribute("position")?.count ?? 0) / 3;
     }
@@ -248,11 +250,14 @@ export class Silhouettes {
         }
 
         for (const group of [this.far, this.near]) {
-            const [built, wood, water] = group.children;
+            const [built, wood, water = null] = group.children;
 
             built.visible = positions.length > 0;
             wood.visible = this.treeCount > 0;
-            water.visible = (this.rivers.getAttribute("position")?.count ?? 0) > 0;
+
+            if (water) {
+                water.visible = (this.rivers.getAttribute("position")?.count ?? 0) > 0;
+            }
         }
     }
 

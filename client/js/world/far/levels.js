@@ -39,17 +39,18 @@ export function middleOf(level, x, z) {
 }
 
 /**
- * A level's ground round its middle ([x, z] metres): its heights (metres) and water (1 where it's
- * water) at its (cells + 1)² corners, row by row (north to south, each west to east), and the
- * ground's up at each ([x, y, z] in turn). Along its edges, every other corner is put halfway
- * between its neighbours, as the next level out has the ground there, so the two meet without a
- * crack. And its triangles (splitAlong's).
+ * A level's ground round its middle ([x, z] metres): its heights (metres), water (1 where it's
+ * water) and depth (metres over the land, less than 0 on land: distantHeights', so its shore's
+ * where that's 0) at its (cells + 1)² corners, row by row (north to south, each west to east),
+ * and the ground's up at each ([x, y, z] in turn). Along its edges, every other corner is put
+ * halfway between its neighbours, as the next level out has the ground there, so the two meet
+ * without a crack. And its triangles (splitAlong's).
  */
 export function sampleLevel(plan, level, [mx, mz]) {
     const step = spacingOf(level);
     const count = FAR.cells + 1;
     const reach = reachOf(level);
-    const { heights, water } = distantHeights(plan, mx - reach, mz - reach, count, step);
+    const { heights, water, depth } = distantHeights(plan, mx - reach, mz - reach, count, step);
     const at = (i, j) => j * count + i;
 
     for (let k = 1; k < count - 1; k += 2) {
@@ -60,6 +61,7 @@ export function sampleLevel(plan, level, [mx, mz]) {
             [count - 1, k, 0, 1],
         ]) {
             heights[at(i, j)] = (heights[at(i - di, j - dj)] + heights[at(i + di, j + dj)]) / 2;
+            depth[at(i, j)] = (depth[at(i - di, j - dj)] + depth[at(i + di, j + dj)]) / 2;
         }
     }
 
@@ -77,7 +79,7 @@ export function sampleLevel(plan, level, [mx, mz]) {
         }
     }
 
-    return { level, middle: [mx, mz], heights, water, normals, indices: splitAlong(heights, FAR.cells) };
+    return { level, middle: [mx, mz], heights, water, depth, normals, indices: splitAlong(heights, FAR.cells) };
 }
 
 /**

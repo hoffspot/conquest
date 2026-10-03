@@ -19,13 +19,15 @@
 import * as THREE from "three";
 import { TREE_WIND } from "./art/kits/trees.js";
 import { distancesFrom } from "./fields.js";
+import { FADE } from "./fog.js";
 
 /**
  * The water: how high over the ground it lies (metres), its own colour (what it scatters back of
- * the light it takes out), and its bed's (the packed earth of a river's or a lake's bed: ground.js
- * bedOf), as the bed's colours it lets through are reckoned from.
+ * the light it takes out), its bed's (the packed earth of a river's or a lake's bed: ground.js
+ * bedOf), as the bed's colours it lets through are reckoned from, and how rough its surface is
+ * under the ripples (three.js's roughness: how blurred the sky in it).
  */
-export const WATER = Object.freeze({ level: 0.03, deep: 0x1f4a4e, bed: 0x8f8470 });
+export const WATER = Object.freeze({ level: 0.03, deep: 0x1f4a4e, bed: 0x8f8470, roughness: 0.12 });
 
 /**
  * The shore field: as far out as it's worked out (squares, either way from the shoreline), and
@@ -238,8 +240,11 @@ export function causticTexture() {
  * (userData.mask: dispose it with the material).
  */
 export function waterMaterial(field, x0, y0, [width, height], under = 0) {
-    const water = new THREE.MeshStandardMaterial({ color: WATER.deep, roughness: 0.12, metalness: 0, transparent: true, depthWrite: false, premultipliedAlpha: true });
+    const water = new THREE.MeshStandardMaterial({ color: WATER.deep, roughness: WATER.roughness, metalness: 0, transparent: true, depthWrite: false, premultipliedAlpha: true });
 
+    // (Not faded out with what's near (fog.js), but going on to where the near world's drawn: the
+    // far land's water and the far rivers (STILL_WATER) meet it there, looking as it does)
+    water.defines = { NO_NEAR_FADE: "" };
     water.name = "water";
     water.userData.mask = field;
     water.userData.own = true;
@@ -323,8 +328,10 @@ diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.86, 0.88, 0.87), waterFoam);`)
             .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
 {
     // (Harder where it runs fast; gentler further off, where many ripples fall in a pixel and
-    // would glitter)
-    vec2 slope = waterSlope * ${RIPPLE_SLOPE.toFixed(3)} * (1.0 + 0.3 * min(waterSpeed, 4.0)) * (1.0 - 0.7 * smoothstep(15.0, 60.0, length(vViewPosition)));
+    // would glitter; none by where the near world starts to fade out, still as the far land's
+    // water is)
+    float away = length(vViewPosition);
+    vec2 slope = waterSlope * ${RIPPLE_SLOPE.toFixed(3)} * (1.0 + 0.3 * min(waterSpeed, 4.0)) * (1.0 - 0.7 * smoothstep(15.0, 60.0, away) - 0.3 * smoothstep(${(FADE.from - 28).toFixed(1)}, ${FADE.from.toFixed(1)}, away));
 
     normal = normalize(normal + (viewMatrix * vec4(slope.x, 0.0, slope.y, 0.0)).xyz);
 }`)
@@ -349,6 +356,45 @@ gl_FragColor = vec4(waterLight / max(waterAlpha, 0.001), waterAlpha);`);
 
     return water;
 }
+
+/**
+ * Water as it's seen from afar (the far land's lakes and sea, the far rivers), still, its ripples
+ * too small to see, looking as the water nearer does where they meet: GLSL for a Lambert material.
+ * `pars` (after its fragment shader's common): stillWater(bed, depth, up), its colour to be lit,
+ * its own over its bed (wet) seen through it where it's shallow, the bed's light taken out the
+ * further it comes up through the water (red first), so many metres deep, looked at so steeply (1
+ * straight down: `up`, from the view); and stillWet, how much of what's drawn is water (set it).
+ * `reflected` (before its opaque_fragment): the sky and the sun reflected off it, as three.js's
+ * standard material reflects them off the water nearer: the sky from the environment's map (the
+ * same blur), as much as a surface reflecting 0.04 square on reflects of it at that roughness and
+ * that glancing a look (Karis's fit); the sun as sharply as that roughness has it (Blinn-Phong,
+ * its highlight as high); and what comes up through it, less what's reflected (Schlick, 0.02
+ * square on).
+ */
+export const STILL_WATER = Object.freeze({
+    pars: `float stillWet;
+vec3 stillWater(vec3 bed, float depth, float up) {
+    vec3 through = exp(-(max(depth, 0.0) / max(up, 0.15)) * vec3(${ABSORBS.map((a) => a.toFixed(3)).join(", ")}));
+
+    return mix(vec3(${new THREE.Color(WATER.deep).toArray().map((v) => v.toFixed(4)).join(", ")}), bed, through);
+}`,
+    up: "clamp(dot(normalize(vViewPosition), normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz)), 0.0, 1.0)",
+    reflected: `if (stillWet > 0.0) {
+    vec3 stillUp = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+    float stillAcross = saturate(dot(stillUp, geometryViewDir));
+    vec3 stillSky = vec3(0.0);
+#if defined( USE_ENVMAP ) && defined( ENVMAP_TYPE_CUBE_UV )
+    vec4 stillRough = ${WATER.roughness.toFixed(2)} * vec4(-1.0, -0.0275, -0.572, 0.022) + vec4(1.0, 0.0425, 1.04, -0.04);
+    vec2 stillFit = vec2(-1.04, 1.04) * (min(stillRough.x * stillRough.x, exp2(-9.28 * stillAcross)) * stillRough.x + stillRough.y) + stillRough.zw;
+
+    stillSky += getIBLRadiance(geometryViewDir, stillUp, ${WATER.roughness.toFixed(2)}) * (0.04 * stillFit.x + stillFit.y);
+#endif
+#if NUM_DIR_LIGHTS > 0
+    stillSky += BRDF_BlinnPhong(directionalLights[0].direction, geometryViewDir, stillUp, vec3(0.04), ${(2 / WATER.roughness ** 4 - 2).toFixed(1)}) * directionalLights[0].color * saturate(dot(stillUp, directionalLights[0].direction));
+#endif
+    outgoingLight = mix(outgoingLight, outgoingLight * (1.0 - (0.02 + 0.98 * pow(1.0 - stillAcross, 5.0))) + stillSky, stillWet);
+}`,
+});
 
 /**
  * The field's texture over a grid of squares (`across` by `down`): how far each is from the shore
