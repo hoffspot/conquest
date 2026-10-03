@@ -856,7 +856,10 @@ after M7d (the land looked at by day first) and before the cliffs and rocks:
     settlement's streets lit as far as 10 m past its edge; the guards with a hand free carrying
     torches at night in place of their shields);
   - the night's own creatures: some of the wild's (the undead, wolves, bats, the wight lord's
-    sort) out only after dark, or more of them; some shut in by day;
+    sort) out only after dark, or more of them; some shut in by day (as built, M7e-3b: the
+    night's own out only after dark and gone to ground at daybreak, the night's hunters met
+    twice as often after dark, two more about each player at night, and those that see in the
+    dark seeing as by day);
   - **passing time:** a room at any tavern for a few gold (the barkeep), sleeping to the next dawn
     or dusk; or camping: a fire built where no hostile is within 40 metres (and none comes while
     the camp's made), slept by to dawn or dusk (a stamina and health rest too). In a world shared
@@ -2854,3 +2857,23 @@ converted data is to be measured in M8 against today's hm08 data.
     same light at night and stays the same); e2e (the guards with lit torches at midnight, none
     by day).
   - **Next:** M7e-3b, the night's own creatures; then M7e-3c, passing time at inns or camping.
+- **2026-10-03, M7e-3b built: the night's creatures** (§9 *Night in play*; docs/WILDS.md *By
+  night*).
+  - **The night's own** (`CREATURES` `night: "only"`): the bat swarms, the skeletons out in the
+    open, the will-o'-wisps, the black shuck and the shadow stalkers are put out only after dark
+    (from half through the dusk to half through the dawn, as the torches are lit). At daybreak
+    those 30 m or more from every player (out of sight) and not fighting go to ground; none are
+    put out by day. The undead camps' and the ruined castles' skeletons are always there.
+  - **The night's hunters** (`night: "more"`): wolves, dire wolves, pumas, hyenas, sand scorpions
+    and cultists met twice as often after dark, the night's own three times (`NIGHT_WEIGHT`, in
+    `candidatesAt`).
+  - **More of them:** two more about each player out in the world after dark (`WILDS.night`: ten
+    in all).
+  - **Seeing in the dark** (`darkSight`, kept on the creature in the battle): the night's own, the
+    wolves, the big cats, the hyenas, the cave spiders and the wight lord see as far as by day
+    out of the light, so in the dark they see a hero first; a torch or a lit road evens it.
+  - **Versions:** `NET_VERSION` 21 (what's put out when, and who sees how far).
+  - **Tests:** test/nightsight.test.js (the night's own only after dark and the hunters more often,
+    every night creature's habits making sense; those that see in the dark seeing as by day; more
+    about a player out in the wilds at midnight, the night's own among them, gone at daybreak).
+  - **Next:** M7e-3c, passing time at inns or camping.

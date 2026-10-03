@@ -24,7 +24,7 @@ import { ABILITIES, alike, ARMOR_CAP, buys, ITEMS, priceOf, Progress, QUALITIES,
 import { SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { createRandom } from "./random.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
-import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, encounterAt, LAIRS, menaces, packOf, tierPower, WILD } from "./creatures.js";
+import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, encounterAt, LAIRS, menaces, outByDay, packOf, tierPower, WILD } from "./creatures.js";
 import { rollSpoils } from "./spoils.js";
 import { campTier, CHUNK, landAt, RACE, startFor } from "./worldplan/plan.js";
 import { armouryGift, COUNSEL, FAILED, MOST_REQUESTS, offerContract, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
@@ -140,12 +140,13 @@ const TEMPLED = new Set(Object.keys(SETTLEMENT_KINDS).filter((kind) => SETTLEMEN
 
 /**
  * The wild's creatures about the players (docs/WILDS.md): how many are kept about each player out
- * in the world (within `about` metres), put out `from` to `to` metres away (out of sight), clear
- * of the settlements by `clear` metres; let go once every player's `far` away (not while
- * fighting). A wild camp's folk come out once a player's `camp` metres from it (a few more than
- * its patrols roam), and are let go `campFar` away.
+ * in the world (within `about` metres; `night` more after dark), put out `from` to `to` metres
+ * away (out of sight), clear of the settlements by `clear` metres; let go once every player's
+ * `far` away (not while fighting), and the night's own at daybreak once every player's `from`
+ * away. A wild camp's folk come out once a player's `camp` metres from it (a few more than its
+ * patrols roam), and are let go `campFar` away.
  */
-export const WILDS = Object.freeze({ count: 8, about: 60, from: 30, to: 44, clear: 25, far: 90, camp: 60, campFar: 140 });
+export const WILDS = Object.freeze({ count: 8, night: 2, about: 60, from: 30, to: 44, clear: 25, far: 90, camp: 60, campFar: 140 });
 
 /**
  * How near (m) a player has to be to a creature when it falls to find their own bundle on it (its
@@ -2260,9 +2261,10 @@ export class Host {
 
     // --- The wild (docs/WILDS.md) ---
 
-    // The wild's creatures about the players: those far from every player let go; the wild camps
-    // and perilous sites near a player come to life (and those far, let go); and each player out
-    // in the world with fewer than WILDS.count about them, one more pack put out, out of sight
+    // The wild's creatures about the players: those far from every player let go (and at
+    // daybreak the night's own, out of sight); the wild camps and perilous sites near a player
+    // come to life (and those far, let go); and each player out in the world with fewer than
+    // WILDS.count about them (more after dark), one more pack put out, out of sight
     #wilds() {
         const plan = this.world.plan;
 
@@ -2273,13 +2275,15 @@ export class Host {
         const places = this.#whereabouts();
         const distanceTo = (actor) => Math.min(...places.map(([x, y]) => hypot(actor.x - x, actor.y - y)));
         const homes = [...this.players.values()].map((player) => ({ at: this.#whereIs(player), home: this.#homeOf(player) })).filter(({ at }) => at);
+        const dark = this.#dark();
 
         for (const [id, one] of [...this.wild]) {
             const actor = this.battle.actor(id);
+            const roaming = actor && !actor.dead && !one.camp && !one.lair && actor.target === null;
 
             if (!actor) {
                 this.#unwild(id);
-            } else if (!actor.dead && !one.camp && !one.lair && actor.target === null && distanceTo(actor) > WILDS.far) {
+            } else if (roaming && (distanceTo(actor) > WILDS.far || (!dark && !outByDay(one.creature) && distanceTo(actor) > WILDS.from))) {
                 this.#release(id);
             }
         }
@@ -2300,10 +2304,18 @@ export class Host {
                 return beast && !beast.dead && hypot(beast.x - actor.x, beast.y - actor.y) < WILDS.about;
             }).length;
 
-            if (about < WILDS.count) {
-                this.#putOut([actor.x, actor.y], this.#homeOf(player), WILDS.count - about);
+            const count = WILDS.count + (dark ? WILDS.night : 0);
+
+            if (about < count) {
+                this.#putOut([actor.x, actor.y], this.#homeOf(player), count - about, dark);
             }
         }
+    }
+
+    // Is it dark out (core/light.js torchesLit: from half through the dusk to half through the
+    // dawn), the night's creatures about?
+    #dark() {
+        return torchesLit(elapsedOf(this.war));
     }
 
     // Where a player's home is: the town their people's players start in (the wild's tamest near
@@ -2315,8 +2327,9 @@ export class Host {
     }
 
     // A pack of what lives there put out near a place (out of sight of it, as strong as its
-    // distance from `home` has it), clear of the settlements and the water, no bigger than `room`
-    #putOut([x, y], home, room) {
+    // distance from `home` has it, what's about at that hour), clear of the settlements and the
+    // water, no bigger than `room`
+    #putOut([x, y], home, room, dark = false) {
         const plan = this.world.plan;
 
         for (let tries = 0; tries < 6; tries++) {
@@ -2328,7 +2341,7 @@ export class Host {
                 continue;
             }
 
-            const encounter = encounterAt(plan, at, [home], this.random);
+            const encounter = encounterAt(plan, at, [home], this.random, dark);
 
             if (encounter) {
                 this.#pack({ ...encounter, count: Math.max(1, Math.min(room, encounter.count)) }, at);
@@ -2382,7 +2395,7 @@ export class Host {
             chase: spec.chase,
             power: { melee: power, ranged: power },
             armor: spec.armor ?? 0,
-            wild: { creature, tier, temper: temper ?? spec.temper, guard: spec.guard ?? 0, roam: roam ?? spec.roam, leash: spec.leash + (roam ?? 0), pack, leader, menace: menaces(creature), unique: Boolean(spec.perilous) },
+            wild: { creature, tier, temper: temper ?? spec.temper, guard: spec.guard ?? 0, roam: roam ?? spec.roam, leash: spec.leash + (roam ?? 0), pack, leader, menace: menaces(creature), unique: Boolean(spec.perilous), darkSight: Boolean(spec.darkSight) },
         });
     }
 
@@ -3089,7 +3102,7 @@ export class Host {
         const actor = this.battle.actor(player.id);
         const plan = this.world.plan;
         const at = this.#whereIs(player) ?? [actor.x, actor.y];
-        const found = plan ? encounterAt(plan, at, [this.#homeOf(player)], this.random) : null;
+        const found = plan ? encounterAt(plan, at, [this.#homeOf(player)], this.random, this.#dark()) : null;
 
         return found ?? { creature: "wolf", tier: 1 };
     }

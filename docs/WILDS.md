@@ -79,13 +79,31 @@ near them, as strong as the camp's distance from that player's home (`CAMP_FOLK`
 
 ## Kept about the players
 
-The host keeps about eight creatures (`WILDS.count`) within 60 m of each player out in the world,
+The host keeps about eight creatures (`WILDS.count`; ten after dark) within 60 m of each player out in the world,
 put out 30 to 44 m away (out of sight) and clear of every settlement, and lets them go once every
 player's 90 m away (never one that's fighting). A camp's folk come out when a player's 60 m from
 it and go once everyone's 140 m off. So there's always something about, and never more than a
 player can see: the creatures are shared by everyone playing (whoever's near sees the same ones
 and can fight them together), and each is kept, moved and fought by the host like anyone else, so
 it plays out the same on every machine.
+
+## By night
+
+The world's clock has a day and a night (docs/GAME.md, *Day and night*), and the wild has its own
+hours (`night` in `CREATURES`; the terrain plan's M7e-3):
+- **The night's own** (`night: "only"`): the bat swarms, the skeletons out in the open, the
+  will-o'-wisps, the black shuck and the shadow stalkers are out only after dark (from half through
+  the dusk to half through the dawn, when the guards' torches are lit). At daybreak those out of
+  everyone's sight (30 m or more from every player) and not fighting go to ground (let go); none are
+  put out by day. The skeletons of the undead camps and the ruined castles are always there.
+- **The night's hunters** (`night: "more"`): wolves, dire wolves, pumas, hyenas, sand scorpions and
+  cultists are met twice as often after dark, and the night's own three times (`NIGHT_WEIGHT`).
+- **More of them:** after dark the host keeps two more (`WILDS.night`) about each player out in
+  the world, ten in all.
+- **Seeing in the dark** (`darkSight`): out of the light everyone sees less far at night (a third
+  to a half as far: docs/GAME.md, *Seeing at night*), but the night's own, the wolves, the big
+  cats, the hyenas, the cave spiders and the wight lord see as far as by day. So out in the dark
+  they see a hero long before the hero sees them; a torch or a lit road evens it.
 
 ## How they behave
 

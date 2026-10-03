@@ -1109,12 +1109,13 @@ export class Battle {
 
     /**
      * Can `a` see `b`: on the same map, within SIGHT squares (out in the world at night, only as
-     * far as the light where `b` is lets them: light.js sightAt, `this.light`), with nothing that
+     * far as the light where `b` is lets them: light.js sightAt, `this.light`; as far as ever for
+     * a creature that sees in the dark, creatures.js `darkSight`), with nothing that
      * blocks sight between their middles (the map's opaque squares: houses and trees, not barrels
      * or a well, outdoors; walls, not tables, indoors)?
      */
     canSee(a, b) {
-        return a.map === b.map && this.#sees(a.map, a.square, b.square, a.map === this.lightMap ? SIGHT * sightAt(this.light, b.square) : SIGHT);
+        return a.map === b.map && this.#sees(a.map, a.square, b.square, a.map === this.lightMap && !a.wild?.darkSight ? SIGHT * sightAt(this.light, b.square) : SIGHT);
     }
 
     // Can someone on a map at one square see another square: within `range` (SIGHT), nothing opaque

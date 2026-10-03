@@ -17,7 +17,14 @@
 // territorial) or that's fighting.
 //
 // Where: in the lands whose kinds (biomes) it likes, anywhere (null), or only in the wilds of one
-// people's lands (`people`: the uniques). Pure data and arithmetic, no DOM.
+// people's lands (`people`: the uniques).
+//
+// When (the terrain plan's M7e, §9 Night in play): some are the night's own, out only after dark
+// (`night` "only": the bats, the restless dead, the wisps, the black shuck, the shadow stalkers),
+// gone to ground by day; some hunt by night, met more often then (`night` "more": the wolves, the
+// big cats, the hyenas, the scorpions, the cultists at their rites); and some see in the dark as
+// by day (`darkSight`), so out of the light they see a hero before the hero sees them. Pure data
+// and arithmetic, no DOM.
 
 import { landAt, SETTLEMENTS } from "./worldplan/plan.js";
 import { hypot, pow } from "./exact.js";
@@ -49,46 +56,47 @@ const PACK_EVERY = 2;
  * how far it wanders (`roam`, metres) and chases (`leash`), its pack ([least, most]), the tiers
  * it's found at ([least, most]), where (`biomes`, or null for any land; `people`: only in their
  * lands' wilds), how it bleeds, and whether it has `hands` (to carry what a beast wouldn't: a
- * spell's tome, spoils.js).
+ * spell's tome, spoils.js); when it's about (`night`: "only" after dark, "more" often after dark)
+ * and whether it sees in the dark (`darkSight`).
  */
 export const CREATURES = Object.freeze({
     // Near home, everywhere
     rat: { name: "Giant rat", hp: 22, weapon: "rat", speed: 1.2, chase: 2.8, temper: "aggressive", roam: 8, leash: 18, pack: [1, 2], tiers: [1, 3], biomes: null, blood: "red" },
     porcupine: { name: "Porcupine", hp: 34, weapon: "porcupine", speed: 0.8, chase: 1.6, temper: "defensive", roam: 6, leash: 10, pack: [1, 1], tiers: [1, 3], biomes: ["woods", "meadow", "heath", "farmland", "elfwood", "tundra"], blood: "red" },
     slime: { name: "Green slime", hp: 30, weapon: "slime", speed: 0.8, chase: 1.5, temper: "defensive", roam: 6, leash: 12, pack: [1, 2], tiers: [1, 3], biomes: ["meadow", "farmland", "woods", "marsh", "jungle", "elfwood"], blood: "slime" },
-    bats: { name: "Bat swarm", hp: 26, weapon: "bats", speed: 1.6, chase: 3.2, temper: "aggressive", roam: 10, leash: 20, pack: [1, 1], tiers: [1, 4], biomes: null, blood: "red" },
+    bats: { name: "Bat swarm", hp: 26, weapon: "bats", speed: 1.6, chase: 3.2, temper: "aggressive", roam: 10, leash: 20, pack: [1, 1], tiers: [1, 4], biomes: null, blood: "red", night: "only", darkSight: true },
     // Further out
-    wolf: { name: "Wolf", hp: 24, weapon: "wolf", speed: 1.4, chase: 3.2, temper: "aggressive", roam: 12, leash: 24, pack: [2, 4], tiers: [2, 5], biomes: ["woods", "tundra", "heath", "elfwood", "meadow", "snow", "darkwood"], blood: "red" },
+    wolf: { name: "Wolf", hp: 24, weapon: "wolf", speed: 1.4, chase: 3.2, temper: "aggressive", roam: 12, leash: 24, pack: [2, 4], tiers: [2, 5], biomes: ["woods", "tundra", "heath", "elfwood", "meadow", "snow", "darkwood"], blood: "red", night: "more", darkSight: true },
     boar: { name: "Wild boar", hp: 44, weapon: "boar", speed: 1.2, chase: 3, temper: "territorial", guard: 5, roam: 8, leash: 16, pack: [1, 2], tiers: [2, 5], biomes: ["woods", "farmland", "meadow", "heath", "jungle"], blood: "red" },
     snake: { name: "Adder", hp: 20, weapon: "snake", speed: 0.8, chase: 1.8, temper: "territorial", guard: 3, roam: 5, leash: 10, pack: [1, 1], tiers: [2, 6], biomes: ["heath", "meadow", "marsh", "savannah", "badlands", "jungle", "farmland"], blood: "red" },
     bandit: { name: "Bandit", hp: 32, hands: true, weapon: "sword", speed: 1.3, chase: 2.4, temper: "aggressive", roam: 10, leash: 22, pack: [1, 3], tiers: [2, 7], biomes: ["farmland", "meadow", "woods", "heath"], blood: "red", armor: 0.05 },
     // Far out
     bear: { name: "Brown bear", hp: 60, weapon: "bear", speed: 1.2, chase: 2.8, temper: "territorial", guard: 7, roam: 10, leash: 18, pack: [1, 1], tiers: [3, 7], biomes: ["woods", "mountain", "tundra", "elfwood", "darkwood"], blood: "red" },
-    puma: { name: "Puma", hp: 40, weapon: "puma", speed: 1.4, chase: 3.4, temper: "territorial", guard: 7, roam: 12, leash: 22, pack: [1, 1], tiers: [3, 7], biomes: ["mountain", "woods", "heath", "badlands", "darkwood"], blood: "red" },
-    direWolf: { name: "Dire wolf", hp: 30, weapon: "direWolf", speed: 1.5, chase: 3.4, temper: "aggressive", roam: 14, leash: 26, pack: [1, 3], tiers: [3, 8], biomes: ["tundra", "snow", "woods", "heath", "mountain"], blood: "red" },
+    puma: { name: "Puma", hp: 40, weapon: "puma", speed: 1.4, chase: 3.4, temper: "territorial", guard: 7, roam: 12, leash: 22, pack: [1, 1], tiers: [3, 7], biomes: ["mountain", "woods", "heath", "badlands", "darkwood"], blood: "red", night: "more", darkSight: true },
+    direWolf: { name: "Dire wolf", hp: 30, weapon: "direWolf", speed: 1.5, chase: 3.4, temper: "aggressive", roam: 14, leash: 26, pack: [1, 3], tiers: [3, 8], biomes: ["tundra", "snow", "woods", "heath", "mountain"], blood: "red", night: "more", darkSight: true },
     goblin: { name: "Goblin raider", hp: 26, hands: true, weapon: "cleaver", speed: 1.4, chase: 2.6, temper: "aggressive", roam: 10, leash: 22, pack: [2, 5], tiers: [3, 8], biomes: ["heath", "mountain", "badlands", "woods"], blood: "red" },
-    skeleton: { name: "Skeleton", hp: 34, hands: true, weapon: "skeleton", speed: 1, chase: 2, temper: "aggressive", roam: 6, leash: 16, pack: [1, 3], tiers: [3, 9], biomes: ["marsh", "heath", "tundra"], blood: "none", armor: 0.1 },
-    cultist: { name: "Cultist", hp: 28, hands: true, weapon: "wand", speed: 1.2, chase: 2.2, temper: "aggressive", roam: 8, leash: 20, pack: [1, 3], tiers: [3, 8], biomes: ["marsh", "jungle", "darkwood", "volcanic"], blood: "red" },
+    skeleton: { name: "Skeleton", hp: 34, hands: true, weapon: "skeleton", speed: 1, chase: 2, temper: "aggressive", roam: 6, leash: 16, pack: [1, 3], tiers: [3, 9], biomes: ["marsh", "heath", "tundra"], blood: "none", armor: 0.1, night: "only", darkSight: true },
+    cultist: { name: "Cultist", hp: 28, hands: true, weapon: "wand", speed: 1.2, chase: 2.2, temper: "aggressive", roam: 8, leash: 20, pack: [1, 3], tiers: [3, 8], biomes: ["marsh", "jungle", "darkwood", "volcanic"], blood: "red", night: "more" },
     // The far wilds
     troll: { name: "Troll", hp: 90, hands: true, weapon: "hammer", speed: 1, chase: 2.2, temper: "aggressive", roam: 8, leash: 18, pack: [1, 2], tiers: [4, 9], biomes: ["mountain", "snow", "tundra", "heath"], blood: "red", armor: 0.1 },
     ogre: { name: "Ogre", hp: 80, hands: true, weapon: "hammer", speed: 1, chase: 2, temper: "aggressive", roam: 8, leash: 18, pack: [1, 2], tiers: [4, 9], biomes: ["badlands", "heath", "mountain", "savannah", "marsh"], blood: "red", armor: 0.05 },
     wyvern: { name: "Wyvern", hp: 60, weapon: "wyvern", speed: 1.3, chase: 3, temper: "aggressive", roam: 14, leash: 26, pack: [1, 2], tiers: [5, 9], biomes: ["mountain", "badlands", "volcanic", "snow"], blood: "red", armor: 0.1 },
     // Only in the wilds of each people's lands
-    blackShuck: { name: "Black shuck", hp: 50, weapon: "blackShuck", speed: 1.5, chase: 3.4, temper: "aggressive", roam: 14, leash: 26, pack: [1, 1], tiers: [3, 8], biomes: null, people: "human", blood: "none" },
+    blackShuck: { name: "Black shuck", hp: 50, weapon: "blackShuck", speed: 1.5, chase: 3.4, temper: "aggressive", roam: 14, leash: 26, pack: [1, 1], tiers: [3, 8], biomes: null, people: "human", blood: "none", night: "only", darkSight: true },
     boggart: { name: "Boggart", hp: 30, hands: true, weapon: "boggart", speed: 1.2, chase: 2.4, temper: "territorial", guard: 6, roam: 8, leash: 16, pack: [1, 1], tiers: [2, 6], biomes: null, people: "human", blood: "red" },
-    wisp: { name: "Will-o'-wisp", hp: 22, weapon: "wisp", speed: 1, chase: 2, temper: "aggressive", roam: 12, leash: 20, pack: [1, 2], tiers: [2, 7], biomes: null, people: "elf", blood: "none" },
+    wisp: { name: "Will-o'-wisp", hp: 22, weapon: "wisp", speed: 1, chase: 2, temper: "aggressive", roam: 12, leash: 20, pack: [1, 2], tiers: [2, 7], biomes: null, people: "elf", blood: "none", night: "only", darkSight: true },
     treant: { name: "Blighted treant", hp: 80, weapon: "treant", speed: 0.7, chase: 1.4, temper: "territorial", guard: 5, roam: 4, leash: 12, pack: [1, 1], tiers: [4, 9], biomes: null, people: "elf", blood: "sap", armor: 0.15 },
-    caveSpider: { name: "Cave spider", hp: 24, weapon: "caveSpider", speed: 1.3, chase: 2.8, temper: "territorial", guard: 5, roam: 8, leash: 18, pack: [1, 4], tiers: [2, 7], biomes: null, people: "darkElf", blood: "ichor" },
-    shadowStalker: { name: "Shadow stalker", hp: 50, weapon: "shadowStalker", speed: 1.4, chase: 3.4, temper: "aggressive", roam: 14, leash: 26, pack: [1, 1], tiers: [4, 9], biomes: null, people: "darkElf", blood: "none" },
-    hyena: { name: "Hyena", hp: 22, weapon: "hyena", speed: 1.4, chase: 3, temper: "aggressive", roam: 14, leash: 24, pack: [2, 5], tiers: [2, 7], biomes: null, people: "cat", blood: "red" },
-    scorpion: { name: "Sand scorpion", hp: 30, weapon: "scorpion", speed: 1, chase: 2.2, temper: "territorial", guard: 4, roam: 6, leash: 12, pack: [1, 2], tiers: [2, 7], biomes: null, people: "cat", blood: "ichor", armor: 0.1 },
+    caveSpider: { name: "Cave spider", hp: 24, weapon: "caveSpider", speed: 1.3, chase: 2.8, temper: "territorial", guard: 5, roam: 8, leash: 18, pack: [1, 4], tiers: [2, 7], biomes: null, people: "darkElf", blood: "ichor", darkSight: true },
+    shadowStalker: { name: "Shadow stalker", hp: 50, weapon: "shadowStalker", speed: 1.4, chase: 3.4, temper: "aggressive", roam: 14, leash: 26, pack: [1, 1], tiers: [4, 9], biomes: null, people: "darkElf", blood: "none", night: "only", darkSight: true },
+    hyena: { name: "Hyena", hp: 22, weapon: "hyena", speed: 1.4, chase: 3, temper: "aggressive", roam: 14, leash: 24, pack: [2, 5], tiers: [2, 7], biomes: null, people: "cat", blood: "red", night: "more", darkSight: true },
+    scorpion: { name: "Sand scorpion", hp: 30, weapon: "scorpion", speed: 1, chase: 2.2, temper: "territorial", guard: 4, roam: 6, leash: 12, pack: [1, 2], tiers: [2, 7], biomes: null, people: "cat", blood: "ichor", armor: 0.1, night: "more" },
     bogFrog: { name: "Bog frog", hp: 28, weapon: "bogFrog", speed: 1, chase: 2, temper: "territorial", guard: 3, roam: 6, leash: 12, pack: [1, 2], tiers: [2, 6], biomes: null, people: "lizard", blood: "red" },
     crocodile: { name: "Marsh crocodile", hp: 60, weapon: "crocodile", speed: 0.8, chase: 2.4, temper: "territorial", guard: 5, roam: 6, leash: 12, pack: [1, 1], tiers: [3, 8], biomes: null, people: "lizard", blood: "red", armor: 0.15 },
     magmaSlime: { name: "Magma slime", hp: 45, weapon: "magmaSlime", speed: 0.7, chase: 1.4, temper: "territorial", guard: 3, roam: 5, leash: 10, pack: [1, 2], tiers: [3, 8], biomes: null, people: "orc", blood: "none", armor: 0.1 },
     rockTusker: { name: "Rock tusker", hp: 80, weapon: "rockTusker", speed: 1.1, chase: 2.8, temper: "territorial", guard: 6, roam: 8, leash: 16, pack: [1, 1], tiers: [4, 9], biomes: null, people: "orc", blood: "none", armor: 0.2 },
     // The mightiest: only in the perilous places
     dragon: { name: "Dragon", hp: 90, weapon: "dragon", speed: 1, chase: 2.2, temper: "aggressive", roam: 6, leash: 30, pack: [1, 1], tiers: [10, 10], biomes: [], blood: "red", armor: 0.25, perilous: true },
-    wightLord: { name: "Wight lord", hp: 70, hands: true, weapon: "wightLord", speed: 1.1, chase: 2.2, temper: "aggressive", roam: 4, leash: 26, pack: [1, 1], tiers: [9, 10], biomes: [], blood: "none", armor: 0.25, perilous: true },
+    wightLord: { name: "Wight lord", hp: 70, hands: true, weapon: "wightLord", speed: 1.1, chase: 2.2, temper: "aggressive", roam: 4, leash: 26, pack: [1, 1], tiers: [9, 10], biomes: [], blood: "none", armor: 0.25, perilous: true, darkSight: true },
     frostTroll: { name: "Frost troll", hp: 75, hands: true, weapon: "frostTroll", speed: 1, chase: 2.2, temper: "aggressive", roam: 10, leash: 22, pack: [1, 1], tiers: [9, 10], biomes: ["snow"], blood: "red", armor: 0.2, perilous: true },
 });
 
@@ -116,6 +124,12 @@ export const LAIRS = Object.freeze({
     "dragon's lair": { master: ["dragon", 10], guards: [["wyvern", 2, 8]], near: 110, back: 45 * 60 * 1000 },
     "ruined castle": { master: ["wightLord", 9], guards: [["skeleton", 4, 7]], near: 90, back: 30 * 60 * 1000 },
 });
+
+/** How much more often the night's creatures are met after dark (weights, by their `night`). */
+export const NIGHT_WEIGHT = Object.freeze({ only: 3, more: 2 });
+
+/** Is a creature about by day (none of the night's own)? */
+export const outByDay = (creature) => CREATURES[creature]?.night !== "only";
 
 /** How many hit points, and how much harder its blows are, a creature of a tier has (than the first tier's). */
 export const tierPower = (tier) => pow(TIER_GROWTH, Math.max(1, tier) - 1);
@@ -161,22 +175,24 @@ export function livesOn(id, { biome, race }) {
  * What creatures could be met at a place in the world: those that live on its land (landAt's
  * { biome, race }) and are found at its tier (none of the perilous places' masters, who only
  * come from there, save the frost trolls of the high snows). The uniques of the people whose lands
- * they are come twice as often.
+ * they are come twice as often. By day (`dark` false) none of the night's own; after dark, the
+ * night's creatures more often (NIGHT_WEIGHT).
  */
-export function candidatesAt(land, tier) {
-    const found = Object.entries(CREATURES).filter(([id, creature]) => livesOn(id, land) && tier >= creature.tiers[0] && tier <= creature.tiers[1] && (!creature.perilous || id === "frostTroll"));
+export function candidatesAt(land, tier, dark = false) {
+    const found = Object.entries(CREATURES).filter(([id, creature]) => livesOn(id, land) && tier >= creature.tiers[0] && tier <= creature.tiers[1] && (!creature.perilous || id === "frostTroll") && (dark || outByDay(id)));
 
-    return found.map(([id, creature]) => ({ id, weight: creature.people ? 2 : 1 }));
+    return found.map(([id, creature]) => ({ id, weight: (creature.people ? 2 : 1) * (dark ? (NIGHT_WEIGHT[creature.night] ?? 1) : 1) }));
 }
 
 /**
- * Which creatures, and how many, to put out at a place (`random`: createRandom's): one kind
- * that lives there at its tier (null if none do), its pack as big as that tier has it.
+ * Which creatures, and how many, to put out at a place (`random`: createRandom's; `dark`: is it
+ * after dark): one kind that lives there at its tier then (null if none do), its pack as big as
+ * that tier has it.
  */
-export function encounterAt(plan, [x, y], homes, random) {
+export function encounterAt(plan, [x, y], homes, random, dark = false) {
     const land = landAt(plan, x, y);
     const tier = tierAt([x, y], homes, land.biome);
-    const candidates = candidatesAt(land, tier);
+    const candidates = candidatesAt(land, tier, dark);
 
     if (!candidates.length) {
         return null;
