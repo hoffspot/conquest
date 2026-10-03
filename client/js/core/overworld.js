@@ -32,7 +32,7 @@ import { Trails, TRAILS } from "./trails.js";
 import { Interiors } from "./insides.js";
 import { WENCHES } from "./lore/taverns.js";
 import { featuresOf } from "./wilds.js";
-import { ARCHES, archesOf, archSquares } from "./arches.js";
+import { archesOf, archSquares, roomOf } from "./arches.js";
 import { CORNERS, GRADE, Ground, PAD_EASE, ROAD } from "./terrain/ground.js";
 import { SLOPE_CLASS, stillLevelAt, stillOf, stillWaterAt } from "./terrain/height.js";
 import { WADE, wadeable, watersOf } from "./terrain/waters.js";
@@ -254,7 +254,7 @@ export class Overworld {
         this.clearings = [
             ...plan.places.filter((place) => place !== start).map(({ at, radius }) => ({ at, radius: radius + CLEAR_OF_PLACES })),
             ...plan.sites.map(({ id }) => this.sites.clearings.get(id)),
-            ...this.arches.map(({ x, y, span }) => ({ at: [x, y], radius: span / 2 + ARCHES.leg + ARCH_ROOM })),
+            ...this.arches.map((arch) => ({ at: [arch.x, arch.y], radius: roomOf(arch) + ARCH_ROOM })),
         ];
         // (The camps' own, where each is pitched: found as the world near it is made, campsNear)
         this.campSpots = new Map();

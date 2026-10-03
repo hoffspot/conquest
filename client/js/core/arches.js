@@ -4,9 +4,11 @@
 // span but air. One to three in each stretch of rocky land (a region: the plan's cells of one
 // rocky land joined side to side), more the bigger it is, none in a small one; each on ground
 // gentle enough to stand on across its span, well inside its land, clear of roads, water, the
-// settlements and the places, and far from any other. Its legs take their squares (they're rock:
-// walked round, and seen past only between them); under its span is open, walked through. Each
-// stands inside one chunk, so the chunk's made with it whole.
+// settlements and the places, and far from any other. It's a fin of rock with a hole worn through
+// it: each leg's foot runs on outwards along the fin a way of its own (its `reach`), the rock
+// sloping down into the ground there. Its legs take their squares (they're rock: walked round,
+// and seen past only between them); under its span is open, walked through. Each stands inside
+// one chunk, so the chunk's made with it whole.
 //
 // Worked out once a world (archesOf), from the plan alone. Exact maths only (it's in core: what's
 // blocked is the rules').
@@ -22,8 +24,9 @@ import { BIOMES, CELL, CELLS, CHUNK, WATER } from "./worldplan/plan.js";
  * `most`; how far apart any two are, at the least, and how far they keep from a settlement's edge
  * or a place (metres); how far their legs' middles are apart and how high the top of the arch's
  * underside stands over the ground (metres, from each one's own numbers); a leg's footprint's
- * radius (metres); and the steepest the land may rise from one foot to the other (rise over run),
- * and the most it may stand above or below a line between them under its span (metres).
+ * radius (metres), and how far on outwards along the fin each foot runs (metres, each leg's own);
+ * and the steepest the land may rise from one foot to the other (rise over run), and the most it
+ * may stand above or below a line between them under its span (metres).
  */
 export const ARCHES = Object.freeze({
     lands: Object.freeze(["mountain", "badlands", "heath", "savannah", "volcanic", "tundra", "snow", "beach"]),
@@ -35,6 +38,7 @@ export const ARCHES = Object.freeze({
     span: Object.freeze([9, 16]),
     rise: Object.freeze([6, 11]),
     leg: 2.4,
+    reach: Object.freeze([1.5, 6]),
     gentle: 0.3,
     bump: 2,
 });
@@ -44,8 +48,9 @@ const made = new WeakMap();
 
 /**
  * A world plan's arches: [{ id, x, y (its middle, metres), turn (radians: the way from one leg to
- * the other), span, rise (metres), land (BIOMES id), variant (0 to 1: its own look) }], the same
- * every time, worked out the first time they're wanted and kept with the plan.
+ * the other), span, rise (metres), reach ([a, b]: how far on each foot runs, the first's away
+ * from the second's, metres), land (BIOMES id), variant (0 to 1: its own look) }], the same every
+ * time, worked out the first time they're wanted and kept with the plan.
  */
 export function archesOf(plan) {
     if (!made.has(plan)) {
@@ -143,16 +148,17 @@ function archAt(plan, k, land) {
         return null;
     }
 
-    const [turnOf, spanOf, riseOf, variant] = [1, 2, 3, 4].map((n) => hashOf(i, j, plan.seed * 13 + 937 + n));
+    const [turnOf, spanOf, riseOf, variant, reachA, reachB] = [1, 2, 3, 4, 5, 6].map((n) => hashOf(i, j, plan.seed * 13 + 937 + n));
     const turn = turnOf * TAU;
     const span = ARCHES.span[0] + (ARCHES.span[1] - ARCHES.span[0]) * spanOf;
     const rise = ARCHES.rise[0] + (ARCHES.rise[1] - ARCHES.rise[0]) * riseOf;
-    const arch = { x, y, turn, span, rise, land, variant };
+    const reach = [reachA, reachB].map((k) => ARCHES.reach[0] + (ARCHES.reach[1] - ARCHES.reach[0]) * k);
+    const arch = { x, y, turn, span, rise, reach, land, variant };
 
     // (Inside its chunk, a couple of squares in, so the chunk's made with all of it)
-    const reach = span / 2 + ARCHES.leg + 2;
+    const out = roomOf(arch) + 2;
 
-    if (Math.floor((x - reach) / CHUNK) !== Math.floor((x + reach) / CHUNK) || Math.floor((y - reach) / CHUNK) !== Math.floor((y + reach) / CHUNK)) {
+    if (Math.floor((x - out) / CHUNK) !== Math.floor((x + out) / CHUNK) || Math.floor((y - out) / CHUNK) !== Math.floor((y + out) / CHUNK)) {
         return null;
     }
 
@@ -178,17 +184,45 @@ export function feetOf({ x, y, turn, span }) {
     ];
 }
 
-/** The squares an arch's legs stand on: [[x, y], ...] (each square whose middle's within a leg's footprint). */
+/** How far an arch reaches from its middle, at the most (metres: the end of its further-reaching foot, and its leg's breadth). */
+export function roomOf({ span, reach = [0, 0] }) {
+    return span / 2 + Math.max(...reach) + ARCHES.leg;
+}
+
+/**
+ * Where an arch's legs stand: [[from, to], [from, to]] (each [x, y], metres), each a line from its
+ * foot outwards as far as it reaches, the leg's footprint everything within ARCHES.leg of it.
+ */
+export function legsOf(arch) {
+    const [a, b] = feetOf(arch);
+    const [ux, uy] = [cos(arch.turn), sin(arch.turn)];
+    const [ra, rb] = arch.reach ?? [0, 0];
+
+    return [
+        [a, [a[0] - ux * ra, a[1] - uy * ra]],
+        [b, [b[0] + ux * rb, b[1] + uy * rb]],
+    ];
+}
+
+/**
+ * The squares an arch's legs stand on: [[x, y], ...] (each square whose middle's within a leg's
+ * footprint: within ARCHES.leg of the line from its foot outwards).
+ */
 export function archSquares(arch) {
     const squares = [];
     const r = ARCHES.leg;
 
-    for (const [fx, fy] of feetOf(arch)) {
-        for (let sy = Math.floor(fy - r); sy <= Math.floor(fy + r); sy++) {
-            for (let sx = Math.floor(fx - r); sx <= Math.floor(fx + r); sx++) {
-                const [dx, dy] = [sx + 0.5 - fx, sy + 0.5 - fy];
+    for (const [[fx, fy], [tx, ty]] of legsOf(arch)) {
+        const [dx, dy] = [tx - fx, ty - fy];
+        const long = dx * dx + dy * dy;
 
-                if (dx * dx + dy * dy <= r * r) {
+        for (let sy = Math.floor(Math.min(fy, ty) - r); sy <= Math.floor(Math.max(fy, ty) + r); sy++) {
+            for (let sx = Math.floor(Math.min(fx, tx) - r); sx <= Math.floor(Math.max(fx, tx) + r); sx++) {
+                const [px, py] = [sx + 0.5 - fx, sy + 0.5 - fy];
+                const t = long > 0 ? Math.min(1, Math.max(0, (px * dx + py * dy) / long)) : 0;
+                const [ex, ey] = [px - dx * t, py - dy * t];
+
+                if (ex * ex + ey * ey <= r * r && !squares.some(([qx, qy]) => qx === sx && qy === sy)) {
                     squares.push([sx, sy]);
                 }
             }

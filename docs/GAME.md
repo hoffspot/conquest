@@ -1291,21 +1291,40 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     (the rock's still painted on the ground there): lowered to low while playing, those drawn are
     hidden, and shown again when it's raised; a chunk drawn on low has none till it's drawn again.
 - **Arches of rock** (kits/arches.js; placed by core/arches.js, WORLD.md *Arches of rock*): a
-  band of rock swept along a curve from one foot, up over the open ground, and down to the other;
-  its legs steep and its top flattish, a little lopsided, each its own.
-  - **Its shape:** 34 rings of 14 points along its length (spaced evenly along it, so the steep
-    legs aren't coarse), each a squared section (a slab worn round at its corners) 4.2 m through
-    and 3.8 m deep at its feet, 3 and 2.6 over its top (each arch a little more or less), flaring
-    a little at its foot, which goes 0.8 m into the ground. Broken by knobs of rock (4.5 m and
-    smaller), and the cliffs' bedding's ledges standing out across it.
-  - **Its colour and picture** are the cliffs': each point's layer of the bedding a shade of its
-    own, moss and snow on what faces up, the land's rock (red in the savannah and badlands, pale
-    on the heath) laid on from three sides (`cliffMaterial`). Chips of it lie round its feet.
+  fin of rock with a hole worn through it, as real ones are (Delicate Arch, Arch Rock on Mackinac,
+  the red sandstone arches): its legs blocky and layered, its top level or bowed, a little
+  lopsided, what's fallen from it lying about its feet and, as its land has it, what grows on it.
+  - **Its shape:** a field of distance to the rock (`rockField`, worked out in its own frame:
+    along the fin, up, and across it), meshed by surface nets on a 0.6 m lattice (`rockOf`). Its
+    crest runs from the ground beyond each foot (as far as that foot `reach`es) up and over, steep
+    or rounded at each end; the hole through it worn to the opening between its legs' squares,
+    springing from a quarter to over half of its height, its crown as high as it `rise`s; over
+    it a cap of rock 1.8 to 3.4 m deep (at least a sixth of its span), level, or bowed down at its
+    middle (most of them a little, some a lot). 1.6 to 2.4 m through, tapering up its legs and
+    flaring at their feet, wandering and leaning a little. On it: beds 0.9 to 1.6 m deep, some
+    standing out as ledges, some worn back, the harder ones capping it; joints cutting it into
+    blocks; knobs (4.5 m and smaller) and pocks. Some (two in five, where a foot reaches far
+    enough) have a small window of their own worn through beyond one leg. Below a person's head
+    it's kept inside its legs' squares (what's walked round is what's blocked), and whole over
+    its opening. 4,000 to 6,000 triangles, worked out in 35 to 100 ms in Node, made a little each
+    frame as its chunk is drawn (about nine pieces), so it never stalls a frame.
+  - **Its colour and picture** are the cliffs': each point's bed a shade of its own, moss and
+    snow on what faces up, the land's rock (red in the savannah and badlands, pale on the heath)
+    laid on from three sides (`cliffMaterial`); darker in its hollows and under its overhangs
+    (how open each point is to the sky, along its normal).
+  - **What's fallen from it** (`fallen`): five to eleven big blocks against its legs, round the
+    edges of their squares, and 10 to 44 chips of scree about it, thicker by its legs, some under
+    its span; each sat on the ground, a little of it sunk.
+  - **What grows on it** (`growthOf`): its land's undergrowth (tufts, heather, bracken, ferns,
+    cotton grass, dry grass, thistles and cacti, as the land has them; no pebbles or bones): on its
+    ledges and top, and round its feet; plenty in a green land (heath, mountain, tundra, beach),
+    less in a dry one (savannah, badlands), a little on the volcanic land, none in the snow. Drawn
+    with the land's undergrowth (one more draw), at the qualities that's drawn at.
   - **Drawn at every quality** (its legs are in the way whether it's drawn or not), a mesh of its
-    own in its chunk (one draw and its shadows', about 1,000 triangles), casting shadows; from
-    afar, out to 2 km, its two legs and the band over them as three boxes in its rock's colour
-    with the other far shapes (far/shapes.js `archShapes`); on the minimap, its legs and a line
-    between them.
+    own in its chunk (one draw and its shadows'), casting shadows; from afar, out to 2 km, its
+    legs (each as long as its squares) and the rock over them as three boxes in its rock's colour
+    with the other far shapes (far/shapes.js `archShapes`); on the minimap, its legs as thick
+    strokes along the fin, as wide as their squares.
 - **Trees** (`Woodland`, kits/trees.js): every variant kept once and drawn wherever it's planted
   (Three.js's BatchedMesh), all the world's wood in one draw call and its leaves in another, only
   the trees in view (and, into the sun's shadows, only those in its); the crowns' shells and the
