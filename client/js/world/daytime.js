@@ -77,6 +77,34 @@ export function sunTowards(time, into = new THREE.Vector3()) {
     return into.set(Math.cos(angle), Math.sin(angle) * Math.sin(SUN_PATH.high), Math.sin(angle) * Math.cos(SUN_PATH.high));
 }
 
+/**
+ * How far the evening's lit the windows at a time of day (atlas.js WINDOW_LIGHT): [how far (0 by
+ * day; rising from a little before the dusk to the night's start, as the windows come on one after
+ * another; 1 all night; falling through the dawn, as they go out), how late in the night it is (0
+ * to 1 from the night's start to its end, 1 through the dawn; 0 by day)].
+ */
+export function windowsAt(time, into = [0, 0]) {
+    const minute = DAY.length / 60;
+    const from = DAY.dusk - 3 * minute;
+    const night = DAY.length - DAY.night + DAY.dawn;
+
+    if (time >= DAY.day && time < from) {
+        into[0] = 0;
+        into[1] = 0;
+    } else if (time >= from && time < DAY.night) {
+        into[0] = (time - from) / (DAY.night - from);
+        into[1] = 0;
+    } else if (time >= DAY.dawn && time < DAY.day) {
+        into[0] = 1 - (time - DAY.dawn) / (DAY.day - DAY.dawn);
+        into[1] = 1;
+    } else {
+        into[0] = 1;
+        into[1] = (time >= DAY.night ? time - DAY.night : time + DAY.length - DAY.night) / night;
+    }
+
+    return into;
+}
+
 /** How much of the moon's face is lit at a phase (0 new, 0.5 full): 0 to 1. */
 export function moonLit(phase) {
     return (1 - Math.cos(2 * Math.PI * phase)) / 2;
@@ -89,11 +117,12 @@ export function moonLit(phase) {
  * or the moon's by night), keyColour (sRGB), keyStrength, zenith, horizon (sRGB), stars (0 to 1),
  * phase, moonShine (0 to 1), light (0 to 1: how much of the day's light from all round there is),
  * exposure (times the day's: the eye grown used to the dark), shadows (how dark: 0 to 1),
+ * windows (windowsAt's),
  * glow (times their own colour: the light on what's lit by nothing but the sky: smoke, motes, the
  * clouds, the far trees), sunGlow (sRGB: round the sun), grade }.
  */
 export function skyAt(time, phase, land, into = null) {
-    const out = into ?? { sun: new THREE.Vector3(), moon: new THREE.Vector3(), key: new THREE.Vector3(), keyColour: [1, 1, 1], keyStrength: 0, zenith: [0, 0, 0], horizon: [0, 0, 0], stars: 0, phase: 0, moonShine: 0, light: 1, exposure: 1, shadows: 1, glow: [1, 1, 1], sunGlow: [1, 1, 1], grade: [0, 0, 0, 0] };
+    const out = into ?? { sun: new THREE.Vector3(), moon: new THREE.Vector3(), key: new THREE.Vector3(), keyColour: [1, 1, 1], keyStrength: 0, zenith: [0, 0, 0], horizon: [0, 0, 0], stars: 0, phase: 0, moonShine: 0, light: 1, exposure: 1, shadows: 1, windows: [0, 0], glow: [1, 1, 1], sunGlow: [1, 1, 1], grade: [0, 0, 0, 0] };
     const sun = sunTowards(time, out.sun);
     const moon = out.moon.copy(sun).negate();
     const height = sun.y;
@@ -138,6 +167,7 @@ export function skyAt(time, phase, land, into = null) {
     out.light = mix(1, 0.22 + 0.12 * lit, night) * (1 - 0.25 * twilight);
     out.exposure = mix(1, NIGHT_EYE.exposure, night);
     out.shadows = mix(1, MOONLIGHT.shadows, night);
+    windowsAt(time, out.windows);
 
     for (let c = 0; c < 3; c++) {
         out.glow[c] = mix(mix(1, NIGHT_GLOW[c] * (0.7 + 0.5 * lit), night), TWILIGHT_GLOW[c], twilight * 0.5);

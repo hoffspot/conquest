@@ -864,9 +864,12 @@ camera, within the budgets.
   there is one; no line if none can be found. The same way drawn on the world map.
 - **Taking it away:** on the world map, a way to remove the pin (a button by it, or a long press on
   it); the column and both lines go with it.
-- **A double tap on the world map** where no way can be found from the player to the place: the map
-  closes and the player runs there, as a double tap there in the world would have them do. (To
-  check with the user when it's built: whether this is meant for where no way's found, or anywhere.)
+- **A double tap on the world map** (the user, 2026-10-03: "The double tap should work the same as
+  setting a destination for the player and the player initiating a run to that destination. If a
+  path to the double tap cannot be calculated, some sort of feedback like "A path cannot be
+  found" should be displayed and no action taken."): the place is the player's destination, run
+  to as a double tap there in the world would have them do (the map closes and they set off); if
+  no way there can be found, the map says "A path cannot be found" and nothing's done.
 - **Saved** with the player's own things (not the world's: each player's pin is their own, not
   shared with the others in the world).
 
@@ -2588,3 +2591,29 @@ converted data is to be measured in M8 against today's hm08 data.
   there, in the world and on the map, kept the best way as the player moves, none if there's no
   way; a way to remove it; a double tap on the map where there's no way closes it and runs there).
   Added as M7f and M7g (§9, and §12's M7 row), before the rest of M7.
+- **2026-10-03, plan:** the user made the world map's double tap plain: it runs the player to the
+  place as a double tap in the world does; where no way there can be found, the map says "A path
+  cannot be found" and nothing's done. M7g's bullet says so.
+- **2026-10-03, M7e-2a built** (day and night, §9: lit windows):
+  - **The windows** (`world/art/engine/atlas.js` `WINDOWS`, `WINDOW_LIGHT`): the buildings'
+    glass (plain, leaded, green, violet, and the lanterns'; not water or obsidian, which shine as
+    glass does) glows warm from within at night, on its glass and not its leading, flickering a
+    little. Each window's seed (1 to 15) is worked out as its building's merged (its glass told
+    apart as the triangles that touch, the seed hashed from where its middle is) and rides on its
+    layer (`WINDOW_STEP`, 2,048 times it), so it's still one material and one draw.
+  - **Through the evening** (`world/daytime.js` `windowsAt`): from three minutes before the dusk
+    to the night's start they come on one after another by their seeds; after midnight about a
+    third go out one after another; through the dawn the rest go out as they came on.
+  - **All night:** a tavern's, a church's, a guild's and a keep's windows (`LIT_ALL_NIGHT`, from
+    the piece a building's merged from: `town3d.js` `partsOf`), and the lanterns' glass.
+  - **Indoors** the windows aren't lit (the insides' material leaves it out): they show the night.
+  - **Pictures:** before/after sheets sent in the session (the start town at the dusk's end, at
+    midnight and late in the night; the follow camera and from above).
+  - **Cost:** nothing more drawn; in the buildings' shader, a varying and, on windows' glass only,
+    a few sums; as a building's merged, its windows told apart (a few hundred corners a building).
+  - **Versions:** none.
+  - **Tests:** `test/buildings.test.js` (each window lit as one and the windows' seeds spread over
+    them all, the same each time; nothing but windows' glass; a tavern's and a keep's all night, a
+    house's each its own; the buildings' shader lights them and the insides' doesn't);
+    `test/daytime.test.js` (`windowsAt` through the day and night).
+  - **Next:** M7e-2b, torches, braziers, lanterns and camp fires, and a small pool of real lights.
