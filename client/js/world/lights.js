@@ -12,8 +12,8 @@
 //   wall a torch hangs on; a list the shaders read, so no shader's made again however many there
 //   are, and by day, none lit, almost nothing done.
 // - **The two that matter most** are the view's two real lamps instead (as indoors), lighting the
-//   folk and everything else fully, and casting shadows (view.js), and left out of the list so
-//   nothing's lit by them twice.
+//   folk and everything else fully, the first casting shadows (view.js), and left out of the list
+//   so nothing's lit by them twice.
 //
 // Each light rises and falls with its fire's flame (fire.js fireSignal: the same sums, the same
 // seed and clock), far less than the flame does, as firelight does.

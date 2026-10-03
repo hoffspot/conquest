@@ -1381,8 +1381,9 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
 
         game.battle.command("player", { type: "move", to: [10, 7] });
 
+        // (Drawn only once they've beckoned: it's what they do that's looked for, not the drawing)
         for (let k = 0; k < 60 && !seen; k++) {
-            game.advance(0.25);
+            game.advance(0.25, { render: false });
 
             if (courtesan.actions.attack?.name === "beckon") {
                 game.advance(0.1);

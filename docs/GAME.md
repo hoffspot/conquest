@@ -805,11 +805,13 @@ a look of its own (`LOOKS`), which the world takes on round the player:
     however many there are), nothing lit behind the wall a torch is on. Torch 4.5 candela,
     reaching 11 m; lantern 3, 9 m; brazier 6, 12 m; camp fire 8, 14 m. Torches and lanterns are
     lit at night; braziers, forges and camp fires day and night.
-  - **Lamp shadows** (QUALITY `lampShadows`): on High both lamps cast shadows, on Medium the
-    nearest, on Low none (256-pixel cube maps). Each is drawn again when its lamp lights another
-    fire, and then every few frames (one lamp every 2 frames on High, every 4 on Medium), so the
-    shadows of the folk and the stones round a camp fire dance with the flame without being drawn
-    every frame. Which lamps cast shadows follows the quality the player chose, not the level the
+  - **Lamp shadows** (QUALITY `lampShadows`): on High and Medium the first lamp (a spell's, or
+    the nearest fire) casts shadows, on Low none (a 256-pixel cube map; each shadowed lamp is 5
+    taps of its map in every lit pixel, so only one, as the research found phones can afford).
+    It's drawn again when the lamp lights another fire, and then every few frames drawn (every 2
+    on High, every 4 on Medium: frames, not the game's steps, so a frame that took several steps
+    costs no more), so the shadows of the folk and the stones round a camp fire dance with the
+    flame without being drawn every frame. Which lamps cast shadows follows the quality the player chose, not the level the
     game drops to while keeping up, so no shader's made again while it's struggling.
   - **The fire lab** (fire-lab.html): a torch either side of a door, a brazier, a camp fire,
     candles on a table and the seven fire spells cast again and again, at midnight, dusk or noon,

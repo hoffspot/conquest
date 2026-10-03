@@ -2707,9 +2707,11 @@ converted data is to be measured in M8 against today's hm08 data.
     own hooks; view.js `lightNear`: the two that matter most the real lamps, a spell's first; the
     torch's wall's other side unlit). Indoors the room's fire and candle lights follow their
     flames (roomlight.js `strengthOf` with the fire's seed and rate).
-  - **Lamp shadows:** both lamps on High, the nearest on Medium, none on Low; drawn again when a
-    lamp changes fire and every 2 (High) or 4 (Medium) frames; set by the chosen quality, so the
-    governor's drops never remake shaders.
+  - **Lamp shadows:** the first lamp on High and Medium, none on Low; drawn again when the
+    lamp changes fire and every 2 (High) or 4 (Medium) frames drawn; set by the chosen quality,
+    so the governor's drops never remake shaders. (Both lamps on High at first made every lit
+    pixel indoors take 10 shadow taps, 13% more drawing in CI's software renderer, pushing the
+    tavern's long browser test past its time: one, as the research said.)
   - **Spells:** seven tiers from a lick of flame to a 24 m whirling column; each fire, flash and
     fireball in flight its own light (`lightsNow`). **Bug found:** the spells' flashes borrowed the
     view's lamps, which the torches' lighting (after it each frame, since M7e-2b) took back, so out

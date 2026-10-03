@@ -46,7 +46,7 @@ import { WATER_DETAIL } from "./water.js";
 export const QUALITY = Object.freeze({
     low: { label: "Low", pixelRatio: 1, shadows: 1024, lampShadows: { lamps: 0, size: 0, every: 0 }, antialias: false, hair: 0.2, skin: 512, undergrowth: 0.5, grass: null, motes: 0, smoke: 0.5, ground: [1, 2, 4], water: 0, fields: 0, far: FAR_LEVELS.low, farTrees: 0, frameRate: 60 },
     medium: { label: "Medium", pixelRatio: 1.5, shadows: 2048, lampShadows: { lamps: 1, size: 256, every: 4 }, antialias: true, hair: 0.3, skin: 512, undergrowth: 0.75, grass: { near: 12, far: 28 }, motes: 300, smoke: 0.75, ground: [1, 2, 4], water: 1, fields: 1, far: FAR_LEVELS.medium, farTrees: 700, frameRate: 60 },
-    high: { label: "High", pixelRatio: 2, shadows: 2048, lampShadows: { lamps: 2, size: 256, every: 2 }, antialias: true, hair: 0.45, skin: 1024, undergrowth: 1, grass: { near: 18, far: 40 }, motes: 600, smoke: 1, ground: [1, 1, 2], water: 1, fields: 1, far: FAR_LEVELS.high, farTrees: 1200, frameRate: 60 },
+    high: { label: "High", pixelRatio: 2, shadows: 2048, lampShadows: { lamps: 1, size: 256, every: 2 }, antialias: true, hair: 0.45, skin: 1024, undergrowth: 1, grass: { near: 18, far: 40 }, motes: 600, smoke: 1, ground: [1, 1, 2], water: 1, fields: 1, far: FAR_LEVELS.high, farTrees: 1200, frameRate: 60 },
 });
 
 /** A quality level for this device: low for small or older phones, medium for phones, high otherwise. */
@@ -116,10 +116,23 @@ const INDOORS = Object.freeze({ background: 0x140e0a, fog: [16, 38], sun: [0xffe
 const LAMPS = 2;
 const _lampFrom = Array.from({ length: LAMPS }, () => null);
 
-// The lamps' shadows drawn again (a view's, its lamps lighting `_lampFrom`'s flames now): a
-// lamp's at once when it's lighting another flame than it was, and one lamp's every so often
-// (QUALITY lampShadows every: frames) so that shadows dance with the flame and follow what moves
+// The lamps handed to other flames (a view's, its lamps lighting `_lampFrom`'s flames now): their
+// shadows drawn again in the next frame drawn (lampShadowsDrawn)
 function lampShadows(view) {
+    view.lamps.forEach((lamp, k) => {
+        if (lamp.from !== _lampFrom[k]) {
+            lamp.from = _lampFrom[k];
+            lamp.handed = true;
+        }
+    });
+}
+
+// The lamps' shadows to draw in a frame about to be drawn (a view's): a lamp's handed to another
+// flame since the last, and one lit lamp's every so often (QUALITY lampShadows every: frames
+// drawn, each lamp in turn), so that shadows dance with the flame and follow what moves. (Frames
+// drawn, not the game's steps: however many steps a frame took, at most one lamp's drawn again
+// for the dance)
+function lampShadowsDrawn(view) {
     const { every = 0 } = view.quality?.lampShadows ?? {};
     let lamps = 0;
 
@@ -134,12 +147,13 @@ function lampShadows(view) {
             return;
         }
 
-        if (lamp.from !== _lampFrom[k]) {
-            lamp.from = _lampFrom[k];
+        if (lamp.handed) {
             lamp.light.shadow.needsUpdate = true;
         } else if (every && lamp.light.intensity > 0 && view.lampFrame % every === Math.floor((k * every) / lamps)) {
             lamp.light.shadow.needsUpdate = true;
         }
+
+        lamp.handed = false;
     });
 }
 
@@ -266,14 +280,14 @@ export class View {
             const light = new THREE.PointLight(0xffffff, 0, 12, 2);
 
             // (Its shadows: drawn only when it's handed to another flame and now and then as its
-            // flame dances (#lampShadows), not every frame; near, for a torch a hand off its wall)
+            // flame dances (lampShadowsDrawn), not every frame; near, for a torch a hand off its wall)
             light.shadow.autoUpdate = false;
             light.shadow.camera.near = 0.1;
             light.shadow.bias = -0.003;
             light.shadow.normalBias = 0.02;
             this.scene.add(light);
 
-            return { light, from: null };
+            return { light, from: null, handed: false };
         });
         this.lampFrame = 0;
         this.room = null;
@@ -1184,6 +1198,7 @@ export class View {
             this.sky.update(camera, now / 1000);
             WINDOW_LIGHT.value.z = (now / 1000) % 1000;
             this.#updateShown();
+            lampShadowsDrawn(this);
         }
 
         const timing = this.timingGpu && scene === this.scene;
