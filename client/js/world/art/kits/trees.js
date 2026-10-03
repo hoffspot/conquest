@@ -28,6 +28,7 @@ import { fireLit } from "../../firelight.js";
 import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { createRandom } from "../../../core/random.js";
 import { TREE_KINDS } from "../../../core/setpieces/pieces.js";
+import { WIND_GLSL } from "../../wind.js";
 
 /**
  * How each kind grows. Heights in metres; angles in degrees from the parent's direction;
@@ -1210,6 +1211,12 @@ function litterPicture(context, kind) {
  */
 export const TREE_WIND = Object.freeze({ time: { value: 0 }, sway: { value: 0.06 } });
 
+/**
+ * How the leaves take a gust (wind.js windGust, 0 to 1, where they are): how much harder they stir
+ * (a share more), and how far they lean the way the wind blows (of their sway).
+ */
+export const TREE_GUSTS = Object.freeze({ stir: 1.5, lean: 2.5 });
+
 // Nearer the camera than this, a tree fades out (metres: all gone at the first, all there at the
 // second), so the camera never looks through a wall of leaves
 export const NEAR_FADE = Object.freeze([3, 7]);
@@ -1267,12 +1274,14 @@ export function treeMaterials() {
         bark.shadowSide = THREE.DoubleSide;
 
         // Seen from behind, a card's leaves are lit as from in front (as the crown is), not dark;
-        // and they stir in the breeze, each part of a crown in its own time, more the higher up
+        // and they stir in the breeze, each part of a crown in its own time, more the higher up,
+        // harder as a gust passes, and lean with the gust the way the wind blows (wind.js)
         leaves.onBeforeCompile = (shader) => {
             Object.assign(shader.uniforms, { windTime: TREE_WIND.time, windSway: TREE_WIND.sway });
             shader.vertexShader = shader.vertexShader
-                .replace("#include <common>", "#include <common>\nuniform float windTime;\nuniform float windSway;")
+                .replace("#include <common>", `#include <common>\nuniform float windTime;\nuniform float windSway;\n${WIND_GLSL}`)
                 .replace("#include <begin_vertex>", `#include <begin_vertex>
+vec3 windLean = vec3(0.0);
 {
     vec4 windLocal = vec4(position, 1.0);
 #ifdef USE_BATCHING
@@ -1280,12 +1289,17 @@ export function treeMaterials() {
 #endif
     vec3 windAt = (modelMatrix * windLocal).xyz;
     float windPhase = windAt.x * 0.37 + windAt.z * 0.29 + windAt.y * 0.8;
-    float windHow = windSway * clamp((windAt.y - 1.5) / 6.0, 0.0, 1.0);
+    float windHigh = windSway * clamp((windAt.y - 1.5) / 6.0, 0.0, 1.0);
+    float windGusting = windGust(windAt.xz, windTime);
+    float windHow = windHigh * (1.0 + ${TREE_GUSTS.stir.toFixed(3)} * windGusting);
 
     transformed.x += windHow * (sin(windTime * 1.7 + windPhase) + 0.4 * sin(windTime * 4.3 + windPhase * 2.1));
     transformed.z += windHow * 0.7 * cos(windTime * 1.3 + windPhase * 1.3);
     transformed.y += windHow * 0.3 * sin(windTime * 3.1 + windPhase * 1.7);
-}`);
+    windLean = vec3(windWay.x, 0.0, windWay.y) * windHigh * ${TREE_GUSTS.lean.toFixed(3)} * windGusting;
+}`)
+                // (The lean the way the wind blows, in the world: whichever way the tree's turned)
+                .replace("#include <project_vertex>", THREE.ShaderChunk.project_vertex.replace("mvPosition = modelViewMatrix * mvPosition;", "mvPosition = viewMatrix * (modelMatrix * mvPosition + vec4(windLean, 0.0));"));
             shader.fragmentShader = shader.fragmentShader.replace("#include <normal_fragment_begin>", THREE.ShaderChunk.normal_fragment_begin.replace("normal *= faceDirection;", ""));
             fireLit(shader);
         };

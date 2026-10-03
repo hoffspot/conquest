@@ -24,6 +24,7 @@ import { splitAlong } from "./far/levels.js";
 import { FAR_FOG } from "./fog.js";
 import { causticTexture, FIELD, SHORE, STILL_WATER, WATER_DETAIL } from "./water.js";
 import { TREE_WIND } from "./art/kits/trees.js";
+import { WIND_GLSL } from "./wind.js";
 
 // Splat texels per metre (edges are shaped at this resolution)
 const SPLAT_RESOLUTION = 4;
@@ -100,6 +101,15 @@ export const STRAW = Object.freeze([0xd6, 0xb2, 0x58]);
  * darker as the grass's picture is, `detail` times more so (a power), so it isn't a flat colour.
  */
 export const GRASS_AFAR = Object.freeze({ amount: 0.95, bright: 0.3, thick: 2.2, detail: 1.6 });
+
+/**
+ * The wind's gusts (wind.js) over the ground past where the tall grass is drawn, and over the
+ * fields' standing crops: how much paler the grass and the crops are where one's passing (a share
+ * lighter at a full gust; about as much as the tall grass's blades are, on the whole, grass.js
+ * GRASS_GUSTS), so the waves run on across the meadows and the fields out of its reach. Worked out
+ * at the ground's corners, so it costs the pixels next to nothing.
+ */
+export const GROUND_GUSTS = Object.freeze({ paler: 0.3 });
 
 /**
  * The fields as they're seen from afar (FIELDS_GLSL): where the chunks' ground turns to the
@@ -854,6 +864,7 @@ vec3 farGround(vec2 at, vec3 up, float height, float rockShift) {
         float ridge = smoothstep(0.015, 0.09, dot(soil, vec3(0.2126, 0.7152, 0.0722)));
         vec3 sown = crop < ${(CROP.wheat + 0.5).toFixed(1)} ? vec3(${cropColour(CROP.wheat)}) : crop < ${(CROP.barley + 0.5).toFixed(1)} ? vec3(${cropColour(CROP.barley)}) : vec3(${cropColour(CROP.greens)});
         soil = mix(soil, sown * (0.65 + 0.5 * ridge), crop > ${(CROP.barley + 0.5).toFixed(1)} ? 0.35 + 0.5 * ridge : 0.85);
+        soil *= 1.0 + ${GROUND_GUSTS.paler.toFixed(3)} * vGust * (crop > ${(CROP.barley + 0.5).toFixed(1)} ? 0.5 : 1.0);
     }
     ground += soil * splat.${"rgba"[k]};
 }`;
@@ -881,6 +892,7 @@ vec3 farGround(vec2 at, vec3 up, float height, float rockShift) {
             farFieldsOn: FAR_FIELDS,
             fieldsClear: FIELDS_CLEAR,
             snowColour: { value: new THREE.Color(ALPINE.colour) },
+            groundGustTime: TREE_WIND.time,
             ...(water ? { groundWater: { value: water.texture }, groundWaterArea: { value: new THREE.Vector4(...water.area) }, causticMap: { value: causticTexture() }, groundTime: TREE_WIND.time, groundDetail: WATER_DETAIL } : {}),
             ...(far ? { farHole: far.hole, farInner: far.inner } : {}),
             ...Object.fromEntries(layers.map(({ size }, k) => [`layer${k}Size`, { value: size }])),
@@ -892,6 +904,11 @@ vec3 farGround(vec2 at, vec3 up, float height, float rockShift) {
 varying vec2 vGround;
 varying vec3 vUp;
 varying float vHeight;
+varying float vGust;
+uniform float groundGustTime;
+#ifndef FAR_LAND
+${WIND_GLSL}
+#endif
 #ifdef FAR_LAND
 attribute float farWater;
 varying float vFarWater;
@@ -930,6 +947,9 @@ vHeight = (modelMatrix * vec4(transformed, 1.0)).y;
 vUp = normalize(mat3(modelMatrix) * objectNormal);
 #ifdef FAR_LAND
 vFarColour = farGround(vGround, vUp, vHeight, ${FAR_GROUND.rock.toFixed(2)});
+vGust = 0.0;
+#else
+vGust = windGust(vGround, groundGustTime);
 #endif`,
             );
         shader.fragmentShader = shader.fragmentShader
@@ -937,6 +957,7 @@ vFarColour = farGround(vGround, vUp, vHeight, ${FAR_GROUND.rock.toFixed(2)});
 varying vec2 vGround;
 varying vec3 vUp;
 varying float vHeight;
+varying float vGust;
 uniform highp sampler2DArray groundTiles;
 uniform vec3 snowColour;
 uniform sampler2D splatMap;
@@ -1071,6 +1092,8 @@ if (grassUnderReach > 0.0 && grassUnderAway < grassUnderReach) {
 float grassAfarIn = grassUnderReach > 0.0 ? smoothstep(grassUnderReach * 0.7, grassUnderReach, grassUnderAway) : 1.0;
 if (grassAfarIn > 0.0) {
     grass = mix(grass, grassAfar(grass, landAt, fine.g, dry, lush, bare, alpineAt(vHeight, coarse.b), grassDetail), grassAfarIn);
+    // (Paler where a gust's passing over it, as thick as the land grows it)
+    grass *= 1.0 + ${GROUND_GUSTS.paler.toFixed(3)} * vGust * grassAfarIn * grassLookAt(landAt).a;
 }
 
 vec3 ground = grass * max(0.0, 1.0 - splat.r - splat.g - splat.b - splat.a);

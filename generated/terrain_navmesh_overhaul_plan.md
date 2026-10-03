@@ -3421,3 +3421,38 @@ converted data is to be measured in M8 against today's hm08 data.
     no lone oak within 450 m of it); no new shader made as the player walks out of the town or
     into the taproom (the e2e).
   - **Next:** M7j-2, a denser grass ring round the player and gusts of wind through the grass.
+- **2026-10-03, M7j-1 merged** (#162), CI green on all nine checks.
+- **2026-10-03, M7j-2 built: a thicker grass ring round the player, and the wind's gusts** (§9 row
+  9: "denser inner ring; wind gusts; drifts per region"; docs/GAME.md *Tall grass*).
+  - **The inner ring** (grass.js `GRASS_BANDS.inner`, view.js `QUALITY.grass.inner`): a third band
+    of clumps, 0.35 m apart (the near band's 0.5), eight blades each, its hashes salted so its
+    clumps aren't the near band's, out to 6 m on medium and 9 m on high (none on low), thinning
+    to the near band's alone over its outer half. The grass where the camera looks closest is
+    about two and a half times as thick.
+  - **One wind** (world/wind.js): `WIND_WAY`, the way the smoke already leant, now the flags'
+    breeze (cloth.js `BREEZE`), the fires' (`FIRE_WIND`) and the grass's (it leant a slightly
+    different way before). `windGust(x, z, time)`: two octaves of smooth noise, stretched across
+    the wind (9 m along, 16 m across) and carried downwind at 5 m a second, changing shape as it
+    goes; at any moment about a fifth of the land in a gust of half strength or more. The same in
+    GLSL (`WIND_GLSL`), the hash in whole numbers (checked against the GPU in Chromium: the same
+    to 1/255, where a float hash differed on a quarter of the cells).
+  - **What takes it:** the tall grass and the crops (`GRASS_GUSTS`: half their height further
+    downwind at the tip, pressed a quarter lower, tips up to 60% paler), so a wave runs through
+    them; the ground past the blades and the fields' standing crops (ground.js `GROUND_GUSTS`, up
+    to 30% paler, worked out at the ground's corners and passed on), so the waves run on across
+    the fields out of the grass's reach; the undergrowth (atlas.js `WILDS.gust`: tossing 1.2
+    times harder and leaning as much again); the trees' leaves (kits/trees.js `TREE_GUSTS`:
+    stirring 1.5 times harder, leaning downwind up to 2.5 times their sway, in the world's frame
+    whichever way the tree's turned).
+  - **Drifts per region:** already there (kits/wilds.js: each land's own flowers, in drifts of
+    one kind from smooth fields across the world), so nothing added.
+  - **Cost** (the pictures' spots on seed 1, medium): the inner band about 31,000 triangles and
+    one draw (farmland eye 615,500 to 647,900); the gusts a smooth noise at each blade's corner,
+    each leaf's, each undergrowth corner and each ground corner, and a multiply a ground pixel.
+  - **Tests:** test/wind.test.js (one way for smoke, flags and fires; gusts on a fifth of the land
+    or so however long the game's run; carried downwind at their speed, longer across the wind
+    than along it; the grass, leaves and undergrowth shaders made with them); test/grass.test.js
+    (three bands on medium and high, the inner closer-set and salted, none where the quality has
+    no inner). e2e: walking out of town, the mountains, the bridge, the tavern (no new shader made),
+    keeping up, the building lab.
+  - **Next:** M7j-3, weathering on the peoples' buildings and a glow under lit windows.

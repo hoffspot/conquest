@@ -234,10 +234,15 @@ describe("the tall grass drawn (world/grass.js)", () => {
         overworld = buildWorld({ seed: 1 }).maps.town;
     });
 
-    it("draws none on low; two bands on medium and high, reaching further on high", () => {
+    it("draws none on low; three bands on medium and high, the inner thicker than the near, reaching further on high", () => {
         assert.equal(QUALITY.low.grass, null);
-        assert.ok(QUALITY.medium.grass.near < QUALITY.medium.grass.far);
-        assert.ok(QUALITY.high.grass.near > QUALITY.medium.grass.near && QUALITY.high.grass.far > QUALITY.medium.grass.far);
+
+        for (const { grass } of [QUALITY.medium, QUALITY.high]) {
+            assert.ok(grass.inner < grass.near && grass.near < grass.far);
+        }
+
+        assert.ok(QUALITY.high.grass.inner > QUALITY.medium.grass.inner && QUALITY.high.grass.near > QUALITY.medium.grass.near && QUALITY.high.grass.far > QUALITY.medium.grass.far);
+        assert.ok(GRASS_BANDS.inner.cell < GRASS_BANDS.near.cell && GRASS_BANDS.inner.salt !== GRASS_BANDS.near.salt);
 
         const grass = new TallGrass(overworld);
 
@@ -245,19 +250,25 @@ describe("the tall grass drawn (world/grass.js)", () => {
         assert.equal(grass.object.children.length, 0);
 
         grass.setQuality(QUALITY.medium.grass);
-        assert.equal(grass.object.children.length, 2);
+        assert.equal(grass.object.children.length, 3);
 
         // (Each band's clump drawn once for each cell of a lattice as wide as the band's reach)
-        const [near, far] = grass.object.children;
+        const [inner, near, far] = grass.object.children;
         const cells = (reach, { cell }) => (Math.ceil((2 * reach) / cell) + 1) ** 2;
 
+        assert.equal(inner.geometry.instanceCount, cells(QUALITY.medium.grass.inner, GRASS_BANDS.inner));
         assert.equal(near.geometry.instanceCount, cells(QUALITY.medium.grass.near, GRASS_BANDS.near));
         assert.equal(far.geometry.instanceCount, cells(QUALITY.medium.grass.far, GRASS_BANDS.far));
         // (A near blade's five corners make three triangles; a far blade's three, one)
+        assert.equal(inner.geometry.attributes.position.count, GRASS_BANDS.inner.blades * 5);
         assert.equal(near.geometry.attributes.position.count, GRASS_BANDS.near.blades * 5);
         assert.equal(near.geometry.index.count, GRASS_BANDS.near.blades * 9);
         assert.equal(far.geometry.attributes.position.count, GRASS_BANDS.far.blades * 3);
         assert.equal(far.geometry.index.count, GRASS_BANDS.far.blades * 3);
+
+        // (No inner band where the quality has none)
+        grass.setQuality({ near: 12, far: 28 });
+        assert.equal(grass.object.children.length, 2);
 
         grass.setQuality(null);
         assert.equal(grass.object.children.length, 0);

@@ -1670,16 +1670,34 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     fields' strips (*Fields*, below), their crops (`CROP_STANDS`): wheat waist high and golden,
     barley a little shorter and paler, greens low and leafy, sown thick, all of a height and
     upright (the map's alpha says it's sown; none on ploughed strips).
-  - **Drawn on the GPU**, two draws: each band one clump of blades (ten, each bent in two, near;
-    eight single wider blades, far) drawn once for each cell of a lattice round the player. A
+  - **Drawn on the GPU**, three draws: each band one clump of blades (eight, each bent in two,
+    inner; ten, near; eight single wider blades, far) drawn once for each cell of a lattice round
+    the player. A
     clump's cell is its own spot on the land, the lattice wrapping round as the player goes, so
     nothing moves but at the bands' edges; where in its cell it grows, which way its blades lean,
     how tall each is and how green, from a hash of its cell. The blades stand on the ground as
     it's drawn (its heights round the player in a texture, read in the vertex shader), lean out
     from their clump's middle and with the breeze, darker at their feet. The far band takes over
     from the near over the near band's last fifth and sinks into the ground at its own edge. The
-    lattice is centred a little ahead of the player the way the camera looks. No alpha: opaque
-    blades, so Apple's GPUs draw nothing behind them.
+    inner band (terrain plan M7j-2; medium and high only, 6 and 9 metres round the player) grows
+    its clumps among the near band's, closer together (0.35 m apart to the near's 0.5), so the
+    grass round the player, where the camera looks closest, is about two and a half times as
+    thick, thinning out to the near band's alone over its outer half. Each band's lattice is
+    centred a little ahead of the player the way the camera looks. No alpha: opaque blades, so
+    Apple's GPUs draw nothing behind them.
+  - **In the wind** (terrain plan M7j-2; `world/wind.js`, `GRASS_GUSTS`): the blades lean the way
+    the wind blows (`WIND_WAY`, the way the smoke leans and the flags fly), and where a gust is
+    passing (`windGust`: patches of stronger wind about 9 m long downwind and 16 m across,
+    travelling downwind at 5 m a second and changing shape as they go; at any moment about a
+    fifth of the land in one) they lean half their height further, are pressed a quarter lower
+    and stir harder, their tips up to 60% paler as they bend: a wave running through the grass
+    and through the standing crops. Past the blades, the ground's grass look and the fields'
+    crops are paler the same way (`ground.js GROUND_GUSTS`, worked out at the ground's corners),
+    so the waves run on across the meadows and fields out of the grass's reach. The undergrowth
+    tosses harder in a gust and leans with it (`atlas.js WILDS.gust`), and the trees' leaves stir
+    harder and lean downwind (`kits/trees.js TREE_GUSTS`). Every gust's worked out in the vertex
+    shaders from where it is and the breeze's time, so nothing's sent each frame; the hash it's
+    made from is in whole numbers, so the GPU's gusts are just the ones `windGust` gives.
   - **The ground under it** is darker and the grass's own colour as thick as it grows, so the
     gaps between the blades read as more grass (`ground.js GRASS_UNDER`).
   - **Past where it's drawn, and on low** (terrain plan M7b-2c; `ground.js GRASS_AFAR`), where no
@@ -1695,7 +1713,8 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     a texture four chunks a side that wraps as the player goes.
   - **Cost** (the meadow by the river on seed 1, the software renderer, relative only): about
     100,000 triangles more on medium (330,000 to 430,000) and 210,000 on high, two draws; none on
-    low.
+    low. The inner band about 31,000 triangles more on medium and 67,000 on high, one draw; the
+    gusts a little more work for each blade's corners and the ground's, and a multiply a pixel.
 
 - **Motes** (terrain plan M7b; `world/motes.js`) drift in the air round the player, each land's
   own (`MOTES_OF`): pollen over the meadows, fields and heath, dust over the dry lands, the woods
