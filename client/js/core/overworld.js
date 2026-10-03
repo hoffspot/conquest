@@ -34,6 +34,7 @@ import { Interiors } from "./insides.js";
 import { WENCHES } from "./lore/taverns.js";
 import { featuresOf } from "./wilds.js";
 import { archesOf, archSquares, roomOf } from "./arches.js";
+import { AQUEDUCTS, aqueductsOf, pierSquares } from "./aqueducts.js";
 import { CORNERS, GRADE, Ground, PAD_EASE, ROAD } from "./terrain/ground.js";
 import { SLOPE_CLASS, stillLevelAt, stillOf, stillWaterAt } from "./terrain/height.js";
 import { WADE, wadeable, watersOf } from "./terrain/waters.js";
@@ -46,6 +47,9 @@ import { BIOME, BIOMES, CELL, CELLS, CHUNK, CHUNKS, planWorld, RACES, startFor, 
 import { hypot } from "./exact.js";
 
 export { CHUNK, CHUNKS, WORLD_SIZE };
+
+// How much room is kept round an aqueduct's pier (metres from its middle: no tree or feature in it)
+const PIER_ROOM = 3.5;
 
 // How much room is kept round an arch of rock past its legs (metres: no tree or feature in it)
 const ARCH_ROOM = 4;
@@ -256,17 +260,20 @@ export class Overworld {
         this.last = null;
 
         // The places trees keep clear of: the settlements (but the town, which is set in), the
-        // sites, the camps and the arches of rock (arches.js: their own room round them)
+        // sites, the camps, the arches of rock (arches.js: their own room round them) and the
+        // aqueducts' piers
         // (Each people's castle and special places, set down as the world near them is made:
         // their clearings growing to their size, where they're set)
         // (Those a trail goes up to facing the way it comes: the trails are made below, before any
         // site is set down)
         this.sites = new Sites(plan, { landAt: (x, y) => this.landAt(x, y), clearing: CLEAR_OF_PLACES, facingOf: (site) => this.trails.facingOf(site) });
         this.arches = archesOf(plan);
+        this.aqueducts = aqueductsOf(plan);
         this.clearings = [
             ...plan.places.filter((place) => place !== start).map(({ at, radius }) => ({ at, radius: radius + CLEAR_OF_PLACES })),
             ...plan.sites.map(({ id }) => this.sites.clearings.get(id)),
             ...this.arches.map((arch) => ({ at: [arch.x, arch.y], radius: roomOf(arch) + ARCH_ROOM })),
+            ...this.aqueducts.flatMap(({ piers }) => piers.map(({ x, y }) => ({ at: [x, y], radius: PIER_ROOM }))),
         ];
         // (The camps' own, where each is pitched: found as the world near it is made, campsNear)
         this.campSpots = new Map();
@@ -1261,6 +1268,28 @@ export class Overworld {
 
             if (stands) {
                 features.push({ kind: "arch", x: arch.x, y: arch.y, size: arch.span / 2, height: arch.rise, turn: arch.turn, variant: arch.variant, squares, opaque: true, arch });
+            }
+        }
+
+        // (An aqueduct's piers in it (aqueducts.js): each standing on its squares, unless it's
+        // fallen or any of its squares is a road's, water, a bridge or built on, when only its
+        // rubble's there, on none)
+        for (const aqueduct of this.aqueducts) {
+            for (const [n, pier] of aqueduct.piers.entries()) {
+                if (Math.floor(pier.x / CHUNK) !== chunk.cx || Math.floor(pier.y / CHUNK) !== chunk.cy) {
+                    continue;
+                }
+
+                const squares = pierSquares(aqueduct, pier);
+                const standing =
+                    squares.length > 0 &&
+                    squares.every(([x, y]) => {
+                        const k = (y - y0) * CHUNK + (x - x0);
+
+                        return x >= x0 && y >= y0 && x < x0 + CHUNK && y < y0 + CHUNK && !chunk.water[k] && !chunk.bridge[k] && !chunk.solid[k] && chunk.ground[k] !== GROUND.road;
+                    });
+
+                features.push({ kind: "aqueduct", x: pier.x, y: pier.y, size: AQUEDUCTS.pier[1] / 2, height: standing ? pier.height : 0, turn: aqueduct.turn, variant: aqueduct.variant, squares: standing ? squares : [], opaque: true, aqueduct, pier: n, standing });
             }
         }
 

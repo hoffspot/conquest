@@ -1140,6 +1140,67 @@ test("by the start town the road crosses the river on a stone bridge: drawn of s
     expect(crossing.cobbles).toBe(2);
 });
 
+test("out in the human lands a broken aqueduct strides across a dip: drawn over its piers, which can't be walked into, walked under through its arches", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+    await page.evaluate(() => window.pellagos.game.stop());
+
+    const under = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const land = game.world.maps.town;
+        // (One of its arches in the stretch kept whole, and a step either side of it)
+        const aqueduct = land.aqueducts.find(({ spans }) => spans.some(Boolean));
+        const n = aqueduct.spans.findIndex(Boolean);
+        const [pier, next] = [aqueduct.piers[n], aqueduct.piers[n + 1]];
+        const [mx, my] = [(pier.x + next.x) / 2, (pier.y + next.y) / 2];
+        const [px, py] = [-Math.sin(aqueduct.turn), Math.cos(aqueduct.turn)];
+        const [sx, sy] = [mx - px * 7, my - py * 7];
+        const me = game.battle.actor(game.me);
+        const avatar = game.avatars.get(game.me);
+
+        Object.assign(me, { x: sx, y: sy, path: [], order: null, progress: null });
+        avatar.object.position.set(sx, land.ground.heightAt(sx, sy), sy);
+
+        for (let n = 0; n < 4; n++) {
+            game.advance(0.25, { render: false });
+
+            for (let k = 0; k < 400 && (game.chunks.update(sx, sy, { budget: 200 }) || game.chunks.busy); k++) {
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        }
+
+        game.advance(0.05);
+
+        const drawn = [];
+
+        session.view.scene.traverse((node) => node.name === "aqueducts" && drawn.push(node));
+
+        // Through under its arch to the other side, passing between its piers
+        const to = [Math.floor(mx + px * 7), Math.floor(my + py * 7)];
+        let nearest = Infinity;
+
+        game.battle.command(game.me, { type: "move", to });
+
+        for (let k = 0; k < 80 && Math.hypot(me.x - to[0] - 0.5, me.y - to[1] - 0.5) > 1; k++) {
+            game.advance(0.25, { render: false });
+            nearest = Math.min(nearest, Math.hypot(me.x - mx, me.y - my));
+        }
+
+        return {
+            drawn: drawn.length,
+            pier: land.squares.blocked(Math.floor(pier.x), Math.floor(pier.y)),
+            arch: land.squares.blocked(Math.floor(mx), Math.floor(my)),
+            over: Math.hypot(me.x - to[0] - 0.5, me.y - to[1] - 0.5) <= 1,
+            nearest,
+        };
+    });
+
+    expect(under.drawn).toBeGreaterThanOrEqual(1);
+    expect(under.pier).toBe(true);
+    expect(under.arch).toBe(false);
+    expect(under.over).toBe(true);
+    expect(under.nearest).toBeLessThan(3);
+});
+
 test("debug mode draws the navigation meshes round the player, baked in a worker", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

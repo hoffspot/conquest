@@ -12,6 +12,7 @@
 // while they're still well inside this one). Each frame draws that, scaled to fit, and the
 // markers over it.
 
+import { AQUEDUCTS, pierCorners } from "../core/aqueducts.js";
 import { ARCHES, legsOf } from "../core/arches.js";
 import { PLAN_KEY } from "../core/interiors.js";
 import { CHUNK, WET } from "../core/overworld.js";
@@ -908,6 +909,36 @@ function mark(context, feature) {
         }
 
         context.lineCap = "butt";
+
+        return;
+    }
+
+    // (An aqueduct's pier: its block, and the channel on to the next if the arch to it stands; a
+    // fallen one's rubble, a smudge)
+    if (kind === "aqueduct") {
+        const { aqueduct, pier: n, standing } = feature;
+        const [pier, next] = [aqueduct.piers[n], aqueduct.piers[n + 1]];
+
+        if (!standing) {
+            context.globalAlpha = 0.55;
+            context.beginPath();
+            context.arc(x, y, AQUEDUCTS.pier[0] * 0.5, 0, 2 * Math.PI);
+            context.fill();
+            context.globalAlpha = 1;
+
+            return;
+        }
+
+        if (aqueduct.spans[n] && pier.state === "whole" && next.state === "whole") {
+            context.lineWidth = AQUEDUCTS.pier[1] * 0.45;
+            context.beginPath();
+            context.moveTo(pier.x, pier.y);
+            context.lineTo(next.x, next.y);
+            context.stroke();
+        }
+
+        outline(context, pierCorners(aqueduct, pier), [0, 0]);
+        context.fill();
 
         return;
     }

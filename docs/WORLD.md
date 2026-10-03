@@ -473,6 +473,29 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   the places). If any of its legs' squares is a road's, water, a bridge or built on, it isn't
   there at all. A chunk's arch is one of its features (`kind: "arch"`, `arch`: arches.js's own).
   `NET_VERSION` 26 (24 when its legs were round footprints at its feet).
+- **Broken aqueducts** (`core/aqueducts.js`; the terrain plan's M7i-3, §9's humans: "ruined
+  villages; hill citadels; broken aqueducts"): a straight row of stone piers striding across a dip
+  in the humans' land, arches between them carrying a channel no water's run in for an age, a
+  stretch of it whole and the rest broken. A region is the plan's cells of the humans' land joined
+  side to side, none of them water; none in one under 1,000 cells (about 1 km²), one more for
+  each 3,000 past that, three at most. Each region's cells are tried in an order of the world's
+  own: from a cell's middle, six headings, the one across the deepest dip (its lowest pier lower
+  than its ends) whose every pier is on the humans' land, on no water and no road, 80 m or more
+  from a settlement's edge, a place or a site; 900 m or more from any other aqueduct and 80 m from
+  any arch of rock. Its own numbers give it 9 to 15 piers 7.5 to 10 m apart (each 2.2 m along it
+  and 2.6 m across), its channel 8 to 14 m over the highest ground under it (no pier taller than
+  28 m). Its fates are drawn from its own numbers too (`fatesOf`): a stretch of 40 to 65% of its
+  piers kept whole, never its ends, its arches all standing (bar one, three times in ten); beyond
+  it each pier fallen (a third of them, more at its very ends), broken to a stump (30% of its
+  height or more), or whole, an arch between two whole piers there standing one time in two. A
+  pier across a chunk's edge has fallen (a chunk's squares are its own). Seed 1 has 2; seeds 2, 3
+  and 7 have 1, 3 and 3; worked out once a world (30 to 100 ms). A standing pier takes the squares
+  its footprint covers (to a quarter of a square past it: `pierSquares`), blocked and hiding
+  what's behind; under its arches and where it's fallen the ground's open (its rubble's walked
+  over); nothing's grown or placed within 3.5 m of a pier's middle. Each pier is one of its
+  chunk's features (`kind: "aqueduct"`, `aqueduct`, `pier`: its number, `standing`: false if it's
+  fallen, or if any of its squares is a road's, water, a bridge or built on, when it has none).
+  `NET_VERSION` 28.
 
 Water can't be walked into, but can be seen over, except where it can be waded. A chunk takes
 about 3 to 5 ms to make in Node,

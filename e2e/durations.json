@@ -17,6 +17,7 @@
     "pellagos.spec.js › an enemy camp near the player is pitched, tents, fire, banner and sentries; its raiders come for the town's fields, and the player's told": 34.4,
     "pellagos.spec.js › an envoy on the road near the player goes by with their escort; struck down, they're waylaid, and the journal tells of the grudge": 35.8,
     "pellagos.spec.js › blows leave wounds of their weapon's kind, worse below each threshold, with blood on the ground; healed and come back to life, gone": 35.6,
+    "pellagos.spec.js › by the start town the road crosses the river on a stone bridge: drawn of stone over its arches, walked over on its cobbles, up its ramp and down the other": 37,
     "pellagos.spec.js › carries on with the saved character, in the same world": 33.8,
     "pellagos.spec.js › debug mode shows how the game runs, and is remembered": 12.3,
     "pellagos.spec.js › dragged up, the camera looks up into the sky (clouds and the sun in it, birds flying by), and walking, it looks down again": 25.3,
@@ -30,6 +31,7 @@
     "pellagos.spec.js › makes a character: a random look, a weapon and a name, then plays them in the town square": 101.6,
     "pellagos.spec.js › on a phone › fits the screen: the title, making a character and the game's buttons; runs where the ground is double-tapped": 41.1,
     "pellagos.spec.js › once a tap lets it make sound, the music plays on recordings of real instruments": 45.2,
+    "pellagos.spec.js › out in the human lands a broken aqueduct strides across a dip: drawn over its piers, which can't be walked into, walked under through its arches": 36,
     "pellagos.spec.js › swiping up from the player sends them straight ahead, running, as far as the way is clear": 42.1,
     "pellagos.spec.js › tapping an enemy rings it as the player's target, until they're told to walk away": 24.6,
     "pellagos.spec.js › tapping someone walks the player up to talk: their name and what they are, what they say, replies that lead on, Escape to stop; the barkeep tells the war's news as it's heard in the town": 45.3,
@@ -58,6 +60,5 @@
     "war.spec.js › lays out the war for a seed: each realm, its ruler and how they stand, the towns drawn in their holders' colours": 1.5,
     "war.spec.js › plays the war on: forces march and camp, the news tells of it, and the players' might brings on the next age": 3,
     "world-map.spec.js › lays out another world from another seed, and zooms in and out": 2.4,
-    "world-map.spec.js › lays out the world for a seed and draws it, with where a player of each people starts": 1.3,
-    "pellagos.spec.js › by the start town the road crosses the river on a stone bridge: drawn of stone over its arches, walked over on its cobbles, up its ramp and down the other": 37
+    "world-map.spec.js › lays out the world for a seed and draws it, with where a player of each people starts": 1.3
 }

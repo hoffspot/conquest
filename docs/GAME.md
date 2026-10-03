@@ -1063,8 +1063,14 @@ about a third of it right beside it (the eight squares round it) and half that a
 off, as raggedly as the edges' noise has it (terrain plan M7b: `WORN`), so a road frays into the
 grass rather than stopping at a line (mipmapped, so a far road's ragged edge, many
 texels to a pixel, doesn't crawl as the camera moves); the shader blends tiling textures by it over
-grass, each at its real size (cobbles about 16 cm across), and shades everything by a much larger
-copy of the grass so the repeats don't show from afar. The grass takes its land's colour
+grass, each at its real size (cobbles about 16 cm across). The grass's own picture (a copy every
+5 m) is read without its repeats showing (`UNREPEATED`, after Inigo Quilez's "texture repetition":
+two copies, each shifted and every other one turned on its side as a broad noise has it, blended,
+their mip level from where they're read so there's no seam where the shift changes: one more
+texture read a pixel); before, its darker blob and band showed past the tall grass as a
+checkerboard of 5 m squares and stripes along the world's lines (the user's photo by an aqueduct).
+That noise (the patches', 61 m a copy, turned off the world's lines) also shades everything a
+little lighter or darker, and wanders the lands' edges. The grass takes its land's colour
 (`LAND_COLOURS`: a little yellower in farmland, darker in the woods, dark in the darkwood, pale
 gold on the savannah, rust in the badlands, ash grey on volcanic land, grey on mountains, white
 with snow, sand on beaches), from one texture of the whole world a texel to the plan's cell,
@@ -1358,6 +1364,34 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     legs (each as long as its squares) and the rock over them as three boxes in its rock's colour
     with the other far shapes (far/shapes.js `archShapes`); on the minimap, its legs as thick
     strokes along the fin, as wide as their squares.
+- **Broken aqueducts** (kits/aqueducts.js; placed by core/aqueducts.js, WORLD.md *Broken
+  aqueducts*): a row of piers of old pale stone across a dip in the human lands, round arches
+  between them ringed with their own stones, and over them the channel that carried the water.
+  - **A pier** stands from 0.6 m into the ground to the channel's floor (or, broken, to a jagged
+    stump of blocks, ivy hanging from it on one side or both, six times in ten), a band of dressed
+    stone round it where its arches spring (its impost).
+  - **Its arches** (`archesOf`): half circles from pier to pier, their crowns 0.9 m under the
+    channel's floor, each ringed on each face with its own stones, long and short in turn, each
+    its own shade, a few centimetres proud, a deeper keystone; under each, its vault. Where its
+    piers stand more than 14 m tall, a lower row of arches under the upper, a string course of
+    dressed stone along its faces halfway up, and the lower row's top a deck of the piers' stone
+    between them.
+  - **The channel** over them: its floor, two walls 0.9 m high and 0.45 m thick, the water's
+    way 0.8 m wide between them, and over it what's left of its cover slabs (a slab a metre or so
+    long, each there about half the time), flush with the walls' tops.
+  - **Where it's broken:** an arch fallen from between its piers leaves a stub springing from each
+    whole pier beside it, its stones broken off and the wall over them broken lower; under it,
+    its stone in a heap of blocks of every size, some half sunk; a fallen pier leaves a bigger
+    heap where it stood, a broken one a smaller one at its foot.
+  - **Its stone** is old (`stone-lime-old` and the bridges' `dressed-old`, weathered by the atlas
+    as the ruins' is), darker towards its foot and under its arches, greener on what faces up.
+  - **Cost:** about 3,000 triangles an aqueduct, each chunk drawing its own piers and the arches
+    from each to the next (a pier at a time, each a step as the chunk's drawn: 1 to 8 ms), merged
+    with the buildings' atlas into a draw or two a chunk and one more for its ivy, casting
+    shadows. Drawn at every quality (its piers are in the way whether it's drawn or not); from
+    afar, out to 2 km, a box for each pier standing and for each arch (far/shapes.js
+    `aqueductShapes`); on the minimap, each standing pier a block, the channel a line on to the
+    next where the arch to it stands, a fallen pier's rubble a smudge.
 - **Trees** (`Woodland`, kits/trees.js): every variant kept once and drawn wherever it's planted
   (Three.js's BatchedMesh), all the world's wood in one draw call and its leaves in another, only
   the trees in view (and, into the sun's shadows, only those in its); the crowns' shells and the
