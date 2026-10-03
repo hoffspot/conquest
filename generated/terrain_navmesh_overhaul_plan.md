@@ -3355,4 +3355,14 @@ converted data is to be measured in M8 against today's hm08 data.
     its inner ward's terrace, each ward higher, the moat's bed below the glacis); e2e (seed 1's
     citadel drawn, the keep's spires over it, its terraces' heights, its gate, gate tower and moat
     in the way, the ground before it open).
+  - **End-to-end tests, steadier** (main's e2e shard 3 had gone red on time): in software the
+    GPU process, shared by every page in a browser, does a page's drawing in its own time, so a
+    test that asks for frames faster than they're drawn left a minute's backlog for the next. Each
+    test now has a browser of its own (`e2e/fixtures.js`); every test draws at half the screen's
+    pixels each way (a frame a fifth quicker or more), but for the two that check the pixels
+    themselves; the poison test steps the game itself rather than waiting on live frames. Seed
+    4242's citadel found no room within 192 m and the far silhouettes then met a null spot: the
+    citadel now looks again out to 320 m, and silhouettes skip a site with no spot. The whole
+    suite one test at a time here: 68 of 70 passed in 47 minutes, and the two others, since fixed,
+    pass.
   - **Next:** the M7 summary report; then M7j, foliage palette, grass ring, weathering.

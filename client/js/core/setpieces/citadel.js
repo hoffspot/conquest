@@ -43,9 +43,10 @@ import { WORLD_SIZE } from "../worldplan/plan.js";
 export const CITADEL = Object.freeze({
     /**
      * Where it may stand: how far it may be moved off its plan's spot (metres: far enough to clear
-     * the road it's near), and how far its land may rise or fall across it (metres).
+     * the road it's near), and if there's no room that near, how far after all (sites.js); and how
+     * far its land may rise or fall across it (metres).
      */
-    room: Object.freeze({ shift: 192, across: 14 }),
+    room: Object.freeze({ shift: 192, farther: 320, across: 14 }),
     hill: Object.freeze({ raise: 7, ease: 40 }),
     terrace: Object.freeze({ rise: Object.freeze([8, 11]), ease: 2.5 }),
     project: 0.3,

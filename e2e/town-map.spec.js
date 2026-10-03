@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.js";
 
 // The town map (town-map.html): a village, town or city laid out from a seed, drawn. It exposes
 // itself as window.townMap, which these tests use

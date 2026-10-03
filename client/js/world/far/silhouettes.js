@@ -202,14 +202,21 @@ export class Silhouettes {
     /**
      * The player's at (x, z) (metres): what's round them worked out again once they've walked far
      * enough, or once more sites have been set down (`settled`: the overworld's sites, their spots
-     * { x, y, facing } by id).
+     * { x, y, facing } by id; null for one that found nowhere to stand, left out).
      */
     update(x, z, settled = new Map()) {
-        if (this.asked && Math.hypot(x - this.asked.x, z - this.asked.z) < RESHAPE && settled.size === this.asked.settled.length) {
+        let count = 0;
+
+        for (const spot of settled.values()) {
+            count += spot ? 1 : 0;
+        }
+
+        if (this.asked && Math.hypot(x - this.asked.x, z - this.asked.z) < RESHAPE && count === this.asked.settled.length) {
             return;
         }
 
-        const ask = { id: ++this.id, x, z, reach: this.reach, trees: this.treeReach, from: FAR_NATURE.from, town: this.town, settled: [...settled].map(([id, { x: sx, y, facing }]) => [id, { x: sx, y, facing }]) };
+        const spots = [...settled].filter(([, spot]) => spot).map(([id, { x: sx, y, facing }]) => [id, { x: sx, y, facing }]);
+        const ask = { id: ++this.id, x, z, reach: this.reach, trees: this.treeReach, from: FAR_NATURE.from, town: this.town, settled: spots };
 
         this.asked = ask;
 

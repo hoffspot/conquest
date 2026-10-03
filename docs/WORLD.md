@@ -525,7 +525,8 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   towers by 2 m (most citadels have a few; a few have none, as Spiš's lower ward is empty).
   Set down as a castle is, high (`LIE`), but on a footprint of its own (`outlineOf`: its glacis's
   edge, a metre past it, as a polygon of 32 corners) up to 192 m from its spot, where its land rises or falls no more than
-  14 m across it: seeds 1, 2, 3, 7, 11 and 23 all find one. It's set down as the world's made
+  14 m across it: seeds 1, 2, 3, 7, 11 and 23 all find one; with none that near, up to 320 m
+  (seed 4242's, roads and water all round its spot). It's set down as the world's made
   (`settleCitadels`, 100 to 200 ms; the one humans' castle a world), not when the player first
   comes near, as its moat and the ground it keeps clear are wanted from afar. Its outer ward and
   glacis on its hill, the land under it on average raised 7 m (`citadelLevel`, to the ground's

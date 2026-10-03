@@ -203,12 +203,13 @@ describe("a hill citadel set down (core/sites.js)", () => {
         one = citadelOf(1);
     });
 
-    it("is the humans' castle, set down clear of the roads and the water wherever their castle is, near its plan's spot", () => {
-        for (const seed of [1, 2, 3, 7]) {
+    it("is the humans' castle, set down clear of the roads and the water wherever their castle is, near its plan's spot (or, with no room near it, farther off)", () => {
+        // (Seed 4242's has no room within CITADEL.room.shift: roads and water all round)
+        for (const seed of [1, 2, 3, 7, 4242]) {
             const { land, site, set } = seed === 1 ? one : citadelOf(seed);
 
             assert.ok(set?.citadel, `seed ${seed}: set down`);
-            assert.ok(Math.hypot(set.x - site.at[0], set.y - site.at[1]) <= CITADEL.room.shift + 1e-9);
+            assert.ok(Math.hypot(set.x - site.at[0], set.y - site.at[1]) <= (seed === 4242 ? CITADEL.room.farther : CITADEL.room.shift) + 1e-9, `seed ${seed}`);
 
             for (const k of [...set.squares].filter((_, n) => n % 7 === 0)) {
                 const [x, y] = [k % WORLD_SIZE, Math.floor(k / WORLD_SIZE)];

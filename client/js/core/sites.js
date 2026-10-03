@@ -391,7 +391,7 @@ export class Sites {
     // Where a site is built: its cell's middle, or near it, clear of roads and water, facing the
     // nearest road (the spot that lies best first, for those that would rather stand high or
     // low: LIE); or null if there's nowhere
-    #setDown(site, [w, h], lie = LIE[site.kind]?.lie) {
+    #setDown(site, [w, h], lie = LIE[site.kind]?.lie, farther = false) {
         const facing = this.#facing(site);
         const size = WORLD_SIZE;
         // (Its land looked at every other square: no road or stream is narrower; each square
@@ -426,7 +426,7 @@ export class Sites {
         // (A citadel: its glacis round its moat, which it may be moved farther to find room for)
         const citadel = isCitadel(site) ? layoutCitadel({ seed: site.seed }) : null;
         const outline = citadel && outlineOf(citadel, 1);
-        const room = citadel ? CITADEL.room : LYING;
+        const room = citadel ? { ...CITADEL.room, shift: farther ? CITADEL.room.farther : CITADEL.room.shift } : LYING;
         // (Round where it rests; and if nowhere there's clear, round its plan's spot)
         const tries = lie ? this.#lying(site, [w, h], lie, room) : rest.at === site.at ? rings(site.at, citadel ? room.shift : SHIFT) : [...rings(rest.at), ...rings(site.at)];
 
@@ -489,8 +489,13 @@ export class Sites {
             };
         }
 
-        // (None that lies well clear: wherever's clear, as for any other)
-        return lie ? this.#setDown(site, [w, h], null) : null;
+        // (None that lies well clear: wherever's clear, as for any other; a citadel, none near its
+        // spot either, looked for farther off, the same way again)
+        if (lie) {
+            return this.#setDown(site, [w, h], null, farther);
+        }
+
+        return citadel && !farther ? this.#setDown(site, [w, h], LIE[site.kind]?.lie, true) : null;
     }
 
     // A hill citadel set down at (x, y), facing `facing` (setpieces/citadel.js): its outer ward on

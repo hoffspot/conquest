@@ -424,8 +424,15 @@ npm run e2e:durations -- report.json  # keeps how long each browser test took, f
 `npm test` checks that `client/js/app/manifest.js` (the loading screen's list of files and their
 sizes) is up to date, so run `npm run build:manifest` after changing the game's code or data. The
 browser tests need Chromium: run `npx playwright install chromium` once, or set `CHROMIUM_PATH`
-to an existing Chromium or Chrome executable. Every browser test has a page of its own, so they
-run side by side (on half the machine's cores; `--workers=N` for more or fewer). CI splits them
+to an existing Chromium or Chrome executable. Every browser test has a page of its own, in a
+browser of its own (`e2e/fixtures.js`: without a GPU, the drawing a test leaves queued in its
+browser's GPU process would slow the next test down by a minute or more), so they run side by
+side (on half the machine's cores; `--workers=N` for more or fewer). They draw at half the
+screen's pixels (`deviceScaleFactor: 0.5`, playwright.config.js: a fifth quicker in software
+rendering; a test of the pixels themselves sets its own). A test that waits on the game's time
+stops it and plays it on by hand (`playUntil` in e2e/pellagos.spec.js): drawn without a GPU, a
+frame takes a second or more and the game goes on a tenth of a second a frame at most, so
+waiting on it as it's drawn is waiting on how slow the machine is. CI splits them
 between eight jobs run at once, each about as long as the others: `scripts/e2e-shard.js` gives
 each job its share by how long each test last took (`e2e/durations.json`; a test not timed yet
 counts as the median), and the job runs it with `--test-list`. After adding tests or making them

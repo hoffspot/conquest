@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.js";
 
 // Pellagos in a real browser. The page exposes itself as window.pellagos ({ game, session,
 // creator, loader, playing }), which these tests use to look inside. Drawing is slow without a
@@ -144,75 +144,81 @@ test("debug mode shows how the game runs, and is remembered", async ({ page }) =
     await expect(page.locator("#debug")).toBeHidden();
 });
 
-test("keeps up: draws fewer pixels, then a level lower, while it can't, says so in Game options and debug mode; Visual quality and Adaptive in Game options", async ({ page }) => {
-    await page.addInitScript(() => localStorage.setItem("pellagos.settings", JSON.stringify({ debug: true, sound: false, quality: "high" })));
-    await playing(page, "/?play&seed=2");
+// (The pixels it draws counted: at the screen's own, a pixel a pixel, not the half the others
+// are drawn at: playwright.config.js)
+test.describe("drawn at the screen's own pixels", () => {
+    test.use({ deviceScaleFactor: 1 });
 
-    // (Under automation Adaptive's off, and how it judges is app/governor.js's tests': here it's
-    // told it can't keep up, twice, as it would on a slow phone)
-    const stepped = await page.evaluate(async () => {
-        const { game, session } = window.pellagos;
-        const view = session.view;
-        const before = view.renderer.getPixelRatio();
-        const told = [
-            { quality: "high", scale: 0.85 },
-            { quality: "medium", scale: 1 },
-        ];
-        const seen = [];
+    test("keeps up: draws fewer pixels, then a level lower, while it can't, says so in Game options and debug mode; Visual quality and Adaptive in Game options", async ({ page }) => {
+        await page.addInitScript(() => localStorage.setItem("pellagos.settings", JSON.stringify({ debug: true, sound: false, quality: "high" })));
+        await playing(page, "/?play&seed=2");
 
-        view.adaptive = true;
-        game.governor.observe = () => told.shift() ?? null;
+        // (Under automation Adaptive's off, and how it judges is app/governor.js's tests': here it's
+        // told it can't keep up, twice, as it would on a slow phone)
+        const stepped = await page.evaluate(async () => {
+            const { game, session } = window.pellagos;
+            const view = session.view;
+            const before = view.renderer.getPixelRatio();
+            const told = [
+                { quality: "high", scale: 0.85 },
+                { quality: "medium", scale: 1 },
+            ];
+            const seen = [];
 
-        await new Promise((resolve) => {
-            const wait = () => {
-                seen.push([view.qualityName, view.adaptiveScale, view.renderer.getPixelRatio()]);
+            view.adaptive = true;
+            game.governor.observe = () => told.shift() ?? null;
 
-                if (view.qualityName === "medium") {
-                    resolve();
-                } else {
-                    requestAnimationFrame(wait);
-                }
-            };
+            await new Promise((resolve) => {
+                const wait = () => {
+                    seen.push([view.qualityName, view.adaptiveScale, view.renderer.getPixelRatio()]);
 
-            wait();
+                    if (view.qualityName === "medium") {
+                        resolve();
+                    } else {
+                        requestAnimationFrame(wait);
+                    }
+                };
+
+                wait();
+            });
+
+            return { before, fewer: seen.find(([, scale]) => scale === 0.85), now: [view.qualityName, view.adaptiveScale, view.chosenQuality] };
         });
 
-        return { before, fewer: seen.find(([, scale]) => scale === 0.85), now: [view.qualityName, view.adaptiveScale, view.chosenQuality] };
+        expect(stepped.fewer[2]).toBeCloseTo(stepped.before * 0.85, 5);
+        expect(stepped.now).toEqual(["medium", 1, "high"]);
+        await expect(page.locator("#debugstats")).toContainText("Quality medium (high chosen: keeping up)");
+
+        // Game options: the quality chosen, Adaptive, and what it's drawing to keep up
+        await page.locator("#menubutton").click();
+        await page.locator("#optionsbutton").click();
+        await expect(page.locator("#qualityname")).toHaveText("High");
+        await expect(page.locator("#adaptiveswitch")).toBeChecked();
+        await page.evaluate(() => window.pellagos.game.onAdapt({ quality: "medium", scale: 1 }));
+        await expect(page.locator("#adapted")).toHaveText("Keeping up: drawing medium");
+
+        // (A quality chosen: drawn at it, every pixel, starting again from there)
+        await page.locator("#qualityslider").evaluate((slider) => {
+            slider.value = "0";
+            slider.dispatchEvent(new Event("input", { bubbles: true }));
+            slider.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+        await expect(page.locator("#qualityname")).toHaveText("Low");
+
+        const chosen = await page.evaluate(() => {
+            const { game, session } = window.pellagos;
+
+            return { quality: session.view.qualityName, chosen: session.view.chosenQuality, scale: session.view.adaptiveScale, ratio: session.view.renderer.getPixelRatio(), step: game.governor.step, saved: JSON.parse(localStorage.getItem("pellagos.settings")).quality };
+        });
+
+        expect(chosen).toEqual({ quality: "low", chosen: "low", scale: 1, ratio: 1, step: 0, saved: "low" });
+        await expect(page.locator("#adapted")).toBeHidden();
+
+        // (Adaptive off: remembered, and the game left at the quality chosen)
+        await page.locator("label:has(#adaptiveswitch)").click();
+        await expect(page.locator("#adaptiveswitch")).not.toBeChecked();
+        expect(await page.evaluate(() => [window.pellagos.session.view.adaptive, JSON.parse(localStorage.getItem("pellagos.settings")).adaptive])).toEqual([false, false]);
     });
-
-    expect(stepped.fewer[2]).toBeCloseTo(stepped.before * 0.85, 5);
-    expect(stepped.now).toEqual(["medium", 1, "high"]);
-    await expect(page.locator("#debugstats")).toContainText("Quality medium (high chosen: keeping up)");
-
-    // Game options: the quality chosen, Adaptive, and what it's drawing to keep up
-    await page.locator("#menubutton").click();
-    await page.locator("#optionsbutton").click();
-    await expect(page.locator("#qualityname")).toHaveText("High");
-    await expect(page.locator("#adaptiveswitch")).toBeChecked();
-    await page.evaluate(() => window.pellagos.game.onAdapt({ quality: "medium", scale: 1 }));
-    await expect(page.locator("#adapted")).toHaveText("Keeping up: drawing medium");
-
-    // (A quality chosen: drawn at it, every pixel, starting again from there)
-    await page.locator("#qualityslider").evaluate((slider) => {
-        slider.value = "0";
-        slider.dispatchEvent(new Event("input", { bubbles: true }));
-        slider.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    await expect(page.locator("#qualityname")).toHaveText("Low");
-
-    const chosen = await page.evaluate(() => {
-        const { game, session } = window.pellagos;
-
-        return { quality: session.view.qualityName, chosen: session.view.chosenQuality, scale: session.view.adaptiveScale, ratio: session.view.renderer.getPixelRatio(), step: game.governor.step, saved: JSON.parse(localStorage.getItem("pellagos.settings")).quality };
-    });
-
-    expect(chosen).toEqual({ quality: "low", chosen: "low", scale: 1, ratio: 1, step: 0, saved: "low" });
-    await expect(page.locator("#adapted")).toBeHidden();
-
-    // (Adaptive off: remembered, and the game left at the quality chosen)
-    await page.locator("label:has(#adaptiveswitch)").click();
-    await expect(page.locator("#adaptiveswitch")).not.toBeChecked();
-    expect(await page.evaluate(() => [window.pellagos.session.view.adaptive, JSON.parse(localStorage.getItem("pellagos.settings")).adaptive])).toEqual([false, false]);
 });
 
 test("makes a character: a random look, a weapon and a name, then plays them in the town square", async ({ page }) => {
@@ -2111,187 +2117,193 @@ test("the adventurers' guild: the receptionist stamps notices behind her counter
     expect(guild.place).toBe("guild");
 });
 
-test("the town's guards stand at its ways out under its people's banner, and talk of the town and the war; a people at war with the player's attacks them", async ({ page }) => {
-    await playing(page, "/?play&seed=2");
+// (How often each is posed goes by how tall they look on the screen, in its pixels: at the
+// screen's own, as the game's drawn, not the half the others are drawn at: playwright.config.js)
+test.describe("drawn at the screen's own pixels", () => {
+    test.use({ deviceScaleFactor: 1 });
 
-    // Out as soon as the game's played: guards at the roads out, a patrol going round, a banner by
-    // each road (drawn over a few seconds, a step at a time)
-    await page.evaluate(() => {
-        const { game } = window.pellagos;
+    test("the town's guards stand at its ways out under its people's banner, and talk of the town and the war; a people at war with the player's attacks them", async ({ page }) => {
+        await playing(page, "/?play&seed=2");
 
-        game.stop();
-        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
-        game.advance(0.1, { render: false });
-    });
-    expect(await playUntil(page, () => {
-        const { game } = window.pellagos;
+        // Out as soon as the game's played: guards at the roads out, a patrol going round, a banner by
+        // each road (drawn over a few seconds, a step at a time)
+        await page.evaluate(() => {
+            const { game } = window.pellagos;
 
-        return !game.enlistees.size && !game.enlisting.length;
-    })).toBe(true);
-
-    const out = await page.evaluate(() => {
-        const { game } = window.pellagos;
-        const soldiers = game.battle.actors.filter(({ kind }) => kind === "soldier");
-
-        return {
-            soldiers: soldiers.map(({ id, team, name, weapon }) => ({ id, team, name, weapon, drawn: game.avatars.has(id) })),
-            banners: game.banners.group.children.length,
-            town: game.host.war.town(game.world.start.id).name,
-        };
-    });
-
-    expect(out.soldiers.length).toBeGreaterThanOrEqual(5);
-    expect(out.soldiers.every(({ team, drawn }) => team === "human" && drawn)).toBe(true);
-    expect(out.soldiers.map(({ name }) => name)).toContain("Human guard");
-    expect(out.soldiers.map(({ name }) => name)).toContain("Human patrol");
-    expect(out.banners).toBeGreaterThanOrEqual(1);
-
-    // Tapping a guard: the player walks up to talk to them, and they tell of their town
-    const guard = out.soldiers.find(({ id }) => id.endsWith("/guard-0"));
-    const tapped = await page.evaluate((id) => {
-        const { game, session } = window.pellagos;
-        const soldier = game.battle.actor(id);
-        const player = game.battle.actor("player");
-
-        // (A few steps out in front of them: they face out of the town)
-        const [x, y] = [soldier.square[0] + Math.round(Math.sin(soldier.post) * 4), soldier.square[1] + Math.round(Math.cos(soldier.post) * 4)];
-
-        Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [], order: null });
-        game.avatars.get("player").place(x + 0.5, y + 0.5, player.facing);
-        game.previous.set("player", { x: player.x, y: player.y });
-        game.advance(0.5);
-
-        const spot = session.view.toScreen(game.avatars.get(id).point(0.6));
-
-        game.tap(spot.x, spot.y, { time: performance.now() + 9000 });
-
-        const order = player.order?.type ?? null;
-
-        game.advance(6);
-
-        return { order, talking: soldier.talkingTo };
-    }, guard.id);
-
-    expect(tapped).toEqual({ order: "approach", talking: "player" });
-
-    // Posed as often as each is seen (Avatar.every): the player, and the guard they're talking to,
-    // near (the camera in close), every frame; those out of view seldom; and so some less often
-    // than every frame
-    const posing = await page.evaluate(async (id) => {
-        const { game, session } = window.pellagos;
-        const { POSING } = await import("/js/world/avatar.js");
-
-        session.view.zoom(0.1);
-        game.advance(0.25);
-
-        const shown = game.battle.actors.filter((one) => one.kind === "soldier" && game.avatars.get(one.id)?.object.visible).map((one) => game.avatars.get(one.id));
-        const unseen = shown.filter(({ object, character }) => session.view.heightOnScreen(object.position, character.height) === 0);
-
-        game.advance(1 / 60, { render: false });
-
-        return { player: game.avatars.get("player").every, guard: game.avatars.get(id).every, unseen: unseen.map(({ every }) => every), seldom: POSING.unseen, fewer: shown.filter(({ every }) => every > 1).length };
-    }, guard.id);
-
-    expect(posing.player).toBe(1);
-    expect(posing.guard).toBe(1);
-    expect(posing.fewer).toBeGreaterThan(0);
-    expect(posing.unseen.every((every) => every === posing.seldom)).toBe(true);
-
-    const talk = page.locator(".talk");
-
-    await expect(talk).toBeVisible();
-    await expect(talk.locator(".talk-name")).toHaveText("Human guard");
-    await expect(talk.locator(".talk-title")).toHaveText(`Of the guard of ${out.town}`);
-    await talk.getByRole("button", { name: /Who holds this place/ }).click();
-    await expect(talk.locator(".talk-line")).toContainText(`${out.town} is ours: the Humans hold it`);
-    await talk.getByRole("button", { name: /How goes the war/ }).click();
-    await expect(talk.locator(".talk-line")).toContainText(/an uneasy peace/i);
-    await page.evaluate(() => window.pellagos.game.start());
-    await page.keyboard.press("Escape");
-    await expect(talk).toBeHidden();
-
-    // At midnight the guards with a hand free carry lit torches in place of their shields
-    // (world/carried.js), and everyone sees less far out of the light (core/light.js); by day the
-    // torches are put away
-    const night = await page.evaluate(() => {
-        const { game } = window.pellagos;
-        const war = game.host.war;
-        const [turn, clock] = [war.turn, war.clock];
-        const torches = () => game.battle.actors.filter(({ id, kind }) => kind === "soldier" && game.avatars.get(id)?.character.torch).length;
-
-        game.stop();
-        Object.assign(war, { turn: 41, clock: 30000 });
-        game.advance(0.05, { render: false });
-
-        const dark = { torches: torches(), lights: game.carried.lights().length, sky: game.battle.light?.sky ?? 1 };
-
-        // (The Light spell, learnt and cast: its globe over the player's shoulder, lighting the
-        // dark round them for the rules too)
-        game.host.players.get(game.me).progress.learn("light");
-
-        const cast = game.act("light", "self");
-
-        for (let k = 0; k < 12; k++) {
+            game.stop();
+            Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
             game.advance(0.1, { render: false });
-        }
+        });
+        expect(await playUntil(page, () => {
+            const { game } = window.pellagos;
 
-        const me = game.battle.actor(game.me);
+            return !game.enlistees.size && !game.enlisting.length;
+        })).toBe(true);
 
-        Object.assign(dark, { cast: cast.ok, globes: game.globes.lights().length, globe: game.battle.light.lit.some(([x, y, reach2]) => Math.abs(x - me.x) < 1 && Math.abs(y - me.y) < 1 && reach2 === 144) });
+        const out = await page.evaluate(() => {
+            const { game } = window.pellagos;
+            const soldiers = game.battle.actors.filter(({ kind }) => kind === "soldier");
 
-        Object.assign(war, { turn, clock });
-        game.advance(0.05, { render: false });
+            return {
+                soldiers: soldiers.map(({ id, team, name, weapon }) => ({ id, team, name, weapon, drawn: game.avatars.has(id) })),
+                banners: game.banners.group.children.length,
+                town: game.host.war.town(game.world.start.id).name,
+            };
+        });
 
-        return { dark, day: { torches: torches(), lights: game.carried.lights().length, light: game.battle.light } };
-    });
+        expect(out.soldiers.length).toBeGreaterThanOrEqual(5);
+        expect(out.soldiers.every(({ team, drawn }) => team === "human" && drawn)).toBe(true);
+        expect(out.soldiers.map(({ name }) => name)).toContain("Human guard");
+        expect(out.soldiers.map(({ name }) => name)).toContain("Human patrol");
+        expect(out.banners).toBeGreaterThanOrEqual(1);
 
-    expect(night.dark.torches).toBeGreaterThan(0);
-    expect(night.dark.lights).toBeGreaterThan(0);
-    expect(night.dark.sky).toBeLessThan(1);
-    expect([night.dark.cast, night.dark.globes, night.dark.globe]).toEqual([true, 1, true]);
-    expect(night.day).toEqual({ torches: 0, lights: 0, light: null });
+        // Tapping a guard: the player walks up to talk to them, and they tell of their town
+        const guard = out.soldiers.find(({ id }) => id.endsWith("/guard-0"));
+        const tapped = await page.evaluate((id) => {
+            const { game, session } = window.pellagos;
+            const soldier = game.battle.actor(id);
+            const player = game.battle.actor("player");
 
-    // Taken by the orcs, at war with the humans: orcish soldiers now, under their banner, and they come for the player
-    const war = await page.evaluate(() => {
-        const { game } = window.pellagos;
-        const { war } = game.host;
+            // (A few steps out in front of them: they face out of the town)
+            const [x, y] = [soldier.square[0] + Math.round(Math.sin(soldier.post) * 4), soldier.square[1] + Math.round(Math.cos(soldier.post) * 4)];
 
-        game.stop();
-        const home = war.town(game.world.start.id);
+            Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [], order: null });
+            game.avatars.get("player").place(x + 0.5, y + 0.5, player.facing);
+            game.previous.set("player", { x: player.x, y: player.y });
+            game.advance(0.5);
 
-        home.owner = "orc";
-        war.known.push("human|orc");
-        war.relations["human|orc"] = { state: "hostile", since: war.turn };
-        game.host.lookAt = 0;
+            const spot = session.view.toScreen(game.avatars.get(id).point(0.6));
 
-        const player = game.battle.actor("player");
-        let [after, hurt] = [false, false];
+            game.tap(spot.x, spot.y, { time: performance.now() + 9000 });
 
-        for (let k = 0; k < 60 && !hurt; k++) {
-            game.advance(0.1, { render: false });
+            const order = player.order?.type ?? null;
+
+            game.advance(6);
+
+            return { order, talking: soldier.talkingTo };
+        }, guard.id);
+
+        expect(tapped).toEqual({ order: "approach", talking: "player" });
+
+        // Posed as often as each is seen (Avatar.every): the player, and the guard they're talking to,
+        // near (the camera in close), every frame; those out of view seldom; and so some less often
+        // than every frame
+        const posing = await page.evaluate(async (id) => {
+            const { game, session } = window.pellagos;
+            const { POSING } = await import("/js/world/avatar.js");
+
+            session.view.zoom(0.1);
+            game.advance(0.25);
+
+            const shown = game.battle.actors.filter((one) => one.kind === "soldier" && game.avatars.get(one.id)?.object.visible).map((one) => game.avatars.get(one.id));
+            const unseen = shown.filter(({ object, character }) => session.view.heightOnScreen(object.position, character.height) === 0);
+
+            game.advance(1 / 60, { render: false });
+
+            return { player: game.avatars.get("player").every, guard: game.avatars.get(id).every, unseen: unseen.map(({ every }) => every), seldom: POSING.unseen, fewer: shown.filter(({ every }) => every > 1).length };
+        }, guard.id);
+
+        expect(posing.player).toBe(1);
+        expect(posing.guard).toBe(1);
+        expect(posing.fewer).toBeGreaterThan(0);
+        expect(posing.unseen.every((every) => every === posing.seldom)).toBe(true);
+
+        const talk = page.locator(".talk");
+
+        await expect(talk).toBeVisible();
+        await expect(talk.locator(".talk-name")).toHaveText("Human guard");
+        await expect(talk.locator(".talk-title")).toHaveText(`Of the guard of ${out.town}`);
+        await talk.getByRole("button", { name: /Who holds this place/ }).click();
+        await expect(talk.locator(".talk-line")).toContainText(`${out.town} is ours: the Humans hold it`);
+        await talk.getByRole("button", { name: /How goes the war/ }).click();
+        await expect(talk.locator(".talk-line")).toContainText(/an uneasy peace/i);
+        await page.evaluate(() => window.pellagos.game.start());
+        await page.keyboard.press("Escape");
+        await expect(talk).toBeHidden();
+
+        // At midnight the guards with a hand free carry lit torches in place of their shields
+        // (world/carried.js), and everyone sees less far out of the light (core/light.js); by day the
+        // torches are put away
+        const night = await page.evaluate(() => {
+            const { game } = window.pellagos;
+            const war = game.host.war;
+            const [turn, clock] = [war.turn, war.clock];
+            const torches = () => game.battle.actors.filter(({ id, kind }) => kind === "soldier" && game.avatars.get(id)?.character.torch).length;
+
+            game.stop();
+            Object.assign(war, { turn: 41, clock: 30000 });
+            game.advance(0.05, { render: false });
+
+            const dark = { torches: torches(), lights: game.carried.lights().length, sky: game.battle.light?.sky ?? 1 };
+
+            // (The Light spell, learnt and cast: its globe over the player's shoulder, lighting the
+            // dark round them for the rules too)
+            game.host.players.get(game.me).progress.learn("light");
+
+            const cast = game.act("light", "self");
+
+            for (let k = 0; k < 12; k++) {
+                game.advance(0.1, { render: false });
+            }
+
+            const me = game.battle.actor(game.me);
+
+            Object.assign(dark, { cast: cast.ok, globes: game.globes.lights().length, globe: game.battle.light.lit.some(([x, y, reach2]) => Math.abs(x - me.x) < 1 && Math.abs(y - me.y) < 1 && reach2 === 144) });
+
+            Object.assign(war, { turn, clock });
+            game.advance(0.05, { render: false });
+
+            return { dark, day: { torches: torches(), lights: game.carried.lights().length, light: game.battle.light } };
+        });
+
+        expect(night.dark.torches).toBeGreaterThan(0);
+        expect(night.dark.lights).toBeGreaterThan(0);
+        expect(night.dark.sky).toBeLessThan(1);
+        expect([night.dark.cast, night.dark.globes, night.dark.globe]).toEqual([true, 1, true]);
+        expect(night.day).toEqual({ torches: 0, lights: 0, light: null });
+
+        // Taken by the orcs, at war with the humans: orcish soldiers now, under their banner, and they come for the player
+        const war = await page.evaluate(() => {
+            const { game } = window.pellagos;
+            const { war } = game.host;
+
+            game.stop();
+            const home = war.town(game.world.start.id);
+
+            home.owner = "orc";
+            war.known.push("human|orc");
+            war.relations["human|orc"] = { state: "hostile", since: war.turn };
+            game.host.lookAt = 0;
+
+            const player = game.battle.actor("player");
+            let [after, hurt] = [false, false];
+
+            for (let k = 0; k < 60 && !hurt; k++) {
+                game.advance(0.1, { render: false });
+
+                const soldiers = game.battle.actors.filter(({ kind }) => kind === "soldier");
+
+                after ||= soldiers.some(({ target }) => target === "player");
+                hurt ||= player.hp < player.maxHp || player.dead;
+            }
 
             const soldiers = game.battle.actors.filter(({ kind }) => kind === "soldier");
 
-            after ||= soldiers.some(({ target }) => target === "player");
-            hurt ||= player.hp < player.maxHp || player.dead;
-        }
+            return { teams: [...new Set(soldiers.map(({ team }) => team))], banner: game.banners.towns.get(home.id)?.people, after, hurt };
+        });
 
-        const soldiers = game.battle.actors.filter(({ kind }) => kind === "soldier");
+        expect(war.teams).toEqual(["orc"]);
+        expect(war.banner).toBe("orc");
+        expect(war.after).toBe(true);
+        expect(war.hurt).toBe(true);
 
-        return { teams: [...new Set(soldiers.map(({ team }) => team))], banner: game.banners.towns.get(home.id)?.people, after, hurt };
+        // (Bars over them, the player's enemies, once they're drawn: over a few seconds, a step at a time)
+        expect(await playUntil(page, () => {
+            const { game } = window.pellagos;
+
+            return game.battle.actors.some(({ id, kind }) => kind === "soldier" && game.hud.tracked.has(id));
+        })).toBe(true);
     });
-
-    expect(war.teams).toEqual(["orc"]);
-    expect(war.banner).toBe("orc");
-    expect(war.after).toBe(true);
-    expect(war.hurt).toBe(true);
-
-    // (Bars over them, the player's enemies, once they're drawn: over a few seconds, a step at a time)
-    expect(await playUntil(page, () => {
-        const { game } = window.pellagos;
-
-        return game.battle.actors.some(({ id, kind }) => kind === "soldier" && game.hud.tracked.has(id));
-    })).toBe(true);
 });
 
 test("an enemy camp near the player is pitched, tents, fire, banner and sentries; its raiders come for the town's fields, and the player's told", async ({ page }) => {
@@ -2942,41 +2954,55 @@ test("the pack shows what's grown and carried; a skill ranks up with use; tradin
 test("what lingers after a creature's blow shows on the player's plate, and its cure from the guild ends it", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
-    // Poisoned (as an adder's bite leaves them), a cure in their pack
+    // Poisoned (as an adder's bite leaves them), a cure in their pack. The world stopped and
+    // played on by hand: drawn without a GPU a frame can take a second or more, and the game's
+    // time goes on no more than a tenth of a second a frame, so waiting on it as it's drawn is
+    // waiting on how slow the machine is
     await page.evaluate(() => {
         const { game } = window.pellagos;
 
+        game.stop();
         game.host.players.get(game.me).progress.stow({ id: "antidote" }, 1);
         game.battle.afflict(game.me, "poison", { by: null });
+        game.advance(0.1, { render: false });
     });
 
     const icon = page.locator('#playerplate .ail[aria-label="Poisoned"]');
+    const banner = page.locator("#banner");
 
     await expect(icon).toBeVisible();
-    await expect(page.locator("#banner")).toContainText("You're poisoned! (Cure poison draught: the adventurers' guild sells them.)");
+    await expect(banner).toContainText("You're poisoned! (Cure poison draught: the adventurers' guild sells them.)");
 
     // (Hurting now and then: less health)
-    await expect.poll(() => page.evaluate(() => window.pellagos.game.battle.actor(window.pellagos.game.me).hp), { timeout: 20000 }).toBeLessThan(50);
+    expect(await playUntil(page, () => window.pellagos.game.battle.actor(window.pellagos.game.me).hp < 50)).toBe(true);
 
-    // The cure drunk from the pack: gone at once
-    await page.keyboard.press("i");
-
+    // The cure drunk from the pack (opened while the game's listening, the world stopped again
+    // while it's used): gone at once
     const pack = page.locator(".pack");
+    const open = async () => {
+        await page.evaluate(() => window.pellagos.game.start());
+        await page.keyboard.press("i");
+        await expect(pack).toBeVisible();
+        await page.evaluate(() => window.pellagos.game.stop());
+    };
 
+    await open();
     await pack.locator('.carried .pack-cell[data-item="antidote"]').click();
     await expect(pack.locator(".pack-about")).toContainText("Cures what's poisoned at once.");
     await pack.locator(".pack-about").getByRole("button", { name: /^Drink/ }).click();
+    expect(await playUntil(page, () => document.querySelector("#banner")?.textContent.includes("No longer poisoned."), { seconds: 2 })).toBe(true);
     await expect(icon).toHaveCount(0);
-    await expect(page.locator("#banner")).toContainText("No longer poisoned.");
     expect(await page.evaluate(() => window.pellagos.game.battle.actor(window.pellagos.game.me).afflictions)).toEqual([]);
 
     // (With nothing to cure, a cure's kept)
     await page.evaluate(() => window.pellagos.game.host.players.get(window.pellagos.game.me).progress.stow({ id: "antidote" }, 1));
+    await page.evaluate(() => window.pellagos.game.start());
     await page.keyboard.press("i");
-    await page.keyboard.press("i");
+    await expect(pack).toBeHidden();
+    await open();
     await pack.locator('.carried .pack-cell[data-item="antidote"]').click();
     await pack.locator(".pack-about").getByRole("button", { name: /^Drink/ }).click();
-    await expect(page.locator("#banner")).toContainText("There's nothing for that to cure.");
+    expect(await playUntil(page, () => document.querySelector("#banner")?.textContent.includes("There's nothing for that to cure."), { seconds: 2 })).toBe(true);
     expect(await page.evaluate(() => window.pellagos.game.progress.count("antidote"))).toBe(1);
 });
 

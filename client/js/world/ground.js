@@ -125,7 +125,8 @@ export const FIELDS_CLEAR = { value: new THREE.Vector3(0, 0, 0) };
  * band where `hedges`), from `fieldSeed` (the world's seed) and the farmland (whether each of the
  * plan's cells is: a block's farmed if its middle's cell is), read by the shader it's in through
  * `ivec2 farmSize()` (how many cells across and down) and `float farmAt(ivec2 cell)` (over 0.5 for
- * farmland); none on the ground a citadel keeps clear (`vec3 fieldsClear`: FIELDS_CLEAR).
+ * farmland); none on the ground a citadel keeps clear (its own uniform, `vec3 fieldsClear`:
+ * FIELDS_CLEAR; none where it's not set, as a shader that only works out the fields leaves it).
  */
 export const FIELDS_GLSL = (() => {
     const odds = [];
@@ -136,7 +137,8 @@ export const FIELDS_GLSL = (() => {
         odds.push(`if (odds < ${total}) return ${crop};`);
     }
 
-    return `uint fieldHash(int a, int b, int c) {
+    return `uniform vec3 fieldsClear;
+uint fieldHash(int a, int b, int c) {
     uint h = uint(a) * 374761393u + uint(b) * 668265263u + uint(c) * 1274126177u;
     h = (h ^ (h >> 13u)) * 1274126177u;
     h = (h ^ (h >> 16u)) * 2246822519u;
@@ -963,7 +965,6 @@ uniform vec2 grassUnderFocus;
 uniform float grassUnderReach;
 uniform int fieldSeed;
 uniform float farFieldsOn;
-uniform vec3 fieldsClear;
 #ifdef FAR_LAND
 varying float vFarWater;
 varying vec3 vFarColour;
