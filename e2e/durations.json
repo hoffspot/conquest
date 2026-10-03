@@ -58,5 +58,6 @@
     "war.spec.js › lays out the war for a seed: each realm, its ruler and how they stand, the towns drawn in their holders' colours": 1.5,
     "war.spec.js › plays the war on: forces march and camp, the news tells of it, and the players' might brings on the next age": 3,
     "world-map.spec.js › lays out another world from another seed, and zooms in and out": 2.4,
-    "world-map.spec.js › lays out the world for a seed and draws it, with where a player of each people starts": 1.3
+    "world-map.spec.js › lays out the world for a seed and draws it, with where a player of each people starts": 1.3,
+    "pellagos.spec.js › by the start town the road crosses the river on a stone bridge: drawn of stone over its arches, walked over on its cobbles, up its ramp and down the other": 37
 }

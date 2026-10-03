@@ -171,7 +171,7 @@ describe("the world outside (overworld.js)", () => {
             if (chunk.bridge[k]) {
                 bridges += chunk.water[k] === WET.river ? 1 : 0;
                 assert.equal(chunk.blocked[k], 0, "bridges can be walked over");
-                assert.equal(chunk.ground[k], GROUND.planks);
+                assert.ok([GROUND.planks, GROUND.cobbles].includes(chunk.ground[k]), "planks, or a stone bridge's cobbles");
             } else if (chunk.water[k]) {
                 assert.equal(chunk.blocked[k], 1, "water can't be walked into");
                 assert.equal(chunk.opaque[k], 0, "but can be seen over");

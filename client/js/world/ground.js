@@ -1269,13 +1269,20 @@ export function chunkGround(overworld, chunk, land, step = 1) {
 function bedOf(overworld, x, y) {
     const kind = overworld.squares.ground(x, y);
 
-    if (kind !== GROUND.soil) {
+    if (kind !== GROUND.soil && kind !== GROUND.cobbles) {
         return kind;
     }
 
     const chunk = overworld.chunkAt(x, y);
+    const k = (y - chunk.y0) * CHUNK + (x - chunk.x0);
 
-    return chunk.water[(y - chunk.y0) * CHUNK + (x - chunk.x0)] ? GROUND.courtyard : kind;
+    // (Under a stone bridge's cobbles, the land as it is under a timber one's planks: they're its
+    // deck's, not the ground's)
+    if (kind === GROUND.cobbles) {
+        return chunk.bridge[k] ? GROUND.planks : kind;
+    }
+
+    return chunk.water[k] ? GROUND.courtyard : kind;
 }
 
 // How far each chunk's ground hangs down round its edges (metres): where it meets a chunk drawn
