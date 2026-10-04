@@ -2870,7 +2870,7 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 #hud .hint {
     position: absolute;
     left: 50%;
-    /* Above the player's plate in the corner, clear of it however narrow the screen */
+    /* Above the player's card in the corner, clear of it however narrow the screen */
     bottom: calc(var(--safe-bottom) + 12px + 80px);
     transition: bottom 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
     transform: translateX(-50%);
@@ -2889,6 +2889,29 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 
 #hud.quick-up .hint {
     bottom: calc(var(--safe-bottom) + 12px + 80px + var(--quick-height) + 10px);
+}
+
+/* What only a keyboard and mouse can do — the keys, the wheel — isn't said on a touch screen,
+   where there's none of it to use and the room is wanted for what is */
+@media (pointer: coarse) {
+    .keys-only {
+        display: none;
+    }
+}
+
+/* With the thumb stick in the corner it has to clear that instead, which stands taller than the
+   card; and with the zoom buttons gone there's the width of them to spare on both sides, so it
+   wraps onto fewer lines */
+body[data-stick="on"] #hud .hint {
+    bottom: calc(var(--safe-bottom) + 16px + var(--stick-size) + 10px);
+}
+
+body[data-stick="on"] #hud.quick-up .hint {
+    bottom: calc(var(--safe-bottom) + 16px + var(--stick-size) + 10px + var(--quick-height) + 10px);
+}
+
+body[data-zoom="off"] #hud .hint {
+    max-width: calc(100% - 2 * (var(--safe-right) + 12px));
 }
 
 @keyframes fade {
