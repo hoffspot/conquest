@@ -32,6 +32,11 @@ livery side by side, is at <https://hoffspot.github.io/conquest/uniform-lab.html
 The fire lab, showing every kind of fire (torches, a brazier, a camp fire, candles) lighting what's
 round it at night and the seven fire spells cast again and again, is at
 <https://hoffspot.github.io/conquest/fire-lab.html>.
+The motion check's contact sheet, drawing each place a motion goes wrong on some people's body (a
+joint past its range, something in the body, a foot sliding or in the ground, a hand off its haft)
+as it happened, is at <https://hoffspot.github.io/conquest/motion-sheet.html>. Choose a report
+there (a CI run's `motion-report`), or run `npm run check:motion` and `npm start` to see your own
+(contribution.md, *The motion check*).
 
 The war between the six peoples, played out on a world's map turn by turn (who holds which town,
 the forces out, the rulers and how they stand with each other, and the news), is at

@@ -5,3 +5,4 @@ e2e-share.txt
 .DS_Store
 *.log
 .cache/
+client/motion-report.json

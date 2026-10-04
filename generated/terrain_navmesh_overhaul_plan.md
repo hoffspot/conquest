@@ -4127,3 +4127,39 @@ converted data is to be measured in M8 against today's hm08 data.
     (the sun temple's door hidden by its obelisk from straight on, plain from the side); the sun
     temple's nave held by outlaws, the ziggurat's its people's.
   - **Next:** M8, Vitruvian characters.
+
+- **2026-10-04, M8a built: the motion check** (§10.1, "the checks come first"; docs/CHARACTERS.md
+  *The motion check*; contribution.md *The motion check*).
+  - **What:** `client/js/characters/motioncheck.js` (DOM-free) plays 245 motions on 30 bodies
+    (each people's at the five ends of their builds), with what each holds and wears, and
+    measures joints past their ranges, things and limbs in the body, feet sliding and in the
+    ground, and second hands off their hafts. `scripts/motion-check.js` (`npm run
+    check:motion`) runs them across the machine's threads in about 5 minutes (4 threads) and
+    writes a report; the same run twice comes out the same to the last digit.
+  - **Not as §10.1 first had it:** the body's own skin, skinned as drawn, is measured, not bone
+    capsules (closer to what's seen, and what the clipping test already did). The clipping test
+    now dresses and measures through the check's code.
+  - **Limits, set from the contact sheet:** joints 3°, things 1.2 cm (the clipping test's),
+    limbs 3 cm, sliding 1 cm, feet in the ground 0.5 cm, hands off hafts 3.5 cm. At 2° and 2 cm,
+    first tried, invisible things were counted (a short body's knee 2° past straight; forearms
+    resting on the chest).
+  - **The baseline** (`test/motion-baseline.json`): 4,782 of 7,242 pairs fail something (limbs
+    2,682, sliding 2,440, joints 1,101, ground 559, things 325, hafts 262). All are real when
+    drawn: forearms through bulky bellies, heels skating as the weight shifts, shoulders far past
+    their range reaching for a weapon on the back, seated feet through the floor on the tallest
+    bodies, feet through the ground in falls. These are M8's work list; CI's `motion` job fails
+    on anything worse.
+  - **The contact sheet** (`client/motion-sheet.html`): each failure drawn at its worst moment,
+    the spot ringed, worst first, filtered by measure, group, people or what's new; close up.
+  - **Along the way:** `Actions.haft` records where a two-handed weapon's second hand is meant to
+    be and where it got to (for the grip measure); the folk's acts' timings moved to
+    core/roles.js `ACT_TIMES`, shared by the game and the check.
+  - **Pipeline:** the `motion` CI job (10 jobs a run), `npm run check:motion`, contribution.md's
+    section on it, and its table of the repository's settings, which every CI job must be among
+    the required checks of (`test/contribution.test.js`).
+  - **Tests:** test/motioncheck.test.js (everything played; each kind of fault caught when put
+    there on purpose, none on a clean guard; the same every time; worse and better than the
+    baseline told apart; the baseline's pairs real); test/contribution.test.js (the settings
+    table's required checks).
+  - **Next:** M8b, the clips: Mesh2Motion's (the main source, §10.3) baked onto today's rig
+    (§10.2's steps 3 to 6), each checked with the motion check before it's used.

@@ -32,6 +32,16 @@ describe("contribution.md kept up to date with the pipeline (the standing rule)"
         assert.match(guide, new RegExp(`\\b${shards} \`e2e\``), `${shards} browser test jobs`);
     });
 
+    it("has every CI job among the required checks in the settings table, each browser test job by its name", () => {
+        const jobs = [...ci.slice(ci.indexOf("\njobs:")).matchAll(/^ {2}([\w-]+):/gm)].map(([, name]) => name);
+        const shards = ci.match(/shard: \[([\d, ]+)\]/)[1].split(",").length;
+        const required = guide.match(/\| Require status checks to pass \|[^\n]*/)?.[0] ?? "";
+
+        assert.match(guide, /### The repository's settings/);
+        assert.deepEqual(jobs.filter((name) => name !== "e2e" && !required.includes(`\`${name}\``)), [], "required checks");
+        assert.ok(required.includes(`\`e2e (1 of ${shards})\` to \`e2e (${shards} of ${shards})\``), `the ${shards} browser test jobs required by name`);
+    });
+
     it("has the Node version the game needs and CI uses", () => {
         const needs = pkg.engines.node.match(/>=\s*(\d+)/)[1];
         const uses = [...new Set([...read(".github/workflows/ci.yml").matchAll(/node-version: (\d+)/g), ...read(".github/workflows/pages.yml").matchAll(/node-version: (\d+)/g)].map(([, version]) => version))];
