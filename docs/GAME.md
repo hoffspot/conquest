@@ -2702,8 +2702,21 @@ metres off (back as many as ever the next time, unless it's been cleared).
     into by its door into a great hall as a keep's, in their marble and green, its lord or lady
     on the throne ("Lady of Caeliavyn Tree Hall"). Held by outlaws, as an abbey or a manor is.
     The other peoples' own places stay open to the sky (the pits, the hatchery, the spider shrine,
-    the spire, the shadow gate) or have no way in at their foot (the sun temple's behind its
-    altar, the ziggurat's at its top), their bands outside.
+    the spire, the shadow gate), their bands outside.
+  - **The sun temple and the ziggurat** (M7.5d; `insides.js` `STRUCTURE_DOORS`, `SITE_PATRONS`):
+    the cat folk's sun temple is gone into by the door in its middle tower's foot, up on its
+    platform behind the obelisk and the altar, 2.5 m off the ground: from the foot of its broad
+    stair, as a castle's raised keep door is (`sites.js` `raisedEntry`, `entranceAt`; the way
+    kept clear round the stair's foot, the platform not on the walking mesh). The lizard folk's
+    ziggurat has a new red portal at its foot, east of its great stair, under a band of glyphs
+    and a lime-stone cornice, a step up from the ground (lizard-places.js `ziggurat`; the
+    ziggurats in their towns have it too). Within, each is a temple as an abbey's, its nave
+    under its own god: the sun temple Aurelia's (the Dawnmother), the ziggurat Ithriel's (the
+    Veiled Star), their statues behind the altar and the other five's shrines down the aisles;
+    its people's, a priest, an acolyte and worshippers, and the herbalist's counter selling
+    draughts and cures, holy jewels and books of prayer (as an abbey's, M7.5c-2; their talk no
+    longer naming the abbey, so it's theirs too). Held by outlaws, the chief before
+    the altar, the chest beside it, guards up the aisle and the rest outside.
   - **The peoples' castles walked into** (M7.5b-3; `setpieces/castles.js`): the elves', the
     orcs', the cat folk's and the dark elves' castles are no longer solid all through. What of each is solid is
     laid out as its kit builds it (the elves' seven towers and the walls between them, the

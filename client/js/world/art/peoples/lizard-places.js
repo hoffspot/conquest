@@ -522,6 +522,21 @@ function ziggurat(piece) {
 
     shrine(solid, [cx - top.half * 0.8, cz - top.deep * 0.8, cx + top.half * 0.8, cz + top.deep * 0.6], top.y, { height: m(3), comb: m(4.5) });
 
+    // Its door into the sanctum in its heart: a portal at the foot of its front beside the great
+    // stair, as their temples' are (painted jambs, a carved lintel, a lime cornice; the way in:
+    // core/insides.js STRUCTURE_DOORS)
+    const face = cz + base / 2 + m(0.4);
+    const px = cx + m(5.2);
+    const portal = [[px - m(1.6), face - m(1.4)], [px + m(1.6), face - m(1.4)], [px + m(1.6), face], [px - m(1.6), face]];
+
+    solid.extrude(inset(portal, -m(0.1)), 0, m(0.3), material("stone-lime"));
+
+    const faces = solid.walls(portal, m(0.3), m(3.1), { 2: [{ u0: m(0.8), u1: m(2.4), v0: 0, v1: m(2.6), depth: m(0.4), back: material("planks-dark") }] }, material("plaster-red"));
+    const at = wallPoint(faces[2]);
+
+    solid.facing([at(0, m(2.75), m(0.05)), at(m(3.2), m(2.75), m(0.05)), at(m(3.2), m(3.1), m(0.05)), at(0, m(3.1), m(0.05))], [0, 0, 1], material("glyphs"));
+    solid.extrude(inset(portal, -m(0.3)), m(3.4), m(3.7), material("stone-lime"));
+
     // The lesser pyramid, and the raised walk joining them
     const small = base * 0.45;
     const [sx, sz] = [W - small / 2 - m(2), cz];

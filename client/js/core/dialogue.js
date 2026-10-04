@@ -494,14 +494,14 @@ export const TREES = Object.freeze({
             },
         },
     },
-    // An abbey's herbalist, a brother or sister of its order: gentle, practical, fond of their
-    // garden
+    // An abbey's herbalist (or a sun temple's or a ziggurat's), a brother or sister of its order:
+    // gentle, practical, fond of their garden
     herbalist: {
         start: "greet",
         nodes: {
             greet: {
                 say: [
-                    { if: { met: false }, lines: ["Peace be with you. I'm {name}; I keep the abbey's garden and its stillroom. You look as if you could use something from either.", "Welcome to the abbey. {name}, herbalist. The brothers and sisters pray; I brew. Both help, I'm told."] },
+                    { if: { met: false }, lines: ["Peace be with you. I'm {name}; I keep the garden here and the stillroom. You look as if you could use something from either.", "Welcome. {name}, herbalist. The brothers and sisters pray; I brew. Both help, I'm told."] },
                     { lines: ["{player}. Bruised again?", "Back, {player}? The draughts are fresh."] },
                 ],
                 choices: "more",
@@ -509,14 +509,14 @@ export const TREES = Object.freeze({
             more: {
                 say: ["What do you need?", "Anything more?"],
                 choices: [
-                    { say: "What does the abbey sell?", next: null, do: [{ shop: "abbey" }] },
+                    { say: "What do you sell?", next: null, do: [{ shop: "abbey" }] },
                     { say: "What grows in your garden?", next: "garden" },
                     FAREWELL,
                 ],
             },
             garden: {
                 say: [
-                    "Feverfew, comfrey, bitterroot for the marsh fever, and a rose the abbot won't let me cut. The draughts are mostly the comfrey.",
+                    "Feverfew, comfrey, bitterroot for the marsh fever, and a rose the elders won't let me cut. The draughts are mostly the comfrey.",
                     "Whatever the deer leave. And a little nightshade, for the rats, kept well away from the rest.",
                 ],
                 choices: [{ say: "Thank you.", next: "more" }, FAREWELL],

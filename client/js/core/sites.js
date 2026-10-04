@@ -526,7 +526,10 @@ export class Sites {
             const castle = site.kind === "castle" ? castleLayout(site.race, [w * PLOT, h * PLOT]) : null;
             const lot = castle && unturned(x, y, facing, [w, h]);
             const entry = laid?.entry ?? castle?.entry;
-            const entrance = entry ? entranceAt(entry, turn, facing) : door ? { ...entranceOf(building, 0, door), inside: door.inside } : building ? { ...entranceOf(building), building: building.name } : null;
+            // (A door up off the ground, gone into from the foot of its stair, as a castle's raised
+            // keep door: the sun temple's)
+            const raised = door?.foot ? raisedEntry(door, [w * PLOT, h * PLOT]) : null;
+            const entrance = entry || raised ? entranceAt(entry ?? raised, turn, facing) : door ? { ...entranceOf(building, 0, door), inside: door.inside } : building ? { ...entranceOf(building), building: building.name } : null;
             const way = new Set(entrance?.clear.map(([i, j]) => j * size + i));
             const all = laid ? laid.solid.flatMap(([x0, y0, x1, y1]) => inside(footprint({ ...turn((x0 + x1) / 2, (y0 + y1) / 2), w: (x1 - x0) / PLOT, h: (y1 - y0) / PLOT, facing }))) : inside(corners);
             const squares = (castle ? all.filter(([i, j]) => solidAt(castle, lot(i + 0.5, j + 0.5))) : all).filter(([i, j]) => !way.has(j * size + i));
@@ -836,6 +839,13 @@ export function entranceAt({ x, y, width, height, floor = 0, foot = [x, y], insi
     }
 
     return { door: { x: door.x, z: door.y, facing, width, height, floor }, front, outside, clear: [...front, outside, ...clear], facing, inside: within };
+}
+
+// A people's own place's door up off the ground (insides.js STRUCTURE_DOORS, with a `foot`), as a
+// layout's entry for entranceAt: where it and the foot of its stair are on its lot (as it would
+// stand facing south, `size` [width, depth] metres), from its numbers
+function raisedEntry({ depth, offset, width, height, floor, foot, inside }, [w, d]) {
+    return { x: w / 2 + offset, y: d - depth, width, height, floor, foot: [w / 2 + foot.offset, d - foot.depth], inside };
 }
 
 // Where a point of a site laid out facing south ([u, v] metres from its north-west corner) is in

@@ -4097,3 +4097,33 @@ converted data is to be measured in M8 against today's hm08 data.
   - **Pictures** (sent in the session): the creature lab (a ghost's and a wraith's moves), a
     ruins' ghost and wraith in play at dusk and at night, a ghost among the crypt's coffins.
   - **Next:** the sun temple's and the ziggurat's doors; then M8.
+- **2026-10-04, M7.5d built: the sun temple and the ziggurat gone into** (docs/GAME.md *Gone into*).
+  - **Why these two:** the last of the peoples' own places with a building to go into but no way
+    in (M7.5b-2b): the sun temple's door up on its platform behind the obelisk and altar, the
+    ziggurat's only at its top. Each is a temple, so each is an abbey's temple within, under its
+    people's god, with the abbey's herbalist (M7.5c-2) to buy from when it's its people's.
+  - **The sun temple** (core/insides.js `STRUCTURE_DOORS`, a door with a `foot`; core/sites.js
+    `raisedEntry`): its existing door in the middle tower's foot, 19.9 m in from its lot's front
+    and 2.5 m up, gone into from the foot of its broad stair, 0.8 m in, as a castle's raised keep
+    door is (`entranceAt`): only the stair's foot is kept clear, the platform staying solid, and
+    the door's glow lifted to its floor. No art changed.
+  - **The ziggurat** (art/peoples/lizard-places.js `ziggurat`): a new portal at its foot east of
+    the great stair, a lime-stone plinth, red plaster walls 3.1 m high round a dark-plank door
+    2.6 m high, a band of glyphs above it and a cornice; 1.6 m in from the lot's front, 0.3 m up.
+    Drawn on every ziggurat, the ones in their towns too.
+  - **Within** (`SITE_PATRONS`, the interior's `patron`): the sun temple Aurelia's, the ziggurat
+    Ithriel's; the abbey's plan for a place worth finding (`ABBEY`, its herbalist's counter);
+    its folk a priest, an acolyte, worshippers and the herbalist; held by outlaws as an abbey is
+    (`heldWithin`). The herbalist's talk no longer names the abbey (dialogue.js `herbalist`), so
+    it's theirs too; each nave in its people's own materials (interiors3d.js `PALETTES`).
+  - **Versions:** `NET_VERSION` 40.
+  - **Tests:** test/insides.test.js (both gone into as temples under their god, named for the
+    place; the way in clear, the door at its floor, the sun temple's 17 to 21 m in from its
+    front, the ziggurat's at its foot; a priest and a herbalist, everyone got to from the door);
+    test/places.test.js (seed 2's sun temple held by outlaws: the chief by the altar, half the
+    band within, the rest outside; its ziggurat its people's: gone into, the priest's and the
+    herbalist's talk, a masterwork amulet bought from the herbalist).
+  - **Pictures** (sent in the session): each from in front and from the side, before and after
+    (the sun temple's door hidden by its obelisk from straight on, plain from the side); the sun
+    temple's nave held by outlaws, the ziggurat's its people's.
+  - **Next:** M8, Vitruvian characters.
