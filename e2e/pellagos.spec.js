@@ -4207,6 +4207,15 @@ test("in a fight four quick actions rise from the bottom, lifting the name and z
     await page.setViewportSize({ width: 402, height: 874 });
     await playing(page, "/?play&seed=1");
 
+    // (The zoom buttons are off until Game options asks for them, and it's their rising that's
+    // being watched here)
+    await page.evaluate(() => {
+        const switched = document.querySelector("#zoomswitch");
+
+        switched.checked = true;
+        switched.dispatchEvent(new Event("change"));
+    });
+
     const bar = page.locator(".quickbar");
     const slot = (n) => bar.locator(`.quick-slot[data-slot="${n}"]`);
     const box = (selector) => page.locator(selector).boundingBox();
@@ -4626,29 +4635,64 @@ test.describe("on a phone", () => {
         await page.goto("/?play&seed=1");
         await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 90000 });
 
-        for (const button of ["#menubutton", "#zoomin", "#zoomout"]) {
+        // (The zoom buttons and the thumb stick are off until Game options asks for them: below)
+        for (const button of ["#menubutton", "#packbutton", "#journalbutton", "#spellbookbutton"]) {
             const box = await page.locator(button).boundingBox();
 
             expect(box.width).toBeGreaterThanOrEqual(44);
             expect(box.x + box.width).toBeLessThanOrEqual(390);
         }
 
-        // The hint fits across the screen, clear of the zoom buttons
+        // The hint fits across the screen
         const hint = await page.locator("#hint").boundingBox();
-        const zoom = await page.locator("#zoomout").boundingBox();
 
         expect(hint.x).toBeGreaterThanOrEqual(0);
-        expect(hint.x + hint.width).toBeLessThanOrEqual(zoom.x);
+        expect(hint.x + hint.width).toBeLessThanOrEqual(390);
 
-        // The player's name and health in the bottom left corner, beside the zoom buttons and
-        // under the hint, with room above it for the stamina bar
+        // The player's name and health in the bottom right corner, under the hint, with room above
+        // it for the stamina bar
         const plate = await page.locator("#playerplate").boundingBox();
 
-        expect(plate.x).toBeLessThan(30);
+        expect(plate.x + plate.width).toBeGreaterThan(390 - 30);
+        expect(plate.x + plate.width).toBeLessThanOrEqual(390);
         expect(plate.y + plate.height).toBeGreaterThan(844 - 30);
         expect(plate.y + plate.height).toBeLessThanOrEqual(844);
-        expect(plate.x + plate.width).toBeLessThanOrEqual(zoom.x);
         expect(hint.y + hint.height).toBeLessThanOrEqual(plate.y - 20);
+
+        // Asked for, the zoom buttons and the thumb stick are big enough to tap and on the screen
+        // too, and the card rises clear of the zoom buttons rather than sitting under them
+        await page.evaluate(() => {
+            for (const id of ["#zoomswitch", "#stickswitch"]) {
+                const switched = document.querySelector(id);
+
+                switched.checked = true;
+                switched.dispatchEvent(new Event("change"));
+            }
+        });
+
+        for (const control of ["#zoomin", "#zoomout", "#stickzone"]) {
+            const box = await page.locator(control).boundingBox();
+
+            expect(box.width).toBeGreaterThanOrEqual(44);
+            expect(box.x).toBeGreaterThanOrEqual(0);
+            expect(box.x + box.width).toBeLessThanOrEqual(390);
+            expect(box.y + box.height).toBeLessThanOrEqual(844);
+        }
+
+        const zoom = await page.locator("#zoomin").boundingBox();
+        const risen = await page.locator("#playerplate").boundingBox();
+
+        expect(risen.y + risen.height).toBeLessThanOrEqual(zoom.y);
+
+        // (Put back, so the double tap below meets the view and not the stick)
+        await page.evaluate(() => {
+            for (const id of ["#zoomswitch", "#stickswitch"]) {
+                const switched = document.querySelector(id);
+
+                switched.checked = false;
+                switched.dispatchEvent(new Event("change"));
+            }
+        });
 
         // The ground double-tapped: the player runs there
         await doubleTap(page, await spotNorth(page, 4), { touch: true });
