@@ -3899,3 +3899,21 @@ converted data is to be measured in M8 against today's hm08 data.
   - **Pictures** (sent in the session): the dark elves' castle from above before (main) and
     after, its courtyard, the stairs up to the Black Tower, its great hall.
   - **Next:** the lizard folk's temple-fortress; the humans' citadels' wards and keeps.
+- **2026-10-04, M7.5b-3d built: the lizard folk's palace gone into** (docs/GAME.md *Gone into*).
+  - **Which way:** their temple-fortress is a square platform 4 m high in its moat, the summit
+    pyramid, the palace and a great tree on it, a causeway (1.2 m high) up to its stairs from
+    the south: all of its courtyard's up on the platform. Making it walkable would mean raising
+    the land under it (the height function, its meshes, the far land and the walking mesh all
+    taking a square pad 4 m over the castle's mound): too much for what it gives. So, as the
+    dark elves' Black Tower's, the palace (their keep) is gone into from the causeway's end, the
+    rest solid as it was.
+  - **An entry's `foot`** ([u, v] on the lot: where its way in begins, if not at its door; core/
+    sites.js `entranceAt`) takes over from 3c's `reach`, which only went straight out from the
+    door: the palace's door is east of the causeway.
+  - **Art:** the middle of the palace's three openings is its door now, wider, with a door in it
+    (world/art/peoples/lizard-places.js `castle`).
+  - **Tests:** test/castles.test.js: the lizard folk's laid out, solid all through but its way
+    in; its palace gone into in seed 1 from outside the causeway's end.
+  - **Pictures** (sent in the session): the temple-fortress from above, before and after, the
+    player at the causeway's end; the palace's great hall.
+  - **Next:** the humans' citadels' wards and keeps; then M7.5b-4 (crypts under the ruins).

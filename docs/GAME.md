@@ -2684,10 +2684,13 @@ metres off (back as many as ever the next time, unless it's been cleared).
     south side, a step up onto its plinth; the cat folk's their tower house, by the door in the
     middle of its front; the dark elves' the Black Tower on its terrace, up stairs on the
     terrace's south face, between two violet lamps (gone into from the stairs' foot: the walking
-    mesh is the land's, the terrace not on it). Within, the keep's great hall: its lord or lady on the throne ("Lord of
+    mesh is the land's, the terrace not on it); the lizard folk's their palace up on the
+    platform of their temple-fortress, by the middle of the three doors in its south face (gone
+    into from the end of the causeway: the platform, its courtyard and its moat aren't walked).
+    Within, the keep's great hall: its lord or lady on the throne ("Lord of
     Sassmau Castle"), their steward, councillors and sentries, speaking for the realm of the town
-    of their people's nearest it (`insides.js` `townOf`). The humans' castles are hill citadels;
-    the lizard folk's is still solid, to come.
+    of their people's nearest it (`insides.js` `townOf`). The humans' castles are hill citadels,
+    their wards and keeps to come.
 
 **What the player's found** (`core/explored.js` `Explored`): the buildings they've gone into (by
 key: marked the first time they cross into one of its floors) and the chunks of the world they've

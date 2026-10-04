@@ -702,7 +702,11 @@ function castle(piece) {
 
     const palace = [[cx + m(1), cz + m(1)], [cx + half - m(1.5), cz + m(1)], [cx + half - m(1.5), cz + half - m(1.5)], [cx + m(1), cz + half - m(1.5)]];
 
-    solid.walls(palace, platform, m(3.2), { 2: [0.2, 0.5, 0.8].map((t) => ({ u0: (palace[1][0] - palace[0][0]) * t - m(0.5), u1: (palace[1][0] - palace[0][0]) * t + m(0.5), v0: 0, v1: m(2.2), depth: m(0.5), back: material("shadow") })) }, material("plaster-red"));
+    // (Three openings in its south face, the middle one its door, the keep's: core/setpieces/castles.js)
+    const long = palace[1][0] - palace[0][0];
+    const openings = [0.2, 0.8].map((t) => ({ u0: long * t - m(0.5), u1: long * t + m(0.5), v0: 0, v1: m(2.2), depth: m(0.5), back: material("shadow") }));
+
+    solid.walls(palace, platform, m(3.2), { 2: [...openings, { u0: long / 2 - m(0.8), u1: long / 2 + m(0.8), v0: 0, v1: m(2.4), depth: m(0.5), back: material("planks-dark"), sides: material("stone-lime") }] }, material("plaster-red"));
 
     let roof = platform + m(3.2);
 

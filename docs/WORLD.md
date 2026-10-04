@@ -300,7 +300,9 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   towers and buildings), their courtyards open ground walked into through their gates
   (`courtAt`: flagstones, the orcs' trodden earth), their keeps' doors cleared as a neutral
   site's (the elves' back tower, the orcs' longhouse, the cat folk's tower house, the foot of the
-  stairs up to the dark elves' Black Tower: the terrain plan's M7.5b-3).
+  stairs up to the dark elves' Black Tower: the terrain plan's M7.5b-3). The lizard folk's
+  temple-fortress stays solid all through but for the end of its causeway, its palace's door
+  gone into from there.
   - **Where they'd rather lie** (`LIE`): each people's castle, the dark elves' obsidian spire,
     the elves' starwatch, the cat folk's pride rock and the watchtowers stand on the highest
     ground they can within 64 m of their cell's middle (of spots 16 m apart, as high as they

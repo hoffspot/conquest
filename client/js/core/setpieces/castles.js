@@ -174,12 +174,30 @@ function darkElf([W, D]) {
         ground: "cobbles",
         gate: [gx, gz],
         // (The Black Tower's door, up on the terrace: gone into from the stairs' foot)
-        entry: { x: cx, y: door, width: 2, height: 3, floor: 3.6, reach: face + 6 - door, inside: "keep" },
+        entry: { x: cx, y: door, width: 2, height: 3, floor: 3.6, foot: [cx, face + 6], inside: "keep" },
     };
 }
 
-// Each people's whose castle can be walked into, so far
-const LAYOUTS = Object.freeze({ elf, orc, cat, darkElf });
+// The lizard folk's temple-fortress: a square platform 4 m high in its moat, all of it solid
+// (the courtyard's up on the platform, and the walking mesh is the land's: it isn't walked onto),
+// its causeway from the south up to the platform's stairs; on the platform the summit pyramid and
+// the palace (their keep), its door the middle of three in its south face, gone into from the
+// causeway's end
+function lizard([W, D]) {
+    const [cx, cz] = [W / 2, D / 2 - 2];
+    const half = Math.min(W, D) / 2 - 8;
+
+    return {
+        solid: [{ rect: [0, 0, W, D] }],
+        court: [],
+        ground: "courtyard",
+        gate: null,
+        entry: { x: (cx + 1 + cx + half - 1.5) / 2, y: cz + half - 1.5, width: 1.6, height: 2.4, floor: 4, foot: [cx, D], inside: "keep" },
+    };
+}
+
+// Each people's whose castle can be walked into (or its keep gone into), so far
+const LAYOUTS = Object.freeze({ elf, orc, cat, darkElf, lizard });
 
 /**
  * A people's castle laid out on its lot ([W, D] metres): { solid (shapes: `rect` [u0, v0, u1,
@@ -188,9 +206,9 @@ const LAYOUTS = Object.freeze({ elf, orc, cat, darkElf });
  * east towards south, a convex one]), court (shapes: within its walls and its gateway,
  * its courtyard), ground (what its courtyard's ground is: a GROUND kind's name, setpieces/pieces.js:
  * flagstones, or the orcs' trodden earth), gate ([u, v]: the middle of its way in, 3 m clear at
- * the least), entry (its keep's door, as a neutral site's: { x, y, width, height, floor (its sill
- * above the ground), reach (how far out from it its way in begins, if not at it: up a stair),
- * inside }, sites.js entranceAt) }; or null for a people's not
+ * the least; null for one with no courtyard walked into), entry (its keep's door, as a neutral site's: { x, y, width, height, floor (its sill
+ * above the ground), foot ([u, v]: where its way in begins, if not at it: the foot of a stair or
+ * causeway up to it), inside }, sites.js entranceAt) }; or null for a people's not
  * laid out yet (theirs stays solid all through).
  */
 export function castleLayout(race, size) {

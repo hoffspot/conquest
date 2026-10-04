@@ -13,6 +13,10 @@ import { WORLD_SIZE } from "../client/js/core/worldplan/plan.js";
 
 const LAID = ["elf", "orc", "cat", "darkElf"];
 
+// Each people's whose castle's keep is gone into: the lizard folk's too, from the end of its
+// causeway (its courtyard's up on its platform, not walked onto)
+const KEEPS = [...LAID, "lizard"];
+
 // What each people's courtyard's ground is
 const GROUNDS = Object.freeze({ elf: GROUND.courtyard, orc: GROUND.road, cat: GROUND.courtyard, darkElf: GROUND.cobbles });
 
@@ -41,14 +45,19 @@ function walked(layout, [W, D], shut = null) {
 }
 
 describe("the peoples' castles as they stand (setpieces/castles.js)", () => {
-    it("are laid out for the elves, the orcs, the cat folk and the dark elves, the same for the same lot; the others' stay solid all through", () => {
-        for (const race of LAID) {
+    it("are laid out for the elves, the orcs, the cat folk, the dark elves and the lizard folk, the same for the same lot; the lizard folk's solid all through but for the way to its keep", () => {
+        for (const race of KEEPS) {
             const size = PEOPLE_PLACES[race].castle.map((plots) => plots * PLOT);
 
             assert.deepEqual(castleLayout(race, size), castleLayout(race, size), race);
         }
 
-        for (const race of ["human", "lizard"]) {
+        const lizard = castleLayout("lizard", [64, 64]);
+
+        assert.deepEqual([lizard.court, lizard.gate], [[], null]);
+        assert.ok(solidAt(lizard, [32, 32]) && solidAt(lizard, [1, 63]), "its platform and moat");
+
+        for (const race of ["human"]) {
             assert.equal(castleLayout(race, [60, 60]), null, race);
         }
     });
@@ -86,7 +95,7 @@ describe("the peoples' castles as they stand (setpieces/castles.js)", () => {
         }
     });
 
-    it("are set down in the world so, whichever way they're turned: their walls and towers blocked, their courtyards open ground reached from outside their gates; the lizard folk's all blocked", () => {
+    it("are set down in the world so, whichever way they're turned: their walls and towers blocked, their courtyards open ground reached from outside their gates; the lizard folk's none but the way to its keep", () => {
         const found = [];
 
         // (Seed 1's at many turns, the cat folk's at a slant of no eighth; in seed 2 the dark
@@ -105,8 +114,11 @@ describe("the peoples' castles as they stand (setpieces/castles.js)", () => {
                     continue;
                 }
 
+                // (The lizard folk's: none but the way to its keep, where it reaches onto its lot)
                 if (!LAID.includes(site.race)) {
-                    assert.equal(set.courts.size, 0, site.race);
+                    const way = new Set(set.entrance.clear.map(([i, j]) => j * WORLD_SIZE + i));
+
+                    assert.ok([...set.courts].every((k) => way.has(k)), site.race);
                     continue;
                 }
 
@@ -142,7 +154,7 @@ describe("the peoples' castles as they stand (setpieces/castles.js)", () => {
         assert.deepEqual(found.sort(), ["cat 1", "cat 2", "darkElf 1", "elf 1", "elf 2", "orc 1", "orc 2"]);
     });
 
-    it("their keeps are gone into from their courtyards (the elves' tower at the back, the orcs' longhouse, the cat folk's tower house, the dark elves' Black Tower up the stairs on its terrace): the great hall, their lord or lady on the throne, their folk there, their realm the nearest of their people's towns", () => {
+    it("their keeps are gone into from their courtyards (the elves' tower at the back, the orcs' longhouse, the cat folk's tower house, the dark elves' Black Tower up the stairs on its terrace) or the end of the causeway (the lizard folk's palace on its platform): the great hall, their lord or lady on the throne, their folk there, their realm the nearest of their people's towns", () => {
         const world = buildWorld({ seed: 1 });
         const host = new Host(world, { populate: false });
 
@@ -152,7 +164,7 @@ describe("the peoples' castles as they stand (setpieces/castles.js)", () => {
 
         const me = host.battle.actor(HOST_PLAYER);
 
-        for (const race of LAID) {
+        for (const race of KEEPS) {
             const site = world.plan.sites.find((each) => each.kind === "castle" && each.race === race);
 
             world.maps.town.sites.heartOf(site);
@@ -164,8 +176,11 @@ describe("the peoples' castles as they stand (setpieces/castles.js)", () => {
 
             assert.equal(keep.kind, "keep", race);
             assert.equal(keep.people, race);
-            assert.ok(set.courts.has(set.entrance.outside[1] * WORLD_SIZE + set.entrance.outside[0]), `${race}: its door's in its courtyard`);
-            assert.ok(set.entrance.clear.every(([i, j]) => world.maps.town.sites.courtAt(i, j) === ground), `${race}: its way in's the courtyard's ground, nothing grown in it`);
+
+            if (LAID.includes(race)) {
+                assert.ok(set.courts.has(set.entrance.outside[1] * WORLD_SIZE + set.entrance.outside[0]), `${race}: its door's in its courtyard`);
+                assert.ok(set.entrance.clear.every(([i, j]) => world.maps.town.sites.courtAt(i, j) === ground), `${race}: its way in's the courtyard's ground, nothing grown in it`);
+            }
 
             Object.assign(me, { hp: 1e6, maxHp: 1e6, map: "town", square: out, x: out[0] + 0.5, y: out[1] + 0.5, path: [], order: null, target: null, spawn: out });
             assert.equal(host.command(HOST_PLAYER, { type: "enter", link: keep.door.id }).ok, true, race);
