@@ -621,6 +621,208 @@ test("swiping up from the player turns them the way the camera looks and sends t
     expect(across).toBeLessThan(1);
 });
 
+// The camera turned to look the way that's clearest ahead of the player, whatever's round the
+// market where they start, and the player left facing off to the side, so that steering them has
+// somewhere to go and turns them to go there; the way the camera then looks, in radians
+async function clearestWayAhead(page) {
+    return page.evaluate(async () => {
+        const { navigatorOf } = await import("/js/core/navigation.js");
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+        const avatar = game.avatars.get("player");
+        const navigation = navigatorOf(game.world.maps[player.map]);
+        const ways = Array.from({ length: 8 }, (_, k) => (k * Math.PI) / 4 - Math.PI);
+        const ahead = (way) => navigation.raycast([player.x, player.y], [player.x + Math.sin(way) * 400, player.y + Math.cos(way) * 400])?.t ?? 0;
+        const clearest = ways.reduce((best, way) => (ahead(way) > ahead(best) ? way : best));
+        const aside = clearest + Math.PI / 2;
+
+        player.facing = aside;
+        avatar.facing = aside;
+        avatar.object.rotation.y = aside;
+        game.cameraFollow.yaw = Math.atan2(-Math.sin(clearest), -Math.cos(clearest));
+        game.cameraFollow.turning = 0;
+
+        // (Drawn once like that, so the player's where they look on the screen)
+        await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+
+        return clearest;
+    });
+}
+
+// Where the player stands and which way they face, as the world has them
+const standing = (page) => page.evaluate(() => {
+    const { game } = window.pellagos;
+    const avatar = game.avatars.get("player");
+
+    return { facing: avatar.facing, x: avatar.object.position.x, z: avatar.object.position.z };
+});
+
+// What the player's been told to do, read without letting the world move on
+const told = (page) => page.evaluate(() => {
+    const player = window.pellagos.game.battle.actor("player");
+
+    return { order: player.order, facing: player.facing };
+});
+
+test("W, A, S, D steer the player the way the camera looks, two of them diagonally, Shift runs, and letting go stops", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const way = await clearestWayAhead(page);
+    const start = await standing(page);
+
+    // (Facing off to the side to begin with, so turning to go shows)
+    expect(Math.abs(Math.sin(start.facing - way))).toBeGreaterThan(0.9);
+
+    // W: straight ahead the way the camera looks, walking
+    await page.keyboard.down("KeyW");
+
+    const walking = await told(page);
+
+    expect(walking.order?.type).toBe("move");
+    expect(walking.order.run).toBe(false);
+    expect(Math.cos(walking.facing - way)).toBeGreaterThan(0.99);
+
+    // Held, they go that way and not off to the side
+    const moved = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+        game.advance(1.5);
+
+        const avatar = game.avatars.get("player");
+
+        return { running: game.battle.actor("player").running, x: avatar.object.position.x, z: avatar.object.position.z };
+    });
+
+    expect(moved.running).toBe(false);
+
+    const along = (moved.x - start.x) * Math.sin(way) + (moved.z - start.z) * Math.cos(way);
+    const across = Math.abs((moved.x - start.x) * Math.cos(way) - (moved.z - start.z) * Math.sin(way));
+
+    expect(along).toBeGreaterThan(1);
+    expect(across).toBeLessThan(1);
+
+    // (Playing on; a pause lets go of what was held, so the key's pressed afresh)
+    await page.keyboard.up("KeyW");
+    await page.evaluate(() => window.pellagos.game.start());
+
+    // W and D together: half way between ahead and to the right, which four buttons couldn't say
+    await page.keyboard.down("KeyW");
+    await page.keyboard.down("KeyD");
+
+    const diagonally = await told(page);
+    const off = (Math.atan2(Math.sin(diagonally.facing - way), Math.cos(diagonally.facing - way)) * 180) / Math.PI;
+
+    expect(Math.abs(off)).toBeGreaterThan(38);
+    expect(Math.abs(off)).toBeLessThan(52);
+
+    // Shift, with a way still held, turns the walk into a run
+    await page.keyboard.up("KeyD");
+    await page.keyboard.down("Shift");
+    expect((await told(page)).order.run).toBe(true);
+
+    // Everything let go: they're told to stop
+    await page.keyboard.up("KeyW");
+    await page.keyboard.up("Shift");
+    expect((await told(page)).order).toBe(null);
+});
+
+test("the thumb stick walks the player the way it's pushed, runs pushed to its rim, stops when let go, and goes when turned off in Game options", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const way = await clearestWayAhead(page);
+    const zone = await page.locator("#stickzone").boundingBox();
+
+    // It's there to begin with, and only its own circle takes touches
+    expect(await page.evaluate(() => getComputedStyle(document.querySelector("#stickzone")).pointerEvents)).toBe("auto");
+
+    const middle = { x: zone.x + zone.width / 2, y: zone.y + zone.height / 2 };
+
+    // Pushed up the screen, short of the rim: ahead the way the camera looks, walking
+    await page.mouse.move(middle.x, middle.y);
+    await page.mouse.down();
+    await page.mouse.move(middle.x, middle.y - 34, { steps: 4 });
+
+    const walking = await told(page);
+
+    expect(walking.order?.type).toBe("move");
+    expect(walking.order.run).toBe(false);
+    expect(Math.cos(walking.facing - way)).toBeGreaterThan(0.99);
+
+    // (The stick knows it's held, and the knob's followed the thumb up out of the middle)
+    expect(await page.evaluate(() => document.querySelector("#stickzone").classList.contains("held"))).toBe(true);
+
+    const knob = await page.evaluate(() => {
+        const held = document.querySelector("#stickknob").getBoundingClientRect();
+        const circle = document.querySelector("#stickzone").getBoundingClientRect();
+
+        return { up: circle.y + circle.height / 2 - (held.y + held.height / 2), across: held.x + held.width / 2 - (circle.x + circle.width / 2) };
+    });
+
+    expect(knob.up).toBeGreaterThan(30);
+    expect(Math.abs(knob.across)).toBeLessThan(2);
+
+    // Pushed over to the rim: running
+    await page.mouse.move(middle.x, middle.y - 80, { steps: 4 });
+    expect((await told(page)).order.run).toBe(true);
+
+    // Let go: told to stop, and the knob's no longer held out
+    await page.mouse.up();
+
+    expect((await told(page)).order).toBe(null);
+    expect(await page.evaluate(() => document.querySelector("#stickzone").classList.contains("held"))).toBe(false);
+
+    // Pushed again and held, they go the way it's pushed and not off to the side
+    const before = await standing(page);
+
+    await page.mouse.move(middle.x, middle.y);
+    await page.mouse.down();
+    await page.mouse.move(middle.x, middle.y - 80, { steps: 4 });
+
+    const moved = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+        game.advance(1.5);
+
+        const avatar = game.avatars.get("player");
+
+        return { x: avatar.object.position.x, z: avatar.object.position.z };
+    });
+
+    const along = (moved.x - before.x) * Math.sin(way) + (moved.z - before.z) * Math.cos(way);
+    const across = Math.abs((moved.x - before.x) * Math.cos(way) - (moved.z - before.z) * Math.sin(way));
+
+    expect(along).toBeGreaterThan(2);
+    expect(across).toBeLessThan(1.5);
+
+    // (Playing on; a pause lets go of what the thumb held, so the stick's taken afresh)
+    await page.mouse.up();
+    await page.evaluate(() => window.pellagos.game.start());
+
+    // Turned off in Game options it's gone, and a thumb where it was does nothing
+    await page.evaluate(() => {
+        const switched = document.querySelector("#stickswitch");
+
+        switched.checked = false;
+        switched.dispatchEvent(new Event("change"));
+    });
+
+    expect(await page.evaluate(() => getComputedStyle(document.querySelector("#stickzone")).display)).toBe("none");
+
+    await page.mouse.move(middle.x, middle.y);
+    await page.mouse.down();
+    await page.mouse.move(middle.x, middle.y - 80, { steps: 4 });
+    expect(await page.evaluate(() => document.querySelector("#stickzone").classList.contains("held"))).toBe(false);
+    await page.mouse.up();
+
+    // The keys steer without it
+    await page.keyboard.down("KeyW");
+    expect((await told(page)).order?.type).toBe("move");
+    await page.keyboard.up("KeyW");
+    expect((await told(page)).order).toBe(null);
+});
+
 test("the camera follows from the first step, swinging round behind the player", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

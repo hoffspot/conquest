@@ -89,8 +89,16 @@ export class Steering {
         }
     }
 
-    /** Take the listeners off again (the game ending). */
+    /**
+     * Take the listeners off again (the game paused or ending). Whatever the thumb was holding is
+     * let go of first: a pause with the stick pushed over would otherwise leave it looking held,
+     * its knob out of the middle, with nothing listening to put it back.
+     */
     dispose() {
+        this.#keys.clear();
+        this.#shift = false;
+        this.#letGoOfStick();
+
         for (const [target, type, listener] of this.#listeners) {
             target.removeEventListener(type, listener);
         }
@@ -98,6 +106,7 @@ export class Steering {
         this.#listeners = [];
         cancelAnimationFrame(this.#frame);
         this.#frame = 0;
+        this.#sent = null;
     }
 
     #on(target, type, listener) {
