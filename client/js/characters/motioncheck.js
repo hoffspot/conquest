@@ -14,8 +14,9 @@ import * as THREE from "three";
 import { ACT_TIMES, ROLES } from "../core/roles.js";
 import { SPELLS } from "../core/spells.js";
 import { WEAPONS } from "../core/weapons.js";
-import { Actions, ATTACKS, DRAWS, REACTIONS } from "./actions.js";
+import { Actions, ATTACKS, DODGES, DRAWS, REACTIONS } from "./actions.js";
 import { Character, hanging, placed } from "./character.js";
+import { CLIP_KEYS } from "./clip-keys.js";
 import { EQUIPMENT, socketOn } from "./equipment.js";
 import { folkLook } from "./folk.js";
 import { buildItem } from "./items.js";
@@ -794,17 +795,36 @@ export function motions() {
         });
     }
 
-    for (const reaction of Object.keys(REACTIONS)) {
+    // (Every way of each: its keyed way, then its clips')
+    for (const [reaction, { length, clips = [] }] of Object.entries(REACTIONS)) {
+        for (let way = 0; way <= clips.length; way++) {
+            list.push({
+                id: way ? `flinch/${reaction}/${clips[way - 1]}` : `flinch/${reaction}`,
+                group: "flinch",
+                look: (body) => soldier(body, first(body)),
+                seconds: length + 0.2,
+                speed: 0,
+                sheathed: false,
+                start: (dressed, body) => {
+                    onGuard(first(body)).start(dressed);
+                    dressed.actions.react(reaction, { way });
+                },
+            });
+        }
+    }
+
+    // Slipping a blow, each way, on guard
+    for (const way of ["left", "right", "back"]) {
         list.push({
-            id: `flinch/${reaction}`,
+            id: `dodge/${way}`,
             group: "flinch",
             look: (body) => soldier(body, first(body)),
-            seconds: REACTIONS[reaction].length + 0.2,
+            seconds: CLIP_KEYS[way === "back" ? DODGES.back : DODGES.side].seconds + 0.2,
             speed: 0,
             sheathed: false,
             start: (dressed, body) => {
                 onGuard(first(body)).start(dressed);
-                dressed.actions.react(reaction);
+                dressed.actions.dodge({ way });
             },
         });
     }

@@ -4450,10 +4450,15 @@ export class Game {
                 case "unbuffed":
                     this.#buffed(event, avatar);
                     break;
-                case "dodged":
+                case "dodged": {
+                    const by = event.by ? this.avatars.get(event.by) : null;
+
                     hud.damage(this.#screenAbove(event.id), "Dodged", { kind: "stun" });
                     effects.burst("dust", avatar.point(0.1));
+                    // (Slipping it: aside, away from where it came from, or back)
+                    avatar.actions.dodge?.({ from: by ? avatar.angleTo(by.object.position.x, by.object.position.z) : 0 });
                     break;
+                }
                 case "resisted":
                     hud.damage(this.#screenAbove(event.id), event.always ? "Immune" : "Resisted", { kind: "stun" });
 

@@ -1606,6 +1606,9 @@ export const DRAWS = Object.freeze({
     },
 });
 
+// Each reaction's keyed way (`pose`: added to the pose, `t` from 0 to 1 through it, struck from
+// `side` (1 the left) and `front` (1 ahead)), and the animators' (`clips`: CLIP_KEYS' hits, added
+// from their first pose as a dodge is, DODGES), done in turn, never the same way twice running
 export const REACTIONS = Object.freeze({
     // A cut: twists away from the blade, head snapping away
     slash: {
@@ -1620,6 +1623,7 @@ export const REACTIONS = Object.freeze({
     // A blunt blow from a staff: rocks back, head thrown back
     strike: {
         length: 0.4,
+        clips: ["hitChest"],
         effect: "dust",
         pose: (t, { side, front }) => {
             const e = pulse(t, 0.2);
@@ -1661,6 +1665,7 @@ export const REACTIONS = Object.freeze({
     // An arrow: a sharp jolt at the chest
     pierce: {
         length: 0.4,
+        clips: ["hitChest"],
         effect: "sparks",
         pose: (t, { side, front }) => {
             const e = pulse(t, 0.12);
@@ -1671,6 +1676,7 @@ export const REACTIONS = Object.freeze({
     // A punch: the head snaps round
     punch: {
         length: 0.32,
+        clips: ["hitHead"],
         effect: "impact",
         pose: (t, { side, front }) => {
             const e = pulse(t, 0.15);
@@ -1681,6 +1687,7 @@ export const REACTIONS = Object.freeze({
     // A kick: winded, doubling over it and driven back a step, the arms drawn in
     kick: {
         length: 0.55,
+        clips: ["hitChest"],
         effect: "impact",
         pose: (t, { side, front }) => {
             const e = pulse(t, 0.18);
@@ -2028,12 +2035,78 @@ function looped(values, u) {
     return 0.5 * (2 * p1 + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (3 * p1 - p0 - 3 * p2 + p3) * t * t * t);
 }
 
+// A clip's movement from its first pose (a hit's, a dodge's: CLIP_KEYS), as the guards' sway is
+// kept: { seconds, body: [[joint, [[angle, values]]]], offset: [values] (x, y, z) }, each
+// channel's values at MOVE_STEPS even steps from its start to its end
+const MOVE_STEPS = 24;
+
+function movementOf(clip) {
+    const { channels, keys, seconds, hit } = CLIP_KEYS[clip];
+    const times = keys.map(([time]) => time);
+    const rows = keys.map(([, ...values]) => values);
+    // (Seconds into it as key times: 1 at the blow)
+    const keyTime = (at) => (at <= hit ? at / hit : 1 + (at - hit) / (seconds - hit));
+    const through = (c) => Array.from({ length: MOVE_STEPS + 1 }, (_, k) => sample(times, rows, c, keyTime((k / MOVE_STEPS) * seconds)) - sample(times, rows, c, 0));
+    const body = new Map();
+    const movement = { seconds, body: [], offset: [], hands: null };
+
+    channels.forEach((channel, c) => {
+        const [joint, name] = channel.split(".");
+
+        if (joint === "offset") {
+            movement.offset[Number(name)] = through(c);
+        } else if (SWAY_BODY.test(channel)) {
+            body.set(joint, [...(body.get(joint) ?? []), [name, through(c)]]);
+        }
+    });
+
+    movement.body = [...body];
+    // (How far it ducks, the spine leaning forward, as a share of its deepest: 0 to 1)
+    const flexes = movement.body.filter(([joint]) => /^Spine/.test(joint)).flatMap(([, angles]) => angles.filter(([name]) => name === "flex").map(([, values]) => values));
+    const leaning = Array.from({ length: MOVE_STEPS + 1 }, (_, k) => Math.max(0, flexes.reduce((sum, values) => sum + values[k], 0)));
+    const deepest = Math.max(...leaning);
+
+    movement.duck = leaning.map((value) => (deepest > 0 ? value / deepest : 0));
+
+    return movement;
+}
+
+// A value `u` of the way from the first of its even steps to the last (0 to 1), straight between them
+function stepped(values, u) {
+    const x = Math.min(1, Math.max(0, u)) * (values.length - 1);
+    const i = Math.min(values.length - 2, Math.floor(x));
+
+    return values[i] + (values[i + 1] - values[i]) * (x - i);
+}
+
+/**
+ * Slipping a blow (the Dodge spell: the battle's "dodged"): ducking aside or swaying back as an
+ * animator's dodge does (CLIP_KEYS: its body and pelvis added from its first pose, the feet planted
+ * where they stand, the hands as they were), eased out over its last quarter. Away from a blow
+ * from the side (to the left from one on the right, mirrored for one on the left); from one ahead,
+ * either way or back, never the same twice running.
+ */
+export const DODGES = Object.freeze({ side: "dodgeSide", back: "dodgeBack" });
+// (How near straight ahead a blow is, as the sine of its angle off it, to be slipped either way;
+// and how far of the clip's lean is taken: all of it, over a guard's, took the spine 8° and the
+// neck 13° past their ranges)
+const AHEAD = 0.5;
+const DODGE_LEAN = 0.65;
+// (And how far forward the hands on guard go as it ducks deepest, arm lengths: kept before the
+// face, as a boxer's are, not left where the head ducks into them)
+const DUCK_REACH = 0.25;
+const DUCK_ASIDE = 0.1;
+// The hits' and dodges' movements, by clip
+const MOVES = new Map([...new Set([...Object.values(DODGES), ...Object.values(REACTIONS).flatMap(({ clips = [] }) => clips)])].map((clip) => [clip, movementOf(clip)]));
+
 const MIRROR = { Left: "Right", Right: "Left", left: "right", right: "left" };
 const mirrored = (joint) => joint.replace(/^(Left|Right|left|right)/, (side) => MIRROR[side]);
 
 // Angles that change sign when a pose is mirrored left for right (turning and bending the other
 // way, the pelvis moved to the other side, hands' x)
 const MIRRORED = new Set(["turn", "bend", "obliquity", "atX", "pointX", "edgeX", "palmX", "towardsX", "elbowX"]);
+// (And those that lean the other way, forward for back: a hit from behind)
+const LEANING = new Set(["flex", "tilt"]);
 
 const _rotation = new THREE.Quaternion();
 const _fall = new THREE.Quaternion();
@@ -2118,6 +2191,9 @@ export class Actions {
         /** The attack under way, if any. */
         this.attack = null;
         this.reactions = [];
+        /** Slipping a blow, if it is: { start, move, mirror } (dodge); and how far the hands go round with the chest for it (0 to 1). */
+        this.dodging = null;
+        this.turning = 0;
         this.fall = null;
 
         /** How the weapon is held on guard (a GUARDS key, or null), and how much (0 to 1). */
@@ -2287,16 +2363,32 @@ export class Actions {
      * React to a blow (a REACTIONS key). `from` is where it came from, as an angle in the
      * character's own frame (0 straight ahead, positive to its left).
      */
-    react(name, { from = 0 } = {}) {
+    react(name, { from = 0, way = null } = {}) {
         const reaction = REACTIONS[name] ?? REACTIONS.strike;
+        const clips = reaction.clips ?? [];
+        // (Its keyed way, 0, or one of its clips': in turn, never the same twice running)
+        const pick = way ?? (clips.length ? this.variety.next(`react:${name}`, 1 + clips.length) : 0);
 
-        this.reactions.push({ reaction, start: this.time, side: Math.sin(from) >= 0 ? 1 : -1, front: Math.cos(from) >= 0 ? 1 : -1 });
+        this.variety.last.set(`react:${name}`, pick);
+        this.reactions.push({ reaction, start: this.time, side: Math.sin(from) >= 0 ? 1 : -1, front: Math.cos(from) >= 0 ? 1 : -1, move: pick > 0 ? MOVES.get(clips[pick - 1]) : null });
+    }
+
+    /**
+     * Slip a blow (DODGES) from `from` (an angle as for react): aside, away from it, or from one
+     * ahead either way or back (`way`: "left", "right" or "back"; else as comes).
+     */
+    dodge({ from = 0, way = null } = {}) {
+        const across = Math.sin(from);
+        const pick = way ?? (Math.abs(across) > AHEAD ? (across > 0 ? "right" : "left") : ["left", "right", "back"][this.variety.next("dodge", 3)]);
+
+        this.dodging = { start: this.time, move: MOVES.get(pick === "back" ? DODGES.back : DODGES.side), mirror: pick === "right" };
     }
 
     /** Fall down dead, away from `from` (an angle as for react). */
     die({ from = 0 } = {}) {
         this.#swapped();
         this.attack = null;
+        this.dodging = null;
         this.fall = { start: this.time, backwards: Math.cos(from) >= 0 };
         this.guardTarget = 0;
     }
@@ -2310,27 +2402,29 @@ export class Actions {
         this.#swapped();
         this.attack = null;
         this.reactions = [];
+        this.dodging = null;
         this.fall = { start: this.time, backwards: Math.cos(from) >= 0, up: seconds };
     }
 
-    /** Get back up (alive again): no fall, attack or reactions. */
+    /** Get back up (alive again): no fall, attack, reactions or dodge. */
     revive() {
         this.fall = null;
         this.attack = null;
         this.reactions = [];
+        this.dodging = null;
         this.guard = 0;
     }
 
-    /** Is anything being done (an attack, a reaction or a fall)? */
+    /** Is anything being done (an attack, a reaction, a dodge or a fall)? */
     get busy() {
-        return Boolean(this.attack || this.reactions.length || this.fall);
+        return Boolean(this.attack || this.reactions.length || this.dodging || this.fall);
     }
 
-    /** Is anything quick under way: a blow, a weapon drawn or put away, a flinch, a fall till it lies still? */
+    /** Is anything quick under way: a blow, a weapon drawn or put away, a flinch, a dodge, a fall till it lies still? */
     get quick() {
         const falling = this.fall && (this.fall.up || this.time - this.fall.start < FALL.buckle + FALL.topple + FALL.settle);
 
-        return Boolean(this.attack || this.reactions.length || falling);
+        return Boolean(this.attack || this.reactions.length || this.dodging || falling);
     }
 
     /**
@@ -2351,7 +2445,7 @@ export class Actions {
             this.#sit();
         }
 
-        const calm = this.attack || this.reactions.length || this.fall ? 0 : 1;
+        const calm = this.attack || this.reactions.length || this.dodging || this.fall ? 0 : 1;
 
         this.calm += Math.sign(calm - this.calm) * Math.min(Math.abs(calm - this.calm), dt * SWAY_EASE);
 
@@ -2362,10 +2456,24 @@ export class Actions {
             const u = (this.time / (sway.seconds * (0.92 + 0.16 * this.phase)) + this.phase) % 1;
             const swaying = weight * (1 - smooth(0, SWAY_WALK, walking)) * smooth(0, 1, this.calm);
 
-            this.#blend(GUARD_TRACKS.get(this.guardName), 0, weight, false, true, false, false, swaying > 0.001 && sway.hands ? this.#swayHands(sway, u, swaying) : null);
+            // (Slipping a blow, the hands kept before the face as the head ducks)
+            // (not two hands on a haft: the other couldn't follow it)
+            const ducking = this.dodging && !("on" in (GUARDS[this.guardName].left ?? {})) ? this.#ducking() : 0;
+            const nudge = swaying > 0.001 && sway.hands ? this.#swayHands(sway, u, swaying) : ducking > 0.001 ? this.#swayHands(null, 0, 0) : null;
+
+            if (ducking > 0.001) {
+                const aside = (this.dodging.mirror ? 1 : -1) * DUCK_ASIDE * ducking;
+
+                nudge.right[0] += aside;
+                nudge.left[0] += aside;
+                nudge.right[2] += DUCK_REACH * ducking;
+                nudge.left[2] += DUCK_REACH * ducking;
+            }
+
+            this.#blend(GUARD_TRACKS.get(this.guardName), 0, weight, false, true, false, false, nudge);
 
             if (swaying > 0.001) {
-                this.#sway(sway, u, swaying);
+                this.#move(sway, u, swaying, { loop: true });
             }
         }
 
@@ -2397,10 +2505,30 @@ export class Actions {
                 return false;
             }
 
-            this.#add(playing.reaction.pose(t, playing));
+            if (playing.move) {
+                // (A clip's hit, through in the reaction's time, eased out over its last third:
+                // mirrored struck from the right, leaning the other way struck from behind)
+                this.#move(playing.move, t, 1 - smooth(0.67, 1, t), { mirror: playing.side < 0, behind: playing.front < 0 });
+            } else {
+                this.#add(playing.reaction.pose(t, playing));
+            }
 
             return true;
         });
+
+        this.turning = 0;
+
+        if (this.dodging) {
+            const { start, move, mirror } = this.dodging;
+            const t = (this.time - start) / move.seconds;
+
+            if (t >= 1) {
+                this.dodging = null;
+            } else {
+                this.#move(move, t, 1 - smooth(0.75, 1, t), { mirror, lean: DODGE_LEAN });
+                this.turning = smooth(0, 0.25, t) * (1 - smooth(0.75, 1, t));
+            }
+        }
 
         // (Knocked down and up again: done)
         if (this.fall?.up && this.time - this.fall.start >= this.fall.up) {
@@ -2678,26 +2806,39 @@ export class Actions {
     }
 
     // Each hand's place moved as the guard's sway has it (arm lengths), `u` of the way round and
-    // `weight` of it
+    // `weight` of it (no sway: not moved)
     #swayHands(sway, u, weight) {
         const nudge = this.nudge;
 
         for (const side of HANDS) {
-            sway.hands[side].forEach((values, k) => (nudge[side][k] = looped(values, u) * weight));
+            for (let k = 0; k < 3; k++) {
+                nudge[side][k] = sway ? looped(sway.hands[side][k], u) * weight : 0;
+            }
         }
 
         return nudge;
     }
 
-    // The body swayed as the guard's sway has it (its angles and the pelvis, as far for a smaller
-    // body as for the one it was baked on), `u` of the way round and `weight` of it
-    #sway(sway, u, weight) {
+    // How far into ducking a dodge is (0 to 1 of its deepest, eased out with it)
+    #ducking() {
+        const { start, move } = this.dodging;
+        const t = (this.time - start) / move.seconds;
+
+        return t >= 1 ? 0 : stepped(move.duck, t) * (1 - smooth(0.75, 1, t));
+    }
+
+    // Add a movement's angles and pelvis to the pose (the guard's sway: `u` of the way round its
+    // loop; a hit's or a dodge's: `u` of the way through it), `weight` of it, the pelvis as far for
+    // a smaller body as for the one it was baked on; mirrored left for right (`mirror`), leaning
+    // the other way (`behind`: struck from behind), and only `lean` of its angles
+    #move({ body, offset }, u, weight, { loop = false, mirror = false, behind = false, lean = 1 } = {}) {
         const rig = this.rig;
         const reach = ((this.character.height ?? CLIP_HEIGHT) / CLIP_HEIGHT) * weight;
+        const at = loop ? looped : stepped;
         const angles = this.swayed;
 
-        for (const [joint, channels] of sway.body) {
-            const index = rig.index.get(joint);
+        for (const [joint, channels] of body) {
+            const index = rig.index.get(mirror ? mirrored(joint) : joint);
 
             if (index === undefined) {
                 continue;
@@ -2708,7 +2849,7 @@ export class Actions {
             }
 
             for (const [name, values] of channels) {
-                angles[name] = looped(values, u) * weight;
+                angles[name] = at(values, u) * weight * lean * (mirror && MIRRORED.has(name) ? -1 : 1) * (behind && LEANING.has(name) ? -1 : 1);
             }
 
             const { kind, side } = rig.joints[index];
@@ -2716,9 +2857,9 @@ export class Actions {
             rig.rotations[index].multiply(jointRotation(kind, side, angles, _rotation));
         }
 
-        rig.offset.x += looped(sway.offset[0], u) * reach;
-        rig.offset.y += looped(sway.offset[1], u) * reach;
-        rig.offset.z += looped(sway.offset[2], u) * reach;
+        rig.offset.x += at(offset[0], u) * reach * (mirror ? -1 : 1);
+        rig.offset.y += at(offset[1], u) * reach;
+        rig.offset.z += at(offset[2], u) * reach * (behind ? -1 : 1);
     }
 
     // Add angles (and a pelvis offset) to the pose
@@ -3205,11 +3346,13 @@ export class Actions {
     }
 
     // The frame a hand's place and turn are given in (world): the character's, or turned as far
-    // as its chest has turned from it (`chest`: 0 to 1; fists kept up before the chest, spinning)
+    // as its chest has turned from it (`chest`: 0 to 1; fists kept up before the chest, spinning;
+    // and every hand, dodging)
     #frame(hand, target) {
         this.character.object.getWorldQuaternion(target);
 
-        const share = hand?.chest ?? 0;
+        // (Slipping a blow, as far as it's turned out of the way: the hands go round with the chest)
+        const share = Math.max(hand?.chest ?? 0, this.turning);
 
         if (share > 0.001) {
             const forward = _forward.set(0, 0, 1).applyQuaternion(this.rig.bone("Spine2").getWorldQuaternion(_chest)).applyQuaternion(_chest.copy(target).invert());

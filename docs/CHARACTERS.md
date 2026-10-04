@@ -820,7 +820,8 @@ holding and wearing what they would. That's 245 motions:
 - each weapon's guard (still for two seconds, a sway's loop; walking; running) and its every
   blow;
 - each spell's casts, and drawing and putting away each weapon;
-- every flinch, falling dead and knocked down;
+- every flinch, every way (keyed and the clips'), slipping a blow each way (aside to the left
+  and right, and back), falling dead and knocked down;
 - the folk's acts (toasting, serving, pouring, forging, blessing, stamping, reading and the rest)
   and every rest of every role.
 
@@ -886,17 +887,35 @@ front or back), added to whatever pose the character is in, so a flinch during a
 shows the attack. Each kind of blow (weapons.js: an attack's `reaction`) has its own, and its own
 effect where it lands, so how a character reacts depends on what hit it:
 
-| Blow | Reaction | Effect |
-| --- | --- | --- |
-| slash (sword) | twists away from the blade, head snapping away | sparks |
-| strike (staff) | rocks back, head thrown back | dust |
-| arcane (wand) | a shudder through the whole body | violet light |
-| fire (grimoire) | flinches back, arms up to shield the face | fire |
-| crush (war hammer) | doubled over, knees buckling, knocked back | a flash and dust |
-| pierce (bow) | a sharp jolt at the chest (and the arrow sticks) | sparks |
-| punch (gauntlets) | the head snaps round | a flash and dust |
-| hack (orc cleaver) | a heavy cut that twists and staggers | sparks |
-| kick (spiked boots) | winded: doubles over, driven back a step, the arms drawn in | a flash and dust |
+| Blow | Reaction | And as the animators' (`clips`) | Effect |
+| --- | --- | --- | --- |
+| slash (sword) | twists away from the blade, head snapping away | | sparks |
+| strike (staff) | rocks back, head thrown back | `Hit_Chest`: doubling over it | dust |
+| arcane (wand) | a shudder through the whole body | | violet light |
+| fire (grimoire) | flinches back, arms up to shield the face | | fire |
+| crush (war hammer) | doubled over, knees buckling, knocked back | | a flash and dust |
+| pierce (bow) | a sharp jolt at the chest (and the arrow sticks) | `Hit_Chest` | sparks |
+| punch (gauntlets) | the head snaps round | `Hit_Head`: the head jolted, the body knocked back a little | a flash and dust |
+| hack (orc cleaver) | a heavy cut that twists and staggers | | sparks |
+| kick (spiked boots) | winded: doubles over, driven back a step, the arms drawn in | `Hit_Chest` | a flash and dust |
+
+Where a reaction has the animators' hits too (Mesh2Motion's, baked: *Clips in the game*, below),
+they're done in turn with the keyed one, never the same way twice running (`react(name, { way })`
+picks one). A clip's hit is added from its own first pose, played through in the reaction's time
+and eased out over its last third: its spine's, neck's, head's and collarbones' angles and its
+pelvis, mirrored when the blow comes from the right and leaning the other way from behind. The
+hands stay where they were.
+
+**Slipping a blow** (`dodge({ from })`, `DODGES`): when the Dodge spell turns a blow aside (the
+battle's `dodged`), the body ducks under it as Mesh2Motion's `Dodge_left` does: forward and down
+by up to 28 cm at the head, leaning aside, away from a blow from the side (mirrored for one from
+the left). Or it sways back and round as `Dodge_back` does. From one ahead it goes either way or
+back, never the same twice running. It's added from the clip's first pose like a clip's hit, eased
+out over its last quarter, with the feet planted where they stand. Its lean is taken at 65%:
+all of it, over a guard's, took the spine 8° and the neck 13° past their ranges. The hands on guard
+stay before the face as the head ducks, going forward and aside with it as a boxer's do (the
+cat folk's gauntlets were in the head), unless both are on a haft. And they turn with the chest as
+it goes round: the backward dodge's 37° turn had the lizard folk's forearm 11 cm into the belly.
 
 To give a new attack its own reaction, add an entry to `REACTIONS` and name it in the attack.
 A new attack needs at least five ways (`ATTACKS[name].variants`: a name and key poses each, or an
@@ -1091,7 +1110,7 @@ The lab plays these whole, as the clip has them.
 
 **Clips in the game** (`scripts/bake-clips.js`, run by `npm run build:clips` too): a clip that's
 to be one of the game's ways of doing something is baked into key poses, the same keys every
-other action is made of (`client/js/characters/clip-keys.js`: 13 clips, 210 keys, 69 KB), so its
+other action is made of (`client/js/characters/clip-keys.js`: 17 clips, 250 keys, 82 KB), so its
 arms are reached within their ranges, what's held is kept out of the body, and the motion check
 measures it as it does any other:
 
@@ -1146,6 +1165,10 @@ at the hip). What was tried, on all 30 of the motion check's bodies:
 | `Spell_Simple_Idle` (a loop) | Guard: the wand's, bow's and grimoire's sway | Kept | The bow's hands half as far, the grimoire's held still |
 | `Fighting Idle` (a loop) | Guard: the fists' and kicks' sway | Kept | The pelvis only: the fists' bob (even at 40%) brought a forearm into the chest on 5 to 8 bodies, the spine's lean on 3 |
 | `Idle_Shield`, `Golf_idle`, `Pistol_Idle` | Guard | Left out | Hardly moves; a golfer's waggle; a pistol held out |
+| `Hit_Chest` | Flinch: the staff's, bow's and kick's other way | Kept | Added from its first pose, the hands left as they were |
+| `Hit_Head` | Flinch: the punch's other way | Kept | Likewise |
+| `Dodge_left` (mirrored for the right), `Dodge_back` | Slipping a blow (the Dodge spell) | Kept | Its lean at 65%; the feet planted (the clips step out of the way) |
+| `Hit_Knockback`, `Defend`, `Sword_Block` | Flinch, a parry | Left out | Their legs are the motion: a fall, a crouch and a step (for the deaths and falls with their legs, to come) |
 | `Idle_FoldArms` | Rest: arms folded | Left out | A shoulder past its range on 27 bodies; the keyed folded arms are clean |
 | `Idle_Rail` | Rest: leaning on the bar | Left out | Hunched over nothing, forearms on a rail higher than the bar |
 | `Greeting`, `Cheering_Two_Hands`, `Victory Fist Pump` | Rest | Left out | Clean; the keyed wave and the adventurer's two clip rests cover them |

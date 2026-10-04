@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { gunzipSync } from "node:zlib";
-import { ATTACKS, DRAWS, RESTS } from "../client/js/characters/actions.js";
+import { ATTACKS, DRAWS, REACTIONS, RESTS } from "../client/js/characters/actions.js";
 import { HumanData } from "../client/js/characters/body.js";
 import { EQUIPMENT } from "../client/js/characters/equipment.js";
 import { folkLook } from "../client/js/characters/folk.js";
@@ -100,11 +100,21 @@ describe("what's worn and carried kept out of the body (equipment.js, items.js, 
                 });
             }
 
-            for (const reaction of ["slash", "crush", "pierce"]) {
+            // (Each flinch every way: keyed, and the animators' clips)
+            for (const reaction of ["slash", "crush", "pierce", "punch"]) {
+                for (let way = 0; way <= (REACTIONS[reaction].clips?.length ?? 0); way++) {
+                    const fighting = onGuard(look, weapon);
+
+                    fighting.actions.react(reaction, { way });
+                    worst.push(...through(who, fighting, 0.6, { every: 0.1 }, `flinching (${reaction}${way ? `, ${REACTIONS[reaction].clips[way - 1]}` : ""})`));
+                }
+            }
+
+            for (const way of ["left", "right", "back"]) {
                 const fighting = onGuard(look, weapon);
 
-                fighting.actions.react(reaction);
-                worst.push(...through(who, fighting, 0.6, { every: 0.1 }, `flinching (${reaction})`));
+                fighting.actions.dodge({ way });
+                worst.push(...through(who, fighting, 1, { every: 0.1 }, `dodging (${way})`));
             }
 
             RESTS.sentry.forEach(({ name: way }, variant) => {

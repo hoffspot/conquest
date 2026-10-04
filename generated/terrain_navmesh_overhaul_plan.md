@@ -4294,3 +4294,26 @@ converted data is to be measured in M8 against today's hm08 data.
   - The motion check's guard "still" is 2 s now, a sway's loop.
   - **Next:** M8d-3, hits from the clips (`Hit_Chest`, `Hit_Head`) and a slip for the Dodge spell;
     then deaths and falls with their legs; then the Vitruvian body (§10).
+
+- **2026-10-04, M8d-3 built: hits and dodges from the clips** (docs/CHARACTERS.md *Fighting*,
+  *Clips in the game*).
+  - **Hits:** Mesh2Motion's `Hit_Chest` (for the staff's, bow's and kick's flinches) and
+    `Hit_Head` (the punch's) as each one's other way, done in turn with the keyed one, never the
+    same twice running (`REACTIONS[name].clips`, `react(name, { way })`). Added from the clip's
+    first pose, through in the reaction's time, mirrored from the right and leaning the other way
+    from behind; the hands as they were. They measure as clean as the keyed ones or cleaner (the
+    punch's worst forearm in the torso 11.6 → 5.0 cm, and no joint past its range where the keyed
+    strike's 17.8° and punch's 9.9°).
+  - **Slipping a blow** (`dodge`, `DODGES`): when the Dodge spell turns a blow aside (the
+    battle's `dodged`, which only showed "Dodged" over the head), the body ducks under it as
+    `Dodge_left` does (mirrored, away from a blow from the left) or sways back and round as
+    `Dodge_back` does; from ahead, either way or back in turn. The feet planted, the lean at 65%
+    (all of it took the spine 8° and the neck 13° past their ranges over a guard's), the hands on
+    guard kept before the face as the head ducks (the cat folk's gauntlets were in the head) and
+    turning with the chest (the lizard folk's forearm was 11 cm into the belly turning back).
+    The guard's sway eases out for it as for a blow.
+  - **The motion check:** every flinch every way and each dodge (277 motions); every existing
+    motion as it was; the baseline gains the new ones' 52 pairs (2,377). The clipping test does
+    every flinch way and each dodge on every body; the lab has a Dodge button.
+  - **Next:** deaths and falls with their legs (`Death_A`..`D`, `Hit_Knockback`: a stance system
+    so the feet can step where a clip steps); then the Vitruvian body (§10).

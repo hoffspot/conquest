@@ -55,8 +55,10 @@ describe("the motion check", () => {
             assert.equal(ids.has(`draw/${weapon}`) && ids.has(`sheathe/${weapon}`), Boolean(DRAWS[guard]?.draw), weapon);
         }
 
-        // Every flinch, every act and every rest of every role
-        assert.equal(all.filter(({ group }) => group === "flinch").length, Object.keys(REACTIONS).length);
+        // Every flinch every way (keyed, and the clips'), each way of slipping a blow, every act and
+        // every rest of every role
+        assert.ok(Object.entries(REACTIONS).every(([name, { clips = [] }]) => ids.has(`flinch/${name}`) && clips.every((clip) => ids.has(`flinch/${name}/${clip}`))));
+        assert.ok(["left", "right", "back"].every((way) => ids.has(`dodge/${way}`)));
         assert.ok(Object.keys(ACT_TIMES).every((act) => ids.has(`act/${act}`)));
         assert.ok(Object.entries(ROLES).every(([role, { rests = [] }]) => rests.every((_, variant) => ids.has(`rest/${role}/${variant}`))));
     });

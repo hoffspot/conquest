@@ -115,7 +115,7 @@ always be green.
 | `npm run build:manifest` | After changing anything under `client/`. The unit tests fail until you do |
 | `npm run build:characters` | Only when rebuilding the body from MakeHuman's MPFB2 (`-- --mpfb2=../mpfb2`) |
 | `npm run build:music` | Only when remaking the music's instrument recordings |
-| `npm run build:clips` | Only when remaking the character lab's animation clips, or the clips baked into the game's attacks, rests and guards' sway (`client/js/characters/clip-keys.js`, from `scripts/bake-clips.js`'s list; a rest's timing in `client/js/core/roles.js` is its clip's, which the tests check). It needs Mesh2Motion's files: `git clone --depth 1 https://github.com/Mesh2Motion/mesh2motion-app ../mesh2motion-app`, then `-- --from=../mesh2motion-app/static/animations` |
+| `npm run build:clips` | Only when remaking the character lab's animation clips, or the clips baked into the game's attacks, rests, guards' sway, flinches and dodges (`client/js/characters/clip-keys.js`, from `scripts/bake-clips.js`'s list; a rest's timing in `client/js/core/roles.js` is its clip's, which the tests check). It needs Mesh2Motion's files: `git clone --depth 1 https://github.com/Mesh2Motion/mesh2motion-app ../mesh2motion-app`, then `-- --from=../mesh2motion-app/static/animations` |
 | `npm run vendor:three` | Only after changing the `three` version in `package.json` |
 | `npm run vendor:meshopt` | Only after changing the `meshoptimizer` version |
 | `npm run vendor:recast` | Only after changing the recast-navigation version |
