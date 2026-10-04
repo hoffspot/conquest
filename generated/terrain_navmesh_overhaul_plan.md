@@ -4240,3 +4240,38 @@ converted data is to be measured in M8 against today's hm08 data.
     talking, leaning, sitting, drinking and working clips), the fighting idles for the guards,
     hits and dodges; then the deaths and falls, whole-body, with their legs (a stance system
     so the feet can step where a clip steps).
+
+- **2026-10-04, M8d-1 built: town life from the clips, and feet that stay planted**
+  (docs/CHARACTERS.md *Movement*, *Resting*, *Clips in the game*). The user had asked what of the
+  new character body is live: none yet (the Vitruvian body is still to come, M8's remaining part);
+  what's changed so far is motion.
+  - **Feet that stay where they're planted** (`locomotion.js`), found baking the idles: every
+    standing foot slid as the body shifted its weight.
+    - The walker shuffled standing feet back under the pelvis wherever an action moved it, at
+      0.8 m/s; now only as the body turns, towards where the walk would have them (`stance`).
+    - Standing, the legs are at 99.6% of their length, past the 98.5% a planted foot was let
+      reach, so any lean slid the foot; now the knees give (the pelvis lowered as far as keeps
+      the feet), and a leg may be as straight as the walk has it.
+    - Crouched lower than the ankle bends (20° of dorsiflexion), the heel rises about the ball
+      of the foot (the overhead blows had ankles 17° past their range keeping the feet flat).
+    - The motion check, all 30 bodies: planted feet sliding 2,566 pairs → 470 (18,885 → 2,809 cm
+      past the limit in all); joints past their range 977 → 596 (5,184° → 2,719°); every
+      punch's slide (7 to 8 cm on every body), the wand's and the rests' gone. A little worse:
+      setting off walking (21 bodies, up to 0.9 cm more of what slid already) and the kicks' (20
+      pairs, about half a centimetre); the seated chats' feet as far through the floor as every
+      seated rest's on the tallest bodies (the seat's height isn't fitted yet).
+  - **The bake:** the pelvis measured from the clip's own planted feet (the motion capture stands
+    5 to 10 cm off its origin, and was pinned at the limits), following only feet on the ground;
+    seated clips (`seated`) only as they move from where they sit; on a bench, never lower.
+  - **Rests from the clips** (`CLIP_RESTS`, after each role's own five; `NET_VERSION` 41):
+    talking (eleven roles), talking seated (councillors, petitioners, patrons with the tankard
+    up, rulers), scratching the head (apprentice, clerk), listening with a hand on the hip
+    (reeve, steward), a cheer and waving someone over (adventurers). Left out: the clip's folded
+    arms (the keyed ones are clean), a rail lean, a salute, drinking, sitting still, and those
+    whose legs are the motion. Six clips added, ten in all (181 keys, 59 KB).
+  - **Along the way:** the lab offers every way an attack or rest has; the clipping test caught a
+    cheer's hanging arm in a sword's hilt (mirrored) and a hand through a wizard's hat (not for
+    those who wear one).
+  - **Next:** M8d-2, the guards' fighting idles (the clips' sway layered over the keyed guards) and
+    hits and dodges (a slip for the Dodge spell); then deaths and falls with their legs; then
+    the Vitruvian body (§10).

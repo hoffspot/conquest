@@ -115,7 +115,7 @@ always be green.
 | `npm run build:manifest` | After changing anything under `client/`. The unit tests fail until you do |
 | `npm run build:characters` | Only when rebuilding the body from MakeHuman's MPFB2 (`-- --mpfb2=../mpfb2`) |
 | `npm run build:music` | Only when remaking the music's instrument recordings |
-| `npm run build:clips` | Only when remaking the character lab's animation clips, or the clips baked into the game's attacks (`client/js/characters/clip-keys.js`, from `scripts/bake-clips.js`'s list). It needs Mesh2Motion's files: `git clone --depth 1 https://github.com/Mesh2Motion/mesh2motion-app ../mesh2motion-app`, then `-- --from=../mesh2motion-app/static/animations` |
+| `npm run build:clips` | Only when remaking the character lab's animation clips, or the clips baked into the game's attacks and rests (`client/js/characters/clip-keys.js`, from `scripts/bake-clips.js`'s list; a rest's timing in `client/js/core/roles.js` is its clip's, which the tests check). It needs Mesh2Motion's files: `git clone --depth 1 https://github.com/Mesh2Motion/mesh2motion-app ../mesh2motion-app`, then `-- --from=../mesh2motion-app/static/animations` |
 | `npm run vendor:three` | Only after changing the `three` version in `package.json` |
 | `npm run vendor:meshopt` | Only after changing the `meshoptimizer` version |
 | `npm run vendor:recast` | Only after changing the recast-navigation version |
@@ -309,7 +309,7 @@ moves first, update the branch again.
 | File | What to do |
 | --- | --- |
 | `client/js/app/manifest.js` | Take either side, then `npm run build:manifest`. It's generated from everything under `client/`. |
-| `client/js/characters/clip-keys.js` | Generated: take the side whose `scripts/bake-clips.js` list you keep, then `npm run build:clips -- --from=...` (above) if both changed it, and `npm run build:manifest`. |
+| `client/js/characters/clip-keys.js` | Generated: take the side whose `scripts/bake-clips.js` list you keep, then `npm run build:clips -- --from=...` (above) if both changed it, and `npm run build:manifest`. A clip rest's `hitAt` and `duration` in `client/js/core/roles.js` are its clip's `hit` and `seconds` there. |
 | `package-lock.json` | Take `main`'s, then `npm install` to bring your own dependency changes back in. |
 | `e2e/durations.json` | Take both sides' entries. Re-time your own tests if they changed (section 2). |
 | `test/motion-baseline.json` | Take `main`'s, then `npm run check:motion` on the merged code. Run it with `--update` only for what your own change meant to make different, and say so. |

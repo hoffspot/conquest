@@ -153,8 +153,10 @@ const walker = new Walker(character, WALK_STYLES[state.walk]);
 
 // Fighting: attacks, reactions and falls, layered over the walk (actions.js)
 const actions = new Actions(character);
-// (Which of an attack's five ways: `way`, or null for any but the last, as in the game; and how
-// to rest: a role's, roles.js)
+// The most ways any attack or rest has (to choose among)
+const WAYS = Math.max(...Object.values(ATTACKS).map(({ variants }) => variants.length), ...Object.values(ROLES).map(({ rests }) => rests.length));
+// (Which of an attack's ways: `way`, or null for any but the last, as in the game; and how to
+// rest: a role's, roles.js)
 const fight = { weapon: params.get("weapon") ?? "", way: params.has("way") ? Number(params.get("way")) : null, reaction: params.get("reaction") ?? "slash", repeat: false, guard: false, slow: 1, at: params.has("at") ? Number(params.get("at")) : null, action: params.get("action") ?? "", role: ROLES[params.get("rest")] ? params.get("rest") : "adventurer" };
 
 walker.overlay = (dt) => actions.apply(dt * fight.slow);
@@ -748,7 +750,7 @@ function attack() {
     if (weapon) {
         const { animation, hitAt, duration } = weapon.attacks[0];
 
-        showWay(animation, actions.startAttack(animation, { hitAt: hitAt / 1000, duration: duration / 1000, variant: fight.way }));
+        showWay(animation, actions.startAttack(animation, { hitAt: hitAt / 1000, duration: duration / 1000, variant: fight.way === null ? null : Math.min(ATTACKS[animation].variants.length - 1, fight.way) }));
     }
 }
 
@@ -765,7 +767,7 @@ function draw(on) {
 function rest() {
     actions.setSeated(Boolean(ROLES[fight.role].seated));
 
-    const way = actions.rest(fight.role, { variant: fight.way === null ? null : Math.min(4, fight.way) });
+    const way = actions.rest(fight.role, { variant: fight.way === null ? null : Math.min(ROLES[fight.role].rests.length - 1, fight.way) });
     const readout = document.getElementById("restreadout");
 
     if (readout && way !== null) {
@@ -794,10 +796,10 @@ function freeze(action, at) {
         const { animation, hitAt, duration } = weapon.attacks[0];
         const elapsed = at <= 1 ? at * (hitAt / 1000) : hitAt / 1000 + (at - 1) * ((duration - hitAt) / 1000);
 
-        showWay(animation, actions.startAttack(animation, { hitAt: hitAt / 1000, duration: duration / 1000, variant: fight.way ?? 0 }));
+        showWay(animation, actions.startAttack(animation, { hitAt: hitAt / 1000, duration: duration / 1000, variant: Math.min(ATTACKS[animation].variants.length - 1, fight.way ?? 0) }));
         actions.attack.start = actions.time - elapsed;
     } else if (action === "rest") {
-        const { hitAt, duration } = ROLES[fight.role].rests[Math.min(4, fight.way ?? 0)];
+        const { hitAt, duration } = ROLES[fight.role].rests[Math.min(ROLES[fight.role].rests.length - 1, fight.way ?? 0)];
         const elapsed = at <= 1 ? at * hitAt : hitAt + (at - 1) * (duration - hitAt);
 
         rest();
@@ -863,7 +865,7 @@ function motionTab() {
                     actions.setGuard(value);
                 },
             }),
-            select("Way", [["", "Any, never twice running"], ...[0, 1, 2, 3, 4].map((way) => [String(way), `${way + 1}`])], {
+            select("Way", [["", "Any, never twice running"], ...Array.from({ length: WAYS }, (_, way) => [String(way), `${way + 1}`])], {
                 get: () => (fight.way === null ? "" : String(fight.way)),
                 set: (value) => (fight.way = value === "" ? null : Number(value)),
             }),

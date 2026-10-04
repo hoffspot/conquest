@@ -44,7 +44,8 @@ const FILES = { base: "human-base-animations.glb", addon: "human-addon-animation
  * or none), hit (seconds into it, or into one of its clips, [which, seconds]: when the blow
  * lands; else as the fastest thing goes fastest), crop ([from, to] seconds: only that part),
  * mirror (left for right), legs ("right" or "left": that leg kicks, as the clip's does, let go
- * of the ground; else the feet stay where they stand) }.
+ * of the ground; else the feet stay where they stand), seated (sitting: the pelvis moved only as
+ * it moves from where the clip sits at its start) }.
  */
 export const BAKES = [
     // Fists: a jab with the lead hand (the clip's left: mirrored, so it's the right's, as every
@@ -55,6 +56,17 @@ export const BAKES = [
     { name: "pushKick", from: [["mocap", "Kick_Breach"]], hold: {}, legs: "right", crop: [0, 1.25], hit: 0.8 },
     // A spell from one hand thrust out (the clip's left: mirrored, to the wand's hand)
     { name: "wandShot", from: [["base", "Spell_Simple_Enter"], ["base", "Spell_Simple_Shoot"], ["base", "Spell_Simple_Exit"]], hold: { right: "wand" }, mirror: true, hit: [1, 0.05] },
+    // The folk's rests (each `hit` the moment that matters, as the keyed rests' are): talking,
+    // both hands going; talking seated, as at a table (the pelvis only as it moves on the seat);
+    // scratching the head, puzzled; a hand on the hip, listening; a fist raised in a cheer (motion
+    // capture; mirrored, the left raised, clear of a blade at the left hip as the right hangs);
+    // and an arm up high, waving someone over (motion capture)
+    { name: "talking", from: [["base", "Idle_Talking"]], hold: {}, hit: 1.2 },
+    { name: "talkingSeated", from: [["base", "Sitting_Talking"]], hold: {}, hit: 1.2, seated: true },
+    { name: "headScratch", from: [["addon", "Confused"]], hold: {}, hit: 1 },
+    { name: "listening", from: [["addon", "Idle Listening"]], hold: {}, hit: 0.8 },
+    { name: "cheer", from: [["mocap", "Cheer_One_arm"]], hold: {}, hit: 1, mirror: true },
+    { name: "hailing", from: [["mocap", "Help_One_Arm"]], hold: {}, hit: 1 },
 ];
 
 // Tried and left out (the motion check, every body: docs/CHARACTERS.md):
@@ -70,7 +82,13 @@ export const BAKES = [
 //    body, but the string's drawn only to the shoulder, 40 cm from the face, not to an anchor
 //    under the jaw as an archer draws it (and as the keyed draws do);
 //  - the Spell_Simple clips' two-handed Two-hand Blast, and Attack_Ground_Pound (one hand on its
-//    weapon, not two).
+//    weapon, not two);
+//  - for rests: arms folded (Idle_FoldArms: a shoulder past its range on 27 bodies; the keyed
+//    one's clean), leaning on a rail (Idle_Rail: hunched over nothing, the bar's lower), shaking
+//    off (Idle_ShakeOff: hardly moves), a nod with an arm out (Yes: reads as pointing), drinking
+//    (Consume Item: from nothing, and the patrons drink from their tankards already), a salute
+//    (Salute: not with a sword in the hand, as the sentries have), sitting still (Sitting_Idle:
+//    hardly moves), and those with the legs' part in them (dances, a hunched rest, meditating).
 
 // Each key value's tolerance, by what it is: a key's left out if the curve through the others
 // passes this near it (degrees; arm lengths; unit vectors; metres; a foot's freedom)
@@ -267,6 +285,20 @@ function pose({ character, walker }, frame, limit = true) {
     object.updateMatrixWorld(true);
 
     return [0, 1].map((i) => ({ height: walker.footHeight(i), at: rig.bone(i ? "RightFoot" : "LeftFoot").getWorldPosition(new THREE.Vector3()) }));
+}
+
+// Where the reference body's ankles are, standing still on its own two feet (the walker's stance)
+function standing({ character, walker }) {
+    character.rig.reset();
+    walker.release();
+
+    for (let k = 0; k < 30; k++) {
+        walker.update(1 / 30, { speed: 0 });
+    }
+
+    character.object.updateMatrixWorld(true);
+
+    return ["LeftFoot", "RightFoot"].map((name) => ({ at: character.rig.bone(name).getWorldPosition(new THREE.Vector3()) }));
 }
 
 /** A hand's part of a key, as the body's posed now: holding `held` (an item's id, "haft", or nothing). */
@@ -488,7 +520,7 @@ function reduce(times, poses, must) {
  * Bake one clip (a BAKES entry) on the reference body: { source, seconds, hit, channels, keys }
  * (each key its time and its values, in the channels' order).
  */
-export async function bake(from, { from: clips, hold, hit = null, crop = null, mirror = false, legs = null }, body = referenceBody()) {
+export async function bake(from, { from: clips, hold, hit = null, crop = null, mirror = false, legs = null, seated = false }, body = referenceBody()) {
     const poses = await sequence(from, clips);
     const clip = retarget(poses, body.character.rig, { names: MESH2MOTION_NAMES, match: MESH2MOTION_MATCH, limit: false });
     const { rig } = body.character;
@@ -514,11 +546,32 @@ export async function bake(from, { from: clips, hold, hit = null, crop = null, m
         const key = keyOf(body, hold, legs);
 
         key.offset[1] = round(height, 3);
-        key.offset = key.offset.map((x, k) => Math.min(OFFSET[k][1], Math.max(OFFSET[k][0], x)));
 
         return { pose: key, feet };
     });
+
     const free = stepping(measured, frameTime);
+
+    // The pelvis where it is over the feet (an animator's figure stands anywhere, ours on its own
+    // two feet): as far from where ours stand under it, standing still, as they are at the
+    // start, and then as far as those on the ground move; then moved only a little. Seated, only
+    // as it moves from where it sits at the start (the bench, not the clip's chair, sets how low)
+    const rest = standing(body);
+    const under = measured[0].feet.reduce((sum, { at }, i) => sum.add(at).sub(rest[i].at), new THREE.Vector3()).multiplyScalar(0.5);
+
+    measured.forEach(({ pose: key, feet }, f) => {
+        const down = f > 0 ? [0, 1].filter((i) => !free[f][i] && !free[f - 1][i]) : [];
+
+        down.forEach((i) => under.addScaledVector(feet[i].at.clone().sub(measured[f - 1].feet[i].at), 1 / down.length));
+        key.offset[0] -= under.x;
+        key.offset[2] -= under.z;
+    });
+
+    const seat = seated ? [...measured[0].pose.offset] : [0, 0, 0];
+
+    for (const { pose: key } of measured) {
+        key.offset = key.offset.map((x, k) => round(Math.min(OFFSET[k][1], Math.max(OFFSET[k][0], x - seat[k])), 3));
+    }
 
     // The frame the blow lands: given (seconds into it, or into one of its clips: [which, seconds]),
     // or as the fastest of the hands, what they hold and the feet goes fastest
@@ -535,7 +588,7 @@ export async function bake(from, { from: clips, hold, hit = null, crop = null, m
     const keyTime = (f) => (f === at ? 1 : round(f <= at ? times[f] / times[at] : 1 + (times[f] - times[at]) / (seconds - times[at]), 3));
 
     return {
-        source: clips.map(([, name]) => name).join(" + ") + (crop ? ` (${crop[0]} to ${crop[1]} s)` : "") + (mirror ? ", mirrored" : ""),
+        source: clips.map(([, name]) => name).join(" + ") + (crop ? ` (${crop[0]} to ${crop[1]} s)` : "") + (mirror ? ", mirrored" : "") + (seated ? ", seated" : ""),
         seconds: round(seconds, 3),
         hit: round(times[at], 3),
         channels: [...channels, ...shapes.map((side) => `${side}.shape`)],
