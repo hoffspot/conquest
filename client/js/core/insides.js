@@ -617,9 +617,86 @@ const KEEP = [
     "..........DD..........",
 ];
 
-/** A keep's floors: its great hall. */
+// A people's castle's keep (out in its lands, not a town's), its great hall as a town keep's but
+// for the stairs down to its undercroft in the north-west corner, where the racks were (they're
+// below now), the steward's desk to the east of the thrones
+const CASTLE_KEEP = [
+    ".SSSSS>...YY.......eee",
+    ".SSSSS>...rr..........",
+    "..........rr...MMM.c.c",
+    ...KEEP.slice(3),
+];
+
+// Its undercroft, 24 by 16 metres, vaulted on four pillars: the stairs up to the great hall along
+// the north wall, rising east from their foot in the north-west corner; the quartermaster's
+// armoury beside them, the castle's arms racked on the wall behind their counter, a suit of
+// armour on a stand either side of it; the castle's forge in the north-east (as a smithy's: its
+// coals, bellows, anvil, quenching trough, grindstone and workbench); the garrison's long table
+// and its benches between the pillars; the arcanist's corner in the south-west, their shelves of
+// jars and bottles on the south wall behind their counter, their worktable beside it; barrels on
+// the west wall and strongboxes in the south-east corner
+const UNDERCROFT = [
+    "<SSSSS...RRRRR.OOOFFFF..",
+    "<SSSSS.........OOOFFFF..",
+    "........nMMMMMn..PFFFF..",
+    "........................",
+    "..............QQ........",
+    "..............QQ...A....",
+    "........I.......I.......",
+    "........................",
+    "K.........bbbbb.........",
+    "K.........TTTTT.......G.",
+    "K.........bbbbb........X",
+    "........I.......I......X",
+    ".......................X",
+    "..MMMM..................",
+    "........TTT.............",
+    ".eeeeee.TTT..........cc.",
+];
+
+/**
+ * A keep's floors: its great hall; a people's castle's (out in its lands: its site's kind
+ * "castle"), with its undercroft below.
+ */
 export function keepRooms(building) {
-    return [{ suffix: "great-hall", style: "keep", name: building.name, rows: KEEP, ground: GROUND.cobbles, sound: "keep" }];
+    if (building.siteKind !== "castle") {
+        return [{ suffix: "great-hall", style: "keep", name: building.name, rows: KEEP, ground: GROUND.cobbles, sound: "keep" }];
+    }
+
+    return [
+        { suffix: "great-hall", style: "keep", name: building.name, rows: CASTLE_KEEP, ground: GROUND.cobbles, sound: "keep" },
+        { suffix: "undercroft", style: "undercroft", name: `The undercroft of ${building.name}`, rows: UNDERCROFT, ground: GROUND.cobbles, sound: "undercroft" },
+    ];
+}
+
+/**
+ * A castle keep's undercroft's folk, worked out from its plan: the castle's smith and their
+ * apprentice at its forge (as a smithy's); its quartermaster behind their counter, going to look
+ * over the racks now and then; its arcanist behind theirs, at their shelves and at their
+ * worktable in turn.
+ */
+export function undercroftFolkOf(building, under) {
+    const random = createRandom(building.seed * 19 + 3);
+    const { n, s } = FACING;
+    const [smith, apprentice] = smithyFolkOf(building, under);
+    const at = (kind, below) => under.pieces.find((piece) => piece.kind === kind && (below ? piece.y > under.height / 2 : piece.y < under.height / 2));
+    const [armoury, arcane] = [at("counter", false), at("counter", true)];
+    const table = under.pieces.find((piece) => piece.kind === "table" && piece.h > 1);
+    const shelves = at("shelves", true);
+    const sex = (share) => (random.chance(share) ? "f" : "m");
+    const middle = (piece) => piece.x + Math.floor(piece.w / 2);
+    const keeps = { square: [middle(armoury), armoury.y - 1], facing: s, wait: [7000, 12000] };
+    const looks = { square: [armoury.x + armoury.w - 1, armoury.y - 1], facing: n, wait: [3000, 5000] };
+    const serves = { square: [arcane.x + 1, arcane.y + 1], facing: n, wait: [7000, 12000] };
+    const reaches = { square: [shelves.x + shelves.w - 2, shelves.y - 1], facing: s, wait: [3000, 5000] };
+    const works = { square: [table.x + 1, table.y - 1], facing: s, act: "read", wait: [4000, 7000] };
+
+    return [
+        { ...smith, talk: "castleSmith" },
+        apprentice,
+        { local: "quartermaster", title: "Quartermaster", role: "quartermaster", sex: sex(0.3), map: under.id, square: keeps.square, facing: s, routine: { order: "alternate", wait: [7000, 12000], stops: [keeps, looks] } },
+        { local: "arcanist", title: "Arcanist", role: "arcanist", sex: sex(0.5), map: under.id, square: serves.square, facing: n, routine: { order: "cycle", wait: [6000, 10000], stops: [serves, reaches, serves, works] } },
+    ];
 }
 
 /**
@@ -885,7 +962,7 @@ const KINDS = Object.freeze({
     church: { first: "nave", rooms: templeRooms, folk: (building, [nave]) => templeFolkOf(building, nave) },
     guild: { first: "hall", rooms: guildRooms, folk: (building, [hall]) => guildFolkOf(building, hall) },
     hall: { first: "chamber", rooms: hallRooms, folk: (building, [chamber]) => hallFolkOf(building, chamber) },
-    keep: { first: "great-hall", rooms: keepRooms, folk: (building, [hall]) => keepFolkOf(building, hall) },
+    keep: { first: "great-hall", rooms: keepRooms, folk: (building, [hall, under]) => [...keepFolkOf(building, hall), ...(under ? undercroftFolkOf(building, under) : [])] },
     // (The places worth finding: no folk of their own, those who hold them the wild's: host.js)
     cave: { first: "cave", rooms: caveRooms, folk: () => [] },
     lair: { first: "lair", rooms: lairRooms, folk: () => [] },
@@ -1095,6 +1172,7 @@ export class Interiors {
             patron: null,
             place: "site",
             site: site.id,
+            siteKind: site.kind,
             people: site.race ?? "human",
             seed: site.seed ?? 1,
             // (Where it stands in the world, for its way in: the ground before it)
@@ -1178,13 +1256,17 @@ export class Interiors {
         Object.assign(building.door.ends[1], { squares: ground.marks.D, arrive: [doorX, doorY - 2], facing: FACING.s, pending: false });
 
         if (upstairs) {
+            // (Their foot below and their top above: up from a tavern's taproom, down from a
+            // castle keep's great hall to its undercroft)
+            const [below, above] = ground.marks["<"] ? [ground, upstairs] : [upstairs, ground];
+
             building.stairs = {
                 id: `${key}/stairs`,
                 kind: "stairs",
                 building: key,
                 ends: [
-                    { map: ground.id, squares: ground.marks["<"], arrive: [1, 3], facing: FACING.n },
-                    { map: upstairs.id, squares: upstairs.marks[">"], arrive: [6, 3], facing: FACING.n },
+                    { map: below.id, squares: below.marks["<"], arrive: [1, 3], facing: FACING.n },
+                    { map: above.id, squares: above.marks[">"], arrive: [6, 3], facing: FACING.n },
                 ],
             };
             this.world.links.push(building.stairs);

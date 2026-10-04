@@ -7,6 +7,7 @@ import { STEP_MS } from "../client/js/core/battle.js";
 import { squaresOf } from "../client/js/core/grid.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
+import { priceOf, wares } from "../client/js/core/progress.js";
 import { castleLayout, inCourt, solidAt } from "../client/js/core/setpieces/castles.js";
 import { GROUND, PEOPLE_PLACES, PLOT } from "../client/js/core/setpieces/pieces.js";
 import { WORLD_SIZE } from "../client/js/core/worldplan/plan.js";
@@ -197,5 +198,59 @@ describe("the peoples' castles as they stand (setpieces/castles.js)", () => {
             assert.match(host.folk.get(`${keep.key}/ruler`).title, new RegExp(`^(Lord|Lady) of ${keep.name}$`));
             assert.equal(post?.town, nearest.id, race);
         }
+    });
+
+    it("their keeps' undercrofts gone down to by the stairs from the great hall: the quartermaster selling the castle's arms and armour (a legendary make there and nowhere else), the arcanist the arcane, each when near them", () => {
+        const world = buildWorld({ seed: 1 });
+        const host = new Host(world, { populate: false });
+
+        host.join({ id: HOST_PLAYER, hero: { name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false } });
+        host.populate();
+        Object.assign(host.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        const me = host.battle.actor(HOST_PLAYER);
+        const { progress } = host.players.get(HOST_PLAYER);
+        const site = world.plan.sites.find((each) => each.kind === "castle" && each.race === "elf");
+
+        world.maps.town.sites.heartOf(site);
+
+        const set = world.maps.town.sites.set.get(site.id);
+        const keep = world.interiors.buildings.get(`site:${site.id}`);
+        const out = [Math.floor(set.x + Math.sin(set.facing) * (set.h * 2 + 3)), Math.floor(set.y + Math.cos(set.facing) * (set.h * 2 + 3))];
+        const walk = (link, to) => {
+            assert.equal(host.command(HOST_PLAYER, { type: "enter", link }).ok, true, link);
+
+            for (let t = 0; t < 60000 && me.map !== to; t += STEP_MS) {
+                host.advance(STEP_MS);
+            }
+
+            assert.equal(me.map, to, link);
+        };
+
+        Object.assign(me, { hp: 1e6, maxHp: 1e6, map: "town", square: out, x: out[0] + 0.5, y: out[1] + 0.5, path: [], order: null, target: null, spawn: out });
+        walk(keep.door.id, `${keep.key}/great-hall`);
+        walk(keep.stairs.id, `${keep.key}/undercroft`);
+
+        const [quartermaster, arcanist] = ["quartermaster", "arcanist"].map((local) => host.battle.actor(`${keep.key}/${local}`));
+        const legendary = { id: "sword", quality: "legendary" };
+        const wand = { id: "wand", quality: "masterwork" };
+
+        assert.ok(quartermaster && arcanist && quartermaster.map === me.map && arcanist.map === me.map);
+        assert.ok(wares("armoury", "elf").some(({ id, quality }) => id === "sword" && quality === "legendary"));
+        assert.ok(["smith", "arcane", "guild"].every((shop) => wares(shop).every(({ quality }) => quality !== "legendary")), "nowhere else");
+        assert.ok(wares("arcane").every(({ id }) => id !== "tomeOfBurn"), "no tomes");
+        progress.gold = priceOf(legendary) + priceOf(wand);
+
+        // (Across the counter from each in turn, standing still)
+        const before = (one) => Object.assign(me, { square: [one.square[0], one.square[1] + 2], x: one.square[0] + 0.5, y: one.square[1] + 2.5, path: [], order: null });
+
+        before(quartermaster);
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "buy", item: legendary, from: arcanist.id }), { ok: false, reason: "far" });
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "buy", item: wand, from: quartermaster.id }), { ok: false, reason: "shop" });
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "buy", item: legendary, from: quartermaster.id }), { ok: true });
+        before(arcanist);
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "buy", item: wand, from: arcanist.id }), { ok: true });
+        assert.ok(progress.gold < priceOf(wand), `${progress.gold} gold left (haggled down)`);
+        assert.deepEqual(progress.pack.filter(Boolean).slice(-2).map(({ id, quality }) => [id, quality]), [["sword", "legendary"], ["wand", "masterwork"]]);
     });
 });

@@ -96,10 +96,15 @@ export const ITEMS = Object.freeze({
 
 /**
  * What each shop sells: the things it keeps, and the best make it has of each. A smith sells its
- * own people's uniform too (core/gear.js UNIFORM).
+ * own people's uniform too (core/gear.js UNIFORM), as does a castle's quartermaster (its armoury:
+ * the arms and armour of war, the only place a legendary make's sold). A castle's arcanist sells
+ * the arcane (wands, grimoires, the hats and jewels of those who cast) and draughts, better made
+ * than a guild's; not tomes (a guild's).
  */
 export const SHOPS = Object.freeze({
     smith: { items: ["sword", "hammer", "staff", "bow", "gauntlets", "quiver", "roundShield", "kiteShield", "cap", "nasalHelm", "jerkin", "gambeson", "mail", "plate", "bracers", "gloves", "platedGloves", "belt", "trousers", "breeches", "greaves", "leatherBoots", "sabatons", "boots", "travelCloak", ...UNIFORM], best: "masterwork" },
+    armoury: { items: ["sword", "hammer", "bow", "gauntlets", "quiver", "roundShield", "kiteShield", "nasalHelm", "gambeson", "mail", "plate", "platedGloves", "greaves", "sabatons", ...UNIFORM], best: "legendary" },
+    arcane: { items: ["wand", "grimoire", "staff", "wizardHat", "amulet", "ring", "potion", ...Object.keys(CURES)], best: "masterwork" },
     tavern: { items: ["ale", "meal"], best: "common" },
     temple: { items: ["potion"], best: "common" },
     guild: { items: ["wand", "grimoire", "wizardHat", "amulet", "ring", "potion", ...Object.keys(CURES), ...ELEMENT_TOMES.map(tomeOf), ...GUILD_TOMES.map(tomeOf)], best: "fine" },

@@ -514,7 +514,13 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
   - the guild's receptionist ("I'd like to buy or sell something", or "What does the guild
     buy?", which she answers: the spoils of the wild and tomes, which no one else takes, and gear):
     wands, grimoires, wizards' hats, jewellery, draughts and cures, and the tomes that open the
-    elements' schools, up to fine.
+    elements' schools, up to fine;
+  - down in a people's castle's undercroft (GAME.md *Places worth finding*, *The undercroft*):
+    its smith as a town's; its quartermaster ("Show me what's on the racks."): the castle's arms,
+    shields and armour and the pieces of its people's uniform, up to legendary, the only shop
+    that sells a legendary make (`SHOPS.armoury`); its arcanist ("What have you for sale?"):
+    wands, grimoires, staves, wizards' hats, jewellery, draughts and cures, up to masterwork, but
+    no tomes (`SHOPS.arcane`).
 
   What's carried sells for 40% of its price (a creature's part for all it's worth, to the guild).
   The shop stays open while the player's within a few steps of the keeper.

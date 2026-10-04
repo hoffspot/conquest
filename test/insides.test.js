@@ -692,6 +692,68 @@ describe("the places worth finding gone into (insides.js: a cave, the dragon's l
     });
 });
 
+describe("a people's castle's keep's undercroft (insides.js)", () => {
+    it("is down the stairs from its great hall (a town's keep, a manor's and the elves' tree hall's have none): its forge, its armoury and the arcanist's corner, all got to from the stairs' foot; the castle's smith and apprentice at the forge, its quartermaster and arcanist behind their counters; and is drawn, vaulted and lit", () => {
+        const world = buildWorld({ seed: 1 });
+        const sites = world.maps.town.sites;
+        const peoples = [];
+
+        for (const site of world.plan.sites.filter((one) => one.race && ["castle", "manor", "tree hall"].includes(one.kind))) {
+            sites.heartOf(site);
+
+            const building = world.interiors.buildings.get(`site:${site.id}`);
+
+            if (!building || building.kind !== "keep") {
+                continue;
+            }
+
+            world.interiors.make(building.key);
+
+            if (site.kind !== "castle") {
+                assert.equal(building.maps.length, 1, `${site.id}, the ${site.race}'s ${site.kind}`);
+                continue;
+            }
+
+            const [hall, under] = building.maps.map((id) => world.maps[id]);
+            const below = building.folk.filter(({ map }) => map === under.id);
+
+            assert.equal(under.style, "undercroft", site.race);
+            assert.deepEqual(building.stairs.ends.map(({ map }) => map), [under.id, hall.id], `${site.race}: the stairs' foot below, their top in the hall`);
+            assert.ok(reachable(hall, building.door.ends[1].arrive, building.stairs.ends[1].arrive), `${site.race}: the stairs got to from the door`);
+
+            // (Everything in it got to from the stairs' foot: every open square, and before each
+            // piece of it)
+            for (let y = 0; y < under.height; y++) {
+                for (let x = 0; x < under.width; x++) {
+                    assert.ok(under.blocked[y][x] || reachable(under, building.stairs.ends[0].arrive, [x, y]), `${site.race}: ${[x, y]}`);
+                }
+            }
+
+            assert.deepEqual(below.map(({ role }) => role), ["smith", "apprentice", "quartermaster", "arcanist"]);
+            assert.equal(below.find(({ role }) => role === "smith").talk, "castleSmith");
+
+            for (const one of below) {
+                for (const { square } of [one, ...(one.routine.stops ?? [])]) {
+                    assert.ok(!under.blocked[square[1]][square[0]], `${site.race}'s ${one.local} at ${square}`);
+                }
+
+                assert.ok(treeFor(one) && ROLES[one.role], one.role);
+            }
+
+            for (const map of [hall, under]) {
+                const interior = buildInterior(map);
+
+                assert.ok(interior.object.children.length > 0 && interior.lights.length >= (map === under ? 5 : 2), `${site.race}: ${map.id}`);
+                interior.dispose();
+            }
+
+            peoples.push(site.race);
+        }
+
+        assert.deepEqual(peoples.sort(), ["cat", "darkElf", "elf", "human", "lizard", "orc"]);
+    });
+});
+
 describe("folk made up as they're wanted (characters/folk.js)", () => {
     it("look as their part and sex have them, the same for the same seed, and each their own", () => {
         const parts = [["barkeep", "barkeep", "m"], ["barmaid", "wench", "f"], ["patron", "drinker", "m"], ["patron", "alewife", "f"], ["patron", "greybeard", "m"], ["innkeeper", "innkeeper", "f"], ["madam", "madam", "f"], ["courtesan", "courtesan", "f"], ["smith", "smith", "m"], ["smith", "smith", "f"], ["apprentice", "apprentice", "m"]];

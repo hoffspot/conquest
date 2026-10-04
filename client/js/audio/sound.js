@@ -50,6 +50,8 @@ export const PLACES = Object.freeze({
     // (In a town hall, the town's music through its windows; in a keep, far off through stone)
     hall: { score: "town", level: 0.35, muffle: 800 },
     keep: { score: "town", level: 0.25, muffle: 500 },
+    // (In a castle keep's undercroft, under its great hall, further off yet)
+    undercroft: { score: "town", level: 0.15, muffle: 350 },
     // (In a cave, or the dragon's lair, the world outside barely heard; in a broken watchtower,
     // through its stones)
     cave: { score: "town", level: 0.12, muffle: 300 },

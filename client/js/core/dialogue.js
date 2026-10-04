@@ -400,6 +400,108 @@ export const TREES = Object.freeze({
             },
         },
     },
+    // A castle's smith, at the forge in its undercroft: the garrison's mail and the lord's horses
+    // keep them busy, and they'll say so
+    castleSmith: {
+        start: "greet",
+        nodes: {
+            greet: {
+                say: [
+                    { if: { met: false }, lines: ["Mind the sparks. {name}; I keep {place}'s forge. What d'you need?", "Hah! Stand clear of the coals, friend. {name}'s the name. If the garrison wears it or swings it, I made it or mended it."] },
+                    { lines: ["{player}. Blade holding up?", "Back down here, {player}? Let's see what you've done to that edge."] },
+                ],
+                choices: "more",
+            },
+            more: {
+                say: ["What else?", "Speak up, the fire's loud.", "Anything more?"],
+                choices: [
+                    { say: "Show me what you have for sale.", next: null, do: [{ shop: "smith" }] },
+                    { say: "Could you put an edge on my blade? (3 gold)", next: "sharpen", do: [{ buy: "sharpening", price: 3 }] },
+                    { say: "What are you working on?", next: "work" },
+                    { if: { notFlag: "askedApprentice" }, say: "Who's that at the bellows?", next: "apprentice", do: [{ remember: "askedApprentice" }] },
+                    FAREWELL,
+                ],
+            },
+            sharpen: { say: ["There. You could shave with that. Don't.", "Good steel, that. Treat it better and it'll outlive you."], choices: "more" },
+            work: {
+                say: [
+                    "Mail for the garrison. Rings, rings and more rings: they split them on the practice yard faster than I close them.",
+                    "Shoes for the stables. The lord's horses go through iron like a drover's.",
+                    "Hinges for the postern gate. Not glorious, but a gate that sticks is a gate that kills you.",
+                ],
+                choices: [{ say: "Honest work.", next: "more" }, FAREWELL],
+            },
+            apprentice: { say: "That's {apprentice}. Keeps the fire up, mostly. Ask the quartermaster for anything fancy; I make, they keep.", choices: "more" },
+        },
+    },
+    // A castle's quartermaster, keeping its armoury in the undercroft: an old soldier, blunt, who
+    // knows the worth of good steel and won't hear it haggled cheap
+    quartermaster: {
+        start: "greet",
+        nodes: {
+            greet: {
+                say: [
+                    { if: { met: false }, lines: ["You've found the armoury. {name}, quartermaster. What's issued to the garrison is the garrison's; what's on the racks behind me is for sale.", "Stop there. {name}, quartermaster of {place}. You want steel? You've come to the right cellar."] },
+                    { lines: ["{player}. Still in one piece, I see. Something on the racks for you?", "Back, {player}? Mind the counter. What'll it be?"] },
+                ],
+                choices: "more",
+            },
+            more: {
+                say: ["What else?", "Well?", "Anything more?"],
+                choices: [
+                    { say: "Show me what's on the racks.", next: null, do: [{ shop: "armoury" }] },
+                    { say: "Where does it all come from?", next: "makers" },
+                    { if: { notFlag: "askedLegendary" }, say: "Is any of it really the best there is?", next: "best", do: [{ remember: "askedLegendary" }] },
+                    FAREWELL,
+                ],
+            },
+            makers: {
+                say: [
+                    "Most of it from the forge behind you. The best of it from the old masters, paid for in blood or gold, and the treasury prefers gold.",
+                    "From the forge, from the towns, and now and then off a dead lord's back. Steel doesn't care who wore it last.",
+                ],
+                choices: [{ say: "I see.", next: "more" }, FAREWELL],
+            },
+            best: {
+                say: "There's a blade or a coat on these racks you'll find nowhere else this side of the war, and you'll pay for it like it. A {town} smith couldn't make it in a lifetime.",
+                choices: "more",
+            },
+        },
+    },
+    // A castle's arcanist, among their jars in the undercroft: learned, dry, a little vain of it
+    arcanist: {
+        start: "greet",
+        nodes: {
+            greet: {
+                say: [
+                    { if: { met: false }, lines: ["Careful. That jar is older than you are, and less forgiving. I'm {name}; I serve {place} in matters arcane. And I sell.", "Ah. A visitor who isn't the quartermaster. {name}, arcanist. Wands, draughts, a ring or two: what's your need?"] },
+                    { lines: ["{player}. Back for more of what keeps you breathing?", "Ah, {player}. Something for the wand hand, or for the wounds?"] },
+                ],
+                choices: "more",
+            },
+            more: {
+                say: ["What else?", "Ask, then.", "Anything more?"],
+                choices: [
+                    { say: "What have you for sale?", next: null, do: [{ shop: "arcane" }] },
+                    { say: "What are you brewing?", next: "brewing" },
+                    { say: "Do you sell tomes?", next: "tomes" },
+                    FAREWELL,
+                ],
+            },
+            brewing: {
+                say: [
+                    "Healing draughts, mostly. The garrison bleeds, I mend. It's dull, and it pays.",
+                    "A cure for the marsh fever. Two parts bitterroot, one part patience. I'm out of patience.",
+                    "Something I'd rather not name in case it hears me. Don't touch the green one.",
+                ],
+                choices: [{ say: "I'll leave you to it.", next: "more" }, FAREWELL],
+            },
+            tomes: {
+                say: "Tomes? Go to the adventurers' guild for those; they pay the libraries. What I sell you can use the day you buy it.",
+                choices: "more",
+            },
+        },
+    },
     // A temple's priest: kindly and unhurried, glad to tell of the Six to anyone who asks
     priest: {
         start: "greet",

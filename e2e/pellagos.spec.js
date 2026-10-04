@@ -3316,6 +3316,86 @@ test("a building gone into is marked on the minimap; holding the minimap opens t
     expect(await page.evaluate(() => window.pellagos.game.running)).toBe(true);
 });
 
+test("a people's castle's undercroft, down the stairs from its great hall: the castle's smith at its forge, its quartermaster and arcanist behind their counters, the quartermaster's racks for sale, a legendary make among them", async ({ page }) => {
+    test.setTimeout(240000);
+    await playing(page, "/?play&seed=1");
+
+    // Into the elves' castle's keep, and down the stairs from its great hall
+    const below = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(player, { hp: 1e6, maxHp: 1e6 });
+
+        const site = game.world.plan.sites.find(({ race, kind }) => race === "elf" && kind === "castle");
+        const until = async (done, steps = 120) => {
+            for (let k = 0; k < steps && !done(); k++) {
+                game.advance(0.1);
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        };
+
+        Object.assign(player, { x: site.at[0] + 0.5, y: site.at[1] + 40.5, path: [], order: null, progress: null });
+
+        for (let k = 0; k < 8; k++) {
+            game.advance(0.25, { render: false });
+
+            while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        }
+
+        const keep = game.world.interiors.buildings.get(`site:${site.id}`);
+        const [ox, oy] = keep.entrance.outside;
+
+        Object.assign(player, { x: ox + 0.5, y: oy + 0.5, path: [], order: null, progress: null });
+        game.host.command("player", { type: "enter", link: keep.door.id });
+        await until(() => player.map !== "town");
+        game.host.command("player", { type: "enter", link: keep.stairs.id });
+        await until(() => player.map === `${keep.key}/undercroft`, 200);
+        await until(() => game.interiors.get(player.map)?.object.visible && ["smith", "quartermaster", "arcanist"].every((local) => game.avatars.get(`${keep.key}/${local}`)), 200);
+
+        // (Before the quartermaster's counter, tapping them till they're come to talk, as they go
+        // between it and their racks)
+        const quartermaster = game.battle.actor(`${keep.key}/quartermaster`);
+        const { session } = window.pellagos;
+
+        Object.assign(player, { x: quartermaster.square[0] + 0.5, y: 3.5, path: [], order: null, progress: null });
+
+        for (let k = 0; k < 20; k++) {
+            game.advance(0.1);
+        }
+
+        for (let tap = 0; tap < 12 && quartermaster.talkingTo !== "player"; tap++) {
+            const spot = session.view.toScreen(game.avatars.get(quartermaster.id).point(0.6));
+
+            game.tap(spot.x, spot.y, { time: performance.now() + 9000 * (tap + 1) });
+            game.advance(2);
+        }
+
+        game.start();
+
+        return { map: player.map, folk: keep.folk.filter(({ map }) => map === player.map).map(({ role }) => role), talking: quartermaster.talkingTo };
+    });
+
+    expect(below.folk).toEqual(["smith", "apprentice", "quartermaster", "arcanist"]);
+    expect(below.talking).toBe("player");
+
+    // What's on the racks: the castle's arms and armour, the best of each made as well as it can be
+    const talk = page.locator(".talk");
+    const pack = page.locator(".pack");
+
+    await expect(talk).toBeVisible();
+    await expect(talk).toContainText("Quartermaster");
+    await talk.getByRole("button", { name: /on the racks/ }).click();
+    await expect(pack).toBeVisible();
+    await expect(pack.locator(".pack-title")).toContainText("Trading with");
+    await expect(pack.locator(".pack-heading")).toHaveText(["Weapons", "Shields and off hand", "Clothes and armour"]);
+    await expect(pack.locator(".wares .pack-row.rarity-legendary").first()).toBeVisible();
+});
+
 test("the places worth finding are on the minimap near them and on the world map once the player's been by, rimmed in who holds them, a cleared one grey till it's held again", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

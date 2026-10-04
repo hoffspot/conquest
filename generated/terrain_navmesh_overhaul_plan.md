@@ -3993,3 +3993,51 @@ converted data is to be measured in M8 against today's hm08 data.
     only going in is new), the great hall from the follow camera and from above.
   - **Next:** M7.5c (the castles' shops and blacksmiths, the abbey's arcane shop, the watchtowers'
     arms, the restless dead).
+- **2026-10-04, M7.5c broken into its steps** (§8 *Friendlies*, *The dead*):
+  - **M7.5c-1:** a people's castle's shops: its keep's undercroft, its smith, quartermaster and
+    arcanist.
+  - **M7.5c-2:** the smaller shops fitting the other places: an abbey's arcane goods, a
+    watchtower's weapons and armour.
+  - **M7.5c-3:** the restless dead at the ruins: ghosts and wraiths, a greater one with an old
+    relic and a chest.
+- **2026-10-04, M7.5c-1 built: the castles' undercrofts, their smiths, quartermasters and
+  arcanists** (docs/GAME.md *The undercroft*; WAR.md *Shops*).
+  - **Where:** a people's castle's keep (the five peoples' and the humans' citadel; not a town's
+    keep, a manor's or the elves' tree hall's, which go in as keeps too: insides.js `addSite`
+    keeps the site's kind, `siteKind`) has two floors: its great hall as before but for the
+    stairs down in its north-west corner where the racks were (the steward's desk moved east of
+    the thrones), and the undercroft below.
+  - **The undercroft** (insides.js `UNDERCROFT`, a new plan mark `n` for an armour stand,
+    interiors.js): 24 by 16 metres, every open square got to from the stairs' foot. Drawn
+    (world/interiors3d.js `undercroft`): a groin vault, bay by bay between four pillars and the
+    walls (`groinVault`: the higher of two crossing barrel vaults at each point, so its edges
+    arch and its groins run corner to corner), springing at 2.5 m, its crown 3.2 m, open over
+    the stairs with a dark shaft up; the smithy's works as they were, drawn by one function now
+    (`forgeworks`, the smithy's too); the quartermaster's racks and two suits of armour on stands
+    (`armourStand`); the arcanist's shelves of glass jars and phials, some glowing (`phialShelves`)
+    and worktable with its alembic (`worktable`); the garrison's table, barrels and strongboxes.
+    The great hall's floor open round a stairwell, the stairs going down into it, a parapet
+    round it (`stairwell`).
+  - **Its folk** (insides.js `undercroftFolkOf`): the smith and apprentice as a smithy's (their
+    plan's forge, anvil, trough, bellows and grindstone; the smith talks as `castleSmith`); a
+    quartermaster (roles.js, actions.js, folk.js: an old soldier in a gambeson) behind the
+    counter and at the racks; an arcanist (in a robe, now and then a wizard's hat) behind theirs,
+    at the shelves and at the worktable. Their talks in dialogue.js.
+  - **Their shops** (progress.js `SHOPS`, host.js `SHOPKEEPERS`): the quartermaster's armoury
+    (arms, shields, armour and the people's uniform, up to legendary: the only legendary make
+    for sale anywhere), the arcanist's arcane goods (wands, grimoires, staves, hats, jewellery,
+    draughts and cures, up to masterwork; no tomes), the smith's as a town's.
+  - **Stairs either way** (insides.js `make`): a building's stairs' foot is on whichever floor
+    has it (a tavern's taproom, a keep's undercroft), their top on the other.
+  - **Versions:** `NET_VERSION` 37 (a castle's keep has a floor more).
+  - **Tests:** test/insides.test.js (every castle's keep, the six peoples', down its stairs to
+    its undercroft, every open square of it got to, its folk where they can stand, and drawn; a
+    manor's and the tree hall's one floor); test/castles.test.js (into the elves' castle and down
+    its stairs: a legendary sword bought from the quartermaster, a masterwork wand from the
+    arcanist, each only when near them; legendary sold nowhere else, no tomes from the
+    arcanist). e2e: down to the elves' castle's undercroft, the quartermaster talked to and his
+    racks open, a legendary make among them.
+  - **Pictures** (sent in the session): the elves' great hall before and after (its stairwell
+    where its racks were), the undercroft from above and within (the forge, the armoury, the
+    arcanist's shelves, the vault), the orcs' undercroft in their dark basalt.
+  - **Next:** M7.5c-2 (an abbey's arcane goods and a watchtower's arms).

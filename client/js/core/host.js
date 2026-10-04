@@ -216,7 +216,7 @@ const KEEP_DONE = 50;
 export const SNAPSHOT_VERSION = 4;
 
 /** Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS). */
-export const SHOPKEEPERS = Object.freeze({ smith: "smith", apprentice: "smith", barkeep: "tavern", barmaid: "tavern", innkeeper: "tavern", priest: "temple", acolyte: "temple", receptionist: "guild" });
+export const SHOPKEEPERS = Object.freeze({ smith: "smith", apprentice: "smith", barkeep: "tavern", barmaid: "tavern", innkeeper: "tavern", priest: "temple", acolyte: "temple", receptionist: "guild", quartermaster: "armoury", arcanist: "arcane" });
 
 /**
  * How near a shopkeeper a player trades with them (squares): a talk's reach across a counter,

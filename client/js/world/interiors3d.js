@@ -1507,7 +1507,6 @@ function smithy(map) {
     const solid = new Solid();
     const moving = [];
     const [w, h] = [m(map.width), m(map.height)];
-    const at = (kind) => map.pieces.find((piece) => piece.kind === kind);
 
     // Beaten earth underfoot, dark with soot; bare stone walls, the door in the middle of the south
     solid.box(-m(0.3), -0.5, -m(0.3), w + m(0.3), 0, h + m(0.3), material("earth-sooty"));
@@ -1518,6 +1517,49 @@ function smithy(map) {
     walledIn(solid, map, "stone", [{ side: "s", from: doorMiddle - 0.7, to: doorMiddle + 0.7, lintel: 2.2 }], [{ side: "e", at: 4 }, { side: "e", at: 9 }, { side: "s", at: 3.5 }, { side: "s", at: 12.5 }]);
     solid.box(m(doorMiddle - 0.7), 0, h - 0.2, m(doorMiddle + 0.7), m(2.2), h + 0.4, material("planks-dark", WALL));
     ceiling(solid, map);
+
+    const works = forgeworks(solid, map, moving);
+
+    // Racks: tools hung on a board along the north wall; finished work (swords, axes, shields)
+    // along the east
+    for (const rack of map.pieces.filter((piece) => piece.kind === "rack")) {
+        const [rx0, rx1, rz0, rz1] = [m(rack.x), m(rack.x + rack.w), m(rack.y), m(rack.y + rack.h)];
+
+        if (rack.w > rack.h) {
+            solid.box(rx0 + 0.3, m(1.2), rz0, rx1 - 0.3, m(2), rz0 + 0.4, material("planks", WALL));
+            solid.box(rx0 + 0.3, 0, rz0 + 0.5, rx1 - 0.3, m(0.8), rz1 - m(0.35), material("planks-dark"));
+
+            for (let x = rx0 + m(0.4); x < rx1 - m(0.2); x += m(0.45)) {
+                const long = (Math.round(x) % 3) * 0.6;
+
+                solid.box(x - 0.12, m(1.25) - long, rz0 + 0.4, x + 0.12, m(1.85), rz0 + 0.65, material("iron", WALL));
+                solid.box(x - 0.35, m(1.25) - long - 0.35, rz0 + 0.35, x + 0.35, m(1.25) - long, rz0 + 0.7, material("iron", WALL));
+            }
+        } else {
+            solid.box(rx1 - m(0.35), m(0.2), rz0 + 0.3, rx1 - m(0.25), m(0.3), rz1 - 0.3, material("timber"));
+            solid.box(rx1 - m(0.35), m(1.1), rz0 + 0.3, rx1 - m(0.25), m(1.2), rz1 - 0.3, material("timber"));
+
+            for (let z = rz0 + m(0.3); z < rz1 - m(0.2); z += m(0.3)) {
+                solid.box(rx1 - m(0.3) - 0.1, m(0.2), z - 0.2, rx1 - m(0.3) + 0.1, m(1.25), z + 0.2, material("iron"));
+                solid.box(rx1 - m(0.3) - 0.25, m(0.85), z - 0.7, rx1 - m(0.3) + 0.25, m(0.9), z + 0.7, material("brass"));
+            }
+
+            solid.cylinder(rx1 - 0.3, (rz0 + rz1) / 2, m(1.4), m(1.45), m(0.35), m(0.35), material("paint-red", WALL), { segments: 14 });
+        }
+    }
+
+    // A lantern hanging in the middle
+    solid.add(objectSolid(lantern(m(map.width / 2), m(map.height * 0.6), m(2.2))));
+
+    return { solid, moving, flames: works.fires, lights: [works.light], hearth: works.hearth };
+}
+
+// A forge's works (a smithy's, and a castle keep's undercroft's), as its plan has them: the forge
+// under its hood, its bellows, the anvil on its stump, the quenching trough, the grindstone (a
+// part that turns as it's cranked: into `moving`), the heap of coals, and a workbench if there's
+// one. { fires (its flames), light (the forge's), hearth (where its fire is) }
+function forgeworks(solid, map, moving) {
+    const at = (kind) => map.pieces.find((piece) => piece.kind === kind);
 
     // The forge: a waist-high hearth of stone against the north wall, a bed of glowing coals on
     // it, a hood over it narrowing to the chimney, and a fire
@@ -1609,51 +1651,21 @@ function smithy(map) {
     solid.pyramid(m(coal.x), m(coal.y), m(coal.x + coal.w), m(coal.y + coal.h), 0, m(0.7), material("shadow"));
     solid.box(m(coal.x + coal.w - 0.8), 0, m(coal.y + coal.h + 0.1), m(coal.x + coal.w - 0.1), m(0.6), m(coal.y + coal.h + 0.6), material("canvas-sack"));
 
-    // Racks: tools hung on a board along the north wall; finished work (swords, axes, shields)
-    // along the east
-    for (const rack of map.pieces.filter((piece) => piece.kind === "rack")) {
-        const [rx0, rx1, rz0, rz1] = [m(rack.x), m(rack.x + rack.w), m(rack.y), m(rack.y + rack.h)];
+    // The workbench along a wall: a vice, a hammer and files on it
+    const bench = at("workbench");
 
-        if (rack.w > rack.h) {
-            solid.box(rx0 + 0.3, m(1.2), rz0, rx1 - 0.3, m(2), rz0 + 0.4, material("planks", WALL));
-            solid.box(rx0 + 0.3, 0, rz0 + 0.5, rx1 - 0.3, m(0.8), rz1 - m(0.35), material("planks-dark"));
+    if (bench) {
+        const [wx0, wx1, wz0, wz1] = [m(bench.x + 0.05), m(bench.x + bench.w - 0.1), m(bench.y + 0.1), m(bench.y + bench.h - 0.1)];
 
-            for (let x = rx0 + m(0.4); x < rx1 - m(0.2); x += m(0.45)) {
-                const long = (Math.round(x) % 3) * 0.6;
-
-                solid.box(x - 0.12, m(1.25) - long, rz0 + 0.4, x + 0.12, m(1.85), rz0 + 0.65, material("iron", WALL));
-                solid.box(x - 0.35, m(1.25) - long - 0.35, rz0 + 0.35, x + 0.35, m(1.25) - long, rz0 + 0.7, material("iron", WALL));
-            }
-        } else {
-            solid.box(rx1 - m(0.35), m(0.2), rz0 + 0.3, rx1 - m(0.25), m(0.3), rz1 - 0.3, material("timber"));
-            solid.box(rx1 - m(0.35), m(1.1), rz0 + 0.3, rx1 - m(0.25), m(1.2), rz1 - 0.3, material("timber"));
-
-            for (let z = rz0 + m(0.3); z < rz1 - m(0.2); z += m(0.3)) {
-                solid.box(rx1 - m(0.3) - 0.1, m(0.2), z - 0.2, rx1 - m(0.3) + 0.1, m(1.25), z + 0.2, material("iron"));
-                solid.box(rx1 - m(0.3) - 0.25, m(0.85), z - 0.7, rx1 - m(0.3) + 0.25, m(0.9), z + 0.7, material("brass"));
-            }
-
-            solid.cylinder(rx1 - 0.3, (rz0 + rz1) / 2, m(1.4), m(1.45), m(0.35), m(0.35), material("paint-red", WALL), { segments: 14 });
-        }
+        table(solid, wx0, wz0, wx1, wz1);
+        solid.box(wx1 - m(0.25), m(0.78), wz0 + m(0.6), wx1 - m(0.05), m(0.98), wz0 + m(0.8), material("iron"));
+        solid.box(wx0 + m(0.2), m(0.78), wz0 + m(1.4), wx0 + m(0.4), m(0.82), wz0 + m(1.8), material("iron"));
+        candle(solid, (wx0 + wx1) / 2, wz1 - m(0.4), m(0.78));
     }
 
-    // The workbench along the west wall: a vice, a hammer and files on it
-    const bench = at("workbench");
-    const [wx0, wx1, wz0, wz1] = [m(bench.x + 0.05), m(bench.x + bench.w - 0.1), m(bench.y + 0.1), m(bench.y + bench.h - 0.1)];
-
-    table(solid, wx0, wz0, wx1, wz1);
-    solid.box(wx1 - m(0.25), m(0.78), wz0 + m(0.6), wx1 - m(0.05), m(0.98), wz0 + m(0.8), material("iron"));
-    solid.box(wx0 + m(0.2), m(0.78), wz0 + m(1.4), wx0 + m(0.4), m(0.82), wz0 + m(1.8), material("iron"));
-    candle(solid, (wx0 + wx1) / 2, wz1 - m(0.4), m(0.78));
-
-    // A lantern hanging in the middle
-    solid.add(objectSolid(lantern(m(map.width / 2), m(map.height * 0.6), m(2.2))));
-
     return {
-        solid,
-        moving,
-        flames: fires,
-        lights: [{ kind: "fire", x: forge.x + forge.w / 2, y: 1.2, z: forge.y + forge.h, colour: 0xff7a2a, intensity: 10, distance: 14, flicker: 0.3, ...fires[0].userData.fire }],
+        fires,
+        light: { kind: "fire", x: forge.x + forge.w / 2, y: 1.2, z: forge.y + forge.h, colour: 0xff7a2a, intensity: 10, distance: 14, flicker: 0.3, ...fires[0].userData.fire },
         hearth: { x: forge.x + forge.w / 2, y: 0.95, z: forge.y + forge.h / 2 },
     };
 }
@@ -2175,8 +2187,14 @@ function keep(map) {
     const solid = new Solid();
     const [w, h] = [m(map.width), m(map.height)];
     const at = (kind) => map.pieces.filter((piece) => piece.kind === kind);
+    const [stair] = at("stairs");
 
-    solid.box(-m(0.3), -0.5, -m(0.3), w + m(0.3), 0, h + m(0.3), material("stone"));
+    // Its flagstones; a people's castle's, round the stairwell down to its undercroft
+    if (stair) {
+        stairwell(solid, map, stair);
+    } else {
+        solid.box(-m(0.3), -0.5, -m(0.3), w + m(0.3), 0, h + m(0.3), material("stone"));
+    }
 
     const doors = map.marks.D;
     const doorMiddle = (doors[0][0] + doors.at(-1)[0] + 1) / 2;
@@ -2279,6 +2297,282 @@ function keep(map) {
         flames: fires.map(({ fire }) => fire),
         lights: fires.map(({ light }) => light),
         hearth: fires[0]?.at ?? null,
+    };
+}
+
+// A castle keep's great hall's floor, round its stairwell (`stair`, the plan's piece) down to its
+// undercroft along the north wall: the stairs going down west from the hall's floor, the well's
+// walls, a dark floor far down, and a low parapet along its open sides (the way onto the stairs at
+// its east end)
+function stairwell(solid, map, stair) {
+    const [w, h] = [m(map.width), m(map.height)];
+    const [hole0, hole1, well0, well1] = [m(stair.x), m(stair.x + stair.w), m(stair.y), m(stair.y + stair.h)];
+    const [ledge, high] = [m(0.25), m(0.9)];
+
+    solid.box(-m(0.3), -0.5, -m(0.3), hole0, 0, h + m(0.3), material("stone"));
+    solid.box(hole1, -0.5, -m(0.3), w + m(0.3), 0, h + m(0.3), material("stone"));
+    solid.box(hole0, -0.5, well1, hole1, 0, h + m(0.3), material("stone"));
+    stairs(solid, hole0, hole1, well0, well1, -m(STOREY), 0, well1);
+
+    solid.box(hole0, -m(STOREY) - 0.5, well0, hole1, -m(STOREY), well1, material("shadow"));
+    solid.box(hole0 - 0.5, -m(STOREY), well0, hole0, -0.5, well1, material("stone-dark"));
+    solid.box(hole0, -m(STOREY), well1, hole1, -0.5, well1 + 0.5, material("stone-dark"));
+    // (The parapet, its coping proud of it)
+    for (const [x0, z0, x1, z1] of [[hole0 - ledge, well0, hole0, well1 + ledge], [hole0, well1, hole1, well1 + ledge]]) {
+        solid.box(x0, 0, z0, x1, high, z1, material("stone-dark"));
+        solid.box(x0 - 0.3, high, z0, x1 + 0.3, high + 0.6, z1 + 0.3, material("stone"), { under: material("stone") });
+    }
+}
+
+// How a castle keep's undercroft is vaulted (metres): its vault springs from its pillars and its
+// walls at `spring`, and rises to `crown` in the middle of each bay; each bay's vault is drawn in
+// `cells` by `cells` (the stairwell's left open, cell by cell, with a shaft `shaft` metres up over
+// it)
+const UNDERCROFT = Object.freeze({ spring: 2.5, crown: 3.2, cells: 8, shaft: 1.5 });
+
+// A groin vault over a bay (art pixels: [x0, z0, x1, z1]), seen from below: the two barrel vaults
+// across it crossing, the higher of them at each point, so its edges arch from corner to corner
+// and its groins run from corner to corner across it. Its cells over `hole` (x0, z0, x1, z1: their
+// middles in it) left open, and a dark shaft up from round them
+function groinVault(solid, [x0, z0, x1, z1], hole) {
+    const { spring, crown, cells, shaft } = UNDERCROFT;
+    const height = (u, v) => m(spring + (crown - spring) * Math.max(Math.sin(Math.PI * u), Math.sin(Math.PI * v)));
+    const point = (i, j) => [x0 + ((x1 - x0) * i) / cells, height(i / cells, j / cells), z0 + ((z1 - z0) * j) / cells];
+    const open = (i, j) => {
+        const [cx, cz] = [x0 + ((x1 - x0) * (i + 0.5)) / cells, z0 + ((z1 - z0) * (j + 0.5)) / cells];
+
+        return i >= 0 && j >= 0 && i < cells && j < cells && hole && cx > hole[0] && cx < hole[2] && cz > hole[1] && cz < hole[3];
+    };
+    const stone = material("stone", CEILING);
+    const top = m(crown + shaft);
+
+    for (let j = 0; j < cells; j++) {
+        for (let i = 0; i < cells; i++) {
+            if (!open(i, j)) {
+                const [a, b, c, d] = [point(i, j), point(i + 1, j), point(i + 1, j + 1), point(i, j + 1)];
+
+                solid.facing([a, b, c], [0, -1, 0], stone);
+                solid.facing([a, c, d], [0, -1, 0], stone);
+                continue;
+            }
+
+            // (The shaft's sides, up from the vault round an open cell, facing into it; its top dark)
+            for (const [di, dj, from, to] of [[0, -1, [0, 0], [1, 0]], [0, 1, [0, 1], [1, 1]], [-1, 0, [0, 0], [0, 1]], [1, 0, [1, 0], [1, 1]]]) {
+                if (!open(i + di, j + dj)) {
+                    const [p, q] = [point(i + from[0], j + from[1]), point(i + to[0], j + to[1])];
+
+                    solid.facing([p, q, [q[0], top, q[2]], [p[0], top, p[2]]], [-di, 0, -dj], material("stone-dark", CEILING));
+                }
+            }
+
+            const [a, c] = [point(i, j), point(i + 1, j + 1)];
+
+            solid.box(a[0], top, a[2], c[0], top + 0.3, c[2], material("shadow", CEILING), { under: material("shadow", CEILING) });
+        }
+    }
+}
+
+// A suit of armour on a stand (art pixels: where it stands): a post on a foot, a mail coat hung on
+// it with its skirt, a surcoat over it in the castle's colour, plates at its shoulders and a helm
+function armourStand(solid, x, z, seed) {
+    solid.box(x - m(0.28), 0, z - m(0.28), x + m(0.28), m(0.08), z + m(0.28), material("timber"));
+    solid.box(x - m(0.04), m(0.08), z - m(0.04), x + m(0.04), m(0.6), z + m(0.04), material("timber"));
+    solid.cylinder(x, z, m(0.55), m(0.8), m(0.25), m(0.21), material("iron"), { segments: 10 });
+    solid.cylinder(x, z, m(0.8), m(1.42), m(0.2), m(0.24), material("iron"), { segments: 10 });
+    solid.box(x - m(0.16), m(0.62), z + m(0.17), x + m(0.16), m(1.38), z + m(0.27), material(seed > 0.5 ? "velvet" : "wool-blue"));
+    solid.cylinder(x, z, m(1.42), m(1.52), m(0.24), m(0.08), material("iron"), { segments: 10 });
+
+    for (const side of [-1, 1]) {
+        solid.cylinder(x + side * m(0.27), z, m(1.3), m(1.46), m(0.09), m(0.13), material("iron"), { segments: 8 });
+    }
+
+    solid.cylinder(x, z, m(1.52), m(1.78), m(0.12), m(0.13), material("iron"), { segments: 10 });
+    solid.cylinder(x, z, m(1.78), m(1.9), m(0.13), m(0.03), material("iron"), { segments: 10 });
+    solid.box(x - m(0.09), m(1.62), z + m(0.11), x + m(0.09), m(1.66), z + m(0.14), material("shadow"));
+}
+
+// An arcanist's shelves against the south wall (a shelves piece along it): four boards on a back,
+// each crowded with jars and phials of coloured glass, stoppered bottles, clay pots, books, a
+// skull, and a phial or two glowing
+function phialShelves(solid, shelf) {
+    const [x0, x1] = [m(shelf.x), m(shelf.x + shelf.w)];
+    const z = m(shelf.y + 1);
+    const glass = ["glass-green", "glass-violet", "wine", "glass", "calabash", "pewter", "glass-green", "glow-blue", "glass-violet", "glow-green"];
+
+    solid.box(x0, 0, z - m(0.1), x1, m(2.2), z, material("planks-dark", WALL));
+
+    for (const [y, k0] of [[0.35, 0], [0.8, 3], [1.25, 5], [1.7, 7]]) {
+        solid.box(x0, m(y), z - m(0.45), x1, m(y + 0.05), z, material("planks", WALL));
+
+        for (let x = x0 + m(0.18), k = k0; x < x1 - m(0.15); x += m(0.22), k++) {
+            const pick = Math.round(x * 3.7 + y * 11) % 7;
+            const [cz, base] = [z - m(0.22), m(y + 0.05)];
+
+            if (pick === 0) {
+                solid.box(x - m(0.07), base, cz - m(0.13), x + m(0.07), base + m(0.28), cz + m(0.13), material(k % 2 ? "ledger" : "leather", WALL));
+            } else if (pick === 1 && k % 5 === 0) {
+                solid.box(x - m(0.08), base, cz - m(0.08), x + m(0.08), base + m(0.14), cz + m(0.08), material("bone", WALL));
+            } else {
+                const tall = m(0.12 + ((k * 7) % 5) * 0.035);
+                const wide = m(0.05 + ((k * 3) % 3) * 0.018);
+
+                solid.cylinder(x, cz, base, base + tall, wide, wide, material(glass[(k * 7 + pick) % glass.length], WALL), { segments: 8 });
+                solid.cylinder(x, cz, base + tall, base + tall + m(0.05), wide * 0.45, wide * 0.4, material(pick % 2 ? "timber" : "linen", WALL), { segments: 6 });
+            }
+        }
+    }
+}
+
+// An arcanist's worktable (a table piece): an alembic over a flame, its glass bulb and its pipe to
+// a phial, open books, a crystal ball on its stand, a mortar and pestle, candles
+function worktable(solid, piece) {
+    const [x0, z0, x1, z1] = [m(piece.x), m(piece.y), m(piece.x + piece.w), m(piece.y + piece.h)];
+    const top = m(0.78);
+    const [cx, cz] = [(x0 + x1) / 2, (z0 + z1) / 2];
+
+    table(solid, x0 + m(0.05), z0 + m(0.1), x1 - m(0.05), z1 - m(0.1));
+
+    // (The alembic: a ring stand over a lamp, its bulb, the pipe down to the phial catching what drips)
+    solid.cylinder(x0 + m(0.7), cz, top, top + m(0.06), m(0.08), m(0.06), material("brass"), { segments: 8 });
+    solid.cylinder(x0 + m(0.7), cz, top + m(0.06), top + m(0.3), m(0.015), m(0.015), material("iron"), { segments: 4 });
+    solid.cylinder(x0 + m(0.7), cz, top + m(0.3), top + m(0.52), m(0.15), m(0.12), material("glass-green"), { segments: 10 });
+    solid.cylinder(x0 + m(0.7), cz, top + m(0.52), top + m(0.62), m(0.04), m(0.02), material("glass-green"), { segments: 6 });
+    solid.tube([[x0 + m(0.7), top + m(0.6), cz], [x0 + m(1.05), top + m(0.5), cz], [x0 + m(1.25), top + m(0.2), cz]], m(0.012), material("glass"), { sides: 4 });
+    solid.cylinder(x0 + m(1.25), cz, top, top + m(0.18), m(0.06), m(0.05), material("glow-green"), { segments: 8 });
+
+    // (Books open and shut; the crystal ball; a mortar and pestle; candles)
+    solid.box(cx - m(0.25), top, z0 + m(0.25), cx + m(0.25), top + m(0.03), z0 + m(0.55), material("parchment"));
+    solid.box(cx + m(0.35), top, z1 - m(0.6), cx + m(0.65), top + m(0.12), z1 - m(0.25), material("ledger"));
+    solid.cylinder(x1 - m(0.5), z0 + m(0.4), top, top + m(0.08), m(0.09), m(0.07), material("brass"), { segments: 8 });
+    solid.cylinder(x1 - m(0.5), z0 + m(0.4), top + m(0.08), top + m(0.26), m(0.1), m(0.1), material("glow-violet"), { segments: 10 });
+    solid.cylinder(x1 - m(0.45), z1 - m(0.45), top, top + m(0.1), m(0.08), m(0.1), material("stone-dark"), { segments: 8 });
+    solid.box(x1 - m(0.47), top + m(0.06), z1 - m(0.47), x1 - m(0.37), top + m(0.22), z1 - m(0.43), material("timber"));
+    candle(solid, cx - m(0.5), z1 - m(0.35), top);
+    candle(solid, x1 - m(0.25), cz, top);
+}
+
+// A castle keep's undercroft, under its great hall: flagstones; bare walls of its stone; its
+// groin vault on four pillars (a pilaster on the walls where a bay meets them); the stairs up to
+// the hall along the north wall, the vault open over them; the castle's forge in the north-east
+// (as a smithy's works: forgeworks); the quartermaster's armoury beside the stairs, the castle's
+// arms on racks on the wall behind their counter, a suit of armour on a stand either side of it;
+// the arcanist's corner in the south-west, their shelves of jars and phials behind their counter,
+// their worktable and its alembic beside it; barrels along the west wall, strongboxes in the
+// south-east corner; lit by the forge, torches on the walls and the arcanist's candles
+function undercroft(map) {
+    const solid = new Solid();
+    const moving = [];
+    const [w, h] = [m(map.width), m(map.height)];
+    const at = (kind) => map.pieces.filter((piece) => piece.kind === kind);
+    const [stair] = at("stairs");
+    const pillars = at("pillar");
+    const { spring, crown } = UNDERCROFT;
+    const thick = m(THICK);
+
+    solid.box(-m(0.3), -0.5, -m(0.3), w + m(0.3), 0, h + m(0.3), material("stone"));
+    walledIn(solid, map, "stone", [], []);
+
+    // (Its walls carried up to the vault's crown)
+    for (const [x0, z0, x1, z1] of [[-thick, -thick, w + thick, 0], [-thick, h, w + thick, h + thick], [-thick, 0, 0, h], [w, 0, w + thick, h]]) {
+        solid.box(x0, m(STOREY), z0, x1, m(crown + 0.3), z1, material("stone", WALL));
+    }
+
+    stairs(solid, m(stair.x), m(stair.x + stair.w), m(stair.y), m(stair.y + stair.h), 0, m(STOREY), m(stair.y + stair.h));
+
+    // The vault, bay by bay between the lines of pillars and the walls, open over the stairs
+    const lines = [0, ...new Set(pillars.map(({ x }) => x + 0.5)), map.width].sort((a, b) => a - b);
+    const rows = [0, ...new Set(pillars.map(({ y }) => y + 0.5)), map.height].sort((a, b) => a - b);
+    const hole = [m(stair.x - 0.1), m(stair.y - 0.1), m(stair.x + stair.w + 0.5), m(stair.y + stair.h + 0.4)];
+
+    for (let j = 0; j + 1 < rows.length; j++) {
+        for (let i = 0; i + 1 < lines.length; i++) {
+            groinVault(solid, [m(lines[i]), m(rows[j]), m(lines[i + 1]), m(rows[j + 1])], hole);
+        }
+    }
+
+    // Its pillars: square plinths, round shafts and capitals up to where the vault springs; and
+    // a pilaster on each wall where a line of them meets it
+    for (const pillar of pillars) {
+        const [cx, cz] = [m(pillar.x + 0.5), m(pillar.y + 0.5)];
+
+        solid.box(cx - m(0.42), 0, cz - m(0.42), cx + m(0.42), m(0.35), cz + m(0.42), material("stone-dark"));
+        solid.cylinder(cx, cz, m(0.35), m(spring - 0.3), m(0.3), m(0.3), material("stone"), { segments: 12 });
+        solid.box(cx - m(0.42), m(spring - 0.3), cz - m(0.42), cx + m(0.42), m(spring), cz + m(0.42), material("stone-dark"));
+    }
+
+    for (const x of lines.slice(1, -1)) {
+        for (const [z0, z1] of [[0, m(0.25)], [h - m(0.25), h]]) {
+            solid.box(m(x - 0.3), 0, z0, m(x + 0.3), m(spring), z1, material("stone-dark", WALL));
+        }
+    }
+
+    for (const z of rows.slice(1, -1)) {
+        for (const [x0, x1] of [[0, m(0.25)], [w - m(0.25), w]]) {
+            solid.box(x0, 0, m(z - 0.3), x1, m(spring), m(z + 0.3), material("stone-dark", WALL));
+        }
+    }
+
+    // The forge
+    const works = forgeworks(solid, map, moving);
+
+    // The armoury: its racks, its counter, its suits of armour on their stands
+    for (const rack of at("rack")) {
+        armoury(solid, rack);
+    }
+
+    const [armouryDesk, arcaneDesk] = at("counter").sort((a, b) => a.y - b.y);
+
+    desk(solid, armouryDesk, "velvet");
+    desk(solid, arcaneDesk, "velvet-purple");
+
+    for (const stand of at("stand")) {
+        armourStand(solid, m(stand.x + 0.5), m(stand.y + 0.5), roughOf(stand.x, stand.y));
+    }
+
+    // The arcanist's: their shelves and their worktable
+    for (const shelf of at("shelves")) {
+        phialShelves(solid, shelf);
+    }
+
+    // (The arcanist's worktable, and the garrison's long table, a run of squares, its benches)
+    for (const piece of at("table")) {
+        if (piece.h > 1) {
+            worktable(solid, piece);
+            continue;
+        }
+
+        const [x0, z0, x1, z1] = [m(piece.x), m(piece.y), m(piece.x + piece.w), m(piece.y + piece.h)];
+
+        table(solid, x0, z0 + m(0.1), x1, z1 - m(0.1));
+        tankard(solid, x0 + m(0.8), (z0 + z1) / 2, m(0.78), true);
+        tankard(solid, x1 - m(1.4), z0 + m(0.3), m(0.78), true);
+        candle(solid, (x0 + x1) / 2, (z0 + z1) / 2, m(0.78));
+    }
+
+    for (const run of benchRuns(map)) {
+        bench(solid, m(run.x), m(run.y), m(run.x + run.w), m(run.y + 1));
+    }
+
+    // The stores: barrels on their sides along the west wall, strongboxes in the corner
+    for (const barrels of at("barrels")) {
+        for (let y = barrels.y; y < barrels.y + barrels.h; y++) {
+            cask(solid, m(barrels.x + 0.1), m(y + 0.5), 0, m(0.8), m(0.4));
+        }
+    }
+
+    for (const box of at("chest")) {
+        chest(solid, m(box.x + 0.5), m(box.y + 0.5));
+    }
+
+    // Torches on the walls: by the foot of the stairs, the armoury, the arcanist's and the stores
+    const torches = [[0.3, 4], [m(armouryDesk.x - 1.5) / M, 0.3], [0.3, arcaneDesk.y - 1], [map.width - 0.3, map.height - 3]].map(([x, z]) => wallTorch(solid, m(x), m(z)));
+
+    return {
+        solid,
+        moving,
+        flames: [...works.fires, ...torches.map(({ fire }) => fire)],
+        lights: [works.light, ...torches.map(({ light }) => light)],
+        hearth: works.hearth,
     };
 }
 
@@ -2967,7 +3261,7 @@ function towerTop(map) {
     return { solid, moving: [], flames: fires.map(({ fire }) => fire), lights: fires.map(({ light }) => light), hearth: null, open: true };
 }
 
-const BUILDERS = { taproom, upstairs, smithy, temple, guild, hall, keep, cave, lair, crypt, ruin, tower, "tower-top": towerTop };
+const BUILDERS = { taproom, upstairs, smithy, temple, guild, hall, keep, undercroft, cave, lair, crypt, ruin, tower, "tower-top": towerTop };
 
 // --- Each people's own ---
 

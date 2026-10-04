@@ -2720,6 +2720,26 @@ metres off (back as many as ever the next time, unless it's been cleared).
     of their people's nearest it (`insides.js` `townOf`). The humans' castles, hill citadels
     (WORLD.md *Hill citadels*), walked into over their bridge, through their gate tower and up
     the stairs from ward to ward, their keep gone into by the door of its forebuilding.
+  - **The undercroft** (the terrain plan's M7.5c-1; `insides.js` `CASTLE_KEEP`, `UNDERCROFT`,
+    `undercroftFolkOf`; world/interiors3d.js `undercroft`): a people's castle's keep (not a
+    town's, a manor's or the elves' tree hall's: `siteKind`) has its armoury below its great
+    hall. The stairs go down from the hall's north-west corner, where its racks were, a stone
+    parapet round the stairwell. Below, 24 by 16 metres under a groin vault on four pillars
+    (pilasters where its bays meet the walls; not drawn while the camera's over it, as a
+    ceiling): the castle's forge in the north-east as a smithy's (the forge under its hood,
+    bellows, anvil, quenching trough, grindstone, coals and workbench: `forgeworks`), its smith
+    and apprentice at work there; the quartermaster behind their counter before the castle's
+    racks of arms, a suit of armour on a stand either side; the garrison's long table and its
+    benches between the pillars; the arcanist behind theirs in the south-west, their shelves of
+    jars and phials of coloured glass against the south wall, their worktable beside it (an
+    alembic over its lamp, books, a crystal ball, a mortar and pestle, candles); barrels along
+    the west wall and strongboxes in the corner; lit by the forge, four torches on the walls and
+    the arcanist's candles. What each sells is in WAR.md (*Shops*); the smith talks of the
+    garrison's mail and the lord's horses (`castleSmith`), the quartermaster of where the steel
+    comes from, the arcanist of what they're brewing and why they don't sell tomes. Heard
+    further off than the hall (`sound.js` `undercroft`). The stairs between the floors have
+    their foot below and their top above whichever floor the door opens into (insides.js
+    `make`). `NET_VERSION` 37.
 
 **What the player's found** (`core/explored.js` `Explored`): the buildings they've gone into (by
 key: marked the first time they cross into one of its floors) and the chunks of the world they've
