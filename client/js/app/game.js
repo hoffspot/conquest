@@ -5152,16 +5152,19 @@ export class Game {
     }
 
     // What lingers on everyone shown, as it goes: an icon for each on their plate (the time it's
-    // got left darkening round it), and rising off them now and then (bubbles, flies, motes,
-    // flames, blood, silk...), those on the player's map
+    // got left darkening round it; what does them good apart from what harms them), and rising
+    // off them now and then (bubbles, flies, motes, flames, blood, silk...), those on the
+    // player's map
     #ailing() {
         const { battle, hud, effects } = this;
         const point = new THREE.Vector3();
+        // (A player's boons, bought by talking: a blessing, a keen edge)
+        const boonsOf = (actor) => this.host.players.get(actor.id)?.boons ?? [];
 
         for (const id of this.ailed) {
             const actor = battle.actor(id);
 
-            if ((!actor?.afflictions?.length && !actor?.buffs?.length) || actor.dead) {
+            if ((!actor?.afflictions?.length && !actor?.buffs?.length && !(actor && boonsOf(actor).length)) || actor.dead) {
                 this.ailed.delete(id);
                 hud.setAfflictions(id, []);
 
@@ -5172,7 +5175,7 @@ export class Game {
         }
 
         for (const actor of battle.actors) {
-            if ((!actor.afflictions?.length && !actor.buffs?.length) || actor.dead) {
+            if ((!actor.afflictions?.length && !actor.buffs?.length && !(actor.kind === "player" && boonsOf(actor).length)) || actor.dead) {
                 continue;
             }
 
@@ -5184,9 +5187,11 @@ export class Game {
 
             this.ailed.add(actor.id);
             hud.setAfflictions(actor.id, [
-                ...actor.afflictions.map(({ kind, until, look }) => ({ kind, ...ailmentOf(kind, look), left: (until - battle.time) / (AFFLICTIONS[kind]?.ms ?? 1) })),
-                // (And the spells lasting on them: a ward, Reflect...)
+                // (What does them good first: the spells lasting on them, a ward, Reflect...; and
+                // a player's boons)
                 ...(actor.buffs ?? []).map(({ kind, until }) => ({ kind, icon: kind, label: SPELLS[kind]?.label ?? kind, left: (until - battle.time) / (SPELLS[kind]?.lasts ?? 1), buff: true })),
+                ...(actor.kind === "player" ? boonsOf(actor) : []).map(({ id, label, until, ms }) => ({ kind: id, icon: id, label, left: (until - battle.time) / ms, buff: true })),
+                ...actor.afflictions.map(({ kind, until, look }) => ({ kind, ...ailmentOf(kind, look), left: (until - battle.time) / (AFFLICTIONS[kind]?.ms ?? 1) })),
             ]);
 
             if (actor.map !== this.mapId || !avatar.object.visible) {

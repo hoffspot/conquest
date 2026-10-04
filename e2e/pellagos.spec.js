@@ -3201,6 +3201,19 @@ test("what lingers after a creature's blow shows on the player's plate, and its 
     await expect(icon).toBeVisible();
     await expect(banner).toContainText("You're poisoned! (Cure poison draught: the adventurers' guild sells them.)");
 
+    // (What does them good shown apart from it, first: a blessing, on a tile rimmed in gold)
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.host.players.get(game.me).boons.push({ id: "blessing", label: "Blessed", melee: 0.05, until: game.battle.time + 600000, ms: 600000 });
+        game.advance(0.1, { render: false });
+    });
+    await expect(page.locator('#playerplate .ail.buff[aria-label="Blessed"]')).toBeVisible();
+    expect(await page.locator("#playerplate .ail").evaluateAll((icons) => icons.map((each) => [each.getAttribute("aria-label"), each.classList.contains("buff")]))).toEqual([
+        ["Blessed", true],
+        ["Poisoned", false],
+    ]);
+
     // (Hurting now and then: less health)
     expect(await playUntil(page, () => window.pellagos.game.battle.actor(window.pellagos.game.me).hp < 50)).toBe(true);
 

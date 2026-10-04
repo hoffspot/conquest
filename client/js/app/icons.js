@@ -114,6 +114,11 @@ const ACTION_DEFS = `
     <stop offset="0" stop-color="#fff6b0"/>
     <stop offset="1" stop-color="#ffc21a"/>
 </linearGradient>
+<radialGradient id="icon-bless-glow">
+    <stop offset="0" stop-color="#fff6c8" stop-opacity="0.95"/>
+    <stop offset="0.5" stop-color="#ffd24a" stop-opacity="0.4"/>
+    <stop offset="1" stop-color="#e0a020" stop-opacity="0"/>
+</radialGradient>
 <filter id="icon-glow" x="-50%" y="-50%" width="200%" height="200%">
     <feGaussianBlur stdDeviation="1.6" result="blur"/>
     <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
@@ -353,6 +358,22 @@ export const ICONS = Object.freeze({
         <path d="M5,-16 L14,-7 L3,-5 Z" fill="#f2e6cf"/>
         <path d="M13,3 A13.5,13.5 0 0 1 -9,10" fill="none" stroke="#f2e6cf" stroke-width="3" stroke-linecap="round"/>
         <path d="M-5,16 L-14,7 L-3,5 Z" fill="#f2e6cf"/>`,
+
+    // The boons bought by talking (core/host.js BOUGHT), shown on the plate while they last: the
+    // temple's blessing, a six-pointed star (for its six deities) under a halo in a golden light;
+    // a smith's sharpening, a sword on a whetstone, the edge glinting and sparks flying
+    blessing: `
+        <circle r="22" fill="url(#icon-bless-glow)"/>
+        ${[0, 1, 2, 3, 4, 5].map((k) => `<path d="M-1.6,0 L0,-20 L1.6,0 Z" fill="#fff0a0" opacity="0.8" transform="translate(0 4) rotate(${k * 60 + 30})"/>`).join("")}
+        <ellipse cy="-14" rx="10" ry="3.2" fill="none" stroke="#fff4b8" stroke-width="2.2" filter="url(#icon-glow)"/>
+        <path d="${star(0, 4, 12, 6, 6)}" fill="url(#icon-stun-star)" stroke="#8a5a10" stroke-width="1.1" stroke-linejoin="round"/>
+        <circle cy="4" r="3" fill="#fffbe6"/>`,
+    sharpening: `
+        <rect x="-9" y="-3.3" width="18" height="6.6" rx="2" transform="translate(8 5) rotate(28)" fill="#80888f" stroke="#2f363b" stroke-width="1.1"/>
+        <path d="M-7,-1 L7,-1" transform="translate(8 5) rotate(28)" stroke="#a8b0b6" stroke-width="1"/>
+        <g transform="translate(-2 -1) rotate(45)">${SWORD}</g>
+        <path d="M9,-4 L15,-8 M10,-1 L17,-1 M9,2 L14,5" stroke="#ffb030" stroke-width="1.5" stroke-linecap="round"/>
+        <path d="${star(10, -16, 6, 1.6, 4, 0)}" fill="#ffffff" filter="url(#icon-glow)"/>`,
 });
 
 // A tunic's outline (a gambeson's, a mail shirt's): shoulders, sleeves and a round neck

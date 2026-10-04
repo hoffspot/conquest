@@ -1775,7 +1775,9 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     border-color: var(--gold-bright);
 }
 
-/* What's lingering on someone (poison, a web...): an icon each, darkening round as it wears off */
+/* What's lingering on someone: an icon each, darkening round as it wears off. What harms them
+   (poison, a web...) on a blood-red disc, ringed in its own colour; what does them good (a spell
+   lasting on them, a boon) on a sapphire tile rimmed in gold, first */
 .plate .ails {
     display: flex;
     justify-content: center;
@@ -1790,8 +1792,8 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     width: 18px;
     height: 18px;
     border-radius: 50%;
-    background: rgba(20, 15, 10, 0.78);
-    box-shadow: 0 0 0 1px rgba(236, 200, 130, 0.55);
+    background: radial-gradient(circle at 50% 35%, #7a1a14, #2a0705 75%);
+    box-shadow: 0 0 0 1px #d8342a, 0 0 5px rgba(216, 52, 42, 0.5);
     animation: ail-pulse 1.8s ease-in-out infinite;
 }
 
@@ -1815,7 +1817,7 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     content: "";
     position: absolute;
     inset: 0;
-    border-radius: 50%;
+    border-radius: inherit;
     background: conic-gradient(transparent calc(var(--left, 1) * 360deg), rgba(0, 0, 0, 0.6) 0);
     pointer-events: none;
 }
@@ -1828,10 +1830,16 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 .plate .ail-slow { box-shadow: 0 0 0 1px #9ad0f0, 0 0 6px rgba(154, 208, 240, 0.55); }
 .plate .ail-fear { box-shadow: 0 0 0 1px #c8a8e8, 0 0 6px rgba(200, 168, 232, 0.6); }
 
-/* A spell lasting on someone (a ward, Reflect...): ringed in gold, steady */
+/* What does them good: a sapphire tile rimmed in gold, steady, a little apart from the harms */
 .plate .ail.buff {
-    box-shadow: 0 0 0 1px #f2d060, 0 0 7px rgba(242, 208, 96, 0.55);
+    border-radius: 22%;
+    background: radial-gradient(circle at 50% 30%, #4a6fb0 0, #1c2f63 55%, #0d1633 100%);
+    box-shadow: inset 0 0 0 1px rgba(255, 236, 170, 0.35), 0 0 0 1.5px #e8c25a, 0 0 7px rgba(242, 208, 96, 0.55);
     animation: none;
+}
+
+.plate .ail.buff + .ail:not(.buff) {
+    margin-left: 4px;
 }
 
 /* A choice to be made (who to summon; whether to go to someone summoning you) */
