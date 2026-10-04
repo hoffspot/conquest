@@ -61,6 +61,11 @@ const ITEM_DEFS = `
     <stop offset="0.55" stop-color="#3aa8e8"/>
     <stop offset="1" stop-color="#0c3a6a"/>
 </radialGradient>
+<radialGradient id="icon-stamina" cx="0.38" cy="0.35" r="0.7">
+    <stop offset="0" stop-color="#fff0b0"/>
+    <stop offset="0.55" stop-color="#ff9a1a"/>
+    <stop offset="1" stop-color="#8a3a04"/>
+</radialGradient>
 <radialGradient id="icon-glass" cx="0.35" cy="0.3" r="0.8">
     <stop offset="0" stop-color="#ffffff" stop-opacity="0.55"/>
     <stop offset="1" stop-color="#bfe3f2" stop-opacity="0.18"/>
@@ -148,6 +153,16 @@ const SWORD = `
         <rect x="-8" y="6" width="16" height="3" rx="1.2" fill="#c8962e" stroke="#5a3b0c" stroke-width="0.9"/>
         <rect x="-1.8" y="9" width="3.6" height="9" fill="#6b3f1d" stroke="#2f1a09" stroke-width="0.8"/>
         <circle cy="19.5" r="2.6" fill="#c8962e" stroke="#5a3b0c" stroke-width="0.9"/>`;
+
+// A Stamina Boost potion: a draught of the stamina bar's orange, a gold stopper, a bolt of
+// lightning on the glass (in the pack, and on the plate while it lasts)
+const STAMINA_BOOST = `
+        <circle cy="6" r="13.5" fill="url(#icon-glass)" stroke="#3a2f45" stroke-width="1.3"/>
+        <path d="M-12.6,3 A13,13 0 1 0 12.6,3 Z" transform="translate(0 0.5) scale(0.97)" fill="url(#icon-stamina)"/>
+        <path d="M-4,-14 L4,-14 L4,-6 L-4,-6 Z" fill="url(#icon-glass)" stroke="#3a2f45" stroke-width="1.2"/>
+        <rect x="-5.5" y="-20" width="11" height="7" rx="1.8" fill="#e0b040" stroke="#6a4a0a" stroke-width="1"/>
+        <path d="M2,-2 L-5,8 L0,8 L-3,17 L6,5 L1,5 L4,-2 Z" fill="#fffbe0" stroke="#8a4a04" stroke-width="1" stroke-linejoin="round"/>
+        <ellipse cx="-7" cy="1" rx="2.2" ry="4" fill="#ffffff" opacity="0.5" transform="rotate(25 -7 1)"/>`;
 
 /** Each action's icon: SVG drawn round 0, 0, about 44 across (the spells' own: spellicons.js). */
 export const ICONS = Object.freeze({
@@ -368,6 +383,7 @@ export const ICONS = Object.freeze({
         <ellipse cy="-14" rx="10" ry="3.2" fill="none" stroke="#fff4b8" stroke-width="2.2" filter="url(#icon-glow)"/>
         <path d="${star(0, 4, 12, 6, 6)}" fill="url(#icon-stun-star)" stroke="#8a5a10" stroke-width="1.1" stroke-linejoin="round"/>
         <circle cy="4" r="3" fill="#fffbe6"/>`,
+    staminaBoost: STAMINA_BOOST,
     sharpening: `
         <rect x="-9" y="-3.3" width="18" height="6.6" rx="2" transform="translate(8 5) rotate(28)" fill="#80888f" stroke="#2f363b" stroke-width="1.1"/>
         <path d="M-7,-1 L7,-1" transform="translate(8 5) rotate(28)" stroke="#a8b0b6" stroke-width="1"/>
@@ -815,6 +831,7 @@ export const ITEM_ICONS = Object.freeze({
         <ellipse cx="-5.5" cy="1" rx="2.6" ry="4.4" fill="#ffffff" opacity="0.55" transform="rotate(25 -5.5 1)"/>`,
 
     // The cures (core/afflictions.js CURES): draughts of their colours, a salve, a bandage
+    staminaBoost: STAMINA_BOOST,
     antidote: draught("poison"),
     cureDisease: draught("disease"),
     invigorate: draught("wither"),

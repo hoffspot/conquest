@@ -85,6 +85,14 @@ export const ITEMS = Object.freeze({
     potion: { label: "Healing draught", use: { heal: 25 }, price: 15 },
     meal: { label: "Hot meal", use: { heal: 15 }, price: 5 },
     ale: { label: "Tankard of ale", use: { stamina: 1000 }, price: 2 },
+    // A boon in a bottle: twice the stamina for five minutes (host.js #outfit), one at a time;
+    // sold at the adventurers' guild
+    staminaBoost: {
+        label: "Stamina Boost potion",
+        about: "Doubles your stamina for five minutes. Only one at a time.",
+        use: { boon: { id: "staminaBoost", label: "Stamina Boost", staminaTimes: 2, ms: 5 * 60000 } },
+        price: 20,
+    },
     // The cures for what lingers after some creatures' blows (afflictions.js): each ends one
     ...Object.fromEntries(Object.entries(CURES).map(([id, { label, cure, price }]) => [id, { label, use: { cure }, price }])),
     // The spells' tomes (spells.js TOMES): each read to learn its spell at once; found on creatures
@@ -115,7 +123,7 @@ export const SHOPS = Object.freeze({
     watch: { items: ["sword", "hammer", "bow", "quiver", "roundShield", "kiteShield", "cap", "nasalHelm", "jerkin", "gambeson", "mail", "bracers", "gloves", "greaves", "leatherBoots", "boots", ...UNIFORM], best: "fine" },
     tavern: { items: ["ale", "meal"], best: "common" },
     temple: { items: ["potion"], best: "common" },
-    guild: { items: ["wand", "grimoire", "wizardHat", "amulet", "ring", "potion", ...Object.keys(CURES), ...ELEMENT_TOMES.map(tomeOf), ...GUILD_TOMES.map(tomeOf)], best: "fine" },
+    guild: { items: ["wand", "grimoire", "wizardHat", "amulet", "ring", "potion", "staminaBoost", ...Object.keys(CURES), ...ELEMENT_TOMES.map(tomeOf), ...GUILD_TOMES.map(tomeOf)], best: "fine" },
 });
 
 /**

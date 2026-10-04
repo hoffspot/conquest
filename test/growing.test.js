@@ -7,7 +7,7 @@ import { before, describe, it } from "node:test";
 import { STEP_MS, UNMASKED_MS } from "../client/js/core/battle.js";
 import { BOUGHT, GROUND_MS, HOST_PLAYER, Host, UNDO_MS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
-import { PACK_SIZE, priceOf, RANKS } from "../client/js/core/progress.js";
+import { PACK_SIZE, priceOf, RANKS, SHOPS, wareKind } from "../client/js/core/progress.js";
 import { decode, encode } from "../client/js/core/wire.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
@@ -324,6 +324,44 @@ describe("growing stronger in play (host.js, progress.js)", () => {
         run(host, BOUGHT.blessing.boon.ms + STEP_MS);
         assert.equal(player.power.melee, 1);
         assert.ok(progress.skills.talk > 0 && progress.skills.trade > 0);
+    });
+
+    it("sells a Stamina Boost potion at the adventurers' guild: drunk, twice the stamina for five minutes, and only one at a time", () => {
+        assert.ok(SHOPS.guild.items.includes("staminaBoost"));
+        assert.equal(wareKind("staminaBoost"), "supplies");
+
+        const host = hosted({ pack: [{ id: "staminaBoost", count: 2 }] });
+        const player = host.battle.actor(HOST_PLAYER);
+        const { progress } = host.players.get(HOST_PLAYER);
+        const use = () => host.command(HOST_PLAYER, { type: "use", item: "staminaBoost" });
+
+        assert.equal(player.maxStamina, 50);
+        player.stamina = 30;
+
+        // Drunk: twice as much breath, and what's left of it twice as much too
+        assert.deepEqual(use(), { ok: true });
+        assert.equal(player.maxStamina, 100);
+        assert.equal(player.stamina, 60);
+        assert.equal(progress.pack[0].count, 1);
+        assert.deepEqual(
+            run(host, STEP_MS).filter(({ type }) => type === "boon").map(({ boon, change }) => [boon, change]),
+            [["staminaBoost", "on"]],
+        );
+
+        // (Not another while it lasts: kept)
+        assert.deepEqual(use(), { ok: false, reason: "boosted" });
+        assert.equal(progress.pack[0].count, 1);
+        assert.equal(player.maxStamina, 100);
+
+        // Five minutes on, it wears off (and is said to); then another can be drunk
+        player.stamina = player.maxStamina;
+        const events = run(host, 5 * 60000);
+
+        assert.deepEqual(events.filter(({ type }) => type === "boon").map(({ boon, change }) => [boon, change]), [["staminaBoost", "off"]]);
+        assert.equal(player.maxStamina, 50);
+        assert.equal(player.stamina, 50);
+        assert.deepEqual(use(), { ok: true });
+        assert.equal(player.maxStamina, 100);
     });
 
     it("moves stacks about the pack, splits them, and throws them away, to be taken back a moment after", () => {
