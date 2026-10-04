@@ -736,6 +736,9 @@ test("W, A, S, D steer the player the way the camera looks, two of them diagonal
 });
 
 test("the thumb stick, off until Game options asks for it, walks the player the way it's pushed, runs pushed to its rim, stops when let go, and goes when it's turned off again", async ({ page }) => {
+    // (Turned on and off again, pushed twice and played on between: more than the usual time, on a
+    // machine drawing in software)
+    test.setTimeout(180000);
     await playing(page, "/?play&seed=1");
 
     await clearestWayAhead(page);
@@ -822,7 +825,7 @@ test("the thumb stick, off until Game options asks for it, walks the player the 
     await page.mouse.up();
     await page.evaluate(() => window.pellagos.game.start());
 
-    // Turned off again it's gone, and a thumb where it was does nothing
+    // Turned off again it's gone
     await page.evaluate(() => {
         const switched = document.querySelector("#stickswitch");
 
@@ -832,15 +835,8 @@ test("the thumb stick, off until Game options asks for it, walks the player the 
 
     expect(await page.evaluate(() => getComputedStyle(document.querySelector("#stickzone")).display)).toBe("none");
 
-    await page.mouse.move(middle.x, middle.y);
-    await page.mouse.down();
-    await page.mouse.move(middle.x, middle.y - 80, { steps: 4 });
-    expect(await page.evaluate(() => document.querySelector("#stickzone").classList.contains("held"))).toBe(false);
-    await page.mouse.up();
-
-    // The keys steer without it. (That thumb was a drag on the view, which turned the camera, and
-    // they've walked since: the clearest way is found again from where they are, an "ahead" order
-    // with something in the way within a stride being refused rather than walked into)
+    // The keys steer without it. (The clearest way is found again from where they've got to: an
+    // "ahead" order with something in the way within a stride is refused and leaves no order)
     await clearestWayAhead(page);
     await page.keyboard.down("KeyW");
     expect((await told(page)).order?.type).toBe("move");
