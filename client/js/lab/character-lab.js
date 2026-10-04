@@ -153,8 +153,10 @@ const walker = new Walker(character, WALK_STYLES[state.walk]);
 
 // Fighting: attacks, reactions and falls, layered over the walk (actions.js)
 const actions = new Actions(character);
-// (Which of an attack's five ways: `way`, or null for any but the last, as in the game; and how
-// to rest: a role's, roles.js)
+// The most ways any attack or rest has (to choose among)
+const WAYS = Math.max(...Object.values(ATTACKS).map(({ variants }) => variants.length), ...Object.values(ROLES).map(({ rests }) => rests.length));
+// (Which of an attack's ways: `way`, or null for any but the last, as in the game; and how to
+// rest: a role's, roles.js)
 const fight = { weapon: params.get("weapon") ?? "", way: params.has("way") ? Number(params.get("way")) : null, reaction: params.get("reaction") ?? "slash", repeat: false, guard: false, slow: 1, at: params.has("at") ? Number(params.get("at")) : null, action: params.get("action") ?? "", role: ROLES[params.get("rest")] ? params.get("rest") : "adventurer" };
 
 walker.overlay = (dt) => actions.apply(dt * fight.slow);
@@ -760,9 +762,6 @@ function draw(on) {
         actions.draw(weapon.attacks[0].animation, on);
     }
 }
-
-// The most ways any attack or rest has (to choose among)
-const WAYS = Math.max(...Object.values(ATTACKS).map(({ variants }) => variants.length), ...Object.values(ROLES).map(({ rests }) => rests.length));
 
 /** Rest as the chosen role does (sitting for a patron's), in the way chosen. */
 function rest() {
