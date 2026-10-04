@@ -2604,11 +2604,13 @@ metres off (back as many as ever the next time, unless it's been cleared).
   a big warrior with a sword, and better spoils) or a wight lord.
 - **They guard it:** each goes for anyone who comes within 10 metres of them (`guard`), and none
   wanders off; they don't count among the wild's creatures about a player.
-- **The chest** stands by the leader on open ground (drops3d.js: an iron-bound wooden chest),
+- **The chest** stands by the leader on open ground (drops3d.js: the JMI 3D Toolkit's iron-bound
+  wooden chest, client/models/jmi, MIT; a chest made in code till it's read, or if it can't be),
   locked while they hold the place (tapped: "It's locked fast, and its guardians still hold the
   place."). Once the last of them falls (the leader with them), the place is cleared (the war
   keeps it, and its rim on the maps goes grey), "The dead of … are laid to rest, for now" or
-  "… is cleared of its outlaws, for now", and the chest is thrown open with a share for each
+  "… is cleared of its outlaws, for now", and the chest is thrown open (the model's own opening,
+  three quarters of a second, on a heap of gold) with a share for each
   player within about 40 metres (`rollLoot("chest")`: 25 to 60 gold, a third more for each tier of
   the land's danger above the first, `CHEST_GOLD`; a potion, a piece or two of gear in the livery
   of the place's people, a human's at the ruins and caves, now and then a fine sword or bow),
@@ -2947,8 +2949,9 @@ game plays on while it's open; a second finger (a pinch) closes it.
    six at a time itself, so asking for more costs nothing), reading each as it arrives. The bar
    shows the bytes downloaded out of the
    total (the files' sizes on disk, which is what arrives, whatever compression the server uses),
-   and each group of files has its own row and bar: the 3D engine, the game's code, the body and
-   its shapes, its skin details, and the props. The data is kept in memory and handed
+   and each group of files has its own row and bar: the 3D engine, the ways over the world
+   (Recast), the game's code, the body and its shapes, its skin details, the lettering, and the
+   things in the world (the treasure chest's model). The data is kept in memory and handed
    to the character kit and the model loader from there; the code is imported from the browser's
    cache. Then the last part of the bar is starting the 3D view and unpacking the body; the skin
    atlas is worked out in a worker meanwhile, and the title doesn't wait for it (making a

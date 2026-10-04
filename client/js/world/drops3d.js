@@ -3,14 +3,16 @@
 // it's lain there too long. Anyone near can tap it to pick it up (app/game.js). A creature's
 // spoils (host.js: a bundle for one player) are a leather sack, and only that player sees theirs.
 // A place's chest (host.js #places: held by outlaws or the dead, by their leader) is an iron-bound
-// wooden chest, shut while its guardians hold the place; once it's cleared, each player near has
-// their share in it, the chest open.
+// wooden chest (the JMI 3D Toolkit's, client/models/jmi; drawn here till it's read, or if it
+// can't be), shut while its guardians hold the place; once it's cleared, each player near has
+// their share in it, its lid thrown open (the model's own "Open") on gold.
 //
 // The icons are painted by whoever makes this (`picture`: an item id to a texture), so the world
 // needn't know how they're drawn.
 
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { loadGltf } from "./art/engine/models.js";
 
 // A bundle's size (metres), and where its icon floats over it
 const BUNDLE = Object.freeze({ radius: 0.2, squash: 0.55 });
@@ -19,6 +21,11 @@ const ICON = Object.freeze({ size: 0.46, above: 0.62, bob: 0.06 });
 // A chest's size (metres: its body; its lid's rise over it, a half-round flattened), its iron
 // bands' width, and how far back its lid's thrown once it's open (radians)
 const CHEST = Object.freeze({ width: 0.8, depth: 0.46, height: 0.4, rise: 0.6, band: 0.05, open: 1.95 });
+
+// The chest's model: where it's read from, how big it's drawn (its units to metres: 0.85 m
+// across), the clip that opens it, and the gold heaped in it (its units: the top of the heap just
+// over the rim, `at` its middle's height; `size` across, up and back)
+const CHEST_MODEL = Object.freeze({ url: "models/jmi/chest.glb", scale: 1.3, clip: "Open", lid: "Chest_Lid", gold: { at: 0.235, size: [0.26, 0.05, 0.17] } });
 
 // Two things dropped on one square sit a little apart, round its middle
 const SPREAD = 0.28;
@@ -56,6 +63,16 @@ export class Drops {
         // (Its inside dark, seen once its lid's thrown back; and the gold in it)
         this.inside = new THREE.MeshStandardMaterial({ color: 0x1a120b, roughness: 1 });
         this.gold = new THREE.MeshStandardMaterial({ color: 0xd9a632, roughness: 0.35, metalness: 0.9, emissive: 0x3a2400 });
+
+        /** The chest's model once it's read ({ scene, clip }), or null (drawn as made here). */
+        this.model = null;
+        this.time = null;
+        loadGltf(CHEST_MODEL.url).then(
+            (gltf) => this.#modelRead(gltf),
+            () => {
+                // (Not to be had: the chest as made here)
+            },
+        );
     }
 
     /** Lay what's dropped on this ground (its height at a point, (x, z) => metres; null: flat at 0). */
@@ -106,12 +123,18 @@ export class Drops {
         }
     }
 
-    /** Bob and turn the icons (time: seconds). */
+    /** Bob and turn the icons, and open the chests opening (time: seconds). */
     update(time) {
-        for (const { icon, seed, above } of this.drawn.values()) {
+        const step = this.time === null ? 0 : Math.max(0, time - this.time);
+
+        this.time = time;
+
+        for (const { icon, seed, above, mixer } of this.drawn.values()) {
             if (icon) {
                 icon.position.y = above + Math.sin(time * 2.2 + seed) * ICON.bob;
             }
+
+            mixer?.update(step);
         }
     }
 
@@ -146,6 +169,12 @@ export class Drops {
         this.leather.dispose();
         this.tie.dispose();
         Object.values(this.chest).forEach((geometry) => geometry.dispose());
+        this.model?.scene.traverse((node) => {
+            if (node.isMesh) {
+                node.geometry.dispose();
+                [node.material].flat().forEach((material) => material.dispose());
+            }
+        });
         this.wood.dispose();
         this.iron.dispose();
         this.inside.dispose();
@@ -166,8 +195,13 @@ export class Drops {
         const seed = [...dropped.id].reduce((sum, character) => sum + character.charCodeAt(0), 0);
         const above = (chest ? CHEST.height + CHEST.depth * 0.5 * CHEST.rise : BUNDLE.radius) + ICON.above;
 
+        let mixer = null;
+
         if (chest) {
-            object.add(this.#chest(!dropped.chest));
+            const made = this.#chest(!dropped.chest);
+
+            object.add(made.chest);
+            mixer = made.mixer;
         } else {
             const bundle = new THREE.Mesh(this.bundle, dropped.bundle ? this.leather : this.cloth);
 
@@ -186,11 +220,71 @@ export class Drops {
         object.rotation.y = chest ? 0 : seed;
         object.name = dropped.id;
         this.group.add(object);
-        this.drawn.set(dropped.id, { object, icon, x, z, seed, above });
+        this.drawn.set(dropped.id, { object, icon, x, z, seed, above, chest, mixer });
     }
 
-    // A chest: its body and its lid (thrown back if it's `open`), iron-bound
+    // The chest's model read: its meshes casting shadows, and the chests drawn till now drawn again
+    // with it
+    #modelRead({ scene, animations }) {
+        scene.traverse((node) => {
+            if (node.isMesh) {
+                node.castShadow = true;
+                node.receiveShadow = true;
+            }
+        });
+
+        this.model = { scene, clip: THREE.AnimationClip.findByName(animations, CHEST_MODEL.clip) };
+
+        for (const [id, drawn] of this.drawn) {
+            if (drawn.chest) {
+                this.group.remove(drawn.object);
+                drawn.icon?.material.dispose();
+                this.drawn.delete(id);
+            }
+        }
+    }
+
+    // A chest (its lid thrown back if it's `open`, opening as it's first drawn): { chest, mixer
+    // (what opens it, or null) }
     #chest(open) {
+        if (this.model) {
+            return this.#modelChest(open);
+        }
+
+        return { chest: this.#madeChest(open), mixer: null };
+    }
+
+    // The chest's model: a copy of it, and opening, its gold in it
+    #modelChest(open) {
+        const chest = new THREE.Group();
+        const object = this.model.scene.clone(true);
+        let mixer = null;
+
+        object.scale.setScalar(CHEST_MODEL.scale);
+        chest.add(object);
+        chest.name = open ? "chest-open" : "chest";
+
+        if (open) {
+            object.add(new THREE.Mesh(this.chest.heap, this.gold));
+
+            if (this.model.clip) {
+                mixer = new THREE.AnimationMixer(object);
+
+                const opening = mixer.clipAction(this.model.clip);
+
+                opening.setLoop(THREE.LoopOnce, 1);
+                opening.clampWhenFinished = true;
+                opening.play();
+            } else {
+                object.getObjectByName(CHEST_MODEL.lid)?.rotateX(-1.83);
+            }
+        }
+
+        return { chest, mixer };
+    }
+
+    // A chest made here: its body and its lid (thrown back if it's `open`), iron-bound
+    #madeChest(open) {
         const chest = new THREE.Group();
         const lid = new THREE.Group();
         // (Its top, under the lid, its dark inside)
@@ -233,6 +327,17 @@ function chestParts() {
     const lidIron = mergeGeometries(bands.map((x) => curved(half + 0.006, band).translate(x, 0, 0)));
     // (Heaped in it, just showing over its rim)
     const gold = new THREE.SphereGeometry(1, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2).scale(width * 0.4, 0.07, depth * 0.38).translate(0, height - 0.035, 0);
+    // (And in the model, in its units: lumpy, as coins heaped up)
+    const heap = new THREE.SphereGeometry(1, 20, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+    const corners = heap.attributes.position;
 
-    return { body, lid, bodyIron, lidIron, gold };
+    for (let k = 0; k < corners.count; k++) {
+        const [x, y, z] = [corners.getX(k), corners.getY(k), corners.getZ(k)];
+
+        corners.setY(k, y * (1 + 0.45 * Math.sin(x * 9.1 + 1.3) * Math.sin(z * 7.7 + 0.4) + 0.25 * Math.sin(x * 23 + z * 19)));
+    }
+
+    heap.scale(...CHEST_MODEL.gold.size).translate(0, CHEST_MODEL.gold.at, 0).computeVertexNormals();
+
+    return { body, lid, bodyIron, lidIron, gold, heap };
 }

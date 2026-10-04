@@ -178,7 +178,7 @@ export const MANIFEST = Object.freeze([
             ["js/world/art/engine/atlas.js", 39308],
             ["js/world/art/engine/leafcards.js", 1745],
             ["js/world/art/engine/materials.js", 4856],
-            ["js/world/art/engine/models.js", 2772],
+            ["js/world/art/engine/models.js", 3208],
             ["js/world/art/engine/paint-worker.js", 416],
             ["js/world/art/engine/painters.js", 56939],
             ["js/world/art/engine/solid.js", 54764],
@@ -230,7 +230,7 @@ export const MANIFEST = Object.freeze([
             ["js/world/cloth.js", 26554],
             ["js/world/contacts.js", 5328],
             ["js/world/daytime.js", 8720],
-            ["js/world/drops3d.js", 10615],
+            ["js/world/drops3d.js", 14519],
             ["js/world/effects.js", 60966],
             ["js/world/environment.js", 5675],
             ["js/world/falls.js", 12180],
@@ -311,6 +311,14 @@ export const MANIFEST = Object.freeze([
         detail: "UnifrakturMaguntia, for the tavern's signs",
         files: [
             ["fonts/UnifrakturMaguntia.woff2", 26512],
+        ],
+    },
+    {
+        id: "models",
+        label: "Things in the world",
+        detail: "A treasure chest (JMI 3D Toolkit)",
+        files: [
+            ["models/jmi/chest.glb", 178404],
         ],
     },
 ]);

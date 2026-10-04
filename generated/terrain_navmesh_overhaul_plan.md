@@ -3650,3 +3650,25 @@ converted data is to be measured in M8 against today's hm08 data.
     test/news.test.js (the board's kinds, with the place near when there is one). e2e: the guild,
     the town hall's work and the journal, hiring an adventurer, an envoy (all passed).
   - **Next:** the chest model the user asked for, then M7.5b (the places entered and explored).
+- **2026-10-04, the places' chest a model, opening as it should** (the user: "Go try to find a
+  model of a good chest with animations. There is probably a free one out there.").
+  - **Looked for** (a researcher, free only, nothing bought): CC0 and MIT first, glTF, a phone's
+    budget. Most asset sites are blocked from here (Quaternius, Poly Pizza, itch.io, Kenney,
+    OpenGameArt, Sketchfab, Poly Haven); GitHub isn't. Found: the JMI 3D Toolkit's treasure chest
+    (vidarr101, MIT; planks and iron straps, a hasp, ring handles; 952 triangles, 512²/256² maps,
+    174 KiB; a separate lid and its own "Open" clip, 0.75 s), KayKit's Dungeon Remastered chest
+    (CC0, but toy-like and with no clip), a PS1-style one (CC-BY); seen, not fetched: Theo Kain's
+    "Medieval Treasure Chest - animated" (CC-BY, 1.8k triangles, realistic and grimy: a fair
+    alternative if fetched by hand) and Quaternius' Fantasy Props MegaKit (CC0, chests).
+  - **Used:** the JMI chest (client/models/jmi: chest.glb unchanged, its LICENSE, where it's
+    from; README credits), downloaded with the game (the manifest's "models" group, "Things in the
+    world", read through the loader as the other data: models.js `loadGltf`). world/drops3d.js
+    draws a place's chest as a copy of it (1.3 times: 0.85 m across), shut while held; the share
+    in it once cleared plays its "Open" once and stays open, on a heap of gold (lumpy, as coins).
+    The chest made in code stays, till the model's read or if it can't be.
+  - **Cost:** 5 draws a chest (wood, inside, iron; the lid's wood and iron), about 950 triangles;
+    a chest at a place at a time.
+  - **Pictures** (sent in the session): the ruin's chest held and cleared, and the cave's
+    cleared, the chest made in code against the model.
+  - **Tests:** test/manifest.test.js (the models group, the chest in it); e2e: the loading screen's
+    seven groups, the held place's chest locked then open.
