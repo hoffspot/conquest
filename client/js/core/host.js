@@ -24,7 +24,8 @@ import { ABILITIES, alike, ARMOR_CAP, buys, ITEMS, priceOf, Progress, QUALITIES,
 import { SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { createRandom } from "./random.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
-import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, encounterAt, LAIRS, menaces, outByDay, packOf, tierPower, WILD } from "./creatures.js";
+import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, encounterAt, LAIRS, menaces, outByDay, packOf, tierAt, tierPower, WILD } from "./creatures.js";
+import { CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { rollSpoils } from "./spoils.js";
 import { campTier, CHUNK, landAt, RACE, startFor } from "./worldplan/plan.js";
 import { armouryGift, COUNSEL, FAILED, MOST_REQUESTS, offerContract, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
@@ -252,6 +253,7 @@ export const REFUSALS = Object.freeze({
     follower: "They don't follow you.",
     shop: "They've nothing like that to sell.",
     full: "Your pack is full.",
+    locked: "It's locked fast, and its guardians still hold the place.",
     unknown: "You haven't learnt that.",
     item: "You can't do that with it.",
     shield: "Not with that weapon.",
@@ -389,6 +391,10 @@ export class Host {
         this.wildCamps = new Map();
         this.lairs = new Map();
         this.slain = {};
+        // The places worth finding held by outlaws or the dead whose band is out (core/places.js):
+        // by the place's id, { ids (the band, its leader first), leader, at, tier, holder, chest
+        // (its square), race (the place's people, or null), cleared }
+        this.held = new Map();
 
 
         /**
@@ -858,9 +864,9 @@ export class Host {
             }
         }
 
-        // Things left lying on the ground: gone after a while
+        // Things left lying on the ground: gone after a while (a place's chest, not: #places)
         for (const [id, dropped] of this.ground) {
-            if (dropped.until <= this.battle.time) {
+            if (dropped.until !== null && dropped.until <= this.battle.time) {
                 this.ground.delete(id);
             }
         }
@@ -888,7 +894,10 @@ export class Host {
 
         // The fallen soldiers: their garrison the fewer; taken away a while after (and the wild's
         // creatures, a perilous site's master gone a long while; the orc, felled by no one of the
-        // players', a good while)
+        // players', a good while; a place's band, the place cleared once the last falls, after all
+        // that fell with them)
+        const bands = new Set();
+
         for (const event of events) {
             const beast = event.type === "death" ? this.wild.get(event.id) : null;
 
@@ -904,6 +913,12 @@ export class Host {
 
                 if (beast.lair && beast.master) {
                     this.slain[beast.lair] = this.battle.time + LAIRS[this.#siteOf(beast.lair).kind].back;
+                    // (The place cleared, a while: core/places.js)
+                    this.war?.clearPlace(beast.lair);
+                }
+
+                if (beast.place) {
+                    bands.add(beast.place);
                 }
             }
 
@@ -958,6 +973,10 @@ export class Host {
                     this.war.remember(struck.team, by.team, -2);
                 }
             }
+        }
+
+        for (const place of bands) {
+            this.#placeFell(place);
         }
 
         while (this.fallen.length && this.fallen[0].at <= this.battle.time) {
@@ -1070,6 +1089,7 @@ export class Host {
             wildCamps: [...this.wildCamps.entries()],
             lairs: [...this.lairs.entries()],
             slain: { ...this.slain },
+            held: [...this.held.entries()],
             ground: structuredClone([...this.ground.values()]),
             campfires: structuredClone(this.campfires),
             nextGround: this.nextGround,
@@ -1159,6 +1179,7 @@ export class Host {
         host.wildCamps = new Map(structuredClone(snapshot.wildCamps ?? []));
         host.lairs = new Map(structuredClone(snapshot.lairs ?? []));
         host.slain = { ...(snapshot.slain ?? {}) };
+        host.held = new Map(structuredClone(snapshot.held ?? []));
         host.ground = new Map((snapshot.ground ?? []).map((dropped) => [dropped.id, structuredClone(dropped)]));
         host.nextGround = snapshot.nextGround ?? 1;
         host.campfires = structuredClone(snapshot.campfires ?? []);
@@ -1604,6 +1625,11 @@ export class Host {
 
         if (dropped.map !== actor.map || hypot(actor.x - dropped.square[0] - 0.5, actor.y - dropped.square[1] - 0.5) > PICK_REACH) {
             return refuse("far");
+        }
+
+        // (A place's chest, its guardians still about)
+        if (dropped.locked) {
+            return refuse("locked");
         }
 
         // (A bundle of a creature's spoils: its gold, and each thing there's room for; what
@@ -2316,7 +2342,7 @@ export class Host {
 
         for (const [id, one] of [...this.wild]) {
             const actor = this.battle.actor(id);
-            const roaming = actor && !actor.dead && !one.camp && !one.lair && actor.target === null;
+            const roaming = actor && !actor.dead && !one.camp && !one.lair && !one.place && actor.target === null;
 
             if (!actor) {
                 this.#unwild(id);
@@ -2327,6 +2353,7 @@ export class Host {
 
         this.#wildCamps(homes);
         this.#lairs(places);
+        this.#places(places, homes);
 
         for (const player of this.players.values()) {
             const actor = this.battle.actor(player.id);
@@ -2336,7 +2363,7 @@ export class Host {
             }
 
             const about = [...this.wild].filter(([id, one]) => {
-                const beast = !one.camp && !one.lair ? this.battle.actor(id) : null;
+                const beast = !one.camp && !one.lair && !one.place ? this.battle.actor(id) : null;
 
                 return beast && !beast.dead && hypot(beast.x - actor.x, beast.y - actor.y) < WILDS.about;
             }).length;
@@ -2389,7 +2416,8 @@ export class Host {
     }
 
     // A pack of creatures put out at a place (`count` of `creature` at `tier`), the first its
-    // leader; what they're of (`camp`, `lair`) and how they keep (`roam`, `temper`): their ids
+    // leader; what they're of (`camp`, `lair`, `place`) and how they keep (`roam`, `temper`,
+    // `guard`): their ids
     #pack({ creature, tier, count }, [x, y], { master = false, ...more } = {}) {
         const free = this.#spots();
         const pack = `pack-${this.nextWild}`;
@@ -2414,11 +2442,11 @@ export class Host {
     }
 
     // One of the wild's creatures into the world: as strong as its tier has it (creatures.js)
-    #rouse(id, creature, tier, square, { pack, leader, master = false, camp = null, lair = null, roam = null, temper = null }) {
+    #rouse(id, creature, tier, square, { pack, leader, master = false, camp = null, lair = null, place = null, roam = null, temper = null, guard = null }) {
         const spec = CREATURES[creature];
         const power = tierPower(tier);
 
-        this.wild.set(id, { creature, tier, pack, camp, lair, master });
+        this.wild.set(id, { creature, tier, pack, camp, lair, master, ...(place ? { place } : {}) });
         this.battle.add({
             id,
             kind: "beast",
@@ -2432,7 +2460,7 @@ export class Host {
             chase: spec.chase,
             power: { melee: power, ranged: power },
             armor: spec.armor ?? 0,
-            wild: { creature, tier, temper: temper ?? spec.temper, guard: spec.guard ?? 0, roam: roam ?? spec.roam, leash: spec.leash + (roam ?? 0), pack, leader, menace: menaces(creature), unique: Boolean(spec.perilous), darkSight: Boolean(spec.darkSight) },
+            wild: { creature, tier, temper: temper ?? spec.temper, guard: guard ?? spec.guard ?? 0, roam: roam ?? spec.roam, leash: spec.leash + (roam ?? 0), pack, leader, menace: menaces(creature), unique: Boolean(spec.perilous), darkSight: Boolean(spec.darkSight) },
         });
     }
 
@@ -2453,7 +2481,7 @@ export class Host {
 
         this.wild.delete(id);
 
-        for (const held of [one.camp && this.wildCamps.get(one.camp), one.lair && this.lairs.get(one.lair)]) {
+        for (const held of [one.camp && this.wildCamps.get(one.camp), one.lair && this.lairs.get(one.lair), one.place && this.held.get(one.place)]) {
             if (held) {
                 held.ids = held.ids.filter((each) => each !== id);
             }
@@ -2537,7 +2565,10 @@ export class Host {
             // dragon's hollow, as it's built: sites.js)
             const at = this.world.maps.town?.sites?.heartOf(site) ?? site.at;
 
-            if ((this.slain[site.id] ?? -Infinity) <= this.battle.time) {
+            const place = placesOf(this.world.plan).find((each) => each.id === site.id);
+            const cleared = this.war && place && holderOf(this.world.plan, place, this.war.places[site.id], this.war.turn) === "cleared";
+
+            if ((this.slain[site.id] ?? -Infinity) <= this.battle.time && !cleared) {
                 ids.push(...this.#pack({ creature: master, tier, count: 1 }, at, { lair: site.id, master: true, roam: 3 }));
             }
 
@@ -2553,6 +2584,107 @@ export class Host {
 
     #siteOf(id) {
         return this.world.plan.sites.find((site) => site.id === id);
+    }
+
+    // The places worth finding held by outlaws or the dead (core/places.js), near a player: their
+    // band out round the place's heart, as many and as strong as the place is big and its land
+    // dangerous, their leader in its middle by a chest, locked; let go once every player's far
+    // (and back as many as ever when one comes near again, unless it's been cleared). The ruined
+    // castles and the dragon's lair keep their own masters (#lairs).
+    #places(places, homes) {
+        const plan = this.world.plan;
+        const near = (at, within) => places.some(([x, y]) => hypot(x - at[0], y - at[1]) < within);
+
+        if (!this.war) {
+            return;
+        }
+
+        for (const [id, held] of [...this.held]) {
+            if (!near(held.at, PLACE_BANDS.far)) {
+                for (const each of [...held.ids]) {
+                    if (!this.battle.actor(each)?.dead) {
+                        this.#release(each);
+                    }
+                }
+
+                this.ground.delete(`chest-${id}`);
+                this.held.delete(id);
+            }
+        }
+
+        for (const place of placesOf(plan)) {
+            if (this.held.has(place.id) || LAIRS[place.kind] || !near(place.at, PLACE_BANDS.near)) {
+                continue;
+            }
+
+            const holder = holderOf(plan, place, this.war.places[place.id], this.war.turn);
+            const band = PLACE_BANDS[holder];
+            const site = band ? this.#siteOf(place.id) : null;
+
+            if (!site || !homes.length) {
+                continue;
+            }
+
+            // (Where it's held: the open ground in its middle, as it's built: sites.js)
+            const at = this.world.maps.town?.sites?.heartOf(site) ?? site.at;
+            const tier = tierAt(at, homes.map(({ home }) => home), landAt(plan, ...at).biome);
+            const count = PLACE_BANDS.count[place.size] + Math.floor(tier / PLACE_BANDS.per);
+            const ring = PLACE_BANDS.ring[place.size];
+            const ids = this.#pack({ creature: band.leader, tier: tier + PLACE_BANDS.lead, count: 1 }, at, { place: place.id, master: true, roam: 2, temper: "territorial", guard: PLACE_BANDS.guard });
+
+            for (let k = 0; k < count; k++) {
+                const angle = ((k + 0.5) / count) * Math.PI * 2;
+
+                ids.push(...this.#pack({ creature: band.folk, tier, count: 1 }, [at[0] + cos(angle) * ring, at[1] + sin(angle) * ring], { place: place.id, roam: 4, temper: "territorial", guard: PLACE_BANDS.guard }));
+            }
+
+            // (The chest on open ground by the leader: not in a wall)
+            let chest = [Math.floor(at[0] + 1.5), Math.floor(at[1])];
+
+            try {
+                chest = this.#spots()(chest);
+            } catch {
+                // (None free near: where it was to be)
+            }
+
+            this.held.set(place.id, { ids, leader: ids[0] ?? null, at, tier, holder, chest, race: place.race, cleared: false });
+            this.ground.set(`chest-${place.id}`, { id: `chest-${place.id}`, chest: true, locked: true, for: null, map: "town", square: chest, place: place.id, until: null });
+        }
+    }
+
+    // One of a place's band fallen: once every one of them is (their leader with them), the place
+    // is cleared (the war keeps it: core/places.js holderOf, empty a while), and its chest opened,
+    // a share of what's in it for each player near
+    #placeFell(id) {
+        const held = this.held.get(id);
+
+        if (!held || held.cleared || held.ids.some((each) => this.battle.actor(each) && !this.battle.actor(each).dead)) {
+            return;
+        }
+
+        held.cleared = true;
+        this.war?.clearPlace(id);
+        this.ground.delete(`chest-${id}`);
+
+        for (const player of this.players.values()) {
+            const actor = this.battle.actor(player.id);
+
+            if (!actor || actor.dead || actor.map !== "town" || hypot(actor.x - held.at[0], actor.y - held.at[1]) > PLACE_BANDS.ring.large + SPOILS_REACH) {
+                continue;
+            }
+
+            // (The gear in it of the place's people, a human's at the ruins and the caves)
+            const bundle = rollLoot("chest", this.random, { people: held.race ?? "human" });
+
+            bundle.gold = Math.round(bundle.gold * (1 + CHEST_GOLD * (held.tier - 1)));
+
+            const ground = `ground-${this.nextGround++}`;
+
+            this.ground.set(ground, { id: ground, bundle, for: player.id, from: "chest", map: "town", square: [...held.chest], until: this.battle.time + GROUND_MS });
+            this.#event("spoils", { id: player.id, ground, from: id, creature: "chest" });
+        }
+
+        this.#event("cleared", { place: id, holder: held.holder });
     }
 
     // A camp's sortie against a town a player's near (the war's "sortie"): its raiders, or

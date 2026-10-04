@@ -33,7 +33,7 @@ import { DAY, daylight, elapsedOf, moonPhase, timeOfDay } from "../core/daytime.
 import { carriesTorch, torchesLit } from "../core/light.js";
 import { STEP_MS, TALK_REACH } from "../core/battle.js";
 import { CREATURES } from "../core/creatures.js";
-import { holderOf, placesOf } from "../core/places.js";
+import { holderOf, PLACE_BANDS, placesOf } from "../core/places.js";
 import { CHUNK } from "../core/worldplan/plan.js";
 import { PLACE_RIMS } from "./mapicons.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
@@ -398,7 +398,7 @@ const LIFT = Object.freeze({ height: 0.35, swing: 0.06, bob: 2.2 });
 const SHAKE_DIES = 4;
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "dismiss", "camp", "strike", "sortie", "sortied", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -2335,6 +2335,21 @@ export class Game {
      * down, sites.js, or where a camp's pitched; its plan's spot till then), holder (who holds it
      * now), rim (its colour) }].
      */
+    // A place's occupiers put to the sword (host.js #placeFell): said, if the player's near it
+    #cleared({ place: id, holder }) {
+        const place = placesOf(this.world.plan).find((each) => each.id === id);
+        const me = this.battle.actor(this.me);
+
+        if (!place || !me || me.map !== "town" || Math.hypot(me.x - place.at[0], me.y - place.at[1]) > PLACE_BANDS.far) {
+            return;
+        }
+
+        const name = place.name ?? `the ${place.kind}`;
+
+        this.hud.message(holder === "dead" ? `The dead of ${name} are laid to rest, for now.` : `${name[0].toUpperCase()}${name.slice(1)} is cleared of its outlaws, for now.`, 4);
+        this.sound?.play("wake");
+    }
+
     placeIcons() {
         const plan = this.world.plan;
         const war = this.host?.war;
@@ -3372,6 +3387,9 @@ export class Game {
             this.hud.message(`You pick up ${thingsOf(event.item)}.`, 2);
         } else if (event.type === "spoils" && event.given) {
             this.hud.message("There's no room in your pack: it's at your feet. Tap the sack to take it.", 3);
+        } else if (event.type === "spoils" && event.creature === "chest") {
+            this.hud.message("The chest's open, your share in it: tap it to take it.", 3);
+            this.sound?.play("coins");
         } else if (event.type === "spoils") {
             this.hud.message(`The ${CREATURES[event.creature]?.name.toLowerCase() ?? "creature"} left something: tap the sack to take it.`, 2.5);
             this.sound?.play("coins");
@@ -4580,6 +4598,9 @@ export class Game {
             case "roused":
                 // (The wild's creatures put out near a player: drawn a few at a time)
                 this.enlisting.push(...event.ids);
+                break;
+            case "cleared":
+                this.#cleared(event);
                 break;
             case "muster":
                 this.#muster(event);

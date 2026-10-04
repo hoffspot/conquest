@@ -70,6 +70,8 @@ export const CREATURES = Object.freeze({
     boar: { name: "Wild boar", hp: 44, weapon: "boar", speed: 1.2, chase: 3, temper: "territorial", guard: 5, roam: 8, leash: 16, pack: [1, 2], tiers: [2, 5], biomes: ["woods", "farmland", "meadow", "heath", "jungle"], blood: "red" },
     snake: { name: "Adder", hp: 20, weapon: "snake", speed: 0.8, chase: 1.8, temper: "territorial", guard: 3, roam: 5, leash: 10, pack: [1, 1], tiers: [2, 6], biomes: ["heath", "meadow", "marsh", "savannah", "badlands", "jungle", "farmland"], blood: "red" },
     bandit: { name: "Bandit", hp: 32, hands: true, weapon: "sword", speed: 1.3, chase: 2.4, temper: "aggressive", roam: 10, leash: 22, pack: [1, 3], tiers: [2, 7], biomes: ["farmland", "meadow", "woods", "heath"], blood: "red", armor: 0.05 },
+    // (The leader of the outlaws holding a place: core/places.js; met only there)
+    banditChief: { name: "Bandit chief", hp: 64, hands: true, weapon: "sword", speed: 1.3, chase: 2.4, temper: "aggressive", roam: 4, leash: 20, pack: [1, 1], tiers: [1, 10], biomes: [], blood: "red", armor: 0.2, perilous: true },
     // Far out
     bear: { name: "Brown bear", hp: 60, weapon: "bear", speed: 1.2, chase: 2.8, temper: "territorial", guard: 7, roam: 10, leash: 18, pack: [1, 1], tiers: [3, 7], biomes: ["woods", "mountain", "tundra", "elfwood", "darkwood"], blood: "red" },
     puma: { name: "Puma", hp: 40, weapon: "puma", speed: 1.4, chase: 3.4, temper: "territorial", guard: 7, roam: 12, leash: 22, pack: [1, 1], tiers: [3, 7], biomes: ["mountain", "woods", "heath", "badlands", "darkwood"], blood: "red", night: "more", darkSight: true },

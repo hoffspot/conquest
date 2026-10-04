@@ -1,11 +1,69 @@
 // Places worth finding (client/js/core/places.js; the terrain plan's M7.5): every site and wild camp
-// a place on the maps, who holds each (mixed by the war, a world at a time), cleared and retaken
+// a place on the maps, who holds each (mixed by the war, a world at a time), cleared and retaken;
+// in play (core/host.js #places), the outlaws or the dead holding theirs, their leader by a locked
+// chest, put to the sword for what's in it
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { ICON_KINDS, PLACE_RIMS } from "../client/js/app/mapicons.js";
-import { heldAtStart, HOLDERS, holderOf, PLACE_KINDS, PLACE_TIMES, placeOf, placesOf } from "../client/js/core/places.js";
+import { STEP_MS } from "../client/js/core/battle.js";
+import { tierAt } from "../client/js/core/creatures.js";
+import { squaresOf } from "../client/js/core/grid.js";
+import { HOST_PLAYER, Host } from "../client/js/core/host.js";
+import { buildWorld } from "../client/js/core/overworld.js";
+import { heldAtStart, HOLDERS, holderOf, PLACE_BANDS, PLACE_KINDS, PLACE_TIMES, placeOf, placesOf } from "../client/js/core/places.js";
 import { War } from "../client/js/core/war/war.js";
-import { planWorld } from "../client/js/core/worldplan/plan.js";
+import { decode, encode } from "../client/js/core/wire.js";
+import { landAt, planWorld } from "../client/js/core/worldplan/plan.js";
+
+const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
+
+function run(host, ms) {
+    const events = [];
+
+    for (let t = 0; t < ms; t += STEP_MS) {
+        events.push(...host.advance(STEP_MS));
+    }
+
+    return events;
+}
+
+const put = (actor, [x, y]) => Object.assign(actor, { square: [x, y], x: x + 0.5, y: y + 0.5, path: [], order: null, target: null, spawn: [x, y] });
+
+// A world (seed 2) with its player in it, hard to kill, the orc gone
+function hosted() {
+    const world = buildWorld({ seed: 2 });
+    const host = new Host(world, { populate: false });
+
+    host.join({ id: HOST_PLAYER, hero: HERO });
+    host.populate();
+    Object.assign(host.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+    const me = host.battle.actor(HOST_PLAYER);
+
+    Object.assign(me, { hp: 1e6, maxHp: 1e6 });
+
+    return { host, world, me };
+}
+
+// The player a few steps from a place's heart (as the host has it)
+function near(context, place, off = 12) {
+    const { host, me } = context;
+    const at = host.world.maps.town.sites.heartOf(host.world.plan.sites.find((site) => site.id === place.id));
+
+    put(me, [Math.floor(at[0] + off), Math.floor(at[1])]);
+    run(host, 600);
+
+    return at;
+}
+
+// Every one of a place's band put to the sword (poisoned past bearing, by the player)
+function putToTheSword(host, held) {
+    for (const id of held.ids) {
+        host.battle.afflict(id, "poison", { by: HOST_PLAYER, damage: 1e7 });
+    }
+
+    return run(host, 3000);
+}
 
 describe("places worth finding (places.js)", () => {
     let plans;
@@ -98,5 +156,106 @@ describe("places worth finding (places.js)", () => {
 
         delete old.places;
         assert.deepEqual(War.restore(plan, old).places, {});
+    });
+});
+
+describe("the places held by outlaws or the dead, in play (host.js #places)", () => {
+    it("puts out their band when a player comes near, as many and as strong as the place is big and its land dangerous, their leader stronger by a locked chest; lets them go once every player's far", () => {
+        const context = hosted();
+        const { host, world, me } = context;
+        const plan = world.plan;
+        const homes = [world.start?.at ?? [0, 0]];
+
+        for (const kind of ["ruins", "cave", "watchtower"]) {
+            const place = placesOf(plan).find((each) => each.kind === kind && heldAtStart(plan, each) !== "friendly");
+            const holder = heldAtStart(plan, place);
+            const band = PLACE_BANDS[holder];
+            const at = near(context, place);
+            const held = host.held.get(place.id);
+            const tier = tierAt(at, homes, landAt(plan, ...at).biome);
+            const [leader, ...folk] = held.ids.map((id) => host.battle.actor(id));
+
+            assert.equal(held.holder, holder);
+            assert.equal(held.tier, tier);
+            assert.equal(leader.wild.creature, band.leader);
+            assert.equal(leader.wild.tier, tier + PLACE_BANDS.lead);
+            assert.ok(host.wild.get(leader.id).master);
+            assert.equal(folk.length, PLACE_BANDS.count[place.size] + Math.floor(tier / PLACE_BANDS.per), `${kind}'s band`);
+            assert.ok(folk.every((one) => one.wild.creature === band.folk && one.wild.tier === tier && host.wild.get(one.id).place === place.id));
+            assert.ok([leader, ...folk].every((one) => one.wild.temper === "territorial" && one.wild.guard === PLACE_BANDS.guard));
+
+            // Its chest by the leader, locked while they hold it
+            const chest = host.ground.get(`chest-${place.id}`);
+
+            assert.ok(chest.chest && chest.locked && chest.until === null);
+            assert.ok(!squaresOf(world.maps.town).blocked(...chest.square), "on open ground");
+            assert.ok(Math.hypot(chest.square[0] - at[0], chest.square[1] - at[1]) <= PLACE_BANDS.ring[place.size], `${kind}'s chest in its middle`);
+            put(me, [...chest.square]);
+            assert.deepEqual(host.command(HOST_PLAYER, { type: "pickUp", ground: chest.id }), { ok: false, reason: "locked" });
+
+            // Come in among them: they go for the player
+            put(me, [folk[0].square[0] + 3, folk[0].square[1]]);
+            run(host, 1500);
+            assert.equal(folk[0].target, HOST_PLAYER, `${kind}'s band guards it`);
+
+            // Far: let go, the chest with them
+            put(me, [Math.floor(at[0] + PLACE_BANDS.far + 60), Math.floor(at[1])]);
+            run(host, 600);
+            assert.ok(!host.held.has(place.id) && !host.ground.has(chest.id));
+            assert.ok(held.ids.every((id) => !host.wild.has(id)));
+        }
+    });
+
+    it("is cleared once they're all put to the sword: the war keeps it, the chest opened with a share for each player near; empty a while, then held again", () => {
+        const context = hosted();
+        const { host, world, me } = context;
+        const place = placesOf(world.plan).find((each) => each.kind === "ruins");
+        const at = near(context, place);
+        const held = host.held.get(place.id);
+        const events = putToTheSword(host, held);
+
+        assert.deepEqual(events.filter((event) => event.type === "cleared").map(({ place: id, holder }) => [id, holder]), [[place.id, "dead"]]);
+        assert.equal(events.filter((event) => event.type === "spoils" || event.type === "cleared").at(-1).type, "cleared", "told after all that fell with them");
+        assert.deepEqual(host.war.places[place.id], { cleared: host.war.turn, times: 1 });
+        assert.equal(holderOf(world.plan, place, host.war.places[place.id], host.war.turn), "cleared");
+        assert.ok(!host.ground.has(`chest-${place.id}`), "the locked chest gone");
+
+        // The chest's share, the player's own to take
+        const share = [...host.ground.values()].find((dropped) => dropped.from === "chest");
+
+        assert.ok(share && share.for === HOST_PLAYER && share.bundle.gold > 0);
+        assert.ok(events.some((event) => event.type === "spoils" && event.creature === "chest" && event.ground === share.id));
+        put(me, [...share.square]);
+        assert.equal(host.command(HOST_PLAYER, { type: "pickUp", ground: share.id }).ok, true);
+
+        // Cleared: none come back while it's empty
+        put(me, [Math.floor(at[0] + PLACE_BANDS.far + 60), Math.floor(at[1])]);
+        run(host, 600);
+        near(context, place);
+        assert.ok(!host.held.has(place.id), "empty a while");
+
+        // A while on, the dead rise again
+        host.war.turn += PLACE_TIMES.retake;
+        run(host, 600);
+        assert.ok(host.held.get(place.id)?.ids.length > 1, "held again");
+    });
+
+    it("carries on exactly from a snapshot, the bands and chests and all", () => {
+        const context = hosted();
+        const { host, world } = context;
+
+        near(context, placesOf(world.plan).find((each) => each.kind === "ruins"));
+        assert.equal(host.held.size, 1);
+
+        const again = Host.restore(buildWorld({ seed: 2 }), decode(encode(host.snapshot())));
+
+        const [id] = host.held.keys();
+
+        assert.deepEqual([...again.held.entries()], [...host.held.entries()]);
+        assert.deepEqual(again.ground.get(`chest-${id}`), host.ground.get(`chest-${id}`));
+
+        run(host, 4000);
+        run(again, 4000);
+        assert.equal(again.checksum(), host.checksum());
     });
 });

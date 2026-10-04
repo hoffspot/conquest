@@ -3589,3 +3589,43 @@ converted data is to be measured in M8 against today's hm08 data.
     on the minimap and on the world map once the player's been by, rimmed in who holds them, a
     cleared one grey till it's held again; a building gone into still marked as it was.
   - **Next:** M7.5a-2, outlaws and the dead at their places, a leader and a chest.
+- **2026-10-04, M7.5a-2 built: outlaws and the dead at their places, a leader by a locked chest,
+  cleared for what's in it** (§8; docs/GAME.md *Held, in play*).
+  - **The band** (core/host.js `#places`, places.js `PLACE_BANDS`): near a player (90 m), a place
+    held by outlaws or the dead puts out its band round its heart: 3/5/7 by its size, one more for
+    every 3 tiers of the land's danger, at the land's tier, territorial, each going for anyone
+    within 10 m (`guard`, a new option for the wild's creatures: a territorial creature with no
+    guard only fought back); let go once every player's 180 m off. Not counted among the wild's
+    creatures about a player, nor sent off at daybreak.
+  - **The leader:** 2 tiers above the band, in the middle: the bandit chief (creatures.js
+    `banditChief`, new: looks, spoils, the bestiary lab) or the wight lord.
+  - **The chest** (ground `chest-<place>`, `locked`, never lying out too long: `until` null, so a
+    saved game keeps it): on the free ground nearest the leader (not inside a tower's wall);
+    tapped while held, refused ("locked"). Drawn (world/drops3d.js) as an iron-bound wooden chest
+    (body, rounded lid on a board, two iron bands, rim, lock plate; open: the lid thrown back, a
+    dark inside, gold heaped in it).
+  - **Cleared:** once every one of the band has fallen, checked after all that fell in the same
+    step (so "cleared" is told last): the war clears the place (`clearPlace`; the dragon's lair and
+    the ruined castles too when their master falls, their master not back till it's held again),
+    the locked chest goes, and each player within 39 m has their own share of a chest's loot
+    (progress.js `LOOT.chest`, gold a third more for each tier above the first) in it, open; the
+    HUD says so (game.js `#cleared`: "The dead of Peningmoor are laid to rest, for now.").
+  - **Kept:** the host's held places with its snapshot (`held`), restored; `NET_VERSION` 32.
+  - **Cost** (the phone's profile, Medium, steady frame; before → after, draws / triangles): at a
+    ruin 99 / 465k → 115 / 655k; at a cave held by six bandits 152 / 702k → 238 / 1.14M; at a wild
+    tower 97 / 464k → 129 / 625k. A band of people, close by, costs what a camp's does: each about
+    36k triangles drawn, and again into the sun's shadows (garments and bodies at full detail till
+    they're under 140 pixels tall). Over the triangle budget near a band of outlaws; for M8 (the
+    Vitruvian characters), with the characters' shadows from their lower-detail bodies.
+  - **Pictures** (sent in the session): a held ruin, cave and wild tower before and after; the
+    chest close up at the ruin and the cave, held and then cleared.
+  - **Tests:** test/places.test.js (the band near a player, as many and as strong as the place
+    and its land, the leader stronger, all guarding, coming at the player; the chest on open ground
+    in its middle, locked; let go once far, the chest with them; put to the sword: cleared, told
+    last, the war keeps it, the share the player's own, none back while it's empty, held again
+    after; carried on exactly from a snapshot). e2e: a ruin's band and its chest drawn, tapped
+    locked, put to the sword, cleared on the map and the chest open, the HUD saying so.
+  - **Seen, not fixed:** the wild camp pitched inside the citadel's cleared ground (seed 1), as
+    before.
+  - **Next:** a free animated chest model in place of the drawn one (the user's ask), then
+    M7.5a-3, a guild mission for each place held.

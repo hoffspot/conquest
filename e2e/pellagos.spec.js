@@ -3366,6 +3366,93 @@ test("the places worth finding are on the minimap near them and on the world map
     expect(seen.kinds).toBeGreaterThan(10);
 });
 
+test("a place's outlaws or dead hold it round their leader by a locked chest: tapped, it's locked; put to the sword, the place is cleared and the chest opened, the player's share in it", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // Up to the ruins nearest the start town, by their chest
+    const held = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(player, { hp: 1e6, maxHp: 1e6 });
+
+        const [ruins] = game.placeIcons()
+            .filter(({ kind }) => kind === "ruins")
+            .sort((a, b) => Math.hypot(a.x - player.x, a.z - player.y) - Math.hypot(b.x - player.x, b.z - player.y));
+        const settle = async (steps) => {
+            for (let k = 0; k < steps; k++) {
+                game.advance(0.25, { render: false });
+
+                while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+            }
+        };
+
+        Object.assign(player, { x: ruins.x + 30, y: ruins.z, path: [], order: null, progress: null });
+        await settle(8);
+
+        const place = game.host.held.get(ruins.id);
+        const chest = game.host.ground.get(`chest-${ruins.id}`);
+
+        // (By the chest, its guardians stood off a way so the tap's on it)
+        Object.assign(player, { x: chest.square[0] - 0.6, y: chest.square[1] + 0.5, path: [], order: null, progress: null });
+
+        for (const id of place.ids) {
+            Object.assign(game.battle.actor(id), { x: chest.square[0] + 25, path: [], order: null, target: null });
+        }
+
+        for (let k = 0; k < 6; k++) {
+            game.advance(0.1);
+        }
+
+        return { id: ruins.id, band: place.ids.map((id) => game.battle.actor(id).wild.creature), chest: game.drops.drawn.get(chest.id)?.object.children[0].name };
+    });
+
+    expect(held.band[0]).toBe("wightLord");
+    expect(held.band.slice(1).every((creature) => creature === "skeleton")).toBe(true);
+    expect(held.chest).toBe("chest");
+
+    // (Going again, so it's heard)
+    const chest = await page.evaluate((id) => {
+        const { game, session } = window.pellagos;
+        const { object } = game.drops.drawn.get(`chest-${id}`);
+
+        game.start();
+
+        return session.view.toScreen(object.position.clone().setY(object.position.y + 0.3));
+    }, held.id);
+
+    await page.mouse.click(chest.x, chest.y);
+    await expect(page.locator("#banner")).toHaveText("It's locked fast, and its guardians still hold the place.");
+
+    // Put to the sword: cleared, the chest open with the player's share
+    const cleared = await page.evaluate(async (id) => {
+        const { game } = window.pellagos;
+
+        game.stop();
+
+        for (const each of game.host.held.get(id).ids) {
+            game.battle.afflict(each, "poison", { by: "player", damage: 1e7 });
+        }
+
+        for (let k = 0; k < 12; k++) {
+            game.advance(0.25, { render: false });
+        }
+
+        game.advance(0.1);
+
+        const share = [...game.host.ground.values()].find((dropped) => dropped.from === "chest");
+
+        return { holder: game.placeIcons().find((icon) => icon.id === id).holder, open: game.drops.drawn.get(share?.id)?.object.children[0].name, locked: game.host.ground.has(`chest-${id}`) };
+    }, held.id);
+
+    expect(cleared).toEqual({ holder: "cleared", open: "chest-open", locked: false });
+    await expect(page.locator("#banner")).toHaveText(/^The dead of .+ are laid to rest, for now\.$/);
+});
+
 test("on the world map a pin's dropped where it's held: a column of light where it stands and a line the way there, taken away held again; tapped twice, the player runs there, or is told there's no way", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

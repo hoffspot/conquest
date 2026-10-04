@@ -520,7 +520,7 @@ export function* dressingCreature(kit, id, { seed = 1, equipment = [], guard = n
 
     // Standing a while, it passes the time as its kind does (actions.js's rests: a bandit as an
     // adventurer, the rest as a sentry), and stops when it moves or fights
-    const role = id === "bandit" ? "adventurer" : "sentry";
+    const role = id === "bandit" || id === "banditChief" ? "adventurer" : "sentry";
     const update = avatar.update.bind(avatar);
     const attack = avatar.actions.startAttack.bind(avatar.actions);
     let still = 0;

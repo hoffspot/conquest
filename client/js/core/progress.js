@@ -152,6 +152,8 @@ export const SELL_SHARE = 0.4;
 export const LOOT = Object.freeze({
     orc: { gold: [5, 15], items: [{ id: "potion", chance: 0.3 }, { uniform: true, chance: 0.12 }, { id: "sword", quality: "fine", chance: 0.06 }] },
     soldier: { gold: [2, 8], items: [{ id: "potion", chance: 0.15 }, { uniform: true, chance: 0.15 }, { id: "bow", quality: "fine", chance: 0.03 }] },
+    // (The chest a place's occupiers guarded, opened once they're put to the sword: core/places.js)
+    chest: { gold: [25, 60], items: [{ id: "potion", chance: 0.9 }, { uniform: true, chance: 0.9 }, { uniform: true, chance: 0.5 }, { id: "sword", quality: "fine", chance: 0.2 }, { id: "bow", quality: "fine", chance: 0.15 }] },
 });
 
 /** How likely a piece of gear found on a foe is to be of each make. */

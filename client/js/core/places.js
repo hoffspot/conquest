@@ -60,6 +60,30 @@ export const PLACE_KINDS = Object.freeze({
 });
 
 /**
+ * Who holds a place held by outlaws or the dead, and how many (host.js #places): the band (`folk`)
+ * and its leader (`leader`, `lead` tiers above the band, in the middle by the chest); `count` of
+ * the band by the place's size, one more for every `per` tiers of its land's danger (creatures.js
+ * tierAt); the band round the middle `ring` metres off, by its size, each going for anyone who
+ * comes within `guard` metres of them; put out once a player's within `near` metres, let go once
+ * every one's further than `far`. The ruined castles and the dragon's lair keep their own masters
+ * (creatures.js LAIRS).
+ */
+export const PLACE_BANDS = Object.freeze({
+    bandits: { folk: "bandit", leader: "banditChief" },
+    dead: { folk: "skeleton", leader: "wightLord" },
+    count: { small: 3, medium: 5, large: 7 },
+    per: 3,
+    lead: 2,
+    ring: { small: 4, medium: 6, large: 9 },
+    guard: 10,
+    near: 90,
+    far: 180,
+});
+
+/** How much more gold a chest holds for each tier of its land's danger above the first. */
+export const CHEST_GOLD = 0.35;
+
+/**
  * How long a cleared place stays empty before it's held again (the war's turns: a day is 60) and
  * what share of a people's places that may be taken are held by bandits at the start.
  */

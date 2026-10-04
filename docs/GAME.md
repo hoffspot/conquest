@@ -2593,6 +2593,26 @@ they are: every site the world plan puts out between the settlements and every w
   empty for 120 of the war's turns (two days of the world's clock: `PLACE_TIMES.retake`), then
   it's held as it was at the start again (`holderOf`). A people's own hold isn't cleared.
 
+**Held, in play** (`core/host.js` `#places`, `PLACE_BANDS`): once a player comes within 90 metres
+of a place held by outlaws or the dead (not the ruined castles or the lair, which keep their own
+masters: `LAIRS`), its band is put out round its heart, and let go again once every player's 180
+metres off (back as many as ever the next time, unless it's been cleared).
+- **As many and as strong as the place is big and its land dangerous:** 3, 5 or 7 of them by its
+  size, one more for every 3 tiers of the land's danger (creatures.js `tierAt`), round the middle
+  4, 6 or 9 metres off; outlaws (`bandit`) or skeletons, at the land's tier.
+- **Their leader**, 2 tiers above them, stands in the middle: a bandit chief (`banditChief`, new:
+  a big warrior with a sword, and better spoils) or a wight lord.
+- **They guard it:** each goes for anyone who comes within 10 metres of them (`guard`), and none
+  wanders off; they don't count among the wild's creatures about a player.
+- **The chest** stands by the leader on open ground (drops3d.js: an iron-bound wooden chest),
+  locked while they hold the place (tapped: "It's locked fast, and its guardians still hold the
+  place."). Once the last of them falls (the leader with them), the place is cleared (the war
+  keeps it, and its rim on the maps goes grey), "The dead of … are laid to rest, for now" or
+  "… is cleared of its outlaws, for now", and the chest is thrown open with a share for each
+  player within about 40 metres (`rollLoot("chest")`: 25 to 60 gold, a third more for each tier of
+  the land's danger above the first, `CHEST_GOLD`; a potion, a piece or two of gear in the
+  livery of the place's people, a human's at the ruins and caves, now and then a fine sword or bow), theirs alone to take, for five minutes.
+
 **What the player's found** (`core/explored.js` `Explored`): the buildings they've gone into (by
 key: marked the first time they cross into one of its floors) and the chunks of the world they've
 set foot in (64 metres square; the chunk they're standing in is marked as they go, out in the
